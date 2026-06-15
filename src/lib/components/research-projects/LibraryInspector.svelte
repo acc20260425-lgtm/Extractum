@@ -141,7 +141,7 @@
         </ExtractumButton>
       {/if}
     </div>
-    <YoutubeSummaryRunDialog bind:open={youtubeSummaryOpen} source={selectedSource} />
+    <YoutubeSummaryRunDialog bind:open={youtubeSummaryOpen} projectId={null} source={selectedSource} />
   {:else}
     <div class="empty-state">
       <p class="eyebrow">Inspector</p>

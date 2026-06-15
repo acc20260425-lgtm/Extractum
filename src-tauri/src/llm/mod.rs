@@ -243,6 +243,7 @@ pub(crate) fn llm_request_kind_diagnostic_key(kind: LlmRequestKind) -> &'static 
         LlmRequestKind::AnalysisChat => "analysis_chat",
         LlmRequestKind::AnalysisReportMap => "analysis_report_map",
         LlmRequestKind::AnalysisReportReduce => "analysis_report_reduce",
+        LlmRequestKind::PromptPackStage => "prompt_pack_stage",
     }
 }
 

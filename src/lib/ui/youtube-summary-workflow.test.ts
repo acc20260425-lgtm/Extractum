@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   canStartYoutubeSummary,
+  retainSelectedRunId,
+  shouldApplyRunEventToRunsPanel,
   summarizePreflightPartitions,
   updateRunListFromEvent,
 } from "./youtube-summary-workflow";
@@ -82,5 +84,33 @@ describe("youtube summary workflow", () => {
 
     expect(runs[0].runStatus).toBe("complete");
     expect(runs[0].latestMessage).toBe("Completed");
+  });
+
+  it("clears selected run when refreshed project runs no longer contain it", () => {
+    expect(retainSelectedRunId(5, [{ runId: 4 }])).toBeNull();
+    expect(retainSelectedRunId(5, [{ runId: 5 }])).toBe(5);
+    expect(retainSelectedRunId(null, [{ runId: 5 }])).toBeNull();
+  });
+
+  it("does not insert unknown global prompt pack events into project-scoped panels", () => {
+    const event: PromptPackRunEvent = {
+      runId: 99,
+      requestId: "req-99",
+      kind: "started",
+      runStatus: "running",
+      phase: "stage",
+      stageRunId: null,
+      stageName: null,
+      sourceSnapshotId: null,
+      queuePosition: null,
+      progressCurrent: 0,
+      progressTotal: 1,
+      message: "Running",
+      error: null,
+    };
+
+    expect(shouldApplyRunEventToRunsPanel([], event, 7)).toBe(false);
+    expect(shouldApplyRunEventToRunsPanel([], event, null)).toBe(true);
+    expect(shouldApplyRunEventToRunsPanel([{ runId: 99 }], event, 7)).toBe(true);
   });
 });

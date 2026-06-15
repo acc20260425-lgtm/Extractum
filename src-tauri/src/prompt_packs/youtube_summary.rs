@@ -1,3 +1,5 @@
+use std::future::Future;
+
 use sqlx::SqlitePool;
 
 use super::dto::{
@@ -11,6 +13,10 @@ use crate::prompt_packs::stage_io::{
     build_transcript_analysis_stage_input, extract_json_payload, insert_stage_artifact_in_pool,
 };
 use crate::prompt_packs::validation::validate_transcript_analysis_output;
+use crate::prompt_packs::{
+    projections::persist_final_result_transaction,
+    result_builder::build_youtube_summary_canonical_result,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ModelBudget {
@@ -95,6 +101,43 @@ pub(crate) struct LlmCompletion {
     pub latency_ms: i64,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct TranscriptAnalysisStageExecutionRequest {
+    pub run_id: i64,
+    pub stage_run_id: i64,
+    pub source_snapshot_id: i64,
+    pub source_ref_id: String,
+    pub prompt_input_json: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct YoutubeSummaryRunExecutionOutcome {
+    pub run_id: i64,
+    pub run_status: String,
+    pub progress_current: i64,
+    pub progress_total: i64,
+    pub message: String,
+}
+
+#[derive(Debug)]
+pub(crate) enum YoutubeSummaryStageExecutionError {
+    Cancelled,
+    Failed(AppError),
+}
+
+impl From<AppError> for YoutubeSummaryStageExecutionError {
+    fn from(error: AppError) -> Self {
+        Self::Failed(error)
+    }
+}
+
+#[derive(Clone, Debug)]
+struct TranscriptStageRow {
+    stage_run_id: i64,
+    source_snapshot_id: i64,
+    source_ref_id: String,
+}
+
 pub(crate) async fn execute_transcript_analysis_stage_with_completion(
     pool: &SqlitePool,
     stage_run_id: i64,
@@ -109,8 +152,16 @@ pub(crate) async fn execute_transcript_analysis_stage_with_completion(
     let input = build_transcript_analysis_stage_input(pool, stage_run_id).await?;
     let input_json = serde_json::to_string(&input)
         .map_err(|error| AppError::internal(format!("serialize stage input: {error}")))?;
-    insert_stage_artifact_in_pool(pool, run_id, stage_run_id, "prompt_input", 1, 1, &input_json)
-        .await?;
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "prompt_input",
+        1,
+        1,
+        &input_json,
+    )
+    .await?;
 
     sqlx::query(
         "UPDATE prompt_pack_stage_runs
@@ -137,8 +188,16 @@ pub(crate) async fn execute_transcript_analysis_stage_with_completion(
     let parsed = extract_json_payload(&completion.text)?;
     let parsed_json = serde_json::to_string(&parsed)
         .map_err(|error| AppError::internal(format!("serialize parsed output: {error}")))?;
-    insert_stage_artifact_in_pool(pool, run_id, stage_run_id, "parsed_output", 1, 3, &parsed_json)
-        .await?;
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "parsed_output",
+        1,
+        3,
+        &parsed_json,
+    )
+    .await?;
     validate_transcript_analysis_output(&input, &parsed)
         .map_err(|error| AppError::validation(error.message))?;
     let metrics = serde_json::json!({
@@ -234,6 +293,318 @@ pub(crate) async fn execute_youtube_summary_run_with_fake_completions(
     };
     persist_minimal_execution_result(pool, run_id, final_status).await?;
     Ok(())
+}
+
+pub(crate) async fn execute_youtube_summary_run_with_stage_executor<F, Fut>(
+    pool: &SqlitePool,
+    run_id: i64,
+    mut execute_stage: F,
+) -> AppResult<YoutubeSummaryRunExecutionOutcome>
+where
+    F: FnMut(TranscriptAnalysisStageExecutionRequest) -> Fut,
+    Fut: Future<Output = Result<LlmCompletion, YoutubeSummaryStageExecutionError>>,
+{
+    let stages = load_pending_transcript_stage_rows(pool, run_id).await?;
+    let total = stages.len() as i64;
+    mark_run_running(pool, run_id, total).await?;
+
+    let mut successes = 0_i64;
+    let mut failures = 0_i64;
+    for stage in stages {
+        if is_run_cancelled(pool, run_id).await? {
+            mark_transcript_stage_cancelled(pool, stage.stage_run_id).await?;
+            return Ok(cancelled_outcome(run_id, successes, total));
+        }
+
+        let input = build_transcript_analysis_stage_input(pool, stage.stage_run_id).await?;
+        let prompt_input_json = serde_json::to_string_pretty(&input)
+            .map_err(|error| AppError::internal(format!("serialize stage input: {error}")))?;
+        let request = TranscriptAnalysisStageExecutionRequest {
+            run_id,
+            stage_run_id: stage.stage_run_id,
+            source_snapshot_id: stage.source_snapshot_id,
+            source_ref_id: stage.source_ref_id,
+            prompt_input_json,
+        };
+
+        match execute_stage(request).await {
+            Ok(completion) => match execute_transcript_analysis_stage_with_completion(
+                pool,
+                stage.stage_run_id,
+                completion,
+            )
+            .await
+            {
+                Ok(()) => successes += 1,
+                Err(error) => {
+                    failures += 1;
+                    mark_transcript_stage_failed(pool, run_id, stage.stage_run_id, &error.message)
+                        .await?;
+                }
+            },
+            Err(error) => match error {
+                YoutubeSummaryStageExecutionError::Cancelled => {
+                    mark_transcript_stage_cancelled(pool, stage.stage_run_id).await?;
+                    mark_run_cancelled(pool, run_id, successes, total).await?;
+                    return Ok(cancelled_outcome(run_id, successes, total));
+                }
+                YoutubeSummaryStageExecutionError::Failed(error) => {
+                    failures += 1;
+                    mark_transcript_stage_failed(pool, run_id, stage.stage_run_id, &error.message)
+                        .await?;
+                }
+            },
+        }
+
+        update_run_progress(pool, run_id, successes, total).await?;
+    }
+
+    mark_pending_mvp_tail_stages_skipped(pool, run_id).await?;
+    let terminal_status = terminal_status(successes, failures);
+    let canonical = build_youtube_summary_canonical_result(pool, run_id).await?;
+    persist_final_result_transaction(pool, run_id, canonical, terminal_status).await?;
+    let message = terminal_message(terminal_status).to_string();
+    sqlx::query(
+        "UPDATE prompt_pack_runs
+         SET latest_message = ?, progress_current = ?, progress_total = ?, updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(&message)
+    .bind(successes)
+    .bind(total)
+    .bind(now_string())
+    .bind(run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    Ok(YoutubeSummaryRunExecutionOutcome {
+        run_id,
+        run_status: terminal_status.to_string(),
+        progress_current: successes,
+        progress_total: total,
+        message,
+    })
+}
+
+async fn load_pending_transcript_stage_rows(
+    pool: &SqlitePool,
+    run_id: i64,
+) -> AppResult<Vec<TranscriptStageRow>> {
+    sqlx::query_as::<_, (i64, i64, String)>(
+        "SELECT stages.id, snapshots.id, snapshots.source_ref_id
+         FROM prompt_pack_stage_runs stages
+         JOIN prompt_pack_run_source_snapshots snapshots
+           ON snapshots.id = stages.source_snapshot_id
+          AND snapshots.run_id = stages.run_id
+         WHERE stages.run_id = ?
+           AND stages.stage_name = 'youtube_summary/transcript_analysis'
+           AND stages.stage_status = 'pending'
+         ORDER BY stages.id ASC",
+    )
+    .bind(run_id)
+    .fetch_all(pool)
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(
+                |(stage_run_id, source_snapshot_id, source_ref_id)| TranscriptStageRow {
+                    stage_run_id,
+                    source_snapshot_id,
+                    source_ref_id,
+                },
+            )
+            .collect()
+    })
+    .map_err(AppError::database)
+}
+
+async fn mark_run_running(pool: &SqlitePool, run_id: i64, total: i64) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE prompt_pack_runs
+         SET run_status = 'running',
+             started_at = COALESCE(started_at, ?),
+             latest_message = 'Running',
+             progress_current = COALESCE(progress_current, 0),
+             progress_total = ?,
+             updated_at = ?
+         WHERE id = ? AND run_status = 'queued'",
+    )
+    .bind(now_string())
+    .bind(total)
+    .bind(now_string())
+    .bind(run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+async fn is_run_cancelled(pool: &SqlitePool, run_id: i64) -> AppResult<bool> {
+    sqlx::query_scalar::<_, String>("SELECT run_status FROM prompt_pack_runs WHERE id = ?")
+        .bind(run_id)
+        .fetch_one(pool)
+        .await
+        .map(|status| status == "cancelled")
+        .map_err(AppError::database)
+}
+
+async fn update_run_progress(
+    pool: &SqlitePool,
+    run_id: i64,
+    successes: i64,
+    total: i64,
+) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE prompt_pack_runs
+         SET progress_current = ?,
+             progress_total = ?,
+             latest_message = ?,
+             updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(successes)
+    .bind(total)
+    .bind(format!("Processed {successes} of {total} video(s)"))
+    .bind(now_string())
+    .bind(run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+async fn mark_run_cancelled(
+    pool: &SqlitePool,
+    run_id: i64,
+    progress_current: i64,
+    progress_total: i64,
+) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE prompt_pack_runs
+         SET run_status = 'cancelled',
+             latest_message = 'Cancelled',
+             progress_current = ?,
+             progress_total = ?,
+             completed_at = COALESCE(completed_at, ?),
+             updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(progress_current)
+    .bind(progress_total)
+    .bind(now_string())
+    .bind(now_string())
+    .bind(run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+async fn mark_transcript_stage_failed(
+    pool: &SqlitePool,
+    run_id: i64,
+    stage_run_id: i64,
+    error: &str,
+) -> AppResult<()> {
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "error",
+        1,
+        99,
+        &serde_json::json!({ "error": error }).to_string(),
+    )
+    .await?;
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET stage_status = 'failed',
+             error_message = ?,
+             latest_message = ?,
+             completed_at = ?,
+             updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(error)
+    .bind(error)
+    .bind(now_string())
+    .bind(now_string())
+    .bind(stage_run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+async fn mark_transcript_stage_cancelled(pool: &SqlitePool, stage_run_id: i64) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET stage_status = 'cancelled',
+             latest_message = 'Cancelled',
+             completed_at = COALESCE(completed_at, ?),
+             updated_at = ?
+         WHERE id = ? AND stage_status IN ('pending', 'running')",
+    )
+    .bind(now_string())
+    .bind(now_string())
+    .bind(stage_run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+async fn mark_pending_mvp_tail_stages_skipped(pool: &SqlitePool, run_id: i64) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET stage_status = 'skipped',
+             latest_message = 'Handled by combined MVP stage',
+             completed_at = ?,
+             updated_at = ?
+         WHERE run_id = ?
+           AND stage_status = 'pending'
+           AND stage_name != 'youtube_summary/transcript_analysis'",
+    )
+    .bind(now_string())
+    .bind(now_string())
+    .bind(run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+fn terminal_status(successes: i64, failures: i64) -> &'static str {
+    if successes > 0 && failures > 0 {
+        "partial"
+    } else if successes > 0 {
+        "complete"
+    } else {
+        "failed"
+    }
+}
+
+fn terminal_message(status: &str) -> &'static str {
+    match status {
+        "complete" => "Completed",
+        "partial" => "Completed with partial results",
+        _ => "Failed",
+    }
+}
+
+fn cancelled_outcome(
+    run_id: i64,
+    progress_current: i64,
+    progress_total: i64,
+) -> YoutubeSummaryRunExecutionOutcome {
+    YoutubeSummaryRunExecutionOutcome {
+        run_id,
+        run_status: "cancelled".to_string(),
+        progress_current,
+        progress_total,
+        message: "Cancelled".to_string(),
+    }
 }
 
 async fn persist_minimal_execution_result(
@@ -354,7 +725,9 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
     )
     .await?;
     if preflight.included_videos.is_empty() || !preflight.blocking_failures.is_empty() {
-        return Err(AppError::validation("start preflight did not include runnable videos"));
+        return Err(AppError::validation(
+            "start preflight did not include runnable videos",
+        ));
     }
 
     let now = now_string();
@@ -598,7 +971,9 @@ async fn classify_video(
             blocking_failures.push(YoutubeSummaryPreflightFailure {
                 source_id: Some(video.source_id),
                 reason: "input_budget_exceeded".to_string(),
-                message: Some("The selected YouTube video exceeds the model input budget".to_string()),
+                message: Some(
+                    "The selected YouTube video exceeds the model input budget".to_string(),
+                ),
             });
         }
         return Ok(());
@@ -634,13 +1009,12 @@ async fn load_run_by_client_request_id(
     pool: &SqlitePool,
     client_request_id: &str,
 ) -> AppResult<Option<PromptPackRunSummaryDto>> {
-    let run_id = sqlx::query_scalar::<_, i64>(
-        "SELECT id FROM prompt_pack_runs WHERE client_request_id = ?",
-    )
-    .bind(client_request_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(AppError::database)?;
+    let run_id =
+        sqlx::query_scalar::<_, i64>("SELECT id FROM prompt_pack_runs WHERE client_request_id = ?")
+            .bind(client_request_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(AppError::database)?;
     match run_id {
         Some(run_id) => Ok(Some(load_run_summary(pool, run_id).await?)),
         None => Ok(None),
@@ -894,8 +1268,16 @@ async fn insert_origins(
             .await
             .map_err(AppError::database)?;
             for (video_source_id, video_id) in rows {
-                insert_one_origin(pool, run_id, scope_id, video_source_id, &video_id, preflight, now)
-                    .await?;
+                insert_one_origin(
+                    pool,
+                    run_id,
+                    scope_id,
+                    video_source_id,
+                    &video_id,
+                    preflight,
+                    now,
+                )
+                .await?;
             }
         } else {
             let video_id = sqlx::query_scalar::<_, String>(
@@ -905,8 +1287,16 @@ async fn insert_origins(
             .fetch_one(pool)
             .await
             .map_err(AppError::database)?;
-            insert_one_origin(pool, run_id, scope_id, Some(*source_id), &video_id, preflight, now)
-                .await?;
+            insert_one_origin(
+                pool,
+                run_id,
+                scope_id,
+                Some(*source_id),
+                &video_id,
+                preflight,
+                now,
+            )
+            .await?;
         }
     }
     Ok(())
@@ -1243,8 +1633,8 @@ async fn transcript_text_for_source(pool: &SqlitePool, source_id: i64) -> AppRes
 mod tests {
     use super::{
         create_youtube_summary_run_skeleton_in_pool, freeze_comment_material_refs,
-        preflight_youtube_summary_in_pool, start_youtube_summary_run_in_pool,
-        test_comment_policy, ModelBudget,
+        preflight_youtube_summary_in_pool, start_youtube_summary_run_in_pool, test_comment_policy,
+        ModelBudget,
     };
     use crate::compression::compress_text;
     use crate::migrations::apply_all_migrations_for_test_pool;
@@ -1254,7 +1644,8 @@ mod tests {
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
     use crate::prompt_packs::youtube_summary::{
         execute_transcript_analysis_stage_with_completion,
-        execute_youtube_summary_run_with_fake_completions, LlmCompletion,
+        execute_youtube_summary_run_with_fake_completions,
+        execute_youtube_summary_run_with_stage_executor, LlmCompletion,
     };
 
     async fn migrated_pool() -> sqlx::SqlitePool {
@@ -1280,7 +1671,10 @@ mod tests {
         }
     }
 
-    fn start_request(client_request_id: &str, source_ids: Vec<i64>) -> StartYoutubeSummaryRunRequest {
+    fn start_request(
+        client_request_id: &str,
+        source_ids: Vec<i64>,
+    ) -> StartYoutubeSummaryRunRequest {
         StartYoutubeSummaryRunRequest {
             client_request_id: client_request_id.to_string(),
             project_id: None,
@@ -1448,7 +1842,9 @@ mod tests {
 
     async fn test_pool_with_ready_video() -> sqlx::SqlitePool {
         let pool = migrated_pool().await;
-        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed pack");
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("seed pack");
         insert_youtube_video(&pool, 901, "v-ready").await;
         insert_transcript(&pool, 901, "Ready transcript").await;
         pool
@@ -1456,7 +1852,9 @@ mod tests {
 
     async fn test_pool_with_same_video_selected_explicitly_and_from_playlist() -> sqlx::SqlitePool {
         let pool = migrated_pool().await;
-        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed pack");
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("seed pack");
         insert_playlist(&pool, 701).await;
         insert_youtube_video(&pool, 901, "v-ready").await;
         insert_transcript(&pool, 901, "Ready transcript").await;
@@ -1487,7 +1885,9 @@ mod tests {
 
     async fn test_pool_with_two_frozen_youtube_summary_sources() -> sqlx::SqlitePool {
         let pool = migrated_pool().await;
-        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed pack");
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("seed pack");
         insert_youtube_video(&pool, 901, "v-ready-1").await;
         insert_youtube_video(&pool, 902, "v-ready-2").await;
         insert_transcript(&pool, 901, "Ready transcript one").await;
@@ -1596,7 +1996,9 @@ mod tests {
     #[tokio::test]
     async fn start_with_recomputed_blocking_preflight_returns_response_without_run() {
         let pool = test_pool_with_youtube_video_without_transcript().await;
-        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed pack");
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("seed pack");
         let request = start_request("req-blocked-start", vec![901]);
 
         let outcome = start_youtube_summary_run_in_pool(&pool, request)
@@ -1652,6 +2054,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn execute_queued_run_with_stage_executor_finishes_complete() {
+        let pool = test_pool_with_frozen_youtube_summary_run().await;
+
+        let outcome =
+            execute_youtube_summary_run_with_stage_executor(&pool, 1, |request| async move {
+                Ok(
+                    fake_completion_with_valid_transcript_analysis_json_for_source(
+                        &request.source_ref_id,
+                    ),
+                )
+            })
+            .await
+            .expect("execute queued run");
+
+        let (run_status, result_status, progress_current, progress_total): (
+            String,
+            String,
+            Option<i64>,
+            Option<i64>,
+        ) = sqlx::query_as(
+            "SELECT run_status, result_status, progress_current, progress_total
+             FROM prompt_pack_runs WHERE id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("run status");
+        let result_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_results WHERE run_id = 1")
+                .fetch_one(&pool)
+                .await
+                .expect("result count");
+
+        assert_eq!(outcome.run_status, "complete");
+        assert_eq!(run_status, "complete");
+        assert_eq!(result_status, "complete");
+        assert_eq!(progress_current, Some(1));
+        assert_eq!(progress_total, Some(1));
+        assert_eq!(result_count, 1);
+    }
+
+    #[tokio::test]
     async fn execute_multi_video_run_with_one_provider_failure_finishes_partial() {
         let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
 
@@ -1659,9 +2102,7 @@ mod tests {
             &pool,
             1,
             vec![
-                Ok(fake_completion_with_valid_transcript_analysis_json_for_source(
-                    "source_ref_1",
-                )),
+                Ok(fake_completion_with_valid_transcript_analysis_json_for_source("source_ref_1")),
                 Err(fake_provider_failure("provider timeout for source_ref_2")),
             ],
         )
@@ -1685,12 +2126,11 @@ mod tests {
         .fetch_one(&pool)
         .await
         .expect("error artifacts");
-        let warning_count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM prompt_pack_result_warnings WHERE run_id = 1",
-        )
-        .fetch_one(&pool)
-        .await
-        .expect("warning count");
+        let warning_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_result_warnings WHERE run_id = 1")
+                .fetch_one(&pool)
+                .await
+                .expect("warning count");
         let quality_flag_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM prompt_pack_result_quality_flags WHERE run_id = 1",
         )

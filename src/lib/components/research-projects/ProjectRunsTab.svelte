@@ -65,7 +65,9 @@
     </ul>
   {/if}
 
-  <YoutubeSummaryRunsPanel {projectId} />
+  {#key projectId ?? "none"}
+    <YoutubeSummaryRunsPanel {projectId} />
+  {/key}
 </section>
 
 <style>

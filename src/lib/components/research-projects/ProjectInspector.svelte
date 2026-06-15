@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { Pencil, Play, Trash2 } from "@lucide/svelte";
+  import { Pencil, Play, PlayCircle, Trash2 } from "@lucide/svelte";
   import { ExtractumButton, ProviderBadge, StatusBadge } from "$lib/components/extractum-ui";
   import { projectRunDisabledReason } from "$lib/ui/research-projects-model";
   import type { AnalysisRunSummary } from "$lib/types/analysis";
   import type { ProjectSourceRecord } from "$lib/types/projects";
   import type { ProjectSourceLinkView, ResearchProjectView } from "$lib/ui/research-projects-model";
+  import YoutubeSummaryRunDialog from "./YoutubeSummaryRunDialog.svelte";
   import YoutubeSummaryRunsPanel from "./YoutubeSummaryRunsPanel.svelte";
 
   let {
@@ -32,6 +33,23 @@
   const mixedProviderRunMessage = "Mixed-provider project runs are not supported yet.";
   const runDisabledReason = $derived(projectRunDisabledReason(project, sources));
   const providerBreakdown = $derived(Array.from(new Set(sources.map((source) => source.provider))));
+  let youtubeSummaryOpen = $state(false);
+  let youtubeSummarySource = $derived(
+    selectedSource
+      ? {
+          sourceId: selectedSource.sourceNumericId,
+          title: selectedSource.title,
+        }
+      : null,
+  );
+  let canRunSelectedYoutubeSummary = $derived(
+    Boolean(
+      project &&
+        selectedSource?.provider === "youtube" &&
+        (selectedSource.subtype === "video" || selectedSource.subtype === "playlist") &&
+        selectedSource.itemCount > 0,
+    ),
+  );
 </script>
 
 <aside class="project-inspector-panel">
@@ -79,11 +97,23 @@
       <p><strong>{selectedSource.title}</strong></p>
       <p>{selectedSource.subtitle ?? selectedSource.filterSummary}</p>
       <StatusBadge status="connected" />
+      {#if canRunSelectedYoutubeSummary}
+        <ExtractumButton variant="outline" disabled={saving} onclick={() => (youtubeSummaryOpen = true)}>
+          <PlayCircle size={14} aria-hidden="true" />
+          YouTube Summary
+        </ExtractumButton>
+      {/if}
       <ExtractumButton variant="outline" disabled={saving} onclick={() => onRemoveSource(selectedSource.sourceNumericId)}>
         Remove from project
       </ExtractumButton>
     </section>
   {/if}
+
+  <YoutubeSummaryRunDialog
+    bind:open={youtubeSummaryOpen}
+    projectId={project?.projectId ?? null}
+    source={youtubeSummarySource}
+  />
 
   <section>
     <h3>Recent runs</h3>
@@ -95,7 +125,9 @@
   </section>
 
   <section>
-    <YoutubeSummaryRunsPanel projectId={project?.projectId ?? null} />
+    {#key project?.projectId ?? "none"}
+      <YoutubeSummaryRunsPanel projectId={project?.projectId ?? null} />
+    {/key}
   </section>
 </aside>
 

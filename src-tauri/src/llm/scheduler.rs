@@ -33,6 +33,7 @@ pub enum LlmRequestKind {
     AnalysisChat,
     AnalysisReportMap,
     AnalysisReportReduce,
+    PromptPackStage,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

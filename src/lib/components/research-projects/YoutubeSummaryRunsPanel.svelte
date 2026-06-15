@@ -8,7 +8,12 @@
     listActivePromptPackRuns,
     listPromptPackRuns,
   } from "$lib/api/prompt-packs";
-  import { statusLabel, updateRunListFromEvent } from "$lib/ui/youtube-summary-workflow";
+  import {
+    retainSelectedRunId,
+    shouldApplyRunEventToRunsPanel,
+    statusLabel,
+    updateRunListFromEvent,
+  } from "$lib/ui/youtube-summary-workflow";
   import type { PromptPackRunListItem } from "$lib/types/prompt-packs";
   import YoutubeSummaryResultView from "./YoutubeSummaryResultView.svelte";
 
@@ -27,6 +32,7 @@
   onMount(() => {
     void refreshRuns();
     void listenToPromptPackRunEvents((event) => {
+      if (!shouldApplyRunEventToRunsPanel(runs, event.payload, projectId)) return;
       runs = updateRunListFromEvent(runs, event.payload);
     }).then((stop) => {
       unlisten = stop;
@@ -45,9 +51,12 @@
         listPromptPackRuns({ projectId, limit: 20 }),
         listActivePromptPackRuns(),
       ]);
-      runs = [...recent, ...active]
+      const scopedActive = projectId === null ? active : active.filter((run) => run.projectId === projectId);
+      const nextRuns = [...recent, ...scopedActive]
         .filter((run, index, allRuns) => allRuns.findIndex((candidate) => candidate.runId === run.runId) === index)
         .sort((left, right) => right.runId - left.runId);
+      runs = nextRuns;
+      selectedRunId = retainSelectedRunId(selectedRunId, nextRuns);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : String(cause);
     } finally {

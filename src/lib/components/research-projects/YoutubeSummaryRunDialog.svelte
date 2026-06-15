@@ -13,15 +13,21 @@
   } from "$lib/api/prompt-packs";
   import { canStartYoutubeSummary, summarizePreflightPartitions } from "$lib/ui/youtube-summary-workflow";
   import type { YoutubeSummaryPreflightResponse } from "$lib/types/prompt-packs";
-  import type { LibraryCatalogSourceView } from "$lib/ui/library-catalog-model";
+
+  type YoutubeSummaryLaunchSource = {
+    sourceId: number;
+    title: string;
+  };
 
   let {
     open = $bindable(false),
+    projectId = null,
     source,
     onStarted,
   }: {
     open?: boolean;
-    source: LibraryCatalogSourceView | null;
+    projectId?: number | null;
+    source: YoutubeSummaryLaunchSource | null;
     onStarted?: (runId: number) => void;
   } = $props();
 
@@ -47,7 +53,7 @@
     error = null;
     try {
       preflight = await preflightYoutubeSummaryRun({
-        projectId: null,
+        projectId,
         sourceIds: [source.sourceId],
         profileId: profileId || null,
         modelOverride: modelOverride || null,
@@ -67,11 +73,11 @@
     if (!source || !canStartYoutubeSummary(preflight)) return;
     loading = true;
     error = null;
-    const clientRequestId = `youtube-summary-${source.sourceId}-${Date.now()}`;
+    const clientRequestId = `youtube-summary-${projectId ?? "global"}-${source.sourceId}-${Date.now()}`;
     try {
       const outcome = await startYoutubeSummaryRun({
         clientRequestId,
-        projectId: null,
+        projectId,
         sourceIds: [source.sourceId],
         profileId: profileId || null,
         modelOverride: modelOverride || null,

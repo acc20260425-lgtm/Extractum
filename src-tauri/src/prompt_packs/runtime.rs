@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::time::Instant;
 
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -9,10 +10,18 @@ use super::dto::{
     StartYoutubeSummaryRunOutcomeDto,
 };
 use super::youtube_summary::{
-    preflight_youtube_summary_in_pool, start_youtube_summary_run_in_pool, ModelBudget,
+    execute_youtube_summary_run_with_stage_executor, preflight_youtube_summary_in_pool,
+    start_youtube_summary_run_in_pool, LlmCompletion as PromptPackLlmCompletion, ModelBudget,
+    TranscriptAnalysisStageExecutionRequest, YoutubeSummaryRunExecutionOutcome,
+    YoutubeSummaryStageExecutionError,
 };
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::llm::{
+    resolve_profile_for_backend, run_llm_collect_with_profile, LlmChatRequest, LlmMessage,
+    LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState,
+    ResolvedLlmProfile,
+};
 
 pub const PROMPT_PACK_RUN_EVENT: &str = "prompt-pack-run-event";
 
@@ -30,6 +39,10 @@ impl PromptPackRunState {
     pub async fn track(&self, run_id: i64) -> AppResult<()> {
         self.active.lock().await.insert(run_id);
         Ok(())
+    }
+
+    pub async fn track_if_absent(&self, run_id: i64) -> AppResult<bool> {
+        Ok(self.active.lock().await.insert(run_id))
     }
 
     pub async fn request_cancel(&self, run_id: i64) -> AppResult<()> {
@@ -125,27 +138,30 @@ pub async fn start_youtube_summary_run(
     )
     .await?;
     if let StartYoutubeSummaryRunOutcomeDto::Started { run } = &outcome {
-        state.track(run.run_id).await?;
-        emit_prompt_pack_run_event(
-            &handle,
-            &state,
-            PromptPackRunEvent {
-                run_id: run.run_id,
-                request_id: format!("run-{}", run.run_id),
-                kind: "queued".to_string(),
-                run_status: run.run_status.clone(),
-                phase: "snapshot".to_string(),
-                stage_run_id: None,
-                stage_name: None,
-                source_snapshot_id: None,
-                queue_position: run.queue_position,
-                progress_current: run.progress_current,
-                progress_total: run.progress_total,
-                message: run.latest_message.clone(),
-                error: None,
-            },
-        )
-        .await;
+        let should_spawn = run.run_status == "queued" && state.track_if_absent(run.run_id).await?;
+        if should_spawn {
+            emit_prompt_pack_run_event(
+                &handle,
+                &state,
+                PromptPackRunEvent {
+                    run_id: run.run_id,
+                    request_id: format!("run-{}", run.run_id),
+                    kind: "queued".to_string(),
+                    run_status: run.run_status.clone(),
+                    phase: "snapshot".to_string(),
+                    stage_run_id: None,
+                    stage_name: None,
+                    source_snapshot_id: None,
+                    queue_position: run.queue_position,
+                    progress_current: run.progress_current,
+                    progress_total: run.progress_total,
+                    message: run.latest_message.clone(),
+                    error: None,
+                },
+            )
+            .await;
+            spawn_youtube_summary_execution(handle.clone(), run.run_id);
+        }
     }
     Ok(outcome)
 }
@@ -154,10 +170,12 @@ pub async fn start_youtube_summary_run(
 pub async fn cancel_prompt_pack_run(
     handle: AppHandle,
     state: State<'_, PromptPackRunState>,
+    scheduler: State<'_, LlmSchedulerState>,
     run_id: i64,
 ) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
     state.request_cancel(run_id).await?;
+    scheduler.cancel_run_requests(run_id).await;
     sqlx::query(
         "UPDATE prompt_pack_runs
          SET run_status = 'cancelled', completed_at = COALESCE(completed_at, ?), updated_at = ?
@@ -190,6 +208,304 @@ pub async fn cancel_prompt_pack_run(
     )
     .await;
     Ok(())
+}
+
+fn spawn_youtube_summary_execution(handle: AppHandle, run_id: i64) {
+    tauri::async_runtime::spawn(async move {
+        let result = execute_youtube_summary_run(handle.clone(), run_id).await;
+        match result {
+            Ok(outcome) => emit_youtube_summary_terminal_event(&handle, outcome).await,
+            Err(error) => {
+                if let Err(mark_error) =
+                    mark_prompt_pack_run_failed(&handle, run_id, &error.message).await
+                {
+                    eprintln!("Prompt Pack run {run_id} failed and could not be marked failed: {mark_error}");
+                }
+                emit_youtube_summary_terminal_event(
+                    &handle,
+                    YoutubeSummaryRunExecutionOutcome {
+                        run_id,
+                        run_status: "failed".to_string(),
+                        progress_current: 0,
+                        progress_total: 0,
+                        message: error.message,
+                    },
+                )
+                .await;
+            }
+        }
+    });
+}
+
+async fn execute_youtube_summary_run(
+    handle: AppHandle,
+    run_id: i64,
+) -> AppResult<YoutubeSummaryRunExecutionOutcome> {
+    let pool = get_pool(&handle).await?;
+    let config = load_run_llm_config(&pool, run_id).await?;
+    let resolved_profile =
+        resolve_profile_for_backend(&handle, config.profile_id.as_deref()).await?;
+    emit_prompt_pack_run_event(
+        &handle,
+        &handle.state::<PromptPackRunState>(),
+        PromptPackRunEvent {
+            run_id,
+            request_id: format!("run-{run_id}-started"),
+            kind: "started".to_string(),
+            run_status: "running".to_string(),
+            phase: "execution".to_string(),
+            stage_run_id: None,
+            stage_name: None,
+            source_snapshot_id: None,
+            queue_position: None,
+            progress_current: Some(0),
+            progress_total: None,
+            message: Some("Running".to_string()),
+            error: None,
+        },
+    )
+    .await;
+
+    execute_youtube_summary_run_with_stage_executor(&pool, run_id, move |stage_request| {
+        let handle = handle.clone();
+        let profile = resolved_profile.clone();
+        let model_override = config.model_override.clone();
+        async move {
+            run_transcript_analysis_stage_request(handle, profile, model_override, stage_request)
+                .await
+        }
+    })
+    .await
+}
+
+#[derive(Clone, Debug)]
+struct RunLlmConfig {
+    profile_id: Option<String>,
+    model_override: Option<String>,
+}
+
+async fn load_run_llm_config(pool: &SqlitePool, run_id: i64) -> AppResult<RunLlmConfig> {
+    sqlx::query_as::<_, (Option<String>, Option<String>)>(
+        "SELECT provider_profile_id, model FROM prompt_pack_runs WHERE id = ?",
+    )
+    .bind(run_id)
+    .fetch_one(pool)
+    .await
+    .map(|(profile_id, model_override)| RunLlmConfig {
+        profile_id,
+        model_override,
+    })
+    .map_err(AppError::database)
+}
+
+async fn run_transcript_analysis_stage_request(
+    handle: AppHandle,
+    profile: ResolvedLlmProfile,
+    model_override: Option<String>,
+    stage_request: TranscriptAnalysisStageExecutionRequest,
+) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
+    let llm_request = build_transcript_analysis_llm_request(
+        &stage_request,
+        Some(profile.profile_id.clone()),
+        model_override,
+    );
+    let request_id = llm_request.request_id.clone();
+    let provider = profile.provider.as_str().to_string();
+    let scheduler = handle.state::<LlmSchedulerState>();
+    let queued_handle = handle.clone();
+    let started_handle = handle.clone();
+    let queued_request_id = request_id.clone();
+    let started_request_id = request_id.clone();
+    let queued_stage_name = "youtube_summary/transcript_analysis".to_string();
+    let started_stage_name = queued_stage_name.clone();
+    let queued_stage_run_id = stage_request.stage_run_id;
+    let started_stage_run_id = stage_request.stage_run_id;
+    let queued_source_snapshot_id = stage_request.source_snapshot_id;
+    let started_source_snapshot_id = stage_request.source_snapshot_id;
+    let run_id = stage_request.run_id;
+    let scheduled_request = llm_request.clone();
+    let scheduled_profile = profile.clone();
+
+    match scheduler
+        .run_request(
+            LlmRequestMetadata {
+                request_id: request_id.clone(),
+                profile_id: profile.profile_id.clone(),
+                provider,
+                kind: LlmRequestKind::PromptPackStage,
+                priority: LlmRequestPriority::Background,
+                owner_run_id: Some(stage_request.run_id),
+            },
+            move |position| {
+                let _ = queued_handle.emit(
+                    PROMPT_PACK_RUN_EVENT,
+                    PromptPackRunEvent {
+                        run_id,
+                        request_id: queued_request_id.clone(),
+                        kind: "queued".to_string(),
+                        run_status: "running".to_string(),
+                        phase: "transcript_analysis".to_string(),
+                        stage_run_id: Some(queued_stage_run_id),
+                        stage_name: Some(queued_stage_name.clone()),
+                        source_snapshot_id: Some(queued_source_snapshot_id),
+                        queue_position: Some(position as i64),
+                        progress_current: None,
+                        progress_total: None,
+                        message: Some(format!("LLM request queued at position {position}")),
+                        error: None,
+                    },
+                );
+            },
+            move |control| async move {
+                let _ = started_handle.emit(
+                    PROMPT_PACK_RUN_EVENT,
+                    PromptPackRunEvent {
+                        run_id,
+                        request_id: started_request_id,
+                        kind: "started".to_string(),
+                        run_status: "running".to_string(),
+                        phase: "transcript_analysis".to_string(),
+                        stage_run_id: Some(started_stage_run_id),
+                        stage_name: Some(started_stage_name),
+                        source_snapshot_id: Some(started_source_snapshot_id),
+                        queue_position: None,
+                        progress_current: None,
+                        progress_total: None,
+                        message: Some("Analyzing transcript".to_string()),
+                        error: None,
+                    },
+                );
+                let started_at = Instant::now();
+                let completion = control
+                    .run_cancellable(run_llm_collect_with_profile(
+                        &scheduled_request,
+                        &scheduled_profile,
+                    ))
+                    .await?;
+                Ok((completion, started_at.elapsed().as_millis() as i64))
+            },
+        )
+        .await
+    {
+        Ok((completion, latency_ms)) => Ok(PromptPackLlmCompletion {
+            text: completion.text,
+            input_tokens: completion
+                .usage
+                .as_ref()
+                .and_then(|usage| usage.input_tokens),
+            output_tokens: completion
+                .usage
+                .as_ref()
+                .and_then(|usage| usage.output_tokens),
+            latency_ms,
+        }),
+        Err(LlmRequestError::Cancelled) => Err(YoutubeSummaryStageExecutionError::Cancelled),
+        Err(LlmRequestError::Failed(error)) => {
+            Err(YoutubeSummaryStageExecutionError::Failed(error))
+        }
+    }
+}
+
+fn build_transcript_analysis_llm_request(
+    request: &TranscriptAnalysisStageExecutionRequest,
+    profile_id: Option<String>,
+    model_override: Option<String>,
+) -> LlmChatRequest {
+    LlmChatRequest {
+        request_id: format!(
+            "prompt-pack-run-{}-stage-{}",
+            request.run_id, request.stage_run_id
+        ),
+        profile_id,
+        model_override,
+        messages: vec![
+            LlmMessage {
+                role: "system".to_string(),
+                content: "Return strict JSON for the YouTube Summary transcript analysis stage. Use only refs from the provided registries.".to_string(),
+            },
+            LlmMessage {
+                role: "user".to_string(),
+                content: format!(
+                    "Analyze the frozen transcript and return exactly one strict JSON object matching this shape:\n\
+                     {{\n\
+                     \"stage_io_version\": \"1.0\",\n\
+                     \"schema_version\": \"1.0\",\n\
+                     \"stage\": \"youtube_summary/transcript_analysis\",\n\
+                     \"video_candidate\": {{\n\
+                     \"summary_text\": \"concise summary\",\n\
+                     \"segment_candidates\": [],\n\
+                     \"key_point_candidates\": [],\n\
+                     \"quote_candidates\": [],\n\
+                     \"action_item_candidates\": [],\n\
+                     \"open_question_candidates\": []\n\
+                     }},\n\
+                     \"claim_candidates\": [{{ \"text\": \"claim\", \"material_refs\": [\"allowed material ref\"] }}],\n\
+                     \"evidence_fragment_candidates\": [{{ \"text\": \"evidence quote or paraphrase\", \"material_refs\": [\"allowed material ref\"] }}],\n\
+                     \"warning_candidates\": []\n\
+                     }}\n\n\
+                     Do not include backend-owned IDs such as claim_id, evidence_id, source_ref_id, segment_id, key_point_id, quote_id, action_item_id, or open_question_id. Use material_refs only from allowed_material_refs in the frozen input. Do not rename fields. Do not wrap the JSON in Markdown.\n\n\
+                     Frozen stage input JSON:\n{}",
+                    request.prompt_input_json
+                ),
+            },
+        ],
+    }
+}
+
+async fn mark_prompt_pack_run_failed(
+    handle: &AppHandle,
+    run_id: i64,
+    message: &str,
+) -> AppResult<()> {
+    let pool = get_pool(handle).await?;
+    sqlx::query(
+        "UPDATE prompt_pack_runs
+         SET run_status = 'failed',
+             result_status = 'failed',
+             latest_message = ?,
+             completed_at = COALESCE(completed_at, ?),
+             updated_at = ?
+         WHERE id = ? AND run_status IN ('queued', 'running')",
+    )
+    .bind(message)
+    .bind(now_string())
+    .bind(now_string())
+    .bind(run_id)
+    .execute(&pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+async fn emit_youtube_summary_terminal_event(
+    handle: &AppHandle,
+    outcome: YoutubeSummaryRunExecutionOutcome,
+) {
+    let state = handle.state::<PromptPackRunState>();
+    let event_kind = match outcome.run_status.as_str() {
+        "complete" => "completed",
+        other => other,
+    };
+    emit_prompt_pack_run_event(
+        handle,
+        &state,
+        PromptPackRunEvent {
+            run_id: outcome.run_id,
+            request_id: format!("run-{}-terminal", outcome.run_id),
+            kind: event_kind.to_string(),
+            run_status: outcome.run_status,
+            phase: "terminal".to_string(),
+            stage_run_id: None,
+            stage_name: None,
+            source_snapshot_id: None,
+            queue_position: None,
+            progress_current: Some(outcome.progress_current),
+            progress_total: Some(outcome.progress_total),
+            message: Some(outcome.message),
+            error: None,
+        },
+    )
+    .await;
 }
 
 #[tauri::command]
@@ -413,18 +729,21 @@ fn now_string() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        cleanup_interrupted_prompt_pack_runs_in_pool, list_prompt_pack_runs_in_pool,
-        PromptPackRunState,
+        build_transcript_analysis_llm_request, cleanup_interrupted_prompt_pack_runs_in_pool,
+        list_prompt_pack_runs_in_pool, PromptPackRunState,
     };
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::dto::{ListPromptPackRunsRequest, PromptPackRunEvent};
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
+    use crate::prompt_packs::youtube_summary::TranscriptAnalysisStageExecutionRequest;
 
     #[tokio::test]
     async fn prompt_pack_run_state_tracks_active_and_cancel_requested_runs() {
         let state = PromptPackRunState::new();
 
-        state.track(42).await.expect("track");
+        assert!(state.track_if_absent(42).await.expect("first track"));
+        assert!(!state.track_if_absent(42).await.expect("duplicate track"));
+        state.track(43).await.expect("track second");
         assert!(state.active_run_ids().await.contains(&42));
 
         state.request_cancel(42).await.expect("cancel");
@@ -432,6 +751,7 @@ mod tests {
 
         state.finish(42).await;
         assert!(!state.active_run_ids().await.contains(&42));
+        assert!(state.active_run_ids().await.contains(&43));
     }
 
     #[tokio::test]
@@ -506,6 +826,40 @@ mod tests {
         assert!(runs.iter().all(|run| run.project_id == Some(7)));
     }
 
+    #[test]
+    fn transcript_analysis_llm_request_embeds_frozen_stage_input() {
+        let request = build_transcript_analysis_llm_request(
+            &TranscriptAnalysisStageExecutionRequest {
+                run_id: 42,
+                stage_run_id: 1001,
+                source_snapshot_id: 501,
+                source_ref_id: "source_ref_1".to_string(),
+                prompt_input_json: "{\"stage\":\"youtube_summary/transcript_analysis\"}"
+                    .to_string(),
+            },
+            Some("profile-1".to_string()),
+            Some("model-1".to_string()),
+        );
+
+        assert_eq!(request.request_id, "prompt-pack-run-42-stage-1001");
+        assert_eq!(request.profile_id.as_deref(), Some("profile-1"));
+        assert_eq!(request.model_override.as_deref(), Some("model-1"));
+        assert_eq!(request.messages[0].role, "system");
+        assert!(request.messages[0].content.contains("Return strict JSON"));
+        assert_eq!(request.messages[1].role, "user");
+        assert!(request.messages[1]
+            .content
+            .contains("Analyze the frozen transcript"));
+        assert!(request.messages[1].content.contains("stage_io_version"));
+        assert!(request.messages[1].content.contains("summary_text"));
+        assert!(request.messages[1]
+            .content
+            .contains("Do not include backend-owned IDs"));
+        assert!(request.messages[1]
+            .content
+            .contains("\"stage\":\"youtube_summary/transcript_analysis\""));
+    }
+
     async fn test_pool_with_prompt_pack_runs<const N: usize>(
         rows: [(i64, Option<i64>, &str, &str); N],
     ) -> sqlx::SqlitePool {
@@ -515,7 +869,9 @@ mod tests {
         apply_all_migrations_for_test_pool(&pool)
             .await
             .expect("apply migrations");
-        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed");
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("seed");
         for (run_id, project_id, status, created_at) in rows {
             if let Some(project_id) = project_id {
                 sqlx::query(

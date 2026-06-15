@@ -44,6 +44,22 @@ export function updateRunListFromEvent(
   return runs.map((run) => (run.runId === event.runId ? { ...run, ...nextRun } : run));
 }
 
+export function retainSelectedRunId(
+  selectedRunId: number | null,
+  runs: Pick<PromptPackRunListItem, "runId">[],
+): number | null {
+  if (selectedRunId === null) return null;
+  return runs.some((run) => run.runId === selectedRunId) ? selectedRunId : null;
+}
+
+export function shouldApplyRunEventToRunsPanel(
+  runs: Pick<PromptPackRunListItem, "runId">[],
+  event: PromptPackRunEvent,
+  projectId: number | null,
+): boolean {
+  return projectId === null || runs.some((run) => run.runId === event.runId);
+}
+
 export function statusLabel(status: PromptPackRunStatus): string {
   return {
     queued: "Queued",
