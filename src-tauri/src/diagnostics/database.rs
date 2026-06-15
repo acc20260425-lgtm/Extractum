@@ -114,7 +114,10 @@ async fn load_source_counts(pool: &Pool<Sqlite>) -> AppResult<Vec<DiagnosticSour
             Ok(DiagnosticSourceCount {
                 source_type: row.try_get("source_type").map_err(AppError::database)?,
                 source_subtype: row.try_get("source_subtype").map_err(AppError::database)?,
-                active: row.try_get::<i64, _>("active").map_err(AppError::database)? != 0,
+                active: row
+                    .try_get::<i64, _>("active")
+                    .map_err(AppError::database)?
+                    != 0,
                 sync_state: row.try_get("sync_state").map_err(AppError::database)?,
                 count: row.try_get("count").map_err(AppError::database)?,
             })
@@ -362,8 +365,9 @@ mod tests {
         seed_safe_rows(&pool).await;
         let expected_versions = expected_migration_versions();
 
-        let (database, sources, items, analysis_runs, ingest) =
-            load_database_diagnostics(&pool).await.expect("load diagnostics");
+        let (database, sources, items, analysis_runs, ingest) = load_database_diagnostics(&pool)
+            .await
+            .expect("load diagnostics");
         let account_ids = load_account_ids(&pool).await.expect("load account ids");
 
         assert_eq!(database.sqlite_available, true);

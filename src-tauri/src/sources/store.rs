@@ -72,13 +72,12 @@ async fn delete_source_from_pool(
     .await
     .map_err(AppError::database)?;
 
-    let project_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM project_sources WHERE source_id = ?",
-    )
-    .bind(source_id)
-    .fetch_one(&mut *conn)
-    .await
-    .map_err(AppError::database)?;
+    let project_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM project_sources WHERE source_id = ?")
+            .bind(source_id)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(AppError::database)?;
 
     if project_count > 0 {
         return Err(AppError::validation(format!(

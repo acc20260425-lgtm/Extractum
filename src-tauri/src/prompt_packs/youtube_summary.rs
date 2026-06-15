@@ -315,8 +315,9 @@ pub(crate) async fn execute_synthesis_stage_with_completion(
         return Err(error);
     }
 
-    let parsed_json = serde_json::to_string(&parsed)
-        .map_err(|error| AppError::internal(format!("serialize synthesis parsed output: {error}")))?;
+    let parsed_json = serde_json::to_string(&parsed).map_err(|error| {
+        AppError::internal(format!("serialize synthesis parsed output: {error}"))
+    })?;
     insert_stage_artifact_in_pool(
         pool,
         run_id,
@@ -408,9 +409,9 @@ pub(crate) async fn execute_youtube_summary_run_with_fake_completions(
     let mut successes = 0_i64;
     let mut failures = 0_i64;
     for (stage_id,) in stages {
-        let completion = completions.next().ok_or_else(|| {
-            AppError::internal("missing fake transcript-analysis completion")
-        })?;
+        let completion = completions
+            .next()
+            .ok_or_else(|| AppError::internal("missing fake transcript-analysis completion"))?;
         match completion {
             Ok(completion) => {
                 execute_transcript_analysis_stage_with_completion(pool, stage_id, completion)
@@ -524,7 +525,11 @@ where
             prompt_input_json,
         };
 
-        match execute_stage(YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request)).await {
+        match execute_stage(YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(
+            request,
+        ))
+        .await
+        {
             Ok(completion) => match execute_transcript_analysis_stage_with_completion(
                 pool,
                 stage.stage_run_id,
@@ -563,7 +568,8 @@ where
         return Ok(cancelled_outcome(run_id, successes, total + 1));
     }
     mark_pending_mvp_tail_stages_skipped(pool, run_id).await?;
-    let terminal_status = terminal_status_for_synthesis(successes, failures, total, synthesis_status);
+    let terminal_status =
+        terminal_status_for_synthesis(successes, failures, total, synthesis_status);
     let progress_total = if successes > 1 { total + 1 } else { total };
     let progress_current = if synthesis_status == "succeeded" {
         successes + 1
@@ -845,23 +851,25 @@ where
     };
 
     match execute_stage(YoutubeSummaryStageExecutionRequest::Synthesis(request)).await {
-        Ok(completion) => match execute_synthesis_stage_with_completion(pool, stage_run_id, completion).await {
-            Ok(()) => {
-                update_run_progress(pool, run_id, successes + 1, transcript_total + 1).await?;
-                Ok("succeeded")
+        Ok(completion) => {
+            match execute_synthesis_stage_with_completion(pool, stage_run_id, completion).await {
+                Ok(()) => {
+                    update_run_progress(pool, run_id, successes + 1, transcript_total + 1).await?;
+                    Ok("succeeded")
+                }
+                Err(error) => {
+                    mark_synthesis_stage_failed_with_artifact(
+                        pool,
+                        run_id,
+                        stage_run_id,
+                        &error.message,
+                    )
+                    .await?;
+                    update_run_progress(pool, run_id, successes, transcript_total + 1).await?;
+                    Ok("failed")
+                }
             }
-            Err(error) => {
-                mark_synthesis_stage_failed_with_artifact(
-                    pool,
-                    run_id,
-                    stage_run_id,
-                    &error.message,
-                )
-                .await?;
-                update_run_progress(pool, run_id, successes, transcript_total + 1).await?;
-                Ok("failed")
-            }
-        },
+        }
         Err(YoutubeSummaryStageExecutionError::Cancelled) => Ok("cancelled"),
         Err(YoutubeSummaryStageExecutionError::Failed(error)) => {
             mark_synthesis_stage_failed_with_artifact(pool, run_id, stage_run_id, &error.message)
@@ -2027,7 +2035,11 @@ pub(crate) async fn build_synthesis_stage_input(
                 .cloned()
                 .unwrap_or_else(|| serde_json::json!({}))
         }));
-        wrap_candidates(&mut claim_candidates, parsed.get("claim_candidates"), &source_ref_id);
+        wrap_candidates(
+            &mut claim_candidates,
+            parsed.get("claim_candidates"),
+            &source_ref_id,
+        );
         wrap_candidates(
             &mut evidence_fragment_candidates,
             parsed.get("evidence_fragment_candidates"),
@@ -2516,7 +2528,10 @@ mod tests {
 
         assert_eq!(input["stage"], "youtube_summary/synthesis");
         assert_eq!(input["videos"].as_array().expect("videos").len(), 2);
-        assert_eq!(input["claim_candidates"].as_array().expect("claims").len(), 2);
+        assert_eq!(
+            input["claim_candidates"].as_array().expect("claims").len(),
+            2
+        );
         assert_eq!(
             input["evidence_fragment_candidates"]
                 .as_array()
@@ -2633,7 +2648,10 @@ mod tests {
         .await
         .expect("artifacts");
 
-        assert_eq!(kinds, vec!["prompt_input", "raw_output", "parsed_output", "metrics"]);
+        assert_eq!(
+            kinds,
+            vec!["prompt_input", "raw_output", "parsed_output", "metrics"]
+        );
     }
 
     #[tokio::test]
@@ -2692,13 +2710,12 @@ mod tests {
         .await
         .expect_err("invalid synthesis fails stage");
 
-        let status: String = sqlx::query_scalar(
-            "SELECT stage_status FROM prompt_pack_stage_runs WHERE id = ?",
-        )
-        .bind(stage_run_id)
-        .fetch_one(&pool)
-        .await
-        .expect("stage status");
+        let status: String =
+            sqlx::query_scalar("SELECT stage_status FROM prompt_pack_stage_runs WHERE id = ?")
+                .bind(stage_run_id)
+                .fetch_one(&pool)
+                .await
+                .expect("stage status");
         let success_artifacts: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM prompt_pack_stage_artifacts
              WHERE stage_run_id = ? AND artifact_kind IN ('parsed_output', 'metrics')",
@@ -2879,11 +2896,11 @@ mod tests {
         let outcome =
             execute_youtube_summary_run_with_stage_executor(&pool, 1, |request| async move {
                 match request {
-                    super::YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request) => {
-                        Ok(fake_completion_with_valid_transcript_analysis_json_for_source(
+                    super::YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request) => Ok(
+                        fake_completion_with_valid_transcript_analysis_json_for_source(
                             &request.source_ref_id,
-                        ))
-                    }
+                        ),
+                    ),
                     super::YoutubeSummaryStageExecutionRequest::Synthesis(_) => {
                         panic!("single-video run should not request synthesis")
                     }
@@ -2993,11 +3010,10 @@ mod tests {
         .await
         .expect("synthesis status");
 
-        let result = crate::prompt_packs::result_builder::build_youtube_summary_canonical_result(
-            &pool, 1,
-        )
-        .await
-        .expect("canonical result");
+        let result =
+            crate::prompt_packs::result_builder::build_youtube_summary_canonical_result(&pool, 1)
+                .await
+                .expect("canonical result");
 
         assert_eq!(status, "skipped");
         assert!(result["outputs"]["pack_data"]["youtube_summary"]["synthesis"].is_null());
@@ -3022,13 +3038,21 @@ mod tests {
             1,
             vec![
                 Ok(LlmCompletion {
-                    text: transcript_analysis_json("First summary", "First claim", "First evidence"),
+                    text: transcript_analysis_json(
+                        "First summary",
+                        "First claim",
+                        "First evidence",
+                    ),
                     input_tokens: Some(10),
                     output_tokens: Some(20),
                     latency_ms: 30,
                 }),
                 Ok(LlmCompletion {
-                    text: transcript_analysis_json("Second summary", "Second claim", "Second evidence"),
+                    text: transcript_analysis_json(
+                        "Second summary",
+                        "Second claim",
+                        "Second evidence",
+                    ),
                     input_tokens: Some(11),
                     output_tokens: Some(21),
                     latency_ms: 31,
@@ -3074,13 +3098,21 @@ mod tests {
             1,
             vec![
                 Ok(LlmCompletion {
-                    text: transcript_analysis_json("First summary", "First claim", "First evidence"),
+                    text: transcript_analysis_json(
+                        "First summary",
+                        "First claim",
+                        "First evidence",
+                    ),
                     input_tokens: Some(10),
                     output_tokens: Some(20),
                     latency_ms: 30,
                 }),
                 Ok(LlmCompletion {
-                    text: transcript_analysis_json("Second summary", "Second claim", "Second evidence"),
+                    text: transcript_analysis_json(
+                        "Second summary",
+                        "Second claim",
+                        "Second evidence",
+                    ),
                     input_tokens: Some(11),
                     output_tokens: Some(21),
                     latency_ms: 31,
@@ -3132,13 +3164,21 @@ mod tests {
             1,
             vec![
                 Ok(LlmCompletion {
-                    text: transcript_analysis_json("First summary", "First claim", "First evidence"),
+                    text: transcript_analysis_json(
+                        "First summary",
+                        "First claim",
+                        "First evidence",
+                    ),
                     input_tokens: Some(10),
                     output_tokens: Some(20),
                     latency_ms: 30,
                 }),
                 Ok(LlmCompletion {
-                    text: transcript_analysis_json("Second summary", "Second claim", "Second evidence"),
+                    text: transcript_analysis_json(
+                        "Second summary",
+                        "Second claim",
+                        "Second evidence",
+                    ),
                     input_tokens: Some(11),
                     output_tokens: Some(21),
                     latency_ms: 31,
@@ -3201,7 +3241,11 @@ mod tests {
             1,
             vec![
                 Ok(LlmCompletion {
-                    text: transcript_analysis_json("First summary", "First claim", "First evidence"),
+                    text: transcript_analysis_json(
+                        "First summary",
+                        "First claim",
+                        "First evidence",
+                    ),
                     input_tokens: Some(10),
                     output_tokens: Some(20),
                     latency_ms: 30,

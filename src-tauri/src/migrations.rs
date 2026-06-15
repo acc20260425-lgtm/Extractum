@@ -330,9 +330,8 @@ mod tests {
             .expect("apply migrations");
 
         let prompt_pack_runs_sql = table_sql(&pool, "prompt_pack_runs").await;
-        assert!(prompt_pack_runs_sql.contains(
-            "FOREIGN KEY (pack_version_id, pack_id, pack_version, schema_version)"
-        ));
+        assert!(prompt_pack_runs_sql
+            .contains("FOREIGN KEY (pack_version_id, pack_id, pack_version, schema_version)"));
         assert!(prompt_pack_runs_sql.contains(
             "REFERENCES prompt_pack_versions(id, pack_id, pack_version, schema_version)"
         ));
@@ -348,9 +347,8 @@ mod tests {
         let origins_sql = table_sql(&pool, "prompt_pack_run_source_origins").await;
         assert!(origins_sql.contains("FOREIGN KEY (source_snapshot_id, run_id)"));
         assert!(origins_sql.contains("FOREIGN KEY (origin_scope_id, run_id)"));
-        assert!(origins_sql.contains(
-            "inclusion_status <> 'included' OR source_snapshot_id IS NOT NULL"
-        ));
+        assert!(origins_sql
+            .contains("inclusion_status <> 'included' OR source_snapshot_id IS NOT NULL"));
 
         let material_sql = table_sql(&pool, "prompt_pack_run_material_snapshots").await;
         assert!(material_sql.contains("FOREIGN KEY (source_snapshot_id, run_id)"));
@@ -365,7 +363,10 @@ mod tests {
         .fetch_optional(&pool)
         .await
         .expect("active version index lookup");
-        assert!(active_version_index.is_some(), "missing active version unique index");
+        assert!(
+            active_version_index.is_some(),
+            "missing active version unique index"
+        );
     }
 
     async fn table_sql(pool: &sqlx::SqlitePool, table_name: &str) -> String {
@@ -387,7 +388,9 @@ mod tests {
             .expect("projects MVP migration is registered");
 
         assert_eq!(migration.description, "projects mvp schema");
-        assert!(migration.sql.contains("CREATE TABLE IF NOT EXISTS projects"));
+        assert!(migration
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS projects"));
         assert!(migration
             .sql
             .contains("CREATE TABLE IF NOT EXISTS project_sources"));

@@ -127,11 +127,13 @@ pub(crate) async fn get_prompt_pack_library_in_pool(
             .await
             .map_err(AppError::database)?
             .into_iter()
-            .map(|(schema_id, schema_kind, content_hash)| PromptPackSchemaAssetDto {
-                schema_id,
-                schema_kind,
-                content_hash,
-            })
+            .map(
+                |(schema_id, schema_kind, content_hash)| PromptPackSchemaAssetDto {
+                    schema_id,
+                    schema_kind,
+                    content_hash,
+                },
+            )
             .collect::<Vec<_>>();
 
             Some(PromptPackVersionDto {
@@ -172,7 +174,9 @@ mod tests {
         apply_all_migrations_for_test_pool(&pool)
             .await
             .expect("apply migrations");
-        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed");
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("seed");
         pool
     }
 
@@ -200,9 +204,18 @@ mod tests {
         assert!(!version.default_include_comments);
 
         assert_eq!(version.stages.len(), 1);
-        assert_eq!(version.stages[0].stage_name, "youtube_summary/transcript_analysis");
-        assert_eq!(version.stages[0].input_schema_id, "stage-io/youtube_summary_transcript_analysis_input");
-        assert_eq!(version.stages[0].output_schema_id, "stage-io/youtube_summary_transcript_analysis_output");
+        assert_eq!(
+            version.stages[0].stage_name,
+            "youtube_summary/transcript_analysis"
+        );
+        assert_eq!(
+            version.stages[0].input_schema_id,
+            "stage-io/youtube_summary_transcript_analysis_input"
+        );
+        assert_eq!(
+            version.stages[0].output_schema_id,
+            "stage-io/youtube_summary_transcript_analysis_output"
+        );
 
         let schema_ids = version
             .schema_assets

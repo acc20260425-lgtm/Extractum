@@ -52,7 +52,10 @@ pub(crate) async fn build_youtube_summary_canonical_result(
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or("")
         }));
-        if let Some(candidate_claims) = parsed.get("claim_candidates").and_then(|value| value.as_array()) {
+        if let Some(candidate_claims) = parsed
+            .get("claim_candidates")
+            .and_then(|value| value.as_array())
+        {
             for candidate in candidate_claims {
                 claims.push(serde_json::json!({
                     "claim_id": format!("claim_{}", claims.len() + 1),
@@ -359,7 +362,11 @@ fn build_canonical_synthesis(
     extend_unique_refs_from_items(&mut evidence_refs, &cross_video_themes, "evidence_refs");
     extend_unique_refs_from_items(&mut evidence_refs, &common_claims, "evidence_refs");
     extend_unique_refs_from_items(&mut evidence_refs, &contradictions, "evidence_refs");
-    extend_unique_source_refs_from_video_refs(&mut source_refs, &cross_video_themes, &video_to_source);
+    extend_unique_source_refs_from_video_refs(
+        &mut source_refs,
+        &cross_video_themes,
+        &video_to_source,
+    );
     extend_unique_source_refs_from_video_refs(&mut source_refs, &common_claims, &video_to_source);
     extend_unique_source_refs_from_video_refs(&mut source_refs, &contradictions, &video_to_source);
 
@@ -407,7 +414,10 @@ async fn build_base_limitations(_pool: &SqlitePool, _run_id: i64) -> AppResult<V
 }
 
 fn push_quality_flag(flags: &mut Vec<serde_json::Value>, flag: &str, severity: &str) {
-    if !flags.iter().any(|value| value["flag"].as_str() == Some(flag)) {
+    if !flags
+        .iter()
+        .any(|value| value["flag"].as_str() == Some(flag))
+    {
         flags.push(serde_json::json!({
             "flag": flag,
             "severity": severity
@@ -501,8 +511,8 @@ mod tests {
             .expect("canonical result");
 
         assert_eq!(
-            result["outputs"]["pack_data"]["youtube_summary"]["synthesis"]
-                ["cross_video_themes"][0]["theme_text"],
+            result["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"][0]
+                ["theme_text"],
             "Shared theme",
         );
         assert_eq!(
@@ -565,16 +575,14 @@ mod tests {
 
         assert!(result["outputs"]["pack_data"]["youtube_summary"]["synthesis"].is_null());
         assert!(has_quality_flag(&result, "synthesis_failed"));
-        assert!(
-            result["limitations"]
-                .as_array()
-                .expect("limitations")
-                .iter()
-                .any(|value| value
-                    .as_str()
-                    .unwrap_or("")
-                    .contains("synthesis stage failed"))
-        );
+        assert!(result["limitations"]
+            .as_array()
+            .expect("limitations")
+            .iter()
+            .any(|value| value
+                .as_str()
+                .unwrap_or("")
+                .contains("synthesis stage failed")));
     }
 
     #[tokio::test]
@@ -628,7 +636,9 @@ mod tests {
         apply_all_migrations_for_test_pool(&pool)
             .await
             .expect("apply migrations");
-        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed");
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("seed");
         sqlx::query(
             "INSERT INTO prompt_pack_runs (
                 id, pack_version_id, pack_id, pack_version, schema_version,
@@ -698,12 +708,11 @@ mod tests {
         run_id: i64,
         status: &str,
     ) -> sqlx::Result<()> {
-        let run_exists: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM prompt_pack_runs WHERE id = ?",
-        )
-        .bind(run_id)
-        .fetch_one(pool)
-        .await?;
+        let run_exists: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_runs WHERE id = ?")
+                .bind(run_id)
+                .fetch_one(pool)
+                .await?;
         assert_eq!(run_exists, 1, "result-builder fixture must own the run");
 
         sqlx::query(
@@ -727,7 +736,10 @@ mod tests {
         .bind(run_id)
         .fetch_one(pool)
         .await?;
-        assert_eq!(owned_stage_exists, 1, "synthesis stage must belong to fixture run");
+        assert_eq!(
+            owned_stage_exists, 1,
+            "synthesis stage must belong to fixture run"
+        );
         Ok(())
     }
 

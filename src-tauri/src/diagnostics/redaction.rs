@@ -89,7 +89,9 @@ fn redact_json_object(object: Map<String, Value>) -> Map<String, Value> {
 fn redact_sensitive_value(value: Value) -> Value {
     match value {
         Value::Number(_) | Value::Bool(_) | Value::Null => value,
-        Value::String(_) | Value::Array(_) | Value::Object(_) => Value::String(REDACTED.to_string()),
+        Value::String(_) | Value::Array(_) | Value::Object(_) => {
+            Value::String(REDACTED.to_string())
+        }
     }
 }
 
@@ -316,8 +318,7 @@ fn bound_snippet(input: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        redact_json_value, redact_text, sanitized_error_message, MAX_SANITIZED_TEXT_CHARS,
-        REDACTED,
+        redact_json_value, redact_text, sanitized_error_message, MAX_SANITIZED_TEXT_CHARS, REDACTED,
     };
     use serde_json::json;
 

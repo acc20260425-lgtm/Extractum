@@ -651,8 +651,13 @@ mod tests {
     async fn diagnostic_status_counts_do_not_return_account_ids_or_messages() {
         let state = TelegramState::new();
         set_account_status_for_test(&state, 10, "ready", Some("private phone +10000000000")).await;
-        set_account_status_for_test(&state, 11, "restore_failed", Some("C:\\Users\\Dima\\session"))
-            .await;
+        set_account_status_for_test(
+            &state,
+            11,
+            "restore_failed",
+            Some("C:\\Users\\Dima\\session"),
+        )
+        .await;
 
         let counts = state.diagnostic_status_counts(&[10, 11, 12]).await;
 

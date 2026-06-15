@@ -61,10 +61,7 @@ pub(crate) async fn validate_and_quarantine_transcript_analysis_output(
     match validate_transcript_analysis_output(input, output) {
         Ok(()) => Ok(()),
         Err(error) => {
-            let object_path = error
-                .object_path
-                .clone()
-                .unwrap_or_else(|| "$".to_string());
+            let object_path = error.object_path.clone().unwrap_or_else(|| "$".to_string());
             let candidate = value_at_path(output, &object_path).unwrap_or(output);
             let content = serde_json::to_string(candidate).unwrap_or_else(|_| "{}".to_string());
             let _ = sqlx::query(
@@ -147,10 +144,7 @@ async fn quarantine_synthesis_output(
     output: &serde_json::Value,
     error: PromptPackValidationError,
 ) -> AppResult<()> {
-    let object_path = error
-        .object_path
-        .clone()
-        .unwrap_or_else(|| "$".to_string());
+    let object_path = error.object_path.clone().unwrap_or_else(|| "$".to_string());
     let validation_message = error.message.clone();
     let candidate = value_at_path(output, &object_path).unwrap_or(output);
     let content = serde_json::to_string(candidate).unwrap_or_else(|_| "{}".to_string());
@@ -227,10 +221,7 @@ fn expect_non_empty_string_at(
     }
 }
 
-fn expect_array(
-    output: &serde_json::Value,
-    key: &str,
-) -> Result<(), PromptPackValidationError> {
+fn expect_array(output: &serde_json::Value, key: &str) -> Result<(), PromptPackValidationError> {
     expect_array_at(output, key, &format!("$.{key}"))
 }
 
@@ -239,7 +230,11 @@ fn expect_array_at(
     key: &str,
     object_path: &str,
 ) -> Result<(), PromptPackValidationError> {
-    if output.get(key).and_then(serde_json::Value::as_array).is_some() {
+    if output
+        .get(key)
+        .and_then(serde_json::Value::as_array)
+        .is_some()
+    {
         Ok(())
     } else {
         Err(PromptPackValidationError {
@@ -308,10 +303,11 @@ fn reject_unknown_synthesis_source_refs(
                     })?;
                     for (index, item) in refs.iter().enumerate() {
                         let item_path = format!("{child_path}[{index}]");
-                        let source_ref = item.as_str().ok_or_else(|| PromptPackValidationError {
-                            message: "source_refs entries must be strings".to_string(),
-                            object_path: Some(item_path.clone()),
-                        })?;
+                        let source_ref =
+                            item.as_str().ok_or_else(|| PromptPackValidationError {
+                                message: "source_refs entries must be strings".to_string(),
+                                object_path: Some(item_path.clone()),
+                            })?;
                         if !allowed_source_refs.contains(source_ref) {
                             return Err(PromptPackValidationError {
                                 message: format!("unknown synthesis source ref {source_ref}"),
@@ -399,7 +395,11 @@ fn reject_unknown_material_refs(
                         }
                     }
                 }
-                reject_unknown_material_refs(child, &format!("{path}.{key}"), allowed_material_refs)?;
+                reject_unknown_material_refs(
+                    child,
+                    &format!("{path}.{key}"),
+                    allowed_material_refs,
+                )?;
             }
         }
         serde_json::Value::Array(items) => {
@@ -416,10 +416,7 @@ fn reject_unknown_material_refs(
     Ok(())
 }
 
-fn value_at_path<'a>(
-    value: &'a serde_json::Value,
-    path: &str,
-) -> Option<&'a serde_json::Value> {
+fn value_at_path<'a>(value: &'a serde_json::Value, path: &str) -> Option<&'a serde_json::Value> {
     if path == "$" {
         return Some(value);
     }
@@ -433,14 +430,12 @@ fn value_at_path<'a>(
 mod tests {
     use super::{
         validate_and_quarantine_synthesis_output,
-        validate_and_quarantine_transcript_analysis_output,
-        validate_synthesis_output, validate_transcript_analysis_output,
+        validate_and_quarantine_transcript_analysis_output, validate_synthesis_output,
+        validate_transcript_analysis_output,
     };
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
-    use crate::prompt_packs::stage_io::{
-        extract_json_payload, TranscriptAnalysisStageInput,
-    };
+    use crate::prompt_packs::stage_io::{extract_json_payload, TranscriptAnalysisStageInput};
 
     #[test]
     fn transcript_analysis_output_rejects_unknown_material_ref() {
@@ -478,8 +473,8 @@ mod tests {
         let input = test_stage_input_with_material_refs(["m_transcript_1"]);
         let output = test_output_with_claim_id("claim_1");
 
-        let error = validate_transcript_analysis_output(&input, &output)
-            .expect_err("final ids rejected");
+        let error =
+            validate_transcript_analysis_output(&input, &output).expect_err("final ids rejected");
 
         assert!(error.message.contains("claim_id"));
     }
@@ -514,8 +509,8 @@ mod tests {
 
     #[test]
     fn extract_json_payload_rejects_multiple_json_objects() {
-        let error = extract_json_payload("{\"a\":1}\n{\"b\":2}")
-            .expect_err("ambiguous JSON rejected");
+        let error =
+            extract_json_payload("{\"a\":1}\n{\"b\":2}").expect_err("ambiguous JSON rejected");
 
         assert!(error.message.contains("multiple JSON objects"));
     }
@@ -798,7 +793,10 @@ mod tests {
             run_id: 42,
             source_ref_id: "source_ref_1".to_string(),
             allowed_source_ref_ids: vec!["source_ref_1".to_string()],
-            allowed_material_refs: material_refs.iter().map(|value| value.to_string()).collect(),
+            allowed_material_refs: material_refs
+                .iter()
+                .map(|value| value.to_string())
+                .collect(),
             transcript_segment_registry: vec![],
             comment_selection_policy: serde_json::json!({}),
             control_preset: "standard".to_string(),
@@ -839,7 +837,9 @@ mod tests {
         apply_all_migrations_for_test_pool(&pool)
             .await
             .expect("apply migrations");
-        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed");
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("seed");
         sqlx::query(
             "INSERT INTO prompt_pack_runs (
                 id, pack_version_id, pack_id, pack_version, schema_version,
@@ -874,7 +874,9 @@ mod tests {
         apply_all_migrations_for_test_pool(&pool)
             .await
             .expect("apply migrations");
-        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed");
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("seed");
         sqlx::query(
             "INSERT INTO prompt_pack_runs (
                 id, pack_version_id, pack_id, pack_version, schema_version,

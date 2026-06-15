@@ -229,7 +229,10 @@ impl SourceJobState {
         jobs
     }
 
-    pub(crate) async fn catalog_jobs_for_sources(&self, source_ids: &[i64]) -> Vec<SourceJobRecord> {
+    pub(crate) async fn catalog_jobs_for_sources(
+        &self,
+        source_ids: &[i64],
+    ) -> Vec<SourceJobRecord> {
         let source_ids = source_ids.iter().copied().collect::<HashSet<_>>();
         let mut jobs = self
             .inner
@@ -282,17 +285,15 @@ impl SourceJobState {
         }
         counts
             .into_iter()
-            .map(
-                |((job_type, status, warning_state, error_kind), count)| {
-                    SourceJobDiagnosticCount {
-                        job_type,
-                        status,
-                        warning_state,
-                        error_kind,
-                        count,
-                    }
-                },
-            )
+            .map(|((job_type, status, warning_state, error_kind), count)| {
+                SourceJobDiagnosticCount {
+                    job_type,
+                    status,
+                    warning_state,
+                    error_kind,
+                    count,
+                }
+            })
             .collect()
     }
 

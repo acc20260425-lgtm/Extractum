@@ -75,25 +75,22 @@ pub(crate) async fn repair_prompt_pack_result_projections(
     pool: &SqlitePool,
     run_id: i64,
 ) -> AppResult<()> {
-    let (result_row_id, canonical_json_zstd): (i64, Vec<u8>) = sqlx::query_as(
-        "SELECT id, canonical_json_zstd FROM prompt_pack_results WHERE run_id = ?",
-    )
-    .bind(run_id)
-    .fetch_one(pool)
-    .await
-    .map_err(AppError::database)?;
+    let (result_row_id, canonical_json_zstd): (i64, Vec<u8>) =
+        sqlx::query_as("SELECT id, canonical_json_zstd FROM prompt_pack_results WHERE run_id = ?")
+            .bind(run_id)
+            .fetch_one(pool)
+            .await
+            .map_err(AppError::database)?;
     let canonical_json = decompress_text(&canonical_json_zstd).map_err(AppError::internal)?;
     let canonical: serde_json::Value = serde_json::from_str(&canonical_json)
         .map_err(|error| AppError::internal(format!("parse canonical result: {error}")))?;
     rebuild_projection_rows(pool, result_row_id, run_id, &canonical).await?;
-    sqlx::query(
-        "UPDATE prompt_pack_results SET projection_updated_at = ? WHERE id = ?",
-    )
-    .bind(crate::time::now_rfc3339_utc())
-    .bind(result_row_id)
-    .execute(pool)
-    .await
-    .map_err(AppError::database)?;
+    sqlx::query("UPDATE prompt_pack_results SET projection_updated_at = ? WHERE id = ?")
+        .bind(crate::time::now_rfc3339_utc())
+        .bind(result_row_id)
+        .execute(pool)
+        .await
+        .map_err(AppError::database)?;
     Ok(())
 }
 
@@ -326,12 +323,11 @@ mod tests {
                 .fetch_one(&pool)
                 .await
                 .expect("run status");
-        let projected_videos: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM prompt_pack_youtube_videos WHERE run_id = 42",
-        )
-        .fetch_one(&pool)
-        .await
-        .expect("projected videos");
+        let projected_videos: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_youtube_videos WHERE run_id = 42")
+                .fetch_one(&pool)
+                .await
+                .expect("projected videos");
         let result_status: String =
             sqlx::query_scalar("SELECT result_status FROM prompt_pack_results WHERE run_id = 42")
                 .fetch_one(&pool)
@@ -358,12 +354,11 @@ mod tests {
             .await
             .expect("repair projections");
 
-        let projected_claims: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM prompt_pack_result_claims WHERE run_id = 42",
-        )
-        .fetch_one(&pool)
-        .await
-        .expect("projected claims");
+        let projected_claims: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_result_claims WHERE run_id = 42")
+                .fetch_one(&pool)
+                .await
+                .expect("projected claims");
 
         assert!(projected_claims > 0);
     }
@@ -394,7 +389,10 @@ mod tests {
         assert_eq!(
             items,
             vec![
-                ("common_claim_1".to_string(), "Both videos mention pilots.".to_string()),
+                (
+                    "common_claim_1".to_string(),
+                    "Both videos mention pilots.".to_string()
+                ),
                 ("theme_1".to_string(), "Shared theme".to_string()),
             ]
         );
@@ -462,7 +460,9 @@ mod tests {
         apply_all_migrations_for_test_pool(&pool)
             .await
             .expect("apply migrations");
-        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed");
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("seed");
         sqlx::query(
             "INSERT INTO prompt_pack_runs (
                 id, pack_version_id, pack_id, pack_version, schema_version,

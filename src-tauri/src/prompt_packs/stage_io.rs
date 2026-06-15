@@ -57,12 +57,14 @@ pub(crate) async fn load_transcript_analysis_stage_for_source(
     .bind(source_ref_id)
     .fetch_one(pool)
     .await
-    .map(|(id, run_id, source_snapshot_id, source_ref_id)| StageRunForInput {
-        id,
-        run_id,
-        source_snapshot_id,
-        source_ref_id,
-    })
+    .map(
+        |(id, run_id, source_snapshot_id, source_ref_id)| StageRunForInput {
+            id,
+            run_id,
+            source_snapshot_id,
+            source_ref_id,
+        },
+    )
     .map_err(AppError::database)
 }
 
@@ -124,10 +126,12 @@ pub(crate) async fn build_transcript_analysis_stage_input(
     let transcript_segment_registry = material_rows
         .iter()
         .filter(|(_, material_kind, _)| material_kind == "transcript")
-        .map(|(material_ref_id, _, text_zstd)| TranscriptSegmentRegistryEntry {
-            material_ref_id: material_ref_id.clone(),
-            text: decompress_text(text_zstd).unwrap_or_default(),
-        })
+        .map(
+            |(material_ref_id, _, text_zstd)| TranscriptSegmentRegistryEntry {
+                material_ref_id: material_ref_id.clone(),
+                text: decompress_text(text_zstd).unwrap_or_default(),
+            },
+        )
         .collect::<Vec<_>>();
 
     Ok(TranscriptAnalysisStageInput {
@@ -209,10 +213,14 @@ pub(crate) fn extract_json_payload(text: &str) -> AppResult<serde_json::Value> {
         return Err(AppError::validation("malformed JSON braces"));
     }
     if ranges.len() > 1 {
-        return Err(AppError::validation("multiple JSON objects in provider response"));
+        return Err(AppError::validation(
+            "multiple JSON objects in provider response",
+        ));
     }
     let Some((start, end)) = ranges.first().copied() else {
-        return Err(AppError::validation("provider response did not contain a JSON object"));
+        return Err(AppError::validation(
+            "provider response did not contain a JSON object",
+        ));
     };
     serde_json::from_str(&trimmed[start..end])
         .map_err(|error| AppError::validation(format!("malformed JSON payload: {error}")))
@@ -258,9 +266,7 @@ fn sha384_hex(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_transcript_analysis_stage_input, load_transcript_analysis_stage_for_source,
-    };
+    use super::{build_transcript_analysis_stage_input, load_transcript_analysis_stage_for_source};
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::dto::StartYoutubeSummaryRunRequest;
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
@@ -295,7 +301,9 @@ mod tests {
         apply_all_migrations_for_test_pool(&pool)
             .await
             .expect("apply migrations");
-        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed");
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("seed");
         insert_youtube_video(&pool, 901, "v-ready").await;
         insert_transcript(&pool, 901, "Ready transcript").await;
         let request = StartYoutubeSummaryRunRequest {

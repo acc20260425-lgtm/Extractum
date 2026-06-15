@@ -98,10 +98,7 @@ async fn build_diagnostic_summary(
 pub(crate) fn sanitize_diagnostic_error(error: AppError) -> AppError {
     let message = sanitized_error_message(&error.message);
     debug_assert!(message.chars().count() <= MAX_SANITIZED_TEXT_CHARS);
-    AppError::new(
-        error.kind,
-        format!("Diagnostic summary failed: {message}"),
-    )
+    AppError::new(error.kind, format!("Diagnostic summary failed: {message}"))
 }
 
 #[cfg(test)]
@@ -110,8 +107,7 @@ mod tests {
     use crate::error::{AppError, AppErrorKind};
 
     const SENTINEL_API_KEY: &str = "sk-sentinel-command-error";
-    const SENTINEL_PATH: &str =
-        "C:\\Users\\Dima\\AppData\\Roaming\\org.ai.extractum\\extractum.db";
+    const SENTINEL_PATH: &str = "C:\\Users\\Dima\\AppData\\Roaming\\org.ai.extractum\\extractum.db";
     const SENTINEL_PAYLOAD: &str = "raw provider payload with private message";
     const COMMAND_ERROR_PREFIX: &str = "Diagnostic summary failed: ";
 
@@ -273,7 +269,10 @@ mod tests {
             "message_bodies",
             "local_database_path",
         ] {
-            assert!(json.contains(allowed), "missing allowed value {allowed}: {json}");
+            assert!(
+                json.contains(allowed),
+                "missing allowed value {allowed}: {json}"
+            );
         }
 
         for forbidden in [

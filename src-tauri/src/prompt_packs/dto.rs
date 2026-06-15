@@ -122,8 +122,12 @@ pub struct PromptPackStageRunDto {
 #[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum StartYoutubeSummaryRunOutcomeDto {
-    Started { run: PromptPackRunSummaryDto },
-    Blocked { preflight: YoutubeSummaryPreflightResponse },
+    Started {
+        run: PromptPackRunSummaryDto,
+    },
+    Blocked {
+        preflight: YoutubeSummaryPreflightResponse,
+    },
 }
 
 #[derive(Clone, Debug, serde::Serialize)]

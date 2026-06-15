@@ -198,7 +198,9 @@ fn catalog_status_for_source(
         return match job.status {
             SourceJobStatus::Queued | SourceJobStatus::Running => (
                 LibraryCatalogStatus::Syncing,
-                job.message.clone().or_else(|| Some(SOURCE_SYNCING_DISABLED_REASON.to_string())),
+                job.message
+                    .clone()
+                    .or_else(|| Some(SOURCE_SYNCING_DISABLED_REASON.to_string())),
             ),
             SourceJobStatus::Failed => (
                 LibraryCatalogStatus::Error,
@@ -215,8 +217,8 @@ fn catalog_disabled_reasons(
     source: &LibrarySourceRecord,
     status: LibraryCatalogStatus,
 ) -> LibraryCatalogDisabledReasons {
-    let unsupported_reason = is_unsupported_youtube_channel(source)
-        .then(|| YOUTUBE_CHANNEL_DISABLED_REASON.to_string());
+    let unsupported_reason =
+        is_unsupported_youtube_channel(source).then(|| YOUTUBE_CHANNEL_DISABLED_REASON.to_string());
     let refresh_source = if unsupported_reason.is_some() {
         unsupported_reason.clone()
     } else if status == LibraryCatalogStatus::Syncing {

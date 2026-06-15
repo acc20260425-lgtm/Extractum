@@ -108,12 +108,9 @@ pub(crate) async fn seed_builtin_prompt_packs_in_pool(pool: &SqlitePool) -> AppR
     .await
     .map_err(AppError::database)?;
 
-    let pack_version_id = super::store::require_prompt_pack_version_id(
-        pool,
-        &pack.pack_id,
-        &pack.pack_version,
-    )
-    .await?;
+    let pack_version_id =
+        super::store::require_prompt_pack_version_id(pool, &pack.pack_id, &pack.pack_version)
+            .await?;
 
     let prompt_template_json = serde_json::to_string(&stage.prompt_template)
         .map_err(|error| AppError::internal(format!("Serialize prompt template: {error}")))?;
@@ -145,7 +142,10 @@ pub(crate) async fn seed_builtin_prompt_packs_in_pool(pool: &SqlitePool) -> AppR
     .bind(&stage.output_schema_id)
     .bind(&stage.validator_mode)
     .bind(compress_text(&prompt_template_json).map_err(AppError::internal)?)
-    .bind(format!("sha384-{}", sha384_hex(prompt_template_json.as_bytes())))
+    .bind(format!(
+        "sha384-{}",
+        sha384_hex(prompt_template_json.as_bytes())
+    ))
     .bind(now)
     .bind(now)
     .execute(pool)
@@ -245,8 +245,12 @@ mod tests {
     async fn seed_youtube_summary_pack_is_idempotent() {
         let pool = test_pool_with_migrations().await;
 
-        seed_builtin_prompt_packs_in_pool(&pool).await.expect("first seed");
-        seed_builtin_prompt_packs_in_pool(&pool).await.expect("second seed");
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("first seed");
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("second seed");
 
         let count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM prompt_pack_versions WHERE pack_id = 'youtube_summary'",
@@ -262,7 +266,9 @@ mod tests {
     async fn seed_youtube_summary_pack_writes_required_schema_assets() {
         let pool = test_pool_with_migrations().await;
 
-        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed");
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("seed");
 
         let schema_ids = sqlx::query_scalar::<_, String>(
             "SELECT schema_id FROM prompt_pack_schema_assets WHERE schema_id LIKE 'stage-io/%' ORDER BY schema_id",
@@ -284,7 +290,9 @@ mod tests {
     async fn seed_youtube_summary_pack_rejects_bundled_hash_conflict() {
         let pool = test_pool_with_migrations().await;
 
-        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed");
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("seed");
 
         sqlx::query(
             "UPDATE prompt_pack_versions SET content_hash = 'sha384-conflict' WHERE pack_id = 'youtube_summary' AND pack_version = '1.0.0'",
@@ -367,7 +375,9 @@ mod tests {
         .await
         .expect("insert future bundled version");
 
-        seed_builtin_prompt_packs_in_pool(&pool).await.expect("seed current bundle");
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("seed current bundle");
 
         let future_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM prompt_pack_versions WHERE pack_id = 'youtube_summary' AND pack_version = '9.9.9'",

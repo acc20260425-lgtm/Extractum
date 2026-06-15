@@ -92,19 +92,19 @@ fn group_llm_request_snapshots(
     for snapshot in snapshots {
         let kind = llm_request_kind_diagnostic_key(snapshot.kind).to_string();
         let state = llm_request_state_diagnostic_key(snapshot.state).to_string();
-        *counts
-            .entry((snapshot.provider, kind, state))
-            .or_insert(0) += 1;
+        *counts.entry((snapshot.provider, kind, state)).or_insert(0) += 1;
     }
     DiagnosticLlmRequestsInfo {
         counts: counts
             .into_iter()
-            .map(|((provider, kind, state), count)| DiagnosticLlmRequestCount {
-                provider,
-                kind,
-                state,
-                count,
-            })
+            .map(
+                |((provider, kind, state), count)| DiagnosticLlmRequestCount {
+                    provider,
+                    kind,
+                    state,
+                    count,
+                },
+            )
             .collect(),
     }
 }
@@ -124,7 +124,11 @@ pub(crate) async fn check_ytdlp_runtime() -> DiagnosticRuntimeCheck {
             DiagnosticRuntimeCheck {
                 status: "available".to_string(),
                 available: true,
-                version: if version.is_empty() { None } else { Some(version) },
+                version: if version.is_empty() {
+                    None
+                } else {
+                    Some(version)
+                },
                 summary: None,
             }
         }
@@ -147,14 +151,13 @@ pub(crate) async fn check_ytdlp_runtime() -> DiagnosticRuntimeCheck {
     }
 }
 
-pub(crate) async fn check_secure_storage(secret_store: &SecretStoreState) -> DiagnosticRuntimeCheck {
+pub(crate) async fn check_secure_storage(
+    secret_store: &SecretStoreState,
+) -> DiagnosticRuntimeCheck {
     // Read-only availability probe: Ok(None) means the store responded and the
     // diagnostic key simply does not exist. Do not write a probe key from the
     // diagnostics command; the command must remain read-only.
-    match secret_store
-        .get_secret(SECURE_STORAGE_READ_PROBE_KEY)
-        .await
-    {
+    match secret_store.get_secret(SECURE_STORAGE_READ_PROBE_KEY).await {
         Ok(Some(_)) | Ok(None) => DiagnosticRuntimeCheck {
             status: "available".to_string(),
             available: true,
