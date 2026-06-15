@@ -74,4 +74,21 @@ describe("project runs screen", () => {
     expect(reportSource).toContain("Run failed before producing a canonical result.");
     expect(reportSource).toContain("Run is still in progress. A canonical result is not available yet.");
   });
+
+  it("renders canonical youtube synthesis groups with a reference rail", () => {
+    const reportSource = readProjectFile("src/lib/components/research-projects/ProjectRunReportPanel.svelte");
+    const apiSource = readProjectFile("src/lib/api/prompt-packs.ts");
+
+    expect(reportSource).toContain('recordAt(youtubeSummary, "synthesis")');
+    expect(reportSource).toContain('arrayAt(synthesis, "cross_video_themes")');
+    expect(reportSource).toContain('arrayAt(synthesis, "common_claims")');
+    expect(reportSource).toContain('arrayAt(synthesis, "contradictions_across_videos")');
+    expect(reportSource).toContain("synthesis-ref-rail");
+    expect(reportSource).toContain("Cross-video themes");
+    expect(reportSource).toContain("Common claims");
+    expect(reportSource).toContain("Contradictions");
+    expect(apiSource).toContain("cross_video_themes");
+    expect(apiSource).toContain("common_claims");
+    expect(apiSource).toContain("contradictions_across_videos");
+  });
 });

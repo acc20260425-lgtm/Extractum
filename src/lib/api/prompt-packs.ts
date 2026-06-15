@@ -270,7 +270,40 @@ function smokeCanonicalResult(runId: number) {
               summary_text:
                 "A deterministic UI fixture summary with enough text to verify wrapping in the result viewer.",
             },
+            {
+              video_id: "video_2",
+              source_ref_id: "source_ref_smoke_2",
+              provider_video_id: "extractum-fixture-2",
+              title: `${YOUTUBE_SUMMARY_SMOKE_FIXTURE_LABEL} second video`,
+              summary_text:
+                "A second deterministic fixture summary used to render cross-video synthesis in the report workspace.",
+            },
           ],
+          synthesis: {
+            cross_video_themes: [
+              {
+                theme_id: "theme_1",
+                theme_text: "Prompt Pack reports can group related ideas across videos.",
+                video_refs: ["video_1", "video_2"],
+                claim_refs: [],
+                evidence_refs: [],
+              },
+            ],
+            common_claims: [
+              {
+                common_claim_id: "common_claim_1",
+                summary_text: "The workflow keeps readable synthesis tied to its source videos.",
+                video_refs: ["video_1", "video_2"],
+                claim_refs: [],
+                evidence_refs: [],
+              },
+            ],
+            contradictions_across_videos: [],
+            claim_refs: [],
+            relation_refs: [],
+            evidence_refs: [],
+            source_refs: ["source_ref_smoke", "source_ref_smoke_2"],
+          },
         },
       },
     },
@@ -279,6 +312,11 @@ function smokeCanonicalResult(runId: number) {
         source_ref_id: "source_ref_smoke",
         source_snapshot_id: YOUTUBE_SUMMARY_SMOKE_FIXTURE_SOURCE_ID,
         title: YOUTUBE_SUMMARY_SMOKE_FIXTURE_LABEL,
+      },
+      {
+        source_ref_id: "source_ref_smoke_2",
+        source_snapshot_id: YOUTUBE_SUMMARY_SMOKE_FIXTURE_SOURCE_ID + 1,
+        title: `${YOUTUBE_SUMMARY_SMOKE_FIXTURE_LABEL} second video`,
       },
     ],
     claims: [

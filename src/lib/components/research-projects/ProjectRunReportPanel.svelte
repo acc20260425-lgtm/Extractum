@@ -49,6 +49,12 @@
   const actionItems = $derived(arrayAt(youtubeSummary, "action_items"));
   const openQuestions = $derived(arrayAt(youtubeSummary, "open_questions"));
   const synthesisItems = $derived(arrayAt(youtubeSummary, "synthesis_items"));
+  const synthesis = $derived(recordAt(youtubeSummary, "synthesis"));
+  const hasCanonicalSynthesis = $derived(Object.keys(synthesis).length > 0);
+  const crossVideoThemes = $derived(arrayAt(synthesis, "cross_video_themes"));
+  const commonClaims = $derived(arrayAt(synthesis, "common_claims"));
+  const contradictions = $derived(arrayAt(synthesis, "contradictions_across_videos"));
+  const synthesisSourceRefs = $derived(stringArrayAt(synthesis, "source_refs"));
   const claims = $derived(arrayAt(canonical, "claims"));
   const evidence = $derived(arrayAt(canonical, "evidence"));
   const sourceRefs = $derived(arrayAt(canonical, "source_refs"));
@@ -154,6 +160,12 @@
     return Array.isArray(next) ? next.filter(isRecord) : [];
   }
 
+  function stringArrayAt(value: unknown, key: string): string[] {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const next = (value as Record<string, unknown>)[key];
+    return Array.isArray(next) ? next.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+  }
+
   function isRecord(value: unknown): value is Record<string, unknown> {
     return Boolean(value && typeof value === "object" && !Array.isArray(value));
   }
@@ -166,6 +178,32 @@
   function numberAt(value: Record<string, unknown>, key: string) {
     const next = value[key];
     return typeof next === "number" ? next : null;
+  }
+
+  function textFromKeys(value: Record<string, unknown>, keys: string[], fallback = "") {
+    for (const key of keys) {
+      const next = textAt(value, key);
+      if (next) return next;
+    }
+    return fallback;
+  }
+
+  function refsForItem(value: Record<string, unknown>) {
+    return uniqueStrings([
+      ...stringArrayAt(value, "video_refs"),
+      ...stringArrayAt(value, "source_refs"),
+      ...stringArrayAt(value, "claim_refs"),
+      ...stringArrayAt(value, "evidence_refs"),
+      ...stringArrayAt(value, "relation_refs"),
+    ]);
+  }
+
+  function uniqueStrings(values: string[]) {
+    const result: string[] = [];
+    for (const value of values) {
+      if (!result.includes(value)) result.push(value);
+    }
+    return result;
   }
 
   function formatSeconds(value: number | null) {
@@ -304,7 +342,49 @@
 
         <div class="report-section">
           <h3>Synthesis</h3>
-          {@render CompactList({ items: synthesisItems, textKey: "text", fallbackPrefix: "Synthesis" })}
+          {#if hasCanonicalSynthesis}
+            <div class="metric-strip">
+              <span>Themes <strong>{crossVideoThemes.length}</strong></span>
+              <span>Claims <strong>{commonClaims.length}</strong></span>
+              <span>Contradictions <strong>{contradictions.length}</strong></span>
+            </div>
+            <div class="synthesis-layout">
+              <div class="synthesis-main">
+                {@render SynthesisGroup({
+                  title: "Cross-video themes",
+                  items: crossVideoThemes,
+                  textKeys: ["theme_text", "text"],
+                  fallbackPrefix: "Theme",
+                })}
+                {@render SynthesisGroup({
+                  title: "Common claims",
+                  items: commonClaims,
+                  textKeys: ["summary_text", "text"],
+                  fallbackPrefix: "Claim",
+                })}
+                {@render SynthesisGroup({
+                  title: "Contradictions",
+                  items: contradictions,
+                  textKeys: ["description", "text"],
+                  fallbackPrefix: "Contradiction",
+                })}
+              </div>
+              <aside class="synthesis-ref-rail" aria-label="Synthesis references">
+                <h4>Refs</h4>
+                {#if synthesisSourceRefs.length === 0}
+                  <p class="muted">None.</p>
+                {:else}
+                  <div class="ref-chip-list">
+                    {#each synthesisSourceRefs as sourceRef (`synthesis-ref-${sourceRef}`)}
+                      <span>{sourceRef}</span>
+                    {/each}
+                  </div>
+                {/if}
+              </aside>
+            </div>
+          {:else}
+            {@render CompactList({ items: synthesisItems, textKey: "text", fallbackPrefix: "Synthesis" })}
+          {/if}
         </div>
 
         <div class="report-section">
@@ -441,6 +521,41 @@
       {/each}
     </div>
   {/if}
+{/snippet}
+
+{#snippet SynthesisGroup({
+  title,
+  items,
+  textKeys,
+  fallbackPrefix,
+}: {
+  title: string;
+  items: Record<string, unknown>[];
+  textKeys: string[];
+  fallbackPrefix: string;
+})}
+  <section class="synthesis-group">
+    <h4>{title}</h4>
+    {#if items.length === 0}
+      <p class="muted">None.</p>
+    {:else}
+      <div class="synthesis-items">
+        {#each items as item, index (`${fallbackPrefix}-${index}`)}
+          {@const refs = refsForItem(item)}
+          <article>
+            <p>{textFromKeys(item, textKeys, `${fallbackPrefix} ${index + 1}`)}</p>
+            {#if refs.length > 0}
+              <div class="synthesis-item-refs">
+                {#each refs as ref (`${fallbackPrefix}-${index}-${ref}`)}
+                  <span>{ref}</span>
+                {/each}
+              </div>
+            {/if}
+          </article>
+        {/each}
+      </div>
+    {/if}
+  </section>
 {/snippet}
 
 <style>
@@ -597,6 +712,68 @@
     gap: 8px;
   }
 
+  .synthesis-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 0.32fr);
+    gap: 12px;
+  }
+
+  .synthesis-main,
+  .synthesis-group,
+  .synthesis-items,
+  .synthesis-ref-rail,
+  .ref-chip-list {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .synthesis-group h4,
+  .synthesis-ref-rail h4 {
+    margin: 0;
+    color: var(--extractum-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+  }
+
+  .synthesis-items article,
+  .synthesis-ref-rail {
+    border: 1px solid var(--extractum-border);
+    border-radius: var(--extractum-radius);
+    background: var(--extractum-surface);
+    padding: 10px;
+  }
+
+  .synthesis-items article p {
+    color: var(--extractum-text);
+    font-size: 13px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  .synthesis-item-refs,
+  .ref-chip-list {
+    flex-flow: row wrap;
+    gap: 6px;
+  }
+
+  .synthesis-item-refs {
+    margin-top: 8px;
+  }
+
+  .synthesis-item-refs span,
+  .ref-chip-list span {
+    border: 1px solid var(--extractum-border);
+    border-radius: var(--extractum-radius);
+    background: var(--extractum-surface-subtle);
+    padding: 3px 6px;
+    color: var(--extractum-muted);
+    font-size: 11px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
   .artifact-list {
     display: flex;
     flex-wrap: wrap;
@@ -654,6 +831,10 @@
     }
 
     .two-column {
+      grid-template-columns: 1fr;
+    }
+
+    .synthesis-layout {
       grid-template-columns: 1fr;
     }
   }
