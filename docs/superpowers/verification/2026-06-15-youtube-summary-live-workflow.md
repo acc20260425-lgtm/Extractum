@@ -368,3 +368,68 @@ Post-run hardening:
 - Notes:
   - Full lib verification initially exposed that the migration baseline test still expected versions `[1, 2, 3, 4, 5, 6, 7]` while the repository now registers `0008_prompt_pack_run_labels.sql`. The expected version list was corrected to `[1, 2, 3, 4, 5, 6, 7, 8]`, then the focused migration test and full lib suite passed.
   - The automated synthesis tests cover runtime budget loading, synthesis input assembly, validator/quarantine behavior, stage artifact persistence, run-level synthesis lifecycle, canonical result building, and projection repair.
+
+## Post-Refactor MCP Bridge Smoke
+
+- Date: 2026-06-15
+- Scope: Live regression smoke after the YouTube Summary module-splitting refactors.
+- Environment:
+  - Tauri MCP Bridge connected to `org.ai.extractum` at `localhost:9223`.
+  - Backend state returned app `extractum` version `0.2.0`, Tauri `2.10.3`.
+  - Main window URL before navigation: `http://localhost:1420/analysis`.
+- Backend command smoke:
+  - `list_active_prompt_pack_runs` returned `[]`.
+  - `list_prompt_pack_runs` returned recent `youtube_summary@1.0.0` runs, including fresh run `#24`.
+- Single-video run smoke:
+  - Run ID: `#24`.
+  - Status: `complete / complete`.
+  - Progress: `1 / 1`.
+  - Transcript-analysis stage: `succeeded`.
+  - Synthesis stage: `skipped`.
+  - Transcript-analysis artifacts present:
+    `prompt_input #1`, `raw_output #2`, `parsed_output #3`, `metrics #4`.
+  - Validation findings: `[]`.
+  - UI `/projects/runs` rendered run `#24`, the report workspace, result metrics,
+    stages/artifacts, validation findings, audit events, and canonical JSON.
+  - Canonical JSON had `outputs.pack_data.youtube_summary.synthesis = null`
+    and quality flag `synthesis_not_applicable_single_video`.
+- Multi-video synthesis UI/backend smoke:
+  - Run ID: `#19`.
+  - Status: `complete / complete`.
+  - Progress: `3 / 3`.
+  - UI report workspace rendered:
+    - Sources: `2`
+    - Videos: `2`
+    - Claims: `3`
+    - Evidence: `3`
+    - Findings: `0`
+  - Transcript stages:
+    - stage `#149`: `succeeded`
+    - stage `#150`: `succeeded`
+  - Synthesis stage:
+    - stage `#154`: `succeeded`
+    - artifacts present: `prompt_input #1`, `raw_output #2`,
+      `parsed_output #3`, `metrics #4`
+  - Canonical synthesis:
+    - `synthesis` was non-null.
+    - `cross_video_themes.length = 1`
+    - `common_claims.length = 1`
+    - `common_claims[0].summary_text.length = 75`
+    - `contradictions_across_videos.length = 0`
+    - `source_refs.length = 2`
+    - storage warning: `null`
+    - validation findings: `[]`
+  - Projection rows from the live SQLite database:
+    - `prompt_pack_youtube_videos = 2`
+    - `prompt_pack_result_source_refs = 2`
+    - `prompt_pack_youtube_synthesis_items = 2`
+    - synthesis rows:
+      - `common_claim_1`: `NotebookLM serves as a central repository for research and trusted sources.`
+      - `theme_1`: `Expanding the utility of NotebookLM projects`
+  - UI selected synthesis `raw_output #2` and rendered `synthesis_candidate`
+    in the Selected Artifact panel.
+- Notes:
+  - This pass reused existing completed live provider runs; no new provider run
+    was started.
+  - The console log capture only showed MCP Bridge/Vite initialization messages
+    during this pass.
