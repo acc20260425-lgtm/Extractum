@@ -261,12 +261,59 @@ Post-run hardening:
   - Verified the report workspace rendered a `Synthesis` section and stage list through the accessibility tree.
   - Scope: non-provider Tauri Bridge command/UI smoke only; no new provider run was started.
 - Live provider verification:
-  - Status: not run for the synthesis-stage slice.
-  - Run ID:
-  - Transcript stage:
+  - Status: PASS with one follow-up canonicalization defect found and fixed.
+  - Source ids: `404`, `402`.
+  - Project id: `6`.
+  - Preflight:
+    - `includedVideos.length = 2`
+    - `skippedVideos.length = 0`
+    - `blockingFailures.length = 0`
+    - `estimatedInputTokens = 6546`
+    - `selectedModelInputLimit = 32000`
+  - Client request id: `codex-live-synthesis-1781530480448`.
+  - Run ID: `#14`.
+  - Final run status: `complete`.
+  - Final result status: `complete`.
+  - Final progress: `3 / 3`.
+  - Transcript stages:
+    - stage `#106`: `succeeded`
+    - stage `#107`: `succeeded`
   - Synthesis stage:
+    - stage `#111`: `succeeded`
+    - artifacts present: `prompt_input #1`, `raw_output #2`,
+      `parsed_output #3`, `metrics #4`
+    - metrics: `input_tokens = 4024`, `output_tokens = 406`,
+      `latency_ms = 16984`, `validation_error_count = 0`
   - Canonical synthesis:
+    - `synthesis` was non-null.
+    - `cross_video_themes.length = 2`
+    - `common_claims.length = 1`
+    - `contradictions_across_videos.length = 0`
+    - `source_refs.length = 2`
+    - validation findings: `[]`
+    - storage warning: `null`
   - Projection rows:
+    - `prompt_pack_youtube_videos = 2`
+    - `prompt_pack_result_source_refs = 2`
+    - `prompt_pack_youtube_synthesis_items = 2`
+    - synthesis projection rows:
+      - `theme_1`: `Enhanced Functionality and Integration of NotebookLM`
+      - `theme_2`: `AI-Powered Content Generation and Application Development`
+  - Follow-up defect found during live verification:
+    - The provider returned `synthesis_candidate.common_claims[0].text`.
+    - The canonical builder only read `summary_text`, so canonical
+      `common_claims[0].summary_text` became empty for run `#14`.
+    - Fixed result-builder canonicalization to preserve `text` as a fallback
+      when `summary_text` is absent.
+    - Added regression test:
+      `build_canonical_result_preserves_synthesis_common_claim_text`.
+    - Red/green evidence:
+      - Before fix, the regression test failed with left `String("")`.
+      - After fix, the regression test passed.
+    - Focused verification:
+      - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-review-youtube-summary-synthesis --lib build_canonical_result_preserves_synthesis_common_claim_text`: PASS.
+      - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-review-youtube-summary-synthesis --lib result_builder`: PASS, 7 tests.
+      - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-review-youtube-summary-synthesis --lib prompt_packs`: PASS, 67 tests.
 - Notes:
   - Full lib verification initially exposed that the migration baseline test still expected versions `[1, 2, 3, 4, 5, 6, 7]` while the repository now registers `0008_prompt_pack_run_labels.sql`. The expected version list was corrected to `[1, 2, 3, 4, 5, 6, 7, 8]`, then the focused migration test and full lib suite passed.
   - The automated synthesis tests cover runtime budget loading, synthesis input assembly, validator/quarantine behavior, stage artifact persistence, run-level synthesis lifecycle, canonical result building, and projection repair.

@@ -313,7 +313,11 @@ fn build_canonical_synthesis(
                 .collect::<Vec<_>>();
             serde_json::json!({
                 "common_claim_id": format!("common_claim_{}", index + 1),
-                "summary_text": claim.get("summary_text").and_then(serde_json::Value::as_str).unwrap_or(""),
+                "summary_text": claim
+                    .get("summary_text")
+                    .or_else(|| claim.get("text"))
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or(""),
                 "video_refs": video_refs,
                 "claim_refs": ref_strings(claim.get("claim_refs")),
                 "evidence_refs": ref_strings(claim.get("evidence_refs"))
@@ -506,6 +510,28 @@ mod tests {
             serde_json::json!(["source_ref_1", "source_ref_2"]),
         );
         assert_eq!(result["outputs"]["sections"][0]["title"], "Summary");
+    }
+
+    #[tokio::test]
+    async fn build_canonical_result_preserves_synthesis_common_claim_text() {
+        let pool = test_pool_with_two_successful_stage_artifacts().await;
+        insert_synthesis_parsed_output_with_common_claim_text(
+            &pool,
+            42,
+            "Both videos show NotebookLM automating AI workflows.",
+        )
+        .await
+        .expect("insert synthesis output");
+
+        let result = super::build_youtube_summary_canonical_result(&pool, 42)
+            .await
+            .expect("canonical result");
+
+        assert_eq!(
+            result["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["common_claims"][0]
+                ["summary_text"],
+            "Both videos show NotebookLM automating AI workflows.",
+        );
     }
 
     #[tokio::test]
@@ -737,6 +763,47 @@ mod tests {
                 content_type, content_hash, content_zstd, redaction_state, created_at
              )
              VALUES (?, 2001, 'parsed_output', 1, 3, 'application/json', 'sha384-synthesis', ?, 'none',
+                '2026-06-14T00:00:00Z')",
+        )
+        .bind(run_id)
+        .bind(compress_text(&parsed.to_string()).expect("compress synthesis"))
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn insert_synthesis_parsed_output_with_common_claim_text(
+        pool: &sqlx::SqlitePool,
+        run_id: i64,
+        claim_text: &str,
+    ) -> sqlx::Result<()> {
+        insert_isolated_result_builder_synthesis_stage_status(pool, run_id, "succeeded").await?;
+        let parsed = serde_json::json!({
+            "stage_io_version": "1.0",
+            "schema_version": "1.0",
+            "stage": "youtube_summary/synthesis",
+            "synthesis_candidate": {
+                "summary_text": "Combined summary",
+                "cross_video_themes": [],
+                "common_claims": [
+                    {
+                        "text": claim_text,
+                        "source_refs": ["source_ref_1", "source_ref_2"],
+                        "claim_refs": [],
+                        "evidence_refs": []
+                    }
+                ],
+                "contradictions_across_videos": []
+            },
+            "limitations": [],
+            "warning_candidates": []
+        });
+        sqlx::query(
+            "INSERT INTO prompt_pack_stage_artifacts (
+                run_id, stage_run_id, artifact_kind, attempt_number, artifact_index,
+                content_type, content_hash, content_zstd, redaction_state, created_at
+             )
+             VALUES (?, 2001, 'parsed_output', 1, 3, 'application/json', 'sha384-synthesis-common-claim', ?, 'none',
                 '2026-06-14T00:00:00Z')",
         )
         .bind(run_id)
