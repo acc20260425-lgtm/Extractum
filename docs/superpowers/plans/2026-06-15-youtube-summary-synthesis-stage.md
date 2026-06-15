@@ -1714,7 +1714,7 @@ git commit -m "Wire YouTube Summary synthesis into runs"
 **Files:**
 - Modify: `src-tauri/src/prompt_packs/result_builder.rs`
 
-- [ ] **Step 1: Write the failing canonical result test**
+- [x] **Step 1: Write the failing canonical result test**
 
 Add or update a test:
 
@@ -1987,7 +1987,7 @@ async fn insert_second_source_snapshot_and_optional_parsed_output(
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -2001,7 +2001,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\co
 
 Expected: FAIL because `synthesis` is currently always `null` and no synthesis quality flags exist.
 
-- [ ] **Step 3: Load latest synthesis parsed output**
+- [x] **Step 3: Load latest synthesis parsed output**
 
 Add:
 
@@ -2037,7 +2037,7 @@ async fn load_latest_run_stage_parsed_output(
 }
 ```
 
-- [ ] **Step 4: Add synthesis to canonical JSON**
+- [x] **Step 4: Add synthesis to canonical JSON**
 
 Load synthesis output, but only expose it in canonical YouTube Summary pack data when the run has more than one video. Single-video results must keep `synthesis = null` to satisfy `VR-YS-005`.
 
@@ -2333,7 +2333,7 @@ async fn load_run_stage_status(
 }
 ```
 
-- [ ] **Step 5: Run canonical result tests**
+- [x] **Step 5: Run canonical result tests**
 
 Run:
 
@@ -2343,7 +2343,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\co
 
 Expected: PASS and at least the five synthesis result-builder tests above are listed as passed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs/result_builder.rs
