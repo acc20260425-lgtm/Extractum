@@ -112,6 +112,36 @@ The schema validates implementation configuration artifacts. It does not make
 
 ---
 
+## 3.1 Bundled Runtime Assets
+
+Bundled prompt packs may ship runtime configuration artifacts next to pack and
+stage assets. Use this path convention for stage-specific runtime settings:
+
+```text
+src-tauri/prompt-packs/<pack_id>/<pack_version>/runtime/<stage_name>.json
+```
+
+For stage names that contain `/`, use the final route segment as the filename.
+For example, the MVP YouTube Summary transcript-analysis stage uses:
+
+```text
+src-tauri/prompt-packs/youtube_summary/1.0.0/runtime/transcript_analysis.json
+```
+
+This file stores runtime-only execution settings such as
+`budget_limits.max_output_tokens`. The current YouTube Summary MVP reads
+`runtime_configuration.budget_limits.max_output_tokens = 4096` from this asset
+and then clamps it to the selected provider model's `output_token_limit` when
+that metadata is available.
+
+Runtime assets are operational configuration. They are not canonical result
+schema, and they are not copied into report output. In the current bundled MVP
+seed path, runtime assets are intentionally separate from the prompt-pack
+version content hash so output budgets can be tuned without changing stage
+schemas or prompt templates.
+
+---
+
 ## 4. Model Routing
 
 `model_routing` maps `model_class` values from `model_recommendations.md` to

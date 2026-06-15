@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::time::Instant;
 
+use serde::Deserialize;
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
@@ -25,7 +26,23 @@ use crate::llm::{
 };
 
 pub const PROMPT_PACK_RUN_EVENT: &str = "prompt-pack-run-event";
-const TRANSCRIPT_ANALYSIS_MAX_OUTPUT_TOKENS: i64 = 4_096;
+const TRANSCRIPT_ANALYSIS_STAGE_JSON: &str =
+    include_str!("../../prompt-packs/youtube_summary/1.0.0/runtime/transcript_analysis.json");
+
+#[derive(Deserialize)]
+struct StageRuntimeConfigAsset {
+    runtime_configuration: Option<StageRuntimeConfiguration>,
+}
+
+#[derive(Deserialize)]
+struct StageRuntimeConfiguration {
+    budget_limits: Option<StageBudgetLimits>,
+}
+
+#[derive(Deserialize)]
+struct StageBudgetLimits {
+    max_output_tokens: Option<i64>,
+}
 
 #[derive(Default)]
 pub struct PromptPackRunState {
@@ -331,7 +348,9 @@ async fn run_transcript_analysis_stage_request(
     let effective_model = resolve_effective_model(&profile, model_override.as_deref())?;
     let model_output_limit =
         resolve_model_output_token_limit_for_backend(&profile, &effective_model).await;
-    let max_output_tokens = transcript_analysis_max_output_tokens(model_output_limit);
+    let stage_output_budget = transcript_analysis_stage_max_output_token_budget()?;
+    let max_output_tokens =
+        transcript_analysis_max_output_tokens(stage_output_budget, model_output_limit);
     let llm_request = build_transcript_analysis_llm_request(
         &stage_request,
         Some(profile.profile_id.clone()),
@@ -483,10 +502,32 @@ fn build_transcript_analysis_llm_request(
     }
 }
 
-fn transcript_analysis_max_output_tokens(model_output_limit: Option<i64>) -> Option<i64> {
+fn transcript_analysis_stage_max_output_token_budget() -> AppResult<i64> {
+    let asset = serde_json::from_str::<StageRuntimeConfigAsset>(TRANSCRIPT_ANALYSIS_STAGE_JSON)
+        .map_err(|error| {
+            AppError::internal(format!(
+                "Parse bundled transcript-analysis runtime configuration: {error}"
+            ))
+        })?;
+    asset
+        .runtime_configuration
+        .and_then(|runtime| runtime.budget_limits)
+        .and_then(|budget| budget.max_output_tokens)
+        .filter(|max_output_tokens| *max_output_tokens > 0)
+        .ok_or_else(|| {
+            AppError::internal(
+                "Bundled transcript-analysis runtime configuration is missing positive max_output_tokens",
+            )
+        })
+}
+
+fn transcript_analysis_max_output_tokens(
+    stage_output_budget: i64,
+    model_output_limit: Option<i64>,
+) -> Option<i64> {
     Some(match model_output_limit.filter(|limit| *limit > 0) {
-        Some(limit) => TRANSCRIPT_ANALYSIS_MAX_OUTPUT_TOKENS.min(limit),
-        None => TRANSCRIPT_ANALYSIS_MAX_OUTPUT_TOKENS,
+        Some(limit) => stage_output_budget.min(limit),
+        None => stage_output_budget,
     })
 }
 
@@ -832,7 +873,8 @@ mod tests {
     use super::{
         build_transcript_analysis_llm_request, cleanup_interrupted_prompt_pack_runs_in_pool,
         delete_prompt_pack_run_in_pool, list_prompt_pack_runs_in_pool,
-        transcript_analysis_max_output_tokens, update_prompt_pack_run_in_pool, PromptPackRunState,
+        transcript_analysis_max_output_tokens, transcript_analysis_stage_max_output_token_budget,
+        update_prompt_pack_run_in_pool, PromptPackRunState,
     };
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::dto::{ListPromptPackRunsRequest, PromptPackRunEvent};
@@ -983,7 +1025,10 @@ mod tests {
             },
             Some("profile-1".to_string()),
             Some("model-1".to_string()),
-            transcript_analysis_max_output_tokens(None),
+            transcript_analysis_max_output_tokens(
+                transcript_analysis_stage_max_output_token_budget().expect("stage budget"),
+                None,
+            ),
         );
 
         assert_eq!(request.request_id, "prompt-pack-run-42-stage-1001");
@@ -1009,14 +1054,25 @@ mod tests {
     #[test]
     fn transcript_analysis_output_budget_is_clamped_to_model_limit() {
         assert_eq!(
-            transcript_analysis_max_output_tokens(Some(2_048)),
+            transcript_analysis_max_output_tokens(4_096, Some(2_048)),
             Some(2_048)
         );
         assert_eq!(
-            transcript_analysis_max_output_tokens(Some(8_192)),
+            transcript_analysis_max_output_tokens(4_096, Some(8_192)),
             Some(4_096)
         );
-        assert_eq!(transcript_analysis_max_output_tokens(None), Some(4_096));
+        assert_eq!(
+            transcript_analysis_max_output_tokens(4_096, None),
+            Some(4_096)
+        );
+    }
+
+    #[test]
+    fn transcript_analysis_output_budget_comes_from_stage_runtime_config() {
+        assert_eq!(
+            transcript_analysis_stage_max_output_token_budget().expect("load stage budget"),
+            4_096
+        );
     }
 
     async fn test_pool_with_prompt_pack_runs<const N: usize>(

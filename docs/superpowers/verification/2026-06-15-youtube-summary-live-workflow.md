@@ -218,6 +218,9 @@ Conclusion:
 Post-run hardening:
 
 - Added provider model output-limit lookup after run `#11`.
+- Moved the transcript-analysis `4096` stage output budget from Rust code into
+  bundled runtime configuration:
+  `src-tauri/prompt-packs/youtube_summary/1.0.0/runtime/transcript_analysis.json`.
 - Effective transcript-analysis request limit is now:
   `min(4096, model.output_token_limit)` when provider metadata is available,
   otherwise `4096`.
