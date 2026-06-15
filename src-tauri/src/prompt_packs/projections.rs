@@ -218,6 +218,84 @@ async fn rebuild_projection_rows(
         .map_err(AppError::database)?;
     }
 
+    if let Some(synthesis) =
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"].as_object()
+    {
+        for item in synthesis
+            .get("cross_video_themes")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            insert_youtube_synthesis_projection_item(
+                pool,
+                result_row_id,
+                run_id,
+                item["theme_id"].as_str().unwrap_or(""),
+                item["theme_text"].as_str().unwrap_or(""),
+            )
+            .await?;
+        }
+
+        for item in synthesis
+            .get("common_claims")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            insert_youtube_synthesis_projection_item(
+                pool,
+                result_row_id,
+                run_id,
+                item["common_claim_id"].as_str().unwrap_or(""),
+                item["summary_text"].as_str().unwrap_or(""),
+            )
+            .await?;
+        }
+
+        for item in synthesis
+            .get("contradictions_across_videos")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            insert_youtube_synthesis_projection_item(
+                pool,
+                result_row_id,
+                run_id,
+                item["contradiction_id"].as_str().unwrap_or(""),
+                item["description"].as_str().unwrap_or(""),
+            )
+            .await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn insert_youtube_synthesis_projection_item(
+    pool: &SqlitePool,
+    result_row_id: i64,
+    run_id: i64,
+    synthesis_id: &str,
+    text: &str,
+) -> AppResult<()> {
+    if synthesis_id.is_empty() || text.is_empty() {
+        return Ok(());
+    }
+    sqlx::query(
+        "INSERT INTO prompt_pack_youtube_synthesis_items (
+            result_row_id, run_id, synthesis_id, text
+         )
+         VALUES (?, ?, ?, ?)",
+    )
+    .bind(result_row_id)
+    .bind(run_id)
+    .bind(synthesis_id)
+    .bind(text)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
     Ok(())
 }
 
@@ -290,6 +368,68 @@ mod tests {
         assert!(projected_claims > 0);
     }
 
+    #[tokio::test]
+    async fn persist_final_result_projects_youtube_synthesis_items() {
+        let pool = test_pool_with_canonical_result_ready().await;
+
+        persist_final_result_transaction(
+            &pool,
+            42,
+            test_canonical_result_with_synthesis(),
+            "complete",
+        )
+        .await
+        .expect("persist result");
+
+        let items: Vec<(String, String)> = sqlx::query_as(
+            "SELECT synthesis_id, text
+             FROM prompt_pack_youtube_synthesis_items
+             WHERE run_id = 42
+             ORDER BY synthesis_id ASC",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("synthesis projection rows");
+
+        assert_eq!(
+            items,
+            vec![
+                ("common_claim_1".to_string(), "Both videos mention pilots.".to_string()),
+                ("theme_1".to_string(), "Shared theme".to_string()),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn repair_rebuilds_missing_youtube_synthesis_projection_rows() {
+        let pool = test_pool_with_canonical_result_ready().await;
+        persist_final_result_transaction(
+            &pool,
+            42,
+            test_canonical_result_with_synthesis(),
+            "complete",
+        )
+        .await
+        .expect("persist result");
+        sqlx::query("DELETE FROM prompt_pack_youtube_synthesis_items WHERE run_id = 42")
+            .execute(&pool)
+            .await
+            .expect("delete synthesis projections");
+
+        repair_prompt_pack_result_projections(&pool, 42)
+            .await
+            .expect("repair projections");
+
+        let projected_items: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM prompt_pack_youtube_synthesis_items WHERE run_id = 42",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("projected synthesis items");
+
+        assert_eq!(projected_items, 2);
+    }
+
     async fn test_pool_with_canonical_result_ready() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
             .await
@@ -359,5 +499,49 @@ mod tests {
             "quality_flags": [],
             "audit_refs": []
         })
+    }
+
+    fn test_canonical_result_with_synthesis() -> serde_json::Value {
+        let mut canonical = test_canonical_result();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["videos"] = serde_json::json!([
+            {
+                "video_id": "video_1",
+                "source_ref_id": "source_ref_1",
+                "title": "Video 1",
+                "summary_text": "Summary 1"
+            },
+            {
+                "video_id": "video_2",
+                "source_ref_id": "source_ref_2",
+                "title": "Video 2",
+                "summary_text": "Summary 2"
+            }
+        ]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"] = serde_json::json!({
+            "cross_video_themes": [
+                {
+                    "theme_id": "theme_1",
+                    "theme_text": "Shared theme",
+                    "video_refs": ["video_1", "video_2"],
+                    "claim_refs": [],
+                    "evidence_refs": []
+                }
+            ],
+            "common_claims": [
+                {
+                    "common_claim_id": "common_claim_1",
+                    "summary_text": "Both videos mention pilots.",
+                    "video_refs": ["video_1", "video_2"],
+                    "claim_refs": [],
+                    "evidence_refs": []
+                }
+            ],
+            "contradictions_across_videos": [],
+            "claim_refs": [],
+            "relation_refs": [],
+            "evidence_refs": [],
+            "source_refs": ["source_ref_1", "source_ref_2"]
+        });
+        canonical
     }
 }

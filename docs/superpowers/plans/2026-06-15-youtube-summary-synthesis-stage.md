@@ -2359,7 +2359,7 @@ git commit -m "Include YouTube Summary synthesis in canonical result"
 
 This task targets the current applied database schema from `src-tauri/migrations/0006_prompt_pack_mvp.sql`, where `prompt_pack_youtube_synthesis_items` has `synthesis_id` and `text`. Do not add a migration to the spec-shaped `synthesis_item_kind`/`synthesis_item_id` columns in this plan; schema convergence is a separate task.
 
-- [ ] **Step 1: Write the failing projection tests**
+- [x] **Step 1: Write the failing projection tests**
 
 Add tests beside the existing projection tests:
 
@@ -2471,7 +2471,7 @@ fn test_canonical_result_with_synthesis() -> serde_json::Value {
 }
 ```
 
-- [ ] **Step 2: Run projection tests to verify they fail**
+- [x] **Step 2: Run projection tests to verify they fail**
 
 Run:
 
@@ -2482,7 +2482,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\co
 
 Expected: FAIL because `rebuild_projection_rows` deletes `prompt_pack_youtube_synthesis_items` but does not insert synthesis projection rows.
 
-- [ ] **Step 3: Implement synthesis projection rebuild**
+- [x] **Step 3: Implement synthesis projection rebuild**
 
 In `rebuild_projection_rows`, after projecting videos, add:
 
@@ -2569,7 +2569,7 @@ async fn insert_youtube_synthesis_projection_item(
 }
 ```
 
-- [ ] **Step 4: Run projection tests**
+- [x] **Step 4: Run projection tests**
 
 Run:
 
@@ -2580,7 +2580,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\co
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs/projections.rs
