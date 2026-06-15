@@ -1,6 +1,6 @@
-use super::youtube_summary::{
+use super::youtube_summary::LlmCompletion;
+use super::youtube_summary_stage_outputs::{
     execute_synthesis_stage_with_completion, execute_transcript_analysis_stage_with_completion,
-    LlmCompletion,
 };
 use super::youtube_summary_test_support::*;
 

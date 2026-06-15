@@ -5,22 +5,10 @@ use super::dto::{
     StartYoutubeSummaryRunRequest,
 };
 use super::json_repair::JsonRepairStageExecutionRequest;
-#[cfg(test)]
-pub(crate) use super::youtube_summary_execution::execute_youtube_summary_run_with_fake_completions;
 pub(crate) use super::youtube_summary_execution::execute_youtube_summary_run_with_stage_executor;
 pub(crate) use super::youtube_summary_preflight::preflight_youtube_summary_in_pool;
 use super::youtube_summary_run_store::{load_run_by_client_request_id, load_run_summary};
 pub(crate) use super::youtube_summary_snapshots::create_youtube_summary_run_skeleton_in_pool;
-#[cfg(test)]
-pub(crate) use super::youtube_summary_snapshots::{
-    freeze_comment_material_refs, test_comment_policy,
-};
-#[cfg(test)]
-pub(crate) use super::youtube_summary_stage_outputs::{
-    execute_synthesis_stage_with_completion, execute_transcript_analysis_stage_with_completion,
-};
-#[cfg(test)]
-pub(crate) use super::youtube_summary_synthesis_input::build_synthesis_stage_input;
 use crate::error::{AppError, AppResult};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

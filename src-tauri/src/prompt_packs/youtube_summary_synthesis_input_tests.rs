@@ -1,4 +1,4 @@
-use super::youtube_summary::build_synthesis_stage_input;
+use super::youtube_summary_synthesis_input::build_synthesis_stage_input;
 use super::youtube_summary_test_support::*;
 
 #[tokio::test]

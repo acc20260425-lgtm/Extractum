@@ -1,7 +1,7 @@
-use super::youtube_summary::{
+use super::youtube_summary::{LlmCompletion, YoutubeSummaryStageExecutionRequest};
+use super::youtube_summary_execution::{
     execute_youtube_summary_run_with_fake_completions,
-    execute_youtube_summary_run_with_stage_executor, LlmCompletion,
-    YoutubeSummaryStageExecutionRequest,
+    execute_youtube_summary_run_with_stage_executor,
 };
 use super::youtube_summary_test_support::*;
 

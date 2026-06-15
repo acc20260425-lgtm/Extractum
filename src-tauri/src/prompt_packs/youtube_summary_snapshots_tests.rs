@@ -1,8 +1,8 @@
 use super::seed::seed_builtin_prompt_packs_in_pool;
-use super::youtube_summary::{
-    freeze_comment_material_refs, start_youtube_summary_run_in_pool, test_comment_policy,
+use super::youtube_summary::start_youtube_summary_run_in_pool;
+use super::youtube_summary_snapshots::{
+    create_youtube_summary_run_skeleton_in_pool, freeze_comment_material_refs, test_comment_policy,
 };
-use super::youtube_summary_snapshots::create_youtube_summary_run_skeleton_in_pool;
 use super::youtube_summary_test_support::*;
 
 #[tokio::test]
