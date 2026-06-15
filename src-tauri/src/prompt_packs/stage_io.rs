@@ -249,7 +249,7 @@ pub(crate) async fn insert_stage_artifact_in_pool(
     .bind(artifact_index)
     .bind(format!("sha384-{}", sha384_hex(content.as_bytes())))
     .bind(compress_text(content).map_err(AppError::internal)?)
-    .bind("2026-06-14T00:00:00Z")
+    .bind(crate::time::now_rfc3339_utc())
     .execute(pool)
     .await
     .map_err(AppError::database)?;
@@ -266,7 +266,10 @@ fn sha384_hex(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_transcript_analysis_stage_input, load_transcript_analysis_stage_for_source};
+    use super::{
+        build_transcript_analysis_stage_input, insert_stage_artifact_in_pool,
+        load_transcript_analysis_stage_for_source,
+    };
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::dto::StartYoutubeSummaryRunRequest;
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
@@ -292,6 +295,37 @@ mod tests {
             .iter()
             .all(|value| value.starts_with("m_")));
         assert!(!input.transcript_segment_registry.is_empty());
+    }
+
+    #[tokio::test]
+    async fn insert_stage_artifact_uses_current_time() {
+        use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
+
+        let (pool, run_id) = test_pool_with_frozen_youtube_summary_run().await;
+        let stage = load_transcript_analysis_stage_for_source(&pool, run_id, "source_ref_1")
+            .await
+            .expect("stage");
+        let before = OffsetDateTime::now_utc() - Duration::seconds(5);
+
+        insert_stage_artifact_in_pool(&pool, run_id, stage.id, "metrics", 1, 4, r#"{"ok":true}"#)
+            .await
+            .expect("insert artifact");
+
+        let after = OffsetDateTime::now_utc() + Duration::seconds(5);
+        let created_at: String = sqlx::query_scalar(
+            "SELECT created_at FROM prompt_pack_stage_artifacts WHERE stage_run_id = ?",
+        )
+        .bind(stage.id)
+        .fetch_one(&pool)
+        .await
+        .expect("artifact created_at");
+        let parsed = OffsetDateTime::parse(&created_at, &Rfc3339).expect("parse created_at");
+
+        assert_ne!(created_at, "2026-06-14T00:00:00Z");
+        assert!(
+            parsed >= before && parsed <= after,
+            "expected {created_at} to be between {before} and {after}"
+        );
     }
 
     async fn test_pool_with_frozen_youtube_summary_run() -> (sqlx::SqlitePool, i64) {

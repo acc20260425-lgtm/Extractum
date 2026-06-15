@@ -157,7 +157,7 @@ pub(crate) async fn build_youtube_summary_canonical_result(
         "pack_id": pack_id,
         "pack_version": pack_version,
         "stage": "youtube_summary/transcript_analysis",
-        "created_at": "2026-06-14T00:00:00Z",
+        "created_at": crate::time::now_rfc3339_utc(),
         "output_language": output_language,
         "metadata": {},
         "run_context": {},
@@ -497,6 +497,28 @@ mod tests {
         );
         assert!(result.get("sources").is_none());
         assert!(result.get("pack_data").is_none());
+    }
+
+    #[tokio::test]
+    async fn build_canonical_result_uses_current_created_at() {
+        use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
+
+        let pool = test_pool_with_successful_stage_artifacts().await;
+        let before = OffsetDateTime::now_utc() - Duration::seconds(5);
+
+        let result = build_youtube_summary_canonical_result(&pool, 42)
+            .await
+            .expect("canonical result");
+
+        let after = OffsetDateTime::now_utc() + Duration::seconds(5);
+        let created_at = result["created_at"].as_str().expect("created_at");
+        let parsed = OffsetDateTime::parse(created_at, &Rfc3339).expect("parse created_at");
+
+        assert_ne!(created_at, "2026-06-14T00:00:00Z");
+        assert!(
+            parsed >= before && parsed <= after,
+            "expected {created_at} to be between {before} and {after}"
+        );
     }
 
     #[tokio::test]
