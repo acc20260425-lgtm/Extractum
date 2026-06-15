@@ -12,10 +12,10 @@ use super::dto::{
 };
 use super::youtube_summary::{
     execute_youtube_summary_run_with_stage_executor, preflight_youtube_summary_in_pool,
-    start_youtube_summary_run_in_pool, LlmCompletion as PromptPackLlmCompletion, ModelBudget,
-    SynthesisStageExecutionRequest, TranscriptAnalysisStageExecutionRequest,
-    YoutubeSummaryRunExecutionOutcome, YoutubeSummaryStageExecutionError,
-    YoutubeSummaryStageExecutionRequest,
+    start_youtube_summary_run_in_pool, JsonRepairStageExecutionRequest,
+    LlmCompletion as PromptPackLlmCompletion, ModelBudget, SynthesisStageExecutionRequest,
+    TranscriptAnalysisStageExecutionRequest, YoutubeSummaryRunExecutionOutcome,
+    YoutubeSummaryStageExecutionError, YoutubeSummaryStageExecutionRequest,
 };
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
@@ -323,6 +323,9 @@ async fn execute_youtube_summary_run(
                 YoutubeSummaryStageExecutionRequest::Synthesis(request) => {
                     run_synthesis_stage_request(handle, profile, model_override, request).await
                 }
+                YoutubeSummaryStageExecutionRequest::JsonRepair(request) => {
+                    run_json_repair_stage_request(handle, profile, model_override, request).await
+                }
             }
         }
     })
@@ -576,6 +579,123 @@ async fn run_synthesis_stage_request(
     }
 }
 
+async fn run_json_repair_stage_request(
+    handle: AppHandle,
+    profile: ResolvedLlmProfile,
+    model_override: Option<String>,
+    stage_request: JsonRepairStageExecutionRequest,
+) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
+    let effective_model = resolve_effective_model(&profile, model_override.as_deref())?;
+    let model_output_limit =
+        resolve_model_output_token_limit_for_backend(&profile, &effective_model).await;
+    let stage_output_budget = if stage_request.stage_name == "youtube_summary/synthesis" {
+        synthesis_stage_max_output_token_budget()?
+    } else {
+        transcript_analysis_stage_max_output_token_budget()?
+    };
+    let max_output_tokens =
+        transcript_analysis_max_output_tokens(stage_output_budget, model_output_limit);
+    let llm_request = build_json_repair_llm_request(
+        &stage_request,
+        Some(profile.profile_id.clone()),
+        model_override,
+        max_output_tokens,
+    );
+    let request_id = llm_request.request_id.clone();
+    let provider = profile.provider.as_str().to_string();
+    let scheduler = handle.state::<LlmSchedulerState>();
+    let queued_handle = handle.clone();
+    let started_handle = handle.clone();
+    let queued_request_id = request_id.clone();
+    let started_request_id = request_id.clone();
+    let stage_name = stage_request.stage_name.clone();
+    let queued_stage_name = stage_name.clone();
+    let started_stage_name = stage_name;
+    let stage_run_id = stage_request.stage_run_id;
+    let run_id = stage_request.run_id;
+    let scheduled_request = llm_request.clone();
+    let scheduled_profile = profile.clone();
+
+    match scheduler
+        .run_request(
+            LlmRequestMetadata {
+                request_id: request_id.clone(),
+                profile_id: profile.profile_id.clone(),
+                provider,
+                kind: LlmRequestKind::PromptPackStage,
+                priority: LlmRequestPriority::Background,
+                owner_run_id: Some(stage_request.run_id),
+            },
+            move |position| {
+                let _ = queued_handle.emit(
+                    PROMPT_PACK_RUN_EVENT,
+                    PromptPackRunEvent {
+                        run_id,
+                        request_id: queued_request_id.clone(),
+                        kind: "queued".to_string(),
+                        run_status: "running".to_string(),
+                        phase: "repair".to_string(),
+                        stage_run_id: Some(stage_run_id),
+                        stage_name: Some(queued_stage_name.clone()),
+                        source_snapshot_id: None,
+                        queue_position: Some(position as i64),
+                        progress_current: None,
+                        progress_total: None,
+                        message: Some(format!("JSON repair queued at position {position}")),
+                        error: None,
+                    },
+                );
+            },
+            move |control| async move {
+                let _ = started_handle.emit(
+                    PROMPT_PACK_RUN_EVENT,
+                    PromptPackRunEvent {
+                        run_id,
+                        request_id: started_request_id,
+                        kind: "started".to_string(),
+                        run_status: "running".to_string(),
+                        phase: "repair".to_string(),
+                        stage_run_id: Some(stage_run_id),
+                        stage_name: Some(started_stage_name),
+                        source_snapshot_id: None,
+                        queue_position: None,
+                        progress_current: None,
+                        progress_total: None,
+                        message: Some("Repairing provider JSON".to_string()),
+                        error: None,
+                    },
+                );
+                let started_at = Instant::now();
+                let completion = control
+                    .run_cancellable(run_llm_collect_with_profile(
+                        &scheduled_request,
+                        &scheduled_profile,
+                    ))
+                    .await?;
+                Ok((completion, started_at.elapsed().as_millis() as i64))
+            },
+        )
+        .await
+    {
+        Ok((completion, latency_ms)) => Ok(PromptPackLlmCompletion {
+            text: completion.text,
+            input_tokens: completion
+                .usage
+                .as_ref()
+                .and_then(|usage| usage.input_tokens),
+            output_tokens: completion
+                .usage
+                .as_ref()
+                .and_then(|usage| usage.output_tokens),
+            latency_ms,
+        }),
+        Err(LlmRequestError::Cancelled) => Err(YoutubeSummaryStageExecutionError::Cancelled),
+        Err(LlmRequestError::Failed(error)) => {
+            Err(YoutubeSummaryStageExecutionError::Failed(error))
+        }
+    }
+}
+
 fn build_transcript_analysis_llm_request(
     request: &TranscriptAnalysisStageExecutionRequest,
     profile_id: Option<String>,
@@ -647,6 +767,43 @@ fn build_synthesis_llm_request(
                 content: format!(
                     "Synthesize the transcript-analysis candidates into one strict JSON object with stage_io_version, schema_version, stage, synthesis_candidate, limitations, and warning_candidates.\n\nRequired synthesis_candidate shape:\n{{\n  \"summary_text\": \"combined readable summary\",\n  \"cross_video_themes\": [{{ \"theme_text\": \"theme\", \"source_refs\": [\"source_ref_1\"], \"claim_refs\": [], \"evidence_refs\": [] }}],\n  \"common_claims\": [],\n  \"contradictions_across_videos\": []\n}}\n\nThe input wrapper field source_ref_id may be used only for reasoning. Do not copy the key source_ref_id into the output. If you need to cite videos, use source_refs arrays inside synthesis_candidate and only values present in the input. For this slice, keep claim_refs, evidence_refs, and relation_refs as empty arrays because the backend has not exposed allowed claim/evidence/relation ref maps to synthesis output. Do not include backend-owned IDs or keys such as source_ref_id, theme_id, common_claim_id, contradiction_id, claim_id, evidence_id, video_id, section_id, or synthesis_item_id. Do not wrap the JSON in Markdown.\n\nSynthesis input JSON:\n{}",
                     prompt_input_json
+                ),
+            },
+        ],
+    }
+}
+
+fn build_json_repair_llm_request(
+    request: &JsonRepairStageExecutionRequest,
+    profile_id: Option<String>,
+    model_override: Option<String>,
+    max_output_tokens: Option<i64>,
+) -> LlmChatRequest {
+    LlmChatRequest {
+        request_id: format!(
+            "prompt-pack-run-{}-stage-{}-repair-{}",
+            request.run_id, request.stage_run_id, request.attempt_number
+        ),
+        profile_id,
+        model_override,
+        max_output_tokens,
+        messages: vec![
+            LlmMessage {
+                role: "system".to_string(),
+                content: "Repair invalid provider JSON for a YouTube Summary pipeline stage. Return exactly one strict JSON object. Do not add Markdown, prose, comments, or backend-owned IDs.".to_string(),
+            },
+            LlmMessage {
+                role: "user".to_string(),
+                content: format!(
+                    "Repair the provider output for stage `{}`.\n\n\
+                     Parser/validator error:\n{}\n\n\
+                     Original frozen stage input JSON:\n{}\n\n\
+                     Invalid provider output:\n{}\n\n\
+                     Return only the corrected JSON object for the same stage, schema_version, and stage_io_version. Preserve useful candidate text from the invalid output when possible. If the original output is truncated, complete only the missing JSON structure using the frozen input as context. Do not include backend-owned IDs.",
+                    request.stage_name,
+                    request.error_message,
+                    request.prompt_input_json,
+                    request.raw_output
                 ),
             },
         ],

@@ -116,6 +116,7 @@ pub(crate) struct TranscriptAnalysisStageExecutionRequest {
 pub(crate) enum YoutubeSummaryStageExecutionRequest {
     TranscriptAnalysis(TranscriptAnalysisStageExecutionRequest),
     Synthesis(SynthesisStageExecutionRequest),
+    JsonRepair(JsonRepairStageExecutionRequest),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -123,6 +124,17 @@ pub(crate) struct SynthesisStageExecutionRequest {
     pub run_id: i64,
     pub stage_run_id: i64,
     pub prompt_input_json: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct JsonRepairStageExecutionRequest {
+    pub run_id: i64,
+    pub stage_run_id: i64,
+    pub stage_name: String,
+    pub attempt_number: i64,
+    pub prompt_input_json: String,
+    pub raw_output: String,
+    pub error_message: String,
 }
 
 const SYNTHESIS_STAGE_NAME: &str = "youtube_summary/synthesis";
@@ -252,6 +264,93 @@ pub(crate) async fn execute_transcript_analysis_stage_with_completion(
     Ok(())
 }
 
+async fn execute_transcript_analysis_stage_repair_completion(
+    pool: &SqlitePool,
+    stage_run_id: i64,
+    completion: LlmCompletion,
+    attempt_number: i64,
+) -> AppResult<()> {
+    let (run_id,): (i64,) =
+        sqlx::query_as("SELECT run_id FROM prompt_pack_stage_runs WHERE id = ?")
+            .bind(stage_run_id)
+            .fetch_one(pool)
+            .await
+            .map_err(AppError::database)?;
+    let input = build_transcript_analysis_stage_input(pool, stage_run_id).await?;
+
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET stage_status = 'running', updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(now_string())
+    .bind(stage_run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "raw_output",
+        attempt_number,
+        2,
+        &completion.text,
+    )
+    .await?;
+    let parsed = extract_json_payload(&completion.text)?;
+    validate_transcript_analysis_output(&input, &parsed)
+        .map_err(|error| AppError::validation(error.message))?;
+    let parsed_json = serde_json::to_string(&parsed)
+        .map_err(|error| AppError::internal(format!("serialize parsed output: {error}")))?;
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "parsed_output",
+        attempt_number,
+        3,
+        &parsed_json,
+    )
+    .await?;
+    let metrics = serde_json::json!({
+        "input_tokens": completion.input_tokens,
+        "output_tokens": completion.output_tokens,
+        "latency_ms": completion.latency_ms,
+        "schema_id": "stage-io/youtube_summary_transcript_analysis_output",
+        "validation_error_count": 0,
+        "attempt_number": attempt_number,
+        "repaired_from_attempt": attempt_number - 1
+    });
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "metrics",
+        attempt_number,
+        4,
+        &metrics.to_string(),
+    )
+    .await?;
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET stage_status = 'succeeded',
+             error_message = NULL,
+             latest_message = 'Repaired JSON output',
+             completed_at = ?,
+             updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(now_string())
+    .bind(now_string())
+    .bind(stage_run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
 pub(crate) async fn execute_synthesis_stage_with_completion(
     pool: &SqlitePool,
     stage_run_id: i64,
@@ -360,6 +459,118 @@ pub(crate) async fn execute_synthesis_stage_with_completion(
     .await
     .map_err(AppError::database)?;
     Ok(())
+}
+
+async fn execute_synthesis_stage_repair_completion(
+    pool: &SqlitePool,
+    stage_run_id: i64,
+    completion: LlmCompletion,
+    attempt_number: i64,
+) -> AppResult<()> {
+    let (run_id,): (i64,) =
+        sqlx::query_as("SELECT run_id FROM prompt_pack_stage_runs WHERE id = ?")
+            .bind(stage_run_id)
+            .fetch_one(pool)
+            .await
+            .map_err(AppError::database)?;
+
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET stage_status = 'running', updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(now_string())
+    .bind(stage_run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "raw_output",
+        attempt_number,
+        2,
+        &completion.text,
+    )
+    .await?;
+    let parsed = extract_json_payload(&completion.text)?;
+    validate_and_quarantine_synthesis_output(pool, run_id, stage_run_id, &parsed).await?;
+    let parsed_json = serde_json::to_string(&parsed).map_err(|error| {
+        AppError::internal(format!("serialize synthesis parsed output: {error}"))
+    })?;
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "parsed_output",
+        attempt_number,
+        3,
+        &parsed_json,
+    )
+    .await?;
+    let metrics = serde_json::json!({
+        "input_tokens": completion.input_tokens,
+        "output_tokens": completion.output_tokens,
+        "latency_ms": completion.latency_ms,
+        "schema_id": SYNTHESIS_SCHEMA_ID,
+        "validation_error_count": 0,
+        "attempt_number": attempt_number,
+        "repaired_from_attempt": attempt_number - 1
+    });
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "metrics",
+        attempt_number,
+        4,
+        &metrics.to_string(),
+    )
+    .await?;
+
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET stage_status = 'succeeded',
+             error_message = NULL,
+             latest_message = 'Repaired JSON output',
+             completed_at = ?,
+             updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(now_string())
+    .bind(now_string())
+    .bind(stage_run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+async fn insert_json_repair_input_artifact(
+    pool: &SqlitePool,
+    request: &JsonRepairStageExecutionRequest,
+) -> AppResult<()> {
+    let content = serde_json::json!({
+        "stage": request.stage_name,
+        "failed_attempt_number": request.attempt_number - 1,
+        "repair_attempt_number": request.attempt_number,
+        "error_message": request.error_message,
+        "prompt_input_json": request.prompt_input_json,
+        "raw_output": request.raw_output
+    })
+    .to_string();
+    insert_stage_artifact_in_pool(
+        pool,
+        request.run_id,
+        request.stage_run_id,
+        "repair_input",
+        request.attempt_number,
+        1,
+        &content,
+    )
+    .await
 }
 
 async fn mark_synthesis_stage_failed(
@@ -524,26 +735,80 @@ where
             source_ref_id: stage.source_ref_id,
             prompt_input_json,
         };
+        let repair_prompt_input_json = request.prompt_input_json.clone();
 
         match execute_stage(YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(
             request,
         ))
         .await
         {
-            Ok(completion) => match execute_transcript_analysis_stage_with_completion(
-                pool,
-                stage.stage_run_id,
-                completion,
-            )
-            .await
-            {
-                Ok(()) => successes += 1,
-                Err(error) => {
-                    failures += 1;
-                    mark_transcript_stage_failed(pool, run_id, stage.stage_run_id, &error.message)
-                        .await?;
+            Ok(completion) => {
+                let raw_output = completion.text.clone();
+                match execute_transcript_analysis_stage_with_completion(
+                    pool,
+                    stage.stage_run_id,
+                    completion,
+                )
+                .await
+                {
+                    Ok(()) => successes += 1,
+                    Err(error) => {
+                        let repair_request = JsonRepairStageExecutionRequest {
+                            run_id,
+                            stage_run_id: stage.stage_run_id,
+                            stage_name: "youtube_summary/transcript_analysis".to_string(),
+                            attempt_number: 2,
+                            prompt_input_json: repair_prompt_input_json,
+                            raw_output,
+                            error_message: error.message,
+                        };
+                        insert_json_repair_input_artifact(pool, &repair_request).await?;
+                        match execute_stage(YoutubeSummaryStageExecutionRequest::JsonRepair(
+                            repair_request,
+                        ))
+                        .await
+                        {
+                            Ok(repair_completion) => {
+                                match execute_transcript_analysis_stage_repair_completion(
+                                    pool,
+                                    stage.stage_run_id,
+                                    repair_completion,
+                                    2,
+                                )
+                                .await
+                                {
+                                    Ok(()) => successes += 1,
+                                    Err(error) => {
+                                        failures += 1;
+                                        mark_transcript_stage_failed(
+                                            pool,
+                                            run_id,
+                                            stage.stage_run_id,
+                                            &error.message,
+                                        )
+                                        .await?;
+                                    }
+                                }
+                            }
+                            Err(YoutubeSummaryStageExecutionError::Cancelled) => {
+                                mark_transcript_stage_cancelled(pool, stage.stage_run_id).await?;
+                                mark_run_cancelled(pool, run_id, successes, total).await?;
+                                return Ok(cancelled_outcome(run_id, successes, total));
+                            }
+                            Err(YoutubeSummaryStageExecutionError::Failed(error)) => {
+                                failures += 1;
+                                mark_transcript_stage_failed(
+                                    pool,
+                                    run_id,
+                                    stage.stage_run_id,
+                                    &error.message,
+                                )
+                                .await?;
+                            }
+                        }
+                    }
                 }
-            },
+            }
             Err(error) => match error {
                 YoutubeSummaryStageExecutionError::Cancelled => {
                     mark_transcript_stage_cancelled(pool, stage.stage_run_id).await?;
@@ -847,26 +1112,85 @@ where
     let request = SynthesisStageExecutionRequest {
         run_id,
         stage_run_id,
-        prompt_input_json,
+        prompt_input_json: prompt_input_json.clone(),
     };
 
     match execute_stage(YoutubeSummaryStageExecutionRequest::Synthesis(request)).await {
         Ok(completion) => {
+            let raw_output = completion.text.clone();
             match execute_synthesis_stage_with_completion(pool, stage_run_id, completion).await {
                 Ok(()) => {
                     update_run_progress(pool, run_id, successes + 1, transcript_total + 1).await?;
                     Ok("succeeded")
                 }
                 Err(error) => {
-                    mark_synthesis_stage_failed_with_artifact(
-                        pool,
+                    let repair_request = JsonRepairStageExecutionRequest {
                         run_id,
                         stage_run_id,
-                        &error.message,
-                    )
-                    .await?;
-                    update_run_progress(pool, run_id, successes, transcript_total + 1).await?;
-                    Ok("failed")
+                        stage_name: SYNTHESIS_STAGE_NAME.to_string(),
+                        attempt_number: 2,
+                        prompt_input_json,
+                        raw_output,
+                        error_message: error.message,
+                    };
+                    insert_json_repair_input_artifact(pool, &repair_request).await?;
+                    match execute_stage(YoutubeSummaryStageExecutionRequest::JsonRepair(
+                        repair_request,
+                    ))
+                    .await
+                    {
+                        Ok(repair_completion) => {
+                            match execute_synthesis_stage_repair_completion(
+                                pool,
+                                stage_run_id,
+                                repair_completion,
+                                2,
+                            )
+                            .await
+                            {
+                                Ok(()) => {
+                                    update_run_progress(
+                                        pool,
+                                        run_id,
+                                        successes + 1,
+                                        transcript_total + 1,
+                                    )
+                                    .await?;
+                                    Ok("succeeded")
+                                }
+                                Err(error) => {
+                                    mark_synthesis_stage_failed_with_artifact(
+                                        pool,
+                                        run_id,
+                                        stage_run_id,
+                                        &error.message,
+                                    )
+                                    .await?;
+                                    update_run_progress(
+                                        pool,
+                                        run_id,
+                                        successes,
+                                        transcript_total + 1,
+                                    )
+                                    .await?;
+                                    Ok("failed")
+                                }
+                            }
+                        }
+                        Err(YoutubeSummaryStageExecutionError::Cancelled) => Ok("cancelled"),
+                        Err(YoutubeSummaryStageExecutionError::Failed(error)) => {
+                            mark_synthesis_stage_failed_with_artifact(
+                                pool,
+                                run_id,
+                                stage_run_id,
+                                &error.message,
+                            )
+                            .await?;
+                            update_run_progress(pool, run_id, successes, transcript_total + 1)
+                                .await?;
+                            Ok("failed")
+                        }
+                    }
                 }
             }
         }
@@ -2904,6 +3228,9 @@ mod tests {
                     super::YoutubeSummaryStageExecutionRequest::Synthesis(_) => {
                         panic!("single-video run should not request synthesis")
                     }
+                    super::YoutubeSummaryStageExecutionRequest::JsonRepair(_) => {
+                        panic!("valid single-video run should not request repair")
+                    }
                 }
             })
             .await
@@ -2933,6 +3260,130 @@ mod tests {
         assert_eq!(progress_current, Some(1));
         assert_eq!(progress_total, Some(1));
         assert_eq!(result_count, 1);
+    }
+
+    #[tokio::test]
+    async fn execute_queued_run_repairs_malformed_transcript_json() {
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+
+        let pool = test_pool_with_frozen_youtube_summary_run().await;
+        let transcript_calls = Arc::new(AtomicUsize::new(0));
+        let repair_calls = Arc::new(AtomicUsize::new(0));
+
+        let outcome = execute_youtube_summary_run_with_stage_executor(&pool, 1, |request| {
+            let transcript_calls = Arc::clone(&transcript_calls);
+            let repair_calls = Arc::clone(&repair_calls);
+            async move {
+                match request {
+                    super::YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(_) => {
+                        transcript_calls.fetch_add(1, Ordering::SeqCst);
+                        Ok(malformed_completion())
+                    }
+                    super::YoutubeSummaryStageExecutionRequest::JsonRepair(request) => {
+                        repair_calls.fetch_add(1, Ordering::SeqCst);
+                        assert_eq!(request.stage_name, "youtube_summary/transcript_analysis");
+                        assert_eq!(request.attempt_number, 2);
+                        assert!(request.error_message.contains("malformed JSON braces"));
+                        assert!(request.raw_output.contains("evidence_fragment_candidates"));
+                        Ok(fake_completion_with_valid_transcript_analysis_json())
+                    }
+                    super::YoutubeSummaryStageExecutionRequest::Synthesis(_) => {
+                        panic!("single-video run should not request synthesis")
+                    }
+                }
+            }
+        })
+        .await
+        .expect("execute repaired run");
+
+        let stage_id = transcript_analysis_stage_id(&pool, 1).await;
+        let attempts = list_stage_artifact_attempts(&pool, stage_id).await;
+
+        assert_eq!(outcome.run_status, "complete");
+        assert_eq!(transcript_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(repair_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            attempts,
+            vec![
+                ("prompt_input".to_string(), 1, 1),
+                ("raw_output".to_string(), 1, 2),
+                ("repair_input".to_string(), 2, 1),
+                ("raw_output".to_string(), 2, 2),
+                ("parsed_output".to_string(), 2, 3),
+                ("metrics".to_string(), 2, 4),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn execute_queued_run_repairs_malformed_synthesis_json() {
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+
+        let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
+        let synthesis_calls = Arc::new(AtomicUsize::new(0));
+        let repair_calls = Arc::new(AtomicUsize::new(0));
+
+        let outcome = execute_youtube_summary_run_with_stage_executor(&pool, 1, |request| {
+            let synthesis_calls = Arc::clone(&synthesis_calls);
+            let repair_calls = Arc::clone(&repair_calls);
+            async move {
+                match request {
+                    super::YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request) => Ok(
+                        fake_completion_with_valid_transcript_analysis_json_for_source(
+                            &request.source_ref_id,
+                        ),
+                    ),
+                    super::YoutubeSummaryStageExecutionRequest::Synthesis(_) => {
+                        synthesis_calls.fetch_add(1, Ordering::SeqCst);
+                        Ok(malformed_completion())
+                    }
+                    super::YoutubeSummaryStageExecutionRequest::JsonRepair(request) => {
+                        repair_calls.fetch_add(1, Ordering::SeqCst);
+                        assert_eq!(request.stage_name, "youtube_summary/synthesis");
+                        assert_eq!(request.attempt_number, 2);
+                        assert!(request.error_message.contains("malformed JSON braces"));
+                        Ok(LlmCompletion {
+                            text: synthesis_json("Repaired combined summary"),
+                            input_tokens: Some(110),
+                            output_tokens: Some(210),
+                            latency_ms: 310,
+                        })
+                    }
+                }
+            }
+        })
+        .await
+        .expect("execute repaired synthesis run");
+
+        let synthesis_stage_id: i64 = sqlx::query_scalar(
+            "SELECT id FROM prompt_pack_stage_runs
+             WHERE run_id = 1 AND stage_name = 'youtube_summary/synthesis'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("synthesis stage");
+        let attempts = list_stage_artifact_attempts(&pool, synthesis_stage_id).await;
+
+        assert_eq!(outcome.run_status, "complete");
+        assert_eq!(synthesis_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(repair_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            attempts,
+            vec![
+                ("prompt_input".to_string(), 1, 1),
+                ("raw_output".to_string(), 1, 2),
+                ("repair_input".to_string(), 2, 1),
+                ("raw_output".to_string(), 2, 2),
+                ("parsed_output".to_string(), 2, 3),
+                ("metrics".to_string(), 2, 4),
+            ]
+        );
     }
 
     #[tokio::test]
@@ -3313,6 +3764,22 @@ mod tests {
         .expect("artifact kinds")
     }
 
+    async fn list_stage_artifact_attempts(
+        pool: &sqlx::SqlitePool,
+        stage_id: i64,
+    ) -> Vec<(String, i64, i64)> {
+        sqlx::query_as(
+            "SELECT artifact_kind, attempt_number, artifact_index
+             FROM prompt_pack_stage_artifacts
+             WHERE stage_run_id = ?
+             ORDER BY attempt_number ASC, artifact_index ASC",
+        )
+        .bind(stage_id)
+        .fetch_all(pool)
+        .await
+        .expect("artifact attempts")
+    }
+
     fn fake_completion_with_valid_transcript_analysis_json() -> LlmCompletion {
         fake_completion_with_valid_transcript_analysis_json_for_source("source_ref_1")
     }
@@ -3346,6 +3813,20 @@ mod tests {
             input_tokens: Some(10),
             output_tokens: Some(20),
             latency_ms: 5,
+        }
+    }
+
+    fn malformed_completion() -> LlmCompletion {
+        LlmCompletion {
+            text: r#"{
+                "stage_io_version": "1.0",
+                "schema_version": "1.0",
+                "stage": "youtube_summary/transcript_analysis",
+                "evidence_fragment_candidates":"#
+                .to_string(),
+            input_tokens: Some(10),
+            output_tokens: Some(20),
+            latency_ms: 30,
         }
     }
 
