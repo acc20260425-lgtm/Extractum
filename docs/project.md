@@ -23,6 +23,21 @@ This command runs frontend tests, Svelte checks, Rust check/tests, and
 policy, and broader live Telegram/LLM event-flow validation remain separate
 stabilization work.
 
+For the YouTube Summary / Prompt Pack project-runs slice, use the narrower
+verification scripts while iterating:
+
+```bash
+npm run test:project-runs
+npm run test:rust:prompt-pack-runs
+npm run verify:project-runs
+```
+
+`test:project-runs` runs the focused Vitest contract/API tests.
+`test:rust:prompt-pack-runs` runs the focused Rust prompt-pack run tests.
+`verify:project-runs` composes those with the full Svelte/TypeScript check.
+The first Rust run after a clean target can be slow because Cargo warms the
+test target; subsequent runs are expected to be much faster.
+
 ## Secret/config policy
 
 Commit shared source, docs, migrations, tests, and stable project config only.
@@ -162,6 +177,15 @@ Implemented:
 - immutable saved run corpus snapshots
 - provider-neutral analysis refs for new live corpus rows
 - YouTube timestamp evidence refs for transcript segments
+- Prompt Pack `youtube_summary` MVP runs with preflight, deterministic
+  source/material snapshots, combined transcript-analysis execution, stage
+  artifacts, canonical result persistence, audit events, validation findings,
+  and YouTube-specific result projections
+- dedicated `/projects/runs` Prompt Pack runs screen with SVAR grid browsing,
+  run label update, confirmed terminal run deletion, confirmed active run
+  cancellation, and a from-scratch report workspace for videos, claims,
+  evidence, warnings, validation findings, audit events, artifacts, and
+  canonical JSON
 - optional YouTube comment enrichment on generic source item rows for direct
   comment browsing without a separate comments pagination endpoint
 - source-level YouTube metadata detail, including bounded raw metadata JSON for
@@ -210,6 +234,18 @@ Not implemented yet:
     aggregates
   - refresh manually without polling, raw JSON, log viewing, copy actions, or
     support-bundle export
+- `/projects`
+  - manage durable research projects and project-source membership
+- `/projects/library`
+  - browse Library sources through the project-oriented navigation surface
+  - launch YouTube Summary runs for synced YouTube video/playlist sources
+- `/projects/runs`
+  - browse Prompt Pack project runs through the Extractum SVAR grid wrapper
+  - update optional run labels
+  - delete terminal Prompt Pack runs after confirmation
+  - cancel active Prompt Pack runs after confirmation
+  - inspect Prompt Pack report components without using the legacy analysis
+    report viewer
 - `/analysis`
   - use the result-first research workspace layout
   - keep NotebookLM export, template editing, and group editing reachable from
@@ -288,6 +324,17 @@ Not implemented yet:
 - prompt template CRUD
 - source group CRUD
 
+### Prompt Packs
+
+- list Prompt Pack library entries and versions
+- run YouTube Summary preflight
+- start and cancel YouTube Summary Prompt Pack runs
+- list recent and active Prompt Pack runs
+- update optional Prompt Pack run labels
+- delete terminal Prompt Pack runs
+- list Prompt Pack stage runs, stage artifacts, audit events, validation
+  findings, and canonical results
+
 ### Settings / LLM
 
 - load and save LLM profiles
@@ -332,6 +379,20 @@ Not implemented yet:
 - `analysis_runs`: saved report runs
 - `analysis_run_messages`: frozen corpus snapshot for saved runs
 - `analysis_chat_messages`: follow-up chat history
+- `prompt_pack_versions`, `prompt_pack_stage_templates`, and
+  `prompt_pack_schema_assets`: bundled Prompt Pack library, stage prompt
+  templates, and schema assets
+- `prompt_pack_runs`: Prompt Pack run headers, status/progress, request and
+  preflight payloads, model/config choices, and optional user-owned run labels
+- `prompt_pack_run_scopes`, `prompt_pack_run_source_snapshots`,
+  `prompt_pack_run_source_origins`, and `prompt_pack_run_material_snapshots`:
+  deterministic run input boundary for YouTube sources, playlist expansion,
+  inclusion/skipping reasons, transcripts, descriptions, and comments
+- `prompt_pack_stage_runs` and `prompt_pack_stage_artifacts`: stage execution
+  status plus compressed prompt/raw/parsed/metrics/error artifacts
+- `prompt_pack_results` and `prompt_pack_result_*`: canonical result JSON plus
+  queryable source refs, claims, evidence, warnings, limitations, quality
+  flags, validation findings, audit refs, and YouTube-specific projections
 
 ## LLM scheduling and analysis caps
 
@@ -374,14 +435,17 @@ LLM scheduling allows two running requests per `(provider, profile)` and priorit
 6. `src-tauri/src/analysis/`
 7. `src-tauri/src/llm/`
 8. `src-tauri/src/diagnostics/`
-9. `src/routes/analysis/+page.svelte`
-10. `src/lib/components/analysis/`
-11. `src/routes/settings/+page.svelte`
-12. `src/routes/diagnostics/+page.svelte`
-13. `src/lib/diagnostics-view-model.ts`
-14. `src/routes/sources/+page.svelte`
-15. `src-tauri/src/error.rs`
-16. `src-tauri/src/migrations.rs`
+9. `src-tauri/src/prompt_packs/`
+10. `src/routes/projects/`
+11. `src/lib/components/research-projects/`
+12. `src/routes/analysis/+page.svelte`
+13. `src/lib/components/analysis/`
+14. `src/routes/settings/+page.svelte`
+15. `src/routes/diagnostics/+page.svelte`
+16. `src/lib/diagnostics-view-model.ts`
+17. `src/routes/sources/+page.svelte`
+18. `src-tauri/src/error.rs`
+19. `src-tauri/src/migrations.rs`
 
 Related deep dive: `docs/takeout-source-import.md`.
 

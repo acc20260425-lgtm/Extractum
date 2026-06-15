@@ -810,6 +810,8 @@ Notes:
 - Project-scoped runs use `scope_type = 'project'` and `project_id`.
 - Project run history is stored in `analysis_runs`; there is no separate
   `project_runs` table in the MVP.
+- Prompt Pack runs use separate `prompt_pack_*` tables. The `/projects/runs`
+  UI is a project-run management screen, not a table named `project_runs`.
 
 ### 2.3 `analysis_source_groups`
 
@@ -974,7 +976,131 @@ building, evidence resolution, saved-run source context, and follow-up chat.
 Completed historical runs without rows are treated as missing legacy snapshots;
 saved-run read paths must not reconstruct them from current live sources.
 
-## 3. Migration history
+## 3. Prompt Pack tables
+
+Prompt Pack persistence starts in migration `0006_prompt_pack_mvp.sql` and is
+extended by `0007_prompt_pack_run_idempotency.sql` and
+`0008_prompt_pack_run_labels.sql`. It is separate from legacy
+`analysis_runs` persistence.
+
+### 3.1 Prompt Pack library tables
+
+Library metadata and bundled execution assets are stored in:
+
+- `prompt_packs`
+- `prompt_pack_versions`
+- `prompt_pack_stage_templates`
+- `prompt_pack_schema_assets`
+
+These tables describe available packs, pack versions, stage prompt templates,
+and schema assets. The current bundled MVP pack is `youtube_summary`.
+
+### 3.2 `prompt_pack_runs`
+
+Stores Prompt Pack run headers and user-facing run state.
+
+Important fields:
+
+- `id`
+- `project_id`
+- `pack_version_id`
+- `pack_id`
+- `pack_version`
+- `schema_version`
+- `run_status`
+- `result_status`
+- `request_json_zstd`
+- `preflight_json_zstd`
+- `provider_profile_id`
+- `model`
+- `output_language`
+- `control_preset`
+- `evidence_mode`
+- `include_comments`
+- `latest_message`
+- `queue_position`
+- `progress_current`
+- `progress_total`
+- `created_at`
+- `started_at`
+- `completed_at`
+- `updated_at`
+- `client_request_id`
+- `run_label`
+
+Notes:
+
+- `run_status` is one of `queued`, `running`, `complete`, `partial`, `failed`,
+  `cancelled`, or `interrupted`.
+- `result_status` is one of `none`, `complete`, `partial`, or `failed`.
+- `client_request_id` is nullable for pre-existing rows and unique when set.
+- `run_label` is nullable; non-null values must remain non-empty after
+  trimming. It is user-owned display metadata for the project-runs UI.
+- The runtime update command changes `run_label` only. It does not rewrite
+  request, preflight, model, result, or artifact data.
+- Deleting Prompt Pack runs is allowed only for terminal runs. Active
+  `queued`/`running` runs must be cancelled first.
+
+### 3.3 Prompt Pack run input boundary
+
+The deterministic run input boundary is stored in:
+
+- `prompt_pack_run_scopes`
+- `prompt_pack_run_source_snapshots`
+- `prompt_pack_run_source_origins`
+- `prompt_pack_run_material_snapshots`
+
+These tables record explicit video and playlist scopes, source snapshots,
+playlist expansion / inclusion decisions, skipped or blocking reasons, and
+compressed material snapshots for transcripts, descriptions, and comments.
+
+### 3.4 Prompt Pack execution and results
+
+Stage execution and artifacts are stored in:
+
+- `prompt_pack_stage_runs`
+- `prompt_pack_stage_artifacts`
+
+Canonical result persistence and projections are stored in:
+
+- `prompt_pack_results`
+- `prompt_pack_result_source_refs`
+- `prompt_pack_result_claims`
+- `prompt_pack_result_evidence`
+- `prompt_pack_result_ref_edges`
+- `prompt_pack_result_unknowns`
+- `prompt_pack_result_verification_tasks`
+- `prompt_pack_result_warnings`
+- `prompt_pack_result_limitations`
+- `prompt_pack_result_quality_flags`
+- `prompt_pack_result_audit_refs`
+- `prompt_pack_result_validation_findings`
+- `prompt_pack_audit_events`
+- `prompt_pack_result_quarantine_artifacts`
+
+YouTube-specific projections for `youtube_summary` are stored in:
+
+- `prompt_pack_youtube_videos`
+- `prompt_pack_youtube_segments`
+- `prompt_pack_youtube_key_points`
+- `prompt_pack_youtube_quotes`
+- `prompt_pack_youtube_action_items`
+- `prompt_pack_youtube_open_questions`
+- `prompt_pack_youtube_synthesis_items`
+
+Notes:
+
+- `prompt_pack_results.canonical_json_zstd` remains the canonical stored
+  result. Projection tables are query/read helpers derived from that result.
+- `prompt_pack_stage_artifacts` store compressed prompt inputs, raw provider
+  outputs, parsed outputs, metrics, repair inputs, and errors.
+- `prompt_pack_audit_events` and validation findings are linked to the run and
+  are rendered by the `/projects/runs` report workspace.
+- Most Prompt Pack child tables use `ON DELETE CASCADE`; deleting an eligible
+  terminal run removes its snapshots, stages, artifacts, results, projections,
+  audit events, and validation findings.
+
+## 4. Migration history
 
 Baseline v1 (`0001_current_schema_baseline.sql`) is the active starting point
 for supported databases. Pre-reset migrations 1 through 26 are archived under
@@ -1034,8 +1160,11 @@ post-baseline migration history.
 | 3 | `0003_analysis_telegram_history_scope.sql` | Telegram migrated-history analysis scope marker |
 | 4 | `0004_source_delete_cascade_indexes.sql` | Source delete cascade indexes |
 | 5 | `0005_projects_mvp.sql` | Projects MVP schema |
+| 6 | `0006_prompt_pack_mvp.sql` | Prompt Pack library, run, stage, result, audit, validation, and YouTube projection schema |
+| 7 | `0007_prompt_pack_run_idempotency.sql` | Nullable unique Prompt Pack run client request id |
+| 8 | `0008_prompt_pack_run_labels.sql` | Optional Prompt Pack run labels |
 
-## 4. Current behavior implications
+## 5. Current behavior implications
 
 - the analysis workspace can render media-bearing and media-only items from `items`;
 - Telegram and YouTube source creation/sync are implemented; unsupported provider sync attempts return typed validation errors;
@@ -1087,7 +1216,7 @@ post-baseline migration history.
 - old non-empty `llm.profile.*.api_key` and `accounts.api_hash` values are legacy migration inputs and are cleared only after successful secure-store writes;
 - Telegram session files remain app-data files, but their contents are encrypted with per-account session keys stored in OS secure storage under `telegram.account.<account_id>.session_key`.
 
-## 5. Telegram schema evolution notes
+## 6. Telegram schema evolution notes
 
 This section is non-contractual design guidance for future migrations. It is
 based on the current Extractum schema shape plus a source-code review of

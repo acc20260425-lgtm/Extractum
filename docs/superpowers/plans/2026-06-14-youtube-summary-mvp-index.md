@@ -39,6 +39,33 @@
    - Depends on: backend commands from runtime and execution/result.
    - Produces: a usable MVP screen and Library entry point.
 
+## Current Handoff State
+
+As of 2026-06-15, the MVP has an additional project-run management layer on
+top of the original YouTube Summary UI:
+
+- `/projects/runs` opens a dedicated Prompt Pack runs screen from the project
+  rail.
+- The top pane uses the Extractum SVAR grid wrapper to browse recent and
+  active `prompt_pack_runs`.
+- The toolbar supports optional run-label updates, confirmed deletion for
+  terminal runs, and confirmed cancellation for active runs.
+- The report pane is built from scratch for Prompt Pack results and does not
+  use the legacy analysis `ReportViewer`, `ReportCanvas`, or
+  `YoutubeSummaryResultView`.
+- Backend support includes `run_label` persistence plus focused update/delete
+  Tauri commands for Prompt Pack runs.
+- Focused verification commands are available:
+
+```powershell
+npm.cmd run test:project-runs
+npm.cmd run test:rust:prompt-pack-runs
+npm.cmd run verify:project-runs
+```
+
+The current-state docs for this behavior are `docs/project.md` and
+`docs/database-schema.md`.
+
 ## Execution Order
 
 Tracking rules:
