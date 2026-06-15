@@ -1848,7 +1848,7 @@ async fn load_comment_text(
 }
 
 fn now_string() -> String {
-    "2026-06-14T00:00:00Z".to_string()
+    crate::time::now_rfc3339_utc()
 }
 
 fn simple_hash(value: &str) -> String {
@@ -2070,7 +2070,7 @@ fn wrap_candidates(
 #[cfg(test)]
 mod tests {
     use super::{
-        create_youtube_summary_run_skeleton_in_pool, freeze_comment_material_refs,
+        create_youtube_summary_run_skeleton_in_pool, freeze_comment_material_refs, now_string,
         preflight_youtube_summary_in_pool, start_youtube_summary_run_in_pool, test_comment_policy,
         ModelBudget,
     };
@@ -2085,6 +2085,23 @@ mod tests {
         execute_youtube_summary_run_with_fake_completions,
         execute_youtube_summary_run_with_stage_executor, LlmCompletion,
     };
+
+    #[test]
+    fn now_string_uses_current_utc_time() {
+        use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
+
+        let before = OffsetDateTime::now_utc() - Duration::seconds(5);
+        let value = now_string();
+        let after = OffsetDateTime::now_utc() + Duration::seconds(5);
+        let parsed =
+            OffsetDateTime::parse(&value, &Rfc3339).expect("parse youtube summary timestamp");
+
+        assert_ne!(value, "2026-06-14T00:00:00Z");
+        assert!(
+            parsed >= before && parsed <= after,
+            "expected {value} to be between {before} and {after}"
+        );
+    }
 
     async fn migrated_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")

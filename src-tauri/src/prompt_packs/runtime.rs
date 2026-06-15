@@ -1023,22 +1023,38 @@ impl From<RunSummaryRow> for PromptPackRunSummaryDto {
 }
 
 fn now_string() -> String {
-    "2026-06-14T00:00:00Z".to_string()
+    crate::time::now_rfc3339_utc()
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         build_transcript_analysis_llm_request, cleanup_interrupted_prompt_pack_runs_in_pool,
-        delete_prompt_pack_run_in_pool, list_prompt_pack_runs_in_pool,
-        synthesis_stage_max_output_token_budget,
-        transcript_analysis_max_output_tokens, transcript_analysis_stage_max_output_token_budget,
-        update_prompt_pack_run_in_pool, PromptPackRunState,
+        delete_prompt_pack_run_in_pool, list_prompt_pack_runs_in_pool, now_string,
+        synthesis_stage_max_output_token_budget, transcript_analysis_max_output_tokens,
+        transcript_analysis_stage_max_output_token_budget, update_prompt_pack_run_in_pool,
+        PromptPackRunState,
     };
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::dto::{ListPromptPackRunsRequest, PromptPackRunEvent};
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
     use crate::prompt_packs::youtube_summary::TranscriptAnalysisStageExecutionRequest;
+
+    #[test]
+    fn now_string_uses_current_utc_time() {
+        use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
+
+        let before = OffsetDateTime::now_utc() - Duration::seconds(5);
+        let value = now_string();
+        let after = OffsetDateTime::now_utc() + Duration::seconds(5);
+        let parsed = OffsetDateTime::parse(&value, &Rfc3339).expect("parse runtime timestamp");
+
+        assert_ne!(value, "2026-06-14T00:00:00Z");
+        assert!(
+            parsed >= before && parsed <= after,
+            "expected {value} to be between {before} and {after}"
+        );
+    }
 
     #[tokio::test]
     async fn prompt_pack_run_state_tracks_active_and_cancel_requested_runs() {

@@ -5,6 +5,15 @@ pub(crate) fn now_secs() -> i64 {
         .as_secs() as i64
 }
 
+pub(crate) fn now_rfc3339_utc() -> String {
+    use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+
+    OffsetDateTime::from_unix_timestamp(now_secs())
+        .unwrap_or(OffsetDateTime::UNIX_EPOCH)
+        .format(&Rfc3339)
+        .expect("format current UTC timestamp")
+}
+
 pub(crate) fn ymd_to_unix_midnight(value: &str) -> Option<i64> {
     let value = value.trim();
     let normalized = if value.len() == 8 && value.chars().all(|ch| ch.is_ascii_digit()) {
@@ -54,7 +63,7 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{now_secs, ymd_to_unix_midnight};
+    use super::{now_rfc3339_utc, now_secs, ymd_to_unix_midnight};
 
     #[test]
     fn ymd_to_unix_midnight_parses_iso_dates() {
@@ -86,5 +95,21 @@ mod tests {
     #[test]
     fn now_secs_returns_unix_timestamp_seconds() {
         assert!(now_secs() >= 1_700_000_000);
+    }
+
+    #[test]
+    fn now_rfc3339_utc_returns_current_utc_timestamp() {
+        use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
+
+        let before = OffsetDateTime::now_utc() - Duration::seconds(5);
+        let value = now_rfc3339_utc();
+        let after = OffsetDateTime::now_utc() + Duration::seconds(5);
+        let parsed = OffsetDateTime::parse(&value, &Rfc3339).expect("parse UTC timestamp");
+
+        assert!(value.ends_with('Z'));
+        assert!(
+            parsed >= before && parsed <= after,
+            "expected {value} to be between {before} and {after}"
+        );
     }
 }
