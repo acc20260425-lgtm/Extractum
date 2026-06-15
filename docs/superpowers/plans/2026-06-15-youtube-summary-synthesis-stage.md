@@ -29,7 +29,7 @@
 - Create: `src-tauri/prompt-packs/youtube_summary/1.0.0/runtime/synthesis.json`
 - Modify: `src-tauri/src/prompt_packs/runtime.rs`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add a unit test near `transcript_analysis_output_budget_comes_from_stage_runtime_config`:
 
@@ -43,7 +43,7 @@ fn synthesis_output_budget_comes_from_stage_runtime_config() {
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -53,7 +53,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\co
 
 Expected: FAIL because `synthesis_stage_max_output_token_budget` does not exist.
 
-- [ ] **Step 3: Add the runtime config asset**
+- [x] **Step 3: Add the runtime config asset**
 
 Create `src-tauri/prompt-packs/youtube_summary/1.0.0/runtime/synthesis.json`:
 
@@ -105,7 +105,7 @@ Create `src-tauri/prompt-packs/youtube_summary/1.0.0/runtime/synthesis.json`:
 }
 ```
 
-- [ ] **Step 4: Implement the budget loader**
+- [x] **Step 4: Implement the budget loader**
 
 In `src-tauri/src/prompt_packs/runtime.rs`, add:
 
@@ -142,7 +142,7 @@ fn stage_max_output_token_budget(asset_json: &str, label: &str) -> AppResult<i64
 }
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run:
 
@@ -152,7 +152,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\co
 
 Expected: PASS, 1 test.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri/prompt-packs/youtube_summary/1.0.0/runtime/synthesis.json src-tauri/src/prompt_packs/runtime.rs

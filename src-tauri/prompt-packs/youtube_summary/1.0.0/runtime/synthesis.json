@@ -1,0 +1,45 @@
+{
+  "runtime_configuration": {
+    "runtime_config_version": "1.0",
+    "model_routing": {
+      "model_routing_version": "1.0",
+      "default_provider_family": "generic_chat",
+      "stage_routes": {
+        "fragment_candidate_mining": "cheap_extractor",
+        "claim_extraction": "reasoning",
+        "claim_linking": "reasoning",
+        "pack_data_generation": "pack_reasoning",
+        "final_synthesis": "writer",
+        "retry_repair": "repair",
+        "youtube_summary/synthesis": "writer"
+      }
+    },
+    "feature_flags": {
+      "retry_enabled": true,
+      "object_repair_enabled": true,
+      "quarantine_enabled": true,
+      "strict_reference_validation": true,
+      "parser_fallback_enabled": false
+    },
+    "budget_limits": {
+      "max_retry_attempts": 2,
+      "stage_timeout_seconds": 120,
+      "max_prompt_tokens": 24000,
+      "max_output_tokens": 6144
+    },
+    "retry_policy": {
+      "retryable_layers": ["schema", "reference"],
+      "escalate_after_attempts": 1,
+      "fallback_model_class": "strong_repair"
+    },
+    "quarantine_policy": {
+      "store": "configured-at-runtime",
+      "redact_raw_provider_output": false,
+      "retention_days": 30
+    },
+    "telemetry": {
+      "enabled": true,
+      "sink": "local"
+    }
+  }
+}

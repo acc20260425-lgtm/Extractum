@@ -28,6 +28,8 @@ use crate::llm::{
 pub const PROMPT_PACK_RUN_EVENT: &str = "prompt-pack-run-event";
 const TRANSCRIPT_ANALYSIS_STAGE_JSON: &str =
     include_str!("../../prompt-packs/youtube_summary/1.0.0/runtime/transcript_analysis.json");
+const SYNTHESIS_STAGE_JSON: &str =
+    include_str!("../../prompt-packs/youtube_summary/1.0.0/runtime/synthesis.json");
 
 #[derive(Deserialize)]
 struct StageRuntimeConfigAsset {
@@ -503,21 +505,28 @@ fn build_transcript_analysis_llm_request(
 }
 
 fn transcript_analysis_stage_max_output_token_budget() -> AppResult<i64> {
-    let asset = serde_json::from_str::<StageRuntimeConfigAsset>(TRANSCRIPT_ANALYSIS_STAGE_JSON)
-        .map_err(|error| {
-            AppError::internal(format!(
-                "Parse bundled transcript-analysis runtime configuration: {error}"
-            ))
-        })?;
+    stage_max_output_token_budget(TRANSCRIPT_ANALYSIS_STAGE_JSON, "transcript-analysis")
+}
+
+fn synthesis_stage_max_output_token_budget() -> AppResult<i64> {
+    stage_max_output_token_budget(SYNTHESIS_STAGE_JSON, "synthesis")
+}
+
+fn stage_max_output_token_budget(asset_json: &str, label: &str) -> AppResult<i64> {
+    let asset = serde_json::from_str::<StageRuntimeConfigAsset>(asset_json).map_err(|error| {
+        AppError::internal(format!(
+            "Parse bundled {label} runtime configuration: {error}"
+        ))
+    })?;
     asset
         .runtime_configuration
         .and_then(|runtime| runtime.budget_limits)
         .and_then(|budget| budget.max_output_tokens)
         .filter(|max_output_tokens| *max_output_tokens > 0)
         .ok_or_else(|| {
-            AppError::internal(
-                "Bundled transcript-analysis runtime configuration is missing positive max_output_tokens",
-            )
+            AppError::internal(format!(
+                "Bundled {label} runtime configuration is missing positive max_output_tokens"
+            ))
         })
 }
 
@@ -873,6 +882,7 @@ mod tests {
     use super::{
         build_transcript_analysis_llm_request, cleanup_interrupted_prompt_pack_runs_in_pool,
         delete_prompt_pack_run_in_pool, list_prompt_pack_runs_in_pool,
+        synthesis_stage_max_output_token_budget,
         transcript_analysis_max_output_tokens, transcript_analysis_stage_max_output_token_budget,
         update_prompt_pack_run_in_pool, PromptPackRunState,
     };
@@ -1072,6 +1082,14 @@ mod tests {
         assert_eq!(
             transcript_analysis_stage_max_output_token_budget().expect("load stage budget"),
             4_096
+        );
+    }
+
+    #[test]
+    fn synthesis_output_budget_comes_from_stage_runtime_config() {
+        assert_eq!(
+            synthesis_stage_max_output_token_budget().expect("load synthesis budget"),
+            6_144
         );
     }
 
