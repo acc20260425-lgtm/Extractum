@@ -9,6 +9,7 @@
     listPromptPackRunStages,
     listPromptPackStageArtifacts,
   } from "$lib/api/prompt-packs";
+  import { formatAppError } from "$lib/app-error";
   import { ExtractumBadge, ExtractumButton } from "$lib/components/extractum-ui";
   import type {
     PromptPackAuditEvent,
@@ -83,7 +84,7 @@
       artifactsByStage = Object.fromEntries(artifactPairs);
     } catch (cause) {
       clearReport(false);
-      error = cause instanceof Error ? cause.message : String(cause);
+      error = formatAppError("loading project run report", cause);
     } finally {
       loading = false;
     }
@@ -109,7 +110,7 @@
         artifactIndex: artifact.artifactIndex,
       });
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : String(cause);
+      error = formatAppError("loading project run artifact", cause);
     } finally {
       loadingArtifact = false;
     }

@@ -54,4 +54,13 @@ describe("project runs screen", () => {
     expect(reportSource).not.toContain("YoutubeSummaryResultView");
     expect(reportSource).not.toContain("report-viewer");
   });
+
+  it("formats object-shaped prompt-pack report errors instead of rendering raw objects", () => {
+    const reportSource = readProjectFile("src/lib/components/research-projects/ProjectRunReportPanel.svelte");
+
+    expect(reportSource).toContain("formatAppError");
+    expect(reportSource).toContain('formatAppError("loading project run report", cause)');
+    expect(reportSource).toContain('formatAppError("loading project run artifact", cause)');
+    expect(reportSource).not.toContain("String(cause)");
+  });
 });
