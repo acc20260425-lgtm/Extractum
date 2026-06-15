@@ -5,38 +5,39 @@ pub(crate) mod execution;
 mod execution_tests;
 #[cfg(test)]
 mod facade_tests;
+pub(crate) mod outputs;
+#[cfg(test)]
+mod outputs_tests;
 pub(crate) mod preflight;
 #[cfg(test)]
 mod preflight_tests;
-pub(crate) mod run_store;
 pub(crate) mod snapshots;
 #[cfg(test)]
 mod snapshots_tests;
 pub(crate) mod sources;
-pub(crate) mod stage_outputs;
-#[cfg(test)]
-mod stage_outputs_tests;
+pub(crate) mod store;
 pub(crate) mod synthesis_input;
 #[cfg(test)]
 mod synthesis_input_tests;
 #[cfg(test)]
 pub(crate) mod test_support;
+mod types;
 
 use super::dto::{
     PreflightYoutubeSummaryRunRequest, StartYoutubeSummaryRunOutcomeDto,
     StartYoutubeSummaryRunRequest,
 };
-use super::json_repair::JsonRepairStageExecutionRequest;
 use crate::error::{AppError, AppResult};
 pub(crate) use execution::execute_youtube_summary_run_with_stage_executor;
 pub(crate) use preflight::preflight_youtube_summary_in_pool;
-use run_store::{load_run_by_client_request_id, load_run_summary};
 pub(crate) use snapshots::create_youtube_summary_run_skeleton_in_pool;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ModelBudget {
-    pub input_token_limit: Option<i64>,
-}
+use store::{load_run_by_client_request_id, load_run_summary};
+pub use types::ModelBudget;
+pub(crate) use types::{
+    LlmCompletion, SynthesisStageExecutionRequest, TranscriptAnalysisStageExecutionRequest,
+    YoutubeSummaryRunExecutionOutcome, YoutubeSummaryStageExecutionError,
+    YoutubeSummaryStageExecutionRequest, SYNTHESIS_STAGE_NAME,
+};
 
 pub(crate) async fn start_youtube_summary_run_in_pool(
     pool: &SqlitePool,
@@ -76,60 +77,6 @@ pub(crate) async fn start_youtube_summary_run_in_pool(
     let run_id = create_youtube_summary_run_skeleton_in_pool(pool, request, 0).await?;
     let run = load_run_summary(pool, run_id).await?;
     Ok(StartYoutubeSummaryRunOutcomeDto::Started { run })
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct LlmCompletion {
-    pub text: String,
-    pub input_tokens: Option<i64>,
-    pub output_tokens: Option<i64>,
-    pub latency_ms: i64,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct TranscriptAnalysisStageExecutionRequest {
-    pub run_id: i64,
-    pub stage_run_id: i64,
-    pub source_snapshot_id: i64,
-    pub source_ref_id: String,
-    pub prompt_input_json: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum YoutubeSummaryStageExecutionRequest {
-    TranscriptAnalysis(TranscriptAnalysisStageExecutionRequest),
-    Synthesis(SynthesisStageExecutionRequest),
-    JsonRepair(JsonRepairStageExecutionRequest),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct SynthesisStageExecutionRequest {
-    pub run_id: i64,
-    pub stage_run_id: i64,
-    pub prompt_input_json: String,
-}
-
-pub(crate) const SYNTHESIS_STAGE_NAME: &str = "youtube_summary/synthesis";
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct YoutubeSummaryRunExecutionOutcome {
-    pub run_id: i64,
-    pub run_status: String,
-    pub progress_current: i64,
-    pub progress_total: i64,
-    pub message: String,
-}
-
-#[derive(Debug)]
-pub(crate) enum YoutubeSummaryStageExecutionError {
-    Cancelled,
-    Failed(AppError),
-}
-
-impl From<AppError> for YoutubeSummaryStageExecutionError {
-    fn from(error: AppError) -> Self {
-        Self::Failed(error)
-    }
 }
 
 pub(crate) fn now_string() -> String {

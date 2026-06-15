@@ -1,4 +1,4 @@
-use super::stage_outputs::{
+use super::outputs::{
     execute_synthesis_stage_with_completion, execute_transcript_analysis_stage_with_completion,
 };
 use super::test_support::*;
