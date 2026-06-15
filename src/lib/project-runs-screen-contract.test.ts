@@ -63,4 +63,15 @@ describe("project runs screen", () => {
     expect(reportSource).toContain('formatAppError("loading project run artifact", cause)');
     expect(reportSource).not.toContain("String(cause)");
   });
+
+  it("keeps diagnostics visible when a run has no canonical result yet", () => {
+    const reportSource = readProjectFile("src/lib/components/research-projects/ProjectRunReportPanel.svelte");
+
+    expect(reportSource).toContain("loadRunDiagnostics");
+    expect(reportSource).toContain("expectedMissingResult");
+    expect(reportSource).toContain("resultUnavailableMessage");
+    expect(reportSource).toContain("Run was cancelled before producing a canonical result.");
+    expect(reportSource).toContain("Run failed before producing a canonical result.");
+    expect(reportSource).toContain("Run is still in progress. A canonical result is not available yet.");
+  });
 });

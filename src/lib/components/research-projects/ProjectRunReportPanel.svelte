@@ -32,8 +32,13 @@
   let loading = $state(false);
   let loadingArtifact = $state(false);
   let error = $state("");
+  let resultError = $state("");
 
   const runId = $derived(run?.runId ?? null);
+  const expectedMissingResult = $derived(
+    Boolean(run && !result && (run.resultStatus ?? "none") !== "complete" && canLackCanonicalResult(run)),
+  );
+  const resultUnavailableMessage = $derived(describeMissingResult(run));
   const canonical = $derived((result?.canonical ?? {}) as Record<string, unknown>);
   const youtubeSummary = $derived(recordAt(recordAt(recordAt(canonical, "outputs"), "pack_data"), "youtube_summary"));
   const summary = $derived(recordAt(recordAt(canonical, "outputs"), "summary"));
@@ -63,41 +68,62 @@
 
     loading = true;
     error = "";
+    resultError = "";
     selectedArtifact = null;
     try {
-      const [nextResult, nextStages, nextFindings, nextAuditEvents] = await Promise.all([
-        getPromptPackResult(runId),
-        listPromptPackRunStages(runId),
-        getPromptPackValidationFindings(runId),
-        listPromptPackAuditEvents(runId),
-      ]);
-      result = nextResult;
-      stages = nextStages;
-      findings = nextFindings;
-      auditEvents = nextAuditEvents;
-      const artifactPairs = await Promise.all(
-        nextStages.map(async (stage) => [
-          stage.stageRunId,
-          await listPromptPackStageArtifacts(stage.stageRunId),
-        ] as const),
-      );
-      artifactsByStage = Object.fromEntries(artifactPairs);
+      await Promise.all([loadRunResult(runId), loadRunDiagnostics(runId)]);
     } catch (cause) {
-      clearReport(false);
-      error = formatAppError("loading project run report", cause);
+      clearDiagnostics();
+      error = formatAppError("loading project run diagnostics", cause);
     } finally {
       loading = false;
     }
   }
 
+  async function loadRunResult(nextRunId: number) {
+    try {
+      result = await getPromptPackResult(nextRunId);
+    } catch (cause) {
+      result = null;
+      if (!canLackCanonicalResult(run)) {
+        resultError = formatAppError("loading project run report", cause);
+      }
+    }
+  }
+
+  async function loadRunDiagnostics(nextRunId: number) {
+    const [nextStages, nextFindings, nextAuditEvents] = await Promise.all([
+      listPromptPackRunStages(nextRunId),
+      getPromptPackValidationFindings(nextRunId),
+      listPromptPackAuditEvents(nextRunId),
+    ]);
+    stages = nextStages;
+    findings = nextFindings;
+    auditEvents = nextAuditEvents;
+    const artifactPairs = await Promise.all(
+      nextStages.map(async (stage) => [
+        stage.stageRunId,
+        await listPromptPackStageArtifacts(stage.stageRunId),
+      ] as const),
+    );
+    artifactsByStage = Object.fromEntries(artifactPairs);
+  }
+
   function clearReport(clearError = true) {
     result = null;
+    clearDiagnostics();
+    if (clearError) {
+      error = "";
+      resultError = "";
+    }
+  }
+
+  function clearDiagnostics() {
     stages = [];
     artifactsByStage = {};
     selectedArtifact = null;
     findings = [];
     auditEvents = [];
-    if (clearError) error = "";
   }
 
   async function openArtifact(artifact: PromptPackStageArtifactSummary) {
@@ -152,6 +178,31 @@
   function jsonPreview(value: unknown) {
     return JSON.stringify(value, null, 2);
   }
+
+  function canLackCanonicalResult(nextRun: PromptPackRunListItem | null) {
+    if (!nextRun) return false;
+    return ["queued", "running", "failed", "cancelled", "interrupted"].includes(nextRun.runStatus);
+  }
+
+  function describeMissingResult(nextRun: PromptPackRunListItem | null) {
+    if (!nextRun) return "";
+    if (nextRun.runStatus === "cancelled") {
+      return "Run was cancelled before producing a canonical result.";
+    }
+    if (nextRun.runStatus === "failed") {
+      return "Run failed before producing a canonical result.";
+    }
+    if (nextRun.runStatus === "running") {
+      return "Run is still in progress. A canonical result is not available yet.";
+    }
+    if (nextRun.runStatus === "queued") {
+      return "Run is queued. A canonical result is not available yet.";
+    }
+    if (nextRun.runStatus === "interrupted") {
+      return "Run was interrupted before producing a canonical result.";
+    }
+    return "No canonical result is available for this run.";
+  }
 </script>
 
 <section class="project-run-report" aria-label="Project run report">
@@ -193,7 +244,11 @@
             <span>Evidence <strong>{evidence.length}</strong></span>
             <span>Findings <strong>{findings.length}</strong></span>
           </div>
-          {#if textAt(summary, "summary_text")}
+          {#if resultError}
+            <p class="result-state error">{resultError}</p>
+          {:else if expectedMissingResult}
+            <p class="result-state">{resultUnavailableMessage}</p>
+          {:else if textAt(summary, "summary_text")}
             <p class="summary-text">{textAt(summary, "summary_text")}</p>
           {/if}
         </div>
@@ -363,6 +418,8 @@
           </div>
           {#if result}
             <pre>{jsonPreview(canonical)}</pre>
+          {:else if expectedMissingResult}
+            <p class="muted">{resultUnavailableMessage}</p>
           {:else}
             <p class="muted">No canonical result.</p>
           {/if}
@@ -484,10 +541,15 @@
   }
 
   .summary-text,
+  .result-state,
   .muted {
     color: var(--extractum-muted);
     font-size: 13px;
     line-height: 1.5;
+  }
+
+  .result-state.error {
+    color: var(--extractum-danger);
   }
 
   .item-list,
