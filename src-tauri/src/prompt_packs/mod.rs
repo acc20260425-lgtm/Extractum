@@ -12,12 +12,24 @@ pub mod store;
 pub mod validation;
 pub mod youtube_summary;
 pub mod youtube_summary_execution;
+#[cfg(test)]
+mod youtube_summary_execution_tests;
+#[cfg(test)]
+mod youtube_summary_facade_tests;
 pub mod youtube_summary_preflight;
+#[cfg(test)]
+mod youtube_summary_preflight_tests;
 pub mod youtube_summary_run_store;
 pub mod youtube_summary_snapshots;
+#[cfg(test)]
+mod youtube_summary_snapshots_tests;
 pub mod youtube_summary_sources;
 pub mod youtube_summary_stage_outputs;
+#[cfg(test)]
+mod youtube_summary_stage_outputs_tests;
 pub mod youtube_summary_synthesis_input;
+#[cfg(test)]
+mod youtube_summary_synthesis_input_tests;
 #[cfg(test)]
 pub(crate) mod youtube_summary_test_support;
 
