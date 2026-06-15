@@ -10,7 +10,7 @@ pub(crate) async fn persist_final_result_transaction(
     terminal_status: &str,
 ) -> AppResult<()> {
     let canonical_json = canonical_result.to_string();
-    let now = "2026-06-14T00:00:00Z";
+    let now = crate::time::now_rfc3339_utc();
     let result_row_id: i64 = sqlx::query_scalar(
         "INSERT INTO prompt_pack_results (
             run_id, result_id, result_status, schema_version, canonical_hash,
@@ -30,8 +30,8 @@ pub(crate) async fn persist_final_result_transaction(
     .bind(canonical_result["schema_version"].as_str().unwrap_or("1.0"))
     .bind(format!("sha384-{}", sha384_hex(canonical_json.as_bytes())))
     .bind(compress_text(&canonical_json).map_err(AppError::internal)?)
-    .bind(now)
-    .bind(now)
+    .bind(&now)
+    .bind(&now)
     .fetch_one(pool)
     .await
     .map_err(AppError::database)?;
@@ -40,8 +40,8 @@ pub(crate) async fn persist_final_result_transaction(
     sqlx::query(
         "UPDATE prompt_pack_results SET projection_updated_at = ?, updated_at = ? WHERE id = ?",
     )
-    .bind(now)
-    .bind(now)
+    .bind(&now)
+    .bind(&now)
     .bind(result_row_id)
     .execute(pool)
     .await
@@ -53,8 +53,8 @@ pub(crate) async fn persist_final_result_transaction(
     )
     .bind(terminal_status)
     .bind(terminal_status)
-    .bind(now)
-    .bind(now)
+    .bind(&now)
+    .bind(&now)
     .bind(run_id)
     .execute(pool)
     .await
@@ -64,7 +64,7 @@ pub(crate) async fn persist_final_result_transaction(
          VALUES (?, 'terminal_result_persisted', 'Prompt Pack result persisted', ?)",
     )
     .bind(run_id)
-    .bind(now)
+    .bind(&now)
     .execute(pool)
     .await
     .map_err(AppError::database)?;
@@ -89,7 +89,7 @@ pub(crate) async fn repair_prompt_pack_result_projections(
     sqlx::query(
         "UPDATE prompt_pack_results SET projection_updated_at = ? WHERE id = ?",
     )
-    .bind("2026-06-14T00:00:00Z")
+    .bind(crate::time::now_rfc3339_utc())
     .bind(result_row_id)
     .execute(pool)
     .await
@@ -428,6 +428,31 @@ mod tests {
         .expect("projected synthesis items");
 
         assert_eq!(projected_items, 2);
+    }
+
+    #[tokio::test]
+    async fn persist_final_result_uses_current_time_for_run_completion() {
+        use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
+
+        let pool = test_pool_with_canonical_result_ready().await;
+        let before = OffsetDateTime::now_utc() - Duration::seconds(5);
+        persist_final_result_transaction(&pool, 42, test_canonical_result(), "complete")
+            .await
+            .expect("persist result");
+        let after = OffsetDateTime::now_utc() + Duration::seconds(5);
+
+        let completed_at: String =
+            sqlx::query_scalar("SELECT completed_at FROM prompt_pack_runs WHERE id = 42")
+                .fetch_one(&pool)
+                .await
+                .expect("completed_at");
+        let parsed = OffsetDateTime::parse(&completed_at, &Rfc3339).expect("parse completed_at");
+
+        assert_ne!(completed_at, "2026-06-14T00:00:00Z");
+        assert!(
+            parsed >= before && parsed <= after,
+            "expected {completed_at} to be between {before} and {after}"
+        );
     }
 
     async fn test_pool_with_canonical_result_ready() -> sqlx::SqlitePool {
