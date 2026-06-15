@@ -13,8 +13,9 @@ use super::dto::{
 use super::youtube_summary::{
     execute_youtube_summary_run_with_stage_executor, preflight_youtube_summary_in_pool,
     start_youtube_summary_run_in_pool, LlmCompletion as PromptPackLlmCompletion, ModelBudget,
-    TranscriptAnalysisStageExecutionRequest, YoutubeSummaryRunExecutionOutcome,
-    YoutubeSummaryStageExecutionError,
+    SynthesisStageExecutionRequest, TranscriptAnalysisStageExecutionRequest,
+    YoutubeSummaryRunExecutionOutcome, YoutubeSummaryStageExecutionError,
+    YoutubeSummaryStageExecutionRequest,
 };
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
@@ -314,8 +315,15 @@ async fn execute_youtube_summary_run(
         let profile = resolved_profile.clone();
         let model_override = config.model_override.clone();
         async move {
-            run_transcript_analysis_stage_request(handle, profile, model_override, stage_request)
-                .await
+            match stage_request {
+                YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request) => {
+                    run_transcript_analysis_stage_request(handle, profile, model_override, request)
+                        .await
+                }
+                YoutubeSummaryStageExecutionRequest::Synthesis(request) => {
+                    run_synthesis_stage_request(handle, profile, model_override, request).await
+                }
+            }
         }
     })
     .await
@@ -422,6 +430,118 @@ async fn run_transcript_analysis_stage_request(
                         progress_current: None,
                         progress_total: None,
                         message: Some("Analyzing transcript".to_string()),
+                        error: None,
+                    },
+                );
+                let started_at = Instant::now();
+                let completion = control
+                    .run_cancellable(run_llm_collect_with_profile(
+                        &scheduled_request,
+                        &scheduled_profile,
+                    ))
+                    .await?;
+                Ok((completion, started_at.elapsed().as_millis() as i64))
+            },
+        )
+        .await
+    {
+        Ok((completion, latency_ms)) => Ok(PromptPackLlmCompletion {
+            text: completion.text,
+            input_tokens: completion
+                .usage
+                .as_ref()
+                .and_then(|usage| usage.input_tokens),
+            output_tokens: completion
+                .usage
+                .as_ref()
+                .and_then(|usage| usage.output_tokens),
+            latency_ms,
+        }),
+        Err(LlmRequestError::Cancelled) => Err(YoutubeSummaryStageExecutionError::Cancelled),
+        Err(LlmRequestError::Failed(error)) => {
+            Err(YoutubeSummaryStageExecutionError::Failed(error))
+        }
+    }
+}
+
+async fn run_synthesis_stage_request(
+    handle: AppHandle,
+    profile: ResolvedLlmProfile,
+    model_override: Option<String>,
+    stage_request: SynthesisStageExecutionRequest,
+) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
+    let effective_model = resolve_effective_model(&profile, model_override.as_deref())?;
+    let model_output_limit =
+        resolve_model_output_token_limit_for_backend(&profile, &effective_model).await;
+    let stage_output_budget = synthesis_stage_max_output_token_budget()?;
+    let max_output_tokens =
+        transcript_analysis_max_output_tokens(stage_output_budget, model_output_limit);
+    let llm_request = build_synthesis_llm_request(
+        stage_request.run_id,
+        stage_request.stage_run_id,
+        stage_request.prompt_input_json.clone(),
+        Some(profile.profile_id.clone()),
+        model_override,
+        max_output_tokens,
+    );
+    let request_id = llm_request.request_id.clone();
+    let provider = profile.provider.as_str().to_string();
+    let scheduler = handle.state::<LlmSchedulerState>();
+    let queued_handle = handle.clone();
+    let started_handle = handle.clone();
+    let queued_request_id = request_id.clone();
+    let started_request_id = request_id.clone();
+    let stage_run_id = stage_request.stage_run_id;
+    let run_id = stage_request.run_id;
+    let scheduled_request = llm_request.clone();
+    let scheduled_profile = profile.clone();
+
+    match scheduler
+        .run_request(
+            LlmRequestMetadata {
+                request_id: request_id.clone(),
+                profile_id: profile.profile_id.clone(),
+                provider,
+                kind: LlmRequestKind::PromptPackStage,
+                priority: LlmRequestPriority::Background,
+                owner_run_id: Some(stage_request.run_id),
+            },
+            move |position| {
+                let _ = queued_handle.emit(
+                    PROMPT_PACK_RUN_EVENT,
+                    PromptPackRunEvent {
+                        run_id,
+                        request_id: queued_request_id.clone(),
+                        kind: "queued".to_string(),
+                        run_status: "running".to_string(),
+                        phase: "synthesis".to_string(),
+                        stage_run_id: Some(stage_run_id),
+                        stage_name: Some("youtube_summary/synthesis".to_string()),
+                        source_snapshot_id: None,
+                        queue_position: Some(position as i64),
+                        progress_current: None,
+                        progress_total: None,
+                        message: Some(format!("LLM request queued at position {position}")),
+                        error: None,
+                    },
+                );
+            },
+            move |control| async move {
+                let _ = started_handle.emit(
+                    PROMPT_PACK_RUN_EVENT,
+                    PromptPackRunEvent {
+                        run_id,
+                        request_id: started_request_id,
+                        kind: "started".to_string(),
+                        run_status: "running".to_string(),
+                        phase: "synthesis".to_string(),
+                        stage_run_id: Some(stage_run_id),
+                        stage_name: Some("youtube_summary/synthesis".to_string()),
+                        source_snapshot_id: None,
+                        queue_position: None,
+                        progress_current: None,
+                        progress_total: None,
+                        message: Some("Synthesizing videos".to_string()),
                         error: None,
                     },
                 );

@@ -1337,7 +1337,7 @@ git commit -m "Execute YouTube Summary synthesis stage"
 - Modify: `src-tauri/src/prompt_packs/youtube_summary.rs`
 - Modify: `src-tauri/src/prompt_packs/runtime.rs`
 
-- [ ] **Step 1: Write the failing run-level tests**
+- [x] **Step 1: Write the failing run-level tests**
 
 Add a single-video gating test:
 
@@ -1552,7 +1552,7 @@ async fn youtube_summary_multi_video_partial_transcripts_skip_synthesis_and_mark
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run:
 
@@ -1565,7 +1565,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\co
 
 Expected: FAIL because the synthesis stage remains `not_implemented`, is not executed, or the new terminal status cases are not wired.
 
-- [ ] **Step 3: Gate synthesis stage skeleton by included video count**
+- [x] **Step 3: Gate synthesis stage skeleton by included video count**
 
 In `insert_stage_skeleton`, remove `youtube_summary/synthesis` from the `not_implemented` tail list and insert it separately. Single-video runs must start as `skipped`; multi-video runs may start as `pending`:
 
@@ -1605,7 +1605,7 @@ insert_stage(
 
 This keeps canonical `synthesis = null` for single-video runs, matching `VR-YS-005`.
 
-- [ ] **Step 4: Execute synthesis after transcript successes**
+- [x] **Step 4: Execute synthesis after transcript successes**
 
 Introduce an explicit request enum so transcript and synthesis executions cannot be confused:
 
@@ -1675,7 +1675,7 @@ Progress and UI events must use this rule:
 - skipped synthesis does not add a progress unit;
 - the real runtime emits the same queue/start/finish event shape as transcript stages, with `phase: "synthesis"`, `stage_name: Some("youtube_summary/synthesis")`, `stage_run_id`, `source_snapshot_id: None`, and message `"Synthesizing videos"`.
 
-- [ ] **Step 5: Define terminal status behavior**
+- [x] **Step 5: Define terminal status behavior**
 
 Use:
 
@@ -1687,7 +1687,7 @@ Use:
 - multi-video transcript partial coverage with synthesis skipped: `partial`;
 - cancellation during synthesis: `cancelled`.
 
-- [ ] **Step 6: Run the run-level test**
+- [x] **Step 6: Run the run-level test**
 
 Run:
 
@@ -1700,7 +1700,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\co
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs/youtube_summary.rs src-tauri/src/prompt_packs/runtime.rs

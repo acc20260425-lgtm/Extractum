@@ -112,6 +112,19 @@ pub(crate) struct TranscriptAnalysisStageExecutionRequest {
     pub prompt_input_json: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum YoutubeSummaryStageExecutionRequest {
+    TranscriptAnalysis(TranscriptAnalysisStageExecutionRequest),
+    Synthesis(SynthesisStageExecutionRequest),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SynthesisStageExecutionRequest {
+    pub run_id: i64,
+    pub stage_run_id: i64,
+    pub prompt_input_json: String,
+}
+
 const SYNTHESIS_STAGE_NAME: &str = "youtube_summary/synthesis";
 // Metrics-only schema identifier for this slice. Do not seed it into
 // prompt_pack_schemas until a foundation/schema task adds the asset.
@@ -382,9 +395,16 @@ pub(crate) async fn execute_youtube_summary_run_with_fake_completions(
     .await
     .map_err(AppError::database)?;
 
-    let mut successes = 0;
-    let mut failures = 0;
-    for ((stage_id,), completion) in stages.into_iter().zip(completions.into_iter()) {
+    let total = stages.len() as i64;
+    let mut completions = completions.into_iter();
+    mark_run_running(pool, run_id, total).await?;
+
+    let mut successes = 0_i64;
+    let mut failures = 0_i64;
+    for (stage_id,) in stages {
+        let completion = completions.next().ok_or_else(|| {
+            AppError::internal("missing fake transcript-analysis completion")
+        })?;
         match completion {
             Ok(completion) => {
                 execute_transcript_analysis_stage_with_completion(pool, stage_id, completion)
@@ -417,15 +437,35 @@ pub(crate) async fn execute_youtube_summary_run_with_fake_completions(
                 .map_err(AppError::database)?;
             }
         }
+        update_run_progress(pool, run_id, successes, total).await?;
     }
 
-    let final_status = if successes > 0 && failures > 0 {
-        "partial"
-    } else if successes > 0 {
-        "complete"
+    let synthesis_status = if successes > 1 {
+        let synthesis_stage_id = synthesis_stage_id(pool, run_id).await?;
+        update_run_progress(pool, run_id, successes, total + 1).await?;
+        let completion = completions
+            .next()
+            .ok_or_else(|| AppError::internal("missing fake synthesis completion"))?;
+        match completion {
+            Ok(completion) => {
+                execute_synthesis_stage_with_completion(pool, synthesis_stage_id, completion).await?;
+                update_run_progress(pool, run_id, successes + 1, total + 1).await?;
+                "succeeded"
+            }
+            Err(error) => {
+                mark_synthesis_stage_failed_with_artifact(pool, run_id, synthesis_stage_id, &error)
+                    .await?;
+                update_run_progress(pool, run_id, successes, total + 1).await?;
+                "failed"
+            }
+        }
     } else {
-        "failed"
+        mark_synthesis_stage_skipped(pool, run_id).await?;
+        "skipped"
     };
+
+    mark_pending_mvp_tail_stages_skipped(pool, run_id).await?;
+    let final_status = terminal_status_for_synthesis(successes, failures, total, synthesis_status);
     persist_minimal_execution_result(pool, run_id, final_status).await?;
     Ok(())
 }
@@ -436,7 +476,7 @@ pub(crate) async fn execute_youtube_summary_run_with_stage_executor<F, Fut>(
     mut execute_stage: F,
 ) -> AppResult<YoutubeSummaryRunExecutionOutcome>
 where
-    F: FnMut(TranscriptAnalysisStageExecutionRequest) -> Fut,
+    F: FnMut(YoutubeSummaryStageExecutionRequest) -> Fut,
     Fut: Future<Output = Result<LlmCompletion, YoutubeSummaryStageExecutionError>>,
 {
     let stages = load_pending_transcript_stage_rows(pool, run_id).await?;
@@ -462,7 +502,7 @@ where
             prompt_input_json,
         };
 
-        match execute_stage(request).await {
+        match execute_stage(YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request)).await {
             Ok(completion) => match execute_transcript_analysis_stage_with_completion(
                 pool,
                 stage.stage_run_id,
@@ -494,8 +534,20 @@ where
         update_run_progress(pool, run_id, successes, total).await?;
     }
 
+    let synthesis_status =
+        execute_synthesis_if_ready(pool, run_id, successes, total, &mut execute_stage).await?;
+    if synthesis_status == "cancelled" {
+        mark_run_cancelled(pool, run_id, successes, total + 1).await?;
+        return Ok(cancelled_outcome(run_id, successes, total + 1));
+    }
     mark_pending_mvp_tail_stages_skipped(pool, run_id).await?;
-    let terminal_status = terminal_status(successes, failures);
+    let terminal_status = terminal_status_for_synthesis(successes, failures, total, synthesis_status);
+    let progress_total = if successes > 1 { total + 1 } else { total };
+    let progress_current = if synthesis_status == "succeeded" {
+        successes + 1
+    } else {
+        successes
+    };
     let canonical = build_youtube_summary_canonical_result(pool, run_id).await?;
     persist_final_result_transaction(pool, run_id, canonical, terminal_status).await?;
     let message = terminal_message(terminal_status).to_string();
@@ -505,8 +557,8 @@ where
          WHERE id = ?",
     )
     .bind(&message)
-    .bind(successes)
-    .bind(total)
+    .bind(progress_current)
+    .bind(progress_total)
     .bind(now_string())
     .bind(run_id)
     .execute(pool)
@@ -516,8 +568,8 @@ where
     Ok(YoutubeSummaryRunExecutionOutcome {
         run_id,
         run_status: terminal_status.to_string(),
-        progress_current: successes,
-        progress_total: total,
+        progress_current,
+        progress_total,
         message,
     })
 }
@@ -690,6 +742,107 @@ async fn mark_transcript_stage_cancelled(pool: &SqlitePool, stage_run_id: i64) -
     Ok(())
 }
 
+async fn synthesis_stage_id(pool: &SqlitePool, run_id: i64) -> AppResult<i64> {
+    sqlx::query_scalar(
+        "SELECT id FROM prompt_pack_stage_runs
+         WHERE run_id = ? AND stage_name = ?
+         ORDER BY id DESC LIMIT 1",
+    )
+    .bind(run_id)
+    .bind(SYNTHESIS_STAGE_NAME)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::database)
+}
+
+async fn mark_synthesis_stage_skipped(pool: &SqlitePool, run_id: i64) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET stage_status = 'skipped',
+             latest_message = 'Not enough successful videos for synthesis',
+             completed_at = COALESCE(completed_at, ?),
+             updated_at = ?
+         WHERE run_id = ?
+           AND stage_name = ?
+           AND stage_status IN ('pending', 'not_implemented')",
+    )
+    .bind(now_string())
+    .bind(now_string())
+    .bind(run_id)
+    .bind(SYNTHESIS_STAGE_NAME)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+async fn mark_synthesis_stage_failed_with_artifact(
+    pool: &SqlitePool,
+    run_id: i64,
+    stage_run_id: i64,
+    error: &str,
+) -> AppResult<()> {
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "error",
+        1,
+        99,
+        &serde_json::json!({ "error": error }).to_string(),
+    )
+    .await?;
+    mark_synthesis_stage_failed(pool, stage_run_id, error).await
+}
+
+async fn execute_synthesis_if_ready<F, Fut>(
+    pool: &SqlitePool,
+    run_id: i64,
+    successes: i64,
+    transcript_total: i64,
+    execute_stage: &mut F,
+) -> AppResult<&'static str>
+where
+    F: FnMut(YoutubeSummaryStageExecutionRequest) -> Fut,
+    Fut: Future<Output = Result<LlmCompletion, YoutubeSummaryStageExecutionError>>,
+{
+    if successes <= 1 {
+        mark_synthesis_stage_skipped(pool, run_id).await?;
+        return Ok("skipped");
+    }
+
+    let stage_run_id = synthesis_stage_id(pool, run_id).await?;
+    update_run_progress(pool, run_id, successes, transcript_total + 1).await?;
+    let input = build_synthesis_stage_input(pool, run_id).await?;
+    let prompt_input_json = serde_json::to_string_pretty(&input)
+        .map_err(|error| AppError::internal(format!("serialize synthesis stage input: {error}")))?;
+    let request = SynthesisStageExecutionRequest {
+        run_id,
+        stage_run_id,
+        prompt_input_json,
+    };
+
+    match execute_stage(YoutubeSummaryStageExecutionRequest::Synthesis(request)).await {
+        Ok(completion) => match execute_synthesis_stage_with_completion(pool, stage_run_id, completion).await {
+            Ok(()) => {
+                update_run_progress(pool, run_id, successes + 1, transcript_total + 1).await?;
+                Ok("succeeded")
+            }
+            Err(error) => {
+                update_run_progress(pool, run_id, successes, transcript_total + 1).await?;
+                Err(error)
+            }
+        },
+        Err(YoutubeSummaryStageExecutionError::Cancelled) => Ok("cancelled"),
+        Err(YoutubeSummaryStageExecutionError::Failed(error)) => {
+            mark_synthesis_stage_failed_with_artifact(pool, run_id, stage_run_id, &error.message)
+                .await?;
+            update_run_progress(pool, run_id, successes, transcript_total + 1).await?;
+            Ok("failed")
+        }
+    }
+}
+
 async fn mark_pending_mvp_tail_stages_skipped(pool: &SqlitePool, run_id: i64) -> AppResult<()> {
     sqlx::query(
         "UPDATE prompt_pack_stage_runs
@@ -699,7 +852,10 @@ async fn mark_pending_mvp_tail_stages_skipped(pool: &SqlitePool, run_id: i64) ->
              updated_at = ?
          WHERE run_id = ?
            AND stage_status = 'pending'
-           AND stage_name != 'youtube_summary/transcript_analysis'",
+           AND stage_name NOT IN (
+               'youtube_summary/transcript_analysis',
+               'youtube_summary/synthesis'
+           )",
     )
     .bind(now_string())
     .bind(now_string())
@@ -708,16 +864,6 @@ async fn mark_pending_mvp_tail_stages_skipped(pool: &SqlitePool, run_id: i64) ->
     .await
     .map_err(AppError::database)?;
     Ok(())
-}
-
-fn terminal_status(successes: i64, failures: i64) -> &'static str {
-    if successes > 0 && failures > 0 {
-        "partial"
-    } else if successes > 0 {
-        "complete"
-    } else {
-        "failed"
-    }
 }
 
 fn terminal_message(status: &str) -> &'static str {
@@ -1532,7 +1678,6 @@ async fn insert_stage_skeleton(
         "segment_extraction",
         "key_point_extraction",
         "quote_extraction",
-        "youtube_summary/synthesis",
     ]
     .iter()
     .enumerate()
@@ -1548,6 +1693,21 @@ async fn insert_stage_skeleton(
         )
         .await?;
     }
+    let synthesis_status = if included_count > 1 {
+        "pending"
+    } else {
+        "skipped"
+    };
+    insert_stage(
+        pool,
+        run_id,
+        None,
+        SYNTHESIS_STAGE_NAME,
+        103,
+        synthesis_status,
+        now,
+    )
+    .await?;
     insert_stage(pool, run_id, None, "final_synthesis", 200, "pending", now).await?;
     insert_stage(pool, run_id, None, "validation", 300, "pending", now).await?;
 
@@ -1765,6 +1925,27 @@ async fn transcript_text_for_source(pool: &SqlitePool, source_id: i64) -> AppRes
     .await
     .map_err(AppError::database)?;
     Ok(segments.join("\n"))
+}
+
+fn terminal_status_for_synthesis(
+    successes: i64,
+    failures: i64,
+    transcript_total: i64,
+    synthesis_status: &str,
+) -> &'static str {
+    if successes == 0 {
+        return "failed";
+    }
+    if synthesis_status == "failed" {
+        return "partial";
+    }
+    if failures > 0 || successes < transcript_total {
+        return "partial";
+    }
+    if transcript_total > 1 && synthesis_status != "succeeded" {
+        return "partial";
+    }
+    "complete"
 }
 
 pub(crate) async fn build_synthesis_stage_input(
@@ -2626,11 +2807,16 @@ mod tests {
 
         let outcome =
             execute_youtube_summary_run_with_stage_executor(&pool, 1, |request| async move {
-                Ok(
-                    fake_completion_with_valid_transcript_analysis_json_for_source(
-                        &request.source_ref_id,
-                    ),
-                )
+                match request {
+                    super::YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request) => {
+                        Ok(fake_completion_with_valid_transcript_analysis_json_for_source(
+                            &request.source_ref_id,
+                        ))
+                    }
+                    super::YoutubeSummaryStageExecutionRequest::Synthesis(_) => {
+                        panic!("single-video run should not request synthesis")
+                    }
+                }
             })
             .await
             .expect("execute queued run");
@@ -2710,6 +2896,213 @@ mod tests {
         assert_eq!(error_artifacts, 1);
         assert!(warning_count > 0);
         assert!(quality_flag_count > 0);
+    }
+
+    #[tokio::test]
+    async fn youtube_summary_single_video_run_skips_synthesis() {
+        let pool = test_pool_with_frozen_youtube_summary_run().await;
+        execute_youtube_summary_run_with_fake_completions(
+            &pool,
+            1,
+            vec![Ok(LlmCompletion {
+                text: transcript_analysis_json("Only summary", "Only claim", "Only evidence"),
+                input_tokens: Some(10),
+                output_tokens: Some(20),
+                latency_ms: 30,
+            })],
+        )
+        .await
+        .expect("execute run");
+
+        let status: String = sqlx::query_scalar(
+            "SELECT stage_status FROM prompt_pack_stage_runs
+             WHERE run_id = 1 AND stage_name = 'youtube_summary/synthesis'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("synthesis status");
+
+        let result = crate::prompt_packs::result_builder::build_youtube_summary_canonical_result(
+            &pool, 1,
+        )
+        .await
+        .expect("canonical result");
+
+        assert_eq!(status, "skipped");
+        assert!(result["outputs"]["pack_data"]["youtube_summary"]["synthesis"].is_null());
+
+        let progress: (i64, i64) = sqlx::query_as(
+            "SELECT progress_current, progress_total
+             FROM prompt_pack_runs
+             WHERE id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("progress");
+
+        assert_eq!(progress, (1, 1));
+    }
+
+    #[tokio::test]
+    async fn youtube_summary_run_executes_synthesis_after_transcript_stages() {
+        let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
+        execute_youtube_summary_run_with_fake_completions(
+            &pool,
+            1,
+            vec![
+                Ok(LlmCompletion {
+                    text: transcript_analysis_json("First summary", "First claim", "First evidence"),
+                    input_tokens: Some(10),
+                    output_tokens: Some(20),
+                    latency_ms: 30,
+                }),
+                Ok(LlmCompletion {
+                    text: transcript_analysis_json("Second summary", "Second claim", "Second evidence"),
+                    input_tokens: Some(11),
+                    output_tokens: Some(21),
+                    latency_ms: 31,
+                }),
+                Ok(LlmCompletion {
+                    text: synthesis_json("Combined summary"),
+                    input_tokens: Some(100),
+                    output_tokens: Some(200),
+                    latency_ms: 300,
+                }),
+            ],
+        )
+        .await
+        .expect("execute run");
+
+        let status: String = sqlx::query_scalar(
+            "SELECT stage_status FROM prompt_pack_stage_runs
+             WHERE run_id = 1 AND stage_name = 'youtube_summary/synthesis'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("synthesis status");
+
+        assert_eq!(status, "succeeded");
+
+        let progress: (i64, i64) = sqlx::query_as(
+            "SELECT progress_current, progress_total
+             FROM prompt_pack_runs
+             WHERE id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("progress");
+
+        assert_eq!(progress, (3, 3));
+    }
+
+    #[tokio::test]
+    async fn youtube_summary_run_marks_partial_when_synthesis_fails() {
+        let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
+        execute_youtube_summary_run_with_fake_completions(
+            &pool,
+            1,
+            vec![
+                Ok(LlmCompletion {
+                    text: transcript_analysis_json("First summary", "First claim", "First evidence"),
+                    input_tokens: Some(10),
+                    output_tokens: Some(20),
+                    latency_ms: 30,
+                }),
+                Ok(LlmCompletion {
+                    text: transcript_analysis_json("Second summary", "Second claim", "Second evidence"),
+                    input_tokens: Some(11),
+                    output_tokens: Some(21),
+                    latency_ms: 31,
+                }),
+                Err("synthesis provider failed".to_string()),
+            ],
+        )
+        .await
+        .expect("execute run");
+
+        let (run_status, result_status): (String, String) = sqlx::query_as(
+            "SELECT runs.run_status, results.result_status
+             FROM prompt_pack_runs runs
+             JOIN prompt_pack_results results ON results.run_id = runs.id
+             WHERE runs.id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("run result status");
+        let synthesis_status: String = sqlx::query_scalar(
+            "SELECT stage_status FROM prompt_pack_stage_runs
+             WHERE run_id = 1 AND stage_name = 'youtube_summary/synthesis'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("synthesis status");
+
+        assert_eq!(run_status, "partial");
+        assert_eq!(result_status, "partial");
+        assert_eq!(synthesis_status, "failed");
+
+        let progress: (i64, i64) = sqlx::query_as(
+            "SELECT progress_current, progress_total
+             FROM prompt_pack_runs
+             WHERE id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("progress");
+
+        assert_eq!(progress, (2, 3));
+    }
+
+    #[tokio::test]
+    async fn youtube_summary_multi_video_partial_transcripts_skip_synthesis_and_mark_partial() {
+        let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
+        execute_youtube_summary_run_with_fake_completions(
+            &pool,
+            1,
+            vec![
+                Ok(LlmCompletion {
+                    text: transcript_analysis_json("First summary", "First claim", "First evidence"),
+                    input_tokens: Some(10),
+                    output_tokens: Some(20),
+                    latency_ms: 30,
+                }),
+                Err("transcript provider failed".to_string()),
+            ],
+        )
+        .await
+        .expect("execute run");
+
+        let (run_status, result_status): (String, String) = sqlx::query_as(
+            "SELECT runs.run_status, results.result_status
+             FROM prompt_pack_runs runs
+             JOIN prompt_pack_results results ON results.run_id = runs.id
+             WHERE runs.id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("run result status");
+        let synthesis_status: String = sqlx::query_scalar(
+            "SELECT stage_status FROM prompt_pack_stage_runs
+             WHERE run_id = 1 AND stage_name = 'youtube_summary/synthesis'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("synthesis status");
+
+        assert_eq!(run_status, "partial");
+        assert_eq!(result_status, "partial");
+        assert_eq!(synthesis_status, "skipped");
+
+        let progress: (i64, i64) = sqlx::query_as(
+            "SELECT progress_current, progress_total
+             FROM prompt_pack_runs
+             WHERE id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("progress");
+
+        assert_eq!(progress, (1, 2));
     }
 
     async fn transcript_analysis_stage_id(pool: &sqlx::SqlitePool, run_id: i64) -> i64 {
