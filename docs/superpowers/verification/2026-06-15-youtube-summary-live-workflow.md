@@ -226,3 +226,47 @@ Post-run hardening:
   otherwise `4096`.
 - This clamp is covered by unit tests; no extra live provider run was started
   for the clamp-only hardening.
+
+## Synthesis Stage
+
+- Date: 2026-06-15
+- Scope: YouTube Summary transcript-analysis plus run-scoped synthesis stage.
+- Automated verification:
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib`: PASS, 763 tests.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib synthesis_output_budget_comes_from_stage_runtime_config`: PASS.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib build_synthesis_stage_input_collects_successful_transcript_outputs`: PASS.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib build_synthesis_stage_input_uses_latest_parsed_output_wrappers`: PASS.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib synthesis_output_validator`: PASS, 9 tests.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib invalid_synthesis_output_is_written_to_quarantine_artifacts`: PASS.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib invalid_synthesis_output_with_unknown_source_ref_is_quarantined`: PASS.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib invalid_synthesis_output_surfaces_quarantine_write_failure`: PASS.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib execute_synthesis_stage_persists_raw_parsed_and_metrics_artifacts`: PASS.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib execute_synthesis_stage_rejects_invalid_output_without_success_artifacts`: PASS.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib youtube_summary_run_executes_synthesis_after_transcript_stages`: PASS.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib youtube_summary_single_video_run_skips_synthesis`: PASS.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib youtube_summary_run_marks_partial_when_synthesis_fails`: PASS.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib youtube_summary_multi_video_partial_transcripts_skip_synthesis_and_mark_partial`: PASS.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib result_builder`: PASS, 6 tests.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib persist_final_result_projects_youtube_synthesis_items`: PASS.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib repair_rebuilds_missing_youtube_synthesis_projection_rows`: PASS.
+  - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-synthesis --lib migrations::tests::build_migrations_starts_at_current_schema_baseline`: PASS.
+  - `git diff --check`: PASS.
+- MCP Bridge smoke:
+  - Status: PASS for non-provider command/UI smoke.
+  - Connected to `org.ai.extractum` through Tauri MCP Bridge at `localhost:9223`.
+  - Backend state returned app `extractum` version `0.2.0`, Tauri `2.10.3`, window `main`.
+  - `window.__TAURI__.core.invoke("list_active_prompt_pack_runs", {})` returned `[]`.
+  - `window.__TAURI__.core.invoke("list_prompt_pack_runs", {})` returned recent `youtube_summary@1.0.0` runs.
+  - Opened `/projects/runs` in the webview and verified the Prompt Pack runs grid rendered recent `youtube_summary@1.0.0` rows.
+  - Verified the report workspace rendered a `Synthesis` section and stage list through the accessibility tree.
+  - Scope: non-provider Tauri Bridge command/UI smoke only; no new provider run was started.
+- Live provider verification:
+  - Status: not run for the synthesis-stage slice.
+  - Run ID:
+  - Transcript stage:
+  - Synthesis stage:
+  - Canonical synthesis:
+  - Projection rows:
+- Notes:
+  - Full lib verification initially exposed that the migration baseline test still expected versions `[1, 2, 3, 4, 5, 6, 7]` while the repository now registers `0008_prompt_pack_run_labels.sql`. The expected version list was corrected to `[1, 2, 3, 4, 5, 6, 7, 8]`, then the focused migration test and full lib suite passed.
+  - The automated synthesis tests cover runtime budget loading, synthesis input assembly, validator/quarantine behavior, stage artifact persistence, run-level synthesis lifecycle, canonical result building, and projection repair.

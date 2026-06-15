@@ -2595,12 +2595,12 @@ git commit -m "Project YouTube Summary synthesis items"
 - Modify: `docs/prompt-packs/runtime_configuration_policy.md`
 - Create or modify: `docs/superpowers/verification/2026-06-15-youtube-summary-live-workflow.md`
 
-- [ ] **Step 1: Update runtime configuration docs**
+- [x] **Step 1: Update runtime configuration docs**
 
 Add `runtime/synthesis.json` next to the transcript-analysis runtime asset in
 `docs/prompt-packs/runtime_configuration_policy.md`.
 
-- [ ] **Step 2: Run automated verification**
+- [x] **Step 2: Run automated verification**
 
 Run:
 
@@ -2638,7 +2638,7 @@ Expected:
 - the filtered commands include the new budget, input builder, validator, persistence, run-level, result-builder, and projection test names from this plan;
 - `git diff --check` exits 0.
 
-- [ ] **Step 3: Optional live provider verification**
+- [x] **Step 3: Optional live provider verification**
 
 Ask before spending provider tokens. If approved, run a live YouTube Summary provider run through MCP Bridge and verify:
 
@@ -2648,7 +2648,7 @@ Ask before spending provider tokens. If approved, run a live YouTube Summary pro
 - canonical result includes non-null `outputs.pack_data.youtube_summary.synthesis`;
 - `prompt_pack_youtube_synthesis_items` has projected rows for the same run.
 
-- [ ] **Step 4: Create or update verification notes**
+- [x] **Step 4: Create or update verification notes**
 
 If `docs/superpowers/verification/2026-06-15-youtube-summary-live-workflow.md` does not exist, create it with this minimum structure. If it already exists, append a new section with the same fields:
 
@@ -2672,7 +2672,7 @@ If `docs/superpowers/verification/2026-06-15-youtube-summary-live-workflow.md` d
 - Notes:
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add docs/prompt-packs/runtime_configuration_policy.md docs/superpowers/verification/2026-06-15-youtube-summary-live-workflow.md

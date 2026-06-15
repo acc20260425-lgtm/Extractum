@@ -128,11 +128,18 @@ For example, the MVP YouTube Summary transcript-analysis stage uses:
 src-tauri/prompt-packs/youtube_summary/1.0.0/runtime/transcript_analysis.json
 ```
 
-This file stores runtime-only execution settings such as
+The MVP YouTube Summary synthesis stage uses:
+
+```text
+src-tauri/prompt-packs/youtube_summary/1.0.0/runtime/synthesis.json
+```
+
+These files store runtime-only execution settings such as
 `budget_limits.max_output_tokens`. The current YouTube Summary MVP reads
-`runtime_configuration.budget_limits.max_output_tokens = 4096` from this asset
-and then clamps it to the selected provider model's `output_token_limit` when
-that metadata is available.
+`runtime_configuration.budget_limits.max_output_tokens = 4096` from the
+transcript-analysis asset and `6144` from the synthesis asset, then clamps the
+stage budget to the selected provider model's `output_token_limit` when that
+metadata is available.
 
 Runtime assets are operational configuration. They are not canonical result
 schema, and they are not copied into report output. In the current bundled MVP
