@@ -301,7 +301,13 @@ pub(crate) async fn execute_synthesis_stage_with_completion(
     )
     .await?;
 
-    let parsed = extract_json_payload(&completion.text)?;
+    let parsed = match extract_json_payload(&completion.text) {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            mark_synthesis_stage_failed(pool, stage_run_id, &error.message).await?;
+            return Err(error);
+        }
+    };
     if let Err(error) =
         validate_and_quarantine_synthesis_output(pool, run_id, stage_run_id, &parsed).await
     {
@@ -448,9 +454,25 @@ pub(crate) async fn execute_youtube_summary_run_with_fake_completions(
             .ok_or_else(|| AppError::internal("missing fake synthesis completion"))?;
         match completion {
             Ok(completion) => {
-                execute_synthesis_stage_with_completion(pool, synthesis_stage_id, completion).await?;
-                update_run_progress(pool, run_id, successes + 1, total + 1).await?;
-                "succeeded"
+                match execute_synthesis_stage_with_completion(pool, synthesis_stage_id, completion)
+                    .await
+                {
+                    Ok(()) => {
+                        update_run_progress(pool, run_id, successes + 1, total + 1).await?;
+                        "succeeded"
+                    }
+                    Err(error) => {
+                        mark_synthesis_stage_failed_with_artifact(
+                            pool,
+                            run_id,
+                            synthesis_stage_id,
+                            &error.message,
+                        )
+                        .await?;
+                        update_run_progress(pool, run_id, successes, total + 1).await?;
+                        "failed"
+                    }
+                }
             }
             Err(error) => {
                 mark_synthesis_stage_failed_with_artifact(pool, run_id, synthesis_stage_id, &error)
@@ -829,8 +851,15 @@ where
                 Ok("succeeded")
             }
             Err(error) => {
+                mark_synthesis_stage_failed_with_artifact(
+                    pool,
+                    run_id,
+                    stage_run_id,
+                    &error.message,
+                )
+                .await?;
                 update_run_progress(pool, run_id, successes, transcript_total + 1).await?;
-                Err(error)
+                Ok("failed")
             }
         },
         Err(YoutubeSummaryStageExecutionError::Cancelled) => Ok("cancelled"),
@@ -2370,6 +2399,31 @@ mod tests {
         .to_string()
     }
 
+    fn synthesis_json_with_backend_owned_id() -> String {
+        serde_json::json!({
+            "stage_io_version": "1.0",
+            "schema_version": "1.0",
+            "stage": "youtube_summary/synthesis",
+            "synthesis_candidate": {
+                "summary_text": "Invalid synthesis",
+                "cross_video_themes": [
+                    {
+                        "theme_id": "theme_from_provider",
+                        "theme_text": "Provider must not assign backend IDs",
+                        "source_refs": ["source_ref_1", "source_ref_2"],
+                        "claim_refs": [],
+                        "evidence_refs": []
+                    }
+                ],
+                "common_claims": [],
+                "contradictions_across_videos": []
+            },
+            "limitations": [],
+            "warning_candidates": []
+        })
+        .to_string()
+    }
+
     async fn persist_succeeded_transcript_stage_fixtures(
         pool: &sqlx::SqlitePool,
         run_id: i64,
@@ -3050,6 +3104,75 @@ mod tests {
         .await
         .expect("progress");
 
+        assert_eq!(progress, (2, 3));
+    }
+
+    #[tokio::test]
+    async fn youtube_summary_run_marks_partial_when_synthesis_output_is_invalid() {
+        let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
+        execute_youtube_summary_run_with_fake_completions(
+            &pool,
+            1,
+            vec![
+                Ok(LlmCompletion {
+                    text: transcript_analysis_json("First summary", "First claim", "First evidence"),
+                    input_tokens: Some(10),
+                    output_tokens: Some(20),
+                    latency_ms: 30,
+                }),
+                Ok(LlmCompletion {
+                    text: transcript_analysis_json("Second summary", "Second claim", "Second evidence"),
+                    input_tokens: Some(11),
+                    output_tokens: Some(21),
+                    latency_ms: 31,
+                }),
+                Ok(LlmCompletion {
+                    text: synthesis_json_with_backend_owned_id(),
+                    input_tokens: Some(100),
+                    output_tokens: Some(200),
+                    latency_ms: 300,
+                }),
+            ],
+        )
+        .await
+        .expect("execute run");
+
+        let (run_status, result_status): (String, String) = sqlx::query_as(
+            "SELECT runs.run_status, results.result_status
+             FROM prompt_pack_runs runs
+             JOIN prompt_pack_results results ON results.run_id = runs.id
+             WHERE runs.id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("run result status");
+        let synthesis_status: String = sqlx::query_scalar(
+            "SELECT stage_status FROM prompt_pack_stage_runs
+             WHERE run_id = 1 AND stage_name = 'youtube_summary/synthesis'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("synthesis status");
+        let quarantine_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM prompt_pack_result_quarantine_artifacts
+             WHERE run_id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("quarantine count");
+        let progress: (i64, i64) = sqlx::query_as(
+            "SELECT progress_current, progress_total
+             FROM prompt_pack_runs
+             WHERE id = 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("progress");
+
+        assert_eq!(run_status, "partial");
+        assert_eq!(result_status, "partial");
+        assert_eq!(synthesis_status, "failed");
+        assert_eq!(quarantine_count, 1);
         assert_eq!(progress, (2, 3));
     }
 
