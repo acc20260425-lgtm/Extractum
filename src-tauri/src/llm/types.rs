@@ -14,6 +14,7 @@ pub struct LlmChatRequest {
     pub profile_id: Option<String>,
     pub messages: Vec<LlmMessage>,
     pub model_override: Option<String>,
+    pub max_output_tokens: Option<i64>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]

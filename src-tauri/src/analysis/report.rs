@@ -171,6 +171,7 @@ fn build_map_request(
         request_id: format!("analysis-map-{run_id}-{chunk_index}-{}", now_secs()),
         profile_id: Some(profile_id),
         model_override: None,
+        max_output_tokens: None,
         messages: vec![
             LlmMessage {
                 role: "system".to_string(),
@@ -326,6 +327,7 @@ fn build_reduce_request(params: ReduceRequestParams<'_>) -> LlmChatRequest {
         request_id: format!("analysis-reduce-{}-{}", params.run_id, now_secs()),
         profile_id: Some(params.profile_id),
         model_override: params.model_override,
+        max_output_tokens: None,
         messages: vec![
             LlmMessage {
                 role: "system".to_string(),

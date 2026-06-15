@@ -132,6 +132,26 @@ fn model_input_token_limit_from_models(
         .filter(|limit| *limit > 0)
 }
 
+fn model_output_token_limit_from_models(
+    models: &[LlmProviderModel],
+    requested_model: &str,
+) -> Option<i64> {
+    let requested_model = requested_model.trim();
+    if requested_model.is_empty() {
+        return None;
+    }
+
+    models
+        .iter()
+        .find(|model| {
+            model.model == requested_model
+                || model.name == requested_model
+                || model.display_name == requested_model
+        })
+        .and_then(|model| model.output_token_limit)
+        .filter(|limit| *limit > 0)
+}
+
 pub(crate) async fn resolve_model_input_token_limit_for_backend(
     profile: &ResolvedLlmProfile,
     model: &str,
@@ -157,6 +177,35 @@ pub(crate) async fn resolve_model_input_token_limit_for_backend(
 
     match result {
         Ok(Ok(models)) => model_input_token_limit_from_models(&models, model),
+        Ok(Err(_)) | Err(_) => None,
+    }
+}
+
+pub(crate) async fn resolve_model_output_token_limit_for_backend(
+    profile: &ResolvedLlmProfile,
+    model: &str,
+) -> Option<i64> {
+    let provider = profile.provider;
+    let api_key = profile.api_key.clone();
+    let openai_compat_config = OpenAiCompatProviderConfig {
+        provider,
+        base_url: profile.base_url.clone(),
+    };
+    let result = timeout(
+        Duration::from_secs(MODEL_LIMIT_LOOKUP_TIMEOUT_SECS),
+        async move {
+            match provider {
+                ProviderKind::Gemini => list_gemini_models(&api_key).await,
+                ProviderKind::OpenAiCompatible => {
+                    list_openai_compat_models(&api_key, &openai_compat_config).await
+                }
+            }
+        },
+    )
+    .await;
+
+    match result {
+        Ok(Ok(models)) => model_output_token_limit_from_models(&models, model),
         Ok(Err(_)) | Err(_) => None,
     }
 }
@@ -447,6 +496,7 @@ pub async fn ask_llm_stream(
         profile_id,
         messages,
         model_override,
+        max_output_tokens: None,
     };
     validate_request(&request)?;
 
@@ -608,8 +658,8 @@ mod tests {
     use super::{
         llm_request_kind_diagnostic_key, llm_request_state_diagnostic_key,
         load_provider_diagnostics_from_pool, model_input_token_limit_from_models,
-        normalize_base_url, save_profile_to_pool, LlmRequestKind, LlmRequestSnapshotState,
-        ProviderKind,
+        model_output_token_limit_from_models, normalize_base_url, save_profile_to_pool,
+        LlmRequestKind, LlmRequestSnapshotState, ProviderKind,
     };
     use crate::error::AppErrorKind;
     use crate::llm::LlmProviderModel;
@@ -667,6 +717,51 @@ mod tests {
         assert_eq!(model_input_token_limit_from_models(&models, "broken"), None);
         assert_eq!(
             model_input_token_limit_from_models(&models, "missing"),
+            None
+        );
+    }
+
+    #[test]
+    fn model_output_token_limit_lookup_matches_provider_model_ids_and_names() {
+        let models = vec![
+            LlmProviderModel {
+                model: "gemini-2.5-pro".to_string(),
+                name: "models/gemini-2.5-pro".to_string(),
+                display_name: "Gemini 2.5 Pro".to_string(),
+                description: String::new(),
+                input_token_limit: None,
+                output_token_limit: Some(65_536),
+                supported_generation_methods: Vec::new(),
+            },
+            LlmProviderModel {
+                model: "broken".to_string(),
+                name: "broken".to_string(),
+                display_name: "Broken".to_string(),
+                description: String::new(),
+                input_token_limit: None,
+                output_token_limit: Some(-1),
+                supported_generation_methods: Vec::new(),
+            },
+        ];
+
+        assert_eq!(
+            model_output_token_limit_from_models(&models, "gemini-2.5-pro"),
+            Some(65_536)
+        );
+        assert_eq!(
+            model_output_token_limit_from_models(&models, "models/gemini-2.5-pro"),
+            Some(65_536)
+        );
+        assert_eq!(
+            model_output_token_limit_from_models(&models, "Gemini 2.5 Pro"),
+            Some(65_536)
+        );
+        assert_eq!(
+            model_output_token_limit_from_models(&models, "broken"),
+            None
+        );
+        assert_eq!(
+            model_output_token_limit_from_models(&models, "missing"),
             None
         );
     }

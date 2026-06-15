@@ -121,6 +121,7 @@ mod tests {
             profile_id: None,
             messages: vec![],
             model_override: None,
+            max_output_tokens: None,
         };
 
         let error = validate_request(&request).expect_err("reject empty request id");
@@ -152,6 +153,7 @@ mod tests {
             profile_id: None,
             messages: vec![],
             model_override: None,
+            max_output_tokens: None,
         };
         let profile = ResolvedLlmProfile {
             profile_id: "default".to_string(),

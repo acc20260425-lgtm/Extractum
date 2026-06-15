@@ -6,7 +6,7 @@ use crate::error::{AppError, AppResult};
 
 use super::streaming::{find_event_boundary, parse_sse_data};
 use super::{
-    resolve_effective_model, LlmChatRequest, LlmCompletion, LlmMessage, LlmProviderModel, LlmUsage,
+    resolve_effective_model, LlmChatRequest, LlmCompletion, LlmProviderModel, LlmUsage,
     ProviderKind, ResolvedLlmProfile,
 };
 
@@ -26,6 +26,8 @@ struct OpenAiCompatChatRequest {
     stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     stream_options: Option<OpenAiCompatStreamOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_tokens: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -97,12 +99,12 @@ struct OpenAiCompatErrorBody {
 }
 
 fn build_openai_compat_request(
-    messages: &[LlmMessage],
+    request: &LlmChatRequest,
     model: &str,
 ) -> AppResult<OpenAiCompatChatRequest> {
     let mut mapped_messages = Vec::new();
 
-    for message in messages {
+    for message in &request.messages {
         let content = message.content.trim();
         if content.is_empty() {
             continue;
@@ -132,6 +134,7 @@ fn build_openai_compat_request(
         stream_options: Some(OpenAiCompatStreamOptions {
             include_usage: true,
         }),
+        max_tokens: request.max_output_tokens,
     })
 }
 
@@ -248,7 +251,7 @@ where
     }
 
     let model = resolve_effective_model(profile, request.model_override.as_deref())?;
-    let request_body = build_openai_compat_request(&request.messages, &model)?;
+    let request_body = build_openai_compat_request(request, &model)?;
     let url = format!("{}/chat/completions", config.base_url.trim_end_matches('/'));
     let client = HttpClient::new();
     let mut response = None;
@@ -497,22 +500,30 @@ mod tests {
     #[test]
     fn openai_compat_request_keeps_standard_roles() {
         let request = build_openai_compat_request(
-            &[
-                LlmMessage {
-                    role: "system".to_string(),
-                    content: "You are concise.".to_string(),
-                },
-                LlmMessage {
-                    role: "user".to_string(),
-                    content: "Hello".to_string(),
-                },
-            ],
+            &LlmChatRequest {
+                request_id: "openai-compat-test".to_string(),
+                profile_id: None,
+                model_override: None,
+                max_output_tokens: Some(4096),
+                messages: vec![
+                    LlmMessage {
+                        role: "system".to_string(),
+                        content: "You are concise.".to_string(),
+                    },
+                    LlmMessage {
+                        role: "user".to_string(),
+                        content: "Hello".to_string(),
+                    },
+                ],
+            },
             "if/kimi-k2-thinking",
         )
         .expect("build request");
 
         assert_eq!(request.model, "if/kimi-k2-thinking");
         assert!(request.stream);
+        let serialized = serde_json::to_value(&request).expect("serialize request");
+        assert_eq!(serialized["max_tokens"], 4096);
         assert_eq!(request.messages[0].role, "system");
         assert_eq!(request.messages[1].role, "user");
     }
@@ -584,10 +595,16 @@ mod tests {
     #[test]
     fn openai_compat_request_rejects_unsupported_roles_with_typed_validation_error() {
         let error = match build_openai_compat_request(
-            &[LlmMessage {
-                role: "tool".to_string(),
-                content: "lookup".to_string(),
-            }],
+            &LlmChatRequest {
+                request_id: "unsupported-role".to_string(),
+                profile_id: None,
+                model_override: None,
+                max_output_tokens: None,
+                messages: vec![LlmMessage {
+                    role: "tool".to_string(),
+                    content: "lookup".to_string(),
+                }],
+            },
             "if/kimi-k2-thinking",
         ) {
             Ok(_) => panic!("unsupported role should fail"),
@@ -641,6 +658,7 @@ mod tests {
                 content: "hello".to_string(),
             }],
             model_override: None,
+            max_output_tokens: None,
         };
         let mut deltas = Vec::new();
 

@@ -5,7 +5,7 @@ use tokio::time::{sleep, Duration};
 use crate::error::{AppError, AppResult};
 
 use super::streaming::{find_event_boundary, parse_sse_data};
-use super::{resolve_effective_model, LlmChatRequest, LlmCompletion, LlmMessage, LlmProviderModel};
+use super::{resolve_effective_model, LlmChatRequest, LlmCompletion, LlmProviderModel};
 use super::{LlmUsage, ResolvedLlmProfile};
 
 const GEMINI_API_BASE: &str = "https://generativelanguage.googleapis.com/v1beta";
@@ -19,6 +19,14 @@ struct GeminiGenerateContentRequest {
     contents: Vec<GeminiContent>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "systemInstruction")]
     system_instruction: Option<GeminiContent>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "generationConfig")]
+    generation_config: Option<GeminiGenerationConfig>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct GeminiGenerationConfig {
+    max_output_tokens: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -90,11 +98,11 @@ struct GeminiModel {
     supported_generation_methods: Option<Vec<String>>,
 }
 
-fn build_gemini_request(messages: &[LlmMessage]) -> AppResult<GeminiGenerateContentRequest> {
+fn build_gemini_request(request: &LlmChatRequest) -> AppResult<GeminiGenerateContentRequest> {
     let mut system_chunks = Vec::new();
     let mut contents = Vec::new();
 
-    for message in messages {
+    for message in &request.messages {
         let content = message.content.trim();
         if content.is_empty() {
             continue;
@@ -144,6 +152,9 @@ fn build_gemini_request(messages: &[LlmMessage]) -> AppResult<GeminiGenerateCont
     Ok(GeminiGenerateContentRequest {
         contents,
         system_instruction,
+        generation_config: request
+            .max_output_tokens
+            .map(|max_output_tokens| GeminiGenerationConfig { max_output_tokens }),
     })
 }
 
@@ -233,7 +244,7 @@ where
     }
 
     let model = resolve_effective_model(profile, request.model_override.as_deref())?;
-    let request_body = build_gemini_request(&request.messages)?;
+    let request_body = build_gemini_request(request)?;
     let url = format!("{GEMINI_API_BASE}/models/{model}:streamGenerateContent?alt=sse");
     let client = HttpClient::new();
     let mut response = None;
@@ -420,26 +431,35 @@ mod tests {
         GeminiPart,
     };
     use crate::error::AppErrorKind;
-    use crate::llm::LlmMessage;
+    use crate::llm::{LlmChatRequest, LlmMessage};
     use reqwest::StatusCode;
 
     #[test]
     fn gemini_request_mapping_keeps_system_history_and_roles() {
-        let request = build_gemini_request(&[
-            LlmMessage {
-                role: "system".to_string(),
-                content: "You are concise.".to_string(),
-            },
-            LlmMessage {
-                role: "user".to_string(),
-                content: "Hello".to_string(),
-            },
-            LlmMessage {
-                role: "assistant".to_string(),
-                content: "Hi there".to_string(),
-            },
-        ])
+        let request = build_gemini_request(&LlmChatRequest {
+            request_id: "gemini-test".to_string(),
+            profile_id: None,
+            model_override: None,
+            max_output_tokens: Some(4096),
+            messages: vec![
+                LlmMessage {
+                    role: "system".to_string(),
+                    content: "You are concise.".to_string(),
+                },
+                LlmMessage {
+                    role: "user".to_string(),
+                    content: "Hello".to_string(),
+                },
+                LlmMessage {
+                    role: "assistant".to_string(),
+                    content: "Hi there".to_string(),
+                },
+            ],
+        })
         .expect("build request");
+
+        let serialized = serde_json::to_value(&request).expect("serialize request");
+        assert_eq!(serialized["generationConfig"]["maxOutputTokens"], 4096);
 
         assert_eq!(
             request.system_instruction,
@@ -454,6 +474,47 @@ mod tests {
         assert_eq!(request.contents[1].role, "model");
     }
 
+    #[test]
+    fn gemini_request_mapping_keeps_existing_messages_without_output_limit() {
+        let request = build_gemini_request(&LlmChatRequest {
+            request_id: "gemini-test-no-limit".to_string(),
+            profile_id: None,
+            model_override: None,
+            max_output_tokens: None,
+            messages: vec![
+                LlmMessage {
+                    role: "system".to_string(),
+                    content: "You are concise.".to_string(),
+                },
+                LlmMessage {
+                    role: "user".to_string(),
+                    content: "Hello".to_string(),
+                },
+                LlmMessage {
+                    role: "assistant".to_string(),
+                    content: "Hi there".to_string(),
+                },
+            ],
+        })
+        .expect("build request");
+
+        assert_eq!(
+            serde_json::to_value(&request).expect("serialize request")["generationConfig"],
+            serde_json::Value::Null
+        );
+
+        assert_eq!(
+            request.system_instruction,
+            Some(GeminiContent {
+                role: "user".to_string(),
+                parts: vec![GeminiPart {
+                    text: "You are concise.".to_string()
+                }]
+            })
+        );
+        assert_eq!(request.contents[0].role, "user");
+        assert_eq!(request.contents[1].role, "model");
+    }
     #[test]
     fn gemini_stream_chunk_text_and_usage_are_parsed() {
         let payload = r#"{"candidates":[{"content":{"role":"model","parts":[{"text":"Hello"}]}}],"usageMetadata":{"promptTokenCount":3,"candidatesTokenCount":4,"totalTokenCount":7}}"#;
@@ -491,10 +552,16 @@ mod tests {
 
     #[test]
     fn gemini_request_rejects_unsupported_roles_with_typed_validation_error() {
-        let error = match build_gemini_request(&[LlmMessage {
-            role: "tool".to_string(),
-            content: "lookup".to_string(),
-        }]) {
+        let error = match build_gemini_request(&LlmChatRequest {
+            request_id: "unsupported-role".to_string(),
+            profile_id: None,
+            model_override: None,
+            max_output_tokens: None,
+            messages: vec![LlmMessage {
+                role: "tool".to_string(),
+                content: "lookup".to_string(),
+            }],
+        }) {
             Ok(_) => panic!("unsupported role should fail"),
             Err(error) => error,
         };

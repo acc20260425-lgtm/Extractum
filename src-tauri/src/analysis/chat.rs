@@ -213,6 +213,7 @@ fn build_chat_request(params: ChatRequestParams<'_>) -> LlmChatRequest {
         profile_id: Some(params.profile_id),
         messages,
         model_override: params.model_override,
+        max_output_tokens: None,
     }
 }
 

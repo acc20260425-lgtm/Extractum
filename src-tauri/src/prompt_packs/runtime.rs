@@ -18,12 +18,14 @@ use super::youtube_summary::{
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::llm::{
+    resolve_effective_model, resolve_model_output_token_limit_for_backend,
     resolve_profile_for_backend, run_llm_collect_with_profile, LlmChatRequest, LlmMessage,
     LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState,
     ResolvedLlmProfile,
 };
 
 pub const PROMPT_PACK_RUN_EVENT: &str = "prompt-pack-run-event";
+const TRANSCRIPT_ANALYSIS_MAX_OUTPUT_TOKENS: i64 = 4_096;
 
 #[derive(Default)]
 pub struct PromptPackRunState {
@@ -326,10 +328,15 @@ async fn run_transcript_analysis_stage_request(
     model_override: Option<String>,
     stage_request: TranscriptAnalysisStageExecutionRequest,
 ) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
+    let effective_model = resolve_effective_model(&profile, model_override.as_deref())?;
+    let model_output_limit =
+        resolve_model_output_token_limit_for_backend(&profile, &effective_model).await;
+    let max_output_tokens = transcript_analysis_max_output_tokens(model_output_limit);
     let llm_request = build_transcript_analysis_llm_request(
         &stage_request,
         Some(profile.profile_id.clone()),
         model_override,
+        max_output_tokens,
     );
     let request_id = llm_request.request_id.clone();
     let provider = profile.provider.as_str().to_string();
@@ -432,6 +439,7 @@ fn build_transcript_analysis_llm_request(
     request: &TranscriptAnalysisStageExecutionRequest,
     profile_id: Option<String>,
     model_override: Option<String>,
+    max_output_tokens: Option<i64>,
 ) -> LlmChatRequest {
     LlmChatRequest {
         request_id: format!(
@@ -440,6 +448,7 @@ fn build_transcript_analysis_llm_request(
         ),
         profile_id,
         model_override,
+        max_output_tokens,
         messages: vec![
             LlmMessage {
                 role: "system".to_string(),
@@ -472,6 +481,13 @@ fn build_transcript_analysis_llm_request(
             },
         ],
     }
+}
+
+fn transcript_analysis_max_output_tokens(model_output_limit: Option<i64>) -> Option<i64> {
+    Some(match model_output_limit.filter(|limit| *limit > 0) {
+        Some(limit) => TRANSCRIPT_ANALYSIS_MAX_OUTPUT_TOKENS.min(limit),
+        None => TRANSCRIPT_ANALYSIS_MAX_OUTPUT_TOKENS,
+    })
 }
 
 async fn mark_prompt_pack_run_failed(
@@ -673,14 +689,13 @@ pub(crate) async fn delete_prompt_pack_run_in_pool(
     pool: &SqlitePool,
     run_id: i64,
 ) -> AppResult<()> {
-    let status = sqlx::query_scalar::<_, String>(
-        "SELECT run_status FROM prompt_pack_runs WHERE id = ?",
-    )
-    .bind(run_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(AppError::database)?
-    .ok_or_else(|| AppError::not_found(format!("Prompt Pack run {run_id} not found")))?;
+    let status =
+        sqlx::query_scalar::<_, String>("SELECT run_status FROM prompt_pack_runs WHERE id = ?")
+            .bind(run_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(AppError::database)?
+            .ok_or_else(|| AppError::not_found(format!("Prompt Pack run {run_id} not found")))?;
 
     if status == "queued" || status == "running" {
         return Err(AppError::conflict(
@@ -817,7 +832,7 @@ mod tests {
     use super::{
         build_transcript_analysis_llm_request, cleanup_interrupted_prompt_pack_runs_in_pool,
         delete_prompt_pack_run_in_pool, list_prompt_pack_runs_in_pool,
-        update_prompt_pack_run_in_pool, PromptPackRunState,
+        transcript_analysis_max_output_tokens, update_prompt_pack_run_in_pool, PromptPackRunState,
     };
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::dto::{ListPromptPackRunsRequest, PromptPackRunEvent};
@@ -915,13 +930,9 @@ mod tests {
 
     #[tokio::test]
     async fn update_prompt_pack_run_updates_user_label_only() {
-        let pool = test_pool_with_prompt_pack_runs([(
-            41,
-            Some(7),
-            "complete",
-            "2026-06-14T10:00:00Z",
-        )])
-        .await;
+        let pool =
+            test_pool_with_prompt_pack_runs([(41, Some(7), "complete", "2026-06-14T10:00:00Z")])
+                .await;
 
         let run = update_prompt_pack_run_in_pool(&pool, 41, Some("  June summary  ".to_string()))
             .await
@@ -972,11 +983,13 @@ mod tests {
             },
             Some("profile-1".to_string()),
             Some("model-1".to_string()),
+            transcript_analysis_max_output_tokens(None),
         );
 
         assert_eq!(request.request_id, "prompt-pack-run-42-stage-1001");
         assert_eq!(request.profile_id.as_deref(), Some("profile-1"));
         assert_eq!(request.model_override.as_deref(), Some("model-1"));
+        assert_eq!(request.max_output_tokens, Some(4096));
         assert_eq!(request.messages[0].role, "system");
         assert!(request.messages[0].content.contains("Return strict JSON"));
         assert_eq!(request.messages[1].role, "user");
@@ -991,6 +1004,19 @@ mod tests {
         assert!(request.messages[1]
             .content
             .contains("\"stage\":\"youtube_summary/transcript_analysis\""));
+    }
+
+    #[test]
+    fn transcript_analysis_output_budget_is_clamped_to_model_limit() {
+        assert_eq!(
+            transcript_analysis_max_output_tokens(Some(2_048)),
+            Some(2_048)
+        );
+        assert_eq!(
+            transcript_analysis_max_output_tokens(Some(8_192)),
+            Some(4_096)
+        );
+        assert_eq!(transcript_analysis_max_output_tokens(None), Some(4_096));
     }
 
     async fn test_pool_with_prompt_pack_runs<const N: usize>(

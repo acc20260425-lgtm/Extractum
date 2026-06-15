@@ -112,3 +112,114 @@ Notes:
 - Run `#9` surfaced a provider-output robustness issue:
   `malformed JSON braces`. That is separate from the project-run management UI
   and should be investigated as prompt/output parsing hardening.
+
+## Follow-up: Run #9 Provider Output
+
+Run `#9` failed in `youtube_summary/transcript_analysis` with
+`malformed JSON braces`.
+
+Evidence from stage `#66`:
+
+- `raw_output #2` was a JSON artifact shaped as `{ "text": "..." }`.
+- The provider text began as a valid transcript-analysis JSON object.
+- The text ended immediately after `"evidence_fragment_candidates":`, without
+  a value or closing braces.
+- `error #99` contained `{ "error": "malformed JSON braces" }`.
+
+Root cause:
+
+- The stage parser correctly rejected an incomplete JSON object.
+- The LLM request layer did not expose a per-request output-token budget, so
+  the provider request relied on provider defaults. For this stage, that can
+  produce a truncated JSON response that the parser reports as malformed braces.
+
+Fix:
+
+- Added `max_output_tokens` to the shared LLM chat request model.
+- Passed it to OpenAI-compatible requests as `max_tokens`.
+- Passed it to Gemini requests as `generationConfig.maxOutputTokens`.
+- Set YouTube Summary transcript-analysis stage requests to a `4096` output
+  token stage budget.
+- The stage budget is clamped to the selected provider model's
+  `output_token_limit` when that metadata is available.
+
+Verification:
+
+- `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-json --lib llm::`: PASS, 45 tests.
+- `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-json --lib prompt_pack_run`: PASS, 8 tests.
+- `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-youtube-summary-json --lib transcript_analysis`: PASS, 6 tests.
+
+Residual risk:
+
+- Closed by live provider run `#11` after explicit approval.
+
+## Follow-up: Run #11 Live Provider Recheck
+
+After the output-token-budget fix, a new live YouTube Summary provider run was
+started through MCP Bridge.
+
+Preflight:
+
+- source id `402`
+- `includedVideos.length = 1`
+- `blockingFailures.length = 0`
+- `estimatedInputTokens = 3272`
+- `selectedModelInputLimit = 32000`
+
+Backend freshness check:
+
+- `src-tauri\target\debug\extractum.exe` last write time:
+  `15.06.2026 11:52:01`
+- running `extractum.exe` process start time: `15.06.2026 11:52:07`
+- This indicates the live app was running the rebuilt backend after the Rust
+  change.
+
+Run result:
+
+- client request id: `codex-live-output-budget-1781513960231`
+- run id: `#11`
+- final run status: `complete`
+- final result status: `complete`
+- transcript-analysis stage id: `#82`
+- transcript-analysis stage status: `succeeded`
+
+Artifacts from stage `#82`:
+
+- `prompt_input #1`: present
+- `raw_output #2`: present
+- `parsed_output #3`: present
+- `metrics #4`: present
+
+Raw/parsed output checks:
+
+- `raw_output #2` inner provider text parsed as valid JSON.
+- Raw JSON keys:
+  `claim_candidates`, `evidence_fragment_candidates`, `schema_version`,
+  `stage`, `stage_io_version`, `video_candidate`, `warning_candidates`.
+- The old truncation tail after `"evidence_fragment_candidates":` was not
+  present.
+- `parsed_output #3` contained `evidence_fragment_candidates`.
+- Validation findings for the run: `[]`.
+
+Metrics:
+
+- `input_tokens = 4852`
+- `output_tokens = 708`
+- `latency_ms = 4216`
+- `validation_error_count = 0`
+
+Conclusion:
+
+- The new live provider run did not reproduce the malformed JSON braces failure
+  seen in run `#9`.
+- The transcript-analysis stage succeeded with raw JSON, parsed output, metrics,
+  and final canonical result persisted.
+
+Post-run hardening:
+
+- Added provider model output-limit lookup after run `#11`.
+- Effective transcript-analysis request limit is now:
+  `min(4096, model.output_token_limit)` when provider metadata is available,
+  otherwise `4096`.
+- This clamp is covered by unit tests; no extra live provider run was started
+  for the clamp-only hardening.
