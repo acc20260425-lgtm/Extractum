@@ -91,4 +91,17 @@ describe("project runs screen", () => {
     expect(apiSource).toContain("common_claims");
     expect(apiSource).toContain("contradictions_across_videos");
   });
+
+  it("makes report references clickable and highlights matching canonical items", () => {
+    const reportSource = readProjectFile("src/lib/components/research-projects/ProjectRunReportPanel.svelte");
+
+    expect(reportSource).toContain("let selectedRef = $state<string | null>(null)");
+    expect(reportSource).toContain("toggleSelectedRef");
+    expect(reportSource).toContain("matchesSelectedRef");
+    expect(reportSource).toContain("data-ref-targets");
+    expect(reportSource).toContain("aria-pressed={selectedRef === refId}");
+    expect(reportSource).toContain("class:ref-selected");
+    expect(reportSource).toContain("class:ref-target");
+    expect(reportSource).toContain("Selected ref");
+  });
 });

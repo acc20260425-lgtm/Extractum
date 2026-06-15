@@ -33,6 +33,7 @@
   let loadingArtifact = $state(false);
   let error = $state("");
   let resultError = $state("");
+  let selectedRef = $state<string | null>(null);
 
   const runId = $derived(run?.runId ?? null);
   const expectedMissingResult = $derived(
@@ -76,6 +77,7 @@
     error = "";
     resultError = "";
     selectedArtifact = null;
+    selectedRef = null;
     try {
       await Promise.all([loadRunResult(runId), loadRunDiagnostics(runId)]);
     } catch (cause) {
@@ -122,6 +124,7 @@
       error = "";
       resultError = "";
     }
+    selectedRef = null;
   }
 
   function clearDiagnostics() {
@@ -175,6 +178,11 @@
     return typeof next === "string" && next.trim() ? next : fallback;
   }
 
+  function stringAt(value: Record<string, unknown>, key: string) {
+    const next = value[key];
+    return typeof next === "string" && next.trim() ? next : "";
+  }
+
   function numberAt(value: Record<string, unknown>, key: string) {
     const next = value[key];
     return typeof next === "number" ? next : null;
@@ -196,6 +204,33 @@
       ...stringArrayAt(value, "evidence_refs"),
       ...stringArrayAt(value, "relation_refs"),
     ]);
+  }
+
+  function refTargetsForItem(value: Record<string, unknown>, identityKeys: string[] = []) {
+    return uniqueStrings([...identityKeys.map((key) => stringAt(value, key)).filter(Boolean), ...refsForItem(value)]);
+  }
+
+  function refTargetAttr(value: Record<string, unknown>, identityKeys: string[] = []) {
+    return refTargetsForItem(value, identityKeys).join(" ");
+  }
+
+  function matchesSelectedRef(value: Record<string, unknown>, identityKeys: string[] = []) {
+    return selectedRef !== null && refTargetsForItem(value, identityKeys).includes(selectedRef);
+  }
+
+  function toggleSelectedRef(refId: string) {
+    selectedRef = selectedRef === refId ? null : refId;
+    if (selectedRef) {
+      setTimeout(() => scrollMatchingRefIntoView(selectedRef), 0);
+    }
+  }
+
+  function scrollMatchingRefIntoView(refId: string | null) {
+    if (!refId) return;
+    const target = Array.from(document.querySelectorAll<HTMLElement>("[data-ref-targets]")).find((element) =>
+      (element.dataset.refTargets ?? "").split(" ").includes(refId),
+    );
+    target?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
 
   function uniqueStrings(values: string[]) {
@@ -298,7 +333,10 @@
           {:else}
             <div class="item-list">
               {#each videos as video, index (`video-${index}`)}
-                <article>
+                <article
+                  data-ref-targets={refTargetAttr(video, ["video_id", "source_ref_id"])}
+                  class:ref-target={matchesSelectedRef(video, ["video_id", "source_ref_id"])}
+                >
                   <strong>{textAt(video, "title", `Video ${index + 1}`)}</strong>
                   <p>{textAt(video, "summary_text", "No summary text.")}</p>
                 </article>
@@ -321,11 +359,21 @@
         <div class="report-section two-column">
           <div>
             <h3>Claims</h3>
-            {@render CompactList({ items: claims, textKey: "text", fallbackPrefix: "Claim" })}
+            {@render CompactList({
+              items: claims,
+              textKey: "text",
+              fallbackPrefix: "Claim",
+              refKeys: ["claim_id", "source_ref_id"],
+            })}
           </div>
           <div>
             <h3>Evidence</h3>
-            {@render CompactList({ items: evidence, textKey: "text", fallbackPrefix: "Evidence" })}
+            {@render CompactList({
+              items: evidence,
+              textKey: "text",
+              fallbackPrefix: "Evidence",
+              refKeys: ["evidence_id", "source_ref_id"],
+            })}
           </div>
         </div>
 
@@ -348,6 +396,12 @@
               <span>Claims <strong>{commonClaims.length}</strong></span>
               <span>Contradictions <strong>{contradictions.length}</strong></span>
             </div>
+            {#if selectedRef}
+              <div class="selected-ref-bar">
+                <span>Selected ref <strong>{selectedRef}</strong></span>
+                <button type="button" onclick={() => (selectedRef = null)}>Clear</button>
+              </div>
+            {/if}
             <div class="synthesis-layout">
               <div class="synthesis-main">
                 {@render SynthesisGroup({
@@ -376,7 +430,7 @@
                 {:else}
                   <div class="ref-chip-list">
                     {#each synthesisSourceRefs as sourceRef (`synthesis-ref-${sourceRef}`)}
-                      <span>{sourceRef}</span>
+                      {@render RefButton({ refId: sourceRef })}
                     {/each}
                   </div>
                 {/if}
@@ -509,13 +563,23 @@
   {/if}
 </section>
 
-{#snippet CompactList({ items, textKey, fallbackPrefix }: { items: Record<string, unknown>[]; textKey: string; fallbackPrefix: string })}
+{#snippet CompactList({
+  items,
+  textKey,
+  fallbackPrefix,
+  refKeys = [],
+}: {
+  items: Record<string, unknown>[];
+  textKey: string;
+  fallbackPrefix: string;
+  refKeys?: string[];
+})}
   {#if items.length === 0}
     <p class="muted">None.</p>
   {:else}
     <div class="item-list compact">
       {#each items as item, index (`${fallbackPrefix}-${index}`)}
-        <article>
+        <article data-ref-targets={refTargetAttr(item, refKeys)} class:ref-target={matchesSelectedRef(item, refKeys)}>
           <p>{textAt(item, textKey, `${fallbackPrefix} ${index + 1}`)}</p>
         </article>
       {/each}
@@ -542,12 +606,12 @@
       <div class="synthesis-items">
         {#each items as item, index (`${fallbackPrefix}-${index}`)}
           {@const refs = refsForItem(item)}
-          <article>
+          <article data-ref-targets={refTargetAttr(item)} class:ref-target={matchesSelectedRef(item)}>
             <p>{textFromKeys(item, textKeys, `${fallbackPrefix} ${index + 1}`)}</p>
             {#if refs.length > 0}
               <div class="synthesis-item-refs">
-                {#each refs as ref (`${fallbackPrefix}-${index}-${ref}`)}
-                  <span>{ref}</span>
+                {#each refs as refId (`${fallbackPrefix}-${index}-${refId}`)}
+                  {@render RefButton({ refId })}
                 {/each}
               </div>
             {/if}
@@ -556,6 +620,18 @@
       </div>
     {/if}
   </section>
+{/snippet}
+
+{#snippet RefButton({ refId }: { refId: string })}
+  <button
+    type="button"
+    class="ref-chip"
+    class:ref-selected={selectedRef === refId}
+    aria-pressed={selectedRef === refId}
+    onclick={() => toggleSelectedRef(refId)}
+  >
+    {refId}
+  </button>
 {/snippet}
 
 <style>
@@ -762,16 +838,58 @@
     margin-top: 8px;
   }
 
-  .synthesis-item-refs span,
-  .ref-chip-list span {
+  .selected-ref-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid color-mix(in srgb, var(--extractum-primary) 28%, var(--extractum-border));
+    border-radius: var(--extractum-radius);
+    background: color-mix(in srgb, var(--extractum-primary) 8%, var(--extractum-surface));
+    padding: 7px 9px;
+    color: var(--extractum-muted);
+    font-size: 12px;
+  }
+
+  .selected-ref-bar strong {
+    color: var(--extractum-text);
+  }
+
+  .selected-ref-bar button,
+  .ref-chip {
     border: 1px solid var(--extractum-border);
     border-radius: var(--extractum-radius);
     background: var(--extractum-surface-subtle);
+    cursor: pointer;
+  }
+
+  .selected-ref-bar button {
+    padding: 4px 7px;
+    color: var(--extractum-text);
+    font-size: 12px;
+  }
+
+  .ref-chip {
     padding: 3px 6px;
     color: var(--extractum-muted);
     font-size: 11px;
     line-height: 1.2;
     overflow-wrap: anywhere;
+    text-align: left;
+  }
+
+  .selected-ref-bar button:hover,
+  .ref-chip:hover,
+  .ref-chip.ref-selected {
+    border-color: color-mix(in srgb, var(--extractum-primary) 50%, var(--extractum-border));
+    background: color-mix(in srgb, var(--extractum-primary) 12%, var(--extractum-surface));
+    color: var(--extractum-primary);
+  }
+
+  .ref-target {
+    border-color: color-mix(in srgb, var(--extractum-primary) 55%, var(--extractum-border)) !important;
+    background: color-mix(in srgb, var(--extractum-primary) 7%, var(--extractum-surface)) !important;
+    box-shadow: inset 3px 0 0 color-mix(in srgb, var(--extractum-primary) 72%, transparent);
   }
 
   .artifact-list {
