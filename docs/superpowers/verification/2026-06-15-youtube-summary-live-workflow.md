@@ -314,6 +314,57 @@ Post-run hardening:
       - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-review-youtube-summary-synthesis --lib build_canonical_result_preserves_synthesis_common_claim_text`: PASS.
       - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-review-youtube-summary-synthesis --lib result_builder`: PASS, 7 tests.
       - `cargo test --manifest-path src-tauri\Cargo.toml --target-dir src-tauri\target\codex-review-youtube-summary-synthesis --lib prompt_packs`: PASS, 67 tests.
+  - Post-fix live provider smoke:
+    - Backend freshness:
+      - `src-tauri\src\prompt_packs\result_builder.rs` last write time:
+        `15.06.2026 16:39:03`
+      - `src-tauri\target\debug\extractum.exe` last write time:
+        `15.06.2026 16:40:26`
+      - running `extractum.exe` process start time: `15.06.2026 16:40:29`
+      - This indicates the running backend was rebuilt after the
+        result-builder source change.
+    - Source ids: `404`, `402`.
+    - Project id: `6`.
+    - Preflight:
+      - `includedVideos.length = 2`
+      - `skippedVideos.length = 0`
+      - `blockingFailures.length = 0`
+      - `estimatedInputTokens = 6546`
+      - `selectedModelInputLimit = 32000`
+    - Client request id:
+      `codex-live-synthesis-post-fix-1781531124078`.
+    - Run ID: `#15`.
+    - Final run status: `complete`.
+    - Final result status: `complete`.
+    - Final progress: `3 / 3`.
+    - Transcript stages:
+      - stage `#115`: `succeeded`
+      - stage `#116`: `succeeded`
+    - Synthesis stage:
+      - stage `#120`: `succeeded`
+      - artifacts present: `prompt_input #1`, `raw_output #2`,
+        `parsed_output #3`, `metrics #4`
+      - metrics: `input_tokens = 4042`, `output_tokens = 346`,
+        `latency_ms = 2680`, `validation_error_count = 0`
+    - Canonical synthesis:
+      - `synthesis` was non-null.
+      - `cross_video_themes.length = 2`
+      - `common_claims.length = 1`
+      - `common_claims[0].summary_text.length = 146`
+      - `source_refs.length = 2`
+      - validation findings: `[]`
+      - storage warning: `null`
+    - Projection rows:
+      - `prompt_pack_youtube_videos = 2`
+      - `prompt_pack_result_source_refs = 2`
+      - `prompt_pack_youtube_synthesis_items = 3`
+      - synthesis projection rows included `common_claim_1`, `theme_1`,
+        and `theme_2`.
+    - Regression result:
+      - The provider again returned `synthesis_candidate.common_claims[0].text`.
+      - Canonical `common_claims[0].summary_text` was populated.
+      - `prompt_pack_youtube_synthesis_items` included
+        `common_claim_1`, confirming the post-fix canonical/projection path.
 - Notes:
   - Full lib verification initially exposed that the migration baseline test still expected versions `[1, 2, 3, 4, 5, 6, 7]` while the repository now registers `0008_prompt_pack_run_labels.sql`. The expected version list was corrected to `[1, 2, 3, 4, 5, 6, 7, 8]`, then the focused migration test and full lib suite passed.
   - The automated synthesis tests cover runtime budget loading, synthesis input assembly, validator/quarantine behavior, stage artifact persistence, run-level synthesis lifecycle, canonical result building, and projection repair.
