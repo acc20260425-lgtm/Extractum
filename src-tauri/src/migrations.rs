@@ -30,6 +30,10 @@ const PROMPT_PACK_RUN_IDEMPOTENCY_VERSION: i64 = 7;
 const PROMPT_PACK_RUN_IDEMPOTENCY_DESCRIPTION: &str = "prompt pack run idempotency";
 const PROMPT_PACK_RUN_IDEMPOTENCY_SQL: &str =
     include_str!("../migrations/0007_prompt_pack_run_idempotency.sql");
+const PROMPT_PACK_RUN_LABELS_VERSION: i64 = 8;
+const PROMPT_PACK_RUN_LABELS_DESCRIPTION: &str = "prompt pack run labels";
+const PROMPT_PACK_RUN_LABELS_SQL: &str =
+    include_str!("../migrations/0008_prompt_pack_run_labels.sql");
 
 fn app_config_db_path() -> Option<PathBuf> {
     dirs::config_dir().map(|dir| dir.join(APP_IDENTIFIER).join(DB_FILENAME))
@@ -122,6 +126,15 @@ fn prompt_pack_run_idempotency_migration() -> Migration {
     }
 }
 
+fn prompt_pack_run_labels_migration() -> Migration {
+    Migration {
+        version: PROMPT_PACK_RUN_LABELS_VERSION,
+        description: PROMPT_PACK_RUN_LABELS_DESCRIPTION,
+        sql: PROMPT_PACK_RUN_LABELS_SQL,
+        kind: MigrationKind::Up,
+    }
+}
+
 pub fn build_migrations() -> Vec<Migration> {
     vec![
         current_schema_baseline_migration(),
@@ -131,6 +144,7 @@ pub fn build_migrations() -> Vec<Migration> {
         projects_mvp_migration(),
         prompt_pack_mvp_migration(),
         prompt_pack_run_idempotency_migration(),
+        prompt_pack_run_labels_migration(),
     ]
 }
 
@@ -255,6 +269,8 @@ mod tests {
         assert!(migrations[6]
             .sql
             .contains("idx_prompt_pack_runs_client_request_id_unique"));
+        assert_eq!(migrations[7].description, "prompt pack run labels");
+        assert!(migrations[7].sql.contains("ADD COLUMN run_label TEXT"));
     }
 
     #[tokio::test]
@@ -294,13 +310,13 @@ mod tests {
     }
 
     #[test]
-    fn build_migrations_includes_prompt_pack_runtime_version_seven() {
+    fn build_migrations_includes_prompt_pack_runtime_version_eight() {
         let versions = build_migrations()
             .iter()
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
     }
 
     #[tokio::test]
@@ -320,6 +336,14 @@ mod tests {
         assert!(prompt_pack_runs_sql.contains(
             "REFERENCES prompt_pack_versions(id, pack_id, pack_version, schema_version)"
         ));
+
+        let run_label_columns: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM pragma_table_info('prompt_pack_runs') WHERE name = 'run_label'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("read prompt_pack_runs columns");
+        assert_eq!(run_label_columns, 1);
 
         let origins_sql = table_sql(&pool, "prompt_pack_run_source_origins").await;
         assert!(origins_sql.contains("FOREIGN KEY (source_snapshot_id, run_id)"));

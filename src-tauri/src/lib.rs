@@ -23,9 +23,10 @@ use projects::{
 mod prompt_packs;
 use prompt_packs::{get_prompt_pack_library, seed_builtin_prompt_packs};
 use prompt_packs::{
-    cancel_prompt_pack_run, cleanup_interrupted_prompt_pack_runs, list_active_prompt_pack_runs,
-    list_prompt_pack_run_stages, list_prompt_pack_runs, preflight_youtube_summary_run,
-    start_youtube_summary_run, PromptPackRunState,
+    cancel_prompt_pack_run, cleanup_interrupted_prompt_pack_runs, delete_prompt_pack_run,
+    list_active_prompt_pack_runs, list_prompt_pack_run_stages, list_prompt_pack_runs,
+    preflight_youtube_summary_run, start_youtube_summary_run, update_prompt_pack_run,
+    PromptPackRunState,
 };
 use prompt_packs::{
     get_prompt_pack_result, get_prompt_pack_stage_artifact,
@@ -196,6 +197,8 @@ pub fn run() {
             preflight_youtube_summary_run,
             start_youtube_summary_run,
             cancel_prompt_pack_run,
+            update_prompt_pack_run,
+            delete_prompt_pack_run,
             list_prompt_pack_runs,
             list_active_prompt_pack_runs,
             list_prompt_pack_run_stages,

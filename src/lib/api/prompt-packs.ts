@@ -15,6 +15,7 @@ import type {
   PromptPackValidationFinding,
   StartYoutubeSummaryRunInput,
   StartYoutubeSummaryRunOutcome,
+  UpdatePromptPackRunInput,
   YoutubeSummaryPreflightResponse,
 } from "$lib/types/prompt-packs";
 import {
@@ -65,6 +66,14 @@ export function cancelPromptPackRun(runId: number) {
     return Promise.resolve();
   }
   return invoke<void>("cancel_prompt_pack_run", { runId });
+}
+
+export function updatePromptPackRun(input: UpdatePromptPackRunInput) {
+  return invoke<PromptPackRunSummary>("update_prompt_pack_run", { ...input });
+}
+
+export function deletePromptPackRun(runId: number) {
+  return invoke<void>("delete_prompt_pack_run", { runId });
 }
 
 export function listPromptPackRuns(input?: ListPromptPackRunsInput) {
@@ -188,6 +197,7 @@ function smokeActiveRun(): PromptPackRunSummary {
     packVersion: "1.0.0",
     runStatus: "running",
     resultStatus: "none",
+    runLabel: "Smoke active run",
     createdAt: "2026-06-14T00:04:00Z",
     startedAt: "2026-06-14T00:04:05Z",
     completedAt: null,
@@ -206,6 +216,7 @@ function smokeRecentRun(projectId: number | null): PromptPackRunSummary {
     packVersion: "1.0.0",
     runStatus: "complete",
     resultStatus: "complete",
+    runLabel: "Smoke terminal result",
     createdAt: "2026-06-14T00:01:00Z",
     startedAt: "2026-06-14T00:01:05Z",
     completedAt: "2026-06-14T00:03:00Z",

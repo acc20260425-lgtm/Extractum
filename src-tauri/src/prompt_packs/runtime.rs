@@ -210,6 +210,28 @@ pub async fn cancel_prompt_pack_run(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn update_prompt_pack_run(
+    handle: AppHandle,
+    run_id: i64,
+    run_label: Option<String>,
+) -> AppResult<PromptPackRunSummaryDto> {
+    let pool = get_pool(&handle).await?;
+    update_prompt_pack_run_in_pool(&pool, run_id, run_label).await
+}
+
+#[tauri::command]
+pub async fn delete_prompt_pack_run(
+    handle: AppHandle,
+    state: State<'_, PromptPackRunState>,
+    run_id: i64,
+) -> AppResult<()> {
+    let pool = get_pool(&handle).await?;
+    delete_prompt_pack_run_in_pool(&pool, run_id).await?;
+    state.finish(run_id).await;
+    Ok(())
+}
+
 fn spawn_youtube_summary_execution(handle: AppHandle, run_id: i64) {
     tauri::async_runtime::spawn(async move {
         let result = execute_youtube_summary_run(handle.clone(), run_id).await;
@@ -588,7 +610,7 @@ pub(crate) async fn list_prompt_pack_runs_in_pool(
     let limit = request.limit.unwrap_or(20).clamp(1, 100);
     let rows = if let Some(project_id) = request.project_id {
         sqlx::query_as::<_, RunSummaryRow>(
-            "SELECT id, project_id, pack_id, pack_version, run_status, result_status,
+            "SELECT id, project_id, run_label, pack_id, pack_version, run_status, result_status,
                     created_at, started_at, completed_at, latest_message,
                     progress_current, progress_total, queue_position
              FROM prompt_pack_runs
@@ -603,7 +625,7 @@ pub(crate) async fn list_prompt_pack_runs_in_pool(
         .map_err(AppError::database)?
     } else {
         sqlx::query_as::<_, RunSummaryRow>(
-            "SELECT id, project_id, pack_id, pack_version, run_status, result_status,
+            "SELECT id, project_id, run_label, pack_id, pack_version, run_status, result_status,
                     created_at, started_at, completed_at, latest_message,
                     progress_current, progress_total, queue_position
              FROM prompt_pack_runs
@@ -616,6 +638,68 @@ pub(crate) async fn list_prompt_pack_runs_in_pool(
         .map_err(AppError::database)?
     };
     Ok(rows.into_iter().map(Into::into).collect())
+}
+
+pub(crate) async fn update_prompt_pack_run_in_pool(
+    pool: &SqlitePool,
+    run_id: i64,
+    run_label: Option<String>,
+) -> AppResult<PromptPackRunSummaryDto> {
+    let normalized_label = normalize_prompt_pack_run_label(run_label);
+    let result = sqlx::query(
+        "UPDATE prompt_pack_runs
+         SET run_label = ?, updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(&normalized_label)
+    .bind(now_string())
+    .bind(run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::not_found(format!(
+            "Prompt Pack run {run_id} not found"
+        )));
+    }
+
+    load_run_summary_optional(pool, run_id)
+        .await?
+        .ok_or_else(|| AppError::not_found(format!("Prompt Pack run {run_id} not found")))
+}
+
+pub(crate) async fn delete_prompt_pack_run_in_pool(
+    pool: &SqlitePool,
+    run_id: i64,
+) -> AppResult<()> {
+    let status = sqlx::query_scalar::<_, String>(
+        "SELECT run_status FROM prompt_pack_runs WHERE id = ?",
+    )
+    .bind(run_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(AppError::database)?
+    .ok_or_else(|| AppError::not_found(format!("Prompt Pack run {run_id} not found")))?;
+
+    if status == "queued" || status == "running" {
+        return Err(AppError::conflict(
+            "Queued or running Prompt Pack runs cannot be deleted",
+        ));
+    }
+
+    sqlx::query("DELETE FROM prompt_pack_runs WHERE id = ?")
+        .bind(run_id)
+        .execute(pool)
+        .await
+        .map_err(AppError::database)?;
+    Ok(())
+}
+
+fn normalize_prompt_pack_run_label(label: Option<String>) -> Option<String> {
+    label
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 async fn list_prompt_pack_run_stages_in_pool(
@@ -663,7 +747,7 @@ async fn load_run_summary_optional(
     run_id: i64,
 ) -> AppResult<Option<PromptPackRunSummaryDto>> {
     sqlx::query_as::<_, RunSummaryRow>(
-        "SELECT id, project_id, pack_id, pack_version, run_status, result_status,
+        "SELECT id, project_id, run_label, pack_id, pack_version, run_status, result_status,
                 created_at, started_at, completed_at, latest_message,
                 progress_current, progress_total, queue_position
          FROM prompt_pack_runs
@@ -689,6 +773,7 @@ async fn emit_prompt_pack_run_event(
 struct RunSummaryRow {
     id: i64,
     project_id: Option<i64>,
+    run_label: Option<String>,
     pack_id: String,
     pack_version: String,
     run_status: String,
@@ -707,6 +792,7 @@ impl From<RunSummaryRow> for PromptPackRunSummaryDto {
         Self {
             run_id: row.id,
             project_id: row.project_id,
+            run_label: row.run_label,
             pack_id: row.pack_id,
             pack_version: row.pack_version,
             run_status: row.run_status,
@@ -730,7 +816,8 @@ fn now_string() -> String {
 mod tests {
     use super::{
         build_transcript_analysis_llm_request, cleanup_interrupted_prompt_pack_runs_in_pool,
-        list_prompt_pack_runs_in_pool, PromptPackRunState,
+        delete_prompt_pack_run_in_pool, list_prompt_pack_runs_in_pool,
+        update_prompt_pack_run_in_pool, PromptPackRunState,
     };
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::dto::{ListPromptPackRunsRequest, PromptPackRunEvent};
@@ -824,6 +911,52 @@ mod tests {
             vec![42, 41]
         );
         assert!(runs.iter().all(|run| run.project_id == Some(7)));
+    }
+
+    #[tokio::test]
+    async fn update_prompt_pack_run_updates_user_label_only() {
+        let pool = test_pool_with_prompt_pack_runs([(
+            41,
+            Some(7),
+            "complete",
+            "2026-06-14T10:00:00Z",
+        )])
+        .await;
+
+        let run = update_prompt_pack_run_in_pool(&pool, 41, Some("  June summary  ".to_string()))
+            .await
+            .expect("update label");
+
+        assert_eq!(run.run_label.as_deref(), Some("June summary"));
+        let status: String =
+            sqlx::query_scalar("SELECT run_status FROM prompt_pack_runs WHERE id = 41")
+                .fetch_one(&pool)
+                .await
+                .expect("status");
+        assert_eq!(status, "complete");
+    }
+
+    #[tokio::test]
+    async fn delete_prompt_pack_run_rejects_active_runs() {
+        let pool = test_pool_with_prompt_pack_runs([
+            (41, Some(7), "running", "2026-06-14T10:00:00Z"),
+            (42, Some(7), "complete", "2026-06-14T11:00:00Z"),
+        ])
+        .await;
+
+        let active_error = delete_prompt_pack_run_in_pool(&pool, 41)
+            .await
+            .expect_err("active run delete rejected");
+        assert_eq!(active_error.kind, crate::error::AppErrorKind::Conflict);
+
+        delete_prompt_pack_run_in_pool(&pool, 42)
+            .await
+            .expect("delete complete run");
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_runs WHERE id = 42")
+            .fetch_one(&pool)
+            .await
+            .expect("count deleted run");
+        assert_eq!(count, 0);
     }
 
     #[test]

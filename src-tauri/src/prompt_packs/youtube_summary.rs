@@ -1027,6 +1027,7 @@ async fn load_run_summary(pool: &SqlitePool, run_id: i64) -> AppResult<PromptPac
         (
             i64,
             Option<i64>,
+            Option<String>,
             String,
             String,
             String,
@@ -1040,7 +1041,7 @@ async fn load_run_summary(pool: &SqlitePool, run_id: i64) -> AppResult<PromptPac
             Option<i64>,
         ),
     >(
-        "SELECT id, project_id, pack_id, pack_version, run_status, result_status,
+        "SELECT id, project_id, run_label, pack_id, pack_version, run_status, result_status,
                 created_at, started_at, completed_at, latest_message,
                 progress_current, progress_total, queue_position
          FROM prompt_pack_runs
@@ -1053,6 +1054,7 @@ async fn load_run_summary(pool: &SqlitePool, run_id: i64) -> AppResult<PromptPac
         |(
             run_id,
             project_id,
+            run_label,
             pack_id,
             pack_version,
             run_status,
@@ -1067,6 +1069,7 @@ async fn load_run_summary(pool: &SqlitePool, run_id: i64) -> AppResult<PromptPac
         )| PromptPackRunSummaryDto {
             run_id,
             project_id,
+            run_label,
             pack_id,
             pack_version,
             run_status,

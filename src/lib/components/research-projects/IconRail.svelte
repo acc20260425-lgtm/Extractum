@@ -11,7 +11,7 @@
   const items = [
     { href: "/projects", label: "Projects", icon: FolderKanban },
     { href: "/projects/library", label: "Library", icon: Library },
-    { href: "/projects#runs", label: "Runs", icon: Activity },
+    { href: "/projects/runs", label: "Runs", icon: Activity },
     { href: "/diagnostics", label: "Diagnostics", icon: ShieldCheck },
     { href: "/settings", label: "Settings", icon: Settings },
   ];
@@ -19,6 +19,7 @@
   function isActive(href: string) {
     if (href === "/projects") return page.url.pathname === "/projects";
     if (href === "/projects/library") return page.url.pathname === "/projects/library";
+    if (href === "/projects/runs") return page.url.pathname === "/projects/runs";
     return page.url.pathname === href;
   }
 </script>

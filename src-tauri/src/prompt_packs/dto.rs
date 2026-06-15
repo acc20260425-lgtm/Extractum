@@ -93,6 +93,7 @@ pub struct ListPromptPackRunsRequest {
 pub struct PromptPackRunSummaryDto {
     pub run_id: i64,
     pub project_id: Option<i64>,
+    pub run_label: Option<String>,
     pub pack_id: String,
     pub pack_version: String,
     pub run_status: String,

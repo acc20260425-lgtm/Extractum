@@ -97,6 +97,11 @@ export interface ListPromptPackRunsInput {
   limit?: number;
 }
 
+export interface UpdatePromptPackRunInput {
+  runId: number;
+  runLabel: string | null;
+}
+
 export interface YoutubeSummaryPreflightResponse {
   packId: string;
   packVersion: string;
@@ -146,6 +151,7 @@ export interface PromptPackRunEvent {
 export interface PromptPackRunSummary {
   runId: number;
   projectId?: number | null;
+  runLabel?: string | null;
   packId?: string;
   packVersion?: string;
   runStatus: PromptPackRunStatus;

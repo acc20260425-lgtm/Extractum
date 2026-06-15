@@ -4,6 +4,7 @@ import {
   getPromptPackResult,
   getPromptPackStageArtifact,
   getPromptPackValidationFindings,
+  deletePromptPackRun,
   listenToPromptPackRunEvents,
   listActivePromptPackRuns,
   listPromptPackAuditEvents,
@@ -12,6 +13,7 @@ import {
   listPromptPackRuns,
   PROMPT_PACK_RUN_EVENT,
   startYoutubeSummaryRun,
+  updatePromptPackRun,
 } from "./prompt-packs";
 
 const invokeMock = vi.hoisted(() => vi.fn());
@@ -119,6 +121,32 @@ describe("prompt pack api wrappers", () => {
       projectId: 7,
       limit: 20,
     });
+  });
+
+  it("wraps project run update and delete commands", async () => {
+    invokeMock.mockResolvedValueOnce({
+      runId: 42,
+      projectId: 7,
+      packId: "youtube_summary",
+      packVersion: "1.0.0",
+      runStatus: "complete",
+      resultStatus: "complete",
+      runLabel: "June summary",
+      createdAt: "2026-06-14T00:00:00Z",
+    });
+
+    await expect(updatePromptPackRun({ runId: 42, runLabel: "June summary" })).resolves.toMatchObject({
+      runId: 42,
+      runLabel: "June summary",
+    });
+    expect(invokeMock).toHaveBeenLastCalledWith("update_prompt_pack_run", {
+      runId: 42,
+      runLabel: "June summary",
+    });
+
+    invokeMock.mockResolvedValueOnce(undefined);
+    await expect(deletePromptPackRun(42)).resolves.toBeUndefined();
+    expect(invokeMock).toHaveBeenLastCalledWith("delete_prompt_pack_run", { runId: 42 });
   });
 
   it("keeps execution result artifact and audit wrappers available", async () => {
