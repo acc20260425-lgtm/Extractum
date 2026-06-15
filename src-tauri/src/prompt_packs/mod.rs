@@ -12,6 +12,10 @@ pub mod store;
 pub mod validation;
 pub mod youtube_summary;
 pub mod youtube_summary_execution;
+pub mod youtube_summary_preflight;
+pub mod youtube_summary_run_store;
+pub mod youtube_summary_snapshots;
+pub mod youtube_summary_sources;
 pub mod youtube_summary_stage_outputs;
 pub mod youtube_summary_synthesis_input;
 
