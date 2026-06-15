@@ -1,5 +1,5 @@
-use super::youtube_summary::{preflight_youtube_summary_in_pool, ModelBudget};
-use super::youtube_summary_test_support::*;
+use super::test_support::*;
+use super::{preflight_youtube_summary_in_pool, ModelBudget};
 
 #[tokio::test]
 async fn preflight_explicit_video_without_transcript_is_blocking_failure() {

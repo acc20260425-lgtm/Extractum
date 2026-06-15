@@ -1,7 +1,7 @@
 use sqlx::SqlitePool;
 
-use super::dto::PromptPackRunSummaryDto;
 use crate::error::{AppError, AppResult};
+use crate::prompt_packs::dto::PromptPackRunSummaryDto;
 
 pub(crate) async fn ensure_pack_version(pool: &SqlitePool) -> AppResult<i64> {
     if let Some(id) = sqlx::query_scalar::<_, i64>(
@@ -15,8 +15,9 @@ pub(crate) async fn ensure_pack_version(pool: &SqlitePool) -> AppResult<i64> {
         return Ok(id);
     }
 
-    super::seed::seed_builtin_prompt_packs_in_pool(pool).await?;
-    super::store::require_prompt_pack_version_id(pool, "youtube_summary", "1.0.0").await
+    crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool(pool).await?;
+    crate::prompt_packs::store::require_prompt_pack_version_id(pool, "youtube_summary", "1.0.0")
+        .await
 }
 
 pub(crate) async fn load_run_by_client_request_id(

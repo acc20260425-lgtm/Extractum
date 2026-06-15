@@ -1,14 +1,14 @@
 use sqlx::SqlitePool;
 
-use super::validation::{
-    validate_and_quarantine_synthesis_output, validate_transcript_analysis_output,
-};
-use super::youtube_summary::LlmCompletion;
-use super::youtube_summary_synthesis_input::build_synthesis_stage_input;
+use super::synthesis_input::build_synthesis_stage_input;
+use super::LlmCompletion;
 use crate::error::{AppError, AppResult};
 use crate::prompt_packs::stage_io::{
     build_transcript_analysis_stage_input, extract_json_payload, insert_stage_artifact_in_pool,
     SYNTHESIS_OUTPUT_SCHEMA_ID, TRANSCRIPT_ANALYSIS_OUTPUT_SCHEMA_ID,
+};
+use crate::prompt_packs::validation::{
+    validate_and_quarantine_synthesis_output, validate_transcript_analysis_output,
 };
 
 pub(crate) async fn execute_transcript_analysis_stage_with_completion(

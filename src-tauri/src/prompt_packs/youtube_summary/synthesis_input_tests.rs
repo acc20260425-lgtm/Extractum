@@ -1,5 +1,5 @@
-use super::youtube_summary_synthesis_input::build_synthesis_stage_input;
-use super::youtube_summary_test_support::*;
+use super::synthesis_input::build_synthesis_stage_input;
+use super::test_support::*;
 
 #[tokio::test]
 async fn build_synthesis_stage_input_collects_successful_transcript_outputs() {

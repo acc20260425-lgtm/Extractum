@@ -1,15 +1,37 @@
 use sqlx::SqlitePool;
 
+pub(crate) mod execution;
+#[cfg(test)]
+mod execution_tests;
+#[cfg(test)]
+mod facade_tests;
+pub(crate) mod preflight;
+#[cfg(test)]
+mod preflight_tests;
+pub(crate) mod run_store;
+pub(crate) mod snapshots;
+#[cfg(test)]
+mod snapshots_tests;
+pub(crate) mod sources;
+pub(crate) mod stage_outputs;
+#[cfg(test)]
+mod stage_outputs_tests;
+pub(crate) mod synthesis_input;
+#[cfg(test)]
+mod synthesis_input_tests;
+#[cfg(test)]
+pub(crate) mod test_support;
+
 use super::dto::{
     PreflightYoutubeSummaryRunRequest, StartYoutubeSummaryRunOutcomeDto,
     StartYoutubeSummaryRunRequest,
 };
 use super::json_repair::JsonRepairStageExecutionRequest;
-pub(crate) use super::youtube_summary_execution::execute_youtube_summary_run_with_stage_executor;
-pub(crate) use super::youtube_summary_preflight::preflight_youtube_summary_in_pool;
-use super::youtube_summary_run_store::{load_run_by_client_request_id, load_run_summary};
-pub(crate) use super::youtube_summary_snapshots::create_youtube_summary_run_skeleton_in_pool;
 use crate::error::{AppError, AppResult};
+pub(crate) use execution::execute_youtube_summary_run_with_stage_executor;
+pub(crate) use preflight::preflight_youtube_summary_in_pool;
+use run_store::{load_run_by_client_request_id, load_run_summary};
+pub(crate) use snapshots::create_youtube_summary_run_skeleton_in_pool;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ModelBudget {

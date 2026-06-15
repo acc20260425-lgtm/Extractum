@@ -2,23 +2,23 @@ use std::future::Future;
 
 use sqlx::SqlitePool;
 
-use super::json_repair::{
-    execute_synthesis_stage_repair_completion, execute_transcript_analysis_stage_repair_completion,
-    insert_json_repair_input_artifact, JsonRepairStageExecutionRequest,
+use super::stage_outputs::{
+    execute_synthesis_stage_with_completion, execute_transcript_analysis_stage_with_completion,
+    mark_synthesis_stage_failed,
 };
-use super::youtube_summary::{
+use super::synthesis_input::build_synthesis_stage_input;
+use super::{
     LlmCompletion, SynthesisStageExecutionRequest, TranscriptAnalysisStageExecutionRequest,
     YoutubeSummaryRunExecutionOutcome, YoutubeSummaryStageExecutionError,
     YoutubeSummaryStageExecutionRequest, SYNTHESIS_STAGE_NAME,
 };
-use super::youtube_summary_stage_outputs::{
-    execute_synthesis_stage_with_completion, execute_transcript_analysis_stage_with_completion,
-    mark_synthesis_stage_failed,
-};
-use super::youtube_summary_synthesis_input::build_synthesis_stage_input;
 #[cfg(test)]
 use crate::compression::compress_text;
 use crate::error::{AppError, AppResult};
+use crate::prompt_packs::json_repair::{
+    execute_synthesis_stage_repair_completion, execute_transcript_analysis_stage_repair_completion,
+    insert_json_repair_input_artifact, JsonRepairStageExecutionRequest,
+};
 use crate::prompt_packs::stage_io::{
     build_transcript_analysis_stage_input, insert_stage_artifact_in_pool,
 };

@@ -1,9 +1,9 @@
-use super::seed::seed_builtin_prompt_packs_in_pool;
-use super::youtube_summary::start_youtube_summary_run_in_pool;
-use super::youtube_summary_snapshots::{
+use super::snapshots::{
     create_youtube_summary_run_skeleton_in_pool, freeze_comment_material_refs, test_comment_policy,
 };
-use super::youtube_summary_test_support::*;
+use super::start_youtube_summary_run_in_pool;
+use super::test_support::*;
+use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
 
 #[tokio::test]
 async fn start_freezes_one_canonical_video_snapshot_with_multiple_origins() {

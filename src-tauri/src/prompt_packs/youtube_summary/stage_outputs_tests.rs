@@ -1,8 +1,8 @@
-use super::youtube_summary::LlmCompletion;
-use super::youtube_summary_stage_outputs::{
+use super::stage_outputs::{
     execute_synthesis_stage_with_completion, execute_transcript_analysis_stage_with_completion,
 };
-use super::youtube_summary_test_support::*;
+use super::test_support::*;
+use super::LlmCompletion;
 
 #[tokio::test]
 async fn execute_synthesis_stage_persists_raw_parsed_and_metrics_artifacts() {

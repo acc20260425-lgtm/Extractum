@@ -1,4 +1,4 @@
-use super::youtube_summary::now_string;
+use super::now_string;
 
 #[test]
 fn now_string_uses_current_utc_time() {
