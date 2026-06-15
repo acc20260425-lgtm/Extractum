@@ -4,6 +4,10 @@ use sqlx::SqlitePool;
 use crate::compression::{compress_text, decompress_text};
 use crate::error::{AppError, AppResult};
 
+pub(crate) const TRANSCRIPT_ANALYSIS_OUTPUT_SCHEMA_ID: &str =
+    "stage-io/youtube_summary_transcript_analysis_output";
+pub(crate) const SYNTHESIS_OUTPUT_SCHEMA_ID: &str = "stage-io/youtube_summary_synthesis_output";
+
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptAnalysisStageInput {

@@ -1,4 +1,5 @@
 pub mod dto;
+pub mod json_repair;
 pub mod library;
 pub mod models;
 pub mod projections;
