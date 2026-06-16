@@ -532,6 +532,13 @@
     transition: color 0.12s, background 0.12s;
   }
 
+  .action-btn :global(svg) {
+    width: 12px !important;
+    height: 12px !important;
+    stroke: currentColor !important;
+    display: block !important;
+  }
+
   .action-btn:hover {
     color: var(--extractum-text);
     background: color-mix(in srgb, var(--extractum-border) 40%, transparent);
