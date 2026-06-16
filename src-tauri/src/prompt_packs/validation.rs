@@ -141,6 +141,37 @@ pub(crate) fn validate_synthesis_output(
     Ok(())
 }
 
+pub(crate) fn validate_synthesis_output_with_allowed_refs(
+    output: &serde_json::Value,
+    allowed_source_refs: &HashSet<String>,
+    allowed_claim_refs: &HashSet<String>,
+    allowed_evidence_refs: &HashSet<String>,
+) -> Result<(), PromptPackValidationError> {
+    validate_synthesis_output(output, allowed_source_refs)?;
+    let candidate = output
+        .get("synthesis_candidate")
+        .ok_or_else(|| PromptPackValidationError {
+            message: "missing required key synthesis_candidate".to_string(),
+            object_path: Some("$.synthesis_candidate".to_string()),
+        })?;
+    reject_direct_intermediate_refs(candidate, "$.synthesis_candidate")?;
+    reject_unknown_refs_in_synthesis(
+        candidate,
+        "$.synthesis_candidate",
+        "claim_refs",
+        "claim_ref",
+        allowed_claim_refs,
+    )?;
+    reject_unknown_refs_in_synthesis(
+        candidate,
+        "$.synthesis_candidate",
+        "evidence_refs",
+        "evidence_ref",
+        allowed_evidence_refs,
+    )?;
+    Ok(())
+}
+
 pub(crate) async fn validate_and_quarantine_synthesis_output(
     pool: &SqlitePool,
     run_id: i64,
@@ -346,7 +377,7 @@ fn reject_non_empty_synthesis_candidate_ref_arrays(
         serde_json::Value::Object(map) => {
             for (key, nested) in map {
                 let child_path = format!("{path}.{key}");
-                if ["claim_refs", "evidence_refs", "relation_refs"].contains(&key.as_str()) {
+                if key == "relation_refs" {
                     let refs = nested.as_array().ok_or_else(|| PromptPackValidationError {
                         message: format!("{key} must be an array"),
                         object_path: Some(child_path.clone()),
@@ -370,6 +401,94 @@ fn reject_non_empty_synthesis_candidate_ref_arrays(
                 reject_non_empty_synthesis_candidate_ref_arrays(
                     nested,
                     &format!("{path}[{index}]"),
+                )?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn reject_direct_intermediate_refs(
+    value: &serde_json::Value,
+    path: &str,
+) -> Result<(), PromptPackValidationError> {
+    match value {
+        serde_json::Value::Object(map) => {
+            for forbidden in ["segment_refs", "key_point_refs", "quote_refs"] {
+                if map.contains_key(forbidden) {
+                    return Err(PromptPackValidationError {
+                        message: format!(
+                            "direct {forbidden} are not allowed in synthesis output v1"
+                        ),
+                        object_path: Some(format!("{path}.{forbidden}")),
+                    });
+                }
+            }
+            for (key, child) in map {
+                reject_direct_intermediate_refs(child, &format!("{path}.{key}"))?;
+            }
+            Ok(())
+        }
+        serde_json::Value::Array(items) => {
+            for (index, child) in items.iter().enumerate() {
+                reject_direct_intermediate_refs(child, &format!("{path}[{index}]"))?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn reject_unknown_refs_in_synthesis(
+    value: &serde_json::Value,
+    path: &str,
+    key_to_check: &str,
+    singular_name: &str,
+    allowed_refs: &HashSet<String>,
+) -> Result<(), PromptPackValidationError> {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, nested) in map {
+                let child_path = format!("{path}.{key}");
+                if key == key_to_check {
+                    let refs = nested.as_array().ok_or_else(|| PromptPackValidationError {
+                        message: format!("{key_to_check} must be an array of strings"),
+                        object_path: Some(child_path.clone()),
+                    })?;
+                    for (index, item) in refs.iter().enumerate() {
+                        let item_path = format!("{child_path}[{index}]");
+                        let reference = item.as_str().ok_or_else(|| PromptPackValidationError {
+                            message: format!("{key_to_check} must be an array of strings"),
+                            object_path: Some(item_path.clone()),
+                        })?;
+                        if !allowed_refs.contains(reference) {
+                            return Err(PromptPackValidationError {
+                                message: format!("unknown {singular_name} {reference}"),
+                                object_path: Some(item_path),
+                            });
+                        }
+                    }
+                } else {
+                    reject_unknown_refs_in_synthesis(
+                        nested,
+                        &child_path,
+                        key_to_check,
+                        singular_name,
+                        allowed_refs,
+                    )?;
+                }
+            }
+            Ok(())
+        }
+        serde_json::Value::Array(items) => {
+            for (index, nested) in items.iter().enumerate() {
+                reject_unknown_refs_in_synthesis(
+                    nested,
+                    &format!("{path}[{index}]"),
+                    key_to_check,
+                    singular_name,
+                    allowed_refs,
                 )?;
             }
             Ok(())
@@ -434,7 +553,7 @@ mod tests {
     use super::{
         validate_and_quarantine_synthesis_output,
         validate_and_quarantine_transcript_analysis_output, validate_synthesis_output,
-        validate_transcript_analysis_output,
+        validate_synthesis_output_with_allowed_refs, validate_transcript_analysis_output,
     };
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
@@ -703,18 +822,115 @@ mod tests {
 
     #[test]
     fn synthesis_output_validator_rejects_provider_authored_claim_ref() {
-        let mut output = valid_synthesis_output();
-        output["synthesis_candidate"]["cross_video_themes"][0]["claim_refs"] =
-            serde_json::json!(["claim_999"]);
+        let output = valid_synthesis_output_with_refs(
+            serde_json::json!(["source_ref_1"]),
+            serde_json::json!(["claim_999"]),
+            serde_json::json!([]),
+        );
+        let allowed_claims = std::collections::HashSet::from(["source_ref_1_claim_1".to_string()]);
+        let allowed_evidence =
+            std::collections::HashSet::from(["source_ref_1_evidence_1".to_string()]);
 
-        let error = validate_synthesis_output(&output, &allowed_synthesis_source_refs())
-            .expect_err("provider-authored claim ref rejected");
+        let error = validate_synthesis_output_with_allowed_refs(
+            &output,
+            &allowed_synthesis_source_refs(),
+            &allowed_claims,
+            &allowed_evidence,
+        )
+        .expect_err("provider-authored claim ref rejected");
 
-        assert!(error.message.contains("claim_refs"));
+        assert!(error.message.contains("unknown claim_ref claim_999"));
         assert_eq!(
             error.object_path.as_deref(),
-            Some("$.synthesis_candidate.cross_video_themes[0].claim_refs")
+            Some("$.synthesis_candidate.cross_video_themes[0].claim_refs[0]")
         );
+    }
+
+    #[test]
+    fn synthesis_output_rejects_unknown_claim_ref() {
+        let output = valid_synthesis_output_with_refs(
+            serde_json::json!(["source_ref_1"]),
+            serde_json::json!(["claim_999"]),
+            serde_json::json!([]),
+        );
+        let allowed_sources = std::collections::HashSet::from(["source_ref_1".to_string()]);
+        let allowed_claims = std::collections::HashSet::from(["source_ref_1_claim_1".to_string()]);
+        let allowed_evidence =
+            std::collections::HashSet::from(["source_ref_1_evidence_1".to_string()]);
+
+        let error = validate_synthesis_output_with_allowed_refs(
+            &output,
+            &allowed_sources,
+            &allowed_claims,
+            &allowed_evidence,
+        )
+        .expect_err("unknown claim rejected");
+
+        assert!(error.message.contains("unknown claim_ref claim_999"));
+    }
+
+    #[test]
+    fn synthesis_output_rejects_direct_segment_key_point_or_quote_refs_inside_synthesis_candidate()
+    {
+        for key in ["segment_refs", "key_point_refs", "quote_refs"] {
+            let mut output = valid_synthesis_output_with_refs(
+                serde_json::json!(["source_ref_1"]),
+                serde_json::json!([]),
+                serde_json::json!([]),
+            );
+            output["synthesis_candidate"]["cross_video_themes"][0][key] =
+                serde_json::json!(["not_allowed"]);
+
+            let allowed_sources = std::collections::HashSet::from(["source_ref_1".to_string()]);
+            let allowed_claims = std::collections::HashSet::new();
+            let allowed_evidence = std::collections::HashSet::new();
+            let error = validate_synthesis_output_with_allowed_refs(
+                &output,
+                &allowed_sources,
+                &allowed_claims,
+                &allowed_evidence,
+            )
+            .expect_err("direct intermediate ref rejected inside synthesis_candidate");
+
+            assert!(error.message.contains(key));
+        }
+    }
+
+    #[test]
+    fn synthesis_output_rejects_non_array_or_non_string_ref_values() {
+        let allowed_sources = std::collections::HashSet::from(["source_ref_1".to_string()]);
+        let allowed_claims = std::collections::HashSet::from(["source_ref_1_claim_1".to_string()]);
+        let allowed_evidence =
+            std::collections::HashSet::from(["source_ref_1_evidence_1".to_string()]);
+
+        let mut non_array = valid_synthesis_output_with_refs(
+            serde_json::json!(["source_ref_1"]),
+            serde_json::json!("source_ref_1_claim_1"),
+            serde_json::json!([]),
+        );
+        let error = validate_synthesis_output_with_allowed_refs(
+            &non_array,
+            &allowed_sources,
+            &allowed_claims,
+            &allowed_evidence,
+        )
+        .expect_err("claim_refs string rejected");
+        assert!(error
+            .message
+            .contains("claim_refs must be an array of strings"));
+
+        non_array["synthesis_candidate"]["cross_video_themes"][0]["claim_refs"] =
+            serde_json::json!(["source_ref_1_claim_1", 42]);
+        let error = validate_synthesis_output_with_allowed_refs(
+            &non_array,
+            &allowed_sources,
+            &allowed_claims,
+            &allowed_evidence,
+        )
+        .expect_err("non-string claim ref rejected");
+        assert!(error
+            .message
+            .contains("claim_refs must be an array of strings"));
     }
 
     #[tokio::test]
@@ -802,10 +1018,24 @@ mod tests {
             .await
             .expect_err("quarantine write failure is surfaced");
 
-        assert!(error.message.contains("quarantine synthesis output"));
+        assert!(error
+            .message
+            .contains("quarantine prompt pack validation error"));
     }
 
     fn valid_synthesis_output() -> serde_json::Value {
+        valid_synthesis_output_with_refs(
+            serde_json::json!(["source_ref_1", "source_ref_2"]),
+            serde_json::json!([]),
+            serde_json::json!([]),
+        )
+    }
+
+    fn valid_synthesis_output_with_refs(
+        source_refs: serde_json::Value,
+        claim_refs: serde_json::Value,
+        evidence_refs: serde_json::Value,
+    ) -> serde_json::Value {
         serde_json::json!({
             "stage_io_version": "1.0",
             "schema_version": "1.0",
@@ -815,9 +1045,9 @@ mod tests {
                 "cross_video_themes": [
                     {
                         "theme_text": "Shared theme",
-                        "source_refs": ["source_ref_1", "source_ref_2"],
-                        "claim_refs": [],
-                        "evidence_refs": []
+                        "source_refs": source_refs,
+                        "claim_refs": claim_refs,
+                        "evidence_refs": evidence_refs
                     }
                 ],
                 "common_claims": [],

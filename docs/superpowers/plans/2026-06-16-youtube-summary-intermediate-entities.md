@@ -1179,7 +1179,7 @@ git commit -m "feat: add intermediate graph to synthesis input"
 - Modify: tests inside `src-tauri/src/prompt_packs/validation.rs`
   - Add transcript-analysis prompt coverage for candidate indexes and backend-ref denial.
 
-- [ ] **Step 1: Add failing synthesis validation tests**
+- [x] **Step 1: Add failing synthesis validation tests**
 
 In `validation.rs` tests, add:
 
@@ -1342,7 +1342,7 @@ fn synthesis_llm_request_describes_allowed_refs_and_forbids_direct_intermediate_
 }
 ```
 
-- [ ] **Step 2: Run validation and prompt tests to verify they fail**
+- [x] **Step 2: Run validation and prompt tests to verify they fail**
 
 Run:
 
@@ -1353,7 +1353,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib prompt_packs::runtime::tes
 
 Expected: FAIL because `validate_synthesis_output_with_allowed_refs` does not exist and the runtime prompts do not yet describe candidate indexes / graph allowed refs.
 
-- [ ] **Step 3: Implement allowed-ref validation**
+- [x] **Step 3: Implement allowed-ref validation**
 
 In `validation.rs`, add:
 
@@ -1413,7 +1413,7 @@ fn reject_direct_intermediate_refs(
 
 `reject_unknown_refs_in_synthesis` should walk the `synthesis_candidate` subtree recursively. When it sees key `claim_refs` or `evidence_refs`, the value must be an array of strings; a scalar value, object value, or non-string array item is a validation error. Every `claim_refs` string item must exist in `allowed_claim_refs`, and every `evidence_refs` string item must exist in `allowed_evidence_refs`.
 
-- [ ] **Step 4: Update transcript-analysis and synthesis prompts**
+- [x] **Step 4: Update transcript-analysis and synthesis prompts**
 
 In `runtime.rs`, update the transcript-analysis prompt text in `build_transcript_analysis_llm_request`.
 
@@ -1445,7 +1445,7 @@ With:
 Use only source_refs from allowed_refs.source_refs, claim_refs from allowed_refs.claim_refs, and evidence_refs from allowed_refs.evidence_refs. You may use segment_refs, key_point_refs, and quote_refs from allowed_refs only for reasoning over canonical_graph. Do not emit segment_refs, key_point_refs, or quote_refs in the output. Leave claim_refs or evidence_refs empty when no supporting allowed ref exists.
 ```
 
-- [ ] **Step 5: Run validation and runtime tests**
+- [x] **Step 5: Run validation and runtime tests**
 
 Run:
 
@@ -1456,7 +1456,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib prompt_packs::runtime::tes
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri\src\prompt_packs\validation.rs src-tauri\src\prompt_packs\runtime.rs

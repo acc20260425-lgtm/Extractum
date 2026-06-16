@@ -727,16 +727,16 @@ fn build_transcript_analysis_llm_request(
                      \"video_candidate\": {{\n\
                      \"summary_text\": \"concise summary\",\n\
                      \"segment_candidates\": [],\n\
-                     \"key_point_candidates\": [],\n\
-                     \"quote_candidates\": [],\n\
+                     \"key_point_candidates\": [{{ \"text\": \"point\", \"segment_candidate_index\": 0, \"material_refs\": [\"allowed material ref\"] }}],\n\
+                     \"quote_candidates\": [{{ \"text\": \"short quote\", \"segment_candidate_index\": 0, \"material_refs\": [\"allowed material ref\"] }}],\n\
                      \"action_item_candidates\": [],\n\
                      \"open_question_candidates\": []\n\
                      }},\n\
                      \"claim_candidates\": [{{ \"text\": \"claim\", \"material_refs\": [\"allowed material ref\"] }}],\n\
-                     \"evidence_fragment_candidates\": [{{ \"text\": \"evidence quote or paraphrase\", \"material_refs\": [\"allowed material ref\"] }}],\n\
+                     \"evidence_fragment_candidates\": [{{ \"text\": \"evidence quote or paraphrase\", \"quote_candidate_index\": 0, \"material_refs\": [\"allowed material ref\"] }}],\n\
                      \"warning_candidates\": []\n\
                      }}\n\n\
-                     Do not include backend-owned IDs such as claim_id, evidence_id, source_ref_id, segment_id, key_point_id, quote_id, action_item_id, or open_question_id. Use material_refs only from allowed_material_refs in the frozen input. Do not rename fields. Do not wrap the JSON in Markdown.\n\n\
+                     Do not include backend-owned refs or IDs such as segment_ref, key_point_ref, quote_ref, claim_id, evidence_id, source_ref_id, segment_id, key_point_id, quote_id, action_item_id, or open_question_id. For optional candidate-to-candidate linkage, use only zero-based segment_candidate_index and quote_candidate_index. Omit candidate index fields when no clear candidate link exists. Use material_refs only from allowed_material_refs in the frozen input. Do not rename fields. Do not wrap the JSON in Markdown.\n\n\
                      Frozen stage input JSON:\n{}",
                     request.prompt_input_json
                 ),
@@ -766,7 +766,7 @@ fn build_synthesis_llm_request(
             LlmMessage {
                 role: "user".to_string(),
                 content: format!(
-                    "Synthesize the transcript-analysis candidates into one strict JSON object with stage_io_version, schema_version, stage, synthesis_candidate, limitations, and warning_candidates.\n\nRequired synthesis_candidate shape:\n{{\n  \"summary_text\": \"combined readable summary\",\n  \"cross_video_themes\": [{{ \"theme_text\": \"theme\", \"source_refs\": [\"source_ref_1\"], \"claim_refs\": [], \"evidence_refs\": [] }}],\n  \"common_claims\": [],\n  \"contradictions_across_videos\": []\n}}\n\nThe input wrapper field source_ref_id may be used only for reasoning. Do not copy the key source_ref_id into the output. If you need to cite videos, use source_refs arrays inside synthesis_candidate and only values present in the input. For this slice, keep claim_refs, evidence_refs, and relation_refs as empty arrays because the backend has not exposed allowed claim/evidence/relation ref maps to synthesis output. Do not include backend-owned IDs or keys such as source_ref_id, theme_id, common_claim_id, contradiction_id, claim_id, evidence_id, video_id, section_id, or synthesis_item_id. Do not wrap the JSON in Markdown.\n\nSynthesis input JSON:\n{}",
+                    "Synthesize the transcript-analysis candidates into one strict JSON object with stage_io_version, schema_version, stage, synthesis_candidate, limitations, and warning_candidates.\n\nRequired synthesis_candidate shape:\n{{\n  \"summary_text\": \"combined readable summary\",\n  \"cross_video_themes\": [{{ \"theme_text\": \"theme\", \"source_refs\": [\"source_ref_1\"], \"claim_refs\": [], \"evidence_refs\": [] }}],\n  \"common_claims\": [],\n  \"contradictions_across_videos\": []\n}}\n\nThe input wrapper field source_ref_id may be used only for reasoning. Do not copy the key source_ref_id into the output. Use only source_refs from allowed_refs.source_refs, claim_refs from allowed_refs.claim_refs, and evidence_refs from allowed_refs.evidence_refs. You may use segment_refs, key_point_refs, and quote_refs from allowed_refs only for reasoning over canonical_graph. Do not emit segment_refs, key_point_refs, or quote_refs in the output. Leave claim_refs or evidence_refs empty when no supporting allowed ref exists. Do not include backend-owned IDs or keys such as source_ref_id, theme_id, common_claim_id, contradiction_id, claim_id, evidence_id, video_id, section_id, or synthesis_item_id. Do not wrap the JSON in Markdown.\n\nSynthesis input JSON:\n{}",
                     prompt_input_json
                 ),
             },
@@ -1187,11 +1187,11 @@ fn now_string() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_transcript_analysis_llm_request, cleanup_interrupted_prompt_pack_runs_in_pool,
-        delete_prompt_pack_run_in_pool, list_prompt_pack_runs_in_pool, now_string,
-        synthesis_stage_max_output_token_budget, transcript_analysis_max_output_tokens,
-        transcript_analysis_stage_max_output_token_budget, update_prompt_pack_run_in_pool,
-        PromptPackRunState,
+        build_synthesis_llm_request, build_transcript_analysis_llm_request,
+        cleanup_interrupted_prompt_pack_runs_in_pool, delete_prompt_pack_run_in_pool,
+        list_prompt_pack_runs_in_pool, now_string, synthesis_stage_max_output_token_budget,
+        transcript_analysis_max_output_tokens, transcript_analysis_stage_max_output_token_budget,
+        update_prompt_pack_run_in_pool, PromptPackRunState,
     };
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::dto::{ListPromptPackRunsRequest, PromptPackRunEvent};
@@ -1378,10 +1378,56 @@ mod tests {
         assert!(request.messages[1].content.contains("summary_text"));
         assert!(request.messages[1]
             .content
-            .contains("Do not include backend-owned IDs"));
+            .contains("Do not include backend-owned refs or IDs"));
         assert!(request.messages[1]
             .content
             .contains("\"stage\":\"youtube_summary/transcript_analysis\""));
+    }
+
+    #[test]
+    fn transcript_analysis_llm_request_describes_candidate_indexes_and_forbids_backend_refs() {
+        let request = build_transcript_analysis_llm_request(
+            &TranscriptAnalysisStageExecutionRequest {
+                run_id: 42,
+                stage_run_id: 1001,
+                source_snapshot_id: 501,
+                source_ref_id: "source_ref_1".to_string(),
+                prompt_input_json: "{\"stage\":\"youtube_summary/transcript_analysis\"}"
+                    .to_string(),
+            },
+            None,
+            Some("model".to_string()),
+            Some(1024),
+        );
+        let prompt = &request.messages[1].content;
+
+        assert!(prompt.contains("segment_candidate_index"));
+        assert!(prompt.contains("quote_candidate_index"));
+        assert!(prompt.contains("zero-based"));
+        assert!(prompt.contains("Do not include backend-owned refs or IDs"));
+        assert!(prompt.contains("segment_ref"));
+        assert!(prompt.contains("quote_ref"));
+        assert!(prompt.contains("source_ref_id"));
+    }
+
+    #[test]
+    fn synthesis_llm_request_describes_allowed_refs_and_forbids_direct_intermediate_refs() {
+        let request = build_synthesis_llm_request(
+            42,
+            2001,
+            "{\"allowed_refs\":{}}".to_string(),
+            None,
+            Some("model".to_string()),
+            Some(1024),
+        );
+        let prompt = &request.messages[1].content;
+
+        assert!(prompt.contains("allowed_refs.source_refs"));
+        assert!(prompt.contains("allowed_refs.claim_refs"));
+        assert!(prompt.contains("allowed_refs.evidence_refs"));
+        assert!(prompt.contains("Do not emit segment_refs"));
+        assert!(prompt.contains("key_point_refs"));
+        assert!(prompt.contains("quote_refs"));
     }
 
     #[test]
