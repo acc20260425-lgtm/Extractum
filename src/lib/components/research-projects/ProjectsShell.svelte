@@ -280,6 +280,7 @@
           onSelectedSourceIdChange={(id) => (selectedSourceId = id)}
           onOpenConnectLibrary={openConnectLibrary}
           onRefreshProjectRuns={onRefreshProjectRuns}
+          onRemoveSource={onRemoveProjectSource}
         />
       {/if}
     </div>

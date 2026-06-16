@@ -24,6 +24,7 @@
     onSelectedSourceIdChange,
     onOpenConnectLibrary,
     onRefreshProjectRuns,
+    onRemoveSource,
   }: {
     project: ResearchProjectView | null;
     projectSourceLinks: ProjectSourceLinkView[];
@@ -34,6 +35,7 @@
     onSelectedSourceIdChange: (sourceId: string | null) => void;
     onOpenConnectLibrary: () => void;
     onRefreshProjectRuns: () => void | Promise<void>;
+    onRemoveSource: (sourceId: number) => void | Promise<void>;
   } = $props();
 
   let activeTab = $state("sources");
@@ -86,6 +88,7 @@
         {selectedSourceId}
         {onSelectedSourceIdChange}
         {onOpenConnectLibrary}
+        {onRemoveSource}
       />
     </ExtractumTabsContent>
     <ExtractumTabsContent value="evidence">

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Library } from "@lucide/svelte";
+  import { Library, RefreshCw, Download, Trash2, X } from "@lucide/svelte";
   import {
     ExtractumButton,
     ExtractumDataGrid,
@@ -26,6 +26,7 @@
     selectedSourceId,
     onSelectedSourceIdChange,
     onOpenConnectLibrary,
+    onRemoveSource,
   }: {
     project: ResearchProjectView | null;
     projectSourceLinks: ProjectSourceLinkView[];
@@ -33,6 +34,7 @@
     selectedSourceId: string | null;
     onSelectedSourceIdChange: (sourceId: string | null) => void;
     onOpenConnectLibrary: () => void;
+    onRemoveSource: (sourceId: number) => void | Promise<void>;
   } = $props();
 
   const columns = [
@@ -59,14 +61,58 @@
         };
       }),
   );
+
+  let selectedRow = $derived(
+    rows.find((row) => row.id === selectedSourceId) ?? null
+  );
+
+  async function handleRemoveSelected() {
+    if (!selectedRow) return;
+    if (confirm(`Are you sure you want to remove "${selectedRow.title}" from this project?`)) {
+      await onRemoveSource(selectedRow.sourceNumericId);
+      onSelectedSourceIdChange(null);
+    }
+  }
 </script>
 
 <section class="sources-tab">
   <header class="sources-toolbar">
-    <ExtractumButton data-ui-action="connect-library" onclick={onOpenConnectLibrary}>
-      <Library size={14} aria-hidden="true" />
-      Connect from Library
-    </ExtractumButton>
+    {#if selectedSourceId && selectedRow}
+      <div class="contextual-action-bar">
+        <div class="selection-info">
+          <span class="selection-count">1</span>
+          <span>selected source</span>
+        </div>
+        <div class="action-buttons">
+          <ExtractumButton variant="secondary" disabled={true} title="Sync selected source (not implemented)">
+            <RefreshCw size={12} aria-hidden="true" />
+            Sync
+          </ExtractumButton>
+          <ExtractumButton variant="secondary" disabled={true} title="Export selected source (not implemented)">
+            <Download size={12} aria-hidden="true" />
+            Export
+          </ExtractumButton>
+          <ExtractumButton variant="destructive" onclick={handleRemoveSelected}>
+            <Trash2 size={12} aria-hidden="true" />
+            Remove
+          </ExtractumButton>
+          <button class="clear-selection-btn" onclick={() => onSelectedSourceIdChange(null)} aria-label="Clear selection">
+            <X size={14} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+    {:else}
+      <div class="global-action-bar">
+        <ExtractumButton variant="outline" disabled={true} title="Sync all sources (not implemented)">
+          <RefreshCw size={12} aria-hidden="true" />
+          Sync all
+        </ExtractumButton>
+        <ExtractumButton data-ui-action="connect-library" onclick={onOpenConnectLibrary}>
+          <Library size={14} aria-hidden="true" />
+          Connect from Library
+        </ExtractumButton>
+      </div>
+    {/if}
   </header>
 
   <ProjectSourceSummary
@@ -104,8 +150,106 @@
   .sources-toolbar {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
     gap: 12px;
+    min-height: 44px;
+  }
+
+  .contextual-action-bar,
+  .global-action-bar {
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
+
+  .global-action-bar {
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .contextual-action-bar {
+    justify-content: space-between;
+    background: color-mix(in srgb, var(--extractum-primary) 8%, var(--extractum-surface-subtle));
+    border: 1px solid color-mix(in srgb, var(--extractum-primary) 15%, var(--extractum-border));
+    border-radius: var(--extractum-radius);
+    padding: 6px 12px;
+    animation: slideIn 0.15s ease-out;
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .selection-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--extractum-text);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .selection-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--extractum-primary);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .action-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  :global(.action-buttons .extractum-button) {
+    min-height: 28px !important;
+    height: 28px !important;
+    padding: 0 10px !important;
+    font-size: 11px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+  }
+
+  .clear-selection-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    color: var(--extractum-muted);
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+    padding: 0;
+  }
+
+  .clear-selection-btn:hover {
+    background: color-mix(in srgb, var(--extractum-border) 40%, transparent);
+    color: var(--extractum-text);
+  }
+
+  .clear-selection-btn :global(svg) {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    display: block;
   }
 
   .sources-grid-region {
