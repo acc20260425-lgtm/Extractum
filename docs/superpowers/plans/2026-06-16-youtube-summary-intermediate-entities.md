@@ -1758,7 +1758,7 @@ git commit -m "feat: quarantine invalid youtube synthesis refs"
 **Files:**
 - Modify: `src-tauri/src/prompt_packs/result_builder.rs`
 
-- [ ] **Step 1: Add failing result builder tests**
+- [x] **Step 1: Add failing result builder tests**
 
 In `result_builder.rs` tests, add:
 
@@ -1880,7 +1880,7 @@ async fn insert_intermediate_entities_artifact(
 }
 ```
 
-- [ ] **Step 2: Run result builder tests to verify they fail**
+- [x] **Step 2: Run result builder tests to verify they fail**
 
 Run:
 
@@ -1890,7 +1890,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib prompt_packs::result_build
 
 Expected: FAIL because result builder ignores graph artifacts.
 
-- [ ] **Step 3: Implement graph preference**
+- [x] **Step 3: Implement graph preference**
 
 In `result_builder.rs`, add helper:
 
@@ -1981,7 +1981,7 @@ push_quality_flag(
 );
 ```
 
-- [ ] **Step 4: Run result builder tests**
+- [x] **Step 4: Run result builder tests**
 
 Run:
 
@@ -1991,7 +1991,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib prompt_packs::result_build
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add src-tauri\src\prompt_packs\result_builder.rs

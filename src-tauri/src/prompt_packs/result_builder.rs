@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use sqlx::SqlitePool;
 
@@ -28,6 +28,11 @@ pub(crate) async fn build_youtube_summary_canonical_result(
     .await
     .map_err(AppError::database)?;
 
+    let mut limitations = build_base_limitations(pool, run_id).await?;
+    let mut quality_flags = build_base_quality_flags(pool, run_id).await?;
+    let graph_outcome = load_complete_intermediate_graph_for_result(pool, run_id).await?;
+    let use_graph_entities = matches!(graph_outcome, GraphLoadOutcome::Complete(_));
+
     let mut source_refs = Vec::new();
     let mut videos = Vec::new();
     let mut claims = Vec::new();
@@ -52,33 +57,61 @@ pub(crate) async fn build_youtube_summary_canonical_result(
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or("")
         }));
-        if let Some(candidate_claims) = parsed
-            .get("claim_candidates")
-            .and_then(|value| value.as_array())
-        {
-            for candidate in candidate_claims {
-                claims.push(serde_json::json!({
-                    "claim_id": format!("claim_{}", claims.len() + 1),
-                    "source_ref_id": source_ref_id,
-                    "text": candidate.get("text").and_then(serde_json::Value::as_str).unwrap_or("")
-                }));
+        if !use_graph_entities {
+            if let Some(candidate_claims) = parsed
+                .get("claim_candidates")
+                .and_then(|value| value.as_array())
+            {
+                for candidate in candidate_claims {
+                    claims.push(serde_json::json!({
+                        "claim_id": format!("claim_{}", claims.len() + 1),
+                        "source_ref_id": source_ref_id,
+                        "text": candidate.get("text").and_then(serde_json::Value::as_str).unwrap_or("")
+                    }));
+                }
             }
-        }
-        if let Some(candidate_evidence) = parsed
-            .get("evidence_fragment_candidates")
-            .and_then(|value| value.as_array())
-        {
-            for candidate in candidate_evidence {
-                evidence.push(serde_json::json!({
-                    "evidence_id": format!("evidence_{}", evidence.len() + 1),
-                    "source_ref_id": source_ref_id,
-                    "text": candidate.get("text").and_then(serde_json::Value::as_str).unwrap_or("")
-                }));
+            if let Some(candidate_evidence) = parsed
+                .get("evidence_fragment_candidates")
+                .and_then(|value| value.as_array())
+            {
+                for candidate in candidate_evidence {
+                    evidence.push(serde_json::json!({
+                        "evidence_id": format!("evidence_{}", evidence.len() + 1),
+                        "source_ref_id": source_ref_id,
+                        "text": candidate.get("text").and_then(serde_json::Value::as_str).unwrap_or("")
+                    }));
+                }
             }
         }
     }
 
-    if evidence.is_empty() && !claims.is_empty() {
+    match graph_outcome {
+        GraphLoadOutcome::Complete(graph) => {
+            claims = graph
+                .get("claims")
+                .and_then(serde_json::Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            evidence = graph
+                .get("evidence")
+                .and_then(serde_json::Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+        }
+        GraphLoadOutcome::PartialGraph => {
+            limitations.push(
+                "intermediate entity graph artifacts were incomplete, so claims and evidence were assembled through the legacy parsed-output path.".to_string(),
+            );
+            push_quality_flag(
+                &mut quality_flags,
+                "intermediate_entities_legacy_fallback",
+                "warning",
+            );
+        }
+        GraphLoadOutcome::NoGraph => {}
+    }
+
+    if !use_graph_entities && evidence.is_empty() && !claims.is_empty() {
         evidence.push(serde_json::json!({
             "evidence_id": "evidence_1",
             "claim_id": "claim_1",
@@ -101,8 +134,6 @@ pub(crate) async fn build_youtube_summary_canonical_result(
     } else {
         serde_json::Value::Null
     };
-    let mut limitations = build_base_limitations(pool, run_id).await?;
-    let mut quality_flags = build_base_quality_flags(pool, run_id).await?;
     match (
         videos.len(),
         canonical_synthesis.is_null(),
@@ -178,6 +209,163 @@ pub(crate) async fn build_youtube_summary_canonical_result(
         "quality_flags": quality_flags,
         "audit_refs": []
     }))
+}
+
+enum GraphLoadOutcome {
+    Complete(serde_json::Value),
+    PartialGraph,
+    NoGraph,
+}
+
+struct IntermediateGraphRow {
+    source_snapshot_id: i64,
+    source_ref_id: String,
+    content_zstd: Vec<u8>,
+}
+
+async fn load_complete_intermediate_graph_for_result(
+    pool: &SqlitePool,
+    run_id: i64,
+) -> AppResult<GraphLoadOutcome> {
+    let expected_sources = sqlx::query_as::<_, (i64, String)>(
+        "SELECT snapshots.id, snapshots.source_ref_id
+         FROM prompt_pack_stage_runs stages
+         JOIN prompt_pack_run_source_snapshots snapshots
+           ON snapshots.id = stages.source_snapshot_id
+          AND snapshots.run_id = stages.run_id
+         WHERE stages.run_id = ?
+           AND stages.stage_name = 'youtube_summary/transcript_analysis'
+           AND stages.stage_status = 'succeeded'
+         ORDER BY snapshots.id ASC",
+    )
+    .bind(run_id)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    let graph_rows = load_intermediate_graph_rows(pool, run_id).await?;
+    if graph_rows.is_empty() {
+        return Ok(GraphLoadOutcome::NoGraph);
+    }
+    let graph_row_sources = graph_rows
+        .iter()
+        .map(|row| (row.source_snapshot_id, row.source_ref_id.clone()))
+        .collect::<Vec<_>>();
+    if graph_row_sources != expected_sources {
+        return Ok(GraphLoadOutcome::PartialGraph);
+    }
+    let merged = merge_result_graph_rows(graph_rows)?;
+    let merged_sources = graph_source_keys(&merged)?;
+    if merged_sources != expected_sources {
+        return Ok(GraphLoadOutcome::PartialGraph);
+    }
+    Ok(GraphLoadOutcome::Complete(merged))
+}
+
+async fn load_intermediate_graph_rows(
+    pool: &SqlitePool,
+    run_id: i64,
+) -> AppResult<Vec<IntermediateGraphRow>> {
+    sqlx::query_as::<_, (i64, String, Vec<u8>)>(
+        "SELECT snapshots.id, snapshots.source_ref_id, artifacts.content_zstd
+         FROM prompt_pack_run_source_snapshots snapshots
+         JOIN prompt_pack_stage_runs stages
+           ON stages.run_id = snapshots.run_id
+          AND stages.source_snapshot_id = snapshots.id
+          AND stages.stage_name = 'youtube_summary/transcript_analysis'
+          AND stages.stage_status = 'succeeded'
+         JOIN prompt_pack_stage_artifacts artifacts
+           ON artifacts.stage_run_id = stages.id
+          AND artifacts.artifact_kind = 'intermediate_entities'
+          AND artifacts.id = (
+              SELECT latest.id
+              FROM prompt_pack_stage_artifacts latest
+              WHERE latest.stage_run_id = stages.id
+                AND latest.artifact_kind = 'intermediate_entities'
+              ORDER BY latest.attempt_number DESC, latest.artifact_index DESC, latest.id DESC
+              LIMIT 1
+          )
+         WHERE snapshots.run_id = ?
+         ORDER BY snapshots.id ASC",
+    )
+    .bind(run_id)
+    .fetch_all(pool)
+    .await
+    .map(|rows| {
+        rows.into_iter()
+            .map(
+                |(source_snapshot_id, source_ref_id, content_zstd)| IntermediateGraphRow {
+                    source_snapshot_id,
+                    source_ref_id,
+                    content_zstd,
+                },
+            )
+            .collect()
+    })
+    .map_err(AppError::database)
+}
+
+fn merge_result_graph_rows(rows: Vec<IntermediateGraphRow>) -> AppResult<serde_json::Value> {
+    let mut merged = serde_json::json!({
+        "sources": [],
+        "claims": [],
+        "evidence": []
+    });
+    for row in rows {
+        let text = decompress_text(&row.content_zstd).map_err(AppError::internal)?;
+        let graph: serde_json::Value = serde_json::from_str(&text)
+            .map_err(|error| AppError::internal(format!("parse intermediate entities: {error}")))?;
+        append_graph_array(&mut merged, &graph, "sources")?;
+        append_graph_array(&mut merged, &graph, "claims")?;
+        append_graph_array(&mut merged, &graph, "evidence")?;
+    }
+    Ok(merged)
+}
+
+fn append_graph_array(
+    merged: &mut serde_json::Value,
+    graph: &serde_json::Value,
+    key: &str,
+) -> AppResult<()> {
+    let graph_items = graph
+        .get(key)
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| AppError::internal(format!("intermediate graph {key} must be an array")))?;
+    let merged_items = merged
+        .get_mut(key)
+        .and_then(serde_json::Value::as_array_mut)
+        .ok_or_else(|| AppError::internal(format!("merged graph {key} missing")))?;
+    merged_items.extend(graph_items.iter().cloned());
+    Ok(())
+}
+
+fn graph_source_keys(graph: &serde_json::Value) -> AppResult<Vec<(i64, String)>> {
+    let sources = graph
+        .get("sources")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| AppError::internal("intermediate graph sources must be an array"))?;
+    let mut seen = HashSet::new();
+    let mut keys = Vec::new();
+    for source in sources {
+        let source_snapshot_id = source
+            .get("source_snapshot_id")
+            .and_then(serde_json::Value::as_i64)
+            .ok_or_else(|| {
+                AppError::internal("intermediate graph source missing source_snapshot_id")
+            })?;
+        let source_ref_id = source
+            .get("source_ref_id")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| AppError::internal("intermediate graph source missing source_ref_id"))?
+            .to_string();
+        if !seen.insert((source_snapshot_id, source_ref_id.clone())) {
+            return Err(AppError::internal(format!(
+                "duplicate intermediate graph source ({source_snapshot_id}, {source_ref_id})"
+            )));
+        }
+        keys.push((source_snapshot_id, source_ref_id));
+    }
+    Ok(keys)
 }
 
 async fn load_latest_parsed_output(
@@ -471,6 +659,7 @@ fn extend_unique_source_refs_from_video_refs(
 mod tests {
     use super::build_youtube_summary_canonical_result;
     use crate::compression::compress_text;
+    use crate::error::AppResult;
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
 
@@ -641,6 +830,65 @@ mod tests {
             &result,
             "synthesis_skipped_insufficient_successes"
         ));
+    }
+
+    #[tokio::test]
+    async fn build_canonical_result_uses_intermediate_graph_claims_and_evidence() {
+        let pool = test_pool_with_successful_stage_artifacts().await;
+        insert_intermediate_entities_artifact(
+            &pool,
+            42,
+            1001,
+            501,
+            "source_ref_1",
+            "Graph claim",
+            "Graph evidence",
+            1,
+        )
+        .await
+        .expect("graph artifact");
+
+        let result = build_youtube_summary_canonical_result(&pool, 42)
+            .await
+            .expect("canonical result");
+
+        assert_eq!(result["claims"][0]["text"], "Graph claim");
+        assert_eq!(result["evidence"][0]["text"], "Graph evidence");
+    }
+
+    #[tokio::test]
+    async fn build_canonical_result_mixed_graph_availability_falls_back_with_quality_flag() {
+        let pool = test_pool_with_two_successful_stage_artifacts().await;
+        insert_intermediate_entities_artifact(
+            &pool,
+            42,
+            1001,
+            501,
+            "source_ref_1",
+            "Graph first",
+            "Graph evidence first",
+            1,
+        )
+        .await
+        .expect("graph artifact");
+
+        let result = build_youtube_summary_canonical_result(&pool, 42)
+            .await
+            .expect("canonical result");
+
+        assert_eq!(result["claims"][0]["text"], "Claim");
+        assert!(has_quality_flag(
+            &result,
+            "intermediate_entities_legacy_fallback"
+        ));
+        assert!(result["limitations"]
+            .as_array()
+            .expect("limitations")
+            .iter()
+            .any(|value| value
+                .as_str()
+                .unwrap_or("")
+                .contains("intermediate entity graph artifacts were incomplete")));
     }
 
     fn has_quality_flag(result: &serde_json::Value, flag: &str) -> bool {
@@ -845,6 +1093,67 @@ mod tests {
         .execute(pool)
         .await?;
         Ok(())
+    }
+
+    async fn insert_intermediate_entities_artifact(
+        pool: &sqlx::SqlitePool,
+        run_id: i64,
+        stage_run_id: i64,
+        source_snapshot_id: i64,
+        source_ref_id: &str,
+        claim: &str,
+        evidence: &str,
+        attempt_number: i64,
+    ) -> AppResult<()> {
+        let claim_ref = format!("{source_ref_id}_claim_1");
+        let evidence_ref = format!("{source_ref_id}_evidence_1");
+        let graph = serde_json::json!({
+            "stage_io_version": "1.0",
+            "schema_version": "1.0",
+            "graph_kind": "youtube_summary_intermediate_entities",
+            "run_id": run_id,
+            "attempt_number": attempt_number,
+            "sources": [{
+                "source_ref_id": source_ref_id,
+                "source_snapshot_id": source_snapshot_id,
+                "title": null
+            }],
+            "segments": [],
+            "key_points": [],
+            "quotes": [],
+            "claims": [{
+                "claim_id": claim_ref.clone(),
+                "source_ref_id": source_ref_id,
+                "text": claim,
+                "material_refs": []
+            }],
+            "evidence": [{
+                "evidence_id": evidence_ref.clone(),
+                "source_ref_id": source_ref_id,
+                "text": evidence,
+                "material_refs": [],
+                "quote_ref": null
+            }],
+            "warnings": [],
+            "allowed_refs": {
+                "source_refs": [source_ref_id],
+                "segment_refs": [],
+                "key_point_refs": [],
+                "quote_refs": [],
+                "claim_refs": [claim_ref],
+                "evidence_refs": [evidence_ref]
+            }
+        });
+        crate::prompt_packs::stage_io::insert_stage_artifact_in_pool(
+            pool,
+            run_id,
+            stage_run_id,
+            "intermediate_entities",
+            attempt_number,
+            5,
+            &graph.to_string(),
+        )
+        .await
     }
 
     async fn test_pool_with_two_successful_stage_artifacts() -> sqlx::SqlitePool {
