@@ -112,6 +112,33 @@ pub(crate) fn validate_youtube_summary_canonical_result(
     );
     validate_synthesis_item_ids(canonical, &mut findings);
 
+    let source_ids = collect_string_ids(
+        canonical.get("source_refs").and_then(Value::as_array),
+        "source_ref_id",
+    );
+    let video_ids = collect_string_ids(
+        canonical
+            .pointer("/outputs/pack_data/youtube_summary/videos")
+            .and_then(Value::as_array),
+        "video_id",
+    );
+    let claim_ids = collect_string_ids(canonical.get("claims").and_then(Value::as_array), "claim_id");
+    let evidence_ids = collect_string_ids(
+        canonical.get("evidence").and_then(Value::as_array),
+        "evidence_id",
+    );
+
+    validate_result_refs(
+        canonical,
+        &source_ids,
+        &video_ids,
+        &claim_ids,
+        &evidence_ids,
+        &mut findings,
+    );
+    validate_youtube_pack_rules(canonical, context, &mut findings);
+    add_advisory_quality_flag_findings(canonical, &mut findings);
+
     findings
 }
 
@@ -273,6 +300,277 @@ fn validate_synthesis_item_ids(
                     Some(path),
                 )),
             }
+        }
+    }
+}
+
+fn collect_string_ids(items: Option<&Vec<Value>>, key: &str) -> HashSet<String> {
+    items
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item.get(key).and_then(Value::as_str))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn validate_result_refs(
+    canonical: &Value,
+    source_ids: &HashSet<String>,
+    video_ids: &HashSet<String>,
+    claim_ids: &HashSet<String>,
+    evidence_ids: &HashSet<String>,
+    findings: &mut Vec<PromptPackResultValidationFinding>,
+) {
+    validate_object_ref_field(
+        canonical
+            .pointer("/outputs/pack_data/youtube_summary/videos")
+            .and_then(Value::as_array),
+        "source_ref_id",
+        source_ids,
+        "$.outputs.pack_data.youtube_summary.videos",
+        findings,
+    );
+    validate_nullable_object_ref_field(
+        canonical.get("claims").and_then(Value::as_array),
+        "source_ref_id",
+        source_ids,
+        "$.claims",
+        findings,
+    );
+    validate_nullable_object_ref_field(
+        canonical.get("evidence").and_then(Value::as_array),
+        "source_ref_id",
+        source_ids,
+        "$.evidence",
+        findings,
+    );
+    validate_nullable_object_ref_field(
+        canonical.get("evidence").and_then(Value::as_array),
+        "claim_id",
+        claim_ids,
+        "$.evidence",
+        findings,
+    );
+
+    let Some(synthesis) = canonical
+        .pointer("/outputs/pack_data/youtube_summary/synthesis")
+        .and_then(Value::as_object)
+    else {
+        return;
+    };
+
+    validate_ref_array(
+        synthesis.get("source_refs"),
+        source_ids,
+        "$.outputs.pack_data.youtube_summary.synthesis.source_refs",
+        findings,
+    );
+    validate_ref_array(
+        synthesis.get("claim_refs"),
+        claim_ids,
+        "$.outputs.pack_data.youtube_summary.synthesis.claim_refs",
+        findings,
+    );
+    validate_ref_array(
+        synthesis.get("evidence_refs"),
+        evidence_ids,
+        "$.outputs.pack_data.youtube_summary.synthesis.evidence_refs",
+        findings,
+    );
+
+    for array_key in [
+        "cross_video_themes",
+        "common_claims",
+        "contradictions_across_videos",
+    ] {
+        let Some(items) = synthesis.get(array_key).and_then(Value::as_array) else {
+            continue;
+        };
+        for (index, item) in items.iter().enumerate() {
+            let base = format!("$.outputs.pack_data.youtube_summary.synthesis.{array_key}[{index}]");
+            validate_ref_array(
+                item.get("source_refs"),
+                source_ids,
+                &format!("{base}.source_refs"),
+                findings,
+            );
+            validate_ref_array(
+                item.get("claim_refs"),
+                claim_ids,
+                &format!("{base}.claim_refs"),
+                findings,
+            );
+            validate_ref_array(
+                item.get("evidence_refs"),
+                evidence_ids,
+                &format!("{base}.evidence_refs"),
+                findings,
+            );
+            validate_ref_array(
+                item.get("video_refs"),
+                video_ids,
+                &format!("{base}.video_refs"),
+                findings,
+            );
+        }
+    }
+}
+
+fn validate_object_ref_field(
+    items: Option<&Vec<Value>>,
+    field: &str,
+    allowed: &HashSet<String>,
+    base_path: &str,
+    findings: &mut Vec<PromptPackResultValidationFinding>,
+) {
+    for (index, item) in items.into_iter().flatten().enumerate() {
+        let path = format!("{base_path}[{index}].{field}");
+        match item.get(field).and_then(Value::as_str).map(str::trim) {
+            Some(value) if allowed.contains(value) => {}
+            Some(value) => findings.push(finding(
+                "error",
+                "RV-RESULT-002",
+                format!("unknown {field} `{value}`"),
+                Some(path),
+            )),
+            None => findings.push(finding(
+                "error",
+                "RV-RESULT-004",
+                format!("{field} must be a non-empty string"),
+                Some(path),
+            )),
+        }
+    }
+}
+
+fn validate_nullable_object_ref_field(
+    items: Option<&Vec<Value>>,
+    field: &str,
+    allowed: &HashSet<String>,
+    base_path: &str,
+    findings: &mut Vec<PromptPackResultValidationFinding>,
+) {
+    for (index, item) in items.into_iter().flatten().enumerate() {
+        let Some(value) = item.get(field) else {
+            continue;
+        };
+        if value.is_null() {
+            continue;
+        }
+        let path = format!("{base_path}[{index}].{field}");
+        match value.as_str().map(str::trim) {
+            Some(ref_id) if allowed.contains(ref_id) => {}
+            Some(ref_id) => findings.push(finding(
+                "error",
+                "RV-RESULT-002",
+                format!("unknown {field} `{ref_id}`"),
+                Some(path),
+            )),
+            None => findings.push(finding(
+                "error",
+                "RV-RESULT-003",
+                format!("{field} must be a string when present"),
+                Some(path),
+            )),
+        }
+    }
+}
+
+fn validate_ref_array(
+    value: Option<&Value>,
+    allowed: &HashSet<String>,
+    base_path: &str,
+    findings: &mut Vec<PromptPackResultValidationFinding>,
+) {
+    for (index, item) in value.and_then(Value::as_array).into_iter().flatten().enumerate() {
+        // Applies to top-level synthesis refs and nested synthesis item refs,
+        // including video_refs/source_refs/claim_refs/evidence_refs. Non-string
+        // ref items are not detected in this result-validation MVP; raw
+        // synthesis-output validation owns that before canonical assembly.
+        let Some(ref_id) = item.as_str() else {
+            continue;
+        };
+        if !allowed.contains(ref_id) {
+            findings.push(finding(
+                "error",
+                "RV-RESULT-002",
+                format!("unknown ref `{ref_id}`"),
+                Some(format!("{base_path}[{index}]")),
+            ));
+        }
+    }
+}
+
+fn validate_youtube_pack_rules(
+    canonical: &Value,
+    context: &YoutubeSummaryResultValidationContext,
+    findings: &mut Vec<PromptPackResultValidationFinding>,
+) {
+    let videos = canonical
+        .pointer("/outputs/pack_data/youtube_summary/videos")
+        .and_then(Value::as_array);
+    if context.terminal_status == "complete"
+        && context.evidence_mode != "narrative_only"
+        && videos.is_some_and(Vec::is_empty)
+    {
+        findings.push(finding(
+            "error",
+            "VR-YS-002",
+            "complete YouTube Summary result must include videos outside narrative_only evidence mode",
+            Some("$.outputs.pack_data.youtube_summary.videos".to_string()),
+        ));
+    }
+
+    let synthesis = canonical.pointer("/outputs/pack_data/youtube_summary/synthesis");
+    if videos.is_some_and(|items| items.len() == 1) && synthesis.is_some_and(Value::is_object) {
+        findings.push(finding(
+            "error",
+            "VR-YS-005",
+            "single-video YouTube Summary result must not include cross-video synthesis object",
+            Some("$.outputs.pack_data.youtube_summary.synthesis".to_string()),
+        ));
+    }
+}
+
+fn add_advisory_quality_flag_findings(
+    canonical: &Value,
+    findings: &mut Vec<PromptPackResultValidationFinding>,
+) {
+    let Some(flags) = canonical.get("quality_flags").and_then(Value::as_array) else {
+        return;
+    };
+    for (index, item) in flags.iter().enumerate() {
+        let Some(flag) = item.get("flag").and_then(Value::as_str) else {
+            continue;
+        };
+        let advisory = match flag {
+            "intermediate_entities_legacy_fallback" => Some((
+                "warning",
+                "Canonical result used legacy parsed-output assembly for claims/evidence.",
+            )),
+            "synthesis_not_applicable_single_video" => Some((
+                "info",
+                "Synthesis was intentionally skipped for a single-video run.",
+            )),
+            "synthesis_failed" => Some((
+                "warning",
+                "Synthesis failed; result was persisted without cross-video synthesis.",
+            )),
+            "synthesis_skipped_insufficient_successes" => Some((
+                "warning",
+                "Synthesis was skipped because fewer than two transcript stages succeeded.",
+            )),
+            _ => None,
+        };
+        if let Some((severity, message)) = advisory {
+            findings.push(finding(
+                severity,
+                "RV-RESULT-005",
+                message,
+                Some(format!("$.quality_flags[{index}]")),
+            ));
         }
     }
 }
@@ -441,6 +739,165 @@ mod tests {
             "RV-RESULT-001",
             "$.outputs.pack_data.youtube_summary.synthesis.common_claims[0].common_claim_id",
         );
+    }
+
+    #[test]
+    fn video_with_unknown_source_ref_returns_error() {
+        let mut canonical = valid_canonical_result();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["videos"][0]["source_ref_id"] =
+            serde_json::json!("source_ref_missing");
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "RV-RESULT-002",
+            "$.outputs.pack_data.youtube_summary.videos[0].source_ref_id",
+        );
+    }
+
+    #[test]
+    fn evidence_with_unknown_claim_id_returns_error() {
+        let mut canonical = valid_canonical_result();
+        canonical["evidence"][0]["claim_id"] = serde_json::json!("claim_missing");
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(&findings, "RV-RESULT-002", "$.evidence[0].claim_id");
+    }
+
+    #[test]
+    fn synthesis_top_level_unknown_claim_ref_returns_error() {
+        let mut canonical = valid_canonical_result_with_synthesis();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["claim_refs"] =
+            serde_json::json!(["claim_missing"]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "RV-RESULT-002",
+            "$.outputs.pack_data.youtube_summary.synthesis.claim_refs[0]",
+        );
+    }
+
+    #[test]
+    fn nested_synthesis_unknown_claim_ref_returns_error_when_top_level_union_empty() {
+        let mut canonical = valid_canonical_result_with_synthesis();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["claim_refs"] =
+            serde_json::json!([]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"][0]
+            ["claim_refs"] = serde_json::json!(["claim_999"]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "RV-RESULT-002",
+            "$.outputs.pack_data.youtube_summary.synthesis.cross_video_themes[0].claim_refs[0]",
+        );
+    }
+
+    #[test]
+    fn nested_synthesis_unknown_video_ref_returns_error() {
+        let mut canonical = valid_canonical_result_with_synthesis();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"][0]
+            ["video_refs"] = serde_json::json!(["video_missing"]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "RV-RESULT-002",
+            "$.outputs.pack_data.youtube_summary.synthesis.cross_video_themes[0].video_refs[0]",
+        );
+    }
+
+    #[test]
+    fn complete_standard_result_with_empty_videos_returns_error() {
+        let mut canonical = valid_canonical_result();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["videos"] = serde_json::json!([]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "VR-YS-002",
+            "$.outputs.pack_data.youtube_summary.videos",
+        );
+    }
+
+    #[test]
+    fn complete_narrative_only_result_allows_empty_videos() {
+        let mut canonical = valid_canonical_result();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["videos"] = serde_json::json!([]);
+
+        let findings = validate_youtube_summary_canonical_result(
+            &canonical,
+            &context("complete", "narrative_only"),
+        );
+
+        assert!(
+            findings.iter().all(|finding| finding.code != "VR-YS-002"),
+            "{findings:#?}"
+        );
+    }
+
+    #[test]
+    fn single_video_with_synthesis_object_returns_error() {
+        let mut canonical = valid_canonical_result_with_synthesis();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["videos"] = serde_json::json!([
+            canonical["outputs"]["pack_data"]["youtube_summary"]["videos"][0].clone()
+        ]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "VR-YS-005",
+            "$.outputs.pack_data.youtube_summary.synthesis",
+        );
+    }
+
+    #[test]
+    fn known_quality_flag_emits_advisory_finding_without_error() {
+        let mut canonical = valid_canonical_result();
+        canonical["quality_flags"] = serde_json::json!([
+            { "flag": "intermediate_entities_legacy_fallback", "severity": "warning" }
+        ]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert!(!has_error(&findings), "{findings:#?}");
+        assert!(
+            findings.iter().any(|finding| {
+                finding.severity == "warning"
+                    && finding.code == "RV-RESULT-005"
+                    && finding.object_path.as_deref() == Some("$.quality_flags[0]")
+            }),
+            "{findings:#?}"
+        );
+    }
+
+    #[test]
+    fn unknown_quality_flag_is_ignored_by_mvp_validator() {
+        let mut canonical = valid_canonical_result();
+        canonical["quality_flags"] = serde_json::json!([
+            { "flag": "custom_future_flag", "severity": "warning" }
+        ]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert!(!findings.iter().any(|finding| finding.code == "RV-RESULT-005"));
     }
 
     fn context(terminal_status: &str, evidence_mode: &str) -> YoutubeSummaryResultValidationContext {

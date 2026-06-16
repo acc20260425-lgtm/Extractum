@@ -720,7 +720,7 @@ canonical result does not expose a top-level relation registry such as
 `claim_relations`, so known-relation validation and derived-union consistency
 for `relation_refs` are explicitly out of scope for this task.
 
-- [ ] **Step 1: Add reference, pack-rule, and advisory tests**
+- [x] **Step 1: Add reference, pack-rule, and advisory tests**
 
 Add these tests:
 
@@ -902,7 +902,7 @@ fn unknown_quality_flag_is_ignored_by_mvp_validator() {
 }
 ```
 
-- [ ] **Step 2: Run the focused tests and confirm expected failures**
+- [x] **Step 2: Run the focused tests and confirm expected failures**
 
 Run:
 
@@ -912,7 +912,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib result_validation
 
 Expected: the newly added reference, pack-rule, and advisory tests fail.
 
-- [ ] **Step 3: Implement reference, pack-rule, and advisory checks**
+- [x] **Step 3: Implement reference, pack-rule, and advisory checks**
 
 Extend `validate_youtube_summary_canonical_result` after identity validation:
 
@@ -1193,7 +1193,7 @@ fn add_advisory_quality_flag_findings(
 }
 ```
 
-- [ ] **Step 4: Run validator tests**
+- [x] **Step 4: Run validator tests**
 
 Run:
 
@@ -1203,7 +1203,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib result_validation
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit reference and advisory validation**
+- [x] **Step 5: Commit reference and advisory validation**
 
 ```powershell
 git add src-tauri\src\prompt_packs\youtube_summary\result_validation.rs
