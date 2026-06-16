@@ -1613,7 +1613,7 @@ git commit -m "refactor: make prompt pack result persistence atomic"
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/result_validation.rs`
 - Modify: `src-tauri/src/prompt_packs/projections.rs` only if helper visibility from Task 4 needs adjustment
 
-- [ ] **Step 1: Add persistence tests**
+- [x] **Step 1: Add persistence tests**
 
 Add these async tests to `result_validation.rs`:
 
@@ -1863,7 +1863,7 @@ async fn count(pool: &sqlx::SqlitePool, table: &str) -> i64 {
 }
 ```
 
-- [ ] **Step 2: Run persistence tests and confirm they fail**
+- [x] **Step 2: Run persistence tests and confirm they fail**
 
 Run:
 
@@ -1873,7 +1873,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib result_validation
 
 Expected: FAIL because `validate_and_persist_final_result_transaction` is not implemented.
 
-- [ ] **Step 3: Implement validation-aware persistence**
+- [x] **Step 3: Implement validation-aware persistence**
 
 Add imports:
 
@@ -2046,7 +2046,7 @@ async fn mark_result_validation_failed_in_transaction(
 }
 ```
 
-- [ ] **Step 4: Run validation persistence tests**
+- [x] **Step 4: Run validation persistence tests**
 
 Run:
 
@@ -2056,7 +2056,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib result_validation
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit validation-aware persistence**
+- [x] **Step 5: Commit validation-aware persistence**
 
 ```powershell
 git add src-tauri\src\prompt_packs\youtube_summary\result_validation.rs src-tauri\src\prompt_packs\projections.rs

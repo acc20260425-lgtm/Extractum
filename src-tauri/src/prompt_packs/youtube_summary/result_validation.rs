@@ -1,6 +1,10 @@
 use std::collections::HashSet;
 
 use serde_json::Value;
+use sqlx::{Sqlite, SqlitePool, Transaction};
+
+use crate::error::{AppError, AppResult};
+use crate::prompt_packs::projections::persist_final_result_in_transaction;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct PromptPackResultValidationFinding {
@@ -590,6 +594,160 @@ fn add_advisory_quality_flag_findings(
     }
 }
 
+pub(crate) async fn validate_and_persist_final_result_transaction(
+    pool: &SqlitePool,
+    run_id: i64,
+    canonical_result: Value,
+    terminal_status: &str,
+) -> AppResult<()> {
+    validate_and_persist_final_result_transaction_internal(
+        pool,
+        run_id,
+        canonical_result,
+        terminal_status,
+        |_| {},
+    )
+    .await
+}
+
+#[cfg(test)]
+pub(crate) async fn validate_and_persist_final_result_transaction_with_result_mutator_for_test<M>(
+    pool: &SqlitePool,
+    run_id: i64,
+    canonical_result: Value,
+    terminal_status: &str,
+    mutate_after_validation: M,
+) -> AppResult<()>
+where
+    M: FnOnce(&mut Value),
+{
+    validate_and_persist_final_result_transaction_internal(
+        pool,
+        run_id,
+        canonical_result,
+        terminal_status,
+        mutate_after_validation,
+    )
+    .await
+}
+
+async fn validate_and_persist_final_result_transaction_internal<M>(
+    pool: &SqlitePool,
+    run_id: i64,
+    mut canonical_result: Value,
+    terminal_status: &str,
+    mutate_after_validation: M,
+) -> AppResult<()>
+where
+    M: FnOnce(&mut Value),
+{
+    let evidence_mode = load_run_evidence_mode(pool, run_id).await?;
+    let context =
+        YoutubeSummaryResultValidationContext::new(run_id, terminal_status, &evidence_mode);
+    let findings = validate_youtube_summary_canonical_result(&canonical_result, &context);
+
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
+    replace_result_level_findings_in_transaction(&mut tx, run_id, &findings).await?;
+
+    if findings.iter().any(|finding| finding.severity == "error") {
+        mark_result_validation_failed_in_transaction(&mut tx, run_id).await?;
+        tx.commit().await.map_err(AppError::database)?;
+        return Err(AppError::validation(
+            "canonical result validation failed; result was not persisted",
+        ));
+    }
+
+    mutate_after_validation(&mut canonical_result);
+    persist_final_result_in_transaction(&mut tx, run_id, &canonical_result, terminal_status)
+        .await?;
+    tx.commit().await.map_err(AppError::database)?;
+    Ok(())
+}
+
+async fn load_run_evidence_mode(pool: &SqlitePool, run_id: i64) -> AppResult<String> {
+    sqlx::query_scalar::<_, String>("SELECT evidence_mode FROM prompt_pack_runs WHERE id = ?")
+        .bind(run_id)
+        .fetch_one(pool)
+        .await
+        .map_err(AppError::database)
+}
+
+async fn replace_result_level_findings_in_transaction(
+    tx: &mut Transaction<'_, Sqlite>,
+    run_id: i64,
+    findings: &[PromptPackResultValidationFinding],
+) -> AppResult<()> {
+    sqlx::query(
+        "DELETE FROM prompt_pack_result_validation_findings
+         WHERE run_id = ? AND stage_run_id IS NULL",
+    )
+    .bind(run_id)
+    .execute(&mut **tx)
+    .await
+    .map_err(AppError::database)?;
+
+    let now = crate::time::now_rfc3339_utc();
+    for finding in findings {
+        sqlx::query(
+            "INSERT INTO prompt_pack_result_validation_findings (
+                run_id, stage_run_id, severity, code, message, object_path, created_at
+             )
+             VALUES (?, NULL, ?, ?, ?, ?, ?)",
+        )
+        .bind(run_id)
+        .bind(&finding.severity)
+        .bind(&finding.code)
+        .bind(&finding.message)
+        .bind(&finding.object_path)
+        .bind(&now)
+        .execute(&mut **tx)
+        .await
+        .map_err(AppError::database)?;
+    }
+
+    Ok(())
+}
+
+async fn mark_result_validation_failed_in_transaction(
+    tx: &mut Transaction<'_, Sqlite>,
+    run_id: i64,
+) -> AppResult<()> {
+    let now = crate::time::now_rfc3339_utc();
+    let message = "Canonical result validation failed; result was not persisted";
+    sqlx::query("DELETE FROM prompt_pack_results WHERE run_id = ?")
+        .bind(run_id)
+        .execute(&mut **tx)
+        .await
+        .map_err(AppError::database)?;
+    sqlx::query(
+        "UPDATE prompt_pack_runs
+         SET run_status = 'failed',
+             result_status = 'failed',
+             latest_message = ?,
+             completed_at = ?,
+             updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(message)
+    .bind(&now)
+    .bind(&now)
+    .bind(run_id)
+    .execute(&mut **tx)
+    .await
+    .map_err(AppError::database)?;
+    sqlx::query(
+        "INSERT INTO prompt_pack_audit_events (run_id, event_kind, message, created_at)
+         VALUES (?, 'terminal_result_validation_failed', ?, ?)",
+    )
+    .bind(run_id)
+    .bind(message)
+    .bind(&now)
+    .execute(&mut **tx)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -920,6 +1078,223 @@ mod tests {
             .any(|finding| finding.code == "RV-RESULT-005"));
     }
 
+    #[tokio::test]
+    async fn validation_persistence_writes_warning_findings_and_persists_result() {
+        let pool = test_pool_with_canonical_result_ready().await;
+        let mut canonical = valid_canonical_result();
+        canonical["quality_flags"] = serde_json::json!([
+            { "flag": "intermediate_entities_legacy_fallback", "severity": "warning" }
+        ]);
+
+        validate_and_persist_final_result_transaction(&pool, 42, canonical, "complete")
+            .await
+            .expect("persist valid result with warning");
+
+        assert_eq!(count(&pool, "prompt_pack_results").await, 1);
+        assert_eq!(count(&pool, "prompt_pack_youtube_videos").await, 1);
+        let finding: (Option<i64>, String, String) = sqlx::query_as(
+            "SELECT stage_run_id, severity, code
+             FROM prompt_pack_result_validation_findings
+             WHERE run_id = 42",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("warning finding");
+        assert_eq!(
+            finding,
+            (None, "warning".to_string(), "RV-RESULT-005".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn validation_persistence_replaces_previous_result_level_findings_on_success() {
+        let pool = test_pool_with_canonical_result_ready().await;
+        let mut first = valid_canonical_result();
+        first["quality_flags"] = serde_json::json!([
+            { "flag": "intermediate_entities_legacy_fallback", "severity": "warning" }
+        ]);
+        validate_and_persist_final_result_transaction(&pool, 42, first, "complete")
+            .await
+            .expect("first persist");
+
+        let mut second = valid_canonical_result();
+        second["quality_flags"] = serde_json::json!([
+            { "flag": "synthesis_not_applicable_single_video", "severity": "info" }
+        ]);
+        validate_and_persist_final_result_transaction(&pool, 42, second, "complete")
+            .await
+            .expect("second persist");
+
+        let findings: Vec<(String, String)> = sqlx::query_as(
+            "SELECT severity, message
+             FROM prompt_pack_result_validation_findings
+             WHERE run_id = 42 AND stage_run_id IS NULL
+             ORDER BY id ASC",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("result findings");
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].0, "info");
+        assert!(findings[0].1.contains("single-video run"));
+    }
+
+    #[tokio::test]
+    async fn validation_error_writes_findings_marks_run_failed_and_skips_result() {
+        let pool = test_pool_with_canonical_result_ready().await;
+        let mut canonical = valid_canonical_result();
+        canonical["pack_id"] = serde_json::json!("other_pack");
+
+        let error = validate_and_persist_final_result_transaction(&pool, 42, canonical, "complete")
+            .await
+            .expect_err("validation failure");
+
+        assert!(
+            error.message.contains("canonical result validation failed"),
+            "{error:?}"
+        );
+        assert_eq!(count(&pool, "prompt_pack_results").await, 0);
+        assert_eq!(
+            count(&pool, "prompt_pack_result_validation_findings").await,
+            1
+        );
+        let run: (String, String) =
+            sqlx::query_as("SELECT run_status, result_status FROM prompt_pack_runs WHERE id = 42")
+                .fetch_one(&pool)
+                .await
+                .expect("run status");
+        assert_eq!(run, ("failed".to_string(), "failed".to_string()));
+        let audit_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM prompt_pack_audit_events
+             WHERE run_id = 42 AND event_kind = 'terminal_result_validation_failed'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("audit count");
+        assert_eq!(audit_count, 1);
+    }
+
+    #[tokio::test]
+    async fn validation_error_keeps_stage_level_findings() {
+        let pool = test_pool_with_canonical_result_ready().await;
+        sqlx::query(
+            "INSERT INTO prompt_pack_stage_runs (
+                id, run_id, stage_name, stage_order, stage_status, created_at, updated_at
+             )
+             VALUES (77, 42, 'youtube_summary/transcript_analysis', 1, 'failed',
+                '2026-06-14T00:00:00Z', '2026-06-14T00:00:00Z')",
+        )
+        .execute(&pool)
+        .await
+        .expect("stage row");
+        sqlx::query(
+            "INSERT INTO prompt_pack_result_validation_findings (
+                run_id, stage_run_id, severity, code, message, object_path, created_at
+             )
+             VALUES (42, 77, 'error', 'VR-STAGE-001', 'stage finding', '$', '2026-06-14T00:00:00Z')",
+        )
+        .execute(&pool)
+        .await
+        .expect("stage finding");
+
+        let mut canonical = valid_canonical_result();
+        canonical["pack_id"] = serde_json::json!("other_pack");
+
+        validate_and_persist_final_result_transaction(&pool, 42, canonical, "complete")
+            .await
+            .expect_err("validation failure");
+
+        let stage_findings: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM prompt_pack_result_validation_findings
+             WHERE run_id = 42 AND stage_run_id = 77",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("stage finding count");
+        let result_findings: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM prompt_pack_result_validation_findings
+             WHERE run_id = 42 AND stage_run_id IS NULL",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("result finding count");
+
+        assert_eq!(stage_findings, 1);
+        assert_eq!(result_findings, 1);
+    }
+
+    #[tokio::test]
+    async fn validation_error_removes_stale_persisted_result_and_projections() {
+        let pool = test_pool_with_canonical_result_ready().await;
+        validate_and_persist_final_result_transaction(
+            &pool,
+            42,
+            valid_canonical_result(),
+            "complete",
+        )
+        .await
+        .expect("initial persist");
+
+        let mut invalid = valid_canonical_result();
+        invalid["claims"][0]["claim_id"] = serde_json::json!("");
+        validate_and_persist_final_result_transaction(&pool, 42, invalid, "complete")
+            .await
+            .expect_err("validation failure");
+
+        assert_eq!(count(&pool, "prompt_pack_results").await, 0);
+        assert_eq!(count(&pool, "prompt_pack_youtube_videos").await, 0);
+    }
+
+    #[tokio::test]
+    async fn validation_wrapper_rolls_back_result_findings_when_persistence_fails_after_validation()
+    {
+        let pool = test_pool_with_canonical_result_ready().await;
+        sqlx::query(
+            "INSERT INTO prompt_pack_result_validation_findings (
+                run_id, stage_run_id, severity, code, message, object_path, created_at
+             )
+             VALUES (42, NULL, 'warning', 'RV-RESULT-005', 'old finding', '$.quality_flags[0]',
+                '2026-06-14T00:00:00Z')",
+        )
+        .execute(&pool)
+        .await
+        .expect("old result finding");
+
+        let mut canonical = valid_canonical_result();
+        canonical["quality_flags"] = serde_json::json!([
+            { "flag": "intermediate_entities_legacy_fallback", "severity": "warning" }
+        ]);
+
+        let error = validate_and_persist_final_result_transaction_with_result_mutator_for_test(
+            &pool,
+            42,
+            canonical,
+            "complete",
+            |canonical| {
+                canonical["source_refs"] = serde_json::json!([
+                    { "source_ref_id": "source_ref_1", "source_snapshot_id": 501, "title": "Video" },
+                    { "source_ref_id": "source_ref_1", "source_snapshot_id": 502, "title": "Duplicate" }
+                ]);
+            },
+        )
+        .await
+        .expect_err("low-level projection persistence should fail");
+
+        assert!(error.message.contains("Database error"), "{error:?}");
+        assert_eq!(count(&pool, "prompt_pack_results").await, 0);
+        let findings: Vec<String> = sqlx::query_scalar(
+            "SELECT message FROM prompt_pack_result_validation_findings
+             WHERE run_id = 42 AND stage_run_id IS NULL
+             ORDER BY id ASC",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("result findings");
+
+        assert_eq!(findings, vec!["old finding".to_string()]);
+    }
+
     fn context(
         terminal_status: &str,
         evidence_mode: &str,
@@ -1042,5 +1417,38 @@ mod tests {
             "source_refs": ["source_ref_1", "source_ref_2"]
         });
         canonical
+    }
+
+    async fn test_pool_with_canonical_result_ready() -> sqlx::SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        crate::migrations::apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
+        crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("seed");
+        sqlx::query(
+            "INSERT INTO prompt_pack_runs (
+                id, pack_version_id, pack_id, pack_version, schema_version,
+                run_status, result_status, output_language, control_preset,
+                evidence_mode, include_comments, created_at, updated_at
+             )
+             VALUES (42, 1, 'youtube_summary', '1.0.0', '1.0',
+                'running', 'none', 'en', 'standard', 'standard', 0,
+                '2026-06-14T00:00:00Z', '2026-06-14T00:00:00Z')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert run");
+        pool
+    }
+
+    async fn count(pool: &sqlx::SqlitePool, table: &str) -> i64 {
+        sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table} WHERE run_id = 42"))
+            .fetch_one(pool)
+            .await
+            .expect("count")
     }
 }
