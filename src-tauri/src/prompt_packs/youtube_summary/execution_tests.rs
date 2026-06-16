@@ -44,6 +44,18 @@ async fn execute_queued_run_with_stage_executor_finishes_complete() {
             .fetch_one(&pool)
             .await
             .expect("result count");
+    let video_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_youtube_videos WHERE run_id = 1")
+            .fetch_one(&pool)
+            .await
+            .expect("video projections");
+    let result_error_findings: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM prompt_pack_result_validation_findings
+         WHERE run_id = 1 AND stage_run_id IS NULL AND severity = 'error'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("result finding count");
 
     assert_eq!(outcome.run_status, "complete");
     assert_eq!(run_status, "complete");
@@ -51,6 +63,60 @@ async fn execute_queued_run_with_stage_executor_finishes_complete() {
     assert_eq!(progress_current, Some(1));
     assert_eq!(progress_total, Some(1));
     assert_eq!(result_count, 1);
+    assert_eq!(video_count, 1);
+    assert_eq!(result_error_findings, 0);
+}
+
+#[tokio::test]
+async fn youtube_summary_invalid_final_result_records_result_level_findings() {
+    let pool = test_pool_with_frozen_youtube_summary_run().await;
+    let outcome =
+        super::execution::execute_youtube_summary_run_with_stage_executor_and_result_mutator(
+            &pool,
+            1,
+            |request| async move {
+                match request {
+                    YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request) => Ok(
+                        fake_completion_with_valid_transcript_analysis_json_for_source(
+                            &request.source_ref_id,
+                        ),
+                    ),
+                    YoutubeSummaryStageExecutionRequest::Synthesis(_) => {
+                        panic!("single-video run should not request synthesis")
+                    }
+                    YoutubeSummaryStageExecutionRequest::JsonRepair(_) => {
+                        panic!("valid single-video run should not request repair")
+                    }
+                }
+            },
+            |canonical| {
+                canonical["claims"][0]["claim_id"] = serde_json::json!("");
+            },
+        )
+        .await;
+
+    assert!(outcome.is_err());
+    let result_rows: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_results WHERE run_id = 1")
+            .fetch_one(&pool)
+            .await
+            .expect("result rows");
+    let result_findings: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM prompt_pack_result_validation_findings
+         WHERE run_id = 1 AND stage_run_id IS NULL AND severity = 'error'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("result findings");
+    let run_status: String =
+        sqlx::query_scalar("SELECT run_status FROM prompt_pack_runs WHERE id = 1")
+            .fetch_one(&pool)
+            .await
+            .expect("run status");
+
+    assert_eq!(result_rows, 0);
+    assert!(result_findings > 0);
+    assert_eq!(run_status, "failed");
 }
 
 #[tokio::test]

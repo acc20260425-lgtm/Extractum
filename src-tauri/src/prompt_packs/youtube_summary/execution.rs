@@ -30,13 +30,12 @@ use crate::prompt_packs::json_repair::{
     execute_transcript_analysis_stage_repair_completion, insert_json_repair_input_artifact,
     JsonRepairStageExecutionRequest,
 };
+use crate::prompt_packs::result_builder::build_youtube_summary_canonical_result;
 use crate::prompt_packs::stage_io::build_transcript_analysis_stage_input;
 #[cfg(test)]
 use crate::prompt_packs::stage_io::insert_stage_artifact_in_pool;
-use crate::prompt_packs::{
-    projections::persist_final_result_transaction,
-    result_builder::build_youtube_summary_canonical_result,
-};
+
+use super::result_validation::validate_and_persist_final_result_transaction;
 
 #[cfg(test)]
 pub(crate) async fn execute_youtube_summary_run_with_fake_completions(
@@ -148,11 +147,47 @@ pub(crate) async fn execute_youtube_summary_run_with_fake_completions(
 pub(crate) async fn execute_youtube_summary_run_with_stage_executor<F, Fut>(
     pool: &SqlitePool,
     run_id: i64,
-    mut execute_stage: F,
+    execute_stage: F,
 ) -> AppResult<YoutubeSummaryRunExecutionOutcome>
 where
     F: FnMut(YoutubeSummaryStageExecutionRequest) -> Fut,
     Fut: Future<Output = Result<LlmCompletion, YoutubeSummaryStageExecutionError>>,
+{
+    execute_youtube_summary_run_with_stage_executor_internal(pool, run_id, execute_stage, |_| {})
+        .await
+}
+
+#[cfg(test)]
+pub(crate) async fn execute_youtube_summary_run_with_stage_executor_and_result_mutator<F, Fut, M>(
+    pool: &SqlitePool,
+    run_id: i64,
+    execute_stage: F,
+    mutate_final_result: M,
+) -> AppResult<YoutubeSummaryRunExecutionOutcome>
+where
+    F: FnMut(YoutubeSummaryStageExecutionRequest) -> Fut,
+    Fut: Future<Output = Result<LlmCompletion, YoutubeSummaryStageExecutionError>>,
+    M: FnOnce(&mut serde_json::Value),
+{
+    execute_youtube_summary_run_with_stage_executor_internal(
+        pool,
+        run_id,
+        execute_stage,
+        mutate_final_result,
+    )
+    .await
+}
+
+async fn execute_youtube_summary_run_with_stage_executor_internal<F, Fut, M>(
+    pool: &SqlitePool,
+    run_id: i64,
+    mut execute_stage: F,
+    mutate_final_result: M,
+) -> AppResult<YoutubeSummaryRunExecutionOutcome>
+where
+    F: FnMut(YoutubeSummaryStageExecutionRequest) -> Fut,
+    Fut: Future<Output = Result<LlmCompletion, YoutubeSummaryStageExecutionError>>,
+    M: FnOnce(&mut serde_json::Value),
 {
     let stages = load_pending_transcript_stage_rows(pool, run_id).await?;
     let total = stages.len() as i64;
@@ -284,8 +319,9 @@ where
     } else {
         successes
     };
-    let canonical = build_youtube_summary_canonical_result(pool, run_id).await?;
-    persist_final_result_transaction(pool, run_id, canonical, terminal_status).await?;
+    let mut canonical = build_youtube_summary_canonical_result(pool, run_id).await?;
+    mutate_final_result(&mut canonical);
+    validate_and_persist_final_result_transaction(pool, run_id, canonical, terminal_status).await?;
     let message = terminal_message(terminal_status).to_string();
     sqlx::query(
         "UPDATE prompt_pack_runs

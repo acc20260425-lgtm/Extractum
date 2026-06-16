@@ -2069,7 +2069,7 @@ git commit -m "feat: gate youtube summary result persistence"
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/execution.rs`
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/execution_tests.rs`
 
-- [ ] **Step 1: Replace the execution import and call**
+- [x] **Step 1: Replace the execution import and call**
 
 In `execution.rs`, replace:
 
@@ -2099,7 +2099,7 @@ with:
 validate_and_persist_final_result_transaction(pool, run_id, canonical, terminal_status).await?;
 ```
 
-- [ ] **Step 2: Add execution regression test for the valid path**
+- [x] **Step 2: Add execution regression test for the valid path**
 
 Prefer extending the existing `execute_queued_run_with_stage_executor_finishes_complete`
 test with the extra projection/finding assertions below, because it already
@@ -2157,7 +2157,7 @@ async fn youtube_summary_valid_run_persists_result_after_result_validation() {
 }
 ```
 
-- [ ] **Step 3: Add an invalid-canonical execution regression test through a test-only helper**
+- [x] **Step 3: Add an invalid-canonical execution regression test through a test-only helper**
 
 Extract the current body of `execute_youtube_summary_run_with_stage_executor`
 into a private internal helper that accepts a final-result mutator. Keep the
@@ -2290,7 +2290,7 @@ async fn youtube_summary_invalid_final_result_records_result_level_findings() {
 }
 ```
 
-- [ ] **Step 4: Run execution tests**
+- [x] **Step 4: Run execution tests**
 
 Run:
 
@@ -2301,7 +2301,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib youtube_summary_invalid_fi
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit execution wiring**
+- [x] **Step 5: Commit execution wiring**
 
 ```powershell
 git add src-tauri\src\prompt_packs\youtube_summary\execution.rs src-tauri\src\prompt_packs\youtube_summary\execution_tests.rs
