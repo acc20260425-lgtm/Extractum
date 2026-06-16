@@ -16,6 +16,7 @@ use super::synthesis_execution::execute_synthesis_if_ready;
 use super::synthesis_execution::{
     mark_synthesis_stage_failed_with_artifact, mark_synthesis_stage_skipped, synthesis_stage_id,
 };
+use super::tail_stages::mark_pending_mvp_tail_stages_skipped;
 use super::transcript_execution::{
     load_pending_transcript_stage_rows, mark_transcript_stage_cancelled,
     mark_transcript_stage_failed,
@@ -305,29 +306,6 @@ where
         progress_total,
         message,
     })
-}
-
-async fn mark_pending_mvp_tail_stages_skipped(pool: &SqlitePool, run_id: i64) -> AppResult<()> {
-    sqlx::query(
-        "UPDATE prompt_pack_stage_runs
-         SET stage_status = 'skipped',
-             latest_message = 'Handled by combined MVP stage',
-             completed_at = ?,
-             updated_at = ?
-         WHERE run_id = ?
-           AND stage_status = 'pending'
-           AND stage_name NOT IN (
-               'youtube_summary/transcript_analysis',
-               'youtube_summary/synthesis'
-           )",
-    )
-    .bind(now_string())
-    .bind(now_string())
-    .bind(run_id)
-    .execute(pool)
-    .await
-    .map_err(AppError::database)?;
-    Ok(())
 }
 
 fn now_string() -> String {

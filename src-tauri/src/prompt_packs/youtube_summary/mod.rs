@@ -22,6 +22,7 @@ pub(crate) mod synthesis_execution;
 pub(crate) mod synthesis_input;
 #[cfg(test)]
 mod synthesis_input_tests;
+pub(crate) mod tail_stages;
 #[cfg(test)]
 pub(crate) mod test_support;
 pub(crate) mod transcript_execution;
