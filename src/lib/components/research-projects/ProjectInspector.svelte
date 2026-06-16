@@ -6,7 +6,6 @@
   import type { ProjectSourceRecord } from "$lib/types/projects";
   import type { ProjectSourceLinkView, ResearchProjectView } from "$lib/ui/research-projects-model";
   import YoutubeSummaryRunDialog from "./YoutubeSummaryRunDialog.svelte";
-  import YoutubeSummaryRunsPanel from "./YoutubeSummaryRunsPanel.svelte";
 
   let {
     project,
@@ -138,11 +137,6 @@
       {/each}
     </section>
 
-    <section>
-      {#key project?.projectId ?? "none"}
-        <YoutubeSummaryRunsPanel projectId={project?.projectId ?? null} />
-      {/key}
-    </section>
   {/if}
 </aside>
 

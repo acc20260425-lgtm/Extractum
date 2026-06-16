@@ -50,6 +50,11 @@ describe("projects mvp route contract", () => {
     expect(runsTabSource).toContain("formatPeriod");
   });
 
+  it("keeps prompt-pack run details in the Runs tab instead of duplicating them in the inspector", () => {
+    expect(runsTabSource).toContain("YoutubeSummaryRunsPanel");
+    expect(inspectorSource).not.toContain("YoutubeSummaryRunsPanel");
+  });
+
   it("keeps top command actions honest while project export is out of scope", () => {
     expect(shellSource).toContain("sources={currentProjectSources}");
     expect(shellSource).toContain("onRunProject={() => (runOpen = true)}");
