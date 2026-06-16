@@ -239,8 +239,17 @@ Evidence comes from `evidence_fragment_candidates`.
 ```
 
 `quote_ref` is optional. The backend may link evidence to a quote only when it
-can do so deterministically from candidate data or exact text matching inside
-the same source. Ambiguous matches remain unlinked.
+can do so deterministically from candidate data inside the same source.
+
+Exact-text matching is allowed only as a narrow fallback:
+
+- the quote text must meet an implementation-defined minimum length threshold;
+- exactly one quote in the same source must match;
+- matching must not cross source boundaries;
+- short, repeated, or ambiguous matches leave `quote_ref = null`.
+
+This keeps quote linking useful without letting common phrases create accidental
+evidence links.
 
 ### Ref Terminology
 
@@ -284,6 +293,19 @@ The builder should be strict for known candidate containers:
 
 This policy keeps absent optional candidate arrays cheap while making malformed
 known structures visible. It avoids silently accepting shape drift from the LLM.
+
+### Material Ref Registry Source
+
+The intermediate builder must validate `material_refs` against the frozen
+run-local transcript-analysis input registry. It may load this registry from the
+persisted transcript-analysis input artifact when available, or rebuild the
+equivalent registry from prompt-pack run snapshot tables through the same
+snapshot-based path used by `build_transcript_analysis_stage_input`.
+
+The builder must not consult live Library tables such as `sources`,
+`youtube_transcript_segments`, playlist tables, or comments. Old runs must be
+validated against the frozen input they actually used, not against current
+Library state.
 
 ## Persistence
 
@@ -379,7 +401,7 @@ Synthesis output checks:
 ## Canonical Result Builder Changes
 
 `build_youtube_summary_canonical_result` should prefer intermediate graph
-entities when the artifact exists.
+entities when a complete graph set exists for the run.
 
 Initial behavior:
 
@@ -390,7 +412,14 @@ Initial behavior:
   tests without an intermediate graph artifact;
 - keep synthesis null/partial behavior unchanged.
 
-This preserves old runs, supports single-video runs, and avoids a hard cutover.
+Graph usage is all-or-nothing for the MVP. If every successful
+transcript-analysis stage has an `intermediate_entities` artifact, the result
+builder uses graph claims and evidence for the whole run. If any successful
+transcript-analysis stage is missing the graph artifact, the result builder
+falls back to the legacy parsed-output path for the whole run.
+
+This avoids mixing ID assignment policies inside one result, preserves old
+runs, supports single-video runs, and avoids a hard cutover.
 
 ## Test Strategy
 
@@ -408,6 +437,10 @@ Add focused Rust tests for:
 - synthesis input contains `canonical_graph` and `allowed_refs`;
 - synthesis output with unknown `claim_refs` fails validation;
 - synthesis output with allowed refs succeeds;
+- single-video runs build and use intermediate graph artifacts even when
+  synthesis is skipped;
+- mixed graph/legacy availability falls back to legacy parsing for the whole
+  run;
 - canonical result builder uses graph claims/evidence when graph artifact
   exists and falls back to old candidate parsing when it does not.
 
