@@ -190,6 +190,11 @@ Segments come from `video_candidate.segment_candidates` when present.
 If transcript output has no segment candidates, MVP should not synthesize fake
 segments. The graph may have an empty `segments` array.
 
+A segment may be kept even when both `title` and `summary_text` are `null` or
+blank, because it can still provide structural navigation through `order_index`
+and `material_refs`. This is the only MVP entity type whose text fields are not
+required for retention.
+
 ### Key Points
 
 Key points come from `video_candidate.key_point_candidates`.
@@ -354,6 +359,10 @@ source-scoped `intermediate_entities` artifacts for successful transcript stages
 and merge them deterministically by ascending
 `prompt_pack_run_source_snapshots.id`. This is the run-local source snapshot
 insertion order and must not depend on transcript-stage completion order.
+
+Warnings from intermediate graph artifacts are backend diagnostics and are not
+forwarded inside `canonical_graph` or elsewhere in synthesis input. This avoids
+leaking pipeline diagnostics into the LLM prompt.
 
 Recommended new fields:
 
