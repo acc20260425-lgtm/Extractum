@@ -6,6 +6,9 @@ use super::outputs::{
     execute_synthesis_stage_with_completion, execute_transcript_analysis_stage_with_completion,
     mark_synthesis_stage_failed,
 };
+use super::progress::{
+    is_run_cancelled, mark_run_cancelled, mark_run_running, update_run_progress,
+};
 use super::synthesis_input::build_synthesis_stage_input;
 use super::{
     LlmCompletion, SynthesisStageExecutionRequest, TranscriptAnalysisStageExecutionRequest,
@@ -334,88 +337,6 @@ async fn load_pending_transcript_stage_rows(
             .collect()
     })
     .map_err(AppError::database)
-}
-
-async fn mark_run_running(pool: &SqlitePool, run_id: i64, total: i64) -> AppResult<()> {
-    sqlx::query(
-        "UPDATE prompt_pack_runs
-         SET run_status = 'running',
-             started_at = COALESCE(started_at, ?),
-             latest_message = 'Running',
-             progress_current = COALESCE(progress_current, 0),
-             progress_total = ?,
-             updated_at = ?
-         WHERE id = ? AND run_status = 'queued'",
-    )
-    .bind(now_string())
-    .bind(total)
-    .bind(now_string())
-    .bind(run_id)
-    .execute(pool)
-    .await
-    .map_err(AppError::database)?;
-    Ok(())
-}
-
-async fn is_run_cancelled(pool: &SqlitePool, run_id: i64) -> AppResult<bool> {
-    sqlx::query_scalar::<_, String>("SELECT run_status FROM prompt_pack_runs WHERE id = ?")
-        .bind(run_id)
-        .fetch_one(pool)
-        .await
-        .map(|status| status == "cancelled")
-        .map_err(AppError::database)
-}
-
-async fn update_run_progress(
-    pool: &SqlitePool,
-    run_id: i64,
-    successes: i64,
-    total: i64,
-) -> AppResult<()> {
-    sqlx::query(
-        "UPDATE prompt_pack_runs
-         SET progress_current = ?,
-             progress_total = ?,
-             latest_message = ?,
-             updated_at = ?
-         WHERE id = ?",
-    )
-    .bind(successes)
-    .bind(total)
-    .bind(format!("Processed {successes} of {total} video(s)"))
-    .bind(now_string())
-    .bind(run_id)
-    .execute(pool)
-    .await
-    .map_err(AppError::database)?;
-    Ok(())
-}
-
-async fn mark_run_cancelled(
-    pool: &SqlitePool,
-    run_id: i64,
-    progress_current: i64,
-    progress_total: i64,
-) -> AppResult<()> {
-    sqlx::query(
-        "UPDATE prompt_pack_runs
-         SET run_status = 'cancelled',
-             latest_message = 'Cancelled',
-             progress_current = ?,
-             progress_total = ?,
-             completed_at = COALESCE(completed_at, ?),
-             updated_at = ?
-         WHERE id = ?",
-    )
-    .bind(progress_current)
-    .bind(progress_total)
-    .bind(now_string())
-    .bind(now_string())
-    .bind(run_id)
-    .execute(pool)
-    .await
-    .map_err(AppError::database)?;
-    Ok(())
 }
 
 async fn mark_transcript_stage_failed(
