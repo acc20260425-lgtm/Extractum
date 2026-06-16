@@ -178,7 +178,6 @@
             <div
               class="tree-project-item-row group"
               class:active={workflowState.selectedProjectId === project.id}
-              oncontextmenu={(e) => openContextMenu(e, project.id, project.title)}
             >
               <button
                 type="button"
@@ -188,6 +187,7 @@
                   e.stopPropagation();
                   onSelectProject(project.id);
                 }}
+                oncontextmenu={(e) => openContextMenu(e, project.id, project.title)}
               >
                 <span class="project-dot-indicator" class:running={project.status === "running"} class:ready={project.status === "ready"}></span>
                 <span class="project-title-text" title={project.title}>{project.title}</span>
