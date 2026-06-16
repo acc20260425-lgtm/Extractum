@@ -230,3 +230,22 @@ fn evidence_index_pointing_to_skipped_quote_candidate_is_rejected() {
         Some("$.evidence_fragment_candidates[0].quote_candidate_index")
     );
 }
+
+#[test]
+fn key_point_index_pointing_to_skipped_segment_candidate_reports_segment_candidate() {
+    let mut parsed = parsed_output();
+    parsed["video_candidate"]["segment_candidates"] = serde_json::json!([]);
+    parsed["video_candidate"]["key_point_candidates"][0]["segment_candidate_index"] =
+        serde_json::json!(0);
+
+    let error = build_source_intermediate_entities(&input(), 1001, Some("Video title"), &parsed, 1)
+        .expect_err("index pointing to skipped segment rejected");
+
+    assert!(error
+        .message
+        .contains("segment_candidate_index 0 points to skipped segment candidate"));
+    assert_eq!(
+        error.object_path.as_deref(),
+        Some("$.video_candidate.key_point_candidates[0].segment_candidate_index")
+    );
+}
