@@ -92,9 +92,8 @@ Target execution shape:
 run snapshots
   -> transcript_analysis LLM output
   -> parsed_output artifact
-  -> backend intermediate entity graph
-  -> intermediate_entities artifact
-  -> synthesis input with canonical graph and allowed refs
+  -> per-source intermediate_entities artifact on transcript stage
+  -> synthesis input merges per-source canonical graphs and allowed refs
   -> synthesis LLM output with checked refs
   -> canonical result builder
 ```
@@ -102,6 +101,11 @@ run snapshots
 The first implementation should not add new queued LLM stages. It should use
 the existing successful transcript-analysis outputs and build deterministic
 backend-owned entities from them.
+
+The intermediate graph must be created for every successful transcript-analysis
+stage, including single-video runs where synthesis is skipped or not applicable.
+The graph is not owned by the synthesis stage, because canonical result
+assembly needs claims and evidence even when no synthesis request runs.
 
 ## Intermediate Graph
 
@@ -133,6 +137,12 @@ Recommended top-level artifact shape:
   }
 }
 ```
+
+Each persisted `intermediate_entities` artifact is source-scoped and attached to
+the transcript-analysis stage that produced it. A source-scoped artifact uses
+the same object shape, but contains exactly one `sources` entry and only entity
+arrays for that source. Synthesis input may merge these source-scoped artifacts
+into the same shape across all successful transcript stages.
 
 ### Source Records
 
@@ -232,6 +242,49 @@ Evidence comes from `evidence_fragment_candidates`.
 can do so deterministically from candidate data or exact text matching inside
 the same source. Ambiguous matches remain unlinked.
 
+### Ref Terminology
+
+The graph keeps `claim_id` and `evidence_id` for compatibility with the current
+canonical result contract. Any `claim_refs` array contains values from
+`claims[*].claim_id`. Any `evidence_refs` array contains values from
+`evidence[*].evidence_id`.
+
+Implementation code should treat these as the same identity values even when
+field names differ by context:
+
+- object field: `claim_id`;
+- ref array field: `claim_refs`;
+- object field: `evidence_id`;
+- ref array field: `evidence_refs`.
+
+New intermediate entity types should prefer `*_ref` names, such as
+`segment_ref`, `key_point_ref`, and `quote_ref`, because they are not already
+constrained by the existing result contract.
+
+### Malformed Candidate Policy
+
+The builder should be strict for known candidate containers:
+
+- top-level `claim_candidates`, `evidence_fragment_candidates`, and
+  `warning_candidates` remain required by the transcript-output validator;
+- if `video_candidate.segment_candidates`,
+  `video_candidate.key_point_candidates`, or `video_candidate.quote_candidates`
+  is missing, treat it as an empty list;
+- if any top-level or `video_candidate` candidate container is present but is
+  not an array, fail validation and quarantine the candidate output;
+- if an item in a known candidate array is not an object, fail validation and
+  quarantine the candidate output;
+- if an item has a known text field but that field is present with a non-string
+  value, fail validation and quarantine the candidate output;
+- if a required text field for an entity is absent or blank, skip that item and
+  record a warning candidate in the graph artifact rather than inventing text;
+- if `material_refs` is present but is not an array of strings, fail validation
+  and quarantine the candidate output;
+- if `material_refs` is absent, treat it as an empty list.
+
+This policy keeps absent optional candidate arrays cheap while making malformed
+known structures visible. It avoids silently accepting shape drift from the LLM.
+
 ## Persistence
 
 MVP persistence should start with an artifact instead of a table migration.
@@ -239,21 +292,29 @@ MVP persistence should start with an artifact instead of a table migration.
 Preferred artifact:
 
 - `artifact_kind = "intermediate_entities"`
-- `stage_run_id` may point to the synthesis stage when the graph is built as
-  synthesis input preparation, or to the transcript stage when the graph is
-  emitted per source. The first implementation should choose the smaller code
-  path and document it in tests.
+- `stage_run_id` points to the successful `youtube_summary/transcript_analysis`
+  stage run that produced the source-scoped graph.
+- one artifact is written per successful transcript-analysis stage.
+- repaired transcript-analysis outputs produce an `intermediate_entities`
+  artifact for the repaired successful attempt; failed or quarantined outputs do
+  not produce one.
 - `content_type = "application/json"`
 - `compression_kind = "zstd"`
 
-Artifact-only persistence is enough for the MVP because the immediate consumer
-is backend synthesis input. Projection tables can follow when UI navigation or
-filtering needs first-class rows.
+Artifact-only persistence is enough for the MVP because the immediate consumers
+are backend synthesis input and canonical result assembly. Projection tables can
+follow when UI navigation or filtering needs first-class rows.
+
+An optional merged run-level or synthesis-stage `intermediate_entities` artifact
+may be added later as an optimization or debugging aid. It is not part of the
+MVP contract.
 
 ## Synthesis Input Changes
 
 `build_synthesis_stage_input` should include both the current loose candidate
-view and the canonical graph during the transition.
+view and the canonical graph during the transition. It should load all
+source-scoped `intermediate_entities` artifacts for successful transcript stages
+and merge them deterministically by source snapshot order.
 
 Recommended new fields:
 
@@ -322,13 +383,14 @@ entities when the artifact exists.
 
 Initial behavior:
 
+- load per-source graph artifacts from successful transcript-analysis stages;
 - build `claims` from graph claims;
 - build `evidence` from graph evidence;
 - keep the current fallback path from transcript parsed output for older runs or
   tests without an intermediate graph artifact;
 - keep synthesis null/partial behavior unchanged.
 
-This preserves old runs and avoids a hard cutover.
+This preserves old runs, supports single-video runs, and avoids a hard cutover.
 
 ## Test Strategy
 
@@ -336,6 +398,8 @@ Add focused Rust tests for:
 
 - deterministic ID assignment across multiple source snapshots;
 - empty segment/key point/quote candidate arrays;
+- malformed known candidate containers fail validation and quarantine;
+- blank text items are skipped with a graph warning;
 - invalid material refs rejected or quarantined through the existing validation
   path;
 - duplicate backend refs impossible or rejected;
@@ -362,25 +426,21 @@ git diff --check
 Implement this as small commits:
 
 1. Add the intermediate graph builder module and pure tests.
-2. Persist an `intermediate_entities` artifact during synthesis input
-   preparation or immediately after transcript-stage success.
-3. Add `canonical_graph` and `allowed_refs` to synthesis input.
+2. Persist a source-scoped `intermediate_entities` artifact immediately after
+   transcript-stage success, including repaired-success outputs.
+3. Merge per-source artifacts into `canonical_graph` and `allowed_refs` in
+   synthesis input.
 4. Update the synthesis prompt to allow checked `claim_refs` and
    `evidence_refs`.
 5. Add synthesis ref validation and quarantine tests.
 6. Update canonical result builder to prefer graph entities with fallback.
 
-## Open Decisions For Implementation
+## Implementation Decision
 
-The implementation plan should choose one of these artifact ownership options:
+The MVP uses per-source transcript-stage `intermediate_entities` artifacts.
+Synthesis input and canonical result assembly both merge those source-scoped
+artifacts when they need a run-level view.
 
-- run-scoped graph artifact attached to the synthesis stage;
-- per-source graph artifacts attached to transcript stages plus synthesis input
-  merges them;
-- both, with per-source artifacts as provenance and a merged synthesis artifact
-  as the synthesis input contract.
-
-Recommendation: start with a merged graph artifact attached to the synthesis
-stage because it is the direct consumer and keeps the first slice smaller. Add
-per-source provenance artifacts later if UI or debugging needs them.
-
+This keeps provenance local to the transcript output that produced each entity
+set, supports single-video runs where synthesis is skipped, and avoids making
+the graph depend on synthesis-stage execution.
