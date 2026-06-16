@@ -1,5 +1,6 @@
 use sqlx::SqlitePool;
 
+use super::entities::load_merged_intermediate_entities_for_run;
 use crate::compression::decompress_text;
 use crate::error::{AppError, AppResult};
 
@@ -70,16 +71,59 @@ pub(crate) async fn build_synthesis_stage_input(
         );
     }
 
+    let merged_graph = load_merged_intermediate_entities_for_run(pool, run_id).await?;
+    let canonical_graph = merged_graph
+        .as_ref()
+        .map(|graph| {
+            serde_json::json!({
+                "sources": graph.get("sources").cloned().unwrap_or_else(|| serde_json::json!([])),
+                "segments": graph.get("segments").cloned().unwrap_or_else(|| serde_json::json!([])),
+                "key_points": graph.get("key_points").cloned().unwrap_or_else(|| serde_json::json!([])),
+                "quotes": graph.get("quotes").cloned().unwrap_or_else(|| serde_json::json!([])),
+                "claims": graph.get("claims").cloned().unwrap_or_else(|| serde_json::json!([])),
+                "evidence": graph.get("evidence").cloned().unwrap_or_else(|| serde_json::json!([]))
+            })
+        })
+        .unwrap_or_else(|| empty_canonical_graph());
+    let allowed_refs = merged_graph
+        .as_ref()
+        .and_then(|graph| graph.get("allowed_refs").cloned())
+        .unwrap_or_else(empty_allowed_refs);
+
     Ok(serde_json::json!({
         "stage_io_version": "1.0",
         "schema_version": "1.0",
         "stage": "youtube_summary/synthesis",
         "run_id": run_id,
         "videos": videos,
+        "canonical_graph": canonical_graph,
+        "allowed_refs": allowed_refs,
         "claim_candidates": claim_candidates,
         "evidence_fragment_candidates": evidence_fragment_candidates,
         "warning_candidates": warning_candidates
     }))
+}
+
+fn empty_canonical_graph() -> serde_json::Value {
+    serde_json::json!({
+        "sources": [],
+        "segments": [],
+        "key_points": [],
+        "quotes": [],
+        "claims": [],
+        "evidence": []
+    })
+}
+
+fn empty_allowed_refs() -> serde_json::Value {
+    serde_json::json!({
+        "source_refs": [],
+        "segment_refs": [],
+        "key_point_refs": [],
+        "quote_refs": [],
+        "claim_refs": [],
+        "evidence_refs": []
+    })
 }
 
 fn wrap_candidates(

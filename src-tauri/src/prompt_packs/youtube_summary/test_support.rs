@@ -1,4 +1,4 @@
-use super::{create_youtube_summary_run_skeleton_in_pool, now_string, LlmCompletion};
+use super::{create_youtube_summary_run_skeleton_in_pool, LlmCompletion};
 use crate::compression::compress_text;
 use crate::migrations::apply_all_migrations_for_test_pool;
 use crate::prompt_packs::dto::{PreflightYoutubeSummaryRunRequest, StartYoutubeSummaryRunRequest};
@@ -363,26 +363,15 @@ pub(crate) async fn persist_succeeded_transcript_stage_fixtures(
     assert_eq!(stage_rows.len(), fixtures.len());
 
     for ((stage_run_id, _source_snapshot_id), fixture) in stage_rows.into_iter().zip(fixtures) {
-        sqlx::query(
-            "UPDATE prompt_pack_stage_runs
-             SET stage_status = 'succeeded', updated_at = ?
-             WHERE id = ?",
-        )
-        .bind(now_string())
-        .bind(stage_run_id)
-        .execute(pool)
-        .await
-        .map_err(crate::error::AppError::database)?;
-
-        let parsed = transcript_analysis_json(fixture.summary, fixture.claim, fixture.evidence);
-        crate::prompt_packs::stage_io::insert_stage_artifact_in_pool(
+        super::outputs::execute_transcript_analysis_stage_with_completion(
             pool,
-            run_id,
             stage_run_id,
-            "parsed_output",
-            1,
-            3,
-            &parsed,
+            LlmCompletion {
+                text: transcript_analysis_json(fixture.summary, fixture.claim, fixture.evidence),
+                input_tokens: Some(10),
+                output_tokens: Some(10),
+                latency_ms: 5,
+            },
         )
         .await?;
     }

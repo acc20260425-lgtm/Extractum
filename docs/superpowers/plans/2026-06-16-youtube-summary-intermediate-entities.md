@@ -871,7 +871,7 @@ git commit -m "feat: persist youtube summary intermediate entities"
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/outputs_tests.rs` if fixture side-effect expectations need updates.
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/execution_tests.rs` if fixture side-effect expectations need updates.
 
-- [ ] **Step 1: Update transcript fixture helpers to use real output path**
+- [x] **Step 1: Update transcript fixture helpers to use real output path**
 
 In `test_support.rs`, update `persist_succeeded_transcript_stage_fixtures` so it no longer manually updates `stage_status` or inserts only a `parsed_output` artifact.
 
@@ -890,7 +890,7 @@ This helper depends on Task 2 and must write the same artifact sequence as produ
 
 This is an intentional fixture fidelity change. Existing tests that inspect artifact counts, artifact order, timestamps, or transcript stage status may need expectation updates because the helper now also writes `prompt_input`, `raw_output`, `metrics`, and `intermediate_entities`. Keep fixture inputs deterministic (`latency_ms`, token counts, completion text), but do not try to suppress production-path side effects in this helper.
 
-- [ ] **Step 2: Run fixture regression tests**
+- [x] **Step 2: Run fixture regression tests**
 
 Run the broader YouTube Summary test filter immediately after changing `persist_succeeded_transcript_stage_fixtures` and before adding new failing synthesis-input tests:
 
@@ -900,7 +900,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib youtube_summary_
 
 Expected: PASS with more than zero tests run. If existing tests fail because they assert the old hand-written fixture artifact shape, update those expectations in the same step so they match the production-path fixture behavior.
 
-- [ ] **Step 3: Add failing synthesis input tests**
+- [x] **Step 3: Add failing synthesis input tests**
 
 In `synthesis_input_tests.rs`, add:
 
@@ -1020,7 +1020,7 @@ async fn load_merged_intermediate_entities_rejects_duplicate_refs_across_sources
 
 Add `overwrite_intermediate_entities_artifact_with_local_refs` as a test helper that inserts a latest `intermediate_entities` artifact for the requested source with local-only refs (`claim_1`, `evidence_1`) and `artifact_index = 5`. This helper intentionally bypasses `build_source_intermediate_entities` so the duplicate-ref merge guard is tested independently from the builder.
 
-- [ ] **Step 4: Run synthesis input tests to verify they fail**
+- [x] **Step 4: Run synthesis input tests to verify they fail**
 
 Run:
 
@@ -1030,7 +1030,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib youtube_summary::synthesis
 
 Expected: FAIL because synthesis input does not include `canonical_graph` or complete `allowed_refs`.
 
-- [ ] **Step 5: Add graph merge loader**
+- [x] **Step 5: Add graph merge loader**
 
 In `entities.rs`, add:
 
@@ -1100,7 +1100,7 @@ Do not merge source graph `warnings` into the returned merged graph.
 
 `merge_source_graph` must also reject duplicate refs across source artifacts for every allowed-ref bucket. With source-qualified refs this should never happen; if it does, return an `AppError::internal` that names the duplicated ref and bucket.
 
-- [ ] **Step 6: Add graph fields to synthesis input**
+- [x] **Step 6: Add graph fields to synthesis input**
 
 In `synthesis_input.rs`, import:
 
@@ -1152,7 +1152,7 @@ Add these fields to the returned synthesis input object:
 "allowed_refs": allowed_refs
 ```
 
-- [ ] **Step 7: Run synthesis input tests**
+- [x] **Step 7: Run synthesis input tests**
 
 Run:
 
@@ -1162,7 +1162,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib youtube_summary::synthesis
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src-tauri\src\prompt_packs\youtube_summary\entities.rs src-tauri\src\prompt_packs\youtube_summary\test_support.rs src-tauri\src\prompt_packs\youtube_summary\synthesis_input.rs src-tauri\src\prompt_packs\youtube_summary\synthesis_input_tests.rs src-tauri\src\prompt_packs\youtube_summary\outputs_tests.rs src-tauri\src\prompt_packs\youtube_summary\execution_tests.rs

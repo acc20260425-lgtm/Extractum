@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use sqlx::SqlitePool;
 
+use crate::compression::decompress_text;
 use crate::error::{AppError, AppResult};
 use crate::prompt_packs::stage_io::TranscriptAnalysisStageInput;
 use crate::prompt_packs::stage_io::{
@@ -85,6 +86,7 @@ pub(crate) fn build_source_intermediate_entities(
         "evidence": evidence,
         "warnings": warnings,
         "allowed_refs": allowed_refs(
+            &input.source_ref_id,
             &segments.items,
             &key_points.items,
             &quotes.items,
@@ -160,6 +162,52 @@ pub(crate) async fn insert_intermediate_entities_artifact(
         &content,
     )
     .await
+}
+
+pub(crate) async fn load_merged_intermediate_entities_for_run(
+    pool: &SqlitePool,
+    run_id: i64,
+) -> AppResult<Option<serde_json::Value>> {
+    let rows = sqlx::query_as::<_, (i64, i64, String, Vec<u8>)>(
+        "SELECT snapshots.id, stages.id, snapshots.source_ref_id, artifacts.content_zstd
+         FROM prompt_pack_run_source_snapshots snapshots
+         JOIN prompt_pack_stage_runs stages
+           ON stages.run_id = snapshots.run_id
+          AND stages.source_snapshot_id = snapshots.id
+          AND stages.stage_name = 'youtube_summary/transcript_analysis'
+          AND stages.stage_status = 'succeeded'
+         JOIN prompt_pack_stage_artifacts artifacts
+           ON artifacts.stage_run_id = stages.id
+          AND artifacts.artifact_kind = 'intermediate_entities'
+          AND artifacts.id = (
+              SELECT latest.id
+              FROM prompt_pack_stage_artifacts latest
+              WHERE latest.stage_run_id = stages.id
+                AND latest.artifact_kind = 'intermediate_entities'
+              ORDER BY latest.attempt_number DESC, latest.artifact_index DESC, latest.id DESC
+              LIMIT 1
+          )
+         WHERE snapshots.run_id = ?
+         ORDER BY snapshots.id ASC",
+    )
+    .bind(run_id)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    if rows.is_empty() {
+        return Ok(None);
+    }
+
+    let mut merged = empty_run_graph(run_id);
+    for (_source_snapshot_id, _stage_run_id, _source_ref_id, content_zstd) in rows {
+        let text = decompress_text(&content_zstd).map_err(AppError::internal)?;
+        let graph: serde_json::Value = serde_json::from_str(&text)
+            .map_err(|error| AppError::internal(format!("parse intermediate entities: {error}")))?;
+        merge_source_graph(&mut merged, &graph)?;
+    }
+
+    Ok(Some(merged))
 }
 
 #[derive(Clone)]
@@ -570,6 +618,7 @@ fn optional_index_ref(
 }
 
 fn allowed_refs(
+    source_ref_id: &str,
     segments: &[serde_json::Value],
     key_points: &[serde_json::Value],
     quotes: &[serde_json::Value],
@@ -577,6 +626,7 @@ fn allowed_refs(
     evidence: &[serde_json::Value],
 ) -> serde_json::Value {
     serde_json::json!({
+        "source_refs": [source_ref_id],
         "segment_refs": collect_string_field(segments, "segment_ref"),
         "key_point_refs": collect_string_field(key_points, "key_point_ref"),
         "quote_refs": collect_string_field(quotes, "quote_ref"),
@@ -591,6 +641,121 @@ fn collect_string_field(items: &[serde_json::Value], key: &str) -> Vec<String> {
         .filter_map(|item| item.get(key).and_then(serde_json::Value::as_str))
         .map(ToString::to_string)
         .collect()
+}
+
+fn empty_run_graph(run_id: i64) -> serde_json::Value {
+    serde_json::json!({
+        "stage_io_version": "1.0",
+        "schema_version": "1.0",
+        "graph_kind": YOUTUBE_SUMMARY_INTERMEDIATE_GRAPH_KIND,
+        "run_id": run_id,
+        "sources": [],
+        "segments": [],
+        "key_points": [],
+        "quotes": [],
+        "claims": [],
+        "evidence": [],
+        "allowed_refs": {
+            "source_refs": [],
+            "segment_refs": [],
+            "key_point_refs": [],
+            "quote_refs": [],
+            "claim_refs": [],
+            "evidence_refs": []
+        }
+    })
+}
+
+fn merge_source_graph(
+    merged: &mut serde_json::Value,
+    source_graph: &serde_json::Value,
+) -> AppResult<()> {
+    for key in [
+        "sources",
+        "segments",
+        "key_points",
+        "quotes",
+        "claims",
+        "evidence",
+    ] {
+        append_array_values(merged, source_graph, key)?;
+    }
+
+    for bucket in [
+        "source_refs",
+        "segment_refs",
+        "key_point_refs",
+        "quote_refs",
+        "claim_refs",
+        "evidence_refs",
+    ] {
+        append_allowed_ref_bucket(merged, source_graph, bucket)?;
+    }
+
+    Ok(())
+}
+
+fn append_array_values(
+    merged: &mut serde_json::Value,
+    source_graph: &serde_json::Value,
+    key: &str,
+) -> AppResult<()> {
+    let source_items = source_graph
+        .get(key)
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| AppError::internal(format!("intermediate graph {key} must be an array")))?;
+    let merged_items = merged
+        .get_mut(key)
+        .and_then(serde_json::Value::as_array_mut)
+        .ok_or_else(|| AppError::internal(format!("merged intermediate graph {key} missing")))?;
+    merged_items.extend(source_items.iter().cloned());
+    Ok(())
+}
+
+fn append_allowed_ref_bucket(
+    merged: &mut serde_json::Value,
+    source_graph: &serde_json::Value,
+    bucket: &str,
+) -> AppResult<()> {
+    let source_refs = source_graph
+        .get("allowed_refs")
+        .and_then(|allowed_refs| allowed_refs.get(bucket))
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| {
+            AppError::internal(format!(
+                "intermediate graph allowed_refs.{bucket} must be an array"
+            ))
+        })?;
+    let merged_refs = merged
+        .get_mut("allowed_refs")
+        .and_then(|allowed_refs| allowed_refs.get_mut(bucket))
+        .and_then(serde_json::Value::as_array_mut)
+        .ok_or_else(|| {
+            AppError::internal(format!(
+                "merged intermediate graph allowed_refs.{bucket} missing"
+            ))
+        })?;
+
+    let mut seen = merged_refs
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .map(ToString::to_string)
+        .collect::<HashSet<_>>();
+    for value in source_refs {
+        let Some(reference) = value.as_str() else {
+            return Err(AppError::internal(format!(
+                "intermediate graph allowed_refs.{bucket} item must be a string"
+            )));
+        };
+        if !seen.insert(reference.to_string()) {
+            return Err(AppError::internal(format!(
+                "duplicate ref {reference} in allowed_refs.{bucket}"
+            )));
+        }
+        merged_refs.push(serde_json::json!(reference));
+    }
+
+    Ok(())
 }
 
 fn validate_graph_kind_for_pack(pack_id: &str) -> Result<(), PromptPackValidationError> {
