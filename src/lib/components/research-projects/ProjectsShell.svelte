@@ -26,6 +26,7 @@
     onConnectSelectedSources,
     onSelectedLibrarySourceIdsChange,
     onRefreshProjectRuns,
+    onSyncSelectedSources,
   }: {
     state: ResearchProjectsWorkflowState;
     showRail?: boolean;
@@ -38,6 +39,7 @@
     onConnectSelectedSources: () => void | Promise<void>;
     onSelectedLibrarySourceIdsChange: (ids: string[]) => void;
     onRefreshProjectRuns: () => void | Promise<void>;
+    onSyncSelectedSources: (sourceIds: number[]) => void | Promise<void>;
   } = $props();
 
   let currentProject = $derived(
@@ -292,11 +294,13 @@
           librarySources={workflowState.librarySources}
           runs={currentRuns}
           loading={workflowState.loading}
+          saving={workflowState.saving}
           {selectedSourceIds}
           onSelectedSourceIdsChange={(ids) => (selectedSourceIds = ids)}
           onOpenConnectLibrary={openConnectLibrary}
           onRefreshProjectRuns={onRefreshProjectRuns}
           onRemoveSource={onRemoveProjectSource}
+          {onSyncSelectedSources}
         />
       {/if}
     </div>

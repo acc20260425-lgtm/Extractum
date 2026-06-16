@@ -5,6 +5,7 @@ import {
   buildResearchProjectsView,
   projectRunDisabledReason,
   reconcileProjectSourceSelection,
+  selectedProjectSourcesSyncDisabledReason,
 } from "./research-projects-model";
 import type { LibraryCatalogRecord } from "$lib/types/library-sources";
 import type { ProjectRecord, ProjectSourceRecord } from "$lib/types/projects";
@@ -153,5 +154,22 @@ describe("research projects model", () => {
     expect(reconcileProjectSourceSelection(["source:10", "source:12", "source:99"], links)).toEqual([
       "source:10",
     ]);
+  });
+
+  it("allows syncing selected YouTube videos and playlists only", () => {
+    const youtubeRows = buildProjectSourceLinksView("project:1", [
+      projectSources[0],
+      { ...projectSources[0], source_id: 11, source_subtype: "playlist", title: "Playlist" },
+    ]);
+    const mixedRows = buildProjectSourceLinksView("project:1", [
+      projectSources[0],
+      { ...projectSources[0], source_id: 12, provider: "telegram", source_subtype: "supergroup" },
+    ]);
+
+    expect(selectedProjectSourcesSyncDisabledReason([])).toBe("Select sources to sync");
+    expect(selectedProjectSourcesSyncDisabledReason(youtubeRows)).toBeNull();
+    expect(selectedProjectSourcesSyncDisabledReason(mixedRows)).toBe(
+      "Selected sources include unsupported sync types",
+    );
   });
 });

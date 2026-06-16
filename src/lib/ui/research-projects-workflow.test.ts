@@ -174,6 +174,7 @@ function createDeps(state: ResearchProjectsWorkflowState) {
     updateProject: vi.fn(),
     deleteProject: vi.fn(),
     startProjectAnalysis: vi.fn(),
+    syncYoutubeSource: vi.fn(),
     formatError: vi.fn((action: string, error: unknown) => `Error ${action}: ${String(error)}`),
   };
 }
@@ -267,6 +268,61 @@ describe("research projects workflow", () => {
       includeMigratedHistory: false,
     });
     expect(state.runs).toEqual([analysisRun({ id: 403, status: "completed" })]);
+    expect(state.status).toBe("");
+  });
+
+  it("starts selected project YouTube source syncs sequentially", async () => {
+    const state = createInitialState();
+    state.selectedProjectId = "project:1";
+    state.projectsRaw = [project()];
+    state.projectSources = [
+      projectSource({ source_id: 10, title: "First" }),
+      projectSource({ source_id: 11, title: "Second" }),
+    ];
+    const deps = createDeps(state);
+    deps.syncYoutubeSource.mockResolvedValue(sourceJob());
+    deps.listProjects.mockResolvedValue([project()]);
+    deps.listProjectSources.mockResolvedValue(state.projectSources);
+    deps.listLibraryCatalog.mockResolvedValue({ sources: [], filter_counts: [] });
+    deps.listProjectRuns.mockResolvedValue([]);
+    deps.listPromptTemplates.mockResolvedValue([]);
+    deps.listSourceJobs.mockResolvedValue([]);
+
+    const workflow = createResearchProjectsWorkflow(deps);
+    await workflow.refreshDerivedState();
+    await workflow.syncProjectSources([10, 11]);
+
+    expect(deps.syncYoutubeSource).toHaveBeenNthCalledWith(1, 10, {
+      metadata: true,
+      transcripts: true,
+      comments: false,
+    });
+    expect(deps.syncYoutubeSource).toHaveBeenNthCalledWith(2, 11, {
+      metadata: true,
+      transcripts: true,
+      comments: false,
+    });
+    expect(state.status).toBe("Queued sync for 2 sources.");
+    expect(deps.listSourceJobs).toHaveBeenCalled();
+  });
+
+  it("can clear queued source sync status after terminal source job refresh", async () => {
+    const state = createInitialState();
+    state.status = "Queued sync for 1 source.";
+    const deps = createDeps(state);
+    deps.listProjects.mockResolvedValue([project()]);
+    deps.listProjectSources.mockResolvedValue([projectSource()]);
+    deps.listLibraryCatalog.mockResolvedValue({
+      sources: [libraryCatalogRecord()],
+      filter_counts: [],
+    });
+    deps.listProjectRuns.mockResolvedValue([]);
+    deps.listPromptTemplates.mockResolvedValue([]);
+    deps.listSourceJobs.mockResolvedValue([sourceJob({ status: "succeeded", finished_at: 10 })]);
+
+    const workflow = createResearchProjectsWorkflow(deps);
+    await workflow.loadWorkspace({ clearQueuedSyncStatus: true });
+
     expect(state.status).toBe("");
   });
 });

@@ -9,6 +9,7 @@
     ProjectSourceLinkView,
     ResearchProjectView,
   } from "$lib/ui/research-projects-model";
+  import { selectedProjectSourcesSyncDisabledReason } from "$lib/ui/research-projects-model";
   import LibrarySourceCell from "./LibrarySourceCell.svelte";
   import ProjectSourceSummary from "./ProjectSourceSummary.svelte";
 
@@ -24,17 +25,21 @@
     projectSourceLinks,
     librarySources,
     selectedSourceIds,
+    saving = false,
     onSelectedSourceIdsChange,
     onOpenConnectLibrary,
     onRemoveSource,
+    onSyncSelectedSources,
   }: {
     project: ResearchProjectView | null;
     projectSourceLinks: ProjectSourceLinkView[];
     librarySources: LibrarySourceView[];
     selectedSourceIds: string[];
+    saving?: boolean;
     onSelectedSourceIdsChange: (sourceIds: string[]) => void;
     onOpenConnectLibrary: () => void;
     onRemoveSource: (sourceId: number | number[]) => void | Promise<void>;
+    onSyncSelectedSources: (sourceIds: number[]) => void | Promise<void>;
   } = $props();
 
   const columns = [
@@ -65,6 +70,12 @@
     rows.filter((row) => selectedSourceIds.includes(row.id))
   );
   let selectedRowIdsInProject = $derived(selectedRows.map((row) => row.id));
+  let syncDisabledReason = $derived(selectedProjectSourcesSyncDisabledReason(selectedRows));
+
+  async function handleSyncSelected() {
+    if (syncDisabledReason) return;
+    await onSyncSelectedSources(selectedRows.map((row) => row.sourceNumericId));
+  }
 
   async function handleRemoveSelected() {
     if (selectedRows.length === 0) return;
@@ -90,9 +101,14 @@
           <span>selected {selectedRows.length === 1 ? 'source' : 'sources'}</span>
         </div>
         <div class="action-buttons">
-          <ExtractumButton variant="secondary" disabled={true} title="Sync selected sources (not implemented)">
+          <ExtractumButton
+            variant="secondary"
+            disabled={saving || syncDisabledReason !== null}
+            title={syncDisabledReason ?? "Sync selected sources"}
+            onclick={handleSyncSelected}
+          >
             <RefreshCw size={12} aria-hidden="true" />
-            Sync
+            {saving ? "Syncing..." : "Sync"}
           </ExtractumButton>
           <ExtractumButton variant="secondary" disabled={true} title="Export selected sources (not implemented)">
             <Download size={12} aria-hidden="true" />

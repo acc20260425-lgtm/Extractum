@@ -63,6 +63,24 @@ describe("projects mvp route contract", () => {
     expect(sourcesTabSource).not.toContain('header: "Subtype"');
   });
 
+  it("wires selected Workspace source syncs to the YouTube source job command", () => {
+    expect(pageSource).toContain("syncYoutubeSource");
+    expect(pageSource).toContain("syncYoutubeSource,");
+    expect(shellSource).toContain("onSyncSelectedSources");
+    expect(workspaceSource).toContain("onSyncSelectedSources");
+    expect(sourcesTabSource).toContain("selectedProjectSourcesSyncDisabledReason");
+    expect(sourcesTabSource).toContain("handleSyncSelected");
+    expect(sourcesTabSource).not.toContain('disabled={true} title="Sync selected sources (not implemented)"');
+  });
+
+  it("refreshes Workspace source content when source sync jobs finish", () => {
+    expect(pageSource).toContain("listenToSourceJobEvents");
+    expect(pageSource).toContain("shouldRefreshForSourceJobStatus");
+    expect(pageSource).toContain('status === "succeeded"');
+    expect(pageSource).toContain('status === "failed"');
+    expect(pageSource).toContain('status === "cancelled"');
+  });
+
   it("keeps top command actions honest while project export is out of scope", () => {
     expect(shellSource).toContain("sources={currentProjectSources}");
     expect(shellSource).toContain("onRunProject={() => (runOpen = true)}");

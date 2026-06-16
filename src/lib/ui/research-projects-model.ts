@@ -186,6 +186,18 @@ export function reconcileProjectSourceSelection(
   return selectedIds.filter((id) => visibleIds.has(id));
 }
 
+export function selectedProjectSourcesSyncDisabledReason(
+  rows: Pick<ProjectSourceLinkView, "provider" | "subtype">[],
+) {
+  if (rows.length === 0) return "Select sources to sync";
+  const hasUnsupported = rows.some(
+    (row) =>
+      row.provider !== "youtube" || (row.subtype !== "video" && row.subtype !== "playlist"),
+  );
+  if (hasUnsupported) return "Selected sources include unsupported sync types";
+  return null;
+}
+
 export function buildProjectSourceLinksView(
   projectId: string | null,
   projectSources: ProjectSourceRecord[],

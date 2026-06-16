@@ -5,6 +5,7 @@ import {
   connectableSelection,
   projectIdFromViewId,
   projectViewId,
+  selectedProjectSourcesSyncDisabledReason,
   type LibrarySourceView,
   type ProjectSourceLinkView,
   type ResearchProjectView,
@@ -20,7 +21,7 @@ import type {
   ProjectSourcesInput,
   UpdateProjectInput,
 } from "$lib/types/projects";
-import type { SourceJobRecord } from "$lib/types/sources";
+import type { SourceJobRecord, YoutubeSyncOptions } from "$lib/types/sources";
 
 export interface ResearchProjectsWorkflowState {
   projectsRaw: ProjectRecord[];
@@ -54,7 +55,12 @@ export interface ResearchProjectsWorkflowDeps {
   updateProject(input: UpdateProjectInput): Promise<ProjectRecord>;
   deleteProject(projectId: number): Promise<void>;
   startProjectAnalysis(input: ProjectAnalysisStartCommand): Promise<number>;
+  syncYoutubeSource(sourceId: number, options: YoutubeSyncOptions): Promise<SourceJobRecord>;
   formatError(action: string, error: unknown): string;
+}
+
+export interface LoadWorkspaceOptions {
+  clearQueuedSyncStatus?: boolean;
 }
 
 function selectedProject(projects: ResearchProjectView[], selectedProjectId: string | null) {
@@ -80,7 +86,7 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
     });
   }
 
-  async function loadWorkspace() {
+  async function loadWorkspace(options: LoadWorkspaceOptions = {}) {
     deps.patch({ loading: true });
     try {
       const [projectsRaw, libraryCatalog, sourceJobs, promptTemplates] = await Promise.all([
@@ -104,6 +110,9 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
         promptTemplates,
       });
       await refreshDerivedState();
+      if (options.clearQueuedSyncStatus && deps.getState().status.startsWith("Queued sync for ")) {
+        deps.patch({ status: "" });
+      }
     } catch (error) {
       deps.patch({ status: deps.formatError("loading research projects", error) });
     } finally {
@@ -225,6 +234,34 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
     }
   }
 
+  async function syncProjectSources(sourceIds: number[]) {
+    const selectedSourceIds = new Set(sourceIds);
+    const sources = deps
+      .getState()
+      .projectSourceLinks.filter((source) => selectedSourceIds.has(source.sourceNumericId));
+    const disabledReason = selectedProjectSourcesSyncDisabledReason(sources);
+    if (disabledReason) {
+      deps.patch({ status: disabledReason });
+      return;
+    }
+
+    deps.patch({ saving: true });
+    try {
+      const options = { metadata: true, transcripts: true, comments: false };
+      for (const source of sources) {
+        await deps.syncYoutubeSource(source.sourceNumericId, options);
+      }
+      deps.patch({
+        status: `Queued sync for ${sources.length} ${sources.length === 1 ? "source" : "sources"}.`,
+      });
+      await loadWorkspace();
+    } catch (error) {
+      deps.patch({ status: deps.formatError("syncing project sources", error) });
+    } finally {
+      deps.patch({ saving: false });
+    }
+  }
+
   return {
     refreshDerivedState,
     loadWorkspace,
@@ -234,5 +271,6 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
     updateProject,
     deleteSelectedProject,
     runProjectAnalysis,
+    syncProjectSources,
   };
 }

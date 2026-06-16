@@ -20,22 +20,26 @@
     librarySources,
     runs,
     loading = false,
+    saving = false,
     selectedSourceIds,
     onSelectedSourceIdsChange,
     onOpenConnectLibrary,
     onRefreshProjectRuns,
     onRemoveSource,
+    onSyncSelectedSources,
   }: {
     project: ResearchProjectView | null;
     projectSourceLinks: ProjectSourceLinkView[];
     librarySources: LibrarySourceView[];
     runs: AnalysisRunSummary[];
     loading?: boolean;
+    saving?: boolean;
     selectedSourceIds: string[];
     onSelectedSourceIdsChange: (sourceIds: string[]) => void;
     onOpenConnectLibrary: () => void;
     onRefreshProjectRuns: () => void | Promise<void>;
     onRemoveSource: (sourceId: number | number[]) => void | Promise<void>;
+    onSyncSelectedSources: (sourceIds: number[]) => void | Promise<void>;
   } = $props();
 
   let activeTab = $state("sources");
@@ -86,9 +90,11 @@
         {projectSourceLinks}
         {librarySources}
         {selectedSourceIds}
+        {saving}
         {onSelectedSourceIdsChange}
         {onOpenConnectLibrary}
         {onRemoveSource}
+        {onSyncSelectedSources}
       />
     </ExtractumTabsContent>
     <ExtractumTabsContent value="evidence">

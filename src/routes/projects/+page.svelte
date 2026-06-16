@@ -16,7 +16,7 @@
     startProjectAnalysis,
     updateProject,
   } from "$lib/api/projects";
-  import { listSourceJobs } from "$lib/api/source-jobs";
+  import { listenToSourceJobEvents, listSourceJobs, syncYoutubeSource } from "$lib/api/source-jobs";
   import { formatAppError } from "$lib/app-error";
   import {
     createResearchProjectsWorkflow,
@@ -55,18 +55,23 @@
     updateProject,
     deleteProject,
     startProjectAnalysis,
+    syncYoutubeSource,
     formatError: formatAppError,
   });
 
   let projectRunsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  let clearQueuedSyncStatusOnNextRefresh = false;
 
-  function scheduleProjectRunsRefresh() {
+  function scheduleProjectRunsRefresh(options: { clearQueuedSyncStatus?: boolean } = {}) {
+    clearQueuedSyncStatusOnNextRefresh ||= options.clearQueuedSyncStatus ?? false;
     if (projectRunsRefreshTimer) {
       clearTimeout(projectRunsRefreshTimer);
     }
     projectRunsRefreshTimer = setTimeout(() => {
       projectRunsRefreshTimer = null;
-      void workflow.loadWorkspace();
+      const clearQueuedSyncStatus = clearQueuedSyncStatusOnNextRefresh;
+      clearQueuedSyncStatusOnNextRefresh = false;
+      void workflow.loadWorkspace({ clearQueuedSyncStatus });
     }, 350);
   }
 
@@ -74,9 +79,14 @@
     return kind === "queued" || kind === "started" || kind === "completed" || kind === "failed" || kind === "cancelled";
   }
 
+  function shouldRefreshForSourceJobStatus(status: string) {
+    return status === "succeeded" || status === "failed" || status === "cancelled";
+  }
+
   onMount(() => {
     let disposed = false;
-    let unlisten: (() => void) | null = null;
+    let unlistenAnalysisRuns: (() => void) | null = null;
+    let unlistenSourceJobs: (() => void) | null = null;
 
     void workflow.loadWorkspace();
     void listenToAnalysisRunEvents(({ payload }) => {
@@ -88,16 +98,32 @@
         if (disposed) {
           nextUnlisten();
         } else {
-          unlisten = nextUnlisten;
+          unlistenAnalysisRuns = nextUnlisten;
         }
       })
       .catch((error) => {
         state.status = formatAppError("listening to analysis run events", error);
       });
+    void listenToSourceJobEvents((job) => {
+      if (shouldRefreshForSourceJobStatus(job.status)) {
+        scheduleProjectRunsRefresh({ clearQueuedSyncStatus: true });
+      }
+    })
+      .then((nextUnlisten) => {
+        if (disposed) {
+          nextUnlisten();
+        } else {
+          unlistenSourceJobs = nextUnlisten;
+        }
+      })
+      .catch((error) => {
+        state.status = formatAppError("listening to source job events", error);
+      });
 
     return () => {
       disposed = true;
-      unlisten?.();
+      unlistenAnalysisRuns?.();
+      unlistenSourceJobs?.();
       if (projectRunsRefreshTimer) {
         clearTimeout(projectRunsRefreshTimer);
       }
@@ -140,5 +166,6 @@
     onConnectSelectedSources={workflow.connectSelectedSources}
     onSelectedLibrarySourceIdsChange={(ids) => (state.selectedLibrarySourceIds = new Set(ids))}
     onRefreshProjectRuns={workflow.loadWorkspace}
+    onSyncSelectedSources={workflow.syncProjectSources}
   />
 </section>
