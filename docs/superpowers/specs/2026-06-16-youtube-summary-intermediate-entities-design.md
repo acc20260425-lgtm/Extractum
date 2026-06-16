@@ -39,8 +39,8 @@ projections would have to infer structure from loose candidate arrays.
   evidence.
 - Preserve the rule that LLMs propose semantic candidates while the backend owns
   IDs and reference validity.
-- Persist the graph as a stage or run artifact without introducing new LLM
-  stages in this slice.
+- Persist the graph as a source-scoped transcript-stage artifact without
+  introducing new LLM stages in this slice.
 - Add a complete closed-world allowed-ref map to synthesis input, including
   segment, key point, quote, claim, evidence, and source refs.
 - Allow synthesis output to use backend-provided `claim_refs` and
@@ -155,10 +155,13 @@ the same object shape, but contains exactly one `sources` entry and only entity
 arrays for that source. Synthesis input may merge these source-scoped artifacts
 into the same shape across all successful transcript stages.
 
-When multiple successful attempts exist for the same source, including a
-successful repaired transcript-analysis attempt, consumers must use the artifact
-from the latest successful stage attempt for that source. The original failed
-attempt must not shadow a later repaired success.
+When multiple successful artifact attempts exist for the same source, including
+a successful repaired transcript-analysis attempt, consumers must use the
+`intermediate_entities` artifact with the latest successful `attempt_number` for
+that source's transcript stage. Repair does not require a separate stage row;
+the graph artifact should share the `stage_run_id` and `attempt_number` of the
+`parsed_output` artifact it was built from. The original failed attempt must not
+shadow a later repaired success.
 
 ### Source Records
 
@@ -302,7 +305,7 @@ The builder should be strict for known candidate containers:
 - if an item in a known candidate array is not an object, fail validation and
   quarantine the candidate output;
 - if an item has a known text field but that field is present with a non-string
-  value, fail validation and quarantine the candidate output;
+  and non-null value, fail validation and quarantine the candidate output;
 - if a required text field for an entity is absent or blank, skip that item and
   record a warning candidate in the graph artifact rather than inventing text;
 - if `material_refs` is present but is not an array of strings, fail validation
@@ -338,8 +341,9 @@ Preferred artifact:
 - repaired transcript-analysis outputs produce an `intermediate_entities`
   artifact for the repaired successful attempt; failed or quarantined outputs do
   not produce one.
-- consumers resolve the graph per source by selecting the latest successful
-  transcript-analysis stage attempt for that source, including repaired attempts.
+- consumers resolve the graph per source by selecting the
+  `intermediate_entities` artifact with the latest successful `attempt_number`
+  for that source's transcript stage, including repaired attempts.
 - `content_type = "application/json"`
 - `compression_kind = "zstd"`
 
@@ -446,8 +450,8 @@ entities when a complete graph set exists for the run.
 Initial behavior:
 
 - load per-source graph artifacts from successful transcript-analysis stages;
-- resolve graph artifacts by latest successful stage attempt per source,
-  including repaired attempts;
+- resolve graph artifacts by latest successful artifact `attempt_number` per
+  source, including repaired attempts on the same `stage_run_id`;
 - build `claims` from graph claims;
 - build `evidence` from graph evidence;
 - keep the current fallback path from transcript parsed output for older runs or
@@ -488,8 +492,8 @@ Add focused Rust tests for:
 - synthesis input contains `canonical_graph` and complete `allowed_refs`,
   including `segment_refs`, `key_point_refs`, and `quote_refs`;
 - synthesis output with unknown `claim_refs` fails validation;
-- synthesis output with direct `segment_refs` or `key_point_refs` fails
-  validation in v1;
+- synthesis output with direct `segment_refs`, `key_point_refs`, or `quote_refs`
+  fails validation in v1;
 - synthesis output with allowed refs succeeds;
 - single-video runs build and use intermediate graph artifacts even when
   synthesis is skipped;
