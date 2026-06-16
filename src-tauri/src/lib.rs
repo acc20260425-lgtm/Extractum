@@ -98,9 +98,9 @@ use notebooklm_export::export_source_to_notebooklm;
 
 mod llm;
 use llm::{
-    ask_llm_stream, cancel_llm_request, clear_llm_profile_api_key, get_llm_profiles,
-    get_llm_request_snapshots, list_llm_provider_models, save_llm_profile, set_active_llm_profile,
-    LlmSchedulerState,
+    ask_llm_stream, cancel_llm_request, clear_llm_profile_api_key, delete_llm_profile,
+    get_llm_profiles, get_llm_request_snapshots, list_llm_provider_models, save_llm_profile,
+    set_active_llm_profile, LlmSchedulerState,
 };
 
 mod analysis;
@@ -229,6 +229,7 @@ pub fn run() {
             get_llm_request_snapshots,
             save_llm_profile,
             clear_llm_profile_api_key,
+            delete_llm_profile,
             set_active_llm_profile,
             list_llm_provider_models,
             ask_llm_stream,

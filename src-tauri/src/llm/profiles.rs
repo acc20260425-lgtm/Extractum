@@ -333,11 +333,48 @@ pub(super) fn validate_profile_input(
     Ok((profile_id, provider_kind, default_model, base_url))
 }
 
+pub(super) async fn delete_profile_from_pool(
+    pool: &Pool<Sqlite>,
+    secret_store: &SecretStoreState,
+    profile_id: &str,
+) -> AppResult<()> {
+    let profile_id = normalize_profile_id(profile_id)?;
+    if profile_id == DEFAULT_PROFILE_ID {
+        return Err(AppError::validation("Cannot delete the default profile"));
+    }
+
+    let profile_ids = list_profile_ids_from_pool(pool).await?;
+    if !profile_ids
+        .iter()
+        .any(|existing_id| existing_id == &profile_id)
+    {
+        return Err(AppError::not_found(format!(
+            "Profile '{profile_id}' was not found"
+        )));
+    }
+
+    delete_setting(pool, &profile_provider_key(&profile_id)).await?;
+    delete_setting(pool, &profile_model_key(&profile_id)).await?;
+    delete_setting(pool, &profile_base_url_key(&profile_id)).await?;
+
+    let key = llm_profile_api_key_secret(&profile_id);
+    secret_store.delete_secret(key).await?;
+
+    let active = read_setting(pool, active_profile_key())
+        .await?
+        .unwrap_or_else(|| DEFAULT_PROFILE_ID.to_string());
+    if normalize_profile_id(&active)? == profile_id {
+        write_setting(pool, active_profile_key(), DEFAULT_PROFILE_ID).await?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        clear_profile_api_key, load_profiles_state_from_pool, resolve_profile_from_pool,
-        save_profile_to_pool, set_active_profile_in_pool, validate_profile_id,
+        clear_profile_api_key, delete_profile_from_pool, load_profiles_state_from_pool,
+        resolve_profile_from_pool, save_profile_to_pool, set_active_profile_in_pool,
+        validate_profile_id,
     };
     use crate::error::AppErrorKind;
     use crate::secret_store::tests::InMemorySecretStore;
@@ -617,5 +654,51 @@ mod tests {
                 .api_key,
             ""
         );
+    }
+
+    #[tokio::test]
+    async fn delete_profile_removes_settings_and_secret_and_resets_active() {
+        let pool = memory_pool().await;
+        let (_store, secret_store) = memory_secret_store();
+
+        let err = delete_profile_from_pool(&pool, &secret_store, "default")
+            .await
+            .unwrap_err();
+        assert!(err.message.contains("Cannot delete the default profile"));
+
+        save_profile_to_pool(
+            &pool,
+            &secret_store,
+            "custom",
+            "gemini",
+            "gemini-2.5-flash",
+            Some("custom-api-key"),
+            "",
+            true,
+        )
+        .await
+        .expect("save custom profile");
+
+        let state = load_profiles_state_from_pool(&pool, &secret_store)
+            .await
+            .expect("load state");
+        assert_eq!(state.active_profile, "custom");
+        assert!(state.profiles.iter().any(|p| p.profile_id == "custom"));
+
+        delete_profile_from_pool(&pool, &secret_store, "custom")
+            .await
+            .expect("delete custom profile");
+
+        let state = load_profiles_state_from_pool(&pool, &secret_store)
+            .await
+            .expect("load state");
+        assert!(!state.profiles.iter().any(|p| p.profile_id == "custom"));
+        assert_eq!(state.active_profile, "default");
+
+        let secret = secret_store
+            .get_secret(llm_profile_api_key_secret("custom"))
+            .await
+            .expect("read custom secret");
+        assert_eq!(secret, None);
     }
 }

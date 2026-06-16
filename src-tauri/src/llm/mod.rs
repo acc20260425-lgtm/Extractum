@@ -17,8 +17,9 @@ mod types;
 use gemini::list_gemini_models;
 use openai_compat::{list_openai_compat_models, OpenAiCompatProviderConfig};
 use profiles::{
-    clear_profile_api_key, load_profiles_state_from_pool, resolve_profile_from_pool,
-    save_profile_to_pool, set_active_profile_in_pool, validate_profile_id, validate_profile_input,
+    clear_profile_api_key, delete_profile_from_pool, load_profiles_state_from_pool,
+    resolve_profile_from_pool, save_profile_to_pool, set_active_profile_in_pool,
+    validate_profile_id, validate_profile_input,
 };
 pub(crate) use runner::{
     resolve_effective_model, run_llm_collect_with_profile, run_llm_stream_with_profile,
@@ -406,6 +407,18 @@ pub async fn set_active_llm_profile(
     let pool = get_pool(&handle).await?;
     let profile_id = validate_profile_id(&profile_id)?;
     set_active_profile_in_pool(&pool, &profile_id).await?;
+    load_profiles_state_from_pool(&pool, &secret_store).await
+}
+
+#[tauri::command]
+pub async fn delete_llm_profile(
+    handle: AppHandle,
+    secret_store: tauri::State<'_, SecretStoreState>,
+    profile_id: String,
+) -> AppResult<LlmProfilesState> {
+    let pool = get_pool(&handle).await?;
+    let profile_id = validate_profile_id(&profile_id)?;
+    delete_profile_from_pool(&pool, &secret_store, &profile_id).await?;
     load_profiles_state_from_pool(&pool, &secret_store).await
 }
 
