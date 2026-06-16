@@ -113,6 +113,7 @@
           rows={rows}
           {columns}
           selectedRowIds={Array.from(selectedSourceIds)}
+          multiselect={true}
           onSelectedRowIdsChange={onSelectedSourceIdsChange}
           height="100%"
           overlay="No library sources"

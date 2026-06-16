@@ -4,6 +4,7 @@ import {
   buildProjectSourceLinksView,
   buildResearchProjectsView,
   projectRunDisabledReason,
+  reconcileProjectSourceSelection,
 } from "./research-projects-model";
 import type { LibraryCatalogRecord } from "$lib/types/library-sources";
 import type { ProjectRecord, ProjectSourceRecord } from "$lib/types/projects";
@@ -138,5 +139,17 @@ describe("research projects model", () => {
         { ...projectSources[0], source_id: 11, provider: "telegram" },
       ]),
     ).toBe("Mixed-provider project runs are not supported yet.");
+  });
+
+  it("keeps source selection scoped to the current project rows", () => {
+    const links = buildProjectSourceLinksView("project:1", [
+      ...projectSources,
+      { ...projectSources[0], project_id: 1, source_id: 11, title: "Second" },
+      { ...projectSources[0], project_id: 2, source_id: 12, title: "Other project" },
+    ]);
+
+    expect(reconcileProjectSourceSelection(["source:10", "source:12", "source:99"], links)).toEqual([
+      "source:10",
+    ]);
   });
 });

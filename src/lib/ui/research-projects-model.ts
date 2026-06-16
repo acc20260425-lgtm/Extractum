@@ -172,6 +172,14 @@ export function connectableSelection(sources: LibrarySourceView[], selectedIds: 
   return sources.filter((source) => selectedIds.has(source.id) && source.connectable);
 }
 
+export function reconcileProjectSourceSelection(
+  selectedIds: string[],
+  rows: Pick<ProjectSourceLinkView, "sourceId">[],
+) {
+  const visibleIds = new Set(rows.map((row) => row.sourceId));
+  return selectedIds.filter((id) => visibleIds.has(id));
+}
+
 export function buildProjectSourceLinksView(
   projectId: string | null,
   projectSources: ProjectSourceRecord[],

@@ -11,6 +11,7 @@
   import TopCommandBar from "./TopCommandBar.svelte";
   import type { ProjectAnalysisStartCommand, ProjectEditorInput } from "$lib/types/projects";
   import type { ResearchProjectsWorkflowState } from "$lib/ui/research-projects-workflow";
+  import { reconcileProjectSourceSelection } from "$lib/ui/research-projects-model";
   import { projectsSharedState } from "$lib/projects-shared.svelte";
 
   let {
@@ -48,10 +49,13 @@
   let currentRuns = $derived(
     workflowState.runs.filter((run) => currentProject && run.project_id === currentProject.projectId),
   );
+  let currentProjectSourceLinks = $derived(
+    workflowState.projectSourceLinks.filter((source) => source.projectId === workflowState.selectedProjectId),
+  );
   let selectedSourceIds = $state<string[]>([]);
   let selectedSource = $derived(
     selectedSourceIds.length > 0
-      ? workflowState.projectSourceLinks.find((source) => source.sourceId === selectedSourceIds[0]) ?? null
+      ? currentProjectSourceLinks.find((source) => source.sourceId === selectedSourceIds[0]) ?? null
       : null,
   );
   let connectOpen = $state(false);
@@ -71,6 +75,16 @@
   $effect(() => {
     if (!editorOpen && editorMode === "create") {
       projectsSharedState.showCreateDialog = false;
+    }
+  });
+
+  $effect(() => {
+    const nextSelection = reconcileProjectSourceSelection(selectedSourceIds, currentProjectSourceLinks);
+    if (
+      nextSelection.length !== selectedSourceIds.length ||
+      nextSelection.some((id, index) => id !== selectedSourceIds[index])
+    ) {
+      selectedSourceIds = nextSelection;
     }
   });
 

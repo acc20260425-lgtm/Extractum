@@ -65,6 +65,7 @@
   let selectedRows = $derived(
     rows.filter((row) => selectedSourceIds.includes(row.id))
   );
+  let selectedRowIdsInProject = $derived(selectedRows.map((row) => row.id));
 
   async function handleRemoveSelected() {
     if (selectedRows.length === 0) return;
@@ -83,11 +84,11 @@
 
 <section class="sources-tab">
   <header class="sources-toolbar">
-    {#if selectedSourceIds.length > 0}
+    {#if selectedRows.length > 0}
       <div class="contextual-action-bar">
         <div class="selection-info">
-          <span class="selection-count">{selectedSourceIds.length}</span>
-          <span>selected {selectedSourceIds.length === 1 ? 'source' : 'sources'}</span>
+          <span class="selection-count">{selectedRows.length}</span>
+          <span>selected {selectedRows.length === 1 ? 'source' : 'sources'}</span>
         </div>
         <div class="action-buttons">
           <ExtractumButton variant="secondary" disabled={true} title="Sync selected sources (not implemented)">
@@ -132,7 +133,8 @@
     <ExtractumDataGrid
       rows={rows}
       {columns}
-      selectedRowIds={selectedSourceIds}
+      selectedRowIds={selectedRowIdsInProject}
+      multiselect={true}
       onSelectedRowIdsChange={onSelectedSourceIdsChange}
       height="100%"
       overlay="No project sources"

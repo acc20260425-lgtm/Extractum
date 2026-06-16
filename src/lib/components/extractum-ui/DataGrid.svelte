@@ -18,6 +18,7 @@
     columns,
     selectedRowIds = [],
     height = "100%",
+    multiselect = false,
     class: className,
     overlay = "Нет данных",
     onSelectedRowIdsChange = () => {},
@@ -26,6 +27,7 @@
     columns: IColumnConfig[];
     selectedRowIds?: string[];
     height?: string;
+    multiselect?: boolean;
     class?: string;
     overlay?: string;
     onSelectedRowIdsChange?: (ids: string[]) => void;
@@ -58,7 +60,7 @@
         selectedRows={selectedRowIds}
         {rowStyle}
         overlay={visibleOverlay}
-        multiselect
+        multiselect={multiselect}
         select
         sizes={{ rowHeight: 34, headerHeight: 34, columnWidth: 160 }}
         onselectrow={emitSelection}
