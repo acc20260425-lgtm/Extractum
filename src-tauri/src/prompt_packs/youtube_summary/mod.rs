@@ -17,6 +17,7 @@ pub(crate) mod snapshots;
 mod snapshots_tests;
 pub(crate) mod sources;
 pub(crate) mod store;
+pub(crate) mod synthesis_execution;
 pub(crate) mod synthesis_input;
 #[cfg(test)]
 mod synthesis_input_tests;
