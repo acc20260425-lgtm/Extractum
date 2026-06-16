@@ -1,5 +1,8 @@
 use sqlx::SqlitePool;
 
+pub(crate) mod entities;
+#[cfg(test)]
+mod entities_tests;
 pub(crate) mod execution;
 pub(crate) mod execution_result;
 #[cfg(test)]

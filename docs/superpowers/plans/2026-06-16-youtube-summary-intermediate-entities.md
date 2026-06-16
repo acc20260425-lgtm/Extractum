@@ -62,7 +62,7 @@
 - Create: `src-tauri/src/prompt_packs/youtube_summary/entities_tests.rs`
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/mod.rs`
 
-- [ ] **Step 1: Add module declarations**
+- [x] **Step 1: Add module declarations**
 
 In `src-tauri/src/prompt_packs/youtube_summary/mod.rs`, add the production module near the other domain modules:
 
@@ -77,7 +77,7 @@ Add the test module near the other `#[cfg(test)]` modules:
 mod entities_tests;
 ```
 
-- [ ] **Step 2: Write failing graph builder tests**
+- [x] **Step 2: Write failing graph builder tests**
 
 Create `src-tauri/src/prompt_packs/youtube_summary/entities_tests.rs` with these tests:
 
@@ -275,7 +275,7 @@ fn evidence_index_pointing_to_skipped_quote_candidate_is_rejected() {
 }
 ```
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
 
 Run:
 
@@ -285,7 +285,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib youtube_summary::entities_
 
 Expected: FAIL because `entities` module and `build_source_intermediate_entities` do not exist.
 
-- [ ] **Step 4: Implement graph builder**
+- [x] **Step 4: Implement graph builder**
 
 Create `src-tauri/src/prompt_packs/youtube_summary/entities.rs` with these public items and helper shape:
 
@@ -399,7 +399,7 @@ Implement the helper functions named above with these exact rules:
 - Graph `segment_ref` on key points/quotes is assigned only from valid `segment_candidate_index`.
 - Graph `quote_ref` on evidence is assigned only from valid `quote_candidate_index`.
 
-- [ ] **Step 5: Run entity tests**
+- [x] **Step 5: Run entity tests**
 
 Run:
 
@@ -409,7 +409,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib youtube_summary::entities_
 
 Expected: PASS for all entity builder tests.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add src-tauri\src\prompt_packs\youtube_summary\mod.rs src-tauri\src\prompt_packs\youtube_summary\entities.rs src-tauri\src\prompt_packs\youtube_summary\entities_tests.rs
