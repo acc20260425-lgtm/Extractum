@@ -13,9 +13,9 @@ pub(crate) async fn mark_run_running(pool: &SqlitePool, run_id: i64, total: i64)
              updated_at = ?
          WHERE id = ? AND run_status = 'queued'",
     )
-    .bind(now_string())
+    .bind(crate::time::now_rfc3339_utc())
     .bind(total)
-    .bind(now_string())
+    .bind(crate::time::now_rfc3339_utc())
     .bind(run_id)
     .execute(pool)
     .await
@@ -49,7 +49,7 @@ pub(crate) async fn update_run_progress(
     .bind(successes)
     .bind(total)
     .bind(format!("Processed {successes} of {total} video(s)"))
-    .bind(now_string())
+    .bind(crate::time::now_rfc3339_utc())
     .bind(run_id)
     .execute(pool)
     .await
@@ -75,17 +75,11 @@ pub(crate) async fn mark_run_cancelled(
     )
     .bind(progress_current)
     .bind(progress_total)
-    .bind(now_string())
-    .bind(now_string())
+    .bind(crate::time::now_rfc3339_utc())
+    .bind(crate::time::now_rfc3339_utc())
     .bind(run_id)
     .execute(pool)
     .await
     .map_err(AppError::database)?;
     Ok(())
-}
-
-fn now_string() -> String {
-    time::OffsetDateTime::now_utc()
-        .format(&time::format_description::well_known::Rfc3339)
-        .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_string())
 }

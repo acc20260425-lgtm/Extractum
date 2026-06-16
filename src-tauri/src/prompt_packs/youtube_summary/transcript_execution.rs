@@ -69,8 +69,8 @@ pub(crate) async fn mark_transcript_stage_failed(
     )
     .bind(error)
     .bind(error)
-    .bind(now_string())
-    .bind(now_string())
+    .bind(crate::time::now_rfc3339_utc())
+    .bind(crate::time::now_rfc3339_utc())
     .bind(stage_run_id)
     .execute(pool)
     .await
@@ -90,17 +90,11 @@ pub(crate) async fn mark_transcript_stage_cancelled(
              updated_at = ?
          WHERE id = ? AND stage_status IN ('pending', 'running')",
     )
-    .bind(now_string())
-    .bind(now_string())
+    .bind(crate::time::now_rfc3339_utc())
+    .bind(crate::time::now_rfc3339_utc())
     .bind(stage_run_id)
     .execute(pool)
     .await
     .map_err(AppError::database)?;
     Ok(())
-}
-
-fn now_string() -> String {
-    time::OffsetDateTime::now_utc()
-        .format(&time::format_description::well_known::Rfc3339)
-        .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_string())
 }

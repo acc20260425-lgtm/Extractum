@@ -40,8 +40,8 @@ pub(crate) async fn mark_synthesis_stage_skipped(pool: &SqlitePool, run_id: i64)
            AND stage_name = ?
            AND stage_status IN ('pending', 'not_implemented')",
     )
-    .bind(now_string())
-    .bind(now_string())
+    .bind(crate::time::now_rfc3339_utc())
+    .bind(crate::time::now_rfc3339_utc())
     .bind(run_id)
     .bind(SYNTHESIS_STAGE_NAME)
     .execute(pool)
@@ -183,10 +183,4 @@ where
             Ok("failed")
         }
     }
-}
-
-fn now_string() -> String {
-    time::OffsetDateTime::now_utc()
-        .format(&time::format_description::well_known::Rfc3339)
-        .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_string())
 }

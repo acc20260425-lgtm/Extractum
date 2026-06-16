@@ -41,7 +41,7 @@ pub(crate) async fn persist_minimal_execution_result(
         "pack_id": "youtube_summary",
         "pack_version": "1.0.0",
         "stage": "youtube_summary/transcript_analysis",
-        "created_at": now_string(),
+        "created_at": crate::time::now_rfc3339_utc(),
         "output_language": "en",
         "metadata": {},
         "run_context": {},
@@ -68,9 +68,9 @@ pub(crate) async fn persist_minimal_execution_result(
     .bind(result_status)
     .bind(format!("sha384-{}", simple_hash(&canonical_json)))
     .bind(compress_text(&canonical_json).map_err(AppError::internal)?)
-    .bind(now_string())
-    .bind(now_string())
-    .bind(now_string())
+    .bind(crate::time::now_rfc3339_utc())
+    .bind(crate::time::now_rfc3339_utc())
+    .bind(crate::time::now_rfc3339_utc())
     .fetch_one(pool)
     .await
     .map_err(AppError::database)?;
@@ -107,8 +107,8 @@ pub(crate) async fn persist_minimal_execution_result(
     )
     .bind(result_status)
     .bind(result_status)
-    .bind(now_string())
-    .bind(now_string())
+    .bind(crate::time::now_rfc3339_utc())
+    .bind(crate::time::now_rfc3339_utc())
     .bind(run_id)
     .execute(pool)
     .await
@@ -135,13 +135,6 @@ pub(crate) fn terminal_status_for_synthesis(
         return "partial";
     }
     "complete"
-}
-
-#[cfg(test)]
-fn now_string() -> String {
-    time::OffsetDateTime::now_utc()
-        .format(&time::format_description::well_known::Rfc3339)
-        .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_string())
 }
 
 #[cfg(test)]
