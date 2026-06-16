@@ -937,7 +937,7 @@ git commit -m "feat: validate youtube summary video traversal refs"
 **Files:**
 - No code changes expected.
 
-- [ ] **Step 1: Run formatter check**
+- [x] **Step 1: Run formatter check**
 
 ```powershell
 cargo fmt --manifest-path src-tauri\Cargo.toml --check
@@ -945,7 +945,7 @@ cargo fmt --manifest-path src-tauri\Cargo.toml --check
 
 Expected: command exits successfully.
 
-- [ ] **Step 2: Run focused result-validation tests**
+- [x] **Step 2: Run focused result-validation tests**
 
 ```powershell
 cargo test --manifest-path src-tauri\Cargo.toml --lib result_validation
@@ -953,7 +953,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib result_validation
 
 Expected: command exits successfully.
 
-- [ ] **Step 3: Run YouTube Summary library tests**
+- [x] **Step 3: Run YouTube Summary library tests**
 
 ```powershell
 cargo test --manifest-path src-tauri\Cargo.toml --lib youtube_summary_
@@ -961,7 +961,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib youtube_summary_
 
 Expected: command exits successfully.
 
-- [ ] **Step 4: Run prompt pack library tests**
+- [x] **Step 4: Run prompt pack library tests**
 
 ```powershell
 cargo test --manifest-path src-tauri\Cargo.toml --lib prompt_packs
@@ -969,7 +969,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib prompt_packs
 
 Expected: command exits successfully.
 
-- [ ] **Step 5: Run cargo check**
+- [x] **Step 5: Run cargo check**
 
 ```powershell
 cargo check --manifest-path src-tauri\Cargo.toml
@@ -977,7 +977,7 @@ cargo check --manifest-path src-tauri\Cargo.toml
 
 Expected: command exits successfully.
 
-- [ ] **Step 6: Run diff check**
+- [x] **Step 6: Run diff check**
 
 ```powershell
 git diff --check
@@ -985,7 +985,7 @@ git diff --check
 
 Expected: no whitespace errors. On Windows, the existing LF/CRLF warning is acceptable if there are no `trailing whitespace` or `space before tab` errors.
 
-- [ ] **Step 7: Inspect git status**
+- [x] **Step 7: Inspect git status**
 
 ```powershell
 git status --short
@@ -993,7 +993,7 @@ git status --short
 
 Expected: only intended files are modified or committed. Do not stage `tmp/`.
 
-- [ ] **Step 8: Commit final verification metadata if any code changed after previous commits**
+- [x] **Step 8: Commit final verification metadata if any code changed after previous commits**
 
 If `git status --short` shows no uncommitted intended code changes after the
 previous task commits, skip this step. If formatting changed files, commit them:

@@ -157,11 +157,7 @@ pub(crate) fn validate_youtube_summary_canonical_result(
         .pointer("/outputs/pack_data/youtube_summary/synthesis")
         .and_then(Value::as_object)
     {
-        validate_synthesis_derived_traversal_refs(
-            synthesis,
-            &video_source_by_id,
-            &mut findings,
-        );
+        validate_synthesis_derived_traversal_refs(synthesis, &video_source_by_id, &mut findings);
     }
     validate_video_traversal_refs(
         videos,
@@ -785,7 +781,9 @@ fn validate_video_traversal_refs(
                     findings.push(finding(
                         "error",
                         "VR-YS-004",
-                        format!("video.source_refs must include self source_ref_id `{source_ref_id}`"),
+                        format!(
+                            "video.source_refs must include self source_ref_id `{source_ref_id}`"
+                        ),
                         Some(format!("{base_path}.source_refs")),
                     ));
                 }
@@ -1429,10 +1427,10 @@ mod tests {
     #[test]
     fn synthesis_extra_top_level_source_ref_not_in_nested_items_returns_error() {
         let mut canonical = valid_canonical_result_with_synthesis();
-        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"][0]
-            ["video_refs"] = serde_json::json!([]);
-        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"][0]
-            ["source_refs"] = serde_json::json!([]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"]
+            [0]["video_refs"] = serde_json::json!([]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"]
+            [0]["source_refs"] = serde_json::json!([]);
         canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["common_claims"][0]
             ["video_refs"] = serde_json::json!([]);
         canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["common_claims"][0]
@@ -1476,10 +1474,10 @@ mod tests {
     #[test]
     fn synthesis_unknown_video_ref_does_not_cascade_to_source_union_error() {
         let mut canonical = valid_canonical_result_with_synthesis();
-        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"][0]
-            ["video_refs"] = serde_json::json!(["video_missing"]);
-        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"][0]
-            ["source_refs"] = serde_json::json!([]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"]
+            [0]["video_refs"] = serde_json::json!(["video_missing"]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"]
+            [0]["source_refs"] = serde_json::json!([]);
         canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["common_claims"][0]
             ["video_refs"] = serde_json::json!([]);
         canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["common_claims"][0]
