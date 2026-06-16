@@ -701,4 +701,38 @@ mod tests {
             .expect("read custom secret");
         assert_eq!(secret, None);
     }
+
+    #[tokio::test]
+    async fn delete_profile_fails_if_secret_store_fails_leaving_db_settings_intact() {
+        let pool = memory_pool().await;
+        let (store, secret_store) = memory_secret_store();
+
+        save_profile_to_pool(
+            &pool,
+            &secret_store,
+            "custom",
+            "gemini",
+            "gemini-2.5-flash",
+            Some("custom-api-key"),
+            "",
+            true,
+        )
+        .await
+        .expect("save custom profile");
+
+        // Make delete fail in secret store
+        store.fail_delete("mock secret deletion error");
+
+        let err = delete_profile_from_pool(&pool, &secret_store, "custom")
+            .await
+            .unwrap_err();
+        assert_eq!(err.message, "mock secret deletion error");
+
+        // DB settings should still remain intact since deletion aborted early
+        let state = load_profiles_state_from_pool(&pool, &secret_store)
+            .await
+            .expect("load state");
+        assert!(state.profiles.iter().any(|p| p.profile_id == "custom"));
+        assert_eq!(state.active_profile, "custom");
+    }
 }
