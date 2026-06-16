@@ -40,7 +40,13 @@ pub(crate) fn validate_youtube_summary_canonical_result(
         "$.schema_version",
         &mut findings,
     );
-    expect_string_value(canonical, "pack_id", "youtube_summary", "$.pack_id", &mut findings);
+    expect_string_value(
+        canonical,
+        "pack_id",
+        "youtube_summary",
+        "$.pack_id",
+        &mut findings,
+    );
     if canonical.get("run_id").and_then(Value::as_i64) != Some(context.run_id) {
         findings.push(finding(
             "error",
@@ -122,7 +128,10 @@ pub(crate) fn validate_youtube_summary_canonical_result(
             .and_then(Value::as_array),
         "video_id",
     );
-    let claim_ids = collect_string_ids(canonical.get("claims").and_then(Value::as_array), "claim_id");
+    let claim_ids = collect_string_ids(
+        canonical.get("claims").and_then(Value::as_array),
+        "claim_id",
+    );
     let evidence_ids = collect_string_ids(
         canonical.get("evidence").and_then(Value::as_array),
         "evidence_id",
@@ -389,7 +398,8 @@ fn validate_result_refs(
             continue;
         };
         for (index, item) in items.iter().enumerate() {
-            let base = format!("$.outputs.pack_data.youtube_summary.synthesis.{array_key}[{index}]");
+            let base =
+                format!("$.outputs.pack_data.youtube_summary.synthesis.{array_key}[{index}]");
             validate_ref_array(
                 item.get("source_refs"),
                 source_ids,
@@ -484,7 +494,12 @@ fn validate_ref_array(
     base_path: &str,
     findings: &mut Vec<PromptPackResultValidationFinding>,
 ) {
-    for (index, item) in value.and_then(Value::as_array).into_iter().flatten().enumerate() {
+    for (index, item) in value
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .enumerate()
+    {
         // Applies to top-level synthesis refs and nested synthesis item refs,
         // including video_refs/source_refs/claim_refs/evidence_refs. Non-string
         // ref items are not detected in this result-validation MVP; raw
@@ -606,7 +621,10 @@ mod tests {
     #[test]
     fn missing_required_top_level_array_returns_error() {
         let mut canonical = valid_canonical_result();
-        canonical.as_object_mut().expect("canonical object").remove("claims");
+        canonical
+            .as_object_mut()
+            .expect("canonical object")
+            .remove("claims");
 
         let findings =
             validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
@@ -789,8 +807,8 @@ mod tests {
         let mut canonical = valid_canonical_result_with_synthesis();
         canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["claim_refs"] =
             serde_json::json!([]);
-        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"][0]
-            ["claim_refs"] = serde_json::json!(["claim_999"]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"]
+            [0]["claim_refs"] = serde_json::json!(["claim_999"]);
 
         let findings =
             validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
@@ -805,8 +823,8 @@ mod tests {
     #[test]
     fn nested_synthesis_unknown_video_ref_returns_error() {
         let mut canonical = valid_canonical_result_with_synthesis();
-        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"][0]
-            ["video_refs"] = serde_json::json!(["video_missing"]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"]
+            [0]["video_refs"] = serde_json::json!(["video_missing"]);
 
         let findings =
             validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
@@ -897,10 +915,15 @@ mod tests {
         let findings =
             validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
 
-        assert!(!findings.iter().any(|finding| finding.code == "RV-RESULT-005"));
+        assert!(!findings
+            .iter()
+            .any(|finding| finding.code == "RV-RESULT-005"));
     }
 
-    fn context(terminal_status: &str, evidence_mode: &str) -> YoutubeSummaryResultValidationContext {
+    fn context(
+        terminal_status: &str,
+        evidence_mode: &str,
+    ) -> YoutubeSummaryResultValidationContext {
         YoutubeSummaryResultValidationContext::new(42, terminal_status, evidence_mode)
     }
 

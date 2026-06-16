@@ -1215,7 +1215,7 @@ git commit -m "feat: validate youtube summary result refs"
 **Files:**
 - Modify: `src-tauri/src/prompt_packs/projections.rs`
 
-- [ ] **Step 1: Add a rollback regression test**
+- [x] **Step 1: Add a rollback regression test**
 
 Add this test to `projections.rs` tests:
 
@@ -1256,7 +1256,7 @@ async fn low_level_result_persistence_rolls_back_when_projection_insert_fails() 
 }
 ```
 
-- [ ] **Step 2: Run the rollback test and confirm it fails**
+- [x] **Step 2: Run the rollback test and confirm it fails**
 
 Run:
 
@@ -1266,7 +1266,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib low_level_result_persisten
 
 Expected: FAIL because the current helper inserts `prompt_pack_results` before projection insertion fails.
 
-- [ ] **Step 3: Extract transaction-aware helpers**
+- [x] **Step 3: Extract transaction-aware helpers**
 
 Update imports:
 
@@ -1590,7 +1590,7 @@ sqlx::query("UPDATE prompt_pack_results SET projection_updated_at = ? WHERE id =
 tx.commit().await.map_err(AppError::database)?;
 ```
 
-- [ ] **Step 4: Run projection tests**
+- [x] **Step 4: Run projection tests**
 
 Run:
 
@@ -1600,7 +1600,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib projections
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit transaction refactor**
+- [x] **Step 5: Commit transaction refactor**
 
 ```powershell
 git add src-tauri\src\prompt_packs\projections.rs

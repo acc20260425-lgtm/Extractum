@@ -1,4 +1,4 @@
-use sqlx::SqlitePool;
+use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::compression::{compress_text, decompress_text};
 use crate::error::{AppError, AppResult};
@@ -7,6 +7,19 @@ pub(crate) async fn persist_final_result_transaction(
     pool: &SqlitePool,
     run_id: i64,
     canonical_result: serde_json::Value,
+    terminal_status: &str,
+) -> AppResult<()> {
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
+    persist_final_result_in_transaction(&mut tx, run_id, &canonical_result, terminal_status)
+        .await?;
+    tx.commit().await.map_err(AppError::database)?;
+    Ok(())
+}
+
+pub(crate) async fn persist_final_result_in_transaction(
+    tx: &mut Transaction<'_, Sqlite>,
+    run_id: i64,
+    canonical_result: &serde_json::Value,
     terminal_status: &str,
 ) -> AppResult<()> {
     let canonical_json = canonical_result.to_string();
@@ -32,18 +45,18 @@ pub(crate) async fn persist_final_result_transaction(
     .bind(compress_text(&canonical_json).map_err(AppError::internal)?)
     .bind(&now)
     .bind(&now)
-    .fetch_one(pool)
+    .fetch_one(&mut **tx)
     .await
     .map_err(AppError::database)?;
 
-    rebuild_projection_rows(pool, result_row_id, run_id, &canonical_result).await?;
+    rebuild_projection_rows_in_transaction(tx, result_row_id, run_id, canonical_result).await?;
     sqlx::query(
         "UPDATE prompt_pack_results SET projection_updated_at = ?, updated_at = ? WHERE id = ?",
     )
     .bind(&now)
     .bind(&now)
     .bind(result_row_id)
-    .execute(pool)
+    .execute(&mut **tx)
     .await
     .map_err(AppError::database)?;
     sqlx::query(
@@ -56,7 +69,7 @@ pub(crate) async fn persist_final_result_transaction(
     .bind(&now)
     .bind(&now)
     .bind(run_id)
-    .execute(pool)
+    .execute(&mut **tx)
     .await
     .map_err(AppError::database)?;
     sqlx::query(
@@ -65,7 +78,7 @@ pub(crate) async fn persist_final_result_transaction(
     )
     .bind(run_id)
     .bind(&now)
-    .execute(pool)
+    .execute(&mut **tx)
     .await
     .map_err(AppError::database)?;
     Ok(())
@@ -84,18 +97,20 @@ pub(crate) async fn repair_prompt_pack_result_projections(
     let canonical_json = decompress_text(&canonical_json_zstd).map_err(AppError::internal)?;
     let canonical: serde_json::Value = serde_json::from_str(&canonical_json)
         .map_err(|error| AppError::internal(format!("parse canonical result: {error}")))?;
-    rebuild_projection_rows(pool, result_row_id, run_id, &canonical).await?;
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
+    rebuild_projection_rows_in_transaction(&mut tx, result_row_id, run_id, &canonical).await?;
     sqlx::query("UPDATE prompt_pack_results SET projection_updated_at = ? WHERE id = ?")
         .bind(crate::time::now_rfc3339_utc())
         .bind(result_row_id)
-        .execute(pool)
+        .execute(&mut *tx)
         .await
         .map_err(AppError::database)?;
+    tx.commit().await.map_err(AppError::database)?;
     Ok(())
 }
 
-async fn rebuild_projection_rows(
-    pool: &SqlitePool,
+async fn rebuild_projection_rows_in_transaction(
+    tx: &mut Transaction<'_, Sqlite>,
     result_row_id: i64,
     run_id: i64,
     canonical: &serde_json::Value,
@@ -121,7 +136,7 @@ async fn rebuild_projection_rows(
     ] {
         sqlx::query(&format!("DELETE FROM {table} WHERE result_row_id = ?"))
             .bind(result_row_id)
-            .execute(pool)
+            .execute(&mut **tx)
             .await
             .map_err(AppError::database)?;
     }
@@ -143,7 +158,7 @@ async fn rebuild_projection_rows(
         .bind(source_ref["source_ref_id"].as_str().unwrap_or(""))
         .bind(source_ref["source_snapshot_id"].as_i64().unwrap_or(0))
         .bind(source_ref["title"].as_str())
-        .execute(pool)
+        .execute(&mut **tx)
         .await
         .map_err(AppError::database)?;
     }
@@ -165,7 +180,7 @@ async fn rebuild_projection_rows(
         .bind(claim["claim_id"].as_str().unwrap_or(""))
         .bind(claim["source_ref_id"].as_str())
         .bind(claim["text"].as_str().unwrap_or(""))
-        .execute(pool)
+        .execute(&mut **tx)
         .await
         .map_err(AppError::database)?;
     }
@@ -188,7 +203,7 @@ async fn rebuild_projection_rows(
         .bind(evidence["claim_id"].as_str())
         .bind(evidence["material_ref_id"].as_str())
         .bind(evidence["text"].as_str().unwrap_or(""))
-        .execute(pool)
+        .execute(&mut **tx)
         .await
         .map_err(AppError::database)?;
     }
@@ -210,7 +225,7 @@ async fn rebuild_projection_rows(
         .bind(video["source_ref_id"].as_str().unwrap_or(""))
         .bind(video["title"].as_str())
         .bind(video["summary_text"].as_str())
-        .execute(pool)
+        .execute(&mut **tx)
         .await
         .map_err(AppError::database)?;
     }
@@ -225,7 +240,7 @@ async fn rebuild_projection_rows(
             .flatten()
         {
             insert_youtube_synthesis_projection_item(
-                pool,
+                tx,
                 result_row_id,
                 run_id,
                 item["theme_id"].as_str().unwrap_or(""),
@@ -241,7 +256,7 @@ async fn rebuild_projection_rows(
             .flatten()
         {
             insert_youtube_synthesis_projection_item(
-                pool,
+                tx,
                 result_row_id,
                 run_id,
                 item["common_claim_id"].as_str().unwrap_or(""),
@@ -257,7 +272,7 @@ async fn rebuild_projection_rows(
             .flatten()
         {
             insert_youtube_synthesis_projection_item(
-                pool,
+                tx,
                 result_row_id,
                 run_id,
                 item["contradiction_id"].as_str().unwrap_or(""),
@@ -271,7 +286,7 @@ async fn rebuild_projection_rows(
 }
 
 async fn insert_youtube_synthesis_projection_item(
-    pool: &SqlitePool,
+    tx: &mut Transaction<'_, Sqlite>,
     result_row_id: i64,
     run_id: i64,
     synthesis_id: &str,
@@ -290,7 +305,7 @@ async fn insert_youtube_synthesis_projection_item(
     .bind(run_id)
     .bind(synthesis_id)
     .bind(text)
-    .execute(pool)
+    .execute(&mut **tx)
     .await
     .map_err(AppError::database)?;
     Ok(())
@@ -451,6 +466,41 @@ mod tests {
             parsed >= before && parsed <= after,
             "expected {completed_at} to be between {before} and {after}"
         );
+    }
+
+    #[tokio::test]
+    async fn low_level_result_persistence_rolls_back_when_projection_insert_fails() {
+        let pool = test_pool_with_canonical_result_ready().await;
+        // This deliberately bypasses result validation to test the lower-level
+        // projection persistence transaction boundary.
+        let mut canonical = test_canonical_result();
+        canonical["source_refs"] = serde_json::json!([
+            { "source_ref_id": "source_ref_1", "source_snapshot_id": 501, "title": "Video" },
+            { "source_ref_id": "source_ref_1", "source_snapshot_id": 502, "title": "Duplicate" }
+        ]);
+
+        let error = persist_final_result_transaction(&pool, 42, canonical, "complete")
+            .await
+            .expect_err("projection unique constraint should fail");
+
+        assert!(
+            error.message.contains("Database error"),
+            "unexpected error: {error:?}"
+        );
+        let result_rows: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_results WHERE run_id = 42")
+                .fetch_one(&pool)
+                .await
+                .expect("result count");
+        let source_projection_rows: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM prompt_pack_result_source_refs WHERE run_id = 42",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("source projection count");
+
+        assert_eq!(result_rows, 0);
+        assert_eq!(source_projection_rows, 0);
     }
 
     async fn test_pool_with_canonical_result_ready() -> sqlx::SqlitePool {
