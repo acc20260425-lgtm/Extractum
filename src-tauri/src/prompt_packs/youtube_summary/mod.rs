@@ -22,6 +22,7 @@ pub(crate) mod synthesis_input;
 mod synthesis_input_tests;
 #[cfg(test)]
 pub(crate) mod test_support;
+pub(crate) mod transcript_execution;
 mod types;
 
 use super::dto::{

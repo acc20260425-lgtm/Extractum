@@ -10,6 +10,10 @@ use super::progress::{
     is_run_cancelled, mark_run_cancelled, mark_run_running, update_run_progress,
 };
 use super::synthesis_input::build_synthesis_stage_input;
+use super::transcript_execution::{
+    load_pending_transcript_stage_rows, mark_transcript_stage_cancelled,
+    mark_transcript_stage_failed,
+};
 use super::{
     LlmCompletion, SynthesisStageExecutionRequest, TranscriptAnalysisStageExecutionRequest,
     YoutubeSummaryRunExecutionOutcome, YoutubeSummaryStageExecutionError,
@@ -29,13 +33,6 @@ use crate::prompt_packs::{
     projections::persist_final_result_transaction,
     result_builder::build_youtube_summary_canonical_result,
 };
-
-#[derive(Clone, Debug)]
-struct TranscriptStageRow {
-    stage_run_id: i64,
-    source_snapshot_id: i64,
-    source_ref_id: String,
-}
 
 #[cfg(test)]
 pub(crate) async fn execute_youtube_summary_run_with_fake_completions(
@@ -305,92 +302,6 @@ where
         progress_total,
         message,
     })
-}
-
-async fn load_pending_transcript_stage_rows(
-    pool: &SqlitePool,
-    run_id: i64,
-) -> AppResult<Vec<TranscriptStageRow>> {
-    sqlx::query_as::<_, (i64, i64, String)>(
-        "SELECT stages.id, snapshots.id, snapshots.source_ref_id
-         FROM prompt_pack_stage_runs stages
-         JOIN prompt_pack_run_source_snapshots snapshots
-           ON snapshots.id = stages.source_snapshot_id
-          AND snapshots.run_id = stages.run_id
-         WHERE stages.run_id = ?
-           AND stages.stage_name = 'youtube_summary/transcript_analysis'
-           AND stages.stage_status = 'pending'
-         ORDER BY stages.id ASC",
-    )
-    .bind(run_id)
-    .fetch_all(pool)
-    .await
-    .map(|rows| {
-        rows.into_iter()
-            .map(
-                |(stage_run_id, source_snapshot_id, source_ref_id)| TranscriptStageRow {
-                    stage_run_id,
-                    source_snapshot_id,
-                    source_ref_id,
-                },
-            )
-            .collect()
-    })
-    .map_err(AppError::database)
-}
-
-async fn mark_transcript_stage_failed(
-    pool: &SqlitePool,
-    run_id: i64,
-    stage_run_id: i64,
-    error: &str,
-) -> AppResult<()> {
-    insert_stage_artifact_in_pool(
-        pool,
-        run_id,
-        stage_run_id,
-        "error",
-        1,
-        99,
-        &serde_json::json!({ "error": error }).to_string(),
-    )
-    .await?;
-    sqlx::query(
-        "UPDATE prompt_pack_stage_runs
-         SET stage_status = 'failed',
-             error_message = ?,
-             latest_message = ?,
-             completed_at = ?,
-             updated_at = ?
-         WHERE id = ?",
-    )
-    .bind(error)
-    .bind(error)
-    .bind(now_string())
-    .bind(now_string())
-    .bind(stage_run_id)
-    .execute(pool)
-    .await
-    .map_err(AppError::database)?;
-    Ok(())
-}
-
-async fn mark_transcript_stage_cancelled(pool: &SqlitePool, stage_run_id: i64) -> AppResult<()> {
-    sqlx::query(
-        "UPDATE prompt_pack_stage_runs
-         SET stage_status = 'cancelled',
-             latest_message = 'Cancelled',
-             completed_at = COALESCE(completed_at, ?),
-             updated_at = ?
-         WHERE id = ? AND stage_status IN ('pending', 'running')",
-    )
-    .bind(now_string())
-    .bind(now_string())
-    .bind(stage_run_id)
-    .execute(pool)
-    .await
-    .map_err(AppError::database)?;
-    Ok(())
 }
 
 async fn synthesis_stage_id(pool: &SqlitePool, run_id: i64) -> AppResult<i64> {
