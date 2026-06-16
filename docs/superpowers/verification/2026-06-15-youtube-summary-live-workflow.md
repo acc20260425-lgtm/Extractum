@@ -433,3 +433,99 @@ Post-run hardening:
     was started.
   - The console log capture only showed MCP Bridge/Vite initialization messages
     during this pass.
+
+## Intermediate Graph / Result Validation Acceptance
+
+- Date: 2026-06-16
+- Scope: Live acceptance pass after the intermediate-entities, result-validation,
+  and derived traversal validation slices.
+- Environment:
+  - Tauri MCP Bridge connected to `org.ai.extractum` at `localhost:9223`.
+  - Backend state returned app `extractum` version `0.2.0`, Tauri `2.10.3`.
+  - The application was already running; no dev-only smoke fixture was used.
+- Single-video acceptance run:
+  - Source id: `414`.
+  - Project id: `5`.
+  - Preflight:
+    - `includedVideos.length = 1`
+    - `skippedVideos.length = 0`
+    - `blockingFailures.length = 0`
+    - `estimatedInputTokens = 6398`
+    - `selectedModelInputLimit = 32000`
+  - Client request id:
+    `codex-smoke-youtube-summary-414-1781634710711`.
+  - Run ID: `#33`.
+  - Final run status: `complete`.
+  - Final result status: `complete`.
+  - Final progress: `1 / 1`.
+  - Transcript-analysis stage:
+    - stage `#262`: `succeeded`
+    - artifacts present: `prompt_input #1`, `raw_output #2`,
+      `parsed_output #3`, `metrics #4`, `intermediate_entities #5`
+  - Canonical result:
+    - `source_refs.length = 1`
+    - `outputs.pack_data.youtube_summary.videos.length = 1`
+    - `claims.length = 1`
+    - `evidence.length = 1`
+    - `outputs.pack_data.youtube_summary.synthesis = null`
+    - quality flag: `synthesis_not_applicable_single_video`
+  - Validation findings:
+    - one advisory info finding, `RV-RESULT-005`, for intentionally skipped
+      single-video synthesis.
+  - UI `/projects/runs` rendered run `#33`, result metrics, stages/artifacts,
+    validation findings, audit events, canonical JSON, and the
+    `intermediate_entities #5` artifact.
+- Multi-video acceptance run:
+  - Source ids: `414`, `413`.
+  - Project id: `5`.
+  - Preflight:
+    - `includedVideos.length = 2`
+    - `skippedVideos.length = 0`
+    - `blockingFailures.length = 0`
+    - `estimatedInputTokens = 11746`
+    - `selectedModelInputLimit = 32000`
+  - Client request id:
+    `codex-smoke-youtube-summary-multi-414-413-1781635042191`.
+  - Run ID: `#34`.
+  - Final run status: `complete`.
+  - Final result status: `complete`.
+  - Final progress: `3 / 3`.
+  - Transcript stages:
+    - stage `#270`: `succeeded`
+    - artifacts present: `prompt_input #1`, `raw_output #2`,
+      `parsed_output #3`, `metrics #4`, `intermediate_entities #5`
+    - stage `#271`: `succeeded` after JSON repair
+    - artifacts present: `prompt_input #1`, `raw_output #2`,
+      `repair_input #1`, repaired `raw_output #2`, `parsed_output #3`,
+      `metrics #4`, `intermediate_entities #5`
+  - Synthesis stage:
+    - stage `#275`: `succeeded` after JSON repair
+    - artifacts present: `prompt_input #1`, `raw_output #2`,
+      `repair_input #1`, repaired `raw_output #2`, `parsed_output #3`,
+      `metrics #4`
+  - Canonical result:
+    - `source_refs.length = 2`
+    - `outputs.pack_data.youtube_summary.videos.length = 2`
+    - `claims.length = 3`
+    - `evidence.length = 2`
+    - `outputs.pack_data.youtube_summary.synthesis` was non-null
+    - `cross_video_themes.length = 1`
+    - `common_claims.length = 1`
+    - `contradictions_across_videos.length = 0`
+    - `synthesis.claim_refs = ["source_ref_1_claim_1", "source_ref_2_claim_1"]`
+    - `synthesis.evidence_refs = ["source_ref_1_evidence_1", "source_ref_2_evidence_1"]`
+    - `synthesis.source_refs = ["source_ref_1", "source_ref_2"]`
+    - `quality_flags = []`
+  - Validation findings: `[]`.
+  - Storage warning: `null`.
+  - Audit tail contained `terminal_result_persisted`.
+  - UI `/projects/runs` rendered run `#34`, result metrics, non-empty synthesis,
+    stages/artifacts for both transcript stages and the synthesis stage, no
+    validation findings, audit events, and canonical JSON.
+- Notes:
+  - The legacy `/analysis` companion Runs panel was not treated as a blocking
+    issue because that surface is planned for removal.
+  - This pass started real provider runs `#33` and `#34`.
+  - The smoke confirmed that repaired transcript attempts still write
+    `intermediate_entities` and that multi-video synthesis can consume the
+    merged intermediate graph successfully.
