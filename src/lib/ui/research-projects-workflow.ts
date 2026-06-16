@@ -141,7 +141,8 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
     }
   }
 
-  async function removeProjectSource(sourceId: number) {
+  async function removeProjectSource(sourceIdOrIds: number | number[]) {
+    const sourceIds = Array.isArray(sourceIdOrIds) ? sourceIdOrIds : [sourceIdOrIds];
     const projectId = projectIdFromViewId(deps.getState().selectedProjectId);
     if (!projectId) {
       deps.patch({ status: "Select a project" });
@@ -149,7 +150,7 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
     }
     deps.patch({ saving: true });
     try {
-      await deps.removeProjectSources({ projectId, sourceIds: [sourceId] });
+      await deps.removeProjectSources({ projectId, sourceIds });
       await loadWorkspace();
     } catch (error) {
       deps.patch({ status: deps.formatError("removing project source", error) });

@@ -20,8 +20,8 @@
     librarySources,
     runs,
     loading = false,
-    selectedSourceId,
-    onSelectedSourceIdChange,
+    selectedSourceIds,
+    onSelectedSourceIdsChange,
     onOpenConnectLibrary,
     onRefreshProjectRuns,
     onRemoveSource,
@@ -31,11 +31,11 @@
     librarySources: LibrarySourceView[];
     runs: AnalysisRunSummary[];
     loading?: boolean;
-    selectedSourceId: string | null;
-    onSelectedSourceIdChange: (sourceId: string | null) => void;
+    selectedSourceIds: string[];
+    onSelectedSourceIdsChange: (sourceIds: string[]) => void;
     onOpenConnectLibrary: () => void;
     onRefreshProjectRuns: () => void | Promise<void>;
-    onRemoveSource: (sourceId: number) => void | Promise<void>;
+    onRemoveSource: (sourceId: number | number[]) => void | Promise<void>;
   } = $props();
 
   let activeTab = $state("sources");
@@ -85,8 +85,8 @@
         {project}
         {projectSourceLinks}
         {librarySources}
-        {selectedSourceId}
-        {onSelectedSourceIdChange}
+        {selectedSourceIds}
+        {onSelectedSourceIdsChange}
         {onOpenConnectLibrary}
         {onRemoveSource}
       />

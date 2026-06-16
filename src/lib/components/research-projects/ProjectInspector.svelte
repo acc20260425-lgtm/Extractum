@@ -31,7 +31,7 @@
     onEditProject: () => void;
     onDeleteProject: () => void | Promise<void>;
     onRunProject: () => void;
-    onRemoveSource: (sourceId: number) => void | Promise<void>;
+    onRemoveSource: (sourceId: number | number[]) => void | Promise<void>;
   } = $props();
 
   const mixedProviderRunMessage = "Mixed-provider project runs are not supported yet.";

@@ -23,18 +23,18 @@
     project,
     projectSourceLinks,
     librarySources,
-    selectedSourceId,
-    onSelectedSourceIdChange,
+    selectedSourceIds,
+    onSelectedSourceIdsChange,
     onOpenConnectLibrary,
     onRemoveSource,
   }: {
     project: ResearchProjectView | null;
     projectSourceLinks: ProjectSourceLinkView[];
     librarySources: LibrarySourceView[];
-    selectedSourceId: string | null;
-    onSelectedSourceIdChange: (sourceId: string | null) => void;
+    selectedSourceIds: string[];
+    onSelectedSourceIdsChange: (sourceIds: string[]) => void;
     onOpenConnectLibrary: () => void;
-    onRemoveSource: (sourceId: number) => void | Promise<void>;
+    onRemoveSource: (sourceId: number | number[]) => void | Promise<void>;
   } = $props();
 
   const columns = [
@@ -62,33 +62,39 @@
       }),
   );
 
-  let selectedRow = $derived(
-    rows.find((row) => row.id === selectedSourceId) ?? null
+  let selectedRows = $derived(
+    rows.filter((row) => selectedSourceIds.includes(row.id))
   );
 
   async function handleRemoveSelected() {
-    if (!selectedRow) return;
-    if (confirm(`Are you sure you want to remove "${selectedRow.title}" from this project?`)) {
-      await onRemoveSource(selectedRow.sourceNumericId);
-      onSelectedSourceIdChange(null);
+    if (selectedRows.length === 0) return;
+    const count = selectedRows.length;
+    const message = count === 1
+      ? `Are you sure you want to remove "${selectedRows[0].title}" from this project?`
+      : `Are you sure you want to remove ${count} selected sources from this project?`;
+
+    if (confirm(message)) {
+      const sourceNumericIds = selectedRows.map((row) => row.sourceNumericId);
+      await onRemoveSource(sourceNumericIds);
+      onSelectedSourceIdsChange([]);
     }
   }
 </script>
 
 <section class="sources-tab">
   <header class="sources-toolbar">
-    {#if selectedSourceId && selectedRow}
+    {#if selectedSourceIds.length > 0}
       <div class="contextual-action-bar">
         <div class="selection-info">
-          <span class="selection-count">1</span>
-          <span>selected source</span>
+          <span class="selection-count">{selectedSourceIds.length}</span>
+          <span>selected {selectedSourceIds.length === 1 ? 'source' : 'sources'}</span>
         </div>
         <div class="action-buttons">
-          <ExtractumButton variant="secondary" disabled={true} title="Sync selected source (not implemented)">
+          <ExtractumButton variant="secondary" disabled={true} title="Sync selected sources (not implemented)">
             <RefreshCw size={12} aria-hidden="true" />
             Sync
           </ExtractumButton>
-          <ExtractumButton variant="secondary" disabled={true} title="Export selected source (not implemented)">
+          <ExtractumButton variant="secondary" disabled={true} title="Export selected sources (not implemented)">
             <Download size={12} aria-hidden="true" />
             Export
           </ExtractumButton>
@@ -96,7 +102,7 @@
             <Trash2 size={12} aria-hidden="true" />
             Remove
           </ExtractumButton>
-          <button class="clear-selection-btn" onclick={() => onSelectedSourceIdChange(null)} aria-label="Clear selection">
+          <button class="clear-selection-btn" onclick={() => onSelectedSourceIdsChange([])} aria-label="Clear selection">
             <X size={14} aria-hidden="true" />
           </button>
         </div>
@@ -126,8 +132,8 @@
     <ExtractumDataGrid
       rows={rows}
       {columns}
-      selectedRowIds={selectedSourceId ? [selectedSourceId] : []}
-      onSelectedRowIdsChange={(ids) => onSelectedSourceIdChange(ids[0] ?? null)}
+      selectedRowIds={selectedSourceIds}
+      onSelectedRowIdsChange={onSelectedSourceIdsChange}
       height="100%"
       overlay="No project sources"
     />

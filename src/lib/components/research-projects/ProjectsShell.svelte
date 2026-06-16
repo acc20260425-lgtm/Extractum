@@ -32,7 +32,7 @@
     onCreateProject: (input: ProjectEditorInput) => void | Promise<void>;
     onUpdateProject: (input: ProjectEditorInput) => void | Promise<void>;
     onDeleteProject: () => void | Promise<void>;
-    onRemoveProjectSource: (sourceId: number) => void | Promise<void>;
+    onRemoveProjectSource: (sourceId: number | number[]) => void | Promise<void>;
     onRunProject: (input: ProjectAnalysisStartCommand) => void | Promise<void>;
     onConnectSelectedSources: () => void | Promise<void>;
     onSelectedLibrarySourceIdsChange: (ids: string[]) => void;
@@ -48,9 +48,11 @@
   let currentRuns = $derived(
     workflowState.runs.filter((run) => currentProject && run.project_id === currentProject.projectId),
   );
-  let selectedSourceId = $state<string | null>(null);
+  let selectedSourceIds = $state<string[]>([]);
   let selectedSource = $derived(
-    workflowState.projectSourceLinks.find((source) => source.sourceId === selectedSourceId) ?? null,
+    selectedSourceIds.length > 0
+      ? workflowState.projectSourceLinks.find((source) => source.sourceId === selectedSourceIds[0]) ?? null
+      : null,
   );
   let connectOpen = $state(false);
   let editorOpen = $state(false);
@@ -276,8 +278,8 @@
           librarySources={workflowState.librarySources}
           runs={currentRuns}
           loading={workflowState.loading}
-          {selectedSourceId}
-          onSelectedSourceIdChange={(id) => (selectedSourceId = id)}
+          {selectedSourceIds}
+          onSelectedSourceIdsChange={(ids) => (selectedSourceIds = ids)}
           onOpenConnectLibrary={openConnectLibrary}
           onRefreshProjectRuns={onRefreshProjectRuns}
           onRemoveSource={onRemoveProjectSource}
