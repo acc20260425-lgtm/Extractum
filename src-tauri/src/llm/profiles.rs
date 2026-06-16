@@ -353,12 +353,12 @@ pub(super) async fn delete_profile_from_pool(
         )));
     }
 
+    let key = llm_profile_api_key_secret(&profile_id);
+    secret_store.delete_secret(key).await?;
+
     delete_setting(pool, &profile_provider_key(&profile_id)).await?;
     delete_setting(pool, &profile_model_key(&profile_id)).await?;
     delete_setting(pool, &profile_base_url_key(&profile_id)).await?;
-
-    let key = llm_profile_api_key_secret(&profile_id);
-    secret_store.delete_secret(key).await?;
 
     let active = read_setting(pool, active_profile_key())
         .await?
