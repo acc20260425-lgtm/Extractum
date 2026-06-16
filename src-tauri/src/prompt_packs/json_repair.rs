@@ -5,11 +5,12 @@ use super::stage_io::{
     SYNTHESIS_OUTPUT_SCHEMA_ID, TRANSCRIPT_ANALYSIS_OUTPUT_SCHEMA_ID,
 };
 use super::validation::{
-    validate_and_quarantine_synthesis_output, validate_transcript_analysis_output,
+    quarantine_prompt_pack_validation_error, validate_and_quarantine_synthesis_output,
+    validate_synthesis_output_with_allowed_refs, validate_transcript_analysis_output,
 };
 use super::youtube_summary::entities::{
     build_or_quarantine_intermediate_entities_for_transcript_stage,
-    insert_intermediate_entities_artifact,
+    insert_intermediate_entities_artifact, load_required_allowed_refs_for_live_synthesis,
 };
 use super::youtube_summary::LlmCompletion;
 use crate::error::{AppError, AppResult};
@@ -174,6 +175,17 @@ pub(crate) async fn execute_synthesis_stage_repair_completion(
     .await?;
     let parsed = extract_json_payload(&completion.text)?;
     validate_and_quarantine_synthesis_output(pool, run_id, stage_run_id, &parsed).await?;
+    let allowed_refs = load_required_allowed_refs_for_live_synthesis(pool, run_id).await?;
+    if let Err(error) = validate_synthesis_output_with_allowed_refs(
+        &parsed,
+        &allowed_refs.source_refs,
+        &allowed_refs.claim_refs,
+        &allowed_refs.evidence_refs,
+    ) {
+        let validation_message = error.message.clone();
+        quarantine_prompt_pack_validation_error(pool, run_id, stage_run_id, &parsed, error).await?;
+        return Err(AppError::validation(validation_message));
+    }
     let parsed_json = serde_json::to_string(&parsed).map_err(|error| {
         AppError::internal(format!("serialize synthesis parsed output: {error}"))
     })?;

@@ -334,6 +334,7 @@ fn build_segments(
         index_to_ref.insert(index, segment_ref.clone());
         items.push(serde_json::json!({
             "segment_ref": segment_ref,
+            "source_ref_id": source_ref_id,
             "order_index": items.len(),
             "title": title,
             "summary_text": summary_text,
@@ -387,6 +388,7 @@ fn build_key_points(
         index_to_ref.insert(index, key_point_ref.clone());
         items.push(serde_json::json!({
             "key_point_ref": key_point_ref,
+            "source_ref_id": source_ref_id,
             "text": text,
             "segment_ref": segment_ref,
             "material_refs": material_refs
@@ -439,6 +441,7 @@ fn build_quotes(
         index_to_ref.insert(index, quote_ref.clone());
         items.push(serde_json::json!({
             "quote_ref": quote_ref,
+            "source_ref_id": source_ref_id,
             "text": text,
             "segment_ref": segment_ref,
             "material_refs": material_refs
@@ -474,6 +477,7 @@ fn build_claims(
         };
         items.push(serde_json::json!({
             "claim_id": format!("{source_ref_id}_claim_{}", items.len() + 1),
+            "source_ref_id": source_ref_id,
             "text": text,
             "material_refs": material_refs
         }));
@@ -518,6 +522,7 @@ fn build_evidence(
         )?;
         items.push(serde_json::json!({
             "evidence_id": format!("{source_ref_id}_evidence_{}", items.len() + 1),
+            "source_ref_id": source_ref_id,
             "text": text,
             "quote_ref": quote_ref,
             "material_refs": material_refs

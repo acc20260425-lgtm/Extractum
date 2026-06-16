@@ -81,16 +81,21 @@ fn build_source_graph_assigns_backend_refs_and_allowed_refs() {
         graph["segments"][0]["segment_ref"],
         "source_ref_1_segment_1"
     );
+    assert_eq!(graph["segments"][0]["source_ref_id"], "source_ref_1");
     assert_eq!(
         graph["key_points"][0]["key_point_ref"],
         "source_ref_1_key_point_1"
     );
+    assert_eq!(graph["key_points"][0]["source_ref_id"], "source_ref_1");
     assert_eq!(graph["quotes"][0]["quote_ref"], "source_ref_1_quote_1");
+    assert_eq!(graph["quotes"][0]["source_ref_id"], "source_ref_1");
     assert_eq!(graph["claims"][0]["claim_id"], "source_ref_1_claim_1");
+    assert_eq!(graph["claims"][0]["source_ref_id"], "source_ref_1");
     assert_eq!(
         graph["evidence"][0]["evidence_id"],
         "source_ref_1_evidence_1"
     );
+    assert_eq!(graph["evidence"][0]["source_ref_id"], "source_ref_1");
     assert_eq!(graph["evidence"][0]["quote_ref"], "source_ref_1_quote_1");
     assert_eq!(
         graph["allowed_refs"]["segment_refs"][0],
