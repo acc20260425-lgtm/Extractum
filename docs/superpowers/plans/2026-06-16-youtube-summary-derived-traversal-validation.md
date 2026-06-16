@@ -769,7 +769,7 @@ git commit -m "test: cover youtube summary video traversal validation"
 **Files:**
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/result_validation.rs`
 
-- [ ] **Step 1: Wire video traversal validation into the top-level validator**
+- [x] **Step 1: Wire video traversal validation into the top-level validator**
 
 In `validate_youtube_summary_canonical_result`, after `validate_synthesis_derived_traversal_refs(...)` and before `validate_youtube_pack_rules(...)`, add:
 
@@ -810,7 +810,7 @@ The full block should read:
     validate_youtube_pack_rules(canonical, context, &mut findings);
 ```
 
-- [ ] **Step 2: Add guarded traversal field helper functions**
+- [x] **Step 2: Add guarded traversal field helper functions**
 
 Add these helpers after `compare_derived_traversal_refs(...)` and before `validate_youtube_pack_rules(...)`:
 
@@ -913,7 +913,7 @@ fn validate_optional_video_ref_array(
 }
 ```
 
-- [ ] **Step 3: Run focused tests**
+- [x] **Step 3: Run focused tests**
 
 Run:
 
@@ -923,7 +923,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib result_validation -- --noc
 
 Expected: all result-validation tests pass.
 
-- [ ] **Step 4: Commit implementation**
+- [x] **Step 4: Commit implementation**
 
 ```powershell
 git add src-tauri\src\prompt_packs\youtube_summary\result_validation.rs

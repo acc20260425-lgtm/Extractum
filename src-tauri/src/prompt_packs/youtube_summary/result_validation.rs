@@ -163,6 +163,13 @@ pub(crate) fn validate_youtube_summary_canonical_result(
             &mut findings,
         );
     }
+    validate_video_traversal_refs(
+        videos,
+        &source_ids,
+        &claim_ids,
+        &evidence_ids,
+        &mut findings,
+    );
     validate_youtube_pack_rules(canonical, context, &mut findings);
     add_advisory_quality_flag_findings(canonical, &mut findings);
 
@@ -733,6 +740,101 @@ fn compare_derived_traversal_refs(
             format!("{path} {}", parts.join("; ")),
             Some(path.to_string()),
         ));
+    }
+}
+
+fn validate_video_traversal_refs(
+    videos: Option<&Vec<Value>>,
+    source_ids: &HashSet<String>,
+    claim_ids: &HashSet<String>,
+    evidence_ids: &HashSet<String>,
+    findings: &mut Vec<PromptPackResultValidationFinding>,
+) {
+    for (index, video) in videos.into_iter().flatten().enumerate() {
+        let base_path = format!("$.outputs.pack_data.youtube_summary.videos[{index}]");
+        validate_optional_video_ref_array(
+            video.get("source_refs"),
+            source_ids,
+            &format!("{base_path}.source_refs"),
+            findings,
+        );
+        validate_optional_video_ref_array(
+            video.get("claim_refs"),
+            claim_ids,
+            &format!("{base_path}.claim_refs"),
+            findings,
+        );
+        validate_optional_video_ref_array(
+            video.get("evidence_refs"),
+            evidence_ids,
+            &format!("{base_path}.evidence_refs"),
+            findings,
+        );
+
+        if let Some(source_refs) = video.get("source_refs").and_then(Value::as_array) {
+            let source_ref_id = video
+                .get("source_ref_id")
+                .and_then(Value::as_str)
+                .map(str::trim);
+            if let Some(source_ref_id) = source_ref_id {
+                let includes_self = source_refs
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .any(|value| value == source_ref_id);
+                if !source_ref_id.is_empty() && !includes_self {
+                    findings.push(finding(
+                        "error",
+                        "VR-YS-004",
+                        format!("video.source_refs must include self source_ref_id `{source_ref_id}`"),
+                        Some(format!("{base_path}.source_refs")),
+                    ));
+                }
+            }
+        }
+    }
+}
+
+fn validate_optional_video_ref_array(
+    value: Option<&Value>,
+    allowed: &HashSet<String>,
+    path: &str,
+    findings: &mut Vec<PromptPackResultValidationFinding>,
+) {
+    // This intentionally differs from validate_ref_array(...), which skips
+    // non-string refs for raw synthesis-output compatibility. Video traversal
+    // arrays are canonical result fields introduced by this slice, so malformed
+    // shapes are result-level VR-YS-020 errors.
+    let Some(value) = value else {
+        return;
+    };
+    let Some(items) = value.as_array() else {
+        findings.push(finding(
+            "error",
+            "VR-YS-020",
+            format!("{path} must be an array of strings"),
+            Some(path.to_string()),
+        ));
+        return;
+    };
+
+    for (index, item) in items.iter().enumerate() {
+        let Some(ref_id) = item.as_str() else {
+            findings.push(finding(
+                "error",
+                "VR-YS-020",
+                format!("{path} must be an array of strings"),
+                Some(path.to_string()),
+            ));
+            continue;
+        };
+        if !allowed.contains(ref_id) {
+            findings.push(finding(
+                "error",
+                "RV-RESULT-002",
+                format!("unknown ref `{ref_id}`"),
+                Some(format!("{path}[{index}]")),
+            ));
+        }
     }
 }
 
