@@ -97,18 +97,6 @@ pub(crate) async fn execute_transcript_analysis_stage_repair_completion(
         attempt_number,
     )
     .await?;
-    let parsed_json = serde_json::to_string(&parsed)
-        .map_err(|error| AppError::internal(format!("serialize parsed output: {error}")))?;
-    insert_stage_artifact_in_pool(
-        pool,
-        run_id,
-        stage_run_id,
-        "parsed_output",
-        attempt_number,
-        3,
-        &parsed_json,
-    )
-    .await?;
     let metrics = serde_json::json!({
         "input_tokens": completion.input_tokens,
         "output_tokens": completion.output_tokens,
@@ -134,6 +122,18 @@ pub(crate) async fn execute_transcript_analysis_stage_repair_completion(
         stage_run_id,
         &intermediate_graph,
         attempt_number,
+    )
+    .await?;
+    let parsed_json = serde_json::to_string(&parsed)
+        .map_err(|error| AppError::internal(format!("serialize parsed output: {error}")))?;
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "parsed_output",
+        attempt_number,
+        3,
+        &parsed_json,
     )
     .await?;
     mark_stage_repaired(pool, stage_run_id).await

@@ -1,7 +1,12 @@
 use super::entities::{
+    build_or_quarantine_intermediate_entities_for_transcript_stage,
     build_source_intermediate_entities, INTERMEDIATE_ENTITIES_ARTIFACT_KIND,
     YOUTUBE_SUMMARY_INTERMEDIATE_GRAPH_KIND,
 };
+use super::test_support::{
+    test_pool_with_frozen_youtube_summary_run, transcript_analysis_stage_id,
+};
+use crate::prompt_packs::stage_io::insert_stage_artifact_in_pool;
 use crate::prompt_packs::stage_io::{TranscriptAnalysisStageInput, TranscriptSegmentRegistryEntry};
 
 fn input() -> TranscriptAnalysisStageInput {
@@ -248,4 +253,41 @@ fn key_point_index_pointing_to_skipped_segment_candidate_reports_segment_candida
         error.object_path.as_deref(),
         Some("$.video_candidate.key_point_candidates[0].segment_candidate_index")
     );
+}
+
+#[tokio::test]
+async fn graph_builder_uses_persisted_prompt_input_material_registry() {
+    let pool = test_pool_with_frozen_youtube_summary_run().await;
+    let stage_id = transcript_analysis_stage_id(&pool, 1).await;
+    let mut prompt_input = input();
+    prompt_input.run_id = 1;
+    prompt_input.allowed_material_refs = vec!["prompt_only_ref".to_string()];
+    prompt_input.transcript_segment_registry = vec![TranscriptSegmentRegistryEntry {
+        material_ref_id: "prompt_only_ref".to_string(),
+        text: "Prompt-only transcript text".to_string(),
+    }];
+    let prompt_input_json =
+        serde_json::to_string(&prompt_input).expect("serialize prompt input fixture");
+    insert_stage_artifact_in_pool(&pool, 1, stage_id, "prompt_input", 1, 1, &prompt_input_json)
+        .await
+        .expect("insert prompt input");
+
+    let mut parsed = parsed_output();
+    parsed["video_candidate"]["segment_candidates"][0]["material_refs"] =
+        serde_json::json!(["prompt_only_ref"]);
+    parsed["video_candidate"]["key_point_candidates"][0]["material_refs"] =
+        serde_json::json!(["prompt_only_ref"]);
+    parsed["video_candidate"]["quote_candidates"][0]["material_refs"] =
+        serde_json::json!(["prompt_only_ref"]);
+    parsed["claim_candidates"][0]["material_refs"] = serde_json::json!(["prompt_only_ref"]);
+    parsed["evidence_fragment_candidates"][0]["material_refs"] =
+        serde_json::json!(["prompt_only_ref"]);
+
+    let graph = build_or_quarantine_intermediate_entities_for_transcript_stage(
+        &pool, 1, stage_id, &parsed, 1,
+    )
+    .await
+    .expect("graph should use persisted prompt_input registry");
+
+    assert_eq!(graph["claims"][0]["material_refs"][0], "prompt_only_ref");
 }

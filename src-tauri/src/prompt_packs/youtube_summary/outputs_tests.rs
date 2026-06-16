@@ -424,6 +424,7 @@ async fn malformed_intermediate_candidates_are_quarantined_without_graph_artifac
     assert_eq!(status, "running");
     assert!(error_message.is_none());
     let artifacts = list_stage_artifact_attempts(&pool, stage_id).await;
+    assert!(!artifacts.contains(&("parsed_output".to_string(), 1, 3)));
     assert!(!artifacts.contains(&("metrics".to_string(), 1, 4)));
     assert!(!artifacts
         .iter()

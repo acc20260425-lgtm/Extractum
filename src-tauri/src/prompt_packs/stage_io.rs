@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
 use crate::compression::{compress_text, decompress_text};
@@ -8,7 +8,7 @@ pub(crate) const TRANSCRIPT_ANALYSIS_OUTPUT_SCHEMA_ID: &str =
     "stage-io/youtube_summary_transcript_analysis_output";
 pub(crate) const SYNTHESIS_OUTPUT_SCHEMA_ID: &str = "stage-io/youtube_summary_synthesis_output";
 
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptAnalysisStageInput {
     pub stage_io_version: String,
@@ -27,7 +27,7 @@ pub struct TranscriptAnalysisStageInput {
     pub output_language: String,
 }
 
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscriptSegmentRegistryEntry {
     pub material_ref_id: String,

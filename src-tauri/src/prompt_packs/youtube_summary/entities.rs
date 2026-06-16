@@ -99,8 +99,13 @@ pub(crate) fn build_source_intermediate_entities(
 pub(crate) async fn load_intermediate_entities_context_for_transcript_stage(
     pool: &SqlitePool,
     stage_run_id: i64,
+    attempt_number: i64,
 ) -> AppResult<(TranscriptAnalysisStageInput, i64, Option<String>)> {
-    let input = build_transcript_analysis_stage_input(pool, stage_run_id).await?;
+    let input =
+        match load_persisted_transcript_analysis_input(pool, stage_run_id, attempt_number).await? {
+            Some(input) => input,
+            None => build_transcript_analysis_stage_input(pool, stage_run_id).await?,
+        };
     let (source_snapshot_id, title): (i64, Option<String>) = sqlx::query_as(
         "SELECT snapshots.id, snapshots.title
          FROM prompt_pack_stage_runs stages
@@ -117,6 +122,35 @@ pub(crate) async fn load_intermediate_entities_context_for_transcript_stage(
     Ok((input, source_snapshot_id, title))
 }
 
+async fn load_persisted_transcript_analysis_input(
+    pool: &SqlitePool,
+    stage_run_id: i64,
+    attempt_number: i64,
+) -> AppResult<Option<TranscriptAnalysisStageInput>> {
+    let content_zstd = sqlx::query_scalar::<_, Vec<u8>>(
+        "SELECT content_zstd
+         FROM prompt_pack_stage_artifacts
+         WHERE stage_run_id = ?
+           AND artifact_kind = 'prompt_input'
+           AND attempt_number <= ?
+         ORDER BY attempt_number DESC, artifact_index DESC, id DESC
+         LIMIT 1",
+    )
+    .bind(stage_run_id)
+    .bind(attempt_number)
+    .fetch_optional(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    let Some(content_zstd) = content_zstd else {
+        return Ok(None);
+    };
+    let text = decompress_text(&content_zstd).map_err(AppError::internal)?;
+    serde_json::from_str(&text)
+        .map(Some)
+        .map_err(|error| AppError::internal(format!("parse transcript prompt_input: {error}")))
+}
+
 pub(crate) async fn build_or_quarantine_intermediate_entities_for_transcript_stage(
     pool: &SqlitePool,
     run_id: i64,
@@ -125,7 +159,8 @@ pub(crate) async fn build_or_quarantine_intermediate_entities_for_transcript_sta
     attempt_number: i64,
 ) -> AppResult<serde_json::Value> {
     let (input, source_snapshot_id, title) =
-        load_intermediate_entities_context_for_transcript_stage(pool, stage_run_id).await?;
+        load_intermediate_entities_context_for_transcript_stage(pool, stage_run_id, attempt_number)
+            .await?;
     match build_source_intermediate_entities(
         &input,
         source_snapshot_id,

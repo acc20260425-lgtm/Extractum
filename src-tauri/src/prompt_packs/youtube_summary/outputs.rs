@@ -64,18 +64,6 @@ pub(crate) async fn execute_transcript_analysis_stage_with_completion(
     )
     .await?;
     let parsed = extract_json_payload(&completion.text)?;
-    let parsed_json = serde_json::to_string(&parsed)
-        .map_err(|error| AppError::internal(format!("serialize parsed output: {error}")))?;
-    insert_stage_artifact_in_pool(
-        pool,
-        run_id,
-        stage_run_id,
-        "parsed_output",
-        1,
-        3,
-        &parsed_json,
-    )
-    .await?;
     validate_transcript_analysis_output(&input, &parsed)
         .map_err(|error| AppError::validation(error.message))?;
     let intermediate_graph = build_or_quarantine_intermediate_entities_for_transcript_stage(
@@ -106,6 +94,18 @@ pub(crate) async fn execute_transcript_analysis_stage_with_completion(
     .await?;
     insert_intermediate_entities_artifact(pool, run_id, stage_run_id, &intermediate_graph, 1)
         .await?;
+    let parsed_json = serde_json::to_string(&parsed)
+        .map_err(|error| AppError::internal(format!("serialize parsed output: {error}")))?;
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "parsed_output",
+        1,
+        3,
+        &parsed_json,
+    )
+    .await?;
     sqlx::query(
         "UPDATE prompt_pack_stage_runs
          SET stage_status = 'succeeded', completed_at = ?, updated_at = ?
