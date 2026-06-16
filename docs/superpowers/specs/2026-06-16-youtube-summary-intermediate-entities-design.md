@@ -41,7 +41,8 @@ projections would have to infer structure from loose candidate arrays.
   IDs and reference validity.
 - Persist the graph as a stage or run artifact without introducing new LLM
   stages in this slice.
-- Add a closed-world allowed-ref map to synthesis input.
+- Add a complete closed-world allowed-ref map to synthesis input, including
+  segment, key point, quote, claim, evidence, and source refs.
 - Allow synthesis output to use backend-provided `claim_refs` and
   `evidence_refs`.
 - Add minimal ref-check validation for synthesis references.
@@ -60,6 +61,10 @@ projections would have to infer structure from loose candidate arrays.
 - No dedicated UI for browsing every intermediate entity.
 - No large schema-table migration for all entity types unless implementation
   proves artifact-only persistence is insufficient.
+- No direct `segment_refs`, `key_point_refs`, or `quote_refs` fields in
+  synthesis output for the first implementation. Those refs are exposed to
+  synthesis input for grounding, while v1 synthesis output continues to cite
+  source, claim, and evidence refs directly.
 
 ## Current Pipeline Shape
 
@@ -352,9 +357,11 @@ Recommended new fields:
   },
   "allowed_refs": {
     "source_refs": [],
+    "segment_refs": [],
+    "key_point_refs": [],
+    "quote_refs": [],
     "claim_refs": [],
-    "evidence_refs": [],
-    "quote_refs": []
+    "evidence_refs": []
   }
 }
 ```
@@ -362,15 +369,23 @@ Recommended new fields:
 Synthesis prompt rules should change from "keep claim_refs/evidence_refs empty"
 to:
 
+- treat `allowed_refs` as the complete closed-world ref registry for the
+  canonical graph included in the input;
 - use only `claim_refs` from `allowed_refs.claim_refs`;
 - use only `evidence_refs` from `allowed_refs.evidence_refs`;
 - use only `source_refs` from `allowed_refs.source_refs`;
+- use `segment_refs`, `key_point_refs`, and `quote_refs` only for grounding and
+  reasoning over the canonical graph in v1;
+- do not emit direct `segment_refs`, `key_point_refs`, or `quote_refs` fields in
+  synthesis output unless a later output schema explicitly adds them;
 - do not create backend-owned IDs;
 - leave refs empty when there is no supporting allowed ref.
 
-`quote_refs` can be present in the input for model grounding, but synthesis
-output does not need to expose quote refs in the first implementation unless the
-existing synthesis schema already allows them.
+If a theme is grounded mainly by key points or segments, synthesis should cite
+the related `claim_refs`, `evidence_refs`, and `source_refs` that the backend
+made available. If no such supporting refs exist, the theme may still be
+included with source refs only, but it must not invent key point or segment refs
+in output.
 
 ## Minimal Validation And Ref Checks
 
@@ -392,6 +407,9 @@ Synthesis output checks:
 - every synthesis `source_refs` value is in `allowed_refs.source_refs`;
 - every synthesis `claim_refs` value is in `allowed_refs.claim_refs`;
 - every synthesis `evidence_refs` value is in `allowed_refs.evidence_refs`;
+- direct synthesis output fields named `segment_refs`, `key_point_refs`, or
+  `quote_refs` are rejected in v1 unless a later synthesis output schema adds
+  them;
 - synthesis must not include backend-owned object IDs such as `claim_id`,
   `evidence_id`, `theme_id`, `common_claim_id`, or `source_ref_id` as created
   objects;
@@ -434,8 +452,11 @@ Add focused Rust tests for:
 - duplicate backend refs impossible or rejected;
 - key point cannot link to a segment from another source;
 - evidence cannot link to a quote from another source;
-- synthesis input contains `canonical_graph` and `allowed_refs`;
+- synthesis input contains `canonical_graph` and complete `allowed_refs`,
+  including `segment_refs`, `key_point_refs`, and `quote_refs`;
 - synthesis output with unknown `claim_refs` fails validation;
+- synthesis output with direct `segment_refs` or `key_point_refs` fails
+  validation in v1;
 - synthesis output with allowed refs succeeds;
 - single-video runs build and use intermediate graph artifacts even when
   synthesis is skipped;
