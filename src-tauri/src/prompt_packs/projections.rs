@@ -3,6 +3,7 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 use crate::compression::{compress_text, decompress_text};
 use crate::error::{AppError, AppResult};
 
+#[allow(dead_code)]
 pub(crate) async fn persist_final_result_transaction(
     pool: &SqlitePool,
     run_id: i64,

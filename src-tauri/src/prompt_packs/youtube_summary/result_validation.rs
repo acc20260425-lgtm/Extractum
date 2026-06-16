@@ -169,6 +169,7 @@ fn finding(
     }
 }
 
+#[cfg(test)]
 fn has_error(findings: &[PromptPackResultValidationFinding]) -> bool {
     findings.iter().any(|finding| finding.severity == "error")
 }
