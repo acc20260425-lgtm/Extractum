@@ -101,7 +101,52 @@
       await onDeleteProject();
     }
   }
+
+  let contextMenu = $state<{
+    visible: boolean;
+    x: number;
+    y: number;
+    projectId: string;
+    projectTitle: string;
+  } | null>(null);
+
+  function openContextMenu(e: MouseEvent, projectId: string, projectTitle: string) {
+    e.preventDefault();
+    contextMenu = {
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      projectId,
+      projectTitle
+    };
+  }
+
+  function closeContextMenu() {
+    contextMenu = null;
+  }
+
+  function handleWindowKeyDown(e: KeyboardEvent) {
+    if (e.key === "Escape") {
+      closeContextMenu();
+    }
+  }
+
+  function handleEditProjectFromMenu() {
+    if (!contextMenu) return;
+    onSelectProject(contextMenu.projectId);
+    closeContextMenu();
+    openEditProject();
+  }
+
+  async function handleDeleteProjectFromMenu() {
+    if (!contextMenu) return;
+    const { projectId, projectTitle } = contextMenu;
+    closeContextMenu();
+    await handleDeleteProject(projectId, projectTitle);
+  }
 </script>
+
+<svelte:window onclick={closeContextMenu} onkeydown={handleWindowKeyDown} />
 
 <div class="projects-shell" style="--inspector-width: {inspectorWidth};">
   {#if showRail}
@@ -133,6 +178,7 @@
             <div
               class="tree-project-item-row group"
               class:active={workflowState.selectedProjectId === project.id}
+              oncontextmenu={(e) => openContextMenu(e, project.id, project.title)}
             >
               <button
                 type="button"
@@ -289,6 +335,30 @@
     saving={workflowState.saving}
     onSubmit={onRunProject}
   />
+
+  {#if contextMenu && contextMenu.visible}
+    <div
+      class="context-menu"
+      style="top: {contextMenu.y}px; left: {contextMenu.x}px;"
+    >
+      <button
+        type="button"
+        class="context-menu-item"
+        onclick={handleEditProjectFromMenu}
+      >
+        <Pencil size={14} aria-hidden="true" />
+        <span>Edit project</span>
+      </button>
+      <button
+        type="button"
+        class="context-menu-item delete-item"
+        onclick={handleDeleteProjectFromMenu}
+      >
+        <Trash2 size={14} aria-hidden="true" />
+        <span>Delete project</span>
+      </button>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -594,5 +664,69 @@
   .tree-add-project-btn:hover {
     border-color: var(--extractum-primary);
     color: var(--extractum-primary);
+  }
+
+  .context-menu {
+    position: fixed;
+    z-index: 1000;
+    min-width: 150px;
+    background: var(--extractum-surface-raised);
+    border: 1px solid var(--extractum-border);
+    border-radius: var(--extractum-radius);
+    box-shadow: var(--shadow-soft);
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    animation: scaleIn 0.1s ease-out;
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .context-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--extractum-text);
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.1s, color 0.1s;
+  }
+
+  .context-menu-item:hover {
+    background: color-mix(in srgb, var(--extractum-primary) 8%, transparent);
+    color: var(--extractum-primary);
+  }
+
+  .context-menu-item.delete-item {
+    color: var(--extractum-danger);
+  }
+
+  .context-menu-item.delete-item:hover {
+    background: color-mix(in srgb, var(--extractum-danger) 8%, transparent);
+    color: var(--extractum-danger);
+  }
+
+  .context-menu-item :global(svg) {
+    width: 14px !important;
+    height: 14px !important;
+    stroke: currentColor !important;
+    display: block !important;
   }
 </style>
