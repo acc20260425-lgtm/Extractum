@@ -8,6 +8,8 @@
 
 **Tech Stack:** Rust, SQLx, SQLite, Tauri backend, existing Prompt Pack artifact tables.
 
+**Execution note:** The implementation was committed as one green slice instead of the intermediate red/partial commits listed in the original TDD plan.
+
 ---
 
 ## Scope
@@ -31,7 +33,7 @@ This plan does not change:
   - Keep `insert_stage_artifact_in_pool(...)` as the public pool wrapper for existing callers.
 - Modify `src-tauri/src/prompt_packs/youtube_summary/entities.rs`
   - Add a transaction-aware `insert_intermediate_entities_artifact_in_transaction(...)`.
-  - Keep the pool helper for existing tests and call sites.
+  - Implementation note: the old pool helper was removed after wiring because no call sites remained.
 - Modify `src-tauri/src/prompt_packs/youtube_summary/outputs.rs`
   - Use one transaction for transcript first-attempt success artifact writes and `stage_status = 'succeeded'`.
 - Modify `src-tauri/src/prompt_packs/json_repair.rs`
@@ -46,7 +48,7 @@ This plan does not change:
 **Files:**
 - Modify: `src-tauri/src/prompt_packs/stage_io.rs`
 
-- [ ] **Step 1: Add SQLx transaction imports**
+- [x] **Step 1: Add SQLx transaction imports**
 
 Change the imports at the top of `stage_io.rs` from:
 
@@ -60,7 +62,7 @@ to:
 use sqlx::{Sqlite, SqlitePool, Transaction};
 ```
 
-- [ ] **Step 2: Extract artifact insert body into a transaction helper**
+- [x] **Step 2: Extract artifact insert body into a transaction helper**
 
 Replace the current `insert_stage_artifact_in_pool(...)` function with this pair:
 
@@ -144,7 +146,7 @@ where
 }
 ```
 
-- [ ] **Step 3: Run the existing stage_io test**
+- [x] **Step 3: Run the existing stage_io test**
 
 Run:
 
@@ -154,7 +156,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib insert_stage_artifact_uses
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs/stage_io.rs
@@ -168,7 +170,7 @@ git commit -m "refactor: add transactional stage artifact insert"
 **Files:**
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/entities.rs`
 
-- [ ] **Step 1: Add SQLx transaction imports**
+- [x] **Step 1: Add SQLx transaction imports**
 
 Change the SQLx import in `entities.rs` from:
 
@@ -194,37 +196,15 @@ to:
 
 ```rust
 use crate::prompt_packs::stage_io::{
-    build_transcript_analysis_stage_input, insert_stage_artifact_in_pool,
-    insert_stage_artifact_in_transaction,
+    build_transcript_analysis_stage_input, insert_stage_artifact_in_transaction,
 };
 ```
 
-- [ ] **Step 2: Add transaction helper and keep pool wrapper**
+- [x] **Step 2: Add transaction helper and remove obsolete pool wrapper**
 
-Replace the current `insert_intermediate_entities_artifact(...)` with:
+The original plan kept a pool wrapper, but execution removed it after confirming no call sites remained. The final helper is:
 
 ```rust
-pub(crate) async fn insert_intermediate_entities_artifact(
-    pool: &SqlitePool,
-    run_id: i64,
-    stage_run_id: i64,
-    graph: &serde_json::Value,
-    attempt_number: i64,
-) -> AppResult<()> {
-    let content = serde_json::to_string(graph)
-        .map_err(|error| AppError::internal(format!("serialize intermediate entities: {error}")))?;
-    insert_stage_artifact_in_pool(
-        pool,
-        run_id,
-        stage_run_id,
-        INTERMEDIATE_ENTITIES_ARTIFACT_KIND,
-        attempt_number,
-        5,
-        &content,
-    )
-    .await
-}
-
 pub(crate) async fn insert_intermediate_entities_artifact_in_transaction(
     tx: &mut Transaction<'_, Sqlite>,
     run_id: i64,
@@ -247,7 +227,7 @@ pub(crate) async fn insert_intermediate_entities_artifact_in_transaction(
 }
 ```
 
-- [ ] **Step 3: Run focused entity/output tests**
+- [x] **Step 3: Run focused entity/output tests**
 
 Run:
 
@@ -257,7 +237,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib intermediate_entities -- -
 
 Expected: PASS. If this filter matches more tests than expected, all matched tests must pass.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add src-tauri/src/prompt_packs/youtube_summary/entities.rs
@@ -271,7 +251,7 @@ git commit -m "refactor: add transactional intermediate graph insert"
 **Files:**
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/outputs_tests.rs`
 
-- [ ] **Step 1: Add first-attempt rollback test**
+- [x] **Step 1: Add first-attempt rollback test**
 
 Add this test near the existing transcript artifact tests:
 
@@ -320,7 +300,7 @@ async fn transcript_success_artifacts_roll_back_when_parsed_insert_fails() {
 }
 ```
 
-- [ ] **Step 2: Add repaired-attempt rollback test**
+- [x] **Step 2: Add repaired-attempt rollback test**
 
 Add this test near `repaired_transcript_analysis_persists_intermediate_entities_for_repair_attempt`:
 
@@ -369,7 +349,7 @@ async fn repaired_transcript_success_artifacts_roll_back_when_parsed_insert_fail
 }
 ```
 
-- [ ] **Step 3: Run first rollback test and verify RED**
+- [x] **Step 3: Run first rollback test and verify RED**
 
 Run:
 
@@ -379,7 +359,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib transcript_success_artifac
 
 Expected before implementation: FAIL because `metrics #4` and `intermediate_entities #5` are still present after the duplicate `parsed_output #3` insert fails.
 
-- [ ] **Step 4: Run repaired rollback test and verify RED**
+- [x] **Step 4: Run repaired rollback test and verify RED**
 
 Run:
 
@@ -389,7 +369,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib repaired_transcript_succes
 
 Expected before implementation: FAIL for the same reason on attempt `2`.
 
-- [ ] **Step 5: Commit failing tests**
+- [x] **Step 5: Commit failing tests**
 
 Only do this if the repository accepts red TDD commits. If not, skip this commit and include tests in Task 4's green commit.
 
@@ -406,7 +386,7 @@ git commit -m "test: cover transcript artifact rollback"
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/outputs.rs`
 - Modify: `src-tauri/src/prompt_packs/json_repair.rs`
 
-- [ ] **Step 1: Update imports in `outputs.rs`**
+- [x] **Step 1: Update imports in `outputs.rs`**
 
 Change:
 
@@ -446,7 +426,7 @@ use crate::prompt_packs::stage_io::{
 };
 ```
 
-- [ ] **Step 2: Replace first-attempt transcript success writes in `outputs.rs`**
+- [x] **Step 2: Replace first-attempt transcript success writes in `outputs.rs`**
 
 In `execute_transcript_analysis_stage_with_completion(...)`, replace the block that inserts `metrics`, `intermediate_entities`, `parsed_output`, and then runs the `UPDATE prompt_pack_stage_runs SET stage_status = 'succeeded'` query with:
 
@@ -496,7 +476,7 @@ sqlx::query(
 tx.commit().await.map_err(AppError::database)?;
 ```
 
-- [ ] **Step 3: Update imports in `json_repair.rs`**
+- [x] **Step 3: Update imports in `json_repair.rs`**
 
 Change:
 
@@ -536,7 +516,7 @@ use super::youtube_summary::entities::{
 };
 ```
 
-- [ ] **Step 4: Make repaired transcript success writes transactional**
+- [x] **Step 4: Make repaired transcript success writes transactional**
 
 In `execute_transcript_analysis_stage_repair_completion(...)`, replace the block that inserts `metrics`, `intermediate_entities`, `parsed_output`, and calls `mark_stage_repaired(...)` with:
 
@@ -577,7 +557,7 @@ tx.commit().await.map_err(AppError::database)?;
 Ok(())
 ```
 
-- [ ] **Step 5: Replace `mark_stage_repaired(...)` with pool and transaction helpers**
+- [x] **Step 5: Replace `mark_stage_repaired(...)` with pool and transaction helpers**
 
 Replace the existing `mark_stage_repaired(...)` function with:
 
@@ -614,7 +594,7 @@ async fn mark_stage_repaired_in_transaction(
 
 This keeps synthesis repair behavior unchanged because `execute_synthesis_stage_repair_completion(...)` can keep calling the pool wrapper.
 
-- [ ] **Step 6: Run rollback tests and verify GREEN**
+- [x] **Step 6: Run rollback tests and verify GREEN**
 
 Run:
 
@@ -625,7 +605,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib repaired_transcript_succes
 
 Expected: both PASS.
 
-- [ ] **Step 7: Run existing transcript artifact tests**
+- [x] **Step 7: Run existing transcript artifact tests**
 
 Run:
 
@@ -638,7 +618,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib repair_graph_build_failure
 
 Expected: all PASS.
 
-- [ ] **Step 8: Commit implementation**
+- [x] **Step 8: Commit implementation**
 
 ```powershell
 git add src-tauri/src/prompt_packs/youtube_summary/outputs.rs src-tauri/src/prompt_packs/json_repair.rs src-tauri/src/prompt_packs/youtube_summary/outputs_tests.rs
@@ -652,7 +632,7 @@ git commit -m "fix: make transcript success artifacts atomic"
 **Files:**
 - No code changes expected.
 
-- [ ] **Step 1: Format check**
+- [x] **Step 1: Format check**
 
 Run:
 
@@ -662,7 +642,7 @@ cargo fmt --manifest-path src-tauri\Cargo.toml --check
 
 Expected: PASS.
 
-- [ ] **Step 2: Focused YouTube Summary tests**
+- [x] **Step 2: Focused YouTube Summary tests**
 
 Run:
 
@@ -672,7 +652,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib youtube_summary_
 
 Expected: PASS.
 
-- [ ] **Step 3: Broad Prompt Pack tests**
+- [x] **Step 3: Broad Prompt Pack tests**
 
 Run:
 
@@ -682,7 +662,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib prompt_packs
 
 Expected: PASS.
 
-- [ ] **Step 4: Compile check**
+- [x] **Step 4: Compile check**
 
 Run:
 
@@ -692,7 +672,7 @@ cargo check --manifest-path src-tauri\Cargo.toml
 
 Expected: PASS, allowing existing dead-code warnings.
 
-- [ ] **Step 5: Git whitespace check**
+- [x] **Step 5: Git whitespace check**
 
 Run:
 
@@ -702,7 +682,7 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 6: Final status**
+- [x] **Step 6: Final status**
 
 Run:
 

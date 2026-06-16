@@ -2,7 +2,8 @@ use sqlx::SqlitePool;
 
 use super::stage_io::{
     build_transcript_analysis_stage_input, extract_json_payload, insert_stage_artifact_in_pool,
-    SYNTHESIS_OUTPUT_SCHEMA_ID, TRANSCRIPT_ANALYSIS_OUTPUT_SCHEMA_ID,
+    insert_stage_artifact_in_transaction, SYNTHESIS_OUTPUT_SCHEMA_ID,
+    TRANSCRIPT_ANALYSIS_OUTPUT_SCHEMA_ID,
 };
 use super::validation::{
     quarantine_prompt_pack_validation_error, validate_and_quarantine_synthesis_output,
@@ -10,7 +11,8 @@ use super::validation::{
 };
 use super::youtube_summary::entities::{
     build_or_quarantine_intermediate_entities_for_transcript_stage,
-    insert_intermediate_entities_artifact, load_required_allowed_refs_for_live_synthesis,
+    insert_intermediate_entities_artifact_in_transaction,
+    load_required_allowed_refs_for_live_synthesis,
 };
 use super::youtube_summary::LlmCompletion;
 use crate::error::{AppError, AppResult};
@@ -106,8 +108,11 @@ pub(crate) async fn execute_transcript_analysis_stage_repair_completion(
         "attempt_number": attempt_number,
         "repaired_from_attempt": attempt_number - 1
     });
-    insert_stage_artifact_in_pool(
-        pool,
+    let parsed_json = serde_json::to_string(&parsed)
+        .map_err(|error| AppError::internal(format!("serialize parsed output: {error}")))?;
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
+    insert_stage_artifact_in_transaction(
+        &mut tx,
         run_id,
         stage_run_id,
         "metrics",
@@ -116,18 +121,16 @@ pub(crate) async fn execute_transcript_analysis_stage_repair_completion(
         &metrics.to_string(),
     )
     .await?;
-    insert_intermediate_entities_artifact(
-        pool,
+    insert_intermediate_entities_artifact_in_transaction(
+        &mut tx,
         run_id,
         stage_run_id,
         &intermediate_graph,
         attempt_number,
     )
     .await?;
-    let parsed_json = serde_json::to_string(&parsed)
-        .map_err(|error| AppError::internal(format!("serialize parsed output: {error}")))?;
-    insert_stage_artifact_in_pool(
-        pool,
+    insert_stage_artifact_in_transaction(
+        &mut tx,
         run_id,
         stage_run_id,
         "parsed_output",
@@ -136,7 +139,9 @@ pub(crate) async fn execute_transcript_analysis_stage_repair_completion(
         &parsed_json,
     )
     .await?;
-    mark_stage_repaired(pool, stage_run_id).await
+    mark_stage_repaired_in_transaction(&mut tx, stage_run_id).await?;
+    tx.commit().await.map_err(AppError::database)?;
+    Ok(())
 }
 
 pub(crate) async fn execute_synthesis_stage_repair_completion(
@@ -222,6 +227,16 @@ pub(crate) async fn execute_synthesis_stage_repair_completion(
 }
 
 async fn mark_stage_repaired(pool: &SqlitePool, stage_run_id: i64) -> AppResult<()> {
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
+    mark_stage_repaired_in_transaction(&mut tx, stage_run_id).await?;
+    tx.commit().await.map_err(AppError::database)?;
+    Ok(())
+}
+
+async fn mark_stage_repaired_in_transaction(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    stage_run_id: i64,
+) -> AppResult<()> {
     sqlx::query(
         "UPDATE prompt_pack_stage_runs
          SET stage_status = 'succeeded',
@@ -234,7 +249,7 @@ async fn mark_stage_repaired(pool: &SqlitePool, stage_run_id: i64) -> AppResult<
     .bind(now_string())
     .bind(now_string())
     .bind(stage_run_id)
-    .execute(pool)
+    .execute(&mut **tx)
     .await
     .map_err(AppError::database)?;
     Ok(())

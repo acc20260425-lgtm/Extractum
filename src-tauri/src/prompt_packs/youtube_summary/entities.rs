@@ -1,12 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
-use sqlx::SqlitePool;
+use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::compression::decompress_text;
 use crate::error::{AppError, AppResult};
 use crate::prompt_packs::stage_io::TranscriptAnalysisStageInput;
 use crate::prompt_packs::stage_io::{
-    build_transcript_analysis_stage_input, insert_stage_artifact_in_pool,
+    build_transcript_analysis_stage_input, insert_stage_artifact_in_transaction,
 };
 use crate::prompt_packs::validation::{
     quarantine_prompt_pack_validation_error, PromptPackValidationError,
@@ -178,8 +178,8 @@ pub(crate) async fn build_or_quarantine_intermediate_entities_for_transcript_sta
     }
 }
 
-pub(crate) async fn insert_intermediate_entities_artifact(
-    pool: &SqlitePool,
+pub(crate) async fn insert_intermediate_entities_artifact_in_transaction(
+    tx: &mut Transaction<'_, Sqlite>,
     run_id: i64,
     stage_run_id: i64,
     graph: &serde_json::Value,
@@ -187,8 +187,8 @@ pub(crate) async fn insert_intermediate_entities_artifact(
 ) -> AppResult<()> {
     let content = serde_json::to_string(graph)
         .map_err(|error| AppError::internal(format!("serialize intermediate entities: {error}")))?;
-    insert_stage_artifact_in_pool(
-        pool,
+    insert_stage_artifact_in_transaction(
+        tx,
         run_id,
         stage_run_id,
         INTERMEDIATE_ENTITIES_ARTIFACT_KIND,

@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
+use sqlx::{Sqlite, SqlitePool, Transaction};
 
 use crate::compression::{compress_text, decompress_text};
 use crate::error::{AppError, AppResult};
@@ -239,6 +239,54 @@ pub(crate) async fn insert_stage_artifact_in_pool(
     artifact_index: i64,
     content: &str,
 ) -> AppResult<()> {
+    insert_stage_artifact_with_executor(
+        pool,
+        run_id,
+        stage_run_id,
+        artifact_kind,
+        attempt_number,
+        artifact_index,
+        content,
+    )
+    .await
+}
+
+pub(crate) async fn insert_stage_artifact_in_transaction(
+    tx: &mut Transaction<'_, Sqlite>,
+    run_id: i64,
+    stage_run_id: i64,
+    artifact_kind: &str,
+    attempt_number: i64,
+    artifact_index: i64,
+    content: &str,
+) -> AppResult<()> {
+    insert_stage_artifact_with_executor(
+        &mut **tx,
+        run_id,
+        stage_run_id,
+        artifact_kind,
+        attempt_number,
+        artifact_index,
+        content,
+    )
+    .await
+}
+
+async fn insert_stage_artifact_with_executor<'e, E>(
+    executor: E,
+    run_id: i64,
+    stage_run_id: i64,
+    artifact_kind: &str,
+    attempt_number: i64,
+    artifact_index: i64,
+    content: &str,
+) -> AppResult<()>
+where
+    E: sqlx::Executor<'e, Database = Sqlite>,
+{
+    let content_hash = format!("sha384-{}", sha384_hex(content.as_bytes()));
+    let content_zstd = compress_text(content).map_err(AppError::internal)?;
+    let created_at = crate::time::now_rfc3339_utc();
     sqlx::query(
         "INSERT INTO prompt_pack_stage_artifacts (
             run_id, stage_run_id, artifact_kind, attempt_number, artifact_index,
@@ -251,10 +299,10 @@ pub(crate) async fn insert_stage_artifact_in_pool(
     .bind(artifact_kind)
     .bind(attempt_number)
     .bind(artifact_index)
-    .bind(format!("sha384-{}", sha384_hex(content.as_bytes())))
-    .bind(compress_text(content).map_err(AppError::internal)?)
-    .bind(crate::time::now_rfc3339_utc())
-    .execute(pool)
+    .bind(content_hash)
+    .bind(content_zstd)
+    .bind(created_at)
+    .execute(executor)
     .await
     .map_err(AppError::database)?;
     Ok(())

@@ -382,6 +382,49 @@ async fn execute_transcript_analysis_stage_persists_intermediate_entities_artifa
 }
 
 #[tokio::test]
+async fn transcript_success_artifacts_roll_back_when_parsed_insert_fails() {
+    let pool = test_pool_with_frozen_youtube_summary_run().await;
+    let stage_id = transcript_analysis_stage_id(&pool, 1).await;
+
+    crate::prompt_packs::stage_io::insert_stage_artifact_in_pool(
+        &pool,
+        1,
+        stage_id,
+        "parsed_output",
+        1,
+        3,
+        r#"{"preexisting":true}"#,
+    )
+    .await
+    .expect("seed duplicate parsed artifact");
+
+    let error = execute_transcript_analysis_stage_with_completion(
+        &pool,
+        stage_id,
+        fake_completion_with_valid_transcript_analysis_json(),
+    )
+    .await
+    .expect_err("duplicate parsed artifact should fail success transaction");
+
+    assert!(error.message.contains("UNIQUE") || error.message.contains("unique"));
+
+    let artifacts = list_stage_artifact_attempts(&pool, stage_id).await;
+    assert!(artifacts.contains(&("prompt_input".to_string(), 1, 1)));
+    assert!(artifacts.contains(&("raw_output".to_string(), 1, 2)));
+    assert!(artifacts.contains(&("parsed_output".to_string(), 1, 3)));
+    assert!(!artifacts.contains(&("metrics".to_string(), 1, 4)));
+    assert!(!artifacts.contains(&("intermediate_entities".to_string(), 1, 5)));
+
+    let status: String =
+        sqlx::query_scalar("SELECT stage_status FROM prompt_pack_stage_runs WHERE id = ?")
+            .bind(stage_id)
+            .fetch_one(&pool)
+            .await
+            .expect("stage status");
+    assert_eq!(status, "running");
+}
+
+#[tokio::test]
 async fn repaired_transcript_analysis_persists_intermediate_entities_for_repair_attempt() {
     let pool = test_pool_with_frozen_youtube_summary_run().await;
     let stage_id = transcript_analysis_stage_id(&pool, 1).await;
@@ -398,6 +441,50 @@ async fn repaired_transcript_analysis_persists_intermediate_entities_for_repair_
     let artifacts = list_stage_artifact_attempts(&pool, stage_id).await;
     assert!(artifacts.contains(&("metrics".to_string(), 2, 4)));
     assert!(artifacts.contains(&("intermediate_entities".to_string(), 2, 5)));
+}
+
+#[tokio::test]
+async fn repaired_transcript_success_artifacts_roll_back_when_parsed_insert_fails() {
+    let pool = test_pool_with_frozen_youtube_summary_run().await;
+    let stage_id = transcript_analysis_stage_id(&pool, 1).await;
+
+    crate::prompt_packs::stage_io::insert_stage_artifact_in_pool(
+        &pool,
+        1,
+        stage_id,
+        "parsed_output",
+        2,
+        3,
+        r#"{"preexisting":true}"#,
+    )
+    .await
+    .expect("seed duplicate repaired parsed artifact");
+
+    let error =
+        crate::prompt_packs::json_repair::execute_transcript_analysis_stage_repair_completion(
+            &pool,
+            stage_id,
+            fake_completion_with_valid_transcript_analysis_json(),
+            2,
+        )
+        .await
+        .expect_err("duplicate repaired parsed artifact should fail success transaction");
+
+    assert!(error.message.contains("UNIQUE") || error.message.contains("unique"));
+
+    let artifacts = list_stage_artifact_attempts(&pool, stage_id).await;
+    assert!(artifacts.contains(&("raw_output".to_string(), 2, 2)));
+    assert!(artifacts.contains(&("parsed_output".to_string(), 2, 3)));
+    assert!(!artifacts.contains(&("metrics".to_string(), 2, 4)));
+    assert!(!artifacts.contains(&("intermediate_entities".to_string(), 2, 5)));
+
+    let status: String =
+        sqlx::query_scalar("SELECT stage_status FROM prompt_pack_stage_runs WHERE id = ?")
+            .bind(stage_id)
+            .fetch_one(&pool)
+            .await
+            .expect("stage status");
+    assert_eq!(status, "running");
 }
 
 #[tokio::test]

@@ -2,14 +2,16 @@ use sqlx::SqlitePool;
 
 use super::entities::{
     build_or_quarantine_intermediate_entities_for_transcript_stage,
-    insert_intermediate_entities_artifact, load_required_allowed_refs_for_live_synthesis,
+    insert_intermediate_entities_artifact_in_transaction,
+    load_required_allowed_refs_for_live_synthesis,
 };
 use super::synthesis_input::build_synthesis_stage_input;
 use super::LlmCompletion;
 use crate::error::{AppError, AppResult};
 use crate::prompt_packs::stage_io::{
     build_transcript_analysis_stage_input, extract_json_payload, insert_stage_artifact_in_pool,
-    SYNTHESIS_OUTPUT_SCHEMA_ID, TRANSCRIPT_ANALYSIS_OUTPUT_SCHEMA_ID,
+    insert_stage_artifact_in_transaction, SYNTHESIS_OUTPUT_SCHEMA_ID,
+    TRANSCRIPT_ANALYSIS_OUTPUT_SCHEMA_ID,
 };
 use crate::prompt_packs::validation::{
     quarantine_prompt_pack_validation_error, validate_and_quarantine_synthesis_output,
@@ -82,8 +84,11 @@ pub(crate) async fn execute_transcript_analysis_stage_with_completion(
         "validation_error_count": 0,
         "attempt_number": 1
     });
-    insert_stage_artifact_in_pool(
-        pool,
+    let parsed_json = serde_json::to_string(&parsed)
+        .map_err(|error| AppError::internal(format!("serialize parsed output: {error}")))?;
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
+    insert_stage_artifact_in_transaction(
+        &mut tx,
         run_id,
         stage_run_id,
         "metrics",
@@ -92,12 +97,16 @@ pub(crate) async fn execute_transcript_analysis_stage_with_completion(
         &metrics.to_string(),
     )
     .await?;
-    insert_intermediate_entities_artifact(pool, run_id, stage_run_id, &intermediate_graph, 1)
-        .await?;
-    let parsed_json = serde_json::to_string(&parsed)
-        .map_err(|error| AppError::internal(format!("serialize parsed output: {error}")))?;
-    insert_stage_artifact_in_pool(
-        pool,
+    insert_intermediate_entities_artifact_in_transaction(
+        &mut tx,
+        run_id,
+        stage_run_id,
+        &intermediate_graph,
+        1,
+    )
+    .await?;
+    insert_stage_artifact_in_transaction(
+        &mut tx,
         run_id,
         stage_run_id,
         "parsed_output",
@@ -114,9 +123,10 @@ pub(crate) async fn execute_transcript_analysis_stage_with_completion(
     .bind(now_string())
     .bind(now_string())
     .bind(stage_run_id)
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .map_err(AppError::database)?;
+    tx.commit().await.map_err(AppError::database)?;
     Ok(())
 }
 
