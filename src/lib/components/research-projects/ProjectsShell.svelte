@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { FolderKanban, ChevronDown, Folder, Plus } from "@lucide/svelte";
+  import { tick } from "svelte";
+  import { FolderKanban, ChevronDown, Folder, Plus, Pencil, Trash2 } from "@lucide/svelte";
   import BottomQueue from "./BottomQueue.svelte";
   import ConnectFromLibrary from "./ConnectFromLibrary.svelte";
   import ProjectEditorDialog from "./ProjectEditorDialog.svelte";
@@ -92,6 +93,14 @@
       await onCreateProject(input);
     }
   }
+
+  async function handleDeleteProject(projectId: string, title: string) {
+    onSelectProject(projectId);
+    await tick();
+    if (confirm(`Are you sure you want to delete "${title}"?`)) {
+      await onDeleteProject();
+    }
+  }
 </script>
 
 <div class="projects-shell" style="--inspector-width: {inspectorWidth};">
@@ -121,19 +130,52 @@
         <!-- List of Projects -->
         <div class="projects-tree-list">
           {#each workflowState.projects as project (project.id)}
-            <button
-              type="button"
-              class="tree-project-item"
+            <div
+              class="tree-project-item-row group"
               class:active={workflowState.selectedProjectId === project.id}
-              onclick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onSelectProject(project.id);
-              }}
             >
-              <span class="project-dot-indicator" class:running={project.status === "running"} class:ready={project.status === "ready"}></span>
-              <span class="project-title-text" title={project.title}>{project.title}</span>
-            </button>
+              <button
+                type="button"
+                class="tree-project-item"
+                onclick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onSelectProject(project.id);
+                }}
+              >
+                <span class="project-dot-indicator" class:running={project.status === "running"} class:ready={project.status === "ready"}></span>
+                <span class="project-title-text" title={project.title}>{project.title}</span>
+              </button>
+
+              <!-- Inline Action Buttons (Visible on Hover) -->
+              <div class="tree-project-actions">
+                <button
+                  type="button"
+                  class="action-btn edit-btn"
+                  title="Edit project"
+                  onclick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onSelectProject(project.id);
+                    openEditProject();
+                  }}
+                >
+                  <Pencil size={11} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  class="action-btn delete-btn"
+                  title="Delete project"
+                  onclick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDeleteProject(project.id, project.title);
+                  }}
+                >
+                  <Trash2 size={11} aria-hidden="true" />
+                </button>
+              </div>
+            </div>
           {/each}
 
           <!-- Add Project Action -->
@@ -418,35 +460,86 @@
     margin-left: 0.55rem;
   }
 
+  .tree-project-item-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    border-radius: 8px;
+    transition: background 0.15s, border-color 0.15s;
+    border: 1px solid transparent;
+    padding-right: 4px;
+  }
+
+  .tree-project-item-row:hover {
+    background: color-mix(in srgb, var(--extractum-surface-raised) 50%, transparent);
+  }
+
+  .tree-project-item-row.active {
+    color: var(--extractum-primary);
+    background: color-mix(in srgb, var(--extractum-primary) 10%, transparent);
+    border-color: color-mix(in srgb, var(--extractum-primary) 15%, transparent);
+    font-weight: 600;
+  }
+
   .tree-project-item {
     display: flex;
     align-items: center;
     gap: 0.45rem;
     padding: 0.35rem 0.5rem;
-    border-radius: 8px;
     color: var(--extractum-muted);
     font-size: 0.8rem;
-    font-weight: 500;
+    font-weight: inherit;
     text-align: left;
     background: transparent;
     border: none;
     cursor: pointer;
-    width: 100%;
+    flex: 1;
     min-width: 0;
-    transition: color 0.15s, background 0.15s, border-color 0.15s;
-    border: 1px solid transparent;
   }
 
-  .tree-project-item:hover {
+  .tree-project-item-row:hover .tree-project-item {
     color: var(--extractum-foreground);
-    background: color-mix(in srgb, var(--extractum-surface-raised) 50%, transparent);
   }
 
-  .tree-project-item.active {
+  .tree-project-item-row.active .tree-project-item {
     color: var(--extractum-primary);
-    background: color-mix(in srgb, var(--extractum-primary) 10%, transparent);
-    border-color: color-mix(in srgb, var(--extractum-primary) 15%, transparent);
-    font-weight: 600;
+  }
+
+  .tree-project-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .tree-project-item-row:hover .tree-project-actions {
+    opacity: 1;
+  }
+
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    background: transparent;
+    border: none;
+    color: var(--extractum-muted);
+    cursor: pointer;
+    transition: color 0.12s, background 0.12s;
+  }
+
+  .action-btn:hover {
+    color: var(--extractum-text);
+    background: color-mix(in srgb, var(--extractum-border) 40%, transparent);
+  }
+
+  .action-btn.delete-btn:hover {
+    color: var(--extractum-danger);
+    background: color-mix(in srgb, var(--extractum-danger) 10%, transparent);
   }
 
   .project-dot-indicator {
