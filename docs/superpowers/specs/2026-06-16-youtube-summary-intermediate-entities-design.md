@@ -149,6 +149,11 @@ the same object shape, but contains exactly one `sources` entry and only entity
 arrays for that source. Synthesis input may merge these source-scoped artifacts
 into the same shape across all successful transcript stages.
 
+When multiple successful attempts exist for the same source, including a
+successful repaired transcript-analysis attempt, consumers must use the artifact
+from the latest successful stage attempt for that source. The original failed
+attempt must not shadow a later repaired success.
+
 ### Source Records
 
 Sources mirror the run snapshot identity:
@@ -322,6 +327,8 @@ Preferred artifact:
 - repaired transcript-analysis outputs produce an `intermediate_entities`
   artifact for the repaired successful attempt; failed or quarantined outputs do
   not produce one.
+- consumers resolve the graph per source by selecting the latest successful
+  transcript-analysis stage attempt for that source, including repaired attempts.
 - `content_type = "application/json"`
 - `compression_kind = "zstd"`
 
@@ -338,7 +345,9 @@ MVP contract.
 `build_synthesis_stage_input` should include both the current loose candidate
 view and the canonical graph during the transition. It should load all
 source-scoped `intermediate_entities` artifacts for successful transcript stages
-and merge them deterministically by source snapshot order.
+and merge them deterministically by ascending
+`prompt_pack_run_source_snapshots.id`. This is the run-local source snapshot
+insertion order and must not depend on transcript-stage completion order.
 
 Recommended new fields:
 
@@ -397,7 +406,8 @@ Intermediate graph checks:
 - `key_point.segment_ref`, when present, references a segment from the same
   source;
 - `quote.segment_ref`, when present, references a segment from the same source;
-- `evidence.quote_ref`, when present, references a quote from the same source.
+- `evidence.quote_ref`, when present, exists in `quotes[*].quote_ref` for the
+  same source.
 
 Synthesis output checks:
 
@@ -421,6 +431,8 @@ entities when a complete graph set exists for the run.
 Initial behavior:
 
 - load per-source graph artifacts from successful transcript-analysis stages;
+- resolve graph artifacts by latest successful stage attempt per source,
+  including repaired attempts;
 - build `claims` from graph claims;
 - build `evidence` from graph evidence;
 - keep the current fallback path from transcript parsed output for older runs or
