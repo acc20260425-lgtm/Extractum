@@ -112,10 +112,17 @@
   const projectsNavItems = [
     {
       href: "/projects",
+      label: "Workspace",
+      caption: "Research workspace",
+      icon: LayoutDashboard,
+      active: (pathname: string) => pathname === "/projects" || pathname === "/projects/",
+    },
+    {
+      href: "/projects/list",
       label: "Projects",
       caption: "Research projects",
       icon: FolderKanban,
-      active: (pathname: string) => pathname.startsWith("/projects") && pathname !== "/projects/library" && !pathname.startsWith("/projects/runs"),
+      active: (pathname: string) => pathname.startsWith("/projects/list"),
     },
     {
       href: "/projects/library",

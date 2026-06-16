@@ -130,7 +130,7 @@
 <section data-ui-route="research-projects">
   <ProjectsShell
     {state}
-    showRail={false}
+    showRail={true}
     onSelectProject={selectProject}
     onCreateProject={workflow.createProject}
     onUpdateProject={workflow.updateProject}
