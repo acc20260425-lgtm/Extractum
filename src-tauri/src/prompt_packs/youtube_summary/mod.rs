@@ -16,6 +16,7 @@ pub(crate) mod preflight;
 #[cfg(test)]
 mod preflight_tests;
 pub(crate) mod progress;
+mod result_validation;
 pub(crate) mod snapshots;
 #[cfg(test)]
 mod snapshots_tests;

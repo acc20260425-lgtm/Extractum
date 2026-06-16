@@ -46,7 +46,7 @@ Use stable codes only:
 - Create: `src-tauri/src/prompt_packs/youtube_summary/result_validation.rs`
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/mod.rs`
 
-- [ ] **Step 1: Register the new module**
+- [x] **Step 1: Register the new module**
 
 Add this line to `src-tauri/src/prompt_packs/youtube_summary/mod.rs` with the other private modules:
 
@@ -54,7 +54,7 @@ Add this line to `src-tauri/src/prompt_packs/youtube_summary/mod.rs` with the ot
 mod result_validation;
 ```
 
-- [ ] **Step 2: Create the validator file with types and a minimal fixture**
+- [x] **Step 2: Create the validator file with types and a minimal fixture**
 
 Create `src-tauri/src/prompt_packs/youtube_summary/result_validation.rs` with this starting content:
 
@@ -213,7 +213,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run the focused test and confirm the expected failure**
+- [x] **Step 3: Run the focused test and confirm the expected failure**
 
 Run:
 
@@ -223,7 +223,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib duplicate_source_ref_id_re
 
 Expected: FAIL because `validate_youtube_summary_canonical_result` currently returns no findings.
 
-- [ ] **Step 4: Keep the failing validator shell uncommitted**
+- [x] **Step 4: Keep the failing validator shell uncommitted**
 
 Do not commit this red state if the branch policy is green-only. Leave the
 new validator file staged or unstaged locally and make the first commit after
@@ -234,7 +234,7 @@ Task 2 passes.
 **Files:**
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/result_validation.rs`
 
-- [ ] **Step 1: Add shape and identity tests**
+- [x] **Step 1: Add shape and identity tests**
 
 Add these tests to the existing `tests` module:
 
@@ -451,7 +451,7 @@ fn valid_canonical_result_with_synthesis() -> Value {
 }
 ```
 
-- [ ] **Step 2: Run shape/identity tests and confirm they fail**
+- [x] **Step 2: Run shape/identity tests and confirm they fail**
 
 Run:
 
@@ -461,7 +461,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib result_validation
 
 Expected: the new invalid-result tests fail because the validator does not inspect shape or ids yet.
 
-- [ ] **Step 3: Implement shape and identity validation**
+- [x] **Step 3: Implement shape and identity validation**
 
 Replace the body of `validate_youtube_summary_canonical_result` and add helpers:
 
@@ -693,7 +693,7 @@ fn validate_synthesis_item_ids(
 }
 ```
 
-- [ ] **Step 4: Run tests and verify shape/identity pass**
+- [x] **Step 4: Run tests and verify shape/identity pass**
 
 Run:
 
@@ -703,7 +703,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib result_validation
 
 Expected: PASS for the validator tests added so far.
 
-- [ ] **Step 5: Commit the green validator shell plus shape and identity validation**
+- [x] **Step 5: Commit the green validator shell plus shape and identity validation**
 
 ```powershell
 git add src-tauri\src\prompt_packs\youtube_summary\mod.rs src-tauri\src\prompt_packs\youtube_summary\result_validation.rs
