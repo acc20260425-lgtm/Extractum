@@ -148,6 +148,116 @@ async fn execute_synthesis_stage_rejects_invalid_output_without_success_artifact
 }
 
 #[tokio::test]
+async fn execute_synthesis_stage_rejects_unknown_claim_ref_with_quarantine() {
+    let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
+    persist_succeeded_transcript_stage_fixtures(
+        &pool,
+        1,
+        vec![
+            TranscriptStageFixture {
+                summary: "A",
+                claim: "Claim A",
+                evidence: "Evidence A",
+            },
+            TranscriptStageFixture {
+                summary: "B",
+                claim: "Claim B",
+                evidence: "Evidence B",
+            },
+        ],
+    )
+    .await
+    .expect("fixtures");
+
+    let stage_run_id = synthesis_stage_id(&pool, 1).await;
+    let completion = LlmCompletion {
+        text: serde_json::json!({
+            "stage_io_version": "1.0",
+            "schema_version": "1.0",
+            "stage": "youtube_summary/synthesis",
+            "synthesis_candidate": {
+                "summary_text": "Combined",
+                "cross_video_themes": [{
+                    "theme_text": "Theme",
+                    "source_refs": ["source_ref_1"],
+                    "claim_refs": ["claim_999"],
+                    "evidence_refs": []
+                }],
+                "common_claims": [],
+                "contradictions_across_videos": []
+            },
+            "limitations": [],
+            "warning_candidates": []
+        })
+        .to_string(),
+        input_tokens: Some(10),
+        output_tokens: Some(10),
+        latency_ms: 5,
+    };
+
+    let error = execute_synthesis_stage_with_completion(&pool, stage_run_id, completion)
+        .await
+        .expect_err("unknown claim ref rejected");
+
+    assert!(error.message.contains("unknown claim_ref claim_999"));
+    let quarantine_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM prompt_pack_result_quarantine_artifacts
+         WHERE run_id = 1 AND stage_run_id = ?",
+    )
+    .bind(stage_run_id)
+    .fetch_one(&pool)
+    .await
+    .expect("quarantine count");
+    assert_eq!(quarantine_count, 1);
+}
+
+#[tokio::test]
+async fn execute_synthesis_stage_requires_complete_intermediate_graph() {
+    let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
+    persist_succeeded_transcript_stage_fixtures(
+        &pool,
+        1,
+        vec![
+            TranscriptStageFixture {
+                summary: "First summary",
+                claim: "First claim",
+                evidence: "First evidence",
+            },
+            TranscriptStageFixture {
+                summary: "Second summary",
+                claim: "Second claim",
+                evidence: "Second evidence",
+            },
+        ],
+    )
+    .await
+    .expect("fixtures");
+    delete_intermediate_entities_artifact_for_source(&pool, 1, "source_ref_2").await;
+
+    let stage_run_id = synthesis_stage_id(&pool, 1).await;
+    let completion = fake_completion_with_valid_synthesis_json_without_claim_refs();
+
+    let error = execute_synthesis_stage_with_completion(&pool, stage_run_id, completion)
+        .await
+        .expect_err("missing graph is an execution error");
+
+    assert!(error
+        .message
+        .contains("missing complete intermediate_entities graph"));
+    let (status, error_message): (String, Option<String>) = sqlx::query_as(
+        "SELECT stage_status, error_message FROM prompt_pack_stage_runs WHERE id = ?",
+    )
+    .bind(stage_run_id)
+    .fetch_one(&pool)
+    .await
+    .expect("synthesis stage status");
+    assert_eq!(status, "failed");
+    assert!(error_message
+        .unwrap_or_default()
+        .contains("missing complete intermediate_entities graph"));
+}
+
+#[tokio::test]
 async fn execute_transcript_analysis_stage_persists_raw_and_parsed_artifacts() {
     let pool = test_pool_with_frozen_youtube_summary_run().await;
     let stage_id = transcript_analysis_stage_id(&pool, 1).await;
@@ -284,4 +394,50 @@ async fn assert_quarantine_count(pool: &sqlx::SqlitePool, stage_id: i64, expecte
     .expect("quarantine count");
 
     assert_eq!(count, expected_count);
+}
+
+async fn synthesis_stage_id(pool: &sqlx::SqlitePool, run_id: i64) -> i64 {
+    sqlx::query_scalar(
+        "SELECT id FROM prompt_pack_stage_runs
+         WHERE run_id = ? AND stage_name = 'youtube_summary/synthesis'",
+    )
+    .bind(run_id)
+    .fetch_one(pool)
+    .await
+    .expect("synthesis stage id")
+}
+
+async fn delete_intermediate_entities_artifact_for_source(
+    pool: &sqlx::SqlitePool,
+    run_id: i64,
+    source_ref_id: &str,
+) {
+    sqlx::query(
+        "DELETE FROM prompt_pack_stage_artifacts
+         WHERE artifact_kind = 'intermediate_entities'
+           AND stage_run_id IN (
+               SELECT stages.id
+               FROM prompt_pack_stage_runs stages
+               JOIN prompt_pack_run_source_snapshots snapshots
+                 ON snapshots.id = stages.source_snapshot_id
+                AND snapshots.run_id = stages.run_id
+               WHERE stages.run_id = ?
+                 AND stages.stage_name = 'youtube_summary/transcript_analysis'
+                 AND snapshots.source_ref_id = ?
+           )",
+    )
+    .bind(run_id)
+    .bind(source_ref_id)
+    .execute(pool)
+    .await
+    .expect("delete intermediate graph artifact");
+}
+
+fn fake_completion_with_valid_synthesis_json_without_claim_refs() -> LlmCompletion {
+    LlmCompletion {
+        text: synthesis_json("Combined summary"),
+        input_tokens: Some(10),
+        output_tokens: Some(10),
+        latency_ms: 5,
+    }
 }

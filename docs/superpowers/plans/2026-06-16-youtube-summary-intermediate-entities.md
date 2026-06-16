@@ -1473,7 +1473,7 @@ git commit -m "feat: validate youtube synthesis refs"
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/outputs_tests.rs`
 - Modify: `src-tauri/src/prompt_packs/validation.rs`
 
-- [ ] **Step 1: Add failing quarantine tests**
+- [x] **Step 1: Add failing quarantine tests**
 
 In `outputs_tests.rs`, add:
 
@@ -1584,7 +1584,7 @@ async fn execute_synthesis_stage_requires_complete_intermediate_graph() {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -1594,7 +1594,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib youtube_summary::outputs_t
 
 Expected: FAIL because synthesis output does not validate against graph allowed refs and live synthesis execution does not require a complete graph.
 
-- [ ] **Step 3: Load allowed refs for synthesis stage**
+- [x] **Step 3: Load allowed refs for synthesis stage**
 
 In `entities.rs`, add:
 
@@ -1682,13 +1682,13 @@ Keep the optional `load_merged_intermediate_entities_for_run` behavior for synth
 
 Completeness is an exact ordered set check against successful transcript stage source snapshots: same `(source_snapshot_id, source_ref_id)` values, same order, and no duplicates. Do not use only `graph["sources"].len()`.
 
-- [ ] **Step 4: Reuse validation quarantine helper for ref errors**
+- [x] **Step 4: Reuse validation quarantine helper for ref errors**
 
 Task 2 introduced `quarantine_prompt_pack_validation_error`. Use that same helper for synthesis ref-check failures instead of adding a second SQL insert path.
 
 No new helper is needed in `validation.rs`.
 
-- [ ] **Step 5: Wire validation into synthesis persistence**
+- [x] **Step 5: Wire validation into synthesis persistence**
 
 In `outputs.rs`, import:
 
@@ -1734,7 +1734,7 @@ if let Err(error) = validate_synthesis_output_with_allowed_refs(
 }
 ```
 
-- [ ] **Step 6: Run quarantine tests**
+- [x] **Step 6: Run quarantine tests**
 
 Run:
 
@@ -1744,7 +1744,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib youtube_summary::outputs_t
 
 Expected: PASS with one quarantine row for the unknown-ref case and a live execution error for missing complete graph.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add src-tauri\src\prompt_packs\youtube_summary\entities.rs src-tauri\src\prompt_packs\youtube_summary\outputs.rs src-tauri\src\prompt_packs\youtube_summary\outputs_tests.rs src-tauri\src\prompt_packs\validation.rs

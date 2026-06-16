@@ -210,6 +210,93 @@ pub(crate) async fn load_merged_intermediate_entities_for_run(
     Ok(Some(merged))
 }
 
+pub(crate) struct AllowedSynthesisRefs {
+    pub(crate) source_refs: HashSet<String>,
+    pub(crate) claim_refs: HashSet<String>,
+    pub(crate) evidence_refs: HashSet<String>,
+}
+
+impl AllowedSynthesisRefs {
+    fn empty() -> Self {
+        Self {
+            source_refs: HashSet::new(),
+            claim_refs: HashSet::new(),
+            evidence_refs: HashSet::new(),
+        }
+    }
+}
+
+pub(crate) async fn load_required_allowed_refs_for_live_synthesis(
+    pool: &SqlitePool,
+    run_id: i64,
+) -> AppResult<AllowedSynthesisRefs> {
+    let expected_sources = sqlx::query_as::<_, (i64, String)>(
+        "SELECT snapshots.id, snapshots.source_ref_id
+         FROM prompt_pack_stage_runs stages
+         JOIN prompt_pack_run_source_snapshots snapshots
+           ON snapshots.id = stages.source_snapshot_id
+          AND snapshots.run_id = stages.run_id
+         WHERE stages.run_id = ?
+           AND stages.stage_name = 'youtube_summary/transcript_analysis'
+           AND stages.stage_status = 'succeeded'
+         ORDER BY snapshots.id ASC",
+    )
+    .bind(run_id)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::database)?;
+    let graph = load_merged_intermediate_entities_for_run(pool, run_id).await?;
+    let Some(graph) = graph else {
+        if !expected_sources.is_empty() {
+            return Err(AppError::validation(
+                "missing complete intermediate_entities graph for live synthesis",
+            ));
+        }
+        return Ok(AllowedSynthesisRefs::empty());
+    };
+
+    let graph_sources = graph
+        .get("sources")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let graph_source_keys = graph_sources
+        .iter()
+        .map(|source| {
+            Ok((
+                source
+                    .get("source_snapshot_id")
+                    .and_then(serde_json::Value::as_i64)
+                    .ok_or_else(|| {
+                        AppError::internal("intermediate graph source missing source_snapshot_id")
+                    })?,
+                source
+                    .get("source_ref_id")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| {
+                        AppError::internal("intermediate graph source missing source_ref_id")
+                    })?
+                    .to_string(),
+            ))
+        })
+        .collect::<AppResult<Vec<_>>>()?;
+    if graph_source_keys != expected_sources {
+        return Err(AppError::validation(
+            "missing complete intermediate_entities graph for live synthesis",
+        ));
+    }
+
+    let allowed = graph
+        .get("allowed_refs")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!({}));
+    Ok(AllowedSynthesisRefs {
+        source_refs: string_set(allowed.get("source_refs")),
+        claim_refs: string_set(allowed.get("claim_refs")),
+        evidence_refs: string_set(allowed.get("evidence_refs")),
+    })
+}
+
 #[derive(Clone)]
 struct BuiltIndexedEntities {
     items: Vec<serde_json::Value>,
@@ -639,6 +726,16 @@ fn collect_string_field(items: &[serde_json::Value], key: &str) -> Vec<String> {
     items
         .iter()
         .filter_map(|item| item.get(key).and_then(serde_json::Value::as_str))
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn string_set(value: Option<&serde_json::Value>) -> HashSet<String> {
+    value
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
         .map(ToString::to_string)
         .collect()
 }

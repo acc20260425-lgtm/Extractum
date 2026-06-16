@@ -2,7 +2,7 @@ use sqlx::SqlitePool;
 
 use super::entities::{
     build_or_quarantine_intermediate_entities_for_transcript_stage,
-    insert_intermediate_entities_artifact,
+    insert_intermediate_entities_artifact, load_required_allowed_refs_for_live_synthesis,
 };
 use super::synthesis_input::build_synthesis_stage_input;
 use super::LlmCompletion;
@@ -12,7 +12,8 @@ use crate::prompt_packs::stage_io::{
     SYNTHESIS_OUTPUT_SCHEMA_ID, TRANSCRIPT_ANALYSIS_OUTPUT_SCHEMA_ID,
 };
 use crate::prompt_packs::validation::{
-    validate_and_quarantine_synthesis_output, validate_transcript_analysis_output,
+    quarantine_prompt_pack_validation_error, validate_and_quarantine_synthesis_output,
+    validate_synthesis_output_with_allowed_refs, validate_transcript_analysis_output,
 };
 
 pub(crate) async fn execute_transcript_analysis_stage_with_completion(
@@ -180,6 +181,24 @@ pub(crate) async fn execute_synthesis_stage_with_completion(
     {
         mark_synthesis_stage_failed(pool, stage_run_id, &error.message).await?;
         return Err(error);
+    }
+    let allowed_refs = match load_required_allowed_refs_for_live_synthesis(pool, run_id).await {
+        Ok(allowed_refs) => allowed_refs,
+        Err(error) => {
+            mark_synthesis_stage_failed(pool, stage_run_id, &error.message).await?;
+            return Err(error);
+        }
+    };
+    if let Err(error) = validate_synthesis_output_with_allowed_refs(
+        &parsed,
+        &allowed_refs.source_refs,
+        &allowed_refs.claim_refs,
+        &allowed_refs.evidence_refs,
+    ) {
+        let validation_message = error.message.clone();
+        quarantine_prompt_pack_validation_error(pool, run_id, stage_run_id, &parsed, error).await?;
+        mark_synthesis_stage_failed(pool, stage_run_id, &validation_message).await?;
+        return Err(AppError::validation(validation_message));
     }
 
     let parsed_json = serde_json::to_string(&parsed).map_err(|error| {
