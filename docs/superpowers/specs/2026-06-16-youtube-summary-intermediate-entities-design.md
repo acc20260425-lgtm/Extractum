@@ -143,6 +143,12 @@ Recommended top-level artifact shape:
 }
 ```
 
+`graph_kind` is a fixed discriminator, not free-form model output. The MVP uses
+the convention `{pack_id}_intermediate_entities`, so the only valid value for
+this pack is `youtube_summary_intermediate_entities`. Builders and consumers
+must validate it against the run's `pack_id`; unknown values are invalid rather
+than ignored.
+
 Each persisted `intermediate_entities` artifact is source-scoped and attached to
 the transcript-analysis stage that produced it. A source-scoped artifact uses
 the same object shape, but contains exactly one `sources` entry and only entity
@@ -506,6 +512,10 @@ Implement this as small commits:
    `evidence_refs`.
 5. Add synthesis ref validation and quarantine tests.
 6. Update canonical result builder to prefer graph entities with fallback.
+
+Step 3 has a hard dependency on step 2. It may be implemented in the same PR or
+commit series as artifact persistence, but it must not be shipped before
+per-source `intermediate_entities` artifacts exist and are covered by tests.
 
 ## Implementation Decision
 
