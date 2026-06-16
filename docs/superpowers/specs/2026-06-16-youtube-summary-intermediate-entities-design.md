@@ -243,18 +243,15 @@ Evidence comes from `evidence_fragment_candidates`.
 }
 ```
 
-`quote_ref` is optional. The backend may link evidence to a quote only when it
-can do so deterministically from candidate data inside the same source.
+`quote_ref` is optional. In the MVP, the backend may link evidence to a quote
+only when the transcript candidate data includes an explicit, source-local quote
+reference that can be validated against a quote in the same intermediate graph.
+If the candidate data does not provide such a reference, `quote_ref` remains
+`null`.
 
-Exact-text matching is allowed only as a narrow fallback:
-
-- the quote text must meet an implementation-defined minimum length threshold;
-- exactly one quote in the same source must match;
-- matching must not cross source boundaries;
-- short, repeated, or ambiguous matches leave `quote_ref = null`.
-
-This keeps quote linking useful without letting common phrases create accidental
-evidence links.
+The MVP must not infer `quote_ref` through exact-text matching. Exact-text
+matching can be reconsidered later with a separate deterministic policy, but it
+is intentionally out of scope for the first implementation.
 
 ### Ref Terminology
 
