@@ -433,6 +433,15 @@ builder uses graph claims and evidence for the whole run. If any successful
 transcript-analysis stage is missing the graph artifact, the result builder
 falls back to the legacy parsed-output path for the whole run.
 
+The fallback must be observable in the canonical result. When the result builder
+falls back because graph artifacts are partially missing, it must add:
+
+- `quality_flags[]` entry with `flag = "intermediate_entities_legacy_fallback"`
+  and `severity = "warning"`;
+- a human-readable warning or limitation stating that intermediate entity graph
+  artifacts were incomplete, so claims and evidence were assembled through the
+  legacy parsed-output path.
+
 This avoids mixing ID assignment policies inside one result, preserves old
 runs, supports single-video runs, and avoids a hard cutover.
 
@@ -458,7 +467,7 @@ Add focused Rust tests for:
 - single-video runs build and use intermediate graph artifacts even when
   synthesis is skipped;
 - mixed graph/legacy availability falls back to legacy parsing for the whole
-  run;
+  run and emits `intermediate_entities_legacy_fallback`;
 - canonical result builder uses graph claims/evidence when graph artifact
   exists and falls back to old candidate parsing when it does not.
 
