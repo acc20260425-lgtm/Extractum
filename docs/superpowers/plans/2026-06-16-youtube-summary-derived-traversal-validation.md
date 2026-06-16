@@ -163,7 +163,11 @@ fn synthesis_extra_top_level_source_ref_not_in_nested_items_returns_error() {
     canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"][0]
         ["source_refs"] = serde_json::json!([]);
     canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["common_claims"][0]
+        ["video_refs"] = serde_json::json!([]);
+    canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["common_claims"][0]
         ["source_refs"] = serde_json::json!([]);
+    canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]
+        ["contradictions_across_videos"][0]["video_refs"] = serde_json::json!([]);
     canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]
         ["contradictions_across_videos"][0]["source_refs"] = serde_json::json!([]);
     canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["source_refs"] =
@@ -258,7 +262,7 @@ git commit -m "test: cover youtube summary synthesis traversal validation"
 **Files:**
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/result_validation.rs`
 
-- [ ] **Step 1: Add `HashMap` import**
+- [x] **Step 1: Add `HashMap` import**
 
 Replace the existing import:
 
@@ -272,7 +276,7 @@ with:
 use std::collections::{HashMap, HashSet};
 ```
 
-- [ ] **Step 2: Wire synthesis traversal validation into the top-level validator**
+- [x] **Step 2: Wire synthesis traversal validation into the top-level validator**
 
 In `validate_youtube_summary_canonical_result`, immediately after `validate_result_refs(...)` and before `validate_youtube_pack_rules(...)`, add:
 
@@ -321,7 +325,7 @@ The surrounding section should read:
     validate_youtube_pack_rules(canonical, context, &mut findings);
 ```
 
-- [ ] **Step 3: Add helper functions for ordered unions**
+- [x] **Step 3: Add helper functions for ordered unions**
 
 Steps 3, 4, and 5 form one contiguous helper block. Insert Step 3 immediately
 after `validate_ref_array(...)` and before `validate_youtube_pack_rules(...)`.
@@ -406,7 +410,7 @@ fn ref_array_strings(value: Option<&Value>) -> Option<Vec<String>> {
 }
 ```
 
-- [ ] **Step 4: Add derivation helpers**
+- [x] **Step 4: Add derivation helpers**
 
 Append these functions immediately after the ordered-union helpers from Step 3:
 
@@ -463,7 +467,7 @@ fn derive_synthesis_source_refs(
 }
 ```
 
-- [ ] **Step 5: Add comparison and finding helpers**
+- [x] **Step 5: Add comparison and finding helpers**
 
 Append these functions immediately after the derivation helpers from Step 4:
 
@@ -543,7 +547,7 @@ fn compare_derived_traversal_refs(
 }
 ```
 
-- [ ] **Step 6: Add synthesis-null regression test**
+- [x] **Step 6: Add synthesis-null regression test**
 
 Add this test immediately after
 `synthesis_unknown_video_ref_does_not_cascade_to_source_union_error`:
@@ -563,7 +567,7 @@ fn synthesis_null_skips_derived_traversal_validation() {
 This is a regression guard after the traversal validator is wired. It is not part
 of Task 1 because it would pass before implementation.
 
-- [ ] **Step 7: Run focused tests**
+- [x] **Step 7: Run focused tests**
 
 Run:
 
@@ -573,7 +577,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib result_validation -- --noc
 
 Expected: all synthesis derived traversal tests from Task 1 pass. Video traversal tests are not present yet.
 
-- [ ] **Step 8: Commit implementation**
+- [x] **Step 8: Commit implementation**
 
 ```powershell
 git add src-tauri\src\prompt_packs\youtube_summary\result_validation.rs

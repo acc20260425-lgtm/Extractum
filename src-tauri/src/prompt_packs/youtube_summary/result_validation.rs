@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use serde_json::Value;
 use sqlx::{Sqlite, SqlitePool, Transaction};
@@ -149,6 +149,20 @@ pub(crate) fn validate_youtube_summary_canonical_result(
         &evidence_ids,
         &mut findings,
     );
+    let videos = canonical
+        .pointer("/outputs/pack_data/youtube_summary/videos")
+        .and_then(Value::as_array);
+    let video_source_by_id = collect_video_source_by_id(videos, &source_ids);
+    if let Some(synthesis) = canonical
+        .pointer("/outputs/pack_data/youtube_summary/synthesis")
+        .and_then(Value::as_object)
+    {
+        validate_synthesis_derived_traversal_refs(
+            synthesis,
+            &video_source_by_id,
+            &mut findings,
+        );
+    }
     validate_youtube_pack_rules(canonical, context, &mut findings);
     add_advisory_quality_flag_findings(canonical, &mut findings);
 
@@ -520,6 +534,205 @@ fn validate_ref_array(
                 Some(format!("{base_path}[{index}]")),
             ));
         }
+    }
+}
+
+fn collect_video_source_by_id(
+    videos: Option<&Vec<Value>>,
+    source_ids: &HashSet<String>,
+) -> HashMap<String, String> {
+    let mut video_source_by_id = HashMap::new();
+    for video in videos.into_iter().flatten() {
+        let Some(video_id) = video.get("video_id").and_then(Value::as_str).map(str::trim) else {
+            continue;
+        };
+        if video_id.is_empty() {
+            continue;
+        }
+        let Some(source_ref_id) = video
+            .get("source_ref_id")
+            .and_then(Value::as_str)
+            .map(str::trim)
+        else {
+            continue;
+        };
+        if source_ids.contains(source_ref_id) {
+            video_source_by_id.insert(video_id.to_string(), source_ref_id.to_string());
+        }
+    }
+    video_source_by_id
+}
+
+fn synthesis_item_arrays<'a>(
+    synthesis: &'a serde_json::Map<String, Value>,
+) -> impl Iterator<Item = &'a Vec<Value>> {
+    [
+        "cross_video_themes",
+        "common_claims",
+        "contradictions_across_videos",
+    ]
+    .into_iter()
+    .filter_map(|key| synthesis.get(key).and_then(Value::as_array))
+}
+
+fn push_ordered_unique(values: &mut Vec<String>, seen: &mut HashSet<String>, value: &str) {
+    if !seen.contains(value) {
+        let value = value.to_string();
+        seen.insert(value.clone());
+        values.push(value);
+    }
+}
+
+fn collect_ordered_unique_ref_array_items(
+    value: Option<&Value>,
+    values: &mut Vec<String>,
+    seen: &mut HashSet<String>,
+) {
+    for item in value
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+    {
+        push_ordered_unique(values, seen, item);
+    }
+}
+
+fn ref_array_strings(value: Option<&Value>) -> Option<Vec<String>> {
+    // Synthesis traversal arrays are canonical-builder output. Non-string refs
+    // are intentionally ignored here because raw synthesis-output validation
+    // owns that shape error before canonical assembly.
+    value.and_then(Value::as_array).map(|items| {
+        items
+            .iter()
+            .filter_map(Value::as_str)
+            .map(ToString::to_string)
+            .collect()
+    })
+}
+
+fn derive_synthesis_claim_refs(synthesis: &serde_json::Map<String, Value>) -> Vec<String> {
+    let mut values = Vec::new();
+    let mut seen = HashSet::new();
+    for items in synthesis_item_arrays(synthesis) {
+        for item in items {
+            collect_ordered_unique_ref_array_items(item.get("claim_refs"), &mut values, &mut seen);
+        }
+    }
+    values
+}
+
+fn derive_synthesis_evidence_refs(synthesis: &serde_json::Map<String, Value>) -> Vec<String> {
+    let mut values = Vec::new();
+    let mut seen = HashSet::new();
+    for items in synthesis_item_arrays(synthesis) {
+        for item in items {
+            collect_ordered_unique_ref_array_items(
+                item.get("evidence_refs"),
+                &mut values,
+                &mut seen,
+            );
+        }
+    }
+    values
+}
+
+fn derive_synthesis_source_refs(
+    synthesis: &serde_json::Map<String, Value>,
+    video_source_by_id: &HashMap<String, String>,
+) -> Vec<String> {
+    let mut values = Vec::new();
+    let mut seen = HashSet::new();
+    for items in synthesis_item_arrays(synthesis) {
+        for item in items {
+            collect_ordered_unique_ref_array_items(item.get("source_refs"), &mut values, &mut seen);
+            for video_id in item
+                .get("video_refs")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+            {
+                if let Some(source_ref_id) = video_source_by_id.get(video_id) {
+                    push_ordered_unique(&mut values, &mut seen, source_ref_id);
+                }
+            }
+        }
+    }
+    values
+}
+
+fn validate_synthesis_derived_traversal_refs(
+    synthesis: &serde_json::Map<String, Value>,
+    video_source_by_id: &HashMap<String, String>,
+    findings: &mut Vec<PromptPackResultValidationFinding>,
+) {
+    compare_derived_traversal_refs(
+        synthesis.get("claim_refs"),
+        derive_synthesis_claim_refs(synthesis),
+        "$.outputs.pack_data.youtube_summary.synthesis.claim_refs",
+        findings,
+    );
+    compare_derived_traversal_refs(
+        synthesis.get("evidence_refs"),
+        derive_synthesis_evidence_refs(synthesis),
+        "$.outputs.pack_data.youtube_summary.synthesis.evidence_refs",
+        findings,
+    );
+    compare_derived_traversal_refs(
+        synthesis.get("source_refs"),
+        derive_synthesis_source_refs(synthesis, video_source_by_id),
+        "$.outputs.pack_data.youtube_summary.synthesis.source_refs",
+        findings,
+    );
+}
+
+fn compare_derived_traversal_refs(
+    actual_value: Option<&Value>,
+    expected: Vec<String>,
+    path: &str,
+    findings: &mut Vec<PromptPackResultValidationFinding>,
+) {
+    let Some(actual) = ref_array_strings(actual_value) else {
+        return;
+    };
+
+    let mut duplicate_seen = HashSet::new();
+    let has_duplicate = actual
+        .iter()
+        .any(|value| !duplicate_seen.insert(value.to_string()));
+
+    let actual_set: HashSet<String> = actual.iter().cloned().collect();
+    let expected_set: HashSet<String> = expected.iter().cloned().collect();
+
+    let missing: Vec<String> = expected
+        .iter()
+        .filter(|value| !actual_set.contains(*value))
+        .cloned()
+        .collect();
+    let extra: Vec<String> = actual
+        .iter()
+        .filter(|value| !expected_set.contains(*value))
+        .cloned()
+        .collect();
+
+    if has_duplicate || !missing.is_empty() || !extra.is_empty() {
+        let mut parts = Vec::new();
+        if has_duplicate {
+            parts.push("duplicates present".to_string());
+        }
+        if !missing.is_empty() {
+            parts.push(format!("missing: {}", serde_json::json!(missing)));
+        }
+        if !extra.is_empty() {
+            parts.push(format!("extra: {}", serde_json::json!(extra)));
+        }
+        findings.push(finding(
+            "error",
+            "VR-YS-015",
+            format!("{path} {}", parts.join("; ")),
+            Some(path.to_string()),
+        ));
     }
 }
 
@@ -1119,7 +1332,11 @@ mod tests {
         canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"][0]
             ["source_refs"] = serde_json::json!([]);
         canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["common_claims"][0]
+            ["video_refs"] = serde_json::json!([]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["common_claims"][0]
             ["source_refs"] = serde_json::json!([]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]
+            ["contradictions_across_videos"][0]["video_refs"] = serde_json::json!([]);
         canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]
             ["contradictions_across_videos"][0]["source_refs"] = serde_json::json!([]);
         canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["source_refs"] =
@@ -1162,7 +1379,11 @@ mod tests {
         canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"][0]
             ["source_refs"] = serde_json::json!([]);
         canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["common_claims"][0]
+            ["video_refs"] = serde_json::json!([]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["common_claims"][0]
             ["source_refs"] = serde_json::json!([]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]
+            ["contradictions_across_videos"][0]["video_refs"] = serde_json::json!([]);
         canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]
             ["contradictions_across_videos"][0]["source_refs"] = serde_json::json!([]);
         canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["source_refs"] =
@@ -1184,6 +1405,16 @@ mod tests {
             }),
             "{findings:#?}"
         );
+    }
+
+    #[test]
+    fn synthesis_null_skips_derived_traversal_validation() {
+        let canonical = valid_canonical_result();
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert!(!findings.iter().any(|finding| finding.code == "VR-YS-015"));
     }
 
     #[test]
