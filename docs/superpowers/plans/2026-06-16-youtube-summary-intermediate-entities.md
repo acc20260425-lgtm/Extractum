@@ -2005,7 +2005,7 @@ git commit -m "feat: use youtube summary intermediate graph in results"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-06-16-youtube-summary-intermediate-entities.md`
 
-- [ ] **Step 1: Run focused YouTube Summary tests**
+- [x] **Step 1: Run focused YouTube Summary tests**
 
 Run:
 
@@ -2015,7 +2015,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib youtube_summary_
 
 Expected: more than zero tests run, all pass.
 
-- [ ] **Step 2: Run Prompt Pack tests**
+- [x] **Step 2: Run Prompt Pack tests**
 
 Run:
 
@@ -2025,7 +2025,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib prompt_packs
 
 Expected: more than zero tests run, all pass.
 
-- [ ] **Step 3: Run compile and formatting checks**
+- [x] **Step 3: Run compile and formatting checks**
 
 Run:
 
@@ -2037,11 +2037,11 @@ git diff --check
 
 Expected: all commands exit 0. Existing unchanged dead-code warnings are acceptable only if they are the same warnings already present before this feature.
 
-- [ ] **Step 4: Mark plan complete**
+- [x] **Step 4: Mark plan complete**
 
 Edit this plan file and check off completed task steps. Do not mark a step complete until its command has been run and its output read.
 
-- [ ] **Step 5: Commit final plan state**
+- [x] **Step 5: Commit final plan state**
 
 ```powershell
 git add docs\superpowers\plans\2026-06-16-youtube-summary-intermediate-entities.md
