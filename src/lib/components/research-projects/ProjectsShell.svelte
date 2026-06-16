@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { FolderKanban } from "@lucide/svelte";
+  import { FolderKanban, ChevronDown, Folder, Plus } from "@lucide/svelte";
   import BottomQueue from "./BottomQueue.svelte";
   import ConnectFromLibrary from "./ConnectFromLibrary.svelte";
   import ProjectEditorDialog from "./ProjectEditorDialog.svelte";
@@ -94,7 +94,7 @@
   }
 </script>
 
-<div class="projects-shell" style="--inspector-width: {inspectorWidth};" class:no-rail={!showRail}>
+<div class="projects-shell" style="--inspector-width: {inspectorWidth};">
   {#if showRail}
     <aside data-ui-region="project-rail" class="project-rail">
       <ProjectRail
@@ -103,6 +103,54 @@
         {onSelectProject}
         onCreateProject={openCreateProject}
       />
+    </aside>
+  {:else}
+    <aside data-ui-region="project-tree-rail" class="project-tree-rail">
+      <div class="tree-rail-header">
+        <h1>Workspace</h1>
+      </div>
+
+      <div class="projects-tree-wrapper">
+        <!-- Root Folder: Projects (Always Expanded) -->
+        <div class="projects-tree-root-header">
+          <span class="folder-chevron-wrapper"><ChevronDown size={12} aria-hidden="true" /></span>
+          <span class="folder-icon-wrapper"><Folder size={12} aria-hidden="true" /></span>
+          <span class="folder-label">Projects</span>
+        </div>
+
+        <!-- List of Projects -->
+        <div class="projects-tree-list">
+          {#each workflowState.projects as project (project.id)}
+            <button
+              type="button"
+              class="tree-project-item"
+              class:active={workflowState.selectedProjectId === project.id}
+              onclick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onSelectProject(project.id);
+              }}
+            >
+              <span class="project-dot-indicator" class:running={project.status === "running"} class:ready={project.status === "ready"}></span>
+              <span class="project-title-text" title={project.title}>{project.title}</span>
+            </button>
+          {/each}
+
+          <!-- Add Project Action -->
+          <button
+            type="button"
+            class="tree-add-project-btn"
+            onclick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              openCreateProject();
+            }}
+          >
+            <Plus size={12} aria-hidden="true" />
+            <span>Create project</span>
+          </button>
+        </div>
+      </div>
     </aside>
   {/if}
 
@@ -210,10 +258,6 @@
     transition: grid-template-columns 0.2s ease;
   }
 
-  .projects-shell.no-rail {
-    grid-template-columns: minmax(0, 1fr) var(--inspector-width, 380px);
-  }
-
   .project-rail,
   .workspace-column,
   .workspace-region,
@@ -235,10 +279,6 @@
   @media (max-width: 1180px) {
     .projects-shell {
       grid-template-columns: 240px minmax(0, 1fr);
-    }
-
-    .projects-shell.no-rail {
-      grid-template-columns: minmax(0, 1fr);
     }
 
     .inspector-region {
@@ -311,5 +351,147 @@
 
   .create-project-cta-btn:active {
     transform: translateY(0);
+  }
+
+  .project-tree-rail {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    gap: 16px;
+    padding: 1.5rem 1rem;
+    border-right: 1px solid var(--extractum-border);
+    background: var(--extractum-surface-subtle);
+  }
+
+  .tree-rail-header h1 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--extractum-foreground);
+    letter-spacing: -0.02em;
+  }
+
+  .projects-tree-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding-left: 0.1rem;
+  }
+
+  .projects-tree-root-header {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.25rem 0.2rem;
+    color: var(--extractum-muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+    user-select: none;
+  }
+
+  .folder-chevron-wrapper {
+    color: var(--extractum-muted);
+    opacity: 0.8;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .folder-icon-wrapper {
+    color: var(--extractum-primary);
+    opacity: 0.9;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .folder-label {
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+  }
+
+  .projects-tree-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding-left: 0.9rem;
+    border-left: 1px dashed var(--extractum-border);
+    margin-left: 0.55rem;
+  }
+
+  .tree-project-item {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 8px;
+    color: var(--extractum-muted);
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-align: left;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    width: 100%;
+    min-width: 0;
+    transition: color 0.15s, background 0.15s, border-color 0.15s;
+    border: 1px solid transparent;
+  }
+
+  .tree-project-item:hover {
+    color: var(--extractum-foreground);
+    background: color-mix(in srgb, var(--extractum-surface-raised) 50%, transparent);
+  }
+
+  .tree-project-item.active {
+    color: var(--extractum-primary);
+    background: color-mix(in srgb, var(--extractum-primary) 10%, transparent);
+    border-color: color-mix(in srgb, var(--extractum-primary) 15%, transparent);
+    font-weight: 600;
+  }
+
+  .project-dot-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--extractum-border);
+    flex-shrink: 0;
+  }
+
+  .project-dot-indicator.running {
+    background: var(--extractum-primary);
+    box-shadow: 0 0 8px var(--extractum-primary);
+    animation: pulse 2s infinite;
+  }
+
+  .project-dot-indicator.ready {
+    background: #10b981;
+  }
+
+  .project-title-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+
+  .tree-add-project-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 8px;
+    color: var(--extractum-muted);
+    font-size: 0.78rem;
+    background: transparent;
+    border: 1px dashed var(--extractum-border);
+    cursor: pointer;
+    margin-top: 0.25rem;
+    width: fit-content;
+    transition: border-color 0.15s, color 0.15s;
+  }
+
+  .tree-add-project-btn:hover {
+    border-color: var(--extractum-primary);
+    color: var(--extractum-primary);
   }
 </style>
