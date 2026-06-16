@@ -7,6 +7,10 @@ use super::stage_io::{
 use super::validation::{
     validate_and_quarantine_synthesis_output, validate_transcript_analysis_output,
 };
+use super::youtube_summary::entities::{
+    build_or_quarantine_intermediate_entities_for_transcript_stage,
+    insert_intermediate_entities_artifact,
+};
 use super::youtube_summary::LlmCompletion;
 use crate::error::{AppError, AppResult};
 
@@ -84,6 +88,14 @@ pub(crate) async fn execute_transcript_analysis_stage_repair_completion(
     let parsed = extract_json_payload(&completion.text)?;
     validate_transcript_analysis_output(&input, &parsed)
         .map_err(|error| AppError::validation(error.message))?;
+    let intermediate_graph = build_or_quarantine_intermediate_entities_for_transcript_stage(
+        pool,
+        run_id,
+        stage_run_id,
+        &parsed,
+        attempt_number,
+    )
+    .await?;
     let parsed_json = serde_json::to_string(&parsed)
         .map_err(|error| AppError::internal(format!("serialize parsed output: {error}")))?;
     insert_stage_artifact_in_pool(
@@ -113,6 +125,14 @@ pub(crate) async fn execute_transcript_analysis_stage_repair_completion(
         attempt_number,
         4,
         &metrics.to_string(),
+    )
+    .await?;
+    insert_intermediate_entities_artifact(
+        pool,
+        run_id,
+        stage_run_id,
+        &intermediate_graph,
+        attempt_number,
     )
     .await?;
     mark_stage_repaired(pool, stage_run_id).await

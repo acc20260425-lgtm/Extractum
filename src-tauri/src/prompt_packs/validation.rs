@@ -61,26 +61,50 @@ pub(crate) async fn validate_and_quarantine_transcript_analysis_output(
     match validate_transcript_analysis_output(input, output) {
         Ok(()) => Ok(()),
         Err(error) => {
-            let object_path = error.object_path.clone().unwrap_or_else(|| "$".to_string());
-            let candidate = value_at_path(output, &object_path).unwrap_or(output);
-            let content = serde_json::to_string(candidate).unwrap_or_else(|_| "{}".to_string());
-            let _ = sqlx::query(
-                "INSERT INTO prompt_pack_result_quarantine_artifacts (
-                    run_id, stage_run_id, object_path, reason, content_json_zstd, created_at
-                 )
-                 VALUES (?, ?, ?, ?, ?, ?)",
+            let _ = quarantine_prompt_pack_validation_error(
+                pool,
+                run_id,
+                stage_run_id,
+                output,
+                error.clone(),
             )
-            .bind(run_id)
-            .bind(stage_run_id)
-            .bind(&object_path)
-            .bind(&error.message)
-            .bind(compress_text(&content).unwrap_or_default())
-            .bind(crate::time::now_rfc3339_utc())
-            .execute(pool)
             .await;
             Err(error)
         }
     }
+}
+
+pub(crate) async fn quarantine_prompt_pack_validation_error(
+    pool: &SqlitePool,
+    run_id: i64,
+    stage_run_id: i64,
+    output: &serde_json::Value,
+    error: PromptPackValidationError,
+) -> AppResult<()> {
+    let object_path = error.object_path.clone().unwrap_or_else(|| "$".to_string());
+    let validation_message = error.message.clone();
+    let candidate = value_at_path(output, &object_path).unwrap_or(output);
+    let content = serde_json::to_string(candidate).unwrap_or_else(|_| "{}".to_string());
+    sqlx::query(
+        "INSERT INTO prompt_pack_result_quarantine_artifacts (
+            run_id, stage_run_id, object_path, reason, content_json_zstd, created_at
+         )
+         VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .bind(run_id)
+    .bind(stage_run_id)
+    .bind(&object_path)
+    .bind(&validation_message)
+    .bind(compress_text(&content).unwrap_or_default())
+    .bind(crate::time::now_rfc3339_utc())
+    .execute(pool)
+    .await
+    .map_err(|db_error| {
+        AppError::internal(format!(
+            "quarantine prompt pack validation error `{validation_message}` failed: {db_error}"
+        ))
+    })?;
+    Ok(())
 }
 
 pub(crate) fn validate_synthesis_output(
@@ -144,29 +168,8 @@ async fn quarantine_synthesis_output(
     output: &serde_json::Value,
     error: PromptPackValidationError,
 ) -> AppResult<()> {
-    let object_path = error.object_path.clone().unwrap_or_else(|| "$".to_string());
     let validation_message = error.message.clone();
-    let candidate = value_at_path(output, &object_path).unwrap_or(output);
-    let content = serde_json::to_string(candidate).unwrap_or_else(|_| "{}".to_string());
-    sqlx::query(
-        "INSERT INTO prompt_pack_result_quarantine_artifacts (
-            run_id, stage_run_id, object_path, reason, content_json_zstd, created_at
-         )
-         VALUES (?, ?, ?, ?, ?, ?)",
-    )
-    .bind(run_id)
-    .bind(stage_run_id)
-    .bind(&object_path)
-    .bind(&validation_message)
-    .bind(compress_text(&content).unwrap_or_default())
-    .bind(crate::time::now_rfc3339_utc())
-    .execute(pool)
-    .await
-    .map_err(|db_error| {
-        AppError::internal(format!(
-            "quarantine synthesis output after validation error `{validation_message}` failed: {db_error}"
-        ))
-    })?;
+    quarantine_prompt_pack_validation_error(pool, run_id, stage_run_id, output, error).await?;
     Err(AppError::validation(validation_message))
 }
 

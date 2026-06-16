@@ -469,6 +469,36 @@ pub(crate) fn fake_completion_with_valid_transcript_analysis_json_for_source(
     }
 }
 
+pub(crate) fn fake_completion_with_malformed_intermediate_candidates_json() -> LlmCompletion {
+    LlmCompletion {
+        text: serde_json::json!({
+            "stage_io_version": "1.0",
+            "schema_version": "1.0",
+            "stage": "youtube_summary/transcript_analysis",
+            "video_candidate": {
+                "summary_text": "Summary",
+                "segment_candidates": [],
+                "key_point_candidates": [],
+                "quote_candidates": { "not": "an array" },
+                "action_item_candidates": [],
+                "open_question_candidates": []
+            },
+            "claim_candidates": [
+                {
+                    "text": "Claim",
+                    "material_refs": ["m_source_ref_1_transcript"]
+                }
+            ],
+            "evidence_fragment_candidates": [],
+            "warning_candidates": []
+        })
+        .to_string(),
+        input_tokens: Some(10),
+        output_tokens: Some(20),
+        latency_ms: 5,
+    }
+}
+
 pub(crate) fn malformed_completion() -> LlmCompletion {
     LlmCompletion {
         text: r#"{

@@ -34,6 +34,11 @@ const PROMPT_PACK_RUN_LABELS_VERSION: i64 = 8;
 const PROMPT_PACK_RUN_LABELS_DESCRIPTION: &str = "prompt pack run labels";
 const PROMPT_PACK_RUN_LABELS_SQL: &str =
     include_str!("../migrations/0008_prompt_pack_run_labels.sql");
+const PROMPT_PACK_INTERMEDIATE_ENTITIES_ARTIFACTS_VERSION: i64 = 9;
+const PROMPT_PACK_INTERMEDIATE_ENTITIES_ARTIFACTS_DESCRIPTION: &str =
+    "prompt pack intermediate entities artifacts";
+const PROMPT_PACK_INTERMEDIATE_ENTITIES_ARTIFACTS_SQL: &str =
+    include_str!("../migrations/0009_prompt_pack_intermediate_entities_artifacts.sql");
 
 fn app_config_db_path() -> Option<PathBuf> {
     dirs::config_dir().map(|dir| dir.join(APP_IDENTIFIER).join(DB_FILENAME))
@@ -135,6 +140,15 @@ fn prompt_pack_run_labels_migration() -> Migration {
     }
 }
 
+fn prompt_pack_intermediate_entities_artifacts_migration() -> Migration {
+    Migration {
+        version: PROMPT_PACK_INTERMEDIATE_ENTITIES_ARTIFACTS_VERSION,
+        description: PROMPT_PACK_INTERMEDIATE_ENTITIES_ARTIFACTS_DESCRIPTION,
+        sql: PROMPT_PACK_INTERMEDIATE_ENTITIES_ARTIFACTS_SQL,
+        kind: MigrationKind::Up,
+    }
+}
+
 pub fn build_migrations() -> Vec<Migration> {
     vec![
         current_schema_baseline_migration(),
@@ -145,6 +159,7 @@ pub fn build_migrations() -> Vec<Migration> {
         prompt_pack_mvp_migration(),
         prompt_pack_run_idempotency_migration(),
         prompt_pack_run_labels_migration(),
+        prompt_pack_intermediate_entities_artifacts_migration(),
     ]
 }
 
@@ -237,7 +252,7 @@ mod tests {
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
         assert_eq!(migrations[0].description, "current schema baseline");
         assert!(migrations[0]
             .sql
@@ -271,6 +286,11 @@ mod tests {
             .contains("idx_prompt_pack_runs_client_request_id_unique"));
         assert_eq!(migrations[7].description, "prompt pack run labels");
         assert!(migrations[7].sql.contains("ADD COLUMN run_label TEXT"));
+        assert_eq!(
+            migrations[8].description,
+            "prompt pack intermediate entities artifacts"
+        );
+        assert!(migrations[8].sql.contains("'intermediate_entities'"));
     }
 
     #[tokio::test]
@@ -310,13 +330,13 @@ mod tests {
     }
 
     #[test]
-    fn build_migrations_includes_prompt_pack_runtime_version_eight() {
+    fn build_migrations_includes_prompt_pack_runtime_version_nine() {
         let versions = build_migrations()
             .iter()
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
     }
 
     #[tokio::test]

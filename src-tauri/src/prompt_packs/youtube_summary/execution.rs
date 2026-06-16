@@ -19,7 +19,7 @@ use super::synthesis_execution::{
 use super::tail_stages::mark_pending_mvp_tail_stages_skipped;
 use super::transcript_execution::{
     load_pending_transcript_stage_rows, mark_transcript_stage_cancelled,
-    mark_transcript_stage_failed,
+    mark_transcript_stage_failed, mark_transcript_stage_failed_for_attempt,
 };
 use super::{
     LlmCompletion, TranscriptAnalysisStageExecutionRequest, YoutubeSummaryRunExecutionOutcome,
@@ -221,10 +221,11 @@ where
                                     Ok(()) => successes += 1,
                                     Err(error) => {
                                         failures += 1;
-                                        mark_transcript_stage_failed(
+                                        mark_transcript_stage_failed_for_attempt(
                                             pool,
                                             run_id,
                                             stage.stage_run_id,
+                                            2,
                                             &error.message,
                                         )
                                         .await?;
@@ -238,10 +239,11 @@ where
                             }
                             Err(YoutubeSummaryStageExecutionError::Failed(error)) => {
                                 failures += 1;
-                                mark_transcript_stage_failed(
+                                mark_transcript_stage_failed_for_attempt(
                                     pool,
                                     run_id,
                                     stage.stage_run_id,
+                                    2,
                                     &error.message,
                                 )
                                 .await?;

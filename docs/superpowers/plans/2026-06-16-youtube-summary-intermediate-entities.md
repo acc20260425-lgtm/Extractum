@@ -430,7 +430,7 @@ git commit -m "feat: build youtube summary intermediate entities"
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/outputs_tests.rs`
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/execution_tests.rs`
 
-- [ ] **Step 1: Add failing artifact persistence tests**
+- [x] **Step 1: Add failing artifact persistence tests**
 
 In `src-tauri/src/prompt_packs/youtube_summary/outputs_tests.rs`, add:
 
@@ -586,7 +586,7 @@ async fn execution_graph_build_failure_after_failed_repair_marks_transcript_fail
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -597,7 +597,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib youtube_summary::execution
 
 Expected: FAIL because no `intermediate_entities` artifact is written, graph build failures are not quarantined, and execution does not yet prove single-owner terminal failure marking.
 
-- [ ] **Step 3: Add quarantine helper and split build/insert helpers**
+- [x] **Step 3: Add quarantine helper and split build/insert helpers**
 
 In `validation.rs`, expose a reusable helper for validation-style quarantine rows:
 
@@ -764,7 +764,7 @@ Implementation notes:
 - Graph artifact ordering is fixed: `prompt_input #1`, `raw_output #2`, `parsed_output #3`, `metrics #4`, `intermediate_entities #5`.
 - The graph artifact helper must only be called after `metrics` has been inserted in normal and repair paths.
 
-- [ ] **Step 4: Call graph build/persistence in normal transcript output path**
+- [x] **Step 4: Call graph build/persistence in normal transcript output path**
 
 In `outputs.rs`, import:
 
@@ -794,7 +794,7 @@ After inserting `metrics #4` and before marking the transcript stage `succeeded`
 insert_intermediate_entities_artifact(pool, run_id, stage_run_id, &intermediate_graph, 1).await?;
 ```
 
-- [ ] **Step 5: Call graph build/persistence in repaired transcript output path**
+- [x] **Step 5: Call graph build/persistence in repaired transcript output path**
 
 In `src-tauri/src/prompt_packs/json_repair.rs`, import:
 
@@ -820,7 +820,7 @@ let intermediate_graph = build_or_quarantine_intermediate_entities_for_transcrip
 
 Then write repaired `parsed_output #3`, repaired `metrics #4`, and `intermediate_entities #5` in that order. If graph build fails, only repaired `raw_output #2` should exist for that attempt; repaired `parsed_output`, `metrics`, and `intermediate_entities` must not be written.
 
-- [ ] **Step 6: Keep terminal transcript failure marking in execution layer**
+- [x] **Step 6: Keep terminal transcript failure marking in execution layer**
 
 In `execution.rs`, import `mark_transcript_stage_failed_for_attempt` from `transcript_execution`.
 
@@ -841,7 +841,7 @@ Apply the same attempt-2 marking when the JSON repair provider request itself re
 
 Do not add terminal failure marking inside `execute_transcript_analysis_stage_with_completion` or `execute_transcript_analysis_stage_repair_completion`; doing so creates duplicate `error` artifacts in full execution.
 
-- [ ] **Step 7: Run artifact and execution tests**
+- [x] **Step 7: Run artifact and execution tests**
 
 Run:
 
@@ -852,7 +852,7 @@ cargo test --manifest-path src-tauri\Cargo.toml --lib youtube_summary::execution
 
 Expected: PASS with graph artifacts after metrics, graph validation failures quarantined, low-level helpers not writing `error` artifacts, and full execution writing exactly one terminal `error` artifact.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add src-tauri\src\prompt_packs\youtube_summary\entities.rs src-tauri\src\prompt_packs\youtube_summary\outputs.rs src-tauri\src\prompt_packs\youtube_summary\outputs_tests.rs src-tauri\src\prompt_packs\youtube_summary\execution.rs src-tauri\src\prompt_packs\youtube_summary\execution_tests.rs src-tauri\src\prompt_packs\youtube_summary\transcript_execution.rs src-tauri\src\prompt_packs\json_repair.rs src-tauri\src\prompt_packs\validation.rs

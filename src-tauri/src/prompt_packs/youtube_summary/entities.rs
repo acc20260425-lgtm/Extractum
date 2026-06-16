@@ -1,7 +1,15 @@
 use std::collections::{HashMap, HashSet};
 
+use sqlx::SqlitePool;
+
+use crate::error::{AppError, AppResult};
 use crate::prompt_packs::stage_io::TranscriptAnalysisStageInput;
-use crate::prompt_packs::validation::PromptPackValidationError;
+use crate::prompt_packs::stage_io::{
+    build_transcript_analysis_stage_input, insert_stage_artifact_in_pool,
+};
+use crate::prompt_packs::validation::{
+    quarantine_prompt_pack_validation_error, PromptPackValidationError,
+};
 
 pub(crate) const INTERMEDIATE_ENTITIES_ARTIFACT_KIND: &str = "intermediate_entities";
 pub(crate) const YOUTUBE_SUMMARY_INTERMEDIATE_GRAPH_KIND: &str =
@@ -84,6 +92,74 @@ pub(crate) fn build_source_intermediate_entities(
             &evidence
         )
     }))
+}
+
+pub(crate) async fn load_intermediate_entities_context_for_transcript_stage(
+    pool: &SqlitePool,
+    stage_run_id: i64,
+) -> AppResult<(TranscriptAnalysisStageInput, i64, Option<String>)> {
+    let input = build_transcript_analysis_stage_input(pool, stage_run_id).await?;
+    let (source_snapshot_id, title): (i64, Option<String>) = sqlx::query_as(
+        "SELECT snapshots.id, snapshots.title
+         FROM prompt_pack_stage_runs stages
+         JOIN prompt_pack_run_source_snapshots snapshots
+           ON snapshots.id = stages.source_snapshot_id
+          AND snapshots.run_id = stages.run_id
+         WHERE stages.id = ?",
+    )
+    .bind(stage_run_id)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    Ok((input, source_snapshot_id, title))
+}
+
+pub(crate) async fn build_or_quarantine_intermediate_entities_for_transcript_stage(
+    pool: &SqlitePool,
+    run_id: i64,
+    stage_run_id: i64,
+    parsed: &serde_json::Value,
+    attempt_number: i64,
+) -> AppResult<serde_json::Value> {
+    let (input, source_snapshot_id, title) =
+        load_intermediate_entities_context_for_transcript_stage(pool, stage_run_id).await?;
+    match build_source_intermediate_entities(
+        &input,
+        source_snapshot_id,
+        title.as_deref(),
+        parsed,
+        attempt_number,
+    ) {
+        Ok(graph) => Ok(graph),
+        Err(error) => {
+            let validation_message = error.message.clone();
+            quarantine_prompt_pack_validation_error(pool, run_id, stage_run_id, parsed, error)
+                .await?;
+            Err(AppError::validation(validation_message))
+        }
+    }
+}
+
+pub(crate) async fn insert_intermediate_entities_artifact(
+    pool: &SqlitePool,
+    run_id: i64,
+    stage_run_id: i64,
+    graph: &serde_json::Value,
+    attempt_number: i64,
+) -> AppResult<()> {
+    let content = serde_json::to_string(graph)
+        .map_err(|error| AppError::internal(format!("serialize intermediate entities: {error}")))?;
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        INTERMEDIATE_ENTITIES_ARTIFACT_KIND,
+        attempt_number,
+        5,
+        &content,
+    )
+    .await
 }
 
 #[derive(Clone)]

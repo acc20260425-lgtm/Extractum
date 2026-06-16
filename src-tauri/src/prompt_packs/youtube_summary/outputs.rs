@@ -1,5 +1,9 @@
 use sqlx::SqlitePool;
 
+use super::entities::{
+    build_or_quarantine_intermediate_entities_for_transcript_stage,
+    insert_intermediate_entities_artifact,
+};
 use super::synthesis_input::build_synthesis_stage_input;
 use super::LlmCompletion;
 use crate::error::{AppError, AppResult};
@@ -73,6 +77,14 @@ pub(crate) async fn execute_transcript_analysis_stage_with_completion(
     .await?;
     validate_transcript_analysis_output(&input, &parsed)
         .map_err(|error| AppError::validation(error.message))?;
+    let intermediate_graph = build_or_quarantine_intermediate_entities_for_transcript_stage(
+        pool,
+        run_id,
+        stage_run_id,
+        &parsed,
+        1,
+    )
+    .await?;
     let metrics = serde_json::json!({
         "input_tokens": completion.input_tokens,
         "output_tokens": completion.output_tokens,
@@ -91,6 +103,8 @@ pub(crate) async fn execute_transcript_analysis_stage_with_completion(
         &metrics.to_string(),
     )
     .await?;
+    insert_intermediate_entities_artifact(pool, run_id, stage_run_id, &intermediate_graph, 1)
+        .await?;
     sqlx::query(
         "UPDATE prompt_pack_stage_runs
          SET stage_status = 'succeeded', completed_at = ?, updated_at = ?

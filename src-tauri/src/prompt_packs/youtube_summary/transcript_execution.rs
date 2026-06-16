@@ -48,12 +48,22 @@ pub(crate) async fn mark_transcript_stage_failed(
     stage_run_id: i64,
     error: &str,
 ) -> AppResult<()> {
+    mark_transcript_stage_failed_for_attempt(pool, run_id, stage_run_id, 1, error).await
+}
+
+pub(crate) async fn mark_transcript_stage_failed_for_attempt(
+    pool: &SqlitePool,
+    run_id: i64,
+    stage_run_id: i64,
+    attempt_number: i64,
+    error: &str,
+) -> AppResult<()> {
     insert_stage_artifact_in_pool(
         pool,
         run_id,
         stage_run_id,
         "error",
-        1,
+        attempt_number,
         99,
         &serde_json::json!({ "error": error }).to_string(),
     )

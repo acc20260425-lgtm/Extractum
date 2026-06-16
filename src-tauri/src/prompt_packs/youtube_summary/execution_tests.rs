@@ -105,8 +105,63 @@ async fn execute_queued_run_repairs_malformed_transcript_json() {
             ("raw_output".to_string(), 2, 2),
             ("parsed_output".to_string(), 2, 3),
             ("metrics".to_string(), 2, 4),
+            ("intermediate_entities".to_string(), 2, 5),
         ]
     );
+}
+
+#[tokio::test]
+async fn execution_graph_build_failure_after_failed_repair_marks_transcript_failed_once() {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    let pool = test_pool_with_frozen_youtube_summary_run().await;
+    let repair_calls = Arc::new(AtomicUsize::new(0));
+
+    let outcome = execute_youtube_summary_run_with_stage_executor(&pool, 1, |request| {
+        let repair_calls = Arc::clone(&repair_calls);
+        async move {
+            match request {
+                YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(_) => {
+                    Ok(fake_completion_with_malformed_intermediate_candidates_json())
+                }
+                YoutubeSummaryStageExecutionRequest::JsonRepair(_) => {
+                    repair_calls.fetch_add(1, Ordering::SeqCst);
+                    Ok(fake_completion_with_malformed_intermediate_candidates_json())
+                }
+                YoutubeSummaryStageExecutionRequest::Synthesis(_) => {
+                    panic!("single-video failed transcript run should not request synthesis")
+                }
+            }
+        }
+    })
+    .await
+    .expect("execute run");
+
+    let stage_id = transcript_analysis_stage_id(&pool, 1).await;
+    let artifacts = list_stage_artifact_attempts(&pool, stage_id).await;
+    let error_artifacts = artifacts
+        .iter()
+        .filter(|(kind, _, _)| kind == "error")
+        .collect::<Vec<_>>();
+    let (status, error_message): (String, Option<String>) = sqlx::query_as(
+        "SELECT stage_status, error_message FROM prompt_pack_stage_runs WHERE id = ?",
+    )
+    .bind(stage_id)
+    .fetch_one(&pool)
+    .await
+    .expect("stage status");
+
+    assert_eq!(outcome.run_status, "failed");
+    assert_eq!(repair_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(status, "failed");
+    assert!(error_message
+        .unwrap_or_default()
+        .contains("quote_candidates must be an array"));
+    assert_eq!(error_artifacts.len(), 1);
+    assert_eq!(error_artifacts[0], &("error".to_string(), 2, 99));
 }
 
 #[tokio::test]
