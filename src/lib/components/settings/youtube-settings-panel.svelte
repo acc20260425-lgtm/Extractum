@@ -31,6 +31,7 @@
   let authStatus = $state<YoutubeAuthStatus | null>(null);
   let cookieText = $state("");
   let editingCookies = $state(false);
+  let dragover = $state(false);
   let loading = $state(true);
   let savingSettings = $state(false);
   let savingCookies = $state(false);
@@ -162,6 +163,42 @@
     editingCookies = false;
   }
 
+  function handleDragOver(event: DragEvent) {
+    event.preventDefault();
+    dragover = true;
+  }
+
+  function handleDragLeave() {
+    dragover = false;
+  }
+
+  function handleDrop(event: DragEvent) {
+    event.preventDefault();
+    dragover = false;
+    const files = event.dataTransfer?.files;
+    if (files && files.length > 0) {
+      void processFile(files[0]);
+    }
+  }
+
+  function handleFileSelect(event: Event) {
+    const files = (event.currentTarget as HTMLInputElement).files;
+    if (files && files.length > 0) {
+      void processFile(files[0]);
+    }
+  }
+
+  async function processFile(file: File) {
+    try {
+      const text = await file.text();
+      cookieText = text;
+      editingCookies = true;
+      panelStatus = `Loaded cookie file: ${file.name}. Review and click Save to store.`;
+    } catch (error) {
+      panelStatus = formatAppError("reading cookie file", error);
+    }
+  }
+
   onMount(() => {
     void loadPanel();
   });
@@ -222,7 +259,29 @@
       </div>
 
       {#if editingCookies}
-        <label>Paste/update cookies
+        <div
+          class="cookie-dropzone"
+          class:dragover={dragover}
+          ondragover={handleDragOver}
+          ondragleave={handleDragLeave}
+          ondrop={handleDrop}
+          role="region"
+          aria-label="Cookies file drop zone"
+        >
+          <div class="dropzone-content">
+            <span class="dropzone-text">Drag & drop <code>cookies.txt</code> file here, or</span>
+            <input
+              type="file"
+              accept=".txt"
+              id="cookie-file-upload"
+              class="hidden-file-input"
+              onchange={handleFileSelect}
+            />
+            <label for="cookie-file-upload" class="file-select-label">browse file</label>
+          </div>
+        </div>
+
+        <label>Or paste cookies text directly
           <textarea
             bind:value={cookieText}
             rows="8"
@@ -451,6 +510,55 @@
     gap: 0.35rem;
     color: var(--muted);
     font-size: 0.9rem;
+  }
+
+  .cookie-dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    text-align: center;
+    background: var(--panel);
+    transition: border-color 0.2s, background-color 0.2s;
+  }
+
+  .cookie-dropzone.dragover {
+    border-color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 8%, var(--panel));
+  }
+
+  .dropzone-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .dropzone-text {
+    font-size: 0.85rem;
+    color: var(--text);
+  }
+
+  .hidden-file-input {
+    display: none;
+  }
+
+  .file-select-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.45rem 0.9rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: white;
+    background: var(--primary);
+    border-radius: 6px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(47, 109, 234, 0.12);
+    transition: opacity 0.15s, transform 0.1s;
+  }
+
+  .file-select-label:hover {
+    opacity: 0.9;
   }
 
   .cookie-textarea {

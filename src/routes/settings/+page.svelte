@@ -1,6 +1,11 @@
 <script lang="ts">
   import { Eraser, Play, RefreshCw, Save, Square, Terminal } from "@lucide/svelte";
   import { onMount } from "svelte";
+  import { browser } from "$app/environment";
+  import ProjectsSettings from "$lib/components/settings/projects-settings.svelte";
+
+  let uiMode = $state<"legacy" | "projects" | null>(null);
+
   import {
     askLlmStream,
     cancelLlmRequest,
@@ -22,6 +27,7 @@
   import SurfaceCard from "$lib/components/ui/SurfaceCard.svelte";
   import Textarea from "$lib/components/ui/Textarea.svelte";
   import type { LlmProfile, LlmProfilesState, LlmProviderModel, LlmUsage } from "$lib/types/llm";
+
 
   interface ProviderOption {
     value: string;
@@ -450,6 +456,14 @@
   }
 
   onMount(() => {
+    if (browser) {
+      uiMode = (localStorage.getItem("extractum.uiMode") as "legacy" | "projects") || "legacy";
+    }
+
+    if (uiMode === "projects") {
+      return;
+    }
+
     let disposed = false;
     let detachListener: (() => void) | null = null;
 
@@ -524,6 +538,9 @@
   });
 </script>
 
+{#if uiMode === "projects"}
+  <ProjectsSettings />
+{:else if uiMode === "legacy"}
 <section class="page-shell">
   <header class="page-hero">
     <div class="page-hero-copy">
@@ -812,6 +829,7 @@
     </SurfaceCard>
   </div>
 </DesktopDialog>
+{/if}
 
 <style>
   .grid {

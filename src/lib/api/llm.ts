@@ -44,3 +44,11 @@ export function listenToLlmResponses(
     (event: LlmStreamEnvelope<LlmStreamEvent> & Event<LlmStreamEvent>) => handler(event),
   );
 }
+
+export function deleteLlmProfile(profileId: string) {
+  return invoke<LlmProfilesState>("delete_llm_profile", { profileId });
+}
+
+export function setActiveLlmProfile(profileId: string) {
+  return invoke<LlmProfilesState>("set_active_llm_profile", { profileId });
+}
