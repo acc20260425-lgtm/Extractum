@@ -524,6 +524,7 @@
     justify-content: center;
     width: 20px;
     height: 20px;
+    padding: 0;
     border-radius: 4px;
     background: transparent;
     border: none;
