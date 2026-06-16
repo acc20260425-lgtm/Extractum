@@ -1,6 +1,7 @@
 <script lang="ts">
   import "$lib/styles/base.css";
-  import { FolderKanban, LayoutDashboard, Menu, Moon, Settings, ShieldCheck, Sun, UserRound } from "@lucide/svelte";
+  import { goto } from "$app/navigation";
+  import { Activity, FolderKanban, LayoutDashboard, Library, Menu, Moon, Settings, ShieldCheck, Sun, UserRound } from "@lucide/svelte";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
   import AppSidebar from "$lib/components/app-sidebar.svelte";
@@ -14,11 +15,32 @@
   let theme = $state<"light" | "dark">("light");
   let sidebarCollapsed = $state(false);
   let mobileSidebarOpen = $state(false);
+  let uiMode = $state<"legacy" | "projects">("legacy");
 
   if (browser) {
     theme = localStorage.getItem("theme") === "dark" ? "dark" : "light";
     sidebarCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
+    let initialMode = (localStorage.getItem("extractum.uiMode") as "legacy" | "projects") || "legacy";
+
+    if (page.url.pathname.startsWith("/projects") && initialMode === "legacy") {
+      initialMode = "projects";
+      localStorage.setItem("extractum.uiMode", "projects");
+    } else if (page.url.pathname.startsWith("/analysis") && initialMode === "projects") {
+      initialMode = "legacy";
+      localStorage.setItem("extractum.uiMode", "legacy");
+    }
+    uiMode = initialMode;
   }
+
+  // Keep uiMode in sync with current route path reactively
+  $effect(() => {
+    const pathname = page.url.pathname;
+    if (pathname.startsWith("/projects") && uiMode === "legacy") {
+      setUiMode("projects");
+    } else if ((pathname.startsWith("/analysis") || pathname === "/") && uiMode === "projects") {
+      setUiMode("legacy");
+    }
+  });
 
   function toggleTheme() {
     theme = theme === "light" ? "dark" : "light";
@@ -48,14 +70,14 @@
     }
   }
 
-  const navItems = [
-    {
-      href: "/projects",
-      label: "Projects",
-      caption: "Research projects",
-      icon: FolderKanban,
-      active: (pathname: string) => pathname.startsWith("/projects"),
-    },
+  function setUiMode(mode: "legacy" | "projects") {
+    uiMode = mode;
+    if (browser) {
+      localStorage.setItem("extractum.uiMode", mode);
+    }
+  }
+
+  const legacyNavItems = [
     {
       href: "/analysis",
       label: "Workspace",
@@ -86,6 +108,46 @@
       active: (pathname: string) => pathname.startsWith("/settings"),
     },
   ];
+
+  const projectsNavItems = [
+    {
+      href: "/projects",
+      label: "Projects",
+      caption: "Research projects",
+      icon: FolderKanban,
+      active: (pathname: string) => pathname.startsWith("/projects") && pathname !== "/projects/library" && !pathname.startsWith("/projects/runs"),
+    },
+    {
+      href: "/projects/library",
+      label: "Library",
+      caption: "Global sources",
+      icon: Library,
+      active: (pathname: string) => pathname.startsWith("/projects/library"),
+    },
+    {
+      href: "/projects/runs",
+      label: "Runs",
+      caption: "Prompt pack runs",
+      icon: Activity,
+      active: (pathname: string) => pathname.startsWith("/projects/runs"),
+    },
+    {
+      href: "/diagnostics",
+      label: "Diagnostics",
+      caption: "Local health",
+      icon: ShieldCheck,
+      active: (pathname: string) => pathname.startsWith("/diagnostics"),
+    },
+    {
+      href: "/settings",
+      label: "Settings",
+      caption: "Models and app",
+      icon: Settings,
+      active: (pathname: string) => pathname.startsWith("/settings"),
+    },
+  ];
+
+  let currentNavItems = $derived(uiMode === "projects" ? projectsNavItems : legacyNavItems);
 </script>
 
 <svelte:head>
@@ -99,12 +161,22 @@
   <ModalHost />
   <div class="shell">
     <AppSidebar
-      {navItems}
+      navItems={currentNavItems}
       pathname={page.url.pathname}
       collapsed={sidebarCollapsed}
       mobileOpen={mobileSidebarOpen}
       onToggleCollapsed={toggleSidebarCollapsed}
       onCloseMobile={closeMobileSidebar}
+      {uiMode}
+      onToggleUiMode={() => {
+        const nextMode = uiMode === "legacy" ? "projects" : "legacy";
+        setUiMode(nextMode);
+        if (nextMode === "projects") {
+          goto("/projects");
+        } else {
+          goto("/analysis");
+        }
+      }}
     />
 
     <main class="workspace">

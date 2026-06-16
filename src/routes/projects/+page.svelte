@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { projectsSharedState } from "$lib/projects-shared.svelte";
   import ProjectsShell from "$lib/components/research-projects/ProjectsShell.svelte";
   import { listenToAnalysisRunEvents } from "$lib/api/analysis-runs";
   import { listAnalysisPromptTemplates } from "$lib/api/analysis-source-groups";
@@ -101,6 +102,23 @@
         clearTimeout(projectRunsRefreshTimer);
       }
     };
+  });
+
+  // Sync state with global projectsSharedState
+  $effect(() => {
+    projectsSharedState.projects = state.projects;
+  });
+
+  $effect(() => {
+    projectsSharedState.selectedProjectId = state.selectedProjectId;
+  });
+
+  $effect(() => {
+    if (projectsSharedState.selectedProjectId !== state.selectedProjectId) {
+      if (projectsSharedState.selectedProjectId) {
+        selectProject(projectsSharedState.selectedProjectId);
+      }
+    }
   });
 
   function selectProject(projectId: string) {

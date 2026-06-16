@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { ChevronLeft, ChevronRight } from "@lucide/svelte";
-  import { tick, type Component } from "svelte";
+  import { ChevronLeft, ChevronRight, Plus, FolderKanban, LayoutDashboard } from "@lucide/svelte";
+  import { tick, type Component, onMount } from "svelte";
+  import { goto } from "$app/navigation";
   import Button from "$lib/components/ui/Button.svelte";
+  import { projectsSharedState } from "$lib/projects-shared.svelte";
 
   type NavIcon = Component<{
     size?: number;
@@ -23,6 +25,8 @@
     mobileOpen,
     onToggleCollapsed,
     onCloseMobile,
+    uiMode = "legacy",
+    onToggleUiMode,
   }: {
     navItems: AppSidebarNavItem[];
     pathname: string;
@@ -30,10 +34,24 @@
     mobileOpen: boolean;
     onToggleCollapsed: () => void;
     onCloseMobile: () => void;
+    uiMode?: "legacy" | "projects";
+    onToggleUiMode: () => void;
   } = $props();
 
   let sidebarElement: HTMLElement | undefined;
   let previousMobileOpen = false;
+
+  onMount(() => {
+    if (uiMode === "projects" && !projectsSharedState.initialized) {
+      void projectsSharedState.load();
+    }
+  });
+
+  $effect(() => {
+    if (uiMode === "projects" && !projectsSharedState.initialized) {
+      void projectsSharedState.load();
+    }
+  });
 
   $effect(() => {
     // Equivalent to tabindex={mobileOpen ? -1 : undefined}, without leaving a focusable aside closed.
@@ -104,35 +122,96 @@
   <nav class="sidebar-nav" aria-label="Primary navigation">
     {#each navItems as item (item.href)}
       {@const NavIcon = item.icon}
-      <a
-        href={item.href}
-        class:active={item.active(pathname)}
-        aria-current={item.active(pathname) ? "page" : undefined}
-        aria-label={item.label}
-        title={!mobileOpen && collapsed ? item.label : undefined}
-        onclick={handleNavClick}
-      >
-        <span class="nav-row">
-          <NavIcon size={16} aria-hidden="true" />
+      <div class="nav-item-container">
+        <a
+          href={item.href}
+          class:active={item.active(pathname)}
+          aria-current={item.active(pathname) ? "page" : undefined}
+          aria-label={item.label}
+          title={!mobileOpen && collapsed ? item.label : undefined}
+          onclick={handleNavClick}
+        >
+          <span class="nav-row">
+            <NavIcon size={16} aria-hidden="true" />
+            {#if !collapsed || mobileOpen}
+              <span class="nav-label">{item.label}</span>
+            {/if}
+          </span>
           {#if !collapsed || mobileOpen}
-            <span class="nav-label">{item.label}</span>
+            <span class="nav-caption">{item.caption}</span>
           {/if}
-        </span>
-        {#if !collapsed || mobileOpen}
-          <span class="nav-caption">{item.caption}</span>
+        </a>
+
+        {#if item.href === "/projects" && uiMode === "projects" && (!collapsed || mobileOpen)}
+          <div class="projects-subnav">
+            {#each projectsSharedState.projects as project (project.id)}
+              <button
+                type="button"
+                class="subnav-project-item"
+                class:active={projectsSharedState.selectedProjectId === project.id}
+                onclick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  projectsSharedState.selectedProjectId = project.id;
+                  if (pathname !== "/projects") {
+                    goto("/projects");
+                  }
+                }}
+              >
+                <span class="subnav-project-dot" class:running={project.status === "running"} class:ready={project.status === "ready"}></span>
+                <span class="subnav-project-title" title={project.title}>{project.title}</span>
+              </button>
+            {/each}
+            <button
+              type="button"
+              class="subnav-add-btn"
+              onclick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                projectsSharedState.showCreateDialog = true;
+                if (pathname !== "/projects") {
+                  goto("/projects");
+                }
+              }}
+            >
+              <Plus size={12} aria-hidden="true" />
+              <span>Create project</span>
+            </button>
+          </div>
         {/if}
-      </a>
+      </div>
     {/each}
   </nav>
 
-  {#if !collapsed || mobileOpen}
-    <div class="sidebar-footer">
+  <div class="sidebar-footer">
+    {#if !collapsed || mobileOpen}
       <div class="footer-copy">
         <span class="footer-label">Workspace mode</span>
-        <strong>NotebookLM x Telegram</strong>
+        <strong>{uiMode === "projects" ? "Research Projects" : "NotebookLM x Telegram"}</strong>
       </div>
-    </div>
-  {/if}
+      <button
+        class="mode-switch-button"
+        type="button"
+        onclick={onToggleUiMode}
+      >
+        {uiMode === "projects" ? "Switch to Legacy UI" : "Try New Projects UI"}
+      </button>
+    {:else}
+      <button
+        class="mode-switch-button collapsed"
+        type="button"
+        onclick={onToggleUiMode}
+        title={uiMode === "projects" ? "Switch to Legacy UI" : "Try New Projects UI"}
+        aria-label={uiMode === "projects" ? "Switch to Legacy UI" : "Try New Projects UI"}
+      >
+        {#if uiMode === "projects"}
+          <LayoutDashboard size={16} aria-hidden="true" />
+        {:else}
+          <FolderKanban size={16} aria-hidden="true" />
+        {/if}
+      </button>
+    {/if}
+  </div>
 </aside>
 
 <style>
@@ -311,6 +390,12 @@
     gap: 0.65rem;
   }
 
+  .sidebar.collapsed .sidebar-footer {
+    align-items: center;
+    padding-inline: 0;
+    width: 100%;
+  }
+
   .footer-copy {
     display: flex;
     flex-direction: column;
@@ -328,6 +413,131 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--muted);
+  }
+
+  .projects-subnav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding-left: 0.5rem;
+    margin-top: 0.2rem;
+    border-left: 1px solid var(--border);
+    margin-left: 1.25rem;
+  }
+
+  .subnav-project-item {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 8px;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-align: left;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    width: 100%;
+    min-width: 0;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .subnav-project-item:hover {
+    color: var(--text);
+    background: color-mix(in srgb, var(--panel-hover) 50%, transparent);
+  }
+
+  .subnav-project-item.active {
+    color: var(--primary);
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+    font-weight: 600;
+  }
+
+  .subnav-project-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+
+  .subnav-project-dot.running {
+    background: var(--primary);
+    box-shadow: 0 0 8px var(--primary);
+    animation: pulse 2s infinite;
+  }
+
+  .subnav-project-dot.ready {
+    background: #10b981;
+  }
+
+  .subnav-project-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+
+  .subnav-add-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 8px;
+    color: var(--muted);
+    font-size: 0.78rem;
+    background: transparent;
+    border: 1px dashed var(--border);
+    cursor: pointer;
+    margin-top: 0.25rem;
+    width: fit-content;
+    transition: border-color 0.15s, color 0.15s;
+  }
+
+  .subnav-add-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+
+  .mode-switch-button {
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 80%, black));
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(47, 109, 234, 0.15);
+    transition: transform 0.1s, opacity 0.15s;
+    text-align: center;
+  }
+
+  .mode-switch-button:hover {
+    opacity: 0.95;
+    transform: translateY(-1px);
+  }
+
+  .mode-switch-button:active {
+    transform: translateY(0);
+  }
+
+  .mode-switch-button.collapsed {
+    width: 2.45rem;
+    height: 2.45rem;
+    padding: 0;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  @keyframes pulse {
+    0% { opacity: 0.5; }
+    50% { opacity: 1; }
+    100% { opacity: 0.5; }
   }
 
   @media (max-width: 820px) {

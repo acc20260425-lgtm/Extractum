@@ -9,6 +9,7 @@
   import TopCommandBar from "./TopCommandBar.svelte";
   import type { ProjectAnalysisStartCommand, ProjectEditorInput } from "$lib/types/projects";
   import type { ResearchProjectsWorkflowState } from "$lib/ui/research-projects-workflow";
+  import { projectsSharedState } from "$lib/projects-shared.svelte";
 
   let {
     state: workflowState,
@@ -51,6 +52,21 @@
   let editorOpen = $state(false);
   let editorMode = $state<"create" | "edit">("create");
   let runOpen = $state(false);
+  let inspectorCollapsed = $state(false);
+  let inspectorWidth = $derived(inspectorCollapsed ? "40px" : "380px");
+
+  $effect(() => {
+    if (projectsSharedState.showCreateDialog) {
+      editorMode = "create";
+      editorOpen = true;
+    }
+  });
+
+  $effect(() => {
+    if (!editorOpen && editorMode === "create") {
+      projectsSharedState.showCreateDialog = false;
+    }
+  });
 
   function openConnectLibrary() {
     connectOpen = true;
@@ -75,7 +91,7 @@
   }
 </script>
 
-<div class="projects-shell">
+<div class="projects-shell" style="--inspector-width: {inspectorWidth};">
   <aside data-ui-region="project-rail" class="project-rail">
     <ProjectRail
       projects={workflowState.projects}
@@ -123,6 +139,8 @@
       selectedSource={selectedSource}
       runs={currentRuns}
       saving={workflowState.saving}
+      collapsed={inspectorCollapsed}
+      onToggleCollapsed={() => (inspectorCollapsed = !inspectorCollapsed)}
       onEditProject={openEditProject}
       onDeleteProject={onDeleteProject}
       onRunProject={() => (runOpen = true)}
@@ -162,9 +180,10 @@
 <style>
   .projects-shell {
     display: grid;
-    grid-template-columns: 260px minmax(0, 1fr) 380px;
+    grid-template-columns: 260px minmax(0, 1fr) var(--inspector-width, 380px);
     min-height: calc(100vh - 68px);
     background: var(--extractum-surface);
+    transition: grid-template-columns 0.2s ease;
   }
 
   .project-rail,
@@ -192,7 +211,7 @@
 
     .inspector-region {
       grid-column: 1 / -1;
-      min-height: 280px;
+      min-height: auto;
       border-top: 1px solid var(--extractum-border);
     }
   }
