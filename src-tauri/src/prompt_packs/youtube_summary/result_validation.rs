@@ -1418,6 +1418,150 @@ mod tests {
     }
 
     #[test]
+    fn video_source_refs_missing_self_ref_returns_error() {
+        let mut canonical = valid_canonical_result();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["videos"][0]["source_refs"] =
+            serde_json::json!([]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "VR-YS-004",
+            "$.outputs.pack_data.youtube_summary.videos[0].source_refs",
+        );
+    }
+
+    #[test]
+    fn video_source_refs_malformed_shape_returns_error() {
+        let mut canonical = valid_canonical_result();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["videos"][0]["source_refs"] =
+            serde_json::json!("not_an_array");
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "VR-YS-020",
+            "$.outputs.pack_data.youtube_summary.videos[0].source_refs",
+        );
+    }
+
+    #[test]
+    fn video_source_refs_with_non_string_item_returns_error() {
+        let mut canonical = valid_canonical_result();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["videos"][0]["source_refs"] =
+            serde_json::json!([42]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "VR-YS-020",
+            "$.outputs.pack_data.youtube_summary.videos[0].source_refs",
+        );
+    }
+
+    #[test]
+    fn video_source_refs_unknown_ref_returns_error() {
+        let mut canonical = valid_canonical_result();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["videos"][0]["source_refs"] =
+            serde_json::json!(["source_ref_missing"]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "RV-RESULT-002",
+            "$.outputs.pack_data.youtube_summary.videos[0].source_refs[0]",
+        );
+    }
+
+    #[test]
+    fn missing_video_source_refs_is_allowed() {
+        let canonical = valid_canonical_result();
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert!(
+            findings.iter().all(|finding| {
+                finding.object_path.as_deref()
+                    != Some("$.outputs.pack_data.youtube_summary.videos[0].source_refs")
+            }),
+            "{findings:#?}"
+        );
+    }
+
+    #[test]
+    fn video_claim_refs_unknown_ref_returns_error() {
+        let mut canonical = valid_canonical_result();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["videos"][0]["claim_refs"] =
+            serde_json::json!(["claim_missing"]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "RV-RESULT-002",
+            "$.outputs.pack_data.youtube_summary.videos[0].claim_refs[0]",
+        );
+    }
+
+    #[test]
+    fn video_evidence_refs_unknown_ref_returns_error() {
+        let mut canonical = valid_canonical_result();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["videos"][0]["evidence_refs"] =
+            serde_json::json!(["evidence_missing"]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "RV-RESULT-002",
+            "$.outputs.pack_data.youtube_summary.videos[0].evidence_refs[0]",
+        );
+    }
+
+    #[test]
+    fn video_claim_refs_malformed_shape_returns_error() {
+        let mut canonical = valid_canonical_result();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["videos"][0]["claim_refs"] =
+            serde_json::json!("not_an_array");
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "VR-YS-020",
+            "$.outputs.pack_data.youtube_summary.videos[0].claim_refs",
+        );
+    }
+
+    #[test]
+    fn video_evidence_refs_with_non_string_item_returns_error() {
+        let mut canonical = valid_canonical_result();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["videos"][0]["evidence_refs"] =
+            serde_json::json!([42]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "VR-YS-020",
+            "$.outputs.pack_data.youtube_summary.videos[0].evidence_refs",
+        );
+    }
+
+    #[test]
     fn complete_standard_result_with_empty_videos_returns_error() {
         let mut canonical = valid_canonical_result();
         canonical["outputs"]["pack_data"]["youtube_summary"]["videos"] = serde_json::json!([]);

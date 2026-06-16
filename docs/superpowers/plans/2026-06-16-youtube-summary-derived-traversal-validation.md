@@ -591,7 +591,7 @@ git commit -m "feat: validate youtube summary synthesis traversal refs"
 **Files:**
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/result_validation.rs`
 
-- [ ] **Step 1: Write failing tests for guarded `videos[]` traversal fields**
+- [x] **Step 1: Write failing tests for guarded `videos[]` traversal fields**
 
 Add these tests after the synthesis traversal tests from Task 1:
 
@@ -741,7 +741,7 @@ fn video_evidence_refs_with_non_string_item_returns_error() {
 }
 ```
 
-- [ ] **Step 2: Run tests and verify the new video tests fail**
+- [x] **Step 2: Run tests and verify the new video tests fail**
 
 Run:
 
@@ -755,7 +755,7 @@ validator should report `$.outputs.pack_data.youtube_summary.videos[0].source_re
 `$.outputs.pack_data.youtube_summary.videos[0].claim_refs`, or
 `$.outputs.pack_data.youtube_summary.videos[0].evidence_refs` before Task 4.
 
-- [ ] **Step 3: Commit failing video tests**
+- [x] **Step 3: Commit failing video tests**
 
 ```powershell
 git add src-tauri\src\prompt_packs\youtube_summary\result_validation.rs
