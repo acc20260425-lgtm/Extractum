@@ -1,6 +1,11 @@
 import type { AnalysisRunSummary } from "$lib/types/analysis";
-import type { LibraryCatalogRecord, LibrarySourceProvider } from "$lib/types/library-sources";
+import type {
+  LibraryCatalogRecord,
+  LibrarySourceProvider,
+  LibrarySourceSubtype,
+} from "$lib/types/library-sources";
 import type { ProjectRecord, ProjectSourceRecord } from "$lib/types/projects";
+import { librarySourceTypeLabel } from "./library-catalog-model";
 
 export type ProjectStatus = "ready" | "running" | "needs_attention" | "empty";
 export type LibrarySourceStatus = "active" | "needs_account" | "syncing" | "error" | "unavailable";
@@ -43,7 +48,8 @@ export type ProjectSourceLinkView = {
   sourceId: string;
   sourceNumericId: number;
   provider: LibrarySourceProvider;
-  subtype: string | null;
+  subtype: LibrarySourceSubtype;
+  typeLabel: string;
   title: string;
   subtitle: string | null;
   itemCount: number;
@@ -194,6 +200,7 @@ export function buildProjectSourceLinksView(
       sourceNumericId: source.source_id,
       provider: source.provider,
       subtype: source.source_subtype,
+      typeLabel: librarySourceTypeLabel(source.provider, source.source_subtype),
       title: source.title ?? `Source #${source.source_id}`,
       subtitle: source.subtitle,
       itemCount: source.item_count,

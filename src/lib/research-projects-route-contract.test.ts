@@ -5,6 +5,7 @@ import railSource from "$lib/components/research-projects/ProjectRail.svelte?raw
 import inspectorSource from "$lib/components/research-projects/ProjectInspector.svelte?raw";
 import runsTabSource from "$lib/components/research-projects/ProjectRunsTab.svelte?raw";
 import runDialogSource from "$lib/components/research-projects/ProjectRunDialog.svelte?raw";
+import sourcesTabSource from "$lib/components/research-projects/SourcesTab.svelte?raw";
 import topCommandBarSource from "$lib/components/research-projects/TopCommandBar.svelte?raw";
 import workspaceSource from "$lib/components/research-projects/ProjectWorkspace.svelte?raw";
 
@@ -53,6 +54,13 @@ describe("projects mvp route contract", () => {
   it("keeps prompt-pack run details in the Runs tab instead of duplicating them in the inspector", () => {
     expect(runsTabSource).toContain("YoutubeSummaryRunsPanel");
     expect(inspectorSource).not.toContain("YoutubeSummaryRunsPanel");
+  });
+
+  it("matches the Library type column in Workspace project sources", () => {
+    expect(workspaceSource).toContain("SourcesTab");
+    expect(sourcesTabSource).toContain('id: "typeLabel", header: "Type"');
+    expect(sourcesTabSource).not.toContain('header: "Provider"');
+    expect(sourcesTabSource).not.toContain('header: "Subtype"');
   });
 
   it("keeps top command actions honest while project export is out of scope", () => {

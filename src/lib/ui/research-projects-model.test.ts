@@ -126,6 +126,8 @@ describe("research projects model", () => {
       projectId: "project:1",
       sourceId: "source:10",
       provider: "youtube",
+      subtype: "video",
+      typeLabel: "YouTube / Video",
       title: "Video",
       addedAt: 300,
     });

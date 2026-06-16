@@ -94,7 +94,7 @@ function dateLabel(unixSeconds: number | null) {
   }).format(new Date(unixSeconds * 1000));
 }
 
-function typeLabel(provider: LibrarySourceProvider, subtype: LibrarySourceSubtype) {
+export function librarySourceTypeLabel(provider: LibrarySourceProvider, subtype: LibrarySourceSubtype) {
   const providerLabel = PROVIDER_LABELS[provider] ?? provider;
   if (!subtype) return `${providerLabel} source`;
   return `${providerLabel} / ${SUBTYPE_LABELS[subtype] ?? subtype}`;
@@ -110,7 +110,7 @@ export function buildLibraryCatalogSourcesView(
     sourceSubtype: record.source.source_subtype,
     title: record.source.title ?? `Source #${record.source.source_id}`,
     subtitle: record.source.subtitle,
-    typeLabel: typeLabel(record.source.provider, record.source.source_subtype),
+    typeLabel: librarySourceTypeLabel(record.source.provider, record.source.source_subtype),
     status: record.status,
     statusDetail: record.status_detail,
     projectCount: record.source.project_count,

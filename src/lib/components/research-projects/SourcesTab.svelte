@@ -39,8 +39,7 @@
 
   const columns = [
     { id: "title", header: "Title", flexgrow: 1, cell: LibrarySourceCell },
-    { id: "provider", header: "Provider", width: 120 },
-    { id: "subtype", header: "Subtype", width: 120 },
+    { id: "typeLabel", header: "Type", width: 150 },
     { id: "localCopyLabel", header: "Details", width: 140 },
     { id: "addedAtLabel", header: "Added to project at", width: 180 },
   ];
