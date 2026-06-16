@@ -37,7 +37,7 @@
     onRefreshProjectRuns: () => void | Promise<void>;
   } = $props();
 
-  let activeTab = $state("overview");
+  let activeTab = $state("sources");
 </script>
 
 <section class="project-workspace-panel">
@@ -151,6 +151,58 @@
     min-width: 0;
     max-width: 100%;
     overflow: hidden;
+  }
+
+  :global(.workspace-tabs [data-slot="tabs-list"]) {
+    display: flex;
+    gap: 24px;
+    border-bottom: 1px solid var(--extractum-border);
+    background: transparent !important;
+    padding: 0 0 1px 0 !important;
+    width: 100%;
+    justify-content: flex-start;
+    border-radius: 0 !important;
+    height: auto !important;
+  }
+
+  :global(.workspace-tabs [data-slot="tabs-trigger"]) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 6px 4px 10px 4px !important;
+    font-size: 0.9rem !important;
+    font-weight: 500 !important;
+    color: var(--extractum-muted) !important;
+    position: relative;
+    cursor: pointer;
+    transition: color 0.15s;
+    border-radius: 0 !important;
+    flex: none !important;
+  }
+
+  :global(.workspace-tabs [data-slot="tabs-trigger"]::after) {
+    display: none !important;
+  }
+
+  :global(.workspace-tabs [data-slot="tabs-trigger"]:hover) {
+    color: var(--extractum-text) !important;
+  }
+
+  :global(.workspace-tabs [data-slot="tabs-trigger"][data-state="active"]) {
+    color: var(--extractum-primary) !important;
+    font-weight: 600 !important;
+  }
+
+  :global(.workspace-tabs [data-slot="tabs-trigger"][data-state="active"]::after) {
+    display: block !important;
+    content: "" !important;
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: 2px !important;
+    background: var(--extractum-primary) !important;
+    border-radius: 2px !important;
   }
 
   .overview-grid {
