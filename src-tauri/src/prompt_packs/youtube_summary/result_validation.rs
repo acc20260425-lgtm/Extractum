@@ -996,6 +996,197 @@ mod tests {
     }
 
     #[test]
+    fn synthesis_missing_nested_claim_ref_in_top_level_union_returns_error() {
+        let mut canonical = valid_canonical_result_with_synthesis();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["claim_refs"] =
+            serde_json::json!([]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "VR-YS-015",
+            "$.outputs.pack_data.youtube_summary.synthesis.claim_refs",
+        );
+    }
+
+    #[test]
+    fn synthesis_extra_top_level_claim_ref_returns_error() {
+        let mut canonical = valid_canonical_result_with_synthesis();
+        canonical["claims"] = serde_json::json!([
+            { "claim_id": "claim_1", "source_ref_id": "source_ref_1", "text": "Claim 1" },
+            { "claim_id": "claim_2", "source_ref_id": "source_ref_2", "text": "Claim 2" }
+        ]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["claim_refs"] =
+            serde_json::json!(["claim_1", "claim_2"]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "VR-YS-015",
+            "$.outputs.pack_data.youtube_summary.synthesis.claim_refs",
+        );
+    }
+
+    #[test]
+    fn synthesis_duplicate_top_level_claim_ref_returns_error_at_field_path() {
+        let mut canonical = valid_canonical_result_with_synthesis();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["claim_refs"] =
+            serde_json::json!(["claim_1", "claim_1"]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "VR-YS-015",
+            "$.outputs.pack_data.youtube_summary.synthesis.claim_refs",
+        );
+    }
+
+    #[test]
+    fn synthesis_missing_nested_evidence_ref_in_top_level_union_returns_error() {
+        let mut canonical = valid_canonical_result_with_synthesis();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["evidence_refs"] =
+            serde_json::json!([]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "VR-YS-015",
+            "$.outputs.pack_data.youtube_summary.synthesis.evidence_refs",
+        );
+    }
+
+    #[test]
+    fn synthesis_extra_top_level_evidence_ref_returns_error() {
+        let mut canonical = valid_canonical_result_with_synthesis();
+        canonical["evidence"] = serde_json::json!([
+            {
+                "evidence_id": "evidence_1",
+                "claim_id": "claim_1",
+                "source_ref_id": "source_ref_1",
+                "text": "Evidence 1"
+            },
+            {
+                "evidence_id": "evidence_2",
+                "claim_id": "claim_1",
+                "source_ref_id": "source_ref_2",
+                "text": "Evidence 2"
+            }
+        ]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["evidence_refs"] =
+            serde_json::json!(["evidence_1", "evidence_2"]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "VR-YS-015",
+            "$.outputs.pack_data.youtube_summary.synthesis.evidence_refs",
+        );
+    }
+
+    #[test]
+    fn synthesis_missing_source_ref_derived_from_video_ref_returns_error() {
+        let mut canonical = valid_canonical_result_with_synthesis();
+        // The fixture has video_2 -> source_ref_2 and source_ref_2 is present in
+        // canonical source_refs[]. The only missing value is in synthesis.source_refs.
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["source_refs"] =
+            serde_json::json!(["source_ref_1"]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "VR-YS-015",
+            "$.outputs.pack_data.youtube_summary.synthesis.source_refs",
+        );
+    }
+
+    #[test]
+    fn synthesis_extra_top_level_source_ref_not_in_nested_items_returns_error() {
+        let mut canonical = valid_canonical_result_with_synthesis();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"][0]
+            ["video_refs"] = serde_json::json!([]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"][0]
+            ["source_refs"] = serde_json::json!([]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["common_claims"][0]
+            ["source_refs"] = serde_json::json!([]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]
+            ["contradictions_across_videos"][0]["source_refs"] = serde_json::json!([]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["source_refs"] =
+            serde_json::json!(["source_ref_2"]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "VR-YS-015",
+            "$.outputs.pack_data.youtube_summary.synthesis.source_refs",
+        );
+    }
+
+    #[test]
+    fn synthesis_order_difference_in_top_level_union_is_allowed() {
+        let mut canonical = valid_canonical_result_with_synthesis();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["source_refs"] =
+            serde_json::json!(["source_ref_2", "source_ref_1"]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert!(
+            findings.iter().all(|finding| {
+                finding.code != "VR-YS-015"
+                    || finding.object_path.as_deref()
+                        != Some("$.outputs.pack_data.youtube_summary.synthesis.source_refs")
+            }),
+            "{findings:#?}"
+        );
+    }
+
+    #[test]
+    fn synthesis_unknown_video_ref_does_not_cascade_to_source_union_error() {
+        let mut canonical = valid_canonical_result_with_synthesis();
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"][0]
+            ["video_refs"] = serde_json::json!(["video_missing"]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["cross_video_themes"][0]
+            ["source_refs"] = serde_json::json!([]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["common_claims"][0]
+            ["source_refs"] = serde_json::json!([]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]
+            ["contradictions_across_videos"][0]["source_refs"] = serde_json::json!([]);
+        canonical["outputs"]["pack_data"]["youtube_summary"]["synthesis"]["source_refs"] =
+            serde_json::json!([]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(
+            &findings,
+            "RV-RESULT-002",
+            "$.outputs.pack_data.youtube_summary.synthesis.cross_video_themes[0].video_refs[0]",
+        );
+        assert!(
+            findings.iter().all(|finding| {
+                finding.code != "VR-YS-015"
+                    || finding.object_path.as_deref()
+                        != Some("$.outputs.pack_data.youtube_summary.synthesis.source_refs")
+            }),
+            "{findings:#?}"
+        );
+    }
+
+    #[test]
     fn complete_standard_result_with_empty_videos_returns_error() {
         let mut canonical = valid_canonical_result();
         canonical["outputs"]["pack_data"]["youtube_summary"]["videos"] = serde_json::json!([]);

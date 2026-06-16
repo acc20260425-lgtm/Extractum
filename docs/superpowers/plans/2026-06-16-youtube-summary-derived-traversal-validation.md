@@ -34,7 +34,7 @@ No new Rust modules are needed. The affected validator file already owns shape, 
 **Files:**
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/result_validation.rs`
 
-- [ ] **Step 1: Write failing tests for synthesis traversal unions**
+- [x] **Step 1: Write failing tests for synthesis traversal unions**
 
 Add these tests in the existing `#[cfg(test)] mod tests` block after `nested_synthesis_unknown_video_ref_returns_error`:
 
@@ -231,7 +231,7 @@ fn synthesis_unknown_video_ref_does_not_cascade_to_source_union_error() {
 }
 ```
 
-- [ ] **Step 2: Run tests and verify the new tests fail**
+- [x] **Step 2: Run tests and verify the new tests fail**
 
 Run:
 
@@ -244,7 +244,7 @@ derived traversal validation exists yet. Existing tests should still compile.
 `synthesis_order_difference_in_top_level_union_is_allowed` is a regression guard
 and may pass both before and after implementation.
 
-- [ ] **Step 3: Commit failing tests**
+- [x] **Step 3: Commit failing tests**
 
 ```powershell
 git add src-tauri\src\prompt_packs\youtube_summary\result_validation.rs
