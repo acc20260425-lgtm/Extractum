@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronLeft, ChevronRight, Plus, FolderKanban, LayoutDashboard } from "@lucide/svelte";
+  import { ChevronLeft, ChevronRight, Plus, FolderKanban, LayoutDashboard, Folder, ChevronDown } from "@lucide/svelte";
   import { tick, type Component, onMount } from "svelte";
   import { goto } from "$app/navigation";
   import Button from "$lib/components/ui/Button.svelte";
@@ -143,40 +143,52 @@
         </a>
 
         {#if item.href === "/projects" && uiMode === "projects" && (!collapsed || mobileOpen)}
-          <div class="projects-subnav">
-            {#each projectsSharedState.projects as project (project.id)}
+          <div class="projects-tree-wrapper">
+            <!-- Root Folder: Projects (Always Expanded) -->
+            <div class="projects-tree-root-header">
+              <span class="folder-chevron-wrapper"><ChevronDown size={12} aria-hidden="true" /></span>
+              <span class="folder-icon-wrapper"><Folder size={12} aria-hidden="true" /></span>
+              <span class="folder-label">Projects</span>
+            </div>
+
+            <!-- List of Projects -->
+            <div class="projects-tree-list">
+              {#each projectsSharedState.projects as project (project.id)}
+                <button
+                  type="button"
+                  class="tree-project-item"
+                  class:active={projectsSharedState.selectedProjectId === project.id}
+                  onclick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    projectsSharedState.selectedProjectId = project.id;
+                    if (pathname !== "/projects") {
+                      goto("/projects");
+                    }
+                  }}
+                >
+                  <span class="project-dot-indicator" class:running={project.status === "running"} class:ready={project.status === "ready"}></span>
+                  <span class="project-title-text" title={project.title}>{project.title}</span>
+                </button>
+              {/each}
+
+              <!-- Add Project Action -->
               <button
                 type="button"
-                class="subnav-project-item"
-                class:active={projectsSharedState.selectedProjectId === project.id}
+                class="tree-add-project-btn"
                 onclick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  projectsSharedState.selectedProjectId = project.id;
+                  projectsSharedState.showCreateDialog = true;
                   if (pathname !== "/projects") {
                     goto("/projects");
                   }
                 }}
               >
-                <span class="subnav-project-dot" class:running={project.status === "running"} class:ready={project.status === "ready"}></span>
-                <span class="subnav-project-title" title={project.title}>{project.title}</span>
+                <Plus size={12} aria-hidden="true" />
+                <span>Create project</span>
               </button>
-            {/each}
-            <button
-              type="button"
-              class="subnav-add-btn"
-              onclick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                projectsSharedState.showCreateDialog = true;
-                if (pathname !== "/projects") {
-                  goto("/projects");
-                }
-              }}
-            >
-              <Plus size={12} aria-hidden="true" />
-              <span>Create project</span>
-            </button>
+            </div>
           </div>
         {/if}
       </div>
@@ -415,17 +427,56 @@
     color: var(--muted);
   }
 
-  .projects-subnav {
+  .projects-tree-wrapper {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
-    padding-left: 0.5rem;
-    margin-top: 0.2rem;
-    border-left: 1px solid var(--border);
+    gap: 0.25rem;
+    padding-left: 0.4rem;
+    margin-top: 0.3rem;
     margin-left: 1.25rem;
   }
 
-  .subnav-project-item {
+  .projects-tree-root-header {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.25rem 0.2rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+    user-select: none;
+  }
+
+  .folder-chevron-wrapper {
+    color: var(--muted);
+    opacity: 0.8;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .folder-icon-wrapper {
+    color: var(--primary);
+    opacity: 0.9;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .folder-label {
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+  }
+
+  .projects-tree-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding-left: 1rem;
+    border-left: 1px dashed var(--border);
+    margin-left: 0.55rem;
+  }
+
+  .tree-project-item {
     display: flex;
     align-items: center;
     gap: 0.45rem;
@@ -440,21 +491,23 @@
     cursor: pointer;
     width: 100%;
     min-width: 0;
-    transition: color 0.15s, background 0.15s;
+    transition: color 0.15s, background 0.15s, border-color 0.15s;
+    border: 1px solid transparent;
   }
 
-  .subnav-project-item:hover {
+  .tree-project-item:hover {
     color: var(--text);
     background: color-mix(in srgb, var(--panel-hover) 50%, transparent);
   }
 
-  .subnav-project-item.active {
+  .tree-project-item.active {
     color: var(--primary);
     background: color-mix(in srgb, var(--primary) 10%, transparent);
+    border-color: color-mix(in srgb, var(--primary) 15%, transparent);
     font-weight: 600;
   }
 
-  .subnav-project-dot {
+  .project-dot-indicator {
     width: 6px;
     height: 6px;
     border-radius: 50%;
@@ -462,24 +515,24 @@
     flex-shrink: 0;
   }
 
-  .subnav-project-dot.running {
+  .project-dot-indicator.running {
     background: var(--primary);
     box-shadow: 0 0 8px var(--primary);
     animation: pulse 2s infinite;
   }
 
-  .subnav-project-dot.ready {
+  .project-dot-indicator.ready {
     background: #10b981;
   }
 
-  .subnav-project-title {
+  .project-title-text {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     flex: 1;
   }
 
-  .subnav-add-btn {
+  .tree-add-project-btn {
     display: flex;
     align-items: center;
     gap: 0.35rem;
@@ -495,7 +548,7 @@
     transition: border-color 0.15s, color 0.15s;
   }
 
-  .subnav-add-btn:hover {
+  .tree-add-project-btn:hover {
     border-color: var(--primary);
     color: var(--primary);
   }
