@@ -3,15 +3,12 @@
   import {
     ExtractumButton,
     ExtractumDataGrid,
-    ProviderBadge,
-    StatusBadge,
   } from "$lib/components/extractum-ui";
   import type {
     LibrarySourceView,
     ProjectSourceLinkView,
     ResearchProjectView,
   } from "$lib/ui/research-projects-model";
-  import type { LibrarySourceProvider } from "$lib/types/library-sources";
   import LibrarySourceCell from "./LibrarySourceCell.svelte";
   import ProjectSourceSummary from "./ProjectSourceSummary.svelte";
 
@@ -62,16 +59,10 @@
         };
       }),
   );
-
-  let provider = $derived<LibrarySourceProvider>(rows[0]?.provider ?? "other");
 </script>
 
 <section class="sources-tab">
   <header class="sources-toolbar">
-    <div class="sources-context">
-      <ProviderBadge {provider} />
-      <StatusBadge status={rows.length > 0 ? "connected" : "unavailable"} />
-    </div>
     <ExtractumButton data-ui-action="connect-library" onclick={onOpenConnectLibrary}>
       <Library size={14} aria-hidden="true" />
       Connect from Library
@@ -113,14 +104,8 @@
   .sources-toolbar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 12px;
-  }
-
-  .sources-context {
-    display: flex;
-    align-items: center;
-    gap: 8px;
   }
 
   .sources-grid-region {

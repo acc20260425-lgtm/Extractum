@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ChevronLeft, ChevronRight, Pencil, Play, PlayCircle, Trash2 } from "@lucide/svelte";
-  import { ExtractumButton, ProviderBadge, StatusBadge } from "$lib/components/extractum-ui";
+  import { ExtractumButton } from "$lib/components/extractum-ui";
   import { projectRunDisabledReason } from "$lib/ui/research-projects-model";
   import type { AnalysisRunSummary } from "$lib/types/analysis";
   import type { ProjectSourceRecord } from "$lib/types/projects";
@@ -36,7 +36,7 @@
 
   const mixedProviderRunMessage = "Mixed-provider project runs are not supported yet.";
   const runDisabledReason = $derived(projectRunDisabledReason(project, sources));
-  const providerBreakdown = $derived(Array.from(new Set(sources.map((source) => source.provider))));
+  const providerCount = $derived(new Set(sources.map((source) => source.provider)).size);
   let youtubeSummaryOpen = $state(false);
   let youtubeSummarySource = $derived(
     selectedSource
@@ -79,13 +79,8 @@
       <p>{project?.description ?? "Create or select a project."}</p>
       <dl>
         <div><dt>Sources</dt><dd>{sources.length}</dd></div>
-        <div><dt>Providers</dt><dd>{providerBreakdown.length}</dd></div>
+        <div><dt>Providers</dt><dd>{providerCount}</dd></div>
       </dl>
-      <div class="provider-row">
-        {#each providerBreakdown as provider (provider)}
-          <ProviderBadge {provider} />
-        {/each}
-      </div>
     </section>
 
     <section>
@@ -116,7 +111,6 @@
         <h3>Selected source</h3>
         <p><strong>{selectedSource.title}</strong></p>
         <p>{selectedSource.subtitle ?? selectedSource.filterSummary}</p>
-        <StatusBadge status="connected" />
         {#if canRunSelectedYoutubeSummary}
           <ExtractumButton variant="outline" disabled={saving} onclick={() => (youtubeSummaryOpen = true)}>
             <PlayCircle size={14} aria-hidden="true" />
@@ -229,9 +223,4 @@
     gap: 8px;
   }
 
-  .provider-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
 </style>

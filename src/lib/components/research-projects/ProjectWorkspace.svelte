@@ -4,7 +4,6 @@
     ExtractumTabsContent,
     ExtractumTabsList,
     ExtractumTabsTrigger,
-    StatusBadge,
   } from "$lib/components/extractum-ui";
   import type {
     LibrarySourceView,
@@ -46,9 +45,6 @@
       <span>Project workspace</span>
       <h1>{project?.title ?? "Research project"}</h1>
     </div>
-    {#if project}
-      <StatusBadge status={project.status === "needs_attention" ? "error" : project.status === "empty" ? "unavailable" : "active"} />
-    {/if}
   </header>
 
   <ExtractumTabs bind:value={activeTab} class="workspace-tabs">
