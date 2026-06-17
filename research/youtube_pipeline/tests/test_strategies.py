@@ -34,6 +34,20 @@ class StrategyTests(unittest.TestCase):
         self.assertTrue(outcome.json_valid)
         self.assertEqual(client.calls[0][1], 1000)
 
+    def test_all_research_strategies_are_registered(self):
+        from research.youtube_pipeline.strategies import STRATEGIES
+
+        self.assertEqual(
+            sorted(STRATEGIES),
+            [
+                "chunk_map_reduce",
+                "one_shot_full_json",
+                "one_shot_markdown_plus_json",
+                "timeline_segment_reduce",
+                "two_pass_summary_structure",
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

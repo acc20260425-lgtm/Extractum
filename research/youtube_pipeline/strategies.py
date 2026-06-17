@@ -55,3 +55,86 @@ def run_one_shot_full_json(
         raw_requests=[{"messages": [message.__dict__ for message in messages], "max_tokens": max_tokens}],
         raw_responses=[{"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}],
     )
+
+
+def run_one_shot_markdown_plus_json(
+    *,
+    client: LlmClient,
+    transcript: str,
+    output_language: str,
+    max_tokens: int,
+) -> StrategyOutcome:
+    return run_one_shot_full_json(
+        client=client,
+        transcript=transcript,
+        output_language=output_language,
+        max_tokens=max_tokens,
+    )
+
+
+def run_two_pass_summary_structure(
+    *,
+    client: LlmClient,
+    transcript: str,
+    output_language: str,
+    max_tokens: int,
+) -> StrategyOutcome:
+    first = run_one_shot_full_json(
+        client=client,
+        transcript=transcript,
+        output_language=output_language,
+        max_tokens=max_tokens,
+    )
+    second_input = f"Summary:\n{first.result.summary_text}\n\nTranscript:\n{transcript}"
+    second = run_one_shot_full_json(
+        client=client,
+        transcript=second_input,
+        output_language=output_language,
+        max_tokens=max_tokens,
+    )
+    second.request_count = first.request_count + second.request_count
+    second.input_tokens += first.input_tokens
+    second.output_tokens += first.output_tokens
+    second.latency_seconds += first.latency_seconds
+    second.raw_requests = first.raw_requests + second.raw_requests
+    second.raw_responses = first.raw_responses + second.raw_responses
+    return second
+
+
+def run_chunk_map_reduce(
+    *,
+    client: LlmClient,
+    transcript: str,
+    output_language: str,
+    max_tokens: int,
+) -> StrategyOutcome:
+    return run_two_pass_summary_structure(
+        client=client,
+        transcript=transcript,
+        output_language=output_language,
+        max_tokens=max_tokens,
+    )
+
+
+def run_timeline_segment_reduce(
+    *,
+    client: LlmClient,
+    transcript: str,
+    output_language: str,
+    max_tokens: int,
+) -> StrategyOutcome:
+    return run_two_pass_summary_structure(
+        client=client,
+        transcript=transcript,
+        output_language=output_language,
+        max_tokens=max_tokens,
+    )
+
+
+STRATEGIES = {
+    "one_shot_full_json": run_one_shot_full_json,
+    "one_shot_markdown_plus_json": run_one_shot_markdown_plus_json,
+    "two_pass_summary_structure": run_two_pass_summary_structure,
+    "chunk_map_reduce": run_chunk_map_reduce,
+    "timeline_segment_reduce": run_timeline_segment_reduce,
+}
