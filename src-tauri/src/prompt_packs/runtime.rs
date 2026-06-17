@@ -725,7 +725,7 @@ fn build_transcript_analysis_llm_request(
                      \"schema_version\": \"1.0\",\n\
                      \"stage\": \"youtube_summary/transcript_analysis\",\n\
                      \"video_candidate\": {{\n\
-                     \"summary_text\": \"concise summary\",\n\
+                     \"summary_text\": \"readable narrative summary\",\n\
                      \"segment_candidates\": [],\n\
                      \"key_point_candidates\": [{{ \"text\": \"point\", \"segment_candidate_index\": 0, \"material_refs\": [\"allowed material ref\"] }}],\n\
                      \"quote_candidates\": [{{ \"text\": \"short quote\", \"segment_candidate_index\": 0, \"material_refs\": [\"allowed material ref\"] }}],\n\
@@ -736,6 +736,7 @@ fn build_transcript_analysis_llm_request(
                      \"evidence_fragment_candidates\": [{{ \"text\": \"evidence quote or paraphrase\", \"quote_candidate_index\": 0, \"material_refs\": [\"allowed material ref\"] }}],\n\
                      \"warning_candidates\": []\n\
                      }}\n\n\
+                     summary_text must be a readable narrative summary of the video, not a terse label. Write 2 to 4 paragraphs in the requested output_language, covering the main argument, important context, and practical takeaways. Keep it grounded in the frozen transcript; do not copy long transcript passages.\n\n\
                      Do not include backend-owned refs or IDs such as segment_ref, key_point_ref, quote_ref, claim_id, evidence_id, source_ref_id, segment_id, key_point_id, quote_id, action_item_id, or open_question_id. For optional candidate-to-candidate linkage, use only zero-based segment_candidate_index and quote_candidate_index. Omit candidate index fields when no clear candidate link exists. Use material_refs only from allowed_material_refs in the frozen input. Do not rename fields. Do not wrap the JSON in Markdown.\n\n\
                      Frozen stage input JSON:\n{}",
                     request.prompt_input_json
@@ -766,7 +767,7 @@ fn build_synthesis_llm_request(
             LlmMessage {
                 role: "user".to_string(),
                 content: format!(
-                    "Synthesize the transcript-analysis candidates into one strict JSON object with stage_io_version, schema_version, stage, synthesis_candidate, limitations, and warning_candidates.\n\nRequired synthesis_candidate shape:\n{{\n  \"summary_text\": \"combined readable summary\",\n  \"cross_video_themes\": [{{ \"theme_text\": \"theme\", \"source_refs\": [\"source_ref_1\"], \"claim_refs\": [], \"evidence_refs\": [] }}],\n  \"common_claims\": [],\n  \"contradictions_across_videos\": []\n}}\n\nThe input wrapper field source_ref_id may be used only for reasoning. Do not copy the key source_ref_id into the output. Use only source_refs from allowed_refs.source_refs, claim_refs from allowed_refs.claim_refs, and evidence_refs from allowed_refs.evidence_refs. You may use segment_refs, key_point_refs, and quote_refs from allowed_refs only for reasoning over canonical_graph. Do not emit segment_refs, key_point_refs, or quote_refs in the output. Leave claim_refs or evidence_refs empty when no supporting allowed ref exists. Do not include backend-owned IDs or keys such as source_ref_id, theme_id, common_claim_id, contradiction_id, claim_id, evidence_id, video_id, section_id, or synthesis_item_id. Do not wrap the JSON in Markdown.\n\nSynthesis input JSON:\n{}",
+                    "Synthesize the transcript-analysis candidates into one strict JSON object with stage_io_version, schema_version, stage, synthesis_candidate, limitations, and warning_candidates.\n\nRequired synthesis_candidate shape:\n{{\n  \"summary_text\": \"readable synthesis summary\",\n  \"cross_video_themes\": [{{ \"theme_text\": \"theme\", \"source_refs\": [\"source_ref_1\"], \"claim_refs\": [], \"evidence_refs\": [] }}],\n  \"common_claims\": [],\n  \"contradictions_across_videos\": []\n}}\n\nsummary_text must be a readable synthesis summary, not a terse label. Write 3 to 5 paragraphs in the requested output_language, explaining the shared themes, meaningful differences, and combined takeaway across the analyzed videos. Keep it grounded in the transcript-analysis candidates and canonical_graph; do not copy long transcript passages.\n\nThe input wrapper field source_ref_id may be used only for reasoning. Do not copy the key source_ref_id into the output. Use only source_refs from allowed_refs.source_refs, claim_refs from allowed_refs.claim_refs, and evidence_refs from allowed_refs.evidence_refs. You may use segment_refs, key_point_refs, and quote_refs from allowed_refs only for reasoning over canonical_graph. Do not emit segment_refs, key_point_refs, or quote_refs in the output. Leave claim_refs or evidence_refs empty when no supporting allowed ref exists. Do not include backend-owned IDs or keys such as source_ref_id, theme_id, common_claim_id, contradiction_id, claim_id, evidence_id, video_id, section_id, or synthesis_item_id. Do not wrap the JSON in Markdown.\n\nSynthesis input JSON:\n{}",
                     prompt_input_json
                 ),
             },
@@ -1378,6 +1379,11 @@ mod tests {
         assert!(request.messages[1].content.contains("summary_text"));
         assert!(request.messages[1]
             .content
+            .contains("summary_text must be a readable narrative summary"));
+        assert!(request.messages[1].content.contains("2 to 4 paragraphs"));
+        assert!(!request.messages[1].content.contains("concise summary"));
+        assert!(request.messages[1]
+            .content
             .contains("Do not include backend-owned refs or IDs"));
         assert!(request.messages[1]
             .content
@@ -1428,6 +1434,9 @@ mod tests {
         assert!(prompt.contains("Do not emit segment_refs"));
         assert!(prompt.contains("key_point_refs"));
         assert!(prompt.contains("quote_refs"));
+        assert!(prompt.contains("summary_text must be a readable synthesis summary"));
+        assert!(prompt.contains("3 to 5 paragraphs"));
+        assert!(!prompt.contains("combined readable summary"));
     }
 
     #[test]
