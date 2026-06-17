@@ -54,8 +54,12 @@ def build_chunk_analysis_messages(
             content=(
                 f"Output language: {output_language}\n"
                 f"Chunk {chunk_index} of {total_chunks}\n\n"
-                "Create a chunk-level summary and extract timeline, claims, evidence, action_items, "
-                "and open_questions that are visible in this chunk. Keep evidence grounded in the chunk text.\n\n"
+                "Create dense chunk notes, not a short abstract. In summary_text write 300-600 words "
+                "when the chunk has enough substance. Capture the concrete details, argument flow, examples, "
+                "named concepts, transitions, and practical implications from this chunk. do not compress "
+                "the chunk into a few sentences.\n\n"
+                "Also extract timeline, claims, evidence, action_items, and open_questions that are visible "
+                "in this chunk. Keep evidence grounded in the chunk text.\n\n"
                 f"{RESULT_CONTRACT}\n\nTranscript chunk:\n{chunk_text}"
             ),
         ),
@@ -79,9 +83,19 @@ def build_chunk_reduce_messages(
             role="user",
             content=(
                 f"Output language: {output_language}\n\n"
-                "Merge these chunk analyses into a detailed final summary with consolidated timeline, "
-                "claims, evidence, action_items, and open_questions. Preserve coverage across beginning, "
-                "middle, and end of the source video.\n\n"
+                "Merge these chunk analyses into a long-form report. In summary_text write 1200-2500 words "
+                "when the source video has enough substance. do not summarize the summaries into a short "
+                "abstract; expand from the chunk evidence and preserve concrete details from the beginning, "
+                "middle, and end of the video.\n\n"
+                "Structure summary_text with readable Markdown headings inside the JSON string:\n"
+                "## Overview\n"
+                "## Detailed narrative\n"
+                "## Major claims and evidence\n"
+                "## Actionable takeaways\n"
+                "## Open questions\n\n"
+                "Also produce consolidated timeline, claims, evidence, action_items, and open_questions. "
+                "Deduplicate repeated items, but do not drop important nuance just because it appears in "
+                "only one chunk.\n\n"
                 f"{RESULT_CONTRACT}\n\nChunk analyses JSON:\n{chunk_results_json}"
             ),
         ),
