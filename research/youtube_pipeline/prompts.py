@@ -112,28 +112,162 @@ def build_final_report_messages(
         ChatMessage(
             role="system",
             content=(
-                "You are a long-form research report writer. Write prose, not JSON. "
-                "Use only the provided chunk analyses and structured result."
+                "You are an expert long-form research report writer. Write detailed, academic-grade prose, not JSON. "
+                "Do not summarize or shorten the information. Expand and write in detail."
             ),
         ),
         ChatMessage(
             role="user",
             content=(
                 f"Output language: {output_language}\n\n"
-                "Please write the final report as Markdown. Do not return JSON. Aim for 2000-4000 words "
-                "when the source material has enough substance. The report should be stronger than a short "
-                "summary: explain the argument flow, important details, examples, evidence, tensions, "
-                "actionable takeaways, and unresolved questions.\n\n"
-                "Use this structure:\n"
+                "Write a comprehensive, long-form research report based on the provided chunk analyses and structured results. "
+                "To ensure maximum coverage of the 3-hour video, you MUST expand each section in detail. "
+                "Do not write a short summary; write a detailed, thorough narrative that explains all concepts, arguments, and examples. "
+                "Aim for a total length of 2000 to 4000 words.\n\n"
+                "Use the following structure and guidelines for each section:\n\n"
                 "# Overview\n"
+                "Write 2-3 paragraphs (300-500 words) summarizing the main theme, context, and significance of the video.\n\n"
                 "# Detailed narrative\n"
+                "Write a very detailed, comprehensive narrative (1500-2500 words). "
+                "Do not just copy the summary from the structured result. Go through the chunk analyses, "
+                "extract all main topics, arguments, stories, and details, and write 2-4 detailed paragraphs for each topic. "
+                "Use subheadings (###) for each major topic discussed in the video.\n\n"
                 "# Timeline and development of ideas\n"
+                "List all timeline items from the structured result. For each item, write a 2-3 sentence description of what was discussed, "
+                "preserving the timestamps and details.\n\n"
                 "# Major claims and evidence\n"
+                "Present all claims and evidence from the structured result. Elaborate on each claim and explain how the evidence supports it, "
+                "using details from the chunk analyses.\n\n"
                 "# Actionable takeaways\n"
+                "Detail all actionable takeaways, explaining their practical implications and target audiences.\n\n"
                 "# Open questions\n"
-                "# Final synthesis\n\n"
+                "List all open questions and write a paragraph for each, explaining why it matters and what its implications are.\n\n"
+                "# Final synthesis\n"
+                "Write a 2-3 paragraph final synthesis, concluding the main takeaways, themes, and long-term implications.\n\n"
                 f"Structured result JSON:\n{structured_result_json}\n\n"
                 f"Chunk analyses JSON:\n{chunk_results_json}"
             ),
         ),
     ]
+
+
+def build_antigravity_reduce_summary_messages(
+    chunk_results_json: str,
+    *,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content=(
+                "You merge chunk-level YouTube transcript analyses' summaries into one coherent, highly detailed narrative report. "
+                "Write in Markdown. Do not return JSON or any JSON wrappers. Write only prose."
+            ),
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n\n"
+                "Merge these chunk analyses into a long-form narrative report. Write at least 1500-2500 words. "
+                "Do not summarize the summaries into a short abstract; expand from the chunk evidence and preserve concrete details "
+                "from the beginning, middle, and end of the video. Use multiple paragraphs for each major topic to explain it in depth.\n\n"
+                "Structure your report with readable Markdown headings:\n"
+                "# Overview\n"
+                "# Detailed narrative\n"
+                "Use subheadings (## or ###) within the detailed narrative to separate major topics.\n\n"
+                f"Chunk analyses JSON:\n{chunk_results_json}"
+            ),
+        ),
+    ]
+
+
+def build_antigravity_reduce_timeline_messages(
+    chunk_results_json: str,
+    *,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content=(
+                "You merge chunk-level YouTube transcript analyses' timelines into one coherent, chronologically sorted timeline. "
+                "Deduplicate closely overlapping segments and merge adjacent items if they cover the same topic. "
+                "Return one JSON object containing ONLY the 'timeline' field, and no Markdown wrapper."
+            ),
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n\n"
+                "Merge and deduplicate these chunk analyses' timelines. Sort them chronologically. "
+                "Aim for a detailed timeline that represents the entire flow of the video.\n\n"
+                "Return exactly this JSON shape:\n"
+                "{\n"
+                '  "timeline": [{"start": "00:00:00", "end": "00:05:00", "title": "Topic", "summary": "Detailed summary"}]\n'
+                "}\n\n"
+                f"Chunk analyses JSON:\n{chunk_results_json}"
+            ),
+        ),
+    ]
+
+
+def build_antigravity_reduce_claims_evidence_messages(
+    chunk_results_json: str,
+    *,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content=(
+                "You merge chunk-level YouTube transcript analyses' claims and evidence. "
+                "Deduplicate repeated items. Keep evidence items grounded in timestamps and correctly linked to their supported claims. "
+                "Return one JSON object containing ONLY 'claims' and 'evidence' fields, and no Markdown wrapper."
+            ),
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n\n"
+                "Merge and deduplicate these chunk analyses' claims and evidence. Maintain the evidence references "
+                "and ensure they map correctly. Keep the statements concrete.\n\n"
+                "Return exactly this JSON shape:\n"
+                "{\n"
+                '  "claims": [{"text": "Claim statement", "importance": "high", "evidence_refs": ["00:01:00"]}],\n'
+                '  "evidence": [{"text": "Grounded evidence description", "timestamp": "00:01:00", "supports_claims": ["Claim statement"]}]\n'
+                "}\n\n"
+                f"Chunk analyses JSON:\n{chunk_results_json}"
+            ),
+        ),
+    ]
+
+
+def build_antigravity_reduce_takeaways_messages(
+    chunk_results_json: str,
+    *,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content=(
+                "You merge chunk-level YouTube transcript analyses' action items and open questions. "
+                "Deduplicate repeated items and preserve all unique nuances. "
+                "Return one JSON object containing ONLY 'action_items' and 'open_questions' fields, and no Markdown wrapper."
+            ),
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n\n"
+                "Merge and deduplicate these chunk analyses' action items and open questions.\n\n"
+                "Return exactly this JSON shape:\n"
+                "{\n"
+                '  "action_items": [{"text": "Action item", "target_audience": "Audience", "priority": "medium"}],\n'
+                '  "open_questions": [{"text": "Open question", "why_it_matters": "Reason"}]\n'
+                "}\n\n"
+                f"Chunk analyses JSON:\n{chunk_results_json}"
+            ),
+        ),
+    ]
+
