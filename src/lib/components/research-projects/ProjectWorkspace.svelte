@@ -150,12 +150,19 @@
     min-height: 0;
     min-width: 0;
     width: 100%;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
   }
 
   :global(.workspace-tabs [data-slot="tabs-content"]) {
     min-width: 0;
     max-width: 100%;
-    overflow: hidden;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   :global(.workspace-tabs [data-slot="tabs-list"]) {
