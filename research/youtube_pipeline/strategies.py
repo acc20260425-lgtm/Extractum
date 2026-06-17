@@ -15,6 +15,9 @@ from research.youtube_pipeline.prompts import (
     build_antigravity_reduce_timeline_messages,
     build_antigravity_reduce_claims_evidence_messages,
     build_antigravity_reduce_takeaways_messages,
+    build_antigravity_chunk_analysis_messages,
+    build_antigravity_chapter_summary_messages,
+    build_antigravity_final_report_messages,
 )
 
 
@@ -253,7 +256,7 @@ def run_antigravity_chunk_map_reduce(
 
     # 1. Map step: Analyze chunks
     for index, chunk in enumerate(chunks, start=1):
-        messages = build_chunk_analysis_messages(
+        messages = build_antigravity_chunk_analysis_messages(
             chunk,
             chunk_index=index,
             total_chunks=len(chunks),
@@ -281,19 +284,36 @@ def run_antigravity_chunk_map_reduce(
 
     reduce_input = json.dumps(chunk_results, ensure_ascii=False, indent=2)
 
-    # 2a. Reduce Summary step
-    summary_messages = build_antigravity_reduce_summary_messages(reduce_input, output_language=output_language)
-    started = time.perf_counter()
-    response = client.complete(summary_messages, max_tokens=max_tokens)
-    latency_seconds += time.perf_counter() - started
-    request_count += 1
-    input_tokens += response.input_tokens
-    output_tokens += response.output_tokens
-    raw_requests.append({"messages": [message.__dict__ for message in summary_messages], "max_tokens": max_tokens})
-    raw_responses.append(
-        {"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}
-    )
-    summary_text = response.text.strip()
+    # 2a. Reduce Summary step: Split chunk results into 3 chapters
+    num_chapters = min(3, len(chunk_results))
+    k, m = divmod(len(chunk_results), num_chapters)
+    chapter_groups = [
+        chunk_results[i * k + min(i, m) : (i + 1) * k + min(i + 1, m)]
+        for i in range(num_chapters)
+    ]
+
+    chapter_summaries = []
+    for ch_idx, ch_group in enumerate(chapter_groups, start=1):
+        chapter_input = json.dumps(ch_group, ensure_ascii=False, indent=2)
+        summary_messages = build_antigravity_chapter_summary_messages(
+            chapter_input,
+            chapter_index=ch_idx,
+            total_chapters=num_chapters,
+            output_language=output_language,
+        )
+        started = time.perf_counter()
+        response = client.complete(summary_messages, max_tokens=max_tokens)
+        latency_seconds += time.perf_counter() - started
+        request_count += 1
+        input_tokens += response.input_tokens
+        output_tokens += response.output_tokens
+        raw_requests.append({"messages": [message.__dict__ for message in summary_messages], "max_tokens": max_tokens})
+        raw_responses.append(
+            {"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}
+        )
+        chapter_summaries.append(response.text.strip())
+
+    summary_text = "\n\n".join(chapter_summaries)
     summary_json_valid = True
     json_valid = json_valid and summary_json_valid
 
@@ -354,7 +374,7 @@ def run_antigravity_chunk_map_reduce(
 
     # 3. Final report formatting step
     structured_result_json = json.dumps(combined_result.to_dict(), ensure_ascii=False, indent=2)
-    messages = build_final_report_messages(
+    messages = build_antigravity_final_report_messages(
         reduce_input,
         structured_result_json,
         output_language=output_language,
