@@ -3,9 +3,14 @@ import json
 import time
 from typing import Protocol
 
+from research.youtube_pipeline.chunking import chunk_by_approx_tokens
 from research.youtube_pipeline.llm_client import ChatMessage, LlmResponse
 from research.youtube_pipeline.models import NormalizedResult
-from research.youtube_pipeline.prompts import build_one_shot_full_json_messages
+from research.youtube_pipeline.prompts import (
+    build_chunk_analysis_messages,
+    build_chunk_reduce_messages,
+    build_one_shot_full_json_messages,
+)
 
 
 class LlmClient(Protocol):
@@ -107,12 +112,77 @@ def run_chunk_map_reduce(
     transcript: str,
     output_language: str,
     max_tokens: int,
+    chunk_token_limit: int = 3000,
 ) -> StrategyOutcome:
-    return run_two_pass_summary_structure(
-        client=client,
-        transcript=transcript,
-        output_language=output_language,
-        max_tokens=max_tokens,
+    chunks = chunk_by_approx_tokens(transcript, max_tokens=chunk_token_limit)
+    if len(chunks) <= 1:
+        return run_one_shot_full_json(
+            client=client,
+            transcript=transcript,
+            output_language=output_language,
+            max_tokens=max_tokens,
+        )
+
+    raw_requests: list[dict[str, object]] = []
+    raw_responses: list[dict[str, object]] = []
+    chunk_results: list[dict[str, object]] = []
+    request_count = 0
+    input_tokens = 0
+    output_tokens = 0
+    latency_seconds = 0.0
+    json_valid = True
+
+    for index, chunk in enumerate(chunks, start=1):
+        messages = build_chunk_analysis_messages(
+            chunk,
+            chunk_index=index,
+            total_chunks=len(chunks),
+            output_language=output_language,
+        )
+        started = time.perf_counter()
+        response = client.complete(messages, max_tokens=max_tokens)
+        latency_seconds += time.perf_counter() - started
+        request_count += 1
+        input_tokens += response.input_tokens
+        output_tokens += response.output_tokens
+        raw_requests.append({"messages": [message.__dict__ for message in messages], "max_tokens": max_tokens})
+        raw_responses.append(
+            {"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}
+        )
+        chunk_result, chunk_json_valid = parse_result_json(response.text)
+        json_valid = json_valid and chunk_json_valid
+        chunk_results.append(
+            {
+                "chunk_index": index,
+                "total_chunks": len(chunks),
+                "result": chunk_result.to_dict(),
+            }
+        )
+
+    reduce_input = json.dumps(chunk_results, ensure_ascii=False, indent=2)
+    messages = build_chunk_reduce_messages(reduce_input, output_language=output_language)
+    started = time.perf_counter()
+    response = client.complete(messages, max_tokens=max_tokens)
+    latency_seconds += time.perf_counter() - started
+    request_count += 1
+    input_tokens += response.input_tokens
+    output_tokens += response.output_tokens
+    raw_requests.append({"messages": [message.__dict__ for message in messages], "max_tokens": max_tokens})
+    raw_responses.append(
+        {"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}
+    )
+    result, reduce_json_valid = parse_result_json(response.text)
+    json_valid = json_valid and reduce_json_valid
+
+    return StrategyOutcome(
+        result=result,
+        request_count=request_count,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        latency_seconds=latency_seconds,
+        json_valid=json_valid,
+        raw_requests=raw_requests,
+        raw_responses=raw_responses,
     )
 
 
