@@ -1,14 +1,17 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { RefreshCw, XCircle } from "@lucide/svelte";
+  import { RefreshCw, Trash2, XCircle } from "@lucide/svelte";
   import { ExtractumBadge, ExtractumButton } from "$lib/components/extractum-ui";
   import {
     cancelPromptPackRun,
+    deletePromptPackRun,
     listenToPromptPackRunEvents,
     listActivePromptPackRuns,
     listPromptPackRuns,
   } from "$lib/api/prompt-packs";
+  import { openConfirmModal } from "$lib/modals";
   import {
+    filterDeletedRunIds,
     retainSelectedRunId,
     shouldApplyRunEventToRunsPanel,
     statusLabel,
@@ -23,6 +26,8 @@
   let loading = $state(false);
   let error = $state<string | null>(null);
   let selectedRunId = $state<number | null>(null);
+  let deletingRunIds = $state<Record<number, boolean>>({});
+  let deletedRunIds = $state<Record<number, boolean>>({});
   let unlisten: (() => void) | null = null;
 
   let activeRuns = $derived(runs.filter((run) => run.runStatus === "queued" || run.runStatus === "running"));
@@ -32,6 +37,7 @@
   onMount(() => {
     void refreshRuns();
     void listenToPromptPackRunEvents((event) => {
+      if (deletedRunIds[event.payload.runId]) return;
       if (!shouldApplyRunEventToRunsPanel(runs, event.payload, projectId)) return;
       runs = updateRunListFromEvent(runs, event.payload);
     }).then((stop) => {
@@ -55,8 +61,9 @@
       const nextRuns = [...recent, ...scopedActive]
         .filter((run, index, allRuns) => allRuns.findIndex((candidate) => candidate.runId === run.runId) === index)
         .sort((left, right) => right.runId - left.runId);
-      runs = nextRuns;
-      selectedRunId = retainSelectedRunId(selectedRunId, nextRuns);
+      const visibleRuns = filterDeletedRunIds(nextRuns, deletedRunIds);
+      runs = visibleRuns;
+      selectedRunId = retainSelectedRunId(selectedRunId, visibleRuns);
     } catch (cause) {
       error = cause instanceof Error ? cause.message : String(cause);
     } finally {
@@ -67,6 +74,37 @@
   async function cancelRun(runId: number) {
     await cancelPromptPackRun(runId);
     await refreshRuns();
+  }
+
+  function isPromptPackRunActive(run: PromptPackRunListItem) {
+    return run.runStatus === "queued" || run.runStatus === "running";
+  }
+
+  async function deleteRun(run: PromptPackRunListItem) {
+    if (isPromptPackRunActive(run) || deletingRunIds[run.runId]) return;
+    const confirmed = await openConfirmModal({
+      title: "Delete Prompt Pack run?",
+      message: `Run ${run.runId} will be removed with its result, stages, and artifacts.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    deletingRunIds = { ...deletingRunIds, [run.runId]: true };
+    error = null;
+    try {
+      await deletePromptPackRun(run.runId);
+      deletedRunIds = { ...deletedRunIds, [run.runId]: true };
+      if (selectedRunId === run.runId) selectedRunId = null;
+      runs = runs.filter((candidate) => candidate.runId !== run.runId);
+      void refreshRuns();
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : String(cause);
+    } finally {
+      const next = { ...deletingRunIds };
+      delete next[run.runId];
+      deletingRunIds = next;
+    }
   }
 </script>
 
@@ -100,10 +138,22 @@
                 <ExtractumBadge>{statusLabel(run.runStatus)}</ExtractumBadge>
                 <p>{run.latestMessage ?? "Waiting for progress."}</p>
               </div>
-              <ExtractumButton variant="outline" onclick={() => void cancelRun(run.runId)}>
-                <XCircle size={14} aria-hidden="true" />
-                Cancel
-              </ExtractumButton>
+              <div class="run-actions">
+                <ExtractumButton variant="outline" onclick={() => void cancelRun(run.runId)}>
+                  <XCircle size={14} aria-hidden="true" />
+                  Cancel
+                </ExtractumButton>
+                <ExtractumButton
+                  class="icon-button danger"
+                  variant="destructive"
+                  aria-label={`Delete Prompt Pack run ${run.runId}`}
+                  title="Delete Prompt Pack run"
+                  disabled={isPromptPackRunActive(run) || deletingRunIds[run.runId]}
+                  onclick={() => void deleteRun(run)}
+                >
+                  <Trash2 size={14} aria-hidden="true" />
+                </ExtractumButton>
+              </div>
             </li>
           {/each}
         </ul>
@@ -123,9 +173,21 @@
                 <ExtractumBadge>{statusLabel(run.runStatus)}</ExtractumBadge>
                 <p>{run.latestMessage ?? run.resultStatus ?? "Completed"}</p>
               </div>
-              <ExtractumButton variant="outline" onclick={() => (selectedRunId = run.runId)}>
-                View result
-              </ExtractumButton>
+              <div class="run-actions">
+                <ExtractumButton variant="outline" onclick={() => (selectedRunId = run.runId)}>
+                  View result
+                </ExtractumButton>
+                <ExtractumButton
+                  class="icon-button danger"
+                  variant="destructive"
+                  aria-label={`Delete Prompt Pack run ${run.runId}`}
+                  title="Delete Prompt Pack run"
+                  disabled={isPromptPackRunActive(run) || deletingRunIds[run.runId]}
+                  onclick={() => void deleteRun(run)}
+                >
+                  <Trash2 size={14} aria-hidden="true" />
+                </ExtractumButton>
+              </div>
             </li>
           {/each}
         </ul>
@@ -212,6 +274,34 @@
     flex-basis: 100%;
     color: var(--extractum-muted);
     font-size: 12px;
+  }
+
+  .run-actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 6px;
+  }
+
+  :global(.icon-button) {
+    min-width: 32px;
+    width: 32px;
+    padding-inline: 0;
+  }
+
+  :global(.icon-button.danger) {
+    color: var(--extractum-danger);
+    border-color: color-mix(in srgb, var(--extractum-danger) 32%, transparent);
+    background: color-mix(in srgb, var(--extractum-danger) 8%, transparent);
+  }
+
+  :global(.icon-button.danger:hover:enabled) {
+    background: color-mix(in srgb, var(--extractum-danger) 14%, transparent);
+  }
+
+  :global(.icon-button.danger svg) {
+    color: currentColor;
+    stroke: currentColor;
   }
 
   .empty-runs {

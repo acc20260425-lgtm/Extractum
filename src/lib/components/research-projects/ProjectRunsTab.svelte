@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { ExternalLink, RefreshCw } from "@lucide/svelte";
+  import { ExternalLink, RefreshCw, Trash2 } from "@lucide/svelte";
   import { formatPeriod, formatTimestamp, runTargetLabel } from "$lib/analysis-utils";
+  import { deleteAnalysisRun } from "$lib/api/analysis-runs";
   import { ExtractumButton } from "$lib/components/extractum-ui";
+  import { openConfirmModal } from "$lib/modals";
   import type { AnalysisRunSummary } from "$lib/types/analysis";
   import YoutubeSummaryRunsPanel from "./YoutubeSummaryRunsPanel.svelte";
 
@@ -18,9 +20,39 @@
   } = $props();
 
   const sortedRuns = $derived([...runs].sort((left, right) => right.created_at - left.created_at));
+  let deletingRunIds = $state<Record<number, boolean>>({});
+  let deleteError = $state<string | null>(null);
 
   function analysisRunHref(run: AnalysisRunSummary) {
     return `/analysis?runId=${run.id}`;
+  }
+
+  function isAnalysisRunActive(run: AnalysisRunSummary) {
+    return run.status === "queued" || run.status === "running";
+  }
+
+  async function deleteProjectRun(run: AnalysisRunSummary) {
+    if (isAnalysisRunActive(run) || deletingRunIds[run.id]) return;
+    const confirmed = await openConfirmModal({
+      title: "Delete project run?",
+      message: `Run ${run.id} will be removed with its saved report and artifacts.`,
+      confirmLabel: "Delete",
+      cancelLabel: "Cancel",
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    deletingRunIds = { ...deletingRunIds, [run.id]: true };
+    deleteError = null;
+    try {
+      await deleteAnalysisRun(run.id);
+      await onRefreshProjectRuns();
+    } catch (cause) {
+      deleteError = cause instanceof Error ? cause.message : String(cause);
+    } finally {
+      const next = { ...deletingRunIds };
+      delete next[run.id];
+      deletingRunIds = next;
+    }
   }
 </script>
 
@@ -39,6 +71,9 @@
   {#if sortedRuns.length === 0}
     <div class="empty-runs">No project runs yet.</div>
   {:else}
+    {#if deleteError}
+      <p class="run-error">{deleteError}</p>
+    {/if}
     <ul class="runs-list">
       {#each sortedRuns as run (run.id)}
         <li>
@@ -56,10 +91,22 @@
               <p class="run-error">{run.error}</p>
             {/if}
           </div>
-          <a class="analysis-link" href={analysisRunHref(run)} aria-label={`Open report for run ${run.id}`}>
-            <ExternalLink size={14} aria-hidden="true" />
-            Open report
-          </a>
+          <div class="run-actions">
+            <a class="analysis-link" href={analysisRunHref(run)} aria-label={`Open report for run ${run.id}`}>
+              <ExternalLink size={14} aria-hidden="true" />
+              Open report
+            </a>
+            <ExtractumButton
+              class="icon-button danger"
+              variant="destructive"
+              aria-label={`Delete project run ${run.id}`}
+              title="Delete project run"
+              disabled={isAnalysisRunActive(run) || deletingRunIds[run.id]}
+              onclick={() => void deleteProjectRun(run)}
+            >
+              <Trash2 size={14} aria-hidden="true" />
+            </ExtractumButton>
+          </div>
         </li>
       {/each}
     </ul>
@@ -167,6 +214,13 @@
     color: var(--extractum-info);
   }
 
+  .run-actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 6px;
+  }
+
   .analysis-link {
     display: inline-flex;
     flex-shrink: 0;
@@ -185,13 +239,35 @@
     background: var(--extractum-surface-subtle);
   }
 
+  :global(.icon-button) {
+    min-width: 32px;
+    width: 32px;
+    padding-inline: 0;
+  }
+
+  :global(.icon-button.danger) {
+    color: var(--extractum-danger);
+    border-color: color-mix(in srgb, var(--extractum-danger) 32%, transparent);
+    background: color-mix(in srgb, var(--extractum-danger) 8%, transparent);
+  }
+
+  :global(.icon-button.danger:hover:enabled) {
+    background: color-mix(in srgb, var(--extractum-danger) 14%, transparent);
+  }
+
+  :global(.icon-button.danger svg) {
+    color: currentColor;
+    stroke: currentColor;
+  }
+
   .empty-runs {
     color: var(--extractum-muted);
   }
 
   @media (max-width: 720px) {
     .runs-list li,
-    .runs-toolbar {
+    .runs-toolbar,
+    .run-actions {
       flex-direction: column;
       align-items: stretch;
     }

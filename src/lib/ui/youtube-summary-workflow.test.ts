@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canStartYoutubeSummary,
+  filterDeletedRunIds,
   retainSelectedRunId,
   shouldApplyRunEventToRunsPanel,
   summarizePreflightPartitions,
@@ -90,6 +91,18 @@ describe("youtube summary workflow", () => {
     expect(retainSelectedRunId(5, [{ runId: 4 }])).toBeNull();
     expect(retainSelectedRunId(5, [{ runId: 5 }])).toBe(5);
     expect(retainSelectedRunId(null, [{ runId: 5 }])).toBeNull();
+  });
+
+  it("keeps locally deleted runs out of refreshed run lists", () => {
+    const runs = filterDeletedRunIds(
+      [
+        { runId: 42, runStatus: "complete" },
+        { runId: 41, runStatus: "failed" },
+      ],
+      { 42: true },
+    );
+
+    expect(runs.map((run) => run.runId)).toEqual([41]);
   });
 
   it("does not insert unknown global prompt pack events into project-scoped panels", () => {

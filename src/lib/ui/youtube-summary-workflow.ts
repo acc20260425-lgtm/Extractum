@@ -44,6 +44,13 @@ export function updateRunListFromEvent(
   return runs.map((run) => (run.runId === event.runId ? { ...run, ...nextRun } : run));
 }
 
+export function filterDeletedRunIds<T extends Pick<PromptPackRunListItem, "runId">>(
+  runs: T[],
+  deletedRunIds: Record<number, boolean>,
+): T[] {
+  return runs.filter((run) => !deletedRunIds[run.runId]);
+}
+
 export function retainSelectedRunId(
   selectedRunId: number | null,
   runs: Pick<PromptPackRunListItem, "runId">[],
