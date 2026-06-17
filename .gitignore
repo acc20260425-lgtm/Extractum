@@ -11,6 +11,12 @@ vite.config.ts.timestamp-*
 reference
 artifacts
 
+# YouTube summary Python research local artifacts
+research/youtube_pipeline/inputs/*
+!research/youtube_pipeline/inputs/.gitkeep
+research/youtube_pipeline/runs/*
+!research/youtube_pipeline/runs/.gitkeep
+
 # Shared VS Code project hints are tracked; local workspace state is not.
 /.vscode/*
 !/.vscode/settings.json
