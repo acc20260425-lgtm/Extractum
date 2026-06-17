@@ -13,6 +13,8 @@
   } from "$lib/api/prompt-packs";
   import { canStartYoutubeSummary, summarizePreflightPartitions } from "$lib/ui/youtube-summary-workflow";
   import type { YoutubeSummaryPreflightResponse } from "$lib/types/prompt-packs";
+  import { getLlmProfiles } from "$lib/api/llm";
+  import type { LlmProfile } from "$lib/types/llm";
 
   type YoutubeSummaryLaunchSource = {
     sourceId: number;
@@ -31,24 +33,75 @@
     onStarted?: (runId: number) => void;
   } = $props();
 
-  let outputLanguage = $state("en");
+  let outputLanguage = $state("ru");
   let profileId = $state("");
   let modelOverride = $state("");
   let includeComments = $state(false);
   let loading = $state(false);
   let preflight = $state<YoutubeSummaryPreflightResponse | null>(null);
   let error = $state<string | null>(null);
+  let llmProfiles = $state<LlmProfile[]>([]);
 
   let partitionSummary = $derived(
     preflight ? summarizePreflightPartitions(preflight) : null,
   );
 
+  let tempValue = "";
+
   $effect(() => {
-    if (open && source) void runPreflight();
+    if (open) {
+      outputLanguage = "ru";
+      tempValue = "ru";
+      void loadProfiles();
+      if (source) void runPreflight();
+    }
   });
 
+  async function loadProfiles() {
+    try {
+      const state = await getLlmProfiles();
+      llmProfiles = state.profiles;
+      if (!profileId) {
+        profileId = state.active_profile;
+      }
+    } catch (e) {
+      console.error("Failed to load LLM profiles:", e);
+    }
+  }
+
+  function handleFocus(e: FocusEvent) {
+    tempValue = outputLanguage;
+    outputLanguage = ""; // Clear to show all datalist options
+    const target = e.target as HTMLInputElement;
+    if (target) target.value = "";
+  }
+
+  function handleBlur(e: FocusEvent) {
+    const target = e.target as HTMLInputElement;
+    setTimeout(() => {
+      const val = target ? target.value : outputLanguage;
+      if (val.length !== 2) {
+        outputLanguage = tempValue || "ru";
+        if (target) target.value = outputLanguage;
+        void runPreflight();
+      }
+    }, 150);
+  }
+
+  function handleLanguageChange(e: Event) {
+    const target = e.target as HTMLInputElement;
+    let val = target ? target.value : outputLanguage;
+    val = val.toLowerCase().replace(/[^a-z]/g, "").slice(0, 2);
+    if (val.length !== 2) {
+      val = tempValue || "ru";
+    }
+    outputLanguage = val;
+    if (target) target.value = val;
+    void runPreflight();
+  }
+
   async function runPreflight() {
-    if (!source) return;
+    if (!source || !outputLanguage) return;
     loading = true;
     error = null;
     try {
@@ -70,7 +123,7 @@
   }
 
   async function startRun() {
-    if (!source || !canStartYoutubeSummary(preflight)) return;
+    if (!source || !outputLanguage || !canStartYoutubeSummary(preflight)) return;
     loading = true;
     error = null;
     const clientRequestId = `youtube-summary-${projectId ?? "global"}-${source.sourceId}-${Date.now()}`;
@@ -119,15 +172,32 @@
     <div class="inputs-grid">
       <label>
         <span>Output language</span>
-        <ExtractumTextInput bind:value={outputLanguage} />
+        <ExtractumTextInput
+          list="languages"
+          bind:value={outputLanguage}
+          maxlength={2}
+          onfocus={handleFocus}
+          onblur={handleBlur}
+          onchange={handleLanguageChange}
+        />
+        <datalist id="languages">
+          <option value="ru">ru</option>
+          <option value="en">en</option>
+        </datalist>
       </label>
       <label>
         <span>LLM profile</span>
-        <ExtractumTextInput bind:value={profileId} placeholder="Default" />
+        <select bind:value={profileId} aria-label="LLM Profile" onchange={() => void runPreflight()}>
+          {#each llmProfiles as profile (profile.profile_id)}
+            <option value={profile.profile_id}>
+              {profile.profile_id} ({profile.default_model})
+            </option>
+          {/each}
+        </select>
       </label>
       <label class="full-width">
         <span>Model override</span>
-        <ExtractumTextInput bind:value={modelOverride} placeholder="Optional" />
+        <ExtractumTextInput bind:value={modelOverride} placeholder="Optional" onchange={() => void runPreflight()} />
       </label>
     </div>
 
@@ -263,6 +333,17 @@
     color: var(--extractum-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
+  }
+
+  select {
+    min-height: 32px;
+    border: 1px solid var(--extractum-border);
+    border-radius: var(--extractum-radius);
+    background: var(--extractum-surface);
+    color: var(--extractum-text);
+    padding: 4px 8px;
+    font-size: 13px;
+    width: 100%;
   }
 
   .checkbox-row {
