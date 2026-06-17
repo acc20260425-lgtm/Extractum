@@ -44,6 +44,14 @@
   const canonical = $derived((result?.canonical ?? {}) as Record<string, unknown>);
   const youtubeSummary = $derived(recordAt(recordAt(recordAt(canonical, "outputs"), "pack_data"), "youtube_summary"));
   const summary = $derived(recordAt(recordAt(canonical, "outputs"), "summary"));
+  const readableSections = $derived(arrayAt(recordAt(canonical, "outputs"), "sections"));
+  const readableSummarySection = $derived(
+    readableSections.find((section) => textAt(section, "section_id") === "section_summary") ??
+      readableSections.find((section) => textAt(section, "body")),
+  );
+  const readableSummaryText = $derived(
+    textAt(summary, "summary_text") || textAt(readableSummarySection ?? {}, "body"),
+  );
   const videos = $derived(arrayAt(youtubeSummary, "videos"));
   const segments = $derived(arrayAt(youtubeSummary, "segments"));
   const keyPoints = $derived(arrayAt(youtubeSummary, "key_points"));
@@ -358,8 +366,8 @@
             <p class="result-state error">{resultError}</p>
           {:else if expectedMissingResult}
             <p class="result-state">{resultUnavailableMessage}</p>
-          {:else if textAt(summary, "summary_text")}
-            <p class="summary-text">{textAt(summary, "summary_text")}</p>
+          {:else if readableSummaryText}
+            <p class="summary-text">{readableSummaryText}</p>
           {/if}
         </div>
 

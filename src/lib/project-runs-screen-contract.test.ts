@@ -92,6 +92,14 @@ describe("project runs screen", () => {
     expect(apiSource).toContain("contradictions_across_videos");
   });
 
+  it("renders readable summary sections when canonical outputs.summary is absent", () => {
+    const reportSource = readProjectFile("src/lib/components/research-projects/ProjectRunReportPanel.svelte");
+
+    expect(reportSource).toContain('arrayAt(recordAt(canonical, "outputs"), "sections")');
+    expect(reportSource).toContain('"section_summary"');
+    expect(reportSource).toContain('textAt(readableSummarySection ?? {}, "body")');
+  });
+
   it("makes report references clickable and highlights matching canonical items", () => {
     const reportSource = readProjectFile("src/lib/components/research-projects/ProjectRunReportPanel.svelte");
 
