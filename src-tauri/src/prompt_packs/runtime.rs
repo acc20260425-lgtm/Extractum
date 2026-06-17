@@ -362,7 +362,9 @@ async fn run_transcript_analysis_stage_request(
     let effective_model = resolve_effective_model(&profile, model_override.as_deref())?;
     let model_output_limit =
         resolve_model_output_token_limit_for_backend(&profile, &effective_model).await;
-    let stage_output_budget = transcript_analysis_stage_max_output_token_budget()?;
+    let control_preset = transcript_analysis_control_preset(&stage_request.prompt_input_json);
+    let stage_output_budget =
+        transcript_analysis_stage_max_output_token_budget_for_control_preset(&control_preset)?;
     let max_output_tokens =
         transcript_analysis_max_output_tokens(stage_output_budget, model_output_limit);
     let llm_request = build_transcript_analysis_llm_request(
@@ -591,6 +593,9 @@ async fn run_json_repair_stage_request(
         resolve_model_output_token_limit_for_backend(&profile, &effective_model).await;
     let stage_output_budget = if stage_request.stage_name == "youtube_summary/synthesis" {
         synthesis_stage_max_output_token_budget()?
+    } else if stage_request.stage_name == "youtube_summary/transcript_analysis" {
+        let control_preset = transcript_analysis_control_preset(&stage_request.prompt_input_json);
+        transcript_analysis_stage_max_output_token_budget_for_control_preset(&control_preset)?
     } else {
         transcript_analysis_stage_max_output_token_budget()?
     };
@@ -697,12 +702,110 @@ async fn run_json_repair_stage_request(
     }
 }
 
+const DETAILED_REPORT_CONTROL_PRESET: &str = "detailed_report";
+
+const STANDARD_VIDEO_SUMMARY_PROMPT: &str = "Write 2 to 4 paragraphs in the requested output_language, covering the main argument, important context, and practical takeaways. Keep it grounded in the frozen transcript; do not copy long transcript passages.";
+
+const DETAILED_VIDEO_SUMMARY_PROMPT: &str = r#"Put the full Markdown report inside video_candidate.summary_text. This must be the full report, not a short abstract. Minimum length: 800 words when the transcript has enough substance. Keep the response as strict JSON; escape Markdown as a JSON string. Use only the frozen transcript and provided metadata/material refs. Do not claim external verification unless the frozen input contains it.
+
+**Системная роль:**
+
+Вы — ведущий аналитик видеоконтента и эксперт по структурированию знаний. Ваша специализация — деконструкция сложных видео (обучение, лекции, интервью) в атомарные инструкции и глубокие аналитические отчеты.
+
+### 1. Цели и задачи:**
+
+* Предоставлять глубокий технический и смысловой анализ YouTube-видео.
+* Создавать структурированные отчеты, включающие метаданные, эссенцию, пошаговые руководства и интерактивные пересказы.
+* Использовать внешние ресурсы для проверки фактов и контекста.
+
+---
+
+### 2. Структура ответа
+
+#### I. Метаданные и Контекст
+
+* **Тип контента:** [Обучение / Новости / Интервью / Аналитика]
+* **Наличие пошаговых инструкций:** [Да / Нет] (укажите сразу, содержит ли видео четкий алгоритм действий).
+* **Целевая аудитория:** Кому и почему это полезно.
+* **Инфо-карта:** Название видео (гиперссылка)| Автор (название канала), подписчики| Метрики: [Длительность, Дата, Охват].
+* **Таймлайн:** Список ключевых этапов видео с таймкодами.
+
+#### II. Эссенция (Суть)
+
+* **Main Idea:** Главная мысль одним емким предложением.
+* **Ключевые тезисы:** 3–5 пунктов с итоговыми выводами (факты, советы, цитаты).
+* **Action Plan:** 2-3 конкретных шага: что сделать пользователю сразу после просмотра.
+
+#### III. Пошаговое руководство (How-to) — НОВЫЙ БЛОК
+
+*Этот блок обязателен, если в видео есть процесс (настройка ПО, рецепт, стратегия).*
+
+* **Цель инструкции:** Какой результат получит пользователь.
+* **Инструменты:** Что понадобится (сервисы, софт, ингредиенты).
+* **Алгоритм:** Детальный нумерованный список. Каждый шаг включает:
+
+1. **Действие:** Что делать.
+2. **Таймкод:** `[MM:SS]` как ссылка.
+3. **Нюанс:** Важное замечание от автора (чего избегать).
+
+#### IV. Адаптивный модуль (Выполняется в зависимости от типа)
+
+* **Для Обучения:** Глоссарий сложных терминов + Практическое задание для закрепления.
+* **Для Новостей:** Список действующих лиц + Исторический/политический контекст (предыстория).
+* **Для видео > 20 минут:** Раздел «FAQ: Часто задаваемые вопросы» (5 пар вопрос-ответ на основе видео).
+
+#### V. Глубокий интерактивный пересказ
+
+* **Объем:** Минимум 800-1000 слов. Никакой «воды», только плотный концентрат информации.
+* **Структура:** Разбейте на главы с осмысленными заголовками.
+* **Навигация:** Каждому важному факту или мысли ОБЯЗАТЕЛЬНО должен сопутствовать таймкод в формате `[ММ:СС]`, являющийся ссылкой.
+* **Форматирование:** Используйте таблицы для сравнения характеристик, списки для перечисления.
+* **Математика и Код:** Если в видео есть формулы — используйте LaTeX (например, $E=mc^2$). Если код — используйте блоки кода с указанием языка.
+
+---
+
+### 3. Правила оформления и Тон
+
+1. **Язык:** Строго русский.
+2. **Стиль:** Профессиональный, аналитический, без «воды».
+3. **Визуальный стиль:**
+
+* Заголовки `##` и `###`.
+* Разделители `---` между крупными блоками.
+* **Жирный шрифт** для ключевых понятий и определений.
+* Цитаты `> ` для прямых высказываний автора.
+
+4. **Запрет:** Не использовать фразы «В этом видео говорится...», «Автор рассказывает...». Сразу переходите к сути: «Метод X заключается в...»."#;
+
+fn transcript_analysis_control_preset(prompt_input_json: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(prompt_input_json)
+        .ok()
+        .and_then(|input| {
+            input
+                .get("controlPreset")
+                .or_else(|| input.get("control_preset"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| "standard".to_string())
+}
+
+fn transcript_analysis_summary_prompt(control_preset: &str) -> &'static str {
+    if control_preset == DETAILED_REPORT_CONTROL_PRESET {
+        DETAILED_VIDEO_SUMMARY_PROMPT
+    } else {
+        STANDARD_VIDEO_SUMMARY_PROMPT
+    }
+}
+
 fn build_transcript_analysis_llm_request(
     request: &TranscriptAnalysisStageExecutionRequest,
     profile_id: Option<String>,
     model_override: Option<String>,
     max_output_tokens: Option<i64>,
 ) -> LlmChatRequest {
+    let control_preset = transcript_analysis_control_preset(&request.prompt_input_json);
+    let summary_prompt = transcript_analysis_summary_prompt(&control_preset);
     LlmChatRequest {
         request_id: format!(
             "prompt-pack-run-{}-stage-{}",
@@ -736,9 +839,10 @@ fn build_transcript_analysis_llm_request(
                      \"evidence_fragment_candidates\": [{{ \"text\": \"evidence quote or paraphrase\", \"quote_candidate_index\": 0, \"material_refs\": [\"allowed material ref\"] }}],\n\
                      \"warning_candidates\": []\n\
                      }}\n\n\
-                     summary_text must be a readable narrative summary of the video, not a terse label. Write 2 to 4 paragraphs in the requested output_language, covering the main argument, important context, and practical takeaways. Keep it grounded in the frozen transcript; do not copy long transcript passages.\n\n\
+                     summary_text must be a readable narrative summary of the video, not a terse label. {}\n\n\
                      Do not include backend-owned refs or IDs such as segment_ref, key_point_ref, quote_ref, claim_id, evidence_id, source_ref_id, segment_id, key_point_id, quote_id, action_item_id, or open_question_id. For optional candidate-to-candidate linkage, use only zero-based segment_candidate_index and quote_candidate_index. Omit candidate index fields when no clear candidate link exists. Use material_refs only from allowed_material_refs in the frozen input. Do not rename fields. Do not wrap the JSON in Markdown.\n\n\
                      Frozen stage input JSON:\n{}",
+                    summary_prompt,
                     request.prompt_input_json
                 ),
             },
@@ -814,6 +918,17 @@ fn build_json_repair_llm_request(
 
 fn transcript_analysis_stage_max_output_token_budget() -> AppResult<i64> {
     stage_max_output_token_budget(TRANSCRIPT_ANALYSIS_STAGE_JSON, "transcript-analysis")
+}
+
+fn transcript_analysis_stage_max_output_token_budget_for_control_preset(
+    control_preset: &str,
+) -> AppResult<i64> {
+    let standard_budget = transcript_analysis_stage_max_output_token_budget()?;
+    if control_preset == DETAILED_REPORT_CONTROL_PRESET {
+        Ok(standard_budget.max(8_192))
+    } else {
+        Ok(standard_budget)
+    }
 }
 
 fn synthesis_stage_max_output_token_budget() -> AppResult<i64> {
@@ -1192,7 +1307,8 @@ mod tests {
         cleanup_interrupted_prompt_pack_runs_in_pool, delete_prompt_pack_run_in_pool,
         list_prompt_pack_runs_in_pool, now_string, synthesis_stage_max_output_token_budget,
         transcript_analysis_max_output_tokens, transcript_analysis_stage_max_output_token_budget,
-        update_prompt_pack_run_in_pool, PromptPackRunState,
+        transcript_analysis_stage_max_output_token_budget_for_control_preset,
+        update_prompt_pack_run_in_pool, PromptPackRunState, DETAILED_REPORT_CONTROL_PRESET,
     };
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::dto::{ListPromptPackRunsRequest, PromptPackRunEvent};
@@ -1354,8 +1470,9 @@ mod tests {
                 stage_run_id: 1001,
                 source_snapshot_id: 501,
                 source_ref_id: "source_ref_1".to_string(),
-                prompt_input_json: "{\"stage\":\"youtube_summary/transcript_analysis\"}"
-                    .to_string(),
+                prompt_input_json:
+                    "{\"stage\":\"youtube_summary/transcript_analysis\",\"controlPreset\":\"standard\"}"
+                        .to_string(),
             },
             Some("profile-1".to_string()),
             Some("model-1".to_string()),
@@ -1381,6 +1498,48 @@ mod tests {
             .content
             .contains("summary_text must be a readable narrative summary"));
         assert!(request.messages[1].content.contains("2 to 4 paragraphs"));
+        assert!(!request.messages[1]
+            .content
+            .contains("Put the full Markdown report inside video_candidate.summary_text"));
+        assert!(!request.messages[1].content.contains("Системная роль"));
+        assert!(!request.messages[1]
+            .content
+            .contains("Минимум 800-1000 слов"));
+        assert!(!request.messages[1].content.contains("concise summary"));
+        assert!(request.messages[1]
+            .content
+            .contains("Do not include backend-owned refs or IDs"));
+        assert!(request.messages[1]
+            .content
+            .contains("\"stage\":\"youtube_summary/transcript_analysis\""));
+    }
+
+    #[test]
+    fn transcript_analysis_llm_request_uses_detailed_report_prompt_for_control_preset() {
+        let request = build_transcript_analysis_llm_request(
+            &TranscriptAnalysisStageExecutionRequest {
+                run_id: 42,
+                stage_run_id: 1001,
+                source_snapshot_id: 501,
+                source_ref_id: "source_ref_1".to_string(),
+                prompt_input_json: "{\"stage\":\"youtube_summary/transcript_analysis\",\"controlPreset\":\"detailed_report\"}"
+                    .to_string(),
+            },
+            Some("profile-1".to_string()),
+            Some("model-1".to_string()),
+            transcript_analysis_max_output_tokens(
+                transcript_analysis_stage_max_output_token_budget().expect("stage budget"),
+                None,
+            ),
+        );
+
+        assert!(request.messages[1]
+            .content
+            .contains("Put the full Markdown report inside video_candidate.summary_text"));
+        assert!(request.messages[1].content.contains("Системная роль"));
+        assert!(request.messages[1]
+            .content
+            .contains("Минимум 800-1000 слов"));
         assert!(!request.messages[1].content.contains("concise summary"));
         assert!(request.messages[1]
             .content
@@ -1459,6 +1618,22 @@ mod tests {
     fn transcript_analysis_output_budget_comes_from_stage_runtime_config() {
         assert_eq!(
             transcript_analysis_stage_max_output_token_budget().expect("load stage budget"),
+            4_096
+        );
+    }
+
+    #[test]
+    fn detailed_report_control_preset_uses_larger_transcript_analysis_output_budget() {
+        assert_eq!(
+            transcript_analysis_stage_max_output_token_budget_for_control_preset(
+                DETAILED_REPORT_CONTROL_PRESET
+            )
+            .expect("load detailed report budget"),
+            8_192
+        );
+        assert_eq!(
+            transcript_analysis_stage_max_output_token_budget_for_control_preset("standard")
+                .expect("load standard budget"),
             4_096
         );
     }

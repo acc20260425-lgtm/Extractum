@@ -34,6 +34,7 @@
   } = $props();
 
   let outputLanguage = $state("ru");
+  let controlPreset = $state("standard");
   let profileId = $state("");
   let modelOverride = $state("");
   let includeComments = $state(false);
@@ -49,6 +50,7 @@
   $effect(() => {
     if (open) {
       outputLanguage = "ru";
+      controlPreset = "standard";
       void loadProfiles();
       if (source) queueMicrotask(() => void runPreflight());
     }
@@ -82,7 +84,7 @@
         profileId: profileId || null,
         modelOverride: modelOverride || null,
         outputLanguage,
-        controlPreset: "standard",
+        controlPreset,
         evidenceMode: "standard",
         includeComments,
       });
@@ -106,7 +108,7 @@
         profileId: profileId || null,
         modelOverride: modelOverride || null,
         outputLanguage,
-        controlPreset: "standard",
+        controlPreset,
         evidenceMode: "standard",
         includeComments,
       });
@@ -146,6 +148,13 @@
         <select bind:value={outputLanguage} aria-label="Output language" onchange={handleLanguageChange}>
           <option value="ru">ru</option>
           <option value="en">en</option>
+        </select>
+      </label>
+      <label>
+        <span>Summary mode</span>
+        <select bind:value={controlPreset} aria-label="Summary mode" onchange={() => void runPreflight()}>
+          <option value="standard">Standard</option>
+          <option value="detailed_report">Detailed report</option>
         </select>
       </label>
       <label>

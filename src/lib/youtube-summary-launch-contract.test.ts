@@ -24,4 +24,14 @@ describe("youtube summary launch contract", () => {
     expect(dialog).toContain("projectId,");
     expect(dialog).not.toContain("projectId: null");
   });
+
+  it("wires the selected youtube summary mode into preflight and start requests", () => {
+    const dialog = readFileSync("src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte", "utf8");
+
+    expect(dialog).toContain("let controlPreset = $state(\"standard\")");
+    expect(dialog).toContain("Summary mode");
+    expect(dialog).toContain("detailed_report");
+    expect(dialog).toContain("controlPreset,");
+    expect(dialog).not.toContain("controlPreset: \"standard\"");
+  });
 });
