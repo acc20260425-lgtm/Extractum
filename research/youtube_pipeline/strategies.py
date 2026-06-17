@@ -9,6 +9,7 @@ from research.youtube_pipeline.models import NormalizedResult
 from research.youtube_pipeline.prompts import (
     build_chunk_analysis_messages,
     build_chunk_reduce_messages,
+    build_final_report_messages,
     build_one_shot_full_json_messages,
 )
 
@@ -173,6 +174,25 @@ def run_chunk_map_reduce(
     )
     result, reduce_json_valid = parse_result_json(response.text)
     json_valid = json_valid and reduce_json_valid
+
+    structured_result_json = json.dumps(result.to_dict(), ensure_ascii=False, indent=2)
+    messages = build_final_report_messages(
+        reduce_input,
+        structured_result_json,
+        output_language=output_language,
+    )
+    started = time.perf_counter()
+    response = client.complete(messages, max_tokens=max_tokens)
+    latency_seconds += time.perf_counter() - started
+    request_count += 1
+    input_tokens += response.input_tokens
+    output_tokens += response.output_tokens
+    raw_requests.append({"messages": [message.__dict__ for message in messages], "max_tokens": max_tokens})
+    raw_responses.append(
+        {"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}
+    )
+    if response.text.strip():
+        result.summary_text = response.text.strip()
 
     return StrategyOutcome(
         result=result,

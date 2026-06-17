@@ -65,6 +65,7 @@ class StrategyTests(unittest.TestCase):
                 '{"summary_text":"Chunk one","timeline":[],"claims":[],"evidence":[],"action_items":[],"open_questions":[]}',
                 '{"summary_text":"Chunk two","timeline":[],"claims":[],"evidence":[],"action_items":[],"open_questions":[]}',
                 '{"summary_text":"Merged result","timeline":[],"claims":[],"evidence":[],"action_items":[],"open_questions":[]}',
+                "# Final report\n\nLong markdown report",
             ]
         )
 
@@ -76,15 +77,17 @@ class StrategyTests(unittest.TestCase):
             chunk_token_limit=3,
         )
 
-        self.assertEqual(outcome.result.summary_text, "Merged result")
-        self.assertEqual(outcome.request_count, 3)
-        self.assertEqual(outcome.input_tokens, 30)
-        self.assertEqual(outcome.output_tokens, 60)
-        self.assertEqual(len(client.calls), 3)
+        self.assertEqual(outcome.result.summary_text, "# Final report\n\nLong markdown report")
+        self.assertEqual(outcome.request_count, 4)
+        self.assertEqual(outcome.input_tokens, 40)
+        self.assertEqual(outcome.output_tokens, 80)
+        self.assertEqual(len(client.calls), 4)
         self.assertIn("Chunk 1 of 2", client.calls[0][0][1].content)
         self.assertIn("Chunk 2 of 2", client.calls[1][0][1].content)
         self.assertIn("Chunk one", client.calls[2][0][1].content)
         self.assertIn("Chunk two", client.calls[2][0][1].content)
+        self.assertIn("write the final report", client.calls[3][0][1].content)
+        self.assertIn("Merged result", client.calls[3][0][1].content)
 
 
 if __name__ == "__main__":

@@ -100,3 +100,40 @@ def build_chunk_reduce_messages(
             ),
         ),
     ]
+
+
+def build_final_report_messages(
+    chunk_results_json: str,
+    structured_result_json: str,
+    *,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content=(
+                "You are a long-form research report writer. Write prose, not JSON. "
+                "Use only the provided chunk analyses and structured result."
+            ),
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n\n"
+                "Please write the final report as Markdown. Do not return JSON. Aim for 2000-4000 words "
+                "when the source material has enough substance. The report should be stronger than a short "
+                "summary: explain the argument flow, important details, examples, evidence, tensions, "
+                "actionable takeaways, and unresolved questions.\n\n"
+                "Use this structure:\n"
+                "# Overview\n"
+                "# Detailed narrative\n"
+                "# Timeline and development of ideas\n"
+                "# Major claims and evidence\n"
+                "# Actionable takeaways\n"
+                "# Open questions\n"
+                "# Final synthesis\n\n"
+                f"Structured result JSON:\n{structured_result_json}\n\n"
+                f"Chunk analyses JSON:\n{chunk_results_json}"
+            ),
+        ),
+    ]
