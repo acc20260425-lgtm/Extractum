@@ -28,10 +28,24 @@ describe("youtube summary launch contract", () => {
   it("wires the selected youtube summary mode into preflight and start requests", () => {
     const dialog = readFileSync("src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte", "utf8");
 
-    expect(dialog).toContain("let controlPreset = $state(\"standard\")");
+    expect(dialog).toContain("let controlPreset = $state(\"detailed_report\")");
+    expect(dialog).toContain("controlPreset = \"detailed_report\"");
     expect(dialog).toContain("Summary mode");
     expect(dialog).toContain("detailed_report");
     expect(dialog).toContain("controlPreset,");
     expect(dialog).not.toContain("controlPreset: \"standard\"");
+  });
+
+  it("renders video summary text through the safe markdown renderer only in video sections", () => {
+    const compactView = readFileSync("src/lib/components/research-projects/YoutubeSummaryResultView.svelte", "utf8");
+    const reportPanel = readFileSync("src/lib/components/research-projects/ProjectRunReportPanel.svelte", "utf8");
+
+    expect(compactView).toContain("SafeMarkdown");
+    expect(compactView).toContain("<SafeMarkdown source={textAt(video, \"summary_text\", \"No summary text.\")} />");
+    expect(compactView).not.toContain("<p>{textAt(video, \"summary_text\", \"No summary text.\")}</p>");
+
+    expect(reportPanel).toContain("SafeMarkdown");
+    expect(reportPanel).toContain("<SafeMarkdown source={textAt(video, \"summary_text\", \"No summary text.\")} />");
+    expect(reportPanel).not.toContain("<p>{textAt(video, \"summary_text\", \"No summary text.\")}</p>");
   });
 });

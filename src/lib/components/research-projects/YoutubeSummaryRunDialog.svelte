@@ -34,7 +34,7 @@
   } = $props();
 
   let outputLanguage = $state("ru");
-  let controlPreset = $state("standard");
+  let controlPreset = $state("detailed_report");
   let profileId = $state("");
   let modelOverride = $state("");
   let includeComments = $state(false);
@@ -50,7 +50,7 @@
   $effect(() => {
     if (open) {
       outputLanguage = "ru";
-      controlPreset = "standard";
+      controlPreset = "detailed_report";
       void loadProfiles();
       if (source) queueMicrotask(() => void runPreflight());
     }

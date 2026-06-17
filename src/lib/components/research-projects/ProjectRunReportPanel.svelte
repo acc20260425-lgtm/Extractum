@@ -11,6 +11,7 @@
   } from "$lib/api/prompt-packs";
   import { formatAppError } from "$lib/app-error";
   import { ExtractumBadge, ExtractumButton } from "$lib/components/extractum-ui";
+  import SafeMarkdown from "./SafeMarkdown.svelte";
   import type {
     PromptPackAuditEvent,
     PromptPackResult,
@@ -383,7 +384,7 @@
                   class:ref-target={matchesSelectedRef(video, ["video_id", "source_ref_id"])}
                 >
                   <strong>{textAt(video, "title", `Video ${index + 1}`)}</strong>
-                  <p>{textAt(video, "summary_text", "No summary text.")}</p>
+                  <SafeMarkdown source={textAt(video, "summary_text", "No summary text.")} />
                 </article>
               {/each}
             </div>

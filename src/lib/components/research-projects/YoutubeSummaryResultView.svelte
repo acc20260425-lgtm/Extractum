@@ -6,6 +6,7 @@
     getPromptPackValidationFindings,
   } from "$lib/api/prompt-packs";
   import { ExtractumBadge, ExtractumButton } from "$lib/components/extractum-ui";
+  import SafeMarkdown from "./SafeMarkdown.svelte";
   import type {
     PromptPackResult,
     PromptPackRunListItem,
@@ -136,7 +137,7 @@
           {#each videos as video, index (`video-${index}`)}
             <li>
               <strong>{textAt(video, "title", `Video ${index + 1}`)}</strong>
-              <p>{textAt(video, "summary_text", "No summary text.")}</p>
+              <SafeMarkdown source={textAt(video, "summary_text", "No summary text.")} />
             </li>
           {/each}
         </ul>
