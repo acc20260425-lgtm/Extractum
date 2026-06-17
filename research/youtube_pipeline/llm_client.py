@@ -38,11 +38,39 @@ class UrllibJsonTransport:
         stripped = raw_body.strip()
         if not stripped:
             raise RuntimeError(f"LLM endpoint returned empty response for {url} with HTTP status {status}")
+        if stripped.startswith("data:"):
+            return parse_sse_chat_completion(stripped, url)
         try:
             return json.loads(stripped)
         except json.JSONDecodeError as exc:
             preview = stripped[:500]
             raise RuntimeError(f"LLM endpoint returned non-JSON response for {url}: {preview}") from exc
+
+
+def parse_sse_chat_completion(body: str, url: str) -> dict[str, Any]:
+    content_parts: list[str] = []
+    usage: dict[str, Any] = {}
+    for line in body.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("data:"):
+            continue
+        event_data = stripped.removeprefix("data:").strip()
+        if not event_data or event_data == "[DONE]":
+            continue
+        try:
+            chunk = json.loads(event_data)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"LLM endpoint returned invalid SSE JSON chunk for {url}: {event_data[:500]}") from exc
+        if isinstance(chunk.get("usage"), dict):
+            usage = chunk["usage"]
+        for choice in chunk.get("choices", []):
+            delta = choice.get("delta") or {}
+            if "content" in delta:
+                content_parts.append(str(delta["content"]))
+    return {
+        "choices": [{"message": {"content": "".join(content_parts)}}],
+        "usage": usage,
+    }
 
 
 class OpenAICompatibleClient:

@@ -57,6 +57,39 @@ class LlmClientTests(unittest.TestCase):
                     {"model": "model", "messages": []},
                 )
 
+    def test_urllib_transport_collects_sse_chat_completion_chunks(self):
+        class SseResponse:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return (
+                    b'data: {"choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}\n\n'
+                    b'data: {"choices":[{"delta":{"content":"{\\n"},"finish_reason":null}]}\n\n'
+                    b'data: {"choices":[{"delta":{"content":"  \\"summary_text\\": \\"ok\\"\\n}"},"finish_reason":"stop"}]}\n\n'
+                    b"data: [DONE]\n\n"
+                )
+
+        with patch("research.youtube_pipeline.llm_client.request.urlopen", return_value=SseResponse()):
+            payload = UrllibJsonTransport().post_json(
+                "http://localhost:20128/v1/chat/completions",
+                {"Content-Type": "application/json"},
+                {"model": "model", "messages": []},
+            )
+
+        self.assertEqual(
+            payload,
+            {
+                "choices": [{"message": {"content": '{\n  "summary_text": "ok"\n}'}}],
+                "usage": {},
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
