@@ -28,6 +28,15 @@
   const selectedRunId = $derived(run?.runId ?? runId);
   const canonical = $derived((result?.canonical ?? {}) as Record<string, unknown>);
   const outputData = $derived(recordAt(recordAt(recordAt(canonical, "outputs"), "pack_data"), "youtube_summary"));
+  const summary = $derived(recordAt(recordAt(canonical, "outputs"), "summary"));
+  const readableSections = $derived(arrayAt(recordAt(canonical, "outputs"), "sections"));
+  const readableSummarySection = $derived(
+    readableSections.find((section) => textAt(section, "section_id") === "section_summary") ??
+      readableSections.find((section) => textAt(section, "body")),
+  );
+  const readableSummaryText = $derived(
+    textAt(summary, "summary_text") || textAt(readableSummarySection ?? {}, "body"),
+  );
   const videos = $derived(arrayAt(outputData, "videos"));
   const claims = $derived(arrayAt(canonical, "claims"));
   const evidence = $derived(arrayAt(canonical, "evidence"));
@@ -108,6 +117,15 @@
       <span>Sources: <strong>{sourceRefs.length}</strong></span>
       <span>Language: <strong>{textAt(canonical, "output_language", "unknown")}</strong></span>
     </div>
+
+    {#if readableSummaryText}
+      <div class="result-section">
+        <h3>Summary</h3>
+        <div class="summary-box">
+          <p>{readableSummaryText}</p>
+        </div>
+      </div>
+    {/if}
 
     <div class="result-section">
       <h3>Videos</h3>
@@ -249,11 +267,19 @@
 
   .summary-meta,
   .result-message,
+  .summary-box,
   .result-section li {
     border: 1px solid var(--extractum-border);
     border-radius: var(--extractum-radius);
     background: var(--extractum-surface-raised);
     padding: 10px;
+  }
+
+  .summary-box p {
+    margin: 0;
+    color: var(--extractum-text);
+    font-size: 13px;
+    line-height: 1.5;
   }
 
   .summary-meta span {
