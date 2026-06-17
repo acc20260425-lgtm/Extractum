@@ -3,6 +3,7 @@
   import { ExtractumButton, ProviderBadge } from "$lib/components/extractum-ui";
   import { projectRunDisabledReason, type ResearchProjectView } from "$lib/ui/research-projects-model";
   import type { ProjectSourceRecord } from "$lib/types/projects";
+  import type { LlmProfile } from "$lib/types/llm";
 
   const PROJECT_EXPORT_DISABLED_REASON = "Project export is not available yet.";
 
@@ -11,11 +12,15 @@
     sources,
     loading = false,
     onRunProject,
+    llmProfiles = [],
+    selectedProfileId = $bindable(""),
   }: {
     project: ResearchProjectView | null;
     sources: Pick<ProjectSourceRecord, "provider">[];
     loading?: boolean;
     onRunProject: () => void;
+    llmProfiles?: LlmProfile[];
+    selectedProfileId?: string;
   } = $props();
 
   const runDisabledReason = $derived(projectRunDisabledReason(project, sources));
@@ -42,10 +47,13 @@
       </select>
     </label>
     <label>
-      <span>Model</span>
-      <select aria-label="Model">
-        <option>GPT-4.1</option>
-        <option>Local profile</option>
+      <span>LLM Profile</span>
+      <select bind:value={selectedProfileId} aria-label="LLM Profile">
+        {#each llmProfiles as profile (profile.profile_id)}
+          <option value={profile.profile_id}>
+            {profile.profile_id} ({profile.default_model})
+          </option>
+        {/each}
       </select>
     </label>
     <ProviderBadge provider="telegram" label="Library" />

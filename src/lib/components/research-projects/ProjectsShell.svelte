@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { tick, onMount } from "svelte";
   import { FolderKanban, ChevronDown, Folder, Plus, Pencil, Trash2 } from "@lucide/svelte";
   import BottomQueue from "./BottomQueue.svelte";
   import ConnectFromLibrary from "./ConnectFromLibrary.svelte";
@@ -13,6 +13,8 @@
   import type { ResearchProjectsWorkflowState } from "$lib/ui/research-projects-workflow";
   import { reconcileProjectSourceSelection } from "$lib/ui/research-projects-model";
   import { projectsSharedState } from "$lib/projects-shared.svelte";
+  import { getLlmProfiles } from "$lib/api/llm";
+  import type { LlmProfile } from "$lib/types/llm";
 
   let {
     state: workflowState,
@@ -89,6 +91,26 @@
       selectedSourceIds = nextSelection;
     }
   });
+
+  let llmProfiles = $state<LlmProfile[]>([]);
+  let selectedProfileId = $state<string>("");
+
+  onMount(async () => {
+    try {
+      const state = await getLlmProfiles();
+      llmProfiles = state.profiles;
+      selectedProfileId = state.active_profile;
+    } catch (e) {
+      console.error("Failed to load LLM profiles:", e);
+    }
+  });
+
+  async function handleRunProject(input: ProjectAnalysisStartCommand) {
+    await onRunProject({
+      ...input,
+      profileId: selectedProfileId || null,
+    });
+  }
 
   function openConnectLibrary() {
     connectOpen = true;
@@ -267,6 +289,8 @@
         sources={currentProjectSources}
         loading={workflowState.loading}
         onRunProject={() => (runOpen = true)}
+        llmProfiles={llmProfiles}
+        bind:selectedProfileId={selectedProfileId}
       />
     </div>
     <div data-ui-region="project-workspace" class="workspace-region">
@@ -354,7 +378,7 @@
     project={currentProject}
     templates={workflowState.promptTemplates}
     saving={workflowState.saving}
-    onSubmit={onRunProject}
+    onSubmit={handleRunProject}
   />
 
   {#if contextMenu && contextMenu.visible}
