@@ -6,6 +6,12 @@
       "sourceType": "github",
       "skillPath": "skills/shadcn-svelte/SKILL.md",
       "computedHash": "a258eddb4cff76bc2cb93d93ebca8a385e5545c3a84ff44a867358d9da5a8af6"
+    },
+    "svar-svelte": {
+      "source": "svar-widgets/skills",
+      "sourceType": "github",
+      "skillPath": "svar-svelte/SKILL.md",
+      "computedHash": "f111376ddd8d8343d7e5d78f256b851fdba960521adab8ac99e3aa40c28fc68f"
     }
   }
 }
