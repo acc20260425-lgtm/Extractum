@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import json
 from typing import Any, Protocol
-from urllib import request
+from urllib import error, request
 
 
 @dataclass
@@ -26,8 +26,23 @@ class UrllibJsonTransport:
     def post_json(self, url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
         body = json.dumps(payload).encode("utf-8")
         req = request.Request(url, data=body, headers=headers, method="POST")
-        with request.urlopen(req, timeout=120) as response:
-            return json.loads(response.read().decode("utf-8"))
+        try:
+            with request.urlopen(req, timeout=120) as response:
+                raw_body = response.read().decode("utf-8", errors="replace")
+                status = getattr(response, "status", "unknown")
+        except error.HTTPError as exc:
+            raw_body = exc.read().decode("utf-8", errors="replace")
+            preview = raw_body.strip()[:500]
+            raise RuntimeError(f"LLM endpoint returned HTTP {exc.code} for {url}: {preview}") from exc
+
+        stripped = raw_body.strip()
+        if not stripped:
+            raise RuntimeError(f"LLM endpoint returned empty response for {url} with HTTP status {status}")
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError as exc:
+            preview = stripped[:500]
+            raise RuntimeError(f"LLM endpoint returned non-JSON response for {url}: {preview}") from exc
 
 
 class OpenAICompatibleClient:
