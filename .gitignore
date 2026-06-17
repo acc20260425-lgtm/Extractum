@@ -11,6 +11,10 @@ vite.config.ts.timestamp-*
 reference
 artifacts
 
+# Python cache artifacts
+__pycache__/
+*.py[cod]
+
 # YouTube summary Python research local artifacts
 research/youtube_pipeline/inputs/*
 !research/youtube_pipeline/inputs/.gitkeep
