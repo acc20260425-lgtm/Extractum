@@ -15,4 +15,16 @@ describe("youtube summary result view contract", () => {
     expect(source).toContain("limitations");
     expect(source).toContain("qualityFlags");
   });
+
+  it("renders the overall readable summary from canonical sections", () => {
+    const source = readFileSync(
+      "src/lib/components/research-projects/YoutubeSummaryResultView.svelte",
+      "utf8",
+    );
+
+    expect(source).toContain('arrayAt(recordAt(canonical, "outputs"), "sections")');
+    expect(source).toContain('"section_summary"');
+    expect(source).toContain('textAt(readableSummarySection ?? {}, "body")');
+    expect(source).toContain("summary-box");
+  });
 });
