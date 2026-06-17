@@ -46,14 +46,11 @@
     preflight ? summarizePreflightPartitions(preflight) : null,
   );
 
-  let tempValue = "";
-
   $effect(() => {
     if (open) {
       outputLanguage = "ru";
-      tempValue = "ru";
       void loadProfiles();
-      if (source) void runPreflight();
+      if (source) queueMicrotask(() => void runPreflight());
     }
   });
 
@@ -69,34 +66,8 @@
     }
   }
 
-  function handleFocus(e: FocusEvent) {
-    tempValue = outputLanguage;
-    outputLanguage = ""; // Clear to show all datalist options
-    const target = e.target as HTMLInputElement;
-    if (target) target.value = "";
-  }
-
-  function handleBlur(e: FocusEvent) {
-    const target = e.target as HTMLInputElement;
-    setTimeout(() => {
-      const val = target ? target.value : outputLanguage;
-      if (val.length !== 2) {
-        outputLanguage = tempValue || "ru";
-        if (target) target.value = outputLanguage;
-        void runPreflight();
-      }
-    }, 150);
-  }
-
-  function handleLanguageChange(e: Event) {
-    const target = e.target as HTMLInputElement;
-    let val = target ? target.value : outputLanguage;
-    val = val.toLowerCase().replace(/[^a-z]/g, "").slice(0, 2);
-    if (val.length !== 2) {
-      val = tempValue || "ru";
-    }
-    outputLanguage = val;
-    if (target) target.value = val;
+  function handleLanguageChange(event: Event) {
+    outputLanguage = (event.currentTarget as HTMLSelectElement).value;
     void runPreflight();
   }
 
@@ -172,18 +143,10 @@
     <div class="inputs-grid">
       <label>
         <span>Output language</span>
-        <ExtractumTextInput
-          list="languages"
-          bind:value={outputLanguage}
-          maxlength={2}
-          onfocus={handleFocus}
-          onblur={handleBlur}
-          onchange={handleLanguageChange}
-        />
-        <datalist id="languages">
+        <select bind:value={outputLanguage} aria-label="Output language" onchange={handleLanguageChange}>
           <option value="ru">ru</option>
           <option value="en">en</option>
-        </datalist>
+        </select>
       </label>
       <label>
         <span>LLM profile</span>
