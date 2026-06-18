@@ -135,10 +135,12 @@ def fact_to_cluster(index: int, fact: Any) -> dict[str, object]:
     time_span = time_span_from_dict(fact.get("time_span")) if hasattr(fact, "get") else None
     entities = sorted(normalize_term_set(fact.get("entities") if hasattr(fact, "get") else None))
     topic_tags = sorted(normalize_term_set(fact.get("topic_tags") if hasattr(fact, "get") else None))
+    kind = _normalize_kind(fact.get("kind") if hasattr(fact, "get") else None)
     importance = normalize_importance(fact.get("importance") if hasattr(fact, "get") else None)
     mention = {
         "fact_id": fact.get("fact_id") if hasattr(fact, "get") else None,
         "text": text,
+        "kind": kind,
         "time_span": time_span,
         "verbatim_quote": fact.get("verbatim_quote") if hasattr(fact, "get") else None,
         "importance": importance,
@@ -148,7 +150,7 @@ def fact_to_cluster(index: int, fact: Any) -> dict[str, object]:
     return {
         "cluster_id": f"cluster_{index + 1:06d}",
         "canonical_text": text,
-        "kind": _normalize_kind(fact.get("kind") if hasattr(fact, "get") else None),
+        "kind": kind,
         "importance": importance,
         "time_span": time_span,
         "entities": entities,
@@ -163,9 +165,20 @@ def _text_terms(text: Any) -> set[str]:
     return set(normalize_fact_key(text).split())
 
 
+def _terms_from_similarity_input(value: Any) -> set[Any]:
+    if isinstance(value, str):
+        return _text_terms(value)
+    if value is None:
+        return set()
+    try:
+        return set(value)
+    except TypeError:
+        return set()
+
+
 def jaccard_similarity(a: Any, b: Any) -> float:
-    left = set(a) if not isinstance(a, str) else _text_terms(a)
-    right = set(b) if not isinstance(b, str) else _text_terms(b)
+    left = _terms_from_similarity_input(a)
+    right = _terms_from_similarity_input(b)
     if not left and not right:
         return 1.0
     if not left or not right:
@@ -278,25 +291,40 @@ def _cluster_terms(cluster: Any) -> set[str]:
     return terms
 
 
-def _node_terms(node: Any, global_terms: Any) -> set[str]:
+def _node_terms(node: Any, global_terms: Any = None) -> set[str]:
     if not hasattr(node, "get"):
         return set()
     terms = _text_terms(node.get("title"))
     terms |= normalize_term_set(node.get("key_terms"))
     terms |= normalize_term_set(node.get("essential_key_terms"))
-    terms |= normalize_term_set(global_terms)
     return terms
 
 
-def alignment_score(node: Any, cluster: Any, global_terms: Any) -> float:
-    node_terms = _node_terms(node, global_terms)
+def _global_term_score(global_terms: Any, cluster_terms: set[str]) -> float:
+    normalized_global_terms = normalize_term_set(global_terms)
+    if not normalized_global_terms or not cluster_terms:
+        return 0.0
+    return len(normalized_global_terms & cluster_terms) / len(normalized_global_terms)
+
+
+def _alignment_node_evidence(node: Any, cluster: Any) -> tuple[float, float]:
+    node_terms = _node_terms(node)
     cluster_terms = _cluster_terms(cluster)
-    terms = term_overlap_score(node_terms, cluster_terms)
+    node_terms_score = term_overlap_score(node_terms, cluster_terms)
     time = time_overlap_score(
         node.get("time_span") if hasattr(node, "get") else None,
         cluster.get("time_span") if hasattr(cluster, "get") else None,
     )
-    return (terms * 0.7) + (time * 0.3)
+    return node_terms_score, time
+
+
+def alignment_score(node: Any, cluster: Any, global_terms: Any) -> float:
+    node_terms_score, time = _alignment_node_evidence(node, cluster)
+    cluster_terms = _cluster_terms(cluster)
+    if node_terms_score <= 0 and time <= 0:
+        return 0.0
+    global_bonus = _global_term_score(global_terms, cluster_terms)
+    return (node_terms_score * 0.60) + (time * 0.35) + (global_bonus * 0.05)
 
 
 def align_fact_clusters_to_moc(
@@ -313,6 +341,9 @@ def align_fact_clusters_to_moc(
         best_index = None
         best_score = -1.0
         for index, node in enumerate(nodes):
+            node_terms_score, time = _alignment_node_evidence(node, cluster)
+            if node_terms_score <= 0 and time <= 0:
+                continue
             score = alignment_score(node, cluster, global_terms)
             if score > best_score:
                 best_index = index
