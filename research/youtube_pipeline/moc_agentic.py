@@ -510,6 +510,10 @@ def validate_moc(
         errors.append("MoC nodes must be a non-empty list")
         nodes = []
 
+    for field_name in ("report_title", "report_thesis"):
+        if _has_suspicious_question_mark_mojibake(str(payload.get(field_name) or "")):
+            errors.append(f"{field_name} contains suspicious question marks")
+
     seen_chunk_ids: dict[str, str] = {}
     covered_chunk_ids: set[str] = set()
     chunk_order = {chunk_id: index for index, chunk_id in enumerate(available_chunk_ids)}
@@ -519,6 +523,9 @@ def validate_moc(
             errors.append(f"nodes[{node_index}] must be an object")
             continue
         node_id = str(node.get("node_id") or f"moc_{node_index:03d}")
+        for field_name in ("title", "purpose"):
+            if _has_suspicious_question_mark_mojibake(str(node.get(field_name) or "")):
+                errors.append(f"{node_id} {field_name} contains suspicious question marks")
         chunk_ids = node.get("chunk_ids")
         if not isinstance(chunk_ids, list) or not chunk_ids:
             errors.append(f"{node_id} must include chunk_ids")
@@ -572,6 +579,16 @@ def validate_moc(
     }
     write_json(run_dir / "planning" / "moc_validation.json", validation)
     return validation
+
+
+def _has_suspicious_question_mark_mojibake(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return False
+    question_count = stripped.count("?")
+    if "???" in stripped:
+        return True
+    return question_count >= 4 and question_count / max(len(stripped), 1) >= 0.25
 
 
 def _dedupe_key(text: str) -> str:

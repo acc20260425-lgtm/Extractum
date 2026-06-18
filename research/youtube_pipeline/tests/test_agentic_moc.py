@@ -534,6 +534,23 @@ class AgenticArtifactHelperTests(unittest.TestCase):
             self.assertTrue(validation["fallback_used"])
             self.assertTrue(any("non-ascending" in error for error in validation["errors"]))
 
+    def test_validate_moc_falls_back_on_suspicious_question_mark_metadata(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = self._write_single_chunk_prep(Path(temp_dir))
+            self._write_moc_raw(run_dir, [["chunk_001"]])
+            moc_raw = read_json(run_dir / "planning" / "moc.raw.json")
+            moc_raw["report_title"] = "???? ?????"
+            moc_raw["nodes"][0]["title"] = "????"
+            write_json(run_dir / "planning" / "moc.raw.json", moc_raw)
+
+            validation = validate_moc(run_dir, target_words=900, chapter_target_words=900)
+            moc = read_json(run_dir / "planning" / "moc.json")
+
+            self.assertFalse(validation["valid"])
+            self.assertTrue(validation["fallback_used"])
+            self.assertTrue(any("suspicious question marks" in error for error in validation["errors"]))
+            self.assertEqual(moc["report_title"], "YouTube Transcript Report")
+
     def test_dedupe_facts_preserves_original_timestamps_and_chunks(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             run_dir, chunk_ids = self._write_two_chunk_mapped_facts(Path(temp_dir))
