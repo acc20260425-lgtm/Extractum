@@ -1080,7 +1080,7 @@ git commit -m "feat: add public youtube summary skill"
 **Files:**
 - Modify: `research/youtube_pipeline/README.md`
 
-- [ ] **Step 1: Add README section**
+- [x] **Step 1: Add README section**
 
 Insert this after the opening paragraph of `## Agentic MoC Skills Workflow`:
 
@@ -1105,7 +1105,7 @@ map extraction, the skill pauses instead of replacing extractor work with direct
 LLM API calls or hidden main-agent reasoning.
 ````
 
-- [ ] **Step 2: Fix existing README wording about map extraction**
+- [x] **Step 2: Fix existing README wording about map extraction**
 
 In `research/youtube_pipeline/README.md`, replace:
 
@@ -1123,7 +1123,7 @@ section writing may fall back to sequential main-agent execution using the same
 section contract.
 ```
 
-- [ ] **Step 3: Run README/contract grep**
+- [x] **Step 3: Run README/contract grep**
 
 Run:
 
@@ -1138,7 +1138,7 @@ Expected:
 - line for `Map extraction is performed by sub-agents`;
 - no line containing the old phrase `main agent or sub-agents`.
 
-- [ ] **Step 4: Commit Task 5**
+- [x] **Step 4: Commit Task 5**
 
 Run:
 

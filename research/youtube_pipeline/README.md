@@ -105,6 +105,25 @@ python -m research.youtube_pipeline.runner `
 The agentic workflow is skill-first and file-backed. It does not add a normal
 `runner.py --strategy` entry point in v1.
 
+### Public Wrapper Skill
+
+For normal use, ask Codex:
+
+```text
+Use skill youtube-summary.
+Transcript file: research/youtube_pipeline/inputs/example.txt
+Write a long Russian summary, about 10000 words.
+```
+
+The `youtube-summary` skill creates or resumes a run, prepares transcript
+chunks, creates map assignments, dispatches child skills, validates artifacts,
+updates `workflow_state.json`, and returns `final/report.md`. The user should
+not manually run the deterministic Python commands during normal use.
+
+Map extraction still requires sub-agents. If sub-agents are unavailable before
+map extraction, the skill pauses instead of replacing extractor work with direct
+LLM API calls or hidden main-agent reasoning.
+
 Use the `youtube-long-report` skill with:
 
 1. transcript path;
@@ -114,9 +133,11 @@ Use the `youtube-long-report` skill with:
 
 The skill runs deterministic Python tools for transcript prep, assignments,
 validation, fact dedupe, alignment, QA artifacts, structured analysis, and final
-assembly. Map extraction, MoC planning, and section writing are performed by the
-main agent or sub-agents through file contracts. Direct LLM API calls are not
-used in this workflow.
+assembly. Map extraction is performed by sub-agents through file contracts. MoC
+planning and section writing are performed by skills and, after valid map
+outputs exist, section writing may fall back to sequential main-agent execution
+using the same section contract. Direct LLM API calls are not used in this
+workflow.
 
 Minimal deterministic validation:
 
