@@ -6,7 +6,7 @@ from typing import Any
 
 from research.youtube_pipeline.llm_client import OpenAICompatibleClient
 from research.youtube_pipeline.metrics import build_metrics
-from research.youtube_pipeline.strategies import STRATEGIES, StrategyOutcome
+from research.youtube_pipeline.strategies import STRATEGIES, StrategyOptions, StrategyOutcome
 
 
 def write_json(path: Path, payload: Any) -> None:
@@ -32,19 +32,18 @@ def write_run_artifacts(
     result_payload = outcome.result.to_dict()
     write_json(output_dir / "result.json", result_payload)
     (output_dir / "result.md").write_text(outcome.result.summary_text, encoding="utf-8")
-    write_json(
-        output_dir / "metrics.json",
-        build_metrics(
-            strategy=strategy,
-            video_id=video_id,
-            result=outcome.result,
-            request_count=outcome.request_count,
-            input_tokens=outcome.input_tokens,
-            output_tokens=outcome.output_tokens,
-            latency_seconds=outcome.latency_seconds,
-            json_valid=outcome.json_valid,
-        ),
+    metrics = build_metrics(
+        strategy=strategy,
+        video_id=video_id,
+        result=outcome.result,
+        request_count=outcome.request_count,
+        input_tokens=outcome.input_tokens,
+        output_tokens=outcome.output_tokens,
+        latency_seconds=outcome.latency_seconds,
+        json_valid=outcome.json_valid,
     )
+    metrics.update(outcome.extra_metrics)
+    write_json(output_dir / "metrics.json", metrics)
     write_jsonl(output_dir / "raw_requests.jsonl", outcome.raw_requests)
     write_jsonl(output_dir / "raw_responses.jsonl", outcome.raw_responses)
     return output_dir
@@ -58,7 +57,7 @@ def build_client_from_env() -> OpenAICompatibleClient:
     )
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run YouTube summary pipeline research strategies.")
     parser.add_argument("--input", required=True, help="Path to transcript text file")
     parser.add_argument("--strategy", required=True, choices=sorted(STRATEGIES))
@@ -66,15 +65,40 @@ def main() -> int:
     parser.add_argument("--output-root", default="research/youtube_pipeline/runs/manual")
     parser.add_argument("--output-language", default="ru")
     parser.add_argument("--max-tokens", type=int, default=8192)
+    parser.add_argument("--chunk-token-limit", type=int, default=3000)
+    parser.add_argument("--target-depth", choices=["auto", "brief", "standard", "deep", "book"], default="auto")
+    parser.add_argument("--min-report-words", type=int, default=None)
+    parser.add_argument("--max-report-words", type=int, default=None)
+    parser.add_argument("--chapter-target-words", type=int, default=900)
+    return parser
+
+
+def build_strategy_options(args: argparse.Namespace) -> StrategyOptions:
+    if args.min_report_words is not None and args.max_report_words is not None:
+        if args.min_report_words > args.max_report_words:
+            raise ValueError("min-report-words cannot be greater than max-report-words")
+    return StrategyOptions(
+        output_language=args.output_language,
+        max_tokens=args.max_tokens,
+        chunk_token_limit=args.chunk_token_limit,
+        target_depth=args.target_depth,
+        min_report_words=args.min_report_words,
+        max_report_words=args.max_report_words,
+        chapter_target_words=args.chapter_target_words,
+    )
+
+
+def main() -> int:
+    parser = build_parser()
     args = parser.parse_args()
 
     transcript = Path(args.input).read_text(encoding="utf-8")
     client = build_client_from_env()
+    options = build_strategy_options(args)
     outcome = STRATEGIES[args.strategy](
         client=client,
         transcript=transcript,
-        output_language=args.output_language,
-        max_tokens=args.max_tokens,
+        options=options,
     )
     output_dir = write_run_artifacts(
         root=Path(args.output_root),

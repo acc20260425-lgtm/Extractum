@@ -243,7 +243,7 @@ Expected: commit succeeds.
 - Modify: `research/youtube_pipeline/runner.py`
 - Modify: `research/youtube_pipeline/tests/test_runner.py`
 
-- [ ] **Step 1: Write failing runner tests for `extra_metrics`**
+- [x] **Step 1: Write failing runner tests for `extra_metrics`**
 
 In `research/youtube_pipeline/tests/test_runner.py`, update the `StrategyOutcome` in `test_write_run_artifacts_creates_expected_files`:
 
@@ -268,7 +268,7 @@ Add assertions after reading metrics:
             self.assertEqual(metrics["target_report_words"], 2700)
 ```
 
-- [ ] **Step 2: Write failing runner tests for CLI option parsing**
+- [x] **Step 2: Write failing runner tests for CLI option parsing**
 
 Add this import:
 
@@ -341,7 +341,7 @@ Add invalid override test:
             build_strategy_options(args)
 ```
 
-- [ ] **Step 3: Run runner tests to verify they fail**
+- [x] **Step 3: Run runner tests to verify they fail**
 
 Run:
 
@@ -351,7 +351,7 @@ python -m unittest research.youtube_pipeline.tests.test_runner -v
 
 Expected: FAIL because `build_parser`, `build_strategy_options`, and metrics merging are missing.
 
-- [ ] **Step 4: Implement parser and strategy option builder**
+- [x] **Step 4: Implement parser and strategy option builder**
 
 In `runner.py`, update imports:
 
@@ -393,7 +393,7 @@ def build_strategy_options(args: argparse.Namespace) -> StrategyOptions:
     )
 ```
 
-- [ ] **Step 5: Merge `extra_metrics` into artifacts**
+- [x] **Step 5: Merge `extra_metrics` into artifacts**
 
 In `write_run_artifacts()`, replace the metrics write with:
 
@@ -412,7 +412,7 @@ In `write_run_artifacts()`, replace the metrics write with:
     write_json(output_dir / "metrics.json", metrics)
 ```
 
-- [ ] **Step 6: Update `main()` to use `StrategyOptions`**
+- [x] **Step 6: Update `main()` to use `StrategyOptions`**
 
 Replace parser construction and strategy call in `main()`:
 
@@ -439,7 +439,7 @@ def main() -> int:
     return 0
 ```
 
-- [ ] **Step 7: Run runner tests**
+- [x] **Step 7: Run runner tests**
 
 Run:
 
@@ -449,7 +449,7 @@ python -m unittest research.youtube_pipeline.tests.test_runner -v
 
 Expected: PASS.
 
-- [ ] **Step 8: Run all tests**
+- [x] **Step 8: Run all tests**
 
 Run:
 
@@ -459,7 +459,7 @@ python -m unittest discover -s research/youtube_pipeline/tests -v
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 Run:
 
