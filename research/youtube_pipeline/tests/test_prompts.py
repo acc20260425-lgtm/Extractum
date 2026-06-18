@@ -139,6 +139,54 @@ class PromptTests(unittest.TestCase):
         self.assertIn("executive overview", joined)
         self.assertIn("final synthesis", joined)
 
+    def test_moc_plan_prompt_requests_global_map_not_long_prose(self):
+        from research.youtube_pipeline.prompts import build_moc_plan_messages
+
+        messages = build_moc_plan_messages(
+            transcript_context="Transcript",
+            video_id="video1",
+            report_min_words=7000,
+            report_max_words=10000,
+            target_report_words=8500,
+            expected_node_min=8,
+            expected_node_max=12,
+            output_language="ru",
+        )
+
+        self.assertIn("Map of Content", messages[0].content)
+        self.assertIn("Return JSON", messages[0].content)
+        self.assertIn("do not write the report", messages[1].content)
+        self.assertIn("target_word_count", messages[1].content)
+
+    def test_moc_map_prompt_requests_atomic_facts(self):
+        from research.youtube_pipeline.prompts import build_moc_map_extraction_messages
+
+        messages = build_moc_map_extraction_messages(
+            chunk_text="[00:00:01] hello",
+            chunk_index=1,
+            total_chunks=2,
+            output_language="ru",
+        )
+
+        self.assertIn("atomic facts", messages[1].content)
+        self.assertIn("verbatim_quote", messages[1].content)
+        self.assertIn("action_items", messages[1].content)
+
+    def test_moc_node_prompt_uses_aligned_facts_and_slice(self):
+        from research.youtube_pipeline.prompts import build_moc_node_section_messages
+
+        messages = build_moc_node_section_messages(
+            node_json='{"title":"Topic","target_word_count":900}',
+            aligned_facts_json='{"facts":[]}',
+            raw_transcript_slice="[00:00:01] source",
+            global_context_json='{"report_thesis":"Thesis"}',
+            output_language="ru",
+        )
+
+        self.assertIn("Markdown prose only", messages[0].content)
+        self.assertIn("aligned facts", messages[1].content)
+        self.assertIn("raw transcript slice", messages[1].content)
+
 
 if __name__ == "__main__":
     unittest.main()

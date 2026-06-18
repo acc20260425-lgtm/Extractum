@@ -584,3 +584,225 @@ def build_adaptive_conclusion_messages(
         ),
     ]
 
+
+def build_moc_plan_messages(
+    *,
+    transcript_context: str,
+    video_id: str,
+    report_min_words: int,
+    report_max_words: int,
+    target_report_words: int,
+    expected_node_min: int,
+    expected_node_max: int,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content=(
+                "You create a global Map of Content for a long YouTube transcript. "
+                "Return JSON only. Return JSON and do not write report prose."
+            ),
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n"
+                f"Video id: {video_id}\n"
+                f"Report word range: {report_min_words}-{report_max_words} words\n"
+                f"Target report words: {target_report_words}\n"
+                f"Expected node count: {expected_node_min}-{expected_node_max}\n\n"
+                "Create a flat, ordered Map of Content for the whole report. Each node should represent "
+                "one coherent section-level topic, preserve the video's argument flow, and give enough "
+                "metadata for later source-grounded section writing. do not write the report; plan it.\n\n"
+                "Each node must include target_word_count, source_focus, key_claims_to_cover, "
+                "required_evidence, timestamps_or_ranges, and transition_notes.\n\n"
+                "Return exactly this JSON shape:\n"
+                "{\n"
+                '  "video_id": "video id",\n'
+                '  "report_thesis": "One-sentence report throughline",\n'
+                '  "global_key_terms": ["term"],\n'
+                '  "nodes": [\n'
+                "    {\n"
+                '      "node_id": "n1",\n'
+                '      "order": 1,\n'
+                '      "title": "Section title",\n'
+                '      "purpose": "Why this section exists",\n'
+                '      "target_word_count": 900,\n'
+                '      "source_focus": "Transcript areas to use",\n'
+                '      "key_claims_to_cover": ["claim"],\n'
+                '      "required_evidence": ["evidence"],\n'
+                '      "timestamps_or_ranges": ["00:00:00-00:05:00"],\n'
+                '      "transition_notes": "How it connects to adjacent nodes"\n'
+                "    }\n"
+                "  ]\n"
+                "}\n\n"
+                f"Transcript context:\n{transcript_context}"
+            ),
+        ),
+    ]
+
+
+def build_moc_map_extraction_messages(
+    *,
+    chunk_text: str,
+    chunk_index: int,
+    total_chunks: int,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content=(
+                "You extract source-grounded facts from one transcript chunk. "
+                "Return JSON only. Use only the provided chunk."
+            ),
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n"
+                f"Chunk {chunk_index} of {total_chunks}\n\n"
+                "Extract atomic facts, claims, evidence, quotes, examples, definitions, warnings, "
+                "action_items, and open questions. Keep every item tied to timestamps when available. "
+                "Use verbatim_quote for short exact source phrases that justify the extracted item.\n\n"
+                "Return exactly this JSON shape:\n"
+                "{\n"
+                '  "facts": [\n'
+                "    {\n"
+                '      "fact_id": "c1-f1",\n'
+                '      "timestamp": "00:00:00",\n'
+                '      "kind": "claim|evidence|quote|example|definition|warning",\n'
+                '      "text": "Atomic source-grounded fact",\n'
+                '      "verbatim_quote": "Short exact quote",\n'
+                '      "importance": "high|medium|low"\n'
+                "    }\n"
+                "  ],\n"
+                '  "action_items": [{"timestamp": "00:00:00", "text": "Action item", "target_audience": ""}],\n'
+                '  "open_questions": [{"timestamp": "00:00:00", "text": "Open question", "why_it_matters": ""}]\n'
+                "}\n\n"
+                f"Transcript chunk:\n{chunk_text}"
+            ),
+        ),
+    ]
+
+
+def build_moc_node_section_messages(
+    *,
+    node_json: str,
+    aligned_facts_json: str,
+    raw_transcript_slice: str,
+    global_context_json: str,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content=(
+                "You write one MoC-guided report section. Markdown prose only. "
+                "Use the provided source material and do not return JSON."
+            ),
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n\n"
+                "Write the section described by the node metadata. Use the aligned facts, compact global context, "
+                "and raw transcript slice. Cite timestamps naturally in the prose when making source-grounded "
+                "claims. Preserve concrete evidence and avoid unsupported filler.\n\n"
+                f"Node metadata JSON:\n{node_json}\n\n"
+                f"Compact global context JSON:\n{global_context_json}\n\n"
+                f"aligned facts JSON:\n{aligned_facts_json}\n\n"
+                f"raw transcript slice:\n{raw_transcript_slice}"
+            ),
+        ),
+    ]
+
+
+def build_moc_node_expansion_messages(
+    *,
+    section_draft: str,
+    node_json: str,
+    aligned_facts_json: str,
+    raw_transcript_slice: str,
+    current_word_count: int,
+    target_word_count: int,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content=(
+                "You expand one MoC-guided section with source-grounded details. "
+                "Return Markdown prose only."
+            ),
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n"
+                f"Current word count: {current_word_count}\n"
+                f"Target word count: {target_word_count}\n\n"
+                "Expand the current section draft toward the target length by adding concrete source-grounded "
+                "details, evidence, examples, timestamps, and missing nuance from the node JSON, aligned facts "
+                "JSON, and raw transcript slice. Avoid generic filler and avoid repeating existing prose.\n\n"
+                f"Node JSON:\n{node_json}\n\n"
+                f"Aligned facts JSON:\n{aligned_facts_json}\n\n"
+                f"Raw transcript slice:\n{raw_transcript_slice}\n\n"
+                f"Current section draft:\n{section_draft}"
+            ),
+        ),
+    ]
+
+
+def build_moc_overview_messages(
+    *,
+    moc_json: str,
+    structured_result_json: str,
+    section_summaries_json: str,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content="You write an executive overview for a MoC-guided report.",
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n\n"
+                "Write a concise executive overview for the report. Use the MoC JSON, section summaries JSON, "
+                "and structured result JSON to frame the main thesis and reader expectations without rewriting sections.\n\n"
+                f"MoC JSON:\n{moc_json}\n\n"
+                f"Section summaries JSON:\n{section_summaries_json}\n\n"
+                f"Structured result JSON:\n{structured_result_json}"
+            ),
+        ),
+    ]
+
+
+def build_moc_conclusion_messages(
+    *,
+    moc_json: str,
+    structured_result_json: str,
+    section_summaries_json: str,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content="You write the final synthesis for a MoC-guided report.",
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n\n"
+                "Write a final synthesis that connects claims, evidence, takeaways, and open questions. "
+                "Use the MoC JSON, section summaries JSON, and structured result JSON without rewriting detailed sections.\n\n"
+                f"MoC JSON:\n{moc_json}\n\n"
+                f"Section summaries JSON:\n{section_summaries_json}\n\n"
+                f"Structured result JSON:\n{structured_result_json}"
+            ),
+        ),
+    ]
+
