@@ -408,6 +408,59 @@ class AgenticArtifactHelperTests(unittest.TestCase):
             index = read_json(Path(str(state["run_root"])) / "run_index.json")
             self.assertEqual(index["runs"][0]["current_stage"], "map_outputs_ready")
 
+    def test_advance_workflow_state_after_validate_map_outputs_sets_known_stage(self):
+        from research.youtube_pipeline.youtube_summary_workflow import advance_workflow_state
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state = start_youtube_summary_run(
+                FIXTURES_DIR / "agentic_tiny_transcript.txt",
+                run_root=Path(temp_dir) / "summary_runs",
+                output_language="ru",
+                target_words=10000,
+                target_tokens=10000,
+                overlap_tokens=0,
+                planner_context_tokens=3000,
+            )
+            run_dir = Path(str(state["run_dir"]))
+            self._write_map_output(run_dir)
+            validate_map_outputs(run_dir)
+
+            updated = advance_workflow_state(run_dir, after="validate_map_outputs")
+
+            self.assertEqual(updated["current_stage"], "map_outputs_ready")
+            self.assertEqual(updated["next_action"], "assemble_map_artifacts")
+            self.assertEqual(updated["artifacts"]["validation_manifest"], "map/validation_manifest.json")
+            self.assertEqual(updated["counts"]["valid_map_output_count"], 1)
+            self.assertEqual(updated["counts"]["invalid_map_output_count"], 0)
+
+    def test_advance_youtube_summary_state_cli_updates_state(self):
+        from research.youtube_pipeline.tools.advance_youtube_summary_state import main as advance_cli
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state = start_youtube_summary_run(
+                FIXTURES_DIR / "agentic_tiny_transcript.txt",
+                run_root=Path(temp_dir) / "summary_runs",
+                output_language="ru",
+                target_words=10000,
+                target_tokens=10000,
+                overlap_tokens=0,
+                planner_context_tokens=3000,
+            )
+            run_dir = Path(str(state["run_dir"]))
+            self._write_map_output(run_dir)
+            validate_map_outputs(run_dir)
+            stdout = io.StringIO()
+
+            with redirect_stdout(stdout):
+                exit_code = advance_cli(["--run-dir", str(run_dir), "--after", "validate_map_outputs"])
+
+            updated = read_json(run_dir / "workflow_state.json")
+            output = stdout.getvalue()
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(updated["current_stage"], "map_outputs_ready")
+            self.assertIn("current_stage=map_outputs_ready", output)
+            self.assertIn("next_action=assemble_map_artifacts", output)
+
     def test_validate_map_outputs_repairs_wrapped_json(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             run_dir = self._write_single_chunk_prep(Path(temp_dir))
@@ -763,6 +816,8 @@ class AgenticArtifactHelperTests(unittest.TestCase):
         self.assertIn("start_youtube_summary", text)
         self.assertIn("workflow_state.json", text)
         self.assertIn("update_youtube_summary_state", text)
+        self.assertIn("advance_youtube_summary_state", text)
+        self.assertIn("--after validate_map_outputs", text)
         self.assertIn("youtube-map-extract", text)
         self.assertIn("youtube-section-reduce", text)
         self.assertIn("pause before map extraction", text.lower())
@@ -839,6 +894,7 @@ class AgenticArtifactHelperTests(unittest.TestCase):
 
     def test_youtube_summary_cli_modules_are_importable(self):
         module_names = [
+            "research.youtube_pipeline.tools.advance_youtube_summary_state",
             "research.youtube_pipeline.tools.start_youtube_summary",
             "research.youtube_pipeline.tools.update_youtube_summary_state",
         ]

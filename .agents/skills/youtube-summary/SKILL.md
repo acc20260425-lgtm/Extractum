@@ -73,10 +73,11 @@ or read the file through Python before judging the artifact content.
    and explain that the workflow needs map extractor sub-agents.
 4. Validate map outputs:
    `python -m research.youtube_pipeline.tools.validate_map_outputs --run-dir <run-dir>`
-5. On valid map outputs, update state:
-   `python -m research.youtube_pipeline.tools.update_youtube_summary_state --run-dir <run-dir> --stage map_outputs_ready --next-action assemble_map_artifacts`
-6. Assemble map artifacts, build planner context, and update state after each
-   deterministic gate.
+5. On valid map outputs, advance state:
+   `python -m research.youtube_pipeline.tools.advance_youtube_summary_state --run-dir <run-dir> --after validate_map_outputs`
+6. Assemble map artifacts, build planner context, and advance state after each
+   deterministic gate with `advance_youtube_summary_state --after <step>`.
+   Use `update_youtube_summary_state` only as a manual fallback.
 7. Use `youtube-moc-planning` to write `planning/moc.raw.json`.
 8. Validate MoC, dedupe facts, align facts, prepare section assignments, and
    update state after each successful gate.

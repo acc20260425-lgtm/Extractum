@@ -26,6 +26,16 @@ WORKFLOW_STAGES = [
     "qa_ready",
     "final_ready",
 ]
+ADVANCE_TRANSITIONS: dict[str, tuple[str, str]] = {
+    "validate_map_outputs": ("map_outputs_ready", "assemble_map_artifacts"),
+    "assemble_map_artifacts": ("map_assembled", "build_planner_context"),
+    "build_planner_context": ("planner_context_ready", "write_moc_raw"),
+    "validate_moc": ("moc_ready", "dedupe_and_align_facts"),
+    "prepare_section_assignments": ("alignment_ready", "write_sections"),
+    "validate_generated_files": ("sections_ready", "run_qa"),
+    "quality_check": ("qa_ready", "assemble_final_report"),
+    "assemble_report": ("final_ready", "done"),
+}
 WORKFLOW_OPTION_FIELDS = [
     "schema",
     "output_language",
@@ -159,6 +169,7 @@ def default_commands(run_dir: Path, *, output_language: str, target_words: int, 
         "quality_check": f"python -m research.youtube_pipeline.tools.quality_check --run-dir {run}",
         "build_structured_analysis": f"python -m research.youtube_pipeline.tools.build_structured_analysis --run-dir {run}",
         "assemble_report": f"python -m research.youtube_pipeline.tools.assemble_report --run-dir {run}",
+        "advance_workflow": f"python -m research.youtube_pipeline.tools.advance_youtube_summary_state --run-dir {run} --after <step>",
     }
 
 
@@ -339,3 +350,123 @@ def update_workflow_state(
     if isinstance(run_root, str) and run_root:
         update_index_with_state(Path(run_root), state)
     return state
+
+
+def advance_workflow_state(run_dir: Path, *, after: str) -> dict[str, object]:
+    if after not in ADVANCE_TRANSITIONS:
+        raise ValueError(f"Unknown workflow step for advance: {after}")
+    current_stage, next_action = ADVANCE_TRANSITIONS[after]
+    artifacts, counts, warnings = _advance_metadata(run_dir, after)
+    return update_workflow_state(
+        run_dir,
+        current_stage=current_stage,
+        next_action=next_action,
+        artifacts=artifacts,
+        counts=counts,
+        validation_warnings=warnings,
+    )
+
+
+def _advance_metadata(run_dir: Path, after: str) -> tuple[dict[str, object], dict[str, object], list[str] | None]:
+    if after == "validate_map_outputs":
+        manifest = read_json(run_dir / "map" / "validation_manifest.json")
+        if not isinstance(manifest, dict):
+            raise ValueError("map validation manifest must be an object")
+        invalid_outputs = manifest.get("invalid_outputs", [])
+        valid_outputs = manifest.get("valid_outputs", [])
+        return (
+            {"validation_manifest": "map/validation_manifest.json"},
+            {
+                "valid_map_output_count": len(valid_outputs) if isinstance(valid_outputs, list) else 0,
+                "invalid_map_output_count": len(invalid_outputs) if isinstance(invalid_outputs, list) else 0,
+            },
+            None,
+        )
+    if after == "assemble_map_artifacts":
+        manifest = read_json(run_dir / "map" / "map_manifest.json")
+        if not isinstance(manifest, dict):
+            raise ValueError("map manifest must be an object")
+        return (
+            {
+                "map_manifest": "map/map_manifest.json",
+                "mapped_facts": "map/mapped_facts.jsonl",
+                "chunk_summaries": "map/chunk_summaries.jsonl",
+            },
+            {
+                "mapped_fact_count": int(manifest.get("mapped_fact_count", 0) or 0),
+                "chunk_summary_count": int(manifest.get("chunk_summary_count", 0) or 0),
+            },
+            None,
+        )
+    if after == "build_planner_context":
+        metadata = read_json(run_dir / "planning" / "planner_context_metadata.json")
+        if not isinstance(metadata, dict):
+            raise ValueError("planner context metadata must be an object")
+        return (
+            {
+                "planner_context": "planning/planner_context.md",
+                "planner_context_metadata": "planning/planner_context_metadata.json",
+            },
+            {
+                "planner_context_estimated_tokens": int(metadata.get("estimated_tokens", 0) or 0),
+                "planner_context_included_fact_count": int(metadata.get("included_fact_count", 0) or 0),
+            },
+            None,
+        )
+    if after == "validate_moc":
+        validation = read_json(run_dir / "planning" / "moc_validation.json")
+        if not isinstance(validation, dict):
+            raise ValueError("MoC validation must be an object")
+        warnings = [str(value) for value in validation.get("warnings", [])] if isinstance(validation.get("warnings"), list) else []
+        if validation.get("fallback_used"):
+            warnings.append("moc_fallback_used")
+        return (
+            {"moc": "planning/moc.json", "moc_validation": "planning/moc_validation.json"},
+            {"moc_node_count": len(read_json(run_dir / "planning" / "moc.json").get("nodes", []))},
+            warnings,
+        )
+    if after == "prepare_section_assignments":
+        assignments = read_jsonl(run_dir / "alignment" / "section_assignments.jsonl")
+        return (
+            {"section_assignments": "alignment/section_assignments.jsonl"},
+            {"section_assignment_count": len(assignments)},
+            None,
+        )
+    if after == "validate_generated_files":
+        validation = read_json(run_dir / "review" / "generated_files_validation.json")
+        if not isinstance(validation, dict):
+            raise ValueError("generated files validation must be an object")
+        return (
+            {"generated_files_validation": "review/generated_files_validation.json"},
+            {
+                "missing_generated_file_count": len(validation.get("missing_files", [])),
+                "unexpected_generated_file_count": len(validation.get("unexpected_files", [])),
+            },
+            None,
+        )
+    if after == "quality_check":
+        coverage = read_json(run_dir / "review" / "coverage.json")
+        if not isinstance(coverage, dict):
+            raise ValueError("coverage must be an object")
+        return (
+            {"coverage": "review/coverage.json"},
+            {
+                "missing_file_count": len(coverage.get("missing_files", [])),
+                "total_section_words": int(coverage.get("total_section_words", 0) or 0),
+            },
+            None,
+        )
+    if after == "assemble_report":
+        result = read_json(run_dir / "final" / "result.json")
+        if not isinstance(result, dict):
+            raise ValueError("final result must be an object")
+        return (
+            {
+                "report": "final/report.md",
+                "metrics": "final/metrics.json",
+                "result": "final/result.json",
+            },
+            {"final_word_count": int(result.get("word_count", 0) or 0)},
+            None,
+        )
+    return {}, {}, None
