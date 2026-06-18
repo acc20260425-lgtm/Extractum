@@ -45,8 +45,8 @@ product experience. The product experience should be one skill invocation.
 - No hidden prompt-pack integration with the existing production
   `youtube_summary` pack.
 - No attempt to make arbitrary transcript sizes finish without agent work. The
-  workflow still requires map extraction and section writing by the main agent
-  or sub-agents.
+  workflow still requires map extraction by sub-agents, and section writing by
+  sub-agents or by the main agent only after valid map outputs exist.
 
 ## Relationship To Existing Work
 
@@ -122,6 +122,9 @@ Responsibilities:
 - recover from validation failures by asking for corrected files, not by
   guessing;
 - resume from existing `workflow_state.json` when possible;
+- update `workflow_state.json` after every validated stage transition;
+- write orchestrator-owned overview and synthesis files after section
+  validation;
 - return final report path and metrics.
 
 The skill should allow the user to say `youtube_summary` or `youtube-summary`,
@@ -139,10 +142,13 @@ Responsibilities:
 
 - validate the transcript file exists;
 - create a run directory when the user did not provide one;
+- compute the transcript hash and options hash used for resume lookup;
+- reuse the latest matching run unless `--force` is passed;
 - choose defaults for chunk size and overlap;
 - call the same underlying Python functions used by `prep_all.py` and
   `prepare_map_assignments.py`;
 - write `workflow_state.json`;
+- update the run index under the configured run root;
 - print the run directory and next action.
 
 This helper does not call an LLM API. It is a deterministic bootstrapper.
@@ -166,6 +172,35 @@ Optional flags:
 --force
 ```
 
+Resume lookup rules:
+
+- if `--run-dir` is supplied, use that exact run and fail if its
+  `workflow_state.json` is missing or incompatible;
+- otherwise compute `transcript_sha256` from the transcript bytes and
+  `options_hash` from normalized workflow options;
+- search `run_root/run_index.json` for the latest run with matching
+  `transcript_sha256` and `options_hash`;
+- resume that run when found;
+- create a new run when no match exists or when `--force` is supplied.
+
+`options_hash` must include only stable workflow-affecting fields:
+
+- `schema`;
+- `output_language`;
+- `target_words`;
+- `target_tokens`;
+- `overlap_tokens`;
+- `planner_context_tokens`;
+- workflow skill version when available.
+
+It must exclude volatile paths and timestamps such as `run_dir` and run
+creation time.
+
+`run_index.json` updates must be atomic: write a temporary file in the same
+directory, then replace the index file. If the index is missing or unreadable,
+the helper may rebuild it by scanning child run directories for valid
+`workflow_state.json` files.
+
 ### 3. `workflow_state.json`
 
 Path:
@@ -181,8 +216,10 @@ Shape:
   "schema": "youtube-summary-workflow-state-v1",
   "run_dir": "research/youtube_pipeline/runs/manual/youtube_summary_agentic/a9/20260618-161500",
   "transcript_path": "research/youtube_pipeline/inputs/a9_k-meLQaYP5Y_en_orig.txt",
+  "transcript_sha256": "4f8c...",
   "output_language": "ru",
   "target_words": 10000,
+  "options_hash": "9a21...",
   "current_stage": "map_assignments_ready",
   "next_action": "dispatch_map_extractors",
   "artifacts": {
@@ -202,6 +239,19 @@ Shape:
 
 The state file is for the skill, not for the user. It exists so the skill can
 resume and can explain what it is doing.
+
+`start_youtube_summary.py` creates the initial state. After that, the
+`youtube-summary` skill owns state updates. It must update
+`current_stage`, `next_action`, `artifacts`, `counts`, and validation warnings
+after each successful deterministic gate. If the implementation uses a helper,
+it should be a deterministic state updater such as:
+
+```text
+research/youtube_pipeline/tools/update_youtube_summary_state.py
+```
+
+That helper may inspect existing manifests and validation files, but it must not
+perform LLM reasoning.
 
 ## Workflow State Machine
 
@@ -238,10 +288,32 @@ The skill uses:
 - `youtube-report-qa` for qualitative review notes.
 
 When sub-agents are available, the skill should use them for map extraction and
-section writing. When sub-agents are unavailable, the skill may process a small
-pilot sequentially in the main agent only after saying that it is using
-single-agent mode. It must record this in metrics or review notes when the
-artifact format supports it. Python API fallback remains forbidden.
+section writing.
+
+Map extraction keeps the approved agentic boundary: if sub-agents are
+unavailable before map extraction, the skill must pause and explain that the
+workflow cannot proceed until map extractor sub-agents are available. It must
+not replace map extraction with Python LLM API calls or hidden main-agent
+reasoning.
+
+After valid map outputs exist, section writing may fall back to sequential
+main-agent execution using the same `youtube-section-reduce` contract when
+section-writer sub-agents are unavailable. The skill must record this in
+metrics or review notes when the artifact format supports it. Python API
+fallback remains forbidden.
+
+## Overview And Synthesis Ownership
+
+The `youtube-summary` orchestrator skill owns:
+
+- `sections/000-overview.md`;
+- `sections/999-synthesis.md`.
+
+It writes these files after section files pass generated-file validation and
+before final assembly. Inputs should be limited to the validated MoC thesis,
+node titles, section opening paragraphs, section conclusions, and repeated
+high-importance facts so the overview and synthesis do not become a
+whole-report rewrite stage.
 
 ## Error Handling
 
@@ -284,6 +356,13 @@ extractors stay manageable.
 - `start_youtube_summary.py` creates prep artifacts, map assignments, and
   `workflow_state.json`.
 - `youtube-summary` can resume from an existing run directory.
+- `youtube-summary` can discover the latest matching run from transcript and
+  options hashes when no run directory is supplied.
+- `workflow_state.json` is updated after each successful validated transition.
+- Map extraction pauses when sub-agents are unavailable instead of falling back
+  to main-agent or Python LLM reasoning.
+- Overview and synthesis ownership is explicit and belongs to the orchestrator
+  skill.
 - The skill preserves the existing no-direct-LLM-API rule.
 - The final response includes the path to `final/report.md`, `final/metrics.json`,
   and any validation warnings.
@@ -300,6 +379,8 @@ The first implementation should be intentionally small:
 
 1. add `start_youtube_summary.py`;
 2. add `.agents/skills/youtube-summary/SKILL.md`;
-3. add tests for state creation and skill contract;
-4. update README with the one-request workflow;
-5. run a small pilot with existing fixture or a short transcript.
+3. add deterministic state update or run inspection support;
+4. add tests for state creation, resume lookup, state transitions, and skill
+   contract;
+5. update README with the one-request workflow;
+6. run a small pilot with existing fixture or a short transcript.
