@@ -248,6 +248,7 @@ import unittest
 
 from research.youtube_pipeline.moc import (
     TranscriptSegment,
+    approximate_token_count,
     chunk_segments_by_approx_tokens,
     format_segments_for_prompt,
     parse_timestamped_transcript,
@@ -296,6 +297,13 @@ class MocTranscriptTests(unittest.TestCase):
         )
 
         self.assertEqual(text, "[00:01:02] hello world")
+
+    def test_approximate_token_count_is_not_plain_word_count(self):
+        self.assertGreater(approximate_token_count("one, two. three!"), 3)
+        self.assertGreater(
+            approximate_token_count("\u0440\u0443\u0441\u0441\u043a\u0438\u0439 \u0442\u0435\u043a\u0441\u0442"),
+            2,
+        )
 
 
 if __name__ == "__main__":
@@ -387,6 +395,13 @@ def parse_timestamped_transcript(transcript: str) -> tuple[list[TranscriptSegmen
 
 def word_count(text: str) -> int:
     return len(text.split())
+
+
+def approximate_token_count(text: str) -> int:
+    words = len(text.split())
+    punctuation = len(re.findall(r"[^\w\s]", text, flags=re.UNICODE))
+    non_ascii = sum(1 for char in text if ord(char) > 127)
+    return max(words, math.ceil(words * 1.15 + punctuation * 0.5 + non_ascii * 0.15))
 
 
 def chunk_time_span(segments: list[TranscriptSegment]) -> tuple[int | None, int | None]:
@@ -1099,11 +1114,19 @@ Append:
             video_id="video1",
             overview="Overview",
             sections=[{"title": "One", "content": "Section body"}],
-            structured_markdown={"timeline": "Timeline", "claims": "Claims", "action_items": "Actions", "open_questions": "Questions"},
+            structured_markdown={
+                "timeline": "Timeline",
+                "claims": "Claims",
+                "action_items": "Actions",
+                "open_questions": "Questions",
+                "unaligned_facts": "- Unassigned fact",
+            },
             conclusion="Conclusion",
         )
 
         self.assertIn("Generated via `moc_guided_map_reduce`", report)
+        self.assertIn("Coverage Appendix: Unaligned Facts", report)
+        self.assertIn("- Unassigned fact", report)
         self.assertIn("## Section 1: One", report)
         self.assertIn("Timeline", report)
         self.assertIn("Conclusion", report)
@@ -1250,6 +1273,17 @@ def build_structured_result_from_facts(
     )
 
 
+def markdown_unaligned_facts(unaligned: list[dict[str, object]]) -> str:
+    if not unaligned:
+        return ""
+    lines = [
+        "These extracted facts were not confidently assigned to a MoC section and should be reviewed manually."
+    ]
+    for cluster in unaligned[:20]:
+        lines.append(f"- {cluster.get('canonical_text', '')}")
+    return "\n".join(lines)
+
+
 def assemble_moc_markdown_report(
     *,
     video_id: str,
@@ -1312,6 +1346,9 @@ def assemble_moc_markdown_report(
         "",
         conclusion.strip(),
     ]
+    unaligned_facts = structured_markdown.get("unaligned_facts", "").strip()
+    if unaligned_facts:
+        parts[-3:-3] = ["## Coverage Appendix: Unaligned Facts", "", unaligned_facts, ""]
     return "\n".join(parts).strip() + "\n"
 ```
 
@@ -1690,6 +1727,45 @@ Add this test:
         self.assertIn("mapped_facts.jsonl", outcome.extra_artifacts)
         self.assertEqual(outcome.extra_metrics["moc_node_count"], 2)
         self.assertEqual(outcome.extra_metrics["deduplicated_fact_count"], 2)
+        self.assertGreater(outcome.extra_metrics["estimated_transcript_tokens"], 0)
+        self.assertEqual(outcome.extra_metrics["parallelism_enabled"], False)
+        self.assertEqual(outcome.extra_metrics["parallelizable_map_call_count"], 1)
+        self.assertEqual(outcome.extra_metrics["parallelizable_node_call_count"], 2)
+
+    def test_moc_guided_map_reduce_records_invalid_json_when_moc_fallback_is_used(self):
+        transcript = "\n".join(
+            [
+                "[00:00:00] Alpha topic",
+                "[00:00:10] Beta topic",
+            ]
+        )
+        client = SequenceClient(
+            [
+                "not json",
+                '{"chunk_index":1,"facts":[],"action_items":[],"open_questions":[]}',
+                "Fallback section text with enough words [00:00:00] " * 5,
+                "Executive overview",
+                "Final conclusion",
+            ]
+        )
+
+        outcome = run_moc_guided_map_reduce(
+            client=client,
+            transcript=transcript,
+            options=StrategyOptions(
+                output_language="ru",
+                video_id="video1",
+                max_tokens=2000,
+                chunk_token_limit=100,
+                chunk_overlap_tokens=10,
+                min_report_words=20,
+                max_report_words=20,
+                chapter_target_words=20,
+            ),
+        )
+
+        self.assertFalse(outcome.json_valid)
+        self.assertTrue(outcome.extra_metrics["moc_fallback_used"])
 ```
 
 - [ ] **Step 2: Run tests and verify failure**
@@ -1710,6 +1786,7 @@ In `research/youtube_pipeline/strategies.py`, import MoC helpers:
 from research.youtube_pipeline.moc import (
     align_fact_clusters_to_moc,
     assemble_moc_markdown_report,
+    approximate_token_count,
     build_evidence_slice,
     build_structured_result_from_facts,
     build_temporal_projection,
@@ -1718,6 +1795,7 @@ from research.youtube_pipeline.moc import (
     deduplicate_facts,
     fallback_moc_plan,
     format_segments_for_prompt,
+    markdown_unaligned_facts,
     parse_timestamped_transcript,
     word_count,
 )
@@ -1775,7 +1853,7 @@ def run_moc_guided_map_reduce(
         )
         return response
 
-    estimated_tokens = transcript_words
+    estimated_tokens = approximate_token_count(transcript)
     moc_projection_used = estimated_tokens > options.planner_context_token_limit
     if moc_projection_used:
         projection = build_temporal_projection(segments, source_word_count=transcript_words)
@@ -1800,7 +1878,7 @@ def run_moc_guided_map_reduce(
     moc_fallback_used = not moc_valid or not isinstance(moc_plan.get("nodes"), list)
     if moc_fallback_used:
         moc_plan = fallback_moc_plan(video_id=video_id, segments=segments, budget=budget)
-    json_valid = json_valid and (moc_valid or moc_fallback_used)
+    json_valid = json_valid and moc_valid
 
     chunks = chunk_segments_by_approx_tokens(
         segments,
@@ -1956,6 +2034,7 @@ def run_moc_guided_map_reduce(
         "claims": markdown_claims(structured),
         "action_items": markdown_action_items(structured),
         "open_questions": markdown_open_questions(structured),
+        "unaligned_facts": markdown_unaligned_facts(unaligned),
     }
     structured.summary_text = assemble_moc_markdown_report(
         video_id=video_id,
@@ -1987,6 +2066,7 @@ def run_moc_guided_map_reduce(
             "report_max_words": budget.report_max_words,
             "target_report_words": budget.target_report_words,
             "actual_report_words": len(structured.summary_text.split()),
+            "estimated_transcript_tokens": estimated_tokens,
             "moc_node_count": len(moc_plan.get("nodes", [])) if isinstance(moc_plan.get("nodes"), list) else 0,
             "moc_fallback_used": moc_fallback_used,
             "moc_projection_used": moc_projection_used,
@@ -1998,6 +2078,10 @@ def run_moc_guided_map_reduce(
             "node_expansion_count": expansion_count,
             "slice_truncated_node_count": slice_truncated_count,
             "parallelism_enabled": False,
+            "parallelizable_map_call_count": len(chunks),
+            "parallelizable_node_call_count": len(aligned_nodes),
+            "max_parallel_map_calls": options.max_parallel_map_calls,
+            "max_parallel_node_calls": options.max_parallel_node_calls,
             "coverage_warnings": transcript_warnings,
         },
         extra_artifacts={
@@ -2269,7 +2353,12 @@ Success criteria for the Tucker run:
 - `deduplicated_fact_count` and `aligned_fact_count` are non-zero;
 - `timeline_segments_count`, `claims_count`, and `evidence_count` are non-zero;
 - `moc_fallback_used=false` for normal full-context run;
-- `moc_projection_used=false` for the current Tucker input with the default planner limit.
+- `moc_projection_used=false` for the current Tucker input with the default planner limit;
+- `estimated_transcript_tokens` is greater than `transcript_words`;
+- `parallelism_enabled=false` is paired with non-zero `parallelizable_map_call_count`
+  and `parallelizable_node_call_count`;
+- if `unaligned_fact_count` is non-zero, `result.md` contains
+  `Coverage Appendix: Unaligned Facts`.
 
 ---
 

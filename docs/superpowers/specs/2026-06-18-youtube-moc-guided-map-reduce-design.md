@@ -329,6 +329,11 @@ The default `120000` limit is a conservative local research setting, not a
 claim about every provider. For the Tucker transcript at roughly 41,000 words,
 the expected path is the full-transcript planner input.
 
+`approximate_token_count()` should be deterministic and conservative enough for
+provider-agnostic local research. V1 can use a lightweight heuristic based on
+word count plus punctuation/CJK/non-ASCII adjustment; it must not treat words
+and tokens as identical in the planner context decision.
+
 Projection format, when required:
 
 ```json
@@ -737,6 +742,11 @@ Generated via `moc_guided_map_reduce`.
 `result.action_items`, and `result.open_questions` should be populated from
 structured reductions over facts and MoC nodes.
 
+If fact alignment leaves unassigned clusters, the final Markdown should include
+a short "Coverage Appendix: Unaligned Facts" section or an equivalent visible
+coverage warning. Saving unaligned facts only in `alignment.json` is not enough
+because the research report would hide possible coverage loss from the reader.
+
 ## Quality and Self-Correction Loop
 
 V1 should include deterministic checks and leave full LLM-as-a-Judge as an
@@ -864,6 +874,7 @@ Use the shared options direction from the adaptive spec.
 @dataclass
 class StrategyOptions:
     output_language: str = "ru"
+    video_id: str = "video"
     max_tokens: int = 8192
     chunk_token_limit: int = 3000
     chunk_overlap_tokens: int = 700
@@ -888,6 +899,7 @@ frequent adjustment.
 Runner options:
 
 ```text
+--video-id <id>
 --target-depth auto|brief|standard|deep|book
 --min-report-words <int>
 --max-report-words <int>
@@ -964,6 +976,7 @@ Add `extra_metrics`:
   "report_max_words": 10000,
   "target_report_words": 8500,
   "actual_report_words": 8120,
+  "estimated_transcript_tokens": 68000,
   "moc_node_count": 10,
   "moc_fallback_used": false,
   "moc_projection_used": false,
@@ -977,6 +990,10 @@ Add `extra_metrics`:
   "timestamped_section_count": 10,
   "slice_truncated_node_count": 2,
   "parallelism_enabled": false,
+  "parallelizable_map_call_count": 16,
+  "parallelizable_node_call_count": 10,
+  "max_parallel_map_calls": 4,
+  "max_parallel_node_calls": 3,
   "coverage_warnings": []
 }
 ```
@@ -991,7 +1008,7 @@ Add `extra_metrics`:
 | Transcript has fewer than 1,000 words | Use `one_shot_full_json` or a single MoC node. |
 | Transcript has no timestamps | Continue, but disable timestamp quality checks and record warning. |
 | Full transcript exceeds planner context limit | Use deterministic temporal projection, record `moc_projection_used=true`, and keep full transcript for map extraction. |
-| MoC JSON invalid | Use deterministic time-window fallback and record `moc_fallback_used=true`. |
+| MoC JSON invalid | Use deterministic time-window fallback, record `moc_fallback_used=true`, and keep aggregate `json_valid=false`. |
 | MoC node budgets missing | Distribute target words by time span and importance. |
 | Map JSON invalid for a chunk | Retry once with the same prompt and a stricter "return valid JSON only" reminder; if still invalid, keep an empty fact set for that chunk and record warning. |
 | Facts do not align to any node | Store them as unaligned facts and add an appendix or warning. |
@@ -1008,9 +1025,12 @@ Use mocked LLM clients. Tests should cover:
 - base report budget selection from transcript word count;
 - explicit min/max override validation;
 - MoC prompt asks for global map only, not long prose;
+- planner context token estimate does not treat word count as token count;
 - planner context policy uses full transcript under the limit and temporal
   projection over the limit;
 - MoC JSON parsing and fallback when invalid;
+- aggregate JSON validity remains false when MoC fallback recovered from
+  invalid planner JSON;
 - fallback MoC nodes preserve order and distribute target words;
 - timestamped transcript parser handles `HH:MM:SS` and `MM:SS` formats;
 - map extraction prompt requests atomic facts, quotes, timestamps, entities,
@@ -1034,10 +1054,13 @@ Use mocked LLM clients. Tests should cover:
 - structured outputs are populated from facts and MoC nodes;
 - intermediate artifacts are written for MoC, facts, alignment, node sections,
   and quality checks;
+- unaligned facts are visible in the final Markdown report as an appendix or
+  warning, not only in `alignment.json`;
 - `extra_metrics` are written to `metrics.json`;
 - timestamp quality warnings are emitted when timestamps are missing;
 - language-aware token budget uses the Russian multiplier for `ru`;
 - bounded parallelism options are passed through or recorded as disabled;
+- disabled parallelism still records parallelizable map/node call counts;
 - runner passes `StrategyOptions` to all registered strategies.
 
 Live LLM runs remain manual research validation, not unit tests.
