@@ -107,7 +107,7 @@ Expected results:
 
 **Steps:**
 
-- [ ] Write failing tests for deterministic IDs, JSONL round trips, stable hashing, and stage cache keys.
+- [x] Write failing tests for deterministic IDs, JSONL round trips, stable hashing, and stage cache keys.
 
 ```python
 from research.youtube_pipeline.moc_agentic import (
@@ -136,7 +136,7 @@ def test_canonical_fact_id_uses_chunk_and_index():
     assert canonical_fact_id("chunk_003", 4) == "fact_chunk_003_004"
 ```
 
-- [ ] Implement these public helpers in `moc_agentic.py`:
+- [x] Implement these public helpers in `moc_agentic.py`:
 
 ```python
 def hash_text(value: str) -> str: ...
@@ -151,8 +151,8 @@ def word_count(text: str) -> int: ...
 def estimate_tokens(text: str, language: str = "ru") -> int: ...
 ```
 
-- [ ] Use UTF-8, sorted JSON keys, and newline-terminated JSON/JSONL files.
-- [ ] Run:
+- [x] Use UTF-8, sorted JSON keys, and newline-terminated JSON/JSONL files.
+- [x] Run:
 
 ```powershell
 python -m unittest research.youtube_pipeline.tests.test_agentic_moc
