@@ -103,6 +103,7 @@ class MocTranscriptTests(unittest.TestCase):
         self.assertEqual(projection["source_segment_count"], 12)
         self.assertNotIn("segment_count", projection)
         self.assertEqual(len(windows), 3)
+        self.assertEqual([window["window_id"] for window in windows], ["window_001", "window_002", "window_003"])
         self.assertEqual(windows[0]["start_ms"], 0)
         self.assertIn("sampled_timestamped_lines", windows[0])
         self.assertNotIn("sample_lines", windows[0])
@@ -126,6 +127,31 @@ class MocTranscriptTests(unittest.TestCase):
         self.assertEqual(window["first_words"].split()[-1], "word79")
         self.assertEqual(window["last_words"].split()[0], "word20")
         self.assertEqual(window["last_words"].split()[-1], "word99")
+
+    def test_build_temporal_projection_splits_dense_windows_by_word_threshold(self):
+        dense_text = " ".join(f"word{index}" for index in range(1000))
+        segments = [
+            TranscriptSegment(
+                f"seg_{index + 1:06d}",
+                index * 60000,
+                (index + 1) * 60000,
+                None,
+                dense_text,
+            )
+            for index in range(3)
+        ]
+
+        projection = build_temporal_projection(
+            segments,
+            source_word_count=3000,
+            window_ms=300000,
+        )
+        windows = projection["windows"]
+
+        self.assertEqual(len(windows), 2)
+        self.assertEqual([window["window_id"] for window in windows], ["window_001", "window_002"])
+        self.assertEqual([window["segment_count"] for window in windows], [2, 1])
+        self.assertLess(windows[0]["end_ms"], 300000)
 
     def test_fallback_moc_plan_builds_contiguous_budgeted_nodes(self):
         segments = [

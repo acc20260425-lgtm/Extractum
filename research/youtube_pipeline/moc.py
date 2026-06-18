@@ -10,6 +10,7 @@ MAX_REPORT_WORDS = 20000
 MAX_MOC_NODES = 20
 MIN_NODE_WORDS = 500
 FALLBACK_NODE_TARGET_WORDS = 900
+PROJECTION_WINDOW_MAX_WORDS = 2000
 
 TIMESTAMP_RE = re.compile(
     r"^\[?(?:(\d{1,2}):)?(\d{2}):(\d{2})(?:[.,](\d{1,3}))?\]?(?=\s|$)"
@@ -222,6 +223,7 @@ def build_temporal_projection(
     windows: list[dict[str, object]] = []
     if timestamped_segments:
         window_segments: list[TranscriptSegment] = []
+        window_word_count = 0
         window_start = timestamped_segments[0].start_ms
         if window_start is None:
             window_start = timestamped_segments[0].end_ms or 0
@@ -229,15 +231,30 @@ def build_temporal_projection(
 
         for segment in timestamped_segments:
             segment_start = segment.start_ms if segment.start_ms is not None else segment.end_ms
-            while segment_start is not None and segment_start >= window_end and window_segments:
-                windows.append(_projection_window(window_segments))
-                window_segments = []
+            while segment_start is not None and segment_start >= window_end:
+                if window_segments:
+                    windows.append(_projection_window(len(windows) + 1, window_segments))
+                    window_segments = []
+                    window_word_count = 0
                 window_start = window_end
                 window_end = window_start + window_ms
+
+            segment_word_count = word_count(segment.text)
+            if (
+                window_segments
+                and window_word_count + segment_word_count > PROJECTION_WINDOW_MAX_WORDS
+            ):
+                windows.append(_projection_window(len(windows) + 1, window_segments))
+                window_segments = []
+                window_word_count = 0
+                window_start = segment_start if segment_start is not None else segment.end_ms or window_end
+                window_end = window_start + window_ms
+
             window_segments.append(segment)
+            window_word_count += segment_word_count
 
         if window_segments:
-            windows.append(_projection_window(window_segments))
+            windows.append(_projection_window(len(windows) + 1, window_segments))
 
     return {
         "projection_kind": "temporal_skeleton",
@@ -248,10 +265,11 @@ def build_temporal_projection(
     }
 
 
-def _projection_window(segments: list[TranscriptSegment]) -> dict[str, object]:
+def _projection_window(window_index: int, segments: list[TranscriptSegment]) -> dict[str, object]:
     start_ms, end_ms = chunk_time_span(segments)
     text = " ".join(segment.text for segment in segments)
     return {
+        "window_id": f"window_{window_index:03d}",
         "start_ms": start_ms,
         "end_ms": end_ms,
         "segment_count": len(segments),
