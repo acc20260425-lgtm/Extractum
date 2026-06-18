@@ -380,3 +380,195 @@ def assemble_map_artifacts(run_dir: Path) -> dict[str, object]:
     }
     write_json(run_dir / "map" / "map_manifest.json", map_manifest)
     return map_manifest
+
+
+def build_planner_context(
+    run_dir: Path,
+    *,
+    max_tokens: int,
+    language: str,
+) -> dict[str, object]:
+    chunks = read_jsonl(run_dir / "prep" / "chunks.jsonl")
+    summaries = read_jsonl(run_dir / "map" / "chunk_summaries.jsonl")
+    facts = read_jsonl(run_dir / "map" / "mapped_facts.jsonl")
+    summary_by_chunk = {str(row["chunk_id"]): row for row in summaries}
+    facts_by_chunk: dict[str, list[dict[str, object]]] = {}
+    for fact in facts:
+        facts_by_chunk.setdefault(str(fact.get("chunk_id", "")), []).append(fact)
+
+    lines = [
+        "# Planner Context",
+        "",
+        "Use this bounded context to create a Map of Content. Do not invent facts.",
+        "",
+    ]
+    included_chunk_count = 0
+    included_fact_count = 0
+    truncated = False
+
+    for chunk in chunks:
+        chunk_id = str(chunk["chunk_id"])
+        summary = summary_by_chunk.get(chunk_id, {})
+        candidate_lines = [
+            f"## {chunk_id} [{chunk.get('start_timestamp')} - {chunk.get('end_timestamp')}]",
+            str(summary.get("chunk_summary", "")),
+        ]
+        for fact in facts_by_chunk.get(chunk_id, []):
+            candidate_lines.append(
+                f"- {fact.get('fact_id')}: {fact.get('text')} ({fact.get('timestamp')}, importance {fact.get('importance')})"
+            )
+        candidate_lines.append("")
+        candidate = "\n".join(lines + candidate_lines)
+        if estimate_tokens(candidate, language=language) > max_tokens and included_chunk_count > 0:
+            truncated = True
+            break
+        lines.extend(candidate_lines)
+        included_chunk_count += 1
+        included_fact_count += len(facts_by_chunk.get(chunk_id, []))
+
+    context = "\n".join(lines).rstrip() + "\n"
+    context_path = run_dir / "planning" / "planner_context.md"
+    context_path.parent.mkdir(parents=True, exist_ok=True)
+    context_path.write_text(context, encoding="utf-8", newline="\n")
+    metadata = {
+        "schema": "agentic-planner-context-metadata-v1",
+        "max_tokens": max_tokens,
+        "estimated_tokens": estimate_tokens(context, language=language),
+        "language": language,
+        "included_chunk_count": included_chunk_count,
+        "total_chunk_count": len(chunks),
+        "included_fact_count": included_fact_count,
+        "total_fact_count": len(facts),
+        "truncated": truncated or included_chunk_count < len(chunks),
+        "chunk_summaries_hash": hash_file(run_dir / "map" / "chunk_summaries.jsonl"),
+        "mapped_facts_hash": hash_file(run_dir / "map" / "mapped_facts.jsonl"),
+    }
+    write_json(run_dir / "planning" / "planner_context_metadata.json", metadata)
+    return metadata
+
+
+def _chunk_ids_from_prep(run_dir: Path) -> list[str]:
+    return [str(chunk["chunk_id"]) for chunk in read_jsonl(run_dir / "prep" / "chunks.jsonl")]
+
+
+def _fallback_moc(run_dir: Path, *, target_words: int, chapter_target_words: int) -> dict[str, object]:
+    chunks = read_jsonl(run_dir / "prep" / "chunks.jsonl")
+    if not chunks:
+        node_count = 1
+    else:
+        node_count = max(1, round(target_words / chapter_target_words))
+        node_count = min(node_count, len(chunks))
+
+    nodes: list[dict[str, object]] = []
+    for index in range(node_count):
+        start = index * len(chunks) // node_count
+        end = (index + 1) * len(chunks) // node_count
+        assigned = chunks[start:end] or chunks[:1]
+        chunk_ids = [str(chunk["chunk_id"]) for chunk in assigned]
+        nodes.append(
+            {
+                "node_id": f"moc_{index + 1:03d}",
+                "title": f"Section {index + 1}",
+                "purpose": "Fallback contiguous transcript section.",
+                "target_words": max(1, round(target_words / node_count)),
+                "time_range": {
+                    "start_ms": timestamp_to_ms(str(assigned[0].get("start_timestamp", ""))),
+                    "end_ms": timestamp_to_ms(str(assigned[-1].get("end_timestamp", ""))),
+                },
+                "chunk_ids": chunk_ids,
+                "key_questions": [],
+                "required_fact_types": ["claim", "example", "quote"],
+                "fallback": True,
+            }
+        )
+    return {
+        "report_title": "YouTube Transcript Report",
+        "source_kind": "youtube_video_transcript",
+        "report_thesis": "Fallback MoC generated from contiguous transcript chunks.",
+        "target_words": target_words,
+        "nodes": nodes,
+    }
+
+
+def validate_moc(
+    run_dir: Path,
+    *,
+    target_words: int,
+    chapter_target_words: int = 900,
+) -> dict[str, object]:
+    raw_path = run_dir / "planning" / "moc.raw.json"
+    payload = read_json(raw_path) if raw_path.exists() else {}
+    available_chunk_ids = _chunk_ids_from_prep(run_dir)
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    if not isinstance(payload, dict):
+        errors.append("MoC must be a JSON object")
+        payload = {}
+    nodes = payload.get("nodes")
+    if not isinstance(nodes, list) or not nodes:
+        errors.append("MoC nodes must be a non-empty list")
+        nodes = []
+
+    seen_chunk_ids: dict[str, str] = {}
+    covered_chunk_ids: set[str] = set()
+    chunk_order = {chunk_id: index for index, chunk_id in enumerate(available_chunk_ids)}
+    previous_node_min_index = -1
+    for node_index, node in enumerate(nodes, start=1):
+        if not isinstance(node, dict):
+            errors.append(f"nodes[{node_index}] must be an object")
+            continue
+        node_id = str(node.get("node_id") or f"moc_{node_index:03d}")
+        chunk_ids = node.get("chunk_ids")
+        if not isinstance(chunk_ids, list) or not chunk_ids:
+            errors.append(f"{node_id} must include chunk_ids")
+            continue
+        if int(node.get("target_words", 0) or 0) <= 0:
+            errors.append(f"{node_id} target_words must be positive")
+        node_indexes: list[int] = []
+        for chunk_id_value in chunk_ids:
+            chunk_id = str(chunk_id_value)
+            if chunk_id not in available_chunk_ids:
+                errors.append(f"{node_id} references unknown chunk {chunk_id}")
+                continue
+            node_indexes.append(chunk_order[chunk_id])
+            if chunk_id in seen_chunk_ids and not node.get("overlap_reason"):
+                errors.append(f"{chunk_id} appears in multiple nodes without overlap_reason")
+            seen_chunk_ids[chunk_id] = node_id
+            covered_chunk_ids.add(chunk_id)
+        if node_indexes:
+            node_min_index = min(node_indexes)
+            if node_min_index < previous_node_min_index and not node.get("thematic_reason"):
+                errors.append(f"{node_id} chunk order is non-ascending without thematic_reason")
+            previous_node_min_index = max(previous_node_min_index, node_min_index)
+
+    missing_chunk_ids = [chunk_id for chunk_id in available_chunk_ids if chunk_id not in covered_chunk_ids]
+    if missing_chunk_ids:
+        errors.append("MoC missing chunk coverage: " + ", ".join(missing_chunk_ids))
+
+    fallback_used = bool(errors)
+    if fallback_used:
+        moc = _fallback_moc(run_dir, target_words=target_words, chapter_target_words=chapter_target_words)
+    else:
+        moc = {
+            "report_title": str(payload.get("report_title") or "YouTube Transcript Report"),
+            "source_kind": str(payload.get("source_kind") or "youtube_video_transcript"),
+            "report_thesis": str(payload.get("report_thesis") or ""),
+            "target_words": int(payload.get("target_words") or target_words),
+            "nodes": nodes,
+        }
+        if not moc["report_thesis"]:
+            warnings.append("report_thesis_empty")
+
+    write_json(run_dir / "planning" / "moc.json", moc)
+    validation = {
+        "schema": "agentic-moc-validation-v1",
+        "valid": not fallback_used,
+        "fallback_used": fallback_used,
+        "errors": errors,
+        "warnings": warnings,
+        "available_chunk_ids": available_chunk_ids,
+        "covered_chunk_ids": sorted(covered_chunk_ids),
+    }
+    write_json(run_dir / "planning" / "moc_validation.json", validation)
+    return validation

@@ -6,6 +6,7 @@ from pathlib import Path
 from research.youtube_pipeline.moc_agentic import (
     assemble_map_artifacts,
     build_stage_key,
+    build_planner_context,
     canonical_fact_id,
     chunk_transcript_text,
     estimate_tokens,
@@ -16,6 +17,7 @@ from research.youtube_pipeline.moc_agentic import (
     read_json,
     read_jsonl,
     validate_map_outputs,
+    validate_moc,
     word_count,
     write_prep_artifacts,
     write_json,
@@ -188,6 +190,73 @@ class AgenticArtifactHelperTests(unittest.TestCase):
             self.assertEqual(mapped_facts[0]["text"], "Evidence should be stored with timestamps.")
             self.assertEqual(chunk_summaries[0]["chunk_id"], "chunk_001")
 
+    def test_build_planner_context_writes_bounded_context_and_metadata(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = self._write_single_chunk_prep(Path(temp_dir))
+            prepare_map_assignments(run_dir, output_language="ru")
+            self._write_map_output(run_dir)
+            validate_map_outputs(run_dir)
+            assemble_map_artifacts(run_dir)
+
+            metadata = build_planner_context(run_dir, max_tokens=3000, language="ru")
+
+            self.assertTrue((run_dir / "planning" / "planner_context.md").exists())
+            self.assertEqual(metadata["included_chunk_count"], 1)
+            self.assertEqual(metadata["total_fact_count"], 1)
+            self.assertLessEqual(metadata["estimated_tokens"], 3000)
+
+    def test_validate_moc_accepts_complete_plan(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = self._write_single_chunk_prep(Path(temp_dir))
+            self._write_moc_raw(run_dir, [["chunk_001"]])
+
+            validation = validate_moc(run_dir, target_words=900, chapter_target_words=900)
+            moc = read_json(run_dir / "planning" / "moc.json")
+
+            self.assertTrue(validation["valid"])
+            self.assertFalse(validation["fallback_used"])
+            self.assertEqual(moc["nodes"][0]["chunk_ids"], ["chunk_001"])
+
+    def test_validate_moc_falls_back_when_chunks_are_missing(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = self._write_multi_chunk_prep(Path(temp_dir))
+            chunks = read_jsonl(run_dir / "prep" / "chunks.jsonl")
+            self.assertGreater(len(chunks), 1)
+            self._write_moc_raw(run_dir, [[chunks[0]["chunk_id"]]])
+
+            validation = validate_moc(run_dir, target_words=1800, chapter_target_words=900)
+            moc = read_json(run_dir / "planning" / "moc.json")
+            covered = [chunk_id for node in moc["nodes"] for chunk_id in node["chunk_ids"]]
+
+            self.assertFalse(validation["valid"])
+            self.assertTrue(validation["fallback_used"])
+            self.assertEqual(sorted(covered), sorted(chunk["chunk_id"] for chunk in chunks))
+
+    def test_validate_moc_falls_back_on_duplicate_chunk_without_reason(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = self._write_single_chunk_prep(Path(temp_dir))
+            self._write_moc_raw(run_dir, [["chunk_001"], ["chunk_001"]])
+
+            validation = validate_moc(run_dir, target_words=900, chapter_target_words=900)
+
+            self.assertFalse(validation["valid"])
+            self.assertTrue(validation["fallback_used"])
+            self.assertIn("appears in multiple nodes", validation["errors"][0])
+
+    def test_validate_moc_falls_back_on_non_ascending_chunk_order(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = self._write_multi_chunk_prep(Path(temp_dir))
+            chunks = read_jsonl(run_dir / "prep" / "chunks.jsonl")
+            first_chunk_id = str(chunks[0]["chunk_id"])
+            last_chunk_id = str(chunks[-1]["chunk_id"])
+            self._write_moc_raw(run_dir, [[last_chunk_id], [first_chunk_id]])
+
+            validation = validate_moc(run_dir, target_words=1800, chapter_target_words=900)
+
+            self.assertFalse(validation["valid"])
+            self.assertTrue(validation["fallback_used"])
+            self.assertTrue(any("non-ascending" in error for error in validation["errors"]))
+
     def _write_single_chunk_prep(self, temp_dir: Path) -> Path:
         run_dir = temp_dir / "run"
         write_prep_artifacts(
@@ -199,9 +268,27 @@ class AgenticArtifactHelperTests(unittest.TestCase):
         )
         return run_dir
 
-    def _write_map_output(self, run_dir: Path, *, wrapped: bool = False) -> None:
+    def _write_multi_chunk_prep(self, temp_dir: Path) -> Path:
+        run_dir = temp_dir / "run"
+        write_prep_artifacts(
+            FIXTURES_DIR / "agentic_tiny_transcript.txt",
+            run_dir,
+            target_tokens=120,
+            overlap_tokens=0,
+            language="ru",
+        )
+        return run_dir
+
+    def _write_map_output(
+        self,
+        run_dir: Path,
+        *,
+        chunk_id: str = "chunk_001",
+        output_file: str = "map/agent_outputs/chunk_001.json",
+        wrapped: bool = False,
+    ) -> None:
         output = {
-            "chunk_id": "chunk_001",
+            "chunk_id": chunk_id,
             "time_range": {"start_ms": 0, "end_ms": 405000},
             "chunk_summary": "The lecture explains file-backed long-report generation.",
             "claims": [{"text": "Reports need evidence.", "timestamp": "00:02:10", "importance": 4}],
@@ -216,16 +303,42 @@ class AgenticArtifactHelperTests(unittest.TestCase):
                     "fact_type": "claim",
                     "timestamp": "00:02:10",
                     "importance": 4,
-                    "chunk_id": "chunk_001",
+                    "chunk_id": chunk_id,
                 }
             ],
         }
-        output_path = run_dir / "map" / "agent_outputs" / "chunk_001.json"
+        output_path = run_dir / output_file
         output_path.parent.mkdir(parents=True, exist_ok=True)
         payload = json.dumps(output, ensure_ascii=False)
         if wrapped:
             payload = f"assistant note\n{payload}\nend note"
         output_path.write_text(payload + "\n", encoding="utf-8")
+
+    def _write_moc_raw(self, run_dir: Path, chunk_groups: list[list[str]]) -> None:
+        nodes = []
+        for index, chunk_ids in enumerate(chunk_groups, start=1):
+            nodes.append(
+                {
+                    "node_id": f"moc_{index:03d}",
+                    "title": f"Node {index}",
+                    "purpose": "Test node",
+                    "target_words": 900,
+                    "time_range": {"start_ms": 0, "end_ms": 600000},
+                    "chunk_ids": chunk_ids,
+                    "key_questions": ["What is the main point?"],
+                    "required_fact_types": ["claim"],
+                }
+            )
+        write_json(
+            run_dir / "planning" / "moc.raw.json",
+            {
+                "report_title": "Test Report",
+                "source_kind": "youtube_video_transcript",
+                "report_thesis": "A test thesis.",
+                "target_words": 900,
+                "nodes": nodes,
+            },
+        )
 
 
 if __name__ == "__main__":

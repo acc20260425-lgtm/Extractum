@@ -316,27 +316,27 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc
 
 **Steps:**
 
-- [ ] Add tests for context caps, language-aware token estimates, MoC schema validation, missing chunk coverage, duplicate chunk assignment, and chronological order.
-- [ ] `build_planner_context.py` reads `prep/chunks.jsonl`, `map/chunk_summaries.jsonl`, and `map/mapped_facts.jsonl`, then writes:
+- [x] Add tests for context caps, language-aware token estimates, MoC schema validation, missing chunk coverage, duplicate chunk assignment, and chronological order.
+- [x] `build_planner_context.py` reads `prep/chunks.jsonl`, `map/chunk_summaries.jsonl`, and `map/mapped_facts.jsonl`, then writes:
 
 ```text
 planning/planner_context.md
 planning/planner_context_metadata.json
 ```
 
-- [ ] The planner context cap must be configurable:
+- [x] The planner context cap must be configurable:
 
 ```powershell
 python -m research.youtube_pipeline.tools.build_planner_context --run-dir <run> --max-tokens 24000 --language ru
 ```
 
-- [ ] Include an adaptive default:
+- [x] Include an adaptive default:
   - `24000` tokens for unknown models;
   - lower value accepted from CLI or skill instructions;
   - value recorded in `planning/planner_context_metadata.json`.
-- [ ] `youtube-moc-planning` writes raw planner output to `planning/moc.raw.json`; `validate_moc.py` validates and normalizes it into `planning/moc.json`.
-- [ ] `validate_moc.py` writes `planning/moc_validation.json` and owns deterministic fallback planning when planner JSON cannot be corrected.
-- [ ] Required MoC JSON fields:
+- [x] `youtube-moc-planning` writes raw planner output to `planning/moc.raw.json`; `validate_moc.py` validates and normalizes it into `planning/moc.json`.
+- [x] `validate_moc.py` writes `planning/moc_validation.json` and owns deterministic fallback planning when planner JSON cannot be corrected.
+- [x] Required MoC JSON fields:
 
 ```json
 {
@@ -359,8 +359,8 @@ python -m research.youtube_pipeline.tools.build_planner_context --run-dir <run> 
 }
 ```
 
-- [ ] Validation must require chunk coverage, positive target word counts, coherent node order, and no excessive duplicate chunk assignment unless the node explains the thematic overlap.
-- [ ] Run:
+- [x] Validation must require chunk coverage, positive target word counts, coherent node order, and no excessive duplicate chunk assignment unless the node explains the thematic overlap.
+- [x] Run:
 
 ```powershell
 python -m unittest research.youtube_pipeline.tests.test_agentic_moc
