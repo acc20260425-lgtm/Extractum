@@ -160,12 +160,24 @@ The expected chunk analysis shape is:
 }
 ```
 
-`substance_score` uses a 1-5 scale:
+`substance_score` uses an anchored 1-5 scale. The adaptive chunk analysis
+prompt should include these anchors so the model does not default every chunk
+to the middle of the scale:
 
-- `1`: repetitive, low-information, housekeeping, or filler.
-- `3`: normal conversational value with useful but moderate density.
-- `5`: dense expert analysis, important claims, evidence, examples, or
-  argument transitions.
+- `1`: greetings, ads, sponsor reads, like-and-subscribe requests, technical
+  issues, repeated intro/outro, or other filler with little analytical value.
+- `2`: casual small talk, low-value anecdotes, logistical setup, or repetition
+  of already covered points.
+- `3`: coherent narrative with moderate informational density and normal
+  interview or lecture flow, but no major new thesis or evidence cluster.
+- `4`: specific claims backed by examples or data, novel frameworks, clear
+  argument transitions, or meaningful practical implications.
+- `5`: pivotal thesis statements, dense expert analysis, evidence-backed
+  counterarguments, or sections with three or more concrete facts, figures,
+  citations, or high-impact examples.
+
+The prompt should explicitly say: use `1` and `2` when appropriate; do not
+default filler or repeated material to `3`.
 
 Python computes the average substance score:
 
@@ -175,7 +187,10 @@ substance_multiplier = 0.7 + 0.6 * ((average_score - 1) / 4)
 
 This creates a multiplier from `0.7x` to `1.3x`. Dense transcripts get more
 report budget; sparse or repetitive transcripts get less. The formula is
-empirical and may need per-model tuning after manual research runs.
+empirical and may need per-model tuning after manual research runs. The narrow
+range is intentional: if scores are noisy or weakly calibrated, the pipeline
+should degrade toward a mostly word-count-based plan rather than overreacting
+to unreliable ratings.
 
 If `substance_score` is absent, non-numeric, or outside the 1-5 range, Python
 should default it to `3` and clamp parsed numeric values into `1..5`. If more
@@ -582,6 +597,8 @@ Use mocked LLM clients. Tests should cover:
 - depth multipliers and explicit min/max overrides;
 - hard caps for report words and chapter count;
 - substance multiplier calculation;
+- adaptive chunk analysis prompt includes anchored examples for
+  `substance_score` values 1-5;
 - invalid substance score fallback and clamping;
 - dynamic programming contiguous weighted chunk partitioning;
 - one chunk per remaining chapter partition constraint;
