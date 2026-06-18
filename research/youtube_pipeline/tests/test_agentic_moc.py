@@ -5,7 +5,9 @@ from pathlib import Path
 
 from research.youtube_pipeline.moc_agentic import (
     align_facts,
+    assemble_report,
     assemble_map_artifacts,
+    build_structured_analysis,
     build_stage_key,
     build_planner_context,
     canonical_fact_id,
@@ -20,6 +22,7 @@ from research.youtube_pipeline.moc_agentic import (
     read_json,
     read_jsonl,
     stage_is_reusable,
+    quality_check,
     validate_map_outputs,
     validate_moc,
     validate_generated_files,
@@ -354,6 +357,50 @@ class AgenticArtifactHelperTests(unittest.TestCase):
                 )
             )
 
+    def test_quality_check_writes_coverage(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = self._write_aligned_section_workspace(Path(temp_dir))
+
+            coverage = quality_check(run_dir)
+
+            self.assertTrue(coverage["valid"])
+            self.assertEqual(coverage["missing_files"], [])
+            self.assertTrue(coverage["section_order_valid"])
+            self.assertFalse(coverage["source_note_present"])
+            self.assertGreater(coverage["total_section_words"], 0)
+            self.assertTrue((run_dir / "review" / "coverage.md").exists())
+
+    def test_build_structured_analysis_uses_fact_clusters(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = self._write_aligned_section_workspace(Path(temp_dir))
+            quality_check(run_dir)
+
+            manifest = build_structured_analysis(run_dir)
+            structured = (run_dir / "review" / "structured_analysis.md").read_text(encoding="utf-8")
+
+            self.assertEqual(manifest["fact_count"], 1)
+            self.assertIn("Evidence should be stored with timestamps.", structured)
+            self.assertIn("00:02:10, 00:04:35", structured)
+
+    def test_assemble_report_writes_final_report_and_metrics(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = self._write_aligned_section_workspace(Path(temp_dir))
+            quality_check(run_dir)
+            build_structured_analysis(run_dir)
+
+            result = assemble_report(run_dir)
+            report = (run_dir / "final" / "report.md").read_text(encoding="utf-8")
+            metrics = read_json(run_dir / "final" / "metrics.json")
+
+            self.assertEqual(result["report_file"], "final/report.md")
+            self.assertIn("summary and analysis of a YouTube video transcript", report)
+            self.assertIn("## Table of Contents", report)
+            self.assertIn("## Structured Analysis", report)
+            self.assertEqual(metrics["strategy"], "moc_agentic_writer")
+
+            coverage_after_assembly = quality_check(run_dir)
+            self.assertTrue(coverage_after_assembly["source_note_present"])
+
     def _write_single_chunk_prep(self, temp_dir: Path) -> Path:
         run_dir = temp_dir / "run"
         write_prep_artifacts(
@@ -457,6 +504,26 @@ class AgenticArtifactHelperTests(unittest.TestCase):
         self.assertEqual(validation["invalid_outputs"], [])
         assemble_map_artifacts(run_dir)
         return run_dir, chunk_ids
+
+    def _write_aligned_section_workspace(self, temp_dir: Path) -> Path:
+        run_dir, chunk_ids = self._write_two_chunk_mapped_facts(temp_dir)
+        dedupe_facts(run_dir)
+        self._write_moc_raw(run_dir, [[chunk_ids[0]], [chunk_ids[1]]])
+        validate_moc(run_dir, target_words=1800, chapter_target_words=900)
+        align_facts(run_dir)
+        prepare_section_assignments(run_dir)
+
+        sections = {
+            "sections/000-overview.md": "## Overview\n\nThis video summary orients the reader once.",
+            "sections/001-node-1.md": "## Node 1\n\nThe first section uses the timestamped evidence in context.",
+            "sections/002-node-2.md": "## Node 2\n\nThe second section uses the same fact in a different local argument.",
+            "sections/999-synthesis.md": "## Synthesis\n\nThe workflow closes by preserving evidence and structure.",
+        }
+        for relative_path, content in sections.items():
+            path = run_dir / relative_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content + "\n", encoding="utf-8")
+        return run_dir
 
     def _write_moc_raw(self, run_dir: Path, chunk_groups: list[list[str]]) -> None:
         nodes = []

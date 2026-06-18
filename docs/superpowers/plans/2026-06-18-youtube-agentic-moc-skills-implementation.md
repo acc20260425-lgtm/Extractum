@@ -480,16 +480,16 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc
 
 **Steps:**
 
-- [ ] Add tests for deterministic structured analysis from fact clusters without LLM calls.
-- [ ] `build_structured_analysis.py` reads `alignment/deduplicated_facts.json`, `alignment/alignment.json`, and `review/coverage.json`, then writes:
+- [x] Add tests for deterministic structured analysis from fact clusters without LLM calls.
+- [x] `build_structured_analysis.py` reads `alignment/deduplicated_facts.json`, `alignment/alignment.json`, and `review/coverage.json`, then writes:
 
 ```text
 review/structured_analysis.md
 review/structured_analysis_manifest.json
 ```
 
-- [ ] Structured analysis sections are built from tags, source timestamps, fact density, and MoC node membership.
-- [ ] `assemble_report.py` writes:
+- [x] Structured analysis sections are built from tags, source timestamps, fact density, and MoC node membership.
+- [x] `assemble_report.py` writes:
 
 ```text
 final/report.md
@@ -497,7 +497,7 @@ final/result.json
 final/metrics.json
 ```
 
-- [ ] Report assembly order:
+- [x] Report assembly order:
 
 ```text
 # <title>
@@ -511,16 +511,16 @@ Source note in 1-2 sentences saying this is a summary of a video/transcript.
 ## Synthesis
 ```
 
-- [ ] `000-overview.md` and `999-synthesis.md` are authored by the orchestrator skill after node sections are available and before QA, using MoC thesis, node titles, section opening paragraphs, section conclusions, and map manifest warnings.
-- [ ] `quality_check.py` writes:
+- [x] `000-overview.md` and `999-synthesis.md` are authored by the orchestrator skill after node sections are available and before QA, using MoC thesis, node titles, section opening paragraphs, section conclusions, and map manifest warnings.
+- [x] `quality_check.py` writes:
 
 ```text
 review/coverage.json
 review/coverage.md
 ```
 
-- [ ] Quality checks must include word count, missing files, section order, duplicate heading detection, duplicate high-overlap paragraph detection, source note presence, repeated source-label overuse detection, and cross-section reuse of the same facts as near-identical prose.
-- [ ] Run:
+- [x] Quality checks must include word count, missing files, section order, duplicate heading detection, duplicate high-overlap paragraph detection, source note presence, repeated source-label overuse detection, and cross-section reuse of the same facts as near-identical prose.
+- [x] Run:
 
 ```powershell
 python -m unittest research.youtube_pipeline.tests.test_agentic_moc

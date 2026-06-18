@@ -759,3 +759,169 @@ def stage_is_reusable(run_dir: Path, manifest_path: Path, current_stage_key: Map
     if not isinstance(output_files, list):
         return False
     return all((run_dir / str(path)).exists() for path in output_files)
+
+
+def quality_check(run_dir: Path) -> dict[str, object]:
+    assignments_path = run_dir / "alignment" / "section_assignments.jsonl"
+    assignments = read_jsonl(assignments_path) if assignments_path.exists() else []
+    expected_sections = [str(row.get("section_file", "")) for row in assignments]
+    boundary_sections = ["sections/000-overview.md", "sections/999-synthesis.md"]
+    expected_files = boundary_sections + expected_sections
+    missing_files = [path for path in expected_files if path and not (run_dir / path).exists()]
+    section_order_valid = expected_sections == sorted(expected_sections)
+
+    section_word_counts: dict[str, int] = {}
+    headings: list[str] = []
+    paragraphs: dict[str, list[str]] = {}
+    source_label_count = 0
+    for relative_path in expected_files:
+        path = run_dir / relative_path
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        section_word_counts[relative_path] = word_count(text)
+        source_label_count += len(re.findall(r"\b(video summary|youtube transcript|speaker)\b", text.lower()))
+        for line in text.splitlines():
+            if line.startswith("#"):
+                headings.append(line.strip().lower())
+        for paragraph in [part.strip() for part in text.split("\n\n") if part.strip()]:
+            normalized = " ".join(paragraph.lower().split())
+            paragraphs.setdefault(normalized, []).append(relative_path)
+
+    duplicate_headings = sorted({heading for heading in headings if headings.count(heading) > 1})
+    duplicate_paragraphs = [
+        {"paragraph": paragraph, "files": files}
+        for paragraph, files in paragraphs.items()
+        if len(files) > 1 and word_count(paragraph) >= 12
+    ]
+    final_report_path = run_dir / "final" / "report.md"
+    final_report = final_report_path.read_text(encoding="utf-8") if final_report_path.exists() else ""
+    source_note_present = "summary and analysis of a youtube video transcript" in final_report.lower()
+    coverage = {
+        "schema": "agentic-coverage-v1",
+        "valid": not missing_files,
+        "missing_files": missing_files,
+        "section_order_valid": section_order_valid,
+        "section_word_counts": section_word_counts,
+        "total_section_words": sum(section_word_counts.values()),
+        "duplicate_headings": duplicate_headings,
+        "duplicate_paragraphs": duplicate_paragraphs,
+        "source_note_present": source_note_present,
+        "source_label_count": source_label_count,
+        "source_label_overuse": source_label_count > 2,
+    }
+    write_json(run_dir / "review" / "coverage.json", coverage)
+    coverage_md = [
+        "# Coverage",
+        "",
+        f"- Missing files: {len(missing_files)}",
+        f"- Total section words: {coverage['total_section_words']}",
+        f"- Duplicate headings: {len(duplicate_headings)}",
+        f"- Duplicate paragraphs: {len(duplicate_paragraphs)}",
+        f"- Source label count: {source_label_count}",
+        "",
+    ]
+    (run_dir / "review").mkdir(parents=True, exist_ok=True)
+    (run_dir / "review" / "coverage.md").write_text("\n".join(coverage_md), encoding="utf-8", newline="\n")
+    return coverage
+
+
+def build_structured_analysis(run_dir: Path) -> dict[str, object]:
+    facts = read_json(run_dir / "alignment" / "deduplicated_facts.json")
+    alignment = read_json(run_dir / "alignment" / "alignment.json")
+    coverage = read_json(run_dir / "review" / "coverage.json") if (run_dir / "review" / "coverage.json").exists() else {}
+    if not isinstance(facts, list) or not isinstance(alignment, dict):
+        raise ValueError("deduplicated facts and alignment are required")
+
+    lines = ["## Structured Analysis", ""]
+    lines.append(f"- Deduplicated facts: {len(facts)}")
+    lines.append(f"- Aligned facts: {alignment.get('aligned_fact_count', 0)}")
+    if isinstance(coverage, dict):
+        lines.append(f"- Missing generated files: {len(coverage.get('missing_files', []))}")
+    lines.append("")
+    lines.append("### Key Evidence")
+    for fact in facts[:20]:
+        if not isinstance(fact, dict):
+            continue
+        timestamps = ", ".join(str(value) for value in fact.get("source_timestamps", []))
+        lines.append(f"- {fact.get('claim')} ({timestamps})")
+    content = "\n".join(lines).rstrip() + "\n"
+    structured_path = run_dir / "review" / "structured_analysis.md"
+    structured_path.parent.mkdir(parents=True, exist_ok=True)
+    structured_path.write_text(content, encoding="utf-8", newline="\n")
+    manifest = {
+        "schema": "agentic-structured-analysis-manifest-v1",
+        "fact_count": len(facts),
+        "structured_analysis_file": "review/structured_analysis.md",
+    }
+    write_json(run_dir / "review" / "structured_analysis_manifest.json", manifest)
+    return manifest
+
+
+def assemble_report(run_dir: Path) -> dict[str, object]:
+    moc = read_json(run_dir / "planning" / "moc.json")
+    assignments = read_jsonl(run_dir / "alignment" / "section_assignments.jsonl")
+    if not isinstance(moc, dict):
+        raise ValueError("MoC must be available before assembly")
+
+    title = str(moc.get("report_title") or "YouTube Transcript Report")
+    overview_file = "sections/000-overview.md"
+    narrative_section_files = [str(row.get("section_file", "")) for row in assignments]
+    synthesis_file = "sections/999-synthesis.md"
+    toc_files = [overview_file, *narrative_section_files, "review/structured_analysis.md", synthesis_file]
+
+    report_parts = [
+        f"# {title}",
+        "",
+        "This report is a summary and analysis of a YouTube video transcript.",
+        "",
+        "## Table of Contents",
+    ]
+    for section_file in toc_files:
+        if not section_file:
+            continue
+        heading = _first_heading((run_dir / section_file).read_text(encoding="utf-8")) if (run_dir / section_file).exists() else section_file
+        report_parts.append(f"- {heading}")
+    report_parts.append("")
+
+    for section_file in [overview_file, *narrative_section_files]:
+        path = run_dir / section_file
+        if path.exists():
+            report_parts.append(path.read_text(encoding="utf-8").strip())
+            report_parts.append("")
+
+    structured_path = run_dir / "review" / "structured_analysis.md"
+    if structured_path.exists():
+        report_parts.append(structured_path.read_text(encoding="utf-8").strip())
+        report_parts.append("")
+
+    synthesis_path = run_dir / synthesis_file
+    if synthesis_path.exists():
+        report_parts.append(synthesis_path.read_text(encoding="utf-8").strip())
+        report_parts.append("")
+
+    report = "\n".join(report_parts).rstrip() + "\n"
+    final_dir = run_dir / "final"
+    final_dir.mkdir(parents=True, exist_ok=True)
+    (final_dir / "report.md").write_text(report, encoding="utf-8", newline="\n")
+    metrics = {
+        "strategy": "moc_agentic_writer",
+        "entry_point": "agentic_skill",
+        "word_count": word_count(report),
+        "section_count": len(toc_files),
+    }
+    write_json(final_dir / "metrics.json", metrics)
+    result = {
+        "report_file": "final/report.md",
+        "metrics_file": "final/metrics.json",
+        "word_count": metrics["word_count"],
+    }
+    write_json(final_dir / "result.json", result)
+    return result
+
+
+def _first_heading(markdown: str) -> str:
+    for line in markdown.splitlines():
+        if line.startswith("#"):
+            return line.lstrip("#").strip()
+    return "Untitled section"
