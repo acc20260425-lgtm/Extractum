@@ -433,8 +433,8 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc
 
 **Steps:**
 
-- [ ] Add tests for missing section outputs, wrong output filenames, stale stage hashes, and valid resume manifests.
-- [ ] Define per-stage hash scopes:
+- [x] Add tests for missing section outputs, wrong output filenames, stale stage hashes, and valid resume manifests.
+- [x] Define per-stage hash scopes:
 
 ```text
 prep: transcript file hash + prep options
@@ -454,14 +454,14 @@ structured_analysis: deduplicated facts hash + alignment hash + coverage hash + 
 assembly: MoC hash + section file hashes + coverage hash + structured analysis hash + report assembly version
 ```
 
-- [ ] `validate_generated_files.py` checks all expected files listed in manifests and writes:
+- [x] `validate_generated_files.py` checks all expected files listed in manifests and writes:
 
 ```text
 review/generated_files_validation.json
 ```
 
-- [ ] Reusable stages must be accepted only when the stored stage hash equals the current stage hash and all declared output files exist.
-- [ ] Run:
+- [x] Reusable stages must be accepted only when the stored stage hash equals the current stage hash and all declared output files exist.
+- [x] Run:
 
 ```powershell
 python -m unittest research.youtube_pipeline.tests.test_agentic_moc

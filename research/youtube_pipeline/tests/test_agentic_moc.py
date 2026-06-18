@@ -19,8 +19,10 @@ from research.youtube_pipeline.moc_agentic import (
     prepare_section_assignments,
     read_json,
     read_jsonl,
+    stage_is_reusable,
     validate_map_outputs,
     validate_moc,
+    validate_generated_files,
     word_count,
     write_prep_artifacts,
     write_json,
@@ -298,6 +300,59 @@ class AgenticArtifactHelperTests(unittest.TestCase):
             self.assertEqual(rows[0]["section_file"], "sections/001-node-1.md")
             self.assertEqual(rows[0]["aligned_fact_ids"], ["fact_cluster_0001"])
             self.assertEqual(rows[0]["overlap_fact_ids"], ["fact_cluster_0001"])
+
+    def test_validate_generated_files_accepts_expected_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = Path(temp_dir) / "run"
+            section_path = run_dir / "sections" / "001-node.md"
+            section_path.parent.mkdir(parents=True, exist_ok=True)
+            section_path.write_text("section", encoding="utf-8")
+
+            result = validate_generated_files(
+                run_dir,
+                agent_id="section_writer_moc_001",
+                expected_files=["sections/001-node.md"],
+            )
+
+            self.assertTrue(result["valid"])
+            self.assertEqual(result["missing_files"], [])
+            self.assertEqual(result["unexpected_files"], [])
+
+    def test_validate_generated_files_reports_missing_and_wrong_sibling_output(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = Path(temp_dir) / "run"
+            wrong_path = run_dir / "sections" / "002-wrong.md"
+            wrong_path.parent.mkdir(parents=True, exist_ok=True)
+            wrong_path.write_text("wrong", encoding="utf-8")
+
+            result = validate_generated_files(
+                run_dir,
+                agent_id="section_writer_moc_001",
+                expected_files=["sections/001-node.md"],
+            )
+
+            self.assertFalse(result["valid"])
+            self.assertEqual(result["missing_files"], ["sections/001-node.md"])
+            self.assertEqual(result["unexpected_files"], ["sections/002-wrong.md"])
+
+    def test_stage_is_reusable_requires_matching_hash_and_outputs(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = Path(temp_dir) / "run"
+            output_path = run_dir / "map" / "mapped_facts.jsonl"
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text("{}\n", encoding="utf-8")
+            stage_key = build_stage_key("map_assembly", {"validated_outputs": "abc"})
+            manifest_path = run_dir / "map" / "assembly_manifest.json"
+            write_json(manifest_path, {"stage_key": stage_key, "output_files": ["map/mapped_facts.jsonl"]})
+
+            self.assertTrue(stage_is_reusable(run_dir, manifest_path, stage_key))
+            self.assertFalse(
+                stage_is_reusable(
+                    run_dir,
+                    manifest_path,
+                    build_stage_key("map_assembly", {"validated_outputs": "changed"}),
+                )
+            )
 
     def _write_single_chunk_prep(self, temp_dir: Path) -> Path:
         run_dir = temp_dir / "run"

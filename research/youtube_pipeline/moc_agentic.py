@@ -709,3 +709,53 @@ def prepare_section_assignments(run_dir: Path) -> list[dict[str, object]]:
 def _slugify(value: str) -> str:
     words = re.findall(r"\w+", value.lower(), flags=re.UNICODE)
     return "-".join(words[:8]) or "section"
+
+
+def validate_generated_files(
+    run_dir: Path,
+    *,
+    agent_id: str,
+    expected_files: Iterable[str],
+) -> dict[str, object]:
+    expected = [str(path) for path in expected_files]
+    missing_files = [path for path in expected if not (run_dir / path).exists()]
+    expected_set = set(expected)
+    unexpected_files: list[str] = []
+
+    for expected_file in expected:
+        parent = (run_dir / expected_file).parent
+        if not parent.exists():
+            continue
+        for path in parent.iterdir():
+            if path.is_file():
+                relative = path.relative_to(run_dir).as_posix()
+                if relative not in expected_set:
+                    unexpected_files.append(relative)
+
+    result = {
+        "schema": "agentic-generated-files-validation-v1",
+        "agent_id": agent_id,
+        "valid": not missing_files and not unexpected_files,
+        "expected_files": expected,
+        "missing_files": sorted(missing_files),
+        "unexpected_files": sorted(set(unexpected_files)),
+    }
+    write_json(run_dir / "review" / "generated_files_validation.json", result)
+    return result
+
+
+def stage_is_reusable(run_dir: Path, manifest_path: Path, current_stage_key: Mapping[str, object]) -> bool:
+    if not manifest_path.exists():
+        return False
+    manifest = read_json(manifest_path)
+    if not isinstance(manifest, dict):
+        return False
+    stored_key = manifest.get("stage_key")
+    if not isinstance(stored_key, dict):
+        return False
+    if stored_key.get("hash") != current_stage_key.get("hash"):
+        return False
+    output_files = manifest.get("output_files", [])
+    if not isinstance(output_files, list):
+        return False
+    return all((run_dir / str(path)).exists() for path in output_files)
