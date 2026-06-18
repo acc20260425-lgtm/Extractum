@@ -662,7 +662,8 @@ class AgenticArtifactHelperTests(unittest.TestCase):
             metrics = read_json(run_dir / "final" / "metrics.json")
 
             self.assertEqual(result["report_file"], "final/report.md")
-            self.assertIn("summary and analysis of a YouTube video transcript", report)
+            self.assertIn("саммари и анализом транскрипта YouTube-видео", report)
+            self.assertNotIn("summary and analysis of a YouTube video transcript", report)
             self.assertIn("## Table of Contents", report)
             self.assertIn("## Structured Analysis", report)
             self.assertEqual(metrics["strategy"], "moc_agentic_writer")

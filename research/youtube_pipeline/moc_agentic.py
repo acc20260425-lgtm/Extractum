@@ -796,7 +796,7 @@ def quality_check(run_dir: Path) -> dict[str, object]:
     ]
     final_report_path = run_dir / "final" / "report.md"
     final_report = final_report_path.read_text(encoding="utf-8") if final_report_path.exists() else ""
-    source_note_present = "summary and analysis of a youtube video transcript" in final_report.lower()
+    source_note_present = _has_final_source_note(final_report)
     coverage = {
         "schema": "agentic-coverage-v1",
         "valid": not missing_files,
@@ -873,7 +873,7 @@ def assemble_report(run_dir: Path) -> dict[str, object]:
     report_parts = [
         f"# {title}",
         "",
-        "This report is a summary and analysis of a YouTube video transcript.",
+        _source_note_for_run(run_dir),
         "",
         "## Table of Contents",
     ]
@@ -918,6 +918,30 @@ def assemble_report(run_dir: Path) -> dict[str, object]:
     }
     write_json(final_dir / "result.json", result)
     return result
+
+
+def _source_note_for_run(run_dir: Path) -> str:
+    language = ""
+    for manifest_path, language_key in (
+        (run_dir / "prep" / "manifest.json", "language"),
+        (run_dir / "map" / "assignment_manifest.json", "output_language"),
+    ):
+        if language or not manifest_path.exists():
+            continue
+        manifest = read_json(manifest_path)
+        if isinstance(manifest, dict):
+            language = str(manifest.get(language_key, "")).lower()
+    if language.startswith("ru"):
+        return "Этот отчет является саммари и анализом транскрипта YouTube-видео."
+    return "This report is a summary and analysis of a YouTube video transcript."
+
+
+def _has_final_source_note(report: str) -> bool:
+    normalized = " ".join(report.lower().split())
+    return (
+        "summary and analysis of a youtube video transcript" in normalized
+        or "саммари и анализом транскрипта youtube-видео" in normalized
+    )
 
 
 def _first_heading(markdown: str) -> str:
