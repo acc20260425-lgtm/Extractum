@@ -42,6 +42,7 @@ from research.youtube_pipeline.youtube_summary_workflow import (
     WORKFLOW_STATE_SCHEMA,
     compute_options_hash,
     normalize_workflow_options,
+    read_run_index,
     rebuild_run_index,
     write_run_index,
 )
@@ -117,6 +118,35 @@ Add these tests to `AgenticArtifactHelperTests`:
 
             write_run_index(run_root, index)
             self.assertEqual(read_json(run_root / "run_index.json"), index)
+
+    def test_read_run_index_rebuilds_broken_index_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_root = Path(temp_dir) / "runs"
+            run_dir = run_root / "sample" / "20260618-160000"
+            state = {
+                "schema": WORKFLOW_STATE_SCHEMA,
+                "run_root": str(run_root),
+                "run_dir": str(run_dir),
+                "transcript_path": "input.txt",
+                "transcript_sha256": "abc",
+                "output_language": "ru",
+                "target_words": 10000,
+                "options_hash": "def",
+                "current_stage": "map_assignments_ready",
+                "next_action": "dispatch_map_extractors",
+                "artifacts": {},
+                "counts": {},
+                "commands": {},
+                "created_at": "2026-06-18T16:00:00",
+                "updated_at": "2026-06-18T16:00:00",
+                "validation_warnings": [],
+            }
+            write_json(run_dir / "workflow_state.json", state)
+            (run_root / "run_index.json").write_text("{broken", encoding="utf-8")
+
+            index = read_run_index(run_root)
+
+            self.assertEqual(index["runs"][0]["run_dir"], str(run_dir))
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -124,7 +154,7 @@ Add these tests to `AgenticArtifactHelperTests`:
 Run:
 
 ```powershell
-python -m unittest research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_youtube_summary_options_hash_ignores_volatile_paths research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_youtube_summary_options_hash_changes_for_workflow_fields research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_run_index_round_trip_and_rebuild_from_state_files
+python -m unittest research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_youtube_summary_options_hash_ignores_volatile_paths research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_youtube_summary_options_hash_changes_for_workflow_fields research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_run_index_round_trip_and_rebuild_from_state_files research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_read_run_index_rebuilds_broken_index_file
 ```
 
 Expected: fail with `ModuleNotFoundError: No module named 'research.youtube_pipeline.youtube_summary_workflow'`.
@@ -237,7 +267,10 @@ def read_run_index(run_root: Path) -> dict[str, object]:
     index_path = run_root / "run_index.json"
     if not index_path.exists():
         return {"schema": RUN_INDEX_SCHEMA, "runs": []}
-    value = read_json(index_path)
+    try:
+        value = read_json(index_path)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return rebuild_run_index(run_root)
     if not isinstance(value, dict) or value.get("schema") != RUN_INDEX_SCHEMA:
         return rebuild_run_index(run_root)
     runs = value.get("runs")
@@ -281,10 +314,10 @@ def rebuild_run_index(run_root: Path) -> dict[str, object]:
 Run:
 
 ```powershell
-python -m unittest research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_youtube_summary_options_hash_ignores_volatile_paths research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_youtube_summary_options_hash_changes_for_workflow_fields research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_run_index_round_trip_and_rebuild_from_state_files
+python -m unittest research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_youtube_summary_options_hash_ignores_volatile_paths research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_youtube_summary_options_hash_changes_for_workflow_fields research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_run_index_round_trip_and_rebuild_from_state_files research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_read_run_index_rebuilds_broken_index_file
 ```
 
-Expected: `Ran 3 tests` and `OK`.
+Expected: `Ran 4 tests` and `OK`.
 
 - [ ] **Step 5: Commit Task 1**
 
@@ -395,6 +428,39 @@ Add these tests:
             self.assertNotEqual(second["run_dir"], first["run_dir"])
             self.assertFalse(second["resumed"])
 
+    def test_start_youtube_summary_run_rejects_explicit_run_dir_without_state(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            explicit_run_dir = Path(temp_dir) / "explicit_run"
+
+            with self.assertRaises(FileNotFoundError):
+                start_youtube_summary_run(
+                    FIXTURES_DIR / "agentic_tiny_transcript.txt",
+                    run_root=Path(temp_dir) / "summary_runs",
+                    run_dir=explicit_run_dir,
+                    output_language="ru",
+                    target_words=10000,
+                    target_tokens=160,
+                    overlap_tokens=30,
+                    planner_context_tokens=3000,
+                )
+
+    def test_start_youtube_summary_run_rejects_explicit_run_dir_with_invalid_state(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            explicit_run_dir = Path(temp_dir) / "explicit_run"
+            write_json(explicit_run_dir / "workflow_state.json", {"schema": "wrong"})
+
+            with self.assertRaises(ValueError):
+                start_youtube_summary_run(
+                    FIXTURES_DIR / "agentic_tiny_transcript.txt",
+                    run_root=Path(temp_dir) / "summary_runs",
+                    run_dir=explicit_run_dir,
+                    output_language="ru",
+                    target_words=10000,
+                    target_tokens=160,
+                    overlap_tokens=30,
+                    planner_context_tokens=3000,
+                )
+
     def test_update_workflow_state_advances_stage_and_preserves_commands(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             state = start_youtube_summary_run(
@@ -430,7 +496,7 @@ Add these tests:
 Run:
 
 ```powershell
-python -m unittest research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_start_youtube_summary_run_creates_state_and_assignments research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_start_youtube_summary_run_resumes_latest_matching_run research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_start_youtube_summary_run_force_creates_new_run research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_update_workflow_state_advances_stage_and_preserves_commands
+python -m unittest research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_start_youtube_summary_run_creates_state_and_assignments research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_start_youtube_summary_run_resumes_latest_matching_run research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_start_youtube_summary_run_force_creates_new_run research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_start_youtube_summary_run_rejects_explicit_run_dir_without_state research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_start_youtube_summary_run_rejects_explicit_run_dir_with_invalid_state research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_update_workflow_state_advances_stage_and_preserves_commands
 ```
 
 Expected: fail with import errors for the new workflow functions.
@@ -546,12 +612,13 @@ def start_youtube_summary_run(
 
     if run_dir is not None:
         state_path = run_dir / "workflow_state.json"
-        if state_path.exists() and not force:
-            state = read_json(state_path)
-            if isinstance(state, dict) and state.get("schema") == WORKFLOW_STATE_SCHEMA:
-                state["resumed"] = True
-                return state
-        selected_run_dir = run_dir
+        if not state_path.exists():
+            raise FileNotFoundError(f"workflow_state.json does not exist for explicit run: {state_path}")
+        state = read_json(state_path)
+        if not isinstance(state, dict) or state.get("schema") != WORKFLOW_STATE_SCHEMA:
+            raise ValueError(f"Invalid workflow_state.json for explicit run: {state_path}")
+        state["resumed"] = True
+        return state
     elif not force:
         match = find_latest_matching_run(run_root, transcript_hash=transcript_hash, options_hash=options_digest)
         if match:
@@ -646,10 +713,10 @@ def update_workflow_state(
 Run:
 
 ```powershell
-python -m unittest research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_start_youtube_summary_run_creates_state_and_assignments research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_start_youtube_summary_run_resumes_latest_matching_run research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_start_youtube_summary_run_force_creates_new_run research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_update_workflow_state_advances_stage_and_preserves_commands
+python -m unittest research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_start_youtube_summary_run_creates_state_and_assignments research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_start_youtube_summary_run_resumes_latest_matching_run research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_start_youtube_summary_run_force_creates_new_run research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_start_youtube_summary_run_rejects_explicit_run_dir_without_state research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_start_youtube_summary_run_rejects_explicit_run_dir_with_invalid_state research.youtube_pipeline.tests.test_agentic_moc.AgenticArtifactHelperTests.test_update_workflow_state_advances_stage_and_preserves_commands
 ```
 
-Expected: `Ran 4 tests` and `OK`.
+Expected: `Ran 6 tests` and `OK`.
 
 - [ ] **Step 5: Commit Task 2**
 
@@ -800,7 +867,9 @@ Run:
 
 ```powershell
 $runRoot = "research/youtube_pipeline/runs/manual/youtube_summary_cli_smoke"
-python -m research.youtube_pipeline.tools.start_youtube_summary --transcript research/youtube_pipeline/tests/fixtures/agentic_tiny_transcript.txt --run-root $runRoot --language ru --target-words 10000 --target-tokens 160 --overlap-tokens 30 --planner-context-tokens 3000 --force
+$startOutput = python -m research.youtube_pipeline.tools.start_youtube_summary --transcript research/youtube_pipeline/tests/fixtures/agentic_tiny_transcript.txt --run-root $runRoot --language ru --target-words 10000 --target-tokens 160 --overlap-tokens 30 --planner-context-tokens 3000 --force
+$startOutput
+$runDir = ($startOutput | Where-Object { $_ -like "run_dir=*" }) -replace "^run_dir=", ""
 ```
 
 Expected output contains:
@@ -811,10 +880,10 @@ next_action=dispatch_map_extractors
 resumed=false
 ```
 
-Then run with the printed run dir:
+Then run with the captured run dir:
 
 ```powershell
-python -m research.youtube_pipeline.tools.update_youtube_summary_state --run-dir <printed-run-dir> --stage map_outputs_ready --next-action assemble_map_artifacts --artifact validation_manifest=map/validation_manifest.json --count valid_map_output_count=1 --warning "manual smoke warning"
+python -m research.youtube_pipeline.tools.update_youtube_summary_state --run-dir $runDir --stage map_outputs_ready --next-action assemble_map_artifacts --artifact validation_manifest=map/validation_manifest.json --count valid_map_output_count=1 --warning "manual smoke warning"
 ```
 
 Expected output contains:
@@ -899,7 +968,7 @@ Inspect `.gitignore` for `.agents/skills` rules. If it already allows `.agents/s
 
 Create `.agents/skills/youtube-summary/SKILL.md`:
 
-```markdown
+````markdown
 ---
 name: youtube-summary
 description: Use when the user wants a long report from a YouTube transcript with one public skill request.
@@ -985,7 +1054,7 @@ Return:
 - `final/metrics.json`;
 - validation warnings from `workflow_state.json`;
 - any files that still require user or sub-agent action.
-```
+````
 
 - [ ] **Step 5: Run skill contract tests**
 
@@ -1015,7 +1084,7 @@ git commit -m "feat: add public youtube summary skill"
 
 Insert this after the opening paragraph of `## Agentic MoC Skills Workflow`:
 
-```markdown
+````markdown
 ### Public Wrapper Skill
 
 For normal use, ask Codex:
@@ -1034,7 +1103,7 @@ not manually run the deterministic Python commands during normal use.
 Map extraction still requires sub-agents. If sub-agents are unavailable before
 map extraction, the skill pauses instead of replacing extractor work with direct
 LLM API calls or hidden main-agent reasoning.
-```
+````
 
 - [ ] **Step 2: Fix existing README wording about map extraction**
 
