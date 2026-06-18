@@ -16,6 +16,7 @@ RESERVED_RUN_ARTIFACT_NAMES = {
     "raw_requests.jsonl",
     "raw_responses.jsonl",
 }
+RESERVED_RUN_ARTIFACT_NAMES_CASEFOLDED = {name.casefold() for name in RESERVED_RUN_ARTIFACT_NAMES}
 
 
 def write_json(path: Path, payload: Any) -> None:
@@ -32,7 +33,7 @@ def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
 def write_extra_artifact(path: Path, payload: Any) -> None:
     if path.name != str(path) or path.name in {"", ".", ".."}:
         raise ValueError(f"extra artifact filename must be a simple relative name: {path}")
-    if path.name in RESERVED_RUN_ARTIFACT_NAMES:
+    if path.name.casefold() in RESERVED_RUN_ARTIFACT_NAMES_CASEFOLDED:
         raise ValueError(f"extra artifact filename is reserved: {path.name}")
     if isinstance(payload, str):
         path.write_text(payload, encoding="utf-8")
@@ -70,7 +71,7 @@ def write_run_artifacts(
         artifact_name = Path(filename)
         if artifact_name.name != str(artifact_name) or artifact_name.name in {"", ".", ".."}:
             raise ValueError(f"extra artifact filename must be a simple relative name: {artifact_name}")
-        if artifact_name.name in RESERVED_RUN_ARTIFACT_NAMES:
+        if artifact_name.name.casefold() in RESERVED_RUN_ARTIFACT_NAMES_CASEFOLDED:
             raise ValueError(f"extra artifact filename is reserved: {artifact_name.name}")
         output_path = output_dir / artifact_name
         if isinstance(payload, str):
