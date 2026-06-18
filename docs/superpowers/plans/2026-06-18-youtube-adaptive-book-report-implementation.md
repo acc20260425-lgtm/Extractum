@@ -478,7 +478,7 @@ Expected: commit succeeds.
 - Create: `research/youtube_pipeline/adaptive.py`
 - Create: `research/youtube_pipeline/tests/test_adaptive.py`
 
-- [ ] **Step 1: Write failing helper tests**
+- [x] **Step 1: Write failing helper tests**
 
 Create `research/youtube_pipeline/tests/test_adaptive.py`:
 
@@ -593,7 +593,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run helper tests to verify they fail**
+- [x] **Step 2: Run helper tests to verify they fail**
 
 Run:
 
@@ -603,7 +603,7 @@ python -m unittest research.youtube_pipeline.tests.test_adaptive -v
 
 Expected: FAIL because `research.youtube_pipeline.adaptive` does not exist.
 
-- [ ] **Step 3: Implement `adaptive.py` dataclasses and budget helpers**
+- [x] **Step 3: Implement `adaptive.py` dataclasses and budget helpers**
 
 Create `research/youtube_pipeline/adaptive.py` with these imports and budget code:
 
@@ -711,7 +711,7 @@ def compute_budget_plan(
     )
 ```
 
-- [ ] **Step 4: Implement DP partitioning**
+- [x] **Step 4: Implement DP partitioning**
 
 Append:
 
@@ -748,7 +748,7 @@ def partition_weighted_chunks(weights: list[int | float], chapter_count: int) ->
     return groups_out
 ```
 
-- [ ] **Step 5: Implement descriptors, bridge, token budgets, and markdown helpers**
+- [x] **Step 5: Implement descriptors, bridge, token budgets, and markdown helpers**
 
 Append:
 
@@ -881,7 +881,7 @@ def assemble_adaptive_markdown_report(
     return "\n".join(parts).strip() + "\n"
 ```
 
-- [ ] **Step 6: Run helper tests**
+- [x] **Step 6: Run helper tests**
 
 Run:
 
@@ -891,7 +891,7 @@ python -m unittest research.youtube_pipeline.tests.test_adaptive -v
 
 Expected: PASS.
 
-- [ ] **Step 7: Run all tests**
+- [x] **Step 7: Run all tests**
 
 Run:
 
@@ -901,7 +901,7 @@ python -m unittest discover -s research/youtube_pipeline/tests -v
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 Run:
 
