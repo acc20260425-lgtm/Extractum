@@ -288,7 +288,7 @@ Add this test:
                 "--video-id",
                 "video1",
                 "--strategy",
-                "adaptive_book_report",
+                "chunk_map_reduce",
                 "--output-language",
                 "ru",
                 "--max-tokens",
@@ -329,7 +329,7 @@ Add invalid override test:
                 "--video-id",
                 "video1",
                 "--strategy",
-                "adaptive_book_report",
+                "chunk_map_reduce",
                 "--min-report-words",
                 "9000",
                 "--max-report-words",
@@ -1385,8 +1385,47 @@ Add test:
         self.assertEqual(outcome.extra_metrics["chapter_count"], 2)
         self.assertEqual(outcome.extra_metrics["expansion_call_count"], 1)
         self.assertEqual(outcome.extra_metrics["target_report_words"], 1400)
+        self.assertFalse(outcome.extra_metrics["outline_fallback_used"])
+        self.assertFalse(outcome.extra_metrics["chapter_expansion_shortfall"])
+        self.assertTrue(outcome.extra_metrics["substance_score_calibration_warning"])
         chapter_generation_call = client.calls[5]
         self.assertEqual(chapter_generation_call[1], 2254)
+
+    def test_adaptive_book_report_records_outline_fallback_and_expansion_shortfall(self):
+        transcript = " ".join(f"word{i}" for i in range(1200))
+        still_short = " ".join(f"short_{i}" for i in range(100))
+        client = SequenceClient(
+            [
+                normalized_chunk("Chunk one dense notes", 1),
+                normalized_chunk("Chunk two dense notes", 2),
+                normalized_chunk("Chunk three dense notes", 3),
+                normalized_chunk("Chunk four dense notes", 4),
+                "{not valid json",
+                "Tiny chapter",
+                still_short,
+                "Second chapter has enough words " * 140,
+                '{"timeline":[]}',
+                '{"claims":[],"evidence":[]}',
+                '{"action_items":[],"open_questions":[]}',
+                "Overview",
+                "Conclusion",
+            ]
+        )
+
+        outcome = run_adaptive_book_report(
+            client=client,
+            transcript=transcript,
+            options=StrategyOptions(
+                output_language="ru",
+                max_tokens=5000,
+                chunk_token_limit=300,
+                chapter_target_words=900,
+            ),
+        )
+
+        self.assertTrue(outcome.extra_metrics["outline_fallback_used"])
+        self.assertTrue(outcome.extra_metrics["chapter_expansion_shortfall"])
+        self.assertFalse(outcome.extra_metrics["substance_score_calibration_warning"])
 ```
 
 The expected `2254` max token value is `ceil(700 * 2.8 * 1.15)`, using the language-aware Russian output token budget.
@@ -1510,6 +1549,38 @@ def markdown_open_questions(result: NormalizedResult) -> str:
     if not result.open_questions:
         return "_No open questions extracted._"
     return "\n".join(f"- {item.text} — {item.why_it_matters}" for item in result.open_questions)
+
+
+def compact_json_items(items: object, *, limit: int, word_limit: int) -> list[object]:
+    if not isinstance(items, list):
+        return []
+    compacted: list[object] = []
+    for item in items[:limit]:
+        if isinstance(item, dict):
+            compacted.append(
+                {
+                    key: first_words(value, word_limit) if isinstance(value, str) else value
+                    for key, value in item.items()
+                }
+            )
+        else:
+            compacted.append(first_words(str(item), word_limit))
+    return compacted
+
+
+def compact_chunk_result_for_chapter(row: dict[str, object]) -> dict[str, object]:
+    result = row.get("result") if isinstance(row.get("result"), dict) else {}
+    return {
+        "chunk_index": row.get("chunk_index"),
+        "total_chunks": row.get("total_chunks"),
+        "substance_score": row.get("substance_score", 3),
+        "summary_text": first_words(str(result.get("summary_text", "")), 250),
+        "timeline": compact_json_items(result.get("timeline"), limit=5, word_limit=50),
+        "claims": compact_json_items(result.get("claims"), limit=5, word_limit=50),
+        "evidence": compact_json_items(result.get("evidence"), limit=5, word_limit=50),
+        "action_items": compact_json_items(result.get("action_items"), limit=3, word_limit=50),
+        "open_questions": compact_json_items(result.get("open_questions"), limit=3, word_limit=50),
+    }
 ```
 
 - [ ] **Step 5: Implement `run_adaptive_book_report`**
@@ -1644,7 +1715,9 @@ Outline and fallback:
     outline_response = call_llm(outline_messages, min(options.max_tokens, 2000))
     outline_payload, outline_valid = parse_json_payload(outline_response.text)
     json_valid = json_valid and outline_valid
+    outline_fallback_used = False
     if not outline_valid:
+        outline_fallback_used = True
         outline_payload = {
             "report_thesis": first_words(chunk_results[0]["result"].get("summary_text", ""), 30),
             "key_terms": [],
@@ -1671,6 +1744,7 @@ Chapters and expansion:
     chapters: list[str] = []
     chapter_titles: list[str] = []
     expansion_call_count = 0
+    chapter_expansion_shortfall = False
     previous_bridge = ""
     outline_chapters = outline_payload.get("chapters") if isinstance(outline_payload.get("chapters"), list) else []
     for group_index, (start, end) in enumerate(groups, start=1):
@@ -1688,7 +1762,7 @@ Chapters and expansion:
         )
         title = str(outline_entry.get("title") or f"Chapter {group_index}")
         chapter_titles.append(title)
-        assigned_notes = chunk_results[start:end]
+        assigned_notes = [compact_chunk_result_for_chapter(row) for row in chunk_results[start:end]]
         assigned_notes_json = json.dumps(assigned_notes, ensure_ascii=False, indent=2)
         chapter_messages = build_adaptive_chapter_generation_messages(
             chapter_index=group_index,
@@ -1725,6 +1799,8 @@ Chapters and expansion:
             ).text.strip()
             if expanded:
                 chapter_text = expanded
+        if len(chapter_text.split()) < int(0.8 * budget_plan.chapter_word_target):
+            chapter_expansion_shortfall = True
         chapters.append(chapter_text)
         previous_bridge = extract_previous_chapter_bridge(chapter_text)
 ```
@@ -1816,6 +1892,8 @@ Return:
             "chapter_count": budget_plan.chapter_count,
             "chapter_word_target": budget_plan.chapter_word_target,
             "expansion_call_count": expansion_call_count,
+            "outline_fallback_used": outline_fallback_used,
+            "chapter_expansion_shortfall": chapter_expansion_shortfall,
             "average_substance_score": budget_plan.average_substance_score,
             "substance_multiplier": budget_plan.substance_multiplier,
             "substance_score_calibration_warning": score_warning,
