@@ -824,6 +824,7 @@ def quality_check(run_dir: Path) -> dict[str, object]:
         for paragraph, files in paragraphs.items()
         if len(files) > 1 and word_count(paragraph) >= 12
     ]
+    high_importance_fact_coverage = _high_importance_fact_coverage(run_dir, assignments)
     final_report_path = run_dir / "final" / "report.md"
     final_report_exists = final_report_path.exists()
     final_report = final_report_path.read_text(encoding="utf-8") if final_report_exists else ""
@@ -837,6 +838,7 @@ def quality_check(run_dir: Path) -> dict[str, object]:
         "total_section_words": sum(section_word_counts.values()),
         "duplicate_headings": duplicate_headings,
         "duplicate_paragraphs": duplicate_paragraphs,
+        "high_importance_fact_coverage": high_importance_fact_coverage,
         "final_report_exists": final_report_exists,
         "final_source_note_present": final_source_note_present,
         "source_note_present": final_source_note_present,
@@ -851,6 +853,7 @@ def quality_check(run_dir: Path) -> dict[str, object]:
         f"- Total section words: {coverage['total_section_words']}",
         f"- Duplicate headings: {len(duplicate_headings)}",
         f"- Duplicate paragraphs: {len(duplicate_paragraphs)}",
+        f"- High-importance fact coverage: {high_importance_fact_coverage['covered_count']}/{high_importance_fact_coverage['assigned_count']}",
         f"- Final report exists: {final_report_exists}",
         f"- Final source note present: {final_source_note_present}",
         f"- Source label count: {source_label_count}",
@@ -859,6 +862,69 @@ def quality_check(run_dir: Path) -> dict[str, object]:
     (run_dir / "review").mkdir(parents=True, exist_ok=True)
     (run_dir / "review" / "coverage.md").write_text("\n".join(coverage_md), encoding="utf-8", newline="\n")
     return coverage
+
+
+def _high_importance_fact_coverage(
+    run_dir: Path,
+    assignments: list[dict[str, object]],
+    *,
+    threshold: int = 4,
+) -> dict[str, object]:
+    facts_path = run_dir / "alignment" / "deduplicated_facts.json"
+    mapped_facts_path = run_dir / "map" / "mapped_facts.jsonl"
+    if not facts_path.exists() or not mapped_facts_path.exists():
+        return {"threshold": threshold, "assigned_count": 0, "covered_count": 0, "missing_count": 0, "missing": []}
+
+    facts = read_json(facts_path)
+    mapped_facts = read_jsonl(mapped_facts_path)
+    if not isinstance(facts, list):
+        return {"threshold": threshold, "assigned_count": 0, "covered_count": 0, "missing_count": 0, "missing": []}
+
+    source_importance = {
+        str(fact.get("fact_id", "")): int(fact.get("importance", 0) or 0)
+        for fact in mapped_facts
+        if isinstance(fact, dict)
+    }
+    high_facts: dict[str, dict[str, object]] = {}
+    for fact in facts:
+        if not isinstance(fact, dict):
+            continue
+        max_importance = max((source_importance.get(str(source_id), 0) for source_id in fact.get("source_fact_ids", [])), default=0)
+        if max_importance >= threshold:
+            high_facts[str(fact.get("fact_id", ""))] = fact
+
+    assigned_count = 0
+    covered_count = 0
+    missing: list[dict[str, object]] = []
+    for assignment in assignments:
+        section_file = str(assignment.get("section_file", ""))
+        section_path = run_dir / section_file
+        section_text = section_path.read_text(encoding="utf-8") if section_path.exists() else ""
+        normalized_section = _normalize_coverage_text(section_text)
+        for fact_id_value in assignment.get("aligned_fact_ids", []):
+            fact_id = str(fact_id_value)
+            fact = high_facts.get(fact_id)
+            if fact is None:
+                continue
+            assigned_count += 1
+            claim = str(fact.get("claim", ""))
+            normalized_claim = _normalize_coverage_text(claim)
+            if normalized_claim and normalized_claim in normalized_section:
+                covered_count += 1
+            else:
+                missing.append({"section_file": section_file, "fact_id": fact_id, "claim": claim})
+
+    return {
+        "threshold": threshold,
+        "assigned_count": assigned_count,
+        "covered_count": covered_count,
+        "missing_count": len(missing),
+        "missing": missing,
+    }
+
+
+def _normalize_coverage_text(text: str) -> str:
+    return " ".join(re.findall(r"\w+", text.lower(), flags=re.UNICODE))
 
 
 def build_structured_analysis(run_dir: Path) -> dict[str, object]:

@@ -724,6 +724,24 @@ class AgenticArtifactHelperTests(unittest.TestCase):
             self.assertGreater(coverage["total_section_words"], 0)
             self.assertTrue((run_dir / "review" / "coverage.md").exists())
 
+    def test_quality_check_reports_high_importance_assigned_fact_coverage(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = self._write_aligned_section_workspace(Path(temp_dir))
+            section_path = run_dir / "sections" / "001-node-1.md"
+            section_path.write_text(
+                "## Node 1\n\nEvidence should be stored with timestamps.\n",
+                encoding="utf-8",
+            )
+
+            coverage = quality_check(run_dir)
+            fact_coverage = coverage["high_importance_fact_coverage"]
+
+            self.assertEqual(fact_coverage["assigned_count"], 2)
+            self.assertEqual(fact_coverage["covered_count"], 1)
+            self.assertEqual(fact_coverage["missing_count"], 1)
+            self.assertEqual(fact_coverage["missing"][0]["section_file"], "sections/002-node-2.md")
+            self.assertEqual(fact_coverage["missing"][0]["fact_id"], "fact_cluster_0001")
+
     def test_build_structured_analysis_uses_fact_clusters(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             run_dir = self._write_aligned_section_workspace(Path(temp_dir))
