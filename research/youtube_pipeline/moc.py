@@ -178,10 +178,6 @@ def moc_depth_multiplier(target_depth: str) -> float:
     }.get(target_depth, 1.0)
 
 
-def _scaled_node_count(count: int, multiplier: float) -> int:
-    return max(1, min(MAX_MOC_NODES, round(count * multiplier)))
-
-
 def compute_moc_budget(transcript_words: int, options: Any) -> MocBudget:
     base_min, base_max, base_node_min, base_node_max = select_moc_base(transcript_words)
     multiplier = moc_depth_multiplier(getattr(options, "target_depth", "auto"))
@@ -198,10 +194,8 @@ def compute_moc_budget(transcript_words: int, options: Any) -> MocBudget:
     if report_min_words > report_max_words:
         raise ValueError("min_report_words cannot be greater than max_report_words")
 
-    expected_node_min = _scaled_node_count(base_node_min, multiplier)
-    expected_node_max = _scaled_node_count(base_node_max, multiplier)
-    if expected_node_max < expected_node_min:
-        expected_node_max = expected_node_min
+    expected_node_min = base_node_min
+    expected_node_max = min(base_node_max, MAX_MOC_NODES)
 
     return MocBudget(
         transcript_words=transcript_words,

@@ -58,6 +58,18 @@ class MocTranscriptTests(unittest.TestCase):
         self.assertEqual(budget.report_max_words, 20000)
         self.assertEqual(budget.target_report_words, 19500)
 
+    def test_compute_moc_budget_depth_scales_words_not_node_expectations(self):
+        budget = compute_moc_budget(
+            transcript_words=41384,
+            options=StrategyOptions(target_depth="book"),
+        )
+
+        self.assertEqual(budget.report_min_words, 14000)
+        self.assertEqual(budget.report_max_words, 20000)
+        self.assertEqual(budget.target_report_words, 17000)
+        self.assertEqual(budget.expected_node_min, 8)
+        self.assertEqual(budget.expected_node_max, 12)
+
     def test_compute_moc_budget_rejects_final_min_greater_than_max(self):
         with self.assertRaisesRegex(
             ValueError,
