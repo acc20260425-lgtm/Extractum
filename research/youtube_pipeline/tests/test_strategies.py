@@ -6,6 +6,7 @@ from research.youtube_pipeline.strategies import (
     run_adaptive_book_report,
     run_antigravity_chunk_map_reduce,
     run_chunk_map_reduce,
+    run_moc_guided_map_reduce,
     run_one_shot_full_json,
 )
 
@@ -70,6 +71,7 @@ class StrategyTests(unittest.TestCase):
                 "adaptive_book_report",
                 "antigravity_chunk_map_reduce",
                 "chunk_map_reduce",
+                "moc_guided_map_reduce",
                 "one_shot_full_json",
                 "one_shot_markdown_plus_json",
                 "timeline_segment_reduce",
@@ -264,6 +266,103 @@ class StrategyTests(unittest.TestCase):
         self.assertEqual(outcome.request_count, 1)
         self.assertEqual(outcome.extra_metrics["strategy_variant"], "adaptive_book_report_short_fallback")
         self.assertEqual(outcome.extra_metrics["transcript_words"], 2)
+
+    def test_moc_guided_map_reduce_maps_aligns_generates_and_assembles(self):
+        transcript = "\n".join(
+            [
+                "[00:00:00] Media power opening",
+                "[00:00:10] Media serves state power",
+                "[00:00:20] Family and technology closing",
+                "[00:00:30] Family matters",
+            ]
+        )
+        client = SequenceClient(
+            [
+                (
+                    '{"video_id":"video1","report_thesis":"Thesis","global_key_terms":["media","family"],'
+                    '"nodes":['
+                    '{"node_id":"node_001","title":"Media","time_span":{"start_ms":0,"end_ms":20000},"importance":"high","target_word_count":20,"description_outline":"Media topic","essential_key_terms":["media"],"required_questions":[],"expected_fact_types":["claims"]},'
+                    '{"node_id":"node_002","title":"Family","time_span":{"start_ms":20000,"end_ms":40000},"importance":"medium","target_word_count":20,"description_outline":"Family topic","essential_key_terms":["family"],"required_questions":[],"expected_fact_types":["claims"]}'
+                    ']}'
+                ),
+                (
+                    '{"chunk_index":1,"chunk_time_span":{"start_ms":0,"end_ms":40000},'
+                    '"facts":['
+                    '{"fact_id":"f1","kind":"claim","text":"Media serves state power","importance":"high","time_span":{"start_ms":10000,"end_ms":11000},"verbatim_quote":"Media serves state power","speaker":null,"entities":["media"],"topic_tags":["state"],"moc_node_hint":null},'
+                    '{"fact_id":"f2","kind":"claim","text":"Family matters","importance":"medium","time_span":{"start_ms":30000,"end_ms":31000},"verbatim_quote":"Family matters","speaker":null,"entities":["family"],"topic_tags":["family"],"moc_node_hint":null}'
+                    '],"action_items":[],"open_questions":[]}'
+                ),
+                "## Section 1: Media\n\nMedia section has enough words with [00:00:10] timestamp " * 3,
+                "## Section 2: Family\n\nFamily section has enough words with [00:00:30] timestamp " * 3,
+                "Executive overview",
+                "Final conclusion",
+            ]
+        )
+
+        outcome = run_moc_guided_map_reduce(
+            client=client,
+            transcript=transcript,
+            options=StrategyOptions(
+                output_language="ru",
+                video_id="video1",
+                max_tokens=2000,
+                chunk_token_limit=100,
+                chunk_overlap_tokens=10,
+                min_report_words=40,
+                max_report_words=40,
+                chapter_target_words=20,
+            ),
+        )
+
+        self.assertIn("Generated via `moc_guided_map_reduce`", outcome.result.summary_text)
+        self.assertIn("Media", outcome.result.summary_text)
+        self.assertIn("Family", outcome.result.summary_text)
+        self.assertEqual(outcome.request_count, 6)
+        self.assertEqual(outcome.result.timeline[0].title, "Media")
+        self.assertEqual(outcome.result.claims[0].text, "Media serves state power")
+        self.assertIn("moc.json", outcome.extra_artifacts)
+        self.assertIn("mapped_facts.jsonl", outcome.extra_artifacts)
+        self.assertEqual(outcome.extra_metrics["moc_node_count"], 2)
+        self.assertEqual(outcome.extra_metrics["deduplicated_fact_count"], 2)
+        self.assertGreater(outcome.extra_metrics["estimated_transcript_tokens"], 0)
+        self.assertEqual(outcome.extra_metrics["parallelism_enabled"], False)
+        self.assertEqual(outcome.extra_metrics["parallelizable_map_call_count"], 1)
+        self.assertEqual(outcome.extra_metrics["parallelizable_node_call_count"], 2)
+
+    def test_moc_guided_map_reduce_records_invalid_json_when_moc_fallback_is_used(self):
+        transcript = "\n".join(
+            [
+                "[00:00:00] Alpha topic",
+                "[00:00:10] Beta topic",
+            ]
+        )
+        client = SequenceClient(
+            [
+                "not json",
+                '{"chunk_index":1,"facts":[],"action_items":[],"open_questions":[]}',
+                "Fallback section text with enough words [00:00:00] " * 5,
+                "Executive overview",
+                "Final conclusion",
+            ]
+        )
+
+        outcome = run_moc_guided_map_reduce(
+            client=client,
+            transcript=transcript,
+            options=StrategyOptions(
+                output_language="ru",
+                video_id="video1",
+                max_tokens=2000,
+                chunk_token_limit=100,
+                chunk_overlap_tokens=10,
+                min_report_words=20,
+                max_report_words=20,
+                chapter_target_words=20,
+            ),
+        )
+
+        self.assertFalse(outcome.json_valid)
+        self.assertTrue(outcome.extra_metrics["moc_fallback_used"])
 
 
 if __name__ == "__main__":
