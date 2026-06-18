@@ -1,0 +1,16 @@
+{
+  "aligned_fact_count": 1,
+  "nodes": [
+    {
+      "aligned_fact_ids": [
+        "fact_cluster_0001"
+      ],
+      "chunk_ids": [
+        "chunk_001"
+      ],
+      "node_id": "moc_001"
+    }
+  ],
+  "schema": "agentic-fact-alignment-v1",
+  "unaligned_fact_count": 0
+}

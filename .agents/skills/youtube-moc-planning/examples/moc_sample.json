@@ -1,0 +1,27 @@
+{
+  "nodes": [
+    {
+      "chunk_ids": [
+        "chunk_001"
+      ],
+      "key_questions": [
+        "What problem is introduced?"
+      ],
+      "node_id": "moc_001",
+      "purpose": "Introduce the argument.",
+      "required_fact_types": [
+        "claim"
+      ],
+      "target_words": 900,
+      "time_range": {
+        "end_ms": 600000,
+        "start_ms": 0
+      },
+      "title": "Why File-Backed Reports Matter"
+    }
+  ],
+  "report_thesis": "The transcript argues for file-backed long report generation.",
+  "report_title": "File-Backed YouTube Report",
+  "source_kind": "youtube_video_transcript",
+  "target_words": 9000
+}

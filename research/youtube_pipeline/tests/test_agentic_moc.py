@@ -1,4 +1,6 @@
+import importlib.util
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -34,6 +36,7 @@ from research.youtube_pipeline.moc_agentic import (
 
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
+REPO_ROOT = Path(__file__).parents[3]
 
 
 def fixture_text(name: str) -> str:
@@ -400,6 +403,41 @@ class AgenticArtifactHelperTests(unittest.TestCase):
 
             coverage_after_assembly = quality_check(run_dir)
             self.assertTrue(coverage_after_assembly["source_note_present"])
+
+    def test_youtube_skill_files_exist_and_reference_existing_tools(self):
+        skill_files = [
+            REPO_ROOT / ".agents" / "skills" / "youtube-long-report" / "SKILL.md",
+            REPO_ROOT / ".agents" / "skills" / "youtube-map-extract" / "SKILL.md",
+            REPO_ROOT / ".agents" / "skills" / "youtube-moc-planning" / "SKILL.md",
+            REPO_ROOT / ".agents" / "skills" / "youtube-section-reduce" / "SKILL.md",
+            REPO_ROOT / ".agents" / "skills" / "youtube-report-qa" / "SKILL.md",
+        ]
+        forbidden_api_markers = ["openai.", "anthropic.", "requests.post", "chat.completions"]
+
+        for skill_file in skill_files:
+            text = skill_file.read_text(encoding="utf-8")
+            self.assertTrue(text.startswith("---\nname: youtube-"))
+            self.assertIn("## Output Contract", text)
+            self.assertIn("Direct LLM API calls are forbidden", text)
+            for marker in forbidden_api_markers:
+                self.assertNotIn(marker, text.lower())
+            for tool_name in re.findall(r"research\.youtube_pipeline\.tools\.([a-z_]+)", text):
+                self.assertIsNotNone(importlib.util.find_spec(f"research.youtube_pipeline.tools.{tool_name}"))
+
+    def test_youtube_skill_examples_are_valid_json(self):
+        example_files = [
+            REPO_ROOT / ".agents" / "skills" / "youtube-long-report" / "examples" / "map_assignment_sample.json",
+            REPO_ROOT / ".agents" / "skills" / "youtube-long-report" / "examples" / "map_output_sample.json",
+            REPO_ROOT / ".agents" / "skills" / "youtube-map-extract" / "examples" / "map_assignment_sample.json",
+            REPO_ROOT / ".agents" / "skills" / "youtube-map-extract" / "examples" / "map_output_sample.json",
+            REPO_ROOT / ".agents" / "skills" / "youtube-moc-planning" / "examples" / "moc_sample.json",
+            REPO_ROOT / ".agents" / "skills" / "youtube-section-reduce" / "examples" / "section_assignment_sample.json",
+            REPO_ROOT / ".agents" / "skills" / "youtube-section-reduce" / "examples" / "alignment_sample.json",
+        ]
+
+        for example_file in example_files:
+            payload = json.loads(example_file.read_text(encoding="utf-8"))
+            self.assertIsInstance(payload, dict)
 
     def _write_single_chunk_prep(self, temp_dir: Path) -> Path:
         run_dir = temp_dir / "run"

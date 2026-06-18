@@ -547,15 +547,15 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc
 
 **Steps:**
 
-- [ ] Add tests that verify every skill file exists, references only existing Python tools, includes no direct LLM API invocation instructions, and includes required output contracts.
-- [ ] `youtube-long-report` must be the orchestrator skill. It runs Python prep tools, dispatches map sub-agents, validates outputs, asks the planner skill for `planning/moc.raw.json`, runs MoC validation to produce `planning/moc.json`, prepares section assignments, dispatches section sub-agents, writes overview/synthesis, runs QA, builds structured analysis, and assembles the final report.
-- [ ] `youtube-map-extract` must accept one assignment JSON and write exactly the declared `output_file`.
-- [ ] `youtube-moc-planning` must consume `planning/planner_context.md` and write planner JSON to `planning/moc.raw.json`; Python validation produces the normalized `planning/moc.json`.
-- [ ] `youtube-section-reduce` must accept one assignment object from `alignment/section_assignments.jsonl` and write exactly the declared section file.
-- [ ] `youtube-report-qa` must inspect generated Markdown and validation files, then write `review/coverage.json`, `review/coverage.md`, and `review/reviewer_notes.md`.
-- [ ] Add example JSON files that match the schemas from Tasks 4, 5, and 6.
-- [ ] Each skill must state that Python tools may be invoked, but direct LLM API calls are forbidden in this workflow.
-- [ ] Run:
+- [x] Add tests that verify every skill file exists, references only existing Python tools, includes no direct LLM API invocation instructions, and includes required output contracts.
+- [x] `youtube-long-report` must be the orchestrator skill. It runs Python prep tools, dispatches map sub-agents, validates outputs, asks the planner skill for `planning/moc.raw.json`, runs MoC validation to produce `planning/moc.json`, prepares section assignments, dispatches section sub-agents, writes overview/synthesis, runs QA, builds structured analysis, and assembles the final report.
+- [x] `youtube-map-extract` must accept one assignment JSON and write exactly the declared `output_file`.
+- [x] `youtube-moc-planning` must consume `planning/planner_context.md` and write planner JSON to `planning/moc.raw.json`; Python validation produces the normalized `planning/moc.json`.
+- [x] `youtube-section-reduce` must accept one assignment object from `alignment/section_assignments.jsonl` and write exactly the declared section file.
+- [x] `youtube-report-qa` must inspect generated Markdown and validation files, then write `review/coverage.json`, `review/coverage.md`, and `review/reviewer_notes.md`.
+- [x] Add example JSON files that match the schemas from Tasks 4, 5, and 6.
+- [x] Each skill must state that Python tools may be invoked, but direct LLM API calls are forbidden in this workflow.
+- [x] Run:
 
 ```powershell
 python -m unittest research.youtube_pipeline.tests.test_agentic_moc

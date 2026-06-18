@@ -1,0 +1,12 @@
+{
+  "chunk_id": "chunk_001",
+  "max_fact_count": 20,
+  "output_file": "map/agent_outputs/chunk_001.json",
+  "output_language": "ru",
+  "target_summary_words": 250,
+  "time_range": {
+    "end_ms": 600000,
+    "start_ms": 0
+  },
+  "transcript_text": "[00:00:00] sample transcript text"
+}

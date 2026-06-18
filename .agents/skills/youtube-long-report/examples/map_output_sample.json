@@ -1,0 +1,31 @@
+{
+  "chunk_id": "chunk_001",
+  "chunk_summary": "The chunk explains why file-backed report generation preserves detail.",
+  "claims": [
+    {
+      "importance": 4,
+      "text": "Evidence should be stored with timestamps.",
+      "timestamp": "00:02:10"
+    }
+  ],
+  "entities": [
+    "Map of Content"
+  ],
+  "examples": [],
+  "facts": [
+    {
+      "chunk_id": "chunk_001",
+      "fact_type": "claim",
+      "importance": 4,
+      "local_fact_id": "fact_001",
+      "text": "Evidence should be stored with timestamps.",
+      "timestamp": "00:02:10"
+    }
+  ],
+  "open_questions": [],
+  "quotes": [],
+  "time_range": {
+    "end_ms": 600000,
+    "start_ms": 0
+  }
+}

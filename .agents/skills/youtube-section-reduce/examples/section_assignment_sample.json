@@ -1,0 +1,16 @@
+{
+  "aligned_fact_ids": [
+    "fact_cluster_0001"
+  ],
+  "chunk_ids": [
+    "chunk_001"
+  ],
+  "node_id": "moc_001",
+  "overlap_fact_ids": [],
+  "section_file": "sections/001-why-file-backed-reports-matter.md",
+  "source_timestamps": [
+    "00:02:10"
+  ],
+  "target_words": 900,
+  "title": "Why File-Backed Reports Matter"
+}
