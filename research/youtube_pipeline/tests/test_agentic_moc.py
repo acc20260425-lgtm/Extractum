@@ -1,8 +1,10 @@
 import importlib.util
+import io
 import json
 import re
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 from research.youtube_pipeline.moc_agentic import (
@@ -428,6 +430,26 @@ class AgenticArtifactHelperTests(unittest.TestCase):
 
             self.assertEqual(validation["valid_outputs"], [])
             self.assertEqual(validation["invalid_outputs"][0]["output_file"], "map/agent_outputs/chunk_001.json")
+
+    def test_validate_map_outputs_cli_prints_error_summary(self):
+        from research.youtube_pipeline.tools.validate_map_outputs import main as validate_map_outputs_cli
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = self._write_single_chunk_prep(Path(temp_dir))
+            prepare_map_assignments(run_dir, output_language="ru")
+            output_path = run_dir / "map" / "agent_outputs" / "chunk_001.json"
+            write_json(output_path, {"chunk_id": "chunk_001", "facts": []})
+            stdout = io.StringIO()
+
+            with redirect_stdout(stdout):
+                exit_code = validate_map_outputs_cli(["--run-dir", str(run_dir)])
+
+            output = stdout.getvalue()
+            self.assertEqual(exit_code, 1)
+            self.assertIn("invalid_outputs=1", output)
+            self.assertIn("map/agent_outputs/chunk_001.json", output)
+            self.assertIn("chunk_summary must be a non-empty string", output)
+            self.assertIn("map/validation_manifest.json", output)
 
     def test_assemble_map_artifacts_writes_canonical_facts(self):
         with tempfile.TemporaryDirectory() as temp_dir:
