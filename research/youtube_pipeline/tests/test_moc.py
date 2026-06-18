@@ -80,6 +80,20 @@ class MocTranscriptTests(unittest.TestCase):
                 options=StrategyOptions(min_report_words=11000, max_report_words=10000),
             )
 
+    def test_compute_moc_budget_rejects_non_positive_min_override(self):
+        with self.assertRaisesRegex(ValueError, "min_report_words must be positive"):
+            compute_moc_budget(
+                transcript_words=41384,
+                options=StrategyOptions(min_report_words=0),
+            )
+
+    def test_compute_moc_budget_rejects_non_positive_max_override(self):
+        with self.assertRaisesRegex(ValueError, "max_report_words must be positive"):
+            compute_moc_budget(
+                transcript_words=41384,
+                options=StrategyOptions(max_report_words=-1),
+            )
+
     def test_build_temporal_projection_groups_timestamped_segments(self):
         segments = [
             TranscriptSegment(
@@ -127,6 +141,22 @@ class MocTranscriptTests(unittest.TestCase):
         self.assertEqual(window["first_words"].split()[-1], "word79")
         self.assertEqual(window["last_words"].split()[0], "word20")
         self.assertEqual(window["last_words"].split()[-1], "word99")
+
+    def test_build_temporal_projection_caps_sampled_timestamped_lines(self):
+        text = " ".join(f"word{index}" for index in range(5000))
+        segments = [TranscriptSegment("seg_000001", 0, 1000, None, text)]
+
+        projection = build_temporal_projection(
+            segments,
+            source_word_count=5000,
+            window_ms=300000,
+        )
+        sample_line = projection["windows"][0]["sampled_timestamped_lines"][0]
+
+        self.assertEqual(len(sample_line.split()), 81)
+        self.assertIn("[00:00:00]", sample_line)
+        self.assertIn("word79", sample_line)
+        self.assertNotIn("word80", sample_line)
 
     def test_build_temporal_projection_splits_dense_windows_by_word_threshold(self):
         dense_text = " ".join(f"word{index}" for index in range(1000))

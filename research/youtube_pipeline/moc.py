@@ -187,6 +187,10 @@ def compute_moc_budget(transcript_words: int, options: Any) -> MocBudget:
     max_override = getattr(options, "max_report_words", None)
     scaled_min = max(MIN_NODE_WORDS, round(base_min * multiplier))
     scaled_max = round(base_max * multiplier)
+    if min_override is not None and int(min_override) <= 0:
+        raise ValueError("min_report_words must be positive")
+    if max_override is not None and int(max_override) <= 0:
+        raise ValueError("max_report_words must be positive")
     report_min_words = int(min_override) if min_override is not None else scaled_min
     report_max_words = int(max_override) if max_override is not None else scaled_max
     report_min_words = min(report_min_words, MAX_REPORT_WORDS)
@@ -301,8 +305,12 @@ def _projection_window(
         "word_count": word_count(text),
         "first_words": first_words(text, 80),
         "last_words": last_words(text, 80),
-        "sampled_timestamped_lines": format_segments_for_prompt(segments[:3]).splitlines(),
+        "sampled_timestamped_lines": _sample_timestamped_lines(segments[:3]),
     }
+
+
+def _sample_timestamped_lines(segments: list[TranscriptSegment]) -> list[str]:
+    return [f"[{format_ms(segment.start_ms)}] {first_words(segment.text, 80)}" for segment in segments]
 
 
 def split_budget_evenly(total: int, count: int) -> list[int]:
