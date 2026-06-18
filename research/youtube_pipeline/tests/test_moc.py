@@ -43,8 +43,8 @@ class MocTranscriptTests(unittest.TestCase):
 
         chunks = chunk_segments_by_approx_tokens(
             segments,
-            max_tokens=4,
-            overlap_tokens=2,
+            max_tokens=20,
+            overlap_tokens=10,
         )
 
         self.assertEqual(
@@ -72,6 +72,29 @@ class MocTranscriptTests(unittest.TestCase):
         )
 
         self.assertEqual([chunk.chunk_index for chunk in chunks], [1, 2, 3])
+
+    def test_chunk_segments_by_approx_tokens_budgets_emitted_text(self):
+        segments = [
+            TranscriptSegment("seg_000001", 0, 1000, None, "alpha"),
+            TranscriptSegment("seg_000002", 1000, 2000, None, "bravo"),
+            TranscriptSegment("seg_000003", 2000, 3000, None, "charlie"),
+        ]
+
+        chunks = chunk_segments_by_approx_tokens(
+            segments,
+            max_tokens=10,
+            overlap_tokens=0,
+        )
+
+        for chunk in chunks:
+            chunk_tokens = approximate_token_count(chunk.text)
+            if len(chunk.segments) == 1:
+                segment_tokens = approximate_token_count(
+                    format_segments_for_prompt(chunk.segments)
+                )
+                self.assertTrue(chunk_tokens <= 10 or segment_tokens > 10)
+            else:
+                self.assertLessEqual(chunk_tokens, 10)
 
     def test_parse_timestamp_ms_accepts_fractional_and_range_timestamps(self):
         cases = [

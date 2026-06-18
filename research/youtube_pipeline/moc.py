@@ -132,6 +132,11 @@ def format_segments_for_prompt(segments: list[TranscriptSegment]) -> str:
     return "\n".join(f"[{format_ms(segment.start_ms)}] {segment.text}" for segment in segments)
 
 
+def _segment_emitted_token_count(segment: TranscriptSegment) -> int:
+    text = f"[{format_ms(segment.start_ms)}] {segment.text}"
+    return approximate_token_count(text) + 1
+
+
 def make_segment_chunk(index: int, segments: list[TranscriptSegment]) -> SegmentChunk:
     start_ms, end_ms = chunk_time_span(segments)
     return SegmentChunk(
@@ -163,7 +168,7 @@ def chunk_segments_by_approx_tokens(
         cursor = start_index
 
         while cursor < len(segments):
-            segment_tokens = approximate_token_count(segments[cursor].text)
+            segment_tokens = _segment_emitted_token_count(segments[cursor])
             if chunk_segments and token_total + segment_tokens > max_tokens:
                 break
             chunk_segments.append(segments[cursor])
@@ -179,7 +184,7 @@ def chunk_segments_by_approx_tokens(
         for index in range(cursor - 1, start_index - 1, -1):
             if overlap_total >= overlap_tokens:
                 break
-            overlap_total += approximate_token_count(segments[index].text)
+            overlap_total += _segment_emitted_token_count(segments[index])
             next_start = index
 
         if next_start <= start_index:
