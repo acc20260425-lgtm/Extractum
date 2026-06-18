@@ -379,15 +379,15 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc
 
 **Steps:**
 
-- [ ] Add tests proving dedupe preserves all original timestamps in `source_timestamps` and all original chunks in `source_chunk_ids`.
-- [ ] `dedupe_facts.py` reads `map/mapped_facts.jsonl` and writes:
+- [x] Add tests proving dedupe preserves all original timestamps in `source_timestamps` and all original chunks in `source_chunk_ids`.
+- [x] `dedupe_facts.py` reads `map/mapped_facts.jsonl` and writes:
 
 ```text
 alignment/deduplicated_facts.json
 alignment/dedupe_report.json
 ```
 
-- [ ] Deduped fact rows must include:
+- [x] Deduped fact rows must include:
 
 ```json
 {
@@ -401,22 +401,22 @@ alignment/dedupe_report.json
 }
 ```
 
-- [ ] `align_facts.py` must align facts to MoC nodes deterministically by `source_chunk_ids` and MoC `chunk_ids`, not by semantic LLM calls.
-- [ ] `align_facts.py` writes:
+- [x] `align_facts.py` must align facts to MoC nodes deterministically by `source_chunk_ids` and MoC `chunk_ids`, not by semantic LLM calls.
+- [x] `align_facts.py` writes:
 
 ```text
 alignment/alignment.json
 alignment/unaligned_facts.json
 ```
 
-- [ ] `prepare_section_assignments.py` writes one assignment per MoC node:
+- [x] `prepare_section_assignments.py` writes one assignment per MoC node:
 
 ```text
 alignment/section_assignments.jsonl
 ```
 
-- [ ] Each section assignment includes node metadata, MoC `chunk_ids`, aligned fact ids, source timestamps, expected `section_file`, target words, and overlap guidance for facts also aligned to adjacent nodes.
-- [ ] Run:
+- [x] Each section assignment includes node metadata, MoC `chunk_ids`, aligned fact ids, source timestamps, expected `section_file`, target words, and overlap guidance for facts also aligned to adjacent nodes.
+- [x] Run:
 
 ```powershell
 python -m unittest research.youtube_pipeline.tests.test_agentic_moc

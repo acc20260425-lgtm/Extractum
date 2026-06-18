@@ -572,3 +572,140 @@ def validate_moc(
     }
     write_json(run_dir / "planning" / "moc_validation.json", validation)
     return validation
+
+
+def _dedupe_key(text: str) -> str:
+    return " ".join(re.findall(r"\w+", text.lower(), flags=re.UNICODE))
+
+
+def dedupe_facts(run_dir: Path) -> list[dict[str, object]]:
+    facts = read_jsonl(run_dir / "map" / "mapped_facts.jsonl")
+    clusters_by_key: dict[str, dict[str, object]] = {}
+
+    for fact in facts:
+        text = str(fact.get("text", "")).strip()
+        key = _dedupe_key(text) or str(fact.get("fact_id", ""))
+        cluster = clusters_by_key.get(key)
+        if cluster is None:
+            cluster = {
+                "fact_id": f"fact_cluster_{len(clusters_by_key) + 1:04d}",
+                "claim": text,
+                "evidence": text,
+                "tags": sorted({str(fact.get("fact_type", ""))}),
+                "source_fact_ids": [],
+                "source_chunk_ids": [],
+                "source_timestamps": [],
+            }
+            clusters_by_key[key] = cluster
+        _append_unique(cluster["source_fact_ids"], str(fact.get("fact_id", "")))
+        _append_unique(cluster["source_chunk_ids"], str(fact.get("chunk_id", "")))
+        _append_unique(cluster["source_timestamps"], str(fact.get("timestamp", "")))
+
+    deduplicated = list(clusters_by_key.values())
+    write_json(run_dir / "alignment" / "deduplicated_facts.json", deduplicated)
+    write_json(
+        run_dir / "alignment" / "dedupe_report.json",
+        {
+            "schema": "agentic-dedupe-report-v1",
+            "input_fact_count": len(facts),
+            "deduplicated_fact_count": len(deduplicated),
+        },
+    )
+    return deduplicated
+
+
+def _append_unique(values: object, value: str) -> None:
+    if not isinstance(values, list) or not value:
+        return
+    if value not in values:
+        values.append(value)
+
+
+def align_facts(run_dir: Path) -> dict[str, object]:
+    moc = read_json(run_dir / "planning" / "moc.json")
+    facts = read_json(run_dir / "alignment" / "deduplicated_facts.json")
+    if not isinstance(moc, dict) or not isinstance(facts, list):
+        raise ValueError("MoC and deduplicated facts must be available before alignment")
+
+    node_alignments: list[dict[str, object]] = []
+    aligned_fact_ids: set[str] = set()
+    for node in moc.get("nodes", []):
+        if not isinstance(node, dict):
+            continue
+        node_chunk_id_list = [str(chunk_id) for chunk_id in node.get("chunk_ids", [])]
+        node_chunk_ids = set(node_chunk_id_list)
+        node_fact_ids: list[str] = []
+        for fact in facts:
+            if not isinstance(fact, dict):
+                continue
+            source_chunk_ids = {str(chunk_id) for chunk_id in fact.get("source_chunk_ids", [])}
+            if node_chunk_ids.intersection(source_chunk_ids):
+                fact_id = str(fact["fact_id"])
+                node_fact_ids.append(fact_id)
+                aligned_fact_ids.add(fact_id)
+        node_alignments.append(
+            {
+                "node_id": str(node.get("node_id", "")),
+                "chunk_ids": node_chunk_id_list,
+                "aligned_fact_ids": node_fact_ids,
+            }
+        )
+
+    unaligned = [fact for fact in facts if isinstance(fact, dict) and str(fact.get("fact_id")) not in aligned_fact_ids]
+    alignment = {
+        "schema": "agentic-fact-alignment-v1",
+        "nodes": node_alignments,
+        "aligned_fact_count": len(aligned_fact_ids),
+        "unaligned_fact_count": len(unaligned),
+    }
+    write_json(run_dir / "alignment" / "alignment.json", alignment)
+    write_json(run_dir / "alignment" / "unaligned_facts.json", unaligned)
+    return alignment
+
+
+def prepare_section_assignments(run_dir: Path) -> list[dict[str, object]]:
+    moc = read_json(run_dir / "planning" / "moc.json")
+    alignment = read_json(run_dir / "alignment" / "alignment.json")
+    facts = read_json(run_dir / "alignment" / "deduplicated_facts.json")
+    if not isinstance(moc, dict) or not isinstance(alignment, dict) or not isinstance(facts, list):
+        raise ValueError("MoC, alignment, and deduplicated facts must be available")
+
+    facts_by_id = {str(fact["fact_id"]): fact for fact in facts if isinstance(fact, dict)}
+    aligned_nodes = {
+        str(node["node_id"]): node for node in alignment.get("nodes", []) if isinstance(node, dict)
+    }
+    fact_usage: dict[str, int] = {}
+    for node in aligned_nodes.values():
+        for fact_id in node.get("aligned_fact_ids", []):
+            fact_usage[str(fact_id)] = fact_usage.get(str(fact_id), 0) + 1
+
+    assignments: list[dict[str, object]] = []
+    for index, node in enumerate(moc.get("nodes", []), start=1):
+        if not isinstance(node, dict):
+            continue
+        node_id = str(node.get("node_id", f"moc_{index:03d}"))
+        aligned_fact_ids = [str(fact_id) for fact_id in aligned_nodes.get(node_id, {}).get("aligned_fact_ids", [])]
+        source_timestamps: list[str] = []
+        for fact_id in aligned_fact_ids:
+            fact = facts_by_id.get(fact_id, {})
+            for timestamp in fact.get("source_timestamps", []):
+                _append_unique(source_timestamps, str(timestamp))
+        assignment = {
+            "node_id": node_id,
+            "title": str(node.get("title", f"Section {index}")),
+            "section_file": f"sections/{index:03d}-{_slugify(str(node.get('title', f'section-{index}')))}.md",
+            "target_words": int(node.get("target_words", 0) or 0),
+            "chunk_ids": [str(chunk_id) for chunk_id in node.get("chunk_ids", [])],
+            "aligned_fact_ids": aligned_fact_ids,
+            "source_timestamps": source_timestamps,
+            "overlap_fact_ids": [fact_id for fact_id in aligned_fact_ids if fact_usage.get(fact_id, 0) > 1],
+        }
+        assignments.append(assignment)
+
+    write_jsonl(run_dir / "alignment" / "section_assignments.jsonl", assignments)
+    return assignments
+
+
+def _slugify(value: str) -> str:
+    words = re.findall(r"\w+", value.lower(), flags=re.UNICODE)
+    return "-".join(words[:8]) or "section"

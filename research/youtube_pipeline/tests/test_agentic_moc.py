@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from research.youtube_pipeline.moc_agentic import (
+    align_facts,
     assemble_map_artifacts,
     build_stage_key,
     build_planner_context,
@@ -12,8 +13,10 @@ from research.youtube_pipeline.moc_agentic import (
     estimate_tokens,
     hash_file,
     hash_text,
+    dedupe_facts,
     normalize_transcript_text,
     prepare_map_assignments,
+    prepare_section_assignments,
     read_json,
     read_jsonl,
     validate_map_outputs,
@@ -257,6 +260,45 @@ class AgenticArtifactHelperTests(unittest.TestCase):
             self.assertTrue(validation["fallback_used"])
             self.assertTrue(any("non-ascending" in error for error in validation["errors"]))
 
+    def test_dedupe_facts_preserves_original_timestamps_and_chunks(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir, chunk_ids = self._write_two_chunk_mapped_facts(Path(temp_dir))
+
+            deduplicated = dedupe_facts(run_dir)
+
+            self.assertEqual(len(deduplicated), 1)
+            self.assertEqual(deduplicated[0]["source_chunk_ids"], chunk_ids)
+            self.assertEqual(deduplicated[0]["source_timestamps"], ["00:02:10", "00:04:35"])
+
+    def test_align_facts_uses_moc_chunk_ids(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir, chunk_ids = self._write_two_chunk_mapped_facts(Path(temp_dir))
+            dedupe_facts(run_dir)
+            self._write_moc_raw(run_dir, [[chunk_ids[0]], [chunk_ids[1]]])
+            validate_moc(run_dir, target_words=1800, chapter_target_words=900)
+
+            alignment = align_facts(run_dir)
+
+            self.assertEqual(alignment["aligned_fact_count"], 1)
+            self.assertEqual(alignment["nodes"][0]["aligned_fact_ids"], ["fact_cluster_0001"])
+            self.assertEqual(alignment["nodes"][1]["aligned_fact_ids"], ["fact_cluster_0001"])
+
+    def test_prepare_section_assignments_writes_jsonl(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir, chunk_ids = self._write_two_chunk_mapped_facts(Path(temp_dir))
+            dedupe_facts(run_dir)
+            self._write_moc_raw(run_dir, [[chunk_ids[0]], [chunk_ids[1]]])
+            validate_moc(run_dir, target_words=1800, chapter_target_words=900)
+            align_facts(run_dir)
+
+            assignments = prepare_section_assignments(run_dir)
+            rows = read_jsonl(run_dir / "alignment" / "section_assignments.jsonl")
+
+            self.assertEqual(assignments, rows)
+            self.assertEqual(rows[0]["section_file"], "sections/001-node-1.md")
+            self.assertEqual(rows[0]["aligned_fact_ids"], ["fact_cluster_0001"])
+            self.assertEqual(rows[0]["overlap_fact_ids"], ["fact_cluster_0001"])
+
     def _write_single_chunk_prep(self, temp_dir: Path) -> Path:
         run_dir = temp_dir / "run"
         write_prep_artifacts(
@@ -285,6 +327,8 @@ class AgenticArtifactHelperTests(unittest.TestCase):
         *,
         chunk_id: str = "chunk_001",
         output_file: str = "map/agent_outputs/chunk_001.json",
+        fact_text: str = "Evidence should be stored with timestamps.",
+        fact_timestamp: str = "00:02:10",
         wrapped: bool = False,
     ) -> None:
         output = {
@@ -299,9 +343,9 @@ class AgenticArtifactHelperTests(unittest.TestCase):
             "facts": [
                 {
                     "local_fact_id": "fact_001",
-                    "text": "Evidence should be stored with timestamps.",
+                    "text": fact_text,
                     "fact_type": "claim",
-                    "timestamp": "00:02:10",
+                    "timestamp": fact_timestamp,
                     "importance": 4,
                     "chunk_id": chunk_id,
                 }
@@ -313,6 +357,51 @@ class AgenticArtifactHelperTests(unittest.TestCase):
         if wrapped:
             payload = f"assistant note\n{payload}\nend note"
         output_path.write_text(payload + "\n", encoding="utf-8")
+
+    def _write_two_chunk_mapped_facts(self, temp_dir: Path) -> tuple[Path, list[str]]:
+        run_dir = temp_dir / "run"
+        chunks = [
+            {
+                "chunk_id": "chunk_001",
+                "chunk_index": 1,
+                "start_timestamp": "00:00:00",
+                "end_timestamp": "00:03:00",
+                "text": "[00:00:00] first chunk",
+                "word_count": 3,
+                "estimated_tokens": 10,
+                "source_hash": hash_text("two chunk fixture"),
+            },
+            {
+                "chunk_id": "chunk_002",
+                "chunk_index": 2,
+                "start_timestamp": "00:03:00",
+                "end_timestamp": "00:06:00",
+                "text": "[00:03:00] second chunk",
+                "word_count": 3,
+                "estimated_tokens": 10,
+                "source_hash": hash_text("two chunk fixture"),
+            },
+        ]
+        write_jsonl(run_dir / "prep" / "chunks.jsonl", chunks)
+        prepare_map_assignments(run_dir, output_language="ru")
+        assignment_manifest = read_json(run_dir / "map" / "assignment_manifest.json")
+        chunk_ids: list[str] = []
+        timestamps = ["00:02:10", "00:04:35"]
+        for index, assignment_path in enumerate(assignment_manifest["assignments"][:2]):
+            assignment = read_json(run_dir / str(assignment_path))
+            chunk_id = str(assignment["chunk_id"])
+            chunk_ids.append(chunk_id)
+            self._write_map_output(
+                run_dir,
+                chunk_id=chunk_id,
+                output_file=str(assignment["output_file"]),
+                fact_text="Evidence should be stored with timestamps.",
+                fact_timestamp=timestamps[index],
+            )
+        validation = validate_map_outputs(run_dir)
+        self.assertEqual(validation["invalid_outputs"], [])
+        assemble_map_artifacts(run_dir)
+        return run_dir, chunk_ids
 
     def _write_moc_raw(self, run_dir: Path, chunk_groups: list[list[str]]) -> None:
         nodes = []
