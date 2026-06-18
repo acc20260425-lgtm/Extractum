@@ -919,7 +919,7 @@ git commit -m "feat: add youtube summary workflow cli"
 - Modify: `.gitignore`
 - Modify: `research/youtube_pipeline/tests/test_agentic_moc.py`
 
-- [ ] **Step 1: Write failing skill contract test**
+- [x] **Step 1: Write failing skill contract test**
 
 Modify `test_youtube_skill_files_exist_and_reference_existing_tools` in `test_agentic_moc.py` by adding the new skill file to `skill_files`:
 
@@ -945,7 +945,7 @@ Add this test:
         self.assertNotIn("chat.completions", text.lower())
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -955,7 +955,7 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc.AgenticArtif
 
 Expected: fail because `.agents/skills/youtube-summary/SKILL.md` does not exist.
 
-- [ ] **Step 3: Add `.gitignore` allowlist if needed**
+- [x] **Step 3: Add `.gitignore` allowlist if needed**
 
 Inspect `.gitignore` for `.agents/skills` rules. If it already allows `.agents/skills/youtube-*/**`, do not change it. If each skill is explicitly allowlisted, add:
 
@@ -964,7 +964,7 @@ Inspect `.gitignore` for `.agents/skills` rules. If it already allows `.agents/s
 !.agents/skills/youtube-summary/**
 ```
 
-- [ ] **Step 4: Create `youtube-summary` skill**
+- [x] **Step 4: Create `youtube-summary` skill**
 
 Create `.agents/skills/youtube-summary/SKILL.md`:
 
@@ -1056,7 +1056,7 @@ Return:
 - any files that still require user or sub-agent action.
 ````
 
-- [ ] **Step 5: Run skill contract tests**
+- [x] **Step 5: Run skill contract tests**
 
 Run:
 
@@ -1066,7 +1066,7 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc.AgenticArtif
 
 Expected: `Ran 2 tests` and `OK`.
 
-- [ ] **Step 6: Commit Task 4**
+- [x] **Step 6: Commit Task 4**
 
 Run:
 

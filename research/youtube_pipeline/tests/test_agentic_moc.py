@@ -681,6 +681,7 @@ class AgenticArtifactHelperTests(unittest.TestCase):
     def test_youtube_skill_files_exist_and_reference_existing_tools(self):
         skill_files = [
             REPO_ROOT / ".agents" / "skills" / "youtube-long-report" / "SKILL.md",
+            REPO_ROOT / ".agents" / "skills" / "youtube-summary" / "SKILL.md",
             REPO_ROOT / ".agents" / "skills" / "youtube-map-extract" / "SKILL.md",
             REPO_ROOT / ".agents" / "skills" / "youtube-moc-planning" / "SKILL.md",
             REPO_ROOT / ".agents" / "skills" / "youtube-section-reduce" / "SKILL.md",
@@ -697,6 +698,20 @@ class AgenticArtifactHelperTests(unittest.TestCase):
                 self.assertNotIn(marker, text.lower())
             for tool_name in re.findall(r"research\.youtube_pipeline\.tools\.([a-z_]+)", text):
                 self.assertIsNotNone(importlib.util.find_spec(f"research.youtube_pipeline.tools.{tool_name}"))
+
+    def test_youtube_summary_skill_mentions_state_and_subagent_boundary(self):
+        skill_file = REPO_ROOT / ".agents" / "skills" / "youtube-summary" / "SKILL.md"
+        text = skill_file.read_text(encoding="utf-8")
+
+        self.assertIn("start_youtube_summary", text)
+        self.assertIn("workflow_state.json", text)
+        self.assertIn("update_youtube_summary_state", text)
+        self.assertIn("youtube-map-extract", text)
+        self.assertIn("youtube-section-reduce", text)
+        self.assertIn("pause before map extraction", text.lower())
+        self.assertIn("Direct LLM API calls are forbidden", text)
+        self.assertNotIn("requests.post", text.lower())
+        self.assertNotIn("chat.completions", text.lower())
 
     def test_youtube_skill_examples_are_valid_json(self):
         example_files = [
