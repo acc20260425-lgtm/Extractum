@@ -97,8 +97,8 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Thesis", joined)
         self.assertIn("Previous ending", joined)
         self.assertIn("Markdown prose only", joined)
-        self.assertIn("spoken video transcript", joined)
-        self.assertIn("not an original essay", joined)
+        self.assertNotIn("Refer to speakers", joined)
+        self.assertNotIn("source framing", joined)
 
     def test_adaptive_expansion_prompt_requests_source_grounded_expansion(self):
         messages = build_adaptive_chapter_expansion_messages(
@@ -134,7 +134,8 @@ class PromptTests(unittest.TestCase):
         joined = "\n".join(message.content for message in overview + conclusion)
 
         self.assertIn("Do not rewrite the chapters", joined)
-        self.assertIn("spoken YouTube transcript", joined)
+        self.assertIn("mention once that this is a summary of a YouTube video", joined)
+        self.assertIn("Do not repeat this framing", joined)
         self.assertIn("executive overview", joined)
         self.assertIn("final synthesis", joined)
 

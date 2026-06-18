@@ -192,7 +192,7 @@ def response_token_budget(target_words: int, output_language: str, max_tokens: i
 
 
 def build_table_of_contents(chapter_titles: list[str]) -> str:
-    lines = ["## Table of Contents", "", "- Source Context", "- Executive Overview", "- Part I: Detailed Narrative"]
+    lines = ["## Table of Contents", "", "- Executive Overview", "- Part I: Detailed Narrative"]
     for index, title in enumerate(chapter_titles, start=1):
         lines.append(f"  - Chapter {index}: {title}")
     lines.extend(
@@ -224,13 +224,9 @@ def assemble_adaptive_markdown_report(
         "",
         "Generated via `adaptive_book_report`.",
         "",
+        "Source note: this is a summary and analysis of a YouTube video transcript.",
+        "",
         build_table_of_contents(chapter_titles),
-        "",
-        "## Source Context",
-        "",
-        "- Source: YouTube video transcript.",
-        "- Format: spoken source, such as a lecture, interview, talk, or discussion.",
-        "- Scope: this report summarizes and analyzes what speakers say in the source; it is not an original essay on the topic.",
         "",
         "## Executive Overview",
         "",

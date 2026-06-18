@@ -485,10 +485,7 @@ def build_adaptive_chapter_generation_messages(
                 f"Target length: about {chapter_word_target} words\n\n"
                 "Use the report thesis, key terms, full chapter outline, assigned chunk notes, "
                 "and previous chapter bridge to write a coherent source-grounded chapter. "
-                "Do not summarize into a short abstract. Preserve concrete claims, examples, evidence, and transitions. "
-                "Keep explicit source framing: this is a chapter about a spoken video transcript, "
-                "not an original essay on the topic. Refer to speakers, the talk, lecture, interview, "
-                "discussion, and the flow of the source when useful.\n\n"
+                "Do not summarize into a short abstract. Preserve concrete claims, examples, evidence, and transitions.\n\n"
                 f"Chapter outline JSON:\n{outline_json}\n\n"
                 f"Previous chapter bridge:\n{previous_bridge}\n\n"
                 f"Assigned chunk notes JSON:\n{assigned_notes_json}"
@@ -555,8 +552,8 @@ def build_adaptive_overview_messages(
             content=(
                 f"Output language: {output_language}\n\n"
                 "Write a concise executive overview. Do not rewrite the chapters. "
-                "Use the outline and structured result to frame the report. "
-                "Make clear this report analyzes a spoken YouTube transcript, not an original essay on the topic.\n\n"
+                "Use the outline and structured result to frame the report. In the first 1-2 sentences, "
+                "mention once that this is a summary of a YouTube video. Do not repeat this framing throughout the report.\n\n"
                 f"Outline JSON:\n{outline_json}\n\n"
                 f"Structured result JSON:\n{structured_result_json}"
             ),
@@ -580,8 +577,7 @@ def build_adaptive_conclusion_messages(
             content=(
                 f"Output language: {output_language}\n\n"
                 "Write a final synthesis. Do not rewrite the chapters. "
-                "Connect the main claims, evidence, takeaways, and open questions. "
-                "Maintain the framing that this is a spoken YouTube transcript.\n\n"
+                "Connect the main claims, evidence, takeaways, and open questions.\n\n"
                 f"Outline JSON:\n{outline_json}\n\n"
                 f"Structured result JSON:\n{structured_result_json}"
             ),
