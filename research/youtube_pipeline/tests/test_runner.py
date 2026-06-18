@@ -40,6 +40,36 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(metrics["chapter_count"], 3)
             self.assertEqual(metrics["target_report_words"], 2700)
 
+    def test_write_run_artifacts_rejects_unsafe_video_ids_before_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outcome = StrategyOutcome(
+                result=NormalizedResult(summary_text="Summary text"),
+                request_count=1,
+                input_tokens=10,
+                output_tokens=20,
+                latency_seconds=1.25,
+                json_valid=True,
+                raw_requests=[],
+                raw_responses=[],
+            )
+
+            unsafe_video_ids = [
+                "nested/video1",
+                "..\\outside",
+                str(Path(tmp) / "absolute-video"),
+            ]
+            for video_id in unsafe_video_ids:
+                with self.subTest(video_id=video_id):
+                    with self.assertRaisesRegex(ValueError, "video[- ]id"):
+                        write_run_artifacts(
+                            root=Path(tmp),
+                            strategy="one_shot_full_json",
+                            video_id=video_id,
+                            outcome=outcome,
+                        )
+
+            self.assertFalse((Path(tmp) / "one_shot_full_json").exists())
+
     def test_build_strategy_options_reads_adaptive_cli_flags(self):
         parser = build_parser()
         args = parser.parse_args(

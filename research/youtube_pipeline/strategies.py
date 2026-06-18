@@ -832,6 +832,40 @@ def build_moc_global_context(moc_plan: dict[str, object]) -> dict[str, object]:
     }
 
 
+def moc_node_has_usable_grounding(node: dict[str, object]) -> bool:
+    time_span = node.get("time_span")
+    if isinstance(time_span, dict):
+        for key in ("start_ms", "end_ms"):
+            value = time_span.get(key)
+            if isinstance(value, int | float) and not isinstance(value, bool):
+                return True
+
+    for key in ("key_terms", "essential_key_terms"):
+        terms = node.get(key)
+        if isinstance(terms, list) and any(isinstance(term, str) and term.strip() for term in terms):
+            return True
+
+    for key in ("source_focus", "description_outline"):
+        value = node.get(key)
+        if isinstance(value, str) and value.strip():
+            return True
+
+    return False
+
+
+def moc_plan_has_usable_nodes(plan: dict[str, object]) -> bool:
+    nodes = plan.get("nodes")
+    if not isinstance(nodes, list):
+        return False
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        title = node.get("title")
+        if isinstance(title, str) and title.strip() and moc_node_has_usable_grounding(node):
+            return True
+    return False
+
+
 def run_moc_guided_map_reduce(
     *,
     client: LlmClient,
@@ -894,7 +928,12 @@ def run_moc_guided_map_reduce(
     nodes = moc_plan.get("nodes") if isinstance(moc_plan.get("nodes"), list) else None
     if not plan_valid:
         json_valid = False
-    if not plan_valid or not nodes or any(not isinstance(node, dict) for node in nodes):
+    if (
+        not plan_valid
+        or not nodes
+        or any(not isinstance(node, dict) for node in nodes)
+        or not moc_plan_has_usable_nodes(moc_plan)
+    ):
         json_valid = False
         moc_fallback_used = True
         moc_plan = fallback_moc_plan(video_id, segments, budget)

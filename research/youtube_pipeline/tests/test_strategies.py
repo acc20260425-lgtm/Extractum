@@ -399,6 +399,44 @@ class StrategyTests(unittest.TestCase):
         self.assertTrue(outcome.extra_metrics["moc_fallback_used"])
         self.assertFalse(outcome.json_valid)
 
+    def test_moc_guided_map_reduce_rejects_unusable_plan_nodes(self):
+        transcript = "\n".join(
+            [
+                "[00:00:00] Alpha topic",
+                "[00:00:10] Beta topic",
+            ]
+        )
+        client = SequenceClient(
+            [
+                (
+                    '{"video_id":"video1","report_thesis":"Bad plan",'
+                    '"global_key_terms":[],"nodes":[{"node_id":"node_001"}]}'
+                ),
+                '{"chunk_index":1,"facts":[],"action_items":[],"open_questions":[]}',
+                "Fallback section text with enough words [00:00:00] " * 5,
+                "Executive overview",
+                "Final conclusion",
+            ]
+        )
+
+        outcome = run_moc_guided_map_reduce(
+            client=client,
+            transcript=transcript,
+            options=StrategyOptions(
+                output_language="ru",
+                video_id="video1",
+                max_tokens=2000,
+                chunk_token_limit=100,
+                chunk_overlap_tokens=10,
+                min_report_words=20,
+                max_report_words=20,
+                chapter_target_words=20,
+            ),
+        )
+
+        self.assertTrue(outcome.extra_metrics["moc_fallback_used"])
+        self.assertFalse(outcome.json_valid)
+
     def test_moc_guided_map_reduce_keeps_json_valid_when_map_retry_succeeds(self):
         transcript = "\n".join(
             [

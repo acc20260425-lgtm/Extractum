@@ -19,6 +19,14 @@ RESERVED_RUN_ARTIFACT_NAMES = {
 RESERVED_RUN_ARTIFACT_NAMES_CASEFOLDED = {name.casefold() for name in RESERVED_RUN_ARTIFACT_NAMES}
 
 
+def validate_simple_path_name(value: str | Path, *, label: str) -> Path:
+    text = str(value)
+    path = Path(value)
+    if "/" in text or "\\" in text or path.name != text or path.is_absolute() or path.name in {"", ".", ".."}:
+        raise ValueError(f"{label} must be a simple relative name: {value}")
+    return path
+
+
 def write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -30,15 +38,15 @@ def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     )
 
 
-def write_extra_artifact(path: Path, payload: Any) -> None:
-    if path.name != str(path) or path.name in {"", ".", ".."}:
-        raise ValueError(f"extra artifact filename must be a simple relative name: {path}")
-    if path.name.casefold() in RESERVED_RUN_ARTIFACT_NAMES_CASEFOLDED:
-        raise ValueError(f"extra artifact filename is reserved: {path.name}")
+def write_extra_artifact(output_dir: Path, filename: str | Path, payload: Any) -> None:
+    artifact_name = validate_simple_path_name(filename, label="extra artifact filename")
+    if artifact_name.name.casefold() in RESERVED_RUN_ARTIFACT_NAMES_CASEFOLDED:
+        raise ValueError(f"extra artifact filename is reserved: {artifact_name.name}")
+    output_path = output_dir / artifact_name
     if isinstance(payload, str):
-        path.write_text(payload, encoding="utf-8")
+        output_path.write_text(payload, encoding="utf-8")
     else:
-        write_json(path, payload)
+        write_json(output_path, payload)
 
 
 def write_run_artifacts(
@@ -48,7 +56,8 @@ def write_run_artifacts(
     video_id: str,
     outcome: StrategyOutcome,
 ) -> Path:
-    output_dir = root / strategy / video_id
+    video_id_path = validate_simple_path_name(video_id, label="video id")
+    output_dir = root / strategy / video_id_path
     output_dir.mkdir(parents=True, exist_ok=True)
     result_payload = outcome.result.to_dict()
     write_json(output_dir / "result.json", result_payload)
@@ -68,16 +77,7 @@ def write_run_artifacts(
     write_jsonl(output_dir / "raw_requests.jsonl", outcome.raw_requests)
     write_jsonl(output_dir / "raw_responses.jsonl", outcome.raw_responses)
     for filename, payload in outcome.extra_artifacts.items():
-        artifact_name = Path(filename)
-        if artifact_name.name != str(artifact_name) or artifact_name.name in {"", ".", ".."}:
-            raise ValueError(f"extra artifact filename must be a simple relative name: {artifact_name}")
-        if artifact_name.name.casefold() in RESERVED_RUN_ARTIFACT_NAMES_CASEFOLDED:
-            raise ValueError(f"extra artifact filename is reserved: {artifact_name.name}")
-        output_path = output_dir / artifact_name
-        if isinstance(payload, str):
-            output_path.write_text(payload, encoding="utf-8")
-        else:
-            write_json(output_path, payload)
+        write_extra_artifact(output_dir, filename, payload)
     return output_dir
 
 
