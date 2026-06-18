@@ -205,6 +205,34 @@ class MocTranscriptTests(unittest.TestCase):
 
         self.assertEqual(len(plan["nodes"]), 2)
 
+    def test_fallback_moc_plan_honors_budget_count_beyond_segment_count(self):
+        segments = [
+            TranscriptSegment("seg_000001", 0, 1000, None, "segment 0"),
+            TranscriptSegment("seg_000002", 1000, 2000, None, "segment 1"),
+        ]
+        budget = compute_moc_budget(
+            transcript_words=1200,
+            options=StrategyOptions(min_report_words=4500, max_report_words=4500),
+        )
+
+        plan = fallback_moc_plan("video1", segments, budget)
+        nodes = plan["nodes"]
+
+        self.assertEqual(len(nodes), 5)
+        self.assertEqual(
+            sum(node["target_word_count"] for node in nodes),
+            budget.target_report_words,
+        )
+        self.assertEqual([node["node_id"] for node in nodes], [
+            "node_001",
+            "node_002",
+            "node_003",
+            "node_004",
+            "node_005",
+        ])
+        self.assertEqual(nodes[0]["time_span"]["start_ms"], 0)
+        self.assertEqual(nodes[-1]["time_span"]["end_ms"], 2000)
+
     def test_parse_timestamped_transcript_accepts_supported_formats(self):
         transcript = "\n".join(
             [

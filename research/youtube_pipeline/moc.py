@@ -297,16 +297,21 @@ def fallback_moc_plan(
         1,
         min(
             MAX_MOC_NODES,
-            len(segments) if segments else 1,
             round(budget.target_report_words / FALLBACK_NODE_TARGET_WORDS),
         ),
     )
     partitions = _partition_segments_evenly(segments, node_count)
     targets = split_budget_evenly(budget.target_report_words, len(partitions))
     nodes: list[dict[str, object]] = []
+    last_time_ms = chunk_time_span(segments)[0]
 
     for index, node_segments in enumerate(partitions, start=1):
         start_ms, end_ms = chunk_time_span(node_segments)
+        if start_ms is None and end_ms is None:
+            start_ms = last_time_ms
+            end_ms = last_time_ms
+        else:
+            last_time_ms = end_ms if end_ms is not None else start_ms
         text = " ".join(segment.text for segment in node_segments)
         nodes.append(
             {
@@ -334,9 +339,11 @@ def _partition_segments_evenly(
     segments: list[TranscriptSegment],
     count: int,
 ) -> list[list[TranscriptSegment]]:
+    count = max(1, count)
     if not segments:
-        return [[]]
-    count = max(1, min(count, len(segments)))
+        return [[] for _ in range(count)]
+    if count >= len(segments):
+        return [[segment] for segment in segments] + [[] for _ in range(count - len(segments))]
     partitions: list[list[TranscriptSegment]] = []
     for index in range(count):
         start = index * len(segments) // count
