@@ -88,10 +88,32 @@ class MocTranscriptTests(unittest.TestCase):
         windows = projection["windows"]
 
         self.assertEqual(projection["projection_kind"], "temporal_skeleton")
+        self.assertEqual(projection["source_segment_count"], 12)
+        self.assertNotIn("segment_count", projection)
         self.assertEqual(len(windows), 3)
         self.assertEqual(windows[0]["start_ms"], 0)
+        self.assertIn("sampled_timestamped_lines", windows[0])
+        self.assertNotIn("sample_lines", windows[0])
         self.assertIn("line 0", windows[0]["first_words"])
         self.assertIn("line 4", windows[0]["last_words"])
+
+    def test_build_temporal_projection_preserves_80_word_edges(self):
+        text = " ".join(f"word{index}" for index in range(100))
+        segments = [TranscriptSegment("seg_000001", 0, 1000, None, text)]
+
+        projection = build_temporal_projection(
+            segments,
+            source_word_count=100,
+            window_ms=300000,
+        )
+        window = projection["windows"][0]
+
+        self.assertEqual(len(window["first_words"].split()), 80)
+        self.assertEqual(len(window["last_words"].split()), 80)
+        self.assertEqual(window["first_words"].split()[0], "word0")
+        self.assertEqual(window["first_words"].split()[-1], "word79")
+        self.assertEqual(window["last_words"].split()[0], "word20")
+        self.assertEqual(window["last_words"].split()[-1], "word99")
 
     def test_fallback_moc_plan_builds_contiguous_budgeted_nodes(self):
         segments = [
@@ -124,6 +146,26 @@ class MocTranscriptTests(unittest.TestCase):
                 previous["time_span"]["end_ms"],
                 current["time_span"]["start_ms"],
             )
+
+    def test_fallback_moc_plan_sizes_nodes_by_900_target_words(self):
+        segments = [
+            TranscriptSegment(
+                f"seg_{index + 1:06d}",
+                index * 1000,
+                (index + 1) * 1000,
+                None,
+                f"segment {index}",
+            )
+            for index in range(10)
+        ]
+        budget = compute_moc_budget(
+            transcript_words=1200,
+            options=StrategyOptions(min_report_words=1400, max_report_words=1400),
+        )
+
+        plan = fallback_moc_plan("video1", segments, budget)
+
+        self.assertEqual(len(plan["nodes"]), 2)
 
     def test_parse_timestamped_transcript_accepts_supported_formats(self):
         transcript = "\n".join(

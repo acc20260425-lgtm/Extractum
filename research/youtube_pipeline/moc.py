@@ -9,6 +9,7 @@ from typing import Any
 MAX_REPORT_WORDS = 20000
 MAX_MOC_NODES = 20
 MIN_NODE_WORDS = 500
+FALLBACK_NODE_TARGET_WORDS = 900
 
 TIMESTAMP_RE = re.compile(
     r"^\[?(?:(\d{1,2}):)?(\d{2}):(\d{2})(?:[.,](\d{1,3}))?\]?(?=\s|$)"
@@ -247,7 +248,7 @@ def build_temporal_projection(
     return {
         "projection_kind": "temporal_skeleton",
         "source_word_count": source_word_count,
-        "segment_count": len(segments),
+        "source_segment_count": len(segments),
         "window_ms": window_ms,
         "windows": windows,
     }
@@ -261,9 +262,9 @@ def _projection_window(segments: list[TranscriptSegment]) -> dict[str, object]:
         "end_ms": end_ms,
         "segment_count": len(segments),
         "word_count": word_count(text),
-        "first_words": first_words(text, 40),
-        "last_words": last_words(text, 40),
-        "sample_lines": format_segments_for_prompt(segments[:3]).splitlines(),
+        "first_words": first_words(text, 80),
+        "last_words": last_words(text, 80),
+        "sampled_timestamped_lines": format_segments_for_prompt(segments[:3]).splitlines(),
     }
 
 
@@ -285,7 +286,7 @@ def fallback_moc_plan(
         min(
             MAX_MOC_NODES,
             len(segments) if segments else 1,
-            round(budget.target_report_words / MIN_NODE_WORDS),
+            round(budget.target_report_words / FALLBACK_NODE_TARGET_WORDS),
         ),
     )
     partitions = _partition_segments_evenly(segments, node_count)
