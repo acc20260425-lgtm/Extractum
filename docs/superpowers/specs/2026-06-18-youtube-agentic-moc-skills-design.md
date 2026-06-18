@@ -31,7 +31,9 @@ transcript
   -> deterministic fact-to-MoC alignment by chunk id
   -> Python section-assignment builder
   -> section writing skill with sub-agents
+  -> overview and synthesis sections
   -> QA skill
+  -> Python structured-analysis builder
   -> Python assembly and metrics
 ```
 
@@ -134,7 +136,9 @@ Responsibilities:
 - trigger MoC planning from map artifacts;
 - call deterministic fact-to-MoC alignment by chunk id;
 - dispatch section-writing sub-agents;
+- write overview and synthesis boundary sections;
 - run QA checks;
+- call Python structured-analysis builder;
 - call final assembly;
 - report final artifact paths and metrics.
 
@@ -142,7 +146,23 @@ This skill should not contain the full writing prompts for every stage. It
 links to child skills and keeps the run lifecycle, artifact paths, failure
 policy, and script invocation order.
 
-### 2. `youtube-moc-planning`
+### 2. `youtube-map-extract`
+
+Map extraction skill used by map extractor sub-agents.
+
+Responsibilities:
+
+- read assigned chunk work packets from `map/assignments/`;
+- extract chunk summary, claims, examples, quotes, entities, open questions,
+  and facts;
+- write JSON only to assigned `map/agent_outputs/*.json` files;
+- avoid outside knowledge and unsupported inference;
+- keep local fact ids only.
+
+This skill contains the prompt contract used by map extractor sub-agents. The
+top-level orchestrator dispatches it with one or more assignment files.
+
+### 3. `youtube-moc-planning`
 
 Global Map of Content planning skill.
 
@@ -216,7 +236,7 @@ Rules:
   aligned facts, not from planner inference.
 ```
 
-### 3. `youtube-section-reduce`
+### 4. `youtube-section-reduce`
 
 File-backed section writing skill.
 
@@ -271,7 +291,7 @@ Style rules:
 - Preserve nuance, disagreement, examples, and caveats from the evidence.
 ```
 
-### 4. `youtube-report-qa`
+### 5. `youtube-report-qa`
 
 Coverage and final review skill.
 
@@ -284,8 +304,9 @@ Responsibilities:
 - check cross-section reuse of the same facts, so repeated evidence is framed
   in each section's local argument instead of duplicated as near-identical
   prose;
-- call `assemble_report.py`;
-- verify final `report.md` and `metrics.json`.
+- write `review/coverage.json`, `review/coverage.md`, and
+  `review/reviewer_notes.md`;
+- leave final report assembly to the orchestrator after QA completes.
 
 ### Later Skill Candidates
 
@@ -328,6 +349,7 @@ research/youtube_pipeline/
     align_facts.py
     prepare_section_assignments.py
     validate_generated_files.py
+    build_structured_analysis.py
     assemble_report.py
     quality_check.py
 ```
@@ -397,11 +419,12 @@ map extractor sub-agents in parallel, but Python does not call an LLM API for
 this stage.
 
 `validate_map_outputs.py` validates and normalizes sub-agent JSON files. Before
-asking for a rerun, it should attempt lightweight JSON repair for common
+marking an output invalid, it should attempt lightweight JSON repair for common
 formatting defects such as trailing text, missing closing braces, or unescaped
 newlines. Repair attempts must be recorded in `map_manifest.json` so the run
-remains auditable. Invalid outputs that cannot be repaired or regenerated are
-listed in `map/quarantine.jsonl`.
+remains auditable. The tool reports invalid outputs and repair failures, but it
+does not dispatch sub-agents. The orchestrator decides whether to request one
+corrected sub-agent output or list the chunk in `map/quarantine.jsonl`.
 
 `assemble_map_artifacts.py` combines valid sub-agent outputs into:
 
@@ -414,7 +437,9 @@ map/quarantine.jsonl
 ```
 
 It must preserve stable output ordering by chunk index and fail if required
-chunks are missing unless the run policy allows quarantine.
+chunks are missing unless the run policy allows quarantine. It also assigns
+canonical global fact ids deterministically, so sub-agent outputs may use local
+fact ids without risking cross-chunk collisions.
 
 `dedupe_facts.py` may merge repeated facts across chunks, but it must preserve
 all contributing chunk ids as `source_chunk_ids` and all original timestamps as
@@ -433,6 +458,11 @@ after alignment. Each row gives a section writer exactly one MoC node, target
 word budget, aligned fact ids, chunk ids, time range, and output section file.
 Section writer agents must receive assignments from this file rather than
 hand-authored prompts.
+
+`build_structured_analysis.py` builds deterministic structured analysis
+sections from deduplicated facts, repeated entities, fact clusters, and coverage
+artifacts. It should not call an LLM or rewrite narrative sections. It writes
+`review/structured_analysis.md` for final assembly.
 
 `validate_moc.py` should also own deterministic fallback planning. If the MoC
 JSON cannot be corrected, it creates time-window nodes with:
@@ -455,10 +485,10 @@ writing starts:
   configured tolerance.
 
 `validate_generated_files.py` checks file ownership after map extractor and
-section writer sub-agents finish. Preferred execution uses isolated workspaces
-or branch-backed sub-agent workspaces so each agent can only merge its assigned
-outputs. When agents share the same workspace, validation must be
-agent-specific:
+section writer sub-agents finish. Parallel sub-agent execution must use
+isolated workspaces or branch-backed sub-agent workspaces so each agent can
+only merge its assigned outputs. A shared workspace is allowed only for
+sequential or debug runs, and validation must be agent-specific:
 
 ```powershell
 python -m research.youtube_pipeline.tools.validate_generated_files `
@@ -466,9 +496,9 @@ python -m research.youtube_pipeline.tools.validate_generated_files `
   --expected-file workspace/sections/003-introduction.md
 ```
 
-The script fails only when that writer's tracked changes include generated
-paths other than the expected section file. Automatic reverts should only be
-allowed for generated workspace files and only when explicitly enabled.
+The script fails when that agent's tracked changes include generated paths
+other than the expected output file. Automatic reverts should only be allowed
+for generated workspace files and only when explicitly enabled.
 
 ## Skill Storage
 
@@ -478,6 +508,9 @@ Use project-local skills:
 .agents/skills/youtube-long-report/SKILL.md
 .agents/skills/youtube-long-report/examples/map_assignment_sample.json
 .agents/skills/youtube-long-report/examples/map_output_sample.json
+.agents/skills/youtube-map-extract/SKILL.md
+.agents/skills/youtube-map-extract/examples/map_assignment_sample.json
+.agents/skills/youtube-map-extract/examples/map_output_sample.json
 .agents/skills/youtube-moc-planning/SKILL.md
 .agents/skills/youtube-moc-planning/examples/moc_sample.json
 .agents/skills/youtube-section-reduce/SKILL.md
@@ -556,6 +589,7 @@ research/youtube_pipeline/work/<run_id>/
     coverage.json
     coverage.md
     reviewer_notes.md
+    structured_analysis.md
   final/
     report.md
     result.json
@@ -579,6 +613,7 @@ research/youtube_pipeline/runs/manual/moc_agentic_writer/<video_id>/
     section_assignments.jsonl
     quarantine.jsonl
     coverage.json
+    structured_analysis.md
     sections/
 ```
 
@@ -616,7 +651,10 @@ Resume hash scope:
 | alignment | MoC hash, deduplicated facts hash, alignment policy version |
 | section assignments | MoC hash, alignment hash, budget policy version |
 | section writing | section assignment hash, aligned fact ids hash, writer agent model/profile, section prompt contract version |
-| QA and assembly | section file hashes, coverage policy version, report assembly version |
+| boundary sections | MoC hash, section file hashes, map manifest hash, boundary prompt contract version |
+| QA | section file hashes, boundary section hashes, QA policy version, QA agent model/profile when used |
+| structured analysis | deduplicated facts hash, alignment hash, coverage hash, structured analysis policy version |
+| assembly | MoC hash, section file hashes, coverage hash, structured analysis hash, report assembly version |
 
 ## Sub-Agent Model
 
@@ -667,9 +705,11 @@ tools.
   `map/agent_outputs/*.json` files are read-only.
 - Tell section writers that all inputs except their assigned section file are
   read-only.
-- Prefer isolated sub-agent workspaces or branch-backed sub-agent workspaces.
-- In shared workspaces, run ownership validation with `--agent-id` and
-  `--expected-file` for each map extractor and section writer.
+- Use isolated sub-agent workspaces or branch-backed sub-agent workspaces for
+  parallel map extraction and section writing.
+- Shared workspaces are only allowed for sequential/debug runs; in that mode,
+  run ownership validation with `--agent-id` and `--expected-file` for each map
+  extractor and section writer.
 - Review sub-agent outputs before final assembly.
 - If sub-agents are unavailable, fail or pause before map extraction. The
   workflow must not replace map extraction with direct Python LLM API calls.
@@ -711,7 +751,7 @@ Each map extractor writes only the assigned output file. Expected output:
   "open_questions": ["..."],
   "facts": [
     {
-      "fact_id": "chunk_001_fact_001",
+      "local_fact_id": "fact_001",
       "text": "...",
       "fact_type": "claim",
       "timestamp": "00:10:00",
@@ -728,6 +768,8 @@ Map extractor rules:
 - do not infer facts from outside knowledge;
 - prefer over-extraction to missed evidence;
 - keep timestamps when present in the source;
+- use only local fact ids; `assemble_map_artifacts.py` assigns canonical
+  global fact ids;
 - write JSON only, with no Markdown wrapper or commentary;
 - do not edit assignment files, other chunks, or assembled map artifacts.
 
@@ -784,6 +826,13 @@ is complete, evidence-backed, and still below target, the orchestrator records
 the deficit instead of forcing expansion. Remaining word budget can be
 redistributed to later unwritten nodes with higher evidence density.
 
+Redistribution only works when section writing is dispatched in ordered waves.
+The orchestrator should write sections in small batches, validate completed
+sections, then update targets for later unassigned section assignments before
+dispatching the next batch. If the run dispatches all section writers at once,
+redistribution is disabled and short complete sections are recorded as budget
+underspend instead of being padded.
+
 Redistribution inputs:
 
 ```text
@@ -805,8 +854,8 @@ Redistribution rules:
 
 ## Overview And Synthesis Contract
 
-The orchestrator skill writes two boundary sections after node sections and QA
-are available:
+The orchestrator skill writes two boundary sections after node sections are
+available and before the QA pass:
 
 ```text
 sections/000-overview.md
@@ -819,16 +868,16 @@ Inputs:
 planning/moc.json
 alignment/section_assignments.jsonl
 sections/001-*.md
-review/coverage.json
+map/map_manifest.json
 map/chunk_summaries.jsonl
 ```
 
 Rules:
 
 - `000-overview.md` uses the MoC thesis, node titles, section opening
-  paragraphs, and coverage warnings to orient the reader;
+  paragraphs, and map manifest warnings to orient the reader;
 - `999-synthesis.md` uses section conclusions, repeated high-importance facts,
-  unresolved questions, and coverage warnings to close the report;
+  unresolved questions, and map manifest warnings to close the report;
 - both files should mention at most once that the report summarizes a YouTube
   transcript;
 - neither file should introduce new factual claims that are absent from map
@@ -845,6 +894,7 @@ planning/moc.json
 alignment/section_assignments.jsonl
 sections/*.md
 review/coverage.json
+review/structured_analysis.md
 ```
 
 It writes:
@@ -900,6 +950,8 @@ The workflow should emit:
   "redistributed_word_count": 600,
   "reused_fact_warning_count": 4,
   "map_subagent_count": 5,
+  "section_writer_subagent_count": 10,
+  "qa_subagent_used": true,
   "subagents_used": true,
   "section_expansion_count": 3,
   "coverage_warnings": 2,
@@ -934,6 +986,8 @@ Metrics should make agentic runs comparable with `adaptive_book_report` and
 - Section writer modifies unassigned generated files: fail the stage and record
   an ownership warning.
 - Sub-agent unavailable for map extraction: fail or pause before the map stage.
+- Structured analysis generation failure: continue only when the run policy
+  allows omitting structured analysis; otherwise fail before final assembly.
 - Assembly failure: fail the run.
 
 ## Testing Strategy
@@ -1007,7 +1061,7 @@ assembly, report assembly, and metrics.
 
 ### Phase 2: Skill Contracts
 
-Create the four v1 skills with concise `SKILL.md` files, clear script calls,
+Create the five v1 skills with concise `SKILL.md` files, clear script calls,
 draft prompt contracts, and example JSON fixtures. Add targeted `.gitignore`
 exceptions if skills are committed under `.agents`.
 
@@ -1019,15 +1073,17 @@ manifests, per-stage hash scopes, and resume checks before expensive stages.
 
 ### Phase 4: Sub-Agent Workflow
 
-Add section-writer sub-agent dispatch instructions to the top-level skill and
-QA skill. Define file ownership, `validate_generated_files.py`, qualitative QA,
-word-budget redistribution, and unavailable-sub-agent handling.
+Add map-extractor and section-writer sub-agent dispatch instructions to the
+top-level skill and QA skill. Define isolated workspace requirements, file
+ownership, `validate_generated_files.py`, qualitative QA, word-budget
+redistribution, and unavailable-sub-agent handling.
 
 ### Phase 4.5: Boundary Sections
 
 Add orchestrator instructions for `sections/000-overview.md` and
 `sections/999-synthesis.md`, then verify assembly uses those files without a
-whole-report rewrite.
+whole-report rewrite. The execution order is node sections, boundary sections,
+QA, structured analysis, then final assembly.
 
 ### Phase 5: End-To-End Research Run
 
