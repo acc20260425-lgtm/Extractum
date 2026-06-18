@@ -2,9 +2,10 @@ import unittest
 
 from research.youtube_pipeline.llm_client import LlmResponse
 from research.youtube_pipeline.strategies import (
+    StrategyOptions,
+    run_antigravity_chunk_map_reduce,
     run_chunk_map_reduce,
     run_one_shot_full_json,
-    run_antigravity_chunk_map_reduce,
 )
 
 
@@ -38,8 +39,7 @@ class StrategyTests(unittest.TestCase):
         outcome = run_one_shot_full_json(
             client=client,
             transcript="Transcript",
-            output_language="ru",
-            max_tokens=1000,
+            options=StrategyOptions(output_language="ru", max_tokens=1000),
         )
 
         self.assertEqual(outcome.result.summary_text, "Summary text")
@@ -47,6 +47,7 @@ class StrategyTests(unittest.TestCase):
         self.assertEqual(outcome.input_tokens, 10)
         self.assertEqual(outcome.output_tokens, 20)
         self.assertTrue(outcome.json_valid)
+        self.assertEqual(outcome.extra_metrics, {})
         self.assertEqual(client.calls[0][1], 1000)
 
     def test_all_research_strategies_are_registered(self):
@@ -77,9 +78,7 @@ class StrategyTests(unittest.TestCase):
         outcome = run_chunk_map_reduce(
             client=client,
             transcript="one two three four five six",
-            output_language="ru",
-            max_tokens=1000,
-            chunk_token_limit=3,
+            options=StrategyOptions(output_language="ru", max_tokens=1000, chunk_token_limit=3),
         )
 
         self.assertEqual(outcome.result.summary_text, "# Final report\n\nLong markdown report")
@@ -111,9 +110,7 @@ class StrategyTests(unittest.TestCase):
         outcome = run_antigravity_chunk_map_reduce(
             client=client,
             transcript="one two three four five six",
-            output_language="ru",
-            max_tokens=1000,
-            chunk_token_limit=3,
+            options=StrategyOptions(output_language="ru", max_tokens=1000, chunk_token_limit=3),
         )
 
         self.assertEqual(outcome.result.summary_text, "# Final report\n\nLong markdown report from antigravity")

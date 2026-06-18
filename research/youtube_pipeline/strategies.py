@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import time
 from typing import Protocol
@@ -27,6 +27,17 @@ class LlmClient(Protocol):
 
 
 @dataclass
+class StrategyOptions:
+    output_language: str = "ru"
+    max_tokens: int = 8192
+    chunk_token_limit: int = 3000
+    target_depth: str = "auto"
+    min_report_words: int | None = None
+    max_report_words: int | None = None
+    chapter_target_words: int = 900
+
+
+@dataclass
 class StrategyOutcome:
     result: NormalizedResult
     request_count: int
@@ -36,6 +47,7 @@ class StrategyOutcome:
     json_valid: bool
     raw_requests: list[dict[str, object]]
     raw_responses: list[dict[str, object]]
+    extra_metrics: dict[str, object] = field(default_factory=dict)
 
 
 def parse_result_json(text: str) -> tuple[NormalizedResult, bool]:
@@ -50,12 +62,11 @@ def run_one_shot_full_json(
     *,
     client: LlmClient,
     transcript: str,
-    output_language: str,
-    max_tokens: int,
+    options: StrategyOptions,
 ) -> StrategyOutcome:
-    messages = build_one_shot_full_json_messages(transcript, output_language=output_language)
+    messages = build_one_shot_full_json_messages(transcript, output_language=options.output_language)
     started = time.perf_counter()
-    response = client.complete(messages, max_tokens=max_tokens)
+    response = client.complete(messages, max_tokens=options.max_tokens)
     latency = time.perf_counter() - started
     result, json_valid = parse_result_json(response.text)
     return StrategyOutcome(
@@ -65,7 +76,7 @@ def run_one_shot_full_json(
         output_tokens=response.output_tokens,
         latency_seconds=latency,
         json_valid=json_valid,
-        raw_requests=[{"messages": [message.__dict__ for message in messages], "max_tokens": max_tokens}],
+        raw_requests=[{"messages": [message.__dict__ for message in messages], "max_tokens": options.max_tokens}],
         raw_responses=[{"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}],
     )
 
@@ -74,14 +85,12 @@ def run_one_shot_markdown_plus_json(
     *,
     client: LlmClient,
     transcript: str,
-    output_language: str,
-    max_tokens: int,
+    options: StrategyOptions,
 ) -> StrategyOutcome:
     return run_one_shot_full_json(
         client=client,
         transcript=transcript,
-        output_language=output_language,
-        max_tokens=max_tokens,
+        options=options,
     )
 
 
@@ -89,21 +98,18 @@ def run_two_pass_summary_structure(
     *,
     client: LlmClient,
     transcript: str,
-    output_language: str,
-    max_tokens: int,
+    options: StrategyOptions,
 ) -> StrategyOutcome:
     first = run_one_shot_full_json(
         client=client,
         transcript=transcript,
-        output_language=output_language,
-        max_tokens=max_tokens,
+        options=options,
     )
     second_input = f"Summary:\n{first.result.summary_text}\n\nTranscript:\n{transcript}"
     second = run_one_shot_full_json(
         client=client,
         transcript=second_input,
-        output_language=output_language,
-        max_tokens=max_tokens,
+        options=options,
     )
     second.request_count = first.request_count + second.request_count
     second.input_tokens += first.input_tokens
@@ -118,17 +124,14 @@ def run_chunk_map_reduce(
     *,
     client: LlmClient,
     transcript: str,
-    output_language: str,
-    max_tokens: int,
-    chunk_token_limit: int = 3000,
+    options: StrategyOptions,
 ) -> StrategyOutcome:
-    chunks = chunk_by_approx_tokens(transcript, max_tokens=chunk_token_limit)
+    chunks = chunk_by_approx_tokens(transcript, max_tokens=options.chunk_token_limit)
     if len(chunks) <= 1:
         return run_one_shot_full_json(
             client=client,
             transcript=transcript,
-            output_language=output_language,
-            max_tokens=max_tokens,
+            options=options,
         )
 
     raw_requests: list[dict[str, object]] = []
@@ -145,15 +148,15 @@ def run_chunk_map_reduce(
             chunk,
             chunk_index=index,
             total_chunks=len(chunks),
-            output_language=output_language,
+            output_language=options.output_language,
         )
         started = time.perf_counter()
-        response = client.complete(messages, max_tokens=max_tokens)
+        response = client.complete(messages, max_tokens=options.max_tokens)
         latency_seconds += time.perf_counter() - started
         request_count += 1
         input_tokens += response.input_tokens
         output_tokens += response.output_tokens
-        raw_requests.append({"messages": [message.__dict__ for message in messages], "max_tokens": max_tokens})
+        raw_requests.append({"messages": [message.__dict__ for message in messages], "max_tokens": options.max_tokens})
         raw_responses.append(
             {"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}
         )
@@ -168,14 +171,14 @@ def run_chunk_map_reduce(
         )
 
     reduce_input = json.dumps(chunk_results, ensure_ascii=False, indent=2)
-    messages = build_chunk_reduce_messages(reduce_input, output_language=output_language)
+    messages = build_chunk_reduce_messages(reduce_input, output_language=options.output_language)
     started = time.perf_counter()
-    response = client.complete(messages, max_tokens=max_tokens)
+    response = client.complete(messages, max_tokens=options.max_tokens)
     latency_seconds += time.perf_counter() - started
     request_count += 1
     input_tokens += response.input_tokens
     output_tokens += response.output_tokens
-    raw_requests.append({"messages": [message.__dict__ for message in messages], "max_tokens": max_tokens})
+    raw_requests.append({"messages": [message.__dict__ for message in messages], "max_tokens": options.max_tokens})
     raw_responses.append(
         {"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}
     )
@@ -186,15 +189,15 @@ def run_chunk_map_reduce(
     messages = build_final_report_messages(
         reduce_input,
         structured_result_json,
-        output_language=output_language,
+        output_language=options.output_language,
     )
     started = time.perf_counter()
-    response = client.complete(messages, max_tokens=max_tokens)
+    response = client.complete(messages, max_tokens=options.max_tokens)
     latency_seconds += time.perf_counter() - started
     request_count += 1
     input_tokens += response.input_tokens
     output_tokens += response.output_tokens
-    raw_requests.append({"messages": [message.__dict__ for message in messages], "max_tokens": max_tokens})
+    raw_requests.append({"messages": [message.__dict__ for message in messages], "max_tokens": options.max_tokens})
     raw_responses.append(
         {"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}
     )
@@ -217,14 +220,12 @@ def run_timeline_segment_reduce(
     *,
     client: LlmClient,
     transcript: str,
-    output_language: str,
-    max_tokens: int,
+    options: StrategyOptions,
 ) -> StrategyOutcome:
     return run_two_pass_summary_structure(
         client=client,
         transcript=transcript,
-        output_language=output_language,
-        max_tokens=max_tokens,
+        options=options,
     )
 
 
@@ -232,17 +233,14 @@ def run_antigravity_chunk_map_reduce(
     *,
     client: LlmClient,
     transcript: str,
-    output_language: str,
-    max_tokens: int,
-    chunk_token_limit: int = 3000,
+    options: StrategyOptions,
 ) -> StrategyOutcome:
-    chunks = chunk_by_approx_tokens(transcript, max_tokens=chunk_token_limit)
+    chunks = chunk_by_approx_tokens(transcript, max_tokens=options.chunk_token_limit)
     if len(chunks) <= 1:
         return run_one_shot_full_json(
             client=client,
             transcript=transcript,
-            output_language=output_language,
-            max_tokens=max_tokens,
+            options=options,
         )
 
     raw_requests: list[dict[str, object]] = []
@@ -260,15 +258,15 @@ def run_antigravity_chunk_map_reduce(
             chunk,
             chunk_index=index,
             total_chunks=len(chunks),
-            output_language=output_language,
+            output_language=options.output_language,
         )
         started = time.perf_counter()
-        response = client.complete(messages, max_tokens=max_tokens)
+        response = client.complete(messages, max_tokens=options.max_tokens)
         latency_seconds += time.perf_counter() - started
         request_count += 1
         input_tokens += response.input_tokens
         output_tokens += response.output_tokens
-        raw_requests.append({"messages": [message.__dict__ for message in messages], "max_tokens": max_tokens})
+        raw_requests.append({"messages": [message.__dict__ for message in messages], "max_tokens": options.max_tokens})
         raw_responses.append(
             {"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}
         )
@@ -299,15 +297,15 @@ def run_antigravity_chunk_map_reduce(
             chapter_input,
             chapter_index=ch_idx,
             total_chapters=num_chapters,
-            output_language=output_language,
+            output_language=options.output_language,
         )
         started = time.perf_counter()
-        response = client.complete(summary_messages, max_tokens=max_tokens)
+        response = client.complete(summary_messages, max_tokens=options.max_tokens)
         latency_seconds += time.perf_counter() - started
         request_count += 1
         input_tokens += response.input_tokens
         output_tokens += response.output_tokens
-        raw_requests.append({"messages": [message.__dict__ for message in summary_messages], "max_tokens": max_tokens})
+        raw_requests.append({"messages": [message.__dict__ for message in summary_messages], "max_tokens": options.max_tokens})
         raw_responses.append(
             {"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}
         )
@@ -318,14 +316,14 @@ def run_antigravity_chunk_map_reduce(
     json_valid = json_valid and summary_json_valid
 
     # 2b. Reduce Timeline step
-    timeline_messages = build_antigravity_reduce_timeline_messages(reduce_input, output_language=output_language)
+    timeline_messages = build_antigravity_reduce_timeline_messages(reduce_input, output_language=options.output_language)
     started = time.perf_counter()
-    response = client.complete(timeline_messages, max_tokens=max_tokens)
+    response = client.complete(timeline_messages, max_tokens=options.max_tokens)
     latency_seconds += time.perf_counter() - started
     request_count += 1
     input_tokens += response.input_tokens
     output_tokens += response.output_tokens
-    raw_requests.append({"messages": [message.__dict__ for message in timeline_messages], "max_tokens": max_tokens})
+    raw_requests.append({"messages": [message.__dict__ for message in timeline_messages], "max_tokens": options.max_tokens})
     raw_responses.append(
         {"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}
     )
@@ -333,14 +331,18 @@ def run_antigravity_chunk_map_reduce(
     json_valid = json_valid and timeline_json_valid
 
     # 2c. Reduce Claims & Evidence step
-    claims_evidence_messages = build_antigravity_reduce_claims_evidence_messages(reduce_input, output_language=output_language)
+    claims_evidence_messages = build_antigravity_reduce_claims_evidence_messages(
+        reduce_input, output_language=options.output_language
+    )
     started = time.perf_counter()
-    response = client.complete(claims_evidence_messages, max_tokens=max_tokens)
+    response = client.complete(claims_evidence_messages, max_tokens=options.max_tokens)
     latency_seconds += time.perf_counter() - started
     request_count += 1
     input_tokens += response.input_tokens
     output_tokens += response.output_tokens
-    raw_requests.append({"messages": [message.__dict__ for message in claims_evidence_messages], "max_tokens": max_tokens})
+    raw_requests.append(
+        {"messages": [message.__dict__ for message in claims_evidence_messages], "max_tokens": options.max_tokens}
+    )
     raw_responses.append(
         {"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}
     )
@@ -348,14 +350,14 @@ def run_antigravity_chunk_map_reduce(
     json_valid = json_valid and claims_evidence_json_valid
 
     # 2d. Reduce Takeaways step
-    takeaways_messages = build_antigravity_reduce_takeaways_messages(reduce_input, output_language=output_language)
+    takeaways_messages = build_antigravity_reduce_takeaways_messages(reduce_input, output_language=options.output_language)
     started = time.perf_counter()
-    response = client.complete(takeaways_messages, max_tokens=max_tokens)
+    response = client.complete(takeaways_messages, max_tokens=options.max_tokens)
     latency_seconds += time.perf_counter() - started
     request_count += 1
     input_tokens += response.input_tokens
     output_tokens += response.output_tokens
-    raw_requests.append({"messages": [message.__dict__ for message in takeaways_messages], "max_tokens": max_tokens})
+    raw_requests.append({"messages": [message.__dict__ for message in takeaways_messages], "max_tokens": options.max_tokens})
     raw_responses.append(
         {"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}
     )
@@ -377,15 +379,15 @@ def run_antigravity_chunk_map_reduce(
     messages = build_antigravity_final_report_messages(
         reduce_input,
         structured_result_json,
-        output_language=output_language,
+        output_language=options.output_language,
     )
     started = time.perf_counter()
-    response = client.complete(messages, max_tokens=max_tokens)
+    response = client.complete(messages, max_tokens=options.max_tokens)
     latency_seconds += time.perf_counter() - started
     request_count += 1
     input_tokens += response.input_tokens
     output_tokens += response.output_tokens
-    raw_requests.append({"messages": [message.__dict__ for message in messages], "max_tokens": max_tokens})
+    raw_requests.append({"messages": [message.__dict__ for message in messages], "max_tokens": options.max_tokens})
     raw_responses.append(
         {"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}
     )

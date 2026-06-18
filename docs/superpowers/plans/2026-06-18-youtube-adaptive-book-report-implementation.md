@@ -43,7 +43,7 @@ python -m unittest discover -s research/youtube_pipeline/tests -v
 - Modify: `research/youtube_pipeline/strategies.py`
 - Modify: `research/youtube_pipeline/tests/test_strategies.py`
 
-- [ ] **Step 1: Write failing tests for `StrategyOptions` and `extra_metrics`**
+- [x] **Step 1: Write failing tests for `StrategyOptions` and `extra_metrics`**
 
 Update imports in `research/youtube_pipeline/tests/test_strategies.py`:
 
@@ -96,7 +96,7 @@ Update the `run_antigravity_chunk_map_reduce` call similarly:
         )
 ```
 
-- [ ] **Step 2: Run the strategy tests to verify they fail**
+- [x] **Step 2: Run the strategy tests to verify they fail**
 
 Run:
 
@@ -106,7 +106,7 @@ python -m unittest research.youtube_pipeline.tests.test_strategies -v
 
 Expected: FAIL because `StrategyOptions` does not exist and existing strategy signatures do not accept `options`.
 
-- [ ] **Step 3: Add `StrategyOptions` and `extra_metrics`**
+- [x] **Step 3: Add `StrategyOptions` and `extra_metrics`**
 
 In `research/youtube_pipeline/strategies.py`, update the dataclass imports:
 
@@ -144,7 +144,7 @@ class StrategyOutcome:
     extra_metrics: dict[str, object] = field(default_factory=dict)
 ```
 
-- [ ] **Step 4: Migrate `run_one_shot_full_json` and wrappers to `StrategyOptions`**
+- [x] **Step 4: Migrate `run_one_shot_full_json` and wrappers to `StrategyOptions`**
 
 Replace `run_one_shot_full_json` signature and internal option usage:
 
@@ -190,7 +190,7 @@ def run_one_shot_markdown_plus_json(
     )
 ```
 
-- [ ] **Step 5: Migrate chunked strategies to `StrategyOptions`**
+- [x] **Step 5: Migrate chunked strategies to `StrategyOptions`**
 
 Update `run_chunk_map_reduce`, `run_timeline_segment_reduce`, and `run_antigravity_chunk_map_reduce` signatures to accept only `options`. Replace:
 
@@ -214,7 +214,7 @@ Every raw request entry should continue recording the exact max token value used
 raw_requests.append({"messages": [message.__dict__ for message in messages], "max_tokens": options.max_tokens})
 ```
 
-- [ ] **Step 6: Run strategy tests to verify they pass**
+- [x] **Step 6: Run strategy tests to verify they pass**
 
 Run:
 
@@ -224,7 +224,7 @@ python -m unittest research.youtube_pipeline.tests.test_strategies -v
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 
