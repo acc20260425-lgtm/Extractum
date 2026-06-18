@@ -895,6 +895,7 @@ def run_moc_guided_map_reduce(
     if not plan_valid:
         json_valid = False
     if not plan_valid or not nodes or any(not isinstance(node, dict) for node in nodes):
+        json_valid = False
         moc_fallback_used = True
         moc_plan = fallback_moc_plan(video_id, segments, budget)
     else:
@@ -987,7 +988,8 @@ def run_moc_guided_map_reduce(
             min(options.max_tokens, max(1000, target_word_count * 3)),
         )
         section_text = section_response.text.strip()
-        if len(section_text.split()) < int(0.8 * target_word_count):
+        section_word_count = word_count(section_text)
+        if section_word_count < int(0.8 * target_word_count):
             expansion_count += 1
             expanded = call_llm(
                 build_moc_node_expansion_messages(
@@ -995,7 +997,7 @@ def run_moc_guided_map_reduce(
                     node_json=node_json,
                     aligned_facts_json=aligned_facts_json,
                     raw_transcript_slice=raw_slice,
-                    current_word_count=len(section_text.split()),
+                    current_word_count=section_word_count,
                     target_word_count=target_word_count,
                     output_language=options.output_language,
                 ),
@@ -1008,11 +1010,12 @@ def run_moc_guided_map_reduce(
 
         title = str(node.get("title", f"Section {index}")) if hasattr(node, "get") else f"Section {index}"
         sections.append({"title": title, "content": section_text})
+        section_word_count = word_count(section_text)
         section_rows.append(
             {
                 "node_id": node.get("node_id") if hasattr(node, "get") else None,
                 "title": title,
-                "word_count": len(section_text.split()),
+                "word_count": section_word_count,
                 "slice_truncated": slice_truncated,
                 "content": section_text,
             }
@@ -1021,7 +1024,7 @@ def run_moc_guided_map_reduce(
             {
                 "node_id": node.get("node_id") if hasattr(node, "get") else None,
                 "title": title,
-                "word_count": len(section_text.split()),
+                "word_count": section_word_count,
                 "first_words": " ".join(section_text.split()[:80]),
             }
         )

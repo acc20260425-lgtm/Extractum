@@ -364,6 +364,87 @@ class StrategyTests(unittest.TestCase):
         self.assertFalse(outcome.json_valid)
         self.assertTrue(outcome.extra_metrics["moc_fallback_used"])
 
+    def test_moc_guided_map_reduce_marks_invalid_plan_shape_as_invalid_json(self):
+        transcript = "\n".join(
+            [
+                "[00:00:00] Alpha topic",
+                "[00:00:10] Beta topic",
+            ]
+        )
+        client = SequenceClient(
+            [
+                '{"nodes":[]}',
+                '{"chunk_index":1,"facts":[],"action_items":[],"open_questions":[]}',
+                "Fallback section text with enough words [00:00:00] " * 5,
+                "Executive overview",
+                "Final conclusion",
+            ]
+        )
+
+        outcome = run_moc_guided_map_reduce(
+            client=client,
+            transcript=transcript,
+            options=StrategyOptions(
+                output_language="ru",
+                video_id="video1",
+                max_tokens=2000,
+                chunk_token_limit=100,
+                chunk_overlap_tokens=10,
+                min_report_words=20,
+                max_report_words=20,
+                chapter_target_words=20,
+            ),
+        )
+
+        self.assertTrue(outcome.extra_metrics["moc_fallback_used"])
+        self.assertFalse(outcome.json_valid)
+
+    def test_moc_guided_map_reduce_keeps_json_valid_when_map_retry_succeeds(self):
+        transcript = "\n".join(
+            [
+                "[00:00:00] Media power opening",
+                "[00:00:10] Media serves state power",
+            ]
+        )
+        client = SequenceClient(
+            [
+                (
+                    '{"video_id":"video1","report_thesis":"Thesis","global_key_terms":["media"],'
+                    '"nodes":['
+                    '{"node_id":"node_001","title":"Media","time_span":{"start_ms":0,"end_ms":20000},"importance":"high","target_word_count":20,"description_outline":"Media topic","essential_key_terms":["media"],"required_questions":[],"expected_fact_types":["claims"]}'
+                    ']}'
+                ),
+                "not json",
+                (
+                    '{"chunk_index":1,"chunk_time_span":{"start_ms":0,"end_ms":20000},'
+                    '"facts":[{"fact_id":"f1","kind":"claim","text":"Media serves state power","importance":"high","time_span":{"start_ms":10000,"end_ms":11000},"verbatim_quote":"Media serves state power","speaker":null,"entities":["media"],"topic_tags":["state"],"moc_node_hint":null}],'
+                    '"action_items":[],"open_questions":[]}'
+                ),
+                "## Section 1: Media\n\nMedia section has enough words with [00:00:10] timestamp " * 3,
+                "Executive overview",
+                "Final conclusion",
+            ]
+        )
+
+        outcome = run_moc_guided_map_reduce(
+            client=client,
+            transcript=transcript,
+            options=StrategyOptions(
+                output_language="ru",
+                video_id="video1",
+                max_tokens=2000,
+                chunk_token_limit=100,
+                chunk_overlap_tokens=10,
+                min_report_words=20,
+                max_report_words=20,
+                chapter_target_words=20,
+            ),
+        )
+
+        self.assertTrue(outcome.json_valid)
+        self.assertEqual(outcome.extra_metrics["map_json_warning_count"], 1)
+        self.assertEqual(outcome.extra_artifacts["quality_checks.json"]["map_json_warning_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
