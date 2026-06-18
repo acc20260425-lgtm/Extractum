@@ -1301,7 +1301,7 @@ Expected: commit succeeds.
 - Modify: `research/youtube_pipeline/strategies.py`
 - Modify: `research/youtube_pipeline/tests/test_strategies.py`
 
-- [ ] **Step 1: Write failing adaptive strategy test**
+- [x] **Step 1: Write failing adaptive strategy test**
 
 Update imports in `test_strategies.py`:
 
@@ -1462,7 +1462,7 @@ Add short-input test:
 
 Update registry test expected list to include `"adaptive_book_report"`.
 
-- [ ] **Step 2: Run strategy tests to verify they fail**
+- [x] **Step 2: Run strategy tests to verify they fail**
 
 Run:
 
@@ -1472,7 +1472,7 @@ python -m unittest research.youtube_pipeline.tests.test_strategies -v
 
 Expected: FAIL because `run_adaptive_book_report` is missing.
 
-- [ ] **Step 3: Import adaptive helpers and prompts**
+- [x] **Step 3: Import adaptive helpers and prompts**
 
 In `strategies.py`, add imports:
 
@@ -1500,7 +1500,7 @@ Add prompt imports:
     build_adaptive_overview_messages,
 ```
 
-- [ ] **Step 4: Add JSON helpers and Markdown section helpers**
+- [x] **Step 4: Add JSON helpers and Markdown section helpers**
 
 Add these helpers above the strategy functions:
 
@@ -1583,7 +1583,7 @@ def compact_chunk_result_for_chapter(row: dict[str, object]) -> dict[str, object
     }
 ```
 
-- [ ] **Step 5: Implement `run_adaptive_book_report`**
+- [x] **Step 5: Implement `run_adaptive_book_report`**
 
 Add the strategy below `run_antigravity_chunk_map_reduce`. The implementation should follow this exact sequence:
 
@@ -1901,7 +1901,7 @@ Return:
     )
 ```
 
-- [ ] **Step 6: Register strategy**
+- [x] **Step 6: Register strategy**
 
 Add to `STRATEGIES`:
 
@@ -1909,7 +1909,7 @@ Add to `STRATEGIES`:
 "adaptive_book_report": run_adaptive_book_report,
 ```
 
-- [ ] **Step 7: Run strategy tests**
+- [x] **Step 7: Run strategy tests**
 
 Run:
 
@@ -1919,7 +1919,7 @@ python -m unittest research.youtube_pipeline.tests.test_strategies -v
 
 Expected: PASS.
 
-- [ ] **Step 8: Run all tests**
+- [x] **Step 8: Run all tests**
 
 Run:
 
@@ -1929,7 +1929,7 @@ python -m unittest discover -s research/youtube_pipeline/tests -v
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 Run:
 

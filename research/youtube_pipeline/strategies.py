@@ -3,10 +3,26 @@ import json
 import time
 from typing import Protocol
 
+from research.youtube_pipeline.adaptive import (
+    assemble_adaptive_markdown_report,
+    build_outline_chunk_descriptors,
+    compute_budget_plan,
+    extract_previous_chapter_bridge,
+    first_words,
+    normalize_substance_score,
+    partition_weighted_chunks,
+    response_token_budget,
+)
 from research.youtube_pipeline.chunking import chunk_by_approx_tokens
 from research.youtube_pipeline.llm_client import ChatMessage, LlmResponse
 from research.youtube_pipeline.models import NormalizedResult
 from research.youtube_pipeline.prompts import (
+    build_adaptive_chapter_expansion_messages,
+    build_adaptive_chapter_generation_messages,
+    build_adaptive_chapter_outline_messages,
+    build_adaptive_chunk_analysis_messages,
+    build_adaptive_conclusion_messages,
+    build_adaptive_overview_messages,
     build_chunk_analysis_messages,
     build_chunk_reduce_messages,
     build_final_report_messages,
@@ -56,6 +72,84 @@ def parse_result_json(text: str) -> tuple[NormalizedResult, bool]:
     except json.JSONDecodeError:
         return NormalizedResult(summary_text=text), False
     return NormalizedResult.from_dict(payload), True
+
+
+def parse_json_payload(text: str) -> tuple[dict[str, object], bool]:
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return {}, False
+    if not isinstance(payload, dict):
+        return {}, False
+    return payload, True
+
+
+def markdown_timeline(result: NormalizedResult) -> str:
+    if not result.timeline:
+        return "_No timeline items extracted._"
+    lines = []
+    for item in result.timeline:
+        lines.append(f"- **{item.start}-{item.end}**: {item.title} - {item.summary}")
+    return "\n".join(lines)
+
+
+def markdown_claims(result: NormalizedResult) -> str:
+    if not result.claims and not result.evidence:
+        return "_No claims or evidence extracted._"
+    lines = []
+    for claim in result.claims:
+        refs = ", ".join(claim.evidence_refs)
+        suffix = f" Evidence refs: {refs}." if refs else ""
+        lines.append(f"- **{claim.importance}**: {claim.text}.{suffix}")
+    for evidence in result.evidence:
+        lines.append(f"  - Evidence at {evidence.timestamp}: {evidence.text}")
+    return "\n".join(lines)
+
+
+def markdown_action_items(result: NormalizedResult) -> str:
+    if not result.action_items:
+        return "_No actionable takeaways extracted._"
+    return "\n".join(
+        f"- **{item.priority}** for {item.target_audience}: {item.text}" for item in result.action_items
+    )
+
+
+def markdown_open_questions(result: NormalizedResult) -> str:
+    if not result.open_questions:
+        return "_No open questions extracted._"
+    return "\n".join(f"- {item.text} - {item.why_it_matters}" for item in result.open_questions)
+
+
+def compact_json_items(items: object, *, limit: int, word_limit: int) -> list[object]:
+    if not isinstance(items, list):
+        return []
+    compacted: list[object] = []
+    for item in items[:limit]:
+        if isinstance(item, dict):
+            compacted.append(
+                {
+                    key: first_words(value, word_limit) if isinstance(value, str) else value
+                    for key, value in item.items()
+                }
+            )
+        else:
+            compacted.append(first_words(str(item), word_limit))
+    return compacted
+
+
+def compact_chunk_result_for_chapter(row: dict[str, object]) -> dict[str, object]:
+    result = row.get("result") if isinstance(row.get("result"), dict) else {}
+    return {
+        "chunk_index": row.get("chunk_index"),
+        "total_chunks": row.get("total_chunks"),
+        "substance_score": row.get("substance_score", 3),
+        "summary_text": first_words(str(result.get("summary_text", "")), 250),
+        "timeline": compact_json_items(result.get("timeline"), limit=5, word_limit=50),
+        "claims": compact_json_items(result.get("claims"), limit=5, word_limit=50),
+        "evidence": compact_json_items(result.get("evidence"), limit=5, word_limit=50),
+        "action_items": compact_json_items(result.get("action_items"), limit=3, word_limit=50),
+        "open_questions": compact_json_items(result.get("open_questions"), limit=3, word_limit=50),
+    }
 
 
 def run_one_shot_full_json(
@@ -406,7 +500,280 @@ def run_antigravity_chunk_map_reduce(
     )
 
 
+def run_adaptive_book_report(
+    *,
+    client: LlmClient,
+    transcript: str,
+    options: StrategyOptions,
+) -> StrategyOutcome:
+    if not transcript.strip():
+        raise ValueError("transcript is empty")
+
+    transcript_words = len(transcript.split())
+    if transcript_words < 1000:
+        outcome = run_one_shot_full_json(client=client, transcript=transcript, options=options)
+        outcome.extra_metrics.update(
+            {
+                "strategy_variant": "adaptive_book_report_short_fallback",
+                "transcript_words": transcript_words,
+            }
+        )
+        return outcome
+
+    chunks = chunk_by_approx_tokens(transcript, max_tokens=options.chunk_token_limit)
+    raw_requests: list[dict[str, object]] = []
+    raw_responses: list[dict[str, object]] = []
+    request_count = 0
+    input_tokens = 0
+    output_tokens = 0
+    latency_seconds = 0.0
+    json_valid = True
+    chunk_results: list[dict[str, object]] = []
+    substance_scores: list[int] = []
+
+    def call_llm(messages: list[ChatMessage], max_tokens: int) -> LlmResponse:
+        nonlocal request_count, input_tokens, output_tokens, latency_seconds
+        started = time.perf_counter()
+        response = client.complete(messages, max_tokens=max_tokens)
+        latency_seconds += time.perf_counter() - started
+        request_count += 1
+        input_tokens += response.input_tokens
+        output_tokens += response.output_tokens
+        raw_requests.append({"messages": [message.__dict__ for message in messages], "max_tokens": max_tokens})
+        raw_responses.append(
+            {"text": response.text, "input_tokens": response.input_tokens, "output_tokens": response.output_tokens}
+        )
+        return response
+
+    for index, chunk in enumerate(chunks, start=1):
+        messages = build_adaptive_chunk_analysis_messages(
+            chunk,
+            chunk_index=index,
+            total_chunks=len(chunks),
+            output_language=options.output_language,
+        )
+        response = call_llm(messages, options.max_tokens)
+        payload, valid = parse_json_payload(response.text)
+        json_valid = json_valid and valid
+        score = normalize_substance_score(payload.get("substance_score"))
+        result = NormalizedResult.from_dict(payload)
+        substance_scores.append(score)
+        chunk_results.append(
+            {
+                "chunk_index": index,
+                "total_chunks": len(chunks),
+                "substance_score": score,
+                "result": result.to_dict(),
+            }
+        )
+
+    budget_plan = compute_budget_plan(
+        transcript_words=transcript_words,
+        substance_scores=substance_scores,
+        options=options,
+        chunk_count=len(chunks),
+    )
+    weights = [
+        len(chunks[index].split()) * substance_scores[index]
+        for index in range(len(chunks))
+    ]
+    groups = partition_weighted_chunks(weights, budget_plan.chapter_count)
+    chapter_groups = [
+        {
+            "chapter_index": group_index,
+            "assigned_chunk_indexes": [index + 1 for index in range(start, end)],
+        }
+        for group_index, (start, end) in enumerate(groups, start=1)
+    ]
+
+    descriptors_json = json.dumps(build_outline_chunk_descriptors(chunk_results), ensure_ascii=False, indent=2)
+    chapter_groups_json = json.dumps(chapter_groups, ensure_ascii=False, indent=2)
+    outline_messages = build_adaptive_chapter_outline_messages(
+        chunk_descriptors_json=descriptors_json,
+        chapter_groups_json=chapter_groups_json,
+        report_min_words=budget_plan.report_min_words,
+        report_max_words=budget_plan.report_max_words,
+        output_language=options.output_language,
+    )
+    outline_response = call_llm(outline_messages, min(options.max_tokens, 2000))
+    outline_payload, outline_valid = parse_json_payload(outline_response.text)
+    json_valid = json_valid and outline_valid
+    outline_fallback_used = False
+    if not outline_valid:
+        outline_fallback_used = True
+        outline_payload = {
+            "report_thesis": first_words(chunk_results[0]["result"].get("summary_text", ""), 30),
+            "key_terms": [],
+            "chapters": [
+                {
+                    "chapter_index": row["chapter_index"],
+                    "title": f"Chapter {row['chapter_index']}",
+                    "one_liner": "Covers the assigned transcript chunks.",
+                    "assigned_chunk_indexes": row["assigned_chunk_indexes"],
+                }
+                for row in chapter_groups
+            ],
+        }
+    if not str(outline_payload.get("report_thesis", "")).strip():
+        outline_payload["report_thesis"] = first_words(chunk_results[0]["result"].get("summary_text", ""), 30)
+    if not isinstance(outline_payload.get("key_terms"), list):
+        outline_payload["key_terms"] = []
+    outline_json = json.dumps(outline_payload, ensure_ascii=False, indent=2)
+
+    chapters: list[str] = []
+    chapter_titles: list[str] = []
+    expansion_call_count = 0
+    chapter_expansion_shortfall = False
+    previous_bridge = ""
+    outline_chapters = outline_payload.get("chapters") if isinstance(outline_payload.get("chapters"), list) else []
+    for group_index, (start, end) in enumerate(groups, start=1):
+        outline_entry = next(
+            (
+                item for item in outline_chapters
+                if isinstance(item, dict) and int(item.get("chapter_index", 0) or 0) == group_index
+            ),
+            {
+                "chapter_index": group_index,
+                "title": f"Chapter {group_index}",
+                "one_liner": "Covers the assigned transcript chunks.",
+                "assigned_chunk_indexes": [index + 1 for index in range(start, end)],
+            },
+        )
+        title = str(outline_entry.get("title") or f"Chapter {group_index}")
+        chapter_titles.append(title)
+        assigned_notes = [compact_chunk_result_for_chapter(row) for row in chunk_results[start:end]]
+        assigned_notes_json = json.dumps(assigned_notes, ensure_ascii=False, indent=2)
+        chapter_messages = build_adaptive_chapter_generation_messages(
+            chapter_index=group_index,
+            total_chapters=len(groups),
+            chapter_word_target=budget_plan.chapter_word_target,
+            assigned_notes_json=assigned_notes_json,
+            outline_json=outline_json,
+            previous_bridge=previous_bridge,
+            output_language=options.output_language,
+        )
+        chapter_response = call_llm(
+            chapter_messages,
+            response_token_budget(budget_plan.chapter_word_target, options.output_language, options.max_tokens),
+        )
+        chapter_text = chapter_response.text.strip()
+        chapter_word_count = len(chapter_text.split())
+        if chapter_word_count < int(0.8 * budget_plan.chapter_word_target):
+            expansion_call_count += 1
+            expansion_messages = build_adaptive_chapter_expansion_messages(
+                chapter_index=group_index,
+                chapter_word_target=budget_plan.chapter_word_target,
+                current_word_count=chapter_word_count,
+                chapter_draft=chapter_text,
+                assigned_notes_json=assigned_notes_json,
+                outline_entry_json=json.dumps(outline_entry, ensure_ascii=False, indent=2),
+                report_thesis=str(outline_payload.get("report_thesis", "")),
+                key_terms=[str(term) for term in outline_payload.get("key_terms", [])],
+                previous_bridge=previous_bridge,
+                output_language=options.output_language,
+            )
+            expanded = call_llm(
+                expansion_messages,
+                response_token_budget(budget_plan.chapter_word_target, options.output_language, options.max_tokens),
+            ).text.strip()
+            if expanded:
+                chapter_text = expanded
+        if len(chapter_text.split()) < int(0.8 * budget_plan.chapter_word_target):
+            chapter_expansion_shortfall = True
+        chapters.append(chapter_text)
+        previous_bridge = extract_previous_chapter_bridge(chapter_text)
+
+    reduce_input = json.dumps(chunk_results, ensure_ascii=False, indent=2)
+
+    timeline_response = call_llm(
+        build_antigravity_reduce_timeline_messages(reduce_input, output_language=options.output_language),
+        options.max_tokens,
+    )
+    timeline_result, timeline_valid = parse_result_json(timeline_response.text)
+    json_valid = json_valid and timeline_valid
+
+    claims_response = call_llm(
+        build_antigravity_reduce_claims_evidence_messages(reduce_input, output_language=options.output_language),
+        options.max_tokens,
+    )
+    claims_result, claims_valid = parse_result_json(claims_response.text)
+    json_valid = json_valid and claims_valid
+
+    takeaways_response = call_llm(
+        build_antigravity_reduce_takeaways_messages(reduce_input, output_language=options.output_language),
+        options.max_tokens,
+    )
+    takeaways_result, takeaways_valid = parse_result_json(takeaways_response.text)
+    json_valid = json_valid and takeaways_valid
+
+    combined_result = NormalizedResult(
+        timeline=timeline_result.timeline,
+        claims=claims_result.claims,
+        evidence=claims_result.evidence,
+        action_items=takeaways_result.action_items,
+        open_questions=takeaways_result.open_questions,
+    )
+    structured_result_json = json.dumps(combined_result.to_dict(), ensure_ascii=False, indent=2)
+
+    overview = call_llm(
+        build_adaptive_overview_messages(
+            outline_json=outline_json,
+            structured_result_json=structured_result_json,
+            output_language=options.output_language,
+        ),
+        min(options.max_tokens, 2000),
+    ).text.strip()
+    conclusion = call_llm(
+        build_adaptive_conclusion_messages(
+            outline_json=outline_json,
+            structured_result_json=structured_result_json,
+            output_language=options.output_language,
+        ),
+        min(options.max_tokens, 2000),
+    ).text.strip()
+
+    combined_result.summary_text = assemble_adaptive_markdown_report(
+        overview=overview,
+        chapters=chapters,
+        chapter_titles=chapter_titles,
+        timeline_markdown=markdown_timeline(combined_result),
+        claims_markdown=markdown_claims(combined_result),
+        action_items_markdown=markdown_action_items(combined_result),
+        open_questions_markdown=markdown_open_questions(combined_result),
+        conclusion=conclusion,
+    )
+
+    identical_score_count = max((substance_scores.count(score) for score in set(substance_scores)), default=0)
+    score_warning = bool(substance_scores and identical_score_count / len(substance_scores) > 0.8)
+    return StrategyOutcome(
+        result=combined_result,
+        request_count=request_count,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        latency_seconds=latency_seconds,
+        json_valid=json_valid,
+        raw_requests=raw_requests,
+        raw_responses=raw_responses,
+        extra_metrics={
+            "strategy_variant": "adaptive_book_report",
+            "transcript_words": budget_plan.transcript_words,
+            "report_min_words": budget_plan.report_min_words,
+            "report_max_words": budget_plan.report_max_words,
+            "target_report_words": budget_plan.target_report_words,
+            "chapter_count": budget_plan.chapter_count,
+            "chapter_word_target": budget_plan.chapter_word_target,
+            "expansion_call_count": expansion_call_count,
+            "outline_fallback_used": outline_fallback_used,
+            "chapter_expansion_shortfall": chapter_expansion_shortfall,
+            "average_substance_score": budget_plan.average_substance_score,
+            "substance_multiplier": budget_plan.substance_multiplier,
+            "substance_score_calibration_warning": score_warning,
+        },
+    )
+
+
 STRATEGIES = {
+    "adaptive_book_report": run_adaptive_book_report,
     "antigravity_chunk_map_reduce": run_antigravity_chunk_map_reduce,
     "one_shot_full_json": run_one_shot_full_json,
     "one_shot_markdown_plus_json": run_one_shot_markdown_plus_json,

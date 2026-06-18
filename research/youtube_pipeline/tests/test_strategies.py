@@ -3,6 +3,7 @@ import unittest
 from research.youtube_pipeline.llm_client import LlmResponse
 from research.youtube_pipeline.strategies import (
     StrategyOptions,
+    run_adaptive_book_report,
     run_antigravity_chunk_map_reduce,
     run_chunk_map_reduce,
     run_one_shot_full_json,
@@ -33,6 +34,16 @@ class SequenceClient:
         return LlmResponse(text=text, input_tokens=10, output_tokens=20)
 
 
+def normalized_chunk(summary, score=3):
+    return (
+        '{"substance_score":'
+        + str(score)
+        + ',"summary_text":"'
+        + summary
+        + '","timeline":[],"claims":[],"evidence":[],"action_items":[],"open_questions":[]}'
+    )
+
+
 class StrategyTests(unittest.TestCase):
     def test_one_shot_full_json_returns_result_and_usage(self):
         client = FakeClient()
@@ -56,6 +67,7 @@ class StrategyTests(unittest.TestCase):
         self.assertEqual(
             sorted(STRATEGIES),
             [
+                "adaptive_book_report",
                 "antigravity_chunk_map_reduce",
                 "chunk_map_reduce",
                 "one_shot_full_json",
@@ -130,6 +142,128 @@ class StrategyTests(unittest.TestCase):
         self.assertIn("research report", client.calls[7][0][1].content)
         self.assertIn("Chapter 1 summary narrative", client.calls[7][0][1].content)
         self.assertIn("Chapter 2 summary narrative", client.calls[7][0][1].content)
+
+    def test_adaptive_book_report_generates_chapters_expands_and_assembles(self):
+        transcript = " ".join(f"word{i}" for i in range(1200))
+        long_chapter = " ".join(f"chapter2_{i}" for i in range(700))
+        expanded_chapter = " ".join(f"expanded1_{i}" for i in range(700))
+        client = SequenceClient(
+            [
+                normalized_chunk("Chunk one dense notes", 3),
+                normalized_chunk("Chunk two dense notes", 3),
+                normalized_chunk("Chunk three dense notes", 3),
+                normalized_chunk("Chunk four dense notes", 3),
+                (
+                    '{"report_thesis":"Main thesis","key_terms":["Term"],'
+                    '"chapters":['
+                    '{"chapter_index":1,"title":"First arc","one_liner":"Covers first half","assigned_chunk_indexes":[1,2]},'
+                    '{"chapter_index":2,"title":"Second arc","one_liner":"Covers second half","assigned_chunk_indexes":[3,4]}'
+                    ']}'
+                ),
+                "Too short",
+                expanded_chapter,
+                long_chapter,
+                '{"timeline":[{"start":"00:00:00","end":"00:05:00","title":"T1","summary":"S1"}]}',
+                '{"claims":[{"text":"C1","importance":"high","evidence_refs":[]}],"evidence":[]}',
+                '{"action_items":[{"text":"A1","target_audience":"Audience","priority":"medium"}],"open_questions":[]}',
+                "Executive overview text",
+                "Final synthesis text",
+            ]
+        )
+
+        outcome = run_adaptive_book_report(
+            client=client,
+            transcript=transcript,
+            options=StrategyOptions(
+                output_language="ru",
+                max_tokens=5000,
+                chunk_token_limit=300,
+                chapter_target_words=900,
+            ),
+        )
+
+        self.assertIn("Generated via `adaptive_book_report`", outcome.result.summary_text)
+        self.assertIn("First arc", outcome.result.summary_text)
+        self.assertIn("Second arc", outcome.result.summary_text)
+        self.assertIn("Executive overview text", outcome.result.summary_text)
+        self.assertIn("Final synthesis text", outcome.result.summary_text)
+        self.assertIn("expanded1_0", outcome.result.summary_text)
+        self.assertEqual(outcome.result.timeline[0].title, "T1")
+        self.assertEqual(outcome.result.claims[0].text, "C1")
+        self.assertEqual(outcome.result.action_items[0].text, "A1")
+        self.assertEqual(outcome.request_count, 13)
+        self.assertTrue(outcome.json_valid)
+        self.assertEqual(outcome.extra_metrics["strategy_variant"], "adaptive_book_report")
+        self.assertEqual(outcome.extra_metrics["chapter_count"], 2)
+        self.assertEqual(outcome.extra_metrics["expansion_call_count"], 1)
+        self.assertEqual(outcome.extra_metrics["target_report_words"], 1400)
+        self.assertFalse(outcome.extra_metrics["outline_fallback_used"])
+        self.assertFalse(outcome.extra_metrics["chapter_expansion_shortfall"])
+        self.assertTrue(outcome.extra_metrics["substance_score_calibration_warning"])
+        chapter_generation_call = client.calls[5]
+        self.assertEqual(chapter_generation_call[1], 2254)
+
+    def test_adaptive_book_report_records_outline_fallback_and_expansion_shortfall(self):
+        transcript = " ".join(f"word{i}" for i in range(1200))
+        still_short = " ".join(f"short_{i}" for i in range(100))
+        client = SequenceClient(
+            [
+                normalized_chunk("Chunk one dense notes", 1),
+                normalized_chunk("Chunk two dense notes", 2),
+                normalized_chunk("Chunk three dense notes", 3),
+                normalized_chunk("Chunk four dense notes", 4),
+                "{not valid json",
+                "Tiny chapter",
+                still_short,
+                "Second chapter has enough words " * 140,
+                '{"timeline":[]}',
+                '{"claims":[],"evidence":[]}',
+                '{"action_items":[],"open_questions":[]}',
+                "Overview",
+                "Conclusion",
+            ]
+        )
+
+        outcome = run_adaptive_book_report(
+            client=client,
+            transcript=transcript,
+            options=StrategyOptions(
+                output_language="ru",
+                max_tokens=5000,
+                chunk_token_limit=300,
+                chapter_target_words=900,
+            ),
+        )
+
+        self.assertTrue(outcome.extra_metrics["outline_fallback_used"])
+        self.assertTrue(outcome.extra_metrics["chapter_expansion_shortfall"])
+        self.assertFalse(outcome.extra_metrics["substance_score_calibration_warning"])
+
+    def test_adaptive_book_report_rejects_empty_transcript(self):
+        client = FakeClient()
+
+        with self.assertRaisesRegex(ValueError, "transcript is empty"):
+            run_adaptive_book_report(
+                client=client,
+                transcript="   ",
+                options=StrategyOptions(),
+            )
+
+        self.assertEqual(client.calls, [])
+
+    def test_adaptive_book_report_uses_one_shot_for_short_transcript(self):
+        client = FakeClient()
+
+        outcome = run_adaptive_book_report(
+            client=client,
+            transcript="short transcript",
+            options=StrategyOptions(output_language="ru", max_tokens=1000),
+        )
+
+        self.assertEqual(outcome.result.summary_text, "Summary text")
+        self.assertEqual(outcome.request_count, 1)
+        self.assertEqual(outcome.extra_metrics["strategy_variant"], "adaptive_book_report_short_fallback")
+        self.assertEqual(outcome.extra_metrics["transcript_words"], 2)
 
 
 if __name__ == "__main__":
