@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping
 
-from research.youtube_pipeline.moc_agentic import read_json, write_json
+from research.youtube_pipeline.moc_agentic import prepare_map_assignments, read_json, write_json, write_prep_artifacts
 
 WORKFLOW_STATE_SCHEMA = "youtube-summary-workflow-state-v1"
 RUN_INDEX_SCHEMA = "youtube-summary-run-index-v1"
@@ -141,3 +141,201 @@ def rebuild_run_index(run_root: Path) -> dict[str, object]:
             )
     runs.sort(key=lambda row: str(row.get("updated_at", "")), reverse=True)
     return {"schema": RUN_INDEX_SCHEMA, "runs": runs}
+
+
+def default_commands(run_dir: Path, *, output_language: str, target_words: int, planner_context_tokens: int) -> dict[str, str]:
+    run = str(run_dir)
+    return {
+        "validate_map_outputs": f"python -m research.youtube_pipeline.tools.validate_map_outputs --run-dir {run}",
+        "assemble_map_artifacts": f"python -m research.youtube_pipeline.tools.assemble_map_artifacts --run-dir {run}",
+        "build_planner_context": (
+            f"python -m research.youtube_pipeline.tools.build_planner_context --run-dir {run} "
+            f"--max-tokens {planner_context_tokens} --language {output_language}"
+        ),
+        "validate_moc": f"python -m research.youtube_pipeline.tools.validate_moc --run-dir {run} --target-words {target_words}",
+        "dedupe_facts": f"python -m research.youtube_pipeline.tools.dedupe_facts --run-dir {run}",
+        "align_facts": f"python -m research.youtube_pipeline.tools.align_facts --run-dir {run}",
+        "prepare_section_assignments": f"python -m research.youtube_pipeline.tools.prepare_section_assignments --run-dir {run}",
+        "quality_check": f"python -m research.youtube_pipeline.tools.quality_check --run-dir {run}",
+        "build_structured_analysis": f"python -m research.youtube_pipeline.tools.build_structured_analysis --run-dir {run}",
+        "assemble_report": f"python -m research.youtube_pipeline.tools.assemble_report --run-dir {run}",
+    }
+
+
+def find_latest_matching_run(run_root: Path, *, transcript_hash: str, options_hash: str) -> dict[str, object] | None:
+    index = read_run_index(run_root)
+    matches = [
+        run
+        for run in index.get("runs", [])
+        if isinstance(run, dict)
+        and run.get("transcript_sha256") == transcript_hash
+        and run.get("options_hash") == options_hash
+    ]
+    if not matches:
+        rebuilt = rebuild_run_index(run_root)
+        write_run_index(run_root, rebuilt)
+        matches = [
+            run
+            for run in rebuilt.get("runs", [])
+            if isinstance(run, dict)
+            and run.get("transcript_sha256") == transcript_hash
+            and run.get("options_hash") == options_hash
+        ]
+    if not matches:
+        return None
+    matches.sort(key=lambda row: str(row.get("updated_at", "")), reverse=True)
+    return matches[0]
+
+
+def update_index_with_state(run_root: Path, state: Mapping[str, object]) -> None:
+    index = read_run_index(run_root)
+    runs = [run for run in index.get("runs", []) if isinstance(run, dict)]
+    run_dir = str(state["run_dir"])
+    runs = [run for run in runs if run.get("run_dir") != run_dir]
+    runs.insert(
+        0,
+        {
+            "run_dir": run_dir,
+            "run_root": str(run_root),
+            "transcript_path": str(state.get("transcript_path", "")),
+            "transcript_sha256": str(state.get("transcript_sha256", "")),
+            "options_hash": str(state.get("options_hash", "")),
+            "current_stage": str(state.get("current_stage", "")),
+            "created_at": str(state.get("created_at", "")),
+            "updated_at": str(state.get("updated_at", "")),
+        },
+    )
+    write_run_index(run_root, {"schema": RUN_INDEX_SCHEMA, "runs": runs})
+
+
+def next_run_dir(run_root: Path, transcript_path: Path, now: str | None = None) -> Path:
+    timestamp = (now or utc_now()).replace("-", "").replace(":", "").replace("Z", "").replace("T", "-")
+    base_dir = run_root / slug_from_transcript_path(transcript_path)
+    candidate = base_dir / timestamp
+    suffix = 2
+    while candidate.exists():
+        candidate = base_dir / f"{timestamp}-{suffix:02d}"
+        suffix += 1
+    return candidate
+
+
+def start_youtube_summary_run(
+    transcript_path: Path,
+    *,
+    run_root: Path = DEFAULT_RUN_ROOT,
+    run_dir: Path | None = None,
+    output_language: str = "ru",
+    target_words: int = 10000,
+    target_tokens: int = 1600,
+    overlap_tokens: int = 200,
+    planner_context_tokens: int = 24000,
+    force: bool = False,
+) -> dict[str, object]:
+    transcript_path = transcript_path.resolve()
+    if not transcript_path.exists():
+        raise FileNotFoundError(f"Transcript file does not exist: {transcript_path}")
+
+    options = normalize_workflow_options(
+        output_language=output_language,
+        target_words=target_words,
+        target_tokens=target_tokens,
+        overlap_tokens=overlap_tokens,
+        planner_context_tokens=planner_context_tokens,
+    )
+    transcript_hash = transcript_sha256(transcript_path)
+    options_digest = compute_options_hash(options)
+
+    if run_dir is not None:
+        state_path = run_dir / "workflow_state.json"
+        if not state_path.exists():
+            raise FileNotFoundError(f"workflow_state.json does not exist for explicit run: {state_path}")
+        state = read_json(state_path)
+        if not isinstance(state, dict) or state.get("schema") != WORKFLOW_STATE_SCHEMA:
+            raise ValueError(f"Invalid workflow_state.json for explicit run: {state_path}")
+        state["resumed"] = True
+        return state
+    if not force:
+        match = find_latest_matching_run(run_root, transcript_hash=transcript_hash, options_hash=options_digest)
+        if match:
+            state = read_json(Path(str(match["run_dir"])) / "workflow_state.json")
+            if isinstance(state, dict):
+                state["resumed"] = True
+                return state
+            raise ValueError(f"Matching workflow_state.json is invalid for run: {match['run_dir']}")
+    selected_run_dir = next_run_dir(run_root, transcript_path)
+
+    prep_manifest = write_prep_artifacts(
+        transcript_path,
+        selected_run_dir,
+        target_tokens=target_tokens,
+        overlap_tokens=overlap_tokens,
+        language=output_language,
+    )
+    assignment_manifest = prepare_map_assignments(selected_run_dir, output_language=output_language)
+    now = utc_now()
+    state = {
+        **options,
+        "run_root": str(run_root),
+        "run_dir": str(selected_run_dir),
+        "transcript_path": str(transcript_path),
+        "transcript_sha256": transcript_hash,
+        "options_hash": options_digest,
+        "current_stage": "map_assignments_ready",
+        "next_action": "dispatch_map_extractors",
+        "artifacts": {
+            "normalized_transcript": "prep/normalized_transcript.txt",
+            "chunks": "prep/chunks.jsonl",
+            "prep_manifest": "prep/manifest.json",
+            "assignment_manifest": "map/assignment_manifest.json",
+        },
+        "counts": {
+            "chunk_count": int(prep_manifest["chunk_count"]),
+            "map_assignment_count": int(assignment_manifest["assignment_count"]),
+        },
+        "commands": default_commands(
+            selected_run_dir,
+            output_language=output_language,
+            target_words=target_words,
+            planner_context_tokens=planner_context_tokens,
+        ),
+        "created_at": now,
+        "updated_at": now,
+        "validation_warnings": [],
+        "resumed": False,
+    }
+    write_json(selected_run_dir / "workflow_state.json", state)
+    update_index_with_state(run_root, state)
+    return state
+
+
+def update_workflow_state(
+    run_dir: Path,
+    *,
+    current_stage: str,
+    next_action: str,
+    artifacts: Mapping[str, object] | None = None,
+    counts: Mapping[str, object] | None = None,
+    validation_warnings: list[str] | None = None,
+) -> dict[str, object]:
+    if current_stage not in WORKFLOW_STAGES:
+        raise ValueError(f"Unknown workflow stage: {current_stage}")
+    state_path = run_dir / "workflow_state.json"
+    state = read_json(state_path)
+    if not isinstance(state, dict) or state.get("schema") != WORKFLOW_STATE_SCHEMA:
+        raise ValueError(f"Invalid workflow state: {state_path}")
+    state["current_stage"] = current_stage
+    state["next_action"] = next_action
+    state["updated_at"] = utc_now()
+    state.setdefault("artifacts", {})
+    state.setdefault("counts", {})
+    if artifacts:
+        state["artifacts"].update(dict(artifacts))
+    if counts:
+        state["counts"].update(dict(counts))
+    if validation_warnings is not None:
+        state["validation_warnings"] = validation_warnings
+    write_json(state_path, state)
+    run_root = state.get("run_root")
+    if isinstance(run_root, str) and run_root:
+        update_index_with_state(Path(run_root), state)
+    return state

@@ -334,7 +334,7 @@ git commit -m "feat: add youtube summary workflow state primitives"
 - Modify: `research/youtube_pipeline/youtube_summary_workflow.py`
 - Modify: `research/youtube_pipeline/tests/test_agentic_moc.py`
 
-- [ ] **Step 1: Write failing tests for bootstrap/resume/update behavior**
+- [x] **Step 1: Write failing tests for bootstrap/resume/update behavior**
 
 Extend the workflow import in `test_agentic_moc.py`:
 
@@ -491,7 +491,7 @@ Add these tests:
             self.assertEqual(index["runs"][0]["current_stage"], "map_outputs_ready")
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -501,7 +501,7 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc.AgenticArtif
 
 Expected: fail with import errors for the new workflow functions.
 
-- [ ] **Step 3: Implement bootstrap/resume/update functions**
+- [x] **Step 3: Implement bootstrap/resume/update functions**
 
 Append this code to `research/youtube_pipeline/youtube_summary_workflow.py`:
 
@@ -708,7 +708,7 @@ def update_workflow_state(
     return state
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run:
 
@@ -718,7 +718,7 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc.AgenticArtif
 
 Expected: `Ran 6 tests` and `OK`.
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2**
 
 Run:
 

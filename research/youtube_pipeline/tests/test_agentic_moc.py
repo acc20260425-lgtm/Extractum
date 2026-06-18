@@ -36,9 +36,12 @@ from research.youtube_pipeline.moc_agentic import (
 from research.youtube_pipeline.youtube_summary_workflow import (
     WORKFLOW_STATE_SCHEMA,
     compute_options_hash,
+    find_latest_matching_run,
     normalize_workflow_options,
     read_run_index,
     rebuild_run_index,
+    start_youtube_summary_run,
+    update_workflow_state,
     write_run_index,
 )
 
@@ -265,6 +268,142 @@ class AgenticArtifactHelperTests(unittest.TestCase):
             self.assertEqual(assignment["chunk_id"], "chunk_001")
             self.assertEqual(assignment["output_file"], "map/agent_outputs/chunk_001.json")
             self.assertEqual(expected_files["expected_files"], ["map/agent_outputs/chunk_001.json"])
+
+    def test_start_youtube_summary_run_creates_state_and_assignments(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_root = Path(temp_dir) / "summary_runs"
+
+            state = start_youtube_summary_run(
+                FIXTURES_DIR / "agentic_tiny_transcript.txt",
+                run_root=run_root,
+                output_language="ru",
+                target_words=10000,
+                target_tokens=160,
+                overlap_tokens=30,
+                planner_context_tokens=3000,
+            )
+
+            run_dir = Path(str(state["run_dir"]))
+            self.assertEqual(state["schema"], WORKFLOW_STATE_SCHEMA)
+            self.assertEqual(state["current_stage"], "map_assignments_ready")
+            self.assertEqual(state["next_action"], "dispatch_map_extractors")
+            self.assertTrue((run_dir / "prep" / "chunks.jsonl").exists())
+            self.assertTrue((run_dir / "map" / "assignment_manifest.json").exists())
+            self.assertTrue((run_dir / "workflow_state.json").exists())
+            self.assertTrue((run_root / "run_index.json").exists())
+
+    def test_start_youtube_summary_run_resumes_latest_matching_run(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_root = Path(temp_dir) / "summary_runs"
+            first = start_youtube_summary_run(
+                FIXTURES_DIR / "agentic_tiny_transcript.txt",
+                run_root=run_root,
+                output_language="ru",
+                target_words=10000,
+                target_tokens=160,
+                overlap_tokens=30,
+                planner_context_tokens=3000,
+            )
+            second = start_youtube_summary_run(
+                FIXTURES_DIR / "agentic_tiny_transcript.txt",
+                run_root=run_root,
+                output_language="ru",
+                target_words=10000,
+                target_tokens=160,
+                overlap_tokens=30,
+                planner_context_tokens=3000,
+            )
+
+            self.assertEqual(second["run_dir"], first["run_dir"])
+            self.assertTrue(second["resumed"])
+
+    def test_start_youtube_summary_run_force_creates_new_run(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_root = Path(temp_dir) / "summary_runs"
+            first = start_youtube_summary_run(
+                FIXTURES_DIR / "agentic_tiny_transcript.txt",
+                run_root=run_root,
+                output_language="ru",
+                target_words=10000,
+                target_tokens=160,
+                overlap_tokens=30,
+                planner_context_tokens=3000,
+            )
+            second = start_youtube_summary_run(
+                FIXTURES_DIR / "agentic_tiny_transcript.txt",
+                run_root=run_root,
+                output_language="ru",
+                target_words=10000,
+                target_tokens=160,
+                overlap_tokens=30,
+                planner_context_tokens=3000,
+                force=True,
+            )
+
+            self.assertNotEqual(second["run_dir"], first["run_dir"])
+            self.assertFalse(second["resumed"])
+
+    def test_start_youtube_summary_run_rejects_explicit_run_dir_without_state(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            explicit_run_dir = Path(temp_dir) / "explicit_run"
+
+            with self.assertRaises(FileNotFoundError):
+                start_youtube_summary_run(
+                    FIXTURES_DIR / "agentic_tiny_transcript.txt",
+                    run_root=Path(temp_dir) / "summary_runs",
+                    run_dir=explicit_run_dir,
+                    output_language="ru",
+                    target_words=10000,
+                    target_tokens=160,
+                    overlap_tokens=30,
+                    planner_context_tokens=3000,
+                )
+
+    def test_start_youtube_summary_run_rejects_explicit_run_dir_with_invalid_state(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            explicit_run_dir = Path(temp_dir) / "explicit_run"
+            write_json(explicit_run_dir / "workflow_state.json", {"schema": "wrong"})
+
+            with self.assertRaises(ValueError):
+                start_youtube_summary_run(
+                    FIXTURES_DIR / "agentic_tiny_transcript.txt",
+                    run_root=Path(temp_dir) / "summary_runs",
+                    run_dir=explicit_run_dir,
+                    output_language="ru",
+                    target_words=10000,
+                    target_tokens=160,
+                    overlap_tokens=30,
+                    planner_context_tokens=3000,
+                )
+
+    def test_update_workflow_state_advances_stage_and_preserves_commands(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            state = start_youtube_summary_run(
+                FIXTURES_DIR / "agentic_tiny_transcript.txt",
+                run_root=Path(temp_dir) / "summary_runs",
+                output_language="ru",
+                target_words=10000,
+                target_tokens=160,
+                overlap_tokens=30,
+                planner_context_tokens=3000,
+            )
+
+            updated = update_workflow_state(
+                Path(str(state["run_dir"])),
+                current_stage="map_outputs_ready",
+                next_action="assemble_map_artifacts",
+                artifacts={"validation_manifest": "map/validation_manifest.json"},
+                counts={"valid_map_output_count": 1},
+                validation_warnings=["example warning"],
+            )
+
+            self.assertEqual(updated["current_stage"], "map_outputs_ready")
+            self.assertEqual(updated["artifacts"]["validation_manifest"], "map/validation_manifest.json")
+            self.assertEqual(updated["counts"]["valid_map_output_count"], 1)
+            self.assertIn("validate_map_outputs", updated["commands"])
+            self.assertEqual(updated["validation_warnings"], ["example warning"])
+            index = read_json(Path(str(state["run_root"])) / "run_index.json")
+            self.assertEqual(index["runs"][0]["current_stage"], "map_outputs_ready")
 
     def test_validate_map_outputs_repairs_wrapped_json(self):
         with tempfile.TemporaryDirectory() as temp_dir:
