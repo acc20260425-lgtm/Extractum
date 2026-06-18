@@ -713,6 +713,15 @@ class AgenticArtifactHelperTests(unittest.TestCase):
             payload = json.loads(example_file.read_text(encoding="utf-8"))
             self.assertIsInstance(payload, dict)
 
+    def test_youtube_summary_cli_modules_are_importable(self):
+        module_names = [
+            "research.youtube_pipeline.tools.start_youtube_summary",
+            "research.youtube_pipeline.tools.update_youtube_summary_state",
+        ]
+
+        for module_name in module_names:
+            self.assertIsNotNone(importlib.util.find_spec(module_name))
+
     def _write_single_chunk_prep(self, temp_dir: Path) -> Path:
         run_dir = temp_dir / "run"
         write_prep_artifacts(

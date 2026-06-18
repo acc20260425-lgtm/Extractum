@@ -734,7 +734,7 @@ git commit -m "feat: add youtube summary run bootstrap"
 - Create: `research/youtube_pipeline/tools/update_youtube_summary_state.py`
 - Modify: `research/youtube_pipeline/tests/test_agentic_moc.py`
 
-- [ ] **Step 1: Write failing CLI contract tests**
+- [x] **Step 1: Write failing CLI contract tests**
 
 Add this test:
 
@@ -749,7 +749,7 @@ Add this test:
             self.assertIsNotNone(importlib.util.find_spec(module_name))
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -759,7 +759,7 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc.AgenticArtif
 
 Expected: fail because the new modules do not exist.
 
-- [ ] **Step 3: Add `start_youtube_summary.py`**
+- [x] **Step 3: Add `start_youtube_summary.py`**
 
 Create `research/youtube_pipeline/tools/start_youtube_summary.py`:
 
@@ -805,7 +805,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 4: Add `update_youtube_summary_state.py`**
+- [x] **Step 4: Add `update_youtube_summary_state.py`**
 
 Create `research/youtube_pipeline/tools/update_youtube_summary_state.py`:
 
@@ -861,7 +861,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 5: Run CLI smoke commands**
+- [x] **Step 5: Run CLI smoke commands**
 
 Run:
 
@@ -893,7 +893,7 @@ current_stage=map_outputs_ready
 next_action=assemble_map_artifacts
 ```
 
-- [ ] **Step 6: Run unit tests**
+- [x] **Step 6: Run unit tests**
 
 Run:
 
@@ -903,7 +903,7 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc.AgenticArtif
 
 Expected: `Ran 1 test` and `OK`.
 
-- [ ] **Step 7: Commit Task 3**
+- [x] **Step 7: Commit Task 3**
 
 Run:
 
