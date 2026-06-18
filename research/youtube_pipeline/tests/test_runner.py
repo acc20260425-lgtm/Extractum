@@ -176,6 +176,28 @@ class RunnerTests(unittest.TestCase):
                     outcome=outcome,
                 )
 
+    def test_write_run_artifacts_rejects_nested_extra_artifact_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            outcome = StrategyOutcome(
+                result=NormalizedResult(summary_text="Summary text"),
+                request_count=1,
+                input_tokens=10,
+                output_tokens=20,
+                latency_seconds=1.25,
+                json_valid=True,
+                raw_requests=[],
+                raw_responses=[],
+                extra_artifacts={"nested/file.json": {}},
+            )
+
+            with self.assertRaisesRegex(ValueError, "extra artifact filename"):
+                write_run_artifacts(
+                    root=Path(tmp),
+                    strategy="moc_guided_map_reduce",
+                    video_id="video1",
+                    outcome=outcome,
+                )
+
     def test_build_strategy_options_rejects_min_greater_than_max(self):
         parser = build_parser()
         args = parser.parse_args(
