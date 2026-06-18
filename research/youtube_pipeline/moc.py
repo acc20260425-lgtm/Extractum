@@ -5,6 +5,8 @@ import math
 import re
 from typing import Any
 
+from research.youtube_pipeline.models import ActionItem, Claim, Evidence, NormalizedResult, OpenQuestion, TimelineItem
+
 
 MAX_REPORT_WORDS = 20000
 MAX_MOC_NODES = 20
@@ -354,6 +356,253 @@ def align_fact_clusters_to_moc(
             aligned_nodes[best_index]["aligned_fact_clusters"].append(cluster)
 
     return aligned_nodes, unaligned
+
+
+def segment_overlaps(segment: TranscriptSegment, start_ms: int | None, end_ms: int | None) -> bool:
+    if start_ms is None or end_ms is None or segment.start_ms is None:
+        return False
+    segment_end_ms = segment.end_ms if segment.end_ms is not None else segment.start_ms
+    return segment.start_ms <= end_ms and segment_end_ms >= start_ms
+
+
+def segments_in_range(
+    segments: list[TranscriptSegment],
+    *,
+    start_ms: int | None,
+    end_ms: int | None,
+) -> list[TranscriptSegment]:
+    return [segment for segment in segments if segment_overlaps(segment, start_ms, end_ms)]
+
+
+def mention_windows(clusters: Any, context_ms: int = 30000) -> list[tuple[int, int]]:
+    windows: list[tuple[int, int]] = []
+    for cluster in clusters or []:
+        mentions = cluster.get("mentions", []) if hasattr(cluster, "get") else []
+        for mention in mentions or []:
+            if not hasattr(mention, "get"):
+                continue
+            span = time_span_from_dict(mention.get("time_span"))
+            if span is None:
+                continue
+            start_ms = span["start_ms"] if span["start_ms"] is not None else span["end_ms"]
+            end_ms = span["end_ms"] if span["end_ms"] is not None else span["start_ms"]
+            if start_ms is None or end_ms is None:
+                continue
+            windows.append((max(0, start_ms - context_ms), end_ms + context_ms))
+    return windows
+
+
+def _format_segments_with_word_limit(segments: list[TranscriptSegment], words_per_segment: int | None = None) -> str:
+    lines = []
+    for segment in segments:
+        text = segment.text
+        if words_per_segment is not None:
+            text = first_words(text, words_per_segment)
+        lines.append(f"[{format_ms(segment.start_ms)}] {text}")
+    return "\n".join(lines)
+
+
+def build_evidence_slice(
+    *,
+    node: Any,
+    clusters: Any,
+    segments: list[TranscriptSegment],
+    max_slice_tokens: int,
+) -> tuple[str, bool]:
+    node_span = time_span_from_dict(node.get("time_span") if hasattr(node, "get") else None)
+    node_start_ms = node_span["start_ms"] if node_span is not None else None
+    node_end_ms = node_span["end_ms"] if node_span is not None else None
+    node_segments = segments_in_range(segments, start_ms=node_start_ms, end_ms=node_end_ms)
+    full_text = format_segments_for_prompt(node_segments)
+    if word_count(full_text) <= max_slice_tokens:
+        return full_text, False
+
+    selected_by_id: dict[str, TranscriptSegment] = {}
+    for segment in node_segments[:3] + node_segments[-3:]:
+        selected_by_id[segment.segment_id] = segment
+    for start_ms, end_ms in mention_windows(clusters):
+        for segment in segments_in_range(node_segments, start_ms=start_ms, end_ms=end_ms):
+            selected_by_id[segment.segment_id] = segment
+
+    selected_segments = sorted(
+        selected_by_id.values(),
+        key=lambda segment: (
+            segment.start_ms is None,
+            segment.start_ms if segment.start_ms is not None else 0,
+            segment.segment_id,
+        ),
+    )
+    truncated_text = format_segments_for_prompt(selected_segments)
+    if word_count(truncated_text) <= max_slice_tokens or not selected_segments:
+        return truncated_text, True
+
+    words_per_segment = max(8, max_slice_tokens // len(selected_segments) - 1)
+    return _format_segments_with_word_limit(selected_segments, words_per_segment), True
+
+
+def timestamp_from_mention(cluster: Any) -> str:
+    mentions = cluster.get("mentions", []) if hasattr(cluster, "get") else []
+    for mention in mentions or []:
+        if not hasattr(mention, "get"):
+            continue
+        span = time_span_from_dict(mention.get("time_span"))
+        if span is None:
+            continue
+        timestamp_ms = span["start_ms"] if span["start_ms"] is not None else span["end_ms"]
+        if timestamp_ms is not None:
+            return format_ms(timestamp_ms)
+    return ""
+
+
+def _dict_text(value: Any) -> str:
+    if not hasattr(value, "get"):
+        return ""
+    text = value.get("text")
+    if isinstance(text, str):
+        return text
+    title = value.get("title")
+    return title if isinstance(title, str) else ""
+
+
+def build_structured_result_from_facts(
+    moc_plan: Any,
+    aligned_nodes: Any,
+    *,
+    action_items: Any,
+    open_questions: Any,
+) -> NormalizedResult:
+    timeline: list[TimelineItem] = []
+    claims: list[Claim] = []
+    evidence: list[Evidence] = []
+
+    node_entries = list(aligned_nodes or [])
+    if not node_entries:
+        node_entries = [
+            {"node": node, "aligned_fact_clusters": []}
+            for node in (moc_plan.get("nodes", []) if hasattr(moc_plan, "get") else [])
+        ]
+
+    for entry in node_entries:
+        node = entry.get("node", {}) if hasattr(entry, "get") else {}
+        span = time_span_from_dict(node.get("time_span") if hasattr(node, "get") else None)
+        timeline.append(
+            TimelineItem(
+                start=format_ms(span["start_ms"]) if span is not None else "",
+                end=format_ms(span["end_ms"]) if span is not None else "",
+                title=str(node.get("title", "")) if hasattr(node, "get") else "",
+                summary=str(node.get("summary", node.get("description", ""))) if hasattr(node, "get") else "",
+            )
+        )
+
+        for cluster in entry.get("aligned_fact_clusters", []) if hasattr(entry, "get") else []:
+            if not hasattr(cluster, "get"):
+                continue
+            text = str(cluster.get("canonical_text", ""))
+            timestamp = timestamp_from_mention(cluster)
+            if len(evidence) < 40:
+                evidence.append(
+                    Evidence(
+                        text=text,
+                        timestamp=timestamp,
+                        supports_claims=[str(cluster.get("cluster_id", ""))] if cluster.get("kind") == "claim" else [],
+                    )
+                )
+            if cluster.get("kind") == "claim" and len(claims) < 20:
+                claims.append(
+                    Claim(
+                        text=text,
+                        importance=normalize_importance(cluster.get("importance")),
+                        evidence_refs=[timestamp] if timestamp else [],
+                    )
+                )
+
+    normalized_action_items = [
+        ActionItem(
+            text=_dict_text(item),
+            target_audience=str(item.get("target_audience", "")) if hasattr(item, "get") else "",
+            priority=normalize_importance(item.get("priority")) if hasattr(item, "get") else "medium",
+        )
+        for item in list(action_items or [])[:20]
+    ]
+    normalized_open_questions = [
+        OpenQuestion(
+            text=_dict_text(item),
+            why_it_matters=str(item.get("why_it_matters", "")) if hasattr(item, "get") else "",
+        )
+        for item in list(open_questions or [])[:20]
+    ]
+
+    return NormalizedResult(
+        summary_text=str(moc_plan.get("overview", "")) if hasattr(moc_plan, "get") else "",
+        timeline=timeline,
+        claims=claims[:20],
+        evidence=evidence[:40],
+        action_items=normalized_action_items,
+        open_questions=normalized_open_questions,
+    )
+
+
+def markdown_unaligned_facts(unaligned: Any) -> str:
+    facts = list(unaligned or [])
+    if not facts:
+        return ""
+
+    lines = [
+        "These facts were extracted from the transcript but were not confidently aligned to a MoC node.",
+        "",
+    ]
+    for cluster in facts[:20]:
+        text = cluster.get("canonical_text", "") if hasattr(cluster, "get") else ""
+        if text:
+            lines.append(f"- {text}")
+    return "\n".join(lines).strip()
+
+
+def assemble_moc_markdown_report(
+    *,
+    video_id: str,
+    overview: str,
+    sections: list[dict[str, Any]],
+    structured_markdown: dict[str, str],
+    conclusion: str,
+) -> str:
+    lines = [
+        f"# MoC Report: {video_id}",
+        "",
+        "Generated via `moc_guided_map_reduce`.",
+        "",
+        "## Table of Contents",
+        "- Overview",
+        "- Part I: Guided Sections",
+        "- Part II: Structured Outputs",
+        "- Conclusion",
+    ]
+    if structured_markdown.get("unaligned_facts"):
+        lines.append("- Coverage Appendix: Unaligned Facts")
+
+    lines.extend(["", "## Overview", "", overview.strip(), "", "## Part I: Guided Sections"])
+    for index, section in enumerate(sections, start=1):
+        title = str(section.get("title", f"Section {index}"))
+        content = str(section.get("content", "")).strip()
+        lines.extend(["", f"## Section {index}: {title}", "", content])
+
+    lines.extend(["", "## Part II: Structured Outputs"])
+    structured_sections = [
+        ("Timeline", structured_markdown.get("timeline", "")),
+        ("Claims", structured_markdown.get("claims", "")),
+        ("Action Items", structured_markdown.get("action_items", "")),
+        ("Open Questions", structured_markdown.get("open_questions", "")),
+    ]
+    for title, content in structured_sections:
+        lines.extend(["", f"### {title}", "", content.strip()])
+
+    lines.extend(["", "## Conclusion", "", conclusion.strip()])
+
+    unaligned_facts = structured_markdown.get("unaligned_facts", "").strip()
+    if unaligned_facts:
+        lines.extend(["", "## Coverage Appendix: Unaligned Facts", "", unaligned_facts])
+
+    return "\n".join(lines).strip() + "\n"
 
 
 def _timestamp_match_ms(match: re.Match[str]) -> int:

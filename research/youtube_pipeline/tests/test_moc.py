@@ -591,6 +591,80 @@ class MocTranscriptTests(unittest.TestCase):
         self.assertGreater(token_count, word_count(text))
         self.assertLessEqual(token_count, word_count(text) * 4)
 
+    def test_build_evidence_slice_truncates_large_node_slice(self):
+        from research.youtube_pipeline.moc import build_evidence_slice
+
+        segments = [
+            TranscriptSegment(f"seg_{index:06d}", index * 10000, (index + 1) * 10000, None, "word " * 100)
+            for index in range(20)
+        ]
+        node = {"time_span": {"start_ms": 0, "end_ms": 200000}}
+        clusters = [
+            {
+                "mentions": [
+                    {"time_span": {"start_ms": 50000, "end_ms": 60000}, "verbatim_quote": "quote"}
+                ]
+            }
+        ]
+
+        text, truncated = build_evidence_slice(node=node, clusters=clusters, segments=segments, max_slice_tokens=200)
+
+        self.assertTrue(truncated)
+        self.assertIn("[00:00:50]", text)
+        self.assertLess(len(text.split()), 450)
+
+    def test_build_structured_result_from_moc_facts(self):
+        from research.youtube_pipeline.moc import build_structured_result_from_facts
+
+        moc = {"nodes": [{"node_id": "node_001", "title": "Topic", "time_span": {"start_ms": 0, "end_ms": 1000}}]}
+        aligned = [
+            {
+                "node": moc["nodes"][0],
+                "aligned_fact_clusters": [
+                    {
+                        "cluster_id": "cluster_000001",
+                        "canonical_text": "Important claim",
+                        "kind": "claim",
+                        "importance": "high",
+                        "mentions": [{"time_span": {"start_ms": 0, "end_ms": 1000}, "verbatim_quote": "quote"}],
+                        "entities": [],
+                        "topic_tags": [],
+                    }
+                ],
+                "coverage_warnings": [],
+            }
+        ]
+
+        result = build_structured_result_from_facts(moc, aligned, action_items=[], open_questions=[])
+
+        self.assertEqual(result.timeline[0].title, "Topic")
+        self.assertEqual(result.claims[0].text, "Important claim")
+        self.assertEqual(result.evidence[0].timestamp, "00:00:00")
+
+    def test_assemble_moc_markdown_report_includes_sections(self):
+        from research.youtube_pipeline.moc import assemble_moc_markdown_report
+
+        report = assemble_moc_markdown_report(
+            video_id="video1",
+            overview="Overview",
+            sections=[{"title": "One", "content": "Section body"}],
+            structured_markdown={
+                "timeline": "Timeline",
+                "claims": "Claims",
+                "action_items": "Actions",
+                "open_questions": "Questions",
+                "unaligned_facts": "- Unassigned fact",
+            },
+            conclusion="Conclusion",
+        )
+
+        self.assertIn("Generated via `moc_guided_map_reduce`", report)
+        self.assertIn("Coverage Appendix: Unaligned Facts", report)
+        self.assertIn("- Unassigned fact", report)
+        self.assertIn("## Section 1: One", report)
+        self.assertIn("Timeline", report)
+        self.assertIn("Conclusion", report)
+
 
 if __name__ == "__main__":
     unittest.main()
