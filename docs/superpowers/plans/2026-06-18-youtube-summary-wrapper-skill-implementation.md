@@ -33,7 +33,7 @@
 - Create: `research/youtube_pipeline/youtube_summary_workflow.py`
 - Modify: `research/youtube_pipeline/tests/test_agentic_moc.py`
 
-- [ ] **Step 1: Write failing tests for option hashing and run index rebuild**
+- [x] **Step 1: Write failing tests for option hashing and run index rebuild**
 
 Add these imports near the existing imports in `research/youtube_pipeline/tests/test_agentic_moc.py`:
 
@@ -149,7 +149,7 @@ Add these tests to `AgenticArtifactHelperTests`:
             self.assertEqual(index["runs"][0]["run_dir"], str(run_dir))
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -159,7 +159,7 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc.AgenticArtif
 
 Expected: fail with `ModuleNotFoundError: No module named 'research.youtube_pipeline.youtube_summary_workflow'`.
 
-- [ ] **Step 3: Add workflow primitive implementation**
+- [x] **Step 3: Add workflow primitive implementation**
 
 Create `research/youtube_pipeline/youtube_summary_workflow.py`:
 
@@ -309,7 +309,7 @@ def rebuild_run_index(run_root: Path) -> dict[str, object]:
     return {"schema": RUN_INDEX_SCHEMA, "runs": runs}
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run:
 
@@ -319,7 +319,7 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc.AgenticArtif
 
 Expected: `Ran 4 tests` and `OK`.
 
-- [ ] **Step 5: Commit Task 1**
+- [x] **Step 5: Commit Task 1**
 
 Run:
 

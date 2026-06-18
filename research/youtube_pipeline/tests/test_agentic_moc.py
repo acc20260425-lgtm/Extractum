@@ -33,6 +33,14 @@ from research.youtube_pipeline.moc_agentic import (
     write_json,
     write_jsonl,
 )
+from research.youtube_pipeline.youtube_summary_workflow import (
+    WORKFLOW_STATE_SCHEMA,
+    compute_options_hash,
+    normalize_workflow_options,
+    read_run_index,
+    rebuild_run_index,
+    write_run_index,
+)
 
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -61,6 +69,103 @@ class AgenticArtifactHelperTests(unittest.TestCase):
         self.assertEqual(key["stage"], "extract_facts")
         self.assertEqual(key["scope"], {"agent": "youtube-map-extract-v1", "chunks": "abc"})
         self.assertEqual(len(key["hash"]), 64)
+
+    def test_youtube_summary_options_hash_ignores_volatile_paths(self):
+        options = normalize_workflow_options(
+            output_language="ru",
+            target_words=10000,
+            target_tokens=1600,
+            overlap_tokens=200,
+            planner_context_tokens=24000,
+        )
+        same_options = {
+            **options,
+            "run_dir": "research/youtube_pipeline/runs/manual/one",
+            "created_at": "2026-06-18T16:00:00",
+        }
+
+        self.assertEqual(options["schema"], WORKFLOW_STATE_SCHEMA)
+        self.assertEqual(compute_options_hash(options), compute_options_hash(same_options))
+
+    def test_youtube_summary_options_hash_changes_for_workflow_fields(self):
+        base = normalize_workflow_options(
+            output_language="ru",
+            target_words=10000,
+            target_tokens=1600,
+            overlap_tokens=200,
+            planner_context_tokens=24000,
+        )
+        changed = normalize_workflow_options(
+            output_language="ru",
+            target_words=12000,
+            target_tokens=1600,
+            overlap_tokens=200,
+            planner_context_tokens=24000,
+        )
+
+        self.assertNotEqual(compute_options_hash(base), compute_options_hash(changed))
+
+    def test_run_index_round_trip_and_rebuild_from_state_files(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_root = Path(temp_dir) / "runs"
+            run_dir = run_root / "sample" / "20260618-160000"
+            state = {
+                "schema": WORKFLOW_STATE_SCHEMA,
+                "run_root": str(run_root),
+                "run_dir": str(run_dir),
+                "transcript_path": "input.txt",
+                "transcript_sha256": "abc",
+                "output_language": "ru",
+                "target_words": 10000,
+                "options_hash": "def",
+                "current_stage": "map_assignments_ready",
+                "next_action": "dispatch_map_extractors",
+                "artifacts": {},
+                "counts": {},
+                "commands": {},
+                "created_at": "2026-06-18T16:00:00",
+                "updated_at": "2026-06-18T16:00:00",
+                "validation_warnings": [],
+            }
+            write_json(run_dir / "workflow_state.json", state)
+
+            index = rebuild_run_index(run_root)
+
+            self.assertEqual(index["schema"], "youtube-summary-run-index-v1")
+            self.assertEqual(index["runs"][0]["run_dir"], str(run_dir))
+            self.assertEqual(index["runs"][0]["transcript_sha256"], "abc")
+
+            write_run_index(run_root, index)
+            self.assertEqual(read_json(run_root / "run_index.json"), index)
+
+    def test_read_run_index_rebuilds_broken_index_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_root = Path(temp_dir) / "runs"
+            run_dir = run_root / "sample" / "20260618-160000"
+            state = {
+                "schema": WORKFLOW_STATE_SCHEMA,
+                "run_root": str(run_root),
+                "run_dir": str(run_dir),
+                "transcript_path": "input.txt",
+                "transcript_sha256": "abc",
+                "output_language": "ru",
+                "target_words": 10000,
+                "options_hash": "def",
+                "current_stage": "map_assignments_ready",
+                "next_action": "dispatch_map_extractors",
+                "artifacts": {},
+                "counts": {},
+                "commands": {},
+                "created_at": "2026-06-18T16:00:00",
+                "updated_at": "2026-06-18T16:00:00",
+                "validation_warnings": [],
+            }
+            write_json(run_dir / "workflow_state.json", state)
+            (run_root / "run_index.json").write_text("{broken", encoding="utf-8")
+
+            index = read_run_index(run_root)
+
+            self.assertEqual(index["runs"][0]["run_dir"], str(run_dir))
 
     def test_canonical_fact_id_uses_chunk_and_index(self):
         self.assertEqual(canonical_fact_id("chunk_003", 4), "fact_chunk_003_004")
