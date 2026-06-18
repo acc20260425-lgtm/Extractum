@@ -601,7 +601,7 @@ def build_moc_plan_messages(
             role="system",
             content=(
                 "You create a global Map of Content for a long YouTube transcript. "
-                "Return JSON only. Return JSON and do not write report prose."
+                "Return JSON only and do not write report prose."
             ),
         ),
         ChatMessage(
@@ -615,8 +615,9 @@ def build_moc_plan_messages(
                 "Create a flat, ordered Map of Content for the whole report. Each node should represent "
                 "one coherent section-level topic, preserve the video's argument flow, and give enough "
                 "metadata for later source-grounded section writing. do not write the report; plan it.\n\n"
-                "Each node must include target_word_count, source_focus, key_claims_to_cover, "
-                "required_evidence, timestamps_or_ranges, and transition_notes.\n\n"
+                "Each node must include target_word_count, key_terms, essential_key_terms, "
+                'time_span with start_ms/end_ms, source_focus, key_claims_to_cover, '
+                "required_evidence, and transition_notes.\n\n"
                 "Return exactly this JSON shape:\n"
                 "{\n"
                 '  "video_id": "video id",\n'
@@ -629,10 +630,12 @@ def build_moc_plan_messages(
                 '      "title": "Section title",\n'
                 '      "purpose": "Why this section exists",\n'
                 '      "target_word_count": 900,\n'
+                '      "key_terms": ["canonical term"],\n'
+                '      "essential_key_terms": ["must-match term"],\n'
+                '      "time_span": {"start_ms": 0, "end_ms": 300000},\n'
                 '      "source_focus": "Transcript areas to use",\n'
                 '      "key_claims_to_cover": ["claim"],\n'
                 '      "required_evidence": ["evidence"],\n'
-                '      "timestamps_or_ranges": ["00:00:00-00:05:00"],\n'
                 '      "transition_notes": "How it connects to adjacent nodes"\n'
                 "    }\n"
                 "  ]\n"
@@ -671,11 +674,13 @@ def build_moc_map_extraction_messages(
                 '  "facts": [\n'
                 "    {\n"
                 '      "fact_id": "c1-f1",\n'
-                '      "timestamp": "00:00:00",\n'
+                '      "time_span": {"start_ms": 0, "end_ms": 10000},\n'
                 '      "kind": "claim|evidence|quote|example|definition|warning",\n'
                 '      "text": "Atomic source-grounded fact",\n'
                 '      "verbatim_quote": "Short exact quote",\n'
-                '      "importance": "high|medium|low"\n'
+                '      "importance": "high|medium|low",\n'
+                '      "entities": ["person or organization"],\n'
+                '      "topic_tags": ["canonical topic"]\n'
                 "    }\n"
                 "  ],\n"
                 '  "action_items": [{"timestamp": "00:00:00", "text": "Action item", "target_audience": ""}],\n'

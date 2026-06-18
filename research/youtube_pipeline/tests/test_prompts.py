@@ -157,6 +157,10 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Return JSON", messages[0].content)
         self.assertIn("do not write the report", messages[1].content)
         self.assertIn("target_word_count", messages[1].content)
+        self.assertIn("time_span", messages[1].content)
+        self.assertIn("start_ms", messages[1].content)
+        self.assertIn("end_ms", messages[1].content)
+        self.assertIn("key_terms", messages[1].content)
 
     def test_moc_map_prompt_requests_atomic_facts(self):
         from research.youtube_pipeline.prompts import build_moc_map_extraction_messages
@@ -171,6 +175,11 @@ class PromptTests(unittest.TestCase):
         self.assertIn("atomic facts", messages[1].content)
         self.assertIn("verbatim_quote", messages[1].content)
         self.assertIn("action_items", messages[1].content)
+        self.assertIn("time_span", messages[1].content)
+        self.assertIn("start_ms", messages[1].content)
+        self.assertIn("end_ms", messages[1].content)
+        self.assertIn("entities", messages[1].content)
+        self.assertIn("topic_tags", messages[1].content)
 
     def test_moc_node_prompt_uses_aligned_facts_and_slice(self):
         from research.youtube_pipeline.prompts import build_moc_node_section_messages
@@ -186,6 +195,60 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Markdown prose only", messages[0].content)
         self.assertIn("aligned facts", messages[1].content)
         self.assertIn("raw transcript slice", messages[1].content)
+
+    def test_moc_expansion_prompt_uses_counts_and_sources(self):
+        from research.youtube_pipeline.prompts import build_moc_node_expansion_messages
+
+        messages = build_moc_node_expansion_messages(
+            section_draft="Draft",
+            node_json='{"title":"Topic"}',
+            aligned_facts_json='{"facts":[]}',
+            raw_transcript_slice="[00:00:01] source",
+            current_word_count=300,
+            target_word_count=900,
+            output_language="ru",
+        )
+        joined = "\n".join(message.content for message in messages)
+
+        self.assertIn("Markdown prose only", joined)
+        self.assertIn("Current word count: 300", joined)
+        self.assertIn("Target word count: 900", joined)
+        self.assertIn("Aligned facts JSON", joined)
+        self.assertIn("Raw transcript slice", joined)
+
+    def test_moc_overview_prompt_uses_moc_summaries_and_structured_result(self):
+        from research.youtube_pipeline.prompts import build_moc_overview_messages
+
+        messages = build_moc_overview_messages(
+            moc_json='{"nodes":[]}',
+            structured_result_json='{"claims":[]}',
+            section_summaries_json='{"sections":[]}',
+            output_language="ru",
+        )
+        joined = "\n".join(message.content for message in messages)
+
+        self.assertIn("executive overview", joined)
+        self.assertIn("MoC JSON", joined)
+        self.assertIn("Section summaries JSON", joined)
+        self.assertIn("Structured result JSON", joined)
+        self.assertIn("without rewriting sections", joined)
+
+    def test_moc_conclusion_prompt_connects_claims_evidence_takeaways_questions(self):
+        from research.youtube_pipeline.prompts import build_moc_conclusion_messages
+
+        messages = build_moc_conclusion_messages(
+            moc_json='{"nodes":[]}',
+            structured_result_json='{"open_questions":[]}',
+            section_summaries_json='{"sections":[]}',
+            output_language="ru",
+        )
+        joined = "\n".join(message.content for message in messages)
+
+        self.assertIn("final synthesis", joined)
+        self.assertIn("claims, evidence, takeaways, and open questions", joined)
+        self.assertIn("MoC JSON", joined)
+        self.assertIn("Section summaries JSON", joined)
+        self.assertIn("without rewriting detailed sections", joined)
 
 
 if __name__ == "__main__":
