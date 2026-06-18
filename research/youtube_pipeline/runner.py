@@ -9,6 +9,15 @@ from research.youtube_pipeline.metrics import build_metrics
 from research.youtube_pipeline.strategies import STRATEGIES, StrategyOptions, StrategyOutcome
 
 
+RESERVED_RUN_ARTIFACT_NAMES = {
+    "result.json",
+    "result.md",
+    "metrics.json",
+    "raw_requests.jsonl",
+    "raw_responses.jsonl",
+}
+
+
 def write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -23,6 +32,8 @@ def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
 def write_extra_artifact(path: Path, payload: Any) -> None:
     if path.name != str(path) or path.name in {"", ".", ".."}:
         raise ValueError(f"extra artifact filename must be a simple relative name: {path}")
+    if path.name in RESERVED_RUN_ARTIFACT_NAMES:
+        raise ValueError(f"extra artifact filename is reserved: {path.name}")
     if isinstance(payload, str):
         path.write_text(payload, encoding="utf-8")
     else:
@@ -59,6 +70,8 @@ def write_run_artifacts(
         artifact_name = Path(filename)
         if artifact_name.name != str(artifact_name) or artifact_name.name in {"", ".", ".."}:
             raise ValueError(f"extra artifact filename must be a simple relative name: {artifact_name}")
+        if artifact_name.name in RESERVED_RUN_ARTIFACT_NAMES:
+            raise ValueError(f"extra artifact filename is reserved: {artifact_name.name}")
         output_path = output_dir / artifact_name
         if isinstance(payload, str):
             output_path.write_text(payload, encoding="utf-8")
