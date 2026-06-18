@@ -2,12 +2,15 @@ import unittest
 
 from research.youtube_pipeline.moc import (
     TranscriptSegment,
+    align_fact_clusters_to_moc,
     approximate_token_count,
     build_temporal_projection,
     chunk_segments_by_approx_tokens,
     compute_moc_budget,
+    deduplicate_facts,
     fallback_moc_plan,
     format_segments_for_prompt,
+    normalize_fact_key,
     parse_timestamp_ms,
     parse_timestamped_transcript,
     word_count,
@@ -16,6 +19,86 @@ from research.youtube_pipeline.strategies import StrategyOptions
 
 
 class MocTranscriptTests(unittest.TestCase):
+    def test_normalize_fact_key_collapses_punctuation_case_and_whitespace(self):
+        self.assertEqual(
+            normalize_fact_key("Media, serves STATE power!"),
+            normalize_fact_key("media serves state power"),
+        )
+
+    def test_deduplicate_facts_merges_duplicates_and_metadata(self):
+        facts = [
+            {
+                "fact_id": "f1",
+                "text": "Media serves state power",
+                "kind": "claim",
+                "importance": "high",
+                "time_span": {"start_ms": 1000, "end_ms": 2000},
+                "verbatim_quote": "quote one",
+                "entities": ["media"],
+                "topic_tags": ["state"],
+            },
+            {
+                "fact_id": "f2",
+                "text": "media serves state power.",
+                "kind": "claim",
+                "importance": "medium",
+                "time_span": {"start_ms": 1000, "end_ms": 2000},
+                "verbatim_quote": "quote two",
+                "entities": ["power"],
+                "topic_tags": ["media"],
+            },
+        ]
+
+        clusters = deduplicate_facts(facts)
+
+        self.assertEqual(len(clusters), 1)
+        cluster = clusters[0]
+        self.assertEqual(cluster["importance"], "high")
+        self.assertEqual(len(cluster["mentions"]), 2)
+        self.assertEqual(cluster["entities"], ["media", "power"])
+        self.assertEqual(cluster["topic_tags"], ["media", "state"])
+
+    def test_align_fact_clusters_to_moc_assigns_best_node_by_terms_and_time(self):
+        moc_plan = {
+            "global_key_terms": ["media"],
+            "nodes": [
+                {
+                    "node_id": "node_001",
+                    "title": "Media",
+                    "key_terms": ["media"],
+                    "time_span": {"start_ms": 0, "end_ms": 2000},
+                },
+                {
+                    "node_id": "node_002",
+                    "title": "Family",
+                    "key_terms": ["family"],
+                    "time_span": {"start_ms": 2000, "end_ms": 4000},
+                },
+            ],
+        }
+        clusters = [
+            {
+                "cluster_id": "cluster_000001",
+                "canonical_text": "Media serves state power",
+                "kind": "claim",
+                "importance": "high",
+                "time_span": {"start_ms": 1000, "end_ms": 2000},
+                "entities": ["media"],
+                "topic_tags": ["state"],
+                "mentions": [],
+            }
+        ]
+
+        aligned, unaligned = align_fact_clusters_to_moc(moc_plan, clusters)
+
+        self.assertEqual(unaligned, [])
+        self.assertEqual(aligned[0]["node"]["node_id"], "node_001")
+        self.assertEqual(
+            aligned[0]["aligned_fact_clusters"][0]["cluster_id"],
+            "cluster_000001",
+        )
+        self.assertEqual(aligned[1]["aligned_fact_clusters"], [])
+
     def test_compute_moc_budget_uses_tucker_scale_defaults(self):
         budget = compute_moc_budget(
             transcript_words=41384,

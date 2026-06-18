@@ -11,12 +11,14 @@ MAX_MOC_NODES = 20
 MIN_NODE_WORDS = 500
 FALLBACK_NODE_TARGET_WORDS = 900
 PROJECTION_WINDOW_MAX_WORDS = 2000
+IMPORTANCE_RANK = {"low": 1, "medium": 2, "high": 3}
 
 TIMESTAMP_RE = re.compile(
     r"^\[?(?:(\d{1,2}):)?(\d{2}):(\d{2})(?:[.,](\d{1,3}))?\]?(?=\s|$)"
 )
 TIMESTAMP_RANGE_ARROW_RE = re.compile(r"^\s*-->\s*")
 TOKEN_RE = re.compile(r"\w+|[^\w\s]", re.UNICODE)
+FACT_WORD_RE = re.compile(r"\w+", re.UNICODE)
 
 
 @dataclass
@@ -45,6 +47,282 @@ class MocBudget:
     target_report_words: int
     expected_node_min: int
     expected_node_max: int
+
+
+def normalize_importance(value: Any) -> str:
+    if not isinstance(value, str):
+        return "low"
+    normalized = value.strip().lower()
+    if normalized in IMPORTANCE_RANK:
+        return normalized
+    return "low"
+
+
+def normalize_fact_key(text: str) -> str:
+    if not isinstance(text, str):
+        return ""
+    return " ".join(FACT_WORD_RE.findall(text.lower()))
+
+
+def normalize_term_set(values: Any) -> set[str]:
+    if isinstance(values, str):
+        candidates = [values]
+    elif isinstance(values, list | tuple | set):
+        candidates = list(values)
+    else:
+        return set()
+
+    terms: set[str] = set()
+    for value in candidates:
+        if not isinstance(value, str):
+            continue
+        normalized = normalize_fact_key(value)
+        if normalized:
+            terms.add(normalized)
+    return terms
+
+
+def _coerce_ms(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return int(value)
+
+
+def time_span_from_dict(payload: Any) -> dict[str, int | None] | None:
+    if not hasattr(payload, "get"):
+        return None
+
+    start_ms = _coerce_ms(payload.get("start_ms"))
+    end_ms = _coerce_ms(payload.get("end_ms"))
+    if start_ms is None and end_ms is None:
+        return None
+    if start_ms is not None and end_ms is not None and end_ms < start_ms:
+        start_ms, end_ms = end_ms, start_ms
+    return {"start_ms": start_ms, "end_ms": end_ms}
+
+
+def merge_time_span(a: Any, b: Any) -> dict[str, int | None] | None:
+    spans = [span for span in (time_span_from_dict(a), time_span_from_dict(b)) if span is not None]
+    if not spans:
+        return None
+
+    starts = [span["start_ms"] for span in spans if span["start_ms"] is not None]
+    ends = [span["end_ms"] for span in spans if span["end_ms"] is not None]
+    if not starts and not ends:
+        return None
+    return {
+        "start_ms": min(starts) if starts else None,
+        "end_ms": max(ends) if ends else None,
+    }
+
+
+def _normalize_kind(value: Any) -> str:
+    if not isinstance(value, str):
+        return "unknown"
+    normalized = normalize_fact_key(value)
+    return normalized or "unknown"
+
+
+def _fact_text(fact: Any) -> str:
+    if not hasattr(fact, "get"):
+        return ""
+    value = fact.get("text")
+    return value if isinstance(value, str) else ""
+
+
+def fact_to_cluster(index: int, fact: Any) -> dict[str, object]:
+    text = _fact_text(fact)
+    time_span = time_span_from_dict(fact.get("time_span")) if hasattr(fact, "get") else None
+    entities = sorted(normalize_term_set(fact.get("entities") if hasattr(fact, "get") else None))
+    topic_tags = sorted(normalize_term_set(fact.get("topic_tags") if hasattr(fact, "get") else None))
+    importance = normalize_importance(fact.get("importance") if hasattr(fact, "get") else None)
+    mention = {
+        "fact_id": fact.get("fact_id") if hasattr(fact, "get") else None,
+        "text": text,
+        "time_span": time_span,
+        "verbatim_quote": fact.get("verbatim_quote") if hasattr(fact, "get") else None,
+        "importance": importance,
+        "entities": entities,
+        "topic_tags": topic_tags,
+    }
+    return {
+        "cluster_id": f"cluster_{index + 1:06d}",
+        "canonical_text": text,
+        "kind": _normalize_kind(fact.get("kind") if hasattr(fact, "get") else None),
+        "importance": importance,
+        "time_span": time_span,
+        "entities": entities,
+        "topic_tags": topic_tags,
+        "mentions": [mention],
+    }
+
+
+def _text_terms(text: Any) -> set[str]:
+    if not isinstance(text, str):
+        return set()
+    return set(normalize_fact_key(text).split())
+
+
+def jaccard_similarity(a: Any, b: Any) -> float:
+    left = set(a) if not isinstance(a, str) else _text_terms(a)
+    right = set(b) if not isinstance(b, str) else _text_terms(b)
+    if not left and not right:
+        return 1.0
+    if not left or not right:
+        return 0.0
+    return len(left & right) / len(left | right)
+
+
+def spans_near(a: Any, b: Any, max_distance_ms: int = 60000) -> bool:
+    left = time_span_from_dict(a)
+    right = time_span_from_dict(b)
+    if left is None or right is None:
+        return True
+
+    left_start = left["start_ms"] if left["start_ms"] is not None else left["end_ms"]
+    left_end = left["end_ms"] if left["end_ms"] is not None else left["start_ms"]
+    right_start = right["start_ms"] if right["start_ms"] is not None else right["end_ms"]
+    right_end = right["end_ms"] if right["end_ms"] is not None else right["start_ms"]
+    if left_start is None or left_end is None or right_start is None or right_end is None:
+        return True
+    if left_end < right_start:
+        return right_start - left_end <= max_distance_ms
+    if right_end < left_start:
+        return left_start - right_end <= max_distance_ms
+    return True
+
+
+def same_fact_cluster(a: Any, b: Any) -> bool:
+    left_text = a.get("canonical_text", "") if hasattr(a, "get") else ""
+    right_text = b.get("canonical_text", "") if hasattr(b, "get") else ""
+    left_key = normalize_fact_key(left_text)
+    right_key = normalize_fact_key(right_text)
+    if left_key and left_key == right_key:
+        return True
+    return (
+        jaccard_similarity(left_key, right_key) >= 0.88
+        and spans_near(
+            a.get("time_span") if hasattr(a, "get") else None,
+            b.get("time_span") if hasattr(b, "get") else None,
+        )
+    )
+
+
+def _merge_cluster_into(target: dict[str, object], source: dict[str, object]) -> None:
+    target["time_span"] = merge_time_span(target.get("time_span"), source.get("time_span"))
+    if IMPORTANCE_RANK[normalize_importance(source.get("importance"))] > IMPORTANCE_RANK[
+        normalize_importance(target.get("importance"))
+    ]:
+        target["importance"] = normalize_importance(source.get("importance"))
+    target["entities"] = sorted(set(target.get("entities", [])) | set(source.get("entities", [])))
+    target["topic_tags"] = sorted(set(target.get("topic_tags", [])) | set(source.get("topic_tags", [])))
+    target["mentions"] = list(target.get("mentions", [])) + list(source.get("mentions", []))
+
+
+def deduplicate_facts(facts: Any) -> list[dict[str, object]]:
+    clusters: list[dict[str, object]] = []
+    for fact in facts or []:
+        candidate = fact_to_cluster(len(clusters), fact)
+        matching_cluster = next(
+            (cluster for cluster in clusters if same_fact_cluster(cluster, candidate)),
+            None,
+        )
+        if matching_cluster is None:
+            clusters.append(candidate)
+        else:
+            _merge_cluster_into(matching_cluster, candidate)
+
+    for index, cluster in enumerate(clusters, start=1):
+        cluster["cluster_id"] = f"cluster_{index:06d}"
+    return clusters
+
+
+def time_overlap_score(node_span: Any, fact_span: Any) -> float:
+    node = time_span_from_dict(node_span)
+    fact = time_span_from_dict(fact_span)
+    if node is None or fact is None:
+        return 0.0
+
+    node_start = node["start_ms"] if node["start_ms"] is not None else node["end_ms"]
+    node_end = node["end_ms"] if node["end_ms"] is not None else node["start_ms"]
+    fact_start = fact["start_ms"] if fact["start_ms"] is not None else fact["end_ms"]
+    fact_end = fact["end_ms"] if fact["end_ms"] is not None else fact["start_ms"]
+    if node_start is None or node_end is None or fact_start is None or fact_end is None:
+        return 0.0
+    if fact_start == fact_end:
+        return 1.0 if node_start <= fact_start <= node_end else 0.0
+
+    overlap = max(0, min(node_end, fact_end) - max(node_start, fact_start))
+    fact_duration = max(1, fact_end - fact_start)
+    if overlap > 0:
+        return min(1.0, overlap / fact_duration)
+    if node_end == fact_start or fact_end == node_start:
+        return 0.5
+    return 0.0
+
+
+def term_overlap_score(node_terms: Any, fact_terms: Any) -> float:
+    node_set = set(node_terms or [])
+    fact_set = set(fact_terms or [])
+    if not node_set or not fact_set:
+        return 0.0
+    return len(node_set & fact_set) / len(node_set)
+
+
+def _cluster_terms(cluster: Any) -> set[str]:
+    if not hasattr(cluster, "get"):
+        return set()
+    terms = _text_terms(cluster.get("canonical_text"))
+    terms |= normalize_term_set(cluster.get("entities"))
+    terms |= normalize_term_set(cluster.get("topic_tags"))
+    return terms
+
+
+def _node_terms(node: Any, global_terms: Any) -> set[str]:
+    if not hasattr(node, "get"):
+        return set()
+    terms = _text_terms(node.get("title"))
+    terms |= normalize_term_set(node.get("key_terms"))
+    terms |= normalize_term_set(node.get("essential_key_terms"))
+    terms |= normalize_term_set(global_terms)
+    return terms
+
+
+def alignment_score(node: Any, cluster: Any, global_terms: Any) -> float:
+    node_terms = _node_terms(node, global_terms)
+    cluster_terms = _cluster_terms(cluster)
+    terms = term_overlap_score(node_terms, cluster_terms)
+    time = time_overlap_score(
+        node.get("time_span") if hasattr(node, "get") else None,
+        cluster.get("time_span") if hasattr(cluster, "get") else None,
+    )
+    return (terms * 0.7) + (time * 0.3)
+
+
+def align_fact_clusters_to_moc(
+    moc_plan: Any,
+    clusters: Any,
+    threshold: float = 0.30,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    nodes = list(moc_plan.get("nodes", []) if hasattr(moc_plan, "get") else [])
+    global_terms = moc_plan.get("global_key_terms", []) if hasattr(moc_plan, "get") else []
+    aligned_nodes = [{"node": node, "aligned_fact_clusters": []} for node in nodes]
+    unaligned: list[dict[str, object]] = []
+
+    for cluster in clusters or []:
+        best_index = None
+        best_score = -1.0
+        for index, node in enumerate(nodes):
+            score = alignment_score(node, cluster, global_terms)
+            if score > best_score:
+                best_index = index
+                best_score = score
+        if best_index is None or best_score < threshold:
+            unaligned.append(cluster)
+        else:
+            aligned_nodes[best_index]["aligned_fact_clusters"].append(cluster)
+
+    return aligned_nodes, unaligned
 
 
 def _timestamp_match_ms(match: re.Match[str]) -> int:
