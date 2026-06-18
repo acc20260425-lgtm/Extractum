@@ -236,8 +236,8 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc
 
 **Steps:**
 
-- [ ] Add tests for map assignment JSON, expected output paths, valid map outputs, invalid map outputs, lightweight JSON repair recording, quarantine reporting, and assembled `map/mapped_facts.jsonl`.
-- [ ] `prepare_map_assignments.py` reads `prep/chunks.jsonl` and writes:
+- [x] Add tests for map assignment JSON, expected output paths, valid map outputs, invalid map outputs, lightweight JSON repair recording, quarantine reporting, and assembled `map/mapped_facts.jsonl`.
+- [x] `prepare_map_assignments.py` reads `prep/chunks.jsonl` and writes:
 
 ```text
 map/assignments/chunk_001.assignment.json
@@ -246,7 +246,7 @@ map/assignment_manifest.json
 map/expected_files/mapper_batch_001.json
 ```
 
-- [ ] Each assignment JSON must include:
+- [x] Each assignment JSON must include:
 
 ```json
 {
@@ -260,8 +260,8 @@ map/expected_files/mapper_batch_001.json
 }
 ```
 
-- [ ] `validate_map_outputs.py` validates sub-agent outputs, attempts lightweight JSON repair for common formatting defects, records repair attempts, and writes `map/validation_manifest.json`.
-- [ ] Valid map output schema:
+- [x] `validate_map_outputs.py` validates sub-agent outputs, attempts lightweight JSON repair for common formatting defects, records repair attempts, and writes `map/validation_manifest.json`.
+- [x] Valid map output schema:
 
 ```json
 {
@@ -286,7 +286,7 @@ map/expected_files/mapper_batch_001.json
 }
 ```
 
-- [ ] `assemble_map_artifacts.py` writes:
+- [x] `assemble_map_artifacts.py` writes:
 
 ```text
 map/chunk_summaries.jsonl
@@ -297,8 +297,8 @@ map/assembly_manifest.json
 map/quarantine.jsonl
 ```
 
-- [ ] Assembled facts must include deterministic `fact_id`, source `chunk_id`, `timestamp`, `text`, `fact_type`, `importance`, and any normalized supporting fields needed by later alignment.
-- [ ] Run:
+- [x] Assembled facts must include deterministic `fact_id`, source `chunk_id`, `timestamp`, `text`, `fact_type`, `importance`, and any normalized supporting fields needed by later alignment.
+- [x] Run:
 
 ```powershell
 python -m unittest research.youtube_pipeline.tests.test_agentic_moc

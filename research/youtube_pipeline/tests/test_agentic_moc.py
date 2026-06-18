@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from research.youtube_pipeline.moc_agentic import (
+    assemble_map_artifacts,
     build_stage_key,
     canonical_fact_id,
     chunk_transcript_text,
@@ -11,8 +12,10 @@ from research.youtube_pipeline.moc_agentic import (
     hash_file,
     hash_text,
     normalize_transcript_text,
+    prepare_map_assignments,
     read_json,
     read_jsonl,
+    validate_map_outputs,
     word_count,
     write_prep_artifacts,
     write_json,
@@ -128,6 +131,101 @@ class AgenticArtifactHelperTests(unittest.TestCase):
             self.assertEqual(read_json(manifest_path), manifest)
             self.assertEqual(manifest["chunk_count"], len(read_jsonl(chunks_path)))
             self.assertEqual(manifest["language"], "ru")
+
+    def test_prepare_map_assignments_writes_assignment_and_expected_files_manifest(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = self._write_single_chunk_prep(Path(temp_dir))
+
+            manifest = prepare_map_assignments(run_dir, output_language="ru")
+
+            self.assertEqual(manifest["assignment_count"], 1)
+            assignment_path = run_dir / "map" / "assignments" / "chunk_001.assignment.json"
+            expected_files_path = run_dir / "map" / "expected_files" / "mapper_batch_001.json"
+            assignment = read_json(assignment_path)
+            expected_files = read_json(expected_files_path)
+
+            self.assertEqual(assignment["chunk_id"], "chunk_001")
+            self.assertEqual(assignment["output_file"], "map/agent_outputs/chunk_001.json")
+            self.assertEqual(expected_files["expected_files"], ["map/agent_outputs/chunk_001.json"])
+
+    def test_validate_map_outputs_repairs_wrapped_json(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = self._write_single_chunk_prep(Path(temp_dir))
+            prepare_map_assignments(run_dir, output_language="ru")
+            self._write_map_output(run_dir, wrapped=True)
+
+            validation = validate_map_outputs(run_dir)
+
+            self.assertEqual(validation["valid_outputs"], ["map/agent_outputs/chunk_001.json"])
+            self.assertEqual(validation["invalid_outputs"], [])
+            self.assertTrue(validation["repair_attempts"][0]["applied"])
+
+    def test_validate_map_outputs_reports_invalid_schema(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = self._write_single_chunk_prep(Path(temp_dir))
+            prepare_map_assignments(run_dir, output_language="ru")
+            output_path = run_dir / "map" / "agent_outputs" / "chunk_001.json"
+            write_json(output_path, {"chunk_id": "chunk_001", "facts": []})
+
+            validation = validate_map_outputs(run_dir)
+
+            self.assertEqual(validation["valid_outputs"], [])
+            self.assertEqual(validation["invalid_outputs"][0]["output_file"], "map/agent_outputs/chunk_001.json")
+
+    def test_assemble_map_artifacts_writes_canonical_facts(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = self._write_single_chunk_prep(Path(temp_dir))
+            prepare_map_assignments(run_dir, output_language="ru")
+            self._write_map_output(run_dir)
+            validate_map_outputs(run_dir)
+
+            map_manifest = assemble_map_artifacts(run_dir)
+            mapped_facts = read_jsonl(run_dir / "map" / "mapped_facts.jsonl")
+            chunk_summaries = read_jsonl(run_dir / "map" / "chunk_summaries.jsonl")
+
+            self.assertEqual(map_manifest["mapped_fact_count"], 1)
+            self.assertEqual(mapped_facts[0]["fact_id"], "fact_chunk_001_001")
+            self.assertEqual(mapped_facts[0]["text"], "Evidence should be stored with timestamps.")
+            self.assertEqual(chunk_summaries[0]["chunk_id"], "chunk_001")
+
+    def _write_single_chunk_prep(self, temp_dir: Path) -> Path:
+        run_dir = temp_dir / "run"
+        write_prep_artifacts(
+            FIXTURES_DIR / "agentic_tiny_transcript.txt",
+            run_dir,
+            target_tokens=10000,
+            overlap_tokens=0,
+            language="ru",
+        )
+        return run_dir
+
+    def _write_map_output(self, run_dir: Path, *, wrapped: bool = False) -> None:
+        output = {
+            "chunk_id": "chunk_001",
+            "time_range": {"start_ms": 0, "end_ms": 405000},
+            "chunk_summary": "The lecture explains file-backed long-report generation.",
+            "claims": [{"text": "Reports need evidence.", "timestamp": "00:02:10", "importance": 4}],
+            "examples": [{"text": "A map stage extracts facts.", "timestamp": "00:02:10"}],
+            "quotes": [],
+            "entities": ["Map of Content"],
+            "open_questions": [],
+            "facts": [
+                {
+                    "local_fact_id": "fact_001",
+                    "text": "Evidence should be stored with timestamps.",
+                    "fact_type": "claim",
+                    "timestamp": "00:02:10",
+                    "importance": 4,
+                    "chunk_id": "chunk_001",
+                }
+            ],
+        }
+        output_path = run_dir / "map" / "agent_outputs" / "chunk_001.json"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps(output, ensure_ascii=False)
+        if wrapped:
+            payload = f"assistant note\n{payload}\nend note"
+        output_path.write_text(payload + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
