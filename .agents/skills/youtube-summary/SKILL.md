@@ -37,6 +37,33 @@ when the user asks for a fresh run instead of resuming a matching run.
 Read `<run-dir>/workflow_state.json` after bootstrap. Use its `next_action`,
 `artifacts`, `counts`, and `commands` fields to continue.
 
+## Workflow Stages
+
+Use only these `current_stage` values:
+
+| Stage | Next action |
+| --- | --- |
+| `map_assignments_ready` | `dispatch_map_extractors` |
+| `map_outputs_ready` | `assemble_map_artifacts` |
+| `map_assembled` | `build_planner_context` |
+| `planner_context_ready` | `write_moc_raw` |
+| `moc_ready` | `dedupe_and_align_facts` |
+| `alignment_ready` | `write_sections` |
+| `sections_ready` | `run_qa` |
+| `qa_ready` | `assemble_final_report` |
+| `final_ready` | `done` |
+
+Do not invent stage names such as `map_artifacts_ready`.
+
+## UTF-8 Artifacts
+
+All generated artifacts are UTF-8. For Russian text, prefer Python reads such as:
+`Path(path).read_text(encoding="utf-8")`.
+
+If you inspect files in PowerShell and see mojibake like `РЎРї...`, set:
+`$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()`
+or read the file through Python before judging the artifact content.
+
 ## Workflow
 
 1. Bootstrap or resume the run with `start_youtube_summary`.

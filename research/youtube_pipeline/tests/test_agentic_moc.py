@@ -757,6 +757,27 @@ class AgenticArtifactHelperTests(unittest.TestCase):
         self.assertNotIn("requests.post", text.lower())
         self.assertNotIn("chat.completions", text.lower())
 
+    def test_youtube_summary_skill_documents_stage_chain_and_utf8_reading(self):
+        skill_file = REPO_ROOT / ".agents" / "skills" / "youtube-summary" / "SKILL.md"
+        text = skill_file.read_text(encoding="utf-8")
+        expected_stages = [
+            "map_assignments_ready",
+            "map_outputs_ready",
+            "map_assembled",
+            "planner_context_ready",
+            "moc_ready",
+            "alignment_ready",
+            "sections_ready",
+            "qa_ready",
+            "final_ready",
+        ]
+
+        self.assertIn("## Workflow Stages", text)
+        for stage in expected_stages:
+            self.assertIn(f"`{stage}`", text)
+        self.assertIn("read_text(encoding=\"utf-8\")", text)
+        self.assertIn("$OutputEncoding", text)
+
     def test_youtube_map_extract_skill_defines_fact_schema(self):
         skill_file = REPO_ROOT / ".agents" / "skills" / "youtube-map-extract" / "SKILL.md"
         text = skill_file.read_text(encoding="utf-8")
