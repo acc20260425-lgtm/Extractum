@@ -252,7 +252,10 @@ Required action:
 3. Use assigned facts before general narrative.
 4. Include timestamps when they help verification.
 5. Expand the same section file if it is under 80 percent of target words.
-6. Stop after writing the assigned file. Do not edit other sections.
+6. If the section is shorter than target but already covers all assigned facts
+   without filler, mark the remaining word deficit for redistribution instead
+   of padding prose.
+7. Stop after writing the assigned file. Do not edit other sections.
 
 Style rules:
 - Mention at most once, if needed, that this is based on a YouTube transcript.
@@ -271,6 +274,9 @@ Responsibilities:
 - optionally dispatch a qualitative review sub-agent;
 - check coherence, repeated prose, unsupported claims, missing high-importance
   facts, and overused framing words;
+- check cross-section reuse of the same facts, so repeated evidence is framed
+  in each section's local argument instead of duplicated as near-identical
+  prose;
 - call `assemble_report.py`;
 - verify final `report.md` and `metrics.json`.
 
@@ -370,8 +376,16 @@ configured, preserve stable output ordering by chunk index, and quarantine
 failed chunks with structured warnings instead of letting the agent improvise
 fact extraction.
 
+Before retrying an API call, the tool should attempt lightweight JSON repair
+for common formatting defects such as trailing text, missing closing braces, or
+unescaped newlines. Repair attempts must be recorded in `map_manifest.json` so
+the run remains auditable.
+
 `dedupe_facts.py` may merge repeated facts across chunks, but it must preserve
-all contributing chunk ids as `source_chunk_ids` on each deduplicated fact.
+all contributing chunk ids as `source_chunk_ids` and all original timestamps as
+`source_timestamps` on each deduplicated fact. Section writers can then cite
+the most relevant timestamp for their chapter while QA can still see every
+place where the fact appeared.
 
 `align_facts.py` is deterministic in v1. It joins facts to MoC nodes by
 chunk membership: a node receives every fact whose `chunk_id` or
@@ -388,6 +402,16 @@ fallback_node_count = max(1, round(target_words / chapter_target_words))
 
 The fallback divides the transcript into contiguous chunk ranges, or by video
 duration when reliable timestamps are available.
+
+MoC validation should perform deterministic coverage checks before section
+writing starts:
+
+- gap detection: warn when important `chunk_ids` are not assigned to any node;
+- overlap limit: warn when a chunk is assigned to more than 2-3 nodes;
+- chronological sanity: warn when node chunk ranges are strongly non-ascending
+  without an explicit thematic reason;
+- budget sanity: verify total target words and node target words stay within
+  configured tolerance.
 
 `validate_section_files.py` checks file ownership after section writers finish.
 Preferred execution uses isolated writer workspaces or branch-backed sub-agent
@@ -504,6 +528,25 @@ research/youtube_pipeline/runs/manual/moc_agentic_writer/<video_id>/
     sections/
 ```
 
+### Resume Contract
+
+The orchestrator skill should be resumable from an existing workspace. Before
+running an expensive or long stage, it checks whether the expected artifact
+already exists and validates it with the matching Python tool.
+
+Examples:
+
+- valid `prep/chunks.jsonl` skips transcript prep;
+- valid `map/mapped_facts.jsonl`, `map/chunk_summaries.jsonl`, and
+  `map/map_manifest.json` skip fact extraction;
+- valid `planning/moc.json` skips MoC planning;
+- valid section files that pass ownership and word-count checks skip section
+  writing for those nodes.
+
+Each stage should write a small completion marker or manifest entry with tool
+version, input hashes, options, and validation status. A stage may be reused
+only when its input hashes and relevant options match the current run.
+
 ## Sub-Agent Model
 
 Sub-agents are first-class in this workflow. The orchestrator skill should
@@ -586,7 +629,9 @@ Writer rules:
 - do not repeat the phrase "this video summary" throughout the section;
 - do not rewrite other sections;
 - if under 80 percent of target words, expand the same file using missing
-  assigned facts.
+  assigned facts;
+- if no assigned facts are missing and expansion would add filler, keep the
+  shorter section and emit a word-deficit note for orchestrator redistribution.
 
 After a writer finishes, the orchestrator runs `validate_section_files.py` for
 that writer and expected section file. If an isolated writer workspace is used,
@@ -594,6 +639,32 @@ the orchestrator merges only the assigned section file. If a shared workspace
 is used and the writer changed unassigned generated files, the run records a
 warning and fails the stage for manual review unless explicit generated-file
 rollback is enabled.
+
+## Budget Redistribution Contract
+
+Section target words are guidance, not permission to add filler. If a section
+is complete, evidence-backed, and still below target, the orchestrator records
+the deficit instead of forcing expansion. Remaining word budget can be
+redistributed to later unwritten nodes with higher evidence density.
+
+Redistribution inputs:
+
+```text
+planning/moc.json
+alignment/alignment.json
+map/chunk_summaries.jsonl
+sections/*.md
+review/section_word_counts.json
+```
+
+Redistribution rules:
+
+- never reduce a section below the words it already contains;
+- prefer nodes with more high-importance facts, dense chunk summaries, or
+  unresolved questions;
+- avoid increasing a node target by more than 30 percent in one pass unless the
+  user explicitly asks for a longer report;
+- record `redistributed_word_count` and per-node budget changes in metrics.
 
 ## Report Assembly Contract
 
@@ -653,6 +724,10 @@ The workflow should emit:
   "aligned_fact_count": 248,
   "unaligned_fact_count": 12,
   "quarantined_chunk_count": 1,
+  "json_repair_count": 3,
+  "resume_reused_stage_count": 2,
+  "redistributed_word_count": 600,
+  "reused_fact_warning_count": 4,
   "fact_extraction_concurrency": 5,
   "subagents_used": true,
   "section_expansion_count": 3,
@@ -671,8 +746,12 @@ Metrics should make agentic runs comparable with `adaptive_book_report` and
 - No timestamps: continue, but record degraded timestamp quality.
 - Fact extraction invalid JSON: retry once when possible, otherwise quarantine
   the chunk and continue with a warning.
+- Fact extraction malformed JSON: attempt lightweight repair before retrying
+  the API call; record repair attempts and failures.
 - Fact extraction rate limits: reduce concurrency and retry with backoff when
   the provider signals a recoverable limit.
+- Existing workspace artifacts: reuse only when validation passes and input
+  hashes/options match; otherwise rerun the stage.
 - Planner context exceeds configured budget: truncate low-priority facts first,
   preserve every chunk summary when possible, and record truncation metadata.
 - MoC invalid JSON: deterministic fallback nodes.
@@ -698,12 +777,15 @@ Python unit tests:
 - transcript normalization;
 - chunk coverage;
 - concurrent fact extraction ordering and quarantine reporting;
+- lightweight JSON repair before fact-extraction retry;
 - planner context construction from chunk summaries and facts;
-- MoC validation and fallback;
+- MoC validation, coverage checks, and fallback;
 - fact dedupe;
 - deterministic fact alignment by chunk id;
 - section file discovery;
 - section file ownership validation in shared and isolated writer workspaces;
+- resume manifest validation and stage reuse;
+- word-budget redistribution after short complete sections;
 - report assembly;
 - metrics generation.
 
@@ -714,6 +796,8 @@ Skill contract tests or fixtures:
 - MoC and section-writing skills include example input/output contracts;
 - section writer contract forbids editing unassigned sections;
 - QA contract checks source framing overuse;
+- QA contract checks near-duplicate prose when the same fact appears in
+  multiple sections;
 - sub-agent fallback path is documented.
 
 Integration smoke test:
@@ -739,8 +823,8 @@ Manual research run:
 
 Build importable Python helpers and CLI wrappers for prep, chunking, counting,
 concurrent fact and chunk-summary extraction, planner context construction from
-map artifacts, MoC validation, deterministic chunk-id alignment, section
-ownership validation, assembly, and metrics.
+map artifacts, MoC coverage validation, deterministic chunk-id alignment,
+section ownership validation, lightweight JSON repair, assembly, and metrics.
 
 ### Phase 2: Skill Contracts
 
@@ -751,13 +835,14 @@ exceptions if skills are committed under `.agents`.
 ### Phase 3: Agentic Workspace
 
 Implement workspace conventions, `run_id` creation, artifact contracts, and a
-minimal orchestrator flow that can be run manually by Codex.
+minimal orchestrator flow that can be run manually by Codex. Add completion
+manifests and resume checks before expensive stages.
 
 ### Phase 4: Sub-Agent Workflow
 
 Add section-writer sub-agent dispatch instructions to the top-level skill and
 QA skill. Define file ownership, `validate_section_files.py`, qualitative QA,
-and sequential fallback.
+word-budget redistribution, and sequential fallback.
 
 ### Phase 5: End-To-End Research Run
 
@@ -784,6 +869,12 @@ with `adaptive_book_report`.
 - Keep transcript prep and fact-to-MoC alignment Python-only in v1.
 - Default `planner_context_target_tokens` to 40000 estimated tokens for the
   map-first planner context.
+- Validate MoC coverage deterministically before section writing.
+- Support resume-on-crash with artifact manifests, input hashes, and
+  validation-gated stage reuse.
+- Attempt lightweight JSON repair before retrying fact extraction calls.
+- Redistribute unused section word budget to later high-density nodes instead
+  of forcing filler expansion.
 - Require sub-agent support when available, but implement sequential fallback.
 
 ## Open Questions
