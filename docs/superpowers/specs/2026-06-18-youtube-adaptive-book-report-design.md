@@ -118,6 +118,23 @@ These caps keep `book` mode from accidentally producing 30+ chapter runs with
 50-60 LLM calls. If a later experiment needs more than 20,000 words, that
 should be an explicit research decision rather than an accidental CLI setting.
 
+Budget calculation should keep both a range and a single planning target:
+
+```text
+base_min_words, base_max_words = lookup transcript word count range
+scaled_min_words = base_min_words * depth_multiplier * substance_multiplier
+scaled_max_words = base_max_words * depth_multiplier * substance_multiplier
+report_min_words = explicit min override or scaled_min_words
+report_max_words = explicit max override or scaled_max_words
+report_min_words, report_max_words = clamp to hard caps
+target_report_words = round((report_min_words + report_max_words) / 2)
+```
+
+If explicit overrides produce `report_min_words > report_max_words`, the runner
+should fail fast with a clear error instead of silently swapping values. The
+strategy should record `report_min_words`, `report_max_words`, and
+`target_report_words` in `extra_metrics`.
+
 For the Tucker transcript at roughly 41,000 words, `auto` should target roughly
 7,000-10,000 report words and about 8-11 chapters before substance adjustment.
 
@@ -203,6 +220,17 @@ minimize sum((chapter_weight - target_weight) ** 2)
 The partitioner must preserve transcript order and keep at least one chunk per
 chapter. There should not be a runtime greedy fallback path in v1; if DP is not
 implemented, the implementation should not claim to satisfy this design.
+
+For v1, each generated chapter receives the same target word budget:
+
+```text
+chapter_word_target = round(target_report_words / chapter_count)
+```
+
+The configured `chapter_target_words` is used to choose chapter count; the
+derived `chapter_word_target` is what chapter generation and expansion prompts
+should use. Equal chapter targets are acceptable because DP already balances
+substance-weighted chunk groups.
 
 ## Chapter Outline
 
@@ -351,6 +379,11 @@ bounded and makes run behavior easy to compare. If the expansion response is
 still shorter than the target, the strategy should use the best available
 chapter text and record the shortfall in extra metrics or notes.
 
+After the final text for a chapter is selected, whether it came from the first
+generation call or the expansion call, the strategy should update the context
+ledger from that final text. The next chapter bridge must therefore be derived
+from the expanded chapter when expansion occurred.
+
 ## Structured Reductions
 
 Long prose and structured JSON should stay separate. After chunk analysis, the
@@ -458,10 +491,12 @@ class StrategyOptions:
     chapter_target_words: int = 900
 ```
 
-The runner should construct `StrategyOptions` once and pass it to every
-strategy. Existing strategies can ignore fields they do not use. If converting
-all strategies at once creates too much churn, the first implementation may use
-a compatibility wrapper, but the end state should be one shared options object.
+The first implementation should migrate the registry interface in one step:
+every callable in `STRATEGIES` should accept `client`, `transcript`, and
+`options: StrategyOptions`. Existing strategies should read
+`options.output_language`, `options.max_tokens`, and `options.chunk_token_limit`
+where relevant, and ignore adaptive fields they do not use. Do not use
+`inspect.signature()` or strategy-name conditionals in the runner.
 
 `StrategyOptions.max_tokens` is the upper bound for a single LLM response, not
 the desired size for every call. `adaptive_book_report` should calculate
@@ -510,6 +545,7 @@ The first implementation should handle these cases explicitly:
 
 | Scenario | Behavior |
 | --- | --- |
+| Transcript is empty or whitespace-only | Fail fast with a clear error and do not call the LLM. |
 | Transcript has fewer than 1,000 words | Use `one_shot_full_json` or a single compact chapter to avoid inflating thin material. |
 | `substance_score` is missing or invalid | Default to `3`, clamp numeric values into `1..5`, and record a warning. |
 | More than 80% of chunks have identical score | Continue, but record a calibration warning in `extra_metrics`. |
@@ -523,12 +559,15 @@ The first implementation should handle these cases explicitly:
 Use mocked LLM clients. Tests should cover:
 
 - adaptive budget selection from transcript word count;
+- range-to-target budget calculation records min, max, and midpoint target;
+- invalid explicit min/max report word overrides fail fast;
 - depth multipliers and explicit min/max overrides;
 - hard caps for report words and chapter count;
 - substance multiplier calculation;
 - invalid substance score fallback and clamping;
 - dynamic programming contiguous weighted chunk partitioning;
 - one chunk per remaining chapter partition constraint;
+- equal `chapter_word_target` is derived from target report words and chapter count;
 - outline chunk descriptors are capped and do not include full chunk summaries;
 - empty `report_thesis` fallback uses the first available chunk summary;
 - chapter outline fallback when outline JSON is invalid;
@@ -538,6 +577,7 @@ Use mocked LLM clients. Tests should cover:
 - chapter expansion call occurs when a chapter is too short;
 - expansion prompt receives source-grounded missing-detail anchors;
 - expansion prompt receives outline, ledger context, and source substance scores;
+- context ledger updates from expanded chapter text when expansion occurred;
 - chapter expansion is skipped when the chapter is long enough;
 - final result summary is assembled from generated chapters, not a final
   rewrite response;
@@ -545,7 +585,8 @@ Use mocked LLM clients. Tests should cover:
 - table of contents is assembled in Python;
 - per-call max token caps are applied for outline, chapter, expansion, overview,
   and conclusion calls;
-- runner passes the new CLI options.
+- runner passes the new CLI options through `StrategyOptions`;
+- all registered strategies use the unified `StrategyOptions` registry interface.
 
 Live LLM runs remain manual research validation, not unit tests.
 
