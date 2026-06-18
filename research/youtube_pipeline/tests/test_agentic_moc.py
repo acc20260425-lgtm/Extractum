@@ -404,6 +404,36 @@ class AgenticArtifactHelperTests(unittest.TestCase):
             coverage_after_assembly = quality_check(run_dir)
             self.assertTrue(coverage_after_assembly["source_note_present"])
 
+    def test_agentic_tool_only_smoke_assembles_final_report_from_fixture(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = Path(temp_dir) / "run"
+            write_prep_artifacts(
+                FIXTURES_DIR / "agentic_tiny_transcript.txt",
+                run_dir,
+                target_tokens=10000,
+                overlap_tokens=0,
+                language="ru",
+            )
+            prepare_map_assignments(run_dir, output_language="ru")
+            self._write_map_output(run_dir)
+            validate_map_outputs(run_dir)
+            assemble_map_artifacts(run_dir)
+            build_planner_context(run_dir, max_tokens=3000, language="ru")
+            self._write_moc_raw(run_dir, [["chunk_001"]])
+            validate_moc(run_dir, target_words=900, chapter_target_words=900)
+            dedupe_facts(run_dir)
+            align_facts(run_dir)
+            prepare_section_assignments(run_dir)
+            self._write_smoke_sections(run_dir)
+            quality_check(run_dir)
+            build_structured_analysis(run_dir)
+
+            result = assemble_report(run_dir)
+
+            self.assertEqual(result["report_file"], "final/report.md")
+            self.assertTrue((run_dir / "final" / "report.md").exists())
+            self.assertTrue((run_dir / "final" / "metrics.json").exists())
+
     def test_youtube_skill_files_exist_and_reference_existing_tools(self):
         skill_files = [
             REPO_ROOT / ".agents" / "skills" / "youtube-long-report" / "SKILL.md",
@@ -562,6 +592,17 @@ class AgenticArtifactHelperTests(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content + "\n", encoding="utf-8")
         return run_dir
+
+    def _write_smoke_sections(self, run_dir: Path) -> None:
+        sections = {
+            "sections/000-overview.md": "## Overview\n\nThis video summary frames the transcript once.",
+            "sections/001-node-1.md": "## Node 1\n\nThe section explains the timestamped evidence workflow.",
+            "sections/999-synthesis.md": "## Synthesis\n\nThe report closes without a whole-report rewrite.",
+        }
+        for relative_path, content in sections.items():
+            path = run_dir / relative_path
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content + "\n", encoding="utf-8")
 
     def _write_moc_raw(self, run_dir: Path, chunk_groups: list[list[str]]) -> None:
         nodes = []

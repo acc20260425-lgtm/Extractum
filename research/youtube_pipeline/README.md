@@ -100,6 +100,37 @@ python -m research.youtube_pipeline.runner `
   --max-slice-tokens 8000
 ```
 
+## Agentic MoC Skills Workflow
+
+The agentic workflow is skill-first and file-backed. It does not add a normal
+`runner.py --strategy` entry point in v1.
+
+Use the `youtube-long-report` skill with:
+
+1. transcript path;
+2. output run directory;
+3. output language;
+4. target report word count.
+
+The skill runs deterministic Python tools for transcript prep, assignments,
+validation, fact dedupe, alignment, QA artifacts, structured analysis, and final
+assembly. Map extraction, MoC planning, and section writing are performed by the
+main agent or sub-agents through file contracts. Direct LLM API calls are not
+used in this workflow.
+
+Minimal deterministic validation:
+
+```powershell
+python -m research.youtube_pipeline.tools.prep_all `
+  --transcript research/youtube_pipeline/tests/fixtures/agentic_tiny_transcript.txt `
+  --out research/youtube_pipeline/runs/manual/agentic_smoke `
+  --language ru `
+  --target-tokens 160 `
+  --overlap-tokens 30
+
+python -m unittest research.youtube_pipeline.tests.test_agentic_moc
+```
+
 AI monk:
 
 ```powershell

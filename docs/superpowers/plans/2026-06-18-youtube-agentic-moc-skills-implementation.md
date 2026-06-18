@@ -574,9 +574,9 @@ Expected `git check-ignore` result: `not ignored` for the YouTube skill files.
 
 **Steps:**
 
-- [ ] Add a deterministic smoke test that uses fixture transcript, synthetic map outputs, a synthetic MoC, synthetic section files, and the Python tools to assemble `final/report.md`.
-- [ ] The smoke test must not use direct LLM API calls or network access.
-- [ ] Update `README.md` with a concise usage section:
+- [x] Add a deterministic smoke test that uses fixture transcript, synthetic map outputs, a synthetic MoC, synthetic section files, and the Python tools to assemble `final/report.md`.
+- [x] The smoke test must not use direct LLM API calls or network access.
+- [x] Update `README.md` with a concise usage section:
 
 ```text
 Agentic MoC skills workflow:
@@ -587,14 +587,14 @@ Agentic MoC skills workflow:
 5. Python validates, assembles, and writes final/report.md.
 ```
 
-- [ ] Include the minimal command sequence for deterministic tool-only validation:
+- [x] Include the minimal command sequence for deterministic tool-only validation:
 
 ```powershell
 python -m research.youtube_pipeline.tools.prep_all --transcript research/youtube_pipeline/tests/fixtures/agentic_tiny_transcript.txt --out research/youtube_pipeline/runs/manual/agentic_smoke --language ru --target-tokens 160 --overlap-tokens 30
 python -m unittest research.youtube_pipeline.tests.test_agentic_moc
 ```
 
-- [ ] Run final verification:
+- [x] Run final verification:
 
 ```powershell
 python -m unittest research.youtube_pipeline.tests.test_agentic_moc
@@ -603,7 +603,7 @@ git diff --check
 git status --short
 ```
 
-- [ ] Commit the completed implementation with:
+- [x] Commit the completed implementation with:
 
 ```powershell
 git add .gitignore .agents/skills/youtube-long-report .agents/skills/youtube-map-extract .agents/skills/youtube-moc-planning .agents/skills/youtube-section-reduce .agents/skills/youtube-report-qa research/youtube_pipeline
