@@ -189,29 +189,20 @@ chunk_weight = chunk_word_count * substance_score
 This keeps dense regions in smaller, more focused chapters while merging less
 dense transcript regions into broader chapters.
 
-The first implementation should prefer a dynamic programming contiguous
-partitioner because chapter balance matters for readability. The objective is
-to split ordered chunks into `chapter_count` groups while minimizing squared
-deviation from the target chapter weight:
+The first implementation should use a dynamic programming contiguous
+partitioner because chapter balance matters for readability and the problem
+size is small. With `chunk_count <= 50` and `chapter_count <= 20`, the
+`O(N^2 * K)` dynamic programming solution is trivial for this research runner.
+The objective is to split ordered chunks into `chapter_count` groups while
+minimizing squared deviation from the target chapter weight:
 
 ```text
 minimize sum((chapter_weight - target_weight) ** 2)
 ```
 
 The partitioner must preserve transcript order and keep at least one chunk per
-chapter. This is inexpensive for research transcripts because chunk counts are
-small. A greedy contiguous partitioner can remain as a fallback if the DP
-implementation is postponed, but the implementation plan should treat DP as
-the target.
-
-If a greedy fallback is used, it should:
-
-1. Compute total chunk weight.
-2. Compute target weight per chapter.
-3. Add chunks to the current chapter until the target is reached.
-4. Start the next chapter unless doing so would violate the explicit constraint
-   that each remaining chapter must receive at least one chunk.
-5. Always preserve original transcript order.
+chapter. There should not be a runtime greedy fallback path in v1; if DP is not
+implemented, the implementation should not claim to satisfy this design.
 
 ## Chapter Outline
 
@@ -224,6 +215,19 @@ Input:
 - chapter index and assigned chunk indexes for every chapter;
 - short chunk descriptors derived from chunk analysis results;
 - the target word range and output language.
+
+Each chunk descriptor must be compact so the outline call stays lightweight.
+For v1, use:
+
+```text
+chunk_index
+substance_score
+first 100 words of summary_text
+up to 3 timeline titles or claim snippets
+```
+
+Do not pass full `summary_text` values or raw transcript text into the outline
+call.
 
 The outline response should be JSON:
 
@@ -245,7 +249,9 @@ The outline response should be JSON:
 If the outline JSON is invalid, the strategy should fall back to deterministic
 chapter titles such as `Chapter 1`, `Chapter 2`, and one-liners derived from
 the assigned chunk summaries. This failure should be recorded in extra metrics
-or notes.
+or notes. If `report_thesis` is missing or empty, derive a fallback thesis from
+the first available chunk summary. If `key_terms` is missing or invalid, use an
+empty list.
 
 The outline also seeds a lightweight context ledger. For v1, this ledger should
 stay small and deterministic:
@@ -253,10 +259,17 @@ stay small and deterministic:
 - `report_thesis` from the outline;
 - `key_terms` from the outline;
 - generated chapter titles and one-liners;
-- the final paragraph of the previous generated chapter.
+- a previous chapter bridge extracted from the previous generated chapter.
 
 The ledger is not a separate long memory system. It exists only to keep chapter
 prompts aligned without sending all chunk notes to every chapter call.
+
+The previous chapter bridge should be extracted mechanically:
+
+1. Prefer the text after the last blank-line paragraph break in the chapter.
+2. Cap the bridge at 200 words.
+3. If that paragraph is empty, a list item, or too short to be useful, use the
+   last 150-200 words of plain chapter text instead.
 
 ## Chapter Generation
 
@@ -279,7 +292,7 @@ chapter prompt context =
   assigned chapter chunk notes
   + full chapter outline
   + report thesis and key terms
-  + previous chapter title and final paragraph, if any
+  + previous chapter title and previous chapter bridge, if any
 ```
 
 This keeps input cost bounded while preserving a shared structure across
@@ -313,9 +326,18 @@ Default rule:
 expand if generated_words < 0.8 * chapter_target_words
 ```
 
-The expansion prompt receives the current chapter draft, the target length, and
-the original source notes. It asks the model to produce a fuller revised chapter
-by expanding underdeveloped topics, examples, and transitions from the notes.
+The expansion prompt receives:
+
+- current chapter draft;
+- target word count and current word count;
+- assigned chunk notes;
+- assigned chunk `substance_score` values;
+- chapter outline entry;
+- report thesis and key terms from the context ledger;
+- previous chapter bridge, when available.
+
+It asks the model to produce a fuller revised chapter by expanding
+underdeveloped topics, examples, and transitions from the notes.
 The expansion must be factual rather than stylistic. The prompt should ask the
 model to identify claims, examples, evidence, timeline moments, or unresolved
 questions from the assigned notes that were missing or thinly covered in the
@@ -351,6 +373,10 @@ the first pass.
 The strategy may generate a short executive overview and final synthesis in
 separate LLM calls. These calls should not receive the entire long report when
 the report is large.
+
+These calls should run after all chapter generation and structured reductions
+are complete. They need the chapter titles, outline, compact chapter summaries,
+and structured JSON, but should not be used to rewrite the detailed narrative.
 
 Preferred inputs:
 
@@ -398,6 +424,9 @@ Generated via `adaptive_book_report`.
 `result.action_items`, and `result.open_questions` should come from the
 structured reductions.
 
+The table of contents should be built deterministically in Python from chapter
+titles and fixed section headings.
+
 ## Strategy Options and Runner Integration
 
 Extend `research/youtube_pipeline/runner.py` with:
@@ -433,6 +462,16 @@ The runner should construct `StrategyOptions` once and pass it to every
 strategy. Existing strategies can ignore fields they do not use. If converting
 all strategies at once creates too much churn, the first implementation may use
 a compatibility wrapper, but the end state should be one shared options object.
+
+`StrategyOptions.max_tokens` is the upper bound for a single LLM response, not
+the desired size for every call. `adaptive_book_report` should calculate
+per-call limits internally:
+
+- chunk analysis: use `options.max_tokens`;
+- outline: cap around `2,000` tokens;
+- chapter generation: cap at `min(options.max_tokens, chapter_target_words * 2)`;
+- chapter expansion: cap at `min(options.max_tokens, chapter_target_words * 2)`;
+- overview and conclusion: cap around `2,000` tokens each.
 
 ## Metrics
 
@@ -477,7 +516,7 @@ The first implementation should handle these cases explicitly:
 | All chunks have low substance | Reduce budget through the substance multiplier, but do not skip chunks in v1. |
 | Expansion still misses target | Use the best available text and record the shortfall. |
 | Chapter notes exceed the approximate input budget | Prefer compact chunk analysis fields over raw transcript text. |
-| Chapter prose repeats earlier chapters | Use the outline, key terms, and previous final paragraph bridge to redirect the next chapter, but do not run a full-report rewrite. |
+| Chapter prose repeats earlier chapters | Use the outline, key terms, and previous chapter bridge to redirect the next chapter, but do not run a full-report rewrite. |
 
 ## Testing Strategy
 
@@ -490,15 +529,22 @@ Use mocked LLM clients. Tests should cover:
 - invalid substance score fallback and clamping;
 - dynamic programming contiguous weighted chunk partitioning;
 - one chunk per remaining chapter partition constraint;
+- outline chunk descriptors are capped and do not include full chunk summaries;
+- empty `report_thesis` fallback uses the first available chunk summary;
 - chapter outline fallback when outline JSON is invalid;
-- context ledger uses outline thesis, key terms, and previous final paragraph;
+- context ledger uses outline thesis, key terms, and previous chapter bridge;
+- previous chapter bridge extraction is capped at 200 words;
 - strategy registration under `adaptive_book_report`;
 - chapter expansion call occurs when a chapter is too short;
 - expansion prompt receives source-grounded missing-detail anchors;
+- expansion prompt receives outline, ledger context, and source substance scores;
 - chapter expansion is skipped when the chapter is long enough;
 - final result summary is assembled from generated chapters, not a final
   rewrite response;
 - `extra_metrics` are written into `metrics.json`;
+- table of contents is assembled in Python;
+- per-call max token caps are applied for outline, chapter, expansion, overview,
+  and conclusion calls;
 - runner passes the new CLI options.
 
 Live LLM runs remain manual research validation, not unit tests.
