@@ -1,4 +1,11 @@
 {
+  "allowed_fact_types": [
+    "claim",
+    "example",
+    "quote",
+    "entity",
+    "question"
+  ],
   "chunk_id": "chunk_001",
   "max_fact_count": 20,
   "output_file": "map/agent_outputs/chunk_001.json",

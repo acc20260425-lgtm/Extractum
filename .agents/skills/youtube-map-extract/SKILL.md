@@ -14,6 +14,7 @@ Direct LLM API calls are forbidden in this workflow. Use the current agent reaso
 ## Input Contract
 
 Read one assignment from `map/assignments/*.assignment.json`. Treat every file outside the declared `output_file` as read-only.
+Use the assignment's `allowed_fact_types` as the complete enum for `facts[].fact_type`.
 
 ## Output Contract
 
@@ -33,8 +34,7 @@ Each `facts[]` item must contain exactly these fields:
 
 - `local_fact_id`: local id within this chunk, such as `fact_001`;
 - `text`: evidence statement extracted from the assigned transcript text;
-- `fact_type`: one of `claim`, `example`, `quote`, `entity`, `timestamped_event`,
-  `definition`, `warning`, or `open_question`;
+- `fact_type`: one of the assignment's `allowed_fact_types` values;
 - `timestamp`: best available timestamp string from the chunk, or `null` when no
   timestamp exists;
 - `importance`: integer from 1 to 5;

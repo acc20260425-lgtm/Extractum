@@ -12,6 +12,8 @@ from research.youtube_pipeline.moc import (
     parse_timestamped_transcript,
 )
 
+DEFAULT_ALLOWED_FACT_TYPES = ("claim", "example", "quote", "entity", "question")
+
 
 def hash_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
@@ -192,11 +194,13 @@ def prepare_map_assignments(
     output_language: str,
     target_summary_words: int = 250,
     max_fact_count: int = 20,
+    allowed_fact_types: Iterable[str] = DEFAULT_ALLOWED_FACT_TYPES,
 ) -> dict[str, object]:
     chunks = read_jsonl(run_dir / "prep" / "chunks.jsonl")
     assignments_dir = run_dir / "map" / "assignments"
     expected_files_dir = run_dir / "map" / "expected_files"
     assignments: list[dict[str, object]] = []
+    allowed_fact_types_list = [str(fact_type) for fact_type in allowed_fact_types]
 
     for chunk in chunks:
         chunk_id = str(chunk["chunk_id"])
@@ -212,6 +216,7 @@ def prepare_map_assignments(
             "transcript_text": str(chunk.get("text", "")),
             "target_summary_words": target_summary_words,
             "max_fact_count": max_fact_count,
+            "allowed_fact_types": allowed_fact_types_list,
         }
         write_json(assignments_dir / f"{chunk_id}.assignment.json", assignment)
         assignments.append(assignment)
@@ -228,6 +233,7 @@ def prepare_map_assignments(
         "expected_files_manifest": "map/expected_files/mapper_batch_001.json",
         "output_language": output_language,
         "chunks_hash": hash_file(run_dir / "prep" / "chunks.jsonl"),
+        "allowed_fact_types": allowed_fact_types_list,
     }
     write_json(run_dir / "map" / "assignment_manifest.json", manifest)
     return manifest
@@ -249,8 +255,9 @@ def _load_json_with_light_repair(path: Path) -> tuple[object | None, dict[str, o
             return None, {"attempted": True, "applied": False, "error": str(repair_error)}
 
 
-def _validate_map_payload(payload: object, expected_chunk_id: str) -> list[str]:
+def _validate_map_payload(payload: object, expected_chunk_id: str, allowed_fact_types: Iterable[str]) -> list[str]:
     errors: list[str] = []
+    allowed_fact_types_set = {str(fact_type) for fact_type in allowed_fact_types}
     if not isinstance(payload, dict):
         return ["output must be a JSON object"]
     if payload.get("chunk_id") != expected_chunk_id:
@@ -268,6 +275,9 @@ def _validate_map_payload(payload: object, expected_chunk_id: str) -> list[str]:
         for key in ("local_fact_id", "text", "fact_type", "timestamp", "importance", "chunk_id"):
             if key not in fact:
                 errors.append(f"facts[{index}] missing {key}")
+        fact_type = str(fact.get("fact_type", ""))
+        if fact_type and fact_type not in allowed_fact_types_set:
+            errors.append(f"facts[{index}] fact_type {fact_type} not in allowed_fact_types")
     return errors
 
 
@@ -292,7 +302,10 @@ def validate_map_outputs(run_dir: Path) -> dict[str, object]:
 
         payload, repair = _load_json_with_light_repair(output_path)
         repair_attempts.append({"output_file": output_file, **repair})
-        errors = _validate_map_payload(payload, str(assignment["chunk_id"]))
+        allowed_fact_types = assignment.get("allowed_fact_types", DEFAULT_ALLOWED_FACT_TYPES)
+        if not isinstance(allowed_fact_types, list):
+            allowed_fact_types = list(DEFAULT_ALLOWED_FACT_TYPES)
+        errors = _validate_map_payload(payload, str(assignment["chunk_id"]), allowed_fact_types)
         if errors:
             invalid_outputs.append({"output_file": output_file, "errors": errors})
         else:

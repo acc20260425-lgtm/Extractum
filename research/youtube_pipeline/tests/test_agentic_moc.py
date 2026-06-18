@@ -269,6 +269,7 @@ class AgenticArtifactHelperTests(unittest.TestCase):
 
             self.assertEqual(assignment["chunk_id"], "chunk_001")
             self.assertEqual(assignment["output_file"], "map/agent_outputs/chunk_001.json")
+            self.assertEqual(assignment["allowed_fact_types"], ["claim", "example", "quote", "entity", "question"])
             self.assertEqual(expected_files["expected_files"], ["map/agent_outputs/chunk_001.json"])
 
     def test_start_youtube_summary_run_creates_state_and_assignments(self):
@@ -430,6 +431,18 @@ class AgenticArtifactHelperTests(unittest.TestCase):
 
             self.assertEqual(validation["valid_outputs"], [])
             self.assertEqual(validation["invalid_outputs"][0]["output_file"], "map/agent_outputs/chunk_001.json")
+
+    def test_validate_map_outputs_rejects_fact_type_outside_assignment_contract(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run_dir = self._write_single_chunk_prep(Path(temp_dir))
+            prepare_map_assignments(run_dir, output_language="ru")
+            self._write_map_output(run_dir, fact_type="timestamped_event")
+
+            validation = validate_map_outputs(run_dir)
+
+            self.assertEqual(validation["valid_outputs"], [])
+            errors = validation["invalid_outputs"][0]["errors"]
+            self.assertTrue(any("fact_type timestamped_event not in allowed_fact_types" in error for error in errors))
 
     def test_validate_map_outputs_cli_prints_error_summary(self):
         from research.youtube_pipeline.tools.validate_map_outputs import main as validate_map_outputs_cli
@@ -796,6 +809,19 @@ class AgenticArtifactHelperTests(unittest.TestCase):
         for field in required_fields:
             self.assertIn(field, sample["facts"][0])
 
+        assignment_sample = json.loads(
+            (
+                REPO_ROOT
+                / ".agents"
+                / "skills"
+                / "youtube-map-extract"
+                / "examples"
+                / "map_assignment_sample.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertIn("allowed_fact_types", assignment_sample)
+        self.assertIn("Use the assignment's `allowed_fact_types`", text)
+
     def test_youtube_skill_examples_are_valid_json(self):
         example_files = [
             REPO_ROOT / ".agents" / "skills" / "youtube-long-report" / "examples" / "map_assignment_sample.json",
@@ -850,6 +876,7 @@ class AgenticArtifactHelperTests(unittest.TestCase):
         output_file: str = "map/agent_outputs/chunk_001.json",
         fact_text: str = "Evidence should be stored with timestamps.",
         fact_timestamp: str = "00:02:10",
+        fact_type: str = "claim",
         wrapped: bool = False,
     ) -> None:
         output = {
@@ -865,7 +892,7 @@ class AgenticArtifactHelperTests(unittest.TestCase):
                 {
                     "local_fact_id": "fact_001",
                     "text": fact_text,
-                    "fact_type": "claim",
+                    "fact_type": fact_type,
                     "timestamp": fact_timestamp,
                     "importance": 4,
                     "chunk_id": chunk_id,
