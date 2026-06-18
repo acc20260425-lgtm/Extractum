@@ -812,8 +812,9 @@ def quality_check(run_dir: Path) -> dict[str, object]:
         if len(files) > 1 and word_count(paragraph) >= 12
     ]
     final_report_path = run_dir / "final" / "report.md"
-    final_report = final_report_path.read_text(encoding="utf-8") if final_report_path.exists() else ""
-    source_note_present = _has_final_source_note(final_report)
+    final_report_exists = final_report_path.exists()
+    final_report = final_report_path.read_text(encoding="utf-8") if final_report_exists else ""
+    final_source_note_present = final_report_exists and _has_final_source_note(final_report)
     coverage = {
         "schema": "agentic-coverage-v1",
         "valid": not missing_files,
@@ -823,7 +824,9 @@ def quality_check(run_dir: Path) -> dict[str, object]:
         "total_section_words": sum(section_word_counts.values()),
         "duplicate_headings": duplicate_headings,
         "duplicate_paragraphs": duplicate_paragraphs,
-        "source_note_present": source_note_present,
+        "final_report_exists": final_report_exists,
+        "final_source_note_present": final_source_note_present,
+        "source_note_present": final_source_note_present,
         "source_label_count": source_label_count,
         "source_label_overuse": source_label_count > 2,
     }
@@ -835,6 +838,8 @@ def quality_check(run_dir: Path) -> dict[str, object]:
         f"- Total section words: {coverage['total_section_words']}",
         f"- Duplicate headings: {len(duplicate_headings)}",
         f"- Duplicate paragraphs: {len(duplicate_paragraphs)}",
+        f"- Final report exists: {final_report_exists}",
+        f"- Final source note present: {final_source_note_present}",
         f"- Source label count: {source_label_count}",
         "",
     ]

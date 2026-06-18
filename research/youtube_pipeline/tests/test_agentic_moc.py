@@ -653,6 +653,8 @@ class AgenticArtifactHelperTests(unittest.TestCase):
             self.assertEqual(coverage["missing_files"], [])
             self.assertTrue(coverage["section_order_valid"])
             self.assertFalse(coverage["source_note_present"])
+            self.assertFalse(coverage["final_report_exists"])
+            self.assertFalse(coverage["final_source_note_present"])
             self.assertGreater(coverage["total_section_words"], 0)
             self.assertTrue((run_dir / "review" / "coverage.md").exists())
 
@@ -687,6 +689,8 @@ class AgenticArtifactHelperTests(unittest.TestCase):
 
             coverage_after_assembly = quality_check(run_dir)
             self.assertTrue(coverage_after_assembly["source_note_present"])
+            self.assertTrue(coverage_after_assembly["final_report_exists"])
+            self.assertTrue(coverage_after_assembly["final_source_note_present"])
 
     def test_agentic_tool_only_smoke_assembles_final_report_from_fixture(self):
         with tempfile.TemporaryDirectory() as temp_dir:
