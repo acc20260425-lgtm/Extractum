@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import re
 
 
@@ -101,10 +102,7 @@ def approximate_token_count(text: str) -> int:
 
     for token in TOKEN_RE.findall(text):
         if any(character.isalnum() or character == "_" for character in token):
-            if token.isascii():
-                token_count += 1
-            else:
-                token_count += 2
+            token_count += max(1, math.ceil(len(token) / 4))
         else:
             token_count += 1
 
