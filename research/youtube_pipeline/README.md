@@ -71,6 +71,20 @@ python -m research.youtube_pipeline.runner `
   --max-tokens 8192
 ```
 
+Adaptive book report for a very long transcript:
+
+```powershell
+python -m research.youtube_pipeline.runner `
+  --input research/youtube_pipeline/inputs/tucker_carlson_f_lRdkH_QoY_en.txt `
+  --video-id f_lRdkH_QoY `
+  --strategy adaptive_book_report `
+  --output-language ru `
+  --target-depth auto `
+  --chunk-token-limit 3000 `
+  --chapter-target-words 900 `
+  --max-tokens 8192
+```
+
 AI monk:
 
 ```powershell
@@ -85,12 +99,26 @@ python -m research.youtube_pipeline.runner `
 Available strategies:
 
 ```text
+adaptive_book_report
+antigravity_chunk_map_reduce
 one_shot_full_json
 one_shot_markdown_plus_json
 two_pass_summary_structure
 chunk_map_reduce
 timeline_segment_reduce
 ```
+
+## Adaptive Book Report Flags
+
+- `--target-depth auto|brief|standard|deep|book`: controls the report budget multiplier.
+- `--min-report-words`: optional lower override for report budget.
+- `--max-report-words`: optional upper override for report budget.
+- `--chapter-target-words`: target words used to derive chapter count; default is `900`.
+- `--chunk-token-limit`: approximate chunk size used by chunked strategies; default is `3000`.
+
+For Russian output, the strategy uses a larger output-token budget for chapter
+generation and expansion because Cyrillic text usually takes more tokens per
+word than English.
 
 ## Run Tests
 

@@ -1947,7 +1947,7 @@ Expected: commit succeeds.
 **Files:**
 - Modify: `research/youtube_pipeline/README.md`
 
-- [ ] **Step 1: Update available strategy list**
+- [x] **Step 1: Update available strategy list**
 
 Add `adaptive_book_report` to the available strategies block:
 
@@ -1961,7 +1961,7 @@ chunk_map_reduce
 timeline_segment_reduce
 ```
 
-- [ ] **Step 2: Add adaptive example**
+- [x] **Step 2: Add adaptive example**
 
 Add this example after the Tucker Carlson example:
 
@@ -1981,7 +1981,7 @@ python -m research.youtube_pipeline.runner `
 ```
 ```
 
-- [ ] **Step 3: Document adaptive flags**
+- [x] **Step 3: Document adaptive flags**
 
 Add:
 
@@ -1999,7 +1999,7 @@ generation and expansion because Cyrillic text usually takes more tokens per
 word than English.
 ```
 
-- [ ] **Step 4: Run all tests**
+- [x] **Step 4: Run all tests**
 
 Run:
 
@@ -2009,7 +2009,7 @@ python -m unittest discover -s research/youtube_pipeline/tests -v
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 
