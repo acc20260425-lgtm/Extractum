@@ -2,6 +2,7 @@ import math
 import unittest
 
 from research.youtube_pipeline.adaptive import (
+    assemble_adaptive_markdown_report,
     build_outline_chunk_descriptors,
     compute_budget_plan,
     compute_chapter_word_target,
@@ -101,6 +102,24 @@ class AdaptiveHelperTests(unittest.TestCase):
 
         self.assertEqual(len(bridge.split()), 200)
         self.assertTrue(bridge.startswith("tail50"))
+
+    def test_assemble_report_preserves_spoken_source_context(self):
+        report = assemble_adaptive_markdown_report(
+            overview="Overview",
+            chapters=["## Chapter 1\n\nChapter text"],
+            chapter_titles=["Chapter title"],
+            timeline_markdown="Timeline",
+            claims_markdown="Claims",
+            action_items_markdown="Actions",
+            open_questions_markdown="Questions",
+            conclusion="Conclusion",
+        )
+
+        self.assertIn("## Source Context", report)
+        self.assertIn("YouTube video transcript", report)
+        self.assertIn("spoken source", report)
+        self.assertIn("not an original essay", report)
+        self.assertLess(report.index("## Source Context"), report.index("## Executive Overview"))
 
 
 if __name__ == "__main__":
