@@ -29,6 +29,12 @@ research/youtube_pipeline/runs/*
 /.codex
 /.codex-logs/
 /.agents/
+!/.agents/
+/.agents/*
+!/.agents/skills/
+/.agents/skills/*
+!/.agents/skills/youtube-*/
+!/.agents/skills/youtube-*/**
 /.kilo/
 /.superpowers/
 /.playwright-mcp/

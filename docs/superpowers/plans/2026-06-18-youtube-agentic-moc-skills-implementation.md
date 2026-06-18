@@ -69,7 +69,7 @@ Do not modify the existing direct-LLM strategy registry for v1. This path is inv
 
 **Steps:**
 
-- [ ] Update `.gitignore` so only `.agents/skills/youtube-*` skill folders are tracked while the rest of `.agents` remains ignored.
+- [x] Update `.gitignore` so only `.agents/skills/youtube-*` skill folders are tracked while the rest of `.agents` remains ignored.
 
 ```gitignore
 /.agents/
@@ -81,21 +81,21 @@ Do not modify the existing direct-LLM strategy registry for v1. This path is inv
 !/.agents/skills/youtube-*/**
 ```
 
-- [ ] Add `research/youtube_pipeline/tests/fixtures/agentic_tiny_transcript.txt` with a timestamped 6-8 minute transcript containing:
+- [x] Add `research/youtube_pipeline/tests/fixtures/agentic_tiny_transcript.txt` with a timestamped 6-8 minute transcript containing:
   - one intro/filler segment;
   - two content-heavy sections;
   - one repeated fact with two timestamps;
   - one closing synthesis.
-- [ ] Run:
+- [x] Run:
 
 ```powershell
 python -m unittest research.youtube_pipeline.tests.test_agentic_moc
-git check-ignore -v --no-index .agents/skills/youtube-long-report/SKILL.md
+git check-ignore --quiet --no-index .agents/skills/youtube-long-report/SKILL.md; if ($LASTEXITCODE -eq 1) { "not ignored" } else { "ignored" }
 ```
 
 Expected results:
 - the unittest command fails until Task 2 creates the test module;
-- `git check-ignore` returns no ignored-rule output after the skill file exists.
+- `git check-ignore` reports `not ignored`.
 
 ---
 
@@ -559,10 +559,10 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc
 
 ```powershell
 python -m unittest research.youtube_pipeline.tests.test_agentic_moc
-git check-ignore -v --no-index .agents/skills/youtube-long-report/SKILL.md
+git check-ignore --quiet --no-index .agents/skills/youtube-long-report/SKILL.md; if ($LASTEXITCODE -eq 1) { "not ignored" } else { "ignored" }
 ```
 
-Expected `git check-ignore` result: no ignored-rule output for the YouTube skill files.
+Expected `git check-ignore` result: `not ignored` for the YouTube skill files.
 
 ---
 
