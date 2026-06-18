@@ -187,15 +187,15 @@ def compute_moc_budget(transcript_words: int, options: Any) -> MocBudget:
 
     min_override = getattr(options, "min_report_words", None)
     max_override = getattr(options, "max_report_words", None)
-    if min_override is not None and max_override is not None:
-        report_min_words = int(min_override)
-        report_max_words = int(max_override)
-    else:
-        report_min_words = max(MIN_NODE_WORDS, round(base_min * multiplier))
-        report_max_words = min(MAX_REPORT_WORDS, round(base_max * multiplier))
+    scaled_min = max(MIN_NODE_WORDS, round(base_min * multiplier))
+    scaled_max = round(base_max * multiplier)
+    report_min_words = int(min_override) if min_override is not None else scaled_min
+    report_max_words = int(max_override) if max_override is not None else scaled_max
+    report_min_words = min(report_min_words, MAX_REPORT_WORDS)
+    report_max_words = min(report_max_words, MAX_REPORT_WORDS)
 
-    if report_max_words < report_min_words:
-        report_max_words = report_min_words
+    if report_min_words > report_max_words:
+        raise ValueError("min_report_words cannot be greater than max_report_words")
 
     expected_node_min = _scaled_node_count(base_node_min, multiplier)
     expected_node_max = _scaled_node_count(base_node_max, multiplier)
@@ -206,7 +206,7 @@ def compute_moc_budget(transcript_words: int, options: Any) -> MocBudget:
         transcript_words=transcript_words,
         report_min_words=report_min_words,
         report_max_words=report_max_words,
-        target_report_words=(report_min_words + report_max_words) // 2,
+        target_report_words=round((report_min_words + report_max_words) / 2),
         expected_node_min=expected_node_min,
         expected_node_max=expected_node_max,
     )

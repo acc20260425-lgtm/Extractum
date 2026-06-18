@@ -28,6 +28,46 @@ class MocTranscriptTests(unittest.TestCase):
         self.assertEqual(budget.expected_node_min, 8)
         self.assertEqual(budget.expected_node_max, 12)
 
+    def test_compute_moc_budget_applies_independent_min_override(self):
+        budget = compute_moc_budget(
+            transcript_words=41384,
+            options=StrategyOptions(min_report_words=8001),
+        )
+
+        self.assertEqual(budget.report_min_words, 8001)
+        self.assertEqual(budget.report_max_words, 10000)
+        self.assertEqual(budget.target_report_words, 9000)
+
+    def test_compute_moc_budget_applies_independent_max_override(self):
+        budget = compute_moc_budget(
+            transcript_words=41384,
+            options=StrategyOptions(max_report_words=9001),
+        )
+
+        self.assertEqual(budget.report_min_words, 7000)
+        self.assertEqual(budget.report_max_words, 9001)
+        self.assertEqual(budget.target_report_words, 8000)
+
+    def test_compute_moc_budget_clamps_overrides_to_max_report_words(self):
+        budget = compute_moc_budget(
+            transcript_words=41384,
+            options=StrategyOptions(min_report_words=19000, max_report_words=25000),
+        )
+
+        self.assertEqual(budget.report_min_words, 19000)
+        self.assertEqual(budget.report_max_words, 20000)
+        self.assertEqual(budget.target_report_words, 19500)
+
+    def test_compute_moc_budget_rejects_final_min_greater_than_max(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "min_report_words cannot be greater than max_report_words",
+        ):
+            compute_moc_budget(
+                transcript_words=41384,
+                options=StrategyOptions(min_report_words=11000, max_report_words=10000),
+            )
+
     def test_build_temporal_projection_groups_timestamped_segments(self):
         segments = [
             TranscriptSegment(
