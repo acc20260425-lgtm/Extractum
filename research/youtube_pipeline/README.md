@@ -85,6 +85,21 @@ python -m research.youtube_pipeline.runner `
   --max-tokens 8192
 ```
 
+MoC-guided map reduce for a very long transcript:
+
+```powershell
+python -m research.youtube_pipeline.runner `
+  --input research/youtube_pipeline/inputs/tucker_carlson_f_lRdkH_QoY_en.txt `
+  --video-id f_lRdkH_QoY `
+  --strategy moc_guided_map_reduce `
+  --output-language ru `
+  --max-tokens 8192 `
+  --chunk-token-limit 3000 `
+  --chunk-overlap-tokens 700 `
+  --planner-context-token-limit 120000 `
+  --max-slice-tokens 8000
+```
+
 AI monk:
 
 ```powershell
@@ -101,6 +116,7 @@ Available strategies:
 ```text
 adaptive_book_report
 antigravity_chunk_map_reduce
+moc_guided_map_reduce
 one_shot_full_json
 one_shot_markdown_plus_json
 two_pass_summary_structure
