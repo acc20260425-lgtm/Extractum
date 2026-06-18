@@ -29,7 +29,20 @@ Write exactly one JSON object to `map/agent_outputs/<chunk_id>.json` with:
 - `open_questions`
 - `facts`
 
-Facts use local ids only. `assemble_map_artifacts.py` creates canonical global fact ids.
+Each `facts[]` item must contain exactly these fields:
+
+- `local_fact_id`: local id within this chunk, such as `fact_001`;
+- `text`: evidence statement extracted from the assigned transcript text;
+- `fact_type`: one of `claim`, `example`, `quote`, `entity`, `timestamped_event`,
+  `definition`, `warning`, or `open_question`;
+- `timestamp`: best available timestamp string from the chunk, or `null` when no
+  timestamp exists;
+- `importance`: integer from 1 to 5;
+- `chunk_id`: the assignment `chunk_id`.
+
+Facts use local ids only. `assemble_map_artifacts.py` creates canonical global
+fact ids. Do not rename these fields, omit them, or replace `facts` with another
+shape.
 
 ## Rules
 

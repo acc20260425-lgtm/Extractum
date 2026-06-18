@@ -713,6 +713,24 @@ class AgenticArtifactHelperTests(unittest.TestCase):
         self.assertNotIn("requests.post", text.lower())
         self.assertNotIn("chat.completions", text.lower())
 
+    def test_youtube_map_extract_skill_defines_fact_schema(self):
+        skill_file = REPO_ROOT / ".agents" / "skills" / "youtube-map-extract" / "SKILL.md"
+        text = skill_file.read_text(encoding="utf-8")
+        required_fields = ["local_fact_id", "text", "fact_type", "timestamp", "importance", "chunk_id"]
+
+        self.assertIn("Each `facts[]` item must contain exactly these fields", text)
+        for field in required_fields:
+            self.assertIn(f"`{field}`", text)
+
+        sample = json.loads(
+            (REPO_ROOT / ".agents" / "skills" / "youtube-map-extract" / "examples" / "map_output_sample.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(sample["facts"])
+        for field in required_fields:
+            self.assertIn(field, sample["facts"][0])
+
     def test_youtube_skill_examples_are_valid_json(self):
         example_files = [
             REPO_ROOT / ".agents" / "skills" / "youtube-long-report" / "examples" / "map_assignment_sample.json",
