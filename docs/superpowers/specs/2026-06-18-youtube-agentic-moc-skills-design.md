@@ -22,10 +22,14 @@ Map-Reduce:
 ```text
 transcript
   -> Python prep tools
-  -> Python fact and chunk-summary extraction tool
+  -> Python map-assignment builder
+  -> Map Extractor Sub-Agents
+  -> Python map-output validation and assembly
   -> Python planner-context builder from map artifacts
   -> MoC planning skill
+  -> Python fact dedupe
   -> deterministic fact-to-MoC alignment by chunk id
+  -> Python section-assignment builder
   -> section writing skill with sub-agents
   -> QA skill
   -> Python assembly and metrics
@@ -45,13 +49,13 @@ transcript
 - No manual word counting, chunking, or filename convention enforcement by the
   LLM. Deterministic scripts own those mechanics.
 - No guarantee that arbitrary-length transcripts fit directly into the agent
-  context. V1 uses a map-first flow: `extract_facts.py` summarizes and extracts
-  evidence per chunk, then `build_planner_context.py` builds a bounded planner
-  context from those dense map artifacts instead of handing the raw transcript
-  to the planner.
-- No conversational-agent fact extraction in v1. Chunk-level fact extraction is
-  an API-like Python tool with fixed prompts and JSONL output, supervised by
-  the orchestrator skill.
+  context. V1 uses a map-first flow: map extractor sub-agents summarize and
+  extract evidence per chunk, then `build_planner_context.py` builds a bounded
+  planner context from those dense map artifacts instead of handing the raw
+  transcript to the planner.
+- No direct LLM API calls in v1. Every LLM reasoning step is performed by the
+  main Codex-style agent or by sub-agents. Python tools prepare assignments,
+  validate files, repair JSON, assemble artifacts, and compute metrics.
 
 ## Core Design Decision
 
@@ -123,7 +127,9 @@ Responsibilities:
 - create or validate the agent workspace;
 - read the input transcript path and target output directory;
 - call transcript prep tools;
-- call Python fact and chunk-summary extraction;
+- call Python map-assignment builder;
+- dispatch map extractor sub-agents;
+- call Python map-output validation and assembly;
 - call Python planner-context builder;
 - trigger MoC planning from map artifacts;
 - call deterministic fact-to-MoC alignment by chunk id;
@@ -234,10 +240,11 @@ Use when MoC nodes have been planned and aligned facts are available.
 Inputs:
 - `planning/moc.json`
 - `alignment/alignment.json`
+- `alignment/section_assignments.jsonl`
 - `prep/chunks.jsonl`
 - `map/chunk_summaries.jsonl`
 - `map/mapped_facts.jsonl`
-- one node assignment JSON
+- one section assignment row
 
 Writable output:
 - only the assigned Markdown section file under `sections/`
@@ -247,7 +254,7 @@ Read-only context:
 - other section files
 
 Required action:
-1. Read the assigned node and aligned fact IDs.
+1. Read the assigned section assignment row and aligned fact IDs.
 2. Write the assigned section as substantive Markdown prose.
 3. Use assigned facts before general narrative.
 4. Include timestamps when they help verification.
@@ -283,10 +290,11 @@ Responsibilities:
 ### Later Skill Candidates
 
 The following stages can become separate skills after the workflow stabilizes,
-but are Python-driven in v1:
+but remain deterministic Python helper stages in v1:
 
 - transcript prep;
-- fact extraction;
+- map assignment preparation;
+- map output validation and assembly;
 - fact deduplication;
 - fact-to-MoC alignment.
 
@@ -311,12 +319,15 @@ research/youtube_pipeline/
     estimate_tokens.py
     chunk_transcript.py
     prep_all.py
+    prepare_map_assignments.py
+    validate_map_outputs.py
+    assemble_map_artifacts.py
     build_planner_context.py
     validate_moc.py
-    extract_facts.py
     dedupe_facts.py
     align_facts.py
-    validate_section_files.py
+    prepare_section_assignments.py
+    validate_generated_files.py
     assemble_report.py
     quality_check.py
 ```
@@ -351,14 +362,48 @@ tools remain available for tests and debugging.
   high-importance facts, entities, and open questions;
 - avoid raw transcript excerpts unless needed to disambiguate a short or
   low-confidence chunk summary;
-- cap output at `planner_context_target_tokens`, defaulting to 40000 estimated
-  tokens for the map-first v1 flow;
+- cap output at `planner_context_target_tokens`. The default is the smaller of
+  40000 estimated tokens and 40 percent of the configured planner model context
+  window, leaving room for skill text, conversation state, and MoC JSON output;
 - write planner context metadata including source transcript tokens, map artifact
   tokens, planner context tokens, compression ratio, omitted low-priority
   facts, and whether truncation was needed.
 
-`extract_facts.py` performs chunk-level LLM API calls outside the agent
-conversation context. It writes:
+`prepare_map_assignments.py` creates sub-agent work packets from
+`prep/chunks.jsonl`. It writes:
+
+```text
+map/assignments/chunk_001.assignment.json
+map/assignments/chunk_002.assignment.json
+map/map_manifest.json
+```
+
+Each assignment includes the chunk id, time range, transcript text, output
+language, expected output schema, target density, and the exact output file the
+map extractor sub-agent may write.
+
+Map extractor sub-agents read one or more assignment files and write only their
+assigned outputs:
+
+```text
+map/agent_outputs/chunk_001.json
+map/agent_outputs/chunk_002.json
+```
+
+Each chunk output should include `chunk_id`, time range, chunk summary,
+important claims, examples, quotes, entities, open questions, and extracted
+facts tagged with their source `chunk_id`. The orchestrator may dispatch many
+map extractor sub-agents in parallel, but Python does not call an LLM API for
+this stage.
+
+`validate_map_outputs.py` validates and normalizes sub-agent JSON files. Before
+asking for a rerun, it should attempt lightweight JSON repair for common
+formatting defects such as trailing text, missing closing braces, or unescaped
+newlines. Repair attempts must be recorded in `map_manifest.json` so the run
+remains auditable. Invalid outputs that cannot be repaired or regenerated are
+listed in `map/quarantine.jsonl`.
+
+`assemble_map_artifacts.py` combines valid sub-agent outputs into:
 
 ```text
 map/chunk_summaries.jsonl
@@ -368,18 +413,8 @@ map/map_manifest.json
 map/quarantine.jsonl
 ```
 
-Each chunk result should include `chunk_id`, time range, chunk summary,
-important claims, examples, quotes, entities, open questions, and extracted
-facts tagged with their source `chunk_id`. The tool should support concurrent
-API calls with `--concurrency` defaulting to 5, retry invalid JSON once when
-configured, preserve stable output ordering by chunk index, and quarantine
-failed chunks with structured warnings instead of letting the agent improvise
-fact extraction.
-
-Before retrying an API call, the tool should attempt lightweight JSON repair
-for common formatting defects such as trailing text, missing closing braces, or
-unescaped newlines. Repair attempts must be recorded in `map_manifest.json` so
-the run remains auditable.
+It must preserve stable output ordering by chunk index and fail if required
+chunks are missing unless the run policy allows quarantine.
 
 `dedupe_facts.py` may merge repeated facts across chunks, but it must preserve
 all contributing chunk ids as `source_chunk_ids` and all original timestamps as
@@ -392,6 +427,12 @@ chunk membership: a node receives every fact whose `chunk_id` or
 `source_chunk_ids` intersects the node's `chunk_ids`. The tool may still emit
 `unaligned_facts.json` for facts from chunks not covered by any node, but it
 should not use semantic similarity as the default alignment mechanism.
+
+`prepare_section_assignments.py` creates `alignment/section_assignments.jsonl`
+after alignment. Each row gives a section writer exactly one MoC node, target
+word budget, aligned fact ids, chunk ids, time range, and output section file.
+Section writer agents must receive assignments from this file rather than
+hand-authored prompts.
 
 `validate_moc.py` should also own deterministic fallback planning. If the MoC
 JSON cannot be corrected, it creates time-window nodes with:
@@ -413,13 +454,14 @@ writing starts:
 - budget sanity: verify total target words and node target words stay within
   configured tolerance.
 
-`validate_section_files.py` checks file ownership after section writers finish.
-Preferred execution uses isolated writer workspaces or branch-backed sub-agent
-workspaces so each writer can only merge its assigned section. When writers
-share the same workspace, validation must be agent-specific:
+`validate_generated_files.py` checks file ownership after map extractor and
+section writer sub-agents finish. Preferred execution uses isolated workspaces
+or branch-backed sub-agent workspaces so each agent can only merge its assigned
+outputs. When agents share the same workspace, validation must be
+agent-specific:
 
 ```powershell
-python -m research.youtube_pipeline.tools.validate_section_files `
+python -m research.youtube_pipeline.tools.validate_generated_files `
   --agent-id section_writer_moc_003 `
   --expected-file workspace/sections/003-introduction.md
 ```
@@ -434,6 +476,8 @@ Use project-local skills:
 
 ```text
 .agents/skills/youtube-long-report/SKILL.md
+.agents/skills/youtube-long-report/examples/map_assignment_sample.json
+.agents/skills/youtube-long-report/examples/map_output_sample.json
 .agents/skills/youtube-moc-planning/SKILL.md
 .agents/skills/youtube-moc-planning/examples/moc_sample.json
 .agents/skills/youtube-section-reduce/SKILL.md
@@ -487,6 +531,12 @@ research/youtube_pipeline/work/<run_id>/
     moc.raw.json
     moc.json
   map/
+    assignments/
+      chunk_001.assignment.json
+      chunk_002.assignment.json
+    agent_outputs/
+      chunk_001.json
+      chunk_002.json
     chunk_summaries.jsonl
     mapped_facts.raw.jsonl
     mapped_facts.jsonl
@@ -495,10 +545,13 @@ research/youtube_pipeline/work/<run_id>/
   alignment/
     deduplicated_facts.json
     alignment.json
+    section_assignments.jsonl
     unaligned_facts.json
   sections/
+    000-overview.md
     001-introduction.md
     002-...
+    999-synthesis.md
   review/
     coverage.json
     coverage.md
@@ -523,6 +576,7 @@ research/youtube_pipeline/runs/manual/moc_agentic_writer/<video_id>/
     map_manifest.json
     deduplicated_facts.json
     alignment.json
+    section_assignments.jsonl
     quarantine.jsonl
     coverage.json
     sections/
@@ -538,7 +592,7 @@ Examples:
 
 - valid `prep/chunks.jsonl` skips transcript prep;
 - valid `map/mapped_facts.jsonl`, `map/chunk_summaries.jsonl`, and
-  `map/map_manifest.json` skip fact extraction;
+  `map/map_manifest.json` skip map sub-agent extraction and map assembly;
 - valid `planning/moc.json` skips MoC planning;
 - valid section files that pass ownership and word-count checks skip section
   writing for those nodes.
@@ -547,19 +601,41 @@ Each stage should write a small completion marker or manifest entry with tool
 version, input hashes, options, and validation status. A stage may be reused
 only when its input hashes and relevant options match the current run.
 
+Resume hash scope:
+
+| Stage | Reuse only when these inputs match |
+|---|---|
+| transcript prep | raw transcript hash, normalization options |
+| chunking | normalized transcript hash, chunk size, overlap, tokenizer estimate mode |
+| map assignments | chunks hash, output language, map schema version |
+| map outputs | assignment hash, agent model/profile, map schema version, prompt contract version |
+| map artifact assembly | validated map output hashes, schema version |
+| planner context | chunk summaries hash, mapped facts hash, target token cap, planner context policy version |
+| MoC planning | planner context hash, target words, output language, planner agent model/profile, MoC prompt contract version |
+| dedupe | mapped facts hash, dedupe policy version |
+| alignment | MoC hash, deduplicated facts hash, alignment policy version |
+| section assignments | MoC hash, alignment hash, budget policy version |
+| section writing | section assignment hash, aligned fact ids hash, writer agent model/profile, section prompt contract version |
+| QA and assembly | section file hashes, coverage policy version, report assembly version |
+
 ## Sub-Agent Model
 
 Sub-agents are first-class in this workflow. The orchestrator skill should
-dispatch them when the environment supports sub-agents, and fall back to local
-sequential execution when it does not.
+dispatch them when the environment supports sub-agents. V1 does not use direct
+LLM API calls as a fallback for LLM reasoning stages.
 
 ### Required V1 Sub-Agent Roles
 
-1. Section Writer Agents
+1. Map Extractor Agents
+   - read assigned chunk work packets from `map/assignments/`;
+   - write one JSON output per assigned chunk into `map/agent_outputs/`;
+   - each agent owns only its assigned output files.
+
+2. Section Writer Agents
    - write disjoint section files.
    - each agent owns one or more MoC nodes and must not edit other sections.
 
-2. Section QA Agent
+3. Section QA Agent
    - performs qualitative review after all sections are written.
    - checks coherence, repeated prose, missing high-importance facts,
      unsupported claims, and source framing overuse.
@@ -583,17 +659,77 @@ tools.
 ### Dispatch Rules
 
 - Use sub-agents only for disjoint work or independent review.
+- Do not give two map extractor agents the same output file.
 - Do not give two writing agents the same section file.
 - Do not ask sub-agents to run destructive cleanup.
 - Give each sub-agent exact file ownership and expected output.
+- Tell map extractor agents that all files except their assigned
+  `map/agent_outputs/*.json` files are read-only.
 - Tell section writers that all inputs except their assigned section file are
   read-only.
-- Prefer isolated writer workspaces or branch-backed sub-agent workspaces.
-- In shared workspaces, run `validate_section_files.py` with `--agent-id` and
-  `--expected-file` for each writer.
+- Prefer isolated sub-agent workspaces or branch-backed sub-agent workspaces.
+- In shared workspaces, run ownership validation with `--agent-id` and
+  `--expected-file` for each map extractor and section writer.
 - Review sub-agent outputs before final assembly.
-- If sub-agents are unavailable, run the same stages sequentially in the main
-  agent and record `subagents_used=false`.
+- If sub-agents are unavailable, fail or pause before map extraction. The
+  workflow must not replace map extraction with direct Python LLM API calls.
+
+## Map Extraction Contract
+
+Map extractor sub-agents read assignment files:
+
+```text
+map/assignments/chunk_001.assignment.json
+map/assignments/chunk_002.assignment.json
+```
+
+Each assignment contains:
+
+```json
+{
+  "chunk_id": "chunk_001",
+  "output_file": "map/agent_outputs/chunk_001.json",
+  "time_range": {"start_ms": 0, "end_ms": 600000},
+  "output_language": "ru",
+  "transcript_text": "...",
+  "target_summary_words": 250,
+  "max_fact_count": 20
+}
+```
+
+Each map extractor writes only the assigned output file. Expected output:
+
+```json
+{
+  "chunk_id": "chunk_001",
+  "time_range": {"start_ms": 0, "end_ms": 600000},
+  "chunk_summary": "...",
+  "claims": [{"text": "...", "timestamp": "00:10:00", "importance": 4}],
+  "examples": [{"text": "...", "timestamp": "00:12:30"}],
+  "quotes": [{"text": "...", "timestamp": "00:13:10"}],
+  "entities": ["..."],
+  "open_questions": ["..."],
+  "facts": [
+    {
+      "fact_id": "chunk_001_fact_001",
+      "text": "...",
+      "fact_type": "claim",
+      "timestamp": "00:10:00",
+      "importance": 4,
+      "chunk_id": "chunk_001"
+    }
+  ]
+}
+```
+
+Map extractor rules:
+
+- extract evidence from the assigned transcript text only;
+- do not infer facts from outside knowledge;
+- prefer over-extraction to missed evidence;
+- keep timestamps when present in the source;
+- write JSON only, with no Markdown wrapper or commentary;
+- do not edit assignment files, other chunks, or assembled map artifacts.
 
 ## Section Writing Contract
 
@@ -602,6 +738,7 @@ Section writers read:
 ```text
 planning/moc.json
 alignment/alignment.json
+alignment/section_assignments.jsonl
 prep/chunks.jsonl
 map/chunk_summaries.jsonl
 map/mapped_facts.jsonl
@@ -633,8 +770,8 @@ Writer rules:
 - if no assigned facts are missing and expansion would add filler, keep the
   shorter section and emit a word-deficit note for orchestrator redistribution.
 
-After a writer finishes, the orchestrator runs `validate_section_files.py` for
-that writer and expected section file. If an isolated writer workspace is used,
+After a writer finishes, the orchestrator runs `validate_generated_files.py` for
+that writer and expected section file. If an isolated sub-agent workspace is used,
 the orchestrator merges only the assigned section file. If a shared workspace
 is used and the writer changed unassigned generated files, the run records a
 warning and fails the stage for manual review unless explicit generated-file
@@ -666,6 +803,37 @@ Redistribution rules:
   user explicitly asks for a longer report;
 - record `redistributed_word_count` and per-node budget changes in metrics.
 
+## Overview And Synthesis Contract
+
+The orchestrator skill writes two boundary sections after node sections and QA
+are available:
+
+```text
+sections/000-overview.md
+sections/999-synthesis.md
+```
+
+Inputs:
+
+```text
+planning/moc.json
+alignment/section_assignments.jsonl
+sections/001-*.md
+review/coverage.json
+map/chunk_summaries.jsonl
+```
+
+Rules:
+
+- `000-overview.md` uses the MoC thesis, node titles, section opening
+  paragraphs, and coverage warnings to orient the reader;
+- `999-synthesis.md` uses section conclusions, repeated high-importance facts,
+  unresolved questions, and coverage warnings to close the report;
+- both files should mention at most once that the report summarizes a YouTube
+  transcript;
+- neither file should introduce new factual claims that are absent from map
+  artifacts or generated sections.
+
 ## Report Assembly Contract
 
 Python owns final assembly.
@@ -674,6 +842,7 @@ Python owns final assembly.
 
 ```text
 planning/moc.json
+alignment/section_assignments.jsonl
 sections/*.md
 review/coverage.json
 ```
@@ -692,10 +861,11 @@ The final report should include:
 - one short source note saying this is a summary and analysis of a YouTube
   video transcript;
 - table of contents;
-- executive overview;
+- executive overview from `sections/000-overview.md`;
 - MoC-guided narrative sections;
-- structured analysis sections;
-- final synthesis;
+- structured analysis sections built deterministically from fact clusters,
+  repeated entities, and coverage artifacts;
+- final synthesis from `sections/999-synthesis.md`;
 - optional coverage appendix for research runs.
 
 No LLM should rewrite `final/report.md` after assembly.
@@ -723,12 +893,13 @@ The workflow should emit:
   "deduplicated_fact_count": 260,
   "aligned_fact_count": 248,
   "unaligned_fact_count": 12,
+  "section_assignment_count": 10,
   "quarantined_chunk_count": 1,
   "json_repair_count": 3,
   "resume_reused_stage_count": 2,
   "redistributed_word_count": 600,
   "reused_fact_warning_count": 4,
-  "fact_extraction_concurrency": 5,
+  "map_subagent_count": 5,
   "subagents_used": true,
   "section_expansion_count": 3,
   "coverage_warnings": 2,
@@ -744,12 +915,11 @@ Metrics should make agentic runs comparable with `adaptive_book_report` and
 - Missing transcript: fail fast.
 - Transcript normalization failure: fail fast.
 - No timestamps: continue, but record degraded timestamp quality.
-- Fact extraction invalid JSON: retry once when possible, otherwise quarantine
-  the chunk and continue with a warning.
-- Fact extraction malformed JSON: attempt lightweight repair before retrying
-  the API call; record repair attempts and failures.
-- Fact extraction rate limits: reduce concurrency and retry with backoff when
-  the provider signals a recoverable limit.
+- Map sub-agent output invalid JSON: attempt lightweight repair, ask for one
+  corrected sub-agent output when possible, otherwise quarantine the chunk and
+  continue with a warning.
+- Map sub-agent output malformed JSON: record repair attempts and failures in
+  `map_manifest.json`.
 - Existing workspace artifacts: reuse only when validation passes and input
   hashes/options match; otherwise rerun the stage.
 - Planner context exceeds configured budget: truncate low-priority facts first,
@@ -763,7 +933,7 @@ Metrics should make agentic runs comparable with `adaptive_book_report` and
 - Short section after expansion: keep the section, record warning.
 - Section writer modifies unassigned generated files: fail the stage and record
   an ownership warning.
-- Sub-agent unavailable: sequential fallback.
+- Sub-agent unavailable for map extraction: fail or pause before the map stage.
 - Assembly failure: fail the run.
 
 ## Testing Strategy
@@ -776,16 +946,21 @@ Python unit tests:
 - token estimation;
 - transcript normalization;
 - chunk coverage;
-- concurrent fact extraction ordering and quarantine reporting;
-- lightweight JSON repair before fact-extraction retry;
+- map assignment generation;
+- map output validation, stable assembly ordering, and quarantine reporting;
+- lightweight JSON repair before requesting a map sub-agent rerun;
 - planner context construction from chunk summaries and facts;
 - MoC validation, coverage checks, and fallback;
 - fact dedupe;
 - deterministic fact alignment by chunk id;
+- section assignment generation;
 - section file discovery;
-- section file ownership validation in shared and isolated writer workspaces;
+- generated file ownership validation in shared and isolated sub-agent
+  workspaces;
+- resume hash-scope validation per stage;
 - resume manifest validation and stage reuse;
 - word-budget redistribution after short complete sections;
+- deterministic structured analysis assembly from fact clusters;
 - report assembly;
 - metrics generation.
 
@@ -793,20 +968,22 @@ Skill contract tests or fixtures:
 
 - each v1 skill references only scripts that exist;
 - orchestrator workflow lists all required stages;
-- MoC and section-writing skills include example input/output contracts;
+- map extraction, MoC, and section-writing stages include example
+  input/output contracts;
 - section writer contract forbids editing unassigned sections;
 - QA contract checks source framing overuse;
 - QA contract checks near-duplicate prose when the same fact appears in
   multiple sections;
-- sub-agent fallback path is documented.
+- sub-agent availability policy is documented.
 
 Integration smoke test:
 
 - use a tiny fixture transcript;
 - run deterministic prep tools;
-- use mocked `extract_facts.py` output with chunk summaries and facts;
+- use mocked map sub-agent outputs with chunk summaries and facts;
 - build planner context from mocked map artifacts;
 - use mocked LLM artifacts for MoC;
+- generate section assignments;
 - assemble a final report;
 - verify `report.md`, `result.json`, and `metrics.json`.
 
@@ -822,9 +999,11 @@ Manual research run:
 ### Phase 1: Deterministic Toolbox
 
 Build importable Python helpers and CLI wrappers for prep, chunking, counting,
-concurrent fact and chunk-summary extraction, planner context construction from
-map artifacts, MoC coverage validation, deterministic chunk-id alignment,
-section ownership validation, lightweight JSON repair, assembly, and metrics.
+map assignment generation, map output validation and assembly, planner context
+construction from map artifacts, MoC coverage validation, deterministic
+chunk-id alignment, section assignment generation, generated-file ownership
+validation, lightweight JSON repair, deterministic structured analysis
+assembly, report assembly, and metrics.
 
 ### Phase 2: Skill Contracts
 
@@ -836,13 +1015,19 @@ exceptions if skills are committed under `.agents`.
 
 Implement workspace conventions, `run_id` creation, artifact contracts, and a
 minimal orchestrator flow that can be run manually by Codex. Add completion
-manifests and resume checks before expensive stages.
+manifests, per-stage hash scopes, and resume checks before expensive stages.
 
 ### Phase 4: Sub-Agent Workflow
 
 Add section-writer sub-agent dispatch instructions to the top-level skill and
-QA skill. Define file ownership, `validate_section_files.py`, qualitative QA,
-word-budget redistribution, and sequential fallback.
+QA skill. Define file ownership, `validate_generated_files.py`, qualitative QA,
+word-budget redistribution, and unavailable-sub-agent handling.
+
+### Phase 4.5: Boundary Sections
+
+Add orchestrator instructions for `sections/000-overview.md` and
+`sections/999-synthesis.md`, then verify assembly uses those files without a
+whole-report rewrite.
 
 ### Phase 5: End-To-End Research Run
 
@@ -859,26 +1044,28 @@ with `adaptive_book_report`.
 - Keep `strategy: "moc_agentic_writer"` in `metrics.json` for comparison with
   Python strategies, and add `entry_point: "agentic_skill"` to make the
   execution path explicit.
-- Use the same LLM provider/model profile for planner and writers in v1.
+- Use the same agent model/profile for planner, map extractors, and writers in v1.
   Role-specific model selection can be added later.
 - Keep fact extraction in the first MVP, because it is the main guard against
   long fluent sections that miss concrete evidence.
-- Make fact extraction a Python API-call tool, not a conversational agent step.
+- Make fact extraction a sub-agent stage. Python only prepares assignments,
+  validates outputs, repairs JSON, and assembles map artifacts.
 - Use the map-first sequence: prep, chunk summaries and fact extraction,
   planner context from map artifacts, MoC planning, deterministic alignment.
 - Keep transcript prep and fact-to-MoC alignment Python-only in v1.
-- Default `planner_context_target_tokens` to 40000 estimated tokens for the
-  map-first planner context.
+- Default `planner_context_target_tokens` to the smaller of 40000 estimated
+  tokens and 40 percent of the configured planner model context window.
 - Validate MoC coverage deterministically before section writing.
 - Support resume-on-crash with artifact manifests, input hashes, and
   validation-gated stage reuse.
-- Attempt lightweight JSON repair before retrying fact extraction calls.
+- Attempt lightweight JSON repair before requesting a map sub-agent rerun.
 - Redistribute unused section word budget to later high-density nodes instead
   of forcing filler expansion.
-- Require sub-agent support when available, but implement sequential fallback.
+- Require sub-agent support for map extraction in v1; do not replace it with
+  direct Python LLM API calls.
 
 ## Open Questions
 
-1. After manual research runs, should `planner_context_target_tokens` remain at
-   40000 estimated tokens, or should it adapt to transcript length and model
-   context?
+1. After manual research runs, should the adaptive
+   `planner_context_target_tokens` policy also account for transcript length
+   and observed MoC JSON size?
