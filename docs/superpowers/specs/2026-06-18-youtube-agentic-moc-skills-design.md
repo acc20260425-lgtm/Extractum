@@ -397,12 +397,17 @@ tools remain available for tests and debugging.
 ```text
 map/assignments/chunk_001.assignment.json
 map/assignments/chunk_002.assignment.json
-map/map_manifest.json
+map/assignment_manifest.json
 ```
 
 Each assignment includes the chunk id, time range, transcript text, output
 language, expected output schema, target density, and the exact output file the
-map extractor sub-agent may write.
+map extractor sub-agent may write. When one map extractor receives multiple
+assignments, the tool also writes an expected-files manifest for that agent:
+
+```text
+map/expected_files/mapper_batch_001.json
+```
 
 Map extractor sub-agents read one or more assignment files and write only their
 assigned outputs:
@@ -421,10 +426,11 @@ this stage.
 `validate_map_outputs.py` validates and normalizes sub-agent JSON files. Before
 marking an output invalid, it should attempt lightweight JSON repair for common
 formatting defects such as trailing text, missing closing braces, or unescaped
-newlines. Repair attempts must be recorded in `map_manifest.json` so the run
-remains auditable. The tool reports invalid outputs and repair failures, but it
-does not dispatch sub-agents. The orchestrator decides whether to request one
-corrected sub-agent output or list the chunk in `map/quarantine.jsonl`.
+newlines. Repair attempts must be recorded in `map/validation_manifest.json`
+so the run remains auditable. The tool reports invalid outputs and repair
+failures, but it does not dispatch sub-agents. The orchestrator decides whether
+to request one corrected sub-agent output or list the chunk in
+`map/quarantine.jsonl`.
 
 `assemble_map_artifacts.py` combines valid sub-agent outputs into:
 
@@ -433,6 +439,7 @@ map/chunk_summaries.jsonl
 map/mapped_facts.raw.jsonl
 map/mapped_facts.jsonl
 map/map_manifest.json
+map/assembly_manifest.json
 map/quarantine.jsonl
 ```
 
@@ -440,6 +447,11 @@ It must preserve stable output ordering by chunk index and fail if required
 chunks are missing unless the run policy allows quarantine. It also assigns
 canonical global fact ids deterministically, so sub-agent outputs may use local
 fact ids without risking cross-chunk collisions.
+
+`map/map_manifest.json` is the public consolidated manifest assembled from the
+assignment, validation, and assembly manifests. Individual tools should write
+their own stage manifest first, then let `assemble_map_artifacts.py` produce the
+consolidated manifest.
 
 `dedupe_facts.py` may merge repeated facts across chunks, but it must preserve
 all contributing chunk ids as `source_chunk_ids` and all original timestamps as
@@ -496,9 +508,17 @@ python -m research.youtube_pipeline.tools.validate_generated_files `
   --expected-file workspace/sections/003-introduction.md
 ```
 
+For agents that own multiple output files, use an expected-files manifest:
+
+```powershell
+python -m research.youtube_pipeline.tools.validate_generated_files `
+  --agent-id mapper_batch_001 `
+  --expected-files-manifest workspace/map/expected_files/mapper_batch_001.json
+```
+
 The script fails when that agent's tracked changes include generated paths
-other than the expected output file. Automatic reverts should only be allowed
-for generated workspace files and only when explicitly enabled.
+outside the expected file or expected-files manifest. Automatic reverts should
+only be allowed for generated workspace files and only when explicitly enabled.
 
 ## Skill Storage
 
@@ -567,9 +587,14 @@ research/youtube_pipeline/work/<run_id>/
     assignments/
       chunk_001.assignment.json
       chunk_002.assignment.json
+    expected_files/
+      mapper_batch_001.json
     agent_outputs/
       chunk_001.json
       chunk_002.json
+    assignment_manifest.json
+    validation_manifest.json
+    assembly_manifest.json
     chunk_summaries.jsonl
     mapped_facts.raw.jsonl
     mapped_facts.jsonl
@@ -608,6 +633,9 @@ research/youtube_pipeline/runs/manual/moc_agentic_writer/<video_id>/
     chunk_summaries.jsonl
     mapped_facts.jsonl
     map_manifest.json
+    assignment_manifest.json
+    validation_manifest.json
+    assembly_manifest.json
     deduplicated_facts.json
     alignment.json
     section_assignments.jsonl
@@ -627,7 +655,8 @@ Examples:
 
 - valid `prep/chunks.jsonl` skips transcript prep;
 - valid `map/mapped_facts.jsonl`, `map/chunk_summaries.jsonl`, and
-  `map/map_manifest.json` skip map sub-agent extraction and map assembly;
+  `map/map_manifest.json` with matching stage manifests skip map sub-agent
+  extraction and map assembly;
 - valid `planning/moc.json` skips MoC planning;
 - valid section files that pass ownership and word-count checks skip section
   writing for those nodes.
@@ -708,11 +737,15 @@ tools.
 - Use isolated sub-agent workspaces or branch-backed sub-agent workspaces for
   parallel map extraction and section writing.
 - Shared workspaces are only allowed for sequential/debug runs; in that mode,
-  run ownership validation with `--agent-id` and `--expected-file` for each map
-  extractor and section writer.
+  run ownership validation with `--agent-id` plus either `--expected-file` or
+  `--expected-files-manifest` for each map extractor and section writer.
 - Review sub-agent outputs before final assembly.
 - If sub-agents are unavailable, fail or pause before map extraction. The
   workflow must not replace map extraction with direct Python LLM API calls.
+- If sub-agents are unavailable after map extraction, section writing may fall
+  back to sequential main-agent execution using the same
+  `youtube-section-reduce` contract. Record `section_writer_subagent_count=0`
+  and keep generated-file ownership validation enabled.
 
 ## Map Extraction Contract
 
@@ -874,6 +907,11 @@ map/chunk_summaries.jsonl
 
 Rules:
 
+- write Markdown only to the assigned boundary section file;
+- target 500-900 words for `000-overview.md` unless the report target is very
+  small;
+- target 500-900 words for `999-synthesis.md` unless the report target is very
+  small;
 - `000-overview.md` uses the MoC thesis, node titles, section opening
   paragraphs, and map manifest warnings to orient the reader;
 - `999-synthesis.md` uses section conclusions, repeated high-importance facts,
@@ -962,6 +1000,10 @@ The workflow should emit:
 Metrics should make agentic runs comparable with `adaptive_book_report` and
 `moc_guided_map_reduce`.
 
+`subagents_used` is a derived compatibility metric. It is true when any
+sub-agent count or boolean role metric indicates sub-agent execution; role-level
+metrics are authoritative for analysis.
+
 ## Error Handling
 
 - Missing transcript: fail fast.
@@ -986,6 +1028,8 @@ Metrics should make agentic runs comparable with `adaptive_book_report` and
 - Section writer modifies unassigned generated files: fail the stage and record
   an ownership warning.
 - Sub-agent unavailable for map extraction: fail or pause before the map stage.
+- Sub-agent unavailable for section writing: use sequential main-agent section
+  writing when the run policy allows it; otherwise pause before section writing.
 - Structured analysis generation failure: continue only when the run policy
   allows omitting structured analysis; otherwise fail before final assembly.
 - Assembly failure: fail the run.
@@ -1011,6 +1055,7 @@ Python unit tests:
 - section file discovery;
 - generated file ownership validation in shared and isolated sub-agent
   workspaces;
+- generated file ownership validation with an expected-files manifest;
 - resume hash-scope validation per stage;
 - resume manifest validation and stage reuse;
 - word-budget redistribution after short complete sections;
@@ -1076,7 +1121,8 @@ manifests, per-stage hash scopes, and resume checks before expensive stages.
 Add map-extractor and section-writer sub-agent dispatch instructions to the
 top-level skill and QA skill. Define isolated workspace requirements, file
 ownership, `validate_generated_files.py`, qualitative QA, word-budget
-redistribution, and unavailable-sub-agent handling.
+redistribution, map-stage fail/pause behavior, and section-writing sequential
+fallback.
 
 ### Phase 4.5: Boundary Sections
 
@@ -1119,6 +1165,8 @@ with `adaptive_book_report`.
   of forcing filler expansion.
 - Require sub-agent support for map extraction in v1; do not replace it with
   direct Python LLM API calls.
+- Allow section writing to fall back to sequential main-agent execution after
+  map extraction when section-writer sub-agents are unavailable.
 
 ## Open Questions
 
