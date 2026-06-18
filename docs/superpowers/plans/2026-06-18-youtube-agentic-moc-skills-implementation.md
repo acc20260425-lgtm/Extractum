@@ -173,7 +173,7 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc
 
 **Steps:**
 
-- [ ] Add tests for transcript normalization, timestamp preservation, token estimates, chunk IDs, and `prep/manifest.json`.
+- [x] Add tests for transcript normalization, timestamp preservation, token estimates, chunk IDs, and `prep/manifest.json`.
 
 ```python
 def test_chunk_transcript_preserves_timestamps(tmp_path):
@@ -185,7 +185,7 @@ def test_chunk_transcript_preserves_timestamps(tmp_path):
     assert chunks[0]["word_count"] > 0
 ```
 
-- [ ] Implement Python functions:
+- [x] Implement Python functions:
 
 ```python
 def normalize_transcript_text(text: str) -> str: ...
@@ -206,8 +206,8 @@ def write_prep_artifacts(
 ) -> dict[str, object]: ...
 ```
 
-- [ ] Each chunk row must include `chunk_id`, `chunk_index`, `start_timestamp`, `end_timestamp`, `text`, `word_count`, `estimated_tokens`, and `source_hash`.
-- [ ] `prep_all.py` writes:
+- [x] Each chunk row must include `chunk_id`, `chunk_index`, `start_timestamp`, `end_timestamp`, `text`, `word_count`, `estimated_tokens`, and `source_hash`.
+- [x] `prep_all.py` writes:
 
 ```text
 prep/normalized_transcript.txt
@@ -215,8 +215,8 @@ prep/chunks.jsonl
 prep/manifest.json
 ```
 
-- [ ] CLI commands must support `--help` and return non-zero on missing input files.
-- [ ] Run:
+- [x] CLI commands must support `--help` and return non-zero on missing input files.
+- [x] Run:
 
 ```powershell
 python -m research.youtube_pipeline.tools.prep_all --transcript research/youtube_pipeline/tests/fixtures/agentic_tiny_transcript.txt --out research/youtube_pipeline/runs/manual/agentic_smoke --language ru --target-tokens 160 --overlap-tokens 30

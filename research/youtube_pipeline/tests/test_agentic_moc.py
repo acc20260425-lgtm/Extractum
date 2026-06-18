@@ -6,15 +6,25 @@ from pathlib import Path
 from research.youtube_pipeline.moc_agentic import (
     build_stage_key,
     canonical_fact_id,
+    chunk_transcript_text,
     estimate_tokens,
     hash_file,
     hash_text,
+    normalize_transcript_text,
     read_json,
     read_jsonl,
     word_count,
+    write_prep_artifacts,
     write_json,
     write_jsonl,
 )
+
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+
+def fixture_text(name: str) -> str:
+    return (FIXTURES_DIR / name).read_text(encoding="utf-8")
 
 
 class AgenticArtifactHelperTests(unittest.TestCase):
@@ -73,6 +83,51 @@ class AgenticArtifactHelperTests(unittest.TestCase):
 
         self.assertEqual(word_count(text), 7)
         self.assertGreater(estimate_tokens(text, language="ru"), estimate_tokens(text, language="en"))
+
+    def test_normalize_transcript_text_trims_and_keeps_line_boundaries(self):
+        raw = "  [00:00:00] hello   world  \n\n  [00:00:10] second line  "
+
+        self.assertEqual(
+            normalize_transcript_text(raw),
+            "[00:00:00] hello world\n[00:00:10] second line\n",
+        )
+
+    def test_chunk_transcript_preserves_timestamps_and_chunk_ids(self):
+        transcript = fixture_text("agentic_tiny_transcript.txt")
+        chunks = chunk_transcript_text(transcript, target_tokens=160, overlap_tokens=30, language="ru")
+
+        self.assertEqual(chunks[0]["chunk_id"], "chunk_001")
+        self.assertEqual(chunks[0]["chunk_index"], 1)
+        self.assertEqual(chunks[0]["start_timestamp"], "00:00:00")
+        self.assertIn("end_timestamp", chunks[0])
+        self.assertGreater(chunks[0]["word_count"], 0)
+        self.assertGreater(chunks[0]["estimated_tokens"], 0)
+        self.assertEqual(chunks[0]["warnings"], [])
+
+    def test_write_prep_artifacts_writes_manifest_and_chunks(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir) / "run"
+            transcript_path = FIXTURES_DIR / "agentic_tiny_transcript.txt"
+
+            manifest = write_prep_artifacts(
+                transcript_path,
+                output_dir,
+                target_tokens=160,
+                overlap_tokens=30,
+                language="ru",
+            )
+
+            normalized_path = output_dir / "prep" / "normalized_transcript.txt"
+            chunks_path = output_dir / "prep" / "chunks.jsonl"
+            manifest_path = output_dir / "prep" / "manifest.json"
+
+            self.assertTrue(normalized_path.exists())
+            self.assertTrue(chunks_path.exists())
+            self.assertTrue(manifest_path.exists())
+            self.assertTrue(normalized_path.read_text(encoding="utf-8").endswith("\n"))
+            self.assertEqual(read_json(manifest_path), manifest)
+            self.assertEqual(manifest["chunk_count"], len(read_jsonl(chunks_path)))
+            self.assertEqual(manifest["language"], "ru")
 
 
 if __name__ == "__main__":
