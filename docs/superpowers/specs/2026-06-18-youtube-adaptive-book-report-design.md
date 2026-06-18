@@ -54,6 +54,9 @@ assembled programmatically in Python.
   chunks may receive less budget, but they should not be dropped.
 - No unbounded `book` mode. Very deep reports should still respect default hard
   caps unless the code is intentionally changed for a special research run.
+- No heavy multi-agent long-form writing system in the first implementation.
+  The strategy may keep a lightweight context ledger, but should avoid adding
+  broad state-management machinery before manual runs prove it is needed.
 
 ## Strategy Summary
 
@@ -186,7 +189,22 @@ chunk_weight = chunk_word_count * substance_score
 This keeps dense regions in smaller, more focused chapters while merging less
 dense transcript regions into broader chapters.
 
-The first implementation can use a greedy contiguous partitioner:
+The first implementation should prefer a dynamic programming contiguous
+partitioner because chapter balance matters for readability. The objective is
+to split ordered chunks into `chapter_count` groups while minimizing squared
+deviation from the target chapter weight:
+
+```text
+minimize sum((chapter_weight - target_weight) ** 2)
+```
+
+The partitioner must preserve transcript order and keep at least one chunk per
+chapter. This is inexpensive for research transcripts because chunk counts are
+small. A greedy contiguous partitioner can remain as a fallback if the DP
+implementation is postponed, but the implementation plan should treat DP as
+the target.
+
+If a greedy fallback is used, it should:
 
 1. Compute total chunk weight.
 2. Compute target weight per chapter.
@@ -211,6 +229,8 @@ The outline response should be JSON:
 
 ```json
 {
+  "report_thesis": "One-sentence throughline for the whole report.",
+  "key_terms": ["important recurring term or entity"],
   "chapters": [
     {
       "chapter_index": 1,
@@ -227,6 +247,17 @@ chapter titles such as `Chapter 1`, `Chapter 2`, and one-liners derived from
 the assigned chunk summaries. This failure should be recorded in extra metrics
 or notes.
 
+The outline also seeds a lightweight context ledger. For v1, this ledger should
+stay small and deterministic:
+
+- `report_thesis` from the outline;
+- `key_terms` from the outline;
+- generated chapter titles and one-liners;
+- the final paragraph of the previous generated chapter.
+
+The ledger is not a separate long memory system. It exists only to keep chapter
+prompts aligned without sending all chunk notes to every chapter call.
+
 ## Chapter Generation
 
 Each chapter is generated in its own LLM request. The prompt receives:
@@ -236,6 +267,7 @@ Each chapter is generated in its own LLM request. The prompt receives:
 - assigned chunk indexes;
 - dense chunk notes for the assigned chunks;
 - the full chapter outline from the lightweight outline call;
+- the lightweight context ledger;
 - the previous chapter bridge, when available.
 
 The chapter prompt must not receive all chunk summaries or all dense chunk
@@ -246,7 +278,8 @@ policy is:
 chapter prompt context =
   assigned chapter chunk notes
   + full chapter outline
-  + previous chapter title and first paragraph, if any
+  + report thesis and key terms
+  + previous chapter title and final paragraph, if any
 ```
 
 This keeps input cost bounded while preserving a shared structure across
@@ -283,6 +316,12 @@ expand if generated_words < 0.8 * chapter_target_words
 The expansion prompt receives the current chapter draft, the target length, and
 the original source notes. It asks the model to produce a fuller revised chapter
 by expanding underdeveloped topics, examples, and transitions from the notes.
+The expansion must be factual rather than stylistic. The prompt should ask the
+model to identify claims, examples, evidence, timeline moments, or unresolved
+questions from the assigned notes that were missing or thinly covered in the
+draft, then integrate those anchors into the revised chapter. It should
+explicitly avoid generic filler, repeated phrasing, and abstract restatement
+that does not add source-grounded detail.
 
 The strategy should cap expansion attempts with
 `max_expansions_per_chapter = 1` for the first implementation. This keeps cost
@@ -438,6 +477,7 @@ The first implementation should handle these cases explicitly:
 | All chunks have low substance | Reduce budget through the substance multiplier, but do not skip chunks in v1. |
 | Expansion still misses target | Use the best available text and record the shortfall. |
 | Chapter notes exceed the approximate input budget | Prefer compact chunk analysis fields over raw transcript text. |
+| Chapter prose repeats earlier chapters | Use the outline, key terms, and previous final paragraph bridge to redirect the next chapter, but do not run a full-report rewrite. |
 
 ## Testing Strategy
 
@@ -448,11 +488,13 @@ Use mocked LLM clients. Tests should cover:
 - hard caps for report words and chapter count;
 - substance multiplier calculation;
 - invalid substance score fallback and clamping;
-- contiguous weighted chunk partitioning;
+- dynamic programming contiguous weighted chunk partitioning;
 - one chunk per remaining chapter partition constraint;
 - chapter outline fallback when outline JSON is invalid;
+- context ledger uses outline thesis, key terms, and previous final paragraph;
 - strategy registration under `adaptive_book_report`;
 - chapter expansion call occurs when a chapter is too short;
+- expansion prompt receives source-grounded missing-detail anchors;
 - chapter expansion is skipped when the chapter is long enough;
 - final result summary is assembled from generated chapters, not a final
   rewrite response;
