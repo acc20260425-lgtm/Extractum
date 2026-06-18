@@ -5,8 +5,12 @@ import re
 
 
 TIMESTAMP_RE = re.compile(
-    r"^(?:\[(\d{1,2}):(\d{2})(?::(\d{2}))?\]|(\d{1,2}):(\d{2})(?::(\d{2}))?)(?=\s)"
+    r"^\[?(?:(\d{1,2}):)?(\d{2}):(\d{2})(?:[.,](\d{1,3}))?\]?(?=\s|$)"
 )
+TIMESTAMP_RANGE_RE = re.compile(
+    r"^\s*-->\s*\[?(?:(?:\d{1,2}:)?\d{2}:\d{2}(?:[.,]\d{1,3})?)\]?\s*"
+)
+TOKEN_RE = re.compile(r"\w+|[^\w\s]", re.UNICODE)
 
 
 @dataclass
@@ -32,18 +36,18 @@ def parse_timestamp_ms(line: str) -> tuple[int | None, str]:
     if not match:
         return None, line
 
-    parts = [part for part in match.groups()[:3] if part is not None]
-    if not parts:
-        parts = [part for part in match.groups()[3:] if part is not None]
+    hours_text, minutes_text, seconds_text, fraction_text = match.groups()
+    hours = int(hours_text or 0)
+    minutes = int(minutes_text)
+    seconds = int(seconds_text)
+    milliseconds = int((fraction_text or "0").ljust(3, "0")[:3])
 
-    if len(parts) == 2:
-        hours = 0
-        minutes, seconds = (int(part) for part in parts)
-    else:
-        hours, minutes, seconds = (int(part) for part in parts)
-
-    start_ms = ((hours * 60 + minutes) * 60 + seconds) * 1000
-    return start_ms, line[match.end() :].lstrip()
+    start_ms = ((hours * 60 + minutes) * 60 + seconds) * 1000 + milliseconds
+    text = line[match.end() :]
+    range_match = TIMESTAMP_RANGE_RE.match(text)
+    if range_match:
+        text = text[range_match.end() :]
+    return start_ms, text.lstrip()
 
 
 def parse_timestamped_transcript(transcript: str) -> tuple[list[TranscriptSegment], list[str]]:
@@ -87,18 +91,15 @@ def word_count(text: str) -> int:
 
 def approximate_token_count(text: str) -> int:
     token_count = 0
-    in_ascii_word = False
 
-    for character in text:
-        if character.isspace():
-            in_ascii_word = False
-        elif character.isascii() and character.isalnum():
-            if not in_ascii_word:
+    for token in TOKEN_RE.findall(text):
+        if any(character.isalnum() or character == "_" for character in token):
+            if token.isascii():
                 token_count += 1
-                in_ascii_word = True
+            else:
+                token_count += 2
         else:
             token_count += 1
-            in_ascii_word = False
 
     return token_count
 
@@ -162,7 +163,7 @@ def chunk_segments_by_approx_tokens(
             token_total += segment_tokens
             cursor += 1
 
-        chunks.append(make_segment_chunk(len(chunks), chunk_segments))
+        chunks.append(make_segment_chunk(len(chunks) + 1, chunk_segments))
         if cursor >= len(segments):
             break
 
