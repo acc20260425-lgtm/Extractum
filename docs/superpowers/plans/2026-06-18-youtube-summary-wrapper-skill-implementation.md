@@ -1152,7 +1152,7 @@ git commit -m "docs: document youtube summary wrapper skill"
 **Files:**
 - Verify all files touched by Tasks 1-5.
 
-- [ ] **Step 1: Run full agentic test module**
+- [x] **Step 1: Run full agentic test module**
 
 Run:
 
@@ -1162,7 +1162,7 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc
 
 Expected: all tests pass.
 
-- [ ] **Step 2: Run full YouTube pipeline test suite**
+- [x] **Step 2: Run full YouTube pipeline test suite**
 
 Run:
 
@@ -1172,7 +1172,7 @@ python -m unittest discover research/youtube_pipeline/tests
 
 Expected: all tests pass.
 
-- [ ] **Step 3: Run whitespace and red-flag checks**
+- [x] **Step 3: Run whitespace and red-flag checks**
 
 Run:
 
@@ -1191,7 +1191,7 @@ rg -n ($patterns -join "|") research/youtube_pipeline/youtube_summary_workflow.p
 
 Expected: no matches.
 
-- [ ] **Step 4: Run deterministic CLI smoke**
+- [x] **Step 4: Run deterministic CLI smoke**
 
 Run:
 
@@ -1220,7 +1220,7 @@ Expected:
 resumed=true
 ```
 
-- [ ] **Step 5: Check git status**
+- [x] **Step 5: Check git status**
 
 Run:
 
@@ -1232,14 +1232,14 @@ Expected: clean working tree after the task commits.
 
 ## Self-Review Checklist
 
-- [ ] Spec requirement: one public `youtube-summary` skill starts the workflow.
-- [ ] Spec requirement: Python performs deterministic bootstrap only and never calls LLM APIs.
-- [ ] Spec requirement: resume uses `transcript_sha256`, `options_hash`, and `run_index.json`.
-- [ ] Spec requirement: `run_index.json` updates are atomic.
-- [ ] Spec requirement: `workflow_state.json` updates after each validated stage transition.
-- [ ] Spec requirement: map extraction pauses when sub-agents are unavailable.
-- [ ] Spec requirement: section writing may fall back to main-agent execution only after valid map outputs exist.
-- [ ] Spec requirement: overview and synthesis are orchestrator-owned and are not whole-report rewrites.
-- [ ] Spec requirement: final response exposes `final/report.md`, `final/metrics.json`, and validation warnings.
-- [ ] No direct LLM API markers in Python or the new skill file.
-- [ ] Full test suite passes.
+- [x] Spec requirement: one public `youtube-summary` skill starts the workflow.
+- [x] Spec requirement: Python performs deterministic bootstrap only and never calls LLM APIs.
+- [x] Spec requirement: resume uses `transcript_sha256`, `options_hash`, and `run_index.json`.
+- [x] Spec requirement: `run_index.json` updates are atomic.
+- [x] Spec requirement: `workflow_state.json` updates after each validated stage transition.
+- [x] Spec requirement: map extraction pauses when sub-agents are unavailable.
+- [x] Spec requirement: section writing may fall back to main-agent execution only after valid map outputs exist.
+- [x] Spec requirement: overview and synthesis are orchestrator-owned and are not whole-report rewrites.
+- [x] Spec requirement: final response exposes `final/report.md`, `final/metrics.json`, and validation warnings.
+- [x] No direct LLM API markers in Python or the new skill file.
+- [x] Full test suite passes.
