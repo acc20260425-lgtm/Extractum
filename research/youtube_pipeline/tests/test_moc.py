@@ -153,6 +153,31 @@ class MocTranscriptTests(unittest.TestCase):
         self.assertEqual([window["segment_count"] for window in windows], [2, 1])
         self.assertLess(windows[0]["end_ms"], 300000)
 
+    def test_build_temporal_projection_preserves_empty_time_gaps(self):
+        segments = [
+            TranscriptSegment("seg_000001", 0, 60000, None, "opening"),
+            TranscriptSegment("seg_000002", 600000, 660000, None, "late return"),
+        ]
+
+        projection = build_temporal_projection(
+            segments,
+            source_word_count=3,
+            window_ms=300000,
+        )
+        windows = projection["windows"]
+
+        self.assertEqual(len(windows), 3)
+        self.assertEqual(
+            [(window["start_ms"], window["end_ms"]) for window in windows],
+            [(0, 300000), (300000, 600000), (600000, 900000)],
+        )
+        self.assertEqual([window["segment_count"] for window in windows], [1, 0, 1])
+        self.assertEqual(windows[1]["first_words"], "")
+        self.assertEqual(windows[1]["last_words"], "")
+        self.assertEqual(windows[1]["sampled_timestamped_lines"], [])
+        for previous, current in zip(windows, windows[1:]):
+            self.assertEqual(previous["end_ms"], current["start_ms"])
+
     def test_fallback_moc_plan_builds_contiguous_budgeted_nodes(self):
         segments = [
             TranscriptSegment(

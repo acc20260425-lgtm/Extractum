@@ -232,10 +232,16 @@ def build_temporal_projection(
         for segment in timestamped_segments:
             segment_start = segment.start_ms if segment.start_ms is not None else segment.end_ms
             while segment_start is not None and segment_start >= window_end:
-                if window_segments:
-                    windows.append(_projection_window(len(windows) + 1, window_segments))
-                    window_segments = []
-                    window_word_count = 0
+                windows.append(
+                    _projection_window(
+                        len(windows) + 1,
+                        window_start,
+                        window_end,
+                        window_segments,
+                    )
+                )
+                window_segments = []
+                window_word_count = 0
                 window_start = window_end
                 window_end = window_start + window_ms
 
@@ -244,17 +250,32 @@ def build_temporal_projection(
                 window_segments
                 and window_word_count + segment_word_count > PROJECTION_WINDOW_MAX_WORDS
             ):
-                windows.append(_projection_window(len(windows) + 1, window_segments))
+                split_end = segment_start if segment_start is not None else window_end
+                windows.append(
+                    _projection_window(
+                        len(windows) + 1,
+                        window_start,
+                        split_end,
+                        window_segments,
+                    )
+                )
                 window_segments = []
                 window_word_count = 0
-                window_start = segment_start if segment_start is not None else segment.end_ms or window_end
+                window_start = split_end
                 window_end = window_start + window_ms
 
             window_segments.append(segment)
             window_word_count += segment_word_count
 
         if window_segments:
-            windows.append(_projection_window(len(windows) + 1, window_segments))
+            windows.append(
+                _projection_window(
+                    len(windows) + 1,
+                    window_start,
+                    window_end,
+                    window_segments,
+                )
+            )
 
     return {
         "projection_kind": "temporal_skeleton",
@@ -265,8 +286,12 @@ def build_temporal_projection(
     }
 
 
-def _projection_window(window_index: int, segments: list[TranscriptSegment]) -> dict[str, object]:
-    start_ms, end_ms = chunk_time_span(segments)
+def _projection_window(
+    window_index: int,
+    start_ms: int | None,
+    end_ms: int | None,
+    segments: list[TranscriptSegment],
+) -> dict[str, object]:
     text = " ".join(segment.text for segment in segments)
     return {
         "window_id": f"window_{window_index:03d}",
