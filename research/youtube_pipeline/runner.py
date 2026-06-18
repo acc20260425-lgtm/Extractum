@@ -20,6 +20,15 @@ def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     )
 
 
+def write_extra_artifact(path: Path, payload: Any) -> None:
+    if path.name != str(path) or path.name in {"", ".", ".."}:
+        raise ValueError(f"extra artifact filename must be a simple relative name: {path}")
+    if isinstance(payload, str):
+        path.write_text(payload, encoding="utf-8")
+    else:
+        write_json(path, payload)
+
+
 def write_run_artifacts(
     *,
     root: Path,
@@ -46,6 +55,15 @@ def write_run_artifacts(
     write_json(output_dir / "metrics.json", metrics)
     write_jsonl(output_dir / "raw_requests.jsonl", outcome.raw_requests)
     write_jsonl(output_dir / "raw_responses.jsonl", outcome.raw_responses)
+    for filename, payload in outcome.extra_artifacts.items():
+        artifact_name = Path(filename)
+        if artifact_name.name != str(artifact_name) or artifact_name.name in {"", ".", ".."}:
+            raise ValueError(f"extra artifact filename must be a simple relative name: {artifact_name}")
+        output_path = output_dir / artifact_name
+        if isinstance(payload, str):
+            output_path.write_text(payload, encoding="utf-8")
+        else:
+            write_json(output_path, payload)
     return output_dir
 
 
@@ -66,10 +84,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-language", default="ru")
     parser.add_argument("--max-tokens", type=int, default=8192)
     parser.add_argument("--chunk-token-limit", type=int, default=3000)
+    parser.add_argument("--chunk-overlap-tokens", type=int, default=700)
     parser.add_argument("--target-depth", choices=["auto", "brief", "standard", "deep", "book"], default="auto")
     parser.add_argument("--min-report-words", type=int, default=None)
     parser.add_argument("--max-report-words", type=int, default=None)
     parser.add_argument("--chapter-target-words", type=int, default=900)
+    parser.add_argument("--planner-context-token-limit", type=int, default=120000)
+    parser.add_argument("--max-slice-tokens", type=int, default=8000)
     return parser
 
 
@@ -79,12 +100,16 @@ def build_strategy_options(args: argparse.Namespace) -> StrategyOptions:
             raise ValueError("min-report-words cannot be greater than max-report-words")
     return StrategyOptions(
         output_language=args.output_language,
+        video_id=args.video_id,
         max_tokens=args.max_tokens,
         chunk_token_limit=args.chunk_token_limit,
+        chunk_overlap_tokens=args.chunk_overlap_tokens,
         target_depth=args.target_depth,
         min_report_words=args.min_report_words,
         max_report_words=args.max_report_words,
         chapter_target_words=args.chapter_target_words,
+        planner_context_token_limit=args.planner_context_token_limit,
+        max_slice_tokens=args.max_slice_tokens,
     )
 
 

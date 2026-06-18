@@ -45,12 +45,18 @@ class LlmClient(Protocol):
 @dataclass
 class StrategyOptions:
     output_language: str = "ru"
+    video_id: str = "video"
     max_tokens: int = 8192
     chunk_token_limit: int = 3000
+    chunk_overlap_tokens: int = 700
     target_depth: str = "auto"
     min_report_words: int | None = None
     max_report_words: int | None = None
     chapter_target_words: int = 900
+    planner_context_token_limit: int = 120000
+    max_slice_tokens: int = 8000
+    max_parallel_map_calls: int = 4
+    max_parallel_node_calls: int = 3
 
 
 @dataclass
@@ -64,6 +70,7 @@ class StrategyOutcome:
     raw_requests: list[dict[str, object]]
     raw_responses: list[dict[str, object]]
     extra_metrics: dict[str, object] = field(default_factory=dict)
+    extra_artifacts: dict[str, object | str] = field(default_factory=dict)
 
 
 def parse_result_json(text: str) -> tuple[NormalizedResult, bool]:
