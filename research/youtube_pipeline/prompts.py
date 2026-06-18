@@ -369,3 +369,217 @@ def build_antigravity_final_report_messages(
         ),
     ]
 
+
+ADAPTIVE_CHUNK_CONTRACT = """Return JSON with this shape:
+{
+  "substance_score": 4,
+  "summary_text": "dense narrative notes for this chunk",
+  "timeline": [{"start": "00:00:00", "end": "00:05:00", "title": "", "summary": ""}],
+  "claims": [{"text": "", "importance": "high", "evidence_refs": []}],
+  "evidence": [{"text": "", "timestamp": "00:00:00", "supports_claims": []}],
+  "action_items": [{"text": "", "target_audience": "", "priority": "medium"}],
+  "open_questions": [{"text": "", "why_it_matters": ""}]
+}
+"""
+
+
+SUBSTANCE_RUBRIC = """substance_score must be an integer from 1 to 5:
+1 = greetings, ads, sponsor reads, like-and-subscribe requests, technical issues, repeated intro/outro, or other filler with little analytical value.
+2 = casual small talk, low-value anecdotes, logistical setup, or repetition of already covered points.
+3 = coherent narrative with moderate informational density and normal interview or lecture flow, but no major new thesis or evidence cluster.
+4 = specific claims backed by examples or data, novel frameworks, clear argument transitions, or meaningful practical implications.
+5 = pivotal thesis statements, dense expert analysis, evidence-backed counterarguments, or sections with three or more concrete facts, figures, citations, or high-impact examples.
+Use 1 and 2 when appropriate. Do not default filler or repeated material to 3.
+"""
+
+
+def build_adaptive_chunk_analysis_messages(
+    chunk_text: str,
+    *,
+    chunk_index: int,
+    total_chunks: int,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content=(
+                "You analyze one chunk of a longer YouTube transcript for an adaptive long-form report. "
+                "Use only this chunk. Return one JSON object and no Markdown wrapper."
+            ),
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n"
+                f"Chunk {chunk_index} of {total_chunks}\n\n"
+                "Create dense chunk notes, not a short abstract. In summary_text write 600-1000 words "
+                "when the chunk has enough substance. Preserve concrete details, argument flow, examples, "
+                "named concepts, transitions, evidence, tensions, and practical implications.\n\n"
+                f"{SUBSTANCE_RUBRIC}\n\n"
+                f"{ADAPTIVE_CHUNK_CONTRACT}\n\nTranscript chunk:\n{chunk_text}"
+            ),
+        ),
+    ]
+
+
+def build_adaptive_chapter_outline_messages(
+    *,
+    chunk_descriptors_json: str,
+    chapter_groups_json: str,
+    report_min_words: int,
+    report_max_words: int,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content=(
+                "You create a compact chapter outline for a long-form YouTube research report. "
+                "Return JSON only. Do not write chapter prose."
+            ),
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n"
+                f"Target report length range: {report_min_words}-{report_max_words} words\n\n"
+                "Create a report_thesis, key_terms, and one chapter entry per provided chapter group. "
+                "Each chapter needs chapter_index, title, one_liner, and assigned_chunk_indexes.\n\n"
+                "Return exactly this JSON shape:\n"
+                "{\n"
+                '  "report_thesis": "One-sentence throughline",\n'
+                '  "key_terms": ["term"],\n'
+                '  "chapters": [{"chapter_index": 1, "title": "Title", "one_liner": "Purpose", "assigned_chunk_indexes": [1]}]\n'
+                "}\n\n"
+                f"Chapter groups JSON:\n{chapter_groups_json}\n\n"
+                f"Chunk descriptors JSON:\n{chunk_descriptors_json}"
+            ),
+        ),
+    ]
+
+
+def build_adaptive_chapter_generation_messages(
+    *,
+    chapter_index: int,
+    total_chapters: int,
+    chapter_word_target: int,
+    assigned_notes_json: str,
+    outline_json: str,
+    previous_bridge: str,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content=(
+                "You write one chapter of a long-form YouTube research report. "
+                "Markdown prose only. Do not return JSON."
+            ),
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n"
+                f"Chapter {chapter_index} of {total_chapters}\n"
+                f"Target length: about {chapter_word_target} words\n\n"
+                "Use the report thesis, key terms, full chapter outline, assigned chunk notes, "
+                "and previous chapter bridge to write a coherent source-grounded chapter. "
+                "Do not summarize into a short abstract. Preserve concrete claims, examples, evidence, and transitions.\n\n"
+                f"Chapter outline JSON:\n{outline_json}\n\n"
+                f"Previous chapter bridge:\n{previous_bridge}\n\n"
+                f"Assigned chunk notes JSON:\n{assigned_notes_json}"
+            ),
+        ),
+    ]
+
+
+def build_adaptive_chapter_expansion_messages(
+    *,
+    chapter_index: int,
+    chapter_word_target: int,
+    current_word_count: int,
+    chapter_draft: str,
+    assigned_notes_json: str,
+    outline_entry_json: str,
+    report_thesis: str,
+    key_terms: list[str],
+    previous_bridge: str,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content=(
+                "You expand one chapter of a long-form research report using only source-grounded detail. "
+                "Return Markdown prose only."
+            ),
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n"
+                f"Chapter {chapter_index}\n"
+                f"Current length: {current_word_count} words\n"
+                f"Target length: about {chapter_word_target} words\n\n"
+                "Revise the chapter by adding source-grounded detail that was missing or thinly covered. "
+                "Look for claims, examples, evidence, timeline moments, unresolved questions, and high-substance notes. "
+                "avoid generic filler, repeated phrasing, and abstract restatement that does not add concrete detail.\n\n"
+                f"Report thesis:\n{report_thesis}\n\n"
+                f"Key terms:\n{', '.join(key_terms)}\n\n"
+                f"Previous chapter bridge:\n{previous_bridge}\n\n"
+                f"Chapter outline entry JSON:\n{outline_entry_json}\n\n"
+                f"Current chapter draft:\n{chapter_draft}\n\n"
+                f"Assigned chunk notes JSON:\n{assigned_notes_json}"
+            ),
+        ),
+    ]
+
+
+def build_adaptive_overview_messages(
+    *,
+    outline_json: str,
+    structured_result_json: str,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content="You write an executive overview for a long-form YouTube research report.",
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n\n"
+                "Write a concise executive overview. Do not rewrite the chapters. "
+                "Use the outline and structured result to frame the report.\n\n"
+                f"Outline JSON:\n{outline_json}\n\n"
+                f"Structured result JSON:\n{structured_result_json}"
+            ),
+        ),
+    ]
+
+
+def build_adaptive_conclusion_messages(
+    *,
+    outline_json: str,
+    structured_result_json: str,
+    output_language: str,
+) -> list[ChatMessage]:
+    return [
+        ChatMessage(
+            role="system",
+            content="You write the final synthesis for a long-form YouTube research report.",
+        ),
+        ChatMessage(
+            role="user",
+            content=(
+                f"Output language: {output_language}\n\n"
+                "Write a final synthesis. Do not rewrite the chapters. "
+                "Connect the main claims, evidence, takeaways, and open questions.\n\n"
+                f"Outline JSON:\n{outline_json}\n\n"
+                f"Structured result JSON:\n{structured_result_json}"
+            ),
+        ),
+    ]
+

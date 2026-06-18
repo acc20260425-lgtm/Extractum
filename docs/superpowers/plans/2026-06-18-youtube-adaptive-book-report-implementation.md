@@ -920,7 +920,7 @@ Expected: commit succeeds.
 - Modify: `research/youtube_pipeline/prompts.py`
 - Modify: `research/youtube_pipeline/tests/test_prompts.py`
 
-- [ ] **Step 1: Write failing prompt tests**
+- [x] **Step 1: Write failing prompt tests**
 
 Update imports in `test_prompts.py`:
 
@@ -1027,7 +1027,7 @@ Add tests:
         self.assertIn("final synthesis", joined)
 ```
 
-- [ ] **Step 2: Run prompt tests to verify they fail**
+- [x] **Step 2: Run prompt tests to verify they fail**
 
 Run:
 
@@ -1037,7 +1037,7 @@ python -m unittest research.youtube_pipeline.tests.test_prompts -v
 
 Expected: FAIL because adaptive prompt builders do not exist.
 
-- [ ] **Step 3: Add adaptive chunk contract and prompt builders**
+- [x] **Step 3: Add adaptive chunk contract and prompt builders**
 
 Append to `prompts.py`:
 
@@ -1262,7 +1262,7 @@ def build_adaptive_conclusion_messages(
     ]
 ```
 
-- [ ] **Step 4: Run prompt tests**
+- [x] **Step 4: Run prompt tests**
 
 Run:
 
@@ -1272,7 +1272,7 @@ python -m unittest research.youtube_pipeline.tests.test_prompts -v
 
 Expected: PASS.
 
-- [ ] **Step 5: Run all tests**
+- [x] **Step 5: Run all tests**
 
 Run:
 
@@ -1282,7 +1282,7 @@ python -m unittest discover -s research/youtube_pipeline/tests -v
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 
