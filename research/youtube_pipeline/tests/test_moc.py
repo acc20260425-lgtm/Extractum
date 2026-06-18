@@ -3,15 +3,88 @@ import unittest
 from research.youtube_pipeline.moc import (
     TranscriptSegment,
     approximate_token_count,
+    build_temporal_projection,
     chunk_segments_by_approx_tokens,
+    compute_moc_budget,
+    fallback_moc_plan,
     format_segments_for_prompt,
     parse_timestamp_ms,
     parse_timestamped_transcript,
     word_count,
 )
+from research.youtube_pipeline.strategies import StrategyOptions
 
 
 class MocTranscriptTests(unittest.TestCase):
+    def test_compute_moc_budget_uses_tucker_scale_defaults(self):
+        budget = compute_moc_budget(
+            transcript_words=41384,
+            options=StrategyOptions(),
+        )
+
+        self.assertEqual(budget.report_min_words, 7000)
+        self.assertEqual(budget.report_max_words, 10000)
+        self.assertEqual(budget.target_report_words, 8500)
+        self.assertEqual(budget.expected_node_min, 8)
+        self.assertEqual(budget.expected_node_max, 12)
+
+    def test_build_temporal_projection_groups_timestamped_segments(self):
+        segments = [
+            TranscriptSegment(
+                f"seg_{index + 1:06d}",
+                index * 60000,
+                (index + 1) * 60000,
+                None,
+                f"line {index} words",
+            )
+            for index in range(12)
+        ]
+
+        projection = build_temporal_projection(
+            segments,
+            source_word_count=240,
+            window_ms=300000,
+        )
+        windows = projection["windows"]
+
+        self.assertEqual(projection["projection_kind"], "temporal_skeleton")
+        self.assertEqual(len(windows), 3)
+        self.assertEqual(windows[0]["start_ms"], 0)
+        self.assertIn("line 0", windows[0]["first_words"])
+        self.assertIn("line 4", windows[0]["last_words"])
+
+    def test_fallback_moc_plan_builds_contiguous_budgeted_nodes(self):
+        segments = [
+            TranscriptSegment(
+                f"seg_{index + 1:06d}",
+                index * 1000,
+                (index + 1) * 1000,
+                None,
+                f"segment {index}",
+            )
+            for index in range(10)
+        ]
+        budget = compute_moc_budget(
+            transcript_words=1200,
+            options=StrategyOptions(chapter_target_words=500),
+        )
+
+        plan = fallback_moc_plan("video1", segments, budget)
+        nodes = plan["nodes"]
+
+        self.assertEqual(plan["video_id"], "video1")
+        self.assertEqual(nodes[0]["time_span"]["start_ms"], 0)
+        self.assertEqual(nodes[-1]["time_span"]["end_ms"], 10000)
+        self.assertEqual(
+            sum(node["target_word_count"] for node in nodes),
+            budget.target_report_words,
+        )
+        for previous, current in zip(nodes, nodes[1:]):
+            self.assertEqual(
+                previous["time_span"]["end_ms"],
+                current["time_span"]["start_ms"],
+            )
+
     def test_parse_timestamped_transcript_accepts_supported_formats(self):
         transcript = "\n".join(
             [
