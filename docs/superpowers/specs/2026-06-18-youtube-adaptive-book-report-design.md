@@ -500,12 +500,30 @@ where relevant, and ignore adaptive fields they do not use. Do not use
 
 `StrategyOptions.max_tokens` is the upper bound for a single LLM response, not
 the desired size for every call. `adaptive_book_report` should calculate
-per-call limits internally:
+per-call limits internally. Chapter and expansion calls should use a
+language-aware word-to-token estimate rather than a fixed `words * 2` rule,
+because Russian output usually needs more tokens per word than English.
+
+Suggested output token multipliers:
+
+| Output language | Multiplier |
+| --- | ---: |
+| `en` | `1.8` |
+| `ru` | `2.8` |
+| other or unknown | `3.0` |
+
+Add a safety margin before applying the global cap:
+
+```text
+response_token_budget = ceil(target_words * language_multiplier * 1.15)
+```
+
+The per-call limits should be:
 
 - chunk analysis: use `options.max_tokens`;
 - outline: cap around `2,000` tokens;
-- chapter generation: cap at `min(options.max_tokens, chapter_target_words * 2)`;
-- chapter expansion: cap at `min(options.max_tokens, chapter_target_words * 2)`;
+- chapter generation: cap at `min(options.max_tokens, response_token_budget)`;
+- chapter expansion: cap at `min(options.max_tokens, response_token_budget)`;
 - overview and conclusion: cap around `2,000` tokens each.
 
 ## Metrics
@@ -585,6 +603,8 @@ Use mocked LLM clients. Tests should cover:
 - table of contents is assembled in Python;
 - per-call max token caps are applied for outline, chapter, expansion, overview,
   and conclusion calls;
+- Russian chapter and expansion token budgets use the language-aware multiplier
+  and safety margin;
 - runner passes the new CLI options through `StrategyOptions`;
 - all registered strategies use the unified `StrategyOptions` registry interface.
 
