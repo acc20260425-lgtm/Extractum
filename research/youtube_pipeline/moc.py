@@ -359,10 +359,23 @@ def align_fact_clusters_to_moc(
 
 
 def segment_overlaps(segment: TranscriptSegment, start_ms: int | None, end_ms: int | None) -> bool:
-    if start_ms is None or end_ms is None or segment.start_ms is None:
+    if (start_ms is None and end_ms is None) or segment.start_ms is None:
         return False
+    if start_ms is None:
+        start_ms = end_ms
+    if end_ms is None:
+        end_ms = start_ms
+    if start_ms is None or end_ms is None:
+        return False
+    if end_ms < start_ms:
+        start_ms, end_ms = end_ms, start_ms
+
     segment_end_ms = segment.end_ms if segment.end_ms is not None else segment.start_ms
-    return segment.start_ms <= end_ms and segment_end_ms >= start_ms
+    if segment_end_ms < segment.start_ms:
+        segment_start_ms, segment_end_ms = segment_end_ms, segment.start_ms
+    else:
+        segment_start_ms = segment.start_ms
+    return segment_start_ms <= end_ms and segment_end_ms >= start_ms
 
 
 def segments_in_range(
@@ -392,13 +405,62 @@ def mention_windows(clusters: Any, context_ms: int = 30000) -> list[tuple[int, i
     return windows
 
 
-def _format_segments_with_word_limit(segments: list[TranscriptSegment], words_per_segment: int | None = None) -> str:
-    lines = []
-    for segment in segments:
-        text = segment.text
-        if words_per_segment is not None:
-            text = first_words(text, words_per_segment)
-        lines.append(f"[{format_ms(segment.start_ms)}] {text}")
+def _truncate_text_to_approx_tokens(text: str, max_tokens: int) -> str:
+    if max_tokens <= 0 or not text:
+        return ""
+    if approximate_token_count(text) <= max_tokens:
+        return text
+
+    kept_words: list[str] = []
+    for word in text.split():
+        candidate_words = kept_words + [word]
+        candidate = " ".join(candidate_words)
+        if approximate_token_count(candidate) > max_tokens:
+            break
+        kept_words = candidate_words
+    if kept_words:
+        return " ".join(kept_words)
+
+    low = 0
+    high = len(text)
+    while low < high:
+        midpoint = (low + high + 1) // 2
+        if approximate_token_count(text[:midpoint]) <= max_tokens:
+            low = midpoint
+        else:
+            high = midpoint - 1
+    return text[:low].rstrip()
+
+
+def _format_segments_with_token_limit(segments: list[TranscriptSegment], max_tokens: int) -> str:
+    lines: list[str] = []
+    prefixes = [f"[{format_ms(segment.start_ms)}]" for segment in segments]
+    remaining_tokens = max_tokens
+
+    for index, segment in enumerate(segments):
+        prefix = prefixes[index]
+        prefix_tokens = approximate_token_count(prefix)
+        future_prefix_tokens = sum(approximate_token_count(future_prefix) for future_prefix in prefixes[index + 1 :])
+        available_tokens = remaining_tokens - future_prefix_tokens
+        if available_tokens <= 0:
+            break
+        if prefix_tokens > available_tokens:
+            if prefix_tokens > remaining_tokens:
+                break
+            line = prefix
+        else:
+            text_budget = max(0, available_tokens - prefix_tokens)
+            text = _truncate_text_to_approx_tokens(segment.text, text_budget)
+            line = f"{prefix} {text}".rstrip()
+            while approximate_token_count(line) > available_tokens and text:
+                text_budget -= 1
+                text = _truncate_text_to_approx_tokens(segment.text, text_budget)
+                line = f"{prefix} {text}".rstrip()
+        line_tokens = approximate_token_count(line)
+        if line_tokens > remaining_tokens:
+            break
+        lines.append(line)
+        remaining_tokens -= line_tokens
     return "\n".join(lines)
 
 
@@ -414,7 +476,7 @@ def build_evidence_slice(
     node_end_ms = node_span["end_ms"] if node_span is not None else None
     node_segments = segments_in_range(segments, start_ms=node_start_ms, end_ms=node_end_ms)
     full_text = format_segments_for_prompt(node_segments)
-    if word_count(full_text) <= max_slice_tokens:
+    if approximate_token_count(full_text) <= max_slice_tokens:
         return full_text, False
 
     selected_by_id: dict[str, TranscriptSegment] = {}
@@ -433,11 +495,10 @@ def build_evidence_slice(
         ),
     )
     truncated_text = format_segments_for_prompt(selected_segments)
-    if word_count(truncated_text) <= max_slice_tokens or not selected_segments:
+    if approximate_token_count(truncated_text) <= max_slice_tokens or not selected_segments:
         return truncated_text, True
 
-    words_per_segment = max(8, max_slice_tokens // len(selected_segments) - 1)
-    return _format_segments_with_word_limit(selected_segments, words_per_segment), True
+    return _format_segments_with_token_limit(selected_segments, max_slice_tokens), True
 
 
 def timestamp_from_mention(cluster: Any) -> str:
@@ -516,21 +577,32 @@ def build_structured_result_from_facts(
                     )
                 )
 
-    normalized_action_items = [
-        ActionItem(
-            text=_dict_text(item),
-            target_audience=str(item.get("target_audience", "")) if hasattr(item, "get") else "",
-            priority=normalize_importance(item.get("priority")) if hasattr(item, "get") else "medium",
+    normalized_action_items: list[ActionItem] = []
+    for item in action_items or []:
+        if not hasattr(item, "get"):
+            continue
+        normalized_action_items.append(
+            ActionItem(
+                text=_dict_text(item),
+                target_audience=str(item.get("target_audience", "")),
+                priority=normalize_importance(item.get("priority")) if item.get("priority") is not None else "medium",
+            )
         )
-        for item in list(action_items or [])[:20]
-    ]
-    normalized_open_questions = [
-        OpenQuestion(
-            text=_dict_text(item),
-            why_it_matters=str(item.get("why_it_matters", "")) if hasattr(item, "get") else "",
+        if len(normalized_action_items) >= 20:
+            break
+
+    normalized_open_questions: list[OpenQuestion] = []
+    for item in open_questions or []:
+        if not hasattr(item, "get"):
+            continue
+        normalized_open_questions.append(
+            OpenQuestion(
+                text=_dict_text(item),
+                why_it_matters=str(item.get("why_it_matters", "")),
+            )
         )
-        for item in list(open_questions or [])[:20]
-    ]
+        if len(normalized_open_questions) >= 20:
+            break
 
     return NormalizedResult(
         summary_text=str(moc_plan.get("overview", "")) if hasattr(moc_plan, "get") else "",

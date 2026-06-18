@@ -613,6 +613,44 @@ class MocTranscriptTests(unittest.TestCase):
         self.assertIn("[00:00:50]", text)
         self.assertLess(len(text.split()), 450)
 
+    def test_build_evidence_slice_enforces_approximate_token_budget(self):
+        from research.youtube_pipeline.moc import build_evidence_slice
+
+        long_token = "x" * 240
+        segments = [
+            TranscriptSegment(f"seg_{index:06d}", index * 10000, (index + 1) * 10000, None, long_token)
+            for index in range(8)
+        ]
+        node = {"time_span": {"start_ms": 0, "end_ms": 80000}}
+        clusters = [{"mentions": [{"time_span": {"start_ms": 30000, "end_ms": 40000}}]}]
+
+        text, truncated = build_evidence_slice(node=node, clusters=clusters, segments=segments, max_slice_tokens=90)
+
+        self.assertTrue(truncated)
+        self.assertLessEqual(approximate_token_count(text), 90)
+        self.assertIn("[00:00:30]", text)
+
+    def test_segment_range_helpers_accept_partial_bounds(self):
+        from research.youtube_pipeline.moc import segment_overlaps, segments_in_range
+
+        segments = [
+            TranscriptSegment("seg_000001", 0, 1000, None, "first"),
+            TranscriptSegment("seg_000002", 2000, 3000, None, "second"),
+            TranscriptSegment("seg_000003", None, None, None, "untimed"),
+        ]
+
+        self.assertTrue(segment_overlaps(segments[1], 2500, None))
+        self.assertTrue(segment_overlaps(segments[1], None, 2500))
+        self.assertFalse(segment_overlaps(segments[0], 2500, None))
+        self.assertEqual(
+            [segment.segment_id for segment in segments_in_range(segments, start_ms=2500, end_ms=None)],
+            ["seg_000002"],
+        )
+        self.assertEqual(
+            [segment.segment_id for segment in segments_in_range(segments, start_ms=None, end_ms=500)],
+            ["seg_000001"],
+        )
+
     def test_build_structured_result_from_moc_facts(self):
         from research.youtube_pipeline.moc import build_structured_result_from_facts
 
@@ -640,6 +678,19 @@ class MocTranscriptTests(unittest.TestCase):
         self.assertEqual(result.timeline[0].title, "Topic")
         self.assertEqual(result.claims[0].text, "Important claim")
         self.assertEqual(result.evidence[0].timestamp, "00:00:00")
+
+    def test_build_structured_result_skips_malformed_action_items_and_questions(self):
+        from research.youtube_pipeline.moc import build_structured_result_from_facts
+
+        result = build_structured_result_from_facts(
+            {"nodes": []},
+            [],
+            action_items=["malformed", {"text": "Do the thing"}],
+            open_questions=[None, {"text": "What changed?"}],
+        )
+
+        self.assertEqual([item.text for item in result.action_items], ["Do the thing"])
+        self.assertEqual([question.text for question in result.open_questions], ["What changed?"])
 
     def test_assemble_moc_markdown_report_includes_sections(self):
         from research.youtube_pipeline.moc import assemble_moc_markdown_report
