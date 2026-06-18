@@ -7,9 +7,7 @@ import re
 TIMESTAMP_RE = re.compile(
     r"^\[?(?:(\d{1,2}):)?(\d{2}):(\d{2})(?:[.,](\d{1,3}))?\]?(?=\s|$)"
 )
-TIMESTAMP_RANGE_RE = re.compile(
-    r"^\s*-->\s*\[?(?:(?:\d{1,2}:)?\d{2}:\d{2}(?:[.,]\d{1,3})?)\]?\s*"
-)
+TIMESTAMP_RANGE_ARROW_RE = re.compile(r"^\s*-->\s*")
 TOKEN_RE = re.compile(r"\w+|[^\w\s]", re.UNICODE)
 
 
@@ -31,23 +29,31 @@ class SegmentChunk:
     text: str
 
 
-def parse_timestamp_ms(line: str) -> tuple[int | None, str]:
-    match = TIMESTAMP_RE.match(line)
-    if not match:
-        return None, line
-
+def _timestamp_match_ms(match: re.Match[str]) -> int:
     hours_text, minutes_text, seconds_text, fraction_text = match.groups()
     hours = int(hours_text or 0)
     minutes = int(minutes_text)
     seconds = int(seconds_text)
     milliseconds = int((fraction_text or "0").ljust(3, "0")[:3])
+    return ((hours * 60 + minutes) * 60 + seconds) * 1000 + milliseconds
 
-    start_ms = ((hours * 60 + minutes) * 60 + seconds) * 1000 + milliseconds
+
+def parse_timestamp_ms(line: str) -> tuple[int | None, int | None, str]:
+    match = TIMESTAMP_RE.match(line)
+    if not match:
+        return None, None, line
+
+    start_ms = _timestamp_match_ms(match)
+    end_ms = None
     text = line[match.end() :]
-    range_match = TIMESTAMP_RANGE_RE.match(text)
-    if range_match:
-        text = text[range_match.end() :]
-    return start_ms, text.lstrip()
+    arrow_match = TIMESTAMP_RANGE_ARROW_RE.match(text)
+    if arrow_match:
+        range_text = text[arrow_match.end() :]
+        end_match = TIMESTAMP_RE.match(range_text)
+        if end_match:
+            end_ms = _timestamp_match_ms(end_match)
+            text = range_text[end_match.end() :]
+    return start_ms, end_ms, text.lstrip()
 
 
 def parse_timestamped_transcript(transcript: str) -> tuple[list[TranscriptSegment], list[str]]:
@@ -59,7 +65,7 @@ def parse_timestamped_transcript(transcript: str) -> tuple[list[TranscriptSegmen
         if not line:
             continue
 
-        start_ms, text = parse_timestamp_ms(line)
+        start_ms, end_ms, text = parse_timestamp_ms(line)
         if start_ms is None:
             has_missing_timestamps = True
 
@@ -67,7 +73,7 @@ def parse_timestamped_transcript(transcript: str) -> tuple[list[TranscriptSegmen
             TranscriptSegment(
                 segment_id=f"seg_{len(segments) + 1:06d}",
                 start_ms=start_ms,
-                end_ms=None,
+                end_ms=end_ms,
                 speaker=None,
                 text=text,
             )
@@ -78,7 +84,8 @@ def parse_timestamped_transcript(transcript: str) -> tuple[list[TranscriptSegmen
         if segment.start_ms is None:
             segment.end_ms = None
             continue
-        segment.end_ms = following_start_ms if following_start_ms is not None else segment.start_ms
+        if segment.end_ms is None:
+            segment.end_ms = following_start_ms if following_start_ms is not None else segment.start_ms
         following_start_ms = segment.start_ms
 
     warnings = ["missing_timestamps"] if has_missing_timestamps else []

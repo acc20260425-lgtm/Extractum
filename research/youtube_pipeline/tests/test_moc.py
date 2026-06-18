@@ -75,16 +75,33 @@ class MocTranscriptTests(unittest.TestCase):
 
     def test_parse_timestamp_ms_accepts_fractional_and_range_timestamps(self):
         cases = [
-            ("[00:01:02.500] text", 62500, "text"),
-            ("00:01:02,500 text", 62500, "text"),
-            ("00:01:02.500 --> 00:01:04.000 text", 62500, "text"),
+            ("[00:01:02.500] text", 62500, None, "text"),
+            ("00:01:02,500 text", 62500, None, "text"),
+            ("00:01:02.500 --> 00:01:04.000 text", 62500, 64000, "text"),
         ]
 
-        for line, expected_start_ms, expected_text in cases:
+        for line, expected_start_ms, expected_end_ms, expected_text in cases:
             with self.subTest(line=line):
-                start_ms, text = parse_timestamp_ms(line)
+                start_ms, end_ms, text = parse_timestamp_ms(line)
                 self.assertEqual(start_ms, expected_start_ms)
+                self.assertEqual(end_ms, expected_end_ms)
                 self.assertEqual(text, expected_text)
+
+    def test_parse_timestamped_transcript_prefers_explicit_range_end(self):
+        transcript = "\n".join(
+            [
+                "00:00:01.000 --> 00:00:03.000 first",
+                "00:00:05.000 second",
+            ]
+        )
+
+        segments, warnings = parse_timestamped_transcript(transcript)
+
+        self.assertEqual(warnings, [])
+        self.assertEqual(segments[0].start_ms, 1000)
+        self.assertEqual(segments[0].end_ms, 3000)
+        self.assertEqual(segments[1].start_ms, 5000)
+        self.assertEqual(segments[1].end_ms, 5000)
 
     def test_format_segments_for_prompt_keeps_timestamps(self):
         segment = TranscriptSegment("seg_000001", 62000, 62000, None, "hello world")
