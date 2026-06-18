@@ -2028,7 +2028,7 @@ Expected: commit succeeds.
 - No required source changes.
 - Manual run artifacts under `research/youtube_pipeline/runs/` are gitignored.
 
-- [ ] **Step 1: Run the full unit test suite**
+- [x] **Step 1: Run the full unit test suite**
 
 Run:
 
@@ -2038,7 +2038,7 @@ python -m unittest discover -s research/youtube_pipeline/tests -v
 
 Expected: all tests pass.
 
-- [ ] **Step 2: Check registered strategy through CLI help**
+- [x] **Step 2: Check registered strategy through CLI help**
 
 Run:
 
@@ -2055,7 +2055,7 @@ adaptive_book_report
 --chapter-target-words
 ```
 
-- [ ] **Step 3: Optional manual LLM run for Tucker transcript**
+- [x] **Step 3: Optional manual LLM run for Tucker transcript** (skipped: required LLM environment variables are not set)
 
 Only run this when the local LLM endpoint and environment variables are available:
 
@@ -2078,7 +2078,7 @@ Expected:
 - `metrics.json` includes `chapter_count`, `chapter_word_target`, `target_report_words`, `expansion_call_count`, `average_substance_score`, and `substance_multiplier`.
 - `result.md` contains `Generated via adaptive_book_report`, a table of contents, chapter headings, structured analysis sections, and final synthesis.
 
-- [ ] **Step 4: Check git status**
+- [x] **Step 4: Check git status**
 
 Run:
 
