@@ -2,7 +2,14 @@
 
 Date: 2026-06-18
 
-Status: draft for user review.
+Status: implemented and verified on `main`.
+
+Implementation notes:
+
+- `youtube-summary` is the public wrapper skill for normal user-facing runs.
+- `youtube-long-report` remains as a lower-level/manual orchestrator contract
+  for older research notes and child-skill documentation.
+- The agentic workflow remains separate from `runner.py --strategy`.
 
 ## Goal
 
@@ -120,9 +127,28 @@ The v1 workflow should use a small set of skills only where agent reasoning
 adds value. Mechanical stages remain Python scripts called by the top-level
 orchestrator.
 
-### 1. `youtube-long-report`
+### 1. `youtube-summary`
 
-Top-level orchestrator skill.
+Public wrapper skill.
+
+Responsibilities:
+
+- accept the transcript path, output language, target words, and optional run
+  directory;
+- create or resume a run through `start_youtube_summary.py`;
+- read and update `workflow_state.json`;
+- call deterministic Python gates in the documented order;
+- advance state with `advance_youtube_summary_state.py`;
+- dispatch `youtube-map-extract`, `youtube-moc-planning`,
+  `youtube-section-reduce`, and `youtube-report-qa`;
+- pause before map extraction when sub-agents are unavailable;
+- return `final/report.md`, `final/metrics.json`, and any validation warnings.
+
+This is the skill users should ask for directly.
+
+### 2. `youtube-long-report`
+
+Lower-level/manual orchestrator skill.
 
 Responsibilities:
 
@@ -144,9 +170,11 @@ Responsibilities:
 
 This skill should not contain the full writing prompts for every stage. It
 links to child skills and keeps the run lifecycle, artifact paths, failure
-policy, and script invocation order.
+policy, and script invocation order. In the current implementation it is
+retained for manual research runs and legacy documentation; `youtube-summary`
+is the preferred public wrapper because it owns resume state.
 
-### 2. `youtube-map-extract`
+### 3. `youtube-map-extract`
 
 Map extraction skill used by map extractor sub-agents.
 
@@ -162,14 +190,14 @@ Responsibilities:
 This skill contains the prompt contract used by map extractor sub-agents. The
 top-level orchestrator dispatches it with one or more assignment files.
 
-### 3. `youtube-moc-planning`
+### 4. `youtube-moc-planning`
 
 Global Map of Content planning skill.
 
 Responsibilities:
 
 - build planner input using Python tools;
-- ask a long-context model for a MoC JSON plan;
+- use the current agent reasoning context to write a MoC JSON plan;
 - require each MoC node to claim contiguous or thematically related
   `chunk_ids`;
 - validate the MoC shape;
@@ -198,7 +226,7 @@ Inputs:
 Required action:
 1. Read the planner context, map manifest, and transcript stats.
 2. Produce only JSON for `planning/moc.raw.json`.
-3. Ask for a structure plan, not long prose.
+3. Write a structure plan, not long prose.
 4. Assign every planned node explicit `chunk_ids`.
 5. Run `validate_moc.py`.
 6. If validation fails, ask once for corrected JSON or use deterministic
@@ -236,7 +264,7 @@ Rules:
   aligned facts, not from planner inference.
 ```
 
-### 4. `youtube-section-reduce`
+### 5. `youtube-section-reduce`
 
 File-backed section writing skill.
 
@@ -291,7 +319,7 @@ Style rules:
 - Preserve nuance, disagreement, examples, and caveats from the evidence.
 ```
 
-### 5. `youtube-report-qa`
+### 6. `youtube-report-qa`
 
 Coverage and final review skill.
 
@@ -525,6 +553,7 @@ only be allowed for generated workspace files and only when explicitly enabled.
 Use project-local skills:
 
 ```text
+.agents/skills/youtube-summary/SKILL.md
 .agents/skills/youtube-long-report/SKILL.md
 .agents/skills/youtube-long-report/examples/map_assignment_sample.json
 .agents/skills/youtube-long-report/examples/map_output_sample.json
@@ -1106,8 +1135,8 @@ assembly, report assembly, and metrics.
 
 ### Phase 2: Skill Contracts
 
-Create the five v1 skills with concise `SKILL.md` files, clear script calls,
-draft prompt contracts, and example JSON fixtures. Add targeted `.gitignore`
+Create the six v1 skills with concise `SKILL.md` files, clear script calls,
+prompt contracts, and example JSON fixtures. Add targeted `.gitignore`
 exceptions if skills are committed under `.agents`.
 
 ### Phase 3: Agentic Workspace

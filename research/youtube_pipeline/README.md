@@ -6,6 +6,10 @@ YouTube summary LLM pipeline strategies.
 It reads local transcript files and writes run artifacts under
 `research/youtube_pipeline/runs/`.
 
+For the boundary between the legacy direct-LLM runner and the newer
+file-backed agentic workflow, see
+`research/youtube_pipeline/RUNNER_AND_AGENTIC_WORKFLOW.md`.
+
 ## Environment
 
 Set these variables for an OpenAI-compatible chat completions endpoint:
@@ -103,7 +107,8 @@ python -m research.youtube_pipeline.runner `
 ## Agentic MoC Skills Workflow
 
 The agentic workflow is skill-first and file-backed. It does not add a normal
-`runner.py --strategy` entry point in v1.
+`runner.py --strategy` entry point in v1. For normal use, start with the public
+`youtube-summary` skill.
 
 ### Public Wrapper Skill
 
@@ -124,20 +129,30 @@ Map extraction still requires sub-agents. If sub-agents are unavailable before
 map extraction, the skill pauses instead of replacing extractor work with direct
 LLM API calls or hidden main-agent reasoning.
 
-Use the `youtube-long-report` skill with:
+`youtube-long-report` remains as a lower-level/manual orchestrator contract for
+older research notes and child-skill documentation. Prefer `youtube-summary`
+for user-facing runs because it owns run creation/resume state and the
+`workflow_state.json` stage chain.
 
-1. transcript path;
-2. output run directory;
-3. output language;
-4. target report word count.
+The underlying bootstrap command is:
 
-The skill runs deterministic Python tools for transcript prep, assignments,
-validation, fact dedupe, alignment, QA artifacts, structured analysis, and final
-assembly. Map extraction is performed by sub-agents through file contracts. MoC
-planning and section writing are performed by skills and, after valid map
-outputs exist, section writing may fall back to sequential main-agent execution
-using the same section contract. Direct LLM API calls are not used in this
-workflow.
+```powershell
+python -m research.youtube_pipeline.tools.start_youtube_summary `
+  --transcript <path> `
+  --language ru `
+  --target-words 10000
+```
+
+After a deterministic gate succeeds, advance run state with:
+
+```powershell
+python -m research.youtube_pipeline.tools.advance_youtube_summary_state `
+  --run-dir <run-dir> `
+  --after <step>
+```
+
+The accepted stage after map artifact assembly is `map_assembled`, not
+`map_artifacts_ready`.
 
 Minimal deterministic validation:
 
@@ -152,7 +167,9 @@ python -m research.youtube_pipeline.tools.prep_all `
 python -m unittest research.youtube_pipeline.tests.test_agentic_moc
 ```
 
-AI monk:
+### Additional Direct-LLM Runner Example
+
+AI monk with the legacy runner:
 
 ```powershell
 python -m research.youtube_pipeline.runner `

@@ -2,6 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+Status: implemented and verified. The original plan created the lower-level
+agentic workflow and `youtube-long-report` contract. Later hardening added the
+public `youtube-summary` wrapper, `workflow_state.json` run state, and
+`advance_youtube_summary_state.py`; use `youtube-summary` for normal
+user-facing runs.
+
 **Goal:** Build a file-backed agentic MoC workflow for long YouTube transcript reports where Python provides deterministic tooling and Codex skills/sub-agents perform all LLM reasoning, with no direct LLM API calls in the v1 agentic path.
 
 **Architecture:** Add a new skill-first workflow beside the existing Python strategies. Python prepares transcript chunks, map assignments, manifests, validation reports, planner context, dedupe/alignment artifacts, structured analysis, report assembly, and quality metrics. Project-local Codex skills orchestrate the workflow and delegate content reasoning to sub-agents through file assignments and file outputs.
@@ -36,6 +42,11 @@ research/youtube_pipeline/tools/assemble_report.py
 research/youtube_pipeline/tools/quality_check.py
 research/youtube_pipeline/tests/test_agentic_moc.py
 research/youtube_pipeline/tests/fixtures/agentic_tiny_transcript.txt
+research/youtube_pipeline/youtube_summary_workflow.py
+research/youtube_pipeline/tools/start_youtube_summary.py
+research/youtube_pipeline/tools/update_youtube_summary_state.py
+research/youtube_pipeline/tools/advance_youtube_summary_state.py
+.agents/skills/youtube-summary/SKILL.md
 .agents/skills/youtube-long-report/SKILL.md
 .agents/skills/youtube-long-report/examples/map_assignment_sample.json
 .agents/skills/youtube-long-report/examples/map_output_sample.json
@@ -548,7 +559,8 @@ python -m unittest research.youtube_pipeline.tests.test_agentic_moc
 **Steps:**
 
 - [x] Add tests that verify every skill file exists, references only existing Python tools, includes no direct LLM API invocation instructions, and includes required output contracts.
-- [x] `youtube-long-report` must be the orchestrator skill. It runs Python prep tools, dispatches map sub-agents, validates outputs, asks the planner skill for `planning/moc.raw.json`, runs MoC validation to produce `planning/moc.json`, prepares section assignments, dispatches section sub-agents, writes overview/synthesis, runs QA, builds structured analysis, and assembles the final report.
+- [x] `youtube-long-report` must be the lower-level/manual orchestrator contract. It runs Python prep tools, dispatches map sub-agents, validates outputs, asks the planner skill for `planning/moc.raw.json`, runs MoC validation to produce `planning/moc.json`, prepares section assignments, dispatches section sub-agents, writes overview/synthesis, runs QA, builds structured analysis, and assembles the final report.
+- [x] `youtube-summary` must be the public wrapper skill for normal runs. It creates or resumes a run, reads `workflow_state.json`, advances state with `advance_youtube_summary_state.py`, and delegates reasoning stages to child skills.
 - [x] `youtube-map-extract` must accept one assignment JSON and write exactly the declared `output_file`.
 - [x] `youtube-moc-planning` must consume `planning/planner_context.md` and write planner JSON to `planning/moc.raw.json`; Python validation produces the normalized `planning/moc.json`.
 - [x] `youtube-section-reduce` must accept one assignment object from `alignment/section_assignments.jsonl` and write exactly the declared section file.
@@ -580,11 +592,11 @@ Expected `git check-ignore` result: `not ignored` for the YouTube skill files.
 
 ```text
 Agentic MoC skills workflow:
-1. Use the youtube-long-report skill.
-2. Provide transcript path and output run directory.
-3. The skill runs Python prep tools.
-4. Map and section writing are delegated to sub-agents.
-5. Python validates, assembles, and writes final/report.md.
+1. Use the youtube-summary skill.
+2. Provide transcript path, output language, and target word count.
+3. The wrapper creates or resumes workflow_state.json.
+4. Map extraction is delegated to sub-agents.
+5. Python validates, advances state, assembles, and writes final/report.md.
 ```
 
 - [x] Include the minimal command sequence for deterministic tool-only validation:
@@ -606,7 +618,7 @@ git status --short
 - [x] Commit the completed implementation with:
 
 ```powershell
-git add .gitignore .agents/skills/youtube-long-report .agents/skills/youtube-map-extract .agents/skills/youtube-moc-planning .agents/skills/youtube-section-reduce .agents/skills/youtube-report-qa research/youtube_pipeline
+git add .gitignore .agents/skills/youtube-summary .agents/skills/youtube-long-report .agents/skills/youtube-map-extract .agents/skills/youtube-moc-planning .agents/skills/youtube-section-reduce .agents/skills/youtube-report-qa research/youtube_pipeline
 git commit -m "feat: add agentic MoC skills workflow"
 ```
 
@@ -614,13 +626,13 @@ git commit -m "feat: add agentic MoC skills workflow"
 
 ## Review Checklist
 
-- [ ] No direct LLM API calls exist in the agentic workflow.
-- [ ] Every sub-agent output is file-backed and validated before downstream use.
-- [ ] Resume hash scopes are explicit per stage.
-- [ ] Fact dedupe preserves `source_timestamps` and `source_chunk_ids`.
-- [ ] Fact-to-section alignment is deterministic by chunk ID.
-- [ ] Overview and synthesis generation ownership is documented.
-- [ ] Structured analysis is deterministic and built from fact clusters.
-- [ ] Skill files are tracked despite the broader `.agents` ignore rule.
-- [ ] Tests cover deterministic tools without network access.
-- [ ] The final report has an unobtrusive source note saying it summarizes a video/transcript.
+- [x] No direct LLM API calls exist in the agentic workflow.
+- [x] Every sub-agent output is file-backed and validated before downstream use.
+- [x] Resume hash scopes are explicit per stage.
+- [x] Fact dedupe preserves `source_timestamps` and `source_chunk_ids`.
+- [x] Fact-to-section alignment is deterministic by chunk ID.
+- [x] Overview and synthesis generation ownership is documented.
+- [x] Structured analysis is deterministic and built from fact clusters.
+- [x] Skill files are tracked despite the broader `.agents` ignore rule.
+- [x] Tests cover deterministic tools without network access.
+- [x] The final report has an unobtrusive source note saying it summarizes a video/transcript.

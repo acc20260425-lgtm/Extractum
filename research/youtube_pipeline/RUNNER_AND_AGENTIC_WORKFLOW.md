@@ -161,6 +161,13 @@ Public wrapper skill:
 .agents/skills/youtube-summary/SKILL.md
 ```
 
+Lower-level/manual orchestration contract retained for older research notes and
+child-skill documentation:
+
+```text
+.agents/skills/youtube-long-report/SKILL.md
+```
+
 Child skills:
 
 ```text
@@ -326,6 +333,11 @@ Use `youtube-summary` when:
   contracts;
 - Python must stay deterministic and avoid direct LLM API reasoning calls.
 
+Use `youtube-long-report` only when working directly with the older manual
+orchestrator contract. It is not the preferred public entry point because it
+does not own the resume-oriented `workflow_state.json` wrapper flow that
+`youtube-summary` provides.
+
 ## Testing
 
 Runner-focused tests:
@@ -345,4 +357,3 @@ Full YouTube pipeline tests:
 ```powershell
 python -m unittest discover research/youtube_pipeline/tests
 ```
-

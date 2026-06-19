@@ -1,13 +1,18 @@
 ---
 name: youtube-long-report
-description: Use when creating a long file-backed report from a YouTube transcript with agentic MoC map-reduce artifacts.
+description: Use for lower-level/manual orchestration of a long file-backed YouTube report when the public youtube-summary wrapper is not being used.
 ---
 
 # YouTube Long Report
 
 ## Overview
 
-Use this as the orchestrator for the agentic MoC workflow. Python owns deterministic mechanics; agent and sub-agent reasoning owns extraction, planning, section prose, and review notes.
+Use this as the lower-level/manual orchestrator contract for the agentic MoC
+workflow. For normal user-facing runs, prefer the public `youtube-summary`
+wrapper, because it creates or resumes runs and owns `workflow_state.json`.
+
+Python owns deterministic mechanics; agent and sub-agent reasoning owns
+extraction, planning, section prose, and review notes.
 
 Direct LLM API calls are forbidden in this workflow. Do not replace map extraction, MoC planning, section writing, or QA judgment with Python API calls.
 
@@ -18,6 +23,24 @@ Direct LLM API calls are forbidden in this workflow. Do not replace map extracti
 - output language
 - target report words
 - optional chunk/token settings
+
+## Relationship To `youtube-summary`
+
+`youtube-summary` is the public wrapper skill. It starts or resumes a run with:
+
+```powershell
+python -m research.youtube_pipeline.tools.start_youtube_summary --transcript <path> --language <language> --target-words <words>
+```
+
+It then advances `workflow_state.json` after deterministic gates with:
+
+```powershell
+python -m research.youtube_pipeline.tools.advance_youtube_summary_state --run-dir <run-dir> --after <step>
+```
+
+Use this `youtube-long-report` skill only for manual research runs, legacy notes,
+or child-skill contract work where the wrapper state machine is not the entry
+point.
 
 ## Workflow
 
