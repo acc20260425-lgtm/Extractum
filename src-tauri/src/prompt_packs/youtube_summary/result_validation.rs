@@ -1169,6 +1169,23 @@ mod tests {
     }
 
     #[test]
+    fn canonical_result_schema_allows_runtime_string_limitations() {
+        let mut canonical = valid_canonical_result();
+        canonical["limitations"] = serde_json::json!([
+            "Synthesis is not applicable to a single-video YouTube Summary run."
+        ]);
+        canonical["quality_flags"] = serde_json::json!([{
+            "flag": "synthesis_not_applicable_single_video",
+            "severity": "info"
+        }]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert!(!has_error(&findings), "findings: {findings:#?}");
+    }
+
+    #[test]
     fn run_id_mismatch_returns_error() {
         let mut canonical = valid_canonical_result();
         canonical["run_id"] = serde_json::json!(43);
