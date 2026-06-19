@@ -1,10 +1,11 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
 use serde::Deserialize;
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 use super::dto::{
     PromptPackRunEvent, PromptPackRunSummaryDto, PromptPackStageRunDto,
@@ -51,7 +52,7 @@ struct StageBudgetLimits {
 #[derive(Default)]
 pub struct PromptPackRunState {
     active: Mutex<HashSet<i64>>,
-    cancel_requested: Mutex<HashSet<i64>>,
+    cancellation_tokens: Mutex<HashMap<i64, CancellationToken>>,
 }
 
 impl PromptPackRunState {
@@ -61,25 +62,40 @@ impl PromptPackRunState {
 
     pub async fn track(&self, run_id: i64) -> AppResult<()> {
         self.active.lock().await.insert(run_id);
+        self.ensure_cancellation_token(run_id).await;
         Ok(())
     }
 
     pub async fn track_if_absent(&self, run_id: i64) -> AppResult<bool> {
-        Ok(self.active.lock().await.insert(run_id))
+        let inserted = self.active.lock().await.insert(run_id);
+        self.ensure_cancellation_token(run_id).await;
+        Ok(inserted)
     }
 
     pub async fn request_cancel(&self, run_id: i64) -> AppResult<()> {
-        self.cancel_requested.lock().await.insert(run_id);
+        self.ensure_cancellation_token(run_id).await.cancel();
         Ok(())
     }
 
     pub async fn is_cancel_requested(&self, run_id: i64) -> bool {
-        self.cancel_requested.lock().await.contains(&run_id)
+        self.cancellation_tokens
+            .lock()
+            .await
+            .get(&run_id)
+            .is_some_and(CancellationToken::is_cancelled)
+    }
+
+    pub async fn child_token(&self, run_id: i64) -> Option<CancellationToken> {
+        self.cancellation_tokens
+            .lock()
+            .await
+            .get(&run_id)
+            .map(CancellationToken::child_token)
     }
 
     pub async fn finish(&self, run_id: i64) {
         self.active.lock().await.remove(&run_id);
-        self.cancel_requested.lock().await.remove(&run_id);
+        self.cancellation_tokens.lock().await.remove(&run_id);
     }
 
     pub async fn active_run_ids(&self) -> Vec<i64> {
@@ -95,6 +111,15 @@ impl PromptPackRunState {
         ) {
             self.finish(event.run_id).await;
         }
+    }
+
+    async fn ensure_cancellation_token(&self, run_id: i64) -> CancellationToken {
+        self.cancellation_tokens
+            .lock()
+            .await
+            .entry(run_id)
+            .or_insert_with(CancellationToken::new)
+            .clone()
     }
 }
 
@@ -1346,6 +1371,25 @@ mod tests {
         state.finish(42).await;
         assert!(!state.active_run_ids().await.contains(&42));
         assert!(state.active_run_ids().await.contains(&43));
+    }
+
+    #[tokio::test]
+    async fn prompt_pack_run_state_cancels_child_tokens() {
+        let state = PromptPackRunState::new();
+
+        state.track(42).await.expect("track");
+        let child = state.child_token(42).await.expect("child token");
+        assert!(!child.is_cancelled());
+
+        state.request_cancel(42).await.expect("cancel");
+
+        tokio::time::timeout(std::time::Duration::from_secs(1), child.cancelled())
+            .await
+            .expect("child token cancelled");
+        assert!(state.is_cancel_requested(42).await);
+
+        state.finish(42).await;
+        assert!(state.child_token(42).await.is_none());
     }
 
     #[tokio::test]
