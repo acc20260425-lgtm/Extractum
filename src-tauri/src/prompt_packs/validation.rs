@@ -1,5 +1,7 @@
 use std::collections::HashSet;
+use std::sync::OnceLock;
 
+use jsonschema::Validator;
 use sqlx::SqlitePool;
 
 use super::stage_io::TranscriptAnalysisStageInput;
@@ -24,23 +26,7 @@ pub(crate) fn validate_transcript_analysis_output(
     input: &TranscriptAnalysisStageInput,
     output: &serde_json::Value,
 ) -> Result<(), PromptPackValidationError> {
-    expect_string(output, "stage_io_version", "1.0")?;
-    expect_string(output, "schema_version", "1.0")?;
-    expect_string(output, "stage", "youtube_summary/transcript_analysis")?;
-    for key in [
-        "video_candidate",
-        "claim_candidates",
-        "evidence_fragment_candidates",
-        "warning_candidates",
-    ] {
-        if output.get(key).is_none() {
-            return Err(PromptPackValidationError {
-                message: format!("missing required key {key}"),
-                object_path: Some(format!("$.{key}")),
-            });
-        }
-    }
-
+    validate_transcript_analysis_output_schema(output)?;
     reject_backend_owned_ids(output, "$")?;
     let allowed_material_refs = input
         .allowed_material_refs
@@ -49,6 +35,59 @@ pub(crate) fn validate_transcript_analysis_output(
         .collect::<HashSet<_>>();
     reject_unknown_material_refs(output, "$", &allowed_material_refs)?;
     Ok(())
+}
+
+fn validate_transcript_analysis_output_schema(
+    output: &serde_json::Value,
+) -> Result<(), PromptPackValidationError> {
+    transcript_analysis_output_validator().and_then(|validator| {
+        validator.validate(output).map_err(|error| {
+            let object_path =
+                jsonschema_instance_path_to_object_path(&error.instance_path().to_string());
+            PromptPackValidationError {
+                message: format!("schema validation failed at {object_path}: {error}"),
+                object_path: Some(object_path),
+            }
+        })
+    })
+}
+
+fn transcript_analysis_output_validator() -> Result<&'static Validator, PromptPackValidationError> {
+    static VALIDATOR: OnceLock<Result<Validator, String>> = OnceLock::new();
+    VALIDATOR
+        .get_or_init(|| {
+            let schema: serde_json::Value = serde_json::from_str(include_str!(
+                "../../prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-transcript-analysis-output.json"
+            ))
+            .map_err(|error| format!("invalid transcript analysis output schema JSON: {error}"))?;
+            jsonschema::validator_for(&schema)
+                .map_err(|error| format!("invalid transcript analysis output schema: {error}"))
+        })
+        .as_ref()
+        .map_err(|message| PromptPackValidationError {
+            message: message.clone(),
+            object_path: Some("$".to_string()),
+        })
+}
+
+fn jsonschema_instance_path_to_object_path(instance_path: &str) -> String {
+    if instance_path.is_empty() {
+        return "$".to_string();
+    }
+
+    let mut object_path = "$".to_string();
+    for segment in instance_path.trim_start_matches('/').split('/') {
+        let segment = segment.replace("~1", "/").replace("~0", "~");
+        if segment.chars().all(|character| character.is_ascii_digit()) {
+            object_path.push('[');
+            object_path.push_str(&segment);
+            object_path.push(']');
+        } else {
+            object_path.push('.');
+            object_path.push_str(&segment);
+        }
+    }
+    object_path
 }
 
 pub(crate) async fn validate_and_quarantine_transcript_analysis_output(
@@ -599,6 +638,26 @@ mod tests {
             validate_transcript_analysis_output(&input, &output).expect_err("final ids rejected");
 
         assert!(error.message.contains("claim_id"));
+    }
+
+    #[test]
+    fn transcript_analysis_output_rejects_structural_schema_errors() {
+        let input = test_stage_input_with_material_refs(["m_transcript_1"]);
+        let output = serde_json::json!({
+            "stage_io_version": "1.0",
+            "schema_version": "1.0",
+            "stage": "youtube_summary/transcript_analysis",
+            "video_candidate": "not an object",
+            "claim_candidates": [],
+            "evidence_fragment_candidates": [],
+            "warning_candidates": []
+        });
+
+        let error = validate_transcript_analysis_output(&input, &output)
+            .expect_err("schema structural error rejected");
+
+        assert!(error.message.contains("video_candidate"));
+        assert_eq!(error.object_path.as_deref(), Some("$.video_candidate"));
     }
 
     #[test]
