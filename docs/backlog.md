@@ -1,6 +1,6 @@
 # Extractum Backlog
 
-> **Updated:** 2026-06-13
+> **Updated:** 2026-06-19
 > **Rule:** this file tracks open work only. Shipped work belongs in current-state docs and Git history.
 
 ## 1. Priority Snapshot
@@ -89,6 +89,13 @@ Priority: medium.
 
 - [ ] add CI for frontend tests, Svelte check, Rust tests, Rust lint, formatting, and `git diff --check`
 - [ ] verify Telegram and LLM event-driven UI flows after the next major backend changes
+- [ ] finish cancellation-token migration for analysis report/chat runs; keep
+  scheduler capacity and domain snapshots unchanged, but replace remaining
+  in-memory cancelled-run sets with `CancellationToken`-style run state where it
+  reduces custom synchronization
+- [ ] run live cancellation smoke tests for Prompt Pack, YouTube source jobs,
+  Takeout imports, and analysis runs through the normal Tauri command/UI paths,
+  confirming terminal events, cleanup, and partial-work semantics
 
 ### 3.5 Frontend Workspace Evolution
 
