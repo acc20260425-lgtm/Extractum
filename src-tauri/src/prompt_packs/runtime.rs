@@ -34,6 +34,9 @@ const TRANSCRIPT_ANALYSIS_STAGE_JSON: &str =
     include_str!("../../prompt-packs/youtube_summary/1.0.0/runtime/transcript_analysis.json");
 const SYNTHESIS_STAGE_JSON: &str =
     include_str!("../../prompt-packs/youtube_summary/1.0.0/runtime/synthesis.json");
+#[cfg(debug_assertions)]
+const PROMPT_PACK_CANCELLATION_SMOKE_FIXTURE_LABEL: &str =
+    "__prompt_pack_cancellation_smoke_fixture__";
 
 #[derive(Deserialize)]
 struct StageRuntimeConfigAsset {
@@ -1176,6 +1179,108 @@ pub async fn cleanup_interrupted_prompt_pack_runs(handle: AppHandle) {
     }
 }
 
+#[cfg(debug_assertions)]
+#[tauri::command]
+pub async fn seed_prompt_pack_cancellation_smoke_fixture(
+    handle: AppHandle,
+    state: State<'_, PromptPackRunState>,
+) -> AppResult<PromptPackRunSummaryDto> {
+    let pool = get_pool(&handle).await?;
+    seed_prompt_pack_cancellation_smoke_fixture_in_pool(&pool, state.inner()).await
+}
+
+#[cfg(debug_assertions)]
+#[tauri::command]
+pub async fn clear_prompt_pack_cancellation_smoke_fixture(
+    handle: AppHandle,
+    state: State<'_, PromptPackRunState>,
+) -> AppResult<i64> {
+    let pool = get_pool(&handle).await?;
+    clear_prompt_pack_cancellation_smoke_fixture_in_pool(&pool, state.inner()).await
+}
+
+#[cfg(debug_assertions)]
+async fn seed_prompt_pack_cancellation_smoke_fixture_in_pool(
+    pool: &SqlitePool,
+    state: &PromptPackRunState,
+) -> AppResult<PromptPackRunSummaryDto> {
+    clear_prompt_pack_cancellation_smoke_fixture_in_pool(pool, state).await?;
+    let pack_version_id = sqlx::query_scalar::<_, i64>(
+        "SELECT id FROM prompt_pack_versions
+         WHERE pack_id = 'youtube_summary' AND pack_version = '1.0.0' AND schema_version = '1.0'
+         LIMIT 1",
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::database)?;
+    let now = now_string();
+    let run_id = sqlx::query_scalar::<_, i64>(
+        "INSERT INTO prompt_pack_runs (
+            pack_version_id, pack_id, pack_version, schema_version, run_status,
+            result_status, provider_profile_id, model, output_language, control_preset,
+            evidence_mode, include_comments, latest_message, progress_current,
+            progress_total, created_at, started_at, updated_at, run_label
+         )
+         VALUES (
+            ?, 'youtube_summary', '1.0.0', '1.0', 'running',
+            'none', '__prompt_pack_cancellation_smoke_fixture__', 'smoke-model',
+            'en', 'standard', 'standard', 0, 'Prompt Pack cancellation smoke fixture running',
+            0, 1, ?, ?, ?, ?
+         )
+         RETURNING id",
+    )
+    .bind(pack_version_id)
+    .bind(&now)
+    .bind(&now)
+    .bind(&now)
+    .bind(PROMPT_PACK_CANCELLATION_SMOKE_FIXTURE_LABEL)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::database)?;
+    state.track(run_id).await?;
+    load_run_summary_optional(pool, run_id)
+        .await?
+        .ok_or_else(|| AppError::not_found(format!("Prompt Pack run {run_id} not found")))
+}
+
+#[cfg(debug_assertions)]
+async fn clear_prompt_pack_cancellation_smoke_fixture_in_pool(
+    pool: &SqlitePool,
+    state: &PromptPackRunState,
+) -> AppResult<i64> {
+    let run_ids = prompt_pack_cancellation_smoke_fixture_run_ids(pool).await?;
+    for run_id in &run_ids {
+        state.request_cancel(*run_id).await?;
+        state.finish(*run_id).await;
+    }
+    if run_ids.is_empty() {
+        return Ok(0);
+    }
+    let mut deleted = 0;
+    for run_id in run_ids {
+        let result = sqlx::query("DELETE FROM prompt_pack_runs WHERE id = ?")
+            .bind(run_id)
+            .execute(pool)
+            .await
+            .map_err(AppError::database)?;
+        deleted += result.rows_affected() as i64;
+    }
+    Ok(deleted)
+}
+
+#[cfg(debug_assertions)]
+async fn prompt_pack_cancellation_smoke_fixture_run_ids(pool: &SqlitePool) -> AppResult<Vec<i64>> {
+    sqlx::query_scalar(
+        "SELECT id FROM prompt_pack_runs
+         WHERE run_label = ?
+         ORDER BY id",
+    )
+    .bind(PROMPT_PACK_CANCELLATION_SMOKE_FIXTURE_LABEL)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::database)
+}
+
 pub(crate) async fn list_prompt_pack_runs_in_pool(
     pool: &SqlitePool,
     request: super::dto::ListPromptPackRunsRequest,
@@ -1388,8 +1493,10 @@ fn now_string() -> String {
 mod tests {
     use super::{
         build_synthesis_llm_request, build_transcript_analysis_llm_request,
-        cleanup_interrupted_prompt_pack_runs_in_pool, delete_prompt_pack_run_in_pool,
+        cleanup_interrupted_prompt_pack_runs_in_pool,
+        clear_prompt_pack_cancellation_smoke_fixture_in_pool, delete_prompt_pack_run_in_pool,
         list_prompt_pack_runs_in_pool, now_string, run_with_prompt_pack_run_cancellation,
+        seed_prompt_pack_cancellation_smoke_fixture_in_pool,
         synthesis_stage_max_output_token_budget, transcript_analysis_max_output_tokens,
         transcript_analysis_stage_max_output_token_budget,
         transcript_analysis_stage_max_output_token_budget_for_control_preset,
@@ -1452,6 +1559,51 @@ mod tests {
 
         state.finish(42).await;
         assert!(state.child_token(42).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn prompt_pack_cancellation_smoke_fixture_tracks_active_run() {
+        let pool = test_pool_with_prompt_pack_runs([]).await;
+        let state = PromptPackRunState::new();
+
+        let run = seed_prompt_pack_cancellation_smoke_fixture_in_pool(&pool, &state)
+            .await
+            .expect("seed smoke fixture");
+
+        assert_eq!(run.run_status, "running");
+        assert_eq!(
+            run.run_label.as_deref(),
+            Some(super::PROMPT_PACK_CANCELLATION_SMOKE_FIXTURE_LABEL)
+        );
+        assert!(state.active_run_ids().await.contains(&run.run_id));
+        assert!(state.child_token(run.run_id).await.is_some());
+    }
+
+    #[tokio::test]
+    async fn prompt_pack_cancellation_smoke_fixture_clear_cancels_tokens_and_deletes_rows() {
+        let pool = test_pool_with_prompt_pack_runs([]).await;
+        let state = PromptPackRunState::new();
+        let run = seed_prompt_pack_cancellation_smoke_fixture_in_pool(&pool, &state)
+            .await
+            .expect("seed smoke fixture");
+        let child = state.child_token(run.run_id).await.expect("child token");
+
+        let deleted = clear_prompt_pack_cancellation_smoke_fixture_in_pool(&pool, &state)
+            .await
+            .expect("clear smoke fixture");
+
+        assert_eq!(deleted, 1);
+        tokio::time::timeout(std::time::Duration::from_secs(1), child.cancelled())
+            .await
+            .expect("fixture child token cancelled");
+        assert!(!state.active_run_ids().await.contains(&run.run_id));
+        let row_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_runs WHERE run_label = ?")
+                .bind(super::PROMPT_PACK_CANCELLATION_SMOKE_FIXTURE_LABEL)
+                .fetch_one(&pool)
+                .await
+                .expect("count smoke rows");
+        assert_eq!(row_count, 0);
     }
 
     #[tokio::test]

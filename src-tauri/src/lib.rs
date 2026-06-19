@@ -27,6 +27,10 @@ use prompt_packs::{
     preflight_youtube_summary_run, start_youtube_summary_run, update_prompt_pack_run,
     PromptPackRunState,
 };
+#[cfg(debug_assertions)]
+use prompt_packs::{
+    clear_prompt_pack_cancellation_smoke_fixture, seed_prompt_pack_cancellation_smoke_fixture,
+};
 use prompt_packs::{get_prompt_pack_library, seed_builtin_prompt_packs};
 use prompt_packs::{
     get_prompt_pack_result, get_prompt_pack_stage_artifact, get_prompt_pack_validation_findings,
@@ -206,6 +210,10 @@ pub fn run() {
             get_prompt_pack_stage_artifact,
             get_prompt_pack_validation_findings,
             list_prompt_pack_audit_events,
+            #[cfg(debug_assertions)]
+            seed_prompt_pack_cancellation_smoke_fixture,
+            #[cfg(debug_assertions)]
+            clear_prompt_pack_cancellation_smoke_fixture,
             get_source_identity_repair_status,
             preview_source_identity_repair,
             audit_legacy_telegram_source_metadata,
