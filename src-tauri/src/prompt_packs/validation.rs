@@ -60,12 +60,31 @@ fn normalize_transcript_analysis_output_for_schema(
         return normalized;
     };
 
-    copy_alias_to_canonical_key(map, "stageIoVersion", "stage_io_version");
-    copy_alias_to_canonical_key(map, "schemaVersion", "schema_version");
+    normalize_stage_output_envelope(map);
     map.entry("warning_candidates".to_string())
         .or_insert_with(|| serde_json::json!([]));
 
     normalized
+}
+
+fn normalize_synthesis_output_for_schema(output: &serde_json::Value) -> serde_json::Value {
+    let mut normalized = output.clone();
+    let Some(map) = normalized.as_object_mut() else {
+        return normalized;
+    };
+
+    normalize_stage_output_envelope(map);
+    map.entry("limitations".to_string())
+        .or_insert_with(|| serde_json::json!([]));
+    map.entry("warning_candidates".to_string())
+        .or_insert_with(|| serde_json::json!([]));
+
+    normalized
+}
+
+fn normalize_stage_output_envelope(map: &mut serde_json::Map<String, serde_json::Value>) {
+    copy_alias_to_canonical_key(map, "stageIoVersion", "stage_io_version");
+    copy_alias_to_canonical_key(map, "schemaVersion", "schema_version");
 }
 
 fn copy_alias_to_canonical_key(
@@ -219,8 +238,9 @@ pub(crate) fn validate_synthesis_output(
 fn validate_synthesis_output_schema(
     output: &serde_json::Value,
 ) -> Result<(), PromptPackValidationError> {
+    let output = normalize_synthesis_output_for_schema(output);
     synthesis_output_validator().and_then(|validator| {
-        validator.validate(output).map_err(|error| {
+        validator.validate(&output).map_err(|error| {
             let object_path = jsonschema_error_object_path(&error);
             PromptPackValidationError {
                 message: format!("schema validation failed at {object_path}: {error}"),
@@ -870,6 +890,32 @@ mod tests {
 
         assert!(error.message.contains("schema_version"));
         assert_eq!(error.object_path.as_deref(), Some("$.schema_version"));
+    }
+
+    #[test]
+    fn synthesis_output_accepts_legacy_camel_case_envelope_aliases() {
+        let mut output = valid_synthesis_output();
+        output
+            .as_object_mut()
+            .expect("output object")
+            .remove("stage_io_version");
+        output
+            .as_object_mut()
+            .expect("output object")
+            .remove("schema_version");
+        output
+            .as_object_mut()
+            .expect("output object")
+            .remove("limitations");
+        output
+            .as_object_mut()
+            .expect("output object")
+            .remove("warning_candidates");
+        output["stageIoVersion"] = serde_json::json!("1.0");
+        output["schemaVersion"] = serde_json::json!("1.0");
+
+        validate_synthesis_output(&output, &allowed_synthesis_source_refs())
+            .expect("legacy aliases accepted");
     }
 
     #[test]
