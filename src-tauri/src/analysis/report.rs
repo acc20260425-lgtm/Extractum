@@ -1,9 +1,11 @@
+use std::future::Future;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use sqlx::{Pool, Sqlite};
 use tauri::{AppHandle, Manager};
 use tokio::task::JoinSet;
+use tokio_util::sync::CancellationToken;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
@@ -512,6 +514,27 @@ struct ReducePhaseResult {
     completion: LlmCompletion,
 }
 
+async fn run_analysis_step_with_cancel<Fut, T>(
+    cancellation_token: Option<CancellationToken>,
+    future: Fut,
+) -> Result<T, LlmRequestError>
+where
+    Fut: Future<Output = Result<T, LlmRequestError>>,
+{
+    let Some(cancellation_token) = cancellation_token else {
+        return future.await;
+    };
+
+    if cancellation_token.is_cancelled() {
+        return Err(LlmRequestError::Cancelled);
+    }
+
+    tokio::select! {
+        result = future => result,
+        _ = cancellation_token.cancelled() => Err(LlmRequestError::Cancelled),
+    }
+}
+
 async fn run_map_phase(
     ctx: &ReportPipelineContext,
     chunks: Vec<Vec<CorpusMessage>>,
@@ -540,6 +563,11 @@ async fn run_map_phase(
         let chunk_counter = completed_chunks.clone();
         let chunk_message_count = chunk.len() as i64;
         let run_id = ctx.run_id;
+        let cancellation_token = ctx
+            .handle
+            .state::<AnalysisState>()
+            .report_run_child_token(ctx.run_id)
+            .await;
 
         join_set.spawn(async move {
             let scheduler = task_handle.state::<LlmSchedulerState>();
@@ -563,6 +591,7 @@ async fn run_map_phase(
             let cancelled_request_id = chunk_request_id.clone();
             let scheduled_request = chunk_request.clone();
             let scheduled_profile = task_profile.clone();
+            let step_cancellation_token = cancellation_token.clone();
 
             match scheduler
                 .run_request(
@@ -597,12 +626,14 @@ async fn run_map_phase(
                             )
                             .emit(&started_handle);
 
-                        control
-                            .run_cancellable(run_llm_collect_with_profile(
+                        run_analysis_step_with_cancel(
+                            step_cancellation_token,
+                            control.run_cancellable(run_llm_collect_with_profile(
                                 &scheduled_request,
                                 &scheduled_profile,
-                            ))
-                            .await
+                            )),
+                        )
+                        .await
                     },
                 )
                 .await
@@ -727,6 +758,11 @@ async fn run_reduce_phase(
     let reduce_request_for_stream = reduce_request.clone();
     let reduce_profile = ctx.resolved_profile.clone();
     let run_id = ctx.run_id;
+    let cancellation_token = ctx
+        .handle
+        .state::<AnalysisState>()
+        .report_run_child_token(ctx.run_id)
+        .await;
     let completion = match scheduler
         .run_request(
             LlmRequestMetadata {
@@ -750,8 +786,9 @@ async fn run_reduce_phase(
                     .message("Writing final report...".to_string())
                     .emit(&started_handle);
 
-                control
-                    .run_cancellable(run_llm_stream_with_profile(
+                run_analysis_step_with_cancel(
+                    cancellation_token,
+                    control.run_cancellable(run_llm_stream_with_profile(
                         &reduce_request_for_stream,
                         &reduce_profile,
                         |delta| {
@@ -760,8 +797,9 @@ async fn run_reduce_phase(
                                 .delta(delta.to_string())
                                 .emit(&delta_handle);
                         },
-                    ))
-                    .await
+                    )),
+                )
+                .await
             },
         )
         .await
@@ -1267,15 +1305,17 @@ mod tests {
         build_map_request, build_reduce_request, capture_report_corpus,
         chunk_target_chars_for_model_input_limit, extract_json_payload, finish_map_phase,
         mark_interrupted_analysis_runs, parse_chunk_summary,
-        resolve_analysis_telegram_history_scope, validate_report_preflight, ReduceRequestParams,
-        ReportRunError, ReportRunInput, StartAnalysisReportRequest,
+        resolve_analysis_telegram_history_scope, run_analysis_step_with_cancel,
+        validate_report_preflight, ReduceRequestParams, ReportRunError, ReportRunInput,
+        StartAnalysisReportRequest,
     };
     use crate::analysis::corpus::{
         AnalysisRunPreflight, AnalysisRunPreflightLimits, CorpusLoadRequest, YoutubeCorpusMode,
     };
     use crate::analysis::models::{AnalysisPromptTemplate, ChunkSummary, CorpusMessage};
     use crate::error::AppErrorKind;
-    use crate::llm::{ProviderKind, ResolvedLlmProfile};
+    use crate::llm::{LlmRequestError, ProviderKind, ResolvedLlmProfile};
+    use tokio_util::sync::CancellationToken;
 
     const SAMPLE_JSON: &str = r#"{"summary":"Brief","topics":["sync"],"notable_points":["Point"],"candidate_refs":["s1-i2"]}"#;
 
@@ -1565,6 +1605,27 @@ mod tests {
         let payload = extract_json_payload(&response).expect("extract fenced payload");
 
         assert_eq!(payload, SAMPLE_JSON);
+    }
+
+    #[tokio::test]
+    async fn analysis_step_cancel_wrapper_allows_completed_future() {
+        let result =
+            run_analysis_step_with_cancel(None, async { Ok::<_, LlmRequestError>("done") })
+                .await
+                .expect("step result");
+
+        assert_eq!(result, "done");
+    }
+
+    #[tokio::test]
+    async fn analysis_step_cancel_wrapper_interrupts_pending_future() {
+        let token = CancellationToken::new();
+        token.cancel();
+
+        let result: Result<(), LlmRequestError> =
+            run_analysis_step_with_cancel(Some(token), std::future::pending()).await;
+
+        assert!(matches!(result, Err(LlmRequestError::Cancelled)));
     }
 
     #[test]

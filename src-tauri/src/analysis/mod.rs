@@ -116,7 +116,7 @@ impl AnalysisState {
             .is_some_and(CancellationToken::is_cancelled)
     }
 
-    async fn report_run_child_token(&self, run_id: i64) -> Option<CancellationToken> {
+    pub(crate) async fn report_run_child_token(&self, run_id: i64) -> Option<CancellationToken> {
         self.report_run_tokens
             .lock()
             .await
