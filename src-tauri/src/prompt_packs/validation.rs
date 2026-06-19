@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
-use jsonschema::Validator;
+use jsonschema::{error::ValidationErrorKind, ValidationError, Validator};
 use sqlx::SqlitePool;
 
 use super::stage_io::TranscriptAnalysisStageInput;
@@ -42,8 +42,7 @@ fn validate_transcript_analysis_output_schema(
 ) -> Result<(), PromptPackValidationError> {
     transcript_analysis_output_validator().and_then(|validator| {
         validator.validate(output).map_err(|error| {
-            let object_path =
-                jsonschema_instance_path_to_object_path(&error.instance_path().to_string());
+            let object_path = jsonschema_error_object_path(&error);
             PromptPackValidationError {
                 message: format!("schema validation failed at {object_path}: {error}"),
                 object_path: Some(object_path),
@@ -88,6 +87,25 @@ fn jsonschema_instance_path_to_object_path(instance_path: &str) -> String {
         }
     }
     object_path
+}
+
+fn jsonschema_error_object_path(error: &ValidationError<'_>) -> String {
+    let object_path = jsonschema_instance_path_to_object_path(&error.instance_path().to_string());
+    match error.kind() {
+        ValidationErrorKind::Required { property } => property
+            .as_str()
+            .map(|property| jsonschema_child_object_path(&object_path, property))
+            .unwrap_or(object_path),
+        _ => object_path,
+    }
+}
+
+fn jsonschema_child_object_path(parent_path: &str, property: &str) -> String {
+    if parent_path == "$" {
+        format!("$.{property}")
+    } else {
+        format!("{parent_path}.{property}")
+    }
 }
 
 pub(crate) async fn validate_and_quarantine_transcript_analysis_output(
@@ -150,9 +168,7 @@ pub(crate) fn validate_synthesis_output(
     output: &serde_json::Value,
     allowed_source_refs: &HashSet<String>,
 ) -> Result<(), PromptPackValidationError> {
-    expect_string(output, "stage_io_version", "1.0")?;
-    expect_string(output, "schema_version", "1.0")?;
-    expect_string(output, "stage", "youtube_summary/synthesis")?;
+    validate_synthesis_output_schema(output)?;
     let candidate = output
         .get("synthesis_candidate")
         .ok_or_else(|| PromptPackValidationError {
@@ -164,20 +180,42 @@ pub(crate) fn validate_synthesis_output(
         "summary_text",
         "$.synthesis_candidate.summary_text",
     )?;
-    for key in [
-        "cross_video_themes",
-        "common_claims",
-        "contradictions_across_videos",
-    ] {
-        expect_array_at(candidate, key, &format!("$.synthesis_candidate.{key}"))?;
-    }
-    for key in ["limitations", "warning_candidates"] {
-        expect_array(output, key)?;
-    }
     reject_non_empty_synthesis_candidate_ref_arrays(candidate, "$.synthesis_candidate")?;
     reject_backend_owned_ids(output, "$")?;
     reject_unknown_synthesis_source_refs(output, "$", allowed_source_refs)?;
     Ok(())
+}
+
+fn validate_synthesis_output_schema(
+    output: &serde_json::Value,
+) -> Result<(), PromptPackValidationError> {
+    synthesis_output_validator().and_then(|validator| {
+        validator.validate(output).map_err(|error| {
+            let object_path = jsonschema_error_object_path(&error);
+            PromptPackValidationError {
+                message: format!("schema validation failed at {object_path}: {error}"),
+                object_path: Some(object_path),
+            }
+        })
+    })
+}
+
+fn synthesis_output_validator() -> Result<&'static Validator, PromptPackValidationError> {
+    static VALIDATOR: OnceLock<Result<Validator, String>> = OnceLock::new();
+    VALIDATOR
+        .get_or_init(|| {
+            let schema: serde_json::Value = serde_json::from_str(include_str!(
+                "../../prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-synthesis-output.json"
+            ))
+            .map_err(|error| format!("invalid synthesis output schema JSON: {error}"))?;
+            jsonschema::validator_for(&schema)
+                .map_err(|error| format!("invalid synthesis output schema: {error}"))
+        })
+        .as_ref()
+        .map_err(|message| PromptPackValidationError {
+            message: message.clone(),
+            object_path: Some("$".to_string()),
+        })
 }
 
 pub(crate) fn validate_synthesis_output_with_allowed_refs(
@@ -259,21 +297,6 @@ async fn load_allowed_synthesis_source_refs(
     .map_err(AppError::database)
 }
 
-fn expect_string(
-    output: &serde_json::Value,
-    key: &str,
-    expected: &str,
-) -> Result<(), PromptPackValidationError> {
-    if output.get(key).and_then(serde_json::Value::as_str) == Some(expected) {
-        Ok(())
-    } else {
-        Err(PromptPackValidationError {
-            message: format!("{key} must be {expected}"),
-            object_path: Some(format!("$.{key}")),
-        })
-    }
-}
-
 fn expect_non_empty_string_at(
     output: &serde_json::Value,
     key: &str,
@@ -289,29 +312,6 @@ fn expect_non_empty_string_at(
     } else {
         Err(PromptPackValidationError {
             message: format!("{key} must be a non-empty string"),
-            object_path: Some(object_path.to_string()),
-        })
-    }
-}
-
-fn expect_array(output: &serde_json::Value, key: &str) -> Result<(), PromptPackValidationError> {
-    expect_array_at(output, key, &format!("$.{key}"))
-}
-
-fn expect_array_at(
-    output: &serde_json::Value,
-    key: &str,
-    object_path: &str,
-) -> Result<(), PromptPackValidationError> {
-    if output
-        .get(key)
-        .and_then(serde_json::Value::as_array)
-        .is_some()
-    {
-        Ok(())
-    } else {
-        Err(PromptPackValidationError {
-            message: format!("{key} must be an array"),
             object_path: Some(object_path.to_string()),
         })
     }
@@ -845,6 +845,18 @@ mod tests {
             error.object_path.as_deref(),
             Some("$.synthesis_candidate.cross_video_themes")
         );
+    }
+
+    #[test]
+    fn synthesis_output_validator_rejects_structural_schema_errors() {
+        let mut output = valid_synthesis_output();
+        output["synthesis_candidate"] = serde_json::json!("not an object");
+
+        let error = validate_synthesis_output(&output, &allowed_synthesis_source_refs())
+            .expect_err("schema structural error rejected");
+
+        assert!(error.message.contains("synthesis_candidate"));
+        assert_eq!(error.object_path.as_deref(), Some("$.synthesis_candidate"));
     }
 
     #[test]

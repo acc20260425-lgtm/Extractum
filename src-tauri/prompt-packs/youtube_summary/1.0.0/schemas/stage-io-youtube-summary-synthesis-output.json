@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stage-io/youtube_summary_synthesis_output",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "stage_io_version",
+    "schema_version",
+    "stage",
+    "synthesis_candidate",
+    "limitations",
+    "warning_candidates"
+  ],
+  "properties": {
+    "stage_io_version": { "const": "1.0" },
+    "schema_version": { "const": "1.0" },
+    "stage": { "const": "youtube_summary/synthesis" },
+    "synthesis_candidate": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "summary_text",
+        "cross_video_themes",
+        "common_claims",
+        "contradictions_across_videos"
+      ],
+      "properties": {
+        "summary_text": { "type": "string", "minLength": 1 },
+        "cross_video_themes": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "common_claims": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "contradictions_across_videos": {
+          "type": "array",
+          "items": { "type": "object" }
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "warning_candidates": {
+      "type": "array",
+      "items": { "type": "object" }
+    }
+  }
+}
