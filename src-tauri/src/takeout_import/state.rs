@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
@@ -10,6 +10,12 @@ use crate::job_helpers::{ActiveJobGuards, CancellationState};
 use crate::time::now_secs;
 
 const TAKEOUT_IMPORT_EVENT: &str = "sources://takeout-import";
+#[cfg(debug_assertions)]
+const TAKEOUT_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID: i64 = -910_001;
+#[cfg(debug_assertions)]
+const TAKEOUT_CANCELLATION_SMOKE_FIXTURE_ACCOUNT_ID: i64 = -910_002;
+#[cfg(debug_assertions)]
+const TAKEOUT_CANCELLATION_SMOKE_FIXTURE_BATCH_ID: i64 = -910_003;
 const STATUS_QUEUED: &str = "queued";
 pub(crate) const STATUS_RUNNING: &str = "running";
 pub(crate) const STATUS_CANCEL_REQUESTED: &str = "cancel_requested";
@@ -211,6 +217,95 @@ impl TakeoutImportState {
         jobs.sort_by_key(|job| (job.started_at, job.job_id.clone()));
         jobs
     }
+
+    #[cfg(debug_assertions)]
+    async fn remove_cancellation_smoke_fixture_jobs(&self) -> usize {
+        let mut inner = self.inner.lock().await;
+        let job_ids = inner
+            .jobs
+            .values()
+            .filter(|job| job.source_id == TAKEOUT_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID)
+            .map(|job| job.job_id.clone())
+            .collect::<Vec<_>>();
+        for job_id in &job_ids {
+            inner.active_jobs.release_by_job_id(job_id);
+            inner.cancel_requested.clear(job_id);
+            inner.jobs.remove(job_id);
+        }
+        job_ids.len()
+    }
+}
+
+#[cfg(debug_assertions)]
+pub(crate) async fn seed_takeout_cancellation_smoke_fixture(
+    handle: AppHandle,
+    state: &TakeoutImportState,
+) -> AppResult<TakeoutImportJobRecord> {
+    clear_takeout_cancellation_smoke_fixture(state).await?;
+    let record = seed_takeout_cancellation_smoke_fixture_in_state(state).await?;
+    emit_takeout_import_event(&handle, &record);
+    let job_id = record.job_id.clone();
+    let token = state.cancellation_token(&job_id).await;
+    let task_handle = handle.clone();
+    tauri::async_runtime::spawn(async move {
+        let Some(token) = token else {
+            return;
+        };
+        token.cancelled().await;
+        let state = task_handle.state::<TakeoutImportState>();
+        if let Some(record) =
+            finish_cancelled_takeout_cancellation_smoke_fixture(state.inner(), &job_id).await
+        {
+            emit_takeout_import_event(&task_handle, &record);
+        }
+    });
+    Ok(record)
+}
+
+#[cfg(debug_assertions)]
+pub(crate) async fn clear_takeout_cancellation_smoke_fixture(
+    state: &TakeoutImportState,
+) -> AppResult<usize> {
+    Ok(state.remove_cancellation_smoke_fixture_jobs().await)
+}
+
+#[cfg(debug_assertions)]
+async fn seed_takeout_cancellation_smoke_fixture_in_state(
+    state: &TakeoutImportState,
+) -> AppResult<TakeoutImportJobRecord> {
+    let record = state
+        .create_job(
+            TAKEOUT_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID,
+            TAKEOUT_CANCELLATION_SMOKE_FIXTURE_ACCOUNT_ID,
+            TAKEOUT_CANCELLATION_SMOKE_FIXTURE_BATCH_ID,
+            crate::ingest_provenance::TAKEOUT_HISTORY_SCOPE_CURRENT,
+        )
+        .await?;
+    state
+        .update_job(&record.job_id, |job| {
+            job.status = STATUS_RUNNING.to_string();
+            job.phase = PHASE_IMPORTING_HISTORY.to_string();
+            job.message = Some("Takeout cancellation smoke fixture running.".to_string());
+            job.progress_current = Some(0);
+            job.progress_total = Some(1);
+        })
+        .await
+        .ok_or_else(|| AppError::not_found(format!("Takeout job {} not found", record.job_id)))
+}
+
+#[cfg(debug_assertions)]
+async fn finish_cancelled_takeout_cancellation_smoke_fixture(
+    state: &TakeoutImportState,
+    job_id: &str,
+) -> Option<TakeoutImportJobRecord> {
+    state
+        .finish_job(job_id, |job| {
+            job.status = STATUS_CANCELLED.to_string();
+            job.phase = PHASE_CANCELLED.to_string();
+            job.message = Some("Takeout import cancelled.".to_string());
+            job.error = None;
+        })
+        .await
 }
 
 pub(crate) async fn update_and_emit<F>(
@@ -236,7 +331,13 @@ fn is_terminal_status(status: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{TakeoutImportState, STATUS_CANCEL_REQUESTED, STATUS_COMPLETED, STATUS_FAILED};
+    use super::{
+        clear_takeout_cancellation_smoke_fixture,
+        finish_cancelled_takeout_cancellation_smoke_fixture,
+        seed_takeout_cancellation_smoke_fixture_in_state, TakeoutImportState, STATUS_CANCELLED,
+        STATUS_CANCEL_REQUESTED, STATUS_COMPLETED, STATUS_FAILED, STATUS_RUNNING,
+        TAKEOUT_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID,
+    };
     use crate::error::AppErrorKind;
     use crate::ingest_provenance::{
         TAKEOUT_HISTORY_SCOPE_CURRENT, TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP,
@@ -324,6 +425,66 @@ mod tests {
             .await
             .expect("finish job");
         assert!(state.cancellation_token(&job.job_id).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn takeout_cancellation_smoke_fixture_tracks_running_job() {
+        let state = TakeoutImportState::new();
+
+        let job = seed_takeout_cancellation_smoke_fixture_in_state(&state)
+            .await
+            .expect("seed smoke fixture");
+
+        assert_eq!(job.source_id, TAKEOUT_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID);
+        assert_eq!(job.status, STATUS_RUNNING);
+        assert!(state.cancellation_token(&job.job_id).await.is_some());
+        assert_eq!(
+            state
+                .active_jobs_for_sources(&[TAKEOUT_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID])
+                .await
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn takeout_cancellation_smoke_fixture_finishes_cancelled_and_clears() {
+        let state = TakeoutImportState::new();
+        let job = seed_takeout_cancellation_smoke_fixture_in_state(&state)
+            .await
+            .expect("seed smoke fixture");
+        let token = state.cancellation_token(&job.job_id).await.expect("token");
+
+        state
+            .request_cancel(&job.job_id)
+            .await
+            .expect("request cancel");
+        tokio::time::timeout(std::time::Duration::from_secs(1), token.cancelled())
+            .await
+            .expect("token cancelled");
+        let finished = finish_cancelled_takeout_cancellation_smoke_fixture(&state, &job.job_id)
+            .await
+            .expect("finish smoke fixture");
+
+        assert_eq!(finished.status, STATUS_CANCELLED);
+        assert_eq!(finished.phase, super::PHASE_CANCELLED);
+        assert_eq!(
+            finished.message.as_deref(),
+            Some("Takeout import cancelled.")
+        );
+        assert!(state.cancellation_token(&job.job_id).await.is_none());
+
+        let deleted = clear_takeout_cancellation_smoke_fixture(&state)
+            .await
+            .expect("clear smoke fixture");
+        assert_eq!(deleted, 1);
+        assert!(state
+            .list_jobs()
+            .await
+            .into_iter()
+            .filter(|job| job.source_id == TAKEOUT_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID)
+            .collect::<Vec<_>>()
+            .is_empty());
     }
 
     #[tokio::test]

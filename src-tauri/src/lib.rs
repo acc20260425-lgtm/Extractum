@@ -67,6 +67,10 @@ use takeout_import::{
     list_takeout_source_import_jobs, run_takeout_export_dc_spike,
     start_takeout_migrated_history_import, start_takeout_source_import, TakeoutImportState,
 };
+#[cfg(debug_assertions)]
+use takeout_import::{
+    clear_takeout_cancellation_smoke_fixture, seed_takeout_cancellation_smoke_fixture,
+};
 
 mod sources;
 use sources::identity_repair::{
@@ -233,6 +237,10 @@ pub fn run() {
             cancel_takeout_source_import,
             list_takeout_source_import_jobs,
             list_takeout_import_recovery_states,
+            #[cfg(debug_assertions)]
+            seed_takeout_cancellation_smoke_fixture,
+            #[cfg(debug_assertions)]
+            clear_takeout_cancellation_smoke_fixture,
             run_takeout_export_dc_spike,
             list_source_items,
             list_source_forum_topics,
