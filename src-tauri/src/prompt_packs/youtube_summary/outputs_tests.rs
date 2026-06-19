@@ -425,6 +425,46 @@ async fn execute_transcript_analysis_stage_persists_raw_and_parsed_artifacts() {
 }
 
 #[tokio::test]
+async fn execute_transcript_analysis_stage_persists_normalized_parsed_output() {
+    let pool = test_pool_with_frozen_youtube_summary_run().await;
+    let stage_id = transcript_analysis_stage_id(&pool, 1).await;
+
+    let mut completion = fake_completion_with_valid_transcript_analysis_json();
+    let mut output: serde_json::Value =
+        serde_json::from_str(&completion.text).expect("parse fake completion");
+    let object = output.as_object_mut().expect("completion object");
+    let stage_io_version = object
+        .remove("stage_io_version")
+        .expect("stage_io_version exists");
+    let schema_version = object
+        .remove("schema_version")
+        .expect("schema_version exists");
+    object.insert("stageIoVersion".to_string(), stage_io_version);
+    object.insert("schemaVersion".to_string(), schema_version);
+    completion.text = output.to_string();
+
+    execute_transcript_analysis_stage_with_completion(&pool, stage_id, completion)
+        .await
+        .expect("execute stage");
+
+    let content_zstd: Vec<u8> = sqlx::query_scalar(
+        "SELECT content_zstd FROM prompt_pack_stage_artifacts
+         WHERE stage_run_id = ? AND artifact_kind = 'parsed_output'",
+    )
+    .bind(stage_id)
+    .fetch_one(&pool)
+    .await
+    .expect("parsed output");
+    let text = crate::compression::decompress_text(&content_zstd).expect("decompress");
+    let parsed: serde_json::Value = serde_json::from_str(&text).expect("parse parsed output");
+
+    assert_eq!(parsed["stage_io_version"], "1.0");
+    assert_eq!(parsed["schema_version"], "1.0");
+    assert!(parsed.get("stageIoVersion").is_none());
+    assert!(parsed.get("schemaVersion").is_none());
+}
+
+#[tokio::test]
 async fn execute_transcript_analysis_stage_persists_intermediate_entities_artifact() {
     let pool = test_pool_with_frozen_youtube_summary_run().await;
     let stage_id = transcript_analysis_stage_id(&pool, 1).await;

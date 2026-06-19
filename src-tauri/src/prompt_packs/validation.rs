@@ -5,8 +5,9 @@ use jsonschema::{error::ValidationErrorKind, ValidationError, Validator};
 use sqlx::SqlitePool;
 
 use super::stage_io::TranscriptAnalysisStageInput;
-pub(crate) use super::stage_output_normalization::normalize_synthesis_output_for_runtime;
-use super::stage_output_normalization::normalize_transcript_analysis_output_for_schema;
+use super::stage_output_normalization::{
+    normalize_synthesis_output_for_runtime, normalize_transcript_analysis_output_for_schema,
+};
 use crate::compression::compress_text;
 use crate::error::{AppError, AppResult};
 

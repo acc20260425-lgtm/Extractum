@@ -13,10 +13,12 @@ use crate::prompt_packs::stage_io::{
     insert_stage_artifact_in_transaction, SYNTHESIS_OUTPUT_SCHEMA_ID,
     TRANSCRIPT_ANALYSIS_OUTPUT_SCHEMA_ID,
 };
+use crate::prompt_packs::stage_output_normalization::{
+    normalize_synthesis_output_for_runtime, normalize_transcript_analysis_output_for_runtime,
+};
 use crate::prompt_packs::validation::{
-    normalize_synthesis_output_for_runtime, quarantine_prompt_pack_validation_error,
-    validate_and_quarantine_synthesis_output, validate_synthesis_output_with_allowed_refs,
-    validate_transcript_analysis_output,
+    quarantine_prompt_pack_validation_error, validate_and_quarantine_synthesis_output,
+    validate_synthesis_output_with_allowed_refs, validate_transcript_analysis_output,
 };
 
 pub(crate) async fn execute_transcript_analysis_stage_with_completion(
@@ -67,6 +69,7 @@ pub(crate) async fn execute_transcript_analysis_stage_with_completion(
     )
     .await?;
     let parsed = extract_json_payload(&completion.text)?;
+    let parsed = normalize_transcript_analysis_output_for_runtime(&parsed);
     validate_transcript_analysis_output(&input, &parsed)
         .map_err(|error| AppError::validation(error.message))?;
     let intermediate_graph = build_or_quarantine_intermediate_entities_for_transcript_stage(
