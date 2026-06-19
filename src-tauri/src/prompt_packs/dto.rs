@@ -1,5 +1,6 @@
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 pub struct PreflightYoutubeSummaryRunRequest {
     pub project_id: Option<i64>,
     pub source_ids: Vec<i64>,

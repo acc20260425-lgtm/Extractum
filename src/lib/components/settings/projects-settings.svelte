@@ -374,8 +374,8 @@
         </div>
 
         <form class="sync-form" onsubmit={(e) => { e.preventDefault(); handleSaveSyncSettings(); }}>
-          <div class="form-group">
-            <label>Initial Sync Mode</label>
+          <fieldset class="form-group">
+            <legend>Initial Sync Mode</legend>
             <p class="field-desc">Choose between pulling a set number of messages or a window of recent days.</p>
             <div class="radio-group">
               <label class="radio-label">
@@ -407,7 +407,7 @@
                 </div>
               </label>
             </div>
-          </div>
+          </fieldset>
 
           <div class="form-group">
             <label for="syncValue">
@@ -952,7 +952,14 @@
     gap: 6px;
   }
 
-  .form-group label {
+  fieldset.form-group {
+    border: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  .form-group label,
+  .form-group legend {
     font-size: 13.5px;
     font-weight: 600;
   }
