@@ -22,6 +22,10 @@ history.
 - `database-schema.md`: current supported SQLite schema, migration baseline,
   and post-baseline migration authoring requirements.
 - `backlog.md`: open work only. Shipped work should not accumulate here.
+- `../research/youtube_pipeline/README.md`: local YouTube summary research
+  prototype notes. The detailed boundary between the legacy direct-LLM runner
+  and the file-backed agentic workflow lives in
+  `../research/youtube_pipeline/RUNNER_AND_AGENTIC_WORKFLOW.md`.
 
 ## Focused Decisions And Analysis
 

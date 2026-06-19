@@ -260,6 +260,18 @@ YouTube scopes can choose one of three corpus modes:
 - transcript plus synthetic description;
 - transcript plus synthetic description plus comments.
 
+The production YouTube Summary path is the Prompt Pack project-runs flow. It
+stores deterministic source/material snapshots, stage artifacts, validation
+findings, audit refs, canonical result JSON, and YouTube-specific projections.
+It is surfaced through `/projects/library` and `/projects/runs`.
+
+The Python package under `research/youtube_pipeline` is a separate local
+research prototype. Its legacy `runner.py` path calls OpenAI-compatible LLM
+profiles for direct strategy experiments. Its newer agentic MoC workflow is
+file-backed and skill-orchestrated: Python prepares, validates, aligns, and
+assembles artifacts, while Codex skills/sub-agents do reasoning work. That
+agentic workflow is not a production Tauri entry point in the current product.
+
 The report run stores:
 
 - scope metadata
@@ -294,6 +306,12 @@ resolution, evidence, and follow-up chat degrade explicitly instead of silently
 falling back to live `items`.
 YouTube transcript refs preserve timestamp evidence and can resolve to
 canonical YouTube URLs with `t=` parameters.
+
+Prompt Pack project runs store their own deterministic source/material
+snapshots and stage artifacts outside the legacy `analysis_runs` report model.
+Those runs are browsed through `/projects/runs`, where the report is presented
+from canonical Prompt Pack result data instead of the legacy analysis report
+viewer.
 
 ### 4.3 LLM provider profiles
 
@@ -440,6 +458,8 @@ The most meaningful remaining design questions are:
   beyond the current explicit import and opt-in browsing/export/analysis flows;
 - whether YouTube jobs should become persistent/resumable across app restart;
 - whether YouTube-specific NotebookLM export enrichment should be shipped;
+- whether the research-only agentic YouTube summary workflow should become a
+  production Prompt Pack or app-managed workflow;
 - how to expand analysis beyond text-bearing corpus items;
 - whether Telegram Forum Topics needs richer browsing/export controls beyond
   materialized topic memberships and the current source item filters;

@@ -295,6 +295,20 @@ The report flow:
 8. persist result + trace data
 9. persist frozen snapshot
 
+Prompt Pack project runs are a newer project-oriented path beside legacy
+analysis reports. They create deterministic source/material snapshots, persist
+stage runs and artifacts, store canonical result JSON, and project
+YouTube-specific result slices for browsing in `/projects/runs`. They do not
+use the legacy analysis report viewer as their primary inspection surface.
+
+The local `research/youtube_pipeline` package is research-only. Its
+`runner.py` entry point executes direct LLM strategy experiments through an
+OpenAI-compatible endpoint. Its agentic MoC workflow is file-backed and
+skill-orchestrated: Python owns deterministic prep, validation, alignment,
+metrics, and assembly, while Codex skills/sub-agents own reasoning. That
+workflow is intentionally not registered as a production `runner.py --strategy`
+or Tauri Prompt Pack entry point.
+
 ### 6.2 Saved run semantics
 
 The saved run model is snapshot-first for new runs.
@@ -422,6 +436,18 @@ If you are changing analysis:
 
 - `src-tauri/src/analysis/`
 - `src/routes/analysis/+page.svelte`
+
+If you are changing Prompt Pack project runs:
+
+- `src-tauri/src/prompt_packs/`
+- `src/routes/projects/runs/`
+- `src/lib/components/research-projects/`
+
+If you are changing the research-only YouTube summary pipeline:
+
+- `research/youtube_pipeline/`
+- `.agents/skills/youtube-summary/`
+- `.agents/skills/youtube-*/`
 
 If you are changing YouTube runtime, sync, auth, or detail UI:
 

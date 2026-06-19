@@ -38,6 +38,16 @@ npm run verify:project-runs
 The first Rust run after a clean target can be slow because Cargo warms the
 test target; subsequent runs are expected to be much faster.
 
+For the local Python YouTube pipeline research prototype, use:
+
+```bash
+python -m unittest discover research/youtube_pipeline/tests
+```
+
+This covers the legacy direct-LLM strategy runner helpers and the deterministic
+parts of the file-backed agentic workflow. It does not exercise live LLM
+providers or Codex sub-agent orchestration.
+
 ## Secret/config policy
 
 Commit shared source, docs, migrations, tests, and stable project config only.
@@ -181,6 +191,10 @@ Implemented:
   source/material snapshots, combined transcript-analysis execution, stage
   artifacts, canonical result persistence, audit events, validation findings,
   and YouTube-specific result projections
+- local Python YouTube summary research prototype under
+  `research/youtube_pipeline`, including legacy direct-LLM strategies and a
+  file-backed agentic MoC workflow. This prototype is not production-integrated
+  into the Tauri app; normal product YouTube Summary runs use Prompt Packs.
 - dedicated `/projects/runs` Prompt Pack runs screen with SVAR grid browsing,
   run label update, confirmed terminal run deletion, confirmed active run
   cancellation, and a from-scratch report workspace for videos, claims,
@@ -206,6 +220,7 @@ Not implemented yet:
 - persistent/resumable YouTube sync jobs across app restart
 - richer Telegram Forum Topics browsing/export beyond the current materialized membership filters
 - Telegram forward metadata enrichment
+- production integration of the research-only agentic YouTube summary workflow
 
 ## Main routes
 
@@ -438,14 +453,15 @@ LLM scheduling allows two running requests per `(provider, profile)` and priorit
 9. `src-tauri/src/prompt_packs/`
 10. `src/routes/projects/`
 11. `src/lib/components/research-projects/`
-12. `src/routes/analysis/+page.svelte`
-13. `src/lib/components/analysis/`
-14. `src/routes/settings/+page.svelte`
-15. `src/routes/diagnostics/+page.svelte`
-16. `src/lib/diagnostics-view-model.ts`
-17. `src/routes/sources/+page.svelte`
-18. `src-tauri/src/error.rs`
-19. `src-tauri/src/migrations.rs`
+12. `research/youtube_pipeline/` for research-only YouTube summary pipeline work
+13. `src/routes/analysis/+page.svelte`
+14. `src/lib/components/analysis/`
+15. `src/routes/settings/+page.svelte`
+16. `src/routes/diagnostics/+page.svelte`
+17. `src/lib/diagnostics-view-model.ts`
+18. `src/routes/sources/+page.svelte`
+19. `src-tauri/src/error.rs`
+20. `src-tauri/src/migrations.rs`
 
 Related deep dive: `docs/takeout-source-import.md`.
 
