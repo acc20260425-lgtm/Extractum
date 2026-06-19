@@ -88,6 +88,10 @@ use youtube::job_commands::{
     cancel_source_job, list_source_jobs, retry_failed_youtube_playlist_videos,
     sync_youtube_playlist_video, sync_youtube_source,
 };
+#[cfg(debug_assertions)]
+use youtube::job_commands::{
+    clear_source_job_cancellation_smoke_fixture, seed_source_job_cancellation_smoke_fixture,
+};
 use youtube::jobs::SourceJobState;
 use youtube::preview::{add_youtube_source, preview_youtube_source};
 use youtube::runtime::get_youtube_runtime_status;
@@ -278,6 +282,10 @@ pub fn run() {
             cancel_source_job,
             list_source_jobs,
             retry_failed_youtube_playlist_videos,
+            #[cfg(debug_assertions)]
+            seed_source_job_cancellation_smoke_fixture,
+            #[cfg(debug_assertions)]
+            clear_source_job_cancellation_smoke_fixture,
             get_youtube_runtime_status,
             list_youtube_source_summaries,
             get_youtube_video_detail,

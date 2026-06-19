@@ -30,6 +30,8 @@ use super::source_metadata::{
 };
 
 pub(crate) const SOURCE_JOB_EVENT: &str = "sources://source-job";
+#[cfg(debug_assertions)]
+const SOURCE_JOB_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID: i64 = -900_001;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -360,6 +362,99 @@ impl SourceJobState {
         inner.cancel_requested.clear(job_id);
         inner.jobs.get(job_id).cloned()
     }
+
+    #[cfg(debug_assertions)]
+    async fn remove_cancellation_smoke_fixture_jobs(&self) -> usize {
+        let mut inner = self.inner.lock().await;
+        let job_ids = inner
+            .jobs
+            .values()
+            .filter(|job| job.source_id == SOURCE_JOB_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID)
+            .map(|job| job.job_id.clone())
+            .collect::<Vec<_>>();
+        for job_id in &job_ids {
+            inner.active_jobs.release_by_job_id(job_id);
+            inner.options_by_job_id.remove(job_id);
+            inner.cancel_requested.clear(job_id);
+            inner.jobs.remove(job_id);
+        }
+        job_ids.len()
+    }
+}
+
+#[cfg(debug_assertions)]
+pub(crate) async fn seed_source_job_cancellation_smoke_fixture(
+    handle: AppHandle,
+    state: &SourceJobState,
+) -> AppResult<SourceJobRecord> {
+    clear_source_job_cancellation_smoke_fixture(state).await?;
+    let record = seed_source_job_cancellation_smoke_fixture_in_state(state).await?;
+    emit_source_job_event(&handle, &record);
+    let job_id = record.job_id.clone();
+    let token = state.cancellation_token(&job_id).await;
+    let task_handle = handle.clone();
+    tauri::async_runtime::spawn(async move {
+        let Some(token) = token else {
+            return;
+        };
+        token.cancelled().await;
+        let state = task_handle.state::<SourceJobState>();
+        if let Some(record) =
+            finish_cancelled_source_job_cancellation_smoke_fixture(state.inner(), &job_id).await
+        {
+            emit_source_job_event(&task_handle, &record);
+        }
+    });
+    Ok(record)
+}
+
+#[cfg(debug_assertions)]
+pub(crate) async fn clear_source_job_cancellation_smoke_fixture(
+    state: &SourceJobState,
+) -> AppResult<usize> {
+    Ok(state.remove_cancellation_smoke_fixture_jobs().await)
+}
+
+#[cfg(debug_assertions)]
+async fn seed_source_job_cancellation_smoke_fixture_in_state(
+    state: &SourceJobState,
+) -> AppResult<SourceJobRecord> {
+    let record = state
+        .create_job(
+            SOURCE_JOB_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID,
+            SourceJobType::YoutubeVideoMetadataSync,
+            None,
+            YoutubeSyncOptions {
+                metadata: true,
+                transcripts: false,
+                comments: false,
+            },
+        )
+        .await?;
+    state
+        .update_job(&record.job_id, |job| {
+            job.status = SourceJobStatus::Running;
+            job.message =
+                Some("YouTube source job cancellation smoke fixture running.".to_string());
+            job.progress_current = Some(0);
+            job.progress_total = Some(1);
+        })
+        .await
+        .ok_or_else(|| AppError::not_found(format!("Source job {} not found", record.job_id)))
+}
+
+#[cfg(debug_assertions)]
+async fn finish_cancelled_source_job_cancellation_smoke_fixture(
+    state: &SourceJobState,
+    job_id: &str,
+) -> Option<SourceJobRecord> {
+    state
+        .finish_job(job_id, |job| {
+            job.status = SourceJobStatus::Succeeded;
+            job.message =
+                Some("YouTube source job cancellation smoke fixture finished.".to_string());
+        })
+        .await
 }
 
 pub(crate) async fn start_youtube_source_job(
@@ -1069,8 +1164,11 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::{
-        retryable_playlist_video_rows, run_source_job_step_with_cancel, SourceJobListFilter,
-        SourceJobState, SourceJobStatus, SourceJobType, YoutubeSyncOptions,
+        clear_source_job_cancellation_smoke_fixture,
+        finish_cancelled_source_job_cancellation_smoke_fixture, retryable_playlist_video_rows,
+        run_source_job_step_with_cancel, seed_source_job_cancellation_smoke_fixture_in_state,
+        SourceJobListFilter, SourceJobState, SourceJobStatus, SourceJobType, YoutubeSyncOptions,
+        SOURCE_JOB_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID,
     };
     use crate::error::{AppError, AppErrorKind, AppResult};
     use tokio_util::sync::CancellationToken;
@@ -1304,6 +1402,70 @@ mod tests {
             .await
             .expect("finish job");
         assert!(state.cancellation_token(&job.job_id).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn source_job_cancellation_smoke_fixture_tracks_running_job() {
+        let state = SourceJobState::new();
+
+        let job = seed_source_job_cancellation_smoke_fixture_in_state(&state)
+            .await
+            .expect("seed smoke fixture");
+
+        assert_eq!(
+            job.source_id,
+            SOURCE_JOB_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID
+        );
+        assert_eq!(job.status, SourceJobStatus::Running);
+        assert!(state.cancellation_token(&job.job_id).await.is_some());
+        assert_eq!(
+            state
+                .list_jobs(SourceJobListFilter {
+                    source_id: Some(SOURCE_JOB_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID),
+                    status: Some(SourceJobStatus::Running),
+                    limit: Some(10),
+                })
+                .await
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn source_job_cancellation_smoke_fixture_finishes_cancelled_and_clears() {
+        let state = SourceJobState::new();
+        let job = seed_source_job_cancellation_smoke_fixture_in_state(&state)
+            .await
+            .expect("seed smoke fixture");
+        let token = state.cancellation_token(&job.job_id).await.expect("token");
+
+        state
+            .request_cancel(&job.job_id)
+            .await
+            .expect("request cancel");
+        tokio::time::timeout(std::time::Duration::from_secs(1), token.cancelled())
+            .await
+            .expect("token cancelled");
+        let finished = finish_cancelled_source_job_cancellation_smoke_fixture(&state, &job.job_id)
+            .await
+            .expect("finish smoke fixture");
+
+        assert_eq!(finished.status, SourceJobStatus::Cancelled);
+        assert_eq!(finished.message.as_deref(), Some("Source job cancelled."));
+        assert!(state.cancellation_token(&job.job_id).await.is_none());
+
+        let deleted = clear_source_job_cancellation_smoke_fixture(&state)
+            .await
+            .expect("clear smoke fixture");
+        assert_eq!(deleted, 1);
+        assert!(state
+            .list_jobs(SourceJobListFilter {
+                source_id: Some(SOURCE_JOB_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID),
+                status: None,
+                limit: Some(10),
+            })
+            .await
+            .is_empty());
     }
 
     #[tokio::test]

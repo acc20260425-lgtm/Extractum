@@ -76,3 +76,20 @@ pub(crate) async fn list_source_jobs(
 ) -> AppResult<Vec<SourceJobRecord>> {
     jobs::list_source_job_records(state.inner(), filter).await
 }
+
+#[cfg(debug_assertions)]
+#[tauri::command]
+pub(crate) async fn seed_source_job_cancellation_smoke_fixture(
+    handle: AppHandle,
+    state: tauri::State<'_, SourceJobState>,
+) -> AppResult<SourceJobRecord> {
+    jobs::seed_source_job_cancellation_smoke_fixture(handle, state.inner()).await
+}
+
+#[cfg(debug_assertions)]
+#[tauri::command]
+pub(crate) async fn clear_source_job_cancellation_smoke_fixture(
+    state: tauri::State<'_, SourceJobState>,
+) -> AppResult<usize> {
+    jobs::clear_source_job_cancellation_smoke_fixture(state.inner()).await
+}
