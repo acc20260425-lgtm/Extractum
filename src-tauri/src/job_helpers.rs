@@ -1,5 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::Hash;
+
+use tokio_util::sync::CancellationToken;
 
 #[derive(Debug)]
 pub(crate) struct ActiveJobGuards<K> {
@@ -38,20 +40,33 @@ where
 
 #[derive(Debug, Default)]
 pub(crate) struct CancellationState {
-    requested: HashSet<String>,
+    tokens: HashMap<String, CancellationToken>,
 }
 
 impl CancellationState {
     pub(crate) fn request(&mut self, job_id: impl Into<String>) {
-        self.requested.insert(job_id.into());
+        self.token(job_id).cancel();
     }
 
     pub(crate) fn is_requested(&self, job_id: &str) -> bool {
-        self.requested.contains(job_id)
+        self.tokens
+            .get(job_id)
+            .is_some_and(CancellationToken::is_cancelled)
     }
 
     pub(crate) fn clear(&mut self, job_id: &str) -> bool {
-        self.requested.remove(job_id)
+        self.tokens.remove(job_id).is_some()
+    }
+
+    pub(crate) fn child_token(&mut self, job_id: impl Into<String>) -> CancellationToken {
+        self.token(job_id).child_token()
+    }
+
+    fn token(&mut self, job_id: impl Into<String>) -> CancellationToken {
+        self.tokens
+            .entry(job_id.into())
+            .or_insert_with(CancellationToken::new)
+            .clone()
     }
 }
 
@@ -85,5 +100,20 @@ mod tests {
         assert!(cancellation.clear("job-1"));
         assert!(!cancellation.is_requested("job-1"));
         assert!(!cancellation.clear("job-1"));
+    }
+
+    #[test]
+    fn cancellation_state_cancels_child_tokens() {
+        let mut cancellation = CancellationState::default();
+        let child = cancellation.child_token("job-1");
+
+        assert!(!child.is_cancelled());
+
+        cancellation.request("job-1");
+
+        assert!(child.is_cancelled());
+        assert!(cancellation.is_requested("job-1"));
+        assert!(cancellation.clear("job-1"));
+        assert!(!cancellation.is_requested("job-1"));
     }
 }
