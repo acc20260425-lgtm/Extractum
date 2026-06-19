@@ -89,13 +89,11 @@ Priority: medium.
 
 - [ ] add CI for frontend tests, Svelte check, Rust tests, Rust lint, formatting, and `git diff --check`
 - [ ] verify Telegram and LLM event-driven UI flows after the next major backend changes
-- [ ] finish cancellation-token migration for analysis report/chat runs; keep
-  scheduler capacity and domain snapshots unchanged, but replace remaining
-  in-memory cancelled-run sets with `CancellationToken`-style run state where it
-  reduces custom synchronization
 - [ ] run live cancellation smoke tests for Prompt Pack, YouTube source jobs,
-  Takeout imports, and analysis runs through the normal Tauri command/UI paths,
-  confirming terminal events, cleanup, and partial-work semantics
+  Takeout imports, and analysis report runs through the normal Tauri command/UI
+  paths, confirming terminal events, cleanup, and partial-work semantics
+- [ ] review analysis chat cancellation only if chat grows beyond a single
+  scheduler-owned request into multi-step run state
 
 ### 3.5 Frontend Workspace Evolution
 
