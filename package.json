@@ -16,6 +16,7 @@
     "verify:project-runs": "npm run test:project-runs && npm run check && npm run test:rust:prompt-pack-runs",
     "verify": "node scripts/verify.mjs",
     "smoke:analysis": "node scripts/analysis-smoke.mjs",
+    "smoke:cancellation": "node scripts/cancellation-smoke.mjs",
     "tauri": "tauri"
   },
   "license": "MIT",

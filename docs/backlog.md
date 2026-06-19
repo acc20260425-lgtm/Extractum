@@ -89,9 +89,6 @@ Priority: medium.
 
 - [ ] add CI for frontend tests, Svelte check, Rust tests, Rust lint, formatting, and `git diff --check`
 - [ ] verify Telegram and LLM event-driven UI flows after the next major backend changes
-- [ ] add an opt-in local or CI smoke runner for the debug cancellation
-  fixtures covering Prompt Pack, YouTube source jobs, Takeout imports, and
-  analysis report runs
 - [ ] review analysis chat cancellation only if chat grows beyond a single
   scheduler-owned request into multi-step run state
 
