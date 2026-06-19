@@ -37,9 +37,9 @@ python -m research.youtube_pipeline.runner `
 Required environment variables:
 
 ```powershell
-$env:YOUTUBE_RESEARCH_LLM_BASE_URL = "https://api.openai.com/v1"
+$env:YOUTUBE_RESEARCH_LLM_BASE_URL = "http://localhost:20128/v1"
 $env:YOUTUBE_RESEARCH_LLM_API_KEY = "..."
-$env:YOUTUBE_RESEARCH_LLM_MODEL = "..."
+$env:YOUTUBE_RESEARCH_LLM_MODEL = "gemini/gemini-3.1-flash-lite-preview"
 ```
 
 The runner writes artifacts under:
