@@ -418,6 +418,7 @@ fn build_key_points(
             segment_refs,
             "segment_candidate_index",
             "segment candidate",
+            warnings,
         )?;
         let key_point_ref = format!("{source_ref_id}_key_point_{}", items.len() + 1);
 
@@ -472,6 +473,7 @@ fn build_quotes(
             segment_refs,
             "segment_candidate_index",
             "segment candidate",
+            warnings,
         )?;
         let quote_ref = format!("{source_ref_id}_quote_{}", items.len() + 1);
 
@@ -557,6 +559,7 @@ fn build_evidence(
             quote_refs,
             "quote_candidate_index",
             "quote candidate",
+            warnings,
         )?;
         items.push(serde_json::json!({
             "evidence_id": format!("{source_ref_id}_evidence_{}", items.len() + 1),
@@ -728,6 +731,7 @@ fn optional_index_ref(
     index_to_ref: &HashMap<usize, String>,
     label: &str,
     target_label: &str,
+    warnings: &mut Vec<serde_json::Value>,
 ) -> Result<Option<String>, PromptPackValidationError> {
     let Some(value) = object.get(key) else {
         return Ok(None);
@@ -740,11 +744,29 @@ fn optional_index_ref(
     };
     let index = usize::try_from(index)
         .map_err(|_| validation_error(format!("{label} is too large"), path))?;
-    index_to_ref.get(&index).cloned().map(Some).ok_or_else(|| {
-        validation_error(
-            format!("unknown {label} {index}; {label} {index} points to skipped {target_label}"),
-            path,
-        )
+    if let Some(reference) = index_to_ref.get(&index) {
+        return Ok(Some(reference.clone()));
+    }
+    warnings.push(invalid_optional_index_warning(
+        label,
+        target_label,
+        index,
+        path,
+    ));
+    Ok(None)
+}
+
+fn invalid_optional_index_warning(
+    label: &str,
+    target_label: &str,
+    index: usize,
+    path: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "code": format!("dropped_invalid_{label}"),
+        "candidate_index": index,
+        "object_path": path,
+        "message": format!("{label} {index} was dropped because it does not point to a retained {target_label}")
     })
 }
 

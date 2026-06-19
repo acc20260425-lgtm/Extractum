@@ -182,14 +182,18 @@ fn invalid_material_ref_is_rejected() {
 }
 
 #[test]
-fn evidence_quote_candidate_index_must_point_to_retained_quote_candidate() {
+fn evidence_quote_candidate_index_to_missing_quote_is_dropped_with_warning() {
     let mut parsed = parsed_output();
     parsed["evidence_fragment_candidates"][0]["quote_candidate_index"] = serde_json::json!(999);
 
-    let error = build_source_intermediate_entities(&input(), 1001, Some("Video title"), &parsed, 1)
-        .expect_err("unknown quote candidate index rejected");
+    let graph = build_source_intermediate_entities(&input(), 1001, Some("Video title"), &parsed, 1)
+        .expect("graph keeps evidence and drops bad optional quote link");
 
-    assert!(error.message.contains("unknown quote_candidate_index 999"));
+    assert!(graph["evidence"][0]["quote_ref"].is_null());
+    assert_eq!(
+        graph["warnings"][0]["code"],
+        "dropped_invalid_quote_candidate_index"
+    );
 }
 
 #[test]
@@ -219,40 +223,46 @@ fn provider_output_must_not_supply_backend_refs_or_ids() {
 }
 
 #[test]
-fn evidence_index_pointing_to_skipped_quote_candidate_is_rejected() {
+fn evidence_index_pointing_to_skipped_quote_candidate_is_dropped_with_warning() {
     let mut parsed = parsed_output();
     parsed["video_candidate"]["quote_candidates"][0]["text"] = serde_json::json!(" ");
     parsed["evidence_fragment_candidates"][0]["quote_candidate_index"] = serde_json::json!(0);
 
-    let error = build_source_intermediate_entities(&input(), 1001, Some("Video title"), &parsed, 1)
-        .expect_err("index pointing to skipped quote rejected");
+    let graph = build_source_intermediate_entities(&input(), 1001, Some("Video title"), &parsed, 1)
+        .expect("graph keeps evidence and drops skipped quote link");
 
-    assert!(error
-        .message
-        .contains("quote_candidate_index 0 points to skipped quote candidate"));
-    assert_eq!(
-        error.object_path.as_deref(),
-        Some("$.evidence_fragment_candidates[0].quote_candidate_index")
-    );
+    assert!(graph["evidence"][0]["quote_ref"].is_null());
+    assert!(graph["warnings"]
+        .as_array()
+        .expect("warnings")
+        .iter()
+        .any(
+            |warning| warning["code"] == "dropped_invalid_quote_candidate_index"
+                && warning["object_path"]
+                    == "$.evidence_fragment_candidates[0].quote_candidate_index"
+        ));
 }
 
 #[test]
-fn key_point_index_pointing_to_skipped_segment_candidate_reports_segment_candidate() {
+fn key_point_index_pointing_to_skipped_segment_candidate_is_dropped_with_warning() {
     let mut parsed = parsed_output();
     parsed["video_candidate"]["segment_candidates"] = serde_json::json!([]);
     parsed["video_candidate"]["key_point_candidates"][0]["segment_candidate_index"] =
         serde_json::json!(0);
 
-    let error = build_source_intermediate_entities(&input(), 1001, Some("Video title"), &parsed, 1)
-        .expect_err("index pointing to skipped segment rejected");
+    let graph = build_source_intermediate_entities(&input(), 1001, Some("Video title"), &parsed, 1)
+        .expect("graph keeps key point and drops skipped segment link");
 
-    assert!(error
-        .message
-        .contains("segment_candidate_index 0 points to skipped segment candidate"));
-    assert_eq!(
-        error.object_path.as_deref(),
-        Some("$.video_candidate.key_point_candidates[0].segment_candidate_index")
-    );
+    assert!(graph["key_points"][0]["segment_ref"].is_null());
+    assert!(graph["warnings"]
+        .as_array()
+        .expect("warnings")
+        .iter()
+        .any(
+            |warning| warning["code"] == "dropped_invalid_segment_candidate_index"
+                && warning["object_path"]
+                    == "$.video_candidate.key_point_candidates[0].segment_candidate_index"
+        ));
 }
 
 #[tokio::test]
