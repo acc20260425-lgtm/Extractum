@@ -28,6 +28,7 @@ grammers-mtsender = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901
 grammers-tl-types = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", features = ["deserializable-functions"] }
 zstd = "0.13"
 tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
 anyhow = "1.0"
 sha2 = "0.10"
 dirs = "6"

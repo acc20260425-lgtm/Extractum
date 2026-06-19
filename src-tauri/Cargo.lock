@@ -1282,6 +1282,7 @@ dependencies = [
  "tempfile",
  "time",
  "tokio",
+ "tokio-util",
  "url",
  "zstd",
 ]

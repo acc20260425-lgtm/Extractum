@@ -1,10 +1,10 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::future::Future;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use serde::Serialize;
 use tokio::sync::{Mutex, Notify};
+use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, AppResult};
 
@@ -82,25 +82,26 @@ impl LlmRequestMetadata {
 
 #[derive(Clone)]
 pub(crate) struct LlmRequestControl {
-    cancelled: Arc<AtomicBool>,
-    cancel_notify: Arc<Notify>,
+    token: CancellationToken,
 }
 
 impl LlmRequestControl {
     fn new() -> Self {
         Self {
-            cancelled: Arc::new(AtomicBool::new(false)),
-            cancel_notify: Arc::new(Notify::new()),
+            token: CancellationToken::new(),
         }
     }
 
     fn cancel(&self) {
-        self.cancelled.store(true, Ordering::SeqCst);
-        self.cancel_notify.notify_waiters();
+        self.token.cancel();
     }
 
     pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::SeqCst)
+        self.token.is_cancelled()
+    }
+
+    pub fn child_token(&self) -> CancellationToken {
+        self.token.child_token()
     }
 
     pub async fn run_cancellable<Fut, T, E>(&self, future: Fut) -> Result<T, LlmRequestError>
@@ -108,14 +109,13 @@ impl LlmRequestControl {
         Fut: Future<Output = Result<T, E>>,
         E: Into<AppError>,
     {
-        let cancelled = self.cancel_notify.notified();
         if self.is_cancelled() {
             return Err(LlmRequestError::Cancelled);
         }
 
         tokio::select! {
             result = future => result.map_err(|error| LlmRequestError::Failed(error.into())),
-            _ = cancelled => Err(LlmRequestError::Cancelled),
+            _ = self.token.cancelled() => Err(LlmRequestError::Cancelled),
         }
     }
 }
@@ -867,6 +867,51 @@ mod tests {
         })
         .await
         .expect("owned request should register");
+
+        assert_eq!(
+            task.await.expect("join task"),
+            Err(LlmRequestError::Cancelled)
+        );
+        assert_scheduler_empty(&scheduler).await;
+    }
+
+    #[tokio::test]
+    async fn cancelling_request_cancels_child_tokens() {
+        let scheduler = Arc::new(LlmSchedulerState::new());
+        let scheduler_for_task = scheduler.clone();
+        let (child_tx, mut child_rx) = mpsc::unbounded_channel();
+
+        let task = tokio::spawn(async move {
+            scheduler_for_task
+                .run_request(
+                    metadata(
+                        "with-child",
+                        "default",
+                        LlmRequestPriority::Background,
+                        LlmRequestKind::AnalysisReportMap,
+                    ),
+                    |_| {},
+                    move |control| async move {
+                        let child_token = control.child_token();
+                        let _ = child_tx.send(child_token.clone());
+                        child_token.cancelled().await;
+                        control
+                            .run_cancellable(async move { Ok::<_, String>("unreachable") })
+                            .await
+                    },
+                )
+                .await
+        });
+
+        let child_token = timeout(Duration::from_secs(1), child_rx.recv())
+            .await
+            .expect("child token should be sent")
+            .expect("child token");
+        assert!(!child_token.is_cancelled());
+        assert!(scheduler.cancel_request("with-child").await);
+        timeout(Duration::from_secs(1), child_token.cancelled())
+            .await
+            .expect("child token should be cancelled");
 
         assert_eq!(
             task.await.expect("join task"),
