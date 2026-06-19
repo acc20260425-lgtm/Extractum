@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, AppResult};
 use crate::job_helpers::{ActiveJobGuards, CancellationState};
@@ -150,6 +151,15 @@ impl TakeoutImportState {
             .is_requested(job_id)
     }
 
+    pub(crate) async fn cancellation_token(&self, job_id: &str) -> Option<CancellationToken> {
+        let mut inner = self.inner.lock().await;
+        let job = inner.jobs.get(job_id)?;
+        if is_terminal_status(&job.status) {
+            return None;
+        }
+        Some(inner.cancel_requested.child_token(job_id))
+    }
+
     pub(crate) async fn update_job<F>(
         &self,
         job_id: &str,
@@ -282,6 +292,38 @@ mod tests {
             .expect("source released");
         assert_eq!(next.job_id, "takeout-2");
         assert_eq!(next.batch_id, 101);
+    }
+
+    #[tokio::test]
+    async fn job_state_cancels_child_tokens() {
+        let state = TakeoutImportState::new();
+        let job = state
+            .create_job(7, 1, 100, TAKEOUT_HISTORY_SCOPE_CURRENT)
+            .await
+            .expect("create job");
+        let token = state
+            .cancellation_token(&job.job_id)
+            .await
+            .expect("cancellation token");
+
+        assert!(!token.is_cancelled());
+
+        state
+            .request_cancel(&job.job_id)
+            .await
+            .expect("cancel active job");
+        tokio::time::timeout(std::time::Duration::from_secs(1), token.cancelled())
+            .await
+            .expect("token cancelled");
+
+        state
+            .finish_job(&job.job_id, |job| {
+                job.status = STATUS_COMPLETED.to_string();
+                job.phase = STATUS_COMPLETED.to_string();
+            })
+            .await
+            .expect("finish job");
+        assert!(state.cancellation_token(&job.job_id).await.is_none());
     }
 
     #[tokio::test]
