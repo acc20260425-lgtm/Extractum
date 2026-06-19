@@ -1,8 +1,11 @@
 #![allow(clippy::needless_borrow, clippy::too_many_arguments)]
 
+use std::future::Future;
+
 use grammers_client::{tl, Client};
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
+use tokio_util::sync::CancellationToken;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppErrorKind, AppResult};
@@ -634,12 +637,34 @@ struct TakeoutImportOutcome {
     warnings: Vec<String>,
 }
 
+async fn run_takeout_step_with_cancel<Fut, T>(
+    cancellation_token: Option<CancellationToken>,
+    future: Fut,
+) -> AppResult<T>
+where
+    Fut: Future<Output = AppResult<T>>,
+{
+    let Some(cancellation_token) = cancellation_token else {
+        return future.await;
+    };
+
+    if cancellation_token.is_cancelled() {
+        return Err(AppError::validation("Takeout import cancelled"));
+    }
+
+    tokio::select! {
+        result = future => result,
+        _ = cancellation_token.cancelled() => Err(AppError::validation("Takeout import cancelled")),
+    }
+}
+
 async fn run_takeout_migrated_history_import(
     handle: &AppHandle,
     job_id: &str,
     batch_id: i64,
 ) -> AppResult<TakeoutImportOutcome> {
     let takeout_state = handle.state::<TakeoutImportState>();
+    let cancellation_token = takeout_state.cancellation_token(job_id).await;
     let telegram_state = handle.state::<TelegramState>();
     let repair_state = handle.state::<SourceIdentityRepairState>();
     require_source_identity_ready(repair_state.inner()).await?;
@@ -666,8 +691,11 @@ async fn run_takeout_migrated_history_import(
         job.message = Some("Resolving Telegram source.".to_string());
     })
     .await;
-    let resolved_peer =
-        resolve_and_refresh_peer(handle, &pool, &client, &source, account_id).await?;
+    let resolved_peer = run_takeout_step_with_cancel(
+        cancellation_token.clone(),
+        resolve_and_refresh_peer(handle, &pool, &client, &source, account_id),
+    )
+    .await?;
     let (resolved_peer_kind, resolved_peer_id) = peer_ref_identity(resolved_peer.peer)?;
     update_takeout_resolved_peer(
         &pool,
@@ -684,20 +712,27 @@ async fn run_takeout_migrated_history_import(
         job.message = Some("Starting Takeout session.".to_string());
     })
     .await;
-    let alias = prepare_export_dc_alias(&session).await?;
+    let alias = run_takeout_step_with_cancel(
+        cancellation_token.clone(),
+        prepare_export_dc_alias(&session),
+    )
+    .await?;
     let init_request = takeout_init_request_for_source_subtype(TELEGRAM_KIND_GROUP)?;
     let mut warnings = Vec::new();
     let mut fallback_used = false;
     let mut export_attempts = ExportDcAttemptState::new();
-    let takeout = export_dc_invoke_with_provenance(
-        &pool,
-        batch_id,
-        &client,
-        &alias,
-        &init_request,
-        &mut warnings,
-        &mut fallback_used,
-        &mut export_attempts,
+    let takeout = run_takeout_step_with_cancel(
+        cancellation_token.clone(),
+        export_dc_invoke_with_provenance(
+            &pool,
+            batch_id,
+            &client,
+            &alias,
+            &init_request,
+            &mut warnings,
+            &mut fallback_used,
+            &mut export_attempts,
+        ),
     )
     .await?;
     let tl::enums::account::Takeout::Takeout(takeout) = takeout;
@@ -709,16 +744,19 @@ async fn run_takeout_migrated_history_import(
         job.message = Some("Revalidating migrated history availability.".to_string());
     })
     .await;
-    let revalidated_chat_id = revalidate_migrated_from_chat_id(
-        &pool,
-        batch_id,
-        &client,
-        &alias,
-        takeout_id,
-        resolved_peer.peer,
-        &mut warnings,
-        &mut fallback_used,
-        &mut export_attempts,
+    let revalidated_chat_id = run_takeout_step_with_cancel(
+        cancellation_token.clone(),
+        revalidate_migrated_from_chat_id(
+            &pool,
+            batch_id,
+            &client,
+            &alias,
+            takeout_id,
+            resolved_peer.peer,
+            &mut warnings,
+            &mut fallback_used,
+            &mut export_attempts,
+        ),
     )
     .await?;
     let validation =
@@ -741,18 +779,21 @@ async fn run_takeout_migrated_history_import(
         job.warnings = warnings.to_vec();
     })
     .await;
-    let split_ranges = export_dc_invoke_with_provenance(
-        &pool,
-        batch_id,
-        &client,
-        &alias,
-        &tl::functions::InvokeWithTakeout {
-            takeout_id,
-            query: tl::functions::messages::GetSplitRanges {},
-        },
-        &mut warnings,
-        &mut fallback_used,
-        &mut export_attempts,
+    let split_ranges = run_takeout_step_with_cancel(
+        cancellation_token.clone(),
+        export_dc_invoke_with_provenance(
+            &pool,
+            batch_id,
+            &client,
+            &alias,
+            &tl::functions::InvokeWithTakeout {
+                takeout_id,
+                query: tl::functions::messages::GetSplitRanges {},
+            },
+            &mut warnings,
+            &mut fallback_used,
+            &mut export_attempts,
+        ),
     )
     .await?;
     let split_count = split_ranges.len() as i64;
@@ -769,19 +810,22 @@ async fn run_takeout_migrated_history_import(
     let mut total = 0_i64;
     let mut only_my_messages_recorded = false;
     for range in selected_ranges {
-        let probe = takeout_history_count_probe(
-            &pool,
-            batch_id,
-            &client,
-            &alias,
-            takeout_id,
-            input_peer.clone(),
-            range.clone(),
-            TELEGRAM_KIND_GROUP,
-            &mut warnings,
-            &mut fallback_used,
-            &mut export_attempts,
-            &mut only_my_messages_recorded,
+        let probe = run_takeout_step_with_cancel(
+            cancellation_token.clone(),
+            takeout_history_count_probe(
+                &pool,
+                batch_id,
+                &client,
+                &alias,
+                takeout_id,
+                input_peer.clone(),
+                range.clone(),
+                TELEGRAM_KIND_GROUP,
+                &mut warnings,
+                &mut fallback_used,
+                &mut export_attempts,
+                &mut only_my_messages_recorded,
+            ),
         )
         .await?;
         total += probe.count;
@@ -840,13 +884,16 @@ async fn run_takeout_migrated_history_import(
     .await;
     let fallback_before = fallback_used;
     record_export_dc_attempt_if_needed(&pool, batch_id, &alias, &mut export_attempts).await?;
-    finish_takeout_session(
-        &client,
-        &alias,
-        takeout_id,
-        true,
-        &mut warnings,
-        &mut fallback_used,
+    run_takeout_step_with_cancel(
+        cancellation_token.clone(),
+        finish_takeout_session(
+            &client,
+            &alias,
+            takeout_id,
+            true,
+            &mut warnings,
+            &mut fallback_used,
+        ),
     )
     .await?;
     record_export_dc_fallback_if_needed(
@@ -875,6 +922,7 @@ async fn run_takeout_source_import(
     batch_id: i64,
 ) -> AppResult<TakeoutImportOutcome> {
     let takeout_state = handle.state::<TakeoutImportState>();
+    let cancellation_token = takeout_state.cancellation_token(job_id).await;
     let telegram_state = handle.state::<TelegramState>();
     let repair_state = handle.state::<SourceIdentityRepairState>();
     require_source_identity_ready(repair_state.inner()).await?;
@@ -899,8 +947,11 @@ async fn run_takeout_source_import(
         job.message = Some("Resolving Telegram source.".to_string());
     })
     .await;
-    let resolved_peer =
-        resolve_and_refresh_peer(handle, &pool, &client, &source, account_id).await?;
+    let resolved_peer = run_takeout_step_with_cancel(
+        cancellation_token.clone(),
+        resolve_and_refresh_peer(handle, &pool, &client, &source, account_id),
+    )
+    .await?;
     let (resolved_peer_kind, resolved_peer_id) = peer_ref_identity(resolved_peer.peer)?;
     update_takeout_resolved_peer(
         &pool,
@@ -917,26 +968,36 @@ async fn run_takeout_source_import(
         job.message = Some("Starting Takeout session.".to_string());
     })
     .await;
-    client
-        .invoke(&tl::functions::users::GetUsers {
-            id: vec![tl::enums::InputUser::UserSelf],
-        })
-        .await
-        .map_err(|e| AppError::network(format!("Telegram self check failed: {e}")))?;
-    let alias = prepare_export_dc_alias(&session).await?;
+    run_takeout_step_with_cancel(cancellation_token.clone(), async {
+        client
+            .invoke(&tl::functions::users::GetUsers {
+                id: vec![tl::enums::InputUser::UserSelf],
+            })
+            .await
+            .map_err(|e| AppError::network(format!("Telegram self check failed: {e}")))
+    })
+    .await?;
+    let alias = run_takeout_step_with_cancel(
+        cancellation_token.clone(),
+        prepare_export_dc_alias(&session),
+    )
+    .await?;
     let init_request = takeout_init_request_for_source_subtype(&telegram_source_subtype)?;
     let mut warnings = Vec::new();
     let mut fallback_used = false;
     let mut export_attempts = ExportDcAttemptState::new();
-    let takeout = export_dc_invoke_with_provenance(
-        &pool,
-        batch_id,
-        &client,
-        &alias,
-        &init_request,
-        &mut warnings,
-        &mut fallback_used,
-        &mut export_attempts,
+    let takeout = run_takeout_step_with_cancel(
+        cancellation_token.clone(),
+        export_dc_invoke_with_provenance(
+            &pool,
+            batch_id,
+            &client,
+            &alias,
+            &init_request,
+            &mut warnings,
+            &mut fallback_used,
+            &mut export_attempts,
+        ),
     )
     .await?;
     let tl::enums::account::Takeout::Takeout(takeout) = takeout;
@@ -1061,6 +1122,7 @@ async fn run_started_takeout_source_import_inner(
     export_attempts: &mut ExportDcAttemptState,
 ) -> AppResult<TakeoutImportOutcome> {
     let takeout_state = handle.state::<TakeoutImportState>();
+    let cancellation_token = takeout_state.cancellation_token(job_id).await;
     let input_peer: tl::enums::InputPeer = resolved_peer.peer.into();
     let mut only_my_messages_recorded = false;
 
@@ -1070,31 +1132,37 @@ async fn run_started_takeout_source_import_inner(
         job.warnings.extend(warnings.clone());
     })
     .await;
-    validate_takeout_peer(
-        pool,
-        batch_id,
-        &client,
-        &alias,
-        takeout_id,
-        telegram_source_subtype,
-        resolved_peer.peer,
-        warnings,
-        fallback_used,
-        export_attempts,
-        &mut only_my_messages_recorded,
+    run_takeout_step_with_cancel(
+        cancellation_token.clone(),
+        validate_takeout_peer(
+            pool,
+            batch_id,
+            &client,
+            &alias,
+            takeout_id,
+            telegram_source_subtype,
+            resolved_peer.peer,
+            warnings,
+            fallback_used,
+            export_attempts,
+            &mut only_my_messages_recorded,
+        ),
     )
     .await?;
-    let migrated_from_chat_id = detect_supergroup_migration(
-        pool,
-        batch_id,
-        client,
-        alias,
-        takeout_id,
-        telegram_source_subtype,
-        resolved_peer.peer,
-        warnings,
-        fallback_used,
-        export_attempts,
+    let migrated_from_chat_id = run_takeout_step_with_cancel(
+        cancellation_token.clone(),
+        detect_supergroup_migration(
+            pool,
+            batch_id,
+            client,
+            alias,
+            takeout_id,
+            telegram_source_subtype,
+            resolved_peer.peer,
+            warnings,
+            fallback_used,
+            export_attempts,
+        ),
     )
     .await?;
     if let Some(migrated_from_chat_id) = migrated_from_chat_id {
@@ -1119,18 +1187,21 @@ async fn run_started_takeout_source_import_inner(
         job.warnings = warnings.to_vec();
     })
     .await;
-    let split_ranges = export_dc_invoke_with_provenance(
-        pool,
-        batch_id,
-        &client,
-        &alias,
-        &tl::functions::InvokeWithTakeout {
-            takeout_id,
-            query: tl::functions::messages::GetSplitRanges {},
-        },
-        warnings,
-        fallback_used,
-        export_attempts,
+    let split_ranges = run_takeout_step_with_cancel(
+        cancellation_token.clone(),
+        export_dc_invoke_with_provenance(
+            pool,
+            batch_id,
+            &client,
+            &alias,
+            &tl::functions::InvokeWithTakeout {
+                takeout_id,
+                query: tl::functions::messages::GetSplitRanges {},
+            },
+            warnings,
+            fallback_used,
+            export_attempts,
+        ),
     )
     .await?;
     let split_count = split_ranges.len() as i64;
@@ -1146,19 +1217,22 @@ async fn run_started_takeout_source_import_inner(
     let mut counted_ranges = Vec::new();
     let mut total = 0_i64;
     for range in selected_ranges {
-        let probe = takeout_history_count_probe(
-            pool,
-            batch_id,
-            &client,
-            &alias,
-            takeout_id,
-            input_peer.clone(),
-            range.clone(),
-            telegram_source_subtype,
-            warnings,
-            fallback_used,
-            export_attempts,
-            &mut only_my_messages_recorded,
+        let probe = run_takeout_step_with_cancel(
+            cancellation_token.clone(),
+            takeout_history_count_probe(
+                pool,
+                batch_id,
+                &client,
+                &alias,
+                takeout_id,
+                input_peer.clone(),
+                range.clone(),
+                telegram_source_subtype,
+                warnings,
+                fallback_used,
+                export_attempts,
+                &mut only_my_messages_recorded,
+            ),
         )
         .await?;
         total += probe.count;
@@ -1217,7 +1291,11 @@ async fn run_started_takeout_source_import_inner(
     .await;
     let fallback_before = *fallback_used;
     record_export_dc_attempt_if_needed(pool, batch_id, alias, export_attempts).await?;
-    finish_takeout_session(client, alias, takeout_id, true, warnings, fallback_used).await?;
+    run_takeout_step_with_cancel(
+        cancellation_token.clone(),
+        finish_takeout_session(client, alias, takeout_id, true, warnings, fallback_used),
+    )
+    .await?;
     record_export_dc_fallback_if_needed(
         pool,
         batch_id,
@@ -1591,6 +1669,7 @@ async fn import_takeout_history_pages(
     migrated_from_chat_id: Option<i64>,
 ) -> AppResult<TakeoutHistoryImport> {
     let takeout_state = handle.state::<TakeoutImportState>();
+    let cancellation_token = takeout_state.cancellation_token(job_id).await;
     let pool = get_pool(handle).await?;
     let range = counted_range.range;
     let split_count = counted_range.count;
@@ -1605,21 +1684,24 @@ async fn import_takeout_history_pages(
         }
 
         let request = takeout_page_request(cursor);
-        let response = takeout_history_page_response(
-            &pool,
-            batch_id,
-            client,
-            alias,
-            takeout_id,
-            input_peer.clone(),
-            range.clone(),
-            request,
-            telegram_source_subtype,
-            &mut only_my_messages,
-            warnings,
-            fallback_used,
-            export_attempts,
-            only_my_messages_recorded,
+        let response = run_takeout_step_with_cancel(
+            cancellation_token.clone(),
+            takeout_history_page_response(
+                &pool,
+                batch_id,
+                client,
+                alias,
+                takeout_id,
+                input_peer.clone(),
+                range.clone(),
+                request,
+                telegram_source_subtype,
+                &mut only_my_messages,
+                warnings,
+                fallback_used,
+                export_attempts,
+                only_my_messages_recorded,
+            ),
         )
         .await?;
         let page = parse_takeout_page(response, profile)?;
@@ -1993,11 +2075,11 @@ mod tests {
         is_channel_private_error, load_takeout_source_subtype, migrated_history_detected_warning,
         raw_parse, record_channel_private_fallback_if_supported,
         record_export_dc_attempt_if_needed, record_export_dc_fallback_if_needed,
-        record_only_my_messages_fallback_if_needed, supports_only_my_messages_fallback,
-        ExportDcAlias, ExportDcAttemptState, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
-        TELEGRAM_KIND_SUPERGROUP,
+        record_only_my_messages_fallback_if_needed, run_takeout_step_with_cancel,
+        supports_only_my_messages_fallback, ExportDcAlias, ExportDcAttemptState,
+        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
     };
-    use crate::error::{AppError, AppErrorKind};
+    use crate::error::{AppError, AppErrorKind, AppResult};
     use crate::ingest_provenance::{
         create_telegram_takeout_batch, finalize_ingest_batch, CreateTelegramTakeoutBatch,
         TerminalBatchStatus,
@@ -2011,6 +2093,7 @@ mod tests {
     };
     use crate::takeout_import::state::TakeoutImportState;
     use grammers_client::tl;
+    use tokio_util::sync::CancellationToken;
 
     #[test]
     fn only_my_messages_fallback_is_limited_to_channels() {
@@ -2027,6 +2110,26 @@ mod tests {
         assert!(!is_channel_private_error(&AppError::network(
             "Rpc error 400: TAKEOUT_INVALID"
         )));
+    }
+
+    #[tokio::test]
+    async fn takeout_step_cancel_wrapper_allows_completed_future() {
+        let result = run_takeout_step_with_cancel(None, async { Ok::<_, AppError>("done") })
+            .await
+            .expect("step result");
+
+        assert_eq!(result, "done");
+    }
+
+    #[tokio::test]
+    async fn takeout_step_cancel_wrapper_interrupts_pending_future() {
+        let token = CancellationToken::new();
+        token.cancel();
+
+        let result: AppResult<()> =
+            run_takeout_step_with_cancel(Some(token), std::future::pending()).await;
+
+        assert!(result.is_err());
     }
 
     #[tokio::test]
