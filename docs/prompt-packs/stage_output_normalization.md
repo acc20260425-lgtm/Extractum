@@ -62,7 +62,24 @@ Those checks remain validator responsibilities.
 
 ---
 
-## 3. Persistence Rule
+## 3. Optional Candidate Links
+
+YouTube transcript-analysis output may include optional candidate-to-candidate
+links such as `segment_candidate_index` and `quote_candidate_index`.
+
+These links are best-effort provider hints. If an index points to a candidate
+that was not retained in the intermediate graph, the runtime drops only that
+link and records an `intermediate_entities.warnings` entry such as
+`dropped_invalid_segment_candidate_index` or
+`dropped_invalid_quote_candidate_index`.
+
+This keeps local linkage noise from failing the whole transcript stage while
+preserving stricter validation for malformed indexes, unknown `material_refs`,
+backend-owned IDs, dangling final refs, and synthesis traversal invariants.
+
+---
+
+## 4. Persistence Rule
 
 If downstream runtime code consumes a normalized shape, persist the normalized
 shape as `parsed_output`.
@@ -76,7 +93,7 @@ Raw provider output is still preserved separately as `raw_output`.
 
 ---
 
-## 4. Testing Expectations
+## 5. Testing Expectations
 
 Normalization changes should include tests for both layers:
 
