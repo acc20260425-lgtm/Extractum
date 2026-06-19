@@ -1,8 +1,10 @@
 use std::collections::{HashMap, HashSet};
+use std::future::Future;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
@@ -318,6 +320,15 @@ impl SourceJobState {
             .is_requested(job_id)
     }
 
+    pub(crate) async fn cancellation_token(&self, job_id: &str) -> Option<CancellationToken> {
+        let mut inner = self.inner.lock().await;
+        let job = inner.jobs.get(job_id)?;
+        if is_terminal_status(&job.status) {
+            return None;
+        }
+        Some(inner.cancel_requested.child_token(job_id))
+    }
+
     pub(crate) async fn update_job<F>(&self, job_id: &str, update: F) -> Option<SourceJobRecord>
     where
         F: FnOnce(&mut SourceJobRecord),
@@ -563,12 +574,17 @@ async fn run_source_job_steps(
     require_source_identity_ready(repair_state.inner()).await?;
     let mut warnings = Vec::new();
     let sync_source_id = related_source_id.unwrap_or(source_id);
+    let cancellation_token = state.cancellation_token(job_id).await;
     if options.metadata {
         update_and_emit_source_job(handle, state, job_id, |job| {
             job.message = Some("Refreshing YouTube metadata.".to_string());
         })
         .await;
-        sync_youtube_metadata(handle, sync_source_id).await?;
+        run_source_job_step_with_cancel(
+            cancellation_token.clone(),
+            sync_youtube_metadata(handle, sync_source_id),
+        )
+        .await?;
     }
 
     if state.is_cancel_requested(job_id).await {
@@ -580,17 +596,48 @@ async fn run_source_job_steps(
             job.message = Some("Syncing YouTube transcript.".to_string());
         })
         .await;
-        sync_youtube_transcript(handle, sync_source_id).await?;
+        run_source_job_step_with_cancel(
+            cancellation_token.clone(),
+            sync_youtube_transcript(handle, sync_source_id),
+        )
+        .await?;
     }
     if options.comments {
         update_and_emit_source_job(handle, state, job_id, |job| {
             job.message = Some("Syncing YouTube comments.".to_string());
         })
         .await;
-        warnings.extend(sync_youtube_comments(handle, sync_source_id).await?);
+        warnings.extend(
+            run_source_job_step_with_cancel(
+                cancellation_token.clone(),
+                sync_youtube_comments(handle, sync_source_id),
+            )
+            .await?,
+        );
     }
 
     Ok(warnings)
+}
+
+async fn run_source_job_step_with_cancel<Fut, T>(
+    cancellation_token: Option<CancellationToken>,
+    future: Fut,
+) -> AppResult<T>
+where
+    Fut: Future<Output = AppResult<T>>,
+{
+    let Some(cancellation_token) = cancellation_token else {
+        return future.await;
+    };
+
+    if cancellation_token.is_cancelled() {
+        return Err(AppError::validation("Source job cancelled"));
+    }
+
+    tokio::select! {
+        result = future => result,
+        _ = cancellation_token.cancelled() => Err(AppError::validation("Source job cancelled")),
+    }
 }
 
 async fn load_video_metadata_or_refresh<F, Fut>(
@@ -1022,10 +1069,11 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::{
-        retryable_playlist_video_rows, SourceJobListFilter, SourceJobState, SourceJobStatus,
-        SourceJobType, YoutubeSyncOptions,
+        retryable_playlist_video_rows, run_source_job_step_with_cancel, SourceJobListFilter,
+        SourceJobState, SourceJobStatus, SourceJobType, YoutubeSyncOptions,
     };
-    use crate::error::AppErrorKind;
+    use crate::error::{AppError, AppErrorKind, AppResult};
+    use tokio_util::sync::CancellationToken;
 
     #[tokio::test]
     async fn jobs_reload_missing_typed_video_metadata_after_refresh_callback() {
@@ -1220,6 +1268,62 @@ mod tests {
 
         assert_eq!(finished.status, SourceJobStatus::Cancelled);
         assert_eq!(finished.message.as_deref(), Some("Source job cancelled."));
+    }
+
+    #[tokio::test]
+    async fn job_state_cancels_child_tokens() {
+        let state = SourceJobState::new();
+        let options = YoutubeSyncOptions {
+            metadata: false,
+            transcripts: false,
+            comments: true,
+        };
+        let job = state
+            .create_job(7, SourceJobType::YoutubeVideoCommentsSync, None, options)
+            .await
+            .expect("create comments job");
+        let token = state
+            .cancellation_token(&job.job_id)
+            .await
+            .expect("cancellation token");
+
+        assert!(!token.is_cancelled());
+
+        state
+            .request_cancel(&job.job_id)
+            .await
+            .expect("request cancel");
+        tokio::time::timeout(std::time::Duration::from_secs(1), token.cancelled())
+            .await
+            .expect("token cancelled");
+
+        state
+            .finish_job(&job.job_id, |job| {
+                job.status = SourceJobStatus::Succeeded;
+            })
+            .await
+            .expect("finish job");
+        assert!(state.cancellation_token(&job.job_id).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn source_job_step_cancel_wrapper_allows_completed_future() {
+        let result = run_source_job_step_with_cancel(None, async { Ok::<_, AppError>("done") })
+            .await
+            .expect("step result");
+
+        assert_eq!(result, "done");
+    }
+
+    #[tokio::test]
+    async fn source_job_step_cancel_wrapper_interrupts_pending_future() {
+        let token = CancellationToken::new();
+        token.cancel();
+
+        let result: AppResult<()> =
+            run_source_job_step_with_cancel(Some(token), std::future::pending()).await;
+
+        assert!(result.is_err());
     }
 
     #[tokio::test]
