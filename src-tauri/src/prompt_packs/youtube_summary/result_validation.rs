@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
 
+use jsonschema::{error::ValidationErrorKind, ValidationError, Validator};
 use serde_json::Value;
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
@@ -37,20 +39,7 @@ pub(crate) fn validate_youtube_summary_canonical_result(
 ) -> Vec<PromptPackResultValidationFinding> {
     let mut findings = Vec::new();
 
-    expect_string_value(
-        canonical,
-        "schema_version",
-        "1.0",
-        "$.schema_version",
-        &mut findings,
-    );
-    expect_string_value(
-        canonical,
-        "pack_id",
-        "youtube_summary",
-        "$.pack_id",
-        &mut findings,
-    );
+    validate_canonical_result_schema(canonical, &mut findings);
     if canonical.get("run_id").and_then(Value::as_i64) != Some(context.run_id) {
         findings.push(finding(
             "error",
@@ -191,20 +180,84 @@ fn has_error(findings: &[PromptPackResultValidationFinding]) -> bool {
     findings.iter().any(|finding| finding.severity == "error")
 }
 
-fn expect_string_value(
-    object: &Value,
-    key: &str,
-    expected: &str,
-    path: &str,
+fn validate_canonical_result_schema(
+    canonical: &Value,
     findings: &mut Vec<PromptPackResultValidationFinding>,
 ) {
-    if object.get(key).and_then(Value::as_str) != Some(expected) {
-        findings.push(finding(
-            "error",
-            "RV-RESULT-003",
-            format!("{key} must be {expected}"),
-            Some(path.to_string()),
-        ));
+    match canonical_result_validator() {
+        Ok(validator) => {
+            for error in validator.iter_errors(canonical) {
+                let object_path = jsonschema_error_object_path(&error);
+                findings.push(finding(
+                    "error",
+                    "RV-RESULT-003",
+                    format!("schema validation failed at {object_path}: {error}"),
+                    Some(object_path),
+                ));
+            }
+        }
+        Err(message) => {
+            findings.push(finding(
+                "error",
+                "RV-RESULT-003",
+                message,
+                Some("$".to_string()),
+            ));
+        }
+    }
+}
+
+fn canonical_result_validator() -> Result<&'static Validator, String> {
+    static VALIDATOR: OnceLock<Result<Validator, String>> = OnceLock::new();
+    VALIDATOR
+        .get_or_init(|| {
+            let schema: serde_json::Value = serde_json::from_str(include_str!(
+                "../../../prompt-packs/youtube_summary/1.0.0/schemas/canonical-result.json"
+            ))
+            .map_err(|error| format!("invalid canonical result schema JSON: {error}"))?;
+            jsonschema::validator_for(&schema)
+                .map_err(|error| format!("invalid canonical result schema: {error}"))
+        })
+        .as_ref()
+        .map_err(Clone::clone)
+}
+
+fn jsonschema_error_object_path(error: &ValidationError<'_>) -> String {
+    let object_path = jsonschema_instance_path_to_object_path(&error.instance_path().to_string());
+    match error.kind() {
+        ValidationErrorKind::Required { property } => property
+            .as_str()
+            .map(|property| jsonschema_child_object_path(&object_path, property))
+            .unwrap_or(object_path),
+        _ => object_path,
+    }
+}
+
+fn jsonschema_instance_path_to_object_path(instance_path: &str) -> String {
+    if instance_path.is_empty() {
+        return "$".to_string();
+    }
+
+    let mut object_path = "$".to_string();
+    for segment in instance_path.trim_start_matches('/').split('/') {
+        let segment = segment.replace("~1", "/").replace("~0", "~");
+        if segment.chars().all(|character| character.is_ascii_digit()) {
+            object_path.push('[');
+            object_path.push_str(&segment);
+            object_path.push(']');
+        } else {
+            object_path.push('.');
+            object_path.push_str(&segment);
+        }
+    }
+    object_path
+}
+
+fn jsonschema_child_object_path(parent_path: &str, property: &str) -> String {
+    if parent_path == "$" {
+        format!("$.{property}")
+    } else {
+        format!("{parent_path}.{property}")
     }
 }
 
@@ -1102,6 +1155,17 @@ mod tests {
             validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
 
         assert_has_error(&findings, "RV-RESULT-003", "$.claims");
+    }
+
+    #[test]
+    fn canonical_result_schema_shape_error_returns_finding() {
+        let mut canonical = valid_canonical_result();
+        canonical["metadata"] = serde_json::json!([]);
+
+        let findings =
+            validate_youtube_summary_canonical_result(&canonical, &context("complete", "standard"));
+
+        assert_has_error(&findings, "RV-RESULT-003", "$.metadata");
     }
 
     #[test]
