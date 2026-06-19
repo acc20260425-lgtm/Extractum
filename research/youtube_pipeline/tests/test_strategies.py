@@ -74,7 +74,6 @@ class StrategyTests(unittest.TestCase):
                 "moc_guided_map_reduce",
                 "one_shot_full_json",
                 "one_shot_markdown_plus_json",
-                "timeline_segment_reduce",
                 "two_pass_summary_structure",
             ],
         )

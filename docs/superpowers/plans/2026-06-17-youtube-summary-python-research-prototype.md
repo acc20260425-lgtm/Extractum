@@ -25,7 +25,7 @@
 - Create: `research/youtube_pipeline/prompts.py`
   - Prompt builders for each strategy step.
 - Create: `research/youtube_pipeline/strategies.py`
-  - Implements `one_shot_full_json`, `one_shot_markdown_plus_json`, `two_pass_summary_structure`, `chunk_map_reduce`, and `timeline_segment_reduce`.
+  - Implements `one_shot_full_json`, `one_shot_markdown_plus_json`, `two_pass_summary_structure`, and `chunk_map_reduce`.
 - Create: `research/youtube_pipeline/runner.py`
   - CLI entry point that reads transcript files, runs selected strategies, and writes artifacts.
 - Create: `research/youtube_pipeline/tests/`
@@ -937,7 +937,6 @@ Append to `StrategyTests` in `test_strategies.py`:
                 "chunk_map_reduce",
                 "one_shot_full_json",
                 "one_shot_markdown_plus_json",
-                "timeline_segment_reduce",
                 "two_pass_summary_structure",
             ],
         )
@@ -1017,27 +1016,11 @@ def run_chunk_map_reduce(
     )
 
 
-def run_timeline_segment_reduce(
-    *,
-    client: LlmClient,
-    transcript: str,
-    output_language: str,
-    max_tokens: int,
-) -> StrategyOutcome:
-    return run_two_pass_summary_structure(
-        client=client,
-        transcript=transcript,
-        output_language=output_language,
-        max_tokens=max_tokens,
-    )
-
-
 STRATEGIES = {
     "one_shot_full_json": run_one_shot_full_json,
     "one_shot_markdown_plus_json": run_one_shot_markdown_plus_json,
     "two_pass_summary_structure": run_two_pass_summary_structure,
     "chunk_map_reduce": run_chunk_map_reduce,
-    "timeline_segment_reduce": run_timeline_segment_reduce,
 }
 ```
 
@@ -1339,17 +1322,17 @@ Spec coverage:
 - Normalized output contract is covered by Task 2.
 - Metrics are covered by Task 3 and Task 9.
 - One-shot baseline is covered by Task 7.
-- Five named strategies are covered by Task 8.
+- Four named strategies are covered by Task 8.
 - Generated artifacts are covered by Task 9.
 - Usage documentation is covered by Task 10.
 
 Intentional first-implementation limitation:
 
-- Task 8 registers all five strategies, but several wrappers initially reuse the
+- Task 8 registers four strategies, but some wrappers initially reuse the
   one-shot/two-pass plumbing. That is acceptable for the first runnable
   prototype because it creates a tested CLI and artifact format. The next
-  research iteration should make `chunk_map_reduce` and
-  `timeline_segment_reduce` use distinct chunking and segment prompts.
+  research iteration should make `chunk_map_reduce` use distinct chunking
+  prompts.
 
 Verification command:
 

@@ -339,19 +339,6 @@ def run_chunk_map_reduce(
     )
 
 
-def run_timeline_segment_reduce(
-    *,
-    client: LlmClient,
-    transcript: str,
-    options: StrategyOptions,
-) -> StrategyOutcome:
-    return run_two_pass_summary_structure(
-        client=client,
-        transcript=transcript,
-        options=options,
-    )
-
-
 def run_antigravity_chunk_map_reduce(
     *,
     client: LlmClient,
@@ -1169,5 +1156,4 @@ STRATEGIES = {
     "two_pass_summary_structure": run_two_pass_summary_structure,
     "chunk_map_reduce": run_chunk_map_reduce,
     "moc_guided_map_reduce": run_moc_guided_map_reduce,
-    "timeline_segment_reduce": run_timeline_segment_reduce,
 }

@@ -192,7 +192,7 @@ def run_one_shot_markdown_plus_json(
 
 - [x] **Step 5: Migrate chunked strategies to `StrategyOptions`**
 
-Update `run_chunk_map_reduce`, `run_timeline_segment_reduce`, and `run_antigravity_chunk_map_reduce` signatures to accept only `options`. Replace:
+Update `run_chunk_map_reduce` and `run_antigravity_chunk_map_reduce` signatures to accept only `options`. Replace:
 
 ```python
 output_language
@@ -1958,7 +1958,6 @@ one_shot_full_json
 one_shot_markdown_plus_json
 two_pass_summary_structure
 chunk_map_reduce
-timeline_segment_reduce
 ```
 
 - [x] **Step 2: Add adaptive example**

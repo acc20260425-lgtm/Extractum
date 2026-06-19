@@ -217,27 +217,14 @@ Expected trade-off:
 - more requests and more merge complexity;
 - final result quality depends heavily on deduplication prompt quality.
 
-### Strategy 5: `timeline_segment_reduce`
+### Removed Timeline-First Candidate
 
-Multiple requests:
-
-```text
-1. transcript -> timeline / semantic segments
-2..N. each segment transcript slice -> segment details
-N+1. segment details -> final summary + claims + evidence + action items + open questions
-```
-
-Purpose:
-
-- test whether model-created semantic segments beat mechanical chunking;
-- evaluate the architecture proposed by the larger multi-stage pipeline plan;
-- learn whether timeline-first is worth the extra orchestration.
-
-Expected trade-off:
-
-- potentially best analytical structure;
-- highest implementation complexity;
-- may be overkill unless quality is clearly better than `chunk_map_reduce`.
+An earlier candidate explored model-created semantic segments before reduction.
+It was removed from the active runner because it remained a stub alias for
+`two_pass_summary_structure` and did not provide a distinct implementation.
+Future timeline-first experiments should be introduced under a new design only
+when they include real segment extraction, segment-detail prompts, and
+deduplication behavior.
 
 ## Metrics
 
@@ -308,29 +295,26 @@ more expensive strategy.
 
 ## Initial Experiment Matrix
 
-Run five strategies against three transcript sizes:
+Run four strategies against three transcript sizes:
 
 ```text
 short       x one_shot_full_json
 short       x one_shot_markdown_plus_json
 short       x two_pass_summary_structure
 short       x chunk_map_reduce
-short       x timeline_segment_reduce
 
 long        x one_shot_full_json
 long        x one_shot_markdown_plus_json
 long        x two_pass_summary_structure
 long        x chunk_map_reduce
-long        x timeline_segment_reduce
 
 very_long   x one_shot_full_json
 very_long   x one_shot_markdown_plus_json
 very_long   x two_pass_summary_structure
 very_long   x chunk_map_reduce
-very_long   x timeline_segment_reduce
 ```
 
-This gives 15 runs. If cost needs to be lower, start with:
+This gives 12 runs. If cost needs to be lower, start with:
 
 ```text
 long x one_shot_full_json
@@ -357,8 +341,8 @@ The research should estimate the threshold. Candidate thresholds:
 - 30k transcript tokens;
 - 40k transcript tokens.
 
-`timeline_segment_reduce` should only become a production candidate if it
-clearly beats `chunk_map_reduce` on quality for long videos.
+Timeline-first reduction was removed from the active runner because the
+prototype never implemented it as a distinct strategy.
 
 ## Non-Goals
 

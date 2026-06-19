@@ -190,7 +190,6 @@ one_shot_full_json
 one_shot_markdown_plus_json
 two_pass_summary_structure
 chunk_map_reduce
-timeline_segment_reduce
 ```
 
 ## Adaptive Book Report Flags
