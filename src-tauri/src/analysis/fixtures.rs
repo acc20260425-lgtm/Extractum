@@ -1,10 +1,12 @@
 use serde::Serialize;
 use sqlx::{Pool, Sqlite};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
+use super::store::set_run_status;
 use super::AnalysisState;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::time::now_secs;
 use crate::youtube::dto::{
     YoutubeAvailabilityStatus, YoutubePlaylistMetadata, YoutubeVideoForm, YoutubeVideoMetadata,
 };
@@ -31,6 +33,7 @@ const CAPTURE_FAILED_SNAPSHOT_RUN_LABEL: &str =
     "__analysis_redesign_fixture__ Capture Failed Snapshot Run";
 const CAPTURE_FAILED_SNAPSHOT_ERROR: &str =
     "Snapshot capture failed: fixture write boundary unavailable";
+const CANCELLED_RUN_MESSAGE: &str = "Analysis run cancelled.";
 const RUNNING_RUN_LABEL: &str = "__analysis_redesign_fixture__ Running Run";
 const FAILED_RUN_LABEL: &str = "__analysis_redesign_fixture__ Failed Run";
 const CANCELLED_RUN_LABEL: &str = "__analysis_redesign_fixture__ Cancelled Run";
@@ -62,7 +65,8 @@ pub async fn seed_analysis_redesign_fixtures(
     let previous_run_ids = fixture_run_ids(&pool).await?;
     remove_fixture_active_runs(state.inner(), &previous_run_ids).await;
     let summary = seed_analysis_redesign_fixtures_in_pool(&pool).await?;
-    register_fixture_active_runs(&pool, state.inner()).await?;
+    let active_run_ids = register_fixture_active_runs(&pool, state.inner()).await?;
+    spawn_fixture_cancellation_waiters(handle, active_run_ids).await;
     Ok(summary)
 }
 
@@ -101,7 +105,10 @@ async fn fixture_run_ids(pool: &Pool<Sqlite>) -> AppResult<Vec<i64>> {
     .map_err(AppError::database)
 }
 
-async fn register_fixture_active_runs(pool: &Pool<Sqlite>, state: &AnalysisState) -> AppResult<()> {
+async fn register_fixture_active_runs(
+    pool: &Pool<Sqlite>,
+    state: &AnalysisState,
+) -> AppResult<Vec<i64>> {
     let run_ids: Vec<i64> = sqlx::query_scalar(
         "SELECT id FROM analysis_runs
          WHERE scope_label_snapshot = ? AND status = 'running'",
@@ -111,16 +118,54 @@ async fn register_fixture_active_runs(pool: &Pool<Sqlite>, state: &AnalysisState
     .await
     .map_err(AppError::database)?;
 
-    for run_id in run_ids {
-        state.insert_active_report_run(run_id).await;
+    for run_id in &run_ids {
+        state.insert_active_report_run(*run_id).await;
     }
 
-    Ok(())
+    Ok(run_ids)
 }
 
 async fn remove_fixture_active_runs(state: &AnalysisState, run_ids: &[i64]) {
     for run_id in run_ids {
+        state.request_report_run_cancel(*run_id).await;
         state.remove_active_report_run(*run_id).await;
+    }
+}
+
+async fn finish_cancelled_fixture_run(
+    pool: &Pool<Sqlite>,
+    state: &AnalysisState,
+    run_id: i64,
+) -> AppResult<()> {
+    set_run_status(
+        pool,
+        run_id,
+        crate::analysis::ANALYSIS_STATUS_CANCELLED,
+        None,
+        None,
+        Some(CANCELLED_RUN_MESSAGE),
+        Some(now_secs()),
+    )
+    .await?;
+    state.remove_active_report_run(run_id).await;
+    Ok(())
+}
+
+async fn spawn_fixture_cancellation_waiters(handle: AppHandle, run_ids: Vec<i64>) {
+    for run_id in run_ids {
+        let state = handle.state::<AnalysisState>();
+        let Some(token) = state.report_run_child_token(run_id).await else {
+            continue;
+        };
+        let task_handle = handle.clone();
+        tauri::async_runtime::spawn(async move {
+            token.cancelled().await;
+            let Ok(pool) = get_pool(&task_handle).await else {
+                return;
+            };
+            let state = task_handle.state::<AnalysisState>();
+            let _ = finish_cancelled_fixture_run(&pool, state.inner(), run_id).await;
+        });
     }
 }
 
@@ -2294,11 +2339,52 @@ mod tests {
 
         assert_eq!(active_run_ids.len(), 1);
         assert!(active_run_ids.contains(&running_run_id));
+        let child_token = state
+            .report_run_child_token(running_run_id)
+            .await
+            .expect("child token");
 
         let fixture_run_ids = fixture_run_ids(&pool).await.expect("load fixture run ids");
         remove_fixture_active_runs(&state, &fixture_run_ids).await;
 
         assert!(state.active_report_run_ids().await.is_empty());
+        tokio::time::timeout(std::time::Duration::from_secs(1), child_token.cancelled())
+            .await
+            .expect("fixture child token cancelled");
+    }
+
+    #[tokio::test]
+    async fn fixture_cancel_waiter_marks_running_run_cancelled() {
+        let pool = fixture_pool().await;
+        let state = super::super::AnalysisState::new();
+        seed_analysis_redesign_fixtures_in_pool(&pool)
+            .await
+            .expect("seed fixtures");
+        register_fixture_active_runs(&pool, &state)
+            .await
+            .expect("register active fixture runs");
+        let running_run_id: i64 =
+            sqlx::query_scalar("SELECT id FROM analysis_runs WHERE scope_label_snapshot = ?")
+                .bind(RUNNING_RUN_LABEL)
+                .fetch_one(&pool)
+                .await
+                .expect("load running run");
+        state.request_report_run_cancel(running_run_id).await;
+
+        finish_cancelled_fixture_run(&pool, &state, running_run_id)
+            .await
+            .expect("finish cancelled fixture");
+
+        let status: String = sqlx::query_scalar("SELECT status FROM analysis_runs WHERE id = ?")
+            .bind(running_run_id)
+            .fetch_one(&pool)
+            .await
+            .expect("load status");
+        assert_eq!(status, crate::analysis::ANALYSIS_STATUS_CANCELLED);
+        assert!(!state
+            .active_report_run_ids()
+            .await
+            .contains(&running_run_id));
     }
 
     #[tokio::test]
