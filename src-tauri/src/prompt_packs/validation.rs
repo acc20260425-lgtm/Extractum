@@ -67,7 +67,9 @@ fn normalize_transcript_analysis_output_for_schema(
     normalized
 }
 
-fn normalize_synthesis_output_for_schema(output: &serde_json::Value) -> serde_json::Value {
+pub(crate) fn normalize_synthesis_output_for_runtime(
+    output: &serde_json::Value,
+) -> serde_json::Value {
     let mut normalized = output.clone();
     let Some(map) = normalized.as_object_mut() else {
         return normalized;
@@ -78,6 +80,16 @@ fn normalize_synthesis_output_for_schema(output: &serde_json::Value) -> serde_js
         .or_insert_with(|| serde_json::json!([]));
     map.entry("warning_candidates".to_string())
         .or_insert_with(|| serde_json::json!([]));
+    normalize_string_array_items(map, "limitations", "text");
+    normalize_string_array_items(map, "warning_candidates", "text");
+    if let Some(candidate) = map
+        .get_mut("synthesis_candidate")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        normalize_string_array_items(candidate, "cross_video_themes", "theme_text");
+        normalize_string_array_items(candidate, "common_claims", "summary_text");
+        normalize_string_array_items(candidate, "contradictions_across_videos", "description");
+    }
 
     normalized
 }
@@ -97,6 +109,21 @@ fn copy_alias_to_canonical_key(
     }
     if let Some(value) = map.get(alias).cloned() {
         map.insert(canonical.to_string(), value);
+    }
+}
+
+fn normalize_string_array_items(
+    map: &mut serde_json::Map<String, serde_json::Value>,
+    key: &str,
+    text_key: &str,
+) {
+    let Some(items) = map.get_mut(key).and_then(serde_json::Value::as_array_mut) else {
+        return;
+    };
+    for item in items {
+        if let Some(text) = item.as_str().map(ToString::to_string) {
+            *item = serde_json::json!({ text_key: text });
+        }
     }
 }
 
@@ -238,7 +265,7 @@ pub(crate) fn validate_synthesis_output(
 fn validate_synthesis_output_schema(
     output: &serde_json::Value,
 ) -> Result<(), PromptPackValidationError> {
-    let output = normalize_synthesis_output_for_schema(output);
+    let output = normalize_synthesis_output_for_runtime(output);
     synthesis_output_validator().and_then(|validator| {
         validator.validate(&output).map_err(|error| {
             let object_path = jsonschema_error_object_path(&error);
@@ -916,6 +943,16 @@ mod tests {
 
         validate_synthesis_output(&output, &allowed_synthesis_source_refs())
             .expect("legacy aliases accepted");
+    }
+
+    #[test]
+    fn synthesis_output_accepts_provider_string_items_for_readable_arrays() {
+        let mut output = valid_synthesis_output();
+        output["synthesis_candidate"]["common_claims"] = serde_json::json!(["Common claim"]);
+        output["limitations"] = serde_json::json!(["Limitation"]);
+
+        validate_synthesis_output(&output, &allowed_synthesis_source_refs())
+            .expect("provider string items accepted");
     }
 
     #[test]

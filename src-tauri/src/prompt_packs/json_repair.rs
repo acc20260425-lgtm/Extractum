@@ -6,8 +6,9 @@ use super::stage_io::{
     TRANSCRIPT_ANALYSIS_OUTPUT_SCHEMA_ID,
 };
 use super::validation::{
-    quarantine_prompt_pack_validation_error, validate_and_quarantine_synthesis_output,
-    validate_synthesis_output_with_allowed_refs, validate_transcript_analysis_output,
+    normalize_synthesis_output_for_runtime, quarantine_prompt_pack_validation_error,
+    validate_and_quarantine_synthesis_output, validate_synthesis_output_with_allowed_refs,
+    validate_transcript_analysis_output,
 };
 use super::youtube_summary::entities::{
     build_or_quarantine_intermediate_entities_for_transcript_stage,
@@ -179,6 +180,7 @@ pub(crate) async fn execute_synthesis_stage_repair_completion(
     )
     .await?;
     let parsed = extract_json_payload(&completion.text)?;
+    let parsed = normalize_synthesis_output_for_runtime(&parsed);
     validate_and_quarantine_synthesis_output(pool, run_id, stage_run_id, &parsed).await?;
     let allowed_refs = load_required_allowed_refs_for_live_synthesis(pool, run_id).await?;
     if let Err(error) = validate_synthesis_output_with_allowed_refs(

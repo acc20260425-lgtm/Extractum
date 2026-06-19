@@ -318,6 +318,31 @@ pub(crate) fn synthesis_json(summary: &str) -> String {
     .to_string()
 }
 
+#[allow(dead_code)]
+pub(crate) fn synthesis_json_with_string_readable_items() -> String {
+    serde_json::json!({
+        "stage_io_version": "1.0",
+        "schema_version": "1.0",
+        "stage": "youtube_summary/synthesis",
+        "synthesis_candidate": {
+            "summary_text": "Combined summary",
+            "cross_video_themes": [
+                {
+                    "theme_text": "Shared theme",
+                    "source_refs": ["source_ref_1", "source_ref_2"],
+                    "claim_refs": [],
+                    "evidence_refs": []
+                }
+            ],
+            "common_claims": ["Common claim"],
+            "contradictions_across_videos": []
+        },
+        "limitations": ["Limitation"],
+        "warning_candidates": []
+    })
+    .to_string()
+}
+
 pub(crate) fn synthesis_json_with_backend_owned_id() -> String {
     serde_json::json!({
         "stage_io_version": "1.0",

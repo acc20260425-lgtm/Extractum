@@ -64,6 +64,67 @@ async fn execute_synthesis_stage_persists_raw_parsed_and_metrics_artifacts() {
 }
 
 #[tokio::test]
+async fn execute_synthesis_stage_normalizes_provider_string_readable_items() {
+    let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
+    persist_succeeded_transcript_stage_fixtures(
+        &pool,
+        1,
+        vec![
+            TranscriptStageFixture {
+                summary: "First summary",
+                claim: "First claim",
+                evidence: "First evidence",
+            },
+            TranscriptStageFixture {
+                summary: "Second summary",
+                claim: "Second claim",
+                evidence: "Second evidence",
+            },
+        ],
+    )
+    .await
+    .expect("persist transcript fixtures");
+
+    let stage_run_id: i64 = sqlx::query_scalar(
+        "SELECT id FROM prompt_pack_stage_runs
+         WHERE run_id = 1 AND stage_name = 'youtube_summary/synthesis'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("stage row");
+
+    execute_synthesis_stage_with_completion(
+        &pool,
+        stage_run_id,
+        LlmCompletion {
+            text: synthesis_json_with_string_readable_items(),
+            input_tokens: Some(100),
+            output_tokens: Some(200),
+            latency_ms: 300,
+        },
+    )
+    .await
+    .expect("execute synthesis");
+
+    let content_zstd: Vec<u8> = sqlx::query_scalar(
+        "SELECT content_zstd FROM prompt_pack_stage_artifacts
+         WHERE stage_run_id = ? AND artifact_kind = 'parsed_output'",
+    )
+    .bind(stage_run_id)
+    .fetch_one(&pool)
+    .await
+    .expect("parsed output");
+    let text = crate::compression::decompress_text(&content_zstd).expect("decompress");
+    let parsed: serde_json::Value = serde_json::from_str(&text).expect("parse parsed output");
+
+    assert_eq!(
+        parsed["synthesis_candidate"]["common_claims"][0]["summary_text"],
+        "Common claim"
+    );
+    assert_eq!(parsed["limitations"][0]["text"], "Limitation");
+}
+
+#[tokio::test]
 async fn execute_synthesis_stage_rejects_invalid_output_without_success_artifacts() {
     let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
     persist_succeeded_transcript_stage_fixtures(

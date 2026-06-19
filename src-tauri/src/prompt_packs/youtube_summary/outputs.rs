@@ -14,8 +14,9 @@ use crate::prompt_packs::stage_io::{
     TRANSCRIPT_ANALYSIS_OUTPUT_SCHEMA_ID,
 };
 use crate::prompt_packs::validation::{
-    quarantine_prompt_pack_validation_error, validate_and_quarantine_synthesis_output,
-    validate_synthesis_output_with_allowed_refs, validate_transcript_analysis_output,
+    normalize_synthesis_output_for_runtime, quarantine_prompt_pack_validation_error,
+    validate_and_quarantine_synthesis_output, validate_synthesis_output_with_allowed_refs,
+    validate_transcript_analysis_output,
 };
 
 pub(crate) async fn execute_transcript_analysis_stage_with_completion(
@@ -186,6 +187,7 @@ pub(crate) async fn execute_synthesis_stage_with_completion(
             return Err(error);
         }
     };
+    let parsed = normalize_synthesis_output_for_runtime(&parsed);
     if let Err(error) =
         validate_and_quarantine_synthesis_output(pool, run_id, stage_run_id, &parsed).await
     {
