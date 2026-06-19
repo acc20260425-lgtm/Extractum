@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::future::Future;
 use std::time::Instant;
 
 use serde::Deserialize;
@@ -315,6 +316,10 @@ async fn execute_youtube_summary_run(
     let config = load_run_llm_config(&pool, run_id).await?;
     let resolved_profile =
         resolve_profile_for_backend(&handle, config.profile_id.as_deref()).await?;
+    let run_cancellation_token = handle
+        .state::<PromptPackRunState>()
+        .child_token(run_id)
+        .await;
     emit_prompt_pack_run_event(
         &handle,
         &handle.state::<PromptPackRunState>(),
@@ -340,17 +345,38 @@ async fn execute_youtube_summary_run(
         let handle = handle.clone();
         let profile = resolved_profile.clone();
         let model_override = config.model_override.clone();
+        let run_cancellation_token = run_cancellation_token.clone();
         async move {
             match stage_request {
                 YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request) => {
-                    run_transcript_analysis_stage_request(handle, profile, model_override, request)
-                        .await
+                    run_transcript_analysis_stage_request(
+                        handle,
+                        profile,
+                        model_override,
+                        run_cancellation_token,
+                        request,
+                    )
+                    .await
                 }
                 YoutubeSummaryStageExecutionRequest::Synthesis(request) => {
-                    run_synthesis_stage_request(handle, profile, model_override, request).await
+                    run_synthesis_stage_request(
+                        handle,
+                        profile,
+                        model_override,
+                        run_cancellation_token,
+                        request,
+                    )
+                    .await
                 }
                 YoutubeSummaryStageExecutionRequest::JsonRepair(request) => {
-                    run_json_repair_stage_request(handle, profile, model_override, request).await
+                    run_json_repair_stage_request(
+                        handle,
+                        profile,
+                        model_override,
+                        run_cancellation_token,
+                        request,
+                    )
+                    .await
                 }
             }
         }
@@ -382,6 +408,7 @@ async fn run_transcript_analysis_stage_request(
     handle: AppHandle,
     profile: ResolvedLlmProfile,
     model_override: Option<String>,
+    run_cancellation_token: Option<CancellationToken>,
     stage_request: TranscriptAnalysisStageExecutionRequest,
 ) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
     let effective_model = resolve_effective_model(&profile, model_override.as_deref())?;
@@ -414,6 +441,7 @@ async fn run_transcript_analysis_stage_request(
     let run_id = stage_request.run_id;
     let scheduled_request = llm_request.clone();
     let scheduled_profile = profile.clone();
+    let stage_cancellation_token = run_cancellation_token.clone();
 
     match scheduler
         .run_request(
@@ -465,12 +493,14 @@ async fn run_transcript_analysis_stage_request(
                     },
                 );
                 let started_at = Instant::now();
-                let completion = control
-                    .run_cancellable(run_llm_collect_with_profile(
+                let completion = run_with_prompt_pack_run_cancellation(
+                    stage_cancellation_token,
+                    control.run_cancellable(run_llm_collect_with_profile(
                         &scheduled_request,
                         &scheduled_profile,
-                    ))
-                    .await?;
+                    )),
+                )
+                .await?;
                 Ok((completion, started_at.elapsed().as_millis() as i64))
             },
         )
@@ -499,6 +529,7 @@ async fn run_synthesis_stage_request(
     handle: AppHandle,
     profile: ResolvedLlmProfile,
     model_override: Option<String>,
+    run_cancellation_token: Option<CancellationToken>,
     stage_request: SynthesisStageExecutionRequest,
 ) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
     let effective_model = resolve_effective_model(&profile, model_override.as_deref())?;
@@ -526,6 +557,7 @@ async fn run_synthesis_stage_request(
     let run_id = stage_request.run_id;
     let scheduled_request = llm_request.clone();
     let scheduled_profile = profile.clone();
+    let stage_cancellation_token = run_cancellation_token.clone();
 
     match scheduler
         .run_request(
@@ -577,12 +609,14 @@ async fn run_synthesis_stage_request(
                     },
                 );
                 let started_at = Instant::now();
-                let completion = control
-                    .run_cancellable(run_llm_collect_with_profile(
+                let completion = run_with_prompt_pack_run_cancellation(
+                    stage_cancellation_token,
+                    control.run_cancellable(run_llm_collect_with_profile(
                         &scheduled_request,
                         &scheduled_profile,
-                    ))
-                    .await?;
+                    )),
+                )
+                .await?;
                 Ok((completion, started_at.elapsed().as_millis() as i64))
             },
         )
@@ -611,6 +645,7 @@ async fn run_json_repair_stage_request(
     handle: AppHandle,
     profile: ResolvedLlmProfile,
     model_override: Option<String>,
+    run_cancellation_token: Option<CancellationToken>,
     stage_request: JsonRepairStageExecutionRequest,
 ) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
     let effective_model = resolve_effective_model(&profile, model_override.as_deref())?;
@@ -646,6 +681,7 @@ async fn run_json_repair_stage_request(
     let run_id = stage_request.run_id;
     let scheduled_request = llm_request.clone();
     let scheduled_profile = profile.clone();
+    let stage_cancellation_token = run_cancellation_token.clone();
 
     match scheduler
         .run_request(
@@ -697,12 +733,14 @@ async fn run_json_repair_stage_request(
                     },
                 );
                 let started_at = Instant::now();
-                let completion = control
-                    .run_cancellable(run_llm_collect_with_profile(
+                let completion = run_with_prompt_pack_run_cancellation(
+                    stage_cancellation_token,
+                    control.run_cancellable(run_llm_collect_with_profile(
                         &scheduled_request,
                         &scheduled_profile,
-                    ))
-                    .await?;
+                    )),
+                )
+                .await?;
                 Ok((completion, started_at.elapsed().as_millis() as i64))
             },
         )
@@ -724,6 +762,27 @@ async fn run_json_repair_stage_request(
         Err(LlmRequestError::Failed(error)) => {
             Err(YoutubeSummaryStageExecutionError::Failed(error))
         }
+    }
+}
+
+async fn run_with_prompt_pack_run_cancellation<Fut, T>(
+    run_cancellation_token: Option<CancellationToken>,
+    future: Fut,
+) -> Result<T, LlmRequestError>
+where
+    Fut: Future<Output = Result<T, LlmRequestError>>,
+{
+    let Some(run_cancellation_token) = run_cancellation_token else {
+        return future.await;
+    };
+
+    if run_cancellation_token.is_cancelled() {
+        return Err(LlmRequestError::Cancelled);
+    }
+
+    tokio::select! {
+        result = future => result,
+        _ = run_cancellation_token.cancelled() => Err(LlmRequestError::Cancelled),
     }
 }
 
@@ -1330,15 +1389,18 @@ mod tests {
     use super::{
         build_synthesis_llm_request, build_transcript_analysis_llm_request,
         cleanup_interrupted_prompt_pack_runs_in_pool, delete_prompt_pack_run_in_pool,
-        list_prompt_pack_runs_in_pool, now_string, synthesis_stage_max_output_token_budget,
-        transcript_analysis_max_output_tokens, transcript_analysis_stage_max_output_token_budget,
+        list_prompt_pack_runs_in_pool, now_string, run_with_prompt_pack_run_cancellation,
+        synthesis_stage_max_output_token_budget, transcript_analysis_max_output_tokens,
+        transcript_analysis_stage_max_output_token_budget,
         transcript_analysis_stage_max_output_token_budget_for_control_preset,
         update_prompt_pack_run_in_pool, PromptPackRunState, DETAILED_REPORT_CONTROL_PRESET,
     };
+    use crate::llm::LlmRequestError;
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::dto::{ListPromptPackRunsRequest, PromptPackRunEvent};
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
     use crate::prompt_packs::youtube_summary::TranscriptAnalysisStageExecutionRequest;
+    use tokio_util::sync::CancellationToken;
 
     #[test]
     fn now_string_uses_current_utc_time() {
@@ -1390,6 +1452,27 @@ mod tests {
 
         state.finish(42).await;
         assert!(state.child_token(42).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn prompt_pack_run_cancellation_allows_completed_stage_future() {
+        let result = run_with_prompt_pack_run_cancellation(None, async {
+            Ok::<_, LlmRequestError>("completed")
+        })
+        .await;
+
+        assert_eq!(result.expect("stage future"), "completed");
+    }
+
+    #[tokio::test]
+    async fn prompt_pack_run_cancellation_interrupts_stage_future() {
+        let token = CancellationToken::new();
+        token.cancel();
+
+        let result: Result<(), LlmRequestError> =
+            run_with_prompt_pack_run_cancellation(Some(token), std::future::pending()).await;
+
+        assert!(matches!(result, Err(LlmRequestError::Cancelled)));
     }
 
     #[tokio::test]
