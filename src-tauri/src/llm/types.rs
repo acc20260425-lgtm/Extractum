@@ -1,3 +1,4 @@
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 
 use super::ProviderKind;
@@ -68,7 +69,7 @@ pub(crate) struct ResolvedLlmProfile {
     pub(crate) profile_id: String,
     pub(crate) provider: ProviderKind,
     pub(crate) default_model: String,
-    pub(crate) api_key: String,
+    pub(crate) api_key: SecretString,
     pub(crate) base_url: String,
 }
 

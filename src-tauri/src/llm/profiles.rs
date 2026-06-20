@@ -1,3 +1,4 @@
+use secrecy::{ExposeSecret, SecretString};
 use sqlx::{Pool, Sqlite};
 
 use crate::error::{AppError, AppResult};
@@ -140,7 +141,7 @@ async fn load_profile_from_pool(
     let api_key_configured = secret_store
         .get_secret(llm_profile_api_key_secret(&profile_id))
         .await?
-        .map(|value| !value.trim().is_empty())
+        .map(|value| !value.expose_secret().trim().is_empty())
         .unwrap_or(false);
     let base_url = read_setting(pool, &profile_base_url_key(&profile_id))
         .await?
@@ -177,12 +178,12 @@ async fn read_profile_api_key(
     pool: &Pool<Sqlite>,
     secret_store: &SecretStoreState,
     profile_id: &str,
-) -> AppResult<String> {
+) -> AppResult<SecretString> {
     migrate_legacy_api_key(pool, secret_store, profile_id).await?;
     Ok(secret_store
         .get_secret(llm_profile_api_key_secret(profile_id))
         .await?
-        .unwrap_or_default())
+        .unwrap_or_else(|| SecretString::new(String::new())))
 }
 
 #[expect(
@@ -379,6 +380,7 @@ mod tests {
     use crate::error::AppErrorKind;
     use crate::secret_store::tests::InMemorySecretStore;
     use crate::secret_store::{llm_profile_api_key_secret, SecretStoreState};
+    use secrecy::ExposeSecret;
     use std::sync::Arc;
 
     async fn memory_pool() -> sqlx::SqlitePool {
@@ -462,7 +464,7 @@ mod tests {
             .expect("resolve active");
         assert_eq!(resolved.profile_id, "alt");
         assert_eq!(resolved.default_model, "gemini-2.0-flash");
-        assert_eq!(resolved.api_key, "alt-key");
+        assert_eq!(resolved.api_key.expose_secret(), "alt-key");
         assert_eq!(resolved.base_url, "");
     }
 
@@ -566,7 +568,7 @@ mod tests {
             .await
             .expect("resolve profile");
         assert_eq!(resolved.default_model, "gemini-2.5-pro");
-        assert_eq!(resolved.api_key, "initial-key");
+        assert_eq!(resolved.api_key.expose_secret(), "initial-key");
     }
 
     #[tokio::test]
@@ -589,7 +591,8 @@ mod tests {
             secret_store
                 .get_secret(llm_profile_api_key_secret("default"))
                 .await
-                .expect("read migrated secret"),
+                .expect("read migrated secret")
+                .map(|value| value.expose_secret().to_string()),
             Some("legacy-key".to_string())
         );
         assert_eq!(
@@ -651,7 +654,8 @@ mod tests {
             resolve_profile_from_pool(&pool, &secret_store, Some("default"))
                 .await
                 .expect("resolve profile")
-                .api_key,
+                .api_key
+                .expose_secret(),
             ""
         );
     }
@@ -699,7 +703,7 @@ mod tests {
             .get_secret(llm_profile_api_key_secret("custom"))
             .await
             .expect("read custom secret");
-        assert_eq!(secret, None);
+        assert!(secret.is_none());
     }
 
     #[tokio::test]

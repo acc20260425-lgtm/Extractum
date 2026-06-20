@@ -1,3 +1,4 @@
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::time::{timeout, Duration};
@@ -167,9 +168,9 @@ pub(crate) async fn resolve_model_input_token_limit_for_backend(
         Duration::from_secs(MODEL_LIMIT_LOOKUP_TIMEOUT_SECS),
         async move {
             match provider {
-                ProviderKind::Gemini => list_gemini_models(&api_key).await,
+                ProviderKind::Gemini => list_gemini_models(api_key.expose_secret()).await,
                 ProviderKind::OpenAiCompatible => {
-                    list_openai_compat_models(&api_key, &openai_compat_config).await
+                    list_openai_compat_models(api_key.expose_secret(), &openai_compat_config).await
                 }
             }
         },
@@ -196,9 +197,9 @@ pub(crate) async fn resolve_model_output_token_limit_for_backend(
         Duration::from_secs(MODEL_LIMIT_LOOKUP_TIMEOUT_SECS),
         async move {
             match provider {
-                ProviderKind::Gemini => list_gemini_models(&api_key).await,
+                ProviderKind::Gemini => list_gemini_models(api_key.expose_secret()).await,
                 ProviderKind::OpenAiCompatible => {
-                    list_openai_compat_models(&api_key, &openai_compat_config).await
+                    list_openai_compat_models(api_key.expose_secret(), &openai_compat_config).await
                 }
             }
         },
@@ -436,7 +437,7 @@ pub async fn list_llm_provider_models(
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .map(ToString::to_string);
+        .map(|value| SecretString::new(value.to_string()));
     let configured_base_url = base_url
         .as_deref()
         .map(str::trim)
@@ -458,7 +459,7 @@ pub async fn list_llm_provider_models(
     } else {
         matching_saved_profile
             .map(|profile| profile.api_key.clone())
-            .unwrap_or_default()
+            .unwrap_or_else(|| SecretString::new(String::new()))
     };
     let base_url = if let Some(url) = configured_base_url {
         normalize_base_url(provider_kind, Some(url.as_str()))?
@@ -479,9 +480,9 @@ pub async fn list_llm_provider_models(
 
     let result = timeout(Duration::from_secs(timeout_secs), async move {
         match provider_kind {
-            ProviderKind::Gemini => list_gemini_models(&api_key).await,
+            ProviderKind::Gemini => list_gemini_models(api_key.expose_secret()).await,
             ProviderKind::OpenAiCompatible => {
-                list_openai_compat_models(&api_key, &openai_compat_config).await
+                list_openai_compat_models(api_key.expose_secret(), &openai_compat_config).await
             }
         }
     })

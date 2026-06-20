@@ -136,7 +136,7 @@ mod tests {
             profile_id: "default".to_string(),
             provider: ProviderKind::Gemini,
             default_model: "   ".to_string(),
-            api_key: String::new(),
+            api_key: String::new().into(),
             base_url: String::new(),
         };
 
@@ -159,7 +159,7 @@ mod tests {
             profile_id: "default".to_string(),
             provider: ProviderKind::Gemini,
             default_model: "gemini-2.5-flash".to_string(),
-            api_key: String::new(),
+            api_key: String::new().into(),
             base_url: String::new(),
         };
 

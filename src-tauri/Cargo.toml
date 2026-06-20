@@ -20,6 +20,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+secrecy = "0.8"
 jsonschema = { version = "0.46.5", default-features = false }
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
 grammers-client = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", default-features = false }

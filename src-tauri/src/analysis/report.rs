@@ -1362,7 +1362,7 @@ mod tests {
             profile_id: "research".to_string(),
             provider: ProviderKind::Gemini,
             default_model: "gemini-2.5-flash".to_string(),
-            api_key: "secret-key".to_string(),
+            api_key: "secret-key".to_string().into(),
             base_url: String::new(),
         }
     }

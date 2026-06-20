@@ -4,6 +4,7 @@ use std::sync::Arc;
 use grammers_client::{client::LoginToken, Client};
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::MemorySession;
+use secrecy::ExposeSecret;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
 
@@ -134,14 +135,14 @@ async fn resolve_account_credentials(
     let api_hash = secret_store
         .get_secret(key)
         .await?
-        .filter(|value| !value.trim().is_empty())
+        .filter(|value| !value.expose_secret().trim().is_empty())
         .ok_or_else(|| {
             AppError::auth(format!(
                 "Telegram API hash for account {} is missing from secure storage. Recreate the account credentials.",
                 credentials.id
             ))
         })?;
-    credentials.api_hash = api_hash;
+    credentials.api_hash = api_hash.expose_secret().to_string();
     Ok(credentials)
 }
 
@@ -534,6 +535,7 @@ mod tests {
     use crate::error::AppErrorKind;
     use crate::secret_store::tests::InMemorySecretStore;
     use crate::secret_store::{telegram_account_api_hash_secret, SecretStoreState};
+    use secrecy::ExposeSecret;
     use std::sync::Arc;
 
     async fn memory_pool() -> sqlx::SqlitePool {
@@ -607,7 +609,8 @@ mod tests {
             secret_store
                 .get_secret(telegram_account_api_hash_secret(account_id))
                 .await
-                .expect("read secret"),
+                .expect("read secret")
+                .map(|value| value.expose_secret().to_string()),
             Some("legacy-hash".to_string())
         );
     }

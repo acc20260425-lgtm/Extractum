@@ -195,6 +195,7 @@ mod tests {
     use crate::error::AppErrorKind;
     use crate::secret_store::tests::InMemorySecretStore;
     use crate::secret_store::{telegram_account_api_hash_secret, SecretStoreState};
+    use secrecy::ExposeSecret;
     use std::sync::Arc;
 
     async fn memory_pool() -> sqlx::SqlitePool {
@@ -265,7 +266,8 @@ mod tests {
             secret_store
                 .get_secret(telegram_account_api_hash_secret(account.id))
                 .await
-                .expect("read secret"),
+                .expect("read secret")
+                .map(|value| value.expose_secret().to_string()),
             Some("api-hash".to_string())
         );
     }
@@ -312,13 +314,11 @@ mod tests {
             .expect("delete account");
 
         assert_eq!(account_count(&pool).await, 0);
-        assert_eq!(
-            secret_store
-                .get_secret(telegram_account_api_hash_secret(account.id))
-                .await
-                .expect("read secret"),
-            None
-        );
+        assert!(secret_store
+            .get_secret(telegram_account_api_hash_secret(account.id))
+            .await
+            .expect("read secret")
+            .is_none());
     }
 
     #[tokio::test]

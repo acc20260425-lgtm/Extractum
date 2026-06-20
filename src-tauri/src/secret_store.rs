@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::error::{AppError, AppResult};
+use secrecy::{ExposeSecret, SecretString};
 
 pub(crate) const SECRET_SERVICE_NAME: &str = "org.ai.extractum";
 
@@ -21,8 +22,8 @@ pub(crate) fn youtube_default_cookies_secret() -> String {
 }
 
 pub(crate) trait SecretStore: Send + Sync {
-    fn get_secret(&self, key: &str) -> AppResult<Option<String>>;
-    fn set_secret(&self, key: &str, value: &str) -> AppResult<()>;
+    fn get_secret(&self, key: &str) -> AppResult<Option<SecretString>>;
+    fn set_secret(&self, key: &str, value: &SecretString) -> AppResult<()>;
     fn delete_secret(&self, key: &str) -> AppResult<()>;
 }
 
@@ -40,7 +41,10 @@ impl SecretStoreState {
         Self::new(Arc::new(SystemSecretStore))
     }
 
-    pub(crate) async fn get_secret(&self, key: impl Into<String>) -> AppResult<Option<String>> {
+    pub(crate) async fn get_secret(
+        &self,
+        key: impl Into<String>,
+    ) -> AppResult<Option<SecretString>> {
         let store = Arc::clone(&self.store);
         let key = key.into();
         tauri::async_runtime::spawn_blocking(move || store.get_secret(&key))
@@ -55,7 +59,7 @@ impl SecretStoreState {
     ) -> AppResult<()> {
         let store = Arc::clone(&self.store);
         let key = key.into();
-        let value = value.into();
+        let value = SecretString::new(value.into());
         tauri::async_runtime::spawn_blocking(move || store.set_secret(&key, &value))
             .await
             .map_err(|error| AppError::internal(format!("Secure storage task failed: {error}")))?
@@ -73,18 +77,20 @@ impl SecretStoreState {
 pub(crate) struct SystemSecretStore;
 
 impl SecretStore for SystemSecretStore {
-    fn get_secret(&self, key: &str) -> AppResult<Option<String>> {
+    fn get_secret(&self, key: &str) -> AppResult<Option<SecretString>> {
         let entry = keyring::Entry::new(SECRET_SERVICE_NAME, key).map_err(map_keyring_error)?;
         match entry.get_password() {
-            Ok(value) => Ok(Some(value)),
+            Ok(value) => Ok(Some(SecretString::new(value))),
             Err(keyring::Error::NoEntry) => Ok(None),
             Err(error) => Err(map_keyring_error(error)),
         }
     }
 
-    fn set_secret(&self, key: &str, value: &str) -> AppResult<()> {
+    fn set_secret(&self, key: &str, value: &SecretString) -> AppResult<()> {
         let entry = keyring::Entry::new(SECRET_SERVICE_NAME, key).map_err(map_keyring_error)?;
-        entry.set_password(value).map_err(map_keyring_error)
+        entry
+            .set_password(value.expose_secret())
+            .map_err(map_keyring_error)
     }
 
     fn delete_secret(&self, key: &str) -> AppResult<()> {
@@ -134,21 +140,27 @@ pub(crate) mod tests {
     }
 
     impl SecretStore for InMemorySecretStore {
-        fn get_secret(&self, key: &str) -> AppResult<Option<String>> {
+        fn get_secret(&self, key: &str) -> AppResult<Option<SecretString>> {
             if let Some(message) = self.fail_get.lock().unwrap().clone() {
                 return Err(AppError::internal(message));
             }
-            Ok(self.secrets.lock().unwrap().get(key).cloned())
+            Ok(self
+                .secrets
+                .lock()
+                .unwrap()
+                .get(key)
+                .cloned()
+                .map(SecretString::new))
         }
 
-        fn set_secret(&self, key: &str, value: &str) -> AppResult<()> {
+        fn set_secret(&self, key: &str, value: &SecretString) -> AppResult<()> {
             if let Some(message) = self.fail_set.lock().unwrap().clone() {
                 return Err(AppError::internal(message));
             }
             self.secrets
                 .lock()
                 .unwrap()
-                .insert(key.to_string(), value.to_string());
+                .insert(key.to_string(), value.expose_secret().to_string());
             Ok(())
         }
 
@@ -186,16 +198,20 @@ pub(crate) mod tests {
         let store = Arc::new(InMemorySecretStore::new());
         let state = SecretStoreState::new(store);
 
-        assert_eq!(state.get_secret("alpha").await.unwrap(), None);
+        assert!(state.get_secret("alpha").await.unwrap().is_none());
 
         state.set_secret("alpha", "secret-value").await.unwrap();
         assert_eq!(
-            state.get_secret("alpha").await.unwrap(),
+            state
+                .get_secret("alpha")
+                .await
+                .unwrap()
+                .map(|value| value.expose_secret().to_string()),
             Some("secret-value".to_string())
         );
 
         state.delete_secret("alpha").await.unwrap();
-        assert_eq!(state.get_secret("alpha").await.unwrap(), None);
+        assert!(state.get_secret("alpha").await.unwrap().is_none());
     }
 
     #[tokio::test]

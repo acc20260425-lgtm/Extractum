@@ -1,8 +1,12 @@
 use crate::error::{AppError, AppResult};
 use crate::secret_store::{youtube_default_cookies_secret, SecretStoreState};
+use secrecy::ExposeSecret;
 
 pub(crate) async fn read_youtube_cookies(secrets: &SecretStoreState) -> AppResult<Option<String>> {
-    secrets.get_secret(youtube_default_cookies_secret()).await
+    Ok(secrets
+        .get_secret(youtube_default_cookies_secret())
+        .await?
+        .map(|value| value.expose_secret().to_string()))
 }
 
 pub(crate) async fn save_youtube_cookies(

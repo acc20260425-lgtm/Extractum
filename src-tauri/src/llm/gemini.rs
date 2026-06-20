@@ -1,4 +1,5 @@
 use reqwest::Client as HttpClient;
+use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use tokio::time::{sleep, Duration};
 
@@ -236,7 +237,7 @@ pub(in crate::llm) async fn stream_gemini_response<F>(
 where
     F: FnMut(&str),
 {
-    if profile.api_key.trim().is_empty() {
+    if profile.api_key.expose_secret().trim().is_empty() {
         return Err(AppError::auth(format!(
             "Profile '{}' does not have a Gemini API key configured",
             profile.profile_id
@@ -253,7 +254,7 @@ where
     for attempt in 1..=GEMINI_STREAM_MAX_ATTEMPTS {
         let candidate = client
             .post(url.clone())
-            .header("x-goog-api-key", profile.api_key.as_str())
+            .header("x-goog-api-key", profile.api_key.expose_secret())
             .header("Content-Type", "application/json")
             .json(&request_body)
             .send()

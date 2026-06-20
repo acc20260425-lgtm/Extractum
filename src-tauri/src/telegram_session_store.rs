@@ -10,6 +10,7 @@ use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
 use grammers_session::types::{DcOption, UpdatesState};
 use grammers_session::{storages::MemorySession, Session, SessionData};
 use rand_core::RngCore;
+use secrecy::ExposeSecret;
 use tauri::{AppHandle, Manager};
 
 use crate::error::{AppError, AppResult};
@@ -167,7 +168,7 @@ async fn read_session_key(
 ) -> AppResult<Option<Vec<u8>>> {
     let key = telegram_account_session_key_secret(account_id);
     match secret_store.get_secret(key).await? {
-        Some(value) => decode_base64(&value).map(Some),
+        Some(value) => decode_base64(value.expose_secret()).map(Some),
         None => Ok(None),
     }
 }
@@ -294,6 +295,7 @@ async fn load_session_from_path(
 mod tests {
     use super::*;
     use crate::secret_store::tests::InMemorySecretStore;
+    use secrecy::ExposeSecret;
     use std::fs;
 
     fn memory_secret_store() -> (Arc<InMemorySecretStore>, SecretStoreState) {
@@ -423,7 +425,7 @@ mod tests {
             .expect("read session key")
             .expect("session key exists");
         secret_store
-            .set_secret(telegram_account_session_key_secret(8), key)
+            .set_secret(telegram_account_session_key_secret(8), key.expose_secret())
             .await
             .expect("copy key to wrong account");
 
@@ -452,12 +454,10 @@ mod tests {
             .expect("delete session");
 
         assert!(!path.exists());
-        assert_eq!(
-            secret_store
-                .get_secret(telegram_account_session_key_secret(7))
-                .await
-                .expect("read session key"),
-            None
-        );
+        assert!(secret_store
+            .get_secret(telegram_account_session_key_secret(7))
+            .await
+            .expect("read session key")
+            .is_none());
     }
 }
