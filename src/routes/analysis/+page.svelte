@@ -428,7 +428,7 @@
     maxBytesPerFile: 50000000,
     overwriteExisting: false,
   });
-  let statusTimer: ReturnType<typeof setTimeout> | null = null;
+  let statusTimer: number | null = null;
   let savedRunsLoadTimer: ReturnType<typeof setTimeout> | null = null;
   const savedRunsLoadDelayMs = 250;
   let llmModelsRequestKey = "";

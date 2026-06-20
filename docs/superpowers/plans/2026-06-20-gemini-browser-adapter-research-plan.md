@@ -3002,7 +3002,7 @@ git commit -m "Add Gemini adapter research matrix report"
 - No new files.
 - Verify all files created by previous tasks.
 
-- [ ] **Step 1: Run complete research matrix**
+- [x] **Step 1: Run complete research matrix**
 
 Run:
 
@@ -3012,7 +3012,7 @@ npm run test:gemini-browser-adapter
 
 Expected: command exits `0`. This includes `npm run test:gemini-browser-adapter:typecheck`.
 
-- [ ] **Step 2: Run research TypeScript check directly**
+- [x] **Step 2: Run research TypeScript check directly**
 
 Run:
 
@@ -3022,7 +3022,7 @@ npm run test:gemini-browser-adapter:typecheck
 
 Expected: command exits `0` and typechecks all TypeScript files under `research/gemini_browser_adapter`.
 
-- [ ] **Step 3: Run Svelte/TypeScript project check**
+- [x] **Step 3: Run Svelte/TypeScript project check**
 
 Run:
 
@@ -3032,7 +3032,7 @@ npm run check
 
 Expected: command exits `0`. If unrelated pre-existing `src-tauri` changes do not affect this command, keep them out of this research commit.
 
-- [ ] **Step 4: Review generated matrix report**
+- [x] **Step 4: Review generated matrix report**
 
 Run:
 
@@ -3042,7 +3042,7 @@ Get-Content -LiteralPath 'research\\gemini_browser_adapter\\artifacts\\matrix-re
 
 Expected: report lists all research tests and has `Failed or unexpected tests: 0` and `Missing matrix pairs: 0`.
 
-- [ ] **Step 5: Confirm production Rust/Tauri was untouched by research commits**
+- [x] **Step 5: Confirm production Rust/Tauri was untouched by research commits**
 
 Run:
 
@@ -3052,7 +3052,7 @@ git diff --name-only HEAD -- src-tauri
 
 Expected: no output for changes introduced by this research plan. If user-owned `src-tauri` edits exist in the working tree, leave them unstaged.
 
-- [ ] **Step 6: Commit final plan doc update**
+- [x] **Step 6: Commit final plan doc update**
 
 Run:
 
