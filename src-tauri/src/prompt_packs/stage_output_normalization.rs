@@ -6,7 +6,6 @@ pub(crate) fn normalize_transcript_analysis_output_for_runtime(
         return normalized;
     };
 
-    normalize_stage_output_envelope(map);
     map.entry("warning_candidates".to_string())
         .or_insert_with(|| serde_json::json!([]));
 
@@ -27,7 +26,6 @@ pub(crate) fn normalize_synthesis_output_for_runtime(
         return normalized;
     };
 
-    normalize_stage_output_envelope(map);
     map.entry("limitations".to_string())
         .or_insert_with(|| serde_json::json!([]));
     map.entry("warning_candidates".to_string())
@@ -44,25 +42,6 @@ pub(crate) fn normalize_synthesis_output_for_runtime(
     }
 
     normalized
-}
-
-fn normalize_stage_output_envelope(map: &mut serde_json::Map<String, serde_json::Value>) {
-    copy_alias_to_canonical_key(map, "stageIoVersion", "stage_io_version");
-    copy_alias_to_canonical_key(map, "schemaVersion", "schema_version");
-}
-
-fn copy_alias_to_canonical_key(
-    map: &mut serde_json::Map<String, serde_json::Value>,
-    alias: &str,
-    canonical: &str,
-) {
-    let value = map.remove(alias);
-    if map.contains_key(canonical) {
-        return;
-    }
-    if let Some(value) = value {
-        map.insert(canonical.to_string(), value);
-    }
 }
 
 fn normalize_string_array_items(
@@ -85,10 +64,10 @@ mod tests {
     use super::normalize_synthesis_output_for_runtime;
 
     #[test]
-    fn synthesis_runtime_normalization_moves_envelope_aliases() {
+    fn synthesis_runtime_normalization_defaults_readable_arrays() {
         let output = serde_json::json!({
-            "stageIoVersion": "1.0",
-            "schemaVersion": "1.0",
+            "stage_io_version": "1.0",
+            "schema_version": "1.0",
             "stage": "youtube_summary/synthesis",
             "synthesis_candidate": {
                 "summary_text": "Summary",
@@ -100,9 +79,7 @@ mod tests {
 
         let normalized = normalize_synthesis_output_for_runtime(&output);
 
-        assert_eq!(normalized["stage_io_version"], "1.0");
-        assert_eq!(normalized["schema_version"], "1.0");
-        assert!(normalized.get("stageIoVersion").is_none());
-        assert!(normalized.get("schemaVersion").is_none());
+        assert_eq!(normalized["limitations"], serde_json::json!([]));
+        assert_eq!(normalized["warning_candidates"], serde_json::json!([]));
     }
 }

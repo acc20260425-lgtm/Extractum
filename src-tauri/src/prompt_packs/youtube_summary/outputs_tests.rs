@@ -425,7 +425,7 @@ async fn execute_transcript_analysis_stage_persists_raw_and_parsed_artifacts() {
 }
 
 #[tokio::test]
-async fn execute_transcript_analysis_stage_persists_normalized_parsed_output() {
+async fn execute_transcript_analysis_stage_persists_default_warning_candidates() {
     let pool = test_pool_with_frozen_youtube_summary_run().await;
     let stage_id = transcript_analysis_stage_id(&pool, 1).await;
 
@@ -433,14 +433,7 @@ async fn execute_transcript_analysis_stage_persists_normalized_parsed_output() {
     let mut output: serde_json::Value =
         serde_json::from_str(&completion.text).expect("parse fake completion");
     let object = output.as_object_mut().expect("completion object");
-    let stage_io_version = object
-        .remove("stage_io_version")
-        .expect("stage_io_version exists");
-    let schema_version = object
-        .remove("schema_version")
-        .expect("schema_version exists");
-    object.insert("stageIoVersion".to_string(), stage_io_version);
-    object.insert("schemaVersion".to_string(), schema_version);
+    object.remove("warning_candidates");
     completion.text = output.to_string();
 
     execute_transcript_analysis_stage_with_completion(&pool, stage_id, completion)
@@ -460,8 +453,7 @@ async fn execute_transcript_analysis_stage_persists_normalized_parsed_output() {
 
     assert_eq!(parsed["stage_io_version"], "1.0");
     assert_eq!(parsed["schema_version"], "1.0");
-    assert!(parsed.get("stageIoVersion").is_none());
-    assert!(parsed.get("schemaVersion").is_none());
+    assert_eq!(parsed["warning_candidates"], serde_json::json!([]));
 }
 
 #[tokio::test]

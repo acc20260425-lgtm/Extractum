@@ -10,38 +10,24 @@ pub(crate) const SYNTHESIS_OUTPUT_SCHEMA_ID: &str = "stage-io/youtube_summary_sy
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TranscriptAnalysisStageInput {
-    #[serde(alias = "stageIoVersion")]
     pub stage_io_version: String,
-    #[serde(alias = "schemaVersion")]
     pub schema_version: String,
     pub stage: String,
-    #[serde(alias = "packId")]
     pub pack_id: String,
-    #[serde(alias = "packVersion")]
     pub pack_version: String,
-    #[serde(alias = "runId")]
     pub run_id: i64,
-    #[serde(alias = "sourceRefId")]
     pub source_ref_id: String,
-    #[serde(alias = "allowedSourceRefIds")]
     pub allowed_source_ref_ids: Vec<String>,
-    #[serde(alias = "allowedMaterialRefs")]
     pub allowed_material_refs: Vec<String>,
-    #[serde(alias = "transcriptSegmentRegistry")]
     pub transcript_segment_registry: Vec<TranscriptSegmentRegistryEntry>,
-    #[serde(alias = "commentSelectionPolicy")]
     pub comment_selection_policy: serde_json::Value,
-    #[serde(alias = "controlPreset")]
     pub control_preset: String,
-    #[serde(alias = "evidenceMode")]
     pub evidence_mode: String,
-    #[serde(alias = "outputLanguage")]
     pub output_language: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TranscriptSegmentRegistryEntry {
-    #[serde(alias = "materialRefId")]
     pub material_ref_id: String,
     pub text: String,
 }
@@ -367,38 +353,6 @@ mod tests {
         assert_eq!(value["source_ref_id"], "source_ref_1");
         assert!(value.get("stageIoVersion").is_none());
         assert!(value.get("schemaVersion").is_none());
-    }
-
-    #[test]
-    fn transcript_analysis_stage_input_deserializes_legacy_camel_case_keys() {
-        let input: super::TranscriptAnalysisStageInput =
-            serde_json::from_value(serde_json::json!({
-                "stageIoVersion": "1.0",
-                "schemaVersion": "1.0",
-                "stage": "youtube_summary/transcript_analysis",
-                "packId": "youtube_summary",
-                "packVersion": "1.0.0",
-                "runId": 42,
-                "sourceRefId": "source_ref_1",
-                "allowedSourceRefIds": ["source_ref_1"],
-                "allowedMaterialRefs": ["m_source_ref_1_transcript"],
-                "transcriptSegmentRegistry": [{
-                    "materialRefId": "m_source_ref_1_transcript",
-                    "text": "Transcript"
-                }],
-                "commentSelectionPolicy": {},
-                "controlPreset": "standard",
-                "evidenceMode": "standard",
-                "outputLanguage": "en"
-            }))
-            .expect("deserialize legacy input");
-
-        assert_eq!(input.stage_io_version, "1.0");
-        assert_eq!(input.pack_id, "youtube_summary");
-        assert_eq!(
-            input.transcript_segment_registry[0].material_ref_id,
-            "m_source_ref_1_transcript"
-        );
     }
 
     #[tokio::test]

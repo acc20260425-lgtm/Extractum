@@ -642,28 +642,6 @@ mod tests {
     }
 
     #[test]
-    fn transcript_analysis_output_accepts_legacy_camel_case_envelope_aliases() {
-        let input = test_stage_input_with_material_refs(["m_transcript_1"]);
-        let output = serde_json::json!({
-            "stageIoVersion": "1.0",
-            "schemaVersion": "1.0",
-            "stage": "youtube_summary/transcript_analysis",
-            "video_candidate": {
-                "summary_text": "Summary",
-                "segment_candidates": [],
-                "key_point_candidates": [],
-                "quote_candidates": [],
-                "action_item_candidates": [],
-                "open_question_candidates": []
-            },
-            "claim_candidates": [],
-            "evidence_fragment_candidates": []
-        });
-
-        validate_transcript_analysis_output(&input, &output).expect("legacy aliases accepted");
-    }
-
-    #[test]
     fn extract_json_payload_accepts_fenced_json_object() {
         let text = "```json\n{\"stage_io_version\":\"1.0\",\"value\":1}\n```";
 
@@ -747,32 +725,6 @@ mod tests {
 
         assert!(error.message.contains("schema_version"));
         assert_eq!(error.object_path.as_deref(), Some("$.schema_version"));
-    }
-
-    #[test]
-    fn synthesis_output_accepts_legacy_camel_case_envelope_aliases() {
-        let mut output = valid_synthesis_output();
-        output
-            .as_object_mut()
-            .expect("output object")
-            .remove("stage_io_version");
-        output
-            .as_object_mut()
-            .expect("output object")
-            .remove("schema_version");
-        output
-            .as_object_mut()
-            .expect("output object")
-            .remove("limitations");
-        output
-            .as_object_mut()
-            .expect("output object")
-            .remove("warning_candidates");
-        output["stageIoVersion"] = serde_json::json!("1.0");
-        output["schemaVersion"] = serde_json::json!("1.0");
-
-        validate_synthesis_output(&output, &allowed_synthesis_source_refs())
-            .expect("legacy aliases accepted");
     }
 
     #[test]
