@@ -1442,7 +1442,7 @@ Expected: commit includes the sidecar Playwright smoke mode, smoke script, packa
 - Modify: `docs/superpowers/specs/2026-06-19-gemini-browser-provider-design.md`
 - Modify: `research/gemini_browser_adapter/DECISION.md`
 
-- [ ] **Step 1: Document release sidecar build order**
+- [x] **Step 1: Document release sidecar build order**
 
 Append to `README.md`:
 
@@ -1475,7 +1475,7 @@ Gemini.
 ```
 ```
 
-- [ ] **Step 2: Add packaging note to the product spec**
+- [x] **Step 2: Add packaging note to the product spec**
 
 Append under `## MVP Implementation Notes - 2026-06-20` in `docs/superpowers/specs/2026-06-19-gemini-browser-provider-design.md`:
 
@@ -1487,7 +1487,7 @@ Append under `## MVP Implementation Notes - 2026-06-20` in `docs/superpowers/spe
   bundling.
 ```
 
-- [ ] **Step 3: Add packaging note to the research decision**
+- [x] **Step 3: Add packaging note to the research decision**
 
 Append under `## Production Handoff - 2026-06-20` in `research/gemini_browser_adapter/DECISION.md`:
 
@@ -1496,7 +1496,7 @@ Append under `## Production Handoff - 2026-06-20` in `research/gemini_browser_ad
   `docs/superpowers/plans/2026-06-20-gemini-browser-sidecar-packaging.md`.
 ```
 
-- [ ] **Step 4: Commit docs**
+- [x] **Step 4: Commit docs**
 
 Update this task's checkboxes to `[x]`.
 

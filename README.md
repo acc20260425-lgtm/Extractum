@@ -205,3 +205,29 @@ Fast path:
 3. `docs/architecture-deep-dive.md`
 4. `docs/design-document.md`
 5. `docs/backlog.md`
+
+## Gemini Browser Sidecar Packaging
+
+The Gemini Browser Provider uses a TypeScript/Playwright sidecar. Development
+runs can launch `sidecars/gemini-browser/dist/index.js` through local Node.
+Release builds must first create the Tauri external sidecar binary:
+
+```powershell
+npm.cmd run test:gemini-browser-sidecar
+npm.cmd run tauri build
+```
+
+`tauri build` runs `npm run build:tauri-prereqs` through
+`src-tauri/tauri.conf.json > build.beforeBuildCommand`, which builds the
+frontend, packages `gemini-browser-sidecar-<target-triple>[.exe]`, and checks
+that the expected binary exists before Tauri starts bundling.
+
+This v1 packaging flow is host-target only. Do not use it for
+`tauri build --target ...` until cross-target sidecar binary generation is added.
+
+Generated binaries under `src-tauri/binaries/gemini-browser-sidecar-*` are
+local build artifacts and are not committed. Browser profile data and Gemini
+run artifacts are app-data runtime files, not bundle resources. Use
+`npm.cmd run smoke:gemini-browser-sidecar:playwright:binary` to verify the
+packaged binary can import Playwright and launch Chromium without navigating to
+Gemini.

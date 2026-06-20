@@ -502,3 +502,8 @@ session and external UI behavior.
 - The selected first adapter remains `resilient-scoring`; research verification
   remains available through `npm.cmd run test:gemini-browser-adapter` in
   PowerShell.
+- Release packaging uses a Tauri external sidecar binary named
+  `gemini-browser-sidecar`. Development runs may still use the local Node
+  script fallback, but packaged app builds run `build:tauri-prereqs` through
+  Tauri's `beforeBuildCommand`, including the sidecar binary check before
+  bundling.

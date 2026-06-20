@@ -92,5 +92,7 @@ Implementation planning should use this shape:
 
 - MVP implementation plan:
   `docs/superpowers/plans/2026-06-20-gemini-browser-provider-mvp.md`.
+- Sidecar packaging follow-up:
+  `docs/superpowers/plans/2026-06-20-gemini-browser-sidecar-packaging.md`.
 - Production code must not import from `research/gemini_browser_adapter`;
   research stays as a regression harness and evidence source.
