@@ -1222,37 +1222,32 @@ Expected: commit includes frontend type/API files and updated plan checkbox only
 ## Task 6: Settings Browser Providers Panel
 
 **Files:**
+- Create: `src/lib/gemini-browser-provider-panel-contract.ts`
 - Create: `src/lib/components/settings/gemini-browser-provider-panel.svelte`
 - Modify: `src/lib/components/settings/projects-settings.svelte`
 - Test: `src/lib/gemini-browser-provider-panel.test.ts`
 
-- [ ] **Step 1: Add a panel behavior test**
+- [x] **Step 1: Add a panel behavior test**
 
-Create `src/lib/gemini-browser-provider-panel.test.ts`:
+Create `src/lib/gemini-browser-provider-panel.test.ts` against `src/lib/gemini-browser-provider-panel-contract.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
-
-function statusLabel(status: string, manualAction: string | null) {
-  if (status === "ready") return "Ready";
-  if (status === "needs_login") return "Login required";
-  if (status === "needs_manual_action" && manualAction === "account_picker") return "Choose account";
-  if (status === "running") return "Running";
-  if (status === "failed") return "Failed";
-  return "Not started";
-}
+import { statusLabel } from "./gemini-browser-provider-panel-contract";
 
 describe("gemini browser provider panel copy contract", () => {
   it("maps provider statuses to compact operator labels", () => {
     expect(statusLabel("ready", null)).toBe("Ready");
     expect(statusLabel("needs_login", "login")).toBe("Login required");
     expect(statusLabel("needs_manual_action", "account_picker")).toBe("Choose account");
+    expect(statusLabel("running", null)).toBe("Running");
+    expect(statusLabel("failed", null)).toBe("Failed");
     expect(statusLabel("not_started", null)).toBe("Not started");
   });
 });
 ```
 
-- [ ] **Step 2: Add the Svelte panel**
+- [x] **Step 2: Add the Svelte panel**
 
 Create `src/lib/components/settings/gemini-browser-provider-panel.svelte`:
 
@@ -1574,7 +1569,7 @@ Create `src/lib/components/settings/gemini-browser-provider-panel.svelte`:
 </style>
 ```
 
-- [ ] **Step 3: Add the Settings tab**
+- [x] **Step 3: Add the Settings tab**
 
 Modify `src/lib/components/settings/projects-settings.svelte` imports:
 
@@ -1605,7 +1600,7 @@ Add this branch before Telegram:
   </div>
 ```
 
-- [ ] **Step 4: Run component-related checks**
+- [x] **Step 4: Run component-related checks**
 
 Run:
 
@@ -1616,12 +1611,12 @@ npm.cmd run check
 
 Expected: Vitest passes and `svelte-check` reports `0 errors and 0 warnings`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 
 ```powershell
-git add src/lib/components/settings/gemini-browser-provider-panel.svelte src/lib/components/settings/projects-settings.svelte src/lib/gemini-browser-provider-panel.test.ts docs/superpowers/plans/2026-06-20-gemini-browser-provider-mvp.md
+git add src/lib/gemini-browser-provider-panel-contract.ts src/lib/components/settings/gemini-browser-provider-panel.svelte src/lib/components/settings/projects-settings.svelte src/lib/gemini-browser-provider-panel.test.ts docs/superpowers/plans/2026-06-20-gemini-browser-provider-mvp.md
 git commit -m "feat: add Gemini browser settings panel"
 ```
 

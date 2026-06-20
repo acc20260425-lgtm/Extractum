@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import {
     Plus,
+    Bot,
     Edit2,
     Trash2,
     Check,
@@ -23,6 +24,7 @@
   } from "$lib/api/llm";
   import { getSyncSettings, saveSyncSettings } from "$lib/api/sources";
   import { formatAppError } from "$lib/app-error";
+  import GeminiBrowserProviderPanel from "$lib/components/settings/gemini-browser-provider-panel.svelte";
   import YoutubeSettingsPanel from "$lib/components/settings/youtube-settings-panel.svelte";
   import type { LlmProfile, LlmProfilesState, LlmProviderModel } from "$lib/types/llm";
   import type { SyncSettings } from "$lib/types/sources";
@@ -256,6 +258,14 @@
     </button>
     <button
       class="tab-btn"
+      class:active={activeTab === "browser"}
+      onclick={() => activeTab = "browser"}
+    >
+      <Bot size={14} />
+      <span>Browser Providers</span>
+    </button>
+    <button
+      class="tab-btn"
       class:active={activeTab === "telegram"}
       onclick={() => activeTab = "telegram"}
     >
@@ -362,6 +372,10 @@
             </tbody>
           </table>
         </div>
+      </div>
+    {:else if activeTab === "browser"}
+      <div class="settings-card">
+        <GeminiBrowserProviderPanel />
       </div>
     {:else if activeTab === "telegram"}
       <!-- TELEGRAM TAB -->
