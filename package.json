@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "node scripts/run-vitest.mjs run",
     "test:gemini-browser-adapter:typecheck": "tsc -p research/gemini_browser_adapter/tsconfig.json --noEmit",
-    "test:gemini-browser-adapter:unit": "node scripts/run-vitest.mjs run research/gemini_browser_adapter/**/*.test.ts",
+    "test:gemini-browser-adapter:unit": "node scripts/run-vitest.mjs run research/gemini_browser_adapter/src",
     "test:gemini-browser-adapter:e2e": "playwright test -c research/gemini_browser_adapter/playwright.config.ts",
     "test:gemini-browser-adapter:report": "node research/gemini_browser_adapter/scripts/write-matrix-report.mjs",
     "test:gemini-browser-adapter": "node research/gemini_browser_adapter/scripts/run-full-verification.mjs",

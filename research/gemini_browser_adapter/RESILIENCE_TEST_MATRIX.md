@@ -25,13 +25,13 @@ failure with required artifacts. It must never hang indefinitely.
 | Slow answer pauses | `slow-pauses` | `ok` | Completion waits through pauses longer than 800 ms |
 | Never stabilizes | `never-stable` | `generation_timeout` | Screenshot, DOM snapshot, trace or telemetry |
 | Login required | `login-required` | `login_required` | Manual-action message and screenshot |
-| CAPTCHA text | `captcha` | `manual_action_required` or `captcha_required` | Manual-action message and screenshot |
-| Account picker | `account-picker` | `manual_action_required` | Manual-action message and screenshot |
-| Consent screen | `consent` | `manual_action_required` | Manual-action message and screenshot |
+| CAPTCHA text | `captcha` | `captcha_required` | Manual-action message and screenshot |
+| Account picker | `account-picker` | `account_picker` | Manual-action message and screenshot |
+| Consent screen | `consent` | `consent_required` | Manual-action message and screenshot |
 | Rate limit banner | `rate-limit` | `rate_limited` | Banner evidence and sanitized network summary if available |
 | Unknown modal | `unknown-modal` | `manual_action_required` | Dialog evidence and screenshot |
-| Broken answer container | `broken-answer` | `response_parse_failed` or `generation_timeout` | Locator attempts and DOM snapshot |
-| Browser crash/close | `closed-page` | `browser_crashed` or `failed` | Status and sanitized error |
+| Broken answer container | `broken-answer` | `response_parse_failed` | Locator attempts and DOM snapshot |
+| Browser crash/close | `closed-page` | `browser_crashed` | Status and sanitized error |
 
 ## Mock Page Requirements
 
@@ -77,3 +77,39 @@ longer be queried. Screenshot capture is optional for those cases.
 
 `telemetry.json` should include locator attempts, status, sanitized URL,
 network summary, timestamps, and error reason.
+
+## Execution
+
+Run the complete research matrix with:
+
+```powershell
+npm run test:gemini-browser-adapter
+```
+
+The Playwright JSON output is written to:
+
+```text
+research/gemini_browser_adapter/artifacts/playwright-results.json
+```
+
+The summarized matrix report is written to:
+
+```text
+research/gemini_browser_adapter/artifacts/matrix-report.md
+```
+
+The executable matrix is implemented in:
+
+```text
+research/gemini_browser_adapter/matrix-cases.json
+research/gemini_browser_adapter/src/matrix-cases.ts
+research/gemini_browser_adapter/tests/matrix.spec.ts
+```
+
+The matrix JSON is the single source of truth for adapter variants and scenario
+IDs. `matrix-cases.ts` imports it for Playwright tests, and
+`write-matrix-report.mjs` reads the same file for coverage validation. The
+matrix covers all `3` adapter variants against all `18` scenarios. Expected
+statuses and required evidence are asserted in `matrix.spec.ts`; report
+generation fails when any expected variant/scenario pair is absent from the
+Playwright JSON output.

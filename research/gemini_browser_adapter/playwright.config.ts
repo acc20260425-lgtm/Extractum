@@ -7,12 +7,13 @@ export default defineConfig({
     timeout: 5_000,
   },
   fullyParallel: false,
+  workers: 1,
   reporter: [
     ["list"],
     [
       "json",
       {
-        outputFile: "research/gemini_browser_adapter/artifacts/playwright-results.json",
+        outputFile: "artifacts/playwright-results.json",
       },
     ],
   ],

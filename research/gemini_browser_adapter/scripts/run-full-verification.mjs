@@ -9,7 +9,7 @@ const staleArtifactPaths = [
 
 function run(label, args) {
   console.log(`\n== ${label} ==`);
-  const result = spawnSync(npm, args, { stdio: "inherit" });
+  const result = spawnSync(npm, args, { stdio: "inherit", shell: process.platform === "win32" });
   if (result.error) {
     console.error(`${label} failed to start: ${result.error.message}`);
     return 1;

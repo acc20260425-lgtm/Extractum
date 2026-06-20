@@ -97,10 +97,10 @@ Run all variants against the same scenario matrix:
 4. Verify that every scenario terminates within its hard timeout.
 5. Compare diagnostics quality when the adapter fails.
 
-The planned executable command is `npm run test:gemini-browser-adapter`. It
-should use a wrapper runner so the matrix report is still generated after a
-Playwright e2e failure. The wrapper should clear stale matrix `result.json`
-files and stale Playwright JSON output immediately before each e2e run.
+The executable command is `npm run test:gemini-browser-adapter`. It uses a
+wrapper runner so the matrix report is still generated after a Playwright e2e
+failure. The wrapper clears stale matrix `result.json` files and stale
+Playwright JSON output immediately before each e2e run.
 
 The matrix should report:
 

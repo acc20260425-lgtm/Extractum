@@ -85,7 +85,7 @@ Edit `package.json` and add these scripts inside `"scripts"`:
 
 ```json
 "test:gemini-browser-adapter:typecheck": "tsc -p research/gemini_browser_adapter/tsconfig.json --noEmit",
-"test:gemini-browser-adapter:unit": "node scripts/run-vitest.mjs run research/gemini_browser_adapter/**/*.test.ts",
+"test:gemini-browser-adapter:unit": "node scripts/run-vitest.mjs run research/gemini_browser_adapter/src",
 "test:gemini-browser-adapter:e2e": "playwright test -c research/gemini_browser_adapter/playwright.config.ts",
 "test:gemini-browser-adapter:report": "node research/gemini_browser_adapter/scripts/write-matrix-report.mjs",
 "test:gemini-browser-adapter": "node research/gemini_browser_adapter/scripts/run-full-verification.mjs"
@@ -107,7 +107,7 @@ const staleArtifactPaths = [
 
 function run(label, args) {
   console.log(`\n== ${label} ==`);
-  const result = spawnSync(npm, args, { stdio: "inherit" });
+  const result = spawnSync(npm, args, { stdio: "inherit", shell: process.platform === "win32" });
   if (result.error) {
     console.error(`${label} failed to start: ${result.error.message}`);
     return 1;
@@ -162,12 +162,13 @@ export default defineConfig({
     timeout: 5_000,
   },
   fullyParallel: false,
+  workers: 1,
   reporter: [
     ["list"],
     [
       "json",
       {
-        outputFile: "research/gemini_browser_adapter/artifacts/playwright-results.json",
+        outputFile: "artifacts/playwright-results.json",
       },
     ],
   ],
@@ -2284,7 +2285,7 @@ git commit -m "Add telemetry-assisted Gemini adapter variant"
 - Modify: `research/gemini_browser_adapter/RESILIENCE_TEST_MATRIX.md`
 - Modify: `research/gemini_browser_adapter/TOOLS_AND_METHODS.md`
 
-- [ ] **Step 1: Write executable matrix cases**
+- [x] **Step 1: Write executable matrix cases**
 
 Create `research/gemini_browser_adapter/matrix-cases.json`:
 
@@ -2588,7 +2589,7 @@ export function expectedMatrixPairTitles(): string[] {
 }
 ```
 
-- [ ] **Step 2: Write matrix Playwright spec**
+- [x] **Step 2: Write matrix Playwright spec**
 
 Create `research/gemini_browser_adapter/tests/matrix.spec.ts`:
 
@@ -2726,7 +2727,7 @@ test.describe("Gemini adapter executable scenario matrix", () => {
 });
 ```
 
-- [ ] **Step 3: Run matrix spec to verify failure**
+- [x] **Step 3: Run matrix spec to verify failure**
 
 Run:
 
@@ -2736,7 +2737,7 @@ npx playwright test -c research/gemini_browser_adapter/playwright.config.ts rese
 
 Expected: FAIL until `matrix-cases.ts`, readiness probes, closed-page status handling, and artifact wrapping from previous tasks are implemented.
 
-- [ ] **Step 4: Verify matrix spec passes**
+- [x] **Step 4: Verify matrix spec passes**
 
 Run:
 
@@ -2753,7 +2754,7 @@ Expected:
 - every granular artifact flag asserts only the required screenshot, HTML, or telemetry artifact file;
 - the `telemetry-assisted / happy-path` case asserts a response event for `/mock-gemini-event`.
 
-- [ ] **Step 5: Write coverage-validating matrix report script**
+- [x] **Step 5: Write coverage-validating matrix report script**
 
 Create `research/gemini_browser_adapter/scripts/write-matrix-report.mjs`:
 
@@ -2908,7 +2909,7 @@ console.log(`Wrote ${outputPath}`);
 if (failed > 0 || missingPairs.length > 0 || missingResultPairs.length > 0 || unexpectedFailureCount > 0 || artifactIncompleteCount > 0 || falseCompletionCount > 0) process.exit(1);
 ```
 
-- [ ] **Step 6: Run full research verification**
+- [x] **Step 6: Run full research verification**
 
 Run:
 
@@ -2927,7 +2928,7 @@ Expected:
 - the report has `Missing matrix pairs: 0`;
 - command exits `0`.
 
-- [ ] **Step 7: Update matrix documentation**
+- [x] **Step 7: Update matrix documentation**
 
 Append this section to `research/gemini_browser_adapter/RESILIENCE_TEST_MATRIX.md`:
 
@@ -2963,7 +2964,7 @@ research/gemini_browser_adapter/tests/matrix.spec.ts
 The matrix JSON is the single source of truth for adapter variants and scenario IDs. `matrix-cases.ts` imports it for Playwright tests, and `write-matrix-report.mjs` reads the same file for coverage validation. The matrix covers all `3` adapter variants against all `18` scenarios. Expected statuses and required evidence are asserted in `matrix.spec.ts`; report generation fails when any expected variant/scenario pair is absent from the Playwright JSON output.
 ````
 
-- [ ] **Step 8: Update tools document**
+- [x] **Step 8: Update tools document**
 
 Add this sentence under `## Method` in `research/gemini_browser_adapter/TOOLS_AND_METHODS.md`:
 
@@ -2974,7 +2975,7 @@ Playwright e2e failure. The wrapper should clear stale matrix `result.json`
 files and stale Playwright JSON output immediately before each e2e run.
 ```
 
-- [ ] **Step 9: Verify no generated artifacts are staged**
+- [x] **Step 9: Verify no generated artifacts are staged**
 
 Run:
 
@@ -2984,7 +2985,7 @@ git status --short --untracked-files=all research\\gemini_browser_adapter
 
 Expected: source files and docs may appear, but generated files under `artifacts/` do not appear.
 
-- [ ] **Step 10: Commit matrix runner**
+- [x] **Step 10: Commit matrix runner**
 
 Run:
 
