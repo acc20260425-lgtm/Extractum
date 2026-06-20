@@ -212,12 +212,14 @@ Change the `Resume` command variant to:
 Run:
 
 ```powershell
+npm.cmd run test:gemini-browser-sidecar:typecheck
 npm.cmd run test:gemini-browser-sidecar:unit
 npm.cmd run test -- src/lib/gemini-browser-provider-panel.test.ts
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-cdp --lib gemini_browser::types
 ```
 
 Expected:
+- Sidecar protocol typecheck passes, including the `resume.browser_profile_dir` union update.
 - Sidecar protocol tests pass.
 - Provider panel label test passes.
 - Rust Gemini browser type tests pass.
@@ -782,6 +784,33 @@ it("maps CDP closed-target send failures to browser_crashed", async () => {
     message: "Chrome CDP connection closed during the run.",
   });
 });
+
+it("maps an already closed attached CDP page before send to browser_crashed", async () => {
+  const adapter = new GeminiBrowserAdapter({
+    env: { EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT: "http://127.0.0.1:9222" },
+  });
+  const page = {
+    isClosed: () => true,
+  };
+  adapter.__setTestPage(page as never, "cdp_attach");
+
+  await expect(
+    adapter.sendSingle({
+      browserProfileDir: "C:/Extractum/gemini-browser/profile",
+      artifactDir: "C:/Extractum/gemini-browser/runs/run-1",
+      request: {
+        run_id: "run-1",
+        prompt: "hello",
+        source: "settings_test",
+        artifact_mode: "reduced",
+      },
+    }),
+  ).resolves.toMatchObject({
+    status: "browser_crashed",
+    manual_action: null,
+    message: "Chrome CDP page closed before the run could send.",
+  });
+});
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -792,7 +821,9 @@ Run:
 npm.cmd run test:gemini-browser-sidecar:unit
 ```
 
-Expected: FAIL because `GeminiBrowserAdapter` does not accept injected dependencies and does not expose `__setTestPage`.
+Expected: FAIL because `GeminiBrowserAdapter` does not accept injected dependencies
+(`fetchLike`, `connectOverCdp`) and does not expose `__setTestPage` /
+`__setTestSession`.
 
 - [ ] **Step 3: Update adapter imports and session types**
 
@@ -1058,11 +1089,16 @@ Replace `openBrowser(browserProfileDir: string)` with:
 
 The no-context branch intentionally does not retain `browser` in `this.session`.
 It is a failed attach setup, not a connected provider state. Do not call
-`browser.close()` or `context.close()` in CDP mode. When a context exists but no
-Gemini page exists, keep `{ browser, context, page: null }` as a connected
-manual-action state so `status()` can report "CDP attached, but no Gemini tab"
-instead of falling back to endpoint probing. A later `stop()` or retry drops or
-replaces those references.
+`browser.close()` or `context.close()` in CDP mode. Playwright's public
+JavaScript `Browser` type does not expose a `disconnect()` method; `close()` is
+too broad for user-owned Chrome in this v1 plan. A failed no-context attach may
+therefore leave the underlying CDP transport alive until garbage collection or
+process exit. Record this as an accepted v1 leak risk in the implementation
+notes. When a context exists but no Gemini page exists, keep
+`{ browser, context, page: null }` as a connected manual-action state so
+`status()` can report "CDP attached, but no Gemini tab" instead of falling back
+to endpoint probing. A later `stop()` or retry drops or replaces those
+references.
 
 - [ ] **Step 7: Update sendSingle page access and closed-target mapping**
 
@@ -1078,8 +1114,28 @@ In `sendSingle`, replace:
 with:
 
 ```ts
+    const mode = resolveBrowserMode(this.env);
+    const hadClosedCdpPage =
+      this.session?.type === "cdp_attach" && Boolean(this.session.page?.isClosed());
+    if (hadClosedCdpPage) {
+      return {
+        run_id: input.request.run_id,
+        status: "browser_crashed",
+        text: null,
+        message: "Chrome CDP page closed before the run could send.",
+        manual_action: null,
+        artifacts: {
+          run_dir: input.artifactDir,
+          html: null,
+          screenshot: null,
+          telemetry: null,
+          artifact_write_error: null,
+        },
+        elapsed_ms: Date.now() - start,
+      };
+    }
+
     if (!this.session?.page || this.session.page.isClosed()) {
-      const mode = resolveBrowserMode(this.env);
       if (mode.type === "cdp_attach") {
         await this.attachCdpBrowser(input.browserProfileDir, { createGeminiPage: false });
       } else {
@@ -1088,6 +1144,25 @@ with:
     }
     const page = this.session?.page ?? null;
     if (!page || page.isClosed()) {
+      const activeType = this.session?.type ?? mode.type;
+      if (activeType !== "cdp_attach") {
+        return {
+          run_id: input.request.run_id,
+          status: "failed",
+          text: null,
+          message: "Gemini browser page was not created.",
+          manual_action: null,
+          artifacts: {
+            run_dir: input.artifactDir,
+            html: null,
+            screenshot: null,
+            telemetry: null,
+            artifact_write_error: null,
+          },
+          elapsed_ms: Date.now() - start,
+        };
+      }
+
       return {
         run_id: input.request.run_id,
         status: "needs_manual_action",
@@ -1105,6 +1180,11 @@ with:
       };
     }
 ```
+
+Closed CDP page that already belonged to the active session is classified as
+`browser_crashed` before retry. Absence of a Gemini page after CDP attach remains
+operator action. Managed mode must not return `start_chrome_cdp`; if managed
+opening fails to produce a usable page, return `failed` with no CDP manual action.
 
 Replace the catch block:
 
@@ -1446,6 +1526,10 @@ Implementation plan:
 - CDP `Stop` and failed setup paths drop Extractum-side references only. They do
   not call `context.close()` or `browser.close()` because the attached Chrome and
   its tabs belong to the operator.
+- Playwright JavaScript does not expose a public `Browser.disconnect()` method.
+  A failed no-context attach after `connectOverCDP` may leave the CDP transport
+  alive until garbage collection or process exit; this is an accepted v1 risk
+  until a safer detach strategy is verified.
 - A connected CDP session with no Gemini page is reported separately from an
   unreachable endpoint: "Chrome CDP attached, but no Gemini tab is available."
 ```
