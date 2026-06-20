@@ -490,3 +490,15 @@ session and external UI behavior.
   MVP?
 - Which app-data subdirectory should own browser profile, sidecar logs, and
   Gemini run logs?
+
+## MVP Implementation Notes - 2026-06-20
+
+- The production provider boundary is `src-tauri/src/gemini_browser`.
+- Browser Provider UI is exposed through Settings -> Browser Providers.
+- Browser profile and run logs live under the Tauri app data directory, not in
+  the repository.
+- Runtime automation uses the TypeScript sidecar boundary under
+  `sidecars/gemini-browser`.
+- The selected first adapter remains `resilient-scoring`; research verification
+  remains available through `npm.cmd run test:gemini-browser-adapter` in
+  PowerShell.

@@ -2696,7 +2696,7 @@ Expected: commit includes the narrow handoff module and updated plan checkbox on
 - Modify: `docs/superpowers/specs/2026-06-19-gemini-browser-provider-design.md`
 - Modify: `research/gemini_browser_adapter/DECISION.md`
 
-- [ ] **Step 1: Document MVP implementation status**
+- [x] **Step 1: Document MVP implementation status**
 
 Append to `docs/superpowers/specs/2026-06-19-gemini-browser-provider-design.md`:
 
@@ -2719,7 +2719,7 @@ Append to `research/gemini_browser_adapter/DECISION.md`:
 - Production code must not import from `research/gemini_browser_adapter`; research stays as a regression harness and evidence source.
 ```
 
-- [ ] **Step 2: Run full feature verification**
+- [x] **Step 2: Run full feature verification**
 
 Run:
 
@@ -2743,7 +2743,7 @@ Rust Gemini browser tests pass
 Rust prompt-pack handoff tests pass
 ```
 
-- [ ] **Step 3: Confirm no Python runtime additions**
+- [x] **Step 3: Confirm no Python runtime additions**
 
 Run:
 
@@ -2754,7 +2754,7 @@ rg -n "python|\\.py|child_process.*python|Command::new\\(\"python" src-tauri/src
 
 Expected: no production Python runtime invocation for Gemini Browser Provider.
 
-- [ ] **Step 4: Commit documentation**
+- [x] **Step 4: Commit documentation**
 
 Run:
 

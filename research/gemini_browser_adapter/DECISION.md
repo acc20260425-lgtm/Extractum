@@ -87,3 +87,10 @@ Implementation planning should use this shape:
 - Private Gemini RPC parsing.
 - Hidden automation of Google account controls.
 - Automatic CAPTCHA, consent, account-picker, or login handling.
+
+## Production Handoff - 2026-06-20
+
+- MVP implementation plan:
+  `docs/superpowers/plans/2026-06-20-gemini-browser-provider-mvp.md`.
+- Production code must not import from `research/gemini_browser_adapter`;
+  research stays as a regression harness and evidence source.
