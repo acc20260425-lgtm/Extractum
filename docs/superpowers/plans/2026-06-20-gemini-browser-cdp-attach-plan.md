@@ -703,7 +703,7 @@ Expected: commit contains only CDP page helper and tests.
 - Modify: `sidecars/gemini-browser/src/adapter.ts`
 - Modify: `sidecars/gemini-browser/src/adapter.test.ts`
 
-- [ ] **Step 1: Add adapter tests for CDP setup, no-page, Open, and closed-target behavior**
+- [x] **Step 1: Add adapter tests for CDP setup, no-page, Open, and closed-target behavior**
 
 Update the existing Vitest and adapter imports in `sidecars/gemini-browser/src/adapter.test.ts`:
 
@@ -897,7 +897,7 @@ it("maps an already closed attached CDP page before send to browser_crashed", as
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -909,7 +909,7 @@ Expected: FAIL because `GeminiBrowserAdapter` does not accept injected dependenc
 (`fetchLike`, `connectOverCdp`) and does not expose `__setTestPage` /
 `__setTestSession`.
 
-- [ ] **Step 3: Update adapter imports and session types**
+- [x] **Step 3: Update adapter imports and session types**
 
 In `sidecars/gemini-browser/src/adapter.ts`, replace the Playwright import with:
 
@@ -951,7 +951,7 @@ interface GeminiBrowserAdapterOptions {
 }
 ```
 
-- [ ] **Step 4: Replace adapter fields and constructor**
+- [x] **Step 4: Replace adapter fields and constructor**
 
 Replace the current fields:
 
@@ -991,7 +991,7 @@ Add this test-only helper inside the class:
   }
 ```
 
-- [ ] **Step 5: Replace status implementation**
+- [x] **Step 5: Replace status implementation**
 
 Replace `status(browserProfileDir: string)` with:
 
@@ -1071,7 +1071,7 @@ function providerStatus(input: {
 }
 ```
 
-- [ ] **Step 6: Add managed and CDP open/resume helpers**
+- [x] **Step 6: Add managed and CDP open/resume helpers**
 
 Replace `openBrowser(browserProfileDir: string)` with:
 
@@ -1184,7 +1184,7 @@ notes. When a context exists but no Gemini page exists, keep
 to endpoint probing. A later `stop()` or retry drops or replaces those
 references.
 
-- [ ] **Step 7: Update sendSingle page access and closed-target mapping**
+- [x] **Step 7: Update sendSingle page access and closed-target mapping**
 
 In `sendSingle`, replace:
 
@@ -1320,7 +1320,7 @@ with:
     }
 ```
 
-- [ ] **Step 8: Update stop lifecycle**
+- [x] **Step 8: Update stop lifecycle**
 
 Replace `stop()` with:
 
@@ -1335,7 +1335,7 @@ Replace `stop()` with:
 
 This intentionally drops CDP references only. Do not call `context.close()` or `browser.close()` in CDP mode; Playwright does not provide a safer v1 detach operation here that is worth risking user tabs. Managed mode still closes the context it owns.
 
-- [ ] **Step 9: Run sidecar tests**
+- [x] **Step 9: Run sidecar tests**
 
 Run:
 
@@ -1345,7 +1345,7 @@ npm.cmd run test:gemini-browser-sidecar
 
 Expected: typecheck, unit tests, and sidecar build pass.
 
-- [ ] **Step 10: Commit adapter changes**
+- [x] **Step 10: Commit adapter changes**
 
 Run:
 
