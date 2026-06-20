@@ -55,7 +55,7 @@ Do not touch `src-tauri/*` in this plan.
 - Create: `research/gemini_browser_adapter/tsconfig.json`
 - Create: `research/gemini_browser_adapter/scripts/run-full-verification.mjs`
 
-- [ ] **Step 1: Add Playwright test dependency**
+- [x] **Step 1: Add Playwright test dependency**
 
 Run:
 
@@ -69,7 +69,7 @@ Expected:
 - `package-lock.json` updates.
 - If the sandbox blocks registry access, rerun this command with escalation.
 
-- [ ] **Step 2: Install Chromium browser for local Playwright runs**
+- [x] **Step 2: Install Chromium browser for local Playwright runs**
 
 Run:
 
@@ -79,7 +79,7 @@ npx playwright install chromium
 
 Expected: Playwright downloads or confirms the Chromium browser binary.
 
-- [ ] **Step 3: Add package scripts**
+- [x] **Step 3: Add package scripts**
 
 Edit `package.json` and add these scripts inside `"scripts"`:
 
@@ -91,7 +91,7 @@ Edit `package.json` and add these scripts inside `"scripts"`:
 "test:gemini-browser-adapter": "node research/gemini_browser_adapter/scripts/run-full-verification.mjs"
 ```
 
-- [ ] **Step 4: Create full verification wrapper**
+- [x] **Step 4: Create full verification wrapper**
 
 Create `research/gemini_browser_adapter/scripts/run-full-verification.mjs`:
 
@@ -148,7 +148,7 @@ Expected:
 - after Playwright e2e starts, the matrix report command runs even when Playwright exits non-zero;
 - the wrapper exits non-zero when either e2e or report generation fails.
 
-- [ ] **Step 5: Create Playwright config**
+- [x] **Step 5: Create Playwright config**
 
 Create `research/gemini_browser_adapter/playwright.config.ts`:
 
@@ -180,7 +180,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 6: Create research TypeScript config**
+- [x] **Step 6: Create research TypeScript config**
 
 Create `research/gemini_browser_adapter/tsconfig.json`:
 
@@ -209,7 +209,7 @@ Create `research/gemini_browser_adapter/tsconfig.json`:
 }
 ```
 
-- [ ] **Step 6: Verify TypeScript config parses**
+- [x] **Step 6: Verify TypeScript config parses**
 
 Run:
 
@@ -219,7 +219,7 @@ npm run test:gemini-browser-adapter:typecheck
 
 Expected: command exits `0`. Do not run `playwright --list` yet; the Playwright test directory has no valid spec file at this point and may fail with `No tests found`.
 
-- [ ] **Step 7: Commit tooling**
+- [x] **Step 7: Commit tooling**
 
 Run:
 
