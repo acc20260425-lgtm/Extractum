@@ -98,16 +98,6 @@ pub(crate) async fn build_youtube_summary_canonical_result(
                 .cloned()
                 .unwrap_or_default();
         }
-        GraphLoadOutcome::PartialGraph => {
-            limitations.push(
-                "intermediate entity graph artifacts were incomplete, so claims and evidence were assembled through the legacy parsed-output path.".to_string(),
-            );
-            push_quality_flag(
-                &mut quality_flags,
-                "intermediate_entities_legacy_fallback",
-                "warning",
-            );
-        }
         GraphLoadOutcome::NoGraph => {}
     }
 
@@ -213,7 +203,6 @@ pub(crate) async fn build_youtube_summary_canonical_result(
 
 enum GraphLoadOutcome {
     Complete(serde_json::Value),
-    PartialGraph,
     NoGraph,
 }
 
@@ -252,12 +241,16 @@ async fn load_complete_intermediate_graph_for_result(
         .map(|row| (row.source_snapshot_id, row.source_ref_id.clone()))
         .collect::<Vec<_>>();
     if graph_row_sources != expected_sources {
-        return Ok(GraphLoadOutcome::PartialGraph);
+        return Err(AppError::internal(format!(
+            "incomplete intermediate_entities graph for prompt pack run {run_id}"
+        )));
     }
     let merged = merge_result_graph_rows(graph_rows)?;
     let merged_sources = graph_source_keys(&merged)?;
     if merged_sources != expected_sources {
-        return Ok(GraphLoadOutcome::PartialGraph);
+        return Err(AppError::internal(format!(
+            "intermediate_entities graph sources do not match successful transcript stages for prompt pack run {run_id}"
+        )));
     }
     Ok(GraphLoadOutcome::Complete(merged))
 }
@@ -857,7 +850,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn build_canonical_result_mixed_graph_availability_falls_back_with_quality_flag() {
+    async fn build_canonical_result_rejects_incomplete_intermediate_graph() {
         let pool = test_pool_with_two_successful_stage_artifacts().await;
         insert_intermediate_entities_artifact(
             &pool,
@@ -872,23 +865,13 @@ mod tests {
         .await
         .expect("graph artifact");
 
-        let result = build_youtube_summary_canonical_result(&pool, 42)
+        let error = build_youtube_summary_canonical_result(&pool, 42)
             .await
-            .expect("canonical result");
+            .expect_err("incomplete graph rejected");
 
-        assert_eq!(result["claims"][0]["text"], "Claim");
-        assert!(has_quality_flag(
-            &result,
-            "intermediate_entities_legacy_fallback"
-        ));
-        assert!(result["limitations"]
-            .as_array()
-            .expect("limitations")
-            .iter()
-            .any(|value| value
-                .as_str()
-                .unwrap_or("")
-                .contains("intermediate entity graph artifacts were incomplete")));
+        assert!(error
+            .message
+            .contains("incomplete intermediate_entities graph"));
     }
 
     fn has_quality_flag(result: &serde_json::Value, flag: &str) -> bool {

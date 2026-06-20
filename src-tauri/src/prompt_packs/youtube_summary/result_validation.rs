@@ -932,10 +932,6 @@ fn add_advisory_quality_flag_findings(
             continue;
         };
         let advisory = match flag {
-            "intermediate_entities_legacy_fallback" => Some((
-                "warning",
-                "Canonical result used legacy parsed-output assembly for claims/evidence.",
-            )),
             "synthesis_not_applicable_single_video" => Some((
                 "info",
                 "Synthesis was intentionally skipped for a single-video run.",
@@ -1794,7 +1790,7 @@ mod tests {
     fn known_quality_flag_emits_advisory_finding_without_error() {
         let mut canonical = valid_canonical_result();
         canonical["quality_flags"] = serde_json::json!([
-            { "flag": "intermediate_entities_legacy_fallback", "severity": "warning" }
+            { "flag": "synthesis_failed", "severity": "warning" }
         ]);
 
         let findings =
@@ -1831,7 +1827,7 @@ mod tests {
         let pool = test_pool_with_canonical_result_ready().await;
         let mut canonical = valid_canonical_result();
         canonical["quality_flags"] = serde_json::json!([
-            { "flag": "intermediate_entities_legacy_fallback", "severity": "warning" }
+            { "flag": "synthesis_failed", "severity": "warning" }
         ]);
 
         validate_and_persist_final_result_transaction(&pool, 42, canonical, "complete")
@@ -1859,7 +1855,7 @@ mod tests {
         let pool = test_pool_with_canonical_result_ready().await;
         let mut first = valid_canonical_result();
         first["quality_flags"] = serde_json::json!([
-            { "flag": "intermediate_entities_legacy_fallback", "severity": "warning" }
+            { "flag": "synthesis_failed", "severity": "warning" }
         ]);
         validate_and_persist_final_result_transaction(&pool, 42, first, "complete")
             .await
@@ -2011,7 +2007,7 @@ mod tests {
 
         let mut canonical = valid_canonical_result();
         canonical["quality_flags"] = serde_json::json!([
-            { "flag": "intermediate_entities_legacy_fallback", "severity": "warning" }
+            { "flag": "synthesis_failed", "severity": "warning" }
         ]);
 
         let error = validate_and_persist_final_result_transaction_with_result_mutator_for_test(
