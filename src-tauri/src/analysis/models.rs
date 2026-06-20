@@ -63,7 +63,6 @@ pub struct AnalysisTraceData {
 #[serde(rename_all = "snake_case")]
 pub enum AnalysisSnapshotState {
     Captured,
-    MissingLegacy,
     CaptureFailed,
 }
 

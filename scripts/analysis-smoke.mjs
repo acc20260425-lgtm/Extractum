@@ -102,7 +102,7 @@ export const savedRunAffordanceSmokeSteps = [
       await assertRunRowAffordance(
         ctx,
         fixtureLabels.missingSnapshotRun,
-        ["Legacy snapshot missing"],
+        ["Snapshot not captured"],
         [captureFailedSnapshotErrorText, "fixture write boundary unavailable"],
       );
       await assertRunRowAffordance(
@@ -114,7 +114,7 @@ export const savedRunAffordanceSmokeSteps = [
     },
   },
   {
-    name: "saved-runs-affordance.missing-legacy",
+    name: "saved-runs-affordance.capture-failed-without-error",
     async run(ctx) {
       await navigateAnalysis(ctx);
       await openRun(ctx, fixtureLabels.missingSnapshotRun);
@@ -123,28 +123,28 @@ export const savedRunAffordanceSmokeSteps = [
       const opened = await openedRunText(ctx);
       assertTextContains(
         opened.header,
-        "Saved report is readable, but this legacy run has no saved source snapshot.",
-        "missing legacy opened header",
+        "Saved report is readable, but saved source context is unavailable for this run.",
+        "capture failed without error opened header",
       );
-      assertTextContains(opened.header, "Legacy run has no saved snapshot", "missing legacy details");
+      assertTextContains(opened.header, "Saved snapshot is unavailable", "capture failed without error details");
 
       await switchToSourceSurface(ctx);
       const sourceText = await sourceSurfaceText(ctx);
       assertTextContains(
         sourceText,
-        "Older saved runs may not include frozen source rows",
-        "missing legacy Source detail",
+        "Extractum did not record a snapshot capture error, but saved snapshot rows are unavailable",
+        "capture failed without error Source detail",
       );
-      assertTextContains(sourceText, "Snapshot unavailable", "missing legacy Source badge");
-      assertTextOmits(sourceText, "Run snapshot\nSources", "missing legacy Source saved snapshot browser");
+      assertTextContains(sourceText, "Snapshot unavailable", "capture failed without error Source badge");
+      assertTextOmits(sourceText, "Run snapshot\nSources", "capture failed without error Source saved snapshot browser");
       await assertLiveSourceClarificationIfAvailable(ctx);
 
       await assertEvidenceDisabledForRun(
         ctx,
         fixtureLabels.missingSnapshotRun,
-        "legacy run has no saved source snapshot",
+        "saved snapshot rows are unavailable",
       );
-      await assertChatDisabledForOpenedRun(ctx, "Older saved runs may not include frozen source rows");
+      await assertChatDisabledForOpenedRun(ctx, "saved snapshot rows are unavailable");
     },
   },
   {
@@ -756,7 +756,7 @@ async function clickLiveSourceIfAvailable(ctx) {
   const text = await sourceSurfaceText(ctx);
   assertTextContains(text, "Live source", "live source header");
   assertTextOmits(text, captureFailedSnapshotErrorText, "live source after capture failed switch");
-  assertTextOmits(text, "Legacy run has no saved snapshot", "live source after missing legacy switch");
+  assertTextOmits(text, "Saved snapshot is unavailable", "live source after unavailable snapshot switch");
   return true;
 }
 

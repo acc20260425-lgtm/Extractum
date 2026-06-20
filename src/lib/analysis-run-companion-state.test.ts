@@ -151,13 +151,6 @@ describe("analysis run companion state", () => {
 
   it.each([
     [
-      "missing_legacy",
-      "unavailable",
-      "legacy_missing",
-      "Saved context unavailable",
-      "Older saved runs may not include frozen source rows",
-    ],
-    [
       "capture_failed",
       "unavailable",
       "capture_failed_with_error",
@@ -251,11 +244,6 @@ describe("analysis run companion state", () => {
   });
 
   it.each([
-    [
-      "missing_legacy",
-      "unavailable",
-      "legacy run has no saved source snapshot",
-    ],
     [
       "capture_failed",
       "unavailable",

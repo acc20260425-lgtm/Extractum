@@ -49,7 +49,7 @@ describe("analysis UI smoke harness contract", () => {
     expect(smokeScriptSource).toContain("savedRunAffordanceSmokeSteps");
     expect(smokeScriptSource).toContain("source-browser.youtube-video-tabs");
     expect(smokeScriptSource).toContain("saved-runs-affordance.rows");
-    expect(smokeScriptSource).toContain("saved-runs-affordance.missing-legacy");
+    expect(smokeScriptSource).toContain("saved-runs-affordance.capture-failed-without-error");
     expect(smokeScriptSource).toContain("saved-runs-affordance.capture-failed");
     expect(smokeScriptSource).toContain("workspace-parity.telegram-source-group-export");
     expect(smokeScriptSource).toContain("workspace-parity.opened-single-run-tools");
@@ -63,7 +63,7 @@ describe("analysis UI smoke harness contract", () => {
     expect(smokeScriptSource).toContain('setRunsSegment(ctx, "Runs scope", "All runs")');
     expect(smokeScriptSource).toContain('setRunsSegment(ctx, "Runs status", "All")');
     expect(smokeScriptSource).toContain('fillByLabel(ctx.socket, "Search runs", "__analysis_redesign_fixture__")');
-    expect(smokeScriptSource).toContain("Legacy snapshot missing");
+    expect(smokeScriptSource).toContain("Snapshot not captured");
     expect(smokeScriptSource).toContain("Snapshot capture failed: fixture write boundary unavailable");
     expect(smokeScriptSource).toContain("This capture-failed fixture report remains readable.");
     expect(smokeScriptSource).toContain("...sourceBrowserSmokeSteps, ...savedRunAffordanceSmokeSteps, ...analysisWorkspaceParitySteps");

@@ -2493,7 +2493,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn load_run_corpus_messages_does_not_reconstruct_completed_missing_legacy_from_live_rows()
+    async fn load_run_corpus_messages_does_not_reconstruct_completed_capture_failed_from_live_rows()
     {
         let pool = snapshot_pool().await;
         sqlx::query(
@@ -2525,7 +2525,7 @@ mod tests {
         run.scope_type = crate::analysis::ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE.to_string();
         run.source_id = Some(2);
         run.source_group_id = None;
-        run.snapshot_state = Some(crate::analysis::models::AnalysisSnapshotState::MissingLegacy);
+        run.snapshot_state = Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed);
         run.snapshot_captured_at = None;
         run.snapshot_error = None;
         run.snapshot_message_count = 0;

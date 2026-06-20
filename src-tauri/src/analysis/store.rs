@@ -140,10 +140,7 @@ fn compute_snapshot_state(row: &AnalysisRunRow) -> Option<AnalysisSnapshotState>
     }
 
     match row.status.as_str() {
-        ANALYSIS_STATUS_COMPLETED if row.snapshot_message_count == 0 => {
-            Some(AnalysisSnapshotState::MissingLegacy)
-        }
-        ANALYSIS_STATUS_FAILED | ANALYSIS_STATUS_CANCELLED => {
+        ANALYSIS_STATUS_COMPLETED | ANALYSIS_STATUS_FAILED | ANALYSIS_STATUS_CANCELLED => {
             Some(AnalysisSnapshotState::CaptureFailed)
         }
         _ => None,
@@ -2080,7 +2077,7 @@ mod tests {
     }
 
     #[test]
-    fn map_run_detail_exposes_missing_legacy_snapshot_state() {
+    fn completed_run_without_capture_marker_is_capture_failed() {
         let mut row = sample_run_row();
         row.snapshot_captured_at = None;
         row.snapshot_error = None;
@@ -2091,7 +2088,7 @@ mod tests {
 
         assert_eq!(
             detail.snapshot_state,
-            Some(crate::analysis::models::AnalysisSnapshotState::MissingLegacy)
+            Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed)
         );
         assert_eq!(detail.snapshot_captured_at, None);
         assert_eq!(detail.snapshot_error, None);

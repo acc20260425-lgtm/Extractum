@@ -22,7 +22,6 @@ export type ChatAvailabilityReason =
   | "checking_snapshot"
   | "missing_snapshot"
   | "missing_report"
-  | "legacy_missing"
   | "capture_failed_with_error"
   | "not_captured_before_terminal"
   | "capture_failed_without_error_unknown"
@@ -110,8 +109,7 @@ export function defaultCompanionTabForOpenedRun(run: AnalysisRunDetail | null): 
 
 function chatReasonForSnapshotAffordance(state: SnapshotAffordanceState): ChatAvailabilityReason {
   if (
-    state === "legacy_missing"
-    || state === "capture_failed_with_error"
+    state === "capture_failed_with_error"
     || state === "not_captured_before_terminal"
     || state === "capture_failed_without_error_unknown"
     || state === "inconsistent"

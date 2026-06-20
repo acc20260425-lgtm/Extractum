@@ -544,7 +544,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn list_analysis_run_messages_returns_empty_page_for_missing_legacy_run() {
+    async fn completed_run_without_snapshot_marker_is_capture_failed() {
         let pool = memory_pool().await;
         sqlx::query(
             "INSERT INTO analysis_runs (
@@ -566,7 +566,7 @@ mod tests {
 
         assert_eq!(
             detail.snapshot_state,
-            Some(crate::analysis::models::AnalysisSnapshotState::MissingLegacy)
+            Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed)
         );
     }
 

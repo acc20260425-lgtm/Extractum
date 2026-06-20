@@ -33,22 +33,6 @@ describe("analysis run snapshot affordance", () => {
     });
   });
 
-  it("distinguishes legacy missing snapshots", () => {
-    expect(snapshotAffordanceForRun(input({
-      snapshotState: "missing_legacy",
-      snapshotCapturedAt: null,
-      probeState: "unavailable",
-      surface: "runs-row",
-    }))).toMatchObject({
-      state: "legacy_missing",
-      severity: "warning",
-      compactLabel: "Legacy snapshot missing",
-      badgeVariant: "warning",
-      headerWarning: "Saved report is readable, but this legacy run has no saved source snapshot.",
-      disabledReason: "Exact source resolution is unavailable because this legacy run has no saved source snapshot.",
-    });
-  });
-
   it("distinguishes capture failures with sanitized backend errors", () => {
     const affordance = snapshotAffordanceForRun(input({
       snapshotState: "capture_failed",

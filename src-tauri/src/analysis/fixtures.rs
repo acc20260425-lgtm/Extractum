@@ -2176,7 +2176,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn missing_snapshot_run_exposes_legacy_state_but_no_saved_messages() {
+    async fn missing_snapshot_run_exposes_capture_failed_state_but_no_saved_messages() {
         let pool = fixture_pool().await;
         seed_analysis_redesign_fixtures_in_pool(&pool)
             .await
@@ -2205,7 +2205,7 @@ mod tests {
             .expect("missing snapshot summary");
         assert_eq!(
             summary.snapshot_state,
-            Some(crate::analysis::models::AnalysisSnapshotState::MissingLegacy)
+            Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed)
         );
 
         let detail = crate::analysis::store::fetch_run_row(&pool, run_id)
@@ -2215,7 +2215,7 @@ mod tests {
             .expect("missing snapshot run exists");
         assert_eq!(
             detail.snapshot_state,
-            Some(crate::analysis::models::AnalysisSnapshotState::MissingLegacy)
+            Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed)
         );
         assert_eq!(detail.snapshot_error, None);
 

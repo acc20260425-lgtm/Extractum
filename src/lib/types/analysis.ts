@@ -38,7 +38,7 @@ export interface AnalysisSourceGroup {
   updated_at: number;
 }
 
-export type AnalysisSnapshotState = "captured" | "missing_legacy" | "capture_failed";
+export type AnalysisSnapshotState = "captured" | "capture_failed";
 export type AnalysisTelegramHistoryScope = "current" | "current_plus_migrated";
 
 export interface AnalysisRunSummary {

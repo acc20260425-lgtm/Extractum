@@ -10,7 +10,6 @@ export type SnapshotAffordanceSurface =
 
 export type SnapshotAffordanceState =
   | "available"
-  | "legacy_missing"
   | "capture_failed_with_error"
   | "not_captured_before_terminal"
   | "capture_failed_without_error_unknown"
@@ -102,7 +101,6 @@ export function snapshotAffordanceForRun(input: SnapshotAffordanceInput): Snapsh
   const sanitizedError = sanitizeSnapshotError(input.snapshotError);
 
   if (input.probeState === "available") return AVAILABLE;
-  if (input.snapshotState === "missing_legacy") return legacyMissingAffordance();
   if (input.snapshotState === "capture_failed" && sanitizedError) return captureFailedAffordance(sanitizedError);
   if (input.snapshotState === "capture_failed") {
     return input.runStatus === "failed" || input.runStatus === "cancelled"
@@ -155,20 +153,6 @@ function baseAffordance({
     disabledReason,
     sanitizedError,
   };
-}
-
-function legacyMissingAffordance(): SnapshotAffordance {
-  return baseAffordance({
-    state: "legacy_missing",
-    severity: "warning",
-    compactLabel: "Legacy snapshot missing",
-    badgeVariant: "warning",
-    headerWarning: "Saved report is readable, but this legacy run has no saved source snapshot.",
-    detailTitle: "Legacy run has no saved snapshot",
-    detailDescription: "Older saved runs may not include frozen source rows, so exact source browsing, evidence source resolution, and follow-up chat stay unavailable.",
-    disabledReason: "Exact source resolution is unavailable because this legacy run has no saved source snapshot.",
-    sanitizedError: null,
-  });
 }
 
 function captureFailedAffordance(sanitizedError: string): SnapshotAffordance {
@@ -249,7 +233,7 @@ function unknownUnavailableAffordance(): SnapshotAffordance {
     badgeVariant: "warning",
     headerWarning: "Saved report is readable, but saved source context is unavailable for this run.",
     detailTitle: "Saved snapshot is unavailable",
-    detailDescription: "Saved snapshot rows are unavailable for this run, and the run does not identify the missing context as a legacy snapshot.",
+    detailDescription: "Saved snapshot rows are unavailable for this run.",
     disabledReason: "Exact source resolution is unavailable because saved snapshot rows are unavailable for this run.",
     sanitizedError: null,
   });
