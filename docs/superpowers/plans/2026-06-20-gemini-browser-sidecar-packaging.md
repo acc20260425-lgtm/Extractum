@@ -447,7 +447,7 @@ Expected: commit includes the new launch resolver and plan checkbox update.
 - Modify: `src-tauri/Cargo.toml`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Add the shell plugin dependency**
+- [x] **Step 1: Add the shell plugin dependency**
 
 Modify `src-tauri/Cargo.toml` dependencies:
 
@@ -457,7 +457,7 @@ tauri-plugin-shell = "2"
 
 Expected: the dependency sits with the other Tauri plugins.
 
-- [ ] **Step 2: Register the shell plugin**
+- [x] **Step 2: Register the shell plugin**
 
 Modify `src-tauri/src/lib.rs` in the Tauri builder chain:
 
@@ -467,7 +467,7 @@ Modify `src-tauri/src/lib.rs` in the Tauri builder chain:
 
 Expected: it is registered next to the existing Tauri plugins.
 
-- [ ] **Step 3: Run dev-path checks**
+- [x] **Step 3: Run dev-path checks**
 
 Run:
 
@@ -478,7 +478,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib gemini_browser
 
 Expected: both commands pass. No runtime launch behavior changes in this task.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Update this task's checkboxes to `[x]`.
 
