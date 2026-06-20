@@ -4,7 +4,7 @@
 
 **Goal:** Build a local, reproducible research harness for the Gemini browser adapter and compare three TypeScript/Node adapter variants against deterministic mock Gemini pages.
 
-**Architecture:** Keep the production app out of this research slice. Add a local mock Gemini server, Playwright tests, TypeScript adapter modules, diagnostic artifact helpers, telemetry helpers, and a matrix report runner under `research/gemini_browser_adapter`. Rust/Tauri integration is not part of this plan.
+**Architecture:** Keep the production app out of this research slice. Add a local mock Gemini server, Playwright tests, TypeScript adapter modules, diagnostic artifact helpers, telemetry helpers, an executable scenario matrix, and a matrix report runner under `research/gemini_browser_adapter`. Rust/Tauri integration is not part of this plan.
 
 **Tech Stack:** TypeScript, Node ESM, Vitest, Playwright, local HTTP mock server, existing npm scripts.
 
@@ -30,7 +30,9 @@ Create and modify only research/tooling files:
 - Create: `research/gemini_browser_adapter/src/telemetry.ts` for sanitized network telemetry.
 - Create: `research/gemini_browser_adapter/src/telemetry.test.ts` for redaction/unit tests.
 - Create: `research/gemini_browser_adapter/tests/telemetry-assisted.spec.ts` for telemetry-assisted behavior.
-- Create: `research/gemini_browser_adapter/scripts/write-matrix-report.mjs` for report generation.
+- Create: `research/gemini_browser_adapter/src/matrix-cases.ts` for the executable scenario matrix and evidence requirements.
+- Create: `research/gemini_browser_adapter/tests/matrix.spec.ts` for the `3 variants x all scenarios` Playwright matrix.
+- Create: `research/gemini_browser_adapter/scripts/write-matrix-report.mjs` for coverage-validated report generation.
 - Modify: `research/gemini_browser_adapter/RESILIENCE_TEST_MATRIX.md` to add the executable command and artifact paths.
 - Modify: `research/gemini_browser_adapter/TOOLS_AND_METHODS.md` to reference the matrix runner.
 
@@ -164,6 +166,22 @@ test("happy-path renders prompt input and final answer after submit", async ({ p
   await expect(page.getByTestId("assistant-answer")).toContainText("Mock final answer");
 });
 
+test("ready renders an idle composer without sending", async ({ page }) => {
+  await page.goto(server.url("ready"));
+  await expect(page.getByRole("textbox")).toBeVisible();
+  await expect(page.getByRole("button", { name: /send/i })).toBeVisible();
+  await expect(page.getByTestId("assistant-answer")).toHaveText("");
+});
+
+test("submit emits a mock network telemetry event", async ({ page }) => {
+  await page.goto(server.url("happy-path"));
+  const responsePromise = page.waitForResponse((response) => response.url().includes("/mock-gemini-event"));
+  await page.getByRole("textbox").fill("hello");
+  await page.getByRole("button", { name: /send/i }).click();
+  const response = await responsePromise;
+  expect(response.status()).toBe(204);
+});
+
 test("login-required exposes a manual login state", async ({ page }) => {
   await page.goto(server.url("login-required"));
   await expect(page.getByText(/sign in/i)).toBeVisible();
@@ -220,6 +238,7 @@ const button = document.querySelector('[data-send]');
 const answer = document.querySelector('[data-testid="assistant-answer"]');
 const stop = document.querySelector('[data-testid="stop-control"]');
 button?.addEventListener('click', () => {
+  fetch('/mock-gemini-event', { method: 'POST', body: 'submitted' }).catch(() => undefined);
   if (stop) stop.hidden = false;
   if (input) input.setAttribute('aria-disabled', 'true');
   const chunks = ['Mock ', 'final ', 'answer ', 'from Gemini-like page.'];
@@ -269,6 +288,17 @@ button?.addEventListener('click', () => {
 `;
 
 export function renderMockGeminiPage(variant = "happy-path") {
+  if (variant === "ready" || variant === "closed-page") {
+    return basePage(`
+      <section class="composer">
+        <div role="textbox" contenteditable="true" aria-label="Ask Gemini"></div>
+        <button data-send aria-label="Send">Send</button>
+      </section>
+      <article class="answer" data-testid="assistant-answer"></article>
+      <button data-testid="stop-control" aria-label="Stop" hidden>Stop</button>
+    `, submitScript);
+  }
+
   if (variant === "login-required") {
     return basePage('<section class="banner"><h1>Sign in</h1><p>Sign in to continue to Gemini.</p></section>');
   }
@@ -392,6 +422,12 @@ import { renderMockGeminiPage } from "./variants.mjs";
 export async function startMockGeminiServer() {
   const server = http.createServer((request, response) => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
+    if (url.pathname === "/mock-gemini-event") {
+      response.writeHead(204);
+      response.end();
+      return;
+    }
+
     if (url.pathname !== "/mock-gemini") {
       response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
       response.end("not found");
@@ -437,7 +473,7 @@ Run:
 npx playwright test -c research/gemini_browser_adapter/playwright.config.ts research/gemini_browser_adapter/tests/mock-gemini.spec.ts
 ```
 
-Expected: PASS for 3 tests.
+Expected: PASS for 5 tests.
 
 - [ ] **Step 6: Commit mock server**
 
@@ -804,6 +840,8 @@ export async function sendSingleDomOnly(page: Page, prompt: string, options: Sen
   const startedAt = Date.now();
   const attempts: LocatorAttempt[] = [];
 
+  if (page.isClosed()) return result("browser_crashed", startedAt, null, attempts, "browser_crashed");
+
   const criticalBefore = await scanCriticalState(page);
   if (criticalBefore) return result(criticalBefore, startedAt, null, attempts, criticalBefore);
 
@@ -816,6 +854,28 @@ export async function sendSingleDomOnly(page: Page, prompt: string, options: Sen
   await sendButton.click();
 
   return await waitForFinalAnswer(page, startedAt, options, attempts);
+}
+
+export async function probeReadyDomOnly(page: Page): Promise<GeminiAdapterResult> {
+  const startedAt = Date.now();
+  const attempts: LocatorAttempt[] = [];
+
+  if (page.isClosed()) return result("browser_crashed", startedAt, null, attempts, "browser_crashed");
+
+  try {
+    const criticalBefore = await scanCriticalState(page);
+    if (criticalBefore) return result(criticalBefore, startedAt, null, attempts, criticalBefore);
+
+    const promptBox = await findPromptBox(page, attempts);
+    const sendButton = await findSendButton(page, attempts);
+    if (promptBox && sendButton) return result("ready", startedAt, null, attempts, null);
+
+    return result("failed", startedAt, null, attempts, "ready_contract_not_satisfied");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const status = /closed|crash|target page/i.test(message) ? "browser_crashed" : "failed";
+    return result(status, startedAt, null, attempts, message);
+  }
 }
 ```
 
@@ -1090,6 +1150,10 @@ export async function sendSingleResilientScoring(page: Page, prompt: string, opt
   void scoreEditableCandidate;
   void scoreButtonCandidate;
 
+  if (page.isClosed()) {
+    return { ...result("browser_crashed", startedAt, null, attempts, "browser_crashed"), variant: "resilient-scoring" };
+  }
+
   const criticalBefore = await scanCriticalState(page);
   if (criticalBefore) return { ...result(criticalBefore, startedAt, null, attempts, criticalBefore), variant: "resilient-scoring" };
 
@@ -1107,6 +1171,32 @@ export async function sendSingleResilientScoring(page: Page, prompt: string, opt
     variant: "resilient-scoring",
     locatorAttempts: attempts,
   };
+}
+
+export async function probeReadyResilientScoring(page: Page): Promise<GeminiAdapterResult> {
+  const startedAt = Date.now();
+  const attempts: LocatorAttempt[] = [];
+  void scoreEditableCandidate;
+  void scoreButtonCandidate;
+
+  if (page.isClosed()) {
+    return { ...result("browser_crashed", startedAt, null, attempts, "browser_crashed"), variant: "resilient-scoring" };
+  }
+
+  try {
+    const criticalBefore = await scanCriticalState(page);
+    if (criticalBefore) return { ...result(criticalBefore, startedAt, null, attempts, criticalBefore), variant: "resilient-scoring" };
+
+    const promptBox = (await findPromptBox(page, attempts)) ?? (await findPromptBoxByScoring(page, attempts));
+    const sendButton = (await findSendButton(page, attempts)) ?? (await findSendButtonByScoring(page, attempts));
+    if (promptBox && sendButton) return { ...result("ready", startedAt, null, attempts, null), variant: "resilient-scoring" };
+
+    return { ...result("failed", startedAt, null, attempts, "ready_contract_not_satisfied"), variant: "resilient-scoring" };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const status = /closed|crash|target page/i.test(message) ? "browser_crashed" : "failed";
+    return { ...result(status, startedAt, null, attempts, message), variant: "resilient-scoring" };
+  }
 }
 ```
 
@@ -1484,6 +1574,17 @@ export async function sendSingleTelemetryAssisted(page: Page, prompt: string, op
     networkSummary,
   };
 }
+
+export async function probeReadyTelemetryAssisted(page: Page): Promise<GeminiAdapterResult> {
+  const networkSummary: GeminiAdapterResult["networkSummary"] = [];
+  attachNetworkTelemetry(page, networkSummary);
+  const result = await probeReadyResilientScoring(page);
+  return {
+    ...result,
+    variant: "telemetry-assisted",
+    networkSummary,
+  };
+}
 ```
 
 Ensure `withArtifacts` receives the result's `networkSummary` when writing telemetry files.
@@ -1510,14 +1611,376 @@ git commit -m "Add telemetry-assisted Gemini adapter variant"
 
 ---
 
-### Task 8: Matrix Report Runner
+### Task 8: Executable Matrix and Report Runner
 
 **Files:**
+- Create: `research/gemini_browser_adapter/src/matrix-cases.ts`
+- Create: `research/gemini_browser_adapter/tests/matrix.spec.ts`
 - Create: `research/gemini_browser_adapter/scripts/write-matrix-report.mjs`
 - Modify: `research/gemini_browser_adapter/RESILIENCE_TEST_MATRIX.md`
 - Modify: `research/gemini_browser_adapter/TOOLS_AND_METHODS.md`
 
-- [ ] **Step 1: Write matrix report script**
+- [ ] **Step 1: Write executable matrix cases**
+
+Create `research/gemini_browser_adapter/src/matrix-cases.ts`:
+
+```ts
+import type { AdapterVariant, GeminiAdapterStatus } from "./types";
+
+export type MatrixAction = "probe" | "send";
+
+export type MatrixScenario = {
+  id: string;
+  mockVariant: string;
+  action: MatrixAction;
+  expectedStatuses: GeminiAdapterStatus[];
+  timeoutMs: number;
+  quietMs: number;
+  requiresRawText: boolean;
+  requiresArtifacts: boolean;
+  requiresTelemetryNetwork: boolean;
+  closePageBeforeRun: boolean;
+};
+
+export const matrixAdapterVariants: AdapterVariant[] = [
+  "dom-only",
+  "resilient-scoring",
+  "telemetry-assisted",
+];
+
+export const matrixScenarios: MatrixScenario[] = [
+  {
+    id: "ready",
+    mockVariant: "ready",
+    action: "probe",
+    expectedStatuses: ["ready"],
+    timeoutMs: 1_000,
+    quietMs: 200,
+    requiresRawText: false,
+    requiresArtifacts: false,
+    requiresTelemetryNetwork: false,
+    closePageBeforeRun: false,
+  },
+  {
+    id: "happy-path",
+    mockVariant: "happy-path",
+    action: "send",
+    expectedStatuses: ["ok"],
+    timeoutMs: 5_000,
+    quietMs: 300,
+    requiresRawText: true,
+    requiresArtifacts: false,
+    requiresTelemetryNetwork: true,
+    closePageBeforeRun: false,
+  },
+  {
+    id: "wrapped-dom",
+    mockVariant: "wrapped-dom",
+    action: "send",
+    expectedStatuses: ["ok"],
+    timeoutMs: 5_000,
+    quietMs: 300,
+    requiresRawText: true,
+    requiresArtifacts: false,
+    requiresTelemetryNetwork: false,
+    closePageBeforeRun: false,
+  },
+  {
+    id: "textarea-input",
+    mockVariant: "textarea-input",
+    action: "send",
+    expectedStatuses: ["ok"],
+    timeoutMs: 5_000,
+    quietMs: 300,
+    requiresRawText: true,
+    requiresArtifacts: false,
+    requiresTelemetryNetwork: false,
+    closePageBeforeRun: false,
+  },
+  {
+    id: "contenteditable-input",
+    mockVariant: "contenteditable-input",
+    action: "send",
+    expectedStatuses: ["ok"],
+    timeoutMs: 5_000,
+    quietMs: 300,
+    requiresRawText: true,
+    requiresArtifacts: false,
+    requiresTelemetryNetwork: false,
+    closePageBeforeRun: false,
+  },
+  {
+    id: "icon-send",
+    mockVariant: "icon-send",
+    action: "send",
+    expectedStatuses: ["ok"],
+    timeoutMs: 5_000,
+    quietMs: 300,
+    requiresRawText: true,
+    requiresArtifacts: false,
+    requiresTelemetryNetwork: false,
+    closePageBeforeRun: false,
+  },
+  {
+    id: "slow-pauses",
+    mockVariant: "slow-pauses",
+    action: "send",
+    expectedStatuses: ["ok"],
+    timeoutMs: 6_000,
+    quietMs: 700,
+    requiresRawText: true,
+    requiresArtifacts: false,
+    requiresTelemetryNetwork: false,
+    closePageBeforeRun: false,
+  },
+  {
+    id: "never-stable",
+    mockVariant: "never-stable",
+    action: "send",
+    expectedStatuses: ["generation_timeout"],
+    timeoutMs: 1_500,
+    quietMs: 300,
+    requiresRawText: false,
+    requiresArtifacts: true,
+    requiresTelemetryNetwork: false,
+    closePageBeforeRun: false,
+  },
+  {
+    id: "login-required",
+    mockVariant: "login-required",
+    action: "send",
+    expectedStatuses: ["login_required"],
+    timeoutMs: 2_000,
+    quietMs: 300,
+    requiresRawText: false,
+    requiresArtifacts: true,
+    requiresTelemetryNetwork: false,
+    closePageBeforeRun: false,
+  },
+  {
+    id: "captcha",
+    mockVariant: "captcha",
+    action: "send",
+    expectedStatuses: ["captcha_required"],
+    timeoutMs: 2_000,
+    quietMs: 300,
+    requiresRawText: false,
+    requiresArtifacts: true,
+    requiresTelemetryNetwork: false,
+    closePageBeforeRun: false,
+  },
+  {
+    id: "account-picker",
+    mockVariant: "account-picker",
+    action: "send",
+    expectedStatuses: ["account_picker"],
+    timeoutMs: 2_000,
+    quietMs: 300,
+    requiresRawText: false,
+    requiresArtifacts: true,
+    requiresTelemetryNetwork: false,
+    closePageBeforeRun: false,
+  },
+  {
+    id: "consent",
+    mockVariant: "consent",
+    action: "send",
+    expectedStatuses: ["consent_required"],
+    timeoutMs: 2_000,
+    quietMs: 300,
+    requiresRawText: false,
+    requiresArtifacts: true,
+    requiresTelemetryNetwork: false,
+    closePageBeforeRun: false,
+  },
+  {
+    id: "rate-limit",
+    mockVariant: "rate-limit",
+    action: "send",
+    expectedStatuses: ["rate_limited"],
+    timeoutMs: 2_000,
+    quietMs: 300,
+    requiresRawText: false,
+    requiresArtifacts: true,
+    requiresTelemetryNetwork: false,
+    closePageBeforeRun: false,
+  },
+  {
+    id: "unknown-modal",
+    mockVariant: "unknown-modal",
+    action: "send",
+    expectedStatuses: ["manual_action_required"],
+    timeoutMs: 2_000,
+    quietMs: 300,
+    requiresRawText: false,
+    requiresArtifacts: true,
+    requiresTelemetryNetwork: false,
+    closePageBeforeRun: false,
+  },
+  {
+    id: "broken-answer",
+    mockVariant: "broken-answer",
+    action: "send",
+    expectedStatuses: ["generation_timeout", "response_parse_failed"],
+    timeoutMs: 1_500,
+    quietMs: 300,
+    requiresRawText: false,
+    requiresArtifacts: true,
+    requiresTelemetryNetwork: false,
+    closePageBeforeRun: false,
+  },
+  {
+    id: "closed-page",
+    mockVariant: "closed-page",
+    action: "send",
+    expectedStatuses: ["browser_crashed"],
+    timeoutMs: 1_000,
+    quietMs: 200,
+    requiresRawText: false,
+    requiresArtifacts: false,
+    requiresTelemetryNetwork: false,
+    closePageBeforeRun: true,
+  },
+];
+
+export function expectedMatrixPairTitles(): string[] {
+  return matrixAdapterVariants.flatMap((variant) =>
+    matrixScenarios.map((scenario) => `${variant} / ${scenario.id}`),
+  );
+}
+```
+
+- [ ] **Step 2: Write matrix Playwright spec**
+
+Create `research/gemini_browser_adapter/tests/matrix.spec.ts`:
+
+```ts
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { expect, test } from "@playwright/test";
+import { startMockGeminiServer } from "../mock-gemini/server.mjs";
+import {
+  probeReadyDomOnly,
+  probeReadyResilientScoring,
+  probeReadyTelemetryAssisted,
+  sendSingleDomOnly,
+  sendSingleResilientScoring,
+  sendSingleTelemetryAssisted,
+} from "../src/dom-contract";
+import { matrixAdapterVariants, matrixScenarios } from "../src/matrix-cases";
+import type { AdapterVariant, GeminiAdapterResult } from "../src/types";
+import type { SendSingleOptions } from "../src/dom-contract";
+
+type AdapterHarness = {
+  send(page: Parameters<typeof sendSingleDomOnly>[0], prompt: string, options: SendSingleOptions): Promise<GeminiAdapterResult>;
+  probe(page: Parameters<typeof sendSingleDomOnly>[0]): Promise<GeminiAdapterResult>;
+};
+
+const adapters: Record<AdapterVariant, AdapterHarness> = {
+  "dom-only": {
+    send: sendSingleDomOnly,
+    probe: probeReadyDomOnly,
+  },
+  "resilient-scoring": {
+    send: sendSingleResilientScoring,
+    probe: probeReadyResilientScoring,
+  },
+  "telemetry-assisted": {
+    send: sendSingleTelemetryAssisted,
+    probe: probeReadyTelemetryAssisted,
+  },
+};
+
+let server: Awaited<ReturnType<typeof startMockGeminiServer>>;
+
+test.beforeAll(async () => {
+  server = await startMockGeminiServer();
+});
+
+test.afterAll(async () => {
+  await server.stop();
+});
+
+test.describe("Gemini adapter executable scenario matrix", () => {
+  for (const variant of matrixAdapterVariants) {
+    for (const scenario of matrixScenarios) {
+      test(`${variant} / ${scenario.id}`, async ({ page }) => {
+        await page.goto(server.url(scenario.mockVariant));
+        if (scenario.closePageBeforeRun) {
+          await page.close();
+        }
+
+        const artifactDir = path.join(
+          "research/gemini_browser_adapter/artifacts/matrix",
+          variant,
+          scenario.id,
+        );
+
+        const result =
+          scenario.action === "probe"
+            ? await adapters[variant].probe(page)
+            : await adapters[variant].send(page, "hello from matrix", {
+                timeoutMs: scenario.timeoutMs,
+                quietMs: scenario.quietMs,
+                artifactDir,
+              });
+
+        expect(result.variant).toBe(variant);
+        expect(scenario.expectedStatuses).toContain(result.status);
+
+        if (scenario.requiresRawText) {
+          expect(result.rawText ?? "").toContain("Mock final answer");
+        } else {
+          expect(result.rawText ?? "").not.toContain("Mock final answer");
+        }
+
+        if (scenario.requiresArtifacts) {
+          expect(result.artifacts?.screenshotPath).toBeTruthy();
+          expect(result.artifacts?.htmlPath).toBeTruthy();
+          expect(result.artifacts?.telemetryPath).toBeTruthy();
+          expect(existsSync(result.artifacts!.screenshotPath!)).toBe(true);
+          expect(existsSync(result.artifacts!.htmlPath!)).toBe(true);
+          expect(existsSync(result.artifacts!.telemetryPath!)).toBe(true);
+        }
+
+        if (scenario.requiresTelemetryNetwork && variant === "telemetry-assisted") {
+          expect(result.networkSummary.some((event) => event.kind === "response")).toBe(true);
+          expect(result.networkSummary.some((event) => event.url.includes("/mock-gemini-event"))).toBe(true);
+        }
+      });
+    }
+  }
+});
+```
+
+- [ ] **Step 3: Run matrix spec to verify failure**
+
+Run:
+
+```powershell
+npx playwright test -c research/gemini_browser_adapter/playwright.config.ts research/gemini_browser_adapter/tests/matrix.spec.ts
+```
+
+Expected: FAIL until `matrix-cases.ts`, readiness probes, closed-page status handling, and artifact wrapping from previous tasks are implemented.
+
+- [ ] **Step 4: Verify matrix spec passes**
+
+Run:
+
+```powershell
+npx playwright test -c research/gemini_browser_adapter/playwright.config.ts research/gemini_browser_adapter/tests/matrix.spec.ts
+```
+
+Expected:
+
+- exactly `48` matrix cases run (`3` adapter variants x `16` scenarios);
+- `ready`, `closed-page`, `account-picker`, `consent`, `unknown-modal`, and `broken-answer` are represented by explicit test titles;
+- every case asserts expected adapter status;
+- every `requiresRawText` case asserts final answer text;
+- every `requiresArtifacts` case asserts screenshot, HTML, and telemetry artifact files;
+- the `telemetry-assisted / happy-path` case asserts a response event for `/mock-gemini-event`.
+
+- [ ] **Step 5: Write coverage-validating matrix report script**
 
 Create `research/gemini_browser_adapter/scripts/write-matrix-report.mjs`:
 
@@ -1529,6 +1992,28 @@ import path from "node:path";
 const artifactDir = "research/gemini_browser_adapter/artifacts";
 const inputPath = path.join(artifactDir, "playwright-results.json");
 const outputPath = path.join(artifactDir, "matrix-report.md");
+const expectedVariants = ["dom-only", "resilient-scoring", "telemetry-assisted"];
+const expectedScenarios = [
+  "ready",
+  "happy-path",
+  "wrapped-dom",
+  "textarea-input",
+  "contenteditable-input",
+  "icon-send",
+  "slow-pauses",
+  "never-stable",
+  "login-required",
+  "captcha",
+  "account-picker",
+  "consent",
+  "rate-limit",
+  "unknown-modal",
+  "broken-answer",
+  "closed-page",
+];
+const expectedPairs = expectedVariants.flatMap((variant) =>
+  expectedScenarios.map((scenario) => `${variant} / ${scenario}`),
+);
 
 function collectSpecs(suite, rows = []) {
   for (const spec of suite.specs || []) {
@@ -1558,6 +2043,8 @@ const rows = collectSpecs({ suites: json.suites || [], titlePath: [] });
 const passed = rows.filter((row) => row.status === "expected" || row.status === "passed").length;
 const failed = rows.length - passed;
 const worst = rows.reduce((max, row) => Math.max(max, row.duration), 0);
+const missingPairs = expectedPairs.filter((pair) => !rows.some((row) => row.title.includes(pair)));
+const observedPairs = expectedPairs.length - missingPairs.length;
 
 const report = [
   "# Gemini Browser Adapter Matrix Report",
@@ -1567,7 +2054,16 @@ const report = [
   `Total tests: ${rows.length}`,
   `Passed tests: ${passed}`,
   `Failed or unexpected tests: ${failed}`,
+  `Expected matrix pairs: ${expectedPairs.length}`,
+  `Observed matrix pairs: ${observedPairs}`,
+  `Missing matrix pairs: ${missingPairs.length}`,
   `Worst duration ms: ${worst}`,
+  "",
+  "## Matrix Coverage",
+  "",
+  missingPairs.length === 0
+    ? "All expected variant/scenario pairs were present."
+    : missingPairs.map((pair) => `- Missing: ${pair}`).join("\n"),
   "",
   "| Test | Status | Duration ms |",
   "| --- | --- | ---: |",
@@ -1578,10 +2074,10 @@ const report = [
 await mkdir(artifactDir, { recursive: true });
 await writeFile(outputPath, report, "utf8");
 console.log(`Wrote ${outputPath}`);
-if (failed > 0) process.exit(1);
+if (failed > 0 || missingPairs.length > 0) process.exit(1);
 ```
 
-- [ ] **Step 2: Run full research verification**
+- [ ] **Step 6: Run full research verification**
 
 Run:
 
@@ -1593,15 +2089,17 @@ Expected:
 
 - unit tests pass;
 - Playwright e2e tests pass;
+- `research/gemini_browser_adapter/tests/matrix.spec.ts` runs all `48` matrix cases;
 - `research/gemini_browser_adapter/artifacts/playwright-results.json` is written;
 - `research/gemini_browser_adapter/artifacts/matrix-report.md` is written;
+- the report has `Missing matrix pairs: 0`;
 - command exits `0`.
 
-- [ ] **Step 3: Update matrix documentation**
+- [ ] **Step 7: Update matrix documentation**
 
 Append this section to `research/gemini_browser_adapter/RESILIENCE_TEST_MATRIX.md`:
 
-```markdown
+````markdown
 ## Execution
 
 Run the complete research matrix with:
@@ -1621,17 +2119,26 @@ The summarized matrix report is written to:
 ```text
 research/gemini_browser_adapter/artifacts/matrix-report.md
 ```
+
+The executable matrix is implemented in:
+
+```text
+research/gemini_browser_adapter/src/matrix-cases.ts
+research/gemini_browser_adapter/tests/matrix.spec.ts
 ```
 
-- [ ] **Step 4: Update tools document**
+The matrix covers all `3` adapter variants against all `16` scenarios. Expected statuses and required evidence are asserted in `matrix.spec.ts`; report generation fails when any expected variant/scenario pair is absent from the Playwright JSON output.
+````
+
+- [ ] **Step 8: Update tools document**
 
 Add this sentence under `## Method` in `research/gemini_browser_adapter/TOOLS_AND_METHODS.md`:
 
 ```markdown
-The executable matrix command is `npm run test:gemini-browser-adapter`; it runs unit tests, Playwright tests, and the matrix report writer.
+The executable matrix command is `npm run test:gemini-browser-adapter`; it runs unit tests, Playwright tests, the `3 variants x all scenarios` matrix spec, and the coverage-validating matrix report writer.
 ```
 
-- [ ] **Step 5: Verify no generated artifacts are staged**
+- [ ] **Step 9: Verify no generated artifacts are staged**
 
 Run:
 
@@ -1641,12 +2148,12 @@ git status --short --untracked-files=all research\\gemini_browser_adapter
 
 Expected: source files and docs may appear, but generated files under `artifacts/` do not appear.
 
-- [ ] **Step 6: Commit matrix runner**
+- [ ] **Step 10: Commit matrix runner**
 
 Run:
 
 ```powershell
-git add research/gemini_browser_adapter/scripts/write-matrix-report.mjs research/gemini_browser_adapter/RESILIENCE_TEST_MATRIX.md research/gemini_browser_adapter/TOOLS_AND_METHODS.md
+git add research/gemini_browser_adapter/src/matrix-cases.ts research/gemini_browser_adapter/tests/matrix.spec.ts research/gemini_browser_adapter/scripts/write-matrix-report.mjs research/gemini_browser_adapter/RESILIENCE_TEST_MATRIX.md research/gemini_browser_adapter/TOOLS_AND_METHODS.md
 git commit -m "Add Gemini adapter research matrix report"
 ```
 
@@ -1686,7 +2193,7 @@ Run:
 Get-Content -LiteralPath 'research\\gemini_browser_adapter\\artifacts\\matrix-report.md'
 ```
 
-Expected: report lists all research tests and has `Failed or unexpected tests: 0`.
+Expected: report lists all research tests and has `Failed or unexpected tests: 0` and `Missing matrix pairs: 0`.
 
 - [ ] **Step 4: Confirm production Rust/Tauri was untouched by research commits**
 
@@ -1715,6 +2222,7 @@ git commit -m "Add Gemini adapter research implementation plan"
 - The plan keeps Rust/Tauri out of the first research harness.
 - The plan creates a local mock Gemini page before adapter code.
 - The plan compares three variants from `TOOLS_AND_METHODS.md`.
+- The plan runs all three variants against all sixteen matrix scenarios.
 - The plan covers success, manual-action, rate-limit, timeout, artifact, and telemetry paths.
 - The plan writes sanitized artifacts only under ignored `research/gemini_browser_adapter/artifacts`.
 - The plan includes exact commands and expected outcomes for every task.
