@@ -776,40 +776,6 @@ where
     Ok(())
 }
 
-#[allow(dead_code)]
-pub(crate) fn decode_legacy_video_source_metadata(bytes: &[u8]) -> Option<YoutubeVideoMetadata> {
-    let json = crate::compression::decompress_bytes(bytes).ok()?;
-    serde_json::from_slice(&json).ok()
-}
-
-#[allow(dead_code)]
-pub(crate) fn decode_legacy_playlist_source_metadata(
-    bytes: &[u8],
-) -> Option<YoutubePlaylistMetadata> {
-    let json = crate::compression::decompress_bytes(bytes).ok()?;
-    serde_json::from_slice(&json).ok()
-}
-
-#[allow(dead_code)]
-pub(crate) async fn insert_video_source_metadata_on_connection(
-    conn: &mut SqliteConnection,
-    source_id: i64,
-    metadata: &YoutubeVideoMetadata,
-) -> AppResult<()> {
-    let columns = YoutubeVideoSourceColumns::try_from_metadata(metadata)?;
-    insert_video_source_columns(conn, source_id, &columns).await
-}
-
-#[allow(dead_code)]
-pub(crate) async fn insert_playlist_source_metadata_on_connection(
-    conn: &mut SqliteConnection,
-    source_id: i64,
-    metadata: &YoutubePlaylistMetadata,
-) -> AppResult<()> {
-    let columns = YoutubePlaylistSourceColumns::try_from_metadata(metadata)?;
-    insert_playlist_source_columns(conn, source_id, &columns).await
-}
-
 pub(crate) async fn upsert_video_source_metadata(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     source_id: i64,
