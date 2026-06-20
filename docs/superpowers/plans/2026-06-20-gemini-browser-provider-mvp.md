@@ -52,7 +52,7 @@
 - Read: `docs/superpowers/specs/2026-06-19-gemini-browser-provider-design.md`
 - Read: `package.json`
 
-- [ ] **Step 1: Create the feature branch**
+- [x] **Step 1: Create the feature branch**
 
 Run:
 
@@ -62,7 +62,7 @@ git switch -c gemini-browser-provider-mvp
 
 Expected: `Switched to a new branch 'gemini-browser-provider-mvp'`.
 
-- [ ] **Step 2: Confirm unrelated worktree changes before editing**
+- [x] **Step 2: Confirm unrelated worktree changes before editing**
 
 Run:
 
@@ -72,27 +72,27 @@ git status --short
 
 Expected: any existing `M scripts/analysis-smoke.mjs`, `M src-tauri/src/analysis/...`, or `M src/lib/analysis-...` files are treated as user changes and are not staged by this plan.
 
-- [ ] **Step 3: Run research regression guard**
+- [x] **Step 3: Run research regression guard**
 
 Run:
 
 ```powershell
-npm run test:gemini-browser-adapter
+npm.cmd run test:gemini-browser-adapter
 ```
 
 Expected: typecheck, unit tests, e2e matrix, and report complete with exit code `0`.
 
-- [ ] **Step 4: Run current frontend check**
+- [x] **Step 4: Run current frontend check**
 
 Run:
 
 ```powershell
-npm run check
+npm.cmd run check
 ```
 
 Expected: `svelte-check` reports `0 errors and 0 warnings`.
 
-- [ ] **Step 5: Commit only the plan checkbox update**
+- [x] **Step 5: Commit only the plan checkbox update**
 
 Run:
 
@@ -1200,7 +1200,7 @@ describe("gemini browser api wrappers", () => {
 Run:
 
 ```powershell
-npm run test -- src/lib/api/gemini-browser.test.ts
+npm.cmd run test -- src/lib/api/gemini-browser.test.ts
 ```
 
 Expected: the new wrapper tests pass.
@@ -1609,8 +1609,8 @@ Add this branch before Telegram:
 Run:
 
 ```powershell
-npm run test -- src/lib/gemini-browser-provider-panel.test.ts
-npm run check
+npm.cmd run test -- src/lib/gemini-browser-provider-panel.test.ts
+npm.cmd run check
 ```
 
 Expected: Vitest passes and `svelte-check` reports `0 errors and 0 warnings`.
@@ -1851,7 +1851,7 @@ Modify `package.json` scripts:
 Run:
 
 ```powershell
-npm run test:gemini-browser-sidecar
+npm.cmd run test:gemini-browser-sidecar
 ```
 
 Expected: sidecar typecheck and unit tests pass.
@@ -2151,8 +2151,8 @@ describe("production Gemini DOM contract", () => {
 Run:
 
 ```powershell
-npm run test:gemini-browser-sidecar
-npm run test:gemini-browser-adapter
+npm.cmd run test:gemini-browser-sidecar
+npm.cmd run test:gemini-browser-adapter
 ```
 
 Expected: sidecar tests pass; research matrix still passes.
@@ -2253,7 +2253,7 @@ Modify `package.json` scripts:
 Run:
 
 ```powershell
-npm run test:gemini-browser-sidecar:build
+npm.cmd run test:gemini-browser-sidecar:build
 ```
 
 Expected: `sidecars/gemini-browser/dist/index.js` is emitted without TypeScript errors.
@@ -2567,7 +2567,7 @@ pub async fn gemini_bridge_stop(
 Run:
 
 ```powershell
-npm run test:gemini-browser-sidecar
+npm.cmd run test:gemini-browser-sidecar
 cargo test --manifest-path src-tauri/Cargo.toml --lib gemini_browser
 ```
 
@@ -2710,7 +2710,7 @@ Append to `docs/superpowers/specs/2026-06-19-gemini-browser-provider-design.md`:
 - Browser Provider UI is exposed through Settings -> Browser Providers.
 - Browser profile and run logs live under the Tauri app data directory, not in the repository.
 - Runtime automation uses the TypeScript sidecar boundary under `sidecars/gemini-browser`.
-- The selected first adapter remains `resilient-scoring`; research verification remains available through `npm run test:gemini-browser-adapter`.
+- The selected first adapter remains `resilient-scoring`; research verification remains available through `npm.cmd run test:gemini-browser-adapter` in PowerShell.
 ```
 
 Append to `research/gemini_browser_adapter/DECISION.md`:
@@ -2727,10 +2727,10 @@ Append to `research/gemini_browser_adapter/DECISION.md`:
 Run:
 
 ```powershell
-npm run test:gemini-browser-adapter
-npm run test:gemini-browser-sidecar
-npm run test -- src/lib/api/gemini-browser.test.ts src/lib/gemini-browser-provider-panel.test.ts
-npm run check
+npm.cmd run test:gemini-browser-adapter
+npm.cmd run test:gemini-browser-sidecar
+npm.cmd run test -- src/lib/api/gemini-browser.test.ts src/lib/gemini-browser-provider-panel.test.ts
+npm.cmd run check
 cargo test --manifest-path src-tauri/Cargo.toml --lib gemini_browser
 cargo test --manifest-path src-tauri/Cargo.toml --lib gemini_browser_stage
 ```
