@@ -1698,7 +1698,7 @@ Expected: commit contains operator docs and plan checkbox updates.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-06-20-gemini-browser-cdp-attach-plan.md`
 
-- [ ] **Step 1: Run sidecar verification**
+- [x] **Step 1: Run sidecar verification**
 
 Run:
 
@@ -1708,7 +1708,7 @@ npm.cmd run test:gemini-browser-sidecar
 
 Expected: sidecar typecheck, unit tests, and build pass.
 
-- [ ] **Step 2: Run frontend verification**
+- [x] **Step 2: Run frontend verification**
 
 Run:
 
@@ -1719,7 +1719,7 @@ npm.cmd run check
 
 Expected: targeted Vitest tests pass and Svelte check reports `0 errors and 0 warnings`.
 
-- [ ] **Step 3: Run Rust verification**
+- [x] **Step 3: Run Rust verification**
 
 Run:
 
@@ -1729,7 +1729,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: all Gemini browser Rust tests pass.
 
-- [ ] **Step 4: Run managed sidecar smokes**
+- [x] **Step 4: Run managed sidecar smokes**
 
 Run:
 
@@ -1740,7 +1740,7 @@ npm.cmd run smoke:gemini-browser-sidecar:playwright:node
 
 Expected: status smoke returns `response.type: "status"`; Playwright smoke returns `ok: true`.
 
-- [ ] **Step 5: Run CDP negative smoke**
+- [x] **Step 5: Run CDP negative smoke**
 
 Run:
 
@@ -1752,7 +1752,7 @@ Remove-Item Env:\EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT
 
 Expected: response status is `needs_manual_action`, manual action is `start_chrome_cdp`, and latest message tells the operator to start Chrome with remote debugging enabled.
 
-- [ ] **Step 6: Run optional manual CDP happy path**
+- [x] **Step 6: Record optional manual CDP happy path status**
 
 Run Chrome manually:
 
@@ -1774,7 +1774,7 @@ npm.cmd run tauri dev
 
 Expected: `Settings -> Browser Providers -> Resume` attaches to the existing Gemini tab; sending the one-sentence test prompt creates a new run with status `ok`. If Google blocks the account, record the observed manual action in the verification notes instead of changing code.
 
-- [ ] **Step 7: Append verification notes**
+- [x] **Step 7: Append verification notes**
 
 Append this section to the end of this plan:
 
@@ -1791,7 +1791,7 @@ Append this section to the end of this plan:
 
 During Task 8 execution, replace each pending line with the observed result and concrete command evidence.
 
-- [ ] **Step 8: Commit final verification note**
+- [x] **Step 8: Commit final verification note**
 
 Run:
 
@@ -1801,6 +1801,32 @@ git commit -m "docs: record Gemini CDP attach verification"
 ```
 
 Expected: final commit contains only plan checkbox and verification-note updates.
+
+---
+
+## Verification Notes
+
+- Sidecar verification: `npm.cmd run test:gemini-browser-sidecar` exited 0.
+  TypeScript sidecar typecheck passed; Vitest reported 4 files / 28 tests
+  passed; `tsc -p sidecars/gemini-browser/tsconfig.build.json` completed.
+- Frontend verification: `npm.cmd run test -- src/lib/gemini-browser-provider-panel.test.ts src/lib/api/gemini-browser.test.ts`
+  exited 0 with 2 files / 5 tests passed. `npm.cmd run check` exited 0 and
+  reported `svelte-check found 0 errors and 0 warnings`.
+- Rust verification: `cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-cdp --lib gemini_browser`
+  exited 0 with 17 tests passed.
+- Managed sidecar smokes: `npm.cmd run smoke:gemini-browser-sidecar:node`
+  returned `response.type: "status"` with provider status `not_started`.
+  `npm.cmd run smoke:gemini-browser-sidecar:playwright:node` returned
+  `{"ok":true,"title":"Gemini Sidecar Smoke"}`.
+- CDP negative smoke: with
+  `EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT=http://127.0.0.1:65530`,
+  `npm.cmd run smoke:gemini-browser-sidecar:resume:node -- --expect-manual-action=start_chrome_cdp`
+  exited 0 and returned `status: "needs_manual_action"`,
+  `manual_action: "start_chrome_cdp"`, and message
+  `Chrome CDP endpoint is unavailable. Start Chrome with remote debugging enabled.`
+- Manual CDP happy path: not run in this automated pass. It requires an
+  operator-started Chrome with remote debugging, manual Google/Gemini login, and
+  UI interaction through `npm.cmd run tauri dev`.
 
 ---
 
