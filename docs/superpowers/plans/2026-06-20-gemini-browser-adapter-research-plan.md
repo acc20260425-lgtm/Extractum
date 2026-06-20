@@ -25,6 +25,7 @@ Create and modify only research/tooling files:
 - Create: `research/gemini_browser_adapter/src/scoring.ts` for deterministic locator scoring.
 - Create: `research/gemini_browser_adapter/src/scoring.test.ts` for scoring unit tests.
 - Create: `research/gemini_browser_adapter/tests/resilient-scoring.spec.ts` for scoring adapter tests.
+- Create: `research/gemini_browser_adapter/src/redaction.ts` for URL and DOM artifact sanitization.
 - Create: `research/gemini_browser_adapter/src/artifacts.ts` for failure bundle writing.
 - Create: `research/gemini_browser_adapter/tests/failure-artifacts.spec.ts` for artifact expectations.
 - Create: `research/gemini_browser_adapter/src/telemetry.ts` for sanitized network telemetry.
@@ -790,9 +791,12 @@ async function typePrompt(promptBox: Locator, prompt: string): Promise<void> {
   }, prompt);
 }
 
-async function latestAnswerText(page: Page): Promise<string> {
-  const answer = page.locator('[data-testid="assistant-answer"], article, main section').last();
-  return (await answer.innerText().catch(() => "")).trim();
+async function latestAnswerText(page: Page): Promise<string | null> {
+  const answer = page.locator(
+    '[data-testid="assistant-answer"], [data-testid*="assistant" i], [data-testid*="response" i], article.answer, [data-answer]',
+  );
+  if ((await answer.count().catch(() => 0)) === 0) return null;
+  return (await answer.last().innerText().catch(() => "")).trim();
 }
 
 async function generationControls(page: Page, attempts: LocatorAttempt[]) {
@@ -818,6 +822,15 @@ export async function waitForFinalAnswer(
     if (critical) return result(critical, startedAt, null, attempts, critical);
 
     const text = await latestAnswerText(page);
+    if (text === null) {
+      const answerMissingGraceMs = Math.min(Math.max(options.quietMs * 2, 500), 1500);
+      if (Date.now() - startedAt >= answerMissingGraceMs) {
+        return result("response_parse_failed", startedAt, null, attempts, "answer_container_not_found");
+      }
+      await page.waitForTimeout(100);
+      continue;
+    }
+
     if (text.length > 0) sawAnswer = true;
     if (text !== lastText) {
       lastText = text;
@@ -1225,6 +1238,7 @@ git commit -m "Add resilient scoring Gemini adapter variant"
 ### Task 6: Failure Artifacts
 
 **Files:**
+- Create: `research/gemini_browser_adapter/src/redaction.ts`
 - Create: `research/gemini_browser_adapter/src/artifacts.ts`
 - Create: `research/gemini_browser_adapter/tests/failure-artifacts.spec.ts`
 - Modify: `research/gemini_browser_adapter/src/dom-contract.ts`
@@ -1250,7 +1264,7 @@ test.afterAll(async () => {
 });
 
 test("timeout writes screenshot, html, and telemetry artifacts", async ({ page }) => {
-  await page.goto(server.url("never-stable"));
+  await page.goto(`${server.url("never-stable")}&authuser=0&token=secret`);
   const result = await sendSingleResilientScoring(page, "hello", {
     timeoutMs: 1_000,
     quietMs: 300,
@@ -1267,6 +1281,8 @@ test("timeout writes screenshot, html, and telemetry artifacts", async ({ page }
 
   const telemetry = JSON.parse(readFileSync(result.artifacts!.telemetryPath!, "utf8"));
   expect(telemetry.reason).toBe("generation_timeout");
+  expect(telemetry.url).toContain("authuser=<redacted>");
+  expect(telemetry.url).toContain("token=<redacted>");
   expect(Array.isArray(telemetry.locatorAttempts)).toBe(true);
 });
 ```
@@ -1281,7 +1297,42 @@ npx playwright test -c research/gemini_browser_adapter/playwright.config.ts rese
 
 Expected: FAIL because `artifactDir` is not part of `SendSingleOptions` and artifact capture is not implemented.
 
-- [ ] **Step 3: Implement artifact writer**
+- [ ] **Step 3: Implement shared redaction helpers**
+
+Create `research/gemini_browser_adapter/src/redaction.ts`:
+
+```ts
+import type { Page } from "@playwright/test";
+
+export function redactUrl(url: string): string {
+  return url.replace(/([?&](?:token|key|session|authuser|at|credential)=)[^&]+/gi, "$1<redacted>");
+}
+
+export async function reducedDomSnapshot(page: Page): Promise<string> {
+  return await page.evaluate(() => {
+    const safeAttributes = new Set(["role", "type", "data-testid", "aria-hidden"]);
+    const serialize = (element: Element, depth = 0): string => {
+      if (depth > 8) return "";
+      if (element.matches("script, style, noscript")) return "";
+      const attrs = Array.from(element.attributes)
+        .filter((attribute) => safeAttributes.has(attribute.name))
+        .map((attribute) => ` ${attribute.name}="${attribute.value.replaceAll('"', "&quot;")}"`)
+        .join("");
+      const children = Array.from(element.children)
+        .map((child) => serialize(child, depth + 1))
+        .join("");
+      const tagName = element.tagName.toLowerCase();
+      return `<${tagName}${attrs}>${children}</${tagName}>`;
+    };
+
+    return serialize(document.body).slice(0, 200_000);
+  }).catch(() => "");
+}
+```
+
+This reduced snapshot intentionally omits visible text, form values, labels, titles, prompt content, answer text, and account hints. It is for selector-shape diagnostics only.
+
+- [ ] **Step 4: Implement artifact writer**
 
 Create `research/gemini_browser_adapter/src/artifacts.ts`:
 
@@ -1289,6 +1340,7 @@ Create `research/gemini_browser_adapter/src/artifacts.ts`:
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Page } from "@playwright/test";
+import { redactUrl, reducedDomSnapshot } from "./redaction";
 import type { FailureArtifacts, LocatorAttempt, NetworkEventSummary } from "./types";
 
 export type CaptureFailureInput = {
@@ -1297,22 +1349,30 @@ export type CaptureFailureInput = {
   reason: string;
   locatorAttempts: LocatorAttempt[];
   networkSummary: NetworkEventSummary[];
+  artifactMode: "full" | "reduced";
 };
 
 export async function captureFailureArtifacts(input: CaptureFailureInput): Promise<FailureArtifacts> {
   await mkdir(input.artifactDir, { recursive: true });
-  const screenshotPath = path.join(input.artifactDir, "failure.png");
+  const screenshotPath = input.artifactMode === "reduced" ? null : path.join(input.artifactDir, "failure.png");
   const htmlPath = path.join(input.artifactDir, "page.html");
   const telemetryPath = path.join(input.artifactDir, "telemetry.json");
 
-  await input.page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
-  await writeFile(htmlPath, await input.page.content(), "utf8").catch(() => undefined);
+  const html =
+    input.artifactMode === "reduced"
+      ? await reducedDomSnapshot(input.page)
+      : await input.page.content();
+
+  if (screenshotPath) {
+    await input.page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
+  }
+  await writeFile(htmlPath, html, "utf8").catch(() => undefined);
   await writeFile(
     telemetryPath,
     JSON.stringify(
       {
         reason: input.reason,
-        url: input.page.url(),
+        url: redactUrl(input.page.url()),
         locatorAttempts: input.locatorAttempts,
         networkSummary: input.networkSummary,
         capturedAt: new Date().toISOString(),
@@ -1332,7 +1392,7 @@ export async function captureFailureArtifacts(input: CaptureFailureInput): Promi
 }
 ```
 
-- [ ] **Step 4: Integrate artifact capture**
+- [ ] **Step 5: Integrate artifact capture**
 
 Modify `SendSingleOptions` in `dom-contract.ts`:
 
@@ -1341,6 +1401,8 @@ export type SendSingleOptions = {
   timeoutMs: number;
   quietMs: number;
   artifactDir?: string;
+  artifactMode?: "full" | "reduced";
+  networkSummary?: NetworkEventSummary[];
 };
 ```
 
@@ -1348,6 +1410,7 @@ Import:
 
 ```ts
 import { captureFailureArtifacts } from "./artifacts";
+import type { NetworkEventSummary } from "./types";
 ```
 
 Add helper:
@@ -1366,11 +1429,14 @@ async function withArtifacts(
       artifactDir: options.artifactDir,
       reason: base.errorReason ?? base.status,
       locatorAttempts: base.locatorAttempts,
-      networkSummary: base.networkSummary,
+      networkSummary: options.networkSummary ?? base.networkSummary,
+      artifactMode: options.artifactMode ?? "full",
     }),
   };
 }
 ```
+
+Use `artifactMode: "reduced"` for any live Gemini run. Reduced mode writes a sanitized DOM snapshot and skips screenshot capture. The default `"full"` mode is only for deterministic local mock pages where fixture HTML contains no real account, prompt, or session data.
 
 Wrap every returned non-`ok` result in both adapter variants with `await withArtifacts(page, baseResult, options)`. For example:
 
@@ -1379,7 +1445,7 @@ const baseResult = result("generation_timeout", startedAt, lastText || null, att
 return await withArtifacts(page, baseResult, options);
 ```
 
-- [ ] **Step 5: Verify artifact tests pass**
+- [ ] **Step 6: Verify artifact tests pass**
 
 Run:
 
@@ -1389,7 +1455,7 @@ npx playwright test -c research/gemini_browser_adapter/playwright.config.ts rese
 
 Expected: PASS and files exist under `research/gemini_browser_adapter/artifacts/test-timeout`.
 
-- [ ] **Step 6: Confirm generated artifacts are ignored**
+- [ ] **Step 7: Confirm generated artifacts are ignored**
 
 Run:
 
@@ -1399,12 +1465,12 @@ git status --short --untracked-files=all research\\gemini_browser_adapter\\artif
 
 Expected: no generated artifact files appear because `artifacts` is ignored except the tracked `.gitkeep`.
 
-- [ ] **Step 7: Commit artifacts**
+- [ ] **Step 8: Commit artifacts**
 
 Run:
 
 ```powershell
-git add research/gemini_browser_adapter/src/artifacts.ts research/gemini_browser_adapter/src/dom-contract.ts research/gemini_browser_adapter/tests/failure-artifacts.spec.ts
+git add research/gemini_browser_adapter/src/redaction.ts research/gemini_browser_adapter/src/artifacts.ts research/gemini_browser_adapter/src/dom-contract.ts research/gemini_browser_adapter/tests/failure-artifacts.spec.ts
 git commit -m "Add Gemini adapter failure artifacts"
 ```
 
@@ -1452,11 +1518,10 @@ Create `research/gemini_browser_adapter/src/telemetry.ts`:
 
 ```ts
 import type { Page } from "@playwright/test";
+import { redactUrl } from "./redaction";
 import type { NetworkEventSummary } from "./types";
 
-export function redactUrl(url: string): string {
-  return url.replace(/([?&](?:token|key|session|authuser|at|credential)=)[^&]+/gi, "$1<redacted>");
-}
+export { redactUrl } from "./redaction";
 
 export function attachNetworkTelemetry(page: Page, events: NetworkEventSummary[]): void {
   page.on("request", (request) => {
@@ -1567,7 +1632,10 @@ Add at the end:
 export async function sendSingleTelemetryAssisted(page: Page, prompt: string, options: SendSingleOptions): Promise<GeminiAdapterResult> {
   const networkSummary: GeminiAdapterResult["networkSummary"] = [];
   attachNetworkTelemetry(page, networkSummary);
-  const result = await sendSingleResilientScoring(page, prompt, options);
+  const result = await sendSingleResilientScoring(page, prompt, {
+    ...options,
+    networkSummary,
+  });
   return {
     ...result,
     variant: "telemetry-assisted",
@@ -1587,7 +1655,7 @@ export async function probeReadyTelemetryAssisted(page: Page): Promise<GeminiAda
 }
 ```
 
-Ensure `withArtifacts` receives the result's `networkSummary` when writing telemetry files.
+Do not capture telemetry-assisted artifacts in the wrapper after `sendSingleResilientScoring` returns. Pass `networkSummary` through `SendSingleOptions` as shown above so the shared `withArtifacts` call writes the same network summary that the telemetry-assisted result returns.
 
 - [ ] **Step 8: Verify telemetry tests pass**
 
@@ -1821,7 +1889,7 @@ export const matrixScenarios: MatrixScenario[] = [
     id: "broken-answer",
     mockVariant: "broken-answer",
     action: "send",
-    expectedStatuses: ["generation_timeout", "response_parse_failed"],
+    expectedStatuses: ["response_parse_failed"],
     timeoutMs: 1_500,
     quietMs: 300,
     requiresRawText: false,
@@ -2224,5 +2292,8 @@ git commit -m "Add Gemini adapter research implementation plan"
 - The plan compares three variants from `TOOLS_AND_METHODS.md`.
 - The plan runs all three variants against all sixteen matrix scenarios.
 - The plan covers success, manual-action, rate-limit, timeout, artifact, and telemetry paths.
+- The plan treats missing assistant answer containers as `response_parse_failed`, not `ok`.
+- The plan redacts artifact URLs and requires reduced, text-free DOM artifacts for live Gemini runs.
+- The plan passes telemetry `networkSummary` through shared adapter options before artifact capture.
 - The plan writes sanitized artifacts only under ignored `research/gemini_browser_adapter/artifacts`.
 - The plan includes exact commands and expected outcomes for every task.
