@@ -1241,7 +1241,7 @@ git commit -m "Add Gemini DOM contract selector config"
 - Modify: `research/gemini_browser_adapter/src/dom-contract.ts`
 - Create: `research/gemini_browser_adapter/tests/resilient-scoring.spec.ts`
 
-- [ ] **Step 1: Write failing scoring unit tests**
+- [x] **Step 1: Write failing scoring unit tests**
 
 Create `research/gemini_browser_adapter/src/scoring.test.ts`:
 
@@ -1289,7 +1289,7 @@ describe("locator scoring", () => {
 });
 ```
 
-- [ ] **Step 2: Run scoring test to verify failure**
+- [x] **Step 2: Run scoring test to verify failure**
 
 Run:
 
@@ -1299,7 +1299,7 @@ npm run test:gemini-browser-adapter:unit -- research/gemini_browser_adapter/src/
 
 Expected: FAIL because `scoring.ts` does not exist.
 
-- [ ] **Step 3: Implement scoring helpers**
+- [x] **Step 3: Implement scoring helpers**
 
 Create `research/gemini_browser_adapter/src/scoring.ts`:
 
@@ -1345,7 +1345,7 @@ export function scoreButtonCandidate(input: ButtonCandidateScoreInput): number {
 }
 ```
 
-- [ ] **Step 4: Verify scoring unit tests pass**
+- [x] **Step 4: Verify scoring unit tests pass**
 
 Run:
 
@@ -1355,7 +1355,7 @@ npm run test:gemini-browser-adapter:unit -- research/gemini_browser_adapter/src/
 
 Expected: PASS for 3 tests.
 
-- [ ] **Step 5: Add resilient-scoring e2e tests**
+- [x] **Step 5: Add resilient-scoring e2e tests**
 
 Create `research/gemini_browser_adapter/tests/resilient-scoring.spec.ts`:
 
@@ -1423,7 +1423,7 @@ test("resilient scoring honors selector config overrides", async ({ page }) => {
 });
 ```
 
-- [ ] **Step 6: Run resilient tests to verify failure**
+- [x] **Step 6: Run resilient tests to verify failure**
 
 Run:
 
@@ -1433,7 +1433,7 @@ npx playwright test -c research/gemini_browser_adapter/playwright.config.ts rese
 
 Expected: FAIL because `sendSingleResilientScoring` is not exported.
 
-- [ ] **Step 7: Add resilient scoring variant**
+- [x] **Step 7: Add resilient scoring variant**
 
 Modify `research/gemini_browser_adapter/src/dom-contract.ts` by importing scoring helpers:
 
@@ -1604,7 +1604,7 @@ export async function probeReadyResilientScoring(
 
 Note: this resilient readiness probe is intentionally artifact-free until Task 7 creates `finalizeResult`; Task 7 replaces it with the artifact-finalizing version.
 
-- [ ] **Step 8: Verify scoring adapter tests pass**
+- [x] **Step 8: Verify scoring adapter tests pass**
 
 Run:
 
@@ -1615,7 +1615,7 @@ npx playwright test -c research/gemini_browser_adapter/playwright.config.ts rese
 
 Expected: PASS for scoring unit tests and both e2e files.
 
-- [ ] **Step 9: Commit resilient scoring**
+- [x] **Step 9: Commit resilient scoring**
 
 Run:
 

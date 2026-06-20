@@ -1,6 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 import type { DomContractConfig } from "./config";
 import { loadDomContractConfig } from "./config";
+import { scoreButtonCandidate, scoreEditableCandidate } from "./scoring";
 import type { GeminiAdapterResult, GeminiAdapterStatus, LocatorAttempt } from "./types";
 
 export type SendSingleOptions = {
@@ -96,16 +97,101 @@ export async function findSendButton(page: Page, attempts: LocatorAttempt[]): Pr
 }
 
 async function typePrompt(promptBox: Locator, prompt: string): Promise<void> {
-  await promptBox.click();
   const tagName = await promptBox.evaluate((element) => element.tagName.toLowerCase());
   if (tagName === "textarea" || tagName === "input") {
+    await promptBox.click();
     await promptBox.fill(prompt);
     return;
+  }
+  if (await promptBox.isVisible().catch(() => false)) {
+    await promptBox.click().catch(() => undefined);
   }
   await promptBox.evaluate((element, value) => {
     element.textContent = value;
     element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
   }, prompt);
+}
+
+async function findByConfiguredSelector(
+  page: Page,
+  selectors: string[],
+  attempts: LocatorAttempt[],
+  name: string,
+): Promise<Locator | null> {
+  for (const selector of selectors) {
+    const locator = page.locator(selector);
+    const count = await locator.count().catch(() => 0);
+    const visible = await firstVisible(locator);
+    const fallback = count > 0 ? locator.first() : null;
+    attempts.push({ name, strategy: "css", matched: Boolean(visible ?? fallback), count });
+    if (visible ?? fallback) return visible ?? fallback;
+  }
+  return null;
+}
+
+async function findPromptBoxByScoring(page: Page, attempts: LocatorAttempt[], minScore: number): Promise<Locator | null> {
+  const bestIndex = await page.locator("textarea, input, [contenteditable='true'], [role='textbox']").evaluateAll((elements) => {
+    let best = { index: -1, score: 0 };
+    elements.forEach((element, index) => {
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      const aria = [
+        element.getAttribute("aria-label"),
+        element.getAttribute("placeholder"),
+        element.getAttribute("role"),
+      ].filter(Boolean).join(" ");
+      const editable =
+        element instanceof HTMLTextAreaElement ||
+        element instanceof HTMLInputElement ||
+        element.getAttribute("contenteditable") === "true" ||
+        element.getAttribute("role") === "textbox";
+      const visible = style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+      let score = 0;
+      if (visible && editable) {
+        if (rect.width >= 300) score += 2;
+        if (rect.height >= 24 && rect.height <= 240) score += 2;
+        if (rect.top / window.innerHeight >= 0.45) score += 2;
+        if (/ask|message|prompt|gemini|enter|type/i.test(aria)) score += 3;
+        score += 1;
+      }
+      if (score > best.score) best = { index, score };
+    });
+    return best;
+  });
+
+  const matched = bestIndex.score >= minScore && bestIndex.index >= 0;
+  attempts.push({ name: "fuzzy:editable", strategy: "fuzzy", matched, score: bestIndex.score });
+  return matched ? page.locator("textarea, input, [contenteditable='true'], [role='textbox']").nth(bestIndex.index) : null;
+}
+
+async function findSendButtonByScoring(page: Page, attempts: LocatorAttempt[], minScore: number): Promise<Locator | null> {
+  const bestIndex = await page.locator("button, [role='button'], [data-send]").evaluateAll((elements) => {
+    let best = { index: -1, score: 0 };
+    elements.forEach((element, index) => {
+      const rect = element.getBoundingClientRect();
+      const style = window.getComputedStyle(element);
+      const label = [
+        element.getAttribute("aria-label"),
+        element.getAttribute("title"),
+        element.textContent,
+      ].filter(Boolean).join(" ");
+      const visible = style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+      const enabled = !element.hasAttribute("disabled") && element.getAttribute("aria-disabled") !== "true";
+      let score = 0;
+      if (visible && enabled) {
+        if (rect.width >= 24 && rect.height >= 24) score += 2;
+        if (/send|submit|run|arrow|message/i.test(label)) score += 5;
+        if (rect.top / window.innerHeight >= 0.45) score += 1;
+        if (rect.right / window.innerWidth >= 0.55) score += 2;
+      }
+      if (score > best.score) best = { index, score };
+    });
+    return best;
+  });
+
+  const matched = bestIndex.score >= minScore && bestIndex.index >= 0;
+  attempts.push({ name: "fuzzy:send-button", strategy: "fuzzy", matched, score: bestIndex.score });
+  return matched ? page.locator("button, [role='button'], [data-send]").nth(bestIndex.index) : null;
 }
 
 async function latestAnswerText(page: Page, config: DomContractConfig): Promise<string | null> {
@@ -212,5 +298,77 @@ export async function probeReadyDomOnly(page: Page, _options?: SendSingleOptions
     const message = error instanceof Error ? error.message : String(error);
     const status = /closed|crash|target page/i.test(message) ? "browser_crashed" : "failed";
     return result(status, startedAt, null, attempts, message);
+  }
+}
+
+export async function sendSingleResilientScoring(page: Page, prompt: string, options: SendSingleOptions): Promise<GeminiAdapterResult> {
+  const startedAt = Date.now();
+  const attempts: LocatorAttempt[] = [];
+  void scoreEditableCandidate;
+  void scoreButtonCandidate;
+  const config = await resolveContractConfig(options);
+
+  if (page.isClosed()) {
+    return { ...result("browser_crashed", startedAt, null, attempts, "browser_crashed"), variant: "resilient-scoring" };
+  }
+
+  const criticalBefore = await scanCriticalState(page);
+  if (criticalBefore) return { ...result(criticalBefore, startedAt, null, attempts, criticalBefore), variant: "resilient-scoring" };
+
+  const promptBox =
+    (await findByConfiguredSelector(page, config.promptSelectors, attempts, "config:prompt")) ??
+    (await findPromptBoxByScoring(page, attempts, config.minPromptScore)) ??
+    (await findPromptBox(page, attempts));
+  if (!promptBox) return { ...result("failed", startedAt, null, attempts, "prompt_input_not_found"), variant: "resilient-scoring" };
+
+  await typePrompt(promptBox, prompt);
+  const sendButton =
+    (await findByConfiguredSelector(page, config.sendSelectors, attempts, "config:send")) ??
+    (await findSendButtonByScoring(page, attempts, config.minSendScore)) ??
+    (await findSendButton(page, attempts));
+  if (!sendButton) return { ...result("failed", startedAt, null, attempts, "send_button_not_found"), variant: "resilient-scoring" };
+  await sendButton.click();
+
+  const finalAnswer = await waitForFinalAnswer(page, startedAt, options, attempts, config);
+  return {
+    ...finalAnswer,
+    variant: "resilient-scoring",
+    locatorAttempts: attempts,
+  };
+}
+
+export async function probeReadyResilientScoring(
+  page: Page,
+  options: SendSingleOptions = { timeoutMs: 1_000, quietMs: 200 },
+): Promise<GeminiAdapterResult> {
+  const startedAt = Date.now();
+  const attempts: LocatorAttempt[] = [];
+  void scoreEditableCandidate;
+  void scoreButtonCandidate;
+  const config = await resolveContractConfig(options);
+
+  if (page.isClosed()) {
+    return { ...result("browser_crashed", startedAt, null, attempts, "browser_crashed"), variant: "resilient-scoring" };
+  }
+
+  try {
+    const criticalBefore = await scanCriticalState(page);
+    if (criticalBefore) return { ...result(criticalBefore, startedAt, null, attempts, criticalBefore), variant: "resilient-scoring" };
+
+    const promptBox =
+      (await findByConfiguredSelector(page, config.promptSelectors, attempts, "config:prompt")) ??
+      (await findPromptBoxByScoring(page, attempts, config.minPromptScore)) ??
+      (await findPromptBox(page, attempts));
+    const sendButton =
+      (await findByConfiguredSelector(page, config.sendSelectors, attempts, "config:send")) ??
+      (await findSendButtonByScoring(page, attempts, config.minSendScore)) ??
+      (await findSendButton(page, attempts));
+    if (promptBox && sendButton) return { ...result("ready", startedAt, null, attempts, null), variant: "resilient-scoring" };
+
+    return { ...result("failed", startedAt, null, attempts, "ready_contract_not_satisfied"), variant: "resilient-scoring" };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const status = /closed|crash|target page/i.test(message) ? "browser_crashed" : "failed";
+    return { ...result(status, startedAt, null, attempts, message), variant: "resilient-scoring" };
   }
 }
