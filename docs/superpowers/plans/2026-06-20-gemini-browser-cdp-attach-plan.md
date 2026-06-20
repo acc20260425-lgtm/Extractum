@@ -557,7 +557,7 @@ Expected: commit contains only CDP endpoint helper and tests.
 - Create: `sidecars/gemini-browser/src/cdp-pages.ts`
 - Create: `sidecars/gemini-browser/src/cdp-pages.test.ts`
 
-- [ ] **Step 1: Write page selection and closed-target tests**
+- [x] **Step 1: Write page selection and closed-target tests**
 
 Create `sidecars/gemini-browser/src/cdp-pages.test.ts`:
 
@@ -626,7 +626,7 @@ describe("closed target error classification", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -636,7 +636,7 @@ npm.cmd run test:gemini-browser-sidecar:unit
 
 Expected: FAIL because `sidecars/gemini-browser/src/cdp-pages.ts` does not exist.
 
-- [ ] **Step 3: Implement page helpers**
+- [x] **Step 3: Implement page helpers**
 
 Create `sidecars/gemini-browser/src/cdp-pages.ts`:
 
@@ -674,7 +674,7 @@ function isUsableGeminiPage(page: CdpPageLike): boolean {
 }
 ```
 
-- [ ] **Step 4: Run page helper tests**
+- [x] **Step 4: Run page helper tests**
 
 Run:
 
@@ -684,7 +684,7 @@ npm.cmd run test:gemini-browser-sidecar:unit
 
 Expected: PASS for endpoint, page helper, protocol, and adapter tests.
 
-- [ ] **Step 5: Commit page helper changes**
+- [x] **Step 5: Commit page helper changes**
 
 Run:
 
