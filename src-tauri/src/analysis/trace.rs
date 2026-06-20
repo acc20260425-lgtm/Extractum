@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use super::models::{AnalysisTraceData, AnalysisTraceRef, CorpusMessage};
 use crate::compression::decompress_bytes;
-use crate::error::{internal_error, AppError, AppResult};
+use crate::error::{internal_error, AppResult};
 
 const TRACE_EXCERPT_MAX_CHARS: usize = 480;
 
@@ -23,35 +23,26 @@ pub(crate) fn decode_trace_data(bytes: Option<&[u8]>) -> AppResult<AnalysisTrace
 
 pub(crate) fn normalize_ref(candidate: &str) -> Option<String> {
     let candidate = candidate.trim().trim_matches('[').trim_matches(']');
-    for separator in ["-i", "-m"] {
-        let Some((source_part, item_part)) = candidate.split_once(separator) else {
-            continue;
-        };
-        if !source_part.starts_with('s') {
-            return None;
-        }
-        let source_digits = &source_part[1..];
-        if source_digits.is_empty() || !source_digits.chars().all(|c| c.is_ascii_digit()) {
-            return None;
-        }
-
-        let (item_digits, timestamp_suffix) = match item_part.split_once('@') {
-            Some((digits, suffix)) if separator == "-i" => {
-                (digits, Some(normalize_timestamp_suffix(suffix)?))
-            }
-            Some(_) => return None,
-            None => (item_part, None),
-        };
-
-        if item_digits.is_empty() || !item_digits.chars().all(|c| c.is_ascii_digit()) {
-            return None;
-        }
-
-        let suffix = timestamp_suffix.unwrap_or_default();
-        return Some(format!("s{source_digits}{separator}{item_digits}{suffix}"));
+    let (source_part, item_part) = candidate.split_once("-i")?;
+    if !source_part.starts_with('s') {
+        return None;
+    }
+    let source_digits = &source_part[1..];
+    if source_digits.is_empty() || !source_digits.chars().all(|c| c.is_ascii_digit()) {
+        return None;
     }
 
-    None
+    let (item_digits, timestamp_suffix) = match item_part.split_once('@') {
+        Some((digits, suffix)) => (digits, Some(normalize_timestamp_suffix(suffix)?)),
+        None => (item_part, None),
+    };
+
+    if item_digits.is_empty() || !item_digits.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+
+    let suffix = timestamp_suffix.unwrap_or_default();
+    Some(format!("s{source_digits}-i{item_digits}{suffix}"))
 }
 
 fn normalize_timestamp_suffix(suffix: &str) -> Option<String> {
@@ -143,29 +134,16 @@ pub(crate) fn try_build_trace_refs(
     Ok(trace_refs)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum TraceRefKind {
-    Item,
-    LegacyMessage,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ParsedTraceRef {
     source_id: i64,
     item_id: i64,
     timestamp_ms: Option<i64>,
-    kind: TraceRefKind,
 }
 
 fn parse_structured_ref(reference: &str) -> Option<ParsedTraceRef> {
     let reference = normalize_ref(reference)?;
-    let (source_part, item_part, kind) =
-        if let Some((source_part, item_part)) = reference.split_once("-i") {
-            (source_part, item_part, TraceRefKind::Item)
-        } else {
-            let (source_part, item_part) = reference.split_once("-m")?;
-            (source_part, item_part, TraceRefKind::LegacyMessage)
-        };
+    let (source_part, item_part) = reference.split_once("-i")?;
     let source_id = source_part.strip_prefix('s')?.parse::<i64>().ok()?;
     let (item_digits, timestamp_ms) = match item_part.split_once('@') {
         Some((digits, suffix)) => {
@@ -184,7 +162,6 @@ fn parse_structured_ref(reference: &str) -> Option<ParsedTraceRef> {
         source_id,
         item_id,
         timestamp_ms,
-        kind,
     })
 }
 
@@ -200,30 +177,9 @@ fn find_trace_message_checked<'a>(
         return Ok(None);
     };
 
-    match parsed.kind {
-        TraceRefKind::Item => Ok(corpus.iter().find(|message| {
-            message.source_id == parsed.source_id && message.item_id == parsed.item_id
-        })),
-        TraceRefKind::LegacyMessage => {
-            let message_id = parsed.item_id.to_string();
-            let candidates = corpus
-                .iter()
-                .filter(|message| {
-                    message.source_id == parsed.source_id
-                        && message.external_id == message_id
-                        && message.item_kind.as_deref() == Some("telegram_message")
-                })
-                .collect::<Vec<_>>();
-
-            match candidates.len() {
-                0 => Ok(None),
-                1 => Ok(Some(candidates[0])),
-                _ => Err(AppError::conflict(format!(
-                    "Legacy Telegram ref {reference} is ambiguous across Telegram history domains"
-                ))),
-            }
-        }
-    }
+    Ok(corpus
+        .iter()
+        .find(|message| message.source_id == parsed.source_id && message.item_id == parsed.item_id))
 }
 
 fn is_synthetic_message(message: &CorpusMessage) -> bool {
@@ -317,9 +273,7 @@ pub(crate) fn build_trace_data(markdown: &str, corpus: &[CorpusMessage]) -> Anal
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_trace_refs, clip_excerpt, decode_trace_data, normalize_ref, try_build_trace_refs,
-    };
+    use super::{build_trace_refs, clip_excerpt, decode_trace_data, normalize_ref};
     use crate::analysis::models::CorpusMessage;
     use crate::compression::compress_json_bytes;
     use crate::error::AppErrorKind;
@@ -368,7 +322,7 @@ mod tests {
 
     #[test]
     fn build_trace_refs_handles_multibyte_excerpt() {
-        let refs = vec!["s1-m1".to_string()];
+        let refs = vec!["s1-i1".to_string()];
         let corpus = vec![CorpusMessage {
             item_id: 1,
             source_id: 1,
@@ -376,7 +330,7 @@ mod tests {
             published_at: 1_710_000_000,
             author: None,
             content: "Индекс рынка акций ".repeat(40),
-            r#ref: "s1-m1".to_string(),
+            r#ref: "s1-i1".to_string(),
             item_kind: Some("telegram_message".to_string()),
             source_type: Some("telegram".to_string()),
             source_subtype: None,
@@ -390,9 +344,8 @@ mod tests {
     }
 
     #[test]
-    fn normalize_ref_accepts_item_refs_and_legacy_message_refs() {
+    fn normalize_ref_accepts_item_refs() {
         assert_eq!(normalize_ref("[s12-i845]").as_deref(), Some("s12-i845"));
-        assert_eq!(normalize_ref("s12-m845").as_deref(), Some("s12-m845"));
         assert_eq!(
             normalize_ref("s12-i400@754000ms").as_deref(),
             Some("s12-i400@754000ms")
@@ -401,7 +354,7 @@ mod tests {
             normalize_ref("[s12-i400@754000-790000ms]").as_deref(),
             Some("s12-i400@754000-790000ms")
         );
-        assert_eq!(normalize_ref("s12-m400@754000ms"), None);
+        assert_eq!(normalize_ref("s12-m845"), None);
         assert_eq!(normalize_ref("s12-i400@790000-754000ms"), None);
         assert_eq!(normalize_ref("s12-iabc"), None);
         assert_eq!(normalize_ref("x12-i845"), None);
@@ -448,69 +401,6 @@ mod tests {
 
         assert_eq!(trace_refs.len(), 1);
         assert_eq!(trace_refs[0].item_id, 400);
-    }
-
-    #[test]
-    fn build_trace_refs_does_not_treat_legacy_message_ref_as_local_item_id() {
-        let refs = vec!["s12-m400".to_string()];
-        let corpus = vec![youtube_segment_message()];
-
-        let trace_refs = build_trace_refs(&refs, &corpus);
-
-        assert!(trace_refs.is_empty());
-    }
-
-    #[test]
-    fn build_trace_refs_resolves_unique_legacy_message_ref_by_external_message_id() {
-        let refs = vec!["s1-m42".to_string()];
-        let corpus = vec![CorpusMessage {
-            item_id: 900,
-            source_id: 1,
-            external_id: "42".to_string(),
-            published_at: 1,
-            author: None,
-            content: "telegram".to_string(),
-            r#ref: "s1-i900".to_string(),
-            item_kind: Some("telegram_message".to_string()),
-            source_type: Some("telegram".to_string()),
-            source_subtype: Some("supergroup".to_string()),
-            metadata_zstd: None,
-        }];
-
-        let trace_refs = try_build_trace_refs(&refs, &corpus).expect("resolve refs");
-
-        assert_eq!(trace_refs.len(), 1);
-        assert_eq!(trace_refs[0].item_id, 900);
-        assert_eq!(trace_refs[0].r#ref, "s1-m42");
-    }
-
-    #[test]
-    fn build_trace_refs_returns_conflict_for_ambiguous_legacy_message_ref() {
-        let refs = vec!["s1-m42".to_string()];
-        let first = CorpusMessage {
-            item_id: 900,
-            source_id: 1,
-            external_id: "42".to_string(),
-            published_at: 1,
-            author: None,
-            content: "current".to_string(),
-            r#ref: "s1-i900".to_string(),
-            item_kind: Some("telegram_message".to_string()),
-            source_type: Some("telegram".to_string()),
-            source_subtype: Some("supergroup".to_string()),
-            metadata_zstd: None,
-        };
-        let second = CorpusMessage {
-            item_id: 901,
-            content: "migrated".to_string(),
-            r#ref: "s1-i901".to_string(),
-            ..first.clone()
-        };
-
-        let error = try_build_trace_refs(&refs, &[first, second])
-            .expect_err("ambiguous legacy ref conflicts");
-
-        assert_eq!(error.kind, crate::error::AppErrorKind::Conflict);
     }
 
     #[test]
