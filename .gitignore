@@ -12,6 +12,7 @@ vite.config.ts.timestamp-*
 reference
 artifacts
 sidecars/gemini-browser/dist/
+src-tauri/binaries/gemini-browser-sidecar-*
 
 # Python cache artifacts
 __pycache__/

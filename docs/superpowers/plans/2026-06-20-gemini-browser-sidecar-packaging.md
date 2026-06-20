@@ -898,7 +898,7 @@ Expected: commit includes shell transport support and plan checkbox update.
 - Modify: `src-tauri/tauri.conf.json`
 - Modify: `.gitignore`
 
-- [ ] **Step 1: Add the build script**
+- [x] **Step 1: Add the build script**
 
 Create `scripts/build-gemini-browser-sidecar.mjs`:
 
@@ -1047,7 +1047,7 @@ console.log(`Wrote ${path.relative(repoRoot, tauriOutput)}`);
 
 This script uses the Tauri target-triple naming pattern for external binaries. It intentionally supports host-target builds only in v1 and fails fast if `GEMINI_BROWSER_SIDECAR_TARGET` or `CARGO_BUILD_TARGET` requests a different target.
 
-- [ ] **Step 2: Add the binary check script**
+- [x] **Step 2: Add the binary check script**
 
 Create `scripts/check-gemini-browser-sidecar-binary.mjs`:
 
@@ -1095,7 +1095,7 @@ if (!existsSync(expectedPath)) {
 console.log(`Found ${path.relative(repoRoot, expectedPath)}`);
 ```
 
-- [ ] **Step 3: Add package scripts**
+- [x] **Step 3: Add package scripts**
 
 Modify root `package.json` scripts:
 
@@ -1107,7 +1107,7 @@ Modify root `package.json` scripts:
 
 Keep existing sidecar test scripts unchanged.
 
-- [ ] **Step 4: Enforce sidecar packaging in Tauri build**
+- [x] **Step 4: Enforce sidecar packaging in Tauri build**
 
 Modify `src-tauri/tauri.conf.json`:
 
@@ -1142,7 +1142,7 @@ Expected:
 - stale sidecar binaries are not detected in place; `build:tauri-prereqs` eliminates staleness by rebuilding the sidecar binary before checking it exists.
 - `GEMINI_BROWSER_SIDECAR_TARGET` or `CARGO_BUILD_TARGET` values different from the host tuple fail with the explicit host-target-only message.
 
-- [ ] **Step 5: Ignore generated sidecar binaries**
+- [x] **Step 5: Ignore generated sidecar binaries**
 
 Modify `.gitignore`:
 
@@ -1152,7 +1152,7 @@ src-tauri/binaries/gemini-browser-sidecar-*
 
 Do not ignore `src-tauri/binaries/.gitkeep` if a later task adds one.
 
-- [ ] **Step 6: Confirm the sidecar packager dependencies**
+- [x] **Step 6: Confirm the sidecar packager dependencies**
 
 Run:
 
@@ -1162,7 +1162,7 @@ npm.cmd ls pkg esbuild
 
 Expected: `pkg` and `esbuild` are installed from Task 2 and listed as dev dependencies.
 
-- [ ] **Step 7: Run script checks**
+- [x] **Step 7: Run script checks**
 
 Run:
 
@@ -1180,7 +1180,7 @@ Expected:
 - `build:tauri-prereqs` runs the frontend build plus sidecar build/check without invoking the full Tauri bundle;
 - `git status` does not show the generated binary as tracked or untracked noise.
 
-- [ ] **Step 8: Commit scripts, build enforcement, and metadata**
+- [x] **Step 8: Commit scripts, build enforcement, and metadata**
 
 Update this task's checkboxes to `[x]`.
 
