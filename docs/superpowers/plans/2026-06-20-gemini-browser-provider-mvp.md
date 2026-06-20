@@ -1877,7 +1877,7 @@ Expected: commit includes sidecar skeleton, package scripts, and updated plan ch
 - Read: `research/gemini_browser_adapter/src/dom-contract.ts`
 - Read: `research/gemini_browser_adapter/src/artifacts.ts`
 
-- [ ] **Step 1: Copy the production DOM contract names**
+- [x] **Step 1: Copy the production DOM contract names**
 
 Create `sidecars/gemini-browser/src/dom-contract.ts`:
 
@@ -1908,7 +1908,7 @@ export const answerCandidates: GeminiSelectorCandidate[] = [
 ];
 ```
 
-- [ ] **Step 2: Add safe artifact writer**
+- [x] **Step 2: Add safe artifact writer**
 
 Create `sidecars/gemini-browser/src/artifacts.ts`:
 
@@ -1967,7 +1967,7 @@ export async function captureFailureArtifacts(input: {
 }
 ```
 
-- [ ] **Step 3: Add adapter facade**
+- [x] **Step 3: Add adapter facade**
 
 Create `sidecars/gemini-browser/src/adapter.ts`:
 
@@ -2116,7 +2116,7 @@ async function waitForAnswerText(page: Page, prompt: string): Promise<string | n
 }
 ```
 
-- [ ] **Step 4: Add adapter tests for non-browser helpers**
+- [x] **Step 4: Add adapter tests for non-browser helpers**
 
 Create `sidecars/gemini-browser/src/adapter.test.ts`:
 
@@ -2143,7 +2143,7 @@ describe("production Gemini DOM contract", () => {
 });
 ```
 
-- [ ] **Step 5: Run sidecar verification and research guard**
+- [x] **Step 5: Run sidecar verification and research guard**
 
 Run:
 
@@ -2154,7 +2154,7 @@ npm.cmd run test:gemini-browser-adapter
 
 Expected: sidecar tests pass; research matrix still passes.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 
