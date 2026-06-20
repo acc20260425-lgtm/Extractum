@@ -2590,7 +2590,7 @@ Expected: commit includes sidecar server/client process wiring and updated plan 
 - Create: `src-tauri/src/prompt_packs/gemini_browser_stage.rs`
 - Test: `src-tauri/src/prompt_packs/gemini_browser_stage.rs`
 
-- [ ] **Step 1: Add a browser completion adapter function**
+- [x] **Step 1: Add a browser completion adapter function**
 
 Create `src-tauri/src/prompt_packs/gemini_browser_stage.rs`:
 
@@ -2649,7 +2649,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Wire module export**
+- [x] **Step 2: Wire module export**
 
 Modify `src-tauri/src/prompt_packs/mod.rs`:
 
@@ -2657,7 +2657,7 @@ Modify `src-tauri/src/prompt_packs/mod.rs`:
 pub(crate) mod gemini_browser_stage;
 ```
 
-- [ ] **Step 3: Leave runtime selection behind a narrow feature flag**
+- [x] **Step 3: Leave runtime selection behind a narrow feature flag**
 
 Modify `src-tauri/src/prompt_packs/runtime.rs` only by adding a comment near `run_transcript_analysis_stage_request`:
 
@@ -2667,7 +2667,7 @@ Modify `src-tauri/src/prompt_packs/runtime.rs` only by adding a comment near `ru
 // API-backed until a run request explicitly selects the browser provider.
 ```
 
-- [ ] **Step 4: Run focused Prompt Pack test**
+- [x] **Step 4: Run focused Prompt Pack test**
 
 Run:
 
@@ -2677,7 +2677,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib gemini_browser_stage
 
 Expected: completion mapping tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 

@@ -165,6 +165,8 @@ mod tests {
         assert!(GeminiBrowserRunStatus::Ok.is_success());
         assert!(GeminiBrowserRunStatus::Ready.is_success());
         assert!(!GeminiBrowserRunStatus::NeedsLogin.is_success());
+        assert!(GeminiBrowserRunStatus::NeedsLogin.is_terminal());
+        assert!(!GeminiBrowserRunStatus::Running.is_terminal());
     }
 
     #[test]

@@ -1,4 +1,5 @@
 pub mod dto;
+pub(crate) mod gemini_browser_stage;
 pub mod json_repair;
 pub mod library;
 pub mod models;

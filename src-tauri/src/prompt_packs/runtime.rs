@@ -406,6 +406,10 @@ async fn run_transcript_analysis_stage_request(
     run_cancellation_token: Option<CancellationToken>,
     stage_request: TranscriptAnalysisStageExecutionRequest,
 ) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
+    // Gemini Browser Provider completion routing will call
+    // gemini_browser_stage::browser_result_to_completion_text after the provider command returns a
+    // successful single-prompt result. The default Prompt Pack path remains API-backed until a run
+    // request explicitly selects the browser provider.
     let effective_model = resolve_effective_model(&profile, model_override.as_deref())?;
     let model_output_limit =
         resolve_model_output_token_limit_for_backend(&profile, &effective_model).await;
