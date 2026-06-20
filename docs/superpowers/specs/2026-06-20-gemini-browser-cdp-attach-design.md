@@ -68,7 +68,7 @@ If the variable is set, CDP attach mode is used. If unset, the current managed m
 
 A later product slice should add a settings UI for this mode. This v1 slice keeps the control surface narrow so the security boundary and operator workflow can be validated first.
 
-The sidecar owns this decision because it already owns Playwright and browser lifecycle behavior. Rust/Tauri continues to call the same JSON-line commands: `status`, `open_browser`, `send_single`, `resume`, and `stop`.
+The sidecar owns this decision because it already owns Playwright and browser lifecycle behavior. Rust/Tauri continues to call the same JSON-line commands: `status`, `open_browser`, `send_single`, `resume`, and `stop`, but the `resume` envelope must be extended to include `browser_profile_dir`. Rust already owns the app-data profile path and should pass it through so every status response can include the same `browser_profile_dir` shape as `status` and `open_browser`.
 
 ## Ownership Invariants
 
@@ -93,6 +93,14 @@ The sidecar owns this decision because it already owns Playwright and browser li
   - store the attached browser/context/page references for later `sendSingle`.
 
 `Resume` in CDP mode must not create a new Gemini tab. If no Gemini page exists, it returns `needs_manual_action` with a message asking the user to open Gemini in the attached Chrome profile or use `Open`.
+
+Protocol update:
+
+```ts
+{ type: "resume"; run_id: string | null; browser_profile_dir: string }
+```
+
+Managed mode may treat `resume` as `openBrowser(browser_profile_dir)` for v1. CDP mode uses `browser_profile_dir` only for status shape consistency and operator diagnostics; browser state still comes from the attached Chrome endpoint.
 
 Gemini page selection:
 
@@ -136,11 +144,22 @@ Typed outcomes should stay visible and actionable:
 - No composer after wait: keep current `needs_login` result until the DOM contract is refined further.
 - CDP browser/page disconnected mid-run: `browser_crashed` with sanitized artifacts and message `Chrome CDP connection closed during the run.`
 
+In CDP mode, Playwright errors that indicate target, page, browser, or context closure must map to `browser_crashed`, not generic `failed`. This includes common closed-target phrases such as `Target closed`, `Page closed`, `Browser has been closed`, `Context closed`, and protocol disconnect errors surfaced during page operations.
+
 Known limitation for this slice: "no composer after wait" is still a coarse fallback. In CDP mode the user may already be logged in while Gemini shows consent, age gate, account picker, disabled Workspace state, region block, model unavailable UI, or prompt-blocked UI. This slice keeps the existing fallback but records it as a DOM-contract follow-up rather than treating every no-composer state as proven logout.
 
 ## Security Boundary
 
 Extractum attaches only to a user-provided loopback endpoint. The default documented endpoint is `http://127.0.0.1:9222`. Endpoint validation rejects `0.0.0.0`, LAN IPs, non-loopback hostnames, non-HTTP schemes, credentials in URLs, and any host outside `127.0.0.1`, `localhost`, or `[::1]`.
+
+Endpoint normalization requires a base HTTP URL with an explicit non-zero port and no username, password, path, query, or hash. Examples:
+
+- accept: `http://127.0.0.1:9222`
+- accept: `http://localhost:9222`
+- reject: `http://127.0.0.1:0`
+- reject: `http://127.0.0.1:9222/json/version`
+- reject: `http://127.0.0.1:9222?token=x`
+- reject: `http://user:pass@127.0.0.1:9222`
 
 Extractum must not:
 
@@ -157,12 +176,14 @@ Unit and integration checks for this slice:
 
 - Sidecar mode resolver chooses CDP attach when `EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT` is present.
 - CDP endpoint validation accepts `http://127.0.0.1:9222`, `http://localhost:9222`, and `http://[::1]:9222`.
-- CDP endpoint validation rejects `http://192.168.1.20:9222`, `http://0.0.0.0:9222`, missing scheme values such as `127.0.0.1:9222`, non-HTTP schemes, credentials in URLs, and arbitrary hostnames.
+- CDP endpoint validation rejects `http://192.168.1.20:9222`, `http://0.0.0.0:9222`, `http://127.0.0.1:0`, `http://127.0.0.1:9222/json/version`, `http://127.0.0.1:9222?token=x`, missing scheme values such as `127.0.0.1:9222`, non-HTTP schemes, credentials in URLs, and arbitrary hostnames.
 - CDP page selection ignores non-Gemini Google pages, ignores unreadable/closed pages, and deterministically prefers the active/frontmost Gemini page when available or the first matching Gemini page otherwise.
 - CDP `Open` creates a Gemini tab when Chrome is connected but no Gemini page exists.
 - CDP `Resume` reports manual action when Chrome is connected but no Gemini page exists.
 - CDP `status` checks validate and lightly probe the endpoint without opening pages or creating long-lived browser automation state.
 - CDP attach failures return typed provider statuses for invalid endpoint, unreachable endpoint, non-Chrome endpoint, empty user profile context, protocol mismatch, and mid-run disconnect.
+- CDP closed-target Playwright errors map to `browser_crashed` rather than generic `failed`.
+- Sidecar protocol tests cover `resume` serialization with `browser_profile_dir`.
 - `stop()` in CDP mode detaches without attempting to kill Chrome.
 - Shared Rust/frontend manual-action types include `start_chrome_cdp`, and UI status label tests cover it.
 - Local/mock CDP tests cover endpoint validation and page-selection logic without requiring Google login state. These can use small fake Browser/Context/Page adapters or a local Playwright-controlled Chromium CDP fixture that serves a non-Google page.
@@ -170,11 +191,13 @@ Unit and integration checks for this slice:
 
 Manual validation:
 
-1. Start Chrome with `--remote-debugging-port=9222` and a dedicated profile.
-2. Login to Gemini manually in that Chrome.
-3. Start Extractum with `EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT=http://127.0.0.1:9222`.
-4. Use `Settings -> Browser Providers -> Resume`.
-5. Send the one-sentence test prompt and verify a new run returns `ok`.
+1. Negative setup: start Extractum with `EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT=http://127.0.0.1:9222` while Chrome is not running with remote debugging.
+2. Click `Settings -> Browser Providers -> Resume`.
+3. Verify the UI shows the `start_chrome_cdp`/operator setup message and does not report a generic failure.
+4. Start Chrome with `--remote-debugging-port=9222` and a dedicated profile.
+5. Login to Gemini manually in that Chrome.
+6. Use `Settings -> Browser Providers -> Resume`.
+7. Send the one-sentence test prompt and verify a new run returns `ok`.
 
 ## Acceptance Criteria
 
