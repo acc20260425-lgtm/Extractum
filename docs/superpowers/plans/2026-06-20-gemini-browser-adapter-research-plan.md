@@ -626,7 +626,7 @@ git commit -m "Add mock Gemini research server"
 - Create: `research/gemini_browser_adapter/src/types.ts`
 - Create: `research/gemini_browser_adapter/src/status.test.ts`
 
-- [ ] **Step 1: Write failing unit tests for status guards**
+- [x] **Step 1: Write failing unit tests for status guards**
 
 Create `research/gemini_browser_adapter/src/status.test.ts`:
 
@@ -655,7 +655,7 @@ describe("Gemini adapter status helpers", () => {
 });
 ```
 
-- [ ] **Step 2: Run unit test to verify it fails**
+- [x] **Step 2: Run unit test to verify it fails**
 
 Run:
 
@@ -665,7 +665,7 @@ npm run test:gemini-browser-adapter:unit -- research/gemini_browser_adapter/src/
 
 Expected: FAIL because `types.ts` does not exist.
 
-- [ ] **Step 3: Implement shared types**
+- [x] **Step 3: Implement shared types**
 
 Create `research/gemini_browser_adapter/src/types.ts`:
 
@@ -743,7 +743,7 @@ export function isManualActionStatus(status: GeminiAdapterStatus): boolean {
 }
 ```
 
-- [ ] **Step 4: Verify unit test passes**
+- [x] **Step 4: Verify unit test passes**
 
 Run:
 
@@ -753,7 +753,7 @@ npm run test:gemini-browser-adapter:unit -- research/gemini_browser_adapter/src/
 
 Expected: PASS for 3 tests.
 
-- [ ] **Step 5: Commit shared types**
+- [x] **Step 5: Commit shared types**
 
 Run:
 
