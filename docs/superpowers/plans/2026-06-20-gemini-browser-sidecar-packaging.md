@@ -1516,7 +1516,7 @@ Expected: commit includes documentation updates and plan checkbox update.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-06-20-gemini-browser-sidecar-packaging.md`
 
-- [ ] **Step 1: Run sidecar verification**
+- [x] **Step 1: Run sidecar verification**
 
 Run:
 
@@ -1526,7 +1526,7 @@ npm.cmd run test:gemini-browser-sidecar
 
 Expected: sidecar typecheck, unit tests, and build pass.
 
-- [ ] **Step 2: Run sidecar launch smokes**
+- [x] **Step 2: Run sidecar launch smokes**
 
 Run:
 
@@ -1542,7 +1542,7 @@ npm.cmd run build:tauri-prereqs
 
 Expected: status smoke commands return one valid `status` response, Playwright smoke commands return `ok: true`, and `build:tauri-prereqs` completes before any full Tauri bundle attempt.
 
-- [ ] **Step 3: Run Rust checks**
+- [x] **Step 3: Run Rust checks**
 
 Run:
 
@@ -1552,7 +1552,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib gemini_browser
 
 Expected: all Gemini browser Rust tests pass.
 
-- [ ] **Step 4: Run frontend checks touched by provider UI**
+- [x] **Step 4: Run frontend checks touched by provider UI**
 
 Run:
 
@@ -1563,7 +1563,7 @@ npm.cmd run check
 
 Expected: targeted Vitest tests pass and Svelte check exits `0`.
 
-- [ ] **Step 5: Run full Tauri bundle verification**
+- [x] **Step 5: Run full Tauri bundle verification**
 
 Run:
 
@@ -1575,7 +1575,7 @@ Expected: the full Tauri build exits `0`. This is the expensive final check that
 
 If the build fails because a local platform installer/signing tool is unavailable, record the exact error in this plan and do not mark the packaging slice complete. A successful `build:tauri-prereqs` is not a substitute for this full bundle verification.
 
-- [ ] **Step 6: Smoke packaged app sidecar resolution**
+- [x] **Step 6: Smoke packaged app sidecar resolution**
 
 Run the packaged app with bundled sidecar mode forced:
 
@@ -1594,7 +1594,7 @@ Expected: the panel must not show the Rust fallback message `Gemini browser side
 
 Do not click `Open Gemini` in this smoke unless separately performing a manual live-browser check. This sidecar resolution smoke must not navigate to Gemini or touch Google account state.
 
-- [ ] **Step 7: Confirm generated binaries are ignored**
+- [x] **Step 7: Confirm generated binaries are ignored**
 
 Run:
 
@@ -1604,7 +1604,7 @@ git status --short --untracked-files=all src-tauri\\binaries
 
 Expected: no generated `gemini-browser-sidecar-*` binary appears in git status.
 
-- [ ] **Step 8: Commit final verification note**
+- [x] **Step 8: Commit final verification note**
 
 Update this task's checkboxes to `[x]`.
 
@@ -1646,3 +1646,17 @@ Expected: final commit contains only plan checkbox and verification-note updates
 **Known risk:** Packaging a Playwright-powered Node sidecar into a single binary can expose tool-specific limitations. Task 2 makes the packaging tool an explicit feasibility gate before any Rust/Tauri integration changes, and Task 6 turns the proven command into reusable build/check scripts. The v1 build scripts are host-target only; cross-target packaging needs a later release-matrix slice.
 
 **Out of scope:** This plan does not add real Gemini automated smoke tests, does not bundle a Chromium browser, does not automate Google account flows, and does not move run logs into SQLite.
+
+## Verification Notes
+
+- Sidecar tests: passed.
+- Node sidecar smoke: passed.
+- Binary sidecar smoke: passed.
+- Node Playwright sidecar smoke: passed.
+- Binary Playwright sidecar smoke: passed.
+- Tauri build prerequisite enforcement: passed.
+- Full Tauri bundle build: passed. The first sandboxed attempt reached the WiX download step and failed with `os error 10013`; the escalated rerun completed successfully and produced the release exe plus MSI/NSIS bundles.
+- Packaged app sidecar resolution smoke: passed. Confirmed from the packaged app UI screenshot with bundled sidecar mode forced: Browser Providers reported `Browser has not been opened.` rather than `Gemini browser sidecar is not running.`
+- Rust Gemini browser tests: passed.
+- Frontend provider tests/check: passed.
+- Generated sidecar binaries: ignored.
