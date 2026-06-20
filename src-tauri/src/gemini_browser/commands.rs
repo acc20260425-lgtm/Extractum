@@ -115,8 +115,11 @@ pub async fn gemini_bridge_send_single(
 }
 
 #[tauri::command]
-pub async fn gemini_bridge_resume() -> AppResult<()> {
-    Ok(())
+pub async fn gemini_bridge_resume(
+    handle: AppHandle,
+    state: State<'_, GeminiBrowserState>,
+) -> AppResult<GeminiBrowserProviderStatus> {
+    sidecar::open_browser(&handle, &state, path_string(&profile_dir(&handle)?)).await
 }
 
 #[tauri::command]

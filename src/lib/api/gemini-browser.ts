@@ -23,7 +23,7 @@ export function geminiBridgeSendSingle(input: GeminiBridgeSendSingleInput) {
 }
 
 export function geminiBridgeResume() {
-  return invoke<void>("gemini_bridge_resume");
+  return invoke<GeminiBrowserProviderStatus>("gemini_bridge_resume");
 }
 
 export function geminiBridgeStop() {

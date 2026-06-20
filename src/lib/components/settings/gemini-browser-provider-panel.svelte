@@ -82,7 +82,8 @@
   async function resumeProvider() {
     busy = true;
     try {
-      await geminiBridgeResume();
+      status = await geminiBridgeResume();
+      message = status.latest_message ?? "Browser resumed.";
       await refresh();
     } catch (error) {
       message = formatAppError("resuming Gemini browser provider", error);
