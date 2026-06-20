@@ -69,26 +69,34 @@
 
 - [ ] **Step 1: Add the failing TypeScript protocol test**
 
-Append this test to `sidecars/gemini-browser/src/protocol.test.ts`:
+Add this type import to `sidecars/gemini-browser/src/protocol.test.ts`:
 
 ```ts
-it("parses resume command with browser profile dir", () => {
-  const envelope = parseEnvelope(
-    JSON.stringify({
-      id: "cmd-resume",
-      command: {
-        type: "resume",
-        run_id: null,
-        browser_profile_dir: "C:/Extractum/gemini-browser/profile",
-      },
-    }),
-  );
+import type { SidecarCommand } from "./protocol.js";
+```
 
-  expect(envelope.command).toEqual({
+Then append this test:
+
+```ts
+
+it("parses resume command with browser profile dir", () => {
+  const resumeCommand: SidecarCommand = {
     type: "resume",
     run_id: null,
     browser_profile_dir: "C:/Extractum/gemini-browser/profile",
-  });
+  };
+
+  const envelope = parseEnvelope(
+    JSON.stringify({
+      id: "cmd-resume",
+      command: resumeCommand,
+    }),
+  );
+
+  const command = envelope.command;
+  expect(command.type).toBe("resume");
+  if (command.type !== "resume") throw new Error("expected resume command");
+  expect(command.browser_profile_dir).toBe("C:/Extractum/gemini-browser/profile");
 });
 ```
 
@@ -804,6 +812,32 @@ it("does not create a Gemini page from sendSingle in CDP attach-only mode", asyn
   expect(context.newPage).not.toHaveBeenCalled();
 });
 
+it("preserves CDP attach setup errors from sendSingle", async () => {
+  const adapter = new GeminiBrowserAdapter({
+    env: { EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT: "http://127.0.0.1:9222" },
+    connectOverCdp: async () => {
+      throw new Error("ECONNREFUSED");
+    },
+  });
+
+  await expect(
+    adapter.sendSingle({
+      browserProfileDir: "C:/Extractum/gemini-browser/profile",
+      artifactDir: "C:/Extractum/gemini-browser/runs/run-1",
+      request: {
+        run_id: "run-1",
+        prompt: "hello",
+        source: "settings_test",
+        artifact_mode: "reduced",
+      },
+    }),
+  ).resolves.toMatchObject({
+    status: "needs_manual_action",
+    manual_action: "start_chrome_cdp",
+    message: "Chrome CDP endpoint is unavailable. Start Chrome with remote debugging enabled.",
+  });
+});
+
 it("maps CDP closed-target send failures to browser_crashed", async () => {
   const adapter = new GeminiBrowserAdapter({
     env: {},
@@ -1024,7 +1058,7 @@ function providerStatus(input: {
   status: GeminiBrowserProviderStatus["status"];
   browserProfileDir: string;
   message: string;
-  manualAction?: string | null;
+  manualAction?: GeminiBrowserProviderStatus["manual_action"];
 }): GeminiBrowserProviderStatus {
   return {
     status: input.status,
@@ -1185,9 +1219,12 @@ with:
       };
     }
 
+    let attachStatus: GeminiBrowserProviderStatus | null = null;
     if (!this.session?.page || this.session.page.isClosed()) {
       if (mode.type === "cdp_attach") {
-        await this.attachCdpBrowser(input.browserProfileDir, { createGeminiPage: false });
+        attachStatus = await this.attachCdpBrowser(input.browserProfileDir, {
+          createGeminiPage: false,
+        });
       } else {
         await this.openManagedBrowser(input.browserProfileDir);
       }
@@ -1202,6 +1239,24 @@ with:
           text: null,
           message: "Gemini browser page was not created.",
           manual_action: null,
+          artifacts: {
+            run_dir: input.artifactDir,
+            html: null,
+            screenshot: null,
+            telemetry: null,
+            artifact_write_error: null,
+          },
+          elapsed_ms: Date.now() - start,
+        };
+      }
+
+      if (!this.session?.context && attachStatus) {
+        return {
+          run_id: input.request.run_id,
+          status: "needs_manual_action",
+          text: null,
+          message: attachStatus.latest_message,
+          manual_action: attachStatus.manual_action,
           artifacts: {
             run_dir: input.artifactDir,
             html: null,
@@ -1233,8 +1288,11 @@ with:
 
 Closed CDP page that already belonged to the active session is classified as
 `browser_crashed` before retry. Absence of a Gemini page after CDP attach remains
-operator action. Managed mode must not return `start_chrome_cdp`; if managed
-opening fails to produce a usable page, return `failed` with no CDP manual action.
+operator action only when a CDP context is connected. If CDP attach itself fails
+or validation rejects the endpoint, preserve `attachStatus.latest_message` and
+`attachStatus.manual_action` in the run result. Managed mode must not return
+`start_chrome_cdp`; if managed opening fails to produce a usable page, return
+`failed` with no CDP manual action.
 
 Replace the catch block:
 
@@ -1519,12 +1577,12 @@ Expected: smoke returns a JSON response with `response.type: "status"`.
 Run in PowerShell:
 
 ```powershell
-$env:EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT = "http://127.0.0.1:9222"
+$env:EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT = "http://127.0.0.1:65530"
 npm.cmd run smoke:gemini-browser-sidecar:resume:node -- --expect-manual-action=start_chrome_cdp
 Remove-Item Env:\EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT
 ```
 
-Expected: smoke returns `response.type: "status"`, `response.status.status: "needs_manual_action"`, and `response.status.manual_action: "start_chrome_cdp"`. If port `9222` is already running Chrome on the machine, use a closed loopback port such as `127.0.0.1:65530` for this negative smoke.
+Expected: smoke returns `response.type: "status"`, `response.status.status: "needs_manual_action"`, and `response.status.manual_action: "start_chrome_cdp"`. Use a closed loopback port so this negative smoke cannot accidentally attach to a developer's running Chrome CDP instance.
 
 - [ ] **Step 5: Commit smoke changes**
 
