@@ -49,9 +49,10 @@ export class GeminiBrowserAdapter {
     }
 
     try {
-      const composer = await firstVisible(
+      const composer = await waitForFirstVisible(
         page,
         composerCandidates.map((candidate) => candidate.selector),
+        { timeoutMs: 30_000, intervalMs: 500 },
       );
       if (!composer) {
         return this.failure(
@@ -68,9 +69,10 @@ export class GeminiBrowserAdapter {
         await page.keyboard.insertText(input.request.prompt);
       });
 
-      const send = await firstVisible(
+      const send = await waitForFirstVisible(
         page,
         sendCandidates.map((candidate) => candidate.selector),
+        { timeoutMs: 10_000, intervalMs: 250 },
       );
       if (!send) {
         return this.failure(
@@ -142,11 +144,24 @@ export class GeminiBrowserAdapter {
   }
 }
 
-async function firstVisible(page: Page, selectors: string[]): Promise<Locator | null> {
-  for (const selector of selectors) {
-    const locator = page.locator(selector).last();
-    if ((await locator.count()) > 0 && (await locator.isVisible().catch(() => false))) {
-      return locator;
+export async function waitForFirstVisible(
+  page: Pick<Page, "locator" | "waitForTimeout">,
+  selectors: string[],
+  options: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<Locator | null> {
+  const timeoutMs = options.timeoutMs ?? 20_000;
+  const intervalMs = options.intervalMs ?? 250;
+  const maxAttempts = Math.max(1, Math.ceil(timeoutMs / Math.max(intervalMs, 1)) + 1);
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    for (const selector of selectors) {
+      const locator = page.locator(selector).last();
+      if ((await locator.count()) > 0 && (await locator.isVisible().catch(() => false))) {
+        return locator;
+      }
+    }
+    if (attempt < maxAttempts - 1) {
+      await page.waitForTimeout(intervalMs);
     }
   }
   return null;
