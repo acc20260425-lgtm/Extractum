@@ -4,7 +4,7 @@ import {
   answerCandidates,
   composerCandidates,
   sendCandidates,
-} from "./dom-contract";
+} from "./dom-contract.js";
 
 describe("production Gemini DOM contract", () => {
   it("keeps the selected resilient-scoring contract version explicit", () => {

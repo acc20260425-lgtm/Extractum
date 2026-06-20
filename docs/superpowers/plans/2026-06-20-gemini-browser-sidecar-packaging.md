@@ -1199,10 +1199,15 @@ Expected: commit includes scripts, package metadata, Tauri build enforcement, ig
 
 **Files:**
 - Modify: `sidecars/gemini-browser/src/index.ts`
+- Modify: `sidecars/gemini-browser/tsconfig.json`
+- Modify: `sidecars/gemini-browser/src/adapter.ts`
+- Modify: `sidecars/gemini-browser/src/artifacts.ts`
+- Modify: `sidecars/gemini-browser/src/adapter.test.ts`
+- Modify: `sidecars/gemini-browser/src/protocol.test.ts`
 - Create: `scripts/gemini-browser-sidecar-smoke.mjs`
 - Modify: `package.json`
 
-- [ ] **Step 1: Add a Playwright launch smoke mode to the sidecar**
+- [x] **Step 1: Add a Playwright launch smoke mode to the sidecar**
 
 Modify the top of `sidecars/gemini-browser/src/index.ts` before creating the JSON-line `readline` interface:
 
@@ -1229,7 +1234,9 @@ Expected: this mode exercises the packaged Playwright import and Chromium launch
 
 This is an internal diagnostic sidecar mode for packaging verification only. It is not a user-facing Gemini Browser Provider command and should not be exposed through Tauri commands or UI.
 
-- [ ] **Step 2: Add a JSON-line and Playwright sidecar smoke script**
+Also keep the built sidecar runnable through plain Node by using `module: "NodeNext"`, `moduleResolution: "NodeNext"`, and `.js` relative import specifiers in sidecar source files. The dev fallback launches `sidecars/gemini-browser/dist/index.js` directly, so extensionless ESM imports are not valid here.
+
+- [x] **Step 2: Add a JSON-line and Playwright sidecar smoke script**
 
 Create `scripts/gemini-browser-sidecar-smoke.mjs`:
 
@@ -1359,7 +1366,7 @@ if (playwrightSmoke) {
 }
 ```
 
-- [ ] **Step 3: Add smoke scripts**
+- [x] **Step 3: Add smoke scripts**
 
 Modify `package.json` scripts:
 
@@ -1370,7 +1377,7 @@ Modify `package.json` scripts:
 "smoke:gemini-browser-sidecar:playwright:binary": "node scripts/gemini-browser-sidecar-smoke.mjs --binary --playwright"
 ```
 
-- [ ] **Step 4: Run sidecar status smoke in Node mode**
+- [x] **Step 4: Run sidecar status smoke in Node mode**
 
 Run:
 
@@ -1381,7 +1388,7 @@ npm.cmd run smoke:gemini-browser-sidecar:node
 
 Expected: stdout contains one JSON response with `id: "smoke-1"` and `response.type: "status"`.
 
-- [ ] **Step 5: Run sidecar status smoke in binary mode**
+- [x] **Step 5: Run sidecar status smoke in binary mode**
 
 Run:
 
@@ -1392,7 +1399,7 @@ npm.cmd run smoke:gemini-browser-sidecar:binary
 
 Expected: stdout contains one JSON response with `id: "smoke-1"` and `response.type: "status"`.
 
-- [ ] **Step 6: Run Playwright launch smoke in Node and binary modes**
+- [x] **Step 6: Run Playwright launch smoke in Node and binary modes**
 
 Run:
 
@@ -1413,7 +1420,7 @@ npx.cmd playwright install chromium
 
 Then re-run the smoke commands. Do not treat missing browser binaries as a reason to skip packaged sidecar launch verification.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Update this task's checkboxes to `[x]`.
 

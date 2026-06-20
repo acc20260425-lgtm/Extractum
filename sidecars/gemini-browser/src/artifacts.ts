@@ -1,8 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
-import type { GeminiBrowserRunRequest, GeminiBrowserRunResult } from "./protocol";
-import { redactText, redactUrl } from "./redaction";
+import type { GeminiBrowserRunRequest, GeminiBrowserRunResult } from "./protocol.js";
+import { redactText, redactUrl } from "./redaction.js";
 
 export async function captureFailureArtifacts(input: {
   page: Page;

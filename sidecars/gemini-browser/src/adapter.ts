@@ -4,9 +4,9 @@ import type {
   GeminiBrowserProviderStatus,
   GeminiBrowserRunRequest,
   GeminiBrowserRunResult,
-} from "./protocol";
-import { answerCandidates, composerCandidates, sendCandidates } from "./dom-contract";
-import { captureFailureArtifacts } from "./artifacts";
+} from "./protocol.js";
+import { answerCandidates, composerCandidates, sendCandidates } from "./dom-contract.js";
+import { captureFailureArtifacts } from "./artifacts.js";
 
 export class GeminiBrowserAdapter {
   private context: BrowserContext | null = null;

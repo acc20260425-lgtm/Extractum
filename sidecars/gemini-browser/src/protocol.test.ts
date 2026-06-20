@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseEnvelope } from "./protocol";
-import { redactText, redactUrl } from "./redaction";
+import { parseEnvelope } from "./protocol.js";
+import { redactText, redactUrl } from "./redaction.js";
 
 describe("gemini browser sidecar protocol", () => {
   it("parses a status command envelope", () => {
