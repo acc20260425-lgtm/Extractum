@@ -107,8 +107,7 @@ Gemini page selection:
 - ignore closed pages and pages whose URL cannot be read;
 - match only URLs whose hostname is exactly `gemini.google.com`;
 - do not select `accounts.google.com`, Google consent pages, or other Google hosts as Gemini pages;
-- prefer the active/frontmost page if Playwright exposes that signal in the attached context;
-- otherwise pick the first matching page in the existing Playwright page order so repeated selection is deterministic.
+- pick the first matching page in the existing Playwright page order so repeated selection is deterministic.
 
 `status(browserProfileDir)` reports:
 
@@ -177,7 +176,7 @@ Unit and integration checks for this slice:
 - Sidecar mode resolver chooses CDP attach when `EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT` is present.
 - CDP endpoint validation accepts `http://127.0.0.1:9222`, `http://localhost:9222`, and `http://[::1]:9222`.
 - CDP endpoint validation rejects `http://192.168.1.20:9222`, `http://0.0.0.0:9222`, `http://127.0.0.1:0`, `http://127.0.0.1:9222/json/version`, `http://127.0.0.1:9222?token=x`, missing scheme values such as `127.0.0.1:9222`, non-HTTP schemes, credentials in URLs, and arbitrary hostnames.
-- CDP page selection ignores non-Gemini Google pages, ignores unreadable/closed pages, and deterministically prefers the active/frontmost Gemini page when available or the first matching Gemini page otherwise.
+- CDP page selection ignores non-Gemini Google pages, ignores unreadable/closed pages, and deterministically selects the first matching Gemini page in page order.
 - CDP `Open` creates a Gemini tab when Chrome is connected but no Gemini page exists.
 - CDP `Resume` reports manual action when Chrome is connected but no Gemini page exists.
 - CDP `status` checks validate and lightly probe the endpoint without opening pages or creating long-lived browser automation state.
@@ -209,3 +208,26 @@ Manual validation:
 - Empty CDP browser contexts are reported as operator setup failures; v1 does not create a new context because it may not share the user's profile/login state.
 - Existing managed mode still works when the CDP env var is absent.
 - No Google login automation is introduced.
+
+## Implementation Plan
+
+Implementation plan:
+`docs/superpowers/plans/2026-06-20-gemini-browser-cdp-attach-plan.md`.
+
+## Implementation Notes
+
+- CDP mode uses the existing Chrome default/persistent context only. If
+  `browser.contexts()` is empty, the provider returns `start_chrome_cdp`; it does
+  not call `browser.newContext()`.
+- `Open` may create a Gemini tab inside the existing context. `Resume` and
+  `sendSingle` attach without creating a tab and return `start_chrome_cdp` if no
+  Gemini page is available.
+- CDP `Stop` and failed setup paths drop Extractum-side references only. They do
+  not call `context.close()` or `browser.close()` because the attached Chrome and
+  its tabs belong to the operator.
+- Playwright JavaScript does not expose a public `Browser.disconnect()` method.
+  A failed no-context attach after `connectOverCDP` may leave the CDP transport
+  alive until garbage collection or process exit; this is an accepted v1 risk
+  until a safer detach strategy is verified.
+- A connected CDP session with no Gemini page is reported separately from an
+  unreachable endpoint: "Chrome CDP attached, but no Gemini tab is available."

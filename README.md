@@ -231,3 +231,32 @@ run artifacts are app-data runtime files, not bundle resources. Use
 `npm.cmd run smoke:gemini-browser-sidecar:playwright:binary` to verify the
 packaged binary can import Playwright and launch Chromium without navigating to
 Gemini.
+
+## Gemini Browser User-Controlled Chrome CDP Mode
+
+For Google accounts that reject Playwright-owned browser login, operators can run
+Gemini Browser Provider in user-controlled Chrome CDP mode.
+
+Start ordinary Chrome with a dedicated Extractum profile:
+
+```powershell
+$profile = "$env:APPDATA\org.ai.extractum\gemini-browser\chrome-cdp-profile"
+Start-Process chrome.exe -ArgumentList @(
+  "--remote-debugging-port=9222",
+  "--user-data-dir=$profile",
+  "https://gemini.google.com/app"
+)
+```
+
+Do not use the normal Chrome `Default` profile. Complete Google/Gemini login
+manually in this Chrome window, then start Extractum with:
+
+```powershell
+$env:EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT = "http://127.0.0.1:9222"
+npm.cmd run tauri dev
+```
+
+In CDP mode, `Resume` attaches only to an existing Gemini tab. `Open` may create
+a Gemini tab but never performs Google account, phone, CAPTCHA, consent, or
+other security actions. `Stop` detaches Extractum and does not close Chrome.
+Only loopback base HTTP endpoints are accepted.

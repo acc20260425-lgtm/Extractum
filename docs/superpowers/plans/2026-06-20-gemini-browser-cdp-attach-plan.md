@@ -1612,7 +1612,7 @@ Expected: commit contains only smoke script and package script updates.
 - Modify: `docs/superpowers/specs/2026-06-20-gemini-browser-cdp-attach-design.md`
 - Modify: `docs/superpowers/plans/2026-06-20-gemini-browser-cdp-attach-plan.md`
 
-- [ ] **Step 1: Document CDP operator mode in README**
+- [x] **Step 1: Document CDP operator mode in README**
 
 Append this section under the existing Gemini Browser Sidecar Packaging section in `README.md`:
 
@@ -1647,7 +1647,7 @@ other security actions. `Stop` detaches Extractum and does not close Chrome.
 Only loopback base HTTP endpoints are accepted.
 ````
 
-- [ ] **Step 2: Add implementation note to the CDP spec**
+- [x] **Step 2: Add implementation note to the CDP spec**
 
 Append this section to `docs/superpowers/specs/2026-06-20-gemini-browser-cdp-attach-design.md`:
 
@@ -1676,11 +1676,11 @@ Implementation plan:
   unreachable endpoint: "Chrome CDP attached, but no Gemini tab is available."
 ```
 
-- [ ] **Step 3: Mark docs task complete in this plan**
+- [x] **Step 3: Mark docs task complete in this plan**
 
 Update Task 7 checkboxes to `[x]` after README and spec are updated.
 
-- [ ] **Step 4: Commit docs**
+- [x] **Step 4: Commit docs**
 
 Run:
 
