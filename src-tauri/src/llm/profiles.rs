@@ -137,7 +137,6 @@ async fn load_profile_from_pool(
     let default_model = read_setting(pool, &profile_model_key(&profile_id))
         .await?
         .unwrap_or_else(|| DEFAULT_MODEL.to_string());
-    migrate_legacy_api_key(pool, secret_store, &profile_id).await?;
     let api_key_configured = secret_store
         .get_secret(llm_profile_api_key_secret(&profile_id))
         .await?
@@ -156,30 +155,10 @@ async fn load_profile_from_pool(
     })
 }
 
-async fn migrate_legacy_api_key(
-    pool: &Pool<Sqlite>,
-    secret_store: &SecretStoreState,
-    profile_id: &str,
-) -> AppResult<()> {
-    let key = llm_profile_api_key_secret(profile_id);
-    let Some(legacy_api_key) = read_setting(pool, &key).await? else {
-        return Ok(());
-    };
-
-    if legacy_api_key.trim().is_empty() {
-        return Ok(());
-    }
-
-    secret_store.set_secret(key.clone(), legacy_api_key).await?;
-    delete_setting(pool, &key).await
-}
-
 async fn read_profile_api_key(
-    pool: &Pool<Sqlite>,
     secret_store: &SecretStoreState,
     profile_id: &str,
 ) -> AppResult<SecretString> {
-    migrate_legacy_api_key(pool, secret_store, profile_id).await?;
     Ok(secret_store
         .get_secret(llm_profile_api_key_secret(profile_id))
         .await?
@@ -272,7 +251,7 @@ pub(super) async fn resolve_profile_from_pool(
 
     let profile = load_profile_from_pool(pool, secret_store, &profile_id).await?;
     let provider = ProviderKind::parse(&profile.provider)?;
-    let api_key = read_profile_api_key(pool, secret_store, &profile_id).await?;
+    let api_key = read_profile_api_key(secret_store, &profile_id).await?;
 
     Ok(ResolvedLlmProfile {
         profile_id,
@@ -569,60 +548,6 @@ mod tests {
             .expect("resolve profile");
         assert_eq!(resolved.default_model, "gemini-2.5-pro");
         assert_eq!(resolved.api_key.expose_secret(), "initial-key");
-    }
-
-    #[tokio::test]
-    async fn legacy_api_key_migrates_and_deletes_app_setting() {
-        let pool = memory_pool().await;
-        let (_store, secret_store) = memory_secret_store();
-        sqlx::query(
-            "INSERT INTO app_settings (key, value) VALUES ('llm.profile.default.api_key', 'legacy-key')",
-        )
-        .execute(&pool)
-        .await
-        .expect("insert legacy key");
-
-        let state = load_profiles_state_from_pool(&pool, &secret_store)
-            .await
-            .expect("load state");
-
-        assert!(state.profiles[0].api_key_configured);
-        assert_eq!(
-            secret_store
-                .get_secret(llm_profile_api_key_secret("default"))
-                .await
-                .expect("read migrated secret")
-                .map(|value| value.expose_secret().to_string()),
-            Some("legacy-key".to_string())
-        );
-        assert_eq!(
-            setting_value(&pool, "llm.profile.default.api_key").await,
-            None
-        );
-    }
-
-    #[tokio::test]
-    async fn legacy_api_key_remains_when_secure_write_fails() {
-        let pool = memory_pool().await;
-        let (store, secret_store) = memory_secret_store();
-        store.fail_set("secure store unavailable");
-        sqlx::query(
-            "INSERT INTO app_settings (key, value) VALUES ('llm.profile.default.api_key', 'legacy-key')",
-        )
-        .execute(&pool)
-        .await
-        .expect("insert legacy key");
-
-        let error = load_profiles_state_from_pool(&pool, &secret_store)
-            .await
-            .expect_err("secure write should fail");
-
-        assert_eq!(error.kind, AppErrorKind::Internal);
-        assert_eq!(error.message, "secure store unavailable");
-        assert_eq!(
-            setting_value(&pool, "llm.profile.default.api_key").await,
-            Some("legacy-key".to_string())
-        );
     }
 
     #[tokio::test]
