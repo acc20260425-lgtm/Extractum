@@ -131,8 +131,8 @@ Create `research/gemini_browser_adapter/tsconfig.json`:
     "checkJs": false,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
@@ -1641,6 +1641,14 @@ export type CaptureFailureInput = {
   artifactMode: "full" | "reduced";
 };
 
+function safePageUrl(page: Page): string {
+  try {
+    return redactUrl(page.url());
+  } catch {
+    return "about:blank#page-url-unavailable";
+  }
+}
+
 export async function captureFailureArtifacts(input: CaptureFailureInput): Promise<FailureArtifacts> {
   await mkdir(input.artifactDir, { recursive: true });
   const screenshotPath = input.artifactMode === "reduced" ? null : path.join(input.artifactDir, "failure.png");
@@ -1650,7 +1658,8 @@ export async function captureFailureArtifacts(input: CaptureFailureInput): Promi
   const html =
     input.artifactMode === "reduced"
       ? await reducedDomSnapshot(input.page)
-      : await input.page.content();
+      : await input.page.content().catch(() => '<!doctype html><html><body data-capture-error="page_content_unavailable"></body></html>');
+  const pageUrl = safePageUrl(input.page);
 
   if (screenshotPath) {
     await input.page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
@@ -1661,7 +1670,7 @@ export async function captureFailureArtifacts(input: CaptureFailureInput): Promi
     JSON.stringify(
       {
         reason: input.reason,
-        url: redactUrl(input.page.url()),
+        url: pageUrl,
         locatorAttempts: input.locatorAttempts,
         networkSummary: input.networkSummary,
         capturedAt: new Date().toISOString(),
@@ -1726,16 +1735,60 @@ async function withArtifacts(
     }),
   };
 }
+
+async function finalizeResult(
+  page: Page,
+  base: GeminiAdapterResult,
+  options: SendSingleOptions,
+): Promise<GeminiAdapterResult> {
+  const withNetworkSummary = {
+    ...base,
+    networkSummary: options.networkSummary ?? base.networkSummary,
+  };
+  return await withArtifacts(page, withNetworkSummary, options);
+}
 ```
 
 Use `artifactMode: "reduced"` for any live Gemini run. Reduced mode writes a sanitized DOM snapshot and skips screenshot capture. The default `"full"` mode is only for deterministic local mock pages where fixture HTML contains no real account, prompt, or session data.
 
-Wrap every returned non-`ok` result in both adapter variants with `await withArtifacts(page, baseResult, options)`. For example:
+Replace the resilient-scoring adapter body with this finalizing form so every early return goes through artifact capture:
 
 ```ts
-const baseResult = result("generation_timeout", startedAt, lastText || null, attempts, "generation_timeout");
-return await withArtifacts(page, baseResult, options);
+export async function sendSingleResilientScoring(page: Page, prompt: string, options: SendSingleOptions): Promise<GeminiAdapterResult> {
+  const startedAt = Date.now();
+  const attempts: LocatorAttempt[] = [];
+  void scoreEditableCandidate;
+  void scoreButtonCandidate;
+  const config = await resolveContractConfig(options);
+  const complete = async (base: GeminiAdapterResult) =>
+    await finalizeResult(page, { ...base, variant: "resilient-scoring", locatorAttempts: attempts }, options);
+
+  if (page.isClosed()) {
+    return await complete(result("browser_crashed", startedAt, null, attempts, "browser_crashed"));
+  }
+
+  const criticalBefore = await scanCriticalState(page);
+  if (criticalBefore) return await complete(result(criticalBefore, startedAt, null, attempts, criticalBefore));
+
+  const promptBox =
+    (await findByConfiguredSelector(page, config.promptSelectors, attempts, "config:prompt")) ??
+    (await findPromptBox(page, attempts)) ??
+    (await findPromptBoxByScoring(page, attempts, config.minPromptScore));
+  if (!promptBox) return await complete(result("failed", startedAt, null, attempts, "prompt_input_not_found"));
+
+  await typePrompt(promptBox, prompt);
+  const sendButton =
+    (await findByConfiguredSelector(page, config.sendSelectors, attempts, "config:send")) ??
+    (await findSendButton(page, attempts)) ??
+    (await findSendButtonByScoring(page, attempts, config.minSendScore));
+  if (!sendButton) return await complete(result("failed", startedAt, null, attempts, "send_button_not_found"));
+  await sendButton.click();
+
+  return await complete(await waitForFinalAnswer(page, startedAt, options, attempts, config));
+}
 ```
+
+Apply the same `complete(...)` pattern to `sendSingleDomOnly` for its `browser_crashed`, critical-state, prompt-missing, send-missing, and final-answer returns. The matrix artifact cases must fail if a non-`ok` result with `artifactDir` skips `finalizeResult`.
 
 - [ ] **Step 6: Verify artifact tests pass**
 
@@ -2605,8 +2658,11 @@ git commit -m "Add Gemini adapter research implementation plan"
 - The plan compares three variants from `TOOLS_AND_METHODS.md`.
 - The plan includes the local `gemini-dom-contract.config.json` selector override promised by `TOOLS_AND_METHODS.md`.
 - The plan typechecks research TypeScript with `tsc -p research/gemini_browser_adapter/tsconfig.json --noEmit`.
+- The research TypeScript config uses bundler module resolution, matching the extensionless TS imports in the research files.
 - The plan runs all three variants against all sixteen matrix scenarios.
 - The plan covers success, manual-action, rate-limit, timeout, artifact, and telemetry paths.
+- The plan routes non-`ok` adapter returns through `finalizeResult` before returning to the test.
+- The artifact writer catches closed-page failures while reading page content and URL.
 - The plan treats missing assistant answer containers as `response_parse_failed`, not `ok`.
 - The plan redacts artifact URLs and requires reduced, text-free DOM artifacts for live Gemini runs.
 - The plan passes telemetry `networkSummary` through shared adapter options before artifact capture.
