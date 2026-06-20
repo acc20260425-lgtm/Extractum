@@ -237,7 +237,7 @@ Expected: commit includes the packager dependencies and plan checkbox update onl
 - Modify: `src-tauri/src/gemini_browser/mod.rs`
 - Test: `src-tauri/src/gemini_browser/sidecar_launch.rs`
 
-- [ ] **Step 1: Add failing launch resolution tests**
+- [x] **Step 1: Add failing launch resolution tests**
 
 Create `src-tauri/src/gemini_browser/sidecar_launch.rs`:
 
@@ -400,7 +400,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Wire the module**
+- [x] **Step 2: Wire the module**
 
 Modify `src-tauri/src/gemini_browser/mod.rs`:
 
@@ -416,7 +416,7 @@ mod types;
 
 Keep existing exports unchanged.
 
-- [ ] **Step 3: Run the focused tests**
+- [x] **Step 3: Run the focused tests**
 
 Run:
 
@@ -426,7 +426,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib gemini_browser::sidecar_la
 
 Expected: all `sidecar_launch` tests pass.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Update this task's checkboxes to `[x]`.
 

@@ -2,6 +2,7 @@ mod commands;
 mod paths;
 mod run_log;
 mod sidecar;
+mod sidecar_launch;
 mod state;
 mod types;
 
