@@ -499,7 +499,7 @@ Expected: commit includes only Tauri shell plugin setup and plan checkbox update
 - Modify: `src-tauri/src/gemini_browser/sidecar.rs`
 - Test: `src-tauri/src/gemini_browser/sidecar.rs`
 
-- [ ] **Step 1: Replace direct repo-cwd spawning with release-safe launch dispatch**
+- [x] **Step 1: Replace direct repo-cwd spawning with release-safe launch dispatch**
 
 Modify the imports in `src-tauri/src/gemini_browser/sidecar.rs`:
 
@@ -556,7 +556,7 @@ async fn spawn(handle: &AppHandle) -> AppResult<Self> {
 
 The bundled path is release default. The Node script path is allowed by default only in debug builds, or in release only when `EXTRACTUM_GEMINI_BROWSER_DEV_SIDECAR=1` is explicitly set.
 
-- [ ] **Step 2: Replace the `Child`-specific process wrapper with a transport enum**
+- [x] **Step 2: Replace the `Child`-specific process wrapper with a transport enum**
 
 Modify `src-tauri/src/gemini_browser/sidecar.rs` so `GeminiBrowserSidecarProcess` stores one of two transports:
 
@@ -568,7 +568,7 @@ enum GeminiBrowserSidecarTransport {
         stdout: BufReader<ChildStdout>,
     },
     Shell {
-        child: tauri_plugin_shell::process::CommandChild,
+        child: Option<tauri_plugin_shell::process::CommandChild>,
         rx: tauri::async_runtime::Receiver<tauri_plugin_shell::process::CommandEvent>,
         stdout_buffer: String,
     },
@@ -582,7 +582,7 @@ pub(crate) struct GeminiBrowserSidecarProcess {
 
 If the exact receiver type differs in the installed `tauri-plugin-shell` version, use the compiler error to import the concrete channel receiver returned by `sidecar(...).spawn()`. Keep the enum shape, the `stdout_buffer`, and request behavior identical.
 
-- [ ] **Step 3: Keep Node request behavior unchanged**
+- [x] **Step 3: Keep Node request behavior unchanged**
 
 Move the existing stdin/stdout write-read logic into:
 
@@ -635,7 +635,7 @@ fn decode_sidecar_line(id: &str, response_line: &str) -> AppResult<GeminiBrowser
 }
 ```
 
-- [ ] **Step 4: Add spawn helpers for both launch modes**
+- [x] **Step 4: Add spawn helpers for both launch modes**
 
 Add:
 
@@ -664,7 +664,7 @@ async fn spawn_bundled(handle: &AppHandle, name: String) -> AppResult<Self> {
 
     Ok(Self {
         transport: GeminiBrowserSidecarTransport::Shell {
-            child,
+            child: Some(child),
             rx,
             stdout_buffer: String::new(),
         },
@@ -692,7 +692,7 @@ fn from_node_child(mut child: Child) -> AppResult<Self> {
 }
 ```
 
-- [ ] **Step 5: Add shell request behavior**
+- [x] **Step 5: Add shell request behavior**
 
 Add:
 
@@ -736,7 +736,7 @@ async fn request_shell(
 }
 ```
 
-- [ ] **Step 6: Update `request`, caller, and `Drop`**
+- [x] **Step 6: Update `request`, caller, and `Drop`**
 
 Update `request`:
 
@@ -750,6 +750,9 @@ match &mut self.transport {
         rx,
         stdout_buffer,
     } => {
+        let child = child.as_mut().ok_or_else(|| {
+            AppError::internal("Bundled Gemini browser sidecar was already stopped")
+        })?;
         request_shell(child, rx, stdout_buffer, &id, command).await
     }
 }
@@ -769,12 +772,14 @@ match &mut self.transport {
         let _ = child.start_kill();
     }
     GeminiBrowserSidecarTransport::Shell { child, .. } => {
-        let _ = child.kill();
+        if let Some(child) = child.take() {
+            let _ = child.kill();
+        }
     }
 }
 ```
 
-- [ ] **Step 7: Add decoder tests**
+- [x] **Step 7: Add decoder tests**
 
 Add tests in `src-tauri/src/gemini_browser/sidecar.rs`:
 
@@ -859,7 +864,7 @@ async fn shell_transport_waits_for_complete_jsonl_line_across_stdout_events() {
 
 If the receiver type is not practical to instantiate, keep the helper-level partial/multiple-line coverage above and note that `request_shell` uses the helper directly.
 
-- [ ] **Step 8: Run Rust checks**
+- [x] **Step 8: Run Rust checks**
 
 Run:
 
@@ -869,7 +874,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib gemini_browser
 
 Expected: all Gemini browser Rust tests pass.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 Update this task's checkboxes to `[x]`.
 
