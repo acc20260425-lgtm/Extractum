@@ -20,6 +20,7 @@ pub enum GeminiBrowserManualAction {
     Consent,
     Captcha,
     UnknownModal,
+    StartChromeCdp,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -137,6 +138,7 @@ pub enum GeminiBrowserSidecarCommand {
     },
     Resume {
         run_id: Option<String>,
+        browser_profile_dir: String,
     },
     Stop,
 }
@@ -180,6 +182,33 @@ mod tests {
 
         let json = serde_json::to_value(command).expect("serialize command");
         assert_eq!(json["command"]["type"], "open_browser");
+        assert_eq!(
+            json["command"]["browser_profile_dir"],
+            "C:/Extractum/gemini-browser/profile"
+        );
+    }
+
+    #[test]
+    fn manual_action_serializes_start_chrome_cdp() {
+        let value = serde_json::to_value(GeminiBrowserManualAction::StartChromeCdp)
+            .expect("serialize manual action");
+
+        assert_eq!(value, "start_chrome_cdp");
+    }
+
+    #[test]
+    fn resume_command_serializes_browser_profile_dir() {
+        let command = GeminiBrowserSidecarEnvelope {
+            id: "cmd-resume".to_string(),
+            command: GeminiBrowserSidecarCommand::Resume {
+                run_id: None,
+                browser_profile_dir: "C:/Extractum/gemini-browser/profile".to_string(),
+            },
+        };
+
+        let json = serde_json::to_value(command).expect("serialize command");
+        assert_eq!(json["command"]["type"], "resume");
+        assert_eq!(json["command"]["run_id"], serde_json::Value::Null);
         assert_eq!(
             json["command"]["browser_profile_dir"],
             "C:/Extractum/gemini-browser/profile"

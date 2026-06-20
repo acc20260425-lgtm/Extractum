@@ -12,6 +12,9 @@ export function statusLabel(
   if (status === "needs_manual_action" && manualAction === "account_picker") {
     return "Choose account";
   }
+  if (status === "needs_manual_action" && manualAction === "start_chrome_cdp") {
+    return "Start Chrome";
+  }
   if (status === "needs_manual_action") return "Manual action";
   if (status === "running") return "Running";
   if (status === "failed") return "Failed";

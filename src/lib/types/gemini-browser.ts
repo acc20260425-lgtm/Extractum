@@ -12,7 +12,8 @@ export type GeminiBrowserManualAction =
   | "account_picker"
   | "consent"
   | "captcha"
-  | "unknown_modal";
+  | "unknown_modal"
+  | "start_chrome_cdp";
 
 export interface GeminiBrowserProviderStatus {
   status: GeminiBrowserProviderStatusKind;

@@ -17,6 +17,7 @@ describe("gemini browser provider panel copy contract", () => {
     expect(statusLabel("ready", null)).toBe("Ready");
     expect(statusLabel("needs_login", "login")).toBe("Login required");
     expect(statusLabel("needs_manual_action", "account_picker")).toBe("Choose account");
+    expect(statusLabel("needs_manual_action", "start_chrome_cdp")).toBe("Start Chrome");
     expect(statusLabel("running", null)).toBe("Running");
     expect(statusLabel("failed", null)).toBe("Failed");
     expect(statusLabel("not_started", null)).toBe("Not started");

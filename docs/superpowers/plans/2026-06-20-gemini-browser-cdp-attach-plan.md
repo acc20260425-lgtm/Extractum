@@ -67,7 +67,7 @@
 - Modify: `src/lib/gemini-browser-provider-panel-contract.ts`
 - Modify: `src/lib/gemini-browser-provider-panel.test.ts`
 
-- [ ] **Step 1: Add the failing TypeScript protocol test**
+- [x] **Step 1: Add the failing TypeScript protocol test**
 
 Add this type import to `sidecars/gemini-browser/src/protocol.test.ts`:
 
@@ -100,7 +100,7 @@ it("parses resume command with browser profile dir", () => {
 });
 ```
 
-- [ ] **Step 2: Add the failing UI label expectation**
+- [x] **Step 2: Add the failing UI label expectation**
 
 In `src/lib/gemini-browser-provider-panel.test.ts`, inside the `maps provider statuses to compact operator labels` test, add:
 
@@ -108,7 +108,7 @@ In `src/lib/gemini-browser-provider-panel.test.ts`, inside the `maps provider st
 expect(statusLabel("needs_manual_action", "start_chrome_cdp")).toBe("Start Chrome");
 ```
 
-- [ ] **Step 3: Add the failing Rust serde expectations**
+- [x] **Step 3: Add the failing Rust serde expectations**
 
 In `src-tauri/src/gemini_browser/types.rs`, inside `mod tests`, add:
 
@@ -141,7 +141,7 @@ fn resume_command_serializes_browser_profile_dir() {
 }
 ```
 
-- [ ] **Step 4: Run the targeted tests and verify they fail for the expected reasons**
+- [x] **Step 4: Run the targeted tests and verify they fail for the expected reasons**
 
 Run:
 
@@ -157,7 +157,7 @@ Expected:
 - UI test fails because `start_chrome_cdp` is not a known manual action label.
 - Rust test fails because `StartChromeCdp` and `Resume.browser_profile_dir` are not implemented.
 
-- [ ] **Step 5: Update the TypeScript sidecar protocol**
+- [x] **Step 5: Update the TypeScript sidecar protocol**
 
 Change the `resume` command member in `sidecars/gemini-browser/src/protocol.ts` to:
 
@@ -165,7 +165,7 @@ Change the `resume` command member in `sidecars/gemini-browser/src/protocol.ts` 
   | { type: "resume"; run_id: string | null; browser_profile_dir: string }
 ```
 
-- [ ] **Step 6: Update the frontend manual action union**
+- [x] **Step 6: Update the frontend manual action union**
 
 Change `GeminiBrowserManualAction` in `src/lib/types/gemini-browser.ts` to:
 
@@ -179,7 +179,7 @@ export type GeminiBrowserManualAction =
   | "start_chrome_cdp";
 ```
 
-- [ ] **Step 7: Update the provider label mapping**
+- [x] **Step 7: Update the provider label mapping**
 
 In `src/lib/gemini-browser-provider-panel-contract.ts`, add the `start_chrome_cdp` branch before the generic `needs_manual_action` branch:
 
@@ -189,7 +189,7 @@ In `src/lib/gemini-browser-provider-panel-contract.ts`, add the `start_chrome_cd
   }
 ```
 
-- [ ] **Step 8: Update Rust shared types**
+- [x] **Step 8: Update Rust shared types**
 
 In `src-tauri/src/gemini_browser/types.rs`, add the enum variant:
 
@@ -215,7 +215,7 @@ Change the `Resume` command variant to:
     },
 ```
 
-- [ ] **Step 9: Run targeted tests and verify they pass**
+- [x] **Step 9: Run targeted tests and verify they pass**
 
 Run:
 
@@ -232,7 +232,7 @@ Expected:
 - Provider panel label test passes.
 - Rust Gemini browser type tests pass.
 
-- [ ] **Step 10: Commit shared type changes**
+- [x] **Step 10: Commit shared type changes**
 
 Run:
 

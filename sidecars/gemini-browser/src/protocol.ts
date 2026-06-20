@@ -59,7 +59,7 @@ export type SidecarCommand =
       browser_profile_dir: string;
       artifact_dir: string;
     }
-  | { type: "resume"; run_id: string | null }
+  | { type: "resume"; run_id: string | null; browser_profile_dir: string }
   | { type: "stop" };
 
 export interface SidecarEnvelope {
