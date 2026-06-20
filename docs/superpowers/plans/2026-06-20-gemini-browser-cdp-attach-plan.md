@@ -138,13 +138,14 @@ fn resume_command_serializes_browser_profile_dir() {
 Run:
 
 ```powershell
+npm.cmd run test:gemini-browser-sidecar:typecheck
 npm.cmd run test:gemini-browser-sidecar:unit
 npm.cmd run test -- src/lib/gemini-browser-provider-panel.test.ts
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-cdp --lib gemini_browser::types
 ```
 
 Expected:
-- TypeScript protocol or type checking fails because `browser_profile_dir` is not in the `resume` command union.
+- TypeScript typecheck fails because `browser_profile_dir` is not in the `resume` command union. The unit test alone is not sufficient because `parseEnvelope()` casts parsed JSON to `SidecarEnvelope`.
 - UI test fails because `start_chrome_cdp` is not a known manual action label.
 - Rust test fails because `StartChromeCdp` and `Resume.browser_profile_dir` are not implemented.
 
@@ -671,6 +672,7 @@ it("maps CDP closed-target send failures to browser_crashed", async () => {
     env: {},
   });
   const page = {
+    isClosed: () => false,
     locator: () => {
       throw new Error("Target closed");
     },
@@ -959,9 +961,31 @@ with:
 
 ```ts
     if (!this.session?.page || this.session.page.isClosed()) {
-      await this.openBrowser(input.browserProfileDir);
+      const mode = resolveBrowserMode(this.env);
+      if (mode.type === "cdp_attach") {
+        await this.attachCdpBrowser(input.browserProfileDir, { createGeminiPage: false });
+      } else {
+        await this.openManagedBrowser(input.browserProfileDir);
+      }
     }
     const page = this.session?.page ?? null;
+    if (!page || page.isClosed()) {
+      return {
+        run_id: input.request.run_id,
+        status: "needs_manual_action",
+        text: null,
+        message: "Open Gemini in the attached Chrome profile or use Open to create a Gemini tab.",
+        manual_action: "start_chrome_cdp",
+        artifacts: {
+          run_dir: input.artifactDir,
+          html: null,
+          screenshot: null,
+          telemetry: null,
+          artifact_write_error: null,
+        },
+        elapsed_ms: Date.now() - start,
+      };
+    }
 ```
 
 Replace the catch block:
@@ -1003,7 +1027,7 @@ Replace `stop()` with:
   }
 ```
 
-This intentionally does not close CDP browser contexts or tabs.
+This intentionally drops CDP references only. Do not call `context.close()` or `browser.close()` in CDP mode; Playwright does not provide a safer v1 detach operation here that is worth risking user tabs. Managed mode still closes the context it owns.
 
 - [ ] **Step 9: Run sidecar tests**
 
