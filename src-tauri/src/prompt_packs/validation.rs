@@ -112,29 +112,6 @@ fn jsonschema_child_object_path(parent_path: &str, property: &str) -> String {
     }
 }
 
-pub(crate) async fn validate_and_quarantine_transcript_analysis_output(
-    pool: &SqlitePool,
-    run_id: i64,
-    stage_run_id: i64,
-    input: &TranscriptAnalysisStageInput,
-    output: &serde_json::Value,
-) -> Result<(), PromptPackValidationError> {
-    match validate_transcript_analysis_output(input, output) {
-        Ok(()) => Ok(()),
-        Err(error) => {
-            let _ = quarantine_prompt_pack_validation_error(
-                pool,
-                run_id,
-                stage_run_id,
-                output,
-                error.clone(),
-            )
-            .await;
-            Err(error)
-        }
-    }
-}
-
 pub(crate) async fn quarantine_prompt_pack_validation_error(
     pool: &SqlitePool,
     run_id: i64,
@@ -595,8 +572,7 @@ fn value_at_path<'a>(value: &'a serde_json::Value, path: &str) -> Option<&'a ser
 #[cfg(test)]
 mod tests {
     use super::{
-        validate_and_quarantine_synthesis_output,
-        validate_and_quarantine_transcript_analysis_output, validate_synthesis_output,
+        validate_and_quarantine_synthesis_output, validate_synthesis_output,
         validate_synthesis_output_with_allowed_refs, validate_transcript_analysis_output,
     };
     use crate::migrations::apply_all_migrations_for_test_pool;
@@ -721,80 +697,6 @@ mod tests {
             extract_json_payload("{\"a\":1}\n{\"b\":2}").expect_err("ambiguous JSON rejected");
 
         assert!(error.message.contains("multiple JSON objects"));
-    }
-
-    #[tokio::test]
-    async fn invalid_candidate_is_written_to_quarantine_artifacts() {
-        let pool = test_pool_with_transcript_analysis_stage().await;
-        let input = test_stage_input_with_material_refs(["m_transcript_1"]);
-        let output = serde_json::json!({
-            "stage_io_version": "1.0",
-            "schema_version": "1.0",
-            "stage": "youtube_summary/transcript_analysis",
-            "video_candidate": {
-                "summary_text": "Summary",
-                "segment_candidates": [],
-                "key_point_candidates": [],
-                "quote_candidates": [],
-                "action_item_candidates": [],
-                "open_question_candidates": []
-            },
-            "claim_candidates": [
-                {
-                    "text": "Claim",
-                    "material_refs": ["m_missing"]
-                }
-            ],
-            "evidence_fragment_candidates": [],
-            "warning_candidates": []
-        });
-
-        validate_and_quarantine_transcript_analysis_output(&pool, 42, 1001, &input, &output)
-            .await
-            .expect_err("invalid candidate rejected");
-
-        let quarantine_count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM prompt_pack_result_quarantine_artifacts \
-             WHERE run_id = 42 AND stage_run_id = 1001 AND object_path = '$.claim_candidates[0]'",
-        )
-        .fetch_one(&pool)
-        .await
-        .expect("quarantine count");
-
-        assert_eq!(quarantine_count, 1);
-    }
-
-    #[tokio::test]
-    async fn transcript_quarantine_artifact_uses_current_time() {
-        let pool = test_pool_with_transcript_analysis_stage().await;
-        let input = test_stage_input_with_material_refs(["m_transcript_1"]);
-        let output = serde_json::json!({
-            "stage_io_version": "1.0",
-            "schema_version": "1.0",
-            "stage": "youtube_summary/transcript_analysis",
-            "video_candidate": {
-                "summary_text": "Summary",
-                "segment_candidates": [],
-                "key_point_candidates": [],
-                "quote_candidates": [],
-                "action_item_candidates": [],
-                "open_question_candidates": []
-            },
-            "claim_candidates": [
-                {
-                    "text": "Claim",
-                    "material_refs": ["m_missing"]
-                }
-            ],
-            "evidence_fragment_candidates": [],
-            "warning_candidates": []
-        });
-
-        validate_and_quarantine_transcript_analysis_output(&pool, 42, 1001, &input, &output)
-            .await
-            .expect_err("invalid candidate rejected");
-
-        assert_quarantine_created_at_is_current(&pool, 1001).await;
     }
 
     #[test]
@@ -1270,43 +1172,6 @@ mod tests {
             "evidence_fragment_candidates": [],
             "warning_candidates": []
         })
-    }
-
-    async fn test_pool_with_transcript_analysis_stage() -> sqlx::SqlitePool {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("connect memory sqlite");
-        apply_all_migrations_for_test_pool(&pool)
-            .await
-            .expect("apply migrations");
-        seed_builtin_prompt_packs_in_pool(&pool)
-            .await
-            .expect("seed");
-        sqlx::query(
-            "INSERT INTO prompt_pack_runs (
-                id, pack_version_id, pack_id, pack_version, schema_version,
-                run_status, result_status, output_language, control_preset,
-                evidence_mode, include_comments, created_at, updated_at
-             )
-             VALUES (42, 1, 'youtube_summary', '1.0.0', '1.0',
-                'running', 'none', 'en', 'standard', 'standard', 0,
-                '2026-06-14T00:00:00Z', '2026-06-14T00:00:00Z')",
-        )
-        .execute(&pool)
-        .await
-        .expect("insert run");
-        sqlx::query(
-            "INSERT INTO prompt_pack_stage_runs (
-                id, run_id, source_snapshot_id, stage_name, stage_order, stage_status,
-                created_at, updated_at
-             )
-             VALUES (1001, 42, NULL, 'youtube_summary/transcript_analysis', 20, 'running',
-                '2026-06-14T00:00:00Z', '2026-06-14T00:00:00Z')",
-        )
-        .execute(&pool)
-        .await
-        .expect("insert stage");
-        pool
     }
 
     async fn test_pool_with_synthesis_stage() -> sqlx::SqlitePool {

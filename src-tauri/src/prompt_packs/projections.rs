@@ -1,6 +1,6 @@
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
-use crate::compression::{compress_text, decompress_text};
+use crate::compression::compress_text;
 use crate::error::{AppError, AppResult};
 
 #[allow(dead_code)]
@@ -82,31 +82,6 @@ pub(crate) async fn persist_final_result_in_transaction(
     .execute(&mut **tx)
     .await
     .map_err(AppError::database)?;
-    Ok(())
-}
-
-pub(crate) async fn repair_prompt_pack_result_projections(
-    pool: &SqlitePool,
-    run_id: i64,
-) -> AppResult<()> {
-    let (result_row_id, canonical_json_zstd): (i64, Vec<u8>) =
-        sqlx::query_as("SELECT id, canonical_json_zstd FROM prompt_pack_results WHERE run_id = ?")
-            .bind(run_id)
-            .fetch_one(pool)
-            .await
-            .map_err(AppError::database)?;
-    let canonical_json = decompress_text(&canonical_json_zstd).map_err(AppError::internal)?;
-    let canonical: serde_json::Value = serde_json::from_str(&canonical_json)
-        .map_err(|error| AppError::internal(format!("parse canonical result: {error}")))?;
-    let mut tx = pool.begin().await.map_err(AppError::database)?;
-    rebuild_projection_rows_in_transaction(&mut tx, result_row_id, run_id, &canonical).await?;
-    sqlx::query("UPDATE prompt_pack_results SET projection_updated_at = ? WHERE id = ?")
-        .bind(crate::time::now_rfc3339_utc())
-        .bind(result_row_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(AppError::database)?;
-    tx.commit().await.map_err(AppError::database)?;
     Ok(())
 }
 
@@ -322,7 +297,7 @@ fn sha384_hex(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{persist_final_result_transaction, repair_prompt_pack_result_projections};
+    use super::persist_final_result_transaction;
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
 
@@ -353,30 +328,6 @@ mod tests {
         assert_eq!(run_status, "complete");
         assert_eq!(result_status, "complete");
         assert!(projected_videos > 0);
-    }
-
-    #[tokio::test]
-    async fn repair_rebuilds_missing_projection_rows_from_canonical_json() {
-        let pool = test_pool_with_canonical_result_ready().await;
-        persist_final_result_transaction(&pool, 42, test_canonical_result(), "complete")
-            .await
-            .expect("persist result");
-        sqlx::query("DELETE FROM prompt_pack_result_claims WHERE run_id = 42")
-            .execute(&pool)
-            .await
-            .expect("delete claims");
-
-        repair_prompt_pack_result_projections(&pool, 42)
-            .await
-            .expect("repair projections");
-
-        let projected_claims: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_result_claims WHERE run_id = 42")
-                .fetch_one(&pool)
-                .await
-                .expect("projected claims");
-
-        assert!(projected_claims > 0);
     }
 
     #[tokio::test]
@@ -412,36 +363,6 @@ mod tests {
                 ("theme_1".to_string(), "Shared theme".to_string()),
             ]
         );
-    }
-
-    #[tokio::test]
-    async fn repair_rebuilds_missing_youtube_synthesis_projection_rows() {
-        let pool = test_pool_with_canonical_result_ready().await;
-        persist_final_result_transaction(
-            &pool,
-            42,
-            test_canonical_result_with_synthesis(),
-            "complete",
-        )
-        .await
-        .expect("persist result");
-        sqlx::query("DELETE FROM prompt_pack_youtube_synthesis_items WHERE run_id = 42")
-            .execute(&pool)
-            .await
-            .expect("delete synthesis projections");
-
-        repair_prompt_pack_result_projections(&pool, 42)
-            .await
-            .expect("repair projections");
-
-        let projected_items: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM prompt_pack_youtube_synthesis_items WHERE run_id = 42",
-        )
-        .fetch_one(&pool)
-        .await
-        .expect("projected synthesis items");
-
-        assert_eq!(projected_items, 2);
     }
 
     #[tokio::test]
