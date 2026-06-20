@@ -81,14 +81,6 @@ impl PromptPackRunState {
         Ok(())
     }
 
-    pub async fn is_cancel_requested(&self, run_id: i64) -> bool {
-        self.cancellation_tokens
-            .lock()
-            .await
-            .get(&run_id)
-            .is_some_and(CancellationToken::is_cancelled)
-    }
-
     pub async fn child_token(&self, run_id: i64) -> Option<CancellationToken> {
         self.cancellation_tokens
             .lock()
@@ -1535,7 +1527,6 @@ mod tests {
         assert!(state.active_run_ids().await.contains(&42));
 
         state.request_cancel(42).await.expect("cancel");
-        assert!(state.is_cancel_requested(42).await);
 
         state.finish(42).await;
         assert!(!state.active_run_ids().await.contains(&42));
@@ -1555,7 +1546,6 @@ mod tests {
         tokio::time::timeout(std::time::Duration::from_secs(1), child.cancelled())
             .await
             .expect("child token cancelled");
-        assert!(state.is_cancel_requested(42).await);
 
         state.finish(42).await;
         assert!(state.child_token(42).await.is_none());
