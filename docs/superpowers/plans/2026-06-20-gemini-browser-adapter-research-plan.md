@@ -237,7 +237,7 @@ git commit -m "Add Gemini adapter research test tooling"
 - Create: `research/gemini_browser_adapter/mock-gemini/server.mjs`
 - Create: `research/gemini_browser_adapter/tests/mock-gemini.spec.ts`
 
-- [ ] **Step 1: Write failing Playwright tests for mock variants**
+- [x] **Step 1: Write failing Playwright tests for mock variants**
 
 Create `research/gemini_browser_adapter/tests/mock-gemini.spec.ts`:
 
@@ -301,7 +301,7 @@ test("rate-limit exposes a rate limit banner", async ({ page }) => {
 });
 ```
 
-- [ ] **Step 2: Run failing mock tests**
+- [x] **Step 2: Run failing mock tests**
 
 Run:
 
@@ -311,7 +311,7 @@ npx playwright test -c research/gemini_browser_adapter/playwright.config.ts rese
 
 Expected: FAIL because `mock-gemini/server.mjs` does not exist.
 
-- [ ] **Step 3: Implement mock variants**
+- [x] **Step 3: Implement mock variants**
 
 Create `research/gemini_browser_adapter/mock-gemini/variants.mjs`:
 
@@ -535,7 +535,7 @@ export function renderMockGeminiPage(variant = "happy-path") {
 export { ANSWER_TEXT };
 ```
 
-- [ ] **Step 4: Implement mock server**
+- [x] **Step 4: Implement mock server**
 
 Create `research/gemini_browser_adapter/mock-gemini/server.mjs`:
 
@@ -589,7 +589,7 @@ export async function startMockGeminiServer() {
 }
 ```
 
-- [ ] **Step 5: Verify Playwright config lists existing tests**
+- [x] **Step 5: Verify Playwright config lists existing tests**
 
 Run:
 
@@ -597,9 +597,9 @@ Run:
 npx playwright test -c research/gemini_browser_adapter/playwright.config.ts research/gemini_browser_adapter/tests/mock-gemini.spec.ts --list
 ```
 
-Expected: command exits `0` and lists the 5 mock Gemini tests.
+Expected: command exits `0` and lists the 7 mock Gemini tests.
 
-- [ ] **Step 6: Verify mock tests pass**
+- [x] **Step 6: Verify mock tests pass**
 
 Run:
 
@@ -609,7 +609,7 @@ npx playwright test -c research/gemini_browser_adapter/playwright.config.ts rese
 
 Expected: PASS for 7 tests.
 
-- [ ] **Step 7: Commit mock server**
+- [x] **Step 7: Commit mock server**
 
 Run:
 
