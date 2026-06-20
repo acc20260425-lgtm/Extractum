@@ -33,7 +33,9 @@ let mut child = Command::new("node").arg(script_path)...
 
 This works from the repository after `npm.cmd run test:gemini-browser-sidecar:build`, but a bundled app should not depend on repo cwd.
 
-Tauri 2 sidecar packaging uses `bundle.externalBin` with platform target-triple binary names, and the official sidecar API expects the sidecar filename rather than a raw path.
+Tauri 2 sidecar packaging uses `bundle.externalBin` with platform target-triple binary names, and the official sidecar API expects the sidecar filename rather than a raw path. Task 9 verifies this assumption with a packaged app smoke that forces bundled sidecar mode and checks for a sidecar-origin `status` response.
+
+This first packaging slice is host-target only. It supports the current developer machine target returned by `rustc --print host-tuple`; cross-target Tauri builds are intentionally out of scope until a CI/release matrix exists.
 
 ---
 
@@ -126,7 +128,8 @@ Expected: commit contains only the plan checkbox update.
 Run:
 
 ```powershell
-npm.cmd install --save-dev pkg
+$npm = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'npm.cmd' } else { 'npm' }
+& $npm install --save-dev pkg
 ```
 
 Expected: `package.json` and `package-lock.json` include `pkg`.
@@ -136,7 +139,8 @@ Expected: `package.json` and `package-lock.json` include `pkg`.
 Run:
 
 ```powershell
-npm.cmd run test:gemini-browser-sidecar:build
+$npm = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'npm.cmd' } else { 'npm' }
+& $npm run test:gemini-browser-sidecar:build
 ```
 
 Expected: `sidecars/gemini-browser/dist/index.js` exists.
@@ -147,7 +151,8 @@ Run:
 
 ```powershell
 $ext = if ($IsWindows -or $env:OS -eq 'Windows_NT') { '.exe' } else { '' }
-npx.cmd pkg sidecars/gemini-browser/dist/index.js --output "artifacts/gemini-browser-sidecar-feasibility$ext"
+$npx = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'npx.cmd' } else { 'npx' }
+& $npx pkg sidecars/gemini-browser/dist/index.js --output "artifacts/gemini-browser-sidecar-feasibility$ext"
 ```
 
 Expected: the command exits `0` and writes a local feasibility binary under `artifacts/`.
@@ -888,6 +893,14 @@ const targetTriple = output("rustc", ["--print", "host-tuple"]);
 if (!targetTriple) {
   throw new Error("rustc did not return a host tuple");
 }
+const requestedTarget =
+  process.env.GEMINI_BROWSER_SIDECAR_TARGET ?? process.env.CARGO_BUILD_TARGET ?? "";
+if (requestedTarget && requestedTarget !== targetTriple) {
+  throw new Error(
+    `Gemini browser sidecar packaging is host-target only in v1. ` +
+      `Requested ${requestedTarget}, host is ${targetTriple}.`,
+  );
+}
 
 mkdirSync(binariesDir, { recursive: true });
 
@@ -915,7 +928,7 @@ renameSync(rawOutput, tauriOutput);
 console.log(`Wrote ${path.relative(repoRoot, tauriOutput)}`);
 ```
 
-This script uses the Tauri target-triple naming pattern for external binaries.
+This script uses the Tauri target-triple naming pattern for external binaries. It intentionally supports host-target builds only in v1 and fails fast if `GEMINI_BROWSER_SIDECAR_TARGET` or `CARGO_BUILD_TARGET` requests a different target.
 
 - [ ] **Step 2: Add the binary check script**
 
@@ -940,6 +953,15 @@ if (result.status !== 0) {
 }
 
 const targetTriple = result.stdout.trim();
+const requestedTarget =
+  process.env.GEMINI_BROWSER_SIDECAR_TARGET ?? process.env.CARGO_BUILD_TARGET ?? "";
+if (requestedTarget && requestedTarget !== targetTriple) {
+  console.error(
+    `Gemini browser sidecar packaging is host-target only in v1. ` +
+      `Requested ${requestedTarget}, host is ${targetTriple}.`,
+  );
+  process.exit(1);
+}
 const expectedPath = path.join(
   repoRoot,
   "src-tauri",
@@ -1000,6 +1022,7 @@ Expected:
 - normal `npm.cmd run build` still builds only the Svelte frontend;
 - `npm.cmd run tauri build` runs `npm run build:tauri-prereqs` through Tauri's `beforeBuildCommand`;
 - missing or stale `src-tauri/binaries/gemini-browser-sidecar-<target-triple>[.exe]` fails with the explicit `check:gemini-browser-sidecar-binary` message before bundling.
+- `GEMINI_BROWSER_SIDECAR_TARGET` or `CARGO_BUILD_TARGET` values different from the host tuple fail with the explicit host-target-only message.
 
 - [ ] **Step 5: Ignore generated sidecar binaries**
 
@@ -1313,6 +1336,9 @@ npm.cmd run tauri build
 frontend, packages `gemini-browser-sidecar-<target-triple>[.exe]`, and checks
 that the expected binary exists before Tauri starts bundling.
 
+This v1 packaging flow is host-target only. Do not use it for
+`tauri build --target ...` until cross-target sidecar binary generation is added.
+
 Generated binaries under `src-tauri/binaries/gemini-browser-sidecar-*` are
 local build artifacts and are not committed. Browser profile data and Gemini
 run artifacts are app-data runtime files, not bundle resources. Use
@@ -1410,7 +1436,38 @@ npm.cmd run check
 
 Expected: targeted Vitest tests pass and Svelte check exits `0`.
 
-- [ ] **Step 5: Confirm generated binaries are ignored**
+- [ ] **Step 5: Run full Tauri bundle verification**
+
+Run:
+
+```powershell
+npm.cmd run tauri build
+```
+
+Expected: the full Tauri build exits `0`. This is the expensive final check that verifies `bundle.externalBin`, platform-suffixed binary naming, and Tauri's `beforeBuildCommand` integration together.
+
+If the build fails because a local platform installer/signing tool is unavailable, record the exact error in this plan and do not mark the packaging slice complete. A successful `build:tauri-prereqs` is not a substitute for this full bundle verification.
+
+- [ ] **Step 6: Smoke packaged app sidecar resolution**
+
+Run the packaged app with bundled sidecar mode forced:
+
+```powershell
+$env:EXTRACTUM_GEMINI_BROWSER_BUNDLED_SIDECAR = '1'
+Start-Process -FilePath 'src-tauri\target\release\extractum.exe'
+```
+
+In the app:
+
+1. Open `Settings -> Browser Providers`.
+2. Click `Check Status`.
+3. Confirm the panel reports a sidecar-origin status message such as `Browser has not been opened.` or `Browser page is available.`
+
+Expected: the panel must not show the Rust fallback message `Gemini browser sidecar is not running.` This verifies that `handle.shell().sidecar("gemini-browser-sidecar")` resolves the external binary configured as `binaries/gemini-browser-sidecar` and that the packaged sidecar answers the JSON-line `status` request.
+
+Do not click `Open Gemini` in this smoke unless separately performing a manual live-browser check. This sidecar resolution smoke must not navigate to Gemini or touch Google account state.
+
+- [ ] **Step 7: Confirm generated binaries are ignored**
 
 Run:
 
@@ -1420,7 +1477,7 @@ git status --short --untracked-files=all src-tauri\\binaries
 
 Expected: no generated `gemini-browser-sidecar-*` binary appears in git status.
 
-- [ ] **Step 6: Commit final verification note**
+- [ ] **Step 8: Commit final verification note**
 
 Update this task's checkboxes to `[x]`.
 
@@ -1435,6 +1492,8 @@ Append this section to the end of this plan:
 - Node Playwright sidecar smoke: passed
 - Binary Playwright sidecar smoke: passed
 - Tauri build prerequisite enforcement: passed
+- Full Tauri bundle build: passed
+- Packaged app sidecar resolution smoke: passed
 - Rust Gemini browser tests: passed
 - Frontend provider tests/check: passed
 - Generated sidecar binaries: ignored
@@ -1457,6 +1516,6 @@ Expected: final commit contains only plan checkbox and verification-note updates
 
 **Security boundary:** Browser profiles, cookies, Google auth state, prompts, live DOM, screenshots, telemetry, and run logs remain runtime/app-data artifacts. The only packaged artifact is the sidecar executable.
 
-**Known risk:** Packaging a Playwright-powered Node sidecar into a single binary can expose tool-specific limitations. Task 2 makes the packaging tool an explicit feasibility gate before any Rust/Tauri integration changes, and Task 6 turns the proven command into reusable build/check scripts.
+**Known risk:** Packaging a Playwright-powered Node sidecar into a single binary can expose tool-specific limitations. Task 2 makes the packaging tool an explicit feasibility gate before any Rust/Tauri integration changes, and Task 6 turns the proven command into reusable build/check scripts. The v1 build scripts are host-target only; cross-target packaging needs a later release-matrix slice.
 
 **Out of scope:** This plan does not add real Gemini automated smoke tests, does not bundle a Chromium browser, does not automate Google account flows, and does not move run logs into SQLite.
