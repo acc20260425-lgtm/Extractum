@@ -406,13 +406,11 @@ Expected: commit includes the new launch resolver and plan checkbox update.
 
 ---
 
-## Task 4: Add Tauri Sidecar Bundle Configuration
+## Task 4: Add Tauri Shell Plugin
 
 **Files:**
 - Modify: `src-tauri/Cargo.toml`
-- Modify: `src-tauri/tauri.conf.json`
 - Modify: `src-tauri/src/lib.rs`
-- Modify: `src-tauri/src/gemini_browser/sidecar.rs`
 
 - [ ] **Step 1: Add the shell plugin dependency**
 
@@ -434,30 +432,39 @@ Modify `src-tauri/src/lib.rs` in the Tauri builder chain:
 
 Expected: it is registered next to the existing Tauri plugins.
 
-- [ ] **Step 3: Add the external sidecar bundle entry**
+- [ ] **Step 3: Run dev-path checks**
 
-Modify `src-tauri/tauri.conf.json` under `bundle`:
+Run:
 
-```json
-"bundle": {
-  "active": true,
-  "targets": "all",
-  "externalBin": [
-    "binaries/gemini-browser-sidecar"
-  ],
-  "icon": [
-    "icons/32x32.png",
-    "icons/128x128.png",
-    "icons/128x128@2x.png",
-    "icons/icon.icns",
-    "icons/icon.ico"
-  ]
-}
+```powershell
+npm.cmd run test:gemini-browser-sidecar
+cargo test --manifest-path src-tauri/Cargo.toml --lib gemini_browser
 ```
 
-Expected: `externalBin` uses the base sidecar name without a target triple; the build script will create the target-triple suffixed file.
+Expected: both commands pass. No runtime launch behavior changes in this task.
 
-- [ ] **Step 4: Replace direct repo-cwd spawning with launch-mode dispatch**
+- [ ] **Step 4: Commit**
+
+Update this task's checkboxes to `[x]`.
+
+Run:
+
+```powershell
+git add src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/src/lib.rs docs/superpowers/plans/2026-06-20-gemini-browser-sidecar-packaging.md
+git commit -m "feat: add Tauri shell support for Gemini sidecar"
+```
+
+Expected: commit includes only Tauri shell plugin setup and plan checkbox update.
+
+---
+
+## Task 5: Implement Shell Sidecar Transport
+
+**Files:**
+- Modify: `src-tauri/src/gemini_browser/sidecar.rs`
+- Test: `src-tauri/src/gemini_browser/sidecar.rs`
+
+- [ ] **Step 1: Replace direct repo-cwd spawning with release-safe launch dispatch**
 
 Modify the imports in `src-tauri/src/gemini_browser/sidecar.rs`:
 
@@ -510,95 +517,11 @@ async fn spawn(handle: &AppHandle) -> AppResult<Self> {
         GeminiBrowserSidecarLaunch::Bundled { name } => Self::spawn_bundled(handle, name).await,
     }
 }
-
-async fn spawn_node_script(node: String, script_path: std::path::PathBuf) -> AppResult<Self> {
-    let mut child = Command::new(node)
-        .arg(script_path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|error| {
-            AppError::internal(format!("Failed to start Gemini browser sidecar: {error}"))
-        })?;
-    Self::from_child(child)
-}
-
-async fn spawn_bundled(handle: &AppHandle, name: String) -> AppResult<Self> {
-    let command = handle
-        .shell()
-        .sidecar(name)
-        .map_err(|error| AppError::internal(format!("Gemini sidecar bundle is unavailable: {error}")))?;
-    let (mut rx, mut child) = command
-        .spawn()
-        .map_err(|error| AppError::internal(format!("Failed to start bundled Gemini sidecar: {error}")))?;
-
-    return Err(AppError::internal(
-        "Bundled Gemini sidecar shell transport is not implemented yet",
-    ));
-}
-
-fn from_child(mut child: Child) -> AppResult<Self> {
-    let stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| AppError::internal("Gemini browser sidecar stdin was unavailable"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| AppError::internal("Gemini browser sidecar stdout was unavailable"))?;
-    Ok(Self {
-        child,
-        stdin,
-        stdout: BufReader::new(stdout),
-        next_id: 1,
-    })
-}
 ```
 
-This step intentionally keeps the bundled shell transport returning an explicit internal error until Task 5 replaces the process wrapper. The dev path must continue working in debug builds, and release builds must prefer the bundled sidecar unless `EXTRACTUM_GEMINI_BROWSER_DEV_SIDECAR=1` is explicitly set.
+The bundled path is release default. The Node script path is allowed by default only in debug builds, or in release only when `EXTRACTUM_GEMINI_BROWSER_DEV_SIDECAR=1` is explicitly set.
 
-- [ ] **Step 5: Update the caller**
-
-Modify `request_sidecar` in `src-tauri/src/gemini_browser/sidecar.rs`:
-
-```rust
-*sidecar = Some(GeminiBrowserSidecarProcess::spawn(handle).await?);
-```
-
-- [ ] **Step 6: Run dev-path checks**
-
-Run:
-
-```powershell
-npm.cmd run test:gemini-browser-sidecar
-cargo test --manifest-path src-tauri/Cargo.toml --lib gemini_browser
-```
-
-Expected: both commands pass. The bundled sidecar path is configured but not used by default in debug builds.
-
-- [ ] **Step 7: Commit**
-
-Update this task's checkboxes to `[x]`.
-
-Run:
-
-```powershell
-git add src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json src-tauri/src/lib.rs src-tauri/src/gemini_browser/sidecar.rs docs/superpowers/plans/2026-06-20-gemini-browser-sidecar-packaging.md
-git commit -m "feat: configure Gemini browser sidecar bundling"
-```
-
-Expected: commit includes Tauri shell plugin setup, bundle config, dev-preserving launcher changes, and plan checkbox update.
-
----
-
-## Task 5: Implement Shell Sidecar Transport
-
-**Files:**
-- Modify: `src-tauri/src/gemini_browser/sidecar.rs`
-- Test: `src-tauri/src/gemini_browser/sidecar.rs`
-
-- [ ] **Step 1: Replace the `Child`-specific process wrapper with a transport enum**
+- [ ] **Step 2: Replace the `Child`-specific process wrapper with a transport enum**
 
 Modify `src-tauri/src/gemini_browser/sidecar.rs` so `GeminiBrowserSidecarProcess` stores one of two transports:
 
@@ -624,7 +547,7 @@ pub(crate) struct GeminiBrowserSidecarProcess {
 
 If the exact receiver type differs in the installed `tauri-plugin-shell` version, use the compiler error to import the concrete channel receiver returned by `sidecar(...).spawn()`. Keep the enum shape, the `stdout_buffer`, and request behavior identical.
 
-- [ ] **Step 2: Keep Node request behavior unchanged**
+- [ ] **Step 3: Keep Node request behavior unchanged**
 
 Move the existing stdin/stdout write-read logic into:
 
@@ -677,7 +600,64 @@ fn decode_sidecar_line(id: &str, response_line: &str) -> AppResult<GeminiBrowser
 }
 ```
 
-- [ ] **Step 3: Add shell request behavior**
+- [ ] **Step 4: Add spawn helpers for both launch modes**
+
+Add:
+
+```rust
+async fn spawn_node_script(node: String, script_path: std::path::PathBuf) -> AppResult<Self> {
+    let child = Command::new(node)
+        .arg(script_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|error| {
+            AppError::internal(format!("Failed to start Gemini browser sidecar: {error}"))
+        })?;
+    Self::from_node_child(child)
+}
+
+async fn spawn_bundled(handle: &AppHandle, name: String) -> AppResult<Self> {
+    let command = handle
+        .shell()
+        .sidecar(name)
+        .map_err(|error| AppError::internal(format!("Gemini sidecar bundle is unavailable: {error}")))?;
+    let (rx, child) = command
+        .spawn()
+        .map_err(|error| AppError::internal(format!("Failed to start bundled Gemini sidecar: {error}")))?;
+
+    Ok(Self {
+        transport: GeminiBrowserSidecarTransport::Shell {
+            child,
+            rx,
+            stdout_buffer: String::new(),
+        },
+        next_id: 1,
+    })
+}
+
+fn from_node_child(mut child: Child) -> AppResult<Self> {
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| AppError::internal("Gemini browser sidecar stdin was unavailable"))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| AppError::internal("Gemini browser sidecar stdout was unavailable"))?;
+    Ok(Self {
+        transport: GeminiBrowserSidecarTransport::Node {
+            child,
+            stdin,
+            stdout: BufReader::new(stdout),
+        },
+        next_id: 1,
+    })
+}
+```
+
+- [ ] **Step 5: Add shell request behavior**
 
 Add:
 
@@ -721,22 +701,7 @@ async fn request_shell(
 }
 ```
 
-- [ ] **Step 4: Finish bundled spawn**
-
-Replace the Task 4 temporary error in `spawn_bundled`:
-
-```rust
-Ok(Self {
-    transport: GeminiBrowserSidecarTransport::Shell {
-        child,
-        rx,
-        stdout_buffer: String::new(),
-    },
-    next_id: 1,
-})
-```
-
-- [ ] **Step 5: Update `request` and `Drop`**
+- [ ] **Step 6: Update `request`, caller, and `Drop`**
 
 Update `request`:
 
@@ -755,6 +720,12 @@ match &mut self.transport {
 }
 ```
 
+Modify `request_sidecar`:
+
+```rust
+*sidecar = Some(GeminiBrowserSidecarProcess::spawn(handle).await?);
+```
+
 Update `Drop`:
 
 ```rust
@@ -768,7 +739,7 @@ match &mut self.transport {
 }
 ```
 
-- [ ] **Step 6: Add decoder tests**
+- [ ] **Step 7: Add decoder tests**
 
 Add tests in `src-tauri/src/gemini_browser/sidecar.rs`:
 
@@ -834,7 +805,7 @@ fn take_complete_jsonl_line(buffer: &mut String) -> Option<String> {
 
 Then update `request_shell` to call `take_complete_jsonl_line(stdout_buffer)` after appending stdout bytes.
 
-- [ ] **Step 7: Run Rust checks**
+- [ ] **Step 8: Run Rust checks**
 
 Run:
 
@@ -844,7 +815,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib gemini_browser
 
 Expected: all Gemini browser Rust tests pass.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 Update this task's checkboxes to `[x]`.
 
@@ -865,6 +836,7 @@ Expected: commit includes shell transport support and plan checkbox update.
 - Create: `scripts/build-gemini-browser-sidecar.mjs`
 - Create: `scripts/check-gemini-browser-sidecar-binary.mjs`
 - Modify: `package.json`
+- Modify: `src-tauri/tauri.conf.json`
 - Modify: `.gitignore`
 
 - [ ] **Step 1: Add the build script**
@@ -880,6 +852,8 @@ const repoRoot = process.cwd();
 const sidecarDist = path.join(repoRoot, "sidecars", "gemini-browser", "dist", "index.js");
 const binariesDir = path.join(repoRoot, "src-tauri", "binaries");
 const extension = process.platform === "win32" ? ".exe" : "";
+const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
 
 function run(label, command, args) {
   const result = spawnSync(command, args, {
@@ -904,7 +878,7 @@ function output(command, args) {
   return result.stdout.trim();
 }
 
-run("sidecar TypeScript build", "npm.cmd", ["run", "test:gemini-browser-sidecar:build"]);
+run("sidecar TypeScript build", npmCommand, ["run", "test:gemini-browser-sidecar:build"]);
 
 if (!existsSync(sidecarDist)) {
   throw new Error(`Missing sidecar dist entry: ${sidecarDist}`);
@@ -926,7 +900,7 @@ const tauriOutput = path.join(
 rmSync(rawOutput, { force: true });
 rmSync(tauriOutput, { force: true });
 
-run("Node sidecar binary packaging", "npx.cmd", [
+run("Node sidecar binary packaging", npxCommand, [
   "pkg",
   sidecarDist,
   "--output",
@@ -988,12 +962,46 @@ Modify root `package.json` scripts:
 
 ```json
 "build:gemini-browser-sidecar": "node scripts/build-gemini-browser-sidecar.mjs",
-"check:gemini-browser-sidecar-binary": "node scripts/check-gemini-browser-sidecar-binary.mjs"
+"check:gemini-browser-sidecar-binary": "node scripts/check-gemini-browser-sidecar-binary.mjs",
+"build:tauri-prereqs": "npm run build && npm run build:gemini-browser-sidecar && npm run check:gemini-browser-sidecar-binary"
 ```
 
 Keep existing sidecar test scripts unchanged.
 
-- [ ] **Step 4: Ignore generated sidecar binaries**
+- [ ] **Step 4: Enforce sidecar packaging in Tauri build**
+
+Modify `src-tauri/tauri.conf.json`:
+
+```json
+"build": {
+  "beforeDevCommand": "npm run dev",
+  "devUrl": "http://localhost:1420",
+  "beforeBuildCommand": "npm run build:tauri-prereqs",
+  "frontendDist": "../build"
+},
+"bundle": {
+  "active": true,
+  "targets": "all",
+  "externalBin": [
+    "binaries/gemini-browser-sidecar"
+  ],
+  "icon": [
+    "icons/32x32.png",
+    "icons/128x128.png",
+    "icons/128x128@2x.png",
+    "icons/icon.icns",
+    "icons/icon.ico"
+  ]
+}
+```
+
+Expected:
+
+- normal `npm.cmd run build` still builds only the Svelte frontend;
+- `npm.cmd run tauri build` runs `npm run build:tauri-prereqs` through Tauri's `beforeBuildCommand`;
+- missing or stale `src-tauri/binaries/gemini-browser-sidecar-<target-triple>[.exe]` fails with the explicit `check:gemini-browser-sidecar-binary` message before bundling.
+
+- [ ] **Step 5: Ignore generated sidecar binaries**
 
 Modify `.gitignore`:
 
@@ -1003,7 +1011,7 @@ src-tauri/binaries/gemini-browser-sidecar-*
 
 Do not ignore `src-tauri/binaries/.gitkeep` if a later task adds one.
 
-- [ ] **Step 5: Confirm the sidecar packager dependency**
+- [ ] **Step 6: Confirm the sidecar packager dependency**
 
 Run:
 
@@ -1013,13 +1021,14 @@ npm.cmd ls pkg
 
 Expected: `pkg` is installed from Task 2 and listed as a dev dependency.
 
-- [ ] **Step 6: Run script checks**
+- [ ] **Step 7: Run script checks**
 
 Run:
 
 ```powershell
 npm.cmd run build:gemini-browser-sidecar
 npm.cmd run check:gemini-browser-sidecar-binary
+npm.cmd run build:tauri-prereqs
 git status --short --untracked-files=all src-tauri\\binaries
 ```
 
@@ -1027,30 +1036,57 @@ Expected:
 
 - build script writes `src-tauri/binaries/gemini-browser-sidecar-<target-triple>.exe` on Windows or no extension on Unix;
 - check script finds it;
+- `build:tauri-prereqs` runs the frontend build plus sidecar build/check without invoking the full Tauri bundle;
 - `git status` does not show the generated binary as tracked or untracked noise.
 
-- [ ] **Step 7: Commit scripts and metadata**
+- [ ] **Step 8: Commit scripts, build enforcement, and metadata**
 
 Update this task's checkboxes to `[x]`.
 
 Run:
 
 ```powershell
-git add scripts/build-gemini-browser-sidecar.mjs scripts/check-gemini-browser-sidecar-binary.mjs package.json package-lock.json .gitignore docs/superpowers/plans/2026-06-20-gemini-browser-sidecar-packaging.md
+git add scripts/build-gemini-browser-sidecar.mjs scripts/check-gemini-browser-sidecar-binary.mjs package.json package-lock.json src-tauri/tauri.conf.json .gitignore docs/superpowers/plans/2026-06-20-gemini-browser-sidecar-packaging.md
 git commit -m "build: add Gemini sidecar binary packaging scripts"
 ```
 
-Expected: commit includes scripts, package metadata, ignore rule, and plan checkbox update. The generated sidecar binary remains untracked.
+Expected: commit includes scripts, package metadata, Tauri build enforcement, ignore rule, and plan checkbox update. The generated sidecar binary remains untracked.
 
 ---
 
 ## Task 7: Add Packaged Launch Smoke
 
 **Files:**
+- Modify: `sidecars/gemini-browser/src/index.ts`
 - Create: `scripts/gemini-browser-sidecar-smoke.mjs`
 - Modify: `package.json`
 
-- [ ] **Step 1: Add a JSON-line sidecar smoke script**
+- [ ] **Step 1: Add a Playwright launch smoke mode to the sidecar**
+
+Modify the top of `sidecars/gemini-browser/src/index.ts` before creating the JSON-line `readline` interface:
+
+```ts
+if (process.argv.includes("--playwright-smoke")) {
+  const { chromium } = await import("@playwright/test");
+  const profileDirArg = process.argv.find((arg) => arg.startsWith("--profile-dir="));
+  const profileDir =
+    profileDirArg?.slice("--profile-dir=".length) ?? "artifacts/gemini-browser-playwright-smoke-profile";
+  const context = await chromium.launchPersistentContext(profileDir, {
+    headless: true,
+    viewport: { width: 800, height: 600 },
+  });
+  const page = context.pages()[0] ?? (await context.newPage());
+  await page.goto("data:text/html,<title>Gemini Sidecar Smoke</title><main>ok</main>");
+  const title = await page.title();
+  await context.close();
+  process.stdout.write(`${JSON.stringify({ ok: true, title })}\n`);
+  process.exit(0);
+}
+```
+
+Expected: this mode exercises the packaged Playwright import and Chromium launch path without navigating to Gemini or automating any Google account surface.
+
+- [ ] **Step 2: Add a JSON-line and Playwright sidecar smoke script**
 
 Create `scripts/gemini-browser-sidecar-smoke.mjs`:
 
@@ -1061,6 +1097,7 @@ import { spawnSync } from "node:child_process";
 
 const repoRoot = process.cwd();
 const mode = process.argv.includes("--binary") ? "binary" : "node";
+const playwrightSmoke = process.argv.includes("--playwright");
 
 function hostTuple() {
   const result = spawnSync("rustc", ["--print", "host-tuple"], {
@@ -1089,70 +1126,108 @@ const args =
     ? []
     : [path.join(repoRoot, "sidecars", "gemini-browser", "dist", "index.js")];
 
+if (playwrightSmoke) {
+  const profileDir = path.join(repoRoot, "artifacts", `gemini-browser-playwright-smoke-${mode}`);
+  args.push("--playwright-smoke", `--profile-dir=${profileDir}`);
+}
+
 const child = spawn(command, args, {
   cwd: repoRoot,
   stdio: ["pipe", "pipe", "pipe"],
 });
 
-const request = {
-  id: "smoke-1",
-  command: {
-    type: "status",
-    browser_profile_dir: path.join(repoRoot, "artifacts", "gemini-browser-smoke-profile"),
-  },
-};
-
-let stdout = "";
-let stderr = "";
-const timeout = setTimeout(() => {
-  child.kill();
-  console.error("Timed out waiting for sidecar status response");
-  process.exit(1);
-}, 5000);
-
-child.stdout.on("data", (chunk) => {
-  stdout += chunk.toString();
-  const line = stdout.split(/\r?\n/).find((entry) => entry.trim().length > 0);
-  if (!line) return;
-  clearTimeout(timeout);
-  child.kill();
-  const parsed = JSON.parse(line);
-  if (parsed.id !== "smoke-1") {
-    console.error(`Unexpected response id: ${line}`);
+if (playwrightSmoke) {
+  let stdout = "";
+  let stderr = "";
+  const timeout = setTimeout(() => {
+    child.kill();
+    console.error("Timed out waiting for Playwright smoke response");
     process.exit(1);
-  }
-  if (parsed.response?.type !== "status") {
-    console.error(`Unexpected response type: ${line}`);
-    process.exit(1);
-  }
-  console.log(line);
-});
+  }, 15000);
 
-child.stderr.on("data", (chunk) => {
-  stderr += chunk.toString();
-});
-
-child.on("exit", (code) => {
-  if (!stdout.trim()) {
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk.toString();
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk.toString();
+  });
+  child.on("exit", (code) => {
     clearTimeout(timeout);
-    console.error(stderr);
-    process.exit(code ?? 1);
-  }
-});
+    if (code !== 0) {
+      console.error(stderr);
+      process.exit(code ?? 1);
+    }
+    const line = stdout.split(/\r?\n/).find((entry) => entry.trim().length > 0);
+    const parsed = line ? JSON.parse(line) : null;
+    if (!parsed?.ok || parsed.title !== "Gemini Sidecar Smoke") {
+      console.error(`Unexpected Playwright smoke output: ${stdout}`);
+      process.exit(1);
+    }
+    console.log(line);
+  });
+} else {
+  const request = {
+    id: "smoke-1",
+    command: {
+      type: "status",
+      browser_profile_dir: path.join(repoRoot, "artifacts", "gemini-browser-smoke-profile"),
+    },
+  };
 
-child.stdin.write(`${JSON.stringify(request)}\n`);
+  let stdout = "";
+  let stderr = "";
+  const timeout = setTimeout(() => {
+    child.kill();
+    console.error("Timed out waiting for sidecar status response");
+    process.exit(1);
+  }, 5000);
+
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk.toString();
+    const line = stdout.split(/\r?\n/).find((entry) => entry.trim().length > 0);
+    if (!line) return;
+    clearTimeout(timeout);
+    child.kill();
+    const parsed = JSON.parse(line);
+    if (parsed.id !== "smoke-1") {
+      console.error(`Unexpected response id: ${line}`);
+      process.exit(1);
+    }
+    if (parsed.response?.type !== "status") {
+      console.error(`Unexpected response type: ${line}`);
+      process.exit(1);
+    }
+    console.log(line);
+  });
+
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk.toString();
+  });
+
+  child.on("exit", (code) => {
+    if (!stdout.trim()) {
+      clearTimeout(timeout);
+      console.error(stderr);
+      process.exit(code ?? 1);
+    }
+  });
+
+  child.stdin.write(`${JSON.stringify(request)}\n`);
+}
 ```
 
-- [ ] **Step 2: Add smoke scripts**
+- [ ] **Step 3: Add smoke scripts**
 
 Modify `package.json` scripts:
 
 ```json
 "smoke:gemini-browser-sidecar:node": "node scripts/gemini-browser-sidecar-smoke.mjs",
-"smoke:gemini-browser-sidecar:binary": "node scripts/gemini-browser-sidecar-smoke.mjs --binary"
+"smoke:gemini-browser-sidecar:binary": "node scripts/gemini-browser-sidecar-smoke.mjs --binary",
+"smoke:gemini-browser-sidecar:playwright:node": "node scripts/gemini-browser-sidecar-smoke.mjs --playwright",
+"smoke:gemini-browser-sidecar:playwright:binary": "node scripts/gemini-browser-sidecar-smoke.mjs --binary --playwright"
 ```
 
-- [ ] **Step 3: Run sidecar smoke in Node mode**
+- [ ] **Step 4: Run sidecar status smoke in Node mode**
 
 Run:
 
@@ -1163,7 +1238,7 @@ npm.cmd run smoke:gemini-browser-sidecar:node
 
 Expected: stdout contains one JSON response with `id: "smoke-1"` and `response.type: "status"`.
 
-- [ ] **Step 4: Run sidecar smoke in binary mode**
+- [ ] **Step 5: Run sidecar status smoke in binary mode**
 
 Run:
 
@@ -1174,18 +1249,39 @@ npm.cmd run smoke:gemini-browser-sidecar:binary
 
 Expected: stdout contains one JSON response with `id: "smoke-1"` and `response.type: "status"`.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Run Playwright launch smoke in Node and binary modes**
+
+Run:
+
+```powershell
+npm.cmd run test:gemini-browser-sidecar:build
+npm.cmd run smoke:gemini-browser-sidecar:playwright:node
+npm.cmd run build:gemini-browser-sidecar
+npm.cmd run smoke:gemini-browser-sidecar:playwright:binary
+```
+
+Expected: both Playwright smoke commands return one JSON response with `ok: true` and `title: "Gemini Sidecar Smoke"`.
+
+If this fails because Playwright browser binaries are not installed on the test machine, run:
+
+```powershell
+npx.cmd playwright install chromium
+```
+
+Then re-run the smoke commands. Do not treat missing browser binaries as a reason to skip packaged sidecar launch verification.
+
+- [ ] **Step 7: Commit**
 
 Update this task's checkboxes to `[x]`.
 
 Run:
 
 ```powershell
-git add scripts/gemini-browser-sidecar-smoke.mjs package.json docs/superpowers/plans/2026-06-20-gemini-browser-sidecar-packaging.md
+git add sidecars/gemini-browser/src/index.ts scripts/gemini-browser-sidecar-smoke.mjs package.json docs/superpowers/plans/2026-06-20-gemini-browser-sidecar-packaging.md
 git commit -m "test: add Gemini sidecar launch smoke"
 ```
 
-Expected: commit includes the smoke script, package scripts, and plan checkbox update.
+Expected: commit includes the sidecar Playwright smoke mode, smoke script, package scripts, and plan checkbox update.
 
 ---
 
@@ -1209,14 +1305,20 @@ Release builds must first create the Tauri external sidecar binary:
 
 ```powershell
 npm.cmd run test:gemini-browser-sidecar
-npm.cmd run build:gemini-browser-sidecar
-npm.cmd run check:gemini-browser-sidecar-binary
 npm.cmd run tauri build
 ```
 
+`tauri build` runs `npm run build:tauri-prereqs` through
+`src-tauri/tauri.conf.json > build.beforeBuildCommand`, which builds the
+frontend, packages `gemini-browser-sidecar-<target-triple>[.exe]`, and checks
+that the expected binary exists before Tauri starts bundling.
+
 Generated binaries under `src-tauri/binaries/gemini-browser-sidecar-*` are
 local build artifacts and are not committed. Browser profile data and Gemini
-run artifacts are app-data runtime files, not bundle resources.
+run artifacts are app-data runtime files, not bundle resources. Use
+`npm.cmd run smoke:gemini-browser-sidecar:playwright:binary` to verify the
+packaged binary can import Playwright and launch Chromium without navigating to
+Gemini.
 ```
 ```
 
@@ -1227,8 +1329,9 @@ Append under `## MVP Implementation Notes - 2026-06-20` in `docs/superpowers/spe
 ```markdown
 - Release packaging uses a Tauri external sidecar binary named
   `gemini-browser-sidecar`. Development runs may still use the local Node
-  script fallback, but packaged app verification must run the sidecar binary
-  check before `tauri build`.
+  script fallback, but packaged app builds run `build:tauri-prereqs` through
+  Tauri's `beforeBuildCommand`, including the sidecar binary check before
+  bundling.
 ```
 
 - [ ] **Step 3: Add packaging note to the research decision**
@@ -1279,9 +1382,12 @@ npm.cmd run smoke:gemini-browser-sidecar:node
 npm.cmd run build:gemini-browser-sidecar
 npm.cmd run check:gemini-browser-sidecar-binary
 npm.cmd run smoke:gemini-browser-sidecar:binary
+npm.cmd run smoke:gemini-browser-sidecar:playwright:node
+npm.cmd run smoke:gemini-browser-sidecar:playwright:binary
+npm.cmd run build:tauri-prereqs
 ```
 
-Expected: both smoke commands return one valid `status` response.
+Expected: status smoke commands return one valid `status` response, Playwright smoke commands return `ok: true`, and `build:tauri-prereqs` completes before any full Tauri bundle attempt.
 
 - [ ] **Step 3: Run Rust checks**
 
@@ -1326,6 +1432,9 @@ Append this section to the end of this plan:
 - Sidecar tests: passed
 - Node sidecar smoke: passed
 - Binary sidecar smoke: passed
+- Node Playwright sidecar smoke: passed
+- Binary Playwright sidecar smoke: passed
+- Tauri build prerequisite enforcement: passed
 - Rust Gemini browser tests: passed
 - Frontend provider tests/check: passed
 - Generated sidecar binaries: ignored
