@@ -1634,7 +1634,7 @@ git commit -m "Add resilient scoring Gemini adapter variant"
 - Create: `research/gemini_browser_adapter/tests/failure-artifacts.spec.ts`
 - Modify: `research/gemini_browser_adapter/src/dom-contract.ts`
 
-- [ ] **Step 1: Write failing artifact e2e test**
+- [x] **Step 1: Write failing artifact e2e test**
 
 Create `research/gemini_browser_adapter/tests/failure-artifacts.spec.ts`:
 
@@ -1730,7 +1730,7 @@ test("reduced artifact mode skips screenshot and strips visible text and form va
 });
 ```
 
-- [ ] **Step 2: Run artifact test to verify failure**
+- [x] **Step 2: Run artifact test to verify failure**
 
 Run:
 
@@ -1740,7 +1740,7 @@ npx playwright test -c research/gemini_browser_adapter/playwright.config.ts rese
 
 Expected: FAIL because `artifactDir` is not part of `SendSingleOptions` and artifact capture is not implemented.
 
-- [ ] **Step 3: Implement shared redaction helpers**
+- [x] **Step 3: Implement shared redaction helpers**
 
 Create `research/gemini_browser_adapter/src/redaction.ts`:
 
@@ -1775,7 +1775,7 @@ export async function reducedDomSnapshot(page: Page): Promise<string> {
 
 This reduced snapshot intentionally omits visible text, form values, labels, titles, prompt content, answer text, and account hints. It is for selector-shape diagnostics only.
 
-- [ ] **Step 4: Implement artifact writer**
+- [x] **Step 4: Implement artifact writer**
 
 Create `research/gemini_browser_adapter/src/artifacts.ts`:
 
@@ -1865,7 +1865,7 @@ export async function captureFailureArtifacts(input: CaptureFailureInput): Promi
 }
 ```
 
-- [ ] **Step 5: Integrate artifact capture**
+- [x] **Step 5: Integrate artifact capture**
 
 Modify `SendSingleOptions` in `dom-contract.ts`:
 
@@ -2034,7 +2034,7 @@ export async function probeReadyResilientScoring(
 
 Apply the same `complete(...)` pattern to `sendSingleDomOnly` for its `browser_crashed`, critical-state, prompt-missing, send-missing, and final-answer returns. The matrix artifact cases must fail if any non-success send or probe result with `artifactDir` skips `finalizeResult`.
 
-- [ ] **Step 6: Verify artifact tests pass**
+- [x] **Step 6: Verify artifact tests pass**
 
 Run:
 
@@ -2044,7 +2044,7 @@ npx playwright test -c research/gemini_browser_adapter/playwright.config.ts rese
 
 Expected: PASS and files exist under `research/gemini_browser_adapter/artifacts/test-timeout`.
 
-- [ ] **Step 7: Confirm generated artifacts are ignored**
+- [x] **Step 7: Confirm generated artifacts are ignored**
 
 Run:
 
@@ -2054,7 +2054,7 @@ git status --short --untracked-files=all research\\gemini_browser_adapter\\artif
 
 Expected: no generated artifact files appear because `artifacts` is ignored except the tracked `.gitkeep`.
 
-- [ ] **Step 8: Commit artifacts**
+- [x] **Step 8: Commit artifacts**
 
 Run:
 

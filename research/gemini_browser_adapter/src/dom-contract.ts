@@ -1,14 +1,19 @@
 import type { Locator, Page } from "@playwright/test";
+import { captureFailureArtifacts } from "./artifacts";
 import type { DomContractConfig } from "./config";
 import { loadDomContractConfig } from "./config";
 import { scoreButtonCandidate, scoreEditableCandidate } from "./scoring";
-import type { GeminiAdapterResult, GeminiAdapterStatus, LocatorAttempt } from "./types";
+import { isSuccessStatus } from "./types";
+import type { GeminiAdapterResult, GeminiAdapterStatus, LocatorAttempt, NetworkEventSummary } from "./types";
 
 export type SendSingleOptions = {
   timeoutMs: number;
   quietMs: number;
   configPath?: string;
   contractConfig?: DomContractConfig;
+  artifactDir?: string;
+  artifactMode?: "full" | "reduced";
+  networkSummary?: NetworkEventSummary[];
 };
 
 async function resolveContractConfig(options: SendSingleOptions): Promise<DomContractConfig> {
@@ -36,6 +41,37 @@ function result(
     artifacts: emptyArtifacts(),
     errorReason,
   };
+}
+
+async function withArtifacts(
+  page: Page,
+  base: GeminiAdapterResult,
+  options: SendSingleOptions,
+): Promise<GeminiAdapterResult> {
+  if (!options.artifactDir || isSuccessStatus(base.status)) return base;
+  return {
+    ...base,
+    artifacts: await captureFailureArtifacts({
+      page,
+      artifactDir: options.artifactDir,
+      reason: base.errorReason ?? base.status,
+      locatorAttempts: base.locatorAttempts,
+      networkSummary: options.networkSummary ?? base.networkSummary,
+      artifactMode: options.artifactMode ?? "full",
+    }),
+  };
+}
+
+async function finalizeResult(
+  page: Page,
+  base: GeminiAdapterResult,
+  options: SendSingleOptions,
+): Promise<GeminiAdapterResult> {
+  const withNetworkSummary = {
+    ...base,
+    networkSummary: options.networkSummary ?? base.networkSummary,
+  };
+  return await withArtifacts(page, withNetworkSummary, options);
 }
 
 async function firstVisible(locator: Locator): Promise<Locator | null> {
@@ -262,42 +298,47 @@ export async function sendSingleDomOnly(page: Page, prompt: string, options: Sen
   const startedAt = Date.now();
   const attempts: LocatorAttempt[] = [];
   const config = await resolveContractConfig(options);
+  const complete = async (base: GeminiAdapterResult) => await finalizeResult(page, base, options);
 
-  if (page.isClosed()) return result("browser_crashed", startedAt, null, attempts, "browser_crashed");
+  if (page.isClosed()) return await complete(result("browser_crashed", startedAt, null, attempts, "browser_crashed"));
 
   const criticalBefore = await scanCriticalState(page);
-  if (criticalBefore) return result(criticalBefore, startedAt, null, attempts, criticalBefore);
+  if (criticalBefore) return await complete(result(criticalBefore, startedAt, null, attempts, criticalBefore));
 
   const promptBox = await findPromptBox(page, attempts);
-  if (!promptBox) return result("failed", startedAt, null, attempts, "prompt_input_not_found");
+  if (!promptBox) return await complete(result("failed", startedAt, null, attempts, "prompt_input_not_found"));
 
   await typePrompt(promptBox, prompt);
   const sendButton = await findSendButton(page, attempts);
-  if (!sendButton) return result("failed", startedAt, null, attempts, "send_button_not_found");
+  if (!sendButton) return await complete(result("failed", startedAt, null, attempts, "send_button_not_found"));
   await sendButton.click();
 
-  return await waitForFinalAnswer(page, startedAt, options, attempts, config);
+  return await complete(await waitForFinalAnswer(page, startedAt, options, attempts, config));
 }
 
-export async function probeReadyDomOnly(page: Page, _options?: SendSingleOptions): Promise<GeminiAdapterResult> {
+export async function probeReadyDomOnly(
+  page: Page,
+  options: SendSingleOptions = { timeoutMs: 1_000, quietMs: 200 },
+): Promise<GeminiAdapterResult> {
   const startedAt = Date.now();
   const attempts: LocatorAttempt[] = [];
+  const complete = async (base: GeminiAdapterResult) => await finalizeResult(page, base, options);
 
-  if (page.isClosed()) return result("browser_crashed", startedAt, null, attempts, "browser_crashed");
+  if (page.isClosed()) return await complete(result("browser_crashed", startedAt, null, attempts, "browser_crashed"));
 
   try {
     const criticalBefore = await scanCriticalState(page);
-    if (criticalBefore) return result(criticalBefore, startedAt, null, attempts, criticalBefore);
+    if (criticalBefore) return await complete(result(criticalBefore, startedAt, null, attempts, criticalBefore));
 
     const promptBox = await findPromptBox(page, attempts);
     const sendButton = await findSendButton(page, attempts);
-    if (promptBox && sendButton) return result("ready", startedAt, null, attempts, null);
+    if (promptBox && sendButton) return await complete(result("ready", startedAt, null, attempts, null));
 
-    return result("failed", startedAt, null, attempts, "ready_contract_not_satisfied");
+    return await complete(result("failed", startedAt, null, attempts, "ready_contract_not_satisfied"));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const status = /closed|crash|target page/i.test(message) ? "browser_crashed" : "failed";
-    return result(status, startedAt, null, attempts, message);
+    return await complete(result(status, startedAt, null, attempts, message));
   }
 }
 
@@ -307,34 +348,31 @@ export async function sendSingleResilientScoring(page: Page, prompt: string, opt
   void scoreEditableCandidate;
   void scoreButtonCandidate;
   const config = await resolveContractConfig(options);
+  const complete = async (base: GeminiAdapterResult) =>
+    await finalizeResult(page, { ...base, variant: "resilient-scoring", locatorAttempts: attempts }, options);
 
   if (page.isClosed()) {
-    return { ...result("browser_crashed", startedAt, null, attempts, "browser_crashed"), variant: "resilient-scoring" };
+    return await complete(result("browser_crashed", startedAt, null, attempts, "browser_crashed"));
   }
 
   const criticalBefore = await scanCriticalState(page);
-  if (criticalBefore) return { ...result(criticalBefore, startedAt, null, attempts, criticalBefore), variant: "resilient-scoring" };
+  if (criticalBefore) return await complete(result(criticalBefore, startedAt, null, attempts, criticalBefore));
 
   const promptBox =
     (await findByConfiguredSelector(page, config.promptSelectors, attempts, "config:prompt")) ??
     (await findPromptBoxByScoring(page, attempts, config.minPromptScore)) ??
     (await findPromptBox(page, attempts));
-  if (!promptBox) return { ...result("failed", startedAt, null, attempts, "prompt_input_not_found"), variant: "resilient-scoring" };
+  if (!promptBox) return await complete(result("failed", startedAt, null, attempts, "prompt_input_not_found"));
 
   await typePrompt(promptBox, prompt);
   const sendButton =
     (await findByConfiguredSelector(page, config.sendSelectors, attempts, "config:send")) ??
     (await findSendButtonByScoring(page, attempts, config.minSendScore)) ??
     (await findSendButton(page, attempts));
-  if (!sendButton) return { ...result("failed", startedAt, null, attempts, "send_button_not_found"), variant: "resilient-scoring" };
+  if (!sendButton) return await complete(result("failed", startedAt, null, attempts, "send_button_not_found"));
   await sendButton.click();
 
-  const finalAnswer = await waitForFinalAnswer(page, startedAt, options, attempts, config);
-  return {
-    ...finalAnswer,
-    variant: "resilient-scoring",
-    locatorAttempts: attempts,
-  };
+  return await complete(await waitForFinalAnswer(page, startedAt, options, attempts, config));
 }
 
 export async function probeReadyResilientScoring(
@@ -346,14 +384,16 @@ export async function probeReadyResilientScoring(
   void scoreEditableCandidate;
   void scoreButtonCandidate;
   const config = await resolveContractConfig(options);
+  const complete = async (base: GeminiAdapterResult) =>
+    await finalizeResult(page, { ...base, variant: "resilient-scoring", locatorAttempts: attempts }, options);
 
   if (page.isClosed()) {
-    return { ...result("browser_crashed", startedAt, null, attempts, "browser_crashed"), variant: "resilient-scoring" };
+    return await complete(result("browser_crashed", startedAt, null, attempts, "browser_crashed"));
   }
 
   try {
     const criticalBefore = await scanCriticalState(page);
-    if (criticalBefore) return { ...result(criticalBefore, startedAt, null, attempts, criticalBefore), variant: "resilient-scoring" };
+    if (criticalBefore) return await complete(result(criticalBefore, startedAt, null, attempts, criticalBefore));
 
     const promptBox =
       (await findByConfiguredSelector(page, config.promptSelectors, attempts, "config:prompt")) ??
@@ -363,12 +403,12 @@ export async function probeReadyResilientScoring(
       (await findByConfiguredSelector(page, config.sendSelectors, attempts, "config:send")) ??
       (await findSendButtonByScoring(page, attempts, config.minSendScore)) ??
       (await findSendButton(page, attempts));
-    if (promptBox && sendButton) return { ...result("ready", startedAt, null, attempts, null), variant: "resilient-scoring" };
+    if (promptBox && sendButton) return await complete(result("ready", startedAt, null, attempts, null));
 
-    return { ...result("failed", startedAt, null, attempts, "ready_contract_not_satisfied"), variant: "resilient-scoring" };
+    return await complete(result("failed", startedAt, null, attempts, "ready_contract_not_satisfied"));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const status = /closed|crash|target page/i.test(message) ? "browser_crashed" : "failed";
-    return { ...result(status, startedAt, null, attempts, message), variant: "resilient-scoring" };
+    return await complete(result(status, startedAt, null, attempts, message));
   }
 }
