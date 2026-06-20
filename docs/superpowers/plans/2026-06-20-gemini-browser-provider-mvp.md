@@ -353,7 +353,7 @@ Expected: commit includes the new Rust module and updated plan checkbox only.
 - Modify: `src-tauri/src/gemini_browser/mod.rs`
 - Test: `src-tauri/src/gemini_browser/run_log.rs`
 
-- [ ] **Step 1: Add path helpers**
+- [x] **Step 1: Add path helpers**
 
 Create `src-tauri/src/gemini_browser/paths.rs`:
 
@@ -417,7 +417,7 @@ pub(crate) fn path_string(path: &Path) -> String {
 }
 ```
 
-- [ ] **Step 2: Add the file-backed log implementation**
+- [x] **Step 2: Add the file-backed log implementation**
 
 Create `src-tauri/src/gemini_browser/run_log.rs`:
 
@@ -567,7 +567,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Wire the new modules**
+- [x] **Step 3: Wire the new modules**
 
 Modify `src-tauri/src/gemini_browser/mod.rs`:
 
@@ -587,7 +587,7 @@ pub use types::{
 };
 ```
 
-- [ ] **Step 4: Run focused Rust tests**
+- [x] **Step 4: Run focused Rust tests**
 
 Run:
 
@@ -597,7 +597,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib gemini_browser
 
 Expected: `gemini_browser::types` and `gemini_browser::run_log` tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 
