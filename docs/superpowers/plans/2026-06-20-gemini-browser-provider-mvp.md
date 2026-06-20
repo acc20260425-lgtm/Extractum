@@ -980,7 +980,7 @@ Expected: commit includes Rust command wiring and updated plan checkbox only.
 - Create: `src/lib/api/gemini-browser.ts`
 - Create: `src/lib/api/gemini-browser.test.ts`
 
-- [ ] **Step 1: Add frontend DTOs**
+- [x] **Step 1: Add frontend DTOs**
 
 Create `src/lib/types/gemini-browser.ts`:
 
@@ -1070,7 +1070,7 @@ export interface GeminiBridgeSendSingleInput {
 }
 ```
 
-- [ ] **Step 2: Add Tauri command wrappers**
+- [x] **Step 2: Add Tauri command wrappers**
 
 Create `src/lib/api/gemini-browser.ts`:
 
@@ -1118,7 +1118,7 @@ export function listenToGeminiBrowserRuns(
 }
 ```
 
-- [ ] **Step 3: Add wrapper tests**
+- [x] **Step 3: Add wrapper tests**
 
 Create `src/lib/api/gemini-browser.test.ts`:
 
@@ -1196,7 +1196,7 @@ describe("gemini browser api wrappers", () => {
 });
 ```
 
-- [ ] **Step 4: Run frontend API tests**
+- [x] **Step 4: Run frontend API tests**
 
 Run:
 
@@ -1206,7 +1206,7 @@ npm.cmd run test -- src/lib/api/gemini-browser.test.ts
 
 Expected: the new wrapper tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 
