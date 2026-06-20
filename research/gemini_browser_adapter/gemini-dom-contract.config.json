@@ -1,0 +1,7 @@
+{
+  "promptSelectors": [],
+  "sendSelectors": [],
+  "answerSelectors": ["[data-testid=\"assistant-answer\"]"],
+  "minPromptScore": 5,
+  "minSendScore": 4
+}

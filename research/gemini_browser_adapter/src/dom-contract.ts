@@ -1,10 +1,18 @@
 import type { Locator, Page } from "@playwright/test";
+import type { DomContractConfig } from "./config";
+import { loadDomContractConfig } from "./config";
 import type { GeminiAdapterResult, GeminiAdapterStatus, LocatorAttempt } from "./types";
 
 export type SendSingleOptions = {
   timeoutMs: number;
   quietMs: number;
+  configPath?: string;
+  contractConfig?: DomContractConfig;
 };
+
+async function resolveContractConfig(options: SendSingleOptions): Promise<DomContractConfig> {
+  return options.contractConfig ?? (await loadDomContractConfig(options.configPath));
+}
 
 function emptyArtifacts() {
   return null;
@@ -100,10 +108,15 @@ async function typePrompt(promptBox: Locator, prompt: string): Promise<void> {
   }, prompt);
 }
 
-async function latestAnswerText(page: Page): Promise<string | null> {
-  const answer = page.locator(
-    '[data-testid="assistant-answer"], [data-testid*="assistant" i], [data-testid*="response" i], article.answer, [data-answer]',
-  );
+async function latestAnswerText(page: Page, config: DomContractConfig): Promise<string | null> {
+  const selectors = [
+    ...config.answerSelectors,
+    '[data-testid*="assistant" i]',
+    '[data-testid*="response" i]',
+    "article.answer",
+    "[data-answer]",
+  ];
+  const answer = page.locator(selectors.join(", "));
   if ((await answer.count().catch(() => 0)) === 0) return null;
   return (await answer.last().innerText().catch(() => "")).trim();
 }
@@ -121,6 +134,7 @@ export async function waitForFinalAnswer(
   startedAt: number,
   options: SendSingleOptions,
   attempts: LocatorAttempt[],
+  config: DomContractConfig,
 ): Promise<GeminiAdapterResult> {
   let lastText = "";
   let lastChangedAt = Date.now();
@@ -130,7 +144,7 @@ export async function waitForFinalAnswer(
     const critical = await scanCriticalState(page);
     if (critical) return result(critical, startedAt, null, attempts, critical);
 
-    const text = await latestAnswerText(page);
+    const text = await latestAnswerText(page, config);
     if (text === null) {
       const answerMissingGraceMs = Math.min(Math.max(options.quietMs * 2, 500), 1500);
       if (Date.now() - startedAt >= answerMissingGraceMs) {
@@ -161,6 +175,7 @@ export async function waitForFinalAnswer(
 export async function sendSingleDomOnly(page: Page, prompt: string, options: SendSingleOptions): Promise<GeminiAdapterResult> {
   const startedAt = Date.now();
   const attempts: LocatorAttempt[] = [];
+  const config = await resolveContractConfig(options);
 
   if (page.isClosed()) return result("browser_crashed", startedAt, null, attempts, "browser_crashed");
 
@@ -175,7 +190,7 @@ export async function sendSingleDomOnly(page: Page, prompt: string, options: Sen
   if (!sendButton) return result("failed", startedAt, null, attempts, "send_button_not_found");
   await sendButton.click();
 
-  return await waitForFinalAnswer(page, startedAt, options, attempts);
+  return await waitForFinalAnswer(page, startedAt, options, attempts, config);
 }
 
 export async function probeReadyDomOnly(page: Page, _options?: SendSingleOptions): Promise<GeminiAdapterResult> {

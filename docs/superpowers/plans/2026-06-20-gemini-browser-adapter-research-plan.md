@@ -1066,7 +1066,7 @@ git commit -m "Add DOM-only Gemini adapter baseline"
 - Create: `research/gemini_browser_adapter/src/config.test.ts`
 - Modify: `research/gemini_browser_adapter/src/dom-contract.ts`
 
-- [ ] **Step 1: Write failing config override tests**
+- [x] **Step 1: Write failing config override tests**
 
 Create `research/gemini_browser_adapter/src/config.test.ts`:
 
@@ -1104,7 +1104,7 @@ describe("DOM contract config", () => {
 });
 ```
 
-- [ ] **Step 2: Run config tests to verify failure**
+- [x] **Step 2: Run config tests to verify failure**
 
 Run:
 
@@ -1114,7 +1114,7 @@ npm run test:gemini-browser-adapter:unit -- research/gemini_browser_adapter/src/
 
 Expected: FAIL because `config.ts` does not exist.
 
-- [ ] **Step 3: Add default selector override file**
+- [x] **Step 3: Add default selector override file**
 
 Create `research/gemini_browser_adapter/gemini-dom-contract.config.json`:
 
@@ -1128,7 +1128,7 @@ Create `research/gemini_browser_adapter/gemini-dom-contract.config.json`:
 }
 ```
 
-- [ ] **Step 4: Implement config loader**
+- [x] **Step 4: Implement config loader**
 
 Create `research/gemini_browser_adapter/src/config.ts`:
 
@@ -1167,7 +1167,7 @@ export async function loadDomContractConfig(
 }
 ```
 
-- [ ] **Step 5: Wire config into adapter options**
+- [x] **Step 5: Wire config into adapter options**
 
 Modify `SendSingleOptions` in `dom-contract.ts`:
 
@@ -1212,7 +1212,7 @@ async function latestAnswerText(page: Page, config: DomContractConfig): Promise<
 
 Thread `config` through `waitForFinalAnswer` and resolve it once at the start of each adapter call.
 
-- [ ] **Step 6: Verify config tests pass**
+- [x] **Step 6: Verify config tests pass**
 
 Run:
 
@@ -1222,7 +1222,7 @@ npm run test:gemini-browser-adapter:unit -- research/gemini_browser_adapter/src/
 
 Expected: PASS for 2 tests.
 
-- [ ] **Step 7: Commit config overrides**
+- [x] **Step 7: Commit config overrides**
 
 Run:
 
