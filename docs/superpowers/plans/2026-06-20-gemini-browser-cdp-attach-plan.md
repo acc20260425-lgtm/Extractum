@@ -259,6 +259,20 @@ describe("CDP endpoint validation", () => {
     expect(resolveBrowserMode({})).toEqual({ type: "managed" });
   });
 
+  it("keeps the configured CDP endpoint as raw operator input", () => {
+    expect(
+      resolveBrowserMode({
+        EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT: " http://127.0.0.1:9222 ",
+      }),
+    ).toEqual({ type: "cdp_attach", rawEndpoint: "http://127.0.0.1:9222" });
+
+    expect(
+      resolveBrowserMode({
+        EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT: "http://192.168.1.20:9222",
+      }),
+    ).toEqual({ type: "cdp_attach", rawEndpoint: "http://192.168.1.20:9222" });
+  });
+
   it("accepts only base loopback HTTP endpoints with a non-zero port", () => {
     expect(validateCdpEndpoint("http://127.0.0.1:9222")).toEqual({
       ok: true,
@@ -321,6 +335,20 @@ describe("CDP status probe", () => {
     });
   });
 
+  it("reports invalid /json/version JSON as non-Chrome protocol", async () => {
+    const fetchMock = vi.fn<FetchLike>(async () => ({
+      ok: true,
+      json: async () => {
+        throw new Error("invalid json");
+      },
+    }));
+
+    await expect(cdpSetupStatus("http://127.0.0.1:9222", fetchMock)).resolves.toEqual({
+      ok: false,
+      message: "Chrome CDP endpoint did not expose a Chrome debugging protocol.",
+    });
+  });
+
   it("reports unreachable endpoint as operator setup action", async () => {
     const fetchMock = vi.fn<FetchLike>(async () => {
       throw new Error("ECONNREFUSED");
@@ -351,7 +379,7 @@ Create `sidecars/gemini-browser/src/cdp-endpoint.ts`:
 ```ts
 export type BrowserMode =
   | { type: "managed" }
-  | { type: "cdp_attach"; endpoint: string };
+  | { type: "cdp_attach"; rawEndpoint: string };
 
 export type CdpEndpointValidation =
   | { ok: true; endpoint: string }
@@ -372,12 +400,7 @@ const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 export function resolveBrowserMode(env: Record<string, string | undefined>): BrowserMode {
   const raw = env.EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT?.trim();
   if (!raw) return { type: "managed" };
-
-  const validation = validateCdpEndpoint(raw);
-  if (!validation.ok) {
-    return { type: "cdp_attach", endpoint: raw };
-  }
-  return { type: "cdp_attach", endpoint: validation.endpoint };
+  return { type: "cdp_attach", rawEndpoint: raw };
 }
 
 export function validateCdpEndpoint(raw: string | undefined): CdpEndpointValidation {
@@ -433,7 +456,15 @@ export async function cdpSetupStatus(
           message: "Chrome CDP endpoint did not expose a Chrome debugging protocol.",
         };
       }
-      const payload = await response.json();
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        return {
+          ok: false,
+          message: "Chrome CDP endpoint did not expose a Chrome debugging protocol.",
+        };
+      }
       if (isChromeVersionPayload(payload)) {
         return { ok: true, message: "Chrome CDP endpoint is reachable." };
       }
@@ -644,12 +675,18 @@ Expected: commit contains only CDP page helper and tests.
 - Modify: `sidecars/gemini-browser/src/adapter.ts`
 - Modify: `sidecars/gemini-browser/src/adapter.test.ts`
 
-- [ ] **Step 1: Add adapter tests for CDP setup status and closed-target mapping**
+- [ ] **Step 1: Add adapter tests for CDP setup, no-page, Open, and closed-target behavior**
 
-Append these tests to `sidecars/gemini-browser/src/adapter.test.ts`:
+Update the existing Vitest and adapter imports in `sidecars/gemini-browser/src/adapter.test.ts`:
 
 ```ts
-import { GeminiBrowserAdapter } from "./adapter.js";
+import { describe, expect, it, vi } from "vitest";
+import { GeminiBrowserAdapter, waitForFirstVisible } from "./adapter.js";
+```
+
+Append these tests:
+
+```ts
 
 it("reports CDP endpoint setup action before long-lived attach", async () => {
   const adapter = new GeminiBrowserAdapter({
@@ -664,6 +701,54 @@ it("reports CDP endpoint setup action before long-lived attach", async () => {
     manual_action: "start_chrome_cdp",
     browser_profile_dir: "C:/Extractum/gemini-browser/profile",
     latest_message: "Chrome CDP endpoint is unavailable. Start Chrome with remote debugging enabled.",
+  });
+});
+
+it("reports attached CDP session without a Gemini page distinctly", async () => {
+  const adapter = new GeminiBrowserAdapter({
+    env: { EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT: "http://127.0.0.1:9222" },
+  });
+
+  adapter.__setTestSession({
+    type: "cdp_attach",
+    browser: null,
+    context: { pages: () => [] } as never,
+    page: null,
+  });
+
+  await expect(adapter.status("C:/Extractum/gemini-browser/profile")).resolves.toMatchObject({
+    status: "needs_manual_action",
+    manual_action: "start_chrome_cdp",
+    latest_message: "Chrome CDP attached, but no Gemini tab is available.",
+  });
+});
+
+it("opens Gemini in an existing CDP context without creating a browser context", async () => {
+  const page = {
+    goto: vi.fn(async () => undefined),
+    isClosed: () => false,
+  };
+  const context = {
+    pages: () => [],
+    newPage: vi.fn(async () => page),
+  };
+  const browser = {
+    contexts: () => [context],
+    newContext: vi.fn(),
+  };
+  const adapter = new GeminiBrowserAdapter({
+    env: { EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT: "http://127.0.0.1:9222" },
+    connectOverCdp: async () => browser as never,
+  });
+
+  await expect(adapter.openBrowser("C:/Extractum/gemini-browser/profile")).resolves.toMatchObject({
+    status: "ready",
+    latest_message: "Chrome CDP attached.",
+  });
+  expect(context.newPage).toHaveBeenCalledOnce();
+  expect(browser.newContext).not.toHaveBeenCalled();
+  expect(page.goto).toHaveBeenCalledWith("https://gemini.google.com/app", {
+    waitUntil: "domcontentloaded",
   });
 });
 
@@ -742,9 +827,12 @@ type BrowserSession =
   | { type: "managed"; context: BrowserContext; page: Page | null }
   | { type: "cdp_attach"; browser: Browser | null; context: BrowserContext | null; page: Page | null };
 
+type ConnectOverCdp = (endpoint: string) => Promise<Browser>;
+
 interface GeminiBrowserAdapterOptions {
   env?: Record<string, string | undefined>;
   fetchLike?: FetchLike;
+  connectOverCdp?: ConnectOverCdp;
 }
 ```
 
@@ -763,10 +851,12 @@ with:
   private session: BrowserSession | null = null;
   private readonly env: Record<string, string | undefined>;
   private readonly fetchLike: FetchLike;
+  private readonly connectOverCdp: ConnectOverCdp;
 
   constructor(options: GeminiBrowserAdapterOptions = {}) {
     this.env = options.env ?? process.env;
     this.fetchLike = options.fetchLike ?? fetch;
+    this.connectOverCdp = options.connectOverCdp ?? ((endpoint) => chromium.connectOverCDP(endpoint));
   }
 ```
 
@@ -780,6 +870,10 @@ Add this test-only helper inside the class:
     }
     this.session = { type: "cdp_attach", browser: null, context: null, page };
   }
+
+  __setTestSession(session: BrowserSession) {
+    this.session = session;
+  }
 ```
 
 - [ ] **Step 5: Replace status implementation**
@@ -788,21 +882,37 @@ Replace `status(browserProfileDir: string)` with:
 
 ```ts
   async status(browserProfileDir: string): Promise<GeminiBrowserProviderStatus> {
+    if (this.session?.type === "cdp_attach") {
+      const page = this.session.page;
+      if (page && !page.isClosed()) {
+        return providerStatus({
+          status: "ready",
+          browserProfileDir,
+          message: "Chrome CDP attached.",
+        });
+      }
+      if (this.session.context) {
+        return providerStatus({
+          status: "needs_manual_action",
+          manualAction: "start_chrome_cdp",
+          browserProfileDir,
+          message: "Chrome CDP attached, but no Gemini tab is available.",
+        });
+      }
+    }
+
     const page = this.session?.page ?? null;
     if (page && !page.isClosed()) {
       return providerStatus({
         status: "ready",
         browserProfileDir,
-        message:
-          this.session?.type === "cdp_attach"
-            ? "Chrome CDP attached."
-            : "Browser page is available.",
+        message: "Browser page is available.",
       });
     }
 
     const mode = resolveBrowserMode(this.env);
     if (mode.type === "cdp_attach") {
-      const probe = await cdpSetupStatus(mode.endpoint, this.fetchLike);
+      const probe = await cdpSetupStatus(mode.rawEndpoint, this.fetchLike);
       if (!probe.ok) {
         return providerStatus({
           status: "needs_manual_action",
@@ -888,7 +998,7 @@ Replace `openBrowser(browserProfileDir: string)` with:
       return this.openManagedBrowser(browserProfileDir);
     }
 
-    const validation = validateCdpEndpoint(mode.endpoint);
+    const validation = validateCdpEndpoint(mode.rawEndpoint);
     if (!validation.ok) {
       return providerStatus({
         status: "needs_manual_action",
@@ -900,7 +1010,7 @@ Replace `openBrowser(browserProfileDir: string)` with:
 
     let browser: Browser;
     try {
-      browser = await chromium.connectOverCDP(validation.endpoint);
+      browser = await this.connectOverCdp(validation.endpoint);
     } catch {
       return providerStatus({
         status: "needs_manual_action",
@@ -912,7 +1022,7 @@ Replace `openBrowser(browserProfileDir: string)` with:
 
     const context = browser.contexts()[0] ?? null;
     if (!context) {
-      this.session = { type: "cdp_attach", browser, context: null, page: null };
+      this.session = null;
       return providerStatus({
         status: "needs_manual_action",
         manualAction: "start_chrome_cdp",
@@ -945,6 +1055,14 @@ Replace `openBrowser(browserProfileDir: string)` with:
     });
   }
 ```
+
+The no-context branch intentionally does not retain `browser` in `this.session`.
+It is a failed attach setup, not a connected provider state. Do not call
+`browser.close()` or `context.close()` in CDP mode. When a context exists but no
+Gemini page exists, keep `{ browser, context, page: null }` as a connected
+manual-action state so `status()` can report "CDP attached, but no Gemini tab"
+instead of falling back to endpoint probing. A later `stop()` or retry drops or
+replaces those references.
 
 - [ ] **Step 7: Update sendSingle page access and closed-target mapping**
 
@@ -1316,6 +1434,20 @@ Append this section to `docs/superpowers/specs/2026-06-20-gemini-browser-cdp-att
 
 Implementation plan:
 `docs/superpowers/plans/2026-06-20-gemini-browser-cdp-attach-plan.md`.
+
+## Implementation Notes
+
+- CDP mode uses the existing Chrome default/persistent context only. If
+  `browser.contexts()` is empty, the provider returns `start_chrome_cdp`; it does
+  not call `browser.newContext()`.
+- `Open` may create a Gemini tab inside the existing context. `Resume` and
+  `sendSingle` attach without creating a tab and return `start_chrome_cdp` if no
+  Gemini page is available.
+- CDP `Stop` and failed setup paths drop Extractum-side references only. They do
+  not call `context.close()` or `browser.close()` because the attached Chrome and
+  its tabs belong to the operator.
+- A connected CDP session with no Gemini page is reported separately from an
+  unreachable endpoint: "Chrome CDP attached, but no Gemini tab is available."
 ```
 
 - [ ] **Step 3: Mark docs task complete in this plan**
