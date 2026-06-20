@@ -3,9 +3,10 @@ use tauri::{AppHandle, Emitter, State};
 use crate::error::{AppError, AppResult};
 
 use super::{
-    create_queued_run, finish_run, list_runs, mark_running, path_string, profile_dir, runs_dir,
-    sidecar, GeminiBrowserProviderStatus, GeminiBrowserRunEvent, GeminiBrowserRunLogSummary,
-    GeminiBrowserRunRequest, GeminiBrowserRunResult, GeminiBrowserRunStatus, GeminiBrowserState,
+    create_queued_run, finish_run, list_runs, mark_running, path_string, profile_dir, run_dir,
+    runs_dir, sidecar, GeminiBrowserProviderStatus, GeminiBrowserRunEvent,
+    GeminiBrowserRunLogSummary, GeminiBrowserRunRequest, GeminiBrowserRunResult,
+    GeminiBrowserRunStatus, GeminiBrowserState,
 };
 
 pub const GEMINI_BROWSER_RUN_EVENT: &str = "gemini-browser://run";
@@ -20,6 +21,8 @@ pub async fn gemini_bridge_status(
     state: State<'_, GeminiBrowserState>,
 ) -> AppResult<GeminiBrowserProviderStatus> {
     sidecar::status(
+        &handle,
+        &state,
         path_string(&profile_dir(&handle)?),
         state.active_run_id().await,
         state.queue_depth().await,
@@ -30,8 +33,9 @@ pub async fn gemini_bridge_status(
 #[tauri::command]
 pub async fn gemini_bridge_open_browser(
     handle: AppHandle,
+    state: State<'_, GeminiBrowserState>,
 ) -> AppResult<GeminiBrowserProviderStatus> {
-    sidecar::open_browser(&handle, path_string(&profile_dir(&handle)?)).await
+    sidecar::open_browser(&handle, &state, path_string(&profile_dir(&handle)?)).await
 }
 
 #[tauri::command]
@@ -83,7 +87,19 @@ pub async fn gemini_bridge_send_single(
         },
     );
 
-    let result = sidecar::send_single_stub(next.clone()).await?;
+    let artifact_dir = path_string(&run_dir(&handle, &next.run_id)?);
+    let result = match sidecar::send_single(
+        &handle,
+        &state,
+        next.clone(),
+        path_string(&profile_dir(&handle)?),
+        artifact_dir,
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => sidecar::sidecar_unavailable_result(next.clone()),
+    };
     finish_run(&runs_root, &next.run_id, result.clone())?;
     state.finish_run(&next.run_id).await;
     emit_run_event(
@@ -104,9 +120,12 @@ pub async fn gemini_bridge_resume() -> AppResult<()> {
 }
 
 #[tauri::command]
-pub async fn gemini_bridge_stop(state: State<'_, GeminiBrowserState>) -> AppResult<()> {
+pub async fn gemini_bridge_stop(
+    handle: AppHandle,
+    state: State<'_, GeminiBrowserState>,
+) -> AppResult<()> {
     state.request_stop().await;
-    Ok(())
+    sidecar::stop(&handle, &state).await
 }
 
 #[tauri::command]

@@ -2178,7 +2178,7 @@ Expected: commit includes sidecar adapter files and updated plan checkbox only.
 - Modify: `package.json`
 - Test: `sidecars/gemini-browser/src/protocol.test.ts`
 
-- [ ] **Step 1: Add the sidecar JSON-line server**
+- [x] **Step 1: Add the sidecar JSON-line server**
 
 Create `sidecars/gemini-browser/src/index.ts`:
 
@@ -2237,7 +2237,7 @@ rl.on("line", async (line) => {
 });
 ```
 
-- [ ] **Step 2: Add root script for local sidecar smoke**
+- [x] **Step 2: Add root script for local sidecar smoke**
 
 Modify `package.json` scripts:
 
@@ -2245,7 +2245,7 @@ Modify `package.json` scripts:
 "gemini-browser-sidecar": "node sidecars/gemini-browser/dist/index.js"
 ```
 
-- [ ] **Step 3: Build the sidecar server**
+- [x] **Step 3: Build the sidecar server**
 
 Run:
 
@@ -2255,7 +2255,7 @@ npm.cmd run test:gemini-browser-sidecar:build
 
 Expected: `sidecars/gemini-browser/dist/index.js` is emitted without TypeScript errors.
 
-- [ ] **Step 4: Add sidecar process storage to Rust state**
+- [x] **Step 4: Add sidecar process storage to Rust state**
 
 Modify `src-tauri/src/gemini_browser/state.rs` imports and state:
 
@@ -2279,7 +2279,7 @@ impl GeminiBrowserState {
 }
 ```
 
-- [ ] **Step 5: Replace Rust sidecar stub with a JSON-line process client**
+- [x] **Step 5: Replace Rust sidecar stub with a JSON-line process client**
 
 Replace `src-tauri/src/gemini_browser/sidecar.rs` with:
 
@@ -2503,7 +2503,7 @@ pub(crate) fn sidecar_unavailable_result(request: GeminiBrowserRunRequest) -> Ge
 }
 ```
 
-- [ ] **Step 6: Route commands through the process client**
+- [x] **Step 6: Route commands through the process client**
 
 Modify `src-tauri/src/gemini_browser/commands.rs`:
 
@@ -2559,7 +2559,7 @@ pub async fn gemini_bridge_stop(
 }
 ```
 
-- [ ] **Step 7: Run sidecar and Rust checks**
+- [x] **Step 7: Run sidecar and Rust checks**
 
 Run:
 
@@ -2570,7 +2570,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib gemini_browser
 
 Expected: sidecar and Rust tests pass.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 Run:
 

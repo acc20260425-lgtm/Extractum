@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
 use tokio_util::sync::CancellationToken;
 
 use super::GeminiBrowserRunRequest;
@@ -10,6 +10,7 @@ pub struct GeminiBrowserState {
     queue: Mutex<VecDeque<GeminiBrowserRunRequest>>,
     active_run_id: Mutex<Option<String>>,
     cancellation: Mutex<Option<CancellationToken>>,
+    sidecar: Mutex<Option<super::sidecar::GeminiBrowserSidecarProcess>>,
 }
 
 impl GeminiBrowserState {
@@ -57,6 +58,12 @@ impl GeminiBrowserState {
         } else {
             false
         }
+    }
+
+    pub(crate) async fn sidecar(
+        &self,
+    ) -> MutexGuard<'_, Option<super::sidecar::GeminiBrowserSidecarProcess>> {
+        self.sidecar.lock().await
     }
 }
 

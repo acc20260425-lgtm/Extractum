@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node scripts/run-vitest.mjs run",
+    "gemini-browser-sidecar": "node sidecars/gemini-browser/dist/index.js",
     "test:gemini-browser-adapter:typecheck": "tsc -p research/gemini_browser_adapter/tsconfig.json --noEmit",
     "test:gemini-browser-adapter:unit": "node scripts/run-vitest.mjs run research/gemini_browser_adapter/src",
     "test:gemini-browser-adapter:e2e": "playwright test -c research/gemini_browser_adapter/playwright.config.ts",
