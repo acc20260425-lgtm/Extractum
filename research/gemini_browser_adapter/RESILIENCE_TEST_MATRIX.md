@@ -53,17 +53,25 @@ importing adapter internals:
 
 ## Artifact Expectations
 
-Failure-oriented scenarios should write artifacts under an app-controlled run
-artifact directory, not into the repository by default. Sanitized fixture
-examples may later be copied into this research folder if they contain no
-profile, account, token, cookie, or private prompt data.
+Failure-oriented scenarios in the local research harness write artifacts under
+the ignored repo-local run directory `research/gemini_browser_adapter/artifacts/`
+so matrix runs are reproducible and easy to inspect. Live Gemini smoke tests or
+production app experiments should pass an app-controlled run artifact directory
+outside the repository by default. Sanitized fixture examples may later be
+copied into this research folder if they contain no profile, account, token,
+cookie, or private prompt data.
 
 Required failure bundle:
 
-- `failure.png`
-- `page.html` or reduced DOM snapshot
 - `telemetry.json`
+- `page.html` or reduced DOM snapshot
+- `failure.png` when screenshot capture is possible and the run is not using
+  reduced live-safe artifact mode
 - optional Playwright trace archive
+
+Closed-page/browser-failure scenarios still require a typed status plus
+`telemetry.json` and placeholder HTML/reduced DOM when the page object can no
+longer be queried. Screenshot capture is optional for those cases.
 
 `telemetry.json` should include locator attempts, status, sanitized URL,
 network summary, timestamps, and error reason.

@@ -112,7 +112,8 @@ The matrix should report:
 Prefer the implementation that:
 
 - never hangs indefinitely;
-- keeps Gemini selectors inside `gemini-dom-contract.mjs`;
+- keeps Gemini selectors inside `src/dom-contract.ts` and local overrides inside
+  `gemini-dom-contract.config.json`;
 - returns typed states for manual action, rate limit, timeout, parse failure,
   and browser failure;
 - preserves raw text when available;

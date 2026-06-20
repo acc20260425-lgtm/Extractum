@@ -1686,16 +1686,22 @@ function safePageUrl(page: Page): string {
   }
 }
 
+async function safeHtmlSnapshot(input: CaptureFailureInput): Promise<string> {
+  const fallback = '<!doctype html><html><body data-capture-error="page_content_unavailable"></body></html>';
+  if (input.artifactMode === "reduced") {
+    const reduced = await reducedDomSnapshot(input.page).catch(() => "");
+    return reduced || fallback;
+  }
+  return await input.page.content().catch(() => fallback);
+}
+
 export async function captureFailureArtifacts(input: CaptureFailureInput): Promise<FailureArtifacts> {
   await mkdir(input.artifactDir, { recursive: true });
   const screenshotPath = input.artifactMode === "reduced" ? null : path.join(input.artifactDir, "failure.png");
   const htmlPath = path.join(input.artifactDir, "page.html");
   const telemetryPath = path.join(input.artifactDir, "telemetry.json");
 
-  const html =
-    input.artifactMode === "reduced"
-      ? await reducedDomSnapshot(input.page)
-      : await input.page.content().catch(() => '<!doctype html><html><body data-capture-error="page_content_unavailable"></body></html>');
+  const html = await safeHtmlSnapshot(input);
   const pageUrl = safePageUrl(input.page);
 
   if (screenshotPath) {
@@ -2093,7 +2099,9 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "timeoutMs": 1000,
       "quietMs": 200,
       "requiresRawText": false,
-      "requiresArtifacts": false,
+      "requiresTelemetryArtifact": false,
+      "requiresHtmlArtifact": false,
+      "requiresScreenshotArtifact": false,
       "requiresTelemetryNetwork": false,
       "closePageBeforeRun": false
     },
@@ -2105,7 +2113,9 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "timeoutMs": 5000,
       "quietMs": 300,
       "requiresRawText": true,
-      "requiresArtifacts": false,
+      "requiresTelemetryArtifact": false,
+      "requiresHtmlArtifact": false,
+      "requiresScreenshotArtifact": false,
       "requiresTelemetryNetwork": true,
       "closePageBeforeRun": false
     },
@@ -2117,7 +2127,9 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "timeoutMs": 5000,
       "quietMs": 300,
       "requiresRawText": true,
-      "requiresArtifacts": false,
+      "requiresTelemetryArtifact": false,
+      "requiresHtmlArtifact": false,
+      "requiresScreenshotArtifact": false,
       "requiresTelemetryNetwork": false,
       "closePageBeforeRun": false
     },
@@ -2129,7 +2141,9 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "timeoutMs": 5000,
       "quietMs": 300,
       "requiresRawText": true,
-      "requiresArtifacts": false,
+      "requiresTelemetryArtifact": false,
+      "requiresHtmlArtifact": false,
+      "requiresScreenshotArtifact": false,
       "requiresTelemetryNetwork": false,
       "closePageBeforeRun": false
     },
@@ -2141,7 +2155,9 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "timeoutMs": 5000,
       "quietMs": 300,
       "requiresRawText": true,
-      "requiresArtifacts": false,
+      "requiresTelemetryArtifact": false,
+      "requiresHtmlArtifact": false,
+      "requiresScreenshotArtifact": false,
       "requiresTelemetryNetwork": false,
       "closePageBeforeRun": false
     },
@@ -2153,7 +2169,9 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "timeoutMs": 5000,
       "quietMs": 300,
       "requiresRawText": true,
-      "requiresArtifacts": false,
+      "requiresTelemetryArtifact": false,
+      "requiresHtmlArtifact": false,
+      "requiresScreenshotArtifact": false,
       "requiresTelemetryNetwork": false,
       "closePageBeforeRun": false
     },
@@ -2165,7 +2183,9 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "timeoutMs": 6000,
       "quietMs": 700,
       "requiresRawText": true,
-      "requiresArtifacts": false,
+      "requiresTelemetryArtifact": false,
+      "requiresHtmlArtifact": false,
+      "requiresScreenshotArtifact": false,
       "requiresTelemetryNetwork": false,
       "closePageBeforeRun": false
     },
@@ -2177,7 +2197,9 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "timeoutMs": 1500,
       "quietMs": 300,
       "requiresRawText": false,
-      "requiresArtifacts": true,
+      "requiresTelemetryArtifact": true,
+      "requiresHtmlArtifact": true,
+      "requiresScreenshotArtifact": true,
       "requiresTelemetryNetwork": false,
       "closePageBeforeRun": false
     },
@@ -2189,7 +2211,9 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "timeoutMs": 2000,
       "quietMs": 300,
       "requiresRawText": false,
-      "requiresArtifacts": true,
+      "requiresTelemetryArtifact": true,
+      "requiresHtmlArtifact": true,
+      "requiresScreenshotArtifact": true,
       "requiresTelemetryNetwork": false,
       "closePageBeforeRun": false
     },
@@ -2201,7 +2225,9 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "timeoutMs": 2000,
       "quietMs": 300,
       "requiresRawText": false,
-      "requiresArtifacts": true,
+      "requiresTelemetryArtifact": true,
+      "requiresHtmlArtifact": true,
+      "requiresScreenshotArtifact": true,
       "requiresTelemetryNetwork": false,
       "closePageBeforeRun": false
     },
@@ -2213,7 +2239,9 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "timeoutMs": 2000,
       "quietMs": 300,
       "requiresRawText": false,
-      "requiresArtifacts": true,
+      "requiresTelemetryArtifact": true,
+      "requiresHtmlArtifact": true,
+      "requiresScreenshotArtifact": true,
       "requiresTelemetryNetwork": false,
       "closePageBeforeRun": false
     },
@@ -2225,7 +2253,9 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "timeoutMs": 2000,
       "quietMs": 300,
       "requiresRawText": false,
-      "requiresArtifacts": true,
+      "requiresTelemetryArtifact": true,
+      "requiresHtmlArtifact": true,
+      "requiresScreenshotArtifact": true,
       "requiresTelemetryNetwork": false,
       "closePageBeforeRun": false
     },
@@ -2237,7 +2267,9 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "timeoutMs": 2000,
       "quietMs": 300,
       "requiresRawText": false,
-      "requiresArtifacts": true,
+      "requiresTelemetryArtifact": true,
+      "requiresHtmlArtifact": true,
+      "requiresScreenshotArtifact": true,
       "requiresTelemetryNetwork": false,
       "closePageBeforeRun": false
     },
@@ -2249,7 +2281,9 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "timeoutMs": 2000,
       "quietMs": 300,
       "requiresRawText": false,
-      "requiresArtifacts": true,
+      "requiresTelemetryArtifact": true,
+      "requiresHtmlArtifact": true,
+      "requiresScreenshotArtifact": true,
       "requiresTelemetryNetwork": false,
       "closePageBeforeRun": false
     },
@@ -2261,7 +2295,9 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "timeoutMs": 1500,
       "quietMs": 300,
       "requiresRawText": false,
-      "requiresArtifacts": true,
+      "requiresTelemetryArtifact": true,
+      "requiresHtmlArtifact": true,
+      "requiresScreenshotArtifact": true,
       "requiresTelemetryNetwork": false,
       "closePageBeforeRun": false
     },
@@ -2273,7 +2309,9 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "timeoutMs": 1000,
       "quietMs": 200,
       "requiresRawText": false,
-      "requiresArtifacts": false,
+      "requiresTelemetryArtifact": true,
+      "requiresHtmlArtifact": true,
+      "requiresScreenshotArtifact": false,
       "requiresTelemetryNetwork": false,
       "closePageBeforeRun": true
     }
@@ -2297,7 +2335,9 @@ export type MatrixScenario = {
   timeoutMs: number;
   quietMs: number;
   requiresRawText: boolean;
-  requiresArtifacts: boolean;
+  requiresTelemetryArtifact: boolean;
+  requiresHtmlArtifact: boolean;
+  requiresScreenshotArtifact: boolean;
   requiresTelemetryNetwork: boolean;
   closePageBeforeRun: boolean;
 };
@@ -2325,6 +2365,7 @@ Create `research/gemini_browser_adapter/tests/matrix.spec.ts`:
 
 ```ts
 import { existsSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { startMockGeminiServer } from "../mock-gemini/server.mjs";
@@ -2398,6 +2439,41 @@ test.describe("Gemini adapter executable scenario matrix", () => {
                 artifactDir,
               });
 
+        const hasScreenshotArtifact = Boolean(result.artifacts?.screenshotPath && existsSync(result.artifacts.screenshotPath));
+        const hasHtmlArtifact = Boolean(result.artifacts?.htmlPath && existsSync(result.artifacts.htmlPath));
+        const hasTelemetryArtifact = Boolean(result.artifacts?.telemetryPath && existsSync(result.artifacts.telemetryPath));
+
+        await mkdir(artifactDir, { recursive: true });
+        await writeFile(
+          path.join(artifactDir, "result.json"),
+          JSON.stringify(
+            {
+              variant,
+              scenarioId: scenario.id,
+              status: result.status,
+              expectedStatuses: scenario.expectedStatuses,
+              elapsedMs: result.elapsedMs,
+              rawTextPresent: Boolean((result.rawText ?? "").trim()),
+              artifacts: {
+                screenshot: hasScreenshotArtifact,
+                html: hasHtmlArtifact,
+                telemetry: hasTelemetryArtifact,
+              },
+              expectedArtifacts: {
+                screenshot: scenario.requiresScreenshotArtifact,
+                html: scenario.requiresHtmlArtifact,
+                telemetry: scenario.requiresTelemetryArtifact,
+              },
+              falseCompletion: result.status === "ok" && !scenario.expectedStatuses.includes("ok"),
+              unexpectedStatus: !scenario.expectedStatuses.includes(result.status),
+              timeoutOrHang: result.status === "generation_timeout" || result.elapsedMs >= scenario.timeoutMs,
+            },
+            null,
+            2,
+          ),
+          "utf8",
+        );
+
         expect(result.variant).toBe(variant);
         expect(scenario.expectedStatuses).toContain(result.status);
 
@@ -2407,14 +2483,9 @@ test.describe("Gemini adapter executable scenario matrix", () => {
           expect(result.rawText ?? "").not.toContain("Mock final answer");
         }
 
-        if (scenario.requiresArtifacts) {
-          expect(result.artifacts?.screenshotPath).toBeTruthy();
-          expect(result.artifacts?.htmlPath).toBeTruthy();
-          expect(result.artifacts?.telemetryPath).toBeTruthy();
-          expect(existsSync(result.artifacts!.screenshotPath!)).toBe(true);
-          expect(existsSync(result.artifacts!.htmlPath!)).toBe(true);
-          expect(existsSync(result.artifacts!.telemetryPath!)).toBe(true);
-        }
+        if (scenario.requiresScreenshotArtifact) expect(hasScreenshotArtifact).toBe(true);
+        if (scenario.requiresHtmlArtifact) expect(hasHtmlArtifact).toBe(true);
+        if (scenario.requiresTelemetryArtifact) expect(hasTelemetryArtifact).toBe(true);
 
         if (scenario.requiresTelemetryNetwork && variant === "telemetry-assisted") {
           expect(result.networkSummary.some((event) => event.kind === "response")).toBe(true);
@@ -2450,7 +2521,7 @@ Expected:
 - `ready`, `closed-page`, `account-picker`, `consent`, `unknown-modal`, and `broken-answer` are represented by explicit test titles;
 - every case asserts expected adapter status;
 - every `requiresRawText` case asserts final answer text;
-- every `requiresArtifacts` case asserts screenshot, HTML, and telemetry artifact files;
+- every granular artifact flag asserts only the required screenshot, HTML, or telemetry artifact file;
 - the `telemetry-assisted / happy-path` case asserts a response event for `/mock-gemini-event`.
 
 - [ ] **Step 5: Write coverage-validating matrix report script**
@@ -2458,7 +2529,7 @@ Expected:
 Create `research/gemini_browser_adapter/scripts/write-matrix-report.mjs`:
 
 ```js
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -2466,6 +2537,7 @@ const artifactDir = "research/gemini_browser_adapter/artifacts";
 const inputPath = path.join(artifactDir, "playwright-results.json");
 const matrixPath = "research/gemini_browser_adapter/matrix-cases.json";
 const outputPath = path.join(artifactDir, "matrix-report.md");
+const matrixResultDir = path.join(artifactDir, "matrix");
 
 if (!existsSync(matrixPath)) {
   console.error(`Missing matrix metadata at ${matrixPath}`);
@@ -2495,6 +2567,21 @@ function collectSpecs(suite, rows = []) {
   return rows;
 }
 
+function collectResultFiles(dir, files = []) {
+  if (!existsSync(dir)) return files;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) collectResultFiles(entryPath, files);
+    else if (entry.name === "result.json") files.push(entryPath);
+  }
+  return files;
+}
+
+function average(values) {
+  if (values.length === 0) return 0;
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
 if (!existsSync(inputPath)) {
   console.error(`Missing Playwright JSON results at ${inputPath}`);
   process.exit(1);
@@ -2507,6 +2594,31 @@ const failed = rows.length - passed;
 const worst = rows.reduce((max, row) => Math.max(max, row.duration), 0);
 const missingPairs = expectedPairs.filter((pair) => !rows.some((row) => row.title.endsWith(pair)));
 const observedPairs = expectedPairs.length - missingPairs.length;
+const resultRows = collectResultFiles(matrixResultDir).map((filePath) => JSON.parse(readFileSync(filePath, "utf8")));
+const resultPairs = new Set(resultRows.map((row) => `${row.variant} / ${row.scenarioId}`));
+const missingResultPairs = expectedPairs.filter((pair) => !resultPairs.has(pair));
+const okCount = resultRows.filter((row) => row.status === "ok").length;
+const cleanTypedFailureCount = resultRows.filter((row) => row.status !== "ok" && row.expectedStatuses.includes(row.status)).length;
+const unexpectedFailureCount = resultRows.filter((row) => row.unexpectedStatus).length;
+const timeoutOrHangCount = resultRows.filter((row) => row.timeoutOrHang).length;
+const falseCompletionCount = resultRows.filter((row) => row.falseCompletion).length;
+const artifactIncompleteCount = resultRows.filter((row) =>
+  Object.entries(row.expectedArtifacts).some(([name, required]) => required && !row.artifacts[name]),
+).length;
+const averageElapsedMs = average(resultRows.map((row) => row.elapsedMs));
+const worstElapsedMs = resultRows.reduce((max, row) => Math.max(max, row.elapsedMs ?? 0), 0);
+const variants = matrixDefinition.adapterVariants.map((variant) => {
+  const rowsForVariant = resultRows.filter((row) => row.variant === variant);
+  return {
+    variant,
+    ok: rowsForVariant.filter((row) => row.status === "ok").length,
+    typedFailure: rowsForVariant.filter((row) => row.status !== "ok" && row.expectedStatuses.includes(row.status)).length,
+    unexpected: rowsForVariant.filter((row) => row.unexpectedStatus).length,
+    falseCompletion: rowsForVariant.filter((row) => row.falseCompletion).length,
+    averageElapsedMs: average(rowsForVariant.map((row) => row.elapsedMs)),
+    worstElapsedMs: rowsForVariant.reduce((max, row) => Math.max(max, row.elapsedMs ?? 0), 0),
+  };
+});
 
 const report = [
   "# Gemini Browser Adapter Matrix Report",
@@ -2519,13 +2631,31 @@ const report = [
   `Expected matrix pairs: ${expectedPairs.length}`,
   `Observed matrix pairs: ${observedPairs}`,
   `Missing matrix pairs: ${missingPairs.length}`,
-  `Worst duration ms: ${worst}`,
+  `Missing result files: ${missingResultPairs.length}`,
+  `Worst Playwright duration ms: ${worst}`,
+  "",
+  "## Adapter Result Metrics",
+  "",
+  `OK count: ${okCount}`,
+  `Clean typed failure count: ${cleanTypedFailureCount}`,
+  `Unexpected failure count: ${unexpectedFailureCount}`,
+  `Timeout/hang count: ${timeoutOrHangCount}`,
+  `Required artifact incomplete count: ${artifactIncompleteCount}`,
+  `False completion count: ${falseCompletionCount}`,
+  `Average elapsed ms: ${averageElapsedMs}`,
+  `Worst elapsed ms: ${worstElapsedMs}`,
+  "",
+  "| Variant | OK | Clean Typed Failure | Unexpected | False Completion | Avg ms | Worst ms |",
+  "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+  ...variants.map((row) =>
+    `| ${row.variant} | ${row.ok} | ${row.typedFailure} | ${row.unexpected} | ${row.falseCompletion} | ${row.averageElapsedMs} | ${row.worstElapsedMs} |`,
+  ),
   "",
   "## Matrix Coverage",
   "",
-  missingPairs.length === 0
-    ? "All expected variant/scenario pairs were present."
-    : missingPairs.map((pair) => `- Missing: ${pair}`).join("\n"),
+  missingPairs.length === 0 && missingResultPairs.length === 0
+    ? "All expected variant/scenario pairs and result files were present."
+    : [...missingPairs.map((pair) => `- Missing Playwright row: ${pair}`), ...missingResultPairs.map((pair) => `- Missing result file: ${pair}`)].join("\n"),
   "",
   "| Test | Status | Duration ms |",
   "| --- | --- | ---: |",
@@ -2536,7 +2666,7 @@ const report = [
 await mkdir(artifactDir, { recursive: true });
 await writeFile(outputPath, report, "utf8");
 console.log(`Wrote ${outputPath}`);
-if (failed > 0 || missingPairs.length > 0) process.exit(1);
+if (failed > 0 || missingPairs.length > 0 || missingResultPairs.length > 0 || unexpectedFailureCount > 0 || artifactIncompleteCount > 0 || falseCompletionCount > 0) process.exit(1);
 ```
 
 - [ ] **Step 6: Run full research verification**
@@ -2702,12 +2832,16 @@ git commit -m "Add Gemini adapter research implementation plan"
 - The plan runs all three variants against all sixteen matrix scenarios.
 - The matrix report derives expected pairs from `matrix-cases.json`, not a duplicated scenario list.
 - The matrix coverage check uses exact title suffix matching, not substring matching.
+- The matrix report includes ok, clean typed failure, unexpected failure, timeout/hang, artifact completeness, false completion, average elapsed, and worst elapsed metrics.
+- Matrix artifact requirements are granular: telemetry, HTML/reduced DOM, and screenshot are checked independently.
+- Closed-page/browser-failure scenarios require telemetry and placeholder HTML artifacts but not screenshot artifacts.
 - The plan covers success, manual-action, rate-limit, timeout, artifact, and telemetry paths.
 - The plan routes non-`ok` adapter returns through `finalizeResult` before returning to the test.
 - The artifact writer catches closed-page failures while reading page content and URL.
 - The plan treats missing assistant answer containers as `response_parse_failed`, not `ok`.
 - The plan redacts artifact URLs and requires reduced, text-free DOM artifacts for live Gemini runs.
 - The plan tests that reduced artifacts skip screenshots and strip visible text/form values.
+- The matrix artifact directory policy is synchronized with `RESILIENCE_TEST_MATRIX.md`.
 - The plan passes telemetry `networkSummary` through shared adapter options before artifact capture.
 - The plan writes sanitized artifacts only under ignored `research/gemini_browser_adapter/artifacts`.
 - The plan includes exact commands and expected outcomes for every task.
