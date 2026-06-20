@@ -1088,7 +1088,7 @@ mod tests {
                 published_at: 1_710_000_000,
                 author: Some("Alice".to_string()),
                 content: "First frozen message".to_string(),
-                r#ref: "s2-m100".to_string(),
+                r#ref: "s2-i11".to_string(),
                 item_kind: Some("youtube_transcript".to_string()),
                 source_type: Some("youtube".to_string()),
                 source_subtype: Some("video".to_string()),
@@ -1106,7 +1106,7 @@ mod tests {
                 published_at: 1_710_000_100,
                 author: None,
                 content: "Second frozen message".to_string(),
-                r#ref: "s4-m101".to_string(),
+                r#ref: "s4-i12".to_string(),
                 item_kind: Some("telegram_message".to_string()),
                 source_type: Some("telegram".to_string()),
                 source_subtype: Some("channel".to_string()),
@@ -2076,7 +2076,7 @@ mod tests {
             .expect("load snapshot");
 
         assert_eq!(loaded.len(), corpus.len());
-        assert_eq!(loaded[0].r#ref, "s2-m100");
+        assert_eq!(loaded[0].r#ref, "s2-i11");
         assert_eq!(loaded[1].content, "Second frozen message");
     }
 
@@ -2245,7 +2245,7 @@ mod tests {
                 after: None,
                 limit: 10,
                 source_id: None,
-                around_ref: Some("s4-m101".to_string()),
+                around_ref: Some("s4-i12".to_string()),
             },
         )
         .await
@@ -2256,7 +2256,7 @@ mod tests {
                 .iter()
                 .map(|message| message.r#ref.as_str())
                 .collect::<Vec<_>>(),
-            vec!["s4-m101"]
+            vec!["s4-i12"]
         );
     }
 
@@ -2489,7 +2489,7 @@ mod tests {
         assert_eq!(corpus[0].source_type.as_deref(), Some("youtube"));
         assert_eq!(corpus[0].source_subtype.as_deref(), Some("video"));
         assert!(corpus[0].metadata_zstd.is_some());
-        assert_eq!(corpus[1].r#ref, "s4-m101");
+        assert_eq!(corpus[1].r#ref, "s4-i12");
     }
 
     #[tokio::test]

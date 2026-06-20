@@ -2550,7 +2550,7 @@ mod tests {
             .execute(&pool)
             .await
             .expect("insert chat");
-        sqlx::query("INSERT INTO analysis_run_messages (run_id, ref) VALUES (42, 's1-m1')")
+        sqlx::query("INSERT INTO analysis_run_messages (run_id, ref) VALUES (42, 's1-i1')")
             .execute(&pool)
             .await
             .expect("insert saved corpus");

@@ -574,7 +574,7 @@ mod tests {
     fn trace_data_roundtrips_through_zstd() {
         let trace = AnalysisTraceData {
             refs: vec![AnalysisTraceRef {
-                r#ref: "s12-m845".to_string(),
+                r#ref: "s12-i321".to_string(),
                 item_id: 321,
                 source_id: 12,
                 external_id: "845".to_string(),
