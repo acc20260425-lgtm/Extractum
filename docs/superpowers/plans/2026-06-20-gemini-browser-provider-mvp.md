@@ -1633,9 +1633,10 @@ Expected: commit includes Settings UI files and updated plan checkbox only.
 - Create: `sidecars/gemini-browser/src/protocol.ts`
 - Create: `sidecars/gemini-browser/src/redaction.ts`
 - Create: `sidecars/gemini-browser/src/protocol.test.ts`
+- Modify: `.gitignore`
 - Modify: `package.json`
 
-- [ ] **Step 1: Add sidecar package scripts**
+- [x] **Step 1: Add sidecar package scripts**
 
 Create `sidecars/gemini-browser/package.json`:
 
@@ -1684,7 +1685,7 @@ Create `sidecars/gemini-browser/tsconfig.build.json`:
 }
 ```
 
-- [ ] **Step 2: Add protocol and redaction utilities**
+- [x] **Step 2: Add protocol and redaction utilities**
 
 Create `sidecars/gemini-browser/src/protocol.ts`:
 
@@ -1795,7 +1796,7 @@ export function redactText(value: string, prompt: string): string {
 }
 ```
 
-- [ ] **Step 3: Add sidecar unit tests**
+- [x] **Step 3: Add sidecar unit tests**
 
 Create `sidecars/gemini-browser/src/protocol.test.ts`:
 
@@ -1831,7 +1832,7 @@ describe("gemini browser sidecar protocol", () => {
 });
 ```
 
-- [ ] **Step 4: Add root scripts**
+- [x] **Step 4: Add root scripts**
 
 Modify `package.json` scripts:
 
@@ -1842,7 +1843,7 @@ Modify `package.json` scripts:
 "test:gemini-browser-sidecar": "npm run test:gemini-browser-sidecar:typecheck && npm run test:gemini-browser-sidecar:unit && npm run test:gemini-browser-sidecar:build"
 ```
 
-- [ ] **Step 5: Run sidecar tests**
+- [x] **Step 5: Run sidecar tests**
 
 Run:
 
@@ -1852,12 +1853,12 @@ npm.cmd run test:gemini-browser-sidecar
 
 Expected: sidecar typecheck and unit tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 
 ```powershell
-git add sidecars/gemini-browser package.json docs/superpowers/plans/2026-06-20-gemini-browser-provider-mvp.md
+git add sidecars/gemini-browser .gitignore package.json docs/superpowers/plans/2026-06-20-gemini-browser-provider-mvp.md
 git commit -m "feat: add Gemini browser sidecar protocol"
 ```
 

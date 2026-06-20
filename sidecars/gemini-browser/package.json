@@ -1,0 +1,10 @@
+{
+  "name": "@extractum/gemini-browser-sidecar",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run src"
+  }
+}
