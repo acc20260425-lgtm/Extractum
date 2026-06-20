@@ -14,6 +14,8 @@
     "build:tauri-prereqs": "npm run build && npm run build:gemini-browser-sidecar && npm run check:gemini-browser-sidecar-binary",
     "smoke:gemini-browser-sidecar:node": "node scripts/gemini-browser-sidecar-smoke.mjs",
     "smoke:gemini-browser-sidecar:binary": "node scripts/gemini-browser-sidecar-smoke.mjs --binary",
+    "smoke:gemini-browser-sidecar:resume:node": "node scripts/gemini-browser-sidecar-smoke.mjs --resume",
+    "smoke:gemini-browser-sidecar:resume:binary": "node scripts/gemini-browser-sidecar-smoke.mjs --binary --resume",
     "smoke:gemini-browser-sidecar:playwright:node": "node scripts/gemini-browser-sidecar-smoke.mjs --playwright",
     "smoke:gemini-browser-sidecar:playwright:binary": "node scripts/gemini-browser-sidecar-smoke.mjs --binary --playwright",
     "test:gemini-browser-adapter:typecheck": "tsc -p research/gemini_browser_adapter/tsconfig.json --noEmit",

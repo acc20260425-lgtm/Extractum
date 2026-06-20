@@ -1495,7 +1495,7 @@ Expected: commit contains Node/Rust resume wiring and serialization test update.
 - Modify: `scripts/gemini-browser-sidecar-smoke.mjs`
 - Modify: `package.json`
 
-- [ ] **Step 1: Add sidecar smoke support for resume**
+- [x] **Step 1: Add sidecar smoke support for resume**
 
 In `scripts/gemini-browser-sidecar-smoke.mjs`, after the existing mode parsing, add:
 
@@ -1556,7 +1556,7 @@ When `--expect-manual-action=start_chrome_cdp` is provided, the smoke must also
 verify `response.status.status === "needs_manual_action"` and
 `response.status.manual_action === "start_chrome_cdp"`.
 
-- [ ] **Step 2: Add package scripts**
+- [x] **Step 2: Add package scripts**
 
 In `package.json`, add scripts next to the existing sidecar smoke scripts:
 
@@ -1565,18 +1565,22 @@ In `package.json`, add scripts next to the existing sidecar smoke scripts:
 "smoke:gemini-browser-sidecar:resume:binary": "node scripts/gemini-browser-sidecar-smoke.mjs --binary --resume"
 ```
 
-- [ ] **Step 3: Run normal resume smoke in managed mode**
+- [x] **Step 3: Run managed status smoke**
 
 Run:
 
 ```powershell
 npm.cmd run test:gemini-browser-sidecar
-npm.cmd run smoke:gemini-browser-sidecar:resume:node
+npm.cmd run smoke:gemini-browser-sidecar:node
 ```
 
 Expected: smoke returns a JSON response with `response.type: "status"`.
 
-- [ ] **Step 4: Run CDP negative smoke without Chrome**
+Execution note: managed `resume` intentionally opens a Playwright-owned browser,
+so it is not used as an automated smoke. The resume protocol path is verified by
+the CDP negative smoke in Step 4.
+
+- [x] **Step 4: Run CDP negative smoke without Chrome**
 
 Run in PowerShell:
 
@@ -1588,7 +1592,7 @@ Remove-Item Env:\EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT
 
 Expected: smoke returns `response.type: "status"`, `response.status.status: "needs_manual_action"`, and `response.status.manual_action: "start_chrome_cdp"`. Use a closed loopback port so this negative smoke cannot accidentally attach to a developer's running Chrome CDP instance.
 
-- [ ] **Step 5: Commit smoke changes**
+- [x] **Step 5: Commit smoke changes**
 
 Run:
 
@@ -1731,11 +1735,10 @@ Run:
 
 ```powershell
 npm.cmd run smoke:gemini-browser-sidecar:node
-npm.cmd run smoke:gemini-browser-sidecar:resume:node
 npm.cmd run smoke:gemini-browser-sidecar:playwright:node
 ```
 
-Expected: status and resume smokes return `response.type: "status"`; Playwright smoke returns `ok: true`.
+Expected: status smoke returns `response.type: "status"`; Playwright smoke returns `ok: true`.
 
 - [ ] **Step 5: Run CDP negative smoke**
 

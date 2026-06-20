@@ -5,6 +5,11 @@ import { spawnSync } from "node:child_process";
 const repoRoot = process.cwd();
 const mode = process.argv.includes("--binary") ? "binary" : "node";
 const playwrightSmoke = process.argv.includes("--playwright");
+const resumeSmoke = process.argv.includes("--resume");
+const expectedManualActionArg = process.argv.find((arg) =>
+  arg.startsWith("--expect-manual-action="),
+);
+const expectedManualAction = expectedManualActionArg?.split("=")[1] ?? null;
 
 function hostTuple() {
   const result = spawnSync("rustc", ["--print", "host-tuple"], {
@@ -73,12 +78,19 @@ if (playwrightSmoke) {
     console.log(line);
   });
 } else {
+  const profileDir = path.join(repoRoot, "artifacts", "gemini-browser-smoke-profile");
   const request = {
     id: "smoke-1",
-    command: {
-      type: "status",
-      browser_profile_dir: path.join(repoRoot, "artifacts", "gemini-browser-smoke-profile"),
-    },
+    command: resumeSmoke
+      ? {
+          type: "resume",
+          run_id: null,
+          browser_profile_dir: profileDir,
+        }
+      : {
+          type: "status",
+          browser_profile_dir: profileDir,
+        },
   };
 
   let stdout = "";
@@ -103,6 +115,16 @@ if (playwrightSmoke) {
     if (parsed.response?.type !== "status") {
       console.error(`Unexpected response type: ${line}`);
       process.exit(1);
+    }
+    if (expectedManualAction) {
+      const status = parsed.response.status;
+      if (
+        status?.status !== "needs_manual_action" ||
+        status?.manual_action !== expectedManualAction
+      ) {
+        console.error(`Unexpected manual action response: ${line}`);
+        process.exit(1);
+      }
     }
     console.log(line);
   });
