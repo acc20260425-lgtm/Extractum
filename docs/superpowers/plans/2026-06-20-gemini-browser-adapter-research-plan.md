@@ -16,12 +16,16 @@ Create and modify only research/tooling files:
 
 - Modify: `package.json` to add Playwright dependency and research scripts.
 - Create: `research/gemini_browser_adapter/playwright.config.ts` for adapter e2e tests.
+- Create: `research/gemini_browser_adapter/tsconfig.json` for strict research TypeScript checks.
 - Create: `research/gemini_browser_adapter/mock-gemini/variants.mjs` to render deterministic mock Gemini pages.
 - Create: `research/gemini_browser_adapter/mock-gemini/server.mjs` to start and stop a local mock server.
 - Create: `research/gemini_browser_adapter/src/types.ts` for shared status/result/artifact types.
 - Create: `research/gemini_browser_adapter/src/status.test.ts` for type and status guard tests.
 - Create: `research/gemini_browser_adapter/src/dom-contract.ts` for adapter variant implementations.
 - Create: `research/gemini_browser_adapter/tests/dom-only-baseline.spec.ts` for baseline Playwright tests.
+- Create: `research/gemini_browser_adapter/gemini-dom-contract.config.json` for local selector overrides.
+- Create: `research/gemini_browser_adapter/src/config.ts` for selector override loading and defaults.
+- Create: `research/gemini_browser_adapter/src/config.test.ts` for config override unit tests.
 - Create: `research/gemini_browser_adapter/src/scoring.ts` for deterministic locator scoring.
 - Create: `research/gemini_browser_adapter/src/scoring.test.ts` for scoring unit tests.
 - Create: `research/gemini_browser_adapter/tests/resilient-scoring.spec.ts` for scoring adapter tests.
@@ -46,18 +50,19 @@ Do not touch `src-tauri/*` in this plan.
 **Files:**
 - Modify: `package.json`
 - Create: `research/gemini_browser_adapter/playwright.config.ts`
+- Create: `research/gemini_browser_adapter/tsconfig.json`
 
 - [ ] **Step 1: Add Playwright test dependency**
 
 Run:
 
 ```powershell
-npm install --save-dev @playwright/test
+npm install --save-dev @playwright/test @types/node
 ```
 
 Expected:
 
-- `package.json` gains `@playwright/test` under `devDependencies`.
+- `package.json` gains `@playwright/test` and `@types/node` under `devDependencies`.
 - `package-lock.json` updates.
 - If the sandbox blocks registry access, rerun this command with escalation.
 
@@ -76,10 +81,11 @@ Expected: Playwright downloads or confirms the Chromium browser binary.
 Edit `package.json` and add these scripts inside `"scripts"`:
 
 ```json
+"test:gemini-browser-adapter:typecheck": "tsc -p research/gemini_browser_adapter/tsconfig.json --noEmit",
 "test:gemini-browser-adapter:unit": "node scripts/run-vitest.mjs run research/gemini_browser_adapter/**/*.test.ts",
 "test:gemini-browser-adapter:e2e": "playwright test -c research/gemini_browser_adapter/playwright.config.ts",
 "test:gemini-browser-adapter:report": "node research/gemini_browser_adapter/scripts/write-matrix-report.mjs",
-"test:gemini-browser-adapter": "npm run test:gemini-browser-adapter:unit && npm run test:gemini-browser-adapter:e2e && npm run test:gemini-browser-adapter:report"
+"test:gemini-browser-adapter": "npm run test:gemini-browser-adapter:typecheck && npm run test:gemini-browser-adapter:unit && npm run test:gemini-browser-adapter:e2e && npm run test:gemini-browser-adapter:report"
 ```
 
 - [ ] **Step 4: Create Playwright config**
@@ -114,22 +120,51 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 5: Verify config parses**
+- [ ] **Step 5: Create research TypeScript config**
 
-Run:
+Create `research/gemini_browser_adapter/tsconfig.json`:
 
-```powershell
-npx playwright test -c research/gemini_browser_adapter/playwright.config.ts --list
+```json
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022",
+    "types": ["node", "vitest"]
+  },
+  "include": [
+    "playwright.config.ts",
+    "src/**/*.ts",
+    "tests/**/*.ts",
+    "mock-gemini/**/*.mjs"
+  ],
+  "exclude": ["artifacts", "node_modules"]
+}
 ```
 
-Expected: command exits `0` and prints no tests yet, or a valid empty test listing.
-
-- [ ] **Step 6: Commit tooling**
+- [ ] **Step 6: Verify TypeScript config parses**
 
 Run:
 
 ```powershell
-git add package.json package-lock.json research/gemini_browser_adapter/playwright.config.ts docs/superpowers/plans/2026-06-20-gemini-browser-adapter-research-plan.md
+npm run test:gemini-browser-adapter:typecheck
+```
+
+Expected: command exits `0`. Do not run `playwright --list` yet; the Playwright test directory has no valid spec file at this point and may fail with `No tests found`.
+
+- [ ] **Step 7: Commit tooling**
+
+Run:
+
+```powershell
+git add package.json package-lock.json research/gemini_browser_adapter/playwright.config.ts research/gemini_browser_adapter/tsconfig.json docs/superpowers/plans/2026-06-20-gemini-browser-adapter-research-plan.md
 git commit -m "Add Gemini adapter research test tooling"
 ```
 
@@ -466,7 +501,17 @@ export async function startMockGeminiServer() {
 }
 ```
 
-- [ ] **Step 5: Verify mock tests pass**
+- [ ] **Step 5: Verify Playwright config lists existing tests**
+
+Run:
+
+```powershell
+npx playwright test -c research/gemini_browser_adapter/playwright.config.ts research/gemini_browser_adapter/tests/mock-gemini.spec.ts --list
+```
+
+Expected: command exits `0` and lists the 5 mock Gemini tests.
+
+- [ ] **Step 6: Verify mock tests pass**
 
 Run:
 
@@ -476,7 +521,7 @@ npx playwright test -c research/gemini_browser_adapter/playwright.config.ts rese
 
 Expected: PASS for 5 tests.
 
-- [ ] **Step 6: Commit mock server**
+- [ ] **Step 7: Commit mock server**
 
 Run:
 
@@ -869,7 +914,7 @@ export async function sendSingleDomOnly(page: Page, prompt: string, options: Sen
   return await waitForFinalAnswer(page, startedAt, options, attempts);
 }
 
-export async function probeReadyDomOnly(page: Page): Promise<GeminiAdapterResult> {
+export async function probeReadyDomOnly(page: Page, _options?: SendSingleOptions): Promise<GeminiAdapterResult> {
   const startedAt = Date.now();
   const attempts: LocatorAttempt[] = [];
 
@@ -913,7 +958,182 @@ git commit -m "Add DOM-only Gemini adapter baseline"
 
 ---
 
-### Task 5: Deterministic Locator Scoring
+### Task 5: Selector Config Overrides
+
+**Files:**
+- Create: `research/gemini_browser_adapter/gemini-dom-contract.config.json`
+- Create: `research/gemini_browser_adapter/src/config.ts`
+- Create: `research/gemini_browser_adapter/src/config.test.ts`
+- Modify: `research/gemini_browser_adapter/src/dom-contract.ts`
+
+- [ ] **Step 1: Write failing config override tests**
+
+Create `research/gemini_browser_adapter/src/config.test.ts`:
+
+```ts
+import { mkdtemp, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+import { DEFAULT_DOM_CONTRACT_CONFIG, loadDomContractConfig } from "./config";
+
+describe("DOM contract config", () => {
+  it("returns defaults when config is absent", async () => {
+    const config = await loadDomContractConfig("missing-config.json");
+    expect(config.answerSelectors).toEqual(DEFAULT_DOM_CONTRACT_CONFIG.answerSelectors);
+  });
+
+  it("loads local selector overrides", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "gemini-dom-contract-"));
+    const configPath = path.join(dir, "gemini-dom-contract.config.json");
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        promptSelectors: ["[data-custom-prompt]"],
+        sendSelectors: ["[data-custom-send]"],
+        answerSelectors: ["[data-custom-answer]"],
+      }),
+      "utf8",
+    );
+
+    const config = await loadDomContractConfig(configPath);
+    expect(config.promptSelectors).toContain("[data-custom-prompt]");
+    expect(config.sendSelectors).toContain("[data-custom-send]");
+    expect(config.answerSelectors).toContain("[data-custom-answer]");
+  });
+});
+```
+
+- [ ] **Step 2: Run config tests to verify failure**
+
+Run:
+
+```powershell
+npm run test:gemini-browser-adapter:unit -- research/gemini_browser_adapter/src/config.test.ts
+```
+
+Expected: FAIL because `config.ts` does not exist.
+
+- [ ] **Step 3: Add default selector override file**
+
+Create `research/gemini_browser_adapter/gemini-dom-contract.config.json`:
+
+```json
+{
+  "promptSelectors": [],
+  "sendSelectors": [],
+  "answerSelectors": ["[data-testid=\"assistant-answer\"]"],
+  "minPromptScore": 5,
+  "minSendScore": 4
+}
+```
+
+- [ ] **Step 4: Implement config loader**
+
+Create `research/gemini_browser_adapter/src/config.ts`:
+
+```ts
+import { readFile } from "node:fs/promises";
+
+export type DomContractConfig = {
+  promptSelectors: string[];
+  sendSelectors: string[];
+  answerSelectors: string[];
+  minPromptScore: number;
+  minSendScore: number;
+};
+
+export const DEFAULT_DOM_CONTRACT_CONFIG: DomContractConfig = {
+  promptSelectors: [],
+  sendSelectors: [],
+  answerSelectors: ["[data-testid=\"assistant-answer\"]"],
+  minPromptScore: 5,
+  minSendScore: 4,
+};
+
+export async function loadDomContractConfig(
+  configPath = "research/gemini_browser_adapter/gemini-dom-contract.config.json",
+): Promise<DomContractConfig> {
+  const raw = await readFile(configPath, "utf8").catch(() => null);
+  if (!raw) return DEFAULT_DOM_CONTRACT_CONFIG;
+  const parsed = JSON.parse(raw) as Partial<DomContractConfig>;
+  return {
+    promptSelectors: parsed.promptSelectors ?? DEFAULT_DOM_CONTRACT_CONFIG.promptSelectors,
+    sendSelectors: parsed.sendSelectors ?? DEFAULT_DOM_CONTRACT_CONFIG.sendSelectors,
+    answerSelectors: parsed.answerSelectors ?? DEFAULT_DOM_CONTRACT_CONFIG.answerSelectors,
+    minPromptScore: parsed.minPromptScore ?? DEFAULT_DOM_CONTRACT_CONFIG.minPromptScore,
+    minSendScore: parsed.minSendScore ?? DEFAULT_DOM_CONTRACT_CONFIG.minSendScore,
+  };
+}
+```
+
+- [ ] **Step 5: Wire config into adapter options**
+
+Modify `SendSingleOptions` in `dom-contract.ts`:
+
+```ts
+import type { DomContractConfig } from "./config";
+import { loadDomContractConfig } from "./config";
+```
+
+```ts
+export type SendSingleOptions = {
+  timeoutMs: number;
+  quietMs: number;
+  configPath?: string;
+  contractConfig?: DomContractConfig;
+};
+```
+
+Add helper:
+
+```ts
+async function resolveContractConfig(options: SendSingleOptions): Promise<DomContractConfig> {
+  return options.contractConfig ?? (await loadDomContractConfig(options.configPath));
+}
+```
+
+Update answer detection to accept config-provided answer selectors before built-in fallbacks:
+
+```ts
+async function latestAnswerText(page: Page, config: DomContractConfig): Promise<string | null> {
+  const selectors = [
+    ...config.answerSelectors,
+    '[data-testid*="assistant" i]',
+    '[data-testid*="response" i]',
+    "article.answer",
+    "[data-answer]",
+  ];
+  const answer = page.locator(selectors.join(", "));
+  if ((await answer.count().catch(() => 0)) === 0) return null;
+  return (await answer.last().innerText().catch(() => "")).trim();
+}
+```
+
+Thread `config` through `waitForFinalAnswer` and resolve it once at the start of each adapter call.
+
+- [ ] **Step 6: Verify config tests pass**
+
+Run:
+
+```powershell
+npm run test:gemini-browser-adapter:unit -- research/gemini_browser_adapter/src/config.test.ts
+```
+
+Expected: PASS for 2 tests.
+
+- [ ] **Step 7: Commit config overrides**
+
+Run:
+
+```powershell
+git add research/gemini_browser_adapter/gemini-dom-contract.config.json research/gemini_browser_adapter/src/config.ts research/gemini_browser_adapter/src/config.test.ts research/gemini_browser_adapter/src/dom-contract.ts
+git commit -m "Add Gemini DOM contract selector config"
+```
+
+---
+
+### Task 6: Deterministic Locator Scoring
 
 **Files:**
 - Create: `research/gemini_browser_adapter/src/scoring.ts`
@@ -1067,6 +1287,40 @@ test("resilient scoring reports captcha as manual action", async ({ page }) => {
   const result = await sendSingleResilientScoring(page, "hello", { timeoutMs: 2_000, quietMs: 300 });
   expect(result.status).toBe("captcha_required");
 });
+
+test("resilient scoring honors selector config overrides", async ({ page }) => {
+  await page.setContent(`
+    <main>
+      <div data-custom-prompt contenteditable="true"></div>
+      <button data-custom-send>Go</button>
+      <section data-custom-answer></section>
+      <script>
+        document.querySelector('[data-custom-send]').addEventListener('click', () => {
+          setTimeout(() => {
+            document.querySelector('[data-custom-answer]').textContent = 'Mock final answer from config override.';
+          }, 100);
+        });
+      </script>
+    </main>
+  `);
+
+  const result = await sendSingleResilientScoring(page, "hello", {
+    timeoutMs: 3_000,
+    quietMs: 300,
+    contractConfig: {
+      promptSelectors: ["[data-custom-prompt]"],
+      sendSelectors: ["[data-custom-send]"],
+      answerSelectors: ["[data-custom-answer]"],
+      minPromptScore: 5,
+      minSendScore: 4,
+    },
+  });
+
+  expect(result.status).toBe("ok");
+  expect(result.rawText).toContain("config override");
+  expect(result.locatorAttempts.some((attempt) => attempt.name === "config:prompt" && attempt.matched)).toBe(true);
+  expect(result.locatorAttempts.some((attempt) => attempt.name === "config:send" && attempt.matched)).toBe(true);
+});
 ```
 
 - [ ] **Step 6: Run resilient tests to verify failure**
@@ -1090,7 +1344,23 @@ import { scoreButtonCandidate, scoreEditableCandidate } from "./scoring";
 Add these functions below `findSendButton`:
 
 ```ts
-async function findPromptBoxByScoring(page: Page, attempts: LocatorAttempt[]): Promise<Locator | null> {
+async function findByConfiguredSelector(
+  page: Page,
+  selectors: string[],
+  attempts: LocatorAttempt[],
+  name: string,
+): Promise<Locator | null> {
+  for (const selector of selectors) {
+    const locator = page.locator(selector);
+    const count = await locator.count().catch(() => 0);
+    const visible = await firstVisible(locator);
+    attempts.push({ name, strategy: "css", matched: Boolean(visible), count });
+    if (visible) return visible;
+  }
+  return null;
+}
+
+async function findPromptBoxByScoring(page: Page, attempts: LocatorAttempt[], minScore: number): Promise<Locator | null> {
   const bestIndex = await page.locator("textarea, input, [contenteditable='true'], [role='textbox']").evaluateAll((elements) => {
     let best = { index: -1, score: 0 };
     elements.forEach((element, index) => {
@@ -1117,14 +1387,15 @@ async function findPromptBoxByScoring(page: Page, attempts: LocatorAttempt[]): P
       }
       if (score > best.score) best = { index, score };
     });
-    return best.score >= 5 ? best.index : -1;
+    return best;
   });
 
-  attempts.push({ name: "fuzzy:editable", strategy: "fuzzy", matched: bestIndex >= 0, score: bestIndex >= 0 ? 5 : 0 });
-  return bestIndex >= 0 ? page.locator("textarea, input, [contenteditable='true'], [role='textbox']").nth(bestIndex) : null;
+  const matched = bestIndex.score >= minScore && bestIndex.index >= 0;
+  attempts.push({ name: "fuzzy:editable", strategy: "fuzzy", matched, score: bestIndex.score });
+  return matched ? page.locator("textarea, input, [contenteditable='true'], [role='textbox']").nth(bestIndex.index) : null;
 }
 
-async function findSendButtonByScoring(page: Page, attempts: LocatorAttempt[]): Promise<Locator | null> {
+async function findSendButtonByScoring(page: Page, attempts: LocatorAttempt[], minScore: number): Promise<Locator | null> {
   const bestIndex = await page.locator("button, [role='button'], [data-send]").evaluateAll((elements) => {
     let best = { index: -1, score: 0 };
     elements.forEach((element, index) => {
@@ -1146,11 +1417,12 @@ async function findSendButtonByScoring(page: Page, attempts: LocatorAttempt[]): 
       }
       if (score > best.score) best = { index, score };
     });
-    return best.score >= 4 ? best.index : -1;
+    return best;
   });
 
-  attempts.push({ name: "fuzzy:send-button", strategy: "fuzzy", matched: bestIndex >= 0, score: bestIndex >= 0 ? 4 : 0 });
-  return bestIndex >= 0 ? page.locator("button, [role='button'], [data-send]").nth(bestIndex) : null;
+  const matched = bestIndex.score >= minScore && bestIndex.index >= 0;
+  attempts.push({ name: "fuzzy:send-button", strategy: "fuzzy", matched, score: bestIndex.score });
+  return matched ? page.locator("button, [role='button'], [data-send]").nth(bestIndex.index) : null;
 }
 ```
 
@@ -1162,6 +1434,7 @@ export async function sendSingleResilientScoring(page: Page, prompt: string, opt
   const attempts: LocatorAttempt[] = [];
   void scoreEditableCandidate;
   void scoreButtonCandidate;
+  const config = await resolveContractConfig(options);
 
   if (page.isClosed()) {
     return { ...result("browser_crashed", startedAt, null, attempts, "browser_crashed"), variant: "resilient-scoring" };
@@ -1170,15 +1443,21 @@ export async function sendSingleResilientScoring(page: Page, prompt: string, opt
   const criticalBefore = await scanCriticalState(page);
   if (criticalBefore) return { ...result(criticalBefore, startedAt, null, attempts, criticalBefore), variant: "resilient-scoring" };
 
-  const promptBox = (await findPromptBox(page, attempts)) ?? (await findPromptBoxByScoring(page, attempts));
+  const promptBox =
+    (await findByConfiguredSelector(page, config.promptSelectors, attempts, "config:prompt")) ??
+    (await findPromptBox(page, attempts)) ??
+    (await findPromptBoxByScoring(page, attempts, config.minPromptScore));
   if (!promptBox) return { ...result("failed", startedAt, null, attempts, "prompt_input_not_found"), variant: "resilient-scoring" };
 
   await typePrompt(promptBox, prompt);
-  const sendButton = (await findSendButton(page, attempts)) ?? (await findSendButtonByScoring(page, attempts));
+  const sendButton =
+    (await findByConfiguredSelector(page, config.sendSelectors, attempts, "config:send")) ??
+    (await findSendButton(page, attempts)) ??
+    (await findSendButtonByScoring(page, attempts, config.minSendScore));
   if (!sendButton) return { ...result("failed", startedAt, null, attempts, "send_button_not_found"), variant: "resilient-scoring" };
   await sendButton.click();
 
-  const finalAnswer = await waitForFinalAnswer(page, startedAt, options, attempts);
+  const finalAnswer = await waitForFinalAnswer(page, startedAt, options, attempts, config);
   return {
     ...finalAnswer,
     variant: "resilient-scoring",
@@ -1186,11 +1465,15 @@ export async function sendSingleResilientScoring(page: Page, prompt: string, opt
   };
 }
 
-export async function probeReadyResilientScoring(page: Page): Promise<GeminiAdapterResult> {
+export async function probeReadyResilientScoring(
+  page: Page,
+  options: SendSingleOptions = { timeoutMs: 1_000, quietMs: 200 },
+): Promise<GeminiAdapterResult> {
   const startedAt = Date.now();
   const attempts: LocatorAttempt[] = [];
   void scoreEditableCandidate;
   void scoreButtonCandidate;
+  const config = await resolveContractConfig(options);
 
   if (page.isClosed()) {
     return { ...result("browser_crashed", startedAt, null, attempts, "browser_crashed"), variant: "resilient-scoring" };
@@ -1200,8 +1483,14 @@ export async function probeReadyResilientScoring(page: Page): Promise<GeminiAdap
     const criticalBefore = await scanCriticalState(page);
     if (criticalBefore) return { ...result(criticalBefore, startedAt, null, attempts, criticalBefore), variant: "resilient-scoring" };
 
-    const promptBox = (await findPromptBox(page, attempts)) ?? (await findPromptBoxByScoring(page, attempts));
-    const sendButton = (await findSendButton(page, attempts)) ?? (await findSendButtonByScoring(page, attempts));
+    const promptBox =
+      (await findByConfiguredSelector(page, config.promptSelectors, attempts, "config:prompt")) ??
+      (await findPromptBox(page, attempts)) ??
+      (await findPromptBoxByScoring(page, attempts, config.minPromptScore));
+    const sendButton =
+      (await findByConfiguredSelector(page, config.sendSelectors, attempts, "config:send")) ??
+      (await findSendButton(page, attempts)) ??
+      (await findSendButtonByScoring(page, attempts, config.minSendScore));
     if (promptBox && sendButton) return { ...result("ready", startedAt, null, attempts, null), variant: "resilient-scoring" };
 
     return { ...result("failed", startedAt, null, attempts, "ready_contract_not_satisfied"), variant: "resilient-scoring" };
@@ -1235,7 +1524,7 @@ git commit -m "Add resilient scoring Gemini adapter variant"
 
 ---
 
-### Task 6: Failure Artifacts
+### Task 7: Failure Artifacts
 
 **Files:**
 - Create: `research/gemini_browser_adapter/src/redaction.ts`
@@ -1400,6 +1689,8 @@ Modify `SendSingleOptions` in `dom-contract.ts`:
 export type SendSingleOptions = {
   timeoutMs: number;
   quietMs: number;
+  configPath?: string;
+  contractConfig?: DomContractConfig;
   artifactDir?: string;
   artifactMode?: "full" | "reduced";
   networkSummary?: NetworkEventSummary[];
@@ -1410,6 +1701,7 @@ Import:
 
 ```ts
 import { captureFailureArtifacts } from "./artifacts";
+import type { DomContractConfig } from "./config";
 import type { NetworkEventSummary } from "./types";
 ```
 
@@ -1476,7 +1768,7 @@ git commit -m "Add Gemini adapter failure artifacts"
 
 ---
 
-### Task 7: Telemetry-Assisted Variant
+### Task 8: Telemetry-Assisted Variant
 
 **Files:**
 - Create: `research/gemini_browser_adapter/src/telemetry.ts`
@@ -1643,10 +1935,16 @@ export async function sendSingleTelemetryAssisted(page: Page, prompt: string, op
   };
 }
 
-export async function probeReadyTelemetryAssisted(page: Page): Promise<GeminiAdapterResult> {
+export async function probeReadyTelemetryAssisted(
+  page: Page,
+  options: SendSingleOptions = { timeoutMs: 1_000, quietMs: 200 },
+): Promise<GeminiAdapterResult> {
   const networkSummary: GeminiAdapterResult["networkSummary"] = [];
   attachNetworkTelemetry(page, networkSummary);
-  const result = await probeReadyResilientScoring(page);
+  const result = await probeReadyResilientScoring(page, {
+    ...options,
+    networkSummary,
+  });
   return {
     ...result,
     variant: "telemetry-assisted",
@@ -1679,7 +1977,7 @@ git commit -m "Add telemetry-assisted Gemini adapter variant"
 
 ---
 
-### Task 8: Executable Matrix and Report Runner
+### Task 9: Executable Matrix and Report Runner
 
 **Files:**
 - Create: `research/gemini_browser_adapter/src/matrix-cases.ts`
@@ -1941,7 +2239,7 @@ import type { SendSingleOptions } from "../src/dom-contract";
 
 type AdapterHarness = {
   send(page: Parameters<typeof sendSingleDomOnly>[0], prompt: string, options: SendSingleOptions): Promise<GeminiAdapterResult>;
-  probe(page: Parameters<typeof sendSingleDomOnly>[0]): Promise<GeminiAdapterResult>;
+  probe(page: Parameters<typeof sendSingleDomOnly>[0], options: SendSingleOptions): Promise<GeminiAdapterResult>;
 };
 
 const adapters: Record<AdapterVariant, AdapterHarness> = {
@@ -1986,7 +2284,11 @@ test.describe("Gemini adapter executable scenario matrix", () => {
 
         const result =
           scenario.action === "probe"
-            ? await adapters[variant].probe(page)
+            ? await adapters[variant].probe(page, {
+                timeoutMs: scenario.timeoutMs,
+                quietMs: scenario.quietMs,
+                artifactDir,
+              })
             : await adapters[variant].send(page, "hello from matrix", {
                 timeoutMs: scenario.timeoutMs,
                 quietMs: scenario.quietMs,
@@ -2155,6 +2457,7 @@ npm run test:gemini-browser-adapter
 
 Expected:
 
+- research TypeScript typecheck passes;
 - unit tests pass;
 - Playwright e2e tests pass;
 - `research/gemini_browser_adapter/tests/matrix.spec.ts` runs all `48` matrix cases;
@@ -2203,7 +2506,7 @@ The matrix covers all `3` adapter variants against all `16` scenarios. Expected 
 Add this sentence under `## Method` in `research/gemini_browser_adapter/TOOLS_AND_METHODS.md`:
 
 ```markdown
-The executable matrix command is `npm run test:gemini-browser-adapter`; it runs unit tests, Playwright tests, the `3 variants x all scenarios` matrix spec, and the coverage-validating matrix report writer.
+The executable matrix command is `npm run test:gemini-browser-adapter`; it runs the research TypeScript typecheck, unit tests, Playwright tests, the `3 variants x all scenarios` matrix spec, and the coverage-validating matrix report writer.
 ```
 
 - [ ] **Step 9: Verify no generated artifacts are staged**
@@ -2227,7 +2530,7 @@ git commit -m "Add Gemini adapter research matrix report"
 
 ---
 
-### Task 9: Final Research Harness Verification
+### Task 10: Final Research Harness Verification
 
 **Files:**
 - No new files.
@@ -2241,9 +2544,19 @@ Run:
 npm run test:gemini-browser-adapter
 ```
 
-Expected: command exits `0`.
+Expected: command exits `0`. This includes `npm run test:gemini-browser-adapter:typecheck`.
 
-- [ ] **Step 2: Run Svelte/TypeScript project check**
+- [ ] **Step 2: Run research TypeScript check directly**
+
+Run:
+
+```powershell
+npm run test:gemini-browser-adapter:typecheck
+```
+
+Expected: command exits `0` and typechecks all TypeScript files under `research/gemini_browser_adapter`.
+
+- [ ] **Step 3: Run Svelte/TypeScript project check**
 
 Run:
 
@@ -2253,7 +2566,7 @@ npm run check
 
 Expected: command exits `0`. If unrelated pre-existing `src-tauri` changes do not affect this command, keep them out of this research commit.
 
-- [ ] **Step 3: Review generated matrix report**
+- [ ] **Step 4: Review generated matrix report**
 
 Run:
 
@@ -2263,7 +2576,7 @@ Get-Content -LiteralPath 'research\\gemini_browser_adapter\\artifacts\\matrix-re
 
 Expected: report lists all research tests and has `Failed or unexpected tests: 0` and `Missing matrix pairs: 0`.
 
-- [ ] **Step 4: Confirm production Rust/Tauri was untouched by research commits**
+- [ ] **Step 5: Confirm production Rust/Tauri was untouched by research commits**
 
 Run:
 
@@ -2273,7 +2586,7 @@ git diff --name-only HEAD -- src-tauri
 
 Expected: no output for changes introduced by this research plan. If user-owned `src-tauri` edits exist in the working tree, leave them unstaged.
 
-- [ ] **Step 5: Commit final plan doc update**
+- [ ] **Step 6: Commit final plan doc update**
 
 Run:
 
@@ -2290,6 +2603,8 @@ git commit -m "Add Gemini adapter research implementation plan"
 - The plan keeps Rust/Tauri out of the first research harness.
 - The plan creates a local mock Gemini page before adapter code.
 - The plan compares three variants from `TOOLS_AND_METHODS.md`.
+- The plan includes the local `gemini-dom-contract.config.json` selector override promised by `TOOLS_AND_METHODS.md`.
+- The plan typechecks research TypeScript with `tsc -p research/gemini_browser_adapter/tsconfig.json --noEmit`.
 - The plan runs all three variants against all sixteen matrix scenarios.
 - The plan covers success, manual-action, rate-limit, timeout, artifact, and telemetry paths.
 - The plan treats missing assistant answer containers as `response_parse_failed`, not `ok`.
