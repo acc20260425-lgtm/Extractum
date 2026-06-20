@@ -35,6 +35,7 @@ Create and modify only research/tooling files:
 - Create: `research/gemini_browser_adapter/src/telemetry.ts` for sanitized network telemetry.
 - Create: `research/gemini_browser_adapter/src/telemetry.test.ts` for redaction/unit tests.
 - Create: `research/gemini_browser_adapter/tests/telemetry-assisted.spec.ts` for telemetry-assisted behavior.
+- Create: `research/gemini_browser_adapter/matrix-cases.json` for shared scenario matrix metadata.
 - Create: `research/gemini_browser_adapter/src/matrix-cases.ts` for the executable scenario matrix and evidence requirements.
 - Create: `research/gemini_browser_adapter/tests/matrix.spec.ts` for the `3 variants x all scenarios` Playwright matrix.
 - Create: `research/gemini_browser_adapter/scripts/write-matrix-report.mjs` for coverage-validated report generation.
@@ -1574,6 +1575,42 @@ test("timeout writes screenshot, html, and telemetry artifacts", async ({ page }
   expect(telemetry.url).toContain("token=<redacted>");
   expect(Array.isArray(telemetry.locatorAttempts)).toBe(true);
 });
+
+test("reduced artifact mode skips screenshot and strips visible text and form values", async ({ page }) => {
+  await page.setContent(`
+    <main>
+      <p>Visible Secret Account Hint</p>
+      <textarea>secret prompt value</textarea>
+      <div contenteditable="true">private editable value</div>
+    </main>
+  `);
+
+  const result = await sendSingleResilientScoring(page, "typed secret prompt", {
+    timeoutMs: 500,
+    quietMs: 100,
+    artifactDir: "research/gemini_browser_adapter/artifacts/test-reduced",
+    artifactMode: "reduced",
+    contractConfig: {
+      promptSelectors: ["textarea"],
+      sendSelectors: ["[data-missing-send]"],
+      answerSelectors: ["[data-missing-answer]"],
+      minPromptScore: 5,
+      minSendScore: 4,
+    },
+  });
+
+  expect(result.status).toBe("failed");
+  expect(result.artifacts?.screenshotPath).toBeNull();
+  expect(result.artifacts?.htmlPath).toBeTruthy();
+  expect(existsSync(result.artifacts!.htmlPath!)).toBe(true);
+
+  const html = readFileSync(result.artifacts!.htmlPath!, "utf8");
+  expect(html).toContain("<textarea");
+  expect(html).not.toContain("Visible Secret Account Hint");
+  expect(html).not.toContain("secret prompt value");
+  expect(html).not.toContain("private editable value");
+  expect(html).not.toContain("typed secret prompt");
+});
 ```
 
 - [ ] **Step 2: Run artifact test to verify failure**
@@ -2033,6 +2070,7 @@ git commit -m "Add telemetry-assisted Gemini adapter variant"
 ### Task 9: Executable Matrix and Report Runner
 
 **Files:**
+- Create: `research/gemini_browser_adapter/matrix-cases.json`
 - Create: `research/gemini_browser_adapter/src/matrix-cases.ts`
 - Create: `research/gemini_browser_adapter/tests/matrix.spec.ts`
 - Create: `research/gemini_browser_adapter/scripts/write-matrix-report.mjs`
@@ -2041,9 +2079,212 @@ git commit -m "Add telemetry-assisted Gemini adapter variant"
 
 - [ ] **Step 1: Write executable matrix cases**
 
+Create `research/gemini_browser_adapter/matrix-cases.json`:
+
+```json
+{
+  "adapterVariants": ["dom-only", "resilient-scoring", "telemetry-assisted"],
+  "scenarios": [
+    {
+      "id": "ready",
+      "mockVariant": "ready",
+      "action": "probe",
+      "expectedStatuses": ["ready"],
+      "timeoutMs": 1000,
+      "quietMs": 200,
+      "requiresRawText": false,
+      "requiresArtifacts": false,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "happy-path",
+      "mockVariant": "happy-path",
+      "action": "send",
+      "expectedStatuses": ["ok"],
+      "timeoutMs": 5000,
+      "quietMs": 300,
+      "requiresRawText": true,
+      "requiresArtifacts": false,
+      "requiresTelemetryNetwork": true,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "wrapped-dom",
+      "mockVariant": "wrapped-dom",
+      "action": "send",
+      "expectedStatuses": ["ok"],
+      "timeoutMs": 5000,
+      "quietMs": 300,
+      "requiresRawText": true,
+      "requiresArtifacts": false,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "textarea-input",
+      "mockVariant": "textarea-input",
+      "action": "send",
+      "expectedStatuses": ["ok"],
+      "timeoutMs": 5000,
+      "quietMs": 300,
+      "requiresRawText": true,
+      "requiresArtifacts": false,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "contenteditable-input",
+      "mockVariant": "contenteditable-input",
+      "action": "send",
+      "expectedStatuses": ["ok"],
+      "timeoutMs": 5000,
+      "quietMs": 300,
+      "requiresRawText": true,
+      "requiresArtifacts": false,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "icon-send",
+      "mockVariant": "icon-send",
+      "action": "send",
+      "expectedStatuses": ["ok"],
+      "timeoutMs": 5000,
+      "quietMs": 300,
+      "requiresRawText": true,
+      "requiresArtifacts": false,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "slow-pauses",
+      "mockVariant": "slow-pauses",
+      "action": "send",
+      "expectedStatuses": ["ok"],
+      "timeoutMs": 6000,
+      "quietMs": 700,
+      "requiresRawText": true,
+      "requiresArtifacts": false,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "never-stable",
+      "mockVariant": "never-stable",
+      "action": "send",
+      "expectedStatuses": ["generation_timeout"],
+      "timeoutMs": 1500,
+      "quietMs": 300,
+      "requiresRawText": false,
+      "requiresArtifacts": true,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "login-required",
+      "mockVariant": "login-required",
+      "action": "send",
+      "expectedStatuses": ["login_required"],
+      "timeoutMs": 2000,
+      "quietMs": 300,
+      "requiresRawText": false,
+      "requiresArtifacts": true,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "captcha",
+      "mockVariant": "captcha",
+      "action": "send",
+      "expectedStatuses": ["captcha_required"],
+      "timeoutMs": 2000,
+      "quietMs": 300,
+      "requiresRawText": false,
+      "requiresArtifacts": true,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "account-picker",
+      "mockVariant": "account-picker",
+      "action": "send",
+      "expectedStatuses": ["account_picker"],
+      "timeoutMs": 2000,
+      "quietMs": 300,
+      "requiresRawText": false,
+      "requiresArtifacts": true,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "consent",
+      "mockVariant": "consent",
+      "action": "send",
+      "expectedStatuses": ["consent_required"],
+      "timeoutMs": 2000,
+      "quietMs": 300,
+      "requiresRawText": false,
+      "requiresArtifacts": true,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "rate-limit",
+      "mockVariant": "rate-limit",
+      "action": "send",
+      "expectedStatuses": ["rate_limited"],
+      "timeoutMs": 2000,
+      "quietMs": 300,
+      "requiresRawText": false,
+      "requiresArtifacts": true,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "unknown-modal",
+      "mockVariant": "unknown-modal",
+      "action": "send",
+      "expectedStatuses": ["manual_action_required"],
+      "timeoutMs": 2000,
+      "quietMs": 300,
+      "requiresRawText": false,
+      "requiresArtifacts": true,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "broken-answer",
+      "mockVariant": "broken-answer",
+      "action": "send",
+      "expectedStatuses": ["response_parse_failed"],
+      "timeoutMs": 1500,
+      "quietMs": 300,
+      "requiresRawText": false,
+      "requiresArtifacts": true,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "closed-page",
+      "mockVariant": "closed-page",
+      "action": "send",
+      "expectedStatuses": ["browser_crashed"],
+      "timeoutMs": 1000,
+      "quietMs": 200,
+      "requiresRawText": false,
+      "requiresArtifacts": false,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": true
+    }
+  ]
+}
+```
+
 Create `research/gemini_browser_adapter/src/matrix-cases.ts`:
 
 ```ts
+import rawMatrixDefinition from "../matrix-cases.json";
 import type { AdapterVariant, GeminiAdapterStatus } from "./types";
 
 export type MatrixAction = "probe" | "send";
@@ -2061,206 +2302,15 @@ export type MatrixScenario = {
   closePageBeforeRun: boolean;
 };
 
-export const matrixAdapterVariants: AdapterVariant[] = [
-  "dom-only",
-  "resilient-scoring",
-  "telemetry-assisted",
-];
+type MatrixDefinition = {
+  adapterVariants: AdapterVariant[];
+  scenarios: MatrixScenario[];
+};
 
-export const matrixScenarios: MatrixScenario[] = [
-  {
-    id: "ready",
-    mockVariant: "ready",
-    action: "probe",
-    expectedStatuses: ["ready"],
-    timeoutMs: 1_000,
-    quietMs: 200,
-    requiresRawText: false,
-    requiresArtifacts: false,
-    requiresTelemetryNetwork: false,
-    closePageBeforeRun: false,
-  },
-  {
-    id: "happy-path",
-    mockVariant: "happy-path",
-    action: "send",
-    expectedStatuses: ["ok"],
-    timeoutMs: 5_000,
-    quietMs: 300,
-    requiresRawText: true,
-    requiresArtifacts: false,
-    requiresTelemetryNetwork: true,
-    closePageBeforeRun: false,
-  },
-  {
-    id: "wrapped-dom",
-    mockVariant: "wrapped-dom",
-    action: "send",
-    expectedStatuses: ["ok"],
-    timeoutMs: 5_000,
-    quietMs: 300,
-    requiresRawText: true,
-    requiresArtifacts: false,
-    requiresTelemetryNetwork: false,
-    closePageBeforeRun: false,
-  },
-  {
-    id: "textarea-input",
-    mockVariant: "textarea-input",
-    action: "send",
-    expectedStatuses: ["ok"],
-    timeoutMs: 5_000,
-    quietMs: 300,
-    requiresRawText: true,
-    requiresArtifacts: false,
-    requiresTelemetryNetwork: false,
-    closePageBeforeRun: false,
-  },
-  {
-    id: "contenteditable-input",
-    mockVariant: "contenteditable-input",
-    action: "send",
-    expectedStatuses: ["ok"],
-    timeoutMs: 5_000,
-    quietMs: 300,
-    requiresRawText: true,
-    requiresArtifacts: false,
-    requiresTelemetryNetwork: false,
-    closePageBeforeRun: false,
-  },
-  {
-    id: "icon-send",
-    mockVariant: "icon-send",
-    action: "send",
-    expectedStatuses: ["ok"],
-    timeoutMs: 5_000,
-    quietMs: 300,
-    requiresRawText: true,
-    requiresArtifacts: false,
-    requiresTelemetryNetwork: false,
-    closePageBeforeRun: false,
-  },
-  {
-    id: "slow-pauses",
-    mockVariant: "slow-pauses",
-    action: "send",
-    expectedStatuses: ["ok"],
-    timeoutMs: 6_000,
-    quietMs: 700,
-    requiresRawText: true,
-    requiresArtifacts: false,
-    requiresTelemetryNetwork: false,
-    closePageBeforeRun: false,
-  },
-  {
-    id: "never-stable",
-    mockVariant: "never-stable",
-    action: "send",
-    expectedStatuses: ["generation_timeout"],
-    timeoutMs: 1_500,
-    quietMs: 300,
-    requiresRawText: false,
-    requiresArtifacts: true,
-    requiresTelemetryNetwork: false,
-    closePageBeforeRun: false,
-  },
-  {
-    id: "login-required",
-    mockVariant: "login-required",
-    action: "send",
-    expectedStatuses: ["login_required"],
-    timeoutMs: 2_000,
-    quietMs: 300,
-    requiresRawText: false,
-    requiresArtifacts: true,
-    requiresTelemetryNetwork: false,
-    closePageBeforeRun: false,
-  },
-  {
-    id: "captcha",
-    mockVariant: "captcha",
-    action: "send",
-    expectedStatuses: ["captcha_required"],
-    timeoutMs: 2_000,
-    quietMs: 300,
-    requiresRawText: false,
-    requiresArtifacts: true,
-    requiresTelemetryNetwork: false,
-    closePageBeforeRun: false,
-  },
-  {
-    id: "account-picker",
-    mockVariant: "account-picker",
-    action: "send",
-    expectedStatuses: ["account_picker"],
-    timeoutMs: 2_000,
-    quietMs: 300,
-    requiresRawText: false,
-    requiresArtifacts: true,
-    requiresTelemetryNetwork: false,
-    closePageBeforeRun: false,
-  },
-  {
-    id: "consent",
-    mockVariant: "consent",
-    action: "send",
-    expectedStatuses: ["consent_required"],
-    timeoutMs: 2_000,
-    quietMs: 300,
-    requiresRawText: false,
-    requiresArtifacts: true,
-    requiresTelemetryNetwork: false,
-    closePageBeforeRun: false,
-  },
-  {
-    id: "rate-limit",
-    mockVariant: "rate-limit",
-    action: "send",
-    expectedStatuses: ["rate_limited"],
-    timeoutMs: 2_000,
-    quietMs: 300,
-    requiresRawText: false,
-    requiresArtifacts: true,
-    requiresTelemetryNetwork: false,
-    closePageBeforeRun: false,
-  },
-  {
-    id: "unknown-modal",
-    mockVariant: "unknown-modal",
-    action: "send",
-    expectedStatuses: ["manual_action_required"],
-    timeoutMs: 2_000,
-    quietMs: 300,
-    requiresRawText: false,
-    requiresArtifacts: true,
-    requiresTelemetryNetwork: false,
-    closePageBeforeRun: false,
-  },
-  {
-    id: "broken-answer",
-    mockVariant: "broken-answer",
-    action: "send",
-    expectedStatuses: ["response_parse_failed"],
-    timeoutMs: 1_500,
-    quietMs: 300,
-    requiresRawText: false,
-    requiresArtifacts: true,
-    requiresTelemetryNetwork: false,
-    closePageBeforeRun: false,
-  },
-  {
-    id: "closed-page",
-    mockVariant: "closed-page",
-    action: "send",
-    expectedStatuses: ["browser_crashed"],
-    timeoutMs: 1_000,
-    quietMs: 200,
-    requiresRawText: false,
-    requiresArtifacts: false,
-    requiresTelemetryNetwork: false,
-    closePageBeforeRun: true,
-  },
-];
+const matrixDefinition = rawMatrixDefinition as MatrixDefinition;
+
+export const matrixAdapterVariants = matrixDefinition.adapterVariants;
+export const matrixScenarios = matrixDefinition.scenarios;
 
 export function expectedMatrixPairTitles(): string[] {
   return matrixAdapterVariants.flatMap((variant) =>
@@ -2414,28 +2464,17 @@ import path from "node:path";
 
 const artifactDir = "research/gemini_browser_adapter/artifacts";
 const inputPath = path.join(artifactDir, "playwright-results.json");
+const matrixPath = "research/gemini_browser_adapter/matrix-cases.json";
 const outputPath = path.join(artifactDir, "matrix-report.md");
-const expectedVariants = ["dom-only", "resilient-scoring", "telemetry-assisted"];
-const expectedScenarios = [
-  "ready",
-  "happy-path",
-  "wrapped-dom",
-  "textarea-input",
-  "contenteditable-input",
-  "icon-send",
-  "slow-pauses",
-  "never-stable",
-  "login-required",
-  "captcha",
-  "account-picker",
-  "consent",
-  "rate-limit",
-  "unknown-modal",
-  "broken-answer",
-  "closed-page",
-];
-const expectedPairs = expectedVariants.flatMap((variant) =>
-  expectedScenarios.map((scenario) => `${variant} / ${scenario}`),
+
+if (!existsSync(matrixPath)) {
+  console.error(`Missing matrix metadata at ${matrixPath}`);
+  process.exit(1);
+}
+
+const matrixDefinition = JSON.parse(readFileSync(matrixPath, "utf8"));
+const expectedPairs = matrixDefinition.adapterVariants.flatMap((variant) =>
+  matrixDefinition.scenarios.map((scenario) => `${variant} / ${scenario.id}`),
 );
 
 function collectSpecs(suite, rows = []) {
@@ -2466,7 +2505,7 @@ const rows = collectSpecs({ suites: json.suites || [], titlePath: [] });
 const passed = rows.filter((row) => row.status === "expected" || row.status === "passed").length;
 const failed = rows.length - passed;
 const worst = rows.reduce((max, row) => Math.max(max, row.duration), 0);
-const missingPairs = expectedPairs.filter((pair) => !rows.some((row) => row.title.includes(pair)));
+const missingPairs = expectedPairs.filter((pair) => !rows.some((row) => row.title.endsWith(pair)));
 const observedPairs = expectedPairs.length - missingPairs.length;
 
 const report = [
@@ -2547,11 +2586,12 @@ research/gemini_browser_adapter/artifacts/matrix-report.md
 The executable matrix is implemented in:
 
 ```text
+research/gemini_browser_adapter/matrix-cases.json
 research/gemini_browser_adapter/src/matrix-cases.ts
 research/gemini_browser_adapter/tests/matrix.spec.ts
 ```
 
-The matrix covers all `3` adapter variants against all `16` scenarios. Expected statuses and required evidence are asserted in `matrix.spec.ts`; report generation fails when any expected variant/scenario pair is absent from the Playwright JSON output.
+The matrix JSON is the single source of truth for adapter variants and scenario IDs. `matrix-cases.ts` imports it for Playwright tests, and `write-matrix-report.mjs` reads the same file for coverage validation. The matrix covers all `3` adapter variants against all `16` scenarios. Expected statuses and required evidence are asserted in `matrix.spec.ts`; report generation fails when any expected variant/scenario pair is absent from the Playwright JSON output.
 ````
 
 - [ ] **Step 8: Update tools document**
@@ -2577,7 +2617,7 @@ Expected: source files and docs may appear, but generated files under `artifacts
 Run:
 
 ```powershell
-git add research/gemini_browser_adapter/src/matrix-cases.ts research/gemini_browser_adapter/tests/matrix.spec.ts research/gemini_browser_adapter/scripts/write-matrix-report.mjs research/gemini_browser_adapter/RESILIENCE_TEST_MATRIX.md research/gemini_browser_adapter/TOOLS_AND_METHODS.md
+git add research/gemini_browser_adapter/matrix-cases.json research/gemini_browser_adapter/src/matrix-cases.ts research/gemini_browser_adapter/tests/matrix.spec.ts research/gemini_browser_adapter/scripts/write-matrix-report.mjs research/gemini_browser_adapter/RESILIENCE_TEST_MATRIX.md research/gemini_browser_adapter/TOOLS_AND_METHODS.md
 git commit -m "Add Gemini adapter research matrix report"
 ```
 
@@ -2660,11 +2700,14 @@ git commit -m "Add Gemini adapter research implementation plan"
 - The plan typechecks research TypeScript with `tsc -p research/gemini_browser_adapter/tsconfig.json --noEmit`.
 - The research TypeScript config uses bundler module resolution, matching the extensionless TS imports in the research files.
 - The plan runs all three variants against all sixteen matrix scenarios.
+- The matrix report derives expected pairs from `matrix-cases.json`, not a duplicated scenario list.
+- The matrix coverage check uses exact title suffix matching, not substring matching.
 - The plan covers success, manual-action, rate-limit, timeout, artifact, and telemetry paths.
 - The plan routes non-`ok` adapter returns through `finalizeResult` before returning to the test.
 - The artifact writer catches closed-page failures while reading page content and URL.
 - The plan treats missing assistant answer containers as `response_parse_failed`, not `ok`.
 - The plan redacts artifact URLs and requires reduced, text-free DOM artifacts for live Gemini runs.
+- The plan tests that reduced artifacts skip screenshots and strip visible text/form values.
 - The plan passes telemetry `networkSummary` through shared adapter options before artifact capture.
 - The plan writes sanitized artifacts only under ignored `research/gemini_browser_adapter/artifacts`.
 - The plan includes exact commands and expected outcomes for every task.
