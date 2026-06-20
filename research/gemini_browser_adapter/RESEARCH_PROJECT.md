@@ -61,6 +61,8 @@ any real Gemini automation is treated as reliable.
 - A mock Gemini page contract that simulates ready, generating, final answer,
   login required, manual action, rate limit, timeout, and broken DOM states.
 - A resilience test matrix with success and clean-failure expectations.
+- A tools and methods note that compares three adapter variants against the
+  same mock scenarios.
 - A diagnostic artifact contract covering screenshot, HTML or DOM snapshot,
   Playwright trace, locator attempts, sanitized network summary, URL, and
   status.
