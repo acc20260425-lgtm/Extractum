@@ -251,7 +251,7 @@ Expected: commit contains only shared protocol/type/label updates.
 - Create: `sidecars/gemini-browser/src/cdp-endpoint.ts`
 - Create: `sidecars/gemini-browser/src/cdp-endpoint.test.ts`
 
-- [ ] **Step 1: Write endpoint validation and probe tests**
+- [x] **Step 1: Write endpoint validation and probe tests**
 
 Create `sidecars/gemini-browser/src/cdp-endpoint.test.ts`:
 
@@ -389,7 +389,7 @@ describe("CDP status probe", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -399,7 +399,7 @@ npm.cmd run test:gemini-browser-sidecar:unit
 
 Expected: FAIL because `sidecars/gemini-browser/src/cdp-endpoint.ts` does not exist.
 
-- [ ] **Step 3: Implement CDP endpoint helpers**
+- [x] **Step 3: Implement CDP endpoint helpers**
 
 Create `sidecars/gemini-browser/src/cdp-endpoint.ts`:
 
@@ -528,7 +528,7 @@ function isChromeVersionPayload(value: unknown): value is {
 }
 ```
 
-- [ ] **Step 4: Run endpoint tests**
+- [x] **Step 4: Run endpoint tests**
 
 Run:
 
@@ -538,7 +538,7 @@ npm.cmd run test:gemini-browser-sidecar:unit
 
 Expected: PASS for `cdp-endpoint.test.ts` and existing sidecar tests.
 
-- [ ] **Step 5: Commit endpoint helpers**
+- [x] **Step 5: Commit endpoint helpers**
 
 Run:
 
