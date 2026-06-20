@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the existing TypeScript sidecar protocol and resilient adapter. Add a release-aware sidecar launcher that prefers a Tauri bundled sidecar binary and keeps an explicit development fallback for local runs. Package only the sidecar executable and sidecar code; browser profile data, cookies, credentials, run artifacts, and live Gemini transcripts remain app-data/runtime files and are never bundled.
 
-**Tech Stack:** Tauri 2, `tauri-plugin-shell`, Rust async command handling, Node/TypeScript sidecar, Playwright, `pkg`-style Node sidecar binary packaging, Vitest, Cargo tests.
+**Tech Stack:** Tauri 2, `tauri-plugin-shell`, Rust async command handling, Node/TypeScript sidecar, Playwright, `esbuild` CJS sidecar bundling, `pkg`-style Node sidecar binary packaging, Vitest, Cargo tests.
 
 ---
 
@@ -123,18 +123,18 @@ Expected: commit contains only the plan checkbox update.
 - Modify: `package-lock.json`
 - Modify: `docs/superpowers/plans/2026-06-20-gemini-browser-sidecar-packaging.md`
 
-- [ ] **Step 1: Add the sidecar packager dependency**
+- [x] **Step 1: Add the sidecar packager dependencies**
 
 Run:
 
 ```powershell
 $npm = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'npm.cmd' } else { 'npm' }
-& $npm install --save-dev pkg
+& $npm install --save-dev pkg esbuild
 ```
 
-Expected: `package.json` and `package-lock.json` include `pkg`.
+Expected: `package.json` and `package-lock.json` include `pkg` and `esbuild`.
 
-- [ ] **Step 2: Build the current TypeScript sidecar**
+- [x] **Step 2: Build the current TypeScript sidecar**
 
 Run:
 
@@ -145,21 +145,49 @@ $npm = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'npm.cmd' } else { 'npm' }
 
 Expected: `sidecars/gemini-browser/dist/index.js` exists.
 
-- [ ] **Step 3: Package the current sidecar before Rust/Tauri changes**
+- [x] **Step 3: Package the current sidecar before Rust/Tauri changes**
 
 Run:
 
 ```powershell
 $ext = if ($IsWindows -or $env:OS -eq 'Windows_NT') { '.exe' } else { '' }
 $npx = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'npx.cmd' } else { 'npx' }
-& $npx pkg sidecars/gemini-browser/dist/index.js --output "artifacts/gemini-browser-sidecar-feasibility$ext"
+$pkgPlatform = if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
+  'win'
+} elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::OSX)) {
+  'macos'
+} elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Linux)) {
+  'linux'
+} else {
+  throw 'Unsupported pkg platform'
+}
+$pkgArch = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
+  'X64' { 'x64'; break }
+  'Arm64' { 'arm64'; break }
+  default { throw "Unsupported pkg architecture: $([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)" }
+}
+$pkgTarget = "node18-$pkgPlatform-$pkgArch"
+New-Item -ItemType Directory -Force artifacts | Out-Null
+@'
+{
+  "pkg": {
+    "assets": [
+      "../node_modules/playwright-core/browsers.json"
+    ]
+  }
+}
+'@ | Set-Content -Encoding UTF8 artifacts/gemini-browser-pkg.config.json
+& $npx esbuild sidecars/gemini-browser/src/index.ts --bundle --platform=node --format=cjs --packages=external --outfile=artifacts/gemini-browser-sidecar-bundle.cjs
+& $npx pkg artifacts/gemini-browser-sidecar-bundle.cjs --config artifacts/gemini-browser-pkg.config.json --targets $pkgTarget --no-bytecode --public --public-packages "*" --output "artifacts/gemini-browser-sidecar-feasibility$ext"
 ```
 
 Expected: the command exits `0` and writes a local feasibility binary under `artifacts/`.
 
-If this fails because `pkg` cannot package the current ESM/Playwright entrypoint, stop this plan before changing Rust/Tauri. Replace the packaging tool in this task and in Task 6 with the smallest working sidecar binary packaging approach, then re-run this feasibility smoke.
+This intentionally uses `esbuild` to convert the TypeScript/ESM sidecar entrypoint into a CommonJS bundle before `pkg` runs. Direct `pkg sidecars/gemini-browser/dist/index.js` is not valid for this project because the current developer Node can be newer than `pkg`'s supported target list, and the ESM/Playwright dependency graph needs an explicit CommonJS entrypoint plus the `playwright-core/browsers.json` asset.
 
-- [ ] **Step 4: Smoke the packaged binary protocol**
+If this `esbuild -> pkg` pipeline fails because `pkg` cannot package the current Playwright dependency graph, stop this plan before changing Rust/Tauri. Replace the packaging tool in this task and in Task 6 with the smallest working sidecar binary packaging approach, then re-run this feasibility smoke.
+
+- [x] **Step 4: Smoke the packaged binary protocol**
 
 Run:
 
@@ -177,7 +205,7 @@ If the packaged process hangs or does not exit after stdin closes, stop and add 
 
 This is a protocol/import feasibility gate only. It proves the packaged Node entrypoint starts, parses JSONL, and answers `status`; it does not launch a Playwright browser context. Browser launch from the packaged binary is verified later by Task 7.
 
-- [ ] **Step 5: Confirm feasibility artifacts are ignored**
+- [x] **Step 5: Confirm feasibility artifacts are ignored**
 
 Run:
 
@@ -187,7 +215,7 @@ git status --short --untracked-files=all artifacts
 
 Expected: no feasibility binary, stdout, stderr, stdin, or profile data appears in git status.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Update this task's checkboxes to `[x]`.
 
@@ -198,7 +226,7 @@ git add package.json package-lock.json docs/superpowers/plans/2026-06-20-gemini-
 git commit -m "build: prove Gemini sidecar packaging feasibility"
 ```
 
-Expected: commit includes the packager dependency and plan checkbox update only. Feasibility binaries and profile artifacts remain ignored.
+Expected: commit includes the packager dependencies and plan checkbox update only. Feasibility binaries and profile artifacts remain ignored.
 
 ---
 
@@ -870,13 +898,17 @@ Expected: commit includes shell transport support and plan checkbox update.
 Create `scripts/build-gemini-browser-sidecar.mjs`:
 
 ```js
-import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 const repoRoot = process.cwd();
+const sidecarEntry = path.join(repoRoot, "sidecars", "gemini-browser", "src", "index.ts");
 const sidecarDist = path.join(repoRoot, "sidecars", "gemini-browser", "dist", "index.js");
 const binariesDir = path.join(repoRoot, "src-tauri", "binaries");
+const packageWorkDir = path.join(repoRoot, "artifacts", "gemini-browser-sidecar-package");
+const bundleOutput = path.join(packageWorkDir, "index.cjs");
+const pkgConfigPath = path.join(packageWorkDir, "pkg.config.json");
 const extension = process.platform === "win32" ? ".exe" : "";
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
@@ -904,6 +936,29 @@ function output(command, args) {
   return result.stdout.trim();
 }
 
+function pkgTarget() {
+  const platform =
+    process.platform === "win32"
+      ? "win"
+      : process.platform === "darwin"
+        ? "macos"
+        : process.platform === "linux"
+          ? "linux"
+          : null;
+  const arch =
+    process.arch === "x64"
+      ? "x64"
+      : process.arch === "arm64"
+        ? "arm64"
+        : null;
+
+  if (!platform || !arch) {
+    throw new Error(`Unsupported pkg target platform: ${process.platform}/${process.arch}`);
+  }
+
+  return `node18-${platform}-${arch}`;
+}
+
 run("sidecar TypeScript build", npmCommand, ["run", "test:gemini-browser-sidecar:build"]);
 
 if (!existsSync(sidecarDist)) {
@@ -924,19 +979,55 @@ if (requestedTarget && requestedTarget !== targetTriple) {
 }
 
 mkdirSync(binariesDir, { recursive: true });
+mkdirSync(packageWorkDir, { recursive: true });
 
 const rawOutput = path.join(binariesDir, `gemini-browser-sidecar${extension}`);
 const tauriOutput = path.join(
   binariesDir,
   `gemini-browser-sidecar-${targetTriple}${extension}`,
 );
+const browsersJsonAsset = path.relative(
+  packageWorkDir,
+  path.join(repoRoot, "node_modules", "playwright-core", "browsers.json"),
+);
 
 rmSync(rawOutput, { force: true });
 rmSync(tauriOutput, { force: true });
+rmSync(bundleOutput, { force: true });
+writeFileSync(
+  pkgConfigPath,
+  JSON.stringify(
+    {
+      pkg: {
+        assets: [browsersJsonAsset.replace(/\\/g, "/")],
+      },
+    },
+    null,
+    2,
+  ),
+);
+
+run("sidecar CommonJS bundle", npxCommand, [
+  "esbuild",
+  sidecarEntry,
+  "--bundle",
+  "--platform=node",
+  "--format=cjs",
+  "--packages=external",
+  `--outfile=${bundleOutput}`,
+]);
 
 run("Node sidecar binary packaging", npxCommand, [
   "pkg",
-  sidecarDist,
+  bundleOutput,
+  "--config",
+  pkgConfigPath,
+  "--targets",
+  pkgTarget(),
+  "--no-bytecode",
+  "--public",
+  "--public-packages",
+  "*",
   "--output",
   rawOutput,
 ]);
@@ -1056,15 +1147,15 @@ src-tauri/binaries/gemini-browser-sidecar-*
 
 Do not ignore `src-tauri/binaries/.gitkeep` if a later task adds one.
 
-- [ ] **Step 6: Confirm the sidecar packager dependency**
+- [ ] **Step 6: Confirm the sidecar packager dependencies**
 
 Run:
 
 ```powershell
-npm.cmd ls pkg
+npm.cmd ls pkg esbuild
 ```
 
-Expected: `pkg` is installed from Task 2 and listed as a dev dependency.
+Expected: `pkg` and `esbuild` are installed from Task 2 and listed as dev dependencies.
 
 - [ ] **Step 7: Run script checks**
 
