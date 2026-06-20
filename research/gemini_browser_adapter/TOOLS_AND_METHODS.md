@@ -77,6 +77,16 @@ and do not treat endpoint names or response shapes as the adapter contract.
 The tools should be runnable without a Google session. Live Gemini smoke tests
 are optional and manual.
 
+## Runtime Boundary
+
+The production app should stay on Rust/Tauri, Svelte/TypeScript, and a
+Node/TypeScript sidecar. Python is allowed only for local research tooling under
+`research/`, such as fixture generation, DOM snapshot analysis, matrix result
+summaries, and report generation.
+
+Do not add Python as a packaged runtime dependency, production sidecar, or
+Gemini Browser Provider execution layer.
+
 ## Method
 
 Run all variants against the same scenario matrix:
@@ -112,6 +122,7 @@ Prefer the implementation that:
 
 ## Out Of MVP Scope
 
+- Python runtime dependencies in the production app.
 - VLM-based runtime recognition.
 - Screenshot upload to external services.
 - Remote selector update servers.

@@ -51,6 +51,9 @@ any real Gemini automation is treated as reliable.
   Google account material in this research folder.
 - No dependency on real Gemini Web tests as the default verification path.
 - No headless hidden browser flow for user-account interactions.
+- No Python runtime dependency, packaged Python sidecar, or Python execution
+  layer in the production Gemini Browser Provider. Python belongs only in
+  local `research/` tooling.
 - No remote selector update mechanism unless a later design adds signatures,
   schema versions, rollback, and a ban on arbitrary JavaScript.
 - No parsing of private Gemini RPC payloads as a stable source of truth.
