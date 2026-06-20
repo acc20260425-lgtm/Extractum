@@ -105,7 +105,7 @@ export function statusTone(status: string): BadgeVariant {
 
 export function normalizeRef(candidate: string) {
   const trimmed = candidate.trim().replace(/^\[/, "").replace(/\]$/, "");
-  return /^s\d+-m\d+$/.test(trimmed) ? trimmed : null;
+  return /^s\d+-i\d+(?:@\d+(?:-\d+)?ms)?$/.test(trimmed) ? trimmed : null;
 }
 
 export function parseReportSegments(line: string): ReportSegment[] {

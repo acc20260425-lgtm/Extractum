@@ -116,17 +116,20 @@ describe("analysis-utils", () => {
   });
 
   it("normalizes only supported trace refs", () => {
-    expect(normalizeRef("[s12-m34]")).toBe("s12-m34");
-    expect(normalizeRef(" s1-m2 ")).toBe("s1-m2");
+    expect(normalizeRef("[s12-i34]")).toBe("s12-i34");
+    expect(normalizeRef(" s1-i2 ")).toBe("s1-i2");
+    expect(normalizeRef("s20-i4@754000ms")).toBe("s20-i4@754000ms");
+    expect(normalizeRef("s20-i4@754000-790000ms")).toBe("s20-i4@754000-790000ms");
+    expect(normalizeRef("s12-m34")).toBeNull();
     expect(normalizeRef("source-1-message-2")).toBeNull();
   });
 
   it("parses report refs while preserving surrounding text", () => {
-    expect(parseReportSegments("See [s1-m2, nope, s3-m4] now")).toEqual([
+    expect(parseReportSegments("See [s1-i2, nope, s3-i4] now")).toEqual([
       { type: "text", value: "See ", key: "text-0" },
-      { type: "ref", value: "s1-m2", key: "ref-4-s1-m2-0" },
+      { type: "ref", value: "s1-i2", key: "ref-4-s1-i2-0" },
       { type: "text", value: ", ", key: "comma-4-0" },
-      { type: "ref", value: "s3-m4", key: "ref-4-s3-m4-1" },
+      { type: "ref", value: "s3-i4", key: "ref-4-s3-i4-1" },
       { type: "text", value: " now", key: "text-tail-24" },
     ]);
 
@@ -137,14 +140,14 @@ describe("analysis-utils", () => {
   });
 
   it("splits reports into stable keyed lines", () => {
-    expect(reportLines("first\n[s1-m2]")).toEqual([
+    expect(reportLines("first\n[s1-i2]")).toEqual([
       {
         key: "line-0",
         segments: [{ type: "text", value: "first", key: "text-tail-0" }],
       },
       {
         key: "line-1",
-        segments: [{ type: "ref", value: "s1-m2", key: "ref-0-s1-m2-0" }],
+        segments: [{ type: "ref", value: "s1-i2", key: "ref-0-s1-i2-0" }],
       },
     ]);
   });
