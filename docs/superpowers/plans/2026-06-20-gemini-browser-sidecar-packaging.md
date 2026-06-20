@@ -61,7 +61,7 @@ This first packaging slice is host-target only. It supports the current develope
 **Files:**
 - Modify: `docs/superpowers/plans/2026-06-20-gemini-browser-sidecar-packaging.md`
 
-- [ ] **Step 1: Create the feature branch**
+- [x] **Step 1: Create the feature branch**
 
 Run:
 
@@ -71,7 +71,7 @@ git switch -c gemini-browser-sidecar-packaging
 
 Expected: `Switched to a new branch 'gemini-browser-sidecar-packaging'`.
 
-- [ ] **Step 2: Confirm the worktree is clean**
+- [x] **Step 2: Confirm the worktree is clean**
 
 Run:
 
@@ -81,7 +81,7 @@ git status --short --branch
 
 Expected: only the new branch header, no modified files.
 
-- [ ] **Step 3: Run current sidecar verification**
+- [x] **Step 3: Run current sidecar verification**
 
 Run:
 
@@ -91,7 +91,7 @@ npm.cmd run test:gemini-browser-sidecar
 
 Expected: sidecar typecheck, unit tests, and build pass.
 
-- [ ] **Step 4: Run current Rust Gemini browser tests**
+- [x] **Step 4: Run current Rust Gemini browser tests**
 
 Run:
 
@@ -101,7 +101,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib gemini_browser
 
 Expected: existing `gemini_browser` tests pass.
 
-- [ ] **Step 5: Mark Task 1 complete and commit**
+- [x] **Step 5: Mark Task 1 complete and commit**
 
 Update this task's checkboxes to `[x]`.
 
