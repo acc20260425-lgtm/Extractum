@@ -97,9 +97,15 @@ Run all variants against the same scenario matrix:
 4. Verify that every scenario terminates within its hard timeout.
 5. Compare diagnostics quality when the adapter fails.
 
+The planned executable command is `npm run test:gemini-browser-adapter`. It
+should use a wrapper runner so the matrix report is still generated after a
+Playwright e2e failure.
+
 The matrix should report:
 
+- success count, including `ok` and `ready`;
 - `ok` count;
+- `ready` count;
 - clean typed failure count;
 - unexpected failure count;
 - timeout/hang count;

@@ -39,6 +39,7 @@ Create and modify only research/tooling files:
 - Create: `research/gemini_browser_adapter/src/matrix-cases.ts` for the executable scenario matrix and evidence requirements.
 - Create: `research/gemini_browser_adapter/tests/matrix.spec.ts` for the `3 variants x all scenarios` Playwright matrix.
 - Create: `research/gemini_browser_adapter/scripts/write-matrix-report.mjs` for coverage-validated report generation.
+- Create: `research/gemini_browser_adapter/scripts/run-full-verification.mjs` so matrix reporting runs even after Playwright failures.
 - Modify: `research/gemini_browser_adapter/RESILIENCE_TEST_MATRIX.md` to add the executable command and artifact paths.
 - Modify: `research/gemini_browser_adapter/TOOLS_AND_METHODS.md` to reference the matrix runner.
 
@@ -52,6 +53,7 @@ Do not touch `src-tauri/*` in this plan.
 - Modify: `package.json`
 - Create: `research/gemini_browser_adapter/playwright.config.ts`
 - Create: `research/gemini_browser_adapter/tsconfig.json`
+- Create: `research/gemini_browser_adapter/scripts/run-full-verification.mjs`
 
 - [ ] **Step 1: Add Playwright test dependency**
 
@@ -86,10 +88,54 @@ Edit `package.json` and add these scripts inside `"scripts"`:
 "test:gemini-browser-adapter:unit": "node scripts/run-vitest.mjs run research/gemini_browser_adapter/**/*.test.ts",
 "test:gemini-browser-adapter:e2e": "playwright test -c research/gemini_browser_adapter/playwright.config.ts",
 "test:gemini-browser-adapter:report": "node research/gemini_browser_adapter/scripts/write-matrix-report.mjs",
-"test:gemini-browser-adapter": "npm run test:gemini-browser-adapter:typecheck && npm run test:gemini-browser-adapter:unit && npm run test:gemini-browser-adapter:e2e && npm run test:gemini-browser-adapter:report"
+"test:gemini-browser-adapter": "node research/gemini_browser_adapter/scripts/run-full-verification.mjs"
 ```
 
-- [ ] **Step 4: Create Playwright config**
+- [ ] **Step 4: Create full verification wrapper**
+
+Create `research/gemini_browser_adapter/scripts/run-full-verification.mjs`:
+
+```js
+import { spawnSync } from "node:child_process";
+
+const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+
+function run(label, args) {
+  console.log(`\n== ${label} ==`);
+  const result = spawnSync(npm, args, { stdio: "inherit" });
+  if (result.error) {
+    console.error(`${label} failed to start: ${result.error.message}`);
+    return 1;
+  }
+  return result.status ?? 1;
+}
+
+for (const [label, args] of [
+  ["research typecheck", ["run", "test:gemini-browser-adapter:typecheck"]],
+  ["research unit tests", ["run", "test:gemini-browser-adapter:unit"]],
+]) {
+  const code = run(label, args);
+  if (code !== 0) process.exit(code);
+}
+
+let e2eCode = 1;
+let reportCode = 1;
+try {
+  e2eCode = run("research Playwright e2e", ["run", "test:gemini-browser-adapter:e2e"]);
+} finally {
+  reportCode = run("research matrix report", ["run", "test:gemini-browser-adapter:report"]);
+}
+
+process.exit(e2eCode || reportCode);
+```
+
+Expected:
+
+- typecheck and unit failures stop the wrapper before e2e;
+- after Playwright e2e starts, the matrix report command runs even when Playwright exits non-zero;
+- the wrapper exits non-zero when either e2e or report generation fails.
+
+- [ ] **Step 5: Create Playwright config**
 
 Create `research/gemini_browser_adapter/playwright.config.ts`:
 
@@ -121,7 +167,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 5: Create research TypeScript config**
+- [ ] **Step 6: Create research TypeScript config**
 
 Create `research/gemini_browser_adapter/tsconfig.json`:
 
@@ -165,7 +211,7 @@ Expected: command exits `0`. Do not run `playwright --list` yet; the Playwright 
 Run:
 
 ```powershell
-git add package.json package-lock.json research/gemini_browser_adapter/playwright.config.ts research/gemini_browser_adapter/tsconfig.json docs/superpowers/plans/2026-06-20-gemini-browser-adapter-research-plan.md
+git add package.json package-lock.json research/gemini_browser_adapter/playwright.config.ts research/gemini_browser_adapter/tsconfig.json research/gemini_browser_adapter/scripts/run-full-verification.mjs docs/superpowers/plans/2026-06-20-gemini-browser-adapter-research-plan.md
 git commit -m "Add Gemini adapter research test tooling"
 ```
 
@@ -545,7 +591,7 @@ Create `research/gemini_browser_adapter/src/status.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { isTerminalStatus, isManualActionStatus } from "./types";
+import { isManualActionStatus, isSuccessStatus, isTerminalStatus } from "./types";
 
 describe("Gemini adapter status helpers", () => {
   it("detects terminal statuses", () => {
@@ -558,6 +604,12 @@ describe("Gemini adapter status helpers", () => {
     expect(isManualActionStatus("login_required")).toBe(true);
     expect(isManualActionStatus("manual_action_required")).toBe(true);
     expect(isManualActionStatus("rate_limited")).toBe(false);
+  });
+
+  it("detects success statuses", () => {
+    expect(isSuccessStatus("ok")).toBe(true);
+    expect(isSuccessStatus("ready")).toBe(true);
+    expect(isSuccessStatus("response_parse_failed")).toBe(false);
   });
 });
 ```
@@ -635,6 +687,10 @@ export function isTerminalStatus(status: GeminiAdapterStatus): boolean {
   return status !== "ready" && status !== "running";
 }
 
+export function isSuccessStatus(status: GeminiAdapterStatus): boolean {
+  return status === "ok" || status === "ready";
+}
+
 export function isManualActionStatus(status: GeminiAdapterStatus): boolean {
   return (
     status === "login_required" ||
@@ -654,7 +710,7 @@ Run:
 npm run test:gemini-browser-adapter:unit -- research/gemini_browser_adapter/src/status.test.ts
 ```
 
-Expected: PASS for 2 tests.
+Expected: PASS for 3 tests.
 
 - [ ] **Step 5: Commit shared types**
 
@@ -1696,10 +1752,21 @@ async function safeHtmlSnapshot(input: CaptureFailureInput): Promise<string> {
 }
 
 export async function captureFailureArtifacts(input: CaptureFailureInput): Promise<FailureArtifacts> {
-  await mkdir(input.artifactDir, { recursive: true });
   const screenshotPath = input.artifactMode === "reduced" ? null : path.join(input.artifactDir, "failure.png");
   const htmlPath = path.join(input.artifactDir, "page.html");
   const telemetryPath = path.join(input.artifactDir, "telemetry.json");
+  const artifactDirReady = await mkdir(input.artifactDir, { recursive: true })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!artifactDirReady) {
+    return {
+      screenshotPath: null,
+      htmlPath: null,
+      telemetryPath: null,
+      tracePath: null,
+    };
+  }
 
   const html = await safeHtmlSnapshot(input);
   const pageUrl = safePageUrl(input.page);
@@ -1707,8 +1774,10 @@ export async function captureFailureArtifacts(input: CaptureFailureInput): Promi
   if (screenshotPath) {
     await input.page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
   }
-  await writeFile(htmlPath, html, "utf8").catch(() => undefined);
-  await writeFile(
+  const htmlWritten = await writeFile(htmlPath, html, "utf8")
+    .then(() => true)
+    .catch(() => false);
+  const telemetryWritten = await writeFile(
     telemetryPath,
     JSON.stringify(
       {
@@ -1722,12 +1791,14 @@ export async function captureFailureArtifacts(input: CaptureFailureInput): Promi
       2,
     ),
     "utf8",
-  );
+  )
+    .then(() => true)
+    .catch(() => false);
 
   return {
     screenshotPath,
-    htmlPath,
-    telemetryPath,
+    htmlPath: htmlWritten ? htmlPath : null,
+    telemetryPath: telemetryWritten ? telemetryPath : null,
     tracePath: null,
   };
 }
@@ -1754,6 +1825,7 @@ Import:
 ```ts
 import { captureFailureArtifacts } from "./artifacts";
 import type { DomContractConfig } from "./config";
+import { isSuccessStatus } from "./types";
 import type { NetworkEventSummary } from "./types";
 ```
 
@@ -1765,7 +1837,7 @@ async function withArtifacts(
   base: GeminiAdapterResult,
   options: SendSingleOptions,
 ): Promise<GeminiAdapterResult> {
-  if (!options.artifactDir || base.status === "ok") return base;
+  if (!options.artifactDir || isSuccessStatus(base.status)) return base;
   return {
     ...base,
     artifacts: await captureFailureArtifacts({
@@ -1831,7 +1903,7 @@ export async function sendSingleResilientScoring(page: Page, prompt: string, opt
 }
 ```
 
-Apply the same `complete(...)` pattern to `sendSingleDomOnly` for its `browser_crashed`, critical-state, prompt-missing, send-missing, and final-answer returns. The matrix artifact cases must fail if a non-`ok` result with `artifactDir` skips `finalizeResult`.
+Apply the same `complete(...)` pattern to `sendSingleDomOnly` for its `browser_crashed`, critical-state, prompt-missing, send-missing, and final-answer returns. The matrix artifact cases must fail if a non-success result with `artifactDir` skips `finalizeResult`.
 
 - [ ] **Step 6: Verify artifact tests pass**
 
@@ -2582,6 +2654,10 @@ function average(values) {
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
+function isSuccessStatus(status) {
+  return status === "ok" || status === "ready";
+}
+
 if (!existsSync(inputPath)) {
   console.error(`Missing Playwright JSON results at ${inputPath}`);
   process.exit(1);
@@ -2597,8 +2673,10 @@ const observedPairs = expectedPairs.length - missingPairs.length;
 const resultRows = collectResultFiles(matrixResultDir).map((filePath) => JSON.parse(readFileSync(filePath, "utf8")));
 const resultPairs = new Set(resultRows.map((row) => `${row.variant} / ${row.scenarioId}`));
 const missingResultPairs = expectedPairs.filter((pair) => !resultPairs.has(pair));
+const successCount = resultRows.filter((row) => isSuccessStatus(row.status)).length;
 const okCount = resultRows.filter((row) => row.status === "ok").length;
-const cleanTypedFailureCount = resultRows.filter((row) => row.status !== "ok" && row.expectedStatuses.includes(row.status)).length;
+const readyCount = resultRows.filter((row) => row.status === "ready").length;
+const cleanTypedFailureCount = resultRows.filter((row) => !isSuccessStatus(row.status) && row.expectedStatuses.includes(row.status)).length;
 const unexpectedFailureCount = resultRows.filter((row) => row.unexpectedStatus).length;
 const timeoutOrHangCount = resultRows.filter((row) => row.timeoutOrHang).length;
 const falseCompletionCount = resultRows.filter((row) => row.falseCompletion).length;
@@ -2611,8 +2689,10 @@ const variants = matrixDefinition.adapterVariants.map((variant) => {
   const rowsForVariant = resultRows.filter((row) => row.variant === variant);
   return {
     variant,
+    success: rowsForVariant.filter((row) => isSuccessStatus(row.status)).length,
     ok: rowsForVariant.filter((row) => row.status === "ok").length,
-    typedFailure: rowsForVariant.filter((row) => row.status !== "ok" && row.expectedStatuses.includes(row.status)).length,
+    ready: rowsForVariant.filter((row) => row.status === "ready").length,
+    typedFailure: rowsForVariant.filter((row) => !isSuccessStatus(row.status) && row.expectedStatuses.includes(row.status)).length,
     unexpected: rowsForVariant.filter((row) => row.unexpectedStatus).length,
     falseCompletion: rowsForVariant.filter((row) => row.falseCompletion).length,
     averageElapsedMs: average(rowsForVariant.map((row) => row.elapsedMs)),
@@ -2636,7 +2716,9 @@ const report = [
   "",
   "## Adapter Result Metrics",
   "",
+  `Success count: ${successCount}`,
   `OK count: ${okCount}`,
+  `Ready count: ${readyCount}`,
   `Clean typed failure count: ${cleanTypedFailureCount}`,
   `Unexpected failure count: ${unexpectedFailureCount}`,
   `Timeout/hang count: ${timeoutOrHangCount}`,
@@ -2645,10 +2727,10 @@ const report = [
   `Average elapsed ms: ${averageElapsedMs}`,
   `Worst elapsed ms: ${worstElapsedMs}`,
   "",
-  "| Variant | OK | Clean Typed Failure | Unexpected | False Completion | Avg ms | Worst ms |",
-  "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+  "| Variant | Success | OK | Ready | Clean Typed Failure | Unexpected | False Completion | Avg ms | Worst ms |",
+  "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
   ...variants.map((row) =>
-    `| ${row.variant} | ${row.ok} | ${row.typedFailure} | ${row.unexpected} | ${row.falseCompletion} | ${row.averageElapsedMs} | ${row.worstElapsedMs} |`,
+    `| ${row.variant} | ${row.success} | ${row.ok} | ${row.ready} | ${row.typedFailure} | ${row.unexpected} | ${row.falseCompletion} | ${row.averageElapsedMs} | ${row.worstElapsedMs} |`,
   ),
   "",
   "## Matrix Coverage",
@@ -2729,7 +2811,9 @@ The matrix JSON is the single source of truth for adapter variants and scenario 
 Add this sentence under `## Method` in `research/gemini_browser_adapter/TOOLS_AND_METHODS.md`:
 
 ```markdown
-The executable matrix command is `npm run test:gemini-browser-adapter`; it runs the research TypeScript typecheck, unit tests, Playwright tests, the `3 variants x all scenarios` matrix spec, and the coverage-validating matrix report writer.
+The planned executable command is `npm run test:gemini-browser-adapter`. It
+should use a wrapper runner so the matrix report is still generated after a
+Playwright e2e failure.
 ```
 
 - [ ] **Step 9: Verify no generated artifacts are staged**
@@ -2832,11 +2916,11 @@ git commit -m "Add Gemini adapter research implementation plan"
 - The plan runs all three variants against all sixteen matrix scenarios.
 - The matrix report derives expected pairs from `matrix-cases.json`, not a duplicated scenario list.
 - The matrix coverage check uses exact title suffix matching, not substring matching.
-- The matrix report includes ok, clean typed failure, unexpected failure, timeout/hang, artifact completeness, false completion, average elapsed, and worst elapsed metrics.
+- The matrix report includes success, ok, ready, clean typed failure, unexpected failure, timeout/hang, artifact completeness, false completion, average elapsed, and worst elapsed metrics.
 - Matrix artifact requirements are granular: telemetry, HTML/reduced DOM, and screenshot are checked independently.
 - Closed-page/browser-failure scenarios require telemetry and placeholder HTML artifacts but not screenshot artifacts.
 - The plan covers success, manual-action, rate-limit, timeout, artifact, and telemetry paths.
-- The plan routes non-`ok` adapter returns through `finalizeResult` before returning to the test.
+- The plan routes non-success adapter returns through `finalizeResult` before returning to the test.
 - The artifact writer catches closed-page failures while reading page content and URL.
 - The plan treats missing assistant answer containers as `response_parse_failed`, not `ok`.
 - The plan redacts artifact URLs and requires reduced, text-free DOM artifacts for live Gemini runs.

@@ -7,8 +7,8 @@ normal development.
 ## Core Rule
 
 Every scenario must terminate in a bounded time. The adapter either returns a
-successful raw answer or returns a typed failure with required artifacts. It
-must never hang indefinitely.
+successful raw answer, returns a successful readiness status, or returns a typed
+failure with required artifacts. It must never hang indefinitely.
 
 ## Scenarios
 
