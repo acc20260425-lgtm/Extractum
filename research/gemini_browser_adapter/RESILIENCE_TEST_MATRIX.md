@@ -15,6 +15,8 @@ failure with required artifacts. It must never hang indefinitely.
 | Scenario | Mock Variant | Expected Status | Required Evidence |
 | --- | --- | --- | --- |
 | Ready page | `ready` | `ready` | Status probe sees usable input and no critical state |
+| Ready page missing send | `ready-missing-send` | `failed` | Probe returns typed failure and artifacts for incomplete composer |
+| Ready page broken composer | `ready-broken` | `failed` | Probe returns typed failure and artifacts for missing composer controls |
 | Basic single prompt | `happy-path` | `ok` | Prompt submitted, final raw text captured |
 | Wrapped DOM | `wrapped-dom` | `ok` | Locator cascade survives extra containers and changed classes |
 | Textarea input | `textarea-input` | `ok` | Input finder uses role/placeholder/textarea fallback |

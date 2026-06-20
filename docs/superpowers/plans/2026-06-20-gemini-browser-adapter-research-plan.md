@@ -96,9 +96,14 @@ Edit `package.json` and add these scripts inside `"scripts"`:
 Create `research/gemini_browser_adapter/scripts/run-full-verification.mjs`:
 
 ```js
+import { rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+const staleArtifactPaths = [
+  "research/gemini_browser_adapter/artifacts/matrix",
+  "research/gemini_browser_adapter/artifacts/playwright-results.json",
+];
 
 function run(label, args) {
   console.log(`\n== ${label} ==`);
@@ -108,6 +113,12 @@ function run(label, args) {
     return 1;
   }
   return result.status ?? 1;
+}
+
+function clearStaleMatrixArtifacts() {
+  for (const target of staleArtifactPaths) {
+    rmSync(target, { recursive: true, force: true });
+  }
 }
 
 for (const [label, args] of [
@@ -121,6 +132,7 @@ for (const [label, args] of [
 let e2eCode = 1;
 let reportCode = 1;
 try {
+  clearStaleMatrixArtifacts();
   e2eCode = run("research Playwright e2e", ["run", "test:gemini-browser-adapter:e2e"]);
 } finally {
   reportCode = run("research matrix report", ["run", "test:gemini-browser-adapter:report"]);
@@ -132,6 +144,7 @@ process.exit(e2eCode || reportCode);
 Expected:
 
 - typecheck and unit failures stop the wrapper before e2e;
+- stale `artifacts/matrix` result files and stale `playwright-results.json` are removed immediately before e2e;
 - after Playwright e2e starts, the matrix report command runs even when Playwright exits non-zero;
 - the wrapper exits non-zero when either e2e or report generation fails.
 
@@ -254,6 +267,18 @@ test("ready renders an idle composer without sending", async ({ page }) => {
   await expect(page.getByRole("textbox")).toBeVisible();
   await expect(page.getByRole("button", { name: /send/i })).toBeVisible();
   await expect(page.getByTestId("assistant-answer")).toHaveText("");
+});
+
+test("ready-missing-send renders an incomplete composer", async ({ page }) => {
+  await page.goto(server.url("ready-missing-send"));
+  await expect(page.getByRole("textbox")).toBeVisible();
+  await expect(page.getByRole("button", { name: /send/i })).toHaveCount(0);
+});
+
+test("ready-broken renders no usable composer controls", async ({ page }) => {
+  await page.goto(server.url("ready-broken"));
+  await expect(page.getByRole("textbox")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /send/i })).toHaveCount(0);
 });
 
 test("submit emits a mock network telemetry event", async ({ page }) => {
@@ -380,6 +405,22 @@ export function renderMockGeminiPage(variant = "happy-path") {
       <article class="answer" data-testid="assistant-answer"></article>
       <button data-testid="stop-control" aria-label="Stop" hidden>Stop</button>
     `, submitScript);
+  }
+
+  if (variant === "ready-missing-send") {
+    return basePage(`
+      <section class="composer">
+        <div role="textbox" contenteditable="true" aria-label="Ask Gemini"></div>
+      </section>
+    `);
+  }
+
+  if (variant === "ready-broken") {
+    return basePage(`
+      <section class="composer">
+        <p>Gemini shell rendered, but composer controls are unavailable.</p>
+      </section>
+    `);
   }
 
   if (variant === "login-required") {
@@ -566,7 +607,7 @@ Run:
 npx playwright test -c research/gemini_browser_adapter/playwright.config.ts research/gemini_browser_adapter/tests/mock-gemini.spec.ts
 ```
 
-Expected: PASS for 5 tests.
+Expected: PASS for 7 tests.
 
 - [ ] **Step 7: Commit mock server**
 
@@ -993,6 +1034,8 @@ export async function probeReadyDomOnly(page: Page, _options?: SendSingleOptions
   }
 }
 ```
+
+Note: this baseline readiness probe is intentionally artifact-free until Task 7 creates `finalizeResult`; Task 7 replaces it with the artifact-finalizing version.
 
 - [ ] **Step 4: Verify baseline tests pass**
 
@@ -1559,6 +1602,8 @@ export async function probeReadyResilientScoring(
 }
 ```
 
+Note: this resilient readiness probe is intentionally artifact-free until Task 7 creates `finalizeResult`; Task 7 replaces it with the artifact-finalizing version.
+
 - [ ] **Step 8: Verify scoring adapter tests pass**
 
 Run:
@@ -1597,7 +1642,7 @@ Create `research/gemini_browser_adapter/tests/failure-artifacts.spec.ts`:
 import { existsSync, readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { startMockGeminiServer } from "../mock-gemini/server.mjs";
-import { sendSingleResilientScoring } from "../src/dom-contract";
+import { probeReadyResilientScoring, sendSingleResilientScoring } from "../src/dom-contract";
 
 let server: Awaited<ReturnType<typeof startMockGeminiServer>>;
 
@@ -1630,6 +1675,22 @@ test("timeout writes screenshot, html, and telemetry artifacts", async ({ page }
   expect(telemetry.url).toContain("authuser=<redacted>");
   expect(telemetry.url).toContain("token=<redacted>");
   expect(Array.isArray(telemetry.locatorAttempts)).toBe(true);
+});
+
+test("failed readiness probe writes artifacts", async ({ page }) => {
+  await page.goto(server.url("ready-missing-send"));
+  const result = await probeReadyResilientScoring(page, {
+    timeoutMs: 1_000,
+    quietMs: 200,
+    artifactDir: "research/gemini_browser_adapter/artifacts/test-ready-missing-send",
+  });
+
+  expect(result.status).toBe("failed");
+  expect(result.errorReason).toBe("ready_contract_not_satisfied");
+  expect(result.artifacts?.htmlPath).toBeTruthy();
+  expect(result.artifacts?.telemetryPath).toBeTruthy();
+  expect(existsSync(result.artifacts!.htmlPath!)).toBe(true);
+  expect(existsSync(result.artifacts!.telemetryPath!)).toBe(true);
 });
 
 test("reduced artifact mode skips screenshot and strips visible text and form values", async ({ page }) => {
@@ -1903,7 +1964,75 @@ export async function sendSingleResilientScoring(page: Page, prompt: string, opt
 }
 ```
 
-Apply the same `complete(...)` pattern to `sendSingleDomOnly` for its `browser_crashed`, critical-state, prompt-missing, send-missing, and final-answer returns. The matrix artifact cases must fail if a non-success result with `artifactDir` skips `finalizeResult`.
+Replace readiness probes with finalizing forms too. A successful `ready` result still skips artifact capture through `isSuccessStatus`; failed readiness probes must write artifacts when `artifactDir` is present.
+
+```ts
+export async function probeReadyDomOnly(
+  page: Page,
+  options: SendSingleOptions = { timeoutMs: 1_000, quietMs: 200 },
+): Promise<GeminiAdapterResult> {
+  const startedAt = Date.now();
+  const attempts: LocatorAttempt[] = [];
+  const complete = async (base: GeminiAdapterResult) => await finalizeResult(page, base, options);
+
+  if (page.isClosed()) return await complete(result("browser_crashed", startedAt, null, attempts, "browser_crashed"));
+
+  try {
+    const criticalBefore = await scanCriticalState(page);
+    if (criticalBefore) return await complete(result(criticalBefore, startedAt, null, attempts, criticalBefore));
+
+    const promptBox = await findPromptBox(page, attempts);
+    const sendButton = await findSendButton(page, attempts);
+    if (promptBox && sendButton) return await complete(result("ready", startedAt, null, attempts, null));
+
+    return await complete(result("failed", startedAt, null, attempts, "ready_contract_not_satisfied"));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const status = /closed|crash|target page/i.test(message) ? "browser_crashed" : "failed";
+    return await complete(result(status, startedAt, null, attempts, message));
+  }
+}
+
+export async function probeReadyResilientScoring(
+  page: Page,
+  options: SendSingleOptions = { timeoutMs: 1_000, quietMs: 200 },
+): Promise<GeminiAdapterResult> {
+  const startedAt = Date.now();
+  const attempts: LocatorAttempt[] = [];
+  void scoreEditableCandidate;
+  void scoreButtonCandidate;
+  const config = await resolveContractConfig(options);
+  const complete = async (base: GeminiAdapterResult) =>
+    await finalizeResult(page, { ...base, variant: "resilient-scoring", locatorAttempts: attempts }, options);
+
+  if (page.isClosed()) {
+    return await complete(result("browser_crashed", startedAt, null, attempts, "browser_crashed"));
+  }
+
+  try {
+    const criticalBefore = await scanCriticalState(page);
+    if (criticalBefore) return await complete(result(criticalBefore, startedAt, null, attempts, criticalBefore));
+
+    const promptBox =
+      (await findByConfiguredSelector(page, config.promptSelectors, attempts, "config:prompt")) ??
+      (await findPromptBox(page, attempts)) ??
+      (await findPromptBoxByScoring(page, attempts, config.minPromptScore));
+    const sendButton =
+      (await findByConfiguredSelector(page, config.sendSelectors, attempts, "config:send")) ??
+      (await findSendButton(page, attempts)) ??
+      (await findSendButtonByScoring(page, attempts, config.minSendScore));
+    if (promptBox && sendButton) return await complete(result("ready", startedAt, null, attempts, null));
+
+    return await complete(result("failed", startedAt, null, attempts, "ready_contract_not_satisfied"));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const status = /closed|crash|target page/i.test(message) ? "browser_crashed" : "failed";
+    return await complete(result(status, startedAt, null, attempts, message));
+  }
+}
+```
+
+Apply the same `complete(...)` pattern to `sendSingleDomOnly` for its `browser_crashed`, critical-state, prompt-missing, send-missing, and final-answer returns. The matrix artifact cases must fail if any non-success send or probe result with `artifactDir` skips `finalizeResult`.
 
 - [ ] **Step 6: Verify artifact tests pass**
 
@@ -2174,6 +2303,34 @@ Create `research/gemini_browser_adapter/matrix-cases.json`:
       "requiresTelemetryArtifact": false,
       "requiresHtmlArtifact": false,
       "requiresScreenshotArtifact": false,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "ready-missing-send",
+      "mockVariant": "ready-missing-send",
+      "action": "probe",
+      "expectedStatuses": ["failed"],
+      "timeoutMs": 1000,
+      "quietMs": 200,
+      "requiresRawText": false,
+      "requiresTelemetryArtifact": true,
+      "requiresHtmlArtifact": true,
+      "requiresScreenshotArtifact": true,
+      "requiresTelemetryNetwork": false,
+      "closePageBeforeRun": false
+    },
+    {
+      "id": "ready-broken",
+      "mockVariant": "ready-broken",
+      "action": "probe",
+      "expectedStatuses": ["failed"],
+      "timeoutMs": 1000,
+      "quietMs": 200,
+      "requiresRawText": false,
+      "requiresTelemetryArtifact": true,
+      "requiresHtmlArtifact": true,
+      "requiresScreenshotArtifact": true,
       "requiresTelemetryNetwork": false,
       "closePageBeforeRun": false
     },
@@ -2589,8 +2746,8 @@ npx playwright test -c research/gemini_browser_adapter/playwright.config.ts rese
 
 Expected:
 
-- exactly `48` matrix cases run (`3` adapter variants x `16` scenarios);
-- `ready`, `closed-page`, `account-picker`, `consent`, `unknown-modal`, and `broken-answer` are represented by explicit test titles;
+- exactly `54` matrix cases run (`3` adapter variants x `18` scenarios);
+- `ready`, `ready-missing-send`, `ready-broken`, `closed-page`, `account-picker`, `consent`, `unknown-modal`, and `broken-answer` are represented by explicit test titles;
 - every case asserts expected adapter status;
 - every `requiresRawText` case asserts final answer text;
 - every granular artifact flag asserts only the required screenshot, HTML, or telemetry artifact file;
@@ -2764,7 +2921,7 @@ Expected:
 - research TypeScript typecheck passes;
 - unit tests pass;
 - Playwright e2e tests pass;
-- `research/gemini_browser_adapter/tests/matrix.spec.ts` runs all `48` matrix cases;
+- `research/gemini_browser_adapter/tests/matrix.spec.ts` runs all `54` matrix cases;
 - `research/gemini_browser_adapter/artifacts/playwright-results.json` is written;
 - `research/gemini_browser_adapter/artifacts/matrix-report.md` is written;
 - the report has `Missing matrix pairs: 0`;
@@ -2803,7 +2960,7 @@ research/gemini_browser_adapter/src/matrix-cases.ts
 research/gemini_browser_adapter/tests/matrix.spec.ts
 ```
 
-The matrix JSON is the single source of truth for adapter variants and scenario IDs. `matrix-cases.ts` imports it for Playwright tests, and `write-matrix-report.mjs` reads the same file for coverage validation. The matrix covers all `3` adapter variants against all `16` scenarios. Expected statuses and required evidence are asserted in `matrix.spec.ts`; report generation fails when any expected variant/scenario pair is absent from the Playwright JSON output.
+The matrix JSON is the single source of truth for adapter variants and scenario IDs. `matrix-cases.ts` imports it for Playwright tests, and `write-matrix-report.mjs` reads the same file for coverage validation. The matrix covers all `3` adapter variants against all `18` scenarios. Expected statuses and required evidence are asserted in `matrix.spec.ts`; report generation fails when any expected variant/scenario pair is absent from the Playwright JSON output.
 ````
 
 - [ ] **Step 8: Update tools document**
@@ -2813,7 +2970,8 @@ Add this sentence under `## Method` in `research/gemini_browser_adapter/TOOLS_AN
 ```markdown
 The planned executable command is `npm run test:gemini-browser-adapter`. It
 should use a wrapper runner so the matrix report is still generated after a
-Playwright e2e failure.
+Playwright e2e failure. The wrapper should clear stale matrix `result.json`
+files and stale Playwright JSON output immediately before each e2e run.
 ```
 
 - [ ] **Step 9: Verify no generated artifacts are staged**
@@ -2913,12 +3071,14 @@ git commit -m "Add Gemini adapter research implementation plan"
 - The plan includes the local `gemini-dom-contract.config.json` selector override promised by `TOOLS_AND_METHODS.md`.
 - The plan typechecks research TypeScript with `tsc -p research/gemini_browser_adapter/tsconfig.json --noEmit`.
 - The research TypeScript config uses bundler module resolution, matching the extensionless TS imports in the research files.
-- The plan runs all three variants against all sixteen matrix scenarios.
+- The plan runs all three variants against all eighteen matrix scenarios.
 - The matrix report derives expected pairs from `matrix-cases.json`, not a duplicated scenario list.
 - The matrix coverage check uses exact title suffix matching, not substring matching.
+- The full verification wrapper clears stale matrix result files before Playwright e2e.
 - The matrix report includes success, ok, ready, clean typed failure, unexpected failure, timeout/hang, artifact completeness, false completion, average elapsed, and worst elapsed metrics.
 - Matrix artifact requirements are granular: telemetry, HTML/reduced DOM, and screenshot are checked independently.
 - Closed-page/browser-failure scenarios require telemetry and placeholder HTML artifacts but not screenshot artifacts.
+- Readiness probe failures route through `finalizeResult` and produce artifacts when `artifactDir` is set.
 - The plan covers success, manual-action, rate-limit, timeout, artifact, and telemetry paths.
 - The plan routes non-success adapter returns through `finalizeResult` before returning to the test.
 - The artifact writer catches closed-page failures while reading page content and URL.

@@ -99,7 +99,8 @@ Run all variants against the same scenario matrix:
 
 The planned executable command is `npm run test:gemini-browser-adapter`. It
 should use a wrapper runner so the matrix report is still generated after a
-Playwright e2e failure.
+Playwright e2e failure. The wrapper should clear stale matrix `result.json`
+files and stale Playwright JSON output immediately before each e2e run.
 
 The matrix should report:
 
