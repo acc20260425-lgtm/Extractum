@@ -33,6 +33,8 @@ Reference material:
   prove the adapter can succeed or fail cleanly.
 - `TOOLS_AND_METHODS.md` defines the tools, implementation variants, and
   comparison method for the research loop.
+- `DECISION.md` records the accepted MVP adapter variant and production
+  guidance from the research loop.
 - `mock-gemini/README.md` defines the future local mock page contract.
 - `artifacts/` is reserved for future sanitized screenshots, traces, telemetry
   samples, and run logs.
