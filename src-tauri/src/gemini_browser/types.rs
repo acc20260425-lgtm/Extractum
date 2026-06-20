@@ -209,6 +209,7 @@ mod tests {
         let json = serde_json::to_value(command).expect("serialize command");
         assert_eq!(json["command"]["type"], "resume");
         assert_eq!(json["command"]["run_id"], serde_json::Value::Null);
+        assert!(json["command"].get("browser_profile_dir").is_some());
         assert_eq!(
             json["command"]["browser_profile_dir"],
             "C:/Extractum/gemini-browser/profile"

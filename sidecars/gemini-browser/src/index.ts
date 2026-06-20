@@ -70,7 +70,10 @@ if (process.argv.includes("--playwright-smoke")) {
         return;
       }
       if (command.type === "resume") {
-        writeResponse(id, { type: "ack" });
+        writeResponse(id, {
+          type: "status",
+          status: await adapter.resumeBrowser(command.browser_profile_dir),
+        });
         return;
       }
       if (command.type === "stop") {

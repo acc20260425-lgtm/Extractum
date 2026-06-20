@@ -119,7 +119,7 @@ pub async fn gemini_bridge_resume(
     handle: AppHandle,
     state: State<'_, GeminiBrowserState>,
 ) -> AppResult<GeminiBrowserProviderStatus> {
-    sidecar::open_browser(&handle, &state, path_string(&profile_dir(&handle)?)).await
+    sidecar::resume(&handle, &state, path_string(&profile_dir(&handle)?)).await
 }
 
 #[tauri::command]

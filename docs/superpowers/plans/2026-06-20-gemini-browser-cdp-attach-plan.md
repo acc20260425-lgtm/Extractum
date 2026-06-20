@@ -1366,7 +1366,7 @@ Expected: commit contains only adapter CDP behavior and tests.
 - Modify: `src-tauri/src/gemini_browser/commands.rs`
 - Modify: `src-tauri/src/gemini_browser/types.rs`
 
-- [ ] **Step 1: Add the Rust sidecar resume test**
+- [x] **Step 1: Add the Rust sidecar resume test**
 
 In `src-tauri/src/gemini_browser/types.rs`, the Task 1 `resume_command_serializes_browser_profile_dir` test already covers serialization. Add one more assertion to that same test:
 
@@ -1374,7 +1374,7 @@ In `src-tauri/src/gemini_browser/types.rs`, the Task 1 `resume_command_serialize
 assert!(json["command"].get("browser_profile_dir").is_some());
 ```
 
-- [ ] **Step 2: Run Rust test and verify current call sites fail to compile**
+- [x] **Step 2: Run Rust test and verify current call sites fail to compile**
 
 Run:
 
@@ -1384,7 +1384,11 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL until Rust command construction is updated to provide `browser_profile_dir` for `Resume`.
 
-- [ ] **Step 3: Wire Node sidecar resume to adapter**
+Execution note: the check passed before wiring because no existing Rust call site
+constructed `GeminiBrowserSidecarCommand::Resume` yet. The new resume helper and
+command wiring are validated by Step 6.
+
+- [x] **Step 3: Wire Node sidecar resume to adapter**
 
 In `sidecars/gemini-browser/src/index.ts`, replace:
 
@@ -1407,7 +1411,7 @@ with:
       }
 ```
 
-- [ ] **Step 4: Add Rust sidecar resume helper**
+- [x] **Step 4: Add Rust sidecar resume helper**
 
 In `src-tauri/src/gemini_browser/sidecar.rs`, add this function after `open_browser`:
 
@@ -1435,7 +1439,7 @@ pub(crate) async fn resume(
 }
 ```
 
-- [ ] **Step 5: Update Tauri resume command**
+- [x] **Step 5: Update Tauri resume command**
 
 In `src-tauri/src/gemini_browser/commands.rs`, replace the current `gemini_bridge_resume` body:
 
@@ -1459,7 +1463,7 @@ pub async fn gemini_bridge_resume(
 }
 ```
 
-- [ ] **Step 6: Run TypeScript and Rust checks**
+- [x] **Step 6: Run TypeScript and Rust checks**
 
 Run:
 
@@ -1472,7 +1476,7 @@ Expected:
 - Sidecar typecheck/build passes with `resumeBrowser`.
 - Rust Gemini browser tests pass.
 
-- [ ] **Step 7: Commit resume wiring**
+- [x] **Step 7: Commit resume wiring**
 
 Run:
 

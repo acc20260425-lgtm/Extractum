@@ -350,6 +350,28 @@ pub(crate) async fn open_browser(
     }
 }
 
+pub(crate) async fn resume(
+    handle: &AppHandle,
+    state: &GeminiBrowserState,
+    browser_profile_dir: String,
+) -> AppResult<GeminiBrowserProviderStatus> {
+    match request_sidecar(
+        handle,
+        state,
+        GeminiBrowserSidecarCommand::Resume {
+            run_id: None,
+            browser_profile_dir,
+        },
+    )
+    .await?
+    {
+        GeminiBrowserSidecarResponse::Status { status } => Ok(status),
+        _ => Err(AppError::internal(
+            "Unexpected Gemini sidecar resume response",
+        )),
+    }
+}
+
 pub(crate) async fn send_single(
     handle: &AppHandle,
     state: &GeminiBrowserState,
