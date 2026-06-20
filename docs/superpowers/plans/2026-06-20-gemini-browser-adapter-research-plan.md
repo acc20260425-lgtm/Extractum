@@ -770,7 +770,7 @@ git commit -m "Add Gemini adapter research result types"
 - Create: `research/gemini_browser_adapter/src/dom-contract.ts`
 - Create: `research/gemini_browser_adapter/tests/dom-only-baseline.spec.ts`
 
-- [ ] **Step 1: Write failing baseline e2e tests**
+- [x] **Step 1: Write failing baseline e2e tests**
 
 Create `research/gemini_browser_adapter/tests/dom-only-baseline.spec.ts`:
 
@@ -817,7 +817,7 @@ test("dom-only baseline reports generation timeout", async ({ page }) => {
 });
 ```
 
-- [ ] **Step 2: Run baseline tests to verify failure**
+- [x] **Step 2: Run baseline tests to verify failure**
 
 Run:
 
@@ -827,7 +827,7 @@ npx playwright test -c research/gemini_browser_adapter/playwright.config.ts rese
 
 Expected: FAIL because `dom-contract.ts` does not exist.
 
-- [ ] **Step 3: Implement DOM-only adapter**
+- [x] **Step 3: Implement DOM-only adapter**
 
 Create `research/gemini_browser_adapter/src/dom-contract.ts`:
 
@@ -1037,7 +1037,7 @@ export async function probeReadyDomOnly(page: Page, _options?: SendSingleOptions
 
 Note: this baseline readiness probe is intentionally artifact-free until Task 7 creates `finalizeResult`; Task 7 replaces it with the artifact-finalizing version.
 
-- [ ] **Step 4: Verify baseline tests pass**
+- [x] **Step 4: Verify baseline tests pass**
 
 Run:
 
@@ -1047,7 +1047,7 @@ npx playwright test -c research/gemini_browser_adapter/playwright.config.ts rese
 
 Expected: PASS for 4 tests.
 
-- [ ] **Step 5: Commit baseline adapter**
+- [x] **Step 5: Commit baseline adapter**
 
 Run:
 
