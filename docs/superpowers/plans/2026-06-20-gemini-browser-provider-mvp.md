@@ -110,9 +110,10 @@ Expected: one docs-only commit. Do not stage unrelated dirty files.
 **Files:**
 - Create: `src-tauri/src/gemini_browser/mod.rs`
 - Create: `src-tauri/src/gemini_browser/types.rs`
+- Modify: `src-tauri/src/lib.rs`
 - Test: `src-tauri/src/gemini_browser/types.rs`
 
-- [ ] **Step 1: Add the module shell**
+- [x] **Step 1: Add the module shell**
 
 Create `src-tauri/src/gemini_browser/mod.rs`:
 
@@ -128,7 +129,7 @@ pub use types::{
 };
 ```
 
-- [ ] **Step 2: Write the failing contract serialization tests**
+- [x] **Step 2: Write the failing contract serialization tests**
 
 Create `src-tauri/src/gemini_browser/types.rs` with the type declarations and tests in this step. The test module must be present before command wiring:
 
@@ -321,7 +322,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run the focused Rust tests**
+- [x] **Step 3: Run the focused Rust tests**
 
 Run:
 
@@ -331,12 +332,12 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib gemini_browser::types
 
 Expected: the new tests compile and pass.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 
 ```powershell
-git add src-tauri/src/gemini_browser/mod.rs src-tauri/src/gemini_browser/types.rs docs/superpowers/plans/2026-06-20-gemini-browser-provider-mvp.md
+git add src-tauri/src/gemini_browser/mod.rs src-tauri/src/gemini_browser/types.rs src-tauri/src/lib.rs docs/superpowers/plans/2026-06-20-gemini-browser-provider-mvp.md
 git commit -m "feat: add Gemini browser provider contracts"
 ```
 

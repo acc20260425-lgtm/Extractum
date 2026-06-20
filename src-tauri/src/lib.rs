@@ -115,6 +115,8 @@ use llm::{
     set_active_llm_profile, LlmSchedulerState,
 };
 
+mod gemini_browser;
+
 mod analysis;
 use analysis::{
     ask_analysis_run_question, cancel_analysis_run, cleanup_interrupted_analysis_runs,
