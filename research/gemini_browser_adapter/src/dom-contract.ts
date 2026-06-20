@@ -3,6 +3,7 @@ import { captureFailureArtifacts } from "./artifacts";
 import type { DomContractConfig } from "./config";
 import { loadDomContractConfig } from "./config";
 import { scoreButtonCandidate, scoreEditableCandidate } from "./scoring";
+import { attachNetworkTelemetry } from "./telemetry";
 import { isSuccessStatus } from "./types";
 import type { GeminiAdapterResult, GeminiAdapterStatus, LocatorAttempt, NetworkEventSummary } from "./types";
 
@@ -411,4 +412,35 @@ export async function probeReadyResilientScoring(
     const status = /closed|crash|target page/i.test(message) ? "browser_crashed" : "failed";
     return await complete(result(status, startedAt, null, attempts, message));
   }
+}
+
+export async function sendSingleTelemetryAssisted(page: Page, prompt: string, options: SendSingleOptions): Promise<GeminiAdapterResult> {
+  const networkSummary: GeminiAdapterResult["networkSummary"] = [];
+  attachNetworkTelemetry(page, networkSummary);
+  const result = await sendSingleResilientScoring(page, prompt, {
+    ...options,
+    networkSummary,
+  });
+  return {
+    ...result,
+    variant: "telemetry-assisted",
+    networkSummary,
+  };
+}
+
+export async function probeReadyTelemetryAssisted(
+  page: Page,
+  options: SendSingleOptions = { timeoutMs: 1_000, quietMs: 200 },
+): Promise<GeminiAdapterResult> {
+  const networkSummary: GeminiAdapterResult["networkSummary"] = [];
+  attachNetworkTelemetry(page, networkSummary);
+  const result = await probeReadyResilientScoring(page, {
+    ...options,
+    networkSummary,
+  });
+  return {
+    ...result,
+    variant: "telemetry-assisted",
+    networkSummary,
+  };
 }

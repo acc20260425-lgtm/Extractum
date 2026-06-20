@@ -2073,7 +2073,7 @@ git commit -m "Add Gemini adapter failure artifacts"
 - Modify: `research/gemini_browser_adapter/src/dom-contract.ts`
 - Create: `research/gemini_browser_adapter/tests/telemetry-assisted.spec.ts`
 
-- [ ] **Step 1: Write failing telemetry unit tests**
+- [x] **Step 1: Write failing telemetry unit tests**
 
 Create `research/gemini_browser_adapter/src/telemetry.test.ts`:
 
@@ -2091,7 +2091,7 @@ describe("telemetry redaction", () => {
 });
 ```
 
-- [ ] **Step 2: Run telemetry test to verify failure**
+- [x] **Step 2: Run telemetry test to verify failure**
 
 Run:
 
@@ -2101,7 +2101,7 @@ npm run test:gemini-browser-adapter:unit -- research/gemini_browser_adapter/src/
 
 Expected: FAIL because `telemetry.ts` does not exist.
 
-- [ ] **Step 3: Implement telemetry collector**
+- [x] **Step 3: Implement telemetry collector**
 
 Create `research/gemini_browser_adapter/src/telemetry.ts`:
 
@@ -2153,7 +2153,7 @@ export function attachNetworkTelemetry(page: Page, events: NetworkEventSummary[]
 }
 ```
 
-- [ ] **Step 4: Verify telemetry unit tests pass**
+- [x] **Step 4: Verify telemetry unit tests pass**
 
 Run:
 
@@ -2163,7 +2163,7 @@ npm run test:gemini-browser-adapter:unit -- research/gemini_browser_adapter/src/
 
 Expected: PASS for 1 test.
 
-- [ ] **Step 5: Add telemetry-assisted e2e tests**
+- [x] **Step 5: Add telemetry-assisted e2e tests**
 
 Create `research/gemini_browser_adapter/tests/telemetry-assisted.spec.ts`:
 
@@ -2197,7 +2197,7 @@ test("telemetry-assisted variant reports rate limit", async ({ page }) => {
 });
 ```
 
-- [ ] **Step 6: Run telemetry e2e tests to verify failure**
+- [x] **Step 6: Run telemetry e2e tests to verify failure**
 
 Run:
 
@@ -2207,7 +2207,7 @@ npx playwright test -c research/gemini_browser_adapter/playwright.config.ts rese
 
 Expected: FAIL because `sendSingleTelemetryAssisted` is not exported.
 
-- [ ] **Step 7: Implement telemetry-assisted adapter**
+- [x] **Step 7: Implement telemetry-assisted adapter**
 
 Modify `dom-contract.ts`:
 
@@ -2252,7 +2252,7 @@ export async function probeReadyTelemetryAssisted(
 
 Do not capture telemetry-assisted artifacts in the wrapper after `sendSingleResilientScoring` returns. Pass `networkSummary` through `SendSingleOptions` as shown above so the shared `withArtifacts` call writes the same network summary that the telemetry-assisted result returns.
 
-- [ ] **Step 8: Verify telemetry tests pass**
+- [x] **Step 8: Verify telemetry tests pass**
 
 Run:
 
@@ -2263,7 +2263,7 @@ npx playwright test -c research/gemini_browser_adapter/playwright.config.ts rese
 
 Expected: PASS for telemetry unit and e2e tests.
 
-- [ ] **Step 9: Commit telemetry-assisted variant**
+- [x] **Step 9: Commit telemetry-assisted variant**
 
 Run:
 
