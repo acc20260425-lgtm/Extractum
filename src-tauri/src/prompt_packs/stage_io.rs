@@ -46,44 +46,6 @@ pub struct TranscriptSegmentRegistryEntry {
     pub text: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct StageRunForInput {
-    pub id: i64,
-    pub run_id: i64,
-    pub source_snapshot_id: i64,
-    pub source_ref_id: String,
-}
-
-pub(crate) async fn load_transcript_analysis_stage_for_source(
-    pool: &SqlitePool,
-    run_id: i64,
-    source_ref_id: &str,
-) -> AppResult<StageRunForInput> {
-    sqlx::query_as::<_, (i64, i64, i64, String)>(
-        "SELECT stages.id, stages.run_id, snapshots.id, snapshots.source_ref_id
-         FROM prompt_pack_stage_runs stages
-         JOIN prompt_pack_run_source_snapshots snapshots
-           ON snapshots.id = stages.source_snapshot_id
-          AND snapshots.run_id = stages.run_id
-         WHERE stages.run_id = ?
-           AND stages.stage_name = 'youtube_summary/transcript_analysis'
-           AND snapshots.source_ref_id = ?",
-    )
-    .bind(run_id)
-    .bind(source_ref_id)
-    .fetch_one(pool)
-    .await
-    .map(
-        |(id, run_id, source_snapshot_id, source_ref_id)| StageRunForInput {
-            id,
-            run_id,
-            source_snapshot_id,
-            source_ref_id,
-        },
-    )
-    .map_err(AppError::database)
-}
-
 pub(crate) async fn build_transcript_analysis_stage_input(
     pool: &SqlitePool,
     stage_run_id: i64,
@@ -330,14 +292,40 @@ fn sha384_hex(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_transcript_analysis_stage_input, insert_stage_artifact_in_pool,
-        load_transcript_analysis_stage_for_source,
-    };
+    use super::{build_transcript_analysis_stage_input, insert_stage_artifact_in_pool};
+    use crate::error::{AppError, AppResult};
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::dto::StartYoutubeSummaryRunRequest;
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
     use crate::prompt_packs::youtube_summary::create_youtube_summary_run_skeleton_in_pool;
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    struct StageRunForInput {
+        id: i64,
+    }
+
+    async fn load_transcript_analysis_stage_for_source(
+        pool: &sqlx::SqlitePool,
+        run_id: i64,
+        source_ref_id: &str,
+    ) -> AppResult<StageRunForInput> {
+        sqlx::query_as::<_, (i64,)>(
+            "SELECT stages.id
+             FROM prompt_pack_stage_runs stages
+             JOIN prompt_pack_run_source_snapshots snapshots
+               ON snapshots.id = stages.source_snapshot_id
+              AND snapshots.run_id = stages.run_id
+             WHERE stages.run_id = ?
+               AND stages.stage_name = 'youtube_summary/transcript_analysis'
+               AND snapshots.source_ref_id = ?",
+        )
+        .bind(run_id)
+        .bind(source_ref_id)
+        .fetch_one(pool)
+        .await
+        .map(|(id,)| StageRunForInput { id })
+        .map_err(AppError::database)
+    }
 
     #[tokio::test]
     async fn build_transcript_analysis_stage_input_uses_frozen_registries() {
