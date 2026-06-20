@@ -361,6 +361,23 @@ describe("CDP status probe", () => {
       message: "Chrome CDP endpoint is unavailable. Start Chrome with remote debugging enabled.",
     });
   });
+
+  it("times out endpoint probe even if fetch never settles", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi.fn<FetchLike>(() => new Promise(() => undefined));
+      const probe = cdpSetupStatus("http://127.0.0.1:9222", fetchMock);
+
+      await vi.advanceTimersByTimeAsync(1_500);
+
+      await expect(probe).resolves.toEqual({
+        ok: false,
+        message: "Chrome CDP endpoint is unavailable. Start Chrome with remote debugging enabled.",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 ```
 
@@ -448,10 +465,18 @@ export async function cdpSetupStatus(
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 1500);
+    let timeout: ReturnType<typeof setTimeout> | null = null;
     try {
       const versionUrl = new URL("/json/version", validation.endpoint);
-      const response = await fetchLike(versionUrl, { signal: controller.signal });
+      const response = await Promise.race([
+        fetchLike(versionUrl, { signal: controller.signal }),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => {
+            controller.abort();
+            reject(new Error("Chrome CDP endpoint probe timed out."));
+          }, 1_500);
+        }),
+      ]);
       if (!response.ok) {
         return {
           ok: false,
@@ -475,7 +500,7 @@ export async function cdpSetupStatus(
         message: "Chrome CDP endpoint did not expose a Chrome debugging protocol.",
       };
     } finally {
-      clearTimeout(timeout);
+      if (timeout) clearTimeout(timeout);
     }
   } catch {
     return {
@@ -565,11 +590,11 @@ describe("CDP Gemini page selection", () => {
     );
   });
 
-  it("prefers active Gemini page when provided", () => {
+  it("returns the first usable Gemini page in page order", () => {
     const first = page("https://gemini.google.com/app");
-    const active = page("https://gemini.google.com/app/active");
+    const second = page("https://gemini.google.com/app/second");
 
-    expect(selectGeminiPage([first, active], active)).toBe(active);
+    expect(selectGeminiPage([first, second])).toBe(first);
   });
 });
 
@@ -613,15 +638,8 @@ export interface CdpPageLike {
   url: () => string;
 }
 
-export function selectGeminiPage<T extends CdpPageLike>(
-  pages: T[],
-  activePage: T | null = null,
-): T | null {
-  const candidates = pages.filter(isUsableGeminiPage);
-  if (activePage && candidates.includes(activePage)) {
-    return activePage;
-  }
-  return candidates[0] ?? null;
+export function selectGeminiPage<T extends CdpPageLike>(pages: T[]): T | null {
+  return pages.find(isUsableGeminiPage) ?? null;
 }
 
 export function isClosedTargetError(error: unknown): boolean {
@@ -752,6 +770,38 @@ it("opens Gemini in an existing CDP context without creating a browser context",
   expect(page.goto).toHaveBeenCalledWith("https://gemini.google.com/app", {
     waitUntil: "domcontentloaded",
   });
+});
+
+it("does not create a Gemini page from sendSingle in CDP attach-only mode", async () => {
+  const context = {
+    pages: () => [],
+    newPage: vi.fn(),
+  };
+  const browser = {
+    contexts: () => [context],
+  };
+  const adapter = new GeminiBrowserAdapter({
+    env: { EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT: "http://127.0.0.1:9222" },
+    connectOverCdp: async () => browser as never,
+  });
+
+  await expect(
+    adapter.sendSingle({
+      browserProfileDir: "C:/Extractum/gemini-browser/profile",
+      artifactDir: "C:/Extractum/gemini-browser/runs/run-1",
+      request: {
+        run_id: "run-1",
+        prompt: "hello",
+        source: "settings_test",
+        artifact_mode: "reduced",
+      },
+    }),
+  ).resolves.toMatchObject({
+    status: "needs_manual_action",
+    manual_action: "start_chrome_cdp",
+    message: "Open Gemini in the attached Chrome profile or use Open to create a Gemini tab.",
+  });
+  expect(context.newPage).not.toHaveBeenCalled();
 });
 
 it("maps CDP closed-target send failures to browser_crashed", async () => {
@@ -1389,6 +1439,10 @@ In `scripts/gemini-browser-sidecar-smoke.mjs`, after the existing mode parsing, 
 
 ```js
 const resumeSmoke = process.argv.includes("--resume");
+const expectedManualActionArg = process.argv.find((arg) =>
+  arg.startsWith("--expect-manual-action="),
+);
+const expectedManualAction = expectedManualActionArg?.split("=")[1] ?? null;
 ```
 
 In the non-Playwright branch, replace the `request` constant with:
@@ -1416,7 +1470,29 @@ Replace the response type assertion:
     if (parsed.response?.type !== "status") {
 ```
 
-with the same line. Both status and resume smokes should receive `response.type === "status"`.
+with:
+
+```js
+    if (parsed.response?.type !== "status") {
+      console.error(`Unexpected response type: ${line}`);
+      process.exit(1);
+    }
+    if (expectedManualAction) {
+      const status = parsed.response.status;
+      if (
+        status?.status !== "needs_manual_action" ||
+        status?.manual_action !== expectedManualAction
+      ) {
+        console.error(`Unexpected manual action response: ${line}`);
+        process.exit(1);
+      }
+    }
+```
+
+Both status and resume smokes should receive `response.type === "status"`.
+When `--expect-manual-action=start_chrome_cdp` is provided, the smoke must also
+verify `response.status.status === "needs_manual_action"` and
+`response.status.manual_action === "start_chrome_cdp"`.
 
 - [ ] **Step 2: Add package scripts**
 
@@ -1444,7 +1520,7 @@ Run in PowerShell:
 
 ```powershell
 $env:EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT = "http://127.0.0.1:9222"
-npm.cmd run smoke:gemini-browser-sidecar:resume:node
+npm.cmd run smoke:gemini-browser-sidecar:resume:node -- --expect-manual-action=start_chrome_cdp
 Remove-Item Env:\EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT
 ```
 
@@ -1605,7 +1681,7 @@ Run:
 
 ```powershell
 $env:EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT = "http://127.0.0.1:65530"
-npm.cmd run smoke:gemini-browser-sidecar:resume:node
+npm.cmd run smoke:gemini-browser-sidecar:resume:node -- --expect-manual-action=start_chrome_cdp
 Remove-Item Env:\EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT
 ```
 
