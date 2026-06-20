@@ -86,7 +86,8 @@ The sidecar owns this decision because it already owns Playwright and browser li
   - parse and validate `EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT` against the loopback allowlist before calling Playwright;
   - connect to the endpoint with `chromium.connectOverCDP(endpoint)`;
   - keep the returned `Browser` connection separately from managed-mode `BrowserContext`;
-  - select `browser.contexts()[0]` when available, otherwise create a new context with `browser.newContext()`;
+  - select `browser.contexts()[0]` when available;
+  - if `browser.contexts()` is empty, return `needs_manual_action` rather than creating a new context;
   - select an existing Gemini page with the deterministic rule below;
   - for `Open` only, create or reuse a page and navigate it to `https://gemini.google.com/app` when no Gemini page exists;
   - store the attached browser/context/page references for later `sendSingle`.
@@ -107,11 +108,15 @@ Gemini page selection:
 - `not_started` with message `Chrome CDP endpoint is configured but not attached.` before first attach.
 - `needs_manual_action` with manual action `start_chrome_cdp` when Chrome CDP is not reachable or needs operator setup.
 
+`status()` in CDP mode performs endpoint validation and a light reachability/protocol check when `EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT` is set. It must not create pages, navigate, or attach long-lived automation state just to answer status. This gives the UI actionable setup messages before the user presses `Open` or `Resume` while preserving the user-controlled browser boundary.
+
 `stop()` in CDP attach mode detaches from the Playwright connection and clears local references, but it does not terminate Chrome.
 
 ## Provider UI
 
 The existing Browser Providers panel remains the v1 surface. It should show mode-aware status text from the backend/sidecar. A later UI polish can add a compact CDP setup hint, but this slice does not need a full wizard.
+
+Implementation must extend shared Rust/frontend manual-action types with `start_chrome_cdp` and add a status label/message mapping. The UI should show this as an operator setup action, not as an unknown modal/account flow.
 
 The key operator-facing distinction:
 
@@ -125,7 +130,7 @@ Typed outcomes should stay visible and actionable:
 - CDP endpoint fails allowlist validation: `needs_manual_action`, manual action `start_chrome_cdp`, message `Chrome CDP endpoint must be a loopback HTTP URL.`
 - CDP endpoint unreachable: `needs_manual_action`, manual action `start_chrome_cdp`, message `Chrome CDP endpoint is unavailable. Start Chrome with remote debugging enabled.`
 - CDP endpoint reachable but not a Chrome debugging endpoint: `needs_manual_action`, manual action `start_chrome_cdp`, message `Chrome CDP endpoint did not expose a Chrome debugging protocol.`
-- CDP connection succeeds but no usable browser context/page is available: `needs_manual_action`, manual action `start_chrome_cdp`, message `Chrome CDP connected but no usable browser context was available.`
+- CDP connection succeeds but no usable browser context is available: `needs_manual_action`, manual action `start_chrome_cdp`, message `Chrome CDP connected but no user profile context was available. Restart Chrome with a dedicated user data directory.`
 - CDP protocol permission/version mismatch: `needs_manual_action`, manual action `start_chrome_cdp`, message `Chrome CDP protocol was incompatible with the sidecar.`
 - CDP connected but Gemini requires login/consent/account action: existing `needs_login` or `needs_manual_action` result from the DOM adapter.
 - No composer after wait: keep current `needs_login` result until the DOM contract is refined further.
@@ -156,8 +161,10 @@ Unit and integration checks for this slice:
 - CDP page selection ignores non-Gemini Google pages, ignores unreadable/closed pages, and deterministically prefers the active/frontmost Gemini page when available or the first matching Gemini page otherwise.
 - CDP `Open` creates a Gemini tab when Chrome is connected but no Gemini page exists.
 - CDP `Resume` reports manual action when Chrome is connected but no Gemini page exists.
-- CDP attach failures return typed provider statuses for invalid endpoint, unreachable endpoint, non-Chrome endpoint, empty unusable context, protocol mismatch, and mid-run disconnect.
+- CDP `status` checks validate and lightly probe the endpoint without opening pages or creating long-lived browser automation state.
+- CDP attach failures return typed provider statuses for invalid endpoint, unreachable endpoint, non-Chrome endpoint, empty user profile context, protocol mismatch, and mid-run disconnect.
 - `stop()` in CDP mode detaches without attempting to kill Chrome.
+- Shared Rust/frontend manual-action types include `start_chrome_cdp`, and UI status label tests cover it.
 - Local/mock CDP tests cover endpoint validation and page-selection logic without requiring Google login state. These can use small fake Browser/Context/Page adapters or a local Playwright-controlled Chromium CDP fixture that serves a non-Google page.
 - Existing managed browser tests and smokes continue to pass.
 
@@ -176,5 +183,6 @@ Manual validation:
 - `Resume` attaches only to an existing user-controlled Chrome/Gemini tab.
 - `Open` may create only a Gemini tab and must not perform account/security actions.
 - If Chrome is not running with CDP, the provider tells the user what to start.
+- Empty CDP browser contexts are reported as operator setup failures; v1 does not create a new context because it may not share the user's profile/login state.
 - Existing managed mode still works when the CDP env var is absent.
 - No Google login automation is introduced.
