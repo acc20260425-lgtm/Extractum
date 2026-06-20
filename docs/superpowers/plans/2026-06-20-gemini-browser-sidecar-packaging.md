@@ -175,6 +175,8 @@ Expected: stdout contains one JSON response with `id: "feasibility-1"` and `resp
 
 If the packaged process hangs or does not exit after stdin closes, stop and add a tiny script smoke before proceeding. Do not proceed to Rust/Tauri integration until the packaged binary can answer `status`.
 
+This is a protocol/import feasibility gate only. It proves the packaged Node entrypoint starts, parses JSONL, and answers `status`; it does not launch a Playwright browser context. Browser launch from the packaged binary is verified later by Task 7.
+
 - [ ] **Step 5: Confirm feasibility artifacts are ignored**
 
 Run:
@@ -810,6 +812,25 @@ fn take_complete_jsonl_line(buffer: &mut String) -> Option<String> {
 
 Then update `request_shell` to call `take_complete_jsonl_line(stdout_buffer)` after appending stdout bytes.
 
+If the installed `tauri-plugin-shell` receiver type can be constructed in tests, add one more test that feeds stdout events in two chunks:
+
+```rust
+#[tokio::test]
+async fn shell_transport_waits_for_complete_jsonl_line_across_stdout_events() {
+    let mut buffer = String::new();
+    buffer.push_str("{\"id\":\"expected\"");
+    assert!(take_complete_jsonl_line(&mut buffer).is_none());
+
+    buffer.push_str(",\"response\":{\"type\":\"ack\"}}\n");
+    let line = take_complete_jsonl_line(&mut buffer).expect("complete line");
+
+    let response = decode_sidecar_line("expected", &line).expect("decode response");
+    assert!(matches!(response, GeminiBrowserSidecarResponse::Ack));
+}
+```
+
+If the receiver type is not practical to instantiate, keep the helper-level partial/multiple-line coverage above and note that `request_shell` uses the helper directly.
+
 - [ ] **Step 8: Run Rust checks**
 
 Run:
@@ -1021,7 +1042,8 @@ Expected:
 
 - normal `npm.cmd run build` still builds only the Svelte frontend;
 - `npm.cmd run tauri build` runs `npm run build:tauri-prereqs` through Tauri's `beforeBuildCommand`;
-- missing or stale `src-tauri/binaries/gemini-browser-sidecar-<target-triple>[.exe]` fails with the explicit `check:gemini-browser-sidecar-binary` message before bundling.
+- missing sidecar binaries fail with the explicit `check:gemini-browser-sidecar-binary` message before bundling;
+- stale sidecar binaries are not detected in place; `build:tauri-prereqs` eliminates staleness by rebuilding the sidecar binary before checking it exists.
 - `GEMINI_BROWSER_SIDECAR_TARGET` or `CARGO_BUILD_TARGET` values different from the host tuple fail with the explicit host-target-only message.
 
 - [ ] **Step 5: Ignore generated sidecar binaries**
@@ -1108,6 +1130,8 @@ if (process.argv.includes("--playwright-smoke")) {
 ```
 
 Expected: this mode exercises the packaged Playwright import and Chromium launch path without navigating to Gemini or automating any Google account surface.
+
+This is an internal diagnostic sidecar mode for packaging verification only. It is not a user-facing Gemini Browser Provider command and should not be exposed through Tauri commands or UI.
 
 - [ ] **Step 2: Add a JSON-line and Playwright sidecar smoke script**
 
