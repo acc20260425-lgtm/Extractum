@@ -116,6 +116,10 @@ use llm::{
 };
 
 mod gemini_browser;
+use gemini_browser::{
+    gemini_bridge_list_runs, gemini_bridge_open_browser, gemini_bridge_resume,
+    gemini_bridge_send_single, gemini_bridge_status, gemini_bridge_stop, GeminiBrowserState,
+};
 
 mod analysis;
 use analysis::{
@@ -151,6 +155,7 @@ pub fn run() {
         .manage(AnalysisState::new())
         .manage(PromptPackRunState::new())
         .manage(LlmSchedulerState::new())
+        .manage(GeminiBrowserState::new())
         .manage(SourceIdentityRepairState::new())
         .manage(SecretStoreState::system())
         .plugin(tauri_plugin_dialog::init())
@@ -256,6 +261,12 @@ pub fn run() {
             list_llm_provider_models,
             ask_llm_stream,
             cancel_llm_request,
+            gemini_bridge_status,
+            gemini_bridge_open_browser,
+            gemini_bridge_send_single,
+            gemini_bridge_resume,
+            gemini_bridge_stop,
+            gemini_bridge_list_runs,
             list_analysis_sources,
             list_library_sources,
             list_library_catalog,

@@ -620,7 +620,7 @@ Expected: commit includes path/run-log files and updated plan checkbox only.
 - Modify: `src-tauri/src/lib.rs`
 - Test: `src-tauri/src/gemini_browser/state.rs`
 
-- [ ] **Step 1: Add queue state**
+- [x] **Step 1: Add queue state**
 
 Create `src-tauri/src/gemini_browser/state.rs`:
 
@@ -717,7 +717,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Add a mockable sidecar facade**
+- [x] **Step 2: Add a mockable sidecar facade**
 
 Create `src-tauri/src/gemini_browser/sidecar.rs`:
 
@@ -773,7 +773,7 @@ pub(crate) async fn send_single_stub(request: GeminiBrowserRunRequest) -> AppRes
 }
 ```
 
-- [ ] **Step 3: Add Tauri commands**
+- [x] **Step 3: Add Tauri commands**
 
 Create `src-tauri/src/gemini_browser/commands.rs`:
 
@@ -898,7 +898,7 @@ pub async fn gemini_bridge_list_runs(
 }
 ```
 
-- [ ] **Step 4: Export and register commands**
+- [x] **Step 4: Export and register commands**
 
 Modify `src-tauri/src/gemini_browser/mod.rs`:
 
@@ -950,7 +950,7 @@ gemini_bridge_stop,
 gemini_bridge_list_runs,
 ```
 
-- [ ] **Step 5: Run Rust tests**
+- [x] **Step 5: Run Rust tests**
 
 Run:
 
@@ -960,7 +960,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib gemini_browser
 
 Expected: all Gemini browser module tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 
