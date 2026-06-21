@@ -504,6 +504,8 @@ test prompt UI unless needed for diagnostics display.
 - Partial/timeout cases are visibly distinguishable in run diagnostics.
 - Run inspector shows why a candidate was selected.
 - Copied diagnostics remain privacy-safe.
+- Prompt-pack/browser-stage automation does not silently consume
+  `ok + timeout_latest` as a normal completion.
 - Existing Browser Provider happy path still works in CDP attach mode.
 - Managed mode remains compatible with the shared extractor and passes the same
   extraction tests as CDP attach mode.
