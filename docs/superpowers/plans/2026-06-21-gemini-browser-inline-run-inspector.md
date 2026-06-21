@@ -37,7 +37,7 @@
 - Modify: `sidecars/gemini-browser/src/adapter.ts`
 - Modify: `sidecars/gemini-browser/src/adapter.test.ts`
 
-- [ ] **Step 1: Add failing sidecar tests for debug summaries**
+- [x] **Step 1: Add failing sidecar tests for debug summaries**
 
 Append these expectations to existing `adapter.test.ts` cases instead of creating a new mock framework.
 
@@ -376,7 +376,7 @@ it("marks answer completion as timeout_latest when visible text never stabilizes
 });
 ```
 
-- [ ] **Step 2: Run sidecar tests to verify they fail**
+- [x] **Step 2: Run sidecar tests to verify they fail**
 
 Run:
 
@@ -386,7 +386,7 @@ npm.cmd run test:gemini-browser-sidecar:unit -- sidecars/gemini-browser/src/adap
 
 Expected: FAIL because `debug_summary` is not present on `GeminiBrowserRunResult`.
 
-- [ ] **Step 3: Add TypeScript protocol types**
+- [x] **Step 3: Add TypeScript protocol types**
 
 In `sidecars/gemini-browser/src/protocol.ts`, add these types above `GeminiBrowserRunResult`:
 
@@ -426,7 +426,7 @@ debug_summary?: GeminiBrowserRunDebugSummary | null;
 The field is optional in the TypeScript DTO because older run JSON and tests may
 not have it. New sidecar results must still populate it.
 
-- [ ] **Step 4: Add adapter diagnostics helpers**
+- [x] **Step 4: Add adapter diagnostics helpers**
 
 In `sidecars/gemini-browser/src/adapter.ts`, import the new types:
 
@@ -554,7 +554,7 @@ export async function waitForFirstVisible(
 }
 ```
 
-- [ ] **Step 5: Return answer diagnostics**
+- [x] **Step 5: Return answer diagnostics**
 
 Replace the answer state interfaces/functions in `adapter.ts` with selector-aware variants:
 
@@ -649,7 +649,7 @@ function bestNewAnswerText(current: AnswerState, baseline: AnswerState): AnswerE
 }
 ```
 
-- [ ] **Step 6: Attach debug summary to every adapter result**
+- [x] **Step 6: Attach debug summary to every adapter result**
 
 At the start of `sendSingle()` after `mode` is resolved:
 
@@ -889,7 +889,7 @@ return this.failure(
 After implementation, search `adapter.ts` for `return {` inside `sendSingle()`.
 There should be no raw `GeminiBrowserRunResult` returns left in that method.
 
-- [ ] **Step 7: Run sidecar checks**
+- [x] **Step 7: Run sidecar checks**
 
 Run:
 
@@ -901,7 +901,7 @@ npm.cmd run test:gemini-browser-sidecar:build
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit Task 1**
+- [x] **Step 8: Commit Task 1**
 
 Run:
 

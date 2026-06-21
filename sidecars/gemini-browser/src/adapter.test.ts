@@ -173,6 +173,15 @@ describe("production Gemini DOM contract", () => {
       status: "needs_manual_action",
       manual_action: "start_chrome_cdp",
       message: "Open Gemini in the attached Chrome profile or use Open to create a Gemini tab.",
+      debug_summary: {
+        mode: "cdp_attach",
+        composer_found: false,
+        send_button_found: false,
+        answer_found: false,
+        answer_completion_reason: "missing",
+        final_text_length: 0,
+        error_stage: "setup",
+      },
     });
     expect(context.newPage).not.toHaveBeenCalled();
   });
@@ -200,6 +209,15 @@ describe("production Gemini DOM contract", () => {
       status: "needs_manual_action",
       manual_action: "start_chrome_cdp",
       message: "Chrome CDP endpoint is unavailable. Start Chrome with remote debugging enabled.",
+      debug_summary: {
+        mode: "cdp_attach",
+        composer_found: false,
+        send_button_found: false,
+        answer_found: false,
+        answer_completion_reason: "missing",
+        final_text_length: 0,
+        error_stage: "setup",
+      },
     });
   });
 
@@ -231,6 +249,12 @@ describe("production Gemini DOM contract", () => {
       status: "browser_crashed",
       manual_action: null,
       message: "Chrome CDP connection closed during the run.",
+      debug_summary: {
+        mode: "cdp_attach",
+        answer_completion_reason: "missing",
+        final_text_length: 0,
+        error_stage: "transport",
+      },
     });
   });
 
@@ -258,7 +282,173 @@ describe("production Gemini DOM contract", () => {
       status: "browser_crashed",
       manual_action: null,
       message: "Chrome CDP page closed before the run could send.",
+      debug_summary: {
+        mode: "cdp_attach",
+        composer_found: false,
+        send_button_found: false,
+        answer_found: false,
+        answer_completion_reason: "missing",
+        final_text_length: 0,
+        error_stage: "transport",
+      },
     });
+  });
+
+  it("adds sanitized debug summary to send-button failures", async () => {
+    const prompt = "private prompt must not appear in debug summary";
+    const composer = {
+      count: async () => 1,
+      nth: () => composer,
+      isVisible: async () => true,
+      fill: vi.fn(async () => undefined),
+    };
+    const empty = {
+      count: async () => 0,
+      nth: () => empty,
+      isVisible: async () => false,
+      allTextContents: async () => [],
+    };
+    const page = {
+      isClosed: () => false,
+      locator: (selector: string) => {
+        if (selector === "rich-textarea textarea") return composer;
+        return empty;
+      },
+      waitForTimeout: async () => undefined,
+    };
+    const adapter = new GeminiBrowserAdapter({ env: {} });
+    adapter.__setTestPage(page as never);
+
+    const result = await adapter.sendSingle({
+      browserProfileDir: "C:/Extractum/gemini-browser/profile",
+      artifactDir: "artifacts/gemini-browser-adapter-test/run-send-fail",
+      request: {
+        run_id: "run-send-fail",
+        prompt,
+        source: "settings_test",
+        artifact_mode: "reduced",
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: "needs_manual_action",
+      message: "Send button was not found.",
+      debug_summary: {
+        mode: "managed",
+        composer_found: true,
+        send_button_found: false,
+        answer_found: false,
+        answer_selector: null,
+        answer_completion_reason: "missing",
+        final_text_length: 0,
+        error_stage: "send",
+      },
+    });
+    expect(JSON.stringify(result.debug_summary)).not.toContain(prompt);
+  });
+
+  it("adds sanitized debug summary to composer failures", async () => {
+    const empty = {
+      count: async () => 0,
+      nth: () => empty,
+      isVisible: async () => false,
+      allTextContents: async () => [],
+    };
+    const page = {
+      isClosed: () => false,
+      locator: () => empty,
+      waitForTimeout: async () => undefined,
+    };
+    const adapter = new GeminiBrowserAdapter({ env: {} });
+    adapter.__setTestPage(page as never);
+
+    await expect(
+      adapter.sendSingle({
+        browserProfileDir: "C:/Extractum/gemini-browser/profile",
+        artifactDir: "artifacts/gemini-browser-adapter-test/run-composer-missing",
+        request: {
+          run_id: "run-composer-missing",
+          prompt: "private prompt",
+          source: "settings_test",
+          artifact_mode: "reduced",
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: "needs_login",
+      debug_summary: {
+        mode: "managed",
+        composer_found: false,
+        send_button_found: false,
+        answer_found: false,
+        answer_completion_reason: "missing",
+        final_text_length: 0,
+        error_stage: "composer",
+      },
+    });
+  });
+
+  it("adds sanitized debug summary to answer timeouts", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-21T00:00:00Z"));
+    try {
+      const composer = {
+        count: async () => 1,
+        nth: () => composer,
+        isVisible: async () => true,
+        fill: vi.fn(async () => undefined),
+      };
+      const send = {
+        count: async () => 1,
+        nth: () => send,
+        isVisible: async () => true,
+        click: vi.fn(async () => undefined),
+      };
+      const empty = {
+        count: async () => 0,
+        nth: () => empty,
+        isVisible: async () => false,
+        allTextContents: async () => [],
+      };
+      const page = {
+        isClosed: () => false,
+        locator: (selector: string) => {
+          if (selector === "rich-textarea textarea") return composer;
+          if (selector === "button[aria-label*='send' i]") return send;
+          return empty;
+        },
+        waitForTimeout: async (ms: number) => {
+          vi.advanceTimersByTime(ms);
+        },
+      };
+      const adapter = new GeminiBrowserAdapter({ env: {} });
+      adapter.__setTestPage(page as never);
+
+      await expect(
+        adapter.sendSingle({
+          browserProfileDir: "C:/Extractum/gemini-browser/profile",
+          artifactDir: "artifacts/gemini-browser-adapter-test/run-answer-timeout",
+          request: {
+            run_id: "run-answer-timeout",
+            prompt: "private prompt",
+            source: "settings_test",
+            artifact_mode: "reduced",
+          },
+        }),
+      ).resolves.toMatchObject({
+        status: "timeout",
+        debug_summary: {
+          mode: "managed",
+          composer_found: true,
+          send_button_found: true,
+          answer_found: false,
+          answer_completion_reason: "missing",
+          final_text_length: 0,
+          error_stage: "answer",
+        },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("waits for a streaming Gemini answer to stabilize before returning text", async () => {
@@ -335,6 +525,16 @@ describe("production Gemini DOM contract", () => {
       ).resolves.toMatchObject({
         status: "ok",
         text: finalAnswer,
+        debug_summary: {
+          mode: "managed",
+          composer_found: true,
+          send_button_found: true,
+          answer_found: true,
+          answer_selector: "[data-response-index]",
+          answer_completion_reason: "stable",
+          final_text_length: finalAnswer.length,
+          error_stage: null,
+        },
       });
     } finally {
       vi.useRealTimers();
@@ -503,6 +703,80 @@ describe("production Gemini DOM contract", () => {
     }
   });
 
+  it("marks answer completion as timeout_latest when visible text never stabilizes", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-21T00:00:00Z"));
+    try {
+      const startedAt = Date.now();
+      let submitted = false;
+      const composer = {
+        count: async () => 1,
+        nth: () => composer,
+        isVisible: async () => true,
+        fill: vi.fn(async () => undefined),
+      };
+      const send = {
+        count: async () => 1,
+        nth: () => send,
+        isVisible: async () => true,
+        click: vi.fn(async () => {
+          submitted = true;
+        }),
+      };
+      const answer = {
+        count: async () => (submitted ? 1 : 0),
+        nth: () => answer,
+        isVisible: async () => true,
+        allTextContents: async () => {
+          if (!submitted) return [];
+          return [`partial answer ${Date.now() - startedAt}`];
+        },
+      };
+      const empty = {
+        count: async () => 0,
+        nth: () => empty,
+        isVisible: async () => false,
+        allTextContents: async () => [],
+      };
+      const page = {
+        isClosed: () => false,
+        locator: (selector: string) => {
+          if (selector === "rich-textarea textarea") return composer;
+          if (selector === "button[aria-label*='send' i]") return send;
+          if (selector === "message-content") return answer;
+          return empty;
+        },
+        waitForTimeout: async (ms: number) => {
+          vi.advanceTimersByTime(ms);
+        },
+      };
+      const adapter = new GeminiBrowserAdapter({ env: {} });
+      adapter.__setTestPage(page as never);
+
+      const result = await adapter.sendSingle({
+        browserProfileDir: "C:/Extractum/gemini-browser/profile",
+        artifactDir: "artifacts/gemini-browser-adapter-test/run-timeout-latest",
+        request: {
+          run_id: "run-timeout-latest",
+          prompt: "slow prompt",
+          source: "settings_test",
+          artifact_mode: "reduced",
+        },
+      });
+
+      expect(result).toMatchObject({
+        status: "ok",
+        debug_summary: {
+          answer_found: true,
+          answer_completion_reason: "timeout_latest",
+        },
+      });
+      expect(result.text).toContain("partial answer");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("waits for Gemini to finish a previous generation before sending", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-21T00:00:00Z"));
@@ -571,6 +845,10 @@ describe("production Gemini DOM contract", () => {
       ).resolves.toMatchObject({
         status: "ok",
         text: finalAnswer,
+        debug_summary: {
+          generation_busy_observed: true,
+          send_button_found: true,
+        },
       });
     } finally {
       vi.useRealTimers();

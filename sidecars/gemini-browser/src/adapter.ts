@@ -7,8 +7,10 @@ import {
   type Page,
 } from "@playwright/test";
 import type {
+  GeminiBrowserDebugErrorStage,
   GeminiBrowserProviderConfig,
   GeminiBrowserProviderStatus,
+  GeminiBrowserRunDebugSummary,
   GeminiBrowserRunRequest,
   GeminiBrowserRunResult,
 } from "./protocol.js";
@@ -228,18 +230,22 @@ export class GeminiBrowserAdapter {
   }): Promise<GeminiBrowserRunResult> {
     const start = Date.now();
     const mode = resolveBrowserMode(this.env, input.browserConfig);
+    let debugSummary = emptyDebugSummary(this.session?.type ?? mode.type);
     const hadClosedCdpPage =
       this.session?.type === "cdp_attach" && Boolean(this.session.page?.isClosed());
     if (hadClosedCdpPage) {
-      return {
-        run_id: input.request.run_id,
-        status: "browser_crashed",
-        text: null,
-        message: "Chrome CDP page closed before the run could send.",
-        manual_action: null,
-        artifacts: emptyArtifacts(input.artifactDir),
-        elapsed_ms: Date.now() - start,
-      };
+      return finalizeRunResult(
+        {
+          run_id: input.request.run_id,
+          status: "browser_crashed",
+          text: null,
+          message: "Chrome CDP page closed before the run could send.",
+          manual_action: null,
+          artifacts: emptyArtifacts(input.artifactDir),
+          elapsed_ms: Date.now() - start,
+        },
+        markErrorStage(debugSummary, "transport"),
+      );
     }
 
     let attachStatus: GeminiBrowserProviderStatus | null = null;
@@ -257,46 +263,61 @@ export class GeminiBrowserAdapter {
     if (!page || page.isClosed()) {
       const activeType = this.session?.type ?? mode.type;
       if (activeType !== "cdp_attach") {
-        return {
-          run_id: input.request.run_id,
-          status: "failed",
-          text: null,
-          message: "Gemini browser page was not created.",
-          manual_action: null,
-          artifacts: emptyArtifacts(input.artifactDir),
-          elapsed_ms: Date.now() - start,
-        };
+        debugSummary = emptyDebugSummary(activeType);
+        return finalizeRunResult(
+          {
+            run_id: input.request.run_id,
+            status: "failed",
+            text: null,
+            message: "Gemini browser page was not created.",
+            manual_action: null,
+            artifacts: emptyArtifacts(input.artifactDir),
+            elapsed_ms: Date.now() - start,
+          },
+          markErrorStage(debugSummary, "setup"),
+        );
       }
 
       if (!this.session?.context && attachStatus) {
-        return {
+        return finalizeRunResult(
+          {
+            run_id: input.request.run_id,
+            status: "needs_manual_action",
+            text: null,
+            message: attachStatus.latest_message,
+            manual_action: attachStatus.manual_action,
+            artifacts: emptyArtifacts(input.artifactDir),
+            elapsed_ms: Date.now() - start,
+          },
+          markErrorStage(debugSummary, "setup"),
+        );
+      }
+
+      return finalizeRunResult(
+        {
           run_id: input.request.run_id,
           status: "needs_manual_action",
           text: null,
-          message: attachStatus.latest_message,
-          manual_action: attachStatus.manual_action,
+          message: "Open Gemini in the attached Chrome profile or use Open to create a Gemini tab.",
+          manual_action: "start_chrome_cdp",
           artifacts: emptyArtifacts(input.artifactDir),
           elapsed_ms: Date.now() - start,
-        };
-      }
-
-      return {
-        run_id: input.request.run_id,
-        status: "needs_manual_action",
-        text: null,
-        message: "Open Gemini in the attached Chrome profile or use Open to create a Gemini tab.",
-        manual_action: "start_chrome_cdp",
-        artifacts: emptyArtifacts(input.artifactDir),
-        elapsed_ms: Date.now() - start,
-      };
+        },
+        markErrorStage(debugSummary, "setup"),
+      );
     }
 
     try {
-      const composer = await waitForFirstVisible(
+      const composerResult = await waitForFirstVisibleWithDiagnostics(
         page,
         composerCandidates.map((candidate) => candidate.selector),
         { timeoutMs: 30_000, intervalMs: 500 },
       );
+      const composer = composerResult.locator;
+      debugSummary = {
+        ...debugSummary,
+        composer_found: Boolean(composer),
+      };
       if (!composer) {
         return this.failure(
           page,
@@ -305,6 +326,7 @@ export class GeminiBrowserAdapter {
           "needs_login",
           "Composer was not found.",
           start,
+          markErrorStage(debugSummary, "composer"),
         );
       }
       await composer.fill(input.request.prompt).catch(async () => {
@@ -312,7 +334,7 @@ export class GeminiBrowserAdapter {
         await page.keyboard.insertText(input.request.prompt);
       });
 
-      const send = await waitForFirstVisible(
+      const sendResult = await waitForFirstVisibleWithDiagnostics(
         page,
         sendCandidates.map((candidate) => candidate.selector),
         {
@@ -322,6 +344,13 @@ export class GeminiBrowserAdapter {
           idleGraceMs: 10_000,
         },
       );
+      const send = sendResult.locator;
+      debugSummary = {
+        ...debugSummary,
+        send_button_found: Boolean(send),
+        generation_busy_observed: sendResult.keptWaitingObserved,
+        waited_for_send_ms: sendResult.waitedMs,
+      };
       if (!send) {
         return this.failure(
           page,
@@ -330,12 +359,21 @@ export class GeminiBrowserAdapter {
           "needs_manual_action",
           "Send button was not found.",
           start,
+          markErrorStage(debugSummary, "send"),
         );
       }
       const answerBaseline = await captureAnswerState(page, input.request.prompt);
       await send.click();
 
       const answer = await waitForAnswerText(page, input.request.prompt, answerBaseline);
+      debugSummary = {
+        ...debugSummary,
+        answer_found: Boolean(answer),
+        answer_selector: answer?.selector ?? null,
+        waited_for_answer_ms: answer?.waitedMs ?? ANSWER_TIMEOUT_MS,
+        answer_completion_reason: answer?.completionReason ?? "missing",
+        final_text_length: answer?.text.length ?? 0,
+      };
       if (!answer) {
         return this.failure(
           page,
@@ -344,24 +382,28 @@ export class GeminiBrowserAdapter {
           "timeout",
           "Answer did not appear before timeout.",
           start,
+          markErrorStage(debugSummary, "answer"),
         );
       }
 
-      return {
-        run_id: input.request.run_id,
-        status: "ok",
-        text: answer,
-        message: null,
-        manual_action: null,
-        artifacts: {
-          run_dir: input.artifactDir,
-          html: null,
-          screenshot: null,
-          telemetry: null,
-          artifact_write_error: null,
+      return finalizeRunResult(
+        {
+          run_id: input.request.run_id,
+          status: "ok",
+          text: answer.text,
+          message: null,
+          manual_action: null,
+          artifacts: {
+            run_dir: input.artifactDir,
+            html: null,
+            screenshot: null,
+            telemetry: null,
+            artifact_write_error: null,
+          },
+          elapsed_ms: Date.now() - start,
         },
-        elapsed_ms: Date.now() - start,
-      };
+        debugSummary,
+      );
     } catch (error) {
       if (this.session?.type === "cdp_attach" && isClosedTargetError(error)) {
         return this.failure(
@@ -371,9 +413,18 @@ export class GeminiBrowserAdapter {
           "browser_crashed",
           "Chrome CDP connection closed during the run.",
           start,
+          markErrorStage(debugSummary, "transport"),
         );
       }
-      return this.failure(page, input.request, input.artifactDir, "failed", String(error), start);
+      return this.failure(
+        page,
+        input.request,
+        input.artifactDir,
+        "failed",
+        String(error),
+        start,
+        markErrorStage(debugSummary, "transport"),
+      );
     }
   }
 
@@ -391,16 +442,20 @@ export class GeminiBrowserAdapter {
     status: GeminiBrowserRunResult["status"],
     message: string,
     start: number,
+    debugSummary: GeminiBrowserRunDebugSummary,
   ): Promise<GeminiBrowserRunResult> {
-    return {
-      run_id: request.run_id,
-      status,
-      text: null,
-      message,
-      manual_action: status === "needs_login" ? "login" : null,
-      artifacts: await captureFailureArtifacts({ page, artifactDir, request, status, message }),
-      elapsed_ms: Date.now() - start,
-    };
+    return finalizeRunResult(
+      {
+        run_id: request.run_id,
+        status,
+        text: null,
+        message,
+        manual_action: status === "needs_login" ? "login" : null,
+        artifacts: await captureFailureArtifacts({ page, artifactDir, request, status, message }),
+        elapsed_ms: Date.now() - start,
+      },
+      debugSummary,
+    );
   }
 }
 
@@ -430,6 +485,52 @@ function emptyArtifacts(artifactDir: string): GeminiBrowserRunResult["artifacts"
   };
 }
 
+interface WaitForFirstVisibleResult {
+  locator: Locator | null;
+  selector: string | null;
+  waitedMs: number;
+  keptWaitingObserved: boolean;
+}
+
+function emptyDebugSummary(mode: GeminiBrowserProviderConfig["mode"]): GeminiBrowserRunDebugSummary {
+  return {
+    mode,
+    composer_found: false,
+    send_button_found: false,
+    generation_busy_observed: false,
+    answer_found: false,
+    answer_selector: null,
+    waited_for_send_ms: 0,
+    waited_for_answer_ms: 0,
+    answer_stable_ms: ANSWER_STABLE_MS,
+    answer_completion_reason: "missing",
+    final_text_length: 0,
+    error_stage: null,
+  };
+}
+
+type RunResultWithoutDebug = Omit<GeminiBrowserRunResult, "debug_summary">;
+
+function finalizeRunResult(
+  result: RunResultWithoutDebug,
+  debugSummary: GeminiBrowserRunDebugSummary,
+): GeminiBrowserRunResult {
+  return {
+    ...result,
+    debug_summary: debugSummary,
+  };
+}
+
+function markErrorStage(
+  debugSummary: GeminiBrowserRunDebugSummary,
+  errorStage: GeminiBrowserDebugErrorStage,
+): GeminiBrowserRunDebugSummary {
+  return {
+    ...debugSummary,
+    error_stage: errorStage,
+  };
+}
+
 export async function waitForFirstVisible(
   page: Pick<Page, "locator" | "waitForTimeout">,
   selectors: string[],
@@ -440,11 +541,26 @@ export async function waitForFirstVisible(
     idleGraceMs?: number;
   } = {},
 ): Promise<Locator | null> {
+  return (await waitForFirstVisibleWithDiagnostics(page, selectors, options)).locator;
+}
+
+async function waitForFirstVisibleWithDiagnostics(
+  page: Pick<Page, "locator" | "waitForTimeout">,
+  selectors: string[],
+  options: {
+    timeoutMs?: number;
+    intervalMs?: number;
+    keepWaitingWhileVisible?: string[];
+    idleGraceMs?: number;
+  } = {},
+): Promise<WaitForFirstVisibleResult> {
   const timeoutMs = options.timeoutMs ?? 20_000;
   const intervalMs = options.intervalMs ?? 250;
   const idleGraceMs = options.idleGraceMs ?? timeoutMs;
   const maxAttempts = Math.max(1, Math.ceil(timeoutMs / Math.max(intervalMs, 1)) + 1);
   let idleElapsedMs = 0;
+  let waitedMs = 0;
+  let keptWaitingObserved = false;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     for (const selector of selectors) {
@@ -453,24 +569,27 @@ export async function waitForFirstVisible(
       for (let index = count - 1; index >= 0; index -= 1) {
         const candidate = locator.nth(index);
         if (await candidate.isVisible().catch(() => false)) {
-          return candidate;
+          return { locator: candidate, selector, waitedMs, keptWaitingObserved };
         }
       }
     }
     const shouldKeepWaiting =
       options.keepWaitingWhileVisible &&
       (await hasVisibleLocator(page, options.keepWaitingWhileVisible));
-    if (!shouldKeepWaiting) {
+    if (shouldKeepWaiting) {
+      keptWaitingObserved = true;
+    } else {
       idleElapsedMs += intervalMs;
       if (idleElapsedMs >= idleGraceMs) {
-        return null;
+        return { locator: null, selector: null, waitedMs, keptWaitingObserved };
       }
     }
     if (attempt < maxAttempts - 1) {
       await page.waitForTimeout(intervalMs);
+      waitedMs += intervalMs;
     }
   }
-  return null;
+  return { locator: null, selector: null, waitedMs, keptWaitingObserved };
 }
 
 const ANSWER_TIMEOUT_MS = 60_000;
@@ -497,25 +616,38 @@ async function hasVisibleLocator(
   return false;
 }
 
+interface AnswerEntry {
+  selector: string;
+  text: string;
+}
+
 interface AnswerState {
-  texts: string[];
+  entries: AnswerEntry[];
+}
+
+interface AnswerResult {
+  text: string;
+  selector: string;
+  waitedMs: number;
+  completionReason: "stable" | "timeout_latest";
 }
 
 async function waitForAnswerText(
   page: Page,
   prompt: string,
   baseline: AnswerState,
-): Promise<string | null> {
+): Promise<AnswerResult | null> {
   const deadline = Date.now() + ANSWER_TIMEOUT_MS;
-  let latestAnswer: string | null = null;
+  let latestAnswer: AnswerEntry | null = null;
   let lastChangedAt = Date.now();
   let firstSeenAt: number | null = null;
+  let waitedMs = 0;
 
   while (Date.now() < deadline) {
     const state = await captureAnswerState(page, prompt);
     const answer = bestNewAnswerText(state, baseline);
     const now = Date.now();
-    if (answer && answer !== latestAnswer) {
+    if (answer && answer.text !== latestAnswer?.text) {
       latestAnswer = answer;
       lastChangedAt = now;
       firstSeenAt ??= now;
@@ -527,17 +659,18 @@ async function waitForAnswerText(
         stableForMs >= ANSWER_STABLE_MS &&
         now - firstSeenAt >= ANSWER_STABLE_MS
       ) {
-        return latestAnswer;
+        return { ...latestAnswer, waitedMs, completionReason: "stable" };
       }
     }
     await page.waitForTimeout(ANSWER_POLL_INTERVAL_MS);
+    waitedMs += ANSWER_POLL_INTERVAL_MS;
   }
 
-  return latestAnswer;
+  return latestAnswer ? { ...latestAnswer, waitedMs, completionReason: "timeout_latest" } : null;
 }
 
 async function captureAnswerState(page: Page, prompt: string): Promise<AnswerState> {
-  const texts: string[] = [];
+  const entries: AnswerEntry[] = [];
   const seen = new Set<string>();
   for (const selector of answerCandidates.map((candidate) => candidate.selector)) {
     const rawTexts = await page.locator(selector).allTextContents().catch(() => []);
@@ -545,19 +678,19 @@ async function captureAnswerState(page: Page, prompt: string): Promise<AnswerSta
       const text = rawText.trim();
       if (text.length === 0 || text === prompt || seen.has(text)) continue;
       seen.add(text);
-      texts.push(text);
+      entries.push({ selector, text });
     }
   }
 
   return {
-    texts,
+    entries,
   };
 }
 
-function bestNewAnswerText(current: AnswerState, baseline: AnswerState): string | null {
-  const baselineTexts = new Set(baseline.texts);
-  const newTexts = current.texts.filter((text) => !baselineTexts.has(text));
-  if (newTexts.length === 0) return null;
+function bestNewAnswerText(current: AnswerState, baseline: AnswerState): AnswerEntry | null {
+  const baselineTexts = new Set(baseline.entries.map((entry) => entry.text));
+  const newEntries = current.entries.filter((entry) => !baselineTexts.has(entry.text));
+  if (newEntries.length === 0) return null;
 
-  return newTexts.reduce((best, text) => (text.length >= best.length ? text : best));
+  return newEntries.reduce((best, entry) => (entry.text.length >= best.text.length ? entry : best));
 }

@@ -18,6 +18,31 @@ export interface GeminiBrowserRunRequest {
   artifact_mode: "reduced" | "full";
 }
 
+export type GeminiBrowserDebugErrorStage =
+  | "setup"
+  | "composer"
+  | "send"
+  | "answer"
+  | "artifacts"
+  | "transport";
+
+export type GeminiBrowserAnswerCompletionReason = "stable" | "timeout_latest" | "missing";
+
+export interface GeminiBrowserRunDebugSummary {
+  mode: GeminiBrowserProviderMode;
+  composer_found: boolean;
+  send_button_found: boolean;
+  generation_busy_observed: boolean;
+  answer_found: boolean;
+  answer_selector: string | null;
+  waited_for_send_ms: number;
+  waited_for_answer_ms: number;
+  answer_stable_ms: number;
+  answer_completion_reason: GeminiBrowserAnswerCompletionReason;
+  final_text_length: number;
+  error_stage: GeminiBrowserDebugErrorStage | null;
+}
+
 export interface GeminiBrowserRunResult {
   run_id: string;
   status: GeminiBrowserRunStatus;
@@ -32,6 +57,7 @@ export interface GeminiBrowserRunResult {
     artifact_write_error: string | null;
   };
   elapsed_ms: number;
+  debug_summary?: GeminiBrowserRunDebugSummary | null;
 }
 
 export interface GeminiBrowserProviderStatus {
