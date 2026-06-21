@@ -29,6 +29,8 @@
 | `TECHNOLOGY_WATCH_PACK_DECISIONS.md` | Decision log по `technology_watch` | Рабочая версия |
 | `youtube_summary_pack_spec.md` | Pack-specific schema для `youtube_summary` | v1 draft |
 | `YOUTUBE_SUMMARY_PACK_DECISIONS.md` | Decision log по `youtube_summary` | Рабочая версия |
+| `telegram_summary_pack_spec.md` | Pack-specific schema для `telegram_summary` | v1 draft |
+| `TELEGRAM_SUMMARY_PACK_DECISIONS.md` | Decision log по `telegram_summary` | Рабочая версия |
 
 ## Reference Validator Skeleton
 
@@ -126,6 +128,8 @@ Current open directions after this layer:
 Этот набор достаточен для реализации первого pack `technology_watch`.
 `youtube_summary_pack_spec.md` добавлен как второй pack-specific draft поверх того же
 baseline.
+`telegram_summary_pack_spec.md` добавлен как третий pack-specific draft для
+Telegram channel/chat summary поверх того же baseline.
 Открытые вопросы, оставшиеся в документах, считаются non-blocking для v1.
 
 ## Текущая архитектура
@@ -205,6 +209,44 @@ Companion documents уточняют типизированные вложенн
 - ~~OQ-YS-01~~ — закрыт через `speaker_id` в `notable_quote`;
 - OQ-YS-02 — достаточно ли текущей granularity `synthesis`;
 - OQ-YS-03 — нужен ли отдельный playlist-level context.
+
+## Третий pack
+
+`telegram_summary` использует Telegram message-centric модель с явным
+pack-local индексом сообщений:
+
+```json
+{
+  "pack_data": {
+    "telegram_summary": {
+      "source_shape": "mixed",
+      "sources": [],
+      "message_refs": [],
+      "digest": null,
+      "timeline": [],
+      "topics": [],
+      "key_messages": [],
+      "threads": [],
+      "claims": [],
+      "forwarded_items": [],
+      "message_quality_signals": [],
+      "cross_source_synthesis": null,
+      "limitations": []
+    }
+  }
+}
+```
+
+Подробная схема находится в `telegram_summary_pack_spec.md`.
+Принятые решения по pack-у кратко зафиксированы в
+`TELEGRAM_SUMMARY_PACK_DECISIONS.md`.
+
+Открытые вопросы v1:
+
+- OQ-TS-01 — нужна ли отдельная schema-форма для recursive summaries очень
+  длинных reply chains;
+- OQ-TS-02 — должны ли веса importance scoring быть runtime-configurable,
+  prompt-guided или фиксироваться в pack runtime profile.
 
 ## Открытые направления
 
