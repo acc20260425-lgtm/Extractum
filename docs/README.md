@@ -11,7 +11,8 @@ history.
   order.
 - `design-document.md`: product/design overview and user-facing workflow
   direction.
-- `architecture-deep-dive.md`: broader architecture notes.
+- `architecture-deep-dive.md`: broader architecture notes, including Browser
+  Providers runtime architecture.
 - `backend-architecture-simplification-analysis.md`: current backend
   maintainability direction and remaining simplification work.
 - `frontend-architecture-evolution-analysis.md`: current frontend workspace
@@ -22,6 +23,9 @@ history.
 - `database-schema.md`: current supported SQLite schema, migration baseline,
   and post-baseline migration authoring requirements.
 - `backlog.md`: open work only. Shipped work should not accumulate here.
+- `browser-providers-llm-troubleshooting.md`: focused LLM/operator runbook for
+  Gemini Browser Provider failures, DOM drift, sidecar protocol issues, CDP
+  attach, and verification commands.
 - `../research/youtube_pipeline/README.md`: local YouTube summary research
   prototype notes. The detailed boundary between the legacy direct-LLM runner
   and the file-backed agentic workflow lives in

@@ -142,6 +142,7 @@ The project follows a practical split:
 
 - Rust backend owns Telegram access, YouTube `yt-dlp` orchestration, session restore, migrations, SQLite I/O, compression, secure storage, and analysis orchestration.
 - Svelte frontend owns route flow, UI state, forms, filtering, and user-facing workflows.
+- Browser Providers are a cross-runtime boundary: Svelte owns operator intent, Tauri owns process/profile/run lifecycle, and provider sidecars own browser automation.
 
 The backend is intentionally thin in UI concerns, while the frontend is intentionally thin in infrastructure concerns.
 
@@ -150,7 +151,7 @@ The backend is intentionally thin in UI concerns, while the frontend is intentio
 - `/accounts`: create/delete accounts, inspect runtime status
 - `/auth/[id]`: Telegram sign-in and logout
 - `/sources`: compatibility redirect to the main analysis workspace
-- `/settings`: manage reusable LLM provider profiles, active profile selection, model refresh, live provider smoke tests, and YouTube cookie/settings controls
+- `/settings`: manage reusable LLM provider profiles, active profile selection, model refresh, live provider smoke tests, Browser Providers, and YouTube cookie/settings controls
 - `/analysis`: source browsing and sync, reports, source groups, active runs, saved run history, follow-up chat, trace inspection
 
 ## Storage overview
@@ -206,6 +207,9 @@ Fast path:
 4. `docs/design-document.md`
 5. `docs/backlog.md`
 
+For Browser Provider troubleshooting, especially Gemini DOM drift, see
+`docs/browser-providers-llm-troubleshooting.md`.
+
 ## Gemini Browser Sidecar Packaging
 
 The Gemini Browser Provider uses a TypeScript/Playwright sidecar. Development
@@ -237,26 +241,17 @@ Gemini.
 For Google accounts that reject Playwright-owned browser login, operators can run
 Gemini Browser Provider in user-controlled Chrome CDP mode.
 
-Start ordinary Chrome with a dedicated Extractum profile:
-
-```powershell
-$profile = "$env:APPDATA\org.ai.extractum\gemini-browser\chrome-cdp-profile"
-Start-Process chrome.exe -ArgumentList @(
-  "--remote-debugging-port=9222",
-  "--user-data-dir=$profile",
-  "https://gemini.google.com/app"
-)
-```
-
-Do not use the normal Chrome `Default` profile. Complete Google/Gemini login
-manually in this Chrome window, then start Extractum with:
-
-```powershell
-$env:EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT = "http://127.0.0.1:9222"
-npm.cmd run tauri dev
-```
+In Settings -> Browser Providers, select `Attach Chrome`, keep the default
+loopback endpoint `http://127.0.0.1:9222`, click `Start Chrome`, complete
+Google/Gemini login manually in that dedicated Chrome profile, then click
+`Resume`. Normal app usage does not require launching Extractum with a CDP
+environment variable.
 
 In CDP mode, `Resume` attaches only to an existing Gemini tab. `Open` may create
 a Gemini tab but never performs Google account, phone, CAPTCHA, consent, or
 other security actions. `Stop` detaches Extractum and does not close Chrome.
 Only loopback base HTTP endpoints are accepted.
+
+For development and automation, the legacy environment override
+`EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT` is still supported by the sidecar, but
+the Settings UI is the preferred operator path.

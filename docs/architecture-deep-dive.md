@@ -30,6 +30,97 @@ Owns:
 - error normalization for display
 - read-only diagnostics presentation
 
+## Browser Providers architecture
+
+Browser Providers are intentionally modeled as a cross-runtime boundary rather
+than as another direct HTTP LLM client. They let Extractum use a real browser
+session when a provider is available only through a web UI or when the user's
+logged-in browser state is the safest integration surface.
+
+The Gemini Browser Provider is the current implementation. Its runtime path is:
+
+1. Settings UI in
+   `src/lib/components/settings/gemini-browser-provider-panel.svelte` captures
+   operator intent: provider mode, CDP endpoint, open/resume/stop actions, and
+   one-off test prompts.
+2. Frontend API helpers in `src/lib/api/gemini-browser.ts` call typed Tauri
+   commands.
+3. Tauri commands in `src-tauri/src/gemini_browser/commands.rs` own run IDs,
+   app-data paths, event emission, run logging, and the sidecar request
+   boundary.
+4. `src-tauri/src/gemini_browser/sidecar.rs` owns the sidecar process and JSONL
+   request/response transport.
+5. `sidecars/gemini-browser/src/index.ts` receives the sidecar envelopes and
+   delegates browser work to `sidecars/gemini-browser/src/adapter.ts`.
+6. The adapter controls Playwright and depends on
+   `sidecars/gemini-browser/src/dom-contract.ts` for Gemini composer, send, and
+   answer selectors.
+7. Rust writes run records and artifacts under the Tauri app-data
+   `gemini-browser/runs/<run_id>` directory.
+
+This keeps the Svelte app free of Playwright imports, keeps Rust free of DOM
+automation details, and gives the TypeScript sidecar a narrow job: drive the
+browser and return typed provider status or run results.
+
+### Provider modes
+
+Managed mode launches a Playwright persistent Chromium profile under the Tauri
+app-data `gemini-browser/profile` directory. In this mode the sidecar owns the
+browser context and may close it when the provider is stopped.
+
+CDP attach mode connects to a user-controlled Chrome instance. The Settings UI
+can start Chrome through `gemini_bridge_start_cdp_chrome`, which is implemented
+in `src-tauri/src/gemini_browser/cdp_chrome.rs`. That launcher uses a dedicated
+app-data profile under `gemini-browser/chrome-cdp-profile` and exposes a local
+CDP endpoint, normally `http://127.0.0.1:9222`.
+
+CDP attach has stricter ownership and security invariants:
+
+- only loopback HTTP base URLs are accepted;
+- the normal Chrome `Default` profile should not be used;
+- Extractum must not close user-controlled Chrome or unrelated tabs;
+- `Resume` attaches to an existing Gemini tab;
+- `Open` may create a Gemini tab but must not perform account, phone, CAPTCHA,
+  consent, or other security actions;
+- `SendPrompt` does not create a new Gemini tab in CDP mode and returns
+  `needs_manual_action` when no usable Gemini page is available.
+
+### Sidecar and packaging boundary
+
+Development runs can use the local Node sidecar build under
+`sidecars/gemini-browser/dist/index.js`. Release builds package the sidecar as a
+Tauri external binary named `gemini-browser-sidecar`. The launch-mode decision
+lives in `src-tauri/src/gemini_browser/sidecar_launch.rs`, and packaging checks
+are exposed through scripts such as `test:gemini-browser-sidecar`,
+`build:gemini-browser-sidecar`, and `check:gemini-browser-sidecar-binary`.
+
+The sidecar protocol is duplicated deliberately across Rust and TypeScript:
+
+- Rust: `src-tauri/src/gemini_browser/types.rs`
+- TypeScript: `sidecars/gemini-browser/src/protocol.ts`
+
+Any command or status shape change must update both files and the corresponding
+tests. The important commands are `status`, `open_browser`, `resume`,
+`send_single`, and `stop`.
+
+### Run logs, artifacts, and troubleshooting
+
+Browser Provider runs are file-backed runtime records rather than database rows.
+Rust creates a queued run, marks it running, invokes the sidecar, and then stores
+the final result. Failure artifacts are written by the sidecar when browser
+automation reaches a page and needs evidence for diagnosis.
+
+Reduced artifacts are the default because live Gemini pages can include account,
+prompt, and private conversation data. Full HTML/screenshot artifacts should be
+reserved for mock or local debugging.
+
+The most volatile production boundary is Gemini DOM automation. When Gemini
+changes its UI, the preferred repair path is to update
+`sidecars/gemini-browser/src/dom-contract.ts`, add regression coverage in
+`sidecars/gemini-browser/src/adapter.test.ts`, and verify the sidecar before
+touching Rust or Svelte. The detailed operational runbook is
+`docs/browser-providers-llm-troubleshooting.md`.
+
 ## 2. Telegram ingest flow
 
 The shared source layer is provider-ready: source records expose
