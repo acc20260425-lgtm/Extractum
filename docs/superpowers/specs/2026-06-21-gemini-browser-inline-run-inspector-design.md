@@ -47,7 +47,7 @@ The inspector shows:
 - run status and result status;
 - created/updated timestamps;
 - elapsed milliseconds when a result exists;
-- response text length when a result exists;
+- result text length and debug final text length when a result exists;
 - latest run message;
 - manual action when present;
 - artifact path availability: run directory, telemetry, reduced/full artifact
@@ -89,6 +89,7 @@ Initial fields:
 - `waited_for_send_ms`: approximate wait time before send button resolution.
 - `waited_for_answer_ms`: approximate wait time before answer text resolution.
 - `answer_stable_ms`: stability window used before accepting the final answer.
+- `answer_completion_reason`: `stable`, `timeout_latest`, or `missing`.
 - `final_text_length`: final extracted answer length, or `0`.
 - `error_stage`: one of `setup`, `composer`, `send`, `answer`, `artifacts`,
   `transport`, or `null`.
@@ -143,7 +144,10 @@ whose `result.artifacts.run_dir` points outside the canonical
 Sidecar tests:
 
 - a successful send includes a sanitized debug summary with answer selector,
-  wait durations, and final text length;
+  wait durations, final text length, and `answer_completion_reason: "stable"`;
+- a slow answer that never stabilizes before timeout reports
+  `answer_completion_reason: "timeout_latest"` when a latest visible answer is
+  returned;
 - a send-button failure reports `error_stage: "send"` without prompt or answer
   text in debug summary;
 - a previous-generation wait records `generation_busy_observed: true`;
@@ -164,8 +168,13 @@ Frontend tests:
 - it falls back to the newest run when no active run exists;
 - it renders missing debug summary gracefully;
 - copy-diagnostics output is sanitized and includes status, run id, elapsed,
-  artifact availability, and debug facts;
+  separate `result_text_length` and `debug_final_text_length`, artifact
+  availability, and debug facts;
+- copy-diagnostics output does not include artifact paths, answer text, or
+  path-like substrings from run messages;
 - open-folder failure renders a non-destructive UI error.
+- copy/selection behavior is covered in pure view-model tests; Svelte
+  source-contract tests only verify wiring and rendering affordances.
 
 Manual validation:
 
@@ -174,10 +183,15 @@ Manual validation:
 3. Start Chrome or attach to an existing CDP session.
 4. Send the short browser-provider smoke prompt.
 5. Confirm the response appears and the inline inspector shows status, elapsed,
-   answer length, artifact refs, and debug facts.
+   result text length, debug final text length, answer completion reason,
+   artifact refs, and debug facts.
 6. Trigger one recoverable failure, such as closing the Gemini tab before send,
    and confirm the inspector explains the stage without exposing private page
    content.
+
+Opening the run folder is a manual UX check, not a CI gate. Automated acceptance
+relies on Rust command validation plus frontend view-model and source-contract
+tests.
 
 ## Acceptance Criteria
 

@@ -64,6 +64,7 @@ await expect(
     send_button_found: true,
     answer_found: true,
     answer_selector: "[data-response-index]",
+    answer_completion_reason: "stable",
     final_text_length: finalAnswer.length,
     error_stage: null,
   },
@@ -118,6 +119,7 @@ it("adds sanitized debug summary to send-button failures", async () => {
       send_button_found: false,
       answer_found: false,
       answer_selector: null,
+      answer_completion_reason: "missing",
       final_text_length: 0,
       error_stage: "send",
     },
@@ -150,6 +152,84 @@ await expect(
 });
 ```
 
+Add a timeout-latest answer test near the existing streaming-answer tests:
+
+```ts
+it("marks answer completion as timeout_latest when visible text never stabilizes", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-06-21T00:00:00Z"));
+  try {
+    const startedAt = Date.now();
+    let submitted = false;
+    const composer = {
+      count: async () => 1,
+      nth: () => composer,
+      isVisible: async () => true,
+      fill: vi.fn(async () => undefined),
+    };
+    const send = {
+      count: async () => 1,
+      nth: () => send,
+      isVisible: async () => true,
+      click: vi.fn(async () => {
+        submitted = true;
+      }),
+    };
+    const answer = {
+      count: async () => (submitted ? 1 : 0),
+      nth: () => answer,
+      isVisible: async () => true,
+      allTextContents: async () => {
+        if (!submitted) return [];
+        return [`partial answer ${Date.now() - startedAt}`];
+      },
+    };
+    const empty = {
+      count: async () => 0,
+      nth: () => empty,
+      isVisible: async () => false,
+      allTextContents: async () => [],
+    };
+    const page = {
+      isClosed: () => false,
+      locator: (selector: string) => {
+        if (selector === "rich-textarea textarea") return composer;
+        if (selector === "button[aria-label*='send' i]") return send;
+        if (selector === "message-content") return answer;
+        return empty;
+      },
+      waitForTimeout: async (ms: number) => {
+        vi.advanceTimersByTime(ms);
+      },
+    };
+    const adapter = new GeminiBrowserAdapter({ env: {} });
+    adapter.__setTestPage(page as never);
+
+    const result = await adapter.sendSingle({
+      browserProfileDir: "C:/Extractum/gemini-browser/profile",
+      artifactDir: "artifacts/gemini-browser-adapter-test/run-timeout-latest",
+      request: {
+        run_id: "run-timeout-latest",
+        prompt: "slow prompt",
+        source: "settings_test",
+        artifact_mode: "reduced",
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: "ok",
+      debug_summary: {
+        answer_found: true,
+        answer_completion_reason: "timeout_latest",
+      },
+    });
+    expect(result.text).toContain("partial answer");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+```
+
 - [ ] **Step 2: Run sidecar tests to verify they fail**
 
 Run:
@@ -173,6 +253,8 @@ export type GeminiBrowserDebugErrorStage =
   | "artifacts"
   | "transport";
 
+export type GeminiBrowserAnswerCompletionReason = "stable" | "timeout_latest" | "missing";
+
 export interface GeminiBrowserRunDebugSummary {
   mode: GeminiBrowserProviderMode;
   composer_found: boolean;
@@ -183,6 +265,7 @@ export interface GeminiBrowserRunDebugSummary {
   waited_for_send_ms: number;
   waited_for_answer_ms: number;
   answer_stable_ms: number;
+  answer_completion_reason: GeminiBrowserAnswerCompletionReason;
   final_text_length: number;
   error_stage: GeminiBrowserDebugErrorStage | null;
 }
@@ -227,6 +310,7 @@ function emptyDebugSummary(mode: GeminiBrowserProviderConfig["mode"]): GeminiBro
     waited_for_send_ms: 0,
     waited_for_answer_ms: 0,
     answer_stable_ms: ANSWER_STABLE_MS,
+    answer_completion_reason: "missing",
     final_text_length: 0,
     error_stage: null,
   };
@@ -342,6 +426,7 @@ interface AnswerResult {
   text: string;
   selector: string;
   waitedMs: number;
+  completionReason: "stable" | "timeout_latest";
 }
 ```
 
@@ -375,14 +460,14 @@ async function waitForAnswerText(
         stableForMs >= ANSWER_STABLE_MS &&
         now - firstSeenAt >= ANSWER_STABLE_MS
       ) {
-        return { ...latestAnswer, waitedMs };
+        return { ...latestAnswer, waitedMs, completionReason: "stable" };
       }
     }
     await page.waitForTimeout(ANSWER_POLL_INTERVAL_MS);
     waitedMs += ANSWER_POLL_INTERVAL_MS;
   }
 
-  return latestAnswer ? { ...latestAnswer, waitedMs } : null;
+  return latestAnswer ? { ...latestAnswer, waitedMs, completionReason: "timeout_latest" } : null;
 }
 ```
 
@@ -579,6 +664,7 @@ if (!answer) {
 debugSummary.answer_found = true;
 debugSummary.answer_selector = answer.selector;
 debugSummary.waited_for_answer_ms = answer.waitedMs;
+debugSummary.answer_completion_reason = answer.completionReason;
 debugSummary.final_text_length = answer.text.length;
 
 return finalizeRunResult(
@@ -716,6 +802,7 @@ fn run_result_serializes_optional_debug_summary() {
             waited_for_send_ms: 15_000,
             waited_for_answer_ms: 12_000,
             answer_stable_ms: 8_000,
+            answer_completion_reason: GeminiBrowserAnswerCompletionReason::Stable,
             final_text_length: 6,
             error_stage: None,
         }),
@@ -747,6 +834,7 @@ debug_summary: Some(crate::gemini_browser::GeminiBrowserRunDebugSummary {
     waited_for_send_ms: 0,
     waited_for_answer_ms: 8_000,
     answer_stable_ms: 8_000,
+    answer_completion_reason: crate::gemini_browser::GeminiBrowserAnswerCompletionReason::Stable,
     final_text_length: 6,
     error_stage: None,
 }),
@@ -793,6 +881,14 @@ pub enum GeminiBrowserDebugErrorStage {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GeminiBrowserAnswerCompletionReason {
+    Stable,
+    TimeoutLatest,
+    Missing,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeminiBrowserRunDebugSummary {
     pub mode: GeminiBrowserProviderMode,
     pub composer_found: bool,
@@ -803,6 +899,7 @@ pub struct GeminiBrowserRunDebugSummary {
     pub waited_for_send_ms: u64,
     pub waited_for_answer_ms: u64,
     pub answer_stable_ms: u64,
+    pub answer_completion_reason: GeminiBrowserAnswerCompletionReason,
     pub final_text_length: usize,
     pub error_stage: Option<GeminiBrowserDebugErrorStage>,
 }
@@ -828,7 +925,7 @@ This includes `sidecar_unavailable_result()` and existing tests that construct a
 In `src-tauri/src/gemini_browser/mod.rs`, add the new types to the `pub use types::{ ... }` list:
 
 ```rust
-GeminiBrowserDebugErrorStage, GeminiBrowserRunDebugSummary,
+GeminiBrowserAnswerCompletionReason, GeminiBrowserDebugErrorStage, GeminiBrowserRunDebugSummary,
 ```
 
 - [ ] **Step 5: Add recorded run directory resolver**
@@ -950,6 +1047,13 @@ pub async fn gemini_bridge_open_run_folder(
 }
 ```
 
+This plan uses `tauri_plugin_opener::OpenerExt` and
+`handle.opener().open_path(...)` from the Tauri opener plugin v2 API. If the
+local crate version exposes a slightly different method signature, use the
+actual `tauri-plugin-opener` v2 API that compiles, but keep the command security
+behavior unchanged: only open a persisted `result.artifacts.run_dir` that
+matches the canonical app-data run directory for the requested run id.
+
 In `src-tauri/src/gemini_browser/mod.rs`, export the command and helper:
 
 ```rust
@@ -1020,6 +1124,8 @@ import { describe, expect, it } from "vitest";
 import {
   artifactAvailability,
   copyableRunDiagnostics,
+  debugFinalTextLength,
+  resultTextLength,
   selectedRunForInspector,
 } from "./gemini-browser-run-inspector";
 import type { GeminiBrowserRun, GeminiBrowserRunResult } from "./types/gemini-browser";
@@ -1029,7 +1135,8 @@ function result(overrides: Partial<GeminiBrowserRunResult> = {}): GeminiBrowserR
     run_id: "run-1",
     status: "ok",
     text: "answer text",
-    message: null,
+    message:
+      "Failed near C:/Users/Dima/AppData/Roaming/org.ai.extractum/gemini-browser/runs/run-1/page.html, /Users/dima/Extractum/private.txt, \\\\server\\share\\secret.txt, and %APPDATA%\\Extractum\\secret.txt",
     manual_action: null,
     artifacts: {
       run_dir: "C:/Users/Dima/AppData/Roaming/org.ai.extractum/gemini-browser/runs/run-1",
@@ -1049,6 +1156,7 @@ function result(overrides: Partial<GeminiBrowserRunResult> = {}): GeminiBrowserR
       waited_for_send_ms: 15_000,
       waited_for_answer_ms: 10_000,
       answer_stable_ms: 8_000,
+      answer_completion_reason: "stable",
       final_text_length: 11,
       error_stage: null,
     },
@@ -1090,17 +1198,35 @@ describe("gemini browser run inspector", () => {
   });
 
   it("copies sanitized diagnostics with debug facts and no local paths", () => {
-    const diagnostics = copyableRunDiagnostics(run());
+    const selectedRun = run();
+    const diagnostics = copyableRunDiagnostics(selectedRun);
 
     expect(diagnostics).toContain("run_id: run-1");
     expect(diagnostics).toContain("status: ok");
     expect(diagnostics).toContain("result_status: ok");
     expect(diagnostics).toContain("elapsed_ms: 16309");
-    expect(diagnostics).toContain("answer_length: 11");
+    expect(diagnostics).toContain("result_text_length: 11");
+    expect(diagnostics).toContain("debug_final_text_length: 11");
     expect(diagnostics).toContain("generation_busy_observed: true");
     expect(diagnostics).toContain("answer_selector: message-content");
+    expect(diagnostics).toContain("answer_completion_reason: stable");
+    expect(diagnostics).not.toContain(selectedRun.result?.artifacts.run_dir ?? "missing-run-dir");
+    expect(diagnostics).not.toContain(selectedRun.result?.artifacts.telemetry ?? "missing-telemetry");
     expect(diagnostics).not.toContain("C:/Users/Dima");
+    expect(diagnostics).not.toContain("/Users/dima");
+    expect(diagnostics).not.toContain("\\\\server\\share");
+    expect(diagnostics).not.toContain("%APPDATA%");
     expect(diagnostics).not.toContain("answer text");
+  });
+
+  it("reports result and debug text lengths separately", () => {
+    const mismatched = result({
+      text: "short",
+      debug_summary: { ...result().debug_summary!, final_text_length: 42 },
+    });
+
+    expect(resultTextLength(mismatched)).toBe(5);
+    expect(debugFinalTextLength(mismatched)).toBe(42);
   });
 
   it("copies a clear marker when debug summary is unavailable", () => {
@@ -1136,6 +1262,8 @@ export type GeminiBrowserDebugErrorStage =
   | "artifacts"
   | "transport";
 
+export type GeminiBrowserAnswerCompletionReason = "stable" | "timeout_latest" | "missing";
+
 export interface GeminiBrowserRunDebugSummary {
   mode: GeminiBrowserProviderMode;
   composer_found: boolean;
@@ -1146,6 +1274,7 @@ export interface GeminiBrowserRunDebugSummary {
   waited_for_send_ms: number;
   waited_for_answer_ms: number;
   answer_stable_ms: number;
+  answer_completion_reason: GeminiBrowserAnswerCompletionReason;
   final_text_length: number;
   error_stage: GeminiBrowserDebugErrorStage | null;
 }
@@ -1191,8 +1320,21 @@ export function artifactAvailability(result: GeminiBrowserRunResult | null) {
   };
 }
 
-export function answerLength(result: GeminiBrowserRunResult | null): number {
-  return result?.debug_summary?.final_text_length ?? result?.text?.length ?? 0;
+export function resultTextLength(result: GeminiBrowserRunResult | null): number {
+  return result?.text?.length ?? 0;
+}
+
+export function debugFinalTextLength(result: GeminiBrowserRunResult | null): number {
+  return result?.debug_summary?.final_text_length ?? 0;
+}
+
+export function sanitizeDiagnosticMessage(message: string | null | undefined): string {
+  if (!message) return "none";
+  return message
+    .replace(/[A-Za-z]:[\\/][^\s]+/g, "[path]")
+    .replace(/\\\\[^\s\\]+\\[^\s]+/g, "[path]")
+    .replace(/\/Users\/[^\s]+/g, "[path]")
+    .replace(/%APPDATA%[\\/][^\s]+/gi, "[path]");
 }
 
 export function copyableRunDiagnostics(run: GeminiBrowserRun): string {
@@ -1207,8 +1349,9 @@ export function copyableRunDiagnostics(run: GeminiBrowserRun): string {
     `created_at: ${run.created_at}`,
     `updated_at: ${run.updated_at}`,
     `elapsed_ms: ${result?.elapsed_ms ?? "unavailable"}`,
-    `answer_length: ${answerLength(result)}`,
-    `message: ${result?.message ?? "none"}`,
+    `result_text_length: ${resultTextLength(result)}`,
+    `debug_final_text_length: ${debugFinalTextLength(result)}`,
+    `message: ${sanitizeDiagnosticMessage(result?.message)}`,
     `manual_action: ${result?.manual_action ?? "none"}`,
     `artifact_run_dir_available: ${availability.run_dir}`,
     `artifact_html_available: ${availability.html}`,
@@ -1230,6 +1373,7 @@ export function copyableRunDiagnostics(run: GeminiBrowserRun): string {
     `generation_busy_observed: ${debug.generation_busy_observed}`,
     `answer_found: ${debug.answer_found}`,
     `answer_selector: ${debug.answer_selector ?? "none"}`,
+    `answer_completion_reason: ${debug.answer_completion_reason}`,
     `waited_for_send_ms: ${debug.waited_for_send_ms}`,
     `waited_for_answer_ms: ${debug.waited_for_answer_ms}`,
     `answer_stable_ms: ${debug.answer_stable_ms}`,
@@ -1285,6 +1429,9 @@ it("renders inline run inspector controls and sanitized diagnostics actions", ()
 it("shows debug summary fields without reading artifact files in the panel", () => {
   expect(componentSource).toContain("generation_busy_observed");
   expect(componentSource).toContain("answer_selector");
+  expect(componentSource).toContain("answer_completion_reason");
+  expect(componentSource).toContain("resultTextLength");
+  expect(componentSource).toContain("debugFinalTextLength");
   expect(componentSource).toContain("waited_for_send_ms");
   expect(componentSource).toContain("waited_for_answer_ms");
   expect(componentSource).not.toContain("page.html");
@@ -1318,9 +1465,10 @@ Import the new API and view model:
 
 ```ts
 import {
-  answerLength,
   artifactAvailability,
   copyableRunDiagnostics,
+  debugFinalTextLength,
+  resultTextLength,
   selectedRunForInspector,
 } from "$lib/gemini-browser-run-inspector";
 ```
@@ -1416,8 +1564,12 @@ Add this block between the test prompt card and recent runs list:
         <span>{selectedInspectorResult?.elapsed_ms ?? 0} ms</span>
       </div>
       <div>
-        <span class="fact-label">Answer length</span>
-        <span>{answerLength(selectedInspectorResult)}</span>
+        <span class="fact-label">Result text length</span>
+        <span>{resultTextLength(selectedInspectorResult)}</span>
+      </div>
+      <div>
+        <span class="fact-label">Debug final length</span>
+        <span>{debugFinalTextLength(selectedInspectorResult)}</span>
       </div>
       <div>
         <span class="fact-label">Manual action</span>
@@ -1469,6 +1621,10 @@ Add this block between the test prompt card and recent runs list:
         <div>
           <span class="fact-label">Answer selector</span>
           <code>{selectedInspectorResult.debug_summary.answer_selector ?? "none"}</code>
+        </div>
+        <div>
+          <span class="fact-label">Answer reason</span>
+          <span>{selectedInspectorResult.debug_summary.answer_completion_reason}</span>
         </div>
         <div>
           <span class="fact-label">Send wait</span>
@@ -1592,9 +1748,10 @@ In `docs/browser-providers-llm-troubleshooting.md`, add a short section after `S
 The Browser Providers panel includes an inline run inspector for the selected
 active run or the newest recent run. Use it before opening app-data manually.
 
-The inspector shows status, elapsed time, answer length, artifact availability,
-manual action, and sidecar `debug_summary` facts such as composer/send/answer
-selection and wait durations.
+The inspector shows status, elapsed time, result text length, debug final text
+length, answer completion reason, artifact availability, manual action, and
+sidecar `debug_summary` facts such as composer/send/answer selection and wait
+durations.
 
 `Copy diagnostics` intentionally omits full local artifact paths, prompt text,
 answer text, raw DOM, screenshots, cookies, and account identifiers. It is the
@@ -1653,9 +1810,13 @@ In the app:
 4. Open or resume Gemini.
 5. Send `Reply with one short sentence confirming the browser provider is connected.`
 6. Confirm the response appears.
-7. Confirm `Run inspector` shows `status: ok`, elapsed time, answer length, artifact availability, and debug facts.
-8. Click `Copy diagnostics` and confirm the copied text has no full local paths and no answer text.
+7. Confirm `Run inspector` shows `status: ok`, elapsed time, result text length, debug final text length, answer completion reason, artifact availability, and debug facts.
+8. Click `Copy diagnostics` and confirm the copied text has separate `result_text_length` and `debug_final_text_length`, no full local paths, no artifact paths, and no answer text.
 9. Click `Open run folder` and confirm the recorded run directory opens.
+
+`Open run folder` is a manual UX validation. Automated acceptance remains the
+Rust command validation plus frontend view-model/source-contract tests, so CI or
+agent runs do not need to perform GUI folder opening.
 
 - [ ] **Step 6: Commit Task 5**
 
@@ -1673,4 +1834,4 @@ git commit -m "docs: document Gemini browser run inspector"
 - Spec coverage: Tasks cover sidecar `debug_summary`, Rust pass-through and persistence, open folder command, frontend DTOs, sanitized copy diagnostics, inline inspector UI, tests, docs, and manual validation.
 - Scope check: No new route, no artifact viewer, no DOM/HTML rendering in the frontend, and no CDP security changes.
 - Type consistency: `debug_summary` is the field name in TypeScript, Rust serde JSON, frontend DTOs, and run-log JSON. Error stages use `setup`, `composer`, `send`, `answer`, `artifacts`, and `transport`.
-- Privacy check: copied diagnostics uses artifact availability flags and debug facts, not prompt text, answer text, full local paths, raw DOM, screenshots, cookies, or account identifiers.
+- Privacy check: copied diagnostics uses artifact availability flags, separate result/debug text lengths, and debug facts, not prompt text, answer text, artifact paths, full local paths, raw DOM, screenshots, cookies, or account identifiers.
