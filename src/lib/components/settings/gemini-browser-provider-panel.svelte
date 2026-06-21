@@ -16,6 +16,12 @@
   import { statusLabel } from "$lib/gemini-browser-provider-panel-contract";
   import { runResultForActivePrompt } from "$lib/gemini-browser-provider-panel-state";
   import {
+    deriveGeminiBrowserSetupChecks,
+    setupCheckActionLabel,
+    setupCheckStateLabel,
+    type GeminiBrowserSetupCheck,
+  } from "$lib/gemini-browser-setup-status";
+  import {
     artifactAvailability,
     copyableRunDiagnostics,
     debugFinalTextLength,
@@ -37,12 +43,21 @@
   const DEFAULT_CDP_ENDPOINT = "http://127.0.0.1:9222";
   const PROVIDER_MODE_STORAGE_KEY = "extractum.geminiBrowser.providerMode";
   const CDP_ENDPOINT_STORAGE_KEY = "extractum.geminiBrowser.cdpEndpoint";
+  const SETUP_CHECK_LABELS = [
+    "Sidecar",
+    "Mode",
+    "Chrome CDP",
+    "Gemini tab",
+    "Gemini readiness",
+    "Last test run",
+  ];
 
   let status = $state<GeminiBrowserProviderStatus | null>(null);
   let runs = $state<GeminiBrowserRun[]>([]);
   let prompt = $state("Reply with one short sentence confirming the browser provider is connected.");
   let busy = $state(false);
   let message = $state("");
+  let statusLoadError = $state<string | null>(null);
   let result = $state<GeminiBrowserRunResult | null>(null);
   let activeTestRunId = $state<string | null>(null);
   let browserProviderMode = $state<GeminiBrowserProviderMode>("managed");
@@ -58,6 +73,18 @@
   const selectedInspectorResult = $derived(selectedInspectorRun?.result ?? null);
   const selectedArtifactAvailability = $derived(artifactAvailability(selectedInspectorResult));
   const selectedPartialRisk = $derived(isPartialRiskBrowserResult(selectedInspectorResult));
+  const setupChecklistDescription = $derived(SETUP_CHECK_LABELS.join(", "));
+  const setupChecks = $derived(
+    deriveGeminiBrowserSetupChecks({
+      status,
+      providerMode: browserProviderMode,
+      cdpEndpoint,
+      runs,
+      selectedRun: selectedInspectorRun,
+      busy,
+      statusLoadError,
+    }),
+  );
 
   function newRunId() {
     return `gemini-browser-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -145,12 +172,15 @@
         geminiBridgeStatus(browserConfig()),
         geminiBridgeListRuns(8),
       ]);
+      statusLoadError = null;
       status = nextStatus;
       runs = log.runs;
       message = nextStatus.latest_message ?? "";
       syncActivePromptResult(log.runs);
     } catch (error) {
-      message = formatAppError("loading Gemini browser provider", error);
+      const formatted = formatAppError("loading Gemini browser provider", error);
+      statusLoadError = formatted;
+      message = formatted;
     }
   }
 
@@ -158,11 +188,48 @@
     busy = true;
     try {
       status = await geminiBridgeOpenBrowser(browserConfig());
+      statusLoadError = null;
       message = status.latest_message ?? "Browser opened.";
     } catch (error) {
       message = formatAppError("opening Gemini browser", error);
     } finally {
       busy = false;
+    }
+  }
+
+  function focusCdpEndpoint() {
+    if (typeof document === "undefined") return;
+    document.getElementById("gemini-browser-cdp-endpoint")?.focus();
+  }
+
+  async function handleSetupCheckAction(check: GeminiBrowserSetupCheck) {
+    if (!check.action) return;
+    if (check.action === "refresh") {
+      await refresh();
+      return;
+    }
+    if (check.action === "start_chrome") {
+      await startCdpChrome();
+      return;
+    }
+    if (check.action === "open") {
+      await openBrowser();
+      return;
+    }
+    if (check.action === "resume") {
+      await resumeProvider();
+      return;
+    }
+    if (check.action === "send_test") {
+      await sendTestPrompt();
+      return;
+    }
+    if (check.action === "view_run" && check.runId) {
+      selectHistoryRun(check.runId);
+      return;
+    }
+    if (check.action === "focus_endpoint") {
+      focusCdpEndpoint();
     }
   }
 
@@ -353,6 +420,44 @@
         </button>
       </div>
     </div>
+
+    <section
+      class="setup-checklist"
+      aria-label="Setup checklist"
+      data-setup-checks={setupChecklistDescription}
+    >
+      <div class="row setup-head">
+        <div>
+          <h3>Setup checklist</h3>
+          <p>Safe next steps for making the Browser Provider usable.</p>
+        </div>
+        <button type="button" onclick={refresh} disabled={busy} title="Refresh setup checklist">
+          <RefreshCw size={14} />
+          <span>Refresh</span>
+        </button>
+      </div>
+
+      <div class="setup-grid">
+        {#each setupChecks as check (check.id)}
+          <div
+            class="setup-row"
+            class:warning={check.state === "warning" || check.state === "action_needed"}
+            class:failed={check.state === "failed"}
+          >
+            <div>
+              <span class="fact-label">{check.label}</span>
+              <strong>{setupCheckStateLabel(check.state)}</strong>
+              <p>{check.message}</p>
+            </div>
+            {#if check.action}
+              <button type="button" onclick={() => handleSetupCheckAction(check)} disabled={busy}>
+                <span>{setupCheckActionLabel(check.action)}</span>
+              </button>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    </section>
 
     <div class="provider-card">
       <label for="gemini-browser-prompt">Test prompt</label>
@@ -673,6 +778,7 @@
   }
 
   .provider-card button,
+  .setup-checklist button,
   .run-inspector button,
   .history-filters button {
     display: inline-flex;
@@ -684,6 +790,57 @@
     background: var(--background);
     color: var(--foreground);
     font-weight: 650;
+  }
+
+  .setup-checklist {
+    grid-column: 1 / -1;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    background: var(--card);
+  }
+
+  .setup-head {
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+
+  .setup-head h3 {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  .setup-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .setup-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    background: var(--background);
+  }
+
+  .setup-row > div {
+    min-width: 0;
+  }
+
+  .setup-row p {
+    margin: 4px 0 0;
+    color: var(--muted-foreground);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  .setup-row.failed {
+    border-color: color-mix(in srgb, var(--destructive) 70%, var(--border));
   }
 
   .run-inspector {
@@ -872,10 +1029,15 @@
 
   @media (max-width: 820px) {
     .provider-grid,
+    .setup-grid,
     .inspector-grid,
     .inspector-grid.compact,
     .run-row {
       grid-template-columns: 1fr;
+    }
+
+    .setup-row {
+      flex-direction: column;
     }
   }
 </style>

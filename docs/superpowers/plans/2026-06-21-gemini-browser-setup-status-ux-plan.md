@@ -795,7 +795,7 @@ git commit -m "feat: derive Gemini browser setup checks"
 - Modify: `src/lib/components/settings/gemini-browser-provider-panel.svelte`
 - Modify: `src/lib/gemini-browser-provider-panel.test.ts`
 
-- [ ] **Step 1: Add failing source-contract tests for the checklist UI**
+- [x] **Step 1: Add failing source-contract tests for the checklist UI**
 
 Append this test inside `describe("gemini browser provider panel copy contract", () => { ... })` in `src/lib/gemini-browser-provider-panel.test.ts`:
 
@@ -822,7 +822,7 @@ Append this test inside `describe("gemini browser provider panel copy contract",
   });
 ```
 
-- [ ] **Step 2: Run panel source tests and verify they fail**
+- [x] **Step 2: Run panel source tests and verify they fail**
 
 Run:
 
@@ -832,7 +832,7 @@ npm.cmd run test -- --run src/lib/gemini-browser-provider-panel.test.ts
 
 Expected: FAIL because the component does not yet import or render setup checks.
 
-- [ ] **Step 3: Import setup helper and derive checklist rows**
+- [x] **Step 3: Import setup helper and derive checklist rows**
 
 Modify imports in `src/lib/components/settings/gemini-browser-provider-panel.svelte`:
 
@@ -889,7 +889,7 @@ Modify `refresh()` so success clears `statusLoadError` and failure stores it:
   }
 ```
 
-- [ ] **Step 4: Add checklist action helpers**
+- [x] **Step 4: Add checklist action helpers**
 
 Add these functions near the existing UI helper functions in `src/lib/components/settings/gemini-browser-provider-panel.svelte`:
 
@@ -931,7 +931,7 @@ Add these functions near the existing UI helper functions in `src/lib/components
   }
 ```
 
-- [ ] **Step 5: Render the Setup checklist between provider controls and test prompt**
+- [x] **Step 5: Render the Setup checklist between provider controls and test prompt**
 
 In `src/lib/components/settings/gemini-browser-provider-panel.svelte`, after the closing `</div>` of the first provider card and before the test prompt provider card, insert:
 
@@ -972,7 +972,7 @@ Keep the existing `.provider-grid` wrapper. The inserted
 between the first provider card and the test prompt provider card, so the CSS
 rule `grid-column: 1 / -1` makes it span both columns.
 
-- [ ] **Step 6: Add checklist styles**
+- [x] **Step 6: Add checklist styles**
 
 In the component `<style>` block, replace:
 
@@ -1064,7 +1064,7 @@ In the existing media query, include `.setup-grid` and `.setup-row`:
   }
 ```
 
-- [ ] **Step 7: Run UI tests and Svelte check**
+- [x] **Step 7: Run UI tests and Svelte check**
 
 Run:
 
@@ -1078,7 +1078,7 @@ Expected:
 - Vitest PASS for both files.
 - `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 8: Mark Task 2 complete and commit**
+- [x] **Step 8: Mark Task 2 complete and commit**
 
 Update this task's checkboxes to `[x]`, then run:
 

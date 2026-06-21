@@ -93,4 +93,25 @@ describe("gemini browser provider panel copy contract", () => {
     expect(componentSource).toContain("row.answerCompletionReason");
     expect(componentSource).not.toContain("{run.prompt_preview}</p>");
   });
+
+  it("renders the actionable setup checklist before test prompt", () => {
+    expect(componentSource).toContain("Setup checklist");
+    expect(componentSource).toContain("deriveGeminiBrowserSetupChecks");
+    expect(componentSource).toContain("setupChecks");
+    expect(componentSource).toContain("handleSetupCheckAction(check)");
+    expect(componentSource).toContain("setupCheckStateLabel(check.state)");
+    expect(componentSource).toContain("setupCheckActionLabel(check.action)");
+    expect(componentSource).toContain("Sidecar");
+    expect(componentSource).toContain("Mode");
+    expect(componentSource).toContain("Chrome CDP");
+    expect(componentSource).toContain("Gemini tab");
+    expect(componentSource).toContain("Gemini readiness");
+    expect(componentSource).toContain("Last test run");
+    expect(componentSource).toContain('class="setup-checklist"');
+    expect(componentSource).toContain("focusCdpEndpoint");
+    expect(componentSource).toContain("selectHistoryRun(check.runId)");
+    expect(componentSource).toContain("sendTestPrompt");
+    expect(componentSource).not.toContain("{check.run?.result?.text}");
+    expect(componentSource).not.toContain("{check.run?.result?.artifacts.run_dir}");
+  });
 });
