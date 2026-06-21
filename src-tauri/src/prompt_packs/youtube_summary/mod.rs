@@ -33,8 +33,8 @@ pub(crate) mod transcript_execution;
 mod types;
 
 use super::dto::{
-    PreflightYoutubeSummaryRunRequest, StartYoutubeSummaryRunOutcomeDto,
-    StartYoutubeSummaryRunRequest,
+    PreflightYoutubeSummaryRunRequest, PromptPackRuntimeProvider,
+    StartYoutubeSummaryRunOutcomeDto, StartYoutubeSummaryRunRequest,
 };
 use crate::error::{AppError, AppResult};
 pub(crate) use execution::execute_youtube_summary_run_with_stage_executor;
@@ -75,9 +75,7 @@ pub(crate) async fn start_youtube_summary_run_in_pool(
     let preflight = preflight_youtube_summary_in_pool(
         pool,
         preflight_request,
-        ModelBudget {
-            input_token_limit: Some(32_000),
-        },
+        model_budget_for_runtime(request.runtime_provider),
     )
     .await?;
 
@@ -88,6 +86,19 @@ pub(crate) async fn start_youtube_summary_run_in_pool(
     let run_id = create_youtube_summary_run_skeleton_in_pool(pool, request, 0).await?;
     let run = load_run_summary(pool, run_id).await?;
     Ok(StartYoutubeSummaryRunOutcomeDto::Started { run })
+}
+
+pub(crate) fn model_budget_for_runtime(
+    runtime_provider: PromptPackRuntimeProvider,
+) -> ModelBudget {
+    match runtime_provider {
+        PromptPackRuntimeProvider::Api => ModelBudget {
+            input_token_limit: Some(32_000),
+        },
+        PromptPackRuntimeProvider::GeminiBrowser => ModelBudget {
+            input_token_limit: None,
+        },
+    }
 }
 
 pub(crate) fn now_string() -> String {

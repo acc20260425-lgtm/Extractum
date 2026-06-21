@@ -39,6 +39,10 @@ const PROMPT_PACK_INTERMEDIATE_ENTITIES_ARTIFACTS_DESCRIPTION: &str =
     "prompt pack intermediate entities artifacts";
 const PROMPT_PACK_INTERMEDIATE_ENTITIES_ARTIFACTS_SQL: &str =
     include_str!("../migrations/0009_prompt_pack_intermediate_entities_artifacts.sql");
+const PROMPT_PACK_RUNTIME_PROVIDER_VERSION: i64 = 10;
+const PROMPT_PACK_RUNTIME_PROVIDER_DESCRIPTION: &str = "prompt pack runtime provider";
+const PROMPT_PACK_RUNTIME_PROVIDER_SQL: &str =
+    include_str!("../migrations/0010_prompt_pack_runtime_provider.sql");
 
 fn app_config_db_path() -> Option<PathBuf> {
     dirs::config_dir().map(|dir| dir.join(APP_IDENTIFIER).join(DB_FILENAME))
@@ -149,6 +153,15 @@ fn prompt_pack_intermediate_entities_artifacts_migration() -> Migration {
     }
 }
 
+fn prompt_pack_runtime_provider_migration() -> Migration {
+    Migration {
+        version: PROMPT_PACK_RUNTIME_PROVIDER_VERSION,
+        description: PROMPT_PACK_RUNTIME_PROVIDER_DESCRIPTION,
+        sql: PROMPT_PACK_RUNTIME_PROVIDER_SQL,
+        kind: MigrationKind::Up,
+    }
+}
+
 pub fn build_migrations() -> Vec<Migration> {
     vec![
         current_schema_baseline_migration(),
@@ -160,6 +173,7 @@ pub fn build_migrations() -> Vec<Migration> {
         prompt_pack_run_idempotency_migration(),
         prompt_pack_run_labels_migration(),
         prompt_pack_intermediate_entities_artifacts_migration(),
+        prompt_pack_runtime_provider_migration(),
     ]
 }
 
@@ -252,7 +266,7 @@ mod tests {
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
         assert_eq!(migrations[0].description, "current schema baseline");
         assert!(migrations[0]
             .sql
@@ -291,6 +305,9 @@ mod tests {
             "prompt pack intermediate entities artifacts"
         );
         assert!(migrations[8].sql.contains("'intermediate_entities'"));
+        assert_eq!(migrations[9].description, "prompt pack runtime provider");
+        assert!(migrations[9].sql.contains("runtime_provider TEXT"));
+        assert!(migrations[9].sql.contains("browser_provider_config_json"));
     }
 
     #[tokio::test]
@@ -330,13 +347,13 @@ mod tests {
     }
 
     #[test]
-    fn build_migrations_includes_prompt_pack_runtime_version_nine() {
+    fn build_migrations_includes_prompt_pack_runtime_provider_version_ten() {
         let versions = build_migrations()
             .iter()
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     }
 
     #[tokio::test]
@@ -363,6 +380,15 @@ mod tests {
         .await
         .expect("read prompt_pack_runs columns");
         assert_eq!(run_label_columns, 1);
+
+        let runtime_columns: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM pragma_table_info('prompt_pack_runs')
+             WHERE name IN ('runtime_provider', 'browser_provider_config_json')",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("read prompt_pack_runs runtime columns");
+        assert_eq!(runtime_columns, 2);
 
         let origins_sql = table_sql(&pool, "prompt_pack_run_source_origins").await;
         assert!(origins_sql.contains("FOREIGN KEY (source_snapshot_id, run_id)"));

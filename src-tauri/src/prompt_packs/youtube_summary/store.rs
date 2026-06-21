@@ -51,6 +51,7 @@ pub(crate) async fn load_run_summary(
             String,
             String,
             String,
+            String,
             Option<String>,
             Option<String>,
             Option<String>,
@@ -59,7 +60,8 @@ pub(crate) async fn load_run_summary(
             Option<i64>,
         ),
     >(
-        "SELECT id, project_id, run_label, pack_id, pack_version, run_status, result_status,
+        "SELECT id, project_id, run_label, runtime_provider, pack_id, pack_version,
+                run_status, result_status,
                 created_at, started_at, completed_at, latest_message,
                 progress_current, progress_total, queue_position
          FROM prompt_pack_runs
@@ -73,6 +75,7 @@ pub(crate) async fn load_run_summary(
             run_id,
             project_id,
             run_label,
+            runtime_provider,
             pack_id,
             pack_version,
             run_status,
@@ -88,7 +91,7 @@ pub(crate) async fn load_run_summary(
             run_id,
             project_id,
             run_label,
-            runtime_provider: "api".to_string(),
+            runtime_provider,
             pack_id,
             pack_version,
             run_status,

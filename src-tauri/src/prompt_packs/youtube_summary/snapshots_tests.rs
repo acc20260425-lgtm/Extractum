@@ -3,6 +3,9 @@ use super::snapshots::{
 };
 use super::start_youtube_summary_run_in_pool;
 use super::test_support::*;
+use crate::compression::decompress_text;
+use crate::gemini_browser::{GeminiBrowserProviderConfig, GeminiBrowserProviderMode};
+use crate::prompt_packs::dto::PromptPackRuntimeProvider;
 use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
 
 #[tokio::test]
@@ -81,6 +84,72 @@ async fn start_with_recomputed_blocking_preflight_returns_response_without_run()
     .await
     .expect("run count");
     assert_eq!(run_count, 0);
+}
+
+#[tokio::test]
+async fn start_persists_gemini_browser_runtime_and_config_snapshot() {
+    let pool = test_pool_with_ready_video().await;
+    let mut request = start_request("req-browser-runtime-start", vec![901]);
+    request.runtime_provider = PromptPackRuntimeProvider::GeminiBrowser;
+    request.profile_id = None;
+    request.model_override = None;
+    request.browser_provider_config = Some(GeminiBrowserProviderConfig {
+        mode: GeminiBrowserProviderMode::CdpAttach,
+        cdp_endpoint: Some("http://127.0.0.1:9222".to_string()),
+    });
+
+    let run = start_youtube_summary_run_in_pool(&pool, request)
+        .await
+        .expect("start browser runtime")
+        .expect_started("browser runtime run");
+
+    assert_eq!(run.runtime_provider, "gemini_browser");
+
+    let (runtime_provider, browser_config_json, request_json_zstd): (
+        String,
+        Option<String>,
+        Vec<u8>,
+    ) = sqlx::query_as(
+        "SELECT runtime_provider, browser_provider_config_json, request_json_zstd
+         FROM prompt_pack_runs
+         WHERE id = ?",
+    )
+    .bind(run.run_id)
+    .fetch_one(&pool)
+    .await
+    .expect("runtime row");
+
+    assert_eq!(runtime_provider, "gemini_browser");
+    let browser_config_json = browser_config_json.expect("browser config json");
+    assert!(browser_config_json.contains("\"mode\":\"cdp_attach\""));
+    assert!(browser_config_json.contains("127.0.0.1:9222"));
+
+    let request_json = decompress_text(&request_json_zstd).expect("decompress request");
+    assert!(request_json.contains("\"runtimeProvider\":\"gemini_browser\""));
+    assert!(request_json.contains("\"browserProviderConfig\""));
+}
+
+#[tokio::test]
+async fn duplicate_client_request_id_preserves_existing_runtime_provider() {
+    let pool = test_pool_with_ready_video().await;
+    let mut browser_request = start_request("req-runtime-idempotent", vec![901]);
+    browser_request.runtime_provider = PromptPackRuntimeProvider::GeminiBrowser;
+    browser_request.profile_id = None;
+    browser_request.model_override = None;
+
+    let first = start_youtube_summary_run_in_pool(&pool, browser_request)
+        .await
+        .expect("first start")
+        .expect_started("first start");
+
+    let api_request = start_request("req-runtime-idempotent", vec![901]);
+    let second = start_youtube_summary_run_in_pool(&pool, api_request)
+        .await
+        .expect("second start")
+        .expect_started("second start");
+
+    assert_eq!(first.run_id, second.run_id);
+    assert_eq!(second.runtime_provider, "gemini_browser");
 }
 
 #[tokio::test]

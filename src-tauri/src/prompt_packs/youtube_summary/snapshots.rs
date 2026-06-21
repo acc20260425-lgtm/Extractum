@@ -3,7 +3,7 @@ use sqlx::SqlitePool;
 use super::preflight::preflight_youtube_summary_in_pool;
 use super::sources::{load_source, transcript_text_for_source};
 use super::store::{ensure_pack_version, load_run_by_client_request_id};
-use super::{estimate_tokens, now_string, ModelBudget, SYNTHESIS_STAGE_NAME};
+use super::{estimate_tokens, model_budget_for_runtime, now_string, SYNTHESIS_STAGE_NAME};
 use crate::compression::{compress_text, decompress_text};
 use crate::error::{AppError, AppResult};
 use crate::prompt_packs::dto::{
@@ -51,9 +51,7 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
             evidence_mode: request.evidence_mode.clone(),
             include_comments: request.include_comments,
         },
-        ModelBudget {
-            input_token_limit: Some(32_000),
-        },
+        model_budget_for_runtime(request.runtime_provider),
     )
     .await?;
     if preflight.included_videos.is_empty() || !preflight.blocking_failures.is_empty() {
@@ -63,10 +61,20 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
     }
 
     let now = now_string();
+    let browser_provider_config_json = request
+        .browser_provider_config
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|error| AppError::internal(format!("serialize browser provider config: {error}")))?;
     let request_json = serde_json::to_string(&serde_json::json!({
         "clientRequestId": request.client_request_id,
         "projectId": request.project_id,
         "sourceIds": request.source_ids,
+        "profileId": request.profile_id,
+        "modelOverride": request.model_override,
+        "runtimeProvider": request.runtime_provider.as_str(),
+        "browserProviderConfig": request.browser_provider_config,
         "outputLanguage": request.output_language,
         "controlPreset": request.control_preset,
         "evidenceMode": request.evidence_mode,
@@ -80,12 +88,13 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
         "INSERT INTO prompt_pack_runs (
             project_id, pack_version_id, pack_id, pack_version, schema_version,
             run_status, result_status, request_json_zstd, preflight_json_zstd,
-            provider_profile_id, model, output_language, control_preset, evidence_mode,
+            provider_profile_id, model, runtime_provider, browser_provider_config_json,
+            output_language, control_preset, evidence_mode,
             include_comments, latest_message, progress_current, progress_total,
             created_at, updated_at, client_request_id
          )
          VALUES (?, ?, 'youtube_summary', '1.0.0', '1.0',
-            'queued', 'none', ?, ?, ?, ?, ?, ?, ?, ?, 'Queued',
+            'queued', 'none', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Queued',
             0, ?, ?, ?, ?)
          RETURNING id",
     )
@@ -95,6 +104,8 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
     .bind(compress_text(&preflight_json).map_err(AppError::internal)?)
     .bind(&request.profile_id)
     .bind(&request.model_override)
+    .bind(request.runtime_provider.as_str())
+    .bind(&browser_provider_config_json)
     .bind(&request.output_language)
     .bind(&request.control_preset)
     .bind(&request.evidence_mode)

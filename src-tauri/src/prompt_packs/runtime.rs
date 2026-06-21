@@ -9,14 +9,15 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
 use super::dto::{
-    PromptPackRunEvent, PromptPackRunSummaryDto, PromptPackStageRunDto,
-    StartYoutubeSummaryRunOutcomeDto,
+    PromptPackRunEvent, PromptPackRunSummaryDto, PromptPackRuntimeProvider,
+    PromptPackStageRunDto, StartYoutubeSummaryRunOutcomeDto,
 };
 use super::json_repair::JsonRepairStageExecutionRequest;
 use super::youtube_summary::{
-    execute_youtube_summary_run_with_stage_executor, preflight_youtube_summary_in_pool,
-    start_youtube_summary_run_in_pool, LlmCompletion as PromptPackLlmCompletion, ModelBudget,
-    SynthesisStageExecutionRequest, TranscriptAnalysisStageExecutionRequest,
+    execute_youtube_summary_run_with_stage_executor, model_budget_for_runtime,
+    preflight_youtube_summary_in_pool, start_youtube_summary_run_in_pool,
+    LlmCompletion as PromptPackLlmCompletion, SynthesisStageExecutionRequest,
+    TranscriptAnalysisStageExecutionRequest,
     YoutubeSummaryRunExecutionOutcome, YoutubeSummaryStageExecutionError,
     YoutubeSummaryStageExecutionRequest,
 };
@@ -126,12 +127,15 @@ pub async fn preflight_youtube_summary_run(
     source_ids: Vec<i64>,
     profile_id: Option<String>,
     model_override: Option<String>,
+    runtime_provider: Option<PromptPackRuntimeProvider>,
+    browser_provider_config: Option<crate::gemini_browser::GeminiBrowserProviderConfig>,
     output_language: String,
     control_preset: String,
     evidence_mode: String,
     include_comments: bool,
 ) -> AppResult<super::dto::YoutubeSummaryPreflightResponse> {
     let pool = get_pool(&handle).await?;
+    let runtime_provider = runtime_provider.unwrap_or_default();
     preflight_youtube_summary_in_pool(
         &pool,
         super::dto::PreflightYoutubeSummaryRunRequest {
@@ -139,16 +143,14 @@ pub async fn preflight_youtube_summary_run(
             source_ids,
             profile_id,
             model_override,
-            runtime_provider: super::dto::PromptPackRuntimeProvider::Api,
-            browser_provider_config: None,
+            runtime_provider,
+            browser_provider_config,
             output_language,
             control_preset,
             evidence_mode,
             include_comments,
         },
-        ModelBudget {
-            input_token_limit: Some(32_000),
-        },
+        model_budget_for_runtime(runtime_provider),
     )
     .await
 }
@@ -162,12 +164,15 @@ pub async fn start_youtube_summary_run(
     source_ids: Vec<i64>,
     profile_id: Option<String>,
     model_override: Option<String>,
+    runtime_provider: Option<PromptPackRuntimeProvider>,
+    browser_provider_config: Option<crate::gemini_browser::GeminiBrowserProviderConfig>,
     output_language: String,
     control_preset: String,
     evidence_mode: String,
     include_comments: bool,
 ) -> AppResult<StartYoutubeSummaryRunOutcomeDto> {
     let pool = get_pool(&handle).await?;
+    let runtime_provider = runtime_provider.unwrap_or_default();
     let outcome = start_youtube_summary_run_in_pool(
         &pool,
         super::dto::StartYoutubeSummaryRunRequest {
@@ -176,8 +181,8 @@ pub async fn start_youtube_summary_run(
             source_ids,
             profile_id,
             model_override,
-            runtime_provider: super::dto::PromptPackRuntimeProvider::Api,
-            browser_provider_config: None,
+            runtime_provider,
+            browser_provider_config,
             output_language,
             control_preset,
             evidence_mode,
@@ -1288,9 +1293,9 @@ pub(crate) async fn list_prompt_pack_runs_in_pool(
     let limit = request.limit.unwrap_or(20).clamp(1, 100);
     let rows = if let Some(project_id) = request.project_id {
         sqlx::query_as::<_, RunSummaryRow>(
-            "SELECT id, project_id, run_label, pack_id, pack_version, run_status, result_status,
-                    created_at, started_at, completed_at, latest_message,
-                    progress_current, progress_total, queue_position
+            "SELECT id, project_id, run_label, runtime_provider, pack_id, pack_version,
+                    run_status, result_status, created_at, started_at, completed_at,
+                    latest_message, progress_current, progress_total, queue_position
              FROM prompt_pack_runs
              WHERE project_id = ?
              ORDER BY created_at DESC, id DESC
@@ -1303,9 +1308,9 @@ pub(crate) async fn list_prompt_pack_runs_in_pool(
         .map_err(AppError::database)?
     } else {
         sqlx::query_as::<_, RunSummaryRow>(
-            "SELECT id, project_id, run_label, pack_id, pack_version, run_status, result_status,
-                    created_at, started_at, completed_at, latest_message,
-                    progress_current, progress_total, queue_position
+            "SELECT id, project_id, run_label, runtime_provider, pack_id, pack_version,
+                    run_status, result_status, created_at, started_at, completed_at,
+                    latest_message, progress_current, progress_total, queue_position
              FROM prompt_pack_runs
              ORDER BY created_at DESC, id DESC
              LIMIT ?",
@@ -1424,9 +1429,9 @@ async fn load_run_summary_optional(
     run_id: i64,
 ) -> AppResult<Option<PromptPackRunSummaryDto>> {
     sqlx::query_as::<_, RunSummaryRow>(
-        "SELECT id, project_id, run_label, pack_id, pack_version, run_status, result_status,
-                created_at, started_at, completed_at, latest_message,
-                progress_current, progress_total, queue_position
+        "SELECT id, project_id, run_label, runtime_provider, pack_id, pack_version,
+                run_status, result_status, created_at, started_at, completed_at,
+                latest_message, progress_current, progress_total, queue_position
          FROM prompt_pack_runs
          WHERE id = ?",
     )
@@ -1451,6 +1456,7 @@ struct RunSummaryRow {
     id: i64,
     project_id: Option<i64>,
     run_label: Option<String>,
+    runtime_provider: String,
     pack_id: String,
     pack_version: String,
     run_status: String,
@@ -1470,7 +1476,7 @@ impl From<RunSummaryRow> for PromptPackRunSummaryDto {
             run_id: row.id,
             project_id: row.project_id,
             run_label: row.run_label,
-            runtime_provider: "api".to_string(),
+            runtime_provider: row.runtime_provider,
             pack_id: row.pack_id,
             pack_version: row.pack_version,
             run_status: row.run_status,
