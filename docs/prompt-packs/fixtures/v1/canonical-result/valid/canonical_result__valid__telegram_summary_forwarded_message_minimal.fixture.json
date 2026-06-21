@@ -1,0 +1,452 @@
+{
+  "schema_version": "1.0",
+  "result_id": "result_ts_forwarded_1",
+  "parent_result_ids": null,
+  "run_id": "run_ts_forwarded_1",
+  "pack_id": "telegram_summary",
+  "pack_version": "v1",
+  "stage": "final_result",
+  "created_at": "2026-06-22T11:00:00Z",
+  "output_language": "en",
+  "metadata": {
+    "result_status": "complete",
+    "producer_type": "llm",
+    "contains_partial_results": false,
+    "contains_unverified_claims": false
+  },
+  "run_context": {
+    "project_id": "project_fixture",
+    "run_goal": "Validate a minimal Telegram summary result with a forwarded message.",
+    "selected_pack": {
+      "pack_id": "telegram_summary",
+      "pack_version": "v1"
+    },
+    "control_preset": "standard",
+    "evidence_mode": "standard",
+    "output_language": "en",
+    "source_languages": [
+      "en"
+    ],
+    "period": {
+      "from": "2026-06-13",
+      "to": "2026-06-13"
+    },
+    "input_corpus": {
+      "source_count": 1,
+      "material_count": 1,
+      "fragment_count": 1,
+      "source_types": [
+        "telegram_channel_snapshot"
+      ]
+    },
+    "model_selection": [
+      {
+        "stage": "telegram_summary/synthesis",
+        "provider": "openai_compatible",
+        "model": "gpt-4.1-mini"
+      }
+    ]
+  },
+  "outputs": {
+    "summary": {
+      "summary_text": "The channel forwarded a vendor status update about a Friday security patch.",
+      "claim_refs": [
+        "claim_1"
+      ],
+      "evidence_refs": [
+        "evidence_1"
+      ],
+      "source_refs": [
+        "source_ref_1"
+      ]
+    },
+    "sections": [
+      {
+        "section_id": "section_forwarded",
+        "section_type": "summary",
+        "custom_section_type": null,
+        "title": "Forwarded item",
+        "items": [
+          {
+            "item_id": "item_1",
+            "text": "The key message is a forwarded vendor status update announcing a security patch for Friday.",
+            "claim_refs": [
+              "claim_1"
+            ],
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ]
+      }
+    ],
+    "pack_data": {
+      "telegram_summary": {
+        "source_shape": "channel",
+        "sources": [
+          {
+            "summary_source_id": "tg_source_forwarded_1",
+            "source_ref_id": "source_ref_1",
+            "source_kind": "channel",
+            "display_name": "Example Product Channel",
+            "platform_id": "-1001234567890",
+            "message_count": 1,
+            "usable_message_count": 1,
+            "topic_count": 1,
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "time_window": {
+          "from": "2026-06-13T00:00:00Z",
+          "to": "2026-06-13T23:59:59Z",
+          "timezone": "UTC",
+          "label": "2026-06-13"
+        },
+        "message_refs": [
+          {
+            "message_ref_id": "msg_ref_1",
+            "summary_source_id": "tg_source_forwarded_1",
+            "source_ref_id": "source_ref_1",
+            "message_id": "1901",
+            "published_at": "2026-06-13T09:15:00Z",
+            "author_display": "Example Product Channel",
+            "message_kind": "forwarded_message",
+            "forum_topic_id": null,
+            "forum_topic_title": null,
+            "reply_to_message_ref": null,
+            "reply_to_top_message_ref": null,
+            "history_scope": "current",
+            "is_migrated_history": false,
+            "migration_domain": null,
+            "has_media": false,
+            "media_kind": null,
+            "media_caption_available": false,
+            "reaction_count": 42,
+            "reply_count": 5,
+            "forward_count": 31,
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "digest": {
+          "summary_text": "The channel amplified a forwarded vendor update saying a security patch is planned for Friday.",
+          "key_events": [
+            "A vendor status update was forwarded to the channel."
+          ],
+          "major_changes": [],
+          "recommended_reads": [
+            "key_message_1"
+          ],
+          "claim_refs": [
+            "claim_1"
+          ],
+          "evidence_refs": [
+            "evidence_1"
+          ],
+          "source_refs": [
+            "source_ref_1"
+          ]
+        },
+        "timeline": [
+          {
+            "timeline_event_id": "timeline_event_1",
+            "occurred_at": "2026-06-13T09:15:00Z",
+            "title": "Vendor update forwarded",
+            "summary_text": "The channel forwarded a vendor status update about a Friday security patch.",
+            "importance": "high",
+            "message_refs": [
+              "msg_ref_1"
+            ],
+            "claim_refs": [
+              "claim_1"
+            ],
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "topics": [
+          {
+            "topic_id": "topic_1",
+            "title": "Security patch timing",
+            "summary_text": "The forwarded item focuses on the timing of a vendor security patch.",
+            "topic_source": "time_window",
+            "topic_scope": "single_source",
+            "importance": "high",
+            "message_count": 1,
+            "key_message_refs": [
+              "key_message_1"
+            ],
+            "thread_refs": [],
+            "claim_refs": [
+              "claim_1"
+            ],
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "key_messages": [
+          {
+            "key_message_id": "key_message_1",
+            "summary_source_id": "tg_source_forwarded_1",
+            "message_ref": "msg_ref_1",
+            "message_id": "1901",
+            "published_at": "2026-06-13T09:15:00Z",
+            "author_display": "Example Product Channel",
+            "role": "forwarded_message",
+            "importance_score": 0.86,
+            "importance_reasons": [
+              "high_forward_count",
+              "novel_information",
+              "claim_dense"
+            ],
+            "summary_text": "The channel forwarded a vendor status update announcing a Friday security patch.",
+            "contains_claims": true,
+            "topic_refs": [
+              "topic_1"
+            ],
+            "thread_refs": [],
+            "claim_refs": [
+              "claim_1"
+            ],
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "threads": [],
+        "claims": [
+          {
+            "telegram_claim_id": "telegram_claim_1",
+            "claim_ref": "claim_1",
+            "claim_text": "Vendor announced a security patch for Friday.",
+            "claim_kind": "factual",
+            "status_in_corpus": "supported_once",
+            "topic_refs": [
+              "topic_1"
+            ],
+            "key_message_refs": [
+              "key_message_1"
+            ],
+            "message_refs": [
+              "msg_ref_1"
+            ],
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "forwarded_items": [
+          {
+            "forwarded_item_id": "forwarded_item_1",
+            "message_ref": "msg_ref_1",
+            "forwarded_from_channel_id": "-1005555666677",
+            "forwarded_from_channel_title": "Vendor Status Channel",
+            "summary_text": "The message was forwarded from Vendor Status Channel and introduced the security-patch timing claim.",
+            "impact": "amplified_topic",
+            "topic_refs": [
+              "topic_1"
+            ],
+            "claim_refs": [
+              "claim_1"
+            ],
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "message_quality_signals": [
+          {
+            "signal_id": "message_quality_1",
+            "message_ref": "msg_ref_1",
+            "signal_type": "claim_dense",
+            "score": 0.79,
+            "reason": "The forwarded message carries the main security-patch timing claim for the period.",
+            "topic_refs": [
+              "topic_1"
+            ],
+            "thread_refs": [],
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "cross_source_synthesis": null,
+        "limitations": [
+          {
+            "limitation_id": "limitation_1",
+            "severity": "low",
+            "message": "The forwarded origin was identified from Telegram metadata but was not separately ingested as an independent source.",
+            "affected_blocks": [
+              "forwarded_items"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "source_refs": [
+    {
+      "source_ref_id": "source_ref_1",
+      "source_type": "telegram_channel_snapshot",
+      "custom_source_type": null,
+      "material_id": "material_ts_forwarded_1",
+      "source_id": "source_ts_forwarded_1",
+      "snapshot_id": "snapshot_ts_forwarded_1",
+      "canonical_url": "https://t.me/exampleproduct",
+      "internal_uri": "extractum://materials/material_ts_forwarded_1",
+      "source_title": "Example Product Channel",
+      "published_at": null,
+      "accessed_at": "2026-06-22T11:00:00Z",
+      "access_status": "live",
+      "type_data": {
+        "schema_version": "1.0",
+        "channel_platform_id": "-1001234567890",
+        "subscriber_count": 84200,
+        "post_count_in_snapshot": 1,
+        "avg_views_per_post": 15400.0,
+        "avg_posts_per_day": 1.0,
+        "snapshot_from": "2026-06-13T00:00:00Z",
+        "snapshot_to": "2026-06-13T23:59:59Z",
+        "scraped_at": "2026-06-22T11:00:00Z",
+        "creator": {
+          "creator_type": "channel",
+          "custom_creator_type": null,
+          "id": "channel_001",
+          "platform_specific_id": "-1001234567890",
+          "display_name": "Example Product Channel",
+          "profile_url": "https://t.me/exampleproduct"
+        },
+        "parent_context": {
+          "context_type": null,
+          "custom_context_type": null,
+          "context_id": null,
+          "platform_specific_id": null,
+          "context_title": null,
+          "context_url": null
+        },
+        "extra_metadata": {
+          "forwarded_from_channel_id": "-1005555666677",
+          "forwarded_from_channel_title": "Vendor Status Channel"
+        }
+      }
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "claim_1",
+      "claim_type": "factual",
+      "custom_claim_type": null,
+      "claim_status": "verified",
+      "custom_claim_status": null,
+      "claim_text": "Vendor announced a security patch for Friday.",
+      "normalized_claim_text": "Vendor announced a security patch for Friday.",
+      "normalized_claim_language": "en",
+      "scope": {
+        "period": {
+          "from": "2026-06-13",
+          "to": "2026-06-13"
+        },
+        "geo": null,
+        "applies_to": [
+          "security_patch"
+        ]
+      },
+      "confidence": {
+        "score": 0.82,
+        "basis": "strong_direct_evidence",
+        "custom_basis": null,
+        "method": "llm_assessment",
+        "custom_method": null
+      },
+      "evidence_refs": [
+        "evidence_1"
+      ],
+      "source_refs": [
+        "source_ref_1"
+      ],
+      "relation_refs": [],
+      "provenance": {
+        "stage": "telegram_summary/claim_extraction",
+        "provider": "openai_compatible",
+        "model": "gpt-4.1-mini",
+        "audit_refs": []
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "evidence_1",
+      "claim_id": "claim_1",
+      "source_ref_id": "source_ref_1",
+      "evidence_type": "fragment",
+      "custom_evidence_type": null,
+      "evidence_role": "supports",
+      "custom_evidence_role": null,
+      "fragment_type": "text_range",
+      "custom_fragment_type": null,
+      "locator_data": {
+        "schema_version": "1.0",
+        "char_start": 0,
+        "char_end": 45,
+        "snapshot_text_id": "telegram_message_1901"
+      },
+      "text_mode": "verbatim",
+      "fragment_text": "Vendor announced a security patch for Friday.",
+      "context_text": "Telegram message 1901 forwards a vendor status update in Example Product Channel.",
+      "contributing_evidence_refs": [],
+      "reasoning_summary": null,
+      "confidence": {
+        "score": 0.87,
+        "basis": "strong_direct_evidence",
+        "custom_basis": null,
+        "method": "llm_assessment",
+        "custom_method": null
+      },
+      "provenance": {
+        "stage": "telegram_summary/synthesis",
+        "provider": "openai_compatible",
+        "model": "gpt-4.1-mini",
+        "audit_refs": []
+      }
+    }
+  ],
+  "claim_relations": [],
+  "unknowns": [],
+  "verification_tasks": [],
+  "warnings": [],
+  "limitations": [],
+  "quality_flags": [],
+  "audit_refs": []
+}
