@@ -19,10 +19,12 @@
     artifactAvailability,
     copyableRunDiagnostics,
     debugFinalTextLength,
+    filterRunHistoryRows,
     isPartialRiskBrowserResult,
     resultTextLength,
     sanitizeDiagnosticMessage,
-    selectedRunForInspector,
+    selectRunForHistory,
+    type GeminiBrowserRunHistoryFilter,
   } from "$lib/gemini-browser-run-inspector";
   import type {
     GeminiBrowserProviderConfig,
@@ -46,7 +48,13 @@
   let browserProviderMode = $state<GeminiBrowserProviderMode>("managed");
   let cdpEndpoint = $state(DEFAULT_CDP_ENDPOINT);
   let inspectorMessage = $state("");
-  const selectedInspectorRun = $derived(selectedRunForInspector(runs, activeTestRunId));
+  let runHistoryFilter = $state<GeminiBrowserRunHistoryFilter>("all");
+  let selectedHistoryRunId = $state<string | null>(null);
+  const activeInspectorRunId = $derived(activeTestRunId ?? status?.active_run_id ?? null);
+  const runHistoryRows = $derived(filterRunHistoryRows(runs, runHistoryFilter));
+  const selectedInspectorRun = $derived(
+    selectRunForHistory(runs, activeInspectorRunId, selectedHistoryRunId, runHistoryFilter),
+  );
   const selectedInspectorResult = $derived(selectedInspectorRun?.result ?? null);
   const selectedArtifactAvailability = $derived(artifactAvailability(selectedInspectorResult));
   const selectedPartialRisk = $derived(isPartialRiskBrowserResult(selectedInspectorResult));
@@ -57,6 +65,34 @@
 
   function currentStatusLabel() {
     return statusLabel(status?.status ?? "not_started", status?.manual_action ?? null);
+  }
+
+  function selectRunHistoryFilter(filter: GeminiBrowserRunHistoryFilter) {
+    runHistoryFilter = filter;
+  }
+
+  function selectHistoryRun(runId: string) {
+    selectedHistoryRunId = runId;
+    inspectorMessage = "";
+  }
+
+  function historyFilterLabel(filter: GeminiBrowserRunHistoryFilter) {
+    if (filter === "all") return "All";
+    if (filter === "problems") return "Problems";
+    if (filter === "partial_risk") return "Partial risk";
+    if (filter === "manual_action") return "Manual action";
+    return "Failed";
+  }
+
+  function formatRunUpdatedAt(value: string) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString();
+  }
+
+  function formatRunElapsed(ms: number | null) {
+    if (ms === null) return "pending";
+    return `${ms} ms`;
   }
 
   function browserConfig(): GeminiBrowserProviderConfig {
@@ -152,6 +188,7 @@
     result = null;
     const runId = newRunId();
     activeTestRunId = runId;
+    selectedHistoryRunId = runId;
     try {
       result = await geminiBridgeSendSingle({
         runId,
@@ -507,18 +544,76 @@
     {/if}
   </section>
 
-  <div class="runs-list">
-    <h3>Recent browser runs</h3>
-    {#each runs as run (run.run_id)}
-      <div class="run-row">
-        <span>{run.status}</span>
-        <code>{run.run_id}</code>
-        <p>{run.prompt_preview}</p>
+  <section class="runs-list" aria-label="Run history">
+    <div class="row history-head">
+      <div>
+        <h3>Run history</h3>
+        <p>Choose a Browser Provider run to inspect.</p>
       </div>
+      <div class="history-filters" aria-label="Run history filters">
+        <button
+          type="button"
+          data-filter="all"
+          class:active={runHistoryFilter === "all"}
+          onclick={() => selectRunHistoryFilter("all")}
+        >
+          {historyFilterLabel("all")}
+        </button>
+        <button
+          type="button"
+          data-filter="problems"
+          class:active={runHistoryFilter === "problems"}
+          onclick={() => selectRunHistoryFilter("problems")}
+        >
+          {historyFilterLabel("problems")}
+        </button>
+        <button
+          type="button"
+          data-filter="partial_risk"
+          class:active={runHistoryFilter === "partial_risk"}
+          onclick={() => selectRunHistoryFilter("partial_risk")}
+        >
+          {historyFilterLabel("partial_risk")}
+        </button>
+        <button
+          type="button"
+          data-filter="manual_action"
+          class:active={runHistoryFilter === "manual_action"}
+          onclick={() => selectRunHistoryFilter("manual_action")}
+        >
+          {historyFilterLabel("manual_action")}
+        </button>
+        <button
+          type="button"
+          data-filter="failed"
+          class:active={runHistoryFilter === "failed"}
+          onclick={() => selectRunHistoryFilter("failed")}
+        >
+          {historyFilterLabel("failed")}
+        </button>
+      </div>
+    </div>
+
+    {#each runHistoryRows as row (row.run.run_id)}
+      <button
+        type="button"
+        class="run-row"
+        class:selected={selectedInspectorRun?.run_id === row.run.run_id}
+        class:warning={row.isProblem}
+        onclick={() => selectHistoryRun(row.run.run_id)}
+      >
+        <span class="run-status">{row.status}</span>
+        <span class="run-badge">{row.badge}</span>
+        <span class="run-preview">{row.run.prompt_preview || "No prompt preview"}</span>
+        <span class="run-meta">{formatRunUpdatedAt(row.run.updated_at)}</span>
+        <span class="run-meta">{formatRunElapsed(row.elapsedMs)}</span>
+        <span class="run-meta">{row.resultTextLength} chars</span>
+        <span class="run-meta">{row.answerCompletionReason ?? "no debug"}</span>
+      </button>
     {:else}
-      <p class="empty">No browser runs yet.</p>
+      <p class="empty">No browser runs match this filter.</p>
     {/each}
-  </div>
+  </section>
 </div>
 
 <style>
@@ -578,7 +673,8 @@
   }
 
   .provider-card button,
-  .run-inspector button {
+  .run-inspector button,
+  .history-filters button {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -681,8 +777,7 @@
     box-sizing: border-box;
   }
 
-  .mono,
-  .run-row code {
+  .mono {
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
     font-size: 12px;
     overflow-wrap: anywhere;
@@ -702,28 +797,84 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    background: var(--card);
+  }
+
+  .history-head {
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .history-head h3 {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  .history-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+  }
+
+  .history-filters button.active {
+    background: var(--accent);
+    color: var(--accent-foreground);
   }
 
   .run-row {
-    align-items: flex-start;
-    border-bottom: 1px solid var(--border);
-    padding: 8px 0;
+    display: grid;
+    grid-template-columns:
+      minmax(90px, 0.8fr) minmax(78px, 0.7fr) minmax(220px, 2fr)
+      repeat(4, minmax(88px, 1fr));
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    background: var(--background);
+    color: var(--foreground);
+    text-align: left;
   }
 
-  .run-row span {
-    min-width: 110px;
+  .run-row.selected {
+    outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
+    outline-offset: 1px;
+  }
+
+  .run-status,
+  .run-badge {
     font-weight: 700;
   }
 
-  .run-row p {
-    margin: 0;
-    flex: 1;
+  .run-badge {
+    justify-self: start;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 2px 7px;
+    font-size: 11px;
+  }
+
+  .run-preview,
+  .run-meta {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .run-meta {
+    color: var(--muted-foreground);
+    font-size: 12px;
   }
 
   @media (max-width: 820px) {
     .provider-grid,
     .inspector-grid,
-    .inspector-grid.compact {
+    .inspector-grid.compact,
+    .run-row {
       grid-template-columns: 1fr;
     }
   }

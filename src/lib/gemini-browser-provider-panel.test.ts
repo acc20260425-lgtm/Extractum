@@ -52,7 +52,7 @@ describe("gemini browser provider panel copy contract", () => {
 
   it("renders inline run inspector controls and sanitized diagnostics actions", () => {
     expect(componentSource).toContain("Run inspector");
-    expect(componentSource).toContain("selectedRunForInspector");
+    expect(componentSource).toContain("selectRunForHistory");
     expect(componentSource).toContain("copyableRunDiagnostics");
     expect(componentSource).toContain("sanitizeDiagnosticMessage");
     expect(componentSource).toContain("Copy diagnostics");
@@ -75,5 +75,22 @@ describe("gemini browser provider panel copy contract", () => {
     expect(componentSource).toContain("waited_for_answer_ms");
     expect(componentSource).not.toContain("page.html");
     expect(componentSource).not.toContain("page.png");
+  });
+
+  it("renders run history filters and selectable rows for the inline inspector", () => {
+    expect(componentSource).toContain("Run history");
+    expect(componentSource).toContain("runHistoryFilter");
+    expect(componentSource).toContain("filterRunHistoryRows");
+    expect(componentSource).toContain("selectRunForHistory");
+    expect(componentSource).toContain('data-filter="all"');
+    expect(componentSource).toContain('data-filter="problems"');
+    expect(componentSource).toContain('data-filter="partial_risk"');
+    expect(componentSource).toContain('data-filter="manual_action"');
+    expect(componentSource).toContain('data-filter="failed"');
+    expect(componentSource).toContain("selectHistoryRun(row.run.run_id)");
+    expect(componentSource).toContain("class:selected={selectedInspectorRun?.run_id === row.run.run_id}");
+    expect(componentSource).toContain("row.badge");
+    expect(componentSource).toContain("row.answerCompletionReason");
+    expect(componentSource).not.toContain("{run.prompt_preview}</p>");
   });
 });

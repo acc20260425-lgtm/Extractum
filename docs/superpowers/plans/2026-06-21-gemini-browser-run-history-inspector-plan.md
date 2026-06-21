@@ -367,7 +367,7 @@ git commit -m "feat: derive Gemini browser run history rows"
 - Modify: `src/lib/components/settings/gemini-browser-provider-panel.svelte`
 - Modify: `src/lib/gemini-browser-provider-panel.test.ts`
 
-- [ ] **Step 1: Write failing Svelte source-contract tests**
+- [x] **Step 1: Write failing Svelte source-contract tests**
 
 Append this test in `src/lib/gemini-browser-provider-panel.test.ts`:
 
@@ -390,7 +390,7 @@ Append this test in `src/lib/gemini-browser-provider-panel.test.ts`:
   });
 ```
 
-- [ ] **Step 2: Run panel source tests and verify they fail**
+- [x] **Step 2: Run panel source tests and verify they fail**
 
 Run:
 
@@ -400,7 +400,7 @@ npm.cmd run test -- --run src/lib/gemini-browser-provider-panel.test.ts
 
 Expected: FAIL because the panel still contains passive `Recent browser runs` rows and does not import/use run-history helpers.
 
-- [ ] **Step 3: Wire selection state and derived rows**
+- [x] **Step 3: Wire selection state and derived rows**
 
 In `src/lib/components/settings/gemini-browser-provider-panel.svelte`, update the helper import from `$lib/gemini-browser-run-inspector` to include the new helpers and type:
 
@@ -483,7 +483,7 @@ In `sendTestPrompt()`, after `activeTestRunId = runId;`, add:
 
 This ensures the new run remains selected once it appears in the refreshed run log.
 
-- [ ] **Step 4: Replace passive recent-runs markup with filterable history**
+- [x] **Step 4: Replace passive recent-runs markup with filterable history**
 
 In `src/lib/components/settings/gemini-browser-provider-panel.svelte`, replace the entire block:
 
@@ -577,7 +577,7 @@ with:
   </section>
 ```
 
-- [ ] **Step 5: Update CSS for history rows**
+- [x] **Step 5: Update CSS for history rows**
 
 In the component `<style>` block, replace this selector:
 
@@ -686,7 +686,7 @@ In the existing media query, add `.run-row`:
   }
 ```
 
-- [ ] **Step 6: Run panel tests and Svelte check**
+- [x] **Step 6: Run panel tests and Svelte check**
 
 Run:
 
@@ -700,7 +700,7 @@ Expected:
 - Vitest PASS for both files.
 - `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 7: Commit Task 2**
+- [x] **Step 7: Commit Task 2**
 
 Run:
 
