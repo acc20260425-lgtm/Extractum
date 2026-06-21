@@ -91,6 +91,8 @@ Implemented:
 - file-backed run log with queued/running/final result records;
 - hardened answer extraction with `stable`, `timeout_latest`, and `missing`
   completion reasons;
+- actionable Setup checklist for sidecar, mode, Chrome CDP, Gemini tab, Gemini
+  readiness, and latest/selected test-run state;
 - inline Run Inspector, sanitized `Copy diagnostics`, and filterable Run
   History.
 
@@ -101,8 +103,6 @@ Not implemented yet:
   rejects `ok + timeout_latest`; it does not yet call `gemini_bridge_send_single`
   for real stage execution.
 - Retry, re-run, cancel, or queued multi-run controls in the operator UI.
-- A full setup/status checklist for Chrome reachable, Gemini tab found,
-  composer found, login readiness, and sidecar health.
 - Search, export, compare, retention, or artifact-content viewing for Run
   History.
 
@@ -203,6 +203,30 @@ background scheduler, no retry/re-run workflow, and no graceful in-flight
 sidecar cancellation path yet. `Stop` asks the provider state to cancel and
 drops/stops the sidecar session, but the cancellation token is not currently
 fed through the sidecar answer-extraction loop.
+
+## Setup Checklist
+
+The Browser Providers panel shows `Setup checklist` between provider controls
+and the test prompt. Use it before opening run folders or reading artifacts.
+
+Rows:
+
+- `Sidecar`: confirms that provider status can be loaded from the sidecar.
+- `Mode`: confirms managed mode or a local-looking CDP endpoint in attach mode.
+- `Chrome CDP`: shows whether attach mode needs `Start Chrome`, `Resume`, or no
+  action.
+- `Gemini tab`: shows whether a usable Gemini page is available or whether the
+  operator should open/resume the browser.
+- `Gemini readiness`: uses provider status and latest run debug facts to decide
+  whether login/manual action is likely, or whether a test prompt should be
+  sent.
+- `Last test run`: classifies the selected/latest run as stable, partial-risk,
+  manual-action, failed, running, or unknown.
+
+Checklist actions reuse existing safe controls. They do not implement retry,
+cancel, prompt-pack routing, login automation, artifact reading, or remote CDP.
+If a row points to `View run`, inspect the selected run through Run Inspector
+and Run History.
 
 ## Inline Run Inspector
 

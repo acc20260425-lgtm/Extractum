@@ -1096,7 +1096,7 @@ git commit -m "feat: show Gemini browser setup checklist"
 - Modify: `docs/browser-providers-llm-troubleshooting.md`
 - Modify: `docs/superpowers/plans/2026-06-21-gemini-browser-setup-status-ux-plan.md`
 
-- [ ] **Step 1: Document the setup checklist workflow**
+- [x] **Step 1: Document the setup checklist workflow**
 
 In `docs/browser-providers-llm-troubleshooting.md`, find `## Inline Run Inspector` and insert this new section immediately before it:
 
@@ -1126,7 +1126,7 @@ If a row points to `View run`, inspect the selected run through Run Inspector
 and Run History.
 ```
 
-- [ ] **Step 2: Run final automated verification**
+- [x] **Step 2: Run final automated verification**
 
 Run:
 
@@ -1142,7 +1142,7 @@ Expected:
 - `svelte-check found 0 errors and 0 warnings`.
 - `git diff --check` exits 0.
 
-- [ ] **Step 3: Manual validation in running app**
+- [x] **Step 3: Manual validation in running app**
 
 Start the app if it is not already running:
 
@@ -1172,7 +1172,7 @@ Validate manually:
 If live Gemini validation is blocked by Google login or verification, record the
 observed manual-action state and do not change code in this task.
 
-- [ ] **Step 4: Record manual validation outcome in this plan**
+- [x] **Step 4: Record manual validation outcome in this plan**
 
 Append a `## Manual Validation Result` section near the end of this plan:
 
@@ -1191,7 +1191,7 @@ Append a `## Manual Validation Result` section near the end of this plan:
 
 Fill the fields with the observed values.
 
-- [ ] **Step 5: Mark Task 3 complete and commit**
+- [x] **Step 5: Mark Task 3 complete and commit**
 
 Update this task's checkboxes to `[x]`, then run:
 
@@ -1202,15 +1202,26 @@ git commit -m "docs: document Gemini browser setup checklist"
 
 ---
 
+## Manual Validation Result
+
+- Date: 2026-06-21 19:48 Europe/Minsk
+- Mode(s): Managed and Attach Chrome CDP in Tauri dev through the MCP bridge (`org.ai.extractum` 0.2.0, Tauri 2.10.3).
+- Setup checklist visible: Yes. It rendered between provider controls and the `Test prompt` card.
+- Managed-mode result: With the managed browser not opened, `Gemini tab` showed `Unknown` with `Open`; `Chrome CDP` showed `Not applicable`. Existing selected run history can still make `Gemini readiness` reflect the selected/latest run facts.
+- Attach-mode result: Initial unavailable CDP state showed `Action needed` with `Start Chrome`; after `Start Chrome`, checklist changed to configured-but-not-attached guidance with `Resume`/`Open`; after `Resume`, `Chrome CDP` and `Gemini tab` were `Ready`.
+- Test run id: `gemini-browser-1782060458499-850671ee098e38`
+- Last test run classification: `Ready` for the stable live test run. Existing manual-action run `gemini-browser-1782026952974-d06ab07ffb345` classified as `Action needed`; `View run` wiring kept Run Inspector on that selected run.
+- Notes: Live Gemini returned `The browser provider has been successfully connected.` Checklist rows did not show full prompt text, answer text, artifact paths, raw URLs, account identifiers, screenshots, or DOM. Run History still shows prompt previews by design.
+
 ## Final Checklist
 
-- [ ] `src/lib/gemini-browser-setup-status.ts` exists and contains pure setup-check derivation.
-- [ ] Helper tests cover managed mode, attach mode, endpoint guidance, manual actions, run classifications, old DTOs, action labels, and privacy boundaries.
-- [ ] Browser Providers settings renders `Setup checklist` between provider controls and test prompt.
-- [ ] Checklist rows include `Sidecar`, `Mode`, `Chrome CDP`, `Gemini tab`, `Gemini readiness`, and `Last test run`.
-- [ ] Checklist actions reuse existing component actions and do not add retry/cancel semantics.
-- [ ] Run Inspector and Run History behavior remains intact.
-- [ ] `npm.cmd run test -- --run src/lib/gemini-browser-setup-status.test.ts src/lib/gemini-browser-provider-panel.test.ts` passes.
-- [ ] `npm.cmd run check` passes.
-- [ ] `git diff --check` passes.
-- [ ] Manual validation outcome is recorded.
+- [x] `src/lib/gemini-browser-setup-status.ts` exists and contains pure setup-check derivation.
+- [x] Helper tests cover managed mode, attach mode, endpoint guidance, manual actions, run classifications, old DTOs, action labels, and privacy boundaries.
+- [x] Browser Providers settings renders `Setup checklist` between provider controls and test prompt.
+- [x] Checklist rows include `Sidecar`, `Mode`, `Chrome CDP`, `Gemini tab`, `Gemini readiness`, and `Last test run`.
+- [x] Checklist actions reuse existing component actions and do not add retry/cancel semantics.
+- [x] Run Inspector and Run History behavior remains intact.
+- [x] `npm.cmd run test -- --run src/lib/gemini-browser-setup-status.test.ts src/lib/gemini-browser-provider-panel.test.ts` passes.
+- [x] `npm.cmd run check` passes.
+- [x] `git diff --check` passes.
+- [x] Manual validation outcome is recorded.
