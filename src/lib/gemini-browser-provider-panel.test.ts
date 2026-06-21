@@ -24,6 +24,20 @@ describe("gemini browser provider panel copy contract", () => {
   });
 
   it("treats Resume as an open-or-reattach command that returns provider status", () => {
-    expect(componentSource).toContain("status = await geminiBridgeResume();");
+    expect(componentSource).toContain("status = await geminiBridgeResume(browserConfig());");
+  });
+
+  it("exposes env-free CDP attach controls in Settings", () => {
+    expect(componentSource).toContain("browserProviderMode");
+    expect(componentSource).toContain("Attach Chrome");
+    expect(componentSource).toContain("CDP endpoint");
+    expect(componentSource).toContain("localStorage");
+  });
+
+  it("passes browser config to status, open, resume, and send calls", () => {
+    expect(componentSource).toContain("geminiBridgeStatus(browserConfig())");
+    expect(componentSource).toContain("geminiBridgeOpenBrowser(browserConfig())");
+    expect(componentSource).toContain("geminiBridgeResume(browserConfig())");
+    expect(componentSource).toContain("browserConfig: browserConfig()");
   });
 });

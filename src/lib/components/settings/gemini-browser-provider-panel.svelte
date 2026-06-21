@@ -13,10 +13,16 @@
   import { formatAppError } from "$lib/app-error";
   import { statusLabel } from "$lib/gemini-browser-provider-panel-contract";
   import type {
+    GeminiBrowserProviderConfig,
+    GeminiBrowserProviderMode,
     GeminiBrowserProviderStatus,
     GeminiBrowserRun,
     GeminiBrowserRunResult,
   } from "$lib/types/gemini-browser";
+
+  const DEFAULT_CDP_ENDPOINT = "http://127.0.0.1:9222";
+  const PROVIDER_MODE_STORAGE_KEY = "extractum.geminiBrowser.providerMode";
+  const CDP_ENDPOINT_STORAGE_KEY = "extractum.geminiBrowser.cdpEndpoint";
 
   let status = $state<GeminiBrowserProviderStatus | null>(null);
   let runs = $state<GeminiBrowserRun[]>([]);
@@ -24,6 +30,8 @@
   let busy = $state(false);
   let message = $state("");
   let result = $state<GeminiBrowserRunResult | null>(null);
+  let browserProviderMode = $state<GeminiBrowserProviderMode>("managed");
+  let cdpEndpoint = $state(DEFAULT_CDP_ENDPOINT);
 
   function newRunId() {
     return `gemini-browser-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -33,9 +41,48 @@
     return statusLabel(status?.status ?? "not_started", status?.manual_action ?? null);
   }
 
+  function browserConfig(): GeminiBrowserProviderConfig {
+    if (browserProviderMode === "managed") {
+      return { mode: "managed" };
+    }
+    return {
+      mode: "cdp_attach",
+      cdpEndpoint: cdpEndpoint.trim() || DEFAULT_CDP_ENDPOINT,
+    };
+  }
+
+  function loadBrowserProviderConfig() {
+    if (typeof localStorage === "undefined") return;
+    const storedMode = localStorage.getItem(PROVIDER_MODE_STORAGE_KEY);
+    if (storedMode === "managed" || storedMode === "cdp_attach") {
+      browserProviderMode = storedMode;
+    }
+    cdpEndpoint = localStorage.getItem(CDP_ENDPOINT_STORAGE_KEY) || DEFAULT_CDP_ENDPOINT;
+  }
+
+  function persistBrowserProviderConfig() {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(PROVIDER_MODE_STORAGE_KEY, browserProviderMode);
+    localStorage.setItem(CDP_ENDPOINT_STORAGE_KEY, cdpEndpoint.trim() || DEFAULT_CDP_ENDPOINT);
+  }
+
+  function selectBrowserProviderMode(mode: GeminiBrowserProviderMode) {
+    browserProviderMode = mode;
+    persistBrowserProviderConfig();
+    void refresh();
+  }
+
+  function updateCdpEndpoint(value: string) {
+    cdpEndpoint = value;
+    persistBrowserProviderConfig();
+  }
+
   async function refresh() {
     try {
-      const [nextStatus, log] = await Promise.all([geminiBridgeStatus(), geminiBridgeListRuns(8)]);
+      const [nextStatus, log] = await Promise.all([
+        geminiBridgeStatus(browserConfig()),
+        geminiBridgeListRuns(8),
+      ]);
       status = nextStatus;
       runs = log.runs;
       message = nextStatus.latest_message ?? "";
@@ -47,7 +94,7 @@
   async function openBrowser() {
     busy = true;
     try {
-      status = await geminiBridgeOpenBrowser();
+      status = await geminiBridgeOpenBrowser(browserConfig());
       message = status.latest_message ?? "Browser opened.";
     } catch (error) {
       message = formatAppError("opening Gemini browser", error);
@@ -69,6 +116,7 @@
         prompt: prompt.trim(),
         source: "settings_test",
         artifactMode: "reduced",
+        browserConfig: browserConfig(),
       });
       message = result.message ?? result.status;
       await refresh();
@@ -82,7 +130,7 @@
   async function resumeProvider() {
     busy = true;
     try {
-      status = await geminiBridgeResume();
+      status = await geminiBridgeResume(browserConfig());
       message = status.latest_message ?? "Browser resumed.";
       await refresh();
     } catch (error) {
@@ -107,6 +155,7 @@
   onMount(() => {
     let disposed = false;
     let unlisten: (() => void) | null = null;
+    loadBrowserProviderConfig();
     void refresh();
     void listenToGeminiBrowserRuns(({ payload }) => {
       if (disposed) return;
@@ -143,6 +192,36 @@
           <RefreshCw size={14} />
         </button>
       </div>
+      <div class="mode-group" aria-label="Browser provider mode">
+        <button
+          type="button"
+          class:active={browserProviderMode === "managed"}
+          onclick={() => selectBrowserProviderMode("managed")}
+          disabled={busy}
+        >
+          Managed
+        </button>
+        <button
+          type="button"
+          class:active={browserProviderMode === "cdp_attach"}
+          onclick={() => selectBrowserProviderMode("cdp_attach")}
+          disabled={busy}
+        >
+          Attach Chrome
+        </button>
+      </div>
+      {#if browserProviderMode === "cdp_attach"}
+        <div class="cdp-config">
+          <label for="gemini-browser-cdp-endpoint">CDP endpoint</label>
+          <input
+            id="gemini-browser-cdp-endpoint"
+            value={cdpEndpoint}
+            oninput={(event) => updateCdpEndpoint((event.currentTarget as HTMLInputElement).value)}
+            disabled={busy}
+          />
+          <p class="message">Start Chrome on this endpoint, open Gemini, then Resume.</p>
+        </div>
+      {/if}
       <p class="mono">{status?.browser_profile_dir ?? "Profile path will appear after status load."}</p>
       {#if message}
         <p class="message">{message}</p>
@@ -263,6 +342,40 @@
     box-sizing: border-box;
     resize: vertical;
     margin: 6px 0 10px;
+  }
+
+  .mode-group {
+    display: inline-flex;
+    gap: 0;
+    margin-top: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .mode-group button {
+    border: 0;
+    border-radius: 0;
+  }
+
+  .mode-group button + button {
+    border-left: 1px solid var(--border);
+  }
+
+  .mode-group button.active {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+
+  .cdp-config {
+    display: grid;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .cdp-config input {
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .mono,

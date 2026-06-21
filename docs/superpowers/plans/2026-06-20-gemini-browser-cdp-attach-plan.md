@@ -1864,13 +1864,13 @@ Expected: final commit contains only plan checkbox and verification-note updates
 
 ### Task 10: Settings UI Controls
 
-- [ ] **Step 1: Add red component-source tests for mode controls and config persistence**
-- [ ] **Step 2: Add mode selector in Browser Providers panel**
-- [ ] **Step 3: Persist selected mode and endpoint in `localStorage`**
-- [ ] **Step 4: Pass the config to all Gemini browser bridge API calls**
-- [ ] **Step 5: Show concise CDP setup copy only when attach mode is selected**
-- [ ] **Step 6: Run UI tests and `npm.cmd run check`**
-- [ ] **Step 7: Commit Settings UX**
+- [x] **Step 1: Add red component-source tests for mode controls and config persistence**
+- [x] **Step 2: Add mode selector in Browser Providers panel**
+- [x] **Step 3: Persist selected mode and endpoint in `localStorage`**
+- [x] **Step 4: Pass the config to all Gemini browser bridge API calls**
+- [x] **Step 5: Show concise CDP setup copy only when attach mode is selected**
+- [x] **Step 6: Run UI tests and `npm.cmd run check`**
+- [x] **Step 7: Commit Settings UX**
 
 ### Task 11: Verification And Notes
 
