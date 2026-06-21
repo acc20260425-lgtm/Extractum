@@ -1987,7 +1987,7 @@ npm.cmd run build:gemini-browser-sidecar
 
 Expected: PASS and writes `src-tauri\binaries\gemini-browser-sidecar-x86_64-pc-windows-msvc.exe` on Windows.
 
-- [ ] **Step 5: Manual validation**
+- [x] **Step 5: Manual validation**
 
 Run the app and validate:
 
