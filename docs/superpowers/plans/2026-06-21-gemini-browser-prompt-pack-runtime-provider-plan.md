@@ -15,10 +15,13 @@
 - Create `src-tauri/migrations/0010_prompt_pack_runtime_provider.sql`: schema fields for runtime selection and browser config snapshots.
 - Modify `src-tauri/src/prompt_packs/dto.rs`: runtime provider enum, request fields, run summary field.
 - Modify `src-tauri/src/prompt_packs/youtube_summary/mod.rs`: runtime-aware start preflight budget.
+- Modify `src-tauri/src/prompt_packs/youtube_summary/preflight_tests.rs`: browser-runtime preflight coverage.
 - Modify `src-tauri/src/prompt_packs/youtube_summary/snapshots.rs`: persist runtime fields and audit snapshot.
+- Modify `src-tauri/src/prompt_packs/youtube_summary/store.rs`: expose runtime provider in YouTube Summary run summaries.
 - Modify `src-tauri/src/prompt_packs/youtube_summary/test_support.rs`: default test requests use `api`.
 - Modify `src-tauri/src/prompt_packs/youtube_summary/snapshots_tests.rs`: storage/idempotency coverage.
 - Modify `src-tauri/src/gemini_browser/commands.rs`: extract reusable `send_single_prompt`.
+- Modify `src-tauri/src/gemini_browser/mod.rs`: re-export `send_single_prompt` for prompt-pack runtime use.
 - Modify `src-tauri/src/prompt_packs/runtime.rs`: load runtime config, format browser prompts, dispatch stages to API or browser backend.
 - Modify `src/lib/types/prompt-packs.ts`: TypeScript runtime provider contract.
 - Modify `src/lib/api/prompt-packs.test.ts`: API wrapper coverage for browser runtime payload.
@@ -223,7 +226,9 @@ git commit -m "feat: add prompt pack runtime provider contract"
 
 **Files:**
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/mod.rs`
+- Modify: `src-tauri/src/prompt_packs/youtube_summary/preflight_tests.rs`
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/snapshots.rs`
+- Modify: `src-tauri/src/prompt_packs/youtube_summary/store.rs`
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/test_support.rs`
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/snapshots_tests.rs`
 - Modify: `src-tauri/src/prompt_packs/runtime.rs`
@@ -575,6 +580,7 @@ git commit -m "feat: persist prompt pack runtime provider"
 
 **Files:**
 - Modify: `src-tauri/src/gemini_browser/commands.rs`
+- Modify: `src-tauri/src/gemini_browser/mod.rs`
 
 - [ ] **Step 1: Write the refactor target**
 
@@ -681,7 +687,22 @@ Replace the body of `gemini_bridge_send_single()` with:
     .await
 ```
 
-- [ ] **Step 3: Run Gemini Browser tests**
+- [ ] **Step 3: Re-export the reusable helper**
+
+In `src-tauri/src/gemini_browser/mod.rs`, add a crate-visible re-export directly below the existing public command re-export block:
+
+```rust
+pub use commands::{
+    gemini_bridge_list_runs, gemini_bridge_open_browser, gemini_bridge_open_run_folder,
+    gemini_bridge_resume, gemini_bridge_send_single, gemini_bridge_start_cdp_chrome,
+    gemini_bridge_status, gemini_bridge_stop,
+};
+pub(crate) use commands::send_single_prompt;
+```
+
+Keep `send_single_prompt` `pub(crate)` in `commands.rs`; it is an internal runtime helper, not a Tauri command.
+
+- [ ] **Step 4: Run Gemini Browser tests**
 
 Run:
 
@@ -691,10 +712,10 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS. This task is a refactor only; command behavior stays unchanged.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```powershell
-git add src-tauri/src/gemini_browser/commands.rs
+git add src-tauri/src/gemini_browser/commands.rs src-tauri/src/gemini_browser/mod.rs
 git commit -m "refactor: reuse Gemini browser send single command"
 ```
 
@@ -1062,10 +1083,14 @@ Add this function after `browser_stage_completion_from_result()`:
 ```rust
 async fn run_browser_llm_request(
     handle: AppHandle,
+    run_id: i64,
+    stage_run_id: i64,
     browser_provider_config: Option<crate::gemini_browser::GeminiBrowserProviderConfig>,
     run_cancellation_token: Option<CancellationToken>,
-    stage_name: &'static str,
+    stage_name: String,
     source_snapshot_id: Option<i64>,
+    phase: &'static str,
+    started_message: &'static str,
     repair_attempt_number: Option<i64>,
     llm_request: LlmChatRequest,
 ) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
@@ -1077,21 +1102,8 @@ async fn run_browser_llm_request(
     }
 
     let prompt = llm_chat_request_to_browser_prompt(&llm_request)?;
-    let run_id = llm_request
-        .request_id
-        .strip_prefix("prompt-pack-run-")
-        .and_then(|rest| rest.split_once("-stage-"))
-        .and_then(|(run_id, _)| run_id.parse::<i64>().ok())
-        .ok_or_else(|| AppError::internal("Prompt Pack Browser Provider request id is malformed"))?;
-    let stage_run_id = llm_request
-        .request_id
-        .split("-stage-")
-        .nth(1)
-        .and_then(|rest| rest.split('-').next())
-        .and_then(|value| value.parse::<i64>().ok())
-        .ok_or_else(|| AppError::internal("Prompt Pack Browser Provider stage id is malformed"))?;
     let browser_run_id = browser_run_id_for_stage(run_id, stage_run_id, repair_attempt_number);
-    let source = browser_run_source_for_stage(run_id, stage_run_id, stage_name);
+    let source = browser_run_source_for_stage(run_id, stage_run_id, &stage_name);
 
     let queued_handle = handle.clone();
     let started_handle = handle.clone();
@@ -1099,6 +1111,8 @@ async fn run_browser_llm_request(
     let started_request_id = request_id.clone();
     let queued_stage_name = stage_name.to_string();
     let started_stage_name = queued_stage_name.clone();
+    let queued_phase = phase.to_string();
+    let started_phase = queued_phase.clone();
     let run_cancellation_for_stop = run_cancellation_token.clone();
 
     let _ = queued_handle.emit(
@@ -1108,7 +1122,7 @@ async fn run_browser_llm_request(
             request_id: request_id.clone(),
             kind: "queued".to_string(),
             run_status: "running".to_string(),
-            phase: "stage".to_string(),
+            phase: queued_phase,
             stage_run_id: Some(stage_run_id),
             stage_name: Some(queued_stage_name),
             source_snapshot_id,
@@ -1129,14 +1143,14 @@ async fn run_browser_llm_request(
                 request_id: started_request_id,
                 kind: "started".to_string(),
                 run_status: "running".to_string(),
-                phase: "stage".to_string(),
+                phase: started_phase,
                 stage_run_id: Some(stage_run_id),
                 stage_name: Some(started_stage_name),
                 source_snapshot_id,
                 queue_position: None,
                 progress_current: None,
                 progress_total: None,
-                message: Some("Running Browser Provider stage".to_string()),
+                message: Some(started_message.to_string()),
                 error: None,
             },
         );
@@ -1220,7 +1234,7 @@ After building `llm_request`, branch:
                 stage_request.run_id,
                 stage_request.stage_run_id,
                 Some(stage_request.source_snapshot_id),
-                "youtube_summary/transcript_analysis",
+                "youtube_summary/transcript_analysis".to_string(),
                 "transcript_analysis",
                 "Analyzing transcript",
             )
@@ -1231,10 +1245,14 @@ After building `llm_request`, branch:
         } => {
             run_browser_llm_request(
                 handle,
+                stage_request.run_id,
+                stage_request.stage_run_id,
                 browser_provider_config,
                 run_cancellation_token,
-                "youtube_summary/transcript_analysis",
+                "youtube_summary/transcript_analysis".to_string(),
                 Some(stage_request.source_snapshot_id),
+                "transcript_analysis",
+                "Analyzing transcript",
                 None,
                 llm_request,
             )
@@ -1243,9 +1261,9 @@ After building `llm_request`, branch:
     }
 ```
 
-For synthesis, pass `source_snapshot_id: None`, stage name `"youtube_summary/synthesis"`, phase `"synthesis"`, and message `"Synthesizing summaries"`.
+For synthesis, pass `run_id`, `stage_run_id`, `source_snapshot_id: None`, stage name `"youtube_summary/synthesis".to_string()`, phase `"synthesis"`, and message `"Synthesizing summaries"`.
 
-For JSON repair, pass `source_snapshot_id: None`, `stage_name` from `stage_request.stage_name`, phase `"repair"`, message `"Repairing stage output"`, and `repair_attempt_number: Some(stage_request.attempt_number)`.
+For JSON repair, pass `run_id`, `stage_run_id`, `source_snapshot_id: None`, `stage_request.stage_name.clone()`, phase `"repair"`, message `"Repairing stage output"`, and `repair_attempt_number: Some(stage_request.attempt_number)`.
 
 Extract the existing scheduler body into `run_api_llm_request()` so this step does not duplicate the scheduler closure three times. Its signature should be:
 
@@ -1258,7 +1276,7 @@ async fn run_api_llm_request(
     run_id: i64,
     stage_run_id: i64,
     source_snapshot_id: Option<i64>,
-    stage_name: &'static str,
+    stage_name: String,
     phase: &'static str,
     started_message: &'static str,
 ) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError>
