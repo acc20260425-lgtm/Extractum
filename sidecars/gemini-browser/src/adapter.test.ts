@@ -421,4 +421,85 @@ describe("production Gemini DOM contract", () => {
       vi.useRealTimers();
     }
   });
+
+  it("does not treat early answer action buttons as completion", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-21T00:00:00Z"));
+    try {
+      const startedAt = new Date("2026-06-21T00:00:00Z").getTime();
+      const partialAnswer = "Текущий Чемпионат мира 2026 в самом разгаре,";
+      const finalAnswer =
+        "Текущий Чемпионат мира 2026 в самом разгаре, и это исторический турнир с несколькими неожиданными результатами, интригой в группах и плотной борьбой фаворитов.";
+      let submitted = false;
+      const composer = {
+        count: async () => 1,
+        nth: () => composer,
+        isVisible: async () => true,
+        fill: vi.fn(async () => undefined),
+      };
+      const send = {
+        count: async () => 1,
+        nth: () => send,
+        isVisible: async () => true,
+        click: vi.fn(async () => {
+          submitted = true;
+        }),
+      };
+      const answer = {
+        count: async () => (submitted ? 1 : 0),
+        nth: () => answer,
+        isVisible: async () => true,
+        allTextContents: vi.fn(async () => {
+          if (!submitted) return [];
+          const elapsed = Date.now() - startedAt;
+          if (elapsed < 5_000) return [partialAnswer];
+          return [finalAnswer];
+        }),
+      };
+      const earlyCompletionAction = {
+        count: async () => (submitted ? 1 : 0),
+        nth: () => earlyCompletionAction,
+        isVisible: async () => true,
+      };
+      const empty = {
+        count: async () => 0,
+        nth: () => empty,
+        isVisible: async () => false,
+        allTextContents: async () => [],
+      };
+      const page = {
+        isClosed: () => false,
+        locator: (selector: string) => {
+          if (selector === "rich-textarea textarea") return composer;
+          if (selector === "button[aria-label*='send' i]") return send;
+          if (selector === "message-content") return answer;
+          if (selector === "[data-test-id='copy-button']") return earlyCompletionAction;
+          return empty;
+        },
+        waitForTimeout: async (ms: number) => {
+          vi.advanceTimersByTime(ms);
+        },
+      };
+      const adapter = new GeminiBrowserAdapter({ env: {} });
+      adapter.__setTestPage(page as never);
+
+      await expect(
+        adapter.sendSingle({
+          browserProfileDir: "C:/Extractum/gemini-browser/profile",
+          artifactDir: "artifacts/gemini-browser-adapter-test/run-3",
+          request: {
+            run_id: "run-3",
+            prompt: "что происходит на чемпионате мира?",
+            source: "settings_test",
+            artifact_mode: "reduced",
+          },
+        }),
+      ).resolves.toMatchObject({
+        status: "ok",
+        text: finalAnswer,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

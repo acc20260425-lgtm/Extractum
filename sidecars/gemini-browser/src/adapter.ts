@@ -454,18 +454,10 @@ export async function waitForFirstVisible(
 
 const ANSWER_TIMEOUT_MS = 60_000;
 const ANSWER_POLL_INTERVAL_MS = 500;
-const ANSWER_STABLE_AFTER_ACTION_MS = 500;
-const ANSWER_STABLE_WITHOUT_ACTION_MS = 8_000;
-
-const answerCompletionActionSelectors = [
-  "[data-test-id='copy-button']",
-  "[data-test-id='thumb-up-button']",
-  "[data-test-id='regenerate-button']",
-];
+const ANSWER_STABLE_MS = 8_000;
 
 interface AnswerState {
   texts: string[];
-  completionActionCount: number;
 }
 
 async function waitForAnswerText(
@@ -489,15 +481,10 @@ async function waitForAnswerText(
     }
     if (latestAnswer) {
       const stableForMs = now - lastChangedAt;
-      const completionActionAppeared =
-        state.completionActionCount > baseline.completionActionCount;
-      if (completionActionAppeared && stableForMs >= ANSWER_STABLE_AFTER_ACTION_MS) {
-        return latestAnswer;
-      }
       if (
         firstSeenAt !== null &&
-        stableForMs >= ANSWER_STABLE_WITHOUT_ACTION_MS &&
-        now - firstSeenAt >= ANSWER_STABLE_WITHOUT_ACTION_MS
+        stableForMs >= ANSWER_STABLE_MS &&
+        now - firstSeenAt >= ANSWER_STABLE_MS
       ) {
         return latestAnswer;
       }
@@ -523,7 +510,6 @@ async function captureAnswerState(page: Page, prompt: string): Promise<AnswerSta
 
   return {
     texts,
-    completionActionCount: await answerCompletionActionCount(page),
   };
 }
 
@@ -533,24 +519,4 @@ function bestNewAnswerText(current: AnswerState, baseline: AnswerState): string 
   if (newTexts.length === 0) return null;
 
   return newTexts.reduce((best, text) => (text.length >= best.length ? text : best));
-}
-
-async function answerCompletionActionCount(page: Page): Promise<number> {
-  let count = 0;
-  for (const selector of answerCompletionActionSelectors) {
-    count += await visibleLocatorCount(page, selector);
-  }
-  return count;
-}
-
-async function visibleLocatorCount(page: Page, selector: string): Promise<number> {
-  const locator = page.locator(selector);
-  const count = await locator.count().catch(() => 0);
-  let visible = 0;
-  for (let index = 0; index < count; index += 1) {
-    if (await locator.nth(index).isVisible().catch(() => false)) {
-      visible += 1;
-    }
-  }
-  return visible;
 }
