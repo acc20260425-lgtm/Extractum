@@ -44,6 +44,8 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
             source_ids: request.source_ids.clone(),
             profile_id: request.profile_id.clone(),
             model_override: request.model_override.clone(),
+            runtime_provider: request.runtime_provider,
+            browser_provider_config: request.browser_provider_config.clone(),
             output_language: request.output_language.clone(),
             control_preset: request.control_preset.clone(),
             evidence_mode: request.evidence_mode.clone(),

@@ -1,7 +1,9 @@
 use super::{create_youtube_summary_run_skeleton_in_pool, LlmCompletion};
 use crate::compression::compress_text;
 use crate::migrations::apply_all_migrations_for_test_pool;
-use crate::prompt_packs::dto::{PreflightYoutubeSummaryRunRequest, StartYoutubeSummaryRunRequest};
+use crate::prompt_packs::dto::{
+    PreflightYoutubeSummaryRunRequest, PromptPackRuntimeProvider, StartYoutubeSummaryRunRequest,
+};
 use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
 
 pub(crate) async fn migrated_pool() -> sqlx::SqlitePool {
@@ -20,6 +22,8 @@ pub(crate) fn request_for_video(source_id: i64) -> PreflightYoutubeSummaryRunReq
         source_ids: vec![source_id],
         profile_id: None,
         model_override: Some("test-model".to_string()),
+        runtime_provider: PromptPackRuntimeProvider::Api,
+        browser_provider_config: None,
         output_language: "en".to_string(),
         control_preset: "standard".to_string(),
         evidence_mode: "standard".to_string(),
@@ -37,6 +41,8 @@ pub(crate) fn start_request(
         source_ids,
         profile_id: None,
         model_override: Some("test-model".to_string()),
+        runtime_provider: PromptPackRuntimeProvider::Api,
+        browser_provider_config: None,
         output_language: "en".to_string(),
         control_preset: "standard".to_string(),
         evidence_mode: "standard".to_string(),

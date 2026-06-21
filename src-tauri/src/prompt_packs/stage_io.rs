@@ -404,6 +404,8 @@ mod tests {
             source_ids: vec![901],
             profile_id: None,
             model_override: Some("test-model".to_string()),
+            runtime_provider: crate::prompt_packs::dto::PromptPackRuntimeProvider::Api,
+            browser_provider_config: None,
             output_language: "en".to_string(),
             control_preset: "standard".to_string(),
             evidence_mode: "standard".to_string(),

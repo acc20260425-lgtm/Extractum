@@ -1,3 +1,27 @@
+use crate::gemini_browser::GeminiBrowserProviderConfig;
+
+#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptPackRuntimeProvider {
+    Api,
+    GeminiBrowser,
+}
+
+impl Default for PromptPackRuntimeProvider {
+    fn default() -> Self {
+        Self::Api
+    }
+}
+
+impl PromptPackRuntimeProvider {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Api => "api",
+            Self::GeminiBrowser => "gemini_browser",
+        }
+    }
+}
+
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
@@ -6,6 +30,10 @@ pub struct PreflightYoutubeSummaryRunRequest {
     pub source_ids: Vec<i64>,
     pub profile_id: Option<String>,
     pub model_override: Option<String>,
+    #[serde(default)]
+    pub runtime_provider: PromptPackRuntimeProvider,
+    #[serde(default)]
+    pub browser_provider_config: Option<GeminiBrowserProviderConfig>,
     pub output_language: String,
     pub control_preset: String,
     pub evidence_mode: String,
@@ -20,6 +48,10 @@ pub struct StartYoutubeSummaryRunRequest {
     pub source_ids: Vec<i64>,
     pub profile_id: Option<String>,
     pub model_override: Option<String>,
+    #[serde(default)]
+    pub runtime_provider: PromptPackRuntimeProvider,
+    #[serde(default)]
+    pub browser_provider_config: Option<GeminiBrowserProviderConfig>,
     pub output_language: String,
     pub control_preset: String,
     pub evidence_mode: String,
@@ -95,6 +127,7 @@ pub struct PromptPackRunSummaryDto {
     pub run_id: i64,
     pub project_id: Option<i64>,
     pub run_label: Option<String>,
+    pub runtime_provider: String,
     pub pack_id: String,
     pub pack_version: String,
     pub run_status: String,
@@ -205,5 +238,65 @@ impl StartYoutubeSummaryRunOutcomeDto {
                 panic!("{context}: expected blocked outcome")
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preflight_request_defaults_to_api_runtime_provider() {
+        let request: PreflightYoutubeSummaryRunRequest =
+            serde_json::from_value(serde_json::json!({
+                "projectId": null,
+                "sourceIds": [901],
+                "profileId": null,
+                "modelOverride": null,
+                "outputLanguage": "en",
+                "controlPreset": "standard",
+                "evidenceMode": "standard",
+                "includeComments": false
+            }))
+            .expect("deserialize preflight request");
+
+        assert_eq!(request.runtime_provider, PromptPackRuntimeProvider::Api);
+        assert!(request.browser_provider_config.is_none());
+    }
+
+    #[test]
+    fn start_request_accepts_gemini_browser_runtime_provider() {
+        let request: StartYoutubeSummaryRunRequest =
+            serde_json::from_value(serde_json::json!({
+                "clientRequestId": "req-browser-runtime-1",
+                "projectId": null,
+                "sourceIds": [901],
+                "profileId": null,
+                "modelOverride": null,
+                "outputLanguage": "en",
+                "controlPreset": "standard",
+                "evidenceMode": "standard",
+                "includeComments": false,
+                "runtimeProvider": "gemini_browser",
+                "browserProviderConfig": {
+                    "mode": "cdp_attach",
+                    "cdpEndpoint": "http://127.0.0.1:9222"
+                }
+            }))
+            .expect("deserialize start request");
+
+        assert_eq!(
+            request.runtime_provider,
+            PromptPackRuntimeProvider::GeminiBrowser
+        );
+        let config = request.browser_provider_config.expect("browser config");
+        assert_eq!(
+            config.mode,
+            crate::gemini_browser::GeminiBrowserProviderMode::CdpAttach
+        );
+        assert_eq!(
+            config.cdp_endpoint.as_deref(),
+            Some("http://127.0.0.1:9222")
+        );
     }
 }

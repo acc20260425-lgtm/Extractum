@@ -88,6 +88,7 @@ pub(crate) async fn load_run_summary(
             run_id,
             project_id,
             run_label,
+            runtime_provider: "api".to_string(),
             pack_id,
             pack_version,
             run_status,

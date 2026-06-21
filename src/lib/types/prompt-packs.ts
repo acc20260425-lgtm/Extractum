@@ -1,3 +1,5 @@
+import type { GeminiBrowserProviderConfig } from "./gemini-browser";
+
 export interface PromptPackLibrary {
   packs: PromptPack[];
 }
@@ -65,11 +67,15 @@ export type PromptPackRunEventPhase =
   | "persist"
   | "terminal";
 
+export type PromptPackRuntimeProvider = "api" | "gemini_browser";
+
 export interface PreflightYoutubeSummaryRunInput {
   projectId: number | null;
   sourceIds: number[];
   profileId: string | null;
   modelOverride: string | null;
+  runtimeProvider?: PromptPackRuntimeProvider;
+  browserProviderConfig?: GeminiBrowserProviderConfig | null;
   outputLanguage: string;
   controlPreset: string;
   evidenceMode: string;
@@ -82,6 +88,8 @@ export interface StartYoutubeSummaryRunInput {
   sourceIds: number[];
   profileId: string | null;
   modelOverride: string | null;
+  runtimeProvider?: PromptPackRuntimeProvider;
+  browserProviderConfig?: GeminiBrowserProviderConfig | null;
   outputLanguage: string;
   controlPreset: string;
   evidenceMode: string;
@@ -152,6 +160,7 @@ export interface PromptPackRunSummary {
   runId: number;
   projectId?: number | null;
   runLabel?: string | null;
+  runtimeProvider?: PromptPackRuntimeProvider;
   packId?: string;
   packVersion?: string;
   runStatus: PromptPackRunStatus;
