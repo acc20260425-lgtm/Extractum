@@ -209,6 +209,7 @@ The first reference validator should include these required fixture classes.
 | `stage_output__invalid_reference__disallowed_fragment_candidate` | `stage_output` | `invalid-reference` | invalid | Candidate references disallowed ID |
 | `stage_output__partial_failure__one_bad_claim_candidate` | `stage_output` | `partial-failure` | invalid object, valid siblings | Object-isolated failure |
 | `prompt_template__valid__claim_extraction_minimal` | `prompt_template` | `valid` | valid | Contains closed-world instructions and output shape |
+| `prompt_template__valid__telegram_summary_pack_data_generation` | `prompt_template` | `valid` | valid | Telegram pack-data prompt mentions closed-world message refs and output namespace |
 | `prompt_template__invalid__assigns_canonical_ids` | `prompt_template` | `invalid` | invalid | Template asks model to assign canonical IDs |
 
 Rules:
@@ -233,7 +234,7 @@ The mandatory fixture matrix is now materialized under `fixtures/v1/`.
 | Canonical QA warning | `single_source_claim` |
 | Stage payload | valid `claim_extraction_minimal`, `missing_allowed_fragment`, `unsupported_stage_io_version` |
 | Stage output | valid `claim_extraction_minimal`, `disallowed_fragment_candidate`, `one_bad_claim_candidate` |
-| Prompt template | valid `claim_extraction_minimal`, invalid `assigns_canonical_ids` |
+| Prompt template | valid `claim_extraction_minimal`, valid `telegram_summary_pack_data_generation`, invalid `assigns_canonical_ids` |
 
 Rules:
 

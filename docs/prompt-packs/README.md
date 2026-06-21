@@ -24,6 +24,7 @@
 | `model_recommendations.md` | Provider-neutral model class recommendations and escalation policy per LLM stage | v1 draft |
 | `runtime_configuration_policy.md` | Boundary policy for runtime config, feature flags, budgets, retry/quarantine and canonical JSON exposure | v1 draft |
 | `prompts/v1/README.md` | Provider-specific prompt file layout; OpenAI-compatible stage prompts | v1 draft |
+| `prompts/v1/telegram_summary_pack_data_generation.md` | Telegram-specific guidance for rendering `pack_data_generation` prompts | v1 draft |
 | `parser-fixtures/v1/README.md` | Raw provider-response parser fixtures for stage outputs | v1 draft |
 | `technology_watch_pack_spec.md` | Pack-specific schema для `technology_watch` | v1 baseline |
 | `TECHNOLOGY_WATCH_PACK_DECISIONS.md` | Decision log по `technology_watch` | Рабочая версия |

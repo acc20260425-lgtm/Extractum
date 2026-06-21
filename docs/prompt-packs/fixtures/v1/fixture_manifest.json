@@ -248,6 +248,15 @@
       "required": true
     },
     {
+      "fixture_id": "prompt_template__valid__telegram_summary_pack_data_generation",
+      "validation_mode": "prompt_template",
+      "fixture_path": "prompt-template/valid/prompt_template__valid__telegram_summary_pack_data_generation.fixture.json",
+      "expected_findings_path": "expected-findings/prompt-template/prompt_template__valid__telegram_summary_pack_data_generation.expected.json",
+      "expected_error_count": 0,
+      "expected_warning_count": 0,
+      "required": true
+    },
+    {
       "fixture_id": "prompt_template__invalid__assigns_canonical_ids",
       "validation_mode": "prompt_template",
       "fixture_path": "prompt-template/invalid/prompt_template__invalid__assigns_canonical_ids.fixture.json",

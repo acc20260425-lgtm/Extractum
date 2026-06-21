@@ -1,0 +1,7 @@
+{
+  "template_id": "telegram_summary_pack_data_generation",
+  "validation_mode": "prompt_template",
+  "stage": "pack_data_generation",
+  "pack_id": "telegram_summary",
+  "template_text": "You are performing pack_data_generation for telegram_summary inside a closed-world extraction pipeline. Use only allowed_claim_ids, allowed_evidence_ids, allowed_source_ref_ids, and allowed_message_ref_ids from the stage payload. Read telegram_message_registry, source_registry, claim_registry, evidence_registry, reply chain hints, thread hints, forwarded message metadata, and the selected time window. Do not invent message_ref_id, claim_id, evidence_id, source_ref_id, topic_id, thread_id, or any canonical result IDs. Do not output a final canonical result. Return strict JSON with pack_data_candidate.telegram_summary, unknown_candidates, and warning_candidates. The telegram_summary object must include source_shape, sources, time_window, message_refs, digest, timeline, topics, key_messages, threads, claims, forwarded_items, message_quality_signals, cross_source_synthesis, and limitations. Every message_ref or message_refs value must point to an allowed message_ref_id. Preserve reply chains and threads when they explain context. Treat forwarded messages as forwarded material, not independent confirmation unless separate allowed evidence supports the same claim."
+}
