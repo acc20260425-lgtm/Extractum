@@ -1874,10 +1874,27 @@ Expected: final commit contains only plan checkbox and verification-note updates
 
 ### Task 11: Verification And Notes
 
-- [ ] **Step 1: Run `npm.cmd run test:gemini-browser-sidecar`**
-- [ ] **Step 2: Run `cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-provider-ux --lib gemini_browser`**
-- [ ] **Step 3: Run `npm.cmd run test -- src/lib/gemini-browser-provider-panel.test.ts src/lib/api/gemini-browser.test.ts`**
-- [ ] **Step 4: Run `npm.cmd run check`**
-- [ ] **Step 5: Run `npm.cmd run build:gemini-browser-sidecar`**
-- [ ] **Step 6: Record observed manual UX validation**
-- [ ] **Step 7: Commit verification notes**
+- [x] **Step 1: Run `npm.cmd run test:gemini-browser-sidecar`**
+- [x] **Step 2: Run `cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-provider-ux --lib gemini_browser`**
+- [x] **Step 3: Run `npm.cmd run test -- src/lib/gemini-browser-provider-panel.test.ts src/lib/api/gemini-browser.test.ts`**
+- [x] **Step 4: Run `npm.cmd run check`**
+- [x] **Step 5: Run `npm.cmd run build:gemini-browser-sidecar`**
+- [x] **Step 6: Record observed manual UX validation**
+- [x] **Step 7: Commit verification notes**
+
+## Env-Free Browser Provider UX Verification Notes
+
+- Sidecar verification: `npm.cmd run test:gemini-browser-sidecar` exited 0.
+  TypeScript sidecar typecheck passed; Vitest reported 4 files / 32 tests
+  passed; `tsc -p sidecars/gemini-browser/tsconfig.build.json` completed.
+- Rust verification: `cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-provider-ux --lib gemini_browser`
+  exited 0 with 19 tests passed.
+- Frontend verification: `npm.cmd run test -- src/lib/gemini-browser-provider-panel.test.ts src/lib/api/gemini-browser.test.ts`
+  exited 0 with 2 files / 8 tests passed.
+- Svelte verification: `npm.cmd run check` exited 0 and reported
+  `svelte-check found 0 errors and 0 warnings`.
+- Sidecar binary build: `npm.cmd run build:gemini-browser-sidecar` exited 0
+  and wrote `src-tauri\binaries\gemini-browser-sidecar-x86_64-pc-windows-msvc.exe`.
+- Manual UX validation: not run in this automated pass. It requires restarting
+  the Tauri UI on this branch, selecting `Attach Chrome` in Settings, and
+  retrying `Resume` against an already-started local Chrome CDP endpoint.
