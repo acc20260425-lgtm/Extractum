@@ -42,4 +42,11 @@ describe("gemini browser provider panel copy contract", () => {
     expect(componentSource).toContain("geminiBridgeResume(browserConfig())");
     expect(componentSource).toContain("browserConfig: browserConfig()");
   });
+
+  it("recovers slow prompt results from the refreshed run log", () => {
+    expect(componentSource).toContain("runResultForActivePrompt");
+    expect(componentSource).toContain("let activeTestRunId");
+    expect(componentSource).toContain("activeTestRunId = runId;");
+    expect(componentSource).toContain("syncActivePromptResult(log.runs)");
+  });
 });

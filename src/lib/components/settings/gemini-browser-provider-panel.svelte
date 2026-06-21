@@ -13,6 +13,7 @@
   } from "$lib/api/gemini-browser";
   import { formatAppError } from "$lib/app-error";
   import { statusLabel } from "$lib/gemini-browser-provider-panel-contract";
+  import { runResultForActivePrompt } from "$lib/gemini-browser-provider-panel-state";
   import type {
     GeminiBrowserProviderConfig,
     GeminiBrowserProviderMode,
@@ -31,6 +32,7 @@
   let busy = $state(false);
   let message = $state("");
   let result = $state<GeminiBrowserRunResult | null>(null);
+  let activeTestRunId = $state<string | null>(null);
   let browserProviderMode = $state<GeminiBrowserProviderMode>("managed");
   let cdpEndpoint = $state(DEFAULT_CDP_ENDPOINT);
 
@@ -78,6 +80,14 @@
     persistBrowserProviderConfig();
   }
 
+  function syncActivePromptResult(nextRuns: GeminiBrowserRun[]) {
+    const completedResult = runResultForActivePrompt(nextRuns, activeTestRunId);
+    if (!completedResult) return;
+    result = completedResult;
+    activeTestRunId = null;
+    message = completedResult.message ?? completedResult.status;
+  }
+
   async function refresh() {
     try {
       const [nextStatus, log] = await Promise.all([
@@ -87,6 +97,7 @@
       status = nextStatus;
       runs = log.runs;
       message = nextStatus.latest_message ?? "";
+      syncActivePromptResult(log.runs);
     } catch (error) {
       message = formatAppError("loading Gemini browser provider", error);
     }
@@ -124,14 +135,17 @@
     }
     busy = true;
     result = null;
+    const runId = newRunId();
+    activeTestRunId = runId;
     try {
       result = await geminiBridgeSendSingle({
-        runId: newRunId(),
+        runId,
         prompt: prompt.trim(),
         source: "settings_test",
         artifactMode: "reduced",
         browserConfig: browserConfig(),
       });
+      activeTestRunId = null;
       message = result.message ?? result.status;
       await refresh();
     } catch (error) {
