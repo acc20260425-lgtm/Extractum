@@ -716,7 +716,7 @@ git commit -m "feat: add Gemini browser run history filters"
 **Files:**
 - Modify: `docs/browser-providers-llm-troubleshooting.md`
 
-- [ ] **Step 1: Document the new history workflow**
+- [x] **Step 1: Document the new history workflow**
 
 In `docs/browser-providers-llm-troubleshooting.md`, find the `## Inline Run Inspector` section. After the paragraph that starts with `The inspector shows status`, insert:
 
@@ -737,7 +737,7 @@ Clicking a history row drives the inline inspector. `Copy diagnostics` and
 the newest run.
 ```
 
-- [ ] **Step 2: Run final verification**
+- [x] **Step 2: Run final verification**
 
 Run:
 
@@ -753,7 +753,7 @@ Expected:
 - `svelte-check found 0 errors and 0 warnings`.
 - `git diff --check` exits 0.
 
-- [ ] **Step 3: Manual validation in running app**
+- [x] **Step 3: Manual validation in running app**
 
 With `npm.cmd run tauri dev` already running, validate manually:
 
@@ -772,7 +772,7 @@ Reply with one short sentence confirming the browser provider is connected.
 8. Select a visible run and click `Copy diagnostics`; confirm the copied diagnostics use the selected run ID.
 9. If the selected run has `artifact_run_dir_available: true`, click `Open run folder` and confirm the folder opens for that selected run.
 
-- [ ] **Step 4: Commit Task 3**
+- [x] **Step 4: Commit Task 3**
 
 Run:
 
@@ -785,12 +785,12 @@ git commit -m "docs: document Gemini run history workflow"
 
 ## Final Checklist
 
-- [ ] Helper tests cover row derivation, filters, selection preservation, and old DTO tolerance.
-- [ ] Source-contract tests cover filter labels, selectable rows, selected state, and inspector actions.
-- [ ] `Run inspector` uses the selected history run.
-- [ ] `Copy diagnostics` and `Open run folder` operate on the selected run.
-- [ ] Partial-risk runs are visibly flagged.
-- [ ] History rows do not render full answer text, raw artifact paths, or copied diagnostics.
-- [ ] `npm.cmd run test -- --run src/lib/gemini-browser-run-inspector.test.ts src/lib/gemini-browser-provider-panel.test.ts` passes.
-- [ ] `npm.cmd run check` passes.
-- [ ] `git diff --check` passes.
+- [x] Helper tests cover row derivation, filters, selection preservation, and old DTO tolerance.
+- [x] Source-contract tests cover filter labels, selectable rows, selected state, and inspector actions.
+- [x] `Run inspector` uses the selected history run.
+- [x] `Copy diagnostics` and `Open run folder` operate on the selected run.
+- [x] Partial-risk runs are visibly flagged.
+- [x] History rows do not render full answer text, raw artifact paths, or copied diagnostics.
+- [x] `npm.cmd run test -- --run src/lib/gemini-browser-run-inspector.test.ts src/lib/gemini-browser-provider-panel.test.ts` passes.
+- [x] `npm.cmd run check` passes.
+- [x] `git diff --check` passes.

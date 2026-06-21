@@ -166,6 +166,21 @@ length, answer completion reason, artifact availability, manual action, and
 sanitized message text plus sidecar `debug_summary` facts such as
 composer/send/answer selection and wait durations.
 
+The `Run history` list below the inspector is the first place to compare
+multiple attempts. Use the filters before opening artifact folders:
+
+- `Problems` shows failed, blocked, timeout, browser-crashed, manual-action,
+  login, and partial-risk runs.
+- `Partial risk` isolates `ok + timeout_latest` results that should not be fed
+  into prompt-pack automation as normal completions.
+- `Manual action` isolates runs that need login, account selection, Chrome CDP
+  setup, consent, CAPTCHA, or another operator step.
+- `Failed` isolates failed, timeout, blocked, and browser-crashed runs.
+
+Clicking a history row drives the inline inspector. `Copy diagnostics` and
+`Open run folder` always operate on the selected history run, not necessarily
+the newest run.
+
 `Copy diagnostics` intentionally omits full local artifact paths, URL query/hash
 data, email-like account hints, prompt text, answer text, raw DOM, screenshots,
 cookies, and account identifiers. It also truncates overlong messages. It is
