@@ -58,7 +58,7 @@ git switch -c gemini-browser-setup-status-ux
 - Create: `src/lib/gemini-browser-setup-status.ts`
 - Create: `src/lib/gemini-browser-setup-status.test.ts`
 
-- [ ] **Step 1: Add failing setup status helper tests**
+- [x] **Step 1: Add failing setup status helper tests**
 
 Create `src/lib/gemini-browser-setup-status.test.ts`:
 
@@ -340,7 +340,7 @@ describe("gemini browser setup status", () => {
 });
 ```
 
-- [ ] **Step 2: Run helper tests and verify they fail**
+- [x] **Step 2: Run helper tests and verify they fail**
 
 Run:
 
@@ -350,7 +350,7 @@ npm.cmd run test -- --run src/lib/gemini-browser-setup-status.test.ts
 
 Expected: FAIL because `src/lib/gemini-browser-setup-status.ts` does not exist.
 
-- [ ] **Step 3: Implement the setup status helper**
+- [x] **Step 3: Implement the setup status helper**
 
 Create `src/lib/gemini-browser-setup-status.ts`:
 
@@ -767,7 +767,7 @@ function isLocalHttpCdpEndpoint(value: string): boolean {
 }
 ```
 
-- [ ] **Step 4: Run helper tests and verify they pass**
+- [x] **Step 4: Run helper tests and verify they pass**
 
 Run:
 
@@ -777,7 +777,7 @@ npm.cmd run test -- --run src/lib/gemini-browser-setup-status.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Mark Task 1 complete and commit**
+- [x] **Step 5: Mark Task 1 complete and commit**
 
 Update this task's checkboxes to `[x]`, then run:
 
