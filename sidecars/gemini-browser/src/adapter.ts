@@ -315,7 +315,12 @@ export class GeminiBrowserAdapter {
       const send = await waitForFirstVisible(
         page,
         sendCandidates.map((candidate) => candidate.selector),
-        { timeoutMs: 10_000, intervalMs: 250 },
+        {
+          timeoutMs: 75_000,
+          intervalMs: 250,
+          keepWaitingWhileVisible: generationBusySelectors,
+          idleGraceMs: 10_000,
+        },
       );
       if (!send) {
         return this.failure(
@@ -428,11 +433,18 @@ function emptyArtifacts(artifactDir: string): GeminiBrowserRunResult["artifacts"
 export async function waitForFirstVisible(
   page: Pick<Page, "locator" | "waitForTimeout">,
   selectors: string[],
-  options: { timeoutMs?: number; intervalMs?: number } = {},
+  options: {
+    timeoutMs?: number;
+    intervalMs?: number;
+    keepWaitingWhileVisible?: string[];
+    idleGraceMs?: number;
+  } = {},
 ): Promise<Locator | null> {
   const timeoutMs = options.timeoutMs ?? 20_000;
   const intervalMs = options.intervalMs ?? 250;
+  const idleGraceMs = options.idleGraceMs ?? timeoutMs;
   const maxAttempts = Math.max(1, Math.ceil(timeoutMs / Math.max(intervalMs, 1)) + 1);
+  let idleElapsedMs = 0;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     for (const selector of selectors) {
@@ -445,6 +457,15 @@ export async function waitForFirstVisible(
         }
       }
     }
+    const shouldKeepWaiting =
+      options.keepWaitingWhileVisible &&
+      (await hasVisibleLocator(page, options.keepWaitingWhileVisible));
+    if (!shouldKeepWaiting) {
+      idleElapsedMs += intervalMs;
+      if (idleElapsedMs >= idleGraceMs) {
+        return null;
+      }
+    }
     if (attempt < maxAttempts - 1) {
       await page.waitForTimeout(intervalMs);
     }
@@ -455,6 +476,26 @@ export async function waitForFirstVisible(
 const ANSWER_TIMEOUT_MS = 60_000;
 const ANSWER_POLL_INTERVAL_MS = 500;
 const ANSWER_STABLE_MS = 8_000;
+const generationBusySelectors = [
+  "button[aria-label*='Stop generating' i]",
+  "button[aria-label*='Останов' i]",
+];
+
+async function hasVisibleLocator(
+  page: Pick<Page, "locator">,
+  selectors: string[],
+): Promise<boolean> {
+  for (const selector of selectors) {
+    const locator = page.locator(selector);
+    const count = await locator.count().catch(() => 0);
+    for (let index = count - 1; index >= 0; index -= 1) {
+      if (await locator.nth(index).isVisible().catch(() => false)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 interface AnswerState {
   texts: string[];

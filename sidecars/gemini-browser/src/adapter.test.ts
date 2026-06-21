@@ -502,4 +502,78 @@ describe("production Gemini DOM contract", () => {
       vi.useRealTimers();
     }
   });
+
+  it("waits for Gemini to finish a previous generation before sending", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-21T00:00:00Z"));
+    try {
+      const startedAt = Date.now();
+      const finalAnswer = "Теперь отвечаю на прошлый вопрос полностью.";
+      let submitted = false;
+      const composer = {
+        count: async () => 1,
+        nth: () => composer,
+        isVisible: async () => true,
+        fill: vi.fn(async () => undefined),
+      };
+      const send = {
+        count: async () => (Date.now() - startedAt >= 15_000 ? 1 : 0),
+        nth: () => send,
+        isVisible: async () => Date.now() - startedAt >= 15_000,
+        click: vi.fn(async () => {
+          submitted = true;
+        }),
+      };
+      const stopGenerating = {
+        count: async () => (Date.now() - startedAt < 15_000 ? 1 : 0),
+        nth: () => stopGenerating,
+        isVisible: async () => Date.now() - startedAt < 15_000,
+      };
+      const answer = {
+        count: async () => (submitted ? 1 : 0),
+        nth: () => answer,
+        isVisible: async () => true,
+        allTextContents: async () => (submitted ? [finalAnswer] : []),
+      };
+      const empty = {
+        count: async () => 0,
+        nth: () => empty,
+        isVisible: async () => false,
+        allTextContents: async () => [],
+      };
+      const page = {
+        isClosed: () => false,
+        locator: (selector: string) => {
+          if (selector === "rich-textarea textarea") return composer;
+          if (selector === "button[aria-label*='send' i]") return send;
+          if (selector === "button[aria-label*='Останов' i]") return stopGenerating;
+          if (selector === "message-content") return answer;
+          return empty;
+        },
+        waitForTimeout: async (ms: number) => {
+          vi.advanceTimersByTime(ms);
+        },
+      };
+      const adapter = new GeminiBrowserAdapter({ env: {} });
+      adapter.__setTestPage(page as never);
+
+      await expect(
+        adapter.sendSingle({
+          browserProfileDir: "C:/Extractum/gemini-browser/profile",
+          artifactDir: "artifacts/gemini-browser-adapter-test/run-4",
+          request: {
+            run_id: "run-4",
+            prompt: "ответь на прошлый вопрос",
+            source: "settings_test",
+            artifact_mode: "reduced",
+          },
+        }),
+      ).resolves.toMatchObject({
+        status: "ok",
+        text: finalAnswer,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
