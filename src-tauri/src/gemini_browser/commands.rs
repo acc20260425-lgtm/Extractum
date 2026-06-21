@@ -64,9 +64,9 @@ pub async fn gemini_bridge_start_cdp_chrome(
 }
 
 #[tauri::command]
-pub async fn gemini_bridge_send_single(
-    handle: AppHandle,
-    state: State<'_, GeminiBrowserState>,
+pub(crate) async fn send_single_prompt(
+    handle: &AppHandle,
+    state: &GeminiBrowserState,
     run_id: String,
     prompt: String,
     source: Option<String>,
@@ -84,7 +84,7 @@ pub async fn gemini_bridge_send_single(
         artifact_mode: artifact_mode.unwrap_or_else(|| "reduced".to_string()),
     };
 
-    let runs_root = runs_dir(&handle)?;
+    let runs_root = runs_dir(handle)?;
     create_queued_run(
         &runs_root,
         &request.run_id,
@@ -93,7 +93,7 @@ pub async fn gemini_bridge_send_single(
     )?;
     let queue_position = state.enqueue(request.clone()).await;
     emit_run_event(
-        &handle,
+        handle,
         GeminiBrowserRunEvent {
             run_id: request.run_id.clone(),
             status: GeminiBrowserRunStatus::Queued,
@@ -109,7 +109,7 @@ pub async fn gemini_bridge_send_single(
     let _token = state.start_run(next.run_id.clone()).await;
     mark_running(&runs_root, &next.run_id)?;
     emit_run_event(
-        &handle,
+        handle,
         GeminiBrowserRunEvent {
             run_id: next.run_id.clone(),
             status: GeminiBrowserRunStatus::Running,
@@ -118,12 +118,12 @@ pub async fn gemini_bridge_send_single(
         },
     );
 
-    let artifact_dir = path_string(&run_dir(&handle, &next.run_id)?);
+    let artifact_dir = path_string(&run_dir(handle, &next.run_id)?);
     let result = match sidecar::send_single(
-        &handle,
-        &state,
+        handle,
+        state,
         next.clone(),
-        path_string(&profile_dir(&handle)?),
+        path_string(&profile_dir(handle)?),
         artifact_dir,
         browser_config,
     )
@@ -135,7 +135,7 @@ pub async fn gemini_bridge_send_single(
     finish_run(&runs_root, &next.run_id, result.clone())?;
     state.finish_run(&next.run_id).await;
     emit_run_event(
-        &handle,
+        handle,
         GeminiBrowserRunEvent {
             run_id: next.run_id,
             status: result.status.clone(),
@@ -144,6 +144,28 @@ pub async fn gemini_bridge_send_single(
         },
     );
     Ok(result)
+}
+
+#[tauri::command]
+pub async fn gemini_bridge_send_single(
+    handle: AppHandle,
+    state: State<'_, GeminiBrowserState>,
+    run_id: String,
+    prompt: String,
+    source: Option<String>,
+    artifact_mode: Option<String>,
+    browser_config: Option<GeminiBrowserProviderConfig>,
+) -> AppResult<GeminiBrowserRunResult> {
+    send_single_prompt(
+        &handle,
+        &state,
+        run_id,
+        prompt,
+        source,
+        artifact_mode,
+        browser_config,
+    )
+    .await
 }
 
 #[tauri::command]

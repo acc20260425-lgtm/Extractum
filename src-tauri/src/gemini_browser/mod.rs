@@ -12,6 +12,7 @@ pub use commands::{
     gemini_bridge_resume, gemini_bridge_send_single, gemini_bridge_start_cdp_chrome,
     gemini_bridge_status, gemini_bridge_stop,
 };
+pub(crate) use commands::send_single_prompt;
 pub(crate) use paths::{chrome_cdp_profile_dir, path_string, profile_dir, run_dir, runs_dir};
 pub(crate) use run_log::{
     create_queued_run, finish_run, list_runs, mark_running, recorded_run_dir,
