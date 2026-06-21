@@ -11,6 +11,20 @@ describe("CDP endpoint validation", () => {
     expect(resolveBrowserMode({})).toEqual({ type: "managed" });
   });
 
+  it("uses command browser config before env fallback", () => {
+    expect(
+      resolveBrowserMode(
+        { EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT: "http://127.0.0.1:9222" },
+        { mode: "managed", cdp_endpoint: null },
+      ),
+    ).toEqual({ type: "managed" });
+
+    expect(resolveBrowserMode({}, { mode: "cdp_attach", cdp_endpoint: null })).toEqual({
+      type: "cdp_attach",
+      rawEndpoint: "http://127.0.0.1:9222",
+    });
+  });
+
   it("keeps the configured CDP endpoint as raw operator input", () => {
     expect(
       resolveBrowserMode({

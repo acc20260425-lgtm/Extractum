@@ -15,9 +15,10 @@ use super::sidecar_launch::{
     resolve_launch_mode, GeminiBrowserBuildProfile, GeminiBrowserSidecarLaunch,
 };
 use super::{
-    GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind, GeminiBrowserRunRequest,
-    GeminiBrowserRunResult, GeminiBrowserRunStatus, GeminiBrowserSidecarCommand,
-    GeminiBrowserSidecarEnvelope, GeminiBrowserSidecarResponse, GeminiBrowserState,
+    GeminiBrowserProviderConfig, GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind,
+    GeminiBrowserRunRequest, GeminiBrowserRunResult, GeminiBrowserRunStatus,
+    GeminiBrowserSidecarCommand, GeminiBrowserSidecarEnvelope, GeminiBrowserSidecarResponse,
+    GeminiBrowserState,
 };
 
 #[derive(Deserialize)]
@@ -303,6 +304,7 @@ pub(crate) async fn status(
     handle: &AppHandle,
     state: &GeminiBrowserState,
     browser_profile_dir: String,
+    browser_config: Option<GeminiBrowserProviderConfig>,
     active_run_id: Option<String>,
     queue_depth: usize,
 ) -> AppResult<GeminiBrowserProviderStatus> {
@@ -311,6 +313,7 @@ pub(crate) async fn status(
         state,
         GeminiBrowserSidecarCommand::Status {
             browser_profile_dir: browser_profile_dir.clone(),
+            browser_config,
         },
     )
     .await
@@ -338,12 +341,14 @@ pub(crate) async fn open_browser(
     handle: &AppHandle,
     state: &GeminiBrowserState,
     browser_profile_dir: String,
+    browser_config: Option<GeminiBrowserProviderConfig>,
 ) -> AppResult<GeminiBrowserProviderStatus> {
     match request_sidecar(
         handle,
         state,
         GeminiBrowserSidecarCommand::OpenBrowser {
             browser_profile_dir,
+            browser_config,
         },
     )
     .await?
@@ -359,6 +364,7 @@ pub(crate) async fn resume(
     handle: &AppHandle,
     state: &GeminiBrowserState,
     browser_profile_dir: String,
+    browser_config: Option<GeminiBrowserProviderConfig>,
 ) -> AppResult<GeminiBrowserProviderStatus> {
     let first_response = request_sidecar(
         handle,
@@ -366,6 +372,7 @@ pub(crate) async fn resume(
         GeminiBrowserSidecarCommand::Resume {
             run_id: None,
             browser_profile_dir: browser_profile_dir.clone(),
+            browser_config: browser_config.clone(),
         },
     )
     .await?;
@@ -380,6 +387,7 @@ pub(crate) async fn resume(
                 GeminiBrowserSidecarCommand::Resume {
                     run_id: None,
                     browser_profile_dir,
+                    browser_config,
                 },
             )
             .await?;
@@ -412,6 +420,7 @@ pub(crate) async fn send_single(
     request: GeminiBrowserRunRequest,
     browser_profile_dir: String,
     artifact_dir: String,
+    browser_config: Option<GeminiBrowserProviderConfig>,
 ) -> AppResult<GeminiBrowserRunResult> {
     match request_sidecar(
         handle,
@@ -420,6 +429,7 @@ pub(crate) async fn send_single(
             request,
             browser_profile_dir,
             artifact_dir,
+            browser_config,
         },
     )
     .await?

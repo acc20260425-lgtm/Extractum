@@ -47,14 +47,14 @@ if (process.argv.includes("--playwright-smoke")) {
       if (command.type === "status") {
         writeResponse(id, {
           type: "status",
-          status: await adapter.status(command.browser_profile_dir),
+          status: await adapter.status(command.browser_profile_dir, command.browser_config),
         });
         return;
       }
       if (command.type === "open_browser") {
         writeResponse(id, {
           type: "status",
-          status: await adapter.openBrowser(command.browser_profile_dir),
+          status: await adapter.openBrowser(command.browser_profile_dir, command.browser_config),
         });
         return;
       }
@@ -65,6 +65,7 @@ if (process.argv.includes("--playwright-smoke")) {
             request: command.request,
             browserProfileDir: command.browser_profile_dir,
             artifactDir: command.artifact_dir,
+            browserConfig: command.browser_config,
           }),
         });
         return;
@@ -72,7 +73,7 @@ if (process.argv.includes("--playwright-smoke")) {
       if (command.type === "resume") {
         writeResponse(id, {
           type: "status",
-          status: await adapter.resumeBrowser(command.browser_profile_dir),
+          status: await adapter.resumeBrowser(command.browser_profile_dir, command.browser_config),
         });
         return;
       }

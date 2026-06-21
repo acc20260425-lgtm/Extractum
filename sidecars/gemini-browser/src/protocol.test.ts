@@ -47,4 +47,30 @@ describe("gemini browser sidecar protocol", () => {
     if (command.type !== "resume") throw new Error("expected resume command");
     expect(command.browser_profile_dir).toBe("C:/Extractum/gemini-browser/profile");
   });
+
+  it("parses provider browser config on status commands", () => {
+    const statusCommand: SidecarCommand = {
+      type: "status",
+      browser_profile_dir: "C:/Extractum/gemini-browser/profile",
+      browser_config: {
+        mode: "cdp_attach",
+        cdp_endpoint: "http://127.0.0.1:9222",
+      },
+    };
+
+    const envelope = parseEnvelope(
+      JSON.stringify({
+        id: "cmd-status",
+        command: statusCommand,
+      }),
+    );
+
+    const command = envelope.command;
+    expect(command.type).toBe("status");
+    if (command.type !== "status") throw new Error("expected status command");
+    expect(command.browser_config).toEqual({
+      mode: "cdp_attach",
+      cdp_endpoint: "http://127.0.0.1:9222",
+    });
+  });
 });

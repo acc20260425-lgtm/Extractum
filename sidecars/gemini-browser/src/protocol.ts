@@ -50,16 +50,37 @@ export interface GeminiBrowserProviderStatus {
   latest_message: string | null;
 }
 
+export type GeminiBrowserProviderMode = "managed" | "cdp_attach";
+
+export interface GeminiBrowserProviderConfig {
+  mode: GeminiBrowserProviderMode;
+  cdp_endpoint?: string | null;
+}
+
 export type SidecarCommand =
-  | { type: "status"; browser_profile_dir: string }
-  | { type: "open_browser"; browser_profile_dir: string }
+  | {
+      type: "status";
+      browser_profile_dir: string;
+      browser_config?: GeminiBrowserProviderConfig | null;
+    }
+  | {
+      type: "open_browser";
+      browser_profile_dir: string;
+      browser_config?: GeminiBrowserProviderConfig | null;
+    }
   | {
       type: "send_single";
       request: GeminiBrowserRunRequest;
       browser_profile_dir: string;
       artifact_dir: string;
+      browser_config?: GeminiBrowserProviderConfig | null;
     }
-  | { type: "resume"; run_id: string | null; browser_profile_dir: string }
+  | {
+      type: "resume";
+      run_id: string | null;
+      browser_profile_dir: string;
+      browser_config?: GeminiBrowserProviderConfig | null;
+    }
   | { type: "stop" };
 
 export interface SidecarEnvelope {

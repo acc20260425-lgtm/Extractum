@@ -24,6 +24,20 @@ pub enum GeminiBrowserManualAction {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GeminiBrowserProviderMode {
+    Managed,
+    CdpAttach,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeminiBrowserProviderConfig {
+    pub mode: GeminiBrowserProviderMode,
+    #[serde(alias = "cdpEndpoint")]
+    pub cdp_endpoint: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeminiBrowserProviderStatus {
     pub status: GeminiBrowserProviderStatusKind,
     pub manual_action: Option<GeminiBrowserManualAction>,
@@ -127,18 +141,22 @@ pub struct GeminiBrowserRunEvent {
 pub enum GeminiBrowserSidecarCommand {
     Status {
         browser_profile_dir: String,
+        browser_config: Option<GeminiBrowserProviderConfig>,
     },
     OpenBrowser {
         browser_profile_dir: String,
+        browser_config: Option<GeminiBrowserProviderConfig>,
     },
     SendSingle {
         request: GeminiBrowserRunRequest,
         browser_profile_dir: String,
         artifact_dir: String,
+        browser_config: Option<GeminiBrowserProviderConfig>,
     },
     Resume {
         run_id: Option<String>,
         browser_profile_dir: String,
+        browser_config: Option<GeminiBrowserProviderConfig>,
     },
     Stop,
 }
@@ -177,6 +195,7 @@ mod tests {
             id: "cmd-1".to_string(),
             command: GeminiBrowserSidecarCommand::OpenBrowser {
                 browser_profile_dir: "C:/Extractum/gemini-browser/profile".to_string(),
+                browser_config: None,
             },
         };
 
@@ -203,6 +222,7 @@ mod tests {
             command: GeminiBrowserSidecarCommand::Resume {
                 run_id: None,
                 browser_profile_dir: "C:/Extractum/gemini-browser/profile".to_string(),
+                browser_config: None,
             },
         };
 
@@ -213,6 +233,28 @@ mod tests {
         assert_eq!(
             json["command"]["browser_profile_dir"],
             "C:/Extractum/gemini-browser/profile"
+        );
+    }
+
+    #[test]
+    fn sidecar_command_serializes_browser_config() {
+        let command = GeminiBrowserSidecarEnvelope {
+            id: "cmd-status".to_string(),
+            command: GeminiBrowserSidecarCommand::Status {
+                browser_profile_dir: "C:/Extractum/gemini-browser/profile".to_string(),
+                browser_config: Some(GeminiBrowserProviderConfig {
+                    mode: GeminiBrowserProviderMode::CdpAttach,
+                    cdp_endpoint: Some("http://127.0.0.1:9222".to_string()),
+                }),
+            },
+        };
+
+        let json = serde_json::to_value(command).expect("serialize command");
+        assert_eq!(json["command"]["type"], "status");
+        assert_eq!(json["command"]["browser_config"]["mode"], "cdp_attach");
+        assert_eq!(
+            json["command"]["browser_config"]["cdp_endpoint"],
+            "http://127.0.0.1:9222"
         );
     }
 }

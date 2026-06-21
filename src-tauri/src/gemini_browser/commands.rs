@@ -4,9 +4,9 @@ use crate::error::{AppError, AppResult};
 
 use super::{
     create_queued_run, finish_run, list_runs, mark_running, path_string, profile_dir, run_dir,
-    runs_dir, sidecar, GeminiBrowserProviderStatus, GeminiBrowserRunEvent,
-    GeminiBrowserRunLogSummary, GeminiBrowserRunRequest, GeminiBrowserRunResult,
-    GeminiBrowserRunStatus, GeminiBrowserState,
+    runs_dir, sidecar, GeminiBrowserProviderConfig, GeminiBrowserProviderStatus,
+    GeminiBrowserRunEvent, GeminiBrowserRunLogSummary, GeminiBrowserRunRequest,
+    GeminiBrowserRunResult, GeminiBrowserRunStatus, GeminiBrowserState,
 };
 
 pub const GEMINI_BROWSER_RUN_EVENT: &str = "gemini-browser://run";
@@ -19,11 +19,13 @@ fn emit_run_event(handle: &AppHandle, event: GeminiBrowserRunEvent) {
 pub async fn gemini_bridge_status(
     handle: AppHandle,
     state: State<'_, GeminiBrowserState>,
+    browser_config: Option<GeminiBrowserProviderConfig>,
 ) -> AppResult<GeminiBrowserProviderStatus> {
     sidecar::status(
         &handle,
         &state,
         path_string(&profile_dir(&handle)?),
+        browser_config,
         state.active_run_id().await,
         state.queue_depth().await,
     )
@@ -34,8 +36,15 @@ pub async fn gemini_bridge_status(
 pub async fn gemini_bridge_open_browser(
     handle: AppHandle,
     state: State<'_, GeminiBrowserState>,
+    browser_config: Option<GeminiBrowserProviderConfig>,
 ) -> AppResult<GeminiBrowserProviderStatus> {
-    sidecar::open_browser(&handle, &state, path_string(&profile_dir(&handle)?)).await
+    sidecar::open_browser(
+        &handle,
+        &state,
+        path_string(&profile_dir(&handle)?),
+        browser_config,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -46,6 +55,7 @@ pub async fn gemini_bridge_send_single(
     prompt: String,
     source: Option<String>,
     artifact_mode: Option<String>,
+    browser_config: Option<GeminiBrowserProviderConfig>,
 ) -> AppResult<GeminiBrowserRunResult> {
     let prompt = prompt.trim().to_string();
     if prompt.is_empty() {
@@ -59,7 +69,12 @@ pub async fn gemini_bridge_send_single(
     };
 
     let runs_root = runs_dir(&handle)?;
-    create_queued_run(&runs_root, &request.run_id, &request.source, &request.prompt)?;
+    create_queued_run(
+        &runs_root,
+        &request.run_id,
+        &request.source,
+        &request.prompt,
+    )?;
     let queue_position = state.enqueue(request.clone()).await;
     emit_run_event(
         &handle,
@@ -94,6 +109,7 @@ pub async fn gemini_bridge_send_single(
         next.clone(),
         path_string(&profile_dir(&handle)?),
         artifact_dir,
+        browser_config,
     )
     .await
     {
@@ -118,8 +134,15 @@ pub async fn gemini_bridge_send_single(
 pub async fn gemini_bridge_resume(
     handle: AppHandle,
     state: State<'_, GeminiBrowserState>,
+    browser_config: Option<GeminiBrowserProviderConfig>,
 ) -> AppResult<GeminiBrowserProviderStatus> {
-    sidecar::resume(&handle, &state, path_string(&profile_dir(&handle)?)).await
+    sidecar::resume(
+        &handle,
+        &state,
+        path_string(&profile_dir(&handle)?),
+        browser_config,
+    )
+    .await
 }
 
 #[tauri::command]

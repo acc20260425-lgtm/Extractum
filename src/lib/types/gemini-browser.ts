@@ -15,6 +15,13 @@ export type GeminiBrowserManualAction =
   | "unknown_modal"
   | "start_chrome_cdp";
 
+export type GeminiBrowserProviderMode = "managed" | "cdp_attach";
+
+export interface GeminiBrowserProviderConfig {
+  mode: GeminiBrowserProviderMode;
+  cdpEndpoint?: string | null;
+}
+
 export interface GeminiBrowserProviderStatus {
   status: GeminiBrowserProviderStatusKind;
   manual_action: GeminiBrowserManualAction | null;
@@ -81,4 +88,5 @@ export interface GeminiBridgeSendSingleInput {
   prompt: string;
   source?: string | null;
   artifactMode?: "reduced" | "full" | null;
+  browserConfig?: GeminiBrowserProviderConfig | null;
 }

@@ -9,6 +9,7 @@ import {
   geminiBridgeStop,
   listenToGeminiBrowserRuns,
 } from "./gemini-browser";
+import type { GeminiBrowserProviderConfig } from "$lib/types/gemini-browser";
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const listenMock = vi.hoisted(() => vi.fn());
@@ -41,12 +42,32 @@ describe("gemini browser api wrappers", () => {
     expect(invokeMock).toHaveBeenLastCalledWith("gemini_bridge_stop");
   });
 
+  it("forwards browser provider config to provider commands", async () => {
+    const browserConfig: GeminiBrowserProviderConfig = {
+      mode: "cdp_attach",
+      cdpEndpoint: "http://127.0.0.1:9222",
+    };
+
+    await geminiBridgeStatus(browserConfig);
+    expect(invokeMock).toHaveBeenLastCalledWith("gemini_bridge_status", { browserConfig });
+
+    await geminiBridgeOpenBrowser(browserConfig);
+    expect(invokeMock).toHaveBeenLastCalledWith("gemini_bridge_open_browser", { browserConfig });
+
+    await geminiBridgeResume(browserConfig);
+    expect(invokeMock).toHaveBeenLastCalledWith("gemini_bridge_resume", { browserConfig });
+  });
+
   it("sends single prompt with camelCase frontend keys", async () => {
     await geminiBridgeSendSingle({
       runId: "run-1",
       prompt: "hello",
       source: "settings_test",
       artifactMode: "reduced",
+      browserConfig: {
+        mode: "cdp_attach",
+        cdpEndpoint: "http://127.0.0.1:9222",
+      },
     });
 
     expect(invokeMock).toHaveBeenLastCalledWith("gemini_bridge_send_single", {
@@ -54,6 +75,10 @@ describe("gemini browser api wrappers", () => {
       prompt: "hello",
       source: "settings_test",
       artifactMode: "reduced",
+      browserConfig: {
+        mode: "cdp_attach",
+        cdpEndpoint: "http://127.0.0.1:9222",
+      },
     });
   });
 

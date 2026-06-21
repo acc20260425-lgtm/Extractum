@@ -1,3 +1,5 @@
+import type { GeminiBrowserProviderConfig } from "./protocol.js";
+
 export type BrowserMode =
   | { type: "managed" }
   | { type: "cdp_attach"; rawEndpoint: string };
@@ -16,9 +18,19 @@ export type FetchLike = (
   init?: { signal?: AbortSignal },
 ) => Promise<FetchResponseLike>;
 
+export const DEFAULT_CDP_ENDPOINT = "http://127.0.0.1:9222";
+
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
-export function resolveBrowserMode(env: Record<string, string | undefined>): BrowserMode {
+export function resolveBrowserMode(
+  env: Record<string, string | undefined>,
+  config?: GeminiBrowserProviderConfig | null,
+): BrowserMode {
+  if (config) {
+    if (config.mode === "managed") return { type: "managed" };
+    return { type: "cdp_attach", rawEndpoint: config.cdp_endpoint?.trim() || DEFAULT_CDP_ENDPOINT };
+  }
+
   const raw = env.EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT?.trim();
   if (!raw) return { type: "managed" };
   return { type: "cdp_attach", rawEndpoint: raw };

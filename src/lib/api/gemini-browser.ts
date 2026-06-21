@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type Event, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   GeminiBridgeSendSingleInput,
+  GeminiBrowserProviderConfig,
   GeminiBrowserProviderStatus,
   GeminiBrowserRunEvent,
   GeminiBrowserRunLogSummary,
@@ -10,20 +11,23 @@ import type {
 
 export const GEMINI_BROWSER_RUN_EVENT = "gemini-browser://run";
 
-export function geminiBridgeStatus() {
-  return invoke<GeminiBrowserProviderStatus>("gemini_bridge_status");
+export function geminiBridgeStatus(browserConfig?: GeminiBrowserProviderConfig | null) {
+  if (!browserConfig) return invoke<GeminiBrowserProviderStatus>("gemini_bridge_status");
+  return invoke<GeminiBrowserProviderStatus>("gemini_bridge_status", { browserConfig });
 }
 
-export function geminiBridgeOpenBrowser() {
-  return invoke<GeminiBrowserProviderStatus>("gemini_bridge_open_browser");
+export function geminiBridgeOpenBrowser(browserConfig?: GeminiBrowserProviderConfig | null) {
+  if (!browserConfig) return invoke<GeminiBrowserProviderStatus>("gemini_bridge_open_browser");
+  return invoke<GeminiBrowserProviderStatus>("gemini_bridge_open_browser", { browserConfig });
 }
 
 export function geminiBridgeSendSingle(input: GeminiBridgeSendSingleInput) {
   return invoke<GeminiBrowserRunResult>("gemini_bridge_send_single", { ...input });
 }
 
-export function geminiBridgeResume() {
-  return invoke<GeminiBrowserProviderStatus>("gemini_bridge_resume");
+export function geminiBridgeResume(browserConfig?: GeminiBrowserProviderConfig | null) {
+  if (!browserConfig) return invoke<GeminiBrowserProviderStatus>("gemini_bridge_resume");
+  return invoke<GeminiBrowserProviderStatus>("gemini_bridge_resume", { browserConfig });
 }
 
 export function geminiBridgeStop() {

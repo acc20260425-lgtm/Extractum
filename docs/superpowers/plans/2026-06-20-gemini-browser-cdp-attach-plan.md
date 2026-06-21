@@ -1853,14 +1853,14 @@ Expected: final commit contains only plan checkbox and verification-note updates
 ### Task 9: Browser Config Protocol
 
 - [x] **Step 1: Create this follow-up plan section**
-- [ ] **Step 2: Add red tests for frontend API forwarding browser config**
-- [ ] **Step 3: Add red tests for Rust sidecar command serialization with browser config**
-- [ ] **Step 4: Add red tests for sidecar protocol and adapter mode resolution from command config**
-- [ ] **Step 5: Implement shared browser config types in TS and Rust**
-- [ ] **Step 6: Forward browser config through `status`, `open_browser`, `resume`, and `send_single` commands**
-- [ ] **Step 7: Update sidecar adapter to prefer command config over env fallback**
-- [ ] **Step 8: Run frontend, Rust, and sidecar tests**
-- [ ] **Step 9: Commit protocol/config plumbing**
+- [x] **Step 2: Add red tests for frontend API forwarding browser config**
+- [x] **Step 3: Add red tests for Rust sidecar command serialization with browser config**
+- [x] **Step 4: Add red tests for sidecar protocol and adapter mode resolution from command config**
+- [x] **Step 5: Implement shared browser config types in TS and Rust**
+- [x] **Step 6: Forward browser config through `status`, `open_browser`, `resume`, and `send_single` commands**
+- [x] **Step 7: Update sidecar adapter to prefer command config over env fallback**
+- [x] **Step 8: Run frontend, Rust, and sidecar tests**
+- [x] **Step 9: Commit protocol/config plumbing**
 
 ### Task 10: Settings UI Controls
 

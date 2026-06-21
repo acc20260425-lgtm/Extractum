@@ -7,6 +7,7 @@ import {
   type Page,
 } from "@playwright/test";
 import type {
+  GeminiBrowserProviderConfig,
   GeminiBrowserProviderStatus,
   GeminiBrowserRunRequest,
   GeminiBrowserRunResult,
@@ -62,7 +63,10 @@ export class GeminiBrowserAdapter {
     this.session = session;
   }
 
-  async status(browserProfileDir: string): Promise<GeminiBrowserProviderStatus> {
+  async status(
+    browserProfileDir: string,
+    browserConfig?: GeminiBrowserProviderConfig | null,
+  ): Promise<GeminiBrowserProviderStatus> {
     if (this.session?.type === "cdp_attach") {
       const page = this.session.page;
       if (page && !page.isClosed()) {
@@ -91,7 +95,7 @@ export class GeminiBrowserAdapter {
       });
     }
 
-    const mode = resolveBrowserMode(this.env);
+    const mode = resolveBrowserMode(this.env, browserConfig);
     if (mode.type === "cdp_attach") {
       const probe = await cdpSetupStatus(mode.rawEndpoint, this.fetchLike);
       if (!probe.ok) {
@@ -116,18 +120,24 @@ export class GeminiBrowserAdapter {
     });
   }
 
-  async openBrowser(browserProfileDir: string): Promise<GeminiBrowserProviderStatus> {
-    const mode = resolveBrowserMode(this.env);
+  async openBrowser(
+    browserProfileDir: string,
+    browserConfig?: GeminiBrowserProviderConfig | null,
+  ): Promise<GeminiBrowserProviderStatus> {
+    const mode = resolveBrowserMode(this.env, browserConfig);
     if (mode.type === "cdp_attach") {
-      return this.attachCdpBrowser(browserProfileDir, { createGeminiPage: true });
+      return this.attachCdpBrowser(browserProfileDir, { createGeminiPage: true, browserConfig });
     }
     return this.openManagedBrowser(browserProfileDir);
   }
 
-  async resumeBrowser(browserProfileDir: string): Promise<GeminiBrowserProviderStatus> {
-    const mode = resolveBrowserMode(this.env);
+  async resumeBrowser(
+    browserProfileDir: string,
+    browserConfig?: GeminiBrowserProviderConfig | null,
+  ): Promise<GeminiBrowserProviderStatus> {
+    const mode = resolveBrowserMode(this.env, browserConfig);
     if (mode.type === "cdp_attach") {
-      return this.attachCdpBrowser(browserProfileDir, { createGeminiPage: false });
+      return this.attachCdpBrowser(browserProfileDir, { createGeminiPage: false, browserConfig });
     }
     return this.openManagedBrowser(browserProfileDir);
   }
@@ -146,9 +156,9 @@ export class GeminiBrowserAdapter {
 
   private async attachCdpBrowser(
     browserProfileDir: string,
-    options: { createGeminiPage: boolean },
+    options: { createGeminiPage: boolean; browserConfig?: GeminiBrowserProviderConfig | null },
   ): Promise<GeminiBrowserProviderStatus> {
-    const mode = resolveBrowserMode(this.env);
+    const mode = resolveBrowserMode(this.env, options.browserConfig);
     if (mode.type !== "cdp_attach") {
       return this.openManagedBrowser(browserProfileDir);
     }
@@ -214,9 +224,10 @@ export class GeminiBrowserAdapter {
     request: GeminiBrowserRunRequest;
     browserProfileDir: string;
     artifactDir: string;
+    browserConfig?: GeminiBrowserProviderConfig | null;
   }): Promise<GeminiBrowserRunResult> {
     const start = Date.now();
-    const mode = resolveBrowserMode(this.env);
+    const mode = resolveBrowserMode(this.env, input.browserConfig);
     const hadClosedCdpPage =
       this.session?.type === "cdp_attach" && Boolean(this.session.page?.isClosed());
     if (hadClosedCdpPage) {
@@ -236,6 +247,7 @@ export class GeminiBrowserAdapter {
       if (mode.type === "cdp_attach") {
         attachStatus = await this.attachCdpBrowser(input.browserProfileDir, {
           createGeminiPage: false,
+          browserConfig: input.browserConfig,
         });
       } else {
         await this.openManagedBrowser(input.browserProfileDir);
