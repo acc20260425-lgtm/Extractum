@@ -9,17 +9,16 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
 use super::dto::{
-    PromptPackRunEvent, PromptPackRunSummaryDto, PromptPackRuntimeProvider,
-    PromptPackStageRunDto, StartYoutubeSummaryRunOutcomeDto,
+    PromptPackRunEvent, PromptPackRunSummaryDto, PromptPackRuntimeProvider, PromptPackStageRunDto,
+    StartYoutubeSummaryRunOutcomeDto,
 };
 use super::json_repair::JsonRepairStageExecutionRequest;
 use super::youtube_summary::{
     execute_youtube_summary_run_with_stage_executor, model_budget_for_runtime,
     preflight_youtube_summary_in_pool, start_youtube_summary_run_in_pool,
     LlmCompletion as PromptPackLlmCompletion, SynthesisStageExecutionRequest,
-    TranscriptAnalysisStageExecutionRequest,
-    YoutubeSummaryRunExecutionOutcome, YoutubeSummaryStageExecutionError,
-    YoutubeSummaryStageExecutionRequest,
+    TranscriptAnalysisStageExecutionRequest, YoutubeSummaryRunExecutionOutcome,
+    YoutubeSummaryStageExecutionError, YoutubeSummaryStageExecutionRequest,
 };
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
@@ -406,6 +405,59 @@ async fn load_run_llm_config(pool: &SqlitePool, run_id: i64) -> AppResult<RunLlm
         model_override,
     })
     .map_err(AppError::database)
+}
+
+fn llm_chat_request_to_browser_prompt(request: &LlmChatRequest) -> AppResult<String> {
+    let mut sections = Vec::with_capacity(request.messages.len());
+    for message in &request.messages {
+        let label = match message.role.as_str() {
+            "system" => "System",
+            "user" => "User",
+            other => {
+                return Err(AppError::validation(format!(
+                    "Unsupported Browser Provider prompt message role: {other}"
+                )));
+            }
+        };
+        sections.push(format!("{label}:\n{}", message.content));
+    }
+    let prompt = sections.join("\n\n");
+    if prompt.trim().is_empty() {
+        return Err(AppError::validation(
+            "Browser Provider prompt cannot be empty",
+        ));
+    }
+    Ok(prompt)
+}
+
+fn browser_run_id_for_stage(
+    run_id: i64,
+    stage_run_id: i64,
+    repair_attempt_number: Option<i64>,
+) -> String {
+    match repair_attempt_number {
+        Some(attempt_number) => {
+            format!("prompt-pack-{run_id}-stage-{stage_run_id}-repair-{attempt_number}")
+        }
+        None => format!("prompt-pack-{run_id}-stage-{stage_run_id}"),
+    }
+}
+
+fn browser_run_source_for_stage(run_id: i64, stage_run_id: i64, stage_name: &str) -> String {
+    format!("prompt_pack:youtube_summary:{stage_name}:run:{run_id}:stage:{stage_run_id}")
+}
+
+fn browser_stage_completion_from_result(
+    result: crate::gemini_browser::GeminiBrowserRunResult,
+) -> AppResult<PromptPackLlmCompletion> {
+    let latency_ms = result.elapsed_ms as i64;
+    let text = super::gemini_browser_stage::browser_result_to_completion_text(result)?;
+    Ok(PromptPackLlmCompletion {
+        text,
+        input_tokens: None,
+        output_tokens: None,
+        latency_ms,
+    })
 }
 
 async fn run_transcript_analysis_stage_request(
@@ -1499,17 +1551,18 @@ fn now_string() -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_synthesis_llm_request, build_transcript_analysis_llm_request,
-        cleanup_interrupted_prompt_pack_runs_in_pool,
+        browser_run_id_for_stage, browser_run_source_for_stage,
+        browser_stage_completion_from_result, build_synthesis_llm_request,
+        build_transcript_analysis_llm_request, cleanup_interrupted_prompt_pack_runs_in_pool,
         clear_prompt_pack_cancellation_smoke_fixture_in_pool, delete_prompt_pack_run_in_pool,
-        list_prompt_pack_runs_in_pool, now_string, run_with_prompt_pack_run_cancellation,
-        seed_prompt_pack_cancellation_smoke_fixture_in_pool,
+        list_prompt_pack_runs_in_pool, llm_chat_request_to_browser_prompt, now_string,
+        run_with_prompt_pack_run_cancellation, seed_prompt_pack_cancellation_smoke_fixture_in_pool,
         synthesis_stage_max_output_token_budget, transcript_analysis_max_output_tokens,
         transcript_analysis_stage_max_output_token_budget,
         transcript_analysis_stage_max_output_token_budget_for_control_preset,
         update_prompt_pack_run_in_pool, PromptPackRunState, DETAILED_REPORT_CONTROL_PRESET,
     };
-    use crate::llm::LlmRequestError;
+    use crate::llm::{LlmChatRequest, LlmMessage, LlmRequestError};
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::dto::{ListPromptPackRunsRequest, PromptPackRunEvent};
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
@@ -1656,6 +1709,92 @@ mod tests {
             .await;
 
         assert!(!state.active_run_ids().await.contains(&42));
+    }
+
+    #[test]
+    fn browser_prompt_formatter_preserves_role_order_and_content() {
+        let request = LlmChatRequest {
+            request_id: "req-browser-format".to_string(),
+            profile_id: None,
+            model_override: None,
+            max_output_tokens: None,
+            messages: vec![
+                LlmMessage {
+                    role: "system".to_string(),
+                    content: "Return strict JSON.".to_string(),
+                },
+                LlmMessage {
+                    role: "user".to_string(),
+                    content: "Analyze this transcript.".to_string(),
+                },
+                LlmMessage {
+                    role: "user".to_string(),
+                    content: "Use source_ref_1 only.".to_string(),
+                },
+            ],
+        };
+
+        let prompt = llm_chat_request_to_browser_prompt(&request).expect("format prompt");
+
+        assert_eq!(
+            prompt,
+            "System:\nReturn strict JSON.\n\nUser:\nAnalyze this transcript.\n\nUser:\nUse source_ref_1 only."
+        );
+    }
+
+    #[test]
+    fn browser_prompt_formatter_rejects_unsupported_roles() {
+        let request = LlmChatRequest {
+            request_id: "req-browser-format".to_string(),
+            profile_id: None,
+            model_override: None,
+            max_output_tokens: None,
+            messages: vec![LlmMessage {
+                role: "assistant".to_string(),
+                content: "previous answer".to_string(),
+            }],
+        };
+
+        let error = llm_chat_request_to_browser_prompt(&request).expect_err("unsupported role");
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+        assert!(error.message.contains("assistant"));
+    }
+
+    #[test]
+    fn browser_run_identity_includes_repair_attempt_when_present() {
+        assert_eq!(
+            browser_run_id_for_stage(42, 1001, None),
+            "prompt-pack-42-stage-1001"
+        );
+        assert_eq!(
+            browser_run_id_for_stage(42, 1001, Some(2)),
+            "prompt-pack-42-stage-1001-repair-2"
+        );
+        assert_eq!(
+            browser_run_source_for_stage(42, 1001, "youtube_summary/transcript_analysis"),
+            "prompt_pack:youtube_summary:youtube_summary/transcript_analysis:run:42:stage:1001"
+        );
+    }
+
+    #[test]
+    fn browser_stage_result_maps_to_prompt_pack_completion_without_tokens() {
+        let result = crate::gemini_browser::GeminiBrowserRunResult {
+            run_id: "prompt-pack-42-stage-1001".to_string(),
+            status: crate::gemini_browser::GeminiBrowserRunStatus::Ok,
+            text: Some("answer".to_string()),
+            message: None,
+            manual_action: None,
+            artifacts: crate::gemini_browser::GeminiBrowserArtifactRefs::default(),
+            elapsed_ms: 321,
+            debug_summary: None,
+        };
+
+        let completion = browser_stage_completion_from_result(result).expect("completion");
+
+        assert_eq!(completion.text, "answer");
+        assert_eq!(completion.input_tokens, None);
+        assert_eq!(completion.output_tokens, None);
+        assert_eq!(completion.latency_ms, 321);
     }
 
     #[tokio::test]
