@@ -17,6 +17,7 @@ function result(overrides: Partial<GeminiBrowserRunResult> = {}): GeminiBrowserR
       artifact_write_error: null,
     },
     elapsed_ms: 16_309,
+    debug_summary: null,
     ...overrides,
   };
 }

@@ -1281,7 +1281,7 @@ git commit -m "feat: expose Gemini browser run diagnostics data"
 - Create: `src/lib/gemini-browser-run-inspector.ts`
 - Create: `src/lib/gemini-browser-run-inspector.test.ts`
 
-- [ ] **Step 1: Add failing frontend view-model tests**
+- [x] **Step 1: Add failing frontend view-model tests**
 
 Create `src/lib/gemini-browser-run-inspector.test.ts`:
 
@@ -1413,7 +1413,7 @@ describe("gemini browser run inspector", () => {
 });
 ```
 
-- [ ] **Step 2: Run frontend tests to verify they fail**
+- [x] **Step 2: Run frontend tests to verify they fail**
 
 Run:
 
@@ -1423,7 +1423,7 @@ npm.cmd run test -- --run src/lib/gemini-browser-run-inspector.test.ts
 
 Expected: FAIL because `gemini-browser-run-inspector.ts` and frontend `debug_summary` types do not exist.
 
-- [ ] **Step 3: Add frontend debug summary types**
+- [x] **Step 3: Add frontend debug summary types**
 
 In `src/lib/types/gemini-browser.ts`, add:
 
@@ -1466,7 +1466,7 @@ Update local test factories in `src/lib/gemini-browser-provider-panel-state.test
 debug_summary: null,
 ```
 
-- [ ] **Step 4: Implement inspector view model**
+- [x] **Step 4: Implement inspector view model**
 
 Create `src/lib/gemini-browser-run-inspector.ts`:
 
@@ -1575,7 +1575,7 @@ export function copyableRunDiagnostics(run: GeminiBrowserRun): string {
 }
 ```
 
-- [ ] **Step 5: Run frontend view-model tests**
+- [x] **Step 5: Run frontend view-model tests**
 
 Run:
 
@@ -1585,7 +1585,7 @@ npm.cmd run test -- --run src/lib/gemini-browser-run-inspector.test.ts src/lib/g
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Task 3**
+- [x] **Step 6: Commit Task 3**
 
 Run:
 
