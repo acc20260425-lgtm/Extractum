@@ -504,7 +504,7 @@ export interface AnswerExtractionArtifactPayload {
 export class AnswerExtractionError extends Error {
   constructor(
     message: string,
-    readonly artifact: AnswerExtractionArtifactPayload | null,
+    readonly artifact: AnswerExtractionArtifactPayload,
     cause: unknown,
   ) {
     super(message, { cause });
@@ -526,7 +526,7 @@ Implementation requirements for the same file:
 - `signature` is internal and composed from selector, group id, group order, grouping mode, block count, block lengths, and total length.
 - `buildExtractionDebug(snapshot, returnedTextLength, completionReason, counters)` returns all fields in `GeminiBrowserAnswerExtractionDebug`.
 - internal helper `toAnswerExtractionArtifact(resultOrSnapshot)` returns `AnswerExtractionArtifactPayload` with lengths/score facts only. It does not need to be exported unless tests need direct unit coverage.
-- internal helper `emptyAnswerExtractionArtifact(completionReason)` returns a safe empty payload for extraction-started failures before the first usable snapshot. Use it when constructing `AnswerExtractionError` would otherwise have no payload.
+- internal helper `emptyAnswerExtractionArtifact(completionReason)` returns a safe empty payload for extraction-started failures before the first usable snapshot. `AnswerExtractionError.artifact` is always non-null; use this empty fallback when constructing `AnswerExtractionError` would otherwise have no payload.
 - `pollAnswerSnapshotsUntilComplete(options)` is the pure polling engine used by tests. It accepts `readSnapshot(elapsedMs)`, `now()`, `waitForTimeout(ms)`, `answerStableMs`, `answerTimeoutMs`, `pollIntervalMs`, `minStablePollsAfterSignatureChange`, and `isBusyVisible()`.
 - `pollAnswerUntilComplete(page, options)` implements:
   - a thin wrapper that calls `captureAnswerExtractionSnapshot()` and delegates to `pollAnswerSnapshotsUntilComplete()`;
@@ -992,12 +992,12 @@ const answer = await this.answerExtractor.pollUntilComplete(page, {
 debugSummary = {
   ...debugSummary,
   answer_found: Boolean(answer.text),
-  answer_selector: answer?.selector ?? null,
-  waited_for_answer_ms: answer?.waitedMs ?? MAX_ANSWER_TIMEOUT_MS,
+  answer_selector: answer.selector,
+  waited_for_answer_ms: answer.waitedMs,
   answer_stable_ms: ANSWER_STABLE_MS,
-  answer_completion_reason: answer?.completionReason ?? "missing",
-  final_text_length: answer?.text?.length ?? 0,
-  extraction: answer?.debug ?? null,
+  answer_completion_reason: answer.completionReason,
+  final_text_length: answer.text ? answer.text.length : 0,
+  extraction: answer.debug,
 };
 ```
 
@@ -1096,7 +1096,7 @@ function mergeArtifactWriteErrors(...errors: Array<string | null | undefined>): 
 
 If `answer.text` is null, return the existing timeout failure shape, but pass along `debugSummary.extraction` and the extraction artifact path/error in `artifacts`.
 
-For thrown failures or `browser_crashed` after extraction started, keep a local `latestExtractionArtifactPayload: AnswerExtractionArtifactPayload | null` in `sendSingle()`. Set it as soon as the extractor returns a payload. If the caught error is `AnswerExtractionError`, prefer `error.artifact` as the latest payload. In the catch branch, if a payload exists, call `this.writeAnswerExtractionArtifact(...)` before `failure(...)` and pass the returned `{ path, error }` into `failure(...)`. If no extraction payload exists because setup/composer/send failed before answer polling, keep `answer_extraction: null`.
+For thrown failures or `browser_crashed` after extraction started, keep a local `latestExtractionArtifactPayload: AnswerExtractionArtifactPayload | null` in `sendSingle()`. Set it as soon as the extractor returns a payload. If the caught error is `AnswerExtractionError`, use `error.artifact` as the latest payload; the extractor must provide `emptyAnswerExtractionArtifact("missing")` when it has no real snapshot yet. In the catch branch, if a payload exists, call `this.writeAnswerExtractionArtifact(...)` before `failure(...)` and pass the returned `{ path, error }` into `failure(...)`. If no extraction payload exists because setup/composer/send failed before answer polling, keep `answer_extraction: null`.
 
 - [ ] **Step 5: Remove old answer polling helpers**
 
@@ -1712,6 +1712,14 @@ Run:
 
 ```powershell
 npm.cmd run test:gemini-browser-sidecar
+```
+
+Expected: PASS.
+
+Run:
+
+```powershell
+npm.cmd run test -- --run sidecars/gemini-browser/src/answer-extractor.test.ts sidecars/gemini-browser/src/adapter.test.ts
 ```
 
 Expected: PASS.
