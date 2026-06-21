@@ -304,6 +304,43 @@ describe("Gemini answer extractor", () => {
       },
     });
   });
+
+  it("returns missing result instead of null when no answer candidate appears", async () => {
+    let now = 0;
+
+    await expect(
+      pollAnswerSnapshotsUntilComplete({
+        readSnapshot: async (elapsedMs) => ({
+          elapsed_ms: elapsedMs,
+          busy_visible: false,
+          raw_candidate_count: 0,
+          grouped_candidates: [],
+          rejected_candidates: [],
+          selected_candidate_id: null,
+          selected_candidate_signature: null,
+          selected_candidate: null,
+          selection_reason: null,
+        }),
+        answerTimeoutMs: 1_000,
+        answerStableMs: ANSWER_STABLE_MS,
+        pollIntervalMs: ANSWER_POLL_INTERVAL_MS,
+        minStablePollsAfterSignatureChange: 3,
+        isBusyVisible: async () => false,
+        now: () => now,
+        waitForTimeout: async (ms) => {
+          now += ms;
+        },
+      }),
+    ).resolves.toMatchObject({
+      text: null,
+      selector: null,
+      completionReason: "missing",
+      debug: {
+        raw_candidate_count: 0,
+        grouped_candidate_count: 0,
+      },
+    });
+  });
 });
 ```
 
@@ -467,10 +504,10 @@ export interface AnswerExtractionArtifactPayload {
 export class AnswerExtractionError extends Error {
   constructor(
     message: string,
-    readonly artifact: AnswerExtractionArtifactPayload,
-    readonly cause: unknown,
+    readonly artifact: AnswerExtractionArtifactPayload | null,
+    cause: unknown,
   ) {
-    super(message);
+    super(message, { cause });
   }
 }
 ```
@@ -489,6 +526,7 @@ Implementation requirements for the same file:
 - `signature` is internal and composed from selector, group id, group order, grouping mode, block count, block lengths, and total length.
 - `buildExtractionDebug(snapshot, returnedTextLength, completionReason, counters)` returns all fields in `GeminiBrowserAnswerExtractionDebug`.
 - internal helper `toAnswerExtractionArtifact(resultOrSnapshot)` returns `AnswerExtractionArtifactPayload` with lengths/score facts only. It does not need to be exported unless tests need direct unit coverage.
+- internal helper `emptyAnswerExtractionArtifact(completionReason)` returns a safe empty payload for extraction-started failures before the first usable snapshot. Use it when constructing `AnswerExtractionError` would otherwise have no payload.
 - `pollAnswerSnapshotsUntilComplete(options)` is the pure polling engine used by tests. It accepts `readSnapshot(elapsedMs)`, `now()`, `waitForTimeout(ms)`, `answerStableMs`, `answerTimeoutMs`, `pollIntervalMs`, `minStablePollsAfterSignatureChange`, and `isBusyVisible()`.
 - `pollAnswerUntilComplete(page, options)` implements:
   - a thin wrapper that calls `captureAnswerExtractionSnapshot()` and delegates to `pollAnswerSnapshotsUntilComplete()`;
@@ -496,8 +534,9 @@ Implementation requirements for the same file:
   - timeout at `MAX_ANSWER_TIMEOUT_MS` unless `answerTimeoutMs` is passed in tests;
   - `timeout_latest` when text exists but stability is not proven;
   - `missing` with `text: null` when no valid answer exists.
+  - never returns `null`; tests must assert the missing-answer case is an `AnswerExtractionResult` with `text: null`;
   - selector/evaluation errors that are not closed-target errors should be converted into `missing` with an artifact carrying rejection/error facts;
-  - closed-target or unexpected fatal extraction errors should throw `AnswerExtractionError` carrying the latest reduced artifact payload, so adapter catch paths can still write `answer-extraction.json`.
+  - closed-target or unexpected fatal extraction errors should throw `AnswerExtractionError` carrying the latest reduced artifact payload when available, or `emptyAnswerExtractionArtifact("missing")` when extraction failed before the first snapshot, so adapter catch paths can still write `answer-extraction.json`.
 
 - [ ] **Step 5: Run extractor tests**
 
@@ -1802,6 +1841,7 @@ git commit -m "docs: document Gemini extraction diagnostics"
 ## Final Completion Checklist
 
 - [ ] `npm.cmd run test:gemini-browser-sidecar` passes.
+- [ ] `npm.cmd run test -- --run sidecars/gemini-browser/src/answer-extractor.test.ts sidecars/gemini-browser/src/adapter.test.ts` passes.
 - [ ] `cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-browser --lib gemini_browser` passes.
 - [ ] `npm.cmd run test -- --run src/lib/gemini-browser-run-inspector.test.ts src/lib/gemini-browser-provider-panel.test.ts` passes.
 - [ ] `npm.cmd run check` passes.
