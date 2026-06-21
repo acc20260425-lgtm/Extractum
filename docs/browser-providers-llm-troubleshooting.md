@@ -33,6 +33,9 @@ Frontend:
 - `src/lib/api/gemini-browser.ts` wraps Tauri invokes.
 - `src/lib/types/gemini-browser.ts` defines frontend status, result, config, and manual-action types.
 - `src/lib/gemini-browser-provider-panel-contract.ts` maps statuses/actions to UI labels.
+- `src/lib/gemini-browser-run-inspector.ts` derives run history rows, filters,
+  selected-run behavior, artifact availability, partial-risk detection, and
+  copyable diagnostics.
 
 Tauri/Rust:
 
@@ -49,6 +52,9 @@ Sidecar:
 - `sidecars/gemini-browser/src/index.ts` is the JSONL process entrypoint.
 - `sidecars/gemini-browser/src/protocol.ts` is the sidecar protocol contract.
 - `sidecars/gemini-browser/src/adapter.ts` owns browser automation and run behavior.
+- `sidecars/gemini-browser/src/answer-extractor.ts` owns answer candidate
+  grouping, structural baseline filtering, stable/timeout completion semantics,
+  and reduced extraction diagnostics.
 - `sidecars/gemini-browser/src/dom-contract.ts` owns Gemini selector candidates.
 - `sidecars/gemini-browser/src/cdp-endpoint.ts` validates and probes CDP endpoints.
 - `sidecars/gemini-browser/src/cdp-pages.ts` selects existing Gemini pages and maps closed-target errors.
@@ -66,6 +72,39 @@ Research/design context:
 - `research/gemini_browser_adapter/DOM_CONTRACT_NOTES.md`
 - `research/gemini_browser_adapter/RESILIENCE_TEST_MATRIX.md`
 - `research/gemini_browser_adapter/TOOLS_AND_METHODS.md`
+
+## Current Implementation Status
+
+As of the 2026-06-21 repository audit, the Gemini Browser Provider is
+implemented as a Settings-panel provider for operator-driven tests and
+diagnostics.
+
+Implemented:
+
+- managed Playwright persistent-browser mode;
+- user-controlled Chrome CDP attach mode;
+- Settings UI for mode selection, CDP endpoint, `Start Chrome`, `Open`,
+  `Resume`, `Stop`, and one-off test prompts;
+- Rust/Tauri commands for status, open, start CDP Chrome, send single prompt,
+  resume, stop, list runs, and open a run folder;
+- JSONL sidecar protocol and bundled sidecar binary path;
+- file-backed run log with queued/running/final result records;
+- hardened answer extraction with `stable`, `timeout_latest`, and `missing`
+  completion reasons;
+- inline Run Inspector, sanitized `Copy diagnostics`, and filterable Run
+  History.
+
+Not implemented yet:
+
+- Browser Provider routing as a normal prompt-pack runtime execution provider.
+  The prompt-pack layer currently has only the result-to-completion guard that
+  rejects `ok + timeout_latest`; it does not yet call `gemini_bridge_send_single`
+  for real stage execution.
+- Retry, re-run, cancel, or queued multi-run controls in the operator UI.
+- A full setup/status checklist for Chrome reachable, Gemini tab found,
+  composer found, login readiness, and sidecar health.
+- Search, export, compare, retention, or artifact-content viewing for Run
+  History.
 
 ## Provider Modes
 
@@ -155,6 +194,15 @@ Run records and artifacts are stored under app data:
 The exact app-data root is platform-dependent and is resolved by Tauri. On Windows it is typically under `%APPDATA%`.
 
 The default artifact mode from Rust is `reduced`. Full HTML/screenshot artifacts should be used only in controlled local/mock situations because live Gemini pages can contain account and prompt data.
+
+Current queue behavior is intentionally simple. `gemini_bridge_send_single`
+creates a queued record, immediately pops the next request, marks it running,
+waits for the sidecar result, then stores the terminal result. `queue_depth` and
+`active_run_id` are exposed for status reporting, but there is no long-running
+background scheduler, no retry/re-run workflow, and no graceful in-flight
+sidecar cancellation path yet. `Stop` asks the provider state to cancel and
+drops/stops the sidecar session, but the cancellation token is not currently
+fed through the sidecar answer-extraction loop.
 
 ## Inline Run Inspector
 
@@ -274,8 +322,9 @@ Next checks:
 3. Check whether `sidecar::send_single()` returned or threw.
 4. Look for a hung wait in `adapter.ts`:
    - composer wait: 30 seconds
-   - send wait: 10 seconds
-   - answer wait: 60 seconds
+   - send wait: up to 75 seconds while generation-busy UI is visible, with a
+     10 second idle grace
+   - answer wait: 120 seconds by default
 5. If the browser visibly answered but run stayed queued/running, suspect answer selector drift or event/log update failure.
 
 ### Run status: `needs_login`
@@ -495,6 +544,24 @@ npm.cmd run test:gemini-browser-sidecar:unit
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-browser --lib gemini_browser
 ```
 
+## Prompt-Pack Boundary
+
+The Browser Provider is not currently wired as a normal prompt-pack execution
+provider. The runtime contains a planned integration boundary, but stage
+execution does not yet route requests through `gemini_bridge_send_single`.
+
+The implemented prompt-pack safety contract is narrower and deliberate:
+
+- `src-tauri/src/prompt_packs/gemini_browser_stage.rs` converts a
+  `GeminiBrowserRunResult` into completion text only for normal `ok` results.
+- `ok + timeout_latest` is rejected as partial-risk and must not be silently
+  consumed as a final prompt completion.
+- `ready`, failed, blocked, timeout, browser-crashed, manual-action, and empty
+  results are not treated as prompt completions.
+
+When adding real prompt-pack routing later, preserve these invariants and link
+each stage result back to the Browser Provider `run_id` that produced it.
+
 ## Sidecar Launch And Packaging
 
 Development usually launches:
@@ -529,6 +596,27 @@ If the sidecar works in Node but not packaged:
 3. Rebuild the sidecar binary.
 4. Run binary smoke.
 5. If Playwright import/browser launch fails only in binary mode, focus on packaging rather than DOM selectors.
+
+## Current Verification Baseline
+
+The 2026-06-21 implementation audit used these automated checks:
+
+```powershell
+npm.cmd run test:gemini-browser-sidecar
+npm.cmd run test -- --run src/lib/api/gemini-browser.test.ts src/lib/gemini-browser-run-inspector.test.ts src/lib/gemini-browser-provider-panel-state.test.ts src/lib/gemini-browser-provider-panel.test.ts
+cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-browser --lib gemini_browser
+npm.cmd run check:gemini-browser-sidecar-binary
+npm.cmd run check
+npm.cmd run smoke:gemini-browser-sidecar:node
+npm.cmd run smoke:gemini-browser-sidecar:binary
+git diff --check
+```
+
+These checks prove the sidecar protocol, extractor tests, frontend inspector
+helpers, Svelte type checking, Rust Gemini-browser module tests, packaged binary
+presence, and basic JSONL sidecar startup. They do not prove current live Gemini
+DOM behavior or Google account/login state. Run the manual smoke below when a
+change depends on the live Gemini web UI.
 
 ## Artifact Rules
 
@@ -607,7 +695,14 @@ Do not weaken these unless there is a reviewed design update:
 - CDP mode requires an existing browser context; it should not create a new context because that may lose the user's login state.
 - `Resume` in CDP mode does not create a Gemini tab.
 - Answer extraction is DOM-based, not network-based.
-- The current MVP does not implement a full resilience matrix inside the production sidecar.
+- Successful stable runs normally store the result JSON and inline debug
+  summary, but not full HTML, screenshot, telemetry, or answer-extraction
+  artifact files. Failure and non-stable paths capture more local evidence.
+- Browser Provider prompt-pack execution routing is not implemented yet.
+- Retry, re-run, search/export/compare, retention, and graceful cancel controls
+  are not implemented yet.
+- The current provider does not implement the full research resilience matrix
+  inside the production sidecar.
 
 ## Before Declaring A Browser Provider Fix Done
 
