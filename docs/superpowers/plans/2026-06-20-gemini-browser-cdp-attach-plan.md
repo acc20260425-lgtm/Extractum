@@ -1895,9 +1895,10 @@ Expected: final commit contains only plan checkbox and verification-note updates
   `svelte-check found 0 errors and 0 warnings`.
 - Sidecar binary build: `npm.cmd run build:gemini-browser-sidecar` exited 0
   and wrote `src-tauri\binaries\gemini-browser-sidecar-x86_64-pc-windows-msvc.exe`.
-- Manual UX validation: not run in this automated pass. It requires restarting
-  the Tauri UI on this branch, selecting `Attach Chrome` in Settings, and
-  retrying `Resume` against an already-started local Chrome CDP endpoint.
+- Manual UX validation: passed after restarting the Tauri UI on this branch.
+  Selecting `Attach Chrome`, pressing `Start Chrome`, logging into Gemini in
+  the launched Chrome window, pressing `Resume`, and sending the test prompt
+  produced a Gemini answer.
 
 ### Task 12: Start Chrome CDP Command
 
@@ -1909,3 +1910,8 @@ Expected: final commit contains only plan checkbox and verification-note updates
 - [x] **Step 6: Run targeted Rust/frontend tests**
 - [x] **Step 7: Run full verification and rebuild sidecar binary**
 - [x] **Step 8: Commit Start Chrome CDP command**
+
+**Manual validation:** passed. `Start Chrome` launched Chrome with the CDP
+profile, Gemini answered the test prompt, and the Browser Provider flow no
+longer required setting `EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT` before starting
+Extractum.
