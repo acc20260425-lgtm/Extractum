@@ -83,6 +83,20 @@ The extractor should continue to use DOM selectors first. It may read local DOM
 structure, accessible names, text contents, visibility, and element order. It
 must not depend on Gemini private backend endpoints.
 
+Default timing constants for v1:
+
+- `ANSWER_POLL_INTERVAL_MS = 500`;
+- `ANSWER_STABLE_MS = 8_000`;
+- `MIN_STABLE_POLLS_AFTER_SIGNATURE_CHANGE = 3`;
+- `MAX_ANSWER_TIMEOUT_MS = 120_000`.
+
+These constants may be configurable in tests, but production defaults should be
+explicit so implementation and tests assert the same behavior.
+`MAX_ANSWER_TIMEOUT_MS` is intentionally longer than the current 60 seconds
+because Gemini can stream slowly through the browser UI. If the implementation
+keeps the existing `ANSWER_TIMEOUT_MS` name, it must use this exact hard-maximum
+value.
+
 ### Candidate Collection
 
 Each poll should produce an internal `AnswerExtractionSnapshot`:
@@ -94,6 +108,7 @@ interface AnswerExtractionSnapshot {
   raw_candidates: AnswerCandidateObservation[];
   grouped_candidates: AnswerCandidateSummary[];
   selected_candidate_id: string | null;
+  selected_candidate_signature: string | null;
   selection_reason: string | null;
 }
 ```
@@ -116,6 +131,26 @@ Candidate observations should include:
 - whether it matched baseline;
 - whether it looked like composer/user prompt/navigation text;
 - parent/group identifier when grouping is possible.
+
+### Structural Baseline
+
+The baseline captured before Send must be structural, not only text-based.
+Repeated or similar answers are valid Gemini outputs, so text equality alone
+must not cause a new assistant turn to be dropped.
+
+Baseline data should include:
+
+- raw candidate selector and DOM order;
+- accepted group id and group DOM order;
+- selected ancestor identity when available, such as response index, role/name
+  pattern, stable attribute, or generated DOM-order path;
+- candidate/group text lengths and descendant block lengths;
+- optional text equality markers only as a secondary signal.
+
+After Send, a candidate is considered new when its group id/order/structural
+signature did not exist in the baseline, or when it appears after the latest
+baseline group in DOM order. Text equality with a baseline answer is not enough
+to reject it.
 
 ### Grouping
 
@@ -141,6 +176,14 @@ Ancestor search must be deterministic:
    controls, account/login UI, navigation labels, or previous-turn controls.
 6. When multiple valid ancestors remain, prefer the deepest ancestor; break ties
    by later DOM order.
+
+Accepted groups must satisfy a one-turn invariant. A grouped candidate may
+represent exactly one post-baseline assistant turn. If an accepted ancestor
+contains multiple response indices, multiple assistant/message role groups, or
+multiple post-baseline assistant candidate groups, the extractor must split the
+children by response index/message role before scoring. If it cannot split them
+deterministically, reject that ancestor and continue with a narrower grouping
+or `single_node` fallback.
 
 The grouped candidate text is then built from visible answer descendants inside
 that ancestor, ordered by DOM position. It must not blindly use the full
@@ -171,16 +214,35 @@ for example `selected_candidate_length`, `candidate_count`,
 `selected_selector`, `selected_grouping`, and a compact list of top candidate
 lengths and selectors.
 
+Candidate signatures are internal completion inputs. A grouped candidate
+signature should be deterministic for a poll and should not require storing full
+text. It should include:
+
+- selector and group id;
+- group DOM order;
+- grouping mode;
+- selected ancestor pattern;
+- descendant answer block count;
+- normalized descendant block lengths in DOM order;
+- total normalized text length.
+
+The signature may use the current text length and block-length vector, but it
+must not be copied into diagnostics as a text hash. If an implementation uses a
+text-derived hash internally to detect same-length text mutation, it must stay
+memory-only or be keyed per run and omitted from persisted/copied diagnostics.
+
 ## Completion Model
 
 The current completion reasons are `stable`, `timeout_latest`, and `missing`.
 Keep those as the public v1 surface, but make their meaning stricter:
 
-- `stable`: selected grouped candidate stayed unchanged for the stable window,
-  candidate count/signature stayed unchanged for several consecutive polls after
-  the last candidate-count or grouping change, no larger valid candidate appeared
-  during that window, and no known generation-busy UI was visible during the
-  final quiet window.
+- `stable`: selected grouped candidate text length and block structure stayed
+  unchanged for at least `ANSWER_STABLE_MS`, candidate count/signature/rank and
+  largest valid candidate length stayed unchanged for at least
+  `MIN_STABLE_POLLS_AFTER_SIGNATURE_CHANGE` consecutive polls after the last
+  candidate-count, grouping, signature, rank, or largest-length change, no larger
+  valid candidate appeared during those polls, and no known generation-busy UI
+  was visible during the final quiet window.
 - `timeout_latest`: some candidate text was visible, but the extractor could not
   prove stability before timeout.
 - `missing`: no valid post-submit answer candidate appeared.
@@ -203,9 +265,10 @@ new grouped candidate becomes better than the previous selected candidate, the
 stable timer also resets. Busy UI is only an additional signal; it is not
 trusted as the only completion gate. The grouped candidate signature, selected
 candidate rank, candidate count, and largest candidate length must remain quiet
-for the completion window before returning `stable`. This gives protection when
-Gemini appends a later block after the stop/busy indicator is absent or
-undetected.
+for both `ANSWER_STABLE_MS` and
+`MIN_STABLE_POLLS_AFTER_SIGNATURE_CHANGE` post-change polls before returning
+`stable`. This gives protection when Gemini appends a later block after the
+stop/busy indicator is absent or undetected.
 
 ## Artifacts And Diagnostics
 
@@ -241,7 +304,9 @@ interface GeminiBrowserAnswerExtractionDebug {
   selected_candidate_rank: number | null;
   selected_score: number | null;
   largest_candidate_length: number;
-  larger_candidate_available: boolean;
+  larger_valid_candidate_available: boolean;
+  larger_rejected_candidate_count: number;
+  larger_rejected_reasons: string[];
   top_candidate_lengths: number[];
   busy_visible_at_completion: boolean;
   last_growth_elapsed_ms: number | null;
@@ -260,6 +325,7 @@ The inline run inspector should surface:
 - selected grouping;
 - selected length vs result text length;
 - selected rank and largest candidate length;
+- larger valid candidate availability and larger rejected candidate count;
 - completion reason;
 - busy at completion;
 - candidate signature change count;
@@ -267,6 +333,29 @@ The inline run inspector should surface:
 
 `Copy diagnostics` should include these fields but still omit full answer text,
 full prompt text, raw local paths, URL query/hash data, and account hints.
+
+The result artifact DTO gains an optional `answer_extraction` field:
+
+```ts
+interface GeminiBrowserRunArtifacts {
+  run_dir: string | null;
+  html: string | null;
+  screenshot: string | null;
+  telemetry: string | null;
+  answer_extraction?: string | null;
+  artifact_write_error: string | null;
+}
+```
+
+Rust and TypeScript DTOs must tolerate missing `answer_extraction` for older run
+records. The path should only be a local artifact path in persisted run JSON; it
+must not be copied into diagnostics.
+
+The extraction artifact is local-only debug material. It should be safe from
+full prompt/answer text, but selector ids, DOM order, lengths, and score facts
+can still reveal answer shape. Treat it like other local Browser Provider
+artifacts: useful for local debugging, not safe for external sharing without
+operator review.
 
 ## Testing Strategy
 
@@ -290,6 +379,9 @@ behavior:
   with nested `message-content`, sibling markdown/list blocks, composer
   controls, and a previous answer. Mocked locator tests are useful for polling
   behavior, but they are not sufficient for validating grouping.
+- the DOM fixture should be a static local HTML page loaded by headless
+  Playwright with no network dependency. Timers should be deterministic through
+  test-controlled DOM mutation rather than real Gemini streaming.
 
 Add frontend/Rust tests only for DTO and UI display changes:
 
