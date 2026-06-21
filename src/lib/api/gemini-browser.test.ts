@@ -3,6 +3,7 @@ import {
   GEMINI_BROWSER_RUN_EVENT,
   geminiBridgeListRuns,
   geminiBridgeOpenBrowser,
+  geminiBridgeOpenRunFolder,
   geminiBridgeResume,
   geminiBridgeSendSingle,
   geminiBridgeStartCdpChrome,
@@ -41,6 +42,11 @@ describe("gemini browser api wrappers", () => {
 
     await geminiBridgeStop();
     expect(invokeMock).toHaveBeenLastCalledWith("gemini_bridge_stop");
+
+    await geminiBridgeOpenRunFolder("run-1");
+    expect(invokeMock).toHaveBeenLastCalledWith("gemini_bridge_open_run_folder", {
+      runId: "run-1",
+    });
   });
 
   it("forwards browser provider config to provider commands", async () => {

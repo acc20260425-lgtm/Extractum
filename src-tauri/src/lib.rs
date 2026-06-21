@@ -117,9 +117,9 @@ use llm::{
 
 mod gemini_browser;
 use gemini_browser::{
-    gemini_bridge_list_runs, gemini_bridge_open_browser, gemini_bridge_resume,
-    gemini_bridge_send_single, gemini_bridge_start_cdp_chrome, gemini_bridge_status,
-    gemini_bridge_stop, GeminiBrowserState,
+    gemini_bridge_list_runs, gemini_bridge_open_browser, gemini_bridge_open_run_folder,
+    gemini_bridge_resume, gemini_bridge_send_single, gemini_bridge_start_cdp_chrome,
+    gemini_bridge_status, gemini_bridge_stop, GeminiBrowserState,
 };
 
 mod analysis;
@@ -270,6 +270,7 @@ pub fn run() {
             gemini_bridge_resume,
             gemini_bridge_stop,
             gemini_bridge_list_runs,
+            gemini_bridge_open_run_folder,
             list_analysis_sources,
             list_library_sources,
             list_library_catalog,

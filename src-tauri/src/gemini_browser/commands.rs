@@ -1,13 +1,14 @@
 use tauri::{AppHandle, Emitter, State};
+use tauri_plugin_opener::OpenerExt;
 
 use crate::error::{AppError, AppResult};
 
 use super::{
     cdp_chrome, chrome_cdp_profile_dir, create_queued_run, finish_run, list_runs, mark_running,
-    path_string, profile_dir, run_dir, runs_dir, sidecar, GeminiBrowserProviderConfig,
-    GeminiBrowserProviderStatus, GeminiBrowserRunEvent, GeminiBrowserRunLogSummary,
-    GeminiBrowserRunRequest, GeminiBrowserRunResult, GeminiBrowserRunStatus,
-    GeminiBrowserStartChromeResult, GeminiBrowserState,
+    path_string, profile_dir, recorded_run_dir, run_dir, runs_dir, sidecar,
+    GeminiBrowserProviderConfig, GeminiBrowserProviderStatus, GeminiBrowserRunEvent,
+    GeminiBrowserRunLogSummary, GeminiBrowserRunRequest, GeminiBrowserRunResult,
+    GeminiBrowserRunStatus, GeminiBrowserStartChromeResult, GeminiBrowserState,
 };
 
 pub const GEMINI_BROWSER_RUN_EVENT: &str = "gemini-browser://run";
@@ -175,4 +176,16 @@ pub async fn gemini_bridge_list_runs(
     limit: Option<usize>,
 ) -> AppResult<GeminiBrowserRunLogSummary> {
     list_runs(&runs_dir(&handle)?, limit.unwrap_or(20))
+}
+
+#[tauri::command]
+pub async fn gemini_bridge_open_run_folder(handle: AppHandle, run_id: String) -> AppResult<()> {
+    let dir = recorded_run_dir(&runs_dir(&handle)?, &run_id)?;
+    handle
+        .opener()
+        .open_path(path_string(&dir), None::<&str>)
+        .map_err(|error| {
+            AppError::internal(format!("Failed to open Gemini browser run folder: {error}"))
+        })?;
+    Ok(())
 }

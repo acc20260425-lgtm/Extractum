@@ -31,6 +31,25 @@ pub enum GeminiBrowserProviderMode {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GeminiBrowserDebugErrorStage {
+    Setup,
+    Composer,
+    Send,
+    Answer,
+    Artifacts,
+    Transport,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GeminiBrowserAnswerCompletionReason {
+    Stable,
+    TimeoutLatest,
+    Missing,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeminiBrowserProviderConfig {
     pub mode: GeminiBrowserProviderMode,
     #[serde(alias = "cdpEndpoint")]
@@ -109,6 +128,22 @@ pub struct GeminiBrowserArtifactRefs {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeminiBrowserRunDebugSummary {
+    pub mode: GeminiBrowserProviderMode,
+    pub composer_found: bool,
+    pub send_button_found: bool,
+    pub generation_busy_observed: bool,
+    pub answer_found: bool,
+    pub answer_selector: Option<String>,
+    pub waited_for_send_ms: u64,
+    pub waited_for_answer_ms: u64,
+    pub answer_stable_ms: u64,
+    pub answer_completion_reason: GeminiBrowserAnswerCompletionReason,
+    pub final_text_length: u64,
+    pub error_stage: Option<GeminiBrowserDebugErrorStage>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeminiBrowserRunResult {
     pub run_id: String,
     pub status: GeminiBrowserRunStatus,
@@ -117,6 +152,8 @@ pub struct GeminiBrowserRunResult {
     pub manual_action: Option<GeminiBrowserManualAction>,
     pub artifacts: GeminiBrowserArtifactRefs,
     pub elapsed_ms: u64,
+    #[serde(default)]
+    pub debug_summary: Option<GeminiBrowserRunDebugSummary>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -262,6 +299,47 @@ mod tests {
         assert_eq!(
             json["command"]["browser_config"]["cdp_endpoint"],
             "http://127.0.0.1:9222"
+        );
+    }
+
+    #[test]
+    fn run_result_serializes_optional_debug_summary() {
+        let result = GeminiBrowserRunResult {
+            run_id: "run-1".to_string(),
+            status: GeminiBrowserRunStatus::Ok,
+            text: Some("answer".to_string()),
+            message: None,
+            manual_action: None,
+            artifacts: GeminiBrowserArtifactRefs::default(),
+            elapsed_ms: 42,
+            debug_summary: Some(GeminiBrowserRunDebugSummary {
+                mode: GeminiBrowserProviderMode::CdpAttach,
+                composer_found: true,
+                send_button_found: true,
+                generation_busy_observed: true,
+                answer_found: true,
+                answer_selector: Some("message-content".to_string()),
+                waited_for_send_ms: 15_000,
+                waited_for_answer_ms: 12_000,
+                answer_stable_ms: 8_000,
+                answer_completion_reason: GeminiBrowserAnswerCompletionReason::Stable,
+                final_text_length: 6,
+                error_stage: None,
+            }),
+        };
+
+        let json = serde_json::to_value(&result).expect("serialize result");
+        assert_eq!(json["debug_summary"]["mode"], "cdp_attach");
+        assert_eq!(json["debug_summary"]["generation_busy_observed"], true);
+
+        let decoded: GeminiBrowserRunResult =
+            serde_json::from_value(json).expect("deserialize result");
+        assert_eq!(
+            decoded
+                .debug_summary
+                .expect("debug summary")
+                .answer_selector,
+            Some("message-content".to_string())
         );
     }
 }

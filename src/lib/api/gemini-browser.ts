@@ -44,6 +44,10 @@ export function geminiBridgeListRuns(limit = 20) {
   return invoke<GeminiBrowserRunLogSummary>("gemini_bridge_list_runs", { limit });
 }
 
+export function geminiBridgeOpenRunFolder(runId: string) {
+  return invoke<void>("gemini_bridge_open_run_folder", { runId });
+}
+
 export function listenToGeminiBrowserRuns(
   handler: (event: Event<GeminiBrowserRunEvent>) => void,
 ): Promise<UnlistenFn> {

@@ -458,6 +458,7 @@ pub(crate) fn sidecar_unavailable_result(
         manual_action: None,
         artifacts: Default::default(),
         elapsed_ms: 0,
+        debug_summary: None,
     }
 }
 

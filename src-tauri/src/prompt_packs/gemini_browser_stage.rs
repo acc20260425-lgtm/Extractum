@@ -35,6 +35,7 @@ mod tests {
             manual_action: None,
             artifacts: GeminiBrowserArtifactRefs::default(),
             elapsed_ms: 1,
+            debug_summary: None,
         }
     }
 

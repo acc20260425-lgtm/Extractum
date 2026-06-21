@@ -923,7 +923,7 @@ git commit -m "feat: add Gemini browser run debug summaries"
 - Modify: `src-tauri/src/lib.rs`
 - Modify: `src/lib/api/gemini-browser.ts`
 
-- [ ] **Step 1: Add failing Rust DTO and run-log tests**
+- [x] **Step 1: Add failing Rust DTO and run-log tests**
 
 In `src-tauri/src/gemini_browser/types.rs`, add a test:
 
@@ -999,7 +999,7 @@ assert_eq!(
 );
 ```
 
-- [ ] **Step 2: Run Rust tests to verify they fail**
+- [x] **Step 2: Run Rust tests to verify they fail**
 
 Run:
 
@@ -1010,7 +1010,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL because `GeminiBrowserRunDebugSummary` and `debug_summary` do not exist.
 
-- [ ] **Step 3: Add Rust debug summary types**
+- [x] **Step 3: Add Rust debug summary types**
 
 In `src-tauri/src/gemini_browser/types.rs`, add:
 
@@ -1066,7 +1066,7 @@ debug_summary: None,
 
 This includes `sidecar_unavailable_result()` and existing tests that construct a result without diagnostics.
 
-- [ ] **Step 4: Export Rust debug summary types**
+- [x] **Step 4: Export Rust debug summary types**
 
 In `src-tauri/src/gemini_browser/mod.rs`, add the new types to the `pub use types::{ ... }` list:
 
@@ -1074,7 +1074,7 @@ In `src-tauri/src/gemini_browser/mod.rs`, add the new types to the `pub use type
 GeminiBrowserAnswerCompletionReason, GeminiBrowserDebugErrorStage, GeminiBrowserRunDebugSummary,
 ```
 
-- [ ] **Step 5: Add recorded run directory resolver**
+- [x] **Step 5: Add recorded run directory resolver**
 
 In `src-tauri/src/gemini_browser/run_log.rs`, add:
 
@@ -1168,7 +1168,7 @@ fn recorded_run_dir_requires_result_artifact_flag_and_returns_computed_dir() {
 }
 ```
 
-- [ ] **Step 6: Add Tauri command to open a run folder**
+- [x] **Step 6: Add Tauri command to open a run folder**
 
 In `src-tauri/src/gemini_browser/commands.rs`, import opener:
 
@@ -1231,7 +1231,7 @@ and in `tauri::generate_handler![ ... ]` add:
 gemini_bridge_open_run_folder,
 ```
 
-- [ ] **Step 7: Add frontend API wrapper**
+- [x] **Step 7: Add frontend API wrapper**
 
 In `src/lib/api/gemini-browser.ts`, add:
 
@@ -1252,7 +1252,7 @@ expect(invokeMock).toHaveBeenLastCalledWith("gemini_bridge_open_run_folder", {
 });
 ```
 
-- [ ] **Step 8: Run Rust/API checks**
+- [x] **Step 8: Run Rust/API checks**
 
 Run:
 
@@ -1263,7 +1263,7 @@ npm.cmd run test -- --run src/lib/api/gemini-browser.test.ts src/lib/gemini-brow
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit Task 2**
+- [x] **Step 9: Commit Task 2**
 
 Run:
 
