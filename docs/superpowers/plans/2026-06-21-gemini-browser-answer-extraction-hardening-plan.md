@@ -73,7 +73,7 @@ Execution setup:
 - Create: `sidecars/gemini-browser/src/answer-extractor.test.ts`
 - Modify: `sidecars/gemini-browser/src/protocol.ts`
 
-- [ ] **Step 1: Add failing extractor tests**
+- [x] **Step 1: Add failing extractor tests**
 
 Create `sidecars/gemini-browser/src/answer-extractor.test.ts` with these tests:
 
@@ -344,7 +344,7 @@ describe("Gemini answer extractor", () => {
 });
 ```
 
-- [ ] **Step 2: Run extractor tests and verify they fail**
+- [x] **Step 2: Run extractor tests and verify they fail**
 
 Run:
 
@@ -354,7 +354,7 @@ npm.cmd run test -- --run sidecars/gemini-browser/src/answer-extractor.test.ts
 
 Expected: FAIL because `sidecars/gemini-browser/src/answer-extractor.ts` does not exist.
 
-- [ ] **Step 3: Add protocol DTO types**
+- [x] **Step 3: Add protocol DTO types**
 
 Modify `sidecars/gemini-browser/src/protocol.ts` by adding these types after `GeminiBrowserAnswerCompletionReason`:
 
@@ -405,7 +405,7 @@ Extend `GeminiBrowserRunResult["artifacts"]`:
     answer_extraction?: string | null;
 ```
 
-- [ ] **Step 4: Implement extraction core**
+- [x] **Step 4: Implement extraction core**
 
 Create `sidecars/gemini-browser/src/answer-extractor.ts` with these public exports and behavior:
 
@@ -538,7 +538,7 @@ Implementation requirements for the same file:
   - selector/evaluation errors that are not closed-target errors should be converted into `missing` with an artifact carrying rejection/error facts;
   - closed-target or unexpected fatal extraction errors should throw `AnswerExtractionError` carrying the latest reduced artifact payload when available, or `emptyAnswerExtractionArtifact("missing")` when extraction failed before the first snapshot, so adapter catch paths can still write `answer-extraction.json`.
 
-- [ ] **Step 5: Run extractor tests**
+- [x] **Step 5: Run extractor tests**
 
 Run:
 
@@ -548,7 +548,7 @@ npm.cmd run test -- --run sidecars/gemini-browser/src/answer-extractor.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Typecheck sidecar**
+- [x] **Step 6: Typecheck sidecar**
 
 Run:
 
@@ -558,7 +558,7 @@ npm.cmd run test:gemini-browser-sidecar:typecheck
 
 Expected: PASS.
 
-- [ ] **Step 7: Mark task complete and commit**
+- [x] **Step 7: Mark task complete and commit**
 
 Update this task's checkboxes to `[x]`, then run:
 
