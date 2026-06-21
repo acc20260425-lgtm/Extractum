@@ -98,6 +98,10 @@ time. `browser_provider_config_json` stores the Browser Provider config snapshot
 used for the run when `runtime_provider = 'gemini_browser'`; it stays `NULL` for
 API-backed runs.
 
+The existing `request_json_zstd` audit snapshot should also include
+`runtimeProvider` and `browserProviderConfig` so the original start payload can
+be inspected without joining runtime-specific columns.
+
 Idempotency keeps its current behavior: if a repeated `client_request_id`
 returns an existing run, the existing row's runtime wins and is not rewritten by
 the repeat request.
@@ -106,11 +110,13 @@ the repeat request.
 
 Extend the prompt-pack start and preflight inputs in Rust and TypeScript:
 
-- `runtimeProvider: "api" | "gemini_browser"`
+- `runtimeProvider?: "api" | "gemini_browser"`
 - `browserProviderConfig?: GeminiBrowserProviderConfig | null`
 
-Rust input structs should accept missing `runtime_provider` as `api` so older
-frontends or saved invocations do not fail deserialization.
+Rust DTO fields and Tauri command parameters should accept missing
+`runtimeProvider` as `api`. Because current Tauri commands take individual
+arguments instead of one request object, the command parameters themselves need
+to be optional/defaulted, not only the inner DTO fields.
 
 For `api` runs:
 
@@ -124,6 +130,10 @@ For `gemini_browser` runs:
   videos, and blocking source failures.
 - `selected_model_input_limit` is `null` because Browser Provider does not
   expose a reliable model metadata API through the existing sidecar contract.
+- Both explicit preflight and the internal preflight inside
+  `start_youtube_summary_run_in_pool` use `ModelBudget { input_token_limit: None
+  }` for Browser Provider runs, so they do not apply the current API fallback
+  budget of `32_000`.
 - The run uses `browserProviderConfig` if supplied, otherwise the Browser
   Provider backend defaults.
 
@@ -181,9 +191,15 @@ The existing Tauri command delegates to this helper. Prompt-pack runtime calls
 the same helper via `handle.state::<GeminiBrowserState>()`. The helper is
 `pub(crate)` and is not a new Tauri command.
 
-Prompt-pack browser run IDs should be deterministic and traceable, for example:
+Prompt-pack browser run IDs should be deterministic and traceable. Main
+transcript/synthesis stage IDs use:
 
 `prompt-pack-{run_id}-stage-{stage_run_id}`
+
+JSON repair stage IDs include the repair attempt number to avoid Browser
+Provider run-history collisions:
+
+`prompt-pack-{run_id}-stage-{stage_run_id}-repair-{attempt_number}`
 
 The Browser Provider run source should include the pack and stage identity, for
 example:
