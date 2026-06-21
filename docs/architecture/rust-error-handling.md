@@ -221,14 +221,18 @@ through a shared helper before constructing `AppError`.
 Use the existing diagnostics redaction helper:
 
 ```rust
-crate::diagnostics::redaction::sanitized_error_message(message)
+crate::diagnostics::sanitized_error_message(message)
 ```
 
 This is the canonical project helper and it bounds output by
-`crate::diagnostics::redaction::MAX_SANITIZED_TEXT_CHARS`. When the rules below require
-additional coverage, extend this helper and its tests instead of adding a second sanitizer with
-overlapping behavior. If other modules need easier access, move or re-export the existing helper
-from a shared module while preserving one implementation and one test corpus.
+`crate::diagnostics::MAX_SANITIZED_TEXT_CHARS`. When the rules below require additional
+coverage, extend this helper and its tests instead of adding a second sanitizer with overlapping
+behavior.
+
+Current code exposes the helper through `crate::diagnostics`, but redaction is a backend-wide
+primitive, not diagnostics-only behavior. Preferred migration: move the implementation to a
+neutral module such as `src-tauri/src/redaction.rs` or `src-tauri/src/safe_text.rs`, then have
+diagnostics and error handling reuse that single implementation.
 
 Feature-specific helpers may add context, but should reuse the shared sanitizer rather than
 creating unrelated redaction rules. All UI-visible error messages derived from external input
@@ -236,8 +240,10 @@ should be single-line or line-collapsed and bounded to the shared maximum.
 
 Redaction rules:
 
-- URL query strings and fragments: remove by default. Preserve only scheme, host, and path
-  when the path itself is not sensitive.
+- URL query strings and fragments: remove by default.
+- External, provider, and browser URLs: preserve only scheme and host by default. Preserve path
+  only for allowlisted domains/routes where path segments are known not to contain account ids,
+  document ids, run ids, opaque state, or private resource identifiers.
 - URL credentials: always redact.
 - Query parameters named like `token`, `key`, `api_key`, `auth`, `code`, `state`, `session`,
   `password`, or `secret`: always redact if a query is intentionally preserved.
@@ -256,7 +262,7 @@ Redaction rules:
 Examples:
 
 ```rust
-let safe_detail = sanitized_error_message(&error.to_string());
+let safe_detail = crate::diagnostics::sanitized_error_message(&error.to_string());
 AppError::network(format!(
     "Provider request failed: {}",
     safe_detail
@@ -278,9 +284,12 @@ AppError::network(format!("Provider request failed: {raw_response_body}"))
 ### SQL/database
 
 Default database failures should map to `AppError::database(...)`, currently an `Internal`
-error with database context. The target behavior for this helper is a safe, bounded UI message.
-Raw database details should go to sanitized diagnostics or structured logs, not directly to
-frontend-visible errors.
+error with database context.
+
+Migration gap: the current implementation still formats raw database details into the UI message.
+Do not rely on `AppError::database(...)` as safe/bounded until it is migrated to use the shared
+sanitizer or to return a generic UI message such as `"Database error"`. Raw database details
+should go to sanitized diagnostics or structured logs, not directly to frontend-visible errors.
 
 Map database errors explicitly only when they represent known product behavior:
 
@@ -306,6 +315,9 @@ Example:
 
 ```rust
 match error {
+    sqlx::Error::Database(db_error) if db_error.constraint() == Some("projects_name_key") => {
+        AppError::conflict("Project name already exists")
+    }
     sqlx::Error::Database(db_error) if db_error.is_unique_violation() => {
         AppError::conflict("A record with these values already exists")
     }
@@ -366,6 +378,10 @@ For diagnostic details:
 - sanitize URLs, prompts, cookies, tokens, and account hints;
 - include stable operation labels such as `read browser run log`, `parse sidecar response`,
   or `open app data directory`.
+
+Structured logs that can enter diagnostics exports must follow the same redaction standard as
+`AppError.message`. Prefer stable ids, counters, enum statuses, and sanitized summaries. Do not
+log raw provider/browser bodies, prompts, tokens, emails, cookies, or local paths.
 
 Do not expand `AppError` into a general debug payload. Keep detailed diagnostics in the
 feature-specific debug surface.
