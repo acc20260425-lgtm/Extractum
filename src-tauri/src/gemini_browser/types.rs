@@ -50,6 +50,49 @@ pub enum GeminiBrowserAnswerCompletionReason {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GeminiBrowserCandidateRejectReason {
+    Baseline,
+    Composer,
+    PromptContainer,
+    Navigation,
+    AccountOrLogin,
+    Controls,
+    MultiTurn,
+    NotVisible,
+    Empty,
+    LowerScore,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GeminiBrowserAnswerGrouping {
+    AssistantTurn,
+    SingleNode,
+    Unknown,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeminiBrowserAnswerExtractionDebug {
+    pub raw_candidate_count: u64,
+    pub grouped_candidate_count: u64,
+    pub selected_candidate_length: u64,
+    pub returned_text_length: u64,
+    pub selected_grouping: GeminiBrowserAnswerGrouping,
+    pub selected_candidate_rank: Option<u64>,
+    pub selected_score: Option<i64>,
+    pub largest_candidate_length: u64,
+    pub larger_valid_candidate_available: bool,
+    pub larger_rejected_candidate_count: u64,
+    pub larger_rejected_reasons: Vec<GeminiBrowserCandidateRejectReason>,
+    pub top_candidate_lengths: Vec<u64>,
+    pub busy_visible_at_completion: bool,
+    pub last_growth_elapsed_ms: Option<u64>,
+    pub candidate_signature_changed_count: u64,
+    pub stable_poll_count_after_last_candidate_change: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeminiBrowserProviderConfig {
     pub mode: GeminiBrowserProviderMode,
     #[serde(alias = "cdpEndpoint")]
@@ -124,6 +167,8 @@ pub struct GeminiBrowserArtifactRefs {
     pub html: Option<String>,
     pub screenshot: Option<String>,
     pub telemetry: Option<String>,
+    #[serde(default)]
+    pub answer_extraction: Option<String>,
     pub artifact_write_error: Option<String>,
 }
 
@@ -141,6 +186,8 @@ pub struct GeminiBrowserRunDebugSummary {
     pub answer_completion_reason: GeminiBrowserAnswerCompletionReason,
     pub final_text_length: u64,
     pub error_stage: Option<GeminiBrowserDebugErrorStage>,
+    #[serde(default)]
+    pub extraction: Option<GeminiBrowserAnswerExtractionDebug>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -310,7 +357,14 @@ mod tests {
             text: Some("answer".to_string()),
             message: None,
             manual_action: None,
-            artifacts: GeminiBrowserArtifactRefs::default(),
+            artifacts: GeminiBrowserArtifactRefs {
+                run_dir: None,
+                html: None,
+                screenshot: None,
+                telemetry: None,
+                answer_extraction: Some("answer-extraction.json".to_string()),
+                artifact_write_error: None,
+            },
             elapsed_ms: 42,
             debug_summary: Some(GeminiBrowserRunDebugSummary {
                 mode: GeminiBrowserProviderMode::CdpAttach,
@@ -325,21 +379,49 @@ mod tests {
                 answer_completion_reason: GeminiBrowserAnswerCompletionReason::Stable,
                 final_text_length: 6,
                 error_stage: None,
+                extraction: Some(GeminiBrowserAnswerExtractionDebug {
+                    raw_candidate_count: 2,
+                    grouped_candidate_count: 1,
+                    selected_candidate_length: 6,
+                    returned_text_length: 6,
+                    selected_grouping: GeminiBrowserAnswerGrouping::AssistantTurn,
+                    selected_candidate_rank: Some(1),
+                    selected_score: Some(120),
+                    largest_candidate_length: 6,
+                    larger_valid_candidate_available: false,
+                    larger_rejected_candidate_count: 1,
+                    larger_rejected_reasons: vec![GeminiBrowserCandidateRejectReason::Composer],
+                    top_candidate_lengths: vec![6],
+                    busy_visible_at_completion: false,
+                    last_growth_elapsed_ms: Some(8_000),
+                    candidate_signature_changed_count: 1,
+                    stable_poll_count_after_last_candidate_change: 3,
+                }),
             }),
         };
 
         let json = serde_json::to_value(&result).expect("serialize result");
+        assert_eq!(json["artifacts"]["answer_extraction"], "answer-extraction.json");
         assert_eq!(json["debug_summary"]["mode"], "cdp_attach");
         assert_eq!(json["debug_summary"]["generation_busy_observed"], true);
+        assert_eq!(
+            json["debug_summary"]["extraction"]["selected_grouping"],
+            "assistant_turn"
+        );
 
         let decoded: GeminiBrowserRunResult =
             serde_json::from_value(json).expect("deserialize result");
+        let debug_summary = decoded.debug_summary.expect("debug summary");
         assert_eq!(
-            decoded
-                .debug_summary
-                .expect("debug summary")
-                .answer_selector,
+            debug_summary.answer_selector,
             Some("message-content".to_string())
+        );
+        assert_eq!(
+            debug_summary
+                .extraction
+                .expect("extraction")
+                .larger_rejected_reasons,
+            vec![GeminiBrowserCandidateRejectReason::Composer]
         );
     }
 }

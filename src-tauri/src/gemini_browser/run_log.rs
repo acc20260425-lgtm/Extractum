@@ -172,6 +172,7 @@ mod tests {
                 answer_completion_reason: GeminiBrowserAnswerCompletionReason::Stable,
                 final_text_length: 6,
                 error_stage: Some(GeminiBrowserDebugErrorStage::Answer),
+                extraction: None,
             }),
         };
         let finished = finish_run(runs_dir, "run-1", result).expect("finish run");

@@ -1131,7 +1131,7 @@ git commit -m "feat: integrate Gemini answer extraction diagnostics"
 - Modify: `src-tauri/src/gemini_browser/run_log.rs`
 - Modify: `src-tauri/src/prompt_packs/gemini_browser_stage.rs`
 
-- [ ] **Step 1: Add failing Rust tests for DTO round-trip and automation guard**
+- [x] **Step 1: Add failing Rust tests for DTO round-trip and automation guard**
 
 Modify `src-tauri/src/gemini_browser/types.rs` test `run_result_serializes_optional_debug_summary()` so the constructed `GeminiBrowserRunResult` includes:
 
@@ -1236,7 +1236,7 @@ GeminiBrowserProviderMode, GeminiBrowserRunDebugSummary,
 GeminiBrowserRunResult, GeminiBrowserRunStatus,
 ```
 
-- [ ] **Step 2: Run Rust Gemini browser tests and verify they fail**
+- [x] **Step 2: Run Rust Gemini browser tests and verify they fail**
 
 Run:
 
@@ -1246,7 +1246,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL because Rust DTOs do not yet define extraction fields.
 
-- [ ] **Step 3: Add Rust DTOs**
+- [x] **Step 3: Add Rust DTOs**
 
 Modify `src-tauri/src/gemini_browser/types.rs`:
 
@@ -1308,7 +1308,7 @@ Extend `GeminiBrowserRunDebugSummary`:
 pub extraction: Option<GeminiBrowserAnswerExtractionDebug>,
 ```
 
-- [ ] **Step 4: Add prompt-pack partial guard**
+- [x] **Step 4: Add prompt-pack partial guard**
 
 Modify `browser_result_to_completion_text()` in `src-tauri/src/prompt_packs/gemini_browser_stage.rs`:
 
@@ -1333,7 +1333,7 @@ GeminiBrowserRunStatus::Ok => {
 }
 ```
 
-- [ ] **Step 5: Run Rust tests**
+- [x] **Step 5: Run Rust tests**
 
 Run:
 
@@ -1343,7 +1343,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 6: Mark task complete and commit**
+- [x] **Step 6: Mark task complete and commit**
 
 Update this task's checkboxes to `[x]`, then run:
 
