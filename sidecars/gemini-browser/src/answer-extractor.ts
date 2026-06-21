@@ -502,6 +502,14 @@ async function captureDomSnapshot(
           return Number.isFinite(parsed) ? parsed : null;
         }
 
+        function textHash(text: string): string {
+          let hash = 0;
+          for (let index = 0; index < text.length; index += 1) {
+            hash = (hash * 31 + text.charCodeAt(index)) >>> 0;
+          }
+          return hash.toString(16);
+        }
+
         function groupAncestor(element: Element): { element: Element; grouping: Grouping } {
           let current: Element | null = element;
           for (let depth = 0; current && depth <= 6; depth += 1) {
@@ -586,7 +594,7 @@ async function captureDomSnapshot(
               block_count: blockLengths.length,
               group_order: order,
               score: selectorScore + text.length + (grouping === "assistant_turn" ? 50 : 0),
-              signature: `${selector}|${id}|${order}|${grouping}|${blockLengths.length}|${blockLengths.join(".")}|${text.length}`,
+              signature: `${selector}|${id}|${order}|${grouping}|${blockLengths.length}|${blockLengths.join(".")}|${text.length}|${textHash(text)}`,
               reject_reasons: [],
             };
             const existing = grouped.get(id);
@@ -632,8 +640,75 @@ async function captureDomSnapshot(
         error,
       );
     }
-    return emptySnapshot(input.elapsedMs);
+    return captureLocatorSnapshot(page as unknown as Pick<Page, "locator">, input);
   }
+}
+
+async function captureLocatorSnapshot(
+  page: Pick<Page, "locator">,
+  input: CaptureInput & { mode: "baseline" | "post_submit" },
+): Promise<AnswerExtractionSnapshot> {
+  const baselineIds = new Set(input.baseline.groups.map((group) => group.group_id));
+  const groupedCandidates: AnswerCandidateSummary[] = [];
+  const rejectedCandidates: RejectedAnswerCandidate[] = [];
+  let rawCandidateCount = 0;
+
+  for (const candidate of answerCandidates) {
+    const rawTexts = await page.locator(candidate.selector).allTextContents().catch(() => []);
+    rawCandidateCount += rawTexts.length;
+    rawTexts.forEach((rawText, index) => {
+      const text = rawText.trim();
+      const groupId = `locator:${candidate.selector}:${index}`;
+      const groupOrder = index;
+      const reasons: GeminiBrowserCandidateRejectReason[] = [];
+      if (!text) reasons.push("empty");
+      if (text === input.prompt) reasons.push("prompt_container");
+      if (input.mode === "post_submit" && baselineIds.has(groupId)) reasons.push("baseline");
+      if (reasons.length > 0) {
+        rejectedCandidates.push({
+          selector: candidate.selector,
+          text_length: text.length,
+          reasons,
+        });
+        return;
+      }
+      groupedCandidates.push({
+        group_id: groupId,
+        selector: candidate.selector,
+        grouping: "single_node",
+        text,
+        text_length: text.length,
+        block_lengths: [text.length],
+        block_count: 1,
+        group_order: groupOrder,
+        score: candidate.score + text.length,
+        signature: `${candidate.selector}|${groupId}|${groupOrder}|single_node|1|${text.length}|${textHash(text)}`,
+        reject_reasons: [],
+      });
+    });
+  }
+
+  groupedCandidates.sort((left, right) => right.score - left.score || right.text_length - left.text_length);
+  const selected = groupedCandidates[0] ?? null;
+  return {
+    elapsed_ms: input.elapsedMs,
+    busy_visible: input.busyVisible,
+    raw_candidate_count: rawCandidateCount,
+    grouped_candidates: groupedCandidates,
+    rejected_candidates: rejectedCandidates,
+    selected_candidate_id: selected?.group_id ?? null,
+    selected_candidate_signature: selected?.signature ?? null,
+    selected_candidate: selected,
+    selection_reason: selected ? "highest_score" : null,
+  };
+}
+
+function textHash(text: string): string {
+  let hash = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = (hash * 31 + text.charCodeAt(index)) >>> 0;
+  }
+  return hash.toString(16);
 }
 
 function isClosedTargetError(error: unknown): boolean {

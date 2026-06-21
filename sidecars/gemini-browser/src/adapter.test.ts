@@ -8,6 +8,38 @@ import {
   sendCandidates,
 } from "./dom-contract.js";
 
+function pageWithSendFlow() {
+  const composer = {
+    count: async () => 1,
+    nth: () => composer,
+    isVisible: async () => true,
+    fill: vi.fn(async () => undefined),
+  };
+  const send = {
+    count: async () => 1,
+    nth: () => send,
+    isVisible: async () => true,
+    click: vi.fn(async () => undefined),
+  };
+  const empty = {
+    count: async () => 0,
+    nth: () => empty,
+    isVisible: async () => false,
+    allTextContents: async () => [],
+  };
+  return {
+    isClosed: () => false,
+    locator: (selector: string) => {
+      if (selector === "rich-textarea textarea") return composer;
+      if (selector === "button[aria-label*='send' i]") return send;
+      return empty;
+    },
+    waitForTimeout: async (ms: number) => {
+      vi.advanceTimersByTime(ms);
+    },
+  };
+}
+
 describe("production Gemini DOM contract", () => {
   it("keeps the selected resilient-scoring contract version explicit", () => {
     expect(GEMINI_DOM_CONTRACT_VERSION).toBe("2026-06-20-resilient-scoring");
@@ -853,5 +885,297 @@ describe("production Gemini DOM contract", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("adds extraction debug to stable answer results", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-21T00:00:00Z"));
+    try {
+      const finalAnswer = "Complete grouped answer.";
+      const page = pageWithSendFlow();
+      const adapter = new GeminiBrowserAdapter({
+        env: {},
+        answerExtractor: {
+          captureBaseline: async () => ({ groups: [], highest_group_order: -1 }),
+          pollUntilComplete: async () => ({
+            text: finalAnswer,
+            selector: "message-content",
+            waitedMs: 8_500,
+            completionReason: "stable",
+            debug: {
+              raw_candidate_count: 2,
+              grouped_candidate_count: 1,
+              selected_candidate_length: finalAnswer.length,
+              returned_text_length: finalAnswer.length,
+              selected_grouping: "assistant_turn",
+              selected_candidate_rank: 1,
+              selected_score: 120,
+              largest_candidate_length: finalAnswer.length,
+              larger_valid_candidate_available: false,
+              larger_rejected_candidate_count: 0,
+              larger_rejected_reasons: [],
+              top_candidate_lengths: [finalAnswer.length],
+              busy_visible_at_completion: false,
+              last_growth_elapsed_ms: 8_000,
+              candidate_signature_changed_count: 1,
+              stable_poll_count_after_last_candidate_change: 3,
+            },
+            artifact: {
+              completion_reason: "stable",
+              raw_candidate_count: 2,
+              grouped_candidate_count: 1,
+              selected_candidate: {
+                selector: "message-content",
+                grouping: "assistant_turn",
+                text_length: finalAnswer.length,
+                score: 120,
+                rank: 1,
+              },
+              top_candidates: [],
+              rejected: [],
+            },
+          }),
+        },
+      });
+      adapter.__setTestPage(page as never);
+
+      const result = await adapter.sendSingle({
+        browserProfileDir: "C:/Extractum/gemini-browser/profile",
+        artifactDir: "artifacts/gemini-browser-adapter-test/run-extraction-stable",
+        request: {
+          run_id: "run-extraction-stable",
+          prompt: "hello",
+          source: "settings_test",
+          artifact_mode: "reduced",
+        },
+      });
+
+      expect(result).toMatchObject({
+        status: "ok",
+        text: finalAnswer,
+        debug_summary: {
+          answer_completion_reason: "stable",
+          final_text_length: finalAnswer.length,
+          extraction: {
+            selected_candidate_length: finalAnswer.length,
+            returned_text_length: finalAnswer.length,
+            selected_grouping: "assistant_turn",
+            larger_valid_candidate_available: false,
+          },
+        },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("writes a reduced extraction artifact for ok timeout_latest without changing status", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-21T00:00:00Z"));
+    try {
+      const artifactDir = "artifacts/gemini-browser-adapter-test/run-timeout-latest-artifact";
+      const page = pageWithSendFlow();
+      const adapter = new GeminiBrowserAdapter({
+        env: {},
+        answerExtractor: {
+          captureBaseline: async () => ({ groups: [], highest_group_order: -1 }),
+          pollUntilComplete: async () => ({
+            text: "partial answer",
+            selector: "message-content",
+            waitedMs: 120_000,
+            completionReason: "timeout_latest",
+            debug: {
+              raw_candidate_count: 1,
+              grouped_candidate_count: 1,
+              selected_candidate_length: 14,
+              returned_text_length: 14,
+              selected_grouping: "assistant_turn",
+              selected_candidate_rank: 1,
+              selected_score: 90,
+              largest_candidate_length: 14,
+              larger_valid_candidate_available: false,
+              larger_rejected_candidate_count: 0,
+              larger_rejected_reasons: [],
+              top_candidate_lengths: [14],
+              busy_visible_at_completion: false,
+              last_growth_elapsed_ms: 500,
+              candidate_signature_changed_count: 50,
+              stable_poll_count_after_last_candidate_change: 0,
+            },
+            artifact: {
+              completion_reason: "timeout_latest",
+              raw_candidate_count: 1,
+              grouped_candidate_count: 1,
+              selected_candidate: {
+                selector: "message-content",
+                grouping: "assistant_turn",
+                text_length: 14,
+                score: 90,
+                rank: 1,
+              },
+              top_candidates: [
+                {
+                  selector: "message-content",
+                  grouping: "assistant_turn",
+                  text_length: 14,
+                  block_lengths: [14],
+                  score: 90,
+                },
+              ],
+              rejected: [],
+            },
+          }),
+        },
+      });
+      adapter.__setTestPage(page as never);
+
+      const result = await adapter.sendSingle({
+        browserProfileDir: "C:/Extractum/gemini-browser/profile",
+        artifactDir,
+        request: {
+          run_id: "run-timeout-latest-artifact",
+          prompt: "slow prompt",
+          source: "settings_test",
+          artifact_mode: "reduced",
+        },
+      });
+
+      expect(result.status).toBe("ok");
+      expect(result.debug_summary?.answer_completion_reason).toBe("timeout_latest");
+      expect(result.artifacts.answer_extraction).toMatch(/answer-extraction\.json$/);
+      expect(result.artifacts.artifact_write_error).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("writes a reduced extraction artifact for missing answer timeout failures", async () => {
+    const page = pageWithSendFlow();
+    const adapter = new GeminiBrowserAdapter({
+      env: {},
+      answerExtractor: {
+        captureBaseline: async () => ({ groups: [], highest_group_order: -1 }),
+        pollUntilComplete: async () => ({
+          text: null,
+          selector: null,
+          waitedMs: 120_000,
+          completionReason: "missing",
+          debug: {
+            raw_candidate_count: 0,
+            grouped_candidate_count: 0,
+            selected_candidate_length: 0,
+            returned_text_length: 0,
+            selected_grouping: "unknown",
+            selected_candidate_rank: null,
+            selected_score: null,
+            largest_candidate_length: 0,
+            larger_valid_candidate_available: false,
+            larger_rejected_candidate_count: 0,
+            larger_rejected_reasons: [],
+            top_candidate_lengths: [],
+            busy_visible_at_completion: false,
+            last_growth_elapsed_ms: null,
+            candidate_signature_changed_count: 0,
+            stable_poll_count_after_last_candidate_change: 0,
+          },
+          artifact: {
+            completion_reason: "missing",
+            raw_candidate_count: 0,
+            grouped_candidate_count: 0,
+            selected_candidate: {
+              selector: null,
+              grouping: "unknown",
+              text_length: 0,
+              score: null,
+              rank: null,
+            },
+            top_candidates: [],
+            rejected: [],
+          },
+        }),
+      },
+    });
+    adapter.__setTestPage(page as never);
+
+    const result = await adapter.sendSingle({
+      browserProfileDir: "C:/Extractum/gemini-browser/profile",
+      artifactDir: "artifacts/gemini-browser-adapter-test/run-missing-answer-artifact",
+      request: {
+        run_id: "run-missing-answer-artifact",
+        prompt: "missing answer",
+        source: "settings_test",
+        artifact_mode: "reduced",
+      },
+    });
+
+    expect(result.status).toBe("timeout");
+    expect(result.artifacts.answer_extraction).toMatch(/answer-extraction\.json$/);
+    expect(result.debug_summary?.extraction?.raw_candidate_count).toBe(0);
+  });
+
+  it("keeps timeout_latest ok when answer extraction artifact write fails", async () => {
+    const page = pageWithSendFlow();
+    const adapter = new GeminiBrowserAdapter({
+      env: {},
+      writeAnswerExtractionArtifact: async () => ({ path: null, error: "disk full" }),
+      answerExtractor: {
+        captureBaseline: async () => ({ groups: [], highest_group_order: -1 }),
+        pollUntilComplete: async () => ({
+          text: "partial answer",
+          selector: "message-content",
+          waitedMs: 120_000,
+          completionReason: "timeout_latest",
+          debug: {
+            raw_candidate_count: 1,
+            grouped_candidate_count: 1,
+            selected_candidate_length: 14,
+            returned_text_length: 14,
+            selected_grouping: "assistant_turn",
+            selected_candidate_rank: 1,
+            selected_score: 90,
+            largest_candidate_length: 14,
+            larger_valid_candidate_available: false,
+            larger_rejected_candidate_count: 0,
+            larger_rejected_reasons: [],
+            top_candidate_lengths: [14],
+            busy_visible_at_completion: false,
+            last_growth_elapsed_ms: 500,
+            candidate_signature_changed_count: 50,
+            stable_poll_count_after_last_candidate_change: 0,
+          },
+          artifact: {
+            completion_reason: "timeout_latest",
+            raw_candidate_count: 1,
+            grouped_candidate_count: 1,
+            selected_candidate: {
+              selector: "message-content",
+              grouping: "assistant_turn",
+              text_length: 14,
+              score: 90,
+              rank: 1,
+            },
+            top_candidates: [],
+            rejected: [],
+          },
+        }),
+      },
+    });
+    adapter.__setTestPage(page as never);
+
+    const result = await adapter.sendSingle({
+      browserProfileDir: "C:/Extractum/gemini-browser/profile",
+      artifactDir: "artifacts/gemini-browser-adapter-test/unwritable",
+      request: {
+        run_id: "run-timeout-latest-write-fail",
+        prompt: "slow prompt",
+        source: "settings_test",
+        artifact_mode: "reduced",
+      },
+    });
+
+    expect(result.status).toBe("ok");
+    expect(result.debug_summary?.answer_completion_reason).toBe("timeout_latest");
+    expect(result.artifacts.answer_extraction).toBeNull();
+    expect(result.artifacts.artifact_write_error).toContain("disk full");
   });
 });

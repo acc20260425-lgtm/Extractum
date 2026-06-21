@@ -7,6 +7,7 @@ import {
   type Page,
 } from "@playwright/test";
 import type {
+  GeminiBrowserAnswerCompletionReason,
   GeminiBrowserDebugErrorStage,
   GeminiBrowserProviderConfig,
   GeminiBrowserProviderStatus,
@@ -14,8 +15,17 @@ import type {
   GeminiBrowserRunRequest,
   GeminiBrowserRunResult,
 } from "./protocol.js";
-import { answerCandidates, composerCandidates, sendCandidates } from "./dom-contract.js";
+import { composerCandidates, sendCandidates } from "./dom-contract.js";
 import { captureFailureArtifacts } from "./artifacts.js";
+import {
+  AnswerExtractionError,
+  ANSWER_STABLE_MS,
+  captureAnswerBaseline,
+  pollAnswerUntilComplete,
+  type AnswerExtractionArtifactPayload,
+  type AnswerExtractionBaseline,
+  type AnswerExtractionResult,
+} from "./answer-extractor.js";
 import {
   cdpSetupStatus,
   resolveBrowserMode,
@@ -35,10 +45,30 @@ type BrowserSession =
 
 type ConnectOverCdp = (endpoint: string) => Promise<Browser>;
 
+type AnswerExtractorPort = {
+  captureBaseline: (page: Page, prompt: string) => Promise<AnswerExtractionBaseline>;
+  pollUntilComplete: (
+    page: Page,
+    options: {
+      prompt: string;
+      baseline: AnswerExtractionBaseline;
+      isBusyVisible: () => Promise<boolean>;
+      answerTimeoutMs?: number;
+    },
+  ) => Promise<AnswerExtractionResult>;
+};
+
+type WriteAnswerExtractionArtifact = (input: {
+  artifactDir: string;
+  payload: AnswerExtractionArtifactPayload;
+}) => Promise<{ path: string | null; error: string | null }>;
+
 interface GeminiBrowserAdapterOptions {
   env?: Record<string, string | undefined>;
   fetchLike?: FetchLike;
   connectOverCdp?: ConnectOverCdp;
+  answerExtractor?: AnswerExtractorPort;
+  writeAnswerExtractionArtifact?: WriteAnswerExtractionArtifact;
 }
 
 export class GeminiBrowserAdapter {
@@ -46,11 +76,19 @@ export class GeminiBrowserAdapter {
   private readonly env: Record<string, string | undefined>;
   private readonly fetchLike: FetchLike;
   private readonly connectOverCdp: ConnectOverCdp;
+  private readonly answerExtractor: AnswerExtractorPort;
+  private readonly writeAnswerExtractionArtifact: WriteAnswerExtractionArtifact;
 
   constructor(options: GeminiBrowserAdapterOptions = {}) {
     this.env = options.env ?? process.env;
     this.fetchLike = options.fetchLike ?? fetch;
     this.connectOverCdp = options.connectOverCdp ?? ((endpoint) => chromium.connectOverCDP(endpoint));
+    this.answerExtractor = options.answerExtractor ?? {
+      captureBaseline: captureAnswerBaseline,
+      pollUntilComplete: pollAnswerUntilComplete,
+    };
+    this.writeAnswerExtractionArtifact =
+      options.writeAnswerExtractionArtifact ?? writeAnswerExtractionArtifact;
   }
 
   __setTestPage(page: Page, mode: BrowserSession["type"] = "managed") {
@@ -231,6 +269,7 @@ export class GeminiBrowserAdapter {
     const start = Date.now();
     const mode = resolveBrowserMode(this.env, input.browserConfig);
     let debugSummary = emptyDebugSummary(this.session?.type ?? mode.type);
+    let latestExtractionArtifactPayload: AnswerExtractionArtifactPayload | null = null;
     const hadClosedCdpPage =
       this.session?.type === "cdp_attach" && Boolean(this.session.page?.isClosed());
     if (hadClosedCdpPage) {
@@ -362,19 +401,30 @@ export class GeminiBrowserAdapter {
           markErrorStage(debugSummary, "send"),
         );
       }
-      const answerBaseline = await captureAnswerState(page, input.request.prompt);
+      const answerBaseline = await this.answerExtractor.captureBaseline(page, input.request.prompt);
       await send.click();
 
-      const answer = await waitForAnswerText(page, input.request.prompt, answerBaseline);
+      const answer = await this.answerExtractor.pollUntilComplete(page, {
+        prompt: input.request.prompt,
+        baseline: answerBaseline,
+        isBusyVisible: () => hasVisibleLocator(page, generationBusySelectors),
+      });
+      latestExtractionArtifactPayload = answer.artifact;
       debugSummary = {
         ...debugSummary,
-        answer_found: Boolean(answer),
-        answer_selector: answer?.selector ?? null,
-        waited_for_answer_ms: answer?.waitedMs ?? ANSWER_TIMEOUT_MS,
-        answer_completion_reason: answer?.completionReason ?? "missing",
-        final_text_length: answer?.text.length ?? 0,
+        answer_found: Boolean(answer.text),
+        answer_selector: answer.selector,
+        waited_for_answer_ms: answer.waitedMs,
+        answer_stable_ms: ANSWER_STABLE_MS,
+        answer_completion_reason: answer.completionReason,
+        final_text_length: answer.text ? answer.text.length : 0,
+        extraction: answer.debug,
       };
-      if (!answer) {
+      if (!answer.text) {
+        const extractionArtifact = await this.writeAnswerExtractionArtifact({
+          artifactDir: input.artifactDir,
+          payload: answer.artifact,
+        });
         return this.failure(
           page,
           input.request,
@@ -383,9 +433,17 @@ export class GeminiBrowserAdapter {
           "Answer did not appear before timeout.",
           start,
           markErrorStage(debugSummary, "answer"),
+          extractionArtifact,
         );
       }
 
+      const extractionArtifact =
+        answer.completionReason !== "stable"
+          ? await this.writeAnswerExtractionArtifact({
+              artifactDir: input.artifactDir,
+              payload: answer.artifact,
+            })
+          : { path: null, error: null };
       return finalizeRunResult(
         {
           run_id: input.request.run_id,
@@ -398,13 +456,23 @@ export class GeminiBrowserAdapter {
             html: null,
             screenshot: null,
             telemetry: null,
-            artifact_write_error: null,
+            answer_extraction: extractionArtifact.path,
+            artifact_write_error: mergeArtifactWriteErrors(null, extractionArtifact.error),
           },
           elapsed_ms: Date.now() - start,
         },
         debugSummary,
       );
     } catch (error) {
+      if (error instanceof AnswerExtractionError) {
+        latestExtractionArtifactPayload = error.artifact;
+      }
+      const extractionArtifact = latestExtractionArtifactPayload
+        ? await this.writeAnswerExtractionArtifact({
+            artifactDir: input.artifactDir,
+            payload: latestExtractionArtifactPayload,
+          })
+        : { path: null, error: null };
       if (this.session?.type === "cdp_attach" && isClosedTargetError(error)) {
         return this.failure(
           page,
@@ -414,6 +482,7 @@ export class GeminiBrowserAdapter {
           "Chrome CDP connection closed during the run.",
           start,
           markErrorStage(debugSummary, "transport"),
+          extractionArtifact,
         );
       }
       return this.failure(
@@ -424,6 +493,7 @@ export class GeminiBrowserAdapter {
         String(error),
         start,
         markErrorStage(debugSummary, "transport"),
+        extractionArtifact,
       );
     }
   }
@@ -443,7 +513,9 @@ export class GeminiBrowserAdapter {
     message: string,
     start: number,
     debugSummary: GeminiBrowserRunDebugSummary,
+    extractionArtifact: { path: string | null; error: string | null } = { path: null, error: null },
   ): Promise<GeminiBrowserRunResult> {
+    const failureArtifacts = await captureFailureArtifacts({ page, artifactDir, request, status, message });
     return finalizeRunResult(
       {
         run_id: request.run_id,
@@ -451,7 +523,14 @@ export class GeminiBrowserAdapter {
         text: null,
         message,
         manual_action: status === "needs_login" ? "login" : null,
-        artifacts: await captureFailureArtifacts({ page, artifactDir, request, status, message }),
+        artifacts: {
+          ...failureArtifacts,
+          answer_extraction: extractionArtifact.path,
+          artifact_write_error: mergeArtifactWriteErrors(
+            failureArtifacts.artifact_write_error,
+            extractionArtifact.error,
+          ),
+        },
         elapsed_ms: Date.now() - start,
       },
       debugSummary,
@@ -481,6 +560,7 @@ function emptyArtifacts(artifactDir: string): GeminiBrowserRunResult["artifacts"
     html: null,
     screenshot: null,
     telemetry: null,
+    answer_extraction: null,
     artifact_write_error: null,
   };
 }
@@ -506,6 +586,7 @@ function emptyDebugSummary(mode: GeminiBrowserProviderConfig["mode"]): GeminiBro
     answer_completion_reason: "missing",
     final_text_length: 0,
     error_stage: null,
+    extraction: null,
   };
 }
 
@@ -592,9 +673,6 @@ async function waitForFirstVisibleWithDiagnostics(
   return { locator: null, selector: null, waitedMs, keptWaitingObserved };
 }
 
-const ANSWER_TIMEOUT_MS = 60_000;
-const ANSWER_POLL_INTERVAL_MS = 500;
-const ANSWER_STABLE_MS = 8_000;
 const generationBusySelectors = [
   "button[aria-label*='Stop generating' i]",
   "button[aria-label*='Останов' i]",
@@ -616,81 +694,23 @@ async function hasVisibleLocator(
   return false;
 }
 
-interface AnswerEntry {
-  selector: string;
-  text: string;
-}
-
-interface AnswerState {
-  entries: AnswerEntry[];
-}
-
-interface AnswerResult {
-  text: string;
-  selector: string;
-  waitedMs: number;
-  completionReason: "stable" | "timeout_latest";
-}
-
-async function waitForAnswerText(
-  page: Page,
-  prompt: string,
-  baseline: AnswerState,
-): Promise<AnswerResult | null> {
-  const deadline = Date.now() + ANSWER_TIMEOUT_MS;
-  let latestAnswer: AnswerEntry | null = null;
-  let lastChangedAt = Date.now();
-  let firstSeenAt: number | null = null;
-  let waitedMs = 0;
-
-  while (Date.now() < deadline) {
-    const state = await captureAnswerState(page, prompt);
-    const answer = bestNewAnswerText(state, baseline);
-    const now = Date.now();
-    if (answer && answer.text !== latestAnswer?.text) {
-      latestAnswer = answer;
-      lastChangedAt = now;
-      firstSeenAt ??= now;
-    }
-    if (latestAnswer) {
-      const stableForMs = now - lastChangedAt;
-      if (
-        firstSeenAt !== null &&
-        stableForMs >= ANSWER_STABLE_MS &&
-        now - firstSeenAt >= ANSWER_STABLE_MS
-      ) {
-        return { ...latestAnswer, waitedMs, completionReason: "stable" };
-      }
-    }
-    await page.waitForTimeout(ANSWER_POLL_INTERVAL_MS);
-    waitedMs += ANSWER_POLL_INTERVAL_MS;
+async function writeAnswerExtractionArtifact(input: {
+  artifactDir: string;
+  payload: AnswerExtractionArtifactPayload;
+}): Promise<{ path: string | null; error: string | null }> {
+  const fs = await import("node:fs/promises");
+  const path = await import("node:path");
+  const artifactPath = path.join(input.artifactDir, "answer-extraction.json");
+  try {
+    await fs.mkdir(input.artifactDir, { recursive: true });
+    await fs.writeFile(artifactPath, JSON.stringify(input.payload, null, 2), "utf8");
+    return { path: artifactPath, error: null };
+  } catch (error) {
+    return { path: null, error: String(error) };
   }
-
-  return latestAnswer ? { ...latestAnswer, waitedMs, completionReason: "timeout_latest" } : null;
 }
 
-async function captureAnswerState(page: Page, prompt: string): Promise<AnswerState> {
-  const entries: AnswerEntry[] = [];
-  const seen = new Set<string>();
-  for (const selector of answerCandidates.map((candidate) => candidate.selector)) {
-    const rawTexts = await page.locator(selector).allTextContents().catch(() => []);
-    for (const rawText of rawTexts) {
-      const text = rawText.trim();
-      if (text.length === 0 || text === prompt || seen.has(text)) continue;
-      seen.add(text);
-      entries.push({ selector, text });
-    }
-  }
-
-  return {
-    entries,
-  };
-}
-
-function bestNewAnswerText(current: AnswerState, baseline: AnswerState): AnswerEntry | null {
-  const baselineTexts = new Set(baseline.entries.map((entry) => entry.text));
-  const newEntries = current.entries.filter((entry) => !baselineTexts.has(entry.text));
-  if (newEntries.length === 0) return null;
-
-  return newEntries.reduce((best, entry) => (entry.text.length >= best.text.length ? entry : best));
+function mergeArtifactWriteErrors(...errors: Array<string | null | undefined>): string | null {
+  const present = errors.filter((error): error is string => Boolean(error));
+  return present.length > 0 ? present.join("; ") : null;
 }

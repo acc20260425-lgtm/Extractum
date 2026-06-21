@@ -577,7 +577,7 @@ git commit -m "feat: add Gemini answer extraction core"
 - Modify: `sidecars/gemini-browser/src/adapter.test.ts`
 - Modify: `sidecars/gemini-browser/src/protocol.ts`
 
-- [ ] **Step 1: Add failing adapter tests for extraction integration**
+- [x] **Step 1: Add failing adapter tests for extraction integration**
 
 Append these tests to `sidecars/gemini-browser/src/adapter.test.ts`:
 
@@ -903,7 +903,7 @@ function pageWithSendFlow() {
 }
 ```
 
-- [ ] **Step 2: Run adapter tests and verify they fail**
+- [x] **Step 2: Run adapter tests and verify they fail**
 
 Run:
 
@@ -913,7 +913,7 @@ npm.cmd run test -- --run sidecars/gemini-browser/src/adapter.test.ts
 
 Expected: FAIL because `debug_summary.extraction` and `artifacts.answer_extraction` are not populated.
 
-- [ ] **Step 3: Integrate extractor in adapter**
+- [x] **Step 3: Integrate extractor in adapter**
 
 Modify `sidecars/gemini-browser/src/adapter.ts`:
 
@@ -1040,7 +1040,7 @@ private async failure(
 
 Inside `failure(...)`, merge `extractionArtifact.path` into `artifacts.answer_extraction` and combine `artifact_write_error` without throwing. If both failure artifact capture and extraction artifact write report errors, join them with `"; "`.
 
-- [ ] **Step 4: Add non-fatal reduced extraction artifact writer**
+- [x] **Step 4: Add non-fatal reduced extraction artifact writer**
 
 In `sidecars/gemini-browser/src/adapter.ts`, add:
 
@@ -1098,11 +1098,11 @@ If `answer.text` is null, return the existing timeout failure shape, but pass al
 
 For thrown failures or `browser_crashed` after extraction started, keep a local `latestExtractionArtifactPayload: AnswerExtractionArtifactPayload | null` in `sendSingle()`. Set it as soon as the extractor returns a payload. If the caught error is `AnswerExtractionError`, use `error.artifact` as the latest payload; the extractor must provide `emptyAnswerExtractionArtifact("missing")` when it has no real snapshot yet. In the catch branch, if a payload exists, call `this.writeAnswerExtractionArtifact(...)` before `failure(...)` and pass the returned `{ path, error }` into `failure(...)`. If no extraction payload exists because setup/composer/send failed before answer polling, keep `answer_extraction: null`.
 
-- [ ] **Step 5: Remove old answer polling helpers**
+- [x] **Step 5: Remove old answer polling helpers**
 
 Delete old local `AnswerEntry`, `AnswerState`, `AnswerResult`, `waitForAnswerText()`, `captureAnswerState()`, and `bestNewAnswerText()` from `adapter.ts` once the extractor owns that behavior.
 
-- [ ] **Step 6: Run sidecar tests and typecheck**
+- [x] **Step 6: Run sidecar tests and typecheck**
 
 Run:
 
@@ -1112,7 +1112,7 @@ npm.cmd run test:gemini-browser-sidecar
 
 Expected: PASS.
 
-- [ ] **Step 7: Mark task complete and commit**
+- [x] **Step 7: Mark task complete and commit**
 
 Update this task's checkboxes to `[x]`, then run:
 
