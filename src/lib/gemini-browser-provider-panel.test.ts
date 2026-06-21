@@ -49,4 +49,26 @@ describe("gemini browser provider panel copy contract", () => {
     expect(componentSource).toContain("activeTestRunId = runId;");
     expect(componentSource).toContain("syncActivePromptResult(log.runs)");
   });
+
+  it("renders inline run inspector controls and sanitized diagnostics actions", () => {
+    expect(componentSource).toContain("Run inspector");
+    expect(componentSource).toContain("selectedRunForInspector");
+    expect(componentSource).toContain("copyableRunDiagnostics");
+    expect(componentSource).toContain("sanitizeDiagnosticMessage");
+    expect(componentSource).toContain("Copy diagnostics");
+    expect(componentSource).toContain("Open run folder");
+    expect(componentSource).toContain("geminiBridgeOpenRunFolder");
+  });
+
+  it("shows debug summary fields without reading artifact files in the panel", () => {
+    expect(componentSource).toContain("generation_busy_observed");
+    expect(componentSource).toContain("answer_selector");
+    expect(componentSource).toContain("answer_completion_reason");
+    expect(componentSource).toContain("resultTextLength");
+    expect(componentSource).toContain("debugFinalTextLength");
+    expect(componentSource).toContain("waited_for_send_ms");
+    expect(componentSource).toContain("waited_for_answer_ms");
+    expect(componentSource).not.toContain("page.html");
+    expect(componentSource).not.toContain("page.png");
+  });
 });

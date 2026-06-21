@@ -1602,7 +1602,7 @@ git commit -m "feat: add Gemini browser run inspector model"
 - Modify: `src/lib/components/settings/gemini-browser-provider-panel.svelte`
 - Modify: `src/lib/gemini-browser-provider-panel.test.ts`
 
-- [ ] **Step 1: Add failing panel source-contract tests**
+- [x] **Step 1: Add failing panel source-contract tests**
 
 In `src/lib/gemini-browser-provider-panel.test.ts`, add:
 
@@ -1630,7 +1630,7 @@ it("shows debug summary fields without reading artifact files in the panel", () 
 });
 ```
 
-- [ ] **Step 2: Run panel tests to verify they fail**
+- [x] **Step 2: Run panel tests to verify they fail**
 
 Run:
 
@@ -1640,7 +1640,7 @@ npm.cmd run test -- --run src/lib/gemini-browser-provider-panel.test.ts
 
 Expected: FAIL because the panel does not yet render the inspector.
 
-- [ ] **Step 3: Add imports and derived inspector state**
+- [x] **Step 3: Add imports and derived inspector state**
 
 In `src/lib/components/settings/gemini-browser-provider-panel.svelte`, update icon imports:
 
@@ -1674,7 +1674,7 @@ const selectedInspectorResult = $derived(selectedInspectorRun?.result ?? null);
 const selectedArtifactAvailability = $derived(artifactAvailability(selectedInspectorResult));
 ```
 
-- [ ] **Step 4: Add inspector actions**
+- [x] **Step 4: Add inspector actions**
 
 Add these functions in the `<script>` block:
 
@@ -1706,7 +1706,7 @@ async function openSelectedRunFolder() {
 }
 ```
 
-- [ ] **Step 5: Render inline inspector markup**
+- [x] **Step 5: Render inline inspector markup**
 
 Add this block between the test prompt card and recent runs list:
 
@@ -1844,7 +1844,7 @@ Add this block between the test prompt card and recent runs list:
 </section>
 ```
 
-- [ ] **Step 6: Add compact inspector styles**
+- [x] **Step 6: Add compact inspector styles**
 
 Add CSS to the component:
 
@@ -1902,7 +1902,7 @@ Extend the existing media query:
 }
 ```
 
-- [ ] **Step 7: Run frontend tests and Svelte check**
+- [x] **Step 7: Run frontend tests and Svelte check**
 
 Run:
 
@@ -1913,7 +1913,7 @@ npm.cmd run check
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit Task 4**
+- [x] **Step 8: Commit Task 4**
 
 Run:
 

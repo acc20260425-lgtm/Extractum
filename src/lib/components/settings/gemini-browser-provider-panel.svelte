@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { ExternalLink, Play, RefreshCw, Send, Square } from "@lucide/svelte";
+  import { Clipboard, ExternalLink, FolderOpen, Play, RefreshCw, Send, Square } from "@lucide/svelte";
   import { onMount } from "svelte";
   import {
     geminiBridgeListRuns,
     geminiBridgeOpenBrowser,
+    geminiBridgeOpenRunFolder,
     geminiBridgeResume,
     geminiBridgeSendSingle,
     geminiBridgeStartCdpChrome,
@@ -14,6 +15,14 @@
   import { formatAppError } from "$lib/app-error";
   import { statusLabel } from "$lib/gemini-browser-provider-panel-contract";
   import { runResultForActivePrompt } from "$lib/gemini-browser-provider-panel-state";
+  import {
+    artifactAvailability,
+    copyableRunDiagnostics,
+    debugFinalTextLength,
+    resultTextLength,
+    sanitizeDiagnosticMessage,
+    selectedRunForInspector,
+  } from "$lib/gemini-browser-run-inspector";
   import type {
     GeminiBrowserProviderConfig,
     GeminiBrowserProviderMode,
@@ -35,6 +44,10 @@
   let activeTestRunId = $state<string | null>(null);
   let browserProviderMode = $state<GeminiBrowserProviderMode>("managed");
   let cdpEndpoint = $state(DEFAULT_CDP_ENDPOINT);
+  let inspectorMessage = $state("");
+  const selectedInspectorRun = $derived(selectedRunForInspector(runs, activeTestRunId));
+  const selectedInspectorResult = $derived(selectedInspectorRun?.result ?? null);
+  const selectedArtifactAvailability = $derived(artifactAvailability(selectedInspectorResult));
 
   function newRunId() {
     return `gemini-browser-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -180,6 +193,32 @@
     }
   }
 
+  async function copyDiagnostics() {
+    if (!selectedInspectorRun) {
+      inspectorMessage = "No browser run is selected.";
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(copyableRunDiagnostics(selectedInspectorRun));
+      inspectorMessage = "Diagnostics copied.";
+    } catch (error) {
+      inspectorMessage = formatAppError("copying Gemini browser diagnostics", error);
+    }
+  }
+
+  async function openSelectedRunFolder() {
+    if (!selectedInspectorRun?.result?.artifacts.run_dir) {
+      inspectorMessage = "Run folder is not available.";
+      return;
+    }
+    try {
+      await geminiBridgeOpenRunFolder(selectedInspectorRun.run_id);
+      inspectorMessage = "Run folder opened.";
+    } catch (error) {
+      inspectorMessage = formatAppError("opening Gemini browser run folder", error);
+    }
+  }
+
   onMount(() => {
     let disposed = false;
     let unlisten: (() => void) | null = null;
@@ -289,6 +328,138 @@
     </div>
   </div>
 
+  <section class="run-inspector" aria-label="Run inspector">
+    <div class="row inspector-head">
+      <div>
+        <h3>Run inspector</h3>
+        <p>Latest Browser Provider run diagnostics.</p>
+      </div>
+      <div class="actions">
+        <button type="button" onclick={refresh} disabled={busy} title="Refresh run diagnostics">
+          <RefreshCw size={14} />
+          <span>Refresh</span>
+        </button>
+        <button type="button" onclick={copyDiagnostics} disabled={!selectedInspectorRun}>
+          <Clipboard size={14} />
+          <span>Copy diagnostics</span>
+        </button>
+        <button
+          type="button"
+          onclick={openSelectedRunFolder}
+          disabled={!selectedInspectorResult?.artifacts.run_dir}
+        >
+          <FolderOpen size={14} />
+          <span>Open run folder</span>
+        </button>
+      </div>
+    </div>
+
+    {#if selectedInspectorRun}
+      <div class="inspector-grid">
+        <div>
+          <span class="fact-label">Run</span>
+          <code>{selectedInspectorRun.run_id}</code>
+        </div>
+        <div>
+          <span class="fact-label">Status</span>
+          <strong>{selectedInspectorRun.status}</strong>
+        </div>
+        <div>
+          <span class="fact-label">Result</span>
+          <strong>{selectedInspectorResult?.status ?? "pending"}</strong>
+        </div>
+        <div>
+          <span class="fact-label">Elapsed</span>
+          <span>{selectedInspectorResult?.elapsed_ms ?? 0} ms</span>
+        </div>
+        <div>
+          <span class="fact-label">Result text length</span>
+          <span>{resultTextLength(selectedInspectorResult)}</span>
+        </div>
+        <div>
+          <span class="fact-label">Debug final length</span>
+          <span>{debugFinalTextLength(selectedInspectorResult)}</span>
+        </div>
+        <div>
+          <span class="fact-label">Manual action</span>
+          <span>{selectedInspectorResult?.manual_action ?? "none"}</span>
+        </div>
+      </div>
+
+      {#if selectedInspectorResult?.message}
+        <p class="message">{sanitizeDiagnosticMessage(selectedInspectorResult.message)}</p>
+      {/if}
+
+      <div class="inspector-grid compact">
+        <div>
+          <span class="fact-label">Run folder</span>
+          <span>{selectedArtifactAvailability.run_dir ? "available" : "missing"}</span>
+        </div>
+        <div>
+          <span class="fact-label">Telemetry</span>
+          <span>{selectedArtifactAvailability.telemetry ? "available" : "missing"}</span>
+        </div>
+        <div>
+          <span class="fact-label">HTML</span>
+          <span>{selectedArtifactAvailability.html ? "available" : "not captured"}</span>
+        </div>
+        <div>
+          <span class="fact-label">Screenshot</span>
+          <span>{selectedArtifactAvailability.screenshot ? "available" : "not captured"}</span>
+        </div>
+      </div>
+
+      {#if selectedInspectorResult?.debug_summary}
+        <div class="inspector-grid compact">
+          <div>
+            <span class="fact-label">Mode</span>
+            <span>{selectedInspectorResult.debug_summary.mode}</span>
+          </div>
+          <div>
+            <span class="fact-label">Composer</span>
+            <span>{selectedInspectorResult.debug_summary.composer_found ? "found" : "missing"}</span>
+          </div>
+          <div>
+            <span class="fact-label">Send</span>
+            <span>{selectedInspectorResult.debug_summary.send_button_found ? "found" : "missing"}</span>
+          </div>
+          <div>
+            <span class="fact-label">Busy observed</span>
+            <span>{selectedInspectorResult.debug_summary.generation_busy_observed ? "yes" : "no"}</span>
+          </div>
+          <div>
+            <span class="fact-label">Answer selector</span>
+            <code>{selectedInspectorResult.debug_summary.answer_selector ?? "none"}</code>
+          </div>
+          <div>
+            <span class="fact-label">Answer reason</span>
+            <span>{selectedInspectorResult.debug_summary.answer_completion_reason}</span>
+          </div>
+          <div>
+            <span class="fact-label">Send wait</span>
+            <span>{selectedInspectorResult.debug_summary.waited_for_send_ms} ms</span>
+          </div>
+          <div>
+            <span class="fact-label">Answer wait</span>
+            <span>{selectedInspectorResult.debug_summary.waited_for_answer_ms} ms</span>
+          </div>
+          <div>
+            <span class="fact-label">Error stage</span>
+            <span>{selectedInspectorResult.debug_summary.error_stage ?? "none"}</span>
+          </div>
+        </div>
+      {:else}
+        <p class="empty">Debug summary unavailable for this run.</p>
+      {/if}
+    {:else}
+      <p class="empty">No browser run selected.</p>
+    {/if}
+
+    {#if inspectorMessage}
+      <p class="message">{inspectorMessage}</p>
+    {/if}
+  </section>
+
   <div class="runs-list">
     <h3>Recent browser runs</h3>
     {#each runs as run (run.run_id)}
@@ -359,7 +530,8 @@
     background: var(--card);
   }
 
-  .provider-card button {
+  .provider-card button,
+  .run-inspector button {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -369,6 +541,52 @@
     background: var(--background);
     color: var(--foreground);
     font-weight: 650;
+  }
+
+  .run-inspector {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    background: var(--card);
+  }
+
+  .inspector-head {
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+
+  .inspector-head h3 {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  .inspector-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .inspector-grid.compact {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .inspector-grid > div {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    background: var(--background);
+    overflow-wrap: anywhere;
+  }
+
+  .fact-label {
+    display: block;
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 4px;
   }
 
   .provider-card textarea {
@@ -452,7 +670,9 @@
   }
 
   @media (max-width: 820px) {
-    .provider-grid {
+    .provider-grid,
+    .inspector-grid,
+    .inspector-grid.compact {
       grid-template-columns: 1fr;
     }
   }
