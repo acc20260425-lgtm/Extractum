@@ -77,7 +77,8 @@ Research/design context:
 
 As of the 2026-06-21 repository audit, the Gemini Browser Provider is
 implemented as a Settings-panel provider for operator-driven tests and
-diagnostics.
+diagnostics, and as an optional prompt-pack runtime provider for YouTube Summary
+runs.
 
 Implemented:
 
@@ -94,14 +95,12 @@ Implemented:
 - actionable Setup checklist for sidecar, mode, Chrome CDP, Gemini tab, Gemini
   readiness, and latest/selected test-run state;
 - inline Run Inspector, sanitized `Copy diagnostics`, and filterable Run
-  History.
+  History;
+- YouTube Summary prompt-pack routing through `runtimeProvider:
+  "gemini_browser"` with managed or CDP attach browser config snapshots.
 
 Not implemented yet:
 
-- Browser Provider routing as a normal prompt-pack runtime execution provider.
-  The prompt-pack layer currently has only the result-to-completion guard that
-  rejects `ok + timeout_latest`; it does not yet call `gemini_bridge_send_single`
-  for real stage execution.
 - Retry, re-run, cancel, or queued multi-run controls in the operator UI.
 - Search, export, compare, retention, or artifact-content viewing for Run
   History.
@@ -568,23 +567,26 @@ npm.cmd run test:gemini-browser-sidecar:unit
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-browser --lib gemini_browser
 ```
 
-## Prompt-Pack Boundary
+## Prompt-Pack Runtime Provider
 
-The Browser Provider is not currently wired as a normal prompt-pack execution
-provider. The runtime contains a planned integration boundary, but stage
-execution does not yet route requests through `gemini_bridge_send_single`.
+YouTube Summary runs can use `runtimeProvider: "api"` or
+`runtimeProvider: "gemini_browser"`.
 
-The implemented prompt-pack safety contract is narrower and deliberate:
+- `api` keeps using the LLM profile scheduler and stores
+  `provider_profile_id` plus the selected model on `prompt_pack_runs`.
+- `gemini_browser` stores `runtime_provider = 'gemini_browser'` and an optional
+  `browser_provider_config_json` snapshot on `prompt_pack_runs`.
+- Browser-backed stages show Prompt Pack progress events, but their
+  `queuePosition` stays `null` because they do not enter the API scheduler.
+- Browser answers are accepted only after the existing Gemini Browser result
+  converter approves them. `ready`, empty, non-ok, manual-action, and
+  `timeout_latest` partial-risk answers fail closed.
 
-- `src-tauri/src/prompt_packs/gemini_browser_stage.rs` converts a
-  `GeminiBrowserRunResult` into completion text only for normal `ok` results.
-- `ok + timeout_latest` is rejected as partial-risk and must not be silently
-  consumed as a final prompt completion.
-- `ready`, failed, blocked, timeout, browser-crashed, manual-action, and empty
-  results are not treated as prompt completions.
-
-When adding real prompt-pack routing later, preserve these invariants and link
-each stage result back to the Browser Provider `run_id` that produced it.
+The Browser Provider is not modeled as a new `llm::ProviderKind`. Prompt-pack
+routing formats the same staged `LlmChatRequest` messages into one browser
+prompt, sends it through `gemini_browser::send_single_prompt`, then returns to
+the shared prompt-pack validation, repair, projection, and result persistence
+path.
 
 ## Sidecar Launch And Packaging
 
@@ -722,7 +724,8 @@ Do not weaken these unless there is a reviewed design update:
 - Successful stable runs normally store the result JSON and inline debug
   summary, but not full HTML, screenshot, telemetry, or answer-extraction
   artifact files. Failure and non-stable paths capture more local evidence.
-- Browser Provider prompt-pack execution routing is not implemented yet.
+- Browser Provider prompt-pack execution routing currently covers YouTube
+  Summary, not every prompt pack.
 - Retry, re-run, search/export/compare, retention, and graceful cancel controls
   are not implemented yet.
 - The current provider does not implement the full research resilience matrix

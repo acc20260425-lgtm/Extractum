@@ -66,10 +66,10 @@ automation details, and gives the TypeScript sidecar a narrow job: drive the
 browser and return typed provider status or run results.
 
 The current implementation is an operator-facing Settings provider for
-one-off browser runs and diagnostics. It is not yet wired into prompt-pack
-runtime execution as a selectable provider path. The prompt-pack layer currently
-contains only the defensive result-to-completion conversion that rejects
-partial-risk `ok + timeout_latest` Browser Provider results.
+one-off browser runs and diagnostics, and a selectable prompt-pack runtime
+provider for YouTube Summary runs. The prompt-pack layer keeps the defensive
+result-to-completion conversion that rejects partial-risk `ok +
+timeout_latest` Browser Provider results.
 
 ### Provider modes
 
@@ -93,6 +93,24 @@ CDP attach has stricter ownership and security invariants:
   consent, or other security actions;
 - `SendPrompt` does not create a new Gemini tab in CDP mode and returns
   `needs_manual_action` when no usable Gemini page is available.
+
+### Prompt-Pack runtime provider
+
+Prompt packs do not model Gemini Browser as an `llm::ProviderKind`. Instead,
+YouTube Summary stores `runtime_provider` per run.
+
+- `runtime_provider = 'api'` resolves the run's LLM profile and sends every
+  stage through `LlmSchedulerState`.
+- `runtime_provider = 'gemini_browser'` formats the same stage
+  `LlmChatRequest` messages into a single browser prompt and sends it through
+  `gemini_browser::send_single_prompt`.
+- Prompt Pack validation, repair, projection, and result persistence stay
+  shared after provider completion text is returned.
+
+Browser-backed runs persist an optional `browser_provider_config_json` snapshot
+on `prompt_pack_runs`. Stage progress still uses Prompt Pack events, but
+`queuePosition` is `null` because Browser Provider execution bypasses the API
+LLM scheduler queue.
 
 ### Sidecar and packaging boundary
 
@@ -464,6 +482,11 @@ Current provider behavior:
 - Gemini uses the shared profile path with no `base_url`;
 - OpenAI-compatible providers use the same profile path but require a configured `base_url` for both `/models` and `/chat/completions`.
 
+Gemini Browser is intentionally outside this provider-kind list. Prompt-pack
+runs choose it through `runtime_provider = 'gemini_browser'`, not through LLM
+profile resolution, because the transport is a browser sidecar rather than a
+direct HTTP chat-completions client.
+
 The frontend `/settings` route mirrors that contract:
 
 - it can select existing profiles or create new ones;
@@ -522,11 +545,10 @@ actions are future design work, not hidden behavior in the current page.
 - YouTube jobs are not persistent or resumable across app restart;
 - YouTube-specific NotebookLM export enrichment is not implemented yet;
 - the analysis layer has not yet become media-aware;
-- Gemini Browser Provider is implemented for Settings diagnostics and one-off
-  runs, but not yet as prompt-pack runtime provider routing;
 - Gemini Browser Provider has status/run-history diagnostics, but not yet
-  retry, re-run, graceful cancel, search/export/compare, or a full setup health
-  checklist;
+  retry, re-run, graceful cancel, or search/export/compare workflows;
+- Gemini Browser prompt-pack runtime routing currently covers YouTube Summary,
+  not every prompt pack;
 - richer Telegram Forum Topics browsing/export and forward metadata are not
   modeled yet;
 - Telegram session storage may still deserve a more robust long-term format.
