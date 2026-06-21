@@ -128,6 +128,152 @@ it("adds sanitized debug summary to send-button failures", async () => {
 });
 ```
 
+Add composer and answer-timeout failure coverage:
+
+```ts
+it("adds sanitized debug summary to composer failures", async () => {
+  const empty = {
+    count: async () => 0,
+    nth: () => empty,
+    isVisible: async () => false,
+    allTextContents: async () => [],
+  };
+  const page = {
+    isClosed: () => false,
+    locator: () => empty,
+    waitForTimeout: async () => undefined,
+  };
+  const adapter = new GeminiBrowserAdapter({ env: {} });
+  adapter.__setTestPage(page as never);
+
+  await expect(
+    adapter.sendSingle({
+      browserProfileDir: "C:/Extractum/gemini-browser/profile",
+      artifactDir: "artifacts/gemini-browser-adapter-test/run-composer-missing",
+      request: {
+        run_id: "run-composer-missing",
+        prompt: "private prompt",
+        source: "settings_test",
+        artifact_mode: "reduced",
+      },
+    }),
+  ).resolves.toMatchObject({
+    status: "needs_login",
+    debug_summary: {
+      mode: "managed",
+      composer_found: false,
+      send_button_found: false,
+      answer_found: false,
+      answer_completion_reason: "missing",
+      final_text_length: 0,
+      error_stage: "composer",
+    },
+  });
+});
+
+it("adds sanitized debug summary to answer timeouts", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-06-21T00:00:00Z"));
+  try {
+    const composer = {
+      count: async () => 1,
+      nth: () => composer,
+      isVisible: async () => true,
+      fill: vi.fn(async () => undefined),
+    };
+    const send = {
+      count: async () => 1,
+      nth: () => send,
+      isVisible: async () => true,
+      click: vi.fn(async () => undefined),
+    };
+    const empty = {
+      count: async () => 0,
+      nth: () => empty,
+      isVisible: async () => false,
+      allTextContents: async () => [],
+    };
+    const page = {
+      isClosed: () => false,
+      locator: (selector: string) => {
+        if (selector === "rich-textarea textarea") return composer;
+        if (selector === "button[aria-label*='send' i]") return send;
+        return empty;
+      },
+      waitForTimeout: async (ms: number) => {
+        vi.advanceTimersByTime(ms);
+      },
+    };
+    const adapter = new GeminiBrowserAdapter({ env: {} });
+    adapter.__setTestPage(page as never);
+
+    await expect(
+      adapter.sendSingle({
+        browserProfileDir: "C:/Extractum/gemini-browser/profile",
+        artifactDir: "artifacts/gemini-browser-adapter-test/run-answer-timeout",
+        request: {
+          run_id: "run-answer-timeout",
+          prompt: "private prompt",
+          source: "settings_test",
+          artifact_mode: "reduced",
+        },
+      }),
+    ).resolves.toMatchObject({
+      status: "timeout",
+      debug_summary: {
+        mode: "managed",
+        composer_found: true,
+        send_button_found: true,
+        answer_found: false,
+        answer_completion_reason: "missing",
+        final_text_length: 0,
+        error_stage: "answer",
+      },
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+```
+
+Extend existing CDP early-return tests so every new `sendSingle()` result has a
+debug summary:
+
+```ts
+// In "does not create a Gemini page from sendSingle in CDP attach-only mode"
+debug_summary: {
+  mode: "cdp_attach",
+  composer_found: false,
+  send_button_found: false,
+  answer_found: false,
+  answer_completion_reason: "missing",
+  final_text_length: 0,
+  error_stage: "setup",
+},
+
+// In "preserves CDP attach setup errors from sendSingle"
+debug_summary: {
+  mode: "cdp_attach",
+  composer_found: false,
+  send_button_found: false,
+  answer_found: false,
+  answer_completion_reason: "missing",
+  final_text_length: 0,
+  error_stage: "setup",
+},
+
+// In "maps an already closed attached CDP page before send to browser_crashed"
+debug_summary: {
+  mode: "cdp_attach",
+  composer_found: false,
+  send_button_found: false,
+  answer_found: false,
+  answer_completion_reason: "missing",
+  final_text_length: 0,
+  error_stage: "transport",
+},
+```
+
 In the existing previous-generation wait test, extend the result expectation:
 
 ```ts
@@ -900,7 +1046,7 @@ pub struct GeminiBrowserRunDebugSummary {
     pub waited_for_answer_ms: u64,
     pub answer_stable_ms: u64,
     pub answer_completion_reason: GeminiBrowserAnswerCompletionReason,
-    pub final_text_length: usize,
+    pub final_text_length: u64,
     pub error_stage: Option<GeminiBrowserDebugErrorStage>,
 }
 ```
@@ -934,29 +1080,20 @@ In `src-tauri/src/gemini_browser/run_log.rs`, add:
 
 ```rust
 pub(crate) fn recorded_run_dir(runs_dir: &Path, run_id: &str) -> AppResult<PathBuf> {
-    let dir = runs_dir.join(safe_run_id(run_id)?);
+    let safe_id = safe_run_id(run_id)?;
+    let dir = runs_dir.join(&safe_id);
     let result_path = dir.join(RUN_FILE);
     if !result_path.exists() {
         return Err(AppError::validation("Gemini browser run was not found"));
     }
     let run = read_run_file(&result_path)?;
-    let recorded = run
+    let _recorded_run_dir = run
         .result
         .as_ref()
         .and_then(|result| result.artifacts.run_dir.as_deref())
         .ok_or_else(|| AppError::validation("Gemini browser run folder is not available"))?;
-    let expected = dir
-        .canonicalize()
-        .map_err(|error| AppError::internal(error.to_string()))?;
-    let recorded = PathBuf::from(recorded)
-        .canonicalize()
-        .map_err(|_| AppError::validation("Gemini browser run folder is not available"))?;
-    if recorded != expected {
-        return Err(AppError::validation(
-            "Gemini browser run folder does not match the recorded run",
-        ));
-    }
-    Ok(expected)
+    dir.canonicalize()
+        .map_err(|error| AppError::internal(format!("Failed to resolve Gemini browser run folder: {error}")))
 }
 ```
 
@@ -964,7 +1101,7 @@ Add a test:
 
 ```rust
 #[test]
-fn recorded_run_dir_accepts_only_result_artifact_run_dir() {
+fn recorded_run_dir_requires_result_artifact_flag_and_returns_computed_dir() {
     let temp = tempdir().expect("tempdir");
     let runs_dir = temp.path();
     create_queued_run(runs_dir, "run-1", "settings_test", "hello Gemini")
@@ -1008,7 +1145,24 @@ fn recorded_run_dir_accepts_only_result_artifact_run_dir() {
         debug_summary: None,
     };
     finish_run(runs_dir, "run-2", mismatched).expect("finish run");
-    assert!(super::recorded_run_dir(runs_dir, "run-2").is_err());
+    let dir = super::recorded_run_dir(runs_dir, "run-2").expect("recorded run dir");
+    assert_eq!(dir.file_name().and_then(|name| name.to_str()), Some("run-2"));
+    assert_ne!(dir, outside.canonicalize().expect("outside canonicalize"));
+
+    create_queued_run(runs_dir, "run-3", "settings_test", "hello Gemini")
+        .expect("create queued run");
+    let no_artifact = GeminiBrowserRunResult {
+        run_id: "run-3".to_string(),
+        status: GeminiBrowserRunStatus::Ok,
+        text: Some("answer".to_string()),
+        message: None,
+        manual_action: None,
+        artifacts: GeminiBrowserArtifactRefs::default(),
+        elapsed_ms: 25,
+        debug_summary: None,
+    };
+    finish_run(runs_dir, "run-3", no_artifact).expect("finish run");
+    assert!(super::recorded_run_dir(runs_dir, "run-3").is_err());
     assert!(super::recorded_run_dir(runs_dir, "../bad").is_err());
     assert!(super::recorded_run_dir(runs_dir, "missing-run").is_err());
 }
@@ -1051,8 +1205,9 @@ This plan uses `tauri_plugin_opener::OpenerExt` and
 `handle.opener().open_path(...)` from the Tauri opener plugin v2 API. If the
 local crate version exposes a slightly different method signature, use the
 actual `tauri-plugin-opener` v2 API that compiles, but keep the command security
-behavior unchanged: only open a persisted `result.artifacts.run_dir` that
-matches the canonical app-data run directory for the requested run id.
+behavior unchanged: require a persisted `result.artifacts.run_dir` before
+opening anything, but open only the canonical app-data run directory computed
+from the requested safe run id.
 
 In `src-tauri/src/gemini_browser/mod.rs`, export the command and helper:
 
@@ -1084,6 +1239,17 @@ In `src/lib/api/gemini-browser.ts`, add:
 export function geminiBridgeOpenRunFolder(runId: string) {
   return invoke<void>("gemini_bridge_open_run_folder", { runId });
 }
+```
+
+In `src/lib/api/gemini-browser.test.ts`, add `geminiBridgeOpenRunFolder` to the
+existing import from `./gemini-browser`, then extend
+`"wraps provider commands with stable command names"`:
+
+```ts
+await geminiBridgeOpenRunFolder("run-1");
+expect(invokeMock).toHaveBeenLastCalledWith("gemini_bridge_open_run_folder", {
+  runId: "run-1",
+});
 ```
 
 - [ ] **Step 8: Run Rust/API checks**
@@ -1136,7 +1302,8 @@ function result(overrides: Partial<GeminiBrowserRunResult> = {}): GeminiBrowserR
     status: "ok",
     text: "answer text",
     message:
-      "Failed near C:/Users/Dima/AppData/Roaming/org.ai.extractum/gemini-browser/runs/run-1/page.html, /Users/dima/Extractum/private.txt, \\\\server\\share\\secret.txt, and %APPDATA%\\Extractum\\secret.txt",
+      "Failed near C:/Users/Dima/AppData/Roaming/org.ai.extractum/gemini-browser/runs/run-1/page.html, file:///C:/Users/Dima/AppData/Roaming/org.ai.extractum/gemini-browser/runs/run-1/page.html, /Users/dima/Extractum/private.txt, /home/dima/.config/extractum/private.txt, \\\\server\\share\\secret.txt, %APPDATA%\\Extractum\\secret.txt, %LOCALAPPDATA%\\Extractum\\secret.txt, https://gemini.google.com/app?authuser=dima@example.com&hl=ru#private, and dima@example.com " +
+      "x".repeat(2_000),
     manual_action: null,
     artifacts: {
       run_dir: "C:/Users/Dima/AppData/Roaming/org.ai.extractum/gemini-browser/runs/run-1",
@@ -1213,9 +1380,16 @@ describe("gemini browser run inspector", () => {
     expect(diagnostics).not.toContain(selectedRun.result?.artifacts.run_dir ?? "missing-run-dir");
     expect(diagnostics).not.toContain(selectedRun.result?.artifacts.telemetry ?? "missing-telemetry");
     expect(diagnostics).not.toContain("C:/Users/Dima");
+    expect(diagnostics).not.toContain("file:///C:/Users/Dima");
     expect(diagnostics).not.toContain("/Users/dima");
+    expect(diagnostics).not.toContain("/home/dima");
     expect(diagnostics).not.toContain("\\\\server\\share");
     expect(diagnostics).not.toContain("%APPDATA%");
+    expect(diagnostics).not.toContain("%LOCALAPPDATA%");
+    expect(diagnostics).not.toContain("authuser");
+    expect(diagnostics).not.toContain("dima@example.com");
+    expect(diagnostics).toContain("https://gemini.google.com/app?[redacted]");
+    expect(diagnostics).toContain("[truncated]");
     expect(diagnostics).not.toContain("answer text");
   });
 
@@ -1328,13 +1502,29 @@ export function debugFinalTextLength(result: GeminiBrowserRunResult | null): num
   return result?.debug_summary?.final_text_length ?? 0;
 }
 
+const MAX_DIAGNOSTIC_MESSAGE_LENGTH = 300;
+
 export function sanitizeDiagnosticMessage(message: string | null | undefined): string {
   if (!message) return "none";
-  return message
+  const sanitized = message
+    .replace(/file:\/\/\/[^\s]+/gi, "[path]")
+    .replace(/https?:\/\/[^\s]+/gi, (rawUrl) => {
+      try {
+        const url = new URL(rawUrl);
+        const suffix = url.search || url.hash ? "?[redacted]" : "";
+        return `${url.origin}${url.pathname}${suffix}`;
+      } catch {
+        return "[url]";
+      }
+    })
     .replace(/[A-Za-z]:[\\/][^\s]+/g, "[path]")
     .replace(/\\\\[^\s\\]+\\[^\s]+/g, "[path]")
     .replace(/\/Users\/[^\s]+/g, "[path]")
-    .replace(/%APPDATA%[\\/][^\s]+/gi, "[path]");
+    .replace(/\/home\/[^\s]+/g, "[path]")
+    .replace(/%(?:APPDATA|LOCALAPPDATA)%[\\/][^\s]+/gi, "[path]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[account]");
+  if (sanitized.length <= MAX_DIAGNOSTIC_MESSAGE_LENGTH) return sanitized;
+  return `${sanitized.slice(0, MAX_DIAGNOSTIC_MESSAGE_LENGTH)}...[truncated]`;
 }
 
 export function copyableRunDiagnostics(run: GeminiBrowserRun): string {
@@ -1421,6 +1611,7 @@ it("renders inline run inspector controls and sanitized diagnostics actions", ()
   expect(componentSource).toContain("Run inspector");
   expect(componentSource).toContain("selectedRunForInspector");
   expect(componentSource).toContain("copyableRunDiagnostics");
+  expect(componentSource).toContain("sanitizeDiagnosticMessage");
   expect(componentSource).toContain("Copy diagnostics");
   expect(componentSource).toContain("Open run folder");
   expect(componentSource).toContain("geminiBridgeOpenRunFolder");
@@ -1469,6 +1660,7 @@ import {
   copyableRunDiagnostics,
   debugFinalTextLength,
   resultTextLength,
+  sanitizeDiagnosticMessage,
   selectedRunForInspector,
 } from "$lib/gemini-browser-run-inspector";
 ```
@@ -1578,7 +1770,7 @@ Add this block between the test prompt card and recent runs list:
     </div>
 
     {#if selectedInspectorResult?.message}
-      <p class="message">{selectedInspectorResult.message}</p>
+      <p class="message">{sanitizeDiagnosticMessage(selectedInspectorResult.message)}</p>
     {/if}
 
     <div class="inspector-grid compact">
@@ -1750,12 +1942,13 @@ active run or the newest recent run. Use it before opening app-data manually.
 
 The inspector shows status, elapsed time, result text length, debug final text
 length, answer completion reason, artifact availability, manual action, and
-sidecar `debug_summary` facts such as composer/send/answer selection and wait
-durations.
+sanitized message text plus sidecar `debug_summary` facts such as
+composer/send/answer selection and wait durations.
 
-`Copy diagnostics` intentionally omits full local artifact paths, prompt text,
-answer text, raw DOM, screenshots, cookies, and account identifiers. It is the
-preferred first payload to paste into an LLM debugging session.
+`Copy diagnostics` intentionally omits full local artifact paths, URL query/hash
+data, email-like account hints, prompt text, answer text, raw DOM, screenshots,
+cookies, and account identifiers. It also truncates overlong messages. It is
+the preferred first payload to paste into an LLM debugging session.
 ```
 
 - [ ] **Step 2: Update architecture docs**

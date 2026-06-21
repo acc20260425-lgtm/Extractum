@@ -48,7 +48,7 @@ The inspector shows:
 - created/updated timestamps;
 - elapsed milliseconds when a result exists;
 - result text length and debug final text length when a result exists;
-- latest run message;
+- latest run message, sanitized before display;
 - manual action when present;
 - artifact path availability: run directory, telemetry, reduced/full artifact
   refs, and artifact write error;
@@ -67,10 +67,12 @@ Controls:
 The UI should not hide the existing test prompt flow. The inspector is an
 operability panel, not a replacement for the provider controls.
 
-The panel may display local artifact paths because the operator is already using
-the local app. The copied diagnostics summary should be more conservative: it
-includes the run id and artifact availability flags by default, not full local
-paths. Full paths can remain visible in the UI for local troubleshooting.
+The panel may display artifact availability because the operator is already
+using the local app, but run messages should still be sanitized before display.
+The copied diagnostics summary is conservative: it includes the run id and
+artifact availability flags by default, not full local paths. Sanitization must
+redact local paths, `file://` paths, URL query/hash data, email-like account
+hints, and overlong messages.
 
 ## Debug Summary Contract
 
@@ -112,7 +114,9 @@ DOM HTML, or screenshot paths beyond the already existing artifact references.
 5. `src/lib/types/gemini-browser.ts` mirrors the frontend DTO.
 6. `src-tauri/src/gemini_browser/commands.rs` exposes a command to open a
    recorded run directory when the persisted `result.artifacts.run_dir` is
-   present and matches the canonical app-data run directory for that run id.
+   present. The persisted path is treated as an availability flag only; the
+   command opens the canonical app-data run directory computed from the safe run
+   id.
 7. `gemini-browser-provider-panel.svelte` renders the inline inspector using the
    existing `geminiBridgeListRuns()` refresh path.
 
@@ -159,8 +163,9 @@ Rust tests:
 - `GeminiBrowserRunResult` serializes and deserializes optional
   `debug_summary`;
 - run-log storage preserves `debug_summary`;
-- open-run-folder command accepts only a persisted `result.artifacts.run_dir`
-  that matches the canonical app-data run directory and returns typed errors.
+- open-run-folder command requires a persisted `result.artifacts.run_dir`, opens
+  only the computed canonical app-data run directory for the safe run id, and
+  returns typed errors.
 
 Frontend tests:
 
@@ -172,6 +177,9 @@ Frontend tests:
   availability, and debug facts;
 - copy-diagnostics output does not include artifact paths, answer text, or
   path-like substrings from run messages;
+- copy-diagnostics and inline messages redact URL query/hash data, `file://`
+  paths, `/home/<user>` paths, `%LOCALAPPDATA%`, email-like account hints, and
+  overlong messages;
 - open-folder failure renders a non-destructive UI error.
 - copy/selection behavior is covered in pure view-model tests; Svelte
   source-contract tests only verify wiring and rendering affordances.
