@@ -17,8 +17,13 @@ export function artifactAvailability(result: GeminiBrowserRunResult | null) {
     html: Boolean(result?.artifacts.html),
     screenshot: Boolean(result?.artifacts.screenshot),
     telemetry: Boolean(result?.artifacts.telemetry),
+    answer_extraction: Boolean(result?.artifacts.answer_extraction),
     artifact_write_error: Boolean(result?.artifacts.artifact_write_error),
   };
+}
+
+export function isPartialRiskBrowserResult(result: GeminiBrowserRunResult | null): boolean {
+  return result?.status === "ok" && result.debug_summary?.answer_completion_reason === "timeout_latest";
 }
 
 export function resultTextLength(result: GeminiBrowserRunResult | null): number {
@@ -74,6 +79,8 @@ export function copyableRunDiagnostics(run: GeminiBrowserRun): string {
     `artifact_html_available: ${availability.html}`,
     `artifact_screenshot_available: ${availability.screenshot}`,
     `artifact_telemetry_available: ${availability.telemetry}`,
+    `answer_extraction_artifact_available: ${availability.answer_extraction}`,
+    `partial_risk: ${isPartialRiskBrowserResult(result)}`,
     `artifact_write_error: ${result?.artifacts.artifact_write_error ? "present" : "none"}`,
   ];
 
@@ -97,6 +104,24 @@ export function copyableRunDiagnostics(run: GeminiBrowserRun): string {
     `final_text_length: ${debug.final_text_length}`,
     `error_stage: ${debug.error_stage ?? "none"}`,
   );
+
+  if (debug.extraction) {
+    lines.push(
+      `extraction_raw_candidate_count: ${debug.extraction.raw_candidate_count}`,
+      `extraction_grouped_candidate_count: ${debug.extraction.grouped_candidate_count}`,
+      `extraction_selected_candidate_length: ${debug.extraction.selected_candidate_length}`,
+      `extraction_returned_text_length: ${debug.extraction.returned_text_length}`,
+      `extraction_selected_grouping: ${debug.extraction.selected_grouping}`,
+      `extraction_selected_candidate_rank: ${debug.extraction.selected_candidate_rank ?? "none"}`,
+      `extraction_largest_candidate_length: ${debug.extraction.largest_candidate_length}`,
+      `extraction_larger_valid_candidate_available: ${debug.extraction.larger_valid_candidate_available}`,
+      `extraction_larger_rejected_candidate_count: ${debug.extraction.larger_rejected_candidate_count}`,
+      `extraction_larger_rejected_reasons: ${debug.extraction.larger_rejected_reasons.join(",") || "none"}`,
+      `extraction_busy_visible_at_completion: ${debug.extraction.busy_visible_at_completion}`,
+      `extraction_candidate_signature_changed_count: ${debug.extraction.candidate_signature_changed_count}`,
+      `extraction_stable_poll_count_after_last_candidate_change: ${debug.extraction.stable_poll_count_after_last_candidate_change}`,
+    );
+  }
 
   return lines.join("\n");
 }

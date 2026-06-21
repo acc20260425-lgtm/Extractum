@@ -64,6 +64,11 @@ describe("gemini browser provider panel copy contract", () => {
     expect(componentSource).toContain("generation_busy_observed");
     expect(componentSource).toContain("answer_selector");
     expect(componentSource).toContain("answer_completion_reason");
+    expect(componentSource).toContain("Partial risk");
+    expect(componentSource).toContain("Answer extraction");
+    expect(componentSource).toContain("raw_candidate_count");
+    expect(componentSource).toContain("grouped_candidate_count");
+    expect(componentSource).toContain("isPartialRiskBrowserResult");
     expect(componentSource).toContain("resultTextLength");
     expect(componentSource).toContain("debugFinalTextLength");
     expect(componentSource).toContain("waited_for_send_ms");

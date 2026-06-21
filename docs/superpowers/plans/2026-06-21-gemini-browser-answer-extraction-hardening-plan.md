@@ -1364,7 +1364,7 @@ git commit -m "feat: guard partial Gemini browser completions"
 - Modify: `src/lib/components/settings/gemini-browser-provider-panel.svelte`
 - Modify: `src/lib/gemini-browser-provider-panel.test.ts`
 
-- [ ] **Step 1: Add failing frontend model tests**
+- [x] **Step 1: Add failing frontend model tests**
 
 Modify `src/lib/gemini-browser-run-inspector.test.ts` fixture `result()`:
 
@@ -1441,7 +1441,7 @@ it("detects timeout_latest as partial risk", () => {
 });
 ```
 
-- [ ] **Step 2: Run frontend model tests and verify they fail**
+- [x] **Step 2: Run frontend model tests and verify they fail**
 
 Run:
 
@@ -1451,7 +1451,7 @@ npm.cmd run test -- --run src/lib/gemini-browser-run-inspector.test.ts
 
 Expected: FAIL because frontend types/model do not yet include extraction fields.
 
-- [ ] **Step 3: Update frontend DTO types**
+- [x] **Step 3: Update frontend DTO types**
 
 Modify `src/lib/types/gemini-browser.ts` with the TypeScript DTOs from Task 1, using frontend naming:
 
@@ -1502,7 +1502,7 @@ Extend `GeminiBrowserRunDebugSummary`:
 extraction?: GeminiBrowserAnswerExtractionDebug | null;
 ```
 
-- [ ] **Step 4: Update inspector model**
+- [x] **Step 4: Update inspector model**
 
 Modify `src/lib/gemini-browser-run-inspector.ts`:
 
@@ -1545,7 +1545,7 @@ After existing debug lines, if `debug.extraction` exists, push:
 
 Do not include `result.artifacts.answer_extraction` path in copied diagnostics.
 
-- [ ] **Step 5: Update Settings inspector UI**
+- [x] **Step 5: Update Settings inspector UI**
 
 Modify imports in `src/lib/components/settings/gemini-browser-provider-panel.svelte`:
 
@@ -1634,7 +1634,7 @@ Add CSS:
 }
 ```
 
-- [ ] **Step 6: Update source-contract UI test**
+- [x] **Step 6: Update source-contract UI test**
 
 Modify `src/lib/gemini-browser-provider-panel.test.ts` to assert:
 
@@ -1646,7 +1646,7 @@ expect(componentSource).toContain("grouped_candidate_count");
 expect(componentSource).toContain("isPartialRiskBrowserResult");
 ```
 
-- [ ] **Step 7: Run frontend tests**
+- [x] **Step 7: Run frontend tests**
 
 Run:
 
@@ -1656,7 +1656,7 @@ npm.cmd run test -- --run src/lib/gemini-browser-run-inspector.test.ts src/lib/g
 
 Expected: PASS.
 
-- [ ] **Step 8: Run Svelte check**
+- [x] **Step 8: Run Svelte check**
 
 Run:
 
@@ -1666,7 +1666,7 @@ npm.cmd run check
 
 Expected: PASS with `svelte-check found 0 errors and 0 warnings`.
 
-- [ ] **Step 9: Mark task complete and commit**
+- [x] **Step 9: Mark task complete and commit**
 
 Update this task's checkboxes to `[x]`, then run:
 

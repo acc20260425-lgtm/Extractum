@@ -19,6 +19,7 @@
     artifactAvailability,
     copyableRunDiagnostics,
     debugFinalTextLength,
+    isPartialRiskBrowserResult,
     resultTextLength,
     sanitizeDiagnosticMessage,
     selectedRunForInspector,
@@ -48,6 +49,7 @@
   const selectedInspectorRun = $derived(selectedRunForInspector(runs, activeTestRunId));
   const selectedInspectorResult = $derived(selectedInspectorRun?.result ?? null);
   const selectedArtifactAvailability = $derived(artifactAvailability(selectedInspectorResult));
+  const selectedPartialRisk = $derived(isPartialRiskBrowserResult(selectedInspectorResult));
 
   function newRunId() {
     return `gemini-browser-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -384,6 +386,10 @@
           <span class="fact-label">Manual action</span>
           <span>{selectedInspectorResult?.manual_action ?? "none"}</span>
         </div>
+        <div class:warning={selectedPartialRisk}>
+          <span class="fact-label">Partial risk</span>
+          <span>{selectedPartialRisk ? "yes" : "no"}</span>
+        </div>
       </div>
 
       {#if selectedInspectorResult?.message}
@@ -406,6 +412,10 @@
         <div>
           <span class="fact-label">Screenshot</span>
           <span>{selectedArtifactAvailability.screenshot ? "available" : "not captured"}</span>
+        </div>
+        <div>
+          <span class="fact-label">Answer extraction</span>
+          <span>{selectedArtifactAvailability.answer_extraction ? "available" : "not captured"}</span>
         </div>
       </div>
 
@@ -448,6 +458,43 @@
             <span>{selectedInspectorResult.debug_summary.error_stage ?? "none"}</span>
           </div>
         </div>
+
+        {#if selectedInspectorResult.debug_summary.extraction}
+          <div class="inspector-grid compact">
+            <div>
+              <span class="fact-label">Raw candidates</span>
+              <span>{selectedInspectorResult.debug_summary.extraction.raw_candidate_count}</span>
+            </div>
+            <div>
+              <span class="fact-label">Grouped candidates</span>
+              <span>{selectedInspectorResult.debug_summary.extraction.grouped_candidate_count}</span>
+            </div>
+            <div>
+              <span class="fact-label">Selected grouping</span>
+              <span>{selectedInspectorResult.debug_summary.extraction.selected_grouping}</span>
+            </div>
+            <div>
+              <span class="fact-label">Selected length</span>
+              <span>{selectedInspectorResult.debug_summary.extraction.selected_candidate_length}</span>
+            </div>
+            <div>
+              <span class="fact-label">Largest candidate</span>
+              <span>{selectedInspectorResult.debug_summary.extraction.largest_candidate_length}</span>
+            </div>
+            <div>
+              <span class="fact-label">Larger valid</span>
+              <span>{selectedInspectorResult.debug_summary.extraction.larger_valid_candidate_available ? "yes" : "no"}</span>
+            </div>
+            <div>
+              <span class="fact-label">Signature changes</span>
+              <span>{selectedInspectorResult.debug_summary.extraction.candidate_signature_changed_count}</span>
+            </div>
+            <div>
+              <span class="fact-label">Stable polls</span>
+              <span>{selectedInspectorResult.debug_summary.extraction.stable_poll_count_after_last_candidate_change}</span>
+            </div>
+          </div>
+        {/if}
       {:else}
         <p class="empty">Debug summary unavailable for this run.</p>
       {/if}
@@ -579,6 +626,10 @@
     padding: 8px;
     background: var(--background);
     overflow-wrap: anywhere;
+  }
+
+  .warning {
+    border-color: color-mix(in srgb, var(--destructive) 55%, var(--border));
   }
 
   .fact-label {

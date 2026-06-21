@@ -27,6 +27,39 @@ export type GeminiBrowserDebugErrorStage =
 
 export type GeminiBrowserAnswerCompletionReason = "stable" | "timeout_latest" | "missing";
 
+export type GeminiBrowserCandidateRejectReason =
+  | "baseline"
+  | "composer"
+  | "prompt_container"
+  | "navigation"
+  | "account_or_login"
+  | "controls"
+  | "multi_turn"
+  | "not_visible"
+  | "empty"
+  | "lower_score";
+
+export type GeminiBrowserAnswerGrouping = "assistant_turn" | "single_node" | "unknown";
+
+export interface GeminiBrowserAnswerExtractionDebug {
+  raw_candidate_count: number;
+  grouped_candidate_count: number;
+  selected_candidate_length: number;
+  returned_text_length: number;
+  selected_grouping: GeminiBrowserAnswerGrouping;
+  selected_candidate_rank: number | null;
+  selected_score: number | null;
+  largest_candidate_length: number;
+  larger_valid_candidate_available: boolean;
+  larger_rejected_candidate_count: number;
+  larger_rejected_reasons: GeminiBrowserCandidateRejectReason[];
+  top_candidate_lengths: number[];
+  busy_visible_at_completion: boolean;
+  last_growth_elapsed_ms: number | null;
+  candidate_signature_changed_count: number;
+  stable_poll_count_after_last_candidate_change: number;
+}
+
 export interface GeminiBrowserProviderConfig {
   mode: GeminiBrowserProviderMode;
   cdpEndpoint?: string | null;
@@ -65,6 +98,7 @@ export interface GeminiBrowserArtifactRefs {
   html: string | null;
   screenshot: string | null;
   telemetry: string | null;
+  answer_extraction?: string | null;
   artifact_write_error: string | null;
 }
 
@@ -81,6 +115,7 @@ export interface GeminiBrowserRunDebugSummary {
   answer_completion_reason: GeminiBrowserAnswerCompletionReason;
   final_text_length: number;
   error_stage: GeminiBrowserDebugErrorStage | null;
+  extraction?: GeminiBrowserAnswerExtractionDebug | null;
 }
 
 export interface GeminiBrowserRunResult {

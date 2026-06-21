@@ -3,6 +3,7 @@ import {
   artifactAvailability,
   copyableRunDiagnostics,
   debugFinalTextLength,
+  isPartialRiskBrowserResult,
   resultTextLength,
   selectedRunForInspector,
 } from "./gemini-browser-run-inspector";
@@ -23,6 +24,8 @@ function result(overrides: Partial<GeminiBrowserRunResult> = {}): GeminiBrowserR
       screenshot: null,
       telemetry:
         "C:/Users/Dima/AppData/Roaming/org.ai.extractum/gemini-browser/runs/run-1/telemetry.json",
+      answer_extraction:
+        "C:/Users/Dima/AppData/Roaming/org.ai.extractum/gemini-browser/runs/run-1/answer-extraction.json",
       artifact_write_error: null,
     },
     elapsed_ms: 16_309,
@@ -39,6 +42,24 @@ function result(overrides: Partial<GeminiBrowserRunResult> = {}): GeminiBrowserR
       answer_completion_reason: "stable",
       final_text_length: 11,
       error_stage: null,
+      extraction: {
+        raw_candidate_count: 3,
+        grouped_candidate_count: 1,
+        selected_candidate_length: 95,
+        returned_text_length: 95,
+        selected_grouping: "assistant_turn",
+        selected_candidate_rank: 1,
+        selected_score: 120,
+        largest_candidate_length: 95,
+        larger_valid_candidate_available: false,
+        larger_rejected_candidate_count: 1,
+        larger_rejected_reasons: ["composer"],
+        top_candidate_lengths: [95, 14],
+        busy_visible_at_completion: false,
+        last_growth_elapsed_ms: 8_000,
+        candidate_signature_changed_count: 2,
+        stable_poll_count_after_last_candidate_change: 3,
+      },
     },
     ...overrides,
   };
@@ -73,6 +94,7 @@ describe("gemini browser run inspector", () => {
       html: false,
       screenshot: false,
       telemetry: true,
+      answer_extraction: true,
       artifact_write_error: false,
     });
   });
@@ -104,6 +126,30 @@ describe("gemini browser run inspector", () => {
     expect(diagnostics).toContain("https://gemini.google.com/app?[redacted]");
     expect(diagnostics).toContain("[truncated]");
     expect(diagnostics).not.toContain("answer text");
+  });
+
+  it("copies extraction diagnostics without artifact paths or answer text", () => {
+    const diagnostics = copyableRunDiagnostics(run());
+
+    expect(diagnostics).toContain("answer_extraction_artifact_available: true");
+    expect(diagnostics).toContain("extraction_raw_candidate_count: 3");
+    expect(diagnostics).toContain("extraction_grouped_candidate_count: 1");
+    expect(diagnostics).toContain("extraction_selected_grouping: assistant_turn");
+    expect(diagnostics).toContain("extraction_larger_valid_candidate_available: false");
+    expect(diagnostics).not.toContain("answer-extraction.json");
+    expect(diagnostics).not.toContain("answer text");
+  });
+
+  it("detects timeout_latest as partial risk", () => {
+    const partial = result({
+      debug_summary: {
+        ...result().debug_summary!,
+        answer_completion_reason: "timeout_latest",
+      },
+    });
+
+    expect(isPartialRiskBrowserResult(partial)).toBe(true);
+    expect(isPartialRiskBrowserResult(result())).toBe(false);
   });
 
   it("reports result and debug text lengths separately", () => {
