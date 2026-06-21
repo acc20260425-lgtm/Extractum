@@ -91,7 +91,10 @@ New Rust backend code should follow these rules:
 
 1. Tauri commands return `AppResult<T>`.
 2. Validate inputs near the boundary and return `AppError::validation(...)`.
-3. Use `AppError::not_found(...)` for explicit missing records or app-controlled artifacts.
+3. Use `AppError::not_found(...)` for explicit missing records and for app-controlled
+   artifacts only when the command contract is a lookup, open, or download operation. If an
+   app-controlled artifact should exist as an invariant of a larger workflow, treat a missing
+   artifact as `AppError::internal(...)`.
 4. Use `AppError::conflict(...)` for duplicate/active/locked state conflicts.
 5. Use `AppError::network(...)` for external communication failures and retryable provider failures.
 6. Use `AppError::internal(...)` for broken invariants, unexpected protocol data, or corrupted internal artifacts.
@@ -172,11 +175,11 @@ impl From<BrowserRunLogError> for AppError {
             BrowserRunLogError::InvalidRunId => {
                 AppError::validation("Invalid browser run id")
             }
-            BrowserRunLogError::ReadFailed(error) => {
-                AppError::internal(format!("Failed to read browser run log: {error}"))
+            BrowserRunLogError::ReadFailed(_error) => {
+                AppError::internal("Failed to read browser run log")
             }
-            BrowserRunLogError::InvalidJson(error) => {
-                AppError::internal(format!("Browser run log is corrupted: {error}"))
+            BrowserRunLogError::InvalidJson(_error) => {
+                AppError::internal("Browser run log is corrupted")
             }
         }
     }
@@ -241,9 +244,9 @@ should be single-line or line-collapsed and bounded to the shared maximum.
 Redaction rules:
 
 - URL query strings and fragments: remove by default.
-- External, provider, and browser URLs: preserve only scheme and host by default. Preserve path
-  only for allowlisted domains/routes where path segments are known not to contain account ids,
-  document ids, run ids, opaque state, or private resource identifiers.
+- External, provider, and browser URLs: current helper behavior redacts whole URL tokens. A
+  future allowlist may preserve scheme and host, or safe path segments for known-safe
+  domains/routes. Until that allowlist exists, do not rely on URL structure being preserved.
 - URL credentials: always redact.
 - Query parameters named like `token`, `key`, `api_key`, `auth`, `code`, `state`, `session`,
   `password`, or `secret`: always redact if a query is intentionally preserved.
@@ -374,14 +377,15 @@ the path includes a user-provided id, filename, or relative component.
 
 For diagnostic details:
 
-- use run artifacts, debug summaries, or structured logs when available;
+- use run artifacts, debug summaries, or sanitized structured logs when available;
 - sanitize URLs, prompts, cookies, tokens, and account hints;
 - include stable operation labels such as `read browser run log`, `parse sidecar response`,
   or `open app data directory`.
 
 Structured logs that can enter diagnostics exports must follow the same redaction standard as
-`AppError.message`. Prefer stable ids, counters, enum statuses, and sanitized summaries. Do not
-log raw provider/browser bodies, prompts, tokens, emails, cookies, or local paths.
+`AppError.message`. Each field must be a stable enum, non-sensitive id, count, boolean, or
+sanitized string. Do not log raw `error`, `url`, `path`, `body`, `email`, prompt, token, cookie,
+provider/browser response, or local path fields.
 
 Do not expand `AppError` into a general debug payload. Keep detailed diagnostics in the
 feature-specific debug surface.
@@ -417,6 +421,8 @@ For new or migrated error handling:
 - Test that expected workflow states return DTO/status values rather than command errors.
 - Test that security-sensitive messages are sanitized when the error can include external input.
 - For frontend-facing commands, include at least one test or smoke path that validates the serialized shape.
+- Test the serialized `AppErrorKind` values directly: `validation`, `not_found`, `auth`,
+  `network`, `conflict`, and `internal`.
 
 The shared sanitizer test corpus should include:
 
@@ -447,6 +453,7 @@ Good first targets:
 - sidecar protocol errors;
 - run log filesystem/JSON errors;
 - CDP Chrome launch/setup errors;
+- `AppError::database(...)` and `database_error(...)` migration to safe bounded messages;
 - open run folder security checks.
 
 The pilot should preserve the existing Tauri command response shapes and migrate only the
