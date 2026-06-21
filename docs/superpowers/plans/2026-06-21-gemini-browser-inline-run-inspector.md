@@ -1930,7 +1930,7 @@ git commit -m "feat: show Gemini browser run inspector"
 - Modify: `docs/browser-providers-llm-troubleshooting.md`
 - Modify: `docs/architecture-deep-dive.md`
 
-- [ ] **Step 1: Update troubleshooting docs**
+- [x] **Step 1: Update troubleshooting docs**
 
 In `docs/browser-providers-llm-troubleshooting.md`, add a short section after `Status And Run Lifecycle`:
 
@@ -1951,7 +1951,7 @@ cookies, and account identifiers. It also truncates overlong messages. It is
 the preferred first payload to paste into an LLM debugging session.
 ```
 
-- [ ] **Step 2: Update architecture docs**
+- [x] **Step 2: Update architecture docs**
 
 In `docs/architecture-deep-dive.md`, extend the Browser Providers run-log paragraph with:
 
@@ -1963,7 +1963,7 @@ excluding prompt text, answer text, raw DOM, screenshots, cookies, and account
 identifiers.
 ```
 
-- [ ] **Step 3: Run full relevant automated checks**
+- [x] **Step 3: Run full relevant automated checks**
 
 Run:
 
@@ -1977,7 +1977,7 @@ git diff --check
 
 Expected: PASS for all commands and no whitespace errors.
 
-- [ ] **Step 4: Rebuild packaged sidecar binary**
+- [x] **Step 4: Rebuild packaged sidecar binary**
 
 Run:
 
@@ -2011,7 +2011,7 @@ In the app:
 Rust command validation plus frontend view-model/source-contract tests, so CI or
 agent runs do not need to perform GUI folder opening.
 
-- [ ] **Step 6: Commit Task 5**
+- [x] **Step 6: Commit Task 5**
 
 Run:
 

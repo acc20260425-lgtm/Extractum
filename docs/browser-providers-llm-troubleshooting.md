@@ -156,6 +156,21 @@ The exact app-data root is platform-dependent and is resolved by Tauri. On Windo
 
 The default artifact mode from Rust is `reduced`. Full HTML/screenshot artifacts should be used only in controlled local/mock situations because live Gemini pages can contain account and prompt data.
 
+## Inline Run Inspector
+
+The Browser Providers panel includes an inline run inspector for the selected
+active run or the newest recent run. Use it before opening app-data manually.
+
+The inspector shows status, elapsed time, result text length, debug final text
+length, answer completion reason, artifact availability, manual action, and
+sanitized message text plus sidecar `debug_summary` facts such as
+composer/send/answer selection and wait durations.
+
+`Copy diagnostics` intentionally omits full local artifact paths, URL query/hash
+data, email-like account hints, prompt text, answer text, raw DOM, screenshots,
+cookies, and account identifiers. It also truncates overlong messages. It is
+the preferred first payload to paste into an LLM debugging session.
+
 ## Fast Troubleshooting Playbook
 
 Start with the UI status, latest message, and recent `run_id`.
