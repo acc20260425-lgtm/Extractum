@@ -36,6 +36,17 @@ describe("youtube summary launch contract", () => {
     expect(dialog).not.toContain("controlPreset: \"standard\"");
   });
 
+  it("wires Gemini Browser runtime selector into preflight and start requests", () => {
+    const dialog = readFileSync("src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte", "utf8");
+
+    expect(dialog).toContain("runtimeProvider = $state");
+    expect(dialog).toContain("Gemini Browser");
+    expect(dialog).toContain("geminiBridgeStatus");
+    expect(dialog).toContain("deriveGeminiBrowserSetupChecks");
+    expect(dialog).toContain("runtimeProvider,");
+    expect(dialog).toContain("browserProviderConfig:");
+  });
+
   it("renders video summary text through the safe markdown renderer only in video sections", () => {
     const compactView = readFileSync("src/lib/components/research-projects/YoutubeSummaryResultView.svelte", "utf8");
     const reportPanel = readFileSync("src/lib/components/research-projects/ProjectRunReportPanel.svelte", "utf8");

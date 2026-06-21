@@ -12,6 +12,7 @@ import {
   listPromptPackStageArtifacts,
   listPromptPackRuns,
   PROMPT_PACK_RUN_EVENT,
+  preflightYoutubeSummaryRun,
   startYoutubeSummaryRun,
   updatePromptPackRun,
 } from "./prompt-packs";
@@ -65,6 +66,86 @@ describe("prompt pack api wrappers", () => {
       sourceIds: [901],
       profileId: null,
       modelOverride: null,
+      outputLanguage: "en",
+      controlPreset: "standard",
+      evidenceMode: "standard",
+      includeComments: false,
+    });
+  });
+
+  it("forwards browser runtime provider fields for preflight and start", async () => {
+    const browserProviderConfig = {
+      mode: "cdp_attach" as const,
+      cdpEndpoint: "http://127.0.0.1:9222",
+    };
+    invokeMock.mockResolvedValueOnce({
+      packId: "youtube_summary",
+      packVersion: "1.0.0",
+      includedVideos: [],
+      skippedVideos: [],
+      blockingFailures: [],
+      estimatedInputTokens: 0,
+      selectedModelInputLimit: null,
+    });
+
+    await preflightYoutubeSummaryRun({
+      projectId: null,
+      sourceIds: [901],
+      profileId: null,
+      modelOverride: null,
+      runtimeProvider: "gemini_browser",
+      browserProviderConfig,
+      outputLanguage: "en",
+      controlPreset: "standard",
+      evidenceMode: "standard",
+      includeComments: false,
+    });
+
+    expect(invokeMock).toHaveBeenLastCalledWith("preflight_youtube_summary_run", {
+      projectId: null,
+      sourceIds: [901],
+      profileId: null,
+      modelOverride: null,
+      runtimeProvider: "gemini_browser",
+      browserProviderConfig,
+      outputLanguage: "en",
+      controlPreset: "standard",
+      evidenceMode: "standard",
+      includeComments: false,
+    });
+
+    invokeMock.mockResolvedValueOnce({
+      kind: "started",
+      run: {
+        runId: 42,
+        runStatus: "queued",
+        latestMessage: "Queued",
+        runtimeProvider: "gemini_browser",
+      },
+    });
+
+    await startYoutubeSummaryRun({
+      clientRequestId: "req-browser-runtime-ui",
+      projectId: null,
+      sourceIds: [901],
+      profileId: null,
+      modelOverride: null,
+      runtimeProvider: "gemini_browser",
+      browserProviderConfig,
+      outputLanguage: "en",
+      controlPreset: "standard",
+      evidenceMode: "standard",
+      includeComments: false,
+    });
+
+    expect(invokeMock).toHaveBeenLastCalledWith("start_youtube_summary_run", {
+      clientRequestId: "req-browser-runtime-ui",
+      projectId: null,
+      sourceIds: [901],
+      profileId: null,
+      modelOverride: null,
+      runtimeProvider: "gemini_browser",
+      browserProviderConfig,
       outputLanguage: "en",
       controlPreset: "standard",
       evidenceMode: "standard",

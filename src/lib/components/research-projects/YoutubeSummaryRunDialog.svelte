@@ -11,10 +11,27 @@
     preflightYoutubeSummaryRun,
     startYoutubeSummaryRun,
   } from "$lib/api/prompt-packs";
+  import {
+    geminiBridgeListRuns,
+    geminiBridgeStatus,
+  } from "$lib/api/gemini-browser";
+  import {
+    deriveGeminiBrowserSetupChecks,
+    setupCheckStateLabel,
+  } from "$lib/gemini-browser-setup-status";
   import { canStartYoutubeSummary, summarizePreflightPartitions } from "$lib/ui/youtube-summary-workflow";
-  import type { YoutubeSummaryPreflightResponse } from "$lib/types/prompt-packs";
+  import type {
+    PromptPackRuntimeProvider,
+    YoutubeSummaryPreflightResponse,
+  } from "$lib/types/prompt-packs";
   import { getLlmProfiles } from "$lib/api/llm";
   import type { LlmProfile } from "$lib/types/llm";
+  import type {
+    GeminiBrowserProviderConfig,
+    GeminiBrowserProviderMode,
+    GeminiBrowserProviderStatus,
+    GeminiBrowserRun,
+  } from "$lib/types/gemini-browser";
 
   type YoutubeSummaryLaunchSource = {
     sourceId: number;
@@ -37,6 +54,12 @@
   let controlPreset = $state("detailed_report");
   let profileId = $state("");
   let modelOverride = $state("");
+  let runtimeProvider = $state<PromptPackRuntimeProvider>("api");
+  let browserProviderMode = $state<GeminiBrowserProviderMode>("managed");
+  let cdpEndpoint = $state("http://127.0.0.1:9222");
+  let browserStatus = $state<GeminiBrowserProviderStatus | null>(null);
+  let browserRuns = $state<GeminiBrowserRun[]>([]);
+  let browserStatusLoadError = $state<string | null>(null);
   let includeComments = $state(false);
   let loading = $state(false);
   let preflight = $state<YoutubeSummaryPreflightResponse | null>(null);
@@ -46,11 +69,38 @@
   let partitionSummary = $derived(
     preflight ? summarizePreflightPartitions(preflight) : null,
   );
+  const browserProviderConfig = $derived<GeminiBrowserProviderConfig | null>(
+    runtimeProvider === "gemini_browser"
+      ? browserConfig()
+      : null,
+  );
+  const browserSetupChecks = $derived(
+    deriveGeminiBrowserSetupChecks({
+      status: browserStatus,
+      providerMode: browserProviderMode,
+      cdpEndpoint,
+      runs: browserRuns,
+      selectedRun: browserRuns[0] ?? null,
+      busy: loading,
+      statusLoadError: browserStatusLoadError,
+    }),
+  );
+  const browserRuntimeBlockingCheck = $derived(
+    runtimeProvider === "gemini_browser"
+      ? browserSetupChecks.find((check) => check.state === "failed" || check.state === "action_needed") ?? null
+      : null,
+  );
 
   $effect(() => {
     if (open) {
       outputLanguage = "ru";
       controlPreset = "detailed_report";
+      runtimeProvider = "api";
+      browserProviderMode = "managed";
+      cdpEndpoint = "http://127.0.0.1:9222";
+      browserStatus = null;
+      browserRuns = [];
+      browserStatusLoadError = null;
       void loadProfiles();
       if (source) queueMicrotask(() => void runPreflight());
     }
@@ -73,6 +123,35 @@
     void runPreflight();
   }
 
+  function browserConfig(): GeminiBrowserProviderConfig {
+    if (browserProviderMode === "managed") return { mode: "managed" };
+    return {
+      mode: "cdp_attach",
+      cdpEndpoint: cdpEndpoint.trim() || null,
+    };
+  }
+
+  async function refreshBrowserStatus() {
+    if (runtimeProvider !== "gemini_browser") return;
+    try {
+      browserStatusLoadError = null;
+      const [status, runs] = await Promise.all([
+        geminiBridgeStatus(browserConfig()),
+        geminiBridgeListRuns(5),
+      ]);
+      browserStatus = status;
+      browserRuns = runs.runs;
+    } catch (cause) {
+      browserStatusLoadError = cause instanceof Error ? cause.message : String(cause);
+    }
+  }
+
+  function handleRuntimeChange(event: Event) {
+    runtimeProvider = (event.currentTarget as HTMLSelectElement).value as PromptPackRuntimeProvider;
+    if (runtimeProvider === "gemini_browser") void refreshBrowserStatus();
+    void runPreflight();
+  }
+
   async function runPreflight() {
     if (!source || !outputLanguage) return;
     loading = true;
@@ -81,8 +160,10 @@
       preflight = await preflightYoutubeSummaryRun({
         projectId,
         sourceIds: [source.sourceId],
-        profileId: profileId || null,
-        modelOverride: modelOverride || null,
+        profileId: runtimeProvider === "api" ? profileId || null : null,
+        modelOverride: runtimeProvider === "api" ? modelOverride || null : null,
+        runtimeProvider,
+        browserProviderConfig: browserProviderConfig,
         outputLanguage,
         controlPreset,
         evidenceMode: "standard",
@@ -96,7 +177,7 @@
   }
 
   async function startRun() {
-    if (!source || !outputLanguage || !canStartYoutubeSummary(preflight)) return;
+    if (!source || !outputLanguage || !canStartYoutubeSummary(preflight) || browserRuntimeBlockingCheck) return;
     loading = true;
     error = null;
     const clientRequestId = `youtube-summary-${projectId ?? "global"}-${source.sourceId}-${Date.now()}`;
@@ -105,8 +186,10 @@
         clientRequestId,
         projectId,
         sourceIds: [source.sourceId],
-        profileId: profileId || null,
-        modelOverride: modelOverride || null,
+        profileId: runtimeProvider === "api" ? profileId || null : null,
+        modelOverride: runtimeProvider === "api" ? modelOverride || null : null,
+        runtimeProvider,
+        browserProviderConfig: browserProviderConfig,
         outputLanguage,
         controlPreset,
         evidenceMode: "standard",
@@ -158,25 +241,62 @@
         </select>
       </label>
       <label>
-        <span>LLM profile</span>
-        <select bind:value={profileId} aria-label="LLM Profile" onchange={() => void runPreflight()}>
-          {#each llmProfiles as profile (profile.profile_id)}
-            <option value={profile.profile_id}>
-              {profile.profile_id} ({profile.default_model})
-            </option>
-          {/each}
+        <span>Runtime</span>
+        <select bind:value={runtimeProvider} aria-label="Runtime provider" onchange={handleRuntimeChange}>
+          <option value="api">API profile</option>
+          <option value="gemini_browser">Gemini Browser</option>
         </select>
       </label>
-      <label class="full-width">
-        <span>Model override</span>
-        <ExtractumTextInput bind:value={modelOverride} placeholder="Optional" onchange={() => void runPreflight()} />
-      </label>
+      {#if runtimeProvider === "api"}
+        <label>
+          <span>LLM profile</span>
+          <select bind:value={profileId} aria-label="LLM Profile" onchange={() => void runPreflight()}>
+            {#each llmProfiles as profile (profile.profile_id)}
+              <option value={profile.profile_id}>
+                {profile.profile_id} ({profile.default_model})
+              </option>
+            {/each}
+          </select>
+        </label>
+        <label class="full-width">
+          <span>Model override</span>
+          <ExtractumTextInput bind:value={modelOverride} placeholder="Optional" onchange={() => void runPreflight()} />
+        </label>
+      {:else}
+        <label>
+          <span>Browser mode</span>
+          <select bind:value={browserProviderMode} aria-label="Browser Provider mode" onchange={() => { void refreshBrowserStatus(); void runPreflight(); }}>
+            <option value="managed">Managed</option>
+            <option value="cdp_attach">Attach Chrome</option>
+          </select>
+        </label>
+        {#if browserProviderMode === "cdp_attach"}
+          <label class="full-width">
+            <span>CDP endpoint</span>
+            <ExtractumTextInput bind:value={cdpEndpoint} onchange={() => { void refreshBrowserStatus(); void runPreflight(); }} />
+          </label>
+        {/if}
+      {/if}
     </div>
 
     <label class="checkbox-row">
       <ExtractumCheckbox bind:checked={includeComments} onchange={() => void runPreflight()} />
       <span>Include comments</span>
     </label>
+
+    {#if runtimeProvider === "gemini_browser"}
+      <section class="preflight-section" aria-label="Browser Provider setup">
+        <h3>Browser Provider</h3>
+        {#each browserSetupChecks.slice(0, 3) as check (check.id)}
+          <ExtractumStatusMessage tone={check.state === "failed" || check.state === "action_needed" ? "error" : "info"}>
+            {check.label}: {setupCheckStateLabel(check.state)} - {check.message}
+          </ExtractumStatusMessage>
+        {/each}
+        <ExtractumButton type="button" variant="outline" onclick={() => void refreshBrowserStatus()} disabled={loading}>
+          Refresh Browser Provider
+        </ExtractumButton>
+      </section>
+    {/if}
 
     <section class="preflight-section" aria-label="Preflight">
       <h3>Preflight check</h3>
@@ -215,7 +335,7 @@
 
     <footer>
       <ExtractumButton type="button" variant="outline" onclick={() => void runPreflight()} disabled={!source || loading}>Refresh</ExtractumButton>
-      <ExtractumButton type="submit" disabled={!source || loading || !canStartYoutubeSummary(preflight)}>Start</ExtractumButton>
+      <ExtractumButton type="submit" disabled={!source || loading || !canStartYoutubeSummary(preflight) || Boolean(browserRuntimeBlockingCheck)}>Start</ExtractumButton>
     </footer>
   </form>
 </ExtractumDialog>
