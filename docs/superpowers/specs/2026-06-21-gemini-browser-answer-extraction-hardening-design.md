@@ -99,8 +99,13 @@ interface AnswerExtractionSnapshot {
 ```
 
 The persisted or copied diagnostic form must be safe. It may include selector
-names, candidate counts, text lengths, score components, and short hashes, but
-not full text.
+names, candidate counts, text lengths, score components, and DOM-derived
+candidate ids, but not full text. Do not include deterministic hashes of prompt
+or answer text in copied diagnostics. If implementation needs a correlation id
+inside a local artifact, prefer a DOM/group id based on selector and element
+order. Text-derived hashes should be avoided; if they become necessary for a
+local-only artifact, they must be keyed per run, omitted from copied
+diagnostics, and documented as non-contractual debug data.
 
 Candidate observations should include:
 
@@ -108,7 +113,6 @@ Candidate observations should include:
 - DOM order index;
 - visible flag;
 - text length;
-- normalized text hash;
 - whether it matched baseline;
 - whether it looked like composer/user prompt/navigation text;
 - parent/group identifier when grouping is possible.
@@ -116,10 +120,32 @@ Candidate observations should include:
 ### Grouping
 
 The extractor should prefer complete assistant-turn containers. For selectors
-such as `message-content`, it should look for the closest stable answer ancestor
-and aggregate visible descendant text in DOM order. If no stable ancestor can be
-identified, it may fall back to a single node, but diagnostics must mark that as
-`grouping: "single_node"`.
+such as `message-content`, it should find the closest deterministic answer
+ancestor and aggregate visible descendant text in DOM order. If no answer
+ancestor can be identified, it may fall back to a single node, but diagnostics
+must mark that as `grouping: "single_node"`.
+
+Ancestor search must be deterministic:
+
+1. Start at the matched raw answer node.
+2. Climb at most six ancestors.
+3. Stop before page/conversation/composer containers such as `body`, `main`,
+   `form`, `[role="main"]`, `[role="textbox"]`, `textarea`,
+   `[contenteditable="true"]`, and known composer containers.
+4. Accept the smallest ancestor that looks like an assistant turn, using an
+   allowlist of stable patterns such as a response index attribute, an
+   assistant/model message role attribute, an article/list item containing
+   answer content but no composer textbox, or a direct parent that owns multiple
+   `message-content` descendants for the same assistant turn.
+5. Reject ancestors that contain the current prompt text, visible send/composer
+   controls, account/login UI, navigation labels, or previous-turn controls.
+6. When multiple valid ancestors remain, prefer the deepest ancestor; break ties
+   by later DOM order.
+
+The grouped candidate text is then built from visible answer descendants inside
+that ancestor, ordered by DOM position. It must not blindly use the full
+ancestor `innerText` when that would include buttons, citations controls,
+composer text, or unrelated previous turns.
 
 Grouping rules should avoid broad page-level fallbacks such as `main` or
 `section` unless they are explicitly constrained to a post-submit assistant
@@ -151,8 +177,10 @@ The current completion reasons are `stable`, `timeout_latest`, and `missing`.
 Keep those as the public v1 surface, but make their meaning stricter:
 
 - `stable`: selected grouped candidate stayed unchanged for the stable window,
-  candidate count/signature stayed unchanged, and no known generation-busy UI was
-  visible during the final quiet window.
+  candidate count/signature stayed unchanged for several consecutive polls after
+  the last candidate-count or grouping change, no larger valid candidate appeared
+  during that window, and no known generation-busy UI was visible during the
+  final quiet window.
 - `timeout_latest`: some candidate text was visible, but the extractor could not
   prove stability before timeout.
 - `missing`: no valid post-submit answer candidate appeared.
@@ -165,23 +193,41 @@ expanding the public result status first. Good examples:
 - `selected_candidate_changed_count`;
 - `last_growth_elapsed_ms`;
 - `stable_window_satisfied`;
+- `stable_poll_count_after_last_candidate_change`;
+- `candidate_signature_changed_count`;
 - `completion_notes`.
 
 The sidecar should keep waiting while generation-busy UI is visible, subject to a
 hard maximum timeout. If the answer keeps growing, the stable timer resets. If a
 new grouped candidate becomes better than the previous selected candidate, the
-stable timer also resets.
+stable timer also resets. Busy UI is only an additional signal; it is not
+trusted as the only completion gate. The grouped candidate signature, selected
+candidate rank, candidate count, and largest candidate length must remain quiet
+for the completion window before returning `stable`. This gives protection when
+Gemini appends a later block after the stop/busy indicator is absent or
+undetected.
 
 ## Artifacts And Diagnostics
 
 Add a reduced answer extraction artifact for failure and partial cases:
 
-- captured for `timeout`, `failed`, `browser_crashed`, and `timeout_latest`;
+- captured for `timeout`, `failed`, `browser_crashed`, and any run whose
+  completion reason is `timeout_latest`;
 - written under the run artifact directory;
 - contains no full prompt or answer text;
-- contains selector names, candidate counts, lengths, hashes, completion reason,
-  and sanitized error stage;
+- contains selector names, candidate counts, lengths, score facts, completion
+  reason, and sanitized error stage;
 - safe to inspect locally and summarize in copied diagnostics.
+
+`timeout_latest` is not a run result status. If visible text exists at timeout,
+the result may still be `status: "ok"` with returned text, but it must be treated
+as a **partial-risk success**:
+
+- write the reduced extraction artifact;
+- expose `answer_completion_reason: "timeout_latest"`;
+- show the partial-risk state in the run inspector;
+- include the partial-risk fact in copied diagnostics;
+- do not silently present it as equivalent to `stable`.
 
 Extend `debug_summary` with compact extraction facts:
 
@@ -190,11 +236,17 @@ interface GeminiBrowserAnswerExtractionDebug {
   raw_candidate_count: number;
   grouped_candidate_count: number;
   selected_candidate_length: number;
+  returned_text_length: number;
   selected_grouping: "assistant_turn" | "single_node" | "unknown";
+  selected_candidate_rank: number | null;
   selected_score: number | null;
+  largest_candidate_length: number;
+  larger_candidate_available: boolean;
   top_candidate_lengths: number[];
   busy_visible_at_completion: boolean;
   last_growth_elapsed_ms: number | null;
+  candidate_signature_changed_count: number;
+  stable_poll_count_after_last_candidate_change: number;
 }
 ```
 
@@ -207,8 +259,10 @@ The inline run inspector should surface:
 - raw/grouped candidate counts;
 - selected grouping;
 - selected length vs result text length;
+- selected rank and largest candidate length;
 - completion reason;
 - busy at completion;
+- candidate signature change count;
 - whether an extraction artifact is available.
 
 `Copy diagnostics` should include these fields but still omit full answer text,
@@ -232,6 +286,10 @@ behavior:
   assistant turn;
 - copied diagnostics include candidate counts and lengths but not answer text,
   prompt text, paths, email-like hints, or sensitive URLs.
+- at least one Playwright DOM fixture page exercises real DOM ancestor grouping
+  with nested `message-content`, sibling markdown/list blocks, composer
+  controls, and a previous answer. Mocked locator tests are useful for polling
+  behavior, but they are not sufficient for validating grouping.
 
 Add frontend/Rust tests only for DTO and UI display changes:
 
@@ -245,8 +303,10 @@ made partial extraction visible. A successful manual run should show:
 
 - `result_text_length === debug_final_text_length`;
 - completion reason `stable` for a fully rendered answer;
-- grouped candidate count greater than or equal to raw candidate count where
-  split DOM appears;
+- raw candidate count may be greater than grouped candidate count where split
+  DOM appears;
+- selected grouped candidate length is greater than each individual fragment
+  length in split-answer cases;
 - selected grouping not `unknown`;
 - copied diagnostics do not include answer text.
 
@@ -271,6 +331,7 @@ test prompt UI unless needed for diagnostics display.
 - Run inspector shows why a candidate was selected.
 - Copied diagnostics remain privacy-safe.
 - Existing Browser Provider happy path still works in CDP attach mode.
-- Existing managed-mode behavior is not intentionally changed.
+- Managed mode remains compatible with the shared extractor and passes the same
+  extraction tests as CDP attach mode.
 - The design of the Gemini page can drift without immediately forcing a blind
   selector tweak; diagnostics should identify what changed.
