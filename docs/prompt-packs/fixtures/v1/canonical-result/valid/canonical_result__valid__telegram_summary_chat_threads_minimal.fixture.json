@@ -1,0 +1,528 @@
+{
+  "schema_version": "1.0",
+  "result_id": "result_ts_chat_1",
+  "parent_result_ids": null,
+  "run_id": "run_ts_chat_1",
+  "pack_id": "telegram_summary",
+  "pack_version": "v1",
+  "stage": "final_result",
+  "created_at": "2026-06-22T09:00:00Z",
+  "output_language": "en",
+  "metadata": {
+    "result_status": "complete",
+    "producer_type": "llm",
+    "contains_partial_results": false,
+    "contains_unverified_claims": false
+  },
+  "run_context": {
+    "project_id": "project_fixture",
+    "run_goal": "Validate a minimal Telegram chat thread summary result.",
+    "selected_pack": {
+      "pack_id": "telegram_summary",
+      "pack_version": "v1"
+    },
+    "control_preset": "standard",
+    "evidence_mode": "standard",
+    "output_language": "en",
+    "source_languages": [
+      "en"
+    ],
+    "period": {
+      "from": "2026-06-10",
+      "to": "2026-06-11"
+    },
+    "input_corpus": {
+      "source_count": 1,
+      "material_count": 1,
+      "fragment_count": 1,
+      "source_types": [
+        "telegram_chat_snapshot"
+      ]
+    },
+    "model_selection": [
+      {
+        "stage": "telegram_summary/thread_grouping",
+        "provider": "openai_compatible",
+        "model": "gpt-4.1-mini"
+      }
+    ]
+  },
+  "outputs": {
+    "summary": {
+      "summary_text": "The chat thread resolved a practical question about reset-token expiry.",
+      "claim_refs": [
+        "claim_1"
+      ],
+      "evidence_refs": [
+        "evidence_1"
+      ],
+      "source_refs": [
+        "source_ref_1"
+      ]
+    },
+    "sections": [
+      {
+        "section_id": "section_threads",
+        "section_type": "summary",
+        "custom_section_type": null,
+        "title": "Threads",
+        "items": [
+          {
+            "item_id": "item_1",
+            "text": "A user asked how long reset tokens remain valid, and another participant answered that they expire after 15 minutes.",
+            "claim_refs": [
+              "claim_1"
+            ],
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ]
+      }
+    ],
+    "pack_data": {
+      "telegram_summary": {
+        "source_shape": "chat",
+        "sources": [
+          {
+            "summary_source_id": "tg_source_chat_1",
+            "source_ref_id": "source_ref_1",
+            "source_kind": "chat",
+            "display_name": "Example Support Chat",
+            "platform_id": "-1009876543210",
+            "message_count": 3,
+            "usable_message_count": 3,
+            "topic_count": 1,
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "time_window": {
+          "from": "2026-06-10T00:00:00Z",
+          "to": "2026-06-11T23:59:59Z",
+          "timezone": "UTC",
+          "label": "2026-06-10..2026-06-11"
+        },
+        "message_refs": [
+          {
+            "message_ref_id": "msg_ref_1",
+            "summary_source_id": "tg_source_chat_1",
+            "source_ref_id": "source_ref_1",
+            "message_id": "2101",
+            "published_at": "2026-06-10T10:00:00Z",
+            "author_display": "User A",
+            "message_kind": "chat_message",
+            "forum_topic_id": null,
+            "forum_topic_title": null,
+            "reply_to_message_ref": null,
+            "reply_to_top_message_ref": null,
+            "history_scope": "current",
+            "is_migrated_history": false,
+            "migration_domain": null,
+            "has_media": false,
+            "media_kind": null,
+            "media_caption_available": false,
+            "reaction_count": 1,
+            "reply_count": 2,
+            "forward_count": null,
+            "evidence_refs": [],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          },
+          {
+            "message_ref_id": "msg_ref_2",
+            "summary_source_id": "tg_source_chat_1",
+            "source_ref_id": "source_ref_1",
+            "message_id": "2102",
+            "published_at": "2026-06-10T10:04:00Z",
+            "author_display": "User B",
+            "message_kind": "chat_message",
+            "forum_topic_id": null,
+            "forum_topic_title": null,
+            "reply_to_message_ref": "msg_ref_1",
+            "reply_to_top_message_ref": "msg_ref_1",
+            "history_scope": "current",
+            "is_migrated_history": false,
+            "migration_domain": null,
+            "has_media": false,
+            "media_kind": null,
+            "media_caption_available": false,
+            "reaction_count": 6,
+            "reply_count": 1,
+            "forward_count": null,
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          },
+          {
+            "message_ref_id": "msg_ref_3",
+            "summary_source_id": "tg_source_chat_1",
+            "source_ref_id": "source_ref_1",
+            "message_id": "2103",
+            "published_at": "2026-06-10T10:07:00Z",
+            "author_display": "User A",
+            "message_kind": "chat_message",
+            "forum_topic_id": null,
+            "forum_topic_title": null,
+            "reply_to_message_ref": "msg_ref_2",
+            "reply_to_top_message_ref": "msg_ref_1",
+            "history_scope": "current",
+            "is_migrated_history": false,
+            "migration_domain": null,
+            "has_media": false,
+            "media_kind": null,
+            "media_caption_available": false,
+            "reaction_count": 2,
+            "reply_count": 0,
+            "forward_count": null,
+            "evidence_refs": [],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "digest": {
+          "summary_text": "The main useful thread answered that reset tokens expire after 15 minutes.",
+          "key_events": [
+            "A reset-token expiry question was answered in the support chat."
+          ],
+          "major_changes": [],
+          "recommended_reads": [
+            "key_message_1",
+            "key_message_2"
+          ],
+          "claim_refs": [
+            "claim_1"
+          ],
+          "evidence_refs": [
+            "evidence_1"
+          ],
+          "source_refs": [
+            "source_ref_1"
+          ]
+        },
+        "timeline": [
+          {
+            "timeline_event_id": "timeline_event_1",
+            "occurred_at": "2026-06-10T10:04:00Z",
+            "title": "Reset-token expiry answered",
+            "summary_text": "A participant answered that reset tokens expire after 15 minutes.",
+            "importance": "medium",
+            "message_refs": [
+              "msg_ref_1",
+              "msg_ref_2"
+            ],
+            "claim_refs": [
+              "claim_1"
+            ],
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "topics": [
+          {
+            "topic_id": "topic_1",
+            "title": "Reset token validity",
+            "summary_text": "The thread covers how long reset tokens remain valid.",
+            "topic_source": "reply_chain",
+            "topic_scope": "single_source",
+            "importance": "medium",
+            "message_count": 3,
+            "key_message_refs": [
+              "key_message_1",
+              "key_message_2"
+            ],
+            "thread_refs": [
+              "thread_1"
+            ],
+            "claim_refs": [
+              "claim_1"
+            ],
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "key_messages": [
+          {
+            "key_message_id": "key_message_1",
+            "summary_source_id": "tg_source_chat_1",
+            "message_ref": "msg_ref_1",
+            "message_id": "2101",
+            "published_at": "2026-06-10T10:00:00Z",
+            "author_display": "User A",
+            "role": "question",
+            "importance_score": 0.52,
+            "importance_reasons": [
+              "started_thread"
+            ],
+            "summary_text": "A user asked how long reset tokens remain valid.",
+            "contains_claims": false,
+            "topic_refs": [
+              "topic_1"
+            ],
+            "thread_refs": [
+              "thread_1"
+            ],
+            "claim_refs": [],
+            "evidence_refs": [],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          },
+          {
+            "key_message_id": "key_message_2",
+            "summary_source_id": "tg_source_chat_1",
+            "message_ref": "msg_ref_2",
+            "message_id": "2102",
+            "published_at": "2026-06-10T10:04:00Z",
+            "author_display": "User B",
+            "role": "answer",
+            "importance_score": 0.86,
+            "importance_reasons": [
+              "resolved_question",
+              "useful_instruction",
+              "claim_dense"
+            ],
+            "summary_text": "A participant answered that reset tokens expire after 15 minutes.",
+            "contains_claims": true,
+            "topic_refs": [
+              "topic_1"
+            ],
+            "thread_refs": [
+              "thread_1"
+            ],
+            "claim_refs": [
+              "claim_1"
+            ],
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "threads": [
+          {
+            "thread_id": "thread_1",
+            "summary_source_id": "tg_source_chat_1",
+            "root_message_ref": "msg_ref_1",
+            "thread_kind": "reply_chain",
+            "forum_topic_id": null,
+            "forum_topic_title": null,
+            "message_count": 3,
+            "participant_count": 2,
+            "summary_text": "The thread starts with a reset-token expiry question and ends with confirmation that the answer helped.",
+            "outcome": "answer_found",
+            "key_message_refs": [
+              "key_message_1",
+              "key_message_2"
+            ],
+            "claim_refs": [
+              "claim_1"
+            ],
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "claims": [
+          {
+            "telegram_claim_id": "telegram_claim_1",
+            "claim_ref": "claim_1",
+            "claim_text": "Reset tokens expire after 15 minutes.",
+            "claim_kind": "factual",
+            "status_in_corpus": "supported_once",
+            "topic_refs": [
+              "topic_1"
+            ],
+            "key_message_refs": [
+              "key_message_2"
+            ],
+            "message_refs": [
+              "msg_ref_2"
+            ],
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "forwarded_items": [],
+        "message_quality_signals": [
+          {
+            "signal_id": "message_quality_1",
+            "message_ref": "msg_ref_2",
+            "signal_type": "useful_answer",
+            "score": 0.88,
+            "reason": "The answer directly resolves the root question in the reply chain.",
+            "topic_refs": [
+              "topic_1"
+            ],
+            "thread_refs": [
+              "thread_1"
+            ],
+            "evidence_refs": [
+              "evidence_1"
+            ],
+            "source_refs": [
+              "source_ref_1"
+            ]
+          }
+        ],
+        "cross_source_synthesis": null,
+        "limitations": []
+      }
+    }
+  },
+  "source_refs": [
+    {
+      "source_ref_id": "source_ref_1",
+      "source_type": "telegram_chat_snapshot",
+      "custom_source_type": null,
+      "material_id": "material_ts_chat_1",
+      "source_id": "source_ts_chat_1",
+      "snapshot_id": "snapshot_ts_chat_1",
+      "canonical_url": "https://t.me/example_support_chat",
+      "internal_uri": "extractum://materials/material_ts_chat_1",
+      "source_title": "Example Support Chat",
+      "published_at": null,
+      "accessed_at": "2026-06-22T09:00:00Z",
+      "access_status": "live",
+      "type_data": {
+        "schema_version": "1.0",
+        "chat_platform_id": "-1009876543210",
+        "member_count": 3200,
+        "message_count_in_snapshot": 3,
+        "unique_author_count": 2,
+        "snapshot_from": "2026-06-10T00:00:00Z",
+        "snapshot_to": "2026-06-11T23:59:59Z",
+        "scraped_at": "2026-06-22T09:00:00Z",
+        "creator": {
+          "creator_type": "unknown",
+          "custom_creator_type": null,
+          "id": null,
+          "platform_specific_id": null,
+          "display_name": "Example Support Chat",
+          "profile_url": "https://t.me/example_support_chat"
+        },
+        "parent_context": {
+          "context_type": null,
+          "custom_context_type": null,
+          "context_id": null,
+          "platform_specific_id": null,
+          "context_title": null,
+          "context_url": null
+        },
+        "extra_metadata": {}
+      }
+    }
+  ],
+  "claims": [
+    {
+      "claim_id": "claim_1",
+      "claim_type": "factual",
+      "custom_claim_type": null,
+      "claim_status": "verified",
+      "custom_claim_status": null,
+      "claim_text": "Reset tokens expire after 15 minutes.",
+      "normalized_claim_text": "Reset tokens expire after 15 minutes.",
+      "normalized_claim_language": "en",
+      "scope": {
+        "period": {
+          "from": "2026-06-10",
+          "to": "2026-06-11"
+        },
+        "geo": null,
+        "applies_to": [
+          "reset_tokens"
+        ]
+      },
+      "confidence": {
+        "score": 0.84,
+        "basis": "strong_direct_evidence",
+        "custom_basis": null,
+        "method": "llm_assessment",
+        "custom_method": null
+      },
+      "evidence_refs": [
+        "evidence_1"
+      ],
+      "source_refs": [
+        "source_ref_1"
+      ],
+      "relation_refs": [],
+      "provenance": {
+        "stage": "telegram_summary/claim_extraction",
+        "provider": "openai_compatible",
+        "model": "gpt-4.1-mini",
+        "audit_refs": []
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "evidence_id": "evidence_1",
+      "claim_id": "claim_1",
+      "source_ref_id": "source_ref_1",
+      "evidence_type": "fragment",
+      "custom_evidence_type": null,
+      "evidence_role": "supports",
+      "custom_evidence_role": null,
+      "fragment_type": "text_range",
+      "custom_fragment_type": null,
+      "locator_data": {
+        "schema_version": "1.0",
+        "char_start": 0,
+        "char_end": 38,
+        "snapshot_text_id": "telegram_message_2102"
+      },
+      "text_mode": "verbatim",
+      "fragment_text": "Reset tokens expire after 15 minutes.",
+      "context_text": "Telegram message 2102 replies to message 2101 in Example Support Chat.",
+      "contributing_evidence_refs": [],
+      "reasoning_summary": null,
+      "confidence": {
+        "score": 0.88,
+        "basis": "strong_direct_evidence",
+        "custom_basis": null,
+        "method": "llm_assessment",
+        "custom_method": null
+      },
+      "provenance": {
+        "stage": "telegram_summary/thread_grouping",
+        "provider": "openai_compatible",
+        "model": "gpt-4.1-mini",
+        "audit_refs": []
+      }
+    }
+  ],
+  "claim_relations": [],
+  "unknowns": [],
+  "verification_tasks": [],
+  "warnings": [],
+  "limitations": [],
+  "quality_flags": [],
+  "audit_refs": []
+}
