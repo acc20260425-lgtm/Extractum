@@ -221,6 +221,13 @@
       "path": "packs/youtube_summary/pack_data.schema.json",
       "$id": "extractum://prompt-packs/schemas/v1/packs/youtube_summary/pack_data.schema.json",
       "status": "semantic"
+    },
+    {
+      "schema_id": "packs/telegram_summary/pack_data",
+      "group": "packs",
+      "path": "packs/telegram_summary/pack_data.schema.json",
+      "$id": "extractum://prompt-packs/schemas/v1/packs/telegram_summary/pack_data.schema.json",
+      "status": "semantic"
     }
   ]
 }

@@ -1,0 +1,1060 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "extractum://prompt-packs/schemas/v1/packs/telegram_summary/pack_data.schema.json",
+  "title": "Pack Data: telegram_summary",
+  "type": "object",
+  "$comment": "Semantic local-shape schema for outputs.pack_data.telegram_summary. This schema covers source shape, message_refs, digest, timeline, topics, key messages, threads, claims, forwarded items, message quality signals, cross-source synthesis, and limitations. Cross-object message_ref existence, namespace isolation, evidence authority, scoring semantics, strict-mode coverage, and complete-result obligations remain validator/pipeline checks.",
+  "x-prompt-pack-schema-status": "semantic",
+  "properties": {
+    "source_shape": {
+      "$ref": "#/$defs/source_shape"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/telegram_summary_source"
+      }
+    },
+    "time_window": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/time_window"
+        }
+      ]
+    },
+    "message_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/telegram_message_ref"
+      }
+    },
+    "digest": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/digest"
+        }
+      ]
+    },
+    "timeline": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/timeline_event"
+      }
+    },
+    "topics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/topic"
+      }
+    },
+    "key_messages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/key_message"
+      }
+    },
+    "threads": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/thread_summary"
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/telegram_claim"
+      }
+    },
+    "forwarded_items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/forwarded_item"
+      }
+    },
+    "message_quality_signals": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/message_quality_signal"
+      }
+    },
+    "cross_source_synthesis": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/cross_source_synthesis"
+        }
+      ]
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/limitation"
+      }
+    }
+  },
+  "required": [
+    "source_shape",
+    "sources",
+    "time_window",
+    "message_refs",
+    "digest",
+    "timeline",
+    "topics",
+    "key_messages",
+    "threads",
+    "claims",
+    "forwarded_items",
+    "message_quality_signals",
+    "cross_source_synthesis",
+    "limitations"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "ref_array": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "nullable_string": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "importance": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical",
+        "unknown"
+      ]
+    },
+    "severity": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "source_shape": {
+      "enum": [
+        "channel",
+        "chat",
+        "mixed"
+      ]
+    },
+    "source_kind": {
+      "enum": [
+        "channel",
+        "chat",
+        "supergroup",
+        "forum_topic",
+        "mixed",
+        "unknown"
+      ]
+    },
+    "telegram_summary_source": {
+      "type": "object",
+      "properties": {
+        "summary_source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_ref_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_kind": {
+          "$ref": "#/$defs/source_kind"
+        },
+        "display_name": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "platform_id": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "message_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "usable_message_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "topic_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "summary_source_id",
+        "source_ref_id",
+        "source_kind",
+        "display_name",
+        "platform_id",
+        "message_count",
+        "usable_message_count",
+        "topic_count",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    },
+    "time_window": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "to": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "timezone": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "label": {
+          "$ref": "#/$defs/nullable_string"
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "timezone",
+        "label"
+      ],
+      "additionalProperties": false
+    },
+    "telegram_message_ref": {
+      "type": "object",
+      "properties": {
+        "message_ref_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary_source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_ref_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "published_at": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "author_display": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "message_kind": {
+          "enum": [
+            "channel_post",
+            "chat_message",
+            "supergroup_message",
+            "forum_topic_message",
+            "comment_message",
+            "forwarded_message",
+            "service_message",
+            "unknown"
+          ]
+        },
+        "forum_topic_id": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "forum_topic_title": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "reply_to_message_ref": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "reply_to_top_message_ref": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "history_scope": {
+          "enum": [
+            "current",
+            "migrated",
+            "mixed",
+            "unknown"
+          ]
+        },
+        "is_migrated_history": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "migration_domain": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "has_media": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "media_kind": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "media_caption_available": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "reaction_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "reply_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "forward_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "message_ref_id",
+        "summary_source_id",
+        "source_ref_id",
+        "message_id",
+        "published_at",
+        "author_display",
+        "message_kind",
+        "forum_topic_id",
+        "forum_topic_title",
+        "reply_to_message_ref",
+        "reply_to_top_message_ref",
+        "history_scope",
+        "is_migrated_history",
+        "migration_domain",
+        "has_media",
+        "media_kind",
+        "media_caption_available",
+        "reaction_count",
+        "reply_count",
+        "forward_count",
+        "evidence_refs",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    },
+    "digest": {
+      "type": "object",
+      "properties": {
+        "summary_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "key_events": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "major_changes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "recommended_reads": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "summary_text",
+        "key_events",
+        "major_changes",
+        "recommended_reads",
+        "claim_refs",
+        "evidence_refs",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    },
+    "timeline_event": {
+      "type": "object",
+      "properties": {
+        "timeline_event_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "occurred_at": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "importance": {
+          "$ref": "#/$defs/importance"
+        },
+        "message_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "timeline_event_id",
+        "occurred_at",
+        "title",
+        "summary_text",
+        "importance",
+        "message_refs",
+        "claim_refs",
+        "evidence_refs",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    },
+    "topic": {
+      "type": "object",
+      "properties": {
+        "topic_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "topic_source": {
+          "enum": [
+            "forum_topic",
+            "reply_chain",
+            "semantic_cluster",
+            "time_window",
+            "manual_query",
+            "unknown"
+          ]
+        },
+        "topic_scope": {
+          "enum": [
+            "single_source",
+            "cross_source",
+            "unknown"
+          ]
+        },
+        "importance": {
+          "$ref": "#/$defs/importance"
+        },
+        "message_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "key_message_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "thread_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "topic_id",
+        "title",
+        "summary_text",
+        "topic_source",
+        "topic_scope",
+        "importance",
+        "message_count",
+        "key_message_refs",
+        "thread_refs",
+        "claim_refs",
+        "evidence_refs",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    },
+    "key_message": {
+      "type": "object",
+      "properties": {
+        "key_message_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary_source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "published_at": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "author_display": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "role": {
+          "enum": [
+            "channel_post",
+            "chat_message",
+            "thread_root",
+            "reply",
+            "answer",
+            "question",
+            "forwarded_message",
+            "moderation_or_service",
+            "unknown"
+          ]
+        },
+        "importance_score": {
+          "$ref": "#/$defs/score"
+        },
+        "importance_reasons": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "pinned",
+              "high_reaction_count",
+              "high_reply_count",
+              "high_forward_count",
+              "started_thread",
+              "resolved_question",
+              "claim_dense",
+              "novel_information",
+              "cross_source_repeated",
+              "risk_signal",
+              "useful_instruction",
+              "editorial_pick",
+              "unknown"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "summary_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "contains_claims": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "topic_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "thread_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "key_message_id",
+        "summary_source_id",
+        "message_ref",
+        "message_id",
+        "published_at",
+        "author_display",
+        "role",
+        "importance_score",
+        "importance_reasons",
+        "summary_text",
+        "contains_claims",
+        "topic_refs",
+        "thread_refs",
+        "claim_refs",
+        "evidence_refs",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    },
+    "thread_summary": {
+      "type": "object",
+      "properties": {
+        "thread_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "summary_source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "root_message_ref": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "thread_kind": {
+          "enum": [
+            "reply_chain",
+            "forum_topic",
+            "comment_discussion",
+            "semantic_thread",
+            "unknown"
+          ]
+        },
+        "forum_topic_id": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "forum_topic_title": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "message_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "participant_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "summary_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "outcome": {
+          "enum": [
+            "answer_found",
+            "decision_made",
+            "partial_consensus",
+            "disagreement",
+            "unresolved",
+            "announcement_only",
+            "unknown"
+          ]
+        },
+        "key_message_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "thread_id",
+        "summary_source_id",
+        "root_message_ref",
+        "thread_kind",
+        "forum_topic_id",
+        "forum_topic_title",
+        "message_count",
+        "participant_count",
+        "summary_text",
+        "outcome",
+        "key_message_refs",
+        "claim_refs",
+        "evidence_refs",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    },
+    "telegram_claim": {
+      "type": "object",
+      "properties": {
+        "telegram_claim_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "claim_ref": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "claim_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "claim_kind": {
+          "enum": [
+            "factual",
+            "prediction",
+            "recommendation",
+            "opinion",
+            "rumor",
+            "question",
+            "unknown"
+          ]
+        },
+        "status_in_corpus": {
+          "enum": [
+            "supported_once",
+            "repeated",
+            "disputed",
+            "corrected",
+            "unverified",
+            "unknown"
+          ]
+        },
+        "topic_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "key_message_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "message_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "telegram_claim_id",
+        "claim_ref",
+        "claim_text",
+        "claim_kind",
+        "status_in_corpus",
+        "topic_refs",
+        "key_message_refs",
+        "message_refs",
+        "evidence_refs",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    },
+    "forwarded_item": {
+      "type": "object",
+      "properties": {
+        "forwarded_item_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "forwarded_from_channel_id": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "forwarded_from_channel_title": {
+          "$ref": "#/$defs/nullable_string"
+        },
+        "summary_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "impact": {
+          "enum": [
+            "context_only",
+            "repeated_claim",
+            "started_discussion",
+            "amplified_topic",
+            "unknown"
+          ]
+        },
+        "topic_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "forwarded_item_id",
+        "message_ref",
+        "forwarded_from_channel_id",
+        "forwarded_from_channel_title",
+        "summary_text",
+        "impact",
+        "topic_refs",
+        "claim_refs",
+        "evidence_refs",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    },
+    "message_quality_signal": {
+      "type": "object",
+      "properties": {
+        "signal_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signal_type": {
+          "enum": [
+            "useful_answer",
+            "practical_instruction",
+            "claim_dense",
+            "coordination",
+            "risk_signal",
+            "low_context",
+            "duplicate_or_echo",
+            "noise",
+            "moderation_or_service",
+            "unknown"
+          ]
+        },
+        "score": {
+          "$ref": "#/$defs/score"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "topic_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "thread_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "signal_id",
+        "message_ref",
+        "signal_type",
+        "score",
+        "reason",
+        "topic_refs",
+        "thread_refs",
+        "evidence_refs",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    },
+    "cross_source_synthesis": {
+      "type": "object",
+      "properties": {
+        "summary_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agreements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/synthesis_note"
+          }
+        },
+        "disagreements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/synthesis_note"
+          }
+        },
+        "source_specific_notes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/synthesis_note"
+          }
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "summary_text",
+        "agreements",
+        "disagreements",
+        "source_specific_notes",
+        "claim_refs",
+        "evidence_refs",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    },
+    "synthesis_note": {
+      "type": "object",
+      "properties": {
+        "note_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "note_text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "claim_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "evidence_refs": {
+          "$ref": "#/$defs/ref_array"
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "note_id",
+        "note_text",
+        "claim_refs",
+        "evidence_refs",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    },
+    "limitation": {
+      "type": "object",
+      "properties": {
+        "limitation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "affected_blocks": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "sources",
+              "time_window",
+              "message_refs",
+              "digest",
+              "timeline",
+              "topics",
+              "key_messages",
+              "threads",
+              "claims",
+              "forwarded_items",
+              "message_quality_signals",
+              "cross_source_synthesis",
+              "limitations",
+              "unknown"
+            ]
+          },
+          "uniqueItems": true
+        },
+        "source_refs": {
+          "$ref": "#/$defs/ref_array"
+        }
+      },
+      "required": [
+        "limitation_id",
+        "severity",
+        "message",
+        "affected_blocks",
+        "source_refs"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
