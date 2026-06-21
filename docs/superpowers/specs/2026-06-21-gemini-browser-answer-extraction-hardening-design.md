@@ -173,6 +173,11 @@ attributes or response indices, then relative position after the latest baseline
 group, and only use generated DOM-order paths as a last-resort diagnostic
 fallback.
 
+If no stable attribute or response index exists, only groups after the highest
+pre-submit group order should be considered new. Never drop a post-submit
+candidate solely because its structural signature or text shape resembles a
+baseline candidate.
+
 ### Grouping
 
 The extractor should prefer complete assistant-turn containers. For selectors
@@ -255,6 +260,11 @@ The signature may use the current text length and block-length vector, but it
 must not be copied into diagnostics as a text hash. If an implementation uses a
 text-derived hash internally to detect same-length text mutation, it must stay
 memory-only or be keyed per run and omitted from persisted/copied diagnostics.
+`selected_candidate_signature` is an internal polling field. Do not expose the
+raw signature string in `debug_summary`, copied diagnostics, or the reduced
+artifact when it contains text-derived material. If the artifact needs signature
+evidence, store separate structural fields such as selector, group id, DOM
+order, block count, and block lengths instead of a raw signature string.
 
 ## Completion Model
 
@@ -309,13 +319,20 @@ Add a reduced answer extraction artifact for failure and partial cases:
 
 `timeout_latest` is not a run result status. If visible text exists at timeout,
 the result may still be `status: "ok"` with returned text, but it must be treated
-as a **partial-risk success**:
+as a **partial-risk success** for Settings/test UI:
 
 - write the reduced extraction artifact;
 - expose `answer_completion_reason: "timeout_latest"`;
 - show the partial-risk state in the run inspector;
 - include the partial-risk fact in copied diagnostics;
 - do not silently present it as equivalent to `stable`.
+
+Automation consumers must not treat `status: "ok"` with
+`answer_completion_reason: "timeout_latest"` as a normal prompt completion. The
+prompt-pack Browser Provider stage should either reject it as a typed partial
+result or mark it explicitly for retry/manual review. Acceptance tests must cover
+that prompt-pack/browser-stage mapping so partial browser text is not silently
+fed into downstream analysis.
 
 Extend `debug_summary` with compact extraction facts:
 
@@ -325,6 +342,8 @@ type GeminiBrowserCandidateRejectReason =
   | "composer"
   | "prompt_container"
   | "navigation"
+  | "account_or_login"
+  | "controls"
   | "multi_turn"
   | "not_visible"
   | "empty"
@@ -423,6 +442,8 @@ behavior:
   extractor waits for the grouped candidate;
 - timeout with visible partial text returns `timeout_latest` and includes partial
   diagnostics;
+- prompt-pack/browser-stage automation does not silently treat
+  `ok + timeout_latest` as a normal completion;
 - a broad page section containing composer text is not selected as an answer;
 - baseline entries from a previous answer are ignored without dropping the new
   assistant turn;
@@ -454,6 +475,14 @@ made partial extraction visible. A successful manual run should show:
   length in split-answer cases;
 - selected grouping not `unknown`;
 - copied diagnostics do not include answer text.
+
+Manual or semi-manual validation should also include a deliberately slow or long
+answer. The acceptable outcomes are either:
+
+- `stable` with full text and matching result/debug lengths; or
+- `timeout_latest` clearly marked as partial-risk in the run inspector and copied
+  diagnostics, with downstream automation guarded from consuming it as normal
+  completion.
 
 ## Rollout
 
