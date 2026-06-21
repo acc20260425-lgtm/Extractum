@@ -451,18 +451,39 @@ export async function waitForFirstVisible(
   return null;
 }
 
+const ANSWER_TIMEOUT_MS = 60_000;
+const ANSWER_POLL_INTERVAL_MS = 500;
+const ANSWER_STABLE_MS = 2_000;
+
 async function waitForAnswerText(page: Page, prompt: string): Promise<string | null> {
-  const deadline = Date.now() + 60_000;
+  const deadline = Date.now() + ANSWER_TIMEOUT_MS;
+  let latestAnswer: string | null = null;
+  let lastChangedAt = Date.now();
+
   while (Date.now() < deadline) {
-    for (const selector of answerCandidates.map((candidate) => candidate.selector)) {
-      const texts = await page.locator(selector).allTextContents().catch(() => []);
-      const answer = texts
-        .map((text) => text.trim())
-        .filter((text) => text.length > 0 && text !== prompt)
-        .at(-1);
-      if (answer) return answer;
+    const answer = await latestAnswerText(page, prompt);
+    const now = Date.now();
+    if (answer && answer !== latestAnswer) {
+      latestAnswer = answer;
+      lastChangedAt = now;
     }
-    await page.waitForTimeout(500);
+    if (latestAnswer && now - lastChangedAt >= ANSWER_STABLE_MS) {
+      return latestAnswer;
+    }
+    await page.waitForTimeout(ANSWER_POLL_INTERVAL_MS);
+  }
+
+  return latestAnswer;
+}
+
+async function latestAnswerText(page: Page, prompt: string): Promise<string | null> {
+  for (const selector of answerCandidates.map((candidate) => candidate.selector)) {
+    const texts = await page.locator(selector).allTextContents().catch(() => []);
+    const answer = texts
+      .map((text) => text.trim())
+      .filter((text) => text.length > 0 && text !== prompt)
+      .at(-1);
+    if (answer) return answer;
   }
   return null;
 }

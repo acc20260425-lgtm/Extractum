@@ -260,4 +260,74 @@ describe("production Gemini DOM contract", () => {
       message: "Chrome CDP page closed before the run could send.",
     });
   });
+
+  it("waits for a streaming Gemini answer to stabilize before returning text", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-21T00:00:00Z"));
+    try {
+      const prompt = "Ты знаешь последние новости ЧМ по футболу?";
+      const finalAnswer =
+        "Да, конечно! Прямо сейчас в США, Канаде и Мексике в самом разгаре групповой этап ЧМ-2026. Турнир преподносит немало сюрпризов.";
+      const composer = {
+        count: async () => 1,
+        nth: () => composer,
+        isVisible: async () => true,
+        fill: vi.fn(async () => undefined),
+      };
+      const send = {
+        count: async () => 1,
+        nth: () => send,
+        isVisible: async () => true,
+        click: vi.fn(async () => undefined),
+      };
+      const answer = {
+        count: async () => 1,
+        nth: () => answer,
+        isVisible: async () => true,
+        allTextContents: vi.fn(async () => {
+          const elapsed = Date.now() - new Date("2026-06-21T00:00:00Z").getTime();
+          if (elapsed < 500) return ["Да,"];
+          return [finalAnswer];
+        }),
+      };
+      const empty = {
+        count: async () => 0,
+        nth: () => empty,
+        isVisible: async () => false,
+        allTextContents: async () => [],
+      };
+      const page = {
+        isClosed: () => false,
+        locator: (selector: string) => {
+          if (selector === "rich-textarea textarea") return composer;
+          if (selector === "button[aria-label*='send' i]") return send;
+          if (selector === "[data-response-index]") return answer;
+          return empty;
+        },
+        waitForTimeout: async (ms: number) => {
+          vi.advanceTimersByTime(ms);
+        },
+      };
+      const adapter = new GeminiBrowserAdapter({ env: {} });
+      adapter.__setTestPage(page as never);
+
+      await expect(
+        adapter.sendSingle({
+          browserProfileDir: "C:/Extractum/gemini-browser/profile",
+          artifactDir: "artifacts/gemini-browser-adapter-test/run-1",
+          request: {
+            run_id: "run-1",
+            prompt,
+            source: "settings_test",
+            artifact_mode: "reduced",
+          },
+        }),
+      ).resolves.toMatchObject({
+        status: "ok",
+        text: finalAnswer,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
