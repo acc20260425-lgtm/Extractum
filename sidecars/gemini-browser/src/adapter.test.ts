@@ -20,6 +20,12 @@ describe("production Gemini DOM contract", () => {
     expect(answerCandidates.some((candidate) => candidate.selector === "main section")).toBe(false);
   });
 
+  it("covers the localized Russian Gemini send button label", () => {
+    expect(sendCandidates.map((candidate) => candidate.selector)).toContain(
+      "button[aria-label*='Отправ' i]",
+    );
+  });
+
   it("waits for a delayed composer candidate before reporting it missing", async () => {
     let attempts = 0;
     const locator = {

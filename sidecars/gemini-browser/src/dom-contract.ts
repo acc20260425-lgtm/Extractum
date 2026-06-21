@@ -14,6 +14,7 @@ export const composerCandidates: GeminiSelectorCandidate[] = [
 
 export const sendCandidates: GeminiSelectorCandidate[] = [
   { selector: "button[aria-label*='send' i]", score: 100, purpose: "send" },
+  { selector: "button[aria-label*='Отправ' i]", score: 95, purpose: "send" },
   { selector: "button[type='submit']", score: 70, purpose: "send" },
 ];
 
