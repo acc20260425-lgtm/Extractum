@@ -327,9 +327,10 @@ export class GeminiBrowserAdapter {
           start,
         );
       }
+      const answerBaseline = await captureAnswerState(page, input.request.prompt);
       await send.click();
 
-      const answer = await waitForAnswerText(page, input.request.prompt);
+      const answer = await waitForAnswerText(page, input.request.prompt, answerBaseline);
       if (!answer) {
         return this.failure(
           page,
@@ -453,22 +454,53 @@ export async function waitForFirstVisible(
 
 const ANSWER_TIMEOUT_MS = 60_000;
 const ANSWER_POLL_INTERVAL_MS = 500;
-const ANSWER_STABLE_MS = 2_000;
+const ANSWER_STABLE_AFTER_ACTION_MS = 500;
+const ANSWER_STABLE_WITHOUT_ACTION_MS = 8_000;
 
-async function waitForAnswerText(page: Page, prompt: string): Promise<string | null> {
+const answerCompletionActionSelectors = [
+  "[data-test-id='copy-button']",
+  "[data-test-id='thumb-up-button']",
+  "[data-test-id='regenerate-button']",
+];
+
+interface AnswerState {
+  texts: string[];
+  completionActionCount: number;
+}
+
+async function waitForAnswerText(
+  page: Page,
+  prompt: string,
+  baseline: AnswerState,
+): Promise<string | null> {
   const deadline = Date.now() + ANSWER_TIMEOUT_MS;
   let latestAnswer: string | null = null;
   let lastChangedAt = Date.now();
+  let firstSeenAt: number | null = null;
 
   while (Date.now() < deadline) {
-    const answer = await latestAnswerText(page, prompt);
+    const state = await captureAnswerState(page, prompt);
+    const answer = bestNewAnswerText(state, baseline);
     const now = Date.now();
     if (answer && answer !== latestAnswer) {
       latestAnswer = answer;
       lastChangedAt = now;
+      firstSeenAt ??= now;
     }
-    if (latestAnswer && now - lastChangedAt >= ANSWER_STABLE_MS) {
-      return latestAnswer;
+    if (latestAnswer) {
+      const stableForMs = now - lastChangedAt;
+      const completionActionAppeared =
+        state.completionActionCount > baseline.completionActionCount;
+      if (completionActionAppeared && stableForMs >= ANSWER_STABLE_AFTER_ACTION_MS) {
+        return latestAnswer;
+      }
+      if (
+        firstSeenAt !== null &&
+        stableForMs >= ANSWER_STABLE_WITHOUT_ACTION_MS &&
+        now - firstSeenAt >= ANSWER_STABLE_WITHOUT_ACTION_MS
+      ) {
+        return latestAnswer;
+      }
     }
     await page.waitForTimeout(ANSWER_POLL_INTERVAL_MS);
   }
@@ -476,14 +508,49 @@ async function waitForAnswerText(page: Page, prompt: string): Promise<string | n
   return latestAnswer;
 }
 
-async function latestAnswerText(page: Page, prompt: string): Promise<string | null> {
+async function captureAnswerState(page: Page, prompt: string): Promise<AnswerState> {
+  const texts: string[] = [];
+  const seen = new Set<string>();
   for (const selector of answerCandidates.map((candidate) => candidate.selector)) {
-    const texts = await page.locator(selector).allTextContents().catch(() => []);
-    const answer = texts
-      .map((text) => text.trim())
-      .filter((text) => text.length > 0 && text !== prompt)
-      .at(-1);
-    if (answer) return answer;
+    const rawTexts = await page.locator(selector).allTextContents().catch(() => []);
+    for (const rawText of rawTexts) {
+      const text = rawText.trim();
+      if (text.length === 0 || text === prompt || seen.has(text)) continue;
+      seen.add(text);
+      texts.push(text);
+    }
   }
-  return null;
+
+  return {
+    texts,
+    completionActionCount: await answerCompletionActionCount(page),
+  };
+}
+
+function bestNewAnswerText(current: AnswerState, baseline: AnswerState): string | null {
+  const baselineTexts = new Set(baseline.texts);
+  const newTexts = current.texts.filter((text) => !baselineTexts.has(text));
+  if (newTexts.length === 0) return null;
+
+  return newTexts.reduce((best, text) => (text.length >= best.length ? text : best));
+}
+
+async function answerCompletionActionCount(page: Page): Promise<number> {
+  let count = 0;
+  for (const selector of answerCompletionActionSelectors) {
+    count += await visibleLocatorCount(page, selector);
+  }
+  return count;
+}
+
+async function visibleLocatorCount(page: Page, selector: string): Promise<number> {
+  const locator = page.locator(selector);
+  const count = await locator.count().catch(() => 0);
+  let visible = 0;
+  for (let index = 0; index < count; index += 1) {
+    if (await locator.nth(index).isVisible().catch(() => false)) {
+      visible += 1;
+    }
+  }
+  return visible;
 }
