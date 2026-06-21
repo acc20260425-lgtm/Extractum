@@ -195,8 +195,8 @@ Safe mapping:
 
 ```rust
 match error {
-    ProviderError::Rejected { account_email, .. } => {
-        tracing::warn!(account_email = %account_email, "provider rejected request");
+    ProviderError::Rejected { account_id, .. } => {
+        tracing::warn!(account_id, "provider rejected request");
         AppError::auth("Provider authentication is required")
     }
 }
@@ -208,20 +208,31 @@ Avoid exposing the raw detail:
 AppError::auth(error.to_string())
 ```
 
+The same rule applies to `tracing` fields. Raw emails, tokens, prompts, cookies, provider
+responses, and local paths must not be logged directly because diagnostics exports may include
+structured logs. Log a non-sensitive id, a stable hash, or a redacted value instead.
+
 ## Sanitization Standard
 
 `AppError.message` must be safe to display and safe to store in normal UI-visible logs.
 When an error message includes external input or output from an external system, sanitize it
 through a shared helper before constructing `AppError`.
 
-Preferred helper shape:
+Use the existing diagnostics redaction helper:
 
 ```rust
-pub(crate) fn sanitize_error_message(message: impl AsRef<str>) -> String;
+crate::diagnostics::redaction::sanitized_error_message(message)
 ```
 
+This is the canonical project helper and it bounds output by
+`crate::diagnostics::redaction::MAX_SANITIZED_TEXT_CHARS`. When the rules below require
+additional coverage, extend this helper and its tests instead of adding a second sanitizer with
+overlapping behavior. If other modules need easier access, move or re-export the existing helper
+from a shared module while preserving one implementation and one test corpus.
+
 Feature-specific helpers may add context, but should reuse the shared sanitizer rather than
-creating unrelated redaction rules.
+creating unrelated redaction rules. All UI-visible error messages derived from external input
+should be single-line or line-collapsed and bounded to the shared maximum.
 
 Redaction rules:
 
@@ -239,13 +250,16 @@ Redaction rules:
   and page text: do not include in `AppError.message`; use a short operation label instead.
 - External command arguments: include only known-safe flags; redact paths, cookies, URLs with
   query strings, and credentials.
+- Long text, multiline text, and Unicode text: collapse or bound through the shared sanitizer;
+  do not return unbounded provider/browser output even after secret redaction.
 
 Examples:
 
 ```rust
+let safe_detail = sanitized_error_message(&error.to_string());
 AppError::network(format!(
     "Provider request failed: {}",
-    sanitize_error_message(error)
+    safe_detail
 ))
 ```
 
@@ -264,7 +278,9 @@ AppError::network(format!("Provider request failed: {raw_response_body}"))
 ### SQL/database
 
 Default database failures should map to `AppError::database(...)`, currently an `Internal`
-error with database context.
+error with database context. The target behavior for this helper is a safe, bounded UI message.
+Raw database details should go to sanitized diagnostics or structured logs, not directly to
+frontend-visible errors.
 
 Map database errors explicitly only when they represent known product behavior:
 
@@ -286,6 +302,17 @@ where available:
 If the driver does not provide enough structured metadata to identify a known product
 condition, keep the error as `AppError::database(...)`.
 
+Example:
+
+```rust
+match error {
+    sqlx::Error::Database(db_error) if db_error.is_unique_violation() => {
+        AppError::conflict("A record with these values already exists")
+    }
+    other => AppError::database(other),
+}
+```
+
 ### JSON and serialization
 
 - User-provided JSON or settings: `Validation`.
@@ -300,6 +327,12 @@ condition, keep the error as `AppError::database(...)`.
 - App-controlled artifact missing when it should exist: usually `Internal`, unless the command
   is specifically a lookup command where `NotFound` is more useful.
 - Permission or write failure in app-controlled storage: `Internal`.
+- Path traversal, non-child canonical path, symlink escape, or access outside the command's
+  allowed root: `Validation` when the request is malformed, or `Conflict` when state changed
+  between validation and use. Return a generic safe message and do not echo the raw path.
+
+For app-controlled paths, validate canonical containment before opening or deleting files when
+the path includes a user-provided id, filename, or relative component.
 
 ### Network, providers, and sidecars
 
@@ -368,6 +401,15 @@ For new or migrated error handling:
 - Test that expected workflow states return DTO/status values rather than command errors.
 - Test that security-sensitive messages are sanitized when the error can include external input.
 - For frontend-facing commands, include at least one test or smoke path that validates the serialized shape.
+
+The shared sanitizer test corpus should include:
+
+- URL credentials, query strings, and fragments;
+- bearer tokens, cookies, API keys, authorization headers, and session ids;
+- email addresses and account hints;
+- Windows paths, UNC paths, file URIs, Unix paths, and app data directories;
+- long Unicode strings and multiline provider/browser bodies;
+- prompt text, transcript text, raw HTML, provider request bodies, and provider response bodies.
 
 ## Initial Migration Pilot
 
