@@ -97,6 +97,20 @@ because Gemini can stream slowly through the browser UI. If the implementation
 keeps the existing `ANSWER_TIMEOUT_MS` name, it must use this exact hard-maximum
 value.
 
+In the normal quiet case, the earliest stable return is:
+
+```text
+last_candidate_change_at
++ max(
+    ANSWER_STABLE_MS,
+    MIN_STABLE_POLLS_AFTER_SIGNATURE_CHANGE * ANSWER_POLL_INTERVAL_MS
+  )
+```
+
+With the defaults above, a short answer that stops changing immediately should
+usually return after roughly 8 seconds plus polling granularity, not after the
+120 second hard maximum.
+
 ### Candidate Collection
 
 Each poll should produce an internal `AnswerExtractionSnapshot`:
@@ -143,7 +157,7 @@ Baseline data should include:
 - raw candidate selector and DOM order;
 - accepted group id and group DOM order;
 - selected ancestor identity when available, such as response index, role/name
-  pattern, stable attribute, or generated DOM-order path;
+  pattern, or stable attribute;
 - candidate/group text lengths and descendant block lengths;
 - optional text equality markers only as a secondary signal.
 
@@ -151,6 +165,13 @@ After Send, a candidate is considered new when its group id/order/structural
 signature did not exist in the baseline, or when it appears after the latest
 baseline group in DOM order. Text equality with a baseline answer is not enough
 to reject it.
+
+Generated DOM-order ids are per-poll diagnostic ids only. They should not be the
+primary structural baseline key because Gemini can insert nodes and shift
+absolute DOM paths while streaming. Baseline matching should prefer stable
+attributes or response indices, then relative position after the latest baseline
+group, and only use generated DOM-order paths as a last-resort diagnostic
+fallback.
 
 ### Grouping
 
@@ -172,8 +193,12 @@ Ancestor search must be deterministic:
    assistant/model message role attribute, an article/list item containing
    answer content but no composer textbox, or a direct parent that owns multiple
    `message-content` descendants for the same assistant turn.
-5. Reject ancestors that contain the current prompt text, visible send/composer
-   controls, account/login UI, navigation labels, or previous-turn controls.
+5. Reject ancestors with visible send/composer controls, account/login UI,
+   navigation labels, or previous-turn controls. Prompt text alone is not enough
+   to reject an ancestor because Gemini may quote or restate the user question.
+   Reject prompt-containing ancestors only when the prompt text is outside answer
+   descendants, or when user/composer role signals indicate the ancestor is a
+   prompt container rather than an assistant answer.
 6. When multiple valid ancestors remain, prefer the deepest ancestor; break ties
    by later DOM order.
 
@@ -295,6 +320,16 @@ as a **partial-risk success**:
 Extend `debug_summary` with compact extraction facts:
 
 ```ts
+type GeminiBrowserCandidateRejectReason =
+  | "baseline"
+  | "composer"
+  | "prompt_container"
+  | "navigation"
+  | "multi_turn"
+  | "not_visible"
+  | "empty"
+  | "lower_score";
+
 interface GeminiBrowserAnswerExtractionDebug {
   raw_candidate_count: number;
   grouped_candidate_count: number;
@@ -306,7 +341,7 @@ interface GeminiBrowserAnswerExtractionDebug {
   largest_candidate_length: number;
   larger_valid_candidate_available: boolean;
   larger_rejected_candidate_count: number;
-  larger_rejected_reasons: string[];
+  larger_rejected_reasons: GeminiBrowserCandidateRejectReason[];
   top_candidate_lengths: number[];
   busy_visible_at_completion: boolean;
   last_growth_elapsed_ms: number | null;
@@ -315,9 +350,21 @@ interface GeminiBrowserAnswerExtractionDebug {
 }
 ```
 
-This can be nested under the existing `debug_summary` to avoid broad result DTO
-churn. Rust DTOs should mirror the optional fields and tolerate older run JSON
-without them.
+This is nested under the existing `debug_summary` to avoid broad result DTO
+churn:
+
+```ts
+interface GeminiBrowserRunDebugSummary {
+  // existing fields...
+  extraction?: GeminiBrowserAnswerExtractionDebug | null;
+}
+```
+
+The `extraction` field itself is optional and nullable for older run records and
+unexpected legacy sidecar responses. Once `extraction` is present, its fields
+are required for new sidecar results so the run inspector can rely on a complete
+compact diagnostic summary. Rust DTOs should mirror this optional nested shape
+and tolerate older run JSON without it.
 
 The inline run inspector should surface:
 
@@ -351,6 +398,12 @@ Rust and TypeScript DTOs must tolerate missing `answer_extraction` for older run
 records. The path should only be a local artifact path in persisted run JSON; it
 must not be copied into diagnostics.
 
+Failure to write `artifacts.answer_extraction` must not hide the original run
+result. Artifact write errors should populate `artifacts.artifact_write_error`
+and leave the run status/completion reason intact. In particular,
+`ok + timeout_latest` must remain an `ok` partial-risk run even if the reduced
+extraction artifact cannot be written.
+
 The extraction artifact is local-only debug material. It should be safe from
 full prompt/answer text, but selector ids, DOM order, lengths, and score facts
 can still reveal answer shape. Treat it like other local Browser Provider
@@ -374,7 +427,7 @@ behavior:
 - baseline entries from a previous answer are ignored without dropping the new
   assistant turn;
 - copied diagnostics include candidate counts and lengths but not answer text,
-  prompt text, paths, email-like hints, or sensitive URLs.
+  prompt text, paths, email-like hints, or sensitive URLs;
 - at least one Playwright DOM fixture page exercises real DOM ancestor grouping
   with nested `message-content`, sibling markdown/list blocks, composer
   controls, and a previous answer. Mocked locator tests are useful for polling
