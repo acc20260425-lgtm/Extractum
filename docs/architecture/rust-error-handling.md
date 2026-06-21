@@ -103,6 +103,8 @@ New Rust backend code should follow these rules:
 9. Do not decide error kind by matching text from an error message in new code.
 10. Do not put secrets, cookies, API keys, tokens, private prompts, or full account identifiers into `AppError.message`.
 11. Treat `AppError.message` as a safe display string. If it contains external input or a lower-level error from a provider, OS, network, browser, or user-selected file, sanitize it before returning it.
+12. Do not use `?` on arbitrary external errors in `AppResult` functions unless there is an
+    explicit `From` mapping that was reviewed for `AppErrorKind` classification and sanitization.
 
 Preferred style:
 
@@ -115,6 +117,10 @@ let run = load_run(pool, run_id)
     .await?
     .ok_or_else(|| AppError::not_found(format!("Run {run_id} was not found")))?;
 ```
+
+User-provided identifiers may be echoed in `AppError.message` only after validation against a
+safe id format. If the id has not been validated or may contain user/private text, use a generic
+message.
 
 Avoid:
 
@@ -194,6 +200,10 @@ Domain error enums may store sensitive details internally when that is useful fo
 tests, but `From<DomainError> for AppError` must produce a safe UI message. Do not assume a
 domain error's `Display` output is safe to expose to the frontend.
 
+Domain error `Display` output is internal-only for sensitive domains. Do not log `%error` or
+`error.to_string()` from provider, browser, filesystem, keyring, database, or user-content
+domains unless it is sanitized first or decomposed into safe structured fields.
+
 Safe mapping:
 
 ```rust
@@ -251,10 +261,10 @@ Redaction rules:
 - Query parameters named like `token`, `key`, `api_key`, `auth`, `code`, `state`, `session`,
   `password`, or `secret`: always redact if a query is intentionally preserved.
 - Cookies, bearer tokens, API keys, session ids, refresh tokens, and authorization headers:
-  replace with `<redacted-secret>`.
+  redact them. The current helper uses the exact replacement marker `[redacted]`.
 - Email addresses, account hints, and full account identifiers: replace with
-  `<redacted-account>` unless the UI explicitly needs a non-sensitive account label.
-- Local absolute paths: replace with `<redacted-path>` or show only a safe basename.
+  `[redacted]` unless the UI explicitly needs a non-sensitive account label.
+- Local absolute paths: replace with `[redacted]` or show only a safe basename.
 - User prompts, transcript text, provider request bodies, provider response bodies, raw HTML,
   and page text: do not include in `AppError.message`; use a short operation label instead.
 - External command arguments: include only known-safe flags; redact paths, cookies, URLs with
@@ -265,12 +275,13 @@ Redaction rules:
 Examples:
 
 ```rust
-let safe_detail = crate::diagnostics::sanitized_error_message(&error.to_string());
-AppError::network(format!(
-    "Provider request failed: {}",
-    safe_detail
+AppError::network(crate::diagnostics::sanitized_error_message(
+    &format!("Provider request failed: {error}")
 ))
 ```
+
+If a command deliberately prepends a fixed prefix after sanitization, the allowed bound is
+`prefix.len() + MAX_SANITIZED_TEXT_CHARS`. Prefer sanitizing the full final message when possible.
 
 ```rust
 AppError::internal("Failed to parse Browser Provider artifact")
@@ -290,8 +301,8 @@ Default database failures should map to `AppError::database(...)`, currently an 
 error with database context.
 
 Migration gap: the current implementation still formats raw database details into the UI message.
-Do not rely on `AppError::database(...)` as safe/bounded until it is migrated to use the shared
-sanitizer or to return a generic UI message such as `"Database error"`. Raw database details
+The target UI message for default database failures is the generic `"Database error"`. Do not
+rely on `AppError::database(...)` as safe/bounded until it is migrated. Raw database details
 should go to sanitized diagnostics or structured logs, not directly to frontend-visible errors.
 
 Map database errors explicitly only when they represent known product behavior:
@@ -405,11 +416,12 @@ New code should not depend on it. Migration should be incremental:
 Useful searches during migration:
 
 ```powershell
-rg 'Err\\(\".*\"\\.into\\(\\)\\)|map_err\\(\\|.*\\| .*to_string\\(\\)\\)' src-tauri/src
-rg 'classify_message|impl From<String> for AppError|impl From<&str> for AppError' src-tauri/src
-rg 'anyhow!|\\.context\\(|format!\\(\"\\{error\\}\"\\)|format!\\(\".*\\{error\\}' src-tauri/src
-rg 'map_err\\(AppError::internal\\)|AppError::internal\\(format!' src-tauri/src
-rg 'raw_response|response_body|provider body|prompt|cookie|authorization|api_key|token' src-tauri/src
+rg -- 'Err\(".*"\.into\(\)\)|map_err\(\|.*\| .*to_string\(\)\)' src-tauri/src
+rg -- 'classify_message|impl From<String> for AppError|impl From<&str> for AppError' src-tauri/src
+rg -- 'anyhow!|\.context\(|format!\("\{error\}"\)|format!\(".*\{error\}' src-tauri/src
+rg -- 'map_err\(AppError::internal\)|AppError::internal\(format!' src-tauri/src
+rg -- 'raw_response|response_body|provider body|prompt|cookie|authorization|api_key|token' src-tauri/src
+rg -- '-> AppResult<|\?;' src-tauri/src
 ```
 
 ## Testing Requirements
