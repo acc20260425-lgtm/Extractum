@@ -85,7 +85,7 @@ import {
   ANSWER_STABLE_MS,
   captureAnswerBaseline,
   captureAnswerExtractionSnapshot,
-  pollAnswerUntilComplete,
+  pollAnswerSnapshotsUntilComplete,
 } from "./answer-extractor.js";
 
 let browser: Browser;
@@ -125,16 +125,16 @@ function shell(body: string) {
 
 describe("Gemini answer extractor", () => {
   it("groups split message-content nodes into one assistant answer", async () => {
-    await loadFixture(shell(`
-      <section data-turn="assistant" data-response-index="1">
-        <message-content>First paragraph.</message-content>
-        <message-content><ul><li>Point A.</li><li>Point B.</li></ul></message-content>
-      </section>
-    `));
-
+    await loadFixture(shell(""));
     const baseline = await captureAnswerBaseline(page, "What is happening in football?");
     await page.evaluate(() => {
-      document.querySelector("[data-response-index='1']")?.setAttribute("data-after-submit", "true");
+      document.querySelector("main")?.insertAdjacentHTML(
+        "beforeend",
+        `<section data-turn="assistant" data-response-index="1">
+          <message-content>First paragraph.</message-content>
+          <message-content><ul><li>Point A.</li><li>Point B.</li></ul></message-content>
+        </section>`,
+      );
     });
 
     const snapshot = await captureAnswerExtractionSnapshot(page, {
@@ -147,24 +147,28 @@ describe("Gemini answer extractor", () => {
     expect(snapshot.grouped_candidates).toHaveLength(1);
     expect(snapshot.grouped_candidates[0]).toMatchObject({
       grouping: "assistant_turn",
-      text_length: "First paragraph.Point A.Point B.".length,
+      text_length: "First paragraph.\nPoint A.\nPoint B.".length,
     });
     expect(snapshot.selected_candidate?.text).toBe("First paragraph.\nPoint A.\nPoint B.");
     expect(snapshot.selected_candidate_signature).toBeTruthy();
   });
 
   it("does not select a broad page container with composer controls", async () => {
-    await loadFixture(shell(`
-      <section data-turn="assistant" data-response-index="1">
-        <message-content>Assistant answer.</message-content>
-      </section>
-      <section data-noisy="true">
-        <message-content>Assistant answer plus composer noise</message-content>
-        <textarea>composer text</textarea>
-      </section>
-    `));
-
+    await loadFixture(shell(""));
     const baseline = await captureAnswerBaseline(page, "What is happening in football?");
+    await page.evaluate(() => {
+      document.querySelector("main")?.insertAdjacentHTML(
+        "beforeend",
+        `<section data-turn="assistant" data-response-index="1">
+          <message-content>Assistant answer.</message-content>
+        </section>
+        <section data-noisy="true">
+          <message-content>Assistant answer plus composer noise</message-content>
+          <textarea>composer text</textarea>
+        </section>`,
+      );
+    });
+
     const snapshot = await captureAnswerExtractionSnapshot(page, {
       prompt: "What is happening in football?",
       baseline,
@@ -206,18 +210,35 @@ describe("Gemini answer extractor", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-21T00:00:00Z"));
     try {
-      await loadFixture(shell(""));
-      const baseline = await captureAnswerBaseline(page, "slow");
-      await page.evaluate(() => {
-        document.querySelector("main")?.insertAdjacentHTML(
-          "beforeend",
-          "<section data-turn='assistant' data-response-index='1'><message-content>Complete answer.</message-content></section>",
-        );
-      });
+      const selected = {
+        group_id: "response:1",
+        selector: "message-content",
+        grouping: "assistant_turn" as const,
+        text: "Complete answer.",
+        text_length: "Complete answer.".length,
+        block_lengths: ["Complete answer.".length],
+        block_count: 1,
+        group_order: 1,
+        score: 120,
+        signature: "message-content|response:1|1|assistant_turn|1|16",
+        reject_reasons: [],
+      };
 
-      const promise = pollAnswerUntilComplete(page, {
-        prompt: "slow",
-        baseline,
+      const promise = pollAnswerSnapshotsUntilComplete({
+        readSnapshot: async (elapsedMs) => ({
+          elapsed_ms: elapsedMs,
+          busy_visible: false,
+          raw_candidate_count: 1,
+          grouped_candidates: [selected],
+          rejected_candidates: [],
+          selected_candidate_id: selected.group_id,
+          selected_candidate_signature: selected.signature,
+          selected_candidate: selected,
+          selection_reason: "highest_score",
+        }),
+        answerStableMs: ANSWER_STABLE_MS,
+        pollIntervalMs: ANSWER_POLL_INTERVAL_MS,
+        minStablePollsAfterSignatureChange: 3,
         isBusyVisible: async () => false,
         now: () => Date.now(),
         waitForTimeout: async (ms) => vi.advanceTimersByTime(ms),
@@ -240,28 +261,43 @@ describe("Gemini answer extractor", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-21T00:00:00Z"));
     try {
-      await loadFixture(shell(""));
-      const baseline = await captureAnswerBaseline(page, "never stable");
       let counter = 0;
-      const promise = pollAnswerUntilComplete(page, {
-        prompt: "never stable",
-        baseline,
+      const promise = pollAnswerSnapshotsUntilComplete({
+        readSnapshot: async (elapsedMs) => {
+          counter += 1;
+          const text = `partial ${counter}`;
+          const selected = {
+            group_id: "response:1",
+            selector: "message-content",
+            grouping: "assistant_turn" as const,
+            text,
+            text_length: text.length,
+            block_lengths: [text.length],
+            block_count: 1,
+            group_order: 1,
+            score: 90,
+            signature: `message-content|response:1|1|assistant_turn|1|${text.length}|${counter}`,
+            reject_reasons: [],
+          };
+          return {
+            elapsed_ms: elapsedMs,
+            busy_visible: false,
+            raw_candidate_count: 1,
+            grouped_candidates: [selected],
+            rejected_candidates: [],
+            selected_candidate_id: selected.group_id,
+            selected_candidate_signature: selected.signature,
+            selected_candidate: selected,
+            selection_reason: "highest_score",
+          };
+        },
         answerTimeoutMs: 2_000,
+        answerStableMs: ANSWER_STABLE_MS,
+        pollIntervalMs: ANSWER_POLL_INTERVAL_MS,
+        minStablePollsAfterSignatureChange: 3,
         isBusyVisible: async () => false,
         now: () => Date.now(),
         waitForTimeout: async (ms) => {
-          counter += 1;
-          await page.evaluate((value) => {
-            const existing = document.querySelector("[data-response-index='1']");
-            if (existing) {
-              existing.querySelector("message-content")!.textContent = `partial ${value}`;
-              return;
-            }
-            document.querySelector("main")?.insertAdjacentHTML(
-              "beforeend",
-              `<section data-turn='assistant' data-response-index='1'><message-content>partial ${value}</message-content></section>`,
-            );
-          }, counter);
           vi.advanceTimersByTime(ms);
         },
       });
@@ -404,8 +440,8 @@ export interface AnswerExtractionSnapshot {
 }
 
 export interface AnswerExtractionResult {
-  text: string;
-  selector: string;
+  text: string | null;
+  selector: string | null;
   waitedMs: number;
   completionReason: GeminiBrowserAnswerCompletionReason;
   debug: GeminiBrowserAnswerExtractionDebug;
@@ -451,12 +487,14 @@ Implementation requirements for the same file:
   - avoid copying prompt/answer text into diagnostics, except the selected candidate `text` returned internally for the final result.
 - `signature` is internal and composed from selector, group id, group order, grouping mode, block count, block lengths, and total length.
 - `buildExtractionDebug(snapshot, returnedTextLength, completionReason, counters)` returns all fields in `GeminiBrowserAnswerExtractionDebug`.
-- `toAnswerExtractionArtifact(resultOrSnapshot)` returns `AnswerExtractionArtifactPayload` with lengths/score facts only.
+- internal helper `toAnswerExtractionArtifact(resultOrSnapshot)` returns `AnswerExtractionArtifactPayload` with lengths/score facts only. It does not need to be exported unless tests need direct unit coverage.
+- `pollAnswerSnapshotsUntilComplete(options)` is the pure polling engine used by tests. It accepts `readSnapshot(elapsedMs)`, `now()`, `waitForTimeout(ms)`, `answerStableMs`, `answerTimeoutMs`, `pollIntervalMs`, `minStablePollsAfterSignatureChange`, and `isBusyVisible()`.
 - `pollAnswerUntilComplete(page, options)` implements:
+  - a thin wrapper that calls `captureAnswerExtractionSnapshot()` and delegates to `pollAnswerSnapshotsUntilComplete()`;
   - earliest stable return formula from the spec;
   - timeout at `MAX_ANSWER_TIMEOUT_MS` unless `answerTimeoutMs` is passed in tests;
   - `timeout_latest` when text exists but stability is not proven;
-  - `null` when no valid answer exists.
+  - `missing` with `text: null` when no valid answer exists.
 
 - [ ] **Step 5: Run extractor tests**
 
@@ -655,6 +693,136 @@ it("writes a reduced extraction artifact for ok timeout_latest without changing 
     vi.useRealTimers();
   }
 });
+
+it("writes a reduced extraction artifact for missing answer timeout failures", async () => {
+  const page = pageWithSendFlow();
+  const adapter = new GeminiBrowserAdapter({
+    env: {},
+    answerExtractor: {
+      captureBaseline: async () => ({ groups: [], highest_group_order: -1 }),
+      pollUntilComplete: async () => ({
+        text: null,
+        selector: null,
+        waitedMs: 120_000,
+        completionReason: "missing",
+        debug: {
+          raw_candidate_count: 0,
+          grouped_candidate_count: 0,
+          selected_candidate_length: 0,
+          returned_text_length: 0,
+          selected_grouping: "unknown",
+          selected_candidate_rank: null,
+          selected_score: null,
+          largest_candidate_length: 0,
+          larger_valid_candidate_available: false,
+          larger_rejected_candidate_count: 0,
+          larger_rejected_reasons: [],
+          top_candidate_lengths: [],
+          busy_visible_at_completion: false,
+          last_growth_elapsed_ms: null,
+          candidate_signature_changed_count: 0,
+          stable_poll_count_after_last_candidate_change: 0,
+        },
+        artifact: {
+          completion_reason: "missing",
+          raw_candidate_count: 0,
+          grouped_candidate_count: 0,
+          selected_candidate: {
+            selector: null,
+            grouping: "unknown",
+            text_length: 0,
+            score: null,
+            rank: null,
+          },
+          top_candidates: [],
+          rejected: [],
+        },
+      }),
+    },
+  });
+  adapter.__setTestPage(page as never);
+
+  const result = await adapter.sendSingle({
+    browserProfileDir: "C:/Extractum/gemini-browser/profile",
+    artifactDir: "artifacts/gemini-browser-adapter-test/run-missing-answer-artifact",
+    request: {
+      run_id: "run-missing-answer-artifact",
+      prompt: "missing answer",
+      source: "settings_test",
+      artifact_mode: "reduced",
+    },
+  });
+
+  expect(result.status).toBe("timeout");
+  expect(result.artifacts.answer_extraction).toMatch(/answer-extraction\.json$/);
+  expect(result.debug_summary?.extraction?.raw_candidate_count).toBe(0);
+});
+
+it("keeps timeout_latest ok when answer extraction artifact write fails", async () => {
+  const page = pageWithSendFlow();
+  const adapter = new GeminiBrowserAdapter({
+    env: {},
+    writeAnswerExtractionArtifact: async () => ({ path: null, error: "disk full" }),
+    answerExtractor: {
+      captureBaseline: async () => ({ groups: [], highest_group_order: -1 }),
+      pollUntilComplete: async () => ({
+        text: "partial answer",
+        selector: "message-content",
+        waitedMs: 120_000,
+        completionReason: "timeout_latest",
+        debug: {
+          raw_candidate_count: 1,
+          grouped_candidate_count: 1,
+          selected_candidate_length: 14,
+          returned_text_length: 14,
+          selected_grouping: "assistant_turn",
+          selected_candidate_rank: 1,
+          selected_score: 90,
+          largest_candidate_length: 14,
+          larger_valid_candidate_available: false,
+          larger_rejected_candidate_count: 0,
+          larger_rejected_reasons: [],
+          top_candidate_lengths: [14],
+          busy_visible_at_completion: false,
+          last_growth_elapsed_ms: 500,
+          candidate_signature_changed_count: 50,
+          stable_poll_count_after_last_candidate_change: 0,
+        },
+        artifact: {
+          completion_reason: "timeout_latest",
+          raw_candidate_count: 1,
+          grouped_candidate_count: 1,
+          selected_candidate: {
+            selector: "message-content",
+            grouping: "assistant_turn",
+            text_length: 14,
+            score: 90,
+            rank: 1,
+          },
+          top_candidates: [],
+          rejected: [],
+        },
+      }),
+    },
+  });
+  adapter.__setTestPage(page as never);
+
+  const result = await adapter.sendSingle({
+    browserProfileDir: "C:/Extractum/gemini-browser/profile",
+    artifactDir: "artifacts/gemini-browser-adapter-test/unwritable",
+    request: {
+      run_id: "run-timeout-latest-write-fail",
+      prompt: "slow prompt",
+      source: "settings_test",
+      artifact_mode: "reduced",
+    },
+  });
+
+  expect(result.status).toBe("ok");
+  expect(result.debug_summary?.answer_completion_reason).toBe("timeout_latest");
+  expect(result.artifacts.answer_extraction).toBeNull();
+  expect(result.artifacts.artifact_write_error).toContain("disk full");
+});
 ```
 
 If `adapter.test.ts` does not have a reusable `pageWithSendFlow()` helper, add one near the other test helpers:
@@ -715,11 +883,17 @@ type AnswerExtractorPort = {
   pollUntilComplete: typeof pollAnswerUntilComplete;
 };
 
+type WriteAnswerExtractionArtifact = (input: {
+  artifactDir: string;
+  payload: AnswerExtractionArtifactPayload;
+}) => Promise<{ path: string | null; error: string | null }>;
+
 interface GeminiBrowserAdapterOptions {
   env?: Record<string, string | undefined>;
   fetchLike?: FetchLike;
   connectOverCdp?: ConnectOverCdp;
   answerExtractor?: AnswerExtractorPort;
+  writeAnswerExtractionArtifact?: WriteAnswerExtractionArtifact;
 }
 ```
 
@@ -727,6 +901,7 @@ interface GeminiBrowserAdapterOptions {
 
 ```ts
 private readonly answerExtractor: AnswerExtractorPort;
+private readonly writeAnswerExtractionArtifact: WriteAnswerExtractionArtifact;
 ```
 
 ```ts
@@ -734,6 +909,8 @@ this.answerExtractor = options.answerExtractor ?? {
   captureBaseline: captureAnswerBaseline,
   pollUntilComplete: pollAnswerUntilComplete,
 };
+this.writeAnswerExtractionArtifact =
+  options.writeAnswerExtractionArtifact ?? writeAnswerExtractionArtifact;
 ```
 
 - import extractor APIs:
@@ -744,7 +921,6 @@ import {
   MAX_ANSWER_TIMEOUT_MS,
   captureAnswerBaseline,
   pollAnswerUntilComplete,
-  toAnswerExtractionArtifact,
   type AnswerExtractionArtifactPayload,
 } from "./answer-extractor.js";
 ```
@@ -772,17 +948,54 @@ const answer = await this.answerExtractor.pollUntilComplete(page, {
 ```ts
 debugSummary = {
   ...debugSummary,
-  answer_found: Boolean(answer),
+  answer_found: Boolean(answer.text),
   answer_selector: answer?.selector ?? null,
   waited_for_answer_ms: answer?.waitedMs ?? MAX_ANSWER_TIMEOUT_MS,
   answer_stable_ms: ANSWER_STABLE_MS,
   answer_completion_reason: answer?.completionReason ?? "missing",
-  final_text_length: answer?.text.length ?? 0,
+  final_text_length: answer?.text?.length ?? 0,
   extraction: answer?.debug ?? null,
 };
 ```
 
 - include `answer_extraction: null` in `emptyArtifacts()` and every artifact literal.
+- replace the old `if (!answer)` branch with:
+
+```ts
+if (!answer.text) {
+  const extractionArtifact = await this.writeAnswerExtractionArtifact({
+    artifactDir: input.artifactDir,
+    payload: answer.artifact,
+  });
+  return this.failure(
+    page,
+    input.request,
+    input.artifactDir,
+    "timeout",
+    "Answer did not appear before timeout.",
+    start,
+    markErrorStage(debugSummary, "answer"),
+    extractionArtifact,
+  );
+}
+```
+
+Update `failure(...)` to accept an optional pre-written extraction artifact:
+
+```ts
+private async failure(
+  page: Page,
+  request: GeminiBrowserRunRequest,
+  artifactDir: string,
+  status: GeminiBrowserRunResult["status"],
+  message: string,
+  start: number,
+  debugSummary: GeminiBrowserRunDebugSummary,
+  extractionArtifact: { path: string | null; error: string | null } = { path: null, error: null },
+): Promise<GeminiBrowserRunResult>
+```
+
+Inside `failure(...)`, merge `extractionArtifact.path` into `artifacts.answer_extraction` and combine `artifact_write_error` without throwing. If both failure artifact capture and extraction artifact write report errors, join them with `"; "`.
 
 - [ ] **Step 4: Add non-fatal reduced extraction artifact writer**
 
@@ -806,12 +1019,12 @@ async function writeAnswerExtractionArtifact(input: {
 }
 ```
 
-When `answer?.completionReason === "timeout_latest"` or a failure has extraction payload, call this writer and merge the returned path/error into artifacts:
+When `answer.completionReason !== "stable"`, call this writer and merge the returned path/error into artifacts:
 
 ```ts
 const extractionArtifact =
-  answer?.completionReason === "timeout_latest"
-    ? await writeAnswerExtractionArtifact({
+  answer.completionReason !== "stable"
+    ? await this.writeAnswerExtractionArtifact({
         artifactDir: input.artifactDir,
         payload: answer.artifact,
       })
@@ -828,6 +1041,10 @@ artifacts: {
 ```
 
 Do not throw when writing `answer-extraction.json` fails.
+
+If `answer.text` is null, return the existing timeout failure shape, but pass along `debugSummary.extraction` and the extraction artifact path/error in `artifacts`.
+
+For thrown failures or `browser_crashed` after extraction started, keep a local `latestExtractionArtifactPayload: AnswerExtractionArtifactPayload | null` in `sendSingle()`. Set it as soon as the extractor returns a payload. In the catch branch, if this payload exists, call `this.writeAnswerExtractionArtifact(...)` before `failure(...)` and pass the returned `{ path, error }` into `failure(...)`. If no extraction payload exists because setup/composer/send failed before answer polling, keep `answer_extraction: null`.
 
 - [ ] **Step 5: Remove old answer polling helpers**
 
@@ -943,7 +1160,9 @@ fn timeout_latest_ok_result_is_not_prompt_completion() {
         extraction: None,
     });
 
-    let error = browser_result_to_completion_text(result).expect_err("partial-risk must not complete");
+    let error =
+        browser_result_to_completion_text(result).expect_err("partial-risk must not complete");
+    assert_eq!(error.kind, AppErrorKind::Validation);
     assert!(error.message.contains("partial"));
     assert!(error.message.contains("timeout_latest"));
 }
@@ -952,6 +1171,8 @@ fn timeout_latest_ok_result_is_not_prompt_completion() {
 Update imports in the test module:
 
 ```rust
+use crate::error::AppErrorKind;
+
 GeminiBrowserAnswerCompletionReason, GeminiBrowserAnswerExtractionDebug,
 GeminiBrowserAnswerGrouping, GeminiBrowserArtifactRefs,
 GeminiBrowserCandidateRejectReason, GeminiBrowserDebugErrorStage,
@@ -1018,7 +1239,7 @@ pub struct GeminiBrowserAnswerExtractionDebug {
 }
 ```
 
-Extend `GeminiBrowserArtifactRefs`:
+Extend `GeminiBrowserArtifactRefs` and keep the existing `Default` derive:
 
 ```rust
 pub answer_extraction: Option<String>,
@@ -1045,7 +1266,7 @@ GeminiBrowserRunStatus::Ok => {
                 == crate::gemini_browser::GeminiBrowserAnswerCompletionReason::TimeoutLatest
         })
     {
-        return Err(AppError::internal(
+        return Err(AppError::validation(
             "Gemini browser result is partial-risk (timeout_latest) and cannot be used as a prompt completion",
         ));
     }
