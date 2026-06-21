@@ -1839,3 +1839,45 @@ Expected: final commit contains only plan checkbox and verification-note updates
 **Known limitation:** The existing DOM adapter still treats no-composer states as `needs_login`. The CDP spec records this as a known limitation and follow-up; this plan does not build a full Gemini manual-action classifier.
 
 **Out of scope:** This plan does not add packaged Settings UI for CDP endpoint configuration, automatic Chrome launching, remote CDP support, Chrome installation discovery, or bundled Chromium delivery.
+
+---
+
+## Follow-Up Slice: Env-Free Browser Provider UX
+
+**Goal:** Let users select user-controlled Chrome/CDP mode from Settings without starting Extractum with `EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT`.
+
+**Architecture:** Keep managed browser mode as the default. Add an explicit browser config object that flows from the Settings panel through the Tauri commands into the sidecar JSONL protocol. The sidecar chooses command config first and keeps `EXTRACTUM_GEMINI_BROWSER_CDP_ENDPOINT` only as a developer override/backward-compatible fallback.
+
+**Scope:** This slice adds Settings controls and protocol plumbing for a fixed local endpoint (`http://127.0.0.1:9222`) plus custom endpoint editing. It does not auto-launch Chrome yet; `Start Chrome` remains a follow-up because it needs OS-specific Chrome discovery and process ownership decisions.
+
+### Task 9: Browser Config Protocol
+
+- [x] **Step 1: Create this follow-up plan section**
+- [ ] **Step 2: Add red tests for frontend API forwarding browser config**
+- [ ] **Step 3: Add red tests for Rust sidecar command serialization with browser config**
+- [ ] **Step 4: Add red tests for sidecar protocol and adapter mode resolution from command config**
+- [ ] **Step 5: Implement shared browser config types in TS and Rust**
+- [ ] **Step 6: Forward browser config through `status`, `open_browser`, `resume`, and `send_single` commands**
+- [ ] **Step 7: Update sidecar adapter to prefer command config over env fallback**
+- [ ] **Step 8: Run frontend, Rust, and sidecar tests**
+- [ ] **Step 9: Commit protocol/config plumbing**
+
+### Task 10: Settings UI Controls
+
+- [ ] **Step 1: Add red component-source tests for mode controls and config persistence**
+- [ ] **Step 2: Add mode selector in Browser Providers panel**
+- [ ] **Step 3: Persist selected mode and endpoint in `localStorage`**
+- [ ] **Step 4: Pass the config to all Gemini browser bridge API calls**
+- [ ] **Step 5: Show concise CDP setup copy only when attach mode is selected**
+- [ ] **Step 6: Run UI tests and `npm.cmd run check`**
+- [ ] **Step 7: Commit Settings UX**
+
+### Task 11: Verification And Notes
+
+- [ ] **Step 1: Run `npm.cmd run test:gemini-browser-sidecar`**
+- [ ] **Step 2: Run `cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-provider-ux --lib gemini_browser`**
+- [ ] **Step 3: Run `npm.cmd run test -- src/lib/gemini-browser-provider-panel.test.ts src/lib/api/gemini-browser.test.ts`**
+- [ ] **Step 4: Run `npm.cmd run check`**
+- [ ] **Step 5: Run `npm.cmd run build:gemini-browser-sidecar`**
+- [ ] **Step 6: Record observed manual UX validation**
+- [ ] **Step 7: Commit verification notes**
