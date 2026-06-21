@@ -79,7 +79,7 @@ Create `sidecars/gemini-browser/src/answer-extractor.test.ts` with these tests:
 
 ```ts
 import { chromium, type Browser, type Page } from "@playwright/test";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   ANSWER_POLL_INTERVAL_MS,
   ANSWER_STABLE_MS,
@@ -207,24 +207,23 @@ describe("Gemini answer extractor", () => {
   });
 
   it("returns stable after the numeric quiet window rather than hard timeout", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-21T00:00:00Z"));
-    try {
-      const selected = {
-        group_id: "response:1",
-        selector: "message-content",
-        grouping: "assistant_turn" as const,
-        text: "Complete answer.",
-        text_length: "Complete answer.".length,
-        block_lengths: ["Complete answer.".length],
-        block_count: 1,
-        group_order: 1,
-        score: 120,
-        signature: "message-content|response:1|1|assistant_turn|1|16",
-        reject_reasons: [],
-      };
+    let now = 0;
+    const selected = {
+      group_id: "response:1",
+      selector: "message-content",
+      grouping: "assistant_turn" as const,
+      text: "Complete answer.",
+      text_length: "Complete answer.".length,
+      block_lengths: ["Complete answer.".length],
+      block_count: 1,
+      group_order: 1,
+      score: 120,
+      signature: "message-content|response:1|1|assistant_turn|1|16",
+      reject_reasons: [],
+    };
 
-      const promise = pollAnswerSnapshotsUntilComplete({
+    await expect(
+      pollAnswerSnapshotsUntilComplete({
         readSnapshot: async (elapsedMs) => ({
           elapsed_ms: elapsedMs,
           busy_visible: false,
@@ -240,29 +239,26 @@ describe("Gemini answer extractor", () => {
         pollIntervalMs: ANSWER_POLL_INTERVAL_MS,
         minStablePollsAfterSignatureChange: 3,
         isBusyVisible: async () => false,
-        now: () => Date.now(),
-        waitForTimeout: async (ms) => vi.advanceTimersByTime(ms),
-      });
-      await vi.advanceTimersByTimeAsync(ANSWER_STABLE_MS + ANSWER_POLL_INTERVAL_MS * 3);
-
-      await expect(promise).resolves.toMatchObject({
-        text: "Complete answer.",
-        completionReason: "stable",
-        debug: {
-          stable_poll_count_after_last_candidate_change: 3,
+        now: () => now,
+        waitForTimeout: async (ms) => {
+          now += ms;
         },
-      });
-    } finally {
-      vi.useRealTimers();
-    }
+      }),
+    ).resolves.toMatchObject({
+      text: "Complete answer.",
+      completionReason: "stable",
+      debug: {
+        stable_poll_count_after_last_candidate_change: 3,
+      },
+    });
   });
 
   it("returns timeout_latest with debug when candidate never stabilizes", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-21T00:00:00Z"));
-    try {
-      let counter = 0;
-      const promise = pollAnswerSnapshotsUntilComplete({
+    let now = 0;
+    let counter = 0;
+
+    await expect(
+      pollAnswerSnapshotsUntilComplete({
         readSnapshot: async (elapsedMs) => {
           counter += 1;
           const text = `partial ${counter}`;
@@ -296,22 +292,17 @@ describe("Gemini answer extractor", () => {
         pollIntervalMs: ANSWER_POLL_INTERVAL_MS,
         minStablePollsAfterSignatureChange: 3,
         isBusyVisible: async () => false,
-        now: () => Date.now(),
+        now: () => now,
         waitForTimeout: async (ms) => {
-          vi.advanceTimersByTime(ms);
+          now += ms;
         },
-      });
-      await vi.advanceTimersByTimeAsync(2_500);
-
-      await expect(promise).resolves.toMatchObject({
-        completionReason: "timeout_latest",
-        debug: {
-          larger_valid_candidate_available: false,
-        },
-      });
-    } finally {
-      vi.useRealTimers();
-    }
+      }),
+    ).resolves.toMatchObject({
+      completionReason: "timeout_latest",
+      debug: {
+        larger_valid_candidate_available: false,
+      },
+    });
   });
 });
 ```
@@ -472,11 +463,21 @@ export interface AnswerExtractionArtifactPayload {
     reasons: GeminiBrowserCandidateRejectReason[];
   }>;
 }
+
+export class AnswerExtractionError extends Error {
+  constructor(
+    message: string,
+    readonly artifact: AnswerExtractionArtifactPayload,
+    readonly cause: unknown,
+  ) {
+    super(message);
+  }
+}
 ```
 
 Implementation requirements for the same file:
 
-- `captureAnswerBaseline(page, prompt)` calls `captureAnswerExtractionSnapshot()` with an empty baseline and returns `groups` plus `highest_group_order`.
+- `captureAnswerBaseline(page, prompt)` uses the same DOM grouping code as snapshots, but runs in `mode: "baseline"`: collect structural groups without post-submit/new-candidate filtering and without rejecting previous assistant turns merely because they are not new. It returns `groups` plus `highest_group_order`.
 - `captureAnswerExtractionSnapshot(page, input)` uses `page.evaluate()` to inspect the real DOM. It must:
   - query selectors from `answerCandidates`;
   - climb at most six ancestors;
@@ -495,6 +496,8 @@ Implementation requirements for the same file:
   - timeout at `MAX_ANSWER_TIMEOUT_MS` unless `answerTimeoutMs` is passed in tests;
   - `timeout_latest` when text exists but stability is not proven;
   - `missing` with `text: null` when no valid answer exists.
+  - selector/evaluation errors that are not closed-target errors should be converted into `missing` with an artifact carrying rejection/error facts;
+  - closed-target or unexpected fatal extraction errors should throw `AnswerExtractionError` carrying the latest reduced artifact payload, so adapter catch paths can still write `answer-extraction.json`.
 
 - [ ] **Step 5: Run extractor tests**
 
@@ -917,6 +920,7 @@ this.writeAnswerExtractionArtifact =
 
 ```ts
 import {
+  AnswerExtractionError,
   ANSWER_STABLE_MS,
   MAX_ANSWER_TIMEOUT_MS,
   captureAnswerBaseline,
@@ -1036,15 +1040,24 @@ artifacts: {
   screenshot: null,
   telemetry: null,
   answer_extraction: extractionArtifact.path,
-  artifact_write_error: extractionArtifact.error,
+  artifact_write_error: mergeArtifactWriteErrors(null, extractionArtifact.error),
 },
 ```
 
 Do not throw when writing `answer-extraction.json` fails.
 
+Add a small merge helper so future telemetry/html artifact write errors are preserved instead of overwritten:
+
+```ts
+function mergeArtifactWriteErrors(...errors: Array<string | null | undefined>): string | null {
+  const present = errors.filter((error): error is string => Boolean(error));
+  return present.length > 0 ? present.join("; ") : null;
+}
+```
+
 If `answer.text` is null, return the existing timeout failure shape, but pass along `debugSummary.extraction` and the extraction artifact path/error in `artifacts`.
 
-For thrown failures or `browser_crashed` after extraction started, keep a local `latestExtractionArtifactPayload: AnswerExtractionArtifactPayload | null` in `sendSingle()`. Set it as soon as the extractor returns a payload. In the catch branch, if this payload exists, call `this.writeAnswerExtractionArtifact(...)` before `failure(...)` and pass the returned `{ path, error }` into `failure(...)`. If no extraction payload exists because setup/composer/send failed before answer polling, keep `answer_extraction: null`.
+For thrown failures or `browser_crashed` after extraction started, keep a local `latestExtractionArtifactPayload: AnswerExtractionArtifactPayload | null` in `sendSingle()`. Set it as soon as the extractor returns a payload. If the caught error is `AnswerExtractionError`, prefer `error.artifact` as the latest payload. In the catch branch, if a payload exists, call `this.writeAnswerExtractionArtifact(...)` before `failure(...)` and pass the returned `{ path, error }` into `failure(...)`. If no extraction payload exists because setup/composer/send failed before answer polling, keep `answer_extraction: null`.
 
 - [ ] **Step 5: Remove old answer polling helpers**
 
@@ -1085,8 +1098,12 @@ Modify `src-tauri/src/gemini_browser/types.rs` test `run_result_serializes_optio
 
 ```rust
 artifacts: GeminiBrowserArtifactRefs {
+    run_dir: None,
+    html: None,
+    screenshot: None,
+    telemetry: None,
     answer_extraction: Some("answer-extraction.json".to_string()),
-    ..Default::default()
+    artifact_write_error: None,
 },
 debug_summary: Some(GeminiBrowserRunDebugSummary {
     mode: GeminiBrowserProviderMode::CdpAttach,
@@ -1715,6 +1732,11 @@ Start the app:
 ```powershell
 npm.cmd run tauri dev
 ```
+
+This manual validation checks Browser Provider behavior in the development app.
+The rebuilt packaged sidecar binary is validated separately by
+`npm.cmd run build:gemini-browser-sidecar`; do not infer packaged sidecar
+runtime behavior from this dev-mode manual check alone.
 
 Manual stable validation:
 
