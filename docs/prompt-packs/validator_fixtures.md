@@ -196,6 +196,7 @@ The first reference validator should include these required fixture classes.
 | `canonical_result__valid__youtube_summary_minimal` | `canonical_result` | `valid` | valid | No `error` findings |
 | `canonical_result__valid__telegram_summary_minimal` | `canonical_result` | `valid` | valid | No `error` findings |
 | `canonical_result__valid__telegram_summary_chat_threads_minimal` | `canonical_result` | `valid` | valid | No `error` findings |
+| `canonical_result__invalid_pipeline__telegram_summary_dangling_message_ref` | `canonical_result` | `invalid-pipeline` | invalid | `VR-TS-006` |
 | `canonical_result__invalid_schema__missing_outputs` | `canonical_result` | `invalid-schema` | invalid | Required top-level object missing |
 | `canonical_result__invalid_reference__dangling_evidence_claim` | `canonical_result` | `invalid-reference` | invalid | `VR-CORE-022` |
 | `canonical_result__invalid_pipeline__claim_source_refs_not_superset` | `canonical_result` | `invalid-pipeline` | invalid | `VR-CORE-017` |
@@ -228,7 +229,7 @@ The mandatory fixture matrix is now materialized under `fixtures/v1/`.
 | Fixture family | Checked-in coverage |
 |---|---|
 | Canonical valid | `technology_watch_minimal`, `youtube_summary_minimal`, `telegram_summary_minimal`, `telegram_summary_chat_threads_minimal` |
-| Canonical invalid schema/reference/pipeline | `missing_outputs`, `dangling_evidence_claim`, `claim_source_refs_not_superset`, `relation_cycle` |
+| Canonical invalid schema/reference/pipeline | `missing_outputs`, `dangling_evidence_claim`, `claim_source_refs_not_superset`, `relation_cycle`, `telegram_summary_dangling_message_ref` |
 | Canonical QA warning | `single_source_claim` |
 | Stage payload | valid `claim_extraction_minimal`, `missing_allowed_fragment`, `unsupported_stage_io_version` |
 | Stage output | valid `claim_extraction_minimal`, `disallowed_fragment_candidate`, `one_bad_claim_candidate` |
@@ -307,6 +308,7 @@ VR-CORE-054
 VR-TW-006
 VR-TW-008
 VR-TW-009
+VR-TS-006
 VR-YS-015
 VR-YS-010
 VR-YS-013

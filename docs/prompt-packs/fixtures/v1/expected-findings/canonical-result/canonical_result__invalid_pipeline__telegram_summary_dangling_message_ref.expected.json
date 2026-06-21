@@ -1,0 +1,15 @@
+{
+  "fixture_id": "canonical_result__invalid_pipeline__telegram_summary_dangling_message_ref",
+  "validation_mode": "canonical_result",
+  "expected_valid": false,
+  "expected_error_count": 1,
+  "expected_warning_count": 0,
+  "expected_findings": [
+    {
+      "rule_id": "VR-TS-006",
+      "severity": "error",
+      "object_path": "$.outputs.pack_data.telegram_summary.key_messages[0].message_ref",
+      "message_contains": "msg_ref_missing"
+    }
+  ]
+}

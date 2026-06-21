@@ -41,6 +41,15 @@
       "required": true
     },
     {
+      "fixture_id": "canonical_result__invalid_pipeline__telegram_summary_dangling_message_ref",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/invalid-pipeline/canonical_result__invalid_pipeline__telegram_summary_dangling_message_ref.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__invalid_pipeline__telegram_summary_dangling_message_ref.expected.json",
+      "expected_error_count": 1,
+      "expected_warning_count": 0,
+      "required": true
+    },
+    {
       "fixture_id": "canonical_result__invalid_schema__missing_outputs",
       "validation_mode": "canonical_result",
       "fixture_path": "canonical-result/invalid-schema/canonical_result__invalid_schema__missing_outputs.fixture.json",
