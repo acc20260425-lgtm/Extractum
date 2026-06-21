@@ -171,6 +171,24 @@ data, email-like account hints, prompt text, answer text, raw DOM, screenshots,
 cookies, and account identifiers. It also truncates overlong messages. It is
 the preferred first payload to paste into an LLM debugging session.
 
+### Answer Extraction Diagnostics
+
+Use this when Gemini visibly produced more text than Extractum received.
+
+Check these fields first:
+
+- `answer_completion_reason`: `stable` means the grouped candidate satisfied the quiet window; `timeout_latest` means the sidecar returned visible text without proving completion.
+- `partial_risk`: `true` means the Settings UI may show text, but prompt-pack automation must not consume it as a normal completion.
+- `result_text_length` vs `debug_final_text_length`: mismatch means UI/run propagation differs from sidecar extraction.
+- `extraction_raw_candidate_count` and `extraction_grouped_candidate_count`: raw > grouped is normal when Gemini splits one answer into blocks.
+- `extraction_selected_grouping`: `assistant_turn` is preferred; `single_node` is a fallback and should be treated with more suspicion after DOM changes.
+- `extraction_largest_candidate_length` and `extraction_larger_valid_candidate_available`: a larger valid candidate means selection/scoring needs review.
+- `answer_extraction_artifact_available`: local-only artifact with selector/count/length facts, not safe for external sharing without review.
+
+For `timeout_latest`, inspect the run locally and decide whether to retry,
+extend the prompt, or treat it as a failed browser-provider completion. Do not
+feed `timeout_latest` text into long prompt-pack analysis as final output.
+
 ## Fast Troubleshooting Playbook
 
 Start with the UI status, latest message, and recent `run_id`.

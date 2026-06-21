@@ -1684,7 +1684,7 @@ git commit -m "feat: show Gemini extraction diagnostics"
 - Modify: `docs/browser-providers-llm-troubleshooting.md`
 - Modify: `docs/superpowers/plans/2026-06-21-gemini-browser-answer-extraction-hardening-plan.md`
 
-- [ ] **Step 1: Update troubleshooting docs**
+- [x] **Step 1: Update troubleshooting docs**
 
 In `docs/browser-providers-llm-troubleshooting.md`, add a section under the run inspector/extraction troubleshooting area:
 
@@ -1706,7 +1706,7 @@ Check these fields first:
 For `timeout_latest`, inspect the run locally and decide whether to retry, extend the prompt, or treat it as a failed browser-provider completion. Do not feed `timeout_latest` text into long prompt-pack analysis as final output.
 ```
 
-- [ ] **Step 2: Run full verification**
+- [x] **Step 2: Run full verification**
 
 Run:
 
@@ -1756,7 +1756,7 @@ git diff --check
 
 Expected: no output and exit code 0.
 
-- [ ] **Step 3: Rebuild sidecar binary**
+- [x] **Step 3: Rebuild sidecar binary**
 
 Run:
 
@@ -1772,7 +1772,7 @@ Wrote src-tauri\binaries\gemini-browser-sidecar-x86_64-pc-windows-msvc.exe
 
 Deprecation warnings from `pkg` or Node are acceptable if the binary is written.
 
-- [ ] **Step 4: Manual validation**
+- [x] **Step 4: Manual validation**
 
 Start the app:
 
@@ -1817,7 +1817,7 @@ Manual slow/partial validation:
    - `timeout_latest` visibly marked as partial-risk, with copied diagnostics including `partial_risk: true`.
 3. If `timeout_latest` appears, confirm prompt-pack automation guard test already passed and do not treat this manual run as a normal prompt-pack completion.
 
-- [ ] **Step 5: Record manual validation outcome in this plan**
+- [x] **Step 5: Record manual validation outcome in this plan**
 
 Append a short note here:
 
@@ -1835,7 +1835,17 @@ Append a short note here:
 
 Fill the fields with the observed run ids and diagnostics.
 
-- [ ] **Step 6: Mark task complete and commit**
+## Manual Validation Result
+
+- Date: 2026-06-21
+- Mode: `cdp_attach`
+- Stable prompt run id: `gemini-browser-1782047532781-d92def16e61c8`
+- Stable result: `ok`, `answer_completion_reason: stable`, `partial_risk: false`, `result_text_length: 916`, `debug_final_text_length: 916`, `extraction_raw_candidate_count: 2`, `extraction_grouped_candidate_count: 1`
+- Slow prompt run id: `gemini-browser-1782047600612-94120d9c27826`
+- Slow/partial result: `ok`, `answer_completion_reason: stable`, `partial_risk: false`, `result_text_length: 5065`, `debug_final_text_length: 5065`, `extraction_raw_candidate_count: 3`, `extraction_grouped_candidate_count: 1`
+- Notes: Both manual Browser Provider runs completed as stable with matching UI/result lengths. No `timeout_latest` partial-risk run was observed. `answer_extraction_artifact_available: false` is expected for stable completions.
+
+- [x] **Step 6: Mark task complete and commit**
 
 Update this task's checkboxes to `[x]`, then run:
 
@@ -1848,13 +1858,13 @@ git commit -m "docs: document Gemini extraction diagnostics"
 
 ## Final Completion Checklist
 
-- [ ] `npm.cmd run test:gemini-browser-sidecar` passes.
-- [ ] `npm.cmd run test -- --run sidecars/gemini-browser/src/answer-extractor.test.ts sidecars/gemini-browser/src/adapter.test.ts` passes.
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-browser --lib gemini_browser` passes.
-- [ ] `npm.cmd run test -- --run src/lib/gemini-browser-run-inspector.test.ts src/lib/gemini-browser-provider-panel.test.ts` passes.
-- [ ] `npm.cmd run check` passes.
-- [ ] `git diff --check` passes.
-- [ ] Sidecar binary rebuilt.
-- [ ] Manual stable validation recorded.
-- [ ] Manual slow/partial validation recorded.
-- [ ] Working tree is clean after final commit.
+- [x] `npm.cmd run test:gemini-browser-sidecar` passes.
+- [x] `npm.cmd run test -- --run sidecars/gemini-browser/src/answer-extractor.test.ts sidecars/gemini-browser/src/adapter.test.ts` passes.
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-browser --lib gemini_browser` passes.
+- [x] `npm.cmd run test -- --run src/lib/gemini-browser-run-inspector.test.ts src/lib/gemini-browser-provider-panel.test.ts` passes.
+- [x] `npm.cmd run check` passes.
+- [x] `git diff --check` passes.
+- [x] Sidecar binary rebuilt.
+- [x] Manual stable validation recorded.
+- [x] Manual slow/partial validation recorded.
+- [x] Working tree is clean after final commit.
