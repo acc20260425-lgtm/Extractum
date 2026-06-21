@@ -110,7 +110,8 @@ DOM HTML, or screenshot paths beyond the already existing artifact references.
    existing run record.
 5. `src/lib/types/gemini-browser.ts` mirrors the frontend DTO.
 6. `src-tauri/src/gemini_browser/commands.rs` exposes a command to open a
-   recorded run directory when `artifacts.run_dir` is present.
+   recorded run directory when the persisted `result.artifacts.run_dir` is
+   present and matches the canonical app-data run directory for that run id.
 7. `gemini-browser-provider-panel.svelte` renders the inline inspector using the
    existing `geminiBridgeListRuns()` refresh path.
 
@@ -131,6 +132,12 @@ throwing.
 If `Open run folder` fails, the UI should show a short error message and keep the
 selected run visible.
 
+The backend command must not trust the frontend button state. It should reject
+queued/running runs without a terminal result, older records without
+`result.artifacts.run_dir`, unsafe run ids, missing run directories, and records
+whose `result.artifacts.run_dir` points outside the canonical
+`gemini-browser/runs/<safe_run_id>` directory.
+
 ## Testing
 
 Sidecar tests:
@@ -140,15 +147,16 @@ Sidecar tests:
 - a send-button failure reports `error_stage: "send"` without prompt or answer
   text in debug summary;
 - a previous-generation wait records `generation_busy_observed: true`;
-- missing debug summary remains backwards-compatible in protocol parsing.
+- TypeScript and frontend DTOs tolerate missing `debug_summary` for older run
+  records while new sidecar results populate it.
 
 Rust tests:
 
 - `GeminiBrowserRunResult` serializes and deserializes optional
   `debug_summary`;
 - run-log storage preserves `debug_summary`;
-- open-run-folder command accepts only the recorded run directory shape and
-  returns typed errors.
+- open-run-folder command accepts only a persisted `result.artifacts.run_dir`
+  that matches the canonical app-data run directory and returns typed errors.
 
 Frontend tests:
 

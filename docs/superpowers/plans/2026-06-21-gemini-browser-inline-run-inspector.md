@@ -191,8 +191,11 @@ export interface GeminiBrowserRunDebugSummary {
 Then add the field to `GeminiBrowserRunResult`:
 
 ```ts
-debug_summary: GeminiBrowserRunDebugSummary | null;
+debug_summary?: GeminiBrowserRunDebugSummary | null;
 ```
+
+The field is optional in the TypeScript DTO because older run JSON and tests may
+not have it. New sidecar results must still populate it.
 
 - [ ] **Step 4: Add adapter diagnostics helpers**
 
@@ -229,8 +232,10 @@ function emptyDebugSummary(mode: GeminiBrowserProviderConfig["mode"]): GeminiBro
   };
 }
 
-function withDebug(
-  result: Omit<GeminiBrowserRunResult, "debug_summary">,
+type RunResultWithoutDebug = Omit<GeminiBrowserRunResult, "debug_summary">;
+
+function finalizeRunResult(
+  result: RunResultWithoutDebug,
   debugSummary: GeminiBrowserRunDebugSummary,
 ): GeminiBrowserRunResult {
   return {
@@ -421,10 +426,24 @@ At the start of `sendSingle()` after `mode` is resolved:
 const debugSummary = emptyDebugSummary(mode.type);
 ```
 
-For early results before a page exists, wrap results with `withDebug(...)`. Example for closed CDP page:
+All `sendSingle()` return paths must go through `finalizeRunResult(...)`. Do not
+return a raw object from `sendSingle()` after this step. This covers:
+
+- already closed CDP page before send;
+- managed page was not created;
+- CDP attach setup error returned from `attachCdpBrowser`;
+- CDP connected but no Gemini tab exists;
+- composer not found;
+- send button not found;
+- answer timeout;
+- successful answer;
+- CDP closed-target catch branch;
+- generic catch branch.
+
+For early results before a page exists, wrap results with `finalizeRunResult(...)`. Example for closed CDP page:
 
 ```ts
-return withDebug(
+return finalizeRunResult(
   {
     run_id: input.request.run_id,
     status: "browser_crashed",
@@ -435,6 +454,57 @@ return withDebug(
     elapsed_ms: Date.now() - start,
   },
   markErrorStage(debugSummary, "transport"),
+);
+```
+
+For the managed-page-not-created branch:
+
+```ts
+return finalizeRunResult(
+  {
+    run_id: input.request.run_id,
+    status: "failed",
+    text: null,
+    message: "Gemini browser page was not created.",
+    manual_action: null,
+    artifacts: emptyArtifacts(input.artifactDir),
+    elapsed_ms: Date.now() - start,
+  },
+  markErrorStage(debugSummary, "setup"),
+);
+```
+
+For the CDP attach setup error branch that uses `attachStatus`:
+
+```ts
+return finalizeRunResult(
+  {
+    run_id: input.request.run_id,
+    status: "needs_manual_action",
+    text: null,
+    message: attachStatus.latest_message,
+    manual_action: attachStatus.manual_action,
+    artifacts: emptyArtifacts(input.artifactDir),
+    elapsed_ms: Date.now() - start,
+  },
+  markErrorStage(debugSummary, "setup"),
+);
+```
+
+For the attached-CDP-without-Gemini-tab branch:
+
+```ts
+return finalizeRunResult(
+  {
+    run_id: input.request.run_id,
+    status: "needs_manual_action",
+    text: null,
+    message: "Open Gemini in the attached Chrome profile or use Open to create a Gemini tab.",
+    manual_action: "start_chrome_cdp",
+    artifacts: emptyArtifacts(input.artifactDir),
+    elapsed_ms: Date.now() - start,
+  },
+  markErrorStage(debugSummary, "setup"),
 );
 ```
 
@@ -511,7 +581,7 @@ debugSummary.answer_selector = answer.selector;
 debugSummary.waited_for_answer_ms = answer.waitedMs;
 debugSummary.final_text_length = answer.text.length;
 
-return withDebug(
+return finalizeRunResult(
   {
     run_id: input.request.run_id,
     status: "ok",
@@ -543,7 +613,7 @@ private async failure(
   start: number,
   debugSummary: GeminiBrowserRunDebugSummary,
 ): Promise<GeminiBrowserRunResult> {
-  return withDebug(
+  return finalizeRunResult(
     {
       run_id: request.run_id,
       status,
@@ -559,6 +629,33 @@ private async failure(
 ```
 
 Update every `this.failure(...)` call to pass a stage-marked `debugSummary`.
+Update catch branches too:
+
+```ts
+if (this.session?.type === "cdp_attach" && isClosedTargetError(error)) {
+  return this.failure(
+    page,
+    input.request,
+    input.artifactDir,
+    "browser_crashed",
+    "Chrome CDP connection closed during the run.",
+    start,
+    markErrorStage(debugSummary, "transport"),
+  );
+}
+return this.failure(
+  page,
+  input.request,
+  input.artifactDir,
+  "failed",
+  String(error),
+  start,
+  markErrorStage(debugSummary, "transport"),
+);
+```
+
+After implementation, search `adapter.ts` for `return {` inside `sendSingle()`.
+There should be no raw `GeminiBrowserRunResult` returns left in that method.
 
 - [ ] **Step 7: Run sidecar checks**
 
@@ -714,6 +811,7 @@ pub struct GeminiBrowserRunDebugSummary {
 Add the field to `GeminiBrowserRunResult`:
 
 ```rust
+#[serde(default)]
 pub debug_summary: Option<GeminiBrowserRunDebugSummary>,
 ```
 
@@ -744,7 +842,24 @@ pub(crate) fn recorded_run_dir(runs_dir: &Path, run_id: &str) -> AppResult<PathB
     if !result_path.exists() {
         return Err(AppError::validation("Gemini browser run was not found"));
     }
-    Ok(dir)
+    let run = read_run_file(&result_path)?;
+    let recorded = run
+        .result
+        .as_ref()
+        .and_then(|result| result.artifacts.run_dir.as_deref())
+        .ok_or_else(|| AppError::validation("Gemini browser run folder is not available"))?;
+    let expected = dir
+        .canonicalize()
+        .map_err(|error| AppError::internal(error.to_string()))?;
+    let recorded = PathBuf::from(recorded)
+        .canonicalize()
+        .map_err(|_| AppError::validation("Gemini browser run folder is not available"))?;
+    if recorded != expected {
+        return Err(AppError::validation(
+            "Gemini browser run folder does not match the recorded run",
+        ));
+    }
+    Ok(expected)
 }
 ```
 
@@ -752,15 +867,51 @@ Add a test:
 
 ```rust
 #[test]
-fn recorded_run_dir_accepts_only_existing_safe_runs() {
+fn recorded_run_dir_accepts_only_result_artifact_run_dir() {
     let temp = tempdir().expect("tempdir");
     let runs_dir = temp.path();
     create_queued_run(runs_dir, "run-1", "settings_test", "hello Gemini")
         .expect("create queued run");
+    assert!(super::recorded_run_dir(runs_dir, "run-1").is_err());
+
+    let run_dir = runs_dir.join("run-1");
+    let result = GeminiBrowserRunResult {
+        run_id: "run-1".to_string(),
+        status: GeminiBrowserRunStatus::Ok,
+        text: Some("answer".to_string()),
+        message: None,
+        manual_action: None,
+        artifacts: GeminiBrowserArtifactRefs {
+            run_dir: Some(run_dir.to_string_lossy().to_string()),
+            ..Default::default()
+        },
+        elapsed_ms: 25,
+        debug_summary: None,
+    };
+    finish_run(runs_dir, "run-1", result).expect("finish run");
 
     let dir = super::recorded_run_dir(runs_dir, "run-1").expect("recorded run dir");
     assert_eq!(dir.file_name().and_then(|name| name.to_str()), Some("run-1"));
 
+    create_queued_run(runs_dir, "run-2", "settings_test", "hello Gemini")
+        .expect("create queued run");
+    let outside = temp.path().join("outside-run-dir");
+    std::fs::create_dir_all(&outside).expect("outside dir");
+    let mismatched = GeminiBrowserRunResult {
+        run_id: "run-2".to_string(),
+        status: GeminiBrowserRunStatus::Ok,
+        text: Some("answer".to_string()),
+        message: None,
+        manual_action: None,
+        artifacts: GeminiBrowserArtifactRefs {
+            run_dir: Some(outside.to_string_lossy().to_string()),
+            ..Default::default()
+        },
+        elapsed_ms: 25,
+        debug_summary: None,
+    };
+    finish_run(runs_dir, "run-2", mismatched).expect("finish run");
+    assert!(super::recorded_run_dir(runs_dir, "run-2").is_err());
     assert!(super::recorded_run_dir(runs_dir, "../bad").is_err());
     assert!(super::recorded_run_dir(runs_dir, "missing-run").is_err());
 }
@@ -1003,7 +1154,7 @@ export interface GeminiBrowserRunDebugSummary {
 Add to `GeminiBrowserRunResult`:
 
 ```ts
-debug_summary: GeminiBrowserRunDebugSummary | null;
+debug_summary?: GeminiBrowserRunDebugSummary | null;
 ```
 
 Update local test factories in `src/lib/gemini-browser-provider-panel-state.test.ts` so `result()` includes:
