@@ -38,7 +38,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 base64 = "0.22"
 chacha20poly1305 = { version = "0.10", features = ["std"] }
 rand_core = { version = "0.6", features = ["getrandom"] }
-time = { version = "0.3", features = ["formatting"] }
+time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 url = "2"
 tempfile = "3"
