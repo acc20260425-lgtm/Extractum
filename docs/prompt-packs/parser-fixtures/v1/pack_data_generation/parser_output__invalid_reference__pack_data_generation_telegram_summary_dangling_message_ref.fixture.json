@@ -1,0 +1,175 @@
+{
+  "fixture_id": "parser_output__invalid_reference__pack_data_generation_telegram_summary_dangling_message_ref",
+  "parser_fixture_version": "1.0",
+  "provider_family": "openai_compatible",
+  "stage": "pack_data_generation",
+  "schema_version": "1.0",
+  "stage_io_version": "1.0",
+  "pack_id": "telegram_summary",
+  "parser_options": {
+    "allow_wrapper_text": false,
+    "reject_unknown_top_level_keys": true
+  },
+  "allowed_claim_ids": ["claim_1"],
+  "allowed_evidence_ids": ["evidence_1"],
+  "allowed_source_ref_ids": ["source_ref_1"],
+  "allowed_message_ref_ids": ["msg_ref_1"],
+  "raw_message_content": "{\"pack_data_candidate\":{\"telegram_summary\":{\"source_shape\":\"channel\",\"sources\":[{\"summary_source_id\":\"tg_source_1\",\"source_ref_id\":\"source_ref_1\",\"source_kind\":\"channel\",\"display_name\":\"Example Product Channel\",\"platform_id\":\"-1001234567890\",\"message_count\":1,\"usable_message_count\":1,\"topic_count\":1,\"source_refs\":[\"source_ref_1\"]}],\"time_window\":{\"from\":\"2026-06-01T00:00:00Z\",\"to\":\"2026-06-07T23:59:59Z\",\"timezone\":\"UTC\",\"label\":\"2026-06-01..2026-06-07\"},\"message_refs\":[{\"message_ref_id\":\"msg_ref_1\",\"summary_source_id\":\"tg_source_1\",\"source_ref_id\":\"source_ref_1\",\"message_id\":\"1842\",\"published_at\":\"2026-06-03T12:30:00Z\",\"author_display\":\"Example Product Channel\",\"message_kind\":\"channel_post\",\"forum_topic_id\":null,\"forum_topic_title\":null,\"reply_to_message_ref\":null,\"reply_to_top_message_ref\":null,\"history_scope\":\"current\",\"is_migrated_history\":false,\"migration_domain\":null,\"has_media\":false,\"media_kind\":null,\"media_caption_available\":false,\"reaction_count\":118,\"reply_count\":9,\"forward_count\":14,\"evidence_refs\":[\"evidence_1\"],\"source_refs\":[\"source_ref_1\"]}],\"digest\":{\"summary_text\":\"The channel announced a product update delay.\",\"key_events\":[\"A product update delay was announced.\"],\"major_changes\":[\"The release moved to next week.\"],\"recommended_reads\":[\"key_message_1\"],\"claim_refs\":[\"claim_1\"],\"evidence_refs\":[\"evidence_1\"],\"source_refs\":[\"source_ref_1\"]},\"timeline\":[{\"timeline_event_id\":\"timeline_event_1\",\"occurred_at\":\"2026-06-03T12:30:00Z\",\"title\":\"Product update delayed\",\"summary_text\":\"The product update will ship next week.\",\"importance\":\"high\",\"message_refs\":[\"msg_ref_1\"],\"claim_refs\":[\"claim_1\"],\"evidence_refs\":[\"evidence_1\"],\"source_refs\":[\"source_ref_1\"]}],\"topics\":[{\"topic_id\":\"topic_1\",\"title\":\"Product release timing\",\"summary_text\":\"The source discusses the timing of the next product update.\",\"topic_source\":\"time_window\",\"topic_scope\":\"single_source\",\"importance\":\"high\",\"message_count\":1,\"key_message_refs\":[\"key_message_1\"],\"thread_refs\":[],\"claim_refs\":[\"claim_1\"],\"evidence_refs\":[\"evidence_1\"],\"source_refs\":[\"source_ref_1\"]}],\"key_messages\":[{\"key_message_id\":\"key_message_1\",\"summary_source_id\":\"tg_source_1\",\"message_ref\":\"msg_ref_missing\",\"message_id\":\"1842\",\"published_at\":\"2026-06-03T12:30:00Z\",\"author_display\":\"Example Product Channel\",\"role\":\"channel_post\",\"importance_score\":0.82,\"importance_reasons\":[\"high_reaction_count\",\"claim_dense\"],\"summary_text\":\"The channel says the product update will ship next week.\",\"contains_claims\":true,\"topic_refs\":[\"topic_1\"],\"thread_refs\":[],\"claim_refs\":[\"claim_1\"],\"evidence_refs\":[\"evidence_1\"],\"source_refs\":[\"source_ref_1\"]}],\"threads\":[],\"claims\":[{\"telegram_claim_id\":\"telegram_claim_1\",\"claim_ref\":\"claim_1\",\"claim_text\":\"The product update will ship next week.\",\"claim_kind\":\"prediction\",\"status_in_corpus\":\"supported_once\",\"topic_refs\":[\"topic_1\"],\"key_message_refs\":[\"key_message_1\"],\"message_refs\":[\"msg_ref_1\"],\"evidence_refs\":[\"evidence_1\"],\"source_refs\":[\"source_ref_1\"]}],\"forwarded_items\":[],\"message_quality_signals\":[{\"signal_id\":\"message_quality_1\",\"message_ref\":\"msg_ref_1\",\"signal_type\":\"claim_dense\",\"score\":0.78,\"reason\":\"The message contains the main scheduling claim.\",\"topic_refs\":[\"topic_1\"],\"thread_refs\":[],\"evidence_refs\":[\"evidence_1\"],\"source_refs\":[\"source_ref_1\"]}],\"cross_source_synthesis\":null,\"limitations\":[]}},\"unknown_candidates\":[],\"warning_candidates\":[]}",
+  "expected_parse_result": {
+    "parse_status": "invalid",
+    "stage": "pack_data_generation",
+    "candidate_count": 1,
+    "validation_findings": [
+      {
+        "rule_id": "VR-TS-006",
+        "severity": "error",
+        "layer": "reference",
+        "object_path": "$.pack_data_candidate.telegram_summary.key_messages[0].message_ref",
+        "message_contains": "msg_ref_missing"
+      }
+    ]
+  },
+  "expected_stage_output": {
+    "pack_data_candidate": {
+      "telegram_summary": {
+        "source_shape": "channel",
+        "sources": [
+          {
+            "summary_source_id": "tg_source_1",
+            "source_ref_id": "source_ref_1",
+            "source_kind": "channel",
+            "display_name": "Example Product Channel",
+            "platform_id": "-1001234567890",
+            "message_count": 1,
+            "usable_message_count": 1,
+            "topic_count": 1,
+            "source_refs": ["source_ref_1"]
+          }
+        ],
+        "time_window": {
+          "from": "2026-06-01T00:00:00Z",
+          "to": "2026-06-07T23:59:59Z",
+          "timezone": "UTC",
+          "label": "2026-06-01..2026-06-07"
+        },
+        "message_refs": [
+          {
+            "message_ref_id": "msg_ref_1",
+            "summary_source_id": "tg_source_1",
+            "source_ref_id": "source_ref_1",
+            "message_id": "1842",
+            "published_at": "2026-06-03T12:30:00Z",
+            "author_display": "Example Product Channel",
+            "message_kind": "channel_post",
+            "forum_topic_id": null,
+            "forum_topic_title": null,
+            "reply_to_message_ref": null,
+            "reply_to_top_message_ref": null,
+            "history_scope": "current",
+            "is_migrated_history": false,
+            "migration_domain": null,
+            "has_media": false,
+            "media_kind": null,
+            "media_caption_available": false,
+            "reaction_count": 118,
+            "reply_count": 9,
+            "forward_count": 14,
+            "evidence_refs": ["evidence_1"],
+            "source_refs": ["source_ref_1"]
+          }
+        ],
+        "digest": {
+          "summary_text": "The channel announced a product update delay.",
+          "key_events": ["A product update delay was announced."],
+          "major_changes": ["The release moved to next week."],
+          "recommended_reads": ["key_message_1"],
+          "claim_refs": ["claim_1"],
+          "evidence_refs": ["evidence_1"],
+          "source_refs": ["source_ref_1"]
+        },
+        "timeline": [
+          {
+            "timeline_event_id": "timeline_event_1",
+            "occurred_at": "2026-06-03T12:30:00Z",
+            "title": "Product update delayed",
+            "summary_text": "The product update will ship next week.",
+            "importance": "high",
+            "message_refs": ["msg_ref_1"],
+            "claim_refs": ["claim_1"],
+            "evidence_refs": ["evidence_1"],
+            "source_refs": ["source_ref_1"]
+          }
+        ],
+        "topics": [
+          {
+            "topic_id": "topic_1",
+            "title": "Product release timing",
+            "summary_text": "The source discusses the timing of the next product update.",
+            "topic_source": "time_window",
+            "topic_scope": "single_source",
+            "importance": "high",
+            "message_count": 1,
+            "key_message_refs": ["key_message_1"],
+            "thread_refs": [],
+            "claim_refs": ["claim_1"],
+            "evidence_refs": ["evidence_1"],
+            "source_refs": ["source_ref_1"]
+          }
+        ],
+        "key_messages": [
+          {
+            "key_message_id": "key_message_1",
+            "summary_source_id": "tg_source_1",
+            "message_ref": "msg_ref_missing",
+            "message_id": "1842",
+            "published_at": "2026-06-03T12:30:00Z",
+            "author_display": "Example Product Channel",
+            "role": "channel_post",
+            "importance_score": 0.82,
+            "importance_reasons": ["high_reaction_count", "claim_dense"],
+            "summary_text": "The channel says the product update will ship next week.",
+            "contains_claims": true,
+            "topic_refs": ["topic_1"],
+            "thread_refs": [],
+            "claim_refs": ["claim_1"],
+            "evidence_refs": ["evidence_1"],
+            "source_refs": ["source_ref_1"]
+          }
+        ],
+        "threads": [],
+        "claims": [
+          {
+            "telegram_claim_id": "telegram_claim_1",
+            "claim_ref": "claim_1",
+            "claim_text": "The product update will ship next week.",
+            "claim_kind": "prediction",
+            "status_in_corpus": "supported_once",
+            "topic_refs": ["topic_1"],
+            "key_message_refs": ["key_message_1"],
+            "message_refs": ["msg_ref_1"],
+            "evidence_refs": ["evidence_1"],
+            "source_refs": ["source_ref_1"]
+          }
+        ],
+        "forwarded_items": [],
+        "message_quality_signals": [
+          {
+            "signal_id": "message_quality_1",
+            "message_ref": "msg_ref_1",
+            "signal_type": "claim_dense",
+            "score": 0.78,
+            "reason": "The message contains the main scheduling claim.",
+            "topic_refs": ["topic_1"],
+            "thread_refs": [],
+            "evidence_refs": ["evidence_1"],
+            "source_refs": ["source_ref_1"]
+          }
+        ],
+        "cross_source_synthesis": null,
+        "limitations": []
+      }
+    },
+    "unknown_candidates": [],
+    "warning_candidates": []
+  }
+}

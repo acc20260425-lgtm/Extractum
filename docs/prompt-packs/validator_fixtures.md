@@ -543,11 +543,13 @@ Current checked-in parser fixtures:
 | `parser_output__invalid_reference__disallowed_evidence` | Disallowed evidence ref yields `STAGE-REF-001` after parsing |
 | `parser_output__valid__pack_data_generation_technology_watch_minimal` | Valid Technology Watch pack data candidate parses to one namespace candidate |
 | `parser_output__valid__pack_data_generation_youtube_summary_minimal` | Valid YouTube Summary pack data candidate parses to one namespace candidate |
+| `parser_output__valid__pack_data_generation_telegram_summary_minimal` | Valid Telegram Summary pack data candidate parses to one namespace candidate |
 | `parser_output__invalid_parse__pack_data_generation_malformed_json` | Invalid pack data generation JSON yields `STAGE-PARSE-001` |
 | `parser_output__invalid_schema__pack_data_generation_unknown_top_level_key` | Unknown pack data generation top-level key yields `STAGE-PARSE-003` |
 | `parser_output__invalid_reference__pack_data_generation_disallowed_claim` | Disallowed recursive `claim_refs` value yields `STAGE-REF-001` after parsing |
 | `parser_output__invalid_reference__pack_data_generation_disallowed_evidence` | Disallowed recursive `evidence_refs` value yields `STAGE-REF-001` after parsing |
 | `parser_output__invalid_reference__pack_data_generation_disallowed_source` | Disallowed recursive `source_refs` value yields `STAGE-REF-001` after parsing |
+| `parser_output__invalid_reference__pack_data_generation_telegram_summary_dangling_message_ref` | Disallowed Telegram `message_ref` value yields `VR-TS-006` after parsing |
 | `parser_output__valid__final_synthesis_minimal` | Valid readable outputs candidate parses to one outputs candidate |
 | `parser_output__invalid_parse__final_synthesis_malformed_json` | Invalid final synthesis JSON yields `STAGE-PARSE-001` |
 | `parser_output__invalid_schema__final_synthesis_unknown_top_level_key` | Unknown final synthesis top-level key yields `STAGE-PARSE-003` |
