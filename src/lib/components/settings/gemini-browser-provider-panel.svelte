@@ -6,6 +6,7 @@
     geminiBridgeOpenBrowser,
     geminiBridgeResume,
     geminiBridgeSendSingle,
+    geminiBridgeStartCdpChrome,
     geminiBridgeStatus,
     geminiBridgeStop,
     listenToGeminiBrowserRuns,
@@ -98,6 +99,19 @@
       message = status.latest_message ?? "Browser opened.";
     } catch (error) {
       message = formatAppError("opening Gemini browser", error);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function startCdpChrome() {
+    busy = true;
+    try {
+      const launch = await geminiBridgeStartCdpChrome(browserConfig());
+      message = launch.message;
+      await refresh();
+    } catch (error) {
+      message = formatAppError("starting Chrome for Gemini browser provider", error);
     } finally {
       busy = false;
     }
@@ -227,6 +241,12 @@
         <p class="message">{message}</p>
       {/if}
       <div class="actions">
+        {#if browserProviderMode === "cdp_attach"}
+          <button type="button" onclick={startCdpChrome} disabled={busy}>
+            <Play size={14} />
+            <span>Start Chrome</span>
+          </button>
+        {/if}
         <button type="button" onclick={openBrowser} disabled={busy}>
           <ExternalLink size={14} />
           <span>Open</span>

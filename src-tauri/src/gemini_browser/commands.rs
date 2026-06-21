@@ -3,10 +3,11 @@ use tauri::{AppHandle, Emitter, State};
 use crate::error::{AppError, AppResult};
 
 use super::{
-    create_queued_run, finish_run, list_runs, mark_running, path_string, profile_dir, run_dir,
-    runs_dir, sidecar, GeminiBrowserProviderConfig, GeminiBrowserProviderStatus,
-    GeminiBrowserRunEvent, GeminiBrowserRunLogSummary, GeminiBrowserRunRequest,
-    GeminiBrowserRunResult, GeminiBrowserRunStatus, GeminiBrowserState,
+    cdp_chrome, chrome_cdp_profile_dir, create_queued_run, finish_run, list_runs, mark_running,
+    path_string, profile_dir, run_dir, runs_dir, sidecar, GeminiBrowserProviderConfig,
+    GeminiBrowserProviderStatus, GeminiBrowserRunEvent, GeminiBrowserRunLogSummary,
+    GeminiBrowserRunRequest, GeminiBrowserRunResult, GeminiBrowserRunStatus,
+    GeminiBrowserStartChromeResult, GeminiBrowserState,
 };
 
 pub const GEMINI_BROWSER_RUN_EVENT: &str = "gemini-browser://run";
@@ -45,6 +46,20 @@ pub async fn gemini_bridge_open_browser(
         browser_config,
     )
     .await
+}
+
+#[tauri::command]
+pub async fn gemini_bridge_start_cdp_chrome(
+    handle: AppHandle,
+    browser_config: Option<GeminiBrowserProviderConfig>,
+) -> AppResult<GeminiBrowserStartChromeResult> {
+    let spec = cdp_chrome::build_chrome_cdp_launch_spec(
+        cdp_chrome::find_chrome_executable(),
+        chrome_cdp_profile_dir(&handle)?,
+        browser_config.as_ref(),
+    )?;
+    cdp_chrome::spawn_chrome_cdp(&spec)?;
+    Ok(cdp_chrome::start_chrome_result(&spec))
 }
 
 #[tauri::command]

@@ -38,6 +38,13 @@ pub struct GeminiBrowserProviderConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeminiBrowserStartChromeResult {
+    pub browser_profile_dir: String,
+    pub cdp_endpoint: String,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeminiBrowserProviderStatus {
     pub status: GeminiBrowserProviderStatusKind,
     pub manual_action: Option<GeminiBrowserManualAction>,

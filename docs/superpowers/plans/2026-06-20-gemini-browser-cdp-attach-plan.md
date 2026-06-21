@@ -1898,3 +1898,14 @@ Expected: final commit contains only plan checkbox and verification-note updates
 - Manual UX validation: not run in this automated pass. It requires restarting
   the Tauri UI on this branch, selecting `Attach Chrome` in Settings, and
   retrying `Resume` against an already-started local Chrome CDP endpoint.
+
+### Task 12: Start Chrome CDP Command
+
+- [x] **Step 1: Add red Rust tests for Chrome CDP launch argument construction**
+- [x] **Step 2: Add red frontend API and Settings source tests for `Start Chrome`**
+- [x] **Step 3: Implement Rust Chrome CDP launch helper and Tauri command**
+- [x] **Step 4: Register and export the new Tauri command**
+- [x] **Step 5: Add frontend API wrapper and Settings button**
+- [x] **Step 6: Run targeted Rust/frontend tests**
+- [x] **Step 7: Run full verification and rebuild sidecar binary**
+- [x] **Step 8: Commit Start Chrome CDP command**

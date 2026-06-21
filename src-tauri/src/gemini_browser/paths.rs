@@ -7,6 +7,7 @@ use crate::error::{AppError, AppResult};
 
 pub(crate) const GEMINI_BROWSER_DIR: &str = "gemini-browser";
 pub(crate) const PROFILE_DIR: &str = "profile";
+pub(crate) const CHROME_CDP_PROFILE_DIR: &str = "chrome-cdp-profile";
 pub(crate) const RUNS_DIR: &str = "runs";
 
 pub(crate) fn base_dir(handle: &AppHandle) -> AppResult<PathBuf> {
@@ -19,6 +20,12 @@ pub(crate) fn base_dir(handle: &AppHandle) -> AppResult<PathBuf> {
 
 pub(crate) fn profile_dir(handle: &AppHandle) -> AppResult<PathBuf> {
     let path = base_dir(handle)?.join(PROFILE_DIR);
+    fs::create_dir_all(&path).map_err(|error| AppError::internal(error.to_string()))?;
+    Ok(path)
+}
+
+pub(crate) fn chrome_cdp_profile_dir(handle: &AppHandle) -> AppResult<PathBuf> {
+    let path = base_dir(handle)?.join(CHROME_CDP_PROFILE_DIR);
     fs::create_dir_all(&path).map_err(|error| AppError::internal(error.to_string()))?;
     Ok(path)
 }

@@ -30,6 +30,7 @@ describe("gemini browser provider panel copy contract", () => {
   it("exposes env-free CDP attach controls in Settings", () => {
     expect(componentSource).toContain("browserProviderMode");
     expect(componentSource).toContain("Attach Chrome");
+    expect(componentSource).toContain("Start Chrome");
     expect(componentSource).toContain("CDP endpoint");
     expect(componentSource).toContain("localStorage");
   });
@@ -37,6 +38,7 @@ describe("gemini browser provider panel copy contract", () => {
   it("passes browser config to status, open, resume, and send calls", () => {
     expect(componentSource).toContain("geminiBridgeStatus(browserConfig())");
     expect(componentSource).toContain("geminiBridgeOpenBrowser(browserConfig())");
+    expect(componentSource).toContain("geminiBridgeStartCdpChrome(browserConfig())");
     expect(componentSource).toContain("geminiBridgeResume(browserConfig())");
     expect(componentSource).toContain("browserConfig: browserConfig()");
   });

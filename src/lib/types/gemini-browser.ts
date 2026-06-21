@@ -22,6 +22,12 @@ export interface GeminiBrowserProviderConfig {
   cdpEndpoint?: string | null;
 }
 
+export interface GeminiBrowserStartChromeResult {
+  browser_profile_dir: string;
+  cdp_endpoint: string;
+  message: string;
+}
+
 export interface GeminiBrowserProviderStatus {
   status: GeminiBrowserProviderStatusKind;
   manual_action: GeminiBrowserManualAction | null;

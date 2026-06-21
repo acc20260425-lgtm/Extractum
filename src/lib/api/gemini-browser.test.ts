@@ -5,6 +5,7 @@ import {
   geminiBridgeOpenBrowser,
   geminiBridgeResume,
   geminiBridgeSendSingle,
+  geminiBridgeStartCdpChrome,
   geminiBridgeStatus,
   geminiBridgeStop,
   listenToGeminiBrowserRuns,
@@ -56,6 +57,11 @@ describe("gemini browser api wrappers", () => {
 
     await geminiBridgeResume(browserConfig);
     expect(invokeMock).toHaveBeenLastCalledWith("gemini_bridge_resume", { browserConfig });
+
+    await geminiBridgeStartCdpChrome(browserConfig);
+    expect(invokeMock).toHaveBeenLastCalledWith("gemini_bridge_start_cdp_chrome", {
+      browserConfig,
+    });
   });
 
   it("sends single prompt with camelCase frontend keys", async () => {
