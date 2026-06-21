@@ -29,7 +29,7 @@
     "test:gemini-browser-sidecar": "npm run test:gemini-browser-sidecar:typecheck && npm run test:gemini-browser-sidecar:unit && npm run test:gemini-browser-sidecar:build",
     "test:project-runs": "node scripts/run-vitest.mjs run src/lib/project-runs-screen-contract.test.ts src/lib/api/prompt-packs.test.ts",
     "test:rust:prompt-pack-runs": "cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-project-runs --lib prompt_pack_run",
-    "test:watch": "vitest",
+    "test:watch": "node scripts/run-vitest.mjs watch",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "verify:project-runs": "npm run test:project-runs && npm run check && npm run test:rust:prompt-pack-runs",
