@@ -196,6 +196,7 @@ The first reference validator should include these required fixture classes.
 | `canonical_result__valid__youtube_summary_minimal` | `canonical_result` | `valid` | valid | No `error` findings |
 | `canonical_result__valid__telegram_summary_minimal` | `canonical_result` | `valid` | valid | No `error` findings |
 | `canonical_result__valid__telegram_summary_chat_threads_minimal` | `canonical_result` | `valid` | valid | No `error` findings |
+| `canonical_result__valid__telegram_summary_forum_topics_minimal` | `canonical_result` | `valid` | valid | No `error` findings |
 | `canonical_result__invalid_pipeline__telegram_summary_dangling_message_ref` | `canonical_result` | `invalid-pipeline` | invalid | `VR-TS-006` |
 | `canonical_result__invalid_schema__missing_outputs` | `canonical_result` | `invalid-schema` | invalid | Required top-level object missing |
 | `canonical_result__invalid_reference__dangling_evidence_claim` | `canonical_result` | `invalid-reference` | invalid | `VR-CORE-022` |
@@ -229,7 +230,7 @@ The mandatory fixture matrix is now materialized under `fixtures/v1/`.
 
 | Fixture family | Checked-in coverage |
 |---|---|
-| Canonical valid | `technology_watch_minimal`, `youtube_summary_minimal`, `telegram_summary_minimal`, `telegram_summary_chat_threads_minimal` |
+| Canonical valid | `technology_watch_minimal`, `youtube_summary_minimal`, `telegram_summary_minimal`, `telegram_summary_chat_threads_minimal`, `telegram_summary_forum_topics_minimal` |
 | Canonical invalid schema/reference/pipeline | `missing_outputs`, `dangling_evidence_claim`, `claim_source_refs_not_superset`, `relation_cycle`, `telegram_summary_dangling_message_ref` |
 | Canonical QA warning | `single_source_claim` |
 | Stage payload | valid `claim_extraction_minimal`, `missing_allowed_fragment`, `unsupported_stage_io_version` |
@@ -283,13 +284,13 @@ Latest reviewed fixture inventory:
 
 | Metric | Value |
 |---|---:|
-| Total manifest entries | 25 |
-| Required fixtures | 15 |
+| Total manifest entries | 30 |
+| Required fixtures | 20 |
 | Optional regression fixtures | 10 |
-| Canonical result fixtures | 17 |
+| Canonical result fixtures | 21 |
 | Stage payload fixtures | 3 |
 | Stage output fixtures | 3 |
-| Prompt template fixtures | 2 |
+| Prompt template fixtures | 3 |
 | Missing fixture or expected paths | 0 |
 
 Covered expected rule IDs:

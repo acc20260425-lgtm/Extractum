@@ -41,6 +41,15 @@
       "required": true
     },
     {
+      "fixture_id": "canonical_result__valid__telegram_summary_forum_topics_minimal",
+      "validation_mode": "canonical_result",
+      "fixture_path": "canonical-result/valid/canonical_result__valid__telegram_summary_forum_topics_minimal.fixture.json",
+      "expected_findings_path": "expected-findings/canonical-result/canonical_result__valid__telegram_summary_forum_topics_minimal.expected.json",
+      "expected_error_count": 0,
+      "expected_warning_count": 0,
+      "required": true
+    },
+    {
       "fixture_id": "canonical_result__invalid_pipeline__telegram_summary_dangling_message_ref",
       "validation_mode": "canonical_result",
       "fixture_path": "canonical-result/invalid-pipeline/canonical_result__invalid_pipeline__telegram_summary_dangling_message_ref.fixture.json",
