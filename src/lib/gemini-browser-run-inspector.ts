@@ -1,4 +1,9 @@
-import type { GeminiBrowserRun, GeminiBrowserRunResult } from "./types/gemini-browser";
+import type {
+  GeminiBrowserAnswerCompletionReason,
+  GeminiBrowserRun,
+  GeminiBrowserRunResult,
+  GeminiBrowserRunStatus,
+} from "./types/gemini-browser";
 
 export function selectedRunForInspector(
   runs: GeminiBrowserRun[],
@@ -9,6 +14,133 @@ export function selectedRunForInspector(
     if (active) return active;
   }
   return runs[0] ?? null;
+}
+
+export type GeminiBrowserRunHistoryFilter =
+  | "all"
+  | "problems"
+  | "partial_risk"
+  | "manual_action"
+  | "failed";
+
+export type GeminiBrowserRunHistoryBadge =
+  | "ok"
+  | "stable"
+  | "partial"
+  | "manual"
+  | "failed"
+  | "running"
+  | "queued";
+
+export interface GeminiBrowserRunHistoryRow {
+  run: GeminiBrowserRun;
+  status: GeminiBrowserRunStatus;
+  badge: GeminiBrowserRunHistoryBadge;
+  isProblem: boolean;
+  isPartialRisk: boolean;
+  elapsedMs: number | null;
+  resultTextLength: number;
+  answerCompletionReason: GeminiBrowserAnswerCompletionReason | null;
+}
+
+const FAILED_RUN_STATUSES = new Set<GeminiBrowserRunStatus>([
+  "failed",
+  "timeout",
+  "browser_crashed",
+  "blocked",
+]);
+
+const MANUAL_ACTION_STATUSES = new Set<GeminiBrowserRunStatus>([
+  "needs_login",
+  "needs_manual_action",
+]);
+
+export function effectiveRunStatus(run: GeminiBrowserRun): GeminiBrowserRunStatus {
+  return run.result?.status ?? run.status;
+}
+
+function isFailedHistoryRun(run: GeminiBrowserRun): boolean {
+  return FAILED_RUN_STATUSES.has(run.status) || FAILED_RUN_STATUSES.has(effectiveRunStatus(run));
+}
+
+function isManualActionHistoryRun(run: GeminiBrowserRun): boolean {
+  return (
+    MANUAL_ACTION_STATUSES.has(run.status) ||
+    MANUAL_ACTION_STATUSES.has(effectiveRunStatus(run)) ||
+    Boolean(run.result?.manual_action)
+  );
+}
+
+export function runHistoryRow(run: GeminiBrowserRun): GeminiBrowserRunHistoryRow {
+  const status = effectiveRunStatus(run);
+  const isPartialRisk = isPartialRiskBrowserResult(run.result);
+  const isManualAction = isManualActionHistoryRun(run);
+  const isFailed = isFailedHistoryRun(run);
+  const answerCompletionReason = run.result?.debug_summary?.answer_completion_reason ?? null;
+  const isProblem = isPartialRisk || isManualAction || isFailed;
+  let badge: GeminiBrowserRunHistoryBadge = "ok";
+
+  if (run.status === "queued") {
+    badge = "queued";
+  } else if (run.status === "running" || status === "running") {
+    badge = "running";
+  } else if (isPartialRisk) {
+    badge = "partial";
+  } else if (isManualAction) {
+    badge = "manual";
+  } else if (isFailed) {
+    badge = "failed";
+  } else if (answerCompletionReason === "stable") {
+    badge = "stable";
+  }
+
+  return {
+    run,
+    status,
+    badge,
+    isProblem,
+    isPartialRisk,
+    elapsedMs: run.result?.elapsed_ms ?? null,
+    resultTextLength: resultTextLength(run.result),
+    answerCompletionReason,
+  };
+}
+
+export function filterRunHistoryRows(
+  runs: GeminiBrowserRun[],
+  filter: GeminiBrowserRunHistoryFilter,
+): GeminiBrowserRunHistoryRow[] {
+  const rows = runs.map(runHistoryRow);
+  if (filter === "all") return rows;
+  return rows.filter((row) => {
+    if (filter === "problems") return row.isProblem;
+    if (filter === "partial_risk") return row.isPartialRisk;
+    if (filter === "manual_action") return isManualActionHistoryRun(row.run);
+    if (filter === "failed") return isFailedHistoryRun(row.run);
+    return true;
+  });
+}
+
+export function selectRunForHistory(
+  runs: GeminiBrowserRun[],
+  activeRunId: string | null,
+  selectedRunId: string | null,
+  filter: GeminiBrowserRunHistoryFilter,
+): GeminiBrowserRun | null {
+  const visibleRows = filterRunHistoryRows(runs, filter);
+  if (visibleRows.length === 0) return null;
+
+  if (selectedRunId) {
+    const selected = visibleRows.find((row) => row.run.run_id === selectedRunId);
+    if (selected) return selected.run;
+  }
+
+  if (activeRunId) {
+    const active = visibleRows.find((row) => row.run.run_id === activeRunId);
+    if (active) return active.run;
+  }
+
+  return visibleRows[0]?.run ?? null;
 }
 
 export function artifactAvailability(result: GeminiBrowserRunResult | null) {

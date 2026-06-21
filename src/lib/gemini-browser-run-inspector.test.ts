@@ -3,9 +3,13 @@ import {
   artifactAvailability,
   copyableRunDiagnostics,
   debugFinalTextLength,
+  filterRunHistoryRows,
   isPartialRiskBrowserResult,
   resultTextLength,
+  runHistoryRow,
+  selectRunForHistory,
   selectedRunForInspector,
+  type GeminiBrowserRunHistoryFilter,
 } from "./gemini-browser-run-inspector";
 import type { GeminiBrowserRun, GeminiBrowserRunResult } from "./types/gemini-browser";
 
@@ -168,5 +172,135 @@ describe("gemini browser run inspector", () => {
     );
 
     expect(diagnostics).toContain("debug_summary: unavailable");
+  });
+
+  function runWithResult(
+    runId: string,
+    runStatus: GeminiBrowserRun["status"],
+    resultOverrides: Partial<GeminiBrowserRunResult> = {},
+  ): GeminiBrowserRun {
+    return run({
+      run_id: runId,
+      status: runStatus,
+      prompt_preview: `${runId} prompt`,
+      updated_at: `2026-06-21T00:00:${runId.length.toString().padStart(2, "0")}Z`,
+      result: result({ run_id: runId, ...resultOverrides }),
+    });
+  }
+
+  it("derives compact history rows without exposing answer text or artifact paths", () => {
+    const row = runHistoryRow(
+      runWithResult("stable-run", "ok", {
+        elapsed_ms: 24_660,
+        text: "full answer text",
+        debug_summary: {
+          ...result().debug_summary!,
+          answer_completion_reason: "stable",
+          final_text_length: 16,
+        },
+      }),
+    );
+
+    expect(row.run.run_id).toBe("stable-run");
+    expect(row.status).toBe("ok");
+    expect(row.badge).toBe("stable");
+    expect(row.isProblem).toBe(false);
+    expect(row.isPartialRisk).toBe(false);
+    expect(row.elapsedMs).toBe(24_660);
+    expect(row.resultTextLength).toBe(16);
+    expect(row.answerCompletionReason).toBe("stable");
+  });
+
+  it("classifies partial risk, manual action, failed, running, queued, and stable rows", () => {
+    const partial = runWithResult("partial", "ok", {
+      debug_summary: {
+        ...result().debug_summary!,
+        answer_completion_reason: "timeout_latest",
+      },
+    });
+    const manual = runWithResult("manual", "needs_manual_action", {
+      status: "needs_manual_action",
+      manual_action: "start_chrome_cdp",
+    });
+    const failed = runWithResult("failed", "failed", { status: "failed" });
+    const blocked = runWithResult("blocked", "blocked", { status: "blocked" });
+    const running = run({ run_id: "running", status: "running", result: null });
+    const queued = run({ run_id: "queued", status: "queued", result: null });
+    const stable = runWithResult("stable", "ok");
+
+    expect(runHistoryRow(partial).badge).toBe("partial");
+    expect(runHistoryRow(partial).isProblem).toBe(true);
+    expect(runHistoryRow(manual).badge).toBe("manual");
+    expect(runHistoryRow(manual).isProblem).toBe(true);
+    expect(runHistoryRow(failed).badge).toBe("failed");
+    expect(runHistoryRow(blocked).badge).toBe("failed");
+    expect(runHistoryRow(running).badge).toBe("running");
+    expect(runHistoryRow(queued).badge).toBe("queued");
+    expect(runHistoryRow(stable).badge).toBe("stable");
+  });
+
+  it("filters history rows by operator-focused buckets", () => {
+    const runs: GeminiBrowserRun[] = [
+      runWithResult("stable", "ok"),
+      runWithResult("partial", "ok", {
+        debug_summary: {
+          ...result().debug_summary!,
+          answer_completion_reason: "timeout_latest",
+        },
+      }),
+      runWithResult("manual", "needs_manual_action", {
+        status: "needs_manual_action",
+        manual_action: "login",
+      }),
+      runWithResult("timeout", "timeout", { status: "timeout" }),
+      run({ run_id: "running", status: "running", result: null }),
+    ];
+
+    const ids = (filter: GeminiBrowserRunHistoryFilter) =>
+      filterRunHistoryRows(runs, filter).map((row) => row.run.run_id);
+
+    expect(ids("all")).toEqual(["stable", "partial", "manual", "timeout", "running"]);
+    expect(ids("problems")).toEqual(["partial", "manual", "timeout"]);
+    expect(ids("partial_risk")).toEqual(["partial"]);
+    expect(ids("manual_action")).toEqual(["manual"]);
+    expect(ids("failed")).toEqual(["timeout"]);
+  });
+
+  it("preserves selected history run across refresh and falls back within the visible filter", () => {
+    const newest = runWithResult("newest", "ok");
+    const active = run({ run_id: "active", status: "running", result: null });
+    const partial = runWithResult("partial", "ok", {
+      debug_summary: {
+        ...result().debug_summary!,
+        answer_completion_reason: "timeout_latest",
+      },
+    });
+    const failed = runWithResult("failed", "failed", { status: "failed" });
+    const runs = [newest, active, partial, failed];
+
+    expect(selectRunForHistory(runs, "active", null, "all")?.run_id).toBe("active");
+    expect(selectRunForHistory(runs, "active", "partial", "all")?.run_id).toBe("partial");
+    expect(selectRunForHistory(runs, "active", "partial", "partial_risk")?.run_id).toBe(
+      "partial",
+    );
+    expect(selectRunForHistory(runs, "active", "newest", "partial_risk")?.run_id).toBe(
+      "partial",
+    );
+    expect(selectRunForHistory(runs, null, "missing", "failed")?.run_id).toBe("failed");
+    expect(selectRunForHistory([], null, "missing", "all")).toBeNull();
+  });
+
+  it("tolerates old run records without debug summary", () => {
+    const oldRun = run({
+      run_id: "old",
+      status: "ok",
+      result: result({ debug_summary: null, text: null }),
+    });
+
+    const row = runHistoryRow(oldRun);
+
+    expect(row.badge).toBe("ok");
+    expect(row.answerCompletionReason).toBeNull();
+    expect(row.resultTextLength).toBe(0);
   });
 });

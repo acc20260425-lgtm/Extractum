@@ -35,7 +35,7 @@ No Rust, sidecar, or protocol DTO changes are required.
 - Modify: `src/lib/gemini-browser-run-inspector.ts`
 - Modify: `src/lib/gemini-browser-run-inspector.test.ts`
 
-- [ ] **Step 1: Write failing helper tests**
+- [x] **Step 1: Write failing helper tests**
 
 Append these imports in `src/lib/gemini-browser-run-inspector.test.ts`:
 
@@ -184,7 +184,7 @@ Append this test block inside the existing `describe("gemini browser run inspect
   });
 ```
 
-- [ ] **Step 2: Run helper tests and verify they fail**
+- [x] **Step 2: Run helper tests and verify they fail**
 
 Run:
 
@@ -194,7 +194,7 @@ npm.cmd run test -- --run src/lib/gemini-browser-run-inspector.test.ts
 
 Expected: FAIL with TypeScript/runtime errors for missing exports such as `filterRunHistoryRows`, `runHistoryRow`, and `selectRunForHistory`.
 
-- [ ] **Step 3: Implement pure helper functions**
+- [x] **Step 3: Implement pure helper functions**
 
 In `src/lib/gemini-browser-run-inspector.ts`, replace the first import with:
 
@@ -340,7 +340,7 @@ export function selectRunForHistory(
 
 Keep the existing `selectedRunForInspector(...)` export for backwards-compatible tests and any existing call sites until Task 2 rewires the panel.
 
-- [ ] **Step 4: Run helper tests and verify they pass**
+- [x] **Step 4: Run helper tests and verify they pass**
 
 Run:
 
@@ -350,7 +350,7 @@ npm.cmd run test -- --run src/lib/gemini-browser-run-inspector.test.ts
 
 Expected: PASS, including the new run-history helper tests.
 
-- [ ] **Step 5: Commit Task 1**
+- [x] **Step 5: Commit Task 1**
 
 Run:
 
