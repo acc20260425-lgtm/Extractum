@@ -44,6 +44,11 @@ pub(crate) struct GeminiBrowserSidecarProcess {
     next_id: u64,
 }
 
+enum ResumeSidecarOutcome {
+    Status(GeminiBrowserProviderStatus),
+    LegacyAck,
+}
+
 impl GeminiBrowserSidecarProcess {
     async fn spawn(handle: &AppHandle) -> AppResult<Self> {
         let repo_root =
@@ -355,17 +360,46 @@ pub(crate) async fn resume(
     state: &GeminiBrowserState,
     browser_profile_dir: String,
 ) -> AppResult<GeminiBrowserProviderStatus> {
-    match request_sidecar(
+    let first_response = request_sidecar(
         handle,
         state,
         GeminiBrowserSidecarCommand::Resume {
             run_id: None,
-            browser_profile_dir,
+            browser_profile_dir: browser_profile_dir.clone(),
         },
     )
-    .await?
-    {
-        GeminiBrowserSidecarResponse::Status { status } => Ok(status),
+    .await?;
+
+    match classify_resume_response(first_response)? {
+        ResumeSidecarOutcome::Status(status) => Ok(status),
+        ResumeSidecarOutcome::LegacyAck => {
+            *state.sidecar().await = None;
+            let retry_response = request_sidecar(
+                handle,
+                state,
+                GeminiBrowserSidecarCommand::Resume {
+                    run_id: None,
+                    browser_profile_dir,
+                },
+            )
+            .await?;
+
+            match classify_resume_response(retry_response)? {
+                ResumeSidecarOutcome::Status(status) => Ok(status),
+                ResumeSidecarOutcome::LegacyAck => Err(AppError::internal(
+                    "Gemini sidecar resume protocol is outdated after restart",
+                )),
+            }
+        }
+    }
+}
+
+fn classify_resume_response(
+    response: GeminiBrowserSidecarResponse,
+) -> AppResult<ResumeSidecarOutcome> {
+    match response {
+        GeminiBrowserSidecarResponse::Status { status } => Ok(ResumeSidecarOutcome::Status(status)),
+        GeminiBrowserSidecarResponse::Ack => Ok(ResumeSidecarOutcome::LegacyAck),
         _ => Err(AppError::internal(
             "Unexpected Gemini sidecar resume response",
         )),
@@ -471,5 +505,13 @@ mod tests {
 
         let response = decode_sidecar_line("expected", &line).expect("decode response");
         assert!(matches!(response, GeminiBrowserSidecarResponse::Ack));
+    }
+
+    #[test]
+    fn resume_response_classifies_legacy_ack_for_retry() {
+        let outcome = classify_resume_response(GeminiBrowserSidecarResponse::Ack)
+            .expect("classify resume response");
+
+        assert!(matches!(outcome, ResumeSidecarOutcome::LegacyAck));
     }
 }
