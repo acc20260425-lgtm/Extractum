@@ -423,9 +423,13 @@ export async function waitForFirstVisible(
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     for (const selector of selectors) {
-      const locator = page.locator(selector).last();
-      if ((await locator.count()) > 0 && (await locator.isVisible().catch(() => false))) {
-        return locator;
+      const locator = page.locator(selector);
+      const count = await locator.count();
+      for (let index = count - 1; index >= 0; index -= 1) {
+        const candidate = locator.nth(index);
+        if (await candidate.isVisible().catch(() => false)) {
+          return candidate;
+        }
       }
     }
     if (attempt < maxAttempts - 1) {

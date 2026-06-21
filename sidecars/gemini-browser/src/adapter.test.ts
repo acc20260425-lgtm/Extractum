@@ -29,10 +29,15 @@ describe("production Gemini DOM contract", () => {
       },
       isVisible: async () => true,
     };
+    const locatorList = {
+      count: locator.count,
+      nth: () => locator,
+      last: () => locator,
+    };
     const page = {
       locator: (selector: string) => {
         expect(selector).toBe("[contenteditable='true']");
-        return { last: () => locator };
+        return locatorList;
       },
       waitForTimeout: async () => undefined,
     } as unknown as Pick<Page, "locator" | "waitForTimeout">;
@@ -41,6 +46,33 @@ describe("production Gemini DOM contract", () => {
       waitForFirstVisible(page, ["[contenteditable='true']"], { timeoutMs: 1_000, intervalMs: 0 }),
     ).resolves.toBe(locator);
     expect(attempts).toBe(3);
+  });
+
+  it("returns an earlier visible match when the last matching element is hidden", async () => {
+    const visible = {
+      count: async () => 1,
+      isVisible: async () => true,
+    };
+    const hidden = {
+      count: async () => 1,
+      isVisible: async () => false,
+    };
+    const locatorList = {
+      count: async () => 2,
+      nth: (index: number) => (index === 0 ? visible : hidden),
+      last: () => hidden,
+    };
+    const page = {
+      locator: (selector: string) => {
+        expect(selector).toBe("[contenteditable='true']");
+        return locatorList;
+      },
+      waitForTimeout: async () => undefined,
+    } as unknown as Pick<Page, "locator" | "waitForTimeout">;
+
+    await expect(
+      waitForFirstVisible(page, ["[contenteditable='true']"], { timeoutMs: 1_000, intervalMs: 0 }),
+    ).resolves.toBe(visible);
   });
 
   it("reports CDP endpoint setup action before long-lived attach", async () => {
