@@ -10,12 +10,15 @@ use tokio_util::sync::CancellationToken;
 
 use super::dto::{
     PromptPackRunEvent, PromptPackRunSummaryDto, PromptPackRuntimeProvider, PromptPackStageRunDto,
-    StartYoutubeSummaryRunOutcomeDto,
+    StartYoutubeSummaryRunOutcomeDto, StartYoutubeSummaryRunRequest,
+    YoutubeSummaryPreflightFailure,
 };
 use super::json_repair::JsonRepairStageExecutionRequest;
 use super::youtube_summary::{
-    execute_youtube_summary_run_with_stage_executor, model_budget_for_runtime,
+    execute_youtube_summary_run_with_stage_executor,
+    load_youtube_summary_run_by_client_request_id_in_pool, model_budget_for_runtime,
     preflight_youtube_summary_in_pool, start_youtube_summary_run_in_pool,
+    start_youtube_summary_run_with_preflight_failures_in_pool,
     LlmCompletion as PromptPackLlmCompletion, SynthesisStageExecutionRequest,
     TranscriptAnalysisStageExecutionRequest, YoutubeSummaryRunExecutionOutcome,
     YoutubeSummaryStageExecutionError, YoutubeSummaryStageExecutionRequest,
@@ -172,23 +175,32 @@ pub async fn start_youtube_summary_run(
 ) -> AppResult<StartYoutubeSummaryRunOutcomeDto> {
     let pool = get_pool(&handle).await?;
     let runtime_provider = runtime_provider.unwrap_or_default();
-    let outcome = start_youtube_summary_run_in_pool(
-        &pool,
-        super::dto::StartYoutubeSummaryRunRequest {
-            client_request_id,
-            project_id,
-            source_ids,
-            profile_id,
-            model_override,
-            runtime_provider,
-            browser_provider_config,
-            output_language,
-            control_preset,
-            evidence_mode,
-            include_comments,
-        },
-    )
-    .await?;
+    let request = StartYoutubeSummaryRunRequest {
+        client_request_id,
+        project_id,
+        source_ids,
+        profile_id,
+        model_override,
+        runtime_provider,
+        browser_provider_config,
+        output_language,
+        control_preset,
+        evidence_mode,
+        include_comments,
+    };
+    let outcome = if request.client_request_id.trim().is_empty() {
+        start_youtube_summary_run_in_pool(&pool, request).await?
+    } else if let Some(run) =
+        load_youtube_summary_run_by_client_request_id_in_pool(&pool, &request.client_request_id)
+            .await?
+    {
+        StartYoutubeSummaryRunOutcomeDto::Started { run }
+    } else {
+        let runtime_failures =
+            browser_runtime_start_failures_for_request(&handle, &request).await?;
+        start_youtube_summary_run_with_preflight_failures_in_pool(&pool, request, runtime_failures)
+            .await?
+    };
     if let StartYoutubeSummaryRunOutcomeDto::Started { run } = &outcome {
         let should_spawn = run.run_status == "queued" && state.track_if_absent(run.run_id).await?;
         if should_spawn {
@@ -216,6 +228,48 @@ pub async fn start_youtube_summary_run(
         }
     }
     Ok(outcome)
+}
+
+async fn browser_runtime_start_failures_for_request(
+    handle: &AppHandle,
+    request: &StartYoutubeSummaryRunRequest,
+) -> AppResult<Vec<YoutubeSummaryPreflightFailure>> {
+    if request.runtime_provider != PromptPackRuntimeProvider::GeminiBrowser {
+        return Ok(Vec::new());
+    }
+
+    let browser_state = handle.state::<crate::gemini_browser::GeminiBrowserState>();
+    let status = crate::gemini_browser::provider_status(
+        handle,
+        &browser_state,
+        request.browser_provider_config.clone(),
+    )
+    .await?;
+
+    Ok(browser_runtime_start_blocking_failure(&status)
+        .into_iter()
+        .collect())
+}
+
+fn browser_runtime_start_blocking_failure(
+    status: &crate::gemini_browser::GeminiBrowserProviderStatus,
+) -> Option<YoutubeSummaryPreflightFailure> {
+    if status.status == crate::gemini_browser::GeminiBrowserProviderStatusKind::Ready {
+        return None;
+    }
+
+    let status_label = format!("{:?}", status.status);
+    let detail = status
+        .latest_message
+        .as_deref()
+        .map(str::trim)
+        .filter(|message| !message.is_empty())
+        .unwrap_or(status_label.as_str());
+    Some(YoutubeSummaryPreflightFailure {
+        source_id: None,
+        reason: "browser_provider_not_ready".to_string(),
+        message: Some(format!("Gemini Browser Provider is not ready: {detail}")),
+    })
 }
 
 #[tauri::command]
@@ -1777,8 +1831,9 @@ fn now_string() -> String {
 mod tests {
     use super::{
         browser_run_id_for_stage, browser_run_source_for_stage,
-        browser_stage_completion_from_result, build_synthesis_llm_request,
-        build_transcript_analysis_llm_request, cleanup_interrupted_prompt_pack_runs_in_pool,
+        browser_runtime_start_blocking_failure, browser_stage_completion_from_result,
+        build_synthesis_llm_request, build_transcript_analysis_llm_request,
+        cleanup_interrupted_prompt_pack_runs_in_pool,
         clear_prompt_pack_cancellation_smoke_fixture_in_pool, delete_prompt_pack_run_in_pool,
         list_prompt_pack_run_stages_in_pool, list_prompt_pack_runs_in_pool,
         llm_chat_request_to_browser_prompt, load_run_runtime_config, now_string,
@@ -1790,6 +1845,7 @@ mod tests {
         update_prompt_pack_run_in_pool, PromptPackRunState, RunRuntimeProvider,
         DETAILED_REPORT_CONTROL_PRESET,
     };
+    use crate::gemini_browser::{GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind};
     use crate::llm::{LlmChatRequest, LlmMessage, LlmRequestError};
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::dto::{ListPromptPackRunsRequest, PromptPackRunEvent};
@@ -2111,6 +2167,43 @@ mod tests {
             vec![42, 41]
         );
         assert!(runs.iter().all(|run| run.project_id == Some(7)));
+    }
+
+    #[test]
+    fn browser_runtime_start_gate_maps_unready_status_to_preflight_failure() {
+        let status = GeminiBrowserProviderStatus {
+            status: GeminiBrowserProviderStatusKind::NeedsLogin,
+            manual_action: None,
+            active_run_id: None,
+            queue_depth: 0,
+            browser_profile_dir: "profile".to_string(),
+            latest_message: Some("Login required".to_string()),
+        };
+
+        let failure = browser_runtime_start_blocking_failure(&status)
+            .expect("needs_login should block browser runtime start");
+
+        assert_eq!(failure.source_id, None);
+        assert_eq!(failure.reason, "browser_provider_not_ready");
+        assert!(failure
+            .message
+            .as_deref()
+            .expect("message")
+            .contains("Login required"));
+    }
+
+    #[test]
+    fn browser_runtime_start_gate_allows_ready_status() {
+        let status = GeminiBrowserProviderStatus {
+            status: GeminiBrowserProviderStatusKind::Ready,
+            manual_action: None,
+            active_run_id: None,
+            queue_depth: 0,
+            browser_profile_dir: "profile".to_string(),
+            latest_message: Some("Ready".to_string()),
+        };
+
+        assert_eq!(browser_runtime_start_blocking_failure(&status), None);
     }
 
     #[tokio::test]

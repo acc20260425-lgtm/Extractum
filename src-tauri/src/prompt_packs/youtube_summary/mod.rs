@@ -33,8 +33,8 @@ pub(crate) mod transcript_execution;
 mod types;
 
 use super::dto::{
-    PreflightYoutubeSummaryRunRequest, PromptPackRuntimeProvider,
-    StartYoutubeSummaryRunOutcomeDto, StartYoutubeSummaryRunRequest,
+    PreflightYoutubeSummaryRunRequest, PromptPackRuntimeProvider, StartYoutubeSummaryRunOutcomeDto,
+    StartYoutubeSummaryRunRequest, YoutubeSummaryPreflightFailure,
 };
 use crate::error::{AppError, AppResult};
 pub(crate) use execution::execute_youtube_summary_run_with_stage_executor;
@@ -51,6 +51,21 @@ pub(crate) use types::{
 pub(crate) async fn start_youtube_summary_run_in_pool(
     pool: &SqlitePool,
     request: StartYoutubeSummaryRunRequest,
+) -> AppResult<StartYoutubeSummaryRunOutcomeDto> {
+    start_youtube_summary_run_with_preflight_failures_in_pool(pool, request, Vec::new()).await
+}
+
+pub(crate) async fn load_youtube_summary_run_by_client_request_id_in_pool(
+    pool: &SqlitePool,
+    client_request_id: &str,
+) -> AppResult<Option<super::dto::PromptPackRunSummaryDto>> {
+    load_run_by_client_request_id(pool, client_request_id).await
+}
+
+pub(crate) async fn start_youtube_summary_run_with_preflight_failures_in_pool(
+    pool: &SqlitePool,
+    request: StartYoutubeSummaryRunRequest,
+    extra_blocking_failures: Vec<YoutubeSummaryPreflightFailure>,
 ) -> AppResult<StartYoutubeSummaryRunOutcomeDto> {
     if request.client_request_id.trim().is_empty() {
         return Err(AppError::validation("client_request_id cannot be empty"));
@@ -72,12 +87,13 @@ pub(crate) async fn start_youtube_summary_run_in_pool(
         evidence_mode: request.evidence_mode.clone(),
         include_comments: request.include_comments,
     };
-    let preflight = preflight_youtube_summary_in_pool(
+    let mut preflight = preflight_youtube_summary_in_pool(
         pool,
         preflight_request,
         model_budget_for_runtime(request.runtime_provider),
     )
     .await?;
+    preflight.blocking_failures.extend(extra_blocking_failures);
 
     if preflight.included_videos.is_empty() || !preflight.blocking_failures.is_empty() {
         return Ok(StartYoutubeSummaryRunOutcomeDto::Blocked { preflight });

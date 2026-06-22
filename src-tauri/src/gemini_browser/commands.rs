@@ -23,10 +23,18 @@ pub async fn gemini_bridge_status(
     state: State<'_, GeminiBrowserState>,
     browser_config: Option<GeminiBrowserProviderConfig>,
 ) -> AppResult<GeminiBrowserProviderStatus> {
+    provider_status(&handle, &state, browser_config).await
+}
+
+pub(crate) async fn provider_status(
+    handle: &AppHandle,
+    state: &GeminiBrowserState,
+    browser_config: Option<GeminiBrowserProviderConfig>,
+) -> AppResult<GeminiBrowserProviderStatus> {
     sidecar::status(
-        &handle,
-        &state,
-        path_string(&profile_dir(&handle)?),
+        handle,
+        state,
+        path_string(&profile_dir(handle)?),
         browser_config,
         state.active_run_id().await,
         state.queue_depth().await,

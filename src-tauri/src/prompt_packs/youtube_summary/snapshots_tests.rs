@@ -1,11 +1,13 @@
 use super::snapshots::{
     create_youtube_summary_run_skeleton_in_pool, freeze_comment_material_refs, test_comment_policy,
 };
-use super::start_youtube_summary_run_in_pool;
 use super::test_support::*;
+use super::{
+    start_youtube_summary_run_in_pool, start_youtube_summary_run_with_preflight_failures_in_pool,
+};
 use crate::compression::decompress_text;
 use crate::gemini_browser::{GeminiBrowserProviderConfig, GeminiBrowserProviderMode};
-use crate::prompt_packs::dto::PromptPackRuntimeProvider;
+use crate::prompt_packs::dto::{PromptPackRuntimeProvider, YoutubeSummaryPreflightFailure};
 use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
 
 #[tokio::test]
@@ -84,6 +86,78 @@ async fn start_with_recomputed_blocking_preflight_returns_response_without_run()
     .await
     .expect("run count");
     assert_eq!(run_count, 0);
+}
+
+#[tokio::test]
+async fn start_with_runtime_blocking_failure_returns_preflight_without_run() {
+    let pool = test_pool_with_ready_video().await;
+    let mut request = start_request("req-browser-runtime-blocked", vec![901]);
+    request.runtime_provider = PromptPackRuntimeProvider::GeminiBrowser;
+    request.profile_id = None;
+    request.model_override = None;
+
+    let outcome = start_youtube_summary_run_with_preflight_failures_in_pool(
+        &pool,
+        request,
+        vec![YoutubeSummaryPreflightFailure {
+            source_id: None,
+            reason: "browser_provider_not_ready".to_string(),
+            message: Some("Gemini Browser Provider needs login.".to_string()),
+        }],
+    )
+    .await
+    .expect("start command returns browser blocking response");
+
+    let blocking = outcome.expect_blocked("browser blocking response");
+    assert_eq!(blocking.included_videos.len(), 1);
+    assert_eq!(
+        blocking.blocking_failures[0].reason,
+        "browser_provider_not_ready"
+    );
+
+    let run_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM prompt_pack_runs WHERE client_request_id = 'req-browser-runtime-blocked'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("run count");
+    assert_eq!(run_count, 0);
+}
+
+#[tokio::test]
+async fn duplicate_start_ignores_runtime_blocking_failure() {
+    let pool = test_pool_with_ready_video().await;
+    let mut request = start_request("req-browser-runtime-duplicate-blocked", vec![901]);
+    request.runtime_provider = PromptPackRuntimeProvider::GeminiBrowser;
+    request.profile_id = None;
+    request.model_override = None;
+
+    let first = start_youtube_summary_run_in_pool(&pool, request.clone())
+        .await
+        .expect("first start")
+        .expect_started("first start");
+    let second = start_youtube_summary_run_with_preflight_failures_in_pool(
+        &pool,
+        request,
+        vec![YoutubeSummaryPreflightFailure {
+            source_id: None,
+            reason: "browser_provider_not_ready".to_string(),
+            message: Some("Gemini Browser Provider needs login.".to_string()),
+        }],
+    )
+    .await
+    .expect("duplicate start")
+    .expect_started("duplicate start returns existing run");
+
+    assert_eq!(first.run_id, second.run_id);
+
+    let run_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM prompt_pack_runs WHERE client_request_id = 'req-browser-runtime-duplicate-blocked'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("run count");
+    assert_eq!(run_count, 1);
 }
 
 #[tokio::test]
