@@ -6,7 +6,7 @@
 
 **Architecture:** Apalis owns durable queue storage and single-worker execution. Extractum keeps the existing file-backed Gemini Browser run log as the product-facing projection for Settings, run history, Prompt Pack provenance, and diagnostics. `send_single_prompt(...)` remains synchronous from the caller perspective by enqueueing a durable job and waiting on the receiver returned when that specific run was registered.
 
-**Tech Stack:** Rust, Tauri 2, Tokio, `apalis = "1"`, `apalis-sqlite = "1"`, `tower` timeout middleware, `parking_lot`, serde, existing Gemini Browser sidecar, existing file-backed run log.
+**Tech Stack:** Rust, Tauri 2, Tokio, `apalis = "=1.0.0-rc.9"`, `apalis-sqlite = "=1.0.0-rc.9"`, `tower` timeout middleware, `parking_lot`, serde, existing Gemini Browser sidecar, existing file-backed run log.
 
 ---
 
@@ -27,6 +27,8 @@
 - Worker startup state, duplicate `run_id` handling, enqueue failure cleanup, test timeouts, and Apalis query capability discovery are specified explicitly.
 - In-memory waiter/cancellation maps and cached status snapshots use synchronous locks; no lock guard may be held across `.await`.
 - Worker execution has a Tower timeout layer so a hung Chrome/sidecar task cannot block the single-concurrency queue forever.
+- Apalis dependencies are pinned to the verified `1.0.0-rc.9` pre-release because Cargo will not select pre-releases from a plain `"1"` requirement.
+- Closed waiter channels and duplicate Apalis idempotency conflicts are mapped to product-level `AppError` values instead of panics or raw SQLite errors.
 
 ## Current State
 
@@ -66,6 +68,7 @@ The first migration must not change the TypeScript API or UI behavior.
 - Job type name: `gemini_browser.run.v1`.
 - Job idempotency key: the Gemini Browser `run_id`.
 - Retry policy: every pushed task must use `TaskBuilder::attempts(1)` or the exact `apalis-sqlite` equivalent proven by tests. Context7 Apalis docs state that `attempts(n)` allows `n - 1` retries, so `attempts(1)` means one total attempt and zero retries.
+- Dependency version policy: pin Apalis crates exactly to `=1.0.0-rc.9` until a stable `1.x` release is verified in this repo. Context7 shows current Apalis docs naming `1.0.0-rc.9`; plain `"1"` may fail because Cargo does not opt into pre-release versions unless the requirement includes the pre-release.
 
 Current Context7 Apalis docs show SQL task rows with fields such as `job`, `id`, `job_type`, `status`, `attempts`, `max_attempts`, `run_at`, `last_result`, `lock_at`, `lock_by`, `done_at`, `priority`, `metadata`, and `idempotency_key`. The plan uses that only as orientation; implementation must not depend on hand-written SQL against those internal fields except in an isolated integration test that verifies actual serialized status values.
 
@@ -109,6 +112,7 @@ Rules:
 - If enqueue fails, `send_single_prompt(...)` removes the waiter and converts the just-created queued run log record to terminal `Failed` with message `"Gemini Browser job enqueue failed: {error}"`.
 - `wait_for_registered_result(run_id, receiver)` waits on the registered receiver with the runtime timeout.
 - On timeout, remove the waiter and return `AppError::internal("Gemini Browser job timed out waiting for worker result")`.
+- On `oneshot::error::RecvError`, remove the waiter and return `AppError::internal("Gemini Browser worker channel closed unexpectedly")`.
 - The worker always writes a terminal run log record before completing a waiter.
 - If no waiter exists because the app restarted or the caller already timed out, the worker still writes the run log and emits events.
 - If worker startup fails, new `send_single_prompt(...)` calls fail before enqueue with a clear internal error.
@@ -184,7 +188,7 @@ Apalis worker concurrency is intentionally `1`, so every production Gemini Brows
 ## File Map
 
 - Modify `src-tauri/Cargo.toml`
-  - Add `apalis = "1"` and `apalis-sqlite = "1"`.
+  - Add exact Apalis RC pins: `apalis = "=1.0.0-rc.9"` and `apalis-sqlite = "=1.0.0-rc.9"`.
 - Modify `src-tauri/src/gemini_browser/mod.rs`
   - Expose the new jobs module, runtime, enqueue helper, cancel helper, and worker bootstrap.
 - Create `src-tauri/src/gemini_browser/jobs.rs`
@@ -223,8 +227,8 @@ Apalis worker concurrency is intentionally `1`, so every production Gemini Brows
 Modify `src-tauri/Cargo.toml` dependencies:
 
 ```toml
-apalis = "1"
-apalis-sqlite = "1"
+apalis = "=1.0.0-rc.9"
+apalis-sqlite = "=1.0.0-rc.9"
 parking_lot = "0.12"
 tower = { version = "0.5", features = ["timeout", "util"] }
 ```
@@ -487,12 +491,58 @@ Add the Tauri wrapper `enqueue_gemini_browser_job(...)` that:
 
 - opens or clones the real Apalis SQLite storage proven in Task 1;
 - delegates to `enqueue_gemini_browser_job_to_storage(...)`;
+- translates duplicate idempotency-key / unique-constraint failures for `run_id` into `AppError::conflict("Gemini Browser job with this run_id is already queued or running")`;
 - returns `QueuedGeminiBrowserJob { run_id, queue_position: None }`;
 - never executes the sidecar inline.
 
 The helper may return `queue_position: None` because Apalis SQL queue depth is not part of the product contract in this pilot.
 
-- [ ] **Step 7: Test real enqueue persists a job before worker startup**
+- [ ] **Step 7: Add duplicate idempotency conflict test**
+
+Add a test named `enqueue_duplicate_run_id_returns_conflict`.
+
+The test must:
+
+- create a temp main `extractum.db`;
+- apply existing Extractum app migrations to that temp database;
+- open Apalis storage against that same temp `extractum.db`;
+- call `enqueue_gemini_browser_job_to_storage(...)` with `run_id = "run-duplicate-idempotency"`;
+- call `enqueue_gemini_browser_job_to_storage(...)` again with the same `run_id`;
+- assert the second result is `Err`;
+- assert `error.kind == crate::error::AppErrorKind::Conflict`;
+- assert `error.message == "Gemini Browser job with this run_id is already queued or running"`.
+
+Implement a narrow mapper used by both the storage helper and the Tauri wrapper:
+
+```rust
+fn map_enqueue_error(_run_id: &str, error: impl std::fmt::Display) -> crate::error::AppError {
+    let message = error.to_string().to_ascii_lowercase();
+    if message.contains("unique constraint")
+        || message.contains("constraint failed")
+        || message.contains("idempotency")
+        || message.contains("duplicate")
+        || message.contains("already exists")
+    {
+        return crate::error::AppError::conflict(
+            "Gemini Browser job with this run_id is already queued or running",
+        );
+    }
+
+    crate::error::AppError::internal(format!("Gemini Browser job enqueue failed: {error}"))
+}
+```
+
+If the final `apalis-sqlite` error type exposes a typed database error such as `sqlx::Error::Database`, prefer checking `database_error.is_unique_violation()` or the SQLite error code before falling back to message matching. Keep the test above either way.
+
+Run:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib enqueue_duplicate_run_id_returns_conflict
+```
+
+Expected: PASS.
+
+- [ ] **Step 8: Test real enqueue persists a job before worker startup**
 
 Add an integration-style unit test that:
 
@@ -564,7 +614,33 @@ async fn wait_for_result_removes_waiter_on_timeout() {
 }
 ```
 
-- [ ] **Step 3: Add duplicate waiter test**
+- [ ] **Step 3: Add closed-channel waiter test**
+
+Add:
+
+```rust
+#[tokio::test]
+async fn wait_for_result_removes_waiter_when_worker_channel_closes() {
+    let runtime = GeminiBrowserJobRuntime::new_for_test(std::time::Duration::from_secs(1));
+    let receiver = runtime
+        .register_waiter("run-channel-closed")
+        .expect("register waiter");
+
+    runtime.remove_waiter("run-channel-closed");
+
+    let error = runtime
+        .wait_for_registered_result("run-channel-closed", receiver)
+        .await
+        .expect_err("closed channel error");
+
+    assert!(error
+        .to_string()
+        .contains("Gemini Browser worker channel closed unexpectedly"));
+    assert!(!runtime.has_waiter_for_test("run-channel-closed"));
+}
+```
+
+- [ ] **Step 4: Add duplicate waiter test**
 
 Add:
 
@@ -582,7 +658,7 @@ async fn register_waiter_rejects_duplicate_run_id() {
 }
 ```
 
-- [ ] **Step 4: Implement waiter methods**
+- [ ] **Step 5: Implement waiter methods**
 
 Implement:
 
@@ -631,7 +707,7 @@ impl GeminiBrowserJobRuntime {
 
 `Default` must set both `waiter_timeout` and `worker_execution_timeout` to `std::time::Duration::from_secs(20 * 60)` and worker status to `Starting`. Tests must use `new_for_test(...)` or `new_for_test_with_timeouts(...)` with short timeouts. `ensure_worker_ready_for_enqueue()` must use a `5` second startup timeout in production.
 
-- [ ] **Step 5: Run waiter tests**
+- [ ] **Step 6: Run waiter tests**
 
 Run:
 
@@ -1569,12 +1645,14 @@ Run:
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib retry
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib worker_timeout_marks_run_failed_and_processes_next_job
+cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib wait_for_result_removes_waiter_when_worker_channel_closes
+cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib enqueue_duplicate_run_id_returns_conflict
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib provider_status_
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib prompt_pack_browser_stage_cancelled
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib restart
 ```
 
-Expected: PASS for no-retry, worker timeout release, status responsiveness, Prompt Pack browser cancellation, and reconciliation/restart tests.
+Expected: PASS for no-retry, worker timeout release, closed waiter channels, duplicate enqueue conflicts, status responsiveness, Prompt Pack browser cancellation, and reconciliation/restart tests.
 
 - [ ] **Step 4: TypeScript Gemini Browser verification**
 
@@ -1611,13 +1689,15 @@ Expected: `git diff --check` exits `0`. `git status --short` shows only intentio
 
 ## Self-Review
 
-- Spec coverage: The plan covers real early Apalis integration, fail-fast worker smoke tests, SQLite storage ownership, explicit runtime construction, synchronous in-memory waiter/cancellation/status locks, worker readiness/error/early-exit state, receiver-based completion waiter semantics, duplicate `run_id` rejection, storage-injected enqueue tests, enqueue failure cleanup, worker execution timeout and queue release, cancellation continuity, Prompt Pack cancellation by `browser_run_id`, run log versus Apalis reconciliation, status UI responsiveness, no automatic retry, crash/restart recovery, current `GeminiBrowserRunResult` fields, and removal of the old `VecDeque`.
+- Spec coverage: The plan covers exact Apalis RC dependency pins, real early Apalis integration, fail-fast worker smoke tests, SQLite storage ownership, explicit runtime construction, synchronous in-memory waiter/cancellation/status locks, worker readiness/error/early-exit state, receiver-based completion waiter semantics, closed waiter channel handling, duplicate `run_id` rejection, duplicate Apalis idempotency conflict translation, storage-injected enqueue tests, enqueue failure cleanup, worker execution timeout and queue release, cancellation continuity, Prompt Pack cancellation by `browser_run_id`, run log versus Apalis reconciliation, status UI responsiveness, no automatic retry, crash/restart recovery, current `GeminiBrowserRunResult` fields, and removal of the old `VecDeque`.
 - Placeholder scan: The plan intentionally avoids placeholder markers, fake production facades, and no-op worker bootstrap. The only API discovery point is constrained to Task 1 and must compile before later tasks proceed.
 - Type consistency: Result examples use the current `GeminiBrowserRunResult` shape with `run_id`, `text`, `manual_action`, `GeminiBrowserArtifactRefs::default()`, and `elapsed_ms`.
 - Apalis status consistency: The plan requires a real `apalis-sqlite` status probe before mapping queue statuses.
 - Retry consistency: The plan requires `attempts(1)` or the verified Apalis equivalent plus an execution-count test proving one failed job is not retried.
 - Query consistency: The plan requires Task 1 to classify Apalis queue inspection as `Supported` or `DegradedRunLogOnly` before reconciliation tasks rely on Apalis internals.
 - Waiter consistency: The plan uses `register_waiter(...) -> Receiver` plus `wait_for_registered_result(...)`; there is no result wait that tries to recover a receiver from only `run_id`.
+- Closed-channel consistency: `wait_for_registered_result(...)` must remove the waiter and return `"Gemini Browser worker channel closed unexpectedly"` on `oneshot::error::RecvError`.
+- Idempotency consistency: duplicate Apalis idempotency / SQLite unique failures are translated to `AppError::conflict`, with a concrete duplicate enqueue test.
 - Lock consistency: Runtime maps use `parking_lot::Mutex`, cached provider status uses `parking_lot::RwLock`, and plan text forbids holding synchronous lock guards across `.await`.
 - Timeout consistency: Caller waiter timeout and worker execution timeout are separate; the worker timeout has a dedicated test proving a timed-out first job does not block the next queued job.
 
