@@ -1,20 +1,21 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen, type Event, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   GeminiBridgeSendSingleInput,
   GeminiBrowserProviderConfig,
   GeminiBrowserProviderStatus,
-  GeminiBrowserRunChangeEvent,
+  GeminiBrowserRun,
   GeminiBrowserRunLogSummary,
   GeminiBrowserRunResult,
   GeminiBrowserStartChromeResult,
 } from "$lib/types/gemini-browser";
 
-export const GEMINI_BROWSER_RUN_CHANGE_EVENT = "gemini-browser://run";
-
 export function geminiBridgeStatus(browserConfig?: GeminiBrowserProviderConfig | null) {
   if (!browserConfig) return invoke<GeminiBrowserProviderStatus>("gemini_bridge_status");
   return invoke<GeminiBrowserProviderStatus>("gemini_bridge_status", { browserConfig });
+}
+
+export function geminiBridgeStatusSnapshot() {
+  return invoke<GeminiBrowserProviderStatus>("gemini_bridge_status_snapshot");
 }
 
 export function geminiBridgeOpenBrowser(browserConfig?: GeminiBrowserProviderConfig | null) {
@@ -44,12 +45,20 @@ export function geminiBridgeListRuns(limit = 20) {
   return invoke<GeminiBrowserRunLogSummary>("gemini_bridge_list_runs", { limit });
 }
 
+export function geminiBridgeGetRun(runId: string) {
+  return invoke<GeminiBrowserRun>("gemini_bridge_get_run", { runId });
+}
+
 export function geminiBridgeOpenRunFolder(runId: string) {
   return invoke<void>("gemini_bridge_open_run_folder", { runId });
 }
 
-export function listenToGeminiBrowserRunChanges(
-  handler: (event: Event<GeminiBrowserRunChangeEvent>) => void,
-): Promise<UnlistenFn> {
-  return listen<GeminiBrowserRunChangeEvent>(GEMINI_BROWSER_RUN_CHANGE_EVENT, handler);
+// AppErrorKind::NotFound is serialized by Tauri as { kind: "not_found", message }.
+export function isGeminiBrowserRunNotFoundError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "kind" in error &&
+    (error as { kind?: unknown }).kind === "not_found"
+  );
 }

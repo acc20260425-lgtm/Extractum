@@ -143,11 +143,6 @@ export interface GeminiBrowserRunLogSummary {
   runs: GeminiBrowserRun[];
 }
 
-export interface GeminiBrowserRunChangeEvent {
-  run_id: string;
-  run_updated_at: string;
-}
-
 export interface GeminiBridgeSendSingleInput {
   runId: string;
   prompt: string;
