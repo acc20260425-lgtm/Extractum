@@ -586,6 +586,76 @@ async fn cancel_queued_run_updates_terminal_snapshot_before_change_event() {
 }
 ```
 
+Add a focused timeout cleanup test near `worker_timeout_marks_run_failed_and_processes_next_job`:
+
+```rust
+#[tokio::test]
+async fn worker_timeout_clears_active_and_cancelled_state() {
+    let temp_dir = tempfile::tempdir().expect("create temp dir");
+    let db_path = temp_dir.path().join("extractum.db");
+    let pool = sqlite_file_pool(&db_path).await;
+
+    crate::migrations::apply_all_migrations_for_test_pool(&pool)
+        .await
+        .expect("apply app migrations");
+    setup_gemini_browser_apalis_storage(&pool)
+        .await
+        .expect("setup Apalis SQLite storage");
+
+    let runs_dir = Arc::new(temp_dir.path().join("runs"));
+    let job = test_job("run-timeout-first");
+    crate::gemini_browser::create_queued_run(
+        &runs_dir,
+        &job.run_id,
+        &job.source,
+        &job.prompt,
+    )
+    .expect("create queued run");
+
+    let mut storage = SqliteStorage::new_in_queue(&pool, GEMINI_BROWSER_QUEUE_NAME);
+    enqueue_gemini_browser_job_to_storage(&mut storage, job)
+        .await
+        .expect("enqueue timeout job");
+
+    let runtime = Arc::new(GeminiBrowserJobRuntime::new_for_test_with_timeouts(
+        Duration::from_millis(50),
+        Duration::from_millis(25),
+        Duration::from_millis(250),
+    ));
+    let state = Arc::new(crate::gemini_browser::GeminiBrowserState::new());
+    let events = Arc::new(Mutex::new(Vec::<String>::new()));
+    let stop_attempts = Arc::new(Mutex::new(Vec::<String>::new()));
+    let executions = Arc::new(AtomicUsize::new(0));
+
+    let worker = WorkerBuilder::new("gemini-browser-timeout-cleanup")
+        .backend(storage)
+        .concurrency(1)
+        .layer(tower::timeout::TimeoutLayer::new(
+            runtime.worker_hard_guard_timeout(),
+        ))
+        .data(runtime.clone())
+        .data(state.clone())
+        .data(runs_dir.clone())
+        .data(TimeoutTestEvents(events.clone()))
+        .data(TimeoutTestStopAttempts(stop_attempts.clone()))
+        .data(executions)
+        .build(timeout_release_test_handler);
+    let worker_task = tokio::spawn(worker.run());
+
+    wait_for_test_event(&events, "run-timeout-first:running").await;
+    runtime.request_cancel("run-timeout-first");
+
+    worker_task
+        .await
+        .expect("worker task joins")
+        .expect("worker run succeeds");
+
+    assert_eq!(state.active_run_id().await, None);
+    assert!(!runtime.is_cancelled("run-timeout-first"));
+    assert_eq!(stop_attempts.lock().as_slice(), ["run-timeout-first:stop"]);
+}
+```
+
 Add a test for event payload construction near `emit_running_event` tests or helper tests:
 
 ```rust
@@ -853,10 +923,14 @@ with:
 
 ```rust
 let timed_out_run = crate::gemini_browser::finish_run(runs_dir, &job.run_id, result.clone())?;
+state.finish_run(&job.run_id).await;
 runtime.complete_waiter(&job.run_id, Ok(result.clone()));
+runtime.clear_cancelled(&job.run_id);
 update_terminal_status_snapshot_best_effort(handle, state, &result);
 emit_gemini_browser_run_change_event(handle, &timed_out_run);
 ```
+
+Keep this cleanup in the timeout branch. The terminal run-log transition must not leave `GeminiBrowserState::active_run_id` or `GeminiBrowserJobRuntime` cancellation state dirty for the timed-out run.
 
 In `finish_completed_job`, replace the same pattern with:
 
