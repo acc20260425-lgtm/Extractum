@@ -184,6 +184,11 @@ export interface PromptPackStageRun {
   stageOrder: number;
   stageStatus: string;
   latestMessage: string | null;
+  browserRunId?: string | null;
+  browserRunStatus?: string | null;
+  browserCompletionReason?: string | null;
+  browserProviderMode?: string | null;
+  browserRunMessage?: string | null;
 }
 
 export interface PromptPackResult {

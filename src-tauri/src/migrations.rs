@@ -43,6 +43,11 @@ const PROMPT_PACK_RUNTIME_PROVIDER_VERSION: i64 = 10;
 const PROMPT_PACK_RUNTIME_PROVIDER_DESCRIPTION: &str = "prompt pack runtime provider";
 const PROMPT_PACK_RUNTIME_PROVIDER_SQL: &str =
     include_str!("../migrations/0010_prompt_pack_runtime_provider.sql");
+const PROMPT_PACK_STAGE_BROWSER_PROVENANCE_VERSION: i64 = 11;
+const PROMPT_PACK_STAGE_BROWSER_PROVENANCE_DESCRIPTION: &str =
+    "prompt pack stage browser provenance";
+const PROMPT_PACK_STAGE_BROWSER_PROVENANCE_SQL: &str =
+    include_str!("../migrations/0011_prompt_pack_stage_browser_provenance.sql");
 
 fn app_config_db_path() -> Option<PathBuf> {
     dirs::config_dir().map(|dir| dir.join(APP_IDENTIFIER).join(DB_FILENAME))
@@ -162,6 +167,15 @@ fn prompt_pack_runtime_provider_migration() -> Migration {
     }
 }
 
+fn prompt_pack_stage_browser_provenance_migration() -> Migration {
+    Migration {
+        version: PROMPT_PACK_STAGE_BROWSER_PROVENANCE_VERSION,
+        description: PROMPT_PACK_STAGE_BROWSER_PROVENANCE_DESCRIPTION,
+        sql: PROMPT_PACK_STAGE_BROWSER_PROVENANCE_SQL,
+        kind: MigrationKind::Up,
+    }
+}
+
 pub fn build_migrations() -> Vec<Migration> {
     vec![
         current_schema_baseline_migration(),
@@ -174,6 +188,7 @@ pub fn build_migrations() -> Vec<Migration> {
         prompt_pack_run_labels_migration(),
         prompt_pack_intermediate_entities_artifacts_migration(),
         prompt_pack_runtime_provider_migration(),
+        prompt_pack_stage_browser_provenance_migration(),
     ]
 }
 
@@ -266,7 +281,7 @@ mod tests {
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
         assert_eq!(migrations[0].description, "current schema baseline");
         assert!(migrations[0]
             .sql
@@ -308,6 +323,14 @@ mod tests {
         assert_eq!(migrations[9].description, "prompt pack runtime provider");
         assert!(migrations[9].sql.contains("runtime_provider TEXT"));
         assert!(migrations[9].sql.contains("browser_provider_config_json"));
+        assert_eq!(
+            migrations[10].description,
+            "prompt pack stage browser provenance"
+        );
+        assert!(migrations[10].sql.contains("browser_run_id TEXT"));
+        assert!(migrations[10]
+            .sql
+            .contains("browser_completion_reason TEXT"));
     }
 
     #[tokio::test]
@@ -353,7 +376,7 @@ mod tests {
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
     }
 
     #[tokio::test]
@@ -389,6 +412,21 @@ mod tests {
         .await
         .expect("read prompt_pack_runs runtime columns");
         assert_eq!(runtime_columns, 2);
+
+        let browser_stage_columns: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM pragma_table_info('prompt_pack_stage_runs')
+             WHERE name IN (
+                'browser_run_id',
+                'browser_run_status',
+                'browser_completion_reason',
+                'browser_provider_mode',
+                'browser_run_message'
+             )",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("read prompt_pack_stage_runs browser columns");
+        assert_eq!(browser_stage_columns, 5);
 
         let origins_sql = table_sql(&pool, "prompt_pack_run_source_origins").await;
         assert!(origins_sql.contains("FOREIGN KEY (source_snapshot_id, run_id)"));

@@ -47,6 +47,22 @@ describe("youtube summary launch contract", () => {
     expect(dialog).toContain("browserProviderConfig:");
   });
 
+  it("surfaces Gemini Browser runtime provenance in prompt pack run diagnostics", () => {
+    const types = readFileSync("src/lib/types/prompt-packs.ts", "utf8");
+    const runsPanel = readFileSync("src/lib/components/research-projects/YoutubeSummaryRunsPanel.svelte", "utf8");
+    const reportPanel = readFileSync("src/lib/components/research-projects/ProjectRunReportPanel.svelte", "utf8");
+
+    expect(types).toContain("browserRunId");
+    expect(types).toContain("browserRunStatus");
+    expect(types).toContain("browserCompletionReason");
+    expect(types).toContain("browserProviderMode");
+    expect(runsPanel).toContain("runtimeLabel(run.runtimeProvider)");
+    expect(runsPanel).toContain("Gemini Browser");
+    expect(reportPanel).toContain("Browser run");
+    expect(reportPanel).toContain("stage.browserRunId");
+    expect(reportPanel).toContain("stage.browserCompletionReason");
+  });
+
   it("renders video summary text through the safe markdown renderer only in video sections", () => {
     const compactView = readFileSync("src/lib/components/research-projects/YoutubeSummaryResultView.svelte", "utf8");
     const reportPanel = readFileSync("src/lib/components/research-projects/ProjectRunReportPanel.svelte", "utf8");

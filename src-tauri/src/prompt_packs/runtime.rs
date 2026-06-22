@@ -351,8 +351,10 @@ async fn execute_youtube_summary_run(
     )
     .await;
 
+    let stage_pool = pool.clone();
     execute_youtube_summary_run_with_stage_executor(&pool, run_id, move |stage_request| {
         let handle = handle.clone();
+        let pool = stage_pool.clone();
         let completion_runtime = completion_runtime.clone();
         let run_cancellation_token = run_cancellation_token.clone();
         async move {
@@ -360,6 +362,7 @@ async fn execute_youtube_summary_run(
                 YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request) => {
                     run_transcript_analysis_stage_request(
                         handle,
+                        pool,
                         completion_runtime,
                         run_cancellation_token,
                         request,
@@ -369,6 +372,7 @@ async fn execute_youtube_summary_run(
                 YoutubeSummaryStageExecutionRequest::Synthesis(request) => {
                     run_synthesis_stage_request(
                         handle,
+                        pool,
                         completion_runtime,
                         run_cancellation_token,
                         request,
@@ -378,6 +382,7 @@ async fn execute_youtube_summary_run(
                 YoutubeSummaryStageExecutionRequest::JsonRepair(request) => {
                     run_json_repair_stage_request(
                         handle,
+                        pool,
                         completion_runtime,
                         run_cancellation_token,
                         request,
@@ -426,21 +431,23 @@ async fn load_run_runtime_config(pool: &SqlitePool, run_id: i64) -> AppResult<Ru
     .fetch_one(pool)
     .await
     .map_err(AppError::database)
-    .and_then(|(profile_id, model_override, runtime_provider, browser_config_json)| {
-        let browser_provider_config = browser_config_json
-            .as_deref()
-            .map(serde_json::from_str)
-            .transpose()
-            .map_err(|error| {
-                AppError::internal(format!("parse Browser Provider config snapshot: {error}"))
-            })?;
-        Ok(RunRuntimeConfig {
-            runtime_provider: RunRuntimeProvider::parse(&runtime_provider)?,
-            profile_id,
-            model_override,
-            browser_provider_config,
-        })
-    })
+    .and_then(
+        |(profile_id, model_override, runtime_provider, browser_config_json)| {
+            let browser_provider_config = browser_config_json
+                .as_deref()
+                .map(serde_json::from_str)
+                .transpose()
+                .map_err(|error| {
+                    AppError::internal(format!("parse Browser Provider config snapshot: {error}"))
+                })?;
+            Ok(RunRuntimeConfig {
+                runtime_provider: RunRuntimeProvider::parse(&runtime_provider)?,
+                profile_id,
+                model_override,
+                browser_provider_config,
+            })
+        },
+    )
 }
 
 #[derive(Clone)]
@@ -623,6 +630,7 @@ async fn run_api_llm_request(
 
 async fn run_browser_llm_request(
     handle: AppHandle,
+    pool: SqlitePool,
     run_id: i64,
     stage_run_id: i64,
     browser_provider_config: Option<crate::gemini_browser::GeminiBrowserProviderConfig>,
@@ -706,23 +714,22 @@ async fn run_browser_llm_request(
         .map_err(LlmRequestError::Failed)
     };
 
-    let result = match run_with_prompt_pack_run_cancellation(run_cancellation_token, browser_future)
-        .await
-    {
-        Ok(result) => result,
-        Err(LlmRequestError::Cancelled) => {
-            if run_cancellation_for_stop
-                .as_ref()
-                .is_some_and(CancellationToken::is_cancelled)
-            {
-                browser_state.request_stop().await;
+    let result =
+        match run_with_prompt_pack_run_cancellation(run_cancellation_token, browser_future).await {
+            Ok(result) => result,
+            Err(LlmRequestError::Cancelled) => {
+                if run_cancellation_for_stop
+                    .as_ref()
+                    .is_some_and(CancellationToken::is_cancelled)
+                {
+                    browser_state.request_stop().await;
+                }
+                return Err(YoutubeSummaryStageExecutionError::Cancelled);
             }
-            return Err(YoutubeSummaryStageExecutionError::Cancelled);
-        }
-        Err(LlmRequestError::Failed(error)) => {
-            return Err(YoutubeSummaryStageExecutionError::Failed(error));
-        }
-    };
+            Err(LlmRequestError::Failed(error)) => {
+                return Err(YoutubeSummaryStageExecutionError::Failed(error));
+            }
+        };
 
     if run_cancellation_for_stop
         .as_ref()
@@ -731,11 +738,70 @@ async fn run_browser_llm_request(
         return Err(YoutubeSummaryStageExecutionError::Cancelled);
     }
 
+    persist_browser_stage_provenance(&pool, stage_run_id, &result)
+        .await
+        .map_err(YoutubeSummaryStageExecutionError::Failed)?;
+
     browser_stage_completion_from_result(result).map_err(YoutubeSummaryStageExecutionError::from)
+}
+
+async fn persist_browser_stage_provenance(
+    pool: &SqlitePool,
+    stage_run_id: i64,
+    result: &crate::gemini_browser::GeminiBrowserRunResult,
+) -> AppResult<()> {
+    let completion_reason = result
+        .debug_summary
+        .as_ref()
+        .and_then(|summary| serde_json::to_value(&summary.answer_completion_reason).ok())
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+        .and_then(non_empty_string);
+    let provider_mode = result
+        .debug_summary
+        .as_ref()
+        .and_then(|summary| serde_json::to_value(&summary.mode).ok())
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+        .and_then(non_empty_string);
+    let run_status = serde_json::to_value(&result.status)
+        .ok()
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+        .and_then(non_empty_string);
+    let run_message = result.message.clone().and_then(non_empty_string);
+
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET browser_run_id = ?,
+             browser_run_status = ?,
+             browser_completion_reason = ?,
+             browser_provider_mode = ?,
+             browser_run_message = ?,
+             updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(&result.run_id)
+    .bind(run_status)
+    .bind(completion_reason)
+    .bind(provider_mode)
+    .bind(run_message)
+    .bind(now_string())
+    .bind(stage_run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+fn non_empty_string(value: String) -> Option<String> {
+    if value.trim().is_empty() {
+        None
+    } else {
+        Some(value)
+    }
 }
 
 async fn run_transcript_analysis_stage_request(
     handle: AppHandle,
+    pool: SqlitePool,
     completion_runtime: RunCompletionRuntime,
     run_cancellation_token: Option<CancellationToken>,
     stage_request: TranscriptAnalysisStageExecutionRequest,
@@ -789,6 +855,7 @@ async fn run_transcript_analysis_stage_request(
         } => {
             run_browser_llm_request(
                 handle,
+                pool,
                 stage_request.run_id,
                 stage_request.stage_run_id,
                 browser_provider_config,
@@ -807,6 +874,7 @@ async fn run_transcript_analysis_stage_request(
 
 async fn run_synthesis_stage_request(
     handle: AppHandle,
+    pool: SqlitePool,
     completion_runtime: RunCompletionRuntime,
     run_cancellation_token: Option<CancellationToken>,
     stage_request: SynthesisStageExecutionRequest,
@@ -860,6 +928,7 @@ async fn run_synthesis_stage_request(
         } => {
             run_browser_llm_request(
                 handle,
+                pool,
                 stage_request.run_id,
                 stage_request.stage_run_id,
                 browser_provider_config,
@@ -878,6 +947,7 @@ async fn run_synthesis_stage_request(
 
 async fn run_json_repair_stage_request(
     handle: AppHandle,
+    pool: SqlitePool,
     completion_runtime: RunCompletionRuntime,
     run_cancellation_token: Option<CancellationToken>,
     stage_request: JsonRepairStageExecutionRequest,
@@ -936,6 +1006,7 @@ async fn run_json_repair_stage_request(
         } => {
             run_browser_llm_request(
                 handle,
+                pool,
                 stage_request.run_id,
                 stage_request.stage_run_id,
                 browser_provider_config,
@@ -1567,9 +1638,26 @@ async fn list_prompt_pack_run_stages_in_pool(
     pool: &SqlitePool,
     run_id: i64,
 ) -> AppResult<Vec<PromptPackStageRunDto>> {
-    sqlx::query_as::<_, (i64, i64, Option<i64>, String, i64, String, Option<String>)>(
+    sqlx::query_as::<
+        _,
+        (
+            i64,
+            i64,
+            Option<i64>,
+            String,
+            i64,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        ),
+    >(
         "SELECT id, run_id, source_snapshot_id, stage_name, stage_order,
-                stage_status, latest_message
+                stage_status, latest_message, browser_run_id, browser_run_status,
+                browser_completion_reason, browser_provider_mode, browser_run_message
          FROM prompt_pack_stage_runs
          WHERE run_id = ?
          ORDER BY stage_order ASC, id ASC",
@@ -1588,6 +1676,11 @@ async fn list_prompt_pack_run_stages_in_pool(
                     stage_order,
                     stage_status,
                     latest_message,
+                    browser_run_id,
+                    browser_run_status,
+                    browser_completion_reason,
+                    browser_provider_mode,
+                    browser_run_message,
                 )| PromptPackStageRunDto {
                     stage_run_id,
                     run_id,
@@ -1596,6 +1689,11 @@ async fn list_prompt_pack_run_stages_in_pool(
                     stage_order,
                     stage_status,
                     latest_message,
+                    browser_run_id,
+                    browser_run_status,
+                    browser_completion_reason,
+                    browser_provider_mode,
+                    browser_run_message,
                 },
             )
             .collect()
@@ -1682,8 +1780,9 @@ mod tests {
         browser_stage_completion_from_result, build_synthesis_llm_request,
         build_transcript_analysis_llm_request, cleanup_interrupted_prompt_pack_runs_in_pool,
         clear_prompt_pack_cancellation_smoke_fixture_in_pool, delete_prompt_pack_run_in_pool,
-        list_prompt_pack_runs_in_pool, llm_chat_request_to_browser_prompt, load_run_runtime_config,
-        now_string, run_with_prompt_pack_run_cancellation,
+        list_prompt_pack_run_stages_in_pool, list_prompt_pack_runs_in_pool,
+        llm_chat_request_to_browser_prompt, load_run_runtime_config, now_string,
+        persist_browser_stage_provenance, run_with_prompt_pack_run_cancellation,
         seed_prompt_pack_cancellation_smoke_fixture_in_pool,
         synthesis_stage_max_output_token_budget, transcript_analysis_max_output_tokens,
         transcript_analysis_stage_max_output_token_budget,
@@ -1970,7 +2069,9 @@ mod tests {
         .await
         .expect("insert runtime rows");
 
-        let api = load_run_runtime_config(&pool, 101).await.expect("api config");
+        let api = load_run_runtime_config(&pool, 101)
+            .await
+            .expect("api config");
         assert_eq!(api.runtime_provider, RunRuntimeProvider::Api);
         assert_eq!(api.profile_id.as_deref(), Some("profile-1"));
         assert_eq!(api.model_override.as_deref(), Some("model-1"));
@@ -2010,6 +2111,112 @@ mod tests {
             vec![42, 41]
         );
         assert!(runs.iter().all(|run| run.project_id == Some(7)));
+    }
+
+    #[tokio::test]
+    async fn list_prompt_pack_run_stages_returns_browser_provenance() {
+        let pool =
+            test_pool_with_prompt_pack_runs([(41, Some(7), "complete", "2026-06-14T10:00:00Z")])
+                .await;
+        sqlx::query(
+            "INSERT INTO prompt_pack_stage_runs (
+                id, run_id, stage_name, stage_order, stage_status,
+                browser_run_id, browser_run_status, browser_completion_reason,
+                browser_provider_mode, browser_run_message, created_at, updated_at
+             )
+             VALUES (
+                1001, 41, 'youtube_summary/transcript_analysis', 20, 'succeeded',
+                'prompt-pack-41-stage-1001', 'ok', 'stable',
+                'cdp_attach', 'Browser answer accepted', '2026-06-14T10:00:01Z',
+                '2026-06-14T10:00:02Z'
+             )",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert browser stage");
+
+        let stages = list_prompt_pack_run_stages_in_pool(&pool, 41)
+            .await
+            .expect("stage list");
+
+        assert_eq!(stages.len(), 1);
+        let stage = &stages[0];
+        assert_eq!(
+            stage.browser_run_id.as_deref(),
+            Some("prompt-pack-41-stage-1001")
+        );
+        assert_eq!(stage.browser_run_status.as_deref(), Some("ok"));
+        assert_eq!(stage.browser_completion_reason.as_deref(), Some("stable"));
+        assert_eq!(stage.browser_provider_mode.as_deref(), Some("cdp_attach"));
+        assert_eq!(
+            stage.browser_run_message.as_deref(),
+            Some("Browser answer accepted")
+        );
+    }
+
+    #[tokio::test]
+    async fn persist_browser_stage_provenance_records_result_identity() {
+        let pool =
+            test_pool_with_prompt_pack_runs([(41, Some(7), "running", "2026-06-14T10:00:00Z")])
+                .await;
+        sqlx::query(
+            "INSERT INTO prompt_pack_stage_runs (
+                id, run_id, stage_name, stage_order, stage_status, created_at, updated_at
+             )
+             VALUES (
+                1001, 41, 'youtube_summary/transcript_analysis', 20, 'running',
+                '2026-06-14T10:00:01Z', '2026-06-14T10:00:01Z'
+             )",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert browser stage");
+
+        persist_browser_stage_provenance(
+            &pool,
+            1001,
+            &crate::gemini_browser::GeminiBrowserRunResult {
+                run_id: "prompt-pack-41-stage-1001".to_string(),
+                status: crate::gemini_browser::GeminiBrowserRunStatus::Ok,
+                text: Some("answer".to_string()),
+                message: Some("   ".to_string()),
+                manual_action: None,
+                artifacts: crate::gemini_browser::GeminiBrowserArtifactRefs::default(),
+                elapsed_ms: 321,
+                debug_summary: Some(crate::gemini_browser::GeminiBrowserRunDebugSummary {
+                    mode: crate::gemini_browser::GeminiBrowserProviderMode::CdpAttach,
+                    composer_found: true,
+                    send_button_found: true,
+                    generation_busy_observed: false,
+                    answer_found: true,
+                    answer_selector: Some("message-content".to_string()),
+                    waited_for_send_ms: 0,
+                    waited_for_answer_ms: 1200,
+                    answer_stable_ms: 800,
+                    answer_completion_reason:
+                        crate::gemini_browser::GeminiBrowserAnswerCompletionReason::Stable,
+                    final_text_length: 6,
+                    error_stage: None,
+                    extraction: None,
+                }),
+            },
+        )
+        .await
+        .expect("persist browser provenance");
+
+        let stage = list_prompt_pack_run_stages_in_pool(&pool, 41)
+            .await
+            .expect("stage list")
+            .pop()
+            .expect("stage");
+        assert_eq!(
+            stage.browser_run_id.as_deref(),
+            Some("prompt-pack-41-stage-1001")
+        );
+        assert_eq!(stage.browser_run_status.as_deref(), Some("ok"));
+        assert_eq!(stage.browser_completion_reason.as_deref(), Some("stable"));
+        assert_eq!(stage.browser_provider_mode.as_deref(), Some("cdp_attach"));
+        assert_eq!(stage.browser_run_message.as_deref(), None);
     }
 
     #[tokio::test]

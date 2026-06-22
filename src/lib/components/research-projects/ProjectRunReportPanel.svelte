@@ -36,6 +36,7 @@
   let resultError = $state("");
   let selectedRef = $state<string | null>(null);
   let artifactCopied = $state(false);
+  let copiedBrowserRunId = $state<string | null>(null);
 
   const runId = $derived(run?.runId ?? null);
   const expectedMissingResult = $derived(
@@ -89,6 +90,7 @@
     selectedArtifact = null;
     selectedRef = null;
     artifactCopied = false;
+    copiedBrowserRunId = null;
     try {
       await Promise.all([loadRunResult(runId), loadRunDiagnostics(runId)]);
     } catch (cause) {
@@ -143,6 +145,7 @@
     artifactsByStage = {};
     selectedArtifact = null;
     artifactCopied = false;
+    copiedBrowserRunId = null;
     findings = [];
     auditEvents = [];
   }
@@ -174,6 +177,18 @@
       }, 1400);
     } catch (cause) {
       error = formatAppError("copying project run artifact", cause);
+    }
+  }
+
+  async function copyBrowserRunId(browserRunId: string) {
+    try {
+      await navigator.clipboard.writeText(browserRunId);
+      copiedBrowserRunId = browserRunId;
+      setTimeout(() => {
+        copiedBrowserRunId = null;
+      }, 1400);
+    } catch (cause) {
+      error = formatAppError("copying Browser run id", cause);
     }
   }
 
@@ -298,6 +313,10 @@
     return JSON.stringify(value, null, 2);
   }
 
+  function runtimeLabel(runtimeProvider: PromptPackRunListItem["runtimeProvider"]) {
+    return runtimeProvider === "gemini_browser" ? "Gemini Browser" : "API profile";
+  }
+
   function canLackCanonicalResult(nextRun: PromptPackRunListItem | null) {
     if (!nextRun) return false;
     return ["queued", "running", "failed", "cancelled", "interrupted"].includes(nextRun.runStatus);
@@ -332,6 +351,7 @@
     </div>
     <div class="report-actions">
       {#if run}
+        <ExtractumBadge>{runtimeLabel(run.runtimeProvider)}</ExtractumBadge>
         <ExtractumBadge>{run.runStatus}</ExtractumBadge>
         <ExtractumBadge>{run.resultStatus ?? "none"}</ExtractumBadge>
       {/if}
@@ -527,6 +547,26 @@
                   </div>
                   {#if stage.latestMessage}
                     <p>{stage.latestMessage}</p>
+                  {/if}
+                  {#if stage.browserRunId}
+                    <div class="browser-stage-meta" aria-label="Browser Provider provenance">
+                      <span>Browser run <code>{stage.browserRunId}</code></span>
+                      {#if stage.browserRunStatus}
+                        <span>Status <strong>{stage.browserRunStatus}</strong></span>
+                      {/if}
+                      {#if stage.browserCompletionReason}
+                        <span>Reason <strong>{stage.browserCompletionReason}</strong></span>
+                      {/if}
+                      {#if stage.browserProviderMode}
+                        <span>Mode <strong>{stage.browserProviderMode}</strong></span>
+                      {/if}
+                      {#if stage.browserRunMessage}
+                        <span>{stage.browserRunMessage}</span>
+                      {/if}
+                      <button type="button" onclick={() => void copyBrowserRunId(stage.browserRunId ?? "")}>
+                        {copiedBrowserRunId === stage.browserRunId ? "Copied" : "Copy run id"}
+                      </button>
+                    </div>
                   {/if}
                   <div class="artifact-list">
                     {#each artifactsByStage[stage.stageRunId] ?? [] as artifact (`${artifact.artifactKind}-${artifact.attemptNumber}-${artifact.artifactIndex}`)}
@@ -976,7 +1016,36 @@
     gap: 6px;
   }
 
-  .artifact-list button {
+  .browser-stage-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .browser-stage-meta span {
+    border: 1px solid var(--extractum-border);
+    border-radius: var(--extractum-radius);
+    background: var(--extractum-surface-subtle);
+    padding: 4px 6px;
+    color: var(--extractum-muted);
+    font-size: 11px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+
+  .browser-stage-meta code {
+    color: var(--extractum-text);
+    font-family: inherit;
+  }
+
+  .browser-stage-meta strong {
+    color: var(--extractum-text);
+  }
+
+  .artifact-list button,
+  .browser-stage-meta button {
     border: 1px solid var(--extractum-border);
     border-radius: var(--extractum-radius);
     background: var(--extractum-surface-subtle);

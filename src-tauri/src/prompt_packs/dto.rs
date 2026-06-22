@@ -151,6 +151,11 @@ pub struct PromptPackStageRunDto {
     pub stage_order: i64,
     pub stage_status: String,
     pub latest_message: Option<String>,
+    pub browser_run_id: Option<String>,
+    pub browser_run_status: Option<String>,
+    pub browser_completion_reason: Option<String>,
+    pub browser_provider_mode: Option<String>,
+    pub browser_run_message: Option<String>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]

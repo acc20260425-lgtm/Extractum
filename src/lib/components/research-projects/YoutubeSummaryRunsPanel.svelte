@@ -80,6 +80,10 @@
     return run.runStatus === "queued" || run.runStatus === "running";
   }
 
+  function runtimeLabel(runtimeProvider: PromptPackRunListItem["runtimeProvider"]) {
+    return runtimeProvider === "gemini_browser" ? "Gemini Browser" : "API profile";
+  }
+
   async function deleteRun(run: PromptPackRunListItem) {
     if (isPromptPackRunActive(run) || deletingRunIds[run.runId]) return;
     const confirmed = await openConfirmModal({
@@ -136,6 +140,7 @@
               <div>
                 <strong>Run #{run.runId}</strong>
                 <ExtractumBadge>{statusLabel(run.runStatus)}</ExtractumBadge>
+                <ExtractumBadge>{runtimeLabel(run.runtimeProvider)}</ExtractumBadge>
                 <p>{run.latestMessage ?? "Waiting for progress."}</p>
               </div>
               <div class="run-actions">
@@ -171,6 +176,7 @@
               <div>
                 <strong>Run #{run.runId}</strong>
                 <ExtractumBadge>{statusLabel(run.runStatus)}</ExtractumBadge>
+                <ExtractumBadge>{runtimeLabel(run.runtimeProvider)}</ExtractumBadge>
                 <p>{run.latestMessage ?? run.resultStatus ?? "Completed"}</p>
               </div>
               <div class="run-actions">
