@@ -1209,7 +1209,7 @@ git commit -m "refactor: expose Gemini Browser run-change API"
 - Create: `src/lib/gemini-browser-refresh-scheduler.ts`
 - Create: `src/lib/gemini-browser-refresh-scheduler.test.ts`
 
-- [ ] **Step 1: Create failing scheduler tests**
+- [x] **Step 1: Create failing scheduler tests**
 
 Create `src/lib/gemini-browser-refresh-scheduler.test.ts`:
 
@@ -1411,7 +1411,7 @@ describe("gemini browser refresh scheduler", () => {
 });
 ```
 
-- [ ] **Step 2: Run failing scheduler tests**
+- [x] **Step 2: Run failing scheduler tests**
 
 Run:
 
@@ -1421,7 +1421,7 @@ npm test -- src/lib/gemini-browser-refresh-scheduler.test.ts
 
 Expected: FAIL because `src/lib/gemini-browser-refresh-scheduler.ts` does not exist.
 
-- [ ] **Step 3: Implement the scheduler**
+- [x] **Step 3: Implement the scheduler**
 
 Create `src/lib/gemini-browser-refresh-scheduler.ts`:
 
@@ -1547,7 +1547,7 @@ export function createGeminiBrowserRefreshScheduler(
 }
 ```
 
-- [ ] **Step 4: Run scheduler tests**
+- [x] **Step 4: Run scheduler tests**
 
 Run:
 
@@ -1557,7 +1557,7 @@ npm test -- src/lib/gemini-browser-refresh-scheduler.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 5**
+- [x] **Step 5: Commit Task 5**
 
 Run:
 
