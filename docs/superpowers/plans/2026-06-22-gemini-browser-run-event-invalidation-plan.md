@@ -149,6 +149,8 @@ Ok(Ok(status)) => Ok(status),
 
 This satisfies the spec rule that live sidecar/browser probes may contribute to the immediate `gemini_bridge_status` return value but must not write back into the lifecycle-owned cached provider snapshot.
 
+If `provider_status_core` no longer uses its `state` parameter after this change, rename the parameter to `_state` in the function signature. Keep call sites unchanged unless the compiler requires a signature change.
+
 - [ ] **Step 4: Run the provider status tests**
 
 Run:
@@ -692,7 +694,7 @@ async fn timeout_cleanup_test_handler(
 }
 ```
 
-Add a test for event payload construction near `emit_running_event` tests or helper tests:
+Add this event payload construction test in `src-tauri/src/gemini_browser/commands.rs` near `emit_run_change_event_core` tests or helper tests:
 
 ```rust
 #[test]
@@ -1592,7 +1594,7 @@ it("routes mount, commands, and run-change events through the shared refresh sch
   expect(componentSource).toContain("function scheduleRefreshInBackground()");
   expect(componentSource).toContain("void scheduleRefresh().catch(reportUnexpectedRefreshError);");
   expect(componentSource).toContain("await scheduleRefresh();");
-  expect(componentSource).toContain("onclick={scheduleRefreshInBackground}");
+  expect(componentSource).toMatch(/onclick=\{\s*scheduleRefreshInBackground\s*\}/);
   expect(componentSource).toContain("listenToGeminiBrowserRunChanges");
   expect(componentSource).not.toContain("listenToGeminiBrowserRuns");
   expect(componentSource).not.toContain("onclick={refresh}");
@@ -1856,15 +1858,15 @@ Run:
 ```powershell
 rg -n "GeminiBrowserRunEvent|listenToGeminiBrowserRuns|GEMINI_BROWSER_RUN_EVENT" src-tauri/src/gemini_browser src/lib/api/gemini-browser.ts src/lib/types/gemini-browser.ts src/lib/components/settings/gemini-browser-provider-panel.svelte -S
 rg -n "payload\\." src/lib/components/settings/gemini-browser-provider-panel.svelte -S
-rg -n "queue_position" src-tauri/src/gemini_browser/types.rs src-tauri/src/gemini_browser/commands.rs src/lib/api/gemini-browser.ts src/lib/types/gemini-browser.ts src/lib/components/settings/gemini-browser-provider-panel.svelte -S
+rg -n "queue_position" src-tauri/src/gemini_browser/types.rs src/lib/api/gemini-browser.ts src/lib/types/gemini-browser.ts src/lib/components/settings/gemini-browser-provider-panel.svelte -S
 ```
 
 Expected:
 
 - No `GeminiBrowserRunEvent`, `listenToGeminiBrowserRuns`, or `GEMINI_BROWSER_RUN_EVENT`.
 - No `payload.` reads in `gemini-browser-provider-panel.svelte`; the run-change listener must not read `payload.status`, `payload.message`, `payload.run_id`, `payload.run_updated_at`, or any other event payload field.
-- No `queue_position` in the Gemini Browser event contract, commands event payload, TypeScript event type, or settings panel.
-- Ignore unrelated `queue_position` matches outside these paths, such as analysis/LLM types, tests, or Apalis queue internals like `QueuedGeminiBrowserJob`.
+- No `queue_position` in the Gemini Browser event contract, TypeScript event type/API, or settings panel.
+- Ignore unrelated `queue_position` matches outside these paths, such as analysis/LLM types, tests, commands-only setup structures, or Apalis queue internals like `QueuedGeminiBrowserJob`.
 
 - [ ] **Step 2: Run focused Rust tests**
 
