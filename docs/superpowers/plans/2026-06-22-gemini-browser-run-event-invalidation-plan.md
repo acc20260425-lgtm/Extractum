@@ -645,8 +645,9 @@ async fn worker_timeout_clears_active_and_cancelled_state() {
     wait_for_test_event(&events, "run-timeout-first:running").await;
     runtime.request_cancel("run-timeout-first");
 
-    worker_task
+    tokio::time::timeout(Duration::from_secs(5), worker_task)
         .await
+        .expect("worker stops before timeout")
         .expect("worker task joins")
         .expect("worker run succeeds");
 
@@ -785,9 +786,13 @@ Run:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-invalidation --lib gemini_browser::jobs::tests::cancel
+cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-invalidation --lib gemini_browser::jobs::tests::worker_timeout_clears_active_and_cancelled_state
+cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-invalidation --lib gemini_browser::commands::tests::run_change_event_uses_run_log_updated_at_only
+cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-invalidation --lib gemini_browser::commands::tests::run_change_event_emit_failure_is_best_effort
+cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-invalidation --lib gemini_browser::commands::tests::status_open_and_resume_do_not_emit_run_change_events_directly
 ```
 
-Expected: FAIL to compile until job/cancel callbacks accept `&GeminiBrowserRun` or emit `GeminiBrowserRunChangeEvent`.
+Expected: FAIL to compile until job/cancel callbacks accept `&GeminiBrowserRun`, emit `GeminiBrowserRunChangeEvent`, and the worker timeout cleanup/event helpers are migrated.
 
 - [ ] **Step 3: Change cancellation callback and terminal snapshot hook to emit from finished run**
 
@@ -1288,6 +1293,27 @@ describe("gemini browser refresh scheduler", () => {
     );
   });
 
+  it("applies provider status independently when run history fails", async () => {
+    const ready = status({ latest_message: "Ready" });
+    const deps = schedulerDeps({
+      loadStatus: vi.fn(async () => ready),
+      loadRuns: vi.fn(async () => {
+        throw new Error("runs down");
+      }),
+    });
+
+    await createGeminiBrowserRefreshScheduler(deps).scheduleRefresh();
+
+    expect(deps.applyStatus).toHaveBeenCalledWith(ready);
+    expect(deps.applyStatusError).toHaveBeenCalledWith(null);
+    expect(deps.applyMessage).toHaveBeenCalledWith("Ready");
+    expect(deps.applyRuns).not.toHaveBeenCalled();
+    expect(deps.syncActivePromptResult).not.toHaveBeenCalled();
+    expect(deps.applyRunsError).toHaveBeenCalledWith(
+      "loading Gemini browser run history: Error: runs down",
+    );
+  });
+
   it("preserves previous state and records both errors when both requests fail", async () => {
     const deps = schedulerDeps({
       loadStatus: vi.fn(async () => {
@@ -1566,8 +1592,11 @@ it("routes mount, commands, and run-change events through the shared refresh sch
   expect(componentSource).toContain("function scheduleRefreshInBackground()");
   expect(componentSource).toContain("void scheduleRefresh().catch(reportUnexpectedRefreshError);");
   expect(componentSource).toContain("await scheduleRefresh();");
+  expect(componentSource).toContain("onclick={scheduleRefreshInBackground}");
   expect(componentSource).toContain("listenToGeminiBrowserRunChanges");
   expect(componentSource).not.toContain("listenToGeminiBrowserRuns");
+  expect(componentSource).not.toContain("onclick={refresh}");
+  expect(componentSource).not.toContain("payload.");
   expect(componentSource).not.toContain("payload.message");
   expect(componentSource).not.toContain("payload.status");
   expect(componentSource).not.toContain("payload.run_updated_at");
@@ -1577,6 +1606,8 @@ it("does not assign authoritative panel state from command return values", () =>
   expect(componentSource).not.toContain("status = await geminiBridgeOpenBrowser");
   expect(componentSource).not.toContain("status = await geminiBridgeResume");
   expect(componentSource).not.toContain("result = await geminiBridgeSendSingle");
+  expect(componentSource).not.toMatch(/\bstatus\s*=\s*(opened|resumed)\b/);
+  expect(componentSource).not.toMatch(/\bresult\s*=\s*completed\b/);
 });
 ```
 
@@ -1590,6 +1621,19 @@ with:
 
 ```ts
 expect(componentSource).toContain("loadStatus: () => geminiBridgeStatus(browserConfig())");
+```
+
+Update the existing slow prompt result recovery test to replace:
+
+```ts
+expect(componentSource).toContain("syncActivePromptResult(log.runs)");
+```
+
+with:
+
+```ts
+expect(componentSource).toContain("syncActivePromptResult(nextRuns)");
+expect(componentSource).not.toContain("syncActivePromptResult(log.runs)");
 ```
 
 - [ ] **Step 2: Run failing panel tests**
@@ -1664,6 +1708,7 @@ Replace all `refresh()` calls:
 
 - `void refresh();` -> `scheduleRefreshInBackground();`
 - `await refresh();` -> `await scheduleRefresh();`
+- `onclick={refresh}` -> `onclick={scheduleRefreshInBackground}`
 - setup check refresh action -> `await scheduleRefresh();`
 
 - [ ] **Step 5: Stop command handlers from direct authoritative assignments**
@@ -1729,7 +1774,7 @@ message = completed.message ?? completed.status;
 await scheduleRefresh();
 ```
 
-Do not set `result` or clear `activeTestRunId` directly here; `syncActivePromptResult(log.runs)` in the scheduler-driven refresh owns that transition.
+Do not set `result` or clear `activeTestRunId` directly here; `syncActivePromptResult(nextRuns)` in the scheduler-driven refresh owns that transition.
 
 Update `startCdpChrome` and `stopProvider` to call `await scheduleRefresh();`.
 
@@ -1809,14 +1854,15 @@ git commit -m "refactor: route Gemini Browser panel refresh through scheduler"
 Run:
 
 ```powershell
-rg -n "GeminiBrowserRunEvent|listenToGeminiBrowserRuns|GEMINI_BROWSER_RUN_EVENT|payload\\.status|payload\\.message|payload\\.queue_position" src-tauri/src/gemini_browser src/lib/api/gemini-browser.ts src/lib/api/gemini-browser.test.ts src/lib/types/gemini-browser.ts src/lib/components/settings/gemini-browser-provider-panel.svelte src/lib/gemini-browser-provider-panel.test.ts -S
+rg -n "GeminiBrowserRunEvent|listenToGeminiBrowserRuns|GEMINI_BROWSER_RUN_EVENT" src-tauri/src/gemini_browser src/lib/api/gemini-browser.ts src/lib/types/gemini-browser.ts src/lib/components/settings/gemini-browser-provider-panel.svelte -S
+rg -n "payload\\." src/lib/components/settings/gemini-browser-provider-panel.svelte -S
 rg -n "queue_position" src-tauri/src/gemini_browser/types.rs src-tauri/src/gemini_browser/commands.rs src/lib/api/gemini-browser.ts src/lib/types/gemini-browser.ts src/lib/components/settings/gemini-browser-provider-panel.svelte -S
 ```
 
 Expected:
 
 - No `GeminiBrowserRunEvent`, `listenToGeminiBrowserRuns`, or `GEMINI_BROWSER_RUN_EVENT`.
-- No Gemini Browser event callback reading `payload.status`, `payload.message`, or `payload.queue_position`.
+- No `payload.` reads in `gemini-browser-provider-panel.svelte`; the run-change listener must not read `payload.status`, `payload.message`, `payload.run_id`, `payload.run_updated_at`, or any other event payload field.
 - No `queue_position` in the Gemini Browser event contract, commands event payload, TypeScript event type, or settings panel.
 - Ignore unrelated `queue_position` matches outside these paths, such as analysis/LLM types, tests, or Apalis queue internals like `QueuedGeminiBrowserJob`.
 
