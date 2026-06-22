@@ -141,6 +141,8 @@ backend job state machine.
   update fails, do not roll back the run log and do not fail the job solely
   because the snapshot update failed. Record a diagnostic or warning, then
   attempt the invalidation event using the run-log record's `updated_at`.
+  This is the degraded path: the durable run log is newer than the cached
+  display snapshot.
 - If Tauri event delivery fails after the run log and any successful snapshot
   update, do not fail the job and do not change the run result. Record a
   diagnostic or warning if the application has a suitable logging path.
@@ -148,6 +150,11 @@ backend job state machine.
 This keeps UI transport and cached display state out of the authoritative
 runtime state machine. A missed event may make the UI stale until the next
 explicit refresh, but it must not corrupt or fail a completed run.
+
+When the run log and cached provider status snapshot disagree, consumers must
+treat the run log as the authoritative source for run-history rows, terminal
+results, and inspector data. The provider status snapshot remains a compact
+display summary and may lag during degraded recovery.
 
 ## Transient Coordination State
 
@@ -174,7 +181,13 @@ already performs an explicit refresh.
 The Settings Gemini Browser panel must stop reading `payload.status` or
 `payload.message` from the event. The listener should only schedule a refresh.
 
-Refresh scheduling must be coalesced so several quick events do not produce
+All refresh sources must go through the same scheduler:
+
+- initial mount;
+- user commands such as Start Chrome, Resume, Stop, and Send Test Prompt;
+- run-change invalidation events.
+
+The scheduler must coalesce refreshes so several quick requests do not produce
 parallel status/list-runs races. The behavior should be deterministic:
 
 - If no refresh is running, start one.
@@ -186,9 +199,21 @@ parallel status/list-runs races. The behavior should be deterministic:
   additional refresh still runs so a terminal update is not skipped because of a
   transient status/list-runs error.
 
-Direct user commands such as Start Chrome, Resume, Stop, and Send Test Prompt
-may continue to call `refresh()` after their command returns. The event listener
-is for background Apalis transitions.
+The refresh implementation must apply status and run-history results
+independently. A `gemini_bridge_status` failure must not prevent a successful
+`gemini_bridge_list_runs` result from updating the run-history UI. Use
+independent awaits, `Promise.allSettled`, or an equivalent pattern rather than a
+single `Promise.all` path that drops both results when one request fails.
+
+If `gemini_bridge_list_runs` succeeds and `gemini_bridge_status` fails, update
+`runs` and active prompt result state from the log, preserve or mark the status
+summary as degraded, and show the status error separately. If
+`gemini_bridge_status` succeeds and `gemini_bridge_list_runs` fails, update the
+status summary but keep the previous run-history rows and show the history
+error separately.
+
+User commands may schedule a refresh after their command returns, but they
+must not bypass the shared scheduler.
 
 ## Legacy Removal Scope
 
@@ -232,6 +257,10 @@ Frontend tests should verify:
   history;
 - the Settings panel does not copy event payload fields into `message`,
   `status`, `runs`, or `result`;
+- run history updates when `gemini_bridge_list_runs` succeeds even if
+  `gemini_bridge_status` fails;
+- mount, user commands, and run-change events all use the same refresh
+  scheduler;
 - refresh requests are coalesced when several events arrive quickly.
 
 Manual verification should include:
