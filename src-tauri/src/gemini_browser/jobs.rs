@@ -2242,20 +2242,13 @@ mod tests {
         let token = state.start_run(job.run_id.clone()).await;
         let stopped = Arc::new(AtomicUsize::new(0));
 
-        cancel_gemini_browser_job_core(
-            &runtime,
-            &state,
-            temp.path(),
-            &job.run_id,
-            |_result| {},
-            {
-                let stopped = stopped.clone();
-                || async move {
-                    stopped.fetch_add(1, Ordering::SeqCst);
-                    Ok(())
-                }
-            },
-        )
+        cancel_gemini_browser_job_core(&runtime, &state, temp.path(), &job.run_id, |_result| {}, {
+            let stopped = stopped.clone();
+            || async move {
+                stopped.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        })
         .await
         .expect("cancel active job");
 

@@ -300,15 +300,13 @@ fn status_snapshot_from_reconciled_run_log_at(
 
     if snapshot.status == GeminiBrowserProviderStatusKind::Running {
         if let Some(latest) = runs.first().and_then(|run| run.result.as_ref()) {
-            snapshot.status = GeminiBrowserState::provider_status_kind_for_run_status(
-                &latest.status,
-            );
+            snapshot.status =
+                GeminiBrowserState::provider_status_kind_for_run_status(&latest.status);
             snapshot.latest_message = latest.message.clone();
             snapshot.manual_action = latest.manual_action.clone();
         } else {
             snapshot.status = GeminiBrowserProviderStatusKind::NotStarted;
-            snapshot.latest_message =
-                Some("Gemini browser sidecar is not running.".to_string());
+            snapshot.latest_message = Some("Gemini browser sidecar is not running.".to_string());
             snapshot.manual_action = None;
         }
     }
@@ -396,17 +394,14 @@ pub(crate) async fn send_single_prompt(
         }) => {
             debug_assert_eq!(failed_result.run_id, run_id);
             if let Err(error) = state.update_status_snapshot(handle, |status| {
-                status.status = GeminiBrowserState::provider_status_kind_for_run_status(
-                    &failed_result.status,
-                );
+                status.status =
+                    GeminiBrowserState::provider_status_kind_for_run_status(&failed_result.status);
                 status.active_run_id = None;
                 status.queue_depth = 0;
                 status.latest_message = failed_result.message.clone();
                 status.manual_action = failed_result.manual_action.clone();
             }) {
-                eprintln!(
-                    "Gemini Browser enqueue failure status snapshot update failed: {error}"
-                );
+                eprintln!("Gemini Browser enqueue failure status snapshot update failed: {error}");
             }
             return Err(source);
         }
@@ -517,12 +512,12 @@ mod tests {
 
     use parking_lot::Mutex;
 
-    use super::super::run_log::read_run;
-    use super::super::{mark_running, GeminiBrowserProviderStatusKind};
     use super::super::jobs::{
         GeminiBrowserArtifactMode, GeminiBrowserJob, GeminiBrowserJobRuntime,
         QueuedGeminiBrowserJob,
     };
+    use super::super::run_log::read_run;
+    use super::super::{mark_running, GeminiBrowserProviderStatusKind};
     use super::*;
 
     #[tokio::test]
@@ -629,8 +624,8 @@ mod tests {
             latest_message: Some("Cached".to_string()),
         };
 
-        let returned = provider_status_snapshot_core(|| Ok(cached.clone()))
-            .expect("snapshot succeeds");
+        let returned =
+            provider_status_snapshot_core(|| Ok(cached.clone())).expect("snapshot succeeds");
 
         assert_eq!(returned, cached);
     }
@@ -639,8 +634,7 @@ mod tests {
     fn provider_status_snapshot_from_reconciled_runs_does_not_keep_stale_running_snapshot() {
         let temp = tempfile::tempdir().expect("create temp dir");
         let runs_root = temp.path();
-        create_queued_run(runs_root, "run-stale", "settings_test", "hello")
-            .expect("create queued");
+        create_queued_run(runs_root, "run-stale", "settings_test", "hello").expect("create queued");
         mark_running(runs_root, "run-stale").expect("mark running");
 
         let stale = GeminiBrowserProviderStatus {
@@ -655,7 +649,10 @@ mod tests {
         let reconciled = status_snapshot_from_reconciled_run_log(runs_root, stale, None)
             .expect("derive reconciled snapshot");
 
-        assert_eq!(reconciled.status, GeminiBrowserProviderStatusKind::NotStarted);
+        assert_eq!(
+            reconciled.status,
+            GeminiBrowserProviderStatusKind::NotStarted
+        );
         assert_eq!(reconciled.active_run_id, None);
         assert_eq!(reconciled.queue_depth, 0);
     }
@@ -664,8 +661,7 @@ mod tests {
     fn provider_status_snapshot_from_reconciled_runs_preserves_live_active_run() {
         let temp = tempfile::tempdir().expect("create temp dir");
         let runs_root = temp.path();
-        create_queued_run(runs_root, "run-live", "settings_test", "hello")
-            .expect("create queued");
+        create_queued_run(runs_root, "run-live", "settings_test", "hello").expect("create queued");
         mark_running(runs_root, "run-live").expect("mark running");
 
         let stale = GeminiBrowserProviderStatus {
@@ -673,12 +669,9 @@ mod tests {
             ..GeminiBrowserState::not_started_status("profile-dir".to_string())
         };
 
-        let reconciled = status_snapshot_from_reconciled_run_log(
-            runs_root,
-            stale,
-            Some("run-live".to_string()),
-        )
-        .expect("derive reconciled snapshot");
+        let reconciled =
+            status_snapshot_from_reconciled_run_log(runs_root, stale, Some("run-live".to_string()))
+                .expect("derive reconciled snapshot");
 
         assert_eq!(reconciled.status, GeminiBrowserProviderStatusKind::Running);
         assert_eq!(reconciled.active_run_id.as_deref(), Some("run-live"));
@@ -714,7 +707,10 @@ mod tests {
         )
         .expect("derive reconciled snapshot");
 
-        assert_eq!(reconciled.status, GeminiBrowserProviderStatusKind::NotStarted);
+        assert_eq!(
+            reconciled.status,
+            GeminiBrowserProviderStatusKind::NotStarted
+        );
         assert_eq!(reconciled.active_run_id, None);
         assert_eq!(reconciled.queue_depth, 0);
     }
@@ -723,8 +719,7 @@ mod tests {
     fn provider_status_snapshot_read_core_writes_reconciled_snapshot_back() {
         let temp = tempfile::tempdir().expect("create temp dir");
         let runs_root = temp.path();
-        create_queued_run(runs_root, "run-stale", "settings_test", "hello")
-            .expect("create queued");
+        create_queued_run(runs_root, "run-stale", "settings_test", "hello").expect("create queued");
         mark_running(runs_root, "run-stale").expect("mark running");
 
         let stale = GeminiBrowserProviderStatus {
@@ -795,16 +790,14 @@ mod tests {
         )
         .expect("snapshot read succeeds");
 
-        let (_expected, _attempted_snapshot) =
-            attempted.expect("conditional write attempted");
+        let (_expected, _attempted_snapshot) = attempted.expect("conditional write attempted");
         assert_eq!(returned, newer);
     }
 
     #[test]
     fn get_run_core_returns_exact_run_from_log() {
         let temp = tempfile::tempdir().expect("create temp dir");
-        create_queued_run(temp.path(), "run-detail", "settings_test", "hello")
-            .expect("create run");
+        create_queued_run(temp.path(), "run-detail", "settings_test", "hello").expect("create run");
 
         let run = get_run_core(temp.path(), "run-detail").expect("get run");
 
@@ -834,7 +827,11 @@ mod tests {
                 ))
             },
             std::time::Duration::from_millis(250),
-            || Ok(GeminiBrowserState::not_started_status("fallback-dir".to_string())),
+            || {
+                Ok(GeminiBrowserState::not_started_status(
+                    "fallback-dir".to_string(),
+                ))
+            },
         )
         .await
         .expect("status read succeeds");
@@ -911,15 +908,12 @@ mod tests {
         )
         .expect("create duplicate queued run");
 
-        let error = send_single_prompt_enqueue_core(
-            temp.path(),
-            &runtime,
-            request,
-            None,
-            |_job| async { panic!("enqueue should not be called") },
-        )
-        .await
-        .expect_err("duplicate run id rejected");
+        let error =
+            send_single_prompt_enqueue_core(temp.path(), &runtime, request, None, |_job| async {
+                panic!("enqueue should not be called")
+            })
+            .await
+            .expect_err("duplicate run id rejected");
 
         let error = unwrap_enqueue_app_error(error);
         assert!(error.to_string().contains("already exists"));
@@ -940,15 +934,12 @@ mod tests {
         finish_run(temp.path(), &request.run_id, ok_result(&request.run_id))
             .expect("finish duplicate run");
 
-        let error = send_single_prompt_enqueue_core(
-            temp.path(),
-            &runtime,
-            request,
-            None,
-            |_job| async { panic!("enqueue should not be called") },
-        )
-        .await
-        .expect_err("duplicate terminal run id rejected");
+        let error =
+            send_single_prompt_enqueue_core(temp.path(), &runtime, request, None, |_job| async {
+                panic!("enqueue should not be called")
+            })
+            .await
+            .expect_err("duplicate terminal run id rejected");
 
         let error = unwrap_enqueue_app_error(error);
         assert!(error.to_string().contains("already exists"));
@@ -963,15 +954,12 @@ mod tests {
             .register_waiter(&request.run_id)
             .expect("register waiter");
 
-        let error = send_single_prompt_enqueue_core(
-            temp.path(),
-            &runtime,
-            request,
-            None,
-            |_job| async { panic!("enqueue should not be called") },
-        )
-        .await
-        .expect_err("duplicate waiter rejected");
+        let error =
+            send_single_prompt_enqueue_core(temp.path(), &runtime, request, None, |_job| async {
+                panic!("enqueue should not be called")
+            })
+            .await
+            .expect_err("duplicate waiter rejected");
 
         let error = unwrap_enqueue_app_error(error);
         assert!(error.to_string().contains("active waiter"));
@@ -1053,15 +1041,12 @@ mod tests {
         let mut request = test_request("bad/run-id");
         request.run_id = "../bad".to_string();
 
-        let error = send_single_prompt_enqueue_core(
-            temp.path(),
-            &runtime,
-            request,
-            None,
-            |_job| async { panic!("enqueue should not be called") },
-        )
-        .await
-        .expect_err("invalid run id rejected before side effects");
+        let error =
+            send_single_prompt_enqueue_core(temp.path(), &runtime, request, None, |_job| async {
+                panic!("enqueue should not be called")
+            })
+            .await
+            .expect_err("invalid run id rejected before side effects");
 
         let error = unwrap_enqueue_app_error(error);
         assert!(!error.to_string().is_empty());
