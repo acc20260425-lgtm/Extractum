@@ -486,7 +486,7 @@ git commit -m "refactor: emit Gemini Browser settings changes from run log"
 - Modify: `src-tauri/src/gemini_browser/jobs.rs`
 - Modify: `src-tauri/src/gemini_browser/commands.rs`
 
-- [ ] **Step 1: Write failing worker/cancel tests for invalidation payload, snapshot ordering, and best-effort emit**
+- [x] **Step 1: Write failing worker/cancel tests for invalidation payload, snapshot ordering, and best-effort emit**
 
 In `src-tauri/src/gemini_browser/jobs.rs`, update event vectors from `GeminiBrowserRunEvent` to `GeminiBrowserRunChangeEvent`.
 
@@ -782,7 +782,7 @@ fn status_open_and_resume_do_not_emit_run_change_events_directly() {
 }
 ```
 
-- [ ] **Step 2: Run failing worker tests**
+- [x] **Step 2: Run failing worker tests**
 
 Run:
 
@@ -796,7 +796,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL to compile until job/cancel callbacks accept `&GeminiBrowserRun`, emit `GeminiBrowserRunChangeEvent`, and the worker timeout cleanup/event helpers are migrated.
 
-- [ ] **Step 3: Change cancellation callback and terminal snapshot hook to emit from finished run**
+- [x] **Step 3: Change cancellation callback and terminal snapshot hook to emit from finished run**
 
 In `cancel_gemini_browser_job_core`, change:
 
@@ -870,7 +870,7 @@ The order for queued cancellation and running-without-active-sidecar failure is 
 
 The snapshot hook is intentionally synchronous. `GeminiBrowserState::update_status_snapshot(...)` is synchronous, so this avoids a borrowed async future lifetime trap. Tests that do not care about snapshots pass `|_result| {}`.
 
-- [ ] **Step 4: Change worker reconciliation to return run-log records**
+- [x] **Step 4: Change worker reconciliation to return run-log records**
 
 Change the worker decision enum from:
 
@@ -920,7 +920,7 @@ match reconcile_gemini_browser_worker_entry(&runtime, &state, &runs_root, &job).
 
 Remove the later standalone `update_running_status_snapshot(...).await?; emit_running_event(...)` pair because the running transition is emitted in the `Execute(running_run)` arm.
 
-- [ ] **Step 5: Add best-effort snapshot update helpers**
+- [x] **Step 5: Add best-effort snapshot update helpers**
 
 Make `update_running_status_snapshot` and `update_terminal_status_snapshot` synchronous functions returning `AppResult<()>`; they only call synchronous `GeminiBrowserState::update_status_snapshot(...)`.
 
@@ -950,7 +950,7 @@ fn update_terminal_status_snapshot_best_effort(
 
 Keep the original `update_running_status_snapshot` and `update_terminal_status_snapshot` functions returning `AppResult<()>` so tests can still exercise exact status mutation.
 
-- [ ] **Step 6: Emit terminal/timeout events from `finish_run` return values**
+- [x] **Step 6: Emit terminal/timeout events from `finish_run` return values**
 
 In `finish_timed_out_job`, replace:
 
@@ -1003,7 +1003,7 @@ fn emit_gemini_browser_run_change_event(
 }
 ```
 
-- [ ] **Step 7: Update test helper decisions**
+- [x] **Step 7: Update test helper decisions**
 
 Any test helper that matches `GeminiBrowserWorkerEntryDecision::Execute` must now match `Execute(_)`.
 
@@ -1018,7 +1018,7 @@ GeminiBrowserWorkerEntryDecision::Terminal { result, .. } => {
 }
 ```
 
-- [ ] **Step 8: Remove temporary legacy Rust event symbols**
+- [x] **Step 8: Remove temporary legacy Rust event symbols**
 
 After `jobs.rs` no longer references the old state-bearing event:
 
@@ -1038,7 +1038,7 @@ fn emit_run_event(handle: &AppHandle, event: GeminiBrowserRunEvent) {
 }
 ```
 
-- [ ] **Step 9: Run Gemini Browser backend tests**
+- [x] **Step 9: Run Gemini Browser backend tests**
 
 Run:
 
@@ -1048,7 +1048,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 10: Commit Task 3**
+- [x] **Step 10: Commit Task 3**
 
 Run:
 

@@ -11,13 +11,11 @@ use super::{
     cdp_chrome, chrome_cdp_profile_dir, create_queued_run, finish_run, list_runs, path_string,
     profile_dir, recorded_run_dir, runs_dir, sidecar, GeminiBrowserProviderConfig,
     GeminiBrowserProviderStatus, GeminiBrowserRun, GeminiBrowserRunChangeEvent,
-    GeminiBrowserRunEvent, GeminiBrowserRunLogSummary, GeminiBrowserRunRequest,
-    GeminiBrowserRunResult, GeminiBrowserRunStatus, GeminiBrowserStartChromeResult,
-    GeminiBrowserState,
+    GeminiBrowserRunLogSummary, GeminiBrowserRunRequest, GeminiBrowserRunResult,
+    GeminiBrowserRunStatus, GeminiBrowserStartChromeResult, GeminiBrowserState,
 };
 
 pub const GEMINI_BROWSER_RUN_CHANGE_EVENT: &str = "gemini-browser://run";
-pub(crate) const GEMINI_BROWSER_RUN_EVENT: &str = GEMINI_BROWSER_RUN_CHANGE_EVENT;
 
 pub(crate) fn run_change_event_from_run(run: &GeminiBrowserRun) -> GeminiBrowserRunChangeEvent {
     GeminiBrowserRunChangeEvent {
@@ -41,10 +39,6 @@ fn emit_run_change_event(handle: &AppHandle, run: &GeminiBrowserRun) {
             .emit(GEMINI_BROWSER_RUN_CHANGE_EVENT, event)
             .map_err(|error| error.to_string())
     });
-}
-
-fn emit_run_event(handle: &AppHandle, event: GeminiBrowserRunEvent) {
-    let _ = handle.emit(GEMINI_BROWSER_RUN_EVENT, event);
 }
 
 #[tauri::command]
@@ -690,6 +684,82 @@ mod tests {
 
         assert!(!error.to_string().is_empty());
         assert!(events.lock().is_empty());
+    }
+
+    #[test]
+    fn run_change_event_uses_run_log_updated_at_only() {
+        let run = crate::gemini_browser::GeminiBrowserRun {
+            run_id: "run-event".to_string(),
+            source: "settings_test".to_string(),
+            status: crate::gemini_browser::GeminiBrowserRunStatus::Running,
+            prompt_preview: "hello".to_string(),
+            created_at: "2026-06-22T00:00:00Z".to_string(),
+            updated_at: "2026-06-22T00:00:01Z".to_string(),
+            result: None,
+        };
+
+        assert_eq!(
+            crate::gemini_browser::commands::run_change_event_from_run(&run),
+            crate::gemini_browser::GeminiBrowserRunChangeEvent {
+                run_id: "run-event".to_string(),
+                run_updated_at: "2026-06-22T00:00:01Z".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn run_change_event_emit_failure_is_best_effort() {
+        let run = crate::gemini_browser::GeminiBrowserRun {
+            run_id: "run-emit-fails".to_string(),
+            source: "settings_test".to_string(),
+            status: crate::gemini_browser::GeminiBrowserRunStatus::Queued,
+            prompt_preview: "hello".to_string(),
+            created_at: "2026-06-22T00:00:00Z".to_string(),
+            updated_at: "2026-06-22T00:00:01Z".to_string(),
+            result: None,
+        };
+        let mut attempted = false;
+
+        emit_run_change_event_core(&run, |event| {
+            attempted = true;
+            assert_eq!(event.run_id, "run-emit-fails");
+            assert_eq!(event.run_updated_at, "2026-06-22T00:00:01Z");
+            Err("emit failed".to_string())
+        });
+
+        assert!(attempted);
+    }
+
+    #[test]
+    fn status_open_and_resume_do_not_emit_run_change_events_directly() {
+        let source = include_str!("commands.rs");
+
+        let status_command = source
+            .split("pub async fn gemini_bridge_status")
+            .nth(1)
+            .expect("status command exists")
+            .split("pub(crate) async fn provider_status")
+            .next()
+            .expect("status command section");
+        assert!(!status_command.contains("emit_run_change_event"));
+
+        let open_command = source
+            .split("pub async fn gemini_bridge_open_browser")
+            .nth(1)
+            .expect("open command exists")
+            .split("#[tauri::command]")
+            .next()
+            .expect("open command section");
+        assert!(!open_command.contains("emit_run_change_event"));
+
+        let resume_command = source
+            .split("pub async fn gemini_bridge_resume")
+            .nth(1)
+            .expect("resume command exists")
+            .split("#[tauri::command]")
+            .next()
+            .expect("resume command section");
+        assert!(!resume_command.contains("emit_run_change_event"));
     }
 
     fn ready_runtime() -> GeminiBrowserJobRuntime {

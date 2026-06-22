@@ -226,14 +226,6 @@ pub struct GeminiBrowserRunChangeEvent {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GeminiBrowserRunEvent {
-    pub run_id: String,
-    pub status: GeminiBrowserRunStatus,
-    pub message: Option<String>,
-    pub queue_position: Option<usize>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum GeminiBrowserSidecarCommand {
     Status {
