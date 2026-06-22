@@ -46,14 +46,18 @@ state-bearing event semantics.
 
 Use the existing event transport only as a lightweight invalidation signal.
 
-The backend still emits a Tauri event after a run enters queued, running,
-terminal, cancelled, or degraded-terminal state, but the event no longer carries
-authoritative status, message, result, or queue position. Do not emit run-change
-events for status probes, open-browser calls, resume calls, or other provider
-operations unless they also create one of those run-log transitions. On the
-normal path, the event is emitted after the durable run log and cached provider
-snapshot have both been updated. The frontend listener uses the event only to
-schedule a refresh from the existing commands:
+The backend still emits a Tauri event after queued, running, and terminal
+run-log transitions, including cancelled and degraded terminal outcomes, but
+the event no longer carries authoritative status, message, result, or queue
+position. A degraded terminal outcome is not a separate
+`GeminiBrowserRunStatus`; it is a terminal run-log result whose surrounding
+display/update path is degraded, such as cached status snapshot update failure
+after the terminal run-log write. Do not emit run-change events for status
+probes, open-browser calls, resume calls, or other provider operations unless
+they also create one of those run-log transitions. On the normal path, the
+event is emitted after the durable run log and cached provider snapshot have
+both been updated. The frontend listener uses the event only to schedule a
+refresh from the existing commands:
 
 - `gemini_bridge_status`
 - `gemini_bridge_list_runs`
@@ -266,11 +270,16 @@ Keep these intentionally:
 
 Rust tests should verify:
 
-- queued, running, cancelled, and terminal transitions still update the run log;
+- queued, running, and terminal transitions still update the run log, with
+  cancellation covered as a terminal outcome;
 - failed run-log transitions do not emit invalidation events;
 - emitted change events contain only invalidation data;
 - emitted change events copy `run_updated_at` from the run-log record;
-- Tauri event emit failure does not fail a completed job;
+- Tauri event emit failure does not fail or roll back a successful run-log
+  transition, including queued, running, and terminal transitions, with
+  cancellation covered as a terminal outcome;
+- status probe, open-browser, and resume operations that do not create a
+  run-log transition do not emit run-change events;
 - cached provider status snapshot failure after a successful run-log transition
   does not roll back the run log or fail the job solely because of UI display
   state;
@@ -300,6 +309,9 @@ Manual verification should include:
 
 - Start Chrome / Resume still works.
 - Settings test prompt updates history through refresh.
+- With the Settings panel open, run a test prompt and verify the history and
+  inspector update after refresh from run log data, not from state-bearing event
+  payload.
 - YouTube Summary through Gemini Browser still completes.
 
 ## Later Full Event Removal
