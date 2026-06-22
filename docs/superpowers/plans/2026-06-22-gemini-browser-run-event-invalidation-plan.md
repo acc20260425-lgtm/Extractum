@@ -227,6 +227,7 @@ assert_eq!(
 with:
 
 ```rust
+assert!(!runtime.has_waiter(&request.run_id));
 assert_eq!(
     events.lock().as_slice(),
     [GeminiBrowserRunChangeEvent {
@@ -393,10 +394,13 @@ let queued_run = create_queued_run(runs_root, &request.run_id, &request.source, 
 Replace the enqueue failure finish block with:
 
 ```rust
+runtime.remove_waiter(&request.run_id);
 let failed_run = finish_run(runs_root, &request.run_id, failed.clone())?;
 emit_event(&failed_run);
 return Err(error);
 ```
+
+Do not remove the existing `runtime.remove_waiter(&request.run_id);` cleanup. The waiter is registered before enqueue, and enqueue failure must leave no active waiter for that `run_id`.
 
 Replace the queued event construction with:
 
