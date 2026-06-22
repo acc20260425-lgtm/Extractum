@@ -84,8 +84,9 @@ and run log data.
 `run_updated_at` is not a separate event timestamp. It must be copied from the
 `updated_at` value of the corresponding run-log record after the transition
 that triggered the event. It must not use a fresh emit-time clock, Apalis job
-timestamp, or sidecar timestamp. If the implementation does not need this value,
-the timestamp field may be removed instead of replaced with another source.
+timestamp, or sidecar timestamp. The field is mandatory in this design so tests
+can prove the event points at a concrete run-log version without becoming a new
+state-bearing payload.
 
 The old public names `GeminiBrowserRunEvent` and `listenToGeminiBrowserRuns`
 should be removed rather than kept as aliases. Keeping aliases would preserve
@@ -129,6 +130,14 @@ If `gemini_bridge_status` also performs a live sidecar/browser probe, that live
 probe is outside the invalidation ordering guarantee. It is best-effort current
 state, not a read model that must be updated before an event can be emitted.
 The event precondition must never depend on live browser or sidecar I/O.
+
+The live probe must not write its result back into the lifecycle-owned cached
+provider status snapshot in this slice. It may contribute to the immediate
+`gemini_bridge_status` return value, but it must not overwrite lifecycle fields
+such as active run, queue depth, latest run message, or terminal display state.
+If a later design wants live probes to persist into the cached snapshot, it must
+define a merge and precedence contract first. That contract must preserve run
+log authority for run-history rows and terminal results.
 
 ## Failure Semantics
 
