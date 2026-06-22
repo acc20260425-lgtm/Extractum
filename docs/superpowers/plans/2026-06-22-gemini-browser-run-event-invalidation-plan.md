@@ -520,7 +520,7 @@ async fn cancel_missing_run_does_not_emit_change_event() {
                 .lock()
                 .push(crate::gemini_browser::commands::run_change_event_from_run(run))
         },
-        |_result| async {},
+        |_result| {},
         || async { Ok(()) },
     )
     .await
@@ -571,7 +571,6 @@ async fn cancel_queued_run_updates_terminal_snapshot_before_change_event() {
                     crate::gemini_browser::GeminiBrowserRunStatus::Cancelled
                 );
                 order.lock().push("snapshot");
-                async {}
             }
         },
         || async { Ok(()) },
@@ -695,7 +694,6 @@ to:
 async fn cancel_gemini_browser_job_core<
     EmitEvent,
     BeforeEmitTerminalSnapshot,
-    SnapshotFut,
     StopActive,
     StopFut,
 >(
@@ -709,9 +707,7 @@ async fn cancel_gemini_browser_job_core<
 ) -> crate::error::AppResult<()>
 where
     EmitEvent: FnMut(&crate::gemini_browser::GeminiBrowserRun),
-    BeforeEmitTerminalSnapshot:
-        FnMut(&crate::gemini_browser::GeminiBrowserRunResult) -> SnapshotFut,
-    SnapshotFut: std::future::Future<Output = ()>,
+    BeforeEmitTerminalSnapshot: FnMut(&crate::gemini_browser::GeminiBrowserRunResult),
     StopActive: FnOnce() -> StopFut,
     StopFut: std::future::Future<Output = crate::error::AppResult<()>>,
 ```
@@ -729,7 +725,7 @@ with:
 ```rust
 let cancelled_run = crate::gemini_browser::finish_run(runs_root, run_id, result.clone())?;
 runtime.complete_waiter(run_id, Ok(result.clone()));
-before_emit_terminal_snapshot(&result).await;
+before_emit_terminal_snapshot(&result);
 emit_event(&cancelled_run);
 ```
 
@@ -738,7 +734,7 @@ For running-without-active-sidecar failure, replace the same pattern with:
 ```rust
 let failed_run = crate::gemini_browser::finish_run(runs_root, run_id, result.clone())?;
 runtime.complete_waiter(run_id, Ok(result.clone()));
-before_emit_terminal_snapshot(&result).await;
+before_emit_terminal_snapshot(&result);
 emit_event(&failed_run);
 ```
 
@@ -753,10 +749,10 @@ In the public `cancel_gemini_browser_job`, replace the emit closure with:
 The order for queued cancellation and running-without-active-sidecar failure is always:
 
 1. `finish_run(...)` writes the terminal run-log record.
-2. `before_emit_terminal_snapshot(&result).await` attempts the cached provider snapshot update.
+2. `before_emit_terminal_snapshot(&result)` attempts the cached provider snapshot update.
 3. `emit_event(&finished_run)` sends the best-effort invalidation event.
 
-Tests that do not care about snapshots pass `|_result| async {}`.
+The snapshot hook is intentionally synchronous. `GeminiBrowserState::update_status_snapshot(...)` is synchronous, so this avoids a borrowed async future lifetime trap. Tests that do not care about snapshots pass `|_result| {}`.
 
 - [ ] **Step 4: Change worker reconciliation to return run-log records**
 
@@ -794,12 +790,12 @@ Update the worker entry match:
 ```rust
 match reconcile_gemini_browser_worker_entry(&runtime, &state, &runs_root, &job).await? {
     GeminiBrowserWorkerEntryDecision::Execute(running_run) => {
-        update_running_status_snapshot_best_effort(handle, &state, &job.run_id).await;
+        update_running_status_snapshot_best_effort(handle, &state, &job.run_id);
         emit_gemini_browser_run_change_event(handle, &running_run);
     }
     GeminiBrowserWorkerEntryDecision::Acknowledged => return Ok(()),
     GeminiBrowserWorkerEntryDecision::Terminal { run, result } => {
-        update_terminal_status_snapshot_best_effort(handle, &state, &result).await;
+        update_terminal_status_snapshot_best_effort(handle, &state, &result);
         emit_gemini_browser_run_change_event(handle, &run);
         return Ok(());
     }
@@ -810,25 +806,27 @@ Remove the later standalone `update_running_status_snapshot(...).await?; emit_ru
 
 - [ ] **Step 5: Add best-effort snapshot update helpers**
 
-Replace `update_running_status_snapshot` / `update_terminal_status_snapshot` call sites in worker completion paths with best-effort wrappers:
+Make `update_running_status_snapshot` and `update_terminal_status_snapshot` synchronous functions returning `AppResult<()>`; they only call synchronous `GeminiBrowserState::update_status_snapshot(...)`.
+
+Replace their call sites in worker completion paths with synchronous best-effort wrappers:
 
 ```rust
-async fn update_running_status_snapshot_best_effort(
+fn update_running_status_snapshot_best_effort(
     handle: &tauri::AppHandle,
     state: &crate::gemini_browser::GeminiBrowserState,
     run_id: &str,
 ) {
-    if let Err(error) = update_running_status_snapshot(handle, state, run_id).await {
+    if let Err(error) = update_running_status_snapshot(handle, state, run_id) {
         eprintln!("Gemini Browser running status snapshot update failed: {error}");
     }
 }
 
-async fn update_terminal_status_snapshot_best_effort(
+fn update_terminal_status_snapshot_best_effort(
     handle: &tauri::AppHandle,
     state: &crate::gemini_browser::GeminiBrowserState,
     result: &crate::gemini_browser::GeminiBrowserRunResult,
 ) {
-    if let Err(error) = update_terminal_status_snapshot(handle, state, result).await {
+    if let Err(error) = update_terminal_status_snapshot(handle, state, result) {
         eprintln!("Gemini Browser terminal status snapshot update failed: {error}");
     }
 }
@@ -852,7 +850,7 @@ with:
 ```rust
 let timed_out_run = crate::gemini_browser::finish_run(runs_dir, &job.run_id, result.clone())?;
 runtime.complete_waiter(&job.run_id, Ok(result.clone()));
-update_terminal_status_snapshot_best_effort(handle, state, &result).await;
+update_terminal_status_snapshot_best_effort(handle, state, &result);
 emit_gemini_browser_run_change_event(handle, &timed_out_run);
 ```
 
@@ -863,7 +861,7 @@ let completed_run = crate::gemini_browser::finish_run(runs_dir, &job.run_id, res
 state.finish_run(&job.run_id).await;
 runtime.complete_waiter(&job.run_id, Ok(result.clone()));
 runtime.clear_cancelled(&job.run_id);
-update_terminal_status_snapshot_best_effort(handle, state, &result).await;
+update_terminal_status_snapshot_best_effort(handle, state, &result);
 emit_gemini_browser_run_change_event(handle, &completed_run);
 ```
 
@@ -1233,7 +1231,7 @@ describe("gemini browser refresh scheduler", () => {
     expect(deps.loadRuns).toHaveBeenCalledTimes(2);
   });
 
-  it("rejects the shared trailing promise when a trailing refresh throws unexpectedly", async () => {
+  it("resolves the first caller and rejects only the trailing promise when trailing refresh throws unexpectedly", async () => {
     const firstStatus = deferred<GeminiBrowserProviderStatus>();
     const firstRuns = deferred<GeminiBrowserRunLogSummary>();
     const unexpected = new Error("apply exploded");
@@ -1260,13 +1258,13 @@ describe("gemini browser refresh scheduler", () => {
     const trailingB = scheduler.scheduleRefresh();
 
     expect(trailingA).toBe(trailingB);
-    const activeRejection = expect(active).rejects.toBe(unexpected);
+    const activeResolution = expect(active).resolves.toBeUndefined();
     const trailingRejection = expect(trailingA).rejects.toBe(unexpected);
 
     firstStatus.resolve(status({ latest_message: "First" }));
     firstRuns.resolve({ runs: [run("run-1")] });
 
-    await activeRejection;
+    await activeResolution;
     await trailingRejection;
   });
 });
@@ -1309,6 +1307,8 @@ export interface GeminiBrowserRefreshScheduler {
   scheduleRefresh: () => Promise<void>;
 }
 
+// Each caller gets a promise for the refresh requested by that call.
+// Later trailing refreshes must not resolve or reject an earlier caller.
 export function createGeminiBrowserRefreshScheduler(
   deps: GeminiBrowserRefreshSchedulerDeps,
 ): GeminiBrowserRefreshScheduler {
@@ -1358,32 +1358,30 @@ export function createGeminiBrowserRefreshScheduler(
     return { resolve, reject };
   }
 
-  async function runTrailingRefresh() {
-    const trailing = takeTrailingRequest();
-    try {
-      await runRefreshOnce();
-      trailing.resolve?.();
-    } catch (error) {
-      trailing.reject?.(error);
-      throw error;
+  function finishRefresh(refresh: Promise<void>) {
+    if (activeRefresh === refresh) {
+      activeRefresh = null;
+    }
+    if (trailingRequested) {
+      const trailing = takeTrailingRequest();
+      const trailingRefresh = startRefreshForCall();
+      void trailingRefresh.then(
+        () => trailing.resolve?.(),
+        (error) => trailing.reject?.(error),
+      );
     }
   }
 
-  async function drainRefreshes() {
-    try {
-      await runRefreshOnce();
-      while (trailingRequested) {
-        await runTrailingRefresh();
-      }
-    } catch (error) {
-      if (trailingRequested || trailingPromise) {
-        const trailing = takeTrailingRequest();
-        trailing.reject?.(error);
-      }
-      throw error;
-    } finally {
-      activeRefresh = null;
-    }
+  function startRefreshForCall(): Promise<void> {
+    const refresh = runRefreshOnce();
+    activeRefresh = refresh;
+
+    void refresh.then(
+      () => finishRefresh(refresh),
+      () => finishRefresh(refresh),
+    );
+
+    return refresh;
   }
 
   function ensureTrailingPromise() {
@@ -1401,8 +1399,7 @@ export function createGeminiBrowserRefreshScheduler(
       trailingRequested = true;
       return ensureTrailingPromise();
     }
-    activeRefresh = drainRefreshes();
-    return activeRefresh;
+    return startRefreshForCall();
   }
 
   return { scheduleRefresh };
