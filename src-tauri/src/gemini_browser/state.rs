@@ -1,5 +1,7 @@
+use std::future::Future;
+
 use parking_lot::RwLock;
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::sync::{Mutex, MutexGuard, OnceCell};
 use tokio_util::sync::CancellationToken;
 
 use super::{
@@ -13,6 +15,7 @@ pub struct GeminiBrowserState {
     cancellation: Mutex<Option<CancellationToken>>,
     sidecar: Mutex<Option<super::sidecar::GeminiBrowserSidecarProcess>>,
     status_snapshot: RwLock<Option<GeminiBrowserProviderStatus>>,
+    startup_reconciliation: OnceCell<()>,
 }
 
 impl GeminiBrowserState {
@@ -55,6 +58,34 @@ impl GeminiBrowserState {
         *self.status_snapshot.write() = Some(status);
     }
 
+    pub(crate) async fn ensure_startup_reconciled<F, Fut>(
+        &self,
+        reconcile: F,
+    ) -> crate::error::AppResult<()>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = crate::error::AppResult<()>>,
+    {
+        self.startup_reconciliation
+            .get_or_try_init(|| async { reconcile().await })
+            .await
+            .map(|_| ())
+    }
+
+    pub(crate) fn set_status_snapshot_if_current(
+        &self,
+        expected: &GeminiBrowserProviderStatus,
+        next: GeminiBrowserProviderStatus,
+    ) -> bool {
+        let mut guard = self.status_snapshot.write();
+        if guard.as_ref() == Some(expected) {
+            *guard = Some(next);
+            true
+        } else {
+            false
+        }
+    }
+
     fn ensure_status_snapshot(&self, handle: &tauri::AppHandle) -> crate::error::AppResult<()> {
         if self.status_snapshot.read().is_some() {
             return Ok(());
@@ -68,7 +99,7 @@ impl GeminiBrowserState {
         Ok(())
     }
 
-    fn not_started_status(browser_profile_dir: String) -> GeminiBrowserProviderStatus {
+    pub(crate) fn not_started_status(browser_profile_dir: String) -> GeminiBrowserProviderStatus {
         GeminiBrowserProviderStatus {
             status: GeminiBrowserProviderStatusKind::NotStarted,
             manual_action: None,
@@ -223,5 +254,71 @@ mod tests {
         );
         assert_eq!(snapshot.active_run_id.as_deref(), Some("run-1"));
         assert_eq!(snapshot.queue_depth, 2);
+    }
+
+    #[tokio::test]
+    async fn startup_reconciliation_gate_runs_once_after_success() {
+        let state = GeminiBrowserState::new();
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+        for _ in 0..2 {
+            let calls = calls.clone();
+            state
+                .ensure_startup_reconciled(move || async move {
+                    calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    Ok(())
+                })
+                .await
+                .expect("reconcile succeeds");
+        }
+
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn startup_reconciliation_gate_retries_after_failure() {
+        let state = GeminiBrowserState::new();
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+
+        let calls_first = calls.clone();
+        let error = state
+            .ensure_startup_reconciled(move || async move {
+                calls_first.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Err(crate::error::AppError::internal("fixture failure"))
+            })
+            .await
+            .expect_err("first attempt fails");
+        assert!(error.to_string().contains("fixture failure"));
+
+        let calls_second = calls.clone();
+        state
+            .ensure_startup_reconciled(move || async move {
+                calls_second.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            })
+            .await
+            .expect("second attempt succeeds");
+
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn set_status_snapshot_if_current_does_not_overwrite_newer_snapshot() {
+        let state = GeminiBrowserState::new();
+        let expected = GeminiBrowserState::not_started_status("profile-dir".to_string());
+        let newer = GeminiBrowserProviderStatus {
+            latest_message: Some("worker update".to_string()),
+            ..expected.clone()
+        };
+        let stale_reconciled = GeminiBrowserProviderStatus {
+            latest_message: Some("stale pull read".to_string()),
+            ..expected.clone()
+        };
+
+        state.set_status_snapshot(expected.clone());
+        state.set_status_snapshot(newer.clone());
+
+        assert!(!state.set_status_snapshot_if_current(&expected, stale_reconciled));
+        assert_eq!(state.status_snapshot_for_test(), Some(newer));
     }
 }

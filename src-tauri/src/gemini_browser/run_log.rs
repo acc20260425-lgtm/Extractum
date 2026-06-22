@@ -103,6 +103,15 @@ pub(crate) fn list_runs(runs_dir: &Path, limit: usize) -> AppResult<GeminiBrowse
     Ok(GeminiBrowserRunLogSummary { runs })
 }
 
+pub(crate) fn read_run(runs_dir: &Path, run_id: &str) -> AppResult<GeminiBrowserRun> {
+    prune_expired_runs(runs_dir)?;
+    let path = run_file_path(runs_dir, run_id)?;
+    if !path.exists() {
+        return Err(AppError::not_found("Gemini browser run was not found"));
+    }
+    read_run_file(&path)
+}
+
 pub(crate) fn recorded_run_dir(runs_dir: &Path, run_id: &str) -> AppResult<PathBuf> {
     prune_expired_runs(runs_dir)?;
     let safe_id = safe_run_id(run_id)?;
@@ -273,6 +282,30 @@ mod tests {
                 .and_then(|summary| summary.answer_selector.as_deref()),
             Some("message-content")
         );
+    }
+
+    #[test]
+    fn read_run_returns_exact_run_by_id() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let runs_dir = temp.path();
+
+        create_queued_run(runs_dir, "run-detail", "settings_test", "hello")
+            .expect("create queued run");
+
+        let run = super::read_run(runs_dir, "run-detail").expect("read run");
+
+        assert_eq!(run.run_id, "run-detail");
+        assert_eq!(run.status, GeminiBrowserRunStatus::Queued);
+    }
+
+    #[test]
+    fn read_run_returns_validation_error_for_missing_run() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+
+        let error = super::read_run(temp.path(), "missing-run").expect_err("missing run errors");
+
+        assert_eq!(error.kind, crate::error::AppErrorKind::NotFound);
+        assert_eq!(error.message, "Gemini browser run was not found");
     }
 
     #[test]

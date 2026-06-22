@@ -633,12 +633,7 @@ pub(crate) async fn start_gemini_browser_job_worker(
         async move {
             let pool = crate::db::get_pool(&setup_handle).await?;
             setup_gemini_browser_apalis_storage(&pool).await?;
-            let runs_root = crate::gemini_browser::runs_dir(&setup_handle)?;
-            reconcile_gemini_browser_run_log_at_startup(
-                &runs_root,
-                apalis_queue_inspection_mode(),
-                |_run_id| Ok(None),
-            )?;
+            ensure_gemini_browser_startup_reconciled(&setup_handle).await?;
             let storage = apalis_sqlite::SqliteStorage::new_with_config(
                 &pool,
                 &gemini_browser_queue_config(),
@@ -656,6 +651,24 @@ pub(crate) async fn start_gemini_browser_job_worker(
         }
     })
     .await
+}
+
+pub(crate) async fn ensure_gemini_browser_startup_reconciled(
+    handle: &tauri::AppHandle,
+) -> crate::error::AppResult<()> {
+    let state = handle.state::<crate::gemini_browser::GeminiBrowserState>();
+    let handle = handle.clone();
+    state
+        .ensure_startup_reconciled(move || async move {
+            let runs_root = crate::gemini_browser::runs_dir(&handle)?;
+            reconcile_gemini_browser_run_log_at_startup(
+                &runs_root,
+                apalis_queue_inspection_mode(),
+                |_run_id| Ok(None),
+            )?;
+            Ok(())
+        })
+        .await
 }
 
 async fn process_gemini_browser_job(

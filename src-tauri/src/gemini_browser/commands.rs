@@ -1,5 +1,6 @@
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
+use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 
 use crate::error::{AppError, AppResult};
 
@@ -9,10 +10,11 @@ use super::jobs::{
 };
 use super::{
     cdp_chrome, chrome_cdp_profile_dir, create_queued_run, finish_run, list_runs, path_string,
-    profile_dir, recorded_run_dir, runs_dir, sidecar, GeminiBrowserProviderConfig,
-    GeminiBrowserProviderStatus, GeminiBrowserRun, GeminiBrowserRunChangeEvent,
-    GeminiBrowserRunLogSummary, GeminiBrowserRunRequest, GeminiBrowserRunResult,
-    GeminiBrowserRunStatus, GeminiBrowserStartChromeResult, GeminiBrowserState,
+    profile_dir, read_run, recorded_run_dir, runs_dir, sidecar, GeminiBrowserProviderConfig,
+    GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind, GeminiBrowserRun,
+    GeminiBrowserRunChangeEvent, GeminiBrowserRunLogSummary, GeminiBrowserRunRequest,
+    GeminiBrowserRunResult, GeminiBrowserRunStatus, GeminiBrowserStartChromeResult,
+    GeminiBrowserState,
 };
 
 pub const GEMINI_BROWSER_RUN_CHANGE_EVENT: &str = "gemini-browser://run";
@@ -50,26 +52,40 @@ pub async fn gemini_bridge_status(
     provider_status(&handle, &state, browser_config).await
 }
 
+#[tauri::command]
+pub async fn gemini_bridge_status_snapshot(
+    handle: AppHandle,
+    state: State<'_, GeminiBrowserState>,
+) -> AppResult<GeminiBrowserProviderStatus> {
+    super::jobs::ensure_gemini_browser_startup_reconciled(&handle).await?;
+    let active_run_id = state.active_run_id().await;
+    provider_status_snapshot_read_core(
+        &runs_dir(&handle)?,
+        || state.status_snapshot(&handle),
+        active_run_id,
+        |expected, snapshot| Ok(state.set_status_snapshot_if_current(expected, snapshot)),
+    )
+}
+
 pub(crate) async fn provider_status(
     handle: &AppHandle,
     state: &GeminiBrowserState,
     browser_config: Option<GeminiBrowserProviderConfig>,
 ) -> AppResult<GeminiBrowserProviderStatus> {
-    let active_run_id = state.active_run_id().await;
-    let queue_depth = 0;
     let browser_profile_dir = path_string(&profile_dir(handle)?);
-    let live_status = sidecar::status(
-        handle,
-        state,
-        browser_profile_dir,
-        browser_config,
-        active_run_id,
-        queue_depth,
-    );
-
-    provider_status_core(
-        state,
-        live_status,
+    provider_status_read_core(
+        || super::jobs::ensure_gemini_browser_startup_reconciled(handle),
+        || state.active_run_id(),
+        |active_run_id| {
+            sidecar::status(
+                handle,
+                state,
+                browser_profile_dir,
+                browser_config,
+                active_run_id,
+                0,
+            )
+        },
         std::time::Duration::from_millis(250),
         || state.status_snapshot(handle),
     )
@@ -168,7 +184,6 @@ async fn run_log_has_any_run(runs_root: &std::path::Path, run_id: &str) -> AppRe
 }
 
 async fn provider_status_core<Fut>(
-    _state: &GeminiBrowserState,
     live_status: Fut,
     timeout: std::time::Duration,
     fallback_status: impl FnOnce() -> AppResult<GeminiBrowserProviderStatus>,
@@ -180,6 +195,150 @@ where
         Ok(Ok(status)) => Ok(status),
         Ok(Err(_)) | Err(_) => fallback_status(),
     }
+}
+
+const STATUS_SNAPSHOT_RUN_SCAN_LIMIT: usize = 200;
+const STATUS_SNAPSHOT_ACTIVITY_GRACE_MINUTES: i64 = 30;
+
+async fn provider_status_read_core<Gate, GateFut, Active, ActiveFut, Live, LiveFut>(
+    ensure_reconciled: Gate,
+    active_run_id: Active,
+    live_status: Live,
+    timeout: std::time::Duration,
+    fallback_status: impl FnOnce() -> AppResult<GeminiBrowserProviderStatus>,
+) -> AppResult<GeminiBrowserProviderStatus>
+where
+    Gate: FnOnce() -> GateFut,
+    GateFut: std::future::Future<Output = AppResult<()>>,
+    Active: FnOnce() -> ActiveFut,
+    ActiveFut: std::future::Future<Output = Option<String>>,
+    Live: FnOnce(Option<String>) -> LiveFut,
+    LiveFut: std::future::Future<Output = AppResult<GeminiBrowserProviderStatus>>,
+{
+    ensure_reconciled().await?;
+    let active_run_id = active_run_id().await;
+    provider_status_core(live_status(active_run_id), timeout, fallback_status).await
+}
+
+fn provider_status_snapshot_core(
+    fallback_status: impl FnOnce() -> AppResult<GeminiBrowserProviderStatus>,
+) -> AppResult<GeminiBrowserProviderStatus> {
+    fallback_status()
+}
+
+fn provider_status_snapshot_read_core(
+    runs_root: &std::path::Path,
+    mut read_snapshot: impl FnMut() -> AppResult<GeminiBrowserProviderStatus>,
+    active_run_id: Option<String>,
+    mut write_snapshot_if_current: impl FnMut(
+        &GeminiBrowserProviderStatus,
+        GeminiBrowserProviderStatus,
+    ) -> AppResult<bool>,
+) -> AppResult<GeminiBrowserProviderStatus> {
+    let snapshot = provider_status_snapshot_core(|| read_snapshot())?;
+    let reconciled =
+        status_snapshot_from_reconciled_run_log(runs_root, snapshot.clone(), active_run_id)?;
+    if write_snapshot_if_current(&snapshot, reconciled.clone())? {
+        Ok(reconciled)
+    } else {
+        read_snapshot()
+    }
+}
+
+fn status_snapshot_from_reconciled_run_log(
+    runs_root: &std::path::Path,
+    snapshot: GeminiBrowserProviderStatus,
+    active_run_id: Option<String>,
+) -> AppResult<GeminiBrowserProviderStatus> {
+    status_snapshot_from_reconciled_run_log_at(
+        runs_root,
+        snapshot,
+        active_run_id,
+        OffsetDateTime::now_utc(),
+    )
+}
+
+fn status_snapshot_from_reconciled_run_log_at(
+    runs_root: &std::path::Path,
+    mut snapshot: GeminiBrowserProviderStatus,
+    active_run_id: Option<String>,
+    now: OffsetDateTime,
+) -> AppResult<GeminiBrowserProviderStatus> {
+    let runs = list_runs(runs_root, STATUS_SNAPSHOT_RUN_SCAN_LIMIT)?.runs;
+    let fresh_queued_count = runs
+        .iter()
+        .filter(|run| {
+            run.status == GeminiBrowserRunStatus::Queued && run_log_activity_is_fresh(run, now)
+        })
+        .count();
+    let stale_queued_count = runs
+        .iter()
+        .filter(|run| {
+            run.status == GeminiBrowserRunStatus::Queued && !run_log_activity_is_fresh(run, now)
+        })
+        .count();
+
+    if let Some(active_run_id) = active_run_id {
+        snapshot.status = GeminiBrowserProviderStatusKind::Running;
+        snapshot.active_run_id = Some(active_run_id);
+        snapshot.queue_depth = fresh_queued_count;
+        if snapshot.latest_message.is_none() {
+            snapshot.latest_message = Some("Running".to_string());
+        }
+        snapshot.manual_action = None;
+        return Ok(snapshot);
+    }
+
+    if fresh_queued_count > 0 {
+        snapshot.status = GeminiBrowserProviderStatusKind::Running;
+        snapshot.active_run_id = None;
+        snapshot.queue_depth = fresh_queued_count;
+        if snapshot.latest_message.is_none() {
+            snapshot.latest_message = Some("Queued".to_string());
+        }
+        snapshot.manual_action = None;
+        return Ok(snapshot);
+    }
+
+    snapshot.active_run_id = None;
+    snapshot.queue_depth = 0;
+    if stale_queued_count > 0 && snapshot.status == GeminiBrowserProviderStatusKind::Running {
+        snapshot.status = GeminiBrowserProviderStatusKind::NotStarted;
+        if snapshot.latest_message.is_none() {
+            snapshot.latest_message = Some(
+                "Gemini browser has stale queued run-log entries; waiting for cleanup.".to_string(),
+            );
+        }
+        snapshot.manual_action = None;
+        return Ok(snapshot);
+    }
+
+    if snapshot.status == GeminiBrowserProviderStatusKind::Running {
+        if let Some(latest) = runs.first().and_then(|run| run.result.as_ref()) {
+            snapshot.status = GeminiBrowserState::provider_status_kind_for_run_status(
+                &latest.status,
+            );
+            snapshot.latest_message = latest.message.clone();
+            snapshot.manual_action = latest.manual_action.clone();
+        } else {
+            snapshot.status = GeminiBrowserProviderStatusKind::NotStarted;
+            snapshot.latest_message =
+                Some("Gemini browser sidecar is not running.".to_string());
+            snapshot.manual_action = None;
+        }
+    }
+    Ok(snapshot)
+}
+
+fn run_log_activity_is_fresh(run: &GeminiBrowserRun, now: OffsetDateTime) -> bool {
+    let Ok(updated_at) = OffsetDateTime::parse(&run.updated_at, &Rfc3339) else {
+        return false;
+    };
+    now - updated_at <= Duration::minutes(STATUS_SNAPSHOT_ACTIVITY_GRACE_MINUTES)
+}
+
+fn get_run_core(runs_root: &std::path::Path, run_id: &str) -> AppResult<GeminiBrowserRun> {
+    read_run(runs_root, run_id)
 }
 
 #[tauri::command]
@@ -323,7 +482,17 @@ pub async fn gemini_bridge_list_runs(
     handle: AppHandle,
     limit: Option<usize>,
 ) -> AppResult<GeminiBrowserRunLogSummary> {
+    super::jobs::ensure_gemini_browser_startup_reconciled(&handle).await?;
     list_runs(&runs_dir(&handle)?, limit.unwrap_or(20))
+}
+
+#[tauri::command]
+pub async fn gemini_bridge_get_run(
+    handle: AppHandle,
+    run_id: String,
+) -> AppResult<GeminiBrowserRun> {
+    super::jobs::ensure_gemini_browser_startup_reconciled(&handle).await?;
+    get_run_core(&runs_dir(&handle)?, &run_id)
 }
 
 #[tauri::command]
@@ -348,6 +517,8 @@ mod tests {
 
     use parking_lot::Mutex;
 
+    use super::super::run_log::read_run;
+    use super::super::{mark_running, GeminiBrowserProviderStatusKind};
     use super::super::jobs::{
         GeminiBrowserArtifactMode, GeminiBrowserJob, GeminiBrowserJobRuntime,
         QueuedGeminiBrowserJob,
@@ -368,7 +539,6 @@ mod tests {
 
         let started = Instant::now();
         let status = provider_status_core(
-            &state,
             async {
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 Ok(GeminiBrowserProviderStatus {
@@ -411,7 +581,6 @@ mod tests {
         });
 
         let returned = provider_status_core(
-            &state,
             async {
                 Ok(GeminiBrowserProviderStatus {
                     status: super::super::GeminiBrowserProviderStatusKind::Ready,
@@ -447,6 +616,234 @@ mod tests {
         );
         assert_eq!(cached.active_run_id.as_deref(), Some("run-cached"));
         assert_eq!(cached.latest_message.as_deref(), Some("Cached running"));
+    }
+
+    #[test]
+    fn status_snapshot_core_returns_cached_status_without_polling_live_sidecar() {
+        let cached = GeminiBrowserProviderStatus {
+            status: GeminiBrowserProviderStatusKind::Running,
+            manual_action: None,
+            active_run_id: Some("run-cached".to_string()),
+            queue_depth: 1,
+            browser_profile_dir: "profile-dir".to_string(),
+            latest_message: Some("Cached".to_string()),
+        };
+
+        let returned = provider_status_snapshot_core(|| Ok(cached.clone()))
+            .expect("snapshot succeeds");
+
+        assert_eq!(returned, cached);
+    }
+
+    #[test]
+    fn provider_status_snapshot_from_reconciled_runs_does_not_keep_stale_running_snapshot() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let runs_root = temp.path();
+        create_queued_run(runs_root, "run-stale", "settings_test", "hello")
+            .expect("create queued");
+        mark_running(runs_root, "run-stale").expect("mark running");
+
+        let stale = GeminiBrowserProviderStatus {
+            status: GeminiBrowserProviderStatusKind::Running,
+            manual_action: None,
+            active_run_id: Some("run-stale".to_string()),
+            queue_depth: 1,
+            browser_profile_dir: "profile-dir".to_string(),
+            latest_message: Some("stale running".to_string()),
+        };
+
+        let reconciled = status_snapshot_from_reconciled_run_log(runs_root, stale, None)
+            .expect("derive reconciled snapshot");
+
+        assert_eq!(reconciled.status, GeminiBrowserProviderStatusKind::NotStarted);
+        assert_eq!(reconciled.active_run_id, None);
+        assert_eq!(reconciled.queue_depth, 0);
+    }
+
+    #[test]
+    fn provider_status_snapshot_from_reconciled_runs_preserves_live_active_run() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let runs_root = temp.path();
+        create_queued_run(runs_root, "run-live", "settings_test", "hello")
+            .expect("create queued");
+        mark_running(runs_root, "run-live").expect("mark running");
+
+        let stale = GeminiBrowserProviderStatus {
+            latest_message: Some("Worker is submitting prompt".to_string()),
+            ..GeminiBrowserState::not_started_status("profile-dir".to_string())
+        };
+
+        let reconciled = status_snapshot_from_reconciled_run_log(
+            runs_root,
+            stale,
+            Some("run-live".to_string()),
+        )
+        .expect("derive reconciled snapshot");
+
+        assert_eq!(reconciled.status, GeminiBrowserProviderStatusKind::Running);
+        assert_eq!(reconciled.active_run_id.as_deref(), Some("run-live"));
+        assert_eq!(
+            reconciled.latest_message.as_deref(),
+            Some("Worker is submitting prompt")
+        );
+    }
+
+    #[test]
+    fn provider_status_snapshot_from_reconciled_runs_ignores_stale_queued_rows() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let runs_root = temp.path();
+        create_queued_run(runs_root, "run-stale-queued", "settings_test", "hello")
+            .expect("create queued");
+        let mut stale_run = read_run(runs_root, "run-stale-queued").expect("read run");
+        stale_run.updated_at = "2026-06-22T00:00:00Z".to_string();
+        std::fs::write(
+            runs_root.join("run-stale-queued").join("result.json"),
+            serde_json::to_string_pretty(&stale_run).expect("serialize run"),
+        )
+        .expect("write stale run");
+
+        let reconciled = status_snapshot_from_reconciled_run_log_at(
+            runs_root,
+            GeminiBrowserState::not_started_status("profile-dir".to_string()),
+            None,
+            time::OffsetDateTime::parse(
+                "2026-06-22T00:31:00Z",
+                &time::format_description::well_known::Rfc3339,
+            )
+            .expect("parse time"),
+        )
+        .expect("derive reconciled snapshot");
+
+        assert_eq!(reconciled.status, GeminiBrowserProviderStatusKind::NotStarted);
+        assert_eq!(reconciled.active_run_id, None);
+        assert_eq!(reconciled.queue_depth, 0);
+    }
+
+    #[test]
+    fn provider_status_snapshot_read_core_writes_reconciled_snapshot_back() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let runs_root = temp.path();
+        create_queued_run(runs_root, "run-stale", "settings_test", "hello")
+            .expect("create queued");
+        mark_running(runs_root, "run-stale").expect("mark running");
+
+        let stale = GeminiBrowserProviderStatus {
+            status: GeminiBrowserProviderStatusKind::Running,
+            manual_action: None,
+            active_run_id: Some("run-stale".to_string()),
+            queue_depth: 1,
+            browser_profile_dir: "profile-dir".to_string(),
+            latest_message: Some("stale running".to_string()),
+        };
+        let mut written = None;
+
+        let returned = provider_status_snapshot_read_core(
+            runs_root,
+            || Ok(stale.clone()),
+            None,
+            |expected, snapshot| {
+                assert_eq!(expected.status, GeminiBrowserProviderStatusKind::Running);
+                written = Some(snapshot);
+                Ok(true)
+            },
+        )
+        .expect("snapshot read succeeds");
+
+        let written = written.expect("snapshot write-back");
+        assert_eq!(returned, written);
+        assert_eq!(written.status, GeminiBrowserProviderStatusKind::NotStarted);
+        assert_eq!(written.active_run_id, None);
+    }
+
+    #[test]
+    fn provider_status_snapshot_read_core_skips_stale_write_back_when_snapshot_changed() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let stale = GeminiBrowserProviderStatus {
+            status: GeminiBrowserProviderStatusKind::Running,
+            manual_action: None,
+            active_run_id: Some("run-stale".to_string()),
+            queue_depth: 1,
+            browser_profile_dir: "profile-dir".to_string(),
+            latest_message: Some("stale running".to_string()),
+        };
+        let newer = GeminiBrowserProviderStatus {
+            status: GeminiBrowserProviderStatusKind::Running,
+            manual_action: None,
+            active_run_id: Some("run-newer".to_string()),
+            queue_depth: 0,
+            browser_profile_dir: "profile-dir".to_string(),
+            latest_message: Some("newer worker snapshot".to_string()),
+        };
+        let mut attempted = None;
+        let mut reads = 0;
+
+        let returned = provider_status_snapshot_read_core(
+            temp.path(),
+            || {
+                reads += 1;
+                if reads == 1 {
+                    Ok(stale.clone())
+                } else {
+                    Ok(newer.clone())
+                }
+            },
+            None,
+            |expected, snapshot| {
+                attempted = Some((expected.clone(), snapshot.clone()));
+                Ok(false)
+            },
+        )
+        .expect("snapshot read succeeds");
+
+        let (_expected, _attempted_snapshot) =
+            attempted.expect("conditional write attempted");
+        assert_eq!(returned, newer);
+    }
+
+    #[test]
+    fn get_run_core_returns_exact_run_from_log() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        create_queued_run(temp.path(), "run-detail", "settings_test", "hello")
+            .expect("create run");
+
+        let run = get_run_core(temp.path(), "run-detail").expect("get run");
+
+        assert_eq!(run.run_id, "run-detail");
+    }
+
+    #[tokio::test]
+    async fn provider_status_read_core_waits_for_startup_reconciliation_before_live_status() {
+        let order = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let gate_order = order.clone();
+        let active_order = order.clone();
+        let live_order = order.clone();
+
+        let status = provider_status_read_core(
+            || async move {
+                gate_order.lock().unwrap().push("gate");
+                Ok(())
+            },
+            || async move {
+                active_order.lock().unwrap().push("active_run_id");
+                None
+            },
+            |_active_run_id| async move {
+                live_order.lock().unwrap().push("live_status");
+                Ok(GeminiBrowserState::not_started_status(
+                    "profile-dir".to_string(),
+                ))
+            },
+            std::time::Duration::from_millis(250),
+            || Ok(GeminiBrowserState::not_started_status("fallback-dir".to_string())),
+        )
+        .await
+        .expect("status read succeeds");
+
+        assert_eq!(status.browser_profile_dir, "profile-dir");
+        assert_eq!(
+            order.lock().unwrap().as_slice(),
+            ["gate", "active_run_id", "live_status"]
+        );
     }
 
     #[tokio::test]
