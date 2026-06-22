@@ -1,6 +1,6 @@
 # Browser Providers LLM Troubleshooting Guide
 
-Last verified against the repository on 2026-06-21.
+Last verified against the repository on 2026-06-22.
 
 This document is written for LLM agents that need to debug or extend Extractum Browser Providers quickly. The main target is the Gemini Browser Provider, especially failures caused by Gemini UI or DOM changes.
 
@@ -41,6 +41,8 @@ Tauri/Rust:
 
 - `src-tauri/src/gemini_browser/commands.rs` exposes Tauri commands.
 - `src-tauri/src/gemini_browser/types.rs` defines Rust protocol/status structs.
+- `src-tauri/src/gemini_browser/jobs.rs` owns the Apalis-backed SQLite queue,
+  worker, completion waiters, cancellation state, and queue polling config.
 - `src-tauri/src/gemini_browser/sidecar.rs` starts the sidecar and sends JSONL requests.
 - `src-tauri/src/gemini_browser/sidecar_launch.rs` chooses dev Node script vs bundled sidecar binary.
 - `src-tauri/src/gemini_browser/cdp_chrome.rs` starts user-controlled Chrome with a CDP port.
@@ -88,6 +90,9 @@ Implemented:
   `Resume`, `Stop`, and one-off test prompts;
 - Rust/Tauri commands for status, open, start CDP Chrome, send single prompt,
   resume, stop, list runs, and open a run folder;
+- Apalis-backed SQLite queue with one Gemini Browser worker, no automatic
+  retries, and synchronous completion waiters for Settings and Prompt Pack
+  callers;
 - JSONL sidecar protocol and bundled sidecar binary path;
 - file-backed run log with queued/running/final result records;
 - hardened answer extraction with `stable`, `timeout_latest`, and `missing`
@@ -194,14 +199,27 @@ The exact app-data root is platform-dependent and is resolved by Tauri. On Windo
 
 The default artifact mode from Rust is `reduced`. Full HTML/screenshot artifacts should be used only in controlled local/mock situations because live Gemini pages can contain account and prompt data.
 
-Current queue behavior is intentionally simple. `gemini_bridge_send_single`
-creates a queued record, immediately pops the next request, marks it running,
-waits for the sidecar result, then stores the terminal result. `queue_depth` and
-`active_run_id` are exposed for status reporting, but there is no long-running
-background scheduler, no retry/re-run workflow, and no graceful in-flight
-sidecar cancellation path yet. `Stop` asks the provider state to cancel and
-drops/stops the sidecar session, but the cancellation token is not currently
-fed through the sidecar answer-extraction loop.
+Current queue behavior is Apalis-backed. `gemini_bridge_send_single` and
+Prompt Pack browser stages create a queued run log record, register a
+per-run waiter, push an Apalis SQLite job into the main `extractum.db`, emit a
+run-change invalidation event, and then wait for the worker result. The
+Gemini Browser worker has concurrency `1`: it marks the run log `running`,
+calls the sidecar, stores the terminal run result, completes the waiter, and
+emits another run-change invalidation event.
+
+The file-backed run log remains the product-facing source for Settings,
+history, Prompt Pack provenance, and diagnostics. Apalis rows are queue
+implementation details. `queue_depth` is currently not a product authority and
+may be `0` even when run history contains queued/running browser runs.
+
+Important Apalis polling rule: do not construct Gemini Browser queue storage
+with bare `SqliteStorage::new_in_queue(...)`. The Apalis SQL default poll
+strategy starts at `100ms` but applies exponential backoff up to roughly
+`60s` after idle periods. For interactive browser prompts this can create a
+large gap between queued run creation and prompt submission to Gemini.
+Gemini Browser must use `gemini_browser_queue_config()` in
+`src-tauri/src/gemini_browser/jobs.rs`, which applies a fixed `100ms`
+`IntervalStrategy` without backoff for both enqueue and worker storage.
 
 ## Setup Checklist
 
@@ -336,19 +354,36 @@ Next checks:
 
 Meaning:
 
-- Rust created the run record but the send flow did not reach a final result yet, or the UI did not receive/refresh the final event.
+- Rust created the run record but the Apalis worker did not mark it running yet,
+  the sidecar flow did not reach a final result, or the UI did not
+  receive/refresh the final event.
 
 Next checks:
 
 1. Inspect `<app-data>/gemini-browser/runs/<run_id>/result.json`.
-2. Check whether `mark_running()` was reached in `commands.rs`.
-3. Check whether `sidecar::send_single()` returned or threw.
-4. Look for a hung wait in `adapter.ts`:
+2. Inspect the Apalis `Jobs` row in the app database (`extractum.db`) for the
+   matching `idempotency_key = run_id`:
+   - `run_at -> lock_at` is queue pickup latency.
+   - `lock_at -> done_at` is worker/sidecar/Gemini execution time.
+   - A large `run_at -> lock_at` gap means the worker did not pick up the job
+     promptly. Verify that both enqueue and worker paths use
+     `gemini_browser_queue_config()` rather than Apalis default polling.
+3. Check whether `mark_running()` was reached in `jobs.rs`.
+4. Check whether `sidecar::send_single()` returned or threw.
+5. Look for a hung wait in `adapter.ts`:
    - composer wait: 30 seconds
    - send wait: up to 75 seconds while generation-busy UI is visible, with a
      10 second idle grace
    - answer wait: 120 seconds by default
-5. If the browser visibly answered but run stayed queued/running, suspect answer selector drift or event/log update failure.
+6. If the browser visibly answered but run stayed queued/running, suspect answer selector drift or event/log update failure.
+
+Known Apalis gotcha:
+
+- In `apalis-sqlite = "=1.0.0-rc.8"`, the default SQL polling strategy uses
+  exponential backoff after empty polls. After the worker has been idle, a new
+  interactive job can wait tens of seconds before `lock_at` is set. Gemini
+  Browser intentionally overrides this with a fixed `100ms` poll interval.
+  Keep the regression test `worker_picks_up_job_quickly_after_idle`.
 
 ### Run status: `needs_login`
 
@@ -578,6 +613,7 @@ YouTube Summary runs can use `runtimeProvider: "api"` or
   `browser_provider_config_json` snapshot on `prompt_pack_runs`.
 - Browser-backed stages show Prompt Pack progress events, but their
   `queuePosition` stays `null` because they do not enter the API scheduler.
+  They still pass through the Gemini Browser Apalis queue described above.
 - Browser answers are accepted only after the existing Gemini Browser result
   converter approves them. `ready`, empty, non-ok, manual-action, and
   `timeout_latest` partial-risk answers fail closed.
@@ -631,6 +667,7 @@ The 2026-06-21 implementation audit used these automated checks:
 npm.cmd run test:gemini-browser-sidecar
 npm.cmd run test -- --run src/lib/api/gemini-browser.test.ts src/lib/gemini-browser-run-inspector.test.ts src/lib/gemini-browser-provider-panel-state.test.ts src/lib/gemini-browser-provider-panel.test.ts
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-browser --lib gemini_browser
+cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gemini-browser --lib worker_picks_up_job_quickly_after_idle
 npm.cmd run check:gemini-browser-sidecar-binary
 npm.cmd run check
 npm.cmd run smoke:gemini-browser-sidecar:node

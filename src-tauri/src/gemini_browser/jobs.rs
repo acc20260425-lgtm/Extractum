@@ -1,9 +1,10 @@
-use apalis::prelude::WorkerBuilderExt;
+use apalis::prelude::{IntervalStrategy, StrategyBuilder, WorkerBuilderExt};
 use apalis_sqlite::TaskBuilderExt;
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Manager};
 
 pub(crate) const GEMINI_BROWSER_QUEUE_NAME: &str = "gemini-browser";
+const GEMINI_BROWSER_QUEUE_POLL_INTERVAL_MS: u64 = 100;
 const DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS: u64 = 20 * 60;
 pub(crate) type GeminiBrowserWaiterResult =
     crate::error::AppResult<crate::gemini_browser::GeminiBrowserRunResult>;
@@ -412,10 +413,19 @@ pub(crate) async fn open_gemini_browser_job_storage(
         + 'static,
 > {
     setup_gemini_browser_apalis_storage(pool).await?;
-    Ok(apalis_sqlite::SqliteStorage::new_in_queue(
+    Ok(apalis_sqlite::SqliteStorage::new_with_config(
         pool,
-        GEMINI_BROWSER_QUEUE_NAME,
+        &gemini_browser_queue_config(),
     ))
+}
+
+fn gemini_browser_queue_config() -> apalis_sqlite::Config {
+    let poll_strategy = StrategyBuilder::new()
+        .apply(IntervalStrategy::new(std::time::Duration::from_millis(
+            GEMINI_BROWSER_QUEUE_POLL_INTERVAL_MS,
+        )))
+        .build();
+    apalis_sqlite::Config::new(GEMINI_BROWSER_QUEUE_NAME).with_poll_interval(poll_strategy)
 }
 
 pub(crate) async fn enqueue_gemini_browser_job_to_storage<S>(
@@ -629,8 +639,10 @@ pub(crate) async fn start_gemini_browser_job_worker(
                 apalis_queue_inspection_mode(),
                 |_run_id| Ok(None),
             )?;
-            let storage =
-                apalis_sqlite::SqliteStorage::new_in_queue(&pool, GEMINI_BROWSER_QUEUE_NAME);
+            let storage = apalis_sqlite::SqliteStorage::new_with_config(
+                &pool,
+                &gemini_browser_queue_config(),
+            );
             let worker_runtime = setup_handle.state::<GeminiBrowserJobRuntime>();
             let timeout_layer =
                 tower::timeout::TimeoutLayer::new(worker_runtime.worker_hard_guard_timeout());
@@ -1130,9 +1142,10 @@ mod tests {
     use super::{
         apalis_queue_inspection_mode, build_gemini_browser_task, cancel_gemini_browser_job_core,
         cancelled_run_result, cancelled_run_result_for_id, enqueue_gemini_browser_job_to_storage,
-        open_gemini_browser_job_storage, reconcile_gemini_browser_run_log_at_startup,
-        reconcile_gemini_browser_worker_entry, run_log_is_cancelled, run_status_for_queue_state,
-        setup_gemini_browser_apalis_storage, start_gemini_browser_job_worker_core,
+        gemini_browser_queue_config, open_gemini_browser_job_storage,
+        reconcile_gemini_browser_run_log_at_startup, reconcile_gemini_browser_worker_entry,
+        run_log_is_cancelled, run_status_for_queue_state, setup_gemini_browser_apalis_storage,
+        start_gemini_browser_job_worker_core,
         startup_reconciliation_checks_queued_runs_against_apalis, timeout_failed_run_result,
         ApalisQueueInspectionMode, GeminiBrowserArtifactMode, GeminiBrowserJob,
         GeminiBrowserJobRuntime, GeminiBrowserWorkerEntryDecision, GeminiBrowserWorkerStatus,
@@ -1468,6 +1481,51 @@ mod tests {
             .expect("processed run id before timeout")
             .expect("processed sender remains open");
         assert_eq!(processed_run_id, "run-before-worker");
+    }
+
+    #[tokio::test]
+    async fn worker_picks_up_job_quickly_after_idle() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let db_path = temp_dir.path().join("extractum.db");
+        let pool = sqlite_file_pool(&db_path).await;
+
+        crate::migrations::apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply app migrations");
+        setup_gemini_browser_apalis_storage(&pool)
+            .await
+            .expect("setup Apalis SQLite storage");
+
+        let storage = SqliteStorage::new_with_config(&pool, &gemini_browser_queue_config());
+        let mut enqueue_storage = storage.clone();
+        let (processed_tx, processed_rx) = oneshot::channel::<String>();
+        let processed_tx = Arc::new(Mutex::new(Some(processed_tx)));
+        let worker = WorkerBuilder::new("gemini-browser-idle-pickup")
+            .backend(storage)
+            .concurrency(1)
+            .data(processed_tx)
+            .build(process_one_job);
+        let worker_task = tokio::spawn(async move { worker.run().await });
+
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        enqueue_gemini_browser_job_to_storage(
+            &mut enqueue_storage,
+            test_job("run-after-idle-pickup"),
+        )
+        .await
+        .expect("enqueue after worker idle");
+
+        let processed_run_id = tokio::time::timeout(Duration::from_millis(500), processed_rx)
+            .await
+            .expect("worker picks up idle job without long polling backoff")
+            .expect("processed sender remains open");
+        assert_eq!(processed_run_id, "run-after-idle-pickup");
+
+        tokio::time::timeout(Duration::from_secs(5), worker_task)
+            .await
+            .expect("worker task stops before timeout")
+            .expect("worker task joins")
+            .expect("worker run succeeds");
     }
 
     #[tokio::test]

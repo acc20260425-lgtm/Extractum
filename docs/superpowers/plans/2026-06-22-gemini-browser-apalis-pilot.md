@@ -29,10 +29,12 @@
 - Worker execution has a Tower timeout layer so a hung Chrome/sidecar task cannot block the single-concurrency queue forever.
 - Apalis dependencies are pinned to the verified `1.0.0-rc.8` pre-release because Cargo will not select pre-releases from a plain `"1"` requirement.
 - Closed waiter channels and duplicate Apalis idempotency conflicts are mapped to product-level `AppError` values instead of panics or raw SQLite errors.
+- Post-implementation latency check found that default `apalis-sqlite` polling can back off to tens of seconds after idle periods. Gemini Browser now requires a fixed `100ms` queue polling config instead of bare `SqliteStorage::new_in_queue(...)`.
 
-## Current State
+## Original Current State
 
-Gemini Browser currently has a custom in-memory queue:
+This section records the pre-pilot baseline from when the plan was written.
+Gemini Browser had a custom in-memory queue:
 
 - `src-tauri/src/gemini_browser/state.rs` stores `Mutex<VecDeque<GeminiBrowserRunRequest>>`, one active run id, a cancellation token, and the sidecar process handle.
 - `src-tauri/src/gemini_browser/commands.rs` validates input, writes a queued run log record, enqueues the request, immediately pops the next request, marks it running, calls `sidecar::send_single`, writes the terminal run log record, and emits `gemini-browser://run` events.
@@ -70,8 +72,11 @@ The first migration must not change the TypeScript API or UI behavior.
 - Job idempotency key: the Gemini Browser `run_id`.
 - Retry policy: every pushed task must use `TaskBuilder::attempts(1)` or the exact `apalis-sqlite` equivalent proven by tests. Context7 Apalis docs state that `attempts(n)` allows `n - 1` retries, so `attempts(1)` means one total attempt and zero retries.
 - Dependency version policy: pin Apalis crates exactly to `=1.0.0-rc.8` until a stable `1.x` release is verified in this repo. Cargo currently resolves `apalis-sqlite` pre-releases up to `1.0.0-rc.8`; plain `"1"` may fail because Cargo does not opt into pre-release versions unless the requirement includes the pre-release.
+- Queue polling policy: construct Gemini Browser Apalis storage through `gemini_browser_queue_config()` in `src-tauri/src/gemini_browser/jobs.rs`, not through bare `SqliteStorage::new_in_queue(...)`. In `apalis-sqlite = "=1.0.0-rc.8"`, the default SQL poll strategy starts at `100ms` but applies exponential backoff up to about `60s` after idle empty polls. That is appropriate for background jobs but too slow for interactive Browser Provider sends and prompt-pack stages. Gemini Browser uses a fixed `100ms` `IntervalStrategy` without backoff for both enqueue and worker storage.
 
 Current Context7 Apalis docs show SQL task rows with fields such as `job`, `id`, `job_type`, `status`, `attempts`, `max_attempts`, `run_at`, `last_result`, `lock_at`, `lock_by`, `done_at`, `priority`, `metadata`, and `idempotency_key`. The plan uses that only as orientation; implementation must not depend on hand-written SQL against those internal fields except in an isolated integration test that verifies actual serialized status values.
+
+Operational latency diagnostic: in the Apalis `Jobs` row, `run_at -> lock_at` is worker pickup latency and `lock_at -> done_at` is worker/sidecar/Gemini execution time. If `run_at -> lock_at` grows to tens of seconds after the worker has been idle, the storage config likely regressed to Apalis default backoff.
 
 ## Completion Waiter Contract
 
@@ -2072,13 +2077,14 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib worker_timeout_marks_run_failed_and_processes_next_job
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib wait_for_result_removes_waiter_when_worker_channel_closes
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib enqueue_duplicate_run_id_returns_conflict
+cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib worker_picks_up_job_quickly_after_idle
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib provider_status_
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib prompt_pack_browser_stage_cancelled
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib prompt_pack_browser_stage_cancelled_before_enqueue_is_tolerated
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib restart
 ```
 
-Expected: PASS for no-retry, shared main DB storage, worker error conversion, worker timeout release, closed waiter channels, duplicate enqueue conflicts, status responsiveness, Prompt Pack browser cancellation including pre-enqueue cancellation, and reconciliation/restart tests.
+Expected: PASS for no-retry, shared main DB storage, worker error conversion, worker timeout release, closed waiter channels, duplicate enqueue conflicts, idle worker pickup latency, status responsiveness, Prompt Pack browser cancellation including pre-enqueue cancellation, and reconciliation/restart tests.
 
 - [x] **Step 4: TypeScript Gemini Browser verification**
 
@@ -2136,6 +2142,7 @@ Expected: `git diff --check` exits `0`. `git status --short` shows only intentio
 - Main DB consistency: Apalis schema initialization preserves product tables in the unit smoke test, preserves a seeded `_sqlx_migrations` table in a separate migration-history preservation test, avoids product table name collisions, and shares the main `extractum.db` without `database is locked` failures.
 - Worker error consistency: sidecar/executor errors are converted into terminal failed run results and acknowledged to Apalis as handled so the no-retry policy is preserved.
 - Cancellation consistency: cancellation runtime APIs are explicit, worker-entry checks in-memory cancellation before `mark_running(...)`, Prompt Pack pre-enqueue cancellation tolerates missing Gemini Browser run log records, and `cancel_gemini_browser_job` is exported only in Task 10 after it is implemented.
+- Queue pickup consistency: Gemini Browser Apalis storage uses `gemini_browser_queue_config()` with fixed `100ms` polling and no exponential backoff; `worker_picks_up_job_quickly_after_idle` protects against reintroducing default idle backoff.
 - Backlog consistency: graceful sidecar shutdown on Tauri app exit is recorded as a deferred backlog item with `RunEvent::ExitRequested` / `RunEvent::Exit` guidance, not as a pilot blocker.
 - Task atomicity consistency: Task 2 Step 1 and Step 2 are explicitly one edit unit because the test references database constants introduced by the helper step.
 

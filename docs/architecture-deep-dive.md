@@ -46,19 +46,22 @@ The Gemini Browser Provider is the current implementation. Its runtime path is:
 2. Frontend API helpers in `src/lib/api/gemini-browser.ts` call typed Tauri
    commands.
 3. Tauri commands in `src-tauri/src/gemini_browser/commands.rs` own run IDs,
-   app-data paths, event emission, run logging, and the sidecar request
-   boundary.
-4. `src-tauri/src/gemini_browser/sidecar.rs` owns the sidecar process and JSONL
+   app-data paths, run logging, run-change invalidation events, and the
+   synchronous command-facing waiter handoff.
+4. `src-tauri/src/gemini_browser/jobs.rs` owns the Apalis-backed SQLite queue,
+   one-worker execution, cancellation state, timeout finalization, and the
+   queue polling config.
+5. `src-tauri/src/gemini_browser/sidecar.rs` owns the sidecar process and JSONL
    request/response transport.
-5. `sidecars/gemini-browser/src/index.ts` receives the sidecar envelopes and
+6. `sidecars/gemini-browser/src/index.ts` receives the sidecar envelopes and
    delegates browser work to `sidecars/gemini-browser/src/adapter.ts`.
-6. The adapter controls Playwright and depends on
+7. The adapter controls Playwright and depends on
    `sidecars/gemini-browser/src/dom-contract.ts` for Gemini composer, send, and
    answer selectors. Answer extraction itself is delegated to
    `sidecars/gemini-browser/src/answer-extractor.ts`, which groups candidate
    nodes, filters pre-submit baseline content, and reports `stable`,
    `timeout_latest`, or `missing` completion semantics.
-7. Rust writes run records and artifacts under the Tauri app-data
+8. Rust writes run records and artifacts under the Tauri app-data
    `gemini-browser/runs/<run_id>` directory.
 
 This keeps the Svelte app free of Playwright imports, keeps Rust free of DOM
@@ -110,7 +113,8 @@ YouTube Summary stores `runtime_provider` per run.
 Browser-backed runs persist an optional `browser_provider_config_json` snapshot
 on `prompt_pack_runs`. Stage progress still uses Prompt Pack events, but
 `queuePosition` is `null` because Browser Provider execution bypasses the API
-LLM scheduler queue.
+LLM scheduler queue. Browser-backed stages still enter the Gemini Browser
+Apalis queue before the worker submits a prompt through the sidecar.
 
 ### Sidecar and packaging boundary
 
@@ -132,10 +136,21 @@ tests. The important commands are `status`, `open_browser`, `resume`,
 
 ### Run logs, artifacts, and troubleshooting
 
-Browser Provider runs are file-backed runtime records rather than database rows.
-Rust creates a queued run, marks it running, invokes the sidecar, and then stores
-the final result. Failure artifacts are written by the sidecar when browser
-automation reaches a page and needs evidence for diagnosis.
+Browser Provider runs are file-backed product records rather than Apalis rows.
+Rust creates a queued run log record, pushes an Apalis SQLite job, and waits on
+a per-run in-memory waiter for synchronous command callers. The single
+Gemini Browser worker marks the run log `running`, invokes the sidecar, writes
+the terminal result, and completes the waiter if the caller is still present.
+Failure artifacts are written by the sidecar when browser automation reaches a
+page and needs evidence for diagnosis.
+
+The Gemini Browser Apalis storage must use the repository's
+`gemini_browser_queue_config()` helper. The default Apalis SQL poll strategy
+adds exponential backoff after idle empty polls and can delay interactive
+browser jobs by tens of seconds before the worker sets `Jobs.lock_at`. The
+Gemini Browser queue intentionally uses a fixed `100ms` polling interval
+without backoff so a prompt-pack stage does not sit queued before Gemini sees
+the prompt.
 
 Reduced artifacts are the default because live Gemini pages can include account,
 prompt, and private conversation data. Full HTML/screenshot artifacts should be
