@@ -26,8 +26,8 @@ pub use state::GeminiBrowserState;
 pub use types::{
     GeminiBrowserAnswerCompletionReason, GeminiBrowserArtifactRefs, GeminiBrowserDebugErrorStage,
     GeminiBrowserProviderConfig, GeminiBrowserProviderMode, GeminiBrowserProviderStatus,
-    GeminiBrowserProviderStatusKind, GeminiBrowserRun, GeminiBrowserRunChangeEvent,
-    GeminiBrowserRunDebugSummary, GeminiBrowserRunLogSummary, GeminiBrowserRunRequest,
-    GeminiBrowserRunResult, GeminiBrowserRunStatus, GeminiBrowserSidecarCommand,
-    GeminiBrowserSidecarEnvelope, GeminiBrowserSidecarResponse, GeminiBrowserStartChromeResult,
+    GeminiBrowserProviderStatusKind, GeminiBrowserRun, GeminiBrowserRunDebugSummary,
+    GeminiBrowserRunLogSummary, GeminiBrowserRunRequest, GeminiBrowserRunResult,
+    GeminiBrowserRunStatus, GeminiBrowserSidecarCommand, GeminiBrowserSidecarEnvelope,
+    GeminiBrowserSidecarResponse, GeminiBrowserStartChromeResult,
 };

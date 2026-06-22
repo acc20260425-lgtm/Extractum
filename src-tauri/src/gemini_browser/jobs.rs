@@ -1,7 +1,7 @@
 use apalis::prelude::{IntervalStrategy, StrategyBuilder, WorkerBuilderExt};
 use apalis_sqlite::TaskBuilderExt;
 use serde::{Deserialize, Serialize};
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 
 pub(crate) const GEMINI_BROWSER_QUEUE_NAME: &str = "gemini-browser";
 const GEMINI_BROWSER_QUEUE_POLL_INTERVAL_MS: u64 = 100;
@@ -508,29 +508,21 @@ pub(crate) async fn cancel_gemini_browser_job(
         &state,
         &runs_root,
         run_id,
-        |run| emit_gemini_browser_run_change_event(handle, run),
         |result| update_terminal_status_snapshot_best_effort(handle, &state, result),
         || stop_active_gemini_browser_sidecar(handle, &state),
     )
     .await
 }
 
-async fn cancel_gemini_browser_job_core<
-    EmitEvent,
-    BeforeEmitTerminalSnapshot,
-    StopActive,
-    StopFut,
->(
+async fn cancel_gemini_browser_job_core<BeforeEmitTerminalSnapshot, StopActive, StopFut>(
     runtime: &GeminiBrowserJobRuntime,
     state: &crate::gemini_browser::GeminiBrowserState,
     runs_root: &std::path::Path,
     run_id: &str,
-    mut emit_event: EmitEvent,
     mut before_emit_terminal_snapshot: BeforeEmitTerminalSnapshot,
     stop_active: StopActive,
 ) -> crate::error::AppResult<()>
 where
-    EmitEvent: FnMut(&crate::gemini_browser::GeminiBrowserRun),
     BeforeEmitTerminalSnapshot: FnMut(&crate::gemini_browser::GeminiBrowserRunResult),
     StopActive: FnOnce() -> StopFut,
     StopFut: std::future::Future<Output = crate::error::AppResult<()>>,
@@ -549,10 +541,9 @@ where
 
     if run.status == crate::gemini_browser::GeminiBrowserRunStatus::Queued {
         let result = cancelled_run_result_for_id(run_id);
-        let cancelled_run = crate::gemini_browser::finish_run(runs_root, run_id, result.clone())?;
+        crate::gemini_browser::finish_run(runs_root, run_id, result.clone())?;
         runtime.complete_waiter(run_id, Ok(result.clone()));
         before_emit_terminal_snapshot(&result);
-        emit_event(&cancelled_run);
         runtime.clear_cancelled(run_id);
         return Ok(());
     }
@@ -573,10 +564,9 @@ where
             elapsed_ms: 0,
             debug_summary: None,
         };
-        let failed_run = crate::gemini_browser::finish_run(runs_root, run_id, result.clone())?;
+        crate::gemini_browser::finish_run(runs_root, run_id, result.clone())?;
         runtime.complete_waiter(run_id, Ok(result.clone()));
         before_emit_terminal_snapshot(&result);
-        emit_event(&failed_run);
         runtime.clear_cancelled(run_id);
     }
 
@@ -682,13 +672,13 @@ async fn process_gemini_browser_job(
 
     match reconcile_gemini_browser_worker_entry(&runtime, &state, &runs_root, &job).await? {
         GeminiBrowserWorkerEntryDecision::Execute(running_run) => {
+            let _running_run = running_run;
             update_running_status_snapshot_best_effort(handle, &state, &job.run_id);
-            emit_gemini_browser_run_change_event(handle, &running_run);
         }
         GeminiBrowserWorkerEntryDecision::Acknowledged => return Ok(()),
         GeminiBrowserWorkerEntryDecision::Terminal { run, result } => {
+            let _run = run;
             update_terminal_status_snapshot_best_effort(handle, &state, &result);
-            emit_gemini_browser_run_change_event(handle, &run);
             return Ok(());
         }
     }
@@ -883,12 +873,11 @@ async fn finish_timed_out_job(
 ) -> crate::error::AppResult<crate::gemini_browser::GeminiBrowserRunResult> {
     let should_stop_sidecar = state.active_run_id().await.as_deref() == Some(job.run_id.as_str());
     let result = timeout_failed_run_result(&job, runtime.worker_execution_timeout());
-    let timed_out_run = crate::gemini_browser::finish_run(runs_dir, &job.run_id, result.clone())?;
+    crate::gemini_browser::finish_run(runs_dir, &job.run_id, result.clone())?;
     state.finish_run(&job.run_id).await;
     runtime.complete_waiter(&job.run_id, Ok(result.clone()));
     runtime.clear_cancelled(&job.run_id);
     update_terminal_status_snapshot_best_effort(handle, state, &result);
-    emit_gemini_browser_run_change_event(handle, &timed_out_run);
 
     if should_stop_sidecar {
         let _ = tokio::time::timeout(
@@ -909,12 +898,11 @@ async fn finish_completed_job(
     job: &GeminiBrowserJob,
     result: crate::gemini_browser::GeminiBrowserRunResult,
 ) -> crate::error::AppResult<()> {
-    let completed_run = crate::gemini_browser::finish_run(runs_dir, &job.run_id, result.clone())?;
+    crate::gemini_browser::finish_run(runs_dir, &job.run_id, result.clone())?;
     state.finish_run(&job.run_id).await;
     runtime.complete_waiter(&job.run_id, Ok(result.clone()));
     runtime.clear_cancelled(&job.run_id);
     update_terminal_status_snapshot_best_effort(handle, state, &result);
-    emit_gemini_browser_run_change_event(handle, &completed_run);
     Ok(())
 }
 
@@ -967,20 +955,6 @@ fn update_terminal_status_snapshot_best_effort(
     if let Err(error) = update_terminal_status_snapshot(handle, state, result) {
         eprintln!("Gemini Browser terminal status snapshot update failed: {error}");
     }
-}
-
-fn emit_gemini_browser_run_change_event(
-    handle: &tauri::AppHandle,
-    run: &crate::gemini_browser::GeminiBrowserRun,
-) {
-    crate::gemini_browser::commands::emit_run_change_event_core(run, |event| {
-        handle
-            .emit(
-                crate::gemini_browser::commands::GEMINI_BROWSER_RUN_CHANGE_EVENT,
-                event,
-            )
-            .map_err(|error| error.to_string())
-    });
 }
 
 fn cancelled_run_result(job: &GeminiBrowserJob) -> crate::gemini_browser::GeminiBrowserRunResult {
@@ -2141,25 +2115,12 @@ mod tests {
             .register_waiter(&job.run_id)
             .expect("register waiter");
         runtime.request_cancel(&job.run_id);
-        let events = Arc::new(Mutex::new(Vec::<
-            crate::gemini_browser::GeminiBrowserRunChangeEvent,
-        >::new()));
 
         cancel_gemini_browser_job_core(
             &runtime,
             &state,
             temp.path(),
             &job.run_id,
-            {
-                let events = events.clone();
-                move |run| {
-                    events
-                        .lock()
-                        .push(crate::gemini_browser::commands::run_change_event_from_run(
-                            run,
-                        ))
-                }
-            },
             |_result| {},
             || async { Ok(()) },
         )
@@ -2178,14 +2139,6 @@ mod tests {
         assert_eq!(
             read_run_by_id(temp.path(), &job.run_id).status,
             crate::gemini_browser::GeminiBrowserRunStatus::Cancelled
-        );
-        let cancelled_run = read_run_by_id(temp.path(), &job.run_id);
-        assert_eq!(
-            events.lock().as_slice(),
-            [crate::gemini_browser::GeminiBrowserRunChangeEvent {
-                run_id: job.run_id.clone(),
-                run_updated_at: cancelled_run.updated_at.clone(),
-            }]
         );
 
         let executed = Arc::new(AtomicUsize::new(0));
@@ -2206,40 +2159,30 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cancel_missing_run_does_not_emit_change_event() {
+    async fn cancel_missing_run_returns_without_run_log_side_effects() {
         let temp = tempfile::tempdir().expect("temp dir");
         let runtime = GeminiBrowserJobRuntime::new_for_test(Duration::from_secs(1));
         let state = crate::gemini_browser::GeminiBrowserState::new();
-        let events = Arc::new(Mutex::new(Vec::<
-            crate::gemini_browser::GeminiBrowserRunChangeEvent,
-        >::new()));
 
         cancel_gemini_browser_job_core(
             &runtime,
             &state,
             temp.path(),
             "missing-run",
-            {
-                let events = events.clone();
-                move |run| {
-                    events
-                        .lock()
-                        .push(crate::gemini_browser::commands::run_change_event_from_run(
-                            run,
-                        ))
-                }
-            },
             |_result| {},
             || async { Ok(()) },
         )
         .await
         .expect("missing run is acknowledged");
 
-        assert!(events.lock().is_empty());
+        assert!(crate::gemini_browser::list_runs(temp.path(), 10)
+            .expect("list runs")
+            .runs
+            .is_empty());
     }
 
     #[tokio::test]
-    async fn cancel_queued_run_updates_terminal_snapshot_before_change_event() {
+    async fn cancel_queued_run_updates_terminal_snapshot() {
         let temp = tempfile::tempdir().expect("temp dir");
         let runtime = GeminiBrowserJobRuntime::new_for_test(Duration::from_secs(1));
         let state = crate::gemini_browser::GeminiBrowserState::new();
@@ -2254,20 +2197,12 @@ mod tests {
         runtime.request_cancel(&job.run_id);
 
         let order = Arc::new(Mutex::new(Vec::<&'static str>::new()));
-        let run_id_for_emit = job.run_id.clone();
 
         cancel_gemini_browser_job_core(
             &runtime,
             &state,
             temp.path(),
             &job.run_id,
-            {
-                let order = order.clone();
-                move |run| {
-                    assert_eq!(run.run_id, run_id_for_emit);
-                    order.lock().push("emit");
-                }
-            },
             {
                 let order = order.clone();
                 move |result| {
@@ -2283,7 +2218,11 @@ mod tests {
         .await
         .expect("cancel queued job");
 
-        assert_eq!(order.lock().as_slice(), ["snapshot", "emit"]);
+        assert_eq!(order.lock().as_slice(), ["snapshot"]);
+        assert_eq!(
+            read_run_by_id(temp.path(), &job.run_id).status,
+            crate::gemini_browser::GeminiBrowserRunStatus::Cancelled
+        );
     }
 
     #[tokio::test]
@@ -2308,7 +2247,6 @@ mod tests {
             &state,
             temp.path(),
             &job.run_id,
-            |_run| {},
             |_result| {},
             {
                 let stopped = stopped.clone();
