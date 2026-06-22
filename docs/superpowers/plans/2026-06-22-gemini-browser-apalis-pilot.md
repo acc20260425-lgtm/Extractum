@@ -109,7 +109,7 @@ Rules:
 - Tests that need race-sensitive timeout control must use `GeminiBrowserJobRuntime::new_for_test_with_timeouts(waiter_timeout, worker_execution_timeout, worker_hard_guard_timeout)`, which must reject or panic unless `waiter_timeout < worker_execution_timeout < worker_hard_guard_timeout`.
 - `waiters` and `cancelled_runs` use synchronous locks because their critical sections only insert, remove, or clone values and must not call `.await`.
 - Do not hold any `parking_lot::Mutex`, `std::sync::Mutex`, or `parking_lot::RwLock` guard across `.await`. Remove/clone the needed value, let the guard drop, then await.
-- `send_single_prompt(...)` checks `worker_status` before writing a queued run log record. If status is `Starting`, it waits up to `5` seconds for `Ready` or `Failed`. If status is still `Starting` after that timeout, it returns before enqueue with `"Gemini Browser worker is still starting"`.
+- `send_single_prompt(...)` checks `worker_status` before writing a queued run log record. If status is `Starting`, it waits up to `5` seconds for `Ready` or `Failed` through a receiver created with `self.worker_status.subscribe()`. If status is still `Starting` after that timeout, it returns before enqueue with `"Gemini Browser worker is still starting"`.
 - If status is `Failed`, `send_single_prompt(...)` returns before enqueue with the stored worker error.
 - `send_single_prompt(...)` rejects duplicate active `run_id` before registering a waiter. A duplicate means either an existing waiter for that `run_id` or a non-terminal run log record for that `run_id`.
 - `send_single_prompt(...)` registers a waiter before pushing the Apalis job.
@@ -119,6 +119,7 @@ Rules:
 - On `oneshot::error::RecvError`, remove the waiter and return `AppError::internal("Gemini Browser worker channel closed unexpectedly")`.
 - The worker always writes a terminal run log record before completing a waiter.
 - If no waiter exists because the app restarted or the caller already timed out, the worker still writes the run log and emits events.
+- `complete_waiter(...)` removes the sender from the map before sending and ignores `sender.send(result)` failure with `let _ = ...`, because the receiver may have been dropped after caller timeout.
 - If worker startup fails, new `send_single_prompt(...)` calls fail before enqueue with a clear internal error.
 - If the app restarts after enqueue, there is no in-memory waiter to satisfy. The restarted worker still processes pending Apalis jobs and repairs the run log to terminal state.
 - `mark_worker_ready(...)`, `mark_worker_failed(...)`, `request_cancel(...)`, `is_cancelled(...)`, and `clear_cancelled(...)` are synchronous runtime methods. `tokio::sync::watch::Sender::send(...)` does not require `.await`.
@@ -252,16 +253,54 @@ Create `src-tauri/src/gemini_browser/jobs.rs`:
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum GeminiBrowserArtifactMode {
+    Reduced,
+    Full,
+}
+
+impl GeminiBrowserArtifactMode {
+    pub(crate) fn from_wire(value: Option<&str>) -> crate::error::AppResult<Self> {
+        match value.unwrap_or("reduced") {
+            "reduced" => Ok(Self::Reduced),
+            "full" => Ok(Self::Full),
+            other => Err(crate::error::AppError::validation(format!(
+                "unsupported Gemini Browser artifact_mode '{other}'"
+            ))),
+        }
+    }
+
+    pub(crate) fn as_wire(&self) -> &'static str {
+        match self {
+            Self::Reduced => "reduced",
+            Self::Full => "full",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct GeminiBrowserJob {
     pub run_id: String,
     pub prompt: String,
     pub source: String,
-    pub artifact_mode: String,
+    pub artifact_mode: GeminiBrowserArtifactMode,
+    pub browser_config: Option<crate::gemini_browser::GeminiBrowserProviderConfig>,
+}
+
+impl GeminiBrowserJob {
+    pub(crate) fn run_request(&self) -> crate::gemini_browser::GeminiBrowserRunRequest {
+        crate::gemini_browser::GeminiBrowserRunRequest {
+            run_id: self.run_id.clone(),
+            prompt: self.prompt.clone(),
+            source: self.source.clone(),
+            artifact_mode: self.artifact_mode.as_wire().to_string(),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::GeminiBrowserJob;
+    use super::{GeminiBrowserArtifactMode, GeminiBrowserJob};
 
     #[test]
     fn gemini_browser_job_serializes_queue_payload() {
@@ -269,16 +308,30 @@ mod tests {
             run_id: "run-1".to_string(),
             prompt: "hello".to_string(),
             source: "settings_test".to_string(),
-            artifact_mode: "reduced".to_string(),
+            artifact_mode: GeminiBrowserArtifactMode::Reduced,
+            browser_config: Some(crate::gemini_browser::GeminiBrowserProviderConfig {
+                mode: crate::gemini_browser::GeminiBrowserProviderMode::CdpAttach,
+                cdp_endpoint: Some("http://127.0.0.1:9222".to_string()),
+            }),
         };
 
         let json = serde_json::to_string(&job).expect("serialize job");
         let decoded: GeminiBrowserJob = serde_json::from_str(&json).expect("decode job");
 
         assert_eq!(decoded, job);
+        assert_eq!(decoded.artifact_mode.as_wire(), "reduced");
+        assert_eq!(
+            decoded
+                .browser_config
+                .as_ref()
+                .and_then(|config| config.cdp_endpoint.as_deref()),
+            Some("http://127.0.0.1:9222")
+        );
     }
 }
 ```
+
+`GeminiBrowserJob` must be a complete execution snapshot. It stores the typed artifact mode and the optional `GeminiBrowserProviderConfig` captured at enqueue time. The command path must convert the incoming `GeminiBrowserRunRequest.artifact_mode` string through `GeminiBrowserArtifactMode::from_wire(...)` before constructing a job; do not pass a raw `String` through the queue payload. The worker must not re-read Settings, `GeminiBrowserState`, or frontend state to decide between managed and CDP execution, because those settings may change after enqueue but before execution.
 
 - [ ] **Step 3: Wire the module**
 
@@ -405,6 +458,8 @@ fn apalis_storage_uses_shared_main_extractum_db_identity() {
     );
 }
 ```
+
+This test references `crate::db::APP_IDENTIFIER`, `DB_FILENAME`, and `db_path_from_config_dir(...)`, which are introduced in Step 2. Write Step 1 and Step 2 in the same code edit before running tests or committing; do not leave the workspace between those steps in a non-compiling state.
 
 - [ ] **Step 2: Centralize the main database helper**
 
@@ -703,7 +758,37 @@ async fn register_waiter_rejects_duplicate_run_id() {
 }
 ```
 
-- [ ] **Step 5: Implement waiter methods**
+- [ ] **Step 5: Add dropped receiver completion test**
+
+Add:
+
+```rust
+#[tokio::test]
+async fn complete_waiter_ignores_dropped_receiver() {
+    let runtime = GeminiBrowserJobRuntime::new_for_test(std::time::Duration::from_secs(1));
+    let receiver = runtime
+        .register_waiter("run-dropped-receiver")
+        .expect("register waiter");
+    drop(receiver);
+
+    let result = crate::gemini_browser::GeminiBrowserRunResult {
+        run_id: "run-dropped-receiver".to_string(),
+        status: crate::gemini_browser::GeminiBrowserRunStatus::Ok,
+        text: Some("late answer".to_string()),
+        message: Some("done".to_string()),
+        manual_action: None,
+        artifacts: crate::gemini_browser::GeminiBrowserArtifactRefs::default(),
+        elapsed_ms: 10,
+        debug_summary: None,
+    };
+
+    runtime.complete_waiter("run-dropped-receiver", Ok(result));
+
+    assert!(!runtime.has_waiter_for_test("run-dropped-receiver"));
+}
+```
+
+- [ ] **Step 6: Implement waiter methods**
 
 Implement:
 
@@ -763,9 +848,19 @@ impl GeminiBrowserJobRuntime {
 }
 ```
 
+`complete_waiter(...)` must remove the sender from the map before sending, then ignore a dropped receiver:
+
+```rust
+if let Some(sender) = self.waiters.lock().remove(run_id) {
+    let _ = sender.send(result);
+}
+```
+
+`ensure_worker_ready_for_enqueue_with_timeout(...)` must not try to await on `watch::Sender` directly. Use `let mut status_rx = self.worker_status.subscribe();`, check `status_rx.borrow().clone()` first for an already-ready or already-failed worker, then await `status_rx.changed()` inside `tokio::time::timeout(...)` and read updates with `status_rx.borrow_and_update().clone()`.
+
 `Default` must set `waiter_timeout` to `std::time::Duration::from_secs(20 * 60 - 30)`, set `worker_execution_timeout` to `std::time::Duration::from_secs(20 * 60)`, set `worker_hard_guard_timeout` to `worker_execution_timeout + std::time::Duration::from_secs(5)`, and set worker status to `Starting`. `new_for_test(timeout)` must set `waiter_timeout` to `timeout`, set `worker_execution_timeout` to `timeout + std::time::Duration::from_millis(50)`, and set `worker_hard_guard_timeout` to `worker_execution_timeout + std::time::Duration::from_millis(50)`. `new_for_test_with_timeouts(waiter_timeout, worker_execution_timeout, worker_hard_guard_timeout)` must reject or panic in tests unless `waiter_timeout < worker_execution_timeout < worker_hard_guard_timeout`, because equal or inverted deadlines reintroduce caller/worker/hard-guard timeout races. `ensure_worker_ready_for_enqueue()` must use a `5` second startup timeout in production.
 
-- [ ] **Step 6: Add cancellation set runtime test**
+- [ ] **Step 7: Add cancellation set runtime test**
 
 Add:
 
@@ -782,7 +877,7 @@ fn runtime_tracks_and_clears_cancelled_run_ids() {
 }
 ```
 
-- [ ] **Step 7: Run waiter tests**
+- [ ] **Step 8: Run waiter tests**
 
 Run:
 
@@ -817,7 +912,8 @@ async fn worker_handler_marks_run_running_and_terminal() {
         run_id: "run-worker-1".to_string(),
         prompt: "hello".to_string(),
         source: "settings_test".to_string(),
-        artifact_mode: "reduced".to_string(),
+        artifact_mode: GeminiBrowserArtifactMode::Reduced,
+        browser_config: None,
     };
 
     crate::gemini_browser::create_queued_run(
@@ -877,7 +973,8 @@ async fn worker_handler_converts_executor_error_to_terminal_failed_result() {
         run_id: "run-worker-error".to_string(),
         prompt: "hello".to_string(),
         source: "settings_test".to_string(),
-        artifact_mode: "reduced".to_string(),
+        artifact_mode: GeminiBrowserArtifactMode::Reduced,
+        browser_config: None,
     };
 
     crate::gemini_browser::create_queued_run(
@@ -1118,7 +1215,7 @@ The production handler must:
 - call `mark_running(...)`;
 - call `GeminiBrowserState::start_run(...)`;
 - emit `GeminiBrowserRunStatus::Running`;
-- call `sidecar::send_single(...)` with the same profile and artifact paths as the old command path;
+- call `sidecar::send_single(...)` with `job.run_request()`, the same profile and artifact paths as the old command path, and `job.browser_config.clone()`;
 - convert sidecar errors through `sidecar::sidecar_unavailable_result(...)`;
 - call `finish_run(...)`;
 - call `GeminiBrowserState::finish_run(...)`;
@@ -1373,11 +1470,13 @@ Add a test around a small core function, not a request-shape-only test. The func
 - `GeminiBrowserJobRuntime`;
 - fake enqueue function;
 - `GeminiBrowserRunRequest`.
+- the `Option<GeminiBrowserProviderConfig>` passed to `send_single_prompt(...)`.
 
 The test must assert:
 
 - `create_queued_run(...)` writes a queued run log record before enqueue;
 - fake enqueue receives exactly the same `run_id`, `prompt`, `source`, and `artifact_mode`;
+- fake enqueue receives the same `browser_config` snapshot that was passed into the command core;
 - the returned queued event uses `GeminiBrowserRunStatus::Queued`.
 
 - [ ] **Step 2: Add duplicate run id and enqueue failure tests**
@@ -1411,13 +1510,15 @@ runtime.ensure_worker_ready_for_enqueue().await?;
 reject_duplicate_non_terminal_run(&runs_root, &request.run_id).await?;
 create_queued_run(&runs_root, &request.run_id, &request.source, &request.prompt)?;
 let waiter = runtime.register_waiter(&request.run_id)?;
+let artifact_mode = GeminiBrowserArtifactMode::from_wire(Some(&request.artifact_mode))?;
 let queued = match crate::gemini_browser::enqueue_gemini_browser_job(
     handle,
     GeminiBrowserJob {
         run_id: request.run_id.clone(),
         prompt: request.prompt.clone(),
         source: request.source.clone(),
-        artifact_mode: request.artifact_mode.clone(),
+        artifact_mode,
+        browser_config: browser_config.clone(),
     },
 )
 .await
@@ -1863,20 +1964,23 @@ Expected: `git diff --check` exits `0`. `git status --short` shows only intentio
 
 ## Self-Review
 
-- Spec coverage: The plan covers exact Apalis RC dependency pins, real early Apalis integration, fail-fast worker smoke tests, SQLite storage ownership inside `extractum.db`, app migration metadata preservation, shared SQLite connection options, explicit runtime construction, synchronous in-memory waiter/cancellation/status locks, worker readiness/error/early-exit state, explicit `mark_worker_*` methods, explicit `request_cancel/is_cancelled/clear_cancelled` methods, receiver-based completion waiter semantics, closed waiter channel handling, duplicate `run_id` rejection, duplicate Apalis idempotency conflict translation, storage-injected enqueue tests, enqueue failure cleanup, worker sidecar error conversion, split product-facing and hard-guard worker timeouts, cancellation continuity including pre-enqueue Prompt Pack cancellation, Prompt Pack cancellation by `browser_run_id`, run log versus Apalis reconciliation, status UI responsiveness, no automatic retry, crash/restart recovery, current `GeminiBrowserRunResult` fields, and removal of the old `VecDeque`.
+- Spec coverage: The plan covers exact Apalis RC dependency pins, real early Apalis integration, fail-fast worker smoke tests, SQLite storage ownership inside `extractum.db`, app migration metadata preservation, shared SQLite connection options, explicit runtime construction, synchronous in-memory waiter/cancellation/status locks, worker readiness/error/early-exit state, explicit `mark_worker_*` methods, explicit `request_cancel/is_cancelled/clear_cancelled` methods, receiver-based completion waiter semantics, closed waiter channel handling, duplicate `run_id` rejection, duplicate Apalis idempotency conflict translation, storage-injected enqueue tests, enqueue failure cleanup, worker sidecar error conversion, split product-facing and hard-guard worker timeouts, cancellation continuity including pre-enqueue Prompt Pack cancellation, Prompt Pack cancellation by `browser_run_id`, run log versus Apalis reconciliation, status UI responsiveness, no automatic retry, crash/restart recovery, current `GeminiBrowserRunResult` fields, self-contained browser execution snapshots including managed/CDP config, and removal of the old `VecDeque`.
 - Placeholder scan: The plan intentionally avoids placeholder markers, fake production facades, and no-op worker bootstrap. The only API discovery point is constrained to Task 1 and must compile before later tasks proceed.
 - Type consistency: Result examples use the current `GeminiBrowserRunResult` shape with `run_id`, `text`, `manual_action`, `GeminiBrowserArtifactRefs::default()`, and `elapsed_ms`.
 - Apalis status consistency: The plan requires a real `apalis-sqlite` status probe before mapping queue statuses, and Task 4 is explicitly forbidden from hardcoding `run_status_for_queue_state(...)` before that probe passes.
 - Retry consistency: The plan requires `attempts(1)` or the verified Apalis equivalent plus an execution-count test proving one failed job is not retried.
 - Query consistency: The plan requires Task 1 to classify Apalis queue inspection as `Supported` or `DegradedRunLogOnly` before reconciliation tasks rely on Apalis internals.
 - Waiter consistency: The plan uses `register_waiter(...) -> Receiver` plus `wait_for_registered_result(...)`; there is no result wait that tries to recover a receiver from only `run_id`.
-- Closed-channel consistency: `wait_for_registered_result(...)` must remove the waiter and return `"Gemini Browser worker channel closed unexpectedly"` on `oneshot::error::RecvError`.
+- Closed-channel consistency: `wait_for_registered_result(...)` must remove the waiter and return `"Gemini Browser worker channel closed unexpectedly"` on `oneshot::error::RecvError`; `complete_waiter(...)` removes the sender before sending and ignores dropped receivers with `let _ = sender.send(result)`.
+- Worker readiness consistency: `ensure_worker_ready_for_enqueue_with_timeout(...)` must create a receiver with `self.worker_status.subscribe()` and wait through `Receiver::changed()`, not try to await on `watch::Sender` directly.
 - Idempotency consistency: duplicate Apalis idempotency / SQLite unique failures are translated to `AppError::conflict`, with a concrete duplicate enqueue test.
+- Payload consistency: `GeminiBrowserJob` carries typed `GeminiBrowserArtifactMode` and the `Option<GeminiBrowserProviderConfig>` captured at enqueue time, so the worker does not re-read Settings or drift from managed to CDP mode after queueing.
 - Lock consistency: Runtime maps use `parking_lot::Mutex`, cached provider status uses `parking_lot::RwLock`, and plan text forbids holding synchronous lock guards across `.await`.
 - Timeout consistency: Caller waiter timeout, product-facing worker execution timeout, and outer Tower hard-guard timeout are separate and ordered as `waiter_timeout < worker_execution_timeout < worker_hard_guard_timeout`; the worker timeout has a dedicated test proving a timed-out first job writes terminal run log state before the hard guard and does not block the next queued job, even when the caller waiter already timed out.
 - Main DB consistency: Apalis schema initialization must preserve `_sqlx_migrations`, avoid product table name collisions, and share the main `extractum.db` without `database is locked` failures.
 - Worker error consistency: sidecar/executor errors are converted into terminal failed run results and acknowledged to Apalis as handled so the no-retry policy is preserved.
 - Cancellation consistency: cancellation runtime APIs are explicit, worker-entry checks in-memory cancellation before `mark_running(...)`, Prompt Pack pre-enqueue cancellation tolerates missing Gemini Browser run log records, and `cancel_gemini_browser_job` is exported only in Task 10 after it is implemented.
+- Task atomicity consistency: Task 2 Step 1 and Step 2 are explicitly one edit unit because the test references database constants introduced by the helper step.
 
 ## Execution Choice
 
