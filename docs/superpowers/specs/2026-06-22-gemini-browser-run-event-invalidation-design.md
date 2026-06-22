@@ -15,15 +15,16 @@ old pre-Apalis behavior still leaks through the run event contract:
   current run state.
 - Tests still verify event payloads as if they were part of the state model.
 
-That makes the event stream a second source of truth next to Apalis state and
-the file-backed Gemini Browser run log. The chosen migration step is to keep a
-small event signal for responsive UI updates, but remove state-bearing event
-semantics.
+That makes the event stream a second source of truth next to Apalis execution
+state and the file-backed Gemini Browser run log. The chosen migration step is
+to keep a small event signal for responsive UI updates, but remove
+state-bearing event semantics.
 
 ## Goals
 
-- Make Apalis plus the Gemini Browser run log the source of truth for run
-  lifecycle state.
+- Keep ownership explicit: Apalis is the source for execution and queue state;
+  the Gemini Browser run log is the source for user-facing run history and
+  results.
 - Convert the Gemini Browser run event into an invalidation signal: "a run
   changed; reread state."
 - Remove legacy event payload fields that duplicate state: `status`, `message`,
@@ -45,11 +46,14 @@ semantics.
 
 Use the existing event transport only as a lightweight invalidation signal.
 
-The backend still emits a Tauri event after meaningful run changes, but the
-event no longer carries authoritative status, message, result, or queue
-position. On the normal path, the event is emitted after the durable run log and
-cached provider snapshot have both been updated. The frontend listener uses the
-event only to schedule a refresh from the existing commands:
+The backend still emits a Tauri event after a run enters queued, running,
+terminal, cancelled, or degraded-terminal state, but the event no longer carries
+authoritative status, message, result, or queue position. Do not emit run-change
+events for status probes, open-browser calls, resume calls, or other provider
+operations unless they also create one of those run-log transitions. On the
+normal path, the event is emitted after the durable run log and cached provider
+snapshot have both been updated. The frontend listener uses the event only to
+schedule a refresh from the existing commands:
 
 - `gemini_bridge_status`
 - `gemini_bridge_list_runs`
@@ -86,7 +90,9 @@ and run log data.
 that triggered the event. It must not use a fresh emit-time clock, Apalis job
 timestamp, or sidecar timestamp. The field is mandatory in this design so tests
 can prove the event points at a concrete run-log version without becoming a new
-state-bearing payload.
+state-bearing payload. Frontend code must not use `run_updated_at` for sorting,
+status decisions, terminal-result decisions, or queue decisions. It is only a
+diagnostic/version pointer back to the run-log record that should be reread.
 
 The old public names `GeminiBrowserRunEvent` and `listenToGeminiBrowserRuns`
 should be removed rather than kept as aliases. Keeping aliases would preserve
@@ -207,6 +213,10 @@ parallel status/list-runs races. The behavior should be deterministic:
 - If the active refresh fails, the pending refresh flag must not be lost; the
   additional refresh still runs so a terminal update is not skipped because of a
   transient status/list-runs error.
+- A pending refresh caused by requests that arrived during a failed active
+  refresh triggers at most one immediate additional refresh. That additional
+  refresh must not become an automatic infinite retry loop; any further retry
+  requires a new mount, command, event, or explicit refresh request.
 
 The refresh implementation must apply status and run-history results
 independently. A `gemini_bridge_status` failure must not prevent a successful
@@ -257,6 +267,7 @@ Keep these intentionally:
 Rust tests should verify:
 
 - queued, running, cancelled, and terminal transitions still update the run log;
+- failed run-log transitions do not emit invalidation events;
 - emitted change events contain only invalidation data;
 - emitted change events copy `run_updated_at` from the run-log record;
 - Tauri event emit failure does not fail a completed job;
