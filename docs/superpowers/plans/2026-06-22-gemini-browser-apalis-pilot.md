@@ -14,7 +14,7 @@
 
 - The first implementation tasks now require a real Apalis SQLite storage smoke test, a real `TaskSink::push(...)`, and a real worker processing a fake job before command refactors begin.
 - The plan no longer creates a production `enqueue()` that returns an uninitialized-queue error instead of using Apalis.
-- SQLite storage ownership is specified: Apalis owns its internal queue tables in a separate Gemini Browser queue database file under the existing Gemini Browser app data directory.
+- SQLite storage ownership is specified: Apalis owns its internal queue tables inside the existing main `extractum.db` database.
 - Completion waiting is specified with a per-run waiter map, timeout behavior, worker failure behavior, and restart behavior.
 - Cancellation is specified for queued and active Gemini Browser jobs, including Prompt Pack cancellation by concrete `browser_run_id`.
 - Worker bootstrap must use a real `WorkerBuilder` and backend with `.concurrency(1)`.
@@ -50,9 +50,13 @@ The first migration must not change the TypeScript API or UI behavior.
 
 ## Storage Decisions
 
-- Use a dedicated Apalis SQLite database file for this pilot: `base_dir(handle)?.join("jobs.sqlite")`, where `base_dir` is the existing Gemini Browser app data directory from `src-tauri/src/gemini_browser/paths.rs`.
-- Do not add Apalis internal tables to `src-tauri` application migrations for `extractum.db`.
-- Do not hand-design Apalis internal queue tables. Let `apalis-sqlite` create or manage its own schema through its supported storage initialization API.
+- Store Apalis SQLite tables in the existing main application database: `extractum.db`, the same database registered by `tauri_plugin_sql::Builder::default().add_migrations("sqlite:extractum.db", build_migrations())`.
+- Do not create `gemini-browser/jobs.sqlite` or any other separate Apalis database file.
+- Do not hand-design Apalis internal queue tables. Let `apalis-sqlite` create or manage its own schema through its supported storage initialization API against `extractum.db`.
+- Reuse the main database identity from `src-tauri/src/db.rs`. Add shared `APP_IDENTIFIER`, `DB_FILENAME`, and config-directory path helpers there if needed instead of creating Gemini-Browser-local database constants.
+- Prefer constructing Apalis storage from the existing `sqlx::SqlitePool` returned by `crate::db::get_pool(handle)` if the proven `apalis-sqlite` API supports that. If it only accepts a URL or path, open an Apalis storage connection to the same `extractum.db` file and document that choice in the helper.
+- If `apalis-sqlite` does not expose a stable schema initialization API for an existing SQLite database, stop the migration and document the blocker before adding copied SQL to Extractum migrations.
+- App migrations still own Extractum product tables. Apalis owns its internal queue schema, but it now lives physically in `extractum.db`.
 - Keep the file-backed run log in `base_dir(handle)?.join("runs")` as the product projection. Apalis rows are queue implementation details.
 - Persist app-visible state in the run log, not by reading Apalis SQL rows in UI commands.
 - Queue name / worker name: `gemini-browser`.
@@ -257,7 +261,9 @@ Add a Tokio test in `jobs.rs` named `apalis_sqlite_storage_pushes_and_worker_pro
 The test must:
 
 - create a temp directory with `tempfile`;
-- create an Apalis SQLite storage using the current `apalis-sqlite` API against a file in that temp directory;
+- create a temp main database file named `extractum.db` in that temp directory;
+- apply the existing Extractum app migrations to that temp `extractum.db` through the same migration helper used by other database tests;
+- create an Apalis SQLite storage using the current `apalis-sqlite` API against that same temp `extractum.db`;
 - push one `GeminiBrowserJob` through `apalis::prelude::TaskSink::push(...)`;
 - run a real `apalis::prelude::WorkerBuilder` worker with `.concurrency(1)`;
 - use a fake handler that sends the processed `run_id` over a Tokio oneshot channel and calls `WorkerContext::stop()?`;
@@ -283,13 +289,13 @@ Keep the final compiling storage setup in a helper such as:
 
 ```rust
 async fn open_gemini_browser_job_storage(
-    db_path: &std::path::Path,
+    main_db: GeminiBrowserApalisDbTarget,
 ) -> crate::error::AppResult<GeminiBrowserApalisStorage> {
     // Use the exact apalis-sqlite storage type proven by the smoke test.
 }
 ```
 
-`GeminiBrowserApalisStorage` may be a concrete type alias or a small wrapper around the concrete storage type required by `apalis-sqlite`.
+`GeminiBrowserApalisDbTarget` can be an existing `sqlx::SqlitePool` from `crate::db::get_pool(handle)` or a path/URL target for the same `extractum.db`, depending on the stable constructor proven in Step 4. `GeminiBrowserApalisStorage` may be a concrete type alias or a small wrapper around the concrete storage type required by `apalis-sqlite`.
 
 - [ ] **Step 7: Record Apalis queue inspection capability**
 
@@ -306,38 +312,53 @@ If `Supported`, add a test that queries a pushed job by `run_id` and reads its v
 
 ---
 
-### Task 2: Define Runtime State, Storage Path, And Queue Contract
+### Task 2: Define Runtime State, Main Database Storage, And Queue Contract
 
 **Files:**
+- Modify: `src-tauri/src/db.rs`
 - Modify: `src-tauri/src/gemini_browser/jobs.rs`
 - Modify: `src-tauri/src/gemini_browser/mod.rs`
 - Modify: `src-tauri/src/lib.rs`
+- Modify: `src-tauri/src/migrations.rs`
 - Test: `src-tauri/src/gemini_browser/jobs.rs`
 
-- [ ] **Step 1: Add path helper test**
+- [ ] **Step 1: Add main database helper test**
 
 Add a pure helper and test:
 
 ```rust
 #[test]
-fn apalis_db_path_lives_under_gemini_browser_base_dir() {
-    let base = std::path::PathBuf::from("app-data").join("gemini-browser");
+fn apalis_storage_uses_shared_main_extractum_db_identity() {
+    let config_dir = std::path::PathBuf::from("config");
+    assert_eq!(crate::db::APP_IDENTIFIER, "org.ai.extractum");
+    assert_eq!(crate::db::DB_FILENAME, "extractum.db");
+    assert_eq!(crate::db::DB_URL, "sqlite:extractum.db");
     assert_eq!(
-        super::jobs_db_path_from_base(&base),
-        base.join("jobs.sqlite")
+        crate::db::db_path_from_config_dir(&config_dir),
+        config_dir.join("org.ai.extractum").join("extractum.db")
     );
 }
 ```
 
-- [ ] **Step 2: Implement the path helper**
+- [ ] **Step 2: Centralize the main database helper**
 
-Add:
+Extend the existing `src-tauri/src/db.rs` `DB_URL` constant into the shared database identity:
 
 ```rust
-pub(crate) fn jobs_db_path_from_base(base: &std::path::Path) -> std::path::PathBuf {
-    base.join("jobs.sqlite")
+pub const APP_IDENTIFIER: &str = "org.ai.extractum";
+pub const DB_FILENAME: &str = "extractum.db";
+pub const DB_URL: &str = "sqlite:extractum.db";
+
+pub(crate) fn db_path_from_config_dir(config_dir: &std::path::Path) -> std::path::PathBuf {
+    config_dir.join(APP_IDENTIFIER).join(DB_FILENAME)
+}
+
+pub(crate) fn app_config_db_path() -> Option<std::path::PathBuf> {
+    dirs::config_dir().map(|dir| db_path_from_config_dir(&dir))
 }
 ```
+
+`src-tauri/src/migrations.rs` must reuse `crate::db::app_config_db_path()` instead of keeping a private copy of the database location. The Tauri wrapper must use the same helper when a path-based Apalis constructor is required. If the storage constructor can use the already-initialized pool, use `crate::db::get_pool(handle)` instead. Do not derive the Apalis database path from `gemini_browser::paths::base_dir(...)`; that directory remains only for profile, artifact, and run-log files.
 
 - [ ] **Step 3: Add runtime state**
 
@@ -452,8 +473,9 @@ The helper may return `queue_position: None` because Apalis SQL queue depth is n
 
 Add an integration-style unit test that:
 
-- creates a temp queue DB;
-- opens temp Apalis storage;
+- creates a temp main `extractum.db`;
+- applies existing Extractum app migrations to that temp database;
+- opens Apalis storage against that same temp `extractum.db`;
 - calls `enqueue_gemini_browser_job_to_storage(...)`;
 - starts the fake worker after enqueue;
 - asserts the fake worker receives the enqueued `run_id`.
@@ -824,7 +846,9 @@ Implement:
 pub(crate) async fn start_gemini_browser_job_worker(
     handle: tauri::AppHandle,
 ) -> crate::error::AppResult<()> {
-    // Open the Apalis SQLite storage from base_dir(handle)?.join("jobs.sqlite").
+    // Open the Apalis SQLite storage against the main extractum.db database.
+    // Prefer crate::db::get_pool(&handle) if the proven constructor supports it;
+    // otherwise use crate::db::app_config_db_path() for the same file.
     // Build a WorkerBuilder named "gemini-browser".
     // Set concurrency to 1.
     // Build the production Gemini Browser job handler.
