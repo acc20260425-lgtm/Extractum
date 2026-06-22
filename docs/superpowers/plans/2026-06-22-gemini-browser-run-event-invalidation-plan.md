@@ -1066,7 +1066,7 @@ git commit -m "refactor: emit Gemini Browser worker changes from run log"
 - Modify: `src/lib/api/gemini-browser.ts`
 - Modify: `src/lib/api/gemini-browser.test.ts`
 
-- [ ] **Step 1: Write failing API tests for new exports and old-name removal**
+- [x] **Step 1: Write failing API tests for new exports and old-name removal**
 
 In `src/lib/api/gemini-browser.test.ts`, update imports to:
 
@@ -1111,7 +1111,7 @@ it("does not expose legacy run event public names", async () => {
 });
 ```
 
-- [ ] **Step 2: Run failing API tests**
+- [x] **Step 2: Run failing API tests**
 
 Run:
 
@@ -1121,7 +1121,7 @@ npm test -- src/lib/api/gemini-browser.test.ts
 
 Expected: FAIL until the API/type names are renamed.
 
-- [ ] **Step 3: Rename the TypeScript event type**
+- [x] **Step 3: Rename the TypeScript event type**
 
 In `src/lib/types/gemini-browser.ts`, replace:
 
@@ -1143,7 +1143,7 @@ export interface GeminiBrowserRunChangeEvent {
 }
 ```
 
-- [ ] **Step 4: Rename API helper and constant**
+- [x] **Step 4: Rename API helper and constant**
 
 In `src/lib/api/gemini-browser.ts`, replace the event imports and exports with:
 
@@ -1182,7 +1182,7 @@ export function listenToGeminiBrowserRunChanges(
 }
 ```
 
-- [ ] **Step 5: Run API tests**
+- [x] **Step 5: Run API tests**
 
 Run:
 
@@ -1192,7 +1192,7 @@ npm test -- src/lib/api/gemini-browser.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Task 4**
+- [x] **Step 6: Commit Task 4**
 
 Run:
 

@@ -4,13 +4,13 @@ import type {
   GeminiBridgeSendSingleInput,
   GeminiBrowserProviderConfig,
   GeminiBrowserProviderStatus,
-  GeminiBrowserRunEvent,
+  GeminiBrowserRunChangeEvent,
   GeminiBrowserRunLogSummary,
   GeminiBrowserRunResult,
   GeminiBrowserStartChromeResult,
 } from "$lib/types/gemini-browser";
 
-export const GEMINI_BROWSER_RUN_EVENT = "gemini-browser://run";
+export const GEMINI_BROWSER_RUN_CHANGE_EVENT = "gemini-browser://run";
 
 export function geminiBridgeStatus(browserConfig?: GeminiBrowserProviderConfig | null) {
   if (!browserConfig) return invoke<GeminiBrowserProviderStatus>("gemini_bridge_status");
@@ -48,8 +48,8 @@ export function geminiBridgeOpenRunFolder(runId: string) {
   return invoke<void>("gemini_bridge_open_run_folder", { runId });
 }
 
-export function listenToGeminiBrowserRuns(
-  handler: (event: Event<GeminiBrowserRunEvent>) => void,
+export function listenToGeminiBrowserRunChanges(
+  handler: (event: Event<GeminiBrowserRunChangeEvent>) => void,
 ): Promise<UnlistenFn> {
-  return listen<GeminiBrowserRunEvent>(GEMINI_BROWSER_RUN_EVENT, handler);
+  return listen<GeminiBrowserRunChangeEvent>(GEMINI_BROWSER_RUN_CHANGE_EVENT, handler);
 }

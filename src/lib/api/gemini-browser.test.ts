@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  GEMINI_BROWSER_RUN_EVENT,
+  GEMINI_BROWSER_RUN_CHANGE_EVENT,
   geminiBridgeListRuns,
   geminiBridgeOpenBrowser,
   geminiBridgeOpenRunFolder,
@@ -9,7 +9,7 @@ import {
   geminiBridgeStartCdpChrome,
   geminiBridgeStatus,
   geminiBridgeStop,
-  listenToGeminiBrowserRuns,
+  listenToGeminiBrowserRunChanges,
 } from "./gemini-browser";
 import type { GeminiBrowserProviderConfig } from "$lib/types/gemini-browser";
 
@@ -94,15 +94,21 @@ describe("gemini browser api wrappers", () => {
     });
   });
 
-  it("lists runs and subscribes to run events", async () => {
+  it("lists runs and subscribes to run-change invalidation events", async () => {
     await geminiBridgeListRuns(5);
     expect(invokeMock).toHaveBeenLastCalledWith("gemini_bridge_list_runs", { limit: 5 });
 
     const unlisten = vi.fn();
     const handler = vi.fn();
     listenMock.mockResolvedValueOnce(unlisten);
-    await expect(listenToGeminiBrowserRuns(handler)).resolves.toBe(unlisten);
-    expect(GEMINI_BROWSER_RUN_EVENT).toBe("gemini-browser://run");
-    expect(listenMock).toHaveBeenCalledWith(GEMINI_BROWSER_RUN_EVENT, handler);
+    await expect(listenToGeminiBrowserRunChanges(handler)).resolves.toBe(unlisten);
+    expect(GEMINI_BROWSER_RUN_CHANGE_EVENT).toBe("gemini-browser://run");
+    expect(listenMock).toHaveBeenCalledWith(GEMINI_BROWSER_RUN_CHANGE_EVENT, handler);
+  });
+
+  it("does not expose legacy run event public names", async () => {
+    const api = await import("./gemini-browser");
+    expect("listenToGeminiBrowserRuns" in api).toBe(false);
+    expect("GEMINI_BROWSER_RUN_EVENT" in api).toBe(false);
   });
 });
