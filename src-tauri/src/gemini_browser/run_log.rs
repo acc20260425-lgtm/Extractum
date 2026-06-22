@@ -1,18 +1,20 @@
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use time::OffsetDateTime;
+use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 
 use crate::error::{AppError, AppResult};
 
 use super::paths::safe_run_id;
 use super::{
-    GeminiBrowserRun, GeminiBrowserRunLogSummary, GeminiBrowserRunResult,
-    GeminiBrowserRunStatus,
+    GeminiBrowserRun, GeminiBrowserRunLogSummary, GeminiBrowserRunResult, GeminiBrowserRunStatus,
 };
 
 const RUN_FILE: &str = "result.json";
 const PROMPT_PREVIEW_CHARS: usize = 120;
+const RUN_RETENTION_HOURS: i64 = 24;
 
 fn now_string() -> String {
     OffsetDateTime::now_utc()
@@ -26,7 +28,10 @@ fn run_file_path(runs_dir: &Path, run_id: &str) -> AppResult<PathBuf> {
 
 fn prompt_preview(prompt: &str) -> String {
     let mut chars = prompt.trim().chars();
-    let preview = chars.by_ref().take(PROMPT_PREVIEW_CHARS).collect::<String>();
+    let preview = chars
+        .by_ref()
+        .take(PROMPT_PREVIEW_CHARS)
+        .collect::<String>();
     if chars.next().is_some() {
         format!("{preview}...")
     } else {
@@ -40,6 +45,7 @@ pub(crate) fn create_queued_run(
     source: &str,
     prompt: &str,
 ) -> AppResult<GeminiBrowserRun> {
+    prune_expired_runs(runs_dir)?;
     let run_dir = runs_dir.join(safe_run_id(run_id)?);
     fs::create_dir_all(&run_dir).map_err(|error| AppError::internal(error.to_string()))?;
     let now = now_string();
@@ -78,6 +84,7 @@ pub(crate) fn finish_run(
 }
 
 pub(crate) fn list_runs(runs_dir: &Path, limit: usize) -> AppResult<GeminiBrowserRunLogSummary> {
+    prune_expired_runs(runs_dir)?;
     if !runs_dir.exists() {
         return Ok(GeminiBrowserRunLogSummary { runs: Vec::new() });
     }
@@ -97,6 +104,7 @@ pub(crate) fn list_runs(runs_dir: &Path, limit: usize) -> AppResult<GeminiBrowse
 }
 
 pub(crate) fn recorded_run_dir(runs_dir: &Path, run_id: &str) -> AppResult<PathBuf> {
+    prune_expired_runs(runs_dir)?;
     let safe_id = safe_run_id(run_id)?;
     let dir = runs_dir.join(&safe_id);
     let result_path = dir.join(RUN_FILE);
@@ -118,7 +126,8 @@ pub(crate) fn recorded_run_dir(runs_dir: &Path, run_id: &str) -> AppResult<PathB
 }
 
 fn read_run_file(path: &Path) -> AppResult<GeminiBrowserRun> {
-    let content = fs::read_to_string(path).map_err(|error| AppError::internal(error.to_string()))?;
+    let content =
+        fs::read_to_string(path).map_err(|error| AppError::internal(error.to_string()))?;
     serde_json::from_str(&content).map_err(|error| AppError::internal(error.to_string()))
 }
 
@@ -128,9 +137,80 @@ fn write_run(path: &Path, run: &GeminiBrowserRun) -> AppResult<()> {
     fs::write(path, content).map_err(|error| AppError::internal(error.to_string()))
 }
 
+fn prune_expired_runs(runs_dir: &Path) -> AppResult<()> {
+    prune_expired_runs_at(runs_dir, OffsetDateTime::now_utc())
+}
+
+fn prune_expired_runs_at(runs_dir: &Path, now: OffsetDateTime) -> AppResult<()> {
+    if !runs_dir.exists() {
+        return Ok(());
+    }
+
+    let cutoff = now - Duration::hours(RUN_RETENTION_HOURS);
+    for entry in fs::read_dir(runs_dir).map_err(|error| AppError::internal(error.to_string()))? {
+        let run_dir = entry
+            .map_err(|error| AppError::internal(error.to_string()))?
+            .path();
+        if !run_dir.is_dir() {
+            continue;
+        }
+
+        let result_path = run_dir.join(RUN_FILE);
+        if !result_path.exists() {
+            continue;
+        }
+
+        let Some(updated_at) = run_updated_at_or_modified_at(&result_path)? else {
+            continue;
+        };
+        if updated_at < cutoff {
+            remove_run_dir(&run_dir)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn run_updated_at_or_modified_at(result_path: &Path) -> AppResult<Option<OffsetDateTime>> {
+    if let Ok(content) = fs::read_to_string(result_path) {
+        if let Ok(run) = serde_json::from_str::<GeminiBrowserRun>(&content) {
+            if let Ok(updated_at) = OffsetDateTime::parse(&run.updated_at, &Rfc3339) {
+                return Ok(Some(updated_at));
+            }
+        }
+    }
+
+    file_modified_at(result_path)
+}
+
+fn file_modified_at(path: &Path) -> AppResult<Option<OffsetDateTime>> {
+    let modified = match fs::metadata(path).and_then(|metadata| metadata.modified()) {
+        Ok(modified) => modified,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(AppError::internal(error.to_string())),
+    };
+    Ok(system_time_to_offset_datetime(modified))
+}
+
+fn system_time_to_offset_datetime(value: SystemTime) -> Option<OffsetDateTime> {
+    let duration = value.duration_since(UNIX_EPOCH).ok()?;
+    OffsetDateTime::from_unix_timestamp(duration.as_secs() as i64).ok()
+}
+
+fn remove_run_dir(run_dir: &Path) -> AppResult<()> {
+    match fs::remove_dir_all(run_dir) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(AppError::internal(error.to_string())),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use tempfile::tempdir;
+    use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 
     use crate::gemini_browser::{
         create_queued_run, finish_run, list_runs, mark_running,
@@ -220,7 +300,10 @@ mod tests {
         finish_run(runs_dir, "run-1", result).expect("finish run");
 
         let dir = super::recorded_run_dir(runs_dir, "run-1").expect("recorded run dir");
-        assert_eq!(dir.file_name().and_then(|name| name.to_str()), Some("run-1"));
+        assert_eq!(
+            dir.file_name().and_then(|name| name.to_str()),
+            Some("run-1")
+        );
 
         create_queued_run(runs_dir, "run-2", "settings_test", "hello Gemini")
             .expect("create queued run");
@@ -241,7 +324,10 @@ mod tests {
         };
         finish_run(runs_dir, "run-2", mismatched).expect("finish run");
         let dir = super::recorded_run_dir(runs_dir, "run-2").expect("recorded run dir");
-        assert_eq!(dir.file_name().and_then(|name| name.to_str()), Some("run-2"));
+        assert_eq!(
+            dir.file_name().and_then(|name| name.to_str()),
+            Some("run-2")
+        );
         assert_ne!(dir, outside.canonicalize().expect("outside canonicalize"));
 
         create_queued_run(runs_dir, "run-3", "settings_test", "hello Gemini")
@@ -260,5 +346,94 @@ mod tests {
         assert!(super::recorded_run_dir(runs_dir, "run-3").is_err());
         assert!(super::recorded_run_dir(runs_dir, "../bad").is_err());
         assert!(super::recorded_run_dir(runs_dir, "missing-run").is_err());
+    }
+
+    const EXPIRED_RUN_AGE_HOURS: i64 = super::RUN_RETENTION_HOURS + 1;
+    const FRESH_RUN_AGE_HOURS: i64 = super::RUN_RETENTION_HOURS - 1;
+
+    #[test]
+    fn list_runs_deletes_run_directories_outside_retention_window() {
+        let temp = tempdir().expect("tempdir");
+        let runs_dir = temp.path();
+
+        create_queued_run(runs_dir, "old-run", "settings_test", "old prompt")
+            .expect("create old run");
+        create_queued_run(runs_dir, "fresh-run", "settings_test", "fresh prompt")
+            .expect("create fresh run");
+        set_run_updated_at(runs_dir, "old-run", hours_ago(EXPIRED_RUN_AGE_HOURS));
+        set_run_updated_at(runs_dir, "fresh-run", hours_ago(FRESH_RUN_AGE_HOURS));
+        fs::write(
+            runs_dir.join("old-run").join("page.html"),
+            "<html>debug</html>",
+        )
+        .expect("write old artifact");
+
+        let listed = list_runs(runs_dir, 10).expect("list runs");
+
+        assert_eq!(listed.runs.len(), 1);
+        assert_eq!(listed.runs[0].run_id, "fresh-run");
+        assert!(!runs_dir.join("old-run").exists());
+        assert!(runs_dir.join("fresh-run").exists());
+    }
+
+    #[test]
+    fn create_queued_run_prunes_expired_runs_before_writing_new_run() {
+        let temp = tempdir().expect("tempdir");
+        let runs_dir = temp.path();
+
+        create_queued_run(runs_dir, "old-run", "settings_test", "old prompt")
+            .expect("create old run");
+        set_run_updated_at(runs_dir, "old-run", hours_ago(EXPIRED_RUN_AGE_HOURS));
+
+        create_queued_run(runs_dir, "new-run", "settings_test", "new prompt")
+            .expect("create new run");
+
+        assert!(!runs_dir.join("old-run").exists());
+        assert!(runs_dir.join("new-run").join("result.json").exists());
+    }
+
+    #[test]
+    fn recorded_run_dir_prunes_expired_run_before_opening_artifacts() {
+        let temp = tempdir().expect("tempdir");
+        let runs_dir = temp.path();
+
+        create_queued_run(runs_dir, "old-run", "settings_test", "old prompt")
+            .expect("create old run");
+        let old_run_dir = runs_dir.join("old-run");
+        finish_run(
+            runs_dir,
+            "old-run",
+            GeminiBrowserRunResult {
+                run_id: "old-run".to_string(),
+                status: GeminiBrowserRunStatus::Ok,
+                text: Some("answer".to_string()),
+                message: None,
+                manual_action: None,
+                artifacts: GeminiBrowserArtifactRefs {
+                    run_dir: Some(old_run_dir.to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+                elapsed_ms: 25,
+                debug_summary: None,
+            },
+        )
+        .expect("finish old run");
+        set_run_updated_at(runs_dir, "old-run", hours_ago(EXPIRED_RUN_AGE_HOURS));
+
+        assert!(super::recorded_run_dir(runs_dir, "old-run").is_err());
+        assert!(!old_run_dir.exists());
+    }
+
+    fn hours_ago(hours: i64) -> String {
+        (OffsetDateTime::now_utc() - Duration::hours(hours))
+            .format(&Rfc3339)
+            .expect("format timestamp")
+    }
+
+    fn set_run_updated_at(runs_dir: &std::path::Path, run_id: &str, updated_at: String) {
+        let path = runs_dir.join(run_id).join("result.json");
+        let mut run = super::read_run_file(&path).expect("read run");
+        run.updated_at = updated_at;
+        super::write_run(&path, &run).expect("write run");
     }
 }
