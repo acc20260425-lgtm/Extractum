@@ -47,8 +47,9 @@ Use the existing event transport only as a lightweight invalidation signal.
 
 The backend still emits a Tauri event after meaningful run changes, but the
 event no longer carries authoritative status, message, result, or queue
-position. The frontend listener uses the event only to schedule a refresh from
-the existing commands:
+position. The event must be emitted only after every read model consumed by the
+frontend refresh path has been updated. The frontend listener uses the event
+only to schedule a refresh from the existing commands:
 
 - `gemini_bridge_status`
 - `gemini_bridge_list_runs`
@@ -67,32 +68,64 @@ pub struct GeminiBrowserRunChangeEvent {
 }
 ```
 
-The event name may remain `gemini-browser://run` for this transition slice so
-that the transport remains narrow and easy to remove later. Code should rename
-helpers and types around the new semantics, for example:
+The wire event name may remain `gemini-browser://run` for this transition slice
+so that the transport remains narrow and easy to remove later. Public symbols
+must not keep the old state-bearing names. Code must rename helpers and types
+around the new semantics, for example:
 
 - Rust: `GeminiBrowserRunChangeEvent`
 - TypeScript: `GeminiBrowserRunChangeEvent`
+- Event constant: `GEMINI_BROWSER_RUN_CHANGE_EVENT`
 - API helper: `listenToGeminiBrowserRunChanges`
 
 Consumers must not infer run status from this event. They must reread status
 and run log data.
 
+The old public names `GeminiBrowserRunEvent` and `listenToGeminiBrowserRuns`
+should be removed rather than kept as aliases. Keeping aliases would preserve
+the legacy state-channel API shape even if the payload is smaller.
+
 ## Backend Behavior
 
-Backend run lifecycle writes remain ordered around the run log:
+Backend run lifecycle writes remain ordered around the read models consumed by
+`refresh()`: the Gemini Browser run log and the provider status snapshot behind
+`gemini_bridge_status`.
 
 1. A run is created in the run log as queued.
-2. A change event is emitted after the queued record exists.
-3. When an Apalis worker starts the job, the run log is marked running.
-4. A change event is emitted after the running record is written.
-5. When the job reaches a terminal result or cancellation, the run log is
+2. Provider status snapshot fields affected by that queued state are updated.
+3. A change event is emitted after both read models are updated.
+4. When an Apalis worker starts the job, the run log is marked running.
+5. Provider status snapshot fields affected by the running state are updated.
+6. A change event is emitted after both read models are updated.
+7. When the job reaches a terminal result or cancellation, the run log is
    updated with the final result.
-6. A change event is emitted after the terminal record is written.
+8. Provider status snapshot fields affected by the terminal state are updated.
+9. A change event is emitted after both read models are updated.
+
+This ordering is required because the frontend reacts to an event by reading
+both `gemini_bridge_status` and `gemini_bridge_list_runs` immediately. Emitting
+between run log update and status snapshot update can produce contradictory UI
+state and is not allowed.
 
 Provider status snapshots may still exist as runtime display state for
 `gemini_bridge_status`, but they must not become an alternate run-history
 source. Run-history UI reads from the run log.
+
+## Transient Coordination State
+
+In-memory coordination is still allowed when it does not become run-history
+truth. The Apalis runtime may keep transient state such as:
+
+- waiters used by synchronous `send_single` calls to await one run result;
+- cancellation tokens;
+- active-run coordination needed to bridge command calls, worker execution, and
+  sidecar lifetime.
+
+This state is implementation coordination only. It may unblock waiters, cancel
+work, or help route an active sidecar operation, but it must not be used as the
+authoritative source for run history, final run status, or frontend refresh
+data. If the process restarts, recoverable run state comes from Apalis storage
+and the run log, not transient memory.
 
 Startup reconciliation should repair run log records from Apalis state as it
 does today. It does not need to replay events for historical changes; UI mount
@@ -103,13 +136,17 @@ already performs an explicit refresh.
 The Settings Gemini Browser panel must stop reading `payload.status` or
 `payload.message` from the event. The listener should only schedule a refresh.
 
-Refresh scheduling should be coalesced so several quick events do not produce
-parallel status/list-runs races. A simple in-flight refresh guard or trailing
-refresh flag is enough:
+Refresh scheduling must be coalesced so several quick events do not produce
+parallel status/list-runs races. The behavior should be deterministic:
 
 - If no refresh is running, start one.
 - If a refresh is already running, remember that another refresh was requested.
-- After the active refresh completes, run one more refresh if needed.
+- If several events arrive during one active refresh, collapse them into exactly
+  one additional refresh.
+- After the active refresh completes, run that additional refresh if requested.
+- If the active refresh fails, the pending refresh flag must not be lost; the
+  additional refresh still runs so a terminal update is not skipped because of a
+  transient status/list-runs error.
 
 Direct user commands such as Start Chrome, Resume, Stop, and Send Test Prompt
 may continue to call `refresh()` after their command returns. The event listener
@@ -123,6 +160,7 @@ Remove these pre-Apalis state-channel traces:
 - Rust `GeminiBrowserRunEvent.message`
 - Rust `GeminiBrowserRunEvent.queue_position`
 - TypeScript equivalents of those fields
+- Public API names `GeminiBrowserRunEvent` and `listenToGeminiBrowserRuns`
 - Frontend assignments from event payload to user-facing message/status
 - Tests that treat event payload as authoritative state
 
