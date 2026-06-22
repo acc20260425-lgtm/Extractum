@@ -46,8 +46,8 @@ The Gemini Browser Provider is the current implementation. Its runtime path is:
 2. Frontend API helpers in `src/lib/api/gemini-browser.ts` call typed Tauri
    commands.
 3. Tauri commands in `src-tauri/src/gemini_browser/commands.rs` own run IDs,
-   app-data paths, run logging, run-change invalidation events, and the
-   synchronous command-facing waiter handoff.
+   app-data paths, run logging, pull read models, and the synchronous
+   command-facing waiter handoff.
 4. `src-tauri/src/gemini_browser/jobs.rs` owns the Apalis-backed SQLite queue,
    one-worker execution, cancellation state, timeout finalization, and the
    queue polling config.
@@ -67,6 +67,12 @@ The Gemini Browser Provider is the current implementation. Its runtime path is:
 This keeps the Svelte app free of Playwright imports, keeps Rust free of DOM
 automation details, and gives the TypeScript sidecar a narrow job: drive the
 browser and return typed provider status or run results.
+
+The Settings UI does not subscribe to Gemini Browser run events. While mounted,
+it keeps browser state fresh through pull refreshes: light polling reads cached
+`gemini_bridge_status_snapshot`, `gemini_bridge_list_runs`, and selected
+`gemini_bridge_get_run(run_id)` details, while explicit full refreshes may call
+live `gemini_bridge_status`.
 
 The current implementation is an operator-facing Settings provider for
 one-off browser runs and diagnostics, and a selectable prompt-pack runtime

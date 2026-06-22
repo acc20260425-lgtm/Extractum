@@ -201,11 +201,16 @@ The default artifact mode from Rust is `reduced`. Full HTML/screenshot artifacts
 
 Current queue behavior is Apalis-backed. `gemini_bridge_send_single` and
 Prompt Pack browser stages create a queued run log record, register a
-per-run waiter, push an Apalis SQLite job into the main `extractum.db`, emit a
-run-change invalidation event, and then wait for the worker result. The
+per-run waiter, push an Apalis SQLite job into the main `extractum.db`, and then
+wait for the worker result. The
 Gemini Browser worker has concurrency `1`: it marks the run log `running`,
-calls the sidecar, stores the terminal run result, completes the waiter, and
-emits another run-change invalidation event.
+calls the sidecar, stores the terminal run result, and completes the waiter.
+
+The Settings panel freshness path is pull-based. Mounted panel polling uses
+`gemini_bridge_status_snapshot`, `gemini_bridge_list_runs`, and
+`gemini_bridge_get_run(run_id)` for selected details. Live
+`gemini_bridge_status` probing is reserved for manual/full refreshes and
+explicit provider commands, not active polling.
 
 The file-backed run log remains the product-facing source for Settings,
 history, Prompt Pack provenance, and diagnostics. Apalis rows are queue
@@ -355,8 +360,8 @@ Next checks:
 Meaning:
 
 - Rust created the run record but the Apalis worker did not mark it running yet,
-  the sidecar flow did not reach a final result, or the UI did not
-  receive/refresh the final event.
+  the sidecar flow did not reach a final result, or the Settings panel has not
+  pulled the terminal run-log state yet.
 
 Next checks:
 
@@ -375,7 +380,7 @@ Next checks:
    - send wait: up to 75 seconds while generation-busy UI is visible, with a
      10 second idle grace
    - answer wait: 120 seconds by default
-6. If the browser visibly answered but run stayed queued/running, suspect answer selector drift or event/log update failure.
+6. If the browser visibly answered but run stayed queued/running, suspect answer selector drift, a run-log update failure, or a selected-detail refresh failure.
 
 Known Apalis gotcha:
 

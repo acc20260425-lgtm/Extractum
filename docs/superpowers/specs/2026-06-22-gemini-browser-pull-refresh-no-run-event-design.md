@@ -2,7 +2,7 @@
 
 Date: 2026-06-22
 
-Status: draft for review.
+Status: approved; implementation planned.
 
 ## Context
 

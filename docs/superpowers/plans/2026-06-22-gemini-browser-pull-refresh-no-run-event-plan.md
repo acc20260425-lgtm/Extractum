@@ -59,7 +59,7 @@
 - Read: `src-tauri/src/gemini_browser/commands.rs`
 - Read: `src/lib/components/settings/gemini-browser-provider-panel.svelte`
 
-- [ ] **Step 1: Create a feature branch**
+- [x] **Step 1: Create a feature branch**
 
 Run:
 
@@ -69,7 +69,7 @@ git checkout -b gemini-browser-pull-refresh-no-run-event
 
 Expected: branch switches to `gemini-browser-pull-refresh-no-run-event`.
 
-- [ ] **Step 2: Confirm starting status**
+- [x] **Step 2: Confirm starting status**
 
 Run:
 
@@ -79,7 +79,7 @@ git status --short --branch
 
 Expected: current branch is `gemini-browser-pull-refresh-no-run-event`; only the approved spec/plan files may be untracked or modified.
 
-- [ ] **Step 3: Run focused baseline checks**
+- [x] **Step 3: Run focused baseline checks**
 
 Run:
 
@@ -109,7 +109,7 @@ Expected: current frontend Gemini Browser tests pass before behavior changes.
 - Modify: `src-tauri/src/gemini_browser/mod.rs`
 - Modify: `src-tauri/src/lib.rs`
 
-- [ ] **Step 1: Add failing run-log detail tests**
+- [x] **Step 1: Add failing run-log detail tests**
 
 In `src-tauri/src/gemini_browser/run_log.rs`, add these tests inside the existing `#[cfg(test)] mod tests`:
 
@@ -139,7 +139,7 @@ fn read_run_returns_validation_error_for_missing_run() {
 }
 ```
 
-- [ ] **Step 2: Run run-log tests and confirm failure**
+- [x] **Step 2: Run run-log tests and confirm failure**
 
 Run:
 
@@ -149,7 +149,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL because `read_run` is not defined.
 
-- [ ] **Step 3: Implement `read_run`**
+- [x] **Step 3: Implement `read_run`**
 
 In `src-tauri/src/gemini_browser/run_log.rs`, add this function after `list_runs`:
 
@@ -164,7 +164,7 @@ pub(crate) fn read_run(runs_dir: &Path, run_id: &str) -> AppResult<GeminiBrowser
 }
 ```
 
-- [ ] **Step 4: Re-run run-log tests**
+- [x] **Step 4: Re-run run-log tests**
 
 Run:
 
@@ -174,7 +174,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 5: Add startup reconciliation gate to state**
+- [x] **Step 5: Add startup reconciliation gate to state**
 
 In `src-tauri/src/gemini_browser/state.rs`, add imports near the top:
 
@@ -226,7 +226,7 @@ pub(crate) fn set_status_snapshot_if_current(
 
 This helper is used by pull-refresh read commands only. Lifecycle-owned worker updates still use the existing direct/update helpers.
 
-- [ ] **Step 6: Add state gate tests**
+- [x] **Step 6: Add state gate tests**
 
 In `src-tauri/src/gemini_browser/state.rs`, add these tests:
 
@@ -300,7 +300,7 @@ fn set_status_snapshot_if_current_does_not_overwrite_newer_snapshot() {
 
 `status_snapshot_for_test()` already exists in `GeminiBrowserState` in the current codebase. If it is missing during implementation, add a `#[cfg(test)]` helper that returns `self.status_snapshot.read().clone()`.
 
-- [ ] **Step 7: Add backend read-model command tests**
+- [x] **Step 7: Add backend read-model command tests**
 
 In `src-tauri/src/gemini_browser/commands.rs`, add these tests in the existing `#[cfg(test)] mod tests`:
 
@@ -531,7 +531,7 @@ async fn provider_status_read_core_waits_for_startup_reconciliation_before_live_
 }
 ```
 
-- [ ] **Step 8: Run backend command tests and confirm failure**
+- [x] **Step 8: Run backend command tests and confirm failure**
 
 Run:
 
@@ -541,7 +541,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL because `provider_status_read_core`, `provider_status_snapshot_core`, `provider_status_snapshot_read_core`, `status_snapshot_from_reconciled_run_log`, and `get_run_core` do not exist.
 
-- [ ] **Step 9: Implement backend read-model helpers and commands**
+- [x] **Step 9: Implement backend read-model helpers and commands**
 
 In `src-tauri/src/gemini_browser/commands.rs`:
 
@@ -767,7 +767,7 @@ pub async fn gemini_bridge_list_runs(
 }
 ```
 
-- [ ] **Step 10: Add startup reconciliation helper**
+- [x] **Step 10: Add startup reconciliation helper**
 
 In `src-tauri/src/gemini_browser/jobs.rs`, add this public helper near `start_gemini_browser_job_worker`:
 
@@ -803,7 +803,7 @@ Keep `setup_gemini_browser_apalis_storage(&pool).await?;` before the reconciliat
 
 `ensure_gemini_browser_startup_reconciled` is the single shared startup gate for worker setup and read commands. It must use `GeminiBrowserState::ensure_startup_reconciled(...)` directly and must not call `gemini_bridge_status_snapshot`, `gemini_bridge_list_runs`, `gemini_bridge_get_run`, or any other command/read path internally. That avoids self-waiting on the same gate during worker startup and keeps retry semantics centralized in the state helper after a failed reconciliation attempt.
 
-- [ ] **Step 11: Re-export and register commands**
+- [x] **Step 11: Re-export and register commands**
 
 In `src-tauri/src/gemini_browser/mod.rs`, update exports:
 
@@ -842,7 +842,7 @@ gemini_bridge_get_run,
 
 Place `gemini_bridge_status_snapshot` after `gemini_bridge_status`, and `gemini_bridge_get_run` after `gemini_bridge_list_runs`.
 
-- [ ] **Step 12: Run backend read-model tests**
+- [x] **Step 12: Run backend read-model tests**
 
 Run:
 
@@ -864,7 +864,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 13: Commit backend read-model commands**
+- [x] **Step 13: Commit backend read-model commands**
 
 Run:
 
@@ -885,7 +885,7 @@ Expected: commit succeeds.
 - Modify: `src-tauri/src/gemini_browser/commands.rs`
 - Modify: `src-tauri/src/gemini_browser/jobs.rs`
 
-- [ ] **Step 1: Remove Rust event assertion tests**
+- [x] **Step 1: Remove Rust event assertion tests**
 
 In `src-tauri/src/gemini_browser/commands.rs`, remove tests:
 
@@ -896,7 +896,7 @@ In `src-tauri/src/gemini_browser/commands.rs`, remove tests:
 Do not replace them with a Rust source test containing the forbidden strings.
 The production-source removal is verified with the scoped `rg` gate in Step 7.
 
-- [ ] **Step 2: Remove event type**
+- [x] **Step 2: Remove event type**
 
 In `src-tauri/src/gemini_browser/types.rs`, delete:
 
@@ -910,7 +910,7 @@ pub struct GeminiBrowserRunChangeEvent {
 
 In `src-tauri/src/gemini_browser/mod.rs`, remove `GeminiBrowserRunChangeEvent` from `pub use types::{...}`.
 
-- [ ] **Step 3: Remove command event helpers**
+- [x] **Step 3: Remove command event helpers**
 
 In `src-tauri/src/gemini_browser/commands.rs`:
 
@@ -1077,7 +1077,7 @@ if let Err(error) = state.update_status_snapshot(handle, |status| {
 }
 ```
 
-- [ ] **Step 4: Remove worker event callbacks**
+- [x] **Step 4: Remove worker event callbacks**
 
 In `src-tauri/src/gemini_browser/jobs.rs`:
 
@@ -1110,7 +1110,7 @@ Keep the status snapshot updates.
 
 7. In `finish_timed_out_job` and `finish_completed_job`, remove `emit_gemini_browser_run_change_event(...)`.
 
-- [ ] **Step 5: Update Rust tests that captured event vectors**
+- [x] **Step 5: Update Rust tests that captured event vectors**
 
 Search:
 
@@ -1140,7 +1140,7 @@ let run = list_runs(temp.path(), 10)
 assert_eq!(run.status, GeminiBrowserRunStatus::Failed);
 ```
 
-- [ ] **Step 6: Run backend event-removal tests**
+- [x] **Step 6: Run backend event-removal tests**
 
 Run:
 
@@ -1150,7 +1150,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 7: Verify no production backend event transport remains**
+- [x] **Step 7: Verify no production backend event transport remains**
 
 Run:
 
@@ -1168,7 +1168,7 @@ rg -n "gemini-browser://run|GEMINI_BROWSER_RUN_CHANGE_EVENT|GeminiBrowserRunChan
 
 Expected: no output. This catches stale imports/re-exports in `src-tauri/src/lib.rs` or any non-`gemini_browser` Rust module before frontend work starts.
 
-- [ ] **Step 8: Commit backend event removal**
+- [x] **Step 8: Commit backend event removal**
 
 Run:
 
@@ -1188,7 +1188,7 @@ Expected: commit succeeds.
 - Modify: `src/lib/api/gemini-browser.ts`
 - Modify: `src/lib/api/gemini-browser.test.ts`
 
-- [ ] **Step 1: Update API tests for pull commands**
+- [x] **Step 1: Update API tests for pull commands**
 
 In `src/lib/api/gemini-browser.test.ts`:
 
@@ -1244,7 +1244,7 @@ it("does not expose Gemini Browser run event public names", async () => {
 });
 ```
 
-- [ ] **Step 2: Run API test and confirm failure**
+- [x] **Step 2: Run API test and confirm failure**
 
 Run:
 
@@ -1254,7 +1254,7 @@ npm.cmd test -- src/lib/api/gemini-browser.test.ts
 
 Expected: FAIL because new wrappers do not exist and old event exports still exist.
 
-- [ ] **Step 3: Remove event type and add command wrappers**
+- [x] **Step 3: Remove event type and add command wrappers**
 
 In `src/lib/types/gemini-browser.ts`, delete:
 
@@ -1305,7 +1305,7 @@ export function isGeminiBrowserRunNotFoundError(error: unknown) {
 
 5. Add `GeminiBrowserRun` to the type import list.
 
-- [ ] **Step 4: Run API tests**
+- [x] **Step 4: Run API tests**
 
 Run:
 
@@ -1315,7 +1315,7 @@ npm.cmd test -- src/lib/api/gemini-browser.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit frontend API removal**
+- [x] **Step 5: Commit frontend API removal**
 
 Run:
 
@@ -1334,7 +1334,7 @@ Expected: commit succeeds.
 - Modify: `src/lib/gemini-browser-refresh-scheduler.ts`
 - Modify: `src/lib/gemini-browser-refresh-scheduler.test.ts`
 
-- [ ] **Step 1: Replace scheduler tests with mode/detail contract tests**
+- [x] **Step 1: Replace scheduler tests with mode/detail contract tests**
 
 In `src/lib/gemini-browser-refresh-scheduler.test.ts`, update helper types:
 
@@ -1583,7 +1583,7 @@ it("resolves with allFailed when every requested light read model fails", async 
 });
 ```
 
-- [ ] **Step 2: Run scheduler tests and confirm failure**
+- [x] **Step 2: Run scheduler tests and confirm failure**
 
 Run:
 
@@ -1593,7 +1593,7 @@ npm.cmd test -- src/lib/gemini-browser-refresh-scheduler.test.ts
 
 Expected: FAIL because scheduler mode/options/detail APIs do not exist.
 
-- [ ] **Step 3: Implement scheduler mode API**
+- [x] **Step 3: Implement scheduler mode API**
 
 In `src/lib/gemini-browser-refresh-scheduler.ts`, replace the public types with:
 
@@ -1758,7 +1758,7 @@ return {
 };
 ```
 
-- [ ] **Step 4: Run scheduler tests**
+- [x] **Step 4: Run scheduler tests**
 
 Run:
 
@@ -1768,7 +1768,7 @@ npm.cmd test -- src/lib/gemini-browser-refresh-scheduler.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit scheduler modes**
+- [x] **Step 5: Commit scheduler modes**
 
 Run:
 
@@ -1787,7 +1787,7 @@ Expected: commit succeeds.
 - Create: `src/lib/gemini-browser-polling.ts`
 - Create: `src/lib/gemini-browser-polling.test.ts`
 
-- [ ] **Step 1: Add polling controller tests**
+- [x] **Step 1: Add polling controller tests**
 
 Create `src/lib/gemini-browser-polling.test.ts`:
 
@@ -2102,7 +2102,7 @@ describe("gemini browser polling controller", () => {
 });
 ```
 
-- [ ] **Step 2: Run polling tests and confirm failure**
+- [x] **Step 2: Run polling tests and confirm failure**
 
 Run:
 
@@ -2112,7 +2112,7 @@ npm.cmd test -- src/lib/gemini-browser-polling.test.ts
 
 Expected: FAIL because `gemini-browser-polling.ts` does not exist.
 
-- [ ] **Step 3: Implement polling controller**
+- [x] **Step 3: Implement polling controller**
 
 Create `src/lib/gemini-browser-polling.ts`:
 
@@ -2327,7 +2327,7 @@ export function createGeminiBrowserPollingController(
 
 The controller owns the grace-window rules. The settings panel must not duplicate raw `status.running || runs.some(...)` logic outside `getActivitySnapshot()`, otherwise stale status/run rows can keep active polling alive forever.
 
-- [ ] **Step 4: Run polling tests**
+- [x] **Step 4: Run polling tests**
 
 Run:
 
@@ -2337,7 +2337,7 @@ npm.cmd test -- src/lib/gemini-browser-polling.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit polling controller**
+- [x] **Step 5: Commit polling controller**
 
 Run:
 
@@ -2356,7 +2356,7 @@ Expected: commit succeeds.
 - Modify: `src/lib/components/settings/gemini-browser-provider-panel.svelte`
 - Modify: `src/lib/gemini-browser-provider-panel.test.ts`
 
-- [ ] **Step 1: Update source-contract tests**
+- [x] **Step 1: Update source-contract tests**
 
 In `src/lib/gemini-browser-provider-panel.test.ts`:
 
@@ -2494,7 +2494,7 @@ it("keeps rejected pending test runs until terminal, not-found confirmation, or 
 });
 ```
 
-- [ ] **Step 2: Run panel tests and confirm failure**
+- [x] **Step 2: Run panel tests and confirm failure**
 
 Run:
 
@@ -2504,7 +2504,7 @@ npm.cmd test -- src/lib/gemini-browser-provider-panel.test.ts
 
 Expected: FAIL because the panel still imports/listens to run-change events and has no polling controller.
 
-- [ ] **Step 3: Update panel imports**
+- [x] **Step 3: Update panel imports**
 
 In `src/lib/components/settings/gemini-browser-provider-panel.svelte`:
 
@@ -2526,7 +2526,7 @@ import {
 import type { GeminiBrowserRefreshOptions } from "$lib/gemini-browser-refresh-scheduler";
 ```
 
-- [ ] **Step 4: Add selected-detail state**
+- [x] **Step 4: Add selected-detail state**
 
 Near existing state declarations, add:
 
@@ -2557,7 +2557,7 @@ function selectedRunIdForInspector() {
 
 and use it in the derived expression.
 
-- [ ] **Step 5: Add selected-run apply helper**
+- [x] **Step 5: Add selected-run apply helper**
 
 In the `<script>` block, add:
 
@@ -2580,7 +2580,7 @@ selectedRunDetail = null;
 selectedDetailError = null;
 ```
 
-- [ ] **Step 6: Add refresh wrappers and create polling controller before scheduler**
+- [x] **Step 6: Add refresh wrappers and create polling controller before scheduler**
 
 Add the refresh wrappers before `refreshScheduler` is created:
 
@@ -2657,7 +2657,7 @@ async function ensurePostTerminalRefresh(runId: string) {
 
 This helper is deliberately conditional. It ensures at least one post-terminal cached status/run-log read when the currently applied `runs` state has not yet observed the terminal row, but it avoids an unconditional extra refresh when another refresh has already applied the terminal state. The fallback `forceTrailing` is light-only and is used only after the first post-terminal light read still has not made the terminal row visible.
 
-- [ ] **Step 7: Update scheduler deps**
+- [x] **Step 7: Update scheduler deps**
 
 Update `createGeminiBrowserRefreshScheduler({ ... })` deps:
 
@@ -2704,7 +2704,7 @@ In `syncActivePromptResult(nextRuns)`, after detecting completed result and clea
 pollingController.confirmPendingRunTerminal(completedResult.run_id);
 ```
 
-- [ ] **Step 8: Update long-running command flow**
+- [x] **Step 8: Update long-running command flow**
 
 Replace `sendTestPrompt()` command body with this structure:
 
@@ -2745,7 +2745,7 @@ Update other command flows:
 - Manual refresh buttons should call `scheduleRefreshInBackground({ mode: "full" }, { recordPollingOutcome: true })`.
 - Mount should call `scheduleRefreshInBackground({ mode: "light" }, { recordPollingOutcome: true })` and start polling, so initial full read-model failure contributes to degraded cadence immediately.
 
-- [ ] **Step 9: Remove event listener on mount**
+- [x] **Step 9: Remove event listener on mount**
 
 Replace the `onMount` block with:
 
@@ -2765,7 +2765,7 @@ onMount(() => {
 
 No `listenToGeminiBrowserRunChanges` call should remain.
 
-- [ ] **Step 10: Run panel tests**
+- [x] **Step 10: Run panel tests**
 
 Run:
 
@@ -2775,7 +2775,7 @@ npm.cmd test -- src/lib/gemini-browser-provider-panel.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 11: Run Svelte check**
+- [x] **Step 11: Run Svelte check**
 
 Run:
 
@@ -2785,7 +2785,7 @@ npm.cmd run check
 
 Expected: PASS with 0 errors.
 
-- [ ] **Step 12: Commit panel wiring**
+- [x] **Step 12: Commit panel wiring**
 
 Run:
 
@@ -2805,7 +2805,7 @@ Expected: commit succeeds.
 - Modify: `docs/architecture-deep-dive.md`
 - Modify: `docs/superpowers/specs/2026-06-22-gemini-browser-pull-refresh-no-run-event-design.md`
 
-- [ ] **Step 1: Update docs references**
+- [x] **Step 1: Update docs references**
 
 Search:
 
@@ -2825,7 +2825,7 @@ Update current docs outside historical plans/specs:
 
 Historical files under `docs/superpowers/plans/2026-06-20-*`, `docs/superpowers/plans/2026-06-22-gemini-browser-run-event-invalidation-plan.md`, and `docs/superpowers/specs/2026-06-22-gemini-browser-run-event-invalidation-design.md` may keep historical event references.
 
-- [ ] **Step 2: Run Rust verification**
+- [x] **Step 2: Run Rust verification**
 
 Run:
 
@@ -2835,7 +2835,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 3: Run frontend verification**
+- [x] **Step 3: Run frontend verification**
 
 Run:
 
@@ -2853,7 +2853,7 @@ npm.cmd run check
 
 Expected: PASS with 0 errors.
 
-- [ ] **Step 4: Run prompt-pack regression tests**
+- [x] **Step 4: Run prompt-pack regression tests**
 
 Run:
 
@@ -2863,7 +2863,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS. This guards the Gemini Browser prompt-pack runtime provider path.
 
-- [ ] **Step 5: Run source removal gates**
+- [x] **Step 5: Run source removal gates**
 
 Run:
 
@@ -2881,7 +2881,7 @@ rg -n "@tauri-apps/api/event" src\lib\api\gemini-browser.ts src\lib\components\s
 
 Expected: no output.
 
-- [ ] **Step 6: Run formatting checks**
+- [x] **Step 6: Run formatting checks**
 
 Run:
 
@@ -2899,7 +2899,7 @@ git diff --check
 
 Expected: no whitespace errors.
 
-- [ ] **Step 7: Commit docs and final verification updates**
+- [x] **Step 7: Commit docs and final verification updates**
 
 Run:
 
@@ -2910,7 +2910,7 @@ git commit -m "docs: describe Gemini Browser pull refresh"
 
 Expected: commit succeeds.
 
-- [ ] **Step 8: Final status**
+- [x] **Step 8: Final status**
 
 Run:
 
