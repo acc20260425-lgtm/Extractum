@@ -1,3 +1,4 @@
 .gitattributes text eol=lf
 *.toml text eol=lf
 src-tauri/migrations/*.sql text eol=lf
+src-tauri/migrations/**/*.sql text eol=lf
