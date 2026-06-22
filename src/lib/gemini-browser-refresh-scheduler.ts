@@ -4,20 +4,65 @@ import type {
   GeminiBrowserRunLogSummary,
 } from "./types/gemini-browser";
 
+export type GeminiBrowserRefreshMode = "light" | "full";
+
+export interface GeminiBrowserRefreshOptions {
+  mode?: GeminiBrowserRefreshMode;
+  forceTrailing?: boolean;
+}
+
+export interface GeminiBrowserRefreshOutcome {
+  allFailed: boolean;
+}
+
 export interface GeminiBrowserRefreshSchedulerDeps {
   loadStatus: () => Promise<GeminiBrowserProviderStatus>;
+  loadStatusSnapshot: () => Promise<GeminiBrowserProviderStatus>;
   loadRuns: () => Promise<GeminiBrowserRunLogSummary>;
+  loadRun: (runId: string) => Promise<GeminiBrowserRun>;
+  getSelectedRunId: () => string | null;
+  getSelectedDetailToken: () => number;
   applyStatus: (status: GeminiBrowserProviderStatus) => void;
   applyRuns: (runs: GeminiBrowserRun[]) => void;
+  applySelectedRun: (run: GeminiBrowserRun) => void;
+  applySelectedRunUnavailable: (runId: string, message: string) => void;
+  applySelectedRunError: (runId: string, message: string) => void;
   applyStatusError: (message: string | null) => void;
   applyRunsError: (message: string | null) => void;
   applyMessage: (message: string) => void;
   syncActivePromptResult: (runs: GeminiBrowserRun[]) => void;
   formatError: (context: string, error: unknown) => string;
+  isRunNotFoundError: (error: unknown) => boolean;
+  isDisposed?: () => boolean;
 }
 
 export interface GeminiBrowserRefreshScheduler {
-  scheduleRefresh: () => Promise<void>;
+  scheduleRefresh: (
+    options?: GeminiBrowserRefreshOptions,
+  ) => Promise<GeminiBrowserRefreshOutcome>;
+  dispose: () => void;
+}
+
+function modeRank(mode: GeminiBrowserRefreshMode) {
+  return mode === "full" ? 2 : 1;
+}
+
+function strongestMode(
+  left: GeminiBrowserRefreshMode,
+  right: GeminiBrowserRefreshMode,
+): GeminiBrowserRefreshMode {
+  return modeRank(right) > modeRank(left) ? right : left;
+}
+
+function compareUpdatedAt(left: string, right: string) {
+  const leftMs = Date.parse(left);
+  const rightMs = Date.parse(right);
+  if (Number.isNaN(leftMs) || Number.isNaN(rightMs)) return null;
+  return leftMs - rightMs;
+}
+
+function selectedVersionKey(runId: string, token: number) {
+  return `${token}:${runId}`;
 }
 
 // Each caller gets a promise for the refresh requested by that call.
@@ -25,40 +70,120 @@ export interface GeminiBrowserRefreshScheduler {
 export function createGeminiBrowserRefreshScheduler(
   deps: GeminiBrowserRefreshSchedulerDeps,
 ): GeminiBrowserRefreshScheduler {
-  let activeRefresh: Promise<void> | null = null;
+  let activeRefresh: Promise<GeminiBrowserRefreshOutcome> | null = null;
+  let activeMode: GeminiBrowserRefreshMode | null = null;
   let trailingRequested = false;
-  let trailingPromise: Promise<void> | null = null;
-  let resolveTrailing: (() => void) | null = null;
+  let trailingMode: GeminiBrowserRefreshMode = "light";
+  let trailingPromise: Promise<GeminiBrowserRefreshOutcome> | null = null;
+  let resolveTrailing: ((outcome: GeminiBrowserRefreshOutcome) => void) | null = null;
   let rejectTrailing: ((error: unknown) => void) | null = null;
+  let disposed = false;
+  const latestSelectedRunVersions = new Map<string, string>();
 
-  async function runRefreshOnce() {
+  function isDisposed() {
+    return disposed || deps.isDisposed?.() === true;
+  }
+
+  function applyIfLive(callback: () => void) {
+    if (isDisposed()) return false;
+    callback();
+    return true;
+  }
+
+  function applySelectedRunIfCurrent(
+    run: GeminiBrowserRun,
+    requestedRunId: string,
+    requestedToken: number,
+  ) {
+    if (isDisposed()) return false;
+    if (deps.getSelectedRunId() !== requestedRunId) return false;
+    if (deps.getSelectedDetailToken() !== requestedToken) return false;
+    const versionKey = selectedVersionKey(run.run_id, requestedToken);
+    const latest = latestSelectedRunVersions.get(versionKey);
+    if (latest) {
+      const comparison = compareUpdatedAt(run.updated_at, latest);
+      if (comparison !== null && comparison < 0) return false;
+      if (comparison === null && !Number.isNaN(Date.parse(latest))) return false;
+    }
+    latestSelectedRunVersions.set(versionKey, run.updated_at);
+    deps.applySelectedRun(run);
+    return true;
+  }
+
+  async function runRefreshOnce(
+    mode: GeminiBrowserRefreshMode,
+  ): Promise<GeminiBrowserRefreshOutcome> {
+    let successfulReadModels = 0;
+    const selectedRunId = deps.getSelectedRunId();
+    const selectedDetailToken = deps.getSelectedDetailToken();
+    const statusPromise = mode === "full" ? deps.loadStatus() : deps.loadStatusSnapshot();
     const [statusResult, runsResult] = await Promise.allSettled([
-      deps.loadStatus(),
+      statusPromise,
       deps.loadRuns(),
     ]);
 
     if (statusResult.status === "fulfilled") {
-      deps.applyStatus(statusResult.value);
-      deps.applyStatusError(null);
-      deps.applyMessage(statusResult.value.latest_message ?? "");
+      successfulReadModels += 1;
+      applyIfLive(() => {
+        deps.applyStatus(statusResult.value);
+        deps.applyStatusError(null);
+        deps.applyMessage(statusResult.value.latest_message ?? "");
+      });
     } else {
       const formatted = deps.formatError(
         "loading Gemini browser provider status",
         statusResult.reason,
       );
-      deps.applyStatusError(formatted);
-      deps.applyMessage(formatted);
+      applyIfLive(() => {
+        deps.applyStatusError(formatted);
+        deps.applyMessage(formatted);
+      });
     }
 
+    let selectedRow: GeminiBrowserRun | null = null;
     if (runsResult.status === "fulfilled") {
-      deps.applyRuns(runsResult.value.runs);
-      deps.applyRunsError(null);
-      deps.syncActivePromptResult(runsResult.value.runs);
+      successfulReadModels += 1;
+      const runs = runsResult.value.runs;
+      selectedRow =
+        selectedRunId === null ? null : runs.find((run) => run.run_id === selectedRunId) ?? null;
+      applyIfLive(() => {
+        deps.applyRuns(runs);
+        deps.applyRunsError(null);
+        deps.syncActivePromptResult(runs);
+      });
+      if (selectedRow && selectedRunId) {
+        applySelectedRunIfCurrent(selectedRow, selectedRunId, selectedDetailToken);
+      }
     } else {
-      deps.applyRunsError(
-        deps.formatError("loading Gemini browser run history", runsResult.reason),
-      );
+      applyIfLive(() => {
+        deps.applyRunsError(
+          deps.formatError("loading Gemini browser run history", runsResult.reason),
+        );
+      });
     }
+
+    const shouldLoadSelectedDetail =
+      selectedRunId !== null && (runsResult.status === "rejected" || !selectedRow);
+    if (shouldLoadSelectedDetail && selectedRunId) {
+      try {
+        const detailRun = await deps.loadRun(selectedRunId);
+        successfulReadModels += 1;
+        applySelectedRunIfCurrent(detailRun, selectedRunId, selectedDetailToken);
+      } catch (error) {
+        const formatted = deps.formatError("loading Gemini browser run detail", error);
+        if (deps.isRunNotFoundError(error)) {
+          applyIfLive(() => {
+            deps.applySelectedRunUnavailable(selectedRunId, formatted);
+          });
+        } else {
+          applyIfLive(() => {
+            deps.applySelectedRunError(selectedRunId, formatted);
+          });
+        }
+      }
+    }
+
+    return { allFailed: successfulReadModels === 0 };
   }
 
   function takeTrailingRequest() {
@@ -71,23 +196,27 @@ export function createGeminiBrowserRefreshScheduler(
     return { resolve, reject };
   }
 
-  function finishRefresh(refresh: Promise<void>) {
+  function finishRefresh(refresh: Promise<GeminiBrowserRefreshOutcome>) {
     if (activeRefresh === refresh) {
       activeRefresh = null;
+      activeMode = null;
     }
     if (trailingRequested) {
+      const nextMode = trailingMode;
+      trailingMode = "light";
       const trailing = takeTrailingRequest();
-      const trailingRefresh = startRefreshForCall();
+      const trailingRefresh = startRefreshForCall(nextMode);
       void trailingRefresh.then(
-        () => trailing.resolve?.(),
+        (outcome) => trailing.resolve?.(outcome),
         (error) => trailing.reject?.(error),
       );
     }
   }
 
-  function startRefreshForCall(): Promise<void> {
-    const refresh = runRefreshOnce();
+  function startRefreshForCall(mode: GeminiBrowserRefreshMode) {
+    const refresh = runRefreshOnce(mode);
     activeRefresh = refresh;
+    activeMode = mode;
 
     void refresh.then(
       () => finishRefresh(refresh),
@@ -99,7 +228,7 @@ export function createGeminiBrowserRefreshScheduler(
 
   function ensureTrailingPromise() {
     if (!trailingPromise) {
-      trailingPromise = new Promise<void>((resolve, reject) => {
+      trailingPromise = new Promise<GeminiBrowserRefreshOutcome>((resolve, reject) => {
         resolveTrailing = resolve;
         rejectTrailing = reject;
       });
@@ -107,13 +236,28 @@ export function createGeminiBrowserRefreshScheduler(
     return trailingPromise;
   }
 
-  function scheduleRefresh() {
+  function scheduleRefresh(options: GeminiBrowserRefreshOptions = {}) {
+    const requestedMode = options.mode ?? "light";
+    if (
+      activeRefresh &&
+      !options.forceTrailing &&
+      activeMode &&
+      modeRank(activeMode) >= modeRank(requestedMode)
+    ) {
+      return activeRefresh;
+    }
     if (activeRefresh) {
       trailingRequested = true;
+      trailingMode = strongestMode(trailingMode, requestedMode);
       return ensureTrailingPromise();
     }
-    return startRefreshForCall();
+    return startRefreshForCall(requestedMode);
   }
 
-  return { scheduleRefresh };
+  return {
+    scheduleRefresh,
+    dispose() {
+      disposed = true;
+    },
+  };
 }
