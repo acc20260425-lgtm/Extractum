@@ -212,9 +212,21 @@ The scheduler must be exposed as a single function, for example
 `scheduleRefresh(): Promise<void>`. If no refresh is active, the returned promise
 resolves after the refresh requested by that call is applied. If a refresh is
 already active, the call marks a trailing refresh as pending and returns the
-promise for that trailing refresh. Command flows that need the UI to reflect the
-latest status/history before clearing busy state or continuing should `await`
-this promise. Event listeners may fire-and-forget the promise.
+single shared promise for that trailing refresh. Every caller that schedules
+while the same active refresh is running must receive that same trailing promise;
+coalescing applies to both work and promise identity. Command flows that need
+the UI to reflect the latest status/history before clearing busy state or
+continuing should `await` this promise. Event listeners may fire-and-forget the
+promise because expected refresh request failures are handled inside the
+scheduler.
+
+`scheduleRefresh()` must not reject for expected `gemini_bridge_status` or
+`gemini_bridge_list_runs` failures. It should capture those errors into the
+panel's status/history error state, apply any successful result, and resolve
+after the refresh attempt has been represented in UI state. If the implementation
+can still reject for unexpected programming errors, every fire-and-forget caller
+must attach a `.catch(...)` handler that records the scheduler failure without
+creating an unhandled rejection.
 
 The scheduler must coalesce refreshes so several quick requests do not produce
 parallel status/list-runs races. The behavior should be deterministic:
@@ -243,7 +255,10 @@ If `gemini_bridge_list_runs` succeeds and `gemini_bridge_status` fails, update
 summary as degraded, and show the status error separately. If
 `gemini_bridge_status` succeeds and `gemini_bridge_list_runs` fails, update the
 status summary but keep the previous run-history rows and show the history
-error separately.
+error separately. If both requests fail, preserve the previous `status`, `runs`,
+and selected/active `result` state, set both error states or a combined degraded
+message, and keep any pending trailing refresh request intact according to the
+scheduler rules above.
 
 User commands may schedule a refresh after their command returns, but they
 must not bypass the shared scheduler.
@@ -309,11 +324,19 @@ Frontend tests should verify:
 - the Settings panel responds to a change event by refreshing status and run
   history;
 - the Settings panel does not copy event payload fields into `message`,
-  `status`, `runs`, or `result`;
+  `status`, `runs`, or `result`, and does not read `payload.run_updated_at`
+  except for optional diagnostics;
 - run history updates when `gemini_bridge_list_runs` succeeds even if
   `gemini_bridge_status` fails;
+- previous status/history/result state is preserved and errors are shown when
+  both refresh requests fail;
+- `scheduleRefresh()` resolves after expected status/list-runs failures are
+  represented in UI state, and fire-and-forget event-triggered refreshes do not
+  create unhandled promise rejections;
 - mount, user commands, and run-change events all use the same refresh
   scheduler;
+- callers that schedule during an active refresh receive the same shared
+  trailing refresh promise;
 - command return values do not directly assign authoritative panel `status`,
   `runs`, or selected/active `result` state outside the shared refresh path;
 - refresh requests are coalesced when several events arrive quickly.
@@ -325,6 +348,10 @@ Manual verification should include:
 - With the Settings panel open, run a test prompt and verify the history and
   inspector update after completion; reload or explicitly refresh the panel and
   verify the same run remains visible from persisted run-log data.
+- Optional diagnostic check: use DevTools, logging, or a temporary breakpoint to
+  confirm the run-change event payload contains only `run_id` and
+  `run_updated_at`, and that UI state is refreshed through the shared refresh
+  path.
 - YouTube Summary through Gemini Browser still completes.
 
 ## Later Full Event Removal
