@@ -1,10 +1,8 @@
 mod baseline_reset;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
-const APP_IDENTIFIER: &str = "org.ai.extractum";
-const DB_FILENAME: &str = "extractum.db";
 const BASELINE_VERSION: i64 = 1;
 const BASELINE_DESCRIPTION: &str = "current schema baseline";
 const BASELINE_SQL: &str = include_str!("../migrations/0001_current_schema_baseline.sql");
@@ -48,13 +46,42 @@ const PROMPT_PACK_STAGE_BROWSER_PROVENANCE_DESCRIPTION: &str =
     "prompt pack stage browser provenance";
 const PROMPT_PACK_STAGE_BROWSER_PROVENANCE_SQL: &str =
     include_str!("../migrations/0011_prompt_pack_stage_browser_provenance.sql");
-
-fn app_config_db_path() -> Option<PathBuf> {
-    dirs::config_dir().map(|dir| dir.join(APP_IDENTIFIER).join(DB_FILENAME))
-}
+const APALIS_SQLITE_JOBS_WORKERS_VERSION: i64 = 20220530084123;
+const APALIS_SQLITE_JOBS_WORKERS_DESCRIPTION: &str = "jobs workers";
+const APALIS_SQLITE_JOBS_WORKERS_SQL: &str =
+    include_str!("../migrations/apalis_sqlite/20220530084123_jobs_workers.sql");
+const APALIS_SQLITE_ADD_JOB_PRIORITY_VERSION: i64 = 20250313213411;
+const APALIS_SQLITE_ADD_JOB_PRIORITY_DESCRIPTION: &str = "add job priority";
+const APALIS_SQLITE_ADD_JOB_PRIORITY_SQL: &str =
+    include_str!("../migrations/apalis_sqlite/20250313213411_add_job_priority.sql");
+const APALIS_SQLITE_STATS_INDEXES_VERSION: i64 = 20251013233016;
+const APALIS_SQLITE_STATS_INDEXES_DESCRIPTION: &str = "stats indexes";
+const APALIS_SQLITE_STATS_INDEXES_SQL: &str =
+    include_str!("../migrations/apalis_sqlite/20251013233016_stats_indexes.sql");
+const APALIS_SQLITE_RENAME_LAST_ERROR_VERSION: i64 = 20251017150712;
+const APALIS_SQLITE_RENAME_LAST_ERROR_DESCRIPTION: &str = "rename last error";
+const APALIS_SQLITE_RENAME_LAST_ERROR_SQL: &str =
+    include_str!("../migrations/apalis_sqlite/20251017150712_rename_last_error.sql");
+const APALIS_SQLITE_WORKER_STARTED_AT_VERSION: i64 = 20251017162501;
+const APALIS_SQLITE_WORKER_STARTED_AT_DESCRIPTION: &str = "worker started at";
+const APALIS_SQLITE_WORKER_STARTED_AT_SQL: &str =
+    include_str!("../migrations/apalis_sqlite/20251017162501_worker_started_at.sql");
+const APALIS_SQLITE_METADATA_VERSION: i64 = 20251018162501;
+const APALIS_SQLITE_METADATA_DESCRIPTION: &str = "metadata";
+// Keep the upstream-significant trailing space in `ADD ` without storing
+// trailing whitespace in the vendored SQL file; SQLx checksums include it.
+const APALIS_SQLITE_METADATA_SQL: &str = "ALTER TABLE\n    Jobs\nADD \n    COLUMN metadata TEXT;\n";
+const APALIS_SQLITE_MOVE_TO_BYTES_VERSION: i64 = 20251018164941;
+const APALIS_SQLITE_MOVE_TO_BYTES_DESCRIPTION: &str = "move to bytes";
+const APALIS_SQLITE_MOVE_TO_BYTES_SQL: &str =
+    include_str!("../migrations/apalis_sqlite/20251018164941_move_to_bytes.sql");
+const APALIS_SQLITE_IDEMPOTENCY_KEY_VERSION: i64 = 20260506101935;
+const APALIS_SQLITE_IDEMPOTENCY_KEY_DESCRIPTION: &str = "idempotency key";
+const APALIS_SQLITE_IDEMPOTENCY_KEY_SQL: &str =
+    include_str!("../migrations/apalis_sqlite/20260506101935_idempotency_key.sql");
 
 pub fn prepare_database() -> crate::error::AppResult<()> {
-    let Some(db_path) = app_config_db_path() else {
+    let Some(db_path) = crate::db::app_config_db_path() else {
         return Ok(());
     };
     prepare_database_at_path(&db_path)
@@ -176,8 +203,61 @@ fn prompt_pack_stage_browser_provenance_migration() -> Migration {
     }
 }
 
-pub fn build_migrations() -> Vec<Migration> {
+fn apalis_sqlite_migrations() -> Vec<Migration> {
     vec![
+        Migration {
+            version: APALIS_SQLITE_JOBS_WORKERS_VERSION,
+            description: APALIS_SQLITE_JOBS_WORKERS_DESCRIPTION,
+            sql: APALIS_SQLITE_JOBS_WORKERS_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: APALIS_SQLITE_ADD_JOB_PRIORITY_VERSION,
+            description: APALIS_SQLITE_ADD_JOB_PRIORITY_DESCRIPTION,
+            sql: APALIS_SQLITE_ADD_JOB_PRIORITY_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: APALIS_SQLITE_STATS_INDEXES_VERSION,
+            description: APALIS_SQLITE_STATS_INDEXES_DESCRIPTION,
+            sql: APALIS_SQLITE_STATS_INDEXES_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: APALIS_SQLITE_RENAME_LAST_ERROR_VERSION,
+            description: APALIS_SQLITE_RENAME_LAST_ERROR_DESCRIPTION,
+            sql: APALIS_SQLITE_RENAME_LAST_ERROR_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: APALIS_SQLITE_WORKER_STARTED_AT_VERSION,
+            description: APALIS_SQLITE_WORKER_STARTED_AT_DESCRIPTION,
+            sql: APALIS_SQLITE_WORKER_STARTED_AT_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: APALIS_SQLITE_METADATA_VERSION,
+            description: APALIS_SQLITE_METADATA_DESCRIPTION,
+            sql: APALIS_SQLITE_METADATA_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: APALIS_SQLITE_MOVE_TO_BYTES_VERSION,
+            description: APALIS_SQLITE_MOVE_TO_BYTES_DESCRIPTION,
+            sql: APALIS_SQLITE_MOVE_TO_BYTES_SQL,
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: APALIS_SQLITE_IDEMPOTENCY_KEY_VERSION,
+            description: APALIS_SQLITE_IDEMPOTENCY_KEY_DESCRIPTION,
+            sql: APALIS_SQLITE_IDEMPOTENCY_KEY_SQL,
+            kind: MigrationKind::Up,
+        },
+    ]
+}
+
+pub fn build_migrations() -> Vec<Migration> {
+    let mut migrations = vec![
         current_schema_baseline_migration(),
         migrated_history_opt_in_migration(),
         analysis_telegram_history_scope_migration(),
@@ -189,18 +269,54 @@ pub fn build_migrations() -> Vec<Migration> {
         prompt_pack_intermediate_entities_artifacts_migration(),
         prompt_pack_runtime_provider_migration(),
         prompt_pack_stage_browser_provenance_migration(),
-    ]
+    ];
+    migrations.extend(apalis_sqlite_migrations());
+    migrations
 }
 
 #[cfg(test)]
 pub(crate) async fn apply_all_migrations_for_test_pool(
     pool: &sqlx::SqlitePool,
 ) -> crate::error::AppResult<()> {
+    use sha2::{Digest, Sha384};
+
+    sqlx::raw_sql(
+        "CREATE TABLE IF NOT EXISTS _sqlx_migrations (
+            version BIGINT PRIMARY KEY,
+            description TEXT NOT NULL,
+            installed_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            success BOOLEAN NOT NULL,
+            checksum BLOB NOT NULL,
+            execution_time BIGINT NOT NULL
+        )",
+    )
+    .execute(pool)
+    .await
+    .map_err(crate::error::AppError::database)?;
+
     for migration in build_migrations() {
         sqlx::raw_sql(migration.sql)
             .execute(pool)
             .await
             .map_err(crate::error::AppError::database)?;
+        let checksum = Sha384::digest(migration.sql.as_bytes()).to_vec();
+        sqlx::query(
+            "INSERT INTO _sqlx_migrations (
+                version,
+                description,
+                success,
+                checksum,
+                execution_time
+            ) VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(migration.version)
+        .bind(migration.description)
+        .bind(true)
+        .bind(checksum)
+        .bind(0_i64)
+        .execute(pool)
+        .await
+        .map_err(crate::error::AppError::database)?;
     }
     Ok(())
 }
@@ -208,19 +324,64 @@ pub(crate) async fn apply_all_migrations_for_test_pool(
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_all_migrations_for_test_pool, build_migrations, current_schema_baseline_migration,
-        prepare_database_at_path,
+        apalis_sqlite_migrations, apply_all_migrations_for_test_pool, build_migrations,
+        current_schema_baseline_migration, prepare_database_at_path,
     };
     use sha2::{Digest, Sha384};
 
     const FROZEN_BASELINE_SHA384: &str =
         "88d7ee88f58531ebed340f2b9a8f1d02ba0ff6eec17b7e2a0d5f1a293cbd14e26a40c9155985c1652538ff0e9df70962";
+    const EXPECTED_BUILD_MIGRATION_VERSIONS: [i64; 19] = [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        20220530084123,
+        20250313213411,
+        20251013233016,
+        20251017150712,
+        20251017162501,
+        20251018162501,
+        20251018164941,
+        20260506101935,
+    ];
 
     fn sha384_hex(value: &str) -> String {
         Sha384::digest(value.as_bytes())
             .iter()
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>()
+    }
+
+    fn app_sqlx_migrator_for_test() -> sqlx::migrate::Migrator {
+        use std::borrow::Cow;
+
+        let migrations = build_migrations()
+            .into_iter()
+            .map(|migration| {
+                sqlx::migrate::Migration::new(
+                    migration.version,
+                    Cow::Borrowed(migration.description),
+                    sqlx::migrate::MigrationType::Simple,
+                    Cow::Borrowed(migration.sql),
+                    false,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        sqlx::migrate::Migrator {
+            migrations: Cow::Owned(migrations),
+            ignore_missing: false,
+            locking: true,
+            no_tx: false,
+        }
     }
 
     #[test]
@@ -281,7 +442,7 @@ mod tests {
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+        assert_eq!(versions, EXPECTED_BUILD_MIGRATION_VERSIONS);
         assert_eq!(migrations[0].description, "current schema baseline");
         assert!(migrations[0]
             .sql
@@ -331,6 +492,15 @@ mod tests {
         assert!(migrations[10]
             .sql
             .contains("browser_completion_reason TEXT"));
+        assert_eq!(migrations[11].description, "jobs workers");
+        assert!(migrations[11]
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS Workers"));
+        assert!(migrations[11]
+            .sql
+            .contains("CREATE TABLE IF NOT EXISTS Jobs"));
+        assert_eq!(migrations[18].description, "idempotency key");
+        assert!(migrations[18].sql.contains("idempotency_key TEXT"));
     }
 
     #[tokio::test]
@@ -376,7 +546,84 @@ mod tests {
             .map(|migration| migration.version)
             .collect::<Vec<_>>();
 
-        assert_eq!(versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+        assert_eq!(versions, EXPECTED_BUILD_MIGRATION_VERSIONS);
+    }
+
+    #[test]
+    fn build_migrations_includes_apalis_sqlite_versions_for_shared_sqlx_history() {
+        let versions = build_migrations()
+            .iter()
+            .map(|migration| migration.version)
+            .collect::<Vec<_>>();
+
+        assert!(versions.contains(&20220530084123));
+        assert!(versions.contains(&20250313213411));
+        assert!(versions.contains(&20251013233016));
+        assert!(versions.contains(&20251017150712));
+        assert!(versions.contains(&20251017162501));
+        assert!(versions.contains(&20251018162501));
+        assert!(versions.contains(&20251018164941));
+        assert!(versions.contains(&20260506101935));
+    }
+
+    #[test]
+    fn vendored_apalis_sqlite_migrations_match_pinned_dependency() {
+        let upstream = apalis_sqlite::SqliteStorage::<(), (), ()>::migrations()
+            .migrations
+            .iter()
+            .map(|migration| {
+                (
+                    migration.version,
+                    migration.description.to_string(),
+                    migration.checksum.as_ref().to_vec(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let vendored = apalis_sqlite_migrations()
+            .iter()
+            .map(|migration| {
+                (
+                    migration.version,
+                    migration.description.to_string(),
+                    Sha384::digest(migration.sql.as_bytes()).to_vec(),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(vendored, upstream);
+    }
+
+    #[tokio::test]
+    async fn app_migrator_accepts_database_with_preexisting_apalis_migration_history() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+
+        apalis_sqlite::SqliteStorage::<(), (), ()>::migrations()
+            .run(&pool)
+            .await
+            .expect("seed Apalis migration history");
+
+        app_sqlx_migrator_for_test()
+            .run(&pool)
+            .await
+            .expect("app migrator accepts preexisting Apalis history");
+
+        let app_baseline_applied: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations WHERE version = ?")
+                .bind(1_i64)
+                .fetch_one(&pool)
+                .await
+                .expect("read baseline migration history");
+        let apalis_jobs_workers_applied: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations WHERE version = ?")
+                .bind(20220530084123_i64)
+                .fetch_one(&pool)
+                .await
+                .expect("read Apalis migration history");
+
+        assert_eq!(app_baseline_applied, 1);
+        assert_eq!(apalis_jobs_workers_applied, 1);
     }
 
     #[tokio::test]

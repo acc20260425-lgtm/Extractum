@@ -6,7 +6,7 @@
 
 **Architecture:** Apalis owns durable queue storage and single-worker execution. Extractum keeps the existing file-backed Gemini Browser run log as the product-facing projection for Settings, run history, Prompt Pack provenance, and diagnostics. `send_single_prompt(...)` remains synchronous from the caller perspective by enqueueing a durable job and waiting on the receiver returned when that specific run was registered.
 
-**Tech Stack:** Rust, Tauri 2, Tokio, `apalis = "=1.0.0-rc.9"`, `apalis-sqlite = "=1.0.0-rc.9"`, `tower` timeout middleware, `parking_lot`, serde, existing Gemini Browser sidecar, existing file-backed run log.
+**Tech Stack:** Rust, Tauri 2, Tokio, `apalis = "=1.0.0-rc.8"`, `apalis-sqlite = "=1.0.0-rc.8"`, `tower` timeout middleware, `parking_lot`, serde, existing Gemini Browser sidecar, existing file-backed run log.
 
 ---
 
@@ -27,7 +27,7 @@
 - Worker startup state, duplicate `run_id` handling, enqueue failure cleanup, test timeouts, and Apalis query capability discovery are specified explicitly.
 - In-memory waiter/cancellation maps and cached status snapshots use synchronous locks; no lock guard may be held across `.await`.
 - Worker execution has a Tower timeout layer so a hung Chrome/sidecar task cannot block the single-concurrency queue forever.
-- Apalis dependencies are pinned to the verified `1.0.0-rc.9` pre-release because Cargo will not select pre-releases from a plain `"1"` requirement.
+- Apalis dependencies are pinned to the verified `1.0.0-rc.8` pre-release because Cargo will not select pre-releases from a plain `"1"` requirement.
 - Closed waiter channels and duplicate Apalis idempotency conflicts are mapped to product-level `AppError` values instead of panics or raw SQLite errors.
 
 ## Current State
@@ -69,7 +69,7 @@ The first migration must not change the TypeScript API or UI behavior.
 - Job type name: `gemini_browser.run.v1`.
 - Job idempotency key: the Gemini Browser `run_id`.
 - Retry policy: every pushed task must use `TaskBuilder::attempts(1)` or the exact `apalis-sqlite` equivalent proven by tests. Context7 Apalis docs state that `attempts(n)` allows `n - 1` retries, so `attempts(1)` means one total attempt and zero retries.
-- Dependency version policy: pin Apalis crates exactly to `=1.0.0-rc.9` until a stable `1.x` release is verified in this repo. Context7 shows current Apalis docs naming `1.0.0-rc.9`; plain `"1"` may fail because Cargo does not opt into pre-release versions unless the requirement includes the pre-release.
+- Dependency version policy: pin Apalis crates exactly to `=1.0.0-rc.8` until a stable `1.x` release is verified in this repo. Cargo currently resolves `apalis-sqlite` pre-releases up to `1.0.0-rc.8`; plain `"1"` may fail because Cargo does not opt into pre-release versions unless the requirement includes the pre-release.
 
 Current Context7 Apalis docs show SQL task rows with fields such as `job`, `id`, `job_type`, `status`, `attempts`, `max_attempts`, `run_at`, `last_result`, `lock_at`, `lock_by`, `done_at`, `priority`, `metadata`, and `idempotency_key`. The plan uses that only as orientation; implementation must not depend on hand-written SQL against those internal fields except in an isolated integration test that verifies actual serialized status values.
 
@@ -201,7 +201,7 @@ Apalis worker concurrency is intentionally `1`, so every production Gemini Brows
 ## File Map
 
 - Modify `src-tauri/Cargo.toml`
-  - Add exact Apalis RC pins: `apalis = "=1.0.0-rc.9"` and `apalis-sqlite = "=1.0.0-rc.9"`.
+  - Add exact Apalis RC pins: `apalis = "=1.0.0-rc.8"` and `apalis-sqlite = "=1.0.0-rc.8"`.
 - Modify `src-tauri/src/gemini_browser/mod.rs`
   - Expose the new jobs module, runtime, enqueue helper, and worker bootstrap early; expose the cancel helper only in Task 10 after the function exists.
 - Create `src-tauri/src/gemini_browser/jobs.rs`
@@ -235,20 +235,20 @@ Apalis worker concurrency is intentionally `1`, so every production Gemini Brows
 - Modify: `src-tauri/src/gemini_browser/mod.rs`
 - Test: `src-tauri/src/gemini_browser/jobs.rs`
 
-- [ ] **Step 1: Add queue runtime dependencies**
+- [x] **Step 1: Add queue runtime dependencies**
 
 Modify `src-tauri/Cargo.toml` dependencies:
 
 ```toml
-apalis = "=1.0.0-rc.9"
-apalis-sqlite = "=1.0.0-rc.9"
+apalis = "=1.0.0-rc.8"
+apalis-sqlite = "=1.0.0-rc.8"
 parking_lot = "0.12"
 tower = { version = "0.5", features = ["timeout", "util"] }
 ```
 
 Do not add a second `tempfile` entry for these tests. `tempfile = "3"` already exists in `src-tauri/Cargo.toml` under `[dependencies]` because production YouTube code uses `NamedTempFile` / `TempDir`; moving it to `[dev-dependencies]` is not part of this Apalis pilot.
 
-- [ ] **Step 2: Create the real job payload**
+- [x] **Step 2: Create the real job payload**
 
 Create `src-tauri/src/gemini_browser/jobs.rs`:
 
@@ -347,7 +347,7 @@ pub struct GeminiBrowserProviderConfig {
 }
 ```
 
-- [ ] **Step 3: Wire the module**
+- [x] **Step 3: Wire the module**
 
 Modify `src-tauri/src/gemini_browser/mod.rs`:
 
@@ -355,7 +355,7 @@ Modify `src-tauri/src/gemini_browser/mod.rs`:
 mod jobs;
 ```
 
-- [ ] **Step 4: Add a real Apalis SQLite smoke test**
+- [x] **Step 4: Add a real Apalis SQLite smoke test**
 
 Add a Tokio test in `jobs.rs` named `apalis_sqlite_storage_pushes_and_worker_processes_one_job`.
 
@@ -378,7 +378,7 @@ The test must not use `Vec`, `VecDeque`, or a test-only queue facade as the queu
 The test must fail with a timeout error instead of hanging if the worker does not stop.
 Do not read `_sqlx_migrations` in this unit smoke test. The current `apply_all_migrations_for_test_pool(...)` helper executes migration SQL directly and does not populate migration history.
 
-- [ ] **Step 5: Run the smoke test**
+- [x] **Step 5: Run the smoke test**
 
 Run:
 
@@ -388,7 +388,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS. Do not continue to Task 2 until this proves real Apalis SQLite storage, non-conflicting Apalis tables inside `extractum.db`, preserved product tables, and a real worker processing one job.
 
-- [ ] **Step 6: Add seeded migration history preservation test**
+- [x] **Step 6: Add seeded migration history preservation test**
 
 Add a unit test named `apalis_storage_preserves_existing_sqlx_migration_history_table`.
 
@@ -426,7 +426,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 7: Record the exact storage constructor in code**
+- [x] **Step 7: Record the exact storage constructor in code**
 
 Keep the final compiling storage setup in a helper such as:
 
@@ -468,7 +468,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS before later tasks use the production storage helper.
 
-- [ ] **Step 7: Record Apalis queue inspection capability**
+- [x] **Step 7: Record Apalis queue inspection capability**
 
 Add a compile-tested helper:
 
@@ -493,7 +493,7 @@ If `Supported`, add a test that queries a pushed job by `run_id` and reads its v
 - Modify: `src-tauri/src/migrations.rs`
 - Test: `src-tauri/src/gemini_browser/jobs.rs`
 
-- [ ] **Step 1: Add main database helper test**
+- [x] **Step 1: Add main database helper test**
 
 Add a pure helper and test:
 
@@ -513,7 +513,7 @@ fn apalis_storage_uses_shared_main_extractum_db_identity() {
 
 This test references `crate::db::APP_IDENTIFIER`, `DB_FILENAME`, and `db_path_from_config_dir(...)`, which are introduced in Step 2. Write Step 1 and Step 2 in the same code edit before running tests or committing; do not leave the workspace between those steps in a non-compiling state.
 
-- [ ] **Step 2: Centralize the main database helper**
+- [x] **Step 2: Centralize the main database helper**
 
 Extend the existing `src-tauri/src/db.rs` `DB_URL` constant into the shared database identity:
 
@@ -533,7 +533,7 @@ pub(crate) fn app_config_db_path() -> Option<std::path::PathBuf> {
 
 `src-tauri/src/migrations.rs` must reuse `crate::db::app_config_db_path()` instead of keeping a private copy of the database location. The Tauri wrapper must use the same helper when a path-based Apalis constructor is required. If the storage constructor can use the already-initialized pool, use `crate::db::get_pool(handle)` instead. Do not derive the Apalis database path from `gemini_browser::paths::base_dir(...)`; that directory remains only for profile, artifact, and run-log files.
 
-- [ ] **Step 3: Add runtime state**
+- [x] **Step 3: Add runtime state**
 
 Add `GeminiBrowserJobRuntime`:
 
@@ -576,7 +576,7 @@ impl Default for GeminiBrowserJobRuntime {
 
 `waiters` and `cancelled_runs` must use synchronous locks because their critical sections do not perform async work. Do not hold either guard across `.await`; remove or clone the sender/cancellation bit first, drop the guard, then await if needed.
 
-- [ ] **Step 4: Add worker readiness tests**
+- [x] **Step 4: Add worker readiness tests**
 
 Add tests:
 
@@ -612,7 +612,7 @@ async fn worker_status_times_out_while_starting() {
 }
 ```
 
-- [ ] **Step 5: Manage runtime state**
+- [x] **Step 5: Manage runtime state**
 
 Modify `src-tauri/src/lib.rs` next to `GeminiBrowserState::new()`:
 
@@ -626,7 +626,7 @@ Export it from `mod.rs`:
 pub(crate) use jobs::GeminiBrowserJobRuntime;
 ```
 
-- [ ] **Step 6: Add real enqueue helpers**
+- [x] **Step 6: Add real enqueue helpers**
 
 Add a lower-level helper that can be used without a Tauri `AppHandle`:
 
@@ -649,7 +649,7 @@ Add the Tauri wrapper `enqueue_gemini_browser_job(...)` that:
 
 The helper may return `queue_position: None` because Apalis SQL queue depth is not part of the product contract in this pilot.
 
-- [ ] **Step 7: Add duplicate idempotency conflict test**
+- [x] **Step 7: Add duplicate idempotency conflict test**
 
 Add a test named `enqueue_duplicate_run_id_returns_conflict`.
 
@@ -694,7 +694,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 8: Test real enqueue persists a job before worker startup**
+- [x] **Step 8: Test real enqueue persists a job before worker startup**
 
 Add an integration-style unit test that:
 
@@ -721,7 +721,7 @@ Expected: PASS.
 - Modify: `src-tauri/src/gemini_browser/jobs.rs`
 - Test: `src-tauri/src/gemini_browser/jobs.rs`
 
-- [ ] **Step 1: Add waiter success test**
+- [x] **Step 1: Add waiter success test**
 
 Add:
 
@@ -747,7 +747,7 @@ async fn waiter_receives_terminal_worker_result() {
 }
 ```
 
-- [ ] **Step 2: Add waiter timeout cleanup test**
+- [x] **Step 2: Add waiter timeout cleanup test**
 
 Add:
 
@@ -767,7 +767,7 @@ async fn wait_for_result_removes_waiter_on_timeout() {
 }
 ```
 
-- [ ] **Step 3: Add closed-channel waiter test**
+- [x] **Step 3: Add closed-channel waiter test**
 
 Add:
 
@@ -793,7 +793,7 @@ async fn wait_for_result_removes_waiter_when_worker_channel_closes() {
 }
 ```
 
-- [ ] **Step 4: Add duplicate waiter test**
+- [x] **Step 4: Add duplicate waiter test**
 
 Add:
 
@@ -811,7 +811,7 @@ async fn register_waiter_rejects_duplicate_run_id() {
 }
 ```
 
-- [ ] **Step 5: Add dropped receiver completion test**
+- [x] **Step 5: Add dropped receiver completion test**
 
 Add:
 
@@ -841,7 +841,7 @@ async fn complete_waiter_ignores_dropped_receiver() {
 }
 ```
 
-- [ ] **Step 6: Implement waiter methods**
+- [x] **Step 6: Implement waiter methods**
 
 Implement:
 
@@ -919,7 +919,7 @@ if let Some(sender) = self.waiters.lock().remove(run_id) {
 
 `Default` must set `worker_execution_timeout` to `std::time::Duration::from_secs(20 * 60)`, set `waiter_timeout` to `worker_execution_timeout + std::time::Duration::from_secs(5)`, set `worker_hard_guard_timeout` to `worker_execution_timeout + std::time::Duration::from_secs(15)`, and set worker status to `Starting`. `new_for_test(timeout)` must set `worker_execution_timeout` to `timeout`, set `waiter_timeout` to `timeout + std::time::Duration::from_millis(50)`, and set `worker_hard_guard_timeout` to `timeout + std::time::Duration::from_millis(100)`. `new_for_test_with_timeouts(waiter_timeout, worker_execution_timeout, worker_hard_guard_timeout)` must reject or panic in tests unless `worker_execution_timeout < waiter_timeout < worker_hard_guard_timeout`, because equal or inverted deadlines reintroduce caller/worker/hard-guard timeout races. `new_for_waiter_timeout_test(waiter_timeout)` is allowed only for unit tests of waiter cleanup where no worker is running; it must not be used by command-flow or worker-flow tests. `ensure_worker_ready_for_enqueue()` must use a `5` second startup timeout in production.
 
-- [ ] **Step 7: Add cancellation set runtime test**
+- [x] **Step 7: Add cancellation set runtime test**
 
 Add:
 
@@ -936,7 +936,7 @@ fn runtime_tracks_and_clears_cancelled_run_ids() {
 }
 ```
 
-- [ ] **Step 8: Run waiter tests**
+- [x] **Step 8: Run waiter tests**
 
 Run:
 
@@ -956,7 +956,7 @@ Expected: PASS.
 
 **Status mapping gate:** Task 4 must not implement `run_status_for_queue_state(...)` and must not hardcode Apalis SQL status strings. Leave that helper unavailable, behind `todo!()`, or limited to test-only placeholders until Task 5 completes `apalis_sqlite_status_probe_documents_actual_status_values`.
 
-- [ ] **Step 1: Add handler contract test with a fake executor**
+- [x] **Step 1: Add handler contract test with a fake executor**
 
 Add:
 
@@ -1015,7 +1015,7 @@ async fn worker_handler_marks_run_running_and_terminal() {
 }
 ```
 
-- [ ] **Step 2: Add handler error-path test**
+- [x] **Step 2: Add handler error-path test**
 
 Add:
 
@@ -1068,7 +1068,7 @@ async fn worker_handler_converts_executor_error_to_terminal_failed_result() {
 
 Production sidecar errors must be converted through `sidecar::sidecar_unavailable_result(...)` or an equivalent current helper before finishing the run. The worker handler must return success to Apalis after writing that terminal failed result, so Apalis does not retry a browser submission that already produced product-facing terminal state.
 
-- [ ] **Step 3: Implement testable worker core**
+- [x] **Step 3: Implement testable worker core**
 
 Add a test helper that mirrors production worker behavior without requiring a Tauri `AppHandle`:
 
@@ -1110,7 +1110,7 @@ where
 }
 ```
 
-- [ ] **Step 4: Run handler tests**
+- [x] **Step 4: Run handler tests**
 
 Run:
 
@@ -1131,7 +1131,7 @@ Expected: PASS.
 
 This is the first task allowed to implement `run_status_for_queue_state(...)` or rely on Apalis SQL status string values.
 
-- [ ] **Step 1: Add a status serialization probe**
+- [x] **Step 1: Add a status serialization probe**
 
 Add a test named `apalis_sqlite_status_probe_documents_actual_status_values`.
 
@@ -1150,7 +1150,7 @@ The test must:
 
 This test may query Apalis SQL internals only because it is a probe that protects this migration plan from status-name drift.
 
-- [ ] **Step 2: Replace status mapping guesses with verified values**
+- [x] **Step 2: Replace status mapping guesses with verified values**
 
 Implement `run_status_for_queue_state(state: &str)` only after Step 1 is passing. It must map the actual observed Apalis SQL values to:
 
@@ -1163,7 +1163,7 @@ GeminiBrowserRunStatus::Failed
 
 Do not hardcode `"done"` or `"completed"` until the probe test proves the real value for this dependency version. Do not map Apalis `Killed` to `GeminiBrowserRunStatus::Cancelled` unless an implementation task proves Apalis emits `Killed` for this pilot. In the initial pilot, `GeminiBrowserRunStatus::Cancelled` comes from the durable run log cancellation path.
 
-- [ ] **Step 3: Run status tests**
+- [x] **Step 3: Run status tests**
 
 Run:
 
@@ -1181,7 +1181,7 @@ Expected: PASS.
 - Modify: `src-tauri/src/gemini_browser/jobs.rs`
 - Test: `src-tauri/src/gemini_browser/jobs.rs`
 
-- [ ] **Step 1: Add no-retry task construction test**
+- [x] **Step 1: Add no-retry task construction test**
 
 Add a test named `gemini_browser_jobs_are_built_with_one_total_attempt`.
 
@@ -1193,7 +1193,7 @@ The test must:
 
 Use the current Apalis API proven in Task 1. Context7 Apalis docs describe `TaskBuilder::attempts(n)` as total attempts where `n = 1` means zero retries.
 
-- [ ] **Step 2: Implement a production task builder helper**
+- [x] **Step 2: Implement a production task builder helper**
 
 Add:
 
@@ -1209,7 +1209,7 @@ fn build_gemini_browser_task(job: GeminiBrowserJob) -> GeminiBrowserApalisTask {
 
 `enqueue_gemini_browser_job_to_storage(...)` must push the task returned by this helper. It must not push the raw payload if that bypasses attempts/idempotency configuration.
 
-- [ ] **Step 3: Add failing-handler no-retry integration test**
+- [x] **Step 3: Add failing-handler no-retry integration test**
 
 Add a test named `failed_gemini_browser_job_is_not_retried`.
 
@@ -1221,7 +1221,7 @@ The test must:
 - assert the execution count is exactly `1`;
 - inspect task metadata or SQL row and assert max attempts is `1` when the backend exposes it.
 
-- [ ] **Step 4: Run no-retry tests**
+- [x] **Step 4: Run no-retry tests**
 
 Run:
 
@@ -1241,7 +1241,7 @@ Expected: PASS.
 - Modify: `src-tauri/src/lib.rs`
 - Test: `src-tauri/src/gemini_browser/jobs.rs`
 
-- [ ] **Step 1: Add worker bootstrap**
+- [x] **Step 1: Add worker bootstrap**
 
 Implement:
 
@@ -1266,7 +1266,7 @@ pub(crate) async fn start_gemini_browser_job_worker(
 This function must not return `Ok(())` without starting a worker.
 If `worker.run()` exits before application shutdown, record diagnostic message `"Gemini Browser job worker stopped unexpectedly"` unless the returned error has a more specific message.
 
-- [ ] **Step 2: Worker handler calls the existing sidecar path**
+- [x] **Step 2: Worker handler calls the existing sidecar path**
 
 The production handler must:
 
@@ -1282,7 +1282,7 @@ The production handler must:
 - call `runtime.clear_cancelled(&job.run_id)` after any terminal result or queued-cancel acknowledgement;
 - emit the terminal event.
 
-- [ ] **Step 3: Add worker execution timeout layer**
+- [x] **Step 3: Add worker execution timeout layer**
 
 Use Tower timeout middleware when building the worker service:
 
@@ -1346,7 +1346,7 @@ async fn finish_timed_out_job(
 Do not rely on waiter timeout alone. The waiter timeout only protects the caller; the worker timeout protects the single-concurrency queue.
 The outer `WorkerBuilder::layer(TimeoutLayer::new(...))` remains required as a hard guard around the whole worker service, but it must have a later deadline than both the product-facing helper and caller waiter timeout. The timeout-aware helper is required so product-facing run log and waiter state are finalized deterministically before the hard guard can abort the handler. Never await sidecar stop before writing the timeout result; if stop hangs, the run log and waiter must already be terminal.
 
-- [ ] **Step 4: Add worker timeout release test**
+- [x] **Step 4: Add worker timeout release test**
 
 Add a test named `worker_timeout_marks_run_failed_and_processes_next_job`.
 
@@ -1372,7 +1372,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 5: Add worker startup failure test**
+- [x] **Step 5: Add worker startup failure test**
 
 Add a test named `worker_startup_failure_marks_runtime_failed`.
 
@@ -1383,7 +1383,7 @@ The test must:
 - assert `GeminiBrowserJobRuntime` status is `Failed`;
 - assert `ensure_worker_ready_for_enqueue()` returns an error containing the startup failure.
 
-- [ ] **Step 6: Add worker run failure test**
+- [x] **Step 6: Add worker run failure test**
 
 Add a test named `worker_run_failure_marks_runtime_failed`.
 
@@ -1393,7 +1393,7 @@ The test must:
 - assert `GeminiBrowserJobRuntime` status becomes `Failed`;
 - assert `ensure_worker_ready_for_enqueue()` returns an error containing `"worker loop failed"`.
 
-- [ ] **Step 7: Export bootstrap and runtime**
+- [x] **Step 7: Export bootstrap and runtime**
 
 In `mod.rs`:
 
@@ -1406,7 +1406,7 @@ pub(crate) use jobs::{
 
 Do not export `cancel_gemini_browser_job` in this task. That function is introduced and exported in Task 10.
 
-- [ ] **Step 8: Spawn worker during setup**
+- [x] **Step 8: Spawn worker during setup**
 
 In `src-tauri/src/lib.rs`, after state is managed and inside setup:
 
@@ -1419,7 +1419,7 @@ tauri::async_runtime::spawn(async move {
 });
 ```
 
-- [ ] **Step 9: Run worker tests**
+- [x] **Step 9: Run worker tests**
 
 Run:
 
@@ -1441,7 +1441,7 @@ Expected: PASS.
 - Test: `src-tauri/src/gemini_browser/commands.rs`
 - Test: `src-tauri/src/gemini_browser/state.rs`
 
-- [ ] **Step 1: Add cached status snapshot type**
+- [x] **Step 1: Add cached status snapshot type**
 
 Add a cached status field to `GeminiBrowserState` or `GeminiBrowserJobRuntime`:
 
@@ -1470,7 +1470,7 @@ pub(crate) fn init_status_snapshot(&self, handle: &tauri::AppHandle) -> crate::e
 }
 ```
 
-- [ ] **Step 2: Add snapshot update helpers**
+- [x] **Step 2: Add snapshot update helpers**
 
 Add helpers:
 
@@ -1491,7 +1491,7 @@ If the snapshot is still `None`, `status_snapshot(handle)` and `update_status_sn
 
 Worker and command code must update the snapshot on queued, running, terminal, cancelled, failed, and manual-action states.
 
-- [ ] **Step 3: Add non-blocking status test**
+- [x] **Step 3: Add non-blocking status test**
 
 Add a test named `provider_status_uses_cached_snapshot_when_sidecar_is_busy`.
 
@@ -1503,7 +1503,7 @@ The test must:
 - assert it returns in less than `200` milliseconds;
 - assert the returned status is the cached `Running` status.
 
-- [ ] **Step 4: Refactor `provider_status(...)`**
+- [x] **Step 4: Refactor `provider_status(...)`**
 
 Change `provider_status(...)` so it:
 
@@ -1514,7 +1514,7 @@ Change `provider_status(...)` so it:
 
 Do not hold the sidecar mutex while reading Apalis queue depth or formatting the cached response.
 
-- [ ] **Step 5: Run status responsiveness tests**
+- [x] **Step 5: Run status responsiveness tests**
 
 Run:
 
@@ -1534,7 +1534,7 @@ Expected: PASS.
 - Test: `src-tauri/src/gemini_browser/commands.rs`
 - Test: `src-tauri/src/gemini_browser/jobs.rs`
 
-- [ ] **Step 1: Add command handoff test**
+- [x] **Step 1: Add command handoff test**
 
 Add a test around a small core function, not a request-shape-only test. The function should accept:
 
@@ -1551,7 +1551,7 @@ The test must assert:
 - fake enqueue receives the same `browser_config` snapshot that was passed into the command core;
 - the returned queued event uses `GeminiBrowserRunStatus::Queued`.
 
-- [ ] **Step 2: Add duplicate run id and enqueue failure tests**
+- [x] **Step 2: Add duplicate run id and enqueue failure tests**
 
 Add tests:
 
@@ -1595,7 +1595,7 @@ async fn send_single_prompt_rejects_invalid_artifact_mode_before_side_effects() 
 }
 ```
 
-- [ ] **Step 3: Refactor command flow**
+- [x] **Step 3: Refactor command flow**
 
 `gemini_bridge_send_single(...)` continues to receive `browser_config: Option<GeminiBrowserProviderConfig>` from the Settings/UI command payload and must pass it unchanged into `send_single_prompt(...)`. Prompt Pack browser runtime must pass its persisted `browser_provider_config` the same way. `send_single_prompt(...)` captures that value into `GeminiBrowserJob.browser_config` before enqueue; the worker must not read Settings again.
 
@@ -1681,7 +1681,7 @@ If `enqueue_gemini_browser_job(...)` returns an error after the queued run log r
 
 Emit the queued event with `queued.queue_position`.
 
-- [ ] **Step 4: Wait for terminal result**
+- [x] **Step 4: Wait for terminal result**
 
 After enqueue:
 
@@ -1691,7 +1691,7 @@ runtime.wait_for_registered_result(&request.run_id, waiter).await
 
 The waiter must be removed on timeout, worker error, dropped sender, and success.
 
-- [ ] **Step 5: Verify command behavior**
+- [x] **Step 5: Verify command behavior**
 
 Run:
 
@@ -1712,7 +1712,7 @@ Expected: PASS.
 - Test: `src-tauri/src/gemini_browser/jobs.rs`
 - Test: `src-tauri/src/prompt_packs/runtime.rs`
 
-- [ ] **Step 1: Add queued cancellation test**
+- [x] **Step 1: Add queued cancellation test**
 
 Test:
 
@@ -1725,7 +1725,7 @@ Test:
 - assert run log status is `Cancelled`;
 - assert waiter receives a `GeminiBrowserRunResult` with `status: Cancelled`.
 
-- [ ] **Step 2: Add active cancellation test**
+- [x] **Step 2: Add active cancellation test**
 
 Test:
 
@@ -1738,7 +1738,7 @@ Test:
 
 `cancel_gemini_browser_job(...)` must not be expected to write the active terminal result directly. For active jobs it requests stop; the worker remains responsible for final run log state after the sidecar path returns.
 
-- [ ] **Step 3: Implement cancel helper**
+- [x] **Step 3: Implement cancel helper**
 
 Implement `cancel_gemini_browser_job(...)` with these branches:
 
@@ -1781,7 +1781,7 @@ After `cancel_gemini_browser_job(...)` exists, export it from `mod.rs`:
 pub(crate) use jobs::cancel_gemini_browser_job;
 ```
 
-- [ ] **Step 4: Update Prompt Pack cancellation**
+- [x] **Step 4: Update Prompt Pack cancellation**
 
 In `run_browser_llm_request(...)`, keep the existing `browser_run_id` local. On `LlmRequestError::Cancelled`, call:
 
@@ -1799,11 +1799,11 @@ crate::gemini_browser::cancel_gemini_browser_job(&handle, &browser_run_id)
     .map_err(YoutubeSummaryStageExecutionError::Failed)?;
 ```
 
-- [ ] **Step 5: Update manual stop**
+- [x] **Step 5: Update manual stop**
 
 In `gemini_bridge_stop(...)`, read `state.active_run_id().await`. If present, call `cancel_gemini_browser_job(&handle, &run_id).await`. If no active run exists, keep the current stop behavior.
 
-- [ ] **Step 6: Run cancellation tests**
+- [x] **Step 6: Run cancellation tests**
 
 Run:
 
@@ -1823,7 +1823,7 @@ Expected: PASS.
 - Test: `src-tauri/src/prompt_packs/runtime.rs`
 - Test: `src-tauri/src/gemini_browser/jobs.rs`
 
-- [ ] **Step 1: Add queued browser-stage cancellation test**
+- [x] **Step 1: Add queued browser-stage cancellation test**
 
 Add a test named `prompt_pack_browser_stage_cancelled_while_queued_cancels_browser_job`.
 
@@ -1837,7 +1837,7 @@ The test must:
 - assert the Prompt Pack stage/run path returns `YoutubeSummaryStageExecutionError::Cancelled`;
 - assert browser provenance does not record `browser_run_status = 'ok'`.
 
-- [ ] **Step 2: Add active browser-stage cancellation test**
+- [x] **Step 2: Add active browser-stage cancellation test**
 
 Add a test named `prompt_pack_browser_stage_cancelled_while_active_stops_sidecar`.
 
@@ -1852,7 +1852,7 @@ The test must:
 - assert the Gemini Browser run log terminal status is `GeminiBrowserRunStatus::Cancelled`;
 - assert the Prompt Pack stage/run returns `YoutubeSummaryStageExecutionError::Cancelled`.
 
-- [ ] **Step 3: Add provenance guard test**
+- [x] **Step 3: Add provenance guard test**
 
 Add a test named `cancelled_browser_stage_does_not_persist_success_provenance`.
 
@@ -1863,7 +1863,7 @@ The test must:
 - assert `browser_run_status` is either `NULL` or `'cancelled'`;
 - assert it is never `'ok'`, `'ready'`, or a partial-success status after cancellation.
 
-- [ ] **Step 4: Add pre-enqueue cancellation test**
+- [x] **Step 4: Add pre-enqueue cancellation test**
 
 Add a test named `prompt_pack_browser_stage_cancelled_before_enqueue_is_tolerated`.
 
@@ -1876,7 +1876,7 @@ The test must:
 - assert no successful browser provenance is written;
 - assert the Prompt Pack stage/run path returns `YoutubeSummaryStageExecutionError::Cancelled`.
 
-- [ ] **Step 5: Run Prompt Pack cancellation tests**
+- [x] **Step 5: Run Prompt Pack cancellation tests**
 
 Run:
 
@@ -1895,7 +1895,7 @@ Expected: PASS.
 - Modify: `src-tauri/src/gemini_browser/run_log.rs`
 - Test: `src-tauri/src/gemini_browser/jobs.rs`
 
-- [ ] **Step 1: Add pending-after-restart test**
+- [x] **Step 1: Add pending-after-restart test**
 
 Test:
 
@@ -1905,7 +1905,7 @@ Test:
 - create a new runtime and start fake worker against the same temp SQLite file;
 - assert the job is processed and run log becomes terminal.
 
-- [ ] **Step 2: Add run log versus Apalis reconciliation matrix tests**
+- [x] **Step 2: Add run log versus Apalis reconciliation matrix tests**
 
 Add tests for this matrix:
 
@@ -1919,7 +1919,7 @@ Add tests for this matrix:
 
 The Apalis-state-dependent startup cases run only when `apalis_queue_inspection_mode() == ApalisQueueInspectionMode::Supported`. Add a separate `DegradedRunLogOnly` test that proves queued run log records are left unchanged at startup when no stable Apalis query API is available.
 
-- [ ] **Step 3: Implement startup and worker-entry reconciliation**
+- [x] **Step 3: Implement startup and worker-entry reconciliation**
 
 At worker startup:
 
@@ -1936,7 +1936,7 @@ At worker job entry:
 - only execute sidecar for `Queued` records;
 - fail stale `Running` records that do not match `GeminiBrowserState::active_run_id()`.
 
-- [ ] **Step 4: Run recovery tests**
+- [x] **Step 4: Run recovery tests**
 
 Run:
 
@@ -1955,7 +1955,7 @@ Expected: PASS.
 - Modify: `src-tauri/src/gemini_browser/commands.rs`
 - Test: `src-tauri/src/gemini_browser/state.rs`
 
-- [ ] **Step 1: Delete queue fields and methods**
+- [x] **Step 1: Delete queue fields and methods**
 
 Remove from `GeminiBrowserState`:
 
@@ -1974,11 +1974,11 @@ cancellation: Mutex<Option<CancellationToken>>,
 sidecar: Mutex<Option<super::sidecar::GeminiBrowserSidecarProcess>>,
 ```
 
-- [ ] **Step 2: Replace provider status queue depth source**
+- [x] **Step 2: Replace provider status queue depth source**
 
 In `gemini_bridge_status(...)`, keep using `GeminiBrowserProviderStatus.queue_depth`. Return queue depth from a real Apalis-backed helper only if the helper is proven by tests; otherwise return `0` in this pilot and rely on queued run events for per-request `queue_position`. Do not read `VecDeque`.
 
-- [ ] **Step 3: Update state test**
+- [x] **Step 3: Update state test**
 
 Replace `queue_tracks_depth_and_active_run` with:
 
@@ -1996,7 +1996,7 @@ async fn state_tracks_active_run_and_cancellation() {
 }
 ```
 
-- [ ] **Step 4: Run state tests**
+- [x] **Step 4: Run state tests**
 
 Run:
 
@@ -2041,7 +2041,7 @@ async fn shutdown_stops_active_gemini_browser_sidecar_with_timeout() {
 **Files:**
 - No code changes unless verification reveals a bug.
 
-- [ ] **Step 1: Rust Gemini Browser verification**
+- [x] **Step 1: Rust Gemini Browser verification**
 
 Run:
 
@@ -2051,7 +2051,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 2: Prompt Pack browser handoff verification**
+- [x] **Step 2: Prompt Pack browser handoff verification**
 
 Run:
 
@@ -2061,7 +2061,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 3: Targeted architectural regression verification**
+- [x] **Step 3: Targeted architectural regression verification**
 
 Run:
 
@@ -2080,7 +2080,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS for no-retry, shared main DB storage, worker error conversion, worker timeout release, closed waiter channels, duplicate enqueue conflicts, status responsiveness, Prompt Pack browser cancellation including pre-enqueue cancellation, and reconciliation/restart tests.
 
-- [ ] **Step 4: TypeScript Gemini Browser verification**
+- [x] **Step 4: TypeScript Gemini Browser verification**
 
 Run:
 
@@ -2090,7 +2090,7 @@ npm.cmd run test -- src/lib/api/gemini-browser.test.ts src/lib/gemini-browser-ru
 
 Expected: PASS.
 
-- [ ] **Step 5: Svelte/type verification**
+- [x] **Step 5: Svelte/type verification**
 
 Run:
 
@@ -2100,7 +2100,7 @@ npm.cmd run check
 
 Expected: PASS.
 
-- [ ] **Step 6: Diff hygiene**
+- [x] **Step 6: Diff hygiene**
 
 Run:
 

@@ -696,15 +696,18 @@ async fn run_browser_llm_request(
     repair_attempt_number: Option<i64>,
     llm_request: LlmChatRequest,
 ) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
+    let browser_run_id = browser_run_id_for_stage(run_id, stage_run_id, repair_attempt_number);
     if run_cancellation_token
         .as_ref()
         .is_some_and(CancellationToken::is_cancelled)
     {
+        crate::gemini_browser::cancel_gemini_browser_job(&handle, &browser_run_id)
+            .await
+            .map_err(YoutubeSummaryStageExecutionError::Failed)?;
         return Err(YoutubeSummaryStageExecutionError::Cancelled);
     }
 
     let prompt = llm_chat_request_to_browser_prompt(&llm_request)?;
-    let browser_run_id = browser_run_id_for_stage(run_id, stage_run_id, repair_attempt_number);
     let source = browser_run_source_for_stage(run_id, stage_run_id, &stage_name);
     let queued_handle = handle.clone();
     let started_handle = handle.clone();
@@ -716,6 +719,7 @@ async fn run_browser_llm_request(
     let started_phase = queued_phase.clone();
     let run_cancellation_for_stop = run_cancellation_token.clone();
     let browser_state = handle.state::<crate::gemini_browser::GeminiBrowserState>();
+    let browser_run_id_for_cancel = browser_run_id.clone();
 
     let _ = queued_handle.emit(
         PROMPT_PACK_RUN_EVENT,
@@ -768,22 +772,19 @@ async fn run_browser_llm_request(
         .map_err(LlmRequestError::Failed)
     };
 
-    let result =
-        match run_with_prompt_pack_run_cancellation(run_cancellation_token, browser_future).await {
-            Ok(result) => result,
-            Err(LlmRequestError::Cancelled) => {
-                if run_cancellation_for_stop
-                    .as_ref()
-                    .is_some_and(CancellationToken::is_cancelled)
-                {
-                    browser_state.request_stop().await;
-                }
-                return Err(YoutubeSummaryStageExecutionError::Cancelled);
-            }
-            Err(LlmRequestError::Failed(error)) => {
-                return Err(YoutubeSummaryStageExecutionError::Failed(error));
-            }
-        };
+    let cancel_handle = handle.clone();
+    let result = run_browser_stage_result_with_cancellation(
+        run_cancellation_token,
+        browser_future,
+        move || async move {
+            crate::gemini_browser::cancel_gemini_browser_job(
+                &cancel_handle,
+                &browser_run_id_for_cancel,
+            )
+            .await
+        },
+    )
+    .await?;
 
     if run_cancellation_for_stop
         .as_ref()
@@ -797,6 +798,31 @@ async fn run_browser_llm_request(
         .map_err(YoutubeSummaryStageExecutionError::Failed)?;
 
     browser_stage_completion_from_result(result).map_err(YoutubeSummaryStageExecutionError::from)
+}
+
+async fn run_browser_stage_result_with_cancellation<BrowserFuture, CancelBrowser, CancelFuture>(
+    run_cancellation_token: Option<CancellationToken>,
+    browser_future: BrowserFuture,
+    cancel_browser_job: CancelBrowser,
+) -> Result<crate::gemini_browser::GeminiBrowserRunResult, YoutubeSummaryStageExecutionError>
+where
+    BrowserFuture:
+        Future<Output = Result<crate::gemini_browser::GeminiBrowserRunResult, LlmRequestError>>,
+    CancelBrowser: FnOnce() -> CancelFuture,
+    CancelFuture: Future<Output = AppResult<()>>,
+{
+    match run_with_prompt_pack_run_cancellation(run_cancellation_token, browser_future).await {
+        Ok(result) => Ok(result),
+        Err(LlmRequestError::Cancelled) => {
+            cancel_browser_job()
+                .await
+                .map_err(YoutubeSummaryStageExecutionError::Failed)?;
+            Err(YoutubeSummaryStageExecutionError::Cancelled)
+        }
+        Err(LlmRequestError::Failed(error)) => {
+            Err(YoutubeSummaryStageExecutionError::Failed(error))
+        }
+    }
 }
 
 async fn persist_browser_stage_provenance(
@@ -1837,13 +1863,13 @@ mod tests {
         clear_prompt_pack_cancellation_smoke_fixture_in_pool, delete_prompt_pack_run_in_pool,
         list_prompt_pack_run_stages_in_pool, list_prompt_pack_runs_in_pool,
         llm_chat_request_to_browser_prompt, load_run_runtime_config, now_string,
-        persist_browser_stage_provenance, run_with_prompt_pack_run_cancellation,
-        seed_prompt_pack_cancellation_smoke_fixture_in_pool,
+        persist_browser_stage_provenance, run_browser_stage_result_with_cancellation,
+        run_with_prompt_pack_run_cancellation, seed_prompt_pack_cancellation_smoke_fixture_in_pool,
         synthesis_stage_max_output_token_budget, transcript_analysis_max_output_tokens,
         transcript_analysis_stage_max_output_token_budget,
         transcript_analysis_stage_max_output_token_budget_for_control_preset,
         update_prompt_pack_run_in_pool, PromptPackRunState, RunRuntimeProvider,
-        DETAILED_REPORT_CONTROL_PRESET,
+        YoutubeSummaryStageExecutionError, DETAILED_REPORT_CONTROL_PRESET,
     };
     use crate::gemini_browser::{GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind};
     use crate::llm::{LlmChatRequest, LlmMessage, LlmRequestError};
@@ -1851,6 +1877,10 @@ mod tests {
     use crate::prompt_packs::dto::{ListPromptPackRunsRequest, PromptPackRunEvent};
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
     use crate::prompt_packs::youtube_summary::TranscriptAnalysisStageExecutionRequest;
+    use std::sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc,
+    };
     use tokio_util::sync::CancellationToken;
 
     #[test]
@@ -1967,6 +1997,186 @@ mod tests {
             run_with_prompt_pack_run_cancellation(Some(token), std::future::pending()).await;
 
         assert!(matches!(result, Err(LlmRequestError::Cancelled)));
+    }
+
+    #[tokio::test]
+    async fn prompt_pack_browser_stage_cancelled_while_queued_cancels_browser_job() {
+        let pool =
+            test_pool_with_prompt_pack_runs([(41, Some(7), "running", "2026-06-22T10:00:00Z")])
+                .await;
+        let stage_run_id = 1001;
+        insert_prompt_pack_browser_stage(&pool, 41, stage_run_id).await;
+        let browser_run_id = browser_run_id_for_stage(41, stage_run_id, None);
+        let runs_dir = tempfile::tempdir().expect("runs dir");
+        crate::gemini_browser::create_queued_run(
+            runs_dir.path(),
+            &browser_run_id,
+            "prompt_pack:youtube_summary:transcript_analysis",
+            "Summarize",
+        )
+        .expect("queued browser run");
+        let token = CancellationToken::new();
+        let cancel_calls = Arc::new(AtomicUsize::new(0));
+        let cancel_calls_for_hook = cancel_calls.clone();
+        let browser_run_id_for_hook = browser_run_id.clone();
+        let runs_root = runs_dir.path().to_path_buf();
+
+        let stage_result = run_browser_stage_result_with_cancellation(
+            Some(token.clone()),
+            std::future::pending(),
+            move || async move {
+                cancel_calls_for_hook.fetch_add(1, Ordering::SeqCst);
+                crate::gemini_browser::finish_run(
+                    &runs_root,
+                    &browser_run_id_for_hook,
+                    cancelled_browser_result(&browser_run_id_for_hook),
+                )?;
+                Ok(())
+            },
+        );
+
+        token.cancel();
+        let stage_result = tokio::time::timeout(std::time::Duration::from_secs(1), stage_result)
+            .await
+            .expect("stage cancellation returned");
+
+        assert!(matches!(
+            stage_result,
+            Err(YoutubeSummaryStageExecutionError::Cancelled)
+        ));
+        assert_eq!(cancel_calls.load(Ordering::SeqCst), 1);
+        let browser_run = crate::gemini_browser::list_runs(runs_dir.path(), 10)
+            .expect("browser runs")
+            .runs
+            .into_iter()
+            .find(|run| run.run_id == browser_run_id)
+            .expect("browser run");
+        assert_eq!(
+            browser_run.status,
+            crate::gemini_browser::GeminiBrowserRunStatus::Cancelled
+        );
+        assert_browser_stage_has_no_success_provenance(&pool, stage_run_id).await;
+    }
+
+    #[tokio::test]
+    async fn prompt_pack_browser_stage_cancelled_while_active_stops_sidecar() {
+        let pool =
+            test_pool_with_prompt_pack_runs([(42, Some(7), "running", "2026-06-22T10:00:00Z")])
+                .await;
+        let stage_run_id = 1002;
+        insert_prompt_pack_browser_stage(&pool, 42, stage_run_id).await;
+        let browser_run_id = browser_run_id_for_stage(42, stage_run_id, None);
+        let runs_dir = tempfile::tempdir().expect("runs dir");
+        crate::gemini_browser::create_queued_run(
+            runs_dir.path(),
+            &browser_run_id,
+            "prompt_pack:youtube_summary:transcript_analysis",
+            "Summarize",
+        )
+        .expect("queued browser run");
+        crate::gemini_browser::mark_running(runs_dir.path(), &browser_run_id)
+            .expect("mark browser run active");
+        let token = CancellationToken::new();
+        let active_browser_token = CancellationToken::new();
+        let stop_requested = Arc::new(AtomicBool::new(false));
+        let stop_requested_for_hook = stop_requested.clone();
+        let active_browser_token_for_hook = active_browser_token.clone();
+        let browser_run_id_for_hook = browser_run_id.clone();
+        let runs_root = runs_dir.path().to_path_buf();
+
+        let stage_result = run_browser_stage_result_with_cancellation(
+            Some(token.clone()),
+            std::future::pending(),
+            move || async move {
+                active_browser_token_for_hook.cancel();
+                stop_requested_for_hook.store(true, Ordering::SeqCst);
+                crate::gemini_browser::finish_run(
+                    &runs_root,
+                    &browser_run_id_for_hook,
+                    cancelled_browser_result(&browser_run_id_for_hook),
+                )?;
+                Ok(())
+            },
+        );
+
+        token.cancel();
+        let stage_result = tokio::time::timeout(std::time::Duration::from_secs(1), stage_result)
+            .await
+            .expect("stage cancellation returned");
+
+        assert!(matches!(
+            stage_result,
+            Err(YoutubeSummaryStageExecutionError::Cancelled)
+        ));
+        assert!(active_browser_token.is_cancelled());
+        assert!(stop_requested.load(Ordering::SeqCst));
+        let browser_run = crate::gemini_browser::list_runs(runs_dir.path(), 10)
+            .expect("browser runs")
+            .runs
+            .into_iter()
+            .find(|run| run.run_id == browser_run_id)
+            .expect("browser run");
+        assert_eq!(
+            browser_run.status,
+            crate::gemini_browser::GeminiBrowserRunStatus::Cancelled
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelled_browser_stage_does_not_persist_success_provenance() {
+        let pool =
+            test_pool_with_prompt_pack_runs([(43, Some(7), "running", "2026-06-22T10:00:00Z")])
+                .await;
+        let stage_run_id = 1003;
+        insert_prompt_pack_browser_stage(&pool, 43, stage_run_id).await;
+        let token = CancellationToken::new();
+
+        let stage_result = run_browser_stage_result_with_cancellation(
+            Some(token.clone()),
+            std::future::pending(),
+            || async { Ok(()) },
+        );
+
+        token.cancel();
+        let stage_result = tokio::time::timeout(std::time::Duration::from_secs(1), stage_result)
+            .await
+            .expect("stage cancellation returned");
+
+        assert!(matches!(
+            stage_result,
+            Err(YoutubeSummaryStageExecutionError::Cancelled)
+        ));
+        assert_browser_stage_has_no_success_provenance(&pool, stage_run_id).await;
+    }
+
+    #[tokio::test]
+    async fn prompt_pack_browser_stage_cancelled_before_enqueue_is_tolerated() {
+        let pool =
+            test_pool_with_prompt_pack_runs([(44, Some(7), "running", "2026-06-22T10:00:00Z")])
+                .await;
+        let stage_run_id = 1004;
+        insert_prompt_pack_browser_stage(&pool, 44, stage_run_id).await;
+        let token = CancellationToken::new();
+        token.cancel();
+        let cancel_calls = Arc::new(AtomicUsize::new(0));
+        let cancel_calls_for_hook = cancel_calls.clone();
+
+        let stage_result = run_browser_stage_result_with_cancellation(
+            Some(token),
+            std::future::pending(),
+            move || async move {
+                cancel_calls_for_hook.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            },
+        )
+        .await;
+
+        assert!(matches!(
+            stage_result,
+            Err(YoutubeSummaryStageExecutionError::Cancelled)
+        ));
+        assert_eq!(cancel_calls.load(Ordering::SeqCst), 1);
+        assert_browser_stage_has_no_success_provenance(&pool, stage_run_id).await;
     }
 
     #[tokio::test]
@@ -2535,6 +2745,58 @@ mod tests {
         assert_eq!(
             synthesis_stage_max_output_token_budget().expect("load synthesis budget"),
             6_144
+        );
+    }
+
+    async fn insert_prompt_pack_browser_stage(
+        pool: &sqlx::SqlitePool,
+        run_id: i64,
+        stage_run_id: i64,
+    ) {
+        sqlx::query(
+            "INSERT INTO prompt_pack_stage_runs (
+                id, run_id, stage_name, stage_order, stage_status, created_at, updated_at
+             )
+             VALUES (
+                ?, ?, 'youtube_summary/transcript_analysis', 20, 'running',
+                '2026-06-22T10:00:01Z', '2026-06-22T10:00:01Z'
+             )",
+        )
+        .bind(stage_run_id)
+        .bind(run_id)
+        .execute(pool)
+        .await
+        .expect("insert prompt pack browser stage");
+    }
+
+    fn cancelled_browser_result(run_id: &str) -> crate::gemini_browser::GeminiBrowserRunResult {
+        crate::gemini_browser::GeminiBrowserRunResult {
+            run_id: run_id.to_string(),
+            status: crate::gemini_browser::GeminiBrowserRunStatus::Cancelled,
+            text: None,
+            message: Some("Cancelled".to_string()),
+            manual_action: None,
+            artifacts: crate::gemini_browser::GeminiBrowserArtifactRefs::default(),
+            elapsed_ms: 0,
+            debug_summary: None,
+        }
+    }
+
+    async fn assert_browser_stage_has_no_success_provenance(
+        pool: &sqlx::SqlitePool,
+        stage_run_id: i64,
+    ) {
+        let status: Option<String> = sqlx::query_scalar(
+            "SELECT browser_run_status FROM prompt_pack_stage_runs WHERE id = ?",
+        )
+        .bind(stage_run_id)
+        .fetch_one(pool)
+        .await
+        .expect("read browser provenance");
+
+        assert!(
+            !matches!(status.as_deref(), Some("ok") | Some("ready")),
+            "cancelled browser stage persisted success provenance: {status:?}"
         );
     }
 

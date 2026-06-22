@@ -1,5 +1,6 @@
 mod cdp_chrome;
 mod commands;
+mod jobs;
 mod paths;
 mod run_log;
 mod sidecar;
@@ -13,6 +14,9 @@ pub use commands::{
     gemini_bridge_status, gemini_bridge_stop,
 };
 pub(crate) use commands::{provider_status, send_single_prompt};
+pub(crate) use jobs::{
+    cancel_gemini_browser_job, start_gemini_browser_job_worker, GeminiBrowserJobRuntime,
+};
 pub(crate) use paths::{chrome_cdp_profile_dir, path_string, profile_dir, run_dir, runs_dir};
 pub(crate) use run_log::{
     create_queued_run, finish_run, list_runs, mark_running, recorded_run_dir,

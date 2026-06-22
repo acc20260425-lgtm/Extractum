@@ -61,6 +61,8 @@ mod sql_helpers;
 mod time;
 mod tx;
 
+use tauri::Manager;
+
 mod takeout_import;
 use takeout_import::{
     cancel_takeout_source_import, list_takeout_import_recovery_states,
@@ -119,7 +121,8 @@ mod gemini_browser;
 use gemini_browser::{
     gemini_bridge_list_runs, gemini_bridge_open_browser, gemini_bridge_open_run_folder,
     gemini_bridge_resume, gemini_bridge_send_single, gemini_bridge_start_cdp_chrome,
-    gemini_bridge_status, gemini_bridge_stop, GeminiBrowserState,
+    gemini_bridge_status, gemini_bridge_stop, start_gemini_browser_job_worker,
+    GeminiBrowserJobRuntime, GeminiBrowserState,
 };
 
 mod analysis;
@@ -157,6 +160,7 @@ pub fn run() {
         .manage(PromptPackRunState::new())
         .manage(LlmSchedulerState::new())
         .manage(GeminiBrowserState::new())
+        .manage(GeminiBrowserJobRuntime::default())
         .manage(SourceIdentityRepairState::new())
         .manage(SecretStoreState::system())
         .plugin(tauri_plugin_dialog::init())
@@ -164,7 +168,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:extractum.db", build_migrations())
+                .add_migrations(crate::db::DB_URL, build_migrations())
                 .build(),
         );
 
@@ -173,6 +177,14 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            app.state::<GeminiBrowserState>()
+                .init_status_snapshot(app.handle())?;
+            let worker_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = start_gemini_browser_job_worker(worker_handle).await {
+                    eprintln!("Failed to start Gemini Browser job worker: {error}");
+                }
+            });
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(error) = seed_builtin_prompt_packs(handle.clone()).await {

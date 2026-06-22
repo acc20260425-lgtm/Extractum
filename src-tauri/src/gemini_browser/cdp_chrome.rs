@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::Duration;
 
 use url::Url;
 
@@ -12,6 +13,8 @@ use super::{
 
 const DEFAULT_CDP_ENDPOINT: &str = "http://127.0.0.1:9222";
 const GEMINI_URL: &str = "https://gemini.google.com/app";
+const CDP_READY_TIMEOUT: Duration = Duration::from_secs(10);
+const CDP_READY_POLL_INTERVAL: Duration = Duration::from_millis(200);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ChromeCdpLaunchSpec {
@@ -98,6 +101,41 @@ pub(crate) fn spawn_chrome_cdp(spec: &ChromeCdpLaunchSpec) -> AppResult<()> {
                 "Failed to start Chrome with remote debugging enabled: {error}"
             ))
         })
+}
+
+pub(crate) async fn wait_for_cdp_endpoint(endpoint: &str) -> AppResult<()> {
+    wait_for_cdp_endpoint_core(endpoint, CDP_READY_TIMEOUT, CDP_READY_POLL_INTERVAL).await
+}
+
+async fn wait_for_cdp_endpoint_core(
+    endpoint: &str,
+    timeout: Duration,
+    poll_interval: Duration,
+) -> AppResult<()> {
+    let version_url = format!("{}/json/version", endpoint.trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_millis(750))
+        .build()
+        .map_err(|error| {
+            AppError::internal(format!("Failed to build CDP probe client: {error}"))
+        })?;
+    let deadline = tokio::time::Instant::now() + timeout;
+
+    loop {
+        let probe_error = match client.get(&version_url).send().await {
+            Ok(response) if response.status().is_success() => return Ok(()),
+            Ok(response) => format!("HTTP {}", response.status()),
+            Err(error) => error.to_string(),
+        };
+
+        if tokio::time::Instant::now() >= deadline {
+            return Err(AppError::internal(format!(
+                "Chrome was started but CDP endpoint did not become reachable at {endpoint}. Last probe error: {probe_error}"
+            )));
+        }
+
+        tokio::time::sleep(poll_interval).await;
+    }
 }
 
 pub(crate) fn start_chrome_result(spec: &ChromeCdpLaunchSpec) -> GeminiBrowserStartChromeResult {
@@ -197,6 +235,57 @@ mod tests {
         assert!(spec
             .args
             .contains(&"https://gemini.google.com/app".to_string()));
+    }
+
+    #[tokio::test]
+    async fn wait_for_cdp_endpoint_accepts_json_version_response() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind test cdp endpoint");
+        let addr = listener.local_addr().expect("read listener address");
+        let server = tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+            let (mut stream, _) = listener.accept().await.expect("accept cdp probe");
+            let mut request = [0_u8; 1024];
+            let _ = stream.read(&mut request).await.expect("read cdp probe");
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 18\r\n\r\n{\"Browser\":\"test\"}",
+                )
+                .await
+                .expect("write cdp response");
+        });
+
+        wait_for_cdp_endpoint_core(
+            &format!("http://{addr}"),
+            std::time::Duration::from_secs(1),
+            std::time::Duration::from_millis(10),
+        )
+        .await
+        .expect("cdp endpoint becomes ready");
+        server.await.expect("server task joins");
+    }
+
+    #[tokio::test]
+    async fn wait_for_cdp_endpoint_reports_unreachable_endpoint() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind unused cdp endpoint");
+        let addr = listener.local_addr().expect("read listener address");
+        drop(listener);
+
+        let error = wait_for_cdp_endpoint_core(
+            &format!("http://{addr}"),
+            std::time::Duration::from_millis(25),
+            std::time::Duration::from_millis(5),
+        )
+        .await
+        .expect_err("unreachable cdp endpoint fails");
+
+        assert!(error
+            .to_string()
+            .contains("CDP endpoint did not become reachable"));
     }
 
     #[test]

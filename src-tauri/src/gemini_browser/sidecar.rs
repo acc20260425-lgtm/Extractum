@@ -191,19 +191,23 @@ async fn request_node(
         AppError::internal(format!("Failed to flush Gemini sidecar request: {error}"))
     })?;
 
-    let mut response_line = String::new();
-    let bytes = stdout
-        .read_line(&mut response_line)
-        .await
-        .map_err(|error| {
-            AppError::internal(format!("Failed to read Gemini sidecar response: {error}"))
-        })?;
-    if bytes == 0 {
-        return Err(AppError::internal(
-            "Gemini browser sidecar exited without a response",
-        ));
+    loop {
+        let mut response_line = String::new();
+        let bytes = stdout
+            .read_line(&mut response_line)
+            .await
+            .map_err(|error| {
+                AppError::internal(format!("Failed to read Gemini sidecar response: {error}"))
+            })?;
+        if bytes == 0 {
+            return Err(AppError::internal(
+                "Gemini browser sidecar exited without a response",
+            ));
+        }
+        if let Some(response) = decode_sidecar_line_for_request(id, &response_line)? {
+            return Ok(response);
+        }
     }
-    decode_sidecar_line(id, &response_line)
 }
 
 async fn request_shell(
@@ -231,7 +235,9 @@ async fn request_shell(
             CommandEvent::Stdout(bytes) => {
                 stdout_buffer.push_str(&String::from_utf8_lossy(&bytes));
                 while let Some(line) = take_complete_jsonl_line(stdout_buffer) {
-                    return decode_sidecar_line(id, &line);
+                    if let Some(response) = decode_sidecar_line_for_request(id, &line)? {
+                        return Ok(response);
+                    }
                 }
             }
             CommandEvent::Stderr(_) => {}
@@ -256,14 +262,20 @@ async fn request_shell(
 }
 
 fn decode_sidecar_line(id: &str, response_line: &str) -> AppResult<GeminiBrowserSidecarResponse> {
+    decode_sidecar_line_for_request(id, response_line)?
+        .ok_or_else(|| AppError::internal("Gemini browser sidecar response id mismatch"))
+}
+
+fn decode_sidecar_line_for_request(
+    id: &str,
+    response_line: &str,
+) -> AppResult<Option<GeminiBrowserSidecarResponse>> {
     let response: SidecarLine = serde_json::from_str(response_line)
         .map_err(|error| AppError::internal(format!("Invalid Gemini sidecar response: {error}")))?;
     if response.id != id {
-        return Err(AppError::internal(
-            "Gemini browser sidecar response id mismatch",
-        ));
+        return Ok(None);
     }
-    Ok(response.response)
+    Ok(Some(response.response))
 }
 
 fn take_complete_jsonl_line(buffer: &mut String) -> Option<String> {
@@ -482,6 +494,21 @@ mod tests {
         let response = decode_sidecar_line("expected", line).expect("decode response");
 
         assert!(matches!(response, GeminiBrowserSidecarResponse::Ack));
+    }
+
+    #[test]
+    fn decode_sidecar_line_for_request_skips_stale_response_ids() {
+        let stale = r#"{"id":"previous","response":{"type":"ack"}}"#;
+        let expected = r#"{"id":"expected","response":{"type":"ack"}}"#;
+
+        assert!(decode_sidecar_line_for_request("expected", stale)
+            .expect("decode stale response")
+            .is_none());
+        assert!(matches!(
+            decode_sidecar_line_for_request("expected", expected)
+                .expect("decode expected response"),
+            Some(GeminiBrowserSidecarResponse::Ack)
+        ));
     }
 
     #[test]
