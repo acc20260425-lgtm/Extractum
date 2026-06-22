@@ -639,7 +639,7 @@ async fn worker_timeout_clears_active_and_cancelled_state() {
         .data(TimeoutTestEvents(events.clone()))
         .data(TimeoutTestStopAttempts(stop_attempts.clone()))
         .data(executions)
-        .build(timeout_release_test_handler);
+        .build(timeout_cleanup_test_handler);
     let worker_task = tokio::spawn(worker.run());
 
     wait_for_test_event(&events, "run-timeout-first:running").await;
@@ -653,6 +653,41 @@ async fn worker_timeout_clears_active_and_cancelled_state() {
     assert_eq!(state.active_run_id().await, None);
     assert!(!runtime.is_cancelled("run-timeout-first"));
     assert_eq!(stop_attempts.lock().as_slice(), ["run-timeout-first:stop"]);
+}
+```
+
+Add this focused handler near `timeout_release_test_handler`. It must stop the worker after the first timeout so the cleanup test cannot hang and cannot have a second run mask dirty `active_run_id` state:
+
+```rust
+async fn timeout_cleanup_test_handler(
+    job: GeminiBrowserJob,
+    runtime: Data<Arc<GeminiBrowserJobRuntime>>,
+    state: Data<Arc<crate::gemini_browser::GeminiBrowserState>>,
+    runs_dir: Data<Arc<PathBuf>>,
+    events: Data<TimeoutTestEvents>,
+    stop_attempts: Data<TimeoutTestStopAttempts>,
+    executions: Data<Arc<AtomicUsize>>,
+    worker: WorkerContext,
+) -> Result<(), BoxDynError> {
+    run_test_job_with_execution_timeout(
+        runtime.as_ref(),
+        state.as_ref(),
+        runs_dir.as_ref(),
+        job,
+        events.0.as_ref(),
+        stop_attempts.0.as_ref(),
+        async {
+            std::future::pending::<
+                crate::error::AppResult<crate::gemini_browser::GeminiBrowserRunResult>,
+            >()
+            .await
+        },
+    )
+    .await?;
+
+    executions.fetch_add(1, Ordering::SeqCst);
+    worker.stop()?;
+    Ok(())
 }
 ```
 
