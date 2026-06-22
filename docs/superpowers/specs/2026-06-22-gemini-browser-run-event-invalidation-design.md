@@ -224,6 +224,15 @@ error separately.
 User commands may schedule a refresh after their command returns, but they
 must not bypass the shared scheduler.
 
+Command return values must not become a second authoritative UI write path for
+the Settings panel. Command handlers may use returned values to show a local
+message, command error, or immediate affordance, but authoritative panel
+`status`, `runs`, and selected/active `result` state must be updated through the
+shared refresh path. For example, `Resume` or `Open` must not permanently set
+panel `status` from its direct command response, and `Send Test Prompt` must not
+permanently set panel `result` from the direct command response while bypassing
+run-log refresh.
+
 ## Legacy Removal Scope
 
 Remove these pre-Apalis state-channel traces:
@@ -254,6 +263,8 @@ Rust tests should verify:
 - cached provider status snapshot failure after a successful run-log transition
   does not roll back the run log or fail the job solely because of UI display
   state;
+- live sidecar/browser status probes used by `gemini_bridge_status` do not write
+  back into the lifecycle-owned cached provider status snapshot;
 - no event payload test depends on status, message, or queue position;
 - prompt-pack Gemini Browser execution still obtains its result from the
   Apalis/run-log path.
@@ -270,6 +281,8 @@ Frontend tests should verify:
   `gemini_bridge_status` fails;
 - mount, user commands, and run-change events all use the same refresh
   scheduler;
+- command return values do not directly assign authoritative panel `status`,
+  `runs`, or selected/active `result` state outside the shared refresh path;
 - refresh requests are coalesced when several events arrive quickly.
 
 Manual verification should include:
