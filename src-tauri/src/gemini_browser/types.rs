@@ -401,7 +401,10 @@ mod tests {
         };
 
         let json = serde_json::to_value(&result).expect("serialize result");
-        assert_eq!(json["artifacts"]["answer_extraction"], "answer-extraction.json");
+        assert_eq!(
+            json["artifacts"]["answer_extraction"],
+            "answer-extraction.json"
+        );
         assert_eq!(json["debug_summary"]["mode"], "cdp_attach");
         assert_eq!(json["debug_summary"]["generation_busy_observed"], true);
         assert_eq!(

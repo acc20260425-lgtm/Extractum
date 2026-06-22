@@ -66,7 +66,9 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
         .as_ref()
         .map(serde_json::to_string)
         .transpose()
-        .map_err(|error| AppError::internal(format!("serialize browser provider config: {error}")))?;
+        .map_err(|error| {
+            AppError::internal(format!("serialize browser provider config: {error}"))
+        })?;
     let request_json = serde_json::to_string(&serde_json::json!({
         "clientRequestId": request.client_request_id,
         "projectId": request.project_id,

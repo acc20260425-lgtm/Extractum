@@ -271,24 +271,23 @@ mod tests {
 
     #[test]
     fn start_request_accepts_gemini_browser_runtime_provider() {
-        let request: StartYoutubeSummaryRunRequest =
-            serde_json::from_value(serde_json::json!({
-                "clientRequestId": "req-browser-runtime-1",
-                "projectId": null,
-                "sourceIds": [901],
-                "profileId": null,
-                "modelOverride": null,
-                "outputLanguage": "en",
-                "controlPreset": "standard",
-                "evidenceMode": "standard",
-                "includeComments": false,
-                "runtimeProvider": "gemini_browser",
-                "browserProviderConfig": {
-                    "mode": "cdp_attach",
-                    "cdpEndpoint": "http://127.0.0.1:9222"
-                }
-            }))
-            .expect("deserialize start request");
+        let request: StartYoutubeSummaryRunRequest = serde_json::from_value(serde_json::json!({
+            "clientRequestId": "req-browser-runtime-1",
+            "projectId": null,
+            "sourceIds": [901],
+            "profileId": null,
+            "modelOverride": null,
+            "outputLanguage": "en",
+            "controlPreset": "standard",
+            "evidenceMode": "standard",
+            "includeComments": false,
+            "runtimeProvider": "gemini_browser",
+            "browserProviderConfig": {
+                "mode": "cdp_attach",
+                "cdpEndpoint": "http://127.0.0.1:9222"
+            }
+        }))
+        .expect("deserialize start request");
 
         assert_eq!(
             request.runtime_provider,

@@ -104,9 +104,7 @@ pub(crate) async fn start_youtube_summary_run_with_preflight_failures_in_pool(
     Ok(StartYoutubeSummaryRunOutcomeDto::Started { run })
 }
 
-pub(crate) fn model_budget_for_runtime(
-    runtime_provider: PromptPackRuntimeProvider,
-) -> ModelBudget {
+pub(crate) fn model_budget_for_runtime(runtime_provider: PromptPackRuntimeProvider) -> ModelBudget {
     match runtime_provider {
         PromptPackRuntimeProvider::Api => ModelBudget {
             input_token_limit: Some(32_000),

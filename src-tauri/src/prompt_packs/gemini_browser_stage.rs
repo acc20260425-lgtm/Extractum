@@ -9,7 +9,8 @@ pub(crate) fn browser_result_to_completion_text(
     match result.status {
         GeminiBrowserRunStatus::Ok => {
             if result.debug_summary.as_ref().is_some_and(|summary| {
-                summary.answer_completion_reason == GeminiBrowserAnswerCompletionReason::TimeoutLatest
+                summary.answer_completion_reason
+                    == GeminiBrowserAnswerCompletionReason::TimeoutLatest
             }) {
                 return Err(AppError::validation(
                     "Gemini browser result is partial-risk (timeout_latest) and cannot be used as a prompt completion",
@@ -35,9 +36,8 @@ mod tests {
     use super::*;
     use crate::error::AppErrorKind;
     use crate::gemini_browser::{
-        GeminiBrowserAnswerCompletionReason, GeminiBrowserArtifactRefs,
-        GeminiBrowserProviderMode, GeminiBrowserRunDebugSummary, GeminiBrowserRunResult,
-        GeminiBrowserRunStatus,
+        GeminiBrowserAnswerCompletionReason, GeminiBrowserArtifactRefs, GeminiBrowserProviderMode,
+        GeminiBrowserRunDebugSummary, GeminiBrowserRunResult, GeminiBrowserRunStatus,
     };
 
     fn result(status: GeminiBrowserRunStatus, text: Option<&str>) -> GeminiBrowserRunResult {
