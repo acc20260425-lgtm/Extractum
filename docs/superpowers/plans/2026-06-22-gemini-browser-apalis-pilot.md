@@ -245,6 +245,8 @@ parking_lot = "0.12"
 tower = { version = "0.5", features = ["timeout", "util"] }
 ```
 
+Do not add a second `tempfile` entry for these tests. `tempfile = "3"` already exists in `src-tauri/Cargo.toml` under `[dependencies]` because production YouTube code uses `NamedTempFile` / `TempDir`; moving it to `[dev-dependencies]` is not part of this Apalis pilot.
+
 - [ ] **Step 2: Create the real job payload**
 
 Create `src-tauri/src/gemini_browser/jobs.rs`:
@@ -808,6 +810,8 @@ impl GeminiBrowserJobRuntime {
     );
 
     pub(crate) fn remove_waiter(&self, run_id: &str);
+
+    pub(crate) fn has_waiter(&self, run_id: &str) -> bool;
 
     pub(crate) async fn wait_for_registered_result(
         &self,
@@ -1492,6 +1496,13 @@ async fn send_single_prompt_rejects_duplicate_non_terminal_run_id_before_enqueue
 }
 
 #[tokio::test]
+async fn send_single_prompt_rejects_duplicate_waiter_before_enqueue() {
+    // Register an active waiter for run-duplicate-waiter.
+    // Call the command core with the same run_id and a fake enqueue that panics if called.
+    // Assert the error mentions an active Gemini Browser waiter for that run_id.
+}
+
+#[tokio::test]
 async fn send_single_prompt_marks_run_failed_when_enqueue_fails() {
     // Arrange a fake enqueue that returns AppError::internal("push failed").
     // Assert the waiter is removed.
@@ -1507,7 +1518,7 @@ In `send_single_prompt(...)`, keep input trimming and validation. Before `create
 ```rust
 let runtime = handle.state::<crate::gemini_browser::GeminiBrowserJobRuntime>();
 runtime.ensure_worker_ready_for_enqueue().await?;
-reject_duplicate_non_terminal_run(&runs_root, &request.run_id).await?;
+reject_duplicate_active_or_non_terminal_run(&runtime, &runs_root, &request.run_id).await?;
 create_queued_run(&runs_root, &request.run_id, &request.source, &request.prompt)?;
 let waiter = runtime.register_waiter(&request.run_id)?;
 let artifact_mode = GeminiBrowserArtifactMode::from_wire(Some(&request.artifact_mode))?;
@@ -1547,6 +1558,32 @@ let queued = match crate::gemini_browser::enqueue_gemini_browser_job(
     }
 };
 ```
+
+`reject_duplicate_active_or_non_terminal_run(...)` must perform both checks from the Completion Waiter Contract:
+
+```rust
+async fn reject_duplicate_active_or_non_terminal_run(
+    runtime: &GeminiBrowserJobRuntime,
+    runs_root: &std::path::Path,
+    run_id: &str,
+) -> crate::error::AppResult<()> {
+    if runtime.has_waiter(run_id) {
+        return Err(crate::error::AppError::conflict(format!(
+            "Gemini Browser run_id '{run_id}' already has an active waiter"
+        )));
+    }
+
+    if run_log_has_non_terminal_run(runs_root, run_id).await? {
+        return Err(crate::error::AppError::conflict(format!(
+            "Gemini Browser run_id '{run_id}' already has a non-terminal run log record"
+        )));
+    }
+
+    Ok(())
+}
+```
+
+Do not split this into two call sites in `send_single_prompt(...)`; the command handoff must reject duplicate waiters and duplicate non-terminal run log records before `create_queued_run(...)`, `register_waiter(...)`, or enqueue.
 
 If `enqueue_gemini_browser_job(...)` returns an error after the queued run log record is written, the `Err` branch must:
 
@@ -1885,6 +1922,34 @@ Expected: PASS.
 
 ---
 
+## Deferred Backlog
+
+These are intentionally not part of the Gemini Browser Apalis pilot acceptance criteria.
+
+### Backlog 1: Graceful Gemini Browser Sidecar Shutdown On App Exit
+
+**Reason:** The pilot stops active sidecar work on cancellation and worker timeout, but it does not add a global Tauri shutdown path. If the app exits while Chrome/Playwright is active, the OS usually cleans up the child process on normal exit, but crash or abrupt termination may still leave a browser process behind.
+
+**Future implementation outline:**
+
+- Use the current Tauri 2 lifecycle API from `app.run(|app, event| { ... })` or plugin `on_event`.
+- Handle `tauri::RunEvent::ExitRequested { .. }` or `tauri::RunEvent::Exit` and call the same internal `stop_active_gemini_browser_sidecar(...)` helper used by cancellation.
+- Do not block the event loop for a long browser shutdown. Use a short timeout such as `std::time::Duration::from_secs(3)`.
+- Add a test around a small shutdown core helper with a fake sidecar stopper:
+
+```rust
+#[tokio::test]
+async fn shutdown_stops_active_gemini_browser_sidecar_with_timeout() {
+    // Arrange active_run_id = Some("run-shutdown") and a fake sidecar stopper.
+    // Call the shutdown helper with a short timeout.
+    // Assert stop was requested once and active run state is not left as running.
+}
+```
+
+**Not covered:** hard crash cleanup after process death. That requires a separate orphan-process strategy and is not required for this queue migration.
+
+---
+
 ### Task 14: Compatibility Verification
 
 **Files:**
@@ -1974,12 +2039,15 @@ Expected: `git diff --check` exits `0`. `git status --short` shows only intentio
 - Closed-channel consistency: `wait_for_registered_result(...)` must remove the waiter and return `"Gemini Browser worker channel closed unexpectedly"` on `oneshot::error::RecvError`; `complete_waiter(...)` removes the sender before sending and ignores dropped receivers with `let _ = sender.send(result)`.
 - Worker readiness consistency: `ensure_worker_ready_for_enqueue_with_timeout(...)` must create a receiver with `self.worker_status.subscribe()` and wait through `Receiver::changed()`, not try to await on `watch::Sender` directly.
 - Idempotency consistency: duplicate Apalis idempotency / SQLite unique failures are translated to `AppError::conflict`, with a concrete duplicate enqueue test.
+- Duplicate run consistency: `send_single_prompt(...)` uses one helper, `reject_duplicate_active_or_non_terminal_run(...)`, that checks both existing active waiters and non-terminal run log records before creating a queued run or registering a new waiter.
 - Payload consistency: `GeminiBrowserJob` carries typed `GeminiBrowserArtifactMode` and the `Option<GeminiBrowserProviderConfig>` captured at enqueue time, so the worker does not re-read Settings or drift from managed to CDP mode after queueing.
+- Dependency consistency: Apalis adds only `apalis`, `apalis-sqlite`, `parking_lot`, and `tower`; `tempfile` is already present in `src-tauri/Cargo.toml` because production YouTube code uses it, so this pilot must not add a duplicate dev-dependency entry.
 - Lock consistency: Runtime maps use `parking_lot::Mutex`, cached provider status uses `parking_lot::RwLock`, and plan text forbids holding synchronous lock guards across `.await`.
 - Timeout consistency: Caller waiter timeout, product-facing worker execution timeout, and outer Tower hard-guard timeout are separate and ordered as `waiter_timeout < worker_execution_timeout < worker_hard_guard_timeout`; the worker timeout has a dedicated test proving a timed-out first job writes terminal run log state before the hard guard and does not block the next queued job, even when the caller waiter already timed out.
 - Main DB consistency: Apalis schema initialization must preserve `_sqlx_migrations`, avoid product table name collisions, and share the main `extractum.db` without `database is locked` failures.
 - Worker error consistency: sidecar/executor errors are converted into terminal failed run results and acknowledged to Apalis as handled so the no-retry policy is preserved.
 - Cancellation consistency: cancellation runtime APIs are explicit, worker-entry checks in-memory cancellation before `mark_running(...)`, Prompt Pack pre-enqueue cancellation tolerates missing Gemini Browser run log records, and `cancel_gemini_browser_job` is exported only in Task 10 after it is implemented.
+- Backlog consistency: graceful sidecar shutdown on Tauri app exit is recorded as a deferred backlog item with `RunEvent::ExitRequested` / `RunEvent::Exit` guidance, not as a pilot blocker.
 - Task atomicity consistency: Task 2 Step 1 and Step 2 are explicitly one edit unit because the test references database constants introduced by the helper step.
 
 ## Execution Choice
