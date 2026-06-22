@@ -10,11 +10,12 @@
     geminiBridgeStartCdpChrome,
     geminiBridgeStatus,
     geminiBridgeStop,
-    listenToGeminiBrowserRuns,
+    listenToGeminiBrowserRunChanges,
   } from "$lib/api/gemini-browser";
   import { formatAppError } from "$lib/app-error";
   import { statusLabel } from "$lib/gemini-browser-provider-panel-contract";
   import { runResultForActivePrompt } from "$lib/gemini-browser-provider-panel-state";
+  import { createGeminiBrowserRefreshScheduler } from "$lib/gemini-browser-refresh-scheduler";
   import {
     deriveGeminiBrowserSetupChecks,
     setupCheckActionLabel,
@@ -58,6 +59,7 @@
   let busy = $state(false);
   let message = $state("");
   let statusLoadError = $state<string | null>(null);
+  let runHistoryLoadError = $state<string | null>(null);
   let result = $state<GeminiBrowserRunResult | null>(null);
   let activeTestRunId = $state<string | null>(null);
   let browserProviderMode = $state<GeminiBrowserProviderMode>("managed");
@@ -150,7 +152,7 @@
   function selectBrowserProviderMode(mode: GeminiBrowserProviderMode) {
     browserProviderMode = mode;
     persistBrowserProviderConfig();
-    void refresh();
+    scheduleRefreshInBackground();
   }
 
   function updateCdpEndpoint(value: string) {
@@ -166,30 +168,48 @@
     message = completedResult.message ?? completedResult.status;
   }
 
-  async function refresh() {
-    try {
-      const [nextStatus, log] = await Promise.all([
-        geminiBridgeStatus(browserConfig()),
-        geminiBridgeListRuns(8),
-      ]);
-      statusLoadError = null;
+  const refreshScheduler = createGeminiBrowserRefreshScheduler({
+    loadStatus: () => geminiBridgeStatus(browserConfig()),
+    loadRuns: () => geminiBridgeListRuns(8),
+    applyStatus: (nextStatus) => {
       status = nextStatus;
-      runs = log.runs;
-      message = nextStatus.latest_message ?? "";
-      syncActivePromptResult(log.runs);
-    } catch (error) {
-      const formatted = formatAppError("loading Gemini browser provider", error);
-      statusLoadError = formatted;
-      message = formatted;
-    }
+    },
+    applyRuns: (nextRuns) => {
+      runs = nextRuns;
+    },
+    applyStatusError: (nextError) => {
+      statusLoadError = nextError;
+    },
+    applyRunsError: (nextError) => {
+      runHistoryLoadError = nextError;
+    },
+    applyMessage: (nextMessage) => {
+      message = nextMessage;
+    },
+    syncActivePromptResult: (nextRuns) => {
+      syncActivePromptResult(nextRuns);
+    },
+    formatError: formatAppError,
+  });
+
+  function scheduleRefresh() {
+    return refreshScheduler.scheduleRefresh();
+  }
+
+  function reportUnexpectedRefreshError(error: unknown) {
+    message = formatAppError("refreshing Gemini browser provider", error);
+  }
+
+  function scheduleRefreshInBackground() {
+    void scheduleRefresh().catch(reportUnexpectedRefreshError);
   }
 
   async function openBrowser() {
     busy = true;
     try {
-      status = await geminiBridgeOpenBrowser(browserConfig());
-      statusLoadError = null;
-      message = status.latest_message ?? "Browser opened.";
+      const opened = await geminiBridgeOpenBrowser(browserConfig());
+      message = opened.latest_message ?? "Browser opened.";
+      await scheduleRefresh();
     } catch (error) {
       message = formatAppError("opening Gemini browser", error);
     } finally {
@@ -205,7 +225,7 @@
   async function handleSetupCheckAction(check: GeminiBrowserSetupCheck) {
     if (!check.action) return;
     if (check.action === "refresh") {
-      await refresh();
+      await scheduleRefresh();
       return;
     }
     if (check.action === "start_chrome") {
@@ -238,7 +258,7 @@
     try {
       const launch = await geminiBridgeStartCdpChrome(browserConfig());
       message = launch.message;
-      await refresh();
+      await scheduleRefresh();
     } catch (error) {
       message = formatAppError("starting Chrome for Gemini browser provider", error);
     } finally {
@@ -257,16 +277,15 @@
     activeTestRunId = runId;
     selectedHistoryRunId = runId;
     try {
-      result = await geminiBridgeSendSingle({
+      const completed = await geminiBridgeSendSingle({
         runId,
         prompt: prompt.trim(),
         source: "settings_test",
         artifactMode: "reduced",
         browserConfig: browserConfig(),
       });
-      activeTestRunId = null;
-      message = result.message ?? result.status;
-      await refresh();
+      message = completed.message ?? completed.status;
+      await scheduleRefresh();
     } catch (error) {
       message = formatAppError("running Gemini browser prompt", error);
     } finally {
@@ -277,9 +296,9 @@
   async function resumeProvider() {
     busy = true;
     try {
-      status = await geminiBridgeResume(browserConfig());
-      message = status.latest_message ?? "Browser resumed.";
-      await refresh();
+      const resumed = await geminiBridgeResume(browserConfig());
+      message = resumed.latest_message ?? "Browser resumed.";
+      await scheduleRefresh();
     } catch (error) {
       message = formatAppError("resuming Gemini browser provider", error);
     } finally {
@@ -291,7 +310,7 @@
     busy = true;
     try {
       await geminiBridgeStop();
-      await refresh();
+      await scheduleRefresh();
     } catch (error) {
       message = formatAppError("stopping Gemini browser provider", error);
     } finally {
@@ -329,11 +348,10 @@
     let disposed = false;
     let unlisten: (() => void) | null = null;
     loadBrowserProviderConfig();
-    void refresh();
-    void listenToGeminiBrowserRuns(({ payload }) => {
+    scheduleRefreshInBackground();
+    void listenToGeminiBrowserRunChanges(() => {
       if (disposed) return;
-      message = payload.message ?? payload.status;
-      void refresh();
+      scheduleRefreshInBackground();
     }).then((detach) => {
       if (disposed) {
         detach();
@@ -361,7 +379,7 @@
     <div class="provider-card">
       <div class="row">
         <strong>Gemini Browser</strong>
-        <button type="button" onclick={refresh} disabled={busy} title="Refresh status">
+        <button type="button" onclick={scheduleRefreshInBackground} disabled={busy} title="Refresh status">
           <RefreshCw size={14} />
         </button>
       </div>
@@ -431,7 +449,12 @@
           <h3>Setup checklist</h3>
           <p>Safe next steps for making the Browser Provider usable.</p>
         </div>
-        <button type="button" onclick={refresh} disabled={busy} title="Refresh setup checklist">
+        <button
+          type="button"
+          onclick={scheduleRefreshInBackground}
+          disabled={busy}
+          title="Refresh setup checklist"
+        >
           <RefreshCw size={14} />
           <span>Refresh</span>
         </button>
@@ -479,7 +502,12 @@
         <p>Latest Browser Provider run diagnostics.</p>
       </div>
       <div class="actions">
-        <button type="button" onclick={refresh} disabled={busy} title="Refresh run diagnostics">
+        <button
+          type="button"
+          onclick={scheduleRefreshInBackground}
+          disabled={busy}
+          title="Refresh run diagnostics"
+        >
           <RefreshCw size={14} />
           <span>Refresh</span>
         </button>
@@ -699,6 +727,10 @@
       </div>
     </div>
 
+    {#if runHistoryLoadError}
+      <p class="error-text">{runHistoryLoadError}</p>
+    {/if}
+
     {#each runHistoryRows as row (row.run.run_id)}
       <button
         type="button"
@@ -753,6 +785,12 @@
     margin: 4px 0 0;
     color: var(--muted-foreground);
     font-size: 13px;
+  }
+
+  .error-text {
+    color: var(--destructive);
+    font-size: 0.85rem;
+    margin: 0;
   }
 
   .status-pill {

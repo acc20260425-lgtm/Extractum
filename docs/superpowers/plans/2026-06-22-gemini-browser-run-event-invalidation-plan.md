@@ -1574,7 +1574,7 @@ git commit -m "feat: add Gemini Browser refresh scheduler"
 - Modify: `src/lib/components/settings/gemini-browser-provider-panel.svelte`
 - Modify: `src/lib/gemini-browser-provider-panel.test.ts`
 
-- [ ] **Step 1: Write failing source-contract tests for the panel**
+- [x] **Step 1: Write failing source-contract tests for the panel**
 
 In `src/lib/gemini-browser-provider-panel.test.ts`, replace:
 
@@ -1638,7 +1638,7 @@ expect(componentSource).toContain("syncActivePromptResult(nextRuns)");
 expect(componentSource).not.toContain("syncActivePromptResult(log.runs)");
 ```
 
-- [ ] **Step 2: Run failing panel tests**
+- [x] **Step 2: Run failing panel tests**
 
 Run:
 
@@ -1648,7 +1648,7 @@ npm test -- src/lib/gemini-browser-provider-panel.test.ts
 
 Expected: FAIL because the component still uses raw `refresh()`, old listener name, and direct command assignments.
 
-- [ ] **Step 3: Update imports and local state in the panel**
+- [x] **Step 3: Update imports and local state in the panel**
 
 In `src/lib/components/settings/gemini-browser-provider-panel.svelte`, replace `listenToGeminiBrowserRuns` import with `listenToGeminiBrowserRunChanges`.
 
@@ -1664,7 +1664,7 @@ Add a history error state next to `statusLoadError`:
 let runHistoryLoadError = $state<string | null>(null);
 ```
 
-- [ ] **Step 4: Replace `refresh()` with the scheduler**
+- [x] **Step 4: Replace `refresh()` with the scheduler**
 
 Delete the existing `async function refresh()` and add:
 
@@ -1713,7 +1713,7 @@ Replace all `refresh()` calls:
 - `onclick={refresh}` -> `onclick={scheduleRefreshInBackground}`
 - setup check refresh action -> `await scheduleRefresh();`
 
-- [ ] **Step 5: Stop command handlers from direct authoritative assignments**
+- [x] **Step 5: Stop command handlers from direct authoritative assignments**
 
 In `openBrowser`, replace:
 
@@ -1780,7 +1780,7 @@ Do not set `result` or clear `activeTestRunId` directly here; `syncActivePromptR
 
 Update `startCdpChrome` and `stopProvider` to call `await scheduleRefresh();`.
 
-- [ ] **Step 6: Update event listener to invalidation-only**
+- [x] **Step 6: Update event listener to invalidation-only**
 
 Replace the `onMount` listener block:
 
@@ -1805,7 +1805,7 @@ void listenToGeminiBrowserRunChanges(() => {
 
 The callback intentionally does not read `payload`, including `payload.run_updated_at`.
 
-- [ ] **Step 7: Render run-history error separately**
+- [x] **Step 7: Render run-history error separately**
 
 Near the run-history heading in the `<section class="runs-list" aria-label="Run history">`, add:
 
@@ -1825,7 +1825,7 @@ Add this style near the other run-history/status styles:
 }
 ```
 
-- [ ] **Step 8: Run panel tests**
+- [x] **Step 8: Run panel tests**
 
 Run:
 
@@ -1835,7 +1835,7 @@ npm test -- src/lib/gemini-browser-provider-panel.test.ts src/lib/gemini-browser
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit Task 6**
+- [x] **Step 9: Commit Task 6**
 
 Run:
 

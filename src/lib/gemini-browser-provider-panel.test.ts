@@ -23,8 +23,29 @@ describe("gemini browser provider panel copy contract", () => {
     expect(statusLabel("not_started", null)).toBe("Not started");
   });
 
-  it("treats Resume as an open-or-reattach command that returns provider status", () => {
-    expect(componentSource).toContain("status = await geminiBridgeResume(browserConfig());");
+  it("routes mount, commands, and run-change events through the shared refresh scheduler", () => {
+    expect(componentSource).toContain("createGeminiBrowserRefreshScheduler");
+    expect(componentSource).toContain("const refreshScheduler");
+    expect(componentSource).toContain("function scheduleRefresh()");
+    expect(componentSource).toContain("function scheduleRefreshInBackground()");
+    expect(componentSource).toContain("void scheduleRefresh().catch(reportUnexpectedRefreshError);");
+    expect(componentSource).toContain("await scheduleRefresh();");
+    expect(componentSource).toMatch(/onclick=\{\s*scheduleRefreshInBackground\s*\}/);
+    expect(componentSource).toContain("listenToGeminiBrowserRunChanges");
+    expect(componentSource).not.toContain("listenToGeminiBrowserRuns");
+    expect(componentSource).not.toContain("onclick={refresh}");
+    expect(componentSource).not.toContain("payload.");
+    expect(componentSource).not.toContain("payload.message");
+    expect(componentSource).not.toContain("payload.status");
+    expect(componentSource).not.toContain("payload.run_updated_at");
+  });
+
+  it("does not assign authoritative panel state from command return values", () => {
+    expect(componentSource).not.toContain("status = await geminiBridgeOpenBrowser");
+    expect(componentSource).not.toContain("status = await geminiBridgeResume");
+    expect(componentSource).not.toContain("result = await geminiBridgeSendSingle");
+    expect(componentSource).not.toMatch(/\bstatus\s*=\s*(opened|resumed)\b/);
+    expect(componentSource).not.toMatch(/\bresult\s*=\s*completed\b/);
   });
 
   it("exposes env-free CDP attach controls in Settings", () => {
@@ -36,7 +57,7 @@ describe("gemini browser provider panel copy contract", () => {
   });
 
   it("passes browser config to status, open, resume, and send calls", () => {
-    expect(componentSource).toContain("geminiBridgeStatus(browserConfig())");
+    expect(componentSource).toContain("loadStatus: () => geminiBridgeStatus(browserConfig())");
     expect(componentSource).toContain("geminiBridgeOpenBrowser(browserConfig())");
     expect(componentSource).toContain("geminiBridgeStartCdpChrome(browserConfig())");
     expect(componentSource).toContain("geminiBridgeResume(browserConfig())");
@@ -47,7 +68,8 @@ describe("gemini browser provider panel copy contract", () => {
     expect(componentSource).toContain("runResultForActivePrompt");
     expect(componentSource).toContain("let activeTestRunId");
     expect(componentSource).toContain("activeTestRunId = runId;");
-    expect(componentSource).toContain("syncActivePromptResult(log.runs)");
+    expect(componentSource).toContain("syncActivePromptResult(nextRuns)");
+    expect(componentSource).not.toContain("syncActivePromptResult(log.runs)");
   });
 
   it("renders inline run inspector controls and sanitized diagnostics actions", () => {
