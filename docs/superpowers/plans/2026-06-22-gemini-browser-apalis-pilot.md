@@ -60,6 +60,7 @@ The first migration must not change the TypeScript API or UI behavior.
 - Do not hand-design Apalis internal queue tables. Let `apalis-sqlite` create or manage its own schema through its supported storage initialization API against `extractum.db`.
 - Reuse the main database identity from `src-tauri/src/db.rs`. Add shared `APP_IDENTIFIER`, `DB_FILENAME`, and config-directory path helpers there if needed instead of creating Gemini-Browser-local database constants.
 - Prefer constructing Apalis storage from the existing `sqlx::SqlitePool` returned by `crate::db::get_pool(handle)` if the proven `apalis-sqlite` API supports that. If it only accepts a URL or path, open an Apalis storage connection to the same `extractum.db` file and document that choice in the helper.
+- If Apalis uses a separate SQLite connection to the same file, the connection options must be compatible with the app pool: create-if-missing policy through the shared DB path, busy timeout, foreign keys, and journal mode/WAL consistency.
 - If `apalis-sqlite` does not expose a stable schema initialization API for an existing SQLite database, stop the migration and document the blocker before adding copied SQL to Extractum migrations.
 - App migrations still own Extractum product tables. Apalis owns its internal queue schema, but it now lives physically in `extractum.db`.
 - Keep the file-backed run log in `base_dir(handle)?.join("runs")` as the product projection. Apalis rows are queue implementation details.
@@ -88,6 +89,7 @@ pub(crate) struct GeminiBrowserJobRuntime {
     worker_status: tokio::sync::watch::Sender<GeminiBrowserWorkerStatus>,
     waiter_timeout: std::time::Duration,
     worker_execution_timeout: std::time::Duration,
+    worker_hard_guard_timeout: std::time::Duration,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -101,8 +103,10 @@ pub(crate) enum GeminiBrowserWorkerStatus {
 Rules:
 
 - Production runtime uses `waiter_timeout = std::time::Duration::from_secs(20 * 60)`.
-- Production runtime uses `worker_execution_timeout = std::time::Duration::from_secs(20 * 60)`.
-- Tests may construct runtime with a shorter timeout through `GeminiBrowserJobRuntime::new_for_test(timeout)`.
+- Production runtime uses `worker_execution_timeout = std::time::Duration::from_secs(20 * 60)` for product-facing sidecar execution timeout and run-log finalization.
+- Production runtime uses `worker_hard_guard_timeout = worker_execution_timeout + std::time::Duration::from_secs(5)` for the outer Tower worker service guard.
+- Tests may construct runtime with a shorter timeout through `GeminiBrowserJobRuntime::new_for_test(timeout)`. That constructor sets `waiter_timeout` and `worker_execution_timeout` to `timeout`, and sets `worker_hard_guard_timeout` to `timeout + std::time::Duration::from_secs(5)`.
+- Tests that need race-sensitive timeout control must use `GeminiBrowserJobRuntime::new_for_test_with_timeouts(waiter_timeout, worker_execution_timeout, worker_hard_guard_timeout)`.
 - `waiters` and `cancelled_runs` use synchronous locks because their critical sections only insert, remove, or clone values and must not call `.await`.
 - Do not hold any `parking_lot::Mutex`, `std::sync::Mutex`, or `parking_lot::RwLock` guard across `.await`. Remove/clone the needed value, let the guard drop, then await.
 - `send_single_prompt(...)` checks `worker_status` before writing a queued run log record. If status is `Starting`, it waits up to `5` seconds for `Ready` or `Failed`. If status is still `Starting` after that timeout, it returns before enqueue with `"Gemini Browser worker is still starting"`.
@@ -117,10 +121,13 @@ Rules:
 - If no waiter exists because the app restarted or the caller already timed out, the worker still writes the run log and emits events.
 - If worker startup fails, new `send_single_prompt(...)` calls fail before enqueue with a clear internal error.
 - If the app restarts after enqueue, there is no in-memory waiter to satisfy. The restarted worker still processes pending Apalis jobs and repairs the run log to terminal state.
+- `mark_worker_ready(...)`, `mark_worker_failed(...)`, `request_cancel(...)`, `is_cancelled(...)`, and `clear_cancelled(...)` are synchronous runtime methods. `tokio::sync::watch::Sender::send(...)` does not require `.await`.
 
 ## Cancellation Contract
 
 - `GeminiBrowserJobRuntime::request_cancel(run_id)` records the run id in `cancelled_runs` for the current process.
+- `GeminiBrowserJobRuntime::is_cancelled(run_id)` is checked by the worker before `mark_running(...)`.
+- `GeminiBrowserJobRuntime::clear_cancelled(run_id)` is called after a queued-cancel acknowledgement or any terminal worker result for that run id.
 - Cancellation must also be durable: `cancel_gemini_browser_job(...)` writes a cancelled terminal run log result when the run is still queued.
 - Queued cancellation: if the job has not started, `cancel_gemini_browser_job(...)` writes `GeminiBrowserRunStatus::Cancelled`, emits a cancelled event, completes the waiter with a cancelled result, and leaves the Apalis job for the worker to acknowledge.
 - Worker queued-cancel acknowledgement: before `mark_running(...)`, the worker reads the run log. If the run is already terminal `Cancelled`, the worker returns success to Apalis without calling the sidecar.
@@ -157,6 +164,7 @@ Startup policy:
 
 Worker-entry policy:
 
+- In-memory `runtime.is_cancelled(run_id)`: write or preserve a terminal `Cancelled` result, complete any waiter with `Cancelled`, call `runtime.clear_cancelled(run_id)`, and acknowledge the Apalis job without sidecar execution.
 - Run log missing for an Apalis job: acknowledge the Apalis job without sidecar execution and store an error in Apalis `last_result` if the backend supports it.
 - Run log terminal `Cancelled`: acknowledge the Apalis job without sidecar execution.
 - Run log terminal success/failure/manual-action: acknowledge the Apalis job without sidecar execution.
@@ -179,10 +187,12 @@ Do not use Apalis SQL internals as a source of truth for UI state. Apalis intern
 
 Apalis worker concurrency is intentionally `1`, so every production Gemini Browser worker must have a hard execution timeout in addition to caller-side waiter timeouts.
 
-- Production worker execution timeout is `20` minutes.
+- Production product-facing worker execution timeout is `20` minutes.
+- Production outer Tower hard-guard timeout is `20` minutes + `5` seconds.
 - Tests must inject shorter worker execution timeouts.
-- The timeout must be implemented with Tower timeout middleware (`tower::timeout::TimeoutLayer` or `ServiceBuilder::timeout(...)`) in the worker service path.
-- On timeout, the product-facing run log must be terminal `Failed`, the waiter must be completed when still present, the failed run event must be emitted, and the worker must continue to the next queued job.
+- Product-facing timeout must be implemented inside the worker handler with `tokio::time::timeout(worker_execution_timeout, sidecar_future)` so it can write terminal run log state.
+- The outer timeout must be implemented with Tower timeout middleware (`tower::timeout::TimeoutLayer` or `ServiceBuilder::timeout(...)`) using `worker_hard_guard_timeout`, which is strictly greater than `worker_execution_timeout`.
+- On product-facing timeout, the run log must be terminal `Failed`, the waiter must be completed when still present, the failed run event must be emitted, and the worker must continue to the next queued job.
 - A waiter timeout alone is insufficient because it does not stop a hung sidecar future inside the single worker.
 
 ## File Map
@@ -286,7 +296,11 @@ The test must:
 - create a temp directory with `tempfile`;
 - create a temp main database file named `extractum.db` in that temp directory;
 - apply the existing Extractum app migrations to that temp `extractum.db` through the same migration helper used by other database tests;
+- record the current product table names from `sqlite_master` and the applied migration versions from `_sqlx_migrations`;
 - create an Apalis SQLite storage using the current `apalis-sqlite` API against that same temp `extractum.db`;
+- assert `_sqlx_migrations` still exists and still reports the same applied migration versions after Apalis storage initialization;
+- assert key product tables such as `prompt_pack_runs`, `prompt_pack_stage_runs`, `prompt_pack_versions`, and `projects` still exist after Apalis storage initialization;
+- assert Apalis internal table names do not collide with any pre-existing product table name from before Apalis storage initialization;
 - push one `GeminiBrowserJob` through `apalis::prelude::TaskSink::push(...)`;
 - run a real `apalis::prelude::WorkerBuilder` worker with `.concurrency(1)`;
 - use a fake handler that sends the processed `run_id` over a Tokio oneshot channel and calls `WorkerContext::stop()?`;
@@ -304,7 +318,7 @@ Run:
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib apalis_sqlite_storage_pushes_and_worker_processes_one_job
 ```
 
-Expected: PASS. Do not continue to Task 2 until this proves real Apalis SQLite storage and a real worker can process one job.
+Expected: PASS. Do not continue to Task 2 until this proves real Apalis SQLite storage, non-conflicting Apalis tables inside `extractum.db`, preserved app migration metadata, and a real worker processing one job.
 
 - [ ] **Step 6: Record the exact storage constructor in code**
 
@@ -319,6 +333,34 @@ async fn open_gemini_browser_job_storage(
 ```
 
 `GeminiBrowserApalisDbTarget` can be an existing `sqlx::SqlitePool` from `crate::db::get_pool(handle)` or a path/URL target for the same `extractum.db`, depending on the stable constructor proven in Step 4. `GeminiBrowserApalisStorage` may be a concrete type alias or a small wrapper around the concrete storage type required by `apalis-sqlite`.
+
+If `apalis-sqlite` requires opening a separate connection to the same file, use the same SQLite connection policy as the app pool:
+
+- create the file if missing only through the same main DB path helper;
+- use a busy timeout of at least `5` seconds;
+- enable foreign keys;
+- use the same journal mode as the app database if the app pool exposes or sets one; prefer WAL if both pools can enable it consistently.
+
+Add a smoke test named `apalis_storage_shares_extractum_db_without_locking_app_pool`.
+
+The test must:
+
+- create a temp `extractum.db`;
+- open the normal app `sqlx::SqlitePool` against it;
+- apply app migrations;
+- open Apalis storage against the same file using the final constructor;
+- insert or read a small product row through the app pool while Apalis storage exists;
+- push one Apalis job while the app pool remains open;
+- read product tables again through the app pool;
+- fail if either side returns `"database is locked"`.
+
+Run:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib apalis_storage_shares_extractum_db_without_locking_app_pool
+```
+
+Expected: PASS before later tasks use the production storage helper.
 
 - [ ] **Step 7: Record Apalis queue inspection capability**
 
@@ -399,6 +441,7 @@ pub(crate) struct GeminiBrowserJobRuntime {
     worker_status: tokio::sync::watch::Sender<GeminiBrowserWorkerStatus>,
     waiter_timeout: std::time::Duration,
     worker_execution_timeout: std::time::Duration,
+    worker_hard_guard_timeout: std::time::Duration,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -417,6 +460,7 @@ impl Default for GeminiBrowserJobRuntime {
             worker_status,
             waiter_timeout: std::time::Duration::from_secs(20 * 60),
             worker_execution_timeout: std::time::Duration::from_secs(20 * 60),
+            worker_hard_guard_timeout: std::time::Duration::from_secs(20 * 60 + 5),
         }
     }
 }
@@ -432,7 +476,7 @@ Add tests:
 #[tokio::test]
 async fn worker_status_blocks_enqueue_when_startup_failed() {
     let runtime = GeminiBrowserJobRuntime::new_for_test(std::time::Duration::from_secs(1));
-    runtime.mark_worker_failed("storage open failed").await;
+    runtime.mark_worker_failed("storage open failed");
 
     let error = runtime.ensure_worker_ready_for_enqueue().await.expect_err("worker failed");
 
@@ -442,7 +486,7 @@ async fn worker_status_blocks_enqueue_when_startup_failed() {
 #[tokio::test]
 async fn worker_status_allows_enqueue_after_ready() {
     let runtime = GeminiBrowserJobRuntime::new_for_test(std::time::Duration::from_secs(1));
-    runtime.mark_worker_ready("2026-06-22T00:00:00Z".to_string()).await;
+    runtime.mark_worker_ready("2026-06-22T00:00:00Z".to_string());
 
     runtime.ensure_worker_ready_for_enqueue().await.expect("worker ready");
 }
@@ -687,14 +731,27 @@ impl GeminiBrowserJobRuntime {
         >,
     ) -> crate::error::AppResult<crate::gemini_browser::GeminiBrowserRunResult>;
 
-    pub(crate) fn new_for_test(waiter_timeout: std::time::Duration) -> Self;
+    pub(crate) fn new_for_test(timeout: std::time::Duration) -> Self;
 
     pub(crate) fn new_for_test_with_timeouts(
         waiter_timeout: std::time::Duration,
         worker_execution_timeout: std::time::Duration,
+        worker_hard_guard_timeout: std::time::Duration,
     ) -> Self;
 
     pub(crate) fn worker_execution_timeout(&self) -> std::time::Duration;
+
+    pub(crate) fn worker_hard_guard_timeout(&self) -> std::time::Duration;
+
+    pub(crate) fn mark_worker_ready(&self, started_at: String);
+
+    pub(crate) fn mark_worker_failed(&self, error: impl Into<String>);
+
+    pub(crate) fn request_cancel(&self, run_id: &str);
+
+    pub(crate) fn is_cancelled(&self, run_id: &str) -> bool;
+
+    pub(crate) fn clear_cancelled(&self, run_id: &str);
 
     pub(crate) async fn ensure_worker_ready_for_enqueue(&self) -> crate::error::AppResult<()>;
 
@@ -705,9 +762,26 @@ impl GeminiBrowserJobRuntime {
 }
 ```
 
-`Default` must set both `waiter_timeout` and `worker_execution_timeout` to `std::time::Duration::from_secs(20 * 60)` and worker status to `Starting`. Tests must use `new_for_test(...)` or `new_for_test_with_timeouts(...)` with short timeouts. `ensure_worker_ready_for_enqueue()` must use a `5` second startup timeout in production.
+`Default` must set both `waiter_timeout` and `worker_execution_timeout` to `std::time::Duration::from_secs(20 * 60)`, set `worker_hard_guard_timeout` to `worker_execution_timeout + std::time::Duration::from_secs(5)`, and set worker status to `Starting`. `new_for_test(timeout)` must set `waiter_timeout` and `worker_execution_timeout` to `timeout`, and set `worker_hard_guard_timeout` to `timeout + std::time::Duration::from_secs(5)`. `new_for_test_with_timeouts(waiter_timeout, worker_execution_timeout, worker_hard_guard_timeout)` must reject or panic in tests if `worker_hard_guard_timeout <= worker_execution_timeout`, because that would reintroduce the hard-guard cleanup race. `ensure_worker_ready_for_enqueue()` must use a `5` second startup timeout in production.
 
-- [ ] **Step 6: Run waiter tests**
+- [ ] **Step 6: Add cancellation set runtime test**
+
+Add:
+
+```rust
+#[test]
+fn runtime_tracks_and_clears_cancelled_run_ids() {
+    let runtime = GeminiBrowserJobRuntime::new_for_test(std::time::Duration::from_secs(1));
+
+    assert!(!runtime.is_cancelled("run-cancel"));
+    runtime.request_cancel("run-cancel");
+    assert!(runtime.is_cancelled("run-cancel"));
+    runtime.clear_cancelled("run-cancel");
+    assert!(!runtime.is_cancelled("run-cancel"));
+}
+```
+
+- [ ] **Step 7: Run waiter tests**
 
 Run:
 
@@ -783,7 +857,59 @@ async fn worker_handler_marks_run_running_and_terminal() {
 }
 ```
 
-- [ ] **Step 2: Implement testable worker core**
+- [ ] **Step 2: Add handler error-path test**
+
+Add:
+
+```rust
+#[tokio::test]
+async fn worker_handler_converts_executor_error_to_terminal_failed_result() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let runtime = GeminiBrowserJobRuntime::new_for_test(std::time::Duration::from_secs(1));
+    let receiver = runtime
+        .register_waiter("run-worker-error")
+        .expect("register waiter");
+    let events = std::sync::Arc::new(parking_lot::Mutex::new(Vec::<String>::new()));
+    let job = GeminiBrowserJob {
+        run_id: "run-worker-error".to_string(),
+        prompt: "hello".to_string(),
+        source: "settings_test".to_string(),
+        artifact_mode: "reduced".to_string(),
+    };
+
+    crate::gemini_browser::create_queued_run(
+        temp.path(),
+        &job.run_id,
+        &job.source,
+        &job.prompt,
+    )
+    .expect("create queued run");
+
+    let result = run_job_with_executor_for_test(
+        temp.path(),
+        &runtime,
+        job,
+        events.clone(),
+        || async { Err(crate::error::AppError::internal("sidecar unavailable")) },
+    )
+    .await
+    .expect("worker returns success to Apalis after terminal run result");
+
+    assert_eq!(result.status, crate::gemini_browser::GeminiBrowserRunStatus::Failed);
+    assert!(result.message.as_deref().unwrap_or("").contains("sidecar unavailable"));
+    assert_eq!(receiver.await.expect("waiter open").expect("worker result"), result);
+    assert_eq!(events.lock().as_slice(), ["running", "failed"]);
+
+    let runs = crate::gemini_browser::list_runs(temp.path(), 10)
+        .expect("list runs")
+        .runs;
+    assert_eq!(runs[0].status, crate::gemini_browser::GeminiBrowserRunStatus::Failed);
+}
+```
+
+Production sidecar errors must be converted through `sidecar::sidecar_unavailable_result(...)` or an equivalent current helper before finishing the run. The worker handler must return success to Apalis after writing that terminal failed result, so Apalis does not retry a browser submission that already produced product-facing terminal state.
+
+- [ ] **Step 3: Implement testable worker core**
 
 Add a test helper that mirrors production worker behavior without requiring a Tauri `AppHandle`:
 
@@ -805,7 +931,19 @@ where
     crate::gemini_browser::mark_running(runs_dir, &job.run_id)?;
     events.lock().push("running".to_string());
 
-    let result = executor().await?;
+    let result = match executor().await {
+        Ok(result) => result,
+        Err(error) => crate::gemini_browser::GeminiBrowserRunResult {
+            run_id: job.run_id.clone(),
+            status: crate::gemini_browser::GeminiBrowserRunStatus::Failed,
+            text: None,
+            message: Some(error.to_string()),
+            manual_action: None,
+            artifacts: crate::gemini_browser::GeminiBrowserArtifactRefs::default(),
+            elapsed_ms: 0,
+            debug_summary: None,
+        },
+    };
     crate::gemini_browser::finish_run(runs_dir, &job.run_id, result.clone())?;
     events.lock().push(format!("{:?}", result.status).to_lowercase());
     runtime.complete_waiter(&job.run_id, Ok(result.clone()));
@@ -813,12 +951,13 @@ where
 }
 ```
 
-- [ ] **Step 3: Run handler test**
+- [ ] **Step 4: Run handler tests**
 
 Run:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib worker_handler_marks_run_running_and_terminal
+cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib worker_handler_converts_executor_error_to_terminal_failed_result
 ```
 
 Expected: PASS.
@@ -954,7 +1093,7 @@ pub(crate) async fn start_gemini_browser_job_worker(
     // otherwise use crate::db::app_config_db_path() for the same file.
     // Build a WorkerBuilder named "gemini-browser".
     // Set concurrency to 1.
-    // Install a Tower timeout layer using runtime.worker_execution_timeout().
+    // Install a Tower hard-guard timeout layer using runtime.worker_hard_guard_timeout().
     // Build the production Gemini Browser job handler.
     // Mark GeminiBrowserJobRuntime worker status Ready after storage and worker construction succeed.
     // Mark worker status Failed before returning any startup error.
@@ -979,6 +1118,7 @@ The production handler must:
 - call `finish_run(...)`;
 - call `GeminiBrowserState::finish_run(...)`;
 - complete the waiter;
+- call `runtime.clear_cancelled(&job.run_id)` after any terminal result or queued-cancel acknowledgement;
 - emit the terminal event.
 
 - [ ] **Step 3: Add worker execution timeout layer**
@@ -986,7 +1126,7 @@ The production handler must:
 Use Tower timeout middleware when building the worker service:
 
 ```rust
-let timeout = runtime.worker_execution_timeout();
+let timeout = runtime.worker_hard_guard_timeout();
 let timeout_layer = tower::timeout::TimeoutLayer::new(timeout);
 
 let worker = apalis::prelude::WorkerBuilder::new("gemini-browser")
@@ -997,6 +1137,7 @@ let worker = apalis::prelude::WorkerBuilder::new("gemini-browser")
 ```
 
 Context7 Tower docs show that timeout middleware returns an error that can be downcast to `tower::timeout::error::Elapsed` when the deadline expires.
+`runtime.worker_hard_guard_timeout()` must be strictly greater than `runtime.worker_execution_timeout()`. In production it is `worker_execution_timeout + std::time::Duration::from_secs(5)`.
 
 Do not rely on the outer worker middleware alone to update product-facing state. The worker handler must run sidecar execution through a timeout-aware helper that finalizes the run log before returning:
 
@@ -1042,7 +1183,7 @@ async fn finish_timed_out_job(
 ```
 
 Do not rely on waiter timeout alone. The waiter timeout only protects the caller; the worker timeout protects the single-concurrency queue.
-The outer `WorkerBuilder::layer(TimeoutLayer::new(...))` remains required as a hard guard around the whole worker service. The timeout-aware helper is required so product-facing run log and waiter state are finalized deterministically.
+The outer `WorkerBuilder::layer(TimeoutLayer::new(...))` remains required as a hard guard around the whole worker service, but it must have a later deadline than the product-facing helper. The timeout-aware helper is required so product-facing run log and waiter state are finalized deterministically before the hard guard can abort the handler.
 
 - [ ] **Step 4: Add worker timeout release test**
 
@@ -1050,12 +1191,13 @@ Add a test named `worker_timeout_marks_run_failed_and_processes_next_job`.
 
 The test must:
 
-- construct `GeminiBrowserJobRuntime::new_for_test_with_timeouts(std::time::Duration::from_secs(1), std::time::Duration::from_millis(25))`;
+- construct `GeminiBrowserJobRuntime::new_for_test_with_timeouts(std::time::Duration::from_secs(1), std::time::Duration::from_millis(25), std::time::Duration::from_millis(250))`;
 - create queued run log records for `run-timeout-first` and `run-timeout-second`;
 - run a real worker with `.concurrency(1)` and the same Tower timeout layer used in production;
 - make the first fake handler wait forever with `std::future::pending::<crate::error::AppResult<crate::gemini_browser::GeminiBrowserRunResult>>()`;
 - make the second fake handler return `GeminiBrowserRunStatus::Ok`;
 - assert the first run log is terminal `Failed` with message containing `"timed out"`;
+- assert the first run log is terminal before the hard-guard deadline would fire;
 - assert the first waiter receives the same terminal failed result;
 - assert the second job is processed after the first timeout;
 - assert the second run log is terminal `Ok`.
@@ -1371,9 +1513,11 @@ Implement `cancel_gemini_browser_job(...)` with these branches:
 - always record `runtime.request_cancel(run_id)`;
 - if `GeminiBrowserState::active_run_id()` equals `run_id`, request stop and stop the sidecar;
 - otherwise read the run log record from `runs_dir(handle)?`;
+- if the run log record is missing, return `Ok(())` after recording cancellation; this covers Prompt Pack cancellation before browser enqueue creates a run log record;
 - if the run log status is `Queued`, write a cancelled `GeminiBrowserRunResult`, emit a cancelled event, and complete the waiter with that result;
 - if the run log is already terminal, leave it unchanged and return `Ok(())`;
 - if the run log is `Running` but state does not report this active run, mark it `Failed` with message `"Gemini Browser run was running without an active sidecar"`.
+- after writing or observing a terminal cancellation for this process, call `runtime.clear_cancelled(run_id)`.
 
 Shape:
 
@@ -1481,7 +1625,20 @@ The test must:
 - assert `browser_run_status` is either `NULL` or `'cancelled'`;
 - assert it is never `'ok'`, `'ready'`, or a partial-success status after cancellation.
 
-- [ ] **Step 4: Run Prompt Pack cancellation tests**
+- [ ] **Step 4: Add pre-enqueue cancellation test**
+
+Add a test named `prompt_pack_browser_stage_cancelled_before_enqueue_is_tolerated`.
+
+The test must:
+
+- create a Prompt Pack browser stage with a derived `browser_run_id`;
+- cancel the Prompt Pack run before calling the Gemini Browser enqueue path;
+- call `cancel_gemini_browser_job(&handle, &browser_run_id)`;
+- assert the helper returns `Ok(())` even though no Gemini Browser run log record exists;
+- assert no successful browser provenance is written;
+- assert the Prompt Pack stage/run path returns `YoutubeSummaryStageExecutionError::Cancelled`.
+
+- [ ] **Step 5: Run Prompt Pack cancellation tests**
 
 Run:
 
@@ -1644,15 +1801,18 @@ Run:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib retry
+cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib apalis_storage_shares_extractum_db_without_locking_app_pool
+cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib worker_handler_converts_executor_error_to_terminal_failed_result
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib worker_timeout_marks_run_failed_and_processes_next_job
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib wait_for_result_removes_waiter_when_worker_channel_closes
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib enqueue_duplicate_run_id_returns_conflict
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib provider_status_
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib prompt_pack_browser_stage_cancelled
+cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib prompt_pack_browser_stage_cancelled_before_enqueue_is_tolerated
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis --lib restart
 ```
 
-Expected: PASS for no-retry, worker timeout release, closed waiter channels, duplicate enqueue conflicts, status responsiveness, Prompt Pack browser cancellation, and reconciliation/restart tests.
+Expected: PASS for no-retry, shared main DB storage, worker error conversion, worker timeout release, closed waiter channels, duplicate enqueue conflicts, status responsiveness, Prompt Pack browser cancellation including pre-enqueue cancellation, and reconciliation/restart tests.
 
 - [ ] **Step 4: TypeScript Gemini Browser verification**
 
@@ -1689,7 +1849,7 @@ Expected: `git diff --check` exits `0`. `git status --short` shows only intentio
 
 ## Self-Review
 
-- Spec coverage: The plan covers exact Apalis RC dependency pins, real early Apalis integration, fail-fast worker smoke tests, SQLite storage ownership, explicit runtime construction, synchronous in-memory waiter/cancellation/status locks, worker readiness/error/early-exit state, receiver-based completion waiter semantics, closed waiter channel handling, duplicate `run_id` rejection, duplicate Apalis idempotency conflict translation, storage-injected enqueue tests, enqueue failure cleanup, worker execution timeout and queue release, cancellation continuity, Prompt Pack cancellation by `browser_run_id`, run log versus Apalis reconciliation, status UI responsiveness, no automatic retry, crash/restart recovery, current `GeminiBrowserRunResult` fields, and removal of the old `VecDeque`.
+- Spec coverage: The plan covers exact Apalis RC dependency pins, real early Apalis integration, fail-fast worker smoke tests, SQLite storage ownership inside `extractum.db`, app migration metadata preservation, shared SQLite connection options, explicit runtime construction, synchronous in-memory waiter/cancellation/status locks, worker readiness/error/early-exit state, explicit `mark_worker_*` methods, explicit `request_cancel/is_cancelled/clear_cancelled` methods, receiver-based completion waiter semantics, closed waiter channel handling, duplicate `run_id` rejection, duplicate Apalis idempotency conflict translation, storage-injected enqueue tests, enqueue failure cleanup, worker sidecar error conversion, split product-facing and hard-guard worker timeouts, cancellation continuity including pre-enqueue Prompt Pack cancellation, Prompt Pack cancellation by `browser_run_id`, run log versus Apalis reconciliation, status UI responsiveness, no automatic retry, crash/restart recovery, current `GeminiBrowserRunResult` fields, and removal of the old `VecDeque`.
 - Placeholder scan: The plan intentionally avoids placeholder markers, fake production facades, and no-op worker bootstrap. The only API discovery point is constrained to Task 1 and must compile before later tasks proceed.
 - Type consistency: Result examples use the current `GeminiBrowserRunResult` shape with `run_id`, `text`, `manual_action`, `GeminiBrowserArtifactRefs::default()`, and `elapsed_ms`.
 - Apalis status consistency: The plan requires a real `apalis-sqlite` status probe before mapping queue statuses.
@@ -1699,7 +1859,10 @@ Expected: `git diff --check` exits `0`. `git status --short` shows only intentio
 - Closed-channel consistency: `wait_for_registered_result(...)` must remove the waiter and return `"Gemini Browser worker channel closed unexpectedly"` on `oneshot::error::RecvError`.
 - Idempotency consistency: duplicate Apalis idempotency / SQLite unique failures are translated to `AppError::conflict`, with a concrete duplicate enqueue test.
 - Lock consistency: Runtime maps use `parking_lot::Mutex`, cached provider status uses `parking_lot::RwLock`, and plan text forbids holding synchronous lock guards across `.await`.
-- Timeout consistency: Caller waiter timeout and worker execution timeout are separate; the worker timeout has a dedicated test proving a timed-out first job does not block the next queued job.
+- Timeout consistency: Caller waiter timeout, product-facing worker execution timeout, and outer Tower hard-guard timeout are separate; the hard guard has a later deadline, and the worker timeout has a dedicated test proving a timed-out first job writes terminal run log state before the hard guard and does not block the next queued job.
+- Main DB consistency: Apalis schema initialization must preserve `_sqlx_migrations`, avoid product table name collisions, and share the main `extractum.db` without `database is locked` failures.
+- Worker error consistency: sidecar/executor errors are converted into terminal failed run results and acknowledged to Apalis as handled so the no-retry policy is preserved.
+- Cancellation consistency: cancellation runtime APIs are explicit, worker-entry checks in-memory cancellation before `mark_running(...)`, and Prompt Pack pre-enqueue cancellation tolerates missing Gemini Browser run log records.
 
 ## Execution Choice
 
