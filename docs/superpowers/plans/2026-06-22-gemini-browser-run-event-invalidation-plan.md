@@ -1851,7 +1851,7 @@ git commit -m "refactor: route Gemini Browser panel refresh through scheduler"
 **Files:**
 - Verify only unless a previous task exposed a mismatch.
 
-- [ ] **Step 1: Search for legacy public names and state-bearing event payloads**
+- [x] **Step 1: Search for legacy public names and state-bearing event payloads**
 
 Run:
 
@@ -1868,7 +1868,7 @@ Expected:
 - No `queue_position` in the Gemini Browser event contract, TypeScript event type/API, or settings panel.
 - Ignore unrelated `queue_position` matches outside these paths, such as analysis/LLM types, tests, commands-only setup structures, or Apalis queue internals like `QueuedGeminiBrowserJob`.
 
-- [ ] **Step 2: Run focused Rust tests**
+- [x] **Step 2: Run focused Rust tests**
 
 Run:
 
@@ -1878,7 +1878,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 3: Run focused frontend tests**
+- [x] **Step 3: Run focused frontend tests**
 
 Run:
 
@@ -1888,7 +1888,7 @@ npm test -- src/lib/api/gemini-browser.test.ts src/lib/gemini-browser-refresh-sc
 
 Expected: PASS.
 
-- [ ] **Step 4: Run prompt-pack regression tests**
+- [x] **Step 4: Run prompt-pack regression tests**
 
 Run:
 
@@ -1898,7 +1898,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 5: Run Svelte check**
+- [x] **Step 5: Run Svelte check**
 
 Run:
 
@@ -1908,7 +1908,7 @@ npm run check
 
 Expected: PASS.
 
-- [ ] **Step 6: Optional manual verification**
+- [x] **Step 6: Optional manual verification**
 
 If a Tauri app and Chrome CDP setup are available:
 
@@ -1920,7 +1920,9 @@ If a Tauri app and Chrome CDP setup are available:
 6. Optionally inspect the Tauri event payload with DevTools/logging/breakpoint and confirm it contains only `run_id` and `run_updated_at`.
 7. Run YouTube Summary with Gemini Browser and verify it completes.
 
-- [ ] **Step 7: Final commit if verification caused follow-up fixes**
+Automated pass note: not run in this session because it requires an already running Tauri app and Chrome CDP setup.
+
+- [x] **Step 7: Final commit if verification caused follow-up fixes**
 
 If Steps 1-6 required follow-up changes, commit them:
 
