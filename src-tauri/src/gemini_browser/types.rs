@@ -220,6 +220,12 @@ pub struct GeminiBrowserRunLogSummary {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeminiBrowserRunChangeEvent {
+    pub run_id: String,
+    pub run_updated_at: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GeminiBrowserRunEvent {
     pub run_id: String,
     pub status: GeminiBrowserRunStatus,

@@ -179,7 +179,7 @@ git commit -m "fix: keep Gemini Browser live status out of cached snapshot"
 - Modify: `src-tauri/src/gemini_browser/mod.rs`
 - Modify: `src-tauri/src/gemini_browser/commands.rs`
 
-- [ ] **Step 1: Write failing tests for queued, failed, and no-transition emit behavior**
+- [x] **Step 1: Write failing tests for queued, failed, and no-transition emit behavior**
 
 Update existing command tests in `src-tauri/src/gemini_browser/commands.rs`:
 
@@ -269,7 +269,7 @@ async fn failed_run_log_transition_does_not_emit_change_event() {
 }
 ```
 
-- [ ] **Step 2: Run the failing command tests**
+- [x] **Step 2: Run the failing command tests**
 
 Run:
 
@@ -279,7 +279,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL to compile until `GeminiBrowserRunChangeEvent`, `run_change_event_from_run`, `send_single_prompt_enqueue_core`, and `SendSinglePromptEnqueueHandoff` exist.
 
-- [ ] **Step 3: Add the Rust run-change event alongside the legacy worker event**
+- [x] **Step 3: Add the Rust run-change event alongside the legacy worker event**
 
 In `src-tauri/src/gemini_browser/types.rs`, add this struct immediately after `GeminiBrowserRunLogSummary` and before the existing legacy `GeminiBrowserRunEvent`:
 
@@ -306,7 +306,7 @@ GeminiBrowserRunChangeEvent, GeminiBrowserRunEvent, GeminiBrowserRunLogSummary,
 GeminiBrowserRunRequest,
 ```
 
-- [ ] **Step 4: Add the run-change event constant and helper while keeping the legacy alias**
+- [x] **Step 4: Add the run-change event constant and helper while keeping the legacy alias**
 
 In `src-tauri/src/gemini_browser/commands.rs`, update imports to include `GeminiBrowserRun` and `GeminiBrowserRunChangeEvent`.
 
@@ -353,7 +353,7 @@ fn emit_run_change_event(handle: &AppHandle, run: &GeminiBrowserRun) {
 
 Keep the old `emit_run_event` helper in this task because it is still used by worker paths. Task 3 replaces it with `emit_run_change_event`.
 
-- [ ] **Step 5: Update settings enqueue core to emit from persisted runs**
+- [x] **Step 5: Update settings enqueue core to emit from persisted runs**
 
 In `src-tauri/src/gemini_browser/commands.rs`, replace:
 
@@ -411,7 +411,7 @@ let queued_event = run_change_event_from_run(&queued_run);
 emit_event(&queued_run);
 ```
 
-- [ ] **Step 6: Update settings `send_single_prompt` snapshot handling**
+- [x] **Step 6: Update settings `send_single_prompt` snapshot handling**
 
 The emit callback in `send_single_prompt` now receives the persisted run-log record. Replace:
 
@@ -459,7 +459,7 @@ The command tests keep asserting externally captured `GeminiBrowserRunChangeEven
 move |run| events.lock().push(run_change_event_from_run(run))
 ```
 
-- [ ] **Step 7: Run the command tests**
+- [x] **Step 7: Run the command tests**
 
 Run:
 
@@ -469,7 +469,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit Task 2**
+- [x] **Step 8: Commit Task 2**
 
 Run:
 

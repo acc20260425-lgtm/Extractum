@@ -10,12 +10,38 @@ use super::jobs::{
 use super::{
     cdp_chrome, chrome_cdp_profile_dir, create_queued_run, finish_run, list_runs, path_string,
     profile_dir, recorded_run_dir, runs_dir, sidecar, GeminiBrowserProviderConfig,
-    GeminiBrowserProviderStatus, GeminiBrowserRunEvent, GeminiBrowserRunLogSummary,
-    GeminiBrowserRunRequest, GeminiBrowserRunResult, GeminiBrowserRunStatus,
-    GeminiBrowserStartChromeResult, GeminiBrowserState,
+    GeminiBrowserProviderStatus, GeminiBrowserRun, GeminiBrowserRunChangeEvent,
+    GeminiBrowserRunEvent, GeminiBrowserRunLogSummary, GeminiBrowserRunRequest,
+    GeminiBrowserRunResult, GeminiBrowserRunStatus, GeminiBrowserStartChromeResult,
+    GeminiBrowserState,
 };
 
-pub const GEMINI_BROWSER_RUN_EVENT: &str = "gemini-browser://run";
+pub const GEMINI_BROWSER_RUN_CHANGE_EVENT: &str = "gemini-browser://run";
+pub(crate) const GEMINI_BROWSER_RUN_EVENT: &str = GEMINI_BROWSER_RUN_CHANGE_EVENT;
+
+pub(crate) fn run_change_event_from_run(run: &GeminiBrowserRun) -> GeminiBrowserRunChangeEvent {
+    GeminiBrowserRunChangeEvent {
+        run_id: run.run_id.clone(),
+        run_updated_at: run.updated_at.clone(),
+    }
+}
+
+pub(crate) fn emit_run_change_event_core<Emit>(run: &GeminiBrowserRun, mut emit: Emit)
+where
+    Emit: FnMut(GeminiBrowserRunChangeEvent) -> Result<(), String>,
+{
+    if let Err(error) = emit(run_change_event_from_run(run)) {
+        eprintln!("Gemini Browser run-change event emit failed: {error}");
+    }
+}
+
+fn emit_run_change_event(handle: &AppHandle, run: &GeminiBrowserRun) {
+    emit_run_change_event_core(run, |event| {
+        handle
+            .emit(GEMINI_BROWSER_RUN_CHANGE_EVENT, event)
+            .map_err(|error| error.to_string())
+    });
+}
 
 fn emit_run_event(handle: &AppHandle, event: GeminiBrowserRunEvent) {
     let _ = handle.emit(GEMINI_BROWSER_RUN_EVENT, event);
@@ -58,7 +84,7 @@ pub(crate) async fn provider_status(
 
 #[derive(Debug)]
 struct SendSinglePromptEnqueueHandoff {
-    queued_event: GeminiBrowserRunEvent,
+    queued_event: GeminiBrowserRunChangeEvent,
     waiter: GeminiBrowserWaiterReceiver,
 }
 
@@ -73,16 +99,17 @@ async fn send_single_prompt_enqueue_core<Enqueue, EnqueueFut, EmitEvent>(
 where
     Enqueue: FnOnce(GeminiBrowserJob) -> EnqueueFut,
     EnqueueFut: std::future::Future<Output = AppResult<QueuedGeminiBrowserJob>>,
-    EmitEvent: FnMut(GeminiBrowserRunEvent),
+    EmitEvent: FnMut(&GeminiBrowserRun),
 {
     let artifact_mode = GeminiBrowserArtifactMode::from_wire(Some(&request.artifact_mode))?;
 
     runtime.ensure_worker_ready_for_enqueue().await?;
     reject_duplicate_existing_run_or_waiter(runtime, runs_root, &request.run_id).await?;
-    create_queued_run(runs_root, &request.run_id, &request.source, &request.prompt)?;
+    let queued_run =
+        create_queued_run(runs_root, &request.run_id, &request.source, &request.prompt)?;
     let waiter = runtime.register_waiter(&request.run_id)?;
 
-    let queued = match enqueue(GeminiBrowserJob {
+    match enqueue(GeminiBrowserJob {
         run_id: request.run_id.clone(),
         prompt: request.prompt.clone(),
         source: request.source.clone(),
@@ -91,7 +118,7 @@ where
     })
     .await
     {
-        Ok(queued) => queued,
+        Ok(_queued) => {}
         Err(error) => {
             runtime.remove_waiter(&request.run_id);
             let failed = GeminiBrowserRunResult {
@@ -104,24 +131,14 @@ where
                 elapsed_ms: 0,
                 debug_summary: None,
             };
-            finish_run(runs_root, &request.run_id, failed.clone())?;
-            emit_event(GeminiBrowserRunEvent {
-                run_id: request.run_id,
-                status: GeminiBrowserRunStatus::Failed,
-                message: failed.message,
-                queue_position: None,
-            });
+            let failed_run = finish_run(runs_root, &request.run_id, failed.clone())?;
+            emit_event(&failed_run);
             return Err(error);
         }
     };
 
-    let queued_event = GeminiBrowserRunEvent {
-        run_id: queued.run_id,
-        status: GeminiBrowserRunStatus::Queued,
-        message: Some("Queued".to_string()),
-        queue_position: queued.queue_position,
-    };
-    emit_event(queued_event.clone());
+    let queued_event = run_change_event_from_run(&queued_run);
+    emit_event(&queued_run);
 
     Ok(SendSinglePromptEnqueueHandoff {
         queued_event,
@@ -230,16 +247,25 @@ pub(crate) async fn send_single_prompt(
         request.clone(),
         browser_config.clone(),
         |job| enqueue_gemini_browser_job(handle, job),
-        |event| {
-            let _ = state.update_status_snapshot(handle, |status| {
+        |run| {
+            if let Err(error) = state.update_status_snapshot(handle, |status| {
                 status.status =
-                    GeminiBrowserState::provider_status_kind_for_run_status(&event.status);
+                    GeminiBrowserState::provider_status_kind_for_run_status(&run.status);
                 status.active_run_id = None;
                 status.queue_depth = 0;
-                status.latest_message = event.message.clone();
-                status.manual_action = None;
-            });
-            emit_run_event(handle, event);
+                status.latest_message = run
+                    .result
+                    .as_ref()
+                    .and_then(|result| result.message.clone())
+                    .or_else(|| Some(format!("{:?}", run.status)));
+                status.manual_action = run
+                    .result
+                    .as_ref()
+                    .and_then(|result| result.manual_action.clone());
+            }) {
+                eprintln!("Gemini Browser status snapshot update failed: {error}");
+            }
+            emit_run_change_event(handle, run);
         },
     )
     .await?;
@@ -440,7 +466,7 @@ mod tests {
         });
         let captured_jobs = Arc::new(Mutex::new(Vec::<GeminiBrowserJob>::new()));
         let observed_queued_log = Arc::new(Mutex::new(false));
-        let events = Arc::new(Mutex::new(Vec::<GeminiBrowserRunEvent>::new()));
+        let events = Arc::new(Mutex::new(Vec::<GeminiBrowserRunChangeEvent>::new()));
         let runs_dir = temp.path().to_path_buf();
 
         let handoff = send_single_prompt_enqueue_core(
@@ -467,7 +493,7 @@ mod tests {
             },
             {
                 let events = events.clone();
-                move |event| events.lock().push(event)
+                move |run| events.lock().push(run_change_event_from_run(run))
             },
         )
         .await
@@ -481,7 +507,15 @@ mod tests {
         assert_eq!(jobs[0].source, request.source);
         assert_eq!(jobs[0].artifact_mode, GeminiBrowserArtifactMode::Reduced);
         assert_eq!(jobs[0].browser_config, browser_config);
-        assert_eq!(handoff.queued_event.status, GeminiBrowserRunStatus::Queued);
+        let queued_run = read_run_by_id(temp.path(), &request.run_id);
+        assert_eq!(queued_run.status, GeminiBrowserRunStatus::Queued);
+        assert_eq!(
+            handoff.queued_event,
+            GeminiBrowserRunChangeEvent {
+                run_id: request.run_id.clone(),
+                run_updated_at: queued_run.updated_at.clone(),
+            }
+        );
         assert_eq!(events.lock().as_slice(), [handoff.queued_event.clone()]);
     }
 
@@ -504,7 +538,7 @@ mod tests {
             request,
             None,
             |_job| async { panic!("enqueue should not be called") },
-            |_event| {},
+            |_run| {},
         )
         .await
         .expect_err("duplicate run id rejected");
@@ -533,7 +567,7 @@ mod tests {
             request,
             None,
             |_job| async { panic!("enqueue should not be called") },
-            |_event| {},
+            |_run| {},
         )
         .await
         .expect_err("duplicate terminal run id rejected");
@@ -556,7 +590,7 @@ mod tests {
             request,
             None,
             |_job| async { panic!("enqueue should not be called") },
-            |_event| {},
+            |_run| {},
         )
         .await
         .expect_err("duplicate waiter rejected");
@@ -569,7 +603,7 @@ mod tests {
         let temp = tempfile::tempdir().expect("temp dir");
         let runtime = ready_runtime();
         let request = test_request("run-enqueue-fails");
-        let events = Arc::new(Mutex::new(Vec::<GeminiBrowserRunEvent>::new()));
+        let events = Arc::new(Mutex::new(Vec::<GeminiBrowserRunChangeEvent>::new()));
 
         let error = send_single_prompt_enqueue_core(
             temp.path(),
@@ -579,7 +613,7 @@ mod tests {
             |_job| async { Err(AppError::internal("push failed")) },
             {
                 let events = events.clone();
-                move |event| events.lock().push(event)
+                move |run| events.lock().push(run_change_event_from_run(run))
             },
         )
         .await
@@ -596,8 +630,11 @@ mod tests {
             .unwrap_or("")
             .contains("Gemini Browser job enqueue failed: push failed"));
         assert_eq!(
-            events.lock().last().map(|event| event.status.clone()),
-            Some(GeminiBrowserRunStatus::Failed)
+            events.lock().as_slice(),
+            [GeminiBrowserRunChangeEvent {
+                run_id: request.run_id.clone(),
+                run_updated_at: run.updated_at.clone(),
+            }]
         );
     }
 
@@ -614,7 +651,7 @@ mod tests {
             request.clone(),
             None,
             |_job| async { panic!("enqueue should not be called") },
-            |_event| {},
+            |_run| {},
         )
         .await
         .expect_err("invalid artifact mode rejected");
@@ -627,6 +664,32 @@ mod tests {
             .runs
             .is_empty());
         assert!(!runtime.has_waiter(&request.run_id));
+    }
+
+    #[tokio::test]
+    async fn failed_run_log_transition_does_not_emit_change_event() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let runtime = ready_runtime();
+        let mut request = test_request("bad/run-id");
+        request.run_id = "../bad".to_string();
+        let events = Arc::new(Mutex::new(Vec::<GeminiBrowserRunChangeEvent>::new()));
+
+        let error = send_single_prompt_enqueue_core(
+            temp.path(),
+            &runtime,
+            request,
+            None,
+            |_job| async { panic!("enqueue should not be called") },
+            {
+                let events = events.clone();
+                move |run| events.lock().push(run_change_event_from_run(run))
+            },
+        )
+        .await
+        .expect_err("invalid run id rejected before emit");
+
+        assert!(!error.to_string().is_empty());
+        assert!(events.lock().is_empty());
     }
 
     fn ready_runtime() -> GeminiBrowserJobRuntime {
