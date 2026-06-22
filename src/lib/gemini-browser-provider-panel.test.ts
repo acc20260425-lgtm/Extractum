@@ -23,21 +23,18 @@ describe("gemini browser provider panel copy contract", () => {
     expect(statusLabel("not_started", null)).toBe("Not started");
   });
 
-  it("routes mount, commands, and run-change events through the shared refresh scheduler", () => {
+  it("routes mount, commands, and polling through the shared refresh scheduler", () => {
     expect(componentSource).toContain("createGeminiBrowserRefreshScheduler");
+    expect(componentSource).toContain("createGeminiBrowserPollingController");
     expect(componentSource).toContain("const refreshScheduler");
-    expect(componentSource).toContain("function scheduleRefresh()");
-    expect(componentSource).toContain("function scheduleRefreshInBackground()");
-    expect(componentSource).toContain("void scheduleRefresh().catch(reportUnexpectedRefreshError);");
-    expect(componentSource).toContain("await scheduleRefresh();");
-    expect(componentSource).toMatch(/onclick=\{\s*scheduleRefreshInBackground\s*\}/);
-    expect(componentSource).toContain("listenToGeminiBrowserRunChanges");
+    expect(componentSource).toContain("geminiBridgeStatusSnapshot");
+    expect(componentSource).toContain('scheduleRefresh({ mode: "light" })');
+    expect(componentSource).toContain('scheduleRefresh({ mode: "full" })');
+    expect(componentSource).not.toContain("listenToGeminiBrowserRunChanges");
     expect(componentSource).not.toContain("listenToGeminiBrowserRuns");
+    expect(componentSource).not.toContain("@tauri-apps/api/event");
     expect(componentSource).not.toContain("onclick={refresh}");
     expect(componentSource).not.toContain("payload.");
-    expect(componentSource).not.toContain("payload.message");
-    expect(componentSource).not.toContain("payload.status");
-    expect(componentSource).not.toContain("payload.run_updated_at");
   });
 
   it("does not assign authoritative panel state from command return values", () => {
@@ -58,6 +55,8 @@ describe("gemini browser provider panel copy contract", () => {
 
   it("passes browser config to status, open, resume, and send calls", () => {
     expect(componentSource).toContain("loadStatus: () => geminiBridgeStatus(browserConfig())");
+    expect(componentSource).toContain("loadStatusSnapshot: () => geminiBridgeStatusSnapshot()");
+    expect(componentSource).toContain("loadRun: (runId) => geminiBridgeGetRun(runId)");
     expect(componentSource).toContain("geminiBridgeOpenBrowser(browserConfig())");
     expect(componentSource).toContain("geminiBridgeStartCdpChrome(browserConfig())");
     expect(componentSource).toContain("geminiBridgeResume(browserConfig())");
@@ -135,5 +134,125 @@ describe("gemini browser provider panel copy contract", () => {
     expect(componentSource).toContain("sendTestPrompt");
     expect(componentSource).not.toContain("{check.run?.result?.text}");
     expect(componentSource).not.toContain("{check.run?.result?.artifacts.run_dir}");
+  });
+
+  it("starts active polling before awaiting the terminal test prompt result", () => {
+    const sendIndex = componentSource.indexOf("const sendPromise = geminiBridgeSendSingle");
+    const pendingIndex = componentSource.indexOf("pollingController.setLocalPendingRun(runId)");
+    const refreshIndex = componentSource.indexOf('await scheduleRefresh({ mode: "light" })');
+    const awaitIndex = componentSource.indexOf("const completed = await sendPromise");
+
+    expect(sendIndex).toBeGreaterThan(-1);
+    expect(pendingIndex).toBeGreaterThan(-1);
+    expect(refreshIndex).toBeGreaterThan(-1);
+    expect(awaitIndex).toBeGreaterThan(-1);
+    expect(pendingIndex).toBeLessThan(awaitIndex);
+    expect(refreshIndex).toBeLessThan(awaitIndex);
+  });
+
+  it("uses light post-terminal refresh for test prompt completion", () => {
+    const awaitIndex = componentSource.indexOf("const completed = await sendPromise");
+    const finalRefreshIndex = componentSource.indexOf("await ensurePostTerminalRefresh(runId)", awaitIndex);
+    const finalFullIndex = componentSource.indexOf(
+      'await scheduleRefresh({ mode: "full", forceTrailing: true })',
+      awaitIndex,
+    );
+
+    expect(finalRefreshIndex).toBeGreaterThan(awaitIndex);
+    expect(finalFullIndex).toBe(-1);
+  });
+
+  it("creates polling controller synchronously before scheduler and send actions", () => {
+    const pollingIndex = componentSource.indexOf(
+      "const pollingController = createGeminiBrowserPollingController",
+    );
+    const schedulerIndex = componentSource.indexOf(
+      "const refreshScheduler = createGeminiBrowserRefreshScheduler",
+    );
+    const sendIndex = componentSource.indexOf("async function sendTestPrompt");
+
+    expect(pollingIndex).toBeGreaterThan(-1);
+    expect(schedulerIndex).toBeGreaterThan(pollingIndex);
+    expect(sendIndex).toBeGreaterThan(schedulerIndex);
+    expect(componentSource).not.toContain("pollingController?.setLocalPendingRun");
+  });
+
+  it("routes selected run detail through scheduler token guard", () => {
+    expect(componentSource).toContain("selectedDetailRequestToken");
+    expect(componentSource).toContain("applySelectedRunFromScheduler");
+    expect(componentSource).toContain("getSelectedDetailToken: () => selectedDetailRequestToken");
+    expect(componentSource).not.toContain("latestSelectedRunUpdatedAt");
+  });
+
+  it("uses activity snapshots instead of raw active-work booleans", () => {
+    expect(componentSource).toContain("getPollingActivitySnapshot");
+    expect(componentSource).toContain("runLogSignals");
+    expect(componentSource).toContain("statusSignal");
+    expect(componentSource).not.toContain("hasActiveGeminiBrowserWork");
+    expect(componentSource).not.toContain("hasActiveWork:");
+  });
+
+  it("discovers prompt-pack Gemini Browser runs through idle polling list_runs", () => {
+    expect(componentSource).toContain("pollingController.start()");
+    expect(componentSource).toContain("loadRuns: () => geminiBridgeListRuns()");
+    expect(componentSource).toContain("applyRuns: (nextRuns) =>");
+    expect(componentSource).toContain("runs = nextRuns");
+    expect(componentSource).not.toContain("listenToGeminiBrowserRunChanges");
+  });
+
+  it("does not route polling through the background refresh wrapper", () => {
+    const controllerIndex = componentSource.indexOf(
+      "const pollingController = createGeminiBrowserPollingController",
+    );
+    const controllerBlock = componentSource.slice(
+      controllerIndex,
+      componentSource.indexOf("const refreshScheduler"),
+    );
+
+    expect(controllerBlock).toContain("scheduleRefresh,");
+    expect(controllerBlock).not.toContain("scheduleRefreshInBackground");
+  });
+
+  it("records initial mount refresh outcome for polling degradation", () => {
+    expect(componentSource).toContain(
+      'scheduleRefreshInBackground({ mode: "light" }, { recordPollingOutcome: true })',
+    );
+  });
+
+  it("keeps rejected pending test runs until terminal, not-found confirmation, or grace expiry", () => {
+    const sendPromptIndex = componentSource.indexOf("async function sendTestPrompt()");
+    const sendPromptSource = componentSource.slice(
+      sendPromptIndex,
+      componentSource.indexOf("async function resumeProvider()", sendPromptIndex),
+    );
+    const completedIndex = sendPromptSource.indexOf("const completed = await sendPromise");
+    const successRefreshIndex = sendPromptSource.indexOf(
+      "await ensurePostTerminalRefresh(runId)",
+      completedIndex,
+    );
+    const catchIndex = sendPromptSource.indexOf("} catch (error) {");
+    const rejectedIndex = sendPromptSource.indexOf(
+      "pollingController.markLocalPendingRunRejected(runId)",
+      catchIndex,
+    );
+    const finalRefreshIndex = sendPromptSource.indexOf(
+      "await ensurePostTerminalRefresh(runId)",
+      catchIndex,
+    );
+    const unavailableIndex = componentSource.indexOf("applySelectedRunUnavailable");
+    const notFoundIndex = componentSource.indexOf(
+      "pollingController.confirmPendingRunNotFound(runId)",
+      unavailableIndex,
+    );
+
+    expect(sendPromptIndex).toBeGreaterThan(-1);
+    expect(completedIndex).toBeGreaterThan(-1);
+    expect(successRefreshIndex).toBeGreaterThan(completedIndex);
+    expect(catchIndex).toBeGreaterThan(-1);
+    expect(rejectedIndex).toBeGreaterThan(catchIndex);
+    expect(finalRefreshIndex).toBeGreaterThan(rejectedIndex);
+    expect(notFoundIndex).toBeGreaterThan(unavailableIndex);
+    expect(componentSource).toContain("pollingController.hasLocalPendingRun(runId)");
+    expect(componentSource).toContain("pollingController.confirmPendingRunTerminal");
   });
 });

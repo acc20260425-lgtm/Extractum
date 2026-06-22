@@ -2,6 +2,7 @@
   import { Clipboard, ExternalLink, FolderOpen, Play, RefreshCw, Send, Square } from "@lucide/svelte";
   import { onMount } from "svelte";
   import {
+    geminiBridgeGetRun,
     geminiBridgeListRuns,
     geminiBridgeOpenBrowser,
     geminiBridgeOpenRunFolder,
@@ -9,13 +10,20 @@
     geminiBridgeSendSingle,
     geminiBridgeStartCdpChrome,
     geminiBridgeStatus,
+    geminiBridgeStatusSnapshot,
     geminiBridgeStop,
-    listenToGeminiBrowserRunChanges,
+    isGeminiBrowserRunNotFoundError,
   } from "$lib/api/gemini-browser";
   import { formatAppError } from "$lib/app-error";
+  import {
+    createGeminiBrowserPollingController,
+  } from "$lib/gemini-browser-polling";
   import { statusLabel } from "$lib/gemini-browser-provider-panel-contract";
   import { runResultForActivePrompt } from "$lib/gemini-browser-provider-panel-state";
-  import { createGeminiBrowserRefreshScheduler } from "$lib/gemini-browser-refresh-scheduler";
+  import {
+    createGeminiBrowserRefreshScheduler,
+    type GeminiBrowserRefreshOptions,
+  } from "$lib/gemini-browser-refresh-scheduler";
   import {
     deriveGeminiBrowserSetupChecks,
     setupCheckActionLabel,
@@ -62,15 +70,21 @@
   let runHistoryLoadError = $state<string | null>(null);
   let result = $state<GeminiBrowserRunResult | null>(null);
   let activeTestRunId = $state<string | null>(null);
+  let disposed = false;
   let browserProviderMode = $state<GeminiBrowserProviderMode>("managed");
   let cdpEndpoint = $state(DEFAULT_CDP_ENDPOINT);
   let inspectorMessage = $state("");
   let runHistoryFilter = $state<GeminiBrowserRunHistoryFilter>("all");
   let selectedHistoryRunId = $state<string | null>(null);
+  let selectedRunDetail = $state<GeminiBrowserRun | null>(null);
+  let selectedDetailError = $state<string | null>(null);
+  let selectedDetailRequestToken = 0;
   const activeInspectorRunId = $derived(activeTestRunId ?? status?.active_run_id ?? null);
   const runHistoryRows = $derived(filterRunHistoryRows(runs, runHistoryFilter));
   const selectedInspectorRun = $derived(
-    selectRunForHistory(runs, activeInspectorRunId, selectedHistoryRunId, runHistoryFilter),
+    selectedRunDetail?.run_id === selectedRunIdForInspector()
+      ? selectedRunDetail
+      : selectRunForHistory(runs, activeInspectorRunId, selectedHistoryRunId, runHistoryFilter),
   );
   const selectedInspectorResult = $derived(selectedInspectorRun?.result ?? null);
   const selectedArtifactAvailability = $derived(artifactAvailability(selectedInspectorResult));
@@ -96,13 +110,27 @@
     return statusLabel(status?.status ?? "not_started", status?.manual_action ?? null);
   }
 
+  function selectedRunIdForInspector() {
+    return activeInspectorRunId ?? selectedHistoryRunId;
+  }
+
   function selectRunHistoryFilter(filter: GeminiBrowserRunHistoryFilter) {
     runHistoryFilter = filter;
   }
 
   function selectHistoryRun(runId: string) {
     selectedHistoryRunId = runId;
+    selectedDetailRequestToken += 1;
+    selectedRunDetail = null;
+    selectedDetailError = null;
     inspectorMessage = "";
+  }
+
+  function applySelectedRunFromScheduler(run: GeminiBrowserRun) {
+    const selectedRunId = selectedRunIdForInspector();
+    if (disposed || run.run_id !== selectedRunId) return;
+    selectedRunDetail = run;
+    selectedDetailError = null;
   }
 
   function historyFilterLabel(filter: GeminiBrowserRunHistoryFilter) {
@@ -152,7 +180,7 @@
   function selectBrowserProviderMode(mode: GeminiBrowserProviderMode) {
     browserProviderMode = mode;
     persistBrowserProviderConfig();
-    scheduleRefreshInBackground();
+    scheduleRefreshInBackground({ mode: "full" }, { recordPollingOutcome: true });
   }
 
   function updateCdpEndpoint(value: string) {
@@ -166,16 +194,61 @@
     result = completedResult;
     activeTestRunId = null;
     message = completedResult.message ?? completedResult.status;
+    pollingController.confirmPendingRunTerminal(completedResult.run_id);
   }
+
+  function scheduleRefresh(options: GeminiBrowserRefreshOptions = {}) {
+    return refreshScheduler.scheduleRefresh(options);
+  }
+
+  function getPollingActivitySnapshot() {
+    const runLogSignals = runs
+      .filter((run) => run.status === "queued" || run.status === "running")
+      .map((run) => ({ key: run.run_id, updatedAt: run.updated_at }));
+    const currentStatus = status;
+    let statusSignal: string | null = null;
+    if (
+      currentStatus &&
+      (currentStatus.status === "running" ||
+        currentStatus.active_run_id ||
+        (currentStatus.queue_depth ?? 0) > 0)
+    ) {
+      statusSignal = `${currentStatus.status}:${currentStatus.active_run_id ?? "none"}:${currentStatus.queue_depth ?? 0}`;
+    }
+    return { runLogSignals, statusSignal };
+  }
+
+  const pollingController = createGeminiBrowserPollingController({
+    scheduleRefresh,
+    getActivitySnapshot: getPollingActivitySnapshot,
+  });
 
   const refreshScheduler = createGeminiBrowserRefreshScheduler({
     loadStatus: () => geminiBridgeStatus(browserConfig()),
-    loadRuns: () => geminiBridgeListRuns(8),
+    loadStatusSnapshot: () => geminiBridgeStatusSnapshot(),
+    loadRuns: () => geminiBridgeListRuns(),
+    loadRun: (runId) => geminiBridgeGetRun(runId),
+    getSelectedRunId: () => selectedRunIdForInspector(),
+    getSelectedDetailToken: () => selectedDetailRequestToken,
     applyStatus: (nextStatus) => {
       status = nextStatus;
     },
     applyRuns: (nextRuns) => {
       runs = nextRuns;
+      syncActivePromptResult(nextRuns);
+    },
+    applySelectedRun: (run) => applySelectedRunFromScheduler(run),
+    applySelectedRunUnavailable: (runId, message) => {
+      if (selectedRunIdForInspector() !== runId) return;
+      if (pollingController.hasLocalPendingRun(runId)) {
+        pollingController.confirmPendingRunNotFound(runId);
+      }
+      selectedRunDetail = null;
+      selectedDetailError = message;
+    },
+    applySelectedRunError: (runId, message) => {
+      if (selectedRunIdForInspector() !== runId) return;
+      selectedDetailError = message;
     },
     applyStatusError: (nextError) => {
       statusLoadError = nextError;
@@ -186,22 +259,46 @@
     applyMessage: (nextMessage) => {
       message = nextMessage;
     },
-    syncActivePromptResult: (nextRuns) => {
-      syncActivePromptResult(nextRuns);
-    },
+    syncActivePromptResult: () => {},
     formatError: formatAppError,
+    isRunNotFoundError: isGeminiBrowserRunNotFoundError,
+    isDisposed: () => disposed,
   });
-
-  function scheduleRefresh() {
-    return refreshScheduler.scheduleRefresh();
-  }
 
   function reportUnexpectedRefreshError(error: unknown) {
     message = formatAppError("refreshing Gemini browser provider", error);
   }
 
-  function scheduleRefreshInBackground() {
-    void scheduleRefresh().catch(reportUnexpectedRefreshError);
+  function scheduleRefreshInBackground(
+    options: GeminiBrowserRefreshOptions = {},
+    behavior: { recordPollingOutcome?: boolean } = {},
+  ) {
+    void scheduleRefresh(options)
+      .then((outcome) => {
+        if (behavior.recordPollingOutcome) {
+          pollingController.recordRefreshOutcome(outcome);
+        }
+      })
+      .catch(reportUnexpectedRefreshError);
+  }
+
+  function isTerminalRunVisible(runId: string) {
+    return runs.some(
+      (run) => run.run_id === runId && run.status !== "queued" && run.status !== "running",
+    );
+  }
+
+  async function ensurePostTerminalRefresh(runId: string) {
+    if (isTerminalRunVisible(runId)) {
+      return;
+    }
+    const outcome = await scheduleRefresh({ mode: "light" });
+    pollingController.recordRefreshOutcome(outcome);
+    if (isTerminalRunVisible(runId)) {
+      return;
+    }
+    const trailingOutcome = await scheduleRefresh({ mode: "light", forceTrailing: true });
+    pollingController.recordRefreshOutcome(trailingOutcome);
   }
 
   async function openBrowser() {
@@ -209,7 +306,8 @@
     try {
       const opened = await geminiBridgeOpenBrowser(browserConfig());
       message = opened.latest_message ?? "Browser opened.";
-      await scheduleRefresh();
+      const outcome = await scheduleRefresh({ mode: "full" });
+      pollingController.recordRefreshOutcome(outcome);
     } catch (error) {
       message = formatAppError("opening Gemini browser", error);
     } finally {
@@ -225,7 +323,8 @@
   async function handleSetupCheckAction(check: GeminiBrowserSetupCheck) {
     if (!check.action) return;
     if (check.action === "refresh") {
-      await scheduleRefresh();
+      const outcome = await scheduleRefresh({ mode: "full" });
+      pollingController.recordRefreshOutcome(outcome);
       return;
     }
     if (check.action === "start_chrome") {
@@ -258,7 +357,8 @@
     try {
       const launch = await geminiBridgeStartCdpChrome(browserConfig());
       message = launch.message;
-      await scheduleRefresh();
+      const outcome = await scheduleRefresh({ mode: "full" });
+      pollingController.recordRefreshOutcome(outcome);
     } catch (error) {
       message = formatAppError("starting Chrome for Gemini browser provider", error);
     } finally {
@@ -276,18 +376,26 @@
     const runId = newRunId();
     activeTestRunId = runId;
     selectedHistoryRunId = runId;
+    selectedDetailRequestToken += 1;
+    selectedRunDetail = null;
+    selectedDetailError = null;
+    pollingController.setLocalPendingRun(runId);
     try {
-      const completed = await geminiBridgeSendSingle({
+      const sendPromise = geminiBridgeSendSingle({
         runId,
         prompt: prompt.trim(),
         source: "settings_test",
         artifactMode: "reduced",
         browserConfig: browserConfig(),
       });
+      await scheduleRefresh({ mode: "light" });
+      const completed = await sendPromise;
       message = completed.message ?? completed.status;
-      await scheduleRefresh();
+      await ensurePostTerminalRefresh(runId);
     } catch (error) {
+      pollingController.markLocalPendingRunRejected(runId);
       message = formatAppError("running Gemini browser prompt", error);
+      await ensurePostTerminalRefresh(runId);
     } finally {
       busy = false;
     }
@@ -298,7 +406,8 @@
     try {
       const resumed = await geminiBridgeResume(browserConfig());
       message = resumed.latest_message ?? "Browser resumed.";
-      await scheduleRefresh();
+      const outcome = await scheduleRefresh({ mode: "full" });
+      pollingController.recordRefreshOutcome(outcome);
     } catch (error) {
       message = formatAppError("resuming Gemini browser provider", error);
     } finally {
@@ -310,7 +419,8 @@
     busy = true;
     try {
       await geminiBridgeStop();
-      await scheduleRefresh();
+      const outcome = await scheduleRefresh({ mode: "full" });
+      pollingController.recordRefreshOutcome(outcome);
     } catch (error) {
       message = formatAppError("stopping Gemini browser provider", error);
     } finally {
@@ -345,23 +455,14 @@
   }
 
   onMount(() => {
-    let disposed = false;
-    let unlisten: (() => void) | null = null;
+    disposed = false;
     loadBrowserProviderConfig();
-    scheduleRefreshInBackground();
-    void listenToGeminiBrowserRunChanges(() => {
-      if (disposed) return;
-      scheduleRefreshInBackground();
-    }).then((detach) => {
-      if (disposed) {
-        detach();
-        return;
-      }
-      unlisten = detach;
-    });
+    scheduleRefreshInBackground({ mode: "light" }, { recordPollingOutcome: true });
+    pollingController.start();
     return () => {
       disposed = true;
-      unlisten?.();
+      pollingController.stop();
+      refreshScheduler.dispose();
     };
   });
 </script>
@@ -379,7 +480,12 @@
     <div class="provider-card">
       <div class="row">
         <strong>Gemini Browser</strong>
-        <button type="button" onclick={scheduleRefreshInBackground} disabled={busy} title="Refresh status">
+        <button
+          type="button"
+          onclick={() => scheduleRefreshInBackground({ mode: "full" }, { recordPollingOutcome: true })}
+          disabled={busy}
+          title="Refresh status"
+        >
           <RefreshCw size={14} />
         </button>
       </div>
@@ -451,7 +557,7 @@
         </div>
         <button
           type="button"
-          onclick={scheduleRefreshInBackground}
+          onclick={() => scheduleRefreshInBackground({ mode: "full" }, { recordPollingOutcome: true })}
           disabled={busy}
           title="Refresh setup checklist"
         >
@@ -504,7 +610,7 @@
       <div class="actions">
         <button
           type="button"
-          onclick={scheduleRefreshInBackground}
+          onclick={() => scheduleRefreshInBackground({ mode: "full" }, { recordPollingOutcome: true })}
           disabled={busy}
           title="Refresh run diagnostics"
         >
@@ -670,6 +776,10 @@
       {/if}
     {:else}
       <p class="empty">No browser run selected.</p>
+    {/if}
+
+    {#if selectedDetailError}
+      <p class="error-text">{selectedDetailError}</p>
     {/if}
 
     {#if inspectorMessage}
