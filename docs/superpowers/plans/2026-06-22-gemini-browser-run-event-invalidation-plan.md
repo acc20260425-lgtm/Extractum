@@ -480,7 +480,7 @@ git commit -m "refactor: emit Gemini Browser settings changes from run log"
 - Modify: `src-tauri/src/gemini_browser/jobs.rs`
 - Modify: `src-tauri/src/gemini_browser/commands.rs`
 
-- [ ] **Step 1: Write failing worker/cancel tests for invalidation payload and best-effort emit**
+- [ ] **Step 1: Write failing worker/cancel tests for invalidation payload, snapshot ordering, and best-effort emit**
 
 In `src-tauri/src/gemini_browser/jobs.rs`, update event vectors from `GeminiBrowserRunEvent` to `GeminiBrowserRunChangeEvent`.
 
@@ -520,12 +520,66 @@ async fn cancel_missing_run_does_not_emit_change_event() {
                 .lock()
                 .push(crate::gemini_browser::commands::run_change_event_from_run(run))
         },
+        |_result| async {},
         || async { Ok(()) },
     )
     .await
     .expect("missing run is acknowledged");
 
     assert!(events.lock().is_empty());
+}
+```
+
+Add a unit test near the queued cancel test to lock the required terminal ordering:
+
+```rust
+#[tokio::test]
+async fn cancel_queued_run_updates_terminal_snapshot_before_change_event() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let runtime = GeminiBrowserJobRuntime::new_for_test(Duration::from_secs(1));
+    let state = crate::gemini_browser::GeminiBrowserState::new();
+    let job = test_job("run-cancel-order");
+    crate::gemini_browser::create_queued_run(
+        temp.path(),
+        &job.run_id,
+        &job.source,
+        &job.prompt,
+    )
+    .expect("create queued run");
+    runtime.request_cancel(&job.run_id);
+
+    let order = Arc::new(Mutex::new(Vec::<&'static str>::new()));
+    let run_id_for_emit = job.run_id.clone();
+
+    cancel_gemini_browser_job_core(
+        &runtime,
+        &state,
+        temp.path(),
+        &job.run_id,
+        {
+            let order = order.clone();
+            move |run| {
+                assert_eq!(run.run_id, run_id_for_emit);
+                order.lock().push("emit");
+            }
+        },
+        {
+            let order = order.clone();
+            move |result| {
+                assert_eq!(
+                    result.status,
+                    crate::gemini_browser::GeminiBrowserRunStatus::Cancelled
+                );
+                order.lock().push("snapshot");
+                async {}
+            }
+        },
+        || async { Ok(()) },
+    )
+    .await
+    .expect("cancel queued job");
+
+    assert_eq!(order.lock().as_slice(), ["snapshot", "emit"]);
 }
 ```
 
@@ -627,18 +681,39 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL to compile until job/cancel callbacks accept `&GeminiBrowserRun` or emit `GeminiBrowserRunChangeEvent`.
 
-- [ ] **Step 3: Change cancellation callback to emit from finished run**
+- [ ] **Step 3: Change cancellation callback and terminal snapshot hook to emit from finished run**
 
 In `cancel_gemini_browser_job_core`, change:
 
 ```rust
-EmitEvent: FnMut(crate::gemini_browser::GeminiBrowserRunEvent),
+async fn cancel_gemini_browser_job_core<EmitEvent, StopActive, StopFut>(
 ```
 
 to:
 
 ```rust
-EmitEvent: FnMut(&crate::gemini_browser::GeminiBrowserRun),
+async fn cancel_gemini_browser_job_core<
+    EmitEvent,
+    BeforeEmitTerminalSnapshot,
+    SnapshotFut,
+    StopActive,
+    StopFut,
+>(
+    runtime: &GeminiBrowserJobRuntime,
+    state: &crate::gemini_browser::GeminiBrowserState,
+    runs_root: &std::path::Path,
+    run_id: &str,
+    mut emit_event: EmitEvent,
+    mut before_emit_terminal_snapshot: BeforeEmitTerminalSnapshot,
+    stop_active: StopActive,
+) -> crate::error::AppResult<()>
+where
+    EmitEvent: FnMut(&crate::gemini_browser::GeminiBrowserRun),
+    BeforeEmitTerminalSnapshot:
+        FnMut(&crate::gemini_browser::GeminiBrowserRunResult) -> SnapshotFut,
+    SnapshotFut: std::future::Future<Output = ()>,
+    StopActive: FnOnce() -> StopFut,
+    StopFut: std::future::Future<Output = crate::error::AppResult<()>>,
 ```
 
 For queued cancellation, replace:
@@ -654,6 +729,7 @@ with:
 ```rust
 let cancelled_run = crate::gemini_browser::finish_run(runs_root, run_id, result.clone())?;
 runtime.complete_waiter(run_id, Ok(result.clone()));
+before_emit_terminal_snapshot(&result).await;
 emit_event(&cancelled_run);
 ```
 
@@ -662,19 +738,25 @@ For running-without-active-sidecar failure, replace the same pattern with:
 ```rust
 let failed_run = crate::gemini_browser::finish_run(runs_root, run_id, result.clone())?;
 runtime.complete_waiter(run_id, Ok(result.clone()));
+before_emit_terminal_snapshot(&result).await;
 emit_event(&failed_run);
 ```
 
 In the public `cancel_gemini_browser_job`, replace the emit closure with:
 
 ```rust
-|run| {
-    let _ = handle.emit(
-        crate::gemini_browser::commands::GEMINI_BROWSER_RUN_CHANGE_EVENT,
-        crate::gemini_browser::commands::run_change_event_from_run(run),
-    );
-},
+|run| emit_gemini_browser_run_change_event(handle, run),
+|result| update_terminal_status_snapshot_best_effort(handle, &state, result),
+|| stop_active_gemini_browser_sidecar(handle, &state),
 ```
+
+The order for queued cancellation and running-without-active-sidecar failure is always:
+
+1. `finish_run(...)` writes the terminal run-log record.
+2. `before_emit_terminal_snapshot(&result).await` attempts the cached provider snapshot update.
+3. `emit_event(&finished_run)` sends the best-effort invalidation event.
+
+Tests that do not care about snapshots pass `|_result| async {}`.
 
 - [ ] **Step 4: Change worker reconciliation to return run-log records**
 
@@ -1150,6 +1232,43 @@ describe("gemini browser refresh scheduler", () => {
     expect(deps.loadStatus).toHaveBeenCalledTimes(2);
     expect(deps.loadRuns).toHaveBeenCalledTimes(2);
   });
+
+  it("rejects the shared trailing promise when a trailing refresh throws unexpectedly", async () => {
+    const firstStatus = deferred<GeminiBrowserProviderStatus>();
+    const firstRuns = deferred<GeminiBrowserRunLogSummary>();
+    const unexpected = new Error("apply exploded");
+    const deps = schedulerDeps({
+      loadStatus: vi
+        .fn()
+        .mockReturnValueOnce(firstStatus.promise)
+        .mockResolvedValue(status({ latest_message: "Second" })),
+      loadRuns: vi
+        .fn()
+        .mockReturnValueOnce(firstRuns.promise)
+        .mockResolvedValue({ runs: [run("run-2")] }),
+      applyRuns: vi
+        .fn()
+        .mockImplementationOnce(() => {})
+        .mockImplementationOnce(() => {
+          throw unexpected;
+        }),
+    });
+    const scheduler = createGeminiBrowserRefreshScheduler(deps);
+
+    const active = scheduler.scheduleRefresh();
+    const trailingA = scheduler.scheduleRefresh();
+    const trailingB = scheduler.scheduleRefresh();
+
+    expect(trailingA).toBe(trailingB);
+    const activeRejection = expect(active).rejects.toBe(unexpected);
+    const trailingRejection = expect(trailingA).rejects.toBe(unexpected);
+
+    firstStatus.resolve(status({ latest_message: "First" }));
+    firstRuns.resolve({ runs: [run("run-1")] });
+
+    await activeRejection;
+    await trailingRejection;
+  });
 });
 ```
 
@@ -1197,6 +1316,7 @@ export function createGeminiBrowserRefreshScheduler(
   let trailingRequested = false;
   let trailingPromise: Promise<void> | null = null;
   let resolveTrailing: (() => void) | null = null;
+  let rejectTrailing: ((error: unknown) => void) | null = null;
 
   async function runRefreshOnce() {
     const [statusResult, runsResult] = await Promise.allSettled([
@@ -1228,29 +1348,49 @@ export function createGeminiBrowserRefreshScheduler(
     }
   }
 
+  function takeTrailingRequest() {
+    const resolve = resolveTrailing;
+    const reject = rejectTrailing;
+    trailingRequested = false;
+    trailingPromise = null;
+    resolveTrailing = null;
+    rejectTrailing = null;
+    return { resolve, reject };
+  }
+
+  async function runTrailingRefresh() {
+    const trailing = takeTrailingRequest();
+    try {
+      await runRefreshOnce();
+      trailing.resolve?.();
+    } catch (error) {
+      trailing.reject?.(error);
+      throw error;
+    }
+  }
+
   async function drainRefreshes() {
     try {
       await runRefreshOnce();
       while (trailingRequested) {
-        trailingRequested = false;
-        const currentResolveTrailing = resolveTrailing;
-        trailingPromise = null;
-        resolveTrailing = null;
-        await runRefreshOnce();
-        currentResolveTrailing?.();
+        await runTrailingRefresh();
       }
+    } catch (error) {
+      if (trailingRequested || trailingPromise) {
+        const trailing = takeTrailingRequest();
+        trailing.reject?.(error);
+      }
+      throw error;
     } finally {
       activeRefresh = null;
-      if (trailingRequested && !activeRefresh) {
-        activeRefresh = drainRefreshes();
-      }
     }
   }
 
   function ensureTrailingPromise() {
     if (!trailingPromise) {
-      trailingPromise = new Promise<void>((resolve) => {
+      trailingPromise = new Promise<void>((resolve, reject) => {
         resolveTrailing = resolve;
+        rejectTrailing = reject;
       });
     }
     return trailingPromise;
@@ -1313,7 +1453,8 @@ it("routes mount, commands, and run-change events through the shared refresh sch
   expect(componentSource).toContain("createGeminiBrowserRefreshScheduler");
   expect(componentSource).toContain("const refreshScheduler");
   expect(componentSource).toContain("function scheduleRefresh()");
-  expect(componentSource).toContain("void scheduleRefresh();");
+  expect(componentSource).toContain("function scheduleRefreshInBackground()");
+  expect(componentSource).toContain("void scheduleRefresh().catch(reportUnexpectedRefreshError);");
   expect(componentSource).toContain("await scheduleRefresh();");
   expect(componentSource).toContain("listenToGeminiBrowserRunChanges");
   expect(componentSource).not.toContain("listenToGeminiBrowserRuns");
@@ -1399,11 +1540,19 @@ const refreshScheduler = createGeminiBrowserRefreshScheduler({
 function scheduleRefresh() {
   return refreshScheduler.scheduleRefresh();
 }
+
+function reportUnexpectedRefreshError(error: unknown) {
+  message = formatAppError("refreshing Gemini browser provider", error);
+}
+
+function scheduleRefreshInBackground() {
+  void scheduleRefresh().catch(reportUnexpectedRefreshError);
+}
 ```
 
 Replace all `refresh()` calls:
 
-- `void refresh();` -> `void scheduleRefresh();`
+- `void refresh();` -> `scheduleRefreshInBackground();`
 - `await refresh();` -> `await scheduleRefresh();`
 - setup check refresh action -> `await scheduleRefresh();`
 
@@ -1479,23 +1628,21 @@ Update `startCdpChrome` and `stopProvider` to call `await scheduleRefresh();`.
 Replace the `onMount` listener block:
 
 ```ts
-void refresh();
+scheduleRefreshInBackground();
 void listenToGeminiBrowserRuns(({ payload }) => {
   if (disposed) return;
   message = payload.message ?? payload.status;
-  void refresh();
+  scheduleRefreshInBackground();
 }).then((detach) => {
 ```
 
 with:
 
 ```ts
-void scheduleRefresh();
+scheduleRefreshInBackground();
 void listenToGeminiBrowserRunChanges(() => {
   if (disposed) return;
-  void scheduleRefresh().catch((error) => {
-    message = formatAppError("refreshing Gemini browser provider", error);
-  });
+  scheduleRefreshInBackground();
 }).then((detach) => {
 ```
 
@@ -1552,14 +1699,16 @@ git commit -m "refactor: route Gemini Browser panel refresh through scheduler"
 Run:
 
 ```powershell
-rg -n "GeminiBrowserRunEvent|listenToGeminiBrowserRuns|GEMINI_BROWSER_RUN_EVENT|payload\\.status|payload\\.message|payload\\.queue_position|queue_position" src-tauri/src/gemini_browser src/lib -S
+rg -n "GeminiBrowserRunEvent|listenToGeminiBrowserRuns|GEMINI_BROWSER_RUN_EVENT|payload\\.status|payload\\.message|payload\\.queue_position" src-tauri/src/gemini_browser src/lib/api/gemini-browser.ts src/lib/api/gemini-browser.test.ts src/lib/types/gemini-browser.ts src/lib/components/settings/gemini-browser-provider-panel.svelte src/lib/gemini-browser-provider-panel.test.ts -S
+rg -n "queue_position" src-tauri/src/gemini_browser/types.rs src-tauri/src/gemini_browser/commands.rs src/lib/api/gemini-browser.ts src/lib/types/gemini-browser.ts src/lib/components/settings/gemini-browser-provider-panel.svelte -S
 ```
 
 Expected:
 
 - No `GeminiBrowserRunEvent`, `listenToGeminiBrowserRuns`, or `GEMINI_BROWSER_RUN_EVENT`.
 - No Gemini Browser event callback reading `payload.status`, `payload.message`, or `payload.queue_position`.
-- `queue_position` may remain only in Apalis queue internals such as `QueuedGeminiBrowserJob`, not in the Tauri event payload or TypeScript event type.
+- No `queue_position` in the Gemini Browser event contract, commands event payload, TypeScript event type, or settings panel.
+- Ignore unrelated `queue_position` matches outside these paths, such as analysis/LLM types, tests, or Apalis queue internals like `QueuedGeminiBrowserJob`.
 
 - [ ] **Step 2: Run focused Rust tests**
 
