@@ -63,7 +63,7 @@ Current legacy contract:
 **Files:**
 - Modify: `src-tauri/src/gemini_browser/commands.rs`
 
-- [ ] **Step 1: Write the failing Rust test for live probe snapshot isolation**
+- [x] **Step 1: Write the failing Rust test for live probe snapshot isolation**
 
 Add this test inside `#[cfg(test)] mod tests` in `src-tauri/src/gemini_browser/commands.rs`, next to `provider_status_uses_cached_snapshot_when_sidecar_is_busy`:
 
@@ -120,7 +120,7 @@ async fn provider_status_live_probe_does_not_mutate_cached_snapshot() {
 }
 ```
 
-- [ ] **Step 2: Run the failing Rust test**
+- [x] **Step 2: Run the failing Rust test**
 
 Run:
 
@@ -130,7 +130,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL because `provider_status_core` currently calls `state.set_status_snapshot(status.clone())` on a successful live status probe.
 
-- [ ] **Step 3: Stop live status probes from mutating the cached snapshot**
+- [x] **Step 3: Stop live status probes from mutating the cached snapshot**
 
 In `provider_status_core`, replace:
 
@@ -151,7 +151,7 @@ This satisfies the spec rule that live sidecar/browser probes may contribute to 
 
 If `provider_status_core` no longer uses its `state` parameter after this change, rename the parameter to `_state` in the function signature. Keep call sites unchanged unless the compiler requires a signature change.
 
-- [ ] **Step 4: Run the provider status tests**
+- [x] **Step 4: Run the provider status tests**
 
 Run:
 
@@ -161,7 +161,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS for both provider status tests.
 
-- [ ] **Step 5: Commit Task 1**
+- [x] **Step 5: Commit Task 1**
 
 Run:
 

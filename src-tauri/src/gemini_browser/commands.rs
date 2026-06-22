@@ -157,7 +157,7 @@ async fn run_log_has_any_run(runs_root: &std::path::Path, run_id: &str) -> AppRe
 }
 
 async fn provider_status_core<Fut>(
-    state: &GeminiBrowserState,
+    _state: &GeminiBrowserState,
     live_status: Fut,
     timeout: std::time::Duration,
     fallback_status: impl FnOnce() -> AppResult<GeminiBrowserProviderStatus>,
@@ -166,10 +166,7 @@ where
     Fut: std::future::Future<Output = AppResult<GeminiBrowserProviderStatus>>,
 {
     match tokio::time::timeout(timeout, live_status).await {
-        Ok(Ok(status)) => {
-            state.set_status_snapshot(status.clone());
-            Ok(status)
-        }
+        Ok(Ok(status)) => Ok(status),
         Ok(Err(_)) | Err(_) => fallback_status(),
     }
 }
@@ -379,6 +376,57 @@ mod tests {
             super::super::GeminiBrowserProviderStatusKind::Running
         );
         assert_eq!(status.active_run_id.as_deref(), Some("run-busy"));
+    }
+
+    #[tokio::test]
+    async fn provider_status_live_probe_does_not_mutate_cached_snapshot() {
+        let state = GeminiBrowserState::new();
+        state.set_status_snapshot(GeminiBrowserProviderStatus {
+            status: super::super::GeminiBrowserProviderStatusKind::Running,
+            manual_action: None,
+            active_run_id: Some("run-cached".to_string()),
+            queue_depth: 1,
+            browser_profile_dir: "profile-dir".to_string(),
+            latest_message: Some("Cached running".to_string()),
+        });
+
+        let returned = provider_status_core(
+            &state,
+            async {
+                Ok(GeminiBrowserProviderStatus {
+                    status: super::super::GeminiBrowserProviderStatusKind::Ready,
+                    manual_action: None,
+                    active_run_id: None,
+                    queue_depth: 0,
+                    browser_profile_dir: "profile-dir".to_string(),
+                    latest_message: Some("Live ready".to_string()),
+                })
+            },
+            Duration::from_millis(25),
+            || {
+                state
+                    .status_snapshot_for_test()
+                    .ok_or_else(|| AppError::internal("expected cached Gemini Browser status"))
+            },
+        )
+        .await
+        .expect("live status returned");
+
+        assert_eq!(
+            returned.status,
+            super::super::GeminiBrowserProviderStatusKind::Ready
+        );
+        assert_eq!(returned.latest_message.as_deref(), Some("Live ready"));
+
+        let cached = state
+            .status_snapshot_for_test()
+            .expect("cached status remains present");
+        assert_eq!(
+            cached.status,
+            super::super::GeminiBrowserProviderStatusKind::Running
+        );
+        assert_eq!(cached.active_run_id.as_deref(), Some("run-cached"));
+        assert_eq!(cached.latest_message.as_deref(), Some("Cached running"));
     }
 
     #[tokio::test]
