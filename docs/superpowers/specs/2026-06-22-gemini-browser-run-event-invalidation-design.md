@@ -47,17 +47,17 @@ state-bearing event semantics.
 Use the existing event transport only as a lightweight invalidation signal.
 
 The backend still emits a Tauri event after queued, running, and terminal
-run-log transitions, including cancelled and degraded terminal outcomes, but
-the event no longer carries authoritative status, message, result, or queue
-position. A degraded terminal outcome is not a separate
-`GeminiBrowserRunStatus`; it is a terminal run-log result whose surrounding
-display/update path is degraded, such as cached status snapshot update failure
-after the terminal run-log write. Do not emit run-change events for status
-probes, open-browser calls, resume calls, or other provider operations unless
-they also create one of those run-log transitions. On the normal path, the
-event is emitted after the durable run log and cached provider snapshot have
-both been updated. The frontend listener uses the event only to schedule a
-refresh from the existing commands:
+run-log transitions, including cancellation, but the event no longer carries
+authoritative status, message, result, or queue position. If cached provider
+snapshot update fails after any successful run-log transition, still emit a
+degraded-path invalidation from the durable run-log record. The degraded path is
+not a `GeminiBrowserRunStatus` or run outcome; it describes the display/update
+path around an already-written run-log transition. Do not emit run-change events
+for status probes, open-browser calls, resume calls, or other provider
+operations unless they also create one of those run-log transitions. On the
+normal path, the event is emitted after the durable run log and cached provider
+snapshot have both been updated. The frontend listener uses the event only to
+schedule a refresh from the existing commands:
 
 - `gemini_bridge_status`
 - `gemini_bridge_list_runs`
@@ -93,10 +93,12 @@ and run log data.
 `updated_at` value of the corresponding run-log record after the transition
 that triggered the event. It must not use a fresh emit-time clock, Apalis job
 timestamp, or sidecar timestamp. The field is mandatory in this design so tests
-can prove the event points at a concrete run-log version without becoming a new
-state-bearing payload. Frontend code must not use `run_updated_at` for sorting,
-status decisions, terminal-result decisions, or queue decisions. It is only a
-diagnostic/version pointer back to the run-log record that should be reread.
+can prove the event points at the run-log record updated by that transition
+without becoming a new state-bearing payload. `run_updated_at` is not required
+to be unique or monotonic across rapid transitions. Frontend code and tests must
+not use it for sorting, status decisions, terminal-result decisions, queue
+decisions, uniqueness checks, or ordering checks. It is only a diagnostic
+pointer back to the run-log record that should be reread.
 
 The old public names `GeminiBrowserRunEvent` and `listenToGeminiBrowserRuns`
 should be removed rather than kept as aliases. Keeping aliases would preserve
@@ -206,6 +208,14 @@ All refresh sources must go through the same scheduler:
 - user commands such as Start Chrome, Resume, Stop, and Send Test Prompt;
 - run-change invalidation events.
 
+The scheduler must be exposed as a single function, for example
+`scheduleRefresh(): Promise<void>`. If no refresh is active, the returned promise
+resolves after the refresh requested by that call is applied. If a refresh is
+already active, the call marks a trailing refresh as pending and returns the
+promise for that trailing refresh. Command flows that need the UI to reflect the
+latest status/history before clearing busy state or continuing should `await`
+this promise. Event listeners may fire-and-forget the promise.
+
 The scheduler must coalesce refreshes so several quick requests do not produce
 parallel status/list-runs races. The behavior should be deterministic:
 
@@ -291,6 +301,9 @@ Rust tests should verify:
 
 Frontend tests should verify:
 
+- the API/types surface exports `GeminiBrowserRunChangeEvent` and
+  `listenToGeminiBrowserRunChanges`, and no longer exports or uses the old
+  `GeminiBrowserRunEvent` / `listenToGeminiBrowserRuns` public API names;
 - API helper listens on the Gemini Browser run event name with the new change
   event type;
 - the Settings panel responds to a change event by refreshing status and run
@@ -310,8 +323,8 @@ Manual verification should include:
 - Start Chrome / Resume still works.
 - Settings test prompt updates history through refresh.
 - With the Settings panel open, run a test prompt and verify the history and
-  inspector update after refresh from run log data, not from state-bearing event
-  payload.
+  inspector update after completion; reload or explicitly refresh the panel and
+  verify the same run remains visible from persisted run-log data.
 - YouTube Summary through Gemini Browser still completes.
 
 ## Later Full Event Removal
