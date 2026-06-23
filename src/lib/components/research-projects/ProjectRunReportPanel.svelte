@@ -572,7 +572,7 @@
                   <article>
                     <div class="stage-title">
                       <strong>{stage.stageName}</strong>
-                      <ExtractumBadge class="status-{stage.stageStatus.toLowerCase().replace(/[\s-]/g, '_')}">
+                      <ExtractumBadge class="stage-status-badge status-{stage.stageStatus.toLowerCase().replace(/[\s-]/g, '_')}">
                         {stage.stageStatus}
                       </ExtractumBadge>
                     </div>
@@ -912,7 +912,6 @@
   }
 
   .item-list article,
-  .stage-list article,
   .segment-list article {
     border: 1px solid var(--extractum-border);
     border-radius: var(--extractum-radius);
@@ -1051,52 +1050,6 @@
     box-shadow: inset 3px 0 0 color-mix(in srgb, var(--extractum-primary) 72%, transparent);
   }
 
-  .artifact-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .browser-stage-meta {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-    margin-top: 8px;
-  }
-
-  .browser-stage-meta span {
-    border: 1px solid var(--extractum-border);
-    border-radius: var(--extractum-radius);
-    background: var(--extractum-surface-subtle);
-    padding: 4px 6px;
-    color: var(--extractum-muted);
-    font-size: 11px;
-    line-height: 1.25;
-    overflow-wrap: anywhere;
-  }
-
-  .browser-stage-meta code {
-    color: var(--extractum-text);
-    font-family: inherit;
-  }
-
-  .browser-stage-meta strong {
-    color: var(--extractum-text);
-  }
-
-  .artifact-list button,
-  .browser-stage-meta button {
-    border: 1px solid var(--extractum-border);
-    border-radius: var(--extractum-radius);
-    background: var(--extractum-surface-subtle);
-    padding: 4px 7px;
-    color: var(--extractum-text);
-    font-size: 12px;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-  }
 
   .artifact-detail,
   .artifact-preview,
@@ -1230,14 +1183,23 @@
     }
   }
 
-
+  /* Secondary column styles (card layout, tabs, status dots) */
+  .report-column.secondary {
+    border: 1px solid var(--extractum-border);
+    border-radius: var(--extractum-radius);
+    background: var(--extractum-surface-raised);
+    padding: 0;
+    gap: 0;
+  }
 
   .sidebar-tabs {
     display: flex;
-    gap: 4px;
-    border-bottom: 1px solid var(--extractum-border);
-    padding-bottom: 8px;
     flex-shrink: 0;
+    border-top: 1px solid var(--extractum-border);
+    border-bottom: 1px solid var(--extractum-border);
+    padding: 0;
+    background: var(--extractum-surface-subtle);
+    gap: 0;
   }
 
   .sidebar-tabs .tab-btn {
@@ -1246,11 +1208,12 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    border: 1px solid transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
     background: transparent;
-    border-radius: var(--extractum-radius);
+    border-radius: 0;
     color: var(--extractum-muted);
-    padding: 6px 10px;
+    padding: 10px;
     cursor: pointer;
     font-size: 12px;
     font-weight: 500;
@@ -1263,9 +1226,9 @@
   }
 
   .sidebar-tabs .tab-btn.active {
-    color: var(--extractum-primary);
     background: var(--extractum-surface-raised);
-    border-color: var(--extractum-border);
+    border-bottom-color: var(--extractum-primary);
+    color: var(--extractum-primary);
   }
 
   .tab-badge {
@@ -1282,36 +1245,6 @@
     color: var(--extractum-primary);
   }
 
-  /* Стили для боковой панели (карточный дизайн, вкладки, бейджи-точки) */
-  .report-column.secondary {
-    border: 1px solid var(--extractum-border);
-    border-radius: var(--extractum-radius);
-    background: var(--extractum-surface-raised);
-    padding: 0;
-    gap: 0;
-  }
-
-  .report-column.secondary .sidebar-tabs {
-    border-top: 1px solid var(--extractum-border);
-    border-bottom: 1px solid var(--extractum-border);
-    padding: 0;
-    background: var(--extractum-surface-subtle);
-    gap: 0;
-  }
-
-  .report-column.secondary .sidebar-tabs .tab-btn {
-    border: none;
-    border-radius: 0;
-    padding: 10px;
-    border-bottom: 2px solid transparent;
-  }
-
-  .report-column.secondary .sidebar-tabs .tab-btn.active {
-    background: var(--extractum-surface-raised);
-    border-bottom-color: var(--extractum-primary);
-    color: var(--extractum-primary);
-  }
-
   .report-column.secondary .report-section {
     border: none;
     border-radius: 0;
@@ -1324,25 +1257,26 @@
     border-bottom: none;
   }
 
-  .report-column.secondary .item-list article,
-  .report-column.secondary .stage-list article {
+  /* Stages inside the secondary column have primary left border */
+  .stage-list article {
     border: none;
     border-radius: 0;
     background: transparent;
     padding: 6px 0 6px 10px;
-    border-left: 3px solid var(--extractum-border);
+    border-left: 3px solid var(--extractum-primary);
   }
 
-  .report-column.secondary .stage-list article {
-    border-left-color: var(--extractum-primary);
-  }
-
+  /* Diagnostic items inside the secondary column have warning left border */
   .report-column.secondary .item-list article {
-    border-left-color: var(--extractum-warning); /* warnings indicator color */
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    padding: 6px 0 6px 10px;
+    border-left: 3px solid var(--extractum-warning);
   }
 
-  /* Семантические цвета для бейджей statuses (цветные точки) */
-  .report-column.secondary :global(.extractum-badge) {
+  /* Semantic status badge dots */
+  .stage-list :global(.stage-status-badge) {
     background: transparent !important;
     border: none !important;
     padding: 0 !important;
@@ -1355,47 +1289,47 @@
     text-transform: lowercase;
   }
 
-  .report-column.secondary :global(.extractum-badge)::before {
-    content: "●";
-    font-size: 10px;
-    line-height: 1;
+  .stage-list :global(.stage-status-badge)::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: currentColor;
   }
 
-  .report-column.secondary :global(.extractum-badge.status-complete)::before,
-  .report-column.secondary :global(.extractum-badge.status-succeeded)::before {
-    color: var(--extractum-success) !important; /* зеленый */
+  .stage-list :global(.stage-status-badge.status-complete)::before,
+  .stage-list :global(.stage-status-badge.status-succeeded)::before {
+    color: var(--extractum-success);
   }
 
-  .report-column.secondary :global(.extractum-badge.status-failed)::before,
-  .report-column.secondary :global(.extractum-badge.status-error)::before {
-    color: var(--extractum-danger) !important; /* красный */
+  .stage-list :global(.stage-status-badge.status-failed)::before,
+  .stage-list :global(.stage-status-badge.status-error)::before {
+    color: var(--extractum-danger);
   }
 
-  .report-column.secondary :global(.extractum-badge.status-skipped)::before,
-  .report-column.secondary :global(.extractum-badge.status-not_implemented)::before,
-  .report-column.secondary :global(.extractum-badge.status-not-implemented)::before {
-    color: var(--extractum-border) !important; /* серый */
+  .stage-list :global(.stage-status-badge.status-skipped)::before,
+  .stage-list :global(.stage-status-badge.status-not_implemented)::before,
+  .stage-list :global(.stage-status-badge.status-not-implemented)::before {
+    color: var(--extractum-border);
   }
 
-  .report-column.secondary :global(.extractum-badge.status-running)::before,
-  .report-column.secondary :global(.extractum-badge.status-in_progress)::before,
-  .report-column.secondary :global(.extractum-badge.status-in-progress)::before {
-    color: var(--extractum-primary) !important; /* синий */
+  .stage-list :global(.stage-status-badge.status-running)::before,
+  .stage-list :global(.stage-status-badge.status-in_progress)::before,
+  .stage-list :global(.stage-status-badge.status-in-progress)::before {
+    color: var(--extractum-primary);
   }
 
-  /* Стили для облегченных тегов артефактов (Muted Tags) */
-  .report-column.secondary .artifact-list {
+  /* Lightweight artifact tags (Muted Tags) */
+  .artifact-list {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px;
-    padding-left: 0;
-    border-left: none;
-    margin-left: 0;
     margin-top: 8px;
   }
 
-  .report-column.secondary .artifact-list button {
+  .artifact-list button {
     position: relative;
     display: inline-flex;
     align-items: center;
@@ -1412,50 +1346,55 @@
     width: auto;
   }
 
-  .report-column.secondary .artifact-list button:hover:not(:disabled) {
+  .artifact-list button:hover:not(:disabled) {
     background: color-mix(in srgb, var(--extractum-primary) 12%, var(--extractum-surface-subtle));
     color: var(--extractum-primary);
-    box-shadow: none;
   }
 
-  .report-column.secondary .artifact-list button .artifact-tag-name {
+  .artifact-list button .artifact-tag-name {
     color: inherit;
     font-weight: 500;
   }
 
-  .report-column.secondary .artifact-list button .artifact-tag-index {
+  .artifact-list button .artifact-tag-index {
     color: var(--extractum-muted);
     font-size: 10px;
     font-weight: normal;
-    opacity: 0.5; /* полупрозрачный индекс */
+    opacity: 0.5;
     margin-left: 1px;
   }
 
-  /* Стили для метаданных браузера */
-  .report-column.secondary .browser-stage-meta {
+  /* Browser stage metadata styles */
+  .browser-stage-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 4px;
     margin-top: 6px;
   }
 
-  .report-column.secondary .browser-stage-meta span {
-    border: none;
+  .browser-stage-meta span {
     background: var(--extractum-surface-subtle);
     border-radius: 4px;
     padding: 2px 6px;
     color: var(--extractum-muted);
     font-size: 11px;
     line-height: 1.3;
+    overflow-wrap: anywhere;
   }
 
-  .report-column.secondary .browser-stage-meta span code {
+  .browser-stage-meta span code {
+    color: var(--extractum-text);
+    font-family: inherit;
     font-weight: 500;
   }
 
-  .report-column.secondary .browser-stage-meta span strong {
+  .browser-stage-meta span strong {
+    color: var(--extractum-text);
     font-weight: 600;
   }
 
-  .report-column.secondary .browser-stage-meta button.copy-run-id-btn {
+  .copy-run-id-btn {
     border: none;
     background: transparent;
     box-shadow: none;
@@ -1471,12 +1410,12 @@
     border-radius: 4px;
   }
 
-  .report-column.secondary .browser-stage-meta button.copy-run-id-btn:hover {
+  .copy-run-id-btn:hover {
     background: var(--extractum-surface-subtle);
     color: var(--extractum-primary);
   }
 
-  .report-column.secondary .browser-stage-meta button.copy-run-id-btn svg {
+  .copy-run-id-btn svg {
     flex-shrink: 0;
   }
 </style>
