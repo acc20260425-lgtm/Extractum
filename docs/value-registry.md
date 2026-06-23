@@ -301,6 +301,7 @@ Prompt-pack database-only values:
 | `failed` | stage status | Failed | Stage failed. | backend/db | terminal | inspect_error/retry | danger | yes | `prompt_pack_stage_runs.stage_status` |
 | `cancelled` | stage status | Cancelled | Stage was cancelled. | backend/db | terminal | retry | neutral | yes | `prompt_pack_stage_runs.stage_status` |
 | `skipped` | stage status | Skipped | Stage was intentionally skipped. | backend/db | terminal | none | neutral | yes | `prompt_pack_stage_runs.stage_status` |
+| `not_implemented` | stage status | Not implemented | Stage is declared but currently not implemented. | backend/db | terminal | inspect_error | neutral | yes | `prompt_pack_stage_runs.stage_status` |
 | `none` | result status | No result | Run has no projected result yet. | backend/db | idle | wait | neutral | yes | `prompt_pack_runs.result_status` |
 | `complete` | result status | Complete | Projected result is complete. | backend/db | terminal | none | success | yes | `prompt_pack_results.result_status` |
 | `partial` | result status | Partial | Projected result is usable but incomplete. | backend/db | terminal | inspect_error | warning | yes | `prompt_pack_results.result_status` |
@@ -678,7 +679,7 @@ Known reason-code families:
 | Gemini manual actions | reason/action | `login`, `account_picker`, `consent`, `captcha`, `unknown_modal`, `start_chrome_cdp` | `src/lib/types/gemini-browser.ts` |
 | Gemini candidate rejection | reason | `baseline`, `composer`, `prompt_container`, `navigation`, `account_or_login`, `controls`, `multi_turn`, `not_visible`, `empty`, `lower_score` | `src/lib/types/gemini-browser.ts` |
 | YouTube availability reasons | availability/reason | See YouTube availability section. | `src/lib/types/sources.ts` |
-| Prompt-pack validation severity/code | severity/code | Currently typed as `string`; needs inventory from persisted data and backend. | `src/lib/types/prompt-packs.ts` |
+| Prompt-pack validation severity/code | severity/code | Severity is constrained to `info`, `warning`, `error`; `code` remains a string and should not be treated as an enum without a separate inventory. | `src/lib/types/prompt-packs.ts` |
 | Takeout warning codes | warning code | Currently typed as `string[]`; needs backend inventory. | `src/lib/types/sources.ts` |
 
 ## Open follow-up inventory
@@ -854,3 +855,48 @@ When in doubt, prefer these categories:
 | Frontend derived state | project status, snapshot affordance state, canvas surface | Can change in frontend, but update this registry and affected tests/docs. |
 | Presentation-only value | badge variant, toast kind, diagnostics tone bucket | Local UI change, but avoid reusing as business status. |
 | Local sentinel/filter value | `all`, `__all_topics__`, `provider:<provider>/subtype:<subtype>` | Safe only inside its declaring component/model unless documented otherwise. |
+## Migration/seed/fixture value inventory
+
+Scope: values found in SQL migrations, bundled prompt-pack assets, seed code, and fixtures. These values often bypass obvious TypeScript/Rust union definitions, so treat this section as a cross-check layer for persisted data and generated fixtures.
+
+### Prompt-pack persisted and bundled values
+
+| Area | Name | Values | Source | Notes |
+| --- | --- | --- | --- | --- |
+| Prompt-pack version source | `origin_kind` | `bundled`, `user` | `src-tauri/migrations/0006_prompt_pack_mvp.sql`, `src-tauri/prompt-packs/youtube_summary/1.0.0/pack.json` | Persisted. `bundled` is the built-in pack source; `user` blocks seed overwrite collisions. |
+| Prompt-pack lifecycle | `lifecycle_status` | `draft`, `active`, `archived` | `src-tauri/migrations/0006_prompt_pack_mvp.sql`, `src-tauri/src/prompt_packs/seed.rs` | Persisted version lifecycle. |
+| Prompt-pack schema assets | `schema_kind` | `canonical_result`, `stage_input`, `stage_output`, `pack_data_schema` | `src-tauri/migrations/0006_prompt_pack_mvp.sql`, `src-tauri/src/prompt_packs/seed.rs` | `pack_data_schema` is SQL-allowed even if current bundle seeds only the other three. |
+| Prompt-pack source scope | `scope_kind` | `explicit_video`, `playlist` | `src-tauri/migrations/0006_prompt_pack_mvp.sql`, `src-tauri/src/prompt_packs/youtube_summary/snapshots.rs` | Source snapshot scope. |
+| Prompt-pack source inclusion | `inclusion_status` | `included`, `skipped`, `blocking` | `src-tauri/migrations/0006_prompt_pack_mvp.sql` | Persisted source-origin inclusion outcome. |
+| Prompt-pack material | `material_kind` | `transcript`, `description`, `comment` | `src-tauri/migrations/0006_prompt_pack_mvp.sql` | Material refs captured into prompt-pack snapshots. |
+| Prompt-pack stage artifacts | `artifact_kind` | `prompt_input`, `raw_output`, `parsed_output`, `metrics`, `error`, `repair_input`, `intermediate_entities` | `src-tauri/migrations/0006_prompt_pack_mvp.sql`, `src-tauri/migrations/0009_prompt_pack_intermediate_entities_artifacts.sql` | `intermediate_entities` was added after the MVP migration. |
+| Prompt-pack artifact redaction | `redaction_state` | `none` | `src-tauri/migrations/0006_prompt_pack_mvp.sql`, `src-tauri/migrations/0009_prompt_pack_intermediate_entities_artifacts.sql` | Default persisted value; no closed CHECK list beyond current default. |
+| Prompt-pack validation severity | `severity` | `info`, `warning`, `error` | `src-tauri/migrations/0006_prompt_pack_mvp.sql` | `code` is still free-form text. |
+| Prompt-pack provider family | `provider_family` | `generic_chat` | `src-tauri/prompt-packs/youtube_summary/1.0.0/stages/transcript_analysis.json`, runtime assets | Bundled asset value; not SQL-constrained. |
+| Prompt-pack validator mode | `validator_mode` | `stage_output` | `src-tauri/prompt-packs/youtube_summary/1.0.0/stages/transcript_analysis.json` | Bundled stage template value; not SQL-constrained. |
+| Prompt-pack control preset | `control_preset` | `standard`, `detailed_report` | `src-tauri/prompt-packs/youtube_summary/1.0.0/pack.json`, `src-tauri/src/prompt_packs/runtime.rs`, `src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte` | `standard` is default; `detailed_report` is a UI/runtime mode. |
+| Prompt-pack evidence mode | `evidence_mode` | `standard`, `narrative_only` | `src-tauri/prompt-packs/youtube_summary/1.0.0/pack.json`, `src-tauri/src/prompt_packs/youtube_summary/result_validation.rs` | `narrative_only` changes validation expectations for empty videos. |
+
+### Telegram history and source metadata values
+
+| Area | Name | Values | Source | Notes |
+| --- | --- | --- | --- | --- |
+| Analysis Telegram history scope | `telegram_history_scope` | `current`, `current_plus_migrated` | `src-tauri/migrations/0003_analysis_telegram_history_scope.sql` | Analysis run persisted option. Distinct from source reader UI `current`/`migrated`/`merged`. |
+| Telegram migrated-history domain | `migration_domain` | `migrated_from_chat` | `src-tauri/migrations/0002_migrated_history_opt_in_schema.sql` | Optional provenance domain for migrated rows. |
+| Telegram history peer kind | `history_peer_kind` | `channel`, `chat`, `user` | `src-tauri/migrations/0001_current_schema_baseline.sql`, `src-tauri/migrations/0002_migrated_history_opt_in_schema.sql` | Telegram peer taxonomy from archive/takeout metadata. |
+| Telegram reply peer kind | `reply_to_peer_kind` | `channel`, `chat`, `user` | `src-tauri/migrations/0001_current_schema_baseline.sql`, `src-tauri/migrations/0002_migrated_history_opt_in_schema.sql` | Optional reply peer taxonomy. |
+| Telegram resolved peer kind | `resolved_peer_kind` | `channel`, `chat` | `src-tauri/migrations/0002_migrated_history_opt_in_schema.sql` | Resolved peer identity kind. |
+| Telegram source peer kind | `peer_kind` | `channel`, `chat` | `src-tauri/migrations/0001_current_schema_baseline.sql` | Telegram source identity peer kind. |
+| Telegram takeout history scope | `history_scope` | `unknown`, `current_history`, `current_history_with_migrated_deferred`, `partial_private_history`, `mixed_partial`, `migrated_small_group_history` | `src-tauri/migrations/0001_current_schema_baseline.sql`, `src-tauri/migrations/0002_migrated_history_opt_in_schema.sql` | Takeout/export provenance scope. `migrated_small_group_history` appears in the opt-in migration. |
+| Telegram source resolution strategy | `resolution_strategy` | `username`, `dialog`, `legacy_metadata`, `unknown` | `src-tauri/migrations/0001_current_schema_baseline.sql` | Telegram source identity resolution strategy. |
+| Topic membership match kind | `match_kind` | `reply_to_top_id`, `typed_root_top_message_id`, `legacy_root_external_id`, `reply_to_msg_id`, `general_fallback` | `src-tauri/migrations/0001_current_schema_baseline.sql` | Topic resolver match provenance. |
+
+### Ingest and typed media metadata values
+
+| Area | Name | Values | Source | Notes |
+| --- | --- | --- | --- | --- |
+| Ingest batch kind | `ingest_kind` | `takeout`, `sync`, `youtube_metadata`, `youtube_transcript`, `youtube_comments`, `youtube_playlist` | `src-tauri/migrations/0001_current_schema_baseline.sql` | Persisted ingest batch classifier. |
+| Ingest observation item kind | `provider_item_kind` | `telegram_message` | `src-tauri/migrations/0001_current_schema_baseline.sql` | Current observation table only constrains Telegram messages. |
+| Ingest observation outcome | `outcome` | `inserted`, `duplicate_observed`, `skipped`, `failed` | `src-tauri/migrations/0001_current_schema_baseline.sql` | Observation write outcome. `duplicate_observed` is also listed in the user-facing registry. |
+| YouTube video form | `video_form` | `regular`, `short`, `live` | `src-tauri/migrations/0001_current_schema_baseline.sql` | Typed YouTube video metadata form. |
+| Analysis document kind | `document_kind` | `telegram_message`, `youtube_transcript`, `youtube_comment`, `youtube_description` | `src-tauri/migrations/0001_current_schema_baseline.sql` | Analysis document material kind. |
