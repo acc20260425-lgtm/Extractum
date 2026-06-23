@@ -6,6 +6,23 @@ use tauri::AppHandle;
 const DEFAULT_LIMIT: u32 = 100;
 const MAX_LIMIT: u32 = 500;
 const JOBS_TABLE: &str = "Jobs";
+const MAX_PAYLOAD_JSON_BYTES: usize = 64 * 1024;
+const TRUNCATED_PREVIEW_CHARS: usize = 2000;
+const DECODE_FAILURE_PREVIEW_CHARS: usize = 500;
+const REDACTED: &str = "[redacted]";
+const SENSITIVE_KEY_FRAGMENTS: &[&str] = &[
+    "apikey",
+    "authorization",
+    "bearer",
+    "cookie",
+    "credentials",
+    "password",
+    "secret",
+    "session",
+    "token",
+    "apihash",
+    "refreshtoken",
+];
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -213,8 +230,165 @@ struct PayloadColumns {
     metadata_raw: Option<Vec<u8>>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct PayloadView {
+    json: Option<Value>,
+    preview: Option<String>,
+    truncated: bool,
+}
+
+fn payload_view(raw: Option<Vec<u8>>, decode_failure_preview: bool) -> PayloadView {
+    let Some(raw) = raw else {
+        return PayloadView {
+            json: None,
+            preview: None,
+            truncated: false,
+        };
+    };
+
+    match serde_json::from_slice::<Value>(&raw) {
+        Ok(value) => bounded_json_payload(redact_json(value)),
+        Err(_) => {
+            let text = String::from_utf8_lossy(&raw);
+            let text_was_truncated =
+                decode_failure_preview && text.chars().count() > DECODE_FAILURE_PREVIEW_CHARS;
+            PayloadView {
+                json: None,
+                preview: if decode_failure_preview {
+                    Some(redacted_text_preview(&text, DECODE_FAILURE_PREVIEW_CHARS))
+                } else {
+                    None
+                },
+                truncated: text_was_truncated,
+            }
+        }
+    }
+}
+
+fn bounded_json_payload(value: Value) -> PayloadView {
+    let serialized = serde_json::to_string(&value).unwrap_or_else(|_| "null".to_string());
+    if serialized.len() <= MAX_PAYLOAD_JSON_BYTES {
+        return PayloadView {
+            json: Some(value),
+            preview: None,
+            truncated: false,
+        };
+    }
+
+    PayloadView {
+        json: Some(serde_json::json!({
+            "truncated": true,
+            "preview": redacted_text_preview(&serialized, TRUNCATED_PREVIEW_CHARS),
+        })),
+        preview: None,
+        truncated: true,
+    }
+}
+
+fn redact_json(value: Value) -> Value {
+    match value {
+        Value::Object(object) => Value::Object(
+            object
+                .into_iter()
+                .map(|(key, value)| {
+                    if is_sensitive_key(&key) {
+                        (key, Value::String(REDACTED.to_string()))
+                    } else {
+                        (key, redact_json(value))
+                    }
+                })
+                .collect(),
+        ),
+        Value::Array(values) => Value::Array(values.into_iter().map(redact_json).collect()),
+        other => other,
+    }
+}
+
+fn is_sensitive_key(key: &str) -> bool {
+    let normalized = key
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect::<String>();
+    SENSITIVE_KEY_FRAGMENTS
+        .iter()
+        .any(|fragment| normalized.contains(fragment))
+}
+
+fn redacted_text_preview(text: &str, max_chars: usize) -> String {
+    let redacted = redact_text_fragments(text);
+    redacted.chars().take(max_chars).collect()
+}
+
+fn redact_text_fragments(text: &str) -> String {
+    text.lines()
+        .map(redact_text_line)
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn redact_text_line(line: &str) -> String {
+    line.split(';')
+        .map(redact_text_segment)
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+fn redact_text_segment(segment: &str) -> String {
+    if let Some((key, separator)) = sensitive_assignment(segment) {
+        let spacer = if separator == ':' { " " } else { "" };
+        return format!("{}{}{}{}", key.trim_end(), separator, spacer, REDACTED);
+    }
+    redact_inline_secret_tokens(segment)
+}
+
+fn sensitive_assignment(segment: &str) -> Option<(&str, char)> {
+    for (index, character) in segment.char_indices() {
+        if index > 120 {
+            return None;
+        }
+        if character == ':' || character == '=' {
+            let key = segment[..index].trim();
+            return is_sensitive_key(key).then_some((&segment[..index], character));
+        }
+    }
+    None
+}
+
+fn redact_inline_secret_tokens(line: &str) -> String {
+    let mut redact_next_count = 0usize;
+    let mut output = Vec::new();
+
+    for word in line.split_whitespace() {
+        if redact_next_count > 0 {
+            output.push(REDACTED.to_string());
+            redact_next_count -= 1;
+            continue;
+        }
+
+        let normalized = word
+            .trim_matches(|character: char| !character.is_ascii_alphanumeric())
+            .to_ascii_lowercase();
+        if normalized == "authorization" {
+            output.push(word.to_string());
+            redact_next_count = 2;
+        } else if normalized == "bearer" || normalized == "cookie" || normalized == "setcookie" {
+            output.push(word.to_string());
+            redact_next_count = 1;
+        } else {
+            output.push(word.to_string());
+        }
+    }
+
+    output.join(" ")
+}
+
 impl InternalJobSummary {
-    fn into_dto(self, _payloads: PayloadColumns) -> ApalisJobRow {
+    fn into_dto(self, payloads: PayloadColumns) -> ApalisJobRow {
+        let job = payload_view(payloads.job_raw, true);
+        let last_result = payload_view(payloads.last_result_raw, false);
+        let metadata = payload_view(payloads.metadata_raw, false);
+
         ApalisJobRow {
             id: self.id,
             job_type: self.job_type,
@@ -228,13 +402,13 @@ impl InternalJobSummary {
             last_activity_at: self.last_activity_at,
             priority: self.priority,
             idempotency_key: self.idempotency_key,
-            job_preview: None,
-            job_truncated: false,
-            job_json: None,
-            last_result: None,
-            last_result_truncated: false,
-            metadata: None,
-            metadata_truncated: false,
+            job_preview: job.preview,
+            job_truncated: job.truncated,
+            job_json: job.json,
+            last_result: last_result.json,
+            last_result_truncated: last_result.truncated,
+            metadata: metadata.json,
+            metadata_truncated: metadata.truncated,
         }
     }
 }
@@ -981,5 +1155,234 @@ mod tests {
                 count: 1,
             }]
         );
+    }
+
+    #[tokio::test]
+    async fn apalis_jobs_payloads_are_redacted_and_truncated() {
+        let pool = memory_pool().await;
+        seed_apalis_job(&pool, "payload-secret").await;
+        let large_text = "x".repeat(70 * 1024);
+        sqlx::query(
+            "UPDATE Jobs
+             SET job = ?, last_result = ?, metadata = ?
+             WHERE idempotency_key = ?",
+        )
+        .bind(r#"{"apiKey":"sk-secret","nested":{"refresh-token":"rt-secret"},"prompt":"safe prompt"}"#)
+        .bind(format!(
+            r#"{{"message":"{large_text}","authorization":"Bearer secret"}}"#
+        ))
+        .bind(r#"{"API Key":"another-secret","normal":"visible"}"#)
+        .bind("payload-secret")
+        .execute(&pool)
+        .await
+        .expect("update payload columns");
+
+        let response = apalis_jobs_list_from_pool(&pool, ApalisJobsListRequest::default())
+            .await
+            .expect("list payload jobs");
+        let job = &response.jobs[0];
+
+        assert_eq!(job.job_json.as_ref().unwrap()["apiKey"], "[redacted]");
+        assert_eq!(
+            job.job_json.as_ref().unwrap()["nested"]["refresh-token"],
+            "[redacted]"
+        );
+        assert_eq!(job.metadata.as_ref().unwrap()["API Key"], "[redacted]");
+        assert_eq!(job.metadata.as_ref().unwrap()["normal"], "visible");
+        assert!(job.last_result_truncated);
+        assert_eq!(job.last_result.as_ref().unwrap()["truncated"], true);
+        assert!(
+            job.last_result.as_ref().unwrap()["preview"]
+                .as_str()
+                .unwrap()
+                .chars()
+                .count()
+                <= 2000
+        );
+        let serialized = serde_json::to_string(job).expect("serialize response row");
+        assert!(!serialized.contains("sk-secret"));
+        assert!(!serialized.contains("rt-secret"));
+        assert!(!serialized.contains("another-secret"));
+        assert!(!serialized.contains("Bearer secret"));
+    }
+
+    #[tokio::test]
+    async fn apalis_jobs_limit_excludes_large_payloads_outside_limited_rows() {
+        let pool = memory_pool().await;
+        seed_apalis_job(&pool, "payload-included").await;
+        seed_apalis_job(&pool, "payload-outside-limit").await;
+        update_job_row(
+            &pool,
+            "payload-included",
+            "Done",
+            Some("2026-06-23T10:00:00Z"),
+            None,
+            Some("2026-06-23T12:00:00Z"),
+        )
+        .await;
+        update_job_row(
+            &pool,
+            "payload-outside-limit",
+            "Done",
+            Some("2026-06-23T09:00:00Z"),
+            None,
+            Some("2026-06-23T11:00:00Z"),
+        )
+        .await;
+        let outside_large_payload = format!(
+            r#"{{"apiKey":"outside-secret","body":"{}"}}"#,
+            "x".repeat(256 * 1024)
+        );
+        sqlx::query("UPDATE Jobs SET job = ? WHERE idempotency_key = ?")
+            .bind(r#"{"safe":"included"}"#)
+            .bind("payload-included")
+            .execute(&pool)
+            .await
+            .expect("update included payload");
+        sqlx::query("UPDATE Jobs SET job = ? WHERE idempotency_key = ?")
+            .bind(outside_large_payload)
+            .bind("payload-outside-limit")
+            .execute(&pool)
+            .await
+            .expect("update outside payload");
+
+        let response = apalis_jobs_list_from_pool(
+            &pool,
+            ApalisJobsListRequest {
+                limit: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("list limited payload jobs");
+
+        assert_eq!(response.total_matching, 2);
+        assert_eq!(response.jobs.len(), 1);
+        assert_eq!(
+            response.jobs[0].idempotency_key.as_deref(),
+            Some("payload-included")
+        );
+        assert_eq!(
+            response.jobs[0].job_json.as_ref().unwrap()["safe"],
+            "included"
+        );
+        let serialized = serde_json::to_string(&response).expect("serialize response");
+        assert!(!serialized.contains("outside-secret"));
+        assert!(!serialized.contains("payload-outside-limit"));
+    }
+
+    #[tokio::test]
+    async fn apalis_jobs_decode_failure_returns_redacted_preview_without_json() {
+        let pool = memory_pool().await;
+        seed_apalis_job(&pool, "payload-invalid").await;
+        let long_tail = "z".repeat(DECODE_FAILURE_PREVIEW_CHARS + 100);
+        sqlx::query("UPDATE Jobs SET job = ? WHERE idempotency_key = ?")
+            .bind(format!("Authorization: Bearer raw-secret\nCookie: session=raw-cookie\nAuthorization: Bearer semicolon-secret; harmless context\nAuthorization Bearer raw-inline\napiKey=sk-secret; plain text payload; {long_tail}"))
+            .bind("payload-invalid")
+            .execute(&pool)
+            .await
+            .expect("update invalid payload");
+
+        let response = apalis_jobs_list_from_pool(&pool, ApalisJobsListRequest::default())
+            .await
+            .expect("list payload jobs");
+        let job = &response.jobs[0];
+
+        assert_eq!(job.job_json, None);
+        assert!(job.job_truncated);
+        let preview = job.job_preview.as_deref().expect("redacted preview");
+        assert!(preview.chars().count() <= DECODE_FAILURE_PREVIEW_CHARS);
+        assert!(preview.contains("Authorization: [redacted]"));
+        assert!(preview.contains("Cookie: [redacted]"));
+        assert!(preview.contains("apiKey=[redacted]"));
+        assert!(preview.contains("harmless context"));
+        assert!(preview.contains("plain text payload"));
+        assert!(!preview.contains("raw-secret"));
+        assert!(!preview.contains("raw-cookie"));
+        assert!(!preview.contains("semicolon-secret"));
+        assert!(!preview.contains("raw-inline"));
+        assert!(!preview.contains("sk-secret"));
+    }
+
+    #[tokio::test]
+    async fn apalis_jobs_non_json_result_and_metadata_are_omitted_in_v1() {
+        let pool = memory_pool().await;
+        seed_apalis_job(&pool, "payload-non-json-secondary").await;
+        sqlx::query("UPDATE Jobs SET last_result = ?, metadata = ? WHERE idempotency_key = ?")
+            .bind("Authorization: Bearer result-secret")
+            .bind("apiKey=metadata-secret")
+            .bind("payload-non-json-secondary")
+            .execute(&pool)
+            .await
+            .expect("update secondary payload columns");
+
+        let response = apalis_jobs_list_from_pool(&pool, ApalisJobsListRequest::default())
+            .await
+            .expect("list payload jobs");
+        let job = &response.jobs[0];
+
+        assert_eq!(job.last_result, None);
+        assert_eq!(job.metadata, None);
+        assert!(!job.last_result_truncated);
+        assert!(!job.metadata_truncated);
+        let serialized = serde_json::to_string(job).expect("serialize row");
+        assert!(!serialized.contains("result-secret"));
+        assert!(!serialized.contains("metadata-secret"));
+    }
+
+    #[tokio::test]
+    async fn apalis_jobs_row_shape_is_stable_when_optional_columns_are_absent() {
+        let pool = memory_pool().await;
+        sqlx::query(
+            "CREATE TABLE Jobs (
+                id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                attempts INTEGER NOT NULL,
+                job TEXT
+             )",
+        )
+        .execute(&pool)
+        .await
+        .expect("create reduced Jobs table");
+        sqlx::query(
+            "INSERT INTO Jobs (id, status, attempts, job) VALUES ('job-1', 'Queued', 2, '{\"safe\":true}')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert reduced job");
+
+        let response = apalis_jobs_list_from_pool(&pool, ApalisJobsListRequest::default())
+            .await
+            .expect("list reduced jobs");
+        let serialized = serde_json::to_value(&response.jobs[0]).expect("serialize row");
+
+        for key in [
+            "id",
+            "jobType",
+            "status",
+            "attempts",
+            "maxAttempts",
+            "runAt",
+            "lockAt",
+            "lockBy",
+            "doneAt",
+            "lastActivityAt",
+            "priority",
+            "idempotencyKey",
+            "jobPreview",
+            "jobTruncated",
+            "jobJson",
+            "lastResult",
+            "lastResultTruncated",
+            "metadata",
+            "metadataTruncated",
+        ] {
+            assert!(serialized.get(key).is_some(), "missing serialized key {key}");
+        }
+
+        assert_eq!(response.jobs[0].job_type, "");
+        assert_eq!(response.jobs[0].status, "Queued");
+        assert_eq!(response.jobs[0].last_result, None);
+        assert_eq!(response.jobs[0].metadata, None);
     }
 }
