@@ -45,6 +45,8 @@ function youtubeSummarySmokeFixtureSource(): LibraryCatalogSourceView {
     lastSyncedLabel: "06/14/2026, 12:05 AM",
     canonicalUrl: "https://www.youtube.com/watch?v=extractum-fixture",
     externalId: "extractum-fixture",
+    createdAt: 1781395200,
+    lastSyncedAt: 1781395500,
     youtube: {
       channel_title: "Extractum Fixture Channel",
       video_form: "video",

@@ -129,6 +129,8 @@ describe("library catalog workflow", () => {
           lastSyncedLabel: "Never",
           canonicalUrl: null,
           externalId: null,
+          createdAt: null,
+          lastSyncedAt: null,
           youtube: null,
           telegram: { account_id: null },
         },

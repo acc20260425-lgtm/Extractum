@@ -31,6 +31,8 @@ function source(overrides: Partial<LibraryCatalogSourceView> = {}): LibraryCatal
     lastSyncedLabel: "Never",
     canonicalUrl: "https://www.youtube.com/playlist?list=PL1",
     externalId: "PL1",
+    createdAt: null,
+    lastSyncedAt: null,
     youtube: {
       video_form: null,
       duration_seconds: null,

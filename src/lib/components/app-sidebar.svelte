@@ -421,6 +421,39 @@
     100% { opacity: 0.5; }
   }
 
+  @media (min-width: 821px) {
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      box-sizing: border-box;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in srgb, var(--border) 60%, transparent) transparent;
+    }
+
+    .sidebar-nav::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .sidebar-nav::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .sidebar-nav::-webkit-scrollbar-thumb {
+      background: color-mix(in srgb, var(--border) 60%, transparent);
+      border-radius: 4px;
+    }
+
+    .sidebar-nav::-webkit-scrollbar-thumb:hover {
+      background: var(--border);
+    }
+  }
+
   @media (max-width: 820px) {
     .sidebar-overlay {
       display: block;
