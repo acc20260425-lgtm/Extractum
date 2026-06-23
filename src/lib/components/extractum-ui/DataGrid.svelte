@@ -1,9 +1,16 @@
+<script module lang="ts">
+  import type { ExtractumDataGridColumn } from "./data-grid-date-format";
+
+  export type { ExtractumDataGridColumn };
+</script>
+
 <script lang="ts">
-  import { Grid, Willow, type IColumnConfig } from "@svar-ui/svelte-grid";
+  import { Grid, Willow } from "@svar-ui/svelte-grid";
   import { Locale } from "@svar-ui/svelte-core";
   import { en as gridEn } from "@svar-ui/grid-locales";
   import { ru as coreRu } from "@svar-ui/core-locales";
   import { cn } from "$lib/utils.js";
+  import { enhanceDateTimeColumns } from "./data-grid-date-format";
 
   type GridRow = {
     id: string;
@@ -24,7 +31,7 @@
     onSelectedRowIdsChange = () => {},
   }: {
     rows: GridRow[];
-    columns: IColumnConfig[];
+    columns: ExtractumDataGridColumn[];
     selectedRowIds?: string[];
     height?: string;
     multiselect?: boolean;
@@ -35,6 +42,7 @@
 
   let api = $state<any>(null);
   let visibleOverlay = $derived(rows.length === 0 ? overlay : undefined);
+  let enhancedColumns = $derived(enhanceDateTimeColumns(columns));
 
   function rowStyle(row: GridRow) {
     return [
@@ -55,7 +63,7 @@
     <Willow fonts={false}>
       <Grid
         data={rows}
-        {columns}
+        columns={enhancedColumns}
         bind:this={api}
         selectedRows={selectedRowIds}
         {rowStyle}

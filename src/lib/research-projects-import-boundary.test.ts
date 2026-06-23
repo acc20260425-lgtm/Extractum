@@ -86,6 +86,8 @@ describe("research projects import boundaries", () => {
     expect(dataGridSource).toContain("fonts={false}");
     expect(dataGridSource).toContain("visibleOverlay");
     expect(dataGridSource).toContain("rows.length === 0 ? overlay : undefined");
+    expect(dataGridSource).toContain("enhanceDateTimeColumns");
+    expect(dataGridSource).toContain("enhancedColumns");
 
     const treeGridSource = readFileSync(
       path.join(repoRoot, "src/lib/components/extractum-ui/TreeDataGrid.svelte"),
