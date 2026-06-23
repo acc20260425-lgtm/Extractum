@@ -22,6 +22,8 @@ history.
   health informed by Telegram Desktop reference review.
 - `database-schema.md`: current supported SQLite schema, migration baseline,
   and post-baseline migration authoring requirements.
+- `value-registry.md`: registry of status/state/kind/mode/provider values,
+  ownership rules, and review checklist for adding or changing string values.
 - `backlog.md`: open work only. Shipped work should not accumulate here.
 - `browser-providers-llm-troubleshooting.md`: focused LLM/operator runbook for
   Gemini Browser Provider failures, DOM drift, sidecar protocol issues, CDP
@@ -67,6 +69,10 @@ when they remain useful as design or regression context.
 
 - Keep root docs as the source of truth for current behavior.
 - Keep `backlog.md` limited to open work.
+- When adding or changing a `status`, `state`, `kind`, `mode`, `phase`,
+  `type`, `provider`, `subtype`, `scope`, `severity`, or similar string value,
+  update `value-registry.md` and record the owner, persistence/API impact,
+  frontend display impact, and fixture impact.
 - Move stale specs to `superpowers/archive/specs/`.
 - Delete completed plans instead of leaving execution logs in active folders.
 - When a file becomes historical, say so at the top and link to the current
