@@ -291,6 +291,30 @@ Naming note: `PromptPackRunStatus` uses `complete`, while events use
 `completed`. Keep this visible until the backend contract is intentionally
 normalized.
 
+Prompt-pack database-only values:
+
+| Value | Type | Name | Meaning | Source of truth | Lifecycle | User action | UI tone | Stable? | Current usage |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `pending` | stage status | Pending | Stage exists but has not started. | backend/db | idle | wait/cancel | neutral | yes | `prompt_pack_stage_runs.stage_status` |
+| `running` | stage status | Running | Stage is executing. | backend/db | active | wait/cancel | info | yes | `prompt_pack_stage_runs.stage_status` |
+| `succeeded` | stage status | Succeeded | Stage completed successfully. | backend/db | terminal | none | success | yes | `prompt_pack_stage_runs.stage_status` |
+| `failed` | stage status | Failed | Stage failed. | backend/db | terminal | inspect_error/retry | danger | yes | `prompt_pack_stage_runs.stage_status` |
+| `cancelled` | stage status | Cancelled | Stage was cancelled. | backend/db | terminal | retry | neutral | yes | `prompt_pack_stage_runs.stage_status` |
+| `skipped` | stage status | Skipped | Stage was intentionally skipped. | backend/db | terminal | none | neutral | yes | `prompt_pack_stage_runs.stage_status` |
+| `none` | result status | No result | Run has no projected result yet. | backend/db | idle | wait | neutral | yes | `prompt_pack_runs.result_status` |
+| `complete` | result status | Complete | Projected result is complete. | backend/db | terminal | none | success | yes | `prompt_pack_results.result_status` |
+| `partial` | result status | Partial | Projected result is usable but incomplete. | backend/db | terminal | inspect_error | warning | yes | `prompt_pack_results.result_status` |
+| `failed` | result status | Failed | Result projection or validation failed. | backend/db | terminal | inspect_error/retry | danger | yes | `prompt_pack_runs.result_status` |
+| `active` | lifecycle status | Active | Prompt-pack version is currently selectable. | backend/db | taxonomy | choose | success | yes | `prompt_pack_versions.lifecycle_status` |
+| `included` | inclusion status | Included | Source origin has a snapshot and is included. | backend/db | taxonomy | none | success | yes | `prompt_pack_run_source_origins.inclusion_status` |
+| `skipped` | inclusion status | Skipped | Source origin was not included in the run snapshot. | backend/db | taxonomy | inspect_error | warning | yes | `prompt_pack_run_source_origins.inclusion_status` |
+| `user` | origin kind | User | Prompt-pack version comes from user data. | backend/db | taxonomy | none | neutral | yes | `prompt_pack_versions.origin_kind` |
+
+Open prompt-pack inventory note: bundled prompt-pack seed data also supplies
+`origin_kind` and `lifecycle_status`; `active` and `user` are observed in code,
+but additional seed-only values should be verified from prompt-pack assets
+before being treated as complete.
+
 Known naming collisions:
 
 | Values | Meaning overlap | Current recommendation |
@@ -500,6 +524,7 @@ Representative backend sources:
 - `src-tauri/src/archive_read_model.rs`
 - `src-tauri/src/readiness.rs`
 - `src-tauri/src/ingest_provenance.rs`
+- `src-tauri/src/sources/items.rs`
 
 These values are visible in backend diagnostics and export selection logic. A
 dedicated frontend type does not yet exist for all of them.
@@ -517,6 +542,58 @@ dedicated frontend type does not yet exist for all of them.
 | `complete` | completeness | Complete | Ingest batch observed complete data. | backend/db | derived | none | success | yes |
 | `partial` | completeness | Partial | Ingest batch observed partial data. | backend/db | derived | inspect_error | warning | yes |
 | `unknown` | completeness | Unknown | Ingest completeness is not classified. | backend/db | derived | inspect_error | neutral | yes |
+| `inserted` | observation outcome | Inserted | Ingest observation inserted a new item. | backend/db | taxonomy | none | success | yes |
+| `duplicate_observed` | observation outcome | Duplicate observed | Ingest observation matched an already-known item. | backend/db | taxonomy | none | neutral | yes |
+| `skipped` | observation outcome | Skipped | Ingest observation skipped an item. | backend/db | taxonomy | inspect_error | warning | yes |
+| `empty_payload` | reason code | Empty payload | Item was skipped because payload had no usable content. | backend/db | taxonomy | inspect_error | warning | yes |
+| `conflict_without_item_id` | reason code | Conflict without item id | Insert conflict occurred but no existing item id could be resolved. | backend/db | taxonomy | inspect_error | warning | yes |
+
+Archive/readiness fallback reasons:
+
+| Value | Type | Name | Meaning | Source of truth | Lifecycle | Stable? | Current usage |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `MissingState` | fallback reason | Missing state | Archive read-model state row is absent. | backend internal | derived | no | NotebookLM export fallback |
+| `NeverBuilt` | fallback reason | Never built | Archive read model was never built. | backend internal | derived | no | NotebookLM export fallback |
+| `Building` | fallback reason | Building | Archive read model is currently building. | backend internal | active | no | NotebookLM export fallback |
+| `Stale` | fallback reason | Stale | Archive read model is stale. | backend internal | derived | no | NotebookLM export fallback |
+| `Failed` | fallback reason | Failed | Archive read model build failed. | backend internal | terminal | no | NotebookLM export fallback |
+| `OldModelVersion` | fallback reason | Old model version | Archive read model was built with an older model version. | backend internal | derived | no | NotebookLM export fallback |
+
+## Backend-only scheduler and maintenance values
+
+Representative backend sources:
+
+- `src-tauri/src/llm/scheduler.rs`
+- `src-tauri/src/llm/mod.rs`
+- `src-tauri/src/migrations/baseline_reset.rs`
+- `src-tauri/src/sources/legacy_metadata_cleanup.rs`
+- `src-tauri/src/sources/items.rs`
+
+LLM scheduler values:
+
+| Value | Type | Name | Meaning | Source of truth | Lifecycle | Stable? | Current usage |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `provider_test` | request kind | Provider test | LLM request tests a provider/profile. | backend scheduler | taxonomy | yes, serialized snapshot | diagnostics/scheduler |
+| `analysis_chat` | request kind | Analysis chat | LLM request serves follow-up chat. | backend scheduler | taxonomy | yes, serialized snapshot | diagnostics/scheduler |
+| `analysis_report_map` | request kind | Analysis report map | LLM request analyzes one report chunk. | backend scheduler | taxonomy | yes, serialized snapshot | diagnostics/scheduler |
+| `analysis_report_reduce` | request kind | Analysis report reduce | LLM request writes final report. | backend scheduler | taxonomy | yes, serialized snapshot | diagnostics/scheduler |
+| `prompt_pack_stage` | request kind | Prompt-pack stage | LLM request executes a prompt-pack stage. | backend scheduler | taxonomy | yes, serialized snapshot | diagnostics/scheduler |
+| `queued` | scheduler state | Queued | Request is waiting in scheduler queue. | backend scheduler | active | yes, serialized snapshot | diagnostics/scheduler |
+| `running` | scheduler state | Running | Request is currently executing. | backend scheduler | active | yes, serialized snapshot | diagnostics/scheduler |
+| `gemini` | provider kind | Gemini | Native Gemini provider. | backend LLM config | taxonomy | yes | provider config |
+| `open_ai_compatible` | provider kind | OpenAI compatible | OpenAI-compatible provider. | backend LLM config | taxonomy | yes | provider config |
+
+Internal maintenance values:
+
+| Value | Type | Name | Meaning | Source of truth | Lifecycle | Stable? | Current usage |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `BaselineReady` | migration state | Baseline ready | Database already matches baseline migration history. | backend internal | terminal | no | migration startup |
+| `OldHistoryReadyForCutover` | migration state | Old history ready for cutover | Old migration history can be collapsed to baseline. | backend internal | transitional | no | migration startup |
+| `Audit` | maintenance mode | Audit | Inspect legacy Telegram metadata without clearing. | backend internal | taxonomy | no | legacy cleanup |
+| `Clear` | maintenance mode | Clear | Clear legacy Telegram metadata candidates. | backend internal | taxonomy | no | legacy cleanup |
+| `MaintainSingleWrite` | maintenance mode | Maintain single write | Update archive read model as part of one item write. | backend internal | taxonomy | no | source item insert |
+| `MarkSourceStaleOnly` | maintenance mode | Mark source stale only | Mark archive read model stale without rebuilding immediately. | backend internal | taxonomy | no | source item insert |
+| `Skip` | maintenance mode | Skip | Skip archive read-model maintenance for this write. | backend internal | taxonomy | no | source item insert |
 
 ## UI modes, tabs, and filters
 
@@ -608,11 +685,10 @@ Known reason-code families:
 
 These areas are intentionally listed as follow-up work rather than guessed:
 
-- Backend Rust enums not yet mirrored in TypeScript, including some diagnostics,
-  LLM scheduler, migration, and archive fallback reason values.
 - Database-only strings in migrations and SQL constraints.
 - UI-only status text stored in local `$state("")` variables.
-- Prompt-pack stage statuses and result statuses currently typed as `string`.
+- Prompt-pack seed-only `origin_kind` and `lifecycle_status` values beyond the
+  observed `user` and `active`.
 - Diagnostic count dimensions such as `errorKind`, `warningState`,
   `completeness`, and `buildMode`.
 - Button variants and Extractum-specific UI variants outside the shared UI
