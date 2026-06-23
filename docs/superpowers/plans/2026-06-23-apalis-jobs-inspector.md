@@ -1140,6 +1140,7 @@ Append these tests inside the existing test module:
         assert!(preview.contains("Authorization: [redacted]"));
         assert!(preview.contains("Cookie: [redacted]"));
         assert!(preview.contains("apiKey=[redacted]"));
+        assert!(preview.contains("plain text payload"));
         assert!(!preview.contains("raw-secret"));
         assert!(!preview.contains("raw-cookie"));
         assert!(!preview.contains("raw-inline"));
@@ -1330,21 +1331,30 @@ fn redact_text_fragments(text: &str) -> String {
 }
 
 fn redact_text_line(line: &str) -> String {
-    if let Some((key, separator)) = sensitive_assignment(line) {
+    let redacted = line
+        .split(';')
+        .map(redact_text_segment)
+        .collect::<Vec<_>>()
+        .join(";");
+    redact_inline_secret_tokens(&redacted)
+}
+
+fn redact_text_segment(segment: &str) -> String {
+    if let Some((key, separator)) = sensitive_assignment(segment) {
         let spacer = if separator == ':' { " " } else { "" };
         return format!("{}{}{}{}", key.trim_end(), separator, spacer, REDACTED);
     }
-    redact_inline_secret_tokens(line)
+    segment.to_string()
 }
 
-fn sensitive_assignment(line: &str) -> Option<(&str, char)> {
-    for (index, character) in line.char_indices() {
+fn sensitive_assignment(segment: &str) -> Option<(&str, char)> {
+    for (index, character) in segment.char_indices() {
         if index > 120 {
             return None;
         }
         if character == ':' || character == '=' {
-            let key = line[..index].trim();
-            return is_sensitive_key(key).then_some((&line[..index], character));
+            let key = segment[..index].trim();
+            return is_sensitive_key(key).then_some((&segment[..index], character));
         }
     }
     None
