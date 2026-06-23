@@ -665,7 +665,7 @@
   }
 
   .status-banner.tone-default {
-    background: var(--muted);
+    background: var(--panel-strong);
     border-color: var(--border);
     color: var(--foreground);
   }
@@ -768,10 +768,10 @@
   }
 
   .profiles-table th {
-    background: var(--muted);
+    background: var(--panel-strong);
     font-weight: 600;
     padding: 10px 14px;
-    color: var(--muted-foreground);
+    color: var(--muted);
     border-bottom: 1px solid var(--border);
   }
 
@@ -823,7 +823,8 @@
   }
 
   .model-cell code {
-    background: var(--muted);
+    background: var(--panel-strong);
+    color: var(--muted);
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 12px;
@@ -865,7 +866,7 @@
   }
 
   .table-btn:hover {
-    background: var(--muted);
+    background: var(--panel-hover);
   }
 
   .table-btn.success-link {
@@ -940,7 +941,7 @@
   }
 
   .action-btn.secondary:hover {
-    background: var(--muted);
+    background: var(--panel-hover);
   }
 
   .action-btn.sm {
@@ -1141,7 +1142,7 @@
 
   .close-btn:hover {
     color: var(--foreground);
-    background: var(--muted);
+    background: var(--panel-hover);
   }
 
   .modal-body {
@@ -1159,7 +1160,7 @@
     gap: 8px;
     padding: 16px 20px;
     border-top: 1px solid var(--border);
-    background: var(--muted);
+    background: var(--panel-strong);
   }
 
   .dialog-error-banner {
