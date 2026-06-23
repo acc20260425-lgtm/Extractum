@@ -581,7 +581,7 @@ LLM scheduler values:
 | `queued` | scheduler state | Queued | Request is waiting in scheduler queue. | backend scheduler | active | yes, serialized snapshot | diagnostics/scheduler |
 | `running` | scheduler state | Running | Request is currently executing. | backend scheduler | active | yes, serialized snapshot | diagnostics/scheduler |
 | `gemini` | provider kind | Gemini | Native Gemini provider. | backend LLM config | taxonomy | yes | provider config |
-| `open_ai_compatible` | provider kind | OpenAI compatible | OpenAI-compatible provider. | backend LLM config | taxonomy | yes | provider config |
+| `openai_compatible` | provider kind | OpenAI compatible | OpenAI-compatible provider. | backend LLM config | taxonomy | yes | provider config |
 
 Internal maintenance values:
 
