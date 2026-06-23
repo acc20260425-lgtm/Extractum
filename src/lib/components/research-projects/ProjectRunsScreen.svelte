@@ -15,6 +15,7 @@
     ExtractumDataGrid,
     ExtractumStatusMessage,
     ExtractumTextInput,
+    type ExtractumDataGridColumn,
   } from "$lib/components/extractum-ui";
   import {
     retainSelectedRunId,
@@ -38,7 +39,7 @@
     completedAt: string;
   };
 
-  const columns = [
+  const columns: ExtractumDataGridColumn[] = [
     { id: "runId", header: "Run", width: 82, sort: true },
     { id: "runLabel", header: "Label", flexgrow: 1, sort: true },
     { id: "projectId", header: "Project", width: 100, sort: true },
@@ -46,8 +47,8 @@
     { id: "status", header: "Status", width: 120, sort: true },
     { id: "resultStatus", header: "Result", width: 110, sort: true },
     { id: "progress", header: "Progress", width: 110 },
-    { id: "createdAt", header: "Created", width: 170, sort: true },
-    { id: "completedAt", header: "Completed", width: 170, sort: true },
+    { id: "createdAt", header: "Created", width: 170, sort: true, dateTimeFormat: "datetime" },
+    { id: "completedAt", header: "Completed", width: 170, sort: true, dateTimeFormat: "datetime" },
   ];
 
   let runs = $state<PromptPackRunListItem[]>([]);

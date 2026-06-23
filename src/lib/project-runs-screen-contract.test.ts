@@ -31,6 +31,13 @@ describe("project runs screen", () => {
     expect(screenSource).not.toContain("ReportViewer");
   });
 
+  it("marks run date columns for locale-aware datetime formatting", () => {
+    const screenSource = readProjectFile("src/lib/components/research-projects/ProjectRunsScreen.svelte");
+
+    expect(screenSource).toContain('{ id: "createdAt", header: "Created", width: 170, sort: true, dateTimeFormat: "datetime" }');
+    expect(screenSource).toContain('{ id: "completedAt", header: "Completed", width: 170, sort: true, dateTimeFormat: "datetime" }');
+  });
+
   it("uses the shared confirm modal before deleting or cancelling project runs", () => {
     const screenSource = readProjectFile("src/lib/components/research-projects/ProjectRunsScreen.svelte");
 
