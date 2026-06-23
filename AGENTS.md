@@ -28,6 +28,7 @@ This file is a working contract for AI agents modifying the repository.
 - Update docs when behavior, architecture, commands, or agent workflow rules change.
 - Inspect the dirty worktree before commits and stage only intended files.
 - Never use destructive git commands unless the user explicitly asks for them.
+- In the Superpowers `finishing-a-development-branch` flow, cleanup after a successful local merge is not considered destructive: `git branch -d <feature-branch>` and removing a clean, workflow-owned `.worktrees/` worktree are normal Option 1 cleanup. Destructive cleanup is Option 4 discard, force deletion, or removing unmerged/dirty work.
 - Do not revert, overwrite, or reformat unrelated user changes.
 - Keep changes focused and local to the requested task.
 
