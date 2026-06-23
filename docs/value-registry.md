@@ -821,3 +821,36 @@ Scope: frontend-local state, filters, tabs, badges, and view-model values. Most 
 | Area | Name | Values | Source | Notes |
 | --- | --- | --- | --- | --- |
 | LLM stream event | `LlmStreamEventKind` | `queued`, `started`, `delta`, `completed`, `failed`, `cancelled` | `src/lib/types/llm.ts` | Streaming UI/API event kind. |
+## Source-of-truth map for repeated values
+
+This section clarifies ownership for values that intentionally appear in more than one layer. Use the canonical owner when adding or changing values; treat mirrors as consumers that must be updated after the owner changes.
+
+| Value family | Canonical owner | Mirrors and derived users | Rule |
+| --- | --- | --- | --- |
+| Source provider/type values: `telegram`, `youtube`, `rss`, `forum` | Backend source model and API payloads | `SourceType`, `AnalysisSourceOptionType`, library/project view-model filters | Add new source providers in backend/API first, then mirror in TS types and UI filters. |
+| Library-only provider values: `web`, `other` | Library catalog API contract | `LibrarySourceProvider`, catalog filters, project settings library filters | Do not back-port to analysis/source types unless the backend supports them as real analysis sources. |
+| Source subtype values: `video`, `playlist`, `channel`, `supergroup`, `group`, `feed`, `thread`, `board`, `site` | Backend source/library records | `SourceSubtype`, `LibrarySourceSubtype`, catalog filter ids, source reader/browser labels | Keep subtype spelling stable because ids such as `provider:<provider>/subtype:<subtype>` depend on it. |
+| Analysis run statuses: `queued`, `running`, `completed`, `failed`, `cancelled` | Backend analysis run lifecycle and persisted run records | `AnalysisRunFilter`, companion filters, workspace active/saved derivation, snapshot affordance gates | Frontend may group values, but must not introduce new canonical run statuses. |
+| Generic job statuses: `queued`, `running`, `succeeded`, `failed`, `cancel_requested`, `cancelled` | Backend job table/API payloads | Source activity UI, diagnostics tone classifier | UI can classify status tone, but backend owns the lifecycle values. |
+| Takeout import statuses and recovery kinds | Backend takeout import/recovery records | Source activity UI and recovery explanations | Add backend value, then add user-facing title/body/severity in frontend if the value is visible. |
+| Prompt-pack run statuses, event kinds, and phases | Backend prompt-pack runtime/API payloads | Frontend prompt-pack types and run display | Frontend types are mirrors. Update both TS types and backend event emission together. |
+| Gemini Browser provider/run statuses | Gemini Browser backend bridge and run log payloads | `GeminiBrowserProviderStatusKind`, `GeminiBrowserRunStatus`, setup checklist, run inspector filters/badges | Backend/bridge owns status values; frontend owns derived filters and badges. |
+| Gemini Browser provider mode: `managed`, `cdp_attach` | Frontend provider config plus backend bridge request shape | LocalStorage setting, settings panel, bridge API request | Treat as a shared UI/API contract because persisted localStorage values must remain readable. |
+| LLM provider kind: `gemini`, `openai_compatible` | Backend `ProviderKind::as_str()` / `parse()` | Frontend LLM profile API types and settings UI | `openai_compatible` is canonical; `omniroute` is a legacy accepted alias only. |
+| LLM stream event kinds | LLM streaming API payloads | Frontend stream handling | Add stream events only when both backend emitter and frontend consumer understand them. |
+| Snapshot state: `captured`, `capture_failed` | Backend analysis run snapshot fields | `AnalysisSnapshotState`, snapshot affordance derivation | Persisted snapshot state stays small; UI-specific states belong in affordance values. |
+| Snapshot affordance/probe/canvas values | Frontend snapshot UI model | Chat availability, evidence source action, source canvas labels | These are derived UI states. Do not persist them unless a backend contract is explicitly added. |
+| Badge/status tone values | Frontend shared UI components | Diagnostics, snapshot affordance, status messages | Presentation-only. Do not treat as backend/API status values. |
+| `active`, `syncing`, `error`, `unavailable` library statuses | Backend library catalog status payloads | Catalog/project view-model statuses, diagnostics classifier | Backend owns catalog record status. Project-level status values are separate. |
+| Project status: `ready`, `running`, `needs_attention`, `empty` | Frontend project view-model | Project cards/settings UI | Derived UI status, not a persisted project lifecycle. |
+| Import/classifier sentinels such as `all`, `__all_source_item_kinds__`, `__all_topics__` | Frontend component/model that declares the sentinel | Select filters and local state | Keep local unless the sentinel crosses process/API boundaries. |
+
+When in doubt, prefer these categories:
+
+| Category | Examples | Change policy |
+| --- | --- | --- |
+| Persisted database/API contract | run status, job status, source type, provider kind | Requires backend, frontend mirror, migration/seed/test fixture review. |
+| Shared UI/API request contract | Gemini Browser provider mode, report launch scope | Requires frontend and backend request parsing review. |
+| Frontend derived state | project status, snapshot affordance state, canvas surface | Can change in frontend, but update this registry and affected tests/docs. |
+| Presentation-only value | badge variant, toast kind, diagnostics tone bucket | Local UI change, but avoid reusing as business status. |
+| Local sentinel/filter value | `all`, `__all_topics__`, `provider:<provider>/subtype:<subtype>` | Safe only inside its declaring component/model unless documented otherwise. |
