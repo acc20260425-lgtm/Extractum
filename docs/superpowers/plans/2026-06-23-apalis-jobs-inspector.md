@@ -23,9 +23,9 @@
 - Create `src/lib/api/apalis-jobs.test.ts`
   - Verifies the API wrapper command name and request payload.
 - Create `src/lib/apalis-jobs-route-contract.test.ts`
-  - Source-level route/navigation/UI contract tests for command isolation, manual refresh, server-side filtering, debounce/stale-response protection, read-only UI, local time display, and navigation.
+  - Source-level route/navigation/UI contract tests for command isolation, manual refresh, SVAR DataGrid adapter usage, server-side filtering, debounce/stale-response protection, read-only UI, local time display, and navigation.
 - Create `src/lib/components/jobs/ApalisJobsPanel.svelte`
-  - Implements split inspector UI, filter controls, debounced search, manual refresh, table, detail panel, loading/empty/error states, and selection handling.
+  - Implements split inspector UI, filter controls, debounced search, manual refresh, the local `ExtractumDataGrid` SVAR adapter, detail panel, loading/empty/error states, and selection handling.
 - Create `src/routes/jobs/+page.svelte`
   - Adds the top-level route and delegates to `ApalisJobsPanel`.
 - Modify `src/routes/+layout.svelte`
@@ -1668,6 +1668,16 @@ describe("apalis jobs inspector frontend source contracts", () => {
     expect(jobsPanelSource).not.toContain("invoke(");
   });
 
+  it("uses the shared SVAR DataGrid adapter for the jobs table", () => {
+    expect(jobsPanelSource).toContain("ExtractumDataGrid");
+    expect(jobsPanelSource).toContain("ExtractumDataGridColumn");
+    expect(jobsPanelSource).toContain("selectedRowIds");
+    expect(jobsPanelSource).toContain("onSelectedRowIdsChange");
+    expect(jobsPanelSource).not.toContain('role="table"');
+    expect(jobsPanelSource).not.toContain("jobs-table");
+    expect(jobsPanelSource).not.toContain('from "@svar-ui/svelte-grid"');
+  });
+
   it("implements manual refresh without auto polling or mutations", () => {
     expect(jobsPanelSource).toMatch(/onMount\s*\(\s*\(\)\s*=>/);
     expect(jobsPanelSource).toContain("refreshJobs(true)");
@@ -1747,6 +1757,10 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
   import { RefreshCw } from "@lucide/svelte";
   import { onDestroy, onMount } from "svelte";
   import { loadApalisJobs } from "$lib/api/apalis-jobs";
+  import {
+    ExtractumDataGrid,
+    type ExtractumDataGridColumn,
+  } from "$lib/components/extractum-ui";
   import { formatDataGridDateTimeValue } from "$lib/components/extractum-ui/data-grid-date-format";
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
@@ -1761,6 +1775,22 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
 
   const statusOptions = ["", "Pending", "Queued", "Running", "Done", "Failed", "Killed"];
   const limitOptions = [50, 100, 200, 500];
+  const columns: ExtractumDataGridColumn[] = [
+    { id: "status", header: "Status", width: 110 },
+    { id: "jobType", header: "Job type", width: 170 },
+    { id: "key", header: "Key", width: 220 },
+    { id: "attemptsLabel", header: "Attempts", width: 95 },
+    { id: "lastActivityAt", header: "Activity", width: 165, dateTimeFormat: "datetime" },
+  ];
+
+  type ApalisJobGridRow = {
+    id: string;
+    status: string;
+    jobType: string;
+    key: string;
+    attemptsLabel: string;
+    lastActivityAt: string | null;
+  };
 
   let response = $state<ApalisJobsListResponse | null>(null);
   let loading = $state(true);
@@ -1777,6 +1807,8 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
   let selectedJob = $derived(
     response?.jobs.find((job) => job.id === selectedJobId) ?? response?.jobs[0] ?? null,
   );
+  let gridRows = $derived((response?.jobs ?? []).map(jobToGridRow));
+  let selectedRowIds = $derived(selectedJobId ? [selectedJobId] : []);
 
   onMount(() => {
     void refreshJobs(true);
@@ -1849,6 +1881,21 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
 
   function formatTime(value: string | null) {
     return String(formatDataGridDateTimeValue(value, "datetime") ?? "Never");
+  }
+
+  function jobToGridRow(job: ApalisJobRow): ApalisJobGridRow {
+    return {
+      id: job.id,
+      status: job.status,
+      jobType: job.jobType || "unknown",
+      key: job.idempotencyKey ?? job.id,
+      attemptsLabel: `${job.attempts}/${job.maxAttempts ?? "-"}`,
+      lastActivityAt: job.lastActivityAt,
+    };
+  }
+
+  function handleGridSelection(ids: string[]) {
+    selectedJobId = ids[0] ?? null;
   }
 
   function statusTone(status: string) {
@@ -1932,29 +1979,15 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
           <span>Refreshed {formatTime(response.refreshedAt)}</span>
         </div>
 
-        <div class="jobs-table" role="table" aria-label="Apalis jobs">
-          <div class="jobs-row jobs-head" role="row">
-            <span role="columnheader">Status</span>
-            <span role="columnheader">Job type</span>
-            <span role="columnheader">Key</span>
-            <span role="columnheader">Attempts</span>
-            <span role="columnheader">Activity</span>
-          </div>
-          {#each response.jobs as job (job.id)}
-            <button
-              class="jobs-row"
-              class:selected={selectedJob?.id === job.id}
-              role="row"
-              type="button"
-              onclick={() => (selectedJobId = job.id)}
-            >
-              <span role="cell"><Badge variant={statusTone(job.status)}>{job.status}</Badge></span>
-              <span role="cell">{job.jobType || "unknown"}</span>
-              <span role="cell">{job.idempotencyKey ?? job.id}</span>
-              <span role="cell">{job.attempts}/{job.maxAttempts ?? "-"}</span>
-              <span role="cell">{formatTime(job.lastActivityAt)}</span>
-            </button>
-          {/each}
+        <div class="jobs-grid-shell">
+          <ExtractumDataGrid
+            rows={gridRows}
+            {columns}
+            {selectedRowIds}
+            height="430px"
+            overlay="No Apalis jobs match these filters."
+            onSelectedRowIdsChange={handleGridSelection}
+          />
         </div>
       {/if}
     </SurfaceCard>
@@ -2052,42 +2085,10 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
     font-size: 0.82rem;
   }
 
-  .jobs-table {
-    display: grid;
-    border: 1px solid var(--border);
-    border-radius: 8px;
+  .jobs-grid-shell {
+    min-width: 0;
+    min-height: 430px;
     overflow: hidden;
-  }
-
-  .jobs-row {
-    display: grid;
-    grid-template-columns: 120px minmax(140px, 1fr) minmax(150px, 1.2fr) 88px 150px;
-    gap: 0.75rem;
-    align-items: center;
-    width: 100%;
-    border: 0;
-    border-bottom: 1px solid var(--border);
-    background: transparent;
-    color: inherit;
-    padding: 0.65rem 0.75rem;
-    text-align: left;
-    font: inherit;
-  }
-
-  .jobs-row:last-child {
-    border-bottom: 0;
-  }
-
-  .jobs-row:not(.jobs-head):hover,
-  .jobs-row.selected {
-    background: color-mix(in srgb, var(--primary) 9%, transparent);
-  }
-
-  .jobs-head {
-    background: var(--panel-strong);
-    color: var(--muted);
-    font-size: 0.78rem;
-    font-weight: 700;
   }
 
   .jobs-detail-panel {
@@ -2178,13 +2179,8 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .jobs-row {
-      grid-template-columns: 100px minmax(110px, 1fr) minmax(130px, 1fr);
-    }
-
-    .jobs-row span:nth-child(4),
-    .jobs-row span:nth-child(5) {
-      display: none;
+    .jobs-grid-shell {
+      min-height: 380px;
     }
   }
 
@@ -2194,12 +2190,8 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
       grid-template-columns: 1fr;
     }
 
-    .jobs-row {
-      grid-template-columns: 92px minmax(0, 1fr);
-    }
-
-    .jobs-row span:nth-child(3) {
-      display: none;
+    .jobs-grid-shell {
+      min-height: 340px;
     }
   }
 </style>
@@ -2326,10 +2318,11 @@ Run:
 git diff --check
 if (rg "SELECT \* FROM Jobs" src-tauri/src/apalis_jobs.rs) { exit 1 }
 if (rg '"en-US", "UTC"' src/lib/components/jobs/ApalisJobsPanel.svelte) { exit 1 }
+if (rg 'role="table"|jobs-table' src/lib/components/jobs/ApalisJobsPanel.svelte) { exit 1 }
 git status --short
 ```
 
-Expected: `git diff --check` prints no errors. The two `rg` guards find no matches, proving the backend does not use full-table `SELECT *` and the UI does not force UTC-only display formatting. `git status --short` shows only intentional files if a final commit remains.
+Expected: `git diff --check` prints no errors. The `rg` guards find no matches, proving the backend does not use full-table `SELECT *`, the UI does not force UTC-only display formatting, and the jobs list uses `ExtractumDataGrid` instead of the old custom table markup. `git status --short` shows only intentional files if a final commit remains.
 
 - [ ] **Step 7: Commit final verification adjustments if any were needed**
 
@@ -2344,6 +2337,6 @@ If no files changed after Task 5, skip this commit and record the verification c
 
 ## Self-Review
 
-- Spec coverage: The plan covers the top-level Jobs navigation, split inspector UI, read-only/manual-refresh behavior, all-job read model, SQL-side filters/counts/sorting/limit, limited-row payload reads, total/count semantics, actual local Apalis schema probe, stable DTO shape, correct latest timestamp sorting, RFC3339 UTC normalization, missing-table behavior, raw text and JSON redaction, truncation, debounced search with stale-response protection, local date/time display, and dev-server verification.
+- Spec coverage: The plan covers the top-level Jobs navigation, split inspector UI, SVAR `ExtractumDataGrid` adapter usage for the jobs table, read-only/manual-refresh behavior, all-job read model, SQL-side filters/counts/sorting/limit, limited-row payload reads, total/count semantics, actual local Apalis schema probe, stable DTO shape, correct latest timestamp sorting, RFC3339 UTC normalization, missing-table behavior, raw text and JSON redaction, truncation, debounced search with stale-response protection, local date/time display, and dev-server verification.
 - Placeholder scan: The plan contains concrete file paths, command lines, DTO shapes, test code, implementation snippets, and expected outcomes for each task.
 - Type consistency: Rust DTOs use `#[serde(rename_all = "camelCase")]`; TS types use camelCase keys (`jobType`, `statusCounts`, `lastActivityAt`) and API wrapper sends `{ request }`, matching the Tauri command signature.
