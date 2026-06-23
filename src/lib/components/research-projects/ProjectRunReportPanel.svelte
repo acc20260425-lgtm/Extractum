@@ -38,6 +38,9 @@
   let artifactCopied = $state(false);
   let copiedBrowserRunId = $state<string | null>(null);
 
+  let sidebarStyle = $state("original");
+  let activeTab = $state("process");
+
   const runId = $derived(run?.runId ?? null);
   const expectedMissingResult = $derived(
     Boolean(run && !result && (run.resultStatus ?? "none") !== "complete" && canLackCanonicalResult(run)),
@@ -73,6 +76,9 @@
   const warnings = $derived(arrayAt(canonical, "warnings"));
   const limitations = $derived(arrayAt(canonical, "limitations"));
   const qualityFlags = $derived(arrayAt(canonical, "quality_flags").concat(arrayAt(canonical, "qualityFlags")));
+  const issueCount = $derived(
+    warnings.length + limitations.length + qualityFlags.length + findings.length + (resultError ? 1 : 0),
+  );
 
   onMount(() => {
     void loadRunReport();
@@ -228,6 +234,7 @@
     const next = value[key];
     return typeof next === "number" ? next : null;
   }
+
 
   function artifactTitle(artifactKind: string) {
     switch (artifactKind) {
@@ -529,121 +536,208 @@
         </div>
       </section>
 
-      <aside class="report-column secondary">
-        <div class="report-section">
-          <div class="section-title">
-            <Layers size={15} aria-hidden="true" />
-            <h3>Stages and Artifacts</h3>
+      <aside class="report-column secondary style-{sidebarStyle}">
+        <div class="style-switcher">
+          <span class="switcher-label">Стиль:</span>
+          <div class="switcher-buttons">
+            <button
+              type="button"
+              class:active={sidebarStyle === "original"}
+              onclick={() => sidebarStyle = "original"}
+              title="Исходная стопка карточек"
+            >
+              Коробки
+            </button>
+            <button
+              type="button"
+              class:active={sidebarStyle === "unified"}
+              onclick={() => sidebarStyle = "unified"}
+              title="Вариант 1: Единая карточка"
+            >
+              Вар 1
+            </button>
+            <button
+              type="button"
+              class:active={sidebarStyle === "tabbed"}
+              onclick={() => sidebarStyle = "tabbed"}
+              title="Вариант 2: Копия Варианта 1"
+            >
+              Вар 2
+            </button>
+            <button
+              type="button"
+              class:active={sidebarStyle === "accordion"}
+              onclick={() => sidebarStyle = "accordion"}
+              title="Вариант 3: Облегченные теги"
+            >
+              Вар 3
+            </button>
+            <button
+              type="button"
+              class:active={sidebarStyle === "borderless"}
+              onclick={() => sidebarStyle = "borderless"}
+              title="Вариант 4: Без рамок"
+            >
+              Вар 4
+            </button>
           </div>
-          {#if stages.length === 0}
-            <p class="muted">No stage runs.</p>
-          {:else}
-            <div class="stage-list">
-              {#each stages as stage (stage.stageRunId)}
-                <article>
-                  <div class="stage-title">
-                    <strong>{stage.stageName}</strong>
-                    <ExtractumBadge>{stage.stageStatus}</ExtractumBadge>
-                  </div>
-                  {#if stage.latestMessage}
-                    <p>{stage.latestMessage}</p>
-                  {/if}
-                  {#if stage.browserRunId}
-                    <div class="browser-stage-meta" aria-label="Browser Provider provenance">
-                      <span>Browser run <code>{stage.browserRunId}</code></span>
-                      {#if stage.browserRunStatus}
-                        <span>Status <strong>{stage.browserRunStatus}</strong></span>
-                      {/if}
-                      {#if stage.browserCompletionReason}
-                        <span>Reason <strong>{stage.browserCompletionReason}</strong></span>
-                      {/if}
-                      {#if stage.browserProviderMode}
-                        <span>Mode <strong>{stage.browserProviderMode}</strong></span>
-                      {/if}
-                      {#if stage.browserRunMessage}
-                        <span>{stage.browserRunMessage}</span>
-                      {/if}
-                      <button type="button" onclick={() => void copyBrowserRunId(stage.browserRunId ?? "")}>
-                        {copiedBrowserRunId === stage.browserRunId ? "Copied" : "Copy run id"}
-                      </button>
+        </div>
+
+        {#if sidebarStyle !== "original"}
+          <div class="sidebar-tabs">
+            <button
+              type="button"
+              class="tab-btn"
+              class:active={activeTab === "process"}
+              onclick={() => activeTab = "process"}
+            >
+              Процесс
+            </button>
+            <button
+              type="button"
+              class="tab-btn"
+              class:active={activeTab === "diagnostics"}
+              onclick={() => activeTab = "diagnostics"}
+            >
+              Диагностика
+              {#if issueCount > 0}
+                <span class="tab-badge">{issueCount}</span>
+              {/if}
+            </button>
+          </div>
+        {/if}
+
+        {#if sidebarStyle === "original" || activeTab === "process"}
+          <div class="report-section">
+            <div class="section-title">
+              <Layers size={15} aria-hidden="true" />
+              <h3>Stages and Artifacts</h3>
+            </div>
+            {#if stages.length === 0}
+              <p class="muted">No stage runs.</p>
+            {:else}
+              <div class="stage-list">
+                {#each stages as stage (stage.stageRunId)}
+                  <article>
+                    <div class="stage-title">
+                      <strong>{stage.stageName}</strong>
+                      <ExtractumBadge class="status-{stage.stageStatus.toLowerCase().replace(/[\s-]/g, '_')}">
+                        {stage.stageStatus}
+                      </ExtractumBadge>
                     </div>
-                  {/if}
-                  <div class="artifact-list">
-                    {#each artifactsByStage[stage.stageRunId] ?? [] as artifact (`${artifact.artifactKind}-${artifact.attemptNumber}-${artifact.artifactIndex}`)}
-                      <button type="button" disabled={loadingArtifact} onclick={() => void openArtifact(artifact)}>
-                        {artifact.artifactKind} #{artifact.artifactIndex}
-                      </button>
-                    {/each}
-                  </div>
-                </article>
-              {/each}
-            </div>
-          {/if}
-        </div>
-
-        <div class="report-section">
-          <h3>Selected Artifact</h3>
-          {#if selectedArtifact}
-            {@render ArtifactDetail({ artifact: selectedArtifact })}
-          {:else}
-            <p class="muted">Select a stage artifact.</p>
-          {/if}
-        </div>
-
-        <div class="report-section">
-          <h3>Warnings</h3>
-          {@render CompactList({
-            items: warnings.concat(limitations).concat(qualityFlags),
-            textKey: "message",
-            fallbackPrefix: "Warning",
-          })}
-        </div>
-
-        <div class="report-section">
-          <h3>Validation Findings</h3>
-          {#if findings.length === 0}
-            <p class="muted">No validation findings.</p>
-          {:else}
-            <div class="item-list">
-              {#each findings as finding (`${finding.createdAt}-${finding.code}`)}
-                <article>
-                  <strong>{finding.severity}: {finding.code}</strong>
-                  <p>{finding.message}</p>
-                </article>
-              {/each}
-            </div>
-          {/if}
-        </div>
-
-        <div class="report-section">
-          <h3>Audit Events</h3>
-          {#if auditEvents.length === 0}
-            <p class="muted">No audit events.</p>
-          {:else}
-            <div class="item-list">
-              {#each auditEvents as event (`${event.createdAt}-${event.eventKind}`)}
-                <article>
-                  <strong>{event.eventKind}</strong>
-                  <p>{event.message ?? event.createdAt}</p>
-                </article>
-              {/each}
-            </div>
-          {/if}
-        </div>
-
-        <div class="report-section">
-          <div class="section-title">
-            <Braces size={15} aria-hidden="true" />
-            <h3>Canonical JSON</h3>
+                    {#if stage.latestMessage}
+                      <p>{stage.latestMessage}</p>
+                    {/if}
+                    {#if stage.browserRunId}
+                      <div class="browser-stage-meta" aria-label="Browser Provider provenance">
+                        <span>Browser run <code>{stage.browserRunId}</code></span>
+                        {#if stage.browserRunStatus}
+                          <span>Status <strong>{stage.browserRunStatus}</strong></span>
+                        {/if}
+                        {#if stage.browserCompletionReason}
+                          <span>Reason <strong>{stage.browserCompletionReason}</strong></span>
+                        {/if}
+                        {#if stage.browserProviderMode}
+                          <span>Mode <strong>{stage.browserProviderMode}</strong></span>
+                        {/if}
+                        {#if stage.browserRunMessage}
+                          <span>{stage.browserRunMessage}</span>
+                        {/if}
+                        <button type="button" class="copy-run-id-btn" onclick={() => void copyBrowserRunId(stage.browserRunId ?? "")}>
+                          {#if copiedBrowserRunId === stage.browserRunId}
+                            <svg class="copy-icon" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+                            <span>Copied</span>
+                          {:else}
+                            <svg class="copy-icon" viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            <span>Copy run id</span>
+                          {/if}
+                        </button>
+                      </div>
+                    {/if}
+                    <div class="artifact-list">
+                      {#each artifactsByStage[stage.stageRunId] ?? [] as artifact (`${artifact.artifactKind}-${artifact.attemptNumber}-${artifact.artifactIndex}`)}
+                        <button type="button" disabled={loadingArtifact} onclick={() => void openArtifact(artifact)}>
+                          {#if sidebarStyle === "accordion"}
+                            <span class="artifact-tag-name">{artifact.artifactKind}</span>
+                            <span class="artifact-tag-index">#{artifact.artifactIndex}</span>
+                          {:else}
+                            {artifact.artifactKind} #{artifact.artifactIndex}
+                          {/if}
+                        </button>
+                      {/each}
+                    </div>
+                  </article>
+                {/each}
+              </div>
+            {/if}
           </div>
-          {#if result}
-            <pre>{jsonPreview(canonical)}</pre>
-          {:else if expectedMissingResult}
-            <p class="muted">{resultUnavailableMessage}</p>
-          {:else}
-            <p class="muted">No canonical result.</p>
-          {/if}
-        </div>
+
+          <div class="report-section">
+            <h3>Selected Artifact</h3>
+            {#if selectedArtifact}
+              {@render ArtifactDetail({ artifact: selectedArtifact })}
+            {:else}
+              <p class="muted">Select a stage artifact.</p>
+            {/if}
+          </div>
+        {/if}
+
+        {#if sidebarStyle === "original" || activeTab === "diagnostics"}
+          <div class="report-section">
+            <h3>Warnings</h3>
+            {@render CompactList({
+              items: warnings.concat(limitations).concat(qualityFlags),
+              textKey: "message",
+              fallbackPrefix: "Warning",
+            })}
+          </div>
+
+          <div class="report-section">
+            <h3>Validation Findings</h3>
+            {#if findings.length === 0}
+              <p class="muted">No validation findings.</p>
+            {:else}
+              <div class="item-list">
+                {#each findings as finding (`${finding.createdAt}-${finding.code}`)}
+                  <article>
+                    <strong>{finding.severity}: {finding.code}</strong>
+                    <p>{finding.message}</p>
+                  </article>
+                {/each}
+              </div>
+            {/if}
+          </div>
+
+          <div class="report-section">
+            <h3>Audit Events</h3>
+            {#if auditEvents.length === 0}
+              <p class="muted">No audit events.</p>
+            {:else}
+              <div class="item-list">
+                {#each auditEvents as event (`${event.createdAt}-${event.eventKind}`)}
+                  <article>
+                    <strong>{event.eventKind}</strong>
+                    <p>{event.message ?? event.createdAt}</p>
+                  </article>
+                {/each}
+              </div>
+            {/if}
+          </div>
+
+          <div class="report-section">
+            <div class="section-title">
+              <Braces size={15} aria-hidden="true" />
+              <h3>Canonical JSON</h3>
+            </div>
+            {#if result}
+              <pre>{jsonPreview(canonical)}</pre>
+            {:else if expectedMissingResult}
+              <p class="muted">{resultUnavailableMessage}</p>
+            {:else}
+              <p class="muted">No canonical result.</p>
+            {/if}
+          </div>
+        {/if}
       </aside>
     </div>
   {/if}
@@ -1052,6 +1146,9 @@
     padding: 4px 7px;
     color: var(--extractum-text);
     font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
 
   .artifact-detail,
@@ -1184,5 +1281,313 @@
     .synthesis-layout {
       grid-template-columns: 1fr;
     }
+  }
+
+  /* Switcher & tabs layout */
+  .style-switcher {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--extractum-surface-subtle);
+    border: 1px solid var(--extractum-border);
+    border-radius: var(--extractum-radius);
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .switcher-label {
+    color: var(--extractum-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+  }
+
+  .switcher-buttons {
+    display: flex;
+    gap: 4px;
+  }
+
+  .switcher-buttons button {
+    border: 1px solid transparent;
+    background: transparent;
+    border-radius: calc(var(--extractum-radius) - 2px);
+    color: var(--extractum-muted);
+    padding: 3px 6px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.15s ease;
+  }
+
+  .switcher-buttons button:hover {
+    color: var(--extractum-text);
+    background: var(--extractum-surface);
+  }
+
+  .switcher-buttons button.active {
+    color: var(--extractum-primary);
+    background: var(--extractum-surface);
+    border-color: var(--extractum-border);
+    font-weight: 500;
+  }
+
+  .sidebar-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--extractum-border);
+    padding-bottom: 8px;
+    flex-shrink: 0;
+  }
+
+  .sidebar-tabs .tab-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid transparent;
+    background: transparent;
+    border-radius: var(--extractum-radius);
+    color: var(--extractum-muted);
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+  }
+
+  .sidebar-tabs .tab-btn:hover {
+    color: var(--extractum-text);
+    background: var(--extractum-surface-subtle);
+  }
+
+  .sidebar-tabs .tab-btn.active {
+    color: var(--extractum-primary);
+    background: var(--extractum-surface-raised);
+    border-color: var(--extractum-border);
+  }
+
+  .tab-badge {
+    background: var(--extractum-border);
+    color: var(--extractum-text);
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 10px;
+    font-weight: bold;
+  }
+
+  .sidebar-tabs .tab-btn.active .tab-badge {
+    background: color-mix(in srgb, var(--extractum-primary) 15%, var(--extractum-border));
+    color: var(--extractum-primary);
+  }
+
+  /* Стили для всех перепроектированных вариантов (карточный дизайн, вкладки, бейджи-точки) */
+  .report-column.secondary:not(.style-original) {
+    border: 1px solid var(--extractum-border);
+    border-radius: var(--extractum-radius);
+    background: var(--extractum-surface-raised);
+    padding: 0;
+    gap: 0;
+  }
+
+  .report-column.secondary:not(.style-original) .style-switcher {
+    margin: 12px;
+    border-color: var(--extractum-border);
+  }
+
+  .report-column.secondary:not(.style-original) .sidebar-tabs {
+    border-top: 1px solid var(--extractum-border);
+    border-bottom: 1px solid var(--extractum-border);
+    padding: 0;
+    background: var(--extractum-surface-subtle);
+    gap: 0;
+  }
+
+  .report-column.secondary:not(.style-original) .sidebar-tabs .tab-btn {
+    border: none;
+    border-radius: 0;
+    padding: 10px;
+    border-bottom: 2px solid transparent;
+  }
+
+  .report-column.secondary:not(.style-original) .sidebar-tabs .tab-btn.active {
+    background: var(--extractum-surface-raised);
+    border-bottom-color: var(--extractum-primary);
+    color: var(--extractum-primary);
+  }
+
+  .report-column.secondary:not(.style-original) .report-section {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--extractum-border);
+  }
+
+  .report-column.secondary:not(.style-original) .report-section:last-child {
+    border-bottom: none;
+  }
+
+  .report-column.secondary:not(.style-original) .item-list article,
+  .report-column.secondary:not(.style-original) .stage-list article {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    padding: 6px 0 6px 10px;
+    border-left: 3px solid var(--extractum-border);
+  }
+
+  .report-column.secondary:not(.style-original) .stage-list article {
+    border-left-color: var(--extractum-primary);
+  }
+
+  .report-column.secondary:not(.style-original) .item-list article {
+    border-left-color: var(--extractum-warning); /* warnings indicator color */
+  }
+
+  /* Семантические цвета для бейджей статусов (цветные точки) */
+  .report-column.secondary:not(.style-original) :global(.extractum-badge) {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    color: var(--extractum-muted) !important;
+    box-shadow: none !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    text-transform: lowercase;
+  }
+
+  .report-column.secondary:not(.style-original) :global(.extractum-badge)::before {
+    content: "●";
+    font-size: 10px;
+    line-height: 1;
+  }
+
+  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-complete)::before,
+  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-succeeded)::before {
+    color: var(--extractum-success) !important; /* зеленый */
+  }
+
+  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-failed)::before,
+  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-error)::before {
+    color: var(--extractum-danger) !important; /* красный */
+  }
+
+  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-skipped)::before,
+  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-not_implemented)::before,
+  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-not-implemented)::before {
+    color: var(--extractum-border) !important; /* серый */
+  }
+
+  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-running)::before,
+  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-in_progress)::before,
+  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-in-progress)::before {
+    color: var(--extractum-primary) !important; /* синий */
+  }
+
+  /* Стили для облегченных тегов артефактов в Варианте 3 (style-accordion) - Вариант Б */
+  .report-column.style-accordion .artifact-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding-left: 0;
+    border-left: none;
+    margin-left: 0;
+    margin-top: 8px;
+  }
+
+  .report-column.style-accordion .artifact-list button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--extractum-surface-subtle);
+    border: none;
+    border-radius: 4px;
+    padding: 3px 7px;
+    font-size: 11px;
+    color: var(--extractum-text);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: none;
+    width: auto;
+  }
+
+  .report-column.style-accordion .artifact-list button::before {
+    display: none;
+  }
+
+  .report-column.style-accordion .artifact-list button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--extractum-primary) 12%, var(--extractum-surface-subtle));
+    color: var(--extractum-primary);
+    box-shadow: none;
+  }
+
+  .report-column.style-accordion .artifact-list button .artifact-tag-name {
+    color: inherit;
+    font-weight: 500;
+  }
+
+  .report-column.style-accordion .artifact-list button .artifact-tag-index {
+    color: var(--extractum-muted);
+    font-size: 10px;
+    font-weight: normal;
+    opacity: 0.5; /* полупрозрачный индекс */
+    margin-left: 1px;
+  }
+
+
+  /* Стили для метаданных браузера во всех новых вариантах (кроме original) */
+  .report-column.secondary:not(.style-original) .browser-stage-meta {
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  .report-column.secondary:not(.style-original) .browser-stage-meta span {
+    border: none;
+    background: var(--extractum-surface-subtle);
+    border-radius: 4px;
+    padding: 2px 6px;
+    color: var(--extractum-muted);
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .report-column.secondary:not(.style-original) .browser-stage-meta span code {
+    font-weight: 500;
+  }
+
+  .report-column.secondary:not(.style-original) .browser-stage-meta span strong {
+    font-weight: 600;
+  }
+
+  .report-column.secondary:not(.style-original) .browser-stage-meta button.copy-run-id-btn {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    padding: 2px 6px;
+    color: var(--extractum-primary);
+    font-size: 11px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border-radius: 4px;
+  }
+
+  .report-column.secondary:not(.style-original) .browser-stage-meta button.copy-run-id-btn:hover {
+    background: var(--extractum-surface-subtle);
+    color: var(--extractum-primary);
+  }
+
+  .report-column.secondary:not(.style-original) .browser-stage-meta button.copy-run-id-btn svg {
+    flex-shrink: 0;
   }
 </style>
