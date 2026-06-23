@@ -900,3 +900,19 @@ Scope: values found in SQL migrations, bundled prompt-pack assets, seed code, an
 | Ingest observation outcome | `outcome` | `inserted`, `duplicate_observed`, `skipped`, `failed` | `src-tauri/migrations/0001_current_schema_baseline.sql` | Observation write outcome. `duplicate_observed` is also listed in the user-facing registry. |
 | YouTube video form | `video_form` | `regular`, `short`, `live` | `src-tauri/migrations/0001_current_schema_baseline.sql` | Typed YouTube video metadata form. |
 | Analysis document kind | `document_kind` | `telegram_message`, `youtube_transcript`, `youtube_comment`, `youtube_description` | `src-tauri/migrations/0001_current_schema_baseline.sql` | Analysis document material kind. |
+## Checklist for adding or changing values
+
+Use this checklist whenever a change introduces or renames a `status`, `state`, `kind`, `mode`, `phase`, `type`, `provider`, `subtype`, `scope`, `severity`, `reason`, or similar string value.
+
+| Check | Question | Expected action |
+| --- | --- | --- |
+| Owner | Which layer owns the value? | Add or update the row in the registry and mark whether the owner is backend/db, API, shared UI/API, frontend derived, presentation-only, or local sentinel. |
+| Persistence | Is the value stored in SQLite, localStorage, files, or fixtures? | Update SQL `CHECK` constraints, migrations, seed data, cleanup scripts, fixtures, and backward-compatible aliases if needed. |
+| API mirror | Does the value cross the Tauri/API boundary? | Update Rust DTOs/models, TypeScript types, mapping functions, and command/request/response tests together. |
+| Frontend display | Is the value visible to users? | Add labels, badges, empty/error states, filters, disabled reasons, and sorting/grouping behavior. |
+| Derived values | Is this only a UI-derived grouping? | Keep it out of backend contracts unless persistence/API support is intentionally added. |
+| Legacy aliases | Is an old spelling still accepted? | Document the alias as accepted legacy input, but keep one canonical output value. |
+| Fixtures | Do smoke/demo/test fixtures use the value? | Update fixture rows and contract tests so seeded data continues to represent real values. |
+| Docs | Does this registry already contain the family? | Extend the existing row/group instead of creating a competing duplicate. |
+
+Recommended review phrase: `Value registry checked: owner, persistence, API mirror, UI display, fixtures.`
