@@ -66,6 +66,23 @@ The command reads through the existing app database pool from
 `crate::db::get_pool(handle)`. It does not create, update, delete, lock, resume,
 or acknowledge jobs.
 
+The implementation must not rely on Context7 documentation alone for the SQL
+shape. The first implementation task must add a local schema discovery test
+against this repository's pinned Apalis stack:
+
+- `apalis = "=1.0.0-rc.8"`
+- `apalis-sqlite = "=1.0.0-rc.8"`
+- app migrations applied through `crate::migrations`
+- Apalis setup applied through the same helper used by Gemini Browser storage
+
+That test must prove the actual local table name and columns before the read
+model is implemented. It should inspect SQLite metadata with a stable query such
+as `PRAGMA table_info('Jobs')` or `sqlite_master`, seed at least one real Apalis
+job through `TaskSink` or the existing Gemini Browser enqueue helper, and verify
+the query can read the local row. If the local table name or required columns
+differ from the spec, update the spec and implementation plan before building
+the UI.
+
 ### Request DTO
 
 ```text
@@ -83,8 +100,11 @@ Rules:
 - Empty strings are treated as no filter
 - `status` and `job_type` are exact filters
 - `search` matches `id` and `idempotency_key` with a contains query
-- Query results are ordered by the most operationally useful timestamp:
-  `COALESCE(run_at, lock_at, done_at)` descending, with a stable fallback to `id`
+- Query results are ordered by `last_activity_at` descending, then `id`
+  descending. `last_activity_at` is the latest non-null timestamp among
+  `done_at`, `lock_at`, and `run_at`, not the first non-null value. The
+  implementation may compute this in Rust after reading rows if SQLite timestamp
+  representation makes a correct SQL `MAX` expression awkward.
 
 ### Response DTO
 
@@ -98,15 +118,23 @@ ApalisJobsListResponse
 - limit: u32
 ```
 
-`total_matching` reflects rows matching filters before limit. Counts are derived
-from the same filtered set where practical. If this becomes too expensive later,
-counts can be limited to the current result set, but v1 should prefer accurate
-filtered counts.
+`refreshed_at` is an RFC3339 UTC timestamp.
+
+`total_matching` reflects rows matching all active filters before limit.
+
+Counts use non-self filter semantics so filter chips remain useful:
+
+- `status_counts` applies `job_type` and `search` filters, but ignores the
+  current `status` filter.
+- `job_type_counts` applies `status` and `search` filters, but ignores the
+  current `job_type` filter.
+- Counts are computed before the result limit.
+- If the `Jobs` table is missing, all counts are empty.
 
 ### Row DTO
 
-Based on the current Apalis SQL row shape documented by Context7, include these
-fields:
+After local schema discovery confirms the current `Jobs` table shape, include
+these fields when the matching columns exist:
 
 ```text
 ApalisJobRow
@@ -119,13 +147,24 @@ ApalisJobRow
 - lock_at: Option<String>
 - lock_by: Option<String>
 - done_at: Option<String>
+- last_activity_at: Option<String>
 - priority: Option<u32>
 - idempotency_key: Option<String>
 - job_preview: Option<String>
+- job_truncated: bool
 - job_json: Option<serde_json::Value>
 - last_result: Option<serde_json::Value>
+- last_result_truncated: bool
 - metadata: Option<serde_json::Value>
+- metadata_truncated: bool
 ```
+
+All timestamp strings returned to the frontend must be normalized to RFC3339 UTC
+before serialization. The frontend must never receive SQLite-local time strings
+or ambiguous numeric timestamps. If Apalis stores an integer epoch, the backend
+converts it; if it stores a text timestamp, the backend parses and re-emits it
+as RFC3339 UTC. If parsing fails, return `None` for the normalized timestamp and
+keep the original value out of the UI-facing DTO.
 
 The current Apalis core statuses are expected to include `Pending`, `Queued`,
 `Running`, `Done`, `Failed`, and `Killed`. The API must not reject unknown
@@ -138,8 +177,21 @@ Apalis stores serialized job payloads in an internal SQL column. The inspector
 may decode JSON payloads when the storage format is JSON-compatible. If decoding
 fails, return a short lossy textual preview and leave `job_json` as `None`.
 
-Payloads may contain prompts or provider configuration. This is a local-only
-diagnostic page, but v1 must avoid adding copy/export/share controls.
+Payloads may contain prompts, provider configuration, cookies, tokens, endpoint
+details, or other sensitive diagnostic material. The backend must sanitize and
+bound every UI-facing payload field:
+
+- Redact object keys whose normalized name contains `api_key`, `apikey`,
+  `authorization`, `bearer`, `cookie`, `credentials`, `password`, `secret`,
+  `session`, `token`, `api_hash`, or `refresh_token`.
+- Redaction is recursive for JSON objects and arrays.
+- Use the exact replacement string `[redacted]`.
+- Limit each of `job_json`, `last_result`, and `metadata` to at most 64 KiB of
+  serialized JSON after redaction.
+- If a section exceeds the limit, return a truncated representation plus the
+  corresponding `*_truncated = true` flag. The UI must label truncated sections.
+- `job_preview` is a redacted text preview capped at 500 characters.
+- Do not add copy, export, open-folder, or share controls in v1.
 
 ### Error Handling
 
@@ -184,13 +236,15 @@ The left pane contains:
   - Run at
   - Lock at
   - Done at
+  - Last activity
 
 The right pane contains selected job details:
 
 - Stable identity block: id, idempotency key, job type
 - Execution block: status, attempts, priority, lock owner
-- Timing block: run_at, lock_at, done_at
-- JSON sections for `job_json`, `last_result`, and `metadata`
+- Timing block: `run_at`, `lock_at`, `done_at`, and `last_activity_at`
+- JSON sections for `job_json`, `last_result`, and `metadata`, with visible
+  truncated markers when any `*_truncated` flag is true
 
 If no job is selected, show an empty detail state asking the user to select a job.
 
@@ -219,17 +273,23 @@ Use TDD for implementation.
 
 Backend tests:
 
+- `apalis_jobs_schema_probe_documents_local_jobs_table_shape`
 - `apalis_jobs_list_returns_rows_from_jobs_table`
 - `apalis_jobs_list_filters_by_status_job_type_and_search`
 - `apalis_jobs_list_clamps_limit`
 - `apalis_jobs_list_returns_empty_when_jobs_table_missing`
 - `apalis_jobs_list_does_not_mutate_jobs`
+- `apalis_jobs_list_sorts_by_latest_activity_timestamp`
+- `apalis_jobs_list_returns_rfc3339_utc_timestamps`
+- `apalis_jobs_counts_ignore_their_own_active_filter`
+- `apalis_jobs_payloads_are_redacted_and_truncated`
 
 Frontend API tests:
 
 - wrapper calls `apalis_jobs_list`
 - request fields are passed as expected
 - response typing covers nullable JSON fields
+- response typing covers normalized timestamps and truncation flags
 
 UI/source contract tests:
 
@@ -237,6 +297,8 @@ UI/source contract tests:
 - `/jobs` route renders manual refresh, filters, table, and detail panel
 - refresh calls the API again
 - selecting a row displays job details
+- truncated and redacted detail sections are labeled without exposing raw secret
+  values
 - empty and error states render without layout collapse
 
 Verification commands:
@@ -262,3 +324,7 @@ top-level split inspector.
 - The SQL inspection is scoped to local diagnostics and does not become a source
   of product truth for existing UI.
 - Unknown Apalis status values are displayed rather than rejected.
+- The design now requires local schema discovery before relying on Apalis SQL
+  internals.
+- Timestamp format, sorting, counts, redaction, and truncation behavior are
+  explicit.
