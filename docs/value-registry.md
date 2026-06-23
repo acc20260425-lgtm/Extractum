@@ -23,6 +23,34 @@ be promoted into a code registry such as `src/lib/status-registry.ts`.
   contracts, events, or persisted UI state.
 - `Current usage` lists representative files, not every reference.
 
+## Review checklist
+
+Use this checklist when adding or changing values:
+
+- Is this value a real machine value, or only user-facing message text?
+- Is it produced by backend/database code, frontend derived state, or UI only?
+- Is it persisted in the database, local storage, URLs, or event payloads?
+- Does the value describe lifecycle, taxonomy, capability, filter, or
+  presentation?
+- Is there an existing value with the same meaning under another name?
+- Does the value need a terminal/active/transitional classification?
+- Does the UI need a default tone, icon, action, or disabled reason for it?
+- Can the value be renamed safely, or does it require a migration?
+
+## Normalization notes
+
+- Prefer `completed` for event and process terminal states unless a backend
+  contract already uses `complete` or `succeeded`.
+- Prefer `failed` for process terminal states and `error` for UI/catalog
+  derived states that summarize one or more failures.
+- Prefer `unavailable` when a resource cannot be used, and `unknown` when the
+  application cannot classify the condition.
+- Prefer `cancel_requested` for transitional cancellation and `cancelled` for
+  terminal cancellation.
+- Keep provider/source taxonomy values lowercase snake_case.
+- Do not merge UI tone values with domain status values. A status maps to a
+  tone; it is not itself a tone.
+
 ## Value type taxonomy
 
 | Type | Meaning | Examples |
@@ -262,6 +290,16 @@ Representative source: `src/lib/types/prompt-packs.ts`.
 Naming note: `PromptPackRunStatus` uses `complete`, while events use
 `completed`. Keep this visible until the backend contract is intentionally
 normalized.
+
+Known naming collisions:
+
+| Values | Meaning overlap | Current recommendation |
+| --- | --- | --- |
+| `complete` / `completed` | Both mean successful terminal completion. | Keep existing contracts; prefer `completed` for new event/process values. |
+| `succeeded` / `completed` | Source jobs use `succeeded`, other processes use `completed`. | Keep source job contract; prefer `completed` for new general process values. |
+| `failed` / `error` | Both communicate failure. | Use `failed` for terminal process status; use `error` for derived catalog/UI summaries. |
+| `ready` / `available` | Both communicate usability. | Use `ready` for runtime/setup readiness; use `available` for resource availability. |
+| `unknown` / `unavailable` | Both can appear when data cannot be used. | Use `unknown` for classification uncertainty; use `unavailable` for known lack of availability. |
 
 ## Gemini Browser provider and runs
 
