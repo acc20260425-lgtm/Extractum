@@ -38,7 +38,6 @@
   let artifactCopied = $state(false);
   let copiedBrowserRunId = $state<string | null>(null);
 
-  let sidebarStyle = $state("original");
   let activeTab = $state("process");
 
   const runId = $derived(run?.runId ?? null);
@@ -536,78 +535,30 @@
         </div>
       </section>
 
-      <aside class="report-column secondary style-{sidebarStyle}">
-        <div class="style-switcher">
-          <span class="switcher-label">Стиль:</span>
-          <div class="switcher-buttons">
-            <button
-              type="button"
-              class:active={sidebarStyle === "original"}
-              onclick={() => sidebarStyle = "original"}
-              title="Исходная стопка карточек"
-            >
-              Коробки
-            </button>
-            <button
-              type="button"
-              class:active={sidebarStyle === "unified"}
-              onclick={() => sidebarStyle = "unified"}
-              title="Вариант 1: Единая карточка"
-            >
-              Вар 1
-            </button>
-            <button
-              type="button"
-              class:active={sidebarStyle === "tabbed"}
-              onclick={() => sidebarStyle = "tabbed"}
-              title="Вариант 2: Копия Варианта 1"
-            >
-              Вар 2
-            </button>
-            <button
-              type="button"
-              class:active={sidebarStyle === "accordion"}
-              onclick={() => sidebarStyle = "accordion"}
-              title="Вариант 3: Облегченные теги"
-            >
-              Вар 3
-            </button>
-            <button
-              type="button"
-              class:active={sidebarStyle === "borderless"}
-              onclick={() => sidebarStyle = "borderless"}
-              title="Вариант 4: Без рамок"
-            >
-              Вар 4
-            </button>
-          </div>
+      <aside class="report-column secondary">
+        <div class="sidebar-tabs">
+          <button
+            type="button"
+            class="tab-btn"
+            class:active={activeTab === "process"}
+            onclick={() => activeTab = "process"}
+          >
+            Процесс
+          </button>
+          <button
+            type="button"
+            class="tab-btn"
+            class:active={activeTab === "diagnostics"}
+            onclick={() => activeTab = "diagnostics"}
+          >
+            Диагностика
+            {#if issueCount > 0}
+              <span class="tab-badge">{issueCount}</span>
+            {/if}
+          </button>
         </div>
 
-        {#if sidebarStyle !== "original"}
-          <div class="sidebar-tabs">
-            <button
-              type="button"
-              class="tab-btn"
-              class:active={activeTab === "process"}
-              onclick={() => activeTab = "process"}
-            >
-              Процесс
-            </button>
-            <button
-              type="button"
-              class="tab-btn"
-              class:active={activeTab === "diagnostics"}
-              onclick={() => activeTab = "diagnostics"}
-            >
-              Диагностика
-              {#if issueCount > 0}
-                <span class="tab-badge">{issueCount}</span>
-              {/if}
-            </button>
-          </div>
-        {/if}
-
-        {#if sidebarStyle === "original" || activeTab === "process"}
+        {#if activeTab === "process"}
           <div class="report-section">
             <div class="section-title">
               <Layers size={15} aria-hidden="true" />
@@ -657,12 +608,8 @@
                     <div class="artifact-list">
                       {#each artifactsByStage[stage.stageRunId] ?? [] as artifact (`${artifact.artifactKind}-${artifact.attemptNumber}-${artifact.artifactIndex}`)}
                         <button type="button" disabled={loadingArtifact} onclick={() => void openArtifact(artifact)}>
-                          {#if sidebarStyle === "accordion"}
-                            <span class="artifact-tag-name">{artifact.artifactKind}</span>
-                            <span class="artifact-tag-index">#{artifact.artifactIndex}</span>
-                          {:else}
-                            {artifact.artifactKind} #{artifact.artifactIndex}
-                          {/if}
+                          <span class="artifact-tag-name">{artifact.artifactKind}</span>
+                          <span class="artifact-tag-index">#{artifact.artifactIndex}</span>
                         </button>
                       {/each}
                     </div>
@@ -682,7 +629,7 @@
           </div>
         {/if}
 
-        {#if sidebarStyle === "original" || activeTab === "diagnostics"}
+        {#if activeTab === "diagnostics"}
           <div class="report-section">
             <h3>Warnings</h3>
             {@render CompactList({
@@ -1283,55 +1230,7 @@
     }
   }
 
-  /* Switcher & tabs layout */
-  .style-switcher {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 6px 10px;
-    background: var(--extractum-surface-subtle);
-    border: 1px solid var(--extractum-border);
-    border-radius: var(--extractum-radius);
-    font-size: 11px;
-    flex-shrink: 0;
-  }
 
-  .switcher-label {
-    color: var(--extractum-muted);
-    font-weight: 500;
-    text-transform: uppercase;
-    font-size: 10px;
-    letter-spacing: 0.5px;
-  }
-
-  .switcher-buttons {
-    display: flex;
-    gap: 4px;
-  }
-
-  .switcher-buttons button {
-    border: 1px solid transparent;
-    background: transparent;
-    border-radius: calc(var(--extractum-radius) - 2px);
-    color: var(--extractum-muted);
-    padding: 3px 6px;
-    cursor: pointer;
-    font-size: 11px;
-    transition: all 0.15s ease;
-  }
-
-  .switcher-buttons button:hover {
-    color: var(--extractum-text);
-    background: var(--extractum-surface);
-  }
-
-  .switcher-buttons button.active {
-    color: var(--extractum-primary);
-    background: var(--extractum-surface);
-    border-color: var(--extractum-border);
-    font-weight: 500;
-  }
 
   .sidebar-tabs {
     display: flex;
@@ -1383,8 +1282,8 @@
     color: var(--extractum-primary);
   }
 
-  /* Стили для всех перепроектированных вариантов (карточный дизайн, вкладки, бейджи-точки) */
-  .report-column.secondary:not(.style-original) {
+  /* Стили для боковой панели (карточный дизайн, вкладки, бейджи-точки) */
+  .report-column.secondary {
     border: 1px solid var(--extractum-border);
     border-radius: var(--extractum-radius);
     background: var(--extractum-surface-raised);
@@ -1392,12 +1291,7 @@
     gap: 0;
   }
 
-  .report-column.secondary:not(.style-original) .style-switcher {
-    margin: 12px;
-    border-color: var(--extractum-border);
-  }
-
-  .report-column.secondary:not(.style-original) .sidebar-tabs {
+  .report-column.secondary .sidebar-tabs {
     border-top: 1px solid var(--extractum-border);
     border-bottom: 1px solid var(--extractum-border);
     padding: 0;
@@ -1405,20 +1299,20 @@
     gap: 0;
   }
 
-  .report-column.secondary:not(.style-original) .sidebar-tabs .tab-btn {
+  .report-column.secondary .sidebar-tabs .tab-btn {
     border: none;
     border-radius: 0;
     padding: 10px;
     border-bottom: 2px solid transparent;
   }
 
-  .report-column.secondary:not(.style-original) .sidebar-tabs .tab-btn.active {
+  .report-column.secondary .sidebar-tabs .tab-btn.active {
     background: var(--extractum-surface-raised);
     border-bottom-color: var(--extractum-primary);
     color: var(--extractum-primary);
   }
 
-  .report-column.secondary:not(.style-original) .report-section {
+  .report-column.secondary .report-section {
     border: none;
     border-radius: 0;
     background: transparent;
@@ -1426,12 +1320,12 @@
     border-bottom: 1px solid var(--extractum-border);
   }
 
-  .report-column.secondary:not(.style-original) .report-section:last-child {
+  .report-column.secondary .report-section:last-child {
     border-bottom: none;
   }
 
-  .report-column.secondary:not(.style-original) .item-list article,
-  .report-column.secondary:not(.style-original) .stage-list article {
+  .report-column.secondary .item-list article,
+  .report-column.secondary .stage-list article {
     border: none;
     border-radius: 0;
     background: transparent;
@@ -1439,16 +1333,16 @@
     border-left: 3px solid var(--extractum-border);
   }
 
-  .report-column.secondary:not(.style-original) .stage-list article {
+  .report-column.secondary .stage-list article {
     border-left-color: var(--extractum-primary);
   }
 
-  .report-column.secondary:not(.style-original) .item-list article {
+  .report-column.secondary .item-list article {
     border-left-color: var(--extractum-warning); /* warnings indicator color */
   }
 
-  /* Семантические цвета для бейджей статусов (цветные точки) */
-  .report-column.secondary:not(.style-original) :global(.extractum-badge) {
+  /* Семантические цвета для бейджей statuses (цветные точки) */
+  .report-column.secondary :global(.extractum-badge) {
     background: transparent !important;
     border: none !important;
     padding: 0 !important;
@@ -1461,36 +1355,36 @@
     text-transform: lowercase;
   }
 
-  .report-column.secondary:not(.style-original) :global(.extractum-badge)::before {
+  .report-column.secondary :global(.extractum-badge)::before {
     content: "●";
     font-size: 10px;
     line-height: 1;
   }
 
-  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-complete)::before,
-  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-succeeded)::before {
+  .report-column.secondary :global(.extractum-badge.status-complete)::before,
+  .report-column.secondary :global(.extractum-badge.status-succeeded)::before {
     color: var(--extractum-success) !important; /* зеленый */
   }
 
-  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-failed)::before,
-  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-error)::before {
+  .report-column.secondary :global(.extractum-badge.status-failed)::before,
+  .report-column.secondary :global(.extractum-badge.status-error)::before {
     color: var(--extractum-danger) !important; /* красный */
   }
 
-  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-skipped)::before,
-  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-not_implemented)::before,
-  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-not-implemented)::before {
+  .report-column.secondary :global(.extractum-badge.status-skipped)::before,
+  .report-column.secondary :global(.extractum-badge.status-not_implemented)::before,
+  .report-column.secondary :global(.extractum-badge.status-not-implemented)::before {
     color: var(--extractum-border) !important; /* серый */
   }
 
-  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-running)::before,
-  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-in_progress)::before,
-  .report-column.secondary:not(.style-original) :global(.extractum-badge.status-in-progress)::before {
+  .report-column.secondary :global(.extractum-badge.status-running)::before,
+  .report-column.secondary :global(.extractum-badge.status-in_progress)::before,
+  .report-column.secondary :global(.extractum-badge.status-in-progress)::before {
     color: var(--extractum-primary) !important; /* синий */
   }
 
-  /* Стили для облегченных тегов артефактов в Варианте 3 (style-accordion) - Вариант Б */
-  .report-column.style-accordion .artifact-list {
+  /* Стили для облегченных тегов артефактов (Muted Tags) */
+  .report-column.secondary .artifact-list {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -1501,7 +1395,7 @@
     margin-top: 8px;
   }
 
-  .report-column.style-accordion .artifact-list button {
+  .report-column.secondary .artifact-list button {
     position: relative;
     display: inline-flex;
     align-items: center;
@@ -1518,22 +1412,18 @@
     width: auto;
   }
 
-  .report-column.style-accordion .artifact-list button::before {
-    display: none;
-  }
-
-  .report-column.style-accordion .artifact-list button:hover:not(:disabled) {
+  .report-column.secondary .artifact-list button:hover:not(:disabled) {
     background: color-mix(in srgb, var(--extractum-primary) 12%, var(--extractum-surface-subtle));
     color: var(--extractum-primary);
     box-shadow: none;
   }
 
-  .report-column.style-accordion .artifact-list button .artifact-tag-name {
+  .report-column.secondary .artifact-list button .artifact-tag-name {
     color: inherit;
     font-weight: 500;
   }
 
-  .report-column.style-accordion .artifact-list button .artifact-tag-index {
+  .report-column.secondary .artifact-list button .artifact-tag-index {
     color: var(--extractum-muted);
     font-size: 10px;
     font-weight: normal;
@@ -1541,14 +1431,13 @@
     margin-left: 1px;
   }
 
-
-  /* Стили для метаданных браузера во всех новых вариантах (кроме original) */
-  .report-column.secondary:not(.style-original) .browser-stage-meta {
+  /* Стили для метаданных браузера */
+  .report-column.secondary .browser-stage-meta {
     gap: 4px;
     margin-top: 6px;
   }
 
-  .report-column.secondary:not(.style-original) .browser-stage-meta span {
+  .report-column.secondary .browser-stage-meta span {
     border: none;
     background: var(--extractum-surface-subtle);
     border-radius: 4px;
@@ -1558,15 +1447,15 @@
     line-height: 1.3;
   }
 
-  .report-column.secondary:not(.style-original) .browser-stage-meta span code {
+  .report-column.secondary .browser-stage-meta span code {
     font-weight: 500;
   }
 
-  .report-column.secondary:not(.style-original) .browser-stage-meta span strong {
+  .report-column.secondary .browser-stage-meta span strong {
     font-weight: 600;
   }
 
-  .report-column.secondary:not(.style-original) .browser-stage-meta button.copy-run-id-btn {
+  .report-column.secondary .browser-stage-meta button.copy-run-id-btn {
     border: none;
     background: transparent;
     box-shadow: none;
@@ -1582,12 +1471,12 @@
     border-radius: 4px;
   }
 
-  .report-column.secondary:not(.style-original) .browser-stage-meta button.copy-run-id-btn:hover {
+  .report-column.secondary .browser-stage-meta button.copy-run-id-btn:hover {
     background: var(--extractum-surface-subtle);
     color: var(--extractum-primary);
   }
 
-  .report-column.secondary:not(.style-original) .browser-stage-meta button.copy-run-id-btn svg {
+  .report-column.secondary .browser-stage-meta button.copy-run-id-btn svg {
     flex-shrink: 0;
   }
 </style>
