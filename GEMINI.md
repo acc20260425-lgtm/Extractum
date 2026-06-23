@@ -25,4 +25,33 @@ This file is a working contract for AI agents modifying the repository.
 - Browser console errors from missing Tauri IPC are expected when testing in Playwright.
 
 ## 3. Workflow Rules
-- Prefer updating documentation when code changes.
+- Update docs when behavior, architecture, commands, or agent workflow rules change.
+- Inspect the dirty worktree before commits and stage only intended files.
+- Never use destructive git commands unless the user explicitly asks for them.
+- Do not revert, overwrite, or reformat unrelated user changes.
+- Keep changes focused and local to the requested task.
+
+## 4. Validation Rules
+- Use `npm.cmd` rather than `npm` in all validation commands on Windows.
+- Use focused tests for changed model, helper, or contract logic.
+- Run `npm.cmd run check` after broad Svelte or TypeScript changes.
+- Run `cargo check` after Rust or Tauri backend changes.
+- Do not claim checks pass unless you ran the relevant command and saw it pass.
+
+## 5. Data Grid & Date Formatting
+- `ExtractumDataGrid` date/time columns must use raw values plus `dateTimeFormat`.
+- Do not pre-format grid date/time values into label-only columns.
+- Use shared grid date formatting for ISO strings, Unix seconds, Unix milliseconds, and `Date` values.
+- Only format date/time grid columns when `dateTimeFormat` is explicitly set.
+
+## 6. Backend, Database & Migrations
+- Keep Telegram, SQLite, compression, session persistence, and low-level integration logic in Rust.
+- Keep SQLite migrations additive.
+- Do not delete, rename, or casually rewrite existing migration files.
+- Do not introduce a second manual SQLite path or duplicate database connection strategy.
+
+## 7. Security
+- Never log secrets.
+- Keep Telegram session persistence backend-owned.
+- Treat LLM API key storage in SQLite profile settings as temporary security debt.
+- When touching LLM profile or credential code, preserve profile scoping and document security tradeoffs.
