@@ -1,7 +1,7 @@
 <script lang="ts">
   import "$lib/styles/base.css";
   import { goto } from "$app/navigation";
-  import { Activity, FolderKanban, LayoutDashboard, Library, Menu, Moon, Settings, ShieldCheck, Sun, UserRound } from "@lucide/svelte";
+  import { Activity, FolderKanban, LayoutDashboard, Library, ListChecks, Menu, Moon, Settings, ShieldCheck, Sun, UserRound } from "@lucide/svelte";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
   import AppSidebar from "$lib/components/app-sidebar.svelte";
@@ -94,6 +94,13 @@
         pathname.startsWith("/accounts") || pathname.startsWith("/auth"),
     },
     {
+      href: "/jobs",
+      label: "Jobs",
+      caption: "Apalis queue",
+      icon: ListChecks,
+      active: (pathname: string) => pathname.startsWith("/jobs"),
+    },
+    {
       href: "/diagnostics",
       label: "Diagnostics",
       caption: "Local health",
@@ -137,6 +144,13 @@
       caption: "Prompt pack runs",
       icon: Activity,
       active: (pathname: string) => pathname.startsWith("/projects/runs"),
+    },
+    {
+      href: "/jobs",
+      label: "Jobs",
+      caption: "Apalis queue",
+      icon: ListChecks,
+      active: (pathname: string) => pathname.startsWith("/jobs"),
     },
     {
       href: "/diagnostics",
@@ -203,7 +217,9 @@
           <div class="workspace-route">
             <span class="workspace-kicker">Current space</span>
             <strong>
-              {#if page.url.pathname.startsWith("/projects")}
+              {#if page.url.pathname.startsWith("/jobs")}
+                Jobs
+              {:else if page.url.pathname.startsWith("/projects")}
                 Research projects
               {:else if page.url.pathname.startsWith("/analysis")}
                 Analysis workspace
