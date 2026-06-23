@@ -4,7 +4,7 @@
 
 **Goal:** Build a top-level read-only `/jobs` inspector for all Apalis jobs with manual refresh, server-side filters, counts, and safe payload previews.
 
-**Architecture:** Add a focused Rust `apalis_jobs` read-model module that reads the existing Apalis SQLite `Jobs` table through the app database pool and exposes one Tauri command, `apalis_jobs_list`. Add a narrow TS API/types layer and a Svelte split inspector route that never mutates jobs and reloads through the backend whenever filters change. Wire the route as its own sidebar item in both legacy and projects navigation modes.
+**Architecture:** Add a focused Rust `apalis_jobs` read-model module that reads the existing Apalis SQLite `Jobs` table through the app database pool and exposes one Tauri command, `apalis_jobs_list`. The backend applies filters, counts, latest-activity sorting, and `LIMIT` in SQL, then reads `job`, `last_result`, and `metadata` only for the limited result IDs. Add a narrow TS API/types layer and a Svelte split inspector route that never mutates jobs, debounces search, guards stale responses, and reloads through the backend whenever filters change.
 
 **Tech Stack:** Tauri 2, Rust 2021, sqlx SQLite, apalis `=1.0.0-rc.8`, apalis-sqlite `=1.0.0-rc.8`, serde, time, Svelte 5, Vitest, lucide-svelte.
 
@@ -13,7 +13,7 @@
 ## File Structure
 
 - Create `src-tauri/src/apalis_jobs.rs`
-  - Owns request/response DTOs, schema discovery, read-only SQL queries, sorting, timestamp normalization, payload redaction, payload truncation, and backend tests.
+  - Owns request/response DTOs, schema discovery, read-only SQL queries, SQL-side filtering/counting/sorting/limit, limited-row payload fetches, timestamp normalization, payload redaction, payload truncation, and backend tests.
 - Modify `src-tauri/src/lib.rs`
   - Registers the `apalis_jobs` module and `apalis_jobs_list` Tauri command.
 - Create `src/lib/types/apalis-jobs.ts`
@@ -23,9 +23,9 @@
 - Create `src/lib/api/apalis-jobs.test.ts`
   - Verifies the API wrapper command name and request payload.
 - Create `src/lib/apalis-jobs-route-contract.test.ts`
-  - Source-level route/navigation/UI contract tests for command isolation, manual refresh, server-side filtering, read-only UI, and navigation.
+  - Source-level route/navigation/UI contract tests for command isolation, manual refresh, server-side filtering, debounce/stale-response protection, read-only UI, local time display, and navigation.
 - Create `src/lib/components/jobs/ApalisJobsPanel.svelte`
-  - Implements split inspector UI, filter controls, manual refresh, table, detail panel, loading/empty/error states, and selection handling.
+  - Implements split inspector UI, filter controls, debounced search, manual refresh, table, detail panel, loading/empty/error states, and selection handling.
 - Create `src/routes/jobs/+page.svelte`
   - Adds the top-level route and delegates to `ApalisJobsPanel`.
 - Modify `src/routes/+layout.svelte`
@@ -46,7 +46,7 @@ Create `src-tauri/src/apalis_jobs.rs` with DTOs, an intentional empty implementa
 ```rust
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::{Row, SqlitePool};
+use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
 use tauri::AppHandle;
 
 const DEFAULT_LIMIT: u32 = 100;
@@ -604,33 +604,36 @@ async fn apalis_jobs_list_from_pool(
         return Ok(empty_response(filters.limit));
     };
 
-    let all_rows = fetch_jobs_rows(pool, &schema).await?;
-    let mut matching = all_rows
-        .iter()
-        .filter(|row| matches_filters(row, &filters, true, true))
-        .cloned()
-        .collect::<Vec<_>>();
-    matching.sort_by(|left, right| compare_jobs(right, left));
-
-    let total_matching = matching.len() as u32;
-    let jobs = matching
+    let total_matching = count_jobs(pool, &schema, &filters, true, true).await?;
+    let status_counts = status_counts(pool, &schema, &filters).await?;
+    let job_type_counts = job_type_counts(pool, &schema, &filters).await?;
+    let summaries = fetch_job_summaries(pool, &schema, &filters).await?;
+    let payloads_by_id = fetch_payloads_for_ids(
+        pool,
+        &schema,
+        summaries.iter().map(|row| row.id.as_str()).collect(),
+    )
+    .await?;
+    let jobs = summaries
         .into_iter()
-        .take(filters.limit as usize)
-        .map(|row| row.into_dto())
+        .map(|row| {
+            let payloads = payloads_by_id.get(&row.id).cloned().unwrap_or_default();
+            row.into_dto(payloads)
+        })
         .collect::<Vec<_>>();
 
     Ok(ApalisJobsListResponse {
         jobs,
         total_matching,
-        status_counts: status_counts(&all_rows, &filters),
-        job_type_counts: job_type_counts(&all_rows, &filters),
+        status_counts,
+        job_type_counts,
         refreshed_at: crate::time::now_rfc3339_utc(),
         limit: filters.limit,
     })
 }
 
 #[derive(Clone, Debug)]
-struct InternalJobRow {
+struct InternalJobSummary {
     id: String,
     job_type: String,
     status: String,
@@ -643,13 +646,17 @@ struct InternalJobRow {
     last_activity_at: Option<String>,
     priority: Option<u32>,
     idempotency_key: Option<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct PayloadColumns {
     job_raw: Option<Vec<u8>>,
     last_result_raw: Option<Vec<u8>>,
     metadata_raw: Option<Vec<u8>>,
 }
 
-impl InternalJobRow {
-    fn into_dto(self) -> ApalisJobRow {
+impl InternalJobSummary {
+    fn into_dto(self, _payloads: PayloadColumns) -> ApalisJobRow {
         ApalisJobRow {
             id: self.id,
             job_type: self.job_type,
@@ -674,75 +681,330 @@ impl InternalJobRow {
     }
 }
 
-async fn fetch_jobs_rows(
+async fn fetch_job_summaries(
     pool: &SqlitePool,
     schema: &JobsTableSchema,
-) -> crate::error::AppResult<Vec<InternalJobRow>> {
-    let rows = sqlx::query("SELECT * FROM Jobs")
+    filters: &ApalisJobsFilters,
+) -> crate::error::AppResult<Vec<InternalJobSummary>> {
+    let mut builder = QueryBuilder::<Sqlite>::new("SELECT ");
+    builder
+        .push(text_expr(schema, "id", "''"))
+        .push(" AS id, ")
+        .push(text_expr(schema, "job_type", "''"))
+        .push(" AS job_type, ")
+        .push(text_expr(schema, "status", "'unknown'"))
+        .push(" AS status, ")
+        .push(int_expr(schema, "attempts", "0"))
+        .push(" AS attempts, ")
+        .push(nullable_int_expr(schema, "max_attempts"))
+        .push(" AS max_attempts, ")
+        .push(nullable_text_expr(schema, "run_at"))
+        .push(" AS run_at, ")
+        .push(nullable_text_expr(schema, "lock_at"))
+        .push(" AS lock_at, ")
+        .push(nullable_text_expr(schema, "lock_by"))
+        .push(" AS lock_by, ")
+        .push(nullable_text_expr(schema, "done_at"))
+        .push(" AS done_at, ")
+        .push(nullable_int_expr(schema, "priority"))
+        .push(" AS priority, ")
+        .push(nullable_text_expr(schema, "idempotency_key"))
+        .push(" AS idempotency_key, ")
+        .push(last_activity_sort_expr(schema))
+        .push(" AS last_activity_sort FROM Jobs");
+    push_where(&mut builder, schema, filters, true, true);
+    builder
+        .push(" ORDER BY last_activity_sort DESC, id DESC LIMIT ")
+        .push_bind(filters.limit as i64);
+
+    let rows = builder
+        .build()
         .fetch_all(pool)
         .await
         .map_err(crate::error::AppError::database)?;
 
     Ok(rows
         .into_iter()
-        .map(|row| internal_row_from_sql(row, schema))
+        .map(internal_summary_from_sql)
         .collect())
 }
 
-fn internal_row_from_sql(row: sqlx::sqlite::SqliteRow, schema: &JobsTableSchema) -> InternalJobRow {
-    let run_at = normalize_timestamp(optional_text(&row, schema, "run_at"));
-    let lock_at = normalize_timestamp(optional_text(&row, schema, "lock_at"));
-    let done_at = normalize_timestamp(optional_text(&row, schema, "done_at"));
+async fn fetch_payloads_for_ids(
+    pool: &SqlitePool,
+    schema: &JobsTableSchema,
+    ids: Vec<&str>,
+) -> crate::error::AppResult<std::collections::HashMap<String, PayloadColumns>> {
+    if ids.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    let mut builder = QueryBuilder::<Sqlite>::new("SELECT ");
+    builder
+        .push(text_expr(schema, "id", "''"))
+        .push(" AS id, ")
+        .push(blob_or_text_expr(schema, "job"))
+        .push(" AS job, ")
+        .push(blob_or_text_expr(schema, "last_result"))
+        .push(" AS last_result, ")
+        .push(blob_or_text_expr(schema, "metadata"))
+        .push(" AS metadata FROM Jobs WHERE id IN (");
+    let mut separated = builder.separated(", ");
+    for id in ids {
+        separated.push_bind(id);
+    }
+    separated.push_unseparated(")");
+
+    let rows = builder
+        .build()
+        .fetch_all(pool)
+        .await
+        .map_err(crate::error::AppError::database)?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let id = row.get::<String, _>("id");
+            let payloads = PayloadColumns {
+                job_raw: optional_blob_or_text_alias(&row, "job"),
+                last_result_raw: optional_blob_or_text_alias(&row, "last_result"),
+                metadata_raw: optional_blob_or_text_alias(&row, "metadata"),
+            };
+            (id, payloads)
+        })
+        .collect())
+}
+
+fn internal_summary_from_sql(row: sqlx::sqlite::SqliteRow) -> InternalJobSummary {
+    let run_at = normalize_timestamp(row.try_get::<Option<String>, _>("run_at").ok().flatten());
+    let lock_at = normalize_timestamp(row.try_get::<Option<String>, _>("lock_at").ok().flatten());
+    let done_at = normalize_timestamp(row.try_get::<Option<String>, _>("done_at").ok().flatten());
     let last_activity_at = latest_timestamp([done_at.as_deref(), lock_at.as_deref(), run_at.as_deref()]);
 
-    InternalJobRow {
-        id: text_or_default(&row, schema, "id", ""),
-        job_type: text_or_default(&row, schema, "job_type", ""),
-        status: text_or_default(&row, schema, "status", "unknown"),
-        attempts: optional_i64(&row, schema, "attempts").unwrap_or_default().max(0) as u32,
-        max_attempts: optional_i64(&row, schema, "max_attempts").map(|value| value.max(0) as u32),
+    InternalJobSummary {
+        id: row.get::<String, _>("id"),
+        job_type: row.get::<String, _>("job_type"),
+        status: row.get::<String, _>("status"),
+        attempts: row.get::<i64, _>("attempts").max(0) as u32,
+        max_attempts: row.try_get::<Option<i64>, _>("max_attempts").ok().flatten().map(|value| value.max(0) as u32),
         run_at,
         lock_at,
-        lock_by: optional_text(&row, schema, "lock_by"),
+        lock_by: row.try_get::<Option<String>, _>("lock_by").ok().flatten(),
         done_at,
         last_activity_at,
-        priority: optional_i64(&row, schema, "priority").map(|value| value.max(0) as u32),
-        idempotency_key: optional_text(&row, schema, "idempotency_key"),
-        job_raw: optional_blob_or_text(&row, schema, "job"),
-        last_result_raw: optional_blob_or_text(&row, schema, "last_result"),
-        metadata_raw: optional_blob_or_text(&row, schema, "metadata"),
+        priority: row.try_get::<Option<i64>, _>("priority").ok().flatten().map(|value| value.max(0) as u32),
+        idempotency_key: row.try_get::<Option<String>, _>("idempotency_key").ok().flatten(),
     }
 }
 
-fn optional_text(row: &sqlx::sqlite::SqliteRow, schema: &JobsTableSchema, column: &str) -> Option<String> {
-    if !schema.has(column) {
-        return None;
-    }
-    row.try_get::<Option<String>, _>(column).ok().flatten()
+async fn count_jobs(
+    pool: &SqlitePool,
+    schema: &JobsTableSchema,
+    filters: &ApalisJobsFilters,
+    include_status: bool,
+    include_job_type: bool,
+) -> crate::error::AppResult<u32> {
+    let mut builder = QueryBuilder::<Sqlite>::new("SELECT COUNT(*) FROM Jobs");
+    push_where(&mut builder, schema, filters, include_status, include_job_type);
+    let count = builder
+        .build_query_scalar::<i64>()
+        .fetch_one(pool)
+        .await
+        .map_err(crate::error::AppError::database)?;
+    Ok(count.max(0) as u32)
 }
 
-fn text_or_default(row: &sqlx::sqlite::SqliteRow, schema: &JobsTableSchema, column: &str, default: &str) -> String {
-    optional_text(row, schema, column).unwrap_or_else(|| default.to_string())
+async fn status_counts(
+    pool: &SqlitePool,
+    schema: &JobsTableSchema,
+    filters: &ApalisJobsFilters,
+) -> crate::error::AppResult<Vec<ApalisJobStatusCount>> {
+    if !schema.has("status") {
+        return Ok(Vec::new());
+    }
+
+    let mut builder = QueryBuilder::<Sqlite>::new(
+        "SELECT COALESCE(CAST(status AS TEXT), 'unknown') AS status, COUNT(*) AS count FROM Jobs",
+    );
+    push_where(&mut builder, schema, filters, false, true);
+    builder.push(" GROUP BY status ORDER BY status");
+    let rows = builder
+        .build()
+        .fetch_all(pool)
+        .await
+        .map_err(crate::error::AppError::database)?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| ApalisJobStatusCount {
+            status: row.get::<String, _>("status"),
+            count: row.get::<i64, _>("count").max(0) as u32,
+        })
+        .collect())
 }
 
-fn optional_i64(row: &sqlx::sqlite::SqliteRow, schema: &JobsTableSchema, column: &str) -> Option<i64> {
-    if !schema.has(column) {
-        return None;
+async fn job_type_counts(
+    pool: &SqlitePool,
+    schema: &JobsTableSchema,
+    filters: &ApalisJobsFilters,
+) -> crate::error::AppResult<Vec<ApalisJobTypeCount>> {
+    if !schema.has("job_type") {
+        return Ok(Vec::new());
     }
-    row.try_get::<Option<i64>, _>(column).ok().flatten()
+
+    let mut builder = QueryBuilder::<Sqlite>::new(
+        "SELECT COALESCE(CAST(job_type AS TEXT), '') AS job_type, COUNT(*) AS count FROM Jobs",
+    );
+    push_where(&mut builder, schema, filters, true, false);
+    builder.push(" GROUP BY job_type ORDER BY job_type");
+    let rows = builder
+        .build()
+        .fetch_all(pool)
+        .await
+        .map_err(crate::error::AppError::database)?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| ApalisJobTypeCount {
+            job_type: row.get::<String, _>("job_type"),
+            count: row.get::<i64, _>("count").max(0) as u32,
+        })
+        .collect())
 }
 
-fn optional_blob_or_text(row: &sqlx::sqlite::SqliteRow, schema: &JobsTableSchema, column: &str) -> Option<Vec<u8>> {
-    if !schema.has(column) {
-        return None;
+fn push_where(
+    builder: &mut QueryBuilder<'_, Sqlite>,
+    schema: &JobsTableSchema,
+    filters: &ApalisJobsFilters,
+    include_status: bool,
+    include_job_type: bool,
+) {
+    if !(include_status && filters.status.is_some())
+        && !(include_job_type && filters.job_type.is_some())
+        && filters.search.is_none()
+    {
+        return;
     }
-    if let Ok(value) = row.try_get::<Option<Vec<u8>>, _>(column) {
+
+    builder.push(" WHERE ");
+    let mut first = true;
+    if include_status {
+        if let Some(status) = filters.status.as_deref() {
+            if !first {
+                builder.push(" AND ");
+            }
+            first = false;
+            if schema.has("status") {
+                builder.push("status = ").push_bind(status);
+            } else {
+                builder.push("0 = ").push_bind(1_i64);
+            }
+        }
+    }
+    if include_job_type {
+        if let Some(job_type) = filters.job_type.as_deref() {
+            if !first {
+                builder.push(" AND ");
+            }
+            first = false;
+            if schema.has("job_type") {
+                builder.push("job_type = ").push_bind(job_type);
+            } else {
+                builder.push("0 = ").push_bind(1_i64);
+            }
+        }
+    }
+    if let Some(search) = filters.search.as_deref() {
+        if !first {
+            builder.push(" AND ");
+        }
+        let pattern = format!("%{}%", search.to_ascii_lowercase());
+        let id_expr = if schema.has("id") {
+            "LOWER(CAST(id AS TEXT)) LIKE "
+        } else {
+            "0 = "
+        };
+        let key_expr = if schema.has("idempotency_key") {
+            "LOWER(CAST(idempotency_key AS TEXT)) LIKE "
+        } else {
+            "0 = "
+        };
+        builder
+            .push("(")
+            .push(id_expr)
+            .push_bind(pattern.clone())
+            .push(" OR ")
+            .push(key_expr)
+            .push_bind(pattern)
+            .push(")");
+    }
+}
+
+fn optional_blob_or_text_alias(row: &sqlx::sqlite::SqliteRow, alias: &str) -> Option<Vec<u8>> {
+    if let Ok(value) = row.try_get::<Option<Vec<u8>>, _>(alias) {
         return value;
     }
-    row.try_get::<Option<String>, _>(column)
+    row.try_get::<Option<String>, _>(alias)
         .ok()
         .flatten()
         .map(String::into_bytes)
+}
+
+fn nullable_text_expr(schema: &JobsTableSchema, column: &str) -> String {
+    if schema.has(column) {
+        format!("CAST({column} AS TEXT)")
+    } else {
+        "NULL".to_string()
+    }
+}
+
+fn text_expr(schema: &JobsTableSchema, column: &str, fallback: &str) -> String {
+    if schema.has(column) {
+        format!("COALESCE(CAST({column} AS TEXT), {fallback})")
+    } else {
+        fallback.to_string()
+    }
+}
+
+fn nullable_int_expr(schema: &JobsTableSchema, column: &str) -> String {
+    if schema.has(column) {
+        format!("CAST({column} AS INTEGER)")
+    } else {
+        "NULL".to_string()
+    }
+}
+
+fn int_expr(schema: &JobsTableSchema, column: &str, fallback: &str) -> String {
+    if schema.has(column) {
+        format!("COALESCE(CAST({column} AS INTEGER), {fallback})")
+    } else {
+        fallback.to_string()
+    }
+}
+
+fn blob_or_text_expr(schema: &JobsTableSchema, column: &str) -> String {
+    if schema.has(column) {
+        column.to_string()
+    } else {
+        "NULL".to_string()
+    }
+}
+
+fn timestamp_epoch_expr(schema: &JobsTableSchema, column: &str) -> String {
+    if !schema.has(column) {
+        return "NULL".to_string();
+    }
+    format!(
+        "COALESCE(unixepoch({column}), CASE WHEN CAST({column} AS INTEGER) > 1000000000 THEN CAST({column} AS INTEGER) ELSE NULL END)"
+    )
+}
+
+fn last_activity_sort_expr(schema: &JobsTableSchema) -> String {
+    format!(
+        "max(COALESCE({}, -9223372036854775808), COALESCE({}, -9223372036854775808), COALESCE({}, -9223372036854775808))",
+        timestamp_epoch_expr(schema, "done_at"),
+        timestamp_epoch_expr(schema, "lock_at"),
+        timestamp_epoch_expr(schema, "run_at"),
+    )
 }
 
 fn normalize_timestamp(value: Option<String>) -> Option<String> {
@@ -779,66 +1041,6 @@ fn latest_timestamp(values: [Option<&str>; 3]) -> Option<String> {
         .flatten()
         .max_by_key(|value| *value)
         .map(ToOwned::to_owned)
-}
-
-fn compare_jobs(left: &InternalJobRow, right: &InternalJobRow) -> std::cmp::Ordering {
-    left.last_activity_at
-        .cmp(&right.last_activity_at)
-        .then_with(|| left.id.cmp(&right.id))
-}
-
-fn matches_filters(
-    row: &InternalJobRow,
-    filters: &ApalisJobsFilters,
-    include_status: bool,
-    include_job_type: bool,
-) -> bool {
-    if include_status && filters.status.as_deref().is_some_and(|status| row.status != status) {
-        return false;
-    }
-    if include_job_type && filters.job_type.as_deref().is_some_and(|job_type| row.job_type != job_type) {
-        return false;
-    }
-    if let Some(search) = filters.search.as_deref() {
-        let search = search.to_ascii_lowercase();
-        let id_matches = row.id.to_ascii_lowercase().contains(&search);
-        let key_matches = row
-            .idempotency_key
-            .as_deref()
-            .unwrap_or_default()
-            .to_ascii_lowercase()
-            .contains(&search);
-        if !id_matches && !key_matches {
-            return false;
-        }
-    }
-    true
-}
-
-fn status_counts(rows: &[InternalJobRow], filters: &ApalisJobsFilters) -> Vec<ApalisJobStatusCount> {
-    let mut counts = std::collections::BTreeMap::<String, u32>::new();
-    for row in rows {
-        if matches_filters(row, filters, false, true) {
-            *counts.entry(row.status.clone()).or_default() += 1;
-        }
-    }
-    counts
-        .into_iter()
-        .map(|(status, count)| ApalisJobStatusCount { status, count })
-        .collect()
-}
-
-fn job_type_counts(rows: &[InternalJobRow], filters: &ApalisJobsFilters) -> Vec<ApalisJobTypeCount> {
-    let mut counts = std::collections::BTreeMap::<String, u32>::new();
-    for row in rows {
-        if matches_filters(row, filters, true, false) {
-            *counts.entry(row.job_type.clone()).or_default() += 1;
-        }
-    }
-    counts
-        .into_iter()
-        .map(|(job_type, count)| ApalisJobTypeCount { job_type, count })
-        .collect()
 }
 ```
 
@@ -922,7 +1124,7 @@ Append these tests inside the existing test module:
         let pool = memory_pool().await;
         seed_apalis_job(&pool, "payload-invalid").await;
         sqlx::query("UPDATE Jobs SET job = ? WHERE idempotency_key = ?")
-            .bind("apiKey=sk-secret; plain text payload")
+            .bind("Authorization: Bearer raw-secret\nCookie: session=raw-cookie\nAuthorization Bearer raw-inline\napiKey=sk-secret; plain text payload")
             .bind("payload-invalid")
             .execute(&pool)
             .await
@@ -935,7 +1137,14 @@ Append these tests inside the existing test module:
 
         assert_eq!(job.job_json, None);
         assert!(!job.job_truncated);
-        assert_eq!(job.job_preview.as_deref(), Some("apiKey=[redacted]"));
+        let preview = job.job_preview.as_deref().expect("redacted preview");
+        assert!(preview.contains("Authorization: [redacted]"));
+        assert!(preview.contains("Cookie: [redacted]"));
+        assert!(preview.contains("apiKey=[redacted]"));
+        assert!(!preview.contains("raw-secret"));
+        assert!(!preview.contains("raw-cookie"));
+        assert!(!preview.contains("raw-inline"));
+        assert!(!preview.contains("sk-secret"));
     }
 
     #[tokio::test]
@@ -1005,7 +1214,7 @@ Expected: payload tests fail because raw JSON columns are not decoded, redacted,
 
 - [ ] **Step 3: Implement exact payload handling**
 
-Add constants and helpers above `InternalJobRow`:
+Add constants and helpers above `InternalJobSummary`:
 
 ```rust
 const MAX_PAYLOAD_JSON_BYTES: usize = 64 * 1024;
@@ -1115,34 +1324,73 @@ fn redacted_text_preview(text: &str, max_chars: usize) -> String {
 }
 
 fn redact_text_fragments(text: &str) -> String {
-    text.split(';')
-        .filter_map(|part| {
-            let trimmed = part.trim();
-            if trimmed.is_empty() {
-                return None;
-            }
-            let mut pieces = trimmed.splitn(2, ['=', ':']);
-            let key = pieces.next().unwrap_or_default().trim();
-            let value = pieces.next();
-            Some(if value.is_some() && is_sensitive_key(key) {
-                format!("{key}={REDACTED}")
-            } else {
-                trimmed.to_string()
-            })
-        })
+    text.lines()
+        .map(redact_text_line)
         .collect::<Vec<_>>()
-        .join("; ")
+        .join("\n")
+}
+
+fn redact_text_line(line: &str) -> String {
+    if let Some((key, separator)) = sensitive_assignment(line) {
+        let spacer = if separator == ':' { " " } else { "" };
+        return format!("{}{}{}{}", key.trim_end(), separator, spacer, REDACTED);
+    }
+    redact_inline_secret_tokens(line)
+}
+
+fn sensitive_assignment(line: &str) -> Option<(&str, char)> {
+    for (index, character) in line.char_indices() {
+        if index > 120 {
+            return None;
+        }
+        if character == ':' || character == '=' {
+            let key = line[..index].trim();
+            return is_sensitive_key(key).then_some((&line[..index], character));
+        }
+    }
+    None
+}
+
+fn redact_inline_secret_tokens(line: &str) -> String {
+    let mut redact_next_count = 0usize;
+    let mut output = Vec::new();
+
+    for word in line.split_whitespace() {
+        if redact_next_count > 0 {
+            output.push(REDACTED.to_string());
+            redact_next_count -= 1;
+            continue;
+        }
+
+        let normalized = word
+            .trim_matches(|character: char| !character.is_ascii_alphanumeric())
+            .to_ascii_lowercase();
+        if normalized == "authorization" {
+            output.push(word.to_string());
+            redact_next_count = 2;
+        } else if normalized == "bearer"
+            || normalized == "cookie"
+            || normalized == "setcookie"
+        {
+            output.push(word.to_string());
+            redact_next_count = 1;
+        } else {
+            output.push(word.to_string());
+        }
+    }
+
+    output.join(" ")
 }
 ```
 
-Then replace `InternalJobRow::into_dto` with:
+Then replace `InternalJobSummary::into_dto` with:
 
 ```rust
-impl InternalJobRow {
-    fn into_dto(self) -> ApalisJobRow {
-        let job = payload_view(self.job_raw, true);
-        let last_result = payload_view(self.last_result_raw, false);
-        let metadata = payload_view(self.metadata_raw, false);
+impl InternalJobSummary {
+    fn into_dto(self, payloads: PayloadColumns) -> ApalisJobRow {
+        let job = payload_view(payloads.job_raw, true);
+        let last_result = payload_view(payloads.last_result_raw, false);
+        let metadata = payload_view(payloads.metadata_raw, false);
 
         ApalisJobRow {
             id: self.id,
@@ -1435,8 +1683,16 @@ describe("apalis jobs inspector frontend source contracts", () => {
   it("reloads through the backend when filters change", () => {
     expect(jobsPanelSource).toContain("function handleFilterChange");
     expect(jobsPanelSource).toContain("void refreshJobs(false)");
+    expect(jobsPanelSource).toContain("searchDebounce");
+    expect(jobsPanelSource).toContain("refreshSequence");
+    expect(jobsPanelSource).toContain("sequence !== refreshSequence");
     expect(jobsPanelSource).not.toContain(".filter((job");
     expect(jobsPanelSource).not.toContain(".filter(job");
+  });
+
+  it("uses the user's locale and time zone for display formatting", () => {
+    expect(jobsPanelSource).toContain('formatDataGridDateTimeValue(value, "datetime")');
+    expect(jobsPanelSource).not.toContain('"en-US", "UTC"');
   });
 
   it("renders split inspector pieces and safe payload labels", () => {
@@ -1489,7 +1745,7 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
 ```svelte
 <script lang="ts">
   import { RefreshCw } from "@lucide/svelte";
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { loadApalisJobs } from "$lib/api/apalis-jobs";
   import { formatDataGridDateTimeValue } from "$lib/components/extractum-ui/data-grid-date-format";
   import Badge from "$lib/components/ui/Badge.svelte";
@@ -1515,6 +1771,8 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
   let search = $state("");
   let limit = $state(100);
   let selectedJobId = $state<string | null>(null);
+  let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+  let refreshSequence = 0;
 
   let selectedJob = $derived(
     response?.jobs.find((job) => job.id === selectedJobId) ?? response?.jobs[0] ?? null,
@@ -1522,6 +1780,11 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
 
   onMount(() => {
     void refreshJobs(true);
+  });
+
+  onDestroy(() => {
+    clearSearchDebounce();
+    refreshSequence += 1;
   });
 
   function request(): ApalisJobsListRequest {
@@ -1533,7 +1796,17 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
     };
   }
 
+  function clearSearchDebounce() {
+    if (searchDebounce) {
+      clearTimeout(searchDebounce);
+      searchDebounce = null;
+    }
+  }
+
   async function refreshJobs(initial: boolean) {
+    clearSearchDebounce();
+    const sequence = ++refreshSequence;
+    const currentRequest = request();
     if (initial) {
       loading = true;
     } else {
@@ -1542,7 +1815,8 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
     error = null;
 
     try {
-      const next = await loadApalisJobs(request());
+      const next = await loadApalisJobs(currentRequest);
+      if (sequence !== refreshSequence) return;
       response = next;
       if (selectedJobId && !next.jobs.some((job) => job.id === selectedJobId)) {
         selectedJobId = next.jobs[0]?.id ?? null;
@@ -1550,20 +1824,31 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
         selectedJobId = next.jobs[0]?.id ?? null;
       }
     } catch (caught) {
+      if (sequence !== refreshSequence) return;
       error = caught instanceof Error ? caught.message : String(caught);
       if (initial) response = null;
     } finally {
-      loading = false;
-      refreshing = false;
+      if (sequence === refreshSequence) {
+        loading = false;
+        refreshing = false;
+      }
     }
   }
 
-  function handleFilterChange() {
+  function handleFilterChange(options: { debounce?: boolean } = {}) {
+    clearSearchDebounce();
+    if (options.debounce) {
+      searchDebounce = setTimeout(() => {
+        searchDebounce = null;
+        void refreshJobs(false);
+      }, 250);
+      return;
+    }
     void refreshJobs(false);
   }
 
   function formatTime(value: string | null) {
-    return String(formatDataGridDateTimeValue(value, "datetime", "en-US", "UTC") ?? "Never");
+    return String(formatDataGridDateTimeValue(value, "datetime") ?? "Never");
   }
 
   function statusTone(status: string) {
@@ -1618,7 +1903,7 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
         </label>
         <label>
           <span>Search</span>
-          <input bind:value={search} oninput={handleFilterChange} placeholder="id or idempotency key" />
+          <input bind:value={search} oninput={() => handleFilterChange({ debounce: true })} placeholder="id or idempotency key" />
         </label>
         <label>
           <span>Limit</span>
@@ -2039,10 +2324,12 @@ Run:
 
 ```powershell
 git diff --check
+if (rg "SELECT \* FROM Jobs" src-tauri/src/apalis_jobs.rs) { exit 1 }
+if (rg '"en-US", "UTC"' src/lib/components/jobs/ApalisJobsPanel.svelte) { exit 1 }
 git status --short
 ```
 
-Expected: `git diff --check` prints no errors. `git status --short` shows only intentional files if a final commit remains.
+Expected: `git diff --check` prints no errors. The two `rg` guards find no matches, proving the backend does not use full-table `SELECT *` and the UI does not force UTC-only display formatting. `git status --short` shows only intentional files if a final commit remains.
 
 - [ ] **Step 7: Commit final verification adjustments if any were needed**
 
@@ -2057,6 +2344,6 @@ If no files changed after Task 5, skip this commit and record the verification c
 
 ## Self-Review
 
-- Spec coverage: The plan covers the top-level Jobs navigation, split inspector UI, read-only/manual-refresh behavior, all-job read model, server-side filters, total/count semantics, actual local Apalis schema probe, stable DTO shape, correct latest timestamp sorting, RFC3339 UTC normalization, missing-table behavior, redaction, truncation, and dev-server verification.
+- Spec coverage: The plan covers the top-level Jobs navigation, split inspector UI, read-only/manual-refresh behavior, all-job read model, SQL-side filters/counts/sorting/limit, limited-row payload reads, total/count semantics, actual local Apalis schema probe, stable DTO shape, correct latest timestamp sorting, RFC3339 UTC normalization, missing-table behavior, raw text and JSON redaction, truncation, debounced search with stale-response protection, local date/time display, and dev-server verification.
 - Placeholder scan: The plan contains concrete file paths, command lines, DTO shapes, test code, implementation snippets, and expected outcomes for each task.
 - Type consistency: Rust DTOs use `#[serde(rename_all = "camelCase")]`; TS types use camelCase keys (`jobType`, `statusCounts`, `lastActivityAt`) and API wrapper sends `{ request }`, matching the Tauri command signature.
