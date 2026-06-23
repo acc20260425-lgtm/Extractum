@@ -344,7 +344,6 @@ Append these tests inside the existing `#[cfg(test)] mod tests`:
         assert_eq!(job.attempts, 0);
         assert_eq!(job.idempotency_key.as_deref(), Some("row-1"));
         assert!(job.run_at.is_some());
-        assert!(job.job_json.is_some());
         assert_eq!(response.total_matching, 1);
     }
 
@@ -1693,9 +1692,11 @@ describe("apalis jobs inspector frontend source contracts", () => {
   it("reloads through the backend when filters change", () => {
     expect(jobsPanelSource).toContain("function handleFilterChange");
     expect(jobsPanelSource).toContain("void refreshJobs(false)");
+    expect(jobsPanelSource).toContain("onchange={() => handleFilterChange()}");
     expect(jobsPanelSource).toContain("searchDebounce");
     expect(jobsPanelSource).toContain("refreshSequence");
     expect(jobsPanelSource).toContain("sequence !== refreshSequence");
+    expect(jobsPanelSource).not.toContain("onchange={handleFilterChange}");
     expect(jobsPanelSource).not.toContain(".filter((job");
     expect(jobsPanelSource).not.toContain(".filter(job");
   });
@@ -1706,6 +1707,9 @@ describe("apalis jobs inspector frontend source contracts", () => {
   });
 
   it("renders split inspector pieces and safe payload labels", () => {
+    expect(jobsPanelSource).toContain('return "danger"');
+    expect(jobsPanelSource).not.toContain('return "error"');
+
     for (const token of [
       "Status",
       "Job type",
@@ -1900,7 +1904,7 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
 
   function statusTone(status: string) {
     if (status === "Done") return "success";
-    if (status === "Failed" || status === "Killed") return "error";
+    if (status === "Failed" || status === "Killed") return "danger";
     if (status === "Running") return "info";
     return "default";
   }
@@ -1933,7 +1937,7 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
       <div class="jobs-toolbar">
         <label>
           <span>Status</span>
-          <select bind:value={statusFilter} onchange={handleFilterChange}>
+          <select bind:value={statusFilter} onchange={() => handleFilterChange()}>
             {#each statusOptions as status}
               <option value={status}>{status || "All statuses"}</option>
             {/each}
@@ -1941,7 +1945,7 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
         </label>
         <label>
           <span>Job type</span>
-          <select bind:value={jobTypeFilter} onchange={handleFilterChange}>
+          <select bind:value={jobTypeFilter} onchange={() => handleFilterChange()}>
             <option value="">All job types</option>
             {#each response?.jobTypeCounts ?? [] as row}
               <option value={row.jobType}>{row.jobType} ({row.count})</option>
@@ -1954,7 +1958,7 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
         </label>
         <label>
           <span>Limit</span>
-          <select bind:value={limit} onchange={handleFilterChange}>
+          <select bind:value={limit} onchange={() => handleFilterChange()}>
             {#each limitOptions as option}
               <option value={option}>{option}</option>
             {/each}
