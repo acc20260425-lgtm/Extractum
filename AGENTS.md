@@ -10,9 +10,10 @@ This file is a working contract for AI agents modifying the repository.
 ## 2. Windows, Vite & Playwright Sandbox Rules
 - Prefer `npm.cmd` over plain `npm` for npm scripts to avoid PowerShell execution policy blocks.
 - Do not assume Vite uses port `5173`. Use the actual local URL printed by Vite.
-- If sandboxed dev server exits immediately, run Vite outside sandbox with a hidden host:
+- If sandboxed dev server exits immediately, run Vite outside sandbox with a hidden host, using approval/escalation when required:
   ```powershell
-  $cmd = 'Set-Location -LiteralPath ''G:\Develop\Extractum''; node.exe node_modules/vite/bin/vite.js --host 127.0.0.1'
+  $workspace = (Get-Location).Path
+  $cmd = "Set-Location -LiteralPath '$workspace'; node.exe node_modules/vite/bin/vite.js --host 127.0.0.1"
   Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoLogo','-NoExit','-Command',$cmd) -PassThru -WindowStyle Hidden
   ```
 - Same hidden host trick applies to the Superpowers visual companion (`server.cjs`), setting `BRAINSTORM_DIR`, `BRAINSTORM_HOST=127.0.0.1`, and `BRAINSTORM_URL_HOST=localhost`.
@@ -34,9 +35,9 @@ This file is a working contract for AI agents modifying the repository.
 
 ## 4. Validation Rules
 - Use `npm.cmd` rather than `npm` in all validation commands on Windows.
-- Use focused tests for changed model, helper, or contract logic.
+- When no Superpowers workflow is active, use focused tests for changed model, helper, or contract logic.
 - Run `npm.cmd run check` after broad Svelte or TypeScript changes.
-- Run `cargo check` after Rust or Tauri backend changes.
+- When no Superpowers workflow is active, run `cargo check` after Rust or Tauri backend changes.
 - Do not claim checks pass unless you ran the relevant command and saw it pass.
 
 ## 5. Data Grid & Date Formatting
