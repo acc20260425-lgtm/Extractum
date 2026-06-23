@@ -5,6 +5,7 @@
     ExtractumDataGrid,
     ExtractumTextInput,
   } from "$lib/components/extractum-ui";
+  import type { ExtractumDataGridColumn } from "$lib/components/extractum-ui";
   import type { LibraryCatalogSourceView } from "$lib/ui/library-catalog-model";
   import LibrarySourceCell from "./LibrarySourceCell.svelte";
 
@@ -32,14 +33,14 @@
     onRefresh: () => void | Promise<void>;
   } = $props();
 
-  const columns = [
+  const columns: ExtractumDataGridColumn[] = [
     { id: "title", header: "Source", width: 320, cell: LibrarySourceCell },
     { id: "typeLabel", header: "Type", width: 150 },
     { id: "status", header: "Status", width: 110 },
     { id: "projectCount", header: "Projects", width: 92 },
     { id: "itemCountLabel", header: "Items", width: 100 },
-    { id: "addedAtLabel", header: "Added", width: 136 },
-    { id: "lastSyncedLabel", header: "Last synced", width: 136 },
+    { id: "createdAt", header: "Added", width: 136, dateTimeFormat: "datetime" },
+    { id: "lastSyncedAt", header: "Last synced", width: 136, dateTimeFormat: "datetime" },
   ];
 </script>
 

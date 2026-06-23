@@ -38,6 +38,8 @@ describe("Library prototype contract", () => {
     expect(workspaceSource).toContain('header: "Items"');
     expect(workspaceSource).toContain('header: "Added"');
     expect(workspaceSource).toContain('header: "Last synced"');
+    expect(workspaceSource).toContain('{ id: "createdAt", header: "Added", width: 136, dateTimeFormat: "datetime" }');
+    expect(workspaceSource).toContain('{ id: "lastSyncedAt", header: "Last synced", width: 136, dateTimeFormat: "datetime" }');
     expect(workspaceSource).not.toContain("@svar-ui/");
     expect(workspaceSource).not.toContain("$lib/components/ui/");
   });

@@ -4,6 +4,7 @@
     ExtractumButton,
     ExtractumDataGrid,
   } from "$lib/components/extractum-ui";
+  import type { ExtractumDataGridColumn } from "$lib/components/extractum-ui";
   import type {
     LibrarySourceView,
     ProjectSourceLinkView,
@@ -42,11 +43,11 @@
     onSyncSelectedSources: (sourceIds: number[]) => void | Promise<void>;
   } = $props();
 
-  const columns = [
+  const columns: ExtractumDataGridColumn[] = [
     { id: "title", header: "Title", flexgrow: 1, cell: LibrarySourceCell },
     { id: "typeLabel", header: "Type", width: 150 },
     { id: "localCopyLabel", header: "Details", width: 140 },
-    { id: "addedAtLabel", header: "Added to project at", width: 180 },
+    { id: "addedAt", header: "Added to project at", width: 180, dateTimeFormat: "datetime" },
   ];
 
   let libraryById = $derived(new Map(librarySources.map((source) => [source.id, source])));

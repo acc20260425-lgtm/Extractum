@@ -35,6 +35,7 @@ export type LibrarySourceView = {
   title: string;
   subtitle: string | null;
   projectCount: number;
+  lastCollectedAt: number | null;
   lastCollectedLabel: string | null;
   localCopyLabel: string | null;
   status: LibrarySourceStatus;
@@ -153,6 +154,7 @@ export function buildLibrarySourcesView(
       title: source.title ?? `Source #${source.source_id}`,
       subtitle: source.subtitle,
       projectCount: source.project_count,
+      lastCollectedAt: source.last_synced_at,
       lastCollectedLabel: dateLabel(source.last_synced_at),
       localCopyLabel: materialLabel(source.item_count),
       status: record.status,

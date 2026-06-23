@@ -22,6 +22,8 @@ export type LibraryCatalogSourceView = {
   projectCount: number;
   itemCount: number;
   itemCountLabel: string;
+  createdAt: number | null;
+  lastSyncedAt: number | null;
   addedAtLabel: string;
   lastSyncedLabel: string;
   canonicalUrl: string | null;
@@ -116,6 +118,8 @@ export function buildLibraryCatalogSourcesView(
     projectCount: record.source.project_count,
     itemCount: record.source.item_count,
     itemCountLabel: countLabel(record.source.item_count),
+    createdAt: record.source.created_at,
+    lastSyncedAt: record.source.last_synced_at,
     addedAtLabel: dateLabel(record.source.created_at) ?? "Unknown",
     lastSyncedLabel: dateLabel(record.source.last_synced_at) ?? "Never",
     canonicalUrl: record.source.canonical_url,

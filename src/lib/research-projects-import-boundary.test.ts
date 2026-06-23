@@ -73,6 +73,24 @@ describe("research projects import boundaries", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("marks research project data grid date columns for wrapper formatting", () => {
+    const sourcesTabSource = readFileSync(
+      path.join(repoRoot, "src/lib/components/research-projects/SourcesTab.svelte"),
+      "utf8",
+    );
+    const connectFromLibrarySource = readFileSync(
+      path.join(repoRoot, "src/lib/components/research-projects/ConnectFromLibrary.svelte"),
+      "utf8",
+    );
+
+    expect(sourcesTabSource).toContain(
+      '{ id: "addedAt", header: "Added to project at", width: 180, dateTimeFormat: "datetime" }',
+    );
+    expect(connectFromLibrarySource).toContain(
+      '{ id: "lastCollectedAt", header: "Последний сбор", width: 140, dateTimeFormat: "datetime" }',
+    );
+  });
+
   it("routes SVAR Grid through Extractum grid wrappers only", () => {
     const dataGridSource = readFileSync(
       path.join(repoRoot, "src/lib/components/extractum-ui/DataGrid.svelte"),

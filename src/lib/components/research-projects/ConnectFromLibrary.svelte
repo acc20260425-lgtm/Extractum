@@ -9,6 +9,7 @@
     ProviderBadge,
     StatusBadge,
   } from "$lib/components/extractum-ui";
+  import type { ExtractumDataGridColumn } from "$lib/components/extractum-ui";
   import {
     connectableSelection,
     filterLibrarySources,
@@ -43,12 +44,12 @@
   let query = $state("");
   let providerFilters = $state<LibrarySourceProvider[]>([]);
 
-  const columns = [
+  const columns: ExtractumDataGridColumn[] = [
     { id: "selected", header: "", width: 44, cell: GridSelectCell },
     { id: "title", header: "Источник", width: 260, cell: LibrarySourceCell },
     { id: "provider", header: "Тип", width: 96 },
     { id: "projectCount", header: "Проекты", width: 80 },
-    { id: "lastCollectedLabel", header: "Последний сбор", width: 140 },
+    { id: "lastCollectedAt", header: "Последний сбор", width: 140, dateTimeFormat: "datetime" },
     { id: "localCopyLabel", header: "Локальная копия", width: 120 },
     { id: "status", header: "Статус", width: 100 },
   ];
