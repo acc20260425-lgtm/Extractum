@@ -244,7 +244,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify the read model test fails**
+- [ ] **Step 2: Run tests to verify the command shell and schema probe compile**
 
 Run:
 
@@ -252,7 +252,7 @@ Run:
 cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-apalis-jobs --lib apalis_jobs
 ```
 
-Expected: `apalis_jobs_schema_probe_documents_local_jobs_table_shape` passes and no production read rows exist yet. If `storage.push(...)` does not compile, switch that one line to the existing helper:
+Expected: both shell tests pass: the schema probe documents the local `Jobs` table and the missing-table command path returns an empty response. If `storage.push(...)` does not compile, switch that one line to the existing helper:
 
 ```rust
 crate::gemini_browser::jobs::enqueue_gemini_browser_job_to_storage(&mut storage, test_job(run_id))
@@ -430,7 +430,7 @@ Append these tests inside the existing `#[cfg(test)] mod tests`:
         seed_apalis_job(&pool, "new-done").await;
         update_job_row(&pool, "old-done", "Done", Some("2026-06-23T08:00:00Z"), None, Some("2026-06-23T09:00:00Z")).await;
         update_job_row(&pool, "new-lock", "Running", Some("2026-06-23T07:00:00Z"), Some("2026-06-23T11:00:00Z"), None).await;
-        update_job_row(&pool, "new-done", "Done", Some("2026-06-23T06:00:00Z"), Some("2026-06-23T08:30:00Z"), Some("2026-06-23T12:00:00Z")).await;
+        update_job_row(&pool, "new-done", "Done", Some("2026-06-23T06:00:00Z"), Some("2026-06-23T08:30:00Z"), Some("1782216000000")).await;
 
         let response = apalis_jobs_list_from_pool(&pool, ApalisJobsListRequest::default())
             .await
@@ -457,7 +457,7 @@ Append these tests inside the existing `#[cfg(test)] mod tests`:
             "timestamps",
             "Done",
             Some("2026-06-23 08:00:00"),
-            Some("1719129600"),
+            Some("1719129600000"),
             Some("2026-06-23T12:00:00+03:00"),
         )
         .await;
@@ -988,12 +988,14 @@ fn blob_or_text_expr(schema: &JobsTableSchema, column: &str) -> String {
     }
 }
 
+const UNIX_MILLISECONDS_THRESHOLD: i64 = 100_000_000_000;
+
 fn timestamp_epoch_expr(schema: &JobsTableSchema, column: &str) -> String {
     if !schema.has(column) {
         return "NULL".to_string();
     }
     format!(
-        "COALESCE(unixepoch({column}), CASE WHEN CAST({column} AS INTEGER) > 1000000000 THEN CAST({column} AS INTEGER) ELSE NULL END)"
+        "COALESCE(unixepoch({column}), CASE WHEN ABS(CAST({column} AS INTEGER)) >= {UNIX_MILLISECONDS_THRESHOLD} THEN CAST({column} AS INTEGER) / 1000 WHEN CAST({column} AS INTEGER) > 1000000000 THEN CAST({column} AS INTEGER) ELSE NULL END)"
     )
 }
 
@@ -1015,7 +1017,7 @@ fn normalize_timestamp(value: Option<String>) -> Option<String> {
     }
 
     if let Ok(epoch) = value.parse::<i64>() {
-        return OffsetDateTime::from_unix_timestamp(epoch)
+        return OffsetDateTime::from_unix_timestamp(unix_timestamp_seconds(epoch))
             .ok()
             .and_then(|timestamp| timestamp.format(&Rfc3339).ok());
     }
@@ -1032,6 +1034,14 @@ fn normalize_timestamp(value: Option<String>) -> Option<String> {
     }
 
     None
+}
+
+fn unix_timestamp_seconds(value: i64) -> i64 {
+    if value.abs() >= UNIX_MILLISECONDS_THRESHOLD {
+        value / 1000
+    } else {
+        value
+    }
 }
 
 fn latest_timestamp(values: [Option<&str>; 3]) -> Option<String> {
@@ -1119,11 +1129,55 @@ Append these tests inside the existing test module:
     }
 
     #[tokio::test]
+    async fn apalis_jobs_limit_excludes_large_payloads_outside_limited_rows() {
+        let pool = memory_pool().await;
+        seed_apalis_job(&pool, "payload-included").await;
+        seed_apalis_job(&pool, "payload-outside-limit").await;
+        update_job_row(&pool, "payload-included", "Done", None, None, Some("2026-06-23T12:00:00Z")).await;
+        update_job_row(&pool, "payload-outside-limit", "Done", None, None, Some("2026-06-23T11:00:00Z")).await;
+        let outside_large_payload = format!(
+            r#"{{"apiKey":"outside-secret","body":"{}"}}"#,
+            "x".repeat(256 * 1024)
+        );
+        sqlx::query("UPDATE Jobs SET job = ? WHERE idempotency_key = ?")
+            .bind(r#"{"safe":"included"}"#)
+            .bind("payload-included")
+            .execute(&pool)
+            .await
+            .expect("update included payload");
+        sqlx::query("UPDATE Jobs SET job = ? WHERE idempotency_key = ?")
+            .bind(outside_large_payload)
+            .bind("payload-outside-limit")
+            .execute(&pool)
+            .await
+            .expect("update outside payload");
+
+        let response = apalis_jobs_list_from_pool(
+            &pool,
+            ApalisJobsListRequest {
+                limit: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("list limited payload jobs");
+
+        assert_eq!(response.total_matching, 2);
+        assert_eq!(response.jobs.len(), 1);
+        assert_eq!(response.jobs[0].idempotency_key.as_deref(), Some("payload-included"));
+        assert_eq!(response.jobs[0].job_json.as_ref().unwrap()["safe"], "included");
+        let serialized = serde_json::to_string(&response).expect("serialize response");
+        assert!(!serialized.contains("outside-secret"));
+        assert!(!serialized.contains("payload-outside-limit"));
+    }
+
+    #[tokio::test]
     async fn apalis_jobs_decode_failure_returns_redacted_preview_without_json() {
         let pool = memory_pool().await;
         seed_apalis_job(&pool, "payload-invalid").await;
+        let long_tail = "z".repeat(DECODE_FAILURE_PREVIEW_CHARS + 100);
         sqlx::query("UPDATE Jobs SET job = ? WHERE idempotency_key = ?")
-            .bind("Authorization: Bearer raw-secret\nCookie: session=raw-cookie\nAuthorization Bearer raw-inline\napiKey=sk-secret; plain text payload")
+            .bind(format!("Authorization: Bearer raw-secret\nCookie: session=raw-cookie\nAuthorization Bearer raw-inline\napiKey=sk-secret; plain text payload; {long_tail}"))
             .bind("payload-invalid")
             .execute(&pool)
             .await
@@ -1135,8 +1189,9 @@ Append these tests inside the existing test module:
         let job = &response.jobs[0];
 
         assert_eq!(job.job_json, None);
-        assert!(!job.job_truncated);
+        assert!(job.job_truncated);
         let preview = job.job_preview.as_deref().expect("redacted preview");
+        assert!(preview.chars().count() <= DECODE_FAILURE_PREVIEW_CHARS);
         assert!(preview.contains("Authorization: [redacted]"));
         assert!(preview.contains("Cookie: [redacted]"));
         assert!(preview.contains("apiKey=[redacted]"));
@@ -1145,6 +1200,32 @@ Append these tests inside the existing test module:
         assert!(!preview.contains("raw-cookie"));
         assert!(!preview.contains("raw-inline"));
         assert!(!preview.contains("sk-secret"));
+    }
+
+    #[tokio::test]
+    async fn apalis_jobs_non_json_result_and_metadata_are_omitted_in_v1() {
+        let pool = memory_pool().await;
+        seed_apalis_job(&pool, "payload-non-json-secondary").await;
+        sqlx::query("UPDATE Jobs SET last_result = ?, metadata = ? WHERE idempotency_key = ?")
+            .bind("Authorization: Bearer result-secret")
+            .bind("apiKey=metadata-secret")
+            .bind("payload-non-json-secondary")
+            .execute(&pool)
+            .await
+            .expect("update secondary payload columns");
+
+        let response = apalis_jobs_list_from_pool(&pool, ApalisJobsListRequest::default())
+            .await
+            .expect("list payload jobs");
+        let job = &response.jobs[0];
+
+        assert_eq!(job.last_result, None);
+        assert_eq!(job.metadata, None);
+        assert!(!job.last_result_truncated);
+        assert!(!job.metadata_truncated);
+        let serialized = serde_json::to_string(job).expect("serialize row");
+        assert!(!serialized.contains("result-secret"));
+        assert!(!serialized.contains("metadata-secret"));
     }
 
     #[tokio::test]
@@ -1216,6 +1297,8 @@ Expected: payload tests fail because raw JSON columns are not decoded, redacted,
 
 Add constants and helpers above `InternalJobSummary`:
 
+For v1, decode-failure text previews are exposed only through `jobPreview` for the primary Apalis `job` payload. Non-JSON `lastResult` and `metadata` values are omitted rather than previewed because the DTO intentionally has no secondary preview fields.
+
 ```rust
 const MAX_PAYLOAD_JSON_BYTES: usize = 64 * 1024;
 const TRUNCATED_PREVIEW_CHARS: usize = 2000;
@@ -1255,6 +1338,8 @@ fn payload_view(raw: Option<Vec<u8>>, decode_failure_preview: bool) -> PayloadVi
         Ok(value) => bounded_json_payload(redact_json(value)),
         Err(_) => {
             let text = String::from_utf8_lossy(&raw);
+            let text_was_truncated =
+                decode_failure_preview && text.chars().count() > DECODE_FAILURE_PREVIEW_CHARS;
             PayloadView {
                 json: None,
                 preview: if decode_failure_preview {
@@ -1262,7 +1347,7 @@ fn payload_view(raw: Option<Vec<u8>>, decode_failure_preview: bool) -> PayloadVi
                 } else {
                     None
                 },
-                truncated: false,
+                truncated: text_was_truncated,
             }
         }
     }
@@ -1703,6 +1788,9 @@ describe("apalis jobs inspector frontend source contracts", () => {
     expect(jobsPanelSource).toContain("function handleFilterChange");
     expect(jobsPanelSource).toContain("void refreshJobs(false)");
     expect(jobsPanelSource).toContain("onchange={() => handleFilterChange()}");
+    expect(jobsPanelSource).toContain("function statusFilterOptions");
+    expect(jobsPanelSource).toContain("response?.statusCounts");
+    expect(jobsPanelSource).not.toContain('const statusOptions = ["", "Pending"');
     expect(jobsPanelSource).toContain("searchDebounce");
     expect(jobsPanelSource).toContain("refreshSequence");
     expect(jobsPanelSource).toContain("sequence !== refreshSequence");
@@ -1719,6 +1807,8 @@ describe("apalis jobs inspector frontend source contracts", () => {
   it("renders split inspector pieces and safe payload labels", () => {
     expect(jobsPanelSource).toContain('return "danger"');
     expect(jobsPanelSource).not.toContain('return "error"');
+    expect(jobsPanelSource).toContain("selectedJobId ? response?.jobs.find");
+    expect(jobsPanelSource).not.toContain("?? response?.jobs[0]");
 
     for (const token of [
       "Status",
@@ -1781,13 +1871,14 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import SurfaceCard from "$lib/components/ui/SurfaceCard.svelte";
   import type {
+    ApalisJobStatusCount,
     ApalisJobRow,
     ApalisJobsListRequest,
     ApalisJobsListResponse,
     ApalisJsonValue,
   } from "$lib/types/apalis-jobs";
 
-  const statusOptions = ["", "Pending", "Queued", "Running", "Done", "Failed", "Killed"];
+  const baseStatusOptions = ["Pending", "Queued", "Running", "Done", "Failed", "Killed"];
   const limitOptions = [50, 100, 200, 500];
   const columns: ExtractumDataGridColumn[] = [
     { id: "status", header: "Status", width: 110 },
@@ -1819,8 +1910,9 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
   let refreshSequence = 0;
 
   let selectedJob = $derived(
-    response?.jobs.find((job) => job.id === selectedJobId) ?? response?.jobs[0] ?? null,
+    selectedJobId ? response?.jobs.find((job) => job.id === selectedJobId) ?? null : null,
   );
+  let statusOptions = $derived(statusFilterOptions(response?.statusCounts ?? []));
   let gridRows = $derived((response?.jobs ?? []).map(jobToGridRow));
   let selectedRowIds = $derived(selectedJobId ? [selectedJobId] : []);
 
@@ -1866,7 +1958,7 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
       response = next;
       if (selectedJobId && !next.jobs.some((job) => job.id === selectedJobId)) {
         selectedJobId = next.jobs[0]?.id ?? null;
-      } else if (!selectedJobId) {
+      } else if (initial && !selectedJobId) {
         selectedJobId = next.jobs[0]?.id ?? null;
       }
     } catch (caught) {
@@ -1895,6 +1987,15 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
 
   function formatTime(value: string | null) {
     return String(formatDataGridDateTimeValue(value, "datetime") ?? "Never");
+  }
+
+  function statusFilterOptions(counts: ApalisJobStatusCount[]) {
+    const seen = new Set(baseStatusOptions);
+    const unknownStatuses = counts
+      .map((row) => row.status)
+      .filter((status) => status && !seen.has(status))
+      .sort();
+    return ["", ...baseStatusOptions, ...unknownStatuses];
   }
 
   function jobToGridRow(job: ApalisJobRow): ApalisJobGridRow {
@@ -2260,7 +2361,17 @@ node scripts/run-vitest.mjs run src/lib/apalis-jobs-route-contract.test.ts src/l
 
 Expected: all Apalis jobs frontend tests pass.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: Run Svelte type checking before committing the route**
+
+Run:
+
+```powershell
+npm.cmd run check
+```
+
+Expected: `svelte-check` exits with code 0.
+
+- [ ] **Step 8: Commit**
 
 ```powershell
 git add src/lib/apalis-jobs-route-contract.test.ts src/lib/components/jobs/ApalisJobsPanel.svelte src/routes/jobs/+page.svelte src/routes/+layout.svelte
@@ -2321,7 +2432,7 @@ Open `http://127.0.0.1:5184/jobs` in the in-app browser or Playwright. Verify:
 - Sidebar shows `Jobs` as a separate top-level item.
 - The page title is `Jobs`.
 - `Refresh`, `Status`, `Job type`, `Search`, and `Limit` controls are visible.
-- Empty state says `No Apalis jobs match these filters.` when the local web-only dev server has no Tauri backend.
+- On the web-only Vite server, the page shows the error state from the unavailable Tauri `invoke` backend rather than the empty state. Verify the empty state only in a Tauri run with an empty `Jobs` table or a mocked component test.
 - There are no mutation controls for retry, cancel, kill, delete, cleanup, export, or copy.
 
 - [ ] **Step 6: Inspect working tree and whitespace**
@@ -2331,12 +2442,14 @@ Run:
 ```powershell
 git diff --check
 if (rg "SELECT \* FROM Jobs" src-tauri/src/apalis_jobs.rs) { exit 1 }
+if (-not (rg "fetch_payloads_for_ids" src-tauri/src/apalis_jobs.rs)) { exit 1 }
+if (-not (rg "WHERE id IN" src-tauri/src/apalis_jobs.rs)) { exit 1 }
 if (rg '"en-US", "UTC"' src/lib/components/jobs/ApalisJobsPanel.svelte) { exit 1 }
 if (rg 'role="table"|jobs-table' src/lib/components/jobs/ApalisJobsPanel.svelte) { exit 1 }
 git status --short
 ```
 
-Expected: `git diff --check` prints no errors. The `rg` guards find no matches, proving the backend does not use full-table `SELECT *`, the UI does not force UTC-only display formatting, and the jobs list uses `ExtractumDataGrid` instead of the old custom table markup. `git status --short` shows only intentional files if a final commit remains.
+Expected: `git diff --check` prints no errors. The `rg` guards prove the backend does not use full-table `SELECT *`, payload columns are fetched through the limited-ID helper, the UI does not force UTC-only display formatting, and the jobs list uses `ExtractumDataGrid` instead of the old custom table markup. `git status --short` shows only intentional files if a final commit remains.
 
 - [ ] **Step 7: Commit final verification adjustments if any were needed**
 
@@ -2351,6 +2464,6 @@ If no files changed after Task 5, skip this commit and record the verification c
 
 ## Self-Review
 
-- Spec coverage: The plan covers the top-level Jobs navigation, split inspector UI, SVAR `ExtractumDataGrid` adapter usage for the jobs table, read-only/manual-refresh behavior, all-job read model, SQL-side filters/counts/sorting/limit, limited-row payload reads, total/count semantics, actual local Apalis schema probe, stable DTO shape, correct latest timestamp sorting, RFC3339 UTC normalization, missing-table behavior, raw text and JSON redaction, truncation, debounced search with stale-response protection, local date/time display, and dev-server verification.
+- Spec coverage: The plan covers the top-level Jobs navigation, split inspector UI, SVAR `ExtractumDataGrid` adapter usage for the jobs table, read-only/manual-refresh behavior, all-job read model, SQL-side filters/counts/sorting/limit, limited-row payload reads, total/count semantics, actual local Apalis schema probe, stable DTO shape, correct latest timestamp sorting with Unix seconds/milliseconds support, RFC3339 UTC normalization, missing-table behavior, raw text and JSON redaction, decode-failure truncation markers, dynamic status options including unknown statuses, explicit selection/detail behavior, debounced search with stale-response protection, local date/time display, and dev-server verification.
 - Placeholder scan: The plan contains concrete file paths, command lines, DTO shapes, test code, implementation snippets, and expected outcomes for each task.
 - Type consistency: Rust DTOs use `#[serde(rename_all = "camelCase")]`; TS types use camelCase keys (`jobType`, `statusCounts`, `lastActivityAt`) and API wrapper sends `{ request }`, matching the Tauri command signature.
