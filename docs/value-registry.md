@@ -707,3 +707,117 @@ Recommended order for turning this document into runtime code:
    compatibility.
 
 Do not rename machine values during promotion unless there is a migration plan.
+
+## Frontend/UI value inventory
+
+Scope: frontend-local state, filters, tabs, badges, and view-model values. Most rows are `internal frontend` unless the note says they are persisted or mirror backend/API values.
+
+### Shared UI and diagnostics
+
+| Area | Name | Values | Source | Notes |
+| --- | --- | --- | --- | --- |
+| UI badges | `BadgeVariant` | `default`, `warning`, `member`, `info`, `success`, `danger`, `neutral` | `src/lib/components/ui/types.ts` | Shared presentation variants. |
+| Toasts | `ToastKind` | `error`, `success`, `info` | `src/lib/toasts.ts` | User notification tone. |
+| App errors | `AppErrorKind` | `validation`, `not_found`, `auth`, `network`, `conflict`, `internal` | `src/lib/app-error.ts` | Frontend error contract used by diagnostics formatting. |
+| Diagnostics tone classifier | success bucket | `available`, `current`, `synced`, `ready`, `succeeded`, `completed`, `complete`, `none` | `src/lib/diagnostics-view-model.ts` | Classifier-only values, not a canonical backend enum. |
+| Diagnostics tone classifier | info bucket | `pending`, `queued`, `running`, `cancel_requested`, `partial`, `present` | `src/lib/diagnostics-view-model.ts` | Classifier-only values. |
+| Diagnostics tone classifier | warning bucket | `never_synced`, `missing_key`, `not_configured`, `unavailable`, `not_found`, `timed_out`, `cancelled` | `src/lib/diagnostics-view-model.ts` | Classifier-only values. |
+| Diagnostics tone classifier | danger bucket | `failed`, `check_failed`, `error`, `internal`, `network`, `auth`, `validation` | `src/lib/diagnostics-view-model.ts` | Classifier-only values. |
+| Diagnostics build mode tone | build mode values | `release`, `debug` | `src/lib/diagnostics-view-model.ts` | Recognized display values for build mode. |
+
+### Analysis workspace and report UI
+
+| Area | Name | Values | Source | Notes |
+| --- | --- | --- | --- | --- |
+| Workspace selection | `WorkspaceSelection.kind` | `source`, `source_group`, `none` | `src/lib/analysis-workspace-state.ts` | Frontend selection state. |
+| Open run | `OpenRunState.kind` | `none`, `active`, `saved` | `src/lib/analysis-workspace-state.ts` | Frontend open-run state. |
+| Canvas | `CanvasMode` | `report`, `source` | `src/lib/analysis-workspace-state.ts` | Main workspace surface. |
+| Source basis | `SourceViewBasis` | `live_source`, `run_snapshot` | `src/lib/analysis-workspace-state.ts` | May be persisted in workspace UI state. |
+| Companion panel | `CompanionTab` | `evidence`, `chat`, `chunks`, `runs` | `src/lib/analysis-workspace-state.ts` | Report companion tabs. |
+| Legacy scope | `LegacyAnalysisScope` | `single_source`, `source_group` | `src/lib/analysis-workspace-state.ts` | Compatibility state. |
+| Report launch scope | `AnalysisReportStartState.analysisScope` | `single_source`, `source_group` | `src/lib/analysis-state.ts` | Launch form state. |
+| Run list filter | `AnalysisRunFilter` | `all`, `completed`, `failed` | `src/lib/analysis-state.ts` | Saved/active run filter. |
+| Trace ref origin | `AnalysisTraceRefOrigin` | `saved`, `resolved`, `unknown` | `src/lib/analysis-state.ts` | Evidence reference provenance in UI. |
+| NotebookLM export range | `NotebookLmExportFormState.range` | `entire_history`, `analysis_period` | `src/lib/analysis-state.ts` | Export form state. |
+| NotebookLM export scope | `NotebookLmExportRequestScope.kind` | `source`, `source_group` | `src/lib/analysis-state.ts` | Request construction state. |
+| Analysis source type | `AnalysisGroupSourceType` | `telegram`, `youtube` | `src/lib/types/analysis.ts` | Analysis group source type. |
+| Analysis source option type | `AnalysisSourceOptionType` | `telegram`, `youtube`, `rss`, `forum` | `src/lib/types/analysis.ts` | Analysis source selector type. |
+| Prompt template kind | `AnalysisPromptTemplateKind` | `report`, `chat` | `src/lib/types/analysis.ts` | Prompt template category. |
+| Snapshot state | `AnalysisSnapshotState` | `captured`, `capture_failed` | `src/lib/types/analysis.ts` | Mirrors run snapshot state in frontend types. |
+| YouTube corpus mode | `YoutubeCorpusMode` | `transcript_only`, `transcript_description`, `transcript_description_comments` | `src/lib/types/analysis.ts` | Report input mode. |
+
+### Companion, evidence, and source browsing
+
+| Area | Name | Values | Source | Notes |
+| --- | --- | --- | --- | --- |
+| Chat availability | `ChatAvailabilityReason` | `enabled`, `no_run`, `pending_completion`, `terminal_run`, `checking_snapshot`, `missing_snapshot`, `missing_report`, `capture_failed_with_error`, `not_captured_before_terminal`, `capture_failed_without_error_unknown`, `inconsistent`, `verification_failed`, `unknown_snapshot` | `src/lib/analysis-run-companion-state.ts` | User-facing chat gate reason. |
+| Evidence source action | `EvidenceSourceActionDecision.kind` | `run_snapshot`, `live_source`, `unavailable` | `src/lib/analysis-run-companion-state.ts` | Action decision for opening evidence in source view. |
+| Companion run status filter | `CompanionRunStatusFilter` | `all`, `completed`, `failed`, `cancelled`, `queued_running` | `src/lib/analysis-run-companion-state.ts` | Run filter UI. |
+| Companion run scope filter | `CompanionRunsFilterState.scope` | `all`, `current` | `src/lib/analysis-run-companion-state.ts` | Run filter UI. |
+| Companion run entry | `CompanionRunEntry.kind` | `active`, `saved` | `src/lib/analysis-run-companion-state.ts` | Combines active and saved runs. |
+| Evidence view basis | `EvidenceSourceViewBasis` | `run_snapshot`, `live_source` | `src/lib/analysis-evidence-source-navigation.ts` | Evidence navigation basis. |
+| Evidence scope | `EvidenceSourceScope.kind` | `source`, `group_member` | `src/lib/analysis-evidence-source-navigation.ts` | Evidence source scope. |
+| Source return context | `SourceReturnContext.kind` | `evidence` | `src/lib/analysis-evidence-source-navigation.ts` | Return-to-evidence marker. |
+| Focused live target | `FocusedLiveSourceTarget.kind` | `source_item`, `youtube_transcript`, `unsupported` | `src/lib/analysis-evidence-source-navigation.ts` | Live source focus target. |
+| Loaded evidence data | `LoadedEvidenceSourceData.kind` | `snapshot`, `source_items`, `youtube_transcript` | `src/lib/analysis-evidence-source-navigation.ts` | Loaded data shape for evidence navigation. |
+| Source browser tabs | `SourceBrowserTabId` | `timeline`, `transcript`, `comments`, `videos`, `sources`, `items`, `metadata`, `activity` | `src/lib/source-browser-model.ts` | Tab ids. |
+| Source browser subject | `SourceBrowserSubject.kind` | `source`, `source_group`, `run_snapshot` | `src/lib/source-browser-model.ts` | Browser subject shape. |
+| Run snapshot browser kind | `RunSnapshotBrowserKind` | `source_group`, `telegram_timeline`, `youtube_transcript`, `generic_items` | `src/lib/source-browser-model.ts` | Snapshot browser specialization. |
+| Loaded item sort | `LoadedSourceItemSort` | `newest`, `oldest` | `src/lib/source-browser-model.ts` | Source item sort. |
+| Loaded YouTube comment sort | `LoadedYoutubeCommentSort` | `newest`, `oldest`, `most_liked` | `src/lib/source-browser-model.ts` | Comment sort. |
+| Comments coverage | `CommentsCoverageState` | `unknown`, `not_synced`, `syncing`, `failed`, `synced_empty`, `synced_with_rows` | `src/lib/source-browser-model.ts` | Derived YouTube comments coverage. |
+| Telegram history scope UI | history scope option values | `current`, `migrated`, `merged` | `src/lib/components/analysis/source-browser-shell.svelte` | UI selector values; check backend support before reusing. |
+| Source reader basis | `SourceReaderBasis` | `live_source`, `run_snapshot` | `src/lib/source-reader-model.ts` | Reader source basis. |
+| Source reader kind | `SourceReaderKind` | `telegram_message`, `youtube_transcript`, `youtube_comment`, `youtube_description`, `generic_item` | `src/lib/source-reader-model.ts` | Reader item kind. |
+| Source reader history scope | `SourceReaderItem.historyScope` | `current`, `migrated` | `src/lib/source-reader-model.ts` | Reader item history scope. |
+| Universal item kind sentinel | `ALL_KINDS` | `__all_source_item_kinds__` | `src/lib/components/analysis/universal-items-view.svelte` | Local filter sentinel. |
+| Known source item kinds | `KNOWN_ITEM_KINDS` | `telegram_message`, `youtube_transcript`, `youtube_comment`, `youtube_description` | `src/lib/components/analysis/universal-items-view.svelte` | Known UI labels; unknown values are allowed and displayed as unknown. |
+
+### Snapshot affordance and canvas state
+
+| Area | Name | Values | Source | Notes |
+| --- | --- | --- | --- | --- |
+| Snapshot affordance surface | `SnapshotAffordanceSurface` | `runs-row`, `opened-header`, `run-details`, `source-tab`, `evidence-tab`, `chat-tab` | `src/lib/analysis-run-snapshot-affordance.ts` | Caller surface for snapshot messaging. |
+| Snapshot affordance state | `SnapshotAffordanceState` | `available`, `capture_failed_with_error`, `not_captured_before_terminal`, `capture_failed_without_error_unknown`, `inconsistent`, `verification_failed`, `checking`, `pending`, `unknown` | `src/lib/analysis-run-snapshot-affordance.ts` | Derived snapshot UI state. |
+| Snapshot affordance severity | `SnapshotAffordanceSeverity` | `none`, `info`, `warning`, `error` | `src/lib/analysis-run-snapshot-affordance.ts` | UI severity. |
+| Snapshot probe state | `SnapshotProbeState` | `available`, `unavailable`, `error`, `loading`, `unknown` | `src/lib/analysis-run-snapshot-affordance.ts` | Probe/load state. |
+| Snapshot badge variant | `SnapshotBadgeVariant` | `neutral`, `info`, `warning`, `danger` | `src/lib/analysis-run-snapshot-affordance.ts` | Local badge subset. |
+| Snapshot availability signal | `SnapshotAvailabilitySignal` | `unknown`, `capturing`, `available`, `unavailable` | `src/lib/analysis-run-snapshot-affordance.ts` | Local alias aligned with canvas availability. |
+| Run snapshot availability | `RunSnapshotAvailability` | `unknown`, `capturing`, `available`, `unavailable` | `src/lib/analysis-report-canvas-state.ts` | Canvas-level snapshot state. |
+| Source canvas surface | `SourceCanvasSurface` | `live_source`, `run_snapshot_unknown`, `run_snapshot_pending`, `run_snapshot_available`, `run_snapshot_unavailable` | `src/lib/analysis-report-canvas-state.ts` | Derived canvas surface. |
+
+### Library, projects, and source import UI
+
+| Area | Name | Values | Source | Notes |
+| --- | --- | --- | --- | --- |
+| Library provider | `LibrarySourceProvider` | `telegram`, `youtube`, `rss`, `forum`, `web`, `other` | `src/lib/types/library-sources.ts` | Library catalog provider values. |
+| Library source subtype | `LibrarySourceSubtype` | `video`, `playlist`, `channel`, `supergroup`, `group`, `feed`, `thread`, `board`, `site`, `null` | `src/lib/types/library-sources.ts` | Library catalog subtype values. |
+| Library catalog status | `LibraryCatalogStatus` | `active`, `syncing`, `error`, `unavailable` | `src/lib/types/library-sources.ts` | Catalog record status. |
+| Library catalog source status | `LibraryCatalogSourceStatus` | `active`, `syncing`, `error`, `unavailable` | `src/lib/ui/library-catalog-model.ts` | View-model status. |
+| Library catalog filter id | `LibraryCatalogFilterId` | `all`, `provider:<provider>`, `provider:<provider>/subtype:<subtype>` | `src/lib/ui/library-catalog-model.ts` | Structured string id. |
+| Research project status | `ProjectStatus` | `ready`, `running`, `needs_attention`, `empty` | `src/lib/ui/research-projects-model.ts` | Project card status. |
+| Research project backing | `ResearchProjectBacking.kind` | `project`, `source_group` | `src/lib/ui/research-projects-model.ts` | View-model backing kind. |
+| Library source status | `LibrarySourceStatus` | `active`, `needs_account`, `syncing`, `error`, `unavailable` | `src/lib/ui/research-projects-model.ts` | Project settings/library attach status. |
+| Project source link status | `ProjectSourceLinkView.connectionStatus` | `connected` | `src/lib/ui/research-projects-model.ts` | Current UI has only connected links. |
+| Library source filter | `LibraryFilterState.providers` | `telegram`, `youtube`, `rss`, `forum`, `web`, `other` | `src/lib/ui/research-projects-model.ts` | Uses `LibrarySourceProvider`. |
+| YouTube smart import provider | `YoutubeSmartImportProvider` | `youtube`, `telegram`, `unknown` | `src/lib/ui/library-add-source-model.ts` | URL classifier provider. |
+| YouTube smart import kind | `YoutubeSmartImportKind` | `video`, `playlist`, `channel`, `unsupported` | `src/lib/ui/library-add-source-model.ts` | URL classifier kind. |
+| Playlist import item result | `PlaylistImportItemResult.status` | `added`, `skipped`, `failed` | `src/lib/ui/library-add-source-model.ts` | Per-item import result. |
+
+### Gemini Browser frontend UI
+
+| Area | Name | Values | Source | Notes |
+| --- | --- | --- | --- | --- |
+| Gemini Browser provider status | `GeminiBrowserProviderStatusKind` | `not_started`, `ready`, `needs_login`, `needs_manual_action`, `running`, `stopped`, `failed` | `src/lib/types/gemini-browser.ts` | Frontend provider status type. |
+| Gemini Browser provider mode | `GeminiBrowserProviderMode` | `managed`, `cdp_attach` | `src/lib/types/gemini-browser.ts` | `cdp_attach` can be persisted in localStorage. |
+| Gemini Browser run status | `GeminiBrowserRunStatus` | `queued`, `running`, `ok`, `ready`, `needs_login`, `needs_manual_action`, `blocked`, `timeout`, `browser_crashed`, `failed`, `cancelled` | `src/lib/types/gemini-browser.ts` | Run/result status type. |
+| Gemini Browser refresh mode | `GeminiBrowserRefreshMode` | `light`, `full` | `src/lib/gemini-browser-refresh-scheduler.ts` | Polling/refresh mode. |
+| Gemini Browser setup check state | `GeminiBrowserSetupCheckState` | `ready`, `action_needed`, `running`, `warning`, `failed`, `unknown`, `not_applicable` | `src/lib/gemini-browser-setup-status.ts` | Setup checklist state. |
+| Gemini Browser run history filter | `GeminiBrowserRunHistoryFilter` | `all`, `problems`, `partial_risk`, `manual_action`, `failed` | `src/lib/gemini-browser-run-inspector.ts` | Run history filter. |
+| Gemini Browser run history badge | `GeminiBrowserRunHistoryBadge` | `ok`, `stable`, `partial`, `manual`, `failed`, `running`, `queued` | `src/lib/gemini-browser-run-inspector.ts` | Derived row badge. |
+
+### LLM stream frontend values
+
+| Area | Name | Values | Source | Notes |
+| --- | --- | --- | --- | --- |
+| LLM stream event | `LlmStreamEventKind` | `queued`, `started`, `delta`, `completed`, `failed`, `cancelled` | `src/lib/types/llm.ts` | Streaming UI/API event kind. |
