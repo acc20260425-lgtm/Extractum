@@ -133,14 +133,17 @@ Counts use non-self filter semantics so filter chips remain useful:
 
 ### Row DTO
 
-After local schema discovery confirms the current `Jobs` table shape, include
-these fields when the matching columns exist:
+The response shape is stable. After local schema discovery confirms the current
+`Jobs` table shape, every row still returns all fields below. If a compatible
+column is absent in the local schema, the backend fills the corresponding DTO
+field with `None` for optional fields or a documented default for required
+fields. The frontend must not branch on runtime schema shape.
 
 ```text
 ApalisJobRow
 - id: String
-- job_type: String
-- status: String
+- job_type: String              // "" only if the column is unexpectedly absent
+- status: String                // "unknown" only if the column is unexpectedly absent
 - attempts: u32
 - max_attempts: Option<u32>
 - run_at: Option<String>
@@ -181,15 +184,32 @@ Payloads may contain prompts, provider configuration, cookies, tokens, endpoint
 details, or other sensitive diagnostic material. The backend must sanitize and
 bound every UI-facing payload field:
 
-- Redact object keys whose normalized name contains `api_key`, `apikey`,
-  `authorization`, `bearer`, `cookie`, `credentials`, `password`, `secret`,
-  `session`, `token`, `api_hash`, or `refresh_token`.
+- Redact object keys whose normalized name contains any normalized sensitive
+  fragment: `apikey`, `authorization`, `bearer`, `cookie`, `credentials`,
+  `password`, `secret`, `session`, `token`, `apihash`, or `refreshtoken`.
+- Key normalization is explicit: convert to lowercase, then remove `_`, `-`,
+  spaces, and all non-alphanumeric ASCII characters before matching. This means
+  keys such as `apiKey`, `api-key`, `API Key`, `refreshToken`,
+  `refresh_token`, and `refresh token` all match.
 - Redaction is recursive for JSON objects and arrays.
 - Use the exact replacement string `[redacted]`.
 - Limit each of `job_json`, `last_result`, and `metadata` to at most 64 KiB of
-  serialized JSON after redaction.
-- If a section exceeds the limit, return a truncated representation plus the
-  corresponding `*_truncated = true` flag. The UI must label truncated sections.
+  serialized JSON after redaction. If a section exceeds the limit, do not return
+  partial arbitrary JSON. Return this valid JSON object instead:
+
+```json
+{
+  "truncated": true,
+  "preview": "redacted JSON preview capped at 2000 characters"
+}
+```
+
+- The corresponding `*_truncated` flag must be `true` for that section.
+- The preview is produced from the redacted serialized JSON only, never from raw
+  unredacted bytes.
+- If payload decoding fails, `job_json` remains `None`, `job_truncated` is
+  `false`, and `job_preview` still contains the redacted lossy text preview
+  capped at 500 characters.
 - `job_preview` is a redacted text preview capped at 500 characters.
 - Do not add copy, export, open-folder, or share controls in v1.
 
@@ -252,8 +272,9 @@ If no job is selected, show an empty detail state asking the user to select a jo
 
 - Page loads once on mount
 - Refresh button reloads data
-- Changing filters reloads or filters via local state, whichever keeps the
-  implementation simpler and consistent with existing app patterns
+- Changing any filter reloads data by calling `apalis_jobs_list` with the full
+  current filter request. The frontend must not derive filtered rows, counts, or
+  `total_matching` by filtering an already limited local result set.
 - If the selected job disappears after refresh, select the first row if present,
   otherwise clear selection
 - No automatic polling in v1
@@ -283,6 +304,7 @@ Backend tests:
 - `apalis_jobs_list_returns_rfc3339_utc_timestamps`
 - `apalis_jobs_counts_ignore_their_own_active_filter`
 - `apalis_jobs_payloads_are_redacted_and_truncated`
+- `apalis_jobs_row_shape_is_stable_when_optional_columns_are_absent`
 
 Frontend API tests:
 
@@ -296,6 +318,8 @@ UI/source contract tests:
 - sidebar includes top-level `Jobs` item in both nav modes
 - `/jobs` route renders manual refresh, filters, table, and detail panel
 - refresh calls the API again
+- changing filters calls the API again instead of filtering the limited local
+  rows
 - selecting a row displays job details
 - truncated and redacted detail sections are labeled without exposing raw secret
   values
@@ -326,5 +350,5 @@ top-level split inspector.
 - Unknown Apalis status values are displayed rather than rejected.
 - The design now requires local schema discovery before relying on Apalis SQL
   internals.
-- Timestamp format, sorting, counts, redaction, and truncation behavior are
-  explicit.
+- Timestamp format, sorting, counts, stable DTO shape, filter reloads, redaction
+  normalization, and truncation behavior are explicit.
