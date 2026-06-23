@@ -1177,7 +1177,7 @@ Append these tests inside the existing test module:
         seed_apalis_job(&pool, "payload-invalid").await;
         let long_tail = "z".repeat(DECODE_FAILURE_PREVIEW_CHARS + 100);
         sqlx::query("UPDATE Jobs SET job = ? WHERE idempotency_key = ?")
-            .bind(format!("Authorization: Bearer raw-secret\nCookie: session=raw-cookie\nAuthorization Bearer raw-inline\napiKey=sk-secret; plain text payload; {long_tail}"))
+            .bind(format!("Authorization: Bearer raw-secret\nCookie: session=raw-cookie\nAuthorization: Bearer semicolon-secret; harmless context\nAuthorization Bearer raw-inline\napiKey=sk-secret; plain text payload; {long_tail}"))
             .bind("payload-invalid")
             .execute(&pool)
             .await
@@ -1195,9 +1195,11 @@ Append these tests inside the existing test module:
         assert!(preview.contains("Authorization: [redacted]"));
         assert!(preview.contains("Cookie: [redacted]"));
         assert!(preview.contains("apiKey=[redacted]"));
+        assert!(preview.contains("harmless context"));
         assert!(preview.contains("plain text payload"));
         assert!(!preview.contains("raw-secret"));
         assert!(!preview.contains("raw-cookie"));
+        assert!(!preview.contains("semicolon-secret"));
         assert!(!preview.contains("raw-inline"));
         assert!(!preview.contains("sk-secret"));
     }
@@ -1416,12 +1418,10 @@ fn redact_text_fragments(text: &str) -> String {
 }
 
 fn redact_text_line(line: &str) -> String {
-    let redacted = line
-        .split(';')
+    line.split(';')
         .map(redact_text_segment)
         .collect::<Vec<_>>()
-        .join(";");
-    redact_inline_secret_tokens(&redacted)
+        .join("; ")
 }
 
 fn redact_text_segment(segment: &str) -> String {
@@ -1429,7 +1429,7 @@ fn redact_text_segment(segment: &str) -> String {
         let spacer = if separator == ':' { " " } else { "" };
         return format!("{}{}{}{}", key.trim_end(), separator, spacer, REDACTED);
     }
-    segment.to_string()
+    redact_inline_secret_tokens(segment)
 }
 
 fn sensitive_assignment(segment: &str) -> Option<(&str, char)> {
@@ -1790,6 +1790,7 @@ describe("apalis jobs inspector frontend source contracts", () => {
     expect(jobsPanelSource).toContain("onchange={() => handleFilterChange()}");
     expect(jobsPanelSource).toContain("function statusFilterOptions");
     expect(jobsPanelSource).toContain("response?.statusCounts");
+    expect(jobsPanelSource).toContain("statusFilterOptions(response?.statusCounts ?? [], statusFilter)");
     expect(jobsPanelSource).not.toContain('const statusOptions = ["", "Pending"');
     expect(jobsPanelSource).toContain("searchDebounce");
     expect(jobsPanelSource).toContain("refreshSequence");
@@ -1912,7 +1913,7 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
   let selectedJob = $derived(
     selectedJobId ? response?.jobs.find((job) => job.id === selectedJobId) ?? null : null,
   );
-  let statusOptions = $derived(statusFilterOptions(response?.statusCounts ?? []));
+  let statusOptions = $derived(statusFilterOptions(response?.statusCounts ?? [], statusFilter));
   let gridRows = $derived((response?.jobs ?? []).map(jobToGridRow));
   let selectedRowIds = $derived(selectedJobId ? [selectedJobId] : []);
 
@@ -1989,12 +1990,16 @@ Create `src/lib/components/jobs/ApalisJobsPanel.svelte`:
     return String(formatDataGridDateTimeValue(value, "datetime") ?? "Never");
   }
 
-  function statusFilterOptions(counts: ApalisJobStatusCount[]) {
+  function statusFilterOptions(counts: ApalisJobStatusCount[], selectedStatus: string) {
     const seen = new Set(baseStatusOptions);
     const unknownStatuses = counts
       .map((row) => row.status)
       .filter((status) => status && !seen.has(status))
       .sort();
+    if (selectedStatus && !seen.has(selectedStatus) && !unknownStatuses.includes(selectedStatus)) {
+      unknownStatuses.push(selectedStatus);
+      unknownStatuses.sort();
+    }
     return ["", ...baseStatusOptions, ...unknownStatuses];
   }
 
