@@ -91,15 +91,32 @@
           <p class="hint">{mixedProviderRunMessage}</p>
         {/if}
       {/if}
-      <ExtractumButton disabled={saving || runDisabledReason !== null} onclick={onRunProject}>
+      <ExtractumButton
+        disabled={saving || runDisabledReason !== null}
+        onclick={onRunProject}
+        aria-label="Run project analysis"
+        title="Run project analysis"
+      >
         <Play size={14} aria-hidden="true" />
         Run project analysis
       </ExtractumButton>
-      <ExtractumButton variant="outline" disabled={!project || saving} onclick={onEditProject}>
+      <ExtractumButton
+        variant="outline"
+        disabled={!project || saving}
+        onclick={onEditProject}
+        aria-label="Edit selected project"
+        title="Edit selected project"
+      >
         <Pencil size={14} aria-hidden="true" />
         Edit project
       </ExtractumButton>
-      <ExtractumButton variant="destructive" disabled={!project || saving} onclick={onDeleteProject}>
+      <ExtractumButton
+        variant="destructive"
+        disabled={!project || saving}
+        onclick={onDeleteProject}
+        aria-label="Delete selected project"
+        title="Delete selected project"
+      >
         <Trash2 size={14} aria-hidden="true" />
         Delete project
       </ExtractumButton>
@@ -111,12 +128,24 @@
         <p><strong>{selectedSource.title}</strong></p>
         <p>{selectedSource.subtitle ?? selectedSource.filterSummary}</p>
         {#if canRunSelectedYoutubeSummary}
-          <ExtractumButton variant="outline" disabled={saving} onclick={() => (youtubeSummaryOpen = true)}>
+          <ExtractumButton
+            variant="outline"
+            disabled={saving}
+            onclick={() => (youtubeSummaryOpen = true)}
+            aria-label="Create YouTube Summary for selected source"
+            title="Create YouTube Summary for selected source"
+          >
             <PlayCircle size={14} aria-hidden="true" />
             YouTube Summary
           </ExtractumButton>
         {/if}
-        <ExtractumButton variant="destructive" disabled={saving} onclick={() => onRemoveSource(selectedSource.sourceNumericId)}>
+        <ExtractumButton
+          variant="destructive"
+          disabled={saving}
+          onclick={() => onRemoveSource(selectedSource.sourceNumericId)}
+          aria-label={`Remove source ${selectedSource.title} from project`}
+          title={`Remove source ${selectedSource.title} from project`}
+        >
           Remove from project
         </ExtractumButton>
       </section>

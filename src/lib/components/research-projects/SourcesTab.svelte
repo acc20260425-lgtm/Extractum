@@ -106,16 +106,27 @@
             variant="secondary"
             disabled={saving || syncDisabledReason !== null}
             title={syncDisabledReason ?? "Sync selected sources"}
+            aria-label={`Sync selected ${selectedRows.length} source${selectedRows.length === 1 ? "" : "s"}`}
             onclick={handleSyncSelected}
           >
             <RefreshCw size={12} aria-hidden="true" />
             {saving ? "Syncing..." : "Sync"}
           </ExtractumButton>
-          <ExtractumButton variant="secondary" disabled={true} title="Export selected sources (not implemented)">
+          <ExtractumButton
+            variant="secondary"
+            disabled={true}
+            title="Export selected sources (not implemented)"
+            aria-label="Export selected sources (not implemented)"
+          >
             <Download size={12} aria-hidden="true" />
             Export
           </ExtractumButton>
-          <ExtractumButton variant="destructive" onclick={handleRemoveSelected}>
+          <ExtractumButton
+            variant="destructive"
+            onclick={handleRemoveSelected}
+            aria-label={`Remove ${selectedRows.length} selected source${selectedRows.length === 1 ? "" : "s"}`}
+            title={`Remove ${selectedRows.length} selected source${selectedRows.length === 1 ? "" : "s"}`}
+          >
             <Trash2 size={12} aria-hidden="true" />
             Remove
           </ExtractumButton>
@@ -126,11 +137,21 @@
       </div>
     {:else}
       <div class="global-action-bar">
-        <ExtractumButton variant="outline" disabled={true} title="Sync all sources (not implemented)">
+        <ExtractumButton
+          variant="outline"
+          disabled={true}
+          title="Sync all sources (not implemented)"
+          aria-label="Sync all sources (not implemented)"
+        >
           <RefreshCw size={12} aria-hidden="true" />
           Sync all
         </ExtractumButton>
-        <ExtractumButton data-ui-action="connect-library" onclick={onOpenConnectLibrary}>
+        <ExtractumButton
+          data-ui-action="connect-library"
+          onclick={onOpenConnectLibrary}
+          aria-label="Connect sources from library"
+          title="Connect sources from library"
+        >
           <Library size={14} aria-hidden="true" />
           Connect from Library
         </ExtractumButton>

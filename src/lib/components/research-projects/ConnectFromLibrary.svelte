@@ -101,6 +101,8 @@
             <button
               type="button"
               class:active={providerFilters.includes(provider)}
+              title={`Filter sources by ${provider}`}
+              aria-label={`Filter sources by ${provider}`}
               onclick={() => toggleProvider(provider)}
             >
               <ProviderBadge {provider} />
@@ -144,11 +146,19 @@
 
       <footer class="connect-actions">
         <span>{selectedConnectableCount} connectable selected</span>
-        <ExtractumButton variant="outline" onclick={() => onOpenChange(false)}>
+        <ExtractumButton
+          variant="outline"
+          onclick={() => onOpenChange(false)}
+          aria-label="Close connect from Library dialog"
+          title="Close connect from Library dialog">
           <X size={14} aria-hidden="true" />
           Close
         </ExtractumButton>
-        <ExtractumButton disabled={selectedConnectableCount === 0 || saving} onclick={connectSelected}>
+        <ExtractumButton
+          disabled={selectedConnectableCount === 0 || saving}
+          onclick={connectSelected}
+          aria-label={`Connect ${selectedConnectableCount} selected source${selectedConnectableCount === 1 ? "" : "s"} to project`}
+          title={`Connect ${selectedConnectableCount} selected source${selectedConnectableCount === 1 ? "" : "s"} to project`}>
           <Check size={14} aria-hidden="true" />
           Подключить выбранные
         </ExtractumButton>
@@ -275,3 +285,5 @@
     font-size: 12px;
   }
 </style>
+
+

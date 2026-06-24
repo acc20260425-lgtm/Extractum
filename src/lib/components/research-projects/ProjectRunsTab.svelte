@@ -67,6 +67,7 @@
       disabled={loading}
       onclick={onRefreshProjectRuns}
       aria-label="Refresh project analysis runs"
+      title="Refresh project analysis runs"
     >
       <RefreshCw size={14} aria-hidden="true" />
       Refresh
@@ -97,10 +98,15 @@
             {/if}
           </div>
           <div class="run-actions">
-            <a class="analysis-link" href={analysisRunHref(run)} aria-label={`Open report for run ${run.id}`}>
-              <ExternalLink size={14} aria-hidden="true" />
-              Open report
-            </a>
+            <a
+              class="analysis-link"
+              href={analysisRunHref(run)}
+              aria-label={`Open report for run ${run.id}`}
+              title={`Open report for run ${run.id}`}
+            >
+      <ExternalLink size={14} aria-hidden="true" />
+      Open report
+    </a>
             <ExtractumButton
               class="icon-button danger"
               variant="destructive"

@@ -123,6 +123,7 @@
       disabled={loading}
       onclick={() => void refreshRuns()}
       aria-label="Refresh prompt pack runs"
+      title="Refresh prompt pack runs"
     >
       <RefreshCw size={14} aria-hidden="true" />
       Refresh
@@ -149,7 +150,12 @@
                 <p>{run.latestMessage ?? "Waiting for progress."}</p>
               </div>
               <div class="run-actions">
-                <ExtractumButton variant="outline" onclick={() => void cancelRun(run.runId)}>
+                <ExtractumButton
+                  variant="outline"
+                  onclick={() => void cancelRun(run.runId)}
+                  aria-label={`Cancel prompt pack run ${run.runId}`}
+                  title={`Cancel prompt pack run ${run.runId}`}
+                >
                   <XCircle size={14} aria-hidden="true" />
                   Cancel
                 </ExtractumButton>
@@ -185,7 +191,12 @@
                 <p>{run.latestMessage ?? run.resultStatus ?? "Completed"}</p>
               </div>
               <div class="run-actions">
-                <ExtractumButton variant="outline" onclick={() => (selectedRunId = run.runId)}>
+                <ExtractumButton
+                  variant="outline"
+                  onclick={() => (selectedRunId = run.runId)}
+                  aria-label={`View prompt pack run ${run.runId} result`}
+                  title={`View prompt pack run ${run.runId} result`}
+                >
                   View result
                 </ExtractumButton>
                 <ExtractumButton

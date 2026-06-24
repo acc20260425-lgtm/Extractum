@@ -57,7 +57,12 @@
       </select>
     </label>
     <ProviderBadge provider="telegram" label="Library" />
-    <ExtractumButton disabled={loading || runDisabledReason !== null} onclick={onRunProject}>
+    <ExtractumButton
+      disabled={loading || runDisabledReason !== null}
+      onclick={onRunProject}
+      aria-label="Run project analysis"
+      title="Run project analysis"
+    >
       <Play size={14} aria-hidden="true" />
       Run
     </ExtractumButton>
@@ -65,7 +70,7 @@
       variant="outline"
       disabled={true}
       title={PROJECT_EXPORT_DISABLED_REASON}
-      aria-label="Export unavailable"
+      aria-label={PROJECT_EXPORT_DISABLED_REASON}
       data-disabled-reason={PROJECT_EXPORT_DISABLED_REASON}
     >
       <Download size={14} aria-hidden="true" />
