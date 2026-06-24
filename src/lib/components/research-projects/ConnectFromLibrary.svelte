@@ -47,7 +47,7 @@
   const columns: ExtractumDataGridColumn[] = [
     { id: "selected", header: "", width: 44, cell: GridSelectCell },
     { id: "title", header: "Источник", width: 260, cell: LibrarySourceCell },
-    { id: "provider", header: "Тип", width: 96 },
+    { id: "typeLabel", header: "Тип", width: 150 },
     { id: "projectCount", header: "Проекты", width: 80 },
     { id: "lastCollectedAt", header: "Последний сбор", width: 140, dateTimeFormat: "datetime" },
     { id: "localCopyLabel", header: "Локальная копия", width: 120 },

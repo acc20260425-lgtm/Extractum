@@ -89,6 +89,7 @@ describe("research projects model", () => {
     const rows = buildLibrarySourcesView(library, projectSources, "project:1");
     expect(rows[0]).toMatchObject({
       sourceId: 10,
+      typeLabel: "YouTube / Video",
       alreadyConnected: true,
       connectable: false,
       disabledReason: "Already in project",

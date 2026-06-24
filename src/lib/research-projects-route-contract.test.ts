@@ -6,6 +6,7 @@ import inspectorSource from "$lib/components/research-projects/ProjectInspector.
 import runsTabSource from "$lib/components/research-projects/ProjectRunsTab.svelte?raw";
 import runDialogSource from "$lib/components/research-projects/ProjectRunDialog.svelte?raw";
 import sourcesTabSource from "$lib/components/research-projects/SourcesTab.svelte?raw";
+import connectFromLibrarySource from "$lib/components/research-projects/ConnectFromLibrary.svelte?raw";
 import topCommandBarSource from "$lib/components/research-projects/TopCommandBar.svelte?raw";
 import workspaceSource from "$lib/components/research-projects/ProjectWorkspace.svelte?raw";
 
@@ -61,6 +62,11 @@ describe("projects mvp route contract", () => {
     expect(sourcesTabSource).toContain('id: "typeLabel", header: "Type"');
     expect(sourcesTabSource).not.toContain('header: "Provider"');
     expect(sourcesTabSource).not.toContain('header: "Subtype"');
+  });
+
+  it("shows full source type labels when connecting sources from Library", () => {
+    expect(connectFromLibrarySource).toContain('id: "typeLabel", header: "Тип"');
+    expect(connectFromLibrarySource).not.toContain('id: "provider", header: "Тип"');
   });
 
   it("wires selected Workspace source syncs to the YouTube source job command", () => {

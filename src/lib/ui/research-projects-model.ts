@@ -32,6 +32,7 @@ export type LibrarySourceView = {
   id: string;
   sourceId: number;
   provider: LibrarySourceProvider;
+  typeLabel: string;
   title: string;
   subtitle: string | null;
   projectCount: number;
@@ -151,6 +152,7 @@ export function buildLibrarySourcesView(
       id: sourceRowId(source.source_id),
       sourceId: source.source_id,
       provider: source.provider,
+      typeLabel: librarySourceTypeLabel(source.provider, source.source_subtype),
       title: source.title ?? `Source #${source.source_id}`,
       subtitle: source.subtitle,
       projectCount: source.project_count,
