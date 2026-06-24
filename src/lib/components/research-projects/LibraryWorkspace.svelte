@@ -45,8 +45,13 @@
 </script>
 
 <section data-ui-region="library-workspace" class="library-workspace">
-  <div class="toolbar extractum-toolbar-row">
-    <ExtractumTextInput bind:value={query} placeholder="Search sources" aria-label="Search Library sources" />
+  <div class="toolbar extractum-toolbar-row flex-wrap justify-start gap-2 px-2 py-2 min-h-[46px]">
+    <ExtractumTextInput
+      bind:value={query}
+      class="flex-1 min-w-[160px]"
+      placeholder="Search sources"
+      aria-label="Search Library sources"
+    />
     <ExtractumButton
       data-ui-action="library-add"
       aria-label="Add library source"
@@ -91,7 +96,7 @@
     </ExtractumButton>
   </div>
 
-  <div class="grid-host extractum-grid-frame">
+  <div class="grid-host extractum-grid-frame min-h-0 min-w-0 flex-1">
     <ExtractumDataGrid
       rows={sources}
       {columns}
@@ -112,22 +117,6 @@
   }
 
   .toolbar {
-    justify-content: flex-start;
-    min-height: 46px;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 8px;
     border-bottom: 1px solid var(--extractum-border);
-  }
-
-  .toolbar :global(.extractum-input) {
-    flex: 1 1 auto;
-    min-width: 160px;
-  }
-
-  .grid-host {
-    min-width: 0;
-    min-height: 0;
-    flex: 1;
   }
 </style>

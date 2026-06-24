@@ -70,40 +70,45 @@
   );
 </script>
 
-<aside data-ui-region="library-inspector" class="library-inspector extractum-panel-shell" aria-label="Library source inspector">
+<aside data-ui-region="library-inspector" class="library-inspector" aria-label="Library source inspector">
   {#if selectedSource}
-    <header class="inspector-header">
-      <div>
-        <p class="eyebrow">Selected source</p>
-        <h2>{selectedSource.title}</h2>
-      </div>
-      <ProviderBadge provider={selectedSource.provider} />
-    </header>
-
-    <div class="status-row">
-      <StatusBadge status={selectedSource.status} />
-      {#if selectedSource.statusDetail}
-        <span class="meta-pill">{selectedSource.statusDetail}</span>
-      {/if}
-    </div>
-
-    <dl class="meta-list">
-      {#each metadataRows as row (row.label)}
+    <section class="extractum-panel-shell">
+      <header class="inspector-header">
         <div>
-          <dt>{row.label}</dt>
-          <dd>
-            {#if row.href && row.value}
-              <a href={row.href} target="_blank" rel="noreferrer">{row.value}</a>
-            {:else}
-              {row.value ?? "N/A"}
-            {/if}
-          </dd>
+          <p class="eyebrow">Selected source</p>
+          <h2>{selectedSource.title}</h2>
         </div>
-      {/each}
-    </dl>
+        <ProviderBadge provider={selectedSource.provider} />
+      </header>
+
+      <div class="status-row">
+        <StatusBadge status={selectedSource.status} />
+        {#if selectedSource.statusDetail}
+          <span class="meta-pill">{selectedSource.statusDetail}</span>
+        {/if}
+      </div>
+    </section>
+
+    <section class="extractum-panel-shell">
+      <h3>Source metadata</h3>
+      <dl class="meta-list">
+        {#each metadataRows as row (row.label)}
+          <div>
+            <dt>{row.label}</dt>
+            <dd>
+              {#if row.href && row.value}
+                <a href={row.href} target="_blank" rel="noreferrer">{row.value}</a>
+              {:else}
+                {row.value ?? "N/A"}
+              {/if}
+            </dd>
+          </div>
+        {/each}
+      </dl>
+    </section>
 
     {#if selectedSource.youtube}
-      <section class="detail-section" aria-label="YouTube details">
+      <section class="detail-section extractum-panel-shell" aria-label="YouTube details">
         <h3>YouTube details</h3>
         <dl class="meta-list">
           {#each youtubeRows as row (row.label)}
@@ -117,7 +122,7 @@
     {/if}
 
     {#if selectedSource.telegram}
-      <section class="detail-section" aria-label="Telegram details">
+      <section class="detail-section extractum-panel-shell" aria-label="Telegram details">
         <h3>Telegram details</h3>
         <dl class="meta-list">
           {#each telegramRows as row (row.label)}
@@ -130,50 +135,52 @@
       </section>
     {/if}
 
-    <div class="commands" aria-label="Inspector commands">
-      <ExtractumButton
-        variant="outline"
-        aria-label={`Open selected source ${selectedSource.title}`}
-        title={`Open selected source ${selectedSource.title}`}
-      >
-        <ExternalLink size={14} aria-hidden="true" />
-        Open
-      </ExtractumButton>
-      <ExtractumButton
-        variant="outline"
-        aria-label={`Sync selected source ${selectedSource.title}`}
-        title={`Sync selected source ${selectedSource.title}`}
-      >
-        <RefreshCw size={14} aria-hidden="true" />
-        Sync
-      </ExtractumButton>
-      <ExtractumButton
-        variant="outline"
-        aria-label={`Open connection dialog for source ${selectedSource.title}`}
-        title={`Open connection dialog for source ${selectedSource.title}`}
-      >
-        <Link2 size={14} aria-hidden="true" />
-        Connect
-      </ExtractumButton>
-      <ExtractumButton
-        variant="outline"
-        aria-label={`Run report for source ${selectedSource.title}`}
-        title={`Run report for source ${selectedSource.title}`}
-      >
-        <PlayCircle size={14} aria-hidden="true" />
-        Run report
-      </ExtractumButton>
-      {#if canRunYoutubeSummary}
+    <section class="extractum-panel-shell">
+      <div class="commands" aria-label="Inspector commands">
         <ExtractumButton
           variant="outline"
-          aria-label={`Run YouTube summary for source ${selectedSource.title}`}
-          title={`Run YouTube summary for source ${selectedSource.title}`}
-          onclick={() => (youtubeSummaryOpen = true)}
+          aria-label={`Open selected source ${selectedSource.title}`}
+          title={`Open selected source ${selectedSource.title}`}
         >
-          <PlayCircle size={14} aria-hidden="true" />YouTube Summary
+          <ExternalLink size={14} aria-hidden="true" />
+          Open
         </ExtractumButton>
-      {/if}
-    </div>
+        <ExtractumButton
+          variant="outline"
+          aria-label={`Sync selected source ${selectedSource.title}`}
+          title={`Sync selected source ${selectedSource.title}`}
+        >
+          <RefreshCw size={14} aria-hidden="true" />
+          Sync
+        </ExtractumButton>
+        <ExtractumButton
+          variant="outline"
+          aria-label={`Open connection dialog for source ${selectedSource.title}`}
+          title={`Open connection dialog for source ${selectedSource.title}`}
+        >
+          <Link2 size={14} aria-hidden="true" />
+          Connect
+        </ExtractumButton>
+        <ExtractumButton
+          variant="outline"
+          aria-label={`Run report for source ${selectedSource.title}`}
+          title={`Run report for source ${selectedSource.title}`}
+        >
+          <PlayCircle size={14} aria-hidden="true" />
+          Run report
+        </ExtractumButton>
+        {#if canRunYoutubeSummary}
+          <ExtractumButton
+            variant="outline"
+            aria-label={`Run YouTube summary for source ${selectedSource.title}`}
+            title={`Run YouTube summary for source ${selectedSource.title}`}
+            onclick={() => (youtubeSummaryOpen = true)}
+          >
+            <PlayCircle size={14} aria-hidden="true" />YouTube Summary
+          </ExtractumButton>
+        {/if}
+      </div>
+    </section>
     <YoutubeSummaryRunDialog bind:open={youtubeSummaryOpen} projectId={null} source={selectedSource} />
   {:else}
     <div class="empty-state extractum-panel-shell">
@@ -190,7 +197,10 @@
     min-height: 0;
     padding: 12px;
     overflow: auto;
-    background: transparent;
+    background: var(--extractum-surface-subtle);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
 
   .inspector-header {
@@ -246,7 +256,7 @@
   .meta-list {
     display: grid;
     gap: 8px;
-    margin: 14px 0;
+    margin: 8px 0 0;
   }
 
   .meta-list div {

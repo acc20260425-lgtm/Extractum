@@ -174,10 +174,7 @@
     right: 14px;
     bottom: 12px;
     max-width: min(520px, calc(100% - 28px));
-    border-radius: var(--extractum-radius);
-    padding: 8px 10px;
     color: var(--extractum-muted);
     font-size: 12px;
-    box-shadow: 0 8px 22px rgb(15 23 42 / 0.10);
   }
 </style>
