@@ -79,7 +79,7 @@
     </ExtractumButton>
     <ExtractumButton
       data-ui-action="library-delete"
-      variant="outline"
+      variant="destructive"
       aria-label={`Delete selected library source${selectedSource ? `: ${selectedSource.title}` : ""}`}
       title={`Delete selected library source${selectedSource ? `: ${selectedSource.title}` : ""}`}
       disabled={!selectedSource}
