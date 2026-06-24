@@ -23,8 +23,27 @@ pub(crate) async fn persist_final_result_in_transaction(
     canonical_result: &serde_json::Value,
     terminal_status: &str,
 ) -> AppResult<()> {
-    let canonical_json = canonical_result.to_string();
     let now = crate::time::now_rfc3339_utc();
+    let updated_rows = sqlx::query(
+        "UPDATE prompt_pack_runs
+         SET run_status = ?, result_status = ?, completed_at = ?, updated_at = ?
+         WHERE id = ? AND run_status IN ('queued', 'running')",
+    )
+    .bind(terminal_status)
+    .bind(terminal_status)
+    .bind(&now)
+    .bind(&now)
+    .bind(run_id)
+    .execute(&mut **tx)
+    .await
+    .map_err(AppError::database)?
+    .rows_affected();
+
+    if updated_rows == 0 {
+        return Ok(());
+    }
+
+    let canonical_json = canonical_result.to_string();
     let result_row_id: i64 = sqlx::query_scalar(
         "INSERT INTO prompt_pack_results (
             run_id, result_id, result_status, schema_version, canonical_hash,
@@ -57,19 +76,6 @@ pub(crate) async fn persist_final_result_in_transaction(
     .bind(&now)
     .bind(&now)
     .bind(result_row_id)
-    .execute(&mut **tx)
-    .await
-    .map_err(AppError::database)?;
-    sqlx::query(
-        "UPDATE prompt_pack_runs
-         SET run_status = ?, result_status = ?, completed_at = ?, updated_at = ?
-         WHERE id = ?",
-    )
-    .bind(terminal_status)
-    .bind(terminal_status)
-    .bind(&now)
-    .bind(&now)
-    .bind(run_id)
     .execute(&mut **tx)
     .await
     .map_err(AppError::database)?;
@@ -331,6 +337,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn persist_final_result_does_not_overwrite_cancelled_run_status() {
+        let pool = test_pool_with_canonical_result_ready_and_status("cancelled", "none").await;
+
+        persist_final_result_transaction(&pool, 42, test_canonical_result(), "complete")
+            .await
+            .expect("persist result");
+
+        let run_status: String =
+            sqlx::query_scalar("SELECT run_status FROM prompt_pack_runs WHERE id = 42")
+                .fetch_one(&pool)
+                .await
+                .expect("run status");
+        let result_status: String =
+            sqlx::query_scalar("SELECT result_status FROM prompt_pack_runs WHERE id = 42")
+                .fetch_one(&pool)
+                .await
+                .expect("result status");
+        let result_rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_results WHERE run_id = 42")
+            .fetch_one(&pool)
+            .await
+            .expect("result rows");
+        let projection_rows: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM prompt_pack_youtube_videos WHERE run_id = 42",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("projection rows");
+
+        assert_eq!(run_status, "cancelled");
+        assert_eq!(result_status, "none");
+        assert_eq!(result_rows, 0);
+        assert_eq!(projection_rows, 0);
+    }
+
+    #[tokio::test]
     async fn persist_final_result_projects_youtube_synthesis_items() {
         let pool = test_pool_with_canonical_result_ready().await;
 
@@ -426,6 +467,13 @@ mod tests {
     }
 
     async fn test_pool_with_canonical_result_ready() -> sqlx::SqlitePool {
+        test_pool_with_canonical_result_ready_and_status("running", "none").await
+    }
+
+    async fn test_pool_with_canonical_result_ready_and_status(
+        run_status: &str,
+        result_status: &str,
+    ) -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
             .await
             .expect("connect memory sqlite");
@@ -442,9 +490,11 @@ mod tests {
                 evidence_mode, include_comments, created_at, updated_at
              )
              VALUES (42, 1, 'youtube_summary', '1.0.0', '1.0',
-                'running', 'none', 'en', 'standard', 'standard', 0,
+                ?, ?, 'en', 'standard', 'standard', 0,
                 '2026-06-14T00:00:00Z', '2026-06-14T00:00:00Z')",
         )
+        .bind(run_status)
+        .bind(result_status)
         .execute(&pool)
         .await
         .expect("insert run");
