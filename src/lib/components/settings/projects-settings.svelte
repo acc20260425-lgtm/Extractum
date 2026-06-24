@@ -276,7 +276,7 @@
 
     <ExtractumTabsContent value="llm">
       <!-- LLM TAB -->
-      <div class="settings-card">
+      <div class="settings-card extractum-panel-shell">
         <div class="card-header">
           <div class="card-header-copy">
             <h2>LLM Provider Profiles</h2>
@@ -288,7 +288,7 @@
           </ExtractumButton>
         </div>
 
-        <div class="table-wrapper">
+        <div class="table-wrapper extractum-grid-frame">
           <table class="profiles-table">
             <thead>
               <tr>
@@ -372,14 +372,14 @@
     </ExtractumTabsContent>
 
     <ExtractumTabsContent value="browser">
-      <div class="settings-card">
+      <div class="settings-card extractum-panel-shell">
         <GeminiBrowserProviderPanel />
       </div>
     </ExtractumTabsContent>
 
     <ExtractumTabsContent value="telegram">
       <!-- TELEGRAM TAB -->
-      <div class="settings-card max-w-2xl">
+      <div class="settings-card extractum-panel-shell max-w-2xl">
         <div class="card-header">
           <div class="card-header-copy">
             <h2>Telegram Synchronizer</h2>
@@ -685,11 +685,7 @@
 
   /* Cards */
   .settings-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
     padding: 20px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   }
 
   .max-w-2xl {
@@ -719,9 +715,6 @@
   /* Table styles */
   .table-wrapper {
     overflow-x: auto;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--background);
   }
 
   .profiles-table {
