@@ -1,7 +1,7 @@
 # Tech-Debt Cleanup Plan — Extractum
 
-> Status: **APPROVED, implementation not yet started.**
-> Created: 2026-06-24. Mirror of plan file `~/.claude/plans/jazzy-dreaming-rossum.md`, enriched with the full audit context so this document alone can restore the working context.
+> Status: **APPROVED. The §3 cleanup itself (dead-code/dedup/barrel) is NOT started.** Several *separate* audit bugs (cancellation/leaks, listener guards, sidecar reap) were already fixed by direct commits since approval and are no longer tracked here.
+> Created: 2026-06-24. Last updated: 2026-06-24. Mirror of plan file `~/.claude/plans/jazzy-dreaming-rossum.md`, enriched with the full audit context so this document alone can restore the working context.
 
 ---
 
@@ -14,29 +14,23 @@
 
 ---
 
-## 1. Full audit findings (reference)
+## 1. Audit findings — still open (reference)
 
-These are NOT all in scope for this cleanup — recorded so the context is complete. Only the tech-debt items (§3) are being executed now.
+These are NOT all in scope for this cleanup — recorded so the context is complete. Only the tech-debt items (§3) are being executed under THIS plan.
 
-### 🔴 Critical / High
-- **#1 Cancelled prompt-pack runs "resurrect"** — `src-tauri/src/prompt_packs/projections.rs:63` `persist_final_result_in_transaction` writes `run_status` guarded only by `WHERE id = ?` (others add `AND run_status IN ('queued','running')`). Cancel is overwritten → `cancelled → complete`.
-- **#2 Insufficient cancellation checkpoints** — `src-tauri/src/prompt_packs/runtime.rs:341`, `youtube_summary/execution.rs:199`. `is_run_cancelled` only checked at start of each transcript stage, not before synthesis/persist. Same root as #1.
-- **#3 Chrome/CDP process leak** — `src-tauri/src/gemini_browser/cdp_chrome.rs:94` `spawn_chrome_cdp` does `.spawn().map(|_| ())`, discards `Child`. No Drop/handle/kill → orphan Chrome accumulates.
-- **#4 Legacy `/analysis` is the default un-migrated UI** — `src/routes/+layout.svelte:18` defaults `uiMode="legacy"`; `/` → `/analysis` (3365-line monolith). Three parallel UI layers coexist.
-- **#5 Silent swallow of LLM-profile load** — `src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte:109`, `ProjectsShell.svelte` (~104). `catch` only `console.error`; profile dropdown silently empty.
-- **#6 Custom form primitives lack accessible-name / aria-live** — `src/lib/components/ui/select/Select.svelte`, `ui/Textarea.svelte`, `ui/StatusMessage.svelte` (inherited by ~9 screens). Correct pattern already exists in projects-mode settings.
+### 🔴 Critical / High (open)
+- **#1 Legacy `/analysis` is the default un-migrated UI** — `src/routes/+layout.svelte:18` defaults `uiMode="legacy"`; `/` → `/analysis` (3365-line monolith). Three parallel UI layers coexist. (Out of scope — see §2.)
+- **#2 Silent swallow of LLM-profile load** — `src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte:109`, `ProjectsShell.svelte` (~104). `catch` only `console.error`; profile dropdown silently empty.
+- **#3 Custom form primitives lack accessible-name / aria-live** — `src/lib/components/ui/select/Select.svelte`, `ui/Textarea.svelte`, `ui/StatusMessage.svelte` (inherited by ~9 screens). Correct pattern already exists in projects-mode settings.
 
-### 🟡 Medium (backend)
-- Sidecar Drop kills but never reaps — `src-tauri/src/gemini_browser/sidecar.rs:159` (no `wait()`/`kill_on_drop`).
-- Telegram runner task leak — `src-tauri/src/telegram.rs:206` (`JoinHandle` dropped, not aborted on logout).
+### 🟡 Medium (backend, open)
 - Migration 0002 FK rebuild risk — `src-tauri/migrations/0002_migrated_history_opt_in_schema.sql` (no `legacy_alter_table=ON`/`foreign_keys=OFF`).
 - Idempotency check not atomic — `src-tauri/src/prompt_packs/runtime.rs:204` (SELECT-then-INSERT outside txn).
 
-### 🟡 Medium (frontend)
-- Duplicate routes `projects/+page.svelte` vs `projects/list/+page.svelte` (→ §3.5).
-- Two missing `disposed` guards on listeners — `YoutubeSummaryRunsPanel.svelte`, `ProjectRunsScreen.svelte`.
+### 🟡 Medium (frontend, open)
+- Duplicate routes `projects/+page.svelte` vs `projects/list/+page.svelte` (→ in scope: §3.5).
 - `$state<any>` for SVAR grid API — `DataGrid.svelte:46`, `TreeDataGrid.svelte`.
-- 10 dead vendored shadcn subtrees (→ §3.1/§3.3).
+- 10 dead vendored shadcn subtrees (→ in scope: §3.1/§3.3).
 
 ### 🟢 Verified-good
 - Security: secrets in OS keyring + `secrecy::SecretString`; Telegram sessions XChaCha20-Poly1305 with per-write nonce; diagnostics redaction with regression tests. No high-sev vulns. No shell in process spawn. SQL fully parameterized. CDP endpoint validated (loopback only). Zero `{@html}`, safe markdown parser.
@@ -101,10 +95,9 @@ Keep using `formatAppError` (`$lib/app-error`) and `createResearchProjectsWorkfl
 ---
 
 ## 4. Out of scope (deferred to separate plans)
-- Retiring/migrating `/analysis`.
-- Correctness bugs #1–#3 (cancellation/leaks).
-- a11y / error-handling #5–#6.
-- Migrating legacy `/analysis` components to `extractum-ui` primitives.
+- Retiring/migrating `/analysis` (#1) and migrating its components to `extractum-ui` primitives.
+- a11y / error-handling #2–#3.
+- Remaining open mediums: Migration 0002 FK rebuild risk, non-atomic idempotency check, `$state<any>` SVAR grid API.
 
 ---
 
