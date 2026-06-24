@@ -58,7 +58,8 @@
     <ExtractumButton
       data-ui-action="library-edit"
       variant="outline"
-      aria-label="Edit selected library source"
+      aria-label={`Edit selected library source${selectedSource ? `: ${selectedSource.title}` : ""}`}
+      title={`Edit selected library source${selectedSource ? `: ${selectedSource.title}` : ""}`}
       disabled={!selectedSource}
       onclick={onEdit}
     >
@@ -68,7 +69,8 @@
     <ExtractumButton
       data-ui-action="library-delete"
       variant="outline"
-      aria-label="Delete selected library source"
+      aria-label={`Delete selected library source${selectedSource ? `: ${selectedSource.title}` : ""}`}
+      title={`Delete selected library source${selectedSource ? `: ${selectedSource.title}` : ""}`}
       disabled={!selectedSource}
       onclick={onDelete}
     >
@@ -78,7 +80,8 @@
     <ExtractumButton
       data-ui-action="library-refresh"
       variant="outline"
-      aria-label="Refresh library sources"
+      aria-label="Refresh library source list"
+      title="Refresh library source list"
       disabled={loading}
       onclick={onRefresh}
     >
