@@ -44,8 +44,8 @@
   ];
 </script>
 
-<section data-ui-region="library-workspace" class="library-workspace">
-  <div class="toolbar extractum-toolbar-row flex-wrap justify-start gap-2 px-2 py-2 min-h-[46px]">
+<section data-ui-region="library-workspace" class="library-workspace extractum-grid-frame">
+  <div class="toolbar extractum-toolbar-row flex-wrap justify-start gap-2 border-b border-[var(--extractum-border)] px-2 py-2 min-h-[46px]">
     <ExtractumTextInput
       bind:value={query}
       class="flex-1 min-w-[160px]"
@@ -111,17 +111,3 @@
     />
   </div>
 </section>
-
-<style>
-  .library-workspace {
-    display: flex;
-    min-width: 0;
-    min-height: 0;
-    flex-direction: column;
-    background: var(--extractum-surface);
-  }
-
-  .toolbar {
-    border-bottom: 1px solid var(--extractum-border);
-  }
-</style>

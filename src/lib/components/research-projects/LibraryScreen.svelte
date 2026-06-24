@@ -88,7 +88,7 @@
 
 <div
   data-ui-screen="library"
-  class="library-screen"
+  class="library-screen extractum-grid-frame bg-[var(--extractum-surface)]"
   style={`--library-filter-width:${filterCollapsed ? 64 : 240}px; --library-inspector-width:${inspectorWidth}px;`}
 >
   <LibraryFilterRail
@@ -154,7 +154,6 @@
     display: grid;
     grid-template-columns: var(--library-filter-width) minmax(0, 1fr) 6px var(--library-inspector-width);
     min-height: calc(100vh - 68px);
-    background: var(--extractum-surface);
   }
 
   .inspector-resize-handle {

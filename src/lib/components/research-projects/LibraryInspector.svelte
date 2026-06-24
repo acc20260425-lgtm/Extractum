@@ -70,34 +70,45 @@
   );
 </script>
 
-<aside data-ui-region="library-inspector" class="library-inspector" aria-label="Library source inspector">
+<aside
+  data-ui-region="library-inspector"
+  class="library-inspector flex min-h-0 min-w-0 flex-col gap-3 overflow-auto p-3 bg-[var(--extractum-surface-subtle)]"
+  aria-label="Library source inspector"
+>
   {#if selectedSource}
     <section class="extractum-panel-shell">
-      <header class="inspector-header">
+      <header class="flex items-start justify-between gap-3">
         <div>
-          <p class="eyebrow">Selected source</p>
-          <h2>{selectedSource.title}</h2>
+          <p class="text-xs font-bold uppercase leading-none tracking-wide text-[var(--extractum-muted)]">Selected source</p>
+          <h2 class="m-0 text-base font-bold leading-tight">{selectedSource.title}</h2>
         </div>
         <ProviderBadge provider={selectedSource.provider} />
       </header>
 
-      <div class="status-row">
+      <div class="status-row flex flex-wrap gap-2 mt-3">
         <StatusBadge status={selectedSource.status} />
         {#if selectedSource.statusDetail}
-          <span class="meta-pill">{selectedSource.statusDetail}</span>
+          <span class="rounded border border-[var(--extractum-border)] px-2 py-1 text-xs text-[var(--extractum-muted)]">{selectedSource.statusDetail}</span>
         {/if}
       </div>
     </section>
 
     <section class="extractum-panel-shell">
-      <h3>Source metadata</h3>
+      <h3 class="m-0 text-xs font-bold uppercase tracking-wide text-[var(--extractum-muted)]">Source metadata</h3>
       <dl class="meta-list">
         {#each metadataRows as row (row.label)}
           <div>
-            <dt>{row.label}</dt>
+            <dt class="text-[var(--extractum-muted)] text-xs font-medium">{row.label}</dt>
             <dd>
               {#if row.href && row.value}
-                <a href={row.href} target="_blank" rel="noreferrer">{row.value}</a>
+                <a
+                  class="text-[var(--extractum-primary)] no-underline hover:underline"
+                  href={row.href}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {row.value}
+                </a>
               {:else}
                 {row.value ?? "N/A"}
               {/if}
@@ -109,11 +120,11 @@
 
     {#if selectedSource.youtube}
       <section class="detail-section extractum-panel-shell" aria-label="YouTube details">
-        <h3>YouTube details</h3>
+        <h3 class="m-0 text-xs font-bold uppercase tracking-wide text-[var(--extractum-muted)]">YouTube details</h3>
         <dl class="meta-list">
           {#each youtubeRows as row (row.label)}
             <div>
-              <dt>{row.label}</dt>
+              <dt class="text-[var(--extractum-muted)] text-xs font-medium">{row.label}</dt>
               <dd>{row.value ?? "N/A"}</dd>
             </div>
           {/each}
@@ -123,11 +134,11 @@
 
     {#if selectedSource.telegram}
       <section class="detail-section extractum-panel-shell" aria-label="Telegram details">
-        <h3>Telegram details</h3>
+        <h3 class="m-0 text-xs font-bold uppercase tracking-wide text-[var(--extractum-muted)]">Telegram details</h3>
         <dl class="meta-list">
           {#each telegramRows as row (row.label)}
             <div>
-              <dt>{row.label}</dt>
+              <dt class="text-[var(--extractum-muted)] text-xs font-medium">{row.label}</dt>
               <dd>{row.value ?? "N/A"}</dd>
             </div>
           {/each}
@@ -136,7 +147,8 @@
     {/if}
 
     <section class="extractum-panel-shell">
-      <div class="commands" aria-label="Inspector commands">
+      <h3 class="m-0 text-xs font-bold uppercase tracking-wide text-[var(--extractum-muted)]">Commands</h3>
+      <div class="commands grid grid-cols-2 gap-2 mt-3" aria-label="Inspector commands">
         <ExtractumButton
           variant="outline"
           aria-label={`Open selected source ${selectedSource.title}`}
@@ -183,76 +195,15 @@
     </section>
     <YoutubeSummaryRunDialog bind:open={youtubeSummaryOpen} projectId={null} source={selectedSource} />
   {:else}
-    <div class="empty-state extractum-panel-shell">
-      <p class="eyebrow">Inspector</p>
-      <h2>No source selected</h2>
-      <p>Select a source row to inspect metadata and available commands.</p>
+    <div class="empty-state extractum-panel-shell min-h-[220px] grid content-center gap-2 text-[var(--extractum-muted)]">
+      <p class="text-xs font-bold uppercase tracking-wide text-[var(--extractum-muted)]">Inspector</p>
+      <h2 class="m-0 text-base font-bold leading-tight">No source selected</h2>
+      <p class="m-0">Select a source row to inspect metadata and available commands.</p>
     </div>
   {/if}
 </aside>
 
 <style>
-  .library-inspector {
-    min-width: 0;
-    min-height: 0;
-    padding: 12px;
-    overflow: auto;
-    background: var(--extractum-surface-subtle);
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .inspector-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .eyebrow {
-    margin: 0 0 6px;
-    color: var(--extractum-muted);
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-  }
-
-  h2 {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 700;
-    line-height: 1.25;
-  }
-
-  h3 {
-    margin: 12px 0 8px;
-    font-size: 13px;
-    font-weight: 700;
-  }
-
-  a {
-    color: var(--extractum-primary);
-    text-decoration: none;
-  }
-
-  a:hover {
-    text-decoration: underline;
-  }
-
-  .status-row,
-  .commands {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 12px;
-  }
-
-  .commands {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-
   .meta-list {
     display: grid;
     gap: 8px;
@@ -276,21 +227,5 @@
     margin: 0;
     font-size: 12px;
     text-align: right;
-  }
-
-  .meta-pill {
-    border: 1px solid var(--extractum-border);
-    border-radius: var(--extractum-radius);
-    padding: 4px 7px;
-    color: var(--extractum-muted);
-    font-size: 12px;
-  }
-
-  .empty-state {
-    display: grid;
-    min-height: 220px;
-    align-content: center;
-    gap: 8px;
-    color: var(--extractum-muted);
   }
 </style>
