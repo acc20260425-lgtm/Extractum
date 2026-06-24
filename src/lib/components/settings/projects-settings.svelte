@@ -5,10 +5,9 @@
     Bot,
     Edit2,
     Trash2,
-    Check,
+    AlertTriangle,
     Save,
     RefreshCw,
-    AlertTriangle,
     Key,
     Shield,
     Video,
@@ -29,6 +28,7 @@
     ExtractumButton,
     ExtractumDialog,
     ExtractumBadge,
+    ExtractumStatusMessage,
     ExtractumTabs,
     ExtractumTabsContent,
     ExtractumTabsList,
@@ -244,36 +244,37 @@
       <p>Configure model profiles, Telegram synchronization modes, and YouTube caption cookies.</p>
     </div>
     {#if statusMessage}
-      <div class="status-banner tone-{statusTone}" role="status">
-        {#if statusTone === "error"}
-          <AlertTriangle size={16} />
-        {:else}
-          <Check size={16} />
-        {/if}
-        <span>{statusMessage}</span>
+      <div class="status-banner" role="status">
+        <ExtractumStatusMessage
+          tone={statusTone === "error" ? "error" : statusTone === "success" ? "info" : "default"}
+        >
+          {statusMessage}
+        </ExtractumStatusMessage>
       </div>
     {/if}
   </header>
 
-  <ExtractumTabs bind:value={activeTab} class="settings-tabs">
-    <ExtractumTabsList variant="line">
-      <ExtractumTabsTrigger value="llm">
-        <Key size={14} />
-        <span>LLM Profiles</span>
-      </ExtractumTabsTrigger>
-      <ExtractumTabsTrigger value="browser">
-        <Bot size={14} />
-        <span>Browser Providers</span>
-      </ExtractumTabsTrigger>
-      <ExtractumTabsTrigger value="telegram">
-        <Send size={14} />
-        <span>Telegram Sync</span>
-      </ExtractumTabsTrigger>
-      <ExtractumTabsTrigger value="youtube">
-        <Video size={14} />
-        <span>YouTube Sync</span>
-      </ExtractumTabsTrigger>
-    </ExtractumTabsList>
+  <ExtractumTabs bind:value={activeTab}>
+    <div class="settings-tabs">
+      <ExtractumTabsList variant="line">
+        <ExtractumTabsTrigger value="llm">
+          <Key size={14} />
+          <span>LLM Profiles</span>
+        </ExtractumTabsTrigger>
+        <ExtractumTabsTrigger value="browser">
+          <Bot size={14} />
+          <span>Browser Providers</span>
+        </ExtractumTabsTrigger>
+        <ExtractumTabsTrigger value="telegram">
+          <Send size={14} />
+          <span>Telegram Sync</span>
+        </ExtractumTabsTrigger>
+        <ExtractumTabsTrigger value="youtube">
+          <Video size={14} />
+          <span>YouTube Sync</span>
+        </ExtractumTabsTrigger>
+      </ExtractumTabsList>
+    </div>
 
     <ExtractumTabsContent value="llm">
       <!-- LLM TAB -->
@@ -538,11 +539,15 @@
         <div class="form-group col-span-2">
           <label for="modal-api-key">API Key</label>
           <div class="input-with-icon">
-            <Shield size={14} class="input-icon" />
+            <Shield
+              size={14}
+              style="position: absolute; top: 50%; left: 12px; transform: translateY(-50%); color: var(--muted-foreground); pointer-events: none;"
+            />
             <ExtractumTextInput
               id="modal-api-key"
               type="password"
-              class="w-full icon-input-padded"
+              class="w-full"
+              style="padding-left: 36px;"
               placeholder={formApiKeyConfigured ? "**************" : "Enter API Key"}
               bind:value={formApiKey}
             />
@@ -565,7 +570,7 @@
               onclick={() => fetchModels(true)}
               disabled={loadingModels}
             >
-              <RefreshCw size={13} class={loadingModels ? "spin" : ""} />
+              <RefreshCw size={13} style={loadingModels ? "animation: spin 1s linear infinite;" : ""} />
               <span>{loadingModels ? "Fetching..." : "Fetch Models"}</span>
             </ExtractumButton>
           </div>
@@ -657,41 +662,14 @@
   }
 
   .status-banner {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    border-radius: var(--radius);
-    font-size: 13px;
-    font-weight: 500;
-    border: 1px solid transparent;
     animation: fadeIn 0.25s ease;
   }
 
-  .status-banner.tone-default {
-    background: var(--panel-strong);
-    border-color: var(--border);
-    color: var(--foreground);
-  }
-
-  .status-banner.tone-success {
-    background: color-mix(in srgb, var(--extractum-success) 10%, var(--background));
-    border-color: color-mix(in srgb, var(--extractum-success) 30%, var(--border));
-    color: var(--extractum-success);
-  }
-
-  .status-banner.tone-error {
-    background: color-mix(in srgb, var(--destructive) 10%, var(--background));
-    border-color: color-mix(in srgb, var(--destructive) 30%, var(--border));
-    color: var(--destructive);
-  }
-
-  /* Navigation tabs */
   .settings-tabs {
     width: 100%;
   }
 
-  :global(.settings-tabs[data-orientation="horizontal"] [data-slot="tabs-list"]) {
+  .settings-tabs :global([data-slot="tabs-list"]) {
     margin-bottom: 6px;
   }
 
@@ -958,28 +936,11 @@
     width: 100%;
   }
 
-  .input-icon {
-    position: absolute;
-    top: 50%;
-    left: 12px;
-    transform: translateY(-50%);
-    color: var(--muted-foreground);
-    pointer-events: none;
-  }
-
-  .icon-input-padded {
-    padding-left: 36px;
-  }
-
   .fetch-models-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 4px;
-  }
-
-  .spin {
-    animation: spin 1s linear infinite;
   }
 
   @keyframes spin {
