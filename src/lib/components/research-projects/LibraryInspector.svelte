@@ -131,24 +131,45 @@
     {/if}
 
     <div class="commands" aria-label="Inspector commands">
-      <ExtractumButton variant="outline" aria-label="Open selected source">
+      <ExtractumButton
+        variant="outline"
+        aria-label={`Open selected source ${selectedSource.title}`}
+        title={`Open selected source ${selectedSource.title}`}
+      >
         <ExternalLink size={14} aria-hidden="true" />
         Open
       </ExtractumButton>
-      <ExtractumButton variant="outline" aria-label="Sync selected source">
+      <ExtractumButton
+        variant="outline"
+        aria-label={`Sync selected source ${selectedSource.title}`}
+        title={`Sync selected source ${selectedSource.title}`}
+      >
         <RefreshCw size={14} aria-hidden="true" />
         Sync
       </ExtractumButton>
-      <ExtractumButton variant="outline" aria-label="Open selected source connection dialog">
+      <ExtractumButton
+        variant="outline"
+        aria-label={`Open connection dialog for source ${selectedSource.title}`}
+        title={`Open connection dialog for source ${selectedSource.title}`}
+      >
         <Link2 size={14} aria-hidden="true" />
         Connect
       </ExtractumButton>
-      <ExtractumButton variant="outline" aria-label="Run report for selected source">
+      <ExtractumButton
+        variant="outline"
+        aria-label={`Run report for source ${selectedSource.title}`}
+        title={`Run report for source ${selectedSource.title}`}
+      >
         <PlayCircle size={14} aria-hidden="true" />
         Run report
       </ExtractumButton>
       {#if canRunYoutubeSummary}
-        <ExtractumButton variant="outline" aria-label="Run YouTube summary for selected source" onclick={() => (youtubeSummaryOpen = true)}>
+        <ExtractumButton
+          variant="outline"
+          aria-label={`Run YouTube summary for source ${selectedSource.title}`}
+          title={`Run YouTube summary for source ${selectedSource.title}`}
+          onclick={() => (youtubeSummaryOpen = true)}
+        >
           <PlayCircle size={14} aria-hidden="true" />YouTube Summary
         </ExtractumButton>
       {/if}
