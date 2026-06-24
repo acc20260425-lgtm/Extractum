@@ -5,6 +5,7 @@
 </script>
 
 <script lang="ts">
+  import { tick } from "svelte";
   import { Grid, Willow } from "@svar-ui/svelte-grid";
   import { Locale } from "@svar-ui/svelte-core";
   import { en as gridEn } from "@svar-ui/grid-locales";
@@ -27,6 +28,7 @@
     height = "100%",
     multiselect = false,
     class: className,
+    ariaLabel,
     overlay = "Нет данных",
     onSelectedRowIdsChange = () => {},
   }: {
@@ -36,13 +38,22 @@
     height?: string;
     multiselect?: boolean;
     class?: string;
+    ariaLabel?: string;
     overlay?: string;
     onSelectedRowIdsChange?: (ids: string[]) => void;
   } = $props();
 
   let api = $state<any>(null);
+  let host = $state<HTMLDivElement | null>(null);
   let visibleOverlay = $derived(rows.length === 0 ? overlay : undefined);
   let enhancedColumns = $derived(enhanceDateTimeColumns(columns));
+
+  $effect(() => {
+    if (!host || !ariaLabel) return;
+    void tick().then(() => {
+      host?.querySelector("[role='grid'], .wx-grid")?.setAttribute("aria-label", ariaLabel);
+    });
+  });
 
   function rowStyle(row: GridRow) {
     return [
@@ -58,7 +69,13 @@
   }
 </script>
 
-<div class={cn("extractum-svar-theme extractum-data-grid", className)} style={`height:${height};`}>
+<div
+  bind:this={host}
+  class={cn("extractum-svar-theme extractum-data-grid", className)}
+  style={`height:${height};`}
+  role={ariaLabel ? "region" : undefined}
+  aria-label={ariaLabel}
+>
   <Locale words={{ ...coreRu, ...gridEn }}>
     <Willow fonts={false}>
       <Grid

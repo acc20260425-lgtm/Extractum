@@ -338,7 +338,7 @@
     outline: none;
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
   }
-  :global(button) {
+  :global(button:not([data-slot="button"])) {
     background: var(--primary);
     color: white;
     border: none;
@@ -349,16 +349,16 @@
     font-weight: 600;
     transition: background 0.2s, border-color 0.2s, color 0.2s;
   }
-  :global(button:hover) { background: var(--primary-hover); }
-  :global(button.secondary) {
+  :global(button:not([data-slot="button"]):hover) { background: var(--primary-hover); }
+  :global(button.secondary:not([data-slot="button"])) {
     background: transparent;
     border: 1px solid var(--border);
     color: var(--text);
   }
-  :global(button.secondary:hover) { background: var(--panel-hover); }
-  :global(button.danger) { background: var(--danger); }
-  :global(button.danger:hover) { background: var(--danger-hover); }
-  :global(button:disabled) { opacity: 0.5; cursor: not-allowed; }
+  :global(button.secondary:not([data-slot="button"]):hover) { background: var(--panel-hover); }
+  :global(button.danger:not([data-slot="button"])) { background: var(--danger); }
+  :global(button.danger:not([data-slot="button"]):hover) { background: var(--danger-hover); }
+  :global(button:not([data-slot="button"]):disabled) { opacity: 0.5; cursor: not-allowed; }
   :global(.page-shell) {
     display: flex;
     flex-direction: column;

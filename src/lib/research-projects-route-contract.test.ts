@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
+import layoutSource from "../routes/+layout.svelte?raw";
 import pageSource from "../routes/projects/+page.svelte?raw";
+import dataGridSource from "$lib/components/extractum-ui/DataGrid.svelte?raw";
 import shellSource from "$lib/components/research-projects/ProjectsShell.svelte?raw";
 import railSource from "$lib/components/research-projects/ProjectRail.svelte?raw";
 import inspectorSource from "$lib/components/research-projects/ProjectInspector.svelte?raw";
 import runsTabSource from "$lib/components/research-projects/ProjectRunsTab.svelte?raw";
+import runsScreenSource from "$lib/components/research-projects/ProjectRunsScreen.svelte?raw";
 import runDialogSource from "$lib/components/research-projects/ProjectRunDialog.svelte?raw";
 import sourcesTabSource from "$lib/components/research-projects/SourcesTab.svelte?raw";
 import connectFromLibrarySource from "$lib/components/research-projects/ConnectFromLibrary.svelte?raw";
 import topCommandBarSource from "$lib/components/research-projects/TopCommandBar.svelte?raw";
 import workspaceSource from "$lib/components/research-projects/ProjectWorkspace.svelte?raw";
+import youtubeSummaryRunsPanelSource from "$lib/components/research-projects/YoutubeSummaryRunsPanel.svelte?raw";
 
 describe("projects mvp route contract", () => {
   it("uses real project APIs instead of analysis source group APIs", () => {
@@ -96,5 +100,36 @@ describe("projects mvp route contract", () => {
     expect(topCommandBarSource).toContain("PROJECT_EXPORT_DISABLED_REASON");
     expect(topCommandBarSource).toContain("disabled={true}");
     expect(topCommandBarSource).toContain("title={PROJECT_EXPORT_DISABLED_REASON}");
+  });
+
+  it("keeps project action hierarchy consistent across Workspace, Projects, and Runs", () => {
+    expect(layoutSource).toContain(":global(button:not([data-slot=\"button\"]))");
+    expect(inspectorSource).toMatch(/variant="destructive"[\s\S]*Delete project/);
+    expect(inspectorSource).toMatch(/variant="destructive"[\s\S]*Remove from project/);
+    expect(runsScreenSource).toMatch(/variant="destructive"[\s\S]*Delete/);
+    expect(shellSource).toContain("aria-label={`Edit project ${project.title}`}");
+    expect(shellSource).toContain("aria-label={`Delete project ${project.title}`}");
+  });
+
+  it("keeps project navigation rows visually neutral until selected", () => {
+    expect(railSource).toContain("data-selected={project.id === selectedProjectId}");
+    expect(railSource).toContain(".project-row.extractum-button:not(.is-selected)");
+    expect(railSource).toContain("box-shadow: inset 3px 0 0 var(--extractum-primary)");
+  });
+
+  it("labels project data grids for assistive technology", () => {
+    expect(dataGridSource).toContain("ariaLabel");
+    expect(dataGridSource).toContain("aria-label={ariaLabel}");
+    expect(sourcesTabSource).toContain('{ id: "title", header: "Title", width: 260, flexgrow: 1');
+    expect(sourcesTabSource).toContain('ariaLabel="Project sources"');
+    expect(connectFromLibrarySource).toContain('ariaLabel="Library sources available to connect"');
+    expect(runsScreenSource).toContain('<section class="project-runs-screen" aria-label="Prompt Pack runs">');
+    expect(runsScreenSource).toContain('<section class="runs-grid-panel" aria-label="Prompt Pack runs grid">');
+    expect(runsScreenSource).toContain('ariaLabel="Prompt Pack runs"');
+  });
+
+  it("scopes repeated project refresh controls", () => {
+    expect(runsTabSource).toContain('aria-label="Refresh project runs"');
+    expect(youtubeSummaryRunsPanelSource).toContain('aria-label="Refresh prompt pack runs"');
   });
 });

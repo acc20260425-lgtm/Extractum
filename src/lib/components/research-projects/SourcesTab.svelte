@@ -44,7 +44,7 @@
   } = $props();
 
   const columns: ExtractumDataGridColumn[] = [
-    { id: "title", header: "Title", flexgrow: 1, cell: LibrarySourceCell },
+    { id: "title", header: "Title", width: 260, flexgrow: 1, cell: LibrarySourceCell },
     { id: "typeLabel", header: "Type", width: 150 },
     { id: "localCopyLabel", header: "Details", width: 140 },
     { id: "addedAt", header: "Added to project at", width: 180, dateTimeFormat: "datetime" },
@@ -153,6 +153,7 @@
       multiselect={true}
       onSelectedRowIdsChange={onSelectedSourceIdsChange}
       height="100%"
+      ariaLabel="Project sources"
       overlay="No project sources"
     />
   </div>

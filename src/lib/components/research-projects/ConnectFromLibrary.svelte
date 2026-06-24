@@ -117,6 +117,7 @@
           multiselect={true}
           onSelectedRowIdsChange={onSelectedSourceIdsChange}
           height="100%"
+          ariaLabel="Library sources available to connect"
           overlay="No library sources"
         />
       </div>

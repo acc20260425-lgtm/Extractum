@@ -239,6 +239,7 @@
                   type="button"
                   class="action-btn edit-btn"
                   title="Edit project"
+                  aria-label={`Edit project ${project.title}`}
                   onclick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -252,6 +253,7 @@
                   type="button"
                   class="action-btn delete-btn"
                   title="Delete project"
+                  aria-label={`Delete project ${project.title}`}
                   onclick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();

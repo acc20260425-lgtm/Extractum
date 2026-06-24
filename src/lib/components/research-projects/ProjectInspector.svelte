@@ -99,7 +99,7 @@
         <Pencil size={14} aria-hidden="true" />
         Edit project
       </ExtractumButton>
-      <ExtractumButton variant="outline" disabled={!project || saving} onclick={onDeleteProject}>
+      <ExtractumButton variant="destructive" disabled={!project || saving} onclick={onDeleteProject}>
         <Trash2 size={14} aria-hidden="true" />
         Delete project
       </ExtractumButton>
@@ -116,7 +116,7 @@
             YouTube Summary
           </ExtractumButton>
         {/if}
-        <ExtractumButton variant="outline" disabled={saving} onclick={() => onRemoveSource(selectedSource.sourceNumericId)}>
+        <ExtractumButton variant="destructive" disabled={saving} onclick={() => onRemoveSource(selectedSource.sourceNumericId)}>
           Remove from project
         </ExtractumButton>
       </section>
@@ -129,7 +129,7 @@
     />
 
     <section>
-      <h3>Recent runs</h3>
+      <h3>Recent project runs</h3>
       {#each runs.slice(0, 5) as run (run.id)}
         <p>{run.scope_label} - {run.status}</p>
       {:else}

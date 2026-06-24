@@ -204,10 +204,10 @@
   }
 </script>
 
-<section class="project-runs-screen" aria-label="Project runs">
+<section class="project-runs-screen" aria-label="Prompt Pack runs">
   <header class="project-runs-header">
     <div>
-      <span>Project runs</span>
+      <span>Prompt Pack</span>
       <h1>Prompt Pack runs</h1>
     </div>
     <div class="header-actions">
@@ -221,7 +221,7 @@
     </div>
   </header>
 
-  <section class="runs-grid-panel" aria-label="Project runs grid">
+  <section class="runs-grid-panel" aria-label="Prompt Pack runs grid">
     <div class="runs-grid-toolbar">
       <label>
         <span>Run label</span>
@@ -263,6 +263,7 @@
         {rows}
         {columns}
         {selectedRowIds}
+        ariaLabel="Prompt Pack runs"
         overlay={loading ? "Loading project runs..." : "No project runs yet."}
         onSelectedRowIdsChange={selectRows}
       />

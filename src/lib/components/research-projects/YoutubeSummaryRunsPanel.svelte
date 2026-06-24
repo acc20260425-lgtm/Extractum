@@ -118,7 +118,12 @@
       <span>Prompt Pack runs</span>
       <strong>{runs.length}</strong>
     </div>
-    <ExtractumButton variant="outline" disabled={loading} onclick={() => void refreshRuns()}>
+    <ExtractumButton
+      variant="outline"
+      disabled={loading}
+      onclick={() => void refreshRuns()}
+      aria-label="Refresh prompt pack runs"
+    >
       <RefreshCw size={14} aria-hidden="true" />
       Refresh
     </ExtractumButton>

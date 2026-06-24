@@ -62,7 +62,12 @@
       <span>Project runs</span>
       <strong>{sortedRuns.length}</strong>
     </div>
-    <ExtractumButton variant="outline" disabled={loading} onclick={onRefreshProjectRuns}>
+    <ExtractumButton
+      variant="outline"
+      disabled={loading}
+      onclick={onRefreshProjectRuns}
+      aria-label="Refresh project runs"
+    >
       <RefreshCw size={14} aria-hidden="true" />
       Refresh
     </ExtractumButton>
