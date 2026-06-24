@@ -28,6 +28,7 @@
   import {
     ExtractumButton,
     ExtractumDialog,
+    ExtractumBadge,
     ExtractumTabs,
     ExtractumTabsContent,
     ExtractumTabsList,
@@ -306,23 +307,34 @@
                     <div class="profile-identity">
                       <strong>{profile.profile_id}</strong>
                       {#if profilesState.active_profile === profile.profile_id}
-                        <span class="active-badge">Active</span>
+                        <ExtractumBadge variant="outline" class="border-emerald-200 bg-emerald-50 text-emerald-700">
+                          Active
+                        </ExtractumBadge>
                       {/if}
                     </div>
                   </td>
                   <td>
-                    <span class="provider-pill {profile.provider}">
+                    <ExtractumBadge
+                      variant="outline"
+                      class={profile.provider === "openai_compatible"
+                        ? "border-amber-200 bg-amber-50 text-amber-700"
+                        : "border-sky-200 bg-sky-50 text-sky-700"}
+                    >
                       {profile.provider === "openai_compatible" ? "OpenAI-comp" : "Gemini"}
-                    </span>
+                    </ExtractumBadge>
                   </td>
                   <td class="model-cell" title={profile.default_model}>
                     <code>{profile.default_model}</code>
                   </td>
                   <td>
-                    <div class="status-indicator">
-                      <div class="dot" class:configured={profile.api_key_configured}></div>
-                      <span>{profile.api_key_configured ? "Key Configured" : "No Key"}</span>
-                    </div>
+                    <ExtractumBadge
+                      variant="outline"
+                      class={profile.api_key_configured
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-zinc-200 bg-zinc-50 text-zinc-700"}
+                    >
+                      {profile.api_key_configured ? "Key Configured" : "No Key"}
+                    </ExtractumBadge>
                   </td>
                   <td>
                     <div class="table-actions">
@@ -752,56 +764,12 @@
     gap: 8px;
   }
 
-  .active-badge {
-    background: color-mix(in srgb, var(--primary) 12%, transparent);
-    color: var(--primary);
-    font-size: 10px;
-    font-weight: 600;
-    padding: 2px 6px;
-    border-radius: 4px;
-    letter-spacing: 0.02em;
-  }
-
-  .provider-pill {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 2px 6px;
-    border-radius: 4px;
-  }
-
-  .provider-pill.gemini {
-    background: #e0f2fe;
-    color: #0369a1;
-  }
-
-  .provider-pill.openai_compatible {
-    background: #f0fdf4;
-    color: #166534;
-  }
-
   .model-cell code {
     background: var(--panel-strong);
     color: var(--muted);
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 12px;
-  }
-
-  .status-indicator {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .status-indicator .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #94a3b8;
-  }
-
-  .status-indicator .dot.configured {
-    background: var(--extractum-success);
   }
 
   .table-actions {
