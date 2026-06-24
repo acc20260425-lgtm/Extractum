@@ -304,6 +304,10 @@ where
         update_run_progress(pool, run_id, successes, total).await?;
     }
 
+    if is_run_cancelled(pool, run_id).await? {
+        mark_run_cancelled(pool, run_id, successes, total).await?;
+        return Ok(cancelled_outcome(run_id, successes, total));
+    }
     let synthesis_status =
         execute_synthesis_if_ready(pool, run_id, successes, total, &mut execute_stage).await?;
     if synthesis_status == "cancelled" {
@@ -311,6 +315,11 @@ where
         return Ok(cancelled_outcome(run_id, successes, total + 1));
     }
     mark_pending_mvp_tail_stages_skipped(pool, run_id).await?;
+    if is_run_cancelled(pool, run_id).await? {
+        let progress_total = if successes > 1 { total + 1 } else { total };
+        mark_run_cancelled(pool, run_id, successes, progress_total).await?;
+        return Ok(cancelled_outcome(run_id, successes, progress_total));
+    }
     let terminal_status =
         terminal_status_for_synthesis(successes, failures, total, synthesis_status);
     let progress_total = if successes > 1 { total + 1 } else { total };

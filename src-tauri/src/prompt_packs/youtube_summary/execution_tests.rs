@@ -4,6 +4,8 @@ use super::execution::{
 };
 use super::test_support::*;
 use super::{LlmCompletion, YoutubeSummaryStageExecutionRequest};
+use crate::error::AppError;
+use crate::prompt_packs::youtube_summary::types::YoutubeSummaryStageExecutionError;
 
 #[tokio::test]
 async fn execute_queued_run_with_stage_executor_finishes_complete() {
@@ -622,4 +624,92 @@ async fn youtube_summary_multi_video_partial_transcripts_skip_synthesis_and_mark
     .expect("progress");
 
     assert_eq!(progress, (1, 2));
+}
+
+#[tokio::test]
+async fn execute_multi_video_run_stops_after_transcript_when_cancelled_before_synthesis() {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    let pool = test_pool_with_two_frozen_youtube_summary_sources().await;
+    let transcript_calls = Arc::new(AtomicUsize::new(0));
+    let transcript_calls_for_assert = Arc::clone(&transcript_calls);
+    let pool_for_stage = pool.clone();
+    let outcome = execute_youtube_summary_run_with_stage_executor(
+        &pool,
+        1,
+        move |request| {
+            let transcript_calls = Arc::clone(&transcript_calls);
+            let pool = pool_for_stage.clone();
+            async move {
+                match request {
+                    YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request) => {
+                        let call_index = transcript_calls.fetch_add(1, Ordering::SeqCst) + 1;
+                        let completion =
+                            fake_completion_with_valid_transcript_analysis_json_for_source(
+                                &request.source_ref_id,
+                            );
+                        if call_index == 2 {
+                            sqlx::query(
+                                "UPDATE prompt_pack_runs SET run_status = 'cancelled' WHERE id = ?",
+                            )
+                            .bind(request.run_id)
+                            .execute(&pool)
+                            .await
+                            .map_err(|error| {
+                                YoutubeSummaryStageExecutionError::Failed(AppError::internal(
+                                    format!("failed to flag run cancelled: {error}"),
+                                ))
+                            })?;
+                        }
+                        Ok(completion)
+                    }
+                    YoutubeSummaryStageExecutionRequest::Synthesis(_) => {
+                        panic!("cancel should prevent synthesis execution")
+                    }
+                    YoutubeSummaryStageExecutionRequest::JsonRepair(_) => {
+                        panic!("valid transcript should not request repair")
+                    }
+                }
+            }
+        },
+    )
+    .await
+    .expect("execute run");
+
+    let (run_status, result_status): (String, String) = sqlx::query_as(
+        "SELECT run_status, result_status FROM prompt_pack_runs WHERE id = 1",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("run status");
+    let result_rows: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_results WHERE run_id = 1")
+            .fetch_one(&pool)
+            .await
+            .expect("result rows");
+    let video_rows: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_youtube_videos WHERE run_id = 1")
+            .fetch_one(&pool)
+            .await
+            .expect("video rows");
+    let synthesis_status: String = sqlx::query_scalar(
+        "SELECT stage_status FROM prompt_pack_stage_runs
+         WHERE run_id = 1 AND stage_name = 'youtube_summary/synthesis'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("synthesis status");
+
+    assert_eq!(outcome.run_status, "cancelled");
+    assert_eq!(outcome.progress_current, 2);
+    assert_eq!(outcome.progress_total, 2);
+    assert_eq!(run_status, "cancelled");
+    assert_eq!(result_status, "none");
+    assert_eq!(result_rows, 0);
+    assert_eq!(video_rows, 0);
+    assert_eq!(synthesis_status, "pending");
+    assert_eq!(transcript_calls_for_assert.load(Ordering::SeqCst), 2);
 }
