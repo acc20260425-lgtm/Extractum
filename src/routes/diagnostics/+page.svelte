@@ -373,11 +373,15 @@
   </header>
 
   {#if status}
-    <ExtractumStatusMessage tone="info" className="page-status">{status}</ExtractumStatusMessage>
+    <div role="status" aria-live="polite">
+      <ExtractumStatusMessage tone="info" className="page-status">{status}</ExtractumStatusMessage>
+    </div>
   {/if}
 
   {#if error}
-    <ExtractumStatusMessage tone="error" className="page-status">{error}</ExtractumStatusMessage>
+    <div role="alert" aria-live="assertive" aria-atomic="true">
+      <ExtractumStatusMessage tone="error" className="page-status">{error}</ExtractumStatusMessage>
+    </div>
   {/if}
 
   {#if summary}
@@ -389,6 +393,7 @@
         variant={diagnosticsTableMode === "issues" ? "default" : "outline"}
         aria-label="Show diagnostics issues only"
         title="Show diagnostics issues only"
+        aria-pressed={diagnosticsTableMode === "issues"}
         onclick={() => (diagnosticsTableMode = "issues")}
       >
         Only issues
@@ -398,6 +403,7 @@
         variant={diagnosticsTableMode === "all" ? "default" : "outline"}
         aria-label="Show all diagnostics tables"
         title="Show all diagnostics tables"
+        aria-pressed={diagnosticsTableMode === "all"}
         onclick={() => (diagnosticsTableMode = "all")}
       >
         All tables

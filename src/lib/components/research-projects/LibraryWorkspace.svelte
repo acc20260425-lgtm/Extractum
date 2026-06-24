@@ -50,7 +50,8 @@
       bind:value={query}
       class="flex-1 min-w-[160px]"
       placeholder="Search sources"
-      aria-label="Search Library sources"
+      aria-label="Search library sources by title, type, or URL"
+      aria-controls="library-sources-grid"
     />
     <ExtractumButton
       data-ui-action="library-add"
@@ -96,11 +97,15 @@
     </ExtractumButton>
   </div>
 
-  <div class="grid-host extractum-grid-frame min-h-0 min-w-0 flex-1">
+  <div
+    id="library-sources-grid"
+    class="grid-host extractum-grid-frame min-h-0 min-w-0 flex-1"
+  >
     <ExtractumDataGrid
       rows={sources}
       {columns}
       selectedRowIds={selectedSourceId ? [selectedSourceId] : []}
+      ariaLabel="Library source list"
       overlay="No sources match this filter"
       onSelectedRowIdsChange={(ids) => onSelectedSourceIdChange(ids.at(-1) ?? null)}
     />

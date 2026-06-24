@@ -243,7 +243,7 @@
       <p>Configure model profiles, Telegram synchronization modes, and YouTube caption cookies.</p>
     </div>
     {#if statusMessage}
-      <div class="page-hero-meta" role="status">
+      <div class="page-hero-meta" role="status" aria-live="polite" aria-atomic="true">
         <ExtractumStatusMessage
           tone={statusTone === "error" ? "error" : statusTone === "success" ? "info" : "default"}
         >
