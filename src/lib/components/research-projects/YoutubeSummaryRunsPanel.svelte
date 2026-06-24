@@ -29,6 +29,7 @@
   let deletingRunIds = $state<Record<number, boolean>>({});
   let deletedRunIds = $state<Record<number, boolean>>({});
   let unlisten: (() => void) | null = null;
+  let disposed = false;
 
   let activeRuns = $derived(runs.filter((run) => run.runStatus === "queued" || run.runStatus === "running"));
   let recentRuns = $derived(runs.filter((run) => run.runStatus !== "queued" && run.runStatus !== "running"));
@@ -41,11 +42,16 @@
       if (!shouldApplyRunEventToRunsPanel(runs, event.payload, projectId)) return;
       runs = updateRunListFromEvent(runs, event.payload);
     }).then((stop) => {
+      if (disposed) {
+        stop();
+        return;
+      }
       unlisten = stop;
     });
   });
 
   onDestroy(() => {
+    disposed = true;
     unlisten?.();
   });
 

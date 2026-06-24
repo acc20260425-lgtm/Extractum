@@ -58,6 +58,7 @@
   let saving = $state(false);
   let status = $state("");
   let unlisten: (() => void) | null = null;
+  let disposed = false;
 
   const selectedRun = $derived(runs.find((run) => run.runId === selectedRunId) ?? null);
   const selectedRowIds = $derived(selectedRunId === null ? [] : [String(selectedRunId)]);
@@ -76,11 +77,16 @@
     void listenToPromptPackRunEvents((event) => {
       runs = updateRunListFromEvent(runs, event.payload);
     }).then((stop) => {
+      if (disposed) {
+        stop();
+        return;
+      }
       unlisten = stop;
     });
   });
 
   onDestroy(() => {
+    disposed = true;
     unlisten?.();
   });
 
