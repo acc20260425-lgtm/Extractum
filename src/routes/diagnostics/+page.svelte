@@ -420,7 +420,12 @@
   <div class="diagnostics-overview-area">
     <div class="status-strip" aria-label="Diagnostics health overview">
       {#each statusStripItems(current) as item (item.label)}
-        <div class="status-tile extractum-panel-shell">
+        <div
+          role="group"
+          aria-label={`Diagnostics status ${item.label}: ${item.value}. ${item.meta}`}
+          class="status-tile extractum-panel-shell"
+          title={`${item.label}: ${item.value} (${item.meta})`}
+        >
           <span>{item.label}</span>
           <strong>{item.value}</strong>
           <Badge variant={item.tone}>{item.meta}</Badge>
