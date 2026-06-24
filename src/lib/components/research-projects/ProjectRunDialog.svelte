@@ -71,8 +71,23 @@
       </select>
     </label>
     <footer>
-      <ExtractumButton type="button" variant="outline" onclick={() => (open = false)}>Cancel</ExtractumButton>
-      <ExtractumButton type="submit" disabled={!project || !selectedTemplateId || saving}>Run</ExtractumButton>
+      <ExtractumButton
+        type="button"
+        variant="outline"
+        onclick={() => (open = false)}
+        aria-label="Cancel run project analysis"
+        title="Cancel run project analysis"
+      >
+        Cancel
+      </ExtractumButton>
+      <ExtractumButton
+        type="submit"
+        disabled={!project || !selectedTemplateId || saving}
+        aria-label="Run project analysis"
+        title="Run project analysis"
+      >
+        Run
+      </ExtractumButton>
     </footer>
   </form>
 </ExtractumDialog>

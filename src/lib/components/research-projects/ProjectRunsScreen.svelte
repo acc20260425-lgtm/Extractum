@@ -214,7 +214,13 @@
       {#if selectedRun}
         <ExtractumBadge>{statusLabel(selectedRun.runStatus)}</ExtractumBadge>
       {/if}
-      <ExtractumButton variant="outline" disabled={loading} onclick={() => void refreshRuns()}>
+      <ExtractumButton
+        variant="outline"
+        disabled={loading}
+        onclick={() => void refreshRuns()}
+        aria-label="Refresh prompt pack runs"
+        title="Refresh prompt pack runs"
+      >
         <RefreshCw size={14} aria-hidden="true" />
         Refresh
       </ExtractumButton>
@@ -233,12 +239,23 @@
         />
       </label>
       <div class="runs-grid-actions">
-        <ExtractumButton disabled={!selectedRun || saving} onclick={() => void saveSelectedRun()}>
+        <ExtractumButton
+          disabled={!selectedRun || saving}
+          onclick={() => void saveSelectedRun()}
+          aria-label="Update selected prompt pack run label"
+          title="Update selected prompt pack run label"
+        >
           <Save size={14} aria-hidden="true" />
           Update
         </ExtractumButton>
         {#if selectedRunIsActive}
-          <ExtractumButton variant="outline" disabled={saving} onclick={() => void cancelSelectedRun()}>
+          <ExtractumButton
+            variant="outline"
+            disabled={saving}
+            onclick={() => void cancelSelectedRun()}
+            aria-label="Cancel selected prompt pack run"
+            title="Cancel selected prompt pack run"
+          >
             <XCircle size={14} aria-hidden="true" />
             Cancel
           </ExtractumButton>
@@ -247,6 +264,8 @@
           variant="destructive"
           disabled={!canDeleteSelectedRun || saving}
           onclick={() => void deleteSelectedRun()}
+          aria-label={`Delete selected prompt pack run ${selectedRun?.runId ?? ""}`.trim()}
+          title={`Delete selected prompt pack run ${selectedRun?.runId ?? ""}`.trim()}
         >
           <Trash2 size={14} aria-hidden="true" />
           Delete
