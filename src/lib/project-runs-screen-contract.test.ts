@@ -38,12 +38,12 @@ describe("project runs screen", () => {
     expect(screenSource).toContain('{ id: "completedAt", header: "Completed", width: 170, sort: true, dateTimeFormat: "datetime" }');
   });
 
-  it("uses the shared confirm modal before deleting or cancelling project runs", () => {
+  it("uses the shared confirm modal before deleting or cancelling prompt-pack runs", () => {
     const screenSource = readProjectFile("src/lib/components/research-projects/ProjectRunsScreen.svelte");
 
     expect(screenSource).toContain("openConfirmModal");
-    expect(screenSource).toContain('title: "Delete project run?"');
-    expect(screenSource).toContain('title: "Cancel active run?"');
+    expect(screenSource).toContain('title: "Delete Prompt Pack run?"');
+    expect(screenSource).toContain('title: "Cancel active Prompt Pack run?"');
     expect(screenSource).toContain('confirmLabel: "Delete"');
     expect(screenSource).toContain('confirmLabel: "Cancel run"');
     expect(screenSource).not.toContain("window.confirm");

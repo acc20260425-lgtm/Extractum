@@ -9,11 +9,11 @@ describe("project runs tab delete controls", () => {
     expect(source).toContain("Trash2");
     expect(source).toContain("deleteAnalysisRun");
     expect(source).toContain("openConfirmModal");
-    expect(source).toContain("Delete project run?");
+    expect(source).toContain("Delete project analysis run?");
     expect(source).toContain('confirmLabel: "Delete"');
     expect(source).not.toContain("confirm(");
     expect(source).toContain("isAnalysisRunActive");
-    expect(source).toContain("aria-label={`Delete project run ${run.id}`}");
+    expect(source).toContain("aria-label={`Delete project analysis run ${run.id}`}");
     expect(source).toContain("disabled={isAnalysisRunActive(run) || deletingRunIds[run.id]}");
   });
 
