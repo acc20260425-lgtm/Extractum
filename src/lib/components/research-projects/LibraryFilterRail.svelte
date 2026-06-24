@@ -29,7 +29,9 @@
 >
   <div class="rail-header">
     {#if !collapsed}
-      <span>Library</span>
+      <h1 class="rail-title">Library</h1>
+    {:else}
+      <h1 class="sr-only">Library</h1>
     {/if}
     <ExtractumButton
       variant="ghost"
@@ -79,6 +81,26 @@
     font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
+  }
+
+  .rail-title {
+    margin: 0;
+    color: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    text-transform: inherit;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .library-filter-rail.collapsed .rail-header {

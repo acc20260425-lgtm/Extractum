@@ -49,9 +49,25 @@
   let enhancedColumns = $derived(enhanceDateTimeColumns(columns));
 
   $effect(() => {
-    if (!host || !ariaLabel) return;
+    if (!host) return;
     void tick().then(() => {
-      host?.querySelector("[role='grid'], .wx-grid")?.setAttribute("aria-label", ariaLabel);
+      if (ariaLabel) {
+        host?.querySelector("[role='grid'], .wx-grid")?.setAttribute("aria-label", ariaLabel);
+      }
+      // svar-ui renders columnheaders as div[role="columnheader"] with text inside a nested
+      // .wx-text child — Chrome doesn't compute the accessible name from nested divs, so we
+      // set aria-label explicitly. Map by aria-colindex (1-based, set by svar-ui) so the
+      // mapping stays correct when columns are hidden, reordered, or grouped.
+      const headerCells = host?.querySelectorAll("[role='columnheader']");
+      headerCells?.forEach((cell) => {
+        const colindex = Number(cell.getAttribute("aria-colindex"));
+        const label = Number.isFinite(colindex) ? enhancedColumns[colindex - 1]?.header : undefined;
+        if (label) {
+          cell.setAttribute("aria-label", String(label));
+        } else {
+          cell.removeAttribute("aria-label");
+        }
+      });
     });
   });
 

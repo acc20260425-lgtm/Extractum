@@ -89,8 +89,7 @@
   class="sidebar"
   class:collapsed={!mobileOpen && collapsed}
   class:mobile-open={mobileOpen}
-  role="navigation"
-  aria-label="Primary navigation"
+  aria-label="App sidebar"
 >
   <div class="sidebar-header">
     <a class="brand" href="/analysis" onclick={handleNavClick} title="Extractum">

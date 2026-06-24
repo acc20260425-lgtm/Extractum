@@ -272,6 +272,7 @@
           <button
             type="button"
             class="tree-add-project-btn"
+            aria-label="Create project"
             onclick={(e) => {
               e.preventDefault();
               e.stopPropagation();

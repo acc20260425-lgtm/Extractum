@@ -17,7 +17,11 @@
   } = $props();
 </script>
 
-<p class={`ui-status-message ${tone} ${size} ${surface ? "surface" : "plain"} ${className}`.trim()}>
+<p
+  class={`ui-status-message ${tone} ${size} ${surface ? "surface" : "plain"} ${className}`.trim()}
+  role={tone === "error" ? "alert" : "status"}
+  aria-live={tone === "error" ? "assertive" : "polite"}
+>
   {@render children?.()}
 </p>
 
