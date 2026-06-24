@@ -282,14 +282,16 @@
             <h2>LLM Provider Profiles</h2>
             <p>Manage API credentials and default models. Stored keys are securely hidden in the system keychain.</p>
           </div>
-          <ExtractumButton
-            onclick={openAddDialog}
-            aria-label="Add a new LLM profile"
-            title="Add a new LLM profile"
-          >
-            <Plus size={16} />
-            <span>Add Profile</span>
-          </ExtractumButton>
+          <div role="group" aria-label="LLM profile actions">
+            <ExtractumButton
+              onclick={openAddDialog}
+              aria-label="Add a new LLM profile"
+              title="Add a new LLM profile"
+            >
+              <Plus size={16} />
+              <span>Add Profile</span>
+            </ExtractumButton>
+          </div>
         </div>
 
         <div class="table-wrapper extractum-grid-frame">
@@ -340,7 +342,11 @@
                     </ExtractumBadge>
                   </td>
                   <td>
-                    <div class="table-actions">
+                    <div
+                      class="table-actions"
+                      role="group"
+                      aria-label={`Actions for profile ${profile.profile_id}`}
+                    >
                       {#if profilesState.active_profile !== profile.profile_id}
                         <ExtractumButton
                           variant="outline"
@@ -458,16 +464,16 @@
             </span>
           </div>
 
-          <div class="form-actions">
-          <ExtractumButton
-            type="submit"
-            disabled={saveSyncLoading}
-            aria-label="Save Telegram synchronization settings"
-            title="Save Telegram synchronization settings"
-          >
-            <Save size={14} />
-            <span>{saveSyncLoading ? "Saving..." : "Save Settings"}</span>
-          </ExtractumButton>
+          <div class="form-actions" role="group" aria-label="Telegram sync actions">
+            <ExtractumButton
+              type="submit"
+              disabled={saveSyncLoading}
+              aria-label="Save Telegram synchronization settings"
+              title="Save Telegram synchronization settings"
+            >
+              <Save size={14} />
+              <span>{saveSyncLoading ? "Saving..." : "Save Settings"}</span>
+            </ExtractumButton>
           </div>
         </form>
       </div>

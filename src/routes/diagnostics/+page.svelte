@@ -352,23 +352,25 @@
       {/if}
     </div>
     <div class="page-hero-meta">
-      {#if summary}
-        <span class="hero-pill">Build mode</span>
-        <ExtractumBadge>{labelFromKey(summary.app.buildMode)}</ExtractumBadge>
-        <span class="hero-pill">Application</span>
-        <ExtractumBadge>{summary.app.appName}</ExtractumBadge>
-      {/if}
-      <ExtractumButton
-        size="sm"
-        variant="outline"
-        aria-label="Refresh diagnostics"
-        title="Refresh diagnostics summary"
-        disabled={loading || refreshing}
-        onclick={() => void refreshDiagnostics(false)}
-      >
-        <RefreshCw size={14} aria-hidden="true" />
-        Refresh
-      </ExtractumButton>
+      <div class="extractum-toolbar-row gap-2" role="group" aria-label="Diagnostics page actions">
+        {#if summary}
+          <span class="hero-pill">Build mode</span>
+          <ExtractumBadge>{labelFromKey(summary.app.buildMode)}</ExtractumBadge>
+          <span class="hero-pill">Application</span>
+          <ExtractumBadge>{summary.app.appName}</ExtractumBadge>
+        {/if}
+        <ExtractumButton
+          size="sm"
+          variant="outline"
+          aria-label="Refresh diagnostics"
+          title="Refresh diagnostics summary"
+          disabled={loading || refreshing}
+          onclick={() => void refreshDiagnostics(false)}
+        >
+          <RefreshCw size={14} aria-hidden="true" />
+          Refresh
+        </ExtractumButton>
+      </div>
     </div>
   </header>
 

@@ -45,7 +45,11 @@
 </script>
 
 <section data-ui-region="library-workspace" class="library-workspace extractum-grid-frame">
-  <div class="toolbar extractum-toolbar-row flex-wrap justify-start gap-2 border-b border-[var(--extractum-border)] px-2 py-2 min-h-[46px]">
+  <div
+    class="toolbar extractum-toolbar-row flex-wrap justify-start gap-2 border-b border-[var(--extractum-border)] px-2 py-2 min-h-[46px]"
+    role="group"
+    aria-label="Library source actions"
+  >
     <ExtractumTextInput
       bind:value={query}
       class="flex-1 min-w-[160px]"
