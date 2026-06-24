@@ -283,7 +283,7 @@
             <h2>LLM Provider Profiles</h2>
             <p>Manage API credentials and default models. Stored keys are securely hidden in the system keychain.</p>
           </div>
-          <ExtractumButton onclick={openAddDialog}>
+          <ExtractumButton onclick={openAddDialog} aria-label="Add a new LLM profile">
             <Plus size={16} />
             <span>Add Profile</span>
           </ExtractumButton>
@@ -456,10 +456,10 @@
           </div>
 
           <div class="form-actions">
-            <ExtractumButton type="submit" disabled={saveSyncLoading}>
-              <Save size={14} />
-              <span>{saveSyncLoading ? "Saving..." : "Save Settings"}</span>
-            </ExtractumButton>
+          <ExtractumButton type="submit" disabled={saveSyncLoading} aria-label="Save Telegram synchronizer settings">
+            <Save size={14} />
+            <span>{saveSyncLoading ? "Saving..." : "Save Settings"}</span>
+          </ExtractumButton>
           </div>
         </form>
       </div>
@@ -599,11 +599,13 @@
         </div>
 
         <footer class="dialog-footer">
-          <ExtractumButton type="button" variant="outline" onclick={() => dialogOpen = false}>Cancel</ExtractumButton>
+          <ExtractumButton type="button" variant="outline" onclick={() => dialogOpen = false} aria-label="Cancel LLM profile dialog">
+            Cancel
+          </ExtractumButton>
           <ExtractumButton
             type="submit"
             disabled={!formProfileId.trim() || !formDefaultModel.trim()}
-            aria-label="Save LLM profile"
+            aria-label={`Save ${isEditing ? `LLM profile ${formProfileId}` : "a new LLM profile"}`}
           >
             <Save size={14} />
             <span>Save Profile</span>
