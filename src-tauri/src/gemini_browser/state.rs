@@ -14,6 +14,7 @@ pub struct GeminiBrowserState {
     active_run_id: Mutex<Option<String>>,
     cancellation: Mutex<Option<CancellationToken>>,
     sidecar: Mutex<Option<super::sidecar::GeminiBrowserSidecarProcess>>,
+    cdp_chrome: Mutex<Option<super::cdp_chrome::ChromeCdpProcess>>,
     status_snapshot: RwLock<Option<GeminiBrowserProviderStatus>>,
     startup_reconciliation: OnceCell<()>,
 }
@@ -191,6 +192,12 @@ impl GeminiBrowserState {
         &self,
     ) -> MutexGuard<'_, Option<super::sidecar::GeminiBrowserSidecarProcess>> {
         self.sidecar.lock().await
+    }
+
+    pub(crate) async fn cdp_chrome_process(
+        &self,
+    ) -> MutexGuard<'_, Option<super::cdp_chrome::ChromeCdpProcess>> {
+        self.cdp_chrome.lock().await
     }
 }
 

@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::process::Command;
+use std::process::Child;
 use std::time::Duration;
 
 use url::Url;
@@ -91,16 +92,35 @@ pub(crate) fn build_chrome_cdp_launch_spec(
     })
 }
 
-pub(crate) fn spawn_chrome_cdp(spec: &ChromeCdpLaunchSpec) -> AppResult<()> {
-    Command::new(&spec.chrome_path)
+#[derive(Debug)]
+pub(crate) struct ChromeCdpProcess {
+    child: Child,
+}
+
+impl ChromeCdpProcess {
+    fn new(child: Child) -> Self {
+        Self { child }
+    }
+}
+
+impl Drop for ChromeCdpProcess {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+pub(crate) fn spawn_chrome_cdp(spec: &ChromeCdpLaunchSpec) -> AppResult<ChromeCdpProcess> {
+    let child = Command::new(&spec.chrome_path)
         .args(&spec.args)
         .spawn()
-        .map(|_| ())
         .map_err(|error| {
             AppError::internal(format!(
                 "Failed to start Chrome with remote debugging enabled: {error}"
             ))
-        })
+        })?;
+
+    Ok(ChromeCdpProcess::new(child))
 }
 
 pub(crate) async fn wait_for_cdp_endpoint(endpoint: &str) -> AppResult<()> {

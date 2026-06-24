@@ -342,6 +342,7 @@ pub async fn gemini_bridge_open_browser(
 #[tauri::command]
 pub async fn gemini_bridge_start_cdp_chrome(
     handle: AppHandle,
+    state: State<'_, GeminiBrowserState>,
     browser_config: Option<GeminiBrowserProviderConfig>,
 ) -> AppResult<GeminiBrowserStartChromeResult> {
     let spec = cdp_chrome::build_chrome_cdp_launch_spec(
@@ -349,8 +350,17 @@ pub async fn gemini_bridge_start_cdp_chrome(
         chrome_cdp_profile_dir(&handle)?,
         browser_config.as_ref(),
     )?;
-    cdp_chrome::spawn_chrome_cdp(&spec)?;
-    cdp_chrome::wait_for_cdp_endpoint(&spec.cdp_endpoint).await?;
+    let process = cdp_chrome::spawn_chrome_cdp(&spec)?;
+    {
+        let mut cdp_process = state.cdp_chrome_process().await;
+        *cdp_process = Some(process);
+    }
+
+    if let Err(error) = cdp_chrome::wait_for_cdp_endpoint(&spec.cdp_endpoint).await {
+        let mut cdp_process = state.cdp_chrome_process().await;
+        cdp_process.take();
+        return Err(error);
+    }
     Ok(cdp_chrome::start_chrome_result(&spec))
 }
 
@@ -469,6 +479,10 @@ pub async fn gemini_bridge_stop(
         return cancel_gemini_browser_job(&handle, &run_id).await;
     }
     state.request_stop().await;
+    {
+        let mut cdp_process = state.cdp_chrome_process().await;
+        cdp_process.take();
+    }
     sidecar::stop(&handle, &state).await
 }
 
