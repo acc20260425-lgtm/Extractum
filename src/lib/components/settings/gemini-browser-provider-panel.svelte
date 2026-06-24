@@ -482,9 +482,10 @@
         <strong>Gemini Browser</strong>
         <button
           type="button"
+          title="Refresh Gemini Browser status"
+          aria-label="Refresh Gemini Browser status"
           onclick={() => scheduleRefreshInBackground({ mode: "full" }, { recordPollingOutcome: true })}
           disabled={busy}
-          title="Refresh status"
         >
           <RefreshCw size={14} />
         </button>
@@ -493,6 +494,8 @@
         <button
           type="button"
           class:active={browserProviderMode === "managed"}
+          title="Select managed provider mode"
+          aria-label="Select managed provider mode"
           onclick={() => selectBrowserProviderMode("managed")}
           disabled={busy}
         >
@@ -501,6 +504,8 @@
         <button
           type="button"
           class:active={browserProviderMode === "cdp_attach"}
+          title="Select attach Chrome provider mode"
+          aria-label="Select attach Chrome provider mode"
           onclick={() => selectBrowserProviderMode("cdp_attach")}
           disabled={busy}
         >
@@ -523,22 +528,46 @@
       {#if message}
         <p class="message">{message}</p>
       {/if}
-      <div class="actions">
-        {#if browserProviderMode === "cdp_attach"}
-          <button type="button" onclick={startCdpChrome} disabled={busy}>
+        <div class="actions">
+          {#if browserProviderMode === "cdp_attach"}
+          <button
+            type="button"
+            title="Start local Chrome for Gemini Browser"
+            aria-label="Start local Chrome for Gemini Browser"
+            onclick={startCdpChrome}
+            disabled={busy}
+          >
             <Play size={14} />
             <span>Start Chrome</span>
           </button>
         {/if}
-        <button type="button" onclick={openBrowser} disabled={busy}>
+        <button
+          type="button"
+          title="Open Gemini browser"
+          aria-label="Open Gemini browser"
+          onclick={openBrowser}
+          disabled={busy}
+        >
           <ExternalLink size={14} />
           <span>Open</span>
         </button>
-        <button type="button" onclick={resumeProvider} disabled={busy}>
+        <button
+          type="button"
+          title="Resume Gemini Browser provider"
+          aria-label="Resume Gemini Browser provider"
+          onclick={resumeProvider}
+          disabled={busy}
+        >
           <Play size={14} />
           <span>Resume</span>
         </button>
-        <button type="button" onclick={stopProvider} disabled={busy}>
+        <button
+          type="button"
+          title="Stop Gemini Browser provider"
+          aria-label="Stop Gemini Browser provider"
+          onclick={stopProvider}
+          disabled={busy}
+        >
           <Square size={14} />
           <span>Stop</span>
         </button>
@@ -557,9 +586,10 @@
         </div>
         <button
           type="button"
+          title="Refresh setup checklist"
+          aria-label="Refresh setup checklist"
           onclick={() => scheduleRefreshInBackground({ mode: "full" }, { recordPollingOutcome: true })}
           disabled={busy}
-          title="Refresh setup checklist"
         >
           <RefreshCw size={14} />
           <span>Refresh</span>
@@ -579,7 +609,13 @@
               <p>{check.message}</p>
             </div>
             {#if check.action}
-              <button type="button" onclick={() => handleSetupCheckAction(check)} disabled={busy}>
+              <button
+                type="button"
+                title={`${setupCheckActionLabel(check.action)} for ${check.label}`}
+                aria-label={`${setupCheckActionLabel(check.action)} for ${check.label}`}
+                onclick={() => handleSetupCheckAction(check)}
+                disabled={busy}
+              >
                 <span>{setupCheckActionLabel(check.action)}</span>
               </button>
             {/if}
@@ -591,7 +627,13 @@
     <div class="provider-card">
       <label for="gemini-browser-prompt">Test prompt</label>
       <textarea id="gemini-browser-prompt" bind:value={prompt} rows="5"></textarea>
-      <button type="button" onclick={sendTestPrompt} disabled={busy || !prompt.trim()}>
+      <button
+        type="button"
+        title="Send test prompt to Gemini Browser"
+        aria-label="Send test prompt to Gemini Browser"
+        onclick={sendTestPrompt}
+        disabled={busy || !prompt.trim()}
+      >
         <Send size={14} />
         <span>{busy ? "Running..." : "Send"}</span>
       </button>
@@ -610,19 +652,28 @@
       <div class="actions">
         <button
           type="button"
+          title="Refresh browser provider run diagnostics"
+          aria-label="Refresh browser provider run diagnostics"
           onclick={() => scheduleRefreshInBackground({ mode: "full" }, { recordPollingOutcome: true })}
           disabled={busy}
-          title="Refresh run diagnostics"
         >
           <RefreshCw size={14} />
           <span>Refresh</span>
         </button>
-        <button type="button" onclick={copyDiagnostics} disabled={!selectedInspectorRun}>
+        <button
+          type="button"
+          title="Copy diagnostics for selected Gemini Browser run"
+          aria-label="Copy diagnostics for selected Gemini Browser run"
+          onclick={copyDiagnostics}
+          disabled={!selectedInspectorRun}
+        >
           <Clipboard size={14} />
           <span>Copy diagnostics</span>
         </button>
         <button
           type="button"
+          title="Open selected Gemini Browser run folder"
+          aria-label="Open selected Gemini Browser run folder"
           onclick={openSelectedRunFolder}
           disabled={!selectedInspectorResult?.artifacts.run_dir}
         >
@@ -797,6 +848,8 @@
         <button
           type="button"
           data-filter="all"
+          title="Filter run history to all runs"
+          aria-label="Filter run history to all runs"
           class:active={runHistoryFilter === "all"}
           onclick={() => selectRunHistoryFilter("all")}
         >
@@ -805,6 +858,8 @@
         <button
           type="button"
           data-filter="problems"
+          title="Filter run history to problem runs"
+          aria-label="Filter run history to problem runs"
           class:active={runHistoryFilter === "problems"}
           onclick={() => selectRunHistoryFilter("problems")}
         >
@@ -813,6 +868,8 @@
         <button
           type="button"
           data-filter="partial_risk"
+          title="Filter run history to partial risk runs"
+          aria-label="Filter run history to partial risk runs"
           class:active={runHistoryFilter === "partial_risk"}
           onclick={() => selectRunHistoryFilter("partial_risk")}
         >
@@ -821,6 +878,8 @@
         <button
           type="button"
           data-filter="manual_action"
+          title="Filter run history to manual action runs"
+          aria-label="Filter run history to manual action runs"
           class:active={runHistoryFilter === "manual_action"}
           onclick={() => selectRunHistoryFilter("manual_action")}
         >
@@ -829,6 +888,8 @@
         <button
           type="button"
           data-filter="failed"
+          title="Filter run history to failed runs"
+          aria-label="Filter run history to failed runs"
           class:active={runHistoryFilter === "failed"}
           onclick={() => selectRunHistoryFilter("failed")}
         >
@@ -847,6 +908,8 @@
         class="run-row"
         class:selected={selectedInspectorRun?.run_id === row.run.run_id}
         class:warning={row.isProblem}
+        title={`Open run inspector for ${row.run.run_id}`}
+        aria-label={`Open run inspector for ${row.run.run_id}, status ${row.status}`}
         onclick={() => selectHistoryRun(row.run.run_id)}
       >
         <span class="run-status">{row.status}</span>
