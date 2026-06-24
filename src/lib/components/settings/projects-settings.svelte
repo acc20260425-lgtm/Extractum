@@ -5,7 +5,6 @@
     Bot,
     Edit2,
     Trash2,
-    AlertTriangle,
     Save,
     RefreshCw,
     Key,
@@ -478,10 +477,9 @@
     <ExtractumDialog bind:open={dialogOpen} title={isEditing ? "Edit LLM Profile" : "Create LLM Profile"} contentClass="w-[min(560px,calc(100vw-48px))]">
       <form class="dialog-grid" onsubmit={(e) => { e.preventDefault(); handleSaveProfile(); }}>
         {#if dialogError}
-          <div class="dialog-error-banner" role="alert">
-            <AlertTriangle size={15} />
-            <span>{dialogError}</span>
-          </div>
+          <ExtractumStatusMessage tone="error">
+            {dialogError}
+          </ExtractumStatusMessage>
         {/if}
 
         <div class="form-group">
@@ -905,20 +903,6 @@
     margin-top: 10px;
     border-top: 1px solid var(--border);
     padding-top: 12px;
-  }
-
-  .dialog-error-banner {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: color-mix(in srgb, var(--destructive) 8%, var(--card));
-    border: 1px solid color-mix(in srgb, var(--destructive) 25%, var(--border));
-    border-radius: var(--radius);
-    padding: 10px 14px;
-    color: var(--destructive);
-    font-size: 12.5px;
-    font-weight: 500;
-    line-height: 1.4;
   }
 
   .dialog-grid {
