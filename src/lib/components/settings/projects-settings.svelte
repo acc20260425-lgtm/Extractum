@@ -26,6 +26,12 @@
   import { formatAppError } from "$lib/app-error";
   import GeminiBrowserProviderPanel from "$lib/components/settings/gemini-browser-provider-panel.svelte";
   import YoutubeSettingsPanel from "$lib/components/settings/youtube-settings-panel.svelte";
+  import {
+    ExtractumTabs,
+    ExtractumTabsContent,
+    ExtractumTabsList,
+    ExtractumTabsTrigger,
+  } from "$lib/components/extractum-ui";
   import type { LlmProfile, LlmProfilesState, LlmProviderModel } from "$lib/types/llm";
   import type { SyncSettings } from "$lib/types/sources";
 
@@ -246,45 +252,27 @@
     {/if}
   </header>
 
-  <!-- Tab Bar -->
-  <div class="tabs-navigation">
-    <button
-      class="tab-btn"
-      class:active={activeTab === "llm"}
-      onclick={() => activeTab = "llm"}
-    >
-      <Key size={14} />
-      <span>LLM Profiles</span>
-    </button>
-    <button
-      class="tab-btn"
-      class:active={activeTab === "browser"}
-      onclick={() => activeTab = "browser"}
-    >
-      <Bot size={14} />
-      <span>Browser Providers</span>
-    </button>
-    <button
-      class="tab-btn"
-      class:active={activeTab === "telegram"}
-      onclick={() => activeTab = "telegram"}
-    >
-      <Send size={14} />
-      <span>Telegram Sync</span>
-    </button>
-    <button
-      class="tab-btn"
-      class:active={activeTab === "youtube"}
-      onclick={() => activeTab = "youtube"}
-    >
-      <Video size={14} />
-      <span>YouTube Sync</span>
-    </button>
-  </div>
+  <ExtractumTabs bind:value={activeTab} class="settings-tabs">
+    <ExtractumTabsList variant="line">
+      <ExtractumTabsTrigger value="llm">
+        <Key size={14} />
+        <span>LLM Profiles</span>
+      </ExtractumTabsTrigger>
+      <ExtractumTabsTrigger value="browser">
+        <Bot size={14} />
+        <span>Browser Providers</span>
+      </ExtractumTabsTrigger>
+      <ExtractumTabsTrigger value="telegram">
+        <Send size={14} />
+        <span>Telegram Sync</span>
+      </ExtractumTabsTrigger>
+      <ExtractumTabsTrigger value="youtube">
+        <Video size={14} />
+        <span>YouTube Sync</span>
+      </ExtractumTabsTrigger>
+    </ExtractumTabsList>
 
-  <!-- Tab Content -->
-  <div class="tab-viewport">
-    {#if activeTab === "llm"}
+    <ExtractumTabsContent value="llm">
       <!-- LLM TAB -->
       <div class="settings-card">
         <div class="card-header">
@@ -376,11 +364,15 @@
           </table>
         </div>
       </div>
-    {:else if activeTab === "browser"}
+    </ExtractumTabsContent>
+
+    <ExtractumTabsContent value="browser">
       <div class="settings-card">
         <GeminiBrowserProviderPanel />
       </div>
-    {:else if activeTab === "telegram"}
+    </ExtractumTabsContent>
+
+    <ExtractumTabsContent value="telegram">
       <!-- TELEGRAM TAB -->
       <div class="settings-card max-w-2xl">
         <div class="card-header">
@@ -454,13 +446,15 @@
           </div>
         </form>
       </div>
-    {:else if activeTab === "youtube"}
+    </ExtractumTabsContent>
+
+    <ExtractumTabsContent value="youtube">
       <!-- YOUTUBE TAB -->
       <div class="settings-card">
         <YoutubeSettingsPanel embedded={true} />
       </div>
-    {/if}
-  </div>
+    </ExtractumTabsContent>
+  </ExtractumTabs>
 
   <!-- Pop-up Modal Editor -->
   {#if dialogOpen}
@@ -687,40 +681,12 @@
   }
 
   /* Navigation tabs */
-  .tabs-navigation {
-    display: flex;
-    gap: 8px;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 2px;
+  .settings-tabs {
+    width: 100%;
   }
 
-  .tab-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    padding: 8px 16px;
-    font-size: 13.5px;
-    font-weight: 500;
-    color: var(--muted-foreground);
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .tab-btn:hover {
-    color: var(--foreground);
-  }
-
-  .tab-btn.active {
-    color: var(--primary);
-    border-bottom-color: var(--primary);
-  }
-
-  .tab-viewport {
-    min-height: 0;
-    flex: 1;
+  :global(.settings-tabs[data-orientation="horizontal"] [data-slot="tabs-list"]) {
+    margin-bottom: 6px;
   }
 
   /* Cards */
