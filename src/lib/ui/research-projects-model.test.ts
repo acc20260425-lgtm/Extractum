@@ -142,7 +142,7 @@ describe("research projects model", () => {
         ...projectSources,
         { ...projectSources[0], source_id: 11, provider: "telegram" },
       ]),
-    ).toBe("Mixed-provider project runs are not supported yet.");
+    ).toBe("Mixed-provider project analysis runs are not supported yet.");
   });
 
   it("keeps source selection scoped to the current project rows", () => {

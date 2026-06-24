@@ -34,8 +34,8 @@
   async function deleteProjectRun(run: AnalysisRunSummary) {
     if (isAnalysisRunActive(run) || deletingRunIds[run.id]) return;
     const confirmed = await openConfirmModal({
-      title: "Delete project run?",
-      message: `Run ${run.id} will be removed with its saved report and artifacts.`,
+      title: "Delete project analysis run?",
+      message: `Project analysis run ${run.id} will be removed with its saved report and artifacts.`,
       confirmLabel: "Delete",
       cancelLabel: "Cancel",
       tone: "danger",
@@ -56,17 +56,17 @@
   }
 </script>
 
-<section class="project-runs-tab" aria-label="Project runs">
+<section class="project-runs-tab" aria-label="Project analysis runs">
   <div class="runs-toolbar extractum-toolbar-row">
     <div>
-      <span>Project runs</span>
+      <span>Project analysis runs</span>
       <strong>{sortedRuns.length}</strong>
     </div>
     <ExtractumButton
       variant="outline"
       disabled={loading}
       onclick={onRefreshProjectRuns}
-      aria-label="Refresh project runs"
+      aria-label="Refresh project analysis runs"
     >
       <RefreshCw size={14} aria-hidden="true" />
       Refresh
@@ -74,7 +74,7 @@
   </div>
 
   {#if sortedRuns.length === 0}
-    <div class="empty-runs extractum-panel-shell">No project runs yet.</div>
+    <div class="empty-runs extractum-panel-shell">No project analysis runs yet.</div>
   {:else}
     {#if deleteError}
       <p class="run-error">{deleteError}</p>
@@ -104,8 +104,8 @@
             <ExtractumButton
               class="icon-button danger"
               variant="destructive"
-              aria-label={`Delete project run ${run.id}`}
-              title="Delete project run"
+              aria-label={`Delete project analysis run ${run.id}`}
+              title="Delete project analysis run"
               disabled={isAnalysisRunActive(run) || deletingRunIds[run.id]}
               onclick={() => void deleteProjectRun(run)}
             >

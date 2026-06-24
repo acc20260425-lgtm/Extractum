@@ -33,7 +33,7 @@
     onRemoveSource: (sourceId: number | number[]) => void | Promise<void>;
   } = $props();
 
-  const mixedProviderRunMessage = "Mixed-provider project runs are not supported yet.";
+  const mixedProviderRunMessage = "Mixed-provider project analysis runs are not supported yet.";
   const runDisabledReason = $derived(projectRunDisabledReason(project, sources));
   const providerCount = $derived(new Set(sources.map((source) => source.provider)).size);
   let youtubeSummaryOpen = $state(false);
@@ -129,11 +129,11 @@
     />
 
     <section class="extractum-panel-shell">
-      <h3>Recent project runs</h3>
+      <h3>Recent project analysis runs</h3>
       {#each runs.slice(0, 5) as run (run.id)}
         <p>{run.scope_label} - {run.status}</p>
       {:else}
-        <p class="hint">No project runs</p>
+        <p class="hint">No project analysis runs</p>
       {/each}
     </section>
 

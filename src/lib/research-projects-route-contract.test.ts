@@ -41,7 +41,7 @@ describe("projects mvp route contract", () => {
   it("exposes create/edit/delete and run eligibility UI", () => {
     expect(railSource).toContain("Create project");
     expect(inspectorSource).toContain("Run project analysis");
-    expect(inspectorSource).toContain("Mixed-provider project runs are not supported yet.");
+    expect(inspectorSource).toContain("Mixed-provider project analysis runs are not supported yet.");
   });
 
   it("defaults project run dates to all synced history instead of today only", () => {
@@ -131,11 +131,23 @@ describe("projects mvp route contract", () => {
     expect(runsScreenSource).toContain('<section class="project-runs-screen" aria-label="Prompt Pack runs">');
     expect(runsScreenSource).toContain('<section class="runs-grid-panel" aria-label="Prompt Pack runs grid">');
     expect(runsScreenSource).toContain('ariaLabel="Prompt Pack runs"');
+    expect(runsScreenSource).toContain('overlay={loading ? "Loading Prompt Pack runs..." : "No Prompt Pack runs yet."}');
   });
 
   it("scopes repeated project refresh controls", () => {
-    expect(runsTabSource).toContain('aria-label="Refresh project runs"');
+    expect(runsTabSource).toContain('aria-label="Refresh project analysis runs"');
     expect(youtubeSummaryRunsPanelSource).toContain('aria-label="Refresh prompt pack runs"');
+  });
+
+  it("clarifies the Workspace Runs taxonomy", () => {
+    expect(runsTabSource).toContain('<section class="project-runs-tab" aria-label="Project analysis runs">');
+    expect(runsTabSource).toContain("<span>Project analysis runs</span>");
+    expect(runsTabSource).toContain("No project analysis runs yet.");
+    expect(inspectorSource).toContain("Recent project analysis runs");
+    expect(inspectorSource).toContain("No project analysis runs");
+    expect(inspectorSource).not.toContain("Recent project runs");
+    expect(runsTabSource).toContain("YoutubeSummaryRunsPanel");
+    expect(youtubeSummaryRunsPanelSource).toContain('aria-label="Prompt Pack runs"');
   });
 
   it("uses shared density primitives for repeated New Projects shells", () => {

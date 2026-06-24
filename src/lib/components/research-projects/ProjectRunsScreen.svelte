@@ -156,8 +156,8 @@
     if (!selectedRun || !canDeleteSelectedRun) return;
     const run = selectedRun;
     const confirmed = await openConfirmModal({
-      title: "Delete project run?",
-      message: `Project run #${run.runId} will be removed from the local database.`,
+      title: "Delete Prompt Pack run?",
+      message: `Prompt Pack run #${run.runId} will be removed from the local database.`,
       confirmLabel: "Delete",
       cancelLabel: "Cancel",
       tone: "danger",
@@ -183,8 +183,8 @@
     if (!selectedRun || !selectedRunIsActive) return;
     const run = selectedRun;
     const confirmed = await openConfirmModal({
-      title: "Cancel active run?",
-      message: `Project run #${run.runId} is still ${statusLabel(run.runStatus).toLocaleLowerCase()}. Cancel this run now?`,
+      title: "Cancel active Prompt Pack run?",
+      message: `Prompt Pack run #${run.runId} is still ${statusLabel(run.runStatus).toLocaleLowerCase()}. Cancel this run now?`,
       confirmLabel: "Cancel run",
       cancelLabel: "Keep running",
       tone: "danger",
@@ -264,7 +264,7 @@
         {columns}
         {selectedRowIds}
         ariaLabel="Prompt Pack runs"
-        overlay={loading ? "Loading project runs..." : "No project runs yet."}
+        overlay={loading ? "Loading Prompt Pack runs..." : "No Prompt Pack runs yet."}
         onSelectedRowIdsChange={selectRows}
       />
     </div>

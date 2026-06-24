@@ -235,6 +235,6 @@ export function projectRunDisabledReason(
   if (!project) return "Select a project";
   if (sources.length === 0) return "Add sources to run analysis";
   const providers = new Set(sources.map((source) => source.provider));
-  if (providers.size > 1) return "Mixed-provider project runs are not supported yet.";
+  if (providers.size > 1) return "Mixed-provider project analysis runs are not supported yet.";
   return null;
 }
