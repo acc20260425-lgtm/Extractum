@@ -361,7 +361,13 @@
         <ExtractumBadge>{run.runStatus}</ExtractumBadge>
         <ExtractumBadge>{run.resultStatus ?? "none"}</ExtractumBadge>
       {/if}
-      <ExtractumButton variant="outline" disabled={!runId || loading} onclick={() => void loadRunReport()}>
+      <ExtractumButton
+        variant="outline"
+        disabled={!runId || loading}
+        onclick={() => void loadRunReport()}
+        aria-label="Refresh run report"
+        title="Refresh run report"
+      >
         <RefreshCw size={14} aria-hidden="true" />
         Refresh
       </ExtractumButton>
