@@ -54,6 +54,7 @@
       {/if}
       <div class="table-scroll">
       <table aria-label={`Diagnostic counts for ${title}`} aria-describedby={hasDescription ? summaryId : undefined}>
+        <caption class="sr-only">Diagnostic counts for {title}</caption>
         <thead>
           <tr>
             {#each columns as column (column.key)}
@@ -88,6 +89,18 @@
     display: flex;
     flex-direction: column;
     gap: 0.65rem;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+    white-space: nowrap;
   }
 
   summary {
