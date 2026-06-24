@@ -33,7 +33,8 @@
     projects: [],
     librarySources: [],
     projectSourceLinks: [],
-    selectedProjectId: null,
+    // Restore previously selected project so effects don't overwrite shared state with null on mount
+    selectedProjectId: projectsSharedState.selectedProjectId,
     selectedLibrarySourceIds: new Set<string>(),
     loading: false,
     saving: false,
@@ -136,7 +137,9 @@
   });
 
   $effect(() => {
-    projectsSharedState.selectedProjectId = state.selectedProjectId;
+    if (projectsSharedState.selectedProjectId !== state.selectedProjectId) {
+      projectsSharedState.selectedProjectId = state.selectedProjectId;
+    }
   });
 
   $effect(() => {

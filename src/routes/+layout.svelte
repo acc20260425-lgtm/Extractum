@@ -32,13 +32,15 @@
     uiMode = initialMode;
   }
 
-  // Keep uiMode in sync with current route path reactively
+  // Correct uiMode when the user lands directly on a /projects URL with legacy mode stored.
+  // We intentionally do NOT reset to "legacy" when on /analysis — the toggle handler does
+  // that via goto(), and doing it here would race with the in-flight navigation and cause
+  // uiMode to bounce (projects → legacy → projects), which can trigger a Svelte 5
+  // effect_update_depth_exceeded error that SvelteKit surfaces as a 500.
   $effect(() => {
     const pathname = page.url.pathname;
     if (pathname.startsWith("/projects") && uiMode === "legacy") {
       setUiMode("projects");
-    } else if ((pathname.startsWith("/analysis") || pathname === "/") && uiMode === "projects") {
-      setUiMode("legacy");
     }
   });
 
