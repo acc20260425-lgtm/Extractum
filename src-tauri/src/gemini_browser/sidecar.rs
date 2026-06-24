@@ -6,6 +6,7 @@ use tauri_plugin_shell::{
     process::{CommandChild, CommandEvent},
     ShellExt,
 };
+use tokio::runtime::Handle;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 
@@ -29,7 +30,7 @@ struct SidecarLine {
 
 enum GeminiBrowserSidecarTransport {
     Node {
-        child: Child,
+        child: Option<Child>,
         stdin: ChildStdin,
         stdout: BufReader<ChildStdout>,
     },
@@ -123,7 +124,7 @@ impl GeminiBrowserSidecarProcess {
             .ok_or_else(|| AppError::internal("Gemini browser sidecar stdout was unavailable"))?;
         Ok(Self {
             transport: GeminiBrowserSidecarTransport::Node {
-                child,
+                child: Some(child),
                 stdin,
                 stdout: BufReader::new(stdout),
             },
@@ -160,7 +161,18 @@ impl Drop for GeminiBrowserSidecarProcess {
     fn drop(&mut self) {
         match &mut self.transport {
             GeminiBrowserSidecarTransport::Node { child, .. } => {
-                let _ = child.start_kill();
+                if let Some(mut child) = child.take() {
+                    let _ = child.start_kill();
+                    if let Some(handle) = Handle::try_current().ok() {
+                        handle.spawn(async move {
+                            let _ = child.kill().await;
+                        });
+                    } else if let Ok(runtime) = tokio::runtime::Runtime::new() {
+                        runtime.block_on(async move {
+                            let _ = child.kill().await;
+                        });
+                    }
+                }
             }
             GeminiBrowserSidecarTransport::Shell { child, .. } => {
                 if let Some(child) = child.take() {
