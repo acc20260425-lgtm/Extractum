@@ -441,50 +441,58 @@
 
     <div class="diagnostics-grid">
       <section class="extractum-panel-shell diagnostics-meta-card">
-        <header>
-          <h2>App and build</h2>
-          <p>Factual diagnostic summary metadata</p>
+        <header class="panel-header">
+          <div class="panel-header-copy">
+            <h2>App and build</h2>
+            <p>Factual diagnostic summary metadata</p>
+          </div>
         </header>
         <div class="meta-grid">
-          <div><span>App</span><strong>{current.app.appName}</strong></div>
-          <div><span>Version</span><strong>{current.app.appVersion}</strong></div>
-          <div><span>Build</span><strong>{labelFromKey(current.app.buildMode)}</strong></div>
-          <div><span>Generated</span><strong>{formatSummaryGeneratedAt(current.app.generatedAtUnix).replace("Summary generated ", "")}</strong></div>
+          <div><span class="muted-copy">App</span><strong>{current.app.appName}</strong></div>
+          <div><span class="muted-copy">Version</span><strong>{current.app.appVersion}</strong></div>
+          <div><span class="muted-copy">Build</span><strong>{labelFromKey(current.app.buildMode)}</strong></div>
+          <div><span class="muted-copy">Generated</span><strong>{formatSummaryGeneratedAt(current.app.generatedAtUnix).replace("Summary generated ", "")}</strong></div>
         </div>
       </section>
 
       <section class="extractum-panel-shell diagnostics-meta-card">
-        <header>
-          <h2>Database</h2>
-          <p>SQLite availability and migration state</p>
+        <header class="panel-header">
+          <div class="panel-header-copy">
+            <h2>Database</h2>
+            <p>SQLite availability and migration state</p>
+          </div>
         </header>
         <div class="meta-grid">
-          <div><span>SQLite</span><strong>{availabilityLabel(current.database.sqliteAvailable)}</strong></div>
-          <div><span>Migrations</span><strong>{labelFromKey(current.database.migrations.status)}</strong></div>
-          <div><span>Accounts</span><strong>{current.database.accountCount}</strong></div>
-          <div><span>Pending versions</span><strong>{current.database.migrations.pendingVersions.length}</strong></div>
-          <div><span>Failed versions</span><strong>{current.database.migrations.failedVersions.length}</strong></div>
+          <div><span class="muted-copy">SQLite</span><strong>{availabilityLabel(current.database.sqliteAvailable)}</strong></div>
+          <div><span class="muted-copy">Migrations</span><strong>{labelFromKey(current.database.migrations.status)}</strong></div>
+          <div><span class="muted-copy">Accounts</span><strong>{current.database.accountCount}</strong></div>
+          <div><span class="muted-copy">Pending versions</span><strong>{current.database.migrations.pendingVersions.length}</strong></div>
+          <div><span class="muted-copy">Failed versions</span><strong>{current.database.migrations.failedVersions.length}</strong></div>
         </div>
       </section>
 
       <section class="extractum-panel-shell diagnostics-meta-card">
-        <header>
-          <h2>Runtimes</h2>
-          <p>Backend-reported runtime checks</p>
+        <header class="panel-header">
+          <div class="panel-header-copy">
+            <h2>Runtimes</h2>
+            <p>Backend-reported runtime checks</p>
+          </div>
         </header>
         <div class="meta-grid">
-          <div><span>Secure storage</span><strong>{labelFromKey(current.runtimes.secureStorage.status)}</strong></div>
-          <div><span>Secure storage available</span><strong>{availabilityLabel(current.runtimes.secureStorage.available)}</strong></div>
-          <div><span>yt-dlp</span><strong>{labelFromKey(current.runtimes.ytdlp.status)}</strong></div>
-          <div><span>yt-dlp available</span><strong>{availabilityLabel(current.runtimes.ytdlp.available)}</strong></div>
-          <div><span>yt-dlp version</span><strong>{current.runtimes.ytdlp.version ?? "Unknown"}</strong></div>
+          <div><span class="muted-copy">Secure storage</span><strong>{labelFromKey(current.runtimes.secureStorage.status)}</strong></div>
+          <div><span class="muted-copy">Secure storage available</span><strong>{availabilityLabel(current.runtimes.secureStorage.available)}</strong></div>
+          <div><span class="muted-copy">yt-dlp</span><strong>{labelFromKey(current.runtimes.ytdlp.status)}</strong></div>
+          <div><span class="muted-copy">yt-dlp available</span><strong>{availabilityLabel(current.runtimes.ytdlp.available)}</strong></div>
+          <div><span class="muted-copy">yt-dlp version</span><strong>{current.runtimes.ytdlp.version ?? "Unknown"}</strong></div>
         </div>
       </section>
 
       <section class="extractum-panel-shell diagnostics-meta-card">
-        <header>
-          <h2>Privacy boundary</h2>
-          <p>Data classes intentionally excluded by backend diagnostics</p>
+        <header class="panel-header">
+          <div class="panel-header-copy">
+            <h2>Privacy boundary</h2>
+            <p>Data classes intentionally excluded by backend diagnostics</p>
+          </div>
         </header>
         {#if privacyLabels(current).length > 0}
           <div class="privacy-chips">
@@ -559,28 +567,10 @@
     font-size: 0.98rem;
   }
 
-  .diagnostics-meta-card header,
-  .diagnostics-meta-card h2 {
-    margin: 0;
-  }
-
-  .diagnostics-meta-card h2 {
-    font-size: 0.96rem;
-    font-weight: 600;
-    color: var(--text);
-  }
-
   .diagnostics-meta-card {
     display: flex;
     flex-direction: column;
     gap: 0.7rem;
-  }
-
-  .diagnostics-meta-card p {
-    margin: 0;
-    color: var(--muted);
-    font-size: 0.8rem;
-    line-height: 1.35;
   }
 
   .diagnostics-grid,
@@ -606,13 +596,6 @@
     flex-direction: column;
     gap: 0.2rem;
     min-width: 0;
-  }
-
-  .meta-grid span {
-    color: var(--muted);
-    font-size: 0.74rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
   }
 
   .meta-grid strong {

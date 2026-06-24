@@ -28,8 +28,6 @@
   const rowText = $derived(
     rows.length === totalRows ? `${rows.length} rows` : `${rows.length}/${totalRows} rows`,
   );
-  const summaryId = $derived(`diagnostic-summary-${title.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase()}`);
-  const hasDescription = $derived(Boolean(description));
 
   function cellValue(row: DiagnosticTableRow, key: string) {
     return row[key] ?? "";
@@ -45,14 +43,13 @@
   <details class="diagnostic-count-details" {open} aria-label={`Expand ${title} diagnostics section`}>
     <summary>
       <span>{title}</span>
-      <span>{rowText}</span>
+      <span class="muted-copy">{rowText}</span>
     </summary>
     {#if description}
-      <p id={summaryId}>{description}</p>
+      <p>{description}</p>
     {/if}
     <div class="extractum-grid-frame table-scroll">
-      <table aria-label={`Diagnostic counts for ${title}`} aria-describedby={hasDescription ? summaryId : undefined}>
-        <caption class="sr-only">Diagnostic counts for {title}</caption>
+      <table class="diagnostic-count-table-grid" aria-label={`Diagnostic counts for ${title}`}>
         <thead>
           <tr>
             {#each columns as column (column.key)}
@@ -90,18 +87,6 @@
     gap: 0.65rem;
   }
 
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    border: 0;
-    white-space: nowrap;
-  }
-
   summary {
     display: flex;
     justify-content: space-between;
@@ -111,8 +96,8 @@
     font-weight: 650;
   }
 
-  summary span:last-child {
-    color: var(--muted);
+  .diagnostic-count-details .muted-copy {
+    margin: 0;
     font-size: 0.8rem;
     font-weight: 500;
   }
@@ -128,7 +113,7 @@
     overflow-x: auto;
   }
 
-  table {
+  .diagnostic-count-table-grid {
     width: 100%;
     min-width: 520px;
     border-collapse: collapse;
