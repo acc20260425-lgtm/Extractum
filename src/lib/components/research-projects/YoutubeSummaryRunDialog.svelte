@@ -287,11 +287,18 @@
     {#if runtimeProvider === "gemini_browser"}
       <section class="preflight-section" aria-label="Browser Provider setup">
         <h3>Browser Provider</h3>
-        {#each browserSetupChecks.slice(0, 3) as check (check.id)}
-          <ExtractumStatusMessage tone={check.state === "failed" || check.state === "action_needed" ? "error" : "info"}>
-            {check.label}: {setupCheckStateLabel(check.state)} - {check.message}
-          </ExtractumStatusMessage>
-        {/each}
+        <div class="browser-checks-list">
+          {#each browserSetupChecks.slice(0, 3) as check (check.id)}
+            <div class="browser-check-item">
+              <span class="status-dot {check.state}" aria-hidden="true"></span>
+              <div class="check-details">
+                <span class="check-label">{check.label}:</span>
+                <span class="check-state-badge {check.state}">{setupCheckStateLabel(check.state)}</span>
+                <span class="check-message"> - {check.message}</span>
+              </div>
+            </div>
+          {/each}
+        </div>
         <ExtractumButton type="button" variant="outline" onclick={() => void refreshBrowserStatus()} disabled={loading}>
           Refresh Browser Provider
         </ExtractumButton>
@@ -551,5 +558,114 @@
     justify-content: flex-end;
     gap: 8px;
     margin-top: 4px;
+  }
+
+  .browser-checks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: var(--extractum-surface-raised);
+    border: 1px solid var(--extractum-border);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+
+  .browser-check-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--extractum-muted);
+  }
+
+  .status-dot.ready {
+    background: var(--extractum-success);
+    box-shadow: 0 0 4px var(--extractum-success);
+  }
+
+  .status-dot.failed,
+  .status-dot.action_needed {
+    background: var(--extractum-danger);
+    box-shadow: 0 0 4px var(--extractum-danger);
+  }
+
+  .status-dot.not_applicable {
+    background: var(--extractum-muted);
+  }
+
+  .status-dot.unknown {
+    background: var(--extractum-muted);
+  }
+
+  .status-dot.running {
+    background: var(--extractum-primary);
+    box-shadow: 0 0 4px var(--extractum-primary);
+  }
+
+  .status-dot.warning {
+    background: var(--extractum-warning);
+    box-shadow: 0 0 4px var(--extractum-warning);
+  }
+
+  .check-details {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--extractum-text);
+  }
+
+  .check-label {
+    font-weight: 600;
+  }
+
+  .check-state-badge {
+    font-weight: 700;
+    font-size: 9px;
+    text-transform: uppercase;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-left: 4px;
+    display: inline-block;
+  }
+
+  .check-state-badge.ready {
+    background: color-mix(in srgb, var(--extractum-success) 12%, transparent);
+    color: var(--extractum-success);
+  }
+
+  .check-state-badge.failed,
+  .check-state-badge.action_needed {
+    background: color-mix(in srgb, var(--extractum-danger) 12%, transparent);
+    color: var(--extractum-danger);
+  }
+
+  .check-state-badge.not_applicable {
+    background: color-mix(in srgb, var(--extractum-muted) 12%, transparent);
+    color: var(--extractum-muted);
+  }
+
+  .check-state-badge.unknown {
+    background: color-mix(in srgb, var(--extractum-muted) 12%, transparent);
+    color: var(--extractum-muted);
+  }
+
+  .check-state-badge.running {
+    background: color-mix(in srgb, var(--extractum-primary) 12%, transparent);
+    color: var(--extractum-primary);
+  }
+
+  .check-state-badge.warning {
+    background: color-mix(in srgb, var(--extractum-warning) 12%, transparent);
+    color: var(--extractum-warning);
+  }
+
+  .check-message {
+    color: var(--extractum-muted);
+    margin-left: 2px;
   }
 </style>
