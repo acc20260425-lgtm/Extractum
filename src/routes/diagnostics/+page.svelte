@@ -380,8 +380,7 @@
   {#if summary}
     {@const tableSections = diagnosticsTableSections(summary)}
 
-    <div class="diagnostics-table-controls" aria-label="Diagnostics table display">
-      <Button size="sm" variant="secondary" selected={diagnosticsTableMode === "issues"} onclick={() => (diagnosticsTableMode = "issues")}>Only issues</Button>
+    <div class="diagnostics-table-controls extractum-toolbar-row" aria-label="Diagnostics table display">
       <Button
         size="sm"
         variant="secondary"
@@ -418,7 +417,7 @@
   <div class="diagnostics-overview-area">
     <div class="status-strip" aria-label="Diagnostics health overview">
       {#each statusStripItems(current) as item (item.label)}
-        <div class="status-tile">
+        <div class="status-tile extractum-panel-shell">
           <span>{item.label}</span>
           <strong>{item.value}</strong>
           <Badge variant={item.tone}>{item.meta}</Badge>
@@ -517,11 +516,6 @@
     min-width: 0;
     flex-direction: column;
     gap: 0.35rem;
-    padding: 0.85rem;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--panel);
-    box-shadow: var(--shadow-soft);
   }
 
   .status-tile span {
@@ -560,10 +554,7 @@
   }
 
   .diagnostics-table-controls {
-    display: flex;
     justify-content: flex-end;
-    gap: 0.45rem;
-    flex-wrap: wrap;
   }
 
   @media (max-width: 980px) {
