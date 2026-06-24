@@ -545,16 +545,14 @@
 
         <div class="form-group col-span-2">
           <label for="modal-api-key">API Key</label>
-          <div class="input-with-icon">
-            <Shield
-              size={14}
-              style="position: absolute; top: 50%; left: 12px; transform: translateY(-50%); color: var(--muted-foreground); pointer-events: none;"
-            />
+          <div class="input-with-icon api-key-input-wrap">
+            <span class="api-key-shield-icon" aria-hidden="true">
+              <Shield size={14} />
+            </span>
             <ExtractumTextInput
               id="modal-api-key"
               type="password"
               class="w-full"
-              style="padding-left: 36px;"
               placeholder={formApiKeyConfigured ? "**************" : "Enter API Key"}
               bind:value={formApiKey}
             />
@@ -578,7 +576,9 @@
               onclick={() => fetchModels(true)}
               disabled={loadingModels}
             >
-              <RefreshCw size={13} style={loadingModels ? "animation: spin 1s linear infinite;" : ""} />
+              <span class={loadingModels ? "spin-icon" : ""} aria-hidden="true">
+                <RefreshCw size={13} />
+              </span>
               <span>{loadingModels ? "Fetching..." : "Fetch Models"}</span>
             </ExtractumButton>
           </div>
@@ -653,16 +653,16 @@
   }
 
   .profiles-table th {
-    background: var(--panel-strong);
+    background: var(--extractum-surface-subtle);
     font-weight: 600;
     padding: 10px 14px;
-    color: var(--muted);
-    border-bottom: 1px solid var(--border);
+    color: var(--extractum-muted);
+    border-bottom: 1px solid var(--extractum-border);
   }
 
   .profiles-table td {
     padding: 12px 14px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--extractum-border);
     vertical-align: middle;
   }
 
@@ -681,8 +681,8 @@
   }
 
   .model-cell code {
-    background: var(--panel-strong);
-    color: var(--muted);
+    background: var(--extractum-surface-subtle);
+    color: var(--extractum-muted);
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 12px;
@@ -845,6 +845,19 @@
     width: 100%;
   }
 
+  .api-key-shield-icon {
+    position: absolute;
+    top: 50%;
+    left: 12px;
+    transform: translateY(-50%);
+    color: var(--extractum-muted);
+    pointer-events: none;
+  }
+
+  .api-key-input-wrap :global(.extractum-input) {
+    padding-left: 36px !important;
+  }
+
   .fetch-models-row {
     display: flex;
     justify-content: space-between;
@@ -855,6 +868,12 @@
   @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+  }
+
+  .spin-icon {
+    display: inline-flex;
+    align-items: center;
+    animation: spin 1s linear infinite;
   }
 </style>
 
