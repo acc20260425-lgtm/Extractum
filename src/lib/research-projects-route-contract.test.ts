@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import layoutSource from "../routes/+layout.svelte?raw";
 import pageSource from "../routes/projects/+page.svelte?raw";
 import dataGridSource from "$lib/components/extractum-ui/DataGrid.svelte?raw";
@@ -10,9 +12,12 @@ import runsScreenSource from "$lib/components/research-projects/ProjectRunsScree
 import runDialogSource from "$lib/components/research-projects/ProjectRunDialog.svelte?raw";
 import sourcesTabSource from "$lib/components/research-projects/SourcesTab.svelte?raw";
 import connectFromLibrarySource from "$lib/components/research-projects/ConnectFromLibrary.svelte?raw";
+import projectSourceSummarySource from "$lib/components/research-projects/ProjectSourceSummary.svelte?raw";
 import topCommandBarSource from "$lib/components/research-projects/TopCommandBar.svelte?raw";
 import workspaceSource from "$lib/components/research-projects/ProjectWorkspace.svelte?raw";
 import youtubeSummaryRunsPanelSource from "$lib/components/research-projects/YoutubeSummaryRunsPanel.svelte?raw";
+
+const baseStylesSource = readFileSync(resolve(process.cwd(), "src/lib/styles/base.css"), "utf8");
 
 describe("projects mvp route contract", () => {
   it("uses real project APIs instead of analysis source group APIs", () => {
@@ -131,5 +136,17 @@ describe("projects mvp route contract", () => {
   it("scopes repeated project refresh controls", () => {
     expect(runsTabSource).toContain('aria-label="Refresh project runs"');
     expect(youtubeSummaryRunsPanelSource).toContain('aria-label="Refresh prompt pack runs"');
+  });
+
+  it("uses shared density primitives for repeated New Projects shells", () => {
+    expect(baseStylesSource).toContain(".extractum-panel-shell");
+    expect(baseStylesSource).toContain(".extractum-grid-frame");
+    expect(baseStylesSource).toContain(".extractum-toolbar-row");
+    expect(baseStylesSource).toContain(".extractum-stat-card");
+    expect(inspectorSource).toContain('class="extractum-panel-shell"');
+    expect(sourcesTabSource).toContain('class="sources-grid-region extractum-grid-frame"');
+    expect(projectSourceSummarySource).toContain('class="extractum-stat-card"');
+    expect(runsTabSource).toContain('class="runs-toolbar extractum-toolbar-row"');
+    expect(youtubeSummaryRunsPanelSource).toContain('class="runs-toolbar extractum-toolbar-row"');
   });
 });

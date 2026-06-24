@@ -72,7 +72,7 @@
   {#if collapsed}
     <div class="vertical-text">Inspector</div>
   {:else}
-    <section>
+    <section class="extractum-panel-shell">
       <span class="eyebrow">Project</span>
       <h2>{project?.title ?? "No project selected"}</h2>
       <p>{project?.description ?? "Create or select a project."}</p>
@@ -82,7 +82,7 @@
       </dl>
     </section>
 
-    <section>
+    <section class="extractum-panel-shell">
       <h3>Actions</h3>
       {#if runDisabledReason}
         {#if runDisabledReason !== mixedProviderRunMessage}
@@ -106,7 +106,7 @@
     </section>
 
     {#if selectedSource}
-      <section>
+      <section class="extractum-panel-shell">
         <h3>Selected source</h3>
         <p><strong>{selectedSource.title}</strong></p>
         <p>{selectedSource.subtitle ?? selectedSource.filterSummary}</p>
@@ -128,7 +128,7 @@
       source={youtubeSummarySource}
     />
 
-    <section>
+    <section class="extractum-panel-shell">
       <h3>Recent project runs</h3>
       {#each runs.slice(0, 5) as run (run.id)}
         <p>{run.scope_label} - {run.status}</p>
@@ -191,10 +191,6 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    border: 1px solid var(--extractum-border);
-    border-radius: var(--extractum-radius);
-    background: var(--extractum-surface-raised);
-    padding: 12px;
   }
 
   h2,

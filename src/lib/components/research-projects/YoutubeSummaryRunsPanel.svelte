@@ -113,7 +113,7 @@
 </script>
 
 <section class="prompt-pack-runs" aria-label="Prompt Pack runs">
-  <div class="runs-toolbar">
+  <div class="runs-toolbar extractum-toolbar-row">
     <div>
       <span>Prompt Pack runs</span>
       <strong>{runs.length}</strong>
@@ -130,18 +130,18 @@
   </div>
 
   {#if error}
-    <p class="run-error">{error}</p>
+    <p class="run-error extractum-panel-shell compact">{error}</p>
   {/if}
 
   <div class="run-groups">
     <section>
       <h3>Active</h3>
       {#if activeRuns.length === 0}
-        <p class="empty-runs">No active prompt pack runs.</p>
+        <p class="empty-runs extractum-panel-shell compact">No active prompt pack runs.</p>
       {:else}
         <ul>
           {#each activeRuns as run (run.runId)}
-            <li>
+            <li class="extractum-panel-shell compact">
               <div>
                 <strong>Run #{run.runId}</strong>
                 <ExtractumBadge>{statusLabel(run.runStatus)}</ExtractumBadge>
@@ -173,11 +173,11 @@
     <section>
       <h3>Recent</h3>
       {#if recentRuns.length === 0}
-        <p class="empty-runs">No prompt pack runs yet.</p>
+        <p class="empty-runs extractum-panel-shell compact">No prompt pack runs yet.</p>
       {:else}
         <ul>
           {#each recentRuns as run (run.runId)}
-            <li class:selected={run.runId === selectedRunId}>
+            <li class="extractum-panel-shell compact" class:selected={run.runId === selectedRunId}>
               <div>
                 <strong>Run #{run.runId}</strong>
                 <ExtractumBadge>{statusLabel(run.runStatus)}</ExtractumBadge>
@@ -222,13 +222,6 @@
     gap: 10px;
   }
 
-  .runs-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
   .runs-toolbar div {
     display: flex;
     align-items: baseline;
@@ -251,15 +244,6 @@
   ul {
     padding: 0;
     list-style: none;
-  }
-
-  li,
-  .empty-runs,
-  .run-error {
-    border: 1px solid var(--extractum-border);
-    border-radius: var(--extractum-radius);
-    background: var(--extractum-surface-raised);
-    padding: 10px;
   }
 
   li {

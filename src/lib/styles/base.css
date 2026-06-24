@@ -122,6 +122,39 @@ body {
   color: var(--extractum-text);
 }
 
+.extractum-panel-shell {
+  border: 1px solid var(--extractum-border);
+  border-radius: var(--extractum-radius);
+  background: var(--extractum-surface-raised);
+  padding: 12px;
+}
+
+.extractum-panel-shell.compact {
+  padding: 10px;
+}
+
+.extractum-grid-frame {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--extractum-border);
+  border-radius: var(--extractum-radius);
+  overflow: hidden;
+}
+
+.extractum-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.extractum-stat-card {
+  border: 1px solid var(--extractum-border);
+  border-radius: var(--extractum-radius);
+  background: var(--extractum-surface-raised);
+  padding: 10px 12px;
+}
+
 .extractum-svar-theme {
   --wx-color-primary: var(--extractum-primary);
   --wx-color-primary-selected: color-mix(in srgb, var(--extractum-primary) 14%, transparent);

@@ -145,7 +145,7 @@
     libraryCount={librarySources.length}
   />
 
-  <div class="sources-grid-region">
+  <div class="sources-grid-region extractum-grid-frame">
     <ExtractumDataGrid
       rows={rows}
       {columns}
@@ -282,8 +282,5 @@
     min-width: 0;
     max-width: 100%;
     flex: 1;
-    border: 1px solid var(--extractum-border);
-    border-radius: var(--extractum-radius);
-    overflow: hidden;
   }
 </style>

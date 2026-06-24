@@ -57,7 +57,7 @@
 </script>
 
 <section class="project-runs-tab" aria-label="Project runs">
-  <div class="runs-toolbar">
+  <div class="runs-toolbar extractum-toolbar-row">
     <div>
       <span>Project runs</span>
       <strong>{sortedRuns.length}</strong>
@@ -74,14 +74,14 @@
   </div>
 
   {#if sortedRuns.length === 0}
-    <div class="empty-runs">No project runs yet.</div>
+    <div class="empty-runs extractum-panel-shell">No project runs yet.</div>
   {:else}
     {#if deleteError}
       <p class="run-error">{deleteError}</p>
     {/if}
     <ul class="runs-list">
       {#each sortedRuns as run (run.id)}
-        <li>
+        <li class="extractum-panel-shell">
           <div class="run-copy">
             <div class="run-title">
               <strong>{runTargetLabel(run)}</strong>
@@ -131,13 +131,6 @@
     padding-top: 12px;
   }
 
-  .runs-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
   .runs-toolbar div {
     display: flex;
     align-items: baseline;
@@ -158,14 +151,6 @@
     margin: 0;
     padding: 0;
     list-style: none;
-  }
-
-  .runs-list li,
-  .empty-runs {
-    border: 1px solid var(--extractum-border);
-    border-radius: var(--extractum-radius);
-    background: var(--extractum-surface-raised);
-    padding: 12px;
   }
 
   .runs-list li {

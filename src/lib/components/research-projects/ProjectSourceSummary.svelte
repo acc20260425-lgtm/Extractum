@@ -23,7 +23,7 @@
 
 <section class="source-summary" aria-label="Project source summary">
   {#each stats as stat (stat.label)}
-    <div>
+    <div class="extractum-stat-card">
       <span>{stat.label}</span>
       <strong>{stat.value}</strong>
     </div>
@@ -35,13 +35,6 @@
     display: grid;
     grid-template-columns: repeat(4, minmax(120px, 1fr));
     gap: 10px;
-  }
-
-  .source-summary div {
-    border: 1px solid var(--extractum-border);
-    border-radius: var(--extractum-radius);
-    background: var(--extractum-surface-raised);
-    padding: 10px 12px;
   }
 
   .source-summary span {
