@@ -359,6 +359,7 @@
       <Button
         size="sm"
         variant="secondary"
+        ariaLabel="Refresh diagnostics"
         disabled={loading || refreshing}
         onclick={() => void refreshDiagnostics(false)}
       >
@@ -381,7 +382,24 @@
 
     <div class="diagnostics-table-controls" aria-label="Diagnostics table display">
       <Button size="sm" variant="secondary" selected={diagnosticsTableMode === "issues"} onclick={() => (diagnosticsTableMode = "issues")}>Only issues</Button>
-      <Button size="sm" variant="secondary" selected={diagnosticsTableMode === "all"} onclick={() => (diagnosticsTableMode = "all")}>All tables</Button>
+      <Button
+        size="sm"
+        variant="secondary"
+        selected={diagnosticsTableMode === "issues"}
+        ariaLabel="Show diagnostics issues only"
+        onclick={() => (diagnosticsTableMode = "issues")}
+      >
+        Only issues
+      </Button>
+      <Button
+        size="sm"
+        variant="secondary"
+        selected={diagnosticsTableMode === "all"}
+        ariaLabel="Show all diagnostics tables"
+        onclick={() => (diagnosticsTableMode = "all")}
+      >
+        All tables
+      </Button>
     </div>
 
     {#if diagnosticsTableMode === "issues"}

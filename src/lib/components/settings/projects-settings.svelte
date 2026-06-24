@@ -341,6 +341,7 @@
                           class="table-btn success-link"
                           onclick={() => makeProfileActive(profile.profile_id)}
                           title="Set as Active Profile"
+                          aria-label={`Set profile ${profile.profile_id} as active`}
                         >
                           Set Active
                         </button>
@@ -348,6 +349,7 @@
                       <button
                         class="table-btn icon-only"
                         onclick={() => openEditDialog(profile)}
+                        aria-label={`Edit profile ${profile.profile_id}`}
                         title="Edit Profile"
                       >
                         <Edit2 size={13} />
@@ -356,6 +358,7 @@
                         class="table-btn icon-only destructive"
                         onclick={() => handleDeleteProfile(profile.profile_id)}
                         disabled={profile.profile_id === "default"}
+                        aria-label={`Delete profile ${profile.profile_id}`}
                         title="Delete Profile"
                       >
                         <Trash2 size={13} />
@@ -556,6 +559,7 @@
                 <button
                   type="button"
                   class="action-btn secondary sm"
+                  aria-label={`Fetch models for ${formProvider} profile`}
                   onclick={() => fetchModels(true)}
                   disabled={loadingModels}
                 >

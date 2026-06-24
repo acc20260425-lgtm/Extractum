@@ -47,19 +47,41 @@
 <section data-ui-region="library-workspace" class="library-workspace">
   <div class="toolbar">
     <ExtractumTextInput bind:value={query} placeholder="Search sources" aria-label="Search Library sources" />
-    <ExtractumButton data-ui-action="library-add" onclick={onAdd}>
+    <ExtractumButton
+      data-ui-action="library-add"
+      aria-label="Add library source"
+      onclick={onAdd}
+    >
       <Plus size={14} aria-hidden="true" />
       Add
     </ExtractumButton>
-    <ExtractumButton data-ui-action="library-edit" variant="outline" disabled={!selectedSource} onclick={onEdit}>
+    <ExtractumButton
+      data-ui-action="library-edit"
+      variant="outline"
+      aria-label="Edit selected library source"
+      disabled={!selectedSource}
+      onclick={onEdit}
+    >
       <Edit3 size={14} aria-hidden="true" />
       Edit
     </ExtractumButton>
-    <ExtractumButton data-ui-action="library-delete" variant="outline" disabled={!selectedSource} onclick={onDelete}>
+    <ExtractumButton
+      data-ui-action="library-delete"
+      variant="outline"
+      aria-label="Delete selected library source"
+      disabled={!selectedSource}
+      onclick={onDelete}
+    >
       <Trash2 size={14} aria-hidden="true" />
       Delete
     </ExtractumButton>
-    <ExtractumButton data-ui-action="library-refresh" variant="outline" disabled={loading} onclick={onRefresh}>
+    <ExtractumButton
+      data-ui-action="library-refresh"
+      variant="outline"
+      aria-label="Refresh library sources"
+      disabled={loading}
+      onclick={onRefresh}
+    >
       <RefreshCw size={14} aria-hidden="true" />
       Refresh
     </ExtractumButton>

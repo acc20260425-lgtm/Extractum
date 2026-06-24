@@ -131,12 +131,24 @@
     {/if}
 
     <div class="commands" aria-label="Inspector commands">
-      <ExtractumButton variant="outline"><ExternalLink size={14} aria-hidden="true" />Open</ExtractumButton>
-      <ExtractumButton variant="outline"><RefreshCw size={14} aria-hidden="true" />Sync</ExtractumButton>
-      <ExtractumButton variant="outline"><Link2 size={14} aria-hidden="true" />Connect</ExtractumButton>
-      <ExtractumButton variant="outline"><PlayCircle size={14} aria-hidden="true" />Run report</ExtractumButton>
+      <ExtractumButton variant="outline" aria-label="Open selected source">
+        <ExternalLink size={14} aria-hidden="true" />
+        Open
+      </ExtractumButton>
+      <ExtractumButton variant="outline" aria-label="Sync selected source">
+        <RefreshCw size={14} aria-hidden="true" />
+        Sync
+      </ExtractumButton>
+      <ExtractumButton variant="outline" aria-label="Open selected source connection dialog">
+        <Link2 size={14} aria-hidden="true" />
+        Connect
+      </ExtractumButton>
+      <ExtractumButton variant="outline" aria-label="Run report for selected source">
+        <PlayCircle size={14} aria-hidden="true" />
+        Run report
+      </ExtractumButton>
       {#if canRunYoutubeSummary}
-        <ExtractumButton variant="outline" onclick={() => (youtubeSummaryOpen = true)}>
+        <ExtractumButton variant="outline" aria-label="Run YouTube summary for selected source" onclick={() => (youtubeSummaryOpen = true)}>
           <PlayCircle size={14} aria-hidden="true" />YouTube Summary
         </ExtractumButton>
       {/if}
