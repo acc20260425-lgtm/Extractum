@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { RefreshCw } from "@lucide/svelte";
+  import { RefreshCw, Trash2 } from "@lucide/svelte";
   import { onDestroy, onMount } from "svelte";
-  import { loadApalisJobs } from "$lib/api/apalis-jobs";
+  import { loadApalisJobs, pruneOldTerminalApalisJobs } from "$lib/api/apalis-jobs";
   import {
     ExtractumDataGrid,
     type ExtractumDataGridColumn,
@@ -41,7 +41,9 @@
   let response = $state<ApalisJobsListResponse | null>(null);
   let loading = $state(true);
   let refreshing = $state(false);
+  let pruning = $state(false);
   let error = $state<string | null>(null);
+  let pruneMessage = $state<string | null>(null);
   let statusFilter = $state("");
   let jobTypeFilter = $state("");
   let search = $state("");
@@ -114,6 +116,30 @@
     }
   }
 
+  async function pruneOldTerminalJobs() {
+    const confirmed = confirm(
+      "Delete finished Apalis jobs older than 24 hours? This includes Done, Killed, and Failed jobs with no retries left. This cannot be undone.",
+    );
+    if (!confirmed) return;
+
+    pruning = true;
+    error = null;
+    pruneMessage = null;
+
+    try {
+      const result = await pruneOldTerminalApalisJobs();
+      pruneMessage =
+        result.deletedCount === 1
+          ? "Deleted 1 old finished job."
+          : `Deleted ${result.deletedCount} old finished jobs.`;
+      await refreshJobs(false);
+    } catch (caught) {
+      error = caught instanceof Error ? caught.message : String(caught);
+    } finally {
+      pruning = false;
+    }
+  }
+
   function handleFilterChange(options: { debounce?: boolean } = {}) {
     clearSearchDebounce();
     if (options.debounce) {
@@ -180,12 +206,23 @@
     <div class="jobs-hero-content">
       <span class="page-eyebrow">Apalis queue</span>
       <h1>Jobs</h1>
-      <p>Read-only inspector for local Apalis jobs.</p>
+      <p>Inspector and maintenance tools for local Apalis jobs.</p>
     </div>
-    <Button variant="secondary" onclick={() => refreshJobs(false)} disabled={loading || refreshing}>
-      <RefreshCw size={15} aria-hidden="true" />
-      Refresh
-    </Button>
+    <div class="jobs-actions">
+      <Button variant="secondary" onclick={() => refreshJobs(false)} disabled={loading || refreshing || pruning}>
+        <RefreshCw size={15} aria-hidden="true" />
+        Refresh
+      </Button>
+      <Button
+        variant="danger-soft"
+        onclick={pruneOldTerminalJobs}
+        disabled={loading || refreshing || pruning}
+        title="Delete finished jobs older than 24 hours: Done, Killed, and Failed with no retries left"
+      >
+        <Trash2 size={15} aria-hidden="true" />
+        {pruning ? "Deleting..." : "Delete old finished jobs"}
+      </Button>
+    </div>
   </div>
 
   <div class="jobs-layout">
@@ -194,7 +231,7 @@
         <label>
           <span>Status</span>
           <select bind:value={statusFilter} onchange={() => handleFilterChange()}>
-            {#each statusOptions as status}
+            {#each statusOptions as status (status)}
               <option value={status}>{status || "All statuses"}</option>
             {/each}
           </select>
@@ -203,7 +240,7 @@
           <span>Job type</span>
           <select bind:value={jobTypeFilter} onchange={() => handleFilterChange()}>
             <option value="">All job types</option>
-            {#each response?.jobTypeCounts ?? [] as row}
+            {#each response?.jobTypeCounts ?? [] as row (row.jobType)}
               <option value={row.jobType}>{row.jobType || "unknown"} ({row.count})</option>
             {/each}
           </select>
@@ -219,7 +256,7 @@
         <label>
           <span>Limit</span>
           <select bind:value={limit} onchange={() => handleFilterChange()}>
-            {#each limitOptions as option}
+            {#each limitOptions as option (option)}
               <option value={option}>{option}</option>
             {/each}
           </select>
@@ -229,9 +266,12 @@
       {#if error}
         <StatusMessage tone="error">{error}</StatusMessage>
       {/if}
+      {#if pruneMessage}
+        <StatusMessage tone="info">{pruneMessage}</StatusMessage>
+      {/if}
 
       <div class="status-strip">
-        {#each statusOptions.filter(Boolean) as status}
+        {#each statusOptions.filter(Boolean) as status (status)}
           <Badge variant={statusTone(status)}>{status} {countForStatus(status)}</Badge>
         {/each}
       </div>
@@ -331,6 +371,13 @@
 
   .jobs-hero-content p {
     color: var(--muted);
+  }
+
+  .jobs-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    flex-wrap: wrap;
   }
 
   .jobs-layout {
@@ -502,6 +549,10 @@
   }
 
   @media (max-width: 640px) {
+    .jobs-actions {
+      justify-content: stretch;
+    }
+
     .jobs-toolbar,
     .detail-list {
       grid-template-columns: 1fr;

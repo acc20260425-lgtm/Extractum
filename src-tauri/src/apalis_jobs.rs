@@ -5,6 +5,7 @@ use tauri::AppHandle;
 
 const DEFAULT_LIMIT: u32 = 100;
 const MAX_LIMIT: u32 = 500;
+const TERMINAL_PRUNE_OLDER_THAN_HOURS: u32 = 24;
 const JOBS_TABLE: &str = "Jobs";
 const MAX_PAYLOAD_JSON_BYTES: usize = 64 * 1024;
 const TRUNCATED_PREVIEW_CHARS: usize = 2000;
@@ -42,6 +43,20 @@ pub(crate) struct ApalisJobsListResponse {
     pub job_type_counts: Vec<ApalisJobTypeCount>,
     pub refreshed_at: String,
     pub limit: u32,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ApalisJobsPruneTerminalRequest {
+    pub older_than_hours: Option<u32>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ApalisJobsPruneTerminalResponse {
+    pub deleted_count: u64,
+    pub cutoff_at: String,
+    pub older_than_hours: u32,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
@@ -91,6 +106,21 @@ pub(crate) async fn apalis_jobs_list(
     apalis_jobs_list_from_pool(&pool, request.unwrap_or_default()).await
 }
 
+#[tauri::command]
+pub(crate) async fn apalis_jobs_prune_terminal(
+    handle: AppHandle,
+    request: Option<ApalisJobsPruneTerminalRequest>,
+) -> crate::error::AppResult<ApalisJobsPruneTerminalResponse> {
+    let pool = crate::db::get_pool(&handle).await?;
+    let older_than_hours = normalized_prune_hours(request.unwrap_or_default().older_than_hours);
+    apalis_jobs_prune_terminal_from_pool_with_hours(
+        &pool,
+        crate::time::now_secs(),
+        older_than_hours,
+    )
+    .await
+}
+
 async fn apalis_jobs_list_from_pool(
     pool: &SqlitePool,
     request: ApalisJobsListRequest,
@@ -128,8 +158,79 @@ async fn apalis_jobs_list_from_pool(
     })
 }
 
+async fn apalis_jobs_prune_terminal_from_pool(
+    pool: &SqlitePool,
+    now_secs: i64,
+) -> crate::error::AppResult<ApalisJobsPruneTerminalResponse> {
+    apalis_jobs_prune_terminal_from_pool_with_hours(pool, now_secs, TERMINAL_PRUNE_OLDER_THAN_HOURS)
+        .await
+}
+
+async fn apalis_jobs_prune_terminal_from_pool_with_hours(
+    pool: &SqlitePool,
+    now_secs: i64,
+    older_than_hours: u32,
+) -> crate::error::AppResult<ApalisJobsPruneTerminalResponse> {
+    let cutoff_secs = prune_cutoff_secs(now_secs, older_than_hours);
+    let cutoff_at = normalize_timestamp(Some(cutoff_secs.to_string()))
+        .unwrap_or_else(crate::time::now_rfc3339_utc);
+    let Some(schema) = jobs_table_schema(pool).await? else {
+        return Ok(ApalisJobsPruneTerminalResponse {
+            deleted_count: 0,
+            cutoff_at,
+            older_than_hours,
+        });
+    };
+
+    if !schema.has("status") || !schema.has("done_at") {
+        return Ok(ApalisJobsPruneTerminalResponse {
+            deleted_count: 0,
+            cutoff_at,
+            older_than_hours,
+        });
+    }
+
+    let done_at_epoch = timestamp_epoch_expr(&schema, "done_at");
+    let mut builder = QueryBuilder::<Sqlite>::new("DELETE FROM Jobs WHERE ");
+    builder
+        .push(&done_at_epoch)
+        .push(" IS NOT NULL AND ")
+        .push(&done_at_epoch)
+        .push(" < ")
+        .push_bind(cutoff_secs)
+        .push(" AND (status = 'Done' OR status = 'Killed'");
+    if schema.has("attempts") && schema.has("max_attempts") {
+        builder.push(
+            " OR (status = 'Failed' AND CAST(max_attempts AS INTEGER) <= CAST(attempts AS INTEGER))",
+        );
+    }
+    builder.push(")");
+
+    let result = builder
+        .build()
+        .execute(pool)
+        .await
+        .map_err(crate::error::AppError::database)?;
+
+    Ok(ApalisJobsPruneTerminalResponse {
+        deleted_count: result.rows_affected(),
+        cutoff_at,
+        older_than_hours,
+    })
+}
+
 fn normalized_limit(limit: Option<u32>) -> u32 {
     limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT)
+}
+
+fn normalized_prune_hours(hours: Option<u32>) -> u32 {
+    hours
+        .unwrap_or(TERMINAL_PRUNE_OLDER_THAN_HOURS)
+        .max(TERMINAL_PRUNE_OLDER_THAN_HOURS)
+}
+
+fn prune_cutoff_secs(now_secs: i64, older_than_hours: u32) -> i64 {
+    now_secs.saturating_sub(i64::from(older_than_hours).saturating_mul(60 * 60))
 }
 
 fn empty_response(limit: u32) -> ApalisJobsListResponse {
@@ -183,13 +284,12 @@ fn filters_from_request(request: ApalisJobsListRequest) -> ApalisJobsFilters {
 }
 
 async fn jobs_table_schema(pool: &SqlitePool) -> crate::error::AppResult<Option<JobsTableSchema>> {
-    let exists: Option<i64> = sqlx::query_scalar(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
-    )
-    .bind(JOBS_TABLE)
-    .fetch_optional(pool)
-    .await
-    .map_err(crate::error::AppError::database)?;
+    let exists: Option<i64> =
+        sqlx::query_scalar("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1")
+            .bind(JOBS_TABLE)
+            .fetch_optional(pool)
+            .await
+            .map_err(crate::error::AppError::database)?;
 
     if exists.is_none() {
         return Ok(None);
@@ -507,11 +607,8 @@ fn internal_summary_from_sql(row: sqlx::sqlite::SqliteRow) -> InternalJobSummary
     let run_at = normalize_timestamp(row.try_get::<Option<String>, _>("run_at").ok().flatten());
     let lock_at = normalize_timestamp(row.try_get::<Option<String>, _>("lock_at").ok().flatten());
     let done_at = normalize_timestamp(row.try_get::<Option<String>, _>("done_at").ok().flatten());
-    let last_activity_at = latest_timestamp([
-        done_at.as_deref(),
-        lock_at.as_deref(),
-        run_at.as_deref(),
-    ]);
+    let last_activity_at =
+        latest_timestamp([done_at.as_deref(), lock_at.as_deref(), run_at.as_deref()]);
 
     InternalJobSummary {
         id: row.get::<String, _>("id"),
@@ -836,9 +933,12 @@ mod tests {
         let mut storage = crate::gemini_browser::open_gemini_browser_job_storage(pool)
             .await
             .expect("open gemini browser storage");
-        crate::gemini_browser::enqueue_gemini_browser_job_to_storage(&mut storage, test_job(run_id))
-            .await
-            .expect("enqueue apalis task");
+        crate::gemini_browser::enqueue_gemini_browser_job_to_storage(
+            &mut storage,
+            test_job(run_id),
+        )
+        .await
+        .expect("enqueue apalis task");
     }
 
     async fn table_columns(pool: &SqlitePool, table: &str) -> Vec<String> {
@@ -904,6 +1004,132 @@ mod tests {
         assert!(response.refreshed_at.ends_with('Z'));
     }
 
+    #[tokio::test]
+    async fn apalis_jobs_prune_terminal_deletes_only_old_done_killed_and_terminal_failed_jobs() {
+        let pool = memory_pool().await;
+        let now = 1_800_000_000;
+        let cutoff = now - 24 * 60 * 60;
+        let old = (cutoff - 10).to_string();
+        let old_millis = ((cutoff - 20) * 1000).to_string();
+        let recent = (cutoff + 10).to_string();
+
+        for run_id in [
+            "prune-old-done",
+            "prune-old-killed",
+            "prune-terminal-failed",
+            "keep-retriable-failed",
+            "keep-recent-done",
+            "keep-old-running",
+            "keep-missing-done-at",
+            "keep-old-run-recent-done",
+        ] {
+            seed_apalis_job(&pool, run_id).await;
+        }
+
+        update_job_terminal_row(&pool, "prune-old-done", "Done", 1, 25, None, Some(&old)).await;
+        update_job_terminal_row(
+            &pool,
+            "prune-old-killed",
+            "Killed",
+            1,
+            25,
+            None,
+            Some(&old_millis),
+        )
+        .await;
+        update_job_terminal_row(
+            &pool,
+            "prune-terminal-failed",
+            "Failed",
+            5,
+            5,
+            None,
+            Some(&old),
+        )
+        .await;
+        update_job_terminal_row(
+            &pool,
+            "keep-retriable-failed",
+            "Failed",
+            4,
+            5,
+            None,
+            Some(&old),
+        )
+        .await;
+        update_job_terminal_row(
+            &pool,
+            "keep-recent-done",
+            "Done",
+            1,
+            25,
+            None,
+            Some(&recent),
+        )
+        .await;
+        update_job_terminal_row(
+            &pool,
+            "keep-old-running",
+            "Running",
+            1,
+            25,
+            None,
+            Some(&old),
+        )
+        .await;
+        update_job_terminal_row(&pool, "keep-missing-done-at", "Done", 1, 25, None, None).await;
+        update_job_terminal_row(
+            &pool,
+            "keep-old-run-recent-done",
+            "Done",
+            1,
+            25,
+            Some(&old),
+            Some(&recent),
+        )
+        .await;
+
+        let response = apalis_jobs_prune_terminal_from_pool(&pool, now)
+            .await
+            .expect("prune old terminal jobs");
+
+        assert_eq!(response.deleted_count, 3);
+        assert_eq!(response.older_than_hours, 24);
+        assert_eq!(
+            response.cutoff_at,
+            normalize_timestamp(Some(cutoff.to_string())).expect("normalized cutoff")
+        );
+
+        let remaining: Vec<String> =
+            sqlx::query_scalar("SELECT idempotency_key FROM Jobs ORDER BY idempotency_key")
+                .fetch_all(&pool)
+                .await
+                .expect("read remaining jobs");
+        assert_eq!(
+            remaining,
+            vec![
+                "keep-missing-done-at",
+                "keep-old-run-recent-done",
+                "keep-old-running",
+                "keep-recent-done",
+                "keep-retriable-failed",
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn apalis_jobs_prune_terminal_returns_zero_when_jobs_table_missing() {
+        let pool = memory_pool().await;
+
+        let response = apalis_jobs_prune_terminal_from_pool(&pool, 1_800_000_000)
+            .await
+            .expect("missing Jobs table is not fatal");
+
+        assert_eq!(response.deleted_count, 0);
+        assert_eq!(response.older_than_hours, 24);
+        assert!(response.cutoff_at.ends_with('Z'));
+    }
+
     async fn update_job_row(
         pool: &SqlitePool,
         idempotency_key: &str,
@@ -925,6 +1151,31 @@ mod tests {
         .execute(pool)
         .await
         .expect("update Jobs row");
+    }
+
+    async fn update_job_terminal_row(
+        pool: &SqlitePool,
+        idempotency_key: &str,
+        status: &str,
+        attempts: i64,
+        max_attempts: i64,
+        run_at: Option<&str>,
+        done_at: Option<&str>,
+    ) {
+        sqlx::query(
+            "UPDATE Jobs
+             SET status = ?, attempts = ?, max_attempts = ?, run_at = COALESCE(?, run_at), done_at = ?
+             WHERE idempotency_key = ?",
+        )
+        .bind(status)
+        .bind(attempts)
+        .bind(max_attempts)
+        .bind(run_at)
+        .bind(done_at)
+        .bind(idempotency_key)
+        .execute(pool)
+        .await
+        .expect("update terminal Jobs row");
     }
 
     #[tokio::test]
@@ -975,7 +1226,10 @@ mod tests {
         .expect("list filtered apalis jobs");
 
         assert_eq!(response.jobs.len(), 1);
-        assert_eq!(response.jobs[0].idempotency_key.as_deref(), Some("search-two"));
+        assert_eq!(
+            response.jobs[0].idempotency_key.as_deref(),
+            Some("search-two")
+        );
         assert_eq!(response.jobs[0].status, "Failed");
         assert_eq!(response.total_matching, 1);
     }
@@ -1377,7 +1631,10 @@ mod tests {
             "metadata",
             "metadataTruncated",
         ] {
-            assert!(serialized.get(key).is_some(), "missing serialized key {key}");
+            assert!(
+                serialized.get(key).is_some(),
+                "missing serialized key {key}"
+            );
         }
 
         assert_eq!(response.jobs[0].job_type, "");

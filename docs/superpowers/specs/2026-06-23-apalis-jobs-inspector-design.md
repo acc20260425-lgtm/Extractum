@@ -3,9 +3,10 @@
 ## Goal
 
 Add a top-level `Jobs` page for inspecting Apalis queue rows stored in the local
-SQLite `extractum.db` database. The first version is read-only and manually
-refreshed. It must help diagnose queue state without changing job execution,
-retry, cancellation, or cleanup behavior.
+SQLite `extractum.db` database. The page is manually refreshed and mostly
+inspection-oriented, with one guarded maintenance action for pruning old
+terminal jobs. It must help diagnose queue state without changing active job
+execution, retry, or cancellation behavior.
 
 ## Product Shape
 
@@ -41,12 +42,15 @@ In scope for v1:
 - Search by job id and idempotency key
 - Limit result count with a conservative default
 - Manually refresh the list
+- Delete terminal Apalis jobs older than 24 hours after explicit confirmation:
+  `Done`, `Killed`, and `Failed` rows whose `attempts >= max_attempts`
 - Select a row and inspect serialized job payload, `last_result`, and metadata
 - Show loading, empty, and error states
 
 Out of scope for v1:
 
-- Cancel, kill, retry, resume, reschedule, delete, or cleanup actions
+- Cancel, kill, retry, resume, reschedule, or any cleanup action other than the
+  explicit 24-hour terminal job prune
 - Automatic polling
 - Reconciliation or mutation of product run logs
 - Treating Apalis internals as product state for other screens
@@ -55,16 +59,32 @@ Out of scope for v1:
 
 ## Backend Design
 
-Add a small read-only Tauri API dedicated to Apalis job inspection. A suggested
-command name is:
+Add a small Tauri API dedicated to Apalis job inspection and maintenance. The
+list command is read-only:
 
 ```text
 apalis_jobs_list
 ```
 
-The command reads through the existing app database pool from
+The list command reads through the existing app database pool from
 `crate::db::get_pool(handle)`. It does not create, update, delete, lock, resume,
 or acknowledge jobs.
+
+The maintenance command is:
+
+```text
+apalis_jobs_prune_terminal
+```
+
+It deletes only terminal rows older than 24 hours by normalized `done_at`:
+
+- `status = 'Done'`
+- `status = 'Killed'`
+- `status = 'Failed' AND attempts >= max_attempts`
+
+It must not call Apalis' raw SQLite `vacuum` because that deletes terminal rows
+without the 24-hour age guard. It also must not read `job`, `last_result`, or
+`metadata` payloads before deleting.
 
 The implementation must not rely on Context7 documentation alone for the SQL
 shape. The first implementation task must add a local schema discovery test
@@ -130,6 +150,21 @@ Counts use non-self filter semantics so filter chips remain useful:
   current `job_type` filter.
 - Counts are computed before the result limit.
 - If the `Jobs` table is missing, all counts are empty.
+
+### Prune DTOs
+
+```text
+ApalisJobsPruneTerminalRequest
+- older_than_hours: Option<u32> // UI sends 24; backend defaults to 24 and never lowers below 24
+
+ApalisJobsPruneTerminalResponse
+- deleted_count: u64
+- cutoff_at: String             // RFC3339 UTC
+- older_than_hours: u32
+```
+
+If the `Jobs` table is missing, or the local schema lacks `status` or `done_at`,
+the command returns `deleted_count = 0`.
 
 ### Row DTO
 
@@ -207,9 +242,10 @@ bound every UI-facing payload field:
 - The corresponding `*_truncated` flag must be `true` for that section.
 - The preview is produced from the redacted serialized JSON only, never from raw
   unredacted bytes.
-- If payload decoding fails, `job_json` remains `None`, `job_truncated` is
-  `false`, and `job_preview` still contains the redacted lossy text preview
-  capped at 500 characters.
+- If payload decoding fails, `job_json` remains `None`, and `job_preview`
+  contains the redacted lossy text preview capped at 500 characters.
+- For decode failures, `job_truncated` is `true` only when the raw lossy text was
+  longer than the capped preview.
 - `job_preview` is a redacted text preview capped at 500 characters.
 - Do not add copy, export, open-folder, or share controls in v1.
 
@@ -217,6 +253,8 @@ bound every UI-facing payload field:
 
 - If the `Jobs` table does not exist, return an empty list with counts instead
   of surfacing a scary database error.
+- If pruning is requested while the `Jobs` table does not exist, return
+  `deleted_count = 0`.
 - Other database errors should surface through the existing `AppError` shape.
 - Invalid limits should be clamped rather than rejected.
 
@@ -241,6 +279,8 @@ The left pane contains:
 - Page title `Jobs`
 - Subtitle describing local Apalis queue inspection
 - Manual refresh button with refresh icon
+- Delete old finished jobs button with trash icon, destructive styling, and browser
+  confirmation before calling the prune command
 - Last refreshed timestamp
 - Status chips or small summary counters
 - Filter row:
@@ -277,8 +317,10 @@ If no job is selected, show an empty detail state asking the user to select a jo
   `total_matching` by filtering an already limited local result set.
 - If the selected job disappears after refresh, select the first row if present,
   otherwise clear selection
+- Delete old finished jobs confirms with the user, calls
+  `apalis_jobs_prune_terminal`, reports the deleted count, and reloads the list
 - No automatic polling in v1
-- No mutating controls in v1
+- No mutating controls besides the guarded 24-hour terminal prune
 
 ## Navigation
 
@@ -303,12 +345,15 @@ Backend tests:
 - `apalis_jobs_list_sorts_by_latest_activity_timestamp`
 - `apalis_jobs_list_returns_rfc3339_utc_timestamps`
 - `apalis_jobs_counts_ignore_their_own_active_filter`
+- `apalis_jobs_prune_terminal_deletes_only_old_done_killed_and_terminal_failed_jobs`
+- `apalis_jobs_prune_terminal_returns_zero_when_jobs_table_missing`
 - `apalis_jobs_payloads_are_redacted_and_truncated`
 - `apalis_jobs_row_shape_is_stable_when_optional_columns_are_absent`
 
 Frontend API tests:
 
 - wrapper calls `apalis_jobs_list`
+- wrapper calls `apalis_jobs_prune_terminal` with `older_than_hours = 24`
 - request fields are passed as expected
 - response typing covers nullable JSON fields
 - response typing covers normalized timestamps and truncation flags
@@ -317,7 +362,8 @@ UI/source contract tests:
 
 - sidebar includes top-level `Jobs` item in both nav modes
 - `/jobs` route renders manual refresh, filters, table, and detail panel
-- refresh calls the API again
+- refresh calls the list API again
+- delete old finished jobs uses confirmation, calls the prune API, and then refreshes
 - changing filters calls the API again instead of filtering the limited local
   rows
 - selecting a row displays job details
@@ -336,13 +382,15 @@ git diff --check
 
 ## Open Decisions
 
-None for v1. The page is read-only, manually refreshed, and implemented as a
-top-level split inspector.
+None for v1. The page is manually refreshed, implemented as a top-level split
+inspector, and has exactly one guarded maintenance mutation: pruning terminal
+jobs older than 24 hours.
 
 ## Self-Review
 
 - No placeholder TODOs remain.
-- The design keeps the inspector read-only and avoids lifecycle side effects.
+- The design keeps active queue execution untouched and avoids lifecycle side
+  effects.
 - The page is explicitly separate from Runs, Projects, Workspace, Diagnostics,
   and Settings.
 - The SQL inspection is scoped to local diagnostics and does not become a source

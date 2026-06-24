@@ -4,7 +4,7 @@ mod archive_read_model;
 mod compression;
 mod db;
 mod diagnostics;
-use apalis_jobs::apalis_jobs_list;
+use apalis_jobs::{apalis_jobs_list, apalis_jobs_prune_terminal};
 use diagnostics::get_diagnostic_summary;
 mod error;
 mod forum_topics;
@@ -207,6 +207,7 @@ pub fn run() {
             ping_db,
             get_diagnostic_summary,
             apalis_jobs_list,
+            apalis_jobs_prune_terminal,
             tg_init,
             tg_is_authenticated,
             tg_get_account_statuses,

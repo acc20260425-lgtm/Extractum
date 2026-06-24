@@ -22,6 +22,16 @@ export interface ApalisJobsListResponse {
   limit: number;
 }
 
+export interface ApalisJobsPruneTerminalRequest {
+  olderThanHours?: number | null;
+}
+
+export interface ApalisJobsPruneTerminalResponse {
+  deletedCount: number;
+  cutoffAt: string;
+  olderThanHours: number;
+}
+
 export interface ApalisJobRow {
   id: string;
   jobType: string;

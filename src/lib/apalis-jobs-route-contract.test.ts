@@ -14,7 +14,9 @@ describe("apalis jobs inspector frontend source contracts", () => {
 
   it("keeps Tauri invocation inside the Apalis jobs API wrapper", () => {
     expect(jobsPageSource).toContain("ApalisJobsPanel");
-    expect(jobsPanelSource).toContain('import { loadApalisJobs } from "$lib/api/apalis-jobs";');
+    expect(jobsPanelSource).toContain(
+      'import { loadApalisJobs, pruneOldTerminalApalisJobs } from "$lib/api/apalis-jobs";',
+    );
     expect(jobsPageSource).not.toContain("invoke(");
     expect(jobsPanelSource).not.toContain("invoke(");
   });
@@ -29,15 +31,18 @@ describe("apalis jobs inspector frontend source contracts", () => {
     expect(jobsPanelSource).not.toContain('from "@svar-ui/svelte-grid"');
   });
 
-  it("implements manual refresh without auto polling or mutations", () => {
+  it("implements manual refresh and guarded pruning without auto polling", () => {
     expect(jobsPanelSource).toMatch(/onMount\s*\(\s*\(\)\s*=>/);
     expect(jobsPanelSource).toContain("refreshJobs(true)");
     expect(jobsPanelSource).toContain("refreshJobs(false)");
+    expect(jobsPanelSource).toContain("pruneOldTerminalApalisJobs");
+    expect(jobsPanelSource).toContain("confirm(");
+    expect(jobsPanelSource).toContain("Delete old finished jobs");
+    expect(jobsPanelSource).toContain("Trash2");
     expect(jobsPanelSource).not.toContain("setInterval");
     expect(jobsPanelSource).not.toContain("retry");
     expect(jobsPanelSource).not.toContain("cancel");
     expect(jobsPanelSource).not.toContain("kill");
-    expect(jobsPanelSource).not.toContain("delete");
     expect(jobsPanelSource).not.toContain("copy");
   });
 
@@ -74,6 +79,7 @@ describe("apalis jobs inspector frontend source contracts", () => {
       "Search",
       "Limit",
       "Refresh",
+      "Delete old finished jobs",
       "Job payload",
       "Last result",
       "Metadata",

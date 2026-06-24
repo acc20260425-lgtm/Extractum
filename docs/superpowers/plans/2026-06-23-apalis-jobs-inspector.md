@@ -2,9 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a top-level read-only `/jobs` inspector for all Apalis jobs with manual refresh, server-side filters, counts, and safe payload previews.
+**Goal:** Build a top-level `/jobs` inspector for all Apalis jobs with manual refresh, server-side filters, counts, safe payload previews, and one guarded old finished jobs prune action.
 
-**Architecture:** Add a focused Rust `apalis_jobs` read-model module that reads the existing Apalis SQLite `Jobs` table through the app database pool and exposes one Tauri command, `apalis_jobs_list`. The backend applies filters, counts, latest-activity sorting, and `LIMIT` in SQL, then reads `job`, `last_result`, and `metadata` only for the limited result IDs. Add a narrow TS API/types layer and a Svelte split inspector route that never mutates jobs, debounces search, guards stale responses, and reloads through the backend whenever filters change.
+Follow-up 2026-06-24: the completed Jobs panel now includes one guarded
+maintenance action next to refresh: delete `Done`, `Killed`, and terminal
+`Failed` Apalis jobs older than 24 hours. The list/read model remains
+read-only; this prune action is implemented as a separate Tauri command and
+must keep the 24-hour age guard.
+
+**Architecture:** Add a focused Rust `apalis_jobs` module that reads the existing Apalis SQLite `Jobs` table through the app database pool and exposes a read command, `apalis_jobs_list`, plus the follow-up maintenance command `apalis_jobs_prune_terminal`. The backend applies filters, counts, latest-activity sorting, and `LIMIT` in SQL, then reads `job`, `last_result`, and `metadata` only for the limited result IDs. The prune command deletes only guarded old terminal rows and does not read payload columns. Add a narrow TS API/types layer and a Svelte split inspector route that debounces search, guards stale responses, reloads through the backend whenever filters change, and only mutates jobs through the confirmed prune action.
 
 **Tech Stack:** Tauri 2, Rust 2021, sqlx SQLite, apalis `=1.0.0-rc.8`, apalis-sqlite `=1.0.0-rc.8`, serde, time, Svelte 5, Vitest, lucide-svelte.
 
@@ -13,19 +19,19 @@
 ## File Structure
 
 - Create `src-tauri/src/apalis_jobs.rs`
-  - Owns request/response DTOs, schema discovery, read-only SQL queries, SQL-side filtering/counting/sorting/limit, limited-row payload fetches, timestamp normalization, payload redaction, payload truncation, and backend tests.
+  - Owns request/response DTOs, schema discovery, read-only list SQL queries, guarded prune SQL, SQL-side filtering/counting/sorting/limit, limited-row payload fetches, timestamp normalization, payload redaction, payload truncation, and backend tests.
 - Modify `src-tauri/src/lib.rs`
-  - Registers the `apalis_jobs` module and `apalis_jobs_list` Tauri command.
+  - Registers the `apalis_jobs` module plus `apalis_jobs_list` and `apalis_jobs_prune_terminal` Tauri commands.
 - Create `src/lib/types/apalis-jobs.ts`
   - Defines stable frontend DTO types in camelCase matching Rust `#[serde(rename_all = "camelCase")]`.
 - Create `src/lib/api/apalis-jobs.ts`
-  - Wraps `invoke("apalis_jobs_list", { request })`.
+  - Wraps `invoke("apalis_jobs_list", { request })` and `invoke("apalis_jobs_prune_terminal", { request })`.
 - Create `src/lib/api/apalis-jobs.test.ts`
-  - Verifies the API wrapper command name and request payload.
+  - Verifies the API wrapper command names and request payloads.
 - Create `src/lib/apalis-jobs-route-contract.test.ts`
-  - Source-level route/navigation/UI contract tests for command isolation, manual refresh, SVAR DataGrid adapter usage, server-side filtering, debounce/stale-response protection, read-only UI, local time display, and navigation.
+  - Source-level route/navigation/UI contract tests for command isolation, manual refresh, guarded prune UI, SVAR DataGrid adapter usage, server-side filtering, debounce/stale-response protection, local time display, and navigation.
 - Create `src/lib/components/jobs/ApalisJobsPanel.svelte`
-  - Implements split inspector UI, filter controls, debounced search, manual refresh, the local `ExtractumDataGrid` SVAR adapter, detail panel, loading/empty/error states, and selection handling.
+  - Implements split inspector UI, filter controls, debounced search, manual refresh, guarded prune action, the local `ExtractumDataGrid` SVAR adapter, detail panel, loading/empty/error states, and selection handling.
 - Create `src/routes/jobs/+page.svelte`
   - Adds the top-level route and delegates to `ApalisJobsPanel`.
 - Modify `src/routes/+layout.svelte`
@@ -2469,6 +2475,6 @@ If no files changed after Task 5, skip this commit and record the verification c
 
 ## Self-Review
 
-- Spec coverage: The plan covers the top-level Jobs navigation, split inspector UI, SVAR `ExtractumDataGrid` adapter usage for the jobs table, read-only/manual-refresh behavior, all-job read model, SQL-side filters/counts/sorting/limit, limited-row payload reads, total/count semantics, actual local Apalis schema probe, stable DTO shape, correct latest timestamp sorting with Unix seconds/milliseconds support, RFC3339 UTC normalization, missing-table behavior, raw text and JSON redaction, decode-failure truncation markers, dynamic status options including unknown statuses, explicit selection/detail behavior, debounced search with stale-response protection, local date/time display, and dev-server verification.
+- Spec coverage: The plan covers the top-level Jobs navigation, split inspector UI, SVAR `ExtractumDataGrid` adapter usage for the jobs table, read-only list/manual-refresh behavior, guarded old finished jobs prune behavior, all-job read model, SQL-side filters/counts/sorting/limit, limited-row payload reads, total/count semantics, actual local Apalis schema probe, stable DTO shape, correct latest timestamp sorting with Unix seconds/milliseconds support, RFC3339 UTC normalization, missing-table behavior, raw text and JSON redaction, decode-failure truncation markers, dynamic status options including unknown statuses, explicit selection/detail behavior, debounced search with stale-response protection, local date/time display, and dev-server verification.
 - Placeholder scan: The plan contains concrete file paths, command lines, DTO shapes, test code, implementation snippets, and expected outcomes for each task.
 - Type consistency: Rust DTOs use `#[serde(rename_all = "camelCase")]`; TS types use camelCase keys (`jobType`, `statusCounts`, `lastActivityAt`) and API wrapper sends `{ request }`, matching the Tauri command signature.

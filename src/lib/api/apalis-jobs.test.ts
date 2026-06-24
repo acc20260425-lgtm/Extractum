@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import apalisJobsApiSource from "./apalis-jobs.ts?raw";
-import { loadApalisJobs } from "./apalis-jobs";
-import type { ApalisJobsListResponse } from "$lib/types/apalis-jobs";
+import { loadApalisJobs, pruneOldTerminalApalisJobs } from "./apalis-jobs";
+import type {
+  ApalisJobsListResponse,
+  ApalisJobsPruneTerminalResponse,
+} from "$lib/types/apalis-jobs";
 
 const invokeMock = vi.hoisted(() => vi.fn());
 
@@ -67,6 +70,24 @@ describe("apalis jobs api wrapper", () => {
         status: "Pending",
         jobType: "gemini-browser",
         search: "run",
+      },
+    });
+  });
+
+  it("prunes old terminal Apalis jobs through the dedicated Tauri command", async () => {
+    const fixture: ApalisJobsPruneTerminalResponse = {
+      deletedCount: 3,
+      cutoffAt: "2026-06-23T12:00:00Z",
+      olderThanHours: 24,
+    };
+    invokeMock.mockResolvedValueOnce(fixture);
+
+    await expect(pruneOldTerminalApalisJobs()).resolves.toBe(fixture);
+
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    expect(invokeMock).toHaveBeenCalledWith("apalis_jobs_prune_terminal", {
+      request: {
+        olderThanHours: 24,
       },
     });
   });
