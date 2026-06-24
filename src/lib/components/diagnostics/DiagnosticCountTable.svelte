@@ -123,13 +123,13 @@
   th,
   td {
     padding: 0.55rem 0.45rem;
-    border-bottom: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--extractum-border) 78%, transparent);
     text-align: left;
     vertical-align: top;
   }
 
   th {
-    color: var(--muted);
+    color: var(--extractum-muted);
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.04em;
@@ -145,7 +145,7 @@
   }
 
   .empty-row {
-    color: var(--muted);
+    color: var(--extractum-muted);
     text-align: left;
   }
 </style>
