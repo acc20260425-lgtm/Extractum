@@ -35,6 +35,7 @@
       variant="ghost"
       size="icon"
       aria-label={collapsed ? "Expand Library filters" : "Collapse Library filters"}
+      title={collapsed ? "Expand Library filters" : "Collapse Library filters"}
       onclick={() => onCollapsedChange(!collapsed)}
     >
       {#if collapsed}

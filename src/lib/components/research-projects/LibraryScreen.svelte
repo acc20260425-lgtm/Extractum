@@ -121,6 +121,7 @@
     aria-valuemin="380"
     aria-valuemax="500"
     aria-valuenow={inspectorWidth}
+    aria-valuetext={`Source inspector width ${inspectorWidth} px`}
     tabindex="0"
     onpointerdown={startInspectorResize}
     onkeydown={resizeWithKeyboard}
@@ -136,7 +137,14 @@
   />
 
   {#if status || workflowState.status}
-    <div class="library-status extractum-panel-shell" role="status">{status || workflowState.status}</div>
+    <div
+      class="library-status extractum-panel-shell"
+      role="status"
+      aria-live="polite"
+      aria-label="Library workflow status"
+    >
+      {status || workflowState.status}
+    </div>
   {/if}
 </div>
 
