@@ -691,11 +691,22 @@
         </label>
 
         <div class="actions">
-          <Button onclick={() => saveProfile(true)} disabled={saving || !canSaveProfile()}>
+          <Button
+            onclick={() => saveProfile(true)}
+            disabled={saving || !canSaveProfile()}
+            ariaLabel="Save profile and set active"
+            title="Save profile and set active"
+          >
             <Save size={15} aria-hidden="true" />
             {saving ? "Saving..." : "Save and set active"}
           </Button>
-          <Button variant="secondary" onclick={() => saveProfile(false)} disabled={saving || !canSaveProfile()}>
+          <Button
+            variant="secondary"
+            onclick={() => saveProfile(false)}
+            disabled={saving || !canSaveProfile()}
+            ariaLabel="Save profile without setting active"
+            title="Save profile without setting active"
+          >
             <Save size={15} aria-hidden="true" />
             Save only
           </Button>
@@ -703,6 +714,8 @@
             variant="secondary"
             onclick={() => loadProviderModels()}
             disabled={loadingModels || !canRefreshModels()}
+            ariaLabel="Refresh available provider models"
+            title="Refresh available provider models"
           >
             <RefreshCw size={15} aria-hidden="true" />
             {loadingModels ? "Loading models..." : "Refresh models"}
@@ -712,11 +725,19 @@
             type="button"
             onclick={clearSavedApiKey}
             disabled={saving || creatingProfile || !apiKeyConfigured}
+            ariaLabel="Clear saved API key"
+            title="Clear saved API key"
           >
             <Eraser size={15} aria-hidden="true" />
             Clear API key
           </Button>
-          <Button variant="secondary" type="button" onclick={openTestDialog}>
+          <Button
+            variant="secondary"
+            type="button"
+            onclick={openTestDialog}
+            ariaLabel="Open provider test console"
+            title="Open provider test console"
+          >
             <Terminal size={15} aria-hidden="true" />
             Open test
           </Button>
@@ -794,12 +815,23 @@
     </label>
 
     <div class="actions modal-actions">
-      <Button onclick={runTest} disabled={testing || !testPrompt.trim() || !canSaveProfile()}>
+      <Button
+        onclick={runTest}
+        disabled={testing || !testPrompt.trim() || !canSaveProfile()}
+        ariaLabel="Run provider test request"
+        title="Run provider test request"
+      >
         <Play size={15} aria-hidden="true" />
         {testing ? "Streaming..." : "Run test"}
       </Button>
       {#if testing}
-        <Button variant="danger-soft" type="button" onclick={cancelTest}>
+        <Button
+          variant="danger-soft"
+          type="button"
+          onclick={cancelTest}
+          ariaLabel="Cancel provider test request"
+          title="Cancel provider test request"
+        >
           <Square size={15} aria-hidden="true" /> Cancel
         </Button>
       {/if}

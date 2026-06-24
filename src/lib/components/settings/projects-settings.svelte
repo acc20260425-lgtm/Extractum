@@ -256,19 +256,19 @@
   <ExtractumTabs bind:value={activeTab}>
     <div class="settings-tabs">
       <ExtractumTabsList variant="line">
-        <ExtractumTabsTrigger value="llm">
+        <ExtractumTabsTrigger value="llm" aria-label="LLM Profiles tab" title="LLM Profiles">
           <Key size={14} />
           <span>LLM Profiles</span>
         </ExtractumTabsTrigger>
-        <ExtractumTabsTrigger value="browser">
+        <ExtractumTabsTrigger value="browser" aria-label="Browser providers tab" title="Browser providers">
           <Bot size={14} />
           <span>Browser Providers</span>
         </ExtractumTabsTrigger>
-        <ExtractumTabsTrigger value="telegram">
+        <ExtractumTabsTrigger value="telegram" aria-label="Telegram sync tab" title="Telegram sync">
           <Send size={14} />
           <span>Telegram Sync</span>
         </ExtractumTabsTrigger>
-        <ExtractumTabsTrigger value="youtube">
+        <ExtractumTabsTrigger value="youtube" aria-label="YouTube sync tab" title="YouTube sync">
           <Video size={14} />
           <span>YouTube Sync</span>
         </ExtractumTabsTrigger>
