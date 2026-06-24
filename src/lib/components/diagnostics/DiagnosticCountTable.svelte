@@ -27,6 +27,12 @@
     open?: boolean;
   } = $props();
 
+  const rowText = $derived(
+    rows.length === totalRows ? `${rows.length} rows` : `${rows.length}/${totalRows} rows`,
+  );
+  const summaryId = $derived(`diagnostic-summary-${title.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase()}`);
+  const hasDescription = $derived(Boolean(description));
+
   function cellValue(row: DiagnosticTableRow, key: string) {
     return row[key] ?? "";
   }
@@ -38,16 +44,16 @@
 </script>
 
 <SurfaceCard className="diagnostic-count-table">
-  <details class="diagnostic-count-details" {open}>
-    <summary>
-      <span>{title}</span>
-      <span>{rows.length === totalRows ? `${rows.length} rows` : `${rows.length}/${totalRows} rows`}</span>
-    </summary>
-    {#if description}
-      <p>{description}</p>
-    {/if}
-    <div class="table-scroll">
-      <table>
+    <details class="diagnostic-count-details" {open} aria-label={`Expand ${title} diagnostics section`}>
+      <summary>
+        <span>{title}</span>
+        <span>{rowText}</span>
+      </summary>
+      {#if description}
+        <p id={summaryId}>{description}</p>
+      {/if}
+      <div class="table-scroll">
+      <table aria-label={`Diagnostic counts for ${title}`} aria-describedby={hasDescription ? summaryId : undefined}>
         <thead>
           <tr>
             {#each columns as column (column.key)}
