@@ -50,6 +50,7 @@
     <ExtractumButton
       data-ui-action="library-add"
       aria-label="Add library source"
+      title="Add library source"
       onclick={onAdd}
     >
       <Plus size={14} aria-hidden="true" />
