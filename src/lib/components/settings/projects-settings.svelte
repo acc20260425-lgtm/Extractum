@@ -427,12 +427,12 @@
             <label for="syncValue">
               {syncSettingsState.initialSyncMode === "recent_messages" ? "Message Limit" : "Days Limit"}
             </label>
-            <input
+            <ExtractumTextInput
               id="syncValue"
               type="number"
               min="1"
               max="10000"
-              class="text-input"
+              class="w-full"
               bind:value={syncSettingsState.initialSyncValue}
               required
             />
@@ -455,7 +455,7 @@
 
     <ExtractumTabsContent value="youtube">
       <!-- YOUTUBE TAB -->
-      <div class="settings-card">
+      <div class="settings-card extractum-panel-shell">
         <YoutubeSettingsPanel embedded={true} />
       </div>
     </ExtractumTabsContent>
@@ -476,7 +476,7 @@
           <ExtractumTextInput
             id="modal-profile-id"
             type="text"
-            class="text-input"
+            class="w-full"
             placeholder="e.g. gemini_flash"
             bind:value={formProfileId}
             disabled={isEditing}
@@ -490,7 +490,7 @@
           <label for="modal-provider">Provider</label>
           <select
             id="modal-provider"
-            class="select-input"
+            class="select-field"
             bind:value={formProvider}
             onchange={() => {
               availableModels = [];
@@ -515,7 +515,7 @@
             <ExtractumTextInput
               id="modal-base-url"
               type="url"
-              class="text-input"
+              class="w-full"
               placeholder="http://localhost:20128/v1"
               bind:value={formBaseUrl}
             />
@@ -530,13 +530,13 @@
             <ExtractumTextInput
               id="modal-api-key"
               type="password"
-              class="text-input icon-padded"
-              placeholder={formApiKeyConfigured ? "••••••••••••••••" : "Enter API Key"}
+              class="w-full icon-input-padded"
+              placeholder={formApiKeyConfigured ? "**************" : "Enter API Key"}
               bind:value={formApiKey}
             />
           </div>
           {#if formApiKeyConfigured}
-            <span class="field-hint success">✓ Saved key is already configured. Leave blank to keep existing key.</span>
+            <span class="field-hint success">Saved key is already configured. Leave blank to keep existing key.</span>
           {:else}
             <span class="field-hint">No key currently saved for this profile ID.</span>
           {/if}
@@ -561,7 +561,7 @@
           {#if availableModels.length > 0}
             <select
               id="modal-default-model"
-              class="select-input"
+              class="select-field"
               bind:value={formDefaultModel}
             >
               {#if !availableModels.some((m) => m.model === formDefaultModel)}
@@ -575,7 +575,7 @@
             <ExtractumTextInput
               id="modal-default-model"
               type="text"
-              class="text-input"
+              class="w-full"
               placeholder={formProvider === "gemini" ? "gemini-2.5-flash" : "Enter model identifier"}
               bind:value={formDefaultModel}
             />
@@ -924,24 +924,24 @@
     color: var(--muted-foreground);
   }
 
-  .text-input,
-  .select-input {
+  .select-field {
     width: 100%;
-    background: var(--background);
-    border: 1px solid var(--border);
-    color: var(--foreground);
-    padding: 8px 12px;
-    border-radius: var(--radius);
-    font-size: 13.5px;
+    min-height: 32px;
+    background: var(--extractum-surface);
+    border: 1px solid var(--extractum-border);
+    color: var(--extractum-text);
+    padding: 6px 10px;
+    border-radius: var(--extractum-radius);
+    font-size: 13px;
     font-family: inherit;
     box-sizing: border-box;
+    line-height: normal;
   }
 
-  .text-input:focus,
-  .select-input:focus {
+  .select-field:focus {
     outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+    border-color: var(--extractum-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--extractum-primary) 15%, transparent);
   }
 
   .form-actions {
@@ -999,7 +999,7 @@
     pointer-events: none;
   }
 
-  .text-input.icon-padded {
+  .icon-input-padded {
     padding-left: 36px;
   }
 
@@ -1019,3 +1019,4 @@
     to { transform: rotate(360deg); }
   }
 </style>
+
