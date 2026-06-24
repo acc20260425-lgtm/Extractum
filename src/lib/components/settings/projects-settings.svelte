@@ -343,7 +343,7 @@
                           variant="outline"
                           size="sm"
                           onclick={() => makeProfileActive(profile.profile_id)}
-                          title="Set as Active Profile"
+                          title={`Set ${profile.profile_id} as active profile`}
                           aria-label={`Set profile ${profile.profile_id} as active`}
                         >
                           Set Active
@@ -354,7 +354,7 @@
                         size="icon-sm"
                         onclick={() => openEditDialog(profile)}
                         aria-label={`Edit profile ${profile.profile_id}`}
-                        title="Edit Profile"
+                        title={`Edit profile ${profile.profile_id}`}
                       >
                         <Edit2 size={13} />
                       </ExtractumButton>
@@ -364,7 +364,7 @@
                         onclick={() => handleDeleteProfile(profile.profile_id)}
                         disabled={profile.profile_id === "default"}
                         aria-label={`Delete profile ${profile.profile_id}`}
-                        title="Delete Profile"
+                        title={`Delete profile ${profile.profile_id}`}
                       >
                         <Trash2 size={13} />
                       </ExtractumButton>
