@@ -283,7 +283,11 @@
             <h2>LLM Provider Profiles</h2>
             <p>Manage API credentials and default models. Stored keys are securely hidden in the system keychain.</p>
           </div>
-          <ExtractumButton onclick={openAddDialog} aria-label="Add a new LLM profile">
+          <ExtractumButton
+            onclick={openAddDialog}
+            aria-label="Add a new LLM profile"
+            title="Add a new LLM profile"
+          >
             <Plus size={16} />
             <span>Add Profile</span>
           </ExtractumButton>
@@ -456,7 +460,12 @@
           </div>
 
           <div class="form-actions">
-          <ExtractumButton type="submit" disabled={saveSyncLoading} aria-label="Save Telegram synchronizer settings">
+          <ExtractumButton
+            type="submit"
+            disabled={saveSyncLoading}
+            aria-label="Save Telegram synchronization settings"
+            title="Save Telegram synchronization settings"
+          >
             <Save size={14} />
             <span>{saveSyncLoading ? "Saving..." : "Save Settings"}</span>
           </ExtractumButton>
@@ -565,6 +574,7 @@
               variant="outline"
               size="sm"
               aria-label={`Fetch models for ${formProvider} profile`}
+              title={`Fetch models for ${formProvider} profile`}
               onclick={() => fetchModels(true)}
               disabled={loadingModels}
             >
@@ -599,13 +609,20 @@
         </div>
 
         <footer class="dialog-footer">
-          <ExtractumButton type="button" variant="outline" onclick={() => dialogOpen = false} aria-label="Cancel LLM profile dialog">
+          <ExtractumButton
+            type="button"
+            variant="outline"
+            onclick={() => dialogOpen = false}
+            aria-label="Cancel LLM profile dialog"
+            title="Cancel LLM profile dialog"
+          >
             Cancel
           </ExtractumButton>
           <ExtractumButton
             type="submit"
             disabled={!formProfileId.trim() || !formDefaultModel.trim()}
             aria-label={`Save ${isEditing ? `LLM profile ${formProfileId}` : "a new LLM profile"}`}
+            title={`Save ${isEditing ? `LLM profile ${formProfileId}` : "a new LLM profile"}`}
           >
             <Save size={14} />
             <span>Save Profile</span>
