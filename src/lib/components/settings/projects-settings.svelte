@@ -34,6 +34,7 @@
     ExtractumTabsTrigger,
     ExtractumTextInput,
   } from "$lib/components/extractum-ui";
+  import UiSelect from "$lib/components/ui/Select.svelte";
   import type { LlmProfile, LlmProfilesState, LlmProviderModel } from "$lib/types/llm";
   import type { SyncSettings } from "$lib/types/sources";
 
@@ -234,16 +235,15 @@
   });
 </script>
 
-<div class="projects-settings-container">
-  <!-- Redesigned Top Header -->
-  <header class="settings-hero">
-    <div class="settings-hero-title">
-      <span class="eyebrow">Redesigned Console</span>
+<section class="page-shell">
+  <header class="page-hero">
+    <div class="page-hero-copy">
+      <span class="page-eyebrow">Redesigned console</span>
       <h1>System Settings</h1>
       <p>Configure model profiles, Telegram synchronization modes, and YouTube caption cookies.</p>
     </div>
     {#if statusMessage}
-      <div class="status-banner" role="status">
+      <div class="page-hero-meta" role="status">
         <ExtractumStatusMessage
           tone={statusTone === "error" ? "error" : statusTone === "success" ? "info" : "default"}
         >
@@ -254,7 +254,7 @@
   </header>
 
   <ExtractumTabs bind:value={activeTab}>
-    <div class="settings-tabs">
+    <div>
       <ExtractumTabsList variant="line">
         <ExtractumTabsTrigger value="llm" aria-label="LLM Profiles tab" title="LLM Profiles">
           <Key size={14} />
@@ -276,10 +276,9 @@
     </div>
 
     <ExtractumTabsContent value="llm">
-      <!-- LLM TAB -->
-      <div class="settings-card extractum-panel-shell">
-        <div class="card-header">
-          <div class="card-header-copy">
+      <div class="extractum-panel-shell">
+        <div class="panel-header">
+          <div class="panel-header-copy">
             <h2>LLM Provider Profiles</h2>
             <p>Manage API credentials and default models. Stored keys are securely hidden in the system keychain.</p>
           </div>
@@ -388,16 +387,16 @@
     </ExtractumTabsContent>
 
     <ExtractumTabsContent value="browser">
-      <div class="settings-card extractum-panel-shell">
+      <div class="extractum-panel-shell">
         <GeminiBrowserProviderPanel />
       </div>
     </ExtractumTabsContent>
 
     <ExtractumTabsContent value="telegram">
       <!-- TELEGRAM TAB -->
-      <div class="settings-card extractum-panel-shell max-w-2xl">
-        <div class="card-header">
-          <div class="card-header-copy">
+      <div class="extractum-panel-shell max-w-2xl">
+        <div class="panel-header">
+          <div class="panel-header-copy">
             <h2>Telegram Synchronizer</h2>
             <p>Determine the depth limit and scope for sync jobs initialized from Telegram sources.</p>
           </div>
@@ -476,7 +475,7 @@
 
     <ExtractumTabsContent value="youtube">
       <!-- YOUTUBE TAB -->
-      <div class="settings-card extractum-panel-shell">
+      <div class="extractum-panel-shell">
         <YoutubeSettingsPanel embedded={true} />
       </div>
     </ExtractumTabsContent>
@@ -507,14 +506,15 @@
         </div>
 
         <div class="form-group">
-          <label for="modal-provider">Provider</label>
-          <select
-            id="modal-provider"
-            class="select-field"
-            bind:value={formProvider}
-            onchange={() => {
+          <span class="field-label">Provider</span>
+          <UiSelect
+            className="w-full"
+            value={formProvider}
+            onchange={(event: Event) => {
+              const nextProvider = (event.currentTarget as HTMLSelectElement).value;
+              formProvider = nextProvider;
               availableModels = [];
-              if (formProvider === "gemini") {
+              if (nextProvider === "gemini") {
                 formDefaultModel = "gemini-2.5-flash";
                 formBaseUrl = "";
               } else {
@@ -526,7 +526,7 @@
             {#each providers as p}
               <option value={p.value}>{p.label}</option>
             {/each}
-          </select>
+          </UiSelect>
         </div>
 
         {#if formProvider === "openai_compatible"}
@@ -568,7 +568,7 @@
 
         <div class="form-group col-span-2">
           <div class="fetch-models-row">
-            <label for="modal-default-model">Default Model</label>
+            <span class="field-label">Default Model</span>
             <ExtractumButton
               type="button"
               variant="outline"
@@ -584,10 +584,12 @@
           </div>
 
           {#if availableModels.length > 0}
-            <select
-              id="modal-default-model"
-              class="select-field"
-              bind:value={formDefaultModel}
+            <UiSelect
+              className="w-full"
+              value={formDefaultModel}
+              onchange={(event: Event) => {
+                formDefaultModel = (event.currentTarget as HTMLSelectElement).value;
+              }}
             >
               {#if !availableModels.some((m) => m.model === formDefaultModel)}
                 <option value={formDefaultModel}>{formDefaultModel}</option>
@@ -595,7 +597,7 @@
               {#each availableModels as m}
                 <option value={m.model}>{m.display_name} ({m.model})</option>
               {/each}
-            </select>
+            </UiSelect>
           {:else}
             <ExtractumTextInput
               id="modal-default-model"
@@ -631,91 +633,10 @@
       </form>
     </ExtractumDialog>
   {/if}
-</div>
+</section>
 
 <style>
-  /* Premium Light Theme styling matching project defaults */
-  .projects-settings-container {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    width: 100%;
-    height: 100%;
-    box-sizing: border-box;
-    padding: 24px;
-    background: var(--background);
-    color: var(--foreground);
-    overflow-y: auto;
-  }
-
-  .settings-hero {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 20px;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 18px;
-  }
-
-  .settings-hero-title h1 {
-    font-size: 24px;
-    font-weight: 700;
-    margin: 4px 0 6px 0;
-    letter-spacing: -0.02em;
-  }
-
-  .settings-hero-title p {
-    font-size: 13.5px;
-    color: var(--muted-foreground);
-    margin: 0;
-  }
-
-  .eyebrow {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--primary);
-  }
-
-  .status-banner {
-    animation: fadeIn 0.25s ease;
-  }
-
-  .settings-tabs {
-    width: 100%;
-  }
-
-  .settings-tabs :global([data-slot="tabs-list"]) {
-    margin-bottom: 6px;
-  }
-
-  /* Cards */
-  .settings-card {
-    padding: 20px;
-  }
-
-  .max-w-2xl {
-    max-width: 42rem;
-  }
-
-  .card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 20px;
-    margin-bottom: 20px;
-  }
-
-  .card-header-copy h2 {
-    font-size: 16px;
-    font-weight: 600;
-    margin: 0 0 4px 0;
-  }
-
-  .card-header-copy p {
-    font-size: 13px;
-    color: var(--muted-foreground);
+  :global(.page-hero .extractum-status-message) {
     margin: 0;
   }
 
@@ -805,6 +726,11 @@
     font-weight: 600;
   }
 
+  .field-label {
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+
   .field-desc {
     font-size: 12.5px;
     color: var(--muted-foreground);
@@ -885,26 +811,6 @@
   .radio-text span {
     font-size: 12px;
     color: var(--muted-foreground);
-  }
-
-  .select-field {
-    width: 100%;
-    min-height: 32px;
-    background: var(--extractum-surface);
-    border: 1px solid var(--extractum-border);
-    color: var(--extractum-text);
-    padding: 6px 10px;
-    border-radius: var(--extractum-radius);
-    font-size: 13px;
-    font-family: inherit;
-    box-sizing: border-box;
-    line-height: normal;
-  }
-
-  .select-field:focus {
-    outline: none;
-    border-color: var(--extractum-primary);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--extractum-primary) 15%, transparent);
   }
 
   .form-actions {
