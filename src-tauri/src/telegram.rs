@@ -7,6 +7,7 @@ use grammers_session::storages::MemorySession;
 use secrecy::ExposeSecret;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
@@ -33,6 +34,7 @@ pub struct AccountClient {
     pub api_hash: String,
     pub login_token: Option<LoginToken>,
     pub phone: Option<String>,
+    pub runner: JoinHandle<()>,
 }
 
 #[derive(Clone)]
@@ -181,9 +183,11 @@ pub async fn clear_account_runtime(
 ) -> AppResult<()> {
     let mut accounts = state.accounts.lock().await;
     if let Some(ac) = accounts.remove(&account_id) {
+        let runner = ac.runner;
         if sign_out {
             let _ = ac.client.sign_out().await;
         }
+        runner.abort();
     }
     drop(accounts);
 
@@ -205,7 +209,7 @@ async fn init_account_client(
     let session = telegram_session_store::load_session(handle, secret_store, account_id).await?;
     let pool = SenderPool::new(Arc::clone(&session), api_id);
 
-    tokio::spawn(async move {
+    let runner = tokio::spawn(async move {
         let _ = pool.runner.run().await;
     });
 
@@ -224,6 +228,7 @@ async fn init_account_client(
             api_hash,
             login_token: None,
             phone: None,
+            runner,
         },
     );
     drop(accounts);
@@ -323,7 +328,9 @@ pub async fn restore_telegram_accounts(handle: AppHandle) {
         if let Err(error) = init_result {
             {
                 let mut clients = state.accounts.lock().await;
-                clients.remove(&account.id);
+                if let Some(ac) = clients.remove(&account.id) {
+                    ac.runner.abort();
+                }
             }
             set_account_status(
                 &handle,
@@ -362,7 +369,9 @@ pub async fn tg_init(
         Ok(is_auth) => Ok(is_auth),
         Err(error) => {
             let mut accounts = state.accounts.lock().await;
-            accounts.remove(&account_id);
+            if let Some(ac) = accounts.remove(&account_id) {
+                ac.runner.abort();
+            }
             drop(accounts);
             set_account_status(
                 &handle,
