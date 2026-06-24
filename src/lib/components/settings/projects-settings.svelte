@@ -27,6 +27,7 @@
   import GeminiBrowserProviderPanel from "$lib/components/settings/gemini-browser-provider-panel.svelte";
   import YoutubeSettingsPanel from "$lib/components/settings/youtube-settings-panel.svelte";
   import {
+    ExtractumButton,
     ExtractumTabs,
     ExtractumTabsContent,
     ExtractumTabsList,
@@ -280,10 +281,10 @@
             <h2>LLM Provider Profiles</h2>
             <p>Manage API credentials and default models. Stored keys are securely hidden in the system keychain.</p>
           </div>
-          <button class="action-btn primary" onclick={openAddDialog}>
+          <ExtractumButton onclick={openAddDialog}>
             <Plus size={16} />
             <span>Add Profile</span>
-          </button>
+          </ExtractumButton>
         </div>
 
         <div class="table-wrapper">
@@ -325,32 +326,35 @@
                   <td>
                     <div class="table-actions">
                       {#if profilesState.active_profile !== profile.profile_id}
-                        <button
-                          class="table-btn success-link"
+                        <ExtractumButton
+                          variant="outline"
+                          size="sm"
                           onclick={() => makeProfileActive(profile.profile_id)}
                           title="Set as Active Profile"
                           aria-label={`Set profile ${profile.profile_id} as active`}
                         >
                           Set Active
-                        </button>
+                        </ExtractumButton>
                       {/if}
-                      <button
-                        class="table-btn icon-only"
+                      <ExtractumButton
+                        variant="ghost"
+                        size="icon-sm"
                         onclick={() => openEditDialog(profile)}
                         aria-label={`Edit profile ${profile.profile_id}`}
                         title="Edit Profile"
                       >
                         <Edit2 size={13} />
-                      </button>
-                      <button
-                        class="table-btn icon-only destructive"
+                      </ExtractumButton>
+                      <ExtractumButton
+                        variant="destructive"
+                        size="icon-sm"
                         onclick={() => handleDeleteProfile(profile.profile_id)}
                         disabled={profile.profile_id === "default"}
                         aria-label={`Delete profile ${profile.profile_id}`}
                         title="Delete Profile"
                       >
                         <Trash2 size={13} />
-                      </button>
+                      </ExtractumButton>
                     </div>
                   </td>
                 </tr>
@@ -439,10 +443,10 @@
           </div>
 
           <div class="form-actions">
-            <button type="submit" class="action-btn primary" disabled={saveSyncLoading}>
+            <ExtractumButton type="submit" disabled={saveSyncLoading}>
               <Save size={14} />
               <span>{saveSyncLoading ? "Saving..." : "Save Settings"}</span>
-            </button>
+            </ExtractumButton>
           </div>
         </form>
       </div>
@@ -462,9 +466,14 @@
       <div class="modal-box">
         <header class="modal-header">
           <h3 id="modal-title">{isEditing ? "Edit LLM Profile" : "Create LLM Profile"}</h3>
-          <button class="close-btn" onclick={() => dialogOpen = false} aria-label="Close dialog">
+          <ExtractumButton
+            variant="ghost"
+            size="icon-sm"
+            onclick={() => dialogOpen = false}
+            aria-label="Close dialog"
+          >
             <X size={18} />
-          </button>
+          </ExtractumButton>
         </header>
 
         <div class="modal-body">
@@ -550,16 +559,17 @@
             <div class="form-group col-span-2">
               <div class="fetch-models-row">
                 <label for="modal-default-model">Default Model</label>
-                <button
+                <ExtractumButton
                   type="button"
-                  class="action-btn secondary sm"
+                  variant="outline"
+                  size="sm"
                   aria-label={`Fetch models for ${formProvider} profile`}
                   onclick={() => fetchModels(true)}
                   disabled={loadingModels}
                 >
                   <RefreshCw size={13} class={loadingModels ? "spin" : ""} />
                   <span>{loadingModels ? "Fetching..." : "Fetch Models"}</span>
-                </button>
+                </ExtractumButton>
               </div>
 
               {#if availableModels.length > 0}
@@ -590,15 +600,15 @@
         </div>
 
         <footer class="modal-footer">
-          <button class="action-btn secondary" onclick={() => dialogOpen = false}>Cancel</button>
-          <button
-            class="action-btn primary"
-            onclick={handleSaveProfile}
+          <ExtractumButton variant="outline" onclick={() => dialogOpen = false}>Cancel</ExtractumButton>
+          <ExtractumButton
             disabled={!formProfileId.trim() || !formDefaultModel.trim()}
+            onclick={handleSaveProfile}
+            aria-label="Save LLM profile"
           >
             <Save size={14} />
             <span>Save Profile</span>
-          </button>
+          </ExtractumButton>
         </footer>
       </div>
     </div>
@@ -823,57 +833,6 @@
     gap: 6px;
   }
 
-  .table-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 12.5px;
-    font-weight: 500;
-    color: var(--primary);
-    padding: 4px 8px;
-    border-radius: 4px;
-    transition: background-color 0.12s;
-  }
-
-  .table-btn:hover {
-    background: var(--panel-hover);
-  }
-
-  .table-btn.success-link {
-    color: var(--extractum-success);
-  }
-
-  .table-btn.success-link:hover {
-    background: color-mix(in srgb, var(--extractum-success) 8%, transparent);
-  }
-
-  .table-btn.icon-only {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    color: var(--muted-foreground);
-    padding: 0;
-  }
-
-  .table-btn.icon-only:hover {
-    color: var(--foreground);
-  }
-
-  .table-btn.icon-only.destructive {
-    color: var(--destructive);
-  }
-
-  .table-btn.icon-only.destructive:hover {
-    background: color-mix(in srgb, var(--destructive) 8%, transparent);
-  }
-
-  .table-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
   .empty-row {
     text-align: center;
     color: var(--muted-foreground);
@@ -881,49 +840,6 @@
   }
 
   /* Button controls */
-  .action-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    padding: 8px 14px;
-    border-radius: var(--radius);
-    cursor: pointer;
-    transition: all 0.15s ease;
-    border: 1px solid var(--border);
-  }
-
-  .action-btn.primary {
-    background: var(--primary);
-    color: var(--primary-foreground);
-    border-color: transparent;
-  }
-
-  .action-btn.primary:hover {
-    opacity: 0.92;
-  }
-
-  .action-btn.secondary {
-    background: var(--card);
-    color: var(--foreground);
-  }
-
-  .action-btn.secondary:hover {
-    background: var(--panel-hover);
-  }
-
-  .action-btn.sm {
-    padding: 4px 10px;
-    font-size: 12px;
-  }
-
-  .action-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
   /* Form groups */
   .sync-form {
     display: flex;
@@ -1099,20 +1015,6 @@
     margin: 0;
     font-size: 16px;
     font-weight: 600;
-  }
-
-  .close-btn {
-    background: none;
-    border: none;
-    color: var(--muted-foreground);
-    cursor: pointer;
-    padding: 4px;
-    border-radius: 4px;
-  }
-
-  .close-btn:hover {
-    color: var(--foreground);
-    background: var(--panel-hover);
   }
 
   .modal-body {
