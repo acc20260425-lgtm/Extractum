@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Edit3, Plus, RefreshCw, Trash2 } from "@lucide/svelte";
+  import { BookOpen, Edit3, Plus, RefreshCw, Trash2 } from "@lucide/svelte";
   import {
     ExtractumButton,
     ExtractumDataGrid,
@@ -11,6 +11,7 @@
 
   let {
     sources,
+    totalSourceCount = 0,
     query = $bindable(""),
     selectedSource,
     selectedSourceId,
@@ -22,6 +23,7 @@
     onRefresh,
   }: {
     sources: LibraryCatalogSourceView[];
+    totalSourceCount?: number;
     query: string;
     selectedSource: LibraryCatalogSourceView | null;
     selectedSourceId: string | null;
@@ -32,6 +34,8 @@
     onDelete: () => void;
     onRefresh: () => void | Promise<void>;
   } = $props();
+
+  const isEmpty = $derived(totalSourceCount === 0 && !loading);
 
   const columns: ExtractumDataGridColumn[] = [
     { id: "title", header: "Source", width: 320, cell: LibrarySourceCell },
@@ -105,13 +109,65 @@
     id="library-sources-grid"
     class="grid-host extractum-grid-frame min-h-0 min-w-0 flex-1"
   >
-    <ExtractumDataGrid
-      rows={sources}
-      {columns}
-      selectedRowIds={selectedSourceId ? [selectedSourceId] : []}
-      ariaLabel="Library source list"
-      overlay="No sources match this filter"
-      onSelectedRowIdsChange={(ids) => onSelectedSourceIdChange(ids.at(-1) ?? null)}
-    />
+    {#if isEmpty}
+      <div class="library-empty-state">
+        <div class="library-empty-icon">
+          <BookOpen size={48} aria-hidden="true" />
+        </div>
+        <h2>No sources yet</h2>
+        <p>Add YouTube channels, Telegram channels, or other sources to start collecting content.</p>
+        <ExtractumButton onclick={onAdd} aria-label="Add your first library source">
+          <Plus size={14} aria-hidden="true" />
+          Add your first source
+        </ExtractumButton>
+      </div>
+    {:else}
+      <ExtractumDataGrid
+        rows={sources}
+        {columns}
+        selectedRowIds={selectedSourceId ? [selectedSourceId] : []}
+        ariaLabel="Library source list"
+        overlay="No sources match this filter"
+        onSelectedRowIdsChange={(ids) => onSelectedSourceIdChange(ids.at(-1) ?? null)}
+      />
+    {/if}
   </div>
 </section>
+
+<style>
+  .library-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0.75rem;
+    height: 100%;
+    padding: 2rem;
+  }
+
+  .library-empty-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 16px;
+    background: var(--extractum-surface-subtle, #f0f4f8);
+    color: var(--extractum-muted);
+    margin-bottom: 0.25rem;
+  }
+
+  .library-empty-state h2 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+  }
+
+  .library-empty-state p {
+    margin: 0;
+    max-width: 52ch;
+    color: var(--extractum-muted);
+    line-height: 1.5;
+    font-size: 0.9rem;
+  }
+</style>

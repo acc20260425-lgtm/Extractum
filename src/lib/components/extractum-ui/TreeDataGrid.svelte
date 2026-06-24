@@ -43,7 +43,7 @@
         { id: "label", header: "", width: 48, treetoggle: true },
       ]
     : [
-        { id: "label", header: "Фильтр", flexgrow: 1, treetoggle: true },
+        { id: "label", header: "Filter", flexgrow: 1, treetoggle: true },
         { id: "count", header: "", width: 54 },
       ]);
 

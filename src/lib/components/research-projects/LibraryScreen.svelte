@@ -101,6 +101,7 @@
 
   <LibraryWorkspace
     sources={visibleSources}
+    totalSourceCount={sources.length}
     bind:query
     selectedSource={selectedSource}
     selectedSourceId={selectedSourceId}

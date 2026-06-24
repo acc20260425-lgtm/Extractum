@@ -24,6 +24,7 @@
   } = $props();
 
   const runDisabledReason = $derived(projectRunDisabledReason(project, sources));
+  const noProject = $derived(project === null);
 </script>
 
 <div class="command-bar">
@@ -35,20 +36,20 @@
   <div class="command-controls">
     <label>
       <span>Period</span>
-      <select aria-label="Project period">
+      <select aria-label="Project period" disabled={noProject} title={noProject ? "Select a project first" : undefined}>
         <option>{project?.periodLabel ?? "01.01.2024 - 31.05.2025"}</option>
       </select>
     </label>
     <label>
       <span>Prompt</span>
-      <select aria-label="Prompt preset">
+      <select aria-label="Prompt preset" disabled={noProject} title={noProject ? "Select a project first" : undefined}>
         <option>Evidence brief</option>
         <option>Risk monitor</option>
       </select>
     </label>
     <label>
       <span>LLM Profile</span>
-      <select bind:value={selectedProfileId} aria-label="LLM Profile">
+      <select bind:value={selectedProfileId} aria-label="LLM Profile" disabled={noProject} title={noProject ? "Select a project first" : undefined}>
         {#each llmProfiles as profile (profile.profile_id)}
           <option value={profile.profile_id}>
             {profile.profile_id} ({profile.default_model})
@@ -135,5 +136,10 @@
     background: var(--extractum-surface);
     color: var(--extractum-text);
     font-size: 13px;
+  }
+
+  .command-controls select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 </style>
