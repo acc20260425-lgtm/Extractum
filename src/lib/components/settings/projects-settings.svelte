@@ -7,7 +7,6 @@
     Trash2,
     Check,
     Save,
-    X,
     RefreshCw,
     AlertTriangle,
     Key,
@@ -28,10 +27,12 @@
   import YoutubeSettingsPanel from "$lib/components/settings/youtube-settings-panel.svelte";
   import {
     ExtractumButton,
+    ExtractumDialog,
     ExtractumTabs,
     ExtractumTabsContent,
     ExtractumTabsList,
     ExtractumTabsTrigger,
+    ExtractumTextInput,
   } from "$lib/components/extractum-ui";
   import type { LlmProfile, LlmProfilesState, LlmProviderModel } from "$lib/types/llm";
   import type { SyncSettings } from "$lib/types/sources";
@@ -460,158 +461,141 @@
     </ExtractumTabsContent>
   </ExtractumTabs>
 
-  <!-- Pop-up Modal Editor -->
   {#if dialogOpen}
-    <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <div class="modal-box">
-        <header class="modal-header">
-          <h3 id="modal-title">{isEditing ? "Edit LLM Profile" : "Create LLM Profile"}</h3>
-          <ExtractumButton
-            variant="ghost"
-            size="icon-sm"
-            onclick={() => dialogOpen = false}
-            aria-label="Close dialog"
-          >
-            <X size={18} />
-          </ExtractumButton>
-        </header>
-
-        <div class="modal-body">
-          {#if dialogError}
-            <div class="dialog-error-banner" role="alert">
-              <AlertTriangle size={15} />
-              <span>{dialogError}</span>
-            </div>
-          {/if}
-
-          <div class="dialog-grid">
-            <div class="form-group">
-              <label for="modal-profile-id">Profile ID</label>
-              <input
-                id="modal-profile-id"
-                type="text"
-                class="text-input"
-                placeholder="e.g. gemini_flash"
-                bind:value={formProfileId}
-                disabled={isEditing}
-              />
-              {#if !isEditing}
-                <span class="field-hint">Alphanumeric characters and underscores only. Stored as lowercase.</span>
-              {/if}
-            </div>
-
-            <div class="form-group">
-              <label for="modal-provider">Provider</label>
-              <select
-                id="modal-provider"
-                class="select-input"
-                bind:value={formProvider}
-                onchange={() => {
-                  availableModels = [];
-                  if (formProvider === "gemini") {
-                    formDefaultModel = "gemini-2.5-flash";
-                    formBaseUrl = "";
-                  } else {
-                    formDefaultModel = "";
-                    formBaseUrl = "http://localhost:20128/v1";
-                  }
-                }}
-              >
-                {#each providers as p}
-                  <option value={p.value}>{p.label}</option>
-                {/each}
-              </select>
-            </div>
-
-            {#if formProvider === "openai_compatible"}
-              <div class="form-group col-span-2">
-                <label for="modal-base-url">Base URL</label>
-                <input
-                  id="modal-base-url"
-                  type="url"
-                  class="text-input"
-                  placeholder="http://localhost:20128/v1"
-                  bind:value={formBaseUrl}
-                />
-                <span class="field-hint">Custom endpoint location for local models or proxy routers.</span>
-              </div>
-            {/if}
-
-            <div class="form-group col-span-2">
-              <label for="modal-api-key">API Key</label>
-              <div class="input-with-icon">
-                <Shield size={14} class="input-icon" />
-                <input
-                  id="modal-api-key"
-                  type="password"
-                  class="text-input icon-padded"
-                  placeholder={formApiKeyConfigured ? "••••••••••••••••" : "Enter API Key"}
-                  bind:value={formApiKey}
-                />
-              </div>
-              {#if formApiKeyConfigured}
-                <span class="field-hint success">✓ Saved key is already configured. Leave blank to keep existing key.</span>
-              {:else}
-                <span class="field-hint">No key currently saved for this profile ID.</span>
-              {/if}
-            </div>
-
-            <div class="form-group col-span-2">
-              <div class="fetch-models-row">
-                <label for="modal-default-model">Default Model</label>
-                <ExtractumButton
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  aria-label={`Fetch models for ${formProvider} profile`}
-                  onclick={() => fetchModels(true)}
-                  disabled={loadingModels}
-                >
-                  <RefreshCw size={13} class={loadingModels ? "spin" : ""} />
-                  <span>{loadingModels ? "Fetching..." : "Fetch Models"}</span>
-                </ExtractumButton>
-              </div>
-
-              {#if availableModels.length > 0}
-                <select
-                  id="modal-default-model"
-                  class="select-input"
-                  bind:value={formDefaultModel}
-                >
-                  {#if !availableModels.some((m) => m.model === formDefaultModel)}
-                    <option value={formDefaultModel}>{formDefaultModel}</option>
-                  {/if}
-                  {#each availableModels as m}
-                    <option value={m.model}>{m.display_name} ({m.model})</option>
-                  {/each}
-                </select>
-              {:else}
-                <input
-                  id="modal-default-model"
-                  type="text"
-                  class="text-input"
-                  placeholder={formProvider === "gemini" ? "gemini-2.5-flash" : "Enter model identifier"}
-                  bind:value={formDefaultModel}
-                />
-              {/if}
-              <span class="field-hint">Select a model or type identifier manually if catalog is not fetched.</span>
-            </div>
+    <ExtractumDialog bind:open={dialogOpen} title={isEditing ? "Edit LLM Profile" : "Create LLM Profile"} contentClass="w-[min(560px,calc(100vw-48px))]">
+      <form class="dialog-grid" onsubmit={(e) => { e.preventDefault(); handleSaveProfile(); }}>
+        {#if dialogError}
+          <div class="dialog-error-banner" role="alert">
+            <AlertTriangle size={15} />
+            <span>{dialogError}</span>
           </div>
+        {/if}
+
+        <div class="form-group">
+          <label for="modal-profile-id">Profile ID</label>
+          <ExtractumTextInput
+            id="modal-profile-id"
+            type="text"
+            class="text-input"
+            placeholder="e.g. gemini_flash"
+            bind:value={formProfileId}
+            disabled={isEditing}
+          />
+          {#if !isEditing}
+            <span class="field-hint">Alphanumeric characters and underscores only. Stored as lowercase.</span>
+          {/if}
         </div>
 
-        <footer class="modal-footer">
-          <ExtractumButton variant="outline" onclick={() => dialogOpen = false}>Cancel</ExtractumButton>
+        <div class="form-group">
+          <label for="modal-provider">Provider</label>
+          <select
+            id="modal-provider"
+            class="select-input"
+            bind:value={formProvider}
+            onchange={() => {
+              availableModels = [];
+              if (formProvider === "gemini") {
+                formDefaultModel = "gemini-2.5-flash";
+                formBaseUrl = "";
+              } else {
+                formDefaultModel = "";
+                formBaseUrl = "http://localhost:20128/v1";
+              }
+            }}
+          >
+            {#each providers as p}
+              <option value={p.value}>{p.label}</option>
+            {/each}
+          </select>
+        </div>
+
+        {#if formProvider === "openai_compatible"}
+          <div class="form-group col-span-2">
+            <label for="modal-base-url">Base URL</label>
+            <ExtractumTextInput
+              id="modal-base-url"
+              type="url"
+              class="text-input"
+              placeholder="http://localhost:20128/v1"
+              bind:value={formBaseUrl}
+            />
+            <span class="field-hint">Custom endpoint location for local models or proxy routers.</span>
+          </div>
+        {/if}
+
+        <div class="form-group col-span-2">
+          <label for="modal-api-key">API Key</label>
+          <div class="input-with-icon">
+            <Shield size={14} class="input-icon" />
+            <ExtractumTextInput
+              id="modal-api-key"
+              type="password"
+              class="text-input icon-padded"
+              placeholder={formApiKeyConfigured ? "••••••••••••••••" : "Enter API Key"}
+              bind:value={formApiKey}
+            />
+          </div>
+          {#if formApiKeyConfigured}
+            <span class="field-hint success">✓ Saved key is already configured. Leave blank to keep existing key.</span>
+          {:else}
+            <span class="field-hint">No key currently saved for this profile ID.</span>
+          {/if}
+        </div>
+
+        <div class="form-group col-span-2">
+          <div class="fetch-models-row">
+            <label for="modal-default-model">Default Model</label>
+            <ExtractumButton
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-label={`Fetch models for ${formProvider} profile`}
+              onclick={() => fetchModels(true)}
+              disabled={loadingModels}
+            >
+              <RefreshCw size={13} class={loadingModels ? "spin" : ""} />
+              <span>{loadingModels ? "Fetching..." : "Fetch Models"}</span>
+            </ExtractumButton>
+          </div>
+
+          {#if availableModels.length > 0}
+            <select
+              id="modal-default-model"
+              class="select-input"
+              bind:value={formDefaultModel}
+            >
+              {#if !availableModels.some((m) => m.model === formDefaultModel)}
+                <option value={formDefaultModel}>{formDefaultModel}</option>
+              {/if}
+              {#each availableModels as m}
+                <option value={m.model}>{m.display_name} ({m.model})</option>
+              {/each}
+            </select>
+          {:else}
+            <ExtractumTextInput
+              id="modal-default-model"
+              type="text"
+              class="text-input"
+              placeholder={formProvider === "gemini" ? "gemini-2.5-flash" : "Enter model identifier"}
+              bind:value={formDefaultModel}
+            />
+          {/if}
+          <span class="field-hint">Select a model or type identifier manually if catalog is not fetched.</span>
+        </div>
+
+        <footer class="dialog-footer">
+          <ExtractumButton type="button" variant="outline" onclick={() => dialogOpen = false}>Cancel</ExtractumButton>
           <ExtractumButton
+            type="submit"
             disabled={!formProfileId.trim() || !formDefaultModel.trim()}
-            onclick={handleSaveProfile}
             aria-label="Save LLM profile"
           >
             <Save size={14} />
             <span>Save Profile</span>
           </ExtractumButton>
         </footer>
-      </div>
-    </div>
+      </form>
+    </ExtractumDialog>
   {/if}
 </div>
 
@@ -974,65 +958,14 @@
     padding-top: 16px;
   }
 
-  /* Modal Dialog */
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(15, 23, 42, 0.45);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    animation: fadeIn 0.15s ease-out;
-  }
-
-  .modal-box {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    width: min(540px, calc(100vw - 32px));
-    max-height: min(720px, calc(100vh - 32px));
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-    animation: scaleUp 0.15s ease-out;
-    overflow: hidden;
-  }
-
-  .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .modal-header h3 {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-  }
-
-  .modal-body {
-    padding: 20px;
-    overflow-y: auto;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .modal-footer {
+  .dialog-footer {
     display: flex;
     justify-content: flex-end;
     gap: 8px;
-    padding: 16px 20px;
+    grid-column: 1 / -1;
+    margin-top: 10px;
     border-top: 1px solid var(--border);
-    background: var(--panel-strong);
+    padding-top: 12px;
   }
 
   .dialog-error-banner {
@@ -1082,17 +1015,6 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 4px;
-  }
-
-  /* Animations */
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-
-  @keyframes scaleUp {
-    from { transform: scale(0.95); opacity: 0; }
-    to { transform: scale(1); opacity: 1; }
   }
 
   .spin {
