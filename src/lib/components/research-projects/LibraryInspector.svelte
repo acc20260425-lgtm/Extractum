@@ -70,7 +70,7 @@
   );
 </script>
 
-<aside data-ui-region="library-inspector" class="library-inspector" aria-label="Library source inspector">
+<aside data-ui-region="library-inspector" class="library-inspector extractum-panel-shell" aria-label="Library source inspector">
   {#if selectedSource}
     <header class="inspector-header">
       <div>
@@ -155,7 +155,7 @@
     </div>
     <YoutubeSummaryRunDialog bind:open={youtubeSummaryOpen} projectId={null} source={selectedSource} />
   {:else}
-    <div class="empty-state">
+    <div class="empty-state extractum-panel-shell">
       <p class="eyebrow">Inspector</p>
       <h2>No source selected</h2>
       <p>Select a source row to inspect metadata and available commands.</p>
@@ -167,9 +167,9 @@
   .library-inspector {
     min-width: 0;
     min-height: 0;
-    padding: 14px;
+    padding: 12px;
     overflow: auto;
-    background: var(--extractum-surface-raised);
+    background: transparent;
   }
 
   .inspector-header {

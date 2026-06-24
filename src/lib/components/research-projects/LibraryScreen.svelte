@@ -136,7 +136,7 @@
   />
 
   {#if status || workflowState.status}
-    <div class="library-status" role="status">{status || workflowState.status}</div>
+    <div class="library-status extractum-panel-shell" role="status">{status || workflowState.status}</div>
   {/if}
 </div>
 
@@ -166,10 +166,8 @@
     right: 14px;
     bottom: 12px;
     max-width: min(520px, calc(100% - 28px));
-    border: 1px solid var(--extractum-border);
     border-radius: var(--extractum-radius);
     padding: 8px 10px;
-    background: var(--extractum-surface-raised);
     color: var(--extractum-muted);
     font-size: 12px;
     box-shadow: 0 8px 22px rgb(15 23 42 / 0.10);

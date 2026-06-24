@@ -45,7 +45,7 @@
 </script>
 
 <section data-ui-region="library-workspace" class="library-workspace">
-  <div class="toolbar">
+  <div class="toolbar extractum-toolbar-row">
     <ExtractumTextInput bind:value={query} placeholder="Search sources" aria-label="Search Library sources" />
     <ExtractumButton
       data-ui-action="library-add"
@@ -87,7 +87,7 @@
     </ExtractumButton>
   </div>
 
-  <div class="grid-host">
+  <div class="grid-host extractum-grid-frame">
     <ExtractumDataGrid
       rows={sources}
       {columns}
@@ -108,9 +108,8 @@
   }
 
   .toolbar {
-    display: flex;
+    justify-content: flex-start;
     min-height: 46px;
-    align-items: center;
     flex-wrap: wrap;
     gap: 8px;
     padding: 8px;
