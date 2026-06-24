@@ -360,6 +360,7 @@
         size="sm"
         variant="secondary"
         ariaLabel="Refresh diagnostics"
+        title="Refresh diagnostics summary"
         disabled={loading || refreshing}
         onclick={() => void refreshDiagnostics(false)}
       >
@@ -386,6 +387,7 @@
         variant="secondary"
         selected={diagnosticsTableMode === "issues"}
         ariaLabel="Show diagnostics issues only"
+        title="Show diagnostics issues only"
         onclick={() => (diagnosticsTableMode = "issues")}
       >
         Only issues
@@ -395,6 +397,7 @@
         variant="secondary"
         selected={diagnosticsTableMode === "all"}
         ariaLabel="Show all diagnostics tables"
+        title="Show all diagnostics tables"
         onclick={() => (diagnosticsTableMode = "all")}
       >
         All tables
