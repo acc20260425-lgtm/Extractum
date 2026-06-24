@@ -3,11 +3,11 @@
   import { onMount } from "svelte";
   import { loadDiagnosticSummary } from "$lib/api/diagnostics";
   import DiagnosticCountTable from "$lib/components/diagnostics/DiagnosticCountTable.svelte";
-  import Badge from "$lib/components/ui/Badge.svelte";
-  import Button from "$lib/components/ui/Button.svelte";
-  import MetaCell from "$lib/components/ui/MetaCell.svelte";
-  import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
-  import SurfaceCard from "$lib/components/ui/SurfaceCard.svelte";
+  import {
+    ExtractumBadge,
+    ExtractumButton,
+    ExtractumStatusMessage,
+  } from "$lib/components/extractum-ui";
   import {
     availabilityLabel,
     availabilityTone,
@@ -353,55 +353,55 @@
     </div>
     <div class="page-hero-meta">
       {#if summary}
-        <Badge variant={buildModeTone(summary.app.buildMode)}>{labelFromKey(summary.app.buildMode)}</Badge>
-        <Badge variant="neutral">{summary.app.appName}</Badge>
+        <span class="hero-pill">Build mode</span>
+        <ExtractumBadge>{labelFromKey(summary.app.buildMode)}</ExtractumBadge>
+        <span class="hero-pill">Application</span>
+        <ExtractumBadge>{summary.app.appName}</ExtractumBadge>
       {/if}
-      <Button
+      <ExtractumButton
         size="sm"
-        variant="secondary"
-        ariaLabel="Refresh diagnostics"
+        variant="outline"
+        aria-label="Refresh diagnostics"
         title="Refresh diagnostics summary"
         disabled={loading || refreshing}
         onclick={() => void refreshDiagnostics(false)}
       >
         <RefreshCw size={14} aria-hidden="true" />
         Refresh
-      </Button>
+      </ExtractumButton>
     </div>
   </header>
 
   {#if status}
-    <StatusMessage tone="info" className="page-status">{status}</StatusMessage>
+    <ExtractumStatusMessage tone="info" className="page-status">{status}</ExtractumStatusMessage>
   {/if}
 
   {#if error}
-    <StatusMessage tone="error" className="page-status">{error}</StatusMessage>
+    <ExtractumStatusMessage tone="error" className="page-status">{error}</ExtractumStatusMessage>
   {/if}
 
   {#if summary}
     {@const tableSections = diagnosticsTableSections(summary)}
 
     <div class="diagnostics-table-controls extractum-toolbar-row" aria-label="Diagnostics table display">
-      <Button
+      <ExtractumButton
         size="sm"
-        variant="secondary"
-        selected={diagnosticsTableMode === "issues"}
-        ariaLabel="Show diagnostics issues only"
+        variant={diagnosticsTableMode === "issues" ? "default" : "outline"}
+        aria-label="Show diagnostics issues only"
         title="Show diagnostics issues only"
         onclick={() => (diagnosticsTableMode = "issues")}
       >
         Only issues
-      </Button>
-      <Button
+      </ExtractumButton>
+      <ExtractumButton
         size="sm"
-        variant="secondary"
-        selected={diagnosticsTableMode === "all"}
-        ariaLabel="Show all diagnostics tables"
+        variant={diagnosticsTableMode === "all" ? "default" : "outline"}
+        aria-label="Show all diagnostics tables"
         title="Show all diagnostics tables"
         onclick={() => (diagnosticsTableMode = "all")}
       >
         All tables
-      </Button>
+      </ExtractumButton>
     </div>
 
     {#if diagnosticsTableMode === "issues"}
@@ -412,7 +412,7 @@
       {@render diagnosticsTableArea(tableSections)}
     {/if}
   {:else if loading}
-    <StatusMessage tone="muted" className="page-status">Loading diagnostics...</StatusMessage>
+    <ExtractumStatusMessage tone="muted" className="page-status">Loading diagnostics...</ExtractumStatusMessage>
   {/if}
 </section>
 
@@ -423,57 +423,73 @@
         <div
           role="group"
           aria-label={`Diagnostics status ${item.label}: ${item.value}. ${item.meta}`}
-          class="status-tile extractum-panel-shell"
+          class="status-tile extractum-stat-card"
           title={`${item.label}: ${item.value} (${item.meta})`}
         >
           <span>{item.label}</span>
           <strong>{item.value}</strong>
-          <Badge variant={item.tone}>{item.meta}</Badge>
+          <ExtractumBadge>{item.meta}</ExtractumBadge>
         </div>
       {/each}
     </div>
 
     <div class="diagnostics-grid">
-      <SurfaceCard title="App and build" meta="Factual diagnostic summary metadata">
+      <section class="extractum-panel-shell diagnostics-meta-card">
+        <header>
+          <h2>App and build</h2>
+          <p>Factual diagnostic summary metadata</p>
+        </header>
         <div class="meta-grid">
-          <MetaCell label="App">{current.app.appName}</MetaCell>
-          <MetaCell label="Version">{current.app.appVersion}</MetaCell>
-          <MetaCell label="Build">{labelFromKey(current.app.buildMode)}</MetaCell>
-          <MetaCell label="Generated">{formatSummaryGeneratedAt(current.app.generatedAtUnix).replace("Summary generated ", "")}</MetaCell>
+          <div><span>App</span><strong>{current.app.appName}</strong></div>
+          <div><span>Version</span><strong>{current.app.appVersion}</strong></div>
+          <div><span>Build</span><strong>{labelFromKey(current.app.buildMode)}</strong></div>
+          <div><span>Generated</span><strong>{formatSummaryGeneratedAt(current.app.generatedAtUnix).replace("Summary generated ", "")}</strong></div>
         </div>
-      </SurfaceCard>
+      </section>
 
-      <SurfaceCard title="Database" meta="SQLite availability and migration state">
+      <section class="extractum-panel-shell diagnostics-meta-card">
+        <header>
+          <h2>Database</h2>
+          <p>SQLite availability and migration state</p>
+        </header>
         <div class="meta-grid">
-          <MetaCell label="SQLite">{availabilityLabel(current.database.sqliteAvailable)}</MetaCell>
-          <MetaCell label="Migrations">{labelFromKey(current.database.migrations.status)}</MetaCell>
-          <MetaCell label="Accounts">{current.database.accountCount}</MetaCell>
-          <MetaCell label="Pending versions">{current.database.migrations.pendingVersions.length}</MetaCell>
-          <MetaCell label="Failed versions">{current.database.migrations.failedVersions.length}</MetaCell>
+          <div><span>SQLite</span><strong>{availabilityLabel(current.database.sqliteAvailable)}</strong></div>
+          <div><span>Migrations</span><strong>{labelFromKey(current.database.migrations.status)}</strong></div>
+          <div><span>Accounts</span><strong>{current.database.accountCount}</strong></div>
+          <div><span>Pending versions</span><strong>{current.database.migrations.pendingVersions.length}</strong></div>
+          <div><span>Failed versions</span><strong>{current.database.migrations.failedVersions.length}</strong></div>
         </div>
-      </SurfaceCard>
+      </section>
 
-      <SurfaceCard title="Runtimes" meta="Backend-reported runtime checks">
+      <section class="extractum-panel-shell diagnostics-meta-card">
+        <header>
+          <h2>Runtimes</h2>
+          <p>Backend-reported runtime checks</p>
+        </header>
         <div class="meta-grid">
-          <MetaCell label="Secure storage">{labelFromKey(current.runtimes.secureStorage.status)}</MetaCell>
-          <MetaCell label="Secure storage available">{availabilityLabel(current.runtimes.secureStorage.available)}</MetaCell>
-          <MetaCell label="yt-dlp">{labelFromKey(current.runtimes.ytdlp.status)}</MetaCell>
-          <MetaCell label="yt-dlp available">{availabilityLabel(current.runtimes.ytdlp.available)}</MetaCell>
-          <MetaCell label="yt-dlp version">{current.runtimes.ytdlp.version ?? "Unknown"}</MetaCell>
+          <div><span>Secure storage</span><strong>{labelFromKey(current.runtimes.secureStorage.status)}</strong></div>
+          <div><span>Secure storage available</span><strong>{availabilityLabel(current.runtimes.secureStorage.available)}</strong></div>
+          <div><span>yt-dlp</span><strong>{labelFromKey(current.runtimes.ytdlp.status)}</strong></div>
+          <div><span>yt-dlp available</span><strong>{availabilityLabel(current.runtimes.ytdlp.available)}</strong></div>
+          <div><span>yt-dlp version</span><strong>{current.runtimes.ytdlp.version ?? "Unknown"}</strong></div>
         </div>
-      </SurfaceCard>
+      </section>
 
-      <SurfaceCard title="Privacy boundary" meta="Data classes intentionally excluded by backend diagnostics">
+      <section class="extractum-panel-shell diagnostics-meta-card">
+        <header>
+          <h2>Privacy boundary</h2>
+          <p>Data classes intentionally excluded by backend diagnostics</p>
+        </header>
         {#if privacyLabels(current).length > 0}
           <div class="privacy-chips">
             {#each privacyLabels(current) as item (item)}
-              <Badge variant="neutral">{item}</Badge>
+              <ExtractumBadge>{item}</ExtractumBadge>
             {/each}
           </div>
         {:else}
-          <StatusMessage tone="muted" surface={false}>{privacyNote(current)}</StatusMessage>
+          <ExtractumStatusMessage tone="muted" surface={false}>{privacyNote(current)}</ExtractumStatusMessage>
         {/if}
-      </SurfaceCard>
+      </section>
     </div>
   </div>
 {/snippet}
@@ -491,9 +507,9 @@
         open={hasDiagnosticIssue(section.rows)}
       />
     {:else}
-      <StatusMessage tone="muted" className="diagnostics-empty-state">
+      <ExtractumStatusMessage tone="muted" className="diagnostics-empty-state">
         No diagnostic issue rows match this view.
-      </StatusMessage>
+      </ExtractumStatusMessage>
     {/each}
   </div>
 {/snippet}
@@ -537,6 +553,30 @@
     font-size: 0.98rem;
   }
 
+  .diagnostics-meta-card header,
+  .diagnostics-meta-card h2 {
+    margin: 0;
+  }
+
+  .diagnostics-meta-card h2 {
+    font-size: 0.96rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .diagnostics-meta-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+
+  .diagnostics-meta-card p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.35;
+  }
+
   .diagnostics-grid,
   .diagnostics-tables {
     display: grid;
@@ -545,7 +585,7 @@
     align-items: start;
   }
 
-  :global(.diagnostics-empty-state.ui-status-message) {
+  :global(.diagnostics-empty-state.extractum-status-message) {
     grid-column: 1 / -1;
   }
 
@@ -553,6 +593,27 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.65rem;
+  }
+
+  .meta-grid div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+  }
+
+  .meta-grid span {
+    color: var(--muted);
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .meta-grid strong {
+    color: var(--text);
+    font-size: 0.9rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .privacy-chips {

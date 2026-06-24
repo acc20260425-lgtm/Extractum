@@ -1,6 +1,4 @@
 <script lang="ts">
-  import SurfaceCard from "$lib/components/ui/SurfaceCard.svelte";
-
   type DiagnosticTableValue = string | number;
   type DiagnosticTableRow = Record<string, DiagnosticTableValue>;
   type DiagnosticTableColumn = {
@@ -43,16 +41,16 @@
   }
 </script>
 
-<SurfaceCard className="diagnostic-count-table">
-    <details class="diagnostic-count-details" {open} aria-label={`Expand ${title} diagnostics section`}>
-      <summary>
-        <span>{title}</span>
-        <span>{rowText}</span>
-      </summary>
-      {#if description}
-        <p id={summaryId}>{description}</p>
-      {/if}
-      <div class="table-scroll">
+<section class="extractum-panel-shell diagnostic-count-table">
+  <details class="diagnostic-count-details" {open} aria-label={`Expand ${title} diagnostics section`}>
+    <summary>
+      <span>{title}</span>
+      <span>{rowText}</span>
+    </summary>
+    {#if description}
+      <p id={summaryId}>{description}</p>
+    {/if}
+    <div class="extractum-grid-frame table-scroll">
       <table aria-label={`Diagnostic counts for ${title}`} aria-describedby={hasDescription ? summaryId : undefined}>
         <caption class="sr-only">Diagnostic counts for {title}</caption>
         <thead>
@@ -78,10 +76,11 @@
       </table>
     </div>
   </details>
-</SurfaceCard>
+</section>
 
 <style>
-  :global(.diagnostic-count-table.ui-surface-card) {
+  :global(.diagnostic-count-table.extractum-panel-shell) {
+    padding-bottom: 0.5rem;
     gap: 0.7rem;
   }
 
