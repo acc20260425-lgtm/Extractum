@@ -242,13 +242,22 @@
           <span>{authStatus?.hasCookies ? "Stored cookie text is hidden." : "No cookies saved."}</span>
         </div>
         <div class="cookie-actions">
-          <Button variant="secondary" size="sm" onclick={startCookieEdit} disabled={loading || savingCookies}>
+          <Button
+            variant="secondary"
+            size="sm"
+            title={authStatus?.hasCookies ? "Update YouTube cookies" : "Paste or update YouTube cookies"}
+            ariaLabel={authStatus?.hasCookies ? "Update YouTube cookies" : "Paste or update YouTube cookies"}
+            onclick={startCookieEdit}
+            disabled={loading || savingCookies}
+          >
             <Cookie size={13} aria-hidden="true" />
             {authStatus?.hasCookies ? "Update cookies" : "Paste/update cookies"}
           </Button>
           <Button
             variant="danger-soft"
             size="sm"
+            title="Clear YouTube authentication and remove stored cookies"
+            ariaLabel="Clear YouTube authentication and remove stored cookies"
             onclick={clearAuth}
             disabled={loading || clearingAuth || !authStatus?.hasCookies}
           >
@@ -292,11 +301,22 @@
           ></textarea>
         </label>
         <div class="actions">
-          <Button onclick={saveCookies} disabled={!canSaveCookies}>
+          <Button
+            title="Save YouTube cookies"
+            ariaLabel="Save YouTube cookies"
+            onclick={saveCookies}
+            disabled={!canSaveCookies}
+          >
             <Save size={15} aria-hidden="true" />
             {savingCookies ? "Saving..." : "Save cookies"}
           </Button>
-          <Button variant="secondary" onclick={cancelCookieEdit} disabled={savingCookies}>
+          <Button
+            variant="secondary"
+            title="Cancel cookie editor"
+            ariaLabel="Cancel cookie editor"
+            onclick={cancelCookieEdit}
+            disabled={savingCookies}
+          >
             <X size={15} aria-hidden="true" />
             Cancel cookie edit
           </Button>
@@ -410,11 +430,22 @@
     />
 
     <div class="actions">
-      <Button onclick={saveSettings} disabled={loading || savingSettings}>
+      <Button
+        title="Save YouTube settings"
+        ariaLabel="Save YouTube settings"
+        onclick={saveSettings}
+        disabled={loading || savingSettings}
+      >
         <Save size={15} aria-hidden="true" />
         {savingSettings ? "Saving..." : "Save settings"}
       </Button>
-      <Button variant="secondary" onclick={loadPanel} disabled={loading || savingSettings}>
+      <Button
+        variant="secondary"
+        title="Reload YouTube settings"
+        ariaLabel="Reload YouTube settings"
+        onclick={loadPanel}
+        disabled={loading || savingSettings}
+      >
         <RefreshCw size={15} aria-hidden="true" />
         Reload
       </Button>
