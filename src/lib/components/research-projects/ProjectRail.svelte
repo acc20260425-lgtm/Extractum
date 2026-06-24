@@ -40,9 +40,10 @@
     {#each visibleProjects as project (project.id)}
       <ExtractumButton
         variant="ghost"
-        class={project.id === selectedProjectId ? "project-row is-selected" : "project-row"}
+        class={project.id === selectedProjectId ? "project-row extractum-project-row is-selected" : "project-row extractum-project-row"}
         data-selected={project.id === selectedProjectId}
         aria-pressed={project.id === selectedProjectId}
+        aria-current={project.id === selectedProjectId ? "page" : undefined}
         onclick={() => onSelectProject(project.id)}
       >
         <span class="project-row-main">
@@ -111,24 +112,6 @@
     gap: 8px;
     padding: 8px;
     text-align: left;
-  }
-
-  :global(.project-row.extractum-button:not(.is-selected)) {
-    color: var(--extractum-text);
-    background: var(--extractum-surface);
-    border: 1px solid transparent;
-  }
-
-  :global(.project-row.extractum-button:not(.is-selected):hover) {
-    background: var(--extractum-surface-raised);
-    border-color: var(--extractum-border);
-  }
-
-  :global(.project-row.is-selected) {
-    color: var(--extractum-text);
-    background: color-mix(in srgb, var(--extractum-primary) 12%, var(--extractum-surface));
-    border: 1px solid color-mix(in srgb, var(--extractum-primary) 28%, var(--extractum-border));
-    box-shadow: inset 3px 0 0 var(--extractum-primary);
   }
 
   .project-row-main {

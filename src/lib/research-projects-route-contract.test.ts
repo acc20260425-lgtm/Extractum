@@ -118,8 +118,20 @@ describe("projects mvp route contract", () => {
 
   it("keeps project navigation rows visually neutral until selected", () => {
     expect(railSource).toContain("data-selected={project.id === selectedProjectId}");
-    expect(railSource).toContain(".project-row.extractum-button:not(.is-selected)");
-    expect(railSource).toContain("box-shadow: inset 3px 0 0 var(--extractum-primary)");
+    expect(railSource).toContain("extractum-project-row");
+    expect(baseStylesSource).toContain(".extractum-project-row:not(.is-selected):hover");
+    expect(baseStylesSource).toContain("box-shadow: inset 3px 0 0 var(--extractum-primary)");
+  });
+
+  it("shares the project row selected-state recipe across project navigation variants", () => {
+    expect(baseStylesSource).toContain(".extractum-project-row");
+    expect(baseStylesSource).toContain(".extractum-project-row.is-selected");
+    expect(railSource).toContain("extractum-project-row");
+    expect(railSource).toContain('aria-current={project.id === selectedProjectId ? "page" : undefined}');
+    expect(shellSource).toContain("tree-project-item-row extractum-project-row");
+    expect(shellSource).toContain("data-selected={workflowState.selectedProjectId === project.id}");
+    expect(shellSource).toContain("class:is-selected={workflowState.selectedProjectId === project.id}");
+    expect(shellSource).toContain('aria-current={workflowState.selectedProjectId === project.id ? "page" : undefined}');
   });
 
   it("labels project data grids for assistive technology", () => {

@@ -155,6 +155,26 @@ body {
   padding: 10px 12px;
 }
 
+.extractum-project-row {
+  border: 1px solid transparent;
+  border-radius: var(--extractum-radius);
+  color: var(--extractum-text);
+  background: transparent;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.extractum-project-row:not(.is-selected):hover {
+  background: var(--extractum-surface-raised);
+  border-color: var(--extractum-border);
+}
+
+.extractum-project-row.is-selected {
+  color: var(--extractum-text);
+  background: color-mix(in srgb, var(--extractum-primary) 12%, var(--extractum-surface));
+  border-color: color-mix(in srgb, var(--extractum-primary) 28%, var(--extractum-border));
+  box-shadow: inset 3px 0 0 var(--extractum-primary);
+}
+
 .extractum-svar-theme {
   --wx-color-primary: var(--extractum-primary);
   --wx-color-primary-selected: color-mix(in srgb, var(--extractum-primary) 14%, transparent);

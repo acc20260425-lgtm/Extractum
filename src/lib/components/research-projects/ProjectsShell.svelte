@@ -216,12 +216,14 @@
         <div class="projects-tree-list">
           {#each workflowState.projects as project (project.id)}
             <div
-              class="tree-project-item-row group"
-              class:active={workflowState.selectedProjectId === project.id}
+              class="tree-project-item-row extractum-project-row group"
+              class:is-selected={workflowState.selectedProjectId === project.id}
+              data-selected={workflowState.selectedProjectId === project.id}
             >
               <button
                 type="button"
                 class="tree-project-item"
+                aria-current={workflowState.selectedProjectId === project.id ? "page" : undefined}
                 onclick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -582,21 +584,7 @@
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    border-radius: 8px;
-    transition: background 0.15s, border-color 0.15s;
-    border: 1px solid transparent;
     padding-right: 4px;
-  }
-
-  .tree-project-item-row:hover {
-    background: color-mix(in srgb, var(--extractum-surface-raised) 50%, transparent);
-  }
-
-  .tree-project-item-row.active {
-    color: var(--extractum-primary);
-    background: color-mix(in srgb, var(--extractum-primary) 10%, transparent);
-    border-color: color-mix(in srgb, var(--extractum-primary) 15%, transparent);
-    font-weight: 600;
   }
 
   .tree-project-item {
@@ -619,8 +607,9 @@
     color: var(--extractum-foreground);
   }
 
-  .tree-project-item-row.active .tree-project-item {
+  .tree-project-item-row.is-selected .tree-project-item {
     color: var(--extractum-primary);
+    font-weight: 600;
   }
 
   .tree-project-actions {
