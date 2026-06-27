@@ -69,6 +69,24 @@
   let inspectorCollapsed = $state(false);
   let inspectorWidth = $derived(inspectorCollapsed ? "40px" : "380px");
 
+  // Roving tabindex: tracks which project owns tabindex=0
+  let focusedProjectId = $state<string | null>(workflowState.selectedProjectId ?? null);
+
+  $effect(() => {
+    if (workflowState.selectedProjectId) {
+      focusedProjectId = workflowState.selectedProjectId;
+    }
+  });
+
+  $effect(() => {
+    const ids = workflowState.projects.map((p) => p.id);
+    if (focusedProjectId && !ids.includes(focusedProjectId)) {
+      focusedProjectId = ids[0] ?? null;
+    } else if (!focusedProjectId && ids.length > 0) {
+      focusedProjectId = ids[0];
+    }
+  });
+
   $effect(() => {
     if (projectsSharedState.showCreateDialog) {
       editorMode = "create";
@@ -213,27 +231,53 @@
         </div>
 
         <!-- List of Projects -->
-        <div class="projects-tree-list">
+        <div class="projects-tree-list" role="tree" aria-label="Research projects"
+          onkeydown={(e) => {
+            const ids = workflowState.projects.map((p) => p.id);
+            const current = ids.indexOf(focusedProjectId ?? "");
+            let next: number | null = null;
+            if (e.key === "ArrowDown") { e.preventDefault(); next = Math.min(current + 1, ids.length - 1); }
+            else if (e.key === "ArrowUp") { e.preventDefault(); next = Math.max(current - 1, 0); }
+            else if (e.key === "Home") { e.preventDefault(); next = 0; }
+            else if (e.key === "End") { e.preventDefault(); next = ids.length - 1; }
+            if (next !== null) {
+              focusedProjectId = ids[next];
+              // selection-follows-focus: arrow navigation selects immediately
+              onSelectProject(ids[next]);
+              (e.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[role="treeitem"]')[next]?.focus();
+            }
+          }}
+        >
           {#each workflowState.projects as project (project.id)}
             <div
+              role="treeitem"
+              tabindex={focusedProjectId === project.id ? 0 : -1}
               class="tree-project-item-row extractum-project-row group"
               class:is-selected={workflowState.selectedProjectId === project.id}
               data-selected={workflowState.selectedProjectId === project.id}
-            >
-              <button
-                type="button"
-                class="tree-project-item"
-                aria-current={workflowState.selectedProjectId === project.id ? "page" : undefined}
-                onclick={(e) => {
+              aria-selected={workflowState.selectedProjectId === project.id}
+              onclick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                focusedProjectId = project.id;
+                onSelectProject(project.id);
+              }}
+              onkeydown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  e.stopPropagation();
+                  focusedProjectId = project.id;
                   onSelectProject(project.id);
-                }}
-                oncontextmenu={(e) => openContextMenu(e, project.id, project.title)}
+                }
+              }}
+              oncontextmenu={(e) => openContextMenu(e, project.id, project.title)}
+            >
+              <div
+                class="tree-project-item"
+                aria-hidden="true"
               >
                 <span class="project-dot-indicator" class:running={project.status === "running"} class:ready={project.status === "ready"}></span>
                 <span class="project-title-text" title={project.title}>{project.title}</span>
-              </button>
+              </div>
 
               <!-- Inline Action Buttons (Visible on Hover) -->
               <div class="tree-project-actions">
@@ -267,10 +311,10 @@
               </div>
             </div>
           {/each}
-
           <!-- Add Project Action -->
           <button
             type="button"
+            data-slot="button"
             class="tree-add-project-btn"
             aria-label="Create project"
             onclick={(e) => {
@@ -515,69 +559,88 @@
     transform: translateY(0);
   }
 
+  /* ─── Tree design tokens ────────────────────────────────────────────────────
+     All intentional deviations from the global design system are declared here.
+     Compact desktop-like feel: tighter rows, system font, no item border-radius.
+  ──────────────────────────────────────────────────────────────────────────── */
   .project-tree-rail {
+    --tree-font-size: 13px;
+    --tree-label-font-size: 11px;
+    --tree-row-line-height: 20px;
+    --tree-item-padding-v: 3px;
+    --tree-item-padding-h: 6px;
+    --tree-item-radius: 0px;
+    --tree-indent: 20px;
+    --tree-hover-bg: color-mix(in srgb, var(--extractum-border) 30%, transparent);
+    --tree-selected-bg: color-mix(in srgb, var(--extractum-primary) 14%, var(--extractum-surface));
+    --tree-selected-accent: inset 2px 0 0 var(--extractum-primary);
+
     display: flex;
     min-height: 0;
     flex-direction: column;
-    gap: 16px;
-    padding: 1.5rem 1rem;
+    gap: 0;
+    padding: 0;
     border-right: 1px solid var(--extractum-border);
     background: var(--extractum-surface-subtle);
+    font-family: var(--extractum-font);
+    font-size: var(--tree-font-size);
   }
 
   .tree-rail-header h1 {
-    font-size: 1.35rem;
+    font-size: var(--tree-label-font-size);
     font-weight: 700;
     margin: 0;
+    padding: 12px 12px 6px;
     color: var(--extractum-foreground);
-    letter-spacing: -0.02em;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    opacity: 0.6;
   }
 
   .projects-tree-wrapper {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    padding-left: 0.1rem;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding-bottom: 4px;
   }
 
   .projects-tree-root-header {
     display: flex;
     align-items: center;
-    gap: 0.45rem;
-    padding: 0.25rem 0.2rem;
+    gap: 4px;
+    padding: var(--tree-item-padding-v) var(--tree-item-padding-h);
     color: var(--extractum-muted);
-    font-size: 0.82rem;
-    font-weight: 600;
+    font-size: var(--tree-label-font-size);
+    font-weight: 700;
     user-select: none;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: default;
   }
 
   .folder-chevron-wrapper {
     color: var(--extractum-muted);
-    opacity: 0.8;
     display: inline-flex;
     align-items: center;
   }
 
   .folder-icon-wrapper {
-    color: var(--extractum-primary);
-    opacity: 0.9;
+    color: var(--extractum-muted);
     display: inline-flex;
     align-items: center;
   }
 
   .folder-label {
-    text-transform: uppercase;
-    font-size: 0.72rem;
-    letter-spacing: 0.05em;
+    flex: 1;
   }
 
   .projects-tree-list {
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
-    padding-left: 0.9rem;
-    border-left: 1px dashed var(--extractum-border);
-    margin-left: 0.55rem;
+    gap: 0;
+    padding-left: var(--tree-indent);
   }
 
   .tree-project-item-row {
@@ -585,40 +648,56 @@
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    padding-right: 4px;
+    border-radius: var(--tree-item-radius);
   }
 
   .tree-project-item {
     display: flex;
     align-items: center;
-    gap: 0.45rem;
-    padding: 0.35rem 0.5rem;
-    color: var(--extractum-muted);
-    font-size: 0.8rem;
-    font-weight: inherit;
+    gap: 6px;
+    padding: var(--tree-item-padding-v) var(--tree-item-padding-h) var(--tree-item-padding-v) 4px;
+    color: var(--extractum-foreground);
+    font-size: var(--tree-font-size);
+    font-weight: 400;
     text-align: left;
     background: transparent;
     border: none;
     cursor: pointer;
     flex: 1;
     min-width: 0;
+    border-radius: var(--tree-item-radius);
+    line-height: var(--tree-row-line-height);
+    transition: none;
   }
 
-  .tree-project-item-row:hover .tree-project-item {
-    color: var(--extractum-foreground);
-  }
-
+  .tree-project-item-row:hover .tree-project-item,
   .tree-project-item-row.is-selected .tree-project-item {
-    color: var(--extractum-primary);
-    font-weight: 600;
+    color: var(--extractum-foreground);
+    font-weight: 400;
+  }
+
+  /* Override global row states for the tree zone */
+  :global(.project-tree-rail .extractum-project-row:not(.is-selected):hover) {
+    background: var(--tree-hover-bg);
+    border-color: transparent;
+    box-shadow: none;
+    border-radius: var(--tree-item-radius);
+  }
+
+  :global(.project-tree-rail .extractum-project-row.is-selected) {
+    background: var(--tree-selected-bg);
+    border-color: transparent;
+    box-shadow: var(--tree-selected-accent);
+    border-radius: var(--tree-item-radius);
   }
 
   .tree-project-actions {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 1px;
+    padding-right: 4px;
     opacity: 0;
-    transition: opacity 0.15s ease;
+    transition: opacity 0.1s ease;
   }
 
   .tree-project-item-row:hover .tree-project-actions {
@@ -629,27 +708,27 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
     padding: 0;
-    border-radius: 4px;
+    border-radius: 3px;
     background: transparent;
     border: none;
     color: var(--extractum-muted);
     cursor: pointer;
-    transition: color 0.12s, background 0.12s;
+    transition: color 0.1s, background 0.1s;
   }
 
   .action-btn :global(svg) {
-    width: 12px !important;
-    height: 12px !important;
+    width: 11px !important;
+    height: 11px !important;
     stroke: currentColor !important;
     display: block !important;
   }
 
   .action-btn:hover {
-    color: var(--extractum-text);
-    background: color-mix(in srgb, var(--extractum-border) 40%, transparent);
+    color: var(--extractum-foreground);
+    background: color-mix(in srgb, var(--extractum-border) 50%, transparent);
   }
 
   .action-btn.delete-btn:hover {
@@ -661,13 +740,13 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--extractum-border);
+    background: color-mix(in srgb, var(--extractum-muted) 35%, transparent);
     flex-shrink: 0;
   }
 
   .project-dot-indicator.running {
     background: var(--extractum-primary);
-    box-shadow: 0 0 8px var(--extractum-primary);
+    box-shadow: 0 0 5px color-mix(in srgb, var(--extractum-primary) 50%, transparent);
     animation: pulse 2s infinite;
   }
 
@@ -685,22 +764,24 @@
   .tree-add-project-btn {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
-    padding: 0.35rem 0.5rem;
-    border-radius: 8px;
+    gap: 5px;
+    padding: var(--tree-item-padding-v) var(--tree-item-padding-h) var(--tree-item-padding-v) 4px;
+    border-radius: var(--tree-item-radius);
     color: var(--extractum-muted);
-    font-size: 0.78rem;
+    font-size: var(--tree-font-size);
+    font-family: inherit;
     background: transparent;
-    border: 1px dashed var(--extractum-border);
+    border: none;
     cursor: pointer;
-    margin-top: 0.25rem;
-    width: fit-content;
-    transition: border-color 0.15s, color 0.15s;
+    width: 100%;
+    line-height: var(--tree-row-line-height);
+    transition: color 0.1s, background 0.1s;
+    margin-top: 2px;
   }
 
   .tree-add-project-btn:hover {
-    border-color: var(--extractum-primary);
-    color: var(--extractum-primary);
+    color: var(--extractum-foreground);
+    background: var(--tree-hover-bg);
   }
 
   .context-menu {

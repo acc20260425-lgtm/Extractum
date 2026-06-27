@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 
 use crate::error::{AppError, AppResult};
+use crate::tx::{begin_immediate, commit, rollback};
 
 use super::identity::{TelegramPeerKind, TelegramResolutionStrategy};
 use super::types::{TelegramSourceKind, TELEGRAM_SOURCE_TYPE};
@@ -72,7 +73,9 @@ pub(crate) async fn run_legacy_telegram_source_metadata_cleanup(
     pool: &sqlx::SqlitePool,
     mode: LegacyTelegramMetadataCleanupMode,
 ) -> AppResult<LegacyTelegramSourceMetadataCleanupReport> {
-    let mut tx = pool.begin().await.map_err(AppError::database)?;
+    // BEGIN IMMEDIATE so the read→write upgrade in Clear mode cannot fail with
+    // SQLITE_BUSY_SNAPSHOT (517) under concurrent writers.
+    let mut conn = begin_immediate(pool).await?;
     let rows: Vec<LegacyTelegramMetadataCandidateRow> = sqlx::query_as(
         r#"
         SELECT
@@ -93,7 +96,7 @@ pub(crate) async fn run_legacy_telegram_source_metadata_cleanup(
         "#,
     )
     .bind(TELEGRAM_SOURCE_TYPE)
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut *conn)
     .await
     .map_err(AppError::database)?;
 
@@ -118,14 +121,14 @@ pub(crate) async fn run_legacy_telegram_source_metadata_cleanup(
             )
             .bind(source_id)
             .bind(TELEGRAM_SOURCE_TYPE)
-            .execute(&mut *tx)
+            .execute(&mut *conn)
             .await
             .map_err(AppError::database)?;
             cleared_source_ids.push(*source_id);
         }
-        tx.commit().await.map_err(AppError::database)?;
+        commit(&mut conn).await?;
     } else {
-        tx.rollback().await.map_err(AppError::database)?;
+        rollback(&mut conn).await?;
     }
 
     Ok(build_report(

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Download, Play } from "@lucide/svelte";
-  import { ExtractumButton, ProviderBadge } from "$lib/components/extractum-ui";
+  import { ExtractumButton } from "$lib/components/extractum-ui";
   import { projectRunDisabledReason, type ResearchProjectView } from "$lib/ui/research-projects-model";
   import type { ProjectSourceRecord } from "$lib/types/projects";
   import type { LlmProfile } from "$lib/types/llm";
@@ -57,12 +57,11 @@
         {/each}
       </select>
     </label>
-    <ProviderBadge provider="telegram" label="Library" />
-    <ExtractumButton
+<ExtractumButton
       disabled={loading || runDisabledReason !== null}
       onclick={onRunProject}
-      aria-label="Run project analysis"
-      title="Run project analysis"
+      aria-label={runDisabledReason ?? "Run project analysis"}
+      title={runDisabledReason ?? "Run project analysis"}
     >
       <Play size={14} aria-hidden="true" />
       Run
@@ -84,11 +83,9 @@
   .command-bar {
     display: flex;
     min-width: 0;
-    min-height: 58px;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
     padding: 10px 14px;
     border-bottom: 1px solid var(--extractum-border);
     background: var(--extractum-surface-raised);
@@ -96,8 +93,7 @@
 
   .project-context {
     display: flex;
-    flex: 1 1 180px;
-    min-width: 180px;
+    flex: 0 0 auto;
     flex-direction: column;
     gap: 2px;
   }
@@ -118,7 +114,7 @@
     min-width: 0;
     flex-wrap: wrap;
     align-items: end;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 8px;
   }
 

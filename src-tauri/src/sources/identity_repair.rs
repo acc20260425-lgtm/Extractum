@@ -8,6 +8,7 @@ use tauri::Manager;
 use tokio::sync::RwLock;
 
 use crate::error::{AppError, AppErrorKind, AppResult};
+use crate::tx::{begin_immediate, commit, rollback};
 
 use super::identity::{
     canonical_telegram_external_id, normalize_telegram_username, TelegramPeerKind,
@@ -171,7 +172,10 @@ pub(crate) async fn repair_source_identity(
     pool: &sqlx::SqlitePool,
     mode: SourceIdentityRepairMode,
 ) -> AppResult<SourceIdentityRepairReport> {
-    let mut tx = pool.begin().await.map_err(AppError::database)?;
+    // BEGIN IMMEDIATE acquires the write lock up front, so the later read→write
+    // upgrade cannot fail with SQLITE_BUSY_SNAPSHOT (517) when other startup tasks
+    // write to the shared database concurrently.
+    let mut conn = begin_immediate(pool).await?;
 
     let rows: Vec<TelegramSourceRepairRow> = sqlx::query_as(
         r#"
@@ -181,7 +185,7 @@ pub(crate) async fn repair_source_identity(
         ORDER BY id
         "#,
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut *conn)
     .await
     .map_err(AppError::database)?;
 
@@ -193,7 +197,7 @@ pub(crate) async fn repair_source_identity(
         ORDER BY source_id
         "#,
     )
-    .fetch_all(&mut *tx)
+    .fetch_all(&mut *conn)
     .await
     .map_err(AppError::database)?;
 
@@ -229,7 +233,7 @@ pub(crate) async fn repair_source_identity(
     ));
 
     if !report.fatal_errors.is_empty() {
-        tx.rollback().await.map_err(AppError::database)?;
+        rollback(&mut conn).await?;
         if mode == SourceIdentityRepairMode::DryRun {
             return Ok(report);
         }
@@ -239,7 +243,7 @@ pub(crate) async fn repair_source_identity(
     for candidate in candidates {
         report.repaired_sources.push(candidate.source_id);
         if mode == SourceIdentityRepairMode::Apply {
-            upsert_telegram_source_identity(&mut tx, &candidate).await?;
+            upsert_telegram_source_identity(&mut conn, &candidate).await?;
         }
     }
 
@@ -251,13 +255,13 @@ pub(crate) async fn repair_source_identity(
                 WHERE source_type = 'telegram'
             "#,
         )
-        .execute(&mut *tx)
+        .execute(&mut *conn)
         .await
         .map_err(AppError::database)?;
         report.canonical_index_created = true;
-        tx.commit().await.map_err(AppError::database)?;
+        commit(&mut conn).await?;
     } else {
-        tx.rollback().await.map_err(AppError::database)?;
+        rollback(&mut conn).await?;
     }
 
     Ok(report)
@@ -498,7 +502,7 @@ fn projection_drift_conflict_errors(
 }
 
 async fn upsert_telegram_source_identity(
-    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    conn: &mut sqlx::SqliteConnection,
     candidate: &TelegramRepairCandidate,
 ) -> AppResult<()> {
     sqlx::query(
@@ -529,7 +533,7 @@ async fn upsert_telegram_source_identity(
     .bind(candidate.username.as_deref())
     .bind(candidate.access_hash)
     .bind(candidate.avatar_cache_key.as_deref())
-    .execute(&mut **tx)
+    .execute(&mut *conn)
     .await
     .map_err(AppError::database)?;
     Ok(())

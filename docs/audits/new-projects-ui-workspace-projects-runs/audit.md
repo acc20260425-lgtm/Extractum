@@ -1,4 +1,4 @@
-# New Projects UI Audit: Workspace, Projects, Runs
+﻿# New Projects UI Audit: Workspace, Projects, Runs
 
 Date: 2026-06-24  
 Capture source: running Tauri MCP window, no app restart, no code changes.  
@@ -7,10 +7,10 @@ Focus: style consistency, CSS duplication candidates, UX density, accessibility 
 
 ## Evidence
 
-1. `01-current-window.png` — Workspace / Sources tab.
-2. `02-projects-list.png` — Projects list route.
-3. `03-project-runs.png` — global Project Runs route with selected run result.
-4. `04-workspace-runs-tab.png` — Workspace / Runs tab.
+1. `01-current-window.png` вЂ” Workspace / Sources tab.
+2. `02-projects-list.png` вЂ” Projects list route.
+3. `03-project-runs.png` вЂ” global Project Runs route with selected run result.
+4. `04-workspace-runs-tab.png` вЂ” Workspace / Runs tab.
 
 ## Step Notes
 
@@ -48,7 +48,7 @@ Strengths:
 - The selected project remains connected to the central workspace and inspector.
 
 Issues:
-- Two projects (`Project 2`, `Тест3`) appear as full blue cards, while the selected project appears pale. This reverses the expected emphasis: unselected items look more primary than the active item.
+- Two projects (`Project 2`, `Проект 3`) appear as full blue cards, while the selected project appears pale. This reverses the expected emphasis: unselected items look more primary than the active item.
 - The Projects route still renders the full Workspace center and inspector. As a result, `Projects` feels like an alternate sidebar mode rather than a distinct page.
 - The left list uses card-style project rows while the Workspace route uses tree rows; both represent the same entity but with different visual systems.
 - `Create project` is a full primary button above the list, while edit/delete are hidden icon affordances in other project navigation contexts. The action model changes by page.
@@ -121,7 +121,7 @@ Accessibility risks:
 
 4. Mixed Russian and English labels are visible in the same operational surface.
    - Evidence: all screenshots.
-   - Examples: `Workspace`, `Sources`, `Evidence`, `Create project`, alongside `Подключено`, `Материалы`, `В библиотеке`.
+   - Examples: `Workspace`, `Sources`, `Evidence`, `Create project`, alongside `Проекты`, `Категории`, `В процессе`.
    - Recommendation: choose one locale per surface or add an explicit localization pass.
 
 ### CSS Duplication Candidates
@@ -130,19 +130,19 @@ Observed via source inspection, not from screenshots alone.
 
 1. Panel/card shell recipe is repeated.
    - Pattern: `border: 1px solid var(--extractum-border)`, `border-radius: var(--extractum-radius)`, `background: var(--extractum-surface-raised)`, `padding: 12px`.
-   - Seen in: `ProjectInspector.svelte`, `ProjectWorkspace.svelte`, `ProjectRunsTab.svelte`, `ConnectFromLibrary.svelte`, `ProjectSourceSummary.svelte`, `ProjectRunReportPanel.svelte`, `YoutubeSummaryRunsPanel.svelte`.
+   - Seen in: `src/lib/components/research-projects/ProjectInspector.svelte`, `src/lib/components/research-projects/ProjectWorkspace.svelte`, `src/lib/components/research-projects/ProjectRunsTab.svelte`, `src/lib/components/research-projects/ConnectFromLibrary.svelte`, `src/lib/components/research-projects/ProjectSourceSummary.svelte`, `src/lib/components/research-projects/ProjectRunReportPanel.svelte`, `src/lib/components/research-projects/YoutubeSummaryRunsPanel.svelte`.
    - Candidate: shared `.extractum-panel` / `.extractum-card` utility or component-level shell.
 
 2. Tab styling is locally overridden in multiple places.
-   - Seen in: `ProjectWorkspace.svelte` workspace tabs and `ProjectRunReportPanel.svelte` sidebar tabs.
+   - Seen in: `src/lib/components/research-projects/ProjectWorkspace.svelte` workspace tabs and `src/lib/components/research-projects/ProjectRunReportPanel.svelte` sidebar tabs.
    - Candidate: shared tab variants for line tabs, sidebar tabs, and compact result tabs.
 
 3. Run/result cards are duplicated across Workspace Runs and global Runs.
-   - Seen in: `ProjectRunsTab.svelte`, `ProjectRunsScreen.svelte`, `ProjectRunReportPanel.svelte`, `YoutubeSummaryRunsPanel.svelte`.
+   - Seen in: `src/lib/components/research-projects/ProjectRunsTab.svelte`, `src/lib/components/research-projects/ProjectRunsScreen.svelte`, `src/lib/components/research-projects/ProjectRunReportPanel.svelte`, `src/lib/components/research-projects/YoutubeSummaryRunsPanel.svelte`.
    - Candidate: shared `RunStatusChip`, `RunCard`, and `RunActions` primitives.
 
 4. Project row/list styling is split.
-   - Seen in: `ProjectsShell.svelte`, `ProjectRail.svelte`, Projects list route state.
+   - Seen in: `src/lib/components/research-projects/ProjectsShell.svelte`, `src/lib/components/research-projects/ProjectRail.svelte`, Projects list route state.
    - Candidate: one `ProjectListItem` style recipe with tree and card density variants.
 
 ### UX Density

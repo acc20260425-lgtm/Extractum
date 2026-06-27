@@ -161,4 +161,110 @@ mod tests {
         assert_eq!(error.message, "stop here");
         assert_eq!(count, 0);
     }
+
+    use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
+    use std::time::Duration;
+
+    async fn file_pool(db_path: &std::path::Path, busy_timeout: Duration) -> sqlx::SqlitePool {
+        let options = SqliteConnectOptions::new()
+            .filename(db_path)
+            .create_if_missing(true)
+            .journal_mode(SqliteJournalMode::Wal)
+            .busy_timeout(busy_timeout);
+        SqlitePoolOptions::new()
+            .max_connections(4)
+            .connect_with(options)
+            .await
+            .expect("connect file pool")
+    }
+
+    // Reproduces the first-launch failure: a DEFERRED transaction that reads, then
+    // writes, fails with SQLITE_BUSY_SNAPSHOT (extended code 517, "database is locked")
+    // when another connection commits between the read and the write. busy_timeout does
+    // NOT rescue a snapshot conflict, so the failure is immediate.
+    #[tokio::test]
+    async fn deferred_read_then_write_hits_busy_snapshot_under_concurrent_writer() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let pool = file_pool(&dir.path().join("snap.db"), Duration::from_millis(200)).await;
+        sqlx::query("CREATE TABLE t (id INTEGER PRIMARY KEY, n INTEGER NOT NULL)")
+            .execute(&pool)
+            .await
+            .expect("create table");
+        sqlx::query("INSERT INTO t (n) VALUES (1)")
+            .execute(&pool)
+            .await
+            .expect("seed row");
+
+        // Connection A: deferred BEGIN, then read -> takes a fixed WAL read snapshot.
+        let mut a = pool.acquire().await.expect("acquire A");
+        sqlx::query("BEGIN").execute(&mut *a).await.expect("begin deferred");
+        let _read: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM t")
+            .fetch_one(&mut *a)
+            .await
+            .expect("read snapshot");
+
+        // Connection B: write + commit, advancing the WAL past A's snapshot.
+        {
+            let mut b = pool.acquire().await.expect("acquire B");
+            sqlx::query("INSERT INTO t (n) VALUES (2)")
+                .execute(&mut *b)
+                .await
+                .expect("concurrent write commits");
+        }
+
+        // Connection A upgrades read -> write and must fail with a busy snapshot.
+        let err = sqlx::query("INSERT INTO t (n) VALUES (3)")
+            .execute(&mut *a)
+            .await
+            .expect_err("deferred read->write upgrade must fail under a concurrent writer");
+        assert!(
+            err.to_string().to_lowercase().contains("locked"),
+            "expected a 'database is locked' busy snapshot, got: {err}"
+        );
+    }
+
+    // Proves the fix: BEGIN IMMEDIATE takes the write lock up front, so the same
+    // read-then-write cycle completes even while another connection contends for writes.
+    #[tokio::test]
+    async fn begin_immediate_read_then_write_survives_concurrent_writer() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let pool = file_pool(&dir.path().join("immediate.db"), Duration::from_secs(5)).await;
+        sqlx::query("CREATE TABLE t (id INTEGER PRIMARY KEY, n INTEGER NOT NULL)")
+            .execute(&pool)
+            .await
+            .expect("create table");
+        sqlx::query("INSERT INTO t (n) VALUES (1)")
+            .execute(&pool)
+            .await
+            .expect("seed row");
+
+        // Connection A: BEGIN IMMEDIATE acquires the write lock before reading.
+        let mut a = begin_immediate(&pool).await.expect("begin immediate");
+        let _read: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM t")
+            .fetch_one(&mut *a)
+            .await
+            .expect("read under immediate");
+
+        // A concurrent writer contends for the write lock; it must wait, not corrupt A.
+        let pool_b = pool.clone();
+        let writer =
+            tokio::spawn(async move { sqlx::query("INSERT INTO t (n) VALUES (99)").execute(&pool_b).await });
+
+        // A's read -> write cycle succeeds; there is no snapshot to invalidate.
+        sqlx::query("INSERT INTO t (n) VALUES (2)")
+            .execute(&mut *a)
+            .await
+            .expect("write under immediate must succeed");
+        commit(&mut a).await.expect("commit");
+
+        writer
+            .await
+            .expect("join writer")
+            .expect("contending writer eventually succeeds");
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM t")
+            .fetch_one(&pool)
+            .await
+            .expect("count rows");
+        assert_eq!(count, 3);
+    }
 }
