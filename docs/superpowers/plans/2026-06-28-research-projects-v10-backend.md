@@ -17,7 +17,7 @@
 - Register new migrations in `src-tauri/src/migrations.rs`; adding a `.sql` file alone is not enough.
 - `dataRange` must mirror the actual analysis corpus: `analysis_documents` with the same source/document-kind filters, plus Telegram migrated-history `items` only when enabled.
 - `get_project_data_range` filters by resolved `source_ids` from `resolve_analysis_sources`, not by `project_sources.source_id`.
-- `ProjectSummary.material_count` counts collected local-copy materials over project material source ids; direct sources use their own `source_id`, YouTube playlist sources expand to linked video `source_id`s.
+- `ProjectSummary.material_count` and `ProjectSourceRecord.item_count` count collected local-copy materials with the same rule: direct sources use their own `source_id`; YouTube playlist sources expand to linked video `source_id`s. A project with one playlist source and two linked video items must show `material_count = 2`, and that playlist source row must show `item_count = 2`.
 - `include_migrated_history=true` is valid only for Telegram and must match `start_project_analysis` validation.
 - Source status wire values are exactly `active`, `syncing`, `error`, `unavailable`; do not introduce `idle`.
 - `ProjectStatus` wire values are exactly `ready`, `running`, `needs_attention`, `empty` in snake_case.
@@ -643,6 +643,39 @@ async fn list_project_sources_includes_catalog_status_last_sync_and_handle() {
     assert_eq!(sources[0].sync_status, crate::library_sources::LibraryCatalogStatus::Error);
     assert_eq!(sources[0].handle.as_deref(), Some("video-10"));
 }
+
+#[tokio::test]
+async fn list_project_sources_counts_playlist_linked_video_materials() {
+    let pool = pool().await;
+    seed_source(&pool, 20, "youtube", "playlist").await;
+    seed_source(&pool, 21, "youtube", "video").await;
+    let project = create_project_in_pool(&pool, "Playlist rows", None)
+        .await
+        .expect("create project");
+    add_project_sources_in_pool(&pool, project.id, vec![20])
+        .await
+        .expect("add playlist source");
+    sqlx::query(
+        "INSERT INTO youtube_playlist_items (playlist_source_id, video_source_id, video_id, position, availability_status, is_removed_from_playlist) VALUES (20, 21, 'video-21', 1, 'available', 0)",
+    )
+    .execute(&pool)
+    .await
+    .expect("link playlist video");
+    sqlx::query(
+        "INSERT INTO items (id, source_id, external_id, author, published_at, ingested_at, content_zstd, item_kind) VALUES (210, 21, 'video-item-1', 'Author', 1000, 1001, x'01', 'youtube_transcript'), (211, 21, 'video-item-2', 'Author', 1002, 1003, x'01', 'youtube_description')",
+    )
+    .execute(&pool)
+    .await
+    .expect("seed video items");
+
+    let sources = list_project_sources_in_pool(&pool, &SourceJobState::new(), project.id)
+        .await
+        .expect("list project sources");
+
+    assert_eq!(sources.len(), 1);
+    assert_eq!(sources[0].source_id, 20);
+    assert_eq!(sources[0].item_count, 2);
+}
 ```
 
 - [ ] **Step 4: Run test to verify it fails**
@@ -650,7 +683,7 @@ async fn list_project_sources_includes_catalog_status_last_sync_and_handle() {
 Run:
 
 ```powershell
-cargo test projects::tests::list_project_sources_includes_catalog_status_last_sync_and_handle
+cargo test projects::tests::list_project_sources_includes_catalog_status_last_sync_and_handle projects::tests::list_project_sources_counts_playlist_linked_video_materials
 ```
 
 Expected: compile failure because the `ProjectSourceRecord` fields and new `list_project_sources_in_pool` signature do not exist yet.
@@ -735,6 +768,39 @@ Use this query body:
 ensure_project_exists(pool, project_id).await?;
 let rows: Vec<ProjectSourceRow> = sqlx::query_as(
     r#"
+    WITH source_material_sources AS (
+        SELECT
+            ps.project_id,
+            ps.source_id AS row_source_id,
+            CASE
+                WHEN s.source_type = 'youtube'
+                 AND s.source_subtype = 'playlist'
+                THEN ypi.video_source_id
+                ELSE ps.source_id
+            END AS material_source_id
+        FROM project_sources ps
+        JOIN sources s ON s.id = ps.source_id
+        LEFT JOIN youtube_playlist_items ypi
+            ON ypi.playlist_source_id = ps.source_id
+           AND ypi.video_source_id IS NOT NULL
+           AND ypi.is_removed_from_playlist = 0
+        WHERE ps.project_id = ?
+          AND (
+              s.source_type <> 'youtube'
+           OR s.source_subtype <> 'playlist'
+           OR ypi.video_source_id IS NOT NULL
+          )
+    ),
+    item_counts AS (
+        SELECT
+            sms.project_id,
+            sms.row_source_id AS source_id,
+            COUNT(DISTINCT items.id) AS item_count
+        FROM source_material_sources sms
+        JOIN items ON items.source_id = sms.material_source_id
+        WHERE items.content_zstd IS NOT NULL
+        GROUP BY sms.project_id, sms.row_source_id
+    )
     SELECT
         ps.project_id,
         s.id AS source_id,
@@ -745,18 +811,20 @@ let rows: Vec<ProjectSourceRow> = sqlx::query_as(
             WHEN s.account_id IS NOT NULL THEN 'Account #' || s.account_id
             ELSE NULL
         END AS subtitle,
-        COUNT(items.content_zstd) AS item_count,
+        COALESCE(item_counts.item_count, 0) AS item_count,
         ps.added_at,
         s.last_synced_at,
         s.external_id
     FROM project_sources ps
     JOIN sources s ON s.id = ps.source_id
-    LEFT JOIN items ON items.source_id = s.id
+    LEFT JOIN item_counts
+        ON item_counts.project_id = ps.project_id
+       AND item_counts.source_id = ps.source_id
     WHERE ps.project_id = ?
-    GROUP BY ps.project_id, s.id, s.source_type, s.source_subtype, s.title, s.account_id, s.last_synced_at, s.external_id, ps.added_at
     ORDER BY ps.added_at DESC, s.id DESC
     "#,
 )
+.bind(project_id)
 .bind(project_id)
 .fetch_all(pool)
 .await
@@ -816,7 +884,7 @@ Update existing tests that call `list_project_sources_in_pool` by passing `&Sour
 Run:
 
 ```powershell
-cargo test projects::tests::add_project_sources_is_idempotent_and_lists_ui_ready_rows projects::tests::list_project_sources_includes_catalog_status_last_sync_and_handle
+cargo test projects::tests::add_project_sources_is_idempotent_and_lists_ui_ready_rows projects::tests::list_project_sources_includes_catalog_status_last_sync_and_handle projects::tests::list_project_sources_counts_playlist_linked_video_materials
 cargo test library_sources::tests::query_library_catalog
 cargo check
 ```
@@ -863,7 +931,7 @@ Create `src-tauri/src/projects/read_model.rs` with the test module first:
 use tauri::AppHandle;
 
 use crate::db::get_pool;
-use crate::error::{AppError, AppResult};
+use crate::error::{AppError, AppErrorKind, AppResult};
 
 #[cfg(test)]
 mod tests {
@@ -1365,7 +1433,7 @@ use crate::analysis::corpus::{
 };
 use crate::analysis::report::resolve_analysis_telegram_history_scope;
 use crate::db::get_pool;
-use crate::error::{AppError, AppResult};
+use crate::error::{AppError, AppErrorKind, AppResult};
 
 #[cfg(test)]
 mod tests {
@@ -1514,6 +1582,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn project_data_range_returns_nulls_for_unmaterialized_playlist_project() {
+        let pool = pool().await;
+        seed_project(&pool, 5).await;
+        seed_source(&pool, 50, "youtube", "playlist").await;
+        attach(&pool, 5, 50).await;
+
+        let range = get_project_data_range_in_pool(&pool, 5, None, false)
+            .await
+            .expect("unmaterialized playlist range");
+
+        assert_eq!(range, ProjectDataRange { from: None, to: None });
+    }
+
+    #[tokio::test]
+    async fn project_data_range_rejects_migrated_history_for_unmaterialized_playlist_project() {
+        let pool = pool().await;
+        seed_project(&pool, 6).await;
+        seed_source(&pool, 60, "youtube", "playlist").await;
+        attach(&pool, 6, 60).await;
+
+        let error = get_project_data_range_in_pool(&pool, 6, None, true)
+            .await
+            .expect_err("unmaterialized playlist migrated history rejected");
+
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+        assert!(error.message.contains("Migrated historical scope"));
+    }
+
+    #[tokio::test]
     async fn project_data_range_rejects_migrated_history_for_non_telegram() {
         let pool = pool().await;
         seed_project(&pool, 3).await;
@@ -1535,7 +1632,7 @@ mod tests {
 Run:
 
 ```powershell
-cargo test projects::data_range::tests::project_data_range_returns_nulls_for_empty_project projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources projects::data_range::tests::project_data_range_rejects_migrated_history_for_non_telegram
+cargo test projects::data_range::tests::project_data_range_returns_nulls_for_empty_project projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources projects::data_range::tests::project_data_range_returns_nulls_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_non_telegram
 ```
 
 Expected: compile failure because `ProjectDataRange` and `get_project_data_range_in_pool` are not implemented.
@@ -1581,7 +1678,38 @@ pub(crate) async fn get_project_data_range_in_pool(
         return Ok(ProjectDataRange { from: None, to: None });
     }
 
-    let resolved = resolve_analysis_sources(pool, None, None, Some(project_id)).await?;
+    if include_migrated_history {
+        let non_telegram_source_type: Option<String> = sqlx::query_scalar(
+            r#"
+            SELECT s.source_type
+            FROM project_sources ps
+            JOIN sources s ON s.id = ps.source_id
+            WHERE ps.project_id = ?
+              AND s.source_type <> 'telegram'
+            ORDER BY s.id ASC
+            LIMIT 1
+            "#,
+        )
+        .bind(project_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(AppError::database)?;
+        if let Some(source_type) = non_telegram_source_type {
+            resolve_analysis_telegram_history_scope(true, &source_type)?;
+        }
+    }
+
+    let resolved = match resolve_analysis_sources(pool, None, None, Some(project_id)).await {
+        Ok(resolved) => resolved,
+        Err(error)
+            if error.kind == AppErrorKind::Validation
+                && error.message.as_str()
+                    == "No linked YouTube videos are available for analysis in this scope" =>
+        {
+            return Ok(ProjectDataRange { from: None, to: None });
+        }
+        Err(error) => return Err(error),
+    };
     let (_, include_migrated_history) = resolve_analysis_telegram_history_scope(
         include_migrated_history,
         &resolved.source_type,
@@ -1664,7 +1792,7 @@ In `src-tauri/src/lib.rs`, add `get_project_data_range` to the `use projects::{.
 Run:
 
 ```powershell
-cargo test projects::data_range::tests::project_data_range_returns_nulls_for_empty_project projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources projects::data_range::tests::project_data_range_rejects_migrated_history_for_non_telegram
+cargo test projects::data_range::tests::project_data_range_returns_nulls_for_empty_project projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources projects::data_range::tests::project_data_range_returns_nulls_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_non_telegram
 cargo test analysis::corpus::tests::youtube_corpus_mode_from_wire_parses_expected_values
 cargo check
 ```
@@ -1948,7 +2076,7 @@ Expected: working tree is clean except ignored/generated files, and the latest c
 
 ## Self-Review
 
-**Spec coverage:** This plan covers migration and registration, pin/archive mutations, source-row `last_synced_at`/status/handle via minimal catalog status input, backend-derived project summary status, playlist-aware `material_count`, lazy `dataRange` with empty-project null range, resolved source IDs, and Telegram migrated-history validation, command registration, TS contracts, value registry, and focused tests.
+**Spec coverage:** This plan covers migration and registration, pin/archive mutations, source-row `last_synced_at`/status/handle via minimal catalog status input, backend-derived project summary status, playlist-aware `material_count` and `ProjectSourceRecord.item_count`, lazy `dataRange` with empty-project and unmaterialized-playlist null ranges, resolved source IDs, and Telegram migrated-history validation, command registration, TS contracts, value registry, and focused tests.
 
 **Red-flag scan:** The plan avoids unresolved markers and gives exact file paths, command names, test names, SQL, Rust signatures, TypeScript interfaces, and expected command outcomes.
 
