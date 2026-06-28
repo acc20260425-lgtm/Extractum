@@ -2,7 +2,7 @@
 
 **Дата:** 2026-06-28
 **Статус:** согласовано (brainstorming), готово к написанию плана реализации
-**Целевой макет:** `Research Projects v10.dc.html` (папка `Tauri MCP Bridge connection 4`; статус источника в макете приведён к контракту бэкенда — `active/syncing/error/unavailable`, бывший `idle` убран)
+**Целевой макет:** [`reference/Tauri MCP Bridge connection 4/Research Projects v10.dc.html`](../../../reference/Tauri%20MCP%20Bridge%20connection%204/Research%20Projects%20v10.dc.html) (в репозитории; статус источника приведён к контракту бэкенда — `active/syncing/error/unavailable`, бывший `idle` убран)
 **Скоуп:** широкий рефакторинг бэкенда «research projects» — данные, новые команды, миграция схемы (закрепление/архив).
 
 ## Цель
@@ -175,25 +175,35 @@ pub async fn get_project_data_range(
 `source_ids` + `source_type` проекта (и единой проверки mixed-provider), затем строит MIN/MAX по тем же
 фильтрам.
 
+> **Range фильтрует по resolved `source_ids`, НЕ по `project_sources`.** `resolve_analysis_sources`
+> раскрывает youtube-playlist в `source_id` связанных видео ([`push_scope_source`, corpus.rs:313](../../../src-tauri/src/analysis/corpus.rs)),
+> а `project_sources` хранит сам playlist-источник. Если джойнить по `project_sources.source_id`, видео
+> плейлиста выпадут из диапазона. Поэтому фильтр — `WHERE d.source_id IN (<resolved source_ids>)`.
+
+> **Валидация `include_migrated_history`.** `include_migrated_history=true` допустим только для Telegram —
+> `start_project_analysis` это уже проверяет через
+> [`resolve_analysis_telegram_history_scope`, report.rs:64](../../../src-tauri/src/analysis/report.rs).
+> Команда range **обязана** повторить это поведение: переиспользовать тот же helper (поднять его видимость до
+> `pub(crate)`) либо вернуть такую же validation error, чтобы тулбар и анализ не расходились.
+
 Диапазон **зеркалит источник и фильтры corpus loader**, а не берёт сырой `items`. Основной корпус —
 `analysis_documents` (с тем же `document_kind`-фильтром, что в
 [`load_analysis_document_messages`](../../../src-tauri/src/analysis/corpus.rs)):
 
 ```sql
--- основной корпус (current)
+-- основной корпус (current); :ids = resolved source_ids из resolve_analysis_sources
 SELECT MIN(d.published_at) AS from_ts, MAX(d.published_at) AS to_ts
 FROM analysis_documents d
-JOIN project_sources ps ON ps.source_id = d.source_id
-WHERE ps.project_id = ?
+WHERE d.source_id IN (:ids)
   -- document_kind в наборе, который грузит corpus loader для типа источника
   -- (telegram_message / youtube_transcript[/description/comment])
 ```
 
-Если у проекта включена migrated-history, диапазон расширяется `UNION` с `items.published_at` по той же
-ветке фильтров, что `fetch_telegram_corpus_rows(..., include_migrated_rows=true)`
-([corpus.rs:506](../../../src-tauri/src/analysis/corpus.rs)): `item_kind='telegram_message'`,
-`is_migrated_history=1`, `migration_domain='migrated_from_chat'`, `content_zstd IS NOT NULL`,
-`content_kind IN ('text_only','text_with_media')`. Итоговый range = MIN/MAX по объединению.
+Если включена migrated-history (только Telegram, см. валидацию выше), диапазон расширяется `UNION` с
+`items.published_at` по той же ветке фильтров, что `fetch_telegram_corpus_rows(..., include_migrated_rows=true)`
+([corpus.rs:506](../../../src-tauri/src/analysis/corpus.rs)): `items.source_id IN (:ids)`,
+`item_kind='telegram_message'`, `is_migrated_history=1`, `migration_domain='migrated_from_chat'`,
+`content_zstd IS NOT NULL`, `content_kind IN ('text_only','text_with_media')`. Итоговый range = MIN/MAX по объединению.
 
 **В плане реализации** вынести список `document_kind`/фильтров в общий хелпер вместе с corpus loader,
 чтобы range и реально анализируемый корпус не разъехались при будущих правках.
@@ -222,7 +232,7 @@ WHERE ps.project_id = ?
 | Юнит | Назначение | Тесты |
 |---|---|---|
 | `read_model.rs::list_research_projects` | агрегаты + derive статуса | SQL-агрегаты без fanout, все 4 ветки статуса, **`running` выигрывает у `empty`** (источники удалены при active run), tie-breaker последнего прогона, архивный проект |
-| `get_project_data_range` | range по `analysis_documents` (+UNION migrated) | проект без материалов (NULL/NULL), несколько источников, границы, влияние `youtube_corpus_mode`/`include_migrated_history`, совпадение с corpus loader |
+| `get_project_data_range` | range по `analysis_documents` (+UNION migrated) | проект без материалов (NULL/NULL), несколько источников, **playlist раскрыт в видео (range покрывает видео, не сам playlist)**, влияние `youtube_corpus_mode`, **migrated-history для не-Telegram → validation error**, совпадение с corpus loader |
 | `ProjectSourceRecord` расширение | last_synced_at / sync_status / handle | каждое значение `LibraryCatalogStatus` (active/syncing/error/unavailable), отсутствие last_synced_at |
 | `catalog_status_for_source` extraction | pub(crate) + latest source job | каталог и проект дают одинаковый статус для одного источника |
 | миграция 0012 + регистрация | колонки pinned/archived_at | зарегистрирована в `build_migrations()`; применяется на baseline; дефолты |
