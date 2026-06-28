@@ -17,7 +17,7 @@
 - Register new migrations in `src-tauri/src/migrations.rs`; adding a `.sql` file alone is not enough.
 - `dataRange` must mirror the actual analysis corpus: `analysis_documents` with the same source/document-kind filters, plus Telegram migrated-history `items` only when enabled.
 - `get_project_data_range` filters by resolved `source_ids` from `resolve_analysis_sources`, not by `project_sources.source_id`.
-- `get_project_data_range` returns `{ from: None, to: None }` for valid but non-runnable project scopes, including mixed-provider projects and unmaterialized YouTube playlists. It must still reject `include_migrated_history=true` for any project with non-Telegram sources before returning a null range.
+- `get_project_data_range` returns `{ from: None, to: None }` for unmaterialized YouTube playlists, but mixed-provider projects must surface the same validation error as `resolve_analysis_sources` (`mixed_provider_project_runs_not_supported`). It must still reject `include_migrated_history=true` for any project with non-Telegram sources before returning a null range.
 - `ProjectSummary.material_count` and `ProjectSourceRecord.item_count` count collected local-copy materials with the same rule: direct sources use their own `source_id`; YouTube playlist sources expand to linked video `source_id`s. A project with one playlist source and two linked video items must show `material_count = 2`, and that playlist source row must show `item_count = 2`.
 - `include_migrated_history=true` is valid only for Telegram and must match `start_project_analysis` validation.
 - Source status wire values are exactly `active`, `syncing`, `error`, `unavailable`; do not introduce `idle`.
@@ -127,8 +127,12 @@ export interface ProjectDataRange {
 Run:
 
 ```powershell
+git status --short
+$null = New-Item -ItemType Directory -Force -Path src-tauri/src/projects
 git mv src-tauri/src/projects.rs src-tauri/src/projects/mod.rs
 ```
+
+Expected before `git mv`: no unrelated dirty files. If `git status --short` shows unrelated changes, pause and stage only planned files later. The explicit `New-Item` keeps the move portable in environments where `git mv` does not create the parent path.
 
 No Rust import changes are needed for `src-tauri/src/lib.rs`; `mod projects;` resolves to `projects/mod.rs`.
 
@@ -151,7 +155,12 @@ ALTER TABLE projects ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE projects ADD COLUMN archived_at INTEGER;
 
 CREATE INDEX IF NOT EXISTS idx_projects_pinned_archived
-    ON projects(pinned DESC, archived_at, updated_at DESC);
+    ON projects(
+        CASE WHEN archived_at IS NULL THEN 0 ELSE 1 END ASC,
+        pinned DESC,
+        updated_at DESC,
+        id DESC
+    );
 ```
 
 - [ ] **Step 4: Register migration constants and function**
@@ -242,6 +251,15 @@ async fn fresh_schema_includes_projects_redesign_columns_index_and_defaults() {
     .expect("check projects redesign index");
     assert_eq!(index_exists, 1);
 
+    let index_sql: String = sqlx::query_scalar(
+        "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_projects_pinned_archived'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("load projects redesign index SQL");
+    assert!(index_sql.contains("CASE WHEN archived_at IS NULL THEN 0 ELSE 1 END"));
+    assert!(index_sql.find("CASE WHEN").unwrap() < index_sql.find("pinned DESC").unwrap());
+
     sqlx::query(
         "INSERT INTO projects (id, name, description, created_at, updated_at) VALUES (91, 'Default flags', NULL, 10, 10)",
     )
@@ -295,12 +313,16 @@ Add inside `src-tauri/src/projects/mod.rs` tests:
 
 ```rust
 #[tokio::test]
-async fn set_project_pinned_toggles_flag_and_updates_timestamp() {
+async fn set_project_pinned_toggles_flag_updates_timestamp_and_rejects_missing_project() {
     let pool = pool().await;
     let project = create_project_in_pool(&pool, "Pinned", None)
         .await
         .expect("create project");
-    let before = project.updated_at;
+    sqlx::query("UPDATE projects SET updated_at = 1 WHERE id = ?")
+        .bind(project.id)
+        .execute(&pool)
+        .await
+        .expect("seed stale updated_at");
 
     set_project_pinned_in_pool(&pool, project.id, true)
         .await
@@ -311,17 +333,29 @@ async fn set_project_pinned_toggles_flag_and_updates_timestamp() {
         .await
         .expect("load pinned project");
     assert_eq!(row.0, 1);
-    assert!(row.1 >= before);
+    assert!(row.1 > 1);
+
+    sqlx::query("UPDATE projects SET updated_at = 1 WHERE id = ?")
+        .bind(project.id)
+        .execute(&pool)
+        .await
+        .expect("reseed stale updated_at");
 
     set_project_pinned_in_pool(&pool, project.id, false)
         .await
         .expect("unpin project");
-    let pinned: i64 = sqlx::query_scalar("SELECT pinned FROM projects WHERE id = ?")
+    let row: (i64, i64) = sqlx::query_as("SELECT pinned, updated_at FROM projects WHERE id = ?")
         .bind(project.id)
         .fetch_one(&pool)
         .await
         .expect("load unpinned project");
-    assert_eq!(pinned, 0);
+    assert_eq!(row.0, 0);
+    assert!(row.1 > 1);
+
+    let missing = set_project_pinned_in_pool(&pool, 404_404, true)
+        .await
+        .expect_err("missing project rejected");
+    assert_eq!(missing.kind, crate::error::AppErrorKind::NotFound);
 }
 
 #[tokio::test]
@@ -330,28 +364,41 @@ async fn set_project_archived_toggles_timestamp_and_rejects_missing_project() {
     let project = create_project_in_pool(&pool, "Archive", None)
         .await
         .expect("create project");
+    sqlx::query("UPDATE projects SET updated_at = 1 WHERE id = ?")
+        .bind(project.id)
+        .execute(&pool)
+        .await
+        .expect("seed stale updated_at");
 
     set_project_archived_in_pool(&pool, project.id, true)
         .await
         .expect("archive project");
-    let archived_at: Option<i64> =
-        sqlx::query_scalar("SELECT archived_at FROM projects WHERE id = ?")
+    let row: (Option<i64>, i64) =
+        sqlx::query_as("SELECT archived_at, updated_at FROM projects WHERE id = ?")
             .bind(project.id)
             .fetch_one(&pool)
             .await
             .expect("load archived project");
-    assert!(archived_at.is_some());
+    assert!(row.0.is_some());
+    assert!(row.1 > 1);
+
+    sqlx::query("UPDATE projects SET updated_at = 1 WHERE id = ?")
+        .bind(project.id)
+        .execute(&pool)
+        .await
+        .expect("reseed stale updated_at");
 
     set_project_archived_in_pool(&pool, project.id, false)
         .await
         .expect("restore project");
-    let archived_at: Option<i64> =
-        sqlx::query_scalar("SELECT archived_at FROM projects WHERE id = ?")
+    let row: (Option<i64>, i64) =
+        sqlx::query_as("SELECT archived_at, updated_at FROM projects WHERE id = ?")
             .bind(project.id)
             .fetch_one(&pool)
             .await
             .expect("load restored project");
-    assert_eq!(archived_at, None);
+    assert_eq!(row.0, None);
+    assert!(row.1 > 1);
 
     let missing = set_project_archived_in_pool(&pool, 404_404, true)
         .await
@@ -365,7 +412,7 @@ async fn set_project_archived_toggles_timestamp_and_rejects_missing_project() {
 Run:
 
 ```powershell
-cargo test projects::tests::set_project_pinned_toggles_flag_and_updates_timestamp projects::tests::set_project_archived_toggles_timestamp_and_rejects_missing_project
+cargo test projects::tests::set_project_pinned_toggles_flag_updates_timestamp_and_rejects_missing_project projects::tests::set_project_archived_toggles_timestamp_and_rejects_missing_project
 ```
 
 Expected: compile failure because `set_project_pinned_in_pool` and `set_project_archived_in_pool` are not defined.
@@ -462,7 +509,7 @@ In `src-tauri/src/lib.rs`, add both commands to the `use projects::{...}` list a
 Run:
 
 ```powershell
-cargo test projects::tests::set_project_pinned_toggles_flag_and_updates_timestamp projects::tests::set_project_archived_toggles_timestamp_and_rejects_missing_project
+cargo test projects::tests::set_project_pinned_toggles_flag_updates_timestamp_and_rejects_missing_project projects::tests::set_project_archived_toggles_timestamp_and_rejects_missing_project
 cargo check
 ```
 
@@ -506,14 +553,21 @@ pub enum LibraryCatalogStatus {
 
 Keep `#[serde(rename_all = "snake_case")]`.
 
-In `src-tauri/src/library_sources/mod.rs`, extend the existing model re-export:
+In `src-tauri/src/library_sources/mod.rs`, move `LibraryCatalogStatus` from the existing `pub(crate) use models::{ ... }` block into the public `pub use models::{ ... }` block. Do not leave it in both blocks.
+
+After the move, the model re-exports should look like:
 
 ```rust
+pub(crate) use models::{
+    LibraryCatalogCapabilities, LibraryCatalogDisabledReasons, LibraryCatalogFilterCount,
+    LibraryCatalogRecord, LibraryCatalogResponse,
+};
 pub use models::{
     LibraryCatalogStatus, LibrarySourceRecord, LibraryTelegramSourceDetails,
     LibraryYoutubeSourceDetails,
 };
 ```
+
 
 - [ ] **Step 2: Extract a minimal catalog status helper**
 
@@ -994,14 +1048,26 @@ mod tests {
     }
 
     async fn seed_source(pool: &sqlx::SqlitePool, id: i64, provider: &str, subtype: &str) {
+        let account_id = if provider == "telegram" {
+            sqlx::query(
+                "INSERT OR IGNORE INTO accounts (id, label, api_id, api_hash, created_at) VALUES (1, 'Test account', 1, 'hash', 1)",
+            )
+            .execute(pool)
+            .await
+            .expect("seed account");
+            Some(1_i64)
+        } else {
+            None
+        };
         sqlx::query(
-            "INSERT INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at) VALUES (?, ?, ?, ?, ?, 1, 0, 100)",
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at, account_id) VALUES (?, ?, ?, ?, ?, 1, 0, 100, ?)",
         )
         .bind(id)
         .bind(provider)
         .bind(subtype)
         .bind(format!("{provider}-{id}"))
         .bind(format!("Source {id}"))
+        .bind(account_id)
         .execute(pool)
         .await
         .expect("seed source");
@@ -1107,7 +1173,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn list_research_projects_prioritizes_running_over_empty_and_sorts_pinned_active_first() {
+    async fn list_research_projects_prioritizes_running_and_sorts_active_pinned_updated_first() {
         let pool = pool().await;
         seed_project(&pool, 1, "Archived", 30).await;
         seed_project(&pool, 2, "Pinned", 20).await;
@@ -1142,7 +1208,7 @@ mod tests {
 Run:
 
 ```powershell
-cargo test projects::read_model::tests::list_research_projects_derives_counts_status_and_last_run_without_fanout projects::read_model::tests::list_research_projects_counts_playlist_linked_video_materials projects::read_model::tests::list_research_projects_prioritizes_running_over_empty_and_sorts_pinned_active_first
+cargo test projects::read_model::tests::list_research_projects_derives_counts_status_and_last_run_without_fanout projects::read_model::tests::list_research_projects_counts_playlist_linked_video_materials projects::read_model::tests::list_research_projects_prioritizes_running_and_sorts_active_pinned_updated_first
 ```
 
 Expected: compile failure because `ProjectSummary`, `ProjectStatus`, and `list_research_projects_in_pool` are not implemented.
@@ -1324,7 +1390,7 @@ In `src-tauri/src/lib.rs`, add `list_research_projects` to the `use projects::{.
 Run:
 
 ```powershell
-cargo test projects::read_model::tests::list_research_projects_derives_counts_status_and_last_run_without_fanout projects::read_model::tests::list_research_projects_counts_playlist_linked_video_materials projects::read_model::tests::list_research_projects_prioritizes_running_over_empty_and_sorts_pinned_active_first
+cargo test projects::read_model::tests::list_research_projects_derives_counts_status_and_last_run_without_fanout projects::read_model::tests::list_research_projects_counts_playlist_linked_video_materials projects::read_model::tests::list_research_projects_prioritizes_running_and_sorts_active_pinned_updated_first
 cargo check
 ```
 
@@ -1351,6 +1417,7 @@ git commit -m "feat: add research projects read model"
 **Interfaces:**
 - Consumes:
   - `resolve_analysis_sources(pool, None, None, Some(project_id))`
+  - `AnalysisSourceResolutionError` and `AnalysisSourceResolutionErrorCode`
   - `YoutubeCorpusMode::from_wire`
   - `resolve_analysis_telegram_history_scope(include_migrated_history, source_type)`
 - Produces:
@@ -1371,9 +1438,159 @@ to:
 pub(crate) fn resolve_analysis_telegram_history_scope(
 ```
 
+Then re-export it from `src-tauri/src/analysis/mod.rs`:
+
+```rust
+pub(crate) use self::report::resolve_analysis_telegram_history_scope;
+```
+
+Project data range code must import this helper from `crate::analysis`, not from `crate::analysis::report`.
+
 - [ ] **Step 2: Extract shared document-kind filter helper**
 
-In `src-tauri/src/analysis/corpus.rs`, add:
+In `src-tauri/src/analysis/corpus.rs`, first extend the error import:
+
+```rust
+use crate::error::{internal_error, AppError, AppResult};
+```
+
+Then add stable resolver error codes and a typed resolver error near `ResolvedAnalysisSources`:
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AnalysisSourceResolutionErrorCode {
+    MixedProviderProject,
+    NoLinkedYoutubeVideos,
+}
+
+impl AnalysisSourceResolutionErrorCode {
+    pub(crate) fn message(self) -> &'static str {
+        match self {
+            Self::MixedProviderProject => "mixed_provider_project_runs_not_supported",
+            Self::NoLinkedYoutubeVideos => {
+                "No linked YouTube videos are available for analysis in this scope"
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AnalysisSourceResolutionError {
+    code: Option<AnalysisSourceResolutionErrorCode>,
+    error: AppError,
+}
+
+impl AnalysisSourceResolutionError {
+    pub(crate) fn validation(code: AnalysisSourceResolutionErrorCode) -> Self {
+        Self {
+            code: Some(code),
+            error: AppError::validation(code.message()),
+        }
+    }
+
+    pub(crate) fn code(&self) -> Option<AnalysisSourceResolutionErrorCode> {
+        self.code
+    }
+
+    pub(crate) fn into_app_error(self) -> AppError {
+        self.error
+    }
+}
+
+impl From<AppError> for AnalysisSourceResolutionError {
+    fn from(error: AppError) -> Self {
+        Self { code: None, error }
+    }
+}
+```
+
+Change `resolve_analysis_sources` to return `Result<ResolvedAnalysisSources, AnalysisSourceResolutionError>`, and update only the matching validation branches to build typed errors from this enum. Keep the wire-visible `NoLinkedYoutubeVideos` message identical to the current human-readable text.
+
+```rust
+return Err(AnalysisSourceResolutionError::validation(
+    AnalysisSourceResolutionErrorCode::MixedProviderProject,
+));
+
+return Err(AnalysisSourceResolutionError::validation(
+    AnalysisSourceResolutionErrorCode::NoLinkedYoutubeVideos,
+));
+```
+
+Update existing resolver consumers to convert typed errors back to `AppError` at API boundaries:
+
+```rust
+let resolved_sources = resolve_analysis_sources(...)
+    .await
+    .map_err(AnalysisSourceResolutionError::into_app_error)?;
+```
+
+For `resolve_run_source_ids`, preserve the existing `String` error boundary:
+
+```rust
+return resolve_analysis_sources(pool, None, None, Some(project_id))
+    .await
+    .map(|resolved| resolved.source_ids)
+    .map_err(|error| error.into_app_error().to_string());
+```
+
+Update `resolve_analysis_sources_rejects_mixed_provider_project` to assert the stable code instead of formatting the error:
+
+```rust
+assert_eq!(
+    error.code(),
+    Some(AnalysisSourceResolutionErrorCode::MixedProviderProject)
+);
+```
+
+Add a focused resolver test that locks both the stable code and the existing consumer-facing no-linked-YouTube message:
+
+```rust
+#[tokio::test]
+async fn resolve_analysis_sources_preserves_no_linked_youtube_error_message() {
+    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("connect memory sqlite");
+    create_project_scope_schema(&pool).await;
+    sqlx::query(
+        "INSERT INTO projects (id, name, created_at, updated_at) VALUES (9, 'Playlist', 1, 1)",
+    )
+    .execute(&pool)
+    .await
+    .expect("insert project");
+    sqlx::query(
+        "INSERT INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at) VALUES (1, 'youtube', 'playlist', 'pl1', 'Playlist', 1, 0, 1)",
+    )
+    .execute(&pool)
+    .await
+    .expect("insert playlist source");
+    sqlx::query("INSERT INTO project_sources (project_id, source_id, added_at) VALUES (9, 1, 1)")
+        .execute(&pool)
+        .await
+        .expect("insert project source");
+
+    let error = resolve_analysis_sources(&pool, None, None, Some(9))
+        .await
+        .expect_err("unmaterialized playlist rejected");
+
+    assert_eq!(
+        error.code(),
+        Some(AnalysisSourceResolutionErrorCode::NoLinkedYoutubeVideos)
+    );
+    let error = error.into_app_error();
+    assert_eq!(
+        error.message,
+        "No linked YouTube videos are available for analysis in this scope"
+    );
+}
+```
+
+Also grep frontend error handling before committing Task 5 and confirm no consumer expects the internal typed enum directly:
+
+```powershell
+rg -n "No linked YouTube|mixed_provider_project_runs_not_supported|no_linked_youtube" src src-tauri
+```
+
+Then add the shared document-kind filter helper:
 
 ```rust
 pub(crate) fn push_analysis_document_kind_filter(
@@ -1450,8 +1667,10 @@ Add near the existing `pub use self::...` block in `src-tauri/src/analysis/mod.r
 
 ```rust
 pub(crate) use self::corpus::{
-    push_analysis_document_kind_filter, resolve_analysis_sources, YoutubeCorpusMode,
+    push_analysis_document_kind_filter, resolve_analysis_sources, AnalysisSourceResolutionError,
+    AnalysisSourceResolutionErrorCode, YoutubeCorpusMode,
 };
+pub(crate) use self::report::resolve_analysis_telegram_history_scope;
 ```
 
 `projects/data_range.rs` must import these from `crate::analysis`, not `crate::analysis::corpus`.
@@ -1476,11 +1695,11 @@ use sqlx::{QueryBuilder, Sqlite};
 use tauri::AppHandle;
 
 use crate::analysis::{
-    push_analysis_document_kind_filter, resolve_analysis_sources, YoutubeCorpusMode,
+    push_analysis_document_kind_filter, resolve_analysis_sources,
+    resolve_analysis_telegram_history_scope, AnalysisSourceResolutionErrorCode, YoutubeCorpusMode,
 };
-use crate::analysis::report::resolve_analysis_telegram_history_scope;
 use crate::db::get_pool;
-use crate::error::{AppError, AppErrorKind, AppResult};
+use crate::error::{AppError, AppResult};
 
 #[cfg(test)]
 mod tests {
@@ -1509,14 +1728,26 @@ mod tests {
     }
 
     async fn seed_source(pool: &sqlx::SqlitePool, id: i64, provider: &str, subtype: &str) {
+        let account_id = if provider == "telegram" {
+            sqlx::query(
+                "INSERT OR IGNORE INTO accounts (id, label, api_id, api_hash, created_at) VALUES (1, 'Test account', 1, 'hash', 1)",
+            )
+            .execute(pool)
+            .await
+            .expect("seed account");
+            Some(1_i64)
+        } else {
+            None
+        };
         sqlx::query(
-            "INSERT INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at) VALUES (?, ?, ?, ?, ?, 1, 0, 1)",
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at, account_id) VALUES (?, ?, ?, ?, ?, 1, 0, 1, ?)",
         )
         .bind(id)
         .bind(provider)
         .bind(subtype)
         .bind(format!("{provider}-{id}"))
         .bind(format!("Source {id}"))
+        .bind(account_id)
         .execute(pool)
         .await
         .expect("seed source");
@@ -1590,6 +1821,35 @@ mod tests {
         .expect("seed document");
     }
 
+    async fn seed_migrated_telegram_item(
+        pool: &sqlx::SqlitePool,
+        item_id: i64,
+        source_id: i64,
+        published_at: i64,
+    ) {
+        sqlx::query(
+            "INSERT INTO items (id, source_id, external_id, author, published_at, ingested_at, content_zstd, item_kind) VALUES (?, ?, ?, 'Migrated Author', ?, ?, x'01', 'telegram_message')",
+        )
+        .bind(item_id)
+        .bind(source_id)
+        .bind(format!("migrated-{item_id}"))
+        .bind(published_at)
+        .bind(published_at + 1)
+        .execute(pool)
+        .await
+        .expect("seed migrated item");
+
+        sqlx::query(
+            "INSERT INTO telegram_messages (item_id, source_id, history_peer_kind, history_peer_id, telegram_message_id, migration_domain, is_migrated_history) VALUES (?, ?, 'chat', 777, ?, 'migrated_from_chat', 1)",
+        )
+        .bind(item_id)
+        .bind(source_id)
+        .bind(item_id)
+        .execute(pool)
+        .await
+        .expect("seed migrated telegram metadata");
+    }
+
     #[tokio::test]
     async fn project_data_range_returns_nulls_for_empty_project() {
         let pool = pool().await;
@@ -1634,6 +1894,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn project_data_range_includes_telegram_migrated_history_when_requested() {
+        let pool = pool().await;
+        seed_project(&pool, 8).await;
+        seed_source(&pool, 80, "telegram", "supergroup").await;
+        attach(&pool, 8, 80).await;
+        seed_document(&pool, 8, 80, "telegram", "supergroup", "telegram_message", 100).await;
+        seed_migrated_telegram_item(&pool, 80_001, 80, 10).await;
+
+        let current_only = get_project_data_range_in_pool(&pool, 8, None, false)
+            .await
+            .expect("current telegram range");
+        assert_eq!(current_only, ProjectDataRange { from: Some(100), to: Some(100) });
+
+        let with_migrated = get_project_data_range_in_pool(&pool, 8, None, true)
+            .await
+            .expect("telegram migrated range");
+        assert_eq!(with_migrated, ProjectDataRange { from: Some(10), to: Some(100) });
+    }
+
+    #[tokio::test]
     async fn project_data_range_expands_playlist_to_linked_video_sources() {
         let pool = pool().await;
         seed_project(&pool, 2).await;
@@ -1670,7 +1950,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn project_data_range_returns_nulls_for_mixed_provider_project() {
+    async fn project_data_range_rejects_mixed_provider_project() {
         let pool = pool().await;
         seed_project(&pool, 7).await;
         seed_source(&pool, 70, "youtube", "video").await;
@@ -1678,11 +1958,18 @@ mod tests {
         attach(&pool, 7, 70).await;
         attach(&pool, 7, 71).await;
 
-        let range = get_project_data_range_in_pool(&pool, 7, None, false)
+        let error = get_project_data_range_in_pool(&pool, 7, None, false)
             .await
-            .expect("mixed provider project range");
+            .expect_err("mixed provider project rejected");
 
-        assert_eq!(range, ProjectDataRange { from: None, to: None });
+        assert_eq!(
+            error.kind,
+            crate::error::AppErrorKind::Validation
+        );
+        assert_eq!(
+            error.message,
+            AnalysisSourceResolutionErrorCode::MixedProviderProject.message()
+        );
     }
 
     #[tokio::test]
@@ -1722,7 +2009,7 @@ mod tests {
 Run:
 
 ```powershell
-cargo test projects::data_range::tests::project_data_range_returns_nulls_for_empty_project projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources projects::data_range::tests::project_data_range_returns_nulls_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_returns_nulls_for_mixed_provider_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_non_telegram
+cargo test projects::data_range::tests::project_data_range_returns_nulls_for_empty_project projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds projects::data_range::tests::project_data_range_includes_telegram_migrated_history_when_requested projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources projects::data_range::tests::project_data_range_returns_nulls_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_mixed_provider_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_non_telegram
 ```
 
 Expected: compile failure because `ProjectDataRange` and `get_project_data_range_in_pool` are not implemented.
@@ -1792,16 +2079,12 @@ pub(crate) async fn get_project_data_range_in_pool(
     let resolved = match resolve_analysis_sources(pool, None, None, Some(project_id)).await {
         Ok(resolved) => resolved,
         Err(error)
-            if error.kind == AppErrorKind::Validation
-                && matches!(
-                    error.message.as_str(),
-                    "No linked YouTube videos are available for analysis in this scope"
-                        | "mixed_provider_project_runs_not_supported"
-                ) =>
+            if error.code()
+                == Some(AnalysisSourceResolutionErrorCode::NoLinkedYoutubeVideos) =>
         {
             return Ok(ProjectDataRange { from: None, to: None });
         }
-        Err(error) => return Err(error),
+        Err(error) => return Err(error.into_app_error()),
     };
     let (_, include_migrated_history) = resolve_analysis_telegram_history_scope(
         include_migrated_history,
@@ -1885,8 +2168,10 @@ In `src-tauri/src/lib.rs`, add `get_project_data_range` to the `use projects::{.
 Run:
 
 ```powershell
-cargo test projects::data_range::tests::project_data_range_returns_nulls_for_empty_project projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources projects::data_range::tests::project_data_range_returns_nulls_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_non_telegram
-cargo test analysis::corpus::tests::youtube_corpus_mode_from_wire_parses_expected_values
+cargo test projects::data_range::tests::project_data_range_returns_nulls_for_empty_project projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds projects::data_range::tests::project_data_range_includes_telegram_migrated_history_when_requested projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources projects::data_range::tests::project_data_range_returns_nulls_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_mixed_provider_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_non_telegram
+cargo test analysis::corpus::tests::youtube_corpus_mode_parses_wire_values_and_defaults
+cargo test analysis::corpus::tests::resolve_analysis_sources_rejects_mixed_provider_project analysis::corpus::tests::resolve_analysis_sources_preserves_no_linked_youtube_error_message
+cargo test analysis::corpus::tests::preflight_counts_eligible_text_messages_for_sources analysis::corpus::tests::load_corpus_messages_filters_youtube_transcript_only_to_transcripts analysis::corpus::tests::load_corpus_messages_includes_youtube_comment_only_in_comments_mode analysis::corpus::tests::preflight_count_matches_loader_for_youtube_corpus_modes
 cargo check
 ```
 
@@ -1968,6 +2253,8 @@ export interface ProjectArchivedInput {
 }
 ```
 
+`src/lib/ui/research-projects-model.ts` already defines a UI-local `ProjectStatus` with the same values. Task 6 does not migrate that UI module; keep the UI type as-is in this task and record both owners in `docs/value-registry.md`. If a later UI integration touches `research-projects-model.ts`, replace the local alias with an import from `$lib/types/projects` instead of keeping duplicate type definitions.
+
 Extend `ProjectSourceRecord`:
 
 ```ts
@@ -2048,13 +2335,17 @@ it("maps research projects v10 commands", async () => {
 
 - [ ] **Step 4: Update value registry**
 
-In `docs/value-registry.md`, update the `Research project status` row to record backend ownership:
+In `docs/value-registry.md`, update the `Research project status` row to record backend/API ownership while preserving the current UI owner:
 
 ```markdown
-| Research project status | `ProjectStatus` | `ready`, `running`, `needs_attention`, `empty` | `src-tauri/src/projects/read_model.rs`, `src/lib/types/projects.ts` | Backend-derived API status for `ProjectSummary`; wire values are snake_case. |
+| Research project status | `ProjectStatus` | `ready`, `running`, `needs_attention`, `empty` | `src-tauri/src/projects/read_model.rs`, `src/lib/types/projects.ts`, `src/lib/ui/research-projects-model.ts` | Backend-derived API status for `ProjectSummary`; UI view-model mirrors the same values until UI integration imports the backend type. |
 ```
 
-Keep the `Library catalog status` row unchanged; the values are reused, not changed.
+Also update the `Library catalog status` row to record the Rust owner introduced by Task 3:
+
+```markdown
+| Library catalog status | `LibraryCatalogStatus` | `active`, `syncing`, `error`, `unavailable` | `src-tauri/src/library_sources/models.rs`, `src/lib/types/library-sources.ts` | Catalog record status shared by backend API and frontend types. |
+```
 
 - [ ] **Step 5: Verify TypeScript and registry task**
 
@@ -2103,6 +2394,8 @@ cargo test migrations::tests::fresh_schema_includes_projects_redesign_columns_in
 cargo test projects::tests
 cargo test projects::read_model::tests
 cargo test projects::data_range::tests
+cargo test analysis::corpus::tests::resolve_analysis_sources_rejects_mixed_provider_project analysis::corpus::tests::resolve_analysis_sources_preserves_no_linked_youtube_error_message
+cargo test analysis::corpus::tests::preflight_counts_eligible_text_messages_for_sources analysis::corpus::tests::load_corpus_messages_filters_youtube_transcript_only_to_transcripts analysis::corpus::tests::load_corpus_messages_includes_youtube_comment_only_in_comments_mode analysis::corpus::tests::preflight_count_matches_loader_for_youtube_corpus_modes
 cargo test library_sources::tests
 ```
 
@@ -2170,7 +2463,7 @@ Expected: working tree is clean except ignored/generated files, and the latest c
 
 ## Self-Review
 
-**Spec coverage:** This plan covers migration and registration, pin/archive mutations, source-row `last_synced_at`/status/handle via minimal catalog status input, backend-derived project summary status, playlist-aware `material_count` and `ProjectSourceRecord.item_count`, lazy `dataRange` with empty-project and unmaterialized-playlist null ranges, resolved source IDs, and Telegram migrated-history validation, command registration, TS contracts, value registry, and focused tests.
+**Spec coverage:** This plan covers migration and registration, pin/archive mutations, source-row `last_synced_at`/status/handle via minimal catalog status input, backend-derived project summary status, playlist-aware `material_count` and `ProjectSourceRecord.item_count`, lazy `dataRange` with empty-project and unmaterialized-playlist null ranges, stable analysis-source resolution error codes, mixed-provider validation parity with analysis corpus, resolved source IDs, Telegram migrated-history validation and positive range expansion, command registration, TS contracts, value registry, and focused tests.
 
 **Red-flag scan:** The plan avoids unresolved markers and gives exact file paths, command names, test names, SQL, Rust signatures, TypeScript interfaces, and expected command outcomes.
 

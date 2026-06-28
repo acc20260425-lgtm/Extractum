@@ -793,7 +793,7 @@ Scope: frontend-local state, filters, tabs, badges, and view-model values. Most 
 | --- | --- | --- | --- | --- |
 | Library provider | `LibrarySourceProvider` | `telegram`, `youtube`, `rss`, `forum`, `web`, `other` | `src/lib/types/library-sources.ts` | Library catalog provider values. |
 | Library source subtype | `LibrarySourceSubtype` | `video`, `playlist`, `channel`, `supergroup`, `group`, `feed`, `thread`, `board`, `site`, `null` | `src/lib/types/library-sources.ts` | Library catalog subtype values. |
-| Library catalog status | `LibraryCatalogStatus` | `active`, `syncing`, `error`, `unavailable` | `src/lib/types/library-sources.ts` | Catalog record status. |
+| Library catalog status | `LibraryCatalogStatus` | `active`, `syncing`, `error`, `unavailable` | `src-tauri/src/library_sources/models.rs`, `src/lib/types/library-sources.ts` | Catalog record status shared by backend API and frontend types. |
 | Library catalog source status | `LibraryCatalogSourceStatus` | `active`, `syncing`, `error`, `unavailable` | `src/lib/ui/library-catalog-model.ts` | View-model status. |
 | Library catalog filter id | `LibraryCatalogFilterId` | `all`, `provider:<provider>`, `provider:<provider>/subtype:<subtype>` | `src/lib/ui/library-catalog-model.ts` | Structured string id. |
 | Research project status | `ProjectStatus` | `ready`, `running`, `needs_attention`, `empty` | `src/lib/ui/research-projects-model.ts` | Project card status. |
