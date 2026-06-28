@@ -18,4 +18,11 @@ describe("SourcesGrid", () => {
     expect(source).toContain('ariaLabel="Источники проекта"');
     expect(source).toContain('overlay="Нет источников"');
   });
+
+  it("attaches the custom cells for the source title and status columns", () => {
+    expect(source).toContain("SourceTitleCell");
+    expect(source).toContain("SourceStatusCell");
+    expect(source).toContain("title: SourceTitleCell");
+    expect(source).toContain("statusLabel: SourceStatusCell");
+  });
 });

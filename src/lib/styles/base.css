@@ -50,6 +50,7 @@
   --extractum-provider-anthropic: #d97757;
   --extractum-provider-google: #4285f4;
   --extractum-provider-telegram: #229ed9;
+  --extractum-provider-youtube: #ff0000;
 }
 
 [data-theme="dark"] {
