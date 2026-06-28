@@ -46,6 +46,9 @@ const PROMPT_PACK_STAGE_BROWSER_PROVENANCE_DESCRIPTION: &str =
     "prompt pack stage browser provenance";
 const PROMPT_PACK_STAGE_BROWSER_PROVENANCE_SQL: &str =
     include_str!("../migrations/0011_prompt_pack_stage_browser_provenance.sql");
+const PROJECTS_REDESIGN_VERSION: i64 = 12;
+const PROJECTS_REDESIGN_DESCRIPTION: &str = "projects redesign schema";
+const PROJECTS_REDESIGN_SQL: &str = include_str!("../migrations/0012_projects_redesign.sql");
 const APALIS_SQLITE_JOBS_WORKERS_VERSION: i64 = 20220530084123;
 const APALIS_SQLITE_JOBS_WORKERS_DESCRIPTION: &str = "jobs workers";
 const APALIS_SQLITE_JOBS_WORKERS_SQL: &str =
@@ -203,6 +206,15 @@ fn prompt_pack_stage_browser_provenance_migration() -> Migration {
     }
 }
 
+fn projects_redesign_migration() -> Migration {
+    Migration {
+        version: PROJECTS_REDESIGN_VERSION,
+        description: PROJECTS_REDESIGN_DESCRIPTION,
+        sql: PROJECTS_REDESIGN_SQL,
+        kind: MigrationKind::Up,
+    }
+}
+
 fn apalis_sqlite_migrations() -> Vec<Migration> {
     vec![
         Migration {
@@ -269,6 +281,7 @@ pub fn build_migrations() -> Vec<Migration> {
         prompt_pack_intermediate_entities_artifacts_migration(),
         prompt_pack_runtime_provider_migration(),
         prompt_pack_stage_browser_provenance_migration(),
+        projects_redesign_migration(),
     ];
     migrations.extend(apalis_sqlite_migrations());
     migrations
@@ -331,7 +344,7 @@ mod tests {
 
     const FROZEN_BASELINE_SHA384: &str =
         "88d7ee88f58531ebed340f2b9a8f1d02ba0ff6eec17b7e2a0d5f1a293cbd14e26a40c9155985c1652538ff0e9df70962";
-    const EXPECTED_BUILD_MIGRATION_VERSIONS: [i64; 19] = [
+    const EXPECTED_BUILD_MIGRATION_VERSIONS: [i64; 20] = [
         1,
         2,
         3,
@@ -343,6 +356,7 @@ mod tests {
         9,
         10,
         11,
+        12,
         20220530084123,
         20250313213411,
         20251013233016,
@@ -492,15 +506,20 @@ mod tests {
         assert!(migrations[10]
             .sql
             .contains("browser_completion_reason TEXT"));
-        assert_eq!(migrations[11].description, "jobs workers");
+        assert_eq!(migrations[11].description, "projects redesign schema");
         assert!(migrations[11]
+            .sql
+            .contains("ALTER TABLE projects ADD COLUMN pinned"));
+        assert!(migrations[11].sql.contains("archived_at"));
+        assert_eq!(migrations[12].description, "jobs workers");
+        assert!(migrations[12]
             .sql
             .contains("CREATE TABLE IF NOT EXISTS Workers"));
-        assert!(migrations[11]
+        assert!(migrations[12]
             .sql
             .contains("CREATE TABLE IF NOT EXISTS Jobs"));
-        assert_eq!(migrations[18].description, "idempotency key");
-        assert!(migrations[18].sql.contains("idempotency_key TEXT"));
+        assert_eq!(migrations[19].description, "idempotency key");
+        assert!(migrations[19].sql.contains("idempotency_key TEXT"));
     }
 
     #[tokio::test]
@@ -763,6 +782,59 @@ mod tests {
         .await
         .expect("read analysis_runs columns");
         assert_eq!(project_id_columns, 1);
+    }
+
+    #[tokio::test]
+    async fn fresh_schema_includes_projects_redesign_columns_index_and_defaults() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+
+        apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
+
+        for column in ["pinned", "archived_at"] {
+            let exists: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = ?",
+            )
+            .bind(column)
+            .fetch_one(&pool)
+            .await
+            .expect("check projects column");
+            assert_eq!(exists, 1, "missing projects.{column}");
+        }
+
+        let index_exists: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_projects_pinned_archived'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("check projects redesign index");
+        assert_eq!(index_exists, 1);
+
+        let index_sql: String = sqlx::query_scalar(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_projects_pinned_archived'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load projects redesign index SQL");
+        assert!(index_sql.contains("CASE WHEN archived_at IS NULL THEN 0 ELSE 1 END"));
+        assert!(index_sql.find("CASE WHEN").unwrap() < index_sql.find("pinned DESC").unwrap());
+
+        sqlx::query(
+            "INSERT INTO projects (id, name, description, created_at, updated_at) VALUES (91, 'Default flags', NULL, 10, 10)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert project");
+
+        let row: (i64, Option<i64>) =
+            sqlx::query_as("SELECT pinned, archived_at FROM projects WHERE id = 91")
+                .fetch_one(&pool)
+                .await
+                .expect("load project flags");
+        assert_eq!(row, (0, None));
     }
 
     #[tokio::test]

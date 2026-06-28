@@ -122,7 +122,7 @@ export interface ProjectDataRange {
 - Consumes: existing `mod projects;` declaration in `src-tauri/src/lib.rs`
 - Produces: a `projects` module directory ready for `read_model.rs` and `data_range.rs`, plus schema columns `projects.pinned` and `projects.archived_at`
 
-- [ ] **Step 1: Move the current projects module without behavior changes**
+- [x] **Step 1: Move the current projects module without behavior changes**
 
 Run:
 
@@ -136,17 +136,18 @@ Expected before `git mv`: no unrelated dirty files. If `git status --short` show
 
 No Rust import changes are needed for `src-tauri/src/lib.rs`; `mod projects;` resolves to `projects/mod.rs`.
 
-- [ ] **Step 2: Run the existing projects smoke tests after the move**
+- [x] **Step 2: Run the existing projects smoke tests after the move**
 
 Run:
 
 ```powershell
-cargo test projects::tests::create_project_trims_and_rejects_duplicate_names_case_insensitively projects::tests::add_project_sources_is_idempotent_and_lists_ui_ready_rows
+cargo test projects::tests::create_project_trims_and_rejects_duplicate_names_case_insensitively
+cargo test projects::tests::add_project_sources_is_idempotent_and_lists_ui_ready_rows
 ```
 
 Expected: both selected tests pass. If module paths changed unexpectedly, fix the path before continuing.
 
-- [ ] **Step 3: Add the migration SQL**
+- [x] **Step 3: Add the migration SQL**
 
 Create `src-tauri/migrations/0012_projects_redesign.sql`:
 
@@ -163,7 +164,7 @@ CREATE INDEX IF NOT EXISTS idx_projects_pinned_archived
     );
 ```
 
-- [ ] **Step 4: Register migration constants and function**
+- [x] **Step 4: Register migration constants and function**
 
 In `src-tauri/src/migrations.rs`, add after the `PROMPT_PACK_STAGE_BROWSER_PROVENANCE_*` constants:
 
@@ -188,7 +189,7 @@ fn projects_redesign_migration() -> Migration {
 
 Add `projects_redesign_migration()` to `build_migrations()` immediately after `prompt_pack_stage_browser_provenance_migration()` and before `migrations.extend(apalis_sqlite_migrations())`.
 
-- [ ] **Step 5: Update migration version expectations**
+- [x] **Step 5: Update migration version expectations**
 
 In `src-tauri/src/migrations.rs`, update the test constant:
 
@@ -217,7 +218,7 @@ const EXPECTED_BUILD_MIGRATION_VERSIONS: [i64; 20] = [
 ];
 ```
 
-- [ ] **Step 6: Add migration coverage for columns, index, and defaults**
+- [x] **Step 6: Add migration coverage for columns, index, and defaults**
 
 Add this test inside `src-tauri/src/migrations.rs` tests:
 
@@ -276,18 +277,19 @@ async fn fresh_schema_includes_projects_redesign_columns_index_and_defaults() {
 }
 ```
 
-- [ ] **Step 7: Verify migration task**
+- [x] **Step 7: Verify migration task**
 
 Run:
 
 ```powershell
-cargo test migrations::tests::fresh_schema_includes_projects_redesign_columns_index_and_defaults migrations::tests::build_migrations_starts_at_current_schema_baseline
+cargo test migrations::tests::fresh_schema_includes_projects_redesign_columns_index_and_defaults
+cargo test migrations::tests::build_migrations_starts_at_current_schema_baseline
 cargo test projects::tests::create_project_trims_and_rejects_duplicate_names_case_insensitively
 ```
 
 Expected: all selected tests pass.
 
-- [ ] **Step 8: Commit Task 1**
+- [x] **Step 8: Commit Task 1**
 
 ```powershell
 git add src-tauri/src/projects/mod.rs src-tauri/migrations/0012_projects_redesign.sql src-tauri/src/migrations.rs
