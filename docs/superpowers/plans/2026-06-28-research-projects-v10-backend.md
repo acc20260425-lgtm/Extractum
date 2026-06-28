@@ -17,6 +17,7 @@
 - Register new migrations in `src-tauri/src/migrations.rs`; adding a `.sql` file alone is not enough.
 - `dataRange` must mirror the actual analysis corpus: `analysis_documents` with the same source/document-kind filters, plus Telegram migrated-history `items` only when enabled.
 - `get_project_data_range` filters by resolved `source_ids` from `resolve_analysis_sources`, not by `project_sources.source_id`.
+- `get_project_data_range` returns `{ from: None, to: None }` for valid but non-runnable project scopes, including mixed-provider projects and unmaterialized YouTube playlists. It must still reject `include_migrated_history=true` for any project with non-Telegram sources before returning a null range.
 - `ProjectSummary.material_count` and `ProjectSourceRecord.item_count` count collected local-copy materials with the same rule: direct sources use their own `source_id`; YouTube playlist sources expand to linked video `source_id`s. A project with one playlist source and two linked video items must show `material_count = 2`, and that playlist source row must show `item_count = 2`.
 - `include_migrated_history=true` is valid only for Telegram and must match `start_project_analysis` validation.
 - Source status wire values are exactly `active`, `syncing`, `error`, `unavailable`; do not introduce `idle`.
@@ -34,6 +35,7 @@
 - Modify: `src-tauri/src/migrations.rs`
 - Modify: `src-tauri/src/library_sources/models.rs`
 - Modify: `src-tauri/src/library_sources/mod.rs`
+- Modify: `src-tauri/src/analysis/mod.rs`
 - Modify: `src-tauri/src/analysis/corpus.rs`
 - Modify: `src-tauri/src/analysis/report.rs`
 - Modify: `src-tauri/src/lib.rs`
@@ -557,10 +559,7 @@ pub(crate) fn catalog_status_for_input(
             ),
             SourceJobStatus::Failed => (
                 LibraryCatalogStatus::Error,
-                job.error
-                    .clone()
-                    .or_else(|| job.message.clone())
-                    .or_else(|| Some("Last sync failed.".to_string())),
+                job.error.clone().or_else(|| job.message.clone()),
             ),
             SourceJobStatus::Succeeded
             | SourceJobStatus::CancelRequested
@@ -586,6 +585,39 @@ fn catalog_status_for_source(
         },
         latest_job,
     )
+}
+```
+
+Also add a regression test in `src-tauri/src/library_sources/mod.rs` so the new helper preserves the existing catalog contract for failed jobs without detail:
+
+```rust
+#[test]
+fn catalog_status_for_input_keeps_failed_job_without_detail_empty() {
+    let job = SourceJobRecord {
+        job_id: "job-1".to_string(),
+        source_id: 1,
+        related_source_id: None,
+        job_type: SourceJobType::YoutubeVideoTranscriptSync,
+        status: SourceJobStatus::Failed,
+        message: None,
+        progress_current: None,
+        progress_total: None,
+        started_at: 10,
+        finished_at: Some(11),
+        warnings: Vec::new(),
+        error: None,
+    };
+
+    let (status, detail) = catalog_status_for_input(
+        CatalogStatusInput {
+            provider: "youtube",
+            source_subtype: Some("video"),
+        },
+        Some(&job),
+    );
+
+    assert_eq!(status, LibraryCatalogStatus::Error);
+    assert_eq!(detail, None);
 }
 ```
 
@@ -885,7 +917,7 @@ Run:
 
 ```powershell
 cargo test projects::tests::add_project_sources_is_idempotent_and_lists_ui_ready_rows projects::tests::list_project_sources_includes_catalog_status_last_sync_and_handle projects::tests::list_project_sources_counts_playlist_linked_video_materials
-cargo test library_sources::tests::query_library_catalog
+cargo test library_sources::tests
 cargo check
 ```
 
@@ -1030,8 +1062,8 @@ mod tests {
         seed_item(&pool, 101, 10).await;
         seed_item(&pool, 102, 11).await;
         seed_run(&pool, 500, 1, "completed", 1000).await;
-        seed_run(&pool, 501, 2, "failed", 1000).await;
-        seed_run(&pool, 502, 2, "completed", 1000).await;
+        seed_run(&pool, 501, 2, "completed", 1000).await;
+        seed_run(&pool, 502, 2, "failed", 1000).await;
 
         let rows = list_research_projects_in_pool(&pool)
             .await
@@ -1310,6 +1342,7 @@ git commit -m "feat: add research projects read model"
 **Files:**
 - Modify: `src-tauri/src/projects/mod.rs`
 - Create: `src-tauri/src/projects/data_range.rs`
+- Modify: `src-tauri/src/analysis/mod.rs`
 - Modify: `src-tauri/src/analysis/corpus.rs`
 - Modify: `src-tauri/src/analysis/report.rs`
 - Modify: `src-tauri/src/lib.rs`
@@ -1409,7 +1442,21 @@ push_analysis_document_kind_filter(
 )?;
 ```
 
-- [ ] **Step 3: Add module declaration and re-export**
+- [ ] **Step 3: Re-export shared corpus APIs from `analysis`**
+
+`src-tauri/src/analysis/mod.rs` declares `mod corpus;`, so `projects::data_range` cannot import `crate::analysis::corpus::*`. Keep the module private and re-export only the APIs needed by the project data range command.
+
+Add near the existing `pub use self::...` block in `src-tauri/src/analysis/mod.rs`:
+
+```rust
+pub(crate) use self::corpus::{
+    push_analysis_document_kind_filter, resolve_analysis_sources, YoutubeCorpusMode,
+};
+```
+
+`projects/data_range.rs` must import these from `crate::analysis`, not `crate::analysis::corpus`.
+
+- [ ] **Step 4: Add module declaration and re-export**
 
 At the top of `src-tauri/src/projects/mod.rs`:
 
@@ -1420,7 +1467,7 @@ pub(crate) use data_range::get_project_data_range_in_pool;
 pub use data_range::{get_project_data_range, ProjectDataRange};
 ```
 
-- [ ] **Step 4: Create failing data range tests**
+- [ ] **Step 5: Create failing data range tests**
 
 Create `src-tauri/src/projects/data_range.rs` with tests:
 
@@ -1428,7 +1475,7 @@ Create `src-tauri/src/projects/data_range.rs` with tests:
 use sqlx::{QueryBuilder, Sqlite};
 use tauri::AppHandle;
 
-use crate::analysis::corpus::{
+use crate::analysis::{
     push_analysis_document_kind_filter, resolve_analysis_sources, YoutubeCorpusMode,
 };
 use crate::analysis::report::resolve_analysis_telegram_history_scope;
@@ -1493,24 +1540,51 @@ mod tests {
         document_kind: &str,
         published_at: i64,
     ) {
+        let item_id = match document_kind {
+            "telegram_message" | "youtube_transcript" | "youtube_comment" => Some(id + 10_000),
+            "youtube_description" => None,
+            other => panic!("unsupported test document kind {other}"),
+        };
+        let document_key = match item_id {
+            Some(item_id) => format!("item:{item_id}"),
+            None => "youtube:description".to_string(),
+        };
+        if let Some(item_id) = item_id {
+            sqlx::query(
+                "INSERT INTO items (id, source_id, external_id, author, published_at, ingested_at, content_zstd, item_kind) VALUES (?, ?, ?, 'Author', ?, ?, x'01', ?)",
+            )
+            .bind(item_id)
+            .bind(source_id)
+            .bind(format!("item-{id}"))
+            .bind(published_at)
+            .bind(published_at + 1)
+            .bind(document_kind)
+            .execute(pool)
+            .await
+            .expect("seed backing item");
+        }
+
         sqlx::query(
             r#"
             INSERT INTO analysis_documents (
                 id, source_id, item_id, document_key, document_kind, source_type, source_subtype,
-                external_id, author, published_at, document_order, ref, content_zstd
+                external_id, author, published_at, document_order, ref, content_zstd, created_at, updated_at
             )
-            VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 'Author', ?, 0, ?, x'01')
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Author', ?, 0, ?, x'01', ?, ?)
             "#,
         )
         .bind(id)
         .bind(source_id)
-        .bind(format!("doc-{id}"))
+        .bind(item_id)
+        .bind(document_key)
         .bind(document_kind)
         .bind(source_type)
         .bind(source_subtype)
         .bind(format!("external-{id}"))
         .bind(published_at)
         .bind(format!("ref-{id}"))
+        .bind(published_at)
+        .bind(published_at)
         .execute(pool)
         .await
         .expect("seed document");
@@ -1596,6 +1670,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn project_data_range_returns_nulls_for_mixed_provider_project() {
+        let pool = pool().await;
+        seed_project(&pool, 7).await;
+        seed_source(&pool, 70, "youtube", "video").await;
+        seed_source(&pool, 71, "telegram", "supergroup").await;
+        attach(&pool, 7, 70).await;
+        attach(&pool, 7, 71).await;
+
+        let range = get_project_data_range_in_pool(&pool, 7, None, false)
+            .await
+            .expect("mixed provider project range");
+
+        assert_eq!(range, ProjectDataRange { from: None, to: None });
+    }
+
+    #[tokio::test]
     async fn project_data_range_rejects_migrated_history_for_unmaterialized_playlist_project() {
         let pool = pool().await;
         seed_project(&pool, 6).await;
@@ -1627,17 +1717,17 @@ mod tests {
 }
 ```
 
-- [ ] **Step 5: Run tests to verify they fail**
+- [ ] **Step 6: Run tests to verify they fail**
 
 Run:
 
 ```powershell
-cargo test projects::data_range::tests::project_data_range_returns_nulls_for_empty_project projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources projects::data_range::tests::project_data_range_returns_nulls_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_non_telegram
+cargo test projects::data_range::tests::project_data_range_returns_nulls_for_empty_project projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources projects::data_range::tests::project_data_range_returns_nulls_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_returns_nulls_for_mixed_provider_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_non_telegram
 ```
 
 Expected: compile failure because `ProjectDataRange` and `get_project_data_range_in_pool` are not implemented.
 
-- [ ] **Step 6: Implement data range structs and query helper**
+- [ ] **Step 7: Implement data range structs and query helper**
 
 Add above the tests in `src-tauri/src/projects/data_range.rs`:
 
@@ -1703,8 +1793,11 @@ pub(crate) async fn get_project_data_range_in_pool(
         Ok(resolved) => resolved,
         Err(error)
             if error.kind == AppErrorKind::Validation
-                && error.message.as_str()
-                    == "No linked YouTube videos are available for analysis in this scope" =>
+                && matches!(
+                    error.message.as_str(),
+                    "No linked YouTube videos are available for analysis in this scope"
+                        | "mixed_provider_project_runs_not_supported"
+                ) =>
         {
             return Ok(ProjectDataRange { from: None, to: None });
         }
@@ -1783,11 +1876,11 @@ pub async fn get_project_data_range(
 }
 ```
 
-- [ ] **Step 7: Register command**
+- [ ] **Step 8: Register command**
 
 In `src-tauri/src/lib.rs`, add `get_project_data_range` to the `use projects::{...}` list and to `tauri::generate_handler![...]` near `start_project_analysis`.
 
-- [ ] **Step 8: Verify data range task**
+- [ ] **Step 9: Verify data range task**
 
 Run:
 
@@ -1799,10 +1892,10 @@ cargo check
 
 Expected: selected tests and `cargo check` pass.
 
-- [ ] **Step 9: Commit Task 5**
+- [ ] **Step 10: Commit Task 5**
 
 ```powershell
-git add src-tauri/src/projects/mod.rs src-tauri/src/projects/data_range.rs src-tauri/src/analysis/corpus.rs src-tauri/src/analysis/report.rs src-tauri/src/lib.rs
+git add src-tauri/src/projects/mod.rs src-tauri/src/projects/data_range.rs src-tauri/src/analysis/mod.rs src-tauri/src/analysis/corpus.rs src-tauri/src/analysis/report.rs src-tauri/src/lib.rs
 git commit -m "feat: add project data range command"
 ```
 
@@ -2010,7 +2103,7 @@ cargo test migrations::tests::fresh_schema_includes_projects_redesign_columns_in
 cargo test projects::tests
 cargo test projects::read_model::tests
 cargo test projects::data_range::tests
-cargo test library_sources::tests::query_library_catalog
+cargo test library_sources::tests
 ```
 
 Expected: all selected test sets pass.
@@ -2046,6 +2139,7 @@ rg -n "list_research_projects|get_project_data_range|set_project_pinned|set_proj
 
 Expected:
 - `src-tauri/src/lib.rs` imports and registers all four commands.
+- `src-tauri/src/analysis/mod.rs` re-exports the corpus APIs used by `projects/data_range.rs`.
 - `src-tauri/src/projects/read_model.rs` defines `list_research_projects`.
 - `src-tauri/src/projects/data_range.rs` defines `get_project_data_range`.
 - `src-tauri/src/projects/mod.rs` defines pin/archive commands.
@@ -2057,7 +2151,7 @@ Expected:
 If Step 2-5 forced mechanical fixes, commit only planned implementation files:
 
 ```powershell
-git add src-tauri/src/projects/mod.rs src-tauri/src/projects/read_model.rs src-tauri/src/projects/data_range.rs src-tauri/src/migrations.rs src-tauri/migrations/0012_projects_redesign.sql src-tauri/src/library_sources/models.rs src-tauri/src/library_sources/mod.rs src-tauri/src/analysis/corpus.rs src-tauri/src/analysis/report.rs src-tauri/src/lib.rs src/lib/types/projects.ts src/lib/api/projects.ts src/lib/api/projects.test.ts docs/value-registry.md
+git add src-tauri/src/projects/mod.rs src-tauri/src/projects/read_model.rs src-tauri/src/projects/data_range.rs src-tauri/src/migrations.rs src-tauri/migrations/0012_projects_redesign.sql src-tauri/src/library_sources/models.rs src-tauri/src/library_sources/mod.rs src-tauri/src/analysis/mod.rs src-tauri/src/analysis/corpus.rs src-tauri/src/analysis/report.rs src-tauri/src/lib.rs src/lib/types/projects.ts src/lib/api/projects.ts src/lib/api/projects.test.ts docs/value-registry.md
 git commit -m "fix: stabilize research projects v10 backend contract"
 ```
 
