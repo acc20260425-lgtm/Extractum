@@ -1003,7 +1003,7 @@ git commit -m "feat: expose project source sync status"
   - `list_research_projects_in_pool(pool) -> AppResult<Vec<ProjectSummary>>`
   - `list_research_projects(handle) -> AppResult<Vec<ProjectSummary>>`
 
-- [ ] **Step 1: Add module declaration and re-exports**
+- [x] **Step 1: Add module declaration and re-exports**
 
 At the top of `src-tauri/src/projects/mod.rs`:
 
@@ -1014,7 +1014,7 @@ pub(crate) use read_model::list_research_projects_in_pool;
 pub use read_model::{list_research_projects, ProjectStatus, ProjectSummary};
 ```
 
-- [ ] **Step 2: Create failing read-model tests**
+- [x] **Step 2: Create failing read-model tests**
 
 Create `src-tauri/src/projects/read_model.rs` with the test module first:
 
@@ -1208,17 +1208,17 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
 
 Run:
 
 ```powershell
-cargo test projects::read_model::tests::list_research_projects_derives_counts_status_and_last_run_without_fanout projects::read_model::tests::list_research_projects_counts_playlist_linked_video_materials projects::read_model::tests::list_research_projects_prioritizes_running_and_sorts_active_pinned_updated_first
+cargo test projects::read_model::tests::list_research_projects_derives_counts_status_and_last_run_without_fanout
 ```
 
 Expected: compile failure because `ProjectSummary`, `ProjectStatus`, and `list_research_projects_in_pool` are not implemented.
 
-- [ ] **Step 4: Add read-model structs and row mapper**
+- [x] **Step 4: Add read-model structs and row mapper**
 
 Add above the tests in `src-tauri/src/projects/read_model.rs`:
 
@@ -1290,7 +1290,7 @@ fn map_project_summary(row: ProjectSummaryRow) -> ProjectSummary {
 }
 ```
 
-- [ ] **Step 5: Implement SQL read model without fanout**
+- [x] **Step 5: Implement SQL read model without fanout**
 
 Add:
 
@@ -1386,22 +1386,22 @@ pub async fn list_research_projects(handle: AppHandle) -> AppResult<Vec<ProjectS
 }
 ```
 
-- [ ] **Step 6: Register command**
+- [x] **Step 6: Register command**
 
 In `src-tauri/src/lib.rs`, add `list_research_projects` to the `use projects::{...}` list and to `tauri::generate_handler![...]` next to `list_projects`.
 
-- [ ] **Step 7: Verify read-model task**
+- [x] **Step 7: Verify read-model task**
 
 Run:
 
 ```powershell
-cargo test projects::read_model::tests::list_research_projects_derives_counts_status_and_last_run_without_fanout projects::read_model::tests::list_research_projects_counts_playlist_linked_video_materials projects::read_model::tests::list_research_projects_prioritizes_running_and_sorts_active_pinned_updated_first
+cargo test projects::read_model::tests::
 cargo check
 ```
 
 Expected: selected tests and `cargo check` pass.
 
-- [ ] **Step 8: Commit Task 4**
+- [x] **Step 8: Commit Task 4**
 
 ```powershell
 git add src-tauri/src/projects/mod.rs src-tauri/src/projects/read_model.rs src-tauri/src/lib.rs

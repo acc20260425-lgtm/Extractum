@@ -1,9 +1,16 @@
+mod read_model;
+
 use tauri::AppHandle;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::library_sources::LibraryCatalogStatus;
 use crate::youtube::jobs::SourceJobState;
+
+#[allow(unused_imports)]
+pub(crate) use read_model::list_research_projects_in_pool;
+#[allow(unused_imports)]
+pub use read_model::{list_research_projects, ProjectStatus, ProjectSummary};
 
 #[derive(Clone, Debug, serde::Serialize, sqlx::FromRow, PartialEq, Eq)]
 pub struct ProjectRecord {
