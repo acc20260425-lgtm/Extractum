@@ -24,6 +24,9 @@ const projectSources: ProjectSourceRecord[] = [
     subtitle: "Channel",
     item_count: 3,
     added_at: 300,
+    last_synced_at: 110,
+    sync_status: "error",
+    handle: "v1",
   },
 ];
 

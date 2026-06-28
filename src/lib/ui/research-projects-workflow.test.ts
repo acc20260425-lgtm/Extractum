@@ -26,6 +26,9 @@ function projectSource(overrides: Partial<ProjectSourceRecord> = {}): ProjectSou
     subtitle: "Channel",
     item_count: 3,
     added_at: 1,
+    last_synced_at: 1,
+    sync_status: "active",
+    handle: "v1",
     ...overrides,
   };
 }

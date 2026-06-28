@@ -1,17 +1,26 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AddProjectSourcesOutcome,
+  ProjectArchivedInput,
   ProjectAnalysisStartCommand,
+  ProjectDataRange,
+  ProjectDataRangeInput,
   ProjectEditorInput,
+  ProjectPinnedInput,
   ProjectRecord,
   ProjectRuns,
   ProjectSourceRecord,
   ProjectSourcesInput,
+  ProjectSummary,
   UpdateProjectInput,
 } from "$lib/types/projects";
 
 export function listProjects() {
   return invoke<ProjectRecord[]>("list_projects");
+}
+
+export function listResearchProjects() {
+  return invoke<ProjectSummary[]>("list_research_projects");
 }
 
 export function createProject(input: ProjectEditorInput) {
@@ -24,6 +33,14 @@ export function updateProject(input: UpdateProjectInput) {
 
 export function deleteProject(projectId: number) {
   return invoke<void>("delete_project", { projectId });
+}
+
+export function setProjectPinned(input: ProjectPinnedInput) {
+  return invoke<void>("set_project_pinned", { ...input });
+}
+
+export function setProjectArchived(input: ProjectArchivedInput) {
+  return invoke<void>("set_project_archived", { ...input });
 }
 
 export function listProjectSources(projectId: number) {
@@ -44,4 +61,8 @@ export function listProjectRuns(projectId: number) {
 
 export function startProjectAnalysis(command: ProjectAnalysisStartCommand) {
   return invoke<number>("start_project_analysis", { ...command });
+}
+
+export function getProjectDataRange(input: ProjectDataRangeInput) {
+  return invoke<ProjectDataRange>("get_project_data_range", { ...input });
 }

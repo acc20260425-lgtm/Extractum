@@ -796,7 +796,7 @@ Scope: frontend-local state, filters, tabs, badges, and view-model values. Most 
 | Library catalog status | `LibraryCatalogStatus` | `active`, `syncing`, `error`, `unavailable` | `src-tauri/src/library_sources/models.rs`, `src/lib/types/library-sources.ts` | Catalog record status shared by backend API and frontend types. |
 | Library catalog source status | `LibraryCatalogSourceStatus` | `active`, `syncing`, `error`, `unavailable` | `src/lib/ui/library-catalog-model.ts` | View-model status. |
 | Library catalog filter id | `LibraryCatalogFilterId` | `all`, `provider:<provider>`, `provider:<provider>/subtype:<subtype>` | `src/lib/ui/library-catalog-model.ts` | Structured string id. |
-| Research project status | `ProjectStatus` | `ready`, `running`, `needs_attention`, `empty` | `src/lib/ui/research-projects-model.ts` | Project card status. |
+| Research project status | `ProjectStatus` | `ready`, `running`, `needs_attention`, `empty` | `src-tauri/src/projects/read_model.rs`, `src/lib/types/projects.ts`, `src/lib/ui/research-projects-model.ts` | Backend-derived API status for `ProjectSummary`; UI view-model mirrors the same values until UI integration imports the backend type. |
 | Research project backing | `ResearchProjectBacking.kind` | `project`, `source_group` | `src/lib/ui/research-projects-model.ts` | View-model backing kind. |
 | Library source status | `LibrarySourceStatus` | `active`, `needs_account`, `syncing`, `error`, `unavailable` | `src/lib/ui/research-projects-model.ts` | Project settings/library attach status. |
 | Project source link status | `ProjectSourceLinkView.connectionStatus` | `connected` | `src/lib/ui/research-projects-model.ts` | Current UI has only connected links. |

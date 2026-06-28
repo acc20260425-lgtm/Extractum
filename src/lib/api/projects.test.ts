@@ -4,10 +4,14 @@ import {
   addProjectSources,
   createProject,
   deleteProject,
+  getProjectDataRange,
   listProjectRuns,
   listProjectSources,
   listProjects,
+  listResearchProjects,
   removeProjectSources,
+  setProjectArchived,
+  setProjectPinned,
   startProjectAnalysis,
   updateProject,
 } from "./projects";
@@ -89,6 +93,38 @@ describe("projects api", () => {
       profileId: null,
       youtubeCorpusMode: "transcript_description",
       includeMigratedHistory: false,
+    });
+  });
+
+  it("maps research projects v10 commands", async () => {
+    invokeMock.mockResolvedValueOnce([]);
+    await listResearchProjects();
+    expect(invokeMock).toHaveBeenLastCalledWith("list_research_projects");
+
+    invokeMock.mockResolvedValueOnce({ from: 10, to: 20 });
+    await getProjectDataRange({
+      projectId: 2,
+      youtubeCorpusMode: "transcript_description",
+      includeMigratedHistory: false,
+    });
+    expect(invokeMock).toHaveBeenLastCalledWith("get_project_data_range", {
+      projectId: 2,
+      youtubeCorpusMode: "transcript_description",
+      includeMigratedHistory: false,
+    });
+
+    invokeMock.mockResolvedValueOnce(undefined);
+    await setProjectPinned({ projectId: 2, pinned: true });
+    expect(invokeMock).toHaveBeenLastCalledWith("set_project_pinned", {
+      projectId: 2,
+      pinned: true,
+    });
+
+    invokeMock.mockResolvedValueOnce(undefined);
+    await setProjectArchived({ projectId: 2, archived: true });
+    expect(invokeMock).toHaveBeenLastCalledWith("set_project_archived", {
+      projectId: 2,
+      archived: true,
     });
   });
 });

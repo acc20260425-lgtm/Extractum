@@ -42,6 +42,8 @@
 - Modify: `src/lib/types/projects.ts`
 - Modify: `src/lib/api/projects.ts`
 - Modify: `src/lib/api/projects.test.ts`
+- Modify: `src/lib/ui/research-projects-model.test.ts`
+- Modify: `src/lib/ui/research-projects-workflow.test.ts`
 - Modify: `docs/value-registry.md`
 
 ## Interfaces
@@ -2209,7 +2211,7 @@ git commit -m "feat: add project data range command"
   - `setProjectPinned(input)`
   - `setProjectArchived(input)`
 
-- [ ] **Step 1: Extend TypeScript project types**
+- [x] **Step 1: Extend TypeScript project types**
 
 In `src/lib/types/projects.ts`, update imports:
 
@@ -2282,7 +2284,7 @@ export interface ProjectSourceRecord {
 }
 ```
 
-- [ ] **Step 2: Add invoke wrappers**
+- [x] **Step 2: Add invoke wrappers**
 
 In `src/lib/api/projects.ts`, import the new input/output types and add:
 
@@ -2304,7 +2306,7 @@ export function setProjectArchived(input: ProjectArchivedInput) {
 }
 ```
 
-- [ ] **Step 3: Add API mapping tests**
+- [x] **Step 3: Add API mapping tests**
 
 In `src/lib/api/projects.test.ts`, include the new functions in the import list and add:
 
@@ -2342,7 +2344,7 @@ it("maps research projects v10 commands", async () => {
 });
 ```
 
-- [ ] **Step 4: Update value registry**
+- [x] **Step 4: Update value registry**
 
 In `docs/value-registry.md`, update the `Research project status` row to record backend/API ownership while preserving the current UI owner:
 
@@ -2356,7 +2358,7 @@ Also update the `Library catalog status` row to record the Rust owner introduced
 | Library catalog status | `LibraryCatalogStatus` | `active`, `syncing`, `error`, `unavailable` | `src-tauri/src/library_sources/models.rs`, `src/lib/types/library-sources.ts` | Catalog record status shared by backend API and frontend types. |
 ```
 
-- [ ] **Step 5: Verify TypeScript and registry task**
+- [x] **Step 5: Verify TypeScript and registry task**
 
 Run:
 
@@ -2367,7 +2369,7 @@ npm.cmd run check
 
 Expected: the API test and Svelte/TypeScript check pass.
 
-- [ ] **Step 6: Commit Task 6**
+- [x] **Step 6: Commit Task 6**
 
 ```powershell
 git add src/lib/types/projects.ts src/lib/api/projects.ts src/lib/api/projects.test.ts docs/value-registry.md
