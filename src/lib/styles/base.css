@@ -34,6 +34,7 @@
   --extractum-border-strong: #c6d0dc;
   --extractum-text: #17212b;
   --extractum-muted: #6e7c8a;
+  --extractum-muted-2: #90a1b2;
   --extractum-primary: #0f66d8;
   --extractum-primary-hover: #0b56b8;
   --extractum-success: #1aa36f;
@@ -43,6 +44,12 @@
   --extractum-density-row-height: 34px;
   --extractum-density-control-height: 32px;
   --extractum-font: "Segoe UI", "Inter", "IBM Plex Sans", Arial, sans-serif;
+
+  /* Brand / provider accents — fixed across themes (brand identity) */
+  --extractum-provider-openai: #10a37f;
+  --extractum-provider-anthropic: #d97757;
+  --extractum-provider-google: #4285f4;
+  --extractum-provider-telegram: #229ed9;
 }
 
 [data-theme="dark"] {
@@ -75,6 +82,7 @@
   --extractum-border-strong: #42515f;
   --extractum-text: #edf2f7;
   --extractum-muted: #90a1b2;
+  --extractum-muted-2: #aab6c2;
   --extractum-primary: #61a3ff;
   --extractum-primary-hover: #3e88f2;
 }
