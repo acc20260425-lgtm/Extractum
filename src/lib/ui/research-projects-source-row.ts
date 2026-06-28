@@ -1,3 +1,4 @@
+import type { ExtractumDataGridColumn } from "$lib/components/extractum-ui/data-grid-date-format";
 import type { LibraryCatalogStatus, LibrarySourceProvider } from "$lib/types/library-sources";
 import type { ProjectSourceRecord } from "$lib/types/projects";
 
@@ -12,7 +13,7 @@ export function sourceSyncStatusLabel(status: LibraryCatalogStatus): string {
   return SYNC_STATUS_LABELS[status];
 }
 
-export interface SourceRowView {
+export type SourceRowView = {
   sourceId: number;
   title: string;
   handle: string | null;
@@ -26,6 +27,27 @@ export interface SourceRowView {
 
 function formatThousands(count: number): string {
   return String(count).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
+export function sourceGridColumns(): ExtractumDataGridColumn[] {
+  return [
+    { id: "title", header: "Источник", width: 260, flexgrow: 1 },
+    { id: "typeLabel", header: "Тип", width: 116 },
+    { id: "materialsLabel", header: "Материалы", width: 116 },
+    { id: "lastSyncedAt", header: "Последний сбор", width: 150, dateTimeFormat: "datetime" },
+    { id: "statusLabel", header: "Статус", width: 104 },
+  ];
+}
+
+export type SourceGridRow = SourceRowView & {
+  id: string;
+};
+
+export function buildSourceGridRows(records: ProjectSourceRecord[]): SourceGridRow[] {
+  return records.map((record) => {
+    const view = buildSourceRow(record);
+    return { ...view, id: String(view.sourceId) };
+  });
 }
 
 export function buildSourceRow(record: ProjectSourceRecord): SourceRowView {

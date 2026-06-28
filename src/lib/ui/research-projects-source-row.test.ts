@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildSourceRow, sourceSyncStatusLabel } from "./research-projects-source-row";
+import {
+  buildSourceGridRows,
+  buildSourceRow,
+  sourceGridColumns,
+  sourceSyncStatusLabel,
+} from "./research-projects-source-row";
 import type { ProjectSourceRecord } from "$lib/types/projects";
 
 function record(overrides: Partial<ProjectSourceRecord> = {}): ProjectSourceRecord {
@@ -60,5 +65,45 @@ describe("buildSourceRow", () => {
       1_717_360_740,
     );
     expect(buildSourceRow(record({ last_synced_at: null })).lastSyncedAt).toBeNull();
+  });
+});
+
+describe("sourceGridColumns", () => {
+  it("defines the v10 source columns with Russian headers", () => {
+    const columns = sourceGridColumns();
+
+    expect(columns.map((column) => column.id)).toEqual([
+      "title",
+      "typeLabel",
+      "materialsLabel",
+      "lastSyncedAt",
+      "statusLabel",
+    ]);
+    expect(columns.map((column) => column.header)).toEqual([
+      "Источник",
+      "Тип",
+      "Материалы",
+      "Последний сбор",
+      "Статус",
+    ]);
+  });
+
+  it("formats the last-collected column as a date-time", () => {
+    const lastSync = sourceGridColumns().find((column) => column.id === "lastSyncedAt");
+
+    expect(lastSync?.dateTimeFormat).toBe("datetime");
+  });
+});
+
+describe("buildSourceGridRows", () => {
+  it("maps records to grid rows keyed by a string source id", () => {
+    const rows = buildSourceGridRows([
+      record({ source_id: 10, title: "ФинБеларусь" }),
+      record({ source_id: 11, title: "СтатусБанк" }),
+    ]);
+
+    expect(rows.map((row) => row.id)).toEqual(["10", "11"]);
+    expect(rows[0].title).toBe("ФинБеларусь");
+    expect(rows[0].sourceId).toBe(10);
   });
 });
