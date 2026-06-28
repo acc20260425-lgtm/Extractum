@@ -12,9 +12,12 @@ use crate::youtube::jobs::{SourceJobRecord, SourceJobState, SourceJobStatus};
 use models::LibrarySourceRow;
 pub(crate) use models::{
     LibraryCatalogCapabilities, LibraryCatalogDisabledReasons, LibraryCatalogFilterCount,
-    LibraryCatalogRecord, LibraryCatalogResponse, LibraryCatalogStatus,
+    LibraryCatalogRecord, LibraryCatalogResponse,
 };
-pub use models::{LibrarySourceRecord, LibraryTelegramSourceDetails, LibraryYoutubeSourceDetails};
+pub use models::{
+    LibraryCatalogStatus, LibrarySourceRecord, LibraryTelegramSourceDetails,
+    LibraryYoutubeSourceDetails,
+};
 
 #[tauri::command]
 pub async fn list_library_sources(
@@ -126,7 +129,7 @@ pub(crate) const YOUTUBE_CHANNEL_DISABLED_REASON: &str =
 const SOURCE_EDIT_DISABLED_REASON: &str = "Source editing is not available yet.";
 const SOURCE_SYNCING_DISABLED_REASON: &str = "Source is syncing.";
 
-fn latest_catalog_jobs_by_source(
+pub(crate) fn latest_catalog_jobs_by_source(
     source_ids: &[i64],
     jobs: Vec<SourceJobRecord>,
 ) -> HashMap<i64, SourceJobRecord> {
@@ -160,6 +163,44 @@ fn latest_catalog_jobs_by_source(
     latest
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct CatalogStatusInput<'a> {
+    pub provider: &'a str,
+    pub source_subtype: Option<&'a str>,
+}
+
+pub(crate) fn catalog_status_for_input(
+    input: CatalogStatusInput<'_>,
+    latest_job: Option<&SourceJobRecord>,
+) -> (LibraryCatalogStatus, Option<String>) {
+    if input.provider == "youtube" && input.source_subtype == Some("channel") {
+        return (
+            LibraryCatalogStatus::Unavailable,
+            Some(YOUTUBE_CHANNEL_DISABLED_REASON.to_string()),
+        );
+    }
+
+    if let Some(job) = latest_job {
+        return match job.status {
+            SourceJobStatus::Queued | SourceJobStatus::Running => (
+                LibraryCatalogStatus::Syncing,
+                job.message
+                    .clone()
+                    .or_else(|| Some(SOURCE_SYNCING_DISABLED_REASON.to_string())),
+            ),
+            SourceJobStatus::Failed => (
+                LibraryCatalogStatus::Error,
+                job.error.clone().or_else(|| job.message.clone()),
+            ),
+            SourceJobStatus::Succeeded
+            | SourceJobStatus::CancelRequested
+            | SourceJobStatus::Cancelled => (LibraryCatalogStatus::Active, None),
+        };
+    }
+
+    (LibraryCatalogStatus::Active, None)
+}
+
 fn catalog_record_for_source(
     source: LibrarySourceRecord,
     latest_job: Option<SourceJobRecord>,
@@ -187,30 +228,13 @@ fn catalog_status_for_source(
     source: &LibrarySourceRecord,
     latest_job: Option<&SourceJobRecord>,
 ) -> (LibraryCatalogStatus, Option<String>) {
-    if is_unsupported_youtube_channel(source) {
-        return (
-            LibraryCatalogStatus::Unavailable,
-            Some(YOUTUBE_CHANNEL_DISABLED_REASON.to_string()),
-        );
-    }
-
-    if let Some(job) = latest_job {
-        return match job.status {
-            SourceJobStatus::Queued | SourceJobStatus::Running => (
-                LibraryCatalogStatus::Syncing,
-                job.message
-                    .clone()
-                    .or_else(|| Some(SOURCE_SYNCING_DISABLED_REASON.to_string())),
-            ),
-            SourceJobStatus::Failed => (
-                LibraryCatalogStatus::Error,
-                job.error.clone().or_else(|| job.message.clone()),
-            ),
-            _ => (LibraryCatalogStatus::Active, None),
-        };
-    }
-
-    (LibraryCatalogStatus::Active, None)
+    catalog_status_for_input(
+        CatalogStatusInput {
+            provider: source.provider.as_str(),
+            source_subtype: source.source_subtype.as_deref(),
+        },
+        latest_job,
+    )
 }
 
 fn catalog_disabled_reasons(
@@ -471,6 +495,35 @@ mod tests {
                 .await
                 .expect("create library source test schema");
         }
+    }
+
+    #[test]
+    fn catalog_status_for_input_keeps_failed_job_without_detail_empty() {
+        let job = SourceJobRecord {
+            job_id: "job-1".to_string(),
+            source_id: 1,
+            related_source_id: None,
+            job_type: SourceJobType::YoutubeVideoTranscriptSync,
+            status: SourceJobStatus::Failed,
+            message: None,
+            progress_current: None,
+            progress_total: None,
+            started_at: 10,
+            finished_at: Some(11),
+            warnings: Vec::new(),
+            error: None,
+        };
+
+        let (status, detail) = catalog_status_for_input(
+            CatalogStatusInput {
+                provider: "youtube",
+                source_subtype: Some("video"),
+            },
+            Some(&job),
+        );
+
+        assert_eq!(status, LibraryCatalogStatus::Error);
+        assert_eq!(detail, None);
     }
 
     async fn insert_source(

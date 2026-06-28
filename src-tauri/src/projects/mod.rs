@@ -2,6 +2,8 @@ use tauri::AppHandle;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::library_sources::LibraryCatalogStatus;
+use crate::youtube::jobs::SourceJobState;
 
 #[derive(Clone, Debug, serde::Serialize, sqlx::FromRow, PartialEq, Eq)]
 pub struct ProjectRecord {
@@ -12,7 +14,7 @@ pub struct ProjectRecord {
     pub updated_at: i64,
 }
 
-#[derive(Clone, Debug, serde::Serialize, sqlx::FromRow, PartialEq, Eq)]
+#[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
 pub struct ProjectSourceRecord {
     pub project_id: i64,
     pub source_id: i64,
@@ -22,6 +24,29 @@ pub struct ProjectSourceRecord {
     pub subtitle: Option<String>,
     pub item_count: i64,
     pub added_at: i64,
+    pub last_synced_at: Option<i64>,
+    pub sync_status: LibraryCatalogStatus,
+    pub handle: Option<String>,
+}
+
+#[derive(sqlx::FromRow)]
+struct ProjectSourceRow {
+    project_id: i64,
+    source_id: i64,
+    provider: String,
+    source_subtype: Option<String>,
+    title: Option<String>,
+    subtitle: Option<String>,
+    item_count: i64,
+    added_at: i64,
+    last_synced_at: Option<i64>,
+    external_id: Option<String>,
+}
+
+fn project_source_handle(external_id: Option<String>) -> Option<String> {
+    external_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 #[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
@@ -348,11 +373,45 @@ pub(crate) async fn remove_project_sources_in_pool(
 
 pub(crate) async fn list_project_sources_in_pool(
     pool: &sqlx::SqlitePool,
+    source_jobs: &SourceJobState,
     project_id: i64,
 ) -> AppResult<Vec<ProjectSourceRecord>> {
     ensure_project_exists(pool, project_id).await?;
-    sqlx::query_as(
+    let rows: Vec<ProjectSourceRow> = sqlx::query_as(
         r#"
+        WITH source_material_sources AS (
+            SELECT
+                ps.project_id,
+                ps.source_id AS row_source_id,
+                CASE
+                    WHEN s.source_type = 'youtube'
+                     AND s.source_subtype = 'playlist'
+                    THEN ypi.video_source_id
+                    ELSE ps.source_id
+                END AS material_source_id
+            FROM project_sources ps
+            JOIN sources s ON s.id = ps.source_id
+            LEFT JOIN youtube_playlist_items ypi
+                ON ypi.playlist_source_id = ps.source_id
+               AND ypi.video_source_id IS NOT NULL
+               AND ypi.is_removed_from_playlist = 0
+            WHERE ps.project_id = ?
+              AND (
+                  s.source_type <> 'youtube'
+               OR s.source_subtype <> 'playlist'
+               OR ypi.video_source_id IS NOT NULL
+              )
+        ),
+        item_counts AS (
+            SELECT
+                sms.project_id,
+                sms.row_source_id AS source_id,
+                COUNT(DISTINCT items.id) AS item_count
+            FROM source_material_sources sms
+            JOIN items ON items.source_id = sms.material_source_id
+            WHERE items.content_zstd IS NOT NULL
+            GROUP BY sms.project_id, sms.row_source_id
+        )
         SELECT
             ps.project_id,
             s.id AS source_id,
@@ -363,20 +422,54 @@ pub(crate) async fn list_project_sources_in_pool(
                 WHEN s.account_id IS NOT NULL THEN 'Account #' || s.account_id
                 ELSE NULL
             END AS subtitle,
-            COUNT(items.content_zstd) AS item_count,
-            ps.added_at
+            COALESCE(item_counts.item_count, 0) AS item_count,
+            ps.added_at,
+            s.last_synced_at,
+            s.external_id
         FROM project_sources ps
         JOIN sources s ON s.id = ps.source_id
-        LEFT JOIN items ON items.source_id = s.id
+        LEFT JOIN item_counts
+            ON item_counts.project_id = ps.project_id
+           AND item_counts.source_id = ps.source_id
         WHERE ps.project_id = ?
-        GROUP BY ps.project_id, s.id, s.source_type, s.source_subtype, s.title, s.account_id, ps.added_at
         ORDER BY ps.added_at DESC, s.id DESC
         "#,
     )
     .bind(project_id)
+    .bind(project_id)
     .fetch_all(pool)
     .await
-    .map_err(AppError::database)
+    .map_err(AppError::database)?;
+
+    let source_ids = rows.iter().map(|row| row.source_id).collect::<Vec<_>>();
+    let jobs = source_jobs.catalog_jobs_for_sources(&source_ids).await;
+    let latest_jobs = crate::library_sources::latest_catalog_jobs_by_source(&source_ids, jobs);
+
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let (sync_status, _) = crate::library_sources::catalog_status_for_input(
+                crate::library_sources::CatalogStatusInput {
+                    provider: row.provider.as_str(),
+                    source_subtype: row.source_subtype.as_deref(),
+                },
+                latest_jobs.get(&row.source_id),
+            );
+            ProjectSourceRecord {
+                project_id: row.project_id,
+                source_id: row.source_id,
+                provider: row.provider,
+                source_subtype: row.source_subtype,
+                title: row.title,
+                subtitle: row.subtitle,
+                item_count: row.item_count,
+                added_at: row.added_at,
+                last_synced_at: row.last_synced_at,
+                sync_status,
+                handle: project_source_handle(row.external_id),
+            }
+        })
+        .collect())
 }
 
 pub(crate) async fn delete_project_in_pool(
@@ -461,10 +554,11 @@ pub async fn set_project_archived(
 #[tauri::command]
 pub async fn list_project_sources(
     handle: AppHandle,
+    source_jobs: tauri::State<'_, SourceJobState>,
     project_id: i64,
 ) -> AppResult<Vec<ProjectSourceRecord>> {
     let pool = get_pool(&handle).await?;
-    list_project_sources_in_pool(&pool, project_id).await
+    list_project_sources_in_pool(&pool, source_jobs.inner(), project_id).await
 }
 
 #[tauri::command]
@@ -555,6 +649,9 @@ pub async fn list_project_runs(
 mod tests {
     use super::*;
     use crate::migrations::apply_all_migrations_for_test_pool;
+    use crate::youtube::jobs::{
+        SourceJobState, SourceJobStatus, SourceJobType, YoutubeSyncOptions,
+    };
 
     async fn pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -641,7 +738,7 @@ mod tests {
         assert_eq!(second.added_count, 0);
         assert_eq!(second.already_present_count, 2);
 
-        let sources = list_project_sources_in_pool(&pool, project.id)
+        let sources = list_project_sources_in_pool(&pool, &SourceJobState::new(), project.id)
             .await
             .expect("list project sources");
         assert_eq!(sources.len(), 2);
@@ -745,6 +842,86 @@ mod tests {
             .await
             .expect_err("missing project rejected");
         assert_eq!(missing.kind, crate::error::AppErrorKind::NotFound);
+    }
+
+    #[tokio::test]
+    async fn list_project_sources_includes_catalog_status_last_sync_and_handle() {
+        let pool = pool().await;
+        seed_source(&pool, 10, "youtube", "video").await;
+        sqlx::query("UPDATE sources SET last_synced_at = 1234, external_id = 'video-10' WHERE id = 10")
+            .execute(&pool)
+            .await
+            .expect("update source metadata");
+        let project = create_project_in_pool(&pool, "Status rows", None)
+            .await
+            .expect("create project");
+        add_project_sources_in_pool(&pool, project.id, vec![10])
+            .await
+            .expect("add source");
+
+        let source_jobs = SourceJobState::new();
+        let options = YoutubeSyncOptions {
+            metadata: true,
+            transcripts: true,
+            comments: false,
+        };
+        let failed = source_jobs
+            .create_job(10, SourceJobType::YoutubeVideoTranscriptSync, None, options)
+            .await
+            .expect("create job");
+        source_jobs
+            .finish_job(&failed.job_id, |job| {
+                job.status = SourceJobStatus::Failed;
+                job.started_at = 77;
+                job.error = Some("Transcript quota exceeded".to_string());
+            })
+            .await
+            .expect("finish job");
+
+        let sources = list_project_sources_in_pool(&pool, &source_jobs, project.id)
+            .await
+            .expect("list project sources");
+
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0].last_synced_at, Some(1234));
+        assert_eq!(
+            sources[0].sync_status,
+            crate::library_sources::LibraryCatalogStatus::Error
+        );
+        assert_eq!(sources[0].handle.as_deref(), Some("video-10"));
+    }
+
+    #[tokio::test]
+    async fn list_project_sources_counts_playlist_linked_video_materials() {
+        let pool = pool().await;
+        seed_source(&pool, 20, "youtube", "playlist").await;
+        seed_source(&pool, 21, "youtube", "video").await;
+        let project = create_project_in_pool(&pool, "Playlist rows", None)
+            .await
+            .expect("create project");
+        add_project_sources_in_pool(&pool, project.id, vec![20])
+            .await
+            .expect("add playlist source");
+        sqlx::query(
+            "INSERT INTO youtube_playlist_items (playlist_source_id, video_source_id, video_id, position, availability_status, is_removed_from_playlist) VALUES (20, 21, 'video-21', 1, 'available', 0)",
+        )
+        .execute(&pool)
+        .await
+        .expect("link playlist video");
+        sqlx::query(
+            "INSERT INTO items (id, source_id, external_id, author, published_at, ingested_at, content_zstd, item_kind) VALUES (210, 21, 'video-item-1', 'Author', 1000, 1001, x'01', 'youtube_transcript'), (211, 21, 'video-item-2', 'Author', 1002, 1003, x'01', 'youtube_description')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed video items");
+
+        let sources = list_project_sources_in_pool(&pool, &SourceJobState::new(), project.id)
+            .await
+            .expect("list project sources");
+
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0].source_id, 20);
+        assert_eq!(sources[0].item_count, 2);
     }
 
     #[tokio::test]

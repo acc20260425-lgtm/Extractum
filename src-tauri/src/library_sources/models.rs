@@ -53,7 +53,7 @@ pub(crate) struct LibraryCatalogRecord {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum LibraryCatalogStatus {
+pub enum LibraryCatalogStatus {
     Active,
     Syncing,
     Error,

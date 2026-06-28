@@ -540,7 +540,7 @@ git commit -m "feat: add project pin and archive commands"
   - `catalog_status_for_input(input, latest_job)`
 - Produces: extended `ProjectSourceRecord` with `last_synced_at`, `sync_status`, and `handle`
 
-- [ ] **Step 1: Make catalog status type public**
+- [x] **Step 1: Make catalog status type public**
 
 In `src-tauri/src/library_sources/models.rs`, change:
 
@@ -572,7 +572,7 @@ pub use models::{
 ```
 
 
-- [ ] **Step 2: Extract a minimal catalog status helper**
+- [x] **Step 2: Extract a minimal catalog status helper**
 
 In `src-tauri/src/library_sources/mod.rs`, change:
 
@@ -678,7 +678,7 @@ fn catalog_status_for_input_keeps_failed_job_without_detail_empty() {
 }
 ```
 
-- [ ] **Step 3: Add failing project source status test**
+- [x] **Step 3: Add failing project source status test**
 
 In `src-tauri/src/projects/mod.rs`, extend the test imports:
 
@@ -767,17 +767,17 @@ async fn list_project_sources_counts_playlist_linked_video_materials() {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it fails**
+- [x] **Step 4: Run test to verify it fails**
 
 Run:
 
 ```powershell
-cargo test projects::tests::list_project_sources_includes_catalog_status_last_sync_and_handle projects::tests::list_project_sources_counts_playlist_linked_video_materials
+cargo test projects::tests::list_project_sources_includes_catalog_status_last_sync_and_handle
 ```
 
 Expected: compile failure because the `ProjectSourceRecord` fields and new `list_project_sources_in_pool` signature do not exist yet.
 
-- [ ] **Step 5: Extend `ProjectSourceRecord`**
+- [x] **Step 5: Extend `ProjectSourceRecord`**
 
 In `src-tauri/src/projects/mod.rs`, add the import:
 
@@ -813,7 +813,7 @@ pub struct ProjectSourceRecord {
 }
 ```
 
-- [ ] **Step 6: Add a private SQL row and handle mapper**
+- [x] **Step 6: Add a private SQL row and handle mapper**
 
 Add near `ProjectSourceRecord`:
 
@@ -839,7 +839,7 @@ fn project_source_handle(external_id: Option<String>) -> Option<String> {
 }
 ```
 
-- [ ] **Step 7: Update `list_project_sources_in_pool` to consume `SourceJobState`**
+- [x] **Step 7: Update `list_project_sources_in_pool` to consume `SourceJobState`**
 
 Change the signature:
 
@@ -950,7 +950,7 @@ Ok(rows
     .collect())
 ```
 
-- [ ] **Step 8: Update Tauri command wrapper**
+- [x] **Step 8: Update Tauri command wrapper**
 
 Change `list_project_sources`:
 
@@ -968,19 +968,21 @@ pub async fn list_project_sources(
 
 Update existing tests that call `list_project_sources_in_pool` by passing `&SourceJobState::new()`.
 
-- [ ] **Step 9: Verify source status task**
+- [x] **Step 9: Verify source status task**
 
 Run:
 
 ```powershell
-cargo test projects::tests::add_project_sources_is_idempotent_and_lists_ui_ready_rows projects::tests::list_project_sources_includes_catalog_status_last_sync_and_handle projects::tests::list_project_sources_counts_playlist_linked_video_materials
+cargo test projects::tests::add_project_sources_is_idempotent_and_lists_ui_ready_rows
+cargo test projects::tests::list_project_sources_includes_catalog_status_last_sync_and_handle
+cargo test projects::tests::list_project_sources_counts_playlist_linked_video_materials
 cargo test library_sources::tests
 cargo check
 ```
 
 Expected: selected tests and `cargo check` pass.
 
-- [ ] **Step 10: Commit Task 3**
+- [x] **Step 10: Commit Task 3**
 
 ```powershell
 git add src-tauri/src/library_sources/models.rs src-tauri/src/library_sources/mod.rs src-tauri/src/projects/mod.rs
