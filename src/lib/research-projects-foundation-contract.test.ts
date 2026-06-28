@@ -29,7 +29,11 @@ describe("new UI foundation", () => {
 
   it("wires Tailwind through Vite without changing the Tauri server settings", () => {
     expect(viteConfigSource).toContain('import tailwindcss from "@tailwindcss/vite";');
-    expect(viteConfigSource).toContain("plugins: [tailwindcss(), sveltekit()]");
+    // `svelteTesting()` is appended only under Vitest (component render tests);
+    // the Tauri/Tailwind plugin wiring and server settings are unchanged.
+    expect(viteConfigSource).toContain(
+      "plugins: [tailwindcss(), sveltekit(), ...(process.env.VITEST ? [svelteTesting()] : [])]",
+    );
     expect(viteConfigSource).toContain("port: 1420");
     expect(viteConfigSource).toContain("strictPort: true");
   });

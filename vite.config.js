@@ -1,12 +1,15 @@
 import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
+import { svelteTesting } from "@testing-library/svelte/vite";
 
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [tailwindcss(), sveltekit()],
+  // `svelteTesting()` is only applied under Vitest so it resolves Svelte's
+  // browser build for component render tests without affecting `tauri dev`.
+  plugins: [tailwindcss(), sveltekit(), ...(process.env.VITEST ? [svelteTesting()] : [])],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
