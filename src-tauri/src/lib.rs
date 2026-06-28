@@ -20,7 +20,8 @@ mod topic_memberships;
 use migrations::{build_migrations, prepare_database};
 use projects::{
     add_project_sources, create_project, delete_project, list_project_runs, list_project_sources,
-    list_projects, remove_project_sources, start_project_analysis, update_project,
+    list_projects, remove_project_sources, set_project_archived, set_project_pinned,
+    start_project_analysis, update_project,
 };
 mod prompt_packs;
 use prompt_packs::{
@@ -225,6 +226,8 @@ pub fn run() {
             create_project,
             update_project,
             delete_project,
+            set_project_pinned,
+            set_project_archived,
             list_project_sources,
             add_project_sources,
             remove_project_sources,

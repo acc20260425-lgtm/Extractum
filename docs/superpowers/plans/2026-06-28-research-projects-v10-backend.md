@@ -309,7 +309,7 @@ git commit -m "feat: add projects redesign migration"
   - `set_project_pinned(handle, project_id, pinned) -> AppResult<()>`
   - `set_project_archived(handle, project_id, archived) -> AppResult<()>`
 
-- [ ] **Step 1: Add failing tests for the two mutations**
+- [x] **Step 1: Add failing tests for the two mutations**
 
 Add inside `src-tauri/src/projects/mod.rs` tests:
 
@@ -409,17 +409,17 @@ async fn set_project_archived_toggles_timestamp_and_rejects_missing_project() {
 }
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
 ```powershell
-cargo test projects::tests::set_project_pinned_toggles_flag_updates_timestamp_and_rejects_missing_project projects::tests::set_project_archived_toggles_timestamp_and_rejects_missing_project
+cargo test projects::tests::set_project_pinned_toggles_flag_updates_timestamp_and_rejects_missing_project
 ```
 
 Expected: compile failure because `set_project_pinned_in_pool` and `set_project_archived_in_pool` are not defined.
 
-- [ ] **Step 3: Add in-pool mutation helpers**
+- [x] **Step 3: Add in-pool mutation helpers**
 
 Add to `src-tauri/src/projects/mod.rs` near other project mutation helpers:
 
@@ -478,7 +478,7 @@ pub(crate) async fn set_project_archived_in_pool(
 }
 ```
 
-- [ ] **Step 4: Add Tauri commands**
+- [x] **Step 4: Add Tauri commands**
 
 Add to `src-tauri/src/projects/mod.rs` near the existing command wrappers:
 
@@ -506,18 +506,19 @@ pub async fn set_project_archived(
 
 In `src-tauri/src/lib.rs`, add both commands to the `use projects::{...}` list and to `tauri::generate_handler![...]` after `delete_project`.
 
-- [ ] **Step 5: Verify mutation task**
+- [x] **Step 5: Verify mutation task**
 
 Run:
 
 ```powershell
-cargo test projects::tests::set_project_pinned_toggles_flag_updates_timestamp_and_rejects_missing_project projects::tests::set_project_archived_toggles_timestamp_and_rejects_missing_project
+cargo test projects::tests::set_project_pinned_toggles_flag_updates_timestamp_and_rejects_missing_project
+cargo test projects::tests::set_project_archived_toggles_timestamp_and_rejects_missing_project
 cargo check
 ```
 
 Expected: selected tests and `cargo check` pass.
 
-- [ ] **Step 6: Commit Task 2**
+- [x] **Step 6: Commit Task 2**
 
 ```powershell
 git add src-tauri/src/projects/mod.rs src-tauri/src/lib.rs

@@ -197,6 +197,63 @@ pub(crate) async fn update_project_in_pool(
         .ok_or_else(|| AppError::not_found(format!("Project {project_id} not found after update")))
 }
 
+pub(crate) async fn set_project_pinned_in_pool(
+    pool: &sqlx::SqlitePool,
+    project_id: i64,
+    pinned: bool,
+) -> AppResult<()> {
+    let now = crate::time::now_secs();
+    let result = sqlx::query(
+        r#"
+        UPDATE projects
+        SET pinned = ?, updated_at = ?
+        WHERE id = ?
+        "#,
+    )
+    .bind(if pinned { 1_i64 } else { 0_i64 })
+    .bind(now)
+    .bind(project_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::not_found(format!(
+            "Project {project_id} not found"
+        )));
+    }
+    Ok(())
+}
+
+pub(crate) async fn set_project_archived_in_pool(
+    pool: &sqlx::SqlitePool,
+    project_id: i64,
+    archived: bool,
+) -> AppResult<()> {
+    let now = crate::time::now_secs();
+    let archived_at = archived.then_some(now);
+    let result = sqlx::query(
+        r#"
+        UPDATE projects
+        SET archived_at = ?, updated_at = ?
+        WHERE id = ?
+        "#,
+    )
+    .bind(archived_at)
+    .bind(now)
+    .bind(project_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::not_found(format!(
+            "Project {project_id} not found"
+        )));
+    }
+    Ok(())
+}
+
 pub(crate) async fn add_project_sources_in_pool(
     pool: &sqlx::SqlitePool,
     project_id: i64,
@@ -383,6 +440,22 @@ pub async fn update_project(
 pub async fn delete_project(handle: AppHandle, project_id: i64) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
     delete_project_in_pool(&pool, project_id).await
+}
+
+#[tauri::command]
+pub async fn set_project_pinned(handle: AppHandle, project_id: i64, pinned: bool) -> AppResult<()> {
+    let pool = get_pool(&handle).await?;
+    set_project_pinned_in_pool(&pool, project_id, pinned).await
+}
+
+#[tauri::command]
+pub async fn set_project_archived(
+    handle: AppHandle,
+    project_id: i64,
+    archived: bool,
+) -> AppResult<()> {
+    let pool = get_pool(&handle).await?;
+    set_project_archived_in_pool(&pool, project_id, archived).await
 }
 
 #[tauri::command]
@@ -576,6 +649,102 @@ mod tests {
         assert_eq!(sources[0].provider, "telegram");
         assert_eq!(sources[1].source_id, 10);
         assert_eq!(sources[1].provider, "youtube");
+    }
+
+    #[tokio::test]
+    async fn set_project_pinned_toggles_flag_updates_timestamp_and_rejects_missing_project() {
+        let pool = pool().await;
+        let project = create_project_in_pool(&pool, "Pinned", None)
+            .await
+            .expect("create project");
+        sqlx::query("UPDATE projects SET updated_at = 1 WHERE id = ?")
+            .bind(project.id)
+            .execute(&pool)
+            .await
+            .expect("seed stale updated_at");
+
+        set_project_pinned_in_pool(&pool, project.id, true)
+            .await
+            .expect("pin project");
+        let row: (i64, i64) =
+            sqlx::query_as("SELECT pinned, updated_at FROM projects WHERE id = ?")
+                .bind(project.id)
+                .fetch_one(&pool)
+                .await
+                .expect("load pinned project");
+        assert_eq!(row.0, 1);
+        assert!(row.1 > 1);
+
+        sqlx::query("UPDATE projects SET updated_at = 1 WHERE id = ?")
+            .bind(project.id)
+            .execute(&pool)
+            .await
+            .expect("reseed stale updated_at");
+
+        set_project_pinned_in_pool(&pool, project.id, false)
+            .await
+            .expect("unpin project");
+        let row: (i64, i64) =
+            sqlx::query_as("SELECT pinned, updated_at FROM projects WHERE id = ?")
+                .bind(project.id)
+                .fetch_one(&pool)
+                .await
+                .expect("load unpinned project");
+        assert_eq!(row.0, 0);
+        assert!(row.1 > 1);
+
+        let missing = set_project_pinned_in_pool(&pool, 404_404, true)
+            .await
+            .expect_err("missing project rejected");
+        assert_eq!(missing.kind, crate::error::AppErrorKind::NotFound);
+    }
+
+    #[tokio::test]
+    async fn set_project_archived_toggles_timestamp_and_rejects_missing_project() {
+        let pool = pool().await;
+        let project = create_project_in_pool(&pool, "Archive", None)
+            .await
+            .expect("create project");
+        sqlx::query("UPDATE projects SET updated_at = 1 WHERE id = ?")
+            .bind(project.id)
+            .execute(&pool)
+            .await
+            .expect("seed stale updated_at");
+
+        set_project_archived_in_pool(&pool, project.id, true)
+            .await
+            .expect("archive project");
+        let row: (Option<i64>, i64) =
+            sqlx::query_as("SELECT archived_at, updated_at FROM projects WHERE id = ?")
+                .bind(project.id)
+                .fetch_one(&pool)
+                .await
+                .expect("load archived project");
+        assert!(row.0.is_some());
+        assert!(row.1 > 1);
+
+        sqlx::query("UPDATE projects SET updated_at = 1 WHERE id = ?")
+            .bind(project.id)
+            .execute(&pool)
+            .await
+            .expect("reseed stale updated_at");
+
+        set_project_archived_in_pool(&pool, project.id, false)
+            .await
+            .expect("restore project");
+        let row: (Option<i64>, i64) =
+            sqlx::query_as("SELECT archived_at, updated_at FROM projects WHERE id = ?")
+                .bind(project.id)
+                .fetch_one(&pool)
+                .await
+                .expect("load restored project");
+        assert_eq!(row.0, None);
+        assert!(row.1 > 1);
+
+        let missing = set_project_archived_in_pool(&pool, 404_404, true)
+            .await
+            .expect_err("missing project rejected");
+        assert_eq!(missing.kind, crate::error::AppErrorKind::NotFound);
     }
 
     #[tokio::test]
