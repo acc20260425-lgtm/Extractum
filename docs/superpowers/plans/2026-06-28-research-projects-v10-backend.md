@@ -2386,7 +2386,7 @@ git commit -m "feat: add research projects v10 frontend contract"
 - Consumes: all prior task commits
 - Produces: verified branch ready for UI integration work
 
-- [ ] **Step 1: Inspect dirty worktree**
+- [x] **Step 1: Inspect dirty worktree**
 
 Run:
 
@@ -2396,7 +2396,7 @@ git status --short
 
 Expected: no unexpected unrelated files. If `.playwright-mcp/` appears, leave it unstaged.
 
-- [ ] **Step 2: Run backend focused tests**
+- [x] **Step 2: Run backend focused tests**
 
 Run:
 
@@ -2405,14 +2405,18 @@ cargo test migrations::tests::fresh_schema_includes_projects_redesign_columns_in
 cargo test projects::tests
 cargo test projects::read_model::tests
 cargo test projects::data_range::tests
-cargo test analysis::corpus::tests::resolve_analysis_sources_rejects_mixed_provider_project analysis::corpus::tests::resolve_analysis_sources_preserves_no_linked_youtube_error_message
-cargo test analysis::corpus::tests::preflight_counts_eligible_text_messages_for_sources analysis::corpus::tests::load_corpus_messages_filters_youtube_transcript_only_to_transcripts analysis::corpus::tests::load_corpus_messages_includes_youtube_comment_only_in_comments_mode analysis::corpus::tests::preflight_count_matches_loader_for_youtube_corpus_modes
+cargo test analysis::corpus::tests::resolve_analysis_sources_rejects_mixed_provider_project
+cargo test analysis::corpus::tests::resolve_analysis_sources_preserves_no_linked_youtube_error_message
+cargo test analysis::corpus::tests::preflight_counts_eligible_text_messages_for_sources
+cargo test analysis::corpus::tests::load_corpus_messages_filters_youtube_transcript_only_to_transcripts
+cargo test analysis::corpus::tests::load_corpus_messages_includes_youtube_comment_only_in_comments_mode
+cargo test analysis::corpus::tests::preflight_count_matches_loader_for_youtube_corpus_modes
 cargo test library_sources::tests
 ```
 
 Expected: all selected test sets pass.
 
-- [ ] **Step 3: Run backend compile check**
+- [x] **Step 3: Run backend compile check**
 
 Run:
 
@@ -2422,7 +2426,7 @@ cargo check
 
 Expected: `Finished` without errors.
 
-- [ ] **Step 4: Run frontend checks**
+- [x] **Step 4: Run frontend checks**
 
 Run:
 
@@ -2433,7 +2437,7 @@ npm.cmd run check
 
 Expected: selected Vitest test passes and `npm.cmd run check` exits successfully.
 
-- [ ] **Step 5: Review command registration**
+- [x] **Step 5: Review command registration**
 
 Run:
 
@@ -2450,7 +2454,7 @@ Expected:
 - `src/lib/api/projects.ts` exposes invoke wrappers.
 - `src/lib/types/projects.ts` exposes TS contracts.
 
-- [ ] **Step 6: Commit verification-only fixes if any**
+- [x] **Step 6: Commit verification-only fixes if any**
 
 If Step 2-5 forced mechanical fixes, commit only planned implementation files:
 
@@ -2461,7 +2465,7 @@ git commit -m "fix: stabilize research projects v10 backend contract"
 
 If there were no fixes, do not create an empty commit.
 
-- [ ] **Step 7: Final status**
+- [x] **Step 7: Final status**
 
 Run:
 
