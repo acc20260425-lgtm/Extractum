@@ -1,3 +1,4 @@
+mod data_range;
 mod read_model;
 
 use tauri::AppHandle;
@@ -7,6 +8,10 @@ use crate::error::{AppError, AppResult};
 use crate::library_sources::LibraryCatalogStatus;
 use crate::youtube::jobs::SourceJobState;
 
+#[allow(unused_imports)]
+pub(crate) use data_range::get_project_data_range_in_pool;
+#[allow(unused_imports)]
+pub use data_range::{get_project_data_range, ProjectDataRange};
 #[allow(unused_imports)]
 pub(crate) use read_model::list_research_projects_in_pool;
 #[allow(unused_imports)]

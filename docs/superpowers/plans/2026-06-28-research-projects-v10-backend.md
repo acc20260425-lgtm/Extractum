@@ -1429,7 +1429,7 @@ git commit -m "feat: add research projects read model"
   - `get_project_data_range_in_pool(pool, project_id, youtube_corpus_mode, include_migrated_history)`
   - `get_project_data_range(handle, project_id, youtube_corpus_mode, include_migrated_history)`
 
-- [ ] **Step 1: Raise Telegram history validation helper visibility**
+- [x] **Step 1: Raise Telegram history validation helper visibility**
 
 In `src-tauri/src/analysis/report.rs`, change:
 
@@ -1451,7 +1451,7 @@ pub(crate) use self::report::resolve_analysis_telegram_history_scope;
 
 Project data range code must import this helper from `crate::analysis`, not from `crate::analysis::report`.
 
-- [ ] **Step 2: Extract shared document-kind filter helper**
+- [x] **Step 2: Extract shared document-kind filter helper**
 
 In `src-tauri/src/analysis/corpus.rs`, first extend the error import:
 
@@ -1664,7 +1664,7 @@ push_analysis_document_kind_filter(
 )?;
 ```
 
-- [ ] **Step 3: Re-export shared corpus APIs from `analysis`**
+- [x] **Step 3: Re-export shared corpus APIs from `analysis`**
 
 `src-tauri/src/analysis/mod.rs` declares `mod corpus;`, so `projects::data_range` cannot import `crate::analysis::corpus::*`. Keep the module private and re-export only the APIs needed by the project data range command.
 
@@ -1680,7 +1680,7 @@ pub(crate) use self::report::resolve_analysis_telegram_history_scope;
 
 `projects/data_range.rs` must import these from `crate::analysis`, not `crate::analysis::corpus`.
 
-- [ ] **Step 4: Add module declaration and re-export**
+- [x] **Step 4: Add module declaration and re-export**
 
 At the top of `src-tauri/src/projects/mod.rs`:
 
@@ -1691,7 +1691,7 @@ pub(crate) use data_range::get_project_data_range_in_pool;
 pub use data_range::{get_project_data_range, ProjectDataRange};
 ```
 
-- [ ] **Step 5: Create failing data range tests**
+- [x] **Step 5: Create failing data range tests**
 
 Create `src-tauri/src/projects/data_range.rs` with tests:
 
@@ -2009,17 +2009,17 @@ mod tests {
 }
 ```
 
-- [ ] **Step 6: Run tests to verify they fail**
+- [x] **Step 6: Run tests to verify they fail**
 
 Run:
 
 ```powershell
-cargo test projects::data_range::tests::project_data_range_returns_nulls_for_empty_project projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds projects::data_range::tests::project_data_range_includes_telegram_migrated_history_when_requested projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources projects::data_range::tests::project_data_range_returns_nulls_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_mixed_provider_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_non_telegram
+cargo test projects::data_range::tests::
 ```
 
 Expected: compile failure because `ProjectDataRange` and `get_project_data_range_in_pool` are not implemented.
 
-- [ ] **Step 7: Implement data range structs and query helper**
+- [x] **Step 7: Implement data range structs and query helper**
 
 Add above the tests in `src-tauri/src/projects/data_range.rs`:
 
@@ -2164,25 +2164,29 @@ pub async fn get_project_data_range(
 }
 ```
 
-- [ ] **Step 8: Register command**
+- [x] **Step 8: Register command**
 
 In `src-tauri/src/lib.rs`, add `get_project_data_range` to the `use projects::{...}` list and to `tauri::generate_handler![...]` near `start_project_analysis`.
 
-- [ ] **Step 9: Verify data range task**
+- [x] **Step 9: Verify data range task**
 
 Run:
 
 ```powershell
-cargo test projects::data_range::tests::project_data_range_returns_nulls_for_empty_project projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds projects::data_range::tests::project_data_range_includes_telegram_migrated_history_when_requested projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources projects::data_range::tests::project_data_range_returns_nulls_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_mixed_provider_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_unmaterialized_playlist_project projects::data_range::tests::project_data_range_rejects_migrated_history_for_non_telegram
+cargo test projects::data_range::tests::
 cargo test analysis::corpus::tests::youtube_corpus_mode_parses_wire_values_and_defaults
-cargo test analysis::corpus::tests::resolve_analysis_sources_rejects_mixed_provider_project analysis::corpus::tests::resolve_analysis_sources_preserves_no_linked_youtube_error_message
-cargo test analysis::corpus::tests::preflight_counts_eligible_text_messages_for_sources analysis::corpus::tests::load_corpus_messages_filters_youtube_transcript_only_to_transcripts analysis::corpus::tests::load_corpus_messages_includes_youtube_comment_only_in_comments_mode analysis::corpus::tests::preflight_count_matches_loader_for_youtube_corpus_modes
+cargo test analysis::corpus::tests::resolve_analysis_sources_rejects_mixed_provider_project
+cargo test analysis::corpus::tests::resolve_analysis_sources_preserves_no_linked_youtube_error_message
+cargo test analysis::corpus::tests::preflight_counts_eligible_text_messages_for_sources
+cargo test analysis::corpus::tests::load_corpus_messages_filters_youtube_transcript_only_to_transcripts
+cargo test analysis::corpus::tests::load_corpus_messages_includes_youtube_comment_only_in_comments_mode
+cargo test analysis::corpus::tests::preflight_count_matches_loader_for_youtube_corpus_modes
 cargo check
 ```
 
 Expected: selected tests and `cargo check` pass.
 
-- [ ] **Step 10: Commit Task 5**
+- [x] **Step 10: Commit Task 5**
 
 ```powershell
 git add src-tauri/src/projects/mod.rs src-tauri/src/projects/data_range.rs src-tauri/src/analysis/mod.rs src-tauri/src/analysis/corpus.rs src-tauri/src/analysis/report.rs src-tauri/src/lib.rs

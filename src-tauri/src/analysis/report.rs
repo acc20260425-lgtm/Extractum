@@ -18,7 +18,8 @@ use crate::llm::{
 
 use super::corpus::{
     load_corpus_messages, preflight_analysis_run, preflight_limit_error, resolve_analysis_sources,
-    AnalysisRunPreflight, AnalysisRunPreflightLimits, CorpusLoadRequest, YoutubeCorpusMode,
+    AnalysisRunPreflight, AnalysisRunPreflightLimits, AnalysisSourceResolutionError,
+    CorpusLoadRequest, YoutubeCorpusMode,
 };
 use super::models::{
     AnalysisChunkSummaryEvent, AnalysisPromptTemplate, AnalysisRunEvent, ChunkSummary,
@@ -61,7 +62,7 @@ pub(crate) struct StartAnalysisReportRequest {
     pub(crate) include_migrated_history: bool,
 }
 
-fn resolve_analysis_telegram_history_scope(
+pub(crate) fn resolve_analysis_telegram_history_scope(
     include_migrated_history: bool,
     source_type: &str,
 ) -> AppResult<(&'static str, bool)> {
@@ -1175,7 +1176,8 @@ pub(crate) async fn start_analysis_report_run(
         resolved_group_id,
         resolved_project_id,
     )
-    .await?;
+    .await
+    .map_err(AnalysisSourceResolutionError::into_app_error)?;
     let (telegram_history_scope, include_migrated_history) =
         resolve_analysis_telegram_history_scope(
             include_migrated_history,

@@ -19,9 +19,9 @@ mod readiness;
 mod topic_memberships;
 use migrations::{build_migrations, prepare_database};
 use projects::{
-    add_project_sources, create_project, delete_project, list_project_runs, list_project_sources,
-    list_projects, list_research_projects, remove_project_sources, set_project_archived,
-    set_project_pinned, start_project_analysis, update_project,
+    add_project_sources, create_project, delete_project, get_project_data_range, list_project_runs,
+    list_project_sources, list_projects, list_research_projects, remove_project_sources,
+    set_project_archived, set_project_pinned, start_project_analysis, update_project,
 };
 mod prompt_packs;
 use prompt_packs::{
@@ -233,6 +233,7 @@ pub fn run() {
             add_project_sources,
             remove_project_sources,
             start_project_analysis,
+            get_project_data_range,
             list_project_runs,
             get_prompt_pack_library,
             preflight_youtube_summary_run,

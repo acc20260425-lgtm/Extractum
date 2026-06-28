@@ -102,6 +102,52 @@ pub(crate) struct ResolvedAnalysisSources {
     pub(crate) skipped_unlinked_playlist_items: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AnalysisSourceResolutionErrorCode {
+    MixedProviderProject,
+    NoLinkedYoutubeVideos,
+}
+
+impl AnalysisSourceResolutionErrorCode {
+    pub(crate) fn message(self) -> &'static str {
+        match self {
+            Self::MixedProviderProject => "mixed_provider_project_runs_not_supported",
+            Self::NoLinkedYoutubeVideos => {
+                "No linked YouTube videos are available for analysis in this scope"
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AnalysisSourceResolutionError {
+    code: Option<AnalysisSourceResolutionErrorCode>,
+    error: AppError,
+}
+
+impl AnalysisSourceResolutionError {
+    pub(crate) fn validation(code: AnalysisSourceResolutionErrorCode) -> Self {
+        Self {
+            code: Some(code),
+            error: AppError::validation(code.message()),
+        }
+    }
+
+    pub(crate) fn code(&self) -> Option<AnalysisSourceResolutionErrorCode> {
+        self.code
+    }
+
+    pub(crate) fn into_app_error(self) -> AppError {
+        self.error
+    }
+}
+
+impl From<AppError> for AnalysisSourceResolutionError {
+    fn from(error: AppError) -> Self {
+        Self { code: None, error }
+    }
+}
+
 pub(crate) fn estimate_message_input_chars(
     content: &str,
     r#ref: &str,
@@ -205,7 +251,7 @@ pub(crate) async fn resolve_analysis_sources(
     source_id: Option<i64>,
     source_group_id: Option<i64>,
     project_id: Option<i64>,
-) -> AppResult<ResolvedAnalysisSources> {
+) -> Result<ResolvedAnalysisSources, AnalysisSourceResolutionError> {
     let selected_count = [
         source_id.is_some(),
         source_group_id.is_some(),
@@ -215,7 +261,7 @@ pub(crate) async fn resolve_analysis_sources(
     .filter(|selected| *selected)
     .count();
     if selected_count != 1 {
-        return Err(AppError::validation("Select exactly one analysis scope"));
+        return Err(AppError::validation("Select exactly one analysis scope").into());
     }
 
     let source_type: String;
@@ -268,13 +314,13 @@ pub(crate) async fn resolve_analysis_sources(
         .map_err(AppError::database)?;
 
         if rows.is_empty() {
-            return Err(AppError::validation("Project does not contain any sources"));
+            return Err(AppError::validation("Project does not contain any sources").into());
         }
 
         let first_type = rows[0].source_type.clone();
         if rows.iter().any(|row| row.source_type != first_type) {
-            return Err(AppError::validation(
-                "mixed_provider_project_runs_not_supported",
+            return Err(AnalysisSourceResolutionError::validation(
+                AnalysisSourceResolutionErrorCode::MixedProviderProject,
             ));
         }
         source_type = first_type;
@@ -292,8 +338,8 @@ pub(crate) async fn resolve_analysis_sources(
     }
 
     if source_type == "youtube" && source_ids.is_empty() {
-        return Err(AppError::validation(
-            "No linked YouTube videos are available for analysis in this scope",
+        return Err(AnalysisSourceResolutionError::validation(
+            AnalysisSourceResolutionErrorCode::NoLinkedYoutubeVideos,
         ));
     }
 
@@ -375,7 +421,7 @@ pub(crate) async fn resolve_run_source_ids(
         return resolve_analysis_sources(pool, None, None, Some(project_id))
             .await
             .map(|resolved| resolved.source_ids)
-            .map_err(|error| error.to_string());
+            .map_err(|error| error.into_app_error().to_string());
     }
 
     Err(format!("Unsupported analysis scope '{}'", run.scope_type))
@@ -585,6 +631,43 @@ struct AnalysisDocumentRow {
     metadata_zstd: Option<Vec<u8>>,
 }
 
+pub(crate) fn push_analysis_document_kind_filter(
+    query: &mut QueryBuilder<'_, Sqlite>,
+    source_type: &str,
+    youtube_corpus_mode: YoutubeCorpusMode,
+    table_alias: &str,
+) -> AppResult<()> {
+    match source_type {
+        "telegram" => {
+            query.push(" AND ");
+            query.push(table_alias);
+            query.push(".source_type = 'telegram' AND ");
+            query.push(table_alias);
+            query.push(".document_kind = 'telegram_message'");
+            Ok(())
+        }
+        "youtube" => {
+            query.push(" AND ");
+            query.push(table_alias);
+            query.push(".source_type = 'youtube' AND ");
+            query.push(table_alias);
+            query.push(".document_kind IN (");
+            query.push("'youtube_transcript'");
+            if youtube_corpus_mode.includes_description() {
+                query.push(", 'youtube_description'");
+            }
+            if youtube_corpus_mode.includes_comments() {
+                query.push(", 'youtube_comment'");
+            }
+            query.push(")");
+            Ok(())
+        }
+        other => Err(AppError::validation(format!(
+            "Unsupported analysis corpus source_type '{other}'"
+        ))),
+    }
+}
+
 async fn load_analysis_document_messages(
     pool: &Pool<Sqlite>,
     request: &CorpusLoadRequest,
@@ -592,25 +675,25 @@ async fn load_analysis_document_messages(
     let mut query = QueryBuilder::<Sqlite>::new(
         r#"
         SELECT
-            item_id,
-            source_id,
-            external_id,
-            author,
-            published_at,
-            ref AS ref_,
-            content_zstd,
-            document_kind,
-            source_type,
-            source_subtype,
-            metadata_zstd
-        FROM analysis_documents
-        WHERE published_at >=
+            d.item_id,
+            d.source_id,
+            d.external_id,
+            d.author,
+            d.published_at,
+            d.ref AS ref_,
+            d.content_zstd,
+            d.document_kind,
+            d.source_type,
+            d.source_subtype,
+            d.metadata_zstd
+        FROM analysis_documents d
+        WHERE d.published_at >=
         "#,
     );
     query.push_bind(request.period_from);
-    query.push(" AND published_at <= ");
+    query.push(" AND d.published_at <= ");
     query.push_bind(request.period_to);
-    query.push(" AND source_id IN (");
+    query.push(" AND d.source_id IN (");
     {
         let mut separated = query.separated(", ");
         for source_id in &request.source_ids {
@@ -618,28 +701,13 @@ async fn load_analysis_document_messages(
         }
     }
     query.push(")");
-    match request.source_type.as_str() {
-        "telegram" => {
-            query.push(" AND source_type = 'telegram' AND document_kind = 'telegram_message'");
-        }
-        "youtube" => {
-            query.push(" AND source_type = 'youtube' AND document_kind IN (");
-            query.push("'youtube_transcript'");
-            if request.youtube_corpus_mode.includes_description() {
-                query.push(", 'youtube_description'");
-            }
-            if request.youtube_corpus_mode.includes_comments() {
-                query.push(", 'youtube_comment'");
-            }
-            query.push(")");
-        }
-        other => {
-            return Err(AppError::validation(format!(
-                "Unsupported analysis corpus source_type '{other}'"
-            )));
-        }
-    }
-    query.push(" ORDER BY published_at ASC, source_id ASC, document_order ASC, id ASC");
+    push_analysis_document_kind_filter(
+        &mut query,
+        request.source_type.as_str(),
+        request.youtube_corpus_mode,
+        "d",
+    )?;
+    query.push(" ORDER BY d.published_at ASC, d.source_id ASC, d.document_order ASC, d.id ASC");
 
     let rows: Vec<AnalysisDocumentRow> = query
         .build_query_as()
@@ -1070,8 +1138,8 @@ mod tests {
         load_run_corpus_messages, load_run_snapshot_messages, load_trace_resolution_messages,
         model_limit_preflight_error, preflight_analysis_run, preflight_limit_error,
         resolve_analysis_sources, resolve_run_source_ids, AnalysisRunPreflight,
-        AnalysisRunPreflightLimits, CorpusLoadRequest, ListRunSnapshotMessagesRequest,
-        YoutubeCorpusMode,
+        AnalysisRunPreflightLimits, AnalysisSourceResolutionErrorCode, CorpusLoadRequest,
+        ListRunSnapshotMessagesRequest, YoutubeCorpusMode,
     };
     use crate::analysis::models::{AnalysisRunDetail, AnalysisRunMessageCursor, CorpusMessage};
     use crate::analysis::store::persist_run_snapshot;
@@ -3104,9 +3172,48 @@ mod tests {
         let error = resolve_analysis_sources(&pool, None, None, Some(9))
             .await
             .expect_err("mixed project rejected");
-        assert!(error
-            .to_string()
-            .contains("mixed_provider_project_runs_not_supported"));
+        assert_eq!(
+            error.code(),
+            Some(AnalysisSourceResolutionErrorCode::MixedProviderProject)
+        );
+    }
+
+    #[tokio::test]
+    async fn resolve_analysis_sources_preserves_no_linked_youtube_error_message() {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        create_project_scope_schema(&pool).await;
+        sqlx::query(
+            "INSERT INTO projects (id, name, created_at, updated_at) VALUES (9, 'Playlist', 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert project");
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at) VALUES (1, 'youtube', 'playlist', 'pl1', 'Playlist', 1, 0, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert playlist source");
+        sqlx::query("INSERT INTO project_sources (project_id, source_id, added_at) VALUES (9, 1, 1)")
+            .execute(&pool)
+            .await
+            .expect("insert project source");
+
+        let error = resolve_analysis_sources(&pool, None, None, Some(9))
+            .await
+            .expect_err("unmaterialized playlist rejected");
+
+        assert_eq!(
+            error.code(),
+            Some(AnalysisSourceResolutionErrorCode::NoLinkedYoutubeVideos)
+        );
+        let error = error.into_app_error();
+        assert_eq!(
+            error.message,
+            "No linked YouTube videos are available for analysis in this scope"
+        );
     }
 
     #[tokio::test]

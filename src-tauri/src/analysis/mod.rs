@@ -36,6 +36,11 @@ use crate::time::now_secs;
 pub use self::chat::{
     ask_analysis_run_question, clear_analysis_chat_messages, list_analysis_chat_messages,
 };
+#[allow(unused_imports)]
+pub(crate) use self::corpus::{
+    push_analysis_document_kind_filter, resolve_analysis_sources, AnalysisSourceResolutionError,
+    AnalysisSourceResolutionErrorCode, YoutubeCorpusMode,
+};
 #[cfg(debug_assertions)]
 pub use self::fixtures::{
     clear_analysis_redesign_fixture_active_runs, clear_analysis_redesign_fixtures,
@@ -46,6 +51,7 @@ pub use self::groups::{
     update_analysis_source_group,
 };
 pub use self::report::cleanup_interrupted_analysis_runs;
+pub(crate) use self::report::resolve_analysis_telegram_history_scope;
 pub use self::report_commands::{cancel_analysis_run, start_analysis_report};
 pub use self::templates::{
     create_analysis_prompt_template, delete_analysis_prompt_template,
