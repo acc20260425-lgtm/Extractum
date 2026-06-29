@@ -157,6 +157,8 @@
 </script>
 
 <section data-ui-route="research-projects">
+  <!-- Temporary switch to the in-progress v10 shell; remove when /projects adopts it. -->
+  <a class="rp-ui-switch" href="/projects/next">Новый интерфейс (beta) →</a>
   <ProjectsShell
     {state}
     showRail={false}
@@ -172,3 +174,21 @@
     onSyncSelectedSources={workflow.syncProjectSources}
   />
 </section>
+
+<style>
+  .rp-ui-switch {
+    position: fixed;
+    bottom: 6px;
+    right: 12px;
+    z-index: 9999;
+    font: 400 11px/1 var(--extractum-font);
+    color: var(--extractum-muted-2);
+    text-decoration: none;
+    opacity: 0.75;
+  }
+
+  .rp-ui-switch:hover {
+    opacity: 1;
+    text-decoration: underline;
+  }
+</style>

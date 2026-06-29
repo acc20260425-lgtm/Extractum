@@ -128,6 +128,8 @@
 </script>
 
 <div class="projects-next">
+  <!-- Temporary switch back to the current /projects screen. -->
+  <a class="rp-ui-switch" href="/projects">← Старый интерфейс</a>
   <ResearchProjectsShell
     summaries={railState.summaries}
     {selectedProjectId}
@@ -177,5 +179,21 @@
   .projects-next {
     height: 100vh;
     min-height: 0;
+  }
+
+  .rp-ui-switch {
+    position: fixed;
+    bottom: 6px;
+    right: 12px;
+    z-index: 9999;
+    font: 400 11px/1 var(--extractum-font);
+    color: var(--extractum-muted-2);
+    text-decoration: none;
+    opacity: 0.75;
+  }
+
+  .rp-ui-switch:hover {
+    opacity: 1;
+    text-decoration: underline;
   }
 </style>
