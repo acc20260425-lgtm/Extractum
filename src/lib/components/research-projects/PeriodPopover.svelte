@@ -1,5 +1,9 @@
 <script lang="ts">
-  import * as Popover from "$lib/components/ui/popover";
+  import {
+    ExtractumPopover,
+    ExtractumPopoverTrigger,
+    ExtractumPopoverContent,
+  } from "$lib/components/extractum-ui";
   import type { PeriodPreset } from "$lib/ui/research-projects-period";
 
   let {
@@ -22,9 +26,9 @@
   }
 </script>
 
-<Popover.Root bind:open>
-  <Popover.Trigger class="period-popover__trigger">Период: {triggerLabel}</Popover.Trigger>
-  <Popover.Content class="period-popover__content" align="start">
+<ExtractumPopover bind:open>
+  <ExtractumPopoverTrigger class="period-popover__trigger">Период: {triggerLabel}</ExtractumPopoverTrigger>
+  <ExtractumPopoverContent class="period-popover__content" align="start">
     <ul class="period-popover__list">
       {#each presets as preset (preset.id)}
         <li>
@@ -39,8 +43,8 @@
         </li>
       {/each}
     </ul>
-  </Popover.Content>
-</Popover.Root>
+  </ExtractumPopoverContent>
+</ExtractumPopover>
 
 <style>
   .period-popover__list {

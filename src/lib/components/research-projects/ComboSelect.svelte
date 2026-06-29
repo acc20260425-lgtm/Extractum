@@ -3,8 +3,16 @@
 </script>
 
 <script lang="ts">
-  import * as Popover from "$lib/components/ui/popover";
-  import * as Command from "$lib/components/ui/command";
+  import {
+    ExtractumPopover,
+    ExtractumPopoverTrigger,
+    ExtractumPopoverContent,
+    ExtractumCommand,
+    ExtractumCommandInput,
+    ExtractumCommandList,
+    ExtractumCommandItem,
+    ExtractumCommandEmpty,
+  } from "$lib/components/extractum-ui";
 
   let {
     options,
@@ -34,19 +42,23 @@
   }
 </script>
 
-<Popover.Root bind:open>
-  <Popover.Trigger class="combo-select__trigger">{triggerPrefix}: {selectedLabel}</Popover.Trigger>
-  <Popover.Content class="combo-select__content" align="start">
-    <Command.Root value={selectedValue}>
-      <Command.Input {placeholder} />
-      <Command.List>
-        <Command.Empty>{emptyLabel}</Command.Empty>
+<ExtractumPopover bind:open>
+  <ExtractumPopoverTrigger class="combo-select__trigger">{triggerPrefix}: {selectedLabel}</ExtractumPopoverTrigger>
+  <ExtractumPopoverContent class="combo-select__content" align="start">
+    <ExtractumCommand value={selectedValue}>
+      <ExtractumCommandInput {placeholder} />
+      <ExtractumCommandList>
+        <ExtractumCommandEmpty>{emptyLabel}</ExtractumCommandEmpty>
         {#each options as option (option.value)}
-          <Command.Item value={option.value} keywords={[option.label]} onSelect={() => pick(option)}>
+          <ExtractumCommandItem
+            value={option.value}
+            keywords={[option.label]}
+            onSelect={() => pick(option)}
+          >
             {option.label}
-          </Command.Item>
+          </ExtractumCommandItem>
         {/each}
-      </Command.List>
-    </Command.Root>
-  </Popover.Content>
-</Popover.Root>
+      </ExtractumCommandList>
+    </ExtractumCommand>
+  </ExtractumPopoverContent>
+</ExtractumPopover>

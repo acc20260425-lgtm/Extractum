@@ -43,3 +43,17 @@ export {
   DialogHeader as ExtractumDialogHeader,
   DialogTitle as ExtractumDialogTitle,
 } from "$lib/components/ui/dialog/index.js";
+
+export {
+  Root as ExtractumPopover,
+  Trigger as ExtractumPopoverTrigger,
+  Content as ExtractumPopoverContent,
+} from "$lib/components/ui/popover/index.js";
+
+export {
+  Root as ExtractumCommand,
+  Input as ExtractumCommandInput,
+  List as ExtractumCommandList,
+  Item as ExtractumCommandItem,
+  Empty as ExtractumCommandEmpty,
+} from "$lib/components/ui/command/index.js";
