@@ -2,18 +2,30 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import ProjectToolbar from "./ProjectToolbar.svelte";
+import type { PeriodPreset } from "$lib/ui/research-projects-period";
+import type { ComboOption } from "./ComboSelect.svelte";
 
 afterEach(cleanup);
 
+const periodPresets: PeriodPreset[] = [
+  { id: "all", label: "Весь период", from: 1, to: 2 },
+  { id: "year:2025", label: "2025", from: 1, to: 2 },
+];
+const promptOptions: ComboOption[] = [{ value: "p1", label: "По умолчанию" }];
+const modelOptions: ComboOption[] = [{ value: "m1", label: "gpt-4.1" }];
+
 const base = {
   title: "Беларусь: медиаполе 2025",
-  periodLabel: "Весь период",
-  promptLabel: "По умолчанию",
-  modelLabel: "gpt-4.1",
+  periodPresets,
+  selectedPeriodId: "all",
+  promptOptions,
+  selectedPromptValue: "p1",
+  modelOptions,
+  selectedModelValue: "m1",
 };
 
 describe("ProjectToolbar", () => {
-  it("renders the title, selector labels, and runs on click", async () => {
+  it("renders title, selector triggers with current selections, and runs", async () => {
     const onRun = vi.fn();
     render(ProjectToolbar, { props: { ...base, onRun } });
 
