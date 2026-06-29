@@ -1,0 +1,70 @@
+<script lang="ts">
+  import ProjectRailSections from "./ProjectRailSections.svelte";
+  import type { ProjectSummary } from "$lib/types/projects";
+
+  let {
+    summaries,
+    selectedProjectId,
+    now,
+    onSelectProject,
+  }: {
+    summaries: ProjectSummary[];
+    selectedProjectId: number | null;
+    now: number;
+    onSelectProject?: (id: number) => void;
+  } = $props();
+</script>
+
+<div class="research-projects-shell">
+  <aside class="research-projects-shell__rail">
+    <div class="research-projects-shell__rail-head">Проекты</div>
+    <ProjectRailSections {summaries} {now} onSelect={onSelectProject} />
+  </aside>
+
+  <main class="research-projects-shell__main">
+    {#if selectedProjectId === null}
+      <div class="research-projects-shell__empty">Выберите проект</div>
+    {/if}
+  </main>
+</div>
+
+<style>
+  .research-projects-shell {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    background: var(--extractum-surface);
+  }
+
+  .research-projects-shell__rail {
+    width: 252px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: auto;
+    border-right: 1px solid var(--extractum-border);
+  }
+
+  .research-projects-shell__rail-head {
+    padding: 12px 12px 8px;
+    font: 700 11px/1 var(--extractum-font);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--extractum-muted);
+  }
+
+  .research-projects-shell__main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .research-projects-shell__empty {
+    margin: auto;
+    font: 400 13px/1.4 var(--extractum-font);
+    color: var(--extractum-muted-2);
+  }
+</style>
