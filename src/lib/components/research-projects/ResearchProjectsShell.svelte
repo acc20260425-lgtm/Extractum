@@ -1,5 +1,7 @@
 <script lang="ts">
+  import type { ComponentProps } from "svelte";
   import ProjectRailSections from "./ProjectRailSections.svelte";
+  import ProjectToolbar from "./ProjectToolbar.svelte";
   import SourcesGrid from "./SourcesGrid.svelte";
   import type { ProjectSourceRecord, ProjectSummary } from "$lib/types/projects";
 
@@ -9,6 +11,7 @@
     now,
     sources = [],
     selectedSourceIds = [],
+    toolbar,
     onSelectProject,
     onSelectedSourceIdsChange,
   }: {
@@ -17,6 +20,7 @@
     now: number;
     sources?: ProjectSourceRecord[];
     selectedSourceIds?: string[];
+    toolbar?: ComponentProps<typeof ProjectToolbar>;
     onSelectProject?: (id: number) => void;
     onSelectedSourceIdsChange?: (ids: string[]) => void;
   } = $props();
@@ -30,6 +34,9 @@
 
   <main class="research-projects-shell__main">
     {#if selectedProjectId !== null}
+      {#if toolbar}
+        <ProjectToolbar {...toolbar} />
+      {/if}
       <div class="research-projects-shell__grid">
         <SourcesGrid {sources} {selectedSourceIds} {onSelectedSourceIdsChange} />
       </div>

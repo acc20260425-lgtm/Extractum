@@ -46,6 +46,11 @@ describe("ResearchProjectsShell", () => {
     expect(shellSource).toContain("{onSelectedSourceIdsChange}");
   });
 
+  it("renders the toolbar above the grid for the selected project", () => {
+    expect(shellSource).toContain("<ProjectToolbar");
+    expect(shellSource).toContain("{...toolbar}");
+  });
+
   it("forwards project selection", async () => {
     const onSelectProject = vi.fn();
     render(ResearchProjectsShell, {
