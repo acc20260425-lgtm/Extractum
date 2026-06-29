@@ -34,7 +34,6 @@
 
 <div class="research-projects-shell">
   <aside class="research-projects-shell__rail">
-    <div class="research-projects-shell__rail-head">Проекты</div>
     <ProjectRailSections {summaries} {now} onSelect={onSelectProject} />
   </aside>
 
@@ -75,14 +74,6 @@
     min-height: 0;
     overflow: auto;
     border-right: 1px solid var(--extractum-border);
-  }
-
-  .research-projects-shell__rail-head {
-    padding: 12px 12px 8px;
-    font: 700 11px/1 var(--extractum-font);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--extractum-muted);
   }
 
   .research-projects-shell__main {

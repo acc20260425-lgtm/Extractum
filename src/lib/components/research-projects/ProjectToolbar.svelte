@@ -98,6 +98,26 @@
     margin-left: auto;
   }
 
+  /* Neutral outline triggers for the popover/combobox selectors. Scoped under
+     .project-toolbar to outrank the app's global `button:not([data-slot=button])`
+     primary styling. */
+  .project-toolbar :global(.period-popover__trigger),
+  .project-toolbar :global(.combo-select__trigger) {
+    height: 32px;
+    padding: 0 11px;
+    border: 1px solid var(--extractum-border);
+    border-radius: var(--extractum-radius);
+    background: var(--extractum-surface-raised);
+    color: var(--extractum-text);
+    font: 500 12px/1 var(--extractum-font);
+    cursor: pointer;
+  }
+
+  .project-toolbar :global(.period-popover__trigger:hover),
+  .project-toolbar :global(.combo-select__trigger:hover) {
+    background: var(--extractum-surface-subtle);
+  }
+
   .project-toolbar__run {
     height: 32px;
     padding: 0 14px;
