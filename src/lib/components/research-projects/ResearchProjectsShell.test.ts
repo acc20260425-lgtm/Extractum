@@ -2,7 +2,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import ResearchProjectsShell from "./ResearchProjectsShell.svelte";
+import rawShellSource from "./ResearchProjectsShell.svelte?raw";
 import type { ProjectSummary } from "$lib/types/projects";
+
+// SourcesGrid (svar) does not render under jsdom, so the rail/selection are
+// render-tested with no project selected, while the main grid wiring is
+// verified by source assertions.
+const shellSource = rawShellSource.replace(/\r\n/g, "\n");
 
 afterEach(cleanup);
 
@@ -27,10 +33,17 @@ function summary(overrides: Partial<ProjectSummary> = {}): ProjectSummary {
 describe("ResearchProjectsShell", () => {
   it("renders the project rail from summaries", () => {
     render(ResearchProjectsShell, {
-      props: { summaries: [summary({ name: "Беларусь" })], selectedProjectId: 1, now: NOW },
+      props: { summaries: [summary({ name: "Беларусь" })], selectedProjectId: null, now: NOW },
     });
 
     expect(screen.getByText("Беларусь")).toBeTruthy();
+  });
+
+  it("wires the sources grid in the main area for the selected project", () => {
+    expect(shellSource).toContain("<SourcesGrid");
+    expect(shellSource).toContain("selectedProjectId !== null");
+    expect(shellSource).toContain("{sources}");
+    expect(shellSource).toContain("{onSelectedSourceIdsChange}");
   });
 
   it("forwards project selection", async () => {

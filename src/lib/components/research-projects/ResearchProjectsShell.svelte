@@ -1,17 +1,24 @@
 <script lang="ts">
   import ProjectRailSections from "./ProjectRailSections.svelte";
-  import type { ProjectSummary } from "$lib/types/projects";
+  import SourcesGrid from "./SourcesGrid.svelte";
+  import type { ProjectSourceRecord, ProjectSummary } from "$lib/types/projects";
 
   let {
     summaries,
     selectedProjectId,
     now,
+    sources = [],
+    selectedSourceIds = [],
     onSelectProject,
+    onSelectedSourceIdsChange,
   }: {
     summaries: ProjectSummary[];
     selectedProjectId: number | null;
     now: number;
+    sources?: ProjectSourceRecord[];
+    selectedSourceIds?: string[];
     onSelectProject?: (id: number) => void;
+    onSelectedSourceIdsChange?: (ids: string[]) => void;
   } = $props();
 </script>
 
@@ -22,7 +29,11 @@
   </aside>
 
   <main class="research-projects-shell__main">
-    {#if selectedProjectId === null}
+    {#if selectedProjectId !== null}
+      <div class="research-projects-shell__grid">
+        <SourcesGrid {sources} {selectedSourceIds} {onSelectedSourceIdsChange} />
+      </div>
+    {:else}
       <div class="research-projects-shell__empty">Выберите проект</div>
     {/if}
   </main>
@@ -60,6 +71,12 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+  }
+
+  .research-projects-shell__grid {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
   }
 
   .research-projects-shell__empty {
