@@ -29,6 +29,9 @@ research/youtube_pipeline/runs/*
 !/.vscode/settings.json
 !/.vscode/extensions.json
 
+# Local Claude Preview launch config (skills under .claude/ stay tracked).
+/.claude/launch.json
+
 /.codex
 /.codex-logs/
 /.agents/
