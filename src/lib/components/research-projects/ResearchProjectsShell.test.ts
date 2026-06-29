@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import ResearchProjectsShell from "./ResearchProjectsShell.svelte";
 import rawShellSource from "./ResearchProjectsShell.svelte?raw";
+import type { InspectorSource } from "./Inspector.svelte";
 import type { ProjectSummary } from "$lib/types/projects";
 
 // SourcesGrid (svar) does not render under jsdom, so the rail/selection are
@@ -64,5 +65,34 @@ describe("ResearchProjectsShell", () => {
 
     await fireEvent.click(screen.getByText("Pick me"));
     expect(onSelectProject).toHaveBeenCalledWith(7);
+  });
+
+  it("renders the inspector as the right column", () => {
+    const inspectorBag = {
+      open: true,
+      selected: {
+        title: "ФинБеларусь",
+        handle: "@fb",
+        statusLabel: "active",
+        syncStatus: "active",
+        materialsLabel: "339",
+        lastSyncLabel: "02.06",
+      } satisfies InspectorSource,
+      periodLabel: "Весь период",
+      promptLabel: "По умолчанию",
+      modelLabel: "gpt-4.1",
+    };
+
+    render(ResearchProjectsShell, {
+      props: { summaries: [], selectedProjectId: null, now: NOW, inspector: inspectorBag },
+    });
+
+    expect(screen.getByText("Инспектор источника")).toBeTruthy();
+    expect(screen.getByText("ФинБеларусь")).toBeTruthy();
+  });
+
+  it("renders the run dock for the selected project", () => {
+    expect(shellSource).toContain("<RunDock");
+    expect(shellSource).toContain("{...runDock}");
   });
 });
