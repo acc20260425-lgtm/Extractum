@@ -53,6 +53,18 @@ Keep `src-tauri/src/analysis/corpus.rs` as the internal facade:
 
 - add `mod source_resolution;`
 - re-export the existing crate-visible source-resolution surface with `pub(crate) use self::source_resolution::{...};`
+- keep `resolve_run_source_ids` as a separate test-only facade re-export, for example:
+
+  ```rust
+  pub(crate) use self::source_resolution::{
+      resolve_analysis_sources, AnalysisSourceResolutionError, AnalysisSourceResolutionErrorCode,
+      ResolvedAnalysisSources,
+  };
+
+  #[cfg(test)]
+  pub(crate) use self::source_resolution::resolve_run_source_ids;
+  ```
+
 - keep existing consumers importing through `super::corpus` or existing root re-exports; do not make callers import from `corpus::source_resolution`.
 
 Move these items from `corpus.rs` to `corpus/source_resolution.rs`:
@@ -92,6 +104,13 @@ The test module stays in `corpus.rs` intentionally. Source-resolution tests shar
 - `pub(crate) struct AnalysisSourceResolutionError`
 - `pub(crate) async fn resolve_analysis_sources(...)`
 - `#[cfg(test)] pub(crate) async fn resolve_run_source_ids(...)`
+
+Preserve the current field and method visibility exactly where callers rely on it:
+
+- `ResolvedAnalysisSources.source_type`, `ResolvedAnalysisSources.source_ids`, and `ResolvedAnalysisSources.skipped_unlinked_playlist_items` stay `pub(crate)`;
+- `AnalysisSourceResolutionErrorCode::message()` stays `pub(crate)`;
+- `AnalysisSourceResolutionError::validation(...)`, `AnalysisSourceResolutionError::code(...)`, and `AnalysisSourceResolutionError::into_app_error(...)` stay `pub(crate)`;
+- `AnalysisSourceResolutionError` fields stay private.
 
 Private source-resolution helpers stay private inside `source_resolution.rs`:
 
@@ -209,7 +228,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 ```
 
-Expected result: all commands pass. The focused `resolve_analysis_sources` and `resolve_run_source_ids` filters must run real tests, not green `0 tests` runs.
+Expected result: all commands pass. The focused `playlist_expansion_excludes_unlinked_and_removed_rows`, `resolve_analysis_sources`, and `resolve_run_source_ids` filters must run real tests, not green `0 tests` runs.
 
 ## Risks And Mitigations
 
