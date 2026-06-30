@@ -21,6 +21,7 @@ use super::corpus::{
     AnalysisRunPreflight, AnalysisRunPreflightLimits, AnalysisSourceResolutionError,
     CorpusLoadRequest, YoutubeCorpusMode,
 };
+use super::events::emit_analysis_event;
 use super::models::{
     AnalysisChunkSummaryEvent, AnalysisPromptTemplate, AnalysisRunEvent, ChunkSummary,
     CorpusMessage,
@@ -33,10 +34,10 @@ use super::store::{
 };
 use super::trace::{build_trace_data, compress_trace_data, normalize_ref};
 use super::{
-    emit_analysis_event, now_secs, AnalysisState, ANALYSIS_FALLBACK_CHUNK_TARGET_CHARS,
-    ANALYSIS_SCOPE_TYPE_PROJECT, ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
-    ANALYSIS_SCOPE_TYPE_SOURCE_GROUP, ANALYSIS_STATUS_CANCELLED, ANALYSIS_STATUS_COMPLETED,
-    ANALYSIS_STATUS_FAILED, ANALYSIS_STATUS_QUEUED, ANALYSIS_STATUS_RUNNING, TEMPLATE_KIND_REPORT,
+    now_secs, AnalysisState, ANALYSIS_FALLBACK_CHUNK_TARGET_CHARS, ANALYSIS_SCOPE_TYPE_PROJECT,
+    ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE, ANALYSIS_SCOPE_TYPE_SOURCE_GROUP, ANALYSIS_STATUS_CANCELLED,
+    ANALYSIS_STATUS_COMPLETED, ANALYSIS_STATUS_FAILED, ANALYSIS_STATUS_QUEUED,
+    ANALYSIS_STATUS_RUNNING, TEMPLATE_KIND_REPORT,
 };
 
 const INTERRUPTED_RUN_MESSAGE: &str = "Analysis run was interrupted when the app was restarted.";

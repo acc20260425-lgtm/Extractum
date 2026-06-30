@@ -9,14 +9,12 @@ use crate::llm::{
 };
 
 use super::corpus::load_run_snapshot_messages;
+use super::events::emit_analysis_chat_event;
 use super::models::{
     AnalysisChatEvent, AnalysisChatMessage, AnalysisChatTurn, AnalysisRunDetail, CorpusMessage,
 };
 use super::store::{fetch_run_row, map_run_detail, resolve_run_scope_label};
-use super::{
-    emit_analysis_chat_event, now_secs, validate_chat_role, validate_chat_turns,
-    ANALYSIS_STATUS_COMPLETED,
-};
+use super::{now_secs, validate_chat_role, validate_chat_turns, ANALYSIS_STATUS_COMPLETED};
 
 fn chat_search_terms(question: &str) -> Vec<String> {
     const STOP_WORDS: &[&str] = &[

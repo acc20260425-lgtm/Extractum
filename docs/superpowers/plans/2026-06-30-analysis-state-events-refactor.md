@@ -305,7 +305,7 @@ Expected: one commit containing only the state extraction and moved state test.
 - Consumes: `super::{ANALYSIS_RUN_EVENT, ANALYSIS_CHAT_EVENT}` from `analysis/mod.rs`.
 - Consumed by: `analysis/report.rs` and `analysis/chat.rs` through `super::events::{...}`.
 
-- [ ] **Step 1: Create the events module**
+- [x] **Step 1: Create the events module**
 
 Create `src-tauri/src/analysis/events.rs` with this content:
 
@@ -342,7 +342,7 @@ fn emit_analysis_chat_event(handle: &AppHandle, event: &AnalysisChatEvent) {
 }
 ```
 
-- [ ] **Step 2: Update report and chat imports**
+- [x] **Step 2: Update report and chat imports**
 
 In `src-tauri/src/analysis/report.rs`, add this import:
 
@@ -373,7 +373,7 @@ Then remove `emit_analysis_chat_event` from the grouped `use super::{ ... }` imp
 use super::{now_secs, validate_chat_role, validate_chat_turns, ANALYSIS_STATUS_COMPLETED};
 ```
 
-- [ ] **Step 3: Clean moved imports from mod.rs**
+- [x] **Step 3: Clean moved imports from mod.rs**
 
 In `src-tauri/src/analysis/mod.rs`, remove `Emitter` from the Tauri import:
 
@@ -398,7 +398,7 @@ use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 ```
 
-- [ ] **Step 4: Format the Rust files**
+- [x] **Step 4: Format the Rust files**
 
 Run:
 
@@ -408,7 +408,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml
 
 Expected: command exits successfully with no required stdout.
 
-- [ ] **Step 5: Verify analysis module tests still pass**
+- [x] **Step 5: Verify analysis module tests still pass**
 
 Run:
 
@@ -418,7 +418,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::tests::
 
 Expected: PASS. This confirms the remaining `analysis/mod.rs` tests still compile without the moved state test and moved event helpers.
 
-- [ ] **Step 6: Verify chat event helper consumer**
+- [x] **Step 6: Verify chat event helper consumer**
 
 Run:
 
@@ -428,7 +428,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::chat::tests::
 
 Expected: PASS. This confirms `chat.rs` can access `super::events::emit_analysis_chat_event`.
 
-- [ ] **Step 7: Verify report event helper consumer**
+- [x] **Step 7: Verify report event helper consumer**
 
 Run:
 
@@ -438,7 +438,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 
 Expected: PASS. This confirms `report.rs` can access `super::events::emit_analysis_event`.
 
-- [ ] **Step 8: Verify all Rust targets and external state consumers compile**
+- [x] **Step 8: Verify all Rust targets and external state consumers compile**
 
 Run:
 
@@ -448,7 +448,7 @@ cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
 Expected: PASS. This covers `accounts.rs`, `account_deletion.rs`, `projects/mod.rs`, `analysis/report_commands.rs`, `lib.rs`, external `crate::analysis::AnalysisState` imports, and test-only import drift.
 
-- [ ] **Step 9: Commit Task 2**
+- [x] **Step 9: Commit Task 2**
 
 Run:
 

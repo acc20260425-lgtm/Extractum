@@ -1,5 +1,6 @@
 mod chat;
 mod corpus;
+mod events;
 #[cfg(debug_assertions)]
 mod fixtures;
 mod groups;
@@ -11,15 +12,14 @@ pub(crate) mod store;
 mod templates;
 mod trace;
 
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 use self::corpus::{
     list_run_snapshot_messages_page, load_trace_resolution_messages, ListRunSnapshotMessagesRequest,
 };
 use self::models::{
-    AnalysisChatEvent, AnalysisChatTurn, AnalysisRunDetail, AnalysisRunEvent,
-    AnalysisRunMessageCursor, AnalysisRunMessagesPage, AnalysisRunSummary, AnalysisSourceOption,
-    AnalysisTraceData, AnalysisTraceRef,
+    AnalysisChatTurn, AnalysisRunDetail, AnalysisRunMessageCursor, AnalysisRunMessagesPage,
+    AnalysisRunSummary, AnalysisSourceOption, AnalysisTraceData, AnalysisTraceRef,
 };
 use self::store::{
     delete_saved_run, fetch_run_row, list_analysis_run_summaries, map_run_detail, map_run_summary,
@@ -72,14 +72,6 @@ const ANALYSIS_STATUS_COMPLETED: &str = "completed";
 const ANALYSIS_STATUS_FAILED: &str = "failed";
 const ANALYSIS_STATUS_CANCELLED: &str = "cancelled";
 const ANALYSIS_FALLBACK_CHUNK_TARGET_CHARS: usize = 16_000;
-
-fn emit_analysis_event(handle: &AppHandle, event: &AnalysisRunEvent) {
-    let _ = handle.emit(ANALYSIS_RUN_EVENT, event);
-}
-
-fn emit_analysis_chat_event(handle: &AppHandle, event: &AnalysisChatEvent) {
-    let _ = handle.emit(ANALYSIS_CHAT_EVENT, event);
-}
 
 fn validate_chat_turns(history: &[AnalysisChatTurn]) -> AppResult<()> {
     for turn in history {
