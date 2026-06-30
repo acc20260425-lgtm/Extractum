@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** implemented; historical execution plan with retrospective verification-hardening notes.
+
 **Goal:** Extract `AnalysisState` and analysis event emitters out of `src-tauri/src/analysis/mod.rs` without changing runtime behavior or public Tauri contracts.
 
 **Architecture:** Add two focused sibling modules, `analysis/state.rs` and `analysis/events.rs`. Keep `analysis/mod.rs` as the facade for constants, command exports, and top-level Tauri command handlers. Preserve external `crate::analysis::AnalysisState` imports through a root re-export, while keeping event helpers private to sibling analysis modules.
@@ -10,7 +12,7 @@
 
 ## Global Constraints
 
-- Behavioral refactor edits are limited to `src-tauri/src/analysis/`; `cargo fmt` may rewrite unrelated Rust files across the crate, so inspect `git diff --name-only` after formatting and keep unrelated rustfmt drift out of refactor commits.
+- Behavioral refactor edits are limited to `src-tauri/src/analysis/`; `cargo fmt` may rewrite unrelated Rust files across the crate, so inspect `git status --short` after formatting and keep unrelated rustfmt drift out of refactor commits.
 - No database migrations.
 - No Tauri command name, argument, return-shape, or frontend binding changes.
 - No event payload or event-name changes.
@@ -21,6 +23,18 @@
 - Keep `AnalysisState` externally importable as `crate::analysis::AnalysisState`.
 - Do not re-export event helpers from `analysis/mod.rs`; import them in sibling modules through `super::events::{...}`.
 - Run Rust commands from the repository root with `--manifest-path src-tauri/Cargo.toml`, or from `src-tauri/` without `--manifest-path`.
+
+---
+
+## Retrospective Hardening
+
+This plan was executed before the later review-hardening edits in commit
+`9f39fb4e` and this follow-up. Existing checked boxes reflect the original
+execution state. Requirements added later, such as `cargo fmt --check`,
+`git status --short` after crate-wide formatting, stricter fixture non-zero
+checks, and separated git command blocks, are retained here as historical
+guardrails for audit or rerun purposes rather than as proof that those exact
+instructions were present during the original task execution.
 
 ---
 
@@ -226,14 +240,14 @@ cargo fmt --manifest-path src-tauri/Cargo.toml
 Then run:
 
 ```powershell
-git diff --name-only
+git status --short
 ```
 
-Expected: `cargo fmt` exits successfully with no required stdout. `git diff --name-only` shows only intended Task 1 files:
+Expected: `cargo fmt` exits successfully with no required stdout. `git status --short` shows only intended Task 1 files, including the untracked new module:
 
 ```text
-src-tauri/src/analysis/mod.rs
-src-tauri/src/analysis/state.rs
+ M src-tauri/src/analysis/mod.rs
+?? src-tauri/src/analysis/state.rs
 ```
 
 If unrelated Rust files appear, do not stage them in the Task 1 refactor commit. Either leave them unstaged for review or make a separate format-only commit before continuing.
@@ -296,7 +310,24 @@ Run:
 
 ```powershell
 git status --short
+```
+
+Expected: only the intended Task 1 files are present:
+
+```text
+ M src-tauri/src/analysis/mod.rs
+?? src-tauri/src/analysis/state.rs
+```
+
+Then run:
+
+```powershell
 git add src-tauri/src/analysis/mod.rs src-tauri/src/analysis/state.rs
+```
+
+Then run:
+
+```powershell
 git commit -m "refactor: extract analysis state"
 ```
 
@@ -422,16 +453,16 @@ cargo fmt --manifest-path src-tauri/Cargo.toml
 Then run:
 
 ```powershell
-git diff --name-only
+git status --short
 ```
 
-Expected: `cargo fmt` exits successfully with no required stdout. `git diff --name-only` shows only intended Task 2 files:
+Expected: `cargo fmt` exits successfully with no required stdout. `git status --short` shows only intended Task 2 files, including the untracked new module:
 
 ```text
-src-tauri/src/analysis/chat.rs
-src-tauri/src/analysis/events.rs
-src-tauri/src/analysis/mod.rs
-src-tauri/src/analysis/report.rs
+ M src-tauri/src/analysis/chat.rs
+ M src-tauri/src/analysis/mod.rs
+ M src-tauri/src/analysis/report.rs
+?? src-tauri/src/analysis/events.rs
 ```
 
 If unrelated Rust files appear, do not stage them in the Task 2 refactor commit. Either leave them unstaged for review or make a separate format-only commit before continuing.
@@ -482,7 +513,26 @@ Run:
 
 ```powershell
 git status --short
+```
+
+Expected: only the intended Task 2 files are present:
+
+```text
+ M src-tauri/src/analysis/chat.rs
+ M src-tauri/src/analysis/mod.rs
+ M src-tauri/src/analysis/report.rs
+?? src-tauri/src/analysis/events.rs
+```
+
+Then run:
+
+```powershell
 git add src-tauri/src/analysis/mod.rs src-tauri/src/analysis/events.rs src-tauri/src/analysis/report.rs src-tauri/src/analysis/chat.rs
+```
+
+Then run:
+
+```powershell
 git commit -m "refactor: extract analysis events"
 ```
 
@@ -549,7 +599,7 @@ Run:
 git status --short
 ```
 
-Expected: clean worktree, or only intentional files if verification artifacts are produced. Do not stage `.playwright-mcp/` if it appears.
+Expected: no output. This backend Rust refactor should not produce verification artifacts; any output means there is uncommitted work or rustfmt drift that must be resolved before completion.
 
 ## Self-Review Notes
 
