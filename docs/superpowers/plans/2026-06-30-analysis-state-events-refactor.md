@@ -56,7 +56,7 @@
   - `async fn ensure_report_run_token(&self, run_id: i64) -> CancellationToken`
 - Consumed by: `analysis/mod.rs`, `analysis/report.rs`, `analysis/report_commands.rs`, debug-only `analysis/fixtures.rs`, `account_deletion.rs`, `accounts.rs`, `projects/mod.rs`, `lib.rs`.
 
-- [ ] **Step 1: Move the state implementation and state test**
+- [x] **Step 1: Move the state implementation and state test**
 
 Create `src-tauri/src/analysis/state.rs` with this content:
 
@@ -215,7 +215,7 @@ use super::{
 };
 ```
 
-- [ ] **Step 2: Format the Rust files**
+- [x] **Step 2: Format the Rust files**
 
 Run:
 
@@ -225,7 +225,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml
 
 Expected: command exits successfully with no required stdout.
 
-- [ ] **Step 3: Verify the moved state test path exists and passes**
+- [x] **Step 3: Verify the moved state test path exists and passes**
 
 Run:
 
@@ -241,7 +241,7 @@ test analysis::state::tests::analysis_state_cancels_report_run_child_tokens ... 
 
 If Cargo reports `0 tests`, stop and fix the test module path before continuing.
 
-- [ ] **Step 4: Verify the named state test is not accidentally filtered out**
+- [x] **Step 4: Verify the named state test is not accidentally filtered out**
 
 Run:
 
@@ -257,7 +257,7 @@ test analysis::state::tests::analysis_state_cancels_report_run_child_tokens ... 
 
 If Cargo reports `0 tests`, stop and fix the test location before continuing.
 
-- [ ] **Step 5: Verify debug fixture consumers of cancellation API**
+- [x] **Step 5: Verify debug fixture consumers of cancellation API**
 
 Run:
 
@@ -267,7 +267,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::
 
 Expected: PASS. This confirms debug-only `fixtures.rs` can still call `request_report_run_cancel` and active fixture run APIs.
 
-- [ ] **Step 6: Verify non-analysis account deletion behavior**
+- [x] **Step 6: Verify non-analysis account deletion behavior**
 
 Run:
 
@@ -277,7 +277,7 @@ cargo test --manifest-path src-tauri/Cargo.toml account_deletion::tests::
 
 Expected: PASS. This confirms account deletion still observes active analysis runs through `AnalysisState`.
 
-- [ ] **Step 7: Commit Task 1**
+- [x] **Step 7: Commit Task 1**
 
 Run:
 
