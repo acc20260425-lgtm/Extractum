@@ -127,7 +127,7 @@ async fn load_analysis_document_messages(
 ) -> crate::error::AppResult<Vec<crate::analysis::models::CorpusMessage>>;
 ```
 
-- [ ] **Step 0: Capture pre-edit worktree state**
+- [x] **Step 0: Capture pre-edit worktree state**
 
 Run:
 
@@ -162,7 +162,7 @@ Get-Content -Raw -LiteralPath 'src-tauri/src/analysis/corpus/live.rs'
 
 Stop unless the baseline is intentionally cleanly separated first. Do not stage pre-existing target-file changes into the live-loading refactor commit.
 
-- [ ] **Step 1: Run focused live-loading characterization tests before editing**
+- [x] **Step 1: Run focused live-loading characterization tests before editing**
 
 Run each command separately:
 
@@ -212,7 +212,7 @@ Expected: PASS with output containing `1 passed`.
 
 If any focused live-loading characterization test fails before editing, stop and inspect the existing failure before moving code.
 
-- [ ] **Step 2: Run consumer baseline tests before editing**
+- [x] **Step 2: Run consumer baseline tests before editing**
 
 Run each command separately:
 
@@ -236,7 +236,7 @@ Expected: PASS and not a green `0 tests` run. Current snapshot at plan authoring
 
 If any broad or consumer baseline test fails before editing, stop and inspect the existing failure before moving code.
 
-- [ ] **Step 3: Create the nested module file with live-loading imports**
+- [x] **Step 3: Create the nested module file with live-loading imports**
 
 Create `src-tauri/src/analysis/corpus/live.rs` with this header:
 
@@ -249,7 +249,7 @@ use crate::compression::{compress_json_bytes, decompress_text};
 use crate::error::{internal_error, AppError, AppResult};
 ```
 
-- [ ] **Step 4: Move live corpus ref and live loading entry point into `live.rs`**
+- [x] **Step 4: Move live corpus ref and live loading entry point into `live.rs`**
 
 Move exactly these two definitions from `src-tauri/src/analysis/corpus.rs` into `src-tauri/src/analysis/corpus/live.rs`, immediately after the imports:
 
@@ -277,7 +277,7 @@ pub(crate) async fn load_corpus_messages(
 
 These are not contiguous in the current file: `estimate_preflight_chunk_count` sits between `live_corpus_ref` and `load_corpus_messages`. Move `live_corpus_ref` and `load_corpus_messages` as two separate ranges. Do not move `estimate_message_input_chars` or `estimate_preflight_chunk_count`; they stay in `corpus.rs`.
 
-- [ ] **Step 5: Move Telegram live corpus loading into `live.rs`**
+- [x] **Step 5: Move Telegram live corpus loading into `live.rs`**
 
 Move this contiguous block from `src-tauri/src/analysis/corpus.rs` into `src-tauri/src/analysis/corpus/live.rs`, immediately after `load_corpus_messages`:
 
@@ -329,7 +329,7 @@ messages.sort_by(|left, right| {
 });
 ```
 
-- [ ] **Step 6: Move analysis-document live loading and document-kind filter into `live.rs`**
+- [x] **Step 6: Move analysis-document live loading and document-kind filter into `live.rs`**
 
 Move this contiguous block from `src-tauri/src/analysis/corpus.rs` into `src-tauri/src/analysis/corpus/live.rs`, immediately after `load_telegram_corpus_messages`:
 
@@ -374,7 +374,7 @@ Do not change the analysis document ordering:
 ORDER BY d.published_at ASC, d.source_id ASC, d.document_order ASC, d.id ASC
 ```
 
-- [ ] **Step 7: Add the private module and facade re-exports in `corpus.rs`**
+- [x] **Step 7: Add the private module and facade re-exports in `corpus.rs`**
 
 At the top of `src-tauri/src/analysis/corpus.rs`, add `mod live;` before the existing nested modules. After import cleanup, the top of the file should start like this:
 
@@ -406,7 +406,7 @@ use crate::error::AppResult;
 
 `Pool`, `Sqlite`, and `AppResult` remain in `corpus.rs` for `preflight_analysis_run`. `QueryBuilder`, `CorpusMessage`, `compress_json_bytes`, `decompress_text`, `internal_error`, and `AppError` move to `live.rs`.
 
-- [ ] **Step 8: Remove moved-only imports and definitions from `corpus.rs`**
+- [x] **Step 8: Remove moved-only imports and definitions from `corpus.rs`**
 
 Replace the current grouped imports in `src-tauri/src/analysis/corpus.rs`.
 
@@ -483,7 +483,7 @@ pub(crate) fn model_limit_preflight_error(
 
 Leave these retained definitions and their attributes byte-for-byte unless `rustfmt` changes whitespace.
 
-- [ ] **Step 9: Run rustfmt and inspect the touched files**
+- [x] **Step 9: Run rustfmt and inspect the touched files**
 
 Run:
 
@@ -506,7 +506,7 @@ Expected `git status --short --untracked-files=all` output for this task, relati
 
 If unrelated Rust files newly appear beyond the Step 0 baseline, do not stage them in the refactor commit. Resolve unrelated rustfmt drift before final verification starts: either make a separate format-only commit after review, or otherwise separate those changes so the only new status entries are the implementation-owned files for this refactor.
 
-- [ ] **Step 10: Run focused live-loading tests after editing**
+- [x] **Step 10: Run focused live-loading tests after editing**
 
 Run each command separately:
 
@@ -554,7 +554,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::source_
 
 Expected: PASS with output containing `1 passed`.
 
-- [ ] **Step 11: Run module-boundary compile coverage**
+- [x] **Step 11: Run module-boundary compile coverage**
 
 Run:
 
@@ -564,7 +564,7 @@ cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
 Expected: PASS. Existing warnings outside the touched files may remain; new warnings mentioning `src/analysis/corpus.rs` or `src/analysis/corpus/live.rs` are not acceptable.
 
-- [ ] **Step 12: Run full corpus and consumer behavior tests before committing**
+- [x] **Step 12: Run full corpus and consumer behavior tests before committing**
 
 Run each command separately:
 
@@ -588,7 +588,7 @@ Expected: PASS and not a green `0 tests` run. This verifies the project data-ran
 
 If the full corpus suite or either consumer test slice fails here, stop and fix the refactor before committing. Do not defer these failures to Task 2.
 
-- [ ] **Step 13: Commit the live-loading extraction**
+- [x] **Step 13: Commit the live-loading extraction**
 
 Before staging, run:
 
