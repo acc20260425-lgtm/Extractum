@@ -464,7 +464,7 @@ Expected: one commit containing only the event helper extraction and import clea
 
 ## Final Verification
 
-- [ ] **Step 1: Run the complete focused validation set from the approved spec**
+- [x] **Step 1: Run the complete focused validation set from the approved spec**
 
 Run each command separately and stop on the first failure:
 
@@ -506,7 +506,7 @@ Expected: every command passes. The `analysis::state::tests::` command and the n
 test analysis::state::tests::analysis_state_cancels_report_run_child_tokens ... ok
 ```
 
-- [ ] **Step 2: Confirm no unintended files are staged**
+- [x] **Step 2: Confirm no unintended files are staged**
 
 Run:
 
