@@ -61,6 +61,8 @@ pub(crate) enum YoutubeCorpusMode {
 }
 
 impl YoutubeCorpusMode {
+    pub(crate) fn from_wire(value: Option<&str>) -> Result<Self, String>;
+    pub(crate) fn as_wire(self) -> &'static str;
     pub(crate) fn includes_description(self) -> bool;
     pub(crate) fn includes_comments(self) -> bool;
 }
@@ -213,6 +215,12 @@ If any focused live-loading characterization test fails before editing, stop and
 Run each command separately:
 
 ```powershell
+cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
+```
+
+Expected: PASS and not a green `0 tests` run. Current baseline is `43 passed`. This broad baseline covers neighboring snapshot, source-resolution, and preflight behavior before moving live-loading code.
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 ```
 
@@ -224,7 +232,7 @@ cargo test --manifest-path src-tauri/Cargo.toml projects::data_range::tests::
 
 Expected: PASS and not a green `0 tests` run. Current baseline is `8 passed`.
 
-If either consumer baseline test fails before editing, stop and inspect the existing failure before moving code.
+If any broad or consumer baseline test fails before editing, stop and inspect the existing failure before moving code.
 
 - [ ] **Step 3: Create the nested module file with live-loading imports**
 
@@ -398,17 +406,19 @@ use crate::error::AppResult;
 
 - [ ] **Step 8: Remove moved-only imports and definitions from `corpus.rs`**
 
-Remove these imports from `src-tauri/src/analysis/corpus.rs` because `live.rs` now owns them:
+Replace the current grouped imports in `src-tauri/src/analysis/corpus.rs`.
+
+Change this:
 
 ```rust
-use sqlx::QueryBuilder;
+use sqlx::{Pool, QueryBuilder, Sqlite};
 
 use super::models::CorpusMessage;
 use crate::compression::{compress_json_bytes, decompress_text};
-use crate::error::{internal_error, AppError};
+use crate::error::{internal_error, AppError, AppResult};
 ```
 
-Keep these production imports in `corpus.rs`:
+to this:
 
 ```rust
 use sqlx::{Pool, Sqlite};
@@ -423,6 +433,13 @@ pub(crate) enum YoutubeCorpusMode {
     TranscriptOnly,
     TranscriptDescription,
     TranscriptDescriptionComments,
+}
+
+impl YoutubeCorpusMode {
+    pub(crate) fn from_wire(value: Option<&str>) -> Result<Self, String>;
+    pub(crate) fn as_wire(self) -> &'static str;
+    pub(crate) fn includes_description(self) -> bool;
+    pub(crate) fn includes_comments(self) -> bool;
 }
 
 pub(crate) struct CorpusLoadRequest {
@@ -540,9 +557,15 @@ cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
 Expected: PASS. Existing warnings outside the touched files may remain; new warnings mentioning `src/analysis/corpus.rs` or `src/analysis/corpus/live.rs` are not acceptable.
 
-- [ ] **Step 12: Run consumer behavior tests before committing**
+- [ ] **Step 12: Run full corpus and consumer behavior tests before committing**
 
 Run each command separately:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
+```
+
+Expected: PASS and not a green `0 tests` run. This must pass before the refactor commit is created; it covers neighboring snapshot, source-resolution, and preflight behavior through the same `analysis::corpus` facade.
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
@@ -556,7 +579,7 @@ cargo test --manifest-path src-tauri/Cargo.toml projects::data_range::tests::
 
 Expected: PASS and not a green `0 tests` run. This verifies the project data-range document-kind filter consumer before the refactor commit is created.
 
-If either consumer test slice fails here, stop and fix the refactor before committing. Do not defer these failures to Task 2.
+If the full corpus suite or either consumer test slice fails here, stop and fix the refactor before committing. Do not defer these failures to Task 2.
 
 - [ ] **Step 13: Commit the live-loading extraction**
 
