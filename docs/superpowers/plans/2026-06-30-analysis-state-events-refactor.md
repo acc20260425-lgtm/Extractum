@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Internal Rust refactor of `src-tauri/src/analysis/` only.
+- Behavioral refactor edits are limited to `src-tauri/src/analysis/`; `cargo fmt` may rewrite unrelated Rust files across the crate, so inspect `git diff --name-only` after formatting and keep unrelated rustfmt drift out of refactor commits.
 - No database migrations.
 - No Tauri command name, argument, return-shape, or frontend binding changes.
 - No event payload or event-name changes.
@@ -223,7 +223,20 @@ Run:
 cargo fmt --manifest-path src-tauri/Cargo.toml
 ```
 
-Expected: command exits successfully with no required stdout.
+Then run:
+
+```powershell
+git diff --name-only
+```
+
+Expected: `cargo fmt` exits successfully with no required stdout. `git diff --name-only` shows only intended Task 1 files:
+
+```text
+src-tauri/src/analysis/mod.rs
+src-tauri/src/analysis/state.rs
+```
+
+If unrelated Rust files appear, do not stage them in the Task 1 refactor commit. Either leave them unstaged for review or make a separate format-only commit before continuing.
 
 - [x] **Step 3: Verify the moved state test path exists and passes**
 
@@ -265,7 +278,7 @@ Run:
 cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::
 ```
 
-Expected: PASS. This confirms debug-only `fixtures.rs` can still call `request_report_run_cancel` and active fixture run APIs.
+Expected: PASS with a non-zero test count. Run this command in the default dev test profile; do not add `--release`, because `fixtures.rs` is compiled behind `#[cfg(debug_assertions)]` and the release profile can turn this required slice into a green `0 tests` run. This confirms debug-only `fixtures.rs` can still call `request_report_run_cancel` and active fixture run APIs.
 
 - [x] **Step 6: Verify non-analysis account deletion behavior**
 
@@ -406,7 +419,22 @@ Run:
 cargo fmt --manifest-path src-tauri/Cargo.toml
 ```
 
-Expected: command exits successfully with no required stdout.
+Then run:
+
+```powershell
+git diff --name-only
+```
+
+Expected: `cargo fmt` exits successfully with no required stdout. `git diff --name-only` shows only intended Task 2 files:
+
+```text
+src-tauri/src/analysis/chat.rs
+src-tauri/src/analysis/events.rs
+src-tauri/src/analysis/mod.rs
+src-tauri/src/analysis/report.rs
+```
+
+If unrelated Rust files appear, do not stage them in the Task 2 refactor commit. Either leave them unstaged for review or make a separate format-only commit before continuing.
 
 - [x] **Step 5: Verify analysis module tests still pass**
 
@@ -488,6 +516,9 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::chat::tests::
 cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::
 ```
 
+Run this command exactly in the default dev test profile. Do not add `--release`,
+because `fixtures.rs` is compiled behind `#[cfg(debug_assertions)]`.
+
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 ```
@@ -497,10 +528,14 @@ cargo test --manifest-path src-tauri/Cargo.toml account_deletion::tests::
 ```
 
 ```powershell
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+```
+
+```powershell
 cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 ```
 
-Expected: every command passes. The `analysis::state::tests::` command and the named state test command must both include the moved state test and must not be green `0 tests` runs. Both should include:
+Expected: every command passes. The `analysis::fixtures::tests::` command must run in the default dev test profile and must not be a green `0 tests` run. The `analysis::state::tests::` command and the named state test command must both include the moved state test and must not be green `0 tests` runs. Both should include:
 
 ```text
 test analysis::state::tests::analysis_state_cancels_report_run_child_tokens ... ok
