@@ -125,7 +125,7 @@ async fn push_scope_source(
 ) -> crate::error::AppResult<()>;
 ```
 
-- [ ] **Step 0: Capture pre-edit worktree state**
+- [x] **Step 0: Capture pre-edit worktree state**
 
 Run:
 
@@ -158,7 +158,7 @@ Get-Content -Raw -LiteralPath 'src-tauri/src/analysis/corpus/source_resolution.r
 
 Stop unless the baseline is intentionally cleanly separated first. Do not stage pre-existing target-file changes into the source-resolution refactor commit.
 
-- [ ] **Step 1: Run source-resolution characterization tests before editing**
+- [x] **Step 1: Run source-resolution characterization tests before editing**
 
 Run each command separately:
 
@@ -196,7 +196,7 @@ Expected: PASS and not a green `0 tests` run. The current module contains eight 
 
 If any characterization or consumer baseline test fails before editing, stop and inspect the existing failure before moving code.
 
-- [ ] **Step 2: Create the nested module file with source-resolution imports**
+- [x] **Step 2: Create the nested module file with source-resolution imports**
 
 Create `src-tauri/src/analysis/corpus/source_resolution.rs` with this header:
 
@@ -216,7 +216,7 @@ use crate::analysis::store::fetch_source_group;
 use crate::error::{AppError, AppResult};
 ```
 
-- [ ] **Step 3: Move source-resolution types and error mapping into `source_resolution.rs`**
+- [x] **Step 3: Move source-resolution types and error mapping into `source_resolution.rs`**
 
 Move this block from `src-tauri/src/analysis/corpus.rs` into `src-tauri/src/analysis/corpus/source_resolution.rs`, immediately after the imports:
 
@@ -278,7 +278,7 @@ impl From<AppError> for AnalysisSourceResolutionError {
 
 Do not move `estimate_message_input_chars`, `live_corpus_ref`, or `estimate_preflight_chunk_count`; they stay in `corpus.rs`.
 
-- [ ] **Step 4: Move source-resolution helpers and functions into `source_resolution.rs`**
+- [x] **Step 4: Move source-resolution helpers and functions into `source_resolution.rs`**
 
 Move this contiguous block from `src-tauri/src/analysis/corpus.rs` into `src-tauri/src/analysis/corpus/source_resolution.rs`, immediately after the error mapping block from Step 3:
 
@@ -329,7 +329,7 @@ pub(crate) async fn resolve_run_source_ids(
 
 Move each full function body verbatim. Do not change SQL text, `ORDER BY` clauses, playlist filtering, error strings, `HashSet` de-duplication, or `resolve_run_source_ids` fallback ordering.
 
-- [ ] **Step 5: Add the private module and facade re-exports in `corpus.rs`**
+- [x] **Step 5: Add the private module and facade re-exports in `corpus.rs`**
 
 At the top of `src-tauri/src/analysis/corpus.rs`, keep `mod snapshot;` and add `mod source_resolution;`. After import cleanup, the file should start like this:
 
@@ -359,7 +359,7 @@ use crate::error::{internal_error, AppError, AppResult};
 
 The targeted `#[allow(unused_imports)]` on `ResolvedAnalysisSources` preserves the current facade-visible type name without introducing warning debt if callers continue to rely on inference instead of importing the type by name.
 
-- [ ] **Step 6: Remove moved-only imports and definitions from `corpus.rs`**
+- [x] **Step 6: Remove moved-only imports and definitions from `corpus.rs`**
 
 Remove these top-level imports from `src-tauri/src/analysis/corpus.rs` because the moved source-resolution module now owns them:
 
@@ -388,7 +388,7 @@ use crate::error::{internal_error, AppError, AppResult};
 
 Remove the moved definitions from `corpus.rs` after they exist in `source_resolution.rs`. `corpus.rs` must still contain `YoutubeCorpusMode`, `CorpusLoadRequest`, `estimate_message_input_chars`, `live_corpus_ref`, `estimate_preflight_chunk_count`, live corpus loading, preflight logic, snapshot facade re-exports, and the `#[cfg(test)] mod tests` block.
 
-- [ ] **Step 7: Run rustfmt and inspect the touched files**
+- [x] **Step 7: Run rustfmt and inspect the touched files**
 
 Run:
 
@@ -411,7 +411,7 @@ Expected `git status --short` output for this task:
 
 If unrelated Rust files appear, do not stage them in the refactor commit. Resolve unrelated rustfmt drift before Task 2 starts: either make a separate format-only commit after review, or otherwise separate those changes so `git status --short` contains only the implementation-owned files for this refactor.
 
-- [ ] **Step 8: Run focused source-resolution tests after editing**
+- [x] **Step 8: Run focused source-resolution tests after editing**
 
 Run each command separately:
 
@@ -444,7 +444,7 @@ analysis::corpus::tests::resolve_run_source_ids_prefers_snapshot_over_live_group
 analysis::corpus::tests::resolve_run_source_ids_loads_project_sources_without_snapshot
 ```
 
-- [ ] **Step 9: Run module-boundary compile coverage**
+- [x] **Step 9: Run module-boundary compile coverage**
 
 Run:
 
@@ -454,7 +454,7 @@ cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
 Expected: PASS. Existing warnings outside the touched files may remain; new warnings mentioning `src/analysis/corpus.rs` or `src/analysis/corpus/source_resolution.rs` are not acceptable.
 
-- [ ] **Step 10: Run consumer behavior tests before committing**
+- [x] **Step 10: Run consumer behavior tests before committing**
 
 Run each command separately:
 
@@ -472,7 +472,7 @@ Expected: PASS and not a green `0 tests` run. This verifies the project data-ran
 
 If either consumer test slice fails here, stop and fix the refactor before committing. Do not defer these failures to Task 2.
 
-- [ ] **Step 11: Commit the source-resolution extraction**
+- [x] **Step 11: Commit the source-resolution extraction**
 
 Before staging, run:
 
