@@ -1,8 +1,8 @@
 # Analysis State and Events Refactor Design
 
 **Date:** 2026-06-30
-**Status:** agreed first slice, ready for implementation planning after review
-**Scope:** internal Rust refactor of `src-tauri/src/analysis/` only.
+**Status:** implemented; historical design for the completed first slice
+**Scope:** behavioral refactor edits are limited to `src-tauri/src/analysis/`; unrelated rustfmt drift may be handled separately as format-only cleanup.
 
 ## Goal
 
@@ -10,9 +10,9 @@ Reduce the responsibility of `src-tauri/src/analysis/mod.rs` without changing be
 
 This slice is intentionally conservative: no database migrations, no Tauri command contract changes, no event payload changes, and no frontend changes.
 
-## Current Shape
+## Original Shape
 
-`analysis/mod.rs` currently owns several unrelated concerns:
+Before this refactor, `analysis/mod.rs` owned several unrelated concerns:
 
 - module declarations and public re-exports;
 - shared constants for run statuses, scope types, template kinds, and event names;
@@ -94,6 +94,10 @@ No error behavior changes are expected. State methods keep their current behavio
 Run focused Rust validation for the affected module boundaries. The commands
 below are written for the repository root; equivalently, run them from
 `src-tauri/` without `--manifest-path src-tauri/Cargo.toml`.
+
+Run the fixture slice in the default dev test profile. Do not use `--release`
+for the required `analysis::fixtures::tests::` run because `fixtures.rs` is
+compiled behind `#[cfg(debug_assertions)]`.
 
 - `cargo test --manifest-path src-tauri/Cargo.toml analysis::tests::`
 - `cargo test --manifest-path src-tauri/Cargo.toml analysis::state::tests::`
