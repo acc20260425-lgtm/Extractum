@@ -22,10 +22,11 @@ This slice is intentionally conservative: no database migrations, no Tauri comma
 - top-level Tauri commands for listing runs, messages, traces, and deletion.
 
 The state helper is small, but it is a central dependency for `report.rs`,
-debug-only `fixtures.rs`, account deletion logic, the project analysis command,
-and Tauri state registration. The event helpers are used by `report.rs` and
-`chat.rs`. Keeping both helper groups in `mod.rs` makes the module root harder to
-scan and makes future extraction work noisier.
+`analysis/report_commands.rs`, debug-only `fixtures.rs`, `analysis/mod.rs`
+command handlers, `accounts.rs`, account deletion logic, the project analysis
+command, and Tauri state registration in `lib.rs`. The event helpers are used
+by `report.rs` and `chat.rs`. Keeping both helper groups in `mod.rs` makes the
+module root harder to scan and makes future extraction work noisier.
 
 ## Proposed Architecture
 
@@ -74,7 +75,10 @@ No runtime data flow changes:
 2. Report startup still inserts active runs through `AnalysisState`.
 3. Cancellation still uses the existing cancellation token map.
 4. Report and chat code still emit the same event names and payloads.
-5. External modules keep their current `AnalysisState` paths:
+5. Internal command wrappers and external modules keep their current
+   `AnalysisState` paths:
+   `analysis/report_commands.rs` through `super::AnalysisState`,
+   `analysis/mod.rs` command handlers through the local re-export,
    `accounts.rs`, `account_deletion.rs`, `projects/mod.rs` through
    `start_project_analysis`, and `lib.rs` through `.manage(AnalysisState::new())`.
 
@@ -98,6 +102,7 @@ below are written for the repository root; equivalently, run them from
 - `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::`
 - `cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::`
 - `cargo test --manifest-path src-tauri/Cargo.toml account_deletion::tests::`
+- `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`
 - `cargo check --manifest-path src-tauri/Cargo.toml --all-targets`
 
 `analysis::state::tests::` is included because the existing
@@ -116,13 +121,23 @@ fixture-run behavior.
 `account_deletion::tests::` is included because account deletion uses
 `AnalysisState::active_report_run_ids` and `insert_active_report_run` to block
 deletion while source-owned analysis work is active. `cargo check --all-targets`
-covers external imports such as `crate::analysis::AnalysisState`, plus test-only
-import drift, but not this behavior.
+covers command-boundary and external imports such as `super::AnalysisState` in
+`analysis/report_commands.rs`, local command handler imports in `analysis/mod.rs`,
+`crate::analysis::AnalysisState` in `accounts.rs`, `account_deletion.rs`,
+`projects/mod.rs`, and `lib.rs`, plus test-only import drift, but not this
+behavior.
 
 `projects/mod.rs` does not need an additional behavior test in this slice:
 `start_project_analysis` only accepts `tauri::State<'_, crate::analysis::AnalysisState>`
 and forwards `state.inner()` to `start_analysis_report_run`. Compile coverage from
 `cargo check --all-targets` is enough for that command path.
+
+`cargo fmt --check` is included because move-only Rust refactors can compile and
+pass tests while leaving formatting dirty. The implementation can use `cargo fmt`
+to fix formatting, but that command may rewrite unrelated Rust files across the
+crate. After running `cargo fmt`, inspect `git diff --name-only`; either stage
+only files intended for this refactor or make a separate format-only commit for
+unrelated rustfmt drift.
 
 If the shell or sandbox blocks `cargo`, rerun the same command with the required approval path rather than claiming success.
 
@@ -153,5 +168,8 @@ The implementation should be mostly mechanical:
    the module root.
 8. Run `cargo fmt --manifest-path src-tauri/Cargo.toml` from the repository root
    if Rust formatting changes. Equivalently, run `cargo fmt` from `src-tauri/`.
+   Because rustfmt operates on the crate, inspect `git diff --name-only` after
+   formatting. Stage only intended state/events files for this refactor, or make
+   a separate format-only commit for unrelated Rust files.
 
 The resulting `mod.rs` should read more like a module facade plus command host, not a dumping ground for shared runtime helpers.
