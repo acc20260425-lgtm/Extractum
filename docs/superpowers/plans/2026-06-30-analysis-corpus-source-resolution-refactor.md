@@ -130,7 +130,7 @@ async fn push_scope_source(
 Run:
 
 ```powershell
-git status --short
+git status --short --untracked-files=all
 ```
 
 Expected: no output for the implementation-owned files:
@@ -148,6 +148,12 @@ git diff -- src-tauri/src/analysis/corpus.rs src-tauri/src/analysis/corpus/sourc
 
 ```powershell
 git diff --cached -- src-tauri/src/analysis/corpus.rs src-tauri/src/analysis/corpus/source_resolution.rs
+```
+
+If `src-tauri/src/analysis/corpus/source_resolution.rs` appears as an untracked file, `git diff` will not show its contents. Inspect it directly before proceeding:
+
+```powershell
+Get-Content -Raw -LiteralPath 'src-tauri/src/analysis/corpus/source_resolution.rs'
 ```
 
 Stop unless the baseline is intentionally cleanly separated first. Do not stage pre-existing target-file changes into the source-resolution refactor commit.
@@ -174,7 +180,21 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::resolve
 
 Expected: PASS and not a green `0 tests` run. The current test filter should run the two tests whose names start with `analysis::corpus::tests::resolve_run_source_ids_`.
 
-If any characterization test fails before editing, stop and inspect the existing failure before moving code.
+Run consumer baseline checks before editing:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
+```
+
+Expected: PASS and not a green `0 tests` run.
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml projects::data_range::tests::
+```
+
+Expected: PASS and not a green `0 tests` run. The current module contains eight filtered tests.
+
+If any characterization or consumer baseline test fails before editing, stop and inspect the existing failure before moving code.
 
 - [ ] **Step 2: Create the nested module file with source-resolution imports**
 
@@ -434,7 +454,25 @@ cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
 Expected: PASS. Existing warnings outside the touched files may remain; new warnings mentioning `src/analysis/corpus.rs` or `src/analysis/corpus/source_resolution.rs` are not acceptable.
 
-- [ ] **Step 10: Commit the source-resolution extraction**
+- [ ] **Step 10: Run consumer behavior tests before committing**
+
+Run each command separately:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
+```
+
+Expected: PASS and not a green `0 tests` run. This verifies the `analysis/report.rs` source-resolution consumer before the refactor commit is created.
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml projects::data_range::tests::
+```
+
+Expected: PASS and not a green `0 tests` run. This verifies the project data-range consumer before the refactor commit is created.
+
+If either consumer test slice fails here, stop and fix the refactor before committing. Do not defer these failures to Task 2.
+
+- [ ] **Step 11: Commit the source-resolution extraction**
 
 Before staging, run:
 
