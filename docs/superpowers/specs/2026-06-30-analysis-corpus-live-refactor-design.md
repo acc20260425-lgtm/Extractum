@@ -40,6 +40,7 @@ Consumers are narrow:
 - `analysis/report.rs` imports `load_corpus_messages`, `preflight_analysis_run`, `preflight_limit_error`, `CorpusLoadRequest`, and `YoutubeCorpusMode` from `super::corpus`.
 - `projects/data_range.rs` uses the root re-exported `push_analysis_document_kind_filter` and `YoutubeCorpusMode`.
 - `analysis/mod.rs` re-exports `push_analysis_document_kind_filter` and `YoutubeCorpusMode`.
+- `analysis/corpus.rs::preflight_analysis_run` is the internal consumer of the `load_corpus_messages` facade after the move.
 - `analysis/corpus.rs` tests call `load_corpus_messages`, `live_corpus_ref`, and preflight helpers through the current module.
 - `analysis/store.rs` imports `YoutubeCorpusMode` directly from `analysis::corpus`; this refactor must not move that enum.
 
@@ -111,6 +112,12 @@ pub(crate) fn live_corpus_ref(source_id: i64, item_id: i64) -> String;
 ```
 
 Preserve the current `live_corpus_ref` facade path. If that re-export is unused in non-test builds, use a targeted `#[allow(unused_imports)]` on the re-export rather than dropping the facade path.
+
+Because `live.rs` is a sibling module of the remaining `corpus.rs` definitions, preserve the current visibility of the types it consumes:
+
+- all `CorpusLoadRequest` fields stay `pub(crate)`;
+- `YoutubeCorpusMode::includes_description()` and `YoutubeCorpusMode::includes_comments()` stay `pub(crate)`;
+- `YoutubeCorpusMode::from_wire()` and `YoutubeCorpusMode::as_wire()` stay `pub(crate)` because current non-live consumers still call them through the corpus facade.
 
 Private live-loading helpers stay private inside `live.rs`:
 
@@ -193,10 +200,30 @@ git status --short --untracked-files=all
 If `src-tauri/src/analysis/corpus.rs` or `src-tauri/src/analysis/corpus/live.rs` is dirty before execution, inspect the baseline before editing. If `corpus/live.rs` is already untracked, `git diff` will not show its contents, so inspect it directly with:
 
 ```powershell
+git diff -- src-tauri/src/analysis/corpus.rs src-tauri/src/analysis/corpus/live.rs
+```
+
+```powershell
+git diff --cached -- src-tauri/src/analysis/corpus.rs src-tauri/src/analysis/corpus/live.rs
+```
+
+```powershell
 Get-Content -Raw -LiteralPath 'src-tauri/src/analysis/corpus/live.rs'
 ```
 
 Do not stage pre-existing target-file changes into the live-loading refactor commit.
+
+The implementation plan must also run these consumer baseline checks before editing and again before creating the refactor commit:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
+```
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml projects::data_range::tests::
+```
+
+Both filtered test commands must run real tests, not green `0 tests` runs.
 
 If formatting fixes are needed during implementation, run:
 
@@ -237,6 +264,10 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::default
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::opted_in_analysis_corpus_includes_migrated_rows_and_counts_preflight
+```
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::explicit_analysis_opt_in_with_zero_migrated_rows_keeps_current_corpus
 ```
 
 ```powershell
