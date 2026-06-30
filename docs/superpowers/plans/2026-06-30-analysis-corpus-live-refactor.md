@@ -640,7 +640,7 @@ Expected: commit succeeds and includes only `src-tauri/src/analysis/corpus.rs` a
   - `analysis/corpus.rs::preflight_analysis_run`: internal `load_corpus_messages` facade call
   - `analysis/corpus.rs` tests: facade-visible `load_corpus_messages`, `live_corpus_ref`, and preflight helpers
 
-- [ ] **Step 1: Run the full corpus test module**
+- [x] **Step 1: Run the full corpus test module**
 
 Run:
 
@@ -650,7 +650,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
 
 Expected: PASS and not a green `0 tests` run. Current snapshot at plan authoring: `43 passed`; do not require this exact count if nearby tests changed before execution.
 
-- [ ] **Step 2: Run report consumer tests**
+- [x] **Step 2: Run report consumer tests**
 
 Run:
 
@@ -660,7 +660,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 
 Expected: PASS and not a green `0 tests` run. Current snapshot at plan authoring: `22 passed`; do not require this exact count if nearby tests changed before execution.
 
-- [ ] **Step 3: Run project data-range consumer tests**
+- [x] **Step 3: Run project data-range consumer tests**
 
 Run:
 
@@ -670,7 +670,7 @@ cargo test --manifest-path src-tauri/Cargo.toml projects::data_range::tests::
 
 Expected: PASS and not a green `0 tests` run. Current snapshot at plan authoring: `8 passed`; do not require this exact count if nearby tests changed before execution.
 
-- [ ] **Step 4: Run format check**
+- [x] **Step 4: Run format check**
 
 Run:
 
@@ -680,7 +680,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
 Expected: PASS with no diff output.
 
-- [ ] **Step 5: Run all-target compile coverage**
+- [x] **Step 5: Run all-target compile coverage**
 
 Run:
 
@@ -690,7 +690,7 @@ cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
 Expected: PASS. Existing warnings outside the touched files may remain; new warnings mentioning `src/analysis/corpus.rs` or `src/analysis/corpus/live.rs` are not acceptable.
 
-- [ ] **Step 6: Confirm final git state**
+- [x] **Step 6: Confirm final git state**
 
 Run:
 
