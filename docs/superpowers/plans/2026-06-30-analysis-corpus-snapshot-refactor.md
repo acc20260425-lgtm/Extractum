@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** implemented; historical execution plan with retrospective verification-hardening notes.
+
 **Goal:** Extract saved analysis run snapshot loading and pagination from `src-tauri/src/analysis/corpus.rs` into `src-tauri/src/analysis/corpus/snapshot.rs` without changing behavior or caller paths.
 
 **Architecture:** Keep `analysis::corpus` as the internal facade. Add a private nested `snapshot` module, move snapshot-specific implementation into it, and re-export only the crate-visible functions and request type that callers already use. Leave live corpus loading, source resolution, preflight logic, and the shared sqlite test harness in `corpus.rs`.
@@ -16,7 +18,18 @@
 - The shared sqlite test harness and all existing tests stay in `src-tauri/src/analysis/corpus.rs` for this slice.
 - Preserve pagination ordering, cursor semantics, page size clamping, `around_ref` behavior, snapshot fallback behavior, and error messages.
 - Run commands from the repository root with `--manifest-path src-tauri/Cargo.toml`.
-- Use `cargo fmt --manifest-path src-tauri/Cargo.toml`; after formatting inspect `git diff --name-only` and keep unrelated rustfmt drift out of the refactor commit.
+- Use `cargo fmt --manifest-path src-tauri/Cargo.toml`; after formatting inspect `git status --short` and keep unrelated rustfmt drift out of the refactor commit.
+
+---
+
+## Retrospective Hardening
+
+This plan was executed before the review-hardening edits in the verification
+note commit `7b00d192` and this follow-up. Existing checked boxes reflect the
+original execution state. Requirements added later, such as `git status --short`
+after crate-wide formatting and separated git command blocks, are retained here
+as historical guardrails for audit or rerun purposes rather than as proof that
+those exact instructions were present during the original task execution.
 
 ---
 
@@ -93,6 +106,11 @@ Run:
 
 ```powershell
 git add -- src-tauri/src/analysis/corpus.rs
+```
+
+Then run:
+
+```powershell
 git commit -m "test: decouple corpus metadata test from snapshot helper"
 ```
 
@@ -312,14 +330,19 @@ Run:
 
 ```powershell
 cargo fmt --manifest-path src-tauri/Cargo.toml
-git diff --name-only
 ```
 
-Expected `git diff --name-only` output for this task:
+Then run:
+
+```powershell
+git status --short
+```
+
+Expected `git status --short` output for this task:
 
 ```text
-src-tauri/src/analysis/corpus.rs
-src-tauri/src/analysis/corpus/snapshot.rs
+ M src-tauri/src/analysis/corpus.rs
+?? src-tauri/src/analysis/corpus/snapshot.rs
 ```
 
 If unrelated Rust files appear, do not stage them in the refactor commit. Either leave them unstaged for review or make a separate format-only commit before continuing.
@@ -368,6 +391,11 @@ Run:
 
 ```powershell
 git add -- src-tauri/src/analysis/corpus.rs src-tauri/src/analysis/corpus/snapshot.rs
+```
+
+Then run:
+
+```powershell
 git commit -m "refactor: extract analysis corpus snapshots"
 ```
 
