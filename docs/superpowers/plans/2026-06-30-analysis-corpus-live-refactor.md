@@ -23,7 +23,7 @@
 - Preserve the `live_corpus_ref`, `load_corpus_messages`, and `push_analysis_document_kind_filter` facade paths through `analysis::corpus`.
 - Run commands from the repository root with `--manifest-path src-tauri/Cargo.toml`.
 - Every filtered `cargo test` command in this plan must run real tests, not green `0 tests` runs.
-- Use `cargo fmt --manifest-path src-tauri/Cargo.toml`; after formatting inspect `git status --short` and keep unrelated rustfmt drift out of the refactor commit.
+- Use `cargo fmt --manifest-path src-tauri/Cargo.toml`; after formatting inspect `git status --short --untracked-files=all` and keep unrelated rustfmt drift out of the refactor commit.
 - Expected behavioral Rust changes for this slice are limited to `src-tauri/src/analysis/corpus.rs` and `src-tauri/src/analysis/corpus/live.rs`.
 
 ---
@@ -135,12 +135,14 @@ Run:
 git status --short --untracked-files=all
 ```
 
-Expected: no output for the implementation-owned files:
+Record the full output as the Step 0 baseline. Expected: no output for the implementation-owned files:
 
 ```text
 src-tauri/src/analysis/corpus.rs
 src-tauri/src/analysis/corpus/live.rs
 ```
+
+Unrelated pre-existing entries may remain in the worktree, but they are not part of this task and must remain unchanged unless the user explicitly separates or approves them.
 
 If either target file is already modified, staged, or untracked before this task starts, inspect the baseline before editing:
 
@@ -218,19 +220,19 @@ Run each command separately:
 cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
 ```
 
-Expected: PASS and not a green `0 tests` run. Current baseline is `43 passed`. This broad baseline covers neighboring snapshot, source-resolution, and preflight behavior before moving live-loading code.
+Expected: PASS and not a green `0 tests` run. Current snapshot at plan authoring: `43 passed`; do not require this exact count if nearby tests changed before execution. This broad baseline covers neighboring snapshot, source-resolution, and preflight behavior before moving live-loading code.
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 ```
 
-Expected: PASS and not a green `0 tests` run. Current baseline is `22 passed`.
+Expected: PASS and not a green `0 tests` run. Current snapshot at plan authoring: `22 passed`; do not require this exact count if nearby tests changed before execution.
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml projects::data_range::tests::
 ```
 
-Expected: PASS and not a green `0 tests` run. Current baseline is `8 passed`.
+Expected: PASS and not a green `0 tests` run. Current snapshot at plan authoring: `8 passed`; do not require this exact count if nearby tests changed before execution.
 
 If any broad or consumer baseline test fails before editing, stop and inspect the existing failure before moving code.
 
@@ -249,7 +251,7 @@ use crate::error::{internal_error, AppError, AppResult};
 
 - [ ] **Step 4: Move live corpus ref and live loading entry point into `live.rs`**
 
-Move this block from `src-tauri/src/analysis/corpus.rs` into `src-tauri/src/analysis/corpus/live.rs`, immediately after the imports:
+Move exactly these two definitions from `src-tauri/src/analysis/corpus.rs` into `src-tauri/src/analysis/corpus/live.rs`, immediately after the imports:
 
 ```rust
 #[allow(dead_code)]
@@ -273,7 +275,7 @@ pub(crate) async fn load_corpus_messages(
 }
 ```
 
-Do not move `estimate_message_input_chars` or `estimate_preflight_chunk_count`; they stay in `corpus.rs`.
+These are not contiguous in the current file: `estimate_preflight_chunk_count` sits between `live_corpus_ref` and `load_corpus_messages`. Move `live_corpus_ref` and `load_corpus_messages` as two separate ranges. Do not move `estimate_message_input_chars` or `estimate_preflight_chunk_count`; they stay in `corpus.rs`.
 
 - [ ] **Step 5: Move Telegram live corpus loading into `live.rs`**
 
@@ -429,6 +431,8 @@ use crate::error::AppResult;
 Remove the moved live-loading definitions from `corpus.rs` after they exist in `live.rs`. `corpus.rs` must still contain:
 
 ```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
 pub(crate) enum YoutubeCorpusMode {
     TranscriptOnly,
     TranscriptDescription,
@@ -442,6 +446,7 @@ impl YoutubeCorpusMode {
     pub(crate) fn includes_comments(self) -> bool;
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct CorpusLoadRequest {
     pub(crate) source_type: String,
     pub(crate) source_ids: Vec<i64>,
@@ -476,6 +481,8 @@ pub(crate) fn model_limit_preflight_error(
 #[cfg(test)] mod tests
 ```
 
+Leave these retained definitions and their attributes byte-for-byte unless `rustfmt` changes whitespace.
+
 - [ ] **Step 9: Run rustfmt and inspect the touched files**
 
 Run:
@@ -487,17 +494,17 @@ cargo fmt --manifest-path src-tauri/Cargo.toml
 Then run:
 
 ```powershell
-git status --short
+git status --short --untracked-files=all
 ```
 
-Expected `git status --short` output for this task:
+Expected `git status --short --untracked-files=all` output for this task, relative to the Step 0 baseline:
 
 ```text
  M src-tauri/src/analysis/corpus.rs
 ?? src-tauri/src/analysis/corpus/live.rs
 ```
 
-If unrelated Rust files appear, do not stage them in the refactor commit. Resolve unrelated rustfmt drift before final verification starts: either make a separate format-only commit after review, or otherwise separate those changes so `git status --short` contains only the implementation-owned files for this refactor.
+If unrelated Rust files newly appear beyond the Step 0 baseline, do not stage them in the refactor commit. Resolve unrelated rustfmt drift before final verification starts: either make a separate format-only commit after review, or otherwise separate those changes so the only new status entries are the implementation-owned files for this refactor.
 
 - [ ] **Step 10: Run focused live-loading tests after editing**
 
@@ -586,17 +593,17 @@ If the full corpus suite or either consumer test slice fails here, stop and fix 
 Before staging, run:
 
 ```powershell
-git status --short
+git status --short --untracked-files=all
 ```
 
-Expected: only these implementation-owned paths are modified or untracked:
+Expected: compared with the Step 0 baseline, only these implementation-owned paths are modified or untracked:
 
 ```text
  M src-tauri/src/analysis/corpus.rs
 ?? src-tauri/src/analysis/corpus/live.rs
 ```
 
-If `src-tauri/src/analysis/corpus.rs` had a pre-edit baseline diff from Step 0, stop here unless that baseline has already been separated from this refactor.
+If `src-tauri/src/analysis/corpus.rs` had a pre-edit baseline diff from Step 0, stop here unless that baseline has already been separated from this refactor. Do not stage unrelated pre-existing Step 0 baseline entries.
 
 Run:
 
@@ -641,7 +648,7 @@ Run:
 cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
 ```
 
-Expected: PASS and not a green `0 tests` run. Current baseline is `43 passed`.
+Expected: PASS and not a green `0 tests` run. Current snapshot at plan authoring: `43 passed`; do not require this exact count if nearby tests changed before execution.
 
 - [ ] **Step 2: Run report consumer tests**
 
@@ -651,7 +658,7 @@ Run:
 cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 ```
 
-Expected: PASS and not a green `0 tests` run. Current baseline is `22 passed`.
+Expected: PASS and not a green `0 tests` run. Current snapshot at plan authoring: `22 passed`; do not require this exact count if nearby tests changed before execution.
 
 - [ ] **Step 3: Run project data-range consumer tests**
 
@@ -661,7 +668,7 @@ Run:
 cargo test --manifest-path src-tauri/Cargo.toml projects::data_range::tests::
 ```
 
-Expected: PASS and not a green `0 tests` run. Current baseline is `8 passed`.
+Expected: PASS and not a green `0 tests` run. Current snapshot at plan authoring: `8 passed`; do not require this exact count if nearby tests changed before execution.
 
 - [ ] **Step 4: Run format check**
 
@@ -688,10 +695,10 @@ Expected: PASS. Existing warnings outside the touched files may remain; new warn
 Run:
 
 ```powershell
-git status --short
+git status --short --untracked-files=all
 ```
 
-Expected: `git status --short` is empty after the refactor commit. If verification discovers a required fix, make that fix in a separate commit or clearly document why the refactor commit was updated.
+Expected: after the refactor commit, `git status --short --untracked-files=all` matches the Step 0 baseline exactly. If the Step 0 baseline was empty, this command is empty. If verification discovers a required fix, make that fix in a separate commit or clearly document why the refactor commit was updated.
 
 Run:
 
