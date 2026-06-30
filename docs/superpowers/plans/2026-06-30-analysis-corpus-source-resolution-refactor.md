@@ -90,7 +90,10 @@ pub(crate) enum AnalysisSourceResolutionErrorCode {
     NoLinkedYoutubeVideos,
 }
 
-pub(crate) struct AnalysisSourceResolutionError;
+pub(crate) struct AnalysisSourceResolutionError {
+    code: Option<AnalysisSourceResolutionErrorCode>,
+    error: crate::error::AppError,
+}
 ```
 
 - Source-resolution-only helpers remain private inside `source_resolution.rs`:
@@ -121,6 +124,33 @@ async fn push_scope_source(
     skipped_unlinked_playlist_items: &mut usize,
 ) -> crate::error::AppResult<()>;
 ```
+
+- [ ] **Step 0: Capture pre-edit worktree state**
+
+Run:
+
+```powershell
+git status --short
+```
+
+Expected: no output for the implementation-owned files:
+
+```text
+src-tauri/src/analysis/corpus.rs
+src-tauri/src/analysis/corpus/source_resolution.rs
+```
+
+If either target file is already modified, staged, or untracked before this task starts, inspect the baseline before editing:
+
+```powershell
+git diff -- src-tauri/src/analysis/corpus.rs src-tauri/src/analysis/corpus/source_resolution.rs
+```
+
+```powershell
+git diff --cached -- src-tauri/src/analysis/corpus.rs src-tauri/src/analysis/corpus/source_resolution.rs
+```
+
+Stop unless the baseline is intentionally cleanly separated first. Do not stage pre-existing target-file changes into the source-resolution refactor commit.
 
 - [ ] **Step 1: Run source-resolution characterization tests before editing**
 
@@ -359,7 +389,7 @@ Expected `git status --short` output for this task:
 ?? src-tauri/src/analysis/corpus/source_resolution.rs
 ```
 
-If unrelated Rust files appear, do not stage them in the refactor commit. Either leave them unstaged for review or make a separate format-only commit before continuing.
+If unrelated Rust files appear, do not stage them in the refactor commit. Resolve unrelated rustfmt drift before Task 2 starts: either make a separate format-only commit after review, or otherwise separate those changes so `git status --short` contains only the implementation-owned files for this refactor.
 
 - [ ] **Step 8: Run focused source-resolution tests after editing**
 
@@ -405,6 +435,21 @@ cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 Expected: PASS. Existing warnings outside the touched files may remain; new warnings mentioning `src/analysis/corpus.rs` or `src/analysis/corpus/source_resolution.rs` are not acceptable.
 
 - [ ] **Step 10: Commit the source-resolution extraction**
+
+Before staging, run:
+
+```powershell
+git status --short
+```
+
+Expected: only these implementation-owned paths are modified or untracked:
+
+```text
+ M src-tauri/src/analysis/corpus.rs
+?? src-tauri/src/analysis/corpus/source_resolution.rs
+```
+
+If `src-tauri/src/analysis/corpus.rs` had a pre-edit baseline diff from Step 0, stop here unless that baseline has already been separated from this refactor.
 
 Run:
 
