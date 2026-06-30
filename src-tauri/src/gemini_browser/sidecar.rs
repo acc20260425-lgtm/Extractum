@@ -6,9 +6,9 @@ use tauri_plugin_shell::{
     process::{CommandChild, CommandEvent},
     ShellExt,
 };
-use tokio::runtime::Handle;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
+use tokio::runtime::Handle;
 
 use crate::error::{AppError, AppResult};
 

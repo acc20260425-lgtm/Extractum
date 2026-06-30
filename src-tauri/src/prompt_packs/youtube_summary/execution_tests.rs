@@ -637,54 +637,48 @@ async fn execute_multi_video_run_stops_after_transcript_when_cancelled_before_sy
     let transcript_calls = Arc::new(AtomicUsize::new(0));
     let transcript_calls_for_assert = Arc::clone(&transcript_calls);
     let pool_for_stage = pool.clone();
-    let outcome = execute_youtube_summary_run_with_stage_executor(
-        &pool,
-        1,
-        move |request| {
-            let transcript_calls = Arc::clone(&transcript_calls);
-            let pool = pool_for_stage.clone();
-            async move {
-                match request {
-                    YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request) => {
-                        let call_index = transcript_calls.fetch_add(1, Ordering::SeqCst) + 1;
-                        let completion =
-                            fake_completion_with_valid_transcript_analysis_json_for_source(
-                                &request.source_ref_id,
-                            );
-                        if call_index == 2 {
-                            sqlx::query(
-                                "UPDATE prompt_pack_runs SET run_status = 'cancelled' WHERE id = ?",
-                            )
-                            .bind(request.run_id)
-                            .execute(&pool)
-                            .await
-                            .map_err(|error| {
-                                YoutubeSummaryStageExecutionError::Failed(AppError::internal(
-                                    format!("failed to flag run cancelled: {error}"),
-                                ))
-                            })?;
-                        }
-                        Ok(completion)
+    let outcome = execute_youtube_summary_run_with_stage_executor(&pool, 1, move |request| {
+        let transcript_calls = Arc::clone(&transcript_calls);
+        let pool = pool_for_stage.clone();
+        async move {
+            match request {
+                YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request) => {
+                    let call_index = transcript_calls.fetch_add(1, Ordering::SeqCst) + 1;
+                    let completion = fake_completion_with_valid_transcript_analysis_json_for_source(
+                        &request.source_ref_id,
+                    );
+                    if call_index == 2 {
+                        sqlx::query(
+                            "UPDATE prompt_pack_runs SET run_status = 'cancelled' WHERE id = ?",
+                        )
+                        .bind(request.run_id)
+                        .execute(&pool)
+                        .await
+                        .map_err(|error| {
+                            YoutubeSummaryStageExecutionError::Failed(AppError::internal(format!(
+                                "failed to flag run cancelled: {error}"
+                            )))
+                        })?;
                     }
-                    YoutubeSummaryStageExecutionRequest::Synthesis(_) => {
-                        panic!("cancel should prevent synthesis execution")
-                    }
-                    YoutubeSummaryStageExecutionRequest::JsonRepair(_) => {
-                        panic!("valid transcript should not request repair")
-                    }
+                    Ok(completion)
+                }
+                YoutubeSummaryStageExecutionRequest::Synthesis(_) => {
+                    panic!("cancel should prevent synthesis execution")
+                }
+                YoutubeSummaryStageExecutionRequest::JsonRepair(_) => {
+                    panic!("valid transcript should not request repair")
                 }
             }
-        },
-    )
+        }
+    })
     .await
     .expect("execute run");
 
-    let (run_status, result_status): (String, String) = sqlx::query_as(
-        "SELECT run_status, result_status FROM prompt_pack_runs WHERE id = 1",
-    )
-    .fetch_one(&pool)
-    .await
-    .expect("run status");
+    let (run_status, result_status): (String, String) =
+        sqlx::query_as("SELECT run_status, result_status FROM prompt_pack_runs WHERE id = 1")
+            .fetch_one(&pool)
+            .await
+            .expect("run status");
     let result_rows: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_results WHERE run_id = 1")
             .fetch_one(&pool)

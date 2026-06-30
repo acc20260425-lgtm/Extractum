@@ -208,12 +208,14 @@ mod tests {
     }
 
     async fn attach(pool: &sqlx::SqlitePool, project_id: i64, source_id: i64) {
-        sqlx::query("INSERT INTO project_sources (project_id, source_id, added_at) VALUES (?, ?, 1)")
-            .bind(project_id)
-            .bind(source_id)
-            .execute(pool)
-            .await
-            .expect("attach source");
+        sqlx::query(
+            "INSERT INTO project_sources (project_id, source_id, added_at) VALUES (?, ?, 1)",
+        )
+        .bind(project_id)
+        .bind(source_id)
+        .execute(pool)
+        .await
+        .expect("attach source");
     }
 
     async fn seed_document(

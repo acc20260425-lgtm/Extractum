@@ -3196,10 +3196,12 @@ mod tests {
         .execute(&pool)
         .await
         .expect("insert playlist source");
-        sqlx::query("INSERT INTO project_sources (project_id, source_id, added_at) VALUES (9, 1, 1)")
-            .execute(&pool)
-            .await
-            .expect("insert project source");
+        sqlx::query(
+            "INSERT INTO project_sources (project_id, source_id, added_at) VALUES (9, 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert project source");
 
         let error = resolve_analysis_sources(&pool, None, None, Some(9))
             .await

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
-use std::process::Command;
 use std::process::Child;
+use std::process::Command;
 use std::time::Duration;
 
 use url::Url;

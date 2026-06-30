@@ -354,16 +354,16 @@ mod tests {
                 .fetch_one(&pool)
                 .await
                 .expect("result status");
-        let result_rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_results WHERE run_id = 42")
-            .fetch_one(&pool)
-            .await
-            .expect("result rows");
-        let projection_rows: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM prompt_pack_youtube_videos WHERE run_id = 42",
-        )
-        .fetch_one(&pool)
-        .await
-        .expect("projection rows");
+        let result_rows: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_results WHERE run_id = 42")
+                .fetch_one(&pool)
+                .await
+                .expect("result rows");
+        let projection_rows: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_youtube_videos WHERE run_id = 42")
+                .fetch_one(&pool)
+                .await
+                .expect("projection rows");
 
         assert_eq!(run_status, "cancelled");
         assert_eq!(result_status, "none");

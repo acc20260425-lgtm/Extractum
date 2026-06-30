@@ -860,10 +860,12 @@ mod tests {
     async fn list_project_sources_includes_catalog_status_last_sync_and_handle() {
         let pool = pool().await;
         seed_source(&pool, 10, "youtube", "video").await;
-        sqlx::query("UPDATE sources SET last_synced_at = 1234, external_id = 'video-10' WHERE id = 10")
-            .execute(&pool)
-            .await
-            .expect("update source metadata");
+        sqlx::query(
+            "UPDATE sources SET last_synced_at = 1234, external_id = 'video-10' WHERE id = 10",
+        )
+        .execute(&pool)
+        .await
+        .expect("update source metadata");
         let project = create_project_in_pool(&pool, "Status rows", None)
             .await
             .expect("create project");

@@ -197,7 +197,10 @@ mod tests {
 
         // Connection A: deferred BEGIN, then read -> takes a fixed WAL read snapshot.
         let mut a = pool.acquire().await.expect("acquire A");
-        sqlx::query("BEGIN").execute(&mut *a).await.expect("begin deferred");
+        sqlx::query("BEGIN")
+            .execute(&mut *a)
+            .await
+            .expect("begin deferred");
         let _read: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM t")
             .fetch_one(&mut *a)
             .await
@@ -247,8 +250,11 @@ mod tests {
 
         // A concurrent writer contends for the write lock; it must wait, not corrupt A.
         let pool_b = pool.clone();
-        let writer =
-            tokio::spawn(async move { sqlx::query("INSERT INTO t (n) VALUES (99)").execute(&pool_b).await });
+        let writer = tokio::spawn(async move {
+            sqlx::query("INSERT INTO t (n) VALUES (99)")
+                .execute(&pool_b)
+                .await
+        });
 
         // A's read -> write cycle succeeds; there is no snapshot to invalidate.
         sqlx::query("INSERT INTO t (n) VALUES (2)")

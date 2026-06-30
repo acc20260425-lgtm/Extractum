@@ -289,10 +289,7 @@ mod tests {
         assert_eq!(ready.status, ProjectStatus::Ready);
         assert_eq!(ready.last_run_at, Some(1000));
 
-        let failed = rows
-            .iter()
-            .find(|row| row.id == 2)
-            .expect("failed project");
+        let failed = rows.iter().find(|row| row.id == 2).expect("failed project");
         assert_eq!(failed.source_count, 1);
         assert_eq!(failed.material_count, 2);
         assert_eq!(failed.status, ProjectStatus::NeedsAttention);
