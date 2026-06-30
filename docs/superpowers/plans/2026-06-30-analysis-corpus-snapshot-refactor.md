@@ -389,7 +389,7 @@ Expected: commit succeeds and includes only `src-tauri/src/analysis/corpus.rs` a
   - `analysis/chat.rs`: `load_run_snapshot_messages`
   - `analysis/corpus.rs` tests: re-exported snapshot helpers and request type
 
-- [ ] **Step 1: Run the full corpus test module**
+- [x] **Step 1: Run the full corpus test module**
 
 Run:
 
@@ -399,7 +399,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
 
 Expected: PASS. This covers snapshot tests plus live corpus, source resolution, YouTube corpus mode, migrated history, and preflight tests that share the same harness.
 
-- [ ] **Step 2: Run chat tests that consume saved run snapshots**
+- [x] **Step 2: Run chat tests that consume saved run snapshots**
 
 Run:
 
@@ -409,7 +409,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::chat::tests::
 
 Expected: PASS. This covers the `analysis/chat.rs` import path through `super::corpus::load_run_snapshot_messages`.
 
-- [ ] **Step 3: Run format check**
+- [x] **Step 3: Run format check**
 
 Run:
 
@@ -419,7 +419,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
 Expected: PASS with no diff output.
 
-- [ ] **Step 4: Run all-target compile coverage**
+- [x] **Step 4: Run all-target compile coverage**
 
 Run:
 
@@ -429,7 +429,7 @@ cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
 Expected: PASS. Existing warnings outside the touched files may remain; no new warnings should mention `src/analysis/corpus.rs` or `src/analysis/corpus/snapshot.rs`.
 
-- [ ] **Step 5: Confirm final git state**
+- [x] **Step 5: Confirm final git state**
 
 Run:
 
