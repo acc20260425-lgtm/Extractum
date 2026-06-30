@@ -31,7 +31,7 @@
 - Modify `src-tauri/src/analysis/mod.rs`: declare `mod state;` and `mod events;`, re-export `AnalysisState`, remove moved definitions/imports, keep constants and Tauri commands.
 - Modify `src-tauri/src/analysis/report.rs`: import `emit_analysis_event` from `super::events`.
 - Modify `src-tauri/src/analysis/chat.rs`: import `emit_analysis_chat_event` from `super::events`.
-- Do not modify `src-tauri/src/account_deletion.rs`, `src-tauri/src/accounts.rs`, `src-tauri/src/projects/mod.rs`, or `src-tauri/src/lib.rs`; validation commands cover those consumers.
+- Do not modify `src-tauri/src/account_deletion.rs`, `src-tauri/src/accounts.rs`, `src-tauri/src/projects/mod.rs`, `src-tauri/src/analysis/report_commands.rs`, or `src-tauri/src/lib.rs`; validation commands cover those consumers.
 
 ---
 
@@ -54,7 +54,7 @@
   - `pub(super) async fn is_report_run_cancelled(&self, run_id: i64) -> bool`
   - `pub(crate) async fn report_run_child_token(&self, run_id: i64) -> Option<CancellationToken>`
   - `async fn ensure_report_run_token(&self, run_id: i64) -> CancellationToken`
-- Consumed by: `analysis/mod.rs`, `analysis/report.rs`, debug-only `analysis/fixtures.rs`, `account_deletion.rs`, `accounts.rs`, `projects/mod.rs`, `lib.rs`.
+- Consumed by: `analysis/mod.rs`, `analysis/report.rs`, `analysis/report_commands.rs`, debug-only `analysis/fixtures.rs`, `account_deletion.rs`, `accounts.rs`, `projects/mod.rs`, `lib.rs`.
 
 - [ ] **Step 1: Move the state implementation and state test**
 
@@ -203,6 +203,15 @@ use self::models::{
     AnalysisChatEvent, AnalysisChatTurn, AnalysisRunDetail, AnalysisRunEvent,
     AnalysisRunMessageCursor, AnalysisRunMessagesPage, AnalysisRunSummary, AnalysisSourceOption,
     AnalysisTraceData, AnalysisTraceRef,
+};
+```
+
+Remove `AnalysisState` from the `analysis/mod.rs` test import block because the only test using it moved to `state.rs`. The grouped import inside `mod tests` should be:
+
+```rust
+use super::{
+    decode_trace_data, validate_chat_role, AnalysisChatTurn, AnalysisTraceData,
+    AnalysisTraceRef, TEMPLATE_KIND_REPORT,
 };
 ```
 
@@ -437,7 +446,7 @@ Run:
 cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 ```
 
-Expected: PASS. This covers `accounts.rs`, `projects/mod.rs`, `lib.rs`, external `crate::analysis::AnalysisState` imports, and test-only import drift.
+Expected: PASS. This covers `accounts.rs`, `account_deletion.rs`, `projects/mod.rs`, `analysis/report_commands.rs`, `lib.rs`, external `crate::analysis::AnalysisState` imports, and test-only import drift.
 
 - [ ] **Step 9: Commit Task 2**
 
@@ -457,20 +466,41 @@ Expected: one commit containing only the event helper extraction and import clea
 
 - [ ] **Step 1: Run the complete focused validation set from the approved spec**
 
-Run:
+Run each command separately and stop on the first failure:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::tests::
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::state::tests::
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis_state_cancels_report_run_child_tokens
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::chat::tests::
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml account_deletion::tests::
+```
+
+```powershell
 cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 ```
 
-Expected: every command passes. The named state test command must include:
+Expected: every command passes. The `analysis::state::tests::` command and the named state test command must both include the moved state test and must not be green `0 tests` runs. Both should include:
 
 ```text
 test analysis::state::tests::analysis_state_cancels_report_run_child_tokens ... ok
