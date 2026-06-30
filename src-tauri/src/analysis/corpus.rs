@@ -1615,10 +1615,7 @@ mod tests {
             vec![11, 10]
         );
 
-        let migrated_metadata =
-            super::decode_optional_metadata_json(corpus[0].metadata_zstd.as_deref())
-                .expect("decode metadata")
-                .expect("metadata");
+        let migrated_metadata = decode_message_metadata_for_test(&corpus[0]);
         assert_eq!(migrated_metadata["history_scope"], "migrated");
         assert_eq!(migrated_metadata["migration_domain"], "migrated_from_chat");
 

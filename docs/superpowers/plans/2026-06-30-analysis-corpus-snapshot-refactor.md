@@ -48,7 +48,7 @@ fn decode_message_metadata_for_test(message: &CorpusMessage) -> serde_json::Valu
 
 - Produces no new production API. This task only makes the live-corpus migrated-history test stop calling `decode_optional_metadata_json`, so that helper can become private inside `snapshot.rs` in Task 2.
 
-- [ ] **Step 1: Run the characterization test before editing**
+- [x] **Step 1: Run the characterization test before editing**
 
 Run:
 
@@ -58,7 +58,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::opted_i
 
 Expected: PASS with output containing `1 passed`. If this fails before editing, stop and inspect the existing failure.
 
-- [ ] **Step 2: Replace the snapshot-helper call in the migrated-history test**
+- [x] **Step 2: Replace the snapshot-helper call in the migrated-history test**
 
 In `src-tauri/src/analysis/corpus.rs`, inside `opted_in_analysis_corpus_includes_migrated_rows_and_counts_preflight`, replace:
 
@@ -77,7 +77,7 @@ with:
 
 Do not move `decode_message_metadata_for_test`; it remains in the existing test module and is already used by YouTube metadata tests.
 
-- [ ] **Step 3: Run the same characterization test after editing**
+- [x] **Step 3: Run the same characterization test after editing**
 
 Run:
 
@@ -87,7 +87,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::opted_i
 
 Expected: PASS with output containing `1 passed`.
 
-- [ ] **Step 4: Commit the test-only preparation**
+- [x] **Step 4: Commit the test-only preparation**
 
 Run:
 
