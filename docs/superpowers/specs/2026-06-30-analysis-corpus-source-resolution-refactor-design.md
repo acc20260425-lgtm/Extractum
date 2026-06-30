@@ -108,6 +108,7 @@ The test module stays in `corpus.rs` intentionally. Source-resolution tests shar
 Preserve the current field and method visibility exactly where callers rely on it:
 
 - `ResolvedAnalysisSources.source_type`, `ResolvedAnalysisSources.source_ids`, and `ResolvedAnalysisSources.skipped_unlinked_playlist_items` stay `pub(crate)`;
+- `ResolvedAnalysisSources.skipped_unlinked_playlist_items` keeps its current `#[allow(dead_code)]` attribute unless the implementation adds a real non-test reader for that field;
 - `AnalysisSourceResolutionErrorCode::message()` stays `pub(crate)`;
 - `AnalysisSourceResolutionError::validation(...)`, `AnalysisSourceResolutionError::code(...)`, and `AnalysisSourceResolutionError::into_app_error(...)` stay `pub(crate)`;
 - `AnalysisSourceResolutionError` fields stay private.
@@ -224,11 +225,24 @@ cargo test --manifest-path src-tauri/Cargo.toml projects::data_range::tests::
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 ```
 
+If formatting fixes are needed during implementation, run `cargo fmt --manifest-path src-tauri/Cargo.toml`, then inspect the changed file list before staging:
+
+```powershell
+git status --short
+```
+
+Expected behavioral Rust changes for this slice are limited to:
+
+- `src-tauri/src/analysis/corpus.rs`
+- `src-tauri/src/analysis/corpus/source_resolution.rs`
+
+Any unrelated `rustfmt` drift must be excluded from the refactor commit or handled in a separate format-only commit.
+
 ```powershell
 cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 ```
 
-Expected result: all commands pass. The focused `playlist_expansion_excludes_unlinked_and_removed_rows`, `resolve_analysis_sources`, and `resolve_run_source_ids` filters must run real tests, not green `0 tests` runs.
+Expected result: all commands pass. Every filtered `cargo test` command listed above must run real tests, not green `0 tests` runs. This includes the focused corpus filters, `analysis::corpus::tests::`, `analysis::report::tests::`, and `projects::data_range::tests::`.
 
 ## Risks And Mitigations
 
