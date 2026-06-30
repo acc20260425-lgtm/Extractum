@@ -171,7 +171,7 @@ fn ensure_captured_snapshot_rows(
 ) -> crate::error::AppResult<()>;
 ```
 
-- [ ] **Step 1: Create the nested module file with snapshot-specific imports**
+- [x] **Step 1: Create the nested module file with snapshot-specific imports**
 
 Create `src-tauri/src/analysis/corpus/snapshot.rs` with this header:
 
@@ -186,7 +186,7 @@ use crate::compression::{decompress_bytes, decompress_text};
 use crate::error::{internal_error, AppError, AppResult};
 ```
 
-- [ ] **Step 2: Move snapshot definitions into `snapshot.rs`**
+- [x] **Step 2: Move snapshot definitions into `snapshot.rs`**
 
 Move this contiguous block from `src-tauri/src/analysis/corpus.rs` into `src-tauri/src/analysis/corpus/snapshot.rs`, immediately after the imports:
 
@@ -247,7 +247,7 @@ Move the function and struct bodies verbatim except for the `AnalysisSnapshotSta
 
 Do not make `decode_optional_metadata_json`, `run_message_from_snapshot_row`, `captured_snapshot_missing_error`, or `ensure_captured_snapshot_rows` public.
 
-- [ ] **Step 3: Add the private module and facade re-exports in `corpus.rs`**
+- [x] **Step 3: Add the private module and facade re-exports in `corpus.rs`**
 
 At the top of `src-tauri/src/analysis/corpus.rs`, add `mod snapshot;` and the re-export block. The top of the file should start like this after import cleanup:
 
@@ -280,7 +280,7 @@ use super::{
 
 If rustfmt does not reorder these imports, leave the grouping readable and minimal.
 
-- [ ] **Step 4: Remove moved-only imports from `corpus.rs`**
+- [x] **Step 4: Remove moved-only imports from `corpus.rs`**
 
 In `src-tauri/src/analysis/corpus.rs`, remove imports that only snapshot code used:
 
@@ -306,7 +306,7 @@ AppResult
 
 `AnalysisRunDetail` must be gated with `#[cfg(test)]` because after the snapshot move it is only used by the test-only `resolve_run_source_ids` helper in `corpus.rs`.
 
-- [ ] **Step 5: Run rustfmt and inspect the touched files**
+- [x] **Step 5: Run rustfmt and inspect the touched files**
 
 Run:
 
@@ -324,7 +324,7 @@ src-tauri/src/analysis/corpus/snapshot.rs
 
 If unrelated Rust files appear, do not stage them in the refactor commit. Either leave them unstaged for review or make a separate format-only commit before continuing.
 
-- [ ] **Step 6: Run focused snapshot tests**
+- [x] **Step 6: Run focused snapshot tests**
 
 Run each command separately:
 
@@ -352,7 +352,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::trace_r
 
 Expected: PASS with output containing `1 passed`.
 
-- [ ] **Step 7: Run compile coverage for module boundaries**
+- [x] **Step 7: Run compile coverage for module boundaries**
 
 Run:
 
@@ -362,7 +362,7 @@ cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
 Expected: PASS. Existing warnings outside `analysis/corpus.rs` may still appear; new warnings mentioning `src/analysis/corpus.rs` or `src/analysis/corpus/snapshot.rs` are not acceptable.
 
-- [ ] **Step 8: Commit the snapshot extraction**
+- [x] **Step 8: Commit the snapshot extraction**
 
 Run:
 
