@@ -331,7 +331,7 @@ Expected: first command has no matches. Second command prints both the `pub(supe
 Run:
 
 ```powershell
-rg -n "pub\\(super\\) enum ReportRunError|pub\\(crate\\) enum ReportRunError|pub enum ReportRunError" src-tauri/src/analysis/report.rs
+rg -n "pub\(super\) enum ReportRunError|pub\(crate\) enum ReportRunError|pub enum ReportRunError" src-tauri/src/analysis/report.rs
 ```
 
 Expected: no matches.
@@ -398,7 +398,29 @@ Run:
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 ```
 
-Expected: PASS with no diff output. If this fails, run `cargo fmt --manifest-path src-tauri/Cargo.toml`, then inspect `git status --short --untracked-files=all` and keep only intended formatting changes for `report.rs` and `report/capture.rs` in this commit.
+Expected: PASS with no diff output.
+
+If this fails, run these commands separately:
+
+```powershell
+cargo fmt --manifest-path src-tauri/Cargo.toml
+```
+
+Then inspect formatting drift:
+
+```powershell
+git status --short --untracked-files=all
+```
+
+Expected: only `src-tauri/src/analysis/report.rs` and `src-tauri/src/analysis/report/capture.rs` have new implementation-owned formatting changes. If rustfmt touched unrelated files, stop and resolve that drift outside this refactor commit.
+
+After any format fixes, rerun:
+
+```powershell
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+```
+
+Expected: PASS with no diff output before continuing to `cargo check`, staging, or commit.
 
 - [ ] **Step 4: Check all Rust targets**
 
@@ -421,19 +443,46 @@ git status --short --untracked-files=all
 
 Expected: diff contains only the capture extraction and import cleanup. Status contains only implementation-owned files plus any pre-existing unrelated baseline entries captured in Task 1.
 
-- [ ] **Step 6: Stage only implementation-owned files**
+- [ ] **Step 6: Compare pre-commit status against baseline**
+
+Run:
+
+```powershell
+git status --short --untracked-files=all | Set-Content -Encoding utf8 -LiteralPath "$env:TEMP\analysis-report-capture-pre-commit-status.txt"
+Compare-Object `
+    (Get-Content -LiteralPath "$env:TEMP\analysis-report-capture-pre-edit-status.txt") `
+    (Get-Content -LiteralPath "$env:TEMP\analysis-report-capture-pre-commit-status.txt")
+```
+
+Expected: the only intentional differences from baseline are `src-tauri/src/analysis/report.rs` and `src-tauri/src/analysis/report/capture.rs`. If any unrelated rustfmt drift or unexpected file appears, stop before committing.
+
+- [ ] **Step 7: Stage only implementation-owned files**
 
 Run:
 
 ```powershell
 git add -- src-tauri/src/analysis/report.rs src-tauri/src/analysis/report/capture.rs
+```
+
+Expected: command exits successfully.
+
+Then run:
+
+```powershell
 git diff --cached --stat
+```
+
+Expected: staged stat contains only `src-tauri/src/analysis/report.rs` and `src-tauri/src/analysis/report/capture.rs`.
+
+Then run:
+
+```powershell
 git diff --cached --check
 ```
 
-Expected: staged stat contains only `src-tauri/src/analysis/report.rs` and `src-tauri/src/analysis/report/capture.rs`. `git diff --cached --check` has no output.
+Expected: no output. If it reports any issue, stop before commit.
 
-- [ ] **Step 7: Commit the Rust refactor**
+- [ ] **Step 8: Commit the Rust refactor**
 
 Run:
 
@@ -443,7 +492,7 @@ git commit -m "refactor: extract analysis report capture helper"
 
 Expected: commit succeeds and includes only the two implementation-owned Rust files.
 
-- [ ] **Step 8: Compare final status against baseline**
+- [ ] **Step 9: Compare final status against baseline**
 
 Run:
 
