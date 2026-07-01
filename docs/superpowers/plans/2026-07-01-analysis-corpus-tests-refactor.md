@@ -461,7 +461,7 @@ source_group_membership_drift_after_capture_does_not_change_saved_run_corpus
 - Consumes source-resolution facade functions from `crate::analysis::corpus`.
 - Produces the source-resolution test module under `analysis::corpus::tests::source_resolution`.
 
-- [ ] **Step 1: Add source-resolution module imports**
+- [x] **Step 1: Add source-resolution module imports**
 
 At the top of `src-tauri/src/analysis/corpus/tests/source_resolution.rs`, add:
 
@@ -475,7 +475,7 @@ use crate::analysis::store::persist_run_snapshot;
 
 If rustc reports an unused import after all source-resolution tests move, remove only that unused import.
 
-- [ ] **Step 2: Move run-source-id and project-source tests**
+- [x] **Step 2: Move run-source-id and project-source tests**
 
 Move these tests from the old inline module into `source_resolution.rs`, preserving bodies and assertions:
 
@@ -488,7 +488,7 @@ resolve_analysis_sources_preserves_no_linked_youtube_error_message
 resolve_analysis_sources_loads_single_provider_project
 ```
 
-- [ ] **Step 3: Check no tests remain in `corpus.rs`**
+- [x] **Step 3: Check no tests remain in `corpus.rs`**
 
 Run:
 

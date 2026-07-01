@@ -11,8 +11,6 @@ pub(crate) use self::snapshot::{
     list_run_snapshot_messages_page, load_run_snapshot_messages, load_trace_resolution_messages,
     ListRunSnapshotMessagesRequest,
 };
-#[cfg(test)]
-pub(crate) use self::source_resolution::resolve_run_source_ids;
 #[allow(unused_imports)]
 pub(crate) use self::source_resolution::ResolvedAnalysisSources;
 pub(crate) use self::source_resolution::{
