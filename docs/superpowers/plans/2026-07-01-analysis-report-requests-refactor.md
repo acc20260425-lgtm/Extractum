@@ -4,6 +4,8 @@
 
 **Goal:** Extract pure analysis report request-building, chunking, and chunk-summary parsing helpers from `src-tauri/src/analysis/report.rs` into `src-tauri/src/analysis/report/requests.rs` without changing runtime behavior.
 
+**Status:** active approved implementation plan; not implemented as of 2026-07-01 because `src-tauri/src/analysis/report/requests.rs` does not exist. After the Rust refactor commit is verified, update this line to `implemented; historical execution record` in a separate docs commit.
+
 **Architecture:** `report.rs` remains the report workflow facade and owns orchestration, cancellation, events, snapshot capture, run lifecycle, and command entry points. A new private nested module, declared as `mod requests;`, owns only pure chunk sizing, map request, JSON parsing, and reduce request helpers. The module is private to `analysis::report`; there is no root re-export from `analysis/mod.rs`.
 
 **Tech Stack:** Rust, Tauri backend, SQLx SQLite, existing `crate::llm` request types, existing `analysis::models` DTOs.
@@ -20,6 +22,7 @@
 - Preserve the existing `ANALYSIS_CHUNK_*` constant values exactly.
 - Keep `format_chunk_corpus` and `summarize_chunk_for_reduce` private inside `requests.rs`.
 - If there are pre-existing target-file changes, inspect and preserve them; do not stage unrelated user work.
+- Capture the pre-edit `git status --short --untracked-files=all` output in execution notes and compare final status against that baseline.
 
 ---
 
@@ -48,7 +51,7 @@
 
 **Interfaces:**
 - Consumes: approved design spec `docs/superpowers/specs/2026-07-01-analysis-report-requests-refactor-design.md`
-- Produces: a clean baseline proving current report tests pass before extraction
+- Produces: clean baselines proving current report and corpus regression slices pass before extraction
 
 - [ ] **Step 1: Inspect the worktree before editing**
 
@@ -58,7 +61,7 @@ Run:
 git status --short --untracked-files=all
 ```
 
-Expected: either clean output, or unrelated existing changes that are clearly outside the implementation-owned files. If `src-tauri/src/analysis/report.rs` or `src-tauri/src/analysis/report/requests.rs` appears, continue with Steps 2-3 before editing.
+Expected: either clean output, or unrelated existing changes that are clearly outside the implementation-owned files. Save this output in execution notes as `PRE_EDIT_STATUS`. If `src-tauri/src/analysis/report.rs` or `src-tauri/src/analysis/report/requests.rs` appears, continue with Steps 2-3 before editing.
 
 - [ ] **Step 2: Inspect any dirty tracked target file**
 
@@ -82,17 +85,20 @@ git diff --cached -- src-tauri/src/analysis/report/requests.rs
 
 Expected: you understand every pre-existing target-file change. Stop and ask before continuing if any pre-existing target-file change overlaps the request-helper extraction.
 
-- [ ] **Step 3: Inspect a pre-existing untracked `requests.rs`**
+- [ ] **Step 3: Inspect and fingerprint a pre-existing untracked `requests.rs`**
 
 Run:
 
 ```powershell
 if (Test-Path -LiteralPath 'src-tauri/src/analysis/report/requests.rs') {
+    git status --short --untracked-files=all -- src-tauri/src/analysis/report/requests.rs
+    Get-Item -LiteralPath 'src-tauri/src/analysis/report/requests.rs' | Select-Object FullName, Length, LastWriteTime
+    Get-FileHash -Algorithm SHA256 -LiteralPath 'src-tauri/src/analysis/report/requests.rs'
     Get-Content -Raw -LiteralPath 'src-tauri/src/analysis/report/requests.rs'
 }
 ```
 
-Expected: if the file already exists, you inspect its contents because normal `git diff` does not show untracked file content.
+Expected: if the file already exists, you capture status, length, SHA-256 hash, and contents because normal `git diff` does not show untracked file content. Stop and ask before continuing if this file contains pre-existing user work that is not the request-helper extraction.
 
 - [ ] **Step 4: Establish the focused report baseline**
 
@@ -113,6 +119,16 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::chunk_t
 ```
 
 Expected: PASS with `1 passed`, not a green `0 tests` run.
+
+- [ ] **Step 6: Establish the focused corpus baseline**
+
+Run:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
+```
+
+Expected: PASS and not a green `0 tests` run. Stop before editing if this baseline is red; do not discover a pre-existing corpus failure only after the request-helper extraction.
 
 ---
 
@@ -399,6 +415,32 @@ rg -n "^(const ANALYSIS_CHUNK|pub\\(super\\) fn chunk_messages|fn format_chunk_c
 
 Expected: matches for every moved constant, every public parent-facing helper, and the two private helper functions.
 
+- [ ] **Step 16: Confirm `extract_json_payload` has exactly parent-module visibility**
+
+Run:
+
+```powershell
+rg -n "^pub\\(super\\) fn extract_json_payload\\(text: &str\\) -> Result<&str, String>" src-tauri/src/analysis/report/requests.rs
+```
+
+Expected: exactly one match.
+
+Run:
+
+```powershell
+rg -n "^(pub\\(crate\\) fn extract_json_payload|pub fn extract_json_payload|fn extract_json_payload)" src-tauri/src/analysis/report/requests.rs
+```
+
+Expected: no matches. This prevents both accidental API widening and accidental test-breaking private visibility.
+
+Run:
+
+```powershell
+rg -n "extract_json_payload" src-tauri/src/analysis/report.rs
+```
+
+Expected: matches only in the test import `use super::requests::extract_json_payload;` and the two existing tests `extracts_json_with_text_before_and_after` and `extracts_json_inside_markdown_fence`. Production code should continue to call `parse_chunk_summary`, not `extract_json_payload`.
+
 ---
 
 ### Task 3: Verify Behavior, Formatting, And Compile Boundaries
@@ -436,7 +478,21 @@ Expected implementation-owned changes:
 ?? src-tauri/src/analysis/report/requests.rs
 ```
 
-If unrelated Rust files changed due to `cargo fmt`, inspect them and do not stage them into this refactor commit. Resolve formatting drift before committing.
+Run:
+
+```powershell
+git diff --name-only
+```
+
+```powershell
+git diff --cached --name-only
+```
+
+```powershell
+git ls-files --others --exclude-standard
+```
+
+Expected: the only new implementation-owned paths are `src-tauri/src/analysis/report.rs` and `src-tauri/src/analysis/report/requests.rs`, plus any unrelated paths already present in `PRE_EDIT_STATUS`. If `cargo fmt` changed any unrelated Rust file, inspect it and resolve that drift before committing this refactor. The refactor commit must not include unrelated rustfmt drift.
 
 - [ ] **Step 3: Run focused report tests**
 
@@ -551,7 +607,7 @@ Run:
 git status --short --untracked-files=all
 ```
 
-Expected implementation-owned files only, unless unrelated pre-existing changes were captured in Task 1 and are still intentionally left unstaged.
+Expected implementation-owned files only, unless unrelated pre-existing changes were captured in `PRE_EDIT_STATUS` and are still intentionally left unstaged. Any file not present in `PRE_EDIT_STATUS` and not one of the two implementation-owned paths must be resolved before staging.
 
 - [ ] **Step 2: Stage only implementation-owned Rust files**
 
@@ -596,7 +652,7 @@ git commit -m "refactor: extract analysis report request helpers"
 
 Expected: commit succeeds.
 
-- [ ] **Step 5: Confirm final status**
+- [ ] **Step 5: Confirm final status against the pre-edit baseline**
 
 Run:
 
@@ -604,7 +660,7 @@ Run:
 git status --short --untracked-files=all
 ```
 
-Expected: clean output, or only unrelated pre-existing changes documented in Task 1.
+Expected: clean output if `PRE_EDIT_STATUS` was clean. If `PRE_EDIT_STATUS` contained unrelated pre-existing changes, final status must match those unrelated entries exactly and must not include `src-tauri/src/analysis/report.rs`, `src-tauri/src/analysis/report/requests.rs`, or any new rustfmt drift.
 
 ---
 
