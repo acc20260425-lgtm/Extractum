@@ -84,17 +84,25 @@ pub(super) async fn capture_report_corpus(
 ) -> Result<Vec<CorpusMessage>, ReportRunError>;
 ```
 
-`ReportRunError` remains defined in `report.rs`, but the nested capture module must be able to construct `CaptureFailed` values:
+`ReportRunError` remains defined in `report.rs` with its current private visibility. Because `report/capture.rs` is a child module of `report.rs`, it can construct `ReportRunError::CaptureFailed` without widening the enum to `pub(super)`:
 
 ```rust
-pub(super) enum ReportRunError {
+enum ReportRunError {
     Failed(String),
     CaptureFailed(String),
     Cancelled(String),
 }
 ```
 
-The enum remains private to the `analysis::report` module tree. Do not move `ReportRunError` and do not expose it outside `analysis::report`.
+The enum remains private to `analysis::report`. Do not move `ReportRunError` and do not expose it to sibling modules under `analysis`.
+
+The implementation plan must include a source guard:
+
+```powershell
+rg -n "pub\\(super\\) enum ReportRunError|pub\\(crate\\) enum ReportRunError|pub enum ReportRunError" src-tauri/src/analysis/report.rs
+```
+
+Expected: no matches.
 
 Expected production API changes outside `analysis::report`: none.
 
