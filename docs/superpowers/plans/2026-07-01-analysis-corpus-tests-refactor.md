@@ -65,7 +65,7 @@
   - `tests/mod.rs` declaring `harness`, `live`, `preflight`, `snapshot`, and `source_resolution`.
   - Empty thematic modules ready to receive moved tests.
 
-- [ ] **Step 1: Capture pre-edit worktree state**
+- [x] **Step 1: Capture pre-edit worktree state**
 
 Run:
 
@@ -75,7 +75,7 @@ git status --short --untracked-files=all
 
 Expected: record the full output as the Step 1 baseline. The usual clean baseline has no output. If unrelated pre-existing entries exist, leave them untouched unless the user explicitly separates or approves them.
 
-- [ ] **Step 2: Inspect target baseline if target files are already dirty**
+- [x] **Step 2: Inspect target baseline if target files are already dirty**
 
 Run:
 
@@ -102,7 +102,7 @@ if (Test-Path -LiteralPath 'src-tauri/src/analysis/corpus/tests') {
 
 Expected: no pre-existing target-file changes. If `corpus.rs` or `corpus/tests/*` is dirty, staged, or untracked, stop unless that baseline is intentionally separated first.
 
-- [ ] **Step 3: Run the full corpus test baseline**
+- [x] **Step 3: Run the full corpus test baseline**
 
 Run:
 
@@ -114,7 +114,7 @@ Expected: PASS and not a green `0 tests` run. Current snapshot at plan authoring
 
 If this baseline command fails, or if it succeeds with `0 tests`, stop before editing. Treat the failure as pre-existing debt and resolve or explicitly document it before starting this refactor.
 
-- [ ] **Step 4: Create the nested test module declarations**
+- [x] **Step 4: Create the nested test module declarations**
 
 Create `src-tauri/src/analysis/corpus/tests/mod.rs`:
 
@@ -136,7 +136,7 @@ src-tauri/src/analysis/corpus/tests/snapshot.rs
 src-tauri/src/analysis/corpus/tests/source_resolution.rs
 ```
 
-- [ ] **Step 5: Replace the inline test module shell in `corpus.rs`**
+- [x] **Step 5: Replace the inline test module shell in `corpus.rs`**
 
 In `src-tauri/src/analysis/corpus.rs`, replace the entire current inline test module, starting at `#[cfg(test)] mod tests {` and ending at that module's closing brace, with:
 
