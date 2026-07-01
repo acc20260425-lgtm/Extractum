@@ -4,7 +4,7 @@
 
 **Goal:** Extract pure analysis report request-building, chunking, and chunk-summary parsing helpers from `src-tauri/src/analysis/report.rs` into `src-tauri/src/analysis/report/requests.rs` without changing runtime behavior.
 
-**Status:** active approved implementation plan; not implemented as of 2026-07-01 because `src-tauri/src/analysis/report/requests.rs` does not exist. After the Rust refactor commit is verified, update this line to `implemented; historical execution record` in a separate docs commit.
+**Status:** implemented; historical execution record.
 
 **Architecture:** `report.rs` remains the report workflow facade and owns orchestration, cancellation, events, snapshot capture, run lifecycle, and command entry points. A new private nested module, declared as `mod requests;`, owns only pure chunk sizing, map request, JSON parsing, and reduce request helpers. The module is private to `analysis::report`; there is no root re-export from `analysis/mod.rs`.
 
@@ -599,7 +599,7 @@ Expected: no whitespace errors.
 - Consumes: verified implementation from Task 3.
 - Produces: one Rust refactor commit.
 
-- [ ] **Step 1: Confirm only intended implementation files are dirty**
+- [x] **Step 1: Confirm only intended implementation files are dirty**
 
 Run:
 
@@ -609,7 +609,7 @@ git status --short --untracked-files=all
 
 Expected implementation-owned files only, unless unrelated pre-existing changes were captured in `PRE_EDIT_STATUS` and are still intentionally left unstaged. Any file not present in `PRE_EDIT_STATUS` and not one of the two implementation-owned paths must be resolved before staging.
 
-- [ ] **Step 2: Stage only implementation-owned Rust files**
+- [x] **Step 2: Stage only implementation-owned Rust files**
 
 Run:
 
@@ -619,7 +619,7 @@ git add -- src-tauri/src/analysis/report.rs src-tauri/src/analysis/report/reques
 
 Expected: only those two Rust files are staged.
 
-- [ ] **Step 3: Verify staged files and staged whitespace**
+- [x] **Step 3: Verify staged files and staged whitespace**
 
 Run:
 
@@ -642,7 +642,7 @@ git diff --cached --check
 
 Expected: no whitespace errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 
@@ -652,7 +652,7 @@ git commit -m "refactor: extract analysis report request helpers"
 
 Expected: commit succeeds.
 
-- [ ] **Step 5: Confirm final status against the pre-edit baseline**
+- [x] **Step 5: Confirm final status against the pre-edit baseline**
 
 Run:
 
