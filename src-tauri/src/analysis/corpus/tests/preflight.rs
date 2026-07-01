@@ -3,9 +3,9 @@ use super::harness::{
     insert_youtube_video_source_with_typed_metadata, rebuild_documents_for_sources, snapshot_pool,
 };
 use crate::analysis::corpus::{
-    AnalysisRunPreflight, AnalysisRunPreflightLimits, YoutubeCorpusMode,
     estimate_message_input_chars, estimate_preflight_chunk_count, load_corpus_messages,
     model_limit_preflight_error, preflight_analysis_run, preflight_limit_error,
+    AnalysisRunPreflight, AnalysisRunPreflightLimits, YoutubeCorpusMode,
 };
 use crate::analysis::models::CorpusMessage;
 use crate::compression::compress_text;
@@ -26,13 +26,10 @@ fn estimated_message_chars_match_report_chunk_accounting() {
     };
 
     assert_eq!(
-        estimate_message_input_chars(
-            &message.content,
-            &message.r#ref,
-            message.author.as_deref()
-        ),
+        estimate_message_input_chars(&message.content, &message.r#ref, message.author.as_deref()),
         message.content.len() + message.r#ref.len() + "Alice".len() + 64
     );
+}
 
 #[test]
 fn estimated_chunk_count_matches_chunk_boundary_behavior() {
@@ -107,8 +104,7 @@ fn model_limit_preflight_reports_oversized_chunks() {
         limits: AnalysisRunPreflightLimits::default(),
     };
 
-    let error =
-        model_limit_preflight_error(&preflight, Some(40_000)).expect("model limit error");
+    let error = model_limit_preflight_error(&preflight, Some(40_000)).expect("model limit error");
 
     assert!(error.contains("40001 estimated input characters per chunk"));
     assert!(error.contains("model input limit 40000"));

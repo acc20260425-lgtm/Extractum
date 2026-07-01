@@ -1,7 +1,5 @@
 use super::harness::{create_project_scope_schema, sample_corpus, sample_run, snapshot_pool};
-use crate::analysis::corpus::{
-    AnalysisSourceResolutionErrorCode, resolve_analysis_sources,
-};
+use crate::analysis::corpus::{resolve_analysis_sources, AnalysisSourceResolutionErrorCode};
 use crate::analysis::store::persist_run_snapshot;
 
 use super::super::source_resolution::resolve_run_source_ids;
@@ -151,10 +149,12 @@ async fn resolve_analysis_sources_rejects_mixed_provider_project() {
         .execute(&pool)
         .await
         .expect("insert sources");
-    sqlx::query("INSERT INTO project_sources (project_id, source_id, added_at) VALUES (9, 1, 1), (9, 2, 1)")
-        .execute(&pool)
-        .await
-        .expect("insert project sources");
+    sqlx::query(
+        "INSERT INTO project_sources (project_id, source_id, added_at) VALUES (9, 1, 1), (9, 2, 1)",
+    )
+    .execute(&pool)
+    .await
+    .expect("insert project sources");
 
     let error = resolve_analysis_sources(&pool, None, None, Some(9))
         .await
@@ -183,12 +183,10 @@ async fn resolve_analysis_sources_preserves_no_linked_youtube_error_message() {
     .execute(&pool)
     .await
     .expect("insert playlist source");
-    sqlx::query(
-        "INSERT INTO project_sources (project_id, source_id, added_at) VALUES (9, 1, 1)",
-    )
-    .execute(&pool)
-    .await
-    .expect("insert project source");
+    sqlx::query("INSERT INTO project_sources (project_id, source_id, added_at) VALUES (9, 1, 1)")
+        .execute(&pool)
+        .await
+        .expect("insert project source");
 
     let error = resolve_analysis_sources(&pool, None, None, Some(9))
         .await
@@ -221,10 +219,12 @@ async fn resolve_analysis_sources_loads_single_provider_project() {
         .execute(&pool)
         .await
         .expect("insert sources");
-    sqlx::query("INSERT INTO project_sources (project_id, source_id, added_at) VALUES (9, 1, 1), (9, 2, 1)")
-        .execute(&pool)
-        .await
-        .expect("insert project sources");
+    sqlx::query(
+        "INSERT INTO project_sources (project_id, source_id, added_at) VALUES (9, 1, 1), (9, 2, 1)",
+    )
+    .execute(&pool)
+    .await
+    .expect("insert project sources");
 
     let resolved = resolve_analysis_sources(&pool, None, None, Some(9))
         .await

@@ -529,7 +529,7 @@ mod tests;
 - Confirms representative tests exist under each new module path.
 - Confirms consumer tests still compile and pass.
 
-- [ ] **Step 1: Run rustfmt**
+- [x] **Step 1: Run rustfmt**
 
 Run:
 
@@ -539,7 +539,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml
 
 Expected: command succeeds.
 
-- [ ] **Step 2: Inspect implementation-owned file status**
+- [x] **Step 2: Inspect implementation-owned file status**
 
 Run:
 
@@ -561,7 +561,7 @@ Expected before commit: relative to the Step 1 baseline, only these implementati
 
 If unrelated files appear beyond the Step 1 baseline, do not stage them in the refactor commit.
 
-- [ ] **Step 3: Run the full corpus test module**
+- [x] **Step 3: Run the full corpus test module**
 
 Run:
 
@@ -578,7 +578,7 @@ analysis::corpus::tests::snapshot::run_snapshot_roundtrips_frozen_corpus
 analysis::corpus::tests::source_resolution::playlist_expansion_excludes_unlinked_and_removed_rows
 ```
 
-- [ ] **Step 4: Run report consumer tests**
+- [x] **Step 4: Run report consumer tests**
 
 Run:
 
@@ -594,7 +594,7 @@ analysis::report::tests::report_start_request_carries_migrated_history_opt_in_to
 analysis::report::tests::validate_report_preflight_rejects_empty_corpus
 ```
 
-- [ ] **Step 5: Run project data-range consumer tests**
+- [x] **Step 5: Run project data-range consumer tests**
 
 Run:
 
@@ -610,7 +610,7 @@ projects::data_range::tests::project_data_range_includes_telegram_migrated_histo
 projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources
 ```
 
-- [ ] **Step 6: Run format check**
+- [x] **Step 6: Run format check**
 
 Run:
 
@@ -620,7 +620,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
 Expected: PASS with no diff output.
 
-- [ ] **Step 7: Run all-target compile coverage**
+- [x] **Step 7: Run all-target compile coverage**
 
 Run:
 
@@ -630,7 +630,7 @@ cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
 Expected: PASS. Existing warnings outside touched files may remain. New warnings mentioning `src-tauri/src/analysis/corpus.rs` or `src-tauri/src/analysis/corpus/tests/` are not acceptable.
 
-- [ ] **Step 8: Check staged diff before committing**
+- [x] **Step 8: Check staged diff before committing**
 
 Run:
 
@@ -640,7 +640,7 @@ git diff -- src-tauri/src/analysis/corpus.rs src-tauri/src/analysis/corpus/tests
 
 Expected: diff only moves the test module body into focused test files, replaces the inline module with `#[cfg(test)] mod tests;`, and adjusts test-helper imports/visibility. No production code above the test module should change.
 
-- [ ] **Step 9: Stage only implementation-owned files**
+- [x] **Step 9: Stage only implementation-owned files**
 
 Run:
 
@@ -656,7 +656,7 @@ git diff --cached --check
 
 Expected: PASS with no whitespace errors.
 
-- [ ] **Step 10: Commit the test split**
+- [x] **Step 10: Commit the test split**
 
 Run:
 
@@ -692,7 +692,7 @@ git show --name-only --oneline --no-renames HEAD
 
 Expected: the first line is the recorded commit hash and message `refactor: split analysis corpus tests`; the file list contains only the seven implementation-owned files listed above.
 
-- [ ] **Step 11: Confirm final git state**
+- [x] **Step 11: Confirm final git state**
 
 Run:
 

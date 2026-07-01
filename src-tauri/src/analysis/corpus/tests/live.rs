@@ -4,8 +4,8 @@ use super::harness::{
     rebuild_documents_for_sources, seed_analysis_source, seed_telegram_item, snapshot_pool,
 };
 use crate::analysis::corpus::{
-    AnalysisRunPreflightLimits, CorpusLoadRequest, YoutubeCorpusMode, live_corpus_ref,
-    load_corpus_messages, preflight_analysis_run,
+    live_corpus_ref, load_corpus_messages, preflight_analysis_run, AnalysisRunPreflightLimits,
+    CorpusLoadRequest, YoutubeCorpusMode,
 };
 use crate::compression::compress_text;
 use crate::error::AppErrorKind;

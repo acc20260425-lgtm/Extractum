@@ -1,7 +1,7 @@
 use super::harness::{rebuild_documents_for_sources, sample_corpus, sample_run, snapshot_pool};
 use crate::analysis::corpus::{
-    ListRunSnapshotMessagesRequest, list_run_snapshot_messages_page, load_run_corpus_messages,
-    load_run_snapshot_messages, load_trace_resolution_messages,
+    list_run_snapshot_messages_page, load_run_corpus_messages, load_run_snapshot_messages,
+    load_trace_resolution_messages, ListRunSnapshotMessagesRequest,
 };
 use crate::analysis::models::AnalysisRunMessageCursor;
 use crate::analysis::store::persist_run_snapshot;
@@ -367,8 +367,7 @@ async fn load_run_corpus_messages_uses_snapshot_when_available() {
 }
 
 #[tokio::test]
-async fn load_run_corpus_messages_does_not_reconstruct_completed_capture_failed_from_live_rows()
-{
+async fn load_run_corpus_messages_does_not_reconstruct_completed_capture_failed_from_live_rows() {
     let pool = snapshot_pool().await;
     sqlx::query(
         "INSERT INTO analysis_runs (
@@ -458,12 +457,10 @@ async fn source_group_membership_drift_after_capture_does_not_change_saved_run_c
     persist_run_snapshot(&pool, 1, "Frozen group", &sample_corpus())
         .await
         .expect("persist snapshot");
-    sqlx::query(
-        "DELETE FROM analysis_source_group_members WHERE group_id = 9 AND source_id = 4",
-    )
-    .execute(&pool)
-    .await
-    .expect("remove member after capture");
+    sqlx::query("DELETE FROM analysis_source_group_members WHERE group_id = 9 AND source_id = 4")
+        .execute(&pool)
+        .await
+        .expect("remove member after capture");
 
     let mut run = sample_run();
     run.id = 1;

@@ -16,10 +16,8 @@ pub(super) fn sample_corpus() -> Vec<CorpusMessage> {
             source_type: Some("youtube".to_string()),
             source_subtype: Some("video".to_string()),
             metadata_zstd: Some(
-                compress_json_bytes(
-                    br#"{"video_id":"video2","item_kind":"youtube_transcript"}"#,
-                )
-                .expect("compress metadata"),
+                compress_json_bytes(br#"{"video_id":"video2","item_kind":"youtube_transcript"}"#)
+                    .expect("compress metadata"),
             ),
         },
         CorpusMessage {
@@ -387,7 +385,11 @@ pub(super) async fn seed_telegram_item(
     .expect("seed telegram identity");
 }
 
-pub(super) fn youtube_metadata_zstd(video_id: &str, title: &str, description: Option<&str>) -> Vec<u8> {
+pub(super) fn youtube_metadata_zstd(
+    video_id: &str,
+    title: &str,
+    description: Option<&str>,
+) -> Vec<u8> {
     let metadata = YoutubeVideoMetadata {
         video_id: video_id.to_string(),
         canonical_url: format!("https://www.youtube.com/watch?v={video_id}"),
@@ -442,23 +444,12 @@ pub(super) async fn insert_youtube_video_source_with_typed_metadata(
     .bind(source_id)
     .bind(video_id)
     .bind(title)
-    .bind(youtube_metadata_zstd(
-        video_id,
-        title,
-        description,
-    ))
+    .bind(youtube_metadata_zstd(video_id, title, description))
     .execute(pool)
     .await
     .expect("insert youtube video source");
-    insert_typed_youtube_video_source(
-        pool,
-        source_id,
-        video_id,
-        title,
-        description,
-        published_at,
-    )
-    .await;
+    insert_typed_youtube_video_source(pool, source_id, video_id, title, description, published_at)
+        .await;
 }
 
 pub(super) async fn insert_typed_youtube_video_source(
@@ -541,8 +532,7 @@ pub(super) fn sample_run() -> AnalysisRunDetail {
         provider: "gemini".to_string(),
         model: "gemini-2.5-flash".to_string(),
         youtube_corpus_mode: "transcript_description".to_string(),
-        telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT
-            .to_string(),
+        telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT.to_string(),
         status: "completed".to_string(),
         result_markdown: Some("Saved report".to_string()),
         error: None,
