@@ -4,7 +4,7 @@
 
 **Goal:** Extract analysis report corpus capture and snapshot-freezing logic from `src-tauri/src/analysis/report.rs` into a focused private nested module without changing runtime behavior.
 
-**Status:** Active implementation handoff; not executed as of 2026-07-01.
+**Status:** Implemented historical execution record as of 2026-07-01. Rust refactor commit: `5db04dea`; execution record finalized in `4a168963`.
 
 **Architecture:** Add `src-tauri/src/analysis/report/capture.rs` as a private child module of `analysis::report`. Keep `report.rs` as the workflow facade and expose `capture_report_corpus` to the parent and existing inline tests through a private root import only.
 
