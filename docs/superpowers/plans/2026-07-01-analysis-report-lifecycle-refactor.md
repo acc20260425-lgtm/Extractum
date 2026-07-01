@@ -413,7 +413,7 @@ pub(super) async fn fail_capture_run(handle: &AppHandle, run_id: i64, error: Str
 pub(super) async fn cancel_run(handle: &AppHandle, run_id: i64, message: String);
 ```
 
-- [ ] **Step 1: Create lifecycle module header**
+- [x] **Step 1: Create lifecycle module header**
 
 Create `src-tauri/src/analysis/report/lifecycle.rs`:
 
@@ -436,7 +436,7 @@ use super::super::{
 };
 ```
 
-- [ ] **Step 2: Move `fail_run` byte-for-byte**
+- [x] **Step 2: Move `fail_run` byte-for-byte**
 
 Cut `fail_run` from `report.rs` and paste it into `lifecycle.rs`. Change only visibility:
 
@@ -446,7 +446,7 @@ pub(super) async fn fail_run(handle: &AppHandle, run_id: i64, error: String) {
 
 Preserve `sanitize_provider_error("Report run failed", &error)`, the `set_run_status` arguments, and the emitted event body.
 
-- [ ] **Step 3: Move `fail_capture_run` byte-for-byte**
+- [x] **Step 3: Move `fail_capture_run` byte-for-byte**
 
 Cut `fail_capture_run` from `report.rs` and paste it into `lifecycle.rs`. Change only visibility:
 
@@ -456,7 +456,7 @@ pub(super) async fn fail_capture_run(handle: &AppHandle, run_id: i64, error: Str
 
 Preserve `mark_run_capture_failed`, timestamp behavior, message text, and event error payload.
 
-- [ ] **Step 4: Move `cancel_run` byte-for-byte**
+- [x] **Step 4: Move `cancel_run` byte-for-byte**
 
 Cut `cancel_run` from `report.rs` and paste it into `lifecycle.rs`. Change only visibility:
 
@@ -466,7 +466,7 @@ pub(super) async fn cancel_run(handle: &AppHandle, run_id: i64, message: String)
 
 Preserve `ANALYSIS_STATUS_CANCELLED`, message persistence, and cancelled event emission.
 
-- [ ] **Step 5: Move `mark_interrupted_analysis_runs` byte-for-byte**
+- [x] **Step 5: Move `mark_interrupted_analysis_runs` byte-for-byte**
 
 Cut `mark_interrupted_analysis_runs` from `report.rs` and paste it into `lifecycle.rs`. Keep crate visibility:
 
@@ -476,7 +476,7 @@ pub(crate) async fn mark_interrupted_analysis_runs(pool: &Pool<Sqlite>) -> AppRe
 
 Preserve SQL text, bind order, `INTERRUPTED_RUN_MESSAGE`, and `now_secs()`.
 
-- [ ] **Step 6: Move `cleanup_interrupted_analysis_runs` byte-for-byte**
+- [x] **Step 6: Move `cleanup_interrupted_analysis_runs` byte-for-byte**
 
 Cut `cleanup_interrupted_analysis_runs` from `report.rs` and paste it into `lifecycle.rs`. Keep public visibility:
 
@@ -486,7 +486,7 @@ pub async fn cleanup_interrupted_analysis_runs(handle: AppHandle) {
 
 Preserve best-effort pool resolution and ignored cleanup result.
 
-- [ ] **Step 7: Move `request_analysis_run_cancel` byte-for-byte**
+- [x] **Step 7: Move `request_analysis_run_cancel` byte-for-byte**
 
 Cut `request_analysis_run_cancel` from `report.rs` and paste it into `lifecycle.rs`. Keep crate visibility:
 
@@ -507,7 +507,7 @@ format!("Analysis run {run_id} is not queued or running")
 format!("Analysis run {run_id} is no longer active")
 ```
 
-- [ ] **Step 8: Declare module and facade forwards in `report.rs`**
+- [x] **Step 8: Declare module and facade forwards in `report.rs`**
 
 Add near the existing `mod requests;` declaration:
 
@@ -525,7 +525,7 @@ use self::lifecycle::{cancel_run, fail_capture_run, fail_run};
 
 Do not modify `src-tauri/src/analysis/mod.rs`.
 
-- [ ] **Step 9: Widen only required `RunEvent` surface**
+- [x] **Step 9: Widen only required `RunEvent` surface**
 
 In `report.rs`, change:
 
@@ -550,7 +550,7 @@ pub(super) fn emit(self, handle: &AppHandle)
 
 Keep `request_id`, `queue_position`, `progress`, `delta`, and `chunk_summary` private.
 
-- [ ] **Step 10: Widen only `INTERRUPTED_RUN_MESSAGE`**
+- [x] **Step 10: Widen only `INTERRUPTED_RUN_MESSAGE`**
 
 Change:
 
@@ -567,7 +567,7 @@ pub(super) const INTERRUPTED_RUN_MESSAGE: &str =
 
 Keep `CANCELLED_RUN_MESSAGE` and `SNAPSHOT_CAPTURE_FAILED_MESSAGE` private.
 
-- [ ] **Step 11: Remove moved-only imports from `report.rs`**
+- [x] **Step 11: Remove moved-only imports from `report.rs`**
 
 In `report.rs`, remove these from `super::store::{...}` if no remaining code uses them:
 
@@ -579,7 +579,7 @@ sanitize_provider_error,
 
 Keep `get_pool`, `set_run_status`, `sanitize_snapshot_error`, and `capture_run_snapshot` in `report.rs` because the remaining report pipeline still uses them.
 
-- [ ] **Step 12: Confirm moved definitions are gone from `report.rs`**
+- [x] **Step 12: Confirm moved definitions are gone from `report.rs`**
 
 Run:
 
@@ -589,7 +589,7 @@ rg -n "^(async fn fail_run|async fn fail_capture_run|async fn cancel_run|pub\\(c
 
 Expected: no matches.
 
-- [ ] **Step 13: Confirm lifecycle module owns moved definitions**
+- [x] **Step 13: Confirm lifecycle module owns moved definitions**
 
 Run:
 
