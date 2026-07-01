@@ -1,7 +1,7 @@
 # Analysis Report Lifecycle Refactor Design
 
 **Date:** 2026-07-01
-**Status:** active spec; implementation not started as of 2026-07-01 because `src-tauri/src/analysis/report/lifecycle.rs` does not exist; not an implementation handoff until a separate plan is written
+**Status:** implemented; historical design record as of 2026-07-01
 **Scope:** internal Rust refactor of analysis report run lifecycle, cancellation, and terminal status helpers.
 
 ## Goal

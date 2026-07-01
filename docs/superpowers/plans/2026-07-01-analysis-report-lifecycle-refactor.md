@@ -4,7 +4,7 @@
 
 **Goal:** Extract analysis report lifecycle, cancellation, and terminal status helpers from `src-tauri/src/analysis/report.rs` into `src-tauri/src/analysis/report/lifecycle.rs` while preserving current facade paths and behavior.
 
-**Status:** active execution plan; implementation not started as of 2026-07-01 because `src-tauri/src/analysis/report/lifecycle.rs` does not exist. Mark this plan `implemented; historical execution record` only after the lifecycle refactor commit and final verification have completed.
+**Status:** implemented; historical execution record as of 2026-07-01
 
 **Architecture:** `report.rs` remains the report workflow facade and keeps map/reduce orchestration, `ReportRunError`, `RunEvent`, `ReportRunInput`, `ReportPipelineContext`, and `start_analysis_report_run`. A new private nested `lifecycle` module owns terminal status persistence and report-run cancellation request handling. `report.rs` forwards the existing public/crate-visible lifecycle facade paths so `analysis/mod.rs`, `lib.rs`, `report_commands.rs`, and inline report tests keep compiling through their current imports.
 
