@@ -395,7 +395,9 @@ Expected: PASS with `1 passed`, not a green `0 tests` run.
 - Consumes: Task 3 source guard and focused test evidence.
 - Produces: refactor commit `refactor: extract analysis report capture helper`.
 
-- [ ] **Step 1: Run full report test slice**
+**Execution adjustment:** The Rust refactor commit was created at Task 2 to honor the user instruction to commit after each task. Task 4 records the full verification, clean status comparisons, and confirms the already-created refactor commit `5db04dea`.
+
+- [x] **Step 1: Run full report test slice**
 
 Run:
 
@@ -405,7 +407,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 2: Run corpus boundary test slice**
+- [x] **Step 2: Run corpus boundary test slice**
 
 Run:
 
@@ -415,7 +417,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 3: Check formatting**
+- [x] **Step 3: Check formatting**
 
 Run:
 
@@ -447,7 +449,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
 Expected: PASS with no diff output before continuing to `cargo check`, staging, or commit.
 
-- [ ] **Step 4: Check all Rust targets**
+- [x] **Step 4: Check all Rust targets**
 
 Run:
 
@@ -457,7 +459,7 @@ cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
 Expected: PASS. This is a broad post-change regression gate, not a pre-edit characterization check; if it fails, inspect whether the failure is pre-existing or caused by this refactor before committing. Existing warnings outside touched files may remain. New warnings mentioning `src-tauri/src/analysis/report.rs` or `src-tauri/src/analysis/report/capture.rs` are not acceptable.
 
-- [ ] **Step 5: Inspect implementation diff**
+- [x] **Step 5: Inspect implementation diff**
 
 Run:
 
@@ -468,7 +470,7 @@ git status --short --untracked-files=all
 
 Expected: diff contains only the capture extraction and import cleanup. Status contains only implementation-owned files plus any pre-existing unrelated baseline entries captured in Task 1.
 
-- [ ] **Step 6: Compare pre-commit status against baseline**
+- [x] **Step 6: Compare pre-commit status against baseline**
 
 Run:
 
@@ -483,7 +485,7 @@ Compare-Object `
 
 Expected: the only intentional differences from baseline are `src-tauri/src/analysis/report.rs` and `src-tauri/src/analysis/report/capture.rs`. If any unrelated rustfmt drift or unexpected file appears, stop before committing.
 
-- [ ] **Step 7: Stage only implementation-owned files**
+- [x] **Step 7: Stage only implementation-owned files**
 
 Run:
 
@@ -509,7 +511,7 @@ git diff --cached --check
 
 Expected: no output. If it reports any issue, stop before commit.
 
-- [ ] **Step 8: Commit the Rust refactor**
+- [x] **Step 8: Commit the Rust refactor**
 
 Run:
 
@@ -519,7 +521,7 @@ git commit -m "refactor: extract analysis report capture helper"
 
 Expected: commit succeeds and includes only the two implementation-owned Rust files.
 
-- [ ] **Step 9: Compare final status against baseline**
+- [x] **Step 9: Compare final status against baseline**
 
 Run:
 
