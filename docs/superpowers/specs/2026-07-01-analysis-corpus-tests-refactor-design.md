@@ -1,7 +1,7 @@
 # Analysis Corpus Tests Refactor Design
 
 **Date:** 2026-07-01
-**Status:** written spec ready for review before implementation planning
+**Status:** active design, not implemented; written spec ready for review before implementation planning
 **Scope:** internal Rust test-only refactor of `src-tauri/src/analysis/corpus.rs` into nested corpus test modules.
 
 ## Goal
@@ -145,6 +145,64 @@ Expected production visibility changes: none.
 
 Expected test-helper visibility changes: helpers shared from `harness.rs` become `pub(super)`.
 
+The expected `tests/harness.rs` helper contract is:
+
+```rust
+pub(super) fn sample_corpus() -> Vec<CorpusMessage>;
+pub(super) async fn create_project_scope_schema(pool: &sqlx::SqlitePool);
+pub(super) async fn snapshot_pool() -> SqlitePool;
+pub(super) fn corpus_request(
+    source_type: &str,
+    source_ids: Vec<i64>,
+    youtube_corpus_mode: YoutubeCorpusMode,
+) -> CorpusLoadRequest;
+pub(super) async fn rebuild_documents_for_sources(pool: &sqlx::SqlitePool, source_ids: &[i64]);
+pub(super) async fn seed_analysis_source(
+    pool: &sqlx::SqlitePool,
+    id: i64,
+    source_type: &str,
+    source_subtype: &str,
+);
+pub(super) async fn seed_telegram_item(
+    pool: &sqlx::SqlitePool,
+    id: i64,
+    source_id: i64,
+    external_id: &str,
+    published_at: i64,
+    content: &str,
+    is_migrated_history: bool,
+);
+pub(super) fn youtube_metadata_zstd(
+    video_id: &str,
+    title: &str,
+    description: Option<&str>,
+) -> Vec<u8>;
+pub(super) async fn insert_youtube_video_source(pool: &SqlitePool, source_id: i64);
+pub(super) async fn insert_youtube_video_source_with_typed_metadata(
+    pool: &SqlitePool,
+    source_id: i64,
+    metadata_zstd: Vec<u8>,
+);
+pub(super) async fn insert_typed_youtube_video_source(
+    pool: &SqlitePool,
+    source_id: i64,
+    video_id: &str,
+    title: &str,
+    description: Option<&str>,
+);
+pub(super) async fn insert_youtube_transcript_segment(
+    pool: &SqlitePool,
+    item_id: i64,
+    source_id: i64,
+    published_at: i64,
+    content: &str,
+);
+pub(super) fn decode_message_metadata_for_test(message: &CorpusMessage) -> serde_json::Value;
+pub(super) fn sample_run() -> AnalysisRunDetail;
+```
+
+If a listed helper ends up used by only one thematic module after the split, the implementation may keep it private in that thematic module instead of exporting it from `harness.rs`. Do not widen any helper beyond `pub(super)`.
+
 ## Data Flow
 
 No runtime data flow changes:
@@ -257,17 +315,29 @@ git status --short --untracked-files=all
 If any target file is already modified, staged, or untracked before this task starts, inspect the baseline before editing:
 
 ```powershell
-git diff -- src-tauri/src/analysis/corpus.rs src-tauri/src/analysis/corpus/tests
+git diff -- src-tauri/src/analysis/corpus.rs
 ```
 
 ```powershell
-git diff --cached -- src-tauri/src/analysis/corpus.rs src-tauri/src/analysis/corpus/tests
+git diff --cached -- src-tauri/src/analysis/corpus.rs
+```
+
+If `src-tauri/src/analysis/corpus/tests` exists before execution, inspect tracked changes under it:
+
+```powershell
+if (Test-Path -LiteralPath 'src-tauri/src/analysis/corpus/tests') {
+    git diff -- src-tauri/src/analysis/corpus/tests
+    git diff --cached -- src-tauri/src/analysis/corpus/tests
+}
 ```
 
 If any `src-tauri/src/analysis/corpus/tests/*.rs` file is untracked before execution, `git diff` will not show its contents. Inspect it directly before proceeding:
 
 ```powershell
-Get-ChildItem -Recurse -File -LiteralPath 'src-tauri/src/analysis/corpus/tests' | ForEach-Object { $_.FullName; Get-Content -Raw -LiteralPath $_.FullName }
+if (Test-Path -LiteralPath 'src-tauri/src/analysis/corpus/tests') {
+    Get-ChildItem -Recurse -File -LiteralPath 'src-tauri/src/analysis/corpus/tests' |
+        ForEach-Object { $_.FullName; Get-Content -Raw -LiteralPath $_.FullName }
+}
 ```
 
 Do not stage pre-existing target-file changes into the test split commit.
@@ -292,7 +362,7 @@ After editing and before committing, run:
 cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
 ```
 
-Expected: PASS and not a green `0 tests` run. Verify that representative tests from each new module run, for example:
+Expected: PASS and not a green `0 tests` run. The implementation plan must require the executor to inspect the output and confirm that the full `analysis::corpus::tests::` filter ran real tests after the module-path redirect. It must also verify that representative tests from each new module ran, for example:
 
 - `analysis::corpus::tests::live::load_corpus_messages_filters_youtube_transcript_only_to_transcripts`
 - `analysis::corpus::tests::preflight::preflight_count_matches_loader_for_youtube_corpus_modes`
@@ -319,11 +389,19 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
 Expected: PASS with no diff output.
 
+After any formatting command or format check, confirm that no unrelated worktree drift appeared:
+
+```powershell
+git status --short --untracked-files=all
+```
+
+Expected: relative to the pre-edit baseline, only implementation-owned files for this test split are modified or untracked before the refactor commit; after the refactor commit, status matches the pre-edit baseline exactly.
+
 ```powershell
 cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 ```
 
-Expected: PASS. Existing warnings outside touched files may remain; new warnings mentioning `src/analysis/corpus.rs` or `src/analysis/corpus/tests/` are not acceptable.
+Expected: PASS. Existing warnings outside touched files may remain; new warnings mentioning `src-tauri/src/analysis/corpus.rs` or `src-tauri/src/analysis/corpus/tests/` are not acceptable.
 
 ## Commit Shape
 
@@ -336,6 +414,8 @@ Expected implementation-owned files:
 - `src-tauri/src/analysis/corpus/tests/preflight.rs`
 - `src-tauri/src/analysis/corpus/tests/snapshot.rs`
 - `src-tauri/src/analysis/corpus/tests/source_resolution.rs`
+
+If any of these paths already exist or are dirty at the pre-edit guard, their exact status and contents become part of the baseline. The implementation commit may include only the net changes intentionally required for this test split; pre-existing tracked or untracked content must be separated first or left untouched and unstaged.
 
 Expected implementation commit:
 
