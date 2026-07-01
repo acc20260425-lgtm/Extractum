@@ -1,7 +1,7 @@
 # Analysis Report Phases Refactor Design
 
 **Date:** 2026-07-01
-**Status:** active spec; implementation not started as of 2026-07-01 because `src-tauri/src/analysis/report/phases.rs` does not exist
+**Status:** implemented historical design as of 2026-07-01. Implemented by Rust refactor commit `4c2e87de`; execution record finalized in `d97dc9d1`.
 **Scope:** internal Rust refactor of analysis report map/reduce phase runtime.
 
 ## Goal

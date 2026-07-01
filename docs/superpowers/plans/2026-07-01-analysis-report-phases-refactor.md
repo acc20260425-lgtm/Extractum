@@ -4,6 +4,8 @@
 
 **Goal:** Extract analysis report map/reduce provider-phase runtime from `src-tauri/src/analysis/report.rs` into a focused private child module without changing behavior.
 
+**Status:** Implemented historical execution record as of 2026-07-01. Rust refactor commit: `4c2e87de`; execution record finalized in `d97dc9d1`.
+
 **Architecture:** Add `src-tauri/src/analysis/report/phases.rs` as a private child module of `analysis::report`. Keep `report.rs` as the workflow facade: it still owns `run_report_pipeline`, `start_analysis_report_run`, `ReportRunError`, `RunEvent`, `ReportRunInput`, capture, lifecycle, persistence, and startup orchestration.
 
 **Tech Stack:** Rust, Tauri backend, SQLx SQLite, Tokio, tokio-util cancellation tokens, Cargo.
