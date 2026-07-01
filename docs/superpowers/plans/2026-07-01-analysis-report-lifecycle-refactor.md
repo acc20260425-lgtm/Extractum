@@ -4,6 +4,8 @@
 
 **Goal:** Extract analysis report lifecycle, cancellation, and terminal status helpers from `src-tauri/src/analysis/report.rs` into `src-tauri/src/analysis/report/lifecycle.rs` while preserving current facade paths and behavior.
 
+**Status:** active execution plan; implementation not started as of 2026-07-01 because `src-tauri/src/analysis/report/lifecycle.rs` does not exist. Mark this plan `implemented; historical execution record` only after the lifecycle refactor commit and final verification have completed.
+
 **Architecture:** `report.rs` remains the report workflow facade and keeps map/reduce orchestration, `ReportRunError`, `RunEvent`, `ReportRunInput`, `ReportPipelineContext`, and `start_analysis_report_run`. A new private nested `lifecycle` module owns terminal status persistence and report-run cancellation request handling. `report.rs` forwards the existing public/crate-visible lifecycle facade paths so `analysis/mod.rs`, `lib.rs`, `report_commands.rs`, and inline report tests keep compiling through their current imports.
 
 **Tech Stack:** Rust, Tauri test runtime, Tauri SQL plugin `DbInstances`, SQLx SQLite, existing `AnalysisState`, existing `LlmSchedulerState`, existing analysis report tests.
@@ -11,7 +13,7 @@
 ## Global Constraints
 
 - Run commands from repository root `G:\Develop\Extractum`.
-- Use `cargo --manifest-path src-tauri/Cargo.toml` because the Rust manifest is under `src-tauri/`.
+- Use cargo commands with `--manifest-path src-tauri/Cargo.toml` because the Rust manifest is under `src-tauri/`; examples in this plan use concrete subcommands such as `cargo test`, `cargo fmt`, and `cargo check`.
 - Implementation-owned Rust files are `src-tauri/src/analysis/report.rs` and `src-tauri/src/analysis/report/lifecycle.rs`.
 - Do not modify `src-tauri/src/analysis/mod.rs`; preserve its existing `pub use self::report::cleanup_interrupted_analysis_runs;`.
 - Do not move map/reduce runtime orchestration, `ReportRunError`, `RunEvent`, `capture_report_corpus`, `start_analysis_report_run`, or report tests in this slice.
@@ -56,7 +58,16 @@ Run:
 git status --short --untracked-files=all
 ```
 
-Expected: clean output, or unrelated pre-existing changes. Save the exact output as `PRE_EDIT_STATUS` in execution notes. If `src-tauri/src/analysis/report.rs` or `src-tauri/src/analysis/report/lifecycle.rs` appears, inspect Steps 2-3 before editing.
+Expected: clean output, or unrelated pre-existing changes. Save the exact output in execution notes as `PRE_EDIT_STATUS`.
+
+Run:
+
+```powershell
+git status --short --untracked-files=all | Set-Content -Encoding utf8 -LiteralPath "$env:TEMP\analysis-report-lifecycle-pre-edit-status.txt"
+Get-Content -Raw -LiteralPath "$env:TEMP\analysis-report-lifecycle-pre-edit-status.txt"
+```
+
+Expected: the file content matches the visible `git status` output. If `src-tauri/src/analysis/report.rs` or `src-tauri/src/analysis/report/lifecycle.rs` appears, inspect Steps 2-3 before editing.
 
 - [ ] **Step 2: Inspect dirty tracked target files**
 
@@ -155,6 +166,7 @@ Also add these imports in the test module:
 
 ```rust
 use crate::db::DB_URL;
+use crate::analysis::report_commands::cancel_analysis_run;
 use sqlx::SqlitePool;
 use tauri::Manager;
 use tauri_plugin_sql::{DbInstances, DbPool};
@@ -168,6 +180,8 @@ Add these helpers near the existing sample helpers in the test module:
 async fn app_handle_with_analysis_pool(pool: SqlitePool) -> tauri::AppHandle {
     let app = tauri::test::mock_builder()
         .manage(DbInstances::default())
+        .manage(crate::analysis::AnalysisState::new())
+        .manage(LlmSchedulerState::new())
         .build(tauri::test::mock_context(tauri::test::noop_assets()))
         .expect("build test app");
     let handle = app.handle().clone();
@@ -336,7 +350,34 @@ async fn request_analysis_run_cancel_running_but_inactive_keeps_conflict_message
 }
 ```
 
-- [ ] **Step 6: Run focused characterization tests**
+- [ ] **Step 6: Add command consumer characterization test**
+
+Add this test:
+
+```rust
+#[tokio::test]
+async fn request_analysis_run_cancel_command_consumer_keeps_facade_path() {
+    let pool = request_cancel_pool_with_runs().await;
+    let handle = app_handle_with_analysis_pool(pool).await;
+    let run_id = 407;
+
+    let error = cancel_analysis_run(
+        handle.clone(),
+        handle.state::<crate::analysis::AnalysisState>(),
+        handle.state::<LlmSchedulerState>(),
+        run_id,
+    )
+    .await
+    .expect_err("missing run should fail through command consumer");
+
+    assert_eq!(error.kind, AppErrorKind::NotFound);
+    assert_eq!(error.message, format!("Analysis run {run_id} not found"));
+}
+```
+
+This is the runtime-level consumer guard for `src-tauri/src/analysis/report_commands.rs`: it exercises the command wrapper and therefore the existing `report::request_analysis_run_cancel` facade path.
+
+- [ ] **Step 7: Run focused characterization tests**
 
 Run:
 
@@ -344,9 +385,9 @@ Run:
 cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::request_analysis_run_cancel_
 ```
 
-Expected: PASS and not a green `0 tests` run. Output includes three tests covering missing run, completed run, and inactive running run.
+Expected: PASS and not a green `0 tests` run. Output includes four tests covering missing run, completed run, inactive running run, and the command consumer path.
 
-- [ ] **Step 7: Run report tests after characterization**
+- [ ] **Step 8: Run report tests after characterization**
 
 Run:
 
@@ -629,12 +670,13 @@ Run each command separately:
 
 ```powershell
 rg -n "pub use self::lifecycle::cleanup_interrupted_analysis_runs" src-tauri/src/analysis/report.rs
-rg -n "pub\\(crate\\) use self::lifecycle::\\{mark_interrupted_analysis_runs, request_analysis_run_cancel\\}" src-tauri/src/analysis/report.rs
+rg -n "mark_interrupted_analysis_runs" src-tauri/src/analysis/report.rs
+rg -n "request_analysis_run_cancel" src-tauri/src/analysis/report.rs
 rg -n "pub use self::report::cleanup_interrupted_analysis_runs" src-tauri/src/analysis/mod.rs
 rg -n "report::request_analysis_run_cancel" src-tauri/src/analysis/report_commands.rs
 ```
 
-Expected: each command has at least one match.
+Expected: each command has at least one match. The `mark_interrupted_analysis_runs` and `request_analysis_run_cancel` matches in `report.rs` must come from facade forwarding/imports or tests, not from leftover moved function bodies. Do not require one exact grouped `pub(crate) use ... { ... }` line; split imports and rustfmt-wrapped imports are acceptable if the effective paths remain `analysis::report::mark_interrupted_analysis_runs` and `analysis::report::request_analysis_run_cancel`.
 
 - [ ] **Step 4: Verify `RunEvent` surface**
 
@@ -649,11 +691,15 @@ Expected: no matches.
 Run each command separately:
 
 ```powershell
-rg -n "pub\\(super\\) struct RunEvent|pub\\(super\\) fn (new|message|error|emit)" src-tauri/src/analysis/report.rs
+rg -n "pub\\(super\\) struct RunEvent" src-tauri/src/analysis/report.rs
+rg -n "pub\\(super\\) fn new" src-tauri/src/analysis/report.rs
+rg -n "pub\\(super\\) fn message" src-tauri/src/analysis/report.rs
+rg -n "pub\\(super\\) fn error" src-tauri/src/analysis/report.rs
+rg -n "pub\\(super\\) fn emit" src-tauri/src/analysis/report.rs
 rg -n "pub\\(super\\) fn (request_id|queue_position|progress|delta|chunk_summary)" src-tauri/src/analysis/report.rs
 ```
 
-Expected: first command matches `RunEvent` plus exactly four lifecycle-facing methods; second command has no matches.
+Expected: the first five commands each have at least one match; the final command has no matches. This avoids false negatives from acceptable rustfmt or import formatting while still preventing lifecycle from widening map/reduce event-builder methods.
 
 - [ ] **Step 5: Run focused cancellation request tests**
 
@@ -663,7 +709,7 @@ Run:
 cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::request_analysis_run_cancel_
 ```
 
-Expected: PASS and not a green `0 tests` run. Output includes missing run, completed run, and inactive running run tests.
+Expected: PASS and not a green `0 tests` run. Output includes missing run, completed run, inactive running run, and command consumer path tests.
 
 - [ ] **Step 6: Run focused interrupted cleanup test**
 
@@ -807,7 +853,16 @@ Run:
 git status --short --untracked-files=all
 ```
 
-Expected: clean output if `PRE_EDIT_STATUS` was clean. If `PRE_EDIT_STATUS` had unrelated entries, final status matches those entries exactly and does not include lifecycle refactor files or new rustfmt drift.
+Then run:
+
+```powershell
+git status --short --untracked-files=all | Set-Content -Encoding utf8 -LiteralPath "$env:TEMP\analysis-report-lifecycle-final-status.txt"
+Compare-Object `
+    (Get-Content -LiteralPath "$env:TEMP\analysis-report-lifecycle-pre-edit-status.txt") `
+    (Get-Content -LiteralPath "$env:TEMP\analysis-report-lifecycle-final-status.txt")
+```
+
+Expected: no `Compare-Object` output if `PRE_EDIT_STATUS` was clean. If `PRE_EDIT_STATUS` had unrelated entries, any output must be explained and must not include lifecycle refactor files or new rustfmt drift.
 
 ---
 
