@@ -351,7 +351,7 @@ If any helper is used only by `live.rs` after the move, keep it private in `live
 - Consumes production preflight helpers from `crate::analysis::corpus`.
 - Produces the preflight test module under `analysis::corpus::tests::preflight`.
 
-- [ ] **Step 1: Add preflight module imports**
+- [x] **Step 1: Add preflight module imports**
 
 At the top of `src-tauri/src/analysis/corpus/tests/preflight.rs`, add:
 
@@ -369,7 +369,7 @@ use crate::analysis::corpus::{
 
 If rustc reports an unused import after all preflight tests move, remove only that unused import.
 
-- [ ] **Step 2: Move pure preflight tests**
+- [x] **Step 2: Move pure preflight tests**
 
 Move these tests from the old inline module into `preflight.rs`, preserving bodies and assertions:
 
@@ -383,7 +383,7 @@ model_limit_preflight_allows_unknown_or_fitting_limits
 model_limit_preflight_reports_oversized_chunks
 ```
 
-- [ ] **Step 3: Move async preflight tests**
+- [x] **Step 3: Move async preflight tests**
 
 Move these tests from the old inline module into `preflight.rs`, preserving bodies and assertions:
 
