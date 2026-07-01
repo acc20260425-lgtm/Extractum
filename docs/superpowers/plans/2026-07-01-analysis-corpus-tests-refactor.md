@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** active plan, not implemented as of 2026-07-01.
+
 **Goal:** Split the large inline `analysis::corpus` test module into focused nested test files without changing production behavior or test assertions.
 
 **Architecture:** Keep `src-tauri/src/analysis/corpus.rs` as the production corpus facade and replace the current inline `#[cfg(test)] mod tests` body with `#[cfg(test)] mod tests;`. Create `src-tauri/src/analysis/corpus/tests/` with a shared `harness.rs` and thematic `live.rs`, `preflight.rs`, `snapshot.rs`, and `source_resolution.rs` modules. Preserve existing behavior by moving test bodies and helpers verbatim, widening only test-helper visibility to `pub(super)` when sibling test modules need a helper.
@@ -109,6 +111,8 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
 ```
 
 Expected: PASS and not a green `0 tests` run. Current snapshot at plan authoring: `43 passed`; do not require this exact count if nearby tests changed before execution.
+
+If this baseline command fails, or if it succeeds with `0 tests`, stop before editing. Treat the failure as pre-existing debt and resolve or explicitly document it before starting this refactor.
 
 - [ ] **Step 4: Create the nested test module declarations**
 
@@ -489,10 +493,23 @@ resolve_analysis_sources_loads_single_provider_project
 Run:
 
 ```powershell
-rg -n "#\\[tokio::test\\]|#\\[test\\]|fn sample_corpus|async fn snapshot_pool" src-tauri/src/analysis/corpus.rs
+rg -n "#\\[tokio::test\\]|#\\[test\\]|fn sample_corpus|async fn create_project_scope_schema|async fn snapshot_pool|fn corpus_request|async fn rebuild_documents_for_sources|async fn seed_analysis_source|async fn seed_telegram_item|fn youtube_metadata_zstd|async fn insert_youtube_video_source|async fn insert_youtube_video_source_with_typed_metadata|async fn insert_typed_youtube_video_source|async fn insert_youtube_transcript_segment|fn decode_message_metadata_for_test|fn sample_run" src-tauri/src/analysis/corpus.rs
 ```
 
 Expected: no output. `corpus.rs` should contain `#[cfg(test)] mod tests;` but no inline test functions or test harness helpers.
+
+Then run:
+
+```powershell
+rg -n "#\\[cfg\\(test\\)\\]|mod tests;" src-tauri/src/analysis/corpus.rs
+```
+
+Expected: output has exactly two matches, and those matches are the external module declaration:
+
+```text
+#[cfg(test)]
+mod tests;
+```
 
 ---
 
@@ -569,7 +586,13 @@ Run:
 cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 ```
 
-Expected: PASS and not a green `0 tests` run.
+Expected: PASS and not a green `0 tests` run. The output must include at least these representative report tests:
+
+```text
+analysis::report::tests::capture_report_corpus_returns_reloaded_snapshot_before_provider_phases
+analysis::report::tests::report_start_request_carries_migrated_history_opt_in_to_corpus_request_shape
+analysis::report::tests::validate_report_preflight_rejects_empty_corpus
+```
 
 - [ ] **Step 5: Run project data-range consumer tests**
 
@@ -579,7 +602,13 @@ Run:
 cargo test --manifest-path src-tauri/Cargo.toml projects::data_range::tests::
 ```
 
-Expected: PASS and not a green `0 tests` run.
+Expected: PASS and not a green `0 tests` run. The output must include at least these representative project data-range tests:
+
+```text
+projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds
+projects::data_range::tests::project_data_range_includes_telegram_migrated_history_when_requested
+projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources
+```
 
 - [ ] **Step 6: Run format check**
 
@@ -647,6 +676,22 @@ src-tauri/src/analysis/corpus/tests/snapshot.rs
 src-tauri/src/analysis/corpus/tests/source_resolution.rs
 ```
 
+Then run:
+
+```powershell
+git rev-parse --short HEAD
+```
+
+Expected: record this exact commit hash as the refactor commit hash for final verification.
+
+Then run:
+
+```powershell
+git show --name-only --oneline --no-renames HEAD
+```
+
+Expected: the first line is the recorded commit hash and message `refactor: split analysis corpus tests`; the file list contains only the seven implementation-owned files listed above.
+
 - [ ] **Step 11: Confirm final git state**
 
 Run:
@@ -663,7 +708,7 @@ Run:
 git log --oneline -3
 ```
 
-Expected: the latest commits include:
+Expected: the first line starts with the recorded refactor commit hash from Step 10 and includes:
 
 ```text
 refactor: split analysis corpus tests
