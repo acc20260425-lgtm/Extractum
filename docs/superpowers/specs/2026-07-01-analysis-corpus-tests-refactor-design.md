@@ -1,7 +1,7 @@
 # Analysis Corpus Tests Refactor Design
 
 **Date:** 2026-07-01
-**Status:** active design, not implemented; written spec ready for review before implementation planning
+**Status:** active design, not implemented as of 2026-07-01; written spec ready for review before implementation planning
 **Scope:** internal Rust test-only refactor of `src-tauri/src/analysis/corpus.rs` into nested corpus test modules.
 
 ## Goal
@@ -150,7 +150,7 @@ The expected `tests/harness.rs` helper contract is:
 ```rust
 pub(super) fn sample_corpus() -> Vec<CorpusMessage>;
 pub(super) async fn create_project_scope_schema(pool: &sqlx::SqlitePool);
-pub(super) async fn snapshot_pool() -> SqlitePool;
+pub(super) async fn snapshot_pool() -> sqlx::SqlitePool;
 pub(super) fn corpus_request(
     source_type: &str,
     source_ids: Vec<i64>,
@@ -177,21 +177,21 @@ pub(super) fn youtube_metadata_zstd(
     title: &str,
     description: Option<&str>,
 ) -> Vec<u8>;
-pub(super) async fn insert_youtube_video_source(pool: &SqlitePool, source_id: i64);
+pub(super) async fn insert_youtube_video_source(pool: &sqlx::SqlitePool, source_id: i64);
 pub(super) async fn insert_youtube_video_source_with_typed_metadata(
-    pool: &SqlitePool,
+    pool: &sqlx::SqlitePool,
     source_id: i64,
     metadata_zstd: Vec<u8>,
 );
 pub(super) async fn insert_typed_youtube_video_source(
-    pool: &SqlitePool,
+    pool: &sqlx::SqlitePool,
     source_id: i64,
     video_id: &str,
     title: &str,
     description: Option<&str>,
 );
 pub(super) async fn insert_youtube_transcript_segment(
-    pool: &SqlitePool,
+    pool: &sqlx::SqlitePool,
     item_id: i64,
     source_id: i64,
     published_at: i64,
@@ -362,7 +362,7 @@ After editing and before committing, run:
 cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
 ```
 
-Expected: PASS and not a green `0 tests` run. The implementation plan must require the executor to inspect the output and confirm that the full `analysis::corpus::tests::` filter ran real tests after the module-path redirect. It must also verify that representative tests from each new module ran, for example:
+Expected: PASS and not a green `0 tests` run. The implementation plan must require the executor to inspect the output and confirm that the full `analysis::corpus::tests::` filter ran real tests after the module-path redirect. It must also require these four representative tests to appear in the post-change output:
 
 - `analysis::corpus::tests::live::load_corpus_messages_filters_youtube_transcript_only_to_transcripts`
 - `analysis::corpus::tests::preflight::preflight_count_matches_loader_for_youtube_corpus_modes`
@@ -395,7 +395,7 @@ After any formatting command or format check, confirm that no unrelated worktree
 git status --short --untracked-files=all
 ```
 
-Expected: relative to the pre-edit baseline, only implementation-owned files for this test split are modified or untracked before the refactor commit; after the refactor commit, status matches the pre-edit baseline exactly.
+Expected: before the refactor commit, only implementation-owned files for this test split are newly modified or untracked relative to the pre-edit baseline. After the refactor commit, the status check is a baseline comparison: the refactor must not introduce new unintended files or diffs outside `src-tauri/src/analysis/corpus.rs` and `src-tauri/src/analysis/corpus/tests/*`. Any pre-existing baseline entries must either remain byte-for-byte unchanged or be separated from the refactor before staging.
 
 ```powershell
 cargo check --manifest-path src-tauri/Cargo.toml --all-targets
