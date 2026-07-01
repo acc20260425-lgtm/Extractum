@@ -197,10 +197,10 @@ async fn request_cancel_pool_with_runs() -> SqlitePool {
             output_language TEXT NOT NULL DEFAULT 'English',
             prompt_template_id INTEGER NOT NULL DEFAULT 1,
             prompt_template_version INTEGER NOT NULL DEFAULT 1,
-            provider_profile TEXT,
-            provider TEXT,
-            model TEXT,
-            youtube_corpus_mode TEXT,
+            provider_profile TEXT NOT NULL DEFAULT 'research',
+            provider TEXT NOT NULL DEFAULT 'gemini',
+            model TEXT NOT NULL DEFAULT 'gemini-2.5-flash',
+            youtube_corpus_mode TEXT NOT NULL DEFAULT 'transcript_description',
             telegram_history_scope TEXT,
             status TEXT NOT NULL,
             result_markdown TEXT,
@@ -245,8 +245,12 @@ async fn insert_cancel_request_run(pool: &SqlitePool, run_id: i64, status: &str)
     sqlx::query(
         "INSERT INTO analysis_runs (
             id, run_type, scope_type, status, period_from, period_to, output_language,
-            prompt_template_id, prompt_template_version, created_at
-        ) VALUES (?, 'report', 'single_source', ?, 1, 2, 'English', 1, 1, 1)",
+            prompt_template_id, prompt_template_version, provider_profile, provider, model,
+            youtube_corpus_mode, created_at
+        ) VALUES (
+            ?, 'report', 'single_source', ?, 1, 2, 'English', 1, 1,
+            'research', 'gemini', 'gemini-2.5-flash', 'transcript_description', 1
+        )",
     )
     .bind(run_id)
     .bind(status)
@@ -255,6 +259,8 @@ async fn insert_cancel_request_run(pool: &SqlitePool, run_id: i64, status: &str)
     .expect("insert analysis run");
 }
 ```
+
+The helper schema and insert values must keep `provider_profile`, `provider`, `model`, and `youtube_corpus_mode` non-null because `fetch_run_row` decodes them into `AnalysisRunRow` as `String`, not `Option<String>`. Do not remove these defaults or explicit inserted values; otherwise the characterization tests can fail during SQLx row decoding before reaching the cancellation error branches.
 
 - [ ] **Step 3: Add missing-run characterization test**
 
