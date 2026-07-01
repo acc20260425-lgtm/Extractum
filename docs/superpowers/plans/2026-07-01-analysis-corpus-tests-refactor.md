@@ -406,7 +406,7 @@ preflight_count_matches_loader_for_youtube_corpus_modes
 - Consumes snapshot facade functions from `crate::analysis::corpus`.
 - Produces the snapshot test module under `analysis::corpus::tests::snapshot`.
 
-- [ ] **Step 1: Add snapshot module imports**
+- [x] **Step 1: Add snapshot module imports**
 
 At the top of `src-tauri/src/analysis/corpus/tests/snapshot.rs`, add:
 
@@ -423,7 +423,7 @@ use crate::error::AppErrorKind;
 
 If rustc reports an unused import after all snapshot tests move, remove only that unused import.
 
-- [ ] **Step 2: Move snapshot persistence and page tests**
+- [x] **Step 2: Move snapshot persistence and page tests**
 
 Move these tests from the old inline module into `snapshot.rs`, preserving bodies and assertions:
 
@@ -435,7 +435,7 @@ list_run_snapshot_messages_page_starts_at_around_ref
 list_run_snapshot_messages_page_does_not_fall_back_to_live_source
 ```
 
-- [ ] **Step 3: Move trace and completed-run snapshot tests**
+- [x] **Step 3: Move trace and completed-run snapshot tests**
 
 Move these tests from the old inline module into `snapshot.rs`, preserving bodies and assertions:
 
