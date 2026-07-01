@@ -462,7 +462,7 @@ Expected: these items are not moved and are not widened to `pub(super)`, `pub(cr
 
 Scheduler-backed runtime tests for `run_map_phase` and `run_reduce_phase` are intentionally not added in this move-only refactor. Because of that accepted risk, preserve the moved source byte-for-byte except for imports, module paths, visibility, and rustfmt, and treat the source guards in this task as required verification rather than optional smoke checks.
 
-- [ ] **Step 1: Verify moved item locations**
+- [x] **Step 1: Verify moved item locations**
 
 Run:
 
@@ -480,7 +480,7 @@ rg -n "^pub\(super\) async fn run_map_phase\(|^pub\(super\) async fn run_reduce_
 
 Expected: prints all moved phase items in `phases.rs`.
 
-- [ ] **Step 2: Verify private module and parent contracts**
+- [x] **Step 2: Verify private module and parent contracts**
 
 Run:
 
@@ -514,7 +514,7 @@ rg -n "^enum ReportRunError|^struct ReportRunInput|^const CANCELLED_RUN_MESSAGE"
 
 Expected: exactly one match for each private parent item.
 
-- [ ] **Step 3: Verify `ReportPipelineContext` and `ReducePhaseResult` parent-visible fields**
+- [x] **Step 3: Verify `ReportPipelineContext` and `ReducePhaseResult` parent-visible fields**
 
 Run:
 
@@ -532,7 +532,7 @@ rg -n "^    pub\(super\) async fn ensure_not_cancelled|^    pub\(super\) fn emit
 
 Expected: prints both parent-visible `ReportPipelineContext` methods consumed by `report.rs`.
 
-- [ ] **Step 4: Verify tests use root private imports**
+- [x] **Step 4: Verify tests use root private imports**
 
 Run:
 
@@ -542,7 +542,7 @@ rg -n "super::phases::finish_map_phase|super::phases::run_analysis_step_with_can
 
 Expected: no matches. `rg` exit code `1` is expected for this no-match guard.
 
-- [ ] **Step 5: Verify provider-phase event and error strings moved intact**
+- [x] **Step 5: Verify provider-phase event and error strings moved intact**
 
 Run:
 
@@ -552,7 +552,7 @@ rg -n '"Dispatching .* chunk analysis request|queued at position|Analyzing chunk
 
 Expected: prints provider-phase event/error literals and `CANCELLED_RUN_MESSAGE` references in `phases.rs`. The literal `"Analysis run cancelled."` remains only in the private `CANCELLED_RUN_MESSAGE` const in `report.rs`.
 
-- [ ] **Step 6: Verify provider request kinds moved intact**
+- [x] **Step 6: Verify provider request kinds moved intact**
 
 Run:
 
@@ -562,7 +562,7 @@ rg -n "LlmRequestKind::AnalysisReportMap|LlmRequestKind::AnalysisReportReduce" s
 
 Expected: prints both request kinds in `phases.rs`.
 
-- [ ] **Step 7: Run focused map-finish tests**
+- [x] **Step 7: Run focused map-finish tests**
 
 Run:
 
@@ -572,7 +572,9 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::finish_
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 8: Run focused cancellation-helper tests**
+- [x] **Step 8: Run focused cancellation-helper tests**
+
+Execution adjustment: as in Task 1, the non-empty focused selector is `analysis::report::tests::analysis_step_cancel_wrapper`; it ran 2 tests and passed.
 
 Run:
 
