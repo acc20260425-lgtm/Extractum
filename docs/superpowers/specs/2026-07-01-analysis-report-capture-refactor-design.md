@@ -41,7 +41,7 @@ Create a private nested module declared from `src-tauri/src/analysis/report.rs`:
 Keep `src-tauri/src/analysis/report.rs` as the report workflow facade:
 
 - add `mod capture;`;
-- import `capture_report_corpus` through an explicit `self::capture` import;
+- import `capture_report_corpus` through a private root import: `use self::capture::capture_report_corpus;`;
 - do not add any root re-export from `analysis/mod.rs`;
 - keep `capture` private to `analysis::report`;
 - keep map/reduce orchestration, lifecycle helpers, request helpers, `start_analysis_report_run`, `RunEvent`, `ReportRunInput`, and `ReportPipelineContext` in their current modules.
@@ -70,6 +70,8 @@ Keep these items in `report.rs` for this slice:
 - all current tests.
 
 The inline test module stays in `report.rs` for this slice. Moving capture tests can be a later test-only refactor if needed.
+
+Current `report::tests` should keep using `super::capture_report_corpus` through the private root import in `report.rs`; tests should not import `super::capture::capture_report_corpus` directly in this slice.
 
 ## Visibility
 
@@ -166,10 +168,11 @@ Preserve current error behavior exactly:
 
 The implementation plan must include source or test guards for these literals:
 
-```text
-Corpus preload failed
-Snapshot capture failed
+```powershell
+rg -n '"Corpus preload failed"|"Snapshot capture failed"' src-tauri/src/analysis/report/capture.rs
 ```
+
+Expected: both literals are present in `report/capture.rs` after extraction, with no duplicate `SNAPSHOT_CAPTURE_FAILED_MESSAGE` constant left in `report.rs`.
 
 ## Non-Goals
 
@@ -214,7 +217,23 @@ if (Test-Path -LiteralPath 'src-tauri/src/analysis/report/capture.rs') {
 
 Do not stage pre-existing target-file changes into the capture extraction commit.
 
-The implementation plan must capture the pre-edit status output as `PRE_EDIT_STATUS` and compare final status against it after formatting, checks, and commit.
+The implementation plan must capture the pre-edit status output as `PRE_EDIT_STATUS` and compare final status against it after formatting, checks, and commit. Use a reproducible status snapshot, not only visual inspection:
+
+```powershell
+git status --short --untracked-files=all | Set-Content -Encoding utf8 -LiteralPath "$env:TEMP\analysis-report-capture-pre-edit-status.txt"
+Get-Content -Raw -LiteralPath "$env:TEMP\analysis-report-capture-pre-edit-status.txt"
+```
+
+After the refactor commit:
+
+```powershell
+git status --short --untracked-files=all | Set-Content -Encoding utf8 -LiteralPath "$env:TEMP\analysis-report-capture-final-status.txt"
+Compare-Object `
+    (Get-Content -LiteralPath "$env:TEMP\analysis-report-capture-pre-edit-status.txt") `
+    (Get-Content -LiteralPath "$env:TEMP\analysis-report-capture-final-status.txt")
+```
+
+Expected: no `Compare-Object` output if the pre-edit status was clean. If the pre-edit status contained unrelated entries, any output must be explained and must not include capture refactor files or new rustfmt drift.
 
 ## Testing
 
@@ -240,13 +259,27 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
 
 Expected: PASS and not a green `0 tests` run. This guards recently split corpus boundaries while capture imports move.
 
-After editing and before committing, run the same report and corpus tests again. The post-change capture-focused test must be repeated explicitly:
+Focused store tests are not required for this slice because `capture_run_snapshot` and `sanitize_snapshot_error` are only imported from a new module location and their implementations are not changed. If the implementation touches `src-tauri/src/analysis/store.rs`, add focused store tests for `capture_run_snapshot` before committing.
+
+After editing and before committing, run these commands explicitly:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::capture_report_corpus_returns_reloaded_snapshot_before_provider_phases
 ```
 
 Expected: PASS with `1 passed`, not a green `0 tests` run.
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
+```
+
+Expected: PASS and not a green `0 tests` run.
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
+```
+
+Expected: PASS and not a green `0 tests` run.
 
 Also run:
 
@@ -265,8 +298,8 @@ Expected: PASS. Existing warnings outside touched files may remain; new warnings
 The implementation plan must include source guards:
 
 ```powershell
-rg -n "async fn capture_report_corpus|const SNAPSHOT_CAPTURE_FAILED_MESSAGE" src-tauri/src/analysis/report.rs
-rg -n "pub\\(super\\) async fn capture_report_corpus|const SNAPSHOT_CAPTURE_FAILED_MESSAGE" src-tauri/src/analysis/report/capture.rs
+rg -n "^async fn capture_report_corpus\(|^const SNAPSHOT_CAPTURE_FAILED_MESSAGE" src-tauri/src/analysis/report.rs
+rg -n "^pub\(super\) async fn capture_report_corpus\(|^const SNAPSHOT_CAPTURE_FAILED_MESSAGE" src-tauri/src/analysis/report/capture.rs
 ```
 
 Expected: first command has no matches after extraction; second command has both moved items.
