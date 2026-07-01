@@ -53,7 +53,7 @@
 - Consumes: approved design spec `docs/superpowers/specs/2026-07-01-analysis-report-requests-refactor-design.md`
 - Produces: clean baselines proving current report and corpus regression slices pass before extraction
 
-- [ ] **Step 1: Inspect the worktree before editing**
+- [x] **Step 1: Inspect the worktree before editing**
 
 Run:
 
@@ -63,7 +63,7 @@ git status --short --untracked-files=all
 
 Expected: either clean output, or unrelated existing changes that are clearly outside the implementation-owned files. Save this output in execution notes as `PRE_EDIT_STATUS`. If `src-tauri/src/analysis/report.rs` or `src-tauri/src/analysis/report/requests.rs` appears, continue with Steps 2-3 before editing.
 
-- [ ] **Step 2: Inspect any dirty tracked target file**
+- [x] **Step 2: Inspect any dirty tracked target file**
 
 Run these separately if `report.rs` or `report/requests.rs` is already modified or staged:
 
@@ -85,7 +85,7 @@ git diff --cached -- src-tauri/src/analysis/report/requests.rs
 
 Expected: you understand every pre-existing target-file change. Stop and ask before continuing if any pre-existing target-file change overlaps the request-helper extraction.
 
-- [ ] **Step 3: Inspect and fingerprint a pre-existing untracked `requests.rs`**
+- [x] **Step 3: Inspect and fingerprint a pre-existing untracked `requests.rs`**
 
 Run:
 
@@ -100,7 +100,7 @@ if (Test-Path -LiteralPath 'src-tauri/src/analysis/report/requests.rs') {
 
 Expected: if the file already exists, you capture status, length, SHA-256 hash, and contents because normal `git diff` does not show untracked file content. Stop and ask before continuing if this file contains pre-existing user work that is not the request-helper extraction.
 
-- [ ] **Step 4: Establish the focused report baseline**
+- [x] **Step 4: Establish the focused report baseline**
 
 Run:
 
@@ -110,7 +110,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 
 Expected: PASS and not a green `0 tests` run. Current snapshot at plan writing is expected to be about `22 passed`, but do not require the exact count if nearby tests changed before execution.
 
-- [ ] **Step 5: Establish the focused constant baseline**
+- [x] **Step 5: Establish the focused constant baseline**
 
 Run:
 
@@ -120,7 +120,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::chunk_t
 
 Expected: PASS with `1 passed`, not a green `0 tests` run.
 
-- [ ] **Step 6: Establish the focused corpus baseline**
+- [x] **Step 6: Establish the focused corpus baseline**
 
 Run:
 
