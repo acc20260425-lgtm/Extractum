@@ -147,7 +147,9 @@ Expected: PASS and not a green `0 tests` run.
 - Consumes: current `analysis::report::request_analysis_run_cancel` facade path.
 - Produces: focused `request_analysis_run_cancel_` tests that guard current error strings before lifecycle extraction.
 
-- [ ] **Step 1: Add test imports**
+**Execution adjustment:** `tauri::test` requires the `tauri/test` feature in this workspace, and enabling it caused the Windows test binary to fail before tests ran with `STATUS_ENTRYPOINT_NOT_FOUND`. With user approval, Task 2 uses a small pool-based cancellation core inside `report.rs` for the three error-string characterization tests. The command consumer/facade path remains guarded by the existing `report_commands.rs` import plus Task 4 facade source checks and `cargo check --all-targets`.
+
+- [x] **Step 1: Add test imports**
 
 In the `#[cfg(test)] mod tests` import block in `src-tauri/src/analysis/report.rs`, add `request_analysis_run_cancel` to the existing `use super::{...}` list and extend the LLM import:
 
@@ -172,7 +174,7 @@ use tauri::Manager;
 use tauri_plugin_sql::{DbInstances, DbPool};
 ```
 
-- [ ] **Step 2: Add Tauri DB test harness helpers**
+- [x] **Step 2: Add DB test harness helpers**
 
 Add these helpers near the existing sample helpers in the test module:
 
@@ -276,7 +278,7 @@ async fn insert_cancel_request_run(pool: &SqlitePool, run_id: i64, status: &str)
 
 The helper schema and insert values must keep `provider_profile`, `provider`, `model`, and `youtube_corpus_mode` non-null because `fetch_run_row` decodes them into `AnalysisRunRow` as `String`, not `Option<String>`. Do not remove these defaults or explicit inserted values; otherwise the characterization tests can fail during SQLx row decoding before reaching the cancellation error branches.
 
-- [ ] **Step 3: Add missing-run characterization test**
+- [x] **Step 3: Add missing-run characterization test**
 
 Add this test near `interrupted_cleanup_preserves_captured_snapshot_state_marker`:
 
@@ -298,7 +300,7 @@ async fn request_analysis_run_cancel_missing_run_keeps_not_found_message() {
 }
 ```
 
-- [ ] **Step 4: Add non-cancellable-status characterization test**
+- [x] **Step 4: Add non-cancellable-status characterization test**
 
 Add this test:
 
@@ -324,7 +326,7 @@ async fn request_analysis_run_cancel_completed_run_keeps_conflict_message() {
 }
 ```
 
-- [ ] **Step 5: Add inactive active-run characterization test**
+- [x] **Step 5: Add inactive active-run characterization test**
 
 Add this test:
 
@@ -350,34 +352,11 @@ async fn request_analysis_run_cancel_running_but_inactive_keeps_conflict_message
 }
 ```
 
-- [ ] **Step 6: Add command consumer characterization test**
+- [x] **Step 6: Preserve command consumer facade guard through compile/source checks**
 
-Add this test:
+Approved adjustment: do not add this runtime-level Tauri command test in Task 2. The local Tauri test runtime path failed before test execution in this Windows workspace. Preserve the consumer guard through `src-tauri/src/analysis/report_commands.rs` continuing to call `report::request_analysis_run_cancel`, Task 4 facade source checks, and `cargo check --all-targets`.
 
-```rust
-#[tokio::test]
-async fn request_analysis_run_cancel_command_consumer_keeps_facade_path() {
-    let pool = request_cancel_pool_with_runs().await;
-    let handle = app_handle_with_analysis_pool(pool).await;
-    let run_id = 407;
-
-    let error = cancel_analysis_run(
-        handle.clone(),
-        handle.state::<crate::analysis::AnalysisState>(),
-        handle.state::<LlmSchedulerState>(),
-        run_id,
-    )
-    .await
-    .expect_err("missing run should fail through command consumer");
-
-    assert_eq!(error.kind, AppErrorKind::NotFound);
-    assert_eq!(error.message, format!("Analysis run {run_id} not found"));
-}
-```
-
-This is the runtime-level consumer guard for `src-tauri/src/analysis/report_commands.rs`: it exercises the command wrapper and therefore the existing `report::request_analysis_run_cancel` facade path.
-
-- [ ] **Step 7: Run focused characterization tests**
+- [x] **Step 7: Run focused characterization tests**
 
 Run:
 
@@ -385,9 +364,9 @@ Run:
 cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::request_analysis_run_cancel_
 ```
 
-Expected: PASS and not a green `0 tests` run. Output includes four tests covering missing run, completed run, inactive running run, and the command consumer path.
+Expected: PASS and not a green `0 tests` run. Output includes three tests covering missing run, completed run, and inactive running run.
 
-- [ ] **Step 8: Run report tests after characterization**
+- [x] **Step 8: Run report tests after characterization**
 
 Run:
 
@@ -397,7 +376,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 8: Commit characterization tests**
+- [x] **Step 8: Commit characterization tests**
 
 Run:
 

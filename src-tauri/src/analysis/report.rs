@@ -761,14 +761,13 @@ pub async fn cleanup_interrupted_analysis_runs(handle: AppHandle) {
     }
 }
 
-pub(crate) async fn request_analysis_run_cancel(
-    handle: &AppHandle,
+async fn request_analysis_run_cancel_for_pool(
+    pool: &Pool<Sqlite>,
     state: &AnalysisState,
     scheduler: &LlmSchedulerState,
     run_id: i64,
-) -> AppResult<()> {
-    let pool = get_pool(handle).await?;
-    let run = fetch_run_row(&pool, run_id)
+) -> AppResult<String> {
+    let run = fetch_run_row(pool, run_id)
         .await?
         .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
 
@@ -786,7 +785,19 @@ pub(crate) async fn request_analysis_run_cancel(
         )));
     }
 
-    RunEvent::new(run_id, "progress", &run.status)
+    Ok(run.status)
+}
+
+pub(crate) async fn request_analysis_run_cancel(
+    handle: &AppHandle,
+    state: &AnalysisState,
+    scheduler: &LlmSchedulerState,
+    run_id: i64,
+) -> AppResult<()> {
+    let pool = get_pool(handle).await?;
+    let status = request_analysis_run_cancel_for_pool(&pool, state, scheduler, run_id).await?;
+
+    RunEvent::new(run_id, "progress", &status)
         .message("Cancelling analysis run...".to_string())
         .emit(handle);
 
@@ -1059,16 +1070,18 @@ mod tests {
     use super::{
         build_map_request, build_reduce_request, capture_report_corpus,
         chunk_target_chars_for_model_input_limit, finish_map_phase, mark_interrupted_analysis_runs,
-        parse_chunk_summary, resolve_analysis_telegram_history_scope,
-        run_analysis_step_with_cancel, validate_report_preflight, ReduceRequestParams,
-        ReportRunError, ReportRunInput, StartAnalysisReportRequest,
+        parse_chunk_summary, request_analysis_run_cancel_for_pool,
+        resolve_analysis_telegram_history_scope, run_analysis_step_with_cancel,
+        validate_report_preflight, ReduceRequestParams, ReportRunError, ReportRunInput,
+        StartAnalysisReportRequest,
     };
     use crate::analysis::corpus::{
         AnalysisRunPreflight, AnalysisRunPreflightLimits, CorpusLoadRequest, YoutubeCorpusMode,
     };
     use crate::analysis::models::{AnalysisPromptTemplate, ChunkSummary, CorpusMessage};
     use crate::error::AppErrorKind;
-    use crate::llm::{LlmRequestError, ProviderKind, ResolvedLlmProfile};
+    use crate::llm::{LlmRequestError, LlmSchedulerState, ProviderKind, ResolvedLlmProfile};
+    use sqlx::SqlitePool;
     use tokio_util::sync::CancellationToken;
 
     const SAMPLE_JSON: &str = r#"{"summary":"Brief","topics":["sync"],"notable_points":["Point"],"candidate_refs":["s1-i2"]}"#;
@@ -1119,6 +1132,86 @@ mod tests {
             api_key: "secret-key".to_string().into(),
             base_url: String::new(),
         }
+    }
+
+    async fn request_cancel_pool_with_runs() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+
+        sqlx::query(
+            "CREATE TABLE analysis_runs (
+                id INTEGER PRIMARY KEY,
+                run_type TEXT NOT NULL DEFAULT 'report',
+                scope_type TEXT NOT NULL DEFAULT 'single_source',
+                source_id INTEGER,
+                source_group_id INTEGER,
+                project_id INTEGER,
+                period_from INTEGER NOT NULL DEFAULT 0,
+                period_to INTEGER NOT NULL DEFAULT 0,
+                output_language TEXT NOT NULL DEFAULT 'English',
+                prompt_template_id INTEGER NOT NULL DEFAULT 1,
+                prompt_template_version INTEGER NOT NULL DEFAULT 1,
+                provider_profile TEXT NOT NULL DEFAULT 'research',
+                provider TEXT NOT NULL DEFAULT 'gemini',
+                model TEXT NOT NULL DEFAULT 'gemini-2.5-flash',
+                youtube_corpus_mode TEXT NOT NULL DEFAULT 'transcript_description',
+                telegram_history_scope TEXT,
+                status TEXT NOT NULL,
+                result_markdown TEXT,
+                trace_data_zstd BLOB,
+                scope_label_snapshot TEXT,
+                snapshot_captured_at TEXT,
+                snapshot_error TEXT,
+                error TEXT,
+                created_at INTEGER NOT NULL DEFAULT 1,
+                completed_at INTEGER
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("create analysis_runs");
+
+        sqlx::query("CREATE TABLE sources (id INTEGER PRIMARY KEY, title TEXT)")
+            .execute(&pool)
+            .await
+            .expect("create sources");
+        sqlx::query("CREATE TABLE analysis_source_groups (id INTEGER PRIMARY KEY, name TEXT)")
+            .execute(&pool)
+            .await
+            .expect("create groups");
+        sqlx::query("CREATE TABLE projects (id INTEGER PRIMARY KEY, name TEXT)")
+            .execute(&pool)
+            .await
+            .expect("create projects");
+        sqlx::query("CREATE TABLE analysis_prompt_templates (id INTEGER PRIMARY KEY, name TEXT)")
+            .execute(&pool)
+            .await
+            .expect("create templates");
+        sqlx::query("CREATE TABLE analysis_run_messages (run_id INTEGER NOT NULL)")
+            .execute(&pool)
+            .await
+            .expect("create run messages");
+
+        pool
+    }
+
+    async fn insert_cancel_request_run(pool: &SqlitePool, run_id: i64, status: &str) {
+        sqlx::query(
+            "INSERT INTO analysis_runs (
+                id, run_type, scope_type, status, period_from, period_to, output_language,
+                prompt_template_id, prompt_template_version, provider_profile, provider, model,
+                youtube_corpus_mode, created_at
+            ) VALUES (
+                ?, 'report', 'single_source', ?, 1, 2, 'English', 1, 1,
+                'research', 'gemini', 'gemini-2.5-flash', 'transcript_description', 1
+            )",
+        )
+        .bind(run_id)
+        .bind(status)
+        .execute(pool)
+        .await
+        .expect("insert analysis run");
     }
 
     #[test]
@@ -1343,6 +1436,59 @@ mod tests {
         assert_eq!(row.0, crate::analysis::ANALYSIS_STATUS_CANCELLED);
         assert_eq!(row.1.as_deref(), Some("2026-05-18T10:00:00Z"));
         assert_eq!(row.2, None);
+    }
+
+    #[tokio::test]
+    async fn request_analysis_run_cancel_missing_run_keeps_not_found_message() {
+        let pool = request_cancel_pool_with_runs().await;
+        let state = crate::analysis::AnalysisState::new();
+        let scheduler = LlmSchedulerState::new();
+        let run_id = 404;
+
+        let error = request_analysis_run_cancel_for_pool(&pool, &state, &scheduler, run_id)
+            .await
+            .expect_err("missing run should fail");
+
+        assert_eq!(error.kind, AppErrorKind::NotFound);
+        assert_eq!(error.message, format!("Analysis run {run_id} not found"));
+    }
+
+    #[tokio::test]
+    async fn request_analysis_run_cancel_completed_run_keeps_conflict_message() {
+        let pool = request_cancel_pool_with_runs().await;
+        insert_cancel_request_run(&pool, 405, crate::analysis::ANALYSIS_STATUS_COMPLETED).await;
+        let state = crate::analysis::AnalysisState::new();
+        let scheduler = LlmSchedulerState::new();
+        let run_id = 405;
+
+        let error = request_analysis_run_cancel_for_pool(&pool, &state, &scheduler, run_id)
+            .await
+            .expect_err("completed run should fail");
+
+        assert_eq!(error.kind, AppErrorKind::Conflict);
+        assert_eq!(
+            error.message,
+            format!("Analysis run {run_id} is not queued or running")
+        );
+    }
+
+    #[tokio::test]
+    async fn request_analysis_run_cancel_running_but_inactive_keeps_conflict_message() {
+        let pool = request_cancel_pool_with_runs().await;
+        insert_cancel_request_run(&pool, 406, crate::analysis::ANALYSIS_STATUS_RUNNING).await;
+        let state = crate::analysis::AnalysisState::new();
+        let scheduler = LlmSchedulerState::new();
+        let run_id = 406;
+
+        let error = request_analysis_run_cancel_for_pool(&pool, &state, &scheduler, run_id)
+            .await
+            .expect_err("inactive running run should fail");
+
+        assert_eq!(error.kind, AppErrorKind::Conflict);
+        assert_eq!(
+            error.message,
+            format!("Analysis run {run_id} is no longer active")
+        );
     }
 
     #[test]
