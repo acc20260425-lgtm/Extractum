@@ -778,7 +778,9 @@ Expected: no whitespace errors.
 - Consumes: verified lifecycle extraction from Task 4.
 - Produces: one Rust refactor commit.
 
-- [ ] **Step 1: Confirm intended files before staging**
+**Execution adjustment:** The Rust refactor commit was created at Task 3 to honor the user instruction to commit after each task. Task 5 therefore records the final staging/status audit and confirms the already-created refactor commit `76596857`.
+
+- [x] **Step 1: Confirm intended files before staging**
 
 Run:
 
@@ -788,7 +790,7 @@ git status --short --untracked-files=all
 
 Expected: only implementation-owned files are newly dirty beyond `PRE_EDIT_STATUS`.
 
-- [ ] **Step 2: Stage implementation-owned files**
+- [x] **Step 2: Stage implementation-owned files**
 
 Run:
 
@@ -796,7 +798,7 @@ Run:
 git add -- src-tauri/src/analysis/report.rs src-tauri/src/analysis/report/lifecycle.rs
 ```
 
-- [ ] **Step 3: Verify staged content**
+- [x] **Step 3: Verify staged content**
 
 Run:
 
@@ -814,7 +816,7 @@ git diff --cached --check
 
 Expected: no whitespace errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 
@@ -824,7 +826,7 @@ git commit -m "refactor: extract analysis report lifecycle helpers"
 
 Expected: commit succeeds.
 
-- [ ] **Step 5: Confirm final status against baseline**
+- [x] **Step 5: Confirm final status against baseline**
 
 Run:
 
