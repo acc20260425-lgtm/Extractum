@@ -52,7 +52,7 @@
 - Consumes: approved design spec at `docs/superpowers/specs/2026-07-01-analysis-report-capture-refactor-design.md`.
 - Produces: baseline status snapshot under `$env:TEMP` and pre-edit test evidence.
 
-- [ ] **Step 1: Capture pre-edit status**
+- [x] **Step 1: Capture pre-edit status**
 
 Run:
 
@@ -65,7 +65,7 @@ Get-Content -Raw -LiteralPath $preEditStatusPath
 
 Expected: review the output before editing. If the output is empty, the worktree baseline is clean. Keep `$env:ANALYSIS_REPORT_CAPTURE_STATUS_TAG` for later status comparisons in this plan run.
 
-- [ ] **Step 2: Inspect target-file drift if present**
+- [x] **Step 2: Inspect target-file drift if present**
 
 Run:
 
@@ -82,7 +82,7 @@ if (Test-Path -LiteralPath 'src-tauri/src/analysis/report/capture.rs') {
 
 Expected: if `report.rs` or `report/capture.rs` already has user changes, stop and decide how to isolate them before editing. Do not overwrite or stage pre-existing target-file changes.
 
-- [ ] **Step 3: Run focused capture baseline**
+- [x] **Step 3: Run focused capture baseline**
 
 Run:
 
@@ -92,7 +92,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::capture
 
 Expected: PASS with `1 passed`, not a green `0 tests` run. If this fails, stop because the capture behavior baseline is already red.
 
-- [ ] **Step 4: Run full report test baseline**
+- [x] **Step 4: Run full report test baseline**
 
 Run:
 
@@ -102,7 +102,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 
 Expected: PASS and not a green `0 tests` run. If this fails, stop and record the pre-existing failure before editing.
 
-- [ ] **Step 5: Run corpus boundary baseline**
+- [x] **Step 5: Run corpus boundary baseline**
 
 Run:
 
