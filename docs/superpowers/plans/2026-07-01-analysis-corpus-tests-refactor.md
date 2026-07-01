@@ -285,7 +285,7 @@ After removing the inline test module body, `src-tauri/src/analysis/corpus.rs` s
 - Consumes production corpus facade items from `crate::analysis::corpus`.
 - Produces the live-loading test module under `analysis::corpus::tests::live`.
 
-- [ ] **Step 1: Add live module imports**
+- [x] **Step 1: Add live module imports**
 
 At the top of `src-tauri/src/analysis/corpus/tests/live.rs`, add:
 
@@ -304,7 +304,7 @@ use crate::error::AppErrorKind;
 
 If rustc reports an unused import after all live tests move, remove only that unused import.
 
-- [ ] **Step 2: Move migrated-history and typed YouTube live tests**
+- [x] **Step 2: Move migrated-history and typed YouTube live tests**
 
 Move these tests from the old inline module into `live.rs`, preserving bodies and assertions:
 
@@ -318,7 +318,7 @@ youtube_description_missing_typed_metadata_skips_without_decoding_source_blob
 youtube_transcript_segment_evidence_uses_typed_source_context
 ```
 
-- [ ] **Step 3: Move live loader behavior tests**
+- [x] **Step 3: Move live loader behavior tests**
 
 Move these tests from the old inline module into `live.rs`, preserving bodies and assertions:
 
@@ -334,7 +334,7 @@ load_corpus_messages_includes_youtube_comment_only_in_comments_mode
 description_mode_creates_synthetic_description_message
 ```
 
-- [ ] **Step 4: Keep local-only helpers local**
+- [x] **Step 4: Keep local-only helpers local**
 
 If any helper is used only by `live.rs` after the move, keep it private in `live.rs` rather than exporting it from `harness.rs`. Do not change test assertions to avoid moving a helper.
 
