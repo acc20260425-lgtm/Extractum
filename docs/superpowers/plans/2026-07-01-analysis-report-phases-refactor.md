@@ -399,15 +399,18 @@ If inline tests still need `LlmRequestError`, `LlmSchedulerState`, or `ProviderK
 use crate::llm::{LlmRequestError, LlmSchedulerState, ProviderKind, ResolvedLlmProfile};
 ```
 
-Update the `super::models` import in `report.rs` to remove `AnalysisChunkSummaryEvent` if only `phases.rs` uses it:
+Keep `AnalysisChunkSummaryEvent` in the `super::models` import because `RunEvent::chunk_summary` remains in `report.rs`. Update the import to keep the current model set:
 
 ```rust
-use super::models::{AnalysisPromptTemplate, AnalysisRunEvent, ChunkSummary, CorpusMessage};
+use super::models::{
+    AnalysisChunkSummaryEvent, AnalysisPromptTemplate, AnalysisRunEvent, ChunkSummary,
+    CorpusMessage,
+};
 ```
 
 Keep `tokio_util::sync::CancellationToken` at the root only if production code still uses it. If only tests need it, import it inside `#[cfg(test)] mod tests` as today.
 
-Expected: no new unused-import warnings in `report.rs` or `phases.rs`.
+Expected: no new unused-import warnings in `report.rs` or `phases.rs`. `AnalysisChunkSummaryEvent` remains used by `RunEvent::chunk_summary` in `report.rs`.
 
 - [ ] **Step 6: Preserve non-moved private contracts in `report.rs`**
 
@@ -455,12 +458,14 @@ Expected: these items are not moved and are not widened to `pub(super)`, `pub(cr
 - Consumes: extraction from Task 2.
 - Produces: proof that moved items and visibility landed in the intended modules.
 
+Scheduler-backed runtime tests for `run_map_phase` and `run_reduce_phase` are intentionally not added in this move-only refactor. Because of that accepted risk, preserve the moved source byte-for-byte except for imports, module paths, visibility, and rustfmt, and treat the source guards in this task as required verification rather than optional smoke checks.
+
 - [ ] **Step 1: Verify moved item locations**
 
 Run:
 
 ```powershell
-rg -n "^\s*(pub\([^)]*\)\s+|pub\s+)?async fn run_map_phase\(|^\s*(pub\([^)]*\)\s+|pub\s+)?async fn run_reduce_phase\(|^\s*(pub\([^)]*\)\s+|pub\s+)?async fn run_analysis_step_with_cancel\(|^\s*(pub\([^)]*\)\s+|pub\s+)?fn finish_map_phase\(|^\s*(pub\([^)]*\)\s+|pub\s+)?struct ReportPipelineContext|^\s*(pub\([^)]*\)\s+|pub\s+)?struct ReducePhaseResult" src-tauri/src/analysis/report.rs
+rg -n "^\s*(pub\([^)]*\)\s+|pub\s+)?async fn run_map_phase\(|^\s*(pub\([^)]*\)\s+|pub\s+)?async fn run_reduce_phase\(|^\s*(pub\([^)]*\)\s+|pub\s+)?async fn run_analysis_step_with_cancel(<[^>]+>)?\(|^\s*(pub\([^)]*\)\s+|pub\s+)?fn finish_map_phase\(|^\s*(pub\([^)]*\)\s+|pub\s+)?struct ReportPipelineContext|^\s*(pub\([^)]*\)\s+|pub\s+)?struct ReducePhaseResult" src-tauri/src/analysis/report.rs
 ```
 
 Expected: no matches. `rg` exit code `1` is expected for this no-match guard.
@@ -468,7 +473,7 @@ Expected: no matches. `rg` exit code `1` is expected for this no-match guard.
 Run:
 
 ```powershell
-rg -n "^pub\(super\) async fn run_map_phase\(|^pub\(super\) async fn run_reduce_phase\(|^pub\(super\) async fn run_analysis_step_with_cancel\(|^pub\(super\) fn finish_map_phase\(|^pub\(super\) struct ReportPipelineContext|^pub\(super\) struct ReducePhaseResult" src-tauri/src/analysis/report/phases.rs
+rg -n "^pub\(super\) async fn run_map_phase\(|^pub\(super\) async fn run_reduce_phase\(|^pub\(super\) async fn run_analysis_step_with_cancel(<[^>]+>)?\(|^pub\(super\) fn finish_map_phase\(|^pub\(super\) struct ReportPipelineContext|^pub\(super\) struct ReducePhaseResult" src-tauri/src/analysis/report/phases.rs
 ```
 
 Expected: prints all moved phase items in `phases.rs`.
@@ -540,12 +545,22 @@ Expected: no matches. `rg` exit code `1` is expected for this no-match guard.
 Run:
 
 ```powershell
-rg -n '"Dispatching .* chunk analysis request|queued at position|Analyzing chunk|summarized\.|Chunk .* failed\.|Chunk .* cancelled\.|Some chunk summaries were not collected|Chunk worker crashed:|Writing final report|Final report queued at position|Final report generation failed\.|Final report generation cancelled\.|Analysis run cancelled\."' src-tauri/src/analysis/report/phases.rs
+rg -n '"Dispatching .* chunk analysis request|queued at position|Analyzing chunk|summarized\.|Chunk .* failed\.|Chunk .* cancelled\.|Some chunk summaries were not collected|Chunk worker crashed:|Writing final report|Final report queued at position|Final report generation failed\.|Final report generation cancelled\."|CANCELLED_RUN_MESSAGE' src-tauri/src/analysis/report/phases.rs
 ```
 
-Expected: prints provider-phase event and error literals in `phases.rs`.
+Expected: prints provider-phase event/error literals and `CANCELLED_RUN_MESSAGE` references in `phases.rs`. The literal `"Analysis run cancelled."` remains only in the private `CANCELLED_RUN_MESSAGE` const in `report.rs`.
 
-- [ ] **Step 6: Run focused map-finish tests**
+- [ ] **Step 6: Verify provider request kinds moved intact**
+
+Run:
+
+```powershell
+rg -n "LlmRequestKind::AnalysisReportMap|LlmRequestKind::AnalysisReportReduce" src-tauri/src/analysis/report/phases.rs
+```
+
+Expected: prints both request kinds in `phases.rs`.
+
+- [ ] **Step 7: Run focused map-finish tests**
 
 Run:
 
@@ -555,7 +570,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::finish_
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 7: Run focused cancellation-helper tests**
+- [ ] **Step 8: Run focused cancellation-helper tests**
 
 Run:
 
