@@ -17,9 +17,9 @@ use crate::llm::{
 };
 
 use super::corpus::{
-    load_corpus_messages, preflight_analysis_run, preflight_limit_error, resolve_analysis_sources,
-    AnalysisRunPreflight, AnalysisRunPreflightLimits, AnalysisSourceResolutionError,
-    CorpusLoadRequest, YoutubeCorpusMode,
+    preflight_analysis_run, preflight_limit_error, resolve_analysis_sources, AnalysisRunPreflight,
+    AnalysisRunPreflightLimits, AnalysisSourceResolutionError, CorpusLoadRequest,
+    YoutubeCorpusMode,
 };
 use super::events::emit_analysis_event;
 use super::models::{
@@ -27,9 +27,8 @@ use super::models::{
     CorpusMessage,
 };
 use super::store::{
-    capture_run_snapshot, fetch_prompt_template, fetch_source_group, find_active_duplicate_run,
-    insert_analysis_run, sanitize_snapshot_error, set_run_status, AnalysisRunInsert,
-    DuplicateRunLookup,
+    fetch_prompt_template, fetch_source_group, find_active_duplicate_run, insert_analysis_run,
+    set_run_status, AnalysisRunInsert, DuplicateRunLookup,
 };
 use super::trace::{build_trace_data, compress_trace_data};
 use super::{
@@ -38,9 +37,11 @@ use super::{
     ANALYSIS_STATUS_RUNNING, TEMPLATE_KIND_REPORT,
 };
 
+mod capture;
 mod lifecycle;
 mod requests;
 
+use self::capture::capture_report_corpus;
 pub use self::lifecycle::cleanup_interrupted_analysis_runs;
 #[cfg(test)]
 use self::lifecycle::request_analysis_run_cancel_for_pool;
@@ -55,7 +56,6 @@ use self::requests::{
 pub(super) const INTERRUPTED_RUN_MESSAGE: &str =
     "Analysis run was interrupted when the app was restarted.";
 const CANCELLED_RUN_MESSAGE: &str = "Analysis run cancelled.";
-const SNAPSHOT_CAPTURE_FAILED_MESSAGE: &str = "Snapshot capture failed";
 
 pub(crate) struct StartAnalysisReportRequest {
     pub(crate) source_id: Option<i64>,
@@ -97,35 +97,6 @@ enum ReportRunError {
     Failed(String),
     CaptureFailed(String),
     Cancelled(String),
-}
-
-async fn capture_report_corpus(
-    pool: &Pool<Sqlite>,
-    run_id: i64,
-    scope_label: &str,
-    request: &CorpusLoadRequest,
-) -> Result<Vec<CorpusMessage>, ReportRunError> {
-    let corpus = load_corpus_messages(pool, request).await.map_err(|error| {
-        ReportRunError::CaptureFailed(sanitize_snapshot_error(
-            "Corpus preload failed",
-            &error.to_string(),
-        ))
-    })?;
-
-    if corpus.is_empty() {
-        return Err(ReportRunError::CaptureFailed(
-            SNAPSHOT_CAPTURE_FAILED_MESSAGE.to_string(),
-        ));
-    }
-
-    capture_run_snapshot(pool, run_id, scope_label, &corpus)
-        .await
-        .map_err(|error| {
-            ReportRunError::CaptureFailed(sanitize_snapshot_error(
-                SNAPSHOT_CAPTURE_FAILED_MESSAGE,
-                &error.to_string(),
-            ))
-        })
 }
 
 pub(super) struct RunEvent {

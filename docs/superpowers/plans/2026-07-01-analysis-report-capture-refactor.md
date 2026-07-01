@@ -129,7 +129,7 @@ Expected: PASS and not a green `0 tests` run. This protects the recently split c
   - `pub(super) async fn capture_report_corpus(pool: &Pool<Sqlite>, run_id: i64, scope_label: &str, request: &CorpusLoadRequest) -> Result<Vec<CorpusMessage>, ReportRunError>`
   - private constant `SNAPSHOT_CAPTURE_FAILED_MESSAGE: &str = "Snapshot capture failed"`
 
-- [ ] **Step 1: Create `capture.rs` with the moved helper**
+- [x] **Step 1: Create `capture.rs` with the moved helper**
 
 Create `src-tauri/src/analysis/report/capture.rs` with this content:
 
@@ -175,7 +175,7 @@ pub(super) async fn capture_report_corpus(
 
 Expected: `capture.rs` owns all imports needed by the capture helper and does not expose the module outside `analysis::report`.
 
-- [ ] **Step 2: Declare and import the capture module from `report.rs`**
+- [x] **Step 2: Declare and import the capture module from `report.rs`**
 
 In `src-tauri/src/analysis/report.rs`, update the module/import block near existing `mod lifecycle;` and `mod requests;` to include:
 
@@ -204,7 +204,7 @@ use self::requests::{
 
 Expected: `capture_report_corpus` is available to `run_report_pipeline` and the inline `report::tests` through `super::capture_report_corpus`.
 
-- [ ] **Step 3: Remove moved constant and helper from `report.rs`**
+- [x] **Step 3: Remove moved constant and helper from `report.rs`**
 
 Delete this constant from `report.rs`:
 
@@ -247,7 +247,7 @@ async fn capture_report_corpus(
 
 Expected: `report.rs` no longer defines the capture constant or capture helper directly.
 
-- [ ] **Step 4: Remove capture-only imports from `report.rs`**
+- [x] **Step 4: Remove capture-only imports from `report.rs`**
 
 Update the `super::corpus` import in `report.rs` from:
 
@@ -290,7 +290,7 @@ use super::store::{
 
 Expected: `report.rs` keeps only imports it still uses after extraction.
 
-- [ ] **Step 5: Preserve inline test access**
+- [x] **Step 5: Preserve inline test access**
 
 Confirm the existing `#[cfg(test)] mod tests` import block in `report.rs` still includes `capture_report_corpus` from the parent module:
 
