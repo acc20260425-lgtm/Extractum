@@ -50,7 +50,7 @@
 - Consumes: approved lifecycle design spec.
 - Produces: `PRE_EDIT_STATUS` baseline and clean pre-edit test baseline.
 
-- [ ] **Step 1: Capture pre-edit status**
+- [x] **Step 1: Capture pre-edit status**
 
 Run:
 
@@ -69,7 +69,7 @@ Get-Content -Raw -LiteralPath "$env:TEMP\analysis-report-lifecycle-pre-edit-stat
 
 Expected: the file content matches the visible `git status` output. If `src-tauri/src/analysis/report.rs` or `src-tauri/src/analysis/report/lifecycle.rs` appears, inspect Steps 2-3 before editing.
 
-- [ ] **Step 2: Inspect dirty tracked target files**
+- [x] **Step 2: Inspect dirty tracked target files**
 
 Run separately if a target file is modified or staged:
 
@@ -91,7 +91,7 @@ git diff --cached -- src-tauri/src/analysis/report/lifecycle.rs
 
 Expected: no unreviewed target-file baseline changes. Stop before editing if a pre-existing target-file change overlaps lifecycle extraction.
 
-- [ ] **Step 3: Inspect pre-existing untracked lifecycle module**
+- [x] **Step 3: Inspect pre-existing untracked lifecycle module**
 
 Run:
 
@@ -106,7 +106,7 @@ if (Test-Path -LiteralPath 'src-tauri/src/analysis/report/lifecycle.rs') {
 
 Expected: if the file exists, you capture status, length, SHA-256 hash, and raw contents. Stop before editing if it contains pre-existing user work.
 
-- [ ] **Step 4: Establish report baseline**
+- [x] **Step 4: Establish report baseline**
 
 Run:
 
@@ -116,7 +116,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 5: Establish interrupted cleanup focused baseline**
+- [x] **Step 5: Establish interrupted cleanup focused baseline**
 
 Run:
 
@@ -126,7 +126,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::interru
 
 Expected: PASS with `1 passed`, not a green `0 tests` run.
 
-- [ ] **Step 6: Establish corpus boundary baseline**
+- [x] **Step 6: Establish corpus boundary baseline**
 
 Run:
 
