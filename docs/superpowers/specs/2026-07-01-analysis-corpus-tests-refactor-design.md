@@ -1,7 +1,7 @@
 # Analysis Corpus Tests Refactor Design
 
 **Date:** 2026-07-01
-**Status:** active design, not implemented as of 2026-07-01; written spec ready for review before implementation planning
+**Status:** implemented and verified as of 2026-07-01; historical design record
 **Scope:** internal Rust test-only refactor of `src-tauri/src/analysis/corpus.rs` into nested corpus test modules.
 
 ## Goal
