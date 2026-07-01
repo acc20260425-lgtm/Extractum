@@ -102,6 +102,14 @@ pub(super) struct ReducePhaseResult {
     pub(super) completion: LlmCompletion,
 }
 
+impl ReportPipelineContext {
+    pub(super) async fn ensure_not_cancelled(&self) -> Result<(), ReportRunError>;
+
+    async fn cancel_children(&self);
+
+    pub(super) fn emit(&self, event: RunEvent);
+}
+
 pub(super) fn finish_map_phase(
     ordered_summaries: Vec<Option<ChunkSummary>>,
     first_error: Option<ReportRunError>,
@@ -138,6 +146,8 @@ enum ReportRunError {
 
 `ReportRunInput` remains defined in `report.rs` with its current private visibility. Because `report/phases.rs` is a child module of `report.rs`, it can read the private type and fields through `super::ReportRunInput` without widening the type. Do not move it and do not make it `pub(super)`, `pub(crate)`, or `pub` in this slice.
 
+`CANCELLED_RUN_MESSAGE` remains defined in `report.rs` with private visibility. Because `report/phases.rs` is a child module of `report.rs`, it can read the private constant through `super::CANCELLED_RUN_MESSAGE` without widening it. Do not make it `pub(super)`, `pub(crate)`, or `pub`.
+
 `RunEvent` remains defined in `report.rs`. `report/phases.rs` currently needs these builder methods:
 
 - `RunEvent::new`
@@ -161,9 +171,13 @@ rg -n "^\s*pub(\([^)]*\))?\s+enum ReportRunError" src-tauri/src/analysis/report.
 rg -n "^enum ReportRunError" src-tauri/src/analysis/report.rs
 rg -n "^\s*pub(\([^)]*\))?\s+struct ReportRunInput" src-tauri/src/analysis/report.rs
 rg -n "^struct ReportRunInput" src-tauri/src/analysis/report.rs
+rg -n "^\s*pub.*CANCELLED_RUN_MESSAGE" src-tauri/src/analysis/report.rs
+rg -n "^const CANCELLED_RUN_MESSAGE" src-tauri/src/analysis/report.rs
+rg -n "^    pub\(super\) async fn ensure_not_cancelled" src-tauri/src/analysis/report/phases.rs
+rg -n "^    pub\(super\) fn emit" src-tauri/src/analysis/report/phases.rs
 ```
 
-Expected: first, third, and fifth commands have no matches; `rg` exit code `1` is expected for those no-match guards. Second command prints exactly one private `mod phases;` line. Fourth command prints exactly one private `enum ReportRunError` line. Sixth command prints exactly one private `struct ReportRunInput` line.
+Expected: first, third, fifth, and seventh commands have no matches; `rg` exit code `1` is expected for those no-match guards. Second command prints exactly one private `mod phases;` line. Fourth command prints exactly one private `enum ReportRunError` line. Sixth command prints exactly one private `struct ReportRunInput` line. Eighth command prints exactly one private `const CANCELLED_RUN_MESSAGE` line. Ninth and tenth commands print the `pub(super)` `ReportPipelineContext` methods consumed by `report.rs`.
 
 Expected production API changes outside `analysis::report`: none.
 
@@ -232,10 +246,10 @@ Preserve current error behavior exactly:
 The implementation plan must include source or test guards for these literals:
 
 ```powershell
-rg -n '"Some chunk summaries were not collected"|"Chunk worker crashed:|Final report generation failed\.|Final report generation cancelled\.|Analysis run cancelled\."' src-tauri/src/analysis/report/phases.rs
+rg -n '"Dispatching .* chunk analysis request|queued at position|Analyzing chunk|summarized\.|Chunk .* failed\.|Chunk .* cancelled\.|Some chunk summaries were not collected|Chunk worker crashed:|Writing final report|Final report queued at position|Final report generation failed\.|Final report generation cancelled\.|Analysis run cancelled\."' src-tauri/src/analysis/report/phases.rs
 ```
 
-Expected: all provider-phase literals are present in `report/phases.rs` after extraction.
+Expected: all provider-phase event and error literals are present in `report/phases.rs` after extraction. These source guards are required because this slice does not add new scheduler-backed runtime tests for `run_map_phase` or `run_reduce_phase`.
 
 ## Non-Goals
 
@@ -315,6 +329,8 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 ```
 
 Expected: PASS and not a green `0 tests` run. This guards the full inline report test surface while phase helpers move.
+
+This slice does not add new scheduler-backed runtime tests for `run_map_phase` or `run_reduce_phase`. That is an accepted risk for this move-only refactor because those paths require LLM scheduler/provider orchestration; the implementation must instead preserve the moved source byte-for-byte except for module paths/imports/visibility, run the full `analysis::report::tests::` slice, run `cargo check --all-targets`, and use the provider-phase event/error literal guards below.
 
 After editing and before committing, run these commands explicitly:
 
