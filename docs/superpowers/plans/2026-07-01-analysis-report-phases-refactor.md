@@ -146,7 +146,7 @@ Expected: PASS and not a green `0 tests` run. If this fails, stop and record the
   - `pub(super) async fn run_map_phase(ctx, chunks)`
   - `pub(super) async fn run_reduce_phase(ctx, input, chunk_summaries)`
 
-- [ ] **Step 1: Create `phases.rs` with imports and moved items**
+- [x] **Step 1: Create `phases.rs` with imports and moved items**
 
 Create `src-tauri/src/analysis/report/phases.rs` by moving the existing implementations of these items from `src-tauri/src/analysis/report.rs`:
 
@@ -225,7 +225,7 @@ use super::{ReportRunError, ReportRunInput, RunEvent, CANCELLED_RUN_MESSAGE};
 
 Expected: moved function bodies are preserved byte-for-byte except for visibility, imports, module paths, and rustfmt.
 
-- [ ] **Step 2: Apply required visibility in `phases.rs`**
+- [x] **Step 2: Apply required visibility in `phases.rs`**
 
 Update the moved declarations in `phases.rs` to this visibility shape:
 
@@ -304,7 +304,7 @@ pub(super) async fn run_reduce_phase(
 
 Expected: parent `report.rs` can construct `ReportPipelineContext`, call `ensure_not_cancelled`, call `emit`, and read `ctx.pool`, `reduce_result.request_id`, and `reduce_result.completion`.
 
-- [ ] **Step 3: Declare and import the phases module from `report.rs`**
+- [x] **Step 3: Declare and import the phases module from `report.rs`**
 
 In `src-tauri/src/analysis/report.rs`, update the module declarations to include `phases`:
 
@@ -326,7 +326,7 @@ use self::phases::{finish_map_phase, run_analysis_step_with_cancel};
 
 Expected: production code uses `run_map_phase`, `run_reduce_phase`, and `ReportPipelineContext` through root private imports. Inline tests keep using `super::finish_map_phase` and `super::run_analysis_step_with_cancel`.
 
-- [ ] **Step 4: Remove moved phase items from `report.rs`**
+- [x] **Step 4: Remove moved phase items from `report.rs`**
 
 Delete these complete items from `src-tauri/src/analysis/report.rs` after they have been moved to `phases.rs`. For each item, delete from the shown signature or type declaration through its matching closing brace.
 
@@ -375,7 +375,7 @@ async fn run_reduce_phase(
 
 Expected: `report.rs` still contains `ReportRunInput`, `validate_report_preflight`, `run_report_pipeline`, and `start_analysis_report_run`.
 
-- [ ] **Step 5: Remove phase-only imports from `report.rs`**
+- [x] **Step 5: Remove phase-only imports from `report.rs`**
 
 Update the top of `src-tauri/src/analysis/report.rs` by removing these root imports when they are no longer used outside `phases.rs`:
 
@@ -414,7 +414,7 @@ Keep `tokio_util::sync::CancellationToken` at the root only if production code s
 
 Expected: no new unused-import warnings in `report.rs` or `phases.rs`. `AnalysisChunkSummaryEvent` remains used by `RunEvent::chunk_summary` in `report.rs`.
 
-- [ ] **Step 6: Preserve non-moved private contracts in `report.rs`**
+- [x] **Step 6: Preserve non-moved private contracts in `report.rs`**
 
 Confirm these definitions remain in `src-tauri/src/analysis/report.rs`:
 
