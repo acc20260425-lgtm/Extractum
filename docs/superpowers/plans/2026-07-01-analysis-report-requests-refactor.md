@@ -179,7 +179,7 @@ pub(super) fn chunk_target_chars_for_model_input_limit(
 ) -> usize;
 ```
 
-- [ ] **Step 1: Create the nested module file with imports and constants**
+- [x] **Step 1: Create the nested module file with imports and constants**
 
 Create `src-tauri/src/analysis/report/requests.rs` with this header and constant block:
 
@@ -197,7 +197,7 @@ const ANALYSIS_CHUNK_ESTIMATED_CHARS_PER_TOKEN: usize = 3;
 const ANALYSIS_CHUNK_MIN_TARGET_CHARS: usize = 2_000;
 ```
 
-- [ ] **Step 2: Move `chunk_messages` byte-for-byte and widen only module visibility**
+- [x] **Step 2: Move `chunk_messages` byte-for-byte and widen only module visibility**
 
 Cut the existing `chunk_messages` function from `report.rs` and paste it below the constants in `requests.rs`. Change only the signature visibility:
 
@@ -207,7 +207,7 @@ pub(super) fn chunk_messages(messages: &[CorpusMessage], max_chars: usize) -> Ve
 
 The body stays byte-for-byte the same.
 
-- [ ] **Step 3: Move `format_chunk_corpus` byte-for-byte and keep it private**
+- [x] **Step 3: Move `format_chunk_corpus` byte-for-byte and keep it private**
 
 Cut the existing `format_chunk_corpus` function from `report.rs` and paste it below `chunk_messages` in `requests.rs`. Keep this signature private:
 
@@ -217,7 +217,7 @@ fn format_chunk_corpus(messages: &[CorpusMessage]) -> String {
 
 The body stays byte-for-byte the same.
 
-- [ ] **Step 4: Move `build_map_request` byte-for-byte and widen only module visibility**
+- [x] **Step 4: Move `build_map_request` byte-for-byte and widen only module visibility**
 
 Cut the existing `build_map_request` function from `report.rs` and paste it below `format_chunk_corpus` in `requests.rs`. Change only the signature visibility:
 
@@ -233,7 +233,7 @@ pub(super) fn build_map_request(
 
 The prompt strings, request ID format, profile assignment, model override, and message structure stay byte-for-byte the same.
 
-- [ ] **Step 5: Move `extract_json_payload` byte-for-byte and widen only module visibility**
+- [x] **Step 5: Move `extract_json_payload` byte-for-byte and widen only module visibility**
 
 Cut the existing `extract_json_payload` function from `report.rs` and paste it below `build_map_request` in `requests.rs`. Change only the signature visibility:
 
@@ -249,7 +249,7 @@ The body stays byte-for-byte the same, including these exact error strings:
 "LLM response did not contain JSON"
 ```
 
-- [ ] **Step 6: Move `parse_chunk_summary` byte-for-byte and widen only module visibility**
+- [x] **Step 6: Move `parse_chunk_summary` byte-for-byte and widen only module visibility**
 
 Cut the existing `parse_chunk_summary` function from `report.rs` and paste it below `extract_json_payload` in `requests.rs`. Change only the signature visibility:
 
@@ -263,7 +263,7 @@ The body stays byte-for-byte the same, including this exact error prefix:
 "Failed to parse chunk summary JSON: {e}"
 ```
 
-- [ ] **Step 7: Move `summarize_chunk_for_reduce` byte-for-byte and keep it private**
+- [x] **Step 7: Move `summarize_chunk_for_reduce` byte-for-byte and keep it private**
 
 Cut the existing `summarize_chunk_for_reduce` function from `report.rs` and paste it below `parse_chunk_summary` in `requests.rs`. Keep this signature private:
 
@@ -273,7 +273,7 @@ fn summarize_chunk_for_reduce(summary: &ChunkSummary) -> String {
 
 The body stays byte-for-byte the same, including the `normalize_ref` filtering.
 
-- [ ] **Step 8: Move `ReduceRequestParams` and expose fields only to the parent module**
+- [x] **Step 8: Move `ReduceRequestParams` and expose fields only to the parent module**
 
 Cut the existing `ReduceRequestParams` struct from `report.rs` and paste it below `summarize_chunk_for_reduce` in `requests.rs`. Change the struct and every field to `pub(super)`:
 
@@ -291,7 +291,7 @@ pub(super) struct ReduceRequestParams<'a> {
 }
 ```
 
-- [ ] **Step 9: Move `build_reduce_request` byte-for-byte and widen only module visibility**
+- [x] **Step 9: Move `build_reduce_request` byte-for-byte and widen only module visibility**
 
 Cut the existing `build_reduce_request` function from `report.rs` and paste it below `ReduceRequestParams` in `requests.rs`. Change only the signature visibility:
 
@@ -301,7 +301,7 @@ pub(super) fn build_reduce_request(params: ReduceRequestParams<'_>) -> LlmChatRe
 
 The prompt strings, request ID format, profile assignment, model override, chunk summary formatting, and message structure stay byte-for-byte the same.
 
-- [ ] **Step 10: Move `chunk_target_chars_for_model_input_limit` byte-for-byte and widen only module visibility**
+- [x] **Step 10: Move `chunk_target_chars_for_model_input_limit` byte-for-byte and widen only module visibility**
 
 Cut the existing `chunk_target_chars_for_model_input_limit` function from `report.rs` and paste it at the bottom of `requests.rs`. Change only the signature visibility:
 
@@ -313,7 +313,7 @@ pub(super) fn chunk_target_chars_for_model_input_limit(
 
 The body stays byte-for-byte the same. The constants used by this function live in `requests.rs`.
 
-- [ ] **Step 11: Declare and import the nested module from `report.rs`**
+- [x] **Step 11: Declare and import the nested module from `report.rs`**
 
 Add this module declaration near the top of `report.rs`, after the `use` block and before constants:
 
@@ -332,7 +332,7 @@ use self::requests::{
 
 If `extract_json_payload` is imported only for tests, do not import it in this production import block; import it inside the test module in Step 13.
 
-- [ ] **Step 12: Remove imports from `report.rs` that moved to `requests.rs`**
+- [x] **Step 12: Remove imports from `report.rs` that moved to `requests.rs`**
 
 Change the `crate::llm` import in `report.rs` from:
 
@@ -376,7 +376,7 @@ const CANCELLED_RUN_MESSAGE: &str = "Analysis run cancelled.";
 const SNAPSHOT_CAPTURE_FAILED_MESSAGE: &str = "Snapshot capture failed";
 ```
 
-- [ ] **Step 13: Update the inline report test imports**
+- [x] **Step 13: Update the inline report test imports**
 
 Change the test module imports so production helpers come through the parent module imports, and `extract_json_payload` comes directly from the nested module:
 
@@ -395,7 +395,7 @@ mod tests {
 
 Keep the remaining `crate::analysis::corpus`, `crate::analysis::models`, `crate::error`, `crate::llm`, and `tokio_util` imports unchanged unless `cargo check` proves an import is unused.
 
-- [ ] **Step 14: Confirm no moved helper definitions remain in `report.rs`**
+- [x] **Step 14: Confirm no moved helper definitions remain in `report.rs`**
 
 Run:
 
@@ -405,7 +405,7 @@ rg -n "^(const ANALYSIS_CHUNK|fn chunk_messages|fn format_chunk_corpus|fn build_
 
 Expected: no matches.
 
-- [ ] **Step 15: Confirm the nested module owns the moved helper definitions**
+- [x] **Step 15: Confirm the nested module owns the moved helper definitions**
 
 Run:
 
@@ -415,7 +415,7 @@ rg -n "^(const ANALYSIS_CHUNK|pub\\(super\\) fn chunk_messages|fn format_chunk_c
 
 Expected: matches for every moved constant, every public parent-facing helper, and the two private helper functions.
 
-- [ ] **Step 16: Confirm `extract_json_payload` has exactly parent-module visibility**
+- [x] **Step 16: Confirm `extract_json_payload` has exactly parent-module visibility**
 
 Run:
 
