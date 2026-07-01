@@ -1,7 +1,7 @@
 # Analysis Report Requests Refactor Design
 
 **Date:** 2026-07-01
-**Status:** active design, not implemented as of 2026-07-01; written spec ready for review before implementation planning
+**Status:** implemented; historical design record as of 2026-07-01
 **Scope:** internal Rust refactor of pure analysis report request, chunking, and parsing helpers.
 
 ## Goal
