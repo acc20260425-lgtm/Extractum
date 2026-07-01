@@ -327,7 +327,7 @@ Expected: no matches. `rg` exit code `1` is expected for this no-match guard.
 - Consumes: extraction from Task 2.
 - Produces: proof that the moved items are in the intended module and no visibility was widened.
 
-- [ ] **Step 1: Verify moved item locations**
+- [x] **Step 1: Verify moved item locations**
 
 Run:
 
@@ -338,7 +338,7 @@ rg -n "^pub\(super\) async fn capture_report_corpus\(|^const SNAPSHOT_CAPTURE_FA
 
 Expected: first command has no matches. `rg` exit code `1` is expected for this no-match guard. Second command prints both the `pub(super) async fn capture_report_corpus(` line and the `const SNAPSHOT_CAPTURE_FAILED_MESSAGE` line.
 
-- [ ] **Step 2: Verify the capture module stays private**
+- [x] **Step 2: Verify the capture module stays private**
 
 Run:
 
@@ -349,7 +349,7 @@ rg -n "^mod capture;" src-tauri/src/analysis/report.rs
 
 Expected: first command has no matches. `rg` exit code `1` is expected for this no-match guard. Second command prints exactly one `mod capture;` line.
 
-- [ ] **Step 3: Verify `ReportRunError` stayed private and in `report.rs`**
+- [x] **Step 3: Verify `ReportRunError` stayed private and in `report.rs`**
 
 Run:
 
@@ -360,7 +360,7 @@ rg -n "^enum ReportRunError" src-tauri/src/analysis/report.rs
 
 Expected: first command has no matches. `rg` exit code `1` is expected for this no-match guard. Second command prints exactly one private `enum ReportRunError` line in `report.rs`.
 
-- [ ] **Step 4: Verify error strings moved to `capture.rs` only**
+- [x] **Step 4: Verify error strings moved to `capture.rs` only**
 
 Run:
 
@@ -372,7 +372,7 @@ rg -n '"Corpus preload failed"|"Snapshot capture failed"' src-tauri/src/analysis
 
 Expected: first command prints both literals in `capture.rs`. The second and third commands have no matches. `rg` exit code `1` is expected for those no-match guards.
 
-- [ ] **Step 5: Run focused capture test**
+- [x] **Step 5: Run focused capture test**
 
 Run:
 
