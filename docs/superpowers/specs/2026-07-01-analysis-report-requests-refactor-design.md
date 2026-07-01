@@ -6,7 +6,7 @@
 
 ## Goal
 
-Reduce the responsibility of `src-tauri/src/analysis/report.rs` by extracting pure report request-building, chunking, and map-summary parsing helpers into a focused private sibling module, without changing report behavior, prompts, request IDs, event flow, cancellation, database writes, or Tauri command contracts.
+Reduce the responsibility of `src-tauri/src/analysis/report.rs` by extracting pure report request-building, chunking, and map-summary parsing helpers into a focused private nested module, without changing report behavior, prompts, request IDs, event flow, cancellation, database writes, or Tauri command contracts.
 
 This is the next conservative slice after simplifying `analysis::corpus`. It intentionally avoids the runtime-heavy map/reduce orchestration and run lifecycle code so the first `report.rs` split is mostly pure, easy to verify, and low risk.
 
@@ -51,7 +51,7 @@ Current consumers are internal to `report.rs`:
 
 ## Proposed Architecture
 
-Create a private nested module:
+Create a private nested module declared from `src-tauri/src/analysis/report.rs`:
 
 - `src-tauri/src/analysis/report/requests.rs`
 
@@ -59,6 +59,8 @@ Keep `src-tauri/src/analysis/report.rs` as the report workflow facade:
 
 - add `mod requests;`;
 - import only the request helpers it needs through explicit `self::requests` imports;
+- do not add any root re-export from `analysis/mod.rs`;
+- keep `requests` private to `analysis::report`;
 - keep all runtime orchestration, cancellation, event emission, snapshot capture, run lifecycle, and command entry points in `report.rs`.
 
 Move these items from `report.rs` to `report/requests.rs`:
@@ -143,20 +145,27 @@ pub(super) fn build_reduce_request(params: ReduceRequestParams<'_>) -> LlmChatRe
 pub(super) fn chunk_target_chars_for_model_input_limit(
     model_input_token_limit: Option<usize>,
 ) -> usize;
-```
 
-These helpers are used by current tests and may also be exposed as `pub(super)`:
-
-```rust
 pub(super) fn extract_json_payload(text: &str) -> Result<&str, String>;
 ```
 
-Keep these private inside `requests.rs` unless compilation proves current tests need them:
+Keep these private inside `requests.rs`:
 
 ```rust
 fn format_chunk_corpus(messages: &[CorpusMessage]) -> String;
 fn summarize_chunk_for_reduce(summary: &ChunkSummary) -> String;
 ```
+
+Current test dependency inventory:
+
+- `chunk_target_chars_are_derived_from_model_input_limit_with_fallback` calls `chunk_target_chars_for_model_input_limit`;
+- `extracts_json_with_text_before_and_after` calls `extract_json_payload`;
+- `extracts_json_inside_markdown_fence` calls `extract_json_payload`;
+- `parse_chunk_summary_ignores_non_json_prefix_with_braces` calls `parse_chunk_summary`;
+- `parse_chunk_summary_rejects_malformed_payload` calls `parse_chunk_summary`;
+- `build_map_request_keeps_run_scoped_request_and_profile` calls `build_map_request`;
+- `build_reduce_request_keeps_run_scoped_request_and_profile` calls `build_reduce_request` and constructs `ReduceRequestParams`;
+- current tests do not call `format_chunk_corpus` or `summarize_chunk_for_reduce` directly, so those helpers should stay private.
 
 Expected production API changes outside `analysis::report`: none.
 
@@ -282,6 +291,14 @@ Expected: PASS and not a green `0 tests` run. The output must include request-he
 - `analysis::report::tests::parse_chunk_summary_rejects_malformed_payload`
 - `analysis::report::tests::build_map_request_keeps_run_scoped_request_and_profile`
 - `analysis::report::tests::build_reduce_request_keeps_run_scoped_request_and_profile`
+
+The implementation plan must also require one focused constant-behavior guard:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::chunk_target_chars_are_derived_from_model_input_limit_with_fallback
+```
+
+Expected: PASS with `1 passed`, not a green `0 tests` run. This is the required regression guard for the moved `ANALYSIS_CHUNK_*` constants. Do not change constant values in this refactor.
 
 Also run consumer and compile checks:
 
