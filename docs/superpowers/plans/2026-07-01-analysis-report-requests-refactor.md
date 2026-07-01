@@ -453,7 +453,7 @@ Expected: matches only in the test import `use super::requests::extract_json_pay
 - Consumes: extracted helper surface from Task 2.
 - Produces: verified implementation ready for the refactor commit.
 
-- [ ] **Step 1: Format the Rust code**
+- [x] **Step 1: Format the Rust code**
 
 Run:
 
@@ -463,7 +463,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml
 
 Expected: command exits 0. After this command, inspect changed files before staging.
 
-- [ ] **Step 2: Check implementation-owned file list after formatting**
+- [x] **Step 2: Check implementation-owned file list after formatting**
 
 Run:
 
@@ -494,7 +494,7 @@ git ls-files --others --exclude-standard
 
 Expected: the only new implementation-owned paths are `src-tauri/src/analysis/report.rs` and `src-tauri/src/analysis/report/requests.rs`, plus any unrelated paths already present in `PRE_EDIT_STATUS`. If `cargo fmt` changed any unrelated Rust file, inspect it and resolve that drift before committing this refactor. The refactor commit must not include unrelated rustfmt drift.
 
-- [ ] **Step 3: Run focused report tests**
+- [x] **Step 3: Run focused report tests**
 
 Run:
 
@@ -512,7 +512,7 @@ analysis::report::tests::build_map_request_keeps_run_scoped_request_and_profile
 analysis::report::tests::build_reduce_request_keeps_run_scoped_request_and_profile
 ```
 
-- [ ] **Step 4: List focused report tests if the Step 3 output is too terse**
+- [x] **Step 4: List focused report tests if the Step 3 output is too terse**
 
 Run this if Step 3 does not print individual test names:
 
@@ -522,7 +522,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests:: -- --l
 
 Expected: output includes the five test names listed in Step 3.
 
-- [ ] **Step 5: Run the focused constant guard**
+- [x] **Step 5: Run the focused constant guard**
 
 Run:
 
@@ -532,7 +532,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::chunk_t
 
 Expected: PASS with `1 passed`, not a green `0 tests` run.
 
-- [ ] **Step 6: Run recently split corpus regression tests**
+- [x] **Step 6: Run recently split corpus regression tests**
 
 Run:
 
@@ -542,7 +542,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 7: Run formatting check**
+- [x] **Step 7: Run formatting check**
 
 Run:
 
@@ -552,7 +552,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
 Expected: PASS with no diff output.
 
-- [ ] **Step 8: Run all-target compile check**
+- [x] **Step 8: Run all-target compile check**
 
 Run:
 
@@ -562,7 +562,7 @@ cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
 Expected: PASS. Existing warnings outside touched files may remain. New warnings mentioning `src-tauri/src/analysis/report.rs` or `src-tauri/src/analysis/report/requests.rs` are not acceptable.
 
-- [ ] **Step 9: Inspect the final diff**
+- [x] **Step 9: Inspect the final diff**
 
 Run:
 
@@ -577,7 +577,7 @@ Expected:
 - `requests.rs` contains the moved helper bodies with only visibility/import changes.
 - No prompt strings, request ID prefixes, JSON parse error strings, or chunk constant values changed.
 
-- [ ] **Step 10: Check whitespace**
+- [x] **Step 10: Check whitespace**
 
 Run:
 

@@ -34,7 +34,7 @@ use super::store::{
 };
 use super::trace::{build_trace_data, compress_trace_data};
 use super::{
-    AnalysisState, ANALYSIS_SCOPE_TYPE_PROJECT, ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
+    now_secs, AnalysisState, ANALYSIS_SCOPE_TYPE_PROJECT, ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
     ANALYSIS_SCOPE_TYPE_SOURCE_GROUP, ANALYSIS_STATUS_CANCELLED, ANALYSIS_STATUS_COMPLETED,
     ANALYSIS_STATUS_FAILED, ANALYSIS_STATUS_QUEUED, ANALYSIS_STATUS_RUNNING, TEMPLATE_KIND_REPORT,
 };
@@ -42,8 +42,8 @@ use super::{
 mod requests;
 
 use self::requests::{
-    build_map_request, build_reduce_request, chunk_messages, chunk_target_chars_for_model_input_limit,
-    parse_chunk_summary, ReduceRequestParams,
+    build_map_request, build_reduce_request, chunk_messages,
+    chunk_target_chars_for_model_input_limit, parse_chunk_summary, ReduceRequestParams,
 };
 
 const INTERRUPTED_RUN_MESSAGE: &str = "Analysis run was interrupted when the app was restarted.";
@@ -1059,9 +1059,9 @@ mod tests {
     use super::{
         build_map_request, build_reduce_request, capture_report_corpus,
         chunk_target_chars_for_model_input_limit, finish_map_phase, mark_interrupted_analysis_runs,
-        parse_chunk_summary, resolve_analysis_telegram_history_scope, run_analysis_step_with_cancel,
-        validate_report_preflight, ReduceRequestParams, ReportRunError, ReportRunInput,
-        StartAnalysisReportRequest,
+        parse_chunk_summary, resolve_analysis_telegram_history_scope,
+        run_analysis_step_with_cancel, validate_report_preflight, ReduceRequestParams,
+        ReportRunError, ReportRunInput, StartAnalysisReportRequest,
     };
     use crate::analysis::corpus::{
         AnalysisRunPreflight, AnalysisRunPreflightLimits, CorpusLoadRequest, YoutubeCorpusMode,
