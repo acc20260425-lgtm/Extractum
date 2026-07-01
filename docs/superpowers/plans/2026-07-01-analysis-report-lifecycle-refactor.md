@@ -613,7 +613,7 @@ Expected: six matches, one for each moved function.
 - Consumes: lifecycle extraction from Task 3.
 - Produces: verified Rust refactor ready to commit.
 
-- [ ] **Step 1: Format Rust code**
+- [x] **Step 1: Format Rust code**
 
 Run:
 
@@ -623,7 +623,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml
 
 Expected: command exits 0.
 
-- [ ] **Step 2: Check changed file list after formatting**
+- [x] **Step 2: Check changed file list after formatting**
 
 Run each command separately:
 
@@ -643,7 +643,7 @@ src-tauri/src/analysis/report/lifecycle.rs
 
 If unrelated paths appear and were not present in `PRE_EDIT_STATUS`, resolve them before committing.
 
-- [ ] **Step 3: Verify facade paths**
+- [x] **Step 3: Verify facade paths**
 
 Run each command separately:
 
@@ -657,7 +657,7 @@ rg -n "report::request_analysis_run_cancel" src-tauri/src/analysis/report_comman
 
 Expected: each command has at least one match. The `mark_interrupted_analysis_runs` and `request_analysis_run_cancel` matches in `report.rs` must come from facade forwarding/imports or tests, not from leftover moved function bodies. Do not require one exact grouped `pub(crate) use ... { ... }` line; split imports and rustfmt-wrapped imports are acceptable if the effective paths remain `analysis::report::mark_interrupted_analysis_runs` and `analysis::report::request_analysis_run_cancel`.
 
-- [ ] **Step 4: Verify `RunEvent` surface**
+- [x] **Step 4: Verify `RunEvent` surface**
 
 Run:
 
@@ -680,7 +680,7 @@ rg -n "pub\\(super\\) fn (request_id|queue_position|progress|delta|chunk_summary
 
 Expected: the first five commands each have at least one match; the final command has no matches. This avoids false negatives from acceptable rustfmt or import formatting while still preventing lifecycle from widening map/reduce event-builder methods.
 
-- [ ] **Step 5: Run focused cancellation request tests**
+- [x] **Step 5: Run focused cancellation request tests**
 
 Run:
 
@@ -690,7 +690,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::request
 
 Expected: PASS and not a green `0 tests` run. Output includes missing run, completed run, inactive running run, and command consumer path tests.
 
-- [ ] **Step 6: Run focused interrupted cleanup test**
+- [x] **Step 6: Run focused interrupted cleanup test**
 
 Run:
 
@@ -700,7 +700,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::interru
 
 Expected: PASS with `1 passed`, not a green `0 tests` run.
 
-- [ ] **Step 7: Run all report tests**
+- [x] **Step 7: Run all report tests**
 
 Run:
 
@@ -710,7 +710,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 8: Run corpus boundary tests**
+- [x] **Step 8: Run corpus boundary tests**
 
 Run:
 
@@ -720,7 +720,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 9: Run formatting check**
+- [x] **Step 9: Run formatting check**
 
 Run:
 
@@ -730,7 +730,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
 Expected: PASS with no diff output.
 
-- [ ] **Step 10: Run all-target compile check**
+- [x] **Step 10: Run all-target compile check**
 
 Run:
 
@@ -740,7 +740,7 @@ cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
 Expected: PASS. Existing warnings outside touched files may remain; new warnings mentioning `src-tauri/src/analysis/report.rs` or `src-tauri/src/analysis/report/lifecycle.rs` are not acceptable.
 
-- [ ] **Step 11: Inspect final Rust diff**
+- [x] **Step 11: Inspect final Rust diff**
 
 Run:
 
@@ -756,7 +756,7 @@ Expected:
 - `lifecycle.rs` contains moved lifecycle helper bodies with only visibility/import changes.
 - `src-tauri/src/analysis/mod.rs` is unchanged.
 
-- [ ] **Step 12: Check whitespace**
+- [x] **Step 12: Check whitespace**
 
 Run:
 
