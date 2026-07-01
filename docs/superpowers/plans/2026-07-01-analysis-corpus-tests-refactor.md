@@ -213,7 +213,7 @@ pub(super) fn decode_message_metadata_for_test(message: &CorpusMessage) -> serde
 pub(super) fn sample_run() -> AnalysisRunDetail;
 ```
 
-- [ ] **Step 1: Add harness imports**
+- [x] **Step 1: Add harness imports**
 
 At the top of `src-tauri/src/analysis/corpus/tests/harness.rs`, add:
 
@@ -228,7 +228,7 @@ use crate::youtube::dto::{YoutubeAvailabilityStatus, YoutubeVideoForm, YoutubeVi
 
 If `ListRunSnapshotMessagesRequest` is unused after moving helpers, remove it during the rustfmt/import-cleanup step.
 
-- [ ] **Step 2: Move shared fixture helpers into `harness.rs`**
+- [x] **Step 2: Move shared fixture helpers into `harness.rs`**
 
 Move these definitions from the old inline `tests` module into `harness.rs`:
 
@@ -251,7 +251,7 @@ sample_run
 
 Preserve each function body verbatim. Change function visibility to `pub(super)` only for helpers that are used by sibling modules. If a moved helper is used only inside `harness.rs`, keep it private.
 
-- [ ] **Step 3: Adjust helper type names for the new module**
+- [x] **Step 3: Adjust helper type names for the new module**
 
 Inside `harness.rs`, use fully qualified `sqlx::SqlitePool` in public helper signatures. The visible helper signatures must not depend on a local `use sqlx::SqlitePool;`.
 
@@ -268,7 +268,7 @@ pub(super) async fn insert_youtube_video_source(
 )
 ```
 
-- [ ] **Step 4: Keep production imports out of `corpus.rs`**
+- [x] **Step 4: Keep production imports out of `corpus.rs`**
 
 After removing the inline test module body, `src-tauri/src/analysis/corpus.rs` should not import test-only items at the production module level. Do not add imports such as `CorpusMessage`, `compress_text`, `compress_json_bytes`, `AppErrorKind`, or YouTube DTOs to production scope.
 
