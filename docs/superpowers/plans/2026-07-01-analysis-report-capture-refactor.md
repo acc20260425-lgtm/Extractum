@@ -4,6 +4,8 @@
 
 **Goal:** Extract analysis report corpus capture and snapshot-freezing logic from `src-tauri/src/analysis/report.rs` into a focused private nested module without changing runtime behavior.
 
+**Status:** Active implementation handoff; not executed as of 2026-07-01.
+
 **Architecture:** Add `src-tauri/src/analysis/report/capture.rs` as a private child module of `analysis::report`. Keep `report.rs` as the workflow facade and expose `capture_report_corpus` to the parent and existing inline tests through a private root import only.
 
 **Tech Stack:** Rust, Tauri backend, SQLx SQLite, Tokio tests, Cargo.
@@ -48,18 +50,20 @@
 
 **Interfaces:**
 - Consumes: approved design spec at `docs/superpowers/specs/2026-07-01-analysis-report-capture-refactor-design.md`.
-- Produces: baseline status snapshot at `$env:TEMP\analysis-report-capture-pre-edit-status.txt` and pre-edit test evidence.
+- Produces: baseline status snapshot under `$env:TEMP` and pre-edit test evidence.
 
 - [ ] **Step 1: Capture pre-edit status**
 
 Run:
 
 ```powershell
-git status --short --untracked-files=all | Set-Content -Encoding utf8 -LiteralPath "$env:TEMP\analysis-report-capture-pre-edit-status.txt"
-Get-Content -Raw -LiteralPath "$env:TEMP\analysis-report-capture-pre-edit-status.txt"
+$env:ANALYSIS_REPORT_CAPTURE_STATUS_TAG = "{0}-{1}" -f (Get-Date -Format 'yyyyMMddHHmmss'), $PID
+$preEditStatusPath = Join-Path $env:TEMP "analysis-report-capture-$env:ANALYSIS_REPORT_CAPTURE_STATUS_TAG-pre-edit-status.txt"
+git status --short --untracked-files=all | Set-Content -Encoding utf8 -LiteralPath $preEditStatusPath
+Get-Content -Raw -LiteralPath $preEditStatusPath
 ```
 
-Expected: review the output before editing. If the output is empty, the worktree baseline is clean.
+Expected: review the output before editing. If the output is empty, the worktree baseline is clean. Keep `$env:ANALYSIS_REPORT_CAPTURE_STATUS_TAG` for later status comparisons in this plan run.
 
 - [ ] **Step 2: Inspect target-file drift if present**
 
@@ -303,6 +307,14 @@ use super::{
 
 Expected: tests do not import `super::capture::capture_report_corpus` directly.
 
+Run this command to verify that boundary mechanically:
+
+```powershell
+rg -n "super::capture::capture_report_corpus" src-tauri/src/analysis/report.rs
+```
+
+Expected: no matches. `rg` exit code `1` is expected for this no-match guard.
+
 ---
 
 ### Task 3: Source Guards And Focused Verification
@@ -320,34 +332,47 @@ Expected: tests do not import `super::capture::capture_report_corpus` directly.
 Run:
 
 ```powershell
-rg -n "^async fn capture_report_corpus\(|^const SNAPSHOT_CAPTURE_FAILED_MESSAGE" src-tauri/src/analysis/report.rs
+rg -n "^\s*(pub\([^)]*\)\s+|pub\s+)?async fn capture_report_corpus\(|^const SNAPSHOT_CAPTURE_FAILED_MESSAGE" src-tauri/src/analysis/report.rs
 rg -n "^pub\(super\) async fn capture_report_corpus\(|^const SNAPSHOT_CAPTURE_FAILED_MESSAGE" src-tauri/src/analysis/report/capture.rs
 ```
 
-Expected: first command has no matches. Second command prints both the `pub(super) async fn capture_report_corpus(` line and the `const SNAPSHOT_CAPTURE_FAILED_MESSAGE` line.
+Expected: first command has no matches. `rg` exit code `1` is expected for this no-match guard. Second command prints both the `pub(super) async fn capture_report_corpus(` line and the `const SNAPSHOT_CAPTURE_FAILED_MESSAGE` line.
 
-- [ ] **Step 2: Verify `ReportRunError` visibility was not widened**
+- [ ] **Step 2: Verify the capture module stays private**
 
 Run:
 
 ```powershell
-rg -n "pub\(super\) enum ReportRunError|pub\(crate\) enum ReportRunError|pub enum ReportRunError" src-tauri/src/analysis/report.rs
+rg -n "^pub.*mod capture" src-tauri/src/analysis/report.rs
+rg -n "^mod capture;" src-tauri/src/analysis/report.rs
 ```
 
-Expected: no matches.
+Expected: first command has no matches. `rg` exit code `1` is expected for this no-match guard. Second command prints exactly one `mod capture;` line.
 
-- [ ] **Step 3: Verify error strings are still in `capture.rs`**
+- [ ] **Step 3: Verify `ReportRunError` stayed private and in `report.rs`**
+
+Run:
+
+```powershell
+rg -n "^\s*pub(\([^)]*\))?\s+enum ReportRunError" src-tauri/src/analysis/report.rs
+rg -n "^enum ReportRunError" src-tauri/src/analysis/report.rs
+```
+
+Expected: first command has no matches. `rg` exit code `1` is expected for this no-match guard. Second command prints exactly one private `enum ReportRunError` line in `report.rs`.
+
+- [ ] **Step 4: Verify error strings moved to `capture.rs` only**
 
 Run:
 
 ```powershell
 rg -n '"Corpus preload failed"|"Snapshot capture failed"' src-tauri/src/analysis/report/capture.rs
 rg -n "^const SNAPSHOT_CAPTURE_FAILED_MESSAGE" src-tauri/src/analysis/report.rs
+rg -n '"Corpus preload failed"|"Snapshot capture failed"' src-tauri/src/analysis/report.rs
 ```
 
-Expected: first command prints both literals in `capture.rs`. Second command has no matches.
+Expected: first command prints both literals in `capture.rs`. The second and third commands have no matches. `rg` exit code `1` is expected for those no-match guards.
 
-- [ ] **Step 4: Run focused capture test**
+- [ ] **Step 5: Run focused capture test**
 
 Run:
 
@@ -430,7 +455,7 @@ Run:
 cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 ```
 
-Expected: PASS. Existing warnings outside touched files may remain. New warnings mentioning `src-tauri/src/analysis/report.rs` or `src-tauri/src/analysis/report/capture.rs` are not acceptable.
+Expected: PASS. This is a broad post-change regression gate, not a pre-edit characterization check; if it fails, inspect whether the failure is pre-existing or caused by this refactor before committing. Existing warnings outside touched files may remain. New warnings mentioning `src-tauri/src/analysis/report.rs` or `src-tauri/src/analysis/report/capture.rs` are not acceptable.
 
 - [ ] **Step 5: Inspect implementation diff**
 
@@ -448,10 +473,12 @@ Expected: diff contains only the capture extraction and import cleanup. Status c
 Run:
 
 ```powershell
-git status --short --untracked-files=all | Set-Content -Encoding utf8 -LiteralPath "$env:TEMP\analysis-report-capture-pre-commit-status.txt"
+$preEditStatusPath = Join-Path $env:TEMP "analysis-report-capture-$env:ANALYSIS_REPORT_CAPTURE_STATUS_TAG-pre-edit-status.txt"
+$preCommitStatusPath = Join-Path $env:TEMP "analysis-report-capture-$env:ANALYSIS_REPORT_CAPTURE_STATUS_TAG-pre-commit-status.txt"
+git status --short --untracked-files=all | Set-Content -Encoding utf8 -LiteralPath $preCommitStatusPath
 Compare-Object `
-    (Get-Content -LiteralPath "$env:TEMP\analysis-report-capture-pre-edit-status.txt") `
-    (Get-Content -LiteralPath "$env:TEMP\analysis-report-capture-pre-commit-status.txt")
+    (Get-Content -LiteralPath $preEditStatusPath) `
+    (Get-Content -LiteralPath $preCommitStatusPath)
 ```
 
 Expected: the only intentional differences from baseline are `src-tauri/src/analysis/report.rs` and `src-tauri/src/analysis/report/capture.rs`. If any unrelated rustfmt drift or unexpected file appears, stop before committing.
@@ -497,10 +524,12 @@ Expected: commit succeeds and includes only the two implementation-owned Rust fi
 Run:
 
 ```powershell
-git status --short --untracked-files=all | Set-Content -Encoding utf8 -LiteralPath "$env:TEMP\analysis-report-capture-final-status.txt"
+$preEditStatusPath = Join-Path $env:TEMP "analysis-report-capture-$env:ANALYSIS_REPORT_CAPTURE_STATUS_TAG-pre-edit-status.txt"
+$finalStatusPath = Join-Path $env:TEMP "analysis-report-capture-$env:ANALYSIS_REPORT_CAPTURE_STATUS_TAG-final-status.txt"
+git status --short --untracked-files=all | Set-Content -Encoding utf8 -LiteralPath $finalStatusPath
 Compare-Object `
-    (Get-Content -LiteralPath "$env:TEMP\analysis-report-capture-pre-edit-status.txt") `
-    (Get-Content -LiteralPath "$env:TEMP\analysis-report-capture-final-status.txt")
+    (Get-Content -LiteralPath $preEditStatusPath) `
+    (Get-Content -LiteralPath $finalStatusPath)
 git log --oneline -1
 ```
 
