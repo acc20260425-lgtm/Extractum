@@ -1,7 +1,7 @@
 # Analysis Report Lifecycle Refactor Design
 
 **Date:** 2026-07-01
-**Status:** active design, not implemented as of 2026-07-01; written spec ready for review before implementation planning
+**Status:** active design record, not implemented as of 2026-07-01 because `src-tauri/src/analysis/report/lifecycle.rs` does not exist; not an implementation handoff until a separate plan is written
 **Scope:** internal Rust refactor of analysis report run lifecycle, cancellation, and terminal status helpers.
 
 ## Goal
@@ -35,6 +35,8 @@ Current consumers:
 
 - `start_analysis_report_run` calls `fail_run`, `fail_capture_run`, and `cancel_run` from the spawned report task;
 - `cleanup_interrupted_analysis_runs` calls `mark_interrupted_analysis_runs`;
+- `src-tauri/src/analysis/mod.rs` re-exports `report::cleanup_interrupted_analysis_runs`;
+- `src-tauri/src/lib.rs` calls `analysis::cleanup_interrupted_analysis_runs` during startup cleanup;
 - `src-tauri/src/analysis/report_commands.rs` calls `report::request_analysis_run_cancel`;
 - inline report tests call `mark_interrupted_analysis_runs`.
 
@@ -48,7 +50,7 @@ Keep `src-tauri/src/analysis/report.rs` as the report workflow facade:
 
 - add `mod lifecycle;`;
 - import lifecycle helpers through explicit `self::lifecycle` imports;
-- do not add any root re-export from `analysis/mod.rs`;
+- preserve the existing root re-export in `analysis/mod.rs`: `pub use self::report::cleanup_interrupted_analysis_runs;`;
 - keep `lifecycle` private to `analysis::report`;
 - keep map/reduce orchestration, `start_analysis_report_run`, `ReportRunError`, `ReportRunInput`, `ReportPipelineContext`, `RunEvent`, and request helpers in their current modules.
 
@@ -95,7 +97,7 @@ pub(super) async fn cancel_run(handle: &AppHandle, run_id: i64, message: String)
 
 pub(crate) async fn mark_interrupted_analysis_runs(pool: &Pool<Sqlite>) -> AppResult<()>;
 
-pub(crate) async fn cleanup_interrupted_analysis_runs(handle: AppHandle);
+pub async fn cleanup_interrupted_analysis_runs(handle: AppHandle);
 
 pub(crate) async fn request_analysis_run_cancel(
     handle: &AppHandle,
@@ -105,7 +107,7 @@ pub(crate) async fn request_analysis_run_cancel(
 ) -> AppResult<()>;
 ```
 
-`request_analysis_run_cancel`, `cleanup_interrupted_analysis_runs`, and `mark_interrupted_analysis_runs` remain `pub(crate)` because they are current crate-facing facade functions. `fail_run`, `fail_capture_run`, and `cancel_run` should be only `pub(super)` because they are used by `start_analysis_report_run` inside `report.rs`.
+`cleanup_interrupted_analysis_runs` remains `pub` because `analysis/mod.rs` currently re-exports it for startup cleanup in `lib.rs`. `request_analysis_run_cancel` and `mark_interrupted_analysis_runs` remain `pub(crate)` because they are crate-facing facade functions. `fail_run`, `fail_capture_run`, and `cancel_run` should be only `pub(super)` because they are used by `start_analysis_report_run` inside `report.rs`.
 
 `RunEvent` remains defined in `report.rs` but must be callable from `lifecycle.rs`. Use the smallest visibility required by the nested module:
 
@@ -122,11 +124,39 @@ impl RunEvent {
 }
 ```
 
-Keep `RunEvent::request_id`, `RunEvent::queue_position`, `RunEvent::progress`, `RunEvent::delta`, and `RunEvent::chunk_summary` private to `report.rs`. `lifecycle.rs` must not call those methods in this slice. Do not move `RunEvent` in this slice.
+This is the complete `RunEvent` lifecycle contract for this slice:
+
+- `lifecycle.rs` may call only `RunEvent::new`, `RunEvent::message`, `RunEvent::error`, and `RunEvent::emit`;
+- `lifecycle.rs` must not access `RunEvent.event` directly;
+- `RunEvent.event` remains private;
+- `RunEvent::request_id`, `RunEvent::queue_position`, `RunEvent::progress`, `RunEvent::delta`, and `RunEvent::chunk_summary` remain private to `report.rs`;
+- `RunEvent` is not moved in this slice.
+
+The implementation plan must include a source guard that searches `src-tauri/src/analysis/report/lifecycle.rs` for forbidden `RunEvent` usage:
+
+```powershell
+rg -n "RunEvent::(request_id|queue_position|progress|delta|chunk_summary)|\\.event" src-tauri/src/analysis/report/lifecycle.rs
+```
+
+Expected: no matches.
+
+`report.rs` must preserve the current facade paths after moving implementations into `lifecycle.rs`:
+
+```rust
+pub use self::lifecycle::cleanup_interrupted_analysis_runs;
+pub(crate) use self::lifecycle::{mark_interrupted_analysis_runs, request_analysis_run_cancel};
+```
+
+The exact import grouping may differ, but these effective visibilities and paths must remain true:
+
+- `analysis::cleanup_interrupted_analysis_runs` keeps working through the existing `analysis/mod.rs` root re-export;
+- `analysis::report::cleanup_interrupted_analysis_runs` keeps working as the source of that root re-export;
+- `analysis::report::request_analysis_run_cancel` keeps working for `analysis/report_commands.rs`;
+- `analysis::report::mark_interrupted_analysis_runs` keeps working for the current inline report tests.
 
 Expected production API changes outside `analysis::report`: none.
 
-Expected root re-export changes: none.
+Expected root re-export changes: preserve the existing `pub use self::report::cleanup_interrupted_analysis_runs;` in `analysis/mod.rs`; do not add new root re-exports.
 
 ## Imports
 
@@ -251,7 +281,15 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
 
 Expected: PASS and not a green `0 tests` run. This guards recently split analysis corpus boundaries while report imports move again.
 
-After editing and before committing, run the same report and corpus tests again, plus:
+After editing and before committing, run the same report and corpus tests again. The post-change lifecycle-focused test must be repeated explicitly:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::interrupted_cleanup_preserves_captured_snapshot_state_marker
+```
+
+Expected: PASS with `1 passed`, not a green `0 tests` run. This post-change check is required even if the broader `analysis::report::tests::` slice already passed.
+
+Also run:
 
 ```powershell
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
