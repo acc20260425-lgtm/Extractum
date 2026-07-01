@@ -48,7 +48,7 @@
 - Consumes: approved design spec at `docs/superpowers/specs/2026-07-01-analysis-report-phases-refactor-design.md`.
 - Produces: baseline status snapshot under `$env:TEMP` and pre-edit test evidence.
 
-- [ ] **Step 1: Capture pre-edit status**
+- [x] **Step 1: Capture pre-edit status**
 
 Run:
 
@@ -61,7 +61,7 @@ Get-Content -Raw -LiteralPath $preEditStatusPath
 
 Expected: review the output before editing. If the output is empty, the worktree baseline is clean. Keep `$env:ANALYSIS_REPORT_PHASES_STATUS_TAG` for later status comparisons in this plan run.
 
-- [ ] **Step 2: Inspect target-file drift if present**
+- [x] **Step 2: Inspect target-file drift if present**
 
 Run:
 
@@ -92,7 +92,7 @@ if (Test-Path -LiteralPath 'src-tauri/src/analysis/report/phases.rs') {
 
 Expected: no output today because `phases.rs` should not exist before implementation. If it exists, inspect it and stop before overwriting it.
 
-- [ ] **Step 3: Run focused map-finish baseline**
+- [x] **Step 3: Run focused map-finish baseline**
 
 Run:
 
@@ -102,7 +102,9 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::finish_
 
 Expected: PASS and not a green `0 tests` run. This covers ordered map collection, missing summaries, and first-error propagation.
 
-- [ ] **Step 4: Run focused cancellation-helper baseline**
+- [x] **Step 4: Run focused cancellation-helper baseline**
+
+Execution adjustment: the planned selector `analysis::report::tests::run_analysis_step_with_cancel` matched 0 tests because Cargo filters by test name, not helper function usage. The actual focused cancellation tests are `analysis_step_cancel_wrapper_*`; `cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::analysis_step_cancel_wrapper` ran 2 tests and passed.
 
 Run:
 
@@ -112,7 +114,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::run_ana
 
 Expected: PASS and not a green `0 tests` run. This covers cancellation wrapper behavior.
 
-- [ ] **Step 5: Run full report test baseline**
+- [x] **Step 5: Run full report test baseline**
 
 Run:
 
