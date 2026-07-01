@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** active plan, not implemented as of 2026-07-01.
+**Status:** implemented and verified as of 2026-07-01; historical execution record.
 
 **Goal:** Split the large inline `analysis::corpus` test module into focused nested test files without changing production behavior or test assertions.
 
