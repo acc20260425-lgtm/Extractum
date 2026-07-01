@@ -1,7 +1,7 @@
 # Analysis Report Lifecycle Refactor Design
 
 **Date:** 2026-07-01
-**Status:** active design record, not implemented as of 2026-07-01 because `src-tauri/src/analysis/report/lifecycle.rs` does not exist; not an implementation handoff until a separate plan is written
+**Status:** active spec; implementation not started as of 2026-07-01 because `src-tauri/src/analysis/report/lifecycle.rs` does not exist; not an implementation handoff until a separate plan is written
 **Scope:** internal Rust refactor of analysis report run lifecycle, cancellation, and terminal status helpers.
 
 ## Goal
@@ -140,6 +140,15 @@ rg -n "RunEvent::(request_id|queue_position|progress|delta|chunk_summary)|\\.eve
 
 Expected: no matches.
 
+The implementation plan must also include source guards that protect the `RunEvent` surface in `report.rs`:
+
+```powershell
+rg -n "pub\\(super\\) struct RunEvent|pub\\(super\\) fn (new|message|error|emit)" src-tauri/src/analysis/report.rs
+rg -n "pub\\(super\\) fn (request_id|queue_position|progress|delta|chunk_summary)" src-tauri/src/analysis/report.rs
+```
+
+Expected: the first command matches `RunEvent` plus exactly the four lifecycle-facing methods; the second command has no matches. This prevents widening the map/reduce event-builder API while making lifecycle compile.
+
 `report.rs` must preserve the current facade paths after moving implementations into `lifecycle.rs`:
 
 ```rust
@@ -147,12 +156,23 @@ pub use self::lifecycle::cleanup_interrupted_analysis_runs;
 pub(crate) use self::lifecycle::{mark_interrupted_analysis_runs, request_analysis_run_cancel};
 ```
 
-The exact import grouping may differ, but these effective visibilities and paths must remain true:
+This facade forwarding is required, not optional. The exact import grouping may differ, but these effective visibilities and paths must remain true:
 
 - `analysis::cleanup_interrupted_analysis_runs` keeps working through the existing `analysis/mod.rs` root re-export;
 - `analysis::report::cleanup_interrupted_analysis_runs` keeps working as the source of that root re-export;
 - `analysis::report::request_analysis_run_cancel` keeps working for `analysis/report_commands.rs`;
 - `analysis::report::mark_interrupted_analysis_runs` keeps working for the current inline report tests.
+
+The implementation plan must include source guards for these paths:
+
+```powershell
+rg -n "pub use self::lifecycle::cleanup_interrupted_analysis_runs" src-tauri/src/analysis/report.rs
+rg -n "pub\\(crate\\) use self::lifecycle::\\{mark_interrupted_analysis_runs, request_analysis_run_cancel\\}" src-tauri/src/analysis/report.rs
+rg -n "pub use self::report::cleanup_interrupted_analysis_runs" src-tauri/src/analysis/mod.rs
+rg -n "report::request_analysis_run_cancel" src-tauri/src/analysis/report_commands.rs
+```
+
+Expected: each command has at least one match after the refactor.
 
 Expected production API changes outside `analysis::report`: none.
 
@@ -216,6 +236,16 @@ Preserve current error behavior exactly:
 - cleanup pool resolution failures remain best-effort and ignored;
 - no new error codes, messages, or user-facing strings are introduced.
 
+The implementation plan must protect the `request_analysis_run_cancel` strings with explicit test assertions before moving lifecycle code. If no focused tests exist when the plan starts, add characterization tests in `report.rs` before the extraction commit. Required assertion coverage:
+
+```rust
+assert_eq!(error.message, format!("Analysis run {run_id} not found"));
+assert_eq!(error.message, format!("Analysis run {run_id} is not queued or running"));
+assert_eq!(error.message, format!("Analysis run {run_id} is no longer active"));
+```
+
+Use the repository's actual `AppError` fields/accessors in the test implementation; the strings above are the required literal values. The focused tests should exercise the existing `analysis::report::request_analysis_run_cancel` facade path, not a direct `lifecycle` module path.
+
 ## Non-Goals
 
 This slice does not:
@@ -257,6 +287,22 @@ if (Test-Path -LiteralPath 'src-tauri/src/analysis/report/lifecycle.rs') {
 
 Do not stage pre-existing target-file changes into the lifecycle extraction commit.
 
+The implementation plan must capture the pre-edit status output as `PRE_EDIT_STATUS` and compare final status against it after formatting, checks, and commit. After any `cargo fmt` run, require:
+
+```powershell
+git status --short --untracked-files=all
+git diff --name-only
+git diff --cached --name-only
+git ls-files --others --exclude-standard
+```
+
+Expected implementation-owned changed paths are only:
+
+- `src-tauri/src/analysis/report.rs`
+- `src-tauri/src/analysis/report/lifecycle.rs`
+
+If `PRE_EDIT_STATUS` was clean, final `git status --short --untracked-files=all` must be clean after the refactor commit. If `PRE_EDIT_STATUS` contained unrelated pre-existing changes, final status must match those unrelated entries exactly and must not include new rustfmt drift or target-file changes.
+
 ## Testing
 
 Run commands from the repository root.
@@ -268,6 +314,18 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 ```
 
 Expected: PASS and not a green `0 tests` run.
+
+Before moving lifecycle code, the implementation plan must establish or add focused `request_analysis_run_cancel` characterization coverage. If these tests already exist, run them before editing. If they do not exist, add them in a small test-only step before extraction and run:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::request_analysis_run_cancel_
+```
+
+Expected: PASS and not a green `0 tests` run. The output must include focused tests covering missing run, non-queued/non-running run, and inactive active-run cancellation, with string assertions for:
+
+- `Analysis run {run_id} not found`
+- `Analysis run {run_id} is not queued or running`
+- `Analysis run {run_id} is no longer active`
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::interrupted_cleanup_preserves_captured_snapshot_state_marker
@@ -281,13 +339,19 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::
 
 Expected: PASS and not a green `0 tests` run. This guards recently split analysis corpus boundaries while report imports move again.
 
-After editing and before committing, run the same report and corpus tests again. The post-change lifecycle-focused test must be repeated explicitly:
+After editing and before committing, run the same report and corpus tests again. The post-change `analysis::report::tests::` run must be PASS and not a green `0 tests` run. The post-change lifecycle-focused tests must also be repeated explicitly:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::interrupted_cleanup_preserves_captured_snapshot_state_marker
 ```
 
 Expected: PASS with `1 passed`, not a green `0 tests` run. This post-change check is required even if the broader `analysis::report::tests::` slice already passed.
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::request_analysis_run_cancel_
+```
+
+Expected: PASS and not a green `0 tests` run. The output must include the focused cancellation request tests added or confirmed before extraction.
 
 Also run:
 
