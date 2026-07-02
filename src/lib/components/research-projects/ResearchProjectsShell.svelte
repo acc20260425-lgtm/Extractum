@@ -4,6 +4,7 @@
   import ProjectRailSections from "./ProjectRailSections.svelte";
   import ProjectToolbar from "./ProjectToolbar.svelte";
   import RunDock from "./RunDock.svelte";
+  import SourcesBulkBar from "./SourcesBulkBar.svelte";
   import SourcesGrid from "./SourcesGrid.svelte";
   import type { ProjectSourceRecord, ProjectSummary } from "$lib/types/projects";
 
@@ -16,6 +17,7 @@
     toolbar,
     runDock,
     inspector,
+    bulkBar,
     onSelectProject,
     onSelectedSourceIdsChange,
   }: {
@@ -27,6 +29,7 @@
     toolbar?: ComponentProps<typeof ProjectToolbar>;
     runDock?: ComponentProps<typeof RunDock>;
     inspector?: ComponentProps<typeof Inspector>;
+    bulkBar?: ComponentProps<typeof SourcesBulkBar>;
     onSelectProject?: (id: number) => void;
     onSelectedSourceIdsChange?: (ids: string[]) => void;
   } = $props();
@@ -41,6 +44,9 @@
     {#if selectedProjectId !== null}
       {#if toolbar}
         <ProjectToolbar {...toolbar} />
+      {/if}
+      {#if bulkBar}
+        <SourcesBulkBar {...bulkBar} />
       {/if}
       <div class="research-projects-shell__grid">
         <SourcesGrid {sources} {selectedSourceIds} {onSelectedSourceIdsChange} />
