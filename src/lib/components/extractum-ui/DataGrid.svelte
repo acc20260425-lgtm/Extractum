@@ -30,6 +30,7 @@
     class: className,
     ariaLabel,
     overlay = "Нет данных",
+    columnStyle,
     onSelectedRowIdsChange = () => {},
   }: {
     rows: GridRow[];
@@ -40,6 +41,7 @@
     class?: string;
     ariaLabel?: string;
     overlay?: string;
+    columnStyle?: (column: ExtractumDataGridColumn) => string;
     onSelectedRowIdsChange?: (ids: string[]) => void;
   } = $props();
 
@@ -100,6 +102,7 @@
         bind:this={api}
         selectedRows={selectedRowIds}
         {rowStyle}
+        columnStyle={columnStyle}
         overlay={visibleOverlay}
         multiselect={multiselect}
         select

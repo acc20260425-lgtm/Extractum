@@ -95,4 +95,14 @@ describe("ResearchProjectsShell", () => {
     expect(shellSource).toContain("<RunDock");
     expect(shellSource).toContain("{...runDock}");
   });
+
+  it("renders the bulk-action bar above the grid when a bulkBar bag is provided", () => {
+    expect(shellSource).toContain("<SourcesBulkBar");
+    expect(shellSource).toContain("{...bulkBar}");
+    // The bar must sit above the grid container in the main column.
+    const barIndex = shellSource.indexOf("<SourcesBulkBar");
+    const gridIndex = shellSource.indexOf('class="research-projects-shell__grid"');
+    expect(barIndex).toBeGreaterThan(-1);
+    expect(barIndex).toBeLessThan(gridIndex);
+  });
 });

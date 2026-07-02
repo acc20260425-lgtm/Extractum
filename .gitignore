@@ -31,6 +31,9 @@ research/youtube_pipeline/runs/*
 
 # Local Claude Preview launch config (skills under .claude/ stay tracked).
 /.claude/launch.json
+# Locally installed skills (symlinks to gitignored .agents/skills targets).
+/.claude/skills/svar-svelte
+/.claude/skills/shadcn-svelte
 
 /.codex
 /.codex-logs/

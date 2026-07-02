@@ -25,4 +25,18 @@ describe("SourcesGrid", () => {
     expect(source).toContain("title: SourceTitleCell");
     expect(source).toContain("statusLabel: SourceStatusCell");
   });
+
+  it("right-aligns the materials column via columnStyle (svar has no column align)", () => {
+    expect(source).toContain("{columnStyle}");
+    expect(source).toContain('"materialsLabel"');
+    expect(source).toContain("extractum-grid-cell-right");
+  });
+
+  it("adds a leading checkbox select column with a tri-state select-all header", () => {
+    expect(source).toContain("SELECT_COLUMN");
+    expect(source).toContain("cell: GridSelectCell");
+    expect(source).toContain("cell: GridSelectAllCell");
+    // row.selected synced from the current selection for the per-row checkbox
+    expect(source).toContain("selected: selectedSourceIds.includes(row.id)");
+  });
 });
