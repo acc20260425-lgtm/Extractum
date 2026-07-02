@@ -13,10 +13,12 @@
     getProjectDataRange,
     listProjectSources,
     listResearchProjects,
+    removeProjectSources,
     setProjectArchived,
     setProjectPinned,
     startProjectAnalysis,
   } from "$lib/api/projects";
+  import { syncYoutubeSource } from "$lib/api/source-jobs";
   import { listAnalysisPromptTemplates } from "$lib/api/analysis-source-groups";
   import type { ProjectSourceRecord } from "$lib/types/projects";
 
@@ -70,6 +72,20 @@
     const record = sources.find((source) => String(source.source_id) === id);
     return record ? buildSourceRow(record) : null;
   });
+  let syncableIds = $derived(
+    sources
+      .filter(
+        (source) =>
+          selectedSourceIds.includes(String(source.source_id)) &&
+          source.provider === "youtube" &&
+          (source.source_subtype === "video" || source.source_subtype === "playlist"),
+      )
+      .map((source) => source.source_id),
+  );
+  let bulkSyncDisabled = $derived(railState.saving || syncableIds.length === 0);
+  let bulkSyncTitle = $derived(
+    syncableIds.length === 0 ? "Нет источников, поддерживающих синхронизацию" : "",
+  );
   let inspectorSource = $derived.by((): InspectorSource | null => {
     const row = selectedSourceRow;
     if (!row) return null;
@@ -116,6 +132,49 @@
     await workflow.reload();
   }
 
+  function clearSelection() {
+    selectedSourceIds = [];
+  }
+
+  async function syncSelectedSources() {
+    if (selectedProjectId === null || syncableIds.length === 0) return;
+    railState = { ...railState, saving: true, status: "" };
+    try {
+      for (const id of syncableIds) {
+        await syncYoutubeSource(id, { metadata: true, transcripts: true, comments: false });
+      }
+      sources = await listProjectSources(selectedProjectId);
+    } catch (error) {
+      railState = {
+        ...railState,
+        status: `Не удалось синхронизировать источники (${String(error)})`,
+      };
+    } finally {
+      railState = { ...railState, saving: false };
+    }
+  }
+
+  async function deleteSelectedSources() {
+    if (selectedProjectId === null || selectedSourceIds.length === 0) return;
+    railState = { ...railState, saving: true, status: "" };
+    try {
+      await removeProjectSources({
+        projectId: selectedProjectId,
+        sourceIds: selectedSourceIds.map((id) => Number(id)),
+      });
+      selectedSourceIds = [];
+      sources = await listProjectSources(selectedProjectId);
+      await workflow.reload();
+    } catch (error) {
+      railState = {
+        ...railState,
+        status: `Не удалось удалить источники (${String(error)})`,
+      };
+    } finally {
+      railState = { ...railState, saving: false };
+    }
+  }
+
   onMount(async () => {
     await workflow.reload();
     const templates = await listAnalysisPromptTemplates("report");
@@ -160,6 +219,16 @@
             selectedProject.status === "running" ? `${selectedProject.name} · идёт анализ` : null,
           queueCount: railState.summaries.filter((summary) => summary.status === "running").length,
           onExport: () => {},
+        }
+      : undefined}
+    bulkBar={selectedSourceIds.length > 0
+      ? {
+          count: selectedSourceIds.length,
+          syncDisabled: bulkSyncDisabled,
+          syncTitle: bulkSyncTitle,
+          onClear: clearSelection,
+          onSync: syncSelectedSources,
+          onDelete: deleteSelectedSources,
         }
       : undefined}
     inspector={inspectorSource
