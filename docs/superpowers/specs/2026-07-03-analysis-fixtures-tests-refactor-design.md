@@ -187,6 +187,8 @@ Do not expose these parent items as `pub(super)`, `pub(crate)`, or `pub`.
 
 Facade coverage is intentional: tests should call the parent fixture facade import `super::super::seed_analysis_redesign_fixtures_in_pool`, not the private production child module path `super::super::seed::seed_analysis_redesign_fixtures_in_pool` or `crate::analysis::fixtures::seed`.
 
+`active_runs.rs` should import `AnalysisState` explicitly through `crate::analysis::AnalysisState`. Do not rely on a parent glob import to make it available.
+
 ## Data Flow
 
 No runtime data flow changes:
@@ -223,12 +225,22 @@ Preserve current test assertions and error expectations exactly:
 The implementation plan must include source guards for these assertion markers after the move:
 
 ```powershell
-rg -n -F "llmProfiles" src-tauri/src/analysis/fixtures/tests/summary.rs
-rg -n -F "SELECT COUNT(*) FROM accounts WHERE label = 'Personal'" src-tauri/src/analysis/fixtures/tests/clear.rs
-rg -n -F "analysis_fixture_video" src-tauri/src/analysis/fixtures/tests/seed.rs
-rg -n -F "repair seeded fixture identities" src-tauri/src/analysis/fixtures/tests/seed.rs
-rg -n -F "This capture-failed fixture report remains readable." src-tauri/src/analysis/fixtures/tests/snapshot.rs
-rg -n -F "ANALYSIS_STATUS_CANCELLED" src-tauri/src/analysis/fixtures/tests/active_runs.rs
+$requiredMarkers = @{
+    "summary.rs" = @("llmProfiles")
+    "clear.rs" = @("SELECT COUNT(*) FROM accounts WHERE label = 'Personal'")
+    "seed.rs" = @("analysis_fixture_video", "repair seeded fixture identities")
+    "snapshot.rs" = @("This capture-failed fixture report remains readable.")
+    "active_runs.rs" = @("ANALYSIS_STATUS_CANCELLED")
+}
+foreach ($entry in $requiredMarkers.GetEnumerator()) {
+    foreach ($marker in $entry.Value) {
+        $path = "src-tauri/src/analysis/fixtures/tests/$($entry.Key)"
+        rg -n -F $marker $path
+        if ($LASTEXITCODE -ne 0) {
+            throw "missing fixture assertion marker '$marker' in $path"
+        }
+    }
+}
 ```
 
 Expected: all moved assertion markers are present in the thematic test modules.
@@ -255,15 +267,16 @@ The implementation plan should:
    - `git status --short --untracked-files=all`
    - `git diff -- src-tauri/src/analysis/fixtures.rs src-tauri/src/analysis/fixtures/tests`
    - `git diff --cached -- src-tauri/src/analysis/fixtures.rs src-tauri/src/analysis/fixtures/tests`
-   - if `src-tauri/src/analysis/fixtures/tests/` already exists untracked, print its contents with `Get-ChildItem -Recurse` and `Get-Content -Raw` for each file before continuing.
-2. Stop before editing if `fixtures.rs` or any target `fixtures/tests/*` file is dirty or pre-existing without an explicit baseline decision.
+   - `git ls-files src-tauri/src/analysis/fixtures/tests`
+   - if `src-tauri/src/analysis/fixtures/tests/` exists in any form, print its contents with `Get-ChildItem -Recurse`; for untracked files, also print `Get-Content -Raw` for each file before continuing.
+2. Stop before editing if `fixtures.rs` is dirty, if any target `fixtures/tests/*` file is dirty, or if `fixtures/tests/` already exists tracked or untracked without an explicit baseline decision.
 3. Run baseline verification before editing:
    - `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::`
    - `cargo check --manifest-path src-tauri/Cargo.toml --all-targets`
 4. Require the fixture baseline test run to be in the default dev test profile; do not use `--release` for the required fixture slice.
 5. Replace the inline test module with `#[cfg(test)] mod tests;`.
 6. Move helpers and tests into thematic files without changing test bodies except imports and module paths.
-7. Keep imports explicit in each test module. Avoid glob imports from `crate`.
+7. Keep imports explicit in each test module. Avoid glob imports from `crate`, and do not use `use super::super::*`; import parent fixture functions, constants, and types by name.
 8. Preserve parent facade access for seed and lifecycle helpers.
 9. Run `cargo fmt --manifest-path src-tauri/Cargo.toml` only if needed, then run `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`.
 10. Inspect `git status --short --untracked-files=all` and changed file list after formatting. Behavioral diff should be limited to:
@@ -296,18 +309,37 @@ Run source guards after the move.
 `fixtures.rs` should keep only test module wiring:
 
 ```powershell
-rg -n "^#\[cfg\(test\)\]$|^mod tests;$" src-tauri/src/analysis/fixtures.rs
+$lines = Get-Content src-tauri/src/analysis/fixtures.rs
+$cfgIndexes = @(
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match '^\s*#\[cfg\(test\)\]\s*$') { $i }
+    }
+)
+$modIndexes = @(
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match '^\s*mod tests;\s*$') { $i }
+    }
+)
+if ($cfgIndexes.Count -ne 1 -or $modIndexes.Count -ne 1 -or $modIndexes[0] -ne ($cfgIndexes[0] + 1)) {
+    throw "fixtures.rs must contain exactly one adjacent #[cfg(test)] / mod tests; pair"
+}
+$lines[$cfgIndexes[0]]
+$lines[$modIndexes[0]]
 ```
 
-Expected: exactly two adjacent lines.
+Expected: exactly two adjacent lines are printed: `#[cfg(test)]` followed by `mod tests;`.
 
 No inline test bodies remain in `fixtures.rs`:
 
 ```powershell
-rg -n "#\[tokio::test\]|^\s*(pub(\([^)]*\))?\s+)?(async\s+fn|fn) (fixture_pool|count|insert_minimal_clear_fixture)\b" src-tauri/src/analysis/fixtures.rs
+$inlineTestMatches = @(rg -n "#\[tokio::test\]|^mod tests \{|use super::\*|SqlitePoolOptions|^\s*(pub(\([^)]*\))?\s+)?(async\s+fn|fn) (fixture_pool|count|insert_minimal_clear_fixture)\b" src-tauri/src/analysis/fixtures.rs)
+if ($inlineTestMatches.Count -ne 0) {
+    $inlineTestMatches
+    throw "inline fixture test body or helper remains in fixtures.rs"
+}
 ```
 
-Expected: no matches. Exit code `1` is expected for this no-match guard.
+Expected: no output and no throw.
 
 Production helper visibility remains private:
 
@@ -316,6 +348,47 @@ rg -n "^\s*pub(\([^)]*\))?\s+(async\s+fn|fn) (fixture_run_ids|register_fixture_a
 ```
 
 Expected: no matches. Exit code `1` is expected.
+
+Fixture constants remain private:
+
+```powershell
+foreach ($constName in @(
+    "FIXTURE_MARKER",
+    "FIXTURE_EXTERNAL_PREFIX",
+    "FIXTURE_PROFILE_ID",
+    "FIXTURE_NOW",
+    "FIXTURE_PERIOD_FROM",
+    "FIXTURE_PERIOD_TO",
+    "TELEGRAM_CHANNEL_LABEL",
+    "TELEGRAM_SUPERGROUP_LABEL",
+    "YOUTUBE_VIDEO_LABEL",
+    "YOUTUBE_PLAYLIST_LABEL",
+    "YOUTUBE_FIXTURE_VIDEO_ID",
+    "YOUTUBE_FIXTURE_PLAYLIST_ID",
+    "TELEGRAM_FIXTURE_CHANNEL_PEER_ID",
+    "TELEGRAM_FIXTURE_SUPERGROUP_PEER_ID",
+    "TELEGRAM_GROUP_LABEL",
+    "COMPLETED_SNAPSHOT_RUN_LABEL",
+    "MISSING_SNAPSHOT_RUN_LABEL",
+    "CAPTURE_FAILED_SNAPSHOT_RUN_LABEL",
+    "CAPTURE_FAILED_SNAPSHOT_ERROR",
+    "CANCELLED_RUN_MESSAGE",
+    "RUNNING_RUN_LABEL",
+    "FAILED_RUN_LABEL",
+    "CANCELLED_RUN_LABEL",
+    "GROUP_SNAPSHOT_RUN_LABEL",
+    "LLM_PROFILE_LABEL",
+    "FIXTURE_SNAPSHOT_CAPTURED_AT"
+)) {
+    $matches = @(rg -n "^\s*pub(\([^)]*\))?\s+const $constName\b" src-tauri/src/analysis/fixtures.rs)
+    if ($matches.Count -ne 0) {
+        $matches
+        throw "fixture constant visibility was widened: $constName"
+    }
+}
+```
+
+Expected: no output and no throw.
 
 Required test files exist:
 
@@ -330,7 +403,7 @@ foreach ($file in @(
     "active_runs.rs"
 )) {
     $path = "src-tauri/src/analysis/fixtures/tests/$file"
-    if (-not (Test-Path -LiteralPath $path)) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "missing fixture test module: $path"
     }
 }
@@ -355,7 +428,36 @@ if ($seedPathMatches.Count -ne 0) {
     $seedPathMatches
     throw "fixture tests must use parent facade access, not the private seed module path"
 }
+$testModSeedPathMatches = @(rg -n "super::seed::" src-tauri/src/analysis/fixtures/tests/mod.rs)
+if ($testModSeedPathMatches.Count -ne 0) {
+    $testModSeedPathMatches
+    throw "fixtures tests/mod.rs must not reach into the private production seed module"
+}
 ```
+
+`tests/mod.rs` stays wiring-only:
+
+```powershell
+$testModBodyMatches = @(rg -n "#\[tokio::test\]|^\s*(pub(\([^)]*\))?\s+)?(async\s+fn|fn)\b|use super::|use crate::" src-tauri/src/analysis/fixtures/tests/mod.rs)
+if ($testModBodyMatches.Count -ne 0) {
+    $testModBodyMatches
+    throw "fixtures tests/mod.rs must contain module declarations only"
+}
+```
+
+Expected: no output and no throw.
+
+Test modules avoid parent and crate glob imports:
+
+```powershell
+$globImportMatches = @(rg -n "use\s+super::super::\*|use\s+crate::.*::\*" src-tauri/src/analysis/fixtures/tests)
+if ($globImportMatches.Count -ne 0) {
+    $globImportMatches
+    throw "fixture test modules must use explicit imports, not parent or crate glob imports"
+}
+```
+
+Expected: no output and no throw.
 
 Required tests moved to expected modules:
 
@@ -391,9 +493,10 @@ $requiredTests = @{
 foreach ($entry in $requiredTests.GetEnumerator()) {
     foreach ($testName in $entry.Value) {
         $path = "src-tauri/src/analysis/fixtures/tests/$($entry.Key)"
-        rg -n "async fn $testName\b" $path
-        if ($LASTEXITCODE -ne 0) {
-            throw "missing fixture test $testName in $path"
+        $content = Get-Content -Raw $path
+        $pattern = "(?s)#\[tokio::test\]\s*async fn $([regex]::Escape($testName))\b"
+        if ($content -notmatch $pattern) {
+            throw "missing #[tokio::test] async fixture test $testName in $path"
         }
     }
 }
@@ -446,6 +549,41 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::activ
 ```
 
 Expected for each focused module slice: pass in the default dev test profile and not a green `0 tests` run.
+
+Post-change test inventory:
+
+```powershell
+$testList = cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests:: -- --list
+if ($LASTEXITCODE -ne 0) {
+    throw "fixture test inventory command failed"
+}
+foreach ($testPath in @(
+    "analysis::fixtures::tests::summary::summary_serializes_with_camel_case_keys",
+    "analysis::fixtures::tests::harness::fixture_test_pool_has_required_tables",
+    "analysis::fixtures::tests::clear::clear_removes_only_fixture_rows_and_is_idempotent",
+    "analysis::fixtures::tests::clear::clear_preserves_non_fixture_groups_and_members",
+    "analysis::fixtures::tests::clear::clear_deletes_child_rows_through_fixture_parent_ids",
+    "analysis::fixtures::tests::seed::seed_creates_safe_account_prompt_profile_sources_and_group",
+    "analysis::fixtures::tests::seed::seed_creates_post_sync_reader_content",
+    "analysis::fixtures::tests::seed::seed_creates_valid_typed_youtube_detail_metadata",
+    "analysis::fixtures::tests::seed::seed_creates_sources_that_pass_identity_repair",
+    "analysis::fixtures::tests::seed::compressed_fixture_fields_are_readable",
+    "analysis::fixtures::tests::seed::seed_creates_fixture_runs_with_statuses_templates_and_snapshots",
+    "analysis::fixtures::tests::seed::seed_twice_keeps_one_deterministic_fixture_set",
+    "analysis::fixtures::tests::snapshot::seeded_snapshot_runs_expose_captured_snapshot_state",
+    "analysis::fixtures::tests::snapshot::fixture_trace_refs_cover_youtube_timestamp_and_telegram_snapshot",
+    "analysis::fixtures::tests::snapshot::missing_snapshot_run_exposes_capture_failed_state_but_no_saved_messages",
+    "analysis::fixtures::tests::snapshot::capture_failed_snapshot_run_has_sanitized_error_trace_and_readable_report",
+    "analysis::fixtures::tests::active_runs::fixture_active_state_tracks_seeded_running_run",
+    "analysis::fixtures::tests::active_runs::fixture_cancel_waiter_marks_running_run_cancelled"
+)) {
+    if ($testList -notmatch [regex]::Escape($testPath)) {
+        throw "fixture test is missing from cargo test --list output: $testPath"
+    }
+}
+```
+
+Expected: every moved test path appears in Cargo's test inventory.
 
 Post-change full fixture slice:
 
