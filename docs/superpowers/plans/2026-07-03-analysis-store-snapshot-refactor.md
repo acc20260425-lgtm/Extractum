@@ -185,7 +185,7 @@ Expected: PASS and not a green `0 tests` run.
 - Consumes from `store.rs`: `CorpusMessage`, `StoredRunSnapshotRow`, `Pool<Sqlite>`, compression helpers, `internal_error`, `AppError`, `AppResult`, and `ANALYSIS_STATUS_FAILED`.
 - Produces through `analysis::store`: `sanitize_snapshot_error`, `sanitize_provider_error`, `capture_run_snapshot`, `persist_run_snapshot`, and `mark_run_capture_failed`.
 
-- [ ] **Step 1: Add the private child module and facade re-export in `store.rs`**
+- [x] **Step 1: Add the private child module and facade re-export in `store.rs`**
 
 Add these lines near the top of `src-tauri/src/analysis/store.rs`, beside the existing `read_model` module declaration and facade re-export:
 
@@ -200,7 +200,7 @@ pub(crate) use self::snapshot::{
 
 Expected: `snapshot` is private. Do not write `pub mod snapshot;` or `pub(crate) mod snapshot;`.
 
-- [ ] **Step 2: Create `snapshot.rs` with the moved imports**
+- [x] **Step 2: Create `snapshot.rs` with the moved imports**
 
 Create `src-tauri/src/analysis/store/snapshot.rs` with this import header before moving the functions:
 
@@ -215,7 +215,7 @@ use crate::error::{internal_error, AppError, AppResult};
 
 Expected: `snapshot.rs` imports `ANALYSIS_STATUS_FAILED` and the moved `mark_run_capture_failed` body binds `ANALYSIS_STATUS_FAILED` directly. Do not keep `crate::analysis::ANALYSIS_STATUS_FAILED` in that moved function if this import is present.
 
-- [ ] **Step 3: Move snapshot helpers into `snapshot.rs`**
+- [x] **Step 3: Move snapshot helpers into `snapshot.rs`**
 
 Move these exact items from `store.rs` into `snapshot.rs`, preserving bodies and order except for the `ANALYSIS_STATUS_FAILED` path adjustment described in Step 2:
 
@@ -229,7 +229,7 @@ Move these exact items from `store.rs` into `snapshot.rs`, preserving bodies and
 
 Implementation detail: the current contiguous move starts at `pub(crate) fn sanitize_snapshot_error(` and ends after the closing brace of `pub(crate) async fn mark_run_capture_failed(pool: &Pool<Sqlite>, run_id: i64, snapshot_error: &str, completed_at: i64) -> AppResult<()>`. Leave `set_run_status` and everything after it in `store.rs`.
 
-- [ ] **Step 4: Preserve the dead-code allowance**
+- [x] **Step 4: Preserve the dead-code allowance**
 
 Ensure the moved `persist_run_snapshot` keeps the allowance directly attached to the function:
 
@@ -249,7 +249,7 @@ pub(crate) async fn persist_run_snapshot(
 
 Expected: normal non-test builds do not gain a dead-code warning for `persist_run_snapshot`.
 
-- [ ] **Step 5: Keep private helpers private**
+- [x] **Step 5: Keep private helpers private**
 
 Verify these moved helpers have no visibility modifier in `snapshot.rs`:
 
@@ -258,7 +258,7 @@ Verify these moved helpers have no visibility modifier in `snapshot.rs`:
 
 Expected: only the five facade API items are `pub(crate)`.
 
-- [ ] **Step 6: Trim moved-only imports from `store.rs`**
+- [x] **Step 6: Trim moved-only imports from `store.rs`**
 
 Update the top of `src-tauri/src/analysis/store.rs` so moved-only imports are gone while remaining store and test code still compile. The production import set should no longer need `CorpusMessage`, `StoredRunSnapshotRow`, `compress_text`, `decompress_text`, `internal_error`, or `ANALYSIS_STATUS_FAILED`.
 
@@ -280,7 +280,7 @@ use crate::error::{AppError, AppResult};
 
 Expected: test-only imports such as `CorpusMessage` can remain inside `#[cfg(test)] mod tests`, but moved-only names must not remain in the production section before the test module.
 
-- [ ] **Step 7: Leave the inline store tests in `store.rs`**
+- [x] **Step 7: Leave the inline store tests in `store.rs`**
 
 Keep the existing test module in `src-tauri/src/analysis/store.rs`. Its `use super` block should continue importing the facade names from `store.rs`:
 
@@ -295,7 +295,7 @@ use super::{
 
 Expected: tests do not import from `super::snapshot` or call `snapshot::` directly. This keeps store tests exercising the facade contract.
 
-- [ ] **Step 8: Run formatter**
+- [x] **Step 8: Run formatter**
 
 Run:
 
