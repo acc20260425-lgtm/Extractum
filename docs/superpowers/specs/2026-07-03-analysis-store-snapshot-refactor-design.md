@@ -143,6 +143,8 @@ Expected root re-export changes in `analysis/mod.rs`: none.
 - `crate::compression::{compress_text, decompress_text}`
 - `crate::error::{internal_error, AppError, AppResult}`
 
+When `ANALYSIS_STATUS_FAILED` is imported into `snapshot.rs`, `mark_run_capture_failed` should bind `ANALYSIS_STATUS_FAILED` directly instead of keeping the current fully qualified `crate::analysis::ANALYSIS_STATUS_FAILED` path. If an implementation chooses to preserve the fully qualified path, it must not add the `ANALYSIS_STATUS_FAILED` import. The implementation plan should pick one form explicitly and avoid unused-import warning debt.
+
 `store.rs` should remove imports that only moved snapshot helpers use after extraction:
 
 - `CorpusMessage`, if only snapshot helpers and tests use it in production scope;
@@ -151,7 +153,7 @@ Expected root re-export changes in `analysis/mod.rs`: none.
 - `decompress_text`, if only `snapshot.rs` uses it;
 - `internal_error`, if only `snapshot.rs` uses it.
 
-Keep in `store.rs` imports needed by prompt-template, source existence, source-group, duplicate-run, insert, status, delete, read-model facade, and tests. Test-only imports can remain inside the inline `#[cfg(test)] mod tests`.
+Keep in `store.rs` imports needed by prompt-template, source existence, source-group, duplicate-run, insert, status, delete, read-model facade, and tests. Test-only imports can remain inside the inline `#[cfg(test)] mod tests`. The implementation plan must include a production-import guard that checks the section of `store.rs` before `#[cfg(test)] mod tests`; moved-only imports must not remain in the production import block.
 
 The implementation plan must verify unused imports after the move and keep the diff free of new warning debt in `src-tauri/src/analysis/store.rs` and `src-tauri/src/analysis/store/snapshot.rs`.
 
@@ -309,6 +311,8 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
+There is no required dedicated lifecycle runtime test for the `analysis/report/lifecycle.rs` consumer in this slice. This is an accepted risk for this move-only refactor: `analysis::store::tests::mark_run_capture_failed` covers the database mutation, `analysis::store::tests::sanitize_provider_error` covers sanitization behavior, `analysis::report::tests::` provides broad report-module regression coverage, and `cargo check --all-targets` covers the lifecycle import/type boundary. The implementation plan must not claim focused lifecycle behavior coverage unless it adds or identifies a concrete lifecycle test name.
+
 After editing and before committing, run each command separately with the same non-zero expectations. Do not paste these as one PowerShell block unless the block explicitly checks `$LASTEXITCODE` after every native command and stops on failure.
 
 Also run consumer compile coverage:
@@ -347,13 +351,23 @@ foreach ($name in @('capture_run_snapshot', 'mark_run_capture_failed', 'persist_
 rg -n "^pub\(crate\) (fn|async fn) (sanitize_snapshot_error|sanitize_provider_error|capture_run_snapshot|persist_run_snapshot|mark_run_capture_failed)\b" src-tauri/src/analysis/store/snapshot.rs
 rg -n "^(fn|async fn) (validate_snapshot_message|load_run_snapshot_messages_on_transaction)\b" src-tauri/src/analysis/store/snapshot.rs
 rg -n "^\s*pub(\([^)]*\))?\s+(fn|async fn) (validate_snapshot_message|load_run_snapshot_messages_on_transaction)\b" src-tauri/src/analysis/store/snapshot.rs
+$storeProduction = [regex]::Split((Get-Content -Raw -LiteralPath 'src-tauri/src/analysis/store.rs'), "#\[cfg\(test\)\]\s*mod tests", 2)[0]
+foreach ($name in @('CorpusMessage', 'StoredRunSnapshotRow', 'compress_text', 'decompress_text', 'internal_error', 'ANALYSIS_STATUS_FAILED')) {
+    if ($storeProduction -match ("\b" + [regex]::Escape($name) + "\b")) {
+        throw "moved-only production import remains in store.rs: $name"
+    }
+}
+$storeTests = [regex]::Match((Get-Content -Raw -LiteralPath 'src-tauri/src/analysis/store.rs'), "(?s)#\[cfg\(test\)\]\s*mod tests \{.*\z").Value
+if ($storeTests -match "super::snapshot|snapshot::") {
+    throw "store tests must use the store facade, not snapshot directly"
+}
 $snapshotSource = Get-Content -Raw -LiteralPath 'src-tauri/src/analysis/store/snapshot.rs'
 if ($snapshotSource -notmatch "#\[allow\(dead_code\)\]\s*pub\(crate\) async fn persist_run_snapshot") {
     throw "persist_run_snapshot must preserve #[allow(dead_code)]"
 }
 ```
 
-Expected: first command has no matches; `rg` exit code `1` is expected for this no-match guard. The second command prints exactly one private module declaration. The third command has no matches; `rg` exit code `1` is expected. The facade loop completes without throwing. Public API guards print the five re-exported snapshot API items. The private-helper positive guard prints both private helper signatures. The private-helper widening guard has no matches; `rg` exit code `1` is expected. The `persist_run_snapshot` PowerShell guard confirms the dead-code allowance stayed attached to the function.
+Expected: first command has no matches; `rg` exit code `1` is expected for this no-match guard. The second command prints exactly one private module declaration. The third command has no matches; `rg` exit code `1` is expected. The facade loop completes without throwing. Public API guards print the five re-exported snapshot API items. The private-helper positive guard prints both private helper signatures. The private-helper widening guard has no matches; `rg` exit code `1` is expected. The production-import guard completes without throwing, proving moved-only imports did not remain before the test module. The store-test guard completes without throwing, proving inline tests still exercise the `store.rs` facade instead of `super::snapshot`. The `persist_run_snapshot` PowerShell guard confirms the dead-code allowance stayed attached to the function.
 
 ## Commit Shape
 
