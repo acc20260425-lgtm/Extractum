@@ -117,13 +117,18 @@ describe("ResearchProjectsShell", () => {
     expect(shellSource).toContain("{...runDock}");
   });
 
-  it("renders the bulk-action bar above the grid when a bulkBar bag is provided", () => {
-    expect(shellSource).toContain("<SourcesBulkBar");
-    expect(shellSource).toContain("{...bulkBar}");
-    // The bar must sit above the grid container in the main column.
-    const barIndex = shellSource.indexOf("<SourcesBulkBar");
+  it("renders the stats bar with the bulk overlay inside and the filter row above the grid", () => {
+    expect(shellSource).toContain("<SourcesFilterBar");
+    expect(shellSource).toContain("{...filterBar}");
+    expect(shellSource).toContain("<SourcesFilterRow");
+    expect(shellSource).toContain("{...filterRow}");
+    // bulk-бар живёт внутри statsbar-контейнера (overlay поверх фильтров)
+    const statsIndex = shellSource.indexOf('class="research-projects-shell__statsbar"');
+    const bulkIndex = shellSource.indexOf("<SourcesBulkBar");
     const gridIndex = shellSource.indexOf('class="research-projects-shell__grid"');
-    expect(barIndex).toBeGreaterThan(-1);
-    expect(barIndex).toBeLessThan(gridIndex);
+    expect(statsIndex).toBeGreaterThan(-1);
+    expect(bulkIndex).toBeGreaterThan(statsIndex);
+    expect(bulkIndex).toBeLessThan(gridIndex);
+    expect(shellSource).toContain("overlay={gridOverlay}");
   });
 });

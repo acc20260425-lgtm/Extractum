@@ -5,6 +5,8 @@
   import ProjectToolbar from "./ProjectToolbar.svelte";
   import RunDock from "./RunDock.svelte";
   import SourcesBulkBar from "./SourcesBulkBar.svelte";
+  import SourcesFilterBar from "./SourcesFilterBar.svelte";
+  import SourcesFilterRow from "./SourcesFilterRow.svelte";
   import SourcesGrid from "./SourcesGrid.svelte";
   import type { ProjectSourceRecord } from "$lib/types/projects";
 
@@ -17,6 +19,9 @@
     runDock,
     inspector,
     bulkBar,
+    filterBar,
+    filterRow,
+    gridOverlay = "Нет источников",
     onSelectedSourceIdsChange,
   }: {
     railPanel: ComponentProps<typeof ProjectRailPanel>;
@@ -27,6 +32,9 @@
     runDock?: ComponentProps<typeof RunDock>;
     inspector?: ComponentProps<typeof Inspector>;
     bulkBar?: ComponentProps<typeof SourcesBulkBar>;
+    filterBar?: ComponentProps<typeof SourcesFilterBar>;
+    filterRow?: ComponentProps<typeof SourcesFilterRow>;
+    gridOverlay?: string;
     onSelectedSourceIdsChange?: (ids: string[]) => void;
   } = $props();
 </script>
@@ -41,11 +49,19 @@
       {#if toolbar}
         <ProjectToolbar {...toolbar} />
       {/if}
-      {#if bulkBar}
-        <SourcesBulkBar {...bulkBar} />
+      {#if filterBar}
+        <div class="research-projects-shell__statsbar">
+          <SourcesFilterBar {...filterBar} />
+          {#if bulkBar}
+            <SourcesBulkBar {...bulkBar} />
+          {/if}
+        </div>
+      {/if}
+      {#if filterRow}
+        <SourcesFilterRow {...filterRow} />
       {/if}
       <div class="research-projects-shell__grid">
-        <SourcesGrid {sources} {selectedSourceIds} {onSelectedSourceIdsChange} />
+        <SourcesGrid {sources} {selectedSourceIds} {onSelectedSourceIdsChange} overlay={gridOverlay} />
       </div>
       {#if runDock}
         <RunDock {...runDock} />
@@ -84,6 +100,11 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+  }
+
+  .research-projects-shell__statsbar {
+    position: relative;
+    flex-shrink: 0;
   }
 
   .research-projects-shell__grid {

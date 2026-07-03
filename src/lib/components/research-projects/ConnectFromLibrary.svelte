@@ -14,7 +14,6 @@
     connectableSelection,
     filterLibrarySources,
     type LibrarySourceView,
-    type ResearchProjectView,
   } from "$lib/ui/research-projects-model";
   import type { LibrarySourceProvider } from "$lib/types/library-sources";
   import LibrarySourceCell from "./LibrarySourceCell.svelte";
@@ -31,7 +30,7 @@
     onConnectSelectedSources,
   }: {
     open: boolean;
-    project: ResearchProjectView | null;
+    project: { title: string } | null;
     librarySources: LibrarySourceView[];
     selectedSourceIds: Set<string>;
     saving: boolean;

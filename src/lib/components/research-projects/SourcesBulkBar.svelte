@@ -63,18 +63,22 @@
 
 <style>
   .sources-bulk-bar {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 6px 12px;
-    border-bottom: 1px solid var(--extractum-border);
-    background: var(--extractum-surface-2, var(--extractum-surface));
+    padding: 0 14px;
+    background: color-mix(in srgb, var(--extractum-primary) 8%, var(--extractum-surface));
+    border-bottom: 1px solid color-mix(in srgb, var(--extractum-primary) 24%, transparent);
     font: 400 13px/1.4 var(--extractum-font);
     color: var(--extractum-text);
   }
 
   .sources-bulk-bar__count {
     font-weight: 600;
+    color: var(--extractum-primary);
   }
 
   .sources-bulk-bar__clear {
