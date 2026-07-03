@@ -9,8 +9,25 @@
   } from "$lib/ui/research-projects-rail-workflow";
   import { buildPeriodPresets, type PeriodPreset } from "$lib/ui/research-projects-period";
   import { buildSourceRow } from "$lib/ui/research-projects-source-row";
+  import ConnectFromLibrary from "$lib/components/research-projects/ConnectFromLibrary.svelte";
   import ProjectEditorDialog from "$lib/components/research-projects/ProjectEditorDialog.svelte";
+  import { listLibraryCatalog } from "$lib/api/library-sources";
   import {
+    buildLibrarySourcesView,
+    connectableSelection,
+    projectViewId,
+  } from "$lib/ui/research-projects-model";
+  import {
+    buildSourceFilterChips,
+    countActiveSourceFilters,
+    emptySourceFilters,
+    filterProjectSources,
+    removeSourceFilterChip,
+    type SourceFilters,
+  } from "$lib/ui/research-projects-source-filters";
+  import type { LibraryCatalogRecord } from "$lib/types/library-sources";
+  import {
+    addProjectSources,
     createProject,
     deleteProject,
     getProjectDataRange,
@@ -39,6 +56,11 @@
   let selectedSourceIds = $state<string[]>([]);
   let editorOpen = $state(false);
   let editorProjectId = $state<number | null>(null);
+  let filters = $state<SourceFilters>(emptySourceFilters());
+  let filtersOpen = $state(false);
+  let connectOpen = $state(false);
+  let libraryCatalogRecords = $state<LibraryCatalogRecord[]>([]);
+  let selectedLibrarySourceIds = $state<Set<string>>(new Set());
   let inspectorOpen = $state(true);
   let promptOptions = $state<ComboOption[]>([]);
   // Model options are loaded from the active LLM profile in a follow-up; for now
@@ -68,6 +90,21 @@
     const summary = railState.summaries.find((s) => s.id === editorProjectId);
     return summary ? { title: summary.name, description: summary.description } : null;
   });
+  let visibleSources = $derived(filterProjectSources(sources, filters));
+  let filterChips = $derived(buildSourceFilterChips(filters));
+  let filtersActive = $derived(countActiveSourceFilters(filters) > 0);
+  let gridOverlay = $derived(
+    filtersActive && visibleSources.length === 0
+      ? "Под условия ничего не подходит"
+      : "Нет источников",
+  );
+  let librarySources = $derived(
+    buildLibrarySourcesView(
+      libraryCatalogRecords,
+      sources,
+      selectedProjectId !== null ? projectViewId(selectedProjectId) : null,
+    ),
+  );
   let periodPresets = $derived(
     buildPeriodPresets(railState.dataRange ?? { from: null, to: null }, now),
   );
@@ -119,6 +156,8 @@
     selectedProjectId = id;
     selectedSourceIds = [];
     selectedPeriodId = "all";
+    filters = emptySourceFilters();
+    filtersOpen = false;
     sources = await listProjectSources(id);
     await workflow.loadDataRange({
       projectId: id,
@@ -229,6 +268,38 @@
     }
   }
 
+  async function openConnectSources() {
+    connectOpen = true;
+    if (libraryCatalogRecords.length === 0) {
+      try {
+        const catalog = await listLibraryCatalog();
+        libraryCatalogRecords = catalog.sources;
+      } catch (error) {
+        railState = { ...railState, status: `Не удалось загрузить библиотеку (${String(error)})` };
+      }
+    }
+  }
+
+  async function connectSelectedLibrarySources() {
+    if (selectedProjectId === null) return;
+    const sourceIds = connectableSelection(librarySources, selectedLibrarySourceIds).map(
+      (source) => source.sourceId,
+    );
+    if (sourceIds.length === 0) return;
+    railState = { ...railState, saving: true, status: "" };
+    try {
+      await addProjectSources({ projectId: selectedProjectId, sourceIds });
+      selectedLibrarySourceIds = new Set();
+      connectOpen = false;
+      sources = await listProjectSources(selectedProjectId);
+      await workflow.reload();
+    } catch (error) {
+      railState = { ...railState, status: `Не удалось подключить источники (${String(error)})` };
+    } finally {
+      railState = { ...railState, saving: false };
+    }
+  }
+
   onMount(async () => {
     await workflow.reload();
     const templates = await listAnalysisPromptTemplates("report");
@@ -256,8 +327,28 @@
       onDelete: (id) => void deleteProjectById(id),
     }}
     {selectedProjectId}
-    {sources}
+    sources={visibleSources}
     {selectedSourceIds}
+    {gridOverlay}
+    filterBar={selectedProject
+      ? {
+          filtersOpen,
+          onToggleFilters: () => (filtersOpen = !filtersOpen),
+          chips: filterChips,
+          onRemoveChip: (key) => (filters = removeSourceFilterChip(filters, key)),
+          filtersActive,
+          onClearAll: () => (filters = emptySourceFilters()),
+          shownCount: visibleSources.length,
+          totalCount: sources.length,
+          onAddSource: () => void openConnectSources(),
+        }
+      : undefined}
+    filterRow={selectedProject && filtersOpen
+      ? {
+          filters,
+          onChange: (next) => (filters = next),
+        }
+      : undefined}
     onSelectedSourceIdsChange={(ids) => (selectedSourceIds = ids)}
     toolbar={selectedProject
       ? {
@@ -310,6 +401,17 @@
     saving={railState.saving}
     error={railState.status}
     onSubmit={submitProjectEditor}
+  />
+  <ConnectFromLibrary
+    open={connectOpen}
+    project={selectedProject ? { title: selectedProject.name } : null}
+    {librarySources}
+    selectedSourceIds={selectedLibrarySourceIds}
+    saving={railState.saving}
+    status={railState.status}
+    onOpenChange={(open) => (connectOpen = open)}
+    onSelectedSourceIdsChange={(ids) => (selectedLibrarySourceIds = new Set(ids))}
+    onConnectSelectedSources={connectSelectedLibrarySources}
   />
 </div>
 
