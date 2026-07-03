@@ -58,3 +58,11 @@ export {
   Item as ExtractumCommandItem,
   Empty as ExtractumCommandEmpty,
 } from "$lib/components/ui/command/index.js";
+
+export {
+  DropdownMenu as ExtractumDropdownMenu,
+  DropdownMenuTrigger as ExtractumDropdownMenuTrigger,
+  DropdownMenuContent as ExtractumDropdownMenuContent,
+  DropdownMenuItem as ExtractumDropdownMenuItem,
+  DropdownMenuSeparator as ExtractumDropdownMenuSeparator,
+} from "$lib/components/ui/dropdown-menu/index.js";

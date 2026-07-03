@@ -1,43 +1,39 @@
 <script lang="ts">
   import type { ComponentProps } from "svelte";
   import Inspector from "./Inspector.svelte";
-  import ProjectRailSections from "./ProjectRailSections.svelte";
+  import ProjectRailPanel from "./ProjectRailPanel.svelte";
   import ProjectToolbar from "./ProjectToolbar.svelte";
   import RunDock from "./RunDock.svelte";
   import SourcesBulkBar from "./SourcesBulkBar.svelte";
   import SourcesGrid from "./SourcesGrid.svelte";
-  import type { ProjectSourceRecord, ProjectSummary } from "$lib/types/projects";
+  import type { ProjectSourceRecord } from "$lib/types/projects";
 
   let {
-    summaries,
+    railPanel,
     selectedProjectId,
-    now,
     sources = [],
     selectedSourceIds = [],
     toolbar,
     runDock,
     inspector,
     bulkBar,
-    onSelectProject,
     onSelectedSourceIdsChange,
   }: {
-    summaries: ProjectSummary[];
+    railPanel: ComponentProps<typeof ProjectRailPanel>;
     selectedProjectId: number | null;
-    now: number;
     sources?: ProjectSourceRecord[];
     selectedSourceIds?: string[];
     toolbar?: ComponentProps<typeof ProjectToolbar>;
     runDock?: ComponentProps<typeof RunDock>;
     inspector?: ComponentProps<typeof Inspector>;
     bulkBar?: ComponentProps<typeof SourcesBulkBar>;
-    onSelectProject?: (id: number) => void;
     onSelectedSourceIdsChange?: (ids: string[]) => void;
   } = $props();
 </script>
 
 <div class="research-projects-shell">
   <aside class="research-projects-shell__rail">
-    <ProjectRailSections {summaries} {now} onSelect={onSelectProject} />
+    <ProjectRailPanel {...railPanel} />
   </aside>
 
   <main class="research-projects-shell__main">

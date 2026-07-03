@@ -9,7 +9,10 @@
   } from "$lib/ui/research-projects-rail-workflow";
   import { buildPeriodPresets, type PeriodPreset } from "$lib/ui/research-projects-period";
   import { buildSourceRow } from "$lib/ui/research-projects-source-row";
+  import ProjectEditorDialog from "$lib/components/research-projects/ProjectEditorDialog.svelte";
   import {
+    createProject,
+    deleteProject,
     getProjectDataRange,
     listProjectSources,
     listResearchProjects,
@@ -17,6 +20,7 @@
     setProjectArchived,
     setProjectPinned,
     startProjectAnalysis,
+    updateProject,
   } from "$lib/api/projects";
   import { syncYoutubeSource } from "$lib/api/source-jobs";
   import { listAnalysisPromptTemplates } from "$lib/api/analysis-source-groups";
@@ -33,6 +37,8 @@
   let selectedProjectId = $state<number | null>(null);
   let sources = $state<ProjectSourceRecord[]>([]);
   let selectedSourceIds = $state<string[]>([]);
+  let editorOpen = $state(false);
+  let editorProjectId = $state<number | null>(null);
   let inspectorOpen = $state(true);
   let promptOptions = $state<ComboOption[]>([]);
   // Model options are loaded from the active LLM profile in a follow-up; for now
@@ -57,6 +63,11 @@
   let selectedProject = $derived(
     railState.summaries.find((summary) => summary.id === selectedProjectId) ?? null,
   );
+  let editorProject = $derived.by(() => {
+    if (editorProjectId === null) return null;
+    const summary = railState.summaries.find((s) => s.id === editorProjectId);
+    return summary ? { title: summary.name, description: summary.description } : null;
+  });
   let periodPresets = $derived(
     buildPeriodPresets(railState.dataRange ?? { from: null, to: null }, now),
   );
@@ -175,6 +186,49 @@
     }
   }
 
+  function openCreateProject() {
+    editorProjectId = null;
+    editorOpen = true;
+  }
+
+  function openEditProject(id: number) {
+    editorProjectId = id;
+    editorOpen = true;
+  }
+
+  async function submitProjectEditor(input: { name: string; description: string | null }) {
+    railState = { ...railState, saving: true, status: "" };
+    try {
+      if (editorProjectId === null) {
+        await createProject(input);
+      } else {
+        await updateProject({ projectId: editorProjectId, ...input });
+      }
+      await workflow.reload();
+    } catch (error) {
+      railState = { ...railState, status: `Не удалось сохранить проект (${String(error)})` };
+    } finally {
+      railState = { ...railState, saving: false };
+    }
+  }
+
+  async function deleteProjectById(id: number) {
+    railState = { ...railState, saving: true, status: "" };
+    try {
+      await deleteProject(id);
+      if (selectedProjectId === id) {
+        selectedProjectId = null;
+        sources = [];
+        selectedSourceIds = [];
+      }
+      await workflow.reload();
+    } catch (error) {
+      railState = { ...railState, status: `Не удалось удалить проект (${String(error)})` };
+    } finally {
+      railState = { ...railState, saving: false };
+    }
+  }
+
   onMount(async () => {
     await workflow.reload();
     const templates = await listAnalysisPromptTemplates("report");
@@ -190,12 +244,20 @@
   <!-- Temporary switch back to the current /projects screen. -->
   <a class="rp-ui-switch" href="/projects">← Старый интерфейс</a>
   <ResearchProjectsShell
-    summaries={railState.summaries}
+    railPanel={{
+      summaries: railState.summaries,
+      selectedProjectId,
+      now,
+      onSelect: selectProject,
+      onCreate: openCreateProject,
+      onEdit: openEditProject,
+      onTogglePin: (id, pinned) => void workflow.setPinned(id, pinned),
+      onToggleArchive: (id, archived) => void workflow.setArchived(id, archived),
+      onDelete: (id) => void deleteProjectById(id),
+    }}
     {selectedProjectId}
-    {now}
     {sources}
     {selectedSourceIds}
-    onSelectProject={selectProject}
     onSelectedSourceIdsChange={(ids) => (selectedSourceIds = ids)}
     toolbar={selectedProject
       ? {
@@ -241,6 +303,13 @@
           onToggle: () => (inspectorOpen = !inspectorOpen),
         }
       : undefined}
+  />
+  <ProjectEditorDialog
+    bind:open={editorOpen}
+    project={editorProject}
+    saving={railState.saving}
+    error={railState.status}
+    onSubmit={submitProjectEditor}
   />
 </div>
 

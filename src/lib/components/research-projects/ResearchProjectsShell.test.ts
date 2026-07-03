@@ -32,12 +32,26 @@ function summary(overrides: Partial<ProjectSummary> = {}): ProjectSummary {
 }
 
 describe("ResearchProjectsShell", () => {
-  it("renders the project rail from summaries", () => {
+  it("renders the project rail panel from the railPanel bag", () => {
     render(ResearchProjectsShell, {
-      props: { summaries: [summary({ name: "Беларусь" })], selectedProjectId: null, now: NOW },
+      props: {
+        railPanel: {
+          summaries: [summary({ name: "Беларусь" })],
+          selectedProjectId: null,
+          now: NOW,
+        },
+        selectedProjectId: null,
+      },
     });
 
     expect(screen.getByText("Беларусь")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Поиск проектов")).toBeTruthy();
+  });
+
+  it("renders the rail panel in the aside", () => {
+    expect(shellSource).toContain("<ProjectRailPanel");
+    expect(shellSource).toContain("{...railPanel}");
+    expect(shellSource).not.toContain("ProjectRailSections");
   });
 
   it("wires the sources grid in the main area for the selected project", () => {
@@ -52,19 +66,22 @@ describe("ResearchProjectsShell", () => {
     expect(shellSource).toContain("{...toolbar}");
   });
 
-  it("forwards project selection", async () => {
-    const onSelectProject = vi.fn();
+  it("forwards project selection through the railPanel bag", async () => {
+    const onSelect = vi.fn();
     render(ResearchProjectsShell, {
       props: {
-        summaries: [summary({ id: 7, name: "Pick me" })],
+        railPanel: {
+          summaries: [summary({ id: 7, name: "Pick me" })],
+          selectedProjectId: null,
+          now: NOW,
+          onSelect,
+        },
         selectedProjectId: null,
-        now: NOW,
-        onSelectProject,
       },
     });
 
     await fireEvent.click(screen.getByText("Pick me"));
-    expect(onSelectProject).toHaveBeenCalledWith(7);
+    expect(onSelect).toHaveBeenCalledWith(7);
   });
 
   it("renders the inspector as the right column", () => {
@@ -84,7 +101,11 @@ describe("ResearchProjectsShell", () => {
     };
 
     render(ResearchProjectsShell, {
-      props: { summaries: [], selectedProjectId: null, now: NOW, inspector: inspectorBag },
+      props: {
+        railPanel: { summaries: [], selectedProjectId: null, now: NOW },
+        selectedProjectId: null,
+        inspector: inspectorBag,
+      },
     });
 
     expect(screen.getByText("Инспектор источника")).toBeTruthy();

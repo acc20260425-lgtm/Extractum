@@ -1,6 +1,5 @@
 <script lang="ts">
   import { ExtractumButton, ExtractumDialog, ExtractumTextInput } from "$lib/components/extractum-ui";
-  import type { ResearchProjectView } from "$lib/ui/research-projects-model";
 
   let {
     open = $bindable(false),
@@ -10,7 +9,7 @@
     onSubmit,
   }: {
     open?: boolean;
-    project?: ResearchProjectView | null;
+    project?: { title: string; description: string | null } | null;
     saving?: boolean;
     error?: string;
     onSubmit: (input: { name: string; description: string | null }) => void | Promise<void>;
