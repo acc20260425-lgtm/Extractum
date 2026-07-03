@@ -40,7 +40,7 @@
 - Consumes: approved design `docs/superpowers/specs/2026-07-03-analysis-store-setup-refactor-design.md`.
 - Produces: captured pre-edit status and baseline test evidence before extraction.
 
-- [ ] **Step 1: Capture the current worktree status**
+- [x] **Step 1: Capture the current worktree status**
 
 Run:
 
@@ -50,7 +50,7 @@ git status --short --untracked-files=all
 
 Expected: record the exact output. Unrelated files may exist, but target files must be clean or handled before editing.
 
-- [ ] **Step 2: Prove tracked target files are clean**
+- [x] **Step 2: Prove tracked target files are clean**
 
 Run:
 
@@ -61,7 +61,7 @@ git diff --cached -- src-tauri/src/analysis/store.rs
 
 Expected: no target-file diff. If `src-tauri/src/analysis/store.rs` is modified or staged before this refactor starts, stop here and make a separate baseline commit before editing.
 
-- [ ] **Step 3: Inspect a pre-existing `setup.rs` directly if present**
+- [x] **Step 3: Inspect a pre-existing `setup.rs` directly if present**
 
 Run:
 
@@ -76,7 +76,7 @@ if (Test-Path -LiteralPath 'src-tauri/src/analysis/store/setup.rs') {
 
 Expected: no output if the file does not exist. If it exists as tracked, staged, modified, or untracked work before this refactor starts, stop here and make a separate baseline commit before editing.
 
-- [ ] **Step 4: Save a unique pre-edit status snapshot**
+- [x] **Step 4: Save a unique pre-edit status snapshot**
 
 Run:
 
@@ -93,7 +93,7 @@ Get-Content -Raw -LiteralPath $statusPointerPath
 
 Expected: the pre-edit status file contains the same relevant baseline status from Step 1, and the pointer file records the tag and status path for later PowerShell sessions.
 
-- [ ] **Step 5: Run baseline source existence test**
+- [x] **Step 5: Run baseline source existence test**
 
 Run:
 
@@ -103,7 +103,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::ensure_s
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 6: Run baseline prompt-template fetch test**
+- [x] **Step 6: Run baseline prompt-template fetch test**
 
 Run:
 
@@ -113,7 +113,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::fetch_pr
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 7: Run baseline full store test slice**
+- [x] **Step 7: Run baseline full store test slice**
 
 Run:
 
@@ -123,7 +123,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 8: Run baseline groups consumer slice**
+- [x] **Step 8: Run baseline groups consumer slice**
 
 Run:
 
@@ -133,7 +133,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::groups::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 9: Run baseline source-resolution consumer slice**
+- [x] **Step 9: Run baseline source-resolution consumer slice**
 
 Run:
 
@@ -143,7 +143,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::source_resolut
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 10: Run baseline report test slice**
+- [x] **Step 10: Run baseline report test slice**
 
 Run:
 
@@ -153,7 +153,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 11: Run baseline builtin template insertion test**
+- [x] **Step 11: Run baseline builtin template insertion test**
 
 Run:
 
