@@ -71,6 +71,11 @@ describe("ResearchProjectsShell", () => {
     expect(screen.getByText("Раздел «Обзор» в разработке")).toBeTruthy();
   });
 
+  it("passes row activation through to the sources grid", () => {
+    expect(shellSource).toContain("{activeSourceId}");
+    expect(shellSource).toContain("{onActivateSource}");
+  });
+
   it("renders the rail panel in the aside", () => {
     expect(shellSource).toContain("<ProjectRailPanel");
     expect(shellSource).toContain("{...railPanel}");

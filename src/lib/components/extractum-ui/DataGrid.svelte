@@ -31,6 +31,9 @@
     ariaLabel,
     overlay = "Нет данных",
     columnStyle,
+    selectOnClick = true,
+    activeRowId = null,
+    onRowClick,
     onSelectedRowIdsChange = () => {},
   }: {
     rows: GridRow[];
@@ -42,6 +45,9 @@
     ariaLabel?: string;
     overlay?: string;
     columnStyle?: (column: ExtractumDataGridColumn) => string;
+    selectOnClick?: boolean;
+    activeRowId?: string | null;
+    onRowClick?: (id: string) => void;
     onSelectedRowIdsChange?: (ids: string[]) => void;
   } = $props();
 
@@ -49,6 +55,9 @@
   // changes (its config effect re-runs), so object props must keep stable
   // references and selection must NOT flow through the reactive prop at all.
   const GRID_SIZES = { rowHeight: 34, headerHeight: 34, columnWidth: 160 };
+
+  // Unique host marker for the active-row CSS rule below.
+  const gridUid = Math.random().toString(36).slice(2, 10);
 
   let api = $state<any>(null);
   let host = $state<HTMLDivElement | null>(null);
@@ -74,6 +83,41 @@
     for (const id of want) {
       if (!currentSet.has(id)) api.exec("select-row", { id, mode: true, toggle: true });
     }
+  });
+
+  // Row click → onRowClick(id). Delegated on the host so svar's internal
+  // re-renders don't detach it; checkbox zones opt out via ignore-click.
+  $effect(() => {
+    const element = host;
+    const handler = (event: MouseEvent) => {
+      if (!onRowClick) return;
+      const target = event.target as HTMLElement;
+      if (target.closest('[data-action="ignore-click"]')) return;
+      if (target.closest(".wx-header")) return;
+      const rowEl = target.closest(".wx-row") as HTMLElement | null;
+      if (!rowEl || !element?.contains(rowEl)) return;
+      const raw = rowEl.dataset.id ?? "";
+      const id = raw.startsWith(":") ? raw.slice(1) : raw;
+      if (id) onRowClick(id);
+    };
+    element?.addEventListener("click", handler);
+    return () => element?.removeEventListener("click", handler);
+  });
+
+  // Active-row highlight as a dynamic CSS rule: survives svar re-renders
+  // (sorting, data refresh) and never touches svar reactive props.
+  let activeRowCss = $derived.by(() => {
+    if (!activeRowId || !/^[\w:-]+$/.test(activeRowId)) return "";
+    const rule =
+      `background: color-mix(in srgb, var(--extractum-primary) 7%, var(--extractum-surface));` +
+      ` box-shadow: inset 2px 0 0 var(--extractum-primary);`;
+    const scope = `.extractum-data-grid[data-grid-uid="${gridUid}"]`;
+    return (
+      `<style>` +
+      `${scope} .wx-row[data-id=":${activeRowId}"] .wx-cell, ` +
+      `${scope} .wx-row[data-id="${activeRowId}"] .wx-cell { ${rule} }` +
+      `</style>`
+    );
   });
 
   $effect(() => {
@@ -113,8 +157,10 @@
   }
 </script>
 
+{@html activeRowCss}
 <div
   bind:this={host}
+  data-grid-uid={gridUid}
   class={cn("extractum-svar-theme extractum-data-grid", className)}
   style={`height:${height};`}
   role={ariaLabel ? "region" : undefined}
@@ -131,7 +177,7 @@
         columnStyle={columnStyle}
         overlay={visibleOverlay}
         multiselect={multiselect}
-        select
+        select={selectOnClick}
         sizes={GRID_SIZES}
         onselectrow={emitSelection}
       />
