@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildSourceGridRows,
   buildSourceRow,
+  compareSourceLastSynced,
+  compareSourceMaterials,
+  compareSourceTitles,
   sourceGridColumns,
   sourceSyncStatusLabel,
 } from "./research-projects-source-row";
@@ -105,5 +108,40 @@ describe("buildSourceGridRows", () => {
     expect(rows.map((row) => row.id)).toEqual(["10", "11"]);
     expect(rows[0].title).toBe("ФинБеларусь");
     expect(rows[0].sourceId).toBe(10);
+  });
+});
+
+describe("sort comparators (svar passes ROW OBJECTS, verified live)", () => {
+  it("compareSourceTitles orders Cyrillic titles case-insensitively", () => {
+    expect(compareSourceTitles({ title: "аист" }, { title: "Бобр" })).toBeLessThan(0);
+    expect(compareSourceTitles({ title: "Яблоко" }, { title: "аист" })).toBeGreaterThan(0);
+    expect(compareSourceTitles({ title: "ФИН" }, { title: "фин" })).toBe(0);
+  });
+
+  it("compareSourceMaterials compares formatted numbers numerically", () => {
+    expect(
+      compareSourceMaterials({ materialsLabel: "4 317" }, { materialsLabel: "339" }),
+    ).toBeGreaterThan(0);
+    expect(
+      compareSourceMaterials({ materialsLabel: "76 070" }, { materialsLabel: "4 317" }),
+    ).toBeGreaterThan(0);
+    expect(compareSourceMaterials({ materialsLabel: "10" }, { materialsLabel: "10" })).toBe(0);
+  });
+
+  it("compareSourceLastSynced treats null as the oldest value", () => {
+    expect(compareSourceLastSynced({ lastSyncedAt: null }, { lastSyncedAt: 100 })).toBeLessThan(0);
+    expect(compareSourceLastSynced({ lastSyncedAt: 100 }, { lastSyncedAt: null })).toBeGreaterThan(0);
+    expect(compareSourceLastSynced({ lastSyncedAt: null }, { lastSyncedAt: null })).toBe(0);
+    expect(compareSourceLastSynced({ lastSyncedAt: 200 }, { lastSyncedAt: 100 })).toBeGreaterThan(0);
+  });
+
+  it("sourceGridColumns enables sorting on every data column", () => {
+    const columns = sourceGridColumns();
+    const byId = new Map(columns.map((c) => [String(c.id), c]));
+    expect(byId.get("title")?.sort).toBe(compareSourceTitles);
+    expect(byId.get("typeLabel")?.sort).toBe(true);
+    expect(byId.get("materialsLabel")?.sort).toBe(compareSourceMaterials);
+    expect(byId.get("lastSyncedAt")?.sort).toBe(compareSourceLastSynced);
+    expect(byId.get("statusLabel")?.sort).toBe(true);
   });
 });

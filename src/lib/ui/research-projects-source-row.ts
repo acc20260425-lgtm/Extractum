@@ -29,13 +29,53 @@ function formatThousands(count: number): string {
   return String(count).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 }
 
+// svar column.sort comparators receive ROW OBJECTS (verified live against the
+// installed @svar-ui/svelte-grid; newer docs describe cell values) and must
+// return a strict 0|1|-1. Comparators are exported for unit tests.
+type SortResult = 0 | 1 | -1;
+
+function sign(value: number): SortResult {
+  return value < 0 ? -1 : value > 0 ? 1 : 0;
+}
+
+type RowLike = Record<string, unknown>;
+
+export function compareSourceTitles(a: RowLike, b: RowLike): SortResult {
+  return sign(
+    String(a.title ?? "").localeCompare(String(b.title ?? ""), "ru", { sensitivity: "base" }),
+  );
+}
+
+export function compareSourceMaterials(a: RowLike, b: RowLike): SortResult {
+  const num = (row: RowLike) => Number(String(row.materialsLabel ?? "").replace(/\D/g, "")) || 0;
+  return sign(num(a) - num(b));
+}
+
+// null = "oldest": sinks below real dates on ascending sort (and inverts with desc,
+// which svar does by negating the comparator).
+export function compareSourceLastSynced(a: RowLike, b: RowLike): SortResult {
+  const num = (row: RowLike) => {
+    const value = row.lastSyncedAt;
+    return typeof value === "number" && Number.isFinite(value) ? value : -Infinity;
+  };
+  const x = num(a);
+  const y = num(b);
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
 export function sourceGridColumns(): ExtractumDataGridColumn[] {
   return [
-    { id: "title", header: "Источник", width: 260, flexgrow: 1 },
-    { id: "typeLabel", header: "Тип", width: 116 },
-    { id: "materialsLabel", header: "Материалы", width: 116 },
-    { id: "lastSyncedAt", header: "Последний сбор", width: 150, dateTimeFormat: "datetime" },
-    { id: "statusLabel", header: "Статус", width: 104 },
+    { id: "title", header: "Источник", width: 260, flexgrow: 1, sort: compareSourceTitles },
+    { id: "typeLabel", header: "Тип", width: 116, sort: true },
+    { id: "materialsLabel", header: "Материалы", width: 116, sort: compareSourceMaterials },
+    {
+      id: "lastSyncedAt",
+      header: "Последний сбор",
+      width: 150,
+      dateTimeFormat: "datetime",
+      sort: compareSourceLastSynced,
+    },
+    { id: "statusLabel", header: "Статус", width: 104, sort: true },
   ];
 }
 

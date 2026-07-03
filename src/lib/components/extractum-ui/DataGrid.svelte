@@ -5,7 +5,7 @@
 </script>
 
 <script lang="ts">
-  import { tick } from "svelte";
+  import { tick, untrack } from "svelte";
   import { Grid, Willow } from "@svar-ui/svelte-grid";
   import { Locale } from "@svar-ui/svelte-core";
   import { en as gridEn } from "@svar-ui/grid-locales";
@@ -45,10 +45,36 @@
     onSelectedRowIdsChange?: (ids: string[]) => void;
   } = $props();
 
+  // svar re-normalises data and clears sortMarks whenever a reactive prop
+  // changes (its config effect re-runs), so object props must keep stable
+  // references and selection must NOT flow through the reactive prop at all.
+  const GRID_SIZES = { rowHeight: 34, headerHeight: 34, columnWidth: 160 };
+
   let api = $state<any>(null);
   let host = $state<HTMLDivElement | null>(null);
   let visibleOverlay = $derived(rows.length === 0 ? overlay : undefined);
   let enhancedColumns = $derived(enhanceDateTimeColumns(columns));
+
+  // Selection sync without the reactive prop: the grid gets a one-time
+  // initial snapshot; later EXTERNAL changes (clear selection, project
+  // switch) are applied as select-row actions, which do not reset sorting.
+  // Internal changes (user clicks) flow out via onselectrow → emitSelection;
+  // the diff below then sees equal sets and does nothing (no echo loop).
+  const initialSelectedIds = untrack(() => [...selectedRowIds]);
+  $effect(() => {
+    const want = selectedRowIds.map(String);
+    if (!api) return;
+    const current: string[] = (untrack(() => api.getState().selectedRows) ?? []).map(String);
+    const wantSet = new Set(want);
+    const currentSet = new Set(current);
+    if (want.length === currentSet.size && want.every((id) => currentSet.has(id))) return;
+    for (const id of current) {
+      if (!wantSet.has(id)) api.exec("select-row", { id, mode: false, toggle: true });
+    }
+    for (const id of want) {
+      if (!currentSet.has(id)) api.exec("select-row", { id, mode: true, toggle: true });
+    }
+  });
 
   $effect(() => {
     if (!host) return;
@@ -100,13 +126,13 @@
         data={rows}
         columns={enhancedColumns}
         bind:this={api}
-        selectedRows={selectedRowIds}
+        selectedRows={initialSelectedIds}
         {rowStyle}
         columnStyle={columnStyle}
         overlay={visibleOverlay}
         multiselect={multiselect}
         select
-        sizes={{ rowHeight: 34, headerHeight: 34, columnWidth: 160 }}
+        sizes={GRID_SIZES}
         onselectrow={emitSelection}
       />
     </Willow>

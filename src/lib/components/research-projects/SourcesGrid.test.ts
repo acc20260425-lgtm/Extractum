@@ -37,7 +37,8 @@ describe("SourcesGrid", () => {
     expect(source).toContain("SELECT_COLUMN");
     expect(source).toContain("cell: GridSelectCell");
     expect(source).toContain("cell: GridSelectAllCell");
-    // row.selected synced from the current selection for the per-row checkbox
-    expect(source).toContain("selected: selectedSourceIds.includes(row.id)");
+    // per-row checkbox reads selection reactively from the grid api,
+    // so rows no longer depend on selectedSourceIds (sort survives selection)
+    expect(source).not.toContain("selected: selectedSourceIds.includes(row.id)");
   });
 });
