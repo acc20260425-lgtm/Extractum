@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** implemented historical execution record. Implemented by `79e065e2 refactor: split analysis store tests` and recorded complete by `125f76f1 docs: complete analysis store tests plan`.
+
 **Goal:** Move the inline `#[cfg(test)] mod tests` body out of `src-tauri/src/analysis/store.rs` into focused nested store test modules without changing production behavior or test assertions.
 
 **Architecture:** Keep `store.rs` as the production facade for `read_model`, `runs`, `setup`, and `snapshot`, with only `#[cfg(test)] mod tests;` for tests. Create `src-tauri/src/analysis/store/tests/` with thematic modules for read-model, setup, snapshot, and runs behavior. Keep tests exercising the parent store facade through `super::super` imports rather than private production child modules.

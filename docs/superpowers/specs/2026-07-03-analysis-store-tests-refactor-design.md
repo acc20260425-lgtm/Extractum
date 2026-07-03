@@ -1,7 +1,7 @@
 # Analysis Store Tests Refactor Design
 
 **Date:** 2026-07-03
-**Status:** active spec; implementation not started as of 2026-07-03 because `src-tauri/src/analysis/store/tests/` does not exist.
+**Status:** implemented historical design. Implemented by `79e065e2 refactor: split analysis store tests` and recorded complete by `125f76f1 docs: complete analysis store tests plan`.
 **Scope:** internal Rust test-only refactor of `src-tauri/src/analysis/store.rs` into nested store test modules.
 
 ## Goal
