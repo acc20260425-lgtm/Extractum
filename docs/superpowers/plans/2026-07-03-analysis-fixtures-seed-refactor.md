@@ -118,7 +118,7 @@ if (Test-Path -LiteralPath 'src-tauri/src/analysis/fixtures/seed.rs') {
 
 Expected: no output if `seed.rs` does not exist. If it exists or shows any status, stop and make a separate baseline commit before continuing.
 
-- [ ] **Step 4: Run focused baseline fixture tests**
+- [ ] **Step 4: Run baseline fixture tests and compile check**
 
 Run each command separately:
 
@@ -146,7 +146,19 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::seed_
 
 Expected: pass in the default dev test profile and not a green `0 tests` run.
 
-If any baseline test fails, stop. Record the failure as pre-existing and do not edit production code in this task.
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::
+```
+
+Expected: pass in the default dev test profile and not a green `0 tests` run.
+
+```powershell
+cargo check --manifest-path src-tauri/Cargo.toml --all-targets
+```
+
+Expected: pass. This establishes that crate-wide compile coverage was green before the module-boundary refactor.
+
+If any baseline test or baseline compile check fails, stop. Record the failure as pre-existing and do not edit production code in this task.
 
 - [ ] **Step 5: Add private seed module wiring in `fixtures.rs`**
 
@@ -365,10 +377,35 @@ Expected: no matches. Exit code `1` is expected.
 Moved definitions present in `seed.rs`:
 
 ```powershell
-rg -n "^\s*(pub(\([^)]*\))?\s+)?(async\s+fn|fn) (json_zstd|insert_fixture_account|insert_fixture_prompt_template|insert_fixture_llm_profile|insert_telegram_source|insert_youtube_video_source|insert_youtube_playlist_source|insert_fixture_source_group|insert_item|insert_telegram_content|insert_youtube_content|insert_run|insert_snapshot_message|mark_fixture_snapshot_captured|mark_fixture_snapshot_capture_failed|trace_zstd|first_item_id|insert_analysis_runs)\b" src-tauri/src/analysis/fixtures/seed.rs
+$requiredSeedHelpers = @(
+    "json_zstd",
+    "insert_fixture_account",
+    "insert_fixture_prompt_template",
+    "insert_fixture_llm_profile",
+    "insert_telegram_source",
+    "insert_youtube_video_source",
+    "insert_youtube_playlist_source",
+    "insert_fixture_source_group",
+    "insert_item",
+    "insert_telegram_content",
+    "insert_youtube_content",
+    "insert_run",
+    "insert_snapshot_message",
+    "mark_fixture_snapshot_captured",
+    "mark_fixture_snapshot_capture_failed",
+    "trace_zstd",
+    "first_item_id",
+    "insert_analysis_runs"
+)
+foreach ($name in $requiredSeedHelpers) {
+    rg -n "^\s*(pub(\([^)]*\))?\s+)?(async\s+fn|fn) $name\b" src-tauri/src/analysis/fixtures/seed.rs
+    if ($LASTEXITCODE -ne 0) {
+        throw "missing moved seed helper in seed.rs: $name"
+    }
+}
 ```
 
-Expected: every moved private helper is present.
+Expected: every required helper is checked independently; the command throws on the first missing helper.
 
 ```powershell
 rg -n "^pub\(super\) async fn seed_analysis_redesign_fixtures_in_pool" src-tauri/src/analysis/fixtures/seed.rs
@@ -385,28 +422,44 @@ Expected: one match.
 No unintended public API in `seed.rs`:
 
 ```powershell
-rg -n "^\s*pub(\([^)]*\))?\s+" src-tauri/src/analysis/fixtures/seed.rs
+$publicItems = @(rg -n "^\s*pub(\([^)]*\))?\s+" src-tauri/src/analysis/fixtures/seed.rs)
+if ($LASTEXITCODE -ne 0) {
+    throw "expected the seed entry point to be pub(super)"
+}
+if ($publicItems.Count -ne 1 -or $publicItems[0] -notmatch "pub\(super\) async fn seed_analysis_redesign_fixtures_in_pool") {
+    $publicItems
+    throw "unexpected public or restricted-public API in seed.rs"
+}
+$publicItems
 ```
 
-Expected: exactly one match, and it must be `pub(super) async fn seed_analysis_redesign_fixtures_in_pool`.
+Expected: the command prints exactly the `pub(super) async fn seed_analysis_redesign_fixtures_in_pool` line and throws for any additional public or restricted-public item.
 
 Inline tests use the parent facade:
 
 ```powershell
 $testSection = [regex]::Split((Get-Content -Raw src-tauri/src/analysis/fixtures.rs), "#\[cfg\(test\)\]", 2)[1]
-$testSection | Select-String -Pattern "super::seed|seed::seed_analysis_redesign_fixtures_in_pool|crate::analysis::fixtures::seed"
+$seedPathMatches = @($testSection | Select-String -Pattern "super::seed|seed::seed_analysis_redesign_fixtures_in_pool|crate::analysis::fixtures::seed")
+if ($seedPathMatches.Count -ne 0) {
+    $seedPathMatches
+    throw "inline tests must use the parent fixture facade, not the private seed module"
+}
 ```
 
-Expected: no matches. Inline tests should call `seed_analysis_redesign_fixtures_in_pool` through the parent private import.
+Expected: no output and no throw. Inline tests should call `seed_analysis_redesign_fixtures_in_pool` through the parent private import.
 
 Production import cleanup:
 
 ```powershell
 $beforeTests = [regex]::Split((Get-Content -Raw src-tauri/src/analysis/fixtures.rs), "#\[cfg\(test\)\]", 2)[0]
-$beforeTests | Select-String -Pattern "YoutubeAvailabilityStatus|YoutubePlaylistMetadata|YoutubeVideoForm|YoutubeVideoMetadata|compress_text|compress_json_bytes|crate::compression"
+$movedImportMatches = @($beforeTests | Select-String -Pattern "YoutubeAvailabilityStatus|YoutubePlaylistMetadata|YoutubeVideoForm|YoutubeVideoMetadata|compress_text|compress_json_bytes|crate::compression")
+if ($movedImportMatches.Count -ne 0) {
+    $movedImportMatches
+    throw "moved-only imports remain in fixtures.rs production section"
+}
 ```
 
-Expected: no matches.
+Expected: no output and no throw.
 
 Seed behavior markers:
 
@@ -461,10 +514,23 @@ rg -n "pub use self::fixtures::\{" src-tauri/src/analysis/mod.rs
 Expected: one match.
 
 ```powershell
-rg -n "seed_analysis_redesign_fixtures|clear_analysis_redesign_fixtures|clear_analysis_redesign_fixture_active_runs" src-tauri/src/analysis/mod.rs src-tauri/src/lib.rs
+foreach ($symbol in @(
+    "seed_analysis_redesign_fixtures",
+    "clear_analysis_redesign_fixtures",
+    "clear_analysis_redesign_fixture_active_runs"
+)) {
+    rg -n $symbol src-tauri/src/analysis/mod.rs
+    if ($LASTEXITCODE -ne 0) {
+        throw "missing debug fixture command export in analysis/mod.rs: $symbol"
+    }
+    rg -n $symbol src-tauri/src/lib.rs
+    if ($LASTEXITCODE -ne 0) {
+        throw "missing debug fixture command registration in lib.rs: $symbol"
+    }
+}
 ```
 
-Expected: existing debug command re-exports and command registration are still present.
+Expected: each of the three debug command symbols is checked independently in both `analysis/mod.rs` and `lib.rs`; the command throws on the first missing symbol.
 
 - [ ] **Step 12: Run full post-change verification**
 
@@ -595,6 +661,8 @@ Expected: no new implementation files remain unstaged. Pre-existing unrelated fi
 Before reporting the implementation complete, confirm the execution log includes:
 
 - [ ] focused baseline fixture seed tests passed before editing and were not green `0 tests` runs;
+- [ ] baseline `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::` passed before editing and was not a green `0 tests` run;
+- [ ] baseline `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed before editing;
 - [ ] focused post-change fixture seed and active-run tests passed and were not green `0 tests` runs;
 - [ ] `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::` passed in the default dev profile and was not a green `0 tests` run;
 - [ ] `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed;
