@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildProjectRailRow,
+  filterProjectRail,
   groupProjectRail,
+  projectRailRowMatches,
   relativeRunLabel,
 } from "./research-projects-rail";
+import type { ProjectRailRow } from "./research-projects-rail";
 import type { ProjectSummary } from "$lib/types/projects";
 
 function summary(overrides: Partial<ProjectSummary> = {}): ProjectSummary {
@@ -97,5 +100,46 @@ describe("groupProjectRail", () => {
     expect(sections.pinned.map((row) => row.id)).toEqual([1]);
     expect(sections.normal.map((row) => row.id)).toEqual([2]);
     expect(sections.archived.map((row) => row.id)).toEqual([3, 4]);
+  });
+});
+
+describe("projectRailRowMatches / filterProjectRail", () => {
+  const row = (over: Partial<ProjectRailRow> = {}): ProjectRailRow => ({
+    id: 1,
+    name: "Беларусь",
+    status: "ready",
+    statusLabel: "готов",
+    sourceCountLabel: "3 источника",
+    meta: "3 источника · готов",
+    pinned: false,
+    archived: false,
+    ...over,
+  });
+
+  it("matches by name case-insensitively", () => {
+    expect(projectRailRowMatches(row({ name: "Финтех-мониторинг" }), "финтех")).toBe(true);
+    expect(projectRailRowMatches(row({ name: "Финтех" }), "зиг")).toBe(false);
+  });
+
+  it("matches by meta text", () => {
+    expect(projectRailRowMatches(row({ meta: "6 источников · идёт анализ" }), "анализ")).toBe(true);
+  });
+
+  it("blank query matches everything", () => {
+    expect(projectRailRowMatches(row(), "")).toBe(true);
+    expect(projectRailRowMatches(row(), "   ")).toBe(true);
+  });
+
+  it("filterProjectRail filters each section and keeps empty query intact", () => {
+    const sections = {
+      pinned: [row({ id: 1, name: "Alpha" })],
+      normal: [row({ id: 2, name: "Beta" }), row({ id: 3, name: "Gamma" })],
+      archived: [row({ id: 4, name: "Beta-архив" })],
+    };
+    const out = filterProjectRail(sections, "beta");
+    expect(out.pinned).toHaveLength(0);
+    expect(out.normal.map((r) => r.id)).toEqual([2]);
+    expect(out.archived.map((r) => r.id)).toEqual([4]);
+    expect(filterProjectRail(sections, "")).toEqual(sections);
   });
 });

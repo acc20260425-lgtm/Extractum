@@ -90,3 +90,21 @@ export function buildProjectRailRow(summary: ProjectSummary, now: number): Proje
     archived: summary.archived,
   };
 }
+
+export function projectRailRowMatches(row: ProjectRailRow, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return row.name.toLowerCase().includes(q) || row.meta.toLowerCase().includes(q);
+}
+
+export function filterProjectRail(
+  sections: ProjectRailSections,
+  query: string,
+): ProjectRailSections {
+  if (!query.trim()) return sections;
+  return {
+    pinned: sections.pinned.filter((row) => projectRailRowMatches(row, query)),
+    normal: sections.normal.filter((row) => projectRailRowMatches(row, query)),
+    archived: sections.archived.filter((row) => projectRailRowMatches(row, query)),
+  };
+}
