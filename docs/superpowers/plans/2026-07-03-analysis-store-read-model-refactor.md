@@ -503,7 +503,7 @@ Expected: PASS with no diff output.
 - Consumes: verified extraction from Task 3.
 - Produces: one implementation commit with only the expected Rust files.
 
-- [ ] **Step 1: Inspect implementation diff**
+- [x] **Step 1: Inspect implementation diff**
 
 Run:
 
@@ -513,7 +513,7 @@ git diff -- src-tauri/src/analysis/store.rs src-tauri/src/analysis/store/read_mo
 
 Expected: `store.rs` loses only the moved read-model cluster and moved-only imports, gains `mod read_model;` plus the facade re-export, and `read_model.rs` contains the moved code.
 
-- [ ] **Step 2: Check for whitespace errors before staging**
+- [x] **Step 2: Check for whitespace errors before staging**
 
 Run:
 
@@ -523,7 +523,7 @@ git diff --check -- src-tauri/src/analysis/store.rs src-tauri/src/analysis/store
 
 Expected: no output and exit code `0`.
 
-- [ ] **Step 3: Inspect status before staging**
+- [x] **Step 3: Inspect status before staging**
 
 Run:
 
@@ -533,7 +533,7 @@ git status --short --untracked-files=all
 
 Expected: only expected target-file changes plus any recorded pre-existing unrelated files. Do not stage unrelated files.
 
-- [ ] **Step 4: Stage only implementation-owned files**
+- [x] **Step 4: Stage only implementation-owned files**
 
 Run:
 
@@ -543,7 +543,7 @@ git add -- src-tauri/src/analysis/store.rs src-tauri/src/analysis/store/read_mod
 
 Expected: only the two Rust files are staged.
 
-- [ ] **Step 5: Verify staged diff**
+- [x] **Step 5: Verify staged diff**
 
 Run:
 
@@ -569,7 +569,7 @@ git status --short --untracked-files=all
 
 Expected: unrelated files remain unstaged.
 
-- [ ] **Step 6: Commit the refactor**
+- [x] **Step 6: Commit the refactor**
 
 Run:
 
@@ -579,7 +579,7 @@ git commit -m "refactor: extract analysis store read model"
 
 Expected: commit succeeds with exactly the staged Rust extraction.
 
-- [ ] **Step 7: Compare final status to the pre-edit baseline**
+- [x] **Step 7: Compare final status to the pre-edit baseline**
 
 Run:
 
@@ -605,7 +605,7 @@ Get-Content -Raw -LiteralPath $finalStatusPath
 
 Expected: no new unintended files or diffs remain after the commit. Any output from `Compare-Object` must be explained by intentional commit effects or pre-existing unrelated files. This step reloads paths from the temp pointer file so it works even when Task 1 and Task 4 run in separate PowerShell processes.
 
-- [ ] **Step 8: Record final commit**
+- [x] **Step 8: Record final commit**
 
 Run:
 
