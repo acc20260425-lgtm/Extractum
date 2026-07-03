@@ -9,6 +9,7 @@
   } from "$lib/ui/research-projects-rail-workflow";
   import { buildPeriodPresets, type PeriodPreset } from "$lib/ui/research-projects-period";
   import { buildSourceRow } from "$lib/ui/research-projects-source-row";
+  import { ExtractumButton, ExtractumDialog } from "$lib/components/extractum-ui";
   import ConnectFromLibrary from "$lib/components/research-projects/ConnectFromLibrary.svelte";
   import {
     PROJECT_SECTIONS,
@@ -65,6 +66,7 @@
   let filtersOpen = $state(false);
   let activeSection = $state<ProjectSectionId>("sources");
   let connectOpen = $state(false);
+  let disconnectOpen = $state(false);
   let libraryCatalogRecords = $state<LibraryCatalogRecord[]>([]);
   let selectedLibrarySourceIds = $state<Set<string>>(new Set());
   let inspectorOpen = $state(true);
@@ -109,6 +111,15 @@
       ? ""
       : `Раздел «${PROJECT_SECTIONS.find((s) => s.id === activeSection)?.label ?? ""}» в разработке`,
   );
+  let activeSyncable = $derived.by(() => {
+    if (!activeSourceId) return false;
+    const record = sources.find((source) => String(source.source_id) === activeSourceId);
+    return (
+      !!record &&
+      record.provider === "youtube" &&
+      (record.source_subtype === "video" || record.source_subtype === "playlist")
+    );
+  });
   let librarySources = $derived(
     buildLibrarySourcesView(
       libraryCatalogRecords,
@@ -312,6 +323,44 @@
     }
   }
 
+  async function syncActiveSource() {
+    if (activeSourceId === null || selectedProjectId === null || !activeSyncable) return;
+    railState = { ...railState, saving: true, status: "" };
+    try {
+      await syncYoutubeSource(Number(activeSourceId), {
+        metadata: true,
+        transcripts: true,
+        comments: false,
+      });
+      sources = await listProjectSources(selectedProjectId);
+    } catch (error) {
+      railState = {
+        ...railState,
+        status: `Не удалось синхронизировать источник (${String(error)})`,
+      };
+    } finally {
+      railState = { ...railState, saving: false };
+    }
+  }
+
+  async function disconnectActiveSource() {
+    if (activeSourceId === null || selectedProjectId === null) return;
+    const id = activeSourceId;
+    disconnectOpen = false;
+    railState = { ...railState, saving: true, status: "" };
+    try {
+      await removeProjectSources({ projectId: selectedProjectId, sourceIds: [Number(id)] });
+      activeSourceId = null;
+      selectedSourceIds = selectedSourceIds.filter((selected) => selected !== id);
+      sources = await listProjectSources(selectedProjectId);
+      await workflow.reload();
+    } catch (error) {
+      railState = { ...railState, status: `Не удалось отключить источник (${String(error)})` };
+    } finally {
+      railState = { ...railState, saving: false };
+    }
+  }
+
   onMount(async () => {
     await workflow.reload();
     const templates = await listAnalysisPromptTemplates("report");
@@ -402,14 +451,17 @@
           onDelete: deleteSelectedSources,
         }
       : undefined}
-    inspector={inspectorSource
+    inspector={selectedProject
       ? {
           open: inspectorOpen,
           selected: inspectorSource,
           periodLabel: selectedPeriod?.label ?? "—",
           promptLabel: selectedPromptLabel,
           modelLabel: selectedModelValue ?? "—",
+          syncDisabled: railState.saving || !activeSyncable,
           onToggle: () => (inspectorOpen = !inspectorOpen),
+          onSync: () => void syncActiveSource(),
+          onDisconnect: () => (disconnectOpen = true),
         }
       : undefined}
   />
@@ -431,6 +483,26 @@
     onSelectedSourceIdsChange={(ids) => (selectedLibrarySourceIds = new Set(ids))}
     onConnectSelectedSources={connectSelectedLibrarySources}
   />
+  <ExtractumDialog bind:open={disconnectOpen} title="Отключить источник">
+    <div class="disconnect-confirm">
+      <p>
+        Отключить источник «{selectedSourceRow?.title ?? ""}» от проекта? Материалы останутся в
+        библиотеке.
+      </p>
+      <footer>
+        <ExtractumButton type="button" variant="outline" onclick={() => (disconnectOpen = false)}>
+          Отмена
+        </ExtractumButton>
+        <ExtractumButton
+          type="button"
+          variant="destructive"
+          onclick={() => void disconnectActiveSource()}
+        >
+          Да, отключить
+        </ExtractumButton>
+      </footer>
+    </div>
+  </ExtractumDialog>
 </div>
 
 <style>
@@ -453,5 +525,19 @@
   .rp-ui-switch:hover {
     opacity: 1;
     text-decoration: underline;
+  }
+
+  .disconnect-confirm {
+    display: flex;
+    min-width: min(420px, calc(100vw - 96px));
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .disconnect-confirm footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
   }
 </style>
