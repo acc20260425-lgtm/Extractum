@@ -96,7 +96,7 @@
   - `tests/mod.rs` declaring `architecture`, `capture`, `harness`, `lifecycle`, `phases`, `preflight`, `requests`, and `scope`.
   - Same test functions under new paths such as `analysis::report::tests::requests::build_reduce_request_keeps_run_scoped_request_and_profile`.
 
-- [ ] **Step 1: Capture pre-edit worktree status**
+- [x] **Step 1: Capture pre-edit worktree status**
 
 Run:
 
@@ -110,7 +110,7 @@ Expected:
 - `src-tauri/src/analysis/report/tests/` does not exist, or the executor stops for an explicit baseline decision before editing.
 - Unrelated local files such as `.claude/settings.local.json` may exist, but must remain unstaged throughout this task.
 
-- [ ] **Step 2: Persist a pre-edit status snapshot**
+- [x] **Step 2: Persist a pre-edit status snapshot**
 
 Run:
 
@@ -126,7 +126,7 @@ Get-Content -LiteralPath $pointerPath
 
 Expected: PowerShell prints the pointer file path and then the saved status snapshot path. Later status comparison reads the path from the pointer file, so it works across separate shell sessions.
 
-- [ ] **Step 3: Inspect target-file baseline**
+- [x] **Step 3: Inspect target-file baseline**
 
 Run:
 
@@ -166,7 +166,7 @@ if (Test-Path -LiteralPath 'src-tauri/src/analysis/report/tests') {
 
 Expected: no output if the directory does not exist. If it exists in any form, this command prints the baseline and stops.
 
-- [ ] **Step 4: Run baseline report tests and compile check**
+- [x] **Step 4: Run baseline report tests and compile check**
 
 Run:
 
@@ -186,7 +186,7 @@ Expected: pass. This establishes crate-wide compile coverage before the module-b
 
 If either baseline command fails, stop. Record the failure as pre-existing and do not edit production code in this task.
 
-- [ ] **Step 5: Create the nested test module declarations**
+- [x] **Step 5: Create the nested test module declarations**
 
 Create `src-tauri/src/analysis/report/tests/mod.rs`:
 
@@ -214,7 +214,7 @@ src-tauri/src/analysis/report/tests/preflight.rs
 src-tauri/src/analysis/report/tests/architecture.rs
 ```
 
-- [ ] **Step 6: Add parent test facade access for `extract_json_payload`**
+- [x] **Step 6: Add parent test facade access for `extract_json_payload`**
 
 Modify the existing `#[cfg(test)] use self::requests::{build_map_request, build_reduce_request, parse_chunk_summary, ReduceRequestParams};` block in `src-tauri/src/analysis/report.rs` so it includes `extract_json_payload`:
 
@@ -228,7 +228,7 @@ use self::requests::{
 
 Expected: moved request tests can import `extract_json_payload` through `super::super::extract_json_payload`; `requests.rs` remains private and no production child module visibility is widened.
 
-- [ ] **Step 7: Move shared harness helpers**
+- [x] **Step 7: Move shared harness helpers**
 
 Move these items from the inline test module in `src-tauri/src/analysis/report.rs` into `src-tauri/src/analysis/report/tests/harness.rs`:
 
@@ -378,7 +378,7 @@ pub(super) async fn insert_cancel_request_run(pool: &SqlitePool, run_id: i64, st
 }
 ```
 
-- [ ] **Step 8: Move scope tests**
+- [x] **Step 8: Move scope tests**
 
 Create `src-tauri/src/analysis/report/tests/scope.rs` with explicit imports:
 
@@ -401,7 +401,7 @@ Move these tests from the inline module into `scope.rs`, keeping each test body 
 - `report_start_request_carries_migrated_history_opt_in_to_corpus_request_shape`
 - `chunk_target_chars_are_derived_from_model_input_limit_with_fallback`
 
-- [ ] **Step 9: Move capture test**
+- [x] **Step 9: Move capture test**
 
 Create `src-tauri/src/analysis/report/tests/capture.rs` with explicit imports:
 
@@ -412,7 +412,7 @@ use crate::analysis::corpus::{CorpusLoadRequest, YoutubeCorpusMode};
 
 Move `capture_report_corpus_returns_reloaded_snapshot_before_provider_phases` into `capture.rs`, keeping the test body byte-for-byte except for imports and module paths.
 
-- [ ] **Step 10: Move lifecycle tests**
+- [x] **Step 10: Move lifecycle tests**
 
 Create `src-tauri/src/analysis/report/tests/lifecycle.rs` with explicit imports:
 
@@ -430,7 +430,7 @@ Move these tests into `lifecycle.rs`, keeping each test body byte-for-byte excep
 - `request_analysis_run_cancel_completed_run_keeps_conflict_message`
 - `request_analysis_run_cancel_running_but_inactive_keeps_conflict_message`
 
-- [ ] **Step 11: Move request tests**
+- [x] **Step 11: Move request tests**
 
 Create `src-tauri/src/analysis/report/tests/requests.rs` with explicit imports:
 
@@ -453,7 +453,7 @@ Move these tests into `requests.rs`, keeping each test body byte-for-byte except
 - `build_map_request_keeps_run_scoped_request_and_profile`
 - `build_reduce_request_keeps_run_scoped_request_and_profile`
 
-- [ ] **Step 12: Move phase tests**
+- [x] **Step 12: Move phase tests**
 
 Create `src-tauri/src/analysis/report/tests/phases.rs` with explicit imports:
 
@@ -472,7 +472,7 @@ Move these tests into `phases.rs`, keeping each test body byte-for-byte except f
 - `finish_map_phase_rejects_missing_chunk_before_reduce`
 - `finish_map_phase_propagates_map_error_without_starting_reduce`
 
-- [ ] **Step 13: Move preflight tests**
+- [x] **Step 13: Move preflight tests**
 
 Create `src-tauri/src/analysis/report/tests/preflight.rs` with explicit imports:
 
@@ -488,7 +488,7 @@ Move these tests into `preflight.rs`, keeping each test body byte-for-byte excep
 - `validate_report_preflight_rejects_oversized_runs`
 - `validate_report_preflight_allows_runs_within_limits`
 
-- [ ] **Step 14: Move architecture test**
+- [x] **Step 14: Move architecture test**
 
 Create `src-tauri/src/analysis/report/tests/architecture.rs`:
 
@@ -507,7 +507,7 @@ fn analysis_report_workflow_file_has_no_tauri_command_adapters() {
 
 Remove the original copy of this test from the inline module.
 
-- [ ] **Step 15: Replace inline test module in `report.rs`**
+- [x] **Step 15: Replace inline test module in `report.rs`**
 
 After all helpers and tests are moved, replace the entire brace-delimited inline `mod tests` body in `src-tauri/src/analysis/report.rs` with exactly:
 
@@ -518,7 +518,7 @@ mod tests;
 
 Expected: `report.rs` keeps all production code and contains no inline test helper bodies or test attributes.
 
-- [ ] **Step 16: Run rustfmt or format check**
+- [x] **Step 16: Run rustfmt or format check**
 
 Run:
 
@@ -542,7 +542,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
 Expected: pass. After any formatting write, inspect the changed file list before staging so unrelated rustfmt drift does not enter the refactor commit.
 
-- [ ] **Step 17: Run source guard for `report.rs` test wiring**
+- [x] **Step 17: Run source guard for `report.rs` test wiring**
 
 Run:
 
@@ -567,7 +567,7 @@ $lines[$modIndexes[0]]
 
 Expected: exactly two adjacent lines are printed: `#[cfg(test)]` followed by `mod tests;`.
 
-- [ ] **Step 18: Run source guard for removed inline tests and stable production visibility**
+- [x] **Step 18: Run source guard for removed inline tests and stable production visibility**
 
 Run:
 
@@ -593,7 +593,7 @@ if ($widenedMatches.Count -ne 0) {
 
 Expected: no output and no throw.
 
-- [ ] **Step 19: Run source guard for parent request facade import**
+- [x] **Step 19: Run source guard for parent request facade import**
 
 Run:
 
@@ -606,7 +606,7 @@ if ($reportSource -notmatch '(?s)#\[cfg\(test\)\]\s*use self::requests::\{[^}]*\
 
 Expected: no throw. This confirms request tests can avoid direct `super::super::requests::extract_json_payload` access.
 
-- [ ] **Step 20: Run source guard for required test files and module wiring**
+- [x] **Step 20: Run source guard for required test files and module wiring**
 
 Run:
 
@@ -656,7 +656,7 @@ if ($testModBodyMatches.Count -ne 0) {
 
 Expected: no output and no throw.
 
-- [ ] **Step 21: Run source guard for imports and helper visibility**
+- [x] **Step 21: Run source guard for imports and helper visibility**
 
 Run:
 
@@ -705,7 +705,7 @@ if ($badPublicish.Count -ne 0) {
 
 Expected: no output and no throw.
 
-- [ ] **Step 22: Run source guard for required moved tests**
+- [x] **Step 22: Run source guard for required moved tests**
 
 Run:
 
@@ -761,7 +761,7 @@ foreach ($entry in $requiredTests.GetEnumerator()) {
 
 Expected: every required test is checked independently; the command throws on the first missing test.
 
-- [ ] **Step 23: Run source guard for assertion markers**
+- [x] **Step 23: Run source guard for assertion markers**
 
 Run:
 
@@ -787,7 +787,7 @@ foreach ($entry in $requiredMarkers.GetEnumerator()) {
 
 Expected: every moved assertion marker is present in the thematic test modules.
 
-- [ ] **Step 24: Run focused report module test slices**
+- [x] **Step 24: Run focused report module test slices**
 
 Run each command separately:
 
@@ -821,7 +821,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::archite
 
 Expected for each focused module slice: pass in the default dev test profile and not a green `0 tests` run.
 
-- [ ] **Step 25: Verify Cargo test inventory**
+- [x] **Step 25: Verify Cargo test inventory**
 
 Run:
 
@@ -865,7 +865,7 @@ foreach ($testPath in @(
 
 Expected: every moved test path appears in Cargo's test inventory.
 
-- [ ] **Step 26: Run full report test slice, compile check, and format check**
+- [x] **Step 26: Run full report test slice, compile check, and format check**
 
 Run:
 
@@ -891,7 +891,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
 Expected: pass.
 
-- [ ] **Step 27: Inspect implementation diff and status after formatting**
+- [x] **Step 27: Inspect implementation diff and status after formatting**
 
 Run:
 
@@ -926,7 +926,7 @@ Compare-Object (Get-Content -LiteralPath $preEditStatusPath) (Get-Content -Liter
 
 Expected: differences are only the intended implementation-owned files. Pre-existing unrelated entries must not be modified or staged.
 
-- [ ] **Step 28: Stage implementation files**
+- [x] **Step 28: Stage implementation files**
 
 Run:
 
@@ -936,7 +936,7 @@ git add -- src-tauri/src/analysis/report.rs src-tauri/src/analysis/report/tests/
 
 Expected: only the report test split files are staged.
 
-- [ ] **Step 29: Verify staged diff**
+- [x] **Step 29: Verify staged diff**
 
 Run:
 
@@ -975,7 +975,7 @@ git status --short --untracked-files=all
 
 Expected: implementation files are staged. Pre-existing unrelated files remain unstaged.
 
-- [ ] **Step 30: Commit the Rust refactor**
+- [x] **Step 30: Commit the Rust refactor**
 
 Run:
 
@@ -985,7 +985,7 @@ git commit -m "refactor: split analysis report tests"
 
 Expected: commit succeeds with only the staged report test split files.
 
-- [ ] **Step 31: Record post-commit status**
+- [x] **Step 31: Record post-commit status**
 
 Run:
 
@@ -999,25 +999,25 @@ Expected: no dirty implementation files remain. Pre-existing unrelated files may
 
 Before reporting the implementation complete, confirm the execution log includes:
 
-- [ ] pre-edit `git status --short --untracked-files=all` captured;
-- [ ] target-file baseline proved `report.rs` was clean and `report/tests/` did not contain pre-existing tracked or untracked work without an explicit baseline decision;
-- [ ] baseline `cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::` passed before editing and was not a green `0 tests` run;
-- [ ] baseline `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed before editing;
-- [ ] source guards proved `report.rs` contains exactly one adjacent `#[cfg(test)]` / `mod tests;` pair;
-- [ ] source guards proved `report.rs` no longer contains inline test body helpers or test attributes;
-- [ ] source guards proved production item visibility was not widened;
-- [ ] source guards proved `extract_json_payload` is available through a private parent `#[cfg(test)]` facade import, not through direct child-module test imports;
-- [ ] source guards proved all required test files exist as files, not directories;
-- [ ] source guards proved `tests/mod.rs` declares only modules and no test/helper logic;
-- [ ] source guards proved tests do not import private production child modules directly;
-- [ ] source guards proved report test modules do not use parent or crate glob imports;
-- [ ] source guards proved shared helper visibility is limited to the approved `pub(super)` harness surface;
-- [ ] source guards proved every required moved test has `#[test]` or `#[tokio::test]` immediately before its function;
-- [ ] source guards proved assertion markers moved to the expected thematic modules;
-- [ ] every focused report module test command passed and was not a green `0 tests` run;
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests:: -- --list` contained every expected moved test path;
-- [ ] full `cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::` passed and was not a green `0 tests` run;
-- [ ] `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed;
-- [ ] `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` passed;
-- [ ] staged diff contained only the expected report test split files;
-- [ ] post-commit `git status --short --untracked-files=all` has no dirty implementation files.
+- [x] pre-edit `git status --short --untracked-files=all` captured;
+- [x] target-file baseline proved `report.rs` was clean and `report/tests/` did not contain pre-existing tracked or untracked work without an explicit baseline decision;
+- [x] baseline `cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::` passed before editing and was not a green `0 tests` run;
+- [x] baseline `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed before editing;
+- [x] source guards proved `report.rs` contains exactly one adjacent `#[cfg(test)]` / `mod tests;` pair;
+- [x] source guards proved `report.rs` no longer contains inline test body helpers or test attributes;
+- [x] source guards proved production item visibility was not widened;
+- [x] source guards proved `extract_json_payload` is available through a private parent `#[cfg(test)]` facade import, not through direct child-module test imports;
+- [x] source guards proved all required test files exist as files, not directories;
+- [x] source guards proved `tests/mod.rs` declares only modules and no test/helper logic;
+- [x] source guards proved tests do not import private production child modules directly;
+- [x] source guards proved report test modules do not use parent or crate glob imports;
+- [x] source guards proved shared helper visibility is limited to the approved `pub(super)` harness surface;
+- [x] source guards proved every required moved test has `#[test]` or `#[tokio::test]` immediately before its function;
+- [x] source guards proved assertion markers moved to the expected thematic modules;
+- [x] every focused report module test command passed and was not a green `0 tests` run;
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests:: -- --list` contained every expected moved test path;
+- [x] full `cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::` passed and was not a green `0 tests` run;
+- [x] `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed;
+- [x] `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` passed;
+- [x] staged diff contained only the expected report test split files;
+- [x] post-commit `git status --short --untracked-files=all` has no dirty implementation files.
