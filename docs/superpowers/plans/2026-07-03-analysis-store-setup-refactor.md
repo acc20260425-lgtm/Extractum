@@ -286,7 +286,7 @@ Expected: formatting completes. If rustfmt touches unrelated Rust files, inspect
 - Consumes: extracted facade from Task 2.
 - Produces: proof that moved helpers left `store.rs`, facade exports are intact, private helper stayed private, imports are clean, and behavior-focused tests pass.
 
-- [ ] **Step 1: Confirm moved definitions no longer live in `store.rs`**
+- [x] **Step 1: Confirm moved definitions no longer live in `store.rs`**
 
 Run:
 
@@ -296,7 +296,7 @@ rg -n "^\s*(pub\([^)]*\)\s+|pub\s+)?(fn|async fn) (builtin_report_template_exist
 
 Expected: no matches. `rg` exit code `1` is expected for this no-match guard.
 
-- [ ] **Step 2: Confirm `store.rs` has a private module declaration**
+- [x] **Step 2: Confirm `store.rs` has a private module declaration**
 
 Run:
 
@@ -314,7 +314,7 @@ rg -n "^pub.*mod setup" src-tauri/src/analysis/store.rs
 
 Expected: no matches. `rg` exit code `1` is expected.
 
-- [ ] **Step 3: Confirm facade re-export exists and contains every public setup name**
+- [x] **Step 3: Confirm facade re-export exists and contains every public setup name**
 
 Run:
 
@@ -341,7 +341,7 @@ foreach ($name in @('ensure_builtin_report_template', 'ensure_sources_exist', 'f
 
 Expected: loop completes without throwing.
 
-- [ ] **Step 4: Confirm moved public API exists in `setup.rs`**
+- [x] **Step 4: Confirm moved public API exists in `setup.rs`**
 
 Run:
 
@@ -351,7 +351,7 @@ rg -n "^pub\(crate\) async fn (ensure_builtin_report_template|ensure_sources_exi
 
 Expected: four matches, one for each public setup API item.
 
-- [ ] **Step 5: Confirm private helper stayed private**
+- [x] **Step 5: Confirm private helper stayed private**
 
 Run:
 
@@ -369,7 +369,7 @@ rg -n "^\s*pub(\([^)]*\))?\s+async fn builtin_report_template_exists\b" src-taur
 
 Expected: no matches. `rg` exit code `1` is expected.
 
-- [ ] **Step 6: Confirm moved-only production imports left `store.rs`**
+- [x] **Step 6: Confirm moved-only production imports left `store.rs`**
 
 Run:
 
@@ -387,7 +387,7 @@ if ($storeProduction -notmatch "\bAnalysisPromptTemplate\b") {
 
 Expected: command completes without throwing.
 
-- [ ] **Step 7: Confirm store tests still exercise the facade**
+- [x] **Step 7: Confirm store tests still exercise the facade**
 
 Run:
 
@@ -400,7 +400,7 @@ if ($storeTests -match "super::setup|setup::") {
 
 Expected: command completes without throwing.
 
-- [ ] **Step 8: Confirm setup literals and SQL markers stayed in `setup.rs`**
+- [x] **Step 8: Confirm setup literals and SQL markers stayed in `setup.rs`**
 
 Run each command separately:
 
@@ -426,7 +426,7 @@ rg -n -F "ORDER BY COALESCE(sources.title, ''), sources.id" src-tauri/src/analys
 
 Expected: every command prints at least one match.
 
-- [ ] **Step 9: Run source existence test**
+- [x] **Step 9: Run source existence test**
 
 Run:
 
@@ -436,7 +436,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::ensure_s
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 10: Run prompt-template fetch test**
+- [x] **Step 10: Run prompt-template fetch test**
 
 Run:
 
@@ -446,7 +446,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::fetch_pr
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 11: Run full store test slice**
+- [x] **Step 11: Run full store test slice**
 
 Run:
 
@@ -456,7 +456,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 12: Run groups consumer slice**
+- [x] **Step 12: Run groups consumer slice**
 
 Run:
 
@@ -466,7 +466,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::groups::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 13: Run source-resolution consumer slice**
+- [x] **Step 13: Run source-resolution consumer slice**
 
 Run:
 
@@ -476,7 +476,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::source_resolut
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 14: Run report test slice**
+- [x] **Step 14: Run report test slice**
 
 Run:
 
@@ -486,7 +486,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 15: Run builtin template insertion test**
+- [x] **Step 15: Run builtin template insertion test**
 
 Run:
 
@@ -496,7 +496,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::tests::builtin_templat
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 16: Run all-target compile coverage**
+- [x] **Step 16: Run all-target compile coverage**
 
 Run:
 
@@ -506,7 +506,7 @@ cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
 Expected: PASS. Existing warnings outside touched files may remain; new warnings mentioning `src-tauri/src/analysis/store.rs` or `src-tauri/src/analysis/store/setup.rs` are not acceptable.
 
-- [ ] **Step 17: Run format check**
+- [x] **Step 17: Run format check**
 
 Run:
 
