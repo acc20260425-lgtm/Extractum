@@ -79,7 +79,7 @@ pub(super) struct FixtureIds {
   - `pub(super) async fn insert_analysis_runs(tx: &mut sqlx::Transaction<'_, Sqlite>, ids: FixtureIds) -> AppResult<()>` in `seed/runs.rs`.
   - Private helper functions in `seed/runs.rs`.
 
-- [ ] **Step 1: Capture pre-edit worktree status**
+- [x] **Step 1: Capture pre-edit worktree status**
 
 Run:
 
@@ -93,7 +93,7 @@ Expected:
 - `src-tauri/src/analysis/fixtures/seed/` does not exist, or the executor stops for an explicit baseline decision before editing.
 - Unrelated local files such as `.claude/settings.local.json` may exist, but must remain unstaged throughout this task.
 
-- [ ] **Step 2: Persist a pre-edit status snapshot**
+- [x] **Step 2: Persist a pre-edit status snapshot**
 
 Run:
 
@@ -109,7 +109,7 @@ Get-Content -LiteralPath $pointerPath
 
 Expected: PowerShell prints the pointer file path and then the saved status snapshot path. Later status comparison reads the path from the pointer file, so it works across separate shell sessions.
 
-- [ ] **Step 3: Inspect target-file baseline**
+- [x] **Step 3: Inspect target-file baseline**
 
 Run:
 
@@ -149,7 +149,7 @@ if (Test-Path -LiteralPath 'src-tauri/src/analysis/fixtures/seed') {
 
 Expected: no output if the directory does not exist. If it exists in any form, this command prints the baseline and stops.
 
-- [ ] **Step 4: Run baseline fixture tests and compile check**
+- [x] **Step 4: Run baseline fixture tests and compile check**
 
 Run each command separately:
 
@@ -185,7 +185,7 @@ Expected: pass. This establishes crate-wide compile coverage before the module-b
 
 If any baseline command fails, stop. Record the failure as pre-existing and do not edit production code in this task.
 
-- [ ] **Step 5: Add child module wiring in `seed.rs`**
+- [x] **Step 5: Add child module wiring in `seed.rs`**
 
 At the top of `src-tauri/src/analysis/fixtures/seed.rs`, add:
 
@@ -197,7 +197,7 @@ use self::runs::{insert_analysis_runs, FixtureIds};
 
 Keep `mod runs;` before the child import.
 
-- [ ] **Step 6: Create `seed/runs.rs` with imports**
+- [x] **Step 6: Create `seed/runs.rs` with imports**
 
 Create `src-tauri/src/analysis/fixtures/seed/runs.rs` with this import skeleton:
 
@@ -217,7 +217,7 @@ use crate::error::{AppError, AppResult};
 
 Do not use a glob import. Do not import fixture constants through `super`.
 
-- [ ] **Step 7: Move `FixtureIds` and run/snapshot helpers into `runs.rs`**
+- [x] **Step 7: Move `FixtureIds` and run/snapshot helpers into `runs.rs`**
 
 Move these definitions from `seed.rs` to `seed/runs.rs`, preserving bodies exactly except for visibility and imports:
 
@@ -279,7 +279,7 @@ async fn first_item_id(
 
 Do not change SQL, string literals, trace payloads, inserted statuses, chat rows, or snapshot marker updates.
 
-- [ ] **Step 8: Clean moved-only imports from `seed.rs`**
+- [x] **Step 8: Clean moved-only imports from `seed.rs`**
 
 After the move, remove constants from the parent fixture import list in `seed.rs` that are used only by moved run/snapshot code.
 
@@ -309,7 +309,7 @@ MISSING_SNAPSHOT_RUN_LABEL
 RUNNING_RUN_LABEL
 ```
 
-- [ ] **Step 9: Run rustfmt**
+- [x] **Step 9: Run rustfmt**
 
 Run:
 
@@ -327,7 +327,7 @@ git status --short --untracked-files=all
 
 Expected: changed files are limited to implementation-owned files plus pre-existing unrelated files. If rustfmt changes unrelated Rust files, inspect the drift and resolve it before continuing.
 
-- [ ] **Step 10: Run source guards for `seed.rs`**
+- [x] **Step 10: Run source guards for `seed.rs`**
 
 Run:
 
@@ -395,7 +395,7 @@ foreach ($constName in @(
 
 Expected: no output and no throw.
 
-- [ ] **Step 11: Run source guards for `seed/runs.rs` visibility and imports**
+- [x] **Step 11: Run source guards for `seed/runs.rs` visibility and imports**
 
 Run:
 
@@ -489,7 +489,7 @@ if ($parentConstantImportMatches.Count -ne 0) {
 
 Expected: one named import list from `super::super` exists and no parent constant import matches are found.
 
-- [ ] **Step 12: Run source guards for private helpers and moved markers**
+- [x] **Step 12: Run source guards for private helpers and moved markers**
 
 Run:
 
@@ -533,7 +533,7 @@ foreach ($marker in $requiredMarkers) {
 
 Expected: every marker is present.
 
-- [ ] **Step 13: Run focused fixture tests**
+- [x] **Step 13: Run focused fixture tests**
 
 Run each command separately:
 
@@ -555,7 +555,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::activ
 
 Expected: pass in the default dev test profile and not a green `0 tests` run.
 
-- [ ] **Step 14: Run full fixture tests, compile, and fmt check**
+- [x] **Step 14: Run full fixture tests, compile, and fmt check**
 
 Run:
 
@@ -581,7 +581,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
 Expected: pass. If it fails, run `cargo fmt --manifest-path src-tauri/Cargo.toml`, inspect `git status --short --untracked-files=all`, resolve unrelated drift, and rerun `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`.
 
-- [ ] **Step 15: Inspect final worktree diff before staging**
+- [x] **Step 15: Inspect final worktree diff before staging**
 
 Run:
 
@@ -610,7 +610,7 @@ git status --short --untracked-files=all
 
 Expected: only implementation-owned files plus pre-existing unrelated files. `.claude/settings.local.json`, if present, remains untracked and unstaged.
 
-- [ ] **Step 16: Compare final status against pre-edit snapshot**
+- [x] **Step 16: Compare final status against pre-edit snapshot**
 
 Run:
 
@@ -624,7 +624,7 @@ Compare-Object (Get-Content -LiteralPath $preEditStatusPath) (Get-Content -Liter
 
 Expected: differences are only the intended implementation-owned files. Pre-existing unrelated entries must not be modified or staged.
 
-- [ ] **Step 17: Stage implementation files**
+- [x] **Step 17: Stage implementation files**
 
 Run:
 
@@ -634,7 +634,7 @@ git add -- src-tauri/src/analysis/fixtures/seed.rs src-tauri/src/analysis/fixtur
 
 Expected: only the fixture seed run-writer files are staged.
 
-- [ ] **Step 18: Verify staged diff**
+- [x] **Step 18: Verify staged diff**
 
 Run:
 
@@ -665,7 +665,7 @@ git status --short --untracked-files=all
 
 Expected: implementation files are staged. Pre-existing unrelated files remain unstaged.
 
-- [ ] **Step 19: Commit the Rust refactor**
+- [x] **Step 19: Commit the Rust refactor**
 
 Run:
 
@@ -675,7 +675,7 @@ git commit -m "refactor: extract fixture seed run writers"
 
 Expected: commit succeeds with only the staged fixture seed run-writer files.
 
-- [ ] **Step 20: Record post-commit status**
+- [x] **Step 20: Record post-commit status**
 
 Run:
 
@@ -689,21 +689,21 @@ Expected: no dirty implementation files remain. Pre-existing unrelated files may
 
 Before reporting the implementation complete, confirm the execution log includes:
 
-- [ ] pre-edit `git status --short --untracked-files=all` captured;
-- [ ] target-file baseline proved `seed.rs` was clean and `fixtures/seed/` did not contain pre-existing tracked or untracked work without an explicit baseline decision;
-- [ ] baseline focused fixture tests passed before editing and were not green `0 tests` runs;
-- [ ] baseline full `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::` passed before editing and was not a green `0 tests` run;
-- [ ] baseline `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed before editing;
-- [ ] source guards proved `seed.rs` declares `mod runs;` and imports `insert_analysis_runs` / `FixtureIds`;
-- [ ] source guards proved moved definitions no longer remain in `seed.rs`;
-- [ ] source guards proved moved-only run constants no longer remain in `seed.rs`;
-- [ ] source guards proved `FixtureIds`, its fields, and `insert_analysis_runs` have only `pub(super)` visibility;
-- [ ] source guards proved all other moved helpers are private in `seed/runs.rs`;
-- [ ] source guards proved `runs.rs` uses explicit imports and imports fixture constants from `super::super`;
-- [ ] source guards proved moved behavior markers live in `runs.rs`;
-- [ ] focused fixture tests passed and were not green `0 tests` runs;
-- [ ] full `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::` passed and was not a green `0 tests` run;
-- [ ] `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed;
-- [ ] `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` passed;
-- [ ] staged diff contained only `seed.rs` and `seed/runs.rs`;
-- [ ] post-commit `git status --short --untracked-files=all` has no dirty implementation files.
+- [x] pre-edit `git status --short --untracked-files=all` captured;
+- [x] target-file baseline proved `seed.rs` was clean and `fixtures/seed/` did not contain pre-existing tracked or untracked work without an explicit baseline decision;
+- [x] baseline focused fixture tests passed before editing and were not green `0 tests` runs;
+- [x] baseline full `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::` passed before editing and was not a green `0 tests` run;
+- [x] baseline `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed before editing;
+- [x] source guards proved `seed.rs` declares `mod runs;` and imports `insert_analysis_runs` / `FixtureIds`;
+- [x] source guards proved moved definitions no longer remain in `seed.rs`;
+- [x] source guards proved moved-only run constants no longer remain in `seed.rs`;
+- [x] source guards proved `FixtureIds`, its fields, and `insert_analysis_runs` have only `pub(super)` visibility;
+- [x] source guards proved all other moved helpers are private in `seed/runs.rs`;
+- [x] source guards proved `runs.rs` uses explicit imports and imports fixture constants from `super::super`;
+- [x] source guards proved moved behavior markers live in `runs.rs`;
+- [x] focused fixture tests passed and were not green `0 tests` runs;
+- [x] full `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::` passed and was not a green `0 tests` run;
+- [x] `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed;
+- [x] `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` passed;
+- [x] staged diff contained only `seed.rs` and `seed/runs.rs`;
+- [x] post-commit `git status --short --untracked-files=all` has no dirty implementation files.
