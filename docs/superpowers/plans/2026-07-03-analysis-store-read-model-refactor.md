@@ -164,7 +164,7 @@ Expected: PASS and not a green `0 tests` run.
 - Consumes from `store.rs`: `AnalysisRunRow`, `AnalysisRunDetail`, `AnalysisRunSummary`, `AnalysisSnapshotState`, analysis status/scope constants, `AppError`, `AppResult`, and `ymd_to_unix_midnight`.
 - Produces through `analysis::store`: `AnalysisRunListFilters`, `map_run_summary`, `map_run_detail`, `list_analysis_run_summaries`, `fetch_run_row`, and `resolve_run_scope_label`.
 
-- [ ] **Step 1: Add the private child module and facade re-export in `store.rs`**
+- [x] **Step 1: Add the private child module and facade re-export in `store.rs`**
 
 Add these lines near the top of `src-tauri/src/analysis/store.rs`, after imports and before the first function:
 
@@ -179,7 +179,7 @@ pub(crate) use self::read_model::{
 
 Expected: `read_model` is private. Do not write `pub mod read_model;` or `pub(crate) mod read_model;`.
 
-- [ ] **Step 2: Create `read_model.rs` with the moved imports**
+- [x] **Step 2: Create `read_model.rs` with the moved imports**
 
 Create `src-tauri/src/analysis/store/read_model.rs` with this import header before moving the functions:
 
@@ -200,7 +200,7 @@ use crate::time::ymd_to_unix_midnight;
 
 Expected: `read_model.rs` does not import prompt-template, source-group, snapshot persistence, status mutation, or compression items.
 
-- [ ] **Step 3: Move read-model helpers into `read_model.rs`**
+- [x] **Step 3: Move read-model helpers into `read_model.rs`**
 
 Move these exact items from `store.rs` into `read_model.rs`, preserving bodies and order:
 
@@ -224,7 +224,7 @@ Move these exact items from `store.rs` into `read_model.rs`, preserving bodies a
 
 Implementation detail: this is not one contiguous file range. First move the contiguous range from `fn resolve_run_scope_label_parts(` through the closing brace of `pub(crate) async fn fetch_run_row(pool: &Pool<Sqlite>, run_id: i64) -> AppResult<Option<AnalysisRunRow>>`. Then move `pub(crate) fn resolve_run_scope_label(run: &AnalysisRunDetail) -> String` separately from its later location. Leave `fetch_prompt_template`, `fetch_source_group`, and every non-read-model function in `store.rs`.
 
-- [ ] **Step 4: Preserve field-level visibility for `AnalysisRunListFilters`**
+- [x] **Step 4: Preserve field-level visibility for `AnalysisRunListFilters`**
 
 Ensure the moved struct remains exactly field-accessible to crate consumers:
 
@@ -247,7 +247,7 @@ pub(crate) struct AnalysisRunListFilters {
 
 Expected: none of these fields become private, `pub(super)`, or renamed.
 
-- [ ] **Step 5: Keep private helpers private**
+- [x] **Step 5: Keep private helpers private**
 
 Verify these moved helpers have no visibility modifier in `read_model.rs`:
 
@@ -265,7 +265,7 @@ Verify these moved helpers have no visibility modifier in `read_model.rs`:
 
 Expected: only the six facade API items are `pub(crate)`.
 
-- [ ] **Step 6: Trim moved-only imports from `store.rs`**
+- [x] **Step 6: Trim moved-only imports from `store.rs`**
 
 Update the top of `src-tauri/src/analysis/store.rs` so moved-only imports are gone while remaining store and test code still compile. The production import set should no longer need `QueryBuilder`, `AnalysisRunSummary`, `AnalysisSnapshotState`, or `ymd_to_unix_midnight`.
 
@@ -290,7 +290,7 @@ use crate::error::{internal_error, AppError, AppResult};
 
 Expected: `store.rs` production imports no longer include `AnalysisRunDetail`, `AnalysisRunRow`, `AnalysisRunSummary`, `AnalysisSnapshotState`, `QueryBuilder`, or `ymd_to_unix_midnight`. If `store.rs` still uses `ANALYSIS_STATUS_CANCELLED`, `ANALYSIS_STATUS_COMPLETED`, or `ANALYSIS_STATUS_FAILED` only in tests through fully qualified `crate::analysis` paths, do not keep them in the production `use super` block.
 
-- [ ] **Step 7: Leave the inline store tests in `store.rs`**
+- [x] **Step 7: Leave the inline store tests in `store.rs`**
 
 Keep the existing test module in `src-tauri/src/analysis/store.rs`. Its `use super` block should continue importing the facade names from `store.rs`:
 
@@ -305,7 +305,7 @@ use super::{
 
 Expected: tests do not import from `super::read_model` directly. This keeps the test coverage on the facade contract.
 
-- [ ] **Step 8: Run formatter**
+- [x] **Step 8: Run formatter**
 
 Run:
 
