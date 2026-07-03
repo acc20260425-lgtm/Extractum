@@ -1,7 +1,7 @@
 # Analysis Store Read Model Refactor Design
 
 **Date:** 2026-07-03
-**Status:** active spec; implementation not started as of 2026-07-03 because `src-tauri/src/analysis/store/read_model.rs` does not exist
+**Status:** implemented historical design. Implemented by `c00d2fb2 refactor: extract analysis store read model`, verified by `f1ef1f7a chore: verify analysis store read model extraction`, and recorded complete by `06422079 docs: complete analysis store read model plan`.
 **Scope:** internal Rust refactor of analysis run read-model mapping and list-query logic.
 
 ## Goal
@@ -10,7 +10,7 @@ Reduce the responsibility of `src-tauri/src/analysis/store.rs` by extracting ana
 
 This is the next conservative backend slice after the report module extractions. It intentionally avoids moving write paths, snapshot transactions, prompt-template storage, duplicate-run lookup, source-group loading, or status mutation so the extraction remains centered on read-only run list/detail behavior.
 
-## Current Shape
+## Original Shape
 
 `src-tauri/src/analysis/store.rs` currently owns several unrelated groups:
 

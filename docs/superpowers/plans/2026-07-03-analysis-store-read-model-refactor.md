@@ -1,5 +1,7 @@
 # Analysis Store Read Model Refactor Implementation Plan
 
+**Status:** implemented historical execution record. Rust extraction landed in `c00d2fb2 refactor: extract analysis store read model`, verification landed in `f1ef1f7a chore: verify analysis store read model extraction`, and this checklist was marked complete in `06422079 docs: complete analysis store read model plan`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Extract analysis run read-model mapping and list/detail query logic from `src-tauri/src/analysis/store.rs` into `src-tauri/src/analysis/store/read_model.rs` without changing behavior or external call paths.
