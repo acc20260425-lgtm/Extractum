@@ -190,12 +190,15 @@
   <!-- Temporary switch back to the current /projects screen. -->
   <a class="rp-ui-switch" href="/projects">← Старый интерфейс</a>
   <ResearchProjectsShell
-    summaries={railState.summaries}
+    railPanel={{
+      summaries: railState.summaries,
+      selectedProjectId,
+      now,
+      onSelect: selectProject,
+    }}
     {selectedProjectId}
-    {now}
     {sources}
     {selectedSourceIds}
-    onSelectProject={selectProject}
     onSelectedSourceIdsChange={(ids) => (selectedSourceIds = ids)}
     toolbar={selectedProject
       ? {
