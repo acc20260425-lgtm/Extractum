@@ -17,6 +17,7 @@
 - Preserve the `analysis::store` facade API for current consumers in `analysis/mod.rs`, `analysis/chat.rs`, `analysis/report/lifecycle.rs`, and `analysis/fixtures.rs`.
 - Run Cargo commands from the repository root using `--manifest-path src-tauri/Cargo.toml`.
 - Run post-change test commands separately, or use a stopping wrapper that checks `$LASTEXITCODE` after every native command.
+- Target files must be clean before editing. If `src-tauri/src/analysis/store.rs` or `src-tauri/src/analysis/store/read_model.rs` has pre-existing tracked, staged, or untracked work, stop and make a separate baseline commit before starting this refactor. This plan uses full-file staging for target files.
 - Do not stage unrelated dirty files such as local tool settings. Compare final status against the captured pre-edit status.
 
 ---
@@ -48,7 +49,7 @@ git status --short --untracked-files=all
 
 Expected: record the exact output. Unrelated files may exist, but target files must be accounted for before editing.
 
-- [ ] **Step 2: Inspect target-file baseline if already dirty**
+- [ ] **Step 2: Prove tracked target files are clean**
 
 Run:
 
@@ -57,7 +58,7 @@ git diff -- src-tauri/src/analysis/store.rs
 git diff --cached -- src-tauri/src/analysis/store.rs
 ```
 
-Expected: no target-file diff, or a consciously recorded baseline that will not be mixed into the extraction commit.
+Expected: no target-file diff. If `src-tauri/src/analysis/store.rs` is modified or staged before this refactor starts, stop here and make a separate baseline commit before editing.
 
 - [ ] **Step 3: Inspect a pre-existing `read_model.rs` directly if present**
 
@@ -72,7 +73,7 @@ if (Test-Path -LiteralPath 'src-tauri/src/analysis/store/read_model.rs') {
 }
 ```
 
-Expected: no output if the file does not exist. If it exists, preserve the baseline and do not overwrite unrelated user work.
+Expected: no output if the file does not exist. If it exists as tracked, staged, modified, or untracked work before this refactor starts, stop here and make a separate baseline commit before editing.
 
 - [ ] **Step 4: Save a unique pre-edit status snapshot**
 
@@ -80,12 +81,16 @@ Run:
 
 ```powershell
 $env:ANALYSIS_STORE_READ_MODEL_STATUS_TAG = "{0}-{1}" -f (Get-Date -Format 'yyyyMMddHHmmss'), $PID
+$statusPointerPath = Join-Path $env:TEMP 'analysis-store-read-model-latest-status-paths.txt'
 $preEditStatusPath = Join-Path $env:TEMP "analysis-store-read-model-$env:ANALYSIS_STORE_READ_MODEL_STATUS_TAG-pre-edit-status.txt"
 git status --short --untracked-files=all | Set-Content -Encoding utf8 -LiteralPath $preEditStatusPath
+"ANALYSIS_STORE_READ_MODEL_STATUS_TAG=$env:ANALYSIS_STORE_READ_MODEL_STATUS_TAG" | Set-Content -Encoding utf8 -LiteralPath $statusPointerPath
+"PRE_EDIT_STATUS_PATH=$preEditStatusPath" | Add-Content -Encoding utf8 -LiteralPath $statusPointerPath
 Get-Content -Raw -LiteralPath $preEditStatusPath
+Get-Content -Raw -LiteralPath $statusPointerPath
 ```
 
-Expected: the file contains the same relevant baseline status from Step 1.
+Expected: the pre-edit status file contains the same relevant baseline status from Step 1, and the pointer file records the tag and status path for later PowerShell sessions.
 
 - [ ] **Step 5: Run baseline focused store list test**
 
@@ -217,7 +222,7 @@ Move these exact items from `store.rs` into `read_model.rs`, preserving bodies a
 - `pub(crate) async fn fetch_run_row(pool: &Pool<Sqlite>, run_id: i64) -> AppResult<Option<AnalysisRunRow>>`
 - `pub(crate) fn resolve_run_scope_label(run: &AnalysisRunDetail) -> String`
 
-Implementation detail: the current contiguous move starts at `fn resolve_run_scope_label_parts(` and ends after the closing brace of `pub(crate) fn resolve_run_scope_label(run: &AnalysisRunDetail) -> String`. Leave `fetch_prompt_template` and everything after it in `store.rs`.
+Implementation detail: this is not one contiguous file range. First move the contiguous range from `fn resolve_run_scope_label_parts(` through the closing brace of `pub(crate) async fn fetch_run_row(pool: &Pool<Sqlite>, run_id: i64) -> AppResult<Option<AnalysisRunRow>>`. Then move `pub(crate) fn resolve_run_scope_label(run: &AnalysisRunDetail) -> String` separately from its later location. Leave `fetch_prompt_template`, `fetch_source_group`, and every non-read-model function in `store.rs`.
 
 - [ ] **Step 4: Preserve field-level visibility for `AnalysisRunListFilters`**
 
@@ -271,8 +276,8 @@ use sqlx::{Pool, Sqlite};
 
 use super::corpus::YoutubeCorpusMode;
 use super::models::{
-    AnalysisPromptTemplate, AnalysisRunDetail, AnalysisRunRow, AnalysisSourceGroup,
-    AnalysisSourceGroupMember, AnalysisSourceGroupRow, CorpusMessage, StoredRunSnapshotRow,
+    AnalysisPromptTemplate, AnalysisSourceGroup, AnalysisSourceGroupMember, AnalysisSourceGroupRow,
+    CorpusMessage, StoredRunSnapshotRow,
 };
 use super::{
     default_report_template_body, now_secs, ANALYSIS_RUN_TYPE_REPORT,
@@ -283,7 +288,7 @@ use crate::compression::{compress_text, decompress_text};
 use crate::error::{internal_error, AppError, AppResult};
 ```
 
-Expected: if `store.rs` still uses `ANALYSIS_STATUS_CANCELLED`, `ANALYSIS_STATUS_COMPLETED`, or `ANALYSIS_STATUS_FAILED` only in tests through fully qualified `crate::analysis` paths, do not keep them in the production `use super` block.
+Expected: `store.rs` production imports no longer include `AnalysisRunDetail`, `AnalysisRunRow`, `AnalysisRunSummary`, `AnalysisSnapshotState`, `QueryBuilder`, or `ymd_to_unix_midnight`. If `store.rs` still uses `ANALYSIS_STATUS_CANCELLED`, `ANALYSIS_STATUS_COMPLETED`, or `ANALYSIS_STATUS_FAILED` only in tests through fully qualified `crate::analysis` paths, do not keep them in the production `use super` block.
 
 - [ ] **Step 7: Leave the inline store tests in `store.rs`**
 
@@ -544,11 +549,25 @@ Run:
 
 ```powershell
 git diff --cached --stat
+```
+
+Expected: cached stat lists only `src-tauri/src/analysis/store.rs` and `src-tauri/src/analysis/store/read_model.rs`.
+
+Run:
+
+```powershell
 git diff --cached --check
+```
+
+Expected: no output and exit code `0`.
+
+Run:
+
+```powershell
 git status --short --untracked-files=all
 ```
 
-Expected: cached stat lists only `src-tauri/src/analysis/store.rs` and `src-tauri/src/analysis/store/read_model.rs`; cached check passes; unrelated files remain unstaged.
+Expected: unrelated files remain unstaged.
 
 - [ ] **Step 6: Commit the refactor**
 
@@ -565,13 +584,26 @@ Expected: commit succeeds with exactly the staged Rust extraction.
 Run:
 
 ```powershell
-$finalStatusPath = Join-Path $env:TEMP "analysis-store-read-model-$env:ANALYSIS_STORE_READ_MODEL_STATUS_TAG-final-status.txt"
+$statusPointerPath = Join-Path $env:TEMP 'analysis-store-read-model-latest-status-paths.txt'
+$statusPointer = @{}
+Get-Content -LiteralPath $statusPointerPath | ForEach-Object {
+    $parts = $_ -split '=', 2
+    if ($parts.Length -eq 2) {
+        $statusPointer[$parts[0]] = $parts[1]
+    }
+}
+$preEditStatusPath = $statusPointer['PRE_EDIT_STATUS_PATH']
+$statusTag = $statusPointer['ANALYSIS_STORE_READ_MODEL_STATUS_TAG']
+if (-not $preEditStatusPath -or -not $statusTag) {
+    throw "missing pre-edit status pointer data"
+}
+$finalStatusPath = Join-Path $env:TEMP "analysis-store-read-model-$statusTag-final-status.txt"
 git status --short --untracked-files=all | Set-Content -Encoding utf8 -LiteralPath $finalStatusPath
 Compare-Object (Get-Content -LiteralPath $preEditStatusPath) (Get-Content -LiteralPath $finalStatusPath)
 Get-Content -Raw -LiteralPath $finalStatusPath
 ```
 
-Expected: no new unintended files or diffs remain after the commit. Any output from `Compare-Object` must be explained by intentional commit effects or pre-existing unrelated files.
+Expected: no new unintended files or diffs remain after the commit. Any output from `Compare-Object` must be explained by intentional commit effects or pre-existing unrelated files. This step reloads paths from the temp pointer file so it works even when Task 1 and Task 4 run in separate PowerShell processes.
 
 - [ ] **Step 8: Record final commit**
 
