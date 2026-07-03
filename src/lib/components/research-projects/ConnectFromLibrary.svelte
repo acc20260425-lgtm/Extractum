@@ -44,7 +44,8 @@
   let providerFilters = $state<LibrarySourceProvider[]>([]);
 
   const columns: ExtractumDataGridColumn[] = [
-    { id: "selected", header: "", width: 44, cell: GridSelectCell },
+    // GridSelectCell's api typing is looser than svar's ICellProps; runtime only needs api/row.
+    { id: "selected", header: "", width: 44, cell: GridSelectCell as unknown as ExtractumDataGridColumn["cell"] },
     { id: "title", header: "Источник", width: 260, cell: LibrarySourceCell },
     { id: "typeLabel", header: "Тип", width: 150 },
     { id: "projectCount", header: "Проекты", width: 80 },

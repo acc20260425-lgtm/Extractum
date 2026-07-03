@@ -23,11 +23,11 @@
   // select-all column).
   const SELECT_COLUMN: ExtractumDataGridColumn = {
     id: "selected",
-    // Svar typing for header-cell components is stricter than a plain
-    // Component<{api}>; the runtime only needs `api`, so cast the header.
+    // Svar typing for header/cell components is stricter than a plain
+    // Component<{api,row}>; the runtime only needs `api`/`row`, so cast both.
     header: { cell: GridSelectAllCell } as unknown as ExtractumDataGridColumn["header"],
     width: 34,
-    cell: GridSelectCell,
+    cell: GridSelectCell as unknown as ExtractumDataGridColumn["cell"],
   };
 
   let {
@@ -44,14 +44,10 @@
 
   const RIGHT_ALIGNED = new Set(["materialsLabel"]);
 
-  // Sync `selected` onto each row so GridSelectCell reflects the current
-  // selection (it reads row.selected).
-  let rows = $derived(
-    buildSourceGridRows(sources).map((row) => ({
-      ...row,
-      selected: selectedSourceIds.includes(row.id),
-    })),
-  );
+  // Rows depend only on the data: GridSelectCell reads selection reactively
+  // from the grid api, so toggling checkboxes does not rebuild rows (and does
+  // not reset svar sorting).
+  let rows = $derived(buildSourceGridRows(sources));
   const columns = [
     SELECT_COLUMN,
     ...sourceGridColumns().map((column) => {
