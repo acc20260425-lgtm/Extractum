@@ -33,6 +33,12 @@ describe("SourcesGrid", () => {
     expect(source).toContain("extractum-grid-cell-right");
   });
 
+  it("separates row activation from checkbox selection (v10)", () => {
+    expect(source).toContain("selectOnClick={false}");
+    expect(source).toContain("activeRowId={activeSourceId}");
+    expect(source).toContain("onRowClick={onActivateSource}");
+  });
+
   it("adds a leading checkbox select column with a tri-state select-all header", () => {
     expect(source).toContain("SELECT_COLUMN");
     expect(source).toContain("cell: GridSelectCell");

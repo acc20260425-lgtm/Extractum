@@ -58,6 +58,7 @@
   let selectedProjectId = $state<number | null>(null);
   let sources = $state<ProjectSourceRecord[]>([]);
   let selectedSourceIds = $state<string[]>([]);
+  let activeSourceId = $state<string | null>(null);
   let editorOpen = $state(false);
   let editorProjectId = $state<number | null>(null);
   let filters = $state<SourceFilters>(emptySourceFilters());
@@ -125,9 +126,8 @@
     promptOptions.find((option) => option.value === selectedPromptValue)?.label ?? "—",
   );
   let selectedSourceRow = $derived.by(() => {
-    const id = selectedSourceIds[0];
-    if (!id) return null;
-    const record = sources.find((source) => String(source.source_id) === id);
+    if (!activeSourceId) return null;
+    const record = sources.find((source) => String(source.source_id) === activeSourceId);
     return record ? buildSourceRow(record) : null;
   });
   let syncableIds = $derived(
@@ -165,6 +165,7 @@
   async function selectProject(id: number) {
     selectedProjectId = id;
     selectedSourceIds = [];
+    activeSourceId = null;
     selectedPeriodId = "all";
     filters = emptySourceFilters();
     filtersOpen = false;
@@ -364,6 +365,8 @@
           onChange: (next) => (filters = next),
         }
       : undefined}
+    {activeSourceId}
+    onActivateSource={(id) => (activeSourceId = id)}
     onSelectedSourceIdsChange={(ids) => (selectedSourceIds = ids)}
     toolbar={selectedProject
       ? {

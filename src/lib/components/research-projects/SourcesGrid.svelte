@@ -35,11 +35,15 @@
     selectedSourceIds = [],
     onSelectedSourceIdsChange = () => {},
     overlay = "Нет источников",
+    activeSourceId = null,
+    onActivateSource,
   }: {
     sources: ProjectSourceRecord[];
     selectedSourceIds?: string[];
     onSelectedSourceIdsChange?: (ids: string[]) => void;
     overlay?: string;
+    activeSourceId?: string | null;
+    onActivateSource?: (id: string) => void;
   } = $props();
 
   const RIGHT_ALIGNED = new Set(["materialsLabel"]);
@@ -73,6 +77,9 @@
   height="100%"
   ariaLabel="Источники проекта"
   {overlay}
+  selectOnClick={false}
+  activeRowId={activeSourceId}
+  onRowClick={onActivateSource}
 />
 
 <style>

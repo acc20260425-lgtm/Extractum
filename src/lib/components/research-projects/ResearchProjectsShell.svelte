@@ -25,6 +25,8 @@
     tabs,
     sectionPlaceholder = "",
     gridOverlay = "Нет источников",
+    activeSourceId = null,
+    onActivateSource,
     onSelectedSourceIdsChange,
   }: {
     railPanel: ComponentProps<typeof ProjectRailPanel>;
@@ -40,6 +42,8 @@
     tabs?: ComponentProps<typeof ProjectTabs>;
     sectionPlaceholder?: string;
     gridOverlay?: string;
+    activeSourceId?: string | null;
+    onActivateSource?: (id: string) => void;
     onSelectedSourceIdsChange?: (ids: string[]) => void;
   } = $props();
 </script>
@@ -72,7 +76,14 @@
           <SourcesFilterRow {...filterRow} />
         {/if}
         <div class="research-projects-shell__grid">
-          <SourcesGrid {sources} {selectedSourceIds} {onSelectedSourceIdsChange} overlay={gridOverlay} />
+          <SourcesGrid
+            {sources}
+            {selectedSourceIds}
+            {onSelectedSourceIdsChange}
+            {activeSourceId}
+            {onActivateSource}
+            overlay={gridOverlay}
+          />
         </div>
       {/if}
       {#if runDock}
