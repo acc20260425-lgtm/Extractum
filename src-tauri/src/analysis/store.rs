@@ -17,6 +17,7 @@ pub(crate) use self::read_model::{
     fetch_run_row, list_analysis_run_summaries, map_run_detail, map_run_summary,
     resolve_run_scope_label, AnalysisRunListFilters,
 };
+#[allow(unused_imports)]
 pub(crate) use self::snapshot::{
     capture_run_snapshot, mark_run_capture_failed, persist_run_snapshot, sanitize_provider_error,
     sanitize_snapshot_error,

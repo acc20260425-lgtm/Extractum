@@ -317,7 +317,7 @@ Expected: formatting completes. If rustfmt touches unrelated Rust files, inspect
 - Consumes: extracted facade from Task 2.
 - Produces: proof that moved helpers left `store.rs`, facade exports are intact, private helpers stayed private, imports are clean, and behavior-focused tests pass.
 
-- [ ] **Step 1: Confirm moved definitions no longer live in `store.rs`**
+- [x] **Step 1: Confirm moved definitions no longer live in `store.rs`**
 
 Run:
 
@@ -327,7 +327,7 @@ rg -n "^\s*(pub\([^)]*\)\s+|pub\s+)?(fn|async fn) (sanitize_snapshot_error|sanit
 
 Expected: no matches. `rg` exit code `1` is expected for this no-match guard.
 
-- [ ] **Step 2: Confirm `store.rs` has a private module declaration**
+- [x] **Step 2: Confirm `store.rs` has a private module declaration**
 
 Run:
 
@@ -345,7 +345,7 @@ rg -n "^pub.*mod snapshot" src-tauri/src/analysis/store.rs
 
 Expected: no matches. `rg` exit code `1` is expected.
 
-- [ ] **Step 3: Confirm facade re-export exists and contains every public snapshot name**
+- [x] **Step 3: Confirm facade re-export exists and contains every public snapshot name**
 
 Run:
 
@@ -372,7 +372,7 @@ foreach ($name in @('capture_run_snapshot', 'mark_run_capture_failed', 'persist_
 
 Expected: loop completes without throwing.
 
-- [ ] **Step 4: Confirm moved public API exists in `snapshot.rs`**
+- [x] **Step 4: Confirm moved public API exists in `snapshot.rs`**
 
 Run:
 
@@ -382,7 +382,7 @@ rg -n "^pub\(crate\) (fn|async fn) (sanitize_snapshot_error|sanitize_provider_er
 
 Expected: five matches, one for each public snapshot API item.
 
-- [ ] **Step 5: Confirm private helpers stayed private**
+- [x] **Step 5: Confirm private helpers stayed private**
 
 Run:
 
@@ -400,7 +400,7 @@ rg -n "^\s*pub(\([^)]*\))?\s+(fn|async fn) (validate_snapshot_message|load_run_s
 
 Expected: no matches. `rg` exit code `1` is expected.
 
-- [ ] **Step 6: Confirm moved-only production imports left `store.rs`**
+- [x] **Step 6: Confirm moved-only production imports left `store.rs`**
 
 Run:
 
@@ -415,7 +415,7 @@ foreach ($name in @('CorpusMessage', 'StoredRunSnapshotRow', 'compress_text', 'd
 
 Expected: command completes without throwing.
 
-- [ ] **Step 7: Confirm store tests still exercise the facade**
+- [x] **Step 7: Confirm store tests still exercise the facade**
 
 Run:
 
@@ -428,7 +428,7 @@ if ($storeTests -match "super::snapshot|snapshot::") {
 
 Expected: command completes without throwing.
 
-- [ ] **Step 8: Confirm `persist_run_snapshot` kept its dead-code allowance**
+- [x] **Step 8: Confirm `persist_run_snapshot` kept its dead-code allowance**
 
 Run:
 
@@ -441,7 +441,7 @@ if ($snapshotSource -notmatch "#\[allow\(dead_code\)\]\s*pub\(crate\) async fn p
 
 Expected: command completes without throwing.
 
-- [ ] **Step 9: Confirm validation and SQL markers stayed in `snapshot.rs`**
+- [x] **Step 9: Confirm validation and SQL markers stayed in `snapshot.rs`**
 
 Run each command separately:
 
@@ -471,7 +471,7 @@ rg -n -F "Snapshot capture failed" src-tauri/src/analysis/store/snapshot.rs
 
 Expected: every command prints at least one match.
 
-- [ ] **Step 10: Run snapshot sanitizer test**
+- [x] **Step 10: Run snapshot sanitizer test**
 
 Run:
 
@@ -481,7 +481,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::sanitize
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 11: Run provider sanitizer test**
+- [x] **Step 11: Run provider sanitizer test**
 
 Run:
 
@@ -491,7 +491,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::sanitize
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 12: Run snapshot capture test**
+- [x] **Step 12: Run snapshot capture test**
 
 Run:
 
@@ -501,7 +501,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::capture_
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 13: Run capture failure marker test**
+- [x] **Step 13: Run capture failure marker test**
 
 Run:
 
@@ -511,7 +511,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::mark_run
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 14: Run full store test slice**
+- [x] **Step 14: Run full store test slice**
 
 Run:
 
@@ -521,7 +521,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 15: Run corpus snapshot consumer slice**
+- [x] **Step 15: Run corpus snapshot consumer slice**
 
 Run:
 
@@ -531,7 +531,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::snapsho
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 16: Run source resolution consumer slice**
+- [x] **Step 16: Run source resolution consumer slice**
 
 Run:
 
@@ -541,7 +541,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::corpus::tests::source_
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 17: Run report test slice**
+- [x] **Step 17: Run report test slice**
 
 Run:
 
@@ -551,7 +551,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::
 
 Expected: PASS and not a green `0 tests` run. This is broad report-module regression coverage; do not claim dedicated lifecycle runtime coverage unless a concrete lifecycle test is added or identified.
 
-- [ ] **Step 18: Run all-target compile coverage**
+- [x] **Step 18: Run all-target compile coverage**
 
 Run:
 
@@ -561,7 +561,7 @@ cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
 Expected: PASS. Existing warnings outside touched files may remain; new warnings mentioning `src-tauri/src/analysis/store.rs` or `src-tauri/src/analysis/store/snapshot.rs` are not acceptable.
 
-- [ ] **Step 19: Run format check**
+- [x] **Step 19: Run format check**
 
 Run:
 
