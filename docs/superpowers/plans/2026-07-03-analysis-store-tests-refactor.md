@@ -72,7 +72,7 @@
   - `mod harness; mod read_model; mod runs; mod setup; mod snapshot;` in `tests/mod.rs`.
   - Same test functions under new paths such as `analysis::store::tests::read_model::list_analysis_run_summaries_applies_query_before_limit`.
 
-- [ ] **Step 1: Capture pre-edit worktree status**
+- [x] **Step 1: Capture pre-edit worktree status**
 
 Run:
 
@@ -86,7 +86,7 @@ Expected:
 - `src-tauri/src/analysis/store/tests/` does not exist, or it is not modified/staged/untracked.
 - Unrelated local files such as `.claude/settings.local.json` may exist, but must remain unstaged throughout this task.
 
-- [ ] **Step 2: Persist a pre-edit status snapshot**
+- [x] **Step 2: Persist a pre-edit status snapshot**
 
 Run:
 
@@ -99,7 +99,7 @@ $preEditStatusPath
 
 Expected: PowerShell prints a temp-file path such as `C:\Users\<you>\AppData\Local\Temp\analysis-store-tests-refactor-20260703120000-status-before.txt`. Save that path in the execution notes; later status comparison uses the exact printed path.
 
-- [ ] **Step 3: Inspect target-file baseline**
+- [x] **Step 3: Inspect target-file baseline**
 
 Run:
 
@@ -128,7 +128,7 @@ if (Test-Path -LiteralPath 'src-tauri/src/analysis/store/tests') {
 
 Expected: no output if the directory does not exist. If it exists or shows any status, stop and make a separate baseline commit before continuing.
 
-- [ ] **Step 4: Run baseline tests**
+- [x] **Step 4: Run baseline tests**
 
 Run each command separately:
 
@@ -158,7 +158,7 @@ Expected: pass and not a green `0 tests` run.
 
 If any baseline test fails, stop. Record the failure as pre-existing and do not edit production code in this task.
 
-- [ ] **Step 5: Create test module directory and module root**
+- [x] **Step 5: Create test module directory and module root**
 
 Create `src-tauri/src/analysis/store/tests/mod.rs`:
 
@@ -179,7 +179,7 @@ Create `src-tauri/src/analysis/store/tests/harness.rs`:
 
 Do not add `pub(crate)` or `pub` helpers.
 
-- [ ] **Step 6: Move read-model tests into `read_model.rs`**
+- [x] **Step 6: Move read-model tests into `read_model.rs`**
 
 Create `src-tauri/src/analysis/store/tests/read_model.rs`.
 
@@ -222,7 +222,7 @@ use crate::error::AppErrorKind;
 
 Keep helper visibility private in this file.
 
-- [ ] **Step 7: Move setup tests into `setup.rs`**
+- [x] **Step 7: Move setup tests into `setup.rs`**
 
 Create `src-tauri/src/analysis/store/tests/setup.rs`.
 
@@ -242,7 +242,7 @@ use crate::error::AppErrorKind;
 
 Keep helper visibility private in this file.
 
-- [ ] **Step 8: Move snapshot tests into `snapshot.rs`**
+- [x] **Step 8: Move snapshot tests into `snapshot.rs`**
 
 Create `src-tauri/src/analysis/store/tests/snapshot.rs`.
 
@@ -267,7 +267,7 @@ use crate::analysis::models::CorpusMessage;
 
 Keep helper visibility private in this file unless Step 9 deliberately imports `snapshot_store_pool` from `super::harness`. The recommended approach is to keep status-update tests in `runs.rs` with a local minimal status schema, so `harness.rs` remains empty.
 
-- [ ] **Step 9: Move run-operation tests into `runs.rs`**
+- [x] **Step 9: Move run-operation tests into `runs.rs`**
 
 Create `src-tauri/src/analysis/store/tests/runs.rs`.
 
@@ -330,7 +330,7 @@ Then change those two tests to call `status_update_pool().await` instead of `sna
 
 Keep all other test bodies, SQL, fixture values, and assertions unchanged.
 
-- [ ] **Step 10: Replace inline tests in `store.rs`**
+- [x] **Step 10: Replace inline tests in `store.rs`**
 
 In `src-tauri/src/analysis/store.rs`, replace the entire inline module that starts with `#[cfg(test)] mod tests {` and currently contains helpers such as `sample_run_row`, `run_list_pool`, and `delete_saved_run_removes_run_and_saved_children` with:
 
@@ -341,7 +341,7 @@ mod tests;
 
 Do not change the production module declarations or facade re-exports above it.
 
-- [ ] **Step 11: Run rustfmt**
+- [x] **Step 11: Run rustfmt**
 
 Run:
 
@@ -351,7 +351,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml
 
 Expected: command exits 0. If unrelated Rust files changed, inspect them before proceeding and resolve drift before staging.
 
-- [ ] **Step 12: Run focused post-change store tests**
+- [x] **Step 12: Run focused post-change store tests**
 
 Run each command separately:
 
@@ -379,7 +379,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::runs::in
 
 Expected: pass and not a green `0 tests` run.
 
-- [ ] **Step 13: Run source guards**
+- [x] **Step 13: Run source guards**
 
 Production facade and external test module declaration:
 
@@ -508,7 +508,7 @@ rg -n -F "Analysis run cancelled." src-tauri/src/analysis/store/tests/runs.rs
 
 Expected: one match.
 
-- [ ] **Step 14: Run full post-change verification**
+- [x] **Step 14: Run full post-change verification**
 
 Run each command separately:
 
@@ -536,7 +536,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
 Expected: pass. If it fails, run `cargo fmt --manifest-path src-tauri/Cargo.toml`, inspect `git status --short --untracked-files=all`, resolve unrelated drift, and then rerun `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`.
 
-- [ ] **Step 15: Compare final worktree to the pre-edit status snapshot**
+- [x] **Step 15: Compare final worktree to the pre-edit status snapshot**
 
 Run, replacing `<PRE_EDIT_STATUS_PATH>` with the path printed in Step 2:
 
@@ -560,7 +560,7 @@ Expected: differences are limited to intended changes in:
 
 Unrelated pre-existing files such as `.claude/settings.local.json` may appear in both before and after and must not be staged.
 
-- [ ] **Step 16: Inspect implementation diff**
+- [x] **Step 16: Inspect implementation diff**
 
 Run:
 
@@ -584,7 +584,7 @@ git diff --check -- src-tauri/src/analysis/store.rs src-tauri/src/analysis/store
 
 Expected: no whitespace errors.
 
-- [ ] **Step 17: Stage implementation files only**
+- [x] **Step 17: Stage implementation files only**
 
 Run:
 
@@ -620,7 +620,7 @@ git diff --cached --check
 
 Expected: no whitespace errors.
 
-- [ ] **Step 18: Commit the refactor**
+- [x] **Step 18: Commit the refactor**
 
 Run:
 
@@ -638,7 +638,7 @@ Expected: commit succeeds with only:
 - `src-tauri/src/analysis/store/tests/setup.rs`
 - `src-tauri/src/analysis/store/tests/snapshot.rs`
 
-- [ ] **Step 19: Record post-commit status**
+- [x] **Step 19: Record post-commit status**
 
 Run:
 
@@ -654,16 +654,16 @@ Expected: no new implementation files remain unstaged. Pre-existing unrelated fi
 
 Before reporting the implementation complete, confirm the execution log includes:
 
-- [ ] baseline `analysis::store::tests::` passed before editing and was not a green `0 tests` run;
-- [ ] baseline focused read-model, snapshot, and runs tests passed before editing and were not green `0 tests` runs;
-- [ ] post-change focused read-model, setup, snapshot, and runs tests passed and were not green `0 tests` runs;
-- [ ] post-change `cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::` passed and was not a green `0 tests` run;
-- [ ] post-change `cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::` passed and was not a green `0 tests` run;
-- [ ] `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed;
-- [ ] `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` passed after any formatting fixes;
-- [ ] source guards proved `store.rs` no longer contains inline test body helpers or test functions;
-- [ ] source guards proved thematic test files exist and hold the expected core test names;
-- [ ] source guards proved tests do not import private production child modules directly;
-- [ ] source guards proved no `pub(crate)` or public helpers were introduced in `store/tests`;
-- [ ] staged files were limited to `src-tauri/src/analysis/store.rs` and `src-tauri/src/analysis/store/tests/*.rs`;
-- [ ] post-commit `git status --short --untracked-files=all` has no dirty refactor files.
+- [x] baseline `analysis::store::tests::` passed before editing and was not a green `0 tests` run;
+- [x] baseline focused read-model, snapshot, and runs tests passed before editing and were not green `0 tests` runs;
+- [x] post-change focused read-model, setup, snapshot, and runs tests passed and were not green `0 tests` runs;
+- [x] post-change `cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::` passed and was not a green `0 tests` run;
+- [x] post-change `cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::` passed and was not a green `0 tests` run;
+- [x] `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed;
+- [x] `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` passed after any formatting fixes;
+- [x] source guards proved `store.rs` no longer contains inline test body helpers or test functions;
+- [x] source guards proved thematic test files exist and hold the expected core test names;
+- [x] source guards proved tests do not import private production child modules directly;
+- [x] source guards proved no `pub(crate)` or public helpers were introduced in `store/tests`;
+- [x] staged files were limited to `src-tauri/src/analysis/store.rs` and `src-tauri/src/analysis/store/tests/*.rs`;
+- [x] post-commit `git status --short --untracked-files=all` has no dirty refactor files.
