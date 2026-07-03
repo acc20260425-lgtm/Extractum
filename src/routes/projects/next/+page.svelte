@@ -10,6 +10,10 @@
   import { buildPeriodPresets, type PeriodPreset } from "$lib/ui/research-projects-period";
   import { buildSourceRow } from "$lib/ui/research-projects-source-row";
   import ConnectFromLibrary from "$lib/components/research-projects/ConnectFromLibrary.svelte";
+  import {
+    PROJECT_SECTIONS,
+    type ProjectSectionId,
+  } from "$lib/components/research-projects/ProjectTabs.svelte";
   import ProjectEditorDialog from "$lib/components/research-projects/ProjectEditorDialog.svelte";
   import { listLibraryCatalog } from "$lib/api/library-sources";
   import {
@@ -58,6 +62,7 @@
   let editorProjectId = $state<number | null>(null);
   let filters = $state<SourceFilters>(emptySourceFilters());
   let filtersOpen = $state(false);
+  let activeSection = $state<ProjectSectionId>("sources");
   let connectOpen = $state(false);
   let libraryCatalogRecords = $state<LibraryCatalogRecord[]>([]);
   let selectedLibrarySourceIds = $state<Set<string>>(new Set());
@@ -97,6 +102,11 @@
     filtersActive && visibleSources.length === 0
       ? "Под условия ничего не подходит"
       : "Нет источников",
+  );
+  let sectionPlaceholder = $derived(
+    activeSection === "sources"
+      ? ""
+      : `Раздел «${PROJECT_SECTIONS.find((s) => s.id === activeSection)?.label ?? ""}» в разработке`,
   );
   let librarySources = $derived(
     buildLibrarySourcesView(
@@ -158,6 +168,7 @@
     selectedPeriodId = "all";
     filters = emptySourceFilters();
     filtersOpen = false;
+    activeSection = "sources";
     sources = await listProjectSources(id);
     await workflow.loadDataRange({
       projectId: id,
@@ -330,7 +341,11 @@
     sources={visibleSources}
     {selectedSourceIds}
     {gridOverlay}
-    filterBar={selectedProject
+    tabs={selectedProject
+      ? { active: activeSection, onSelect: (id) => (activeSection = id) }
+      : undefined}
+    sectionPlaceholder={selectedProject ? sectionPlaceholder : ""}
+    filterBar={selectedProject && activeSection === "sources"
       ? {
           filtersOpen,
           onToggleFilters: () => (filtersOpen = !filtersOpen),
@@ -343,7 +358,7 @@
           onAddSource: () => void openConnectSources(),
         }
       : undefined}
-    filterRow={selectedProject && filtersOpen
+    filterRow={selectedProject && activeSection === "sources" && filtersOpen
       ? {
           filters,
           onChange: (next) => (filters = next),
@@ -374,7 +389,7 @@
           onExport: () => {},
         }
       : undefined}
-    bulkBar={selectedSourceIds.length > 0
+    bulkBar={activeSection === "sources" && selectedSourceIds.length > 0
       ? {
           count: selectedSourceIds.length,
           syncDisabled: bulkSyncDisabled,

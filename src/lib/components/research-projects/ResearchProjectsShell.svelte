@@ -2,6 +2,7 @@
   import type { ComponentProps } from "svelte";
   import Inspector from "./Inspector.svelte";
   import ProjectRailPanel from "./ProjectRailPanel.svelte";
+  import ProjectTabs from "./ProjectTabs.svelte";
   import ProjectToolbar from "./ProjectToolbar.svelte";
   import RunDock from "./RunDock.svelte";
   import SourcesBulkBar from "./SourcesBulkBar.svelte";
@@ -21,6 +22,8 @@
     bulkBar,
     filterBar,
     filterRow,
+    tabs,
+    sectionPlaceholder = "",
     gridOverlay = "Нет источников",
     onSelectedSourceIdsChange,
   }: {
@@ -34,6 +37,8 @@
     bulkBar?: ComponentProps<typeof SourcesBulkBar>;
     filterBar?: ComponentProps<typeof SourcesFilterBar>;
     filterRow?: ComponentProps<typeof SourcesFilterRow>;
+    tabs?: ComponentProps<typeof ProjectTabs>;
+    sectionPlaceholder?: string;
     gridOverlay?: string;
     onSelectedSourceIdsChange?: (ids: string[]) => void;
   } = $props();
@@ -49,20 +54,27 @@
       {#if toolbar}
         <ProjectToolbar {...toolbar} />
       {/if}
-      {#if filterBar}
-        <div class="research-projects-shell__statsbar">
-          <SourcesFilterBar {...filterBar} />
-          {#if bulkBar}
-            <SourcesBulkBar {...bulkBar} />
-          {/if}
+      {#if tabs}
+        <ProjectTabs {...tabs} />
+      {/if}
+      {#if sectionPlaceholder}
+        <div class="research-projects-shell__section-placeholder">{sectionPlaceholder}</div>
+      {:else}
+        {#if filterBar}
+          <div class="research-projects-shell__statsbar">
+            <SourcesFilterBar {...filterBar} />
+            {#if bulkBar}
+              <SourcesBulkBar {...bulkBar} />
+            {/if}
+          </div>
+        {/if}
+        {#if filterRow}
+          <SourcesFilterRow {...filterRow} />
+        {/if}
+        <div class="research-projects-shell__grid">
+          <SourcesGrid {sources} {selectedSourceIds} {onSelectedSourceIdsChange} overlay={gridOverlay} />
         </div>
       {/if}
-      {#if filterRow}
-        <SourcesFilterRow {...filterRow} />
-      {/if}
-      <div class="research-projects-shell__grid">
-        <SourcesGrid {sources} {selectedSourceIds} {onSelectedSourceIdsChange} overlay={gridOverlay} />
-      </div>
       {#if runDock}
         <RunDock {...runDock} />
       {/if}
@@ -105,6 +117,14 @@
   .research-projects-shell__statsbar {
     position: relative;
     flex-shrink: 0;
+  }
+
+  .research-projects-shell__section-placeholder {
+    flex: 1;
+    display: grid;
+    place-items: center;
+    font: 400 13px/1.4 var(--extractum-font);
+    color: var(--extractum-muted-2);
   }
 
   .research-projects-shell__grid {

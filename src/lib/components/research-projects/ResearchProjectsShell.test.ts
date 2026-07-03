@@ -48,6 +48,29 @@ describe("ResearchProjectsShell", () => {
     expect(screen.getByPlaceholderText("Поиск проектов")).toBeTruthy();
   });
 
+  it("renders the tabs row under the toolbar and the section placeholder instead of the grid", () => {
+    expect(shellSource).toContain("<ProjectTabs");
+    expect(shellSource).toContain("{...tabs}");
+    const toolbarIndex = shellSource.indexOf("<ProjectToolbar");
+    const tabsIndex = shellSource.indexOf("<ProjectTabs");
+    const statsIndex = shellSource.indexOf('class="research-projects-shell__statsbar"');
+    expect(tabsIndex).toBeGreaterThan(toolbarIndex);
+    expect(tabsIndex).toBeLessThan(statsIndex);
+    expect(shellSource).toContain("sectionPlaceholder");
+    expect(shellSource).toContain("research-projects-shell__section-placeholder");
+  });
+
+  it("shows the placeholder text when sectionPlaceholder is provided", () => {
+    render(ResearchProjectsShell, {
+      props: {
+        railPanel: { summaries: [], selectedProjectId: null, now: NOW },
+        selectedProjectId: 1,
+        sectionPlaceholder: "Раздел «Обзор» в разработке",
+      },
+    });
+    expect(screen.getByText("Раздел «Обзор» в разработке")).toBeTruthy();
+  });
+
   it("renders the rail panel in the aside", () => {
     expect(shellSource).toContain("<ProjectRailPanel");
     expect(shellSource).toContain("{...railPanel}");
