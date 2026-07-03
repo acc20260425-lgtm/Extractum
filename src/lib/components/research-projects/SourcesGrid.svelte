@@ -34,10 +34,12 @@
     sources,
     selectedSourceIds = [],
     onSelectedSourceIdsChange = () => {},
+    overlay = "Нет источников",
   }: {
     sources: ProjectSourceRecord[];
     selectedSourceIds?: string[];
     onSelectedSourceIdsChange?: (ids: string[]) => void;
+    overlay?: string;
   } = $props();
 
   const RIGHT_ALIGNED = new Set(["materialsLabel"]);
@@ -74,7 +76,7 @@
   onSelectedRowIdsChange={onSelectedSourceIdsChange}
   height="100%"
   ariaLabel="Источники проекта"
-  overlay="Нет источников"
+  {overlay}
 />
 
 <style>

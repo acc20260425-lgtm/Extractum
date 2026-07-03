@@ -16,7 +16,8 @@ describe("SourcesGrid", () => {
 
   it("labels the grid and provides an empty overlay in Russian", () => {
     expect(source).toContain('ariaLabel="Источники проекта"');
-    expect(source).toContain('overlay="Нет источников"');
+    expect(source).toContain('overlay = "Нет источников"');
+    expect(source).toContain("{overlay}");
   });
 
   it("attaches the custom cells for the source title and status columns", () => {
