@@ -58,7 +58,7 @@
 - Produces:
   - `pub(super) async fn seed_analysis_redesign_fixtures_in_pool(pool: &Pool<Sqlite>) -> AppResult<AnalysisRedesignFixtureSummary>`
 
-- [ ] **Step 1: Capture pre-edit worktree status**
+- [x] **Step 1: Capture pre-edit worktree status**
 
 Run:
 
@@ -72,7 +72,7 @@ Expected:
 - `src-tauri/src/analysis/fixtures/seed.rs` does not exist, or it is not modified/staged/untracked.
 - Unrelated local files such as `.claude/settings.local.json` may exist, but must remain unstaged throughout this task.
 
-- [ ] **Step 2: Persist a pre-edit status snapshot**
+- [x] **Step 2: Persist a pre-edit status snapshot**
 
 Run:
 
@@ -87,7 +87,7 @@ $preEditStatusPointerPath
 
 Expected: PowerShell prints the pointer-file path `analysis-fixtures-seed-refactor-status-pointer.txt`. Later steps must read this pointer file to recover the actual status snapshot path across separate PowerShell sessions.
 
-- [ ] **Step 3: Inspect target-file baseline**
+- [x] **Step 3: Inspect target-file baseline**
 
 Run:
 
@@ -118,7 +118,7 @@ if (Test-Path -LiteralPath 'src-tauri/src/analysis/fixtures/seed.rs') {
 
 Expected: no output if `seed.rs` does not exist. If it exists or shows any status, stop and make a separate baseline commit before continuing.
 
-- [ ] **Step 4: Run baseline fixture tests and compile check**
+- [x] **Step 4: Run baseline fixture tests and compile check**
 
 Run each command separately:
 
@@ -160,7 +160,7 @@ Expected: pass. This establishes that crate-wide compile coverage was green befo
 
 If any baseline test or baseline compile check fails, stop. Record the failure as pre-existing and do not edit production code in this task.
 
-- [ ] **Step 5: Add private seed module wiring in `fixtures.rs`**
+- [x] **Step 5: Add private seed module wiring in `fixtures.rs`**
 
 In `src-tauri/src/analysis/fixtures.rs`, add this module declaration and import after the existing import block and before constants:
 
@@ -172,7 +172,7 @@ use self::seed::seed_analysis_redesign_fixtures_in_pool;
 
 Keep the module private. Do not add any `pub use` for the seed module or seed entry point.
 
-- [ ] **Step 6: Create `fixtures/seed.rs` with seed imports**
+- [x] **Step 6: Create `fixtures/seed.rs` with seed imports**
 
 Create `src-tauri/src/analysis/fixtures/seed.rs` with this import block:
 
@@ -198,7 +198,7 @@ use crate::youtube::dto::{
 
 Do not use `use super::*;`.
 
-- [ ] **Step 7: Move the contiguous seed block into `seed.rs`**
+- [x] **Step 7: Move the contiguous seed block into `seed.rs`**
 
 Move the production block that starts at this function in `src-tauri/src/analysis/fixtures.rs`:
 
@@ -260,7 +260,7 @@ pub(super) async fn seed_analysis_redesign_fixtures_in_pool(
 
 Keep all other moved helper definitions private.
 
-- [ ] **Step 8: Clean parent production imports**
+- [x] **Step 8: Clean parent production imports**
 
 In `src-tauri/src/analysis/fixtures.rs`, remove this moved-only import block:
 
@@ -286,7 +286,7 @@ use crate::time::now_secs;
 
 Do not add compression imports to `fixtures.rs`. The moved code can continue using fully qualified `crate::compression::compress_text` and `crate::compression::compress_json_bytes` from `seed.rs`.
 
-- [ ] **Step 9: Run rustfmt**
+- [x] **Step 9: Run rustfmt**
 
 Run:
 
@@ -296,7 +296,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml
 
 Expected: command exits 0. If unrelated Rust files changed, inspect them before proceeding and resolve drift before staging.
 
-- [ ] **Step 10: Run focused post-change fixture tests**
+- [x] **Step 10: Run focused post-change fixture tests**
 
 Run each command separately:
 
@@ -330,7 +330,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::seed_
 
 Expected: pass in the default dev test profile and not a green `0 tests` run.
 
-- [ ] **Step 11: Run source guards**
+- [x] **Step 11: Run source guards**
 
 Private module declaration:
 
@@ -532,7 +532,7 @@ foreach ($symbol in @(
 
 Expected: each of the three debug command symbols is checked independently in both `analysis/mod.rs` and `lib.rs`; the command throws on the first missing symbol.
 
-- [ ] **Step 12: Run full post-change verification**
+- [x] **Step 12: Run full post-change verification**
 
 Run each command separately:
 
@@ -554,7 +554,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
 Expected: pass. If it fails, run `cargo fmt --manifest-path src-tauri/Cargo.toml`, inspect `git status --short --untracked-files=all`, resolve unrelated drift, and then rerun `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`.
 
-- [ ] **Step 13: Compare final worktree to the pre-edit status snapshot**
+- [x] **Step 13: Compare final worktree to the pre-edit status snapshot**
 
 Run:
 
@@ -575,7 +575,7 @@ Expected: differences are limited to intended changes in:
 
 Unrelated pre-existing files such as `.claude/settings.local.json` may appear in both before and after and must not be staged.
 
-- [ ] **Step 14: Inspect implementation diff**
+- [x] **Step 14: Inspect implementation diff**
 
 Run:
 
@@ -600,7 +600,7 @@ git diff --check -- src-tauri/src/analysis/fixtures.rs src-tauri/src/analysis/fi
 
 Expected: no whitespace errors.
 
-- [ ] **Step 15: Stage implementation files only**
+- [x] **Step 15: Stage implementation files only**
 
 Run:
 
@@ -631,7 +631,7 @@ git diff --cached --check
 
 Expected: no whitespace errors.
 
-- [ ] **Step 16: Commit the refactor**
+- [x] **Step 16: Commit the refactor**
 
 Run:
 
@@ -644,7 +644,7 @@ Expected: commit succeeds with only:
 - `src-tauri/src/analysis/fixtures.rs`
 - `src-tauri/src/analysis/fixtures/seed.rs`
 
-- [ ] **Step 17: Record post-commit status**
+- [x] **Step 17: Record post-commit status**
 
 Run:
 
@@ -660,18 +660,18 @@ Expected: no new implementation files remain unstaged. Pre-existing unrelated fi
 
 Before reporting the implementation complete, confirm the execution log includes:
 
-- [ ] focused baseline fixture seed tests passed before editing and were not green `0 tests` runs;
-- [ ] baseline `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::` passed before editing and was not a green `0 tests` run;
-- [ ] baseline `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed before editing;
-- [ ] focused post-change fixture seed and active-run tests passed and were not green `0 tests` runs;
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::` passed in the default dev profile and was not a green `0 tests` run;
-- [ ] `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed;
-- [ ] `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` passed after any formatting fixes;
-- [ ] source guards proved `seed` is private and the seed entry point is only privately imported by the parent;
-- [ ] source guards proved moved definitions are absent from `fixtures.rs` and present in `fixtures/seed.rs`;
-- [ ] source guards proved `seed.rs` has no unintended public API beyond `pub(super) async fn seed_analysis_redesign_fixtures_in_pool`;
-- [ ] source guards proved inline tests do not call `super::seed` or direct private-module paths;
-- [ ] source guards proved moved-only YouTube DTO and compression imports are absent from parent production imports;
-- [ ] source guards proved debug command re-exports and command registration remain present;
-- [ ] staged files were limited to `src-tauri/src/analysis/fixtures.rs` and `src-tauri/src/analysis/fixtures/seed.rs`;
-- [ ] post-commit `git status --short --untracked-files=all` has no dirty refactor files.
+- [x] focused baseline fixture seed tests passed before editing and were not green `0 tests` runs;
+- [x] baseline `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::` passed before editing and was not a green `0 tests` run;
+- [x] baseline `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed before editing;
+- [x] focused post-change fixture seed and active-run tests passed and were not green `0 tests` runs;
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::` passed in the default dev profile and was not a green `0 tests` run;
+- [x] `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed;
+- [x] `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` passed after any formatting fixes;
+- [x] source guards proved `seed` is private and the seed entry point is only privately imported by the parent;
+- [x] source guards proved moved definitions are absent from `fixtures.rs` and present in `fixtures/seed.rs`;
+- [x] source guards proved `seed.rs` has no unintended public API beyond `pub(super) async fn seed_analysis_redesign_fixtures_in_pool`;
+- [x] source guards proved inline tests do not call `super::seed` or direct private-module paths;
+- [x] source guards proved moved-only YouTube DTO and compression imports are absent from parent production imports;
+- [x] source guards proved debug command re-exports and command registration remain present;
+- [x] staged files were limited to `src-tauri/src/analysis/fixtures.rs` and `src-tauri/src/analysis/fixtures/seed.rs`;
+- [x] post-commit `git status --short --untracked-files=all` has no dirty refactor files.
