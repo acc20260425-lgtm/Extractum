@@ -299,14 +299,32 @@ The implementation plan must capture pre-edit status using a unique tag and pers
 ```powershell
 $tag = "analysis-fixtures-seed-refactor-" + (Get-Date -Format "yyyyMMddHHmmss")
 $preEditStatusPath = Join-Path $env:TEMP "$tag-status-before.txt"
+$preEditStatusPointerPath = Join-Path $env:TEMP "analysis-fixtures-seed-refactor-status-pointer.txt"
 git status --short --untracked-files=all | Set-Content -LiteralPath $preEditStatusPath
-$preEditStatusPath
+$preEditStatusPath | Set-Content -LiteralPath $preEditStatusPointerPath
+$preEditStatusPointerPath
 ```
+
+Expected: the command prints the pointer-file path. Later commands must read that pointer file to recover the actual status snapshot path, so the workflow works across separate PowerShell sessions.
 
 Before commit, compare the final status to the captured baseline and confirm no new unintended files or diffs exist outside:
 
 - `src-tauri/src/analysis/fixtures.rs`
 - `src-tauri/src/analysis/fixtures/seed.rs`
+
+Use a command that reads the persisted pointer instead of relying on an in-memory PowerShell variable:
+
+```powershell
+$preEditStatusPointerPath = Join-Path $env:TEMP "analysis-fixtures-seed-refactor-status-pointer.txt"
+$preEditStatusPath = Get-Content -LiteralPath $preEditStatusPointerPath
+$before = Get-Content -LiteralPath $preEditStatusPath
+$afterPath = Join-Path $env:TEMP "analysis-fixtures-seed-refactor-status-after.txt"
+git status --short --untracked-files=all | Set-Content -LiteralPath $afterPath
+$after = Get-Content -LiteralPath $afterPath
+Compare-Object -ReferenceObject $before -DifferenceObject $after
+```
+
+Expected: differences are limited to the two intended target files. Pre-existing unrelated files may appear in both before and after and must remain unstaged.
 
 If `cargo fmt` rewrites unrelated Rust files, resolve that drift before the refactor commit by making a separate format-only commit or restoring only implementation-owned formatting changes after review. Final status should return to the captured baseline except for intended staged refactor files.
 
@@ -337,8 +355,8 @@ Expected: first command has one match; second command has no matches. The seed e
 Moved definitions must not remain in `fixtures.rs`:
 
 ```powershell
-rg -n "^\s*(fn|async fn) (json_zstd|insert_fixture_account|insert_fixture_prompt_template|insert_fixture_llm_profile|insert_telegram_source|insert_youtube_video_source|insert_youtube_playlist_source|insert_fixture_source_group|insert_item|insert_telegram_content|insert_youtube_content|insert_run|insert_snapshot_message|mark_fixture_snapshot_captured|mark_fixture_snapshot_capture_failed|trace_zstd|first_item_id|insert_analysis_runs|seed_analysis_redesign_fixtures_in_pool)\b" src-tauri/src/analysis/fixtures.rs
-rg -n "^\s*struct FixtureIds\b" src-tauri/src/analysis/fixtures.rs
+rg -n "^\s*(pub(\([^)]*\))?\s+)?(async\s+fn|fn) (json_zstd|insert_fixture_account|insert_fixture_prompt_template|insert_fixture_llm_profile|insert_telegram_source|insert_youtube_video_source|insert_youtube_playlist_source|insert_fixture_source_group|insert_item|insert_telegram_content|insert_youtube_content|insert_run|insert_snapshot_message|mark_fixture_snapshot_captured|mark_fixture_snapshot_capture_failed|trace_zstd|first_item_id|insert_analysis_runs|seed_analysis_redesign_fixtures_in_pool)\b" src-tauri/src/analysis/fixtures.rs
+rg -n "^\s*(pub(\([^)]*\))?\s+)?struct FixtureIds\b" src-tauri/src/analysis/fixtures.rs
 ```
 
 Expected: no matches. `rg` exit code `1` is expected. Test calls may still mention `seed_analysis_redesign_fixtures_in_pool`, but production definitions must be gone.
@@ -346,7 +364,7 @@ Expected: no matches. `rg` exit code `1` is expected. Test calls may still menti
 Moved definitions must exist in `seed.rs`:
 
 ```powershell
-rg -n "^\s*(fn|async fn) (json_zstd|insert_fixture_account|insert_fixture_prompt_template|insert_fixture_llm_profile|insert_telegram_source|insert_youtube_video_source|insert_youtube_playlist_source|insert_fixture_source_group|insert_item|insert_telegram_content|insert_youtube_content|insert_run|insert_snapshot_message|mark_fixture_snapshot_captured|mark_fixture_snapshot_capture_failed|trace_zstd|first_item_id|insert_analysis_runs)\b" src-tauri/src/analysis/fixtures/seed.rs
+rg -n "^\s*(pub(\([^)]*\))?\s+)?(async\s+fn|fn) (json_zstd|insert_fixture_account|insert_fixture_prompt_template|insert_fixture_llm_profile|insert_telegram_source|insert_youtube_video_source|insert_youtube_playlist_source|insert_fixture_source_group|insert_item|insert_telegram_content|insert_youtube_content|insert_run|insert_snapshot_message|mark_fixture_snapshot_captured|mark_fixture_snapshot_capture_failed|trace_zstd|first_item_id|insert_analysis_runs)\b" src-tauri/src/analysis/fixtures/seed.rs
 rg -n "^pub\(super\) async fn seed_analysis_redesign_fixtures_in_pool" src-tauri/src/analysis/fixtures/seed.rs
 rg -n "^struct FixtureIds\b" src-tauri/src/analysis/fixtures/seed.rs
 ```
@@ -356,19 +374,28 @@ Expected: all moved seed helpers exist in `seed.rs`, and only the seed entry poi
 No unintended public API in `seed.rs`:
 
 ```powershell
-rg -n "pub\(crate\)|^pub\s" src-tauri/src/analysis/fixtures/seed.rs
+rg -n "^\s*pub(\([^)]*\))?\s+" src-tauri/src/analysis/fixtures/seed.rs
 ```
 
-Expected: no matches. `rg` exit code `1` is expected.
+Expected: exactly one match, and it must be `pub(super) async fn seed_analysis_redesign_fixtures_in_pool`. Any other public or restricted-public item, including `pub(super)` helpers, `pub(crate)` items, `pub(in crate::analysis)` items, or plain `pub` items, is a failure.
+
+Inline tests should keep covering the parent facade instead of the private child module:
+
+```powershell
+$testSection = [regex]::Split((Get-Content -Raw src-tauri/src/analysis/fixtures.rs), "#\[cfg\(test\)\]", 2)[1]
+$testSection | Select-String -Pattern "super::seed|seed::seed_analysis_redesign_fixtures_in_pool|crate::analysis::fixtures::seed"
+```
+
+Expected: no matches. Inline tests should call `seed_analysis_redesign_fixtures_in_pool` through the parent private import, not through `super::seed` or any direct private-module path.
 
 Production import cleanup guard:
 
 ```powershell
-$beforeTests = (Get-Content -Raw src-tauri/src/analysis/fixtures.rs).Split("#[cfg(test)]")[0]
-$beforeTests | Select-String -Pattern "YoutubeAvailabilityStatus|YoutubePlaylistMetadata|YoutubeVideoForm|YoutubeVideoMetadata"
+$beforeTests = [regex]::Split((Get-Content -Raw src-tauri/src/analysis/fixtures.rs), "#\[cfg\(test\)\]", 2)[0]
+$beforeTests | Select-String -Pattern "YoutubeAvailabilityStatus|YoutubePlaylistMetadata|YoutubeVideoForm|YoutubeVideoMetadata|compress_text|compress_json_bytes|crate::compression"
 ```
 
-Expected: no moved-only YouTube DTO imports remain in `fixtures.rs`.
+Expected: no moved-only YouTube DTO or compression imports remain in the production section of `fixtures.rs`.
 
 Public debug exports remain unchanged:
 
@@ -387,8 +414,17 @@ Baseline before editing:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::seed_creates_safe_account_prompt_profile_sources_and_group
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::seed_creates_fixture_runs_with_statuses_templates_and_snapshots
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::fixture_active_state_tracks_seeded_running_run
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::seed_twice_keeps_one_deterministic_fixture_set
 ```
 
@@ -398,12 +434,33 @@ Post-change verification:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::seed_creates_safe_account_prompt_profile_sources_and_group
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::seed_creates_fixture_runs_with_statuses_templates_and_snapshots
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::fixture_active_state_tracks_seeded_running_run
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::fixture_cancel_waiter_marks_running_run_cancelled
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::seed_twice_keeps_one_deterministic_fixture_set
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::
+```
+
+```powershell
 cargo check --manifest-path src-tauri/Cargo.toml --all-targets
+```
+
+```powershell
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 ```
 
