@@ -168,6 +168,8 @@ Private helpers stay private inside `read_model.rs`:
 
 Do not widen private helpers to `pub(crate)` unless a current non-test consumer already needs them. The implementation plan must include source guards that these helper names no longer appear in `store.rs` and that public facade re-exports exist in `store.rs`.
 
+The implementation plan must also mechanically verify that all `AnalysisRunListFilters` fields remain `pub(crate)` after the move. This is part of the facade contract because command handlers construct filters directly through `analysis::store`; relying only on `cargo check` would find the issue late but would not document the expected field-level surface.
+
 Expected production API changes outside `analysis::store`: none.
 
 Expected root re-export changes in `analysis/mod.rs`: none.
@@ -315,15 +317,41 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::
 
 Expected: PASS and not a green `0 tests` run. This guards adjacent store behavior while imports move.
 
-After editing and before committing, run these commands explicitly, with the same non-zero expectations:
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::
+```
+
+Expected: PASS and not a green `0 tests` run. This establishes the fixture consumer baseline for `fetch_run_row`, `map_run_detail`, `list_analysis_run_summaries`, and `AnalysisRunListFilters`.
+
+After editing and before committing, run each command separately, with the same non-zero expectations. Do not paste these as one PowerShell block unless the block explicitly checks `$LASTEXITCODE` after every native command and stops on failure.
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::list_analysis_run_summaries
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::map_run_summary
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::map_run_detail
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::resolve_run_scope_label
+```
+
+```powershell
 cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::
 ```
+
+Also run the fixture consumer behavior slice:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::
+```
+
+Expected: PASS and not a green `0 tests` run. This is required consumer behavior coverage, not just compile coverage.
 
 Also run consumer compile coverage:
 
@@ -331,7 +359,7 @@ Also run consumer compile coverage:
 cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 ```
 
-Expected: PASS. This covers `analysis/mod.rs`, `analysis/chat.rs`, `analysis/report/lifecycle.rs`, and fixture test consumers that keep using the `analysis::store` facade. Existing warnings outside touched files may remain; new warnings mentioning `src-tauri/src/analysis/store.rs` or `src-tauri/src/analysis/store/read_model.rs` are not acceptable.
+Expected: PASS. This covers `analysis/mod.rs`, `analysis/chat.rs`, `analysis/report/lifecycle.rs`, and fixture consumers at the import/type boundary. Existing warnings outside touched files may remain; new warnings mentioning `src-tauri/src/analysis/store.rs` or `src-tauri/src/analysis/store/read_model.rs` are not acceptable.
 
 Also run:
 
@@ -344,12 +372,23 @@ Expected: PASS with no diff output.
 The implementation plan must include source guards:
 
 ```powershell
-rg -n "^\s*(pub\([^)]*\)\s+|pub\s+)?(fn|async fn|struct) (resolve_run_scope_label_parts|resolve_run_row_scope_label|compute_snapshot_state|map_run_summary|map_run_detail|AnalysisRunListFilters|trimmed_filter|escaped_like_contains|parse_yyyy_mm_dd_midnight|parse_yyyy_mm_dd_day_end|push_like_predicate|push_search_term_predicate|list_analysis_run_summaries|fetch_run_row|resolve_run_scope_label)\b|^const ANALYSIS_RUN_LIST_SELECT|^const RUN_QUERY_FIELDS" src-tauri/src/analysis/store.rs
-rg -n "pub\(crate\) use self::read_model::|AnalysisRunListFilters|fetch_run_row|list_analysis_run_summaries|map_run_detail|map_run_summary|resolve_run_scope_label" src-tauri/src/analysis/store.rs
+rg -n "^\s*(pub\([^)]*\)\s+|pub\s+)?(fn|async fn|struct) (resolve_run_scope_label_parts|resolve_run_row_scope_label|compute_snapshot_state|map_run_summary|map_run_detail|AnalysisRunListFilters|trimmed_filter|escaped_like_contains|parse_yyyy_mm_dd_midnight|parse_yyyy_mm_dd_day_end|push_like_predicate|push_search_term_predicate|list_analysis_run_summaries|fetch_run_row|resolve_run_scope_label)\b|^\s*(pub\([^)]*\)\s+|pub\s+)?const (ANALYSIS_RUN_LIST_SELECT|RUN_QUERY_FIELDS)\b" src-tauri/src/analysis/store.rs
+rg -n "^pub\(crate\) use self::read_model::" src-tauri/src/analysis/store.rs
+$storeFacade = Get-Content -Raw -LiteralPath 'src-tauri/src/analysis/store.rs'
+$readModelReExport = [regex]::Match($storeFacade, "pub\(crate\) use self::read_model::\{(?<block>[\s\S]*?)\};")
+if (-not $readModelReExport.Success) {
+    throw "missing read_model facade re-export block"
+}
+foreach ($name in @('AnalysisRunListFilters', 'fetch_run_row', 'list_analysis_run_summaries', 'map_run_detail', 'map_run_summary', 'resolve_run_scope_label')) {
+    if ($readModelReExport.Groups['block'].Value -notmatch ("\b" + [regex]::Escape($name) + "\b")) {
+        throw "missing read_model facade re-export: $name"
+    }
+}
 rg -n "^pub\(crate\) (fn|async fn|struct) (map_run_summary|map_run_detail|AnalysisRunListFilters|list_analysis_run_summaries|fetch_run_row|resolve_run_scope_label)\b" src-tauri/src/analysis/store/read_model.rs
+rg -n "^\s+pub\(crate\) (source_id|source_group_id|project_id|limit|query|status|provider|model|template|date_from|date_to):" src-tauri/src/analysis/store/read_model.rs
 ```
 
-Expected: first command has no matches; `rg` exit code `1` is expected for this no-match guard. Second command confirms the facade re-export and moved public names exist in `store.rs` without requiring a one-line `pub use`. Third command prints all moved public read-model API items in `read_model.rs`.
+Expected: first command has no matches; `rg` exit code `1` is expected for this no-match guard. The second command confirms the facade re-export anchor exists, and the PowerShell loop confirms each moved public name is inside that re-export instead of merely appearing in tests. The third command prints all moved public read-model API items in `read_model.rs`. The fourth command prints all eleven `AnalysisRunListFilters` fields; fewer matches means the field-level facade contract changed.
 
 ## Commit Shape
 
