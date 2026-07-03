@@ -175,7 +175,7 @@ Expected: PASS and not a green `0 tests` run.
 - Consumes from `store.rs`: `AnalysisPromptTemplate`, `AnalysisSourceGroup`, `AnalysisSourceGroupMember`, `AnalysisSourceGroupRow`, builtin template constants/helpers, `Pool<Sqlite>`, `AppError`, and `AppResult`.
 - Produces through `analysis::store`: `ensure_builtin_report_template`, `ensure_sources_exist`, `fetch_prompt_template`, and `fetch_source_group`.
 
-- [ ] **Step 1: Add the private child module and facade re-export in `store.rs`**
+- [x] **Step 1: Add the private child module and facade re-export in `store.rs`**
 
 Add these lines near the top of `src-tauri/src/analysis/store.rs`, beside the existing `read_model` and `snapshot` module declarations and facade re-exports:
 
@@ -190,7 +190,7 @@ pub(crate) use self::setup::{
 
 Expected: `setup` is private. Do not write `pub mod setup;` or `pub(crate) mod setup;`.
 
-- [ ] **Step 2: Create `setup.rs` with the moved imports**
+- [x] **Step 2: Create `setup.rs` with the moved imports**
 
 Create `src-tauri/src/analysis/store/setup.rs` with this import header before moving the functions:
 
@@ -208,7 +208,7 @@ use crate::error::{AppError, AppResult};
 
 Expected: `setup.rs` owns source-group model imports and builtin template constants/helpers.
 
-- [ ] **Step 3: Move setup helpers into `setup.rs`**
+- [x] **Step 3: Move setup helpers into `setup.rs`**
 
 Move these exact items from `store.rs` into `setup.rs`, preserving bodies and order:
 
@@ -220,7 +220,7 @@ Move these exact items from `store.rs` into `setup.rs`, preserving bodies and or
 
 Implementation detail: the current contiguous move starts at `async fn builtin_report_template_exists(` and ends after the closing brace of `pub(crate) async fn fetch_source_group(pool: &Pool<Sqlite>, group_id: i64) -> AppResult<Option<AnalysisSourceGroup>>`. Leave `DuplicateRunLookup` and everything after it in `store.rs`.
 
-- [ ] **Step 4: Keep private helper private**
+- [x] **Step 4: Keep private helper private**
 
 Verify the moved builtin existence helper has no visibility modifier in `setup.rs`:
 
@@ -230,7 +230,7 @@ async fn builtin_report_template_exists(pool: &Pool<Sqlite>) -> AppResult<bool>
 
 Expected: only the four facade API items are `pub(crate)`.
 
-- [ ] **Step 5: Trim moved-only imports from `store.rs`**
+- [x] **Step 5: Trim moved-only imports from `store.rs`**
 
 Update the top of `src-tauri/src/analysis/store.rs` so moved-only imports are gone while remaining store and test code still compile. The production import set should no longer need `AnalysisSourceGroup`, `AnalysisSourceGroupMember`, `AnalysisSourceGroupRow`, `default_report_template_body`, `now_secs`, `DEFAULT_REPORT_TEMPLATE_NAME`, or `TEMPLATE_KIND_REPORT`.
 
@@ -249,7 +249,7 @@ use crate::error::{AppError, AppResult};
 
 Expected: `AnalysisPromptTemplate` remains in production imports for `AnalysisRunInsert`. Test-only imports can remain inside `#[cfg(test)] mod tests`.
 
-- [ ] **Step 6: Leave the inline store tests in `store.rs`**
+- [x] **Step 6: Leave the inline store tests in `store.rs`**
 
 Keep the existing test module in `src-tauri/src/analysis/store.rs`. Its `use super` block should continue importing the facade names from `store.rs`:
 
@@ -264,7 +264,7 @@ use super::{
 
 Expected: tests do not import from `super::setup` or call `setup::` directly. This keeps store tests exercising the facade contract.
 
-- [ ] **Step 7: Run formatter**
+- [x] **Step 7: Run formatter**
 
 Run:
 
