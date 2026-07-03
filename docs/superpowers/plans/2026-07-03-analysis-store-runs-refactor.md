@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** implemented historical execution record. Implemented by `09f917e9 refactor: extract analysis store run operations` and recorded complete by `75ec9ddc docs: complete analysis store runs plan`.
+
 **Goal:** Extract analysis store run write/status/delete logic from `src-tauri/src/analysis/store.rs` into private `src-tauri/src/analysis/store/runs.rs` without behavior or facade changes.
 
 **Architecture:** Keep `store.rs` as the public `analysis::store` facade and inline test owner. Move only `DuplicateRunLookup`, `find_active_duplicate_run`, `AnalysisRunInsert`, `insert_analysis_run`, `set_run_status`, and `delete_saved_run` into `store/runs.rs`, then re-export them from `store.rs` through `pub(crate) use self::runs::`. External consumers continue importing through `analysis::store`.

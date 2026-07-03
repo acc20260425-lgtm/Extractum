@@ -1,7 +1,7 @@
 # Analysis Store Runs Refactor Design
 
 **Date:** 2026-07-03
-**Status:** active spec; implementation not started as of 2026-07-03 because `src-tauri/src/analysis/store/runs.rs` does not exist.
+**Status:** implemented historical design. Implemented by `09f917e9 refactor: extract analysis store run operations` and recorded complete by `75ec9ddc docs: complete analysis store runs plan`.
 **Scope:** internal Rust refactor of analysis run duplicate lookup, run insertion, status mutation, and saved-run deletion logic.
 
 ## Goal
