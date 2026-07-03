@@ -85,7 +85,7 @@
   - `tests/mod.rs` declaring `active_runs`, `clear`, `harness`, `seed`, `snapshot`, and `summary`.
   - Same test functions under new paths such as `analysis::fixtures::tests::seed::seed_creates_safe_account_prompt_profile_sources_and_group`.
 
-- [ ] **Step 1: Capture pre-edit worktree status**
+- [x] **Step 1: Capture pre-edit worktree status**
 
 Run:
 
@@ -99,7 +99,7 @@ Expected:
 - `src-tauri/src/analysis/fixtures/tests/` does not exist, or the executor stops for an explicit baseline decision before editing.
 - Unrelated local files such as `.claude/settings.local.json` may exist, but must remain unstaged throughout this task.
 
-- [ ] **Step 2: Persist a pre-edit status snapshot**
+- [x] **Step 2: Persist a pre-edit status snapshot**
 
 Run:
 
@@ -115,7 +115,7 @@ Get-Content -LiteralPath $pointerPath
 
 Expected: PowerShell prints the pointer file path and then the saved status snapshot path. Later status comparison reads the path from the pointer file, so it works across separate shell sessions.
 
-- [ ] **Step 3: Inspect target-file baseline**
+- [x] **Step 3: Inspect target-file baseline**
 
 Run:
 
@@ -155,7 +155,7 @@ if (Test-Path -LiteralPath 'src-tauri/src/analysis/fixtures/tests') {
 
 Expected: no output if the directory does not exist. If it exists in any form, this command prints the baseline and stops.
 
-- [ ] **Step 4: Run baseline fixture tests and compile check**
+- [x] **Step 4: Run baseline fixture tests and compile check**
 
 Run:
 
@@ -175,7 +175,7 @@ Expected: pass. This establishes crate-wide compile coverage before the module-b
 
 If either baseline command fails, stop. Record the failure as pre-existing and do not edit production code in this task.
 
-- [ ] **Step 5: Create the nested test module declarations**
+- [x] **Step 5: Create the nested test module declarations**
 
 Create `src-tauri/src/analysis/fixtures/tests/mod.rs`:
 
@@ -199,7 +199,7 @@ src-tauri/src/analysis/fixtures/tests/snapshot.rs
 src-tauri/src/analysis/fixtures/tests/active_runs.rs
 ```
 
-- [ ] **Step 6: Move shared harness helpers and harness test**
+- [x] **Step 6: Move shared harness helpers and harness test**
 
 Move these items from the inline `mod tests` in `src-tauri/src/analysis/fixtures.rs` into `src-tauri/src/analysis/fixtures/tests/harness.rs`:
 
@@ -239,7 +239,7 @@ pub(super) async fn count(pool: &Pool<Sqlite>, sql: &str) -> i64 {
 
 Keep `fixture_test_pool_has_required_tables` below those helpers with its current body. It should call `fixture_pool()` and the local `count` helper.
 
-- [ ] **Step 7: Move summary serialization test**
+- [x] **Step 7: Move summary serialization test**
 
 Move `summary_serializes_with_camel_case_keys` into `src-tauri/src/analysis/fixtures/tests/summary.rs`.
 
@@ -251,7 +251,7 @@ use super::super::AnalysisRedesignFixtureSummary;
 
 Keep the test body unchanged.
 
-- [ ] **Step 8: Move clear fixture tests**
+- [x] **Step 8: Move clear fixture tests**
 
 Move these items into `src-tauri/src/analysis/fixtures/tests/clear.rs`:
 
@@ -276,7 +276,7 @@ async fn insert_minimal_clear_fixture(pool: &Pool<Sqlite>) {
 
 Keep the moved SQL and assertions unchanged.
 
-- [ ] **Step 9: Move seed behavior tests**
+- [x] **Step 9: Move seed behavior tests**
 
 Move these tests into `src-tauri/src/analysis/fixtures/tests/seed.rs`:
 
@@ -300,7 +300,7 @@ use super::super::{
 
 Keep direct crate-qualified calls such as `crate::youtube::detail::get_youtube_video_detail_from_pool`, `crate::sources::identity_repair::repair_source_identity`, and `crate::compression::decompress_text` as they are.
 
-- [ ] **Step 10: Move snapshot/read-model fixture tests**
+- [x] **Step 10: Move snapshot/read-model fixture tests**
 
 Move these tests into `src-tauri/src/analysis/fixtures/tests/snapshot.rs`:
 
@@ -322,7 +322,7 @@ use super::super::{
 
 Keep the store read-model calls through the `crate::analysis::store` facade as they are.
 
-- [ ] **Step 11: Move active-run tests**
+- [x] **Step 11: Move active-run tests**
 
 Move these tests into `src-tauri/src/analysis/fixtures/tests/active_runs.rs`:
 
@@ -348,7 +348,7 @@ let state = AnalysisState::new();
 
 Keep cancellation, status, and timeout assertions unchanged.
 
-- [ ] **Step 12: Replace the inline test module in `fixtures.rs`**
+- [x] **Step 12: Replace the inline test module in `fixtures.rs`**
 
 In `src-tauri/src/analysis/fixtures.rs`, replace the entire inline test module, starting at `#[cfg(test)] mod tests {` and ending at that module's closing brace, with:
 
@@ -359,7 +359,7 @@ mod tests;
 
 Do not change production code above that point. In particular, keep production helper functions and fixture constants private.
 
-- [ ] **Step 13: Run rustfmt**
+- [x] **Step 13: Run rustfmt**
 
 Run:
 
@@ -377,7 +377,7 @@ git status --short --untracked-files=all
 
 Expected: changed files are limited to implementation-owned files plus pre-existing unrelated files. If rustfmt changes unrelated Rust files, inspect the drift and resolve it before continuing.
 
-- [ ] **Step 14: Run source guards for `fixtures.rs` wiring and production visibility**
+- [x] **Step 14: Run source guards for `fixtures.rs` wiring and production visibility**
 
 Run:
 
@@ -467,7 +467,7 @@ foreach ($constName in @(
 
 Expected: no output and no throw.
 
-- [ ] **Step 15: Run source guards for test module shape**
+- [x] **Step 15: Run source guards for test module shape**
 
 Run:
 
@@ -544,7 +544,7 @@ if ($globImportMatches.Count -ne 0) {
 
 Expected: no output and no throw.
 
-- [ ] **Step 16: Run source guards for required tests and assertion markers**
+- [x] **Step 16: Run source guards for required tests and assertion markers**
 
 Run:
 
@@ -614,7 +614,7 @@ foreach ($entry in $requiredMarkers.GetEnumerator()) {
 
 Expected: every required marker is printed once or more and no throw occurs.
 
-- [ ] **Step 17: Run focused fixture module tests**
+- [x] **Step 17: Run focused fixture module tests**
 
 Run each command separately:
 
@@ -654,7 +654,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::activ
 
 Expected: pass in the default dev test profile and not a green `0 tests` run.
 
-- [ ] **Step 18: Verify Cargo test inventory**
+- [x] **Step 18: Verify Cargo test inventory**
 
 Run:
 
@@ -691,7 +691,7 @@ foreach ($testPath in @(
 
 Expected: every moved test path appears in Cargo's test inventory.
 
-- [ ] **Step 19: Run full fixture tests, compile, and fmt check**
+- [x] **Step 19: Run full fixture tests, compile, and fmt check**
 
 Run:
 
@@ -717,7 +717,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
 Expected: pass. If it fails, run `cargo fmt --manifest-path src-tauri/Cargo.toml`, inspect `git status --short --untracked-files=all`, resolve unrelated drift, and rerun `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`.
 
-- [ ] **Step 20: Inspect final worktree diff before staging**
+- [x] **Step 20: Inspect final worktree diff before staging**
 
 Run:
 
@@ -752,7 +752,7 @@ git status --short --untracked-files=all
 
 Expected: only implementation-owned files plus pre-existing unrelated files. `.claude/settings.local.json`, if present, remains untracked and unstaged.
 
-- [ ] **Step 21: Compare final status against pre-edit snapshot**
+- [x] **Step 21: Compare final status against pre-edit snapshot**
 
 Run:
 
@@ -766,7 +766,7 @@ Compare-Object (Get-Content -LiteralPath $preEditStatusPath) (Get-Content -Liter
 
 Expected: differences are only the intended implementation-owned files. Pre-existing unrelated entries must not be modified or staged.
 
-- [ ] **Step 22: Stage implementation files**
+- [x] **Step 22: Stage implementation files**
 
 Run:
 
@@ -776,7 +776,7 @@ git add -- src-tauri/src/analysis/fixtures.rs src-tauri/src/analysis/fixtures/te
 
 Expected: only the fixture test split files are staged.
 
-- [ ] **Step 23: Verify staged diff**
+- [x] **Step 23: Verify staged diff**
 
 Run:
 
@@ -813,7 +813,7 @@ git status --short --untracked-files=all
 
 Expected: implementation files are staged. Pre-existing unrelated files remain unstaged.
 
-- [ ] **Step 24: Commit the Rust refactor**
+- [x] **Step 24: Commit the Rust refactor**
 
 Run:
 
@@ -823,7 +823,7 @@ git commit -m "refactor: split analysis fixture tests"
 
 Expected: commit succeeds with only the staged fixture test split files.
 
-- [ ] **Step 25: Record post-commit status**
+- [x] **Step 25: Record post-commit status**
 
 Run:
 
@@ -837,23 +837,23 @@ Expected: no dirty implementation files remain. Pre-existing unrelated files may
 
 Before reporting the implementation complete, confirm the execution log includes:
 
-- [ ] pre-edit `git status --short --untracked-files=all` captured;
-- [ ] target-file baseline proved `fixtures.rs` was clean and `fixtures/tests/` did not contain pre-existing tracked or untracked work without an explicit baseline decision;
-- [ ] baseline `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::` passed before editing and was not a green `0 tests` run;
-- [ ] baseline `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed before editing;
-- [ ] source guards proved `fixtures.rs` contains exactly one adjacent `#[cfg(test)]` / `mod tests;` pair;
-- [ ] source guards proved `fixtures.rs` no longer contains inline test body helpers or `#[tokio::test]` attributes;
-- [ ] source guards proved production helper and fixture constant visibility was not widened;
-- [ ] source guards proved all required test files exist as files, not directories;
-- [ ] source guards proved `tests/mod.rs` declares only modules and no test/helper logic;
-- [ ] source guards proved tests do not import the private production seed module directly;
-- [ ] source guards proved fixture test modules do not use parent or crate glob imports;
-- [ ] source guards proved every required moved test has `#[tokio::test]` immediately before its `async fn`;
-- [ ] source guards proved assertion markers moved to the expected thematic modules;
-- [ ] every focused fixture module test command passed and was not a green `0 tests` run;
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests:: -- --list` contained every expected moved test path;
-- [ ] full `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::` passed and was not a green `0 tests` run;
-- [ ] `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed;
-- [ ] `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` passed;
-- [ ] staged diff contained only the expected fixture test split files;
-- [ ] post-commit `git status --short --untracked-files=all` has no dirty implementation files.
+- [x] pre-edit `git status --short --untracked-files=all` captured;
+- [x] target-file baseline proved `fixtures.rs` was clean and `fixtures/tests/` did not contain pre-existing tracked or untracked work without an explicit baseline decision;
+- [x] baseline `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::` passed before editing and was not a green `0 tests` run;
+- [x] baseline `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed before editing;
+- [x] source guards proved `fixtures.rs` contains exactly one adjacent `#[cfg(test)]` / `mod tests;` pair;
+- [x] source guards proved `fixtures.rs` no longer contains inline test body helpers or `#[tokio::test]` attributes;
+- [x] source guards proved production helper and fixture constant visibility was not widened;
+- [x] source guards proved all required test files exist as files, not directories;
+- [x] source guards proved `tests/mod.rs` declares only modules and no test/helper logic;
+- [x] source guards proved tests do not import the private production seed module directly;
+- [x] source guards proved fixture test modules do not use parent or crate glob imports;
+- [x] source guards proved every required moved test has `#[tokio::test]` immediately before its `async fn`;
+- [x] source guards proved assertion markers moved to the expected thematic modules;
+- [x] every focused fixture module test command passed and was not a green `0 tests` run;
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests:: -- --list` contained every expected moved test path;
+- [x] full `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::` passed and was not a green `0 tests` run;
+- [x] `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed;
+- [x] `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` passed;
+- [x] staged diff contained only the expected fixture test split files;
+- [x] post-commit `git status --short --untracked-files=all` has no dirty implementation files.
