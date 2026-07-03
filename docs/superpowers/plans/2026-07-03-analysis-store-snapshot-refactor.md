@@ -1,5 +1,7 @@
 # Analysis Store Snapshot Refactor Implementation Plan
 
+**Status:** implemented historical execution record. Rust extraction landed in `b8368f69 refactor: extract analysis store snapshot logic`, verification landed in `25bd92e8 chore: verify analysis store snapshot extraction`, and this checklist was marked complete in `5acaed82 docs: complete analysis store snapshot plan`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Extract analysis snapshot capture, persistence, failure marking, reload, validation, and sanitization logic from `src-tauri/src/analysis/store.rs` into `src-tauri/src/analysis/store/snapshot.rs` without changing behavior or external call paths.

@@ -1,7 +1,7 @@
 # Analysis Store Snapshot Refactor Design
 
 **Date:** 2026-07-03
-**Status:** active spec; implementation not started as of 2026-07-03 because `src-tauri/src/analysis/store/snapshot.rs` does not exist
+**Status:** implemented historical design. Implemented by `b8368f69 refactor: extract analysis store snapshot logic`, verified by `25bd92e8 chore: verify analysis store snapshot extraction`, and recorded complete by `5acaed82 docs: complete analysis store snapshot plan`.
 **Scope:** internal Rust refactor of analysis snapshot capture, persistence, reload, failure marking, and error sanitization logic.
 
 ## Goal
@@ -10,7 +10,7 @@ Reduce the responsibility of `src-tauri/src/analysis/store.rs` by extracting ana
 
 This is the next conservative backend slice after the read-model extraction. It intentionally avoids moving prompt-template storage, source existence checks, source-group loading, duplicate-run lookup, run insertion, status mutation, saved-run deletion, read-model queries, or store tests.
 
-## Current Shape
+## Original Shape
 
 `src-tauri/src/analysis/store.rs` currently owns:
 
