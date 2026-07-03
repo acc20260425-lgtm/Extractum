@@ -583,7 +583,7 @@ Expected: PASS with no diff output.
 - Consumes: verified extraction from Task 3.
 - Produces: one implementation commit with only the expected Rust files.
 
-- [ ] **Step 1: Inspect implementation diff**
+- [x] **Step 1: Inspect implementation diff**
 
 Run:
 
@@ -593,7 +593,7 @@ git diff -- src-tauri/src/analysis/store.rs src-tauri/src/analysis/store/snapsho
 
 Expected: `store.rs` loses only the moved snapshot cluster and moved-only imports, gains `mod snapshot;` plus the facade re-export, and `snapshot.rs` contains the moved code.
 
-- [ ] **Step 2: Check for whitespace errors before staging**
+- [x] **Step 2: Check for whitespace errors before staging**
 
 Run:
 
@@ -603,7 +603,7 @@ git diff --check -- src-tauri/src/analysis/store.rs src-tauri/src/analysis/store
 
 Expected: no output and exit code `0`.
 
-- [ ] **Step 3: Inspect status before staging**
+- [x] **Step 3: Inspect status before staging**
 
 Run:
 
@@ -613,7 +613,7 @@ git status --short --untracked-files=all
 
 Expected: only expected target-file changes plus any recorded pre-existing unrelated files. Do not stage unrelated files.
 
-- [ ] **Step 4: Stage only implementation-owned files**
+- [x] **Step 4: Stage only implementation-owned files**
 
 Run:
 
@@ -623,7 +623,7 @@ git add -- src-tauri/src/analysis/store.rs src-tauri/src/analysis/store/snapshot
 
 Expected: only the two Rust files are staged.
 
-- [ ] **Step 5: Verify staged stat**
+- [x] **Step 5: Verify staged stat**
 
 Run:
 
@@ -633,7 +633,7 @@ git diff --cached --stat
 
 Expected: cached stat lists only `src-tauri/src/analysis/store.rs` and `src-tauri/src/analysis/store/snapshot.rs`.
 
-- [ ] **Step 6: Verify staged whitespace**
+- [x] **Step 6: Verify staged whitespace**
 
 Run:
 
@@ -643,7 +643,7 @@ git diff --cached --check
 
 Expected: no output and exit code `0`.
 
-- [ ] **Step 7: Verify unrelated files remain unstaged**
+- [x] **Step 7: Verify unrelated files remain unstaged**
 
 Run:
 
@@ -653,7 +653,7 @@ git status --short --untracked-files=all
 
 Expected: unrelated files remain unstaged.
 
-- [ ] **Step 8: Commit the refactor**
+- [x] **Step 8: Commit the refactor**
 
 Run:
 
@@ -663,7 +663,7 @@ git commit -m "refactor: extract analysis store snapshot logic"
 
 Expected: commit succeeds with exactly the staged Rust extraction.
 
-- [ ] **Step 9: Compare final status to the pre-edit baseline**
+- [x] **Step 9: Compare final status to the pre-edit baseline**
 
 Run:
 
@@ -689,7 +689,7 @@ Get-Content -Raw -LiteralPath $finalStatusPath
 
 Expected: no new unintended files or diffs remain after the commit. Any output from `Compare-Object` must be explained by intentional commit effects or pre-existing unrelated files.
 
-- [ ] **Step 10: Record final commit**
+- [x] **Step 10: Record final commit**
 
 Run:
 
