@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildSourceGridRows,
   buildSourceRow,
+  compareMaterialsLabels,
+  compareNullableTimestamps,
+  compareRuStrings,
   sourceGridColumns,
   sourceSyncStatusLabel,
 } from "./research-projects-source-row";
@@ -105,5 +108,36 @@ describe("buildSourceGridRows", () => {
     expect(rows.map((row) => row.id)).toEqual(["10", "11"]);
     expect(rows[0].title).toBe("ФинБеларусь");
     expect(rows[0].sourceId).toBe(10);
+  });
+});
+
+describe("sort comparators", () => {
+  it("compareRuStrings orders Cyrillic case-insensitively", () => {
+    expect(compareRuStrings("аист", "Бобр")).toBeLessThan(0);
+    expect(compareRuStrings("Яблоко", "аист")).toBeGreaterThan(0);
+    expect(compareRuStrings("ФИН", "фин")).toBe(0);
+  });
+
+  it("compareMaterialsLabels compares formatted numbers numerically", () => {
+    expect(compareMaterialsLabels("4 317", "339")).toBeGreaterThan(0);
+    expect(compareMaterialsLabels("76 070", "4 317")).toBeGreaterThan(0);
+    expect(compareMaterialsLabels("10", "10")).toBe(0);
+  });
+
+  it("compareNullableTimestamps treats null as the oldest value", () => {
+    expect(compareNullableTimestamps(null, 100)).toBeLessThan(0);
+    expect(compareNullableTimestamps(100, null)).toBeGreaterThan(0);
+    expect(compareNullableTimestamps(null, null)).toBe(0);
+    expect(compareNullableTimestamps(200, 100)).toBeGreaterThan(0);
+  });
+
+  it("sourceGridColumns enables sorting on every data column", () => {
+    const columns = sourceGridColumns();
+    const byId = new Map(columns.map((c) => [String(c.id), c]));
+    expect(byId.get("title")?.sort).toBe(compareRuStrings);
+    expect(byId.get("typeLabel")?.sort).toBe(true);
+    expect(byId.get("materialsLabel")?.sort).toBe(compareMaterialsLabels);
+    expect(byId.get("lastSyncedAt")?.sort).toBe(compareNullableTimestamps);
+    expect(byId.get("statusLabel")?.sort).toBe(true);
   });
 });
