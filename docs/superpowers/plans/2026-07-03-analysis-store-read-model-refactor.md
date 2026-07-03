@@ -327,7 +327,7 @@ Expected: formatting completes. If rustfmt touches unrelated Rust files, inspect
 - Consumes: extracted facade from Task 2.
 - Produces: proof that moved helpers left `store.rs`, facade exports are intact, fields remain accessible, and behavior-focused tests pass.
 
-- [ ] **Step 1: Confirm moved definitions no longer live in `store.rs`**
+- [x] **Step 1: Confirm moved definitions no longer live in `store.rs`**
 
 Run:
 
@@ -337,7 +337,7 @@ rg -n "^\s*(pub\([^)]*\)\s+|pub\s+)?(fn|async fn|struct) (resolve_run_scope_labe
 
 Expected: no matches. `rg` exit code `1` is expected for this no-match guard.
 
-- [ ] **Step 2: Confirm `store.rs` has a private module declaration**
+- [x] **Step 2: Confirm `store.rs` has a private module declaration**
 
 Run:
 
@@ -348,7 +348,7 @@ rg -n "^pub.*mod read_model" src-tauri/src/analysis/store.rs
 
 Expected: first command prints exactly one match. Second command has no matches; `rg` exit code `1` is expected.
 
-- [ ] **Step 3: Confirm facade re-export exists and contains every public read-model name**
+- [x] **Step 3: Confirm facade re-export exists and contains every public read-model name**
 
 Run:
 
@@ -368,7 +368,7 @@ foreach ($name in @('AnalysisRunListFilters', 'fetch_run_row', 'list_analysis_ru
 
 Expected: the `rg` command prints the facade anchor, and the loop completes without throwing.
 
-- [ ] **Step 4: Confirm moved public API exists in `read_model.rs`**
+- [x] **Step 4: Confirm moved public API exists in `read_model.rs`**
 
 Run:
 
@@ -378,7 +378,7 @@ rg -n "^pub\(crate\) (fn|async fn|struct) (map_run_summary|map_run_detail|Analys
 
 Expected: six matches, one for each public read-model API item.
 
-- [ ] **Step 5: Confirm `AnalysisRunListFilters` fields remain `pub(crate)`**
+- [x] **Step 5: Confirm `AnalysisRunListFilters` fields remain `pub(crate)`**
 
 Run:
 
@@ -388,7 +388,7 @@ rg -n "^\s+pub\(crate\) (source_id|source_group_id|project_id|limit|query|status
 
 Expected: eleven matches, one for each filter field.
 
-- [ ] **Step 6: Confirm read-model literals and SQL markers stayed in `read_model.rs`**
+- [x] **Step 6: Confirm read-model literals and SQL markers stayed in `read_model.rs`**
 
 Run:
 
@@ -398,7 +398,7 @@ rg -n '"Pass only one of source_id, source_group_id, or project_id"|queued_runni
 
 Expected: all read-model filter/query behavior markers are present in `read_model.rs`.
 
-- [ ] **Step 7: Confirm tests still exercise the facade, not the private module**
+- [x] **Step 7: Confirm tests still exercise the facade, not the private module**
 
 Run:
 
@@ -411,7 +411,7 @@ if ($storeTests -match "super::read_model|read_model::") {
 
 Expected: command completes without throwing. Tests should keep using the `store.rs` facade imports from `super`.
 
-- [ ] **Step 8: Run focused store list test**
+- [x] **Step 8: Run focused store list test**
 
 Run:
 
@@ -421,7 +421,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::list_ana
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 9: Run summary mapping test**
+- [x] **Step 9: Run summary mapping test**
 
 Run:
 
@@ -431,7 +431,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::map_run_
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 10: Run detail mapping test**
+- [x] **Step 10: Run detail mapping test**
 
 Run:
 
@@ -441,7 +441,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::map_run_
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 11: Run scope-label test**
+- [x] **Step 11: Run scope-label test**
 
 Run:
 
@@ -451,7 +451,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::resolve_
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 12: Run full store test slice**
+- [x] **Step 12: Run full store test slice**
 
 Run:
 
@@ -461,7 +461,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 13: Run fixture consumer behavior slice**
+- [x] **Step 13: Run fixture consumer behavior slice**
 
 Run:
 
@@ -471,7 +471,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::
 
 Expected: PASS and not a green `0 tests` run.
 
-- [ ] **Step 14: Run all-target compile coverage**
+- [x] **Step 14: Run all-target compile coverage**
 
 Run:
 
@@ -481,7 +481,7 @@ cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 
 Expected: PASS. Existing warnings outside touched files may remain; new warnings mentioning `src-tauri/src/analysis/store.rs` or `src-tauri/src/analysis/store/read_model.rs` are not acceptable.
 
-- [ ] **Step 15: Run format check**
+- [x] **Step 15: Run format check**
 
 Run:
 

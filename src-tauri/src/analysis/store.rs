@@ -6,9 +6,8 @@ use super::models::{
     CorpusMessage, StoredRunSnapshotRow,
 };
 use super::{
-    default_report_template_body, now_secs, ANALYSIS_RUN_TYPE_REPORT,
-    ANALYSIS_SCOPE_TYPE_SOURCE_GROUP, ANALYSIS_STATUS_QUEUED, ANALYSIS_STATUS_RUNNING,
-    DEFAULT_REPORT_TEMPLATE_NAME, TEMPLATE_KIND_REPORT,
+    default_report_template_body, now_secs, ANALYSIS_RUN_TYPE_REPORT, ANALYSIS_STATUS_QUEUED,
+    ANALYSIS_STATUS_RUNNING, DEFAULT_REPORT_TEMPLATE_NAME, TEMPLATE_KIND_REPORT,
 };
 use crate::compression::{compress_text, decompress_text};
 use crate::error::{internal_error, AppError, AppResult};
