@@ -64,7 +64,7 @@
   - `pub(crate) async fn set_run_status(pool: &Pool<Sqlite>, run_id: i64, status: &str, result_markdown: Option<&str>, trace_data_zstd: Option<&[u8]>, error: Option<&str>, completed_at: Option<i64>) -> AppResult<()>`
   - `pub(crate) async fn delete_saved_run(pool: &Pool<Sqlite>, run_id: i64) -> AppResult<()>`
 
-- [ ] **Step 1: Capture pre-edit worktree status**
+- [x] **Step 1: Capture pre-edit worktree status**
 
 Run:
 
@@ -78,7 +78,7 @@ Expected:
 - `src-tauri/src/analysis/store/runs.rs` does not exist, or it is not modified/staged/untracked.
 - Unrelated local files such as `.claude/settings.local.json` may exist, but must remain unstaged throughout this task.
 
-- [ ] **Step 2: Persist a pre-edit status snapshot**
+- [x] **Step 2: Persist a pre-edit status snapshot**
 
 Run:
 
@@ -91,7 +91,7 @@ $preEditStatusPath
 
 Expected: PowerShell prints a temp-file path such as `C:\Users\<you>\AppData\Local\Temp\analysis-store-runs-refactor-20260703120000-status-before.txt`. Save that path in the execution notes; later status comparison uses the exact printed path.
 
-- [ ] **Step 3: Inspect target-file baseline**
+- [x] **Step 3: Inspect target-file baseline**
 
 Run:
 
@@ -122,7 +122,7 @@ if (Test-Path -LiteralPath 'src-tauri/src/analysis/store/runs.rs') {
 
 Expected: no output if `runs.rs` does not exist. If it exists or shows any status, stop and make a separate baseline commit before continuing.
 
-- [ ] **Step 4: Run focused baseline tests**
+- [x] **Step 4: Run focused baseline tests**
 
 Run each command separately:
 
@@ -158,7 +158,7 @@ Expected: pass and not a green `0 tests` run.
 
 If any baseline test fails, stop. Record the failure as pre-existing and do not edit production code in this task.
 
-- [ ] **Step 5: Create `store/runs.rs` with the moved production code**
+- [x] **Step 5: Create `store/runs.rs` with the moved production code**
 
 Create `src-tauri/src/analysis/store/runs.rs` with this content copied from the current top production block of `store.rs`:
 
@@ -375,7 +375,7 @@ pub(crate) async fn delete_saved_run(pool: &Pool<Sqlite>, run_id: i64) -> AppRes
 
 Keep this file free of test code in this slice.
 
-- [ ] **Step 6: Update `store.rs` module declarations and facade**
+- [x] **Step 6: Update `store.rs` module declarations and facade**
 
 At the top of `src-tauri/src/analysis/store.rs`, replace the current production imports and module block:
 
@@ -412,7 +412,7 @@ pub(crate) use self::runs::{
 
 Do not make the module declaration public.
 
-- [ ] **Step 7: Remove moved definitions from `store.rs`**
+- [x] **Step 7: Remove moved definitions from `store.rs`**
 
 In `src-tauri/src/analysis/store.rs`, delete the production block that starts at:
 
@@ -442,7 +442,7 @@ mod tests {
 
 Do not edit the inline test bodies in this step.
 
-- [ ] **Step 8: Run rustfmt**
+- [x] **Step 8: Run rustfmt**
 
 Run:
 
@@ -452,7 +452,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml
 
 Expected: command exits 0. If unrelated Rust files changed, inspect them before proceeding and resolve drift before staging.
 
-- [ ] **Step 9: Run focused post-change store tests**
+- [x] **Step 9: Run focused post-change store tests**
 
 Run each command separately:
 
@@ -486,7 +486,7 @@ cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::delete_s
 
 Expected: pass and not a green `0 tests` run.
 
-- [ ] **Step 10: Run source guards**
+- [x] **Step 10: Run source guards**
 
 Private module declaration:
 
@@ -631,7 +631,7 @@ rg -n -F "Analysis run {run_id} not found" src-tauri/src/analysis/store/runs.rs
 
 Expected: one match.
 
-- [ ] **Step 11: Run full post-change verification**
+- [x] **Step 11: Run full post-change verification**
 
 Run each command separately:
 
@@ -665,7 +665,7 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
 Expected: pass. If it fails, run `cargo fmt --manifest-path src-tauri/Cargo.toml`, inspect `git status --short --untracked-files=all`, resolve unrelated drift, and then rerun `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`.
 
-- [ ] **Step 12: Compare final worktree to the pre-edit status snapshot**
+- [x] **Step 12: Compare final worktree to the pre-edit status snapshot**
 
 Run, replacing `<PRE_EDIT_STATUS_PATH>` with the path printed in Step 2:
 
@@ -684,7 +684,7 @@ Expected: differences are limited to intended changes in:
 
 Unrelated pre-existing files such as `.claude/settings.local.json` may appear in both before and after and must not be staged.
 
-- [ ] **Step 13: Inspect implementation diff**
+- [x] **Step 13: Inspect implementation diff**
 
 Run:
 
@@ -708,7 +708,7 @@ git diff --check -- src-tauri/src/analysis/store.rs src-tauri/src/analysis/store
 
 Expected: no whitespace errors.
 
-- [ ] **Step 14: Stage implementation files only**
+- [x] **Step 14: Stage implementation files only**
 
 Run:
 
@@ -739,7 +739,7 @@ git diff --cached --check
 
 Expected: no whitespace errors.
 
-- [ ] **Step 15: Commit the refactor**
+- [x] **Step 15: Commit the refactor**
 
 Run:
 
@@ -752,7 +752,7 @@ Expected: commit succeeds with only:
 - `src-tauri/src/analysis/store.rs`
 - `src-tauri/src/analysis/store/runs.rs`
 
-- [ ] **Step 16: Record post-commit status**
+- [x] **Step 16: Record post-commit status**
 
 Run:
 
@@ -768,16 +768,16 @@ Expected: no new implementation files remain unstaged. Pre-existing unrelated fi
 
 Before reporting the implementation complete, confirm the execution log includes:
 
-- [ ] focused baseline store run tests passed before editing and were not green `0 tests` runs;
-- [ ] focused post-change store run tests passed and were not green `0 tests` runs;
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::` passed and was not a green `0 tests` run;
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::` passed and was not a green `0 tests` run;
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::` passed in the default dev profile and was not a green `0 tests` run;
-- [ ] `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed;
-- [ ] `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` passed after any formatting fixes;
-- [ ] source guards proved `runs` is private and the moved production definitions are absent from `store.rs`;
-- [ ] source guards proved moved definitions, field visibility, SQL markers, status constants, and delete error string exist in `runs.rs`;
-- [ ] store tests still use the parent facade, not `super::runs`;
-- [ ] production import cleanup guard found no moved-only imports in `store.rs`;
-- [ ] staged files were limited to `src-tauri/src/analysis/store.rs` and `src-tauri/src/analysis/store/runs.rs`;
-- [ ] post-commit `git status --short --untracked-files=all` has no dirty refactor files.
+- [x] focused baseline store run tests passed before editing and were not green `0 tests` runs;
+- [x] focused post-change store run tests passed and were not green `0 tests` runs;
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml analysis::store::tests::` passed and was not a green `0 tests` run;
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml analysis::report::tests::` passed and was not a green `0 tests` run;
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml analysis::fixtures::tests::` passed in the default dev profile and was not a green `0 tests` run;
+- [x] `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` passed;
+- [x] `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` passed after any formatting fixes;
+- [x] source guards proved `runs` is private and the moved production definitions are absent from `store.rs`;
+- [x] source guards proved moved definitions, field visibility, SQL markers, status constants, and delete error string exist in `runs.rs`;
+- [x] store tests still use the parent facade, not `super::runs`;
+- [x] production import cleanup guard found no moved-only imports in `store.rs`;
+- [x] staged files were limited to `src-tauri/src/analysis/store.rs` and `src-tauri/src/analysis/store/runs.rs`;
+- [x] post-commit `git status --short --untracked-files=all` has no dirty refactor files.
