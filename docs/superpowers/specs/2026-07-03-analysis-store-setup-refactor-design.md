@@ -1,7 +1,7 @@
 # Analysis Store Setup Refactor Design
 
 **Date:** 2026-07-03
-**Status:** active spec; implementation not started as of 2026-07-03 because `src-tauri/src/analysis/store/setup.rs` does not exist
+**Status:** implemented historical design. Implemented by `c7013d7d refactor: extract analysis store setup logic`, verified by `a4277088 chore: verify analysis store setup extraction`, and recorded complete by `210d5bf3 docs: complete analysis store setup plan`.
 **Scope:** internal Rust refactor of analysis store prompt-template setup, source existence validation, prompt-template fetch, and source-group fetch logic.
 
 ## Goal
@@ -10,7 +10,7 @@ Reduce the responsibility of `src-tauri/src/analysis/store.rs` by extracting ana
 
 This is the next conservative backend slice after the read-model and snapshot extractions. It intentionally avoids moving duplicate-run lookup, analysis run insertion, run status mutation, saved-run deletion, read-model logic, snapshot logic, or store tests.
 
-## Current Shape
+## Original Shape
 
 `src-tauri/src/analysis/store.rs` currently owns:
 

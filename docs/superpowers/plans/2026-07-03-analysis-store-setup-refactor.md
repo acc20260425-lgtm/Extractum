@@ -1,5 +1,7 @@
 # Analysis Store Setup Refactor Implementation Plan
 
+**Status:** implemented historical execution record. Rust extraction landed in `c7013d7d refactor: extract analysis store setup logic`, verification landed in `a4277088 chore: verify analysis store setup extraction`, and this checklist was marked complete in `210d5bf3 docs: complete analysis store setup plan`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Extract analysis store setup and lookup helpers from `src-tauri/src/analysis/store.rs` into `src-tauri/src/analysis/store/setup.rs` without changing behavior or external call paths.
