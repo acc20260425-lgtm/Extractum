@@ -70,7 +70,7 @@ describe("ProjectToolbar", () => {
     expect(source).toContain("Параметры запуска");
   });
 
-  it("highlights open triggers via bits-ui data-state", () => {
+  it("highlights open triggers via the popover data-state attribute", () => {
     expect(source).toContain('[data-state="open"]');
   });
 });

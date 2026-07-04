@@ -75,6 +75,7 @@
   // the selector is empty and the run falls back to the profile default model.
   let modelOptions = $state<ComboOption[]>([]);
   let selectedPeriodId = $state<string | undefined>("all");
+  let customPeriod = $state<PeriodPreset | null>(null);
   let selectedPromptValue = $state<string | undefined>(undefined);
   let selectedModelValue = $state<string | undefined>(undefined);
 
@@ -131,7 +132,9 @@
     buildPeriodPresets(railState.dataRange ?? { from: null, to: null }, now),
   );
   let selectedPeriod = $derived<PeriodPreset | undefined>(
-    periodPresets.find((preset) => preset.id === selectedPeriodId),
+    selectedPeriodId === "custom"
+      ? (customPeriod ?? undefined)
+      : periodPresets.find((preset) => preset.id === selectedPeriodId),
   );
   let selectedPromptLabel = $derived(
     promptOptions.find((option) => option.value === selectedPromptValue)?.label ?? "—",
@@ -178,6 +181,7 @@
     selectedSourceIds = [];
     activeSourceId = null;
     selectedPeriodId = "all";
+    customPeriod = null;
     filters = emptySourceFilters();
     filtersOpen = false;
     activeSection = "sources";
@@ -422,7 +426,15 @@
           title: selectedProject.name,
           periodPresets,
           selectedPeriodId,
-          onSelectPeriod: (preset) => (selectedPeriodId = preset.id),
+          selectedPeriodLabel: selectedPeriod?.label,
+          dataRange:
+            railState.dataRange?.from != null && railState.dataRange?.to != null
+              ? { from: railState.dataRange.from, to: railState.dataRange.to }
+              : null,
+          onSelectPeriod: (preset) => {
+            if (preset.id === "custom") customPeriod = preset;
+            selectedPeriodId = preset.id;
+          },
           promptOptions,
           selectedPromptValue,
           onSelectPrompt: (option) => (selectedPromptValue = option.value),

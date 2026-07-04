@@ -305,7 +305,7 @@
   }
 
   /* Общий вид триггеров (scoped override глобального button-правила) +
-     open-состояние по bits-ui data-state. */
+     open-состояние по data-state поповер-триггера. */
   .project-toolbar :global(.tb-trigger) {
     height: 32px;
     display: flex;
