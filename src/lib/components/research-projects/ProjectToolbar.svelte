@@ -51,13 +51,16 @@
     <ComboSelect
       options={promptOptions}
       selectedValue={selectedPromptValue}
-      triggerPrefix="Промпт"
+      placeholder="Поиск шаблона…"
+      triggerFallback="Промпт"
       onSelect={onSelectPrompt}
     />
     <ComboSelect
       options={modelOptions}
       selectedValue={selectedModelValue}
-      triggerPrefix="Модель"
+      placeholder="Поиск модели…"
+      triggerIcon="dot"
+      triggerFallback="Модель"
       onSelect={onSelectModel}
     />
   </div>

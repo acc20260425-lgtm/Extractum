@@ -1,25 +1,39 @@
-import { describe, expect, it } from "vitest";
-import rawSource from "./ComboSelect.svelte?raw";
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
+import ComboSelect, { type ComboOption } from "./ComboSelect.svelte";
 
-// The Command primitive throws under jsdom ("node.querySelector is not a
-// function"), unlike the plain Popover. So — like the svar grid wrappers —
-// ComboSelect is verified by source assertions; the live combobox is checked
-// visually during integration.
-const source = rawSource.replace(/\r\n/g, "\n");
+afterEach(cleanup);
+
+const options: ComboOption[] = [
+  { value: "p1", label: "Evidence brief", description: "Сводка с цитатами" },
+  { value: "p2", label: "Risk monitor" },
+];
 
 describe("ComboSelect", () => {
-  it("wires a searchable popover + command combobox via Extractum wrappers", () => {
-    expect(source).toContain("ExtractumPopover");
-    expect(source).toContain("ExtractumCommand");
-    expect(source).toContain("ExtractumCommandInput");
-    expect(source).toContain("ExtractumCommandItem");
-    expect(source).toContain("ExtractumCommandEmpty");
+  it("shows the selected label without a prefix and a caret on the trigger", () => {
+    render(ComboSelect, {
+      props: { options, selectedValue: "p1", placeholder: "Поиск шаблона…" },
+    });
+    const trigger = document.querySelector(".combo-select__trigger");
+    expect(trigger?.textContent).toContain("Evidence brief");
+    expect(trigger?.textContent).not.toContain("Промпт:");
+    expect(trigger?.textContent).toContain("▾");
   });
 
-  it("binds option value/label search and forwards selection", () => {
-    expect(source).toContain("value={option.value}");
-    expect(source).toContain("keywords={[option.label]}");
-    expect(source).toContain("onSelect={() => pick(option)}");
-    expect(source).toContain("{triggerPrefix}: {selectedLabel}");
+  it("falls back to the placeholder label when nothing is selected", () => {
+    render(ComboSelect, {
+      props: { options, placeholder: "Поиск…", triggerFallback: "Промпт" },
+    });
+    expect(document.querySelector(".combo-select__trigger")?.textContent).toContain("Промпт");
+  });
+
+  it("opens the options panel and forwards selection", async () => {
+    const onSelect = vi.fn();
+    render(ComboSelect, {
+      props: { options, selectedValue: "p1", placeholder: "Поиск шаблона…", open: true, onSelect },
+    });
+    await fireEvent.click(await screen.findByText("Risk monitor"));
+    expect(onSelect).toHaveBeenCalledWith(options[1]);
   });
 });

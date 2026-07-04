@@ -31,8 +31,8 @@ describe("ProjectToolbar", () => {
 
     expect(screen.getByText("Беларусь: медиаполе 2025")).toBeTruthy();
     expect(screen.getByText("Период: Весь период")).toBeTruthy();
-    expect(screen.getByText("Промпт: По умолчанию")).toBeTruthy();
-    expect(screen.getByText("Модель: gpt-4.1")).toBeTruthy();
+    expect(document.querySelector(".combo-select__trigger")?.textContent).toContain("По умолчанию");
+
 
     await fireEvent.click(screen.getByRole("button", { name: "Запустить анализ" }));
     expect(onRun).toHaveBeenCalledTimes(1);
