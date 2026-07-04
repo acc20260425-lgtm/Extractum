@@ -42,3 +42,15 @@ export function buildPeriodPresets(range: ProjectDataRange, now: number): Period
 
   return presets;
 }
+
+export function formatPeriodDate(unix: number): string {
+  const date = new Date(unix * 1000);
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yy = String(date.getFullYear()).slice(2);
+  return `${dd}.${mm}.${yy}`;
+}
+
+export function periodRangeLabel(from: number, to: number): string {
+  return `${formatPeriodDate(from)} – ${formatPeriodDate(to)}`;
+}

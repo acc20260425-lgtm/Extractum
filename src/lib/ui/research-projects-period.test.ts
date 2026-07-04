@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPeriodPresets } from "./research-projects-period";
+import { buildPeriodPresets, formatPeriodDate, periodRangeLabel } from "./research-projects-period";
 
 const at = (iso: string) => Math.floor(Date.parse(iso) / 1000);
 
@@ -62,5 +62,18 @@ describe("buildPeriodPresets", () => {
     );
 
     expect(last30?.from).toBe(range.from);
+  });
+});
+
+describe("period date formatting", () => {
+  const unix = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12).getTime() / 1000;
+
+  it("formats unix seconds as DD.MM.YY in local time", () => {
+    expect(formatPeriodDate(unix(2025, 5, 31))).toBe("31.05.25");
+    expect(formatPeriodDate(unix(2024, 1, 3))).toBe("03.01.24");
+  });
+
+  it("builds a range label", () => {
+    expect(periodRangeLabel(unix(2024, 3, 14), unix(2025, 5, 31))).toBe("14.03.24 – 31.05.25");
   });
 });
