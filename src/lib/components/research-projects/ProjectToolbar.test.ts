@@ -30,7 +30,7 @@ describe("ProjectToolbar", () => {
     render(ProjectToolbar, { props: { ...base, onRun } });
 
     expect(screen.getByText("Беларусь: медиаполе 2025")).toBeTruthy();
-    expect(screen.getByText("Период: Весь период")).toBeTruthy();
+    expect(document.querySelector(".period-popover__trigger")?.textContent).toContain("Весь период");
     expect(document.querySelector(".combo-select__trigger")?.textContent).toContain("По умолчанию");
 
 

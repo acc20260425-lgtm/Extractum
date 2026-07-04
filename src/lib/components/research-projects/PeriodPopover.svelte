@@ -4,18 +4,21 @@
     ExtractumPopoverTrigger,
     ExtractumPopoverContent,
   } from "$lib/components/extractum-ui";
+  import PeriodPanel from "./PeriodPanel.svelte";
   import type { PeriodPreset } from "$lib/ui/research-projects-period";
 
   let {
     presets,
     selectedId,
     triggerLabel,
+    dataRange = null,
     open = $bindable(false),
     onSelect,
   }: {
     presets: PeriodPreset[];
     selectedId?: string;
     triggerLabel: string;
+    dataRange?: { from: number; to: number } | null;
     open?: boolean;
     onSelect?: (preset: PeriodPreset) => void;
   } = $props();
@@ -27,52 +30,29 @@
 </script>
 
 <ExtractumPopover bind:open>
-  <ExtractumPopoverTrigger class="period-popover__trigger">Период: {triggerLabel}</ExtractumPopoverTrigger>
-  <ExtractumPopoverContent class="period-popover__content" align="start">
-    <ul class="period-popover__list">
-      {#each presets as preset (preset.id)}
-        <li>
-          <button
-            type="button"
-            class="period-popover__item"
-            data-selected={preset.id === selectedId}
-            onclick={() => pick(preset)}
-          >
-            {preset.label}
-          </button>
-        </li>
-      {/each}
-    </ul>
+  <ExtractumPopoverTrigger class="tb-trigger period-popover__trigger">
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.5"
+    >
+      <rect x="2.5" y="3.5" width="11" height="10" rx="1.5" />
+      <path d="M2.5 6.5h11M5.5 2v3M10.5 2v3" />
+    </svg>
+    {triggerLabel}
+    <span class="tb-caret">▾</span>
+  </ExtractumPopoverTrigger>
+  <ExtractumPopoverContent class="period-popover__content" align="end">
+    <PeriodPanel {presets} {selectedId} {dataRange} onSelect={pick} />
   </ExtractumPopoverContent>
 </ExtractumPopover>
 
 <style>
-  .period-popover__list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  :global(.period-popover__item) {
-    width: 100%;
-    padding: 6px 10px;
-    border: none;
-    border-radius: 5px;
-    background: transparent;
-    text-align: left;
-    font: 400 12.5px/1.2 var(--extractum-font);
-    color: var(--extractum-text);
-    cursor: pointer;
-  }
-
-  :global(.period-popover__item:hover) {
-    background: var(--extractum-surface-subtle);
-  }
-
-  :global(.period-popover__item[data-selected="true"]) {
-    color: var(--extractum-primary);
-    font-weight: 600;
+  :global(.period-popover__content) {
+    width: 290px;
+    padding: 6px;
   }
 </style>
