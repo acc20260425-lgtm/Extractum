@@ -1275,7 +1275,7 @@ pub(crate) struct YoutubeSummaryExecutionOptions {
 Rename `execute_youtube_summary_run_with_stage_executor_internal` to `execute_youtube_summary_run_with_stage_executor_with_options` and add the `options` parameter immediately, before adding any wrapper that calls it:
 
 ```rust
-async fn execute_youtube_summary_run_with_stage_executor_with_options<F, Fut, M>(
+pub(crate) async fn execute_youtube_summary_run_with_stage_executor_with_options<F, Fut, M>(
     pool: &SqlitePool,
     run_id: i64,
     options: YoutubeSummaryExecutionOptions,
