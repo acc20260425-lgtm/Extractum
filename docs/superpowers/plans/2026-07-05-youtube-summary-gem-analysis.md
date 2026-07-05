@@ -856,7 +856,7 @@ git commit -m "feat(prompt-packs): add gem analysis runtime requests"
 - Produces `assemble_gem_analysis_markdown(...) -> String`.
 - Produces `assemble_gem_analysis_transcript_output(...) -> String`.
 
-- [ ] **Step 1: Add material-loading tests**
+- [x] **Step 1: Add material-loading tests**
 
 In `gem_analysis.rs` tests, add:
 
@@ -903,7 +903,7 @@ async fn load_gem_materials_skips_empty_comment_rows() {
 
 Use existing test support for creating runs. If a helper name differs, add small local helpers in the test module that insert exactly the rows needed.
 
-- [ ] **Step 2: Add assembly tests**
+- [x] **Step 2: Add assembly tests**
 
 Add:
 
@@ -938,7 +938,7 @@ fn assemble_gem_transcript_output_contains_empty_candidate_arrays() {
 }
 ```
 
-- [ ] **Step 3: Run material/assembly tests and verify failure**
+- [x] **Step 3: Run material/assembly tests and verify failure**
 
 Run:
 
@@ -949,7 +949,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL because helpers are not implemented.
 
-- [ ] **Step 4: Implement material loading**
+- [x] **Step 4: Implement material loading**
 
 In `gem_analysis.rs`, define:
 
@@ -994,7 +994,7 @@ If metadata is absent or invalid, use plain text for `transcript_timestamped` an
 
 For comments, concatenate decompressed `material_kind = 'comment'` rows ordered by `sequence_index, id`, using blank-line separators. Set `SkippedNoComments` when `comments_text.trim().is_empty()`.
 
-- [ ] **Step 5: Implement prompt input builders**
+- [x] **Step 5: Implement prompt input builders**
 
 In `gem_analysis.rs`, define the full part prompt literals before the builder functions:
 
@@ -1162,7 +1162,7 @@ serde_json::json!({
 
 Do not include transcript in comments input. Do not include comments in transcript inputs.
 
-- [ ] **Step 6: Implement input budget helpers**
+- [x] **Step 6: Implement input budget helpers**
 
 Add:
 
@@ -1186,7 +1186,7 @@ fn enforce_gem_input_budget(part: GemAnalysisPart, estimate: i64, cap: i64) -> A
 
 The cap value is supplied by `GemAnalysisInputBudget` from Task 5. For Task 4, unit-test the pure helper with a small cap such as `GemAnalysisInputBudget { max_input_tokens: 100 }`.
 
-- [ ] **Step 7: Implement Markdown and transcript-output assembly**
+- [x] **Step 7: Implement Markdown and transcript-output assembly**
 
 `assemble_gem_analysis_markdown` must produce:
 
@@ -1226,7 +1226,7 @@ serde_json::json!({
 })
 ```
 
-- [ ] **Step 8: Run focused verification**
+- [x] **Step 8: Run focused verification**
 
 Run:
 
@@ -1237,7 +1237,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit Task 4**
+- [x] **Step 9: Commit Task 4**
 
 ```powershell
 git add src-tauri/src/prompt_packs/youtube_summary/gem_analysis.rs src-tauri/src/prompt_packs/youtube_summary/snapshots_tests.rs
