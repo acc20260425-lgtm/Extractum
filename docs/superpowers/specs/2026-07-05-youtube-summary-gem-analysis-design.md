@@ -20,8 +20,12 @@ The first draft assumed too much about existing stage inputs and retry behavior.
 - `transcript_segment_registry` entries currently contain only `material_ref_id` and `text`; transcript timestamps from `youtube_transcript_segments.start_ms/end_ms` are not included.
 - `build_transcript_analysis_stage_input` currently reads all material snapshots but only puts `material_kind == "transcript"` rows into `transcript_segment_registry`.
 - Comment rows can be snapshotted when `include_comments` is true, but part 2 needs a new loader from `prompt_pack_run_material_snapshots`; comments are not already available in the stage input.
+- The current comment snapshot policy uses `test_comment_policy()` in the production snapshot path: up to 50 comments, token-capped at 4000, ordered by earliest `published_at`. This is a bounded sample, not a representative audience corpus.
+- `load_comment_text` can produce an empty string while `insert_material` still creates a `material_kind == "comment"` row, so part 2 must be gated by trimmed concatenated comment text, not by row existence.
 - `run_transcript_analysis_stage_request` returns one `LlmCompletion`; the existing JSON repair in `execution.rs` repairs final transcript-analysis JSON, not internal `{ part, markdown }` JSON.
 - Gemini Browser requests currently derive `browser_run_id` from `run_id + stage_run_id` with only repair-attempt variation, so Gem parts need an explicit request/run discriminator.
+- Transcript material currently uses `transcript_text_for_source`, which joins segment text without timestamps. Gem timestamp formatting must use the same source selection and truncation policy as the normal transcript path, then add timing only at prompt construction time.
+- Database migrations define `youtube_transcript_segments.start_ms` as `NOT NULL`, but older snapshots or future ingest paths may still lack structured timing in the frozen run input. The design needs an explicit degradation path for missing timestamp metadata.
 - The transcript-analysis output schema allows empty candidate arrays, but the implementation must test that normalization, intermediate entities, result builder, and canonical validation accept the final Gem output.
 
 ## Scope
@@ -31,7 +35,7 @@ In scope:
 - Add `Gem analysis` to the existing `Summary mode` select.
 - Add `gem_analysis` to the prompt-pack `control_preset` registry.
 - Enforce `gem_analysis` for exactly one included YouTube video.
-- Keep part 1 and part 3 transcript-only, but make the transcript timestamped for Gem runs.
+- Keep part 1 and part 3 transcript-only, formatting timestamps from frozen structured timing metadata when available.
 - Keep part 2 comments-only, loaded from frozen comment material snapshots.
 - Add an internal Gem mini-pipeline in the execution/orchestration layer, not hidden inside the current one-completion transcript runtime function.
 - Add new per-part JSON parsing and one-repair-attempt handling for `{ part, markdown }`.
@@ -46,6 +50,7 @@ Out of scope for the first version:
 - A dedicated web-search/fact-check stage owned by Extractum.
 - Passing description, source metadata, URL, subscribers, view counts, or prior part outputs into Gem parts.
 - A result-view redesign.
+- Changing the existing comment snapshot sample policy to top-liked, newest, or stratified comments.
 
 ## Data Contract
 
@@ -53,7 +58,7 @@ Each part analyzes its own source material independently.
 
 Part 1 receives:
 
-- Timestamped transcript text only.
+- Transcript text only, timestamped from frozen timing metadata when available.
 - No comments.
 - No description.
 - No source snapshot metadata.
@@ -69,20 +74,28 @@ Part 2 receives:
 
 Part 3 receives:
 
-- Timestamped transcript text only.
+- Transcript text only, timestamped from frozen timing metadata when available.
 - No comments.
 - No description.
 - No source metadata.
 - No part 1 or part 2 output.
 
-Because part 1 and part 3 require time navigation, `gem_analysis` needs timestamped transcript material. Preserve the user-facing "transcript-only" rule by formatting transcript segments as transcript text with timestamps, for example:
+Because part 1 and part 3 require time navigation, `gem_analysis` needs timestamped transcript input. Preserve the user-facing "transcript-only" rule by formatting transcript segments as transcript text with timestamps, for example:
 
 ```text
 [00:00] Segment text
 [00:17] Next segment text
 ```
 
-Implementation decision for the first version: when `control_preset == "gem_analysis"`, snapshot transcript material with `[MM:SS]` prefixes derived from `youtube_transcript_segments.start_ms`. This requires adding a timestamped transcript source helper and passing `control_preset` into material snapshot creation. After the snapshot is created, Gem part prompts read only the frozen transcript material snapshot and must not read live transcript rows.
+Implementation decision for the first version:
+
+- Keep the frozen transcript text consumer-neutral. Do not change `text_zstd` based on `control_preset`.
+- Store ordered transcript timing structurally in the transcript material snapshot, preferably in existing `metadata_json_zstd`, as segment entries with at least `{ start_ms, end_ms, text }`.
+- Build Gem part 1 and part 3 prompt material by reading only frozen run material snapshots and formatting the structured segment timing as `[MM:SS] text`.
+- Use the same transcript source selection and truncation policy as the current `transcript_text_for_source` path so normal modes and Gem mode do not silently diverge on which transcript text was frozen.
+- If structured timing is missing for a run, degrade explicitly: part 1 and part 3 receive plain frozen transcript text, the prompt says timestamps are unavailable in the input, and the model is instructed not to invent timestamps. The report remains valid but loses interactive time navigation for that run.
+
+This keeps material freezing neutral to downstream consumers while still giving Gem prompts timestamped transcript input when the run snapshot contains timing.
 
 ## Prompt Adjustments For Missing Data
 
@@ -95,6 +108,51 @@ The original user prompts mention metadata and fact-checking fields that are not
 - If an API or browser model does external lookup on its own, source names and links may be included only when the model can provide concrete working references.
 
 This keeps the prompt useful without forcing hallucinated metadata.
+
+## Input Budget And Overflow
+
+Gem analysis intentionally sends transcript material twice: once to part 1 and once to part 3. This is more expensive than `standard` or `detailed_report`, which send the transcript once. The implementation must make that cost explicit in validation instead of relying only on output token budgets.
+
+Before starting Gem part requests, estimate input tokens for each part:
+
+- part 1: shared wrapper + part 1 prompt + timestamped transcript input;
+- part 2: shared wrapper + part 2 prompt + comments-only input, when comments are present;
+- part 3: shared wrapper + part 3 prompt + timestamped transcript input.
+
+The input cap for each part is the lower of:
+
+- the selected API model input/context limit, when known from the provider/model registry;
+- the prompt-pack runtime `max_prompt_tokens` guard;
+- a Gem-specific app-side safety cap if the runtime cannot expose a model-specific context window.
+
+Reserve an implementation constant for wrapper overhead and estimator error. The exact value can be tuned in code, but tests must prove that a prompt close to the cap is rejected before a provider call rather than failing after an expensive partial run.
+
+First-version overflow policy:
+
+- Do not truncate transcript input for Gem analysis. Truncation would make part 1 and part 3 disagree with the requested full-video report and could remove timestamps needed by the prompts.
+- If part 1 or part 3 estimated input exceeds the cap, block the Gem transcript-analysis stage before any provider call with a clear error such as `Gem analysis transcript is too long for the selected model.`
+- If part 2 estimated input exceeds the cap, reduce only the comment sample using the existing comment token cap policy before the prompt is built. If the trimmed comment text is still empty, skip part 2.
+- For Gemini Browser, where the browser provider does not expose a reliable enforceable context window, apply the same app-side `max_prompt_tokens` guard and report overflow before opening the browser request.
+
+The UI does not need a full token estimator in this slice, but the execution layer must enforce the guard because API keys and browser sessions can be used outside the normal UI preflight path.
+
+## Comment Sampling And Sentiment Wording
+
+For the first version, part 2 uses the comment material that the existing snapshot policy freezes:
+
+- up to 50 comments;
+- bounded by the current comment token cap;
+- ordered by earliest publication time in the current production query.
+
+This sample is useful for a bounded comments-only analysis, but it must not be described as representative of all comments or the whole audience. The part 2 prompt must scope every sentiment claim to the selected comment sample.
+
+Required wording changes for part 2:
+
+- Replace "percentage ratio of audience sentiment" with "qualitative or approximate distribution within the selected comment sample".
+- Mention that the analysis is based only on the provided comment sample when describing general sentiment.
+- Do not ask for exact percentages in v1. Use qualitative labels such as predominantly positive, mixed, skeptical, or neutral, with an explicit sample-level caveat.
+
+Changing the snapshot policy to top-liked, newest, or stratified comments is out of scope for this feature slice. If that policy changes later, update this design and the prompt wording together.
 
 ## Architecture
 
@@ -110,13 +168,18 @@ For each transcript stage:
 `execute_gem_analysis_transcript_stage` performs:
 
 1. Defense-in-depth guard that the run has exactly one included source snapshot.
-2. Load timestamped transcript input for parts 1 and 3.
-3. Load comments-only material from frozen material snapshots for part 2.
-4. Execute part 1 (`passport`) through the selected runtime.
-5. Execute part 2 (`comments`) only when non-empty comment material exists.
-6. Execute part 3 (`deep_recap`) through the selected runtime.
-7. Assemble one final transcript-analysis JSON object.
-8. Persist it through the existing `execute_transcript_analysis_stage_with_completion` path so the current parsed output, intermediate entities, result builder, and canonical output remain the outer contract.
+2. Load transcript input for parts 1 and 3, timestamped when frozen timing metadata is available.
+3. Load comments-only material from frozen material snapshots for part 2 and compute trimmed concatenated comment text.
+4. Run input-budget checks before the first provider call.
+5. Check cancellation before starting part 1.
+6. Execute part 1 (`passport`) through the selected runtime.
+7. Check cancellation before optional part 2.
+8. Execute part 2 (`comments`) only when the trimmed comment material is non-empty.
+9. Check cancellation before part 3.
+10. Execute part 3 (`deep_recap`) through the selected runtime.
+11. Check cancellation before final assembly/persistence.
+12. Assemble one final transcript-analysis JSON object.
+13. Persist it through the existing `execute_transcript_analysis_stage_with_completion` path so the current parsed output, intermediate entities, result builder, and canonical output remain the outer contract.
 
 The final assembled transcript-analysis JSON has this shape:
 
@@ -135,6 +198,26 @@ The final assembled transcript-analysis JSON has this shape:
 ```
 
 `video_candidate.segment_candidates`, `key_point_candidates`, `quote_candidates`, `action_item_candidates`, and `open_question_candidates` may be omitted because the intermediate-entity builder treats those nested arrays as empty when missing. `claim_candidates` and `evidence_fragment_candidates` must be present as arrays.
+
+## Cancellation And Retry Semantics
+
+Gem analysis has multiple provider calls inside one persisted transcript-analysis stage, so it needs internal cancellation checkpoints. The implementation must check the same run cancellation source used by the outer execution loop:
+
+- before part 1 starts;
+- after part 1 succeeds and before part 2 starts or is skipped;
+- after part 2 succeeds/fails/skips and before part 3 starts;
+- after part 3 succeeds and before assembled output is persisted.
+
+If cancellation is detected at a checkpoint, the stage must stop without starting later parts and should follow the existing run/stage cancellation semantics instead of producing a partial report.
+
+First-version retry policy:
+
+- There is no partial credit or per-part result cache.
+- If required part 1 or part 3 fails after its repair attempt, the transcript-analysis stage fails.
+- If part 3 fails after successful part 1 and optional part 2, a retry reruns all Gem parts from scratch.
+- Optional part 2 may fail without failing the stage, but only after its own one repair attempt and with the user-facing failure note in the assembled report.
+
+This accepts higher retry cost in v1 to keep persistence and result loading compatible with the existing single-stage output model.
 
 ## Runtime Request Model
 
@@ -187,6 +270,8 @@ Gemini Browser run IDs and sources must also include the part discriminator. Thi
 prompt-pack-<run_id>-stage-<stage_run_id>-gem-passport
 prompt_pack:youtube_summary:youtube_summary/transcript_analysis:gem-passport:run:<run_id>:stage:<stage_run_id>
 ```
+
+The discriminator parameter must be optional. Existing transcript, synthesis, and repair callers pass `None` and must keep their current request IDs unchanged. Gem part and Gem repair callers pass a stable discriminator such as `gem-passport` or `gem-deep-recap-repair-1`.
 
 Browser runtime ignores `max_output_tokens`, so Gem prompts must include concise length targets and anti-bloat instructions. API runtime should still set max output token budgets.
 
@@ -288,7 +373,7 @@ Return exactly one strict JSON object:
   "markdown": "<full Russian Markdown report>"
 }
 
-Use only the input material provided below for this part. Do not use outputs from other Gem analysis parts. Do not invent timestamps, metadata, source titles, subscriber counts, metrics, or links. If a requested item is unavailable in the provided material, write `Недоступно во входных данных`. For fact-checking, do not fabricate sources or URLs; if external verification is unavailable in the current runtime, explicitly state that limitation.
+Use only the input material provided below for this part. Do not use outputs from other Gem analysis parts. Do not invent timestamps, metadata, source titles, subscriber counts, metrics, or links. If a requested item is unavailable in the provided material, write `Недоступно во входных данных`. If transcript input has no `[MM:SS]` timestamps, state that timestamps are unavailable in the input and do not create approximate timestamps. For fact-checking, do not fabricate sources or URLs; if external verification is unavailable in the current runtime, explicitly state that limitation.
 
 Input material:
 <part-specific material>
@@ -317,7 +402,12 @@ The semantic structure remains:
 
 ### Part 2 Body: Comments Analysis
 
-Use the user's "ЧАСТЬ 2. Анализ комментариев к видео" prompt unchanged in structure. The only runtime wrapper constraint is that the input contains comments only and comments must be summarized, not quoted verbatim.
+Use the user's "ЧАСТЬ 2. Анализ комментариев к видео" prompt with sampling-aware edits:
+
+- The input contains comments only and comments must be summarized, not quoted verbatim.
+- The report must say that sentiment is based on the provided selected comment sample.
+- The "Общий сентимент" item must ask for a qualitative or approximate distribution inside the selected sample, not a percentage for the whole audience.
+- Exact percentages are out of scope for v1; the model should use qualitative labels and sample-level caveats instead.
 
 ### Part 3 Body: Deep Interactive Recap
 
@@ -353,7 +443,7 @@ Gem analysis supports exactly one YouTube video.
 
 The execution layer repeats this guard so bypassing preflight cannot produce N independent Gem mini-pipelines plus synthesis.
 
-`Include comments` remains the user control for comments. In `gem_analysis`, it controls whether comment material is snapshotted for part 2. If disabled, absent, or empty, part 2 is skipped.
+`Include comments` remains the user control for comments. In `gem_analysis`, it controls whether comment material is snapshotted for part 2. If disabled, absent, or empty after trimming concatenated comment text, part 2 is skipped.
 
 ## Progress And Events
 
@@ -389,9 +479,19 @@ First-version artifact plan:
 
 ```json
 {
-  "schema_id": "stage-io/youtube_summary_transcript_analysis_output",
+  "metrics_kind": "youtube_summary_transcript_analysis",
+  "metrics_version": "1.0",
   "attempt_number": 1,
   "gem_analysis": {
+    "input_budget": {
+      "status": "passed",
+      "cap_tokens": 24000,
+      "part_estimates": {
+        "passport": 12000,
+        "comments": 2500,
+        "deep_recap": 12000
+      }
+    },
     "parts": [
       {
         "part": "passport",
@@ -460,22 +560,34 @@ Preflight/start:
 
 Stage input/data:
 
-- Gem transcript input includes real `[MM:SS]` timestamps from frozen transcript data.
-- Part 1 prompt receives timestamped transcript only.
-- Part 3 prompt receives timestamped transcript only.
+- Transcript material snapshot remains consumer-neutral in `text_zstd`; Gem timestamp formatting is produced at prompt-build time from structured frozen timing metadata.
+- Gem transcript input includes real `[MM:SS]` timestamps from frozen transcript timing metadata when metadata is present.
+- Gem transcript input degrades to plain transcript text and timestamp-unavailable instructions when timing metadata is missing.
+- Gem timestamped input uses the same source selection and truncation policy as the normal transcript snapshot helper.
+- Part 1 prompt receives transcript only, timestamped when timing metadata is available.
+- Part 3 prompt receives transcript only, timestamped when timing metadata is available.
 - Part 2 prompt receives comments only from frozen comment material snapshots.
 - Part 2 skips when comments are disabled, absent, or empty.
+- Part 2 skips when comment material rows exist but trimmed concatenated comment text is empty.
+- Part 2 prompt scopes sentiment to the selected comment sample and does not ask for exact percentages.
+- Long transcript input that exceeds the per-part input cap blocks before any provider call and is not silently truncated.
+- Part 2 comment input obeys the existing comment token cap before prompt construction.
 
 Runtime:
 
 - API request IDs are unique per Gem part.
 - Gemini Browser run IDs are unique per Gem part.
+- Browser request discriminator is optional; existing transcript, synthesis, and repair callers passing `None` keep unchanged IDs.
 - Browser prompt conversion still supports Gem part messages.
 - Part parser accepts valid `{ part, markdown }`.
 - Part parser rejects wrong part, missing markdown, empty markdown, and Markdown-fenced non-JSON.
 - Part repair is attempted once on invalid part output.
 - Required part failure fails the stage.
 - Optional comments failure assembles a successful report with the part 2 failure note.
+- Cancellation before part 1 prevents all provider calls.
+- Cancellation after part 1 prevents part 2/part 3 calls and does not persist a partial report.
+- Cancellation after part 2 prevents part 3 and does not persist a partial report.
+- Required part 3 failure after successful earlier parts fails the stage; retry reruns all parts because v1 has no partial result cache.
 
 Final output:
 
@@ -497,10 +609,18 @@ Verification:
 - `gem_analysis` remains a `Summary mode`, not a new prompt pack.
 - It is single-video only, enforced in preflight/start and execution.
 - It uses independent part calls.
-- Part 1 and part 3 remain transcript-only by using timestamped transcript text.
+- Part 1 and part 3 remain transcript-only; timestamps are formatted from structured frozen timing metadata at prompt-build time when available.
+- Frozen transcript text remains consumer-neutral and does not vary by `control_preset`.
+- If timestamp metadata is missing, Gem degrades to plain transcript input with explicit no-timestamp instructions.
+- Part 1 and part 3 input overflow blocks the stage before provider calls; v1 does not truncate transcript input.
 - Part 2 is comments-only and loaded from frozen comment material snapshots.
+- Part 2 runs only when trimmed concatenated comment text is non-empty.
+- Part 2 sentiment language is scoped to the selected comment sample, not the whole audience.
+- Internal cancellation checkpoints are required before/between Gem part calls.
+- There is no partial per-part result cache or partial credit in v1; retries rerun all parts.
 - Source metadata is not passed to parts in the first version.
 - Per-part JSON repair is new narrow code, not reuse of final transcript-analysis repair.
 - Browser runtime is supported with unique per-part IDs.
+- Browser helper discriminator is optional and existing callers pass `None`.
 - No new artifact kinds are introduced in the first version.
 - The final user-visible output is one assembled Russian Markdown report in `summary_text`.
