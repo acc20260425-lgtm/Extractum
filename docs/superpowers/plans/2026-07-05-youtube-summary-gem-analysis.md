@@ -1333,6 +1333,20 @@ where
 
 Update the test-only `execute_youtube_summary_run_with_stage_executor_and_result_mutator` to call the same `execute_youtube_summary_run_with_stage_executor_with_options` helper with `YoutubeSummaryExecutionOptions::unbounded_for_tests()`.
 
+Keep the crate-level exports and runtime imports aligned with the `#[cfg(test)]` gate in the same implementation pass:
+
+- In `youtube_summary/mod.rs`, split the executor re-exports if they are currently grouped. The options-based executor stays available in release builds, while the old 3-argument wrapper is test-only:
+
+```rust
+pub(crate) use execution::execute_youtube_summary_run_with_stage_executor_with_options;
+
+#[cfg(test)]
+pub(crate) use execution::execute_youtube_summary_run_with_stage_executor;
+```
+
+- In `runtime.rs`, after moving `execute_youtube_summary_run` to `execute_youtube_summary_run_with_stage_executor_with_options` in Step 4, remove `execute_youtube_summary_run_with_stage_executor` from the non-test import list. Import the 3-argument wrapper only from `#[cfg(test)]` test code if a test still needs it.
+- Do not leave an intermediate state where release code imports or re-exports the `#[cfg(test)]` wrapper. The release guard is `cargo check --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-gem-analysis`, and it must compile without the old 3-argument API.
+
 Production code must call only `execute_youtube_summary_run_with_stage_executor_with_options` with a real runtime-computed `YoutubeSummaryExecutionOptions`.
 
 - [ ] **Step 3: Add runtime budget tests**
