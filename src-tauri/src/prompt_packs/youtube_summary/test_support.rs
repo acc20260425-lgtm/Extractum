@@ -202,6 +202,21 @@ pub(crate) async fn test_pool_with_playlist_one_ready_one_missing_transcript() -
     pool
 }
 
+pub(crate) async fn test_pool_with_playlist_two_ready_videos() -> sqlx::SqlitePool {
+    let pool = migrated_pool().await;
+    seed_builtin_prompt_packs_in_pool(&pool)
+        .await
+        .expect("seed pack");
+    insert_playlist(&pool, 701).await;
+    insert_youtube_video(&pool, 901, "v-ready-1").await;
+    insert_youtube_video(&pool, 902, "v-ready-2").await;
+    insert_transcript(&pool, 901, "Ready transcript one").await;
+    insert_transcript(&pool, 902, "Ready transcript two").await;
+    insert_playlist_item(&pool, 701, Some(901), "v-ready-1", 1).await;
+    insert_playlist_item(&pool, 701, Some(902), "v-ready-2", 2).await;
+    pool
+}
+
 pub(crate) async fn test_pool_with_ready_video() -> sqlx::SqlitePool {
     let pool = migrated_pool().await;
     seed_builtin_prompt_packs_in_pool(&pool)

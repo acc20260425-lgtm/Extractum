@@ -105,6 +105,14 @@ pub(crate) async fn preflight_youtube_summary_in_pool(
         }
     }
 
+    if request.control_preset == "gem_analysis" && included_videos.len() != 1 {
+        blocking_failures.push(YoutubeSummaryPreflightFailure {
+            source_id: None,
+            reason: "gem_analysis_requires_single_video".to_string(),
+            message: Some("Gem analysis supports exactly one YouTube video.".to_string()),
+        });
+    }
+
     Ok(YoutubeSummaryPreflightResponse {
         pack_id: "youtube_summary".to_string(),
         pack_version: "1.0.0".to_string(),

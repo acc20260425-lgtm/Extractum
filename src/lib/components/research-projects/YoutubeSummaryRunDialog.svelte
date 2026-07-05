@@ -238,6 +238,7 @@
         <select bind:value={controlPreset} aria-label="Summary mode" onchange={() => void runPreflight()}>
           <option value="standard">Standard</option>
           <option value="detailed_report">Detailed report</option>
+          <option value="gem_analysis">Gem analysis</option>
         </select>
       </label>
       <label>

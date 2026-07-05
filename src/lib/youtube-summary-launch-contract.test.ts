@@ -31,6 +31,7 @@ describe("youtube summary launch contract", () => {
     expect(dialog).toContain("let controlPreset = $state(\"detailed_report\")");
     expect(dialog).toContain("controlPreset = \"detailed_report\"");
     expect(dialog).toContain("Summary mode");
+    expect(dialog).toContain('<option value="gem_analysis">Gem analysis</option>');
     expect(dialog).toContain("detailed_report");
     expect(dialog).toContain("controlPreset,");
     expect(dialog).not.toContain("controlPreset: \"standard\"");

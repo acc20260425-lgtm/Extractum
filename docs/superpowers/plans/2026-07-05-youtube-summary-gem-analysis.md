@@ -102,7 +102,7 @@ No commit is required for this task.
 - Consumes: existing `controlPreset` Svelte state and `PreflightYoutubeSummaryRunRequest.control_preset`.
 - Produces: backend preflight failure reason `gem_analysis_requires_single_video`.
 
-- [ ] **Step 1: Write the failing UI contract test**
+- [x] **Step 1: Write the failing UI contract test**
 
 Add this assertion to `wires the selected youtube summary mode into preflight and start requests`:
 
@@ -112,7 +112,7 @@ expect(dialog).toContain("let controlPreset = $state(\"detailed_report\")");
 expect(dialog).toContain("controlPreset = \"detailed_report\"");
 ```
 
-- [ ] **Step 2: Run the UI contract test and verify it fails**
+- [x] **Step 2: Run the UI contract test and verify it fails**
 
 Run:
 
@@ -122,7 +122,7 @@ npm.cmd run test -- src/lib/youtube-summary-launch-contract.test.ts
 
 Expected: FAIL because `gem_analysis` is not present in the Svelte file.
 
-- [ ] **Step 3: Add the Svelte option**
+- [x] **Step 3: Add the Svelte option**
 
 In `YoutubeSummaryRunDialog.svelte`, add the new option without changing defaults:
 
@@ -132,7 +132,7 @@ In `YoutubeSummaryRunDialog.svelte`, add the new option without changing default
 <option value="gem_analysis">Gem analysis</option>
 ```
 
-- [ ] **Step 4: Add the multi-video preflight fixture helper**
+- [x] **Step 4: Add the multi-video preflight fixture helper**
 
 In `src-tauri/src/prompt_packs/youtube_summary/test_support.rs`, add:
 
@@ -153,7 +153,7 @@ pub(crate) async fn test_pool_with_playlist_two_ready_videos() -> sqlx::SqlitePo
 }
 ```
 
-- [ ] **Step 5: Add backend preflight tests**
+- [x] **Step 5: Add backend preflight tests**
 
 In `preflight_tests.rs`, add:
 
@@ -203,7 +203,7 @@ async fn preflight_gem_analysis_blocks_multiple_included_videos() {
 }
 ```
 
-- [ ] **Step 6: Run preflight tests and verify the new multi-video test fails**
+- [x] **Step 6: Run preflight tests and verify the new multi-video test fails**
 
 Run:
 
@@ -213,7 +213,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL because the guard is not implemented.
 
-- [ ] **Step 7: Implement the preflight guard**
+- [x] **Step 7: Implement the preflight guard**
 
 At the end of `preflight_youtube_summary_in_pool`, before returning, insert:
 
@@ -229,7 +229,7 @@ if request.control_preset == "gem_analysis" && included_videos.len() != 1 {
 
 Keep the existing included/skipped lists intact so the UI can still show what was discovered.
 
-- [ ] **Step 8: Update value registry**
+- [x] **Step 8: Update value registry**
 
 In `docs/value-registry.md`, update the `Prompt-pack control preset` row to include:
 
@@ -239,7 +239,7 @@ In `docs/value-registry.md`, update the `Prompt-pack control preset` row to incl
 
 Mention `gem_analysis` is single-video and sequential multi-request.
 
-- [ ] **Step 9: Run focused verification**
+- [x] **Step 9: Run focused verification**
 
 Run:
 
@@ -250,7 +250,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: both PASS.
 
-- [ ] **Step 10: Commit Task 1**
+- [x] **Step 10: Commit Task 1**
 
 ```powershell
 git add src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte src/lib/youtube-summary-launch-contract.test.ts src-tauri/src/prompt_packs/youtube_summary/preflight.rs src-tauri/src/prompt_packs/youtube_summary/preflight_tests.rs src-tauri/src/prompt_packs/youtube_summary/test_support.rs docs/value-registry.md

@@ -874,7 +874,7 @@ Scope: values found in SQL migrations, bundled prompt-pack assets, seed code, an
 | Prompt-pack validation severity | `severity` | `info`, `warning`, `error` | `src-tauri/migrations/0006_prompt_pack_mvp.sql` | `code` is still free-form text. |
 | Prompt-pack provider family | `provider_family` | `generic_chat` | `src-tauri/prompt-packs/youtube_summary/1.0.0/stages/transcript_analysis.json`, runtime assets | Bundled asset value; not SQL-constrained. |
 | Prompt-pack validator mode | `validator_mode` | `stage_output` | `src-tauri/prompt-packs/youtube_summary/1.0.0/stages/transcript_analysis.json` | Bundled stage template value; not SQL-constrained. |
-| Prompt-pack control preset | `control_preset` | `standard`, `detailed_report` | `src-tauri/prompt-packs/youtube_summary/1.0.0/pack.json`, `src-tauri/src/prompt_packs/runtime.rs`, `src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte` | `standard` is default; `detailed_report` is a UI/runtime mode. |
+| Prompt-pack control preset | `control_preset` | `standard`, `detailed_report`, `gem_analysis` | `src-tauri/prompt-packs/youtube_summary/1.0.0/pack.json`, `src-tauri/src/prompt_packs/runtime.rs`, `src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte` | `standard` is default; `detailed_report` is a UI/runtime mode; `gem_analysis` is a single-video sequential multi-request mode. |
 | Prompt-pack evidence mode | `evidence_mode` | `standard`, `narrative_only` | `src-tauri/prompt-packs/youtube_summary/1.0.0/pack.json`, `src-tauri/src/prompt_packs/youtube_summary/result_validation.rs` | `narrative_only` changes validation expectations for empty videos. |
 
 ### Telegram history and source metadata values

@@ -64,3 +64,50 @@ async fn browser_runtime_preflight_does_not_apply_api_input_limit() {
     assert_eq!(response.included_videos.len(), 1);
     assert_eq!(response.selected_model_input_limit, None);
 }
+
+#[tokio::test]
+async fn preflight_gem_analysis_allows_exactly_one_included_video() {
+    let pool = test_pool_with_ready_video().await;
+    let mut request = request_for_video(901);
+    request.control_preset = "gem_analysis".to_string();
+
+    let response = preflight_youtube_summary_in_pool(
+        &pool,
+        request,
+        ModelBudget {
+            input_token_limit: Some(32_000),
+        },
+    )
+    .await
+    .expect("preflight");
+
+    assert_eq!(response.included_videos.len(), 1);
+    assert!(response.blocking_failures.is_empty());
+}
+
+#[tokio::test]
+async fn preflight_gem_analysis_blocks_multiple_included_videos() {
+    let pool = test_pool_with_playlist_two_ready_videos().await;
+    let mut request = request_for_playlist(701);
+    request.control_preset = "gem_analysis".to_string();
+
+    let response = preflight_youtube_summary_in_pool(
+        &pool,
+        request,
+        ModelBudget {
+            input_token_limit: Some(32_000),
+        },
+    )
+    .await
+    .expect("preflight");
+
+    assert_eq!(
+        response.blocking_failures[0].reason,
+        "gem_analysis_requires_single_video"
+    );
+    assert!(response.blocking_failures[0]
+        .message
+        .as_deref()
+        .unwrap_or_default()
+        .contains("exactly one YouTube video"));
+}
