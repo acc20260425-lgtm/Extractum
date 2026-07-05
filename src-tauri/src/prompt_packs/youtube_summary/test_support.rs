@@ -248,6 +248,13 @@ pub(crate) async fn test_pool_with_comments_out_of_order() -> sqlx::SqlitePool {
     pool
 }
 
+pub(crate) async fn test_pool_with_ready_video_and_comments() -> sqlx::SqlitePool {
+    let pool = test_pool_with_ready_video().await;
+    insert_comment(&pool, 901, "comment-1", 10, "Useful comment").await;
+    insert_comment(&pool, 901, "comment-2", 20, "Second useful comment").await;
+    pool
+}
+
 pub(crate) async fn test_pool_with_frozen_youtube_summary_run() -> sqlx::SqlitePool {
     let pool = test_pool_with_ready_video().await;
     let run_id = create_youtube_summary_run_skeleton_in_pool(

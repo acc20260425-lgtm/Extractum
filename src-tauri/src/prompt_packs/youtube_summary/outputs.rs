@@ -26,6 +26,21 @@ pub(crate) async fn execute_transcript_analysis_stage_with_completion(
     stage_run_id: i64,
     completion: LlmCompletion,
 ) -> AppResult<()> {
+    execute_transcript_analysis_stage_with_completion_and_metrics_extension(
+        pool,
+        stage_run_id,
+        completion,
+        None,
+    )
+    .await
+}
+
+pub(crate) async fn execute_transcript_analysis_stage_with_completion_and_metrics_extension(
+    pool: &SqlitePool,
+    stage_run_id: i64,
+    completion: LlmCompletion,
+    metrics_extension: Option<serde_json::Value>,
+) -> AppResult<()> {
     let (run_id,): (i64,) =
         sqlx::query_as("SELECT run_id FROM prompt_pack_stage_runs WHERE id = ?")
             .bind(stage_run_id)
@@ -80,7 +95,7 @@ pub(crate) async fn execute_transcript_analysis_stage_with_completion(
         1,
     )
     .await?;
-    let metrics = serde_json::json!({
+    let mut metrics = serde_json::json!({
         "input_tokens": completion.input_tokens,
         "output_tokens": completion.output_tokens,
         "latency_ms": completion.latency_ms,
@@ -88,6 +103,15 @@ pub(crate) async fn execute_transcript_analysis_stage_with_completion(
         "validation_error_count": 0,
         "attempt_number": 1
     });
+    if let Some(extension) = metrics_extension {
+        let metrics_object = metrics.as_object_mut().expect("base metrics is an object");
+        let extension_object = extension
+            .as_object()
+            .ok_or_else(|| AppError::internal("metrics extension must be a JSON object"))?;
+        for (key, value) in extension_object {
+            metrics_object.insert(key.clone(), value.clone());
+        }
+    }
     let parsed_json = serde_json::to_string(&parsed)
         .map_err(|error| AppError::internal(format!("serialize parsed output: {error}")))?;
     let mut tx = pool.begin().await.map_err(AppError::database)?;

@@ -38,7 +38,11 @@ use super::dto::{
     StartYoutubeSummaryRunRequest, YoutubeSummaryPreflightFailure,
 };
 use crate::error::{AppError, AppResult};
+#[cfg(test)]
 pub(crate) use execution::execute_youtube_summary_run_with_stage_executor;
+pub(crate) use execution::{
+    execute_youtube_summary_run_with_stage_executor_with_options, YoutubeSummaryExecutionOptions,
+};
 pub(crate) use preflight::preflight_youtube_summary_in_pool;
 pub(crate) use snapshots::create_youtube_summary_run_skeleton_in_pool;
 use store::{load_run_by_client_request_id, load_run_summary};

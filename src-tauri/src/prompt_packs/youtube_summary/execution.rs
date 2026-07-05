@@ -5,6 +5,7 @@ use sqlx::SqlitePool;
 #[cfg(test)]
 use super::execution_result::persist_minimal_execution_result;
 use super::execution_result::{cancelled_outcome, terminal_message, terminal_status_for_synthesis};
+use super::gem_analysis::execute_gem_analysis_transcript_stage;
 #[cfg(test)]
 use super::outputs::execute_synthesis_stage_with_completion;
 use super::outputs::execute_transcript_analysis_stage_with_completion;
@@ -22,8 +23,9 @@ use super::transcript_execution::{
     mark_transcript_stage_failed, mark_transcript_stage_failed_for_attempt,
 };
 use super::{
-    LlmCompletion, TranscriptAnalysisStageExecutionRequest, YoutubeSummaryRunExecutionOutcome,
-    YoutubeSummaryStageExecutionError, YoutubeSummaryStageExecutionRequest,
+    GemAnalysisInputBudget, LlmCompletion, TranscriptAnalysisStageExecutionRequest,
+    YoutubeSummaryRunExecutionOutcome, YoutubeSummaryStageExecutionError,
+    YoutubeSummaryStageExecutionRequest,
 };
 use crate::error::{AppError, AppResult};
 use crate::prompt_packs::json_repair::{
@@ -36,6 +38,22 @@ use crate::prompt_packs::stage_io::build_transcript_analysis_stage_input;
 use crate::prompt_packs::stage_io::insert_stage_artifact_in_pool;
 
 use super::result_validation::validate_and_persist_final_result_transaction;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct YoutubeSummaryExecutionOptions {
+    pub(crate) gem_input_budget: GemAnalysisInputBudget,
+}
+
+#[cfg(test)]
+impl YoutubeSummaryExecutionOptions {
+    pub(crate) fn unbounded_for_tests() -> Self {
+        Self {
+            gem_input_budget: GemAnalysisInputBudget {
+                max_input_tokens: i64::MAX,
+            },
+        }
+    }
+}
 
 #[cfg(test)]
 pub(crate) async fn execute_youtube_summary_run_with_fake_completions(
@@ -144,6 +162,7 @@ pub(crate) async fn execute_youtube_summary_run_with_fake_completions(
     Ok(())
 }
 
+#[cfg(test)]
 pub(crate) async fn execute_youtube_summary_run_with_stage_executor<F, Fut>(
     pool: &SqlitePool,
     run_id: i64,
@@ -153,8 +172,14 @@ where
     F: FnMut(YoutubeSummaryStageExecutionRequest) -> Fut,
     Fut: Future<Output = Result<LlmCompletion, YoutubeSummaryStageExecutionError>>,
 {
-    execute_youtube_summary_run_with_stage_executor_internal(pool, run_id, execute_stage, |_| {})
-        .await
+    execute_youtube_summary_run_with_stage_executor_with_options(
+        pool,
+        run_id,
+        YoutubeSummaryExecutionOptions::unbounded_for_tests(),
+        execute_stage,
+        |_| {},
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -169,18 +194,20 @@ where
     Fut: Future<Output = Result<LlmCompletion, YoutubeSummaryStageExecutionError>>,
     M: FnOnce(&mut serde_json::Value),
 {
-    execute_youtube_summary_run_with_stage_executor_internal(
+    execute_youtube_summary_run_with_stage_executor_with_options(
         pool,
         run_id,
+        YoutubeSummaryExecutionOptions::unbounded_for_tests(),
         execute_stage,
         mutate_final_result,
     )
     .await
 }
 
-async fn execute_youtube_summary_run_with_stage_executor_internal<F, Fut, M>(
+pub(crate) async fn execute_youtube_summary_run_with_stage_executor_with_options<F, Fut, M>(
     pool: &SqlitePool,
     run_id: i64,
+    options: YoutubeSummaryExecutionOptions,
     mut execute_stage: F,
     mutate_final_result: M,
 ) -> AppResult<YoutubeSummaryRunExecutionOutcome>
@@ -202,6 +229,33 @@ where
         }
 
         let input = build_transcript_analysis_stage_input(pool, stage.stage_run_id).await?;
+        if input.control_preset == "gem_analysis" {
+            match execute_gem_analysis_transcript_stage(
+                pool,
+                run_id,
+                &stage,
+                input,
+                options.gem_input_budget,
+                &mut execute_stage,
+            )
+            .await
+            {
+                Ok(()) => successes += 1,
+                Err(YoutubeSummaryStageExecutionError::Cancelled) => {
+                    mark_transcript_stage_cancelled(pool, stage.stage_run_id).await?;
+                    mark_run_cancelled(pool, run_id, successes, total).await?;
+                    return Ok(cancelled_outcome(run_id, successes, total));
+                }
+                Err(YoutubeSummaryStageExecutionError::Failed(error)) => {
+                    failures += 1;
+                    mark_transcript_stage_failed(pool, run_id, stage.stage_run_id, &error.message)
+                        .await?;
+                }
+            }
+            update_run_progress(pool, run_id, successes, total).await?;
+            continue;
+        }
+
         let prompt_input_json = serde_json::to_string_pretty(&input)
             .map_err(|error| AppError::internal(format!("serialize stage input: {error}")))?;
         let request = TranscriptAnalysisStageExecutionRequest {

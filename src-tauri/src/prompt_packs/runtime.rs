@@ -15,22 +15,23 @@ use super::dto::{
 };
 use super::json_repair::JsonRepairStageExecutionRequest;
 use super::youtube_summary::{
-    execute_youtube_summary_run_with_stage_executor,
+    execute_youtube_summary_run_with_stage_executor_with_options,
     load_youtube_summary_run_by_client_request_id_in_pool, model_budget_for_runtime,
     preflight_youtube_summary_in_pool, start_youtube_summary_run_in_pool,
-    start_youtube_summary_run_with_preflight_failures_in_pool, GemAnalysisPart,
-    GemAnalysisPartRepairRequest, GemAnalysisPartStageExecutionRequest,
+    start_youtube_summary_run_with_preflight_failures_in_pool, GemAnalysisInputBudget,
+    GemAnalysisPart, GemAnalysisPartRepairRequest, GemAnalysisPartStageExecutionRequest,
     LlmCompletion as PromptPackLlmCompletion, SynthesisStageExecutionRequest,
-    TranscriptAnalysisStageExecutionRequest, YoutubeSummaryRunExecutionOutcome,
-    YoutubeSummaryStageExecutionError, YoutubeSummaryStageExecutionRequest,
+    TranscriptAnalysisStageExecutionRequest, YoutubeSummaryExecutionOptions,
+    YoutubeSummaryRunExecutionOutcome, YoutubeSummaryStageExecutionError,
+    YoutubeSummaryStageExecutionRequest,
 };
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::llm::{
-    resolve_effective_model, resolve_model_output_token_limit_for_backend,
-    resolve_profile_for_backend, run_llm_collect_with_profile, LlmChatRequest, LlmMessage,
-    LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState,
-    ResolvedLlmProfile,
+    resolve_effective_model, resolve_model_input_token_limit_for_backend,
+    resolve_model_output_token_limit_for_backend, resolve_profile_for_backend,
+    run_llm_collect_with_profile, LlmChatRequest, LlmMessage, LlmRequestError, LlmRequestKind,
+    LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState, ResolvedLlmProfile,
 };
 
 pub const PROMPT_PACK_RUN_EVENT: &str = "prompt-pack-run-event";
@@ -54,6 +55,7 @@ struct StageRuntimeConfiguration {
 
 #[derive(Deserialize)]
 struct StageBudgetLimits {
+    max_prompt_tokens: Option<i64>,
     max_output_tokens: Option<i64>,
 }
 
@@ -372,13 +374,33 @@ async fn execute_youtube_summary_run(
 ) -> AppResult<YoutubeSummaryRunExecutionOutcome> {
     let pool = get_pool(&handle).await?;
     let config = load_run_runtime_config(&pool, run_id).await?;
-    let completion_runtime = match config.runtime_provider {
-        RunRuntimeProvider::Api => RunCompletionRuntime::Api {
-            profile: resolve_profile_for_backend(&handle, config.profile_id.as_deref()).await?,
-            model_override: config.model_override.clone(),
-        },
-        RunRuntimeProvider::GeminiBrowser => RunCompletionRuntime::GeminiBrowser {
-            browser_provider_config: config.browser_provider_config.clone(),
+    let (completion_runtime, model_input_limit) = match config.runtime_provider {
+        RunRuntimeProvider::Api => {
+            let profile =
+                resolve_profile_for_backend(&handle, config.profile_id.as_deref()).await?;
+            let effective_model =
+                resolve_effective_model(&profile, config.model_override.as_deref())?;
+            let model_input_limit =
+                resolve_model_input_token_limit_for_backend(&profile, &effective_model).await;
+            (
+                RunCompletionRuntime::Api {
+                    profile,
+                    model_override: config.model_override.clone(),
+                },
+                model_input_limit,
+            )
+        }
+        RunRuntimeProvider::GeminiBrowser => (
+            RunCompletionRuntime::GeminiBrowser {
+                browser_provider_config: config.browser_provider_config.clone(),
+            },
+            None,
+        ),
+    };
+    let prompt_budget = transcript_analysis_stage_max_prompt_token_budget()?;
+    let execution_options = YoutubeSummaryExecutionOptions {
+        gem_input_budget: GemAnalysisInputBudget {
+            max_input_tokens: gem_input_cap(model_input_limit, prompt_budget),
         },
     };
     let run_cancellation_token = handle
@@ -407,66 +429,72 @@ async fn execute_youtube_summary_run(
     .await;
 
     let stage_pool = pool.clone();
-    execute_youtube_summary_run_with_stage_executor(&pool, run_id, move |stage_request| {
-        let handle = handle.clone();
-        let pool = stage_pool.clone();
-        let completion_runtime = completion_runtime.clone();
-        let run_cancellation_token = run_cancellation_token.clone();
-        async move {
-            match stage_request {
-                YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request) => {
-                    run_transcript_analysis_stage_request(
-                        handle,
-                        pool,
-                        completion_runtime,
-                        run_cancellation_token,
-                        request,
-                    )
-                    .await
-                }
-                YoutubeSummaryStageExecutionRequest::Synthesis(request) => {
-                    run_synthesis_stage_request(
-                        handle,
-                        pool,
-                        completion_runtime,
-                        run_cancellation_token,
-                        request,
-                    )
-                    .await
-                }
-                YoutubeSummaryStageExecutionRequest::JsonRepair(request) => {
-                    run_json_repair_stage_request(
-                        handle,
-                        pool,
-                        completion_runtime,
-                        run_cancellation_token,
-                        request,
-                    )
-                    .await
-                }
-                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(request) => {
-                    run_gem_analysis_part_stage_request(
-                        handle,
-                        pool,
-                        completion_runtime,
-                        run_cancellation_token,
-                        request,
-                    )
-                    .await
-                }
-                YoutubeSummaryStageExecutionRequest::GemAnalysisPartRepair(request) => {
-                    run_gem_analysis_part_repair_request(
-                        handle,
-                        pool,
-                        completion_runtime,
-                        run_cancellation_token,
-                        request,
-                    )
-                    .await
+    execute_youtube_summary_run_with_stage_executor_with_options(
+        &pool,
+        run_id,
+        execution_options,
+        move |stage_request| {
+            let handle = handle.clone();
+            let pool = stage_pool.clone();
+            let completion_runtime = completion_runtime.clone();
+            let run_cancellation_token = run_cancellation_token.clone();
+            async move {
+                match stage_request {
+                    YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request) => {
+                        run_transcript_analysis_stage_request(
+                            handle,
+                            pool,
+                            completion_runtime,
+                            run_cancellation_token,
+                            request,
+                        )
+                        .await
+                    }
+                    YoutubeSummaryStageExecutionRequest::Synthesis(request) => {
+                        run_synthesis_stage_request(
+                            handle,
+                            pool,
+                            completion_runtime,
+                            run_cancellation_token,
+                            request,
+                        )
+                        .await
+                    }
+                    YoutubeSummaryStageExecutionRequest::JsonRepair(request) => {
+                        run_json_repair_stage_request(
+                            handle,
+                            pool,
+                            completion_runtime,
+                            run_cancellation_token,
+                            request,
+                        )
+                        .await
+                    }
+                    YoutubeSummaryStageExecutionRequest::GemAnalysisPart(request) => {
+                        run_gem_analysis_part_stage_request(
+                            handle,
+                            pool,
+                            completion_runtime,
+                            run_cancellation_token,
+                            request,
+                        )
+                        .await
+                    }
+                    YoutubeSummaryStageExecutionRequest::GemAnalysisPartRepair(request) => {
+                        run_gem_analysis_part_repair_request(
+                            handle,
+                            pool,
+                            completion_runtime,
+                            run_cancellation_token,
+                            request,
+                        )
+                        .await
+                    }
                 }
             }
-        }
-    })
+        },
+        |_| {},
+    )
     .await
 }
 
@@ -1656,6 +1684,10 @@ fn transcript_analysis_stage_max_output_token_budget() -> AppResult<i64> {
     stage_max_output_token_budget(TRANSCRIPT_ANALYSIS_STAGE_JSON, "transcript-analysis")
 }
 
+fn transcript_analysis_stage_max_prompt_token_budget() -> AppResult<i64> {
+    stage_max_prompt_token_budget(TRANSCRIPT_ANALYSIS_STAGE_JSON, "transcript-analysis")
+}
+
 fn transcript_analysis_stage_max_output_token_budget_for_control_preset(
     control_preset: &str,
 ) -> AppResult<i64> {
@@ -1669,6 +1701,24 @@ fn transcript_analysis_stage_max_output_token_budget_for_control_preset(
 
 fn synthesis_stage_max_output_token_budget() -> AppResult<i64> {
     stage_max_output_token_budget(SYNTHESIS_STAGE_JSON, "synthesis")
+}
+
+fn stage_max_prompt_token_budget(asset_json: &str, label: &str) -> AppResult<i64> {
+    let asset = serde_json::from_str::<StageRuntimeConfigAsset>(asset_json).map_err(|error| {
+        AppError::internal(format!(
+            "Parse bundled {label} runtime configuration: {error}"
+        ))
+    })?;
+    asset
+        .runtime_configuration
+        .and_then(|runtime| runtime.budget_limits)
+        .and_then(|budget| budget.max_prompt_tokens)
+        .filter(|max_prompt_tokens| *max_prompt_tokens > 0)
+        .ok_or_else(|| {
+            AppError::internal(format!(
+                "Bundled {label} runtime configuration is missing positive max_prompt_tokens"
+            ))
+        })
 }
 
 fn stage_max_output_token_budget(asset_json: &str, label: &str) -> AppResult<i64> {
@@ -1697,6 +1747,16 @@ fn transcript_analysis_max_output_tokens(
         Some(limit) => stage_output_budget.min(limit),
         None => stage_output_budget,
     })
+}
+
+fn gem_input_cap(model_input_limit: Option<usize>, prompt_budget: i64) -> i64 {
+    match model_input_limit
+        .and_then(|limit| i64::try_from(limit).ok())
+        .filter(|limit| *limit > 0)
+    {
+        Some(model_limit) => model_limit.min(prompt_budget),
+        None => prompt_budget,
+    }
 }
 
 async fn mark_prompt_pack_run_failed(
@@ -2175,15 +2235,16 @@ mod tests {
         build_synthesis_llm_request, build_transcript_analysis_llm_request,
         cleanup_interrupted_prompt_pack_runs_in_pool,
         clear_prompt_pack_cancellation_smoke_fixture_in_pool, delete_prompt_pack_run_in_pool,
-        list_prompt_pack_run_stages_in_pool, list_prompt_pack_runs_in_pool,
+        gem_input_cap, list_prompt_pack_run_stages_in_pool, list_prompt_pack_runs_in_pool,
         llm_chat_request_to_browser_prompt, load_run_runtime_config, now_string,
         persist_browser_stage_provenance, run_browser_stage_result_with_cancellation,
         run_with_prompt_pack_run_cancellation, seed_prompt_pack_cancellation_smoke_fixture_in_pool,
         synthesis_stage_max_output_token_budget, transcript_analysis_max_output_tokens,
         transcript_analysis_stage_max_output_token_budget,
         transcript_analysis_stage_max_output_token_budget_for_control_preset,
-        update_prompt_pack_run_in_pool, PromptPackRunState, RunRuntimeProvider,
-        YoutubeSummaryStageExecutionError, DETAILED_REPORT_CONTROL_PRESET,
+        transcript_analysis_stage_max_prompt_token_budget, update_prompt_pack_run_in_pool,
+        PromptPackRunState, RunRuntimeProvider, YoutubeSummaryStageExecutionError,
+        DETAILED_REPORT_CONTROL_PRESET,
     };
     use crate::gemini_browser::{GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind};
     use crate::llm::{LlmChatRequest, LlmMessage, LlmRequestError};
@@ -3056,6 +3117,21 @@ mod tests {
             transcript_analysis_stage_max_output_token_budget().expect("load stage budget"),
             4_096
         );
+    }
+
+    #[test]
+    fn transcript_analysis_stage_max_prompt_token_budget_reads_runtime_config() {
+        assert_eq!(
+            transcript_analysis_stage_max_prompt_token_budget().expect("prompt budget"),
+            24_000
+        );
+    }
+
+    #[test]
+    fn gem_input_budget_uses_lower_known_model_limit() {
+        assert_eq!(gem_input_cap(Some(8_000), 24_000), 8_000);
+        assert_eq!(gem_input_cap(Some(64_000), 24_000), 24_000);
+        assert_eq!(gem_input_cap(None, 24_000), 24_000);
     }
 
     #[test]

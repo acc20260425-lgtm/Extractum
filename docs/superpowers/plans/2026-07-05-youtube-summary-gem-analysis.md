@@ -1261,7 +1261,7 @@ git commit -m "feat(prompt-packs): build gem analysis materials"
 - Produces persistence helper `execute_transcript_analysis_stage_with_completion_and_metrics_extension(...)`.
 - Consumes `YoutubeSummaryStageExecutionRequest::GemAnalysisPart` and `GemAnalysisPartRepair`.
 
-- [ ] **Step 1: Introduce execution options and rename the internal executor**
+- [x] **Step 1: Introduce execution options and rename the internal executor**
 
 In `execution.rs`, add the options struct:
 
@@ -1290,7 +1290,7 @@ where
 
 Do not use `options` yet in this step except to accept it; the compiler may allow the unused variable warning. This keeps the crate compiling before Gem branching is added.
 
-- [ ] **Step 2: Keep the old test helper API behind `#[cfg(test)]` only**
+- [x] **Step 2: Keep the old test helper API behind `#[cfg(test)]` only**
 
 Add a test-only unbounded helper. Do not expose this in production builds:
 
@@ -1349,7 +1349,7 @@ pub(crate) use execution::execute_youtube_summary_run_with_stage_executor;
 
 Production code must call only `execute_youtube_summary_run_with_stage_executor_with_options` with a real runtime-computed `YoutubeSummaryExecutionOptions`.
 
-- [ ] **Step 3: Add runtime budget tests**
+- [x] **Step 3: Add runtime budget tests**
 
 In `runtime.rs` tests, add:
 
@@ -1370,7 +1370,7 @@ fn gem_input_budget_uses_lower_known_model_limit() {
 }
 ```
 
-- [ ] **Step 4: Implement runtime prompt-budget reading and cap resolution**
+- [x] **Step 4: Implement runtime prompt-budget reading and cap resolution**
 
 In `runtime.rs`, extend `StageBudgetLimits`:
 
@@ -1520,7 +1520,7 @@ execute_youtube_summary_run_with_stage_executor_with_options(
 
 Import `resolve_model_input_token_limit_for_backend` alongside the existing output-limit resolver.
 
-- [ ] **Step 5: Add output persistence test for metrics extension**
+- [x] **Step 5: Add output persistence test for metrics extension**
 
 In `outputs_tests.rs`, add:
 
@@ -1578,7 +1578,7 @@ async fn load_stage_artifact_json(
 }
 ```
 
-- [ ] **Step 6: Implement metrics extension persistence**
+- [x] **Step 6: Implement metrics extension persistence**
 
 In `outputs.rs`, keep the existing public function as a wrapper:
 
@@ -1635,7 +1635,7 @@ if let Some(extension) = metrics_extension {
 
 Then keep the existing `insert_stage_artifact_in_transaction(..., &metrics.to_string())` call unchanged.
 
-- [ ] **Step 7: Add Gem execution test helpers**
+- [x] **Step 7: Add Gem execution test helpers**
 
 In `test_support.rs`, add:
 
@@ -1679,7 +1679,7 @@ fn fake_gem_part_completion(part: GemAnalysisPart) -> LlmCompletion {
 }
 ```
 
-- [ ] **Step 8: Add Gem execution tests**
+- [x] **Step 8: Add Gem execution tests**
 
 In `execution.rs` tests or a `gem_analysis` test module, add:
 
@@ -1722,7 +1722,7 @@ Also add tests:
 - `gem_analysis_optional_comments_failure_persists_report_with_failure_note`
 - `gem_analysis_does_not_start_next_part_after_cancellation_checkpoint`
 
-- [ ] **Step 9: Run execution tests and verify failure**
+- [x] **Step 9: Run execution tests and verify failure**
 
 Run:
 
@@ -1734,7 +1734,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL because execution branch is not implemented.
 
-- [ ] **Step 10: Branch from normal execution using runtime-provided options**
+- [x] **Step 10: Branch from normal execution using runtime-provided options**
 
 Inside the stage loop in `execute_youtube_summary_run_with_stage_executor_with_options`, after building `input`, branch:
 
@@ -1768,7 +1768,7 @@ if input.control_preset == "gem_analysis" {
 
 Use the existing pending stage row fields already referenced in the loop: `stage.stage_run_id`, `stage.source_snapshot_id`, and `stage.source_ref_id`. Do not add another adapter type for this task.
 
-- [ ] **Step 11: Implement Gem execution helper**
+- [x] **Step 11: Implement Gem execution helper**
 
 `execute_gem_analysis_transcript_stage` flow:
 
@@ -1801,7 +1801,7 @@ where
 
 When first parse fails, build `GemAnalysisPartRepairRequest` with `attempt_number: 1`. If repair fails for part 1 or part 3, return `Failed(error)`. If comments repair fails, return a comments failure status to the caller without failing the stage.
 
-- [ ] **Step 12: Persist assembled output and metrics**
+- [x] **Step 12: Persist assembled output and metrics**
 
 Use:
 
@@ -1834,7 +1834,7 @@ serde_json::json!({
 })
 ```
 
-- [ ] **Step 13: Run focused verification**
+- [x] **Step 13: Run focused verification**
 
 Run:
 
@@ -1845,7 +1845,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 14: Commit Task 5**
+- [x] **Step 14: Commit Task 5**
 
 ```powershell
 git add src-tauri/src/prompt_packs/youtube_summary/gem_analysis.rs src-tauri/src/prompt_packs/youtube_summary/execution.rs src-tauri/src/prompt_packs/youtube_summary/outputs.rs src-tauri/src/prompt_packs/youtube_summary/outputs_tests.rs

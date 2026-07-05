@@ -1,11 +1,49 @@
-use super::execution::{
-    execute_youtube_summary_run_with_fake_completions,
-    execute_youtube_summary_run_with_stage_executor,
-};
+use super::execution::execute_youtube_summary_run_with_fake_completions;
 use super::test_support::*;
-use super::{LlmCompletion, YoutubeSummaryStageExecutionRequest};
+use super::{
+    execute_youtube_summary_run_with_stage_executor,
+    execute_youtube_summary_run_with_stage_executor_with_options,
+    start_youtube_summary_run_in_pool, GemAnalysisInputBudget, GemAnalysisPart, LlmCompletion,
+    YoutubeSummaryExecutionOptions, YoutubeSummaryStageExecutionRequest,
+};
 use crate::error::AppError;
 use crate::prompt_packs::youtube_summary::types::YoutubeSummaryStageExecutionError;
+
+fn request_kind_label(request: &YoutubeSummaryStageExecutionRequest) -> &'static str {
+    match request {
+        YoutubeSummaryStageExecutionRequest::GemAnalysisPart(request) => match request.part {
+            GemAnalysisPart::Passport => "gem_passport",
+            GemAnalysisPart::Comments => "gem_comments",
+            GemAnalysisPart::DeepRecap => "gem_deep_recap",
+        },
+        YoutubeSummaryStageExecutionRequest::GemAnalysisPartRepair(_) => "gem_part_repair",
+        YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(_) => "transcript_analysis",
+        YoutubeSummaryStageExecutionRequest::Synthesis(_) => "synthesis",
+        YoutubeSummaryStageExecutionRequest::JsonRepair(_) => "json_repair",
+    }
+}
+
+fn fake_gem_part_completion(part: GemAnalysisPart) -> LlmCompletion {
+    LlmCompletion {
+        text: serde_json::json!({
+            "part": part.as_str(),
+            "markdown": "### Section\nContent",
+        })
+        .to_string(),
+        input_tokens: Some(10),
+        output_tokens: Some(20),
+        latency_ms: 30,
+    }
+}
+
+fn malformed_gem_part_completion() -> LlmCompletion {
+    LlmCompletion {
+        text: "{ not json".to_string(),
+        input_tokens: Some(10),
+        output_tokens: Some(20),
+        latency_ms: 30,
+    }
+}
 
 #[tokio::test]
 async fn execute_queued_run_with_stage_executor_finishes_complete() {
@@ -71,6 +109,321 @@ async fn execute_queued_run_with_stage_executor_finishes_complete() {
     assert_eq!(result_count, 1);
     assert_eq!(video_count, 1);
     assert_eq!(result_error_findings, 0);
+}
+
+#[tokio::test]
+async fn gem_analysis_executes_passport_comments_and_deep_recap_in_order() {
+    let pool = test_pool_with_ready_video_and_comments().await;
+    let mut request = start_request("req-gem-exec-order", vec![901]);
+    request.control_preset = "gem_analysis".to_string();
+    request.include_comments = true;
+    let run = start_youtube_summary_run_in_pool(&pool, request)
+        .await
+        .expect("start")
+        .expect_started("started");
+
+    let mut seen = Vec::new();
+    execute_youtube_summary_run_with_stage_executor(&pool, run.run_id, |request| {
+        seen.push(request_kind_label(&request));
+        async move {
+            match request {
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(part) => {
+                    Ok(fake_gem_part_completion(part.part))
+                }
+                _ => panic!("unexpected request"),
+            }
+        }
+    })
+    .await
+    .expect("execute");
+
+    assert_eq!(seen, vec!["gem_passport", "gem_comments", "gem_deep_recap"]);
+}
+
+#[tokio::test]
+async fn gem_analysis_skips_comments_when_trimmed_comment_text_is_empty() {
+    let pool = test_pool_with_ready_video().await;
+    insert_comment(&pool, 901, "empty-comment", 10, "   ").await;
+    let mut request = start_request("req-gem-empty-comment-skip", vec![901]);
+    request.control_preset = "gem_analysis".to_string();
+    request.include_comments = true;
+    let run = start_youtube_summary_run_in_pool(&pool, request)
+        .await
+        .expect("start")
+        .expect_started("started");
+
+    let mut seen = Vec::new();
+    execute_youtube_summary_run_with_stage_executor(&pool, run.run_id, |request| {
+        seen.push(request_kind_label(&request));
+        async move {
+            match request {
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(part) => {
+                    assert_ne!(part.part, GemAnalysisPart::Comments);
+                    Ok(fake_gem_part_completion(part.part))
+                }
+                _ => panic!("unexpected request"),
+            }
+        }
+    })
+    .await
+    .expect("execute");
+
+    assert_eq!(seen, vec!["gem_passport", "gem_deep_recap"]);
+}
+
+#[tokio::test]
+async fn gem_analysis_repairs_invalid_required_part_once() {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    let pool = test_pool_with_ready_video_and_comments().await;
+    let mut request = start_request("req-gem-repair-required", vec![901]);
+    request.control_preset = "gem_analysis".to_string();
+    request.include_comments = true;
+    let run = start_youtube_summary_run_in_pool(&pool, request)
+        .await
+        .expect("start")
+        .expect_started("started");
+    let passport_calls = Arc::new(AtomicUsize::new(0));
+    let repair_calls = Arc::new(AtomicUsize::new(0));
+
+    execute_youtube_summary_run_with_stage_executor(&pool, run.run_id, |request| {
+        let passport_calls = Arc::clone(&passport_calls);
+        let repair_calls = Arc::clone(&repair_calls);
+        async move {
+            match request {
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(part)
+                    if part.part == GemAnalysisPart::Passport =>
+                {
+                    passport_calls.fetch_add(1, Ordering::SeqCst);
+                    Ok(malformed_gem_part_completion())
+                }
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(part) => {
+                    Ok(fake_gem_part_completion(part.part))
+                }
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPartRepair(repair) => {
+                    repair_calls.fetch_add(1, Ordering::SeqCst);
+                    assert_eq!(repair.part, GemAnalysisPart::Passport);
+                    assert_eq!(repair.attempt_number, 1);
+                    Ok(fake_gem_part_completion(repair.part))
+                }
+                _ => panic!("unexpected request"),
+            }
+        }
+    })
+    .await
+    .expect("execute");
+
+    assert_eq!(passport_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(repair_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn gem_analysis_input_budget_blocks_before_first_provider_call() {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    let pool = test_pool_with_ready_video_and_comments().await;
+    let mut request = start_request("req-gem-budget-blocks", vec![901]);
+    request.control_preset = "gem_analysis".to_string();
+    request.include_comments = true;
+    let run = start_youtube_summary_run_in_pool(&pool, request)
+        .await
+        .expect("start")
+        .expect_started("started");
+    let calls = Arc::new(AtomicUsize::new(0));
+
+    let outcome = execute_youtube_summary_run_with_stage_executor_with_options(
+        &pool,
+        run.run_id,
+        YoutubeSummaryExecutionOptions {
+            gem_input_budget: GemAnalysisInputBudget {
+                max_input_tokens: 1,
+            },
+        },
+        |request| {
+            let calls = Arc::clone(&calls);
+            async move {
+                calls.fetch_add(1, Ordering::SeqCst);
+                match request {
+                    YoutubeSummaryStageExecutionRequest::GemAnalysisPart(part) => {
+                        Ok(fake_gem_part_completion(part.part))
+                    }
+                    _ => panic!("unexpected request"),
+                }
+            }
+        },
+        |_| {},
+    )
+    .await
+    .expect("execute");
+
+    let (stage_status, error_message): (String, Option<String>) =
+        sqlx::query_as("SELECT stage_status, error_message FROM prompt_pack_stage_runs WHERE run_id = ? AND stage_name = 'youtube_summary/transcript_analysis'")
+            .bind(run.run_id)
+            .fetch_one(&pool)
+            .await
+            .expect("stage status");
+
+    assert_eq!(outcome.run_status, "failed");
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    assert_eq!(stage_status, "failed");
+    assert!(error_message.unwrap_or_default().contains("input budget"));
+}
+
+#[tokio::test]
+async fn gem_analysis_required_part_failure_fails_stage() {
+    let pool = test_pool_with_ready_video_and_comments().await;
+    let mut request = start_request("req-gem-required-fails", vec![901]);
+    request.control_preset = "gem_analysis".to_string();
+    request.include_comments = true;
+    let run = start_youtube_summary_run_in_pool(&pool, request)
+        .await
+        .expect("start")
+        .expect_started("started");
+
+    let outcome =
+        execute_youtube_summary_run_with_stage_executor(&pool, run.run_id, |request| async move {
+            match request {
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(part)
+                    if part.part == GemAnalysisPart::Passport =>
+                {
+                    Err(YoutubeSummaryStageExecutionError::Failed(
+                        AppError::internal("passport provider failed"),
+                    ))
+                }
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(part) => {
+                    Ok(fake_gem_part_completion(part.part))
+                }
+                _ => panic!("unexpected request"),
+            }
+        })
+        .await
+        .expect("execute");
+
+    let (stage_status, error_message): (String, Option<String>) =
+        sqlx::query_as("SELECT stage_status, error_message FROM prompt_pack_stage_runs WHERE run_id = ? AND stage_name = 'youtube_summary/transcript_analysis'")
+            .bind(run.run_id)
+            .fetch_one(&pool)
+            .await
+            .expect("stage status");
+
+    assert_eq!(outcome.run_status, "failed");
+    assert_eq!(stage_status, "failed");
+    assert!(error_message
+        .unwrap_or_default()
+        .contains("passport provider failed"));
+}
+
+#[tokio::test]
+async fn gem_analysis_optional_comments_failure_persists_report_with_failure_note() {
+    let pool = test_pool_with_ready_video_and_comments().await;
+    let mut request = start_request("req-gem-comments-fail-note", vec![901]);
+    request.control_preset = "gem_analysis".to_string();
+    request.include_comments = true;
+    let run = start_youtube_summary_run_in_pool(&pool, request)
+        .await
+        .expect("start")
+        .expect_started("started");
+
+    let outcome =
+        execute_youtube_summary_run_with_stage_executor(&pool, run.run_id, |request| async move {
+            match request {
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(part)
+                    if part.part == GemAnalysisPart::Comments =>
+                {
+                    Err(YoutubeSummaryStageExecutionError::Failed(
+                        AppError::internal("comments provider failed"),
+                    ))
+                }
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(part) => {
+                    Ok(fake_gem_part_completion(part.part))
+                }
+                _ => panic!("unexpected request"),
+            }
+        })
+        .await
+        .expect("execute");
+
+    let stage_id = transcript_analysis_stage_id(&pool, run.run_id).await;
+    let parsed = load_stage_artifact_json(&pool, stage_id, "parsed_output").await;
+    let metrics = load_stage_artifact_json(&pool, stage_id, "metrics").await;
+    let summary = parsed["video_candidate"]["summary_text"]
+        .as_str()
+        .expect("summary text");
+
+    assert_eq!(outcome.run_status, "complete");
+    assert!(summary.contains("Не выполнено"));
+    assert_eq!(
+        metrics["gem_analysis"]["comments_part"]["status"],
+        serde_json::json!("failed")
+    );
+}
+
+#[tokio::test]
+async fn gem_analysis_does_not_start_next_part_after_cancellation_checkpoint() {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    let pool = test_pool_with_ready_video_and_comments().await;
+    let mut request = start_request("req-gem-cancel-between-parts", vec![901]);
+    request.control_preset = "gem_analysis".to_string();
+    request.include_comments = true;
+    let run = start_youtube_summary_run_in_pool(&pool, request)
+        .await
+        .expect("start")
+        .expect_started("started");
+    let calls = Arc::new(AtomicUsize::new(0));
+    let pool_for_stage = pool.clone();
+
+    let outcome = execute_youtube_summary_run_with_stage_executor(&pool, run.run_id, |request| {
+        let calls = Arc::clone(&calls);
+        let pool = pool_for_stage.clone();
+        async move {
+            calls.fetch_add(1, Ordering::SeqCst);
+            match request {
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(part)
+                    if part.part == GemAnalysisPart::Passport =>
+                {
+                    sqlx::query(
+                        "UPDATE prompt_pack_runs SET run_status = 'cancelled' WHERE id = ?",
+                    )
+                    .bind(part.run_id)
+                    .execute(&pool)
+                    .await
+                    .map_err(|error| {
+                        YoutubeSummaryStageExecutionError::Failed(AppError::internal(format!(
+                            "failed to flag run cancelled: {error}"
+                        )))
+                    })?;
+                    Ok(fake_gem_part_completion(part.part))
+                }
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(part) => {
+                    Ok(fake_gem_part_completion(part.part))
+                }
+                _ => panic!("unexpected request"),
+            }
+        }
+    })
+    .await
+    .expect("execute");
+
+    let stage_status: String =
+        sqlx::query_scalar("SELECT stage_status FROM prompt_pack_stage_runs WHERE run_id = ? AND stage_name = 'youtube_summary/transcript_analysis'")
+            .bind(run.run_id)
+            .fetch_one(&pool)
+            .await
+            .expect("stage status");
+
+    assert_eq!(outcome.run_status, "cancelled");
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(stage_status, "cancelled");
 }
 
 #[tokio::test]
@@ -730,4 +1083,22 @@ async fn execute_multi_video_run_stops_after_transcript_when_cancelled_before_sy
     assert_eq!(video_rows, 0);
     assert_eq!(synthesis_status, "pending");
     assert_eq!(transcript_calls_for_assert.load(Ordering::SeqCst), 2);
+}
+
+async fn load_stage_artifact_json(
+    pool: &sqlx::SqlitePool,
+    stage_id: i64,
+    artifact_kind: &str,
+) -> serde_json::Value {
+    let content_zstd: Vec<u8> = sqlx::query_scalar(
+        "SELECT content_zstd FROM prompt_pack_stage_artifacts
+         WHERE stage_run_id = ? AND artifact_kind = ?",
+    )
+    .bind(stage_id)
+    .bind(artifact_kind)
+    .fetch_one(pool)
+    .await
+    .expect("artifact content");
+    let text = crate::compression::decompress_text(&content_zstd).expect("decompress artifact");
+    serde_json::from_str(&text).expect("artifact json")
 }

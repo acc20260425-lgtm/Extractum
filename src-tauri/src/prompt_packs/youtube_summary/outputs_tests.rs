@@ -1,5 +1,6 @@
 use super::outputs::{
     execute_synthesis_stage_with_completion, execute_transcript_analysis_stage_with_completion,
+    execute_transcript_analysis_stage_with_completion_and_metrics_extension,
 };
 use super::test_support::*;
 use super::LlmCompletion;
@@ -475,6 +476,34 @@ async fn execute_transcript_analysis_stage_persists_intermediate_entities_artifa
 }
 
 #[tokio::test]
+async fn transcript_stage_metrics_can_include_gem_analysis_extension() {
+    let pool = test_pool_with_frozen_youtube_summary_run().await;
+    let stage_id = transcript_analysis_stage_id(&pool, 1).await;
+    let completion = fake_completion_with_valid_transcript_analysis_json();
+
+    execute_transcript_analysis_stage_with_completion_and_metrics_extension(
+        &pool,
+        stage_id,
+        completion,
+        Some(serde_json::json!({
+            "gem_analysis": {
+                "parts": [
+                    { "part": "passport", "status": "succeeded" }
+                ]
+            }
+        })),
+    )
+    .await
+    .expect("execute stage");
+
+    let metrics = load_stage_artifact_json(&pool, stage_id, "metrics").await;
+    assert_eq!(
+        metrics["gem_analysis"]["parts"][0]["part"],
+        serde_json::json!("passport")
+    );
+}
+
+#[tokio::test]
 async fn transcript_success_artifacts_roll_back_when_parsed_insert_fails() {
     let pool = test_pool_with_frozen_youtube_summary_run().await;
     let stage_id = transcript_analysis_stage_id(&pool, 1).await;
@@ -655,6 +684,24 @@ async fn assert_quarantine_count(pool: &sqlx::SqlitePool, stage_id: i64, expecte
     .expect("quarantine count");
 
     assert_eq!(count, expected_count);
+}
+
+async fn load_stage_artifact_json(
+    pool: &sqlx::SqlitePool,
+    stage_id: i64,
+    artifact_kind: &str,
+) -> serde_json::Value {
+    let content_zstd: Vec<u8> = sqlx::query_scalar(
+        "SELECT content_zstd FROM prompt_pack_stage_artifacts
+         WHERE stage_run_id = ? AND artifact_kind = ?",
+    )
+    .bind(stage_id)
+    .bind(artifact_kind)
+    .fetch_one(pool)
+    .await
+    .expect("artifact content");
+    let text = crate::compression::decompress_text(&content_zstd).expect("decompress artifact");
+    serde_json::from_str(&text).expect("artifact json")
 }
 
 async fn synthesis_stage_id(pool: &sqlx::SqlitePool, run_id: i64) -> i64 {

@@ -1,9 +1,19 @@
+use std::future::Future;
+
 use sqlx::SqlitePool;
 
+use super::outputs::execute_transcript_analysis_stage_with_completion_and_metrics_extension;
+use super::progress::is_run_cancelled;
 use super::sources::TranscriptSnapshotSegment;
-use super::{estimate_tokens, GemAnalysisInputBudget, GemAnalysisPart};
+use super::transcript_execution::TranscriptStageRow;
+use super::{
+    estimate_tokens, GemAnalysisInputBudget, GemAnalysisPart, GemAnalysisPartRepairRequest,
+    GemAnalysisPartStageExecutionRequest, LlmCompletion, YoutubeSummaryStageExecutionError,
+    YoutubeSummaryStageExecutionRequest,
+};
 use crate::compression::decompress_text;
 use crate::error::{AppError, AppResult};
+use crate::prompt_packs::stage_io::TranscriptAnalysisStageInput;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum GemCommentsStatus {
@@ -54,6 +64,87 @@ const GEM_DEEP_RECAP_PROMPT_BODY: &str = r#"Системная роль:
 Markdown должен начинаться с `###`; вложенные заголовки через `####`; не использовать `#`, `##` или leading/trailing `---`."#;
 
 const GEM_INPUT_ESTIMATOR_OVERHEAD_TOKENS: i64 = 1_500;
+const GEM_LLM_WRAPPER_TEXT_ESTIMATE: &str = "Return strict JSON for one Gem analysis part with part and markdown fields. Use only the provided material and do not add prose outside JSON.";
+const GEM_COMMENTS_FAILURE_NOTE: &str =
+    "Не выполнено: анализ комментариев завершился ошибкой после повторной попытки.";
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct GemPartMetrics {
+    part: GemAnalysisPart,
+    status: &'static str,
+    attempts: i64,
+    input_tokens: Option<i64>,
+    output_tokens: Option<i64>,
+    latency_ms: i64,
+    repaired: bool,
+    error_message: Option<String>,
+}
+
+impl GemPartMetrics {
+    fn succeeded(part: GemAnalysisPart, completion: &LlmCompletion) -> Self {
+        Self {
+            part,
+            status: "succeeded",
+            attempts: 1,
+            input_tokens: completion.input_tokens,
+            output_tokens: completion.output_tokens,
+            latency_ms: completion.latency_ms,
+            repaired: false,
+            error_message: None,
+        }
+    }
+
+    fn failed(part: GemAnalysisPart, error_message: String) -> Self {
+        Self {
+            part,
+            status: "failed",
+            attempts: 1,
+            input_tokens: None,
+            output_tokens: None,
+            latency_ms: 0,
+            repaired: false,
+            error_message: Some(error_message),
+        }
+    }
+
+    fn add_repair_completion(&mut self, completion: &LlmCompletion) {
+        self.attempts += 1;
+        self.input_tokens = sum_optional_tokens(self.input_tokens, completion.input_tokens);
+        self.output_tokens = sum_optional_tokens(self.output_tokens, completion.output_tokens);
+        self.latency_ms += completion.latency_ms;
+        self.repaired = true;
+    }
+
+    fn to_json(&self) -> serde_json::Value {
+        let mut value = serde_json::json!({
+            "part": self.part.as_str(),
+            "status": self.status,
+            "attempts": self.attempts,
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "latency_ms": self.latency_ms,
+            "repaired": self.repaired,
+        });
+        if let Some(error_message) = &self.error_message {
+            value["error_message"] = serde_json::json!(error_message);
+        }
+        value
+    }
+}
+
+fn sum_optional_tokens(left: Option<i64>, right: Option<i64>) -> Option<i64> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left + right),
+        (Some(value), None) | (None, Some(value)) => Some(value),
+        (None, None) => None,
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct GemInputEstimate {
+    part: GemAnalysisPart,
+    estimated_tokens: i64,
+}
 
 pub(crate) async fn load_gem_analysis_materials(
     pool: &SqlitePool,
@@ -303,6 +394,287 @@ pub(crate) fn parse_gem_analysis_part_output(
     Ok(GemAnalysisPartOutput {
         part: expected_part,
         markdown,
+    })
+}
+
+pub(crate) async fn execute_gem_analysis_transcript_stage<F, Fut>(
+    pool: &SqlitePool,
+    run_id: i64,
+    stage: &TranscriptStageRow,
+    _input: TranscriptAnalysisStageInput,
+    input_budget: GemAnalysisInputBudget,
+    execute_stage: &mut F,
+) -> Result<(), YoutubeSummaryStageExecutionError>
+where
+    F: FnMut(YoutubeSummaryStageExecutionRequest) -> Fut,
+    Fut: Future<Output = Result<LlmCompletion, YoutubeSummaryStageExecutionError>>,
+{
+    verify_single_source_snapshot(pool, run_id).await?;
+
+    let materials = load_gem_analysis_materials(pool, stage.stage_run_id)
+        .await
+        .map_err(YoutubeSummaryStageExecutionError::Failed)?;
+
+    let passport_prompt_input_json =
+        build_gem_prompt_input_json(GemAnalysisPart::Passport, &stage.source_ref_id, &materials)?;
+    let deep_recap_prompt_input_json =
+        build_gem_prompt_input_json(GemAnalysisPart::DeepRecap, &stage.source_ref_id, &materials)?;
+    let comments_prompt_input_json = if materials.comments_status == GemCommentsStatus::Present {
+        Some(build_gem_prompt_input_json(
+            GemAnalysisPart::Comments,
+            &stage.source_ref_id,
+            &materials,
+        )?)
+    } else {
+        None
+    };
+
+    let mut input_estimates = vec![
+        GemInputEstimate {
+            part: GemAnalysisPart::Passport,
+            estimated_tokens: estimate_gem_prompt_tokens(
+                &passport_prompt_input_json,
+                GEM_LLM_WRAPPER_TEXT_ESTIMATE,
+            ),
+        },
+        GemInputEstimate {
+            part: GemAnalysisPart::DeepRecap,
+            estimated_tokens: estimate_gem_prompt_tokens(
+                &deep_recap_prompt_input_json,
+                GEM_LLM_WRAPPER_TEXT_ESTIMATE,
+            ),
+        },
+    ];
+    if let Some(prompt_input_json) = &comments_prompt_input_json {
+        input_estimates.push(GemInputEstimate {
+            part: GemAnalysisPart::Comments,
+            estimated_tokens: estimate_gem_prompt_tokens(
+                prompt_input_json,
+                GEM_LLM_WRAPPER_TEXT_ESTIMATE,
+            ),
+        });
+    }
+    for estimate in &input_estimates {
+        enforce_gem_input_budget(estimate.part, estimate.estimated_tokens, input_budget)
+            .map_err(YoutubeSummaryStageExecutionError::Failed)?;
+    }
+
+    ensure_gem_run_not_cancelled(pool, run_id).await?;
+    let passport_request = build_gem_part_request(
+        run_id,
+        stage,
+        GemAnalysisPart::Passport,
+        passport_prompt_input_json,
+    );
+    let (passport, passport_metrics) =
+        run_gem_part_with_one_repair(execute_stage, passport_request).await?;
+
+    ensure_gem_run_not_cancelled(pool, run_id).await?;
+    let (comments_markdown, comments_metrics) =
+        if let Some(comments_prompt_input_json) = comments_prompt_input_json {
+            let comments_request = build_gem_part_request(
+                run_id,
+                stage,
+                GemAnalysisPart::Comments,
+                comments_prompt_input_json,
+            );
+            match run_gem_part_with_one_repair(execute_stage, comments_request).await {
+                Ok((comments, metrics)) => (Some(comments.markdown), metrics),
+                Err(YoutubeSummaryStageExecutionError::Cancelled) => {
+                    return Err(YoutubeSummaryStageExecutionError::Cancelled)
+                }
+                Err(YoutubeSummaryStageExecutionError::Failed(error)) => (
+                    Some(GEM_COMMENTS_FAILURE_NOTE.to_string()),
+                    GemPartMetrics::failed(GemAnalysisPart::Comments, error.message),
+                ),
+            }
+        } else {
+            (
+                None,
+                GemPartMetrics {
+                    part: GemAnalysisPart::Comments,
+                    status: "skipped_no_comments",
+                    attempts: 0,
+                    input_tokens: None,
+                    output_tokens: None,
+                    latency_ms: 0,
+                    repaired: false,
+                    error_message: None,
+                },
+            )
+        };
+
+    ensure_gem_run_not_cancelled(pool, run_id).await?;
+    let deep_recap_request = build_gem_part_request(
+        run_id,
+        stage,
+        GemAnalysisPart::DeepRecap,
+        deep_recap_prompt_input_json,
+    );
+    let (deep_recap, deep_recap_metrics) =
+        run_gem_part_with_one_repair(execute_stage, deep_recap_request).await?;
+
+    ensure_gem_run_not_cancelled(pool, run_id).await?;
+    let markdown = assemble_gem_analysis_markdown(
+        &passport.markdown,
+        comments_markdown.as_deref(),
+        &deep_recap.markdown,
+    );
+    let assembled_output_json = assemble_gem_analysis_transcript_output(&markdown)
+        .map_err(YoutubeSummaryStageExecutionError::Failed)?;
+    let total_latency_ms =
+        passport_metrics.latency_ms + comments_metrics.latency_ms + deep_recap_metrics.latency_ms;
+    let gem_metrics_json = gem_metrics_json(
+        input_budget,
+        &input_estimates,
+        &[passport_metrics, deep_recap_metrics],
+        &comments_metrics,
+    );
+    let completion = LlmCompletion {
+        text: assembled_output_json,
+        input_tokens: None,
+        output_tokens: None,
+        latency_ms: total_latency_ms,
+    };
+    execute_transcript_analysis_stage_with_completion_and_metrics_extension(
+        pool,
+        stage.stage_run_id,
+        completion,
+        Some(gem_metrics_json),
+    )
+    .await
+    .map_err(YoutubeSummaryStageExecutionError::Failed)
+}
+
+async fn verify_single_source_snapshot(
+    pool: &SqlitePool,
+    run_id: i64,
+) -> Result<(), YoutubeSummaryStageExecutionError> {
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)
+         FROM prompt_pack_run_source_snapshots
+         WHERE run_id = ?",
+    )
+    .bind(run_id)
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::database)
+    .map_err(YoutubeSummaryStageExecutionError::Failed)?;
+    if count != 1 {
+        return Err(YoutubeSummaryStageExecutionError::Failed(
+            AppError::validation("Gem analysis requires exactly one included source snapshot"),
+        ));
+    }
+    Ok(())
+}
+
+fn build_gem_prompt_input_json(
+    part: GemAnalysisPart,
+    source_ref_id: &str,
+    materials: &GemAnalysisMaterialInput,
+) -> Result<String, YoutubeSummaryStageExecutionError> {
+    let value = build_gem_analysis_part_prompt_input(part, source_ref_id, materials);
+    serde_json::to_string_pretty(&value)
+        .map_err(|error| AppError::internal(format!("serialize Gem prompt input: {error}")))
+        .map_err(YoutubeSummaryStageExecutionError::Failed)
+}
+
+fn build_gem_part_request(
+    run_id: i64,
+    stage: &TranscriptStageRow,
+    part: GemAnalysisPart,
+    prompt_input_json: String,
+) -> GemAnalysisPartStageExecutionRequest {
+    GemAnalysisPartStageExecutionRequest {
+        run_id,
+        stage_run_id: stage.stage_run_id,
+        source_snapshot_id: stage.source_snapshot_id,
+        source_ref_id: stage.source_ref_id.clone(),
+        part,
+        prompt_input_json,
+    }
+}
+
+async fn ensure_gem_run_not_cancelled(
+    pool: &SqlitePool,
+    run_id: i64,
+) -> Result<(), YoutubeSummaryStageExecutionError> {
+    if is_run_cancelled(pool, run_id)
+        .await
+        .map_err(YoutubeSummaryStageExecutionError::Failed)?
+    {
+        return Err(YoutubeSummaryStageExecutionError::Cancelled);
+    }
+    Ok(())
+}
+
+async fn run_gem_part_with_one_repair<F, Fut>(
+    execute_stage: &mut F,
+    request: GemAnalysisPartStageExecutionRequest,
+) -> Result<(GemAnalysisPartOutput, GemPartMetrics), YoutubeSummaryStageExecutionError>
+where
+    F: FnMut(YoutubeSummaryStageExecutionRequest) -> Fut,
+    Fut: Future<Output = Result<LlmCompletion, YoutubeSummaryStageExecutionError>>,
+{
+    let part = request.part;
+    let completion = execute_stage(YoutubeSummaryStageExecutionRequest::GemAnalysisPart(
+        request.clone(),
+    ))
+    .await?;
+    let raw_output = completion.text.clone();
+    let mut metrics = GemPartMetrics::succeeded(part, &completion);
+    match parse_gem_analysis_part_output(&completion.text, part) {
+        Ok(output) => return Ok((output, metrics)),
+        Err(error) => {
+            let repair_request = GemAnalysisPartRepairRequest {
+                run_id: request.run_id,
+                stage_run_id: request.stage_run_id,
+                source_snapshot_id: request.source_snapshot_id,
+                source_ref_id: request.source_ref_id.clone(),
+                part,
+                attempt_number: 1,
+                prompt_input_json: request.prompt_input_json.clone(),
+                raw_output,
+                error_message: error.message,
+            };
+            let repair_completion = execute_stage(
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPartRepair(repair_request),
+            )
+            .await?;
+            metrics.add_repair_completion(&repair_completion);
+            let output = parse_gem_analysis_part_output(&repair_completion.text, part)
+                .map_err(YoutubeSummaryStageExecutionError::Failed)?;
+            Ok((output, metrics))
+        }
+    }
+}
+
+fn gem_metrics_json(
+    input_budget: GemAnalysisInputBudget,
+    input_estimates: &[GemInputEstimate],
+    part_metrics: &[GemPartMetrics],
+    comments_metrics: &GemPartMetrics,
+) -> serde_json::Value {
+    serde_json::json!({
+        "gem_analysis": {
+            "input_budget": {
+                "max_input_tokens": input_budget.max_input_tokens,
+                "estimates": input_estimates
+                    .iter()
+                    .map(|estimate| {
+                        serde_json::json!({
+                            "part": estimate.part.as_str(),
+                            "estimated_tokens": estimate.estimated_tokens,
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+            },
+            "parts": part_metrics
+                .iter()
+                .map(GemPartMetrics::to_json)
+                .collect::<Vec<_>>(),
+            "comments_part": comments_metrics.to_json(),
+        }
     })
 }
 
