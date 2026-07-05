@@ -57,7 +57,7 @@
 - Consumes: current `main` branch with approved spec and plan commits.
 - Produces: an isolated implementation branch or worktree before code edits start.
 
-- [ ] **Step 1: Check the current worktree**
+- [x] **Step 1: Check the current worktree**
 
 Run:
 
@@ -67,7 +67,7 @@ git status --short
 
 Expected: no tracked file changes. Untracked local IDE files such as `.claude/settings.local.json` may remain untracked and must not be staged.
 
-- [ ] **Step 2: Create an isolated implementation branch or worktree**
+- [x] **Step 2: Create an isolated implementation branch or worktree**
 
 Preferred if using the repository directly:
 
@@ -83,7 +83,7 @@ git worktree add .worktrees/youtube-summary-gem-analysis -b feature/youtube-summ
 
 Expected: implementation work no longer lands directly on `main`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 No commit is required for this task.
 
