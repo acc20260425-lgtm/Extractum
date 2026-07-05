@@ -1,6 +1,10 @@
 use super::snapshots::{
     create_youtube_summary_run_skeleton_in_pool, freeze_comment_material_refs, test_comment_policy,
 };
+use super::sources::{
+    render_transcript_snapshot_text, transcript_snapshot_segments_for_source,
+    transcript_text_for_source,
+};
 use super::test_support::*;
 use super::{
     start_youtube_summary_run_in_pool, start_youtube_summary_run_with_preflight_failures_in_pool,
@@ -158,6 +162,55 @@ async fn duplicate_start_ignores_runtime_blocking_failure() {
     .await
     .expect("run count");
     assert_eq!(run_count, 1);
+}
+
+#[tokio::test]
+async fn transcript_snapshot_text_is_rendered_from_structured_segments() {
+    let pool = test_pool_with_ready_video().await;
+    let request = start_request("req-transcript-segments", vec![901]);
+
+    let run = start_youtube_summary_run_in_pool(&pool, request)
+        .await
+        .expect("start")
+        .expect_started("started");
+
+    let (text_zstd, metadata_json_zstd): (Vec<u8>, Vec<u8>) = sqlx::query_as(
+        "SELECT text_zstd, metadata_json_zstd
+         FROM prompt_pack_run_material_snapshots
+         WHERE run_id = ? AND material_kind = 'transcript'",
+    )
+    .bind(run.run_id)
+    .fetch_one(&pool)
+    .await
+    .expect("transcript material");
+
+    let text = decompress_text(&text_zstd).expect("text");
+    let metadata = decompress_text(&metadata_json_zstd).expect("metadata");
+    let value: serde_json::Value = serde_json::from_str(&metadata).expect("metadata json");
+    let segments = value["segments"].as_array().expect("segments");
+
+    let joined = segments
+        .iter()
+        .map(|segment| segment["text"].as_str().expect("segment text"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert_eq!(text, joined);
+    assert_eq!(segments[0]["start_ms"], serde_json::json!(0));
+    assert!(segments[0]["end_ms"].as_i64().unwrap_or_default() >= 0);
+}
+
+#[tokio::test]
+async fn transcript_text_for_source_uses_segment_renderer() {
+    let pool = test_pool_with_ready_video().await;
+
+    let segments = transcript_snapshot_segments_for_source(&pool, 901)
+        .await
+        .expect("segments");
+    let rendered = render_transcript_snapshot_text(&segments);
+    let legacy_text = transcript_text_for_source(&pool, 901).await.expect("text");
+
+    assert_eq!(legacy_text, rendered);
 }
 
 #[tokio::test]

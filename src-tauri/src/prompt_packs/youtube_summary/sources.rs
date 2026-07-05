@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
 use crate::error::{AppError, AppResult};
@@ -17,6 +18,13 @@ pub(crate) struct VideoCandidate {
     pub(crate) title: String,
     pub(crate) description: Option<String>,
     pub(crate) is_playlist_child: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub(crate) struct TranscriptSnapshotSegment {
+    pub(crate) start_ms: i64,
+    pub(crate) end_ms: i64,
+    pub(crate) text: String,
 }
 
 pub(crate) enum PlaylistCandidate {
@@ -102,8 +110,16 @@ pub(crate) async fn transcript_text_for_source(
     pool: &SqlitePool,
     source_id: i64,
 ) -> AppResult<String> {
-    let segments = sqlx::query_scalar::<_, String>(
-        "SELECT text
+    let segments = transcript_snapshot_segments_for_source(pool, source_id).await?;
+    Ok(render_transcript_snapshot_text(&segments))
+}
+
+pub(crate) async fn transcript_snapshot_segments_for_source(
+    pool: &SqlitePool,
+    source_id: i64,
+) -> AppResult<Vec<TranscriptSnapshotSegment>> {
+    sqlx::query_as::<_, (i64, i64, String)>(
+        "SELECT start_ms, end_ms, text
          FROM youtube_transcript_segments
          WHERE source_id = ?
          ORDER BY segment_index ASC, id ASC",
@@ -111,6 +127,22 @@ pub(crate) async fn transcript_text_for_source(
     .bind(source_id)
     .fetch_all(pool)
     .await
-    .map_err(AppError::database)?;
-    Ok(segments.join("\n"))
+    .map(|rows| {
+        rows.into_iter()
+            .map(|(start_ms, end_ms, text)| TranscriptSnapshotSegment {
+                start_ms,
+                end_ms,
+                text,
+            })
+            .collect()
+    })
+    .map_err(AppError::database)
+}
+
+pub(crate) fn render_transcript_snapshot_text(segments: &[TranscriptSnapshotSegment]) -> String {
+    segments
+        .iter()
+        .map(|segment| segment.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n")
 }

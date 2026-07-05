@@ -273,7 +273,7 @@ git commit -m "feat(prompt-packs): register gem analysis summary mode"
 - Produces: `render_transcript_snapshot_text(&[TranscriptSnapshotSegment]) -> String`.
 - `insert_material` gains `metadata_json: Option<&serde_json::Value>` and writes `metadata_json_zstd`.
 
-- [ ] **Step 1: Add failing snapshot tests**
+- [x] **Step 1: Add failing snapshot tests**
 
 In `snapshots_tests.rs`, add:
 
@@ -332,7 +332,7 @@ async fn transcript_text_for_source_uses_segment_renderer() {
 
 Import `transcript_snapshot_segments_for_source`, `render_transcript_snapshot_text`, and `transcript_text_for_source` from `sources.rs`.
 
-- [ ] **Step 2: Run the new tests and verify failure**
+- [x] **Step 2: Run the new tests and verify failure**
 
 Run:
 
@@ -342,7 +342,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL because metadata is not written and helper functions do not exist.
 
-- [ ] **Step 3: Add transcript segment helpers**
+- [x] **Step 3: Add transcript segment helpers**
 
 In `sources.rs`, add:
 
@@ -399,7 +399,7 @@ let segments = transcript_snapshot_segments_for_source(pool, source_id).await?;
 Ok(render_transcript_snapshot_text(&segments))
 ```
 
-- [ ] **Step 4: Extend material insertion with metadata**
+- [x] **Step 4: Extend material insertion with metadata**
 
 In `snapshots.rs`, import `compress_text` is already available through `insert_material`; add a small helper:
 
@@ -444,7 +444,7 @@ Bind:
 
 Pass `None` for description and comments.
 
-- [ ] **Step 5: Snapshot transcript from structured segments**
+- [x] **Step 5: Snapshot transcript from structured segments**
 
 In `insert_material_snapshots`, replace the transcript branch with:
 
@@ -474,7 +474,7 @@ if !transcript.trim().is_empty() {
 
 Update all other `insert_material` calls with the new `metadata_json` argument.
 
-- [ ] **Step 6: Run focused verification**
+- [x] **Step 6: Run focused verification**
 
 Run:
 
@@ -484,7 +484,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit Task 2**
+- [x] **Step 7: Commit Task 2**
 
 ```powershell
 git add src-tauri/src/prompt_packs/youtube_summary/sources.rs src-tauri/src/prompt_packs/youtube_summary/snapshots.rs src-tauri/src/prompt_packs/youtube_summary/snapshots_tests.rs src-tauri/src/prompt_packs/youtube_summary/test_support.rs

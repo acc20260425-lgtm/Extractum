@@ -1,7 +1,9 @@
 use sqlx::SqlitePool;
 
 use super::preflight::preflight_youtube_summary_in_pool;
-use super::sources::{load_source, transcript_text_for_source};
+use super::sources::{
+    load_source, render_transcript_snapshot_text, transcript_snapshot_segments_for_source,
+};
 use super::store::{ensure_pack_version, load_run_by_client_request_id};
 use super::{estimate_tokens, model_budget_for_runtime, now_string, SYNTHESIS_STAGE_NAME};
 use crate::compression::{compress_text, decompress_text};
@@ -221,8 +223,13 @@ async fn insert_material_snapshots(
     .await
     .map_err(AppError::database)?;
 
-    let transcript = transcript_text_for_source(pool, source_id).await?;
+    let transcript_segments = transcript_snapshot_segments_for_source(pool, source_id).await?;
+    let transcript = render_transcript_snapshot_text(&transcript_segments);
     if !transcript.trim().is_empty() {
+        let metadata = serde_json::json!({
+            "kind": "youtube_transcript_segments",
+            "segments": transcript_segments,
+        });
         insert_material(
             pool,
             run_id,
@@ -232,6 +239,7 @@ async fn insert_material_snapshots(
             None,
             0,
             &transcript,
+            Some(&metadata),
             now,
         )
         .await?;
@@ -254,6 +262,7 @@ async fn insert_material_snapshots(
             None,
             1,
             &description,
+            None,
             now,
         )
         .await?;
@@ -275,6 +284,7 @@ async fn insert_material_snapshots(
                 comment.external_id.as_deref(),
                 10 + index as i64,
                 &text,
+                None,
                 now,
             )
             .await?;
@@ -282,6 +292,10 @@ async fn insert_material_snapshots(
     }
 
     Ok(())
+}
+
+fn compress_metadata_json(value: &serde_json::Value) -> AppResult<Vec<u8>> {
+    compress_text(&value.to_string()).map_err(AppError::internal)
 }
 
 async fn insert_material(
@@ -293,14 +307,15 @@ async fn insert_material(
     external_id: Option<&str>,
     sequence_index: i64,
     text: &str,
+    metadata_json: Option<&serde_json::Value>,
     now: &str,
 ) -> AppResult<()> {
     sqlx::query(
         "INSERT OR IGNORE INTO prompt_pack_run_material_snapshots (
             run_id, source_snapshot_id, material_ref_id, material_kind,
-            external_id, sequence_index, text_zstd, token_estimate, created_at
+            external_id, sequence_index, text_zstd, metadata_json_zstd, token_estimate, created_at
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(run_id)
     .bind(source_snapshot_id)
@@ -309,6 +324,7 @@ async fn insert_material(
     .bind(external_id)
     .bind(sequence_index)
     .bind(compress_text(text).map_err(AppError::internal)?)
+    .bind(metadata_json.map(compress_metadata_json).transpose()?)
     .bind(estimate_tokens(text))
     .bind(now)
     .execute(pool)
