@@ -1261,18 +1261,43 @@ git commit -m "feat(prompt-packs): build gem analysis materials"
 - Produces persistence helper `execute_transcript_analysis_stage_with_completion_and_metrics_extension(...)`.
 - Consumes `YoutubeSummaryStageExecutionRequest::GemAnalysisPart` and `GemAnalysisPartRepair`.
 
-- [ ] **Step 1: Add execution options and runtime budget tests**
+- [ ] **Step 1: Introduce execution options and rename the internal executor**
 
-In `execution.rs`, add a defaultable options struct:
+In `execution.rs`, add the options struct:
 
 ```rust
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct YoutubeSummaryExecutionOptions {
     pub(crate) gem_input_budget: GemAnalysisInputBudget,
 }
+```
 
+Rename `execute_youtube_summary_run_with_stage_executor_internal` to `execute_youtube_summary_run_with_stage_executor_with_options` and add the `options` parameter immediately, before adding any wrapper that calls it:
+
+```rust
+async fn execute_youtube_summary_run_with_stage_executor_with_options<F, Fut, M>(
+    pool: &SqlitePool,
+    run_id: i64,
+    options: YoutubeSummaryExecutionOptions,
+    mut execute_stage: F,
+    mutate_final_result: M,
+) -> AppResult<YoutubeSummaryRunExecutionOutcome>
+where
+    F: FnMut(YoutubeSummaryStageExecutionRequest) -> Fut,
+    Fut: Future<Output = Result<LlmCompletion, YoutubeSummaryStageExecutionError>>,
+    M: FnOnce(&mut serde_json::Value),
+```
+
+Do not use `options` yet in this step except to accept it; the compiler may allow the unused variable warning. This keeps the crate compiling before Gem branching is added.
+
+- [ ] **Step 2: Keep the old test helper API behind `#[cfg(test)]` only**
+
+Add a test-only unbounded helper. Do not expose this in production builds:
+
+```rust
+#[cfg(test)]
 impl YoutubeSummaryExecutionOptions {
-    pub(crate) fn for_tests() -> Self {
+    pub(crate) fn unbounded_for_tests() -> Self {
         Self {
             gem_input_budget: GemAnalysisInputBudget {
                 max_input_tokens: i64::MAX,
@@ -1282,9 +1307,10 @@ impl YoutubeSummaryExecutionOptions {
 }
 ```
 
-Add an overload-style helper while keeping existing tests source-compatible:
+Gate the 3-argument wrapper behind `#[cfg(test)]`:
 
 ```rust
+#[cfg(test)]
 pub(crate) async fn execute_youtube_summary_run_with_stage_executor<F, Fut>(
     pool: &SqlitePool,
     run_id: i64,
@@ -1297,7 +1323,7 @@ where
     execute_youtube_summary_run_with_stage_executor_with_options(
         pool,
         run_id,
-        YoutubeSummaryExecutionOptions::for_tests(),
+        YoutubeSummaryExecutionOptions::unbounded_for_tests(),
         execute_stage,
         |_| {},
     )
@@ -1305,7 +1331,11 @@ where
 }
 ```
 
-Update `execute_youtube_summary_run_with_stage_executor_and_result_mutator` to call the same `execute_youtube_summary_run_with_stage_executor_with_options` helper with `YoutubeSummaryExecutionOptions::for_tests()`.
+Update the test-only `execute_youtube_summary_run_with_stage_executor_and_result_mutator` to call the same `execute_youtube_summary_run_with_stage_executor_with_options` helper with `YoutubeSummaryExecutionOptions::unbounded_for_tests()`.
+
+Production code must call only `execute_youtube_summary_run_with_stage_executor_with_options` with a real runtime-computed `YoutubeSummaryExecutionOptions`.
+
+- [ ] **Step 3: Add runtime budget tests**
 
 In `runtime.rs` tests, add:
 
@@ -1326,7 +1356,7 @@ fn gem_input_budget_uses_lower_known_model_limit() {
 }
 ```
 
-- [ ] **Step 2: Implement runtime prompt-budget reading and cap resolution**
+- [ ] **Step 4: Implement runtime prompt-budget reading and cap resolution**
 
 In `runtime.rs`, extend `StageBudgetLimits`:
 
@@ -1476,7 +1506,7 @@ execute_youtube_summary_run_with_stage_executor_with_options(
 
 Import `resolve_model_input_token_limit_for_backend` alongside the existing output-limit resolver.
 
-- [ ] **Step 3: Add output persistence test for metrics extension**
+- [ ] **Step 5: Add output persistence test for metrics extension**
 
 In `outputs_tests.rs`, add:
 
@@ -1510,6 +1540,8 @@ async fn transcript_stage_metrics_can_include_gem_analysis_extension() {
 }
 ```
 
+The `fake_completion_with_valid_transcript_analysis_json()` helper already exists in `src-tauri/src/prompt_packs/youtube_summary/test_support.rs`; import it through the existing `use super::test_support::*;` pattern used by nearby tests.
+
 Add this explicit helper in `outputs_tests.rs`:
 
 ```rust
@@ -1532,7 +1564,7 @@ async fn load_stage_artifact_json(
 }
 ```
 
-- [ ] **Step 4: Implement metrics extension persistence**
+- [ ] **Step 6: Implement metrics extension persistence**
 
 In `outputs.rs`, keep the existing public function as a wrapper:
 
@@ -1589,7 +1621,7 @@ if let Some(extension) = metrics_extension {
 
 Then keep the existing `insert_stage_artifact_in_transaction(..., &metrics.to_string())` call unchanged.
 
-- [ ] **Step 5: Add Gem execution test helpers**
+- [ ] **Step 7: Add Gem execution test helpers**
 
 In `test_support.rs`, add:
 
@@ -1633,7 +1665,7 @@ fn fake_gem_part_completion(part: GemAnalysisPart) -> LlmCompletion {
 }
 ```
 
-- [ ] **Step 6: Add Gem execution tests**
+- [ ] **Step 8: Add Gem execution tests**
 
 In `execution.rs` tests or a `gem_analysis` test module, add:
 
@@ -1676,7 +1708,7 @@ Also add tests:
 - `gem_analysis_optional_comments_failure_persists_report_with_failure_note`
 - `gem_analysis_does_not_start_next_part_after_cancellation_checkpoint`
 
-- [ ] **Step 7: Run execution tests and verify failure**
+- [ ] **Step 9: Run execution tests and verify failure**
 
 Run:
 
@@ -1688,25 +1720,9 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL because execution branch is not implemented.
 
-- [ ] **Step 8: Branch from normal execution**
+- [ ] **Step 10: Branch from normal execution using runtime-provided options**
 
-Rename `execute_youtube_summary_run_with_stage_executor_internal` to accept options:
-
-```rust
-async fn execute_youtube_summary_run_with_stage_executor_with_options<F, Fut, M>(
-    pool: &SqlitePool,
-    run_id: i64,
-    options: YoutubeSummaryExecutionOptions,
-    mut execute_stage: F,
-    mutate_final_result: M,
-) -> AppResult<YoutubeSummaryRunExecutionOutcome>
-where
-    F: FnMut(YoutubeSummaryStageExecutionRequest) -> Fut,
-    Fut: Future<Output = Result<LlmCompletion, YoutubeSummaryStageExecutionError>>,
-    M: FnOnce(&mut serde_json::Value),
-```
-
-Inside the stage loop, after building `input`, branch:
+Inside the stage loop in `execute_youtube_summary_run_with_stage_executor_with_options`, after building `input`, branch:
 
 ```rust
 if input.control_preset == "gem_analysis" {
@@ -1738,11 +1754,11 @@ if input.control_preset == "gem_analysis" {
 
 Use the existing pending stage row fields already referenced in the loop: `stage.stage_run_id`, `stage.source_snapshot_id`, and `stage.source_ref_id`. Do not add another adapter type for this task.
 
-- [ ] **Step 9: Implement Gem execution helper**
+- [ ] **Step 11: Implement Gem execution helper**
 
 `execute_gem_analysis_transcript_stage` flow:
 
-1. Verify the run has exactly one included source snapshot by counting `prompt_pack_run_source_snapshots`.
+1. Verify the run has exactly one included source snapshot by counting `prompt_pack_run_source_snapshots`. This check runs inside the per-stage loop, so keep it read-only and idempotent; if a corrupted run has multiple pending transcript stages, each stage may perform the same count before failing.
 2. Load Gem materials for the current stage.
 3. Build prompt inputs for all parts that may run.
 4. Estimate and enforce the input budget for part 1, optional part 2, and part 3 before calling `execute_stage` for any part.
@@ -1771,7 +1787,7 @@ where
 
 When first parse fails, build `GemAnalysisPartRepairRequest` with `attempt_number: 1`. If repair fails for part 1 or part 3, return `Failed(error)`. If comments repair fails, return a comments failure status to the caller without failing the stage.
 
-- [ ] **Step 10: Persist assembled output and metrics**
+- [ ] **Step 12: Persist assembled output and metrics**
 
 Use:
 
@@ -1804,7 +1820,7 @@ serde_json::json!({
 })
 ```
 
-- [ ] **Step 11: Run focused verification**
+- [ ] **Step 13: Run focused verification**
 
 Run:
 
@@ -1815,7 +1831,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 12: Commit Task 5**
+- [ ] **Step 14: Commit Task 5**
 
 ```powershell
 git add src-tauri/src/prompt_packs/youtube_summary/gem_analysis.rs src-tauri/src/prompt_packs/youtube_summary/execution.rs src-tauri/src/prompt_packs/youtube_summary/outputs.rs src-tauri/src/prompt_packs/youtube_summary/outputs_tests.rs
@@ -1835,6 +1851,8 @@ git commit -m "feat(prompt-packs): execute gem analysis mini pipeline"
 **Interfaces:**
 - Consumes final transcript-analysis JSON with `video_candidate.summary_text` and empty claim/evidence arrays.
 - Produces existing canonical YouTube Summary result with one video section.
+
+**Primary Scope Risk:** This task is the main integration unknown. The assembled Gem output intentionally has empty `claim_candidates` and `evidence_fragment_candidates`, and may omit nested video candidate arrays. It still passes through `validate_transcript_analysis_output`, `normalize_transcript_analysis_output_for_runtime`, `build_or_quarantine_intermediate_entities_for_transcript_stage`, result building, and canonical validation. If any layer rejects the shape, fix that layer deliberately with focused tests for `control_preset == "gem_analysis"` instead of patching the Gem output with fabricated claims/evidence.
 
 - [ ] **Step 1: Add final path regression tests**
 
@@ -1940,5 +1958,7 @@ git commit -m "feat(prompt-packs): integrate gem analysis summary mode"
 
 - Spec coverage: tasks cover UI label/value, single-video guard, neutral transcript snapshot, timing metadata, comments-only part 2, input budget, unique request/browser IDs, part JSON repair, cancellation checkpoints, optional comments failure, final assembled Markdown, metrics, value registry, and verification.
 - Red-flag scan: no step uses reserved marker strings or unnamed future helpers; helper names are defined before use.
-- Type consistency: `GemAnalysisPart`, `GemAnalysisPartStageExecutionRequest`, `GemAnalysisPartRepairRequest`, and `GemAnalysisPartOutput` are introduced before execution tasks use them.
+- Type consistency: `GemAnalysisPart`, `GemAnalysisInputBudget`, `YoutubeSummaryExecutionOptions`, `GemAnalysisPartStageExecutionRequest`, `GemAnalysisPartRepairRequest`, and `GemAnalysisPartOutput` are introduced before execution tasks use them.
+- Safety check: the unbounded 3-argument executor wrapper and `unbounded_for_tests()` are `#[cfg(test)]`; production must pass runtime-computed options through `execute_youtube_summary_run_with_stage_executor_with_options`.
+- Risk check: Task 6 is explicitly marked as the main integration scope risk because validation, normalization, intermediate entity building, and result building may reject empty candidates or omitted nested arrays.
 - Scope: the plan stays inside existing YouTube Summary prompt pack and does not introduce a separate pack, new artifact kinds, web-search stage, or multi-video Gem synthesis.
