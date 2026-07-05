@@ -1,6 +1,6 @@
 # YouTube Summary Gem Analysis Mode Design
 
-Status: revised draft for user review
+Status: approved for implementation planning
 Date: 2026-07-05
 
 ## Objective
@@ -89,10 +89,12 @@ Because part 1 and part 3 require time navigation, `gem_analysis` needs timestam
 
 Implementation decision for the first version:
 
-- Keep the frozen transcript text consumer-neutral. Do not change `text_zstd` based on `control_preset`.
-- Store ordered transcript timing structurally in the transcript material snapshot, preferably in existing `metadata_json_zstd`, as segment entries with at least `{ start_ms, end_ms, text }`.
-- Build Gem part 1 and part 3 prompt material by reading only frozen run material snapshots and formatting the structured segment timing as `[MM:SS] text`.
-- Use the same transcript source selection and truncation policy as the current `transcript_text_for_source` path so normal modes and Gem mode do not silently diverge on which transcript text was frozen.
+- Use bounded ordered transcript segments as the single source of truth for frozen transcript material. Build this segment list once during material snapshotting from the same source rows and ordering that `transcript_text_for_source` currently uses.
+- Apply transcript freezing limits to the segment list before rendering any text. Truncate only on segment boundaries. If no complete segment can fit under the configured limit, fail the snapshot/input preparation with a clear overflow error rather than cutting a segment in the middle.
+- Store the bounded segment list structurally in the transcript material snapshot for every prompt-pack run, preferably in existing `metadata_json_zstd`, as entries with at least `{ start_ms, end_ms, text }`. This is not `gem_analysis`-specific metadata.
+- Render consumer-neutral `text_zstd` from the same bounded segment list by joining segment `text` values. Do not run a second, independent character truncation pass over the joined string.
+- Build Gem part 1 and part 3 prompt material from the same bounded segment list by formatting each segment as `[MM:SS] text`.
+- Existing and future non-Gem consumers may continue reading plain `text_zstd`; Gem reads the structured segment metadata from the frozen snapshot. Both views represent the same bounded segment list.
 - If structured timing is missing for a run, degrade explicitly: part 1 and part 3 receive plain frozen transcript text, the prompt says timestamps are unavailable in the input, and the model is instructed not to invent timestamps. The report remains valid but loses interactive time navigation for that run.
 
 This keeps material freezing neutral to downstream consumers while still giving Gem prompts timestamped transcript input when the run snapshot contains timing.
@@ -122,10 +124,10 @@ Before starting Gem part requests, estimate input tokens for each part:
 The input cap for each part is the lower of:
 
 - the selected API model input/context limit, when known from the provider/model registry;
-- the prompt-pack runtime `max_prompt_tokens` guard;
+- the configured prompt-pack runtime `max_prompt_tokens` value, enforced by new Gem input-budget logic;
 - a Gem-specific app-side safety cap if the runtime cannot expose a model-specific context window.
 
-Reserve an implementation constant for wrapper overhead and estimator error. The exact value can be tuned in code, but tests must prove that a prompt close to the cap is rejected before a provider call rather than failing after an expensive partial run.
+Current transcript runtime code already carries `max_prompt_tokens` in configuration, but the normal transcript request path does not enforce it as an input guard. Gem analysis is the first feature in this area that must enforce an input-budget check before provider calls. Reserve an implementation constant for wrapper overhead and estimator error. The exact value can be tuned in code, but tests must prove that a prompt close to the cap is rejected before a provider call rather than failing after an expensive partial run.
 
 First-version overflow policy:
 
@@ -262,7 +264,10 @@ prompt-pack-run-<run_id>-stage-<stage_run_id>-gem-comments
 prompt-pack-run-<run_id>-stage-<stage_run_id>-gem-deep-recap
 ```
 
-Repair request IDs append `-repair-<attempt>`.
+Request ID suffixes are built exactly once:
+
+- normal part request suffix: `gem-<part-slug>`;
+- repair request suffix: `gem-<part-slug>-repair-<attempt>`.
 
 Gemini Browser run IDs and sources must also include the part discriminator. This requires extending the browser helper so it can include an optional request discriminator, for example:
 
@@ -271,7 +276,7 @@ prompt-pack-<run_id>-stage-<stage_run_id>-gem-passport
 prompt_pack:youtube_summary:youtube_summary/transcript_analysis:gem-passport:run:<run_id>:stage:<stage_run_id>
 ```
 
-The discriminator parameter must be optional. Existing transcript, synthesis, and repair callers pass `None` and must keep their current request IDs unchanged. Gem part and Gem repair callers pass a stable discriminator such as `gem-passport` or `gem-deep-recap-repair-1`.
+The discriminator parameter must be optional. Existing transcript, synthesis, and repair callers pass `None` and must keep their current request IDs unchanged. Gem part and Gem repair callers pass the final request suffix, such as `gem-passport` or `gem-deep-recap-repair-1`. The browser helper must not append an additional repair suffix internally.
 
 Browser runtime ignores `max_output_tokens`, so Gem prompts must include concise length targets and anti-bloat instructions. API runtime should still set max output token budgets.
 
@@ -373,7 +378,7 @@ Return exactly one strict JSON object:
   "markdown": "<full Russian Markdown report>"
 }
 
-Use only the input material provided below for this part. Do not use outputs from other Gem analysis parts. Do not invent timestamps, metadata, source titles, subscriber counts, metrics, or links. If a requested item is unavailable in the provided material, write `Недоступно во входных данных`. If transcript input has no `[MM:SS]` timestamps, state that timestamps are unavailable in the input and do not create approximate timestamps. For fact-checking, do not fabricate sources or URLs; if external verification is unavailable in the current runtime, explicitly state that limitation.
+Use only the input material provided below for this part. Do not use outputs from other Gem analysis parts. Do not invent timestamps, metadata, source titles, subscriber counts, metrics, or links. If a requested item is unavailable in the provided material, write `Недоступно во входных данных`. If transcript input has no `[MM:SS]` timestamps, state that timestamps are unavailable in the input and do not create approximate timestamps. For fact-checking, do not fabricate sources or URLs; if external verification is unavailable in the current runtime, explicitly state that limitation. Do not start `markdown` with `#` or `##`; the backend assembler owns the top-level report title and part headings. Start internal headings at `###`, use `####` for nested headings, and avoid leading/trailing horizontal rules.
 
 Input material:
 <part-specific material>
@@ -390,6 +395,7 @@ Use the user's "ЧАСТЬ 1. Аналитический паспорт виде
 - The "Таймлайн" and How-to timecodes must use only `[MM:SS]` timestamps present in the timestamped transcript input.
 - The fact-check section must be renamed to `Внешний контекст и Ресурсы (упоминания и доступный фактчекинг)` and must not require fabricated hyperlinks.
 - If external verification is unavailable, the fact-check subsection must say: `Независимый фактчекинг недоступен в текущем runtime; ниже перечислены только упоминания из транскрипта.`
+- Downshift any requested part-internal headings so the returned part Markdown nests under the assembler's `## Часть 1...` heading. Use `###` for top internal sections and avoid extra top/bottom `---`.
 
 The semantic structure remains:
 
@@ -415,6 +421,7 @@ Use the user's "ЧАСТЬ 3. Глубокий интерактивный пер
 
 - Every required `[ММ:СС]` timestamp must come from the timestamped transcript input.
 - If a point cannot be tied to an input timestamp, omit the timestamp for that point rather than inventing one, and keep this rare.
+- Downshift the requested `##`/`###` chapter structure by one level so the returned part Markdown nests under the assembler's `## Часть 3...` heading. Avoid extra top/bottom `---`; use separators only inside the part when they materially improve readability.
 
 The semantic structure remains:
 
@@ -560,7 +567,11 @@ Preflight/start:
 
 Stage input/data:
 
-- Transcript material snapshot remains consumer-neutral in `text_zstd`; Gem timestamp formatting is produced at prompt-build time from structured frozen timing metadata.
+- Transcript material snapshot uses bounded ordered transcript segments as the single source of truth.
+- Transcript material snapshot writes structured timing metadata for all prompt-pack runs, not only `gem_analysis`.
+- Consumer-neutral `text_zstd` is rendered from the same bounded segment list stored in metadata.
+- Transcript truncation happens on segment boundaries, before rendering `text_zstd` or Gem timestamped input.
+- Plain `text_zstd` and Gem timestamped input contain the same segment texts in the same order.
 - Gem transcript input includes real `[MM:SS]` timestamps from frozen transcript timing metadata when metadata is present.
 - Gem transcript input degrades to plain transcript text and timestamp-unavailable instructions when timing metadata is missing.
 - Gem timestamped input uses the same source selection and truncation policy as the normal transcript snapshot helper.
@@ -578,6 +589,7 @@ Runtime:
 - API request IDs are unique per Gem part.
 - Gemini Browser run IDs are unique per Gem part.
 - Browser request discriminator is optional; existing transcript, synthesis, and repair callers passing `None` keep unchanged IDs.
+- Gem repair request IDs and browser discriminators include `-repair-<attempt>` exactly once.
 - Browser prompt conversion still supports Gem part messages.
 - Part parser accepts valid `{ part, markdown }`.
 - Part parser rejects wrong part, missing markdown, empty markdown, and Markdown-fenced non-JSON.
@@ -594,6 +606,7 @@ Final output:
 - Assembled report starts with `# Gem-анализ`.
 - Final parsed transcript-analysis output has `video_candidate.summary_text`.
 - Final output includes all three part headings.
+- Part markdown is nested under assembler-owned `## Часть N` headings and does not introduce duplicate top-level `#` or part-level `##` headings.
 - No-comments run includes the skipped note.
 - Result builder renders the summary in the existing viewer path.
 
@@ -610,6 +623,9 @@ Verification:
 - It is single-video only, enforced in preflight/start and execution.
 - It uses independent part calls.
 - Part 1 and part 3 remain transcript-only; timestamps are formatted from structured frozen timing metadata at prompt-build time when available.
+- Bounded ordered transcript segments are the single source of truth for transcript material snapshots.
+- Transcript `text_zstd` is rendered from those bounded segments and is not truncated independently.
+- Transcript timing metadata is written for all prompt-pack transcript snapshots, not only Gem runs.
 - Frozen transcript text remains consumer-neutral and does not vary by `control_preset`.
 - If timestamp metadata is missing, Gem degrades to plain transcript input with explicit no-timestamp instructions.
 - Part 1 and part 3 input overflow blocks the stage before provider calls; v1 does not truncate transcript input.
@@ -622,5 +638,7 @@ Verification:
 - Per-part JSON repair is new narrow code, not reuse of final transcript-analysis repair.
 - Browser runtime is supported with unique per-part IDs.
 - Browser helper discriminator is optional and existing callers pass `None`.
+- Gem repair suffixes are appended exactly once by the Gem request-suffix builder.
+- Gem part Markdown is nested under assembler-owned `## Часть N` headings.
 - No new artifact kinds are introduced in the first version.
 - The final user-visible output is one assembled Russian Markdown report in `summary_text`.
