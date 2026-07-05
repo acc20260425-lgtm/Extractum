@@ -280,6 +280,10 @@ Representative source: `src/lib/types/prompt-packs.ts`.
 | `preflight` | phase | Preflight | Validate inputs before running. | backend event | active | wait | info | yes |
 | `snapshot` | phase | Snapshot | Capture source snapshot. | backend event | active | wait | info | yes |
 | `stage` | phase | Stage | Execute a prompt-pack stage. | backend event | active | wait | info | yes |
+| `gem_passport` | phase | Gem passport | Execute Gem analysis part 1, the analytical passport. | backend event | active | wait | info | yes |
+| `gem_comments` | phase | Gem comments | Execute optional Gem analysis part 2 over the selected comment sample. | backend event | active | wait | info | yes |
+| `gem_deep_recap` | phase | Gem deep recap | Execute Gem analysis part 3, the deep recap. | backend event | active | wait | info | yes |
+| `gem_part_repair` | phase | Gem part repair | Repair one Gem analysis part JSON response. | backend event | active | wait | info | yes |
 | `validation` | phase | Validation | Validate stage or final result. | backend event | active | wait | info | yes |
 | `projection` | phase | Projection | Project result into canonical output. | backend event | active | wait | info | yes |
 | `persist` | phase | Persist | Save artifacts and results. | backend event | active | wait | info | yes |

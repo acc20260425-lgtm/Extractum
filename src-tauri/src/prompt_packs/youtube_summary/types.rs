@@ -23,11 +23,66 @@ pub(crate) struct TranscriptAnalysisStageExecutionRequest {
     pub prompt_input_json: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum GemAnalysisPart {
+    Passport,
+    Comments,
+    DeepRecap,
+}
+
+impl GemAnalysisPart {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Passport => "passport",
+            Self::Comments => "comments",
+            Self::DeepRecap => "deep_recap",
+        }
+    }
+
+    pub(crate) fn slug(self) -> &'static str {
+        match self {
+            Self::Passport => "passport",
+            Self::Comments => "comments",
+            Self::DeepRecap => "deep-recap",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct GemAnalysisInputBudget {
+    pub(crate) max_input_tokens: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct GemAnalysisPartStageExecutionRequest {
+    pub run_id: i64,
+    pub stage_run_id: i64,
+    pub source_snapshot_id: i64,
+    pub source_ref_id: String,
+    pub part: GemAnalysisPart,
+    pub prompt_input_json: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct GemAnalysisPartRepairRequest {
+    pub run_id: i64,
+    pub stage_run_id: i64,
+    pub source_snapshot_id: i64,
+    pub source_ref_id: String,
+    pub part: GemAnalysisPart,
+    pub attempt_number: i64,
+    pub prompt_input_json: String,
+    pub raw_output: String,
+    pub error_message: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum YoutubeSummaryStageExecutionRequest {
     TranscriptAnalysis(TranscriptAnalysisStageExecutionRequest),
     Synthesis(SynthesisStageExecutionRequest),
     JsonRepair(JsonRepairStageExecutionRequest),
+    GemAnalysisPart(GemAnalysisPartStageExecutionRequest),
+    GemAnalysisPartRepair(GemAnalysisPartRepairRequest),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -18,7 +18,8 @@ use super::youtube_summary::{
     execute_youtube_summary_run_with_stage_executor,
     load_youtube_summary_run_by_client_request_id_in_pool, model_budget_for_runtime,
     preflight_youtube_summary_in_pool, start_youtube_summary_run_in_pool,
-    start_youtube_summary_run_with_preflight_failures_in_pool,
+    start_youtube_summary_run_with_preflight_failures_in_pool, GemAnalysisPart,
+    GemAnalysisPartRepairRequest, GemAnalysisPartStageExecutionRequest,
     LlmCompletion as PromptPackLlmCompletion, SynthesisStageExecutionRequest,
     TranscriptAnalysisStageExecutionRequest, YoutubeSummaryRunExecutionOutcome,
     YoutubeSummaryStageExecutionError, YoutubeSummaryStageExecutionRequest,
@@ -443,6 +444,26 @@ async fn execute_youtube_summary_run(
                     )
                     .await
                 }
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(request) => {
+                    run_gem_analysis_part_stage_request(
+                        handle,
+                        pool,
+                        completion_runtime,
+                        run_cancellation_token,
+                        request,
+                    )
+                    .await
+                }
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPartRepair(request) => {
+                    run_gem_analysis_part_repair_request(
+                        handle,
+                        pool,
+                        completion_runtime,
+                        run_cancellation_token,
+                        request,
+                    )
+                    .await
+                }
             }
         }
     })
@@ -542,17 +563,31 @@ fn browser_run_id_for_stage(
     run_id: i64,
     stage_run_id: i64,
     repair_attempt_number: Option<i64>,
+    request_discriminator: Option<&str>,
 ) -> String {
-    match repair_attempt_number {
-        Some(attempt_number) => {
+    match (request_discriminator, repair_attempt_number) {
+        (Some(discriminator), _) => {
+            format!("prompt-pack-{run_id}-stage-{stage_run_id}-{discriminator}")
+        }
+        (None, Some(attempt_number)) => {
             format!("prompt-pack-{run_id}-stage-{stage_run_id}-repair-{attempt_number}")
         }
-        None => format!("prompt-pack-{run_id}-stage-{stage_run_id}"),
+        (None, None) => format!("prompt-pack-{run_id}-stage-{stage_run_id}"),
     }
 }
 
-fn browser_run_source_for_stage(run_id: i64, stage_run_id: i64, stage_name: &str) -> String {
-    format!("prompt_pack:youtube_summary:{stage_name}:run:{run_id}:stage:{stage_run_id}")
+fn browser_run_source_for_stage(
+    run_id: i64,
+    stage_run_id: i64,
+    stage_name: &str,
+    request_discriminator: Option<&str>,
+) -> String {
+    let base =
+        format!("prompt_pack:youtube_summary:{stage_name}:run:{run_id}:stage:{stage_run_id}");
+    match request_discriminator {
+        Some(discriminator) => format!("{base}:{discriminator}"),
+        None => base,
+    }
 }
 
 fn browser_stage_completion_from_result(
@@ -694,9 +729,15 @@ async fn run_browser_llm_request(
     phase: &'static str,
     started_message: &'static str,
     repair_attempt_number: Option<i64>,
+    request_discriminator: Option<&str>,
     llm_request: LlmChatRequest,
 ) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
-    let browser_run_id = browser_run_id_for_stage(run_id, stage_run_id, repair_attempt_number);
+    let browser_run_id = browser_run_id_for_stage(
+        run_id,
+        stage_run_id,
+        repair_attempt_number,
+        request_discriminator,
+    );
     if run_cancellation_token
         .as_ref()
         .is_some_and(CancellationToken::is_cancelled)
@@ -708,7 +749,8 @@ async fn run_browser_llm_request(
     }
 
     let prompt = llm_chat_request_to_browser_prompt(&llm_request)?;
-    let source = browser_run_source_for_stage(run_id, stage_run_id, &stage_name);
+    let source =
+        browser_run_source_for_stage(run_id, stage_run_id, &stage_name, request_discriminator);
     let queued_handle = handle.clone();
     let started_handle = handle.clone();
     let request_id = llm_request.request_id.clone();
@@ -945,6 +987,7 @@ async fn run_transcript_analysis_stage_request(
                 "transcript_analysis",
                 "Analyzing transcript",
                 None,
+                None,
                 llm_request,
             )
             .await
@@ -1017,6 +1060,7 @@ async fn run_synthesis_stage_request(
                 None,
                 "synthesis",
                 "Synthesizing videos",
+                None,
                 None,
                 llm_request,
             )
@@ -1096,6 +1140,154 @@ async fn run_json_repair_stage_request(
                 "repair",
                 "Repairing provider JSON",
                 Some(stage_request.attempt_number),
+                None,
+                llm_request,
+            )
+            .await
+        }
+    }
+}
+
+async fn run_gem_analysis_part_stage_request(
+    handle: AppHandle,
+    pool: SqlitePool,
+    completion_runtime: RunCompletionRuntime,
+    run_cancellation_token: Option<CancellationToken>,
+    stage_request: GemAnalysisPartStageExecutionRequest,
+) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
+    let (profile_id, model_override, model_output_limit) = match &completion_runtime {
+        RunCompletionRuntime::Api {
+            profile,
+            model_override,
+        } => {
+            let effective_model = resolve_effective_model(profile, model_override.as_deref())?;
+            let model_output_limit =
+                resolve_model_output_token_limit_for_backend(profile, &effective_model).await;
+            (
+                Some(profile.profile_id.clone()),
+                model_override.clone(),
+                model_output_limit,
+            )
+        }
+        RunCompletionRuntime::GeminiBrowser { .. } => (None, None, None),
+    };
+    let max_output_tokens =
+        gem_analysis_part_max_output_tokens(stage_request.part, model_output_limit);
+    let llm_request = build_gem_analysis_part_llm_request(
+        &stage_request,
+        profile_id,
+        model_override,
+        max_output_tokens,
+    );
+    let phase = gem_part_phase(stage_request.part);
+    let started_message = gem_part_started_message(stage_request.part);
+
+    match completion_runtime {
+        RunCompletionRuntime::Api { profile, .. } => {
+            run_api_llm_request(
+                handle,
+                profile,
+                run_cancellation_token,
+                llm_request,
+                stage_request.run_id,
+                stage_request.stage_run_id,
+                Some(stage_request.source_snapshot_id),
+                "youtube_summary/transcript_analysis".to_string(),
+                phase,
+                started_message,
+            )
+            .await
+        }
+        RunCompletionRuntime::GeminiBrowser {
+            browser_provider_config,
+        } => {
+            let discriminator = gem_part_request_suffix(stage_request.part);
+            run_browser_llm_request(
+                handle,
+                pool,
+                stage_request.run_id,
+                stage_request.stage_run_id,
+                browser_provider_config,
+                run_cancellation_token,
+                "youtube_summary/transcript_analysis".to_string(),
+                Some(stage_request.source_snapshot_id),
+                phase,
+                started_message,
+                None,
+                Some(discriminator.as_str()),
+                llm_request,
+            )
+            .await
+        }
+    }
+}
+
+async fn run_gem_analysis_part_repair_request(
+    handle: AppHandle,
+    pool: SqlitePool,
+    completion_runtime: RunCompletionRuntime,
+    run_cancellation_token: Option<CancellationToken>,
+    stage_request: GemAnalysisPartRepairRequest,
+) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
+    let (profile_id, model_override, model_output_limit) = match &completion_runtime {
+        RunCompletionRuntime::Api {
+            profile,
+            model_override,
+        } => {
+            let effective_model = resolve_effective_model(profile, model_override.as_deref())?;
+            let model_output_limit =
+                resolve_model_output_token_limit_for_backend(profile, &effective_model).await;
+            (
+                Some(profile.profile_id.clone()),
+                model_override.clone(),
+                model_output_limit,
+            )
+        }
+        RunCompletionRuntime::GeminiBrowser { .. } => (None, None, None),
+    };
+    let max_output_tokens =
+        gem_analysis_part_max_output_tokens(stage_request.part, model_output_limit);
+    let llm_request = build_gem_analysis_part_repair_llm_request(
+        &stage_request,
+        profile_id,
+        model_override,
+        max_output_tokens,
+    );
+
+    match completion_runtime {
+        RunCompletionRuntime::Api { profile, .. } => {
+            run_api_llm_request(
+                handle,
+                profile,
+                run_cancellation_token,
+                llm_request,
+                stage_request.run_id,
+                stage_request.stage_run_id,
+                Some(stage_request.source_snapshot_id),
+                "youtube_summary/transcript_analysis".to_string(),
+                "gem_part_repair",
+                "Gem analysis: repairing part JSON",
+            )
+            .await
+        }
+        RunCompletionRuntime::GeminiBrowser {
+            browser_provider_config,
+        } => {
+            let discriminator =
+                gem_part_repair_request_suffix(stage_request.part, stage_request.attempt_number);
+            run_browser_llm_request(
+                handle,
+                pool,
+                stage_request.run_id,
+                stage_request.stage_run_id,
+                browser_provider_config,
+                run_cancellation_token,
+                "youtube_summary/transcript_analysis".to_string(),
+                Some(stage_request.source_snapshot_id),
+                "gem_part_repair",
+                "Gem analysis: repairing part JSON",
+                None,
+                Some(discriminator.as_str()),
                 llm_request,
             )
             .await
@@ -1295,6 +1487,128 @@ fn build_synthesis_llm_request(
                 content: format!(
                     "Synthesize the transcript-analysis candidates into one strict JSON object with stage_io_version, schema_version, stage, synthesis_candidate, limitations, and warning_candidates.\n\nRequired synthesis_candidate shape:\n{{\n  \"summary_text\": \"readable synthesis summary\",\n  \"cross_video_themes\": [{{ \"theme_text\": \"theme\", \"source_refs\": [\"source_ref_1\"], \"claim_refs\": [], \"evidence_refs\": [] }}],\n  \"common_claims\": [],\n  \"contradictions_across_videos\": []\n}}\n\nsummary_text must be a readable synthesis summary, not a terse label. Write 3 to 5 paragraphs in the requested output_language, explaining the shared themes, meaningful differences, and combined takeaway across the analyzed videos. Keep it grounded in the transcript-analysis candidates and canonical_graph; do not copy long transcript passages.\n\nThe input wrapper field source_ref_id may be used only for reasoning. Do not copy the key source_ref_id into the output. Use only source_refs from allowed_refs.source_refs, claim_refs from allowed_refs.claim_refs, and evidence_refs from allowed_refs.evidence_refs. You may use segment_refs, key_point_refs, and quote_refs from allowed_refs only for reasoning over canonical_graph. Do not emit segment_refs, key_point_refs, or quote_refs in the output. Leave claim_refs or evidence_refs empty when no supporting allowed ref exists. Do not include backend-owned IDs or keys such as source_ref_id, theme_id, common_claim_id, contradiction_id, claim_id, evidence_id, video_id, section_id, or synthesis_item_id. Do not wrap the JSON in Markdown.\n\nSynthesis input JSON:\n{}",
                     prompt_input_json
+                ),
+            },
+        ],
+    }
+}
+
+fn gem_part_request_suffix(part: GemAnalysisPart) -> String {
+    format!("gem-{}", part.slug())
+}
+
+fn gem_part_repair_request_suffix(part: GemAnalysisPart, attempt_number: i64) -> String {
+    format!("gem-{}-repair-{attempt_number}", part.slug())
+}
+
+fn gem_part_phase(part: GemAnalysisPart) -> &'static str {
+    match part {
+        GemAnalysisPart::Passport => "gem_passport",
+        GemAnalysisPart::Comments => "gem_comments",
+        GemAnalysisPart::DeepRecap => "gem_deep_recap",
+    }
+}
+
+fn gem_part_started_message(part: GemAnalysisPart) -> &'static str {
+    match part {
+        GemAnalysisPart::Passport => "Gem analysis: building analytical passport",
+        GemAnalysisPart::Comments => "Gem analysis: analyzing comments",
+        GemAnalysisPart::DeepRecap => "Gem analysis: writing deep recap",
+    }
+}
+
+fn gem_part_output_budget(part: GemAnalysisPart) -> i64 {
+    match part {
+        GemAnalysisPart::Comments => 4_096,
+        GemAnalysisPart::Passport | GemAnalysisPart::DeepRecap => 8_192,
+    }
+}
+
+fn gem_analysis_part_max_output_tokens(
+    part: GemAnalysisPart,
+    model_output_limit: Option<i64>,
+) -> Option<i64> {
+    transcript_analysis_max_output_tokens(gem_part_output_budget(part), model_output_limit)
+}
+
+fn build_gem_analysis_part_llm_request(
+    request: &GemAnalysisPartStageExecutionRequest,
+    profile_id: Option<String>,
+    model_override: Option<String>,
+    max_output_tokens: Option<i64>,
+) -> LlmChatRequest {
+    LlmChatRequest {
+        request_id: format!(
+            "prompt-pack-run-{}-stage-{}-{}",
+            request.run_id,
+            request.stage_run_id,
+            gem_part_request_suffix(request.part)
+        ),
+        profile_id,
+        model_override,
+        max_output_tokens,
+        messages: vec![
+            LlmMessage {
+                role: "system".to_string(),
+                content: "Return strict JSON for one Gem analysis part. Do not include Markdown fences, prose outside JSON, comments, or backend-owned IDs. Put the complete Russian Markdown report in the markdown field.".to_string(),
+            },
+            LlmMessage {
+                role: "user".to_string(),
+                content: format!(
+                    "Return exactly one strict JSON object:\n\
+                     {{\n\
+                     \"part\": \"{}\",\n\
+                     \"markdown\": \"<full Russian Markdown report>\"\n\
+                     }}\n\
+                     Use only the input material provided below for this part. Do not use outputs from other Gem analysis parts. Do not invent timestamps, metadata, source titles, subscriber counts, metrics, or links. If a requested item is unavailable in the provided material, write `Недоступно во входных данных`. If transcript input has no `[MM:SS]` timestamps, state that timestamps are unavailable in the input and do not create approximate timestamps. For fact-checking, do not fabricate sources or URLs; if external verification is unavailable in the current runtime, explicitly state that limitation. Do not start markdown with # or ##; the backend assembler owns the top-level report title and part headings. Start internal headings at ###, use #### for nested headings, and avoid leading/trailing horizontal rules.\n\n\
+                     Gem analysis part input JSON:\n{}",
+                    request.part.as_str(),
+                    request.prompt_input_json
+                ),
+            },
+        ],
+    }
+}
+
+fn build_gem_analysis_part_repair_llm_request(
+    request: &GemAnalysisPartRepairRequest,
+    profile_id: Option<String>,
+    model_override: Option<String>,
+    max_output_tokens: Option<i64>,
+) -> LlmChatRequest {
+    LlmChatRequest {
+        request_id: format!(
+            "prompt-pack-run-{}-stage-{}-{}",
+            request.run_id,
+            request.stage_run_id,
+            gem_part_repair_request_suffix(request.part, request.attempt_number)
+        ),
+        profile_id,
+        model_override,
+        max_output_tokens,
+        messages: vec![
+            LlmMessage {
+                role: "system".to_string(),
+                content: "Return strict JSON for one Gem analysis part. Do not include Markdown fences, prose outside JSON, comments, or backend-owned IDs. Put the complete Russian Markdown report in the markdown field.".to_string(),
+            },
+            LlmMessage {
+                role: "user".to_string(),
+                content: format!(
+                    "Repair the invalid Gem analysis part output for part `{}`.\n\n\
+                     Parser/validator error:\n{}\n\n\
+                     Original Gem part input JSON:\n{}\n\n\
+                     Invalid provider output:\n{}\n\n\
+                     Return exactly one strict JSON object:\n\
+                     {{\n\
+                     \"part\": \"{}\",\n\
+                     \"markdown\": \"<full Russian Markdown report>\"\n\
+                     }}\n\
+                     Preserve useful Markdown content from the invalid output when possible. Use only the original Gem part input and the invalid output. Do not add prose outside JSON.",
+                    request.part.as_str(),
+                    request.error_message,
+                    request.prompt_input_json,
+                    request.raw_output,
+                    request.part.as_str(),
                 ),
             },
         ],
@@ -2006,7 +2320,7 @@ mod tests {
                 .await;
         let stage_run_id = 1001;
         insert_prompt_pack_browser_stage(&pool, 41, stage_run_id).await;
-        let browser_run_id = browser_run_id_for_stage(41, stage_run_id, None);
+        let browser_run_id = browser_run_id_for_stage(41, stage_run_id, None, None);
         let runs_dir = tempfile::tempdir().expect("runs dir");
         crate::gemini_browser::create_queued_run(
             runs_dir.path(),
@@ -2065,7 +2379,7 @@ mod tests {
                 .await;
         let stage_run_id = 1002;
         insert_prompt_pack_browser_stage(&pool, 42, stage_run_id).await;
-        let browser_run_id = browser_run_id_for_stage(42, stage_run_id, None);
+        let browser_run_id = browser_run_id_for_stage(42, stage_run_id, None, None);
         let runs_dir = tempfile::tempdir().expect("runs dir");
         crate::gemini_browser::create_queued_run(
             runs_dir.path(),
@@ -2257,16 +2571,36 @@ mod tests {
     #[test]
     fn browser_run_identity_includes_repair_attempt_when_present() {
         assert_eq!(
-            browser_run_id_for_stage(42, 1001, None),
+            browser_run_id_for_stage(42, 1001, None, None),
             "prompt-pack-42-stage-1001"
         );
         assert_eq!(
-            browser_run_id_for_stage(42, 1001, Some(2)),
+            browser_run_id_for_stage(42, 1001, Some(2), None),
             "prompt-pack-42-stage-1001-repair-2"
         );
         assert_eq!(
-            browser_run_source_for_stage(42, 1001, "youtube_summary/transcript_analysis"),
+            browser_run_source_for_stage(42, 1001, "youtube_summary/transcript_analysis", None),
             "prompt_pack:youtube_summary:youtube_summary/transcript_analysis:run:42:stage:1001"
+        );
+    }
+
+    #[test]
+    fn browser_run_id_accepts_optional_gem_discriminator() {
+        assert_eq!(
+            browser_run_id_for_stage(42, 1001, None, None),
+            "prompt-pack-42-stage-1001"
+        );
+        assert_eq!(
+            browser_run_id_for_stage(42, 1001, Some(2), None),
+            "prompt-pack-42-stage-1001-repair-2"
+        );
+        assert_eq!(
+            browser_run_id_for_stage(42, 1001, None, Some("gem-passport")),
+            "prompt-pack-42-stage-1001-gem-passport"
+        );
+        assert_eq!(
+            browser_run_id_for_stage(42, 1001, None, Some("gem-deep-recap-repair-1")),
+            "prompt-pack-42-stage-1001-gem-deep-recap-repair-1"
         );
     }
 

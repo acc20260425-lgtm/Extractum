@@ -24,6 +24,10 @@ async fn execute_queued_run_with_stage_executor_finishes_complete() {
             YoutubeSummaryStageExecutionRequest::JsonRepair(_) => {
                 panic!("valid single-video run should not request repair")
             }
+            YoutubeSummaryStageExecutionRequest::GemAnalysisPart(_)
+            | YoutubeSummaryStageExecutionRequest::GemAnalysisPartRepair(_) => {
+                panic!("standard run should not request gem analysis")
+            }
         }
     })
     .await
@@ -89,6 +93,10 @@ async fn youtube_summary_invalid_final_result_records_result_level_findings() {
                     YoutubeSummaryStageExecutionRequest::JsonRepair(_) => {
                         panic!("valid single-video run should not request repair")
                     }
+                    YoutubeSummaryStageExecutionRequest::GemAnalysisPart(_)
+                    | YoutubeSummaryStageExecutionRequest::GemAnalysisPartRepair(_) => {
+                        panic!("standard run should not request gem analysis")
+                    }
                 }
             },
             |canonical| {
@@ -152,6 +160,10 @@ async fn execute_queued_run_repairs_malformed_transcript_json() {
                 YoutubeSummaryStageExecutionRequest::Synthesis(_) => {
                     panic!("single-video run should not request synthesis")
                 }
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(_)
+                | YoutubeSummaryStageExecutionRequest::GemAnalysisPartRepair(_) => {
+                    panic!("standard run should not request gem analysis")
+                }
             }
         }
     })
@@ -201,6 +213,10 @@ async fn execution_graph_build_failure_after_failed_repair_marks_transcript_fail
                 }
                 YoutubeSummaryStageExecutionRequest::Synthesis(_) => {
                     panic!("single-video failed transcript run should not request synthesis")
+                }
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(_)
+                | YoutubeSummaryStageExecutionRequest::GemAnalysisPartRepair(_) => {
+                    panic!("standard run should not request gem analysis")
                 }
             }
         }
@@ -268,6 +284,10 @@ async fn execute_queued_run_repairs_malformed_synthesis_json() {
                         output_tokens: Some(210),
                         latency_ms: 310,
                     })
+                }
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(_)
+                | YoutubeSummaryStageExecutionRequest::GemAnalysisPartRepair(_) => {
+                    panic!("standard run should not request gem analysis")
                 }
             }
         }
@@ -667,6 +687,10 @@ async fn execute_multi_video_run_stops_after_transcript_when_cancelled_before_sy
                 }
                 YoutubeSummaryStageExecutionRequest::JsonRepair(_) => {
                     panic!("valid transcript should not request repair")
+                }
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(_)
+                | YoutubeSummaryStageExecutionRequest::GemAnalysisPartRepair(_) => {
+                    panic!("standard run should not request gem analysis")
                 }
             }
         }

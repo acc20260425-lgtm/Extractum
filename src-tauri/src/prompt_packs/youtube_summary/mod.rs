@@ -9,6 +9,7 @@ pub(crate) mod execution_result;
 mod execution_tests;
 #[cfg(test)]
 mod facade_tests;
+pub(crate) mod gem_analysis;
 pub(crate) mod outputs;
 #[cfg(test)]
 mod outputs_tests;
@@ -41,8 +42,11 @@ pub(crate) use execution::execute_youtube_summary_run_with_stage_executor;
 pub(crate) use preflight::preflight_youtube_summary_in_pool;
 pub(crate) use snapshots::create_youtube_summary_run_skeleton_in_pool;
 use store::{load_run_by_client_request_id, load_run_summary};
+#[allow(unused_imports)]
+pub(crate) use types::GemAnalysisInputBudget;
 pub use types::ModelBudget;
 pub(crate) use types::{
+    GemAnalysisPart, GemAnalysisPartRepairRequest, GemAnalysisPartStageExecutionRequest,
     LlmCompletion, SynthesisStageExecutionRequest, TranscriptAnalysisStageExecutionRequest,
     YoutubeSummaryRunExecutionOutcome, YoutubeSummaryStageExecutionError,
     YoutubeSummaryStageExecutionRequest, SYNTHESIS_STAGE_NAME,

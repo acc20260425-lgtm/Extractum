@@ -508,7 +508,7 @@ git commit -m "feat(prompt-packs): freeze transcript segment metadata"
 - Extends `YoutubeSummaryStageExecutionRequest` with `GemAnalysisPart` and `GemAnalysisPartRepair`.
 - Produces `parse_gem_analysis_part_output(raw, expected_part) -> AppResult<GemAnalysisPartOutput>`.
 
-- [ ] **Step 1: Add failing runtime ID tests**
+- [x] **Step 1: Add failing runtime ID tests**
 
 In the `runtime.rs` tests module, add tests that call helper functions directly:
 
@@ -545,7 +545,7 @@ fn browser_run_id_for_stage(
 ) -> String
 ```
 
-- [ ] **Step 2: Add failing part parser tests**
+- [x] **Step 2: Add failing part parser tests**
 
 In `gem_analysis.rs`, include a `#[cfg(test)]` module with:
 
@@ -596,7 +596,7 @@ fn parse_part_output_accepts_json_fence_with_internal_markdown_code_block() {
 }
 ```
 
-- [ ] **Step 3: Run tests and verify failure**
+- [x] **Step 3: Run tests and verify failure**
 
 Run:
 
@@ -607,7 +607,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL because types/helpers do not exist.
 
-- [ ] **Step 4: Add Gem types**
+- [x] **Step 4: Add Gem types**
 
 In `types.rs`, add:
 
@@ -675,7 +675,7 @@ GemAnalysisPartRepair(GemAnalysisPartRepairRequest),
 
 Re-export these types from `youtube_summary/mod.rs` next to existing request types.
 
-- [ ] **Step 5: Add part parser**
+- [x] **Step 5: Add part parser**
 
 In `gem_analysis.rs`, add:
 
@@ -715,7 +715,7 @@ pub(crate) fn parse_gem_analysis_part_output(
 }
 ```
 
-- [ ] **Step 6: Update browser helper signature**
+- [x] **Step 6: Update browser helper signature**
 
 Change `browser_run_id_for_stage` and `browser_run_source_for_stage` to accept an optional discriminator:
 
@@ -740,7 +740,7 @@ match (request_discriminator, repair_attempt_number) {
 
 Pass `None` from existing transcript, synthesis, and JSON repair callers.
 
-- [ ] **Step 7: Add Gem LLM request builders**
+- [x] **Step 7: Add Gem LLM request builders**
 
 In `runtime.rs`, add builders:
 
@@ -793,7 +793,7 @@ Return exactly one strict JSON object:
 Use only the input material provided below for this part. Do not use outputs from other Gem analysis parts. Do not invent timestamps, metadata, source titles, subscriber counts, metrics, or links. If a requested item is unavailable in the provided material, write `Недоступно во входных данных`. If transcript input has no `[MM:SS]` timestamps, state that timestamps are unavailable in the input and do not create approximate timestamps. For fact-checking, do not fabricate sources or URLs; if external verification is unavailable in the current runtime, explicitly state that limitation. Do not start markdown with # or ##; the backend assembler owns the top-level report title and part headings. Start internal headings at ###, use #### for nested headings, and avoid leading/trailing horizontal rules.
 ```
 
-- [ ] **Step 8: Route new enum variants in runtime**
+- [x] **Step 8: Route new enum variants in runtime**
 
 In the central runtime match that currently dispatches `TranscriptAnalysis`, `Synthesis`, and `JsonRepair`, add branches for:
 
@@ -820,7 +820,7 @@ Use started messages:
 - `Gem analysis: writing deep recap`
 - `Gem analysis: repairing part JSON`
 
-- [ ] **Step 9: Run focused runtime tests**
+- [x] **Step 9: Run focused runtime tests**
 
 Run:
 
@@ -831,11 +831,11 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 10: Update value registry for phases**
+- [x] **Step 10: Update value registry for phases**
 
 Add `gem_passport`, `gem_comments`, `gem_deep_recap`, and `gem_part_repair` to the event phase registry row in `docs/value-registry.md`.
 
-- [ ] **Step 11: Commit Task 3**
+- [x] **Step 11: Commit Task 3**
 
 ```powershell
 git add src-tauri/src/prompt_packs/youtube_summary/types.rs src-tauri/src/prompt_packs/youtube_summary/mod.rs src-tauri/src/prompt_packs/runtime.rs src-tauri/src/prompt_packs/youtube_summary/gem_analysis.rs docs/value-registry.md
