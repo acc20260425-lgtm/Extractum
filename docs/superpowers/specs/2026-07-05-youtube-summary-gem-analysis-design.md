@@ -121,20 +121,21 @@ Before starting Gem part requests, estimate input tokens for each part:
 - part 2: shared wrapper + part 2 prompt + comments-only input, when comments are present;
 - part 3: shared wrapper + part 3 prompt + timestamped transcript input.
 
-The input cap for each part is the lower of:
+The input cap for each part is computed before the execution/orchestration layer starts Gem parts. `runtime.rs` resolves the selected runtime/model details, reads the prompt-pack runtime `max_prompt_tokens`, computes the effective Gem cap, and passes that cap into the YouTube Summary execution context. The execution layer must not independently resolve LLM profiles or model metadata.
 
-- the selected API model input/context limit, when known from the provider/model registry;
-- the configured prompt-pack runtime `max_prompt_tokens` value, enforced by new Gem input-budget logic;
-- a Gem-specific app-side safety cap if the runtime cannot expose a model-specific context window.
+The effective Gem cap is:
 
-Current transcript runtime code already carries `max_prompt_tokens` in configuration, but the normal transcript request path does not enforce it as an input guard. Gem analysis is the first feature in this area that must enforce an input-budget check before provider calls. Reserve an implementation constant for wrapper overhead and estimator error. The exact value can be tuned in code, but tests must prove that a prompt close to the cap is rejected before a provider call rather than failing after an expensive partial run.
+- `min(selected API model input/context limit, configured prompt-pack runtime max_prompt_tokens)` when the model limit is known;
+- the configured prompt-pack runtime `max_prompt_tokens` when the model limit is unknown or the runtime is Gemini Browser.
+
+Current transcript runtime code already carries `max_prompt_tokens` in configuration, but the normal transcript request path does not deserialize or enforce it as an input guard. Gem analysis is the first feature in this area that must add that input-budget logic. Reserve an implementation constant for wrapper overhead and estimator error. The exact value can be tuned in code, but tests must prove that all planned Gem part prompts are checked before the first provider call rather than failing after an expensive partial run.
 
 First-version overflow policy:
 
 - Do not truncate transcript input for Gem analysis. Truncation would make part 1 and part 3 disagree with the requested full-video report and could remove timestamps needed by the prompts.
 - If part 1 or part 3 estimated input exceeds the cap, block the Gem transcript-analysis stage before any provider call with a clear error such as `Gem analysis transcript is too long for the selected model.`
 - If part 2 estimated input exceeds the cap, reduce only the comment sample using the existing comment token cap policy before the prompt is built. If the trimmed comment text is still empty, skip part 2.
-- For Gemini Browser, where the browser provider does not expose a reliable enforceable context window, apply the same app-side `max_prompt_tokens` guard and report overflow before opening the browser request.
+- For Gemini Browser, where the browser provider does not expose a reliable enforceable context window, use the configured prompt-pack `max_prompt_tokens` as the effective cap and report overflow before opening the browser request.
 
 The UI does not need a full token estimator in this slice, but the execution layer must enforce the guard because API keys and browser sessions can be used outside the normal UI preflight path.
 

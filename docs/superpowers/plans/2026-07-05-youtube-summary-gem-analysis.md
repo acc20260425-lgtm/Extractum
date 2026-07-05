@@ -4,7 +4,7 @@
 
 **Goal:** Add the approved single-video `Gem analysis` YouTube Summary mode that runs independent transcript/comment/transcript Gem parts and assembles one Markdown report into `video_candidate.summary_text`.
 
-**Architecture:** Keep `gem_analysis` inside the existing YouTube Summary prompt pack as a `control_preset`. Freeze transcript material from bounded ordered transcript segments as the single source of truth, then use a focused Gem execution helper to build per-part prompts, call the selected runtime, repair part JSON once, and persist one normal transcript-analysis output. Existing `standard` and `detailed_report` flows stay on the current single-completion path.
+**Architecture:** Keep `gem_analysis` inside the existing YouTube Summary prompt pack as a `control_preset`. Freeze transcript material from bounded ordered transcript segments as the single source of truth, compute the effective Gem input cap in `runtime.rs` before execution starts, then use a focused Gem execution helper to build per-part prompts, check all part budgets before the first LLM call, call the selected runtime, repair part JSON once, and persist one normal transcript-analysis output. Existing `standard` and `detailed_report` flows stay on the current single-completion path.
 
 **Tech Stack:** Svelte 5 + TypeScript frontend, Vitest contract tests, Tauri/Rust backend, SQLx SQLite, existing prompt-pack runtime and artifact tables.
 
@@ -18,11 +18,13 @@
 - Gem part 1 and part 3 timestamped input is rendered from the same bounded transcript segment list as `text_zstd`.
 - Part 1 and part 3 input overflow blocks before any provider call; v1 does not truncate Gem transcript input.
 - Part 2 sentiment language is scoped to the selected comment sample and does not ask for exact percentages.
+- Gem input-budget cap is computed in `runtime.rs` from the selected model input limit when known and the bundled transcript-analysis `max_prompt_tokens`; execution receives the already computed cap.
 - Cancellation checkpoints are required before part 1, before part 2, before part 3, and before final persistence.
 - v1 has no partial per-part result cache; a required part failure makes a retry rerun all parts.
 - No new `artifact_kind` values in this slice.
 - Update `docs/value-registry.md` for new `control_preset` and any new event `phase` values.
 - Use `npm.cmd` for npm scripts on Windows.
+- Execute this plan in an isolated branch or worktree before the first implementation task.
 
 ---
 
@@ -38,11 +40,52 @@
 - `src-tauri/src/prompt_packs/youtube_summary/preflight.rs` blocks `gem_analysis` unless exactly one video is included.
 - `src-tauri/src/prompt_packs/youtube_summary/preflight_tests.rs` covers the single-video guard.
 - `src-tauri/src/prompt_packs/youtube_summary/types.rs` adds Gem part request/repair types and enum variants.
-- `src-tauri/src/prompt_packs/runtime.rs` builds/runs Gem part and repair requests, optional browser discriminators, output budgets, and part prompt wrappers.
-- `src-tauri/src/prompt_packs/youtube_summary/gem_analysis.rs` is a new focused orchestrator for material loading, prompt input assembly, input-budget checks, part output parsing/repair decisions, final Markdown assembly, and final transcript-analysis JSON assembly.
+- `src-tauri/src/prompt_packs/runtime.rs` builds/runs Gem part and repair requests, optional browser discriminators, output budgets, prompt-pack `max_prompt_tokens` reading, selected model input-limit resolution, and part prompt wrappers.
+- `src-tauri/src/prompt_packs/youtube_summary/gem_analysis.rs` is a new focused orchestrator for material loading, prompt input assembly, input-budget checks using the runtime-provided cap, part output parsing/repair decisions, final Markdown assembly, and final transcript-analysis JSON assembly.
 - `src-tauri/src/prompt_packs/youtube_summary/execution.rs` branches to `execute_gem_analysis_transcript_stage` when `control_preset == "gem_analysis"`.
 - `src-tauri/src/prompt_packs/youtube_summary/outputs.rs` accepts an optional metrics extension when persisting assembled Gem output.
 - Existing Rust test files in `youtube_summary` and `runtime.rs` receive focused tests near the code they verify.
+
+---
+
+### Task 0: Isolate The Implementation Workspace
+
+**Files:**
+- No repository file changes expected.
+
+**Interfaces:**
+- Consumes: current `main` branch with approved spec and plan commits.
+- Produces: an isolated implementation branch or worktree before code edits start.
+
+- [ ] **Step 1: Check the current worktree**
+
+Run:
+
+```powershell
+git status --short
+```
+
+Expected: no tracked file changes. Untracked local IDE files such as `.claude/settings.local.json` may remain untracked and must not be staged.
+
+- [ ] **Step 2: Create an isolated implementation branch or worktree**
+
+Preferred if using the repository directly:
+
+```powershell
+git switch -c feature/youtube-summary-gem-analysis
+```
+
+Alternative when using the worktree flow:
+
+```powershell
+git worktree add .worktrees/youtube-summary-gem-analysis -b feature/youtube-summary-gem-analysis
+```
+
+Expected: implementation work no longer lands directly on `main`.
+
+- [ ] **Step 3: Commit**
+
+No commit is required for this task.
 
 ---
 
@@ -89,7 +132,28 @@ In `YoutubeSummaryRunDialog.svelte`, add the new option without changing default
 <option value="gem_analysis">Gem analysis</option>
 ```
 
-- [ ] **Step 4: Add backend preflight tests**
+- [ ] **Step 4: Add the multi-video preflight fixture helper**
+
+In `src-tauri/src/prompt_packs/youtube_summary/test_support.rs`, add:
+
+```rust
+pub(crate) async fn test_pool_with_playlist_two_ready_videos() -> sqlx::SqlitePool {
+    let pool = migrated_pool().await;
+    seed_builtin_prompt_packs_in_pool(&pool)
+        .await
+        .expect("seed pack");
+    insert_playlist(&pool, 701).await;
+    insert_youtube_video(&pool, 901, "v-ready-1").await;
+    insert_youtube_video(&pool, 902, "v-ready-2").await;
+    insert_transcript(&pool, 901, "Ready transcript one").await;
+    insert_transcript(&pool, 902, "Ready transcript two").await;
+    insert_playlist_item(&pool, 701, Some(901), "v-ready-1", 1).await;
+    insert_playlist_item(&pool, 701, Some(902), "v-ready-2", 2).await;
+    pool
+}
+```
+
+- [ ] **Step 5: Add backend preflight tests**
 
 In `preflight_tests.rs`, add:
 
@@ -139,9 +203,7 @@ async fn preflight_gem_analysis_blocks_multiple_included_videos() {
 }
 ```
 
-If `test_pool_with_playlist_two_ready_videos` does not exist, add it to `test_support.rs` by composing two ready linked playlist children with transcript rows, following the existing playlist helpers.
-
-- [ ] **Step 5: Run preflight tests and verify the new multi-video test fails**
+- [ ] **Step 6: Run preflight tests and verify the new multi-video test fails**
 
 Run:
 
@@ -151,7 +213,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL because the guard is not implemented.
 
-- [ ] **Step 6: Implement the preflight guard**
+- [ ] **Step 7: Implement the preflight guard**
 
 At the end of `preflight_youtube_summary_in_pool`, before returning, insert:
 
@@ -167,7 +229,7 @@ if request.control_preset == "gem_analysis" && included_videos.len() != 1 {
 
 Keep the existing included/skipped lists intact so the UI can still show what was discovered.
 
-- [ ] **Step 7: Update value registry**
+- [ ] **Step 8: Update value registry**
 
 In `docs/value-registry.md`, update the `Prompt-pack control preset` row to include:
 
@@ -177,7 +239,7 @@ In `docs/value-registry.md`, update the `Prompt-pack control preset` row to incl
 
 Mention `gem_analysis` is single-video and sequential multi-request.
 
-- [ ] **Step 8: Run focused verification**
+- [ ] **Step 9: Run focused verification**
 
 Run:
 
@@ -188,7 +250,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: both PASS.
 
-- [ ] **Step 9: Commit Task 1**
+- [ ] **Step 10: Commit Task 1**
 
 ```powershell
 git add src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte src/lib/youtube-summary-launch-contract.test.ts src-tauri/src/prompt_packs/youtube_summary/preflight.rs src-tauri/src/prompt_packs/youtube_summary/preflight_tests.rs src-tauri/src/prompt_packs/youtube_summary/test_support.rs docs/value-registry.md
@@ -441,6 +503,7 @@ git commit -m "feat(prompt-packs): freeze transcript segment metadata"
 
 **Interfaces:**
 - Produces enum `GemAnalysisPart::{Passport, Comments, DeepRecap}`.
+- Produces `GemAnalysisInputBudget { max_input_tokens: i64 }`.
 - Produces request structs `GemAnalysisPartStageExecutionRequest` and `GemAnalysisPartRepairRequest`.
 - Extends `YoutubeSummaryStageExecutionRequest` with `GemAnalysisPart` and `GemAnalysisPartRepair`.
 - Produces `parse_gem_analysis_part_output(raw, expected_part) -> AppResult<GemAnalysisPartOutput>`.
@@ -520,6 +583,17 @@ fn parse_part_output_rejects_empty_markdown() {
 
     assert!(error.message.contains("markdown"));
 }
+
+#[test]
+fn parse_part_output_accepts_json_fence_with_internal_markdown_code_block() {
+    let raw = "```json\n{\"part\":\"deep_recap\",\"markdown\":\"### Код\\n```rust\\nfn main() {}\\n```\\nФормула: $E=mc^2$\"}\n```";
+
+    let parsed = parse_gem_analysis_part_output(raw, GemAnalysisPart::DeepRecap)
+        .expect("parse fenced JSON with code block inside markdown string");
+
+    assert!(parsed.markdown.contains("```rust"));
+    assert!(parsed.markdown.contains("$E=mc^2$"));
+}
 ```
 
 - [ ] **Step 3: Run tests and verify failure**
@@ -561,6 +635,11 @@ impl GemAnalysisPart {
             Self::DeepRecap => "deep-recap",
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct GemAnalysisInputBudget {
+    pub(crate) max_input_tokens: i64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -804,8 +883,14 @@ async fn load_gem_materials_formats_timestamped_transcript_from_metadata() {
 #[tokio::test]
 async fn load_gem_materials_skips_empty_comment_rows() {
     let pool = test_pool_with_ready_video().await;
-    insert_empty_comment_material_snapshot_for_test(&pool, 1).await;
-    let stage_id = transcript_analysis_stage_id(&pool, 1).await;
+    insert_comment(&pool, 901, "empty-comment", 10, "").await;
+    let mut request = start_request("req-gem-empty-comments", vec![901]);
+    request.include_comments = true;
+    let run = start_youtube_summary_run_in_pool(&pool, request)
+        .await
+        .expect("start")
+        .expect_started("started");
+    let stage_id = transcript_analysis_stage_id(&pool, run.run_id).await;
 
     let materials = load_gem_analysis_materials(&pool, stage_id)
         .await
@@ -911,6 +996,126 @@ For comments, concatenate decompressed `material_kind = 'comment'` rows ordered 
 
 - [ ] **Step 5: Implement prompt input builders**
 
+In `gem_analysis.rs`, define the full part prompt literals before the builder functions:
+
+```rust
+const GEM_PASSPORT_PROMPT_BODY: &str = r#"Системная роль:
+Вы - ведущий аналитик видеоконтента и эксперт по структурированию знаний. Специализация - экспресс-деконструкция медиаматериалов, создание применимых How-to руководств и аккуратная проверка доступных утверждений.
+
+Цель:
+Создать структурированный аналитический паспорт видео на основе только предоставленного transcript material.
+
+Правила входных данных:
+- Используйте только transcript material из этого запроса.
+- Не используйте комментарии, описание, метаданные источника или результаты других Gem parts.
+- Не придумывайте title, URL, автора, подписчиков, длительность, дату публикации, просмотры, внешние ссылки или timestamp.
+- Если поле недоступно во входе, пишите: `Недоступно во входных данных`.
+- Таймкоды берите только из `[MM:SS]`, реально присутствующих во входном transcript material.
+- Если независимый фактчекинг недоступен в runtime, не фабрикуйте источники и ссылки.
+- Markdown должен начинаться с `###`; не используйте `#` или `##`, потому что backend добавляет заголовок части.
+
+Структура отчета:
+
+### I. Метаданные и Контекст
+- **Тип контента:** точный жанр.
+- **Наличие пошаговых инструкций:** Да или Нет; укажите, есть ли готовый алгоритм действий.
+- **Целевая аудитория:** кому и для каких задач полезно содержание.
+- **Инфо-карта:** Название видео | Автор | Метрики: длительность, дата публикации, просмотры. Заполняйте только если это есть в transcript material; иначе `Недоступно во входных данных`.
+- **Таймлайн:** хронологический список ключевых этапов с реальными `[MM:SS]`.
+
+### II. Эссенция
+- **Main Idea:** главная мысль строго одним сильным предложением.
+- **Ключевые тезисы:** 3-5 фундаментальных выводов, аргументов, цифр или коротких цитат из transcript material.
+- **Action Plan:** 2-3 конкретных шага для внедрения знаний после просмотра.
+
+### III. Пошаговое руководство (How-to)
+Заполняется только если описан процесс.
+- **Цель инструкции:** измеримый результат.
+- **Инструменты и ресурсы:** полный список необходимого.
+- **Алгоритм:** нумерованный список. Для каждого шага: **Действие**, **Таймкод** `[MM:SS]`, **Нюанс/Предостережение**.
+
+### IV. Адаптивный модуль
+- Если это обучение: глоссарий из 5+ сложных терминов с простыми определениями и 1 практическое домашнее задание.
+- Если это новости или аналитика: список действующих лиц/организаций и исторический, рыночный или геополитический контекст из transcript material.
+- Если содержание длиннее 20 минут по доступным таймкодам: FAQ из 5 вопросов и ответов строго по transcript material.
+
+### V. Внешний контекст и Ресурсы (упоминания и доступный фактчекинг)
+- **Список упоминаний:** книги, авторы, сервисы, законы и внешние ссылки, которые озвучены в transcript material.
+- **Доступный фактчекинг:** если runtime не предоставляет внешнюю проверку, напишите: `Независимый фактчекинг недоступен в текущем runtime; ниже перечислены только упоминания из транскрипта.`
+
+Стиль:
+Русский язык. Профессионально, без воды и без личных местоимений. Не используйте фразы-филлеры вроде `В данном видеоролике...`."#;
+
+const GEM_COMMENTS_PROMPT_BODY: &str = r#"Системная роль:
+Вы - эксперт по анализу общественного мнения, работе с аудиторией и сентимент-анализу.
+
+Цель:
+Провести анализ только предоставленного selected comment sample. Это ограниченная выборка комментариев, а не все комментарии и не вся аудитория.
+
+Правила входных данных:
+- Используйте только comment material из этого запроса.
+- Не используйте transcript, описание, метаданные источника или результаты других Gem parts.
+- Не цитируйте комментарии дословно; обобщайте.
+- Не называйте выводы репрезентативными для всей аудитории.
+- Не давайте точные проценты sentiment в v1. Используйте качественные формулировки: преимущественно позитивный, смешанный, скептический, нейтральный.
+- Markdown должен начинаться с `###`; не используйте `#` или `##`.
+
+Структура анализа:
+
+### 1. Общий сентимент
+Опишите качественное распределение настроений внутри предоставленной выборки комментариев и общий эмоциональный фон. Обязательно укажите, что вывод относится только к selected comment sample.
+
+### 2. Ключевые темы обсуждения
+Выделите 3-5 главных тем, сгруппируйте мнения и укажите, какие темы вызвали наибольший резонанс в выборке.
+
+### 3. Вопросы и боли аудитории
+Составьте структурированный список частых или глубоких вопросов, которые важны для зрителей и не раскрыты в предоставленных комментариях/контексте.
+
+### 4. Ценные инсайты и дополнения
+Извлеките полезные дополнения: альтернативные сервисы, личный опыт, исправления ошибок, экспертные уточнения.
+
+### 5. Конструктивная критика
+Разделите критику на категории: **техническая часть**, **подача**, **фактология**.
+
+Стиль:
+Строго русский. Объективно, основанно на данных выборки, без личных суждений об аудитории."#;
+
+const GEM_DEEP_RECAP_PROMPT_BODY: &str = r#"Системная роль:
+Вы - ведущий аналитик видеоконтента и эксперт по структурированию знаний. Специализация - деконструкция сложных видео в плотные, глубокие текстовые пересказы высокой точности.
+
+Цель:
+Создать глубокий интерактивный пересказ основного содержания на основе только provided transcript material.
+
+Правила входных данных:
+- Используйте только transcript material из этого запроса.
+- Не используйте комментарии, описание, метаданные источника или результаты других Gem parts.
+- Каждому ключевому тезису, факту или аргументу сопоставляйте реальный `[MM:SS]` из transcript material.
+- Не придумывайте timestamp. Если timestamp недоступен для конкретного пункта, лучше опустить timestamp, чем создать приблизительный.
+- Markdown должен начинаться с `###`; не используйте `#` или `##`.
+- Используйте `####` для вложенных подразделов.
+- Не добавляйте leading/trailing `---`; внутренние разделители используйте только когда они помогают чтению.
+
+Требования к пересказу:
+
+### Объем и плотность
+Минимум 800-1000 слов, если transcript material достаточно содержателен. Полное отсутствие воды, вводных фраз и лирических отступлений. Только факты, методологии и логические цепочки.
+
+### Структура
+Разбейте текст на логические главы с осмысленными заголовками уровня `###`. Каждый раздел раскрывайте детально.
+
+### Интерактивная навигация
+Каждому ключевому тезису, факту или аргументу сопутствует реальный `[MM:SS]` из входа.
+
+### Визуализация данных
+Если сравниваются подходы, инструменты или концепции, оформите сравнение Markdown-таблицей. Списки используйте для свойств и этапов.
+
+### Технический блок
+Если во входе есть формулы, используйте LaTeX. Если есть код, оформляйте его fenced code block с языком.
+
+Стиль:
+Строго русский. Академический, аналитический, лаконичный. Не используйте фразы-филлеры вроде `В этом видео говорится...`, `Автор рассказывает...`, `Блогер объясняет...`."#;
+```
+
 Build per-part prompt input JSON with only the allowed material:
 
 ```rust
@@ -922,7 +1127,7 @@ serde_json::json!({
         "kind": "transcript",
         "text": transcript_timestamped,
     },
-    "task": passport_prompt_body()
+    "task": GEM_PASSPORT_PROMPT_BODY
 })
 ```
 
@@ -936,7 +1141,22 @@ serde_json::json!({
         "sample_limit_note": "Analysis is based only on the provided selected comment sample.",
         "text": comments_text,
     },
-    "task": comments_prompt_body()
+    "task": GEM_COMMENTS_PROMPT_BODY
+})
+```
+
+For deep recap:
+
+```rust
+serde_json::json!({
+    "part": "deep_recap",
+    "source_ref_id": source_ref_id,
+    "timestamps_available": timestamps_available,
+    "input_material": {
+        "kind": "transcript",
+        "text": transcript_timestamped,
+    },
+    "task": GEM_DEEP_RECAP_PROMPT_BODY
 })
 ```
 
@@ -948,7 +1168,6 @@ Add:
 
 ```rust
 const GEM_INPUT_ESTIMATOR_OVERHEAD_TOKENS: i64 = 1_500;
-const GEM_BROWSER_INPUT_TOKEN_CAP: i64 = 24_000;
 
 fn estimate_gem_prompt_tokens(prompt_input_json: &str, wrapper_text: &str) -> i64 {
     super::estimate_tokens(prompt_input_json) + super::estimate_tokens(wrapper_text) + GEM_INPUT_ESTIMATOR_OVERHEAD_TOKENS
@@ -965,7 +1184,7 @@ fn enforce_gem_input_budget(part: GemAnalysisPart, estimate: i64, cap: i64) -> A
 }
 ```
 
-The cap source is supplied by execution/runtime in Task 5. For Task 4, unit-test the pure helper with a small cap.
+The cap value is supplied by `GemAnalysisInputBudget` from Task 5. For Task 4, unit-test the pure helper with a small cap such as `GemAnalysisInputBudget { max_input_tokens: 100 }`.
 
 - [ ] **Step 7: Implement Markdown and transcript-output assembly**
 
@@ -1038,10 +1257,226 @@ git commit -m "feat(prompt-packs): build gem analysis materials"
 
 **Interfaces:**
 - Produces `execute_gem_analysis_transcript_stage(...)`.
+- Produces `YoutubeSummaryExecutionOptions { gem_input_budget: GemAnalysisInputBudget }`.
 - Produces persistence helper `execute_transcript_analysis_stage_with_completion_and_metrics_extension(...)`.
 - Consumes `YoutubeSummaryStageExecutionRequest::GemAnalysisPart` and `GemAnalysisPartRepair`.
 
-- [ ] **Step 1: Add output persistence test for metrics extension**
+- [ ] **Step 1: Add execution options and runtime budget tests**
+
+In `execution.rs`, add a defaultable options struct:
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct YoutubeSummaryExecutionOptions {
+    pub(crate) gem_input_budget: GemAnalysisInputBudget,
+}
+
+impl YoutubeSummaryExecutionOptions {
+    pub(crate) fn for_tests() -> Self {
+        Self {
+            gem_input_budget: GemAnalysisInputBudget {
+                max_input_tokens: i64::MAX,
+            },
+        }
+    }
+}
+```
+
+Add an overload-style helper while keeping existing tests source-compatible:
+
+```rust
+pub(crate) async fn execute_youtube_summary_run_with_stage_executor<F, Fut>(
+    pool: &SqlitePool,
+    run_id: i64,
+    execute_stage: F,
+) -> AppResult<YoutubeSummaryRunExecutionOutcome>
+where
+    F: FnMut(YoutubeSummaryStageExecutionRequest) -> Fut,
+    Fut: Future<Output = Result<LlmCompletion, YoutubeSummaryStageExecutionError>>,
+{
+    execute_youtube_summary_run_with_stage_executor_with_options(
+        pool,
+        run_id,
+        YoutubeSummaryExecutionOptions::for_tests(),
+        execute_stage,
+        |_| {},
+    )
+    .await
+}
+```
+
+Update `execute_youtube_summary_run_with_stage_executor_and_result_mutator` to call the same `execute_youtube_summary_run_with_stage_executor_with_options` helper with `YoutubeSummaryExecutionOptions::for_tests()`.
+
+In `runtime.rs` tests, add:
+
+```rust
+#[test]
+fn transcript_analysis_stage_max_prompt_token_budget_reads_runtime_config() {
+    assert_eq!(
+        transcript_analysis_stage_max_prompt_token_budget().expect("prompt budget"),
+        24_000
+    );
+}
+
+#[test]
+fn gem_input_budget_uses_lower_known_model_limit() {
+    assert_eq!(gem_input_cap(Some(8_000), 24_000), 8_000);
+    assert_eq!(gem_input_cap(Some(64_000), 24_000), 24_000);
+    assert_eq!(gem_input_cap(None, 24_000), 24_000);
+}
+```
+
+- [ ] **Step 2: Implement runtime prompt-budget reading and cap resolution**
+
+In `runtime.rs`, extend `StageBudgetLimits`:
+
+```rust
+#[derive(Deserialize)]
+struct StageBudgetLimits {
+    max_prompt_tokens: Option<i64>,
+    max_output_tokens: Option<i64>,
+}
+```
+
+Add:
+
+```rust
+fn stage_max_prompt_token_budget(asset_json: &str, label: &str) -> AppResult<i64> {
+    let asset = serde_json::from_str::<StageRuntimeConfigAsset>(asset_json).map_err(|error| {
+        AppError::internal(format!(
+            "Parse bundled {label} runtime configuration: {error}"
+        ))
+    })?;
+    asset
+        .runtime_configuration
+        .and_then(|runtime| runtime.budget_limits)
+        .and_then(|budget| budget.max_prompt_tokens)
+        .filter(|max_prompt_tokens| *max_prompt_tokens > 0)
+        .ok_or_else(|| {
+            AppError::internal(format!(
+                "Bundled {label} runtime configuration is missing positive max_prompt_tokens"
+            ))
+        })
+}
+
+fn transcript_analysis_stage_max_prompt_token_budget() -> AppResult<i64> {
+    stage_max_prompt_token_budget(TRANSCRIPT_ANALYSIS_STAGE_JSON, "transcript-analysis")
+}
+
+fn gem_input_cap(model_input_limit: Option<usize>, prompt_budget: i64) -> i64 {
+    match model_input_limit.and_then(|limit| i64::try_from(limit).ok()).filter(|limit| *limit > 0) {
+        Some(model_limit) => model_limit.min(prompt_budget),
+        None => prompt_budget,
+    }
+}
+```
+
+In `execute_youtube_summary_run`, resolve the model input limit before calling the execution helper:
+
+```rust
+let (completion_runtime, model_input_limit) = match config.runtime_provider {
+    RunRuntimeProvider::Api => {
+        let profile = resolve_profile_for_backend(&handle, config.profile_id.as_deref()).await?;
+        let effective_model = resolve_effective_model(&profile, config.model_override.as_deref())?;
+        let model_input_limit =
+            resolve_model_input_token_limit_for_backend(&profile, &effective_model).await;
+        (
+            RunCompletionRuntime::Api {
+                profile,
+                model_override: config.model_override.clone(),
+            },
+            model_input_limit,
+        )
+    }
+    RunRuntimeProvider::GeminiBrowser => (
+        RunCompletionRuntime::GeminiBrowser {
+            browser_provider_config: config.browser_provider_config.clone(),
+        },
+        None,
+    ),
+};
+let prompt_budget = transcript_analysis_stage_max_prompt_token_budget()?;
+let execution_options = YoutubeSummaryExecutionOptions {
+    gem_input_budget: GemAnalysisInputBudget {
+        max_input_tokens: gem_input_cap(model_input_limit, prompt_budget),
+    },
+};
+```
+
+Call:
+
+```rust
+execute_youtube_summary_run_with_stage_executor_with_options(
+    &pool,
+    run_id,
+    execution_options,
+    move |stage_request| {
+        let handle = handle.clone();
+        let pool = stage_pool.clone();
+        let completion_runtime = completion_runtime.clone();
+        let run_cancellation_token = run_cancellation_token.clone();
+        async move {
+            match stage_request {
+                YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request) => {
+                    run_transcript_analysis_stage_request(
+                        handle,
+                        pool,
+                        completion_runtime,
+                        run_cancellation_token,
+                        request,
+                    )
+                    .await
+                }
+                YoutubeSummaryStageExecutionRequest::Synthesis(request) => {
+                    run_synthesis_stage_request(
+                        handle,
+                        pool,
+                        completion_runtime,
+                        run_cancellation_token,
+                        request,
+                    )
+                    .await
+                }
+                YoutubeSummaryStageExecutionRequest::JsonRepair(request) => {
+                    run_json_repair_stage_request(
+                        handle,
+                        pool,
+                        completion_runtime,
+                        run_cancellation_token,
+                        request,
+                    )
+                    .await
+                }
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPart(request) => {
+                    run_gem_analysis_part_stage_request(
+                        handle,
+                        pool,
+                        completion_runtime,
+                        run_cancellation_token,
+                        request,
+                    )
+                    .await
+                }
+                YoutubeSummaryStageExecutionRequest::GemAnalysisPartRepair(request) => {
+                    run_gem_analysis_part_repair_request(
+                        handle,
+                        pool,
+                        completion_runtime,
+                        run_cancellation_token,
+                        request,
+                    )
+                    .await
+                }
+            }
+        }
+    },
+    |_| {},
+)
+```
+
+Import `resolve_model_input_token_limit_for_backend` alongside the existing output-limit resolver.
+
+- [ ] **Step 3: Add output persistence test for metrics extension**
 
 In `outputs_tests.rs`, add:
 
@@ -1075,9 +1510,29 @@ async fn transcript_stage_metrics_can_include_gem_analysis_extension() {
 }
 ```
 
-Add `load_stage_artifact_json` as a test helper if no equivalent exists.
+Add this explicit helper in `outputs_tests.rs`:
 
-- [ ] **Step 2: Implement metrics extension persistence**
+```rust
+async fn load_stage_artifact_json(
+    pool: &sqlx::SqlitePool,
+    stage_id: i64,
+    artifact_kind: &str,
+) -> serde_json::Value {
+    let content_zstd: Vec<u8> = sqlx::query_scalar(
+        "SELECT content_zstd FROM prompt_pack_stage_artifacts
+         WHERE stage_run_id = ? AND artifact_kind = ?",
+    )
+    .bind(stage_id)
+    .bind(artifact_kind)
+    .fetch_one(pool)
+    .await
+    .expect("artifact content");
+    let text = crate::compression::decompress_text(&content_zstd).expect("decompress artifact");
+    serde_json::from_str(&text).expect("artifact json")
+}
+```
+
+- [ ] **Step 4: Implement metrics extension persistence**
 
 In `outputs.rs`, keep the existing public function as a wrapper:
 
@@ -1108,9 +1563,77 @@ pub(crate) async fn execute_transcript_analysis_stage_with_completion_and_metric
 ) -> AppResult<()>
 ```
 
-Before writing metrics, merge object fields from `metrics_extension` into the base metrics object. Reject non-object extensions with `AppError::internal("metrics extension must be a JSON object")`.
+Build metrics as a mutable object immediately before `let parsed_json = ...`:
 
-- [ ] **Step 3: Add Gem execution tests**
+```rust
+let mut metrics = serde_json::json!({
+    "input_tokens": completion.input_tokens,
+    "output_tokens": completion.output_tokens,
+    "latency_ms": completion.latency_ms,
+    "schema_id": TRANSCRIPT_ANALYSIS_OUTPUT_SCHEMA_ID,
+    "validation_error_count": 0,
+    "attempt_number": 1
+});
+if let Some(extension) = metrics_extension {
+    let metrics_object = metrics
+        .as_object_mut()
+        .expect("base metrics is an object");
+    let extension_object = extension
+        .as_object()
+        .ok_or_else(|| AppError::internal("metrics extension must be a JSON object"))?;
+    for (key, value) in extension_object {
+        metrics_object.insert(key.clone(), value.clone());
+    }
+}
+```
+
+Then keep the existing `insert_stage_artifact_in_transaction(..., &metrics.to_string())` call unchanged.
+
+- [ ] **Step 5: Add Gem execution test helpers**
+
+In `test_support.rs`, add:
+
+```rust
+pub(crate) async fn test_pool_with_ready_video_and_comments() -> sqlx::SqlitePool {
+    let pool = test_pool_with_ready_video().await;
+    insert_comment(&pool, 901, "comment-1", 10, "Useful comment").await;
+    insert_comment(&pool, 901, "comment-2", 20, "Second useful comment").await;
+    pool
+}
+```
+
+In `execution_tests.rs`, add local helpers:
+
+```rust
+fn request_kind_label(request: &YoutubeSummaryStageExecutionRequest) -> &'static str {
+    match request {
+        YoutubeSummaryStageExecutionRequest::GemAnalysisPart(request) => match request.part {
+            GemAnalysisPart::Passport => "gem_passport",
+            GemAnalysisPart::Comments => "gem_comments",
+            GemAnalysisPart::DeepRecap => "gem_deep_recap",
+        },
+        YoutubeSummaryStageExecutionRequest::GemAnalysisPartRepair(_) => "gem_part_repair",
+        YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(_) => "transcript_analysis",
+        YoutubeSummaryStageExecutionRequest::Synthesis(_) => "synthesis",
+        YoutubeSummaryStageExecutionRequest::JsonRepair(_) => "json_repair",
+    }
+}
+
+fn fake_gem_part_completion(part: GemAnalysisPart) -> LlmCompletion {
+    LlmCompletion {
+        text: serde_json::json!({
+            "part": part.as_str(),
+            "markdown": "### Section\nContent",
+        })
+        .to_string(),
+        input_tokens: Some(10),
+        output_tokens: Some(20),
+        latency_ms: 30,
+    }
+}
+```
+
+- [ ] **Step 6: Add Gem execution tests**
 
 In `execution.rs` tests or a `gem_analysis` test module, add:
 
@@ -1145,22 +1668,6 @@ async fn gem_analysis_executes_passport_comments_and_deep_recap_in_order() {
 }
 ```
 
-Implement test helpers:
-
-```rust
-fn fake_gem_part_completion(part: GemAnalysisPart) -> LlmCompletion {
-    LlmCompletion {
-        text: format!(
-            r#"{{"part":"{}","markdown":"### Section\nContent"}}"#,
-            part.as_str()
-        ),
-        input_tokens: Some(10),
-        output_tokens: Some(20),
-        latency_ms: 30,
-    }
-}
-```
-
 Also add tests:
 
 - `gem_analysis_skips_comments_when_trimmed_comment_text_is_empty`
@@ -1169,7 +1676,7 @@ Also add tests:
 - `gem_analysis_optional_comments_failure_persists_report_with_failure_note`
 - `gem_analysis_does_not_start_next_part_after_cancellation_checkpoint`
 
-- [ ] **Step 4: Run execution tests and verify failure**
+- [ ] **Step 7: Run execution tests and verify failure**
 
 Run:
 
@@ -1181,9 +1688,25 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: FAIL because execution branch is not implemented.
 
-- [ ] **Step 5: Branch from normal execution**
+- [ ] **Step 8: Branch from normal execution**
 
-In `execute_youtube_summary_run_with_stage_executor_internal`, after building `input`, branch:
+Rename `execute_youtube_summary_run_with_stage_executor_internal` to accept options:
+
+```rust
+async fn execute_youtube_summary_run_with_stage_executor_with_options<F, Fut, M>(
+    pool: &SqlitePool,
+    run_id: i64,
+    options: YoutubeSummaryExecutionOptions,
+    mut execute_stage: F,
+    mutate_final_result: M,
+) -> AppResult<YoutubeSummaryRunExecutionOutcome>
+where
+    F: FnMut(YoutubeSummaryStageExecutionRequest) -> Fut,
+    Fut: Future<Output = Result<LlmCompletion, YoutubeSummaryStageExecutionError>>,
+    M: FnOnce(&mut serde_json::Value),
+```
+
+Inside the stage loop, after building `input`, branch:
 
 ```rust
 if input.control_preset == "gem_analysis" {
@@ -1192,6 +1715,7 @@ if input.control_preset == "gem_analysis" {
         run_id,
         &stage,
         input,
+        options.gem_input_budget,
         &mut execute_stage,
     )
     .await
@@ -1212,25 +1736,26 @@ if input.control_preset == "gem_analysis" {
 }
 ```
 
-Use the actual pending stage row type from `transcript_execution.rs`; expose fields through an existing or new crate-private struct if needed.
+Use the existing pending stage row fields already referenced in the loop: `stage.stage_run_id`, `stage.source_snapshot_id`, and `stage.source_ref_id`. Do not add another adapter type for this task.
 
-- [ ] **Step 6: Implement Gem execution helper**
+- [ ] **Step 9: Implement Gem execution helper**
 
 `execute_gem_analysis_transcript_stage` flow:
 
 1. Verify the run has exactly one included source snapshot by counting `prompt_pack_run_source_snapshots`.
 2. Load Gem materials for the current stage.
-3. Build part 1 prompt input and enforce input budget.
-4. Check `is_run_cancelled`.
-5. Call `execute_stage(YoutubeSummaryStageExecutionRequest::GemAnalysisPart(request))`.
-6. Parse or repair part 1.
-7. Check cancellation.
-8. If comments are present, run part 2; if missing, store skipped status.
-9. Check cancellation.
-10. Run part 3 as required.
-11. Check cancellation.
-12. Assemble Markdown and transcript-analysis JSON.
-13. Persist through `execute_transcript_analysis_stage_with_completion_and_metrics_extension`.
+3. Build prompt inputs for all parts that may run.
+4. Estimate and enforce the input budget for part 1, optional part 2, and part 3 before calling `execute_stage` for any part.
+5. Check `is_run_cancelled`.
+6. Call `execute_stage(YoutubeSummaryStageExecutionRequest::GemAnalysisPart(request))` for part 1.
+7. Parse or repair part 1.
+8. Check cancellation.
+9. If comments are present, run part 2; if missing, store skipped status.
+10. Check cancellation.
+11. Run part 3 as required.
+12. Check cancellation.
+13. Assemble Markdown and transcript-analysis JSON.
+14. Persist through `execute_transcript_analysis_stage_with_completion_and_metrics_extension`.
 
 Required part repair helper:
 
@@ -1246,7 +1771,7 @@ where
 
 When first parse fails, build `GemAnalysisPartRepairRequest` with `attempt_number: 1`. If repair fails for part 1 or part 3, return `Failed(error)`. If comments repair fails, return a comments failure status to the caller without failing the stage.
 
-- [ ] **Step 7: Persist assembled output and metrics**
+- [ ] **Step 10: Persist assembled output and metrics**
 
 Use:
 
@@ -1279,7 +1804,7 @@ serde_json::json!({
 })
 ```
 
-- [ ] **Step 8: Run focused verification**
+- [ ] **Step 11: Run focused verification**
 
 Run:
 
@@ -1290,7 +1815,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit Task 5**
+- [ ] **Step 12: Commit Task 5**
 
 ```powershell
 git add src-tauri/src/prompt_packs/youtube_summary/gem_analysis.rs src-tauri/src/prompt_packs/youtube_summary/execution.rs src-tauri/src/prompt_packs/youtube_summary/outputs.rs src-tauri/src/prompt_packs/youtube_summary/outputs_tests.rs
@@ -1318,17 +1843,26 @@ Add tests named:
 ```rust
 #[tokio::test]
 async fn gem_analysis_final_output_builds_canonical_single_video_result() {
-    let pool = test_pool_with_ready_video().await;
-    let run_id = seed_completed_gem_analysis_run_for_test(&pool).await;
+    let pool = test_pool_with_frozen_youtube_summary_run().await;
+    let stage_id = transcript_analysis_stage_id(&pool, 1).await;
+    let output = assemble_gem_analysis_transcript_output("# Gem-анализ\n\n### Section\nContent")
+        .expect("assembled output");
+    execute_transcript_analysis_stage_with_completion(
+        &pool,
+        stage_id,
+        LlmCompletion {
+            text: output,
+            input_tokens: Some(10),
+            output_tokens: Some(20),
+            latency_ms: 30,
+        },
+    )
+    .await
+    .expect("persist transcript stage");
 
-    let canonical = build_youtube_summary_canonical_result(&pool, run_id)
+    let canonical = build_youtube_summary_canonical_result(&pool, 1)
         .await
         .expect("canonical");
-    validate_youtube_summary_canonical_result(
-        &canonical,
-        &context("complete", "gem_analysis"),
-    )
-    .expect("valid canonical");
 
     assert!(canonical["outputs"]["videos"][0]["summary_text"]
         .as_str()
@@ -1337,7 +1871,7 @@ async fn gem_analysis_final_output_builds_canonical_single_video_result() {
 }
 ```
 
-Use existing helper names where available. If `context` is test-local in `result_validation.rs`, place the validation test in that module and a builder-only test in `result_builder` tests.
+Place this as a builder-path test near existing result builder tests. If canonical validation rejects this output, add a separate `result_validation.rs` unit test using that file's local `context("complete", "gem_analysis")` helper and update validation deliberately for `gem_analysis`.
 
 - [ ] **Step 2: Run final path tests and inspect failures**
 
