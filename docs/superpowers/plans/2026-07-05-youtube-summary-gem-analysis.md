@@ -1868,7 +1868,7 @@ git commit -m "feat(prompt-packs): execute gem analysis mini pipeline"
 
 **Primary Scope Risk:** This task is the main integration unknown. The assembled Gem output intentionally has empty `claim_candidates` and `evidence_fragment_candidates`, and may omit nested video candidate arrays. It still passes through `validate_transcript_analysis_output`, `normalize_transcript_analysis_output_for_runtime`, `build_or_quarantine_intermediate_entities_for_transcript_stage`, result building, and canonical validation. If any layer rejects the shape, fix that layer deliberately with focused tests for `control_preset == "gem_analysis"` instead of patching the Gem output with fabricated claims/evidence.
 
-- [ ] **Step 1: Add final path regression tests**
+- [x] **Step 1: Add final path regression tests**
 
 Add tests named:
 
@@ -1905,7 +1905,7 @@ async fn gem_analysis_final_output_builds_canonical_single_video_result() {
 
 Place this as a builder-path test near existing result builder tests. If canonical validation rejects this output, add a separate `result_validation.rs` unit test using that file's local `context("complete", "gem_analysis")` helper and update validation deliberately for `gem_analysis`.
 
-- [ ] **Step 2: Run final path tests and inspect failures**
+- [x] **Step 2: Run final path tests and inspect failures**
 
 Run:
 
@@ -1915,7 +1915,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: PASS if previous tasks produce schema-compatible output. If it fails because validation requires non-empty claims/evidence for `complete`, update validation deliberately for `control_preset == "gem_analysis"` and add an assertion that empty videos are still rejected.
 
-- [ ] **Step 3: Run frontend verification**
+- [x] **Step 3: Run frontend verification**
 
 Run:
 
@@ -1925,7 +1925,7 @@ npm.cmd run test -- src/lib/youtube-summary-launch-contract.test.ts src/lib/api/
 
 Expected: PASS.
 
-- [ ] **Step 4: Run Rust focused verification**
+- [x] **Step 4: Run Rust focused verification**
 
 Run:
 
@@ -1938,7 +1938,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/co
 
 Expected: all PASS.
 
-- [ ] **Step 5: Run broad backend/frontend checks**
+- [x] **Step 5: Run broad backend/frontend checks**
 
 Run:
 
@@ -1949,7 +1949,7 @@ npm.cmd run check
 
 Expected: both PASS. Browser console errors from missing Tauri IPC are irrelevant because this task does not use Playwright/browser verification.
 
-- [ ] **Step 6: Inspect worktree and commit final integration**
+- [x] **Step 6: Inspect worktree and commit final integration**
 
 Run:
 

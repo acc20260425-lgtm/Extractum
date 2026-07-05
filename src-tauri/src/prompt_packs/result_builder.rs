@@ -655,6 +655,12 @@ mod tests {
     use crate::error::AppResult;
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
+    use crate::prompt_packs::youtube_summary::gem_analysis::assemble_gem_analysis_transcript_output;
+    use crate::prompt_packs::youtube_summary::outputs::execute_transcript_analysis_stage_with_completion;
+    use crate::prompt_packs::youtube_summary::test_support::{
+        test_pool_with_frozen_youtube_summary_run, transcript_analysis_stage_id,
+    };
+    use crate::prompt_packs::youtube_summary::LlmCompletion;
 
     #[tokio::test]
     async fn build_canonical_result_assigns_backend_owned_ids() {
@@ -679,6 +685,36 @@ mod tests {
         );
         assert!(result.get("sources").is_none());
         assert!(result.get("pack_data").is_none());
+    }
+
+    #[tokio::test]
+    async fn gem_analysis_final_output_builds_canonical_single_video_result() {
+        let pool = test_pool_with_frozen_youtube_summary_run().await;
+        let stage_id = transcript_analysis_stage_id(&pool, 1).await;
+        let output =
+            assemble_gem_analysis_transcript_output("# Gem-анализ\n\n### Section\nContent")
+                .expect("assembled output");
+        execute_transcript_analysis_stage_with_completion(
+            &pool,
+            stage_id,
+            LlmCompletion {
+                text: output,
+                input_tokens: Some(10),
+                output_tokens: Some(20),
+                latency_ms: 30,
+            },
+        )
+        .await
+        .expect("persist transcript stage");
+
+        let canonical = build_youtube_summary_canonical_result(&pool, 1)
+            .await
+            .expect("canonical");
+
+        assert!(canonical["outputs"]["pack_data"]["youtube_summary"]["videos"][0]["summary_text"]
+            .as_str()
+            .unwrap()
+            .starts_with("# Gem-анализ"));
     }
 
     #[tokio::test]
