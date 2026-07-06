@@ -1,4 +1,9 @@
 import {
+  connectProjectSourceIds,
+  connectedSourceIdsForProject,
+  type ProjectAddSourceWorkflowDeps,
+} from "./project-add-source-workflow";
+import {
   buildLibrarySourcesView,
   buildProjectSourceLinksView,
   buildResearchProjectsView,
@@ -262,6 +267,60 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
     }
   }
 
+  function setStatus(message: string) {
+    deps.patch({ status: message });
+  }
+
+  function selectedNumericProjectId() {
+    return projectIdFromViewId(deps.getState().selectedProjectId);
+  }
+
+  function projectAddSourceDeps(): ProjectAddSourceWorkflowDeps {
+    return {
+      addProjectSources: deps.addProjectSources,
+      refreshAfterProjectSourceConnect: () => loadWorkspace(),
+      setProjectAddSourceSaving: (saving) => deps.patch({ saving }),
+      setProjectAddSourceStatus: setStatus,
+      formatError: deps.formatError,
+    };
+  }
+
+  async function connectAddedProjectSource(sourceId?: number) {
+    await connectProjectSourceIds({
+      projectId: selectedNumericProjectId(),
+      sourceIds: [sourceId],
+      origin: "new_source",
+      emptyBehavior: "missing_source_id_status",
+      deps: projectAddSourceDeps(),
+    });
+  }
+
+  async function connectAddedProjectSources(sourceIds: number[]) {
+    await connectProjectSourceIds({
+      projectId: selectedNumericProjectId(),
+      sourceIds,
+      origin: "new_source",
+      emptyBehavior: "silent",
+      deps: projectAddSourceDeps(),
+    });
+  }
+
+  async function connectExistingProjectSource(sourceId: number) {
+    const projectId = selectedNumericProjectId();
+    const connectedSourceIds = connectedSourceIdsForProject(deps.getState().projectSources, projectId);
+    if (connectedSourceIds.has(sourceId)) {
+      deps.patch({ status: "Already connected to this project." });
+      return;
+    }
+
+    await connectProjectSourceIds({
+      projectId,
+      sourceIds: [sourceId],
+      origin: "existing_source",
+      deps: projectAddSourceDeps(),
+    });
+  }
+
   return {
     refreshDerivedState,
     loadWorkspace,
@@ -272,5 +331,9 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
     deleteSelectedProject,
     runProjectAnalysis,
     syncProjectSources,
+    connectAddedProjectSource,
+    connectAddedProjectSources,
+    connectExistingProjectSource,
+    setStatus,
   };
 }

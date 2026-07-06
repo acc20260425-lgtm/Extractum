@@ -357,7 +357,7 @@ Expected: commit succeeds.
 - Produces `workflow.connectExistingProjectSource(sourceId: number)`.
 - Produces `workflow.setStatus(message: string)`.
 
-- [ ] **Step 1: Add failing workflow tests**
+- [x] **Step 1: Add failing workflow tests**
 
 Append these tests to `src/lib/ui/research-projects-workflow.test.ts` inside the existing `describe` block:
 
@@ -510,13 +510,13 @@ import { connectedSourceIdsForProject } from "./project-add-source-workflow";
   });
 ```
 
-- [ ] **Step 2: Run tests and verify the workflow API fails before implementation**
+- [x] **Step 2: Run tests and verify the workflow API fails before implementation**
 
 Run: `npm.cmd run test -- src/lib/ui/research-projects-workflow.test.ts`
 
 Expected: FAIL because `connectAddedProjectSource`, `connectAddedProjectSources`, `connectExistingProjectSource`, and `setStatus` are not returned by `createResearchProjectsWorkflow`.
 
-- [ ] **Step 3: Add helper imports**
+- [x] **Step 3: Add helper imports**
 
 In `src/lib/ui/research-projects-workflow.ts`, add:
 
@@ -528,7 +528,7 @@ import {
 } from "./project-add-source-workflow";
 ```
 
-- [ ] **Step 4: Add wrapper functions before the return object**
+- [x] **Step 4: Add wrapper functions before the return object**
 
 Insert this block before `return {` in `createResearchProjectsWorkflow`:
 
@@ -588,7 +588,7 @@ Insert this block before `return {` in `createResearchProjectsWorkflow`:
   }
 ```
 
-- [ ] **Step 5: Return the new workflow methods**
+- [x] **Step 5: Return the new workflow methods**
 
 Add these properties to the returned object:
 
@@ -599,13 +599,13 @@ Add these properties to the returned object:
     setStatus,
 ```
 
-- [ ] **Step 6: Run focused workflow tests**
+- [x] **Step 6: Run focused workflow tests**
 
 Run: `npm.cmd run test -- src/lib/ui/research-projects-workflow.test.ts src/lib/ui/project-add-source-workflow.test.ts`
 
 Expected: PASS for both files.
 
-- [ ] **Step 7: Commit Task 2**
+- [x] **Step 7: Commit Task 2**
 
 Run:
 

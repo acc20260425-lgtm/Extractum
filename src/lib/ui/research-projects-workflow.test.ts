@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { connectedSourceIdsForProject } from "./project-add-source-workflow";
 import { createResearchProjectsWorkflow, type ResearchProjectsWorkflowState } from "./research-projects-workflow";
 import type { AnalysisPromptTemplate, AnalysisRunSummary } from "$lib/types/analysis";
 import type { LibraryCatalogRecord, LibrarySourceRecord } from "$lib/types/library-sources";
@@ -204,6 +205,147 @@ describe("research projects workflow", () => {
 
     expect(deps.addProjectSources).toHaveBeenCalledWith({ projectId: 1, sourceIds: [10] });
     expect(state.status).toContain("Connected sources: 1");
+  });
+
+  it("connects a newly added scalar Library source to the selected project", async () => {
+    const state = createInitialState();
+    state.selectedProjectId = "project:1";
+    const deps = createDeps(state);
+    deps.addProjectSources.mockResolvedValue({ added_count: 1, already_present_count: 0 });
+    deps.listProjects.mockResolvedValue([project()]);
+    deps.listProjectSources.mockResolvedValue([projectSource({ source_id: 10 })]);
+    deps.listLibraryCatalog.mockResolvedValue({ sources: [libraryCatalogRecord()], filter_counts: [] });
+    deps.listProjectRuns.mockResolvedValue([]);
+    deps.listPromptTemplates.mockResolvedValue([]);
+    deps.listSourceJobs.mockResolvedValue([]);
+
+    const workflow = createResearchProjectsWorkflow(deps);
+    await workflow.connectAddedProjectSource(10);
+
+    expect(deps.addProjectSources).toHaveBeenCalledWith({ projectId: 1, sourceIds: [10] });
+    expect(state.status).toBe("Source added and connected to project.");
+    expect(deps.listLibraryCatalog).toHaveBeenCalled();
+    expect(connectedSourceIdsForProject(state.projectSources, 1).has(10)).toBe(true);
+  });
+
+  it("updates connectedSourceIds backing state after a dialog connect while the dialog can remain open", async () => {
+    const state = createInitialState();
+    state.selectedProjectId = "project:1";
+    state.projectSources = [];
+    const deps = createDeps(state);
+    deps.addProjectSources.mockResolvedValue({ added_count: 1, already_present_count: 0 });
+    deps.listProjects.mockResolvedValue([project()]);
+    deps.listProjectSources.mockResolvedValue([projectSource({ source_id: 10 })]);
+    deps.listLibraryCatalog.mockResolvedValue({ sources: [libraryCatalogRecord()], filter_counts: [] });
+    deps.listProjectRuns.mockResolvedValue([]);
+    deps.listPromptTemplates.mockResolvedValue([]);
+    deps.listSourceJobs.mockResolvedValue([]);
+
+    const workflow = createResearchProjectsWorkflow(deps);
+    await workflow.connectAddedProjectSource(10);
+
+    expect([...connectedSourceIdsForProject(state.projectSources, 1)]).toEqual([10]);
+  });
+
+  it("connects newly added playlist videos in one batch", async () => {
+    const state = createInitialState();
+    state.selectedProjectId = "project:1";
+    const deps = createDeps(state);
+    deps.addProjectSources.mockResolvedValue({ added_count: 2, already_present_count: 0 });
+    deps.listProjects.mockResolvedValue([project()]);
+    deps.listProjectSources.mockResolvedValue([
+      projectSource({ source_id: 10 }),
+      projectSource({ source_id: 11 }),
+    ]);
+    deps.listLibraryCatalog.mockResolvedValue({ sources: [libraryCatalogRecord()], filter_counts: [] });
+    deps.listProjectRuns.mockResolvedValue([]);
+    deps.listPromptTemplates.mockResolvedValue([]);
+    deps.listSourceJobs.mockResolvedValue([]);
+
+    const workflow = createResearchProjectsWorkflow(deps);
+    await workflow.connectAddedProjectSources([10, 11, 11]);
+
+    expect(deps.addProjectSources).toHaveBeenCalledOnce();
+    expect(deps.addProjectSources).toHaveBeenCalledWith({ projectId: 1, sourceIds: [10, 11] });
+  });
+
+  it("reports a missing scalar source ID without calling addProjectSources", async () => {
+    const state = createInitialState();
+    state.selectedProjectId = "project:1";
+    const deps = createDeps(state);
+    deps.listProjects.mockResolvedValue([project()]);
+    deps.listProjectSources.mockResolvedValue([]);
+    deps.listLibraryCatalog.mockResolvedValue({ sources: [], filter_counts: [] });
+    deps.listProjectRuns.mockResolvedValue([]);
+    deps.listPromptTemplates.mockResolvedValue([]);
+    deps.listSourceJobs.mockResolvedValue([]);
+
+    const workflow = createResearchProjectsWorkflow(deps);
+    await workflow.connectAddedProjectSource(undefined);
+
+    expect(deps.addProjectSources).not.toHaveBeenCalled();
+    expect(state.status).toBe("Source added to Library, but auto-connect could not be completed.");
+  });
+
+  it("skips a duplicate existing-source connect when current state already contains the source", async () => {
+    const state = createInitialState();
+    state.selectedProjectId = "project:1";
+    state.projectSources = [projectSource({ source_id: 10 })];
+    const deps = createDeps(state);
+
+    const workflow = createResearchProjectsWorkflow(deps);
+    await workflow.connectExistingProjectSource(10);
+
+    expect(deps.addProjectSources).not.toHaveBeenCalled();
+    expect(state.status).toBe("Already connected to this project.");
+  });
+
+  it("uses backend already-present outcome when an existing source connect races", async () => {
+    const state = createInitialState();
+    state.selectedProjectId = "project:1";
+    const deps = createDeps(state);
+    deps.addProjectSources.mockResolvedValue({ added_count: 0, already_present_count: 1 });
+    deps.listProjects.mockResolvedValue([project()]);
+    deps.listProjectSources.mockResolvedValue([projectSource({ source_id: 10 })]);
+    deps.listLibraryCatalog.mockResolvedValue({ sources: [libraryCatalogRecord()], filter_counts: [] });
+    deps.listProjectRuns.mockResolvedValue([]);
+    deps.listPromptTemplates.mockResolvedValue([]);
+    deps.listSourceJobs.mockResolvedValue([]);
+
+    const workflow = createResearchProjectsWorkflow(deps);
+    await workflow.connectExistingProjectSource(10);
+
+    expect(deps.addProjectSources).toHaveBeenCalledWith({ projectId: 1, sourceIds: [10] });
+    expect(state.status).toBe("Already connected to this project.");
+  });
+
+  it("handles returned existing source IDs from scalar provider flows such as Telegram", async () => {
+    const state = createInitialState();
+    state.selectedProjectId = "project:1";
+    const deps = createDeps(state);
+    deps.addProjectSources.mockResolvedValue({ added_count: 0, already_present_count: 1 });
+    deps.listProjects.mockResolvedValue([project()]);
+    deps.listProjectSources.mockResolvedValue([projectSource({ source_id: 10 })]);
+    deps.listLibraryCatalog.mockResolvedValue({ sources: [libraryCatalogRecord()], filter_counts: [] });
+    deps.listProjectRuns.mockResolvedValue([]);
+    deps.listPromptTemplates.mockResolvedValue([]);
+    deps.listSourceJobs.mockResolvedValue([]);
+
+    const workflow = createResearchProjectsWorkflow(deps);
+    await workflow.connectAddedProjectSource(10);
+
+    expect(deps.addProjectSources).toHaveBeenCalledWith({ projectId: 1, sourceIds: [10] });
+    expect(state.status).toBe("Already connected to this project.");
+  });
+
+  it("can set project workflow status for dialog provider messages", () => {
+    const state = createInitialState();
+    const deps = createDeps(state);
+
+    const workflow = createResearchProjectsWorkflow(deps);
+    workflow.setStatus("Provider message");
+
+    expect(state.status).toBe("Provider message");
   });
 
   it("loads project sources, runs, prompts and source jobs into derived state", async () => {
