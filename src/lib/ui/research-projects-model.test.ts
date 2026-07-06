@@ -99,6 +99,16 @@ describe("research projects model", () => {
     });
   });
 
+  it("keeps catalog, project records, project rows, and connect API IDs in one numeric id-space", () => {
+    const libraryRows = buildLibrarySourcesView(library, projectSources, "project:1");
+    const projectRows = buildProjectSourceLinksView("project:1", projectSources);
+    const addProjectSourcesPayload = { projectId: 1, sourceIds: [libraryRows[0].sourceId] };
+
+    expect(libraryRows[0].sourceId).toBe(projectSources[0].source_id);
+    expect(projectRows[0].sourceNumericId).toBe(projectSources[0].source_id);
+    expect(addProjectSourcesPayload.sourceIds).toEqual([projectSources[0].source_id]);
+  });
+
   it("uses catalog disabled reasons as project Library source base state", () => {
     const rows = buildLibrarySourcesView(
       [

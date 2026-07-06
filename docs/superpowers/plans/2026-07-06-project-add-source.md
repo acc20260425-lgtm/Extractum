@@ -43,7 +43,7 @@
 - Produces `connectProjectSourceIds(input)`, consumed by `research-projects-workflow.ts` and `/projects/next/+page.svelte`.
 - Produces `connectedSourceIdsForProject(projectSources, projectId)`, consumed by `ProjectsShell.svelte`, `/projects/next/+page.svelte`, and workflow duplicate pre-checks.
 
-- [ ] **Step 1: Add failing helper and id-space tests**
+- [x] **Step 1: Add failing helper and id-space tests**
 
 Create `src/lib/ui/project-add-source-workflow.test.ts`:
 
@@ -210,13 +210,13 @@ Add this test to `src/lib/ui/research-projects-model.test.ts` inside the existin
   });
 ```
 
-- [ ] **Step 2: Run tests and verify the new helper fails before implementation**
+- [x] **Step 2: Run tests and verify the new helper fails before implementation**
 
 Run: `npm.cmd run test -- src/lib/ui/project-add-source-workflow.test.ts src/lib/ui/research-projects-model.test.ts`
 
 Expected: FAIL because `./project-add-source-workflow` does not exist.
 
-- [ ] **Step 3: Create project context type**
+- [x] **Step 3: Create project context type**
 
 Create `src/lib/ui/project-add-source-context.ts`:
 
@@ -229,7 +229,7 @@ export interface ProjectAddSourceContext {
 }
 ```
 
-- [ ] **Step 4: Create workflow helper**
+- [x] **Step 4: Create workflow helper**
 
 Create `src/lib/ui/project-add-source-workflow.ts`:
 
@@ -325,13 +325,13 @@ export async function connectProjectSourceIds({
 }
 ```
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 Run: `npm.cmd run test -- src/lib/ui/project-add-source-workflow.test.ts src/lib/ui/research-projects-model.test.ts`
 
 Expected: PASS for both files.
 
-- [ ] **Step 6: Commit Task 1**
+- [x] **Step 6: Commit Task 1**
 
 Run:
 
