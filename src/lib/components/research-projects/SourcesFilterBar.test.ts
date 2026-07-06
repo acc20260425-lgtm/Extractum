@@ -7,6 +7,10 @@ afterEach(cleanup);
 
 const base = { filtersOpen: false, shownCount: 8, totalCount: 10 };
 
+function visibleActionCopy(button: HTMLElement) {
+  return button.textContent?.replace(/^\s*\+\s*/, "").replace(/\s+/g, " ").trim();
+}
+
 describe("SourcesFilterBar", () => {
   it("shows the counter and toggles the filter row", async () => {
     const onToggleFilters = vi.fn();
@@ -70,5 +74,22 @@ describe("SourcesFilterBar", () => {
 
     expect(onAddSource).toHaveBeenCalledOnce();
     expect(onConnectFromLibrary).toHaveBeenCalledOnce();
+  });
+
+  it("keeps visible copy, aria-label and title synchronized for source actions", () => {
+    render(SourcesFilterBar, { props: { ...base } });
+
+    const add = screen.getByRole("button", { name: "Add source" });
+    const connect = screen.getByRole("button", { name: "Connect from Library" });
+
+    expect(visibleActionCopy(add)).toBe("Add source");
+    expect(add.getAttribute("aria-label")).toBe("Add source");
+    expect(add.getAttribute("title")).toBe("Add source");
+    expect(add.getAttribute("data-ui-action")).toBe("add-source");
+
+    expect(connect.textContent?.replace(/\s+/g, " ").trim()).toBe("Connect from Library");
+    expect(connect.getAttribute("aria-label")).toBe("Connect from Library");
+    expect(connect.getAttribute("title")).toBe("Connect from Library");
+    expect(connect.getAttribute("data-ui-action")).toBe("connect-library");
   });
 });

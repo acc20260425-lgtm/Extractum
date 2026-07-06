@@ -107,18 +107,19 @@
     position: absolute;
     inset: 0;
     z-index: 5;
+    min-height: 42px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     padding: 0 14px;
-    background: color-mix(in srgb, var(--extractum-primary) 8%, var(--extractum-surface));
-    border-bottom: 1px solid color-mix(in srgb, var(--extractum-primary) 24%, transparent);
-    font: 400 13px/1.4 var(--extractum-font);
+    background: color-mix(in srgb, var(--extractum-primary) 10%, var(--extractum-surface-raised));
+    border-bottom: 1px solid color-mix(in srgb, var(--extractum-primary) 28%, transparent);
+    font: 400 12.5px/1.35 var(--extractum-font);
     color: var(--extractum-text);
   }
 
   .sources-bulk-bar__count {
-    font-weight: 600;
+    font-weight: 700;
     color: var(--extractum-primary);
   }
 
@@ -128,8 +129,9 @@
     padding: 0;
     color: var(--extractum-primary);
     cursor: pointer;
-    font: inherit;
+    font: 600 12px/1 var(--extractum-font);
     text-decoration: underline;
+    text-underline-offset: 2px;
   }
 
   .sources-bulk-bar__spacer {

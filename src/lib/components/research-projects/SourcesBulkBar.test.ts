@@ -69,6 +69,18 @@ describe("SourcesBulkBar", () => {
     expect(button.getAttribute("title")).toBe("Select one YouTube video source");
   });
 
+  it("keeps Delete from Library visible copy and accessible names stable", () => {
+    render(SourcesBulkBar, {
+      props: {
+        count: 1,
+        libraryDeleteDisabled: false,
+      },
+    });
+
+    const button = screen.getByRole("button", { name: "Delete from Library" });
+    expect(button.textContent?.replace(/\s+/g, " ").trim()).toBe("Delete from Library");
+  });
+
   it("confirms before deleting from Library and deletes only on confirm", async () => {
     const onDeleteFromLibrary = vi.fn();
     render(SourcesBulkBar, {

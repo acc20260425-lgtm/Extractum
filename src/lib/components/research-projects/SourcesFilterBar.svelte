@@ -98,32 +98,33 @@
 
 <style>
   .sources-filter-bar {
+    min-height: 42px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 14px;
-    padding: 11px 14px 9px;
+    padding: 6px 14px;
     background: var(--extractum-surface-raised);
-    border-bottom: 1px solid var(--extractum-border-subtle, var(--extractum-border));
+    border-bottom: 1px solid color-mix(in srgb, var(--extractum-border) 72%, transparent);
   }
 
   .sources-filter-bar__left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: wrap;
     min-width: 0;
   }
 
   /* scoped override глобального button-правила */
   .sources-filter-bar__left .sources-filter-bar__filters-btn {
-    height: 30px;
+    height: 28px;
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    padding: 0 11px;
+    padding: 0 10px;
     border: 1px solid var(--extractum-border);
-    border-radius: 6px;
+    border-radius: var(--extractum-radius);
     background: var(--extractum-surface);
     color: var(--extractum-text);
     font: 600 12px/1 var(--extractum-font);
@@ -200,19 +201,20 @@
   }
 
   .sources-filter-bar__actions > button {
-    height: 28px;
+    height: 30px;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
     padding: 0 11px;
-    border-radius: 6px;
-    font: 600 12px/1 var(--extractum-font);
+    border-radius: var(--extractum-radius);
+    font: 600 12.5px/1 var(--extractum-font);
     cursor: pointer;
+    white-space: nowrap;
   }
 
   .sources-filter-bar__add {
     border: 1px solid var(--extractum-primary);
-    background: color-mix(in srgb, var(--extractum-primary) 6%, transparent);
+    background: color-mix(in srgb, var(--extractum-primary) 7%, transparent);
     color: var(--extractum-primary);
   }
 
@@ -221,13 +223,14 @@
   }
 
   .sources-filter-bar__connect {
-    border: 1px solid var(--extractum-border);
-    background: var(--extractum-surface);
-    color: var(--extractum-text);
+    border: 1px solid var(--extractum-primary);
+    background: var(--extractum-primary);
+    color: #fff;
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--extractum-primary) 26%, transparent);
   }
 
   .sources-filter-bar__connect:hover {
-    background: var(--extractum-surface-subtle);
+    background: var(--extractum-primary-hover);
   }
 
   .sources-filter-bar__add-plus {

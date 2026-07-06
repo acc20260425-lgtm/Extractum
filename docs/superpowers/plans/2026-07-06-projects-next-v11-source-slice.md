@@ -295,7 +295,7 @@ git commit -m "refactor: share projects source table layout"
 - Preserves `aria-label="Add source"`, `title="Add source"`, visible `Add source`, `aria-label="Connect from Library"`, `title="Connect from Library"`, and visible `Connect from Library`.
 - Preserves `Delete from Library` accessible names and confirmation behavior.
 
-- [ ] **Step 1: Add accessibility/copy synchronization tests for filter actions**
+- [x] **Step 1: Add accessibility/copy synchronization tests for filter actions**
 
 Add to `src/lib/components/research-projects/SourcesFilterBar.test.ts`:
 
@@ -318,7 +318,7 @@ Add to `src/lib/components/research-projects/SourcesFilterBar.test.ts`:
   });
 ```
 
-- [ ] **Step 2: Add bulk bar copy-preservation test**
+- [x] **Step 2: Add bulk bar copy-preservation test**
 
 Add to `src/lib/components/research-projects/SourcesBulkBar.test.ts`:
 
@@ -336,7 +336,7 @@ Add to `src/lib/components/research-projects/SourcesBulkBar.test.ts`:
   });
 ```
 
-- [ ] **Step 3: Run focused tests before CSS changes**
+- [x] **Step 3: Run focused tests before CSS changes**
 
 Run:
 
@@ -346,7 +346,7 @@ npm.cmd run test -- src/lib/components/research-projects/SourcesFilterBar.test.t
 
 Expected: PASS. These tests lock copy and hooks before visual edits.
 
-- [ ] **Step 4: Polish `SourcesFilterBar.svelte` styles without renaming actions**
+- [x] **Step 4: Polish `SourcesFilterBar.svelte` styles without renaming actions**
 
 Keep the current markup and callbacks. Replace the `.sources-filter-bar` and action button style block with token-driven v11-like density:
 
@@ -431,7 +431,7 @@ Keep the existing hover rules but adjust them to:
 
 Do not remove `data-ui-action`, `aria-label`, or `title`.
 
-- [ ] **Step 5: Polish `SourcesBulkBar.svelte` styles without changing copy**
+- [x] **Step 5: Polish `SourcesBulkBar.svelte` styles without changing copy**
 
 Keep markup and dialogs. Replace `.sources-bulk-bar` styles with:
 
@@ -470,7 +470,7 @@ Keep markup and dialogs. Replace `.sources-bulk-bar` styles with:
 
 Keep the dialog styles unless Svelte check reports an issue.
 
-- [ ] **Step 6: Run focused tests**
+- [x] **Step 6: Run focused tests**
 
 Run:
 
@@ -480,7 +480,7 @@ npm.cmd run test -- src/lib/components/research-projects/SourcesFilterBar.test.t
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit Task 2**
+- [x] **Step 7: Commit Task 2**
 
 Run:
 
