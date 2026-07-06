@@ -118,6 +118,19 @@ describe("projects mvp route contract", () => {
     expect(listPageSource).toContain("onSetStatus={workflow.setStatus}");
   });
 
+  it("wires the project Add source dialog through the next Projects route", () => {
+    const nextPageSource = readFileSync(resolve(process.cwd(), "src/routes/projects/next/+page.svelte"), "utf8");
+    expect(nextPageSource).toContain("LibraryAddSourceDialog");
+    expect(nextPageSource).toContain("connectAddedProjectSource");
+    expect(nextPageSource).toContain("connectAddedProjectSources");
+    expect(nextPageSource).toContain("connectExistingProjectSource");
+    expect(nextPageSource).toContain("projectAddSourceContext");
+    expect(nextPageSource).toContain("let connectedSourceIds = $derived(connectedSourceIdsForProject(sources, selectedProjectId))");
+    expect(nextPageSource).toContain("formatError: formatAppError");
+    expect(nextPageSource).toContain("onConnectFromLibrary: () => void openConnectSources()");
+    expect(nextPageSource).toContain("onAddSource: () => (addSourceOpen = true)");
+  });
+
   it("wires selected Workspace source syncs to the YouTube source job command", () => {
     expect(pageSource).toContain("syncYoutubeSource");
     expect(pageSource).toContain("syncYoutubeSource,");

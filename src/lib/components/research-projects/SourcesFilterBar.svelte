@@ -11,6 +11,7 @@
     shownCount,
     totalCount,
     onAddSource,
+    onConnectFromLibrary,
   }: {
     filtersOpen: boolean;
     onToggleFilters?: () => void;
@@ -21,6 +22,7 @@
     shownCount: number;
     totalCount: number;
     onAddSource?: () => void;
+    onConnectFromLibrary?: () => void;
   } = $props();
 </script>
 
@@ -70,14 +72,28 @@
     {/if}
     <span class="sources-filter-bar__count">{shownCount} из {totalCount}</span>
   </div>
-  <button
-    type="button"
-    class="sources-filter-bar__add"
-    title="Подключить источник из библиотеки"
-    onclick={() => onAddSource?.()}
-  >
-    <span class="sources-filter-bar__add-plus">+</span>Добавить источник
-  </button>
+  <div class="sources-filter-bar__actions">
+    <button
+      type="button"
+      class="sources-filter-bar__add"
+      data-ui-action="add-source"
+      aria-label="Add source"
+      title="Add source"
+      onclick={() => onAddSource?.()}
+    >
+      <span class="sources-filter-bar__add-plus">+</span>Add source
+    </button>
+    <button
+      type="button"
+      class="sources-filter-bar__connect"
+      data-ui-action="connect-library"
+      aria-label="Connect from Library"
+      title="Connect from Library"
+      onclick={() => onConnectFromLibrary?.()}
+    >
+      Connect from Library
+    </button>
+  </div>
 </div>
 
 <style>
@@ -176,23 +192,42 @@
     color: var(--extractum-muted-2);
   }
 
-  .sources-filter-bar > .sources-filter-bar__add {
-    height: 28px;
+  .sources-filter-bar__actions {
+    display: inline-flex;
     flex-shrink: 0;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sources-filter-bar__actions > button {
+    height: 28px;
     display: inline-flex;
     align-items: center;
     gap: 6px;
     padding: 0 11px;
-    border: 1px solid var(--extractum-primary);
     border-radius: 6px;
-    background: color-mix(in srgb, var(--extractum-primary) 6%, transparent);
-    color: var(--extractum-primary);
     font: 600 12px/1 var(--extractum-font);
     cursor: pointer;
   }
 
-  .sources-filter-bar > .sources-filter-bar__add:hover {
+  .sources-filter-bar__add {
+    border: 1px solid var(--extractum-primary);
+    background: color-mix(in srgb, var(--extractum-primary) 6%, transparent);
+    color: var(--extractum-primary);
+  }
+
+  .sources-filter-bar__add:hover {
     background: color-mix(in srgb, var(--extractum-primary) 12%, transparent);
+  }
+
+  .sources-filter-bar__connect {
+    border: 1px solid var(--extractum-border);
+    background: var(--extractum-surface);
+    color: var(--extractum-text);
+  }
+
+  .sources-filter-bar__connect:hover {
+    background: var(--extractum-surface-subtle);
   }
 
   .sources-filter-bar__add-plus {

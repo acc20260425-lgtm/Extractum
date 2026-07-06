@@ -60,10 +60,15 @@ describe("SourcesFilterBar", () => {
     expect(onClearAll).toHaveBeenCalledOnce();
   });
 
-  it("forwards add-source clicks", async () => {
+  it("exposes separate Add source and Connect from Library actions", async () => {
     const onAddSource = vi.fn();
-    render(SourcesFilterBar, { props: { ...base, onAddSource } });
-    await fireEvent.click(screen.getByText("Добавить источник"));
+    const onConnectFromLibrary = vi.fn();
+    render(SourcesFilterBar, { props: { ...base, onAddSource, onConnectFromLibrary } });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Add source" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Connect from Library" }));
+
     expect(onAddSource).toHaveBeenCalledOnce();
+    expect(onConnectFromLibrary).toHaveBeenCalledOnce();
   });
 });

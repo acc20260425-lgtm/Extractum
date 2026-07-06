@@ -1141,7 +1141,7 @@ Expected: commit succeeds.
 - Consumes `LibraryAddSourceDialog` with `projectContext` from Task 3.
 - Preserves the existing Connect-from-Library sheet by moving it to `onConnectFromLibrary`.
 
-- [ ] **Step 1: Add failing `SourcesFilterBar` tests**
+- [x] **Step 1: Add failing `SourcesFilterBar` tests**
 
 Update the existing add-source test in `src/lib/components/research-projects/SourcesFilterBar.test.ts` to use two callbacks:
 
@@ -1165,7 +1165,7 @@ If the test file does not import `screen` and `fireEvent`, change its import to:
 import { fireEvent, render, screen } from "@testing-library/svelte";
 ```
 
-- [ ] **Step 2: Add failing `/projects/next` route contract tests**
+- [x] **Step 2: Add failing `/projects/next` route contract tests**
 
 Add these assertions to the route contract test created in Task 4:
 
@@ -1182,13 +1182,13 @@ Add these assertions to the route contract test created in Task 4:
     expect(nextPageSource).toContain("onAddSource: () => (addSourceOpen = true)");
 ```
 
-- [ ] **Step 3: Run tests and verify `/projects/next` contracts fail before implementation**
+- [x] **Step 3: Run tests and verify `/projects/next` contracts fail before implementation**
 
 Run: `npm.cmd run test -- src/lib/components/research-projects/SourcesFilterBar.test.ts src/lib/research-projects-route-contract.test.ts`
 
 Expected: FAIL because `SourcesFilterBar` has one action callback and `/projects/next` does not render `LibraryAddSourceDialog`.
 
-- [ ] **Step 4: Split `SourcesFilterBar` actions**
+- [x] **Step 4: Split `SourcesFilterBar` actions**
 
 In `SourcesFilterBar.svelte`, add `onConnectFromLibrary` to props:
 
@@ -1271,7 +1271,7 @@ Replace `.sources-filter-bar > .sources-filter-bar__add` CSS selectors with:
 
 Keep `.sources-filter-bar__add-plus` as the plus glyph styling.
 
-- [ ] **Step 5: Wire shared helper into `/projects/next/+page.svelte`**
+- [x] **Step 5: Wire shared helper into `/projects/next/+page.svelte`**
 
 Add imports:
 
@@ -1365,7 +1365,7 @@ Add helper deps and wrappers before `openConnectSources()`:
   }
 ```
 
-- [ ] **Step 6: Wire `/projects/next` buttons and dialog**
+- [x] **Step 6: Wire `/projects/next` buttons and dialog**
 
 Change the `filterBar` action props to:
 
@@ -1386,19 +1386,19 @@ Render `LibraryAddSourceDialog` before `ConnectFromLibrary`:
   />
 ```
 
-- [ ] **Step 7: Run focused tests**
+- [x] **Step 7: Run focused tests**
 
 Run: `npm.cmd run test -- src/lib/components/research-projects/SourcesFilterBar.test.ts src/lib/research-projects-route-contract.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 8: Run Svelte check**
+- [x] **Step 8: Run Svelte check**
 
 Run: `npm.cmd run check`
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit Task 5**
+- [x] **Step 9: Commit Task 5**
 
 Run:
 

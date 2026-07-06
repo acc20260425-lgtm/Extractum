@@ -11,12 +11,21 @@
   import { buildSourceRow } from "$lib/ui/research-projects-source-row";
   import { ExtractumButton, ExtractumDialog } from "$lib/components/extractum-ui";
   import ConnectFromLibrary from "$lib/components/research-projects/ConnectFromLibrary.svelte";
+  import LibraryAddSourceDialog from "$lib/components/research-projects/LibraryAddSourceDialog.svelte";
   import {
     PROJECT_SECTIONS,
     type ProjectSectionId,
   } from "$lib/components/research-projects/ProjectTabs.svelte";
   import ProjectEditorDialog from "$lib/components/research-projects/ProjectEditorDialog.svelte";
+  import { formatAppError } from "$lib/app-error";
   import { listLibraryCatalog } from "$lib/api/library-sources";
+  import { buildLibraryCatalogSourcesView } from "$lib/ui/library-catalog-model";
+  import type { ProjectAddSourceContext } from "$lib/ui/project-add-source-context";
+  import {
+    connectProjectSourceIds,
+    connectedSourceIdsForProject,
+    type ProjectAddSourceWorkflowDeps,
+  } from "$lib/ui/project-add-source-workflow";
   import {
     buildLibrarySourcesView,
     connectableSelection,
@@ -66,6 +75,7 @@
   let filtersOpen = $state(false);
   let activeSection = $state<ProjectSectionId>("sources");
   let connectOpen = $state(false);
+  let addSourceOpen = $state(false);
   let disconnectOpen = $state(false);
   let libraryCatalogRecords = $state<LibraryCatalogRecord[]>([]);
   let selectedLibrarySourceIds = $state<Set<string>>(new Set());
@@ -88,7 +98,7 @@
     setProjectPinned,
     setProjectArchived,
     getProjectDataRange,
-    formatError: (action, error) => `Не удалось выполнить: ${action} (${String(error)})`,
+    formatError: formatAppError,
   });
 
   let selectedProject = $derived(
@@ -127,6 +137,18 @@
       sources,
       selectedProjectId !== null ? projectViewId(selectedProjectId) : null,
     ),
+  );
+  let libraryCatalogSources = $derived(buildLibraryCatalogSourcesView(libraryCatalogRecords));
+  let connectedSourceIds = $derived(connectedSourceIdsForProject(sources, selectedProjectId));
+  let projectAddSourceContext = $derived<ProjectAddSourceContext | undefined>(
+    selectedProjectId !== null
+      ? {
+          projectId: selectedProjectId,
+          connectedSourceIds,
+          onConnectExistingSource: connectExistingProjectSource,
+          onConnectAddedSources: connectAddedProjectSources,
+        }
+      : undefined,
   );
   let periodPresets = $derived(
     buildPeriodPresets(railState.dataRange ?? { from: null, to: null }, now),
@@ -295,6 +317,62 @@
     }
   }
 
+  async function refreshAfterProjectSourceConnect() {
+    const catalog = await listLibraryCatalog();
+    libraryCatalogRecords = catalog.sources;
+    if (selectedProjectId !== null) {
+      sources = await listProjectSources(selectedProjectId);
+    }
+    await workflow.reload();
+  }
+
+  function projectAddSourceDeps(): ProjectAddSourceWorkflowDeps {
+    return {
+      addProjectSources,
+      refreshAfterProjectSourceConnect,
+      setProjectAddSourceSaving: (saving) => {
+        railState = { ...railState, saving };
+      },
+      setProjectAddSourceStatus: (status) => {
+        railState = { ...railState, status };
+      },
+      formatError: formatAppError,
+    };
+  }
+
+  async function connectAddedProjectSource(sourceId?: number) {
+    await connectProjectSourceIds({
+      projectId: selectedProjectId,
+      sourceIds: [sourceId],
+      origin: "new_source",
+      emptyBehavior: "missing_source_id_status",
+      deps: projectAddSourceDeps(),
+    });
+  }
+
+  async function connectAddedProjectSources(sourceIds: number[]) {
+    await connectProjectSourceIds({
+      projectId: selectedProjectId,
+      sourceIds,
+      origin: "new_source",
+      emptyBehavior: "silent",
+      deps: projectAddSourceDeps(),
+    });
+  }
+
+  async function connectExistingProjectSource(sourceId: number) {
+    if (connectedSourceIds.has(sourceId)) {
+      railState = { ...railState, status: "Already connected to this project." };
+      return;
+    }
+    await connectProjectSourceIds({
+      projectId: selectedProjectId,
+      sourceIds: [sourceId],
+      origin: "existing_source",
+      deps: projectAddSourceDeps(),
+    });
+  }
+
   async function openConnectSources() {
     connectOpen = true;
     if (libraryCatalogRecords.length === 0) {
@@ -409,7 +487,8 @@
           onClearAll: () => (filters = emptySourceFilters()),
           shownCount: visibleSources.length,
           totalCount: sources.length,
-          onAddSource: () => void openConnectSources(),
+          onAddSource: () => (addSourceOpen = true),
+          onConnectFromLibrary: () => void openConnectSources(),
         }
       : undefined}
     filterRow={selectedProject && activeSection === "sources" && filtersOpen
@@ -483,6 +562,13 @@
     saving={railState.saving}
     error={railState.status}
     onSubmit={submitProjectEditor}
+  />
+  <LibraryAddSourceDialog
+    bind:open={addSourceOpen}
+    sources={libraryCatalogSources}
+    onSourcesChanged={connectAddedProjectSource}
+    onStatus={(status) => (railState = { ...railState, status })}
+    projectContext={projectAddSourceContext}
   />
   <ConnectFromLibrary
     open={connectOpen}
