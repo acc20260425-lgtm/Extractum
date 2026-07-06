@@ -151,6 +151,11 @@ describe("ResearchProjectsShell", () => {
     expect(shellSource).toContain("box-shadow: -10px 0 30px");
   });
 
+  it("provides a named container for responsive source-table controls", () => {
+    expect(shellSource).toContain("container-type: inline-size");
+    expect(shellSource).toContain("container-name: sources");
+  });
+
   it("closes the open inspector from the overlay backdrop", async () => {
     const onToggle = vi.fn();
     render(ResearchProjectsShell, {

@@ -4,7 +4,10 @@
     ExtractumPopoverTrigger,
     ExtractumPopoverContent,
   } from "$lib/components/extractum-ui";
-  import { SOURCE_FILTER_ROW_GRID_TEMPLATE } from "$lib/ui/research-projects-source-row";
+  import {
+    SOURCE_FILTER_ROW_GRID_TEMPLATE,
+    SOURCE_FILTER_ROW_GRID_TEMPLATES,
+  } from "$lib/ui/research-projects-source-row";
   import type { SourceFilters } from "$lib/ui/research-projects-source-filters";
 
   let {
@@ -45,11 +48,18 @@
     const value = Number(raw.replace(/\D/g, ""));
     return raw.trim() === "" || !Number.isFinite(value) ? null : value;
   }
+
+  const FILTER_ROW_STYLE = [
+    `grid-template-columns: ${SOURCE_FILTER_ROW_GRID_TEMPLATE}`,
+    `--sources-filter-template-760: ${SOURCE_FILTER_ROW_GRID_TEMPLATES[760]}`,
+    `--sources-filter-template-600: ${SOURCE_FILTER_ROW_GRID_TEMPLATES[600]}`,
+    `--sources-filter-template-460: ${SOURCE_FILTER_ROW_GRID_TEMPLATES[460]}`,
+  ].join("; ");
 </script>
 
 <div
   class="sources-filter-row"
-  style={`grid-template-columns: ${SOURCE_FILTER_ROW_GRID_TEMPLATE};`}
+  style={FILTER_ROW_STYLE}
 >
   <div></div>
 
@@ -82,7 +92,8 @@
     {/if}
   </div>
 
-  <ExtractumPopover>
+  <div class="sources-filter-row__type">
+    <ExtractumPopover>
     <ExtractumPopoverTrigger class="sources-filter-row__dd" aria-label="Фильтр по типу">
       {multiLabel(filters.types)}<span class="sources-filter-row__caret">▾</span>
     </ExtractumPopoverTrigger>
@@ -100,9 +111,10 @@
         </label>
       {/each}
     </ExtractumPopoverContent>
-  </ExtractumPopover>
+    </ExtractumPopover>
+  </div>
 
-  <div class="sources-filter-row__range">
+  <div class="sources-filter-row__range sources-filter-row__materials">
     <input
       type="number"
       aria-label="Материалы от"
@@ -121,7 +133,7 @@
     />
   </div>
 
-  <div class="sources-filter-row__range">
+  <div class="sources-filter-row__range sources-filter-row__date">
     <input
       type="date"
       aria-label="Синхронизирован с"
@@ -136,7 +148,8 @@
     />
   </div>
 
-  <ExtractumPopover>
+  <div class="sources-filter-row__status">
+    <ExtractumPopover>
     <ExtractumPopoverTrigger class="sources-filter-row__dd" aria-label="Фильтр по статусу">
       {multiLabel(filters.statuses)}<span class="sources-filter-row__caret">▾</span>
     </ExtractumPopoverTrigger>
@@ -154,7 +167,8 @@
         </label>
       {/each}
     </ExtractumPopoverContent>
-  </ExtractumPopover>
+    </ExtractumPopover>
+  </div>
 </div>
 
 <style>
@@ -266,5 +280,35 @@
     font: 400 11.5px/1 var(--extractum-font);
     color: var(--extractum-text);
     outline: none;
+  }
+
+  @container sources (max-width: 760px) {
+    .sources-filter-row {
+      grid-template-columns: var(--sources-filter-template-760);
+    }
+
+    .sources-filter-row__date {
+      display: none;
+    }
+  }
+
+  @container sources (max-width: 600px) {
+    .sources-filter-row {
+      grid-template-columns: var(--sources-filter-template-600);
+    }
+
+    .sources-filter-row__type {
+      display: none;
+    }
+  }
+
+  @container sources (max-width: 460px) {
+    .sources-filter-row {
+      grid-template-columns: var(--sources-filter-template-460);
+    }
+
+    .sources-filter-row__materials {
+      display: none;
+    }
   }
 </style>

@@ -2,8 +2,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import SourcesFilterRow from "./SourcesFilterRow.svelte";
-import { SOURCE_FILTER_ROW_GRID_TEMPLATE } from "$lib/ui/research-projects-source-row";
+import rawSource from "./SourcesFilterRow.svelte?raw";
+import {
+  SOURCE_FILTER_ROW_GRID_TEMPLATE,
+  SOURCE_FILTER_ROW_GRID_TEMPLATES,
+} from "$lib/ui/research-projects-source-row";
 import { emptySourceFilters } from "$lib/ui/research-projects-source-filters";
+
+const source = rawSource.replace(/\r\n/g, "\n");
 
 afterEach(cleanup);
 
@@ -67,5 +73,23 @@ describe("SourcesFilterRow", () => {
     expect(row?.getAttribute("style")).toContain(
       `grid-template-columns: ${SOURCE_FILTER_ROW_GRID_TEMPLATE}`,
     );
+    expect(row?.getAttribute("style")).toContain(
+      `--sources-filter-template-760: ${SOURCE_FILTER_ROW_GRID_TEMPLATES[760]}`,
+    );
+    expect(row?.getAttribute("style")).toContain(
+      `--sources-filter-template-600: ${SOURCE_FILTER_ROW_GRID_TEMPLATES[600]}`,
+    );
+    expect(row?.getAttribute("style")).toContain(
+      `--sources-filter-template-460: ${SOURCE_FILTER_ROW_GRID_TEMPLATES[460]}`,
+    );
+  });
+
+  it("keeps filter controls aligned with responsive source-table breakpoints", () => {
+    expect(source).toContain("@container sources (max-width: 760px)");
+    expect(source).toContain("var(--sources-filter-template-760)");
+    expect(source).toContain("@container sources (max-width: 600px)");
+    expect(source).toContain("var(--sources-filter-template-600)");
+    expect(source).toContain("@container sources (max-width: 460px)");
+    expect(source).toContain("var(--sources-filter-template-460)");
   });
 });

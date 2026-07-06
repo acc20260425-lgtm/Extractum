@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   enhanceDateTimeColumns,
+  enhanceDateTimeResponsiveColumns,
   formatDataGridDateTimeValue,
   parseDataGridDateTimeValue,
   type ExtractumDataGridColumn,
+  type ExtractumDataGridResponsive,
 } from "./data-grid-date-format";
 
 describe("data grid date/time formatting", () => {
@@ -71,5 +73,30 @@ describe("data grid date/time formatting", () => {
     expect(enhanced[1].template?.("2026-06-22T21:24:51Z", {}, enhanced[1])).toBe("Jun 22, 2026, 21:24");
     expect(enhanced[2]).toBe(columns[2]);
     expect(enhanced[3].template).toBe(existingTemplate);
+  });
+
+  it("injects date-time templates into responsive column definitions", () => {
+    const responsive: ExtractumDataGridResponsive = {
+      760: {
+        columns: [
+          { id: "title", header: "Title" },
+          { id: "lastSyncedAt", header: "Last sync", dateTimeFormat: "datetime" },
+        ],
+      },
+    };
+
+    const enhanced = enhanceDateTimeResponsiveColumns(responsive, "en-US", "UTC");
+    const sourceColumns = responsive["760"].columns;
+    const enhancedColumns = enhanced?.["760"]?.columns;
+
+    if (!sourceColumns || !enhancedColumns) {
+      throw new Error("responsive columns were not enhanced");
+    }
+
+    expect(enhancedColumns[0]).toBe(sourceColumns[0]);
+    expect(enhancedColumns[1]).not.toBe(sourceColumns[1]);
+    expect(enhancedColumns[1].template?.("2026-06-22T21:24:51Z", {}, enhancedColumns[1])).toBe(
+      "Jun 22, 2026, 21:24",
+    );
   });
 });

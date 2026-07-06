@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  SOURCE_FILTER_ROW_GRID_TEMPLATES,
   SOURCE_FILTER_ROW_GRID_TEMPLATE,
   SOURCE_TABLE_LAYOUT,
   buildSourceGridRows,
@@ -8,6 +9,7 @@ import {
   compareSourceMaterials,
   compareSourceTitles,
   sourceGridColumns,
+  sourceGridResponsiveColumns,
   sourceSyncStatusLabel,
 } from "./research-projects-source-row";
 import type { ProjectSourceRecord } from "$lib/types/projects";
@@ -122,6 +124,25 @@ describe("sourceGridColumns", () => {
     expect(byId.get("materialsLabel")?.width).toBe(SOURCE_TABLE_LAYOUT.materials);
     expect(byId.get("lastSyncedAt")?.width).toBe(SOURCE_TABLE_LAYOUT.lastSync);
     expect(byId.get("statusLabel")?.width).toBe(SOURCE_TABLE_LAYOUT.status);
+  });
+
+  it("defines v11 responsive column-drop layouts for narrow source tables", () => {
+    expect(SOURCE_FILTER_ROW_GRID_TEMPLATES).toEqual({
+      default: "34px minmax(160px, 1fr) 116px 116px 150px 104px",
+      760: "34px minmax(150px, 1fr) 116px 116px 104px",
+      600: "34px minmax(140px, 1fr) 116px 104px",
+      460: "34px minmax(120px, 1fr) 104px",
+    });
+
+    const responsive = sourceGridResponsiveColumns();
+    const hiddenIds = (breakpoint: "760" | "600" | "460") =>
+      responsive[breakpoint].columns
+        .filter((column) => column.hidden)
+        .map((column) => String(column.id));
+
+    expect(hiddenIds("760")).toEqual(["lastSyncedAt"]);
+    expect(hiddenIds("600")).toEqual(["typeLabel", "lastSyncedAt"]);
+    expect(hiddenIds("460")).toEqual(["typeLabel", "materialsLabel", "lastSyncedAt"]);
   });
 });
 

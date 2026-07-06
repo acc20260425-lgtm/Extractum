@@ -144,6 +144,8 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+    container-type: inline-size;
+    container-name: sources;
     background: var(--extractum-surface);
   }
 

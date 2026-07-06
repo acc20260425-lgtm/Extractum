@@ -12,14 +12,42 @@ export const SOURCE_TABLE_LAYOUT = {
   status: 104,
 } as const;
 
-export const SOURCE_FILTER_ROW_GRID_TEMPLATE = [
-  `${SOURCE_TABLE_LAYOUT.select}px`,
-  `minmax(${SOURCE_TABLE_LAYOUT.titleMin}px, 1fr)`,
-  `${SOURCE_TABLE_LAYOUT.type}px`,
-  `${SOURCE_TABLE_LAYOUT.materials}px`,
-  `${SOURCE_TABLE_LAYOUT.lastSync}px`,
-  `${SOURCE_TABLE_LAYOUT.status}px`,
-].join(" ");
+export const SOURCE_FILTER_ROW_GRID_TEMPLATES = {
+  default: [
+    `${SOURCE_TABLE_LAYOUT.select}px`,
+    `minmax(${SOURCE_TABLE_LAYOUT.titleMin}px, 1fr)`,
+    `${SOURCE_TABLE_LAYOUT.type}px`,
+    `${SOURCE_TABLE_LAYOUT.materials}px`,
+    `${SOURCE_TABLE_LAYOUT.lastSync}px`,
+    `${SOURCE_TABLE_LAYOUT.status}px`,
+  ].join(" "),
+  760: [
+    `${SOURCE_TABLE_LAYOUT.select}px`,
+    "minmax(150px, 1fr)",
+    `${SOURCE_TABLE_LAYOUT.type}px`,
+    `${SOURCE_TABLE_LAYOUT.materials}px`,
+    `${SOURCE_TABLE_LAYOUT.status}px`,
+  ].join(" "),
+  600: [
+    `${SOURCE_TABLE_LAYOUT.select}px`,
+    "minmax(140px, 1fr)",
+    `${SOURCE_TABLE_LAYOUT.materials}px`,
+    `${SOURCE_TABLE_LAYOUT.status}px`,
+  ].join(" "),
+  460: [
+    `${SOURCE_TABLE_LAYOUT.select}px`,
+    "minmax(120px, 1fr)",
+    `${SOURCE_TABLE_LAYOUT.status}px`,
+  ].join(" "),
+} as const;
+
+export const SOURCE_FILTER_ROW_GRID_TEMPLATE = SOURCE_FILTER_ROW_GRID_TEMPLATES.default;
+
+const SOURCE_TABLE_RESPONSIVE_HIDDEN_COLUMNS = {
+  760: ["lastSyncedAt"],
+  600: ["typeLabel", "lastSyncedAt"],
+  460: ["typeLabel", "materialsLabel", "lastSyncedAt"],
+} as const;
 
 const SYNC_STATUS_LABELS: Record<LibraryCatalogStatus, string> = {
   active: "active",
@@ -106,6 +134,26 @@ export function sourceGridColumns(): ExtractumDataGridColumn[] {
     },
     { id: "statusLabel", header: "Статус", width: SOURCE_TABLE_LAYOUT.status, sort: true },
   ];
+}
+
+export function sourceGridResponsiveColumns(): Record<string, { columns: ExtractumDataGridColumn[] }> {
+  const baseColumns = sourceGridColumns();
+
+  return Object.fromEntries(
+    Object.entries(SOURCE_TABLE_RESPONSIVE_HIDDEN_COLUMNS).map(([breakpoint, hiddenColumns]) => {
+      const hidden = new Set<string>(hiddenColumns);
+      return [
+        breakpoint,
+        {
+          columns: baseColumns.map((column) =>
+            column.id != null && hidden.has(String(column.id))
+              ? { ...column, hidden: true }
+              : column,
+          ),
+        },
+      ];
+    }),
+  );
 }
 
 export type SourceGridRow = SourceRowView & {

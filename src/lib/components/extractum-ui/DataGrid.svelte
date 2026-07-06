@@ -11,7 +11,11 @@
   import { en as gridEn } from "@svar-ui/grid-locales";
   import { ru as coreRu } from "@svar-ui/core-locales";
   import { cn } from "$lib/utils.js";
-  import { enhanceDateTimeColumns } from "./data-grid-date-format";
+  import {
+    enhanceDateTimeColumns,
+    enhanceDateTimeResponsiveColumns,
+  } from "./data-grid-date-format";
+  import type { ExtractumDataGridResponsive } from "./data-grid-date-format";
 
   type GridRow = {
     id: string;
@@ -31,6 +35,7 @@
     ariaLabel,
     overlay = "Нет данных",
     columnStyle,
+    responsive,
     selectOnClick = true,
     activeRowId = null,
     onRowClick,
@@ -45,6 +50,7 @@
     ariaLabel?: string;
     overlay?: string;
     columnStyle?: (column: ExtractumDataGridColumn) => string;
+    responsive?: ExtractumDataGridResponsive;
     selectOnClick?: boolean;
     activeRowId?: string | null;
     onRowClick?: (id: string) => void;
@@ -63,6 +69,7 @@
   let host = $state<HTMLDivElement | null>(null);
   let visibleOverlay = $derived(rows.length === 0 ? overlay : undefined);
   let enhancedColumns = $derived(enhanceDateTimeColumns(columns));
+  let enhancedResponsive = $derived(enhanceDateTimeResponsiveColumns(responsive));
 
   // Selection sync without the reactive prop: the grid gets a one-time
   // initial snapshot; later EXTERNAL changes (clear selection, project
@@ -178,6 +185,7 @@
         overlay={visibleOverlay}
         multiselect={multiselect}
         select={selectOnClick}
+        responsive={enhancedResponsive}
         sizes={GRID_SIZES}
         onselectrow={emitSelection}
       />

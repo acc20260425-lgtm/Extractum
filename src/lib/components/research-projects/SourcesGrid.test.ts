@@ -13,6 +13,8 @@ describe("SourcesGrid", () => {
     expect(source).toContain("sourceGridColumns");
     expect(source).toContain("SOURCE_TABLE_LAYOUT");
     expect(source).toContain("width: SOURCE_TABLE_LAYOUT.select");
+    expect(source).toContain("sourceGridResponsiveColumns");
+    expect(source).toContain("responsive={responsiveColumns}");
     expect(source).toContain("<ExtractumDataGrid");
   });
 

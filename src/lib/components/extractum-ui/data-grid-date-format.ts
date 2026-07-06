@@ -1,10 +1,18 @@
-import type { IColumnConfig } from "@svar-ui/svelte-grid";
+import type { IColumnConfig, ISizeConfig } from "@svar-ui/svelte-grid";
 
 export type ExtractumDateTimeFormat = "date" | "datetime" | "time";
 
 export type ExtractumDataGridColumn = IColumnConfig & {
   dateTimeFormat?: ExtractumDateTimeFormat | false;
 };
+
+export type ExtractumDataGridResponsive = Record<
+  string,
+  {
+    sizes?: ISizeConfig;
+    columns?: ExtractumDataGridColumn[];
+  }
+>;
 
 const UNIX_MILLISECONDS_THRESHOLD = 100_000_000_000;
 
@@ -90,4 +98,24 @@ export function enhanceDateTimeColumns(
       template: (value: unknown) => String(formatDataGridDateTimeValue(value, dateTimeFormat, locale, timeZone) ?? ""),
     };
   });
+}
+
+export function enhanceDateTimeResponsiveColumns(
+  responsive: ExtractumDataGridResponsive | undefined,
+  locale?: string | string[],
+  timeZone?: string,
+): Record<string, { sizes?: ISizeConfig; columns?: IColumnConfig[] }> | undefined {
+  if (!responsive) return undefined;
+
+  return Object.fromEntries(
+    Object.entries(responsive).map(([breakpoint, config]) => [
+      breakpoint,
+      {
+        ...config,
+        columns: config.columns
+          ? enhanceDateTimeColumns(config.columns, locale, timeZone)
+          : undefined,
+      },
+    ]),
+  );
 }

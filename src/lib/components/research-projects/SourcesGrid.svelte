@@ -9,6 +9,7 @@
     SOURCE_TABLE_LAYOUT,
     buildSourceGridRows,
     sourceGridColumns,
+    sourceGridResponsiveColumns,
   } from "$lib/ui/research-projects-source-row";
   import type { ProjectSourceRecord } from "$lib/types/projects";
   import SourceStatusCell from "./SourceStatusCell.svelte";
@@ -53,13 +54,23 @@
   // from the grid api, so toggling checkboxes does not rebuild rows (and does
   // not reset svar sorting).
   let rows = $derived(buildSourceGridRows(sources));
-  const columns = [
-    SELECT_COLUMN,
-    ...sourceGridColumns().map((column) => {
+  function attachSourceCells(columns: ExtractumDataGridColumn[]): ExtractumDataGridColumn[] {
+    return columns.map((column) => {
       const cell = column.id ? CELL_BY_COLUMN[column.id] : undefined;
       return cell ? { ...column, cell } : column;
-    }),
-  ];
+    });
+  }
+
+  const columns = [{ ...SELECT_COLUMN }, ...attachSourceCells(sourceGridColumns())];
+  const responsiveColumns = Object.fromEntries(
+    Object.entries(sourceGridResponsiveColumns()).map(([breakpoint, config]) => [
+      breakpoint,
+      {
+        ...config,
+        columns: [{ ...SELECT_COLUMN }, ...attachSourceCells(config.columns)],
+      },
+    ]),
+  );
 
   function columnStyle(column: ExtractumDataGridColumn): string {
     return column.id != null && RIGHT_ALIGNED.has(String(column.id))
@@ -73,6 +84,7 @@
   {rows}
   {columns}
   {columnStyle}
+  responsive={responsiveColumns}
   selectedRowIds={selectedSourceIds}
   multiselect={true}
   onSelectedRowIdsChange={onSelectedSourceIdsChange}
