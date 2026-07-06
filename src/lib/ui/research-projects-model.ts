@@ -195,8 +195,7 @@ export function selectedProjectSourcesSyncDisabledReason(
 ) {
   if (rows.length === 0) return "Select sources to sync";
   const hasUnsupported = rows.some(
-    (row) =>
-      row.provider !== "youtube" || (row.subtype !== "video" && row.subtype !== "playlist"),
+    (row) => row.provider !== "youtube" || row.subtype !== "video",
   );
   if (hasUnsupported) return "Selected sources include unsupported sync types";
   return null;

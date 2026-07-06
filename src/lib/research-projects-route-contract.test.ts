@@ -138,7 +138,13 @@ describe("projects mvp route contract", () => {
     expect(workspaceSource).toContain("onSyncSelectedSources");
     expect(sourcesTabSource).toContain("selectedProjectSourcesSyncDisabledReason");
     expect(sourcesTabSource).toContain("handleSyncSelected");
+    expect(sourcesTabSource).toContain("handleSyncAll");
+    expect(sourcesTabSource).toContain("syncAllDisabledReason");
+    expect(sourcesTabSource).toContain("onclick={handleSyncAll}");
     expect(sourcesTabSource).not.toContain('disabled={true} title="Sync selected sources (not implemented)"');
+    expect(sourcesTabSource).not.toContain("Sync all sources (not implemented)");
+    const nextPageSource = readFileSync(resolve(process.cwd(), "src/routes/projects/next/+page.svelte"), "utf8");
+    expect(nextPageSource).not.toContain("comments: false");
   });
 
   it("refreshes Workspace source content when source sync jobs finish", () => {

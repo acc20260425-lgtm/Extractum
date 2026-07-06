@@ -440,12 +440,12 @@ describe("research projects workflow", () => {
     expect(deps.syncYoutubeSource).toHaveBeenNthCalledWith(1, 10, {
       metadata: true,
       transcripts: true,
-      comments: false,
+      comments: true,
     });
     expect(deps.syncYoutubeSource).toHaveBeenNthCalledWith(2, 11, {
       metadata: true,
       transcripts: true,
-      comments: false,
+      comments: true,
     });
     expect(state.status).toBe("Queued sync for 2 sources.");
     expect(deps.listSourceJobs).toHaveBeenCalled();

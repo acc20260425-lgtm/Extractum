@@ -252,7 +252,7 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
 
     deps.patch({ saving: true });
     try {
-      const options = { metadata: true, transcripts: true, comments: false };
+      const options = { metadata: true, transcripts: true, comments: true };
       for (const source of sources) {
         await deps.syncYoutubeSource(source.sourceNumericId, options);
       }

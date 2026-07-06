@@ -170,9 +170,11 @@ describe("research projects model", () => {
     ]);
   });
 
-  it("allows syncing selected YouTube videos and playlists only", () => {
+  it("allows syncing selected YouTube videos only", () => {
     const youtubeRows = buildProjectSourceLinksView("project:1", [
       projectSources[0],
+    ]);
+    const playlistRows = buildProjectSourceLinksView("project:1", [
       { ...projectSources[0], source_id: 11, source_subtype: "playlist", title: "Playlist" },
     ]);
     const mixedRows = buildProjectSourceLinksView("project:1", [
@@ -182,6 +184,9 @@ describe("research projects model", () => {
 
     expect(selectedProjectSourcesSyncDisabledReason([])).toBe("Select sources to sync");
     expect(selectedProjectSourcesSyncDisabledReason(youtubeRows)).toBeNull();
+    expect(selectedProjectSourcesSyncDisabledReason(playlistRows)).toBe(
+      "Selected sources include unsupported sync types",
+    );
     expect(selectedProjectSourcesSyncDisabledReason(mixedRows)).toBe(
       "Selected sources include unsupported sync types",
     );

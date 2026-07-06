@@ -74,10 +74,16 @@
   );
   let selectedRowIdsInProject = $derived(selectedRows.map((row) => row.id));
   let syncDisabledReason = $derived(selectedProjectSourcesSyncDisabledReason(selectedRows));
+  let syncAllDisabledReason = $derived(project ? selectedProjectSourcesSyncDisabledReason(rows) : "Select a project");
 
   async function handleSyncSelected() {
     if (syncDisabledReason) return;
     await onSyncSelectedSources(selectedRows.map((row) => row.sourceNumericId));
+  }
+
+  async function handleSyncAll() {
+    if (syncAllDisabledReason) return;
+    await onSyncSelectedSources(rows.map((row) => row.sourceNumericId));
   }
 
   async function handleRemoveSelected() {
@@ -141,9 +147,10 @@
       <div class="global-action-bar">
         <ExtractumButton
           variant="outline"
-          disabled={true}
-          title="Sync all sources (not implemented)"
-          aria-label="Sync all sources (not implemented)"
+          disabled={saving || syncAllDisabledReason !== null}
+          title={syncAllDisabledReason ?? "Sync all sources"}
+          aria-label="Sync all sources"
+          onclick={handleSyncAll}
         >
           <RefreshCw size={12} aria-hidden="true" />
           Sync all

@@ -172,7 +172,7 @@
         (source) =>
           selectedSourceIds.includes(String(source.source_id)) &&
           source.provider === "youtube" &&
-          (source.source_subtype === "video" || source.source_subtype === "playlist"),
+          source.source_subtype === "video",
       )
       .map((source) => source.source_id),
   );
@@ -240,7 +240,7 @@
     railState = { ...railState, saving: true, status: "" };
     try {
       for (const id of syncableIds) {
-        await syncYoutubeSource(id, { metadata: true, transcripts: true, comments: false });
+        await syncYoutubeSource(id, { metadata: true, transcripts: true, comments: true });
       }
       sources = await listProjectSources(selectedProjectId);
     } catch (error) {
@@ -412,7 +412,7 @@
       await syncYoutubeSource(Number(activeSourceId), {
         metadata: true,
         transcripts: true,
-        comments: false,
+        comments: true,
       });
       sources = await listProjectSources(selectedProjectId);
     } catch (error) {
