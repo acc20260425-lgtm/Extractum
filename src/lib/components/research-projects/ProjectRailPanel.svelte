@@ -86,6 +86,7 @@
         type="button"
         class="rail-panel__icon-btn"
         title={compact ? "Комфортный вид" : "Компактный вид"}
+        aria-label={compact ? "Комфортный вид" : "Компактный вид"}
         onclick={() => (compact = !compact)}
       >
         <svg
@@ -103,11 +104,12 @@
         type="button"
         class="rail-panel__icon-btn"
         title="Создать проект"
+        aria-label="Создать проект"
         onclick={() => onCreate?.()}
       >
         +
       </button>
-      <button type="button" class="rail-panel__icon-btn" title="Скоро" disabled>
+      <button type="button" class="rail-panel__icon-btn" title="Скоро" aria-label="Синхронизация скоро" disabled>
         <svg
           width="13"
           height="13"
@@ -124,6 +126,7 @@
           <ExtractumDropdownMenuTrigger
             class="rail-panel__menu-trigger"
             title="Действия с проектом"
+            aria-label="Действия выбранного проекта"
           >
             ⋯
           </ExtractumDropdownMenuTrigger>
@@ -167,7 +170,7 @@
     {/if}
   </div>
 
-  <div class="rail-panel__list">
+  <div class="rail-panel__list" role="listbox" aria-label="Проекты">
     {#if activeVisible || filtered.pinned.length > 0}
       <div class="rail-panel__section-header">
         <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
@@ -225,6 +228,7 @@
       <button
         type="button"
         class="rail-panel__archive-toggle"
+        aria-expanded={archiveOpen}
         onclick={() => (archiveOpen = !archiveOpen)}
       >
         <svg

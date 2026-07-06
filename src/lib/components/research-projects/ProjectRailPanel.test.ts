@@ -2,10 +2,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import ProjectRailPanel from "./ProjectRailPanel.svelte";
+import rawSource from "./ProjectRailPanel.svelte?raw";
 import type { ProjectSummary } from "$lib/types/projects";
 
 afterEach(cleanup);
 
+const source = rawSource.replace(/\r\n/g, "\n");
 const NOW = 1_000_000_000;
 
 function summary(overrides: Partial<ProjectSummary> = {}): ProjectSummary {
@@ -30,6 +32,26 @@ const baseProps = {
 };
 
 describe("ProjectRailPanel", () => {
+  it("renders the project list as a v11 listbox with the active project selected", () => {
+    render(ProjectRailPanel, {
+      props: {
+        ...baseProps,
+        summaries: [summary({ id: 1, name: "First" }), summary({ id: 2, name: "Chosen" })],
+        selectedProjectId: 2,
+      },
+    });
+
+    expect(screen.getByRole("listbox", { name: "Проекты" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: /Chosen/, selected: true })).toBeTruthy();
+  });
+
+  it("keeps v11 panel affordance hooks in source", () => {
+    expect(source).toContain('aria-label="Проекты"');
+    expect(source).toContain("aria-expanded={archiveOpen}");
+    expect(source).toContain('aria-label={compact ? "Комфортный вид" : "Компактный вид"}');
+    expect(source).toContain('aria-label="Создать проект"');
+  });
+
   it("renders header actions: compact toggle, create, disabled sync", () => {
     render(ProjectRailPanel, { props: { ...baseProps, summaries: [summary()] } });
     expect(screen.getByTitle("Компактный вид")).toBeTruthy();
@@ -79,9 +101,12 @@ describe("ProjectRailPanel", () => {
       },
     });
     expect(screen.queryByText("Старый аудит")).toBeNull();
+    const archiveToggle = screen.getByRole("button", { name: /Архив/ });
+    expect(archiveToggle.getAttribute("aria-expanded")).toBe("false");
     expect(screen.getByText("2")).toBeTruthy();
 
-    await fireEvent.click(screen.getByText("Архив"));
+    await fireEvent.click(archiveToggle);
+    expect(archiveToggle.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText("Старый аудит")).toBeTruthy();
     expect(screen.getByText("Q3 ресёрч")).toBeTruthy();
   });

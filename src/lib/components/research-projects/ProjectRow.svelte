@@ -41,7 +41,12 @@
   class="project-row"
   data-variant={variant}
   data-status={row.status}
-  role="button"
+  data-pinned={row.pinned || variant === "active"}
+  data-archived={row.archived || variant === "archived"}
+  data-compact={compact}
+  role="option"
+  aria-selected={variant === "active"}
+  aria-label={`${row.name} ${row.meta}`}
   tabindex="0"
   title={compact ? `${row.name} — ${row.meta}` : undefined}
   onclick={() => onSelect?.(row.id)}
@@ -78,6 +83,7 @@
       <ExtractumDropdownMenuTrigger
         class="project-row__menu-trigger"
         title="Действия"
+        aria-label={`Действия проекта ${row.name}`}
         onclick={(e: MouseEvent) => e.stopPropagation()}
       >
         ⋯
@@ -136,6 +142,12 @@
 
   .project-row:hover {
     background: var(--extractum-surface-subtle);
+  }
+
+  .project-row:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--extractum-primary) 48%, transparent);
+    outline-offset: -2px;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--extractum-primary) 12%, transparent);
   }
 
   .project-row[data-variant="active"],
@@ -262,8 +274,14 @@
   }
 
   .project-row:hover .project-row__actions :global(.project-row__menu-trigger),
+  .project-row:focus-within .project-row__actions :global(.project-row__menu-trigger),
   .project-row__actions :global(.project-row__menu-trigger[data-state="open"]) {
     opacity: 1;
+  }
+
+  .project-row__actions :global(.project-row__menu-trigger:focus-visible) {
+    outline: 2px solid color-mix(in srgb, var(--extractum-primary) 48%, transparent);
+    outline-offset: 2px;
   }
 
   .project-row__actions :global(.project-row__menu-trigger:hover) {

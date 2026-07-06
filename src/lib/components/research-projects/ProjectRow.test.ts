@@ -2,11 +2,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import ProjectRow from "./ProjectRow.svelte";
+import rawSource from "./ProjectRow.svelte?raw";
 import { buildProjectRailRow } from "$lib/ui/research-projects-rail";
 import type { ProjectSummary } from "$lib/types/projects";
 
 afterEach(cleanup);
 
+const source = rawSource.replace(/\r\n/g, "\n");
 const NOW = 1_000_000_000;
 
 function summary(overrides: Partial<ProjectSummary> = {}): ProjectSummary {
@@ -26,6 +28,26 @@ function summary(overrides: Partial<ProjectSummary> = {}): ProjectSummary {
 }
 
 describe("ProjectRow", () => {
+  it("exposes the row as a v11 listbox option with selected and state attributes", () => {
+    const row = buildProjectRailRow(summary({ id: 5, name: "Act", pinned: true }), NOW);
+    const { container } = render(ProjectRow, { props: { row, variant: "active" } });
+
+    const option = screen.getByRole("option", { name: /Act/, selected: true });
+    expect(option).toBeTruthy();
+    const root = container.querySelector(".project-row");
+    expect(root?.getAttribute("data-variant")).toBe("active");
+    expect(root?.getAttribute("data-pinned")).toBe("true");
+    expect(root?.getAttribute("data-archived")).toBe("false");
+    expect(root?.getAttribute("data-compact")).toBe("false");
+  });
+
+  it("keeps v11 focus and hover affordance hooks in source", () => {
+    expect(source).toContain(":focus-visible");
+    expect(source).toContain('aria-selected={variant === "active"}');
+    expect(source).toContain("Действия проекта");
+    expect(source).not.toContain("progress");
+  });
+
   it("renders the project name and meta", () => {
     const row = buildProjectRailRow(
       summary({ name: "Беларусь", source_count: 10, status: "ready" }),
@@ -90,6 +112,12 @@ describe("ProjectRow", () => {
     const row = buildProjectRailRow(summary(), NOW);
     render(ProjectRow, { props: { row } });
     expect(screen.getByTitle("Действия")).toBeTruthy();
+  });
+
+  it("names the row menu trigger with the project for screen readers", () => {
+    const row = buildProjectRailRow(summary({ name: "Menu" }), NOW);
+    render(ProjectRow, { props: { row } });
+    expect(screen.getByRole("button", { name: "Действия проекта Menu" })).toBeTruthy();
   });
 
   it("opens the menu and forwards edit / pin / delete-request actions", async () => {
