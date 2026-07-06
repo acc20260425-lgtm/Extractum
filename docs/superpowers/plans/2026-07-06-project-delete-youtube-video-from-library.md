@@ -165,10 +165,10 @@ async fn sqlite_ignores_foreign_keys_pragma_inside_open_transaction() {
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml tx::tests::begin_immediate_with_foreign_keys_enforces_cascade tx::tests::sqlite_ignores_foreign_keys_pragma_inside_open_transaction
+cargo test --manifest-path src-tauri/Cargo.toml tx::tests::begin_immediate_with_foreign_keys_enforces_cascade
 ```
 
-Expected: the first test fails to compile because `begin_immediate_with_foreign_keys` is missing; the second test may pass after the compile error is fixed.
+Expected: FAIL to compile because `begin_immediate_with_foreign_keys` is missing.
 
 - [ ] **Step 3: Implement FK setup in `src-tauri/src/tx.rs`**
 
@@ -346,7 +346,8 @@ pub(crate) async fn delete_source_row_on_connection(
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml tx::tests::begin_immediate_with_foreign_keys_enforces_cascade tx::tests::sqlite_ignores_foreign_keys_pragma_inside_open_transaction sources::store::tests::delete_source_from_pool_enables_foreign_keys_and_cascades_dependents
+cargo test --manifest-path src-tauri/Cargo.toml tx::tests::
+cargo test --manifest-path src-tauri/Cargo.toml sources::store::tests::delete_source_from_pool_enables_foreign_keys_and_cascades_dependents
 ```
 
 Expected: PASS.
@@ -386,11 +387,55 @@ async fn count_rows(pool: &sqlx::SqlitePool, sql: &str) -> i64 {
         .await
         .unwrap_or_else(|error| panic!("count query failed: {sql}: {error}"))
 }
+
+fn quote_sqlite_identifier(identifier: &str) -> String {
+    format!("\"{}\"", identifier.replace('"', "\"\""))
+}
 ```
 
 Add these tests:
 
 ```rust
+#[tokio::test]
+async fn project_scoped_delete_schema_source_foreign_keys_are_delete_safe() {
+    use sqlx::Row;
+
+    let pool = pool().await;
+    let tables: Vec<String> = sqlx::query_scalar(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("list sqlite tables");
+
+    let mut unsafe_refs = Vec::new();
+    for table in tables {
+        let pragma = format!("PRAGMA foreign_key_list({})", quote_sqlite_identifier(&table));
+        let rows = sqlx::query(&pragma)
+            .fetch_all(&pool)
+            .await
+            .unwrap_or_else(|error| panic!("foreign_key_list for {table}: {error}"));
+        for row in rows {
+            let target_table: String = row.try_get("table").expect("target table");
+            if target_table != "sources" {
+                continue;
+            }
+            let from_column: String = row.try_get("from").expect("from column");
+            let on_delete: String = row.try_get("on_delete").expect("on_delete action");
+            let delete_safe = matches!(on_delete.as_str(), "CASCADE" | "SET NULL")
+                || (table == "project_sources" && on_delete == "RESTRICT");
+            if !delete_safe {
+                unsafe_refs.push(format!("{table}.{from_column} -> sources ON DELETE {on_delete}"));
+            }
+        }
+    }
+
+    assert!(
+        unsafe_refs.is_empty(),
+        "Every FK to sources(id) must be CASCADE/SET NULL, except project_sources.source_id RESTRICT handled by the project delete transaction: {unsafe_refs:?}"
+    );
+}
+
 #[tokio::test]
 async fn project_scoped_delete_removes_youtube_video_and_cascaded_materials() {
     let pool = pool().await;
@@ -574,7 +619,7 @@ Run:
 cargo test --manifest-path src-tauri/Cargo.toml projects::tests::project_scoped_delete
 ```
 
-Expected: FAIL to compile because `delete_project_youtube_video_source_from_library_in_pool` and DTOs are missing.
+Expected: FAIL to compile because `delete_project_youtube_video_source_from_library_in_pool` and DTOs are missing. The schema guard test is named with the same `project_scoped_delete` prefix so it runs under this filter.
 
 - [ ] **Step 3: Add backend DTOs in `src-tauri/src/projects/mod.rs`**
 
@@ -792,7 +837,7 @@ Run:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml projects::tests::project_scoped_delete
-cargo test --manifest-path src-tauri/Cargo.toml sources::store::tests::delete_source_is_blocked_when_source_is_used_by_project sources::store::tests::delete_source_from_pool_enables_foreign_keys_and_cascades_dependents
+cargo test --manifest-path src-tauri/Cargo.toml sources::store::tests::delete_source
 ```
 
 Expected: PASS.
@@ -988,6 +1033,9 @@ import type { DeleteProjectYoutubeVideoSourceOutcome } from "$lib/types/projects
 Add near `selectedProjectSourcesSyncDisabledReason`:
 
 ```ts
+export const PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM =
+  "Delete this YouTube video from the project and Library? The app will cancel the deletion if another project still uses it. This will remove its transcript, comments, and stored materials.";
+
 export function selectedProjectSourceLibraryDeleteDisabledReason(
   rows: Pick<ProjectSourceLinkView, "provider" | "subtype">[],
 ) {
@@ -1014,50 +1062,81 @@ export function projectSourceLibraryDeleteStatus(
 
 - [ ] **Step 7: Add workflow tests in `src/lib/ui/research-projects-workflow.test.ts`**
 
-Add mocked dependency `deleteProjectYoutubeVideoSourceFromLibrary` to the test setup object:
+Extend the model import at the top of the test file:
+
+```ts
+import {
+  PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM,
+  buildProjectSourceLinksView,
+} from "./research-projects-model";
+```
+
+Add mocked dependencies to `createDeps`:
 
 ```ts
 deleteProjectYoutubeVideoSourceFromLibrary: vi.fn(),
 confirm: vi.fn(() => true),
 ```
 
+Add this helper near `createDeps`:
+
+```ts
+function createStateWithSelectedYoutubeVideoSource() {
+  const state = createInitialState();
+  state.selectedProjectId = "project:1";
+  state.projectsRaw = [project()];
+  state.projectSources = [projectSource()];
+  state.projectSourceLinks = buildProjectSourceLinksView("project:1", state.projectSources);
+  return state;
+}
+```
+
 Add tests:
 
 ```ts
 it("does not call delete command when confirmation is cancelled", async () => {
-  const { workflow, deps } = setupWorkflowWithProjectSource({
-    confirm: vi.fn(() => false),
-  });
+  const state = createStateWithSelectedYoutubeVideoSource();
+  const deps = createDeps(state);
+  deps.confirm.mockReturnValueOnce(false);
+  const workflow = createResearchProjectsWorkflow(deps);
 
   await workflow.deleteProjectYoutubeVideoSourceFromLibrary(10);
 
+  expect(deps.confirm).toHaveBeenCalledWith(PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM);
   expect(deps.deleteProjectYoutubeVideoSourceFromLibrary).not.toHaveBeenCalled();
 });
 
 it("deletes one project youtube video source from library and refreshes workspace", async () => {
-  const { workflow, deps, state } = setupWorkflowWithProjectSource();
+  const state = createStateWithSelectedYoutubeVideoSource();
+  const deps = createDeps(state);
   deps.deleteProjectYoutubeVideoSourceFromLibrary.mockResolvedValueOnce({
     status: "deleted",
     blocking_projects: [],
     remaining_blocking_project_count: 0,
   });
+  deps.listProjects.mockResolvedValue([project()]);
+  deps.listProjectSources.mockResolvedValue([projectSource()]);
+  deps.listLibraryCatalog.mockResolvedValue({ sources: [], filter_counts: [] });
+  deps.listProjectRuns.mockResolvedValue([]);
+  deps.listPromptTemplates.mockResolvedValue([]);
+  deps.listSourceJobs.mockResolvedValue([]);
+  const workflow = createResearchProjectsWorkflow(deps);
 
   await workflow.deleteProjectYoutubeVideoSourceFromLibrary(10);
 
-  expect(deps.confirm).toHaveBeenCalledWith(
-    "Delete this YouTube video from the project and Library? The app will cancel the deletion if another project still uses it. This will remove its transcript, comments, and stored materials.",
-  );
+  expect(deps.confirm).toHaveBeenCalledWith(PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM);
   expect(deps.deleteProjectYoutubeVideoSourceFromLibrary).toHaveBeenCalledWith({
     projectId: 1,
     sourceId: 10,
   });
   expect(state.status).toBe("Source deleted from project and Library.");
-  expect(deps.listLibraryCatalog).toHaveBeenCalledTimes(2);
+  expect(deps.listLibraryCatalog).toHaveBeenCalledTimes(1);
   expect(deps.listProjectSources).toHaveBeenCalled();
 });
 
 it("keeps current project membership when backend reports blocking projects", async () => {
-  const { workflow, deps, state } = setupWorkflowWithProjectSource();
+  const state = createStateWithSelectedYoutubeVideoSource();
+  const deps = createDeps(state);
   deps.deleteProjectYoutubeVideoSourceFromLibrary.mockResolvedValueOnce({
     status: "blocked_by_other_projects",
     blocking_projects: [
@@ -1067,74 +1146,15 @@ it("keeps current project membership when backend reports blocking projects", as
     ],
     remaining_blocking_project_count: 1,
   });
+  const workflow = createResearchProjectsWorkflow(deps);
 
   await workflow.deleteProjectYoutubeVideoSourceFromLibrary(10);
 
   expect(state.status).toBe(
     "Cannot delete from Library: source is used by other projects: Alpha, Beta, Gamma, and 1 more.",
   );
-  expect(deps.listLibraryCatalog).toHaveBeenCalledTimes(1);
+  expect(deps.listLibraryCatalog).toHaveBeenCalledTimes(0);
 });
-```
-
-Use the existing test setup shape. If there is no `setupWorkflowWithProjectSource`, add this helper to the test file:
-
-```ts
-function setupWorkflowWithProjectSource(overrides: Partial<ResearchProjectsWorkflowDeps> = {}) {
-  const state: ResearchProjectsWorkflowState = {
-    projectsRaw: [{ id: 1, name: "Project", description: null, created_at: 1, updated_at: 1 }],
-    projectSources: [
-      {
-        project_id: 1,
-        source_id: 10,
-        provider: "youtube",
-        source_subtype: "video",
-        title: "Video",
-        subtitle: null,
-        item_count: 1,
-        added_at: 1,
-        last_synced_at: null,
-        sync_status: "active",
-        handle: "video-10",
-      },
-    ],
-    runs: [],
-    libraryCatalogRecords: [],
-    sourceJobs: [],
-    promptTemplates: [],
-    projects: [],
-    librarySources: [],
-    projectSourceLinks: [],
-    selectedProjectId: "project:1",
-    selectedLibrarySourceIds: new Set(),
-    loading: false,
-    saving: false,
-    status: "",
-  };
-  const deps = {
-    getState: () => state,
-    patch: (patch: Partial<ResearchProjectsWorkflowState>) => Object.assign(state, patch),
-    listProjects: vi.fn(async () => state.projectsRaw),
-    listProjectSources: vi.fn(async () => state.projectSources),
-    listLibraryCatalog: vi.fn(async () => ({ sources: [] })),
-    listProjectRuns: vi.fn(async () => []),
-    listPromptTemplates: vi.fn(async () => []),
-    listSourceJobs: vi.fn(async () => []),
-    addProjectSources: vi.fn(),
-    removeProjectSources: vi.fn(),
-    deleteProjectYoutubeVideoSourceFromLibrary: vi.fn(),
-    createProject: vi.fn(),
-    updateProject: vi.fn(),
-    deleteProject: vi.fn(),
-    startProjectAnalysis: vi.fn(),
-    syncYoutubeSource: vi.fn(),
-    confirm: vi.fn(() => true),
-    formatError: (_action: string, error: unknown) => String(error),
-    ...overrides,
-  } satisfies ResearchProjectsWorkflowDeps;
-  const workflow = createResearchProjectsWorkflow(deps);
-  return { workflow, deps, state };
-}
 ```
 
 - [ ] **Step 8: Implement workflow helper in `src/lib/ui/research-projects-workflow.ts`**
@@ -1142,6 +1162,7 @@ function setupWorkflowWithProjectSource(overrides: Partial<ResearchProjectsWorkf
 Extend imports:
 
 ```ts
+PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM,
 projectSourceLibraryDeleteStatus,
 selectedProjectSourceLibraryDeleteDisabledReason,
 ```
@@ -1160,13 +1181,6 @@ deleteProjectYoutubeVideoSourceFromLibrary(
   input: DeleteProjectYoutubeVideoSourceInput,
 ): Promise<DeleteProjectYoutubeVideoSourceOutcome>;
 confirm(message: string): boolean;
-```
-
-Add the confirmation copy constant near the top:
-
-```ts
-export const PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM =
-  "Delete this YouTube video from the project and Library? The app will cancel the deletion if another project still uses it. This will remove its transcript, comments, and stored materials.";
 ```
 
 Add method before `setStatus`:
@@ -1320,25 +1334,25 @@ async function handleDeleteSelectedSourceFromLibrary() {
   if (libraryDeleteDisabledReason || selectedRows.length !== 1) return;
   const [source] = selectedRows;
   await onDeleteProjectSourceFromLibrary(source.sourceNumericId);
-  selectedIds = [];
+  onSelectedSourceIdsChange([]);
 }
 ```
 
 - [ ] **Step 4: Add the `Delete from Library` button in the selected-source toolbar**
 
-Place this button near the existing `Remove` button:
+Place this `ExtractumButton` near the existing `Remove` button:
 
 ```svelte
-<button
-  type="button"
-  class="sources-tab__toolbar-button sources-tab__toolbar-button--danger"
+<ExtractumButton
+  variant="destructive"
   disabled={saving || libraryDeleteDisabledReason !== null}
   title={libraryDeleteDisabledReason ?? ""}
+  aria-label="Delete selected YouTube video from Library"
   onclick={() => void handleDeleteSelectedSourceFromLibrary()}
 >
-  <Trash2 size={18} aria-hidden="true" />
+  <Trash2 size={12} aria-hidden="true" />
   Delete from Library
-</button>
+</ExtractumButton>
 ```
 
 Use the existing toolbar button element style in `SourcesTab.svelte`; the required props are `disabled`, `title`, `onclick`, icon, and the visible label `Delete from Library`.
@@ -1488,6 +1502,12 @@ Expected: FAIL because the new props and dialog are missing.
 
 - [ ] **Step 3: Add `SourcesBulkBar.svelte` props and dialog state**
 
+Add import:
+
+```ts
+import { PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM } from "$lib/ui/research-projects-model";
+```
+
 Extend props:
 
 ```ts
@@ -1536,7 +1556,7 @@ Add separate dialog after the existing remove dialog:
 <ExtractumDialog bind:open={libraryDeleteConfirmOpen} title="Delete from Library">
   <div class="sources-bulk-bar__confirm">
     <p>
-      Delete this YouTube video from the project and Library? The app will cancel the deletion if another project still uses it. This will remove its transcript, comments, and stored materials.
+      {PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM}
     </p>
     <footer>
       <ExtractumButton
@@ -1703,7 +1723,9 @@ Expected: PASS.
 Run:
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml tx::tests::begin_immediate_with_foreign_keys_enforces_cascade tx::tests::sqlite_ignores_foreign_keys_pragma_inside_open_transaction sources::store::tests::delete_source_from_pool_enables_foreign_keys_and_cascades_dependents projects::tests::project_scoped_delete
+cargo test --manifest-path src-tauri/Cargo.toml tx::tests::
+cargo test --manifest-path src-tauri/Cargo.toml sources::store::tests::delete_source
+cargo test --manifest-path src-tauri/Cargo.toml projects::tests::project_scoped_delete
 ```
 
 Expected: PASS.
@@ -1762,7 +1784,7 @@ Final response must include exact commands run and whether each passed. Mention 
 
 ## Plan Self-Review
 
-**Spec coverage:** Covered the new project-scoped Tauri command, structured outcome, FK setup before `BEGIN IMMEDIATE`, delete lock reuse, validation errors, active/archived blocking projects, payload cap, playlist `SET NULL`, cascade cleanup, standalone delete semantics, API wrapper, workflow helper, model helper, both UI locations, confirmation, success/blocked statuses, and final validation commands.
+**Spec coverage:** Covered the new project-scoped Tauri command, structured outcome, FK setup before `BEGIN IMMEDIATE`, delete lock reuse, validation errors, active/archived blocking projects, payload cap, playlist `SET NULL`, cascade cleanup plus schema-wide FK guard, standalone delete semantics, API wrapper, workflow helper, model helper, both UI locations, shared confirmation copy, success/blocked statuses, and final validation commands.
 
 **Placeholder scan:** The plan uses concrete function names, copy, file paths, commands, and code snippets. It avoids deferred implementation markers.
 
