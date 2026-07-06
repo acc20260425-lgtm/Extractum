@@ -9,6 +9,7 @@
     addProjectSources,
     createProject,
     deleteProject,
+    deleteProjectYoutubeVideoSourceFromLibrary,
     listProjectRuns,
     listProjectSources,
     listProjects,
@@ -57,6 +58,8 @@
     deleteProject,
     startProjectAnalysis,
     syncYoutubeSource,
+    deleteProjectYoutubeVideoSourceFromLibrary,
+    confirm: (message) => window.confirm(message),
     formatError: formatAppError,
   });
 
@@ -175,6 +178,7 @@
     onSelectedLibrarySourceIdsChange={(ids) => (state.selectedLibrarySourceIds = new Set(ids))}
     onRefreshProjectRuns={workflow.loadWorkspace}
     onSyncSelectedSources={workflow.syncProjectSources}
+    onDeleteProjectSourceFromLibrary={workflow.deleteProjectYoutubeVideoSourceFromLibrary}
     onSetStatus={workflow.setStatus}
   />
 </section>

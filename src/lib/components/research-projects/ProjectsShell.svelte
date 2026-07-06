@@ -36,6 +36,7 @@
     onSelectedLibrarySourceIdsChange,
     onRefreshProjectRuns,
     onSyncSelectedSources,
+    onDeleteProjectSourceFromLibrary = async (_sourceId: number) => {},
     onSetStatus,
   }: {
     state: ResearchProjectsWorkflowState;
@@ -53,6 +54,7 @@
     onSelectedLibrarySourceIdsChange: (ids: string[]) => void;
     onRefreshProjectRuns: () => void | Promise<void>;
     onSyncSelectedSources: (sourceIds: number[]) => void | Promise<void>;
+    onDeleteProjectSourceFromLibrary?: (sourceId: number) => void | Promise<void>;
     onSetStatus: (message: string) => void;
   } = $props();
 
@@ -406,6 +408,7 @@
           onOpenConnectLibrary={openConnectLibrary}
           onRefreshProjectRuns={onRefreshProjectRuns}
           onRemoveSource={onRemoveProjectSource}
+          {onDeleteProjectSourceFromLibrary}
           {onSyncSelectedSources}
         />
       {/if}

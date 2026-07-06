@@ -18,6 +18,10 @@ import workspaceSource from "$lib/components/research-projects/ProjectWorkspace.
 import youtubeSummaryRunsPanelSource from "$lib/components/research-projects/YoutubeSummaryRunsPanel.svelte?raw";
 
 const baseStylesSource = readFileSync(resolve(process.cwd(), "src/lib/styles/base.css"), "utf8");
+const projectsListRouteSource = readFileSync(
+  resolve(process.cwd(), "src/routes/projects/list/+page.svelte"),
+  "utf8",
+);
 
 describe("projects mvp route contract", () => {
   it("uses real project APIs instead of analysis source group APIs", () => {
@@ -111,11 +115,30 @@ describe("projects mvp route contract", () => {
     expect(pageSource).toContain("onSetStatus={workflow.setStatus}");
     expect(pageSource).not.toContain("onSourcesChanged={(ids)");
 
-    const listPageSource = readFileSync(resolve(process.cwd(), "src/routes/projects/list/+page.svelte"), "utf8");
-    expect(listPageSource).toContain("onConnectAddedProjectSource={workflow.connectAddedProjectSource}");
-    expect(listPageSource).toContain("onConnectAddedProjectSources={workflow.connectAddedProjectSources}");
-    expect(listPageSource).toContain("onConnectExistingProjectSource={workflow.connectExistingProjectSource}");
-    expect(listPageSource).toContain("onSetStatus={workflow.setStatus}");
+    expect(projectsListRouteSource).toContain("onConnectAddedProjectSource={workflow.connectAddedProjectSource}");
+    expect(projectsListRouteSource).toContain("onConnectAddedProjectSources={workflow.connectAddedProjectSources}");
+    expect(projectsListRouteSource).toContain("onConnectExistingProjectSource={workflow.connectExistingProjectSource}");
+    expect(projectsListRouteSource).toContain("onSetStatus={workflow.setStatus}");
+  });
+
+  it("wires project source Library delete through the main projects route", () => {
+    expect(pageSource).toContain("deleteProjectYoutubeVideoSourceFromLibrary");
+    expect(pageSource).toContain(
+      "onDeleteProjectSourceFromLibrary={workflow.deleteProjectYoutubeVideoSourceFromLibrary}",
+    );
+  });
+
+  it("wires project source Library delete through the list projects route", () => {
+    expect(projectsListRouteSource).toContain("deleteProjectYoutubeVideoSourceFromLibrary");
+    expect(projectsListRouteSource).toContain(
+      "onDeleteProjectSourceFromLibrary={workflow.deleteProjectYoutubeVideoSourceFromLibrary}",
+    );
+  });
+
+  it("keeps Remove membership-only and adds a separate Delete from Library action", () => {
+    expect(sourcesTabSource).toContain("Delete from Library");
+    expect(sourcesTabSource).toContain("onDeleteProjectSourceFromLibrary");
+    expect(sourcesTabSource).toContain("onRemoveSource");
   });
 
   it("wires the project Add source dialog through the next Projects route", () => {

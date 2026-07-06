@@ -27,6 +27,7 @@
     onOpenConnectLibrary,
     onRefreshProjectRuns,
     onRemoveSource,
+    onDeleteProjectSourceFromLibrary = async (_sourceId: number) => {},
     onSyncSelectedSources,
   }: {
     project: ResearchProjectView | null;
@@ -41,6 +42,7 @@
     onOpenConnectLibrary: () => void;
     onRefreshProjectRuns: () => void | Promise<void>;
     onRemoveSource: (sourceId: number | number[]) => void | Promise<void>;
+    onDeleteProjectSourceFromLibrary?: (sourceId: number) => void | Promise<void>;
     onSyncSelectedSources: (sourceIds: number[]) => void | Promise<void>;
   } = $props();
 
@@ -97,6 +99,7 @@
         {onOpenAddSource}
         {onOpenConnectLibrary}
         {onRemoveSource}
+        {onDeleteProjectSourceFromLibrary}
         {onSyncSelectedSources}
       />
     </ExtractumTabsContent>

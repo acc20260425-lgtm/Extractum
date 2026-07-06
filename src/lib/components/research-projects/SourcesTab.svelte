@@ -10,7 +10,10 @@
     ProjectSourceLinkView,
     ResearchProjectView,
   } from "$lib/ui/research-projects-model";
-  import { selectedProjectSourcesSyncDisabledReason } from "$lib/ui/research-projects-model";
+  import {
+    selectedProjectSourceLibraryDeleteDisabledReason,
+    selectedProjectSourcesSyncDisabledReason,
+  } from "$lib/ui/research-projects-model";
   import LibrarySourceCell from "./LibrarySourceCell.svelte";
   import ProjectSourceSummary from "./ProjectSourceSummary.svelte";
 
@@ -31,6 +34,7 @@
     onOpenAddSource,
     onOpenConnectLibrary,
     onRemoveSource,
+    onDeleteProjectSourceFromLibrary = async (_sourceId: number) => {},
     onSyncSelectedSources,
   }: {
     project: ResearchProjectView | null;
@@ -42,6 +46,7 @@
     onOpenAddSource: () => void;
     onOpenConnectLibrary: () => void;
     onRemoveSource: (sourceId: number | number[]) => void | Promise<void>;
+    onDeleteProjectSourceFromLibrary?: (sourceId: number) => void | Promise<void>;
     onSyncSelectedSources: (sourceIds: number[]) => void | Promise<void>;
   } = $props();
 
@@ -74,6 +79,9 @@
   );
   let selectedRowIdsInProject = $derived(selectedRows.map((row) => row.id));
   let syncDisabledReason = $derived(selectedProjectSourcesSyncDisabledReason(selectedRows));
+  let libraryDeleteDisabledReason = $derived(
+    selectedProjectSourceLibraryDeleteDisabledReason(selectedRows),
+  );
   let syncAllDisabledReason = $derived(project ? selectedProjectSourcesSyncDisabledReason(rows) : "Select a project");
 
   async function handleSyncSelected() {
@@ -84,6 +92,13 @@
   async function handleSyncAll() {
     if (syncAllDisabledReason) return;
     await onSyncSelectedSources(rows.map((row) => row.sourceNumericId));
+  }
+
+  async function handleDeleteSelectedSourceFromLibrary() {
+    if (libraryDeleteDisabledReason || selectedRows.length !== 1) return;
+    const [source] = selectedRows;
+    await onDeleteProjectSourceFromLibrary(source.sourceNumericId);
+    onSelectedSourceIdsChange([]);
   }
 
   async function handleRemoveSelected() {
@@ -128,6 +143,16 @@
           >
             <Download size={12} aria-hidden="true" />
             Export
+          </ExtractumButton>
+          <ExtractumButton
+            variant="destructive"
+            disabled={saving || libraryDeleteDisabledReason !== null}
+            title={libraryDeleteDisabledReason ?? ""}
+            aria-label="Delete selected YouTube video from Library"
+            onclick={() => void handleDeleteSelectedSourceFromLibrary()}
+          >
+            <Trash2 size={12} aria-hidden="true" />
+            Delete from Library
           </ExtractumButton>
           <ExtractumButton
             variant="destructive"

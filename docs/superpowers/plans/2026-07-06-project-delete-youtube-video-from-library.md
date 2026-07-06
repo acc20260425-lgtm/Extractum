@@ -1265,7 +1265,7 @@ git commit -m "feat: add project source library delete frontend helpers"
 - Consumes: workflow method `deleteProjectYoutubeVideoSourceFromLibrary(sourceId: number)`
 - Consumes: model helper `selectedProjectSourceLibraryDeleteDisabledReason`
 
-- [ ] **Step 1: Add failing route contract tests**
+- [x] **Step 1: Add failing route contract tests**
 
 In `src/lib/research-projects-route-contract.test.ts`, add tests that assert both current routes import and pass the new command:
 
@@ -1295,7 +1295,7 @@ it("keeps Remove membership-only and adds a separate Delete from Library action"
 });
 ```
 
-- [ ] **Step 2: Run the route contract tests and verify they fail**
+- [x] **Step 2: Run the route contract tests and verify they fail**
 
 Run:
 
@@ -1305,7 +1305,7 @@ npm.cmd run test -- src/lib/research-projects-route-contract.test.ts
 
 Expected: FAIL because the route and component wiring is missing.
 
-- [ ] **Step 3: Add `SourcesTab.svelte` prop and derived disabled state**
+- [x] **Step 3: Add `SourcesTab.svelte` prop and derived disabled state**
 
 In `SourcesTab.svelte`, import the helper:
 
@@ -1344,7 +1344,7 @@ async function handleDeleteSelectedSourceFromLibrary() {
 }
 ```
 
-- [ ] **Step 4: Add the `Delete from Library` button in the selected-source toolbar**
+- [x] **Step 4: Add the `Delete from Library` button in the selected-source toolbar**
 
 Place this `ExtractumButton` near the existing `Remove` button:
 
@@ -1363,7 +1363,7 @@ Place this `ExtractumButton` near the existing `Remove` button:
 
 Use the existing toolbar button element style in `SourcesTab.svelte`; the required props are `disabled`, `title`, `onclick`, icon, and the visible label `Delete from Library`.
 
-- [ ] **Step 5: Thread the callback through workspace components**
+- [x] **Step 5: Thread the callback through workspace components**
 
 In `ProjectWorkspace.svelte`, add prop:
 
@@ -1389,7 +1389,7 @@ Pass it to `ProjectWorkspace`:
 onDeleteProjectSourceFromLibrary={onDeleteProjectSourceFromLibrary}
 ```
 
-- [ ] **Step 6: Wire route dependencies**
+- [x] **Step 6: Wire route dependencies**
 
 In both `src/routes/projects/+page.svelte` and `src/routes/projects/list/+page.svelte`, import:
 
@@ -1410,7 +1410,7 @@ Pass the callback to `ProjectsShell`:
 onDeleteProjectSourceFromLibrary={workflow.deleteProjectYoutubeVideoSourceFromLibrary}
 ```
 
-- [ ] **Step 7: Run Task 4 tests**
+- [x] **Step 7: Run Task 4 tests**
 
 Run:
 
@@ -1420,7 +1420,7 @@ npm.cmd run test -- src/lib/research-projects-route-contract.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit Task 4**
+- [x] **Step 8: Commit Task 4**
 
 Run:
 
