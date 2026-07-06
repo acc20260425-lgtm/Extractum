@@ -59,7 +59,6 @@
     startProjectAnalysis,
     syncYoutubeSource,
     deleteProjectYoutubeVideoSourceFromLibrary,
-    confirm: (message) => window.confirm(message),
     formatError: formatAppError,
   });
 

@@ -143,6 +143,11 @@ describe("projects mvp route contract", () => {
     expect(sourcesTabSource).toContain("Delete from Library");
     expect(sourcesTabSource).toContain("onDeleteProjectSourceFromLibrary");
     expect(sourcesTabSource).toContain("onRemoveSource");
+    expect(sourcesTabSource).toContain("PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM");
+    expect(sourcesTabSource).toContain("Cancel Library deletion");
+    expect(sourcesTabSource).toContain("Delete from Library permanently");
+    expect(pageSource).not.toContain("confirm: (message) => window.confirm(message)");
+    expect(projectsListRouteSource).not.toContain("confirm: (message) => window.confirm(message)");
   });
 
   it("wires the project Add source dialog through the next Projects route", () => {

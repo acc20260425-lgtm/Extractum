@@ -3,6 +3,7 @@
   import {
     ExtractumButton,
     ExtractumDataGrid,
+    ExtractumDialog,
   } from "$lib/components/extractum-ui";
   import type { ExtractumDataGridColumn } from "$lib/components/extractum-ui";
   import type {
@@ -11,6 +12,7 @@
     ResearchProjectView,
   } from "$lib/ui/research-projects-model";
   import {
+    PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM,
     selectedProjectSourceLibraryDeleteDisabledReason,
     selectedProjectSourcesSyncDisabledReason,
   } from "$lib/ui/research-projects-model";
@@ -83,6 +85,7 @@
     selectedProjectSourceLibraryDeleteDisabledReason(selectedRows),
   );
   let syncAllDisabledReason = $derived(project ? selectedProjectSourcesSyncDisabledReason(rows) : "Select a project");
+  let libraryDeleteConfirmOpen = $state(false);
 
   async function handleSyncSelected() {
     if (syncDisabledReason) return;
@@ -94,9 +97,18 @@
     await onSyncSelectedSources(rows.map((row) => row.sourceNumericId));
   }
 
-  async function handleDeleteSelectedSourceFromLibrary() {
-    if (libraryDeleteDisabledReason || selectedRows.length !== 1) return;
+  function openDeleteSelectedSourceFromLibraryConfirm() {
+    if (saving || libraryDeleteDisabledReason || selectedRows.length !== 1) return;
+    libraryDeleteConfirmOpen = true;
+  }
+
+  async function confirmDeleteSelectedSourceFromLibrary() {
+    if (saving || libraryDeleteDisabledReason || selectedRows.length !== 1) {
+      libraryDeleteConfirmOpen = false;
+      return;
+    }
     const [source] = selectedRows;
+    libraryDeleteConfirmOpen = false;
     await onDeleteProjectSourceFromLibrary(source.sourceNumericId);
     onSelectedSourceIdsChange([]);
   }
@@ -149,7 +161,7 @@
             disabled={saving || libraryDeleteDisabledReason !== null}
             title={libraryDeleteDisabledReason ?? ""}
             aria-label="Delete selected YouTube video from Library"
-            onclick={() => void handleDeleteSelectedSourceFromLibrary()}
+            onclick={openDeleteSelectedSourceFromLibraryConfirm}
           >
             <Trash2 size={12} aria-hidden="true" />
             Delete from Library
@@ -223,6 +235,28 @@
     />
   </div>
 </section>
+
+<ExtractumDialog bind:open={libraryDeleteConfirmOpen} title="Delete from Library">
+  <div class="sources-tab__library-delete-confirm">
+    <p>{PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM}</p>
+    <footer>
+      <ExtractumButton
+        type="button"
+        variant="outline"
+        onclick={() => (libraryDeleteConfirmOpen = false)}
+      >
+        Cancel Library deletion
+      </ExtractumButton>
+      <ExtractumButton
+        type="button"
+        variant="destructive"
+        onclick={() => void confirmDeleteSelectedSourceFromLibrary()}
+      >
+        Delete from Library permanently
+      </ExtractumButton>
+    </footer>
+  </div>
+</ExtractumDialog>
 
 <style>
   .sources-tab {
@@ -347,5 +381,19 @@
     min-width: 0;
     max-width: 100%;
     flex: 1;
+  }
+
+  .sources-tab__library-delete-confirm {
+    display: flex;
+    min-width: min(420px, calc(100vw - 96px));
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .sources-tab__library-delete-confirm footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
   }
 </style>

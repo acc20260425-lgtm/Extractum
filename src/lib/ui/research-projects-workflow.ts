@@ -10,7 +10,6 @@ import {
   connectableSelection,
   projectIdFromViewId,
   projectViewId,
-  PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM,
   projectSourceLibraryDeleteStatus,
   selectedProjectSourceLibraryDeleteDisabledReason,
   selectedProjectSourcesSyncDisabledReason,
@@ -69,7 +68,6 @@ export interface ResearchProjectsWorkflowDeps {
   deleteProject(projectId: number): Promise<void>;
   startProjectAnalysis(input: ProjectAnalysisStartCommand): Promise<number>;
   syncYoutubeSource(sourceId: number, options: YoutubeSyncOptions): Promise<SourceJobRecord>;
-  confirm(message: string): boolean;
   formatError(action: string, error: unknown): string;
 }
 
@@ -288,10 +286,6 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
     const disabledReason = selectedProjectSourceLibraryDeleteDisabledReason(row ? [row] : []);
     if (disabledReason) {
       deps.patch({ status: disabledReason });
-      return;
-    }
-
-    if (!deps.confirm(PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM)) {
       return;
     }
 

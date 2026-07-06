@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { connectedSourceIdsForProject } from "./project-add-source-workflow";
-import {
-  PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM,
-  buildProjectSourceLinksView,
-} from "./research-projects-model";
+import { buildProjectSourceLinksView } from "./research-projects-model";
 import { createResearchProjectsWorkflow, type ResearchProjectsWorkflowState } from "./research-projects-workflow";
 import type { AnalysisPromptTemplate, AnalysisRunSummary } from "$lib/types/analysis";
 import type { LibraryCatalogRecord, LibrarySourceRecord } from "$lib/types/library-sources";
@@ -184,7 +181,6 @@ function createDeps(state: ResearchProjectsWorkflowState) {
     deleteProject: vi.fn(),
     startProjectAnalysis: vi.fn(),
     syncYoutubeSource: vi.fn(),
-    confirm: vi.fn(() => true),
     formatError: vi.fn((action: string, error: unknown) => `Error ${action}: ${String(error)}`),
   };
 }
@@ -466,18 +462,6 @@ describe("research projects workflow", () => {
     expect(deps.listSourceJobs).toHaveBeenCalled();
   });
 
-  it("does not call project source Library delete when confirmation is cancelled", async () => {
-    const state = createStateWithSelectedYoutubeVideoSource();
-    const deps = createDeps(state);
-    deps.confirm.mockReturnValueOnce(false);
-    const workflow = createResearchProjectsWorkflow(deps);
-
-    await workflow.deleteProjectYoutubeVideoSourceFromLibrary(10);
-
-    expect(deps.confirm).toHaveBeenCalledWith(PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM);
-    expect(deps.deleteProjectYoutubeVideoSourceFromLibrary).not.toHaveBeenCalled();
-  });
-
   it("deletes one project YouTube video source from Library and refreshes workspace", async () => {
     const state = createStateWithSelectedYoutubeVideoSource();
     const deps = createDeps(state);
@@ -496,7 +480,6 @@ describe("research projects workflow", () => {
 
     await workflow.deleteProjectYoutubeVideoSourceFromLibrary(10);
 
-    expect(deps.confirm).toHaveBeenCalledWith(PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM);
     expect(deps.deleteProjectYoutubeVideoSourceFromLibrary).toHaveBeenCalledWith({
       projectId: 1,
       sourceId: 10,
