@@ -46,7 +46,14 @@
     onActivateSource?: (id: string) => void;
     onSelectedSourceIdsChange?: (ids: string[]) => void;
   } = $props();
+
+  function handleWindowKeydown(event: KeyboardEvent) {
+    if (event.key !== "Escape" || !inspector || inspector.open === false) return;
+    inspector.onToggle?.();
+  }
 </script>
+
+<svelte:window onkeydown={handleWindowKeydown} />
 
 <div class="research-projects-shell">
   <aside class="research-projects-shell__rail">

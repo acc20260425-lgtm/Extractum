@@ -177,6 +177,27 @@ describe("ResearchProjectsShell", () => {
     expect(onToggle).toHaveBeenCalledOnce();
   });
 
+  it("closes the open inspector with Escape", async () => {
+    const onToggle = vi.fn();
+    render(ResearchProjectsShell, {
+      props: {
+        railPanel: { summaries: [], selectedProjectId: null, now: NOW },
+        selectedProjectId: null,
+        inspector: {
+          open: true,
+          selected: null,
+          periodLabel: "Р’РµСЃСЊ РїРµСЂРёРѕРґ",
+          promptLabel: "РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ",
+          modelLabel: "gpt-4.1",
+          onToggle,
+        },
+      },
+    });
+
+    await fireEvent.keyDown(window, { key: "Escape" });
+    expect(onToggle).toHaveBeenCalledOnce();
+  });
+
   it("renders the run dock for the selected project", () => {
     expect(shellSource).toContain("<RunDock");
     expect(shellSource).toContain("{...runDock}");

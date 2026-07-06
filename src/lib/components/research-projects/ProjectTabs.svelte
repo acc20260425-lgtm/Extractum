@@ -25,16 +25,49 @@
     active: ProjectSectionId;
     onSelect?: (id: ProjectSectionId) => void;
   } = $props();
+
+  function focusTab(event: KeyboardEvent, index: number) {
+    const tabs = Array.from(
+      (event.currentTarget as HTMLElement)
+        .closest('[role="tablist"]')
+        ?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [],
+    );
+    tabs[index]?.focus();
+  }
+
+  function handleTabKeydown(event: KeyboardEvent, index: number) {
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowRight") {
+      nextIndex = (index + 1) % PROJECT_SECTIONS.length;
+    } else if (event.key === "ArrowLeft") {
+      nextIndex = (index - 1 + PROJECT_SECTIONS.length) % PROJECT_SECTIONS.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = PROJECT_SECTIONS.length - 1;
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onSelect?.(PROJECT_SECTIONS[index].id);
+      return;
+    }
+
+    if (nextIndex === null) return;
+    event.preventDefault();
+    focusTab(event, nextIndex);
+    onSelect?.(PROJECT_SECTIONS[nextIndex].id);
+  }
 </script>
 
 <div class="project-tabs" role="tablist" aria-label="Разделы проекта">
-  {#each PROJECT_SECTIONS as section (section.id)}
+  {#each PROJECT_SECTIONS as section, index (section.id)}
     <button
       type="button"
       role="tab"
       class="project-tabs__tab"
       aria-selected={active === section.id}
+      tabindex={active === section.id ? 0 : -1}
       onclick={() => onSelect?.(section.id)}
+      onkeydown={(event) => handleTabKeydown(event, index)}
     >
       {section.label}
     </button>

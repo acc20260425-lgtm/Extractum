@@ -33,6 +33,52 @@ describe("ProjectTabs", () => {
     expect(onSelect).toHaveBeenCalledWith("reports");
   });
 
+  it("uses roving tabindex for keyboard tab navigation", () => {
+    render(ProjectTabs, { props: { active: "sources" } });
+
+    expect(screen.getByRole("tab", { name: PROJECT_SECTIONS[1].label }).getAttribute("tabindex")).toBe(
+      "0",
+    );
+    expect(screen.getByRole("tab", { name: PROJECT_SECTIONS[0].label }).getAttribute("tabindex")).toBe("-1");
+    expect(screen.getByRole("tab", { name: PROJECT_SECTIONS[2].label }).getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("selects adjacent tabs with arrow keys", async () => {
+    const onSelect = vi.fn();
+    render(ProjectTabs, { props: { active: "sources", onSelect } });
+    const sources = screen.getByRole("tab", { name: PROJECT_SECTIONS[1].label });
+
+    await fireEvent.keyDown(sources, { key: "ArrowRight" });
+    expect(onSelect).toHaveBeenLastCalledWith("evidence");
+
+    await fireEvent.keyDown(sources, { key: "ArrowLeft" });
+    expect(onSelect).toHaveBeenLastCalledWith("overview");
+  });
+
+  it("selects first and last tabs with Home and End", async () => {
+    const onSelect = vi.fn();
+    render(ProjectTabs, { props: { active: "sources", onSelect } });
+    const sources = screen.getByRole("tab", { name: PROJECT_SECTIONS[1].label });
+
+    await fireEvent.keyDown(sources, { key: "End" });
+    expect(onSelect).toHaveBeenLastCalledWith("prompts");
+
+    await fireEvent.keyDown(sources, { key: "Home" });
+    expect(onSelect).toHaveBeenLastCalledWith("overview");
+  });
+
+  it("selects the focused tab with Enter and Space", async () => {
+    const onSelect = vi.fn();
+    render(ProjectTabs, { props: { active: "sources", onSelect } });
+    const reports = screen.getByRole("tab", { name: PROJECT_SECTIONS[3].label });
+
+    await fireEvent.keyDown(reports, { key: "Enter" });
+    expect(onSelect).toHaveBeenLastCalledWith("reports");
+
+    await fireEvent.keyDown(reports, { key: " " });
+    expect(onSelect).toHaveBeenLastCalledWith("reports");
+  });
+
   it("keeps the v11 compact tab row contract", () => {
     expect(source).toContain("height: 40px");
     expect(source).toContain("box-shadow: inset 0 -2px 0 var(--extractum-primary)");
