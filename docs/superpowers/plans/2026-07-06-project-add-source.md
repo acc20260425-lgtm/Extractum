@@ -114,6 +114,21 @@ describe("project add-source workflow", () => {
     expect(d.setProjectAddSourceStatus).toHaveBeenCalledWith("Already in Library. Connected to project.");
   });
 
+  it("does not claim a connection when the backend reports no changed or existing rows", async () => {
+    const d = deps();
+    d.addProjectSources.mockResolvedValue({ added_count: 0, already_present_count: 0 });
+
+    await connectProjectSourceIds({
+      projectId: 7,
+      sourceIds: [10],
+      origin: "new_source",
+      deps: d,
+    });
+
+    expect(d.setProjectAddSourceStatus).not.toHaveBeenCalled();
+    expect(d.refreshAfterProjectSourceConnect).toHaveBeenCalledOnce();
+  });
+
   it("refreshes and reports scalar missing source ID without connecting", async () => {
     const d = deps();
 
@@ -261,7 +276,7 @@ function outcomeStatus(outcome: AddProjectSourcesOutcome, origin: ProjectAddSour
   if (outcome.already_present_count > 0) {
     return "Already connected to this project.";
   }
-  return "Already connected to this project.";
+  return null;
 }
 
 export async function connectProjectSourceIds({
@@ -288,7 +303,10 @@ export async function connectProjectSourceIds({
   deps.setProjectAddSourceSaving(true);
   try {
     const outcome = await deps.addProjectSources({ projectId, sourceIds: normalizedSourceIds });
-    deps.setProjectAddSourceStatus(outcomeStatus(outcome, origin));
+    const status = outcomeStatus(outcome, origin);
+    if (status !== null) {
+      deps.setProjectAddSourceStatus(status);
+    }
     await deps.refreshAfterProjectSourceConnect();
   } catch (error) {
     if (origin === "new_source") {
@@ -343,6 +361,12 @@ Expected: commit succeeds.
 
 Append these tests to `src/lib/ui/research-projects-workflow.test.ts` inside the existing `describe` block:
 
+Also add this import at the top of the file:
+
+```ts
+import { connectedSourceIdsForProject } from "./project-add-source-workflow";
+```
+
 ```ts
   it("connects a newly added scalar Library source to the selected project", async () => {
     const state = createInitialState();
@@ -362,6 +386,26 @@ Append these tests to `src/lib/ui/research-projects-workflow.test.ts` inside the
     expect(deps.addProjectSources).toHaveBeenCalledWith({ projectId: 1, sourceIds: [10] });
     expect(state.status).toBe("Source added and connected to project.");
     expect(deps.listLibraryCatalog).toHaveBeenCalled();
+    expect(connectedSourceIdsForProject(state.projectSources, 1).has(10)).toBe(true);
+  });
+
+  it("updates connectedSourceIds backing state after a dialog connect while the dialog can remain open", async () => {
+    const state = createInitialState();
+    state.selectedProjectId = "project:1";
+    state.projectSources = [];
+    const deps = createDeps(state);
+    deps.addProjectSources.mockResolvedValue({ added_count: 1, already_present_count: 0 });
+    deps.listProjects.mockResolvedValue([project()]);
+    deps.listProjectSources.mockResolvedValue([projectSource({ source_id: 10 })]);
+    deps.listLibraryCatalog.mockResolvedValue({ sources: [libraryCatalogRecord()], filter_counts: [] });
+    deps.listProjectRuns.mockResolvedValue([]);
+    deps.listPromptTemplates.mockResolvedValue([]);
+    deps.listSourceJobs.mockResolvedValue([]);
+
+    const workflow = createResearchProjectsWorkflow(deps);
+    await workflow.connectAddedProjectSource(10);
+
+    expect([...connectedSourceIdsForProject(state.projectSources, 1)]).toEqual([10]);
   });
 
   it("connects newly added playlist videos in one batch", async () => {
@@ -431,6 +475,25 @@ Append these tests to `src/lib/ui/research-projects-workflow.test.ts` inside the
 
     const workflow = createResearchProjectsWorkflow(deps);
     await workflow.connectExistingProjectSource(10);
+
+    expect(deps.addProjectSources).toHaveBeenCalledWith({ projectId: 1, sourceIds: [10] });
+    expect(state.status).toBe("Already connected to this project.");
+  });
+
+  it("handles returned existing source IDs from scalar provider flows such as Telegram", async () => {
+    const state = createInitialState();
+    state.selectedProjectId = "project:1";
+    const deps = createDeps(state);
+    deps.addProjectSources.mockResolvedValue({ added_count: 0, already_present_count: 1 });
+    deps.listProjects.mockResolvedValue([project()]);
+    deps.listProjectSources.mockResolvedValue([projectSource({ source_id: 10 })]);
+    deps.listLibraryCatalog.mockResolvedValue({ sources: [libraryCatalogRecord()], filter_counts: [] });
+    deps.listProjectRuns.mockResolvedValue([]);
+    deps.listPromptTemplates.mockResolvedValue([]);
+    deps.listSourceJobs.mockResolvedValue([]);
+
+    const workflow = createResearchProjectsWorkflow(deps);
+    await workflow.connectAddedProjectSource(10);
 
     expect(deps.addProjectSources).toHaveBeenCalledWith({ projectId: 1, sourceIds: [10] });
     expect(state.status).toBe("Already connected to this project.");
@@ -585,22 +648,35 @@ Append these tests to `src/lib/library-add-source-contract.test.ts`:
   });
 
   it("passes project context through the YouTube add-source tree", () => {
-    expect(dialogSource).toContain("<LibraryYoutubeAddPanel {sources} {onSourcesChanged} {onStatus} {projectContext}");
-    expect(youtubePanelSource).toContain("<LibraryYoutubeSmartImport {sources} {onSourcesChanged} {onStatus} {projectContext}");
-    expect(youtubePanelSource).toContain("<LibraryYoutubePlaylistImport {sources} {onSourcesChanged} {onStatus} {projectContext}");
+    expect(dialogSource).toMatch(/<LibraryYoutubeAddPanel[\s\S]*\{projectContext\}/);
+    expect(youtubePanelSource).toMatch(/<LibraryYoutubeSmartImport[\s\S]*\{projectContext\}/);
+    expect(youtubePanelSource).toMatch(/<LibraryYoutubePlaylistImport[\s\S]*\{projectContext\}/);
   });
 
   it("allows Smart import duplicates to connect existing Library sources in project mode", () => {
     expect(smartImportSource).toContain("canConnectExistingSmartImportSource");
     expect(smartImportSource).toContain("projectContext.onConnectExistingSource(existingSmartImportSource.sourceId)");
     expect(smartImportSource).toContain("Connect to project");
+    expect(smartImportSource).toContain("Connecting...");
     expect(smartImportSource).toContain("Already connected to this project");
+  });
+
+  it("keeps Smart import playlists on the scalar source callback path", () => {
+    expect(smartImportSource).toContain('materializePlaylistVideos: preview.kind !== "playlist"');
+    expect(smartImportSource).toContain("await onSourcesChanged(source.id)");
   });
 
   it("connects all added playlist video source IDs through the project batch callback", () => {
     expect(playlistImportSource).toContain('result.status === "added"');
     expect(playlistImportSource).toContain("projectContext.onConnectAddedSources(addedSourceIds)");
-    expect(playlistImportSource).toContain("await onSourcesChanged(summary.results.find((result) => result.sourceId !== null)?.sourceId ?? undefined)");
+    expect(playlistImportSource).toContain("await onSourcesChanged(");
+    expect(playlistImportSource).toContain("summary.results.find((result) => result.sourceId !== null)?.sourceId ?? undefined");
+  });
+
+  it("keeps Telegram project connection on the scalar callback path", () => {
+    expect(dialogSource).toMatch(/<LibraryTelegramDialogImport[\s\S]*\{onSourcesChanged\}[\s\S]*\{onStatus\}/);
+    expect(dialogSource).not.toMatch(/<LibraryTelegramDialogImport[\s\S]*\{projectContext\}/);
+    expect(telegramImportSource).toContain("await onSourcesChanged(source.id)");
   });
 ```
 
@@ -639,6 +715,8 @@ Leave Telegram as:
 ```svelte
         <LibraryTelegramDialogImport {onSourcesChanged} {onStatus} />
 ```
+
+Telegram does not need `projectContext`: in project mode the host passes `onSourcesChanged={connectAddedProjectSource}`, so both newly created and backend-reused Telegram source IDs enter the same scalar project connect helper.
 
 - [ ] **Step 4: Extend `LibraryYoutubeAddPanel.svelte` props and pass context**
 
@@ -716,7 +794,13 @@ Replace the duplicate branch in `addSource()` with:
           onStatus("Already connected to this project.");
           return;
         }
-        await projectContext.onConnectExistingSource(existingSmartImportSource.sourceId);
+        adding = true;
+        status = "";
+        try {
+          await projectContext.onConnectExistingSource(existingSmartImportSource.sourceId);
+        } finally {
+          adding = false;
+        }
         return;
       }
       status = `Already in Library: ${existingSmartImportSource.title}`;
@@ -746,7 +830,7 @@ Change the action button disabled expression and label to:
             {#if existingSmartImportSourceConnected}
               Already connected to this project
             {:else if existingSmartImportSource && projectContext}
-              Connect to project
+              {adding ? "Connecting..." : "Connect to project"}
             {:else if existingSmartImportSource}
               Already in Library
             {:else}
@@ -853,6 +937,9 @@ Append these tests to `src/lib/research-projects-route-contract.test.ts`:
     expect(shellSource).toContain("LibraryAddSourceDialog");
     expect(shellSource).toContain("addSourceOpen");
     expect(shellSource).toContain("projectAddSourceContext");
+    expect(shellSource).toContain("let connectedSourceIds = $derived(");
+    expect(shellSource).toContain("connectedSourceIdsForProject(workflowState.projectSources");
+    expect(shellSource).toContain("let projectAddSourceContext = $derived<ProjectAddSourceContext | undefined>");
     expect(shellSource).toContain("buildLibraryCatalogSourcesView");
     expect(shellSource).toContain("connectedSourceIdsForProject");
     expect(shellSource).toContain("onConnectAddedProjectSource");
@@ -1089,6 +1176,8 @@ Add these assertions to the route contract test created in Task 4:
     expect(nextPageSource).toContain("connectAddedProjectSources");
     expect(nextPageSource).toContain("connectExistingProjectSource");
     expect(nextPageSource).toContain("projectAddSourceContext");
+    expect(nextPageSource).toContain("let connectedSourceIds = $derived(connectedSourceIdsForProject(sources, selectedProjectId))");
+    expect(nextPageSource).toContain("formatError: formatAppError");
     expect(nextPageSource).toContain("onConnectFromLibrary: () => void openConnectSources()");
     expect(nextPageSource).toContain("onAddSource: () => (addSourceOpen = true)");
 ```
@@ -1188,6 +1277,7 @@ Add imports:
 
 ```ts
   import LibraryAddSourceDialog from "$lib/components/research-projects/LibraryAddSourceDialog.svelte";
+  import { formatAppError } from "$lib/app-error";
   import { buildLibraryCatalogSourcesView } from "$lib/ui/library-catalog-model";
   import type { ProjectAddSourceContext } from "$lib/ui/project-add-source-context";
   import {
@@ -1237,7 +1327,7 @@ Add helper deps and wrappers before `openConnectSources()`:
       setProjectAddSourceStatus: (status) => {
         railState = { ...railState, status };
       },
-      formatError: (action, error) => `РќРµ СѓРґР°Р»РѕСЃСЊ РІС‹РїРѕР»РЅРёС‚СЊ: ${action} (${String(error)})`,
+      formatError: formatAppError,
     };
   }
 
