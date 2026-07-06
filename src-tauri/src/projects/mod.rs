@@ -6,6 +6,11 @@ use tauri::AppHandle;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::library_sources::LibraryCatalogStatus;
+use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
+use crate::sources::{
+    delete_source_row_on_connection, require_source_identity_ready, SourceIdentityRepairState,
+};
+use crate::tx::{begin_immediate_with_foreign_keys, commit, rollback};
 use crate::youtube::jobs::SourceJobState;
 
 #[allow(unused_imports)]
@@ -65,6 +70,27 @@ fn project_source_handle(external_id: Option<String>) -> Option<String> {
 pub struct AddProjectSourcesOutcome {
     pub added_count: i64,
     pub already_present_count: i64,
+}
+
+#[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DeleteProjectYoutubeVideoSourceStatus {
+    Deleted,
+    BlockedByOtherProjects,
+}
+
+#[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
+pub struct BlockingProjectReference {
+    pub project_id: i64,
+    pub title: String,
+    pub archived: bool,
+}
+
+#[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
+pub struct DeleteProjectYoutubeVideoSourceOutcome {
+    pub status: DeleteProjectYoutubeVideoSourceStatus,
+    pub blocking_projects: Vec<BlockingProjectReference>,
+    pub remaining_blocking_project_count: i64,
 }
 
 fn normalize_project_name(name: &str) -> AppResult<String> {
@@ -514,6 +540,142 @@ pub(crate) async fn delete_project_in_pool(
     Ok(())
 }
 
+#[derive(sqlx::FromRow)]
+struct BlockingProjectRow {
+    project_id: i64,
+    title: String,
+    archived: i64,
+}
+
+pub(crate) async fn delete_project_youtube_video_source_from_library_in_pool(
+    pool: &sqlx::SqlitePool,
+    project_id: i64,
+    source_id: i64,
+) -> AppResult<DeleteProjectYoutubeVideoSourceOutcome> {
+    let mut conn = begin_immediate_with_foreign_keys(pool).await?;
+
+    let result: AppResult<DeleteProjectYoutubeVideoSourceOutcome> = async {
+        let source: Option<(String, Option<String>)> =
+            sqlx::query_as("SELECT source_type, source_subtype FROM sources WHERE id = ?")
+                .bind(source_id)
+                .fetch_optional(&mut *conn)
+                .await
+                .map_err(AppError::database)?;
+
+        let Some((provider, subtype)) = source else {
+            return Err(AppError::not_found(format!("Source {source_id} not found")));
+        };
+        if provider != "youtube" || subtype.as_deref() != Some("video") {
+            return Err(AppError::validation(
+                "Only YouTube video sources can be deleted from Library here",
+            ));
+        }
+
+        let project_exists: i64 =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM projects WHERE id = ?)")
+                .bind(project_id)
+                .fetch_one(&mut *conn)
+                .await
+                .map_err(AppError::database)?;
+        if project_exists == 0 {
+            return Err(AppError::not_found(format!(
+                "Project {project_id} not found"
+            )));
+        }
+
+        let linked: i64 = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM project_sources WHERE project_id = ? AND source_id = ?)",
+        )
+        .bind(project_id)
+        .bind(source_id)
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(AppError::database)?;
+        if linked == 0 {
+            return Err(AppError::validation(format!(
+                "Source {source_id} is not linked to project {project_id}"
+            )));
+        }
+
+        let blocking_rows: Vec<BlockingProjectRow> = sqlx::query_as(
+            r#"
+            SELECT p.id AS project_id,
+                   p.name AS title,
+                   CASE WHEN p.archived_at IS NULL THEN 0 ELSE 1 END AS archived
+            FROM project_sources ps
+            JOIN projects p ON p.id = ps.project_id
+            WHERE ps.source_id = ? AND ps.project_id <> ?
+            ORDER BY p.name COLLATE NOCASE ASC, p.id ASC
+            "#,
+        )
+        .bind(source_id)
+        .bind(project_id)
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(AppError::database)?;
+
+        if !blocking_rows.is_empty() {
+            let total = blocking_rows.len();
+            let blocking_projects = blocking_rows
+                .into_iter()
+                .take(3)
+                .map(|row| BlockingProjectReference {
+                    project_id: row.project_id,
+                    title: row.title,
+                    archived: row.archived != 0,
+                })
+                .collect::<Vec<_>>();
+            return Ok(DeleteProjectYoutubeVideoSourceOutcome {
+                status: DeleteProjectYoutubeVideoSourceStatus::BlockedByOtherProjects,
+                blocking_projects,
+                remaining_blocking_project_count: total.saturating_sub(3) as i64,
+            });
+        }
+
+        sqlx::query("DELETE FROM project_sources WHERE project_id = ? AND source_id = ?")
+            .bind(project_id)
+            .bind(source_id)
+            .execute(&mut *conn)
+            .await
+            .map_err(AppError::database)?;
+        sqlx::query("UPDATE projects SET updated_at = ? WHERE id = ?")
+            .bind(crate::time::now_secs())
+            .bind(project_id)
+            .execute(&mut *conn)
+            .await
+            .map_err(AppError::database)?;
+
+        let deleted = delete_source_row_on_connection(&mut conn, source_id).await?;
+        if deleted == 0 {
+            return Err(AppError::not_found(format!("Source {source_id} not found")));
+        }
+
+        Ok(DeleteProjectYoutubeVideoSourceOutcome {
+            status: DeleteProjectYoutubeVideoSourceStatus::Deleted,
+            blocking_projects: Vec::new(),
+            remaining_blocking_project_count: 0,
+        })
+    }
+    .await;
+
+    match result {
+        Ok(outcome)
+            if outcome.status == DeleteProjectYoutubeVideoSourceStatus::BlockedByOtherProjects =>
+        {
+            rollback(&mut conn).await?;
+            Ok(outcome)
+        }
+        Ok(outcome) => {
+            commit(&mut conn).await?;
+            Ok(outcome)
+        }
+        Err(error) => {
+            let _ = rollback(&mut conn).await;
+            Err(error)
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn list_projects(handle: AppHandle) -> AppResult<Vec<ProjectRecord>> {
     let pool = get_pool(&handle).await?;
@@ -591,6 +753,22 @@ pub async fn remove_project_sources(
 ) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
     remove_project_sources_in_pool(&pool, project_id, source_ids).await
+}
+
+#[tauri::command]
+pub async fn delete_project_youtube_video_source_from_library(
+    handle: AppHandle,
+    repair_state: tauri::State<'_, SourceIdentityRepairState>,
+    ingest_locks: tauri::State<'_, SourceIngestLocks>,
+    project_id: i64,
+    source_id: i64,
+) -> AppResult<DeleteProjectYoutubeVideoSourceOutcome> {
+    require_source_identity_ready(repair_state.inner()).await?;
+    let _ingest_guard = ingest_locks
+        .try_acquire(source_id, SourceIngestKind::Delete)
+        .await?;
+    let pool = get_pool(&handle).await?;
+    delete_project_youtube_video_source_from_library_in_pool(&pool, project_id, source_id).await
 }
 
 #[tauri::command]
@@ -710,6 +888,17 @@ mod tests {
         .execute(pool)
         .await
         .expect("seed source");
+    }
+
+    async fn count_rows(pool: &sqlx::SqlitePool, sql: &str) -> i64 {
+        sqlx::query_scalar(sql)
+            .fetch_one(pool)
+            .await
+            .unwrap_or_else(|error| panic!("count query failed: {sql}: {error}"))
+    }
+
+    fn quote_sqlite_identifier(identifier: &str) -> String {
+        format!("\"{}\"", identifier.replace('"', "\"\""))
     }
 
     #[tokio::test]
@@ -936,6 +1125,258 @@ mod tests {
         assert_eq!(sources.len(), 1);
         assert_eq!(sources[0].source_id, 20);
         assert_eq!(sources[0].item_count, 2);
+    }
+
+    #[tokio::test]
+    async fn project_scoped_delete_schema_source_foreign_keys_are_delete_safe() {
+        use sqlx::Row;
+
+        let pool = pool().await;
+        let tables: Vec<String> = sqlx::query_scalar(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+        )
+        .fetch_all(&pool)
+        .await
+        .expect("list sqlite tables");
+
+        let mut unsafe_refs = Vec::new();
+        for table in tables {
+            let pragma = format!("PRAGMA foreign_key_list({})", quote_sqlite_identifier(&table));
+            let rows = sqlx::query(&pragma)
+                .fetch_all(&pool)
+                .await
+                .unwrap_or_else(|error| panic!("foreign_key_list for {table}: {error}"));
+            for row in rows {
+                let target_table: String = row.try_get("table").expect("target table");
+                if target_table != "sources" {
+                    continue;
+                }
+                let from_column: String = row.try_get("from").expect("from column");
+                let on_delete: String = row.try_get("on_delete").expect("on_delete action");
+                let delete_safe = matches!(on_delete.as_str(), "CASCADE" | "SET NULL")
+                    || (table == "project_sources" && on_delete == "RESTRICT");
+                if !delete_safe {
+                    unsafe_refs
+                        .push(format!("{table}.{from_column} -> sources ON DELETE {on_delete}"));
+                }
+            }
+        }
+
+        assert!(
+            unsafe_refs.is_empty(),
+            "Every FK to sources(id) must be CASCADE/SET NULL, except project_sources.source_id RESTRICT handled by the project delete transaction: {unsafe_refs:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn project_scoped_delete_removes_youtube_video_and_cascaded_materials() {
+        let pool = pool().await;
+        seed_source(&pool, 30, "youtube", "playlist").await;
+        seed_source(&pool, 31, "youtube", "video").await;
+        let project = create_project_in_pool(&pool, "Video project", None)
+            .await
+            .expect("create project");
+        add_project_sources_in_pool(&pool, project.id, vec![31])
+            .await
+            .expect("link video");
+        sqlx::query(
+            "INSERT INTO youtube_playlist_items (playlist_source_id, video_source_id, video_id, position, availability_status, is_removed_from_playlist) VALUES (30, 31, 'video-31', 1, 'available', 0)",
+        )
+        .execute(&pool)
+        .await
+        .expect("link playlist item");
+        sqlx::query(
+            "INSERT INTO items (id, source_id, external_id, author, published_at, ingested_at, content_zstd, item_kind) VALUES (310, 31, 'transcript-31', 'Author', 100, 101, x'01', 'youtube_transcript')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed transcript item");
+        sqlx::query(
+            "INSERT INTO youtube_transcript_segments (item_id, source_id, segment_index, start_ms, end_ms, text) VALUES (310, 31, 0, 0, 1000, 'hello')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed transcript segment");
+        sqlx::query(
+            "INSERT INTO analysis_documents (id, source_id, item_id, document_key, document_kind, source_type, source_subtype, external_id, author, published_at, ref, content_zstd, created_at, updated_at) VALUES (311, 31, 310, 'item:310', 'youtube_transcript', 'youtube', 'video', 'doc-31', 'Author', 100, '00:00', x'01', 100, 100)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed analysis document");
+
+        let outcome = delete_project_youtube_video_source_from_library_in_pool(
+            &pool, project.id, 31,
+        )
+        .await
+        .expect("delete project video source");
+
+        assert_eq!(outcome.status, DeleteProjectYoutubeVideoSourceStatus::Deleted);
+        assert!(outcome.blocking_projects.is_empty());
+        assert_eq!(outcome.remaining_blocking_project_count, 0);
+        assert_eq!(
+            count_rows(&pool, "SELECT COUNT(*) FROM sources WHERE id = 31").await,
+            0
+        );
+        assert_eq!(
+            count_rows(&pool, "SELECT COUNT(*) FROM project_sources WHERE source_id = 31").await,
+            0
+        );
+        assert_eq!(
+            count_rows(&pool, "SELECT COUNT(*) FROM items WHERE source_id = 31").await,
+            0
+        );
+        assert_eq!(
+            count_rows(
+                &pool,
+                "SELECT COUNT(*) FROM youtube_transcript_segments WHERE source_id = 31",
+            )
+            .await,
+            0
+        );
+        assert_eq!(
+            count_rows(
+                &pool,
+                "SELECT COUNT(*) FROM analysis_documents WHERE source_id = 31",
+            )
+            .await,
+            0
+        );
+
+        let detached: Option<i64> = sqlx::query_scalar(
+            "SELECT video_source_id FROM youtube_playlist_items WHERE video_id = 'video-31'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("load playlist item");
+        assert_eq!(detached, None);
+    }
+
+    #[tokio::test]
+    async fn project_scoped_delete_blocks_other_active_and_archived_projects_without_mutation() {
+        let pool = pool().await;
+        seed_source(&pool, 40, "youtube", "video").await;
+        let current = create_project_in_pool(&pool, "Current", None)
+            .await
+            .expect("create current project");
+        let active = create_project_in_pool(&pool, "Active blocker", None)
+            .await
+            .expect("create active project");
+        let archived = create_project_in_pool(&pool, "Archived blocker", None)
+            .await
+            .expect("create archived project");
+        set_project_archived_in_pool(&pool, archived.id, true)
+            .await
+            .expect("archive blocker");
+        add_project_sources_in_pool(&pool, current.id, vec![40])
+            .await
+            .expect("link current");
+        add_project_sources_in_pool(&pool, active.id, vec![40])
+            .await
+            .expect("link active");
+        add_project_sources_in_pool(&pool, archived.id, vec![40])
+            .await
+            .expect("link archived");
+
+        let outcome =
+            delete_project_youtube_video_source_from_library_in_pool(&pool, current.id, 40)
+                .await
+                .expect("blocked outcome");
+
+        assert_eq!(
+            outcome.status,
+            DeleteProjectYoutubeVideoSourceStatus::BlockedByOtherProjects
+        );
+        assert_eq!(
+            outcome
+                .blocking_projects
+                .iter()
+                .map(|project| project.title.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Active blocker", "Archived blocker"]
+        );
+        assert_eq!(outcome.remaining_blocking_project_count, 0);
+        assert_eq!(
+            count_rows(&pool, "SELECT COUNT(*) FROM sources WHERE id = 40").await,
+            1
+        );
+        assert_eq!(
+            count_rows(&pool, "SELECT COUNT(*) FROM project_sources WHERE source_id = 40").await,
+            3
+        );
+    }
+
+    #[tokio::test]
+    async fn project_scoped_delete_caps_blocking_projects_and_reports_remaining_count() {
+        let pool = pool().await;
+        seed_source(&pool, 50, "youtube", "video").await;
+        let current = create_project_in_pool(&pool, "Current", None)
+            .await
+            .expect("create current project");
+        add_project_sources_in_pool(&pool, current.id, vec![50])
+            .await
+            .expect("link current");
+        for name in ["Alpha", "Beta", "Gamma", "Omega", "Zeta"] {
+            let project = create_project_in_pool(&pool, name, None)
+                .await
+                .expect("create blocker");
+            add_project_sources_in_pool(&pool, project.id, vec![50])
+                .await
+                .expect("link blocker");
+        }
+
+        let outcome =
+            delete_project_youtube_video_source_from_library_in_pool(&pool, current.id, 50)
+                .await
+                .expect("blocked outcome");
+
+        assert_eq!(
+            outcome
+                .blocking_projects
+                .iter()
+                .map(|project| project.title.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Alpha", "Beta", "Gamma"]
+        );
+        assert_eq!(outcome.remaining_blocking_project_count, 2);
+    }
+
+    #[tokio::test]
+    async fn project_scoped_delete_rejects_invalid_sources_and_missing_links() {
+        let pool = pool().await;
+        seed_account(&pool, 1).await;
+        seed_source(&pool, 60, "youtube", "playlist").await;
+        seed_source(&pool, 61, "telegram", "supergroup").await;
+        seed_source(&pool, 62, "youtube", "video").await;
+        let project = create_project_in_pool(&pool, "Validation", None)
+            .await
+            .expect("create project");
+        add_project_sources_in_pool(&pool, project.id, vec![60, 61])
+            .await
+            .expect("link invalid types");
+
+        for (source_id, label) in [(60, "playlist"), (61, "telegram")] {
+            let error =
+                delete_project_youtube_video_source_from_library_in_pool(&pool, project.id, source_id)
+                    .await
+                    .expect_err("invalid source should be rejected");
+            assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+            assert!(
+                error.message.contains("Only YouTube video"),
+                "{label} should report a YouTube-video validation message"
+            );
+        }
+
+        let missing_link =
+            delete_project_youtube_video_source_from_library_in_pool(&pool, project.id, 62)
+                .await
+                .expect_err("missing link rejected");
+        assert_eq!(missing_link.kind, crate::error::AppErrorKind::Validation);
+
+        let missing_project =
+            delete_project_youtube_video_source_from_library_in_pool(&pool, 999_999, 62)
+                .await
+                .expect_err("missing project rejected");
+        assert_eq!(missing_project.kind, crate::error::AppErrorKind::NotFound);
     }
 
     #[tokio::test]

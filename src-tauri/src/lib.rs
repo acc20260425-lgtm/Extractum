@@ -19,7 +19,8 @@ mod readiness;
 mod topic_memberships;
 use migrations::{build_migrations, prepare_database};
 use projects::{
-    add_project_sources, create_project, delete_project, get_project_data_range, list_project_runs,
+    add_project_sources, create_project, delete_project,
+    delete_project_youtube_video_source_from_library, get_project_data_range, list_project_runs,
     list_project_sources, list_projects, list_research_projects, remove_project_sources,
     set_project_archived, set_project_pinned, start_project_analysis, update_project,
 };
@@ -232,6 +233,7 @@ pub fn run() {
             list_project_sources,
             add_project_sources,
             remove_project_sources,
+            delete_project_youtube_video_source_from_library,
             start_project_analysis,
             get_project_data_range,
             list_project_runs,

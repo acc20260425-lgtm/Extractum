@@ -367,6 +367,7 @@ git commit -m "fix: enforce sqlite foreign keys for source deletion"
 
 **Files:**
 - Modify: `src-tauri/src/projects/mod.rs`
+- Modify: `src-tauri/src/sources/mod.rs`
 - Modify: `src-tauri/src/lib.rs`
 - Modify: `docs/value-registry.md`
 
@@ -376,7 +377,7 @@ git commit -m "fix: enforce sqlite foreign keys for source deletion"
 - Produces: Tauri command `delete_project_youtube_video_source_from_library(project_id: i64, source_id: i64)`
 - Produces: Rust DTOs `DeleteProjectYoutubeVideoSourceOutcome`, `DeleteProjectYoutubeVideoSourceStatus`, `BlockingProjectReference`
 
-- [ ] **Step 1: Add failing backend tests in `src-tauri/src/projects/mod.rs`**
+- [x] **Step 1: Add failing backend tests in `src-tauri/src/projects/mod.rs`**
 
 In `mod tests`, add this helper:
 
@@ -616,7 +617,7 @@ If a future runtime-only table is created lazily outside migrations and referenc
 this guard will not see it. Any new table with a `sources(id)` foreign key should be added through
 migrations or covered by a dedicated runtime-schema test before relying on source deletion.
 
-- [ ] **Step 2: Run the backend command tests and verify they fail**
+- [x] **Step 2: Run the backend command tests and verify they fail**
 
 Run:
 
@@ -626,7 +627,7 @@ cargo test --manifest-path src-tauri/Cargo.toml projects::tests::project_scoped_
 
 Expected: FAIL to compile because `delete_project_youtube_video_source_from_library_in_pool` and DTOs are missing. The schema guard test is named with the same `project_scoped_delete` prefix so it runs under this filter.
 
-- [ ] **Step 3: Add backend DTOs in `src-tauri/src/projects/mod.rs`**
+- [x] **Step 3: Add backend DTOs in `src-tauri/src/projects/mod.rs`**
 
 Add after `AddProjectSourcesOutcome`:
 
@@ -662,7 +663,7 @@ use crate::sources::store::delete_source_row_on_connection;
 use crate::tx::{begin_immediate_with_foreign_keys, commit, rollback};
 ```
 
-- [ ] **Step 4: Add the in-pool delete implementation in `src-tauri/src/projects/mod.rs`**
+- [x] **Step 4: Add the in-pool delete implementation in `src-tauri/src/projects/mod.rs`**
 
 Add this helper before the command section:
 
@@ -798,7 +799,7 @@ pub(crate) async fn delete_project_youtube_video_source_from_library_in_pool(
 }
 ```
 
-- [ ] **Step 5: Add the Tauri command in `src-tauri/src/projects/mod.rs`**
+- [x] **Step 5: Add the Tauri command in `src-tauri/src/projects/mod.rs`**
 
 Add near the other `#[tauri::command]` functions:
 
@@ -820,7 +821,7 @@ pub async fn delete_project_youtube_video_source_from_library(
 }
 ```
 
-- [ ] **Step 6: Register the Tauri command in `src-tauri/src/lib.rs`**
+- [x] **Step 6: Register the Tauri command in `src-tauri/src/lib.rs`**
 
 Add the command to the `use crate::projects::{...}` import list and to `tauri::generate_handler![...]`:
 
@@ -828,7 +829,7 @@ Add the command to the `use crate::projects::{...}` import list and to `tauri::g
 delete_project_youtube_video_source_from_library,
 ```
 
-- [ ] **Step 7: Update `docs/value-registry.md`**
+- [x] **Step 7: Update `docs/value-registry.md`**
 
 In the `Library, projects, and source import UI` table, add this row:
 
@@ -836,7 +837,7 @@ In the `Library, projects, and source import UI` table, add this row:
 | Project YouTube video Library delete outcome | `DeleteProjectYoutubeVideoSourceOutcome.status` | `deleted`, `blocked_by_other_projects` | `src-tauri/src/projects/mod.rs`, `src/lib/types/projects.ts` | Tauri API response for project-scoped Library deletion. `deleted` is terminal success; `blocked_by_other_projects` is an expected non-error result when other projects still reference the source. |
 ```
 
-- [ ] **Step 8: Run Task 2 tests**
+- [x] **Step 8: Run Task 2 tests**
 
 Run:
 
@@ -847,7 +848,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::store::tests::delete_so
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit Task 2**
+- [x] **Step 9: Commit Task 2**
 
 Run:
 

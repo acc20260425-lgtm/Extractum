@@ -45,7 +45,8 @@ pub(crate) use items::{
 };
 pub(crate) use peer_resolution::{resolve_and_refresh_peer, ResolvedSyncPeer};
 pub(crate) use store::{
-    load_source, load_source_record, upsert_youtube_playlist_source, upsert_youtube_video_source,
+    delete_source_row_on_connection, load_source, load_source_record,
+    upsert_youtube_playlist_source, upsert_youtube_video_source,
 };
 pub(crate) use sync::finalize_sync;
 pub(crate) use types::{
