@@ -707,7 +707,7 @@ If `ProjectToolbar.svelte` or its test was not changed, omit those files from `g
 - Consumes the completed component updates.
 - Produces verification evidence before the branch is marked done.
 
-- [ ] **Step 1: Run focused frontend tests for the whole slice**
+- [x] **Step 1: Run focused frontend tests for the whole slice**
 
 Run:
 
@@ -717,7 +717,7 @@ npm.cmd run test -- src/lib/ui/research-projects-source-row.test.ts src/lib/comp
 
 Expected: PASS.
 
-- [ ] **Step 2: Run Svelte check**
+- [x] **Step 2: Run Svelte check**
 
 Run:
 
@@ -727,13 +727,13 @@ npm.cmd run check
 
 Expected: PASS with 0 errors.
 
-- [ ] **Step 3: Run Svelte MCP autofixer on changed Svelte components**
+- [x] **Step 3: Run Svelte MCP autofixer on changed Svelte components**
 
 For each changed `.svelte` file, call the official Svelte MCP `svelte_autofixer` with `desired_svelte_version: 5`. Use the component filename only and pass the complete current file contents as the `code` field; do not pass excerpts.
 
 Expected: no required fixes. If the autofixer reports an issue, patch the component, rerun the focused tests from Step 1, rerun `npm.cmd run check`, and rerun the autofixer for the patched component.
 
-- [ ] **Step 4: Verify the live `/projects/next` screen through Tauri MCP**
+- [x] **Step 4: Verify the live `/projects/next` screen through Tauri MCP**
 
 Use the existing Tauri MCP bridge session. If no session is active, connect to the app and navigate to `/projects/next`.
 
@@ -762,7 +762,7 @@ Expected: every configured source-table header reports `fits: true`. If a header
 2. use the existing shorter header copy already present in the app;
 3. increase only the relevant shared layout width and update `SOURCE_FILTER_ROW_GRID_TEMPLATE` tests.
 
-- [ ] **Step 5: Verify current interactions in Tauri MCP**
+- [x] **Step 5: Verify current interactions in Tauri MCP**
 
 In the live app:
 
@@ -775,7 +775,7 @@ In the live app:
 
 Expected: all entry points remain reachable and no visible overlap appears.
 
-- [ ] **Step 6: Commit verification fixes if any**
+- [x] **Step 6: Commit verification fixes if any**
 
 If Steps 1-5 required code changes, inspect `git status --short`, stage only the verification-fix files listed there, and commit:
 
@@ -792,8 +792,8 @@ If no files changed during verification, do not create an empty commit.
 
 ## Final Verification Before Completion
 
-- [ ] `npm.cmd run test -- src/lib/ui/research-projects-source-row.test.ts src/lib/components/research-projects/SourcesGrid.test.ts src/lib/components/research-projects/SourcesFilterRow.test.ts src/lib/components/research-projects/SourcesFilterBar.test.ts src/lib/components/research-projects/SourcesBulkBar.test.ts src/lib/components/research-projects/ProjectTabs.test.ts src/lib/components/research-projects/ProjectToolbar.test.ts src/lib/components/research-projects/ResearchProjectsShell.test.ts`
-- [ ] `npm.cmd run check`
-- [ ] Svelte MCP autofixer checked every changed `.svelte` component.
-- [ ] Tauri MCP screenshot/DOM verification confirms header text fits and no source-slice overlap exists.
-- [ ] `git status --short` shows only intentional files or known untracked local files.
+- [x] `npm.cmd run test -- src/lib/ui/research-projects-source-row.test.ts src/lib/components/research-projects/SourcesGrid.test.ts src/lib/components/research-projects/SourcesFilterRow.test.ts src/lib/components/research-projects/SourcesFilterBar.test.ts src/lib/components/research-projects/SourcesBulkBar.test.ts src/lib/components/research-projects/ProjectTabs.test.ts src/lib/components/research-projects/ProjectToolbar.test.ts src/lib/components/research-projects/ResearchProjectsShell.test.ts`
+- [x] `npm.cmd run check`
+- [x] Svelte MCP autofixer checked every changed `.svelte` component.
+- [x] Tauri MCP screenshot/DOM verification confirms header text fits and no source-slice overlap exists.
+- [x] `git status --short` shows only intentional files or known untracked local files.
