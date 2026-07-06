@@ -16,6 +16,11 @@ describe("SourcesGrid", () => {
     expect(source).toContain("<ExtractumDataGrid");
   });
 
+  it("keeps SVAR as the source table implementation", () => {
+    expect(source).toContain("<ExtractumDataGrid");
+    expect(source).not.toContain("<table");
+  });
+
   it("labels the grid and provides an empty overlay in Russian", () => {
     expect(source).toContain('ariaLabel="Источники проекта"');
     expect(source).toContain('overlay = "Нет источников"');

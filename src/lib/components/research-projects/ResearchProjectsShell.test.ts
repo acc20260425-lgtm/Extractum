@@ -146,9 +146,13 @@ describe("ResearchProjectsShell", () => {
   });
 
   it("renders the stats bar with the bulk overlay inside and the filter row above the grid", () => {
+    expect(shellSource).toContain("research-projects-shell__statsbar");
     expect(shellSource).toContain("<SourcesFilterBar");
+    expect(shellSource).toContain("<SourcesFilterBar {...filterBar} />");
     expect(shellSource).toContain("{...filterBar}");
+    expect(shellSource).toContain("<SourcesBulkBar {...bulkBar} />");
     expect(shellSource).toContain("<SourcesFilterRow");
+    expect(shellSource).toContain("<SourcesFilterRow {...filterRow} />");
     expect(shellSource).toContain("{...filterRow}");
     // bulk-бар живёт внутри statsbar-контейнера (overlay поверх фильтров)
     const statsIndex = shellSource.indexOf('class="research-projects-shell__statsbar"');

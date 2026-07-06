@@ -2,8 +2,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import ProjectTabs, { PROJECT_SECTIONS } from "./ProjectTabs.svelte";
+import rawSource from "./ProjectTabs.svelte?raw";
 
 afterEach(cleanup);
+
+const source = rawSource.replace(/\r\n/g, "\n");
 
 describe("ProjectTabs", () => {
   it("renders all six sections with Russian labels", () => {
@@ -28,5 +31,10 @@ describe("ProjectTabs", () => {
     render(ProjectTabs, { props: { active: "sources", onSelect } });
     await fireEvent.click(screen.getByRole("tab", { name: "Отчёты" }));
     expect(onSelect).toHaveBeenCalledWith("reports");
+  });
+
+  it("keeps the v11 compact tab row contract", () => {
+    expect(source).toContain("height: 40px");
+    expect(source).toContain("box-shadow: inset 0 -2px 0 var(--extractum-primary)");
   });
 });

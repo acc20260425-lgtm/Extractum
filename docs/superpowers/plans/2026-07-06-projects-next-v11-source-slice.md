@@ -509,7 +509,7 @@ git commit -m "style: polish projects source action bars"
 - Keeps existing Svelte component props unchanged.
 - Keeps SVAR DataGrid date formatting through raw values plus `dateTimeFormat`.
 
-- [ ] **Step 1: Add raw contract tests for v11 density and shell composition**
+- [x] **Step 1: Add raw contract tests for v11 density and shell composition**
 
 In `src/lib/components/research-projects/ProjectTabs.test.ts`, add:
 
@@ -546,7 +546,7 @@ In `src/lib/components/research-projects/SourcesGrid.test.ts`, add:
   });
 ```
 
-- [ ] **Step 2: Run focused tests before style changes**
+- [x] **Step 2: Run focused tests before style changes**
 
 Run:
 
@@ -556,7 +556,7 @@ npm.cmd run test -- src/lib/components/research-projects/ProjectTabs.test.ts src
 
 Expected: PASS for the existing composition checks and the current `ProjectTabs` raw assertions (`height: 40px` and active underline already exist). If this fails, stop and inspect the current component before editing; do not weaken the raw assertions.
 
-- [ ] **Step 3: Tighten `ResearchProjectsShell.svelte` seams**
+- [x] **Step 3: Tighten `ResearchProjectsShell.svelte` seams**
 
 Keep markup composition. Adjust styles:
 
@@ -586,7 +586,7 @@ Keep markup composition. Adjust styles:
 
 Do not change rail, inspector, or run dock styles in this task.
 
-- [ ] **Step 4: Tighten `ProjectTabs.svelte` styles**
+- [x] **Step 4: Tighten `ProjectTabs.svelte` styles**
 
 Keep existing labels and section ids. Ensure the style block contains:
 
@@ -624,7 +624,7 @@ Keep active-state underline:
   }
 ```
 
-- [ ] **Step 5: Adjust `ProjectToolbar.svelte` only for small visual mismatches**
+- [x] **Step 5: Adjust `ProjectToolbar.svelte` only for small visual mismatches**
 
 Before editing, compare the current toolbar screenshot with v11. If only spacing needs tightening, keep behavior and adjust:
 
@@ -639,7 +639,7 @@ Before editing, compare the current toolbar screenshot with v11. If only spacing
 
 Do not change popover behavior, selector state, or run-disabled logic.
 
-- [ ] **Step 6: Tune `SourcesGrid.svelte` wrapper styles with a scoped class**
+- [x] **Step 6: Tune `SourcesGrid.svelte` wrapper styles with a scoped class**
 
 Keep SVAR DataGrid. Add a local class to the `ExtractumDataGrid` invocation so source-table polish does not leak to Library, analysis, or other grids:
 
@@ -675,7 +675,7 @@ Add the source-table-only rules in `SourcesGrid.svelte`:
   }
 ```
 
-- [ ] **Step 7: Run focused tests**
+- [x] **Step 7: Run focused tests**
 
 Run:
 
@@ -685,7 +685,7 @@ npm.cmd run test -- src/lib/components/research-projects/ProjectTabs.test.ts src
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit Task 3**
+- [x] **Step 8: Commit Task 3**
 
 Run:
 

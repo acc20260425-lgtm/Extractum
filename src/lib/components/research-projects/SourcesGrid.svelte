@@ -69,6 +69,7 @@
 </script>
 
 <ExtractumDataGrid
+  class="sources-grid__table"
   {rows}
   {columns}
   {columnStyle}
@@ -88,5 +89,15 @@
      (returns a global class name). */
   :global(.extractum-grid-cell-right) {
     text-align: right;
+  }
+
+  :global(.sources-grid__table .wx-header .wx-cell) {
+    font-weight: 700;
+    color: var(--extractum-text);
+    background: var(--extractum-surface-subtle);
+  }
+
+  :global(.sources-grid__table .wx-row .wx-cell) {
+    border-color: color-mix(in srgb, var(--extractum-border) 72%, transparent);
   }
 </style>

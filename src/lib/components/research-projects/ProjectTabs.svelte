@@ -60,13 +60,13 @@
     padding: 0;
     border: none;
     background: transparent;
-    font: 500 13px/1 var(--extractum-font);
+    font: 600 13px/1 var(--extractum-font);
     color: var(--extractum-muted);
     cursor: pointer;
   }
 
   .project-tabs .project-tabs__tab[aria-selected="true"] {
-    font-weight: 600;
+    font-weight: 700;
     color: var(--extractum-primary);
     box-shadow: inset 0 -2px 0 var(--extractum-primary);
   }

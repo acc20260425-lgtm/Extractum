@@ -123,11 +123,13 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+    background: var(--extractum-surface);
   }
 
   .research-projects-shell__statsbar {
     position: relative;
     flex-shrink: 0;
+    min-height: 42px;
   }
 
   .research-projects-shell__section-placeholder {
@@ -142,6 +144,7 @@
     flex: 1;
     min-height: 0;
     min-width: 0;
+    background: var(--extractum-surface-raised);
   }
 
   .research-projects-shell__empty {
