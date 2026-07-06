@@ -28,6 +28,10 @@
     activeSourceId = null,
     onActivateSource,
     onSelectedSourceIdsChange,
+    keyboardNavigationEnabled = false,
+    onKeyboardActivateSource,
+    onKeyboardInspectSource,
+    onKeyboardEscape,
   }: {
     railPanel: ComponentProps<typeof ProjectRailPanel>;
     selectedProjectId: number | null;
@@ -45,6 +49,10 @@
     activeSourceId?: string | null;
     onActivateSource?: (id: string) => void;
     onSelectedSourceIdsChange?: (ids: string[]) => void;
+    keyboardNavigationEnabled?: boolean;
+    onKeyboardActivateSource?: (id: string) => void;
+    onKeyboardInspectSource?: (id: string) => void;
+    onKeyboardEscape?: () => boolean;
   } = $props();
 
   function handleWindowKeydown(event: KeyboardEvent) {
@@ -91,6 +99,10 @@
             {onSelectedSourceIdsChange}
             {activeSourceId}
             {onActivateSource}
+            {keyboardNavigationEnabled}
+            {onKeyboardActivateSource}
+            {onKeyboardInspectSource}
+            {onKeyboardEscape}
             overlay={gridOverlay}
           />
         </div>

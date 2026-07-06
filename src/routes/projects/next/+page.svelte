@@ -491,6 +491,12 @@
     }
   }
 
+  function handleSourceKeyboardEscape(): boolean {
+    if (!filtersOpen) return false;
+    filtersOpen = false;
+    return true;
+  }
+
   onMount(async () => {
     await workflow.reload();
     const templates = await listAnalysisPromptTemplates("report");
@@ -535,6 +541,7 @@
           onClearAll: () => (filters = emptySourceFilters()),
           shownCount: visibleSources.length,
           totalCount: sources.length,
+          keyboardHint: "↑↓ строка · Enter инспектор",
           onAddSource: () => (addSourceOpen = true),
           onConnectFromLibrary: () => void openConnectSources(),
         }
@@ -548,6 +555,13 @@
     {activeSourceId}
     onActivateSource={(id) => (activeSourceId = id)}
     onSelectedSourceIdsChange={(ids) => (selectedSourceIds = ids)}
+    keyboardNavigationEnabled={selectedProject !== null && activeSection === "sources" && !connectOpen && !addSourceOpen && !disconnectOpen}
+    onKeyboardActivateSource={(id) => (activeSourceId = id)}
+    onKeyboardInspectSource={(id) => {
+      activeSourceId = id;
+      inspectorOpen = true;
+    }}
+    onKeyboardEscape={handleSourceKeyboardEscape}
     toolbar={selectedProject
       ? {
           title: selectedProject.name,

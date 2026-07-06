@@ -117,7 +117,7 @@
     if (!activeRowId || !/^[\w:-]+$/.test(activeRowId)) return "";
     const rule =
       `background: color-mix(in srgb, var(--extractum-primary) 7%, var(--extractum-surface));` +
-      ` box-shadow: inset 2px 0 0 var(--extractum-primary);`;
+      ` box-shadow: inset 2px 0 0 var(--extractum-primary), inset 0 0 0 1px color-mix(in srgb, var(--extractum-primary) 30%, transparent);`;
     const scope = `.extractum-data-grid[data-grid-uid="${gridUid}"]`;
     return (
       `<style>` +

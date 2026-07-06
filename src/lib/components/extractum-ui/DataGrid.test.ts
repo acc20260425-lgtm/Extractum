@@ -9,4 +9,9 @@ describe("Extractum DataGrid", () => {
     expect(source).toContain("enhancedResponsive");
     expect(source).toContain("responsive={enhancedResponsive}");
   });
+
+  it("uses the v11 active-row focus ring", () => {
+    expect(source).toContain("inset 2px 0 0 var(--extractum-primary)");
+    expect(source).toContain("inset 0 0 0 1px");
+  });
 });

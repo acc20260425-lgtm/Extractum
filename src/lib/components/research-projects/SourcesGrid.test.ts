@@ -48,6 +48,18 @@ describe("SourcesGrid", () => {
     expect(source).toContain("onRowClick={onActivateSource}");
   });
 
+  it("wires keyboard navigation through rendered grid row order", () => {
+    expect(source).toContain("sourceKeyboardCommand");
+    expect(source).toContain("sourceGridRowIdsFromElement");
+    expect(source).toContain("isSourceKeyboardEditableTarget");
+    expect(source).toContain("<svelte:document onkeydown={handleDocumentKeydown} />");
+    expect(source).toContain("keyboardNavigationEnabled");
+    expect(source).toContain("onKeyboardActivateSource");
+    expect(source).toContain("onKeyboardInspectSource");
+    expect(source).toContain("onKeyboardEscape");
+    expect(source).toContain("scrollActiveSourceRowIntoView");
+  });
+
   it("adds a leading checkbox select column with a tri-state select-all header", () => {
     expect(source).toContain("SELECT_COLUMN");
     expect(source).toContain("cell: GridSelectCell");

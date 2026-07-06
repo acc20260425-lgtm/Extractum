@@ -10,6 +10,7 @@
     onClearAll,
     shownCount,
     totalCount,
+    keyboardHint,
     onAddSource,
     onConnectFromLibrary,
   }: {
@@ -21,6 +22,7 @@
     onClearAll?: () => void;
     shownCount: number;
     totalCount: number;
+    keyboardHint?: string;
     onAddSource?: () => void;
     onConnectFromLibrary?: () => void;
   } = $props();
@@ -71,6 +73,9 @@
       </button>
     {/if}
     <span class="sources-filter-bar__count">{shownCount} из {totalCount}</span>
+    {#if keyboardHint}
+      <span class="sources-filter-bar__keyboard-hint">{keyboardHint}</span>
+    {/if}
   </div>
   <div class="sources-filter-bar__actions">
     <button
@@ -191,6 +196,12 @@
   .sources-filter-bar__count {
     font: 500 11.5px/1 var(--extractum-font);
     color: var(--extractum-muted-2);
+  }
+
+  .sources-filter-bar__keyboard-hint {
+    font: 500 11px/1 var(--extractum-font);
+    color: var(--extractum-muted-2);
+    white-space: nowrap;
   }
 
   .sources-filter-bar__actions {

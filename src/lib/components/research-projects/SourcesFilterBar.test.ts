@@ -92,4 +92,10 @@ describe("SourcesFilterBar", () => {
     expect(connect.getAttribute("title")).toBe("Connect from Library");
     expect(connect.getAttribute("data-ui-action")).toBe("connect-library");
   });
+
+  it("shows the optional keyboard hint beside the row count", () => {
+    render(SourcesFilterBar, { props: { ...base, keyboardHint: "↑↓ строка · Enter инспектор" } });
+
+    expect(screen.getByText("↑↓ строка · Enter инспектор")).toBeTruthy();
+  });
 });
