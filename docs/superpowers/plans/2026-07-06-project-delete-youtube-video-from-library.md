@@ -1704,7 +1704,7 @@ git commit -m "feat: add library delete action to next project sources"
 - Consumes all previous task outputs.
 - Produces a verified branch ready for user review.
 
-- [ ] **Step 1: Run focused frontend tests**
+- [x] **Step 1: Run focused frontend tests**
 
 Run:
 
@@ -1714,7 +1714,7 @@ npm.cmd run test -- src/lib/api/projects.test.ts src/lib/ui/research-projects-mo
 
 Expected: PASS.
 
-- [ ] **Step 2: Run frontend type and Svelte checks**
+- [x] **Step 2: Run frontend type and Svelte checks**
 
 Run:
 
@@ -1724,7 +1724,7 @@ npm.cmd run check
 
 Expected: PASS.
 
-- [ ] **Step 3: Run focused Rust tests**
+- [x] **Step 3: Run focused Rust tests**
 
 Run:
 
@@ -1736,7 +1736,7 @@ cargo test --manifest-path src-tauri/Cargo.toml projects::tests::project_scoped_
 
 Expected: PASS.
 
-- [ ] **Step 4: Run Rust compile check**
+- [x] **Step 4: Run Rust compile check**
 
 Run:
 
@@ -1746,7 +1746,7 @@ cargo check --manifest-path src-tauri/Cargo.toml
 
 Expected: PASS.
 
-- [ ] **Step 5: Inspect worktree before final commit**
+- [x] **Step 5: Inspect worktree before final commit**
 
 Run:
 
@@ -1756,7 +1756,7 @@ git status --short
 
 Expected: only intended files from Tasks 1-5 are modified, plus no staged `.claude/settings.local.json`.
 
-- [ ] **Step 6: Commit verification fixes if any files changed**
+- [x] **Step 6: Commit verification fixes if any files changed**
 
 If verification required source fixes, run:
 
@@ -1767,7 +1767,7 @@ git commit -m "fix: polish project source library deletion"
 
 If no files changed after Task 5, record this step as complete without a commit.
 
-- [ ] **Step 7: Self-review the final branch**
+- [x] **Step 7: Self-review the final branch**
 
 Check these items manually:
 
@@ -1782,7 +1782,7 @@ Check these items manually:
 - Cascade cleanup is proven by tests, not implemented as duplicate manual deletes.
 - Value registry includes `deleted` and `blocked_by_other_projects`.
 
-- [ ] **Step 8: Report verification evidence**
+- [x] **Step 8: Report verification evidence**
 
 Final response must include exact commands run and whether each passed. Mention any command that could not be run.
 
