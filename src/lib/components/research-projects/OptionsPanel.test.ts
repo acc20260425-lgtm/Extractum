@@ -2,9 +2,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import OptionsPanel from "./OptionsPanel.svelte";
+import rawSource from "./OptionsPanel.svelte?raw";
 import type { ComboOption } from "./ComboSelect.svelte";
 
 afterEach(cleanup);
+
+const source = rawSource.replace(/\r\n/g, "\n");
 
 const options: ComboOption[] = [
   { value: "gpt-4.1", label: "GPT-4.1", mono: "gpt-4.1", dot: "#10a37f", group: "OpenAI" },
@@ -20,6 +23,15 @@ const options: ComboOption[] = [
 ];
 
 describe("OptionsPanel", () => {
+  it("keeps v11 command data slots available for scoped styling", () => {
+    expect(source).toContain('data-slot="command"');
+    expect(source).toContain('data-slot="command-input"');
+    expect(source).toContain('data-slot="command-list"');
+    expect(source).toContain('data-slot="command-group-heading"');
+    expect(source).toContain('data-slot="command-item"');
+    expect(source).toContain('data-slot="command-empty"');
+  });
+
   it("renders options with group headings, dots, second lines and a check on the selected one", () => {
     render(OptionsPanel, {
       props: { options, selectedValue: "gpt-4o", placeholder: "Поиск модели…" },

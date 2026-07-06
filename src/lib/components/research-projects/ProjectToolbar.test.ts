@@ -73,4 +73,36 @@ describe("ProjectToolbar", () => {
   it("highlights open triggers via the popover data-state attribute", () => {
     expect(source).toContain('[data-state="open"]');
   });
+
+  it("keeps only one wide selector popover expanded at a time", async () => {
+    render(ProjectToolbar, {
+      props: {
+        ...base,
+        dataRange: { from: periodPresets[0].from, to: periodPresets[0].to },
+      },
+    });
+
+    const period = screen.getByRole("combobox", { name: "Период" });
+    const prompt = screen.getByRole("combobox", { name: "Промпт" });
+    const model = screen.getByRole("combobox", { name: "Модель" });
+
+    expect(period.getAttribute("aria-expanded")).toBe("false");
+    expect(prompt.getAttribute("aria-expanded")).toBe("false");
+    expect(model.getAttribute("aria-expanded")).toBe("false");
+
+    await fireEvent.click(period);
+    expect(period.getAttribute("aria-expanded")).toBe("true");
+    expect(await screen.findByText(/Данные проекта:/)).toBeTruthy();
+
+    await fireEvent.click(prompt);
+    expect(period.getAttribute("aria-expanded")).toBe("false");
+    expect(prompt.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.queryByText(/Данные проекта:/)).toBeNull();
+    expect(screen.getByPlaceholderText("Поиск шаблона…")).toBeTruthy();
+
+    await fireEvent.click(model);
+    expect(prompt.getAttribute("aria-expanded")).toBe("false");
+    expect(model.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByPlaceholderText("Поиск модели…")).toBeTruthy();
+  });
 });

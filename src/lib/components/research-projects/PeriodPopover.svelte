@@ -11,6 +11,7 @@
     presets,
     selectedId,
     triggerLabel,
+    ariaLabel,
     dataRange = null,
     open = $bindable(false),
     onSelect,
@@ -18,6 +19,7 @@
     presets: PeriodPreset[];
     selectedId?: string;
     triggerLabel: string;
+    ariaLabel?: string;
     dataRange?: { from: number; to: number } | null;
     open?: boolean;
     onSelect?: (preset: PeriodPreset) => void;
@@ -30,7 +32,12 @@
 </script>
 
 <ExtractumPopover bind:open>
-  <ExtractumPopoverTrigger class="tb-trigger period-popover__trigger">
+  <ExtractumPopoverTrigger
+    class="tb-trigger period-popover__trigger"
+    role="combobox"
+    aria-label={ariaLabel}
+    aria-expanded={open}
+  >
     <svg
       width="13"
       height="13"

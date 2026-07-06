@@ -13,6 +13,32 @@ const presets: PeriodPreset[] = [
 ];
 
 describe("PeriodPopover", () => {
+  it("exposes the trigger as a v11 combobox with aria-expanded state", () => {
+    const { unmount } = render(PeriodPopover, {
+      props: {
+        presets,
+        selectedId: "all",
+        triggerLabel: "Весь период",
+        ariaLabel: "Период",
+      },
+    });
+    const closedTrigger = screen.getByRole("combobox", { name: "Период" });
+    expect(closedTrigger.getAttribute("aria-expanded")).toBe("false");
+    unmount();
+
+    render(PeriodPopover, {
+      props: {
+        presets,
+        selectedId: "all",
+        triggerLabel: "Весь период",
+        ariaLabel: "Период",
+        open: true,
+      },
+    });
+    const openTrigger = screen.getByRole("combobox", { name: "Период" });
+    expect(openTrigger.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("renders a prefix-free trigger with a caret", () => {
     render(PeriodPopover, {
       props: { presets, selectedId: "all", triggerLabel: "Весь период" },

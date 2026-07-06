@@ -29,7 +29,7 @@
   });
 </script>
 
-<div class="options-panel">
+<div class="options-panel" data-slot="command">
   <div class="options-panel__search">
     <svg
       width="13"
@@ -42,16 +42,19 @@
       <circle cx="7" cy="7" r="4.5" />
       <path d="M10.5 10.5L14 14" />
     </svg>
-    <input bind:value={query} {placeholder} aria-label={placeholder} />
+    <input data-slot="command-input" bind:value={query} {placeholder} aria-label={placeholder} />
   </div>
-  <div class="options-panel__list" role="listbox">
+  <div class="options-panel__list" data-slot="command-list" role="listbox">
     {#each filtered as option, index (option.value)}
       {#if option.group && (index === 0 || filtered[index - 1].group !== option.group)}
-        <div class="options-panel__group" role="presentation">{option.group}</div>
+        <div class="options-panel__group" data-slot="command-group-heading" role="presentation">
+          {option.group}
+        </div>
       {/if}
       <button
         type="button"
         role="option"
+        data-slot="command-item"
         class="options-panel__item"
         aria-selected={option.value === selectedValue}
         onclick={() => onSelect?.(option)}
@@ -73,7 +76,7 @@
       </button>
     {/each}
     {#if filtered.length === 0}
-      <div class="options-panel__empty">{emptyLabel}</div>
+      <div class="options-panel__empty" data-slot="command-empty">{emptyLabel}</div>
     {/if}
   </div>
 </div>

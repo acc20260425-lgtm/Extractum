@@ -11,6 +11,32 @@ const options: ComboOption[] = [
 ];
 
 describe("ComboSelect", () => {
+  it("exposes the trigger as a v11 combobox with aria-expanded state", () => {
+    const { unmount } = render(ComboSelect, {
+      props: {
+        options,
+        selectedValue: "p1",
+        placeholder: "Поиск шаблона…",
+        ariaLabel: "Промпт",
+      },
+    });
+    const closedTrigger = screen.getByRole("combobox", { name: "Промпт" });
+    expect(closedTrigger.getAttribute("aria-expanded")).toBe("false");
+    unmount();
+
+    render(ComboSelect, {
+      props: {
+        options,
+        selectedValue: "p1",
+        placeholder: "Поиск шаблона…",
+        ariaLabel: "Промпт",
+        open: true,
+      },
+    });
+    const openTrigger = screen.getByRole("combobox", { name: "Промпт" });
+    expect(openTrigger.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("shows the selected label without a prefix and a caret on the trigger", () => {
     render(ComboSelect, {
       props: { options, selectedValue: "p1", placeholder: "Поиск шаблона…" },

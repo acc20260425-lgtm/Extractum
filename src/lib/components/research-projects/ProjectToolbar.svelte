@@ -53,6 +53,15 @@
 
   let paramsOpen = $state(false);
   let narrowSection = $state<"period" | "prompt" | "model" | null>(null);
+  let wideOpen = $state<"period" | "prompt" | "model" | null>(null);
+
+  function setWideOpen(selector: "period" | "prompt" | "model", open: boolean) {
+    if (open) {
+      wideOpen = selector;
+    } else if (wideOpen === selector) {
+      wideOpen = null;
+    }
+  }
 
   function toggleSection(section: "period" | "prompt" | "model") {
     narrowSection = narrowSection === section ? null : section;
@@ -85,22 +94,28 @@
       presets={periodPresets}
       selectedId={selectedPeriodId}
       triggerLabel={periodLabel}
+      ariaLabel="Период"
       {dataRange}
+      bind:open={() => wideOpen === "period", (open) => setWideOpen("period", open)}
       onSelect={onSelectPeriod}
     />
     <ComboSelect
       options={promptOptions}
       selectedValue={selectedPromptValue}
       placeholder="Поиск шаблона…"
+      ariaLabel="Промпт"
       triggerFallback="Промпт"
+      bind:open={() => wideOpen === "prompt", (open) => setWideOpen("prompt", open)}
       onSelect={onSelectPrompt}
     />
     <ComboSelect
       options={modelOptions}
       selectedValue={selectedModelValue}
       placeholder="Поиск модели…"
+      ariaLabel="Модель"
       triggerIcon="dot"
       triggerFallback="Модель"
+      bind:open={() => wideOpen === "model", (open) => setWideOpen("model", open)}
       onSelect={onSelectModel}
     />
     <button

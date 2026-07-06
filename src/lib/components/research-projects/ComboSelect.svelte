@@ -21,6 +21,7 @@
     options,
     selectedValue,
     placeholder,
+    ariaLabel,
     triggerIcon = "lines",
     triggerFallback,
     emptyLabel = "Ничего не найдено",
@@ -30,6 +31,7 @@
     options: ComboOption[];
     selectedValue?: string;
     placeholder: string;
+    ariaLabel?: string;
     triggerIcon?: "lines" | "dot";
     triggerFallback?: string;
     emptyLabel?: string;
@@ -47,7 +49,12 @@
 </script>
 
 <ExtractumPopover bind:open>
-  <ExtractumPopoverTrigger class="tb-trigger combo-select__trigger">
+  <ExtractumPopoverTrigger
+    class="tb-trigger combo-select__trigger"
+    role="combobox"
+    aria-label={ariaLabel}
+    aria-expanded={open}
+  >
     {#if triggerIcon === "dot"}
       <span
         class="combo-select__dot"
