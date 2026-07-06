@@ -6,6 +6,7 @@
     ExtractumTabsTrigger,
   } from "$lib/components/extractum-ui";
   import type { LibraryCatalogSourceView } from "$lib/ui/library-catalog-model";
+  import type { ProjectAddSourceContext } from "$lib/ui/project-add-source-context";
   import LibraryYoutubePlaylistImport from "./LibraryYoutubePlaylistImport.svelte";
   import LibraryYoutubeSmartImport from "./LibraryYoutubeSmartImport.svelte";
 
@@ -13,10 +14,12 @@
     sources,
     onSourcesChanged,
     onStatus,
+    projectContext,
   }: {
     sources: LibraryCatalogSourceView[];
     onSourcesChanged: (sourceId?: number) => void | Promise<void>;
     onStatus: (message: string) => void;
+    projectContext?: ProjectAddSourceContext;
   } = $props();
 
   let mode = $state<"smart" | "existing">("smart");
@@ -30,11 +33,11 @@
     </ExtractumTabsList>
 
     <ExtractumTabsContent value="smart">
-      <LibraryYoutubeSmartImport {sources} {onSourcesChanged} {onStatus} />
+      <LibraryYoutubeSmartImport {sources} {onSourcesChanged} {onStatus} {projectContext} />
     </ExtractumTabsContent>
 
     <ExtractumTabsContent value="existing">
-      <LibraryYoutubePlaylistImport {sources} {onSourcesChanged} {onStatus} />
+      <LibraryYoutubePlaylistImport {sources} {onSourcesChanged} {onStatus} {projectContext} />
     </ExtractumTabsContent>
   </ExtractumTabs>
 </section>

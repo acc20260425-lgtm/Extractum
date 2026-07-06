@@ -13,16 +13,19 @@
     existingYoutubeSmartImportSource,
   } from "$lib/ui/library-add-source-model";
   import type { LibraryCatalogSourceView } from "$lib/ui/library-catalog-model";
+  import type { ProjectAddSourceContext } from "$lib/ui/project-add-source-context";
   import type { YoutubePreview } from "$lib/types/sources";
 
   let {
     sources,
     onSourcesChanged,
     onStatus,
+    projectContext,
   }: {
     sources: LibraryCatalogSourceView[];
     onSourcesChanged: (sourceId?: number) => void | Promise<void>;
     onStatus: (message: string) => void;
+    projectContext?: ProjectAddSourceContext;
   } = $props();
 
   let youtubeUrl = $state("");
@@ -37,6 +40,21 @@
   const backendUrl = $derived(classification.normalizedUrl ?? trimmedUrl);
   const existingSmartImportSource = $derived(existingYoutubeSmartImportSource(sources, preview));
   const canPreview = $derived(Boolean(trimmedUrl) && classification.supported && !previewing && !adding);
+  const existingSmartImportSourceConnected = $derived(
+    Boolean(
+      existingSmartImportSource &&
+        projectContext?.connectedSourceIds.has(existingSmartImportSource.sourceId),
+    ),
+  );
+  const canConnectExistingSmartImportSource = $derived(
+    Boolean(
+      projectContext &&
+        existingSmartImportSource &&
+        !existingSmartImportSourceConnected &&
+        !previewing &&
+        !adding,
+    ),
+  );
   const canAdd = $derived(Boolean(preview) && !existingSmartImportSource && !previewing && !adding);
 
   function updateUrl(value: string) {
@@ -63,6 +81,20 @@
   async function addSource() {
     if (!preview || adding) return;
     if (existingSmartImportSource) {
+      if (projectContext) {
+        if (projectContext.connectedSourceIds.has(existingSmartImportSource.sourceId)) {
+          onStatus("Already connected to this project.");
+          return;
+        }
+        adding = true;
+        status = "";
+        try {
+          await projectContext.onConnectExistingSource(existingSmartImportSource.sourceId);
+        } finally {
+          adding = false;
+        }
+        return;
+      }
       status = `Already in Library: ${existingSmartImportSource.title}`;
       return;
     }
@@ -130,7 +162,11 @@
 
   {#if existingSmartImportSource}
     <ExtractumStatusMessage tone="info">
-      Already in Library: {existingSmartImportSource.title}
+      {#if existingSmartImportSourceConnected}
+        Already connected to this project.
+      {:else}
+        Already in Library: {existingSmartImportSource.title}
+      {/if}
     </ExtractumStatusMessage>
   {/if}
 
@@ -158,9 +194,13 @@
         <p>{preview.channelTitle ?? preview.channelHandle ?? preview.canonicalUrl}</p>
         <div class="actions">
           <span>{preview.canonicalUrl}</span>
-          <ExtractumButton onclick={addSource} disabled={!canAdd}>
+          <ExtractumButton onclick={addSource} disabled={!canAdd && !canConnectExistingSmartImportSource}>
             <Plus size={14} aria-hidden="true" />
-            {#if existingSmartImportSource}
+            {#if existingSmartImportSourceConnected}
+              Already connected to this project
+            {:else if existingSmartImportSource && projectContext}
+              {adding ? "Connecting..." : "Connect to project"}
+            {:else if existingSmartImportSource}
               Already in Library
             {:else}
               {adding ? "Adding..." : "Add source"}

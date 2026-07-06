@@ -633,7 +633,7 @@ Expected: commit succeeds.
 - Uses `projectContext.onConnectExistingSource(sourceId)` only for Smart import duplicates.
 - Uses `projectContext.onConnectAddedSources(sourceIds)` only for successful playlist batch adds.
 
-- [ ] **Step 1: Add failing component contract tests**
+- [x] **Step 1: Add failing component contract tests**
 
 Append these tests to `src/lib/library-add-source-contract.test.ts`:
 
@@ -680,13 +680,13 @@ Append these tests to `src/lib/library-add-source-contract.test.ts`:
   });
 ```
 
-- [ ] **Step 2: Run tests and verify component contracts fail before implementation**
+- [x] **Step 2: Run tests and verify component contracts fail before implementation**
 
 Run: `npm.cmd run test -- src/lib/library-add-source-contract.test.ts`
 
 Expected: FAIL because `projectContext` is not defined in the dialog or provider components.
 
-- [ ] **Step 3: Extend `LibraryAddSourceDialog.svelte` props and pass context**
+- [x] **Step 3: Extend `LibraryAddSourceDialog.svelte` props and pass context**
 
 Add this import:
 
@@ -718,7 +718,7 @@ Leave Telegram as:
 
 Telegram does not need `projectContext`: in project mode the host passes `onSourcesChanged={connectAddedProjectSource}`, so both newly created and backend-reused Telegram source IDs enter the same scalar project connect helper.
 
-- [ ] **Step 4: Extend `LibraryYoutubeAddPanel.svelte` props and pass context**
+- [x] **Step 4: Extend `LibraryYoutubeAddPanel.svelte` props and pass context**
 
 Add:
 
@@ -746,7 +746,7 @@ Change provider calls to:
       <LibraryYoutubePlaylistImport {sources} {onSourcesChanged} {onStatus} {projectContext} />
 ```
 
-- [ ] **Step 5: Implement Smart import project duplicate states**
+- [x] **Step 5: Implement Smart import project duplicate states**
 
 In `LibraryYoutubeSmartImport.svelte`, add:
 
@@ -839,7 +839,7 @@ Change the action button disabled expression and label to:
           </ExtractumButton>
 ```
 
-- [ ] **Step 6: Implement playlist batch project callback**
+- [x] **Step 6: Implement playlist batch project callback**
 
 In `LibraryYoutubePlaylistImport.svelte`, add:
 
@@ -875,19 +875,19 @@ Replace the `if (summary.added > 0)` block with:
       }
 ```
 
-- [ ] **Step 7: Run component contract tests**
+- [x] **Step 7: Run component contract tests**
 
 Run: `npm.cmd run test -- src/lib/library-add-source-contract.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 8: Run Svelte check for component typing**
+- [x] **Step 8: Run Svelte check for component typing**
 
 Run: `npm.cmd run check`
 
 Expected: PASS. Existing Tauri IPC browser-console warnings are irrelevant because this command does not run a browser.
 
-- [ ] **Step 9: Commit Task 3**
+- [x] **Step 9: Commit Task 3**
 
 Run:
 

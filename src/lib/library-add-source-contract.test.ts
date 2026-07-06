@@ -85,4 +85,45 @@ describe("Library Add Source contract", () => {
     expect(telegramImportSource).toContain("before loading Telegram dialogs");
     expect(telegramImportSource).toContain('formatAppError("adding Telegram source"');
   });
+
+  it("keeps the standalone scalar onSourcesChanged contract while accepting project context", () => {
+    expect(dialogSource).toContain("projectContext?: ProjectAddSourceContext");
+    expect(dialogSource).toContain("onSourcesChanged: (sourceId?: number) => void | Promise<void>");
+    expect(youtubePanelSource).toContain("projectContext?: ProjectAddSourceContext");
+    expect(youtubePanelSource).toContain("onSourcesChanged: (sourceId?: number) => void | Promise<void>");
+    expect(playlistImportSource).toContain("onSourcesChanged: (sourceId?: number) => void | Promise<void>");
+    expect(playlistImportSource).not.toContain("onSourcesChanged: (sourceIds: number[])");
+  });
+
+  it("passes project context through the YouTube add-source tree", () => {
+    expect(dialogSource).toMatch(/<LibraryYoutubeAddPanel[\s\S]*\{projectContext\}/);
+    expect(youtubePanelSource).toMatch(/<LibraryYoutubeSmartImport[\s\S]*\{projectContext\}/);
+    expect(youtubePanelSource).toMatch(/<LibraryYoutubePlaylistImport[\s\S]*\{projectContext\}/);
+  });
+
+  it("allows Smart import duplicates to connect existing Library sources in project mode", () => {
+    expect(smartImportSource).toContain("canConnectExistingSmartImportSource");
+    expect(smartImportSource).toContain("projectContext.onConnectExistingSource(existingSmartImportSource.sourceId)");
+    expect(smartImportSource).toContain("Connect to project");
+    expect(smartImportSource).toContain("Connecting...");
+    expect(smartImportSource).toContain("Already connected to this project");
+  });
+
+  it("keeps Smart import playlists on the scalar source callback path", () => {
+    expect(smartImportSource).toContain('materializePlaylistVideos: preview.kind !== "playlist"');
+    expect(smartImportSource).toContain("await onSourcesChanged(source.id)");
+  });
+
+  it("connects all added playlist video source IDs through the project batch callback", () => {
+    expect(playlistImportSource).toContain('result.status === "added"');
+    expect(playlistImportSource).toContain("projectContext.onConnectAddedSources(addedSourceIds)");
+    expect(playlistImportSource).toContain("await onSourcesChanged(");
+    expect(playlistImportSource).toContain("summary.results.find((result) => result.sourceId !== null)?.sourceId ?? undefined");
+  });
+
+  it("keeps Telegram project connection on the scalar callback path", () => {
+    expect(dialogSource).toMatch(/<LibraryTelegramDialogImport[\s\S]*\{onSourcesChanged\}[\s\S]*\{onStatus\}/);
+    expect(dialogSource).not.toMatch(/<LibraryTelegramDialogImport[\s\S]*\{projectContext\}/);
+    expect(telegramImportSource).toContain("await onSourcesChanged(source.id)");
+  });
 });

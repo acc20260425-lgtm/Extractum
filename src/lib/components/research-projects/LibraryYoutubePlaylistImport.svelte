@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Plus, RefreshCw } from "@lucide/svelte";
+  import { SvelteSet } from "svelte/reactivity";
   import {
     ExtractumBadge,
     ExtractumButton,
@@ -19,16 +20,19 @@
   } from "$lib/ui/library-add-source-model";
   import { addSelectedYoutubePlaylistVideos } from "$lib/ui/library-add-source-workflow";
   import type { LibraryCatalogSourceView } from "$lib/ui/library-catalog-model";
+  import type { ProjectAddSourceContext } from "$lib/ui/project-add-source-context";
   import type { YoutubePlaylistDetail } from "$lib/types/youtube";
 
   let {
     sources,
     onSourcesChanged,
     onStatus,
+    projectContext,
   }: {
     sources: LibraryCatalogSourceView[];
     onSourcesChanged: (sourceId?: number) => void | Promise<void>;
     onStatus: (message: string) => void;
+    projectContext?: ProjectAddSourceContext;
   } = $props();
 
   let playlistQuery = $state("");
@@ -36,7 +40,7 @@
   let detail = $state<YoutubePlaylistDetail | null>(null);
   let loadingDetail = $state(false);
   let adding = $state(false);
-  let selectedVideoIds = $state<Set<string>>(new Set());
+  let selectedVideoIds = new SvelteSet<string>();
   let status = $state("");
   let summary = $state<PlaylistImportSummary | null>(null);
 
@@ -58,7 +62,7 @@
     detail = null;
     summary = null;
     status = "";
-    selectedVideoIds = new Set();
+    selectedVideoIds.clear();
     loadingDetail = true;
     try {
       detail = await getYoutubePlaylistDetail(sourceId);
@@ -70,13 +74,11 @@
   }
 
   function toggleVideo(id: string) {
-    const next = new Set(selectedVideoIds);
-    if (next.has(id)) {
-      next.delete(id);
+    if (selectedVideoIds.has(id)) {
+      selectedVideoIds.delete(id);
     } else {
-      next.add(id);
+      selectedVideoIds.add(id);
     }
-    selectedVideoIds = next;
   }
 
   async function addSelected() {
@@ -91,7 +93,16 @@
       });
       if (summary.added > 0) {
         onStatus(`Added ${summary.added} YouTube video source${summary.added === 1 ? "" : "s"}.`);
-        await onSourcesChanged(summary.results.find((result) => result.sourceId !== null)?.sourceId ?? undefined);
+        if (projectContext) {
+          const addedSourceIds = summary.results
+            .filter((result) => result.status === "added" && result.sourceId !== null)
+            .map((result) => result.sourceId as number);
+          if (addedSourceIds.length > 0) {
+            await projectContext.onConnectAddedSources(addedSourceIds);
+          }
+        } else {
+          await onSourcesChanged(summary.results.find((result) => result.sourceId !== null)?.sourceId ?? undefined);
+        }
       }
     } finally {
       adding = false;

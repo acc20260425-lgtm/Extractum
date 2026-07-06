@@ -7,6 +7,7 @@
     ExtractumTabsTrigger,
   } from "$lib/components/extractum-ui";
   import type { LibraryCatalogSourceView } from "$lib/ui/library-catalog-model";
+  import type { ProjectAddSourceContext } from "$lib/ui/project-add-source-context";
   import LibraryTelegramDialogImport from "./LibraryTelegramDialogImport.svelte";
   import LibraryYoutubeAddPanel from "./LibraryYoutubeAddPanel.svelte";
 
@@ -15,11 +16,13 @@
     sources,
     onSourcesChanged,
     onStatus,
+    projectContext,
   }: {
     open?: boolean;
     sources: LibraryCatalogSourceView[];
     onSourcesChanged: (sourceId?: number) => void | Promise<void>;
     onStatus: (message: string) => void;
+    projectContext?: ProjectAddSourceContext;
   } = $props();
 
   let provider = $state<"youtube" | "telegram">("youtube");
@@ -38,7 +41,7 @@
       </ExtractumTabsList>
 
       <ExtractumTabsContent value="youtube">
-        <LibraryYoutubeAddPanel {sources} {onSourcesChanged} {onStatus} />
+        <LibraryYoutubeAddPanel {sources} {onSourcesChanged} {onStatus} {projectContext} />
       </ExtractumTabsContent>
 
       <ExtractumTabsContent value="telegram">
