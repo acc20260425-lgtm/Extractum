@@ -97,15 +97,34 @@
   </main>
 
   {#if inspector}
-    <Inspector {...inspector} />
+    {#if inspector.open !== false}
+      <button
+        class="research-projects-shell__inspector-backdrop"
+        data-slot="button"
+        type="button"
+        aria-label="Закрыть инспектор"
+        onclick={() => inspector.onToggle?.()}
+      ></button>
+    {/if}
+    <aside
+      class="research-projects-shell__inspector"
+      class:research-projects-shell__inspector--open={inspector.open !== false}
+      class:research-projects-shell__inspector--closed={inspector.open === false}
+    >
+      <Inspector {...inspector} />
+    </aside>
   {/if}
 </div>
 
 <style>
   .research-projects-shell {
+    position: relative;
     display: flex;
     height: 100%;
     min-height: 0;
+    overflow: hidden;
+    container-type: inline-size;
+    container-name: app;
     background: var(--extractum-surface);
   }
 
@@ -152,9 +171,57 @@
     background: var(--extractum-surface-raised);
   }
 
+  .research-projects-shell__inspector {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 45px;
+    width: 45px;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--extractum-surface-subtle);
+    transition: width 0.18s ease, flex-basis 0.18s ease;
+  }
+
+  .research-projects-shell__inspector--open {
+    flex-basis: 301px;
+    width: 301px;
+  }
+
+  .research-projects-shell__inspector :global(.inspector) {
+    width: 100%;
+  }
+
+  .research-projects-shell__inspector-backdrop {
+    display: none;
+  }
+
   .research-projects-shell__empty {
     margin: auto;
     font: 400 13px/1.4 var(--extractum-font);
     color: var(--extractum-muted-2);
+  }
+
+  @container app (max-width: 1160px) {
+    .research-projects-shell__inspector-backdrop {
+      position: absolute;
+      inset: 0;
+      z-index: 19;
+      display: block;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: rgba(23, 33, 43, 0.18);
+      cursor: default;
+    }
+
+    .research-projects-shell__inspector--open {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 20;
+      width: 324px;
+      box-shadow: -10px 0 30px rgba(23, 33, 43, 0.16);
+    }
   }
 </style>

@@ -140,6 +140,38 @@ describe("ResearchProjectsShell", () => {
     expect(screen.getByText("ФинБеларусь")).toBeTruthy();
   });
 
+  it("uses a responsive inspector shell that can overlay the grid", () => {
+    expect(shellSource).toContain("container-type: inline-size");
+    expect(shellSource).toContain("container-name: app");
+    expect(shellSource).toContain("research-projects-shell__inspector-backdrop");
+    expect(shellSource).toContain("research-projects-shell__inspector");
+    expect(shellSource).toContain("@container app (max-width: 1160px)");
+    expect(shellSource).toContain("position: absolute");
+    expect(shellSource).toContain("width: 324px");
+    expect(shellSource).toContain("box-shadow: -10px 0 30px");
+  });
+
+  it("closes the open inspector from the overlay backdrop", async () => {
+    const onToggle = vi.fn();
+    render(ResearchProjectsShell, {
+      props: {
+        railPanel: { summaries: [], selectedProjectId: null, now: NOW },
+        selectedProjectId: null,
+        inspector: {
+          open: true,
+          selected: null,
+          periodLabel: "Весь период",
+          promptLabel: "По умолчанию",
+          modelLabel: "gpt-4.1",
+          onToggle,
+        },
+      },
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Закрыть инспектор" }));
+    expect(onToggle).toHaveBeenCalledOnce();
+  });
+
   it("renders the run dock for the selected project", () => {
     expect(shellSource).toContain("<RunDock");
     expect(shellSource).toContain("{...runDock}");
