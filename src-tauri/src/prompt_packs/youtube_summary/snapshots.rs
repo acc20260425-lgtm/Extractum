@@ -38,6 +38,8 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
         return Ok(run.run_id);
     }
 
+    let include_comments =
+        effective_include_comments(&request.control_preset, request.include_comments);
     let pack_version_id = ensure_pack_version(pool).await?;
     let preflight = preflight_youtube_summary_in_pool(
         pool,
@@ -51,7 +53,7 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
             output_language: request.output_language.clone(),
             control_preset: request.control_preset.clone(),
             evidence_mode: request.evidence_mode.clone(),
-            include_comments: request.include_comments,
+            include_comments,
         },
         model_budget_for_runtime(request.runtime_provider),
     )
@@ -82,7 +84,7 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
         "outputLanguage": request.output_language,
         "controlPreset": request.control_preset,
         "evidenceMode": request.evidence_mode,
-        "includeComments": request.include_comments
+        "includeComments": include_comments
     }))
     .map_err(|error| AppError::internal(format!("serialize request: {error}")))?;
     let preflight_json = serde_json::to_string(&preflight)
@@ -113,7 +115,7 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
     .bind(&request.output_language)
     .bind(&request.control_preset)
     .bind(&request.evidence_mode)
-    .bind(request.include_comments)
+    .bind(include_comments)
     .bind(preflight.included_videos.len() as i64)
     .bind(&now)
     .bind(&now)
@@ -157,7 +159,7 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
             run_id,
             video.source_id,
             &source_ref_id,
-            request.include_comments,
+            include_comments,
             &now,
         )
         .await?;
@@ -166,6 +168,10 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
     insert_stage_skeleton(pool, run_id, preflight.included_videos.len(), &now).await?;
 
     Ok(run_id)
+}
+
+fn effective_include_comments(control_preset: &str, include_comments: bool) -> bool {
+    include_comments || control_preset == "gem_analysis"
 }
 
 async fn insert_source_snapshot(

@@ -37,6 +37,17 @@ describe("youtube summary launch contract", () => {
     expect(dialog).not.toContain("controlPreset: \"standard\"");
   });
 
+  it("forces comments into gem analysis launch requests", () => {
+    const dialog = readFileSync("src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte", "utf8");
+
+    expect(dialog).toContain("effectiveIncludeComments");
+    expect(dialog).toContain("controlPreset === \"gem_analysis\" ? true : includeComments");
+    expect(dialog).toContain("function handleSummaryModeChange");
+    expect(dialog).toContain("includeComments = true");
+    expect(dialog).toContain("includeComments: effectiveIncludeComments");
+    expect(dialog).toContain("onchange={handleSummaryModeChange}");
+  });
+
   it("wires Gemini Browser runtime selector into preflight and start requests", () => {
     const dialog = readFileSync("src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte", "utf8");
 

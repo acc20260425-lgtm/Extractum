@@ -293,3 +293,35 @@ async fn comment_snapshot_selection_is_deterministic_when_enabled() {
     assert_eq!(first, second);
     assert_eq!(first[0].external_id.as_deref(), Some("comment-oldest"));
 }
+
+#[tokio::test]
+async fn gem_analysis_freezes_comments_even_when_include_comments_is_false() {
+    let pool = test_pool_with_ready_video_and_comments().await;
+    let mut request = start_request("req-gem-analysis-comments-default", vec![901]);
+    request.control_preset = "gem_analysis".to_string();
+    request.include_comments = false;
+
+    let run_id = create_youtube_summary_run_skeleton_in_pool(&pool, request, 1)
+        .await
+        .expect("create run");
+
+    let comment_materials: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)
+         FROM prompt_pack_run_material_snapshots
+         WHERE run_id = ? AND material_kind = 'comment'",
+    )
+    .bind(run_id)
+    .fetch_one(&pool)
+    .await
+    .expect("comment material count");
+
+    let include_comments: bool =
+        sqlx::query_scalar("SELECT include_comments FROM prompt_pack_runs WHERE id = ?")
+            .bind(run_id)
+            .fetch_one(&pool)
+            .await
+            .expect("stored include comments");
+
+    assert!(comment_materials > 0);
+    assert!(include_comments);
+}

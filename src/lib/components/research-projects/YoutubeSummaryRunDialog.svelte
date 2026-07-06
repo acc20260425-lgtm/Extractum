@@ -69,6 +69,9 @@
   let partitionSummary = $derived(
     preflight ? summarizePreflightPartitions(preflight) : null,
   );
+  const effectiveIncludeComments = $derived(
+    controlPreset === "gem_analysis" ? true : includeComments,
+  );
   const browserProviderConfig = $derived<GeminiBrowserProviderConfig | null>(
     runtimeProvider === "gemini_browser"
       ? browserConfig()
@@ -101,6 +104,7 @@
       browserStatus = null;
       browserRuns = [];
       browserStatusLoadError = null;
+      includeComments = false;
       void loadProfiles();
       if (source) queueMicrotask(() => void runPreflight());
     }
@@ -120,6 +124,14 @@
 
   function handleLanguageChange(event: Event) {
     outputLanguage = (event.currentTarget as HTMLSelectElement).value;
+    void runPreflight();
+  }
+
+  function handleSummaryModeChange(event: Event) {
+    controlPreset = (event.currentTarget as HTMLSelectElement).value;
+    if (controlPreset === "gem_analysis") {
+      includeComments = true;
+    }
     void runPreflight();
   }
 
@@ -152,6 +164,13 @@
     void runPreflight();
   }
 
+  function handleIncludeCommentsChange() {
+    if (controlPreset === "gem_analysis") {
+      includeComments = true;
+    }
+    void runPreflight();
+  }
+
   async function runPreflight() {
     if (!source || !outputLanguage) return;
     loading = true;
@@ -167,7 +186,7 @@
         outputLanguage,
         controlPreset,
         evidenceMode: "standard",
-        includeComments,
+        includeComments: effectiveIncludeComments,
       });
     } catch (cause) {
       error = cause instanceof Error ? cause.message : String(cause);
@@ -193,7 +212,7 @@
         outputLanguage,
         controlPreset,
         evidenceMode: "standard",
-        includeComments,
+        includeComments: effectiveIncludeComments,
       });
       if (outcome.kind === "blocked") {
         preflight = outcome.preflight;
@@ -235,7 +254,7 @@
       </label>
       <label>
         <span>Summary mode</span>
-        <select bind:value={controlPreset} aria-label="Summary mode" onchange={() => void runPreflight()}>
+        <select bind:value={controlPreset} aria-label="Summary mode" onchange={handleSummaryModeChange}>
           <option value="standard">Standard</option>
           <option value="detailed_report">Detailed report</option>
           <option value="gem_analysis">Gem analysis</option>
@@ -281,7 +300,7 @@
     </div>
 
     <label class="checkbox-row">
-      <ExtractumCheckbox bind:checked={includeComments} onchange={() => void runPreflight()} />
+      <ExtractumCheckbox bind:checked={includeComments} onchange={handleIncludeCommentsChange} />
       <span>Include comments</span>
     </label>
 
