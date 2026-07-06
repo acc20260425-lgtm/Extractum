@@ -1,10 +1,40 @@
-use crate::error::{database_error, AppResult};
+use crate::error::{database_error, AppError, AppResult};
 use sqlx::{Pool, Sqlite};
 
 pub(crate) type SqlitePoolConnection = sqlx::pool::PoolConnection<Sqlite>;
 
 pub(crate) async fn begin_immediate(pool: &Pool<Sqlite>) -> AppResult<SqlitePoolConnection> {
     let mut conn = pool.acquire().await.map_err(database_error)?;
+    sqlx::query("BEGIN IMMEDIATE")
+        .execute(&mut *conn)
+        .await
+        .map_err(database_error)?;
+    Ok(conn)
+}
+
+pub(crate) async fn enable_foreign_keys(conn: &mut SqlitePoolConnection) -> AppResult<()> {
+    sqlx::query("PRAGMA foreign_keys = ON")
+        .execute(&mut **conn)
+        .await
+        .map_err(database_error)?;
+
+    let enabled: i64 = sqlx::query_scalar("PRAGMA foreign_keys")
+        .fetch_one(&mut **conn)
+        .await
+        .map_err(database_error)?;
+    if enabled != 1 {
+        return Err(AppError::internal(
+            "SQLite foreign key enforcement could not be enabled",
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) async fn begin_immediate_with_foreign_keys(
+    pool: &Pool<Sqlite>,
+) -> AppResult<SqlitePoolConnection> {
+    let mut conn = pool.acquire().await.map_err(database_error)?;
+    enable_foreign_keys(&mut conn).await?;
     sqlx::query("BEGIN IMMEDIATE")
         .execute(&mut *conn)
         .await
@@ -46,7 +76,10 @@ pub(crate) async fn finish_manual_transaction<T>(
 
 #[cfg(test)]
 mod tests {
-    use super::{begin_immediate, commit, finish_manual_transaction, rollback};
+    use super::{
+        begin_immediate, begin_immediate_with_foreign_keys, commit, finish_manual_transaction,
+        rollback,
+    };
     use crate::error::{AppError, AppErrorKind, AppResult};
 
     #[tokio::test]
@@ -160,6 +193,87 @@ mod tests {
         assert_eq!(error.kind, AppErrorKind::Validation);
         assert_eq!(error.message, "stop here");
         assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn begin_immediate_with_foreign_keys_enforces_cascade() {
+        let pool = sqlx::SqlitePool::connect(":memory:")
+            .await
+            .expect("connect in-memory db");
+        sqlx::query("PRAGMA foreign_keys = OFF")
+            .execute(&pool)
+            .await
+            .expect("disable foreign keys for baseline");
+        sqlx::query("CREATE TABLE parents (id INTEGER PRIMARY KEY)")
+            .execute(&pool)
+            .await
+            .expect("create parent table");
+        sqlx::query(
+            "CREATE TABLE children (id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL REFERENCES parents(id) ON DELETE CASCADE)",
+        )
+        .execute(&pool)
+        .await
+        .expect("create child table");
+        sqlx::query("INSERT INTO parents (id) VALUES (1)")
+            .execute(&pool)
+            .await
+            .expect("insert parent");
+        sqlx::query("INSERT INTO children (id, parent_id) VALUES (10, 1)")
+            .execute(&pool)
+            .await
+            .expect("insert child");
+
+        let mut conn = begin_immediate_with_foreign_keys(&pool)
+            .await
+            .expect("begin immediate with foreign keys");
+        let enabled: i64 = sqlx::query_scalar("PRAGMA foreign_keys")
+            .fetch_one(&mut *conn)
+            .await
+            .expect("read foreign key pragma");
+        assert_eq!(enabled, 1);
+
+        sqlx::query("DELETE FROM parents WHERE id = 1")
+            .execute(&mut *conn)
+            .await
+            .expect("delete parent");
+        commit(&mut conn).await.expect("commit");
+
+        let child_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM children")
+            .fetch_one(&pool)
+            .await
+            .expect("count children");
+        assert_eq!(child_count, 0);
+    }
+
+    #[tokio::test]
+    async fn sqlite_ignores_foreign_keys_pragma_inside_open_transaction() {
+        let pool = sqlx::SqlitePool::connect(":memory:")
+            .await
+            .expect("connect in-memory db");
+        let mut conn = pool.acquire().await.expect("acquire connection");
+        sqlx::query("PRAGMA foreign_keys = OFF")
+            .execute(&mut *conn)
+            .await
+            .expect("disable foreign keys");
+        sqlx::query("BEGIN IMMEDIATE")
+            .execute(&mut *conn)
+            .await
+            .expect("begin immediate");
+        sqlx::query("PRAGMA foreign_keys = ON")
+            .execute(&mut *conn)
+            .await
+            .expect("attempt pragma inside transaction");
+
+        let enabled: i64 = sqlx::query_scalar("PRAGMA foreign_keys")
+            .fetch_one(&mut *conn)
+            .await
+            .expect("read foreign key pragma");
+        assert_eq!(enabled, 0);
+
+        sqlx::query("ROLLBACK")
+            .execute(&mut *conn)
+            .await
+            .expect("rollback");
     }
 
     use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};

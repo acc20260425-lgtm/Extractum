@@ -67,7 +67,7 @@
 - Produces: `sources::store::delete_source_row_on_connection(conn: &mut SqlitePoolConnection, source_id: i64) -> AppResult<u64>`
 - Consumed by: Task 2 project-scoped delete transaction.
 
-- [ ] **Step 1: Add failing FK helper tests in `src-tauri/src/tx.rs`**
+- [x] **Step 1: Add failing FK helper tests in `src-tauri/src/tx.rs`**
 
 Add imports in the test module:
 
@@ -160,7 +160,7 @@ async fn sqlite_ignores_foreign_keys_pragma_inside_open_transaction() {
 }
 ```
 
-- [ ] **Step 2: Run the FK helper tests and verify they fail**
+- [x] **Step 2: Run the FK helper tests and verify they fail**
 
 Run:
 
@@ -170,7 +170,7 @@ cargo test --manifest-path src-tauri/Cargo.toml tx::tests::begin_immediate_with_
 
 Expected: FAIL to compile because `begin_immediate_with_foreign_keys` is missing.
 
-- [ ] **Step 3: Implement FK setup in `src-tauri/src/tx.rs`**
+- [x] **Step 3: Implement FK setup in `src-tauri/src/tx.rs`**
 
 Replace the top imports and add the helper:
 
@@ -213,7 +213,7 @@ pub(crate) async fn begin_immediate_with_foreign_keys(
 
 Keep the existing `begin_immediate`, `commit`, `rollback`, and `finish_manual_transaction` functions unchanged.
 
-- [ ] **Step 4: Add failing standalone cascade test in `src-tauri/src/sources/store.rs`**
+- [x] **Step 4: Add failing standalone cascade test in `src-tauri/src/sources/store.rs`**
 
 Add this test to the existing `mod tests`:
 
@@ -278,7 +278,7 @@ async fn delete_source_from_pool_enables_foreign_keys_and_cascades_dependents() 
 }
 ```
 
-- [ ] **Step 5: Run the standalone cascade test and verify it fails**
+- [x] **Step 5: Run the standalone cascade test and verify it fails**
 
 Run:
 
@@ -288,7 +288,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::store::tests::delete_so
 
 Expected: FAIL because `delete_source_from_pool` has not enabled FK enforcement on its connection.
 
-- [ ] **Step 6: Factor source row deletion in `src-tauri/src/sources/store.rs`**
+- [x] **Step 6: Factor source row deletion in `src-tauri/src/sources/store.rs`**
 
 Add this import near the existing crate imports:
 
@@ -341,7 +341,7 @@ pub(crate) async fn delete_source_row_on_connection(
 }
 ```
 
-- [ ] **Step 7: Run Task 1 tests**
+- [x] **Step 7: Run Task 1 tests**
 
 Run:
 
@@ -352,7 +352,7 @@ cargo test --manifest-path src-tauri/Cargo.toml sources::store::tests::delete_so
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit Task 1**
+- [x] **Step 8: Commit Task 1**
 
 Run:
 

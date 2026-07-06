@@ -5,6 +5,7 @@ use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
 use crate::telegram::TelegramState;
+use crate::tx::{enable_foreign_keys, SqlitePoolConnection};
 use crate::youtube::dto::{YoutubePlaylistMetadata, YoutubeVideoMetadata};
 use crate::youtube::source_metadata::{
     upsert_playlist_source_metadata, upsert_video_source_metadata, YoutubePlaylistSourceColumns,
@@ -65,6 +66,7 @@ async fn delete_source_from_pool(
     source_id: i64,
 ) -> AppResult<u64> {
     let mut conn = pool.acquire().await.map_err(AppError::database)?;
+    enable_foreign_keys(&mut conn).await?;
     sqlx::query(&format!(
         "PRAGMA busy_timeout = {SOURCE_DELETE_BUSY_TIMEOUT_MS}"
     ))
@@ -85,9 +87,16 @@ async fn delete_source_from_pool(
         )));
     }
 
+    delete_source_row_on_connection(&mut conn, source_id).await
+}
+
+pub(crate) async fn delete_source_row_on_connection(
+    conn: &mut SqlitePoolConnection,
+    source_id: i64,
+) -> AppResult<u64> {
     sqlx::query("DELETE FROM sources WHERE id = ?")
         .bind(source_id)
-        .execute(&mut *conn)
+        .execute(&mut **conn)
         .await
         .map(|result| result.rows_affected())
         .map_err(AppError::database)
@@ -608,7 +617,7 @@ mod tests {
         YoutubeAvailabilityStatus, YoutubePlaylistMetadata, YoutubeVideoForm, YoutubeVideoMetadata,
     };
     use serde_json::json;
-    use sqlx::sqlite::SqliteConnectOptions;
+    use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
     use std::time::Duration as StdDuration;
     use tokio::time::sleep;
 
@@ -740,6 +749,71 @@ mod tests {
             .await
             .expect("count remaining sources");
         assert_eq!(remaining, 0);
+    }
+
+    #[tokio::test]
+    async fn delete_source_from_pool_enables_foreign_keys_and_cascades_dependents() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        crate::migrations::apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
+        sqlx::query("PRAGMA foreign_keys = OFF")
+            .execute(&pool)
+            .await
+            .expect("disable foreign keys before delete");
+
+        sqlx::query(
+            "INSERT INTO sources (id, source_type, source_subtype, external_id, title, is_active, is_member, created_at) VALUES (70, 'youtube', 'video', 'video-70', 'Video 70', 1, 0, 100)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed source");
+        sqlx::query(
+            "INSERT INTO items (id, source_id, external_id, author, published_at, ingested_at, content_zstd, item_kind) VALUES (700, 70, 'transcript-70', 'Author', 100, 101, x'01', 'youtube_transcript')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed item");
+        sqlx::query(
+            "INSERT INTO youtube_transcript_segments (item_id, source_id, segment_index, start_ms, end_ms, text) VALUES (700, 70, 0, 0, 1000, 'hello')",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed transcript segment");
+        sqlx::query(
+            "INSERT INTO analysis_documents (id, source_id, item_id, document_key, document_kind, source_type, source_subtype, external_id, author, published_at, ref, content_zstd, created_at, updated_at) VALUES (701, 70, 700, 'item:700', 'youtube_transcript', 'youtube', 'video', 'doc-70', 'Author', 100, '00:00', x'01', 100, 100)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed analysis document");
+
+        let rows = delete_source_from_pool(&pool, 70)
+            .await
+            .expect("delete source");
+        assert_eq!(rows, 1);
+
+        for (label, query) in [
+            ("sources", "SELECT COUNT(*) FROM sources WHERE id = 70"),
+            ("items", "SELECT COUNT(*) FROM items WHERE source_id = 70"),
+            (
+                "youtube_transcript_segments",
+                "SELECT COUNT(*) FROM youtube_transcript_segments WHERE source_id = 70",
+            ),
+            (
+                "analysis_documents",
+                "SELECT COUNT(*) FROM analysis_documents WHERE source_id = 70",
+            ),
+        ] {
+            let count: i64 = sqlx::query_scalar(query)
+                .fetch_one(&pool)
+                .await
+                .unwrap_or_else(|error| panic!("count {label}: {error}"));
+            assert_eq!(count, 0, "{label} rows should be removed");
+        }
     }
 
     #[test]
