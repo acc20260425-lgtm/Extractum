@@ -42,6 +42,7 @@
       <button
         class="inspector__toggle"
         type="button"
+        data-slot="button"
         title="Свернуть"
         aria-label="Свернуть"
         onclick={() => onToggle?.()}
@@ -98,6 +99,7 @@
         <button
           class="inspector__sync"
           type="button"
+          data-slot="button"
           disabled={syncDisabled}
           aria-label="Синхронизировать"
           onclick={() => onSync?.()}
@@ -108,6 +110,7 @@
         <button
           class="inspector__disconnect"
           type="button"
+          data-slot="button"
           title="Отключить источник"
           aria-label="Отключить источник"
           onclick={() => onDisconnect?.()}
@@ -122,6 +125,7 @@
     <button
       class="inspector__toggle"
       type="button"
+      data-slot="button"
       title="Развернуть инспектор"
       aria-label="Развернуть инспектор"
       onclick={() => onToggle?.()}
@@ -164,21 +168,39 @@
     margin-bottom: 9px;
   }
 
-  .inspector__toggle {
+  button.inspector__toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex: 0 0 26px;
     width: 26px;
     height: 26px;
-    border: none;
+    padding: 0;
+    border: 1px solid var(--extractum-border);
     border-radius: var(--extractum-radius);
-    background: transparent;
+    background: var(--extractum-surface-raised);
     color: var(--extractum-muted);
     cursor: pointer;
+    line-height: 1;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
   }
 
-  .inspector__toggle:hover {
-    background: var(--extractum-surface-raised);
+  button.inspector__toggle:hover {
+    border-color: var(--extractum-muted-2);
+    background: var(--extractum-surface);
+    color: var(--extractum-text);
+  }
+
+  button.inspector__toggle:focus-visible {
+    outline: 2px solid var(--extractum-primary);
+    outline-offset: 2px;
+  }
+
+  button.inspector__toggle :global(svg) {
+    width: 15px;
+    height: 15px;
+    stroke-width: 2.25;
+    flex-shrink: 0;
   }
 
   .inspector__body {

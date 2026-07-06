@@ -2,8 +2,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import Inspector, { type InspectorSource } from "./Inspector.svelte";
+import rawSource from "./Inspector.svelte?raw";
 
 afterEach(cleanup);
+
+const source = rawSource.replace(/\r\n/g, "\n");
 
 const selected: InspectorSource = {
   title: "ФинБеларусь · видео",
@@ -41,6 +44,14 @@ describe("Inspector", () => {
 
     await fireEvent.click(screen.getByRole("button", { name: "Свернуть" }));
     expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the inspector toggle visibly framed with an icon", () => {
+    expect(source).toContain('data-slot="button"');
+    expect(source).toMatch(
+      /button\.inspector__toggle\s*\{[\s\S]*border: 1px solid var\(--extractum-border\);[\s\S]*background: var\(--extractum-surface-raised\);/,
+    );
+    expect(source).toMatch(/button\.inspector__toggle :global\(svg\)\s*\{[\s\S]*stroke-width: 2.25;/);
   });
 
   it("runs footer sync and disconnect actions for the selected source", async () => {
