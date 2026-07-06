@@ -17,7 +17,7 @@ The flow must also handle sources that already exist in Library: notify the user
 - `LibraryAddSourceDialog.svelte` already contains the full add-source experience with provider tabs for YouTube and Telegram.
 - `LibraryAddSourceDialog` accepts:
   - `sources`, used by YouTube duplicate detection.
-  - `onSourcesChanged(sourceId?: number)`, called after a source is added.
+  - `onSourcesChanged(sourceId?: number)`, called after a source is added. This is a scalar callback today; `LibraryScreen.svelte` depends on that scalar shape to select `source:${sourceId}`.
   - `onStatus(message)`, used to surface non-blocking workflow messages.
 - `LibraryYoutubeSmartImport.svelte` already detects an existing YouTube source via `existingYoutubeSmartImportSource(sources, preview)`, but currently treats it as a terminal disabled state.
 - `LibraryTelegramDialogImport.svelte` calls `addTelegramSource(...)` and then `onSourcesChanged(source.id)`.
@@ -34,8 +34,9 @@ In scope:
 - Add an `Add source` button wherever the project UI already exposes `Connect from Library`.
 - Reuse the existing full `LibraryAddSourceDialog`; do not build a separate provider-specific project dialog.
 - Add a project-aware callback path that receives a source ID from the Library dialog and connects it to the active project.
-- Add a project-aware batch callback path that receives multiple source IDs from playlist imports and connects them to the active project in one `addProjectSources` call.
+- Add a project-only batch callback path that receives multiple source IDs from playlist imports and connects them to the active project in one `addProjectSources` call.
 - Keep the standalone Library route behavior unchanged: adding a source there still only adds/refreshes Library.
+- Preserve the existing scalar `onSourcesChanged(sourceId?: number)` contract for standalone Library consumers.
 - For YouTube Smart import duplicates, change the existing Library-only disabled state into a project-aware connect path when the dialog is opened from a project.
 - Make provider components project-aware through explicit props only; they render project-mode UI branches, but they must not import project APIs.
 - Update `LibraryYoutubePlaylistImport` so project mode can connect every successful playlist-video source ID, not only the first one.
@@ -138,13 +139,13 @@ Project mode connects that playlist container source to the project. It does not
 `LibraryYoutubePlaylistImport` can add several videos. The current implementation only calls `onSourcesChanged(...)` once with the first non-null source ID; v1 must change the project-mode callback path so it connects every successful newly added video source ID in one batch.
 
 - Project mode collects all `summary.results` entries with `status === "added"` and non-null `sourceId`.
-- Project mode calls `onSourcesChanged(sourceIds)` once with the collected numeric IDs.
+- Project mode calls `projectContext.onConnectAddedSources(sourceIds)` once with the collected numeric IDs.
 - The shared helper calls `addProjectSources({ projectId, sourceIds })` once and refreshes once.
-- If the collected list is empty, project mode refreshes Library/project views and reports `Source added to Library, but auto-connect could not be completed.`
+- If the collected list is empty, project mode does not emit the missing-source-ID status because no source was added. The provider-local summary remains responsible for skipped/failed row feedback.
 
 Rows skipped before add execution are not connected in v1 because the current skipped result has `sourceId: null` and no typed duplicate reason. Users can connect those existing sources through `Connect from Library` or through YouTube Smart import duplicate detection. A later version can add typed skip reasons and catalog lookup to connect skipped-existing playlist rows.
 
-Standalone Library mode continues to call `onSourcesChanged(...)` once after the batch to preserve the current Library refresh behavior.
+Standalone Library mode continues to call scalar `onSourcesChanged(firstSourceId)` once after the batch to preserve the current Library refresh and selection behavior.
 
 ### Telegram
 
@@ -161,12 +162,14 @@ Recommended shape:
   - `projectId`;
   - a reactive `connectedSourceIds` set for derived provider UI;
   - an `onConnectExistingSource(sourceId)` callback owned by the project workflow layer.
-- Project screens pass a project-aware `onSourcesChanged(sourceIdOrIds?: number | number[])` callback that delegates to the shared helper for newly created Library sources.
+- Project screens pass a project-aware scalar `onSourcesChanged(sourceId?: number)` callback that delegates to the shared helper for newly created scalar Library sources.
+- `projectContext` also contains `onConnectAddedSources(sourceIds: number[])`, a project-only batch callback for playlist imports.
 - Provider components use `projectContext` to render project-aware UI and to invoke `onConnectExistingSource` when an existing Library source should be connected without creating a new source.
+- Provider components use `onConnectAddedSources` only when they have already added multiple new Library sources and need to connect them in one project call.
 - Provider components do not import `addProjectSources`, project APIs, or route-level state directly.
 - The shared project add-source helper owns:
   - refreshing Library catalog data;
-  - normalizing one source ID or many source IDs into a unique numeric `sourceIds` array;
+  - normalizing source IDs into a unique numeric `sourceIds` array;
   - calling `addProjectSources` once per callback invocation;
   - interpreting `{ added_count, already_present_count }`;
   - refreshing project data after each helper invocation;
@@ -208,7 +211,7 @@ Expected touched areas:
 - `src/lib/ui/project-add-source-workflow.ts`
   - Provide the shared project add-source helper.
   - Use `addProjectSources` outcome for status.
-  - Accept `sourceIdOrIds?: number | number[]`.
+  - Accept `sourceIds: number[]` internally.
   - Deduplicate IDs before calling `addProjectSources`.
   - Refresh state after each successful or already-present connect outcome.
 
@@ -217,6 +220,7 @@ Expected touched areas:
 
 - `LibraryAddSourceDialog.svelte`
   - Accept optional project context without breaking the Library route.
+  - Keep `onSourcesChanged` scalar: `(sourceId?: number) => void | Promise<void>`.
   - Pass project context to provider components.
 
 - `LibraryYoutubeSmartImport.svelte`
@@ -227,7 +231,8 @@ Expected touched areas:
 
 - `LibraryYoutubePlaylistImport.svelte`
   - In project mode, collect all `summary.results` entries with `status === "added"` and non-null `sourceId`.
-  - In project mode, call `onSourcesChanged(sourceIds)` once with that collected array.
+  - In project mode, call `projectContext.onConnectAddedSources(sourceIds)` once with that collected array.
+  - In standalone Library mode, keep calling scalar `onSourcesChanged(firstSourceId)` once.
   - Leave skipped rows unconnected in v1 because skipped results do not carry source IDs or typed duplicate reasons.
   - Preserve the current standalone Library behavior.
 
@@ -236,7 +241,8 @@ Expected touched areas:
 - Library add failure: keep existing provider-local error handling.
 - Project connect failure after Library add success: do not roll back the Library source. Show a status explaining that the source was added but project connection failed.
 - Missing project: disable `Add source` and do not open the project dialog.
-- Missing source ID from a provider flow: refresh Library and project views, then show `Source added to Library, but auto-connect could not be completed.`
+- Missing source ID from a scalar provider flow: refresh Library and project views, then show `Source added to Library, but auto-connect could not be completed.`
+- Empty playlist batch: do not show the missing-source-ID status; no source was added, and the provider-local summary explains skipped/failed rows.
 - Backend idempotency and `already_present_count` are the final authority for connect outcomes.
 - If the reactive UI context knows a source is already connected, it should not call `addProjectSources`.
 - If a connect is attempted and the backend returns `already_present_count > 0`, show `Already connected to this project.` and refresh project state.
@@ -251,13 +257,15 @@ Add or update focused tests:
 - Workflow batch test: project-mode playlist add passes all added source IDs to one `addProjectSources({ projectId, sourceIds })` call.
 - Workflow outcome test: `already_present_count > 0` produces `Already connected to this project.`
 - Workflow failure test: project connect failure after Library add success reports that Library add succeeded but project connect failed.
-- Missing source ID test: project-mode callback refreshes and reports `Source added to Library, but auto-connect could not be completed.`
+- Missing scalar source ID test: project-mode callback refreshes and reports `Source added to Library, but auto-connect could not be completed.`
+- Empty playlist batch test: project mode does not call `addProjectSources` and does not show the missing-source-ID status when the batch produced no added source IDs.
 - Reactive context test: after one connect while the dialog remains open, `connectedSourceIds` updates before the next provider action.
 - Duplicate test: an existing YouTube Library source can be connected from the Smart import preview in project mode.
 - Already-connected test: the project-mode duplicate path shows `Already connected to this project` and does not call `addProjectSources`.
 - Smart playlist test: YouTube Smart import playlist connects the playlist container source, not the playlist videos.
 - Telegram existing-source test: a returned existing Telegram source ID is routed through the same project connect helper.
 - Existing Library route test: standalone Library add-source behavior remains Library-only and does not import project APIs.
+- Standalone callback contract test: `LibraryAddSourceDialog` / `LibraryYoutubeAddPanel` / `LibraryYoutubePlaylistImport` keep scalar `onSourcesChanged(sourceId?: number)` for Library route consumers.
 - Playlist skipped-row test: skipped playlist rows with `sourceId: null` are not auto-connected in v1.
 - ID-space invariant test: `connectedSourceIds`, catalog `sourceId`, project `source_id`, and `addProjectSources.sourceIds` use the same numeric source IDs.
 
