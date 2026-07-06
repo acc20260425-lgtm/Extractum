@@ -20,10 +20,12 @@ The action is intentionally narrower than the existing `Remove` action:
 - `delete_source` already refuses to delete a Library source while it is referenced by any project, but the current error reports only a count and does not list project names.
 - `delete_source_from_pool` currently deletes only the `sources` row. Cleanup of transcripts, comments, source-specific YouTube metadata, analysis documents, archive read rows, prompt-pack snapshots, and other dependent rows relies on SQLite foreign-key actions such as `ON DELETE CASCADE`.
 - SQLite enforces those foreign-key actions only when `PRAGMA foreign_keys = ON` is enabled on the active connection. The new project-scoped delete path must not assume that the pooled connection already has this enabled.
+- The current Tauri SQL plugin setup uses `tauri_plugin_sql::Builder::default().add_migrations(...).build()` and `sqlite:extractum.db` preload; this code does not visibly configure `foreign_keys(true)` for the main runtime pool. The implementation plan must treat global FK enablement as unproven unless verified in code or documentation.
 - `project_sources.source_id` is `ON DELETE RESTRICT`, so the current project membership must be deleted before the source row. Other project memberships must block the operation.
 - `youtube_playlist_items.video_source_id` uses `ON DELETE SET NULL`. A YouTube video source may have been materialized from a playlist; deleting the video source is allowed, and linked playlist item rows should remain as playlist snapshots with `video_source_id = NULL`.
 - Calling `removeProjectSources` first and `deleteSource` second is unsafe for this feature: if the source is linked to another project, the current project membership would already be gone while Library deletion fails.
 - Project archive state does not remove `project_sources` membership. Archived projects still count as usage and must block deletion.
+- `0012_projects_redesign.sql` adds project columns/indexes and does not redefine `project_sources`, so the `project_sources.source_id` FK action remains the one introduced by `0005_projects_mvp.sql`.
 
 ## UX Contract
 
@@ -73,10 +75,16 @@ No partial deletion is allowed:
 - do not delete the Library source;
 - do not mutate source materials.
 
-The status message lists up to three blocking project names and summarizes the rest:
+The status message lists up to three blocking project names and summarizes the rest only when the backend reports additional hidden projects:
 
 ```text
 Cannot delete from Library: source is used by other projects: Project A, Project B, Project C, and 2 more.
+```
+
+If `remaining_blocking_project_count == 0`, the suffix is omitted:
+
+```text
+Cannot delete from Library: source is used by other projects: Project A, Project B, Project C.
 ```
 
 Archived projects are included in this check and can appear in the blocking list.
@@ -119,24 +127,28 @@ Validation errors remain errors:
 
 The command runs the preflight and deletion inside one write transaction. The implementation must acquire a SQLite write lock before the "other projects" check, for example with an immediate transaction or an equivalent first write, so a concurrent project-source insert cannot appear between the check and source deletion.
 
+`PRAGMA foreign_keys = ON` must be enabled and verified before `BEGIN IMMEDIATE` or any other transaction start. SQLite ignores attempts to change this PRAGMA while a transaction or savepoint is open. The existing `tx::begin_immediate(pool)` helper starts the transaction immediately, so this feature needs either a new helper that prepares the connection first or a refactor that separates connection acquisition, FK setup, and `BEGIN IMMEDIATE`.
+
 1. Acquire the same `SourceIngestLocks` state with `SourceIngestKind::Delete` that `delete_source` uses for `source_id`.
-2. Start the write transaction.
-3. Enable and verify `PRAGMA foreign_keys = ON` on the transaction connection before deleting rows.
-4. Confirm the source exists and is `youtube / video`.
-5. Confirm `project_sources(project_id, source_id)` exists.
-6. Query all other projects using the source, including archived projects.
-7. If any other project exists, explicitly roll back the transaction and return `blocked_by_other_projects` without mutations.
-8. Delete the current `project_sources` row.
-9. Delete the `sources` row for `source_id`.
+2. Acquire a SQLite connection.
+3. Enable `PRAGMA foreign_keys = ON` on that connection while no transaction is open.
+4. Verify `PRAGMA foreign_keys` returns `1`; if not, fail before any mutation.
+5. Start the write transaction with `BEGIN IMMEDIATE`.
+6. Confirm the source exists and is `youtube / video`.
+7. Confirm `project_sources(project_id, source_id)` exists.
+8. Query all other projects using the source, including archived projects.
+9. If any other project exists, explicitly roll back the transaction and return `blocked_by_other_projects` without mutations.
+10. Delete the current `project_sources` row.
+11. Delete the `sources` row for `source_id`.
 
 The deletion must factor the existing source-delete behavior; reuse-as-is is not valid because `delete_source_from_pool` acquires its own connection and performs its own `project_count > 0` guard. That separate connection would not see the uncommitted deletion of the current `project_sources` row.
 
 Implementation should split source deletion into explicit helpers, for example:
 
-- standalone path: acquire a connection, enable `foreign_keys`, set the busy timeout, check `project_sources` count is zero, then call a low-level row-delete helper;
-- project-scoped path: use the already-open write transaction, enable `foreign_keys`, perform the "other projects" structured check, delete the current membership, then call the same low-level row-delete helper without the standalone `project_count` guard.
+- standalone path: acquire a connection, enable and verify `foreign_keys` before any transaction, set the busy timeout, check `project_sources` count is zero, then call a low-level row-delete helper;
+- project-scoped path: use the already-prepared transaction connection, perform the "other projects" structured check, delete the current membership, then call the same low-level row-delete helper without the standalone `project_count` guard.
 
-The standalone `delete_source` command keeps its existing semantics: any project membership blocks deletion with a validation error. The project-scoped command owns the more specific "other projects" branch and must not rely on the standalone count guard for correctness.
+The standalone `delete_source` command keeps its existing project-membership semantics: any project membership blocks deletion with a validation error. It may intentionally gain guaranteed cascade cleanup if the current runtime pool was previously using `foreign_keys = OFF`; that is a bug fix and must be covered by tests rather than treated as behavior to preserve. The project-scoped command owns the more specific "other projects" branch and must not rely on the standalone count guard for correctness.
 
 The user-facing promise that transcripts, comments, and stored materials are removed is backed by SQLite FK cascade and SET NULL behavior, not by ad hoc manual deletion. Backend tests must prove that the relevant dependent rows disappear or detach as intended.
 
@@ -184,10 +196,12 @@ Backend tests:
 - returns `blocked_by_other_projects` without deleting anything when another active project uses the source;
 - returns `blocked_by_other_projects` without deleting anything when another archived project uses the source;
 - returns at most three `blocking_projects` with a correct `remaining_blocking_project_count`;
+- proves `PRAGMA foreign_keys` is enabled before `BEGIN IMMEDIATE`, not inside an already-open transaction;
 - rejects a YouTube playlist;
 - rejects a Telegram or other non-YouTube source;
 - rejects a source not linked to the current project;
-- preserves the existing `delete_source` behavior for standalone Library deletion, including the existing project-membership validation;
+- preserves the existing `delete_source` project-membership validation for standalone Library deletion;
+- verifies standalone `delete_source` also performs cascade cleanup when no project membership blocks it;
 - covers the refactored low-level source-row delete path from both standalone and project-scoped commands.
 
 Frontend unit and contract tests:
@@ -197,6 +211,7 @@ Frontend unit and contract tests:
 - no command is called when confirmation is cancelled;
 - successful outcome refreshes project data and Library catalog;
 - blocked outcome displays up to three project names plus `and N more`;
+- blocked outcome omits the `and N more` suffix when `remaining_blocking_project_count` is `0`;
 - existing `Remove` behavior remains membership-only.
 
 Validation:
