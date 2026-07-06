@@ -57,8 +57,6 @@
   - Small visual adjustment only if needed after screenshot comparison; no selector behavior changes.
 - `src/lib/components/research-projects/ResearchProjectsShell.svelte`
   - Tighten seams between toolbar, tabs, stats/bulk bar, filter row, and grid.
-- `docs/superpowers/specs/2026-07-06-projects-next-v11-source-slice-design.md`
-  - Status is set to `approved`.
 
 ---
 
@@ -105,6 +103,7 @@ Add inside the existing `sourceGridColumns` describe block:
 
     expect(SOURCE_TABLE_LAYOUT).toEqual({
       select: 34,
+      titleMin: 160,
       titleFlexGrow: 1,
       type: 116,
       materials: 116,
@@ -112,7 +111,7 @@ Add inside the existing `sourceGridColumns` describe block:
       status: 104,
     });
     expect(SOURCE_FILTER_ROW_GRID_TEMPLATE).toBe(
-      "34px minmax(0, 1fr) 116px 116px 150px 104px",
+      "34px minmax(160px, 1fr) 116px 116px 150px 104px",
     );
 
     expect(byId.get("title")?.flexgrow).toBe(SOURCE_TABLE_LAYOUT.titleFlexGrow);
@@ -167,6 +166,7 @@ Modify `src/lib/ui/research-projects-source-row.ts` near the top:
 ```ts
 export const SOURCE_TABLE_LAYOUT = {
   select: 34,
+  titleMin: 160,
   titleFlexGrow: 1,
   type: 116,
   materials: 116,
@@ -176,7 +176,7 @@ export const SOURCE_TABLE_LAYOUT = {
 
 export const SOURCE_FILTER_ROW_GRID_TEMPLATE = [
   `${SOURCE_TABLE_LAYOUT.select}px`,
-  "minmax(0, 1fr)",
+  `minmax(${SOURCE_TABLE_LAYOUT.titleMin}px, 1fr)`,
   `${SOURCE_TABLE_LAYOUT.type}px`,
   `${SOURCE_TABLE_LAYOUT.materials}px`,
   `${SOURCE_TABLE_LAYOUT.lastSync}px`,
@@ -215,6 +215,8 @@ export function sourceGridColumns(): ExtractumDataGridColumn[] {
 ```
 
 Important: do not set `width` on the title column. SVAR docs confirm `flexgrow` has no effect when `width` is explicitly set.
+
+Do not add a `minWidth`/`minwidth` field to the SVAR title column. The installed `@svar-ui/svelte-grid` `IColumnConfig` exposes `width` and `flexgrow`, but no minimum-width property. The title lower bound is handled by `SOURCE_FILTER_ROW_GRID_TEMPLATE` and by the live header-fit verification in Task 4.
 
 - [ ] **Step 4: Consume select width in `SourcesGrid.svelte`**
 
@@ -256,7 +258,7 @@ Modify the root element:
 Remove this CSS declaration from `.sources-filter-row`:
 
 ```css
-grid-template-columns: 34px minmax(0, 1fr) 116px 116px 150px 104px;
+grid-template-columns: 34px minmax(160px, 1fr) 116px 116px 150px 104px;
 ```
 
 - [ ] **Step 6: Run focused tests to verify green**
@@ -552,7 +554,7 @@ Run:
 npm.cmd run test -- src/lib/components/research-projects/ProjectTabs.test.ts src/lib/components/research-projects/ResearchProjectsShell.test.ts src/lib/components/research-projects/SourcesGrid.test.ts src/lib/components/research-projects/ProjectToolbar.test.ts
 ```
 
-Expected: PASS if the current files already satisfy the raw-source contracts. If a new raw assertion fails, adjust the assertion to match the intended exact style in Step 3 rather than weakening the contract.
+Expected: PASS for the existing composition checks and the current `ProjectTabs` raw assertions (`height: 40px` and active underline already exist). If this fails, stop and inspect the current component before editing; do not weaken the raw assertions.
 
 - [ ] **Step 3: Tighten `ResearchProjectsShell.svelte` seams**
 
@@ -637,23 +639,9 @@ Before editing, compare the current toolbar screenshot with v11. If only spacing
 
 Do not change popover behavior, selector state, or run-disabled logic.
 
-- [ ] **Step 6: Tune `SourcesGrid.svelte` wrapper styles**
+- [ ] **Step 6: Tune `SourcesGrid.svelte` wrapper styles with a scoped class**
 
-Keep SVAR DataGrid. Add or adjust global rules inside `SourcesGrid.svelte` only if the grid needs per-screen polish:
-
-```css
-  :global(.extractum-data-grid .wx-header .wx-cell) {
-    font-weight: 700;
-    color: var(--extractum-text);
-    background: var(--extractum-surface-subtle);
-  }
-
-  :global(.extractum-data-grid .wx-row .wx-cell) {
-    border-color: color-mix(in srgb, var(--extractum-border) 72%, transparent);
-  }
-```
-
-If this affects other DataGrid instances unexpectedly, move the rules behind a local class passed to `ExtractumDataGrid`:
+Keep SVAR DataGrid. Add a local class to the `ExtractumDataGrid` invocation so source-table polish does not leak to Library, analysis, or other grids:
 
 ```svelte
 <ExtractumDataGrid
@@ -673,7 +661,7 @@ If this affects other DataGrid instances unexpectedly, move the rules behind a l
 />
 ```
 
-Then scope rules to:
+Add the source-table-only rules in `SourcesGrid.svelte`:
 
 ```css
   :global(.sources-grid__table .wx-header .wx-cell) {

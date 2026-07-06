@@ -118,8 +118,10 @@ Keep the current filter model and align the row to the source table:
 The implementation plan must not rely on reading live SVAR column positions from the DOM. Instead, define the source table geometry once in UI code and consume it from both sides:
 
 - numeric widths for SVAR columns: select `34`, type `116`, materials `116`, last sync `150`, status `104`;
-- title column as the only flexible column: `minmax(0, 1fr)` in the filter row, `flexgrow: 1` in SVAR;
-- a derived filter-row grid template equivalent to `34px minmax(0, 1fr) 116px 116px 150px 104px`.
+- title column as the only flexible column: `minmax(160px, 1fr)` in the filter row, `flexgrow: 1` in SVAR;
+- a derived filter-row grid template equivalent to `34px minmax(160px, 1fr) 116px 116px 150px 104px`.
+
+The installed SVAR `IColumnConfig` exposes `width` and `flexgrow`, but no `minWidth`/`minwidth` property. The title lower bound is therefore expressed in the external filter-row grid template and verified visually/header-fit in Tauri MCP; the SVAR title column remains flexible with `flexgrow: 1` and no fixed `width`.
 
 This makes alignment deterministic for the configured grid. Perfect runtime alignment after user-driven column resizing is out of scope because the current DataGrid does not expose those live widths to `SourcesFilterRow`.
 
