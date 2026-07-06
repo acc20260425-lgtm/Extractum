@@ -16,8 +16,25 @@ import analysisUtilsSource from "./analysis-utils.ts?raw";
 import analysisTypesSource from "./types/analysis.ts?raw";
 import workspaceStateSource from "./analysis-workspace-state.ts?raw";
 import chatBackendSource from "../../src-tauri/src/analysis/chat.rs?raw";
-import corpusBackendSource from "../../src-tauri/src/analysis/corpus.rs?raw";
-import storeBackendSource from "../../src-tauri/src/analysis/store.rs?raw";
+import corpusBackendFacadeSource from "../../src-tauri/src/analysis/corpus.rs?raw";
+import corpusSnapshotSource from "../../src-tauri/src/analysis/corpus/snapshot.rs?raw";
+import corpusSourceResolutionSource from "../../src-tauri/src/analysis/corpus/source_resolution.rs?raw";
+import storeBackendFacadeSource from "../../src-tauri/src/analysis/store.rs?raw";
+import storeReadModelSource from "../../src-tauri/src/analysis/store/read_model.rs?raw";
+import storeRunsSource from "../../src-tauri/src/analysis/store/runs.rs?raw";
+import storeSnapshotSource from "../../src-tauri/src/analysis/store/snapshot.rs?raw";
+
+const corpusBackendSource = [
+  corpusBackendFacadeSource,
+  corpusSnapshotSource,
+  corpusSourceResolutionSource,
+].join("\n");
+const storeBackendSource = [
+  storeBackendFacadeSource,
+  storeReadModelSource,
+  storeRunsSource,
+  storeSnapshotSource,
+].join("\n");
 
 describe("analysis redesign final safety contract", () => {
   it("keeps run snapshot and live source basis explicit in Source mode", () => {

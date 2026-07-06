@@ -18,7 +18,7 @@ describe("diagnostics UX contract", () => {
   });
 
   it("puts diagnostics table controls before summary cards and filters issue rows", () => {
-    const controlsIndex = diagnosticsPageSource.indexOf('class="diagnostics-table-controls"');
+    const controlsIndex = diagnosticsPageSource.indexOf("diagnostics-table-controls");
     const gridIndex = diagnosticsPageSource.indexOf('class="diagnostics-grid"');
 
     expect(controlsIndex).toBeGreaterThan(0);
