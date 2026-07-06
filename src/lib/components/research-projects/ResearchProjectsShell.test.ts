@@ -145,21 +145,25 @@ describe("ResearchProjectsShell", () => {
     expect(shellSource).toContain("{...runDock}");
   });
 
-  it("renders the stats bar with the bulk overlay inside and the filter row above the grid", () => {
+  it("renders the bulk bar as an in-flow strip below the stats bar", () => {
     expect(shellSource).toContain("research-projects-shell__statsbar");
     expect(shellSource).toContain("<SourcesFilterBar");
     expect(shellSource).toContain("<SourcesFilterBar {...filterBar} />");
     expect(shellSource).toContain("{...filterBar}");
     expect(shellSource).toContain("<SourcesBulkBar {...bulkBar} />");
+    expect(shellSource).toContain("research-projects-shell__bulkbar");
     expect(shellSource).toContain("<SourcesFilterRow");
     expect(shellSource).toContain("<SourcesFilterRow {...filterRow} />");
     expect(shellSource).toContain("{...filterRow}");
-    // bulk-бар живёт внутри statsbar-контейнера (overlay поверх фильтров)
     const statsIndex = shellSource.indexOf('class="research-projects-shell__statsbar"');
+    const statsCloseIndex = shellSource.indexOf("</div>", statsIndex);
     const bulkIndex = shellSource.indexOf("<SourcesBulkBar");
+    const bulkWrapperIndex = shellSource.indexOf('class="research-projects-shell__bulkbar"');
     const gridIndex = shellSource.indexOf('class="research-projects-shell__grid"');
     expect(statsIndex).toBeGreaterThan(-1);
-    expect(bulkIndex).toBeGreaterThan(statsIndex);
+    expect(statsCloseIndex).toBeGreaterThan(statsIndex);
+    expect(bulkWrapperIndex).toBeGreaterThan(statsCloseIndex);
+    expect(bulkIndex).toBeGreaterThan(bulkWrapperIndex);
     expect(bulkIndex).toBeLessThan(gridIndex);
     expect(shellSource).toContain("overlay={gridOverlay}");
   });

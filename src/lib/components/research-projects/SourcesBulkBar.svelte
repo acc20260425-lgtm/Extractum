@@ -104,9 +104,7 @@
 
 <style>
   .sources-bulk-bar {
-    position: absolute;
-    inset: 0;
-    z-index: 5;
+    flex-shrink: 0;
     min-height: 42px;
     display: flex;
     align-items: center;

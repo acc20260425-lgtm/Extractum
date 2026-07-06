@@ -67,9 +67,11 @@
         {#if filterBar}
           <div class="research-projects-shell__statsbar">
             <SourcesFilterBar {...filterBar} />
-            {#if bulkBar}
-              <SourcesBulkBar {...bulkBar} />
-            {/if}
+          </div>
+        {/if}
+        {#if bulkBar}
+          <div class="research-projects-shell__bulkbar">
+            <SourcesBulkBar {...bulkBar} />
           </div>
         {/if}
         {#if filterRow}
@@ -127,9 +129,12 @@
   }
 
   .research-projects-shell__statsbar {
-    position: relative;
     flex-shrink: 0;
     min-height: 42px;
+  }
+
+  .research-projects-shell__bulkbar {
+    flex-shrink: 0;
   }
 
   .research-projects-shell__section-placeholder {

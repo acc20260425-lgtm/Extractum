@@ -2,13 +2,24 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import SourcesBulkBar from "./SourcesBulkBar.svelte";
+import rawSource from "./SourcesBulkBar.svelte?raw";
 
 afterEach(cleanup);
+
+const source = rawSource.replace(/\r\n/g, "\n");
 
 describe("SourcesBulkBar", () => {
   it("shows the selected count", () => {
     render(SourcesBulkBar, { props: { count: 3 } });
     expect(screen.getByText("Выбрано: 3")).toBeTruthy();
+  });
+
+  it("renders as an in-flow strip instead of an overlay", () => {
+    expect(source).toContain(".sources-bulk-bar {");
+    expect(source).not.toContain("position: absolute");
+    expect(source).not.toContain("inset: 0");
+    expect(source).not.toContain("z-index: 5");
+    expect(source).toContain("flex-shrink: 0");
   });
 
   it("disables the sync button and exposes the title when syncDisabled", () => {
