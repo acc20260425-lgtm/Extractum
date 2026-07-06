@@ -10,6 +10,9 @@ import {
   connectableSelection,
   projectIdFromViewId,
   projectViewId,
+  PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM,
+  projectSourceLibraryDeleteStatus,
+  selectedProjectSourceLibraryDeleteDisabledReason,
   selectedProjectSourcesSyncDisabledReason,
   type LibrarySourceView,
   type ProjectSourceLinkView,
@@ -19,6 +22,8 @@ import type { AnalysisPromptTemplate, AnalysisRunSummary } from "$lib/types/anal
 import type { LibraryCatalogRecord, LibraryCatalogResponse } from "$lib/types/library-sources";
 import type {
   AddProjectSourcesOutcome,
+  DeleteProjectYoutubeVideoSourceInput,
+  DeleteProjectYoutubeVideoSourceOutcome,
   ProjectAnalysisStartCommand,
   ProjectEditorInput,
   ProjectRecord,
@@ -56,11 +61,15 @@ export interface ResearchProjectsWorkflowDeps {
   listSourceJobs(): Promise<SourceJobRecord[]>;
   addProjectSources(input: ProjectSourcesInput): Promise<AddProjectSourcesOutcome>;
   removeProjectSources(input: ProjectSourcesInput): Promise<void>;
+  deleteProjectYoutubeVideoSourceFromLibrary(
+    input: DeleteProjectYoutubeVideoSourceInput,
+  ): Promise<DeleteProjectYoutubeVideoSourceOutcome>;
   createProject(input: ProjectEditorInput): Promise<ProjectRecord>;
   updateProject(input: UpdateProjectInput): Promise<ProjectRecord>;
   deleteProject(projectId: number): Promise<void>;
   startProjectAnalysis(input: ProjectAnalysisStartCommand): Promise<number>;
   syncYoutubeSource(sourceId: number, options: YoutubeSyncOptions): Promise<SourceJobRecord>;
+  confirm(message: string): boolean;
   formatError(action: string, error: unknown): string;
 }
 
@@ -267,6 +276,39 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
     }
   }
 
+  async function deleteProjectYoutubeVideoSourceFromLibrary(sourceId: number) {
+    const state = deps.getState();
+    const projectId = projectIdFromViewId(state.selectedProjectId);
+    if (!projectId) {
+      deps.patch({ status: "Select a project" });
+      return;
+    }
+
+    const row = state.projectSourceLinks.find((source) => source.sourceNumericId === sourceId);
+    const disabledReason = selectedProjectSourceLibraryDeleteDisabledReason(row ? [row] : []);
+    if (disabledReason) {
+      deps.patch({ status: disabledReason });
+      return;
+    }
+
+    if (!deps.confirm(PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM)) {
+      return;
+    }
+
+    deps.patch({ saving: true });
+    try {
+      const outcome = await deps.deleteProjectYoutubeVideoSourceFromLibrary({ projectId, sourceId });
+      deps.patch({ status: projectSourceLibraryDeleteStatus(outcome) });
+      if (outcome.status === "deleted") {
+        await loadWorkspace();
+      }
+    } catch (error) {
+      deps.patch({ status: deps.formatError("deleting project source from Library", error) });
+    } finally {
+      deps.patch({ saving: false });
+    }
+  }
+
   function setStatus(message: string) {
     deps.patch({ status: message });
   }
@@ -331,6 +373,7 @@ export function createResearchProjectsWorkflow(deps: ResearchProjectsWorkflowDep
     deleteSelectedProject,
     runProjectAnalysis,
     syncProjectSources,
+    deleteProjectYoutubeVideoSourceFromLibrary,
     connectAddedProjectSource,
     connectAddedProjectSources,
     connectExistingProjectSource,

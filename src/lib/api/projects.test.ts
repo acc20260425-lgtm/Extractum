@@ -4,6 +4,7 @@ import {
   addProjectSources,
   createProject,
   deleteProject,
+  deleteProjectYoutubeVideoSourceFromLibrary,
   getProjectDataRange,
   listProjectRuns,
   listProjectSources,
@@ -66,6 +67,24 @@ describe("projects api", () => {
       projectId: 2,
       sourceIds: [5],
     });
+
+    invokeMock.mockResolvedValueOnce({
+      status: "deleted",
+      blocking_projects: [],
+      remaining_blocking_project_count: 0,
+    });
+    const deleteOutcome = await deleteProjectYoutubeVideoSourceFromLibrary({
+      projectId: 2,
+      sourceId: 5,
+    });
+    expect(invokeMock).toHaveBeenLastCalledWith(
+      "delete_project_youtube_video_source_from_library",
+      {
+        projectId: 2,
+        sourceId: 5,
+      },
+    );
+    expect(deleteOutcome.status).toBe("deleted");
 
     invokeMock.mockResolvedValueOnce([]);
     await listProjectRuns(2);

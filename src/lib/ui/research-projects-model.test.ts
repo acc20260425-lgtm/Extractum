@@ -3,8 +3,11 @@ import {
   buildLibrarySourcesView,
   buildProjectSourceLinksView,
   buildResearchProjectsView,
+  PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM,
+  projectSourceLibraryDeleteStatus,
   projectRunDisabledReason,
   reconcileProjectSourceSelection,
+  selectedProjectSourceLibraryDeleteDisabledReason,
   selectedProjectSourcesSyncDisabledReason,
 } from "./research-projects-model";
 import type { LibraryCatalogRecord } from "$lib/types/library-sources";
@@ -190,5 +193,64 @@ describe("research projects model", () => {
     expect(selectedProjectSourcesSyncDisabledReason(mixedRows)).toBe(
       "Selected sources include unsupported sync types",
     );
+  });
+
+  it("requires exactly one selected YouTube video for Library deletion", () => {
+    const youtubeRows = buildProjectSourceLinksView("project:1", [
+      projectSources[0],
+    ]);
+    const playlistRows = buildProjectSourceLinksView("project:1", [
+      { ...projectSources[0], source_id: 11, source_subtype: "playlist", title: "Playlist" },
+    ]);
+    const telegramRows = buildProjectSourceLinksView("project:1", [
+      { ...projectSources[0], source_id: 12, provider: "telegram", source_subtype: "supergroup" },
+    ]);
+
+    expect(selectedProjectSourceLibraryDeleteDisabledReason([])).toBe(
+      "Select one YouTube video source",
+    );
+    expect(selectedProjectSourceLibraryDeleteDisabledReason([...youtubeRows, ...playlistRows])).toBe(
+      "Select one YouTube video source",
+    );
+    expect(selectedProjectSourceLibraryDeleteDisabledReason(youtubeRows)).toBeNull();
+    expect(selectedProjectSourceLibraryDeleteDisabledReason(playlistRows)).toBe(
+      "Only YouTube videos can be deleted from Library here",
+    );
+    expect(selectedProjectSourceLibraryDeleteDisabledReason(telegramRows)).toBe(
+      "Only YouTube videos can be deleted from Library here",
+    );
+  });
+
+  it("formats project source Library delete outcomes", () => {
+    expect(PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM).toContain(
+      "Delete this YouTube video from the project and Library?",
+    );
+    expect(
+      projectSourceLibraryDeleteStatus({
+        status: "deleted",
+        blocking_projects: [],
+        remaining_blocking_project_count: 0,
+      }),
+    ).toBe("Source deleted from project and Library.");
+    expect(
+      projectSourceLibraryDeleteStatus({
+        status: "blocked_by_other_projects",
+        blocking_projects: [
+          { project_id: 1, title: "Alpha", archived: false },
+          { project_id: 2, title: "Beta", archived: true },
+          { project_id: 3, title: "Gamma", archived: false },
+        ],
+        remaining_blocking_project_count: 2,
+      }),
+    ).toBe(
+      "Cannot delete from Library: source is used by other projects: Alpha, Beta, Gamma, and 2 more.",
+    );
+    expect(
+      projectSourceLibraryDeleteStatus({
+        status: "blocked_by_other_projects",
+        blocking_projects: [{ project_id: 1, title: "Alpha", archived: false }],
+        remaining_blocking_project_count: 0,
+      }),
+    ).toBe("Cannot delete from Library: source is used by other projects: Alpha.");
   });
 });

@@ -876,7 +876,7 @@ git commit -m "feat: add project-scoped youtube library delete command"
 - Produces: `projectSourceLibraryDeleteStatus(outcome): string`
 - Produces: workflow method `deleteProjectYoutubeVideoSourceFromLibrary(sourceId: number): Promise<void>`
 
-- [ ] **Step 1: Add failing API wrapper test in `src/lib/api/projects.test.ts`**
+- [x] **Step 1: Add failing API wrapper test in `src/lib/api/projects.test.ts`**
 
 Add import:
 
@@ -907,7 +907,7 @@ it("invokes delete_project_youtube_video_source_from_library with project and so
 });
 ```
 
-- [ ] **Step 2: Add failing model tests in `src/lib/ui/research-projects-model.test.ts`**
+- [x] **Step 2: Add failing model tests in `src/lib/ui/research-projects-model.test.ts`**
 
 Add tests:
 
@@ -971,7 +971,7 @@ describe("projectSourceLibraryDeleteStatus", () => {
 });
 ```
 
-- [ ] **Step 3: Run the new frontend helper tests and verify they fail**
+- [x] **Step 3: Run the new frontend helper tests and verify they fail**
 
 Run:
 
@@ -981,7 +981,7 @@ npm.cmd run test -- src/lib/api/projects.test.ts src/lib/ui/research-projects-mo
 
 Expected: FAIL because the functions and types are missing.
 
-- [ ] **Step 4: Add TypeScript API types in `src/lib/types/projects.ts`**
+- [x] **Step 4: Add TypeScript API types in `src/lib/types/projects.ts`**
 
 Add after `ProjectSourcesInput`:
 
@@ -1006,7 +1006,7 @@ export interface DeleteProjectYoutubeVideoSourceOutcome {
 }
 ```
 
-- [ ] **Step 5: Add API wrapper in `src/lib/api/projects.ts`**
+- [x] **Step 5: Add API wrapper in `src/lib/api/projects.ts`**
 
 Extend imports:
 
@@ -1028,7 +1028,7 @@ export function deleteProjectYoutubeVideoSourceFromLibrary(
 }
 ```
 
-- [ ] **Step 6: Add model helpers in `src/lib/ui/research-projects-model.ts`**
+- [x] **Step 6: Add model helpers in `src/lib/ui/research-projects-model.ts`**
 
 Add import:
 
@@ -1066,7 +1066,7 @@ export function projectSourceLibraryDeleteStatus(
 }
 ```
 
-- [ ] **Step 7: Add workflow tests in `src/lib/ui/research-projects-workflow.test.ts`**
+- [x] **Step 7: Add workflow tests in `src/lib/ui/research-projects-workflow.test.ts`**
 
 Extend the model import at the top of the test file:
 
@@ -1163,7 +1163,7 @@ it("keeps current project membership when backend reports blocking projects", as
 });
 ```
 
-- [ ] **Step 8: Implement workflow helper in `src/lib/ui/research-projects-workflow.ts`**
+- [x] **Step 8: Implement workflow helper in `src/lib/ui/research-projects-workflow.ts`**
 
 Extend imports:
 
@@ -1230,7 +1230,7 @@ Return the method:
 deleteProjectYoutubeVideoSourceFromLibrary,
 ```
 
-- [ ] **Step 9: Run Task 3 tests**
+- [x] **Step 9: Run Task 3 tests**
 
 Run:
 
@@ -1240,7 +1240,7 @@ npm.cmd run test -- src/lib/api/projects.test.ts src/lib/ui/research-projects-mo
 
 Expected: PASS.
 
-- [ ] **Step 10: Commit Task 3**
+- [x] **Step 10: Commit Task 3**
 
 Run:
 

@@ -4,7 +4,11 @@ import type {
   LibrarySourceProvider,
   LibrarySourceSubtype,
 } from "$lib/types/library-sources";
-import type { ProjectRecord, ProjectSourceRecord } from "$lib/types/projects";
+import type {
+  DeleteProjectYoutubeVideoSourceOutcome,
+  ProjectRecord,
+  ProjectSourceRecord,
+} from "$lib/types/projects";
 import { librarySourceTypeLabel } from "./library-catalog-model";
 
 export type ProjectStatus = "ready" | "running" | "needs_attention" | "empty";
@@ -199,6 +203,32 @@ export function selectedProjectSourcesSyncDisabledReason(
   );
   if (hasUnsupported) return "Selected sources include unsupported sync types";
   return null;
+}
+
+export const PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM =
+  "Delete this YouTube video from the project and Library? The app will cancel the deletion if another project still uses it. This will remove its transcript, comments, and stored materials.";
+
+export function selectedProjectSourceLibraryDeleteDisabledReason(
+  rows: Pick<ProjectSourceLinkView, "provider" | "subtype">[],
+) {
+  if (rows.length !== 1) return "Select one YouTube video source";
+  const [row] = rows;
+  if (row.provider !== "youtube" || row.subtype !== "video") {
+    return "Only YouTube videos can be deleted from Library here";
+  }
+  return null;
+}
+
+export function projectSourceLibraryDeleteStatus(
+  outcome: DeleteProjectYoutubeVideoSourceOutcome,
+) {
+  if (outcome.status === "deleted") return "Source deleted from project and Library.";
+  const names = outcome.blocking_projects.map((project) => project.title).join(", ");
+  const suffix =
+    outcome.remaining_blocking_project_count > 0
+      ? `, and ${outcome.remaining_blocking_project_count} more`
+      : "";
+  return `Cannot delete from Library: source is used by other projects: ${names}${suffix}.`;
 }
 
 export function buildProjectSourceLinksView(

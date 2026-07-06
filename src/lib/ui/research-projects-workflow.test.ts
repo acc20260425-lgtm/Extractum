@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { connectedSourceIdsForProject } from "./project-add-source-workflow";
+import {
+  PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM,
+  buildProjectSourceLinksView,
+} from "./research-projects-model";
 import { createResearchProjectsWorkflow, type ResearchProjectsWorkflowState } from "./research-projects-workflow";
 import type { AnalysisPromptTemplate, AnalysisRunSummary } from "$lib/types/analysis";
 import type { LibraryCatalogRecord, LibrarySourceRecord } from "$lib/types/library-sources";
@@ -174,13 +178,24 @@ function createDeps(state: ResearchProjectsWorkflowState) {
     listSourceJobs: vi.fn(),
     addProjectSources: vi.fn(),
     removeProjectSources: vi.fn(),
+    deleteProjectYoutubeVideoSourceFromLibrary: vi.fn(),
     createProject: vi.fn(),
     updateProject: vi.fn(),
     deleteProject: vi.fn(),
     startProjectAnalysis: vi.fn(),
     syncYoutubeSource: vi.fn(),
+    confirm: vi.fn(() => true),
     formatError: vi.fn((action: string, error: unknown) => `Error ${action}: ${String(error)}`),
   };
+}
+
+function createStateWithSelectedYoutubeVideoSource() {
+  const state = createInitialState();
+  state.selectedProjectId = "project:1";
+  state.projectsRaw = [project()];
+  state.projectSources = [projectSource()];
+  state.projectSourceLinks = buildProjectSourceLinksView("project:1", state.projectSources);
+  return state;
 }
 
 describe("research projects workflow", () => {
@@ -449,6 +464,68 @@ describe("research projects workflow", () => {
     });
     expect(state.status).toBe("Queued sync for 2 sources.");
     expect(deps.listSourceJobs).toHaveBeenCalled();
+  });
+
+  it("does not call project source Library delete when confirmation is cancelled", async () => {
+    const state = createStateWithSelectedYoutubeVideoSource();
+    const deps = createDeps(state);
+    deps.confirm.mockReturnValueOnce(false);
+    const workflow = createResearchProjectsWorkflow(deps);
+
+    await workflow.deleteProjectYoutubeVideoSourceFromLibrary(10);
+
+    expect(deps.confirm).toHaveBeenCalledWith(PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM);
+    expect(deps.deleteProjectYoutubeVideoSourceFromLibrary).not.toHaveBeenCalled();
+  });
+
+  it("deletes one project YouTube video source from Library and refreshes workspace", async () => {
+    const state = createStateWithSelectedYoutubeVideoSource();
+    const deps = createDeps(state);
+    deps.deleteProjectYoutubeVideoSourceFromLibrary.mockResolvedValueOnce({
+      status: "deleted",
+      blocking_projects: [],
+      remaining_blocking_project_count: 0,
+    });
+    deps.listProjects.mockResolvedValue([project()]);
+    deps.listProjectSources.mockResolvedValue([projectSource()]);
+    deps.listLibraryCatalog.mockResolvedValue({ sources: [], filter_counts: [] });
+    deps.listProjectRuns.mockResolvedValue([]);
+    deps.listPromptTemplates.mockResolvedValue([]);
+    deps.listSourceJobs.mockResolvedValue([]);
+    const workflow = createResearchProjectsWorkflow(deps);
+
+    await workflow.deleteProjectYoutubeVideoSourceFromLibrary(10);
+
+    expect(deps.confirm).toHaveBeenCalledWith(PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM);
+    expect(deps.deleteProjectYoutubeVideoSourceFromLibrary).toHaveBeenCalledWith({
+      projectId: 1,
+      sourceId: 10,
+    });
+    expect(state.status).toBe("Source deleted from project and Library.");
+    expect(deps.listLibraryCatalog).toHaveBeenCalledTimes(1);
+    expect(deps.listProjectSources).toHaveBeenCalled();
+  });
+
+  it("keeps current project membership when backend reports blocking projects", async () => {
+    const state = createStateWithSelectedYoutubeVideoSource();
+    const deps = createDeps(state);
+    deps.deleteProjectYoutubeVideoSourceFromLibrary.mockResolvedValueOnce({
+      status: "blocked_by_other_projects",
+      blocking_projects: [
+        { project_id: 2, title: "Alpha", archived: false },
+        { project_id: 3, title: "Beta", archived: true },
+        { project_id: 4, title: "Gamma", archived: false },
+      ],
+      remaining_blocking_project_count: 1,
+    });
+    const workflow = createResearchProjectsWorkflow(deps);
+
+    await workflow.deleteProjectYoutubeVideoSourceFromLibrary(10);
+
+    expect(state.status).toBe(
+      "Cannot delete from Library: source is used by other projects: Alpha, Beta, Gamma, and 1 more.",
+    );
+    expect(deps.listLibraryCatalog).toHaveBeenCalledTimes(0);
   });
 
   it("can clear queued source sync status after terminal source job refresh", async () => {

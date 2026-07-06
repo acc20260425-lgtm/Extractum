@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AddProjectSourcesOutcome,
+  DeleteProjectYoutubeVideoSourceInput,
+  DeleteProjectYoutubeVideoSourceOutcome,
   ProjectArchivedInput,
   ProjectAnalysisStartCommand,
   ProjectDataRange,
@@ -53,6 +55,15 @@ export function addProjectSources(input: ProjectSourcesInput) {
 
 export function removeProjectSources(input: ProjectSourcesInput) {
   return invoke<void>("remove_project_sources", { ...input });
+}
+
+export function deleteProjectYoutubeVideoSourceFromLibrary(
+  input: DeleteProjectYoutubeVideoSourceInput,
+) {
+  return invoke<DeleteProjectYoutubeVideoSourceOutcome>(
+    "delete_project_youtube_video_source_from_library",
+    { ...input },
+  );
 }
 
 export function listProjectRuns(projectId: number) {

@@ -82,6 +82,25 @@ export interface ProjectSourcesInput {
   sourceIds: number[];
 }
 
+export interface DeleteProjectYoutubeVideoSourceInput {
+  projectId: number;
+  sourceId: number;
+}
+
+export type DeleteProjectYoutubeVideoSourceStatus = "deleted" | "blocked_by_other_projects";
+
+export interface BlockingProjectReference {
+  project_id: number;
+  title: string;
+  archived: boolean;
+}
+
+export interface DeleteProjectYoutubeVideoSourceOutcome {
+  status: DeleteProjectYoutubeVideoSourceStatus;
+  blocking_projects: BlockingProjectReference[];
+  remaining_blocking_project_count: number;
+}
+
 export interface ProjectAnalysisStartCommand {
   projectId: number;
   periodFrom: number;
