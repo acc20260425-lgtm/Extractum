@@ -26,6 +26,10 @@ const projectsNextRouteSource = readFileSync(
   resolve(process.cwd(), "src/routes/projects/next/+page.svelte"),
   "utf8",
 );
+const projectSourceGridSource = readFileSync(
+  resolve(process.cwd(), "src/lib/ui/research-projects-project-source-grid.ts"),
+  "utf8",
+);
 
 describe("projects mvp route contract", () => {
   it("uses real project APIs instead of analysis source group APIs", () => {
@@ -76,9 +80,11 @@ describe("projects mvp route contract", () => {
 
   it("matches the Library type column in Workspace project sources", () => {
     expect(workspaceSource).toContain("SourcesTab");
-    expect(sourcesTabSource).toContain('id: "typeLabel", header: "Type"');
-    expect(sourcesTabSource).not.toContain('header: "Provider"');
-    expect(sourcesTabSource).not.toContain('header: "Subtype"');
+    expect(sourcesTabSource).toContain("projectSourceGridColumns");
+    expect(projectSourceGridSource).toContain('id: "typeLabel"');
+    expect(projectSourceGridSource).toContain('header: "Type"');
+    expect(projectSourceGridSource).not.toContain('header: "Provider"');
+    expect(projectSourceGridSource).not.toContain('header: "Subtype"');
   });
 
   it("shows full source type labels when connecting sources from Library", () => {
@@ -232,7 +238,8 @@ describe("projects mvp route contract", () => {
   it("labels project data grids for assistive technology", () => {
     expect(dataGridSource).toContain("ariaLabel");
     expect(dataGridSource).toContain("aria-label={ariaLabel}");
-    expect(sourcesTabSource).toContain('{ id: "title", header: "Title", width: 260, flexgrow: 1');
+    expect(projectSourceGridSource).toContain('id: "title"');
+    expect(projectSourceGridSource).toContain('header: "Title"');
     expect(sourcesTabSource).toContain('ariaLabel="Project sources"');
     expect(connectFromLibrarySource).toContain('ariaLabel="Library sources available to connect"');
     expect(runsScreenSource).toContain('<section class="project-runs-screen" aria-label="Prompt Pack runs">');

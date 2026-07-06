@@ -5,7 +5,6 @@
     ExtractumDataGrid,
     ExtractumDialog,
   } from "$lib/components/extractum-ui";
-  import type { ExtractumDataGridColumn } from "$lib/components/extractum-ui";
   import type {
     LibrarySourceView,
     ProjectSourceLinkView,
@@ -16,6 +15,7 @@
     selectedProjectSourceLibraryDeleteDisabledReason,
     selectedProjectSourcesSyncDisabledReason,
   } from "$lib/ui/research-projects-model";
+  import { projectSourceGridColumns } from "$lib/ui/research-projects-project-source-grid";
   import LibrarySourceCell from "./LibrarySourceCell.svelte";
   import ProjectSourceSummary from "./ProjectSourceSummary.svelte";
 
@@ -52,12 +52,7 @@
     onSyncSelectedSources: (sourceIds: number[]) => void | Promise<void>;
   } = $props();
 
-  const columns: ExtractumDataGridColumn[] = [
-    { id: "title", header: "Title", width: 260, flexgrow: 1, cell: LibrarySourceCell },
-    { id: "typeLabel", header: "Type", width: 150 },
-    { id: "localCopyLabel", header: "Details", width: 140 },
-    { id: "addedAt", header: "Added to project at", width: 180, dateTimeFormat: "datetime" },
-  ];
+  const columns = projectSourceGridColumns(LibrarySourceCell);
 
   let libraryById = $derived(new Map(librarySources.map((source) => [source.id, source])));
   let rows = $derived<ProjectSourceGridRow[]>(
