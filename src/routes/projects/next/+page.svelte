@@ -29,7 +29,9 @@
   import {
     buildLibrarySourcesView,
     connectableSelection,
+    projectSourceLibraryDeleteStatus,
     projectViewId,
+    selectedProjectSourceLibraryDeleteDisabledReason,
   } from "$lib/ui/research-projects-model";
   import {
     buildSourceFilterChips,
@@ -44,6 +46,7 @@
     addProjectSources,
     createProject,
     deleteProject,
+    deleteProjectYoutubeVideoSourceFromLibrary,
     getProjectDataRange,
     listProjectSources,
     listResearchProjects,
@@ -176,6 +179,17 @@
       )
       .map((source) => source.source_id),
   );
+  let selectedProjectSourceRows = $derived(
+    sources.filter((source) => selectedSourceIds.includes(String(source.source_id))),
+  );
+  let bulkLibraryDeleteDisabledReason = $derived(
+    selectedProjectSourceLibraryDeleteDisabledReason(
+      selectedProjectSourceRows.map((source) => ({
+        provider: source.provider,
+        subtype: source.source_subtype,
+      })),
+    ),
+  );
   let bulkSyncDisabled = $derived(railState.saving || syncableIds.length === 0);
   let bulkSyncTitle = $derived(
     syncableIds.length === 0 ? "Нет источников, поддерживающих синхронизацию" : "",
@@ -268,6 +282,40 @@
       railState = {
         ...railState,
         status: `Не удалось удалить источники (${String(error)})`,
+      };
+    } finally {
+      railState = { ...railState, saving: false };
+    }
+  }
+
+  async function deleteSelectedSourceFromLibrary() {
+    if (
+      selectedProjectId === null ||
+      bulkLibraryDeleteDisabledReason !== null ||
+      selectedProjectSourceRows.length !== 1
+    ) {
+      return;
+    }
+    const sourceId = selectedProjectSourceRows[0].source_id;
+    railState = { ...railState, saving: true, status: "" };
+    try {
+      const outcome = await deleteProjectYoutubeVideoSourceFromLibrary({
+        projectId: selectedProjectId,
+        sourceId,
+      });
+      railState = { ...railState, status: projectSourceLibraryDeleteStatus(outcome) };
+      if (outcome.status === "deleted") {
+        selectedSourceIds = [];
+        activeSourceId = activeSourceId === String(sourceId) ? null : activeSourceId;
+        const catalog = await listLibraryCatalog();
+        libraryCatalogRecords = catalog.sources;
+        sources = await listProjectSources(selectedProjectId);
+        await workflow.reload();
+      }
+    } catch (error) {
+      railState = {
+        ...railState,
+        status: formatAppError("deleting project source from Library", error),
       };
     } finally {
       railState = { ...railState, saving: false };
@@ -537,8 +585,11 @@
           count: selectedSourceIds.length,
           syncDisabled: bulkSyncDisabled,
           syncTitle: bulkSyncTitle,
+          libraryDeleteDisabled: railState.saving || bulkLibraryDeleteDisabledReason !== null,
+          libraryDeleteTitle: bulkLibraryDeleteDisabledReason ?? "",
           onClear: clearSelection,
           onSync: syncSelectedSources,
+          onDeleteFromLibrary: deleteSelectedSourceFromLibrary,
           onDelete: deleteSelectedSources,
         }
       : undefined}

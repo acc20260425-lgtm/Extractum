@@ -13,14 +13,20 @@ describe("SourcesBulkBar", () => {
 
   it("disables the sync button and exposes the title when syncDisabled", () => {
     render(SourcesBulkBar, {
-      props: { count: 2, syncDisabled: true, syncTitle: "Нет источников для синхронизации" },
+      props: {
+        count: 2,
+        syncDisabled: true,
+        syncTitle: "Нет источников для синхронизации",
+      },
     });
-    const sync = screen.getByRole("button", { name: "Синхронизировать" }) as HTMLButtonElement;
+    const sync = screen.getByRole("button", {
+      name: "Синхронизировать",
+    }) as HTMLButtonElement;
     expect(sync.disabled).toBe(true);
     expect(sync.getAttribute("title")).toBe("Нет источников для синхронизации");
   });
 
-  it("calls onClear when clicking «Снять выделение»", async () => {
+  it("calls onClear when clicking Clear selection", async () => {
     const onClear = vi.fn();
     render(SourcesBulkBar, { props: { count: 1, onClear } });
     await fireEvent.click(screen.getByText("Снять выделение"));
@@ -30,7 +36,9 @@ describe("SourcesBulkBar", () => {
   it("calls onSync when the enabled sync button is clicked", async () => {
     const onSync = vi.fn();
     render(SourcesBulkBar, { props: { count: 1, onSync } });
-    await fireEvent.click(screen.getByRole("button", { name: "Синхронизировать" }));
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Синхронизировать" }),
+    );
     expect(onSync).toHaveBeenCalledOnce();
   });
 
@@ -38,12 +46,58 @@ describe("SourcesBulkBar", () => {
     const onDelete = vi.fn();
     render(SourcesBulkBar, { props: { count: 2, onDelete } });
 
-    // The bar's delete button opens the dialog; it must NOT delete immediately.
     await fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
     expect(onDelete).not.toHaveBeenCalled();
 
-    // Confirm inside the dialog.
     await fireEvent.click(screen.getByRole("button", { name: "Да, удалить" }));
     expect(onDelete).toHaveBeenCalledOnce();
+  });
+
+  it("shows Delete from Library as a separate action and respects disabled reason", () => {
+    render(SourcesBulkBar, {
+      props: {
+        count: 2,
+        libraryDeleteDisabled: true,
+        libraryDeleteTitle: "Select one YouTube video source",
+      },
+    });
+
+    const button = screen.getByRole("button", {
+      name: "Delete from Library",
+    }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute("title")).toBe("Select one YouTube video source");
+  });
+
+  it("confirms before deleting from Library and deletes only on confirm", async () => {
+    const onDeleteFromLibrary = vi.fn();
+    render(SourcesBulkBar, {
+      props: {
+        count: 1,
+        libraryDeleteDisabled: false,
+        onDeleteFromLibrary,
+      },
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Delete from Library" }));
+    expect(onDeleteFromLibrary).not.toHaveBeenCalled();
+
+    await fireEvent.click(screen.getByRole("button", { name: "Delete from Library permanently" }));
+    expect(onDeleteFromLibrary).toHaveBeenCalledOnce();
+  });
+
+  it("does not delete from Library when the confirmation is cancelled", async () => {
+    const onDeleteFromLibrary = vi.fn();
+    render(SourcesBulkBar, {
+      props: {
+        count: 1,
+        libraryDeleteDisabled: false,
+        onDeleteFromLibrary,
+      },
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Delete from Library" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Cancel Library deletion" }));
+    expect(onDeleteFromLibrary).not.toHaveBeenCalled();
   });
 });

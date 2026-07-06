@@ -1,27 +1,40 @@
 <script lang="ts">
   import { ExtractumButton, ExtractumDialog } from "$lib/components/extractum-ui";
+  import { PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM } from "$lib/ui/research-projects-model";
 
   let {
     count,
     syncDisabled = false,
     syncTitle = "",
+    libraryDeleteDisabled = true,
+    libraryDeleteTitle = "",
     onClear = () => {},
     onSync = () => {},
+    onDeleteFromLibrary = () => {},
     onDelete = () => {},
   }: {
     count: number;
     syncDisabled?: boolean;
     syncTitle?: string;
+    libraryDeleteDisabled?: boolean;
+    libraryDeleteTitle?: string;
     onClear?: () => void;
     onSync?: () => void;
+    onDeleteFromLibrary?: () => void;
     onDelete?: () => void;
   } = $props();
 
   let confirmOpen = $state(false);
+  let libraryDeleteConfirmOpen = $state(false);
 
   function confirmDelete() {
     confirmOpen = false;
     onDelete();
+  }
+
+  function confirmDeleteFromLibrary() {
+    libraryDeleteConfirmOpen = false;
+    onDeleteFromLibrary();
   }
 </script>
 
@@ -38,6 +51,14 @@
     onclick={() => onSync()}
   >
     Синхронизировать
+  </ExtractumButton>
+  <ExtractumButton
+    variant="destructive"
+    disabled={libraryDeleteDisabled}
+    title={libraryDeleteDisabled ? libraryDeleteTitle : ""}
+    onclick={() => (libraryDeleteConfirmOpen = true)}
+  >
+    Delete from Library
   </ExtractumButton>
   <ExtractumButton variant="destructive" onclick={() => (confirmOpen = true)}>
     Удалить
@@ -56,6 +77,26 @@
       </ExtractumButton>
       <ExtractumButton type="button" variant="destructive" onclick={confirmDelete}>
         Да, удалить
+      </ExtractumButton>
+    </footer>
+  </div>
+</ExtractumDialog>
+
+<ExtractumDialog bind:open={libraryDeleteConfirmOpen} title="Delete from Library">
+  <div class="sources-bulk-bar__confirm">
+    <p>
+      {PROJECT_YOUTUBE_VIDEO_LIBRARY_DELETE_CONFIRM}
+    </p>
+    <footer>
+      <ExtractumButton
+        type="button"
+        variant="outline"
+        onclick={() => (libraryDeleteConfirmOpen = false)}
+      >
+        Cancel Library deletion
+      </ExtractumButton>
+      <ExtractumButton type="button" variant="destructive" onclick={confirmDeleteFromLibrary}>
+        Delete from Library permanently
       </ExtractumButton>
     </footer>
   </div>

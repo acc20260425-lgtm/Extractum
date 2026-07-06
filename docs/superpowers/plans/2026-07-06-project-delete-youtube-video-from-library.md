@@ -1444,7 +1444,7 @@ git commit -m "feat: add library delete action to project sources toolbar"
 - Consumes: `projectSourceLibraryDeleteStatus`
 - Consumes: API wrapper `deleteProjectYoutubeVideoSourceFromLibrary`
 
-- [ ] **Step 1: Add failing `SourcesBulkBar` tests**
+- [x] **Step 1: Add failing `SourcesBulkBar` tests**
 
 In `SourcesBulkBar.test.ts`, add:
 
@@ -1496,7 +1496,7 @@ it("does not delete from Library when the confirmation is cancelled", async () =
 });
 ```
 
-- [ ] **Step 2: Run `SourcesBulkBar` tests and verify they fail**
+- [x] **Step 2: Run `SourcesBulkBar` tests and verify they fail**
 
 Run:
 
@@ -1506,7 +1506,7 @@ npm.cmd run test -- src/lib/components/research-projects/SourcesBulkBar.test.ts
 
 Expected: FAIL because the new props and dialog are missing.
 
-- [ ] **Step 3: Add `SourcesBulkBar.svelte` props and dialog state**
+- [x] **Step 3: Add `SourcesBulkBar.svelte` props and dialog state**
 
 Add import:
 
@@ -1541,7 +1541,7 @@ function confirmDeleteFromLibrary() {
 }
 ```
 
-- [ ] **Step 4: Add the `/projects/next` bulk-bar button and dialog**
+- [x] **Step 4: Add the `/projects/next` bulk-bar button and dialog**
 
 Add button before the existing destructive `Remove` button:
 
@@ -1580,7 +1580,7 @@ Add separate dialog after the existing remove dialog:
 </ExtractumDialog>
 ```
 
-- [ ] **Step 5: Add `/projects/next` derived state and delete handler**
+- [x] **Step 5: Add `/projects/next` derived state and delete handler**
 
 In `src/routes/projects/next/+page.svelte`, import:
 
@@ -1651,7 +1651,7 @@ async function deleteSelectedSourceFromLibrary() {
 }
 ```
 
-- [ ] **Step 6: Pass new props to `SourcesBulkBar` through `/projects/next` shell config**
+- [x] **Step 6: Pass new props to `SourcesBulkBar` through `/projects/next` shell config**
 
 Extend `bulkBar={...}`:
 
@@ -1661,7 +1661,7 @@ libraryDeleteTitle: bulkLibraryDeleteDisabledReason ?? "",
 onDeleteFromLibrary: deleteSelectedSourceFromLibrary,
 ```
 
-- [ ] **Step 7: Add `/projects/next` route contract assertion**
+- [x] **Step 7: Add `/projects/next` route contract assertion**
 
 In `src/lib/research-projects-route-contract.test.ts`, add:
 
@@ -1673,7 +1673,7 @@ it("wires Delete from Library in the next projects bulk bar", () => {
 });
 ```
 
-- [ ] **Step 8: Run Task 5 tests**
+- [x] **Step 8: Run Task 5 tests**
 
 Run:
 
@@ -1683,7 +1683,7 @@ npm.cmd run test -- src/lib/components/research-projects/SourcesBulkBar.test.ts 
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit Task 5**
+- [x] **Step 9: Commit Task 5**
 
 Run:
 

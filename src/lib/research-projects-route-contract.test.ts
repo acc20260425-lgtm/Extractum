@@ -22,6 +22,10 @@ const projectsListRouteSource = readFileSync(
   resolve(process.cwd(), "src/routes/projects/list/+page.svelte"),
   "utf8",
 );
+const projectsNextRouteSource = readFileSync(
+  resolve(process.cwd(), "src/routes/projects/next/+page.svelte"),
+  "utf8",
+);
 
 describe("projects mvp route contract", () => {
   it("uses real project APIs instead of analysis source group APIs", () => {
@@ -142,16 +146,21 @@ describe("projects mvp route contract", () => {
   });
 
   it("wires the project Add source dialog through the next Projects route", () => {
-    const nextPageSource = readFileSync(resolve(process.cwd(), "src/routes/projects/next/+page.svelte"), "utf8");
-    expect(nextPageSource).toContain("LibraryAddSourceDialog");
-    expect(nextPageSource).toContain("connectAddedProjectSource");
-    expect(nextPageSource).toContain("connectAddedProjectSources");
-    expect(nextPageSource).toContain("connectExistingProjectSource");
-    expect(nextPageSource).toContain("projectAddSourceContext");
-    expect(nextPageSource).toContain("let connectedSourceIds = $derived(connectedSourceIdsForProject(sources, selectedProjectId))");
-    expect(nextPageSource).toContain("formatError: formatAppError");
-    expect(nextPageSource).toContain("onConnectFromLibrary: () => void openConnectSources()");
-    expect(nextPageSource).toContain("onAddSource: () => (addSourceOpen = true)");
+    expect(projectsNextRouteSource).toContain("LibraryAddSourceDialog");
+    expect(projectsNextRouteSource).toContain("connectAddedProjectSource");
+    expect(projectsNextRouteSource).toContain("connectAddedProjectSources");
+    expect(projectsNextRouteSource).toContain("connectExistingProjectSource");
+    expect(projectsNextRouteSource).toContain("projectAddSourceContext");
+    expect(projectsNextRouteSource).toContain("let connectedSourceIds = $derived(connectedSourceIdsForProject(sources, selectedProjectId))");
+    expect(projectsNextRouteSource).toContain("formatError: formatAppError");
+    expect(projectsNextRouteSource).toContain("onConnectFromLibrary: () => void openConnectSources()");
+    expect(projectsNextRouteSource).toContain("onAddSource: () => (addSourceOpen = true)");
+  });
+
+  it("wires Delete from Library in the next projects bulk bar", () => {
+    expect(projectsNextRouteSource).toContain("deleteProjectYoutubeVideoSourceFromLibrary");
+    expect(projectsNextRouteSource).toContain("onDeleteFromLibrary: deleteSelectedSourceFromLibrary");
+    expect(projectsNextRouteSource).toContain("bulkLibraryDeleteDisabledReason");
   });
 
   it("wires selected Workspace source syncs to the YouTube source job command", () => {
@@ -166,8 +175,7 @@ describe("projects mvp route contract", () => {
     expect(sourcesTabSource).toContain("onclick={handleSyncAll}");
     expect(sourcesTabSource).not.toContain('disabled={true} title="Sync selected sources (not implemented)"');
     expect(sourcesTabSource).not.toContain("Sync all sources (not implemented)");
-    const nextPageSource = readFileSync(resolve(process.cwd(), "src/routes/projects/next/+page.svelte"), "utf8");
-    expect(nextPageSource).not.toContain("comments: false");
+    expect(projectsNextRouteSource).not.toContain("comments: false");
   });
 
   it("refreshes Workspace source content when source sync jobs finish", () => {
