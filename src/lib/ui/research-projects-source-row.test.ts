@@ -49,9 +49,16 @@ describe("buildSourceRow", () => {
     expect(row.handle).toBe("@finbelarus");
     expect(row.provider).toBe("telegram");
     expect(row.typeLabel).toBe("telegram");
+    expect(row.typeDot).toBe("var(--extractum-provider-telegram)");
     expect(row.materialsLabel).toBe("4 317");
     expect(row.syncStatus).toBe("syncing");
     expect(row.statusLabel).toBe("sync");
+  });
+
+  it("uses a provider dot token for YouTube inspector details", () => {
+    expect(buildSourceRow(record({ provider: "youtube", source_subtype: "video" })).typeDot).toBe(
+      "var(--extractum-provider-youtube)",
+    );
   });
 
   it("formats material counts with grouped thousands", () => {

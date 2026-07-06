@@ -4,13 +4,15 @@
     handle: string | null;
     statusLabel: string;
     syncStatus: string;
+    typeLabel: string;
+    typeDot: string;
     materialsLabel: string;
     lastSyncLabel: string;
   };
 </script>
 
 <script lang="ts">
-  import { ChevronRight, RefreshCw, Trash2 } from "@lucide/svelte";
+  import { ChevronRight, ExternalLink, Minus, RefreshCw } from "@lucide/svelte";
 
   let {
     open = true,
@@ -19,8 +21,10 @@
     promptLabel,
     modelLabel,
     syncDisabled = false,
+    openDisabled = false,
     onToggle,
     onSync,
+    onOpen,
     onDisconnect,
   }: {
     open?: boolean;
@@ -29,8 +33,10 @@
     promptLabel: string;
     modelLabel: string;
     syncDisabled?: boolean;
+    openDisabled?: boolean;
     onToggle?: () => void;
     onSync?: () => void;
+    onOpen?: () => void;
     onDisconnect?: () => void;
   } = $props();
 </script>
@@ -58,12 +64,20 @@
           <div class="inspector__subline">
             {#if selected.handle}<span class="inspector__handle">{selected.handle}</span>{/if}
             <span class="inspector__status" data-status={selected.syncStatus}>
+              <span class="inspector__status-dot" aria-hidden="true"></span>
               {selected.statusLabel}
             </span>
           </div>
         </div>
 
         <div class="inspector__card">
+          <div class="inspector__row">
+            <span class="inspector__key">Тип</span>
+            <span class="inspector__type">
+              <span class="inspector__type-dot" aria-hidden="true" style:background={selected.typeDot}></span>
+              {selected.typeLabel}
+            </span>
+          </div>
           <div class="inspector__row">
             <span class="inspector__key">Материалы</span>
             <span class="inspector__num">{selected.materialsLabel}</span>
@@ -107,16 +121,31 @@
           <RefreshCw size={12} aria-hidden="true" />
           Синхронизировать
         </button>
-        <button
-          class="inspector__disconnect"
-          type="button"
-          data-slot="button"
-          title="Отключить источник"
-          aria-label="Отключить источник"
-          onclick={() => onDisconnect?.()}
-        >
-          <Trash2 size={14} aria-hidden="true" />
-        </button>
+        <div class="inspector__footer-actions">
+          <button
+            class="inspector__open"
+            type="button"
+            data-slot="button"
+            title="Открыть источник"
+            aria-label="Открыть"
+            disabled={openDisabled || !onOpen}
+            onclick={() => onOpen?.()}
+          >
+            <ExternalLink size={12} aria-hidden="true" />
+            Открыть
+          </button>
+          <button
+            class="inspector__disconnect"
+            type="button"
+            data-slot="button"
+            title="Убрать из проекта"
+            aria-label="Убрать"
+            onclick={() => onDisconnect?.()}
+          >
+            <Minus size={12} aria-hidden="true" />
+            Убрать
+          </button>
+        </div>
       </div>
     {/if}
   </div>
@@ -230,21 +259,38 @@
   }
 
   .inspector__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 19px;
+    padding: 0 8px;
+    border-radius: 5px;
     font: 500 11px/1 var(--extractum-font);
     color: var(--extractum-muted);
   }
 
   .inspector__status[data-status="active"] {
     color: var(--extractum-success);
+    background: color-mix(in srgb, var(--extractum-success) 12%, transparent);
   }
   .inspector__status[data-status="syncing"] {
     color: var(--extractum-primary);
+    background: color-mix(in srgb, var(--extractum-primary) 12%, transparent);
   }
   .inspector__status[data-status="error"] {
     color: var(--extractum-danger);
+    background: color-mix(in srgb, var(--extractum-danger) 12%, transparent);
   }
   .inspector__status[data-status="unavailable"] {
     color: var(--extractum-warning);
+    background: color-mix(in srgb, var(--extractum-warning) 12%, transparent);
+  }
+
+  .inspector__status-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 999px;
+    background: currentColor;
   }
 
   .inspector__card {
@@ -275,6 +321,20 @@
     color: var(--extractum-text);
   }
 
+  .inspector__type {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font: 500 12.5px/1 var(--extractum-font);
+    color: var(--extractum-text);
+  }
+
+  .inspector__type-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+  }
+
   .inspector__num {
     font: 600 12.5px/1 var(--extractum-font);
     color: var(--extractum-text);
@@ -284,7 +344,8 @@
   .inspector__footer {
     flex-shrink: 0;
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     gap: 8px;
     padding: 10px 12px;
     border-top: 1px solid var(--extractum-border);
@@ -292,22 +353,22 @@
   }
 
   .inspector__sync {
-    flex: 1;
-    height: 30px;
+    width: 100%;
+    height: 32px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    border: 1px solid var(--extractum-border);
+    border: 1px solid var(--extractum-primary);
     border-radius: var(--extractum-radius);
-    background: var(--extractum-surface-raised);
-    color: var(--extractum-text);
-    font: 500 12.5px/1 var(--extractum-font);
+    background: color-mix(in srgb, var(--extractum-primary) 6%, transparent);
+    color: var(--extractum-primary);
+    font: 600 12.5px/1 var(--extractum-font);
     cursor: pointer;
   }
 
   .inspector__sync:hover:not(:disabled) {
-    background: var(--extractum-surface-subtle);
+    background: color-mix(in srgb, var(--extractum-primary) 12%, transparent);
   }
 
   .inspector__sync:disabled {
@@ -315,17 +376,43 @@
     cursor: not-allowed;
   }
 
+  .inspector__footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .inspector__open,
   .inspector__disconnect {
+    flex: 1;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
     height: 30px;
-    border: 1px solid color-mix(in srgb, var(--extractum-danger) 35%, var(--extractum-border));
+    gap: 5px;
     border-radius: var(--extractum-radius);
     background: var(--extractum-surface-raised);
-    color: var(--extractum-danger);
+    font: 500 12px/1 var(--extractum-font);
     cursor: pointer;
+  }
+
+  .inspector__open {
+    border: 1px solid var(--extractum-border);
+    color: var(--extractum-text);
+  }
+
+  .inspector__open:hover:not(:disabled) {
+    background: var(--extractum-surface-subtle);
+  }
+
+  .inspector__open:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .inspector__disconnect {
+    border: 1px solid color-mix(in srgb, var(--extractum-danger) 35%, var(--extractum-border));
+    color: var(--extractum-danger);
   }
 
   .inspector__disconnect:hover {

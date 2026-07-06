@@ -120,6 +120,8 @@ describe("ResearchProjectsShell", () => {
         handle: "@fb",
         statusLabel: "active",
         syncStatus: "active",
+        typeLabel: "telegram",
+        typeDot: "var(--extractum-provider-telegram)",
         materialsLabel: "339",
         lastSyncLabel: "02.06",
       } satisfies InspectorSource,

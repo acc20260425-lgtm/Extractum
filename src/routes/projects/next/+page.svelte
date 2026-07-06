@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import ResearchProjectsShell from "$lib/components/research-projects/ResearchProjectsShell.svelte";
   import type { ComboOption } from "$lib/components/research-projects/ComboSelect.svelte";
   import type { InspectorSource } from "$lib/components/research-projects/Inspector.svelte";
@@ -164,11 +165,17 @@
   let selectedPromptLabel = $derived(
     promptOptions.find((option) => option.value === selectedPromptValue)?.label ?? "—",
   );
-  let selectedSourceRow = $derived.by(() => {
+  let selectedSourceRecord = $derived.by(() => {
     if (!activeSourceId) return null;
-    const record = sources.find((source) => String(source.source_id) === activeSourceId);
+    return sources.find((source) => String(source.source_id) === activeSourceId) ?? null;
+  });
+  let selectedSourceRow = $derived.by(() => {
+    const record = selectedSourceRecord;
     return record ? buildSourceRow(record) : null;
   });
+  let activeSourceOpenUrl = $derived(
+    selectedSourceRecord ? youtubeProjectSourceUrl(selectedSourceRecord) : null,
+  );
   let syncableIds = $derived(
     sources
       .filter(
@@ -202,6 +209,8 @@
       handle: row.handle,
       statusLabel: row.statusLabel,
       syncStatus: row.syncStatus,
+      typeLabel: row.typeLabel,
+      typeDot: row.typeDot,
       materialsLabel: row.materialsLabel,
       lastSyncLabel: row.lastSyncedAt
         ? new Date(row.lastSyncedAt * 1000).toLocaleString("ru-RU")
@@ -491,6 +500,33 @@
     }
   }
 
+  function youtubeProjectSourceUrl(source: ProjectSourceRecord): string | null {
+    const externalId = source.handle?.trim();
+    if (source.provider !== "youtube" || !externalId) return null;
+    if (source.source_subtype === "video") {
+      return `https://www.youtube.com/watch?v=${encodeURIComponent(externalId)}`;
+    }
+    if (source.source_subtype === "playlist") {
+      return `https://www.youtube.com/playlist?list=${encodeURIComponent(externalId)}`;
+    }
+    if (source.source_subtype === "channel") {
+      return externalId.startsWith("@")
+        ? `https://www.youtube.com/${encodeURIComponent(externalId)}`
+        : `https://www.youtube.com/channel/${encodeURIComponent(externalId)}`;
+    }
+    return null;
+  }
+
+  async function openActiveSource() {
+    const url = activeSourceOpenUrl;
+    if (!url) return;
+    try {
+      await openUrl(url);
+    } catch (error) {
+      railState = { ...railState, status: `Не удалось открыть источник (${String(error)})` };
+    }
+  }
+
   function handleSourceKeyboardEscape(): boolean {
     if (!filtersOpen) return false;
     filtersOpen = false;
@@ -615,8 +651,10 @@
           promptLabel: selectedPromptLabel,
           modelLabel: selectedModelValue ?? "—",
           syncDisabled: railState.saving || !activeSyncable,
+          openDisabled: activeSourceOpenUrl === null,
           onToggle: () => (inspectorOpen = !inspectorOpen),
           onSync: () => void syncActiveSource(),
+          onOpen: () => void openActiveSource(),
           onDisconnect: () => (disconnectOpen = true),
         }
       : undefined}

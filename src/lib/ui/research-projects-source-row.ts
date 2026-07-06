@@ -66,11 +66,21 @@ export type SourceRowView = {
   handle: string | null;
   provider: LibrarySourceProvider;
   typeLabel: string;
+  typeDot: string;
   materialsLabel: string;
   lastSyncedAt: number | null;
   syncStatus: LibraryCatalogStatus;
   statusLabel: string;
 }
+
+const PROVIDER_DOT_TOKENS: Record<LibrarySourceProvider, string> = {
+  telegram: "var(--extractum-provider-telegram)",
+  youtube: "var(--extractum-provider-youtube)",
+  rss: "var(--extractum-muted-2)",
+  forum: "var(--extractum-muted-2)",
+  web: "var(--extractum-muted-2)",
+  other: "var(--extractum-muted-2)",
+};
 
 function formatThousands(count: number): string {
   return String(count).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
@@ -174,6 +184,7 @@ export function buildSourceRow(record: ProjectSourceRecord): SourceRowView {
     handle: record.handle,
     provider: record.provider,
     typeLabel: record.provider,
+    typeDot: PROVIDER_DOT_TOKENS[record.provider] ?? "var(--extractum-muted-2)",
     materialsLabel: formatThousands(record.item_count),
     lastSyncedAt: record.last_synced_at,
     syncStatus: record.sync_status,
