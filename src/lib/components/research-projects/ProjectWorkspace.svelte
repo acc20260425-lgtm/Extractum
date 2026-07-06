@@ -23,6 +23,7 @@
     saving = false,
     selectedSourceIds,
     onSelectedSourceIdsChange,
+    onOpenAddSource,
     onOpenConnectLibrary,
     onRefreshProjectRuns,
     onRemoveSource,
@@ -36,6 +37,7 @@
     saving?: boolean;
     selectedSourceIds: string[];
     onSelectedSourceIdsChange: (sourceIds: string[]) => void;
+    onOpenAddSource: () => void;
     onOpenConnectLibrary: () => void;
     onRefreshProjectRuns: () => void | Promise<void>;
     onRemoveSource: (sourceId: number | number[]) => void | Promise<void>;
@@ -92,6 +94,7 @@
         {selectedSourceIds}
         {saving}
         {onSelectedSourceIdsChange}
+        {onOpenAddSource}
         {onOpenConnectLibrary}
         {onRemoveSource}
         {onSyncSelectedSources}

@@ -3,6 +3,7 @@
   import { FolderKanban, ChevronDown, Folder, Plus, Pencil, Trash2 } from "@lucide/svelte";
   import BottomQueue from "./BottomQueue.svelte";
   import ConnectFromLibrary from "./ConnectFromLibrary.svelte";
+  import LibraryAddSourceDialog from "./LibraryAddSourceDialog.svelte";
   import ProjectEditorDialog from "./ProjectEditorDialog.svelte";
   import ProjectInspector from "./ProjectInspector.svelte";
   import ProjectRail from "./ProjectRail.svelte";
@@ -10,6 +11,9 @@
   import ProjectWorkspace from "./ProjectWorkspace.svelte";
   import TopCommandBar from "./TopCommandBar.svelte";
   import type { ProjectAnalysisStartCommand, ProjectEditorInput } from "$lib/types/projects";
+  import { buildLibraryCatalogSourcesView } from "$lib/ui/library-catalog-model";
+  import type { ProjectAddSourceContext } from "$lib/ui/project-add-source-context";
+  import { connectedSourceIdsForProject } from "$lib/ui/project-add-source-workflow";
   import type { ResearchProjectsWorkflowState } from "$lib/ui/research-projects-workflow";
   import { reconcileProjectSourceSelection } from "$lib/ui/research-projects-model";
   import { projectsSharedState } from "$lib/projects-shared.svelte";
@@ -26,9 +30,13 @@
     onRemoveProjectSource,
     onRunProject,
     onConnectSelectedSources,
+    onConnectAddedProjectSource,
+    onConnectAddedProjectSources,
+    onConnectExistingProjectSource,
     onSelectedLibrarySourceIdsChange,
     onRefreshProjectRuns,
     onSyncSelectedSources,
+    onSetStatus,
   }: {
     state: ResearchProjectsWorkflowState;
     showRail?: boolean;
@@ -39,9 +47,13 @@
     onRemoveProjectSource: (sourceId: number | number[]) => void | Promise<void>;
     onRunProject: (input: ProjectAnalysisStartCommand) => void | Promise<void>;
     onConnectSelectedSources: () => void | Promise<void>;
+    onConnectAddedProjectSource: (sourceId?: number) => void | Promise<void>;
+    onConnectAddedProjectSources: (sourceIds: number[]) => void | Promise<void>;
+    onConnectExistingProjectSource: (sourceId: number) => void | Promise<void>;
     onSelectedLibrarySourceIdsChange: (ids: string[]) => void;
     onRefreshProjectRuns: () => void | Promise<void>;
     onSyncSelectedSources: (sourceIds: number[]) => void | Promise<void>;
+    onSetStatus: (message: string) => void;
   } = $props();
 
   let currentProject = $derived(
@@ -63,6 +75,21 @@
       : null,
   );
   let connectOpen = $state(false);
+  let addSourceOpen = $state(false);
+  let libraryCatalogSources = $derived(buildLibraryCatalogSourcesView(workflowState.libraryCatalogRecords));
+  let connectedSourceIds = $derived(
+    connectedSourceIdsForProject(workflowState.projectSources, currentProject?.projectId ?? null),
+  );
+  let projectAddSourceContext = $derived<ProjectAddSourceContext | undefined>(
+    currentProject
+      ? {
+          projectId: currentProject.projectId,
+          connectedSourceIds,
+          onConnectExistingSource: onConnectExistingProjectSource,
+          onConnectAddedSources: onConnectAddedProjectSources,
+        }
+      : undefined,
+  );
   let editorOpen = $state(false);
   let editorMode = $state<"create" | "edit">("create");
   let runOpen = $state(false);
@@ -70,7 +97,7 @@
   let inspectorWidth = $derived(inspectorCollapsed ? "40px" : "380px");
 
   // Roving tabindex: tracks which project owns tabindex=0
-  let focusedProjectId = $state<string | null>(workflowState.selectedProjectId ?? null);
+  let focusedProjectId = $state<string | null>(null);
 
   $effect(() => {
     if (workflowState.selectedProjectId) {
@@ -132,6 +159,10 @@
 
   function openConnectLibrary() {
     connectOpen = true;
+  }
+
+  function openAddSource() {
+    addSourceOpen = true;
   }
 
   function openCreateProject() {
@@ -231,7 +262,7 @@
         </div>
 
         <!-- List of Projects -->
-        <div class="projects-tree-list" role="tree" aria-label="Research projects"
+        <div class="projects-tree-list" role="tree" tabindex="-1" aria-label="Research projects"
           onkeydown={(e) => {
             const ids = workflowState.projects.map((p) => p.id);
             const current = ids.indexOf(focusedProjectId ?? "");
@@ -256,6 +287,7 @@
               class:is-selected={workflowState.selectedProjectId === project.id}
               data-selected={workflowState.selectedProjectId === project.id}
               aria-selected={workflowState.selectedProjectId === project.id}
+              aria-current={workflowState.selectedProjectId === project.id ? "page" : undefined}
               onclick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -370,6 +402,7 @@
           saving={workflowState.saving}
           {selectedSourceIds}
           onSelectedSourceIdsChange={(ids) => (selectedSourceIds = ids)}
+          onOpenAddSource={openAddSource}
           onOpenConnectLibrary={openConnectLibrary}
           onRefreshProjectRuns={onRefreshProjectRuns}
           onRemoveSource={onRemoveProjectSource}
@@ -401,6 +434,14 @@
       onRemoveSource={onRemoveProjectSource}
     />
   </div>
+
+  <LibraryAddSourceDialog
+    bind:open={addSourceOpen}
+    sources={libraryCatalogSources}
+    onSourcesChanged={onConnectAddedProjectSource}
+    onStatus={onSetStatus}
+    projectContext={projectAddSourceContext}
+  />
 
   <ConnectFromLibrary
     open={connectOpen}

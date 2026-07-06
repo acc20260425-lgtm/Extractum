@@ -916,7 +916,7 @@ Expected: commit succeeds.
 - Consumes `buildLibraryCatalogSourcesView` from `src/lib/ui/library-catalog-model.ts`.
 - Consumes `connectedSourceIdsForProject` from Task 1.
 
-- [ ] **Step 1: Add failing route and toolbar contract tests**
+- [x] **Step 1: Add failing route and toolbar contract tests**
 
 Append these tests to `src/lib/research-projects-route-contract.test.ts`:
 
@@ -962,13 +962,13 @@ Append these tests to `src/lib/research-projects-route-contract.test.ts`:
   });
 ```
 
-- [ ] **Step 2: Run tests and verify current shell contracts fail before implementation**
+- [x] **Step 2: Run tests and verify current shell contracts fail before implementation**
 
 Run: `npm.cmd run test -- src/lib/research-projects-route-contract.test.ts`
 
 Expected: FAIL because `Add source`, `LibraryAddSourceDialog`, and project add-source callbacks are not wired.
 
-- [ ] **Step 3: Add `Add source` button to `SourcesTab.svelte`**
+- [x] **Step 3: Add `Add source` button to `SourcesTab.svelte`**
 
 Add `Plus` to the lucide import:
 
@@ -1001,7 +1001,7 @@ Insert this button immediately before the existing `Connect from Library` button
         </ExtractumButton>
 ```
 
-- [ ] **Step 4: Pass `onOpenAddSource` through `ProjectWorkspace.svelte`**
+- [x] **Step 4: Pass `onOpenAddSource` through `ProjectWorkspace.svelte`**
 
 Add the prop to destructuring and type:
 
@@ -1019,7 +1019,7 @@ Pass it into `SourcesTab`:
         {onOpenAddSource}
 ```
 
-- [ ] **Step 5: Wire dialog state and project context in `ProjectsShell.svelte`**
+- [x] **Step 5: Wire dialog state and project context in `ProjectsShell.svelte`**
 
 Add imports:
 
@@ -1092,7 +1092,7 @@ Render the add-source dialog before `ConnectFromLibrary`:
   />
 ```
 
-- [ ] **Step 6: Pass workflow callbacks from `/projects` and `/projects/list`**
+- [x] **Step 6: Pass workflow callbacks from `/projects` and `/projects/list`**
 
 In both `src/routes/projects/+page.svelte` and `src/routes/projects/list/+page.svelte`, add these props to `<ProjectsShell>`:
 
@@ -1103,19 +1103,19 @@ In both `src/routes/projects/+page.svelte` and `src/routes/projects/list/+page.s
     onSetStatus={workflow.setStatus}
 ```
 
-- [ ] **Step 7: Run focused tests**
+- [x] **Step 7: Run focused tests**
 
 Run: `npm.cmd run test -- src/lib/research-projects-route-contract.test.ts src/lib/ui/research-projects-workflow.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 8: Run Svelte check**
+- [x] **Step 8: Run Svelte check**
 
 Run: `npm.cmd run check`
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit Task 4**
+- [x] **Step 9: Commit Task 4**
 
 Run:
 

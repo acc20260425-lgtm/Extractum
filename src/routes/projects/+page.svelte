@@ -169,9 +169,13 @@
     onRemoveProjectSource={workflow.removeProjectSource}
     onRunProject={workflow.runProjectAnalysis}
     onConnectSelectedSources={workflow.connectSelectedSources}
+    onConnectAddedProjectSource={workflow.connectAddedProjectSource}
+    onConnectAddedProjectSources={workflow.connectAddedProjectSources}
+    onConnectExistingProjectSource={workflow.connectExistingProjectSource}
     onSelectedLibrarySourceIdsChange={(ids) => (state.selectedLibrarySourceIds = new Set(ids))}
     onRefreshProjectRuns={workflow.loadWorkspace}
     onSyncSelectedSources={workflow.syncProjectSources}
+    onSetStatus={workflow.setStatus}
   />
 </section>
 

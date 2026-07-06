@@ -78,6 +78,46 @@ describe("projects mvp route contract", () => {
     expect(connectFromLibrarySource).not.toContain('id: "provider", header: "Тип"');
   });
 
+  it("places Add source immediately before Connect from Library in the project sources toolbar", () => {
+    expect(sourcesTabSource).toContain("onOpenAddSource");
+    expect(sourcesTabSource).toContain('data-ui-action="add-source"');
+    expect(sourcesTabSource).toContain('data-ui-action="connect-library"');
+    expect(sourcesTabSource.indexOf('data-ui-action="add-source"')).toBeLessThan(
+      sourcesTabSource.indexOf('data-ui-action="connect-library"'),
+    );
+    expect(sourcesTabSource).toContain("Plus");
+    expect(sourcesTabSource).toContain("Add source");
+  });
+
+  it("wires the project Add source dialog through the current ProjectsShell", () => {
+    expect(workspaceSource).toContain("onOpenAddSource");
+    expect(shellSource).toContain("LibraryAddSourceDialog");
+    expect(shellSource).toContain("addSourceOpen");
+    expect(shellSource).toContain("projectAddSourceContext");
+    expect(shellSource).toContain("let connectedSourceIds = $derived(");
+    expect(shellSource).toContain("connectedSourceIdsForProject(workflowState.projectSources");
+    expect(shellSource).toContain("let projectAddSourceContext = $derived<ProjectAddSourceContext | undefined>");
+    expect(shellSource).toContain("buildLibraryCatalogSourcesView");
+    expect(shellSource).toContain("connectedSourceIdsForProject");
+    expect(shellSource).toContain("onConnectAddedProjectSource");
+    expect(shellSource).toContain("onConnectAddedProjectSources");
+    expect(shellSource).toContain("onConnectExistingProjectSource");
+  });
+
+  it("passes project add-source workflow callbacks from both current project routes", () => {
+    expect(pageSource).toContain("onConnectAddedProjectSource={workflow.connectAddedProjectSource}");
+    expect(pageSource).toContain("onConnectAddedProjectSources={workflow.connectAddedProjectSources}");
+    expect(pageSource).toContain("onConnectExistingProjectSource={workflow.connectExistingProjectSource}");
+    expect(pageSource).toContain("onSetStatus={workflow.setStatus}");
+    expect(pageSource).not.toContain("onSourcesChanged={(ids)");
+
+    const listPageSource = readFileSync(resolve(process.cwd(), "src/routes/projects/list/+page.svelte"), "utf8");
+    expect(listPageSource).toContain("onConnectAddedProjectSource={workflow.connectAddedProjectSource}");
+    expect(listPageSource).toContain("onConnectAddedProjectSources={workflow.connectAddedProjectSources}");
+    expect(listPageSource).toContain("onConnectExistingProjectSource={workflow.connectExistingProjectSource}");
+    expect(listPageSource).toContain("onSetStatus={workflow.setStatus}");
+  });
+
   it("wires selected Workspace source syncs to the YouTube source job command", () => {
     expect(pageSource).toContain("syncYoutubeSource");
     expect(pageSource).toContain("syncYoutubeSource,");

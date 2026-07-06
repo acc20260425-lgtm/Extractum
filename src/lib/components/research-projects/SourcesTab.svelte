@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Library, RefreshCw, Download, Trash2, X } from "@lucide/svelte";
+  import { Library, RefreshCw, Download, Trash2, X, Plus } from "@lucide/svelte";
   import {
     ExtractumButton,
     ExtractumDataGrid,
@@ -28,6 +28,7 @@
     selectedSourceIds,
     saving = false,
     onSelectedSourceIdsChange,
+    onOpenAddSource,
     onOpenConnectLibrary,
     onRemoveSource,
     onSyncSelectedSources,
@@ -38,6 +39,7 @@
     selectedSourceIds: string[];
     saving?: boolean;
     onSelectedSourceIdsChange: (sourceIds: string[]) => void;
+    onOpenAddSource: () => void;
     onOpenConnectLibrary: () => void;
     onRemoveSource: (sourceId: number | number[]) => void | Promise<void>;
     onSyncSelectedSources: (sourceIds: number[]) => void | Promise<void>;
@@ -145,6 +147,16 @@
         >
           <RefreshCw size={12} aria-hidden="true" />
           Sync all
+        </ExtractumButton>
+        <ExtractumButton
+          data-ui-action="add-source"
+          onclick={onOpenAddSource}
+          disabled={!project}
+          aria-label="Add source to project"
+          title="Add source to project"
+        >
+          <Plus size={14} aria-hidden="true" />
+          Add source
         </ExtractumButton>
         <ExtractumButton
           data-ui-action="connect-library"
