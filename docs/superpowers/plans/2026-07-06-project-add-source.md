@@ -1420,7 +1420,7 @@ Expected: commit succeeds.
 - Verifies the full project add-source surface after all implementation commits.
 - Confirms the standalone Library callback contract remains scalar.
 
-- [ ] **Step 1: Run the focused frontend test set**
+- [x] **Step 1: Run the focused frontend test set**
 
 Run:
 
@@ -1430,13 +1430,13 @@ npm.cmd run test -- src/lib/ui/project-add-source-workflow.test.ts src/lib/ui/re
 
 Expected: PASS.
 
-- [ ] **Step 2: Run the full Svelte and TypeScript check**
+- [x] **Step 2: Run the full Svelte and TypeScript check**
 
 Run: `npm.cmd run check`
 
 Expected: PASS.
 
-- [ ] **Step 3: Inspect the final diff**
+- [x] **Step 3: Inspect the final diff**
 
 Run: `git diff --check`
 
@@ -1446,7 +1446,7 @@ Run: `git status --short`
 
 Expected: only implementation files from this plan are modified or staged; `.claude/settings.local.json` remains untracked and unstaged.
 
-- [ ] **Step 4: Commit final fixes if Step 1, Step 2, or Step 3 required a code correction**
+- [x] **Step 4: Commit final fixes if Step 1, Step 2, or Step 3 required a code correction**
 
 If a correction was needed, run:
 
