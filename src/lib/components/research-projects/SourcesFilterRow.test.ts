@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import SourcesFilterRow from "./SourcesFilterRow.svelte";
+import { SOURCE_FILTER_ROW_GRID_TEMPLATE } from "$lib/ui/research-projects-source-row";
 import { emptySourceFilters } from "$lib/ui/research-projects-source-filters";
 
 afterEach(cleanup);
@@ -57,5 +58,14 @@ describe("SourcesFilterRow", () => {
       target: { value: "2026-05-01" },
     });
     expect(onChange).toHaveBeenCalledWith({ ...emptySourceFilters(), syncedFrom: "2026-05-01" });
+  });
+
+  it("uses the shared source table grid template", () => {
+    render(SourcesFilterRow, { props: { filters: emptySourceFilters() } });
+    const row = document.querySelector(".sources-filter-row") as HTMLElement | null;
+
+    expect(row?.getAttribute("style")).toContain(
+      `grid-template-columns: ${SOURCE_FILTER_ROW_GRID_TEMPLATE}`,
+    );
   });
 });

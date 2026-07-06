@@ -11,6 +11,8 @@ describe("SourcesGrid", () => {
   it("wires the v10 source columns and rows into the data grid", () => {
     expect(source).toContain("buildSourceGridRows");
     expect(source).toContain("sourceGridColumns");
+    expect(source).toContain("SOURCE_TABLE_LAYOUT");
+    expect(source).toContain("width: SOURCE_TABLE_LAYOUT.select");
     expect(source).toContain("<ExtractumDataGrid");
   });
 

@@ -4,6 +4,7 @@
     ExtractumPopoverTrigger,
     ExtractumPopoverContent,
   } from "$lib/components/extractum-ui";
+  import { SOURCE_FILTER_ROW_GRID_TEMPLATE } from "$lib/ui/research-projects-source-row";
   import type { SourceFilters } from "$lib/ui/research-projects-source-filters";
 
   let {
@@ -46,7 +47,10 @@
   }
 </script>
 
-<div class="sources-filter-row">
+<div
+  class="sources-filter-row"
+  style={`grid-template-columns: ${SOURCE_FILTER_ROW_GRID_TEMPLATE};`}
+>
   <div></div>
 
   <div class="sources-filter-row__search">
@@ -156,7 +160,6 @@
 <style>
   .sources-filter-row {
     display: grid;
-    grid-template-columns: 34px minmax(0, 1fr) 116px 116px 150px 104px;
     align-items: center;
     gap: 6px;
     padding: 6px 8px;

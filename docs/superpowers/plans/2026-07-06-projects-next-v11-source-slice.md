@@ -76,7 +76,7 @@
 - Keeps `sourceGridColumns(): ExtractumDataGridColumn[]`.
 - Uses confirmed SVAR column sizing properties: `width` for fixed pixel width and lowercase `flexgrow` for flexible width.
 
-- [ ] **Step 1: Add failing layout-contract tests**
+- [x] **Step 1: Add failing layout-contract tests**
 
 Modify imports in `src/lib/ui/research-projects-source-row.test.ts`:
 
@@ -149,7 +149,7 @@ Add this test:
   });
 ```
 
-- [ ] **Step 2: Run focused tests to verify red**
+- [x] **Step 2: Run focused tests to verify red**
 
 Run:
 
@@ -159,7 +159,7 @@ npm.cmd run test -- src/lib/ui/research-projects-source-row.test.ts src/lib/comp
 
 Expected: FAIL because `SOURCE_TABLE_LAYOUT` and `SOURCE_FILTER_ROW_GRID_TEMPLATE` are not exported and the components do not consume them yet.
 
-- [ ] **Step 3: Implement layout constants in the source-row UI module**
+- [x] **Step 3: Implement layout constants in the source-row UI module**
 
 Modify `src/lib/ui/research-projects-source-row.ts` near the top:
 
@@ -218,7 +218,7 @@ Important: do not set `width` on the title column. SVAR docs confirm `flexgrow` 
 
 Do not add a `minWidth`/`minwidth` field to the SVAR title column. The installed `@svar-ui/svelte-grid` `IColumnConfig` exposes `width` and `flexgrow`, but no minimum-width property. The title lower bound is handled by `SOURCE_FILTER_ROW_GRID_TEMPLATE` and by the live header-fit verification in Task 4.
 
-- [ ] **Step 4: Consume select width in `SourcesGrid.svelte`**
+- [x] **Step 4: Consume select width in `SourcesGrid.svelte`**
 
 Modify the import from `$lib/ui/research-projects-source-row`:
 
@@ -241,7 +241,7 @@ Modify `SELECT_COLUMN`:
   };
 ```
 
-- [ ] **Step 5: Consume the shared grid template in `SourcesFilterRow.svelte`**
+- [x] **Step 5: Consume the shared grid template in `SourcesFilterRow.svelte`**
 
 Add the import:
 
@@ -261,7 +261,7 @@ Remove this CSS declaration from `.sources-filter-row`:
 grid-template-columns: 34px minmax(160px, 1fr) 116px 116px 150px 104px;
 ```
 
-- [ ] **Step 6: Run focused tests to verify green**
+- [x] **Step 6: Run focused tests to verify green**
 
 Run:
 
@@ -271,7 +271,7 @@ npm.cmd run test -- src/lib/ui/research-projects-source-row.test.ts src/lib/comp
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit Task 1**
+- [x] **Step 7: Commit Task 1**
 
 Run:
 

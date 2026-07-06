@@ -2,6 +2,25 @@ import type { ExtractumDataGridColumn } from "$lib/components/extractum-ui/data-
 import type { LibraryCatalogStatus, LibrarySourceProvider } from "$lib/types/library-sources";
 import type { ProjectSourceRecord } from "$lib/types/projects";
 
+export const SOURCE_TABLE_LAYOUT = {
+  select: 34,
+  titleMin: 160,
+  titleFlexGrow: 1,
+  type: 116,
+  materials: 116,
+  lastSync: 150,
+  status: 104,
+} as const;
+
+export const SOURCE_FILTER_ROW_GRID_TEMPLATE = [
+  `${SOURCE_TABLE_LAYOUT.select}px`,
+  `minmax(${SOURCE_TABLE_LAYOUT.titleMin}px, 1fr)`,
+  `${SOURCE_TABLE_LAYOUT.type}px`,
+  `${SOURCE_TABLE_LAYOUT.materials}px`,
+  `${SOURCE_TABLE_LAYOUT.lastSync}px`,
+  `${SOURCE_TABLE_LAYOUT.status}px`,
+].join(" ");
+
 const SYNC_STATUS_LABELS: Record<LibraryCatalogStatus, string> = {
   active: "active",
   syncing: "sync",
@@ -65,17 +84,27 @@ export function compareSourceLastSynced(a: RowLike, b: RowLike): SortResult {
 
 export function sourceGridColumns(): ExtractumDataGridColumn[] {
   return [
-    { id: "title", header: "Источник", width: 260, flexgrow: 1, sort: compareSourceTitles },
-    { id: "typeLabel", header: "Тип", width: 116, sort: true },
-    { id: "materialsLabel", header: "Материалы", width: 116, sort: compareSourceMaterials },
+    {
+      id: "title",
+      header: "Источник",
+      flexgrow: SOURCE_TABLE_LAYOUT.titleFlexGrow,
+      sort: compareSourceTitles,
+    },
+    { id: "typeLabel", header: "Тип", width: SOURCE_TABLE_LAYOUT.type, sort: true },
+    {
+      id: "materialsLabel",
+      header: "Материалы",
+      width: SOURCE_TABLE_LAYOUT.materials,
+      sort: compareSourceMaterials,
+    },
     {
       id: "lastSyncedAt",
       header: "Последний сбор",
-      width: 150,
+      width: SOURCE_TABLE_LAYOUT.lastSync,
       dateTimeFormat: "datetime",
       sort: compareSourceLastSynced,
     },
-    { id: "statusLabel", header: "Статус", width: 104, sort: true },
+    { id: "statusLabel", header: "Статус", width: SOURCE_TABLE_LAYOUT.status, sort: true },
   ];
 }
 

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  SOURCE_FILTER_ROW_GRID_TEMPLATE,
+  SOURCE_TABLE_LAYOUT,
   buildSourceGridRows,
   buildSourceRow,
   compareSourceLastSynced,
@@ -95,6 +97,31 @@ describe("sourceGridColumns", () => {
     const lastSync = sourceGridColumns().find((column) => column.id === "lastSyncedAt");
 
     expect(lastSync?.dateTimeFormat).toBe("datetime");
+  });
+
+  it("uses one v11 source-table layout contract for grid columns and filter row", () => {
+    const columns = sourceGridColumns();
+    const byId = new Map(columns.map((column) => [String(column.id), column]));
+
+    expect(SOURCE_TABLE_LAYOUT).toEqual({
+      select: 34,
+      titleMin: 160,
+      titleFlexGrow: 1,
+      type: 116,
+      materials: 116,
+      lastSync: 150,
+      status: 104,
+    });
+    expect(SOURCE_FILTER_ROW_GRID_TEMPLATE).toBe(
+      "34px minmax(160px, 1fr) 116px 116px 150px 104px",
+    );
+
+    expect(byId.get("title")?.flexgrow).toBe(SOURCE_TABLE_LAYOUT.titleFlexGrow);
+    expect(byId.get("title")?.width).toBeUndefined();
+    expect(byId.get("typeLabel")?.width).toBe(SOURCE_TABLE_LAYOUT.type);
+    expect(byId.get("materialsLabel")?.width).toBe(SOURCE_TABLE_LAYOUT.materials);
+    expect(byId.get("lastSyncedAt")?.width).toBe(SOURCE_TABLE_LAYOUT.lastSync);
+    expect(byId.get("statusLabel")?.width).toBe(SOURCE_TABLE_LAYOUT.status);
   });
 });
 

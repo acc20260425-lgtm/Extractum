@@ -6,6 +6,7 @@
   } from "$lib/components/extractum-ui";
   import type { ExtractumDataGridColumn } from "$lib/components/extractum-ui";
   import {
+    SOURCE_TABLE_LAYOUT,
     buildSourceGridRows,
     sourceGridColumns,
   } from "$lib/ui/research-projects-source-row";
@@ -26,7 +27,7 @@
     // Svar typing for header/cell components is stricter than a plain
     // Component<{api,row}>; the runtime only needs `api`/`row`, so cast both.
     header: { cell: GridSelectAllCell } as unknown as ExtractumDataGridColumn["header"],
-    width: 34,
+    width: SOURCE_TABLE_LAYOUT.select,
     cell: GridSelectCell as unknown as ExtractumDataGridColumn["cell"],
   };
 
