@@ -611,6 +611,11 @@ async fn project_scoped_delete_rejects_invalid_sources_and_missing_links() {
 }
 ```
 
+Coverage boundary: this guard inspects the tables present after `apply_all_migrations_for_test_pool`.
+If a future runtime-only table is created lazily outside migrations and references `sources(id)`,
+this guard will not see it. Any new table with a `sources(id)` foreign key should be added through
+migrations or covered by a dedicated runtime-schema test before relying on source deletion.
+
 - [ ] **Step 2: Run the backend command tests and verify they fail**
 
 Run:
@@ -1784,7 +1789,7 @@ Final response must include exact commands run and whether each passed. Mention 
 
 ## Plan Self-Review
 
-**Spec coverage:** Covered the new project-scoped Tauri command, structured outcome, FK setup before `BEGIN IMMEDIATE`, delete lock reuse, validation errors, active/archived blocking projects, payload cap, playlist `SET NULL`, cascade cleanup plus schema-wide FK guard, standalone delete semantics, API wrapper, workflow helper, model helper, both UI locations, shared confirmation copy, success/blocked statuses, and final validation commands.
+**Spec coverage:** Covered the new project-scoped Tauri command, structured outcome, FK setup before `BEGIN IMMEDIATE`, delete lock reuse, validation errors, active/archived blocking projects, payload cap, playlist `SET NULL`, cascade cleanup plus migrated-schema FK guard, standalone delete semantics, API wrapper, workflow helper, model helper, both UI locations, shared confirmation copy, success/blocked statuses, and final validation commands. The FK guard's coverage boundary is explicit: runtime-only lazy tables outside migrations require a separate test.
 
 **Placeholder scan:** The plan uses concrete function names, copy, file paths, commands, and code snippets. It avoids deferred implementation markers.
 
