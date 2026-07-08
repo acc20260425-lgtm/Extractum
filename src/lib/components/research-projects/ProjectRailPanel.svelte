@@ -115,17 +115,17 @@
       >
         <RefreshCw size={13} aria-hidden="true" />
       </button>
-      {#if selected}
-        <ExtractumDropdownMenu bind:open={headerMenuOpen}>
-          <ExtractumDropdownMenuTrigger
-            class="rail-panel__menu-trigger"
-            data-ui-action="selected-project-actions"
-            title="Действия с проектом"
-            aria-label="Действия выбранного проекта"
-          >
-            <span class="rail-panel__more-dots" aria-hidden="true">⋯</span>
-          </ExtractumDropdownMenuTrigger>
-          <ExtractumDropdownMenuContent align="end">
+      <ExtractumDropdownMenu bind:open={headerMenuOpen}>
+        <ExtractumDropdownMenuTrigger
+          class="rail-panel__menu-trigger"
+          data-ui-action="selected-project-actions"
+          title="Действия с проектом"
+          aria-label="Действия выбранного проекта"
+        >
+          <span class="rail-panel__more-dots" aria-hidden="true">⋯</span>
+        </ExtractumDropdownMenuTrigger>
+        <ExtractumDropdownMenuContent align="end">
+          {#if selected}
             <ExtractumDropdownMenuItem onclick={() => selected && onEdit?.(selected.id)}>
               Редактировать
             </ExtractumDropdownMenuItem>
@@ -139,21 +139,13 @@
             >
               Удалить
             </ExtractumDropdownMenuItem>
-          </ExtractumDropdownMenuContent>
-        </ExtractumDropdownMenu>
-      {:else}
-        <button
-          type="button"
-          class="rail-panel__icon-btn"
-          data-ui-action="selected-project-actions"
-          title="Выберите проект"
-          aria-label="Действия выбранного проекта"
-          aria-disabled="true"
-          disabled
-        >
-          <span class="rail-panel__more-dots" aria-hidden="true">⋯</span>
-        </button>
-      {/if}
+          {:else}
+            <ExtractumDropdownMenuItem disabled>
+              <span>Выберите проект</span>
+            </ExtractumDropdownMenuItem>
+          {/if}
+        </ExtractumDropdownMenuContent>
+      </ExtractumDropdownMenu>
     </div>
   </div>
 
