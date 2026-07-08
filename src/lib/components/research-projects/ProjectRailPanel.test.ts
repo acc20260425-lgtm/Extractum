@@ -60,6 +60,48 @@ describe("ProjectRailPanel", () => {
     expect(sync.disabled).toBe(true);
   });
 
+  it("exposes the project list header controls with stable v11 action hooks", async () => {
+    render(ProjectRailPanel, {
+      props: { ...baseProps, summaries: [summary({ id: 5 })], selectedProjectId: 5 },
+    });
+
+    const compactButton = screen.getByRole("button", { name: "Компактный вид" });
+    expect(compactButton.getAttribute("data-ui-action")).toBe("toggle-project-compact");
+    expect(compactButton.getAttribute("aria-pressed")).toBe("false");
+
+    await fireEvent.click(compactButton);
+    const comfortButton = screen.getByRole("button", { name: "Комфортный вид" });
+    expect(comfortButton.getAttribute("aria-pressed")).toBe("true");
+
+    expect(screen.getByRole("button", { name: "Создать проект" }).getAttribute("data-ui-action")).toBe(
+      "create-project",
+    );
+    const sync = screen.getByRole("button", { name: "Синхронизация скоро" }) as HTMLButtonElement;
+    expect(sync.getAttribute("data-ui-action")).toBe("sync-projects");
+    expect(sync.getAttribute("aria-disabled")).toBe("true");
+    expect(sync.disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "Действия выбранного проекта" }).getAttribute("data-ui-action")).toBe(
+      "selected-project-actions",
+    );
+  });
+
+  it("exposes search clear as a named icon action", async () => {
+    render(ProjectRailPanel, {
+      props: {
+        ...baseProps,
+        summaries: [summary({ id: 1, name: "Alpha" }), summary({ id: 2, name: "Beta" })],
+      },
+    });
+    const input = screen.getByPlaceholderText("Поиск проектов") as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: "alp" } });
+
+    const clear = screen.getByRole("button", { name: "Очистить поиск проектов" });
+    expect(clear.getAttribute("data-ui-action")).toBe("clear-project-search");
+
+    await fireEvent.click(clear);
+    expect(input.value).toBe("");
+  });
+
   it("hides the header project menu without a selected project and shows it with one", () => {
     const { unmount } = render(ProjectRailPanel, {
       props: { ...baseProps, summaries: [summary()] },
@@ -102,6 +144,7 @@ describe("ProjectRailPanel", () => {
     });
     expect(screen.queryByText("Старый аудит")).toBeNull();
     const archiveToggle = screen.getByRole("button", { name: /Архив/ });
+    expect(archiveToggle.getAttribute("data-ui-action")).toBe("toggle-project-archive");
     expect(archiveToggle.getAttribute("aria-expanded")).toBe("false");
     expect(screen.getByText("2")).toBeTruthy();
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { List, MoreHorizontal, Plus, RefreshCw, Search, X } from "@lucide/svelte";
   import {
     ExtractumButton,
     ExtractumDialog,
@@ -85,50 +86,44 @@
       <button
         type="button"
         class="rail-panel__icon-btn"
+        data-ui-action="toggle-project-compact"
         title={compact ? "Комфортный вид" : "Компактный вид"}
         aria-label={compact ? "Комфортный вид" : "Компактный вид"}
+        aria-pressed={compact}
         onclick={() => (compact = !compact)}
       >
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-        >
-          <path d="M2.5 4h11M2.5 8h11M2.5 12h11" />
-        </svg>
+        <List size={13} aria-hidden="true" />
       </button>
       <button
         type="button"
         class="rail-panel__icon-btn"
+        data-ui-action="create-project"
         title="Создать проект"
         aria-label="Создать проект"
         onclick={() => onCreate?.()}
       >
-        +
+        <Plus size={14} aria-hidden="true" />
       </button>
-      <button type="button" class="rail-panel__icon-btn" title="Скоро" aria-label="Синхронизация скоро" disabled>
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-        >
-          <path d="M2 8a6 6 0 019.5-4.8M14 8a6 6 0 01-9.5 4.8M11.5 2v3h-3M4.5 14v-3h3" />
-        </svg>
+      <button
+        type="button"
+        class="rail-panel__icon-btn"
+        data-ui-action="sync-projects"
+        title="Скоро"
+        aria-label="Синхронизация скоро"
+        aria-disabled="true"
+        disabled
+      >
+        <RefreshCw size={13} aria-hidden="true" />
       </button>
       {#if selected}
         <ExtractumDropdownMenu bind:open={headerMenuOpen}>
           <ExtractumDropdownMenuTrigger
             class="rail-panel__menu-trigger"
+            data-ui-action="selected-project-actions"
             title="Действия с проектом"
             aria-label="Действия выбранного проекта"
           >
-            ⋯
+            <MoreHorizontal size={14} aria-hidden="true" />
           </ExtractumDropdownMenuTrigger>
           <ExtractumDropdownMenuContent align="end">
             <ExtractumDropdownMenuItem onclick={() => selected && onEdit?.(selected.id)}>
@@ -151,21 +146,18 @@
   </div>
 
   <div class="rail-panel__search">
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-    >
-      <circle cx="7" cy="7" r="4.5" />
-      <path d="M10.5 10.5L14 14" />
-    </svg>
+    <Search size={13} aria-hidden="true" />
     <input bind:value={query} placeholder="Поиск проектов" aria-label="Поиск проектов" />
     {#if query.length > 0}
-      <button type="button" class="rail-panel__clear" title="Очистить" onclick={() => (query = "")}>
-        ×
+      <button
+        type="button"
+        class="rail-panel__clear"
+        data-ui-action="clear-project-search"
+        title="Очистить"
+        aria-label="Очистить поиск проектов"
+        onclick={() => (query = "")}
+      >
+        <X size={13} aria-hidden="true" />
       </button>
     {/if}
   </div>
@@ -228,6 +220,7 @@
       <button
         type="button"
         class="rail-panel__archive-toggle"
+        data-ui-action="toggle-project-archive"
         aria-expanded={archiveOpen}
         onclick={() => (archiveOpen = !archiveOpen)}
       >
@@ -321,11 +314,27 @@
     font-size: 15px;
     line-height: 1;
     cursor: pointer;
+    flex-shrink: 0;
   }
 
   .rail-panel__actions .rail-panel__icon-btn:hover:not(:disabled),
   .rail-panel__actions :global(.rail-panel__menu-trigger:hover) {
     background: var(--extractum-surface-subtle);
+  }
+
+  .rail-panel__actions .rail-panel__icon-btn[aria-pressed="true"],
+  .rail-panel__actions :global(.rail-panel__menu-trigger[data-state="open"]) {
+    border-color: var(--extractum-primary);
+    background: color-mix(in srgb, var(--extractum-primary) 10%, var(--extractum-surface));
+    color: var(--extractum-primary);
+  }
+
+  .rail-panel__actions .rail-panel__icon-btn:focus-visible,
+  .rail-panel__actions :global(.rail-panel__menu-trigger:focus-visible),
+  .rail-panel__search .rail-panel__clear:focus-visible,
+  .rail-panel__list .rail-panel__archive-toggle:focus-visible {
+    outline: 2px solid var(--extractum-primary);
+    outline-offset: 2px;
   }
 
   .rail-panel__actions .rail-panel__icon-btn:disabled {
@@ -358,13 +367,23 @@
   }
 
   .rail-panel__search .rail-panel__clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
     border: none;
+    border-radius: 4px;
     background: transparent;
     padding: 0;
     color: var(--extractum-muted-2);
-    font-size: 15px;
     line-height: 1;
     cursor: pointer;
+  }
+
+  .rail-panel__search .rail-panel__clear:hover {
+    background: var(--extractum-surface-subtle);
+    color: var(--extractum-text);
   }
 
   .rail-panel__list {
