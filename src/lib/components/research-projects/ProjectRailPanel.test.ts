@@ -102,17 +102,23 @@ describe("ProjectRailPanel", () => {
     expect(input.value).toBe("");
   });
 
-  it("hides the header project menu without a selected project and shows it with one", () => {
+  it("keeps the header project menu visible but disabled without a selected project", () => {
     const { unmount } = render(ProjectRailPanel, {
       props: { ...baseProps, summaries: [summary()] },
     });
-    expect(screen.queryByTitle("Действия с проектом")).toBeNull();
+    const disabledMenu = screen.getByRole("button", { name: "Действия выбранного проекта" }) as HTMLButtonElement;
+    expect(disabledMenu.textContent?.trim()).toBe("⋯");
+    expect(disabledMenu.getAttribute("data-ui-action")).toBe("selected-project-actions");
+    expect(disabledMenu.getAttribute("aria-disabled")).toBe("true");
+    expect(disabledMenu.disabled).toBe(true);
     unmount();
 
     render(ProjectRailPanel, {
       props: { ...baseProps, summaries: [summary({ id: 5 })], selectedProjectId: 5 },
     });
-    expect(screen.getByTitle("Действия с проектом")).toBeTruthy();
+    const activeMenu = screen.getByRole("button", { name: "Действия выбранного проекта" }) as HTMLButtonElement;
+    expect(activeMenu.disabled).toBe(false);
+    expect(activeMenu.getAttribute("aria-disabled")).toBeNull();
   });
 
   it("filters projects by search and shows an empty state", async () => {

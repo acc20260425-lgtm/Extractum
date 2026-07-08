@@ -141,6 +141,18 @@
             </ExtractumDropdownMenuItem>
           </ExtractumDropdownMenuContent>
         </ExtractumDropdownMenu>
+      {:else}
+        <button
+          type="button"
+          class="rail-panel__icon-btn"
+          data-ui-action="selected-project-actions"
+          title="Выберите проект"
+          aria-label="Действия выбранного проекта"
+          aria-disabled="true"
+          disabled
+        >
+          <span class="rail-panel__more-dots" aria-hidden="true">⋯</span>
+        </button>
       {/if}
     </div>
   </div>
