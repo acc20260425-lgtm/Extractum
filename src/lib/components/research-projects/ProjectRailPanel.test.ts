@@ -80,9 +80,9 @@ describe("ProjectRailPanel", () => {
     expect(sync.getAttribute("data-ui-action")).toBe("sync-projects");
     expect(sync.getAttribute("aria-disabled")).toBe("true");
     expect(sync.disabled).toBe(true);
-    expect(screen.getByRole("button", { name: "Действия выбранного проекта" }).getAttribute("data-ui-action")).toBe(
-      "selected-project-actions",
-    );
+    const menuButton = screen.getByRole("button", { name: "Действия выбранного проекта" });
+    expect(menuButton.getAttribute("data-ui-action")).toBe("selected-project-actions");
+    expect(menuButton.textContent?.trim()).toBe("⋯");
   });
 
   it("exposes search clear as a named icon action", async () => {

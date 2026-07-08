@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { List, MoreHorizontal, Plus, RefreshCw, Search, X } from "@lucide/svelte";
+  import { List, Plus, RefreshCw, Search, X } from "@lucide/svelte";
   import {
     ExtractumButton,
     ExtractumDialog,
@@ -123,7 +123,7 @@
             title="Действия с проектом"
             aria-label="Действия выбранного проекта"
           >
-            <MoreHorizontal size={14} aria-hidden="true" />
+            <span class="rail-panel__more-dots" aria-hidden="true">⋯</span>
           </ExtractumDropdownMenuTrigger>
           <ExtractumDropdownMenuContent align="end">
             <ExtractumDropdownMenuItem onclick={() => selected && onEdit?.(selected.id)}>
@@ -340,6 +340,14 @@
   .rail-panel__actions .rail-panel__icon-btn:disabled {
     opacity: 0.45;
     cursor: default;
+  }
+
+  .rail-panel__actions :global(.rail-panel__more-dots) {
+    display: inline-block;
+    transform: translateY(-1px);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
   }
 
   .rail-panel__search {
