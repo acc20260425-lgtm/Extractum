@@ -26,6 +26,9 @@
     align-items: center;
     gap: 8px;
     min-width: 0;
+    /* svar's .wx-cell is display:block with a fixed height; stretch to it so
+       align-items:center actually centers the two-line text block. */
+    height: 100%;
   }
 
   .source-title-cell__dot {
@@ -46,8 +49,9 @@
 
   .source-title-cell__text {
     display: flex;
-    align-items: baseline;
-    gap: 6px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1px;
     min-width: 0;
   }
 
@@ -60,7 +64,10 @@
   }
 
   .source-title-cell__handle {
-    flex-shrink: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
     font: 400 11px/1.2 var(--extractum-font);
     color: var(--extractum-muted-2);
   }

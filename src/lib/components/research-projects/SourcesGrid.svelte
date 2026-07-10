@@ -167,6 +167,7 @@
     {overlay}
     selectOnClick={false}
     activeRowId={activeSourceId}
+    rowHeight={44}
     onRowClick={onActivateSource}
   />
 </div>
@@ -187,9 +188,40 @@
     font-weight: 700;
     color: var(--extractum-text);
     background: var(--extractum-surface-subtle);
+    position: relative;
+  }
+
+  :global(.sources-grid__table .wx-header .wx-cell:has(.wx-sort)) {
+    cursor: pointer;
+  }
+
+  /* призрачная стрелка-подсказка: видна только на hover и только пока колонка
+     НЕ отсортирована. В svar-шапке у сортируемых колонок есть пустой `.wx-sort`,
+     у несортированных aria-sort="none" (у отсортированной — ascending/descending
+     плюс собственный индикатор в `.wx-sort`). */
+  :global(.sources-grid__table .wx-header .wx-cell[aria-sort="none"]:has(.wx-sort)::after) {
+    content: "";
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    width: 7px;
+    height: 7px;
+    margin-top: -4px;
+    border-right: 1.5px solid var(--extractum-muted);
+    border-bottom: 1.5px solid var(--extractum-muted);
+    transform: rotate(45deg);
+    opacity: 0;
+    transition: opacity .12s ease;
+  }
+  :global(.sources-grid__table .wx-header .wx-cell[aria-sort="none"]:has(.wx-sort):hover::after) {
+    opacity: .4;
   }
 
   :global(.sources-grid__table .wx-row .wx-cell) {
     border-color: color-mix(in srgb, var(--extractum-border) 72%, transparent);
+    /* the 44px row is taller than one line of text; align-content centers
+       block-level cell content vertically without breaking text-overflow
+       ellipsis and text-align:right the way display:flex would. */
+    align-content: center;
   }
 </style>

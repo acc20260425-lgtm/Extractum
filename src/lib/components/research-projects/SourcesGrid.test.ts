@@ -60,6 +60,17 @@ describe("SourcesGrid", () => {
     expect(source).toContain("scrollActiveSourceRowIntoView");
   });
 
+  it("uses the mockup's 44px rows so the two-line title cell is not clipped", () => {
+    expect(source).toContain("rowHeight={44}");
+  });
+
+  it("vertically centers single-line cells in the 44px row without breaking ellipsis", () => {
+    // flex would break text-overflow on bare-text cells (Тип, Материалы) and
+    // text-align:right, so block cells are centered via align-content instead
+    expect(source).toContain("align-content: center");
+    expect(source).not.toMatch(/\.wx-row \.wx-cell[^}]*display: flex/s);
+  });
+
   it("adds a leading checkbox select column with a tri-state select-all header", () => {
     expect(source).toContain("SELECT_COLUMN");
     expect(source).toContain("cell: GridSelectCell");

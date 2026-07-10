@@ -83,7 +83,7 @@
   let disconnectOpen = $state(false);
   let libraryCatalogRecords = $state<LibraryCatalogRecord[]>([]);
   let selectedLibrarySourceIds = $state<Set<string>>(new Set());
-  let inspectorOpen = $state(true);
+  let inspectorOpen = $state(false);
   let promptOptions = $state<ComboOption[]>([]);
   // Model options are loaded from the active LLM profile in a follow-up; for now
   // the selector is empty and the run falls back to the profile default model.

@@ -38,6 +38,7 @@
     responsive,
     selectOnClick = true,
     activeRowId = null,
+    rowHeight = 34,
     onRowClick,
     onSelectedRowIdsChange = () => {},
   }: {
@@ -53,6 +54,7 @@
     responsive?: ExtractumDataGridResponsive;
     selectOnClick?: boolean;
     activeRowId?: string | null;
+    rowHeight?: number;
     onRowClick?: (id: string) => void;
     onSelectedRowIdsChange?: (ids: string[]) => void;
   } = $props();
@@ -60,7 +62,7 @@
   // svar re-normalises data and clears sortMarks whenever a reactive prop
   // changes (its config effect re-runs), so object props must keep stable
   // references and selection must NOT flow through the reactive prop at all.
-  const GRID_SIZES = { rowHeight: 34, headerHeight: 34, columnWidth: 160 };
+  const GRID_SIZES = { rowHeight: untrack(() => rowHeight), headerHeight: 34, columnWidth: 160 };
 
   // Unique host marker for the active-row CSS rule below.
   const gridUid = Math.random().toString(36).slice(2, 10);
