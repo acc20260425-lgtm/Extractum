@@ -5,10 +5,12 @@
 
 ## Goal
 
-Guarantee bounded, observable ownership and cleanup of external processes
+Guarantee bounded, observable ownership and cleanup of external process trees
 started by Extractum: `yt-dlp`, the Gemini Browser sidecar, and the dedicated
-CDP Chrome process. Closing the application, cancelling the owning operation,
-or reaching a timeout must not leave orphan processes.
+CDP Chrome process. On Windows, controlled shutdown/cancellation and an
+unexpected Extractum process death must not leave those owned trees running.
+Other platforms receive deterministic parent kill/reap during controlled
+shutdown; crash-safe tree containment there is not claimed by this slice.
 
 ## Scope
 
@@ -18,6 +20,7 @@ Included:
 - Gemini Browser Node and bundled Tauri shell sidecar transports;
 - the Chrome process launched by `gemini_bridge_start_cdp_chrome`;
 - application exit coordination with a three-second cleanup deadline;
+- per-process Windows Job Objects with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`;
 - regression tests, live Windows verification, and current-state docs.
 
 Excluded:
@@ -26,6 +29,7 @@ Excluded:
 - startup reconciliation of internal worker records;
 - cancellation of internal analysis/prompt-pack tasks;
 - browsers not launched and owned by Extractum.
+- non-Windows crash-safe descendant containment.
 
 ## Current Risks
 
@@ -54,34 +58,70 @@ Rejected alternatives:
 - Drop-only cleanup is useful as a last resort but cannot provide graceful
   stop, a shared deadline, deterministic reap, or shutdown admission control.
 
+## Windows Process-Tree Containment
+
+Add a small Windows-specific owner backed by `windows-sys` process/threading
+and job-object APIs. Immediately after each owned child spawn, create a Job
+Object, set `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, open the child process by PID,
+and assign it to that job before exposing the operation/handle to callers.
+Each `yt-dlp` operation, sidecar, and CDP Chrome launch gets its own job rather
+than sharing an application-wide job, so cancelling one operation cannot kill
+unrelated owned processes.
+
+The job handle moves with the subsystem process owner and is closed only after
+normal termination/reap. On cancellation, timeout, force cleanup, or Extractum
+crash, closing the handle terminates the entire assigned tree, including
+helpers such as `ffmpeg` and Chrome descendants. If job creation or assignment
+fails, the just-spawned child is immediately killed/reaped and the launch
+returns a sanitized internal error; an uncontained child is never published.
+
+On non-Windows systems the containment owner is a no-op marker and controlled
+cleanup targets the direct child. OS-level crash cleanup for descendants is a
+documented platform limitation and future work.
+
 ## Application Shutdown State
 
 Add `ExternalProcessShutdownState` managed by Tauri. It has atomic phases:
 
 - `running`: new external operations may start;
 - `shutting_down`: new operations fail before spawn;
-- `complete`: cleanup finished and the application may exit.
+- `completed`: cleanup finished and the application may exit.
 
 The phase is runtime-only and not persisted or exposed as a domain/API value.
 It therefore does not add a value-registry entry.
 
 Replace the terminal `.run(...).expect(...)` usage with the Tauri event-loop
-form that receives `RunEvent`. On the first `RunEvent::ExitRequested`:
+form that receives `RunEvent`. On the first `RunEvent::ExitRequested`, preserve
+its `code: Option<i32>` (defaulting to `0` only when absent), then:
 
 1. call `api.prevent_exit()`;
 2. atomically transition `running → shutting_down`;
-3. spawn exactly one async cleanup task;
+3. spawn exactly one async cleanup task and an independent hard watchdog;
 4. run subsystem cleanup under a shared three-second deadline;
 5. force-kill and reap any remaining owned processes;
-6. set the phase to `complete` and call `AppHandle::exit(0)`.
+6. set the phase to `completed` and call `AppHandle::exit(original_code)`.
 
 Repeated exit requests during `shutting_down` are prevented but do not create
-another cleanup task. Exit requests after `complete` are not prevented. This
+another cleanup task. Exit requests after `completed` are not prevented. This
 guard avoids duplicate cleanup and a programmatic-exit loop.
 
-Every external-process entry point checks the admission state immediately
-before spawning. Rejection uses a typed validation error with the message
-`Application is shutting down` and does not start a process.
+The cleanup task is not trusted as the sole exit path. An OS watchdog thread,
+created outside the async runtime task, waits four seconds from the first exit
+request; unless the phase is already `completed`, it records a constant
+sanitized warning, marks the phase completed, and calls
+`AppHandle::exit(original_code)`. Thus an async-task panic, mutex deadlock, or
+force-reap stall cannot leave an invisible application running.
+The first three seconds are the shared graceful budget; force cleanup receives
+the remaining hard-cap interval of at most one second.
+
+Use a single admission gate shared by all external-process subsystems.
+Acquiring a permit atomically checks `running` and increments the count of
+in-progress spawn/install transactions. The permit is held from before spawn
+until the child is either contained and installed in its owning state/registry,
+or killed/reaped after any failure. Shutdown closes admission and waits for all
+outstanding permits before taking installed handles. This removes check-then-
+act races for `yt-dlp`, sidecar, and Chrome. Rejection uses a typed validation
+error with the message `Application is shutting down` and does not spawn.
 
 ## Managed yt-dlp Operations
 
@@ -96,15 +136,22 @@ metadata/comments/captions/preview functions explicitly receive
 their existing `AppHandle`/managed-state command boundary. No global singleton
 is introduced. `run_ytdlp_with_options` performs these steps:
 
-1. construct and spawn the configured child with piped stdout/stderr;
-2. register the managed operation;
-3. move the `Child` into a dedicated async task;
-4. return a caller future guarded by an RAII cancellation guard;
-5. have the task select between child exit, the existing operation timeout,
-   and cancellation;
-6. on timeout/cancellation, call `child.kill().await`, which kills and waits;
-7. finish stdout/stderr readers, produce the current result type, then remove
-   the registry entry and notify waiters.
+1. acquire an admission permit and reserve/register the operation before spawn;
+2. construct and spawn the child with piped stdout/stderr;
+3. assign the child to its per-operation Windows Job Object;
+4. on spawn/containment failure, kill/reap any new child, remove the reservation,
+   and preserve existing spawn-error classification, including
+   `ErrorKind::NotFound` to `yt-dlp is not available on PATH`;
+5. move the `Child`, its Job Object owner, and any cookie `NamedTempFile` into a
+   dedicated async task before releasing the admission permit;
+6. start stdout and stderr drain futures immediately and poll them concurrently
+   with child exit, deadline, and cancellation (equivalent to the pipe-draining
+   semantics of `wait_with_output`);
+7. return a caller future guarded by an RAII cancellation guard;
+8. on timeout/cancellation, terminate the contained tree and await direct-child
+   reap within the hard cleanup cap;
+9. join the already-running output drains, produce the current result type,
+   remove the registry entry, notify waiters, then drop the cookie temp file.
 
 If the caller future is dropped by the existing source-job cancellation
 `select!`, the guard cancels the managed task. This closes the current gap
@@ -124,9 +171,19 @@ arguments, cookies, output payloads, or local paths.
 
 ## Gemini Sidecar Lifecycle
 
-`GeminiBrowserState` remains the owner of its optional sidecar. Shutdown takes
-the handle out of the state first, so concurrent commands cannot continue using
-it.
+`GeminiBrowserState` remains the owner of its optional sidecar. Existing
+`request_sidecar` holds the sidecar mutex across the entire protocol request,
+including potentially long Gemini generation. Shutdown therefore first cancels
+a state-level in-flight-request token. Every sidecar request selects between
+that token and the protocol future; cancellation drops the borrowed protocol
+future, returns a typed shutdown/cancellation error, and releases the mutex.
+Only then does shutdown take the handle out of state. The bounded force path
+must never wait indefinitely for the request mutex.
+
+Spawn uses the shared admission permit across process creation, Job Object
+assignment, and installation into `GeminiBrowserState`. Shutdown closes
+admission and waits for outstanding spawn/install permits before cancelling
+requests and taking the installed handle.
 
 Graceful shutdown sends the existing sidecar protocol `Stop` command and waits
 for acknowledgement/termination within the remaining shared budget. If the
@@ -134,7 +191,7 @@ sidecar does not terminate:
 
 - Tokio Node transport calls kill and awaits reap;
 - Tauri shell transport calls `CommandChild::kill()` and consumes receiver
-  events until `CommandEvent::Terminated` or the deadline expires.
+  events until `CommandEvent::Terminated` or the hard cleanup cap expires.
 
 The existing Drop implementation remains a best-effort fallback, not the
 normal shutdown path. Its behavior must stay non-panicking.
@@ -143,19 +200,31 @@ normal shutdown path. Its behavior must stay non-panicking.
 
 `GeminiBrowserState` remains the owner of `ChromeCdpProcess`. Shutdown takes the
 handle out of state and calls an explicit `shutdown()` method that performs
-`kill` followed by `wait`. Chrome has no Extractum protocol for graceful exit,
-so this immediate owned-process termination is the normal path.
+contained-tree termination followed by direct-child `wait`. Chrome has no
+Extractum protocol for graceful exit, so this immediate owned-process
+termination is the normal path. Spawn, Job Object assignment, and installation
+into state occur under one shared admission permit. Synchronous Chrome
+kill/wait runs through `spawn_blocking` so it cannot stall the Tokio worker that
+drives other cleanup futures.
 
 Drop retains the current kill/wait fallback. Extractum never enumerates or
 terminates Chrome instances it did not launch.
+
+Known limitation: if Chrome finds an already-running browser with the same
+`--user-data-dir`, the newly spawned process may delegate to it and exit. That
+existing browser was not launched by the current operation, cannot be assigned
+retroactively to its Job Object, and remains intentionally unmanaged. The CDP
+startup path must detect that the owned child exited and must not claim that an
+unrelated delegated browser is owned or will be terminated on shutdown.
 
 ## Failure Isolation
 
 Shutdown attempts all three subsystem cleanups even if one reports an error.
 The coordinator records sanitized warnings and proceeds to the remaining
 subsystems. The three-second deadline bounds total graceful cleanup, not three
-seconds per subsystem. After the deadline, force cleanup runs for all remaining
-handles before programmatic exit.
+seconds per subsystem. After that deadline, force cleanup runs concurrently for
+all remaining handles under the independent four-second hard exit cap. The
+watchdog exits even if force cleanup or its task panics/stalls.
 
 No shutdown log may contain process arguments, cookies, prompts, provider
 output, command stdout/stderr, profile directories, or executable paths.
@@ -167,18 +236,32 @@ Implementation follows red-green-refactor cycles.
 Automated tests cover:
 
 - normal `yt-dlp` exit removes its registry entry and returns captured output;
+- output larger than the platform pipe buffer is drained concurrently and
+  completes successfully without a false timeout;
 - timeout kills/reaps the fake child and preserves the timeout error;
 - dropping the caller future triggers cancellation and reap;
 - global shutdown closes admission, cancels active operations, and waits for an
   empty registry;
 - registration after shutdown returns the typed error without spawning;
+- admission shutdown racing each spawn either rejects before spawn or publishes
+  a contained, registered handle that shutdown subsequently cleans;
+- spawn NotFound and other spawn errors preserve current classification and
+  remove the pre-spawn reservation;
+- the cookie temp file remains alive until managed task termination and is
+  removed only after kill/reap;
 - sidecar graceful Stop precedes force-kill;
+- shutdown cancellation releases a mutex held by an in-flight long sidecar
+  request before the graceful/force path takes its handle;
 - stalled Node and Tauri shell transports use their transport-specific
   kill/reap behavior;
 - explicit Chrome shutdown and Drop fallback both kill/wait once;
-- repeated `ExitRequested` events create one cleanup task and a completed phase
-  permits final exit;
+- repeated `ExitRequested` events create one cleanup task, preserve the first
+  requested exit code, and a `completed` phase permits final exit;
+- a panicking or stalled cleanup task still exits through the four-second
+  watchdog with the preserved code;
 - one subsystem failure does not skip later cleanup;
+- Windows Job Object closure terminates fake descendant processes as well as
+  the direct child;
 - source-level contracts keep the Tauri lifecycle hook and forbid secret/path
   data in shutdown warnings.
 
@@ -201,12 +284,17 @@ git diff --check
 On Windows, using a release GUI build:
 
 - start a deliberately long `yt-dlp` operation, close Extractum, and verify no
-  owned `yt-dlp.exe` remains;
+  owned `yt-dlp.exe` or helper descendant remains;
 - start the Gemini sidecar and Extractum-owned CDP Chrome, close Extractum, and
   verify both owned processes terminate;
 - close Extractum with no active external processes;
 - confirm total exit delay is at most approximately three seconds plus small
-  scheduling/process-reap overhead.
+- force-terminate Extractum during an owned test process tree and confirm the
+  Windows Job Object removes that tree.
+
+The normal target is three seconds plus small scheduling overhead; the hard
+watchdog requires process exit by approximately four seconds even when cleanup
+stalls.
 
 Process identity is captured before exit from the owning handles/PIDs; tests do
 not infer ownership by killing every process with a matching executable name.
@@ -225,12 +313,15 @@ Update:
 
 ## Acceptance Criteria
 
-- Timeout, caller cancellation, and app shutdown cannot orphan `yt-dlp`.
+- On Windows, timeout, caller cancellation, app shutdown, and Extractum crash
+  cannot orphan the owned `yt-dlp` process tree.
 - Gemini sidecar receives graceful Stop before bounded force cleanup.
 - Extractum-owned CDP Chrome is killed and reaped; unrelated Chrome is untouched.
 - New external operations are rejected after shutdown begins.
 - Repeated exit requests do not duplicate cleanup or loop programmatic exit.
-- Total graceful shutdown uses one three-second budget.
+- The first requested exit code is preserved.
+- Total graceful shutdown uses one three-second budget and the independent
+  watchdog enforces an approximately four-second hard cap.
 - Cleanup failures do not prevent other subsystem cleanup and do not leak
   sensitive process data.
 - Automated tests, full Rust/TypeScript checks, current-state docs, and Windows
