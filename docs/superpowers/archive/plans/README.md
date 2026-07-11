@@ -10,6 +10,10 @@ Current product and architecture state belongs in root docs such as
 
 Active implementation plans belong in `docs/superpowers/plans/`.
 
+Security Hardening and Hidden Child Processes plans from 2026-07-11 record the
+completed Tauri configuration, credential-origin, CSP verification, and hidden
+Windows `yt-dlp` process work.
+
 NotebookLM source-group export plans from 2026-05-31 record the shipped
 Telegram source-group export package behavior, group validation, member file
 layout, frontend dialog enablement, docs closure, verification, and branch

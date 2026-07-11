@@ -18,8 +18,8 @@ Release automation was unavailable because the automation bridge is gated by
 
 The release executable was launched from
 `src-tauri/target/release/extractum.exe`. The user manually exercised each path
-and reported `окна нет` ("there is no window") for all of them. This is user-observed
-desktop evidence, not automation evidence.
+and reported `окна нет` ("there is no window") for all of them. This is
+user-observed desktop evidence, not automation evidence.
 
 | Path | User observation |
 | --- | --- |

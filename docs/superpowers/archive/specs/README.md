@@ -10,6 +10,10 @@ or `docs/backlog.md`.
 
 Active or still-relevant specs belong in `docs/superpowers/specs/`.
 
+Security Hardening and Hidden Child Processes specs from 2026-07-11 record the
+shipped production Tauri/CSP/credential boundaries and the Windows
+`CREATE_NO_WINDOW` policy for `yt-dlp` launchers.
+
 NotebookLM source-group export specs from 2026-05-31 record the shipped
 Telegram source-group export scope, validation rules, package layout, and UI
 enablement boundaries.
