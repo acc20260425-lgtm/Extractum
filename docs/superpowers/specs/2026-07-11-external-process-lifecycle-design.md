@@ -10,19 +10,18 @@ started by Extractum: `yt-dlp`, the Gemini Browser sidecar, and the dedicated
 CDP Chrome process. Controlled shutdown/cancellation deterministically targets
 the direct owned child. Windows Job Objects additionally contain descendants
 created after assignment and clean those contained trees if Extractum crashes.
-Pre-assignment descendants and PID-only Tauri shell children are explicit
-limitations; the design does not claim universal orphan prevention.
+Pre-assignment descendants are an explicit limitation; the design does not
+claim universal orphan prevention.
 
 ## Scope
 
 Included:
 
 - all real `yt-dlp` invocations through `youtube/ytdlp.rs`;
-- Gemini Browser Node and bundled Tauri shell sidecar transports;
+- Gemini Browser Node-script and bundled-binary Tokio sidecar modes;
 - the Chrome process launched by `gemini_bridge_start_cdp_chrome`;
 - application exit coordination with a three-second cleanup deadline;
-- per-process Windows Job Objects with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` for
-  raw-handle transports;
+- per-process Windows Job Objects with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`;
 - regression tests, live Windows verification, and current-state docs.
 
 Excluded:
@@ -48,9 +47,8 @@ have terminated before the Tauri process exits.
 ## Selected Architecture
 
 Keep process ownership inside each subsystem and add a thin application exit
-coordinator. This avoids a type-erased global registry spanning incompatible
-Tokio `Child`, synchronous `std::process::Child`, and Tauri shell
-`CommandChild` types.
+coordinator. This avoids a type-erased global registry spanning Tokio `Child`
+and synchronous `std::process::Child` types.
 
 Rejected alternatives:
 
@@ -59,6 +57,11 @@ Rejected alternatives:
   owning subsystem.
 - Drop-only cleanup is useful as a last resort but cannot provide graceful
   stop, a shared deadline, deterministic reap, or shutdown admission control.
+- Keeping the bundled sidecar on `tauri-plugin-shell::CommandChild` preserves
+  the existing wrapper but exposes only a PID, prevents safe raw-handle Job
+  assignment, and requires a second JSONL/event transport. It is rejected in
+  favor of resolving the packaged binary path and spawning it through the same
+  Tokio transport as the Node-script mode.
 
 ## Windows Process-Tree Containment
 
@@ -68,7 +71,7 @@ Immediately after each owned child spawn, create a Job Object, set
 process handle already owned by `tokio::process::Child` or
 `std::process::Child`. The primary path must never reopen these children by PID;
 this avoids PID-reuse races that could assign and later terminate an unrelated
-process. Each containable `yt-dlp`, Node sidecar, and CDP Chrome launch gets its
+process. Each `yt-dlp`, sidecar, and CDP Chrome launch gets its
 own job rather than sharing an application-wide job.
 
 The job handle moves with the subsystem process owner and is closed only after
@@ -77,12 +80,6 @@ crash, closing the handle terminates the assigned process and descendants
 created after assignment. If job creation or assignment fails, the
 just-spawned child is immediately killed/reaped and the launch returns a
 sanitized internal error; an uncontained raw-handle child is never published.
-
-`tauri_plugin_shell::process::CommandChild` exposes only `pid()`. Reopening that
-PID cannot be made safe against reuse, even with liveness or creation-time
-checks, so the bundled shell sidecar is deliberately not assigned to a Job
-Object. It retains protocol Stop plus direct `kill()`/`Terminated` cleanup, and
-crash-safe descendant containment is not claimed for that transport.
 
 There is also an unavoidable spawn-to-assignment window with Rust's standard
 Command APIs. `CREATE_SUSPENDED` alone is insufficient because those APIs do
@@ -168,9 +165,9 @@ is introduced. `run_ytdlp_with_options` performs these steps:
    with child exit, deadline, and cancellation (equivalent to the pipe-draining
    semantics of `wait_with_output`);
 7. return a caller future guarded by an RAII cancellation guard;
-8. on ordinary mid-session timeout/cancellation, terminate the contained tree
-   and await direct-child reap within a separate one-second per-operation reap
-   budget;
+8. on ordinary mid-session timeout/cancellation, call `TerminateJobObject` on
+   Windows (or direct-child kill elsewhere), keep the containment handle open,
+   and await direct-child reap within a separate one-second per-operation budget;
 9. join the already-running output drains, produce the current result type,
    remove the registry entry, notify waiters, then drop the cookie temp file.
 
@@ -182,8 +179,11 @@ function.
 The one-second per-operation reap budget is independent of application
 shutdown. If it expires, close the Windows Job Object handle (or issue the
 platform direct-child kill), detach the stuck waiter, remove the registry entry,
-and emit a sanitized warning containing only operation ID and stage. During app
-shutdown, the global three/four-second budgets take precedence.
+and emit a sanitized warning containing only operation ID and stage. The
+detached task continues owning the cookie `NamedTempFile`; if reap remains
+stuck, that file can live until Extractum exits, when process teardown removes
+the final owner. During app shutdown, the global three/four-second budgets take
+precedence.
 
 Normal non-zero exits keep current `yt-dlp` error classification. Timeout keeps
 the existing timeout messages. Source-job cancellation keeps its existing
@@ -214,18 +214,32 @@ goes directly to transport-specific force cleanup; sending Stop over the same
 pipe would be unreliable and could consume the whole graceful budget.
 
 Spawn uses the shared admission permit across process creation, Job Object
-assignment where a raw handle is available, and installation into
-`GeminiBrowserState`. Shutdown closes admission and waits for outstanding
-spawn/install permits before cancelling requests and taking the installed
-handle.
+assignment, and installation into `GeminiBrowserState`. Both launch modes use
+one Tokio child/JSONL transport:
+
+- development mode spawns `node <repo-dist-script>`;
+- bundled mode resolves
+  `current_exe().parent()/gemini-browser-sidecar[.exe]`, matching the path
+  convention used by `tauri-plugin-shell` and the observed Tauri release output,
+  then spawns that executable directly.
+
+Bundled path resolution is unit-tested for Windows and non-Windows suffixes and
+verified against a release build. Direct backend spawning does not broaden
+webview shell capability; no frontend command or arbitrary executable path is
+exposed. Shutdown closes admission and waits for outstanding spawn/install
+permits before cancelling requests and taking the installed handle.
 
 For an idle, untainted transport, graceful shutdown sends the existing sidecar
 protocol `Stop` command and waits for acknowledgement/termination within the
 remaining shared budget. If the sidecar does not terminate:
 
-- Tokio Node transport calls kill and awaits reap;
-- Tauri shell transport calls `CommandChild::kill()` and consumes receiver
-  events until `CommandEvent::Terminated` or the hard cleanup cap expires.
+- the unified Tokio transport terminates its Job Object tree and awaits the
+  direct child within the hard cleanup cap.
+
+Remove the Tauri shell transport enum arm, `request_shell`, `CommandEvent`
+buffer reassembly, and transport-specific shell force-cleanup branch. The JSONL
+request/response implementation is shared by Node-script and bundled-binary
+modes.
 
 The existing Drop implementation remains a best-effort fallback, not the
 normal shutdown path. Its behavior must stay non-panicking.
@@ -238,8 +252,9 @@ contained-tree termination followed by direct-child `wait`. Chrome has no
 Extractum protocol for graceful exit, so this immediate owned-process
 termination is the normal path. Spawn, Job Object assignment, and installation
 into state occur under one shared admission permit. Synchronous Chrome
-kill/wait runs through `spawn_blocking` so it cannot stall the Tokio worker that
-drives other cleanup futures.
+spawn plus Job assignment and later kill/wait run through `spawn_blocking` so
+neither `CreateProcess` nor cleanup stalls the Tokio worker that drives other
+futures.
 
 Drop retains the current kill/wait fallback. Extractum never enumerates or
 terminates Chrome instances it did not launch.
@@ -286,21 +301,26 @@ Automated tests cover:
 - the cookie temp file remains alive until managed task termination and is
   removed only after kill/reap;
 - sidecar graceful Stop precedes force-kill;
+- bundled sidecar path resolution matches `current_exe()` layout on Windows and
+  non-Windows, and a release smoke launches the packaged binary directly;
+- source contracts confirm the legacy Tauri shell transport/event-buffer code
+  is removed;
 - shutdown cancellation releases a mutex held by an in-flight long sidecar
   request before the graceful/force path takes its handle;
 - a cancelled/partially written sidecar request taints the transport and skips
   graceful Stop;
 - graceful cleanup for YouTube, sidecar, and Chrome starts concurrently;
-- stalled Node and Tauri shell transports use their transport-specific
-  kill/reap behavior;
+- stalled Node-script and bundled-binary modes use the unified Tokio
+  tree-termination/reap behavior;
 - explicit Chrome shutdown and Drop fallback both kill/wait once;
+- Chrome spawn/Job assignment and kill/wait execute through `spawn_blocking`;
 - repeated `ExitRequested` events create one cleanup task, preserve the first
   requested exit code, and a `completed` phase permits final exit;
 - a panicking or stalled cleanup task still exits through the four-second
   watchdog with the preserved code;
 - one subsystem failure does not skip later cleanup;
-- Windows Job Object assignment uses the already-owned raw child handle and
-  never reopens a Tokio/std child by PID;
+- a source-level containment contract requires the already-owned raw child
+  handle and rejects `OpenProcess`/`.pid()`-based assignment in that module;
 - Windows Job Object closure terminates a real test descendant created after
   assignment as well as its direct test child;
 - source-level contracts keep the Tauri lifecycle hook and forbid secret/path
@@ -357,12 +377,12 @@ Update:
 
 ## Acceptance Criteria
 
-- Timeout, caller cancellation, and app shutdown deterministically terminate
-  and reap the direct owned `yt-dlp` process.
+- Timeout, caller cancellation, and app shutdown deterministically request
+  termination of the direct owned `yt-dlp` process and normally confirm reap;
+  a one-second stuck-reap degradation path is explicitly logged and detached.
 - On Windows, raw-handle children and descendants created after Job Object
   assignment are terminated when their job closes, including on Extractum
-  crash; pre-assignment descendants and PID-only shell sidecars remain explicit
-  limitations.
+  crash; pre-assignment descendants remain an explicit limitation.
 - An idle, untainted Gemini sidecar receives graceful Stop before bounded force
   cleanup; a tainted transport skips directly to force cleanup.
 - Extractum-owned CDP Chrome is killed and reaped; unrelated Chrome is untouched.
