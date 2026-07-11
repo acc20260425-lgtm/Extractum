@@ -21,4 +21,10 @@
 - `npm.cmd run tauri build -- --no-bundle` — passed.
 - `npm.cmd run tauri build -- --no-bundle --features csp-verification` — passed.
 
+## Runtime boundary follow-up
+
+- The debug executable was launched and exposed no listening socket, confirming no MCP bridge listener.
+- The normal release executable was rebuilt after the feature build, launched, and likewise exposed no listening socket.
+- The feature-gated release build compiled successfully. Full manual DevTools CSP inspection and release UI walkthroughs remain environment/manual follow-ups rather than automated assertions in this run.
+
 The build logs contain known Gemini/Apalis/fixture and third-party SVAR warnings. No new security-hardening warning was introduced.
