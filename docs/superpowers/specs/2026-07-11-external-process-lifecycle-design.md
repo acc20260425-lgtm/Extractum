@@ -226,12 +226,19 @@ one Tokio child/JSONL transport:
 Bundled path resolution is unit-tested for Windows and non-Windows suffixes and
 verified against a release build. Direct backend spawning does not broaden
 webview shell capability; no frontend command or arbitrary executable path is
-exposed. Shutdown closes admission and waits for outstanding spawn/install
-permits before cancelling requests and taking the installed handle.
+exposed. Both sidecar modes apply the existing `hide_console_window` helper on
+Windows, preserving the no-console behavior previously supplied by the shell
+plugin. Sidecar stderr is piped and drained concurrently so it cannot block the
+child; only sanitized constant diagnostics may be logged. Shutdown closes
+admission and waits for outstanding spawn/install permits before cancelling
+requests and taking the installed handle.
 
 For an idle, untainted transport, graceful shutdown sends the existing sidecar
 protocol `Stop` command and waits for acknowledgement/termination within the
-remaining shared budget. If the sidecar does not terminate:
+remaining shared budget. The current sidecar `Stop` closes the managed browser
+session but leaves the JSONL loop waiting on stdin, so after receiving ACK the
+parent must close/take sidecar stdin to deliver EOF, then await process exit. If
+ACK, EOF-driven exit, or reap does not complete in budget:
 
 - the unified Tokio transport terminates its Job Object tree and awaits the
   direct child within the hard cleanup cap.
@@ -300,9 +307,15 @@ Automated tests cover:
   remove the pre-spawn reservation;
 - the cookie temp file remains alive until managed task termination and is
   removed only after kill/reap;
+- a stuck-reap timeout detaches the waiter, removes the registry entry, emits a
+  sanitized warning, and keeps the cookie owner alive in the detached task;
 - sidecar graceful Stop precedes force-kill;
+- sidecar graceful Stop ACK is followed by stdin closure and EOF-driven process
+  exit before force cleanup is considered;
 - bundled sidecar path resolution matches `current_exe()` layout on Windows and
   non-Windows, and a release smoke launches the packaged binary directly;
+- both direct sidecar modes use `hide_console_window` on Windows and drain
+  stderr without logging raw sidecar output;
 - source contracts confirm the legacy Tauri shell transport/event-buffer code
   is removed;
 - shutdown cancellation releases a mutex held by an in-flight long sidecar
@@ -331,6 +344,11 @@ depend on installed `yt-dlp`, Node, or Chrome binaries. The Windows Job Object
 integration test uses only an OS-provided inert process such as PowerShell or
 `cmd.exe` to create a bounded parent/descendant fixture. Existing real-product
 process smoke tests remain separate integration evidence.
+
+The Tauri `RunEvent` callback remains a thin adapter over a testable shutdown
+coordinator core. Tests inject the monotonic clock/watchdog scheduler and final
+exit callback, so repeated-exit, preserved-code, panic, and hard-cap behavior
+can be asserted without terminating the Rust test process.
 
 Final automated verification includes:
 
@@ -385,7 +403,9 @@ Update:
   crash; pre-assignment descendants remain an explicit limitation.
 - An idle, untainted Gemini sidecar receives graceful Stop before bounded force
   cleanup; a tainted transport skips directly to force cleanup.
-- Extractum-owned CDP Chrome is killed and reaped; unrelated Chrome is untouched.
+- Extractum-owned CDP Chrome receives contained-tree termination and is normally
+  reaped; the hard watchdog remains the documented degradation path. Unrelated
+  Chrome is untouched.
 - New external operations are rejected after shutdown begins.
 - Repeated exit requests do not duplicate cleanup or loop programmatic exit.
 - The first requested exit code is preserved.
