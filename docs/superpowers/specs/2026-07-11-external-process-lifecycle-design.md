@@ -1,7 +1,7 @@
 # External Process Lifecycle Design
 
 **Date:** 2026-07-11
-**Status:** awaiting written-spec review
+**Status:** approved for implementation planning
 
 ## Goal
 
