@@ -241,12 +241,24 @@ which they were configured.
 
 The persistence mechanism makes that rule executable: whenever a save creates,
 replaces, or preserves a configured key, it writes the effective normalized
-base URL explicitly instead of storing a blank/default sentinel. During this
-slice, a one-time startup backfill also materializes the current effective base
-URL for every legacy profile that has a configured key but a missing or blank
-endpoint setting. The backfill runs before such profiles can be resolved for a
-request. Profiles without keys may continue to use an implicit provider
-default.
+base URL explicitly instead of storing a blank/default sentinel.
+
+Legacy materialization is lazy and part of the profile resolver itself, not a
+separate startup task. After the resolver checks the OS keyring, if the profile
+has a configured key and its persisted endpoint is missing or blank, it writes
+the current effective normalized URL before returning the resolved profile.
+Every request path already passes through this resolver, so a key cannot be
+used before its origin is materialized. Concurrent resolutions may repeat the
+same write safely; the operation is idempotent and runs whenever the legacy
+condition is encountered, with no migration-complete flag. Profiles without
+keys may continue to use an implicit provider default.
+
+This materialization is intentionally visible in profile state and UI. A keyed
+profile that previously showed an empty base-URL field with a default
+placeholder will show the explicit effective URL after its first resolution or
+save. Unkeyed profiles retain the empty/default-placeholder behavior. Existing
+tests and frontend contracts that require an empty `base_url` for keyed legacy
+profiles must be updated to this new security behavior.
 
 Path-only changes under the same origin do not require a new key. Provider,
 scheme, host, or effective-port changes do.
@@ -296,7 +308,10 @@ Automated coverage must include:
 - blank/missing and explicit provider-default endpoints normalize to the same
   credential origin;
 - saves with configured keys materialize their effective base URL;
-- startup backfill materializes legacy keyed profiles before request use;
+- profile resolution lazily and idempotently materializes legacy keyed profiles
+  before returning them for request use;
+- keyed materialization returns the explicit effective URL to profile state,
+  while unkeyed implicit-default profiles remain blank;
 - unchanged provider/origin preserves a key;
 - provider, scheme, host, and port changes require a replacement key;
 - path-only changes preserve a key;
@@ -324,6 +339,17 @@ Live MCP verification uses the unchanged command:
 npm.cmd run tauri dev
 ```
 
+With that development app running, final verification also executes the two
+fixture consumers that exercise the wrapper, global API, and `cfg(dev)` command
+registration together:
+
+```powershell
+npm.cmd run smoke:analysis
+npm.cmd run smoke:cancellation
+```
+
+Both must complete successfully, including fixture cleanup.
+
 Production CSP verification must additionally build and launch bundled assets:
 
 ```powershell
@@ -336,7 +362,8 @@ that navigation and basic interactions work and that no MCP Bridge listener is
 present.
 
 Absence of CSP violations is observed through a separate verification-only
-release-profile build. Add a Cargo feature such as `csp-verification` that
+release-profile build. This is explicitly a manual verification step. Add a
+Cargo feature such as `csp-verification` that
 enables `tauri/devtools`, plus a feature-gated setup hook that opens DevTools.
 Build it with the same production CSP and bundled assets using a config overlay
 that does not modify security policy:
@@ -352,6 +379,13 @@ release build remains free of the feature and cannot open DevTools. These
 checks are required because the Vite development server cannot prove that
 Tauri's compile-time CSP asset modification and production asset protocol work
 correctly.
+
+For `tauri build --debug`, open its DevTools console and call representative
+fixture commands through
+`window.__TAURI_INTERNALS__.invoke("seed_analysis_redesign_fixtures")`. The
+expected result is an unknown-command rejection. This runtime check complements
+the source-level `cfg(dev)` contract; it does not depend on `withGlobalTauri` or
+the MCP Bridge.
 
 ## Documentation
 
@@ -380,6 +414,7 @@ only by the project `tauri dev` workflow.
 
 - `npm.cmd run tauri dev` launches an MCP-enabled debug app without extra user
   arguments.
+- `smoke:analysis` and `smoke:cancellation` pass against that development app.
 - `npm.cmd run tauri build` uses `withGlobalTauri: false` and the production CSP.
 - `npm.cmd run tauri build -- --debug` does not register the MCP Bridge.
 - `npm.cmd run tauri build -- --debug` exposes none of the development fixture
