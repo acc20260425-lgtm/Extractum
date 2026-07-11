@@ -236,8 +236,8 @@ missing base URL to the provider default. For OpenAI-compatible profiles, an
 empty base URL and the explicit current default
 `http://localhost:20128/v1` therefore have the same origin. A provider without
 a configurable endpoint has no URL origin component. If a future release
-changes a provider default, existing keys must remain bound to the origin at
-which they were configured.
+changes a provider default, keys whose origin has been materialized remain
+bound to the origin at which they were configured.
 
 The persistence mechanism makes that rule executable: whenever a save creates,
 replaces, or preserves a configured key, it writes the effective normalized
@@ -247,11 +247,20 @@ Legacy materialization is lazy and part of the profile resolver itself, not a
 separate startup task. After the resolver checks the OS keyring, if the profile
 has a configured key and its persisted endpoint is missing or blank, it writes
 the current effective normalized URL before returning the resolved profile.
-Every request path already passes through this resolver, so a key cannot be
-used before its origin is materialized. Concurrent resolutions may repeat the
-same write safely; the operation is idempotent and runs whenever the legacy
-condition is encountered, with no migration-complete flag. Profiles without
-keys may continue to use an implicit provider default.
+Loading the profiles state applies the same materialization to every listed
+profile, so opening settings eagerly upgrades dormant keyed profiles. Every
+request path also passes through the resolver, so a key cannot be used by the
+current version before its origin is materialized. Concurrent resolutions or
+state loads may repeat the same write safely; the operation is idempotent and
+runs whenever the legacy condition is encountered, with no migration-complete
+flag. Profiles without keys may continue to use an implicit provider default.
+
+Accepted legacy limitation: the historical origin of a keyed profile that has
+never stored an endpoint cannot be reconstructed. If such a profile is neither
+loaded nor used before a future release changes the provider default, its first
+materialization will bind it to that future default. This slice substantially
+narrows that window through state-load and resolver materialization but does
+not claim to recover origin information that was never persisted.
 
 This materialization is intentionally visible in profile state and UI. A keyed
 profile that previously showed an empty base-URL field with a default
@@ -310,6 +319,8 @@ Automated coverage must include:
 - saves with configured keys materialize their effective base URL;
 - profile resolution lazily and idempotently materializes legacy keyed profiles
   before returning them for request use;
+- loading profile state eagerly performs the same idempotent materialization
+  for all listed keyed profiles;
 - keyed materialization returns the explicit effective URL to profile state,
   while unkeyed implicit-default profiles remain blank;
 - unchanged provider/origin preserves a key;
@@ -339,16 +350,24 @@ Live MCP verification uses the unchanged command:
 npm.cmd run tauri dev
 ```
 
-With that development app running, final verification also executes the two
-fixture consumers that exercise the wrapper, global API, and `cfg(dev)` command
-registration together:
+While that manually launched app is running, execute the cancellation smoke,
+which connects to the existing MCP Bridge:
 
 ```powershell
-npm.cmd run smoke:analysis
 npm.cmd run smoke:cancellation
 ```
 
-Both must complete successfully, including fixture cleanup.
+Then stop the manual development app. Only after its Vite and MCP Bridge ports
+are free, execute the analysis smoke:
+
+```powershell
+npm.cmd run smoke:analysis
+```
+
+`smoke:analysis` launches and stops its own `npm.cmd run tauri dev` instance
+with isolated application-data directories. Running it beside the manual app
+would conflict on Vite port `1420` and the MCP Bridge listener. Both smoke
+checks must complete successfully, including fixture cleanup.
 
 Production CSP verification must additionally build and launch bundled assets:
 
@@ -365,20 +384,19 @@ Absence of CSP violations is observed through a separate verification-only
 release-profile build. This is explicitly a manual verification step. Add a
 Cargo feature such as `csp-verification` that
 enables `tauri/devtools`, plus a feature-gated setup hook that opens DevTools.
-Build it with the same production CSP and bundled assets using a config overlay
-that does not modify security policy:
+Tauri supports `open_devtools()` directly when this feature is enabled, so no
+window config overlay is needed. Build it with the same production config and
+bundled assets:
 
 ```powershell
-npm.cmd run tauri build -- --no-bundle --features csp-verification --config src-tauri/tauri.csp-verification.conf.json
+npm.cmd run tauri build -- --no-bundle --features csp-verification
 ```
 
 Inspect the WebView console while repeating the smoke navigation and require no
-`securitypolicyviolation`/CSP refusal messages. Automated config tests must
-prove that this overlay changes only the window's DevTools setting. The normal
-release build remains free of the feature and cannot open DevTools. These
-checks are required because the Vite development server cannot prove that
-Tauri's compile-time CSP asset modification and production asset protocol work
-correctly.
+`securitypolicyviolation`/CSP refusal messages. The normal release build remains
+free of the feature and cannot open DevTools. These checks are required because
+the Vite development server cannot prove that Tauri's compile-time CSP asset
+modification and production asset protocol work correctly.
 
 For `tauri build --debug`, open its DevTools console and call representative
 fixture commands through
@@ -414,7 +432,8 @@ only by the project `tauri dev` workflow.
 
 - `npm.cmd run tauri dev` launches an MCP-enabled debug app without extra user
   arguments.
-- `smoke:analysis` and `smoke:cancellation` pass against that development app.
+- `smoke:cancellation` passes against the manual development app, and after it
+  stops, self-managed `smoke:analysis` passes without port conflicts.
 - `npm.cmd run tauri build` uses `withGlobalTauri: false` and the production CSP.
 - `npm.cmd run tauri build -- --debug` does not register the MCP Bridge.
 - `npm.cmd run tauri build -- --debug` exposes none of the development fixture
@@ -426,7 +445,9 @@ only by the project `tauri dev` workflow.
 - The main webview cannot load, select, or execute SQLite through plugin
   permissions.
 - Remote plaintext LLM endpoints are rejected before requests are sent.
-- A stored key cannot silently cross provider or network-origin boundaries.
+- A newly saved or materialized key cannot silently cross provider or
+  network-origin boundaries; the irrecoverable dormant-legacy limitation is
+  documented explicitly.
 - Existing same-scope profiles and local HTTP provider workflows continue to
   work.
 - Automated tests, current-state docs, and agent workflow docs describe the
