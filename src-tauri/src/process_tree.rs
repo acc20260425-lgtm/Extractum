@@ -1,7 +1,7 @@
 #[cfg(windows)]
 use std::{
     os::windows::io::AsRawHandle,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicU8, Ordering},
 };
 
 #[cfg(windows)]
@@ -17,7 +17,7 @@ use windows_sys::Win32::{
 #[cfg(windows)]
 pub(crate) struct ProcessTreeGuard {
     job: HANDLE,
-    terminated: AtomicBool,
+    termination_state: AtomicU8,
 }
 
 #[cfg(windows)]
@@ -45,7 +45,7 @@ impl ProcessTreeGuard {
 
         Ok(Self {
             job,
-            terminated: AtomicBool::new(false),
+            termination_state: AtomicU8::new(TERMINATION_IDLE),
         })
     }
 
@@ -69,16 +69,45 @@ impl ProcessTreeGuard {
     }
 
     pub(crate) fn terminate(&self) -> anyhow::Result<()> {
-        if self.terminated.swap(true, Ordering::AcqRel) {
-            return Ok(());
+        loop {
+            match self.termination_state.load(Ordering::Acquire) {
+                TERMINATION_COMPLETE => return Ok(()),
+                TERMINATION_IDLE => {
+                    if self
+                        .termination_state
+                        .compare_exchange(
+                            TERMINATION_IDLE,
+                            TERMINATION_IN_PROGRESS,
+                            Ordering::AcqRel,
+                            Ordering::Acquire,
+                        )
+                        .is_ok()
+                    {
+                        break;
+                    }
+                }
+                TERMINATION_IN_PROGRESS => std::hint::spin_loop(),
+                _ => unreachable!("invalid process tree termination state"),
+            }
         }
 
         if unsafe { TerminateJobObject(self.job, 1) } == 0 {
+            self.termination_state
+                .store(TERMINATION_IDLE, Ordering::Release);
             anyhow::bail!("failed to terminate Windows process containment job");
         }
+        self.termination_state
+            .store(TERMINATION_COMPLETE, Ordering::Release);
         Ok(())
     }
 }
+
+#[cfg(windows)]
+const TERMINATION_IDLE: u8 = 0;
+#[cfg(windows)]
+const TERMINATION_IN_PROGRESS: u8 = 1;
+#[cfg(windows)]
+const TERMINATION_COMPLETE: u8 = 2;
 
 #[cfg(windows)]
 impl Drop for ProcessTreeGuard {
@@ -111,11 +140,12 @@ impl ProcessTreeGuard {
 
 #[cfg(all(test, windows))]
 mod tests {
-    use super::ProcessTreeGuard;
+    use super::{ProcessTreeGuard, TERMINATION_IDLE};
     use std::{
         fs,
         io::{BufRead, BufReader},
         process::{Command, Stdio},
+        sync::atomic::AtomicU8,
         thread,
         time::{Duration, SystemTime, UNIX_EPOCH},
     };
@@ -211,6 +241,17 @@ mod tests {
         guard.terminate().expect("first termination");
         guard.terminate().expect("second termination");
         child.wait().expect("reap child");
+    }
+
+    #[test]
+    fn terminate_failure_remains_reportable_and_retryable() {
+        let guard = ProcessTreeGuard {
+            job: std::ptr::null_mut(),
+            termination_state: AtomicU8::new(TERMINATION_IDLE),
+        };
+
+        assert!(guard.terminate().is_err());
+        assert!(guard.terminate().is_err());
     }
 
     #[test]
