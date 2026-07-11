@@ -16,7 +16,7 @@ describe("hidden child process contract", () => {
     expect(childProcessSource).toMatch(
       /#\[cfg\(windows\)\][\s\S]*creation_flags\(CREATE_NO_WINDOW\)/,
     );
-    expect(childProcessSource).toContain("command\n}");
+    expect(childProcessSource).toMatch(/command\r?\n}/);
     expect(childProcessSource).toContain("assert_eq!(CREATE_NO_WINDOW, 0x0800_0000)");
     expect(sidecarSource).not.toContain("hide_console_window");
     expect(cdpChromeSource).not.toContain("hide_console_window");
