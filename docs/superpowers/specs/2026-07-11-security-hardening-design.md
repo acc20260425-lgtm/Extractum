@@ -1,7 +1,7 @@
 # Security Hardening Design
 
 **Date:** 2026-07-11  
-**Status:** revised after design review; awaiting renewed approval
+**Status:** approved for implementation planning
 
 ## Goal
 
@@ -294,6 +294,9 @@ the same origin preserve the existing key.
 - CSP and capability regression tests fail with messages naming the forbidden
   permission or configuration value.
 - Endpoint and credential-scope errors use `AppError::validation`.
+- Profile-state loading fails closed with a typed error if keyed legacy
+  materialization cannot persist the effective URL; it does not return a
+  silently unmaterialized profile list. The error contains no secret values.
 - Network code remains responsible for runtime connection errors only after
   configuration validation succeeds.
 
