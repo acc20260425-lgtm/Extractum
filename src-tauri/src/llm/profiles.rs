@@ -5,8 +5,7 @@ use crate::error::{AppError, AppResult};
 use crate::secret_store::{llm_profile_api_key_secret, SecretStoreState};
 
 use super::{
-    default_base_url_for_provider, normalize_base_url, ProviderKind, DEFAULT_MODEL,
-    DEFAULT_PROFILE_ID, DEFAULT_PROVIDER,
+    normalize_base_url, ProviderKind, DEFAULT_MODEL, DEFAULT_PROFILE_ID, DEFAULT_PROVIDER,
 };
 use super::{LlmProfile, LlmProfilesState, ResolvedLlmProfile};
 
@@ -57,6 +56,28 @@ fn profile_id_from_provider_key(key: &str) -> Option<String> {
         .and_then(|value| value.strip_suffix(profile_provider_key_suffix()))
         .filter(|value| !value.is_empty())
         .map(ToString::to_string)
+}
+
+fn credential_scope(
+    provider: ProviderKind,
+    base_url: &str,
+) -> AppResult<(ProviderKind, Option<(String, String, u16)>)> {
+    if provider == ProviderKind::Gemini {
+        return Ok((provider, None));
+    }
+
+    let base_url = normalize_base_url(provider, Some(base_url))?;
+    let parsed = reqwest::Url::parse(&base_url)
+        .map_err(|_| AppError::validation(format!("Invalid base URL '{base_url}'")))?;
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| AppError::validation("Base URL must include a host"))?
+        .to_ascii_lowercase();
+    let port = parsed
+        .port_or_known_default()
+        .ok_or_else(|| AppError::validation("Base URL must include a known port"))?;
+
+    Ok((provider, Some((parsed.scheme().to_ascii_lowercase(), host, port))))
 }
 
 async fn read_setting(pool: &Pool<Sqlite>, key: &str) -> AppResult<Option<String>> {
@@ -144,7 +165,7 @@ async fn load_profile_from_pool(
         .unwrap_or(false);
     let base_url = read_setting(pool, &profile_base_url_key(&profile_id))
         .await?
-        .unwrap_or_else(|| default_base_url_for_provider(&provider).to_string());
+        .unwrap_or_default();
 
     Ok(LlmProfile {
         profile_id,
@@ -180,15 +201,34 @@ pub(super) async fn save_profile_to_pool(
     set_active: bool,
 ) -> AppResult<()> {
     let profile_id = normalize_profile_id(profile_id)?;
+    let provider_kind = ProviderKind::parse(provider)?;
+    let base_url = normalize_base_url(provider_kind, Some(base_url))?;
+    let replacement_key = api_key.map(str::trim).filter(|value| !value.is_empty());
+    let existing = load_profile_from_pool(pool, secret_store, &profile_id).await?;
+
+    if existing.api_key_configured && replacement_key.is_none() {
+        let existing_provider = ProviderKind::parse(&existing.provider)?;
+        if credential_scope(existing_provider, &existing.base_url)?
+            != credential_scope(provider_kind, &base_url)?
+        {
+            return Err(AppError::validation(
+                "Changing a keyed profile's provider or origin requires a replacement API key or clearing the existing key first",
+            ));
+        }
+    }
 
     write_setting(pool, &profile_provider_key(&profile_id), provider).await?;
     write_setting(pool, &profile_model_key(&profile_id), default_model).await?;
-    if let Some(api_key) = api_key.map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(api_key) = replacement_key {
         let key = llm_profile_api_key_secret(&profile_id);
         secret_store.set_secret(key.clone(), api_key).await?;
         delete_setting(pool, &key).await?;
     }
-    write_setting(pool, &profile_base_url_key(&profile_id), base_url).await?;
+    if replacement_key.is_some() || existing.api_key_configured {
+        write_setting(pool, &profile_base_url_key(&profile_id), &base_url).await?;
+    } else {
+        delete_setting(pool, &profile_base_url_key(&profile_id)).await?;
+    }
 
     if set_active {
         write_setting(pool, active_profile_key(), &profile_id).await?;
@@ -219,7 +259,9 @@ pub(super) async fn load_profiles_state_from_pool(
 
     let mut profiles = Vec::with_capacity(profile_ids.len());
     for profile_id in profile_ids {
-        profiles.push(load_profile_from_pool(pool, secret_store, &profile_id).await?);
+        let mut profile = load_profile_from_pool(pool, secret_store, &profile_id).await?;
+        materialize_keyed_profile_base_url(pool, &mut profile).await?;
+        profiles.push(profile);
     }
 
     Ok(LlmProfilesState {
@@ -249,7 +291,8 @@ pub(super) async fn resolve_profile_from_pool(
         )));
     }
 
-    let profile = load_profile_from_pool(pool, secret_store, &profile_id).await?;
+    let mut profile = load_profile_from_pool(pool, secret_store, &profile_id).await?;
+    materialize_keyed_profile_base_url(pool, &mut profile).await?;
     let provider = ProviderKind::parse(&profile.provider)?;
     let api_key = read_profile_api_key(secret_store, &profile_id).await?;
     let base_url = normalize_base_url(provider, Some(&profile.base_url))?;
@@ -261,6 +304,24 @@ pub(super) async fn resolve_profile_from_pool(
         api_key,
         base_url,
     })
+}
+
+async fn materialize_keyed_profile_base_url(
+    pool: &Pool<Sqlite>,
+    profile: &mut LlmProfile,
+) -> AppResult<()> {
+    if !profile.api_key_configured {
+        return Ok(());
+    }
+
+    let provider = ProviderKind::parse(&profile.provider)?;
+    let base_url = normalize_base_url(provider, Some(&profile.base_url))?;
+    if profile.base_url != base_url {
+        write_setting(pool, &profile_base_url_key(&profile.profile_id), &base_url).await?;
+        profile.base_url = base_url;
+    }
+
+    Ok(())
 }
 
 pub(super) async fn clear_profile_api_key(
@@ -353,20 +414,35 @@ pub(super) async fn delete_profile_from_pool(
 #[cfg(test)]
 mod tests {
     use super::{
-        clear_profile_api_key, delete_profile_from_pool, load_profiles_state_from_pool,
-        resolve_profile_from_pool, save_profile_to_pool, set_active_profile_in_pool,
-        validate_profile_id,
+        clear_profile_api_key, credential_scope, delete_profile_from_pool,
+        load_profiles_state_from_pool, resolve_profile_from_pool, save_profile_to_pool,
+        set_active_profile_in_pool, validate_profile_id,
     };
     use crate::error::AppErrorKind;
+    use crate::llm::ProviderKind;
     use crate::secret_store::tests::InMemorySecretStore;
     use crate::secret_store::{llm_profile_api_key_secret, SecretStoreState};
     use secrecy::ExposeSecret;
+    use sqlx::sqlite::SqlitePoolOptions;
     use std::sync::Arc;
 
     async fn memory_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
             .await
             .expect("connect memory sqlite");
+        sqlx::query("CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT)")
+            .execute(&pool)
+            .await
+            .expect("create app_settings");
+        pool
+    }
+
+    async fn single_connection_memory_pool() -> sqlx::SqlitePool {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("connect single-connection memory sqlite");
         sqlx::query("CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT)")
             .execute(&pool)
             .await
@@ -474,6 +550,148 @@ mod tests {
             error.message,
             "HTTP base URL must use localhost or a loopback IP address"
         );
+    }
+
+    #[tokio::test]
+    async fn changing_key_scope_without_replacement_is_rejected() {
+        let pool = memory_pool().await;
+        let (_store, secret_store) = memory_secret_store();
+
+        save_profile_to_pool(
+            &pool,
+            &secret_store,
+            "default",
+            "openai_compatible",
+            "model",
+            Some("existing-key"),
+            "http://localhost:20128/v1",
+            true,
+        )
+        .await
+        .expect("save initial profile");
+
+        let error = save_profile_to_pool(
+            &pool,
+            &secret_store,
+            "default",
+            "openai_compatible",
+            "model",
+            None,
+            "https://example.com/v1",
+            true,
+        )
+        .await
+        .expect_err("retain a key only within its existing origin scope");
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+    }
+
+    #[tokio::test]
+    async fn keyed_legacy_profile_materializes_effective_base_url_while_unkeyed_stays_blank() {
+        let pool = memory_pool().await;
+        let (_store, secret_store) = memory_secret_store();
+
+        sqlx::query("INSERT INTO app_settings (key, value) VALUES (?, ?), (?, ?), (?, ?)")
+            .bind("llm.profile.default.provider")
+            .bind("openai_compatible")
+            .bind("llm.profile.default.default_model")
+            .bind("model")
+            .bind("llm.profile.default.base_url")
+            .bind("")
+            .execute(&pool)
+            .await
+            .expect("seed legacy profile");
+        secret_store
+            .set_secret(llm_profile_api_key_secret("default"), "keyed")
+            .await
+            .expect("seed key");
+
+        let keyed_state = load_profiles_state_from_pool(&pool, &secret_store)
+            .await
+            .expect("load keyed profile state");
+        assert_eq!(
+            keyed_state.profiles[0].base_url,
+            "http://localhost:20128/v1"
+        );
+        assert_eq!(
+            setting_value(&pool, "llm.profile.default.base_url").await,
+            Some("http://localhost:20128/v1".to_string())
+        );
+
+        clear_profile_api_key(&secret_store, "default")
+            .await
+            .expect("clear key");
+        sqlx::query("DELETE FROM app_settings WHERE key = ?")
+            .bind("llm.profile.default.base_url")
+            .execute(&pool)
+            .await
+            .expect("clear materialized URL");
+
+        let unkeyed_state = load_profiles_state_from_pool(&pool, &secret_store)
+            .await
+            .expect("load unkeyed profile state");
+        assert_eq!(unkeyed_state.profiles[0].base_url, "");
+    }
+
+    #[test]
+    fn credential_scope_uses_provider_origin_and_effective_port_but_not_path() {
+        let localhost_default = credential_scope(
+            ProviderKind::OpenAiCompatible,
+            "http://localhost:20128/v1",
+        )
+        .expect("localhost scope");
+        let same_origin_other_path = credential_scope(
+            ProviderKind::OpenAiCompatible,
+            "http://LOCALHOST:20128/other",
+        )
+        .expect("same origin scope");
+        let different_scheme = credential_scope(
+            ProviderKind::OpenAiCompatible,
+            "https://localhost:20128/v1",
+        )
+        .expect("scheme scope");
+        let different_port = credential_scope(
+            ProviderKind::OpenAiCompatible,
+            "http://localhost:20129/v1",
+        )
+        .expect("port scope");
+
+        assert_eq!(localhost_default, same_origin_other_path);
+        assert_ne!(localhost_default, different_scheme);
+        assert_ne!(localhost_default, different_port);
+        assert_ne!(
+            localhost_default,
+            credential_scope(ProviderKind::Gemini, "").expect("provider scope")
+        );
+    }
+
+    #[tokio::test]
+    async fn materialization_write_failure_fails_closed_during_state_load() {
+        let pool = single_connection_memory_pool().await;
+        let (_store, secret_store) = memory_secret_store();
+
+        sqlx::query("INSERT INTO app_settings (key, value) VALUES (?, ?), (?, ?), (?, ?)")
+            .bind("llm.profile.default.provider")
+            .bind("openai_compatible")
+            .bind("llm.profile.default.default_model")
+            .bind("model")
+            .bind("llm.profile.default.base_url")
+            .bind("")
+            .execute(&pool)
+            .await
+            .expect("seed keyed legacy profile");
+        secret_store
+            .set_secret(llm_profile_api_key_secret("default"), "keyed")
+            .await
+            .expect("seed key");
+        sqlx::query("PRAGMA query_only = ON")
+            .execute(&pool)
+            .await
+            .expect("make writes fail");
+
+        assert!(load_profiles_state_from_pool(&pool, &secret_store)
+            .await
+            .is_err());
     }
 
     #[tokio::test]

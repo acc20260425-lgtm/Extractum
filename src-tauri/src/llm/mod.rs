@@ -79,19 +79,6 @@ impl ProviderKind {
     }
 }
 
-fn default_base_url_for_provider_kind(provider: ProviderKind) -> &'static str {
-    match provider {
-        ProviderKind::Gemini => "",
-        ProviderKind::OpenAiCompatible => DEFAULT_OPENAI_COMPAT_BASE_URL,
-    }
-}
-
-fn default_base_url_for_provider(provider: &str) -> &'static str {
-    ProviderKind::parse(provider)
-        .map(default_base_url_for_provider_kind)
-        .unwrap_or("")
-}
-
 fn normalize_base_url(provider: ProviderKind, base_url: Option<&str>) -> AppResult<String> {
     match provider {
         ProviderKind::Gemini => Ok(String::new()),

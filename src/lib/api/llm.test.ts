@@ -58,6 +58,25 @@ describe("llm api wrappers", () => {
     });
   });
 
+  it("preserves materialized backend base_url values without camel-casing the DTO", async () => {
+    invokeMock.mockResolvedValueOnce({
+      active_profile: "work",
+      profiles: [
+        {
+          profile_id: "work",
+          provider: "openai_compatible",
+          default_model: "model",
+          api_key_configured: true,
+          base_url: "http://localhost:20128/v1",
+        },
+      ],
+    });
+
+    await expect(getLlmProfiles()).resolves.toMatchObject({
+      profiles: [{ base_url: "http://localhost:20128/v1" }],
+    });
+  });
+
   it("wraps model listing with provider, key, and base url arguments", async () => {
     invokeMock.mockResolvedValueOnce([]);
 

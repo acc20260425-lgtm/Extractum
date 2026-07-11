@@ -14,4 +14,8 @@ describe("settings profile UX contract", () => {
     expect(settingsPageSource).toContain("filteredAvailableModels");
     expect(settingsPageSource).toContain('ariaLabel="Search models"');
   });
+
+  it("uses the materialized snake_case backend URL when selecting a profile", () => {
+    expect(settingsPageSource).toContain("baseUrl = profile.base_url");
+  });
 });
