@@ -4,6 +4,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import TakeoutRecoveryNotice from "$lib/components/analysis/takeout-recovery-notice.svelte";
+  import YoutubeThumbnail from "$lib/components/youtube-thumbnail.svelte";
   import {
     isActiveTakeoutImportJob,
     migratedHistoryActionDisabledReason,
@@ -275,8 +276,10 @@
               onclick={() => onSelectSource(source.id)}
             >
               <div class="source-avatar" aria-hidden="true">
-                {#if youtubeSummary?.thumbnailUrl ?? source.avatarDataUrl}
-                  <img src={youtubeSummary?.thumbnailUrl ?? source.avatarDataUrl ?? ""} alt="" loading="lazy" />
+                {#if youtubeSummary?.thumbnailUrl}
+                  <YoutubeThumbnail url={youtubeSummary.thumbnailUrl} fallbackSrc={source.avatarDataUrl} />
+                {:else if source.avatarDataUrl}
+                  <img src={source.avatarDataUrl} alt="" loading="lazy" />
                 {:else}
                   <span>{sourceInitial(source)}</span>
                 {/if}

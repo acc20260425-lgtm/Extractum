@@ -1,6 +1,7 @@
 <script lang="ts">
   import { RefreshCw, Trash2 } from "@lucide/svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import YoutubeThumbnail from "$lib/components/youtube-thumbnail.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
   import { membershipLabel, sourceCapabilities, sourceKindLabel } from "$lib/source-capabilities";
@@ -43,7 +44,7 @@
   const sourceMembershipLabel = $derived(membershipLabel(source));
   const syncReason = $derived(syncDisabledReason(source));
   const sourceRuntimeStatus = $derived(runtimeStatus(source.accountId));
-  const thumbnailUrl = $derived(youtubeSummary?.thumbnailUrl ?? source.avatarDataUrl);
+  const thumbnailUrl = $derived(youtubeSummary?.thumbnailUrl ?? null);
   const runtimeBadgeLabel = $derived(
     !sourceRuntimeStatus
       ? null
@@ -66,7 +67,9 @@
 <li class:selected={selected}>
   <div class="source-avatar" aria-hidden="true">
     {#if thumbnailUrl}
-      <img src={thumbnailUrl} alt="" loading="lazy" />
+      <YoutubeThumbnail url={thumbnailUrl} fallbackSrc={source.avatarDataUrl} />
+    {:else if source.avatarDataUrl}
+      <img src={source.avatarDataUrl} alt="" loading="lazy" />
     {:else}
       <span>{sourceInitial()}</span>
     {/if}

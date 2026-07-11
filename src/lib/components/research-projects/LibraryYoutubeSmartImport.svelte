@@ -8,6 +8,7 @@
   } from "$lib/components/extractum-ui";
   import { addYoutubeSource, previewYoutubeSource } from "$lib/api/sources";
   import { formatAppError } from "$lib/app-error";
+  import YoutubeThumbnail from "$lib/components/youtube-thumbnail.svelte";
   import {
     classifyYoutubeImportInput,
     existingYoutubeSmartImportSource,
@@ -174,7 +175,7 @@
     <article class="preview-card">
       <div class="preview-media" aria-hidden="true">
         {#if preview.thumbnailUrl}
-          <img src={preview.thumbnailUrl} alt="" loading="lazy" />
+          <YoutubeThumbnail url={preview.thumbnailUrl} />
         {:else}
           <span>{preview.kind === "playlist" ? "PL" : "YT"}</span>
         {/if}
@@ -253,7 +254,7 @@
     font-weight: 700;
   }
 
-  .preview-media img {
+  .preview-media :global(img) {
     width: 100%;
     height: 100%;
     object-fit: cover;

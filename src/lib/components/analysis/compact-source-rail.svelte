@@ -2,6 +2,7 @@
   import { AlertTriangle, Folder, Loader2, Plus, RefreshCw, Search, Send, Video } from "@lucide/svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import SourceSwitcherPanel from "$lib/components/analysis/source-switcher-panel.svelte";
+  import YoutubeThumbnail from "$lib/components/youtube-thumbnail.svelte";
   import { sourceCapabilities } from "$lib/source-capabilities";
   import type { AccountRuntimeStatus } from "$lib/types/accounts";
   import type { AnalysisSourceGroup, AnalysisSourceOption } from "$lib/types/analysis";
@@ -206,8 +207,10 @@
       {#if currentSource}
         {@const Mark = providerMark(currentSource)}
         <span class="context-avatar">
-          {#if youtubeSummaries[currentSource.id]?.thumbnailUrl ?? currentSource.avatarDataUrl}
-            <img src={youtubeSummaries[currentSource.id]?.thumbnailUrl ?? currentSource.avatarDataUrl ?? ""} alt="" loading="lazy" />
+          {#if youtubeSummaries[currentSource.id]?.thumbnailUrl}
+            <YoutubeThumbnail url={youtubeSummaries[currentSource.id]?.thumbnailUrl ?? null} fallbackSrc={currentSource.avatarDataUrl} />
+          {:else if currentSource.avatarDataUrl}
+            <img src={currentSource.avatarDataUrl} alt="" loading="lazy" />
           {:else}
             {sourceInitial(currentSource)}
           {/if}
@@ -254,8 +257,10 @@
         onclick={() => onSelectSource(source.id)}
       >
         <span class="mini-avatar">
-          {#if youtubeSummaries[source.id]?.thumbnailUrl ?? source.avatarDataUrl}
-            <img src={youtubeSummaries[source.id]?.thumbnailUrl ?? source.avatarDataUrl ?? ""} alt="" loading="lazy" />
+          {#if youtubeSummaries[source.id]?.thumbnailUrl}
+            <YoutubeThumbnail url={youtubeSummaries[source.id]?.thumbnailUrl ?? null} fallbackSrc={source.avatarDataUrl} />
+          {:else if source.avatarDataUrl}
+            <img src={source.avatarDataUrl} alt="" loading="lazy" />
           {:else}
             {sourceInitial(source)}
           {/if}

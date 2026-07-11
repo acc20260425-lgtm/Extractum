@@ -4,6 +4,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
+  import YoutubeThumbnail from "$lib/components/youtube-thumbnail.svelte";
   import { addYoutubeSource, previewYoutubeSource } from "$lib/api/sources";
   import { formatAppError } from "$lib/app-error";
   import type { YoutubePreview } from "$lib/types/sources";
@@ -148,7 +149,7 @@
     <article class="preview-card">
       <div class="preview-media" aria-hidden="true">
         {#if youtubePreview.thumbnailUrl}
-          <img src={youtubePreview.thumbnailUrl} alt="" loading="lazy" />
+          <YoutubeThumbnail url={youtubePreview.thumbnailUrl} />
         {:else}
           <span>{youtubePreview.kind === "playlist" ? "PL" : "YT"}</span>
         {/if}
@@ -249,7 +250,7 @@
     min-width: 0;
   }
 
-  .preview-media img {
+  .preview-media :global(img) {
     width: 100%;
     height: 100%;
     object-fit: cover;

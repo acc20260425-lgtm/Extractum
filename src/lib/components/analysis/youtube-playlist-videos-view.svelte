@@ -3,6 +3,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import StatusMessage from "$lib/components/ui/StatusMessage.svelte";
+  import YoutubeThumbnail from "$lib/components/youtube-thumbnail.svelte";
   import { isRetryableYoutubeAvailabilityStatus } from "$lib/youtube-source-policy";
   import type { YoutubePlaylistDetail, YoutubePlaylistItemDetail } from "$lib/types/youtube";
 
@@ -108,7 +109,7 @@
           <article class:removed={item.isRemovedFromPlaylist} class="playlist-row">
             <div class="playlist-thumb" aria-hidden="true">
               {#if item.thumbnailUrl}
-                <img src={item.thumbnailUrl} alt="" loading="lazy" />
+                <YoutubeThumbnail url={item.thumbnailUrl} />
               {:else}
                 <Video size={18} />
               {/if}
@@ -286,7 +287,7 @@
     color: var(--muted);
   }
 
-  .playlist-thumb img {
+  .playlist-thumb :global(img) {
     width: 100%;
     height: 100%;
     object-fit: cover;
