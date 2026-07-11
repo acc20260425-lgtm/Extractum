@@ -22,10 +22,23 @@ pub(crate) fn hide_console_window(
 ) -> &mut tokio::process::Command;
 ```
 
-On Windows the helper calls Tokio's Windows-only
-`Command::creation_flags(CREATE_NO_WINDOW)`. Tokio combines the supplied flags
-with `CREATE_UNICODE_ENVIRONMENT`. On non-Windows targets the helper returns the
-command unchanged.
+The numeric value is independently defined by Microsoft's Win32
+[`PROCESS_CREATION_FLAGS`](https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags)
+reference. The unit test guards against accidental later edits to the project
+constant; it is not the authority for the Win32 value.
+
+The constant is declared unconditionally so its unit test runs on every host;
+on non-Windows production builds it is annotated with `#[allow(dead_code)]`.
+The `creation_flags` call itself is inside `#[cfg(windows)]`, because that Tokio
+API does not exist on other targets. On Windows the helper calls
+`Command::creation_flags(CREATE_NO_WINDOW)`. Tokio delegates process creation
+to `std`, which combines the supplied flags with `CREATE_UNICODE_ENVIRONMENT`.
+On non-Windows targets the helper returns the command unchanged.
+
+`creation_flags` replaces the caller-supplied flag set rather than merging with
+an earlier call. Therefore `hide_console_window` must be the only code that
+sets creation flags for commands passed to it, and call sites must not invoke
+`creation_flags` before or after the helper.
 
 Use the helper at all three confirmed `yt-dlp` launch paths:
 
@@ -56,8 +69,9 @@ DTOs and error semantics is not required for this focused window-creation fix.
 
 - A source contract fails before implementation and requires the shared helper
   plus all three `yt-dlp` call sites.
-- A unit test asserts `CREATE_NO_WINDOW == 0x0800_0000`; this prevents an
-  incorrect magic-number flag from passing a source-presence check.
+- A unit test asserts `CREATE_NO_WINDOW == 0x0800_0000`; this guards against an
+  accidental later edit. The Microsoft Win32 reference remains the independent
+  source of truth for the value.
 - Rust tests for YouTube and diagnostics runtime behavior continue to pass.
 - `cargo check` passes.
 - In a release or CSP-verification build, navigating to Analysis and
