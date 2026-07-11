@@ -27,6 +27,9 @@ desktop evidence, not automation evidence.
 | Navigate to **Diagnostics** (version probe) | No console window flashed or remained visible. |
 | Start a YouTube metadata/preview operation (real `yt-dlp` invocation) | No console window appeared or remained visible. |
 
+The user also confirmed that normal results and errors behaved as usual for all
+three exercised paths.
+
 ## Why this uses a release GUI build
 
 This check must use a release GUI executable. A dev build has a parent terminal,
