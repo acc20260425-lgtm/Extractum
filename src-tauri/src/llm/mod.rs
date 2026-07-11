@@ -1,5 +1,6 @@
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
+use std::net::IpAddr;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::time::{timeout, Duration};
 
@@ -103,6 +104,21 @@ fn normalize_base_url(provider: ProviderKind, base_url: Option<&str>) -> AppResu
                 .map_err(|_| AppError::validation(format!("Invalid base URL '{candidate}'")))?;
             if !matches!(parsed.scheme(), "http" | "https") {
                 return Err(AppError::validation("Base URL must use http or https"));
+            }
+            if parsed.scheme() == "http" {
+                let is_loopback_ip = parsed
+                    .host_str()
+                    .map(|host| host.trim_start_matches('[').trim_end_matches(']'))
+                    .and_then(|host| host.parse::<IpAddr>().ok())
+                    .is_some_and(|ip| ip.is_loopback());
+                let is_localhost = parsed
+                    .host_str()
+                    .is_some_and(|host| host.eq_ignore_ascii_case("localhost"));
+                if !is_localhost && !is_loopback_ip {
+                    return Err(AppError::validation(
+                        "HTTP base URL must use localhost or a loopback IP address",
+                    ));
+                }
             }
 
             Ok(parsed.as_str().trim_end_matches('/').to_string())
@@ -787,6 +803,29 @@ mod tests {
 
         assert_eq!(error.kind, AppErrorKind::Validation);
         assert_eq!(error.message, "Base URL must use http or https");
+    }
+
+    #[test]
+    fn normalize_base_url_allows_https_and_loopback_http_only() {
+        let cases = [
+            ("https endpoint", "https://example.com/v1", true),
+            ("localhost http", "http://LOCALHOST:8080/v1", true),
+            ("ipv4 loopback http", "http://127.0.0.1:8080/v1", true),
+            ("ipv4 loopback range http", "http://127.1.2.3:8080/v1", true),
+            ("ipv6 loopback http", "http://[::1]:8080/v1", true),
+            ("remote ipv4 http", "http://192.0.2.1/v1", false),
+            ("remote ipv6 http", "http://[2001:db8::1]/v1", false),
+            ("hostname http", "http://example.com/v1", false),
+            ("unsupported scheme", "ftp://localhost/v1", false),
+        ];
+
+        for (name, url, expected_ok) in cases {
+            assert_eq!(
+                normalize_base_url(ProviderKind::OpenAiCompatible, Some(url)).is_ok(),
+                expected_ok,
+                "{name}: {url}"
+            );
+        }
     }
 
     #[test]
