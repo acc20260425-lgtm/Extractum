@@ -6,16 +6,20 @@ use serde_json::Value;
 
 use crate::compression::compress_json_bytes;
 use crate::error::{AppError, AppResult};
+use crate::external_process::ExternalProcessShutdownState;
 
 use super::dto::{
     YoutubeCaptionTrack, YoutubeCaptionTrackKind, YoutubeTranscript, YoutubeTranscriptSegment,
     YoutubeVideoMetadata,
 };
 use super::ytdlp::{run_ytdlp_with_options, YtdlpRunOptions, YTDLP_PREVIEW_TIMEOUT};
+use super::process_runtime::YoutubeProcessRegistry;
 
 pub(crate) const YOUTUBE_CAPTION_DOWNLOAD_TIMEOUT: Duration = YTDLP_PREVIEW_TIMEOUT;
 
 pub(crate) async fn fetch_transcript_for_video(
+    registry: &YoutubeProcessRegistry,
+    shutdown: &ExternalProcessShutdownState,
     metadata: &YoutubeVideoMetadata,
     preferred_language: Option<&str>,
     override_language: Option<&str>,
@@ -41,6 +45,8 @@ pub(crate) async fn fetch_transcript_for_video(
     let output_template = output_template.to_string_lossy().to_string();
     let args = caption_download_args(&metadata.canonical_url, language, &output_template);
     run_ytdlp_with_options(
+        registry,
+        shutdown,
         &args,
         YtdlpRunOptions {
             timeout: YOUTUBE_CAPTION_DOWNLOAD_TIMEOUT,

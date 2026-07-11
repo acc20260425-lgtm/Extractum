@@ -107,6 +107,7 @@ use youtube::job_commands::{
     clear_source_job_cancellation_smoke_fixture, seed_source_job_cancellation_smoke_fixture,
 };
 use youtube::jobs::SourceJobState;
+use youtube::process_runtime::YoutubeProcessRegistry;
 use youtube::preview::{add_youtube_source, preview_youtube_source};
 use youtube::runtime::get_youtube_runtime_status;
 use youtube::settings::{
@@ -163,6 +164,7 @@ pub fn run() {
 
     let builder = tauri::Builder::default()
         .manage(ExternalProcessShutdownState::new())
+        .manage(YoutubeProcessRegistry::new())
         .manage(TelegramState::new())
         .manage(SourceIngestLocks::new())
         .manage(TakeoutImportState::new())

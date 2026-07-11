@@ -3,6 +3,7 @@ use std::time::Duration;
 use serde_json::Value;
 
 use crate::error::{AppError, AppResult};
+use crate::external_process::ExternalProcessShutdownState;
 
 use super::dto::{
     YoutubeAvailabilityStatus, YoutubeCaptionsEstimate, YoutubeChapter,
@@ -11,17 +12,22 @@ use super::dto::{
 };
 use super::url::{YoutubeParsedUrl, YoutubeUrlKind};
 use super::ytdlp::{run_ytdlp_with_options, YtdlpRunOptions, YTDLP_PREVIEW_TIMEOUT};
+use super::process_runtime::YoutubeProcessRegistry;
 
 pub(crate) const PLAYLIST_METADATA_PAGE_SIZE: i64 = 200;
 pub(crate) const YOUTUBE_METADATA_TIMEOUT: Duration = YTDLP_PREVIEW_TIMEOUT;
 
 pub(crate) async fn fetch_video_metadata(
+    registry: &YoutubeProcessRegistry,
+    shutdown: &ExternalProcessShutdownState,
     canonical_url: &str,
     video_form: YoutubeVideoForm,
     cookies: Option<String>,
 ) -> AppResult<YoutubeVideoMetadata> {
     let parsed = super::url::parse_youtube_url(canonical_url)?;
     let output = run_ytdlp_with_options(
+        registry,
+        shutdown,
         &video_metadata_args(canonical_url),
         YtdlpRunOptions {
             timeout: YOUTUBE_METADATA_TIMEOUT,
@@ -34,6 +40,8 @@ pub(crate) async fn fetch_video_metadata(
 }
 
 pub(crate) async fn fetch_playlist_metadata(
+    registry: &YoutubeProcessRegistry,
+    shutdown: &ExternalProcessShutdownState,
     playlist_url: &str,
     cookies: Option<String>,
 ) -> AppResult<YoutubePlaylistMetadata> {
@@ -44,7 +52,7 @@ pub(crate) async fn fetch_playlist_metadata(
     loop {
         let end = start + PLAYLIST_METADATA_PAGE_SIZE - 1;
         let range = format!("{start}-{end}");
-        let mut page = fetch_playlist_metadata_page(playlist_url, &range, cookies.clone()).await?;
+        let mut page = fetch_playlist_metadata_page(registry, shutdown, playlist_url, &range, cookies.clone()).await?;
         let page_len = page.items.len();
 
         if base.is_none() {
@@ -84,12 +92,16 @@ pub(crate) async fn fetch_playlist_metadata(
 }
 
 pub(crate) async fn fetch_playlist_metadata_page(
+    registry: &YoutubeProcessRegistry,
+    shutdown: &ExternalProcessShutdownState,
     playlist_url: &str,
     range: &str,
     cookies: Option<String>,
 ) -> AppResult<YoutubePlaylistMetadata> {
     let parsed = super::url::parse_youtube_url(playlist_url)?;
     let output = run_ytdlp_with_options(
+        registry,
+        shutdown,
         &playlist_metadata_page_args(playlist_url, range),
         YtdlpRunOptions {
             timeout: YOUTUBE_METADATA_TIMEOUT,

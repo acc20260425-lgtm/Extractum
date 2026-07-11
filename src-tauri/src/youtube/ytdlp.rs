@@ -1,16 +1,13 @@
-use std::io::{ErrorKind, Write};
+use std::io::Write;
 use std::path::Path;
 use std::time::Duration;
 
 use tempfile::NamedTempFile;
-use tokio::process::Command;
-use tokio::time::timeout;
-
-use crate::child_process::hide_console_window;
 use crate::error::{AppError, AppResult};
+use crate::external_process::ExternalProcessShutdownState;
 
 use super::cookies::validate_netscape_cookie_file;
-use super::errors::classify_ytdlp_failure;
+use super::process_runtime::{run_ytdlp_managed, CookieLifetimeGuard, YoutubeProcessRegistry};
 
 pub(crate) const YTDLP_PREVIEW_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -26,8 +23,14 @@ pub(crate) struct YtdlpRunOptions {
 }
 
 #[allow(dead_code)]
-pub(crate) async fn run_ytdlp(args: &[String]) -> AppResult<YtdlpOutput> {
+pub(crate) async fn run_ytdlp(
+    registry: &YoutubeProcessRegistry,
+    shutdown: &ExternalProcessShutdownState,
+    args: &[String],
+) -> AppResult<YtdlpOutput> {
     run_ytdlp_with_options(
+        registry,
+        shutdown,
         args,
         YtdlpRunOptions {
             timeout: YTDLP_PREVIEW_TIMEOUT,
@@ -38,6 +41,8 @@ pub(crate) async fn run_ytdlp(args: &[String]) -> AppResult<YtdlpOutput> {
 }
 
 pub(crate) async fn run_ytdlp_with_options(
+    registry: &YoutubeProcessRegistry,
+    shutdown: &ExternalProcessShutdownState,
     args: &[String],
     options: YtdlpRunOptions,
 ) -> AppResult<YtdlpOutput> {
@@ -59,29 +64,11 @@ pub(crate) async fn run_ytdlp_with_options(
         None
     };
     let command_args = ytdlp_command_args(args, cookie_file.as_ref().map(|file| file.path()));
+    let cookie_guard = cookie_file.map(CookieLifetimeGuard::new);
 
-    let output = timeout(options.timeout, async {
-        let mut command = Command::new("yt-dlp");
-        command.args(&command_args);
-        hide_console_window(&mut command);
-        command.output().await
-    })
-    .await
-    .map_err(|_| AppError::network(timeout_message(options.timeout)))?
-    .map_err(|error| {
-        if error.kind() == ErrorKind::NotFound {
-            AppError::validation("yt-dlp is not available on PATH")
-        } else {
-            AppError::network(format!("Failed to run yt-dlp: {error}"))
-        }
-    })?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    if !output.status.success() {
-        return Err(classify_ytdlp_failure(&stderr));
-    }
+    let (stdout, stderr) = run_ytdlp_managed(
+        registry, shutdown, &command_args, options.timeout, timeout_message(options.timeout), cookie_guard,
+    ).await?;
 
     Ok(YtdlpOutput { stdout, stderr })
 }

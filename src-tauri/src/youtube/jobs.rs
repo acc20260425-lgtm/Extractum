@@ -8,6 +8,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use crate::external_process::ExternalProcessShutdownState;
 use crate::job_helpers::{ActiveJobGuards, CancellationState};
 use crate::secret_store::SecretStoreState;
 use crate::sources::{
@@ -23,6 +24,7 @@ use super::captions::{
 use super::comments::{fetch_comments_for_video, DEFAULT_MAX_COMMENTS_PER_VIDEO};
 use super::dto::{YoutubePlaylistMetadata, YoutubeVideoForm, YoutubeVideoMetadata};
 use super::metadata::{fetch_playlist_metadata, fetch_video_metadata};
+use super::process_runtime::YoutubeProcessRegistry;
 use super::playlist::upsert_playlist_items;
 use super::settings::load_youtube_auth_cookies_from_state;
 use super::source_metadata::{
@@ -778,6 +780,8 @@ async fn sync_youtube_metadata(handle: &AppHandle, source_id: i64) -> AppResult<
     ensure_youtube_source(&source)?;
     let secrets = handle.state::<SecretStoreState>();
     let cookies = load_youtube_auth_cookies_from_state(&pool, &secrets).await?;
+    let registry = handle.state::<YoutubeProcessRegistry>();
+    let shutdown = handle.state::<ExternalProcessShutdownState>();
 
     enum MetadataSyncPayload {
         Video(YoutubeVideoMetadata),
@@ -791,7 +795,7 @@ async fn sync_youtube_metadata(handle: &AppHandle, source_id: i64) -> AppResult<
                 .as_ref()
                 .map(|metadata| metadata.canonical_url.clone())
                 .unwrap_or_else(|| playlist_canonical_url(&source));
-            MetadataSyncPayload::Playlist(fetch_playlist_metadata(&canonical_url, cookies).await?)
+            MetadataSyncPayload::Playlist(fetch_playlist_metadata(registry.inner(), shutdown.inner(), &canonical_url, cookies).await?)
         }
         _ => {
             let typed = load_video_source_metadata_map(&pool, &[source_id])
@@ -806,7 +810,7 @@ async fn sync_youtube_metadata(handle: &AppHandle, source_id: i64) -> AppResult<
                 .and_then(|metadata| metadata.video_form_for_provider())
                 .unwrap_or(YoutubeVideoForm::Regular);
             MetadataSyncPayload::Video(
-                fetch_video_metadata(&canonical_url, video_form, cookies).await?,
+                fetch_video_metadata(registry.inner(), shutdown.inner(), &canonical_url, video_form, cookies).await?,
             )
         }
     };
@@ -847,7 +851,11 @@ async fn sync_youtube_transcript(handle: &AppHandle, source_id: i64) -> AppResul
     let preferred_language = load_preferred_caption_language(&pool).await?;
     let secrets = handle.state::<SecretStoreState>();
     let cookies = load_youtube_auth_cookies_from_state(&pool, &secrets).await?;
+    let registry = handle.state::<YoutubeProcessRegistry>();
+    let shutdown = handle.state::<ExternalProcessShutdownState>();
     let transcript = fetch_transcript_for_video(
+        registry.inner(),
+        shutdown.inner(),
         &metadata_for_provider,
         Some(preferred_language.as_str()),
         metadata.caption_language_override.as_deref(),
@@ -915,7 +923,11 @@ async fn sync_youtube_comments(handle: &AppHandle, source_id: i64) -> AppResult<
     let metadata_for_provider = metadata.to_provider_metadata();
     let secrets = handle.state::<SecretStoreState>();
     let cookies = load_youtube_auth_cookies_from_state(&pool, &secrets).await?;
+    let registry = handle.state::<YoutubeProcessRegistry>();
+    let shutdown = handle.state::<ExternalProcessShutdownState>();
     let comments = fetch_comments_for_video(
+        registry.inner(),
+        shutdown.inner(),
         &metadata_for_provider,
         DEFAULT_MAX_COMMENTS_PER_VIDEO,
         now_secs(),

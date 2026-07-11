@@ -3,10 +3,12 @@ use std::time::Duration;
 use serde_json::Value;
 
 use crate::error::{AppError, AppResult};
+use crate::external_process::ExternalProcessShutdownState;
 use crate::time::ymd_to_unix_midnight;
 
 use super::dto::{YoutubeComment, YoutubeVideoMetadata};
 use super::ytdlp::{run_ytdlp_with_options, YtdlpRunOptions};
+use super::process_runtime::YoutubeProcessRegistry;
 
 pub(crate) const DEFAULT_MAX_COMMENTS_PER_VIDEO: usize = 1_000;
 pub(crate) const YOUTUBE_COMMENTS_FETCH_TIMEOUT: Duration = Duration::from_secs(120);
@@ -17,12 +19,16 @@ pub(crate) struct YoutubeCommentsIngest {
 }
 
 pub(crate) async fn fetch_comments_for_video(
+    registry: &YoutubeProcessRegistry,
+    shutdown: &ExternalProcessShutdownState,
     metadata: &YoutubeVideoMetadata,
     max_comments: usize,
     sync_started_at: i64,
     cookies: Option<String>,
 ) -> AppResult<YoutubeCommentsIngest> {
     let output = run_ytdlp_with_options(
+        registry,
+        shutdown,
         &comments_fetch_args(&metadata.canonical_url, max_comments),
         YtdlpRunOptions {
             timeout: YOUTUBE_COMMENTS_FETCH_TIMEOUT,

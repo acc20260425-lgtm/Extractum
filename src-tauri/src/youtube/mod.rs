@@ -9,6 +9,7 @@ pub(crate) mod jobs;
 pub(crate) mod metadata;
 pub(crate) mod playlist;
 pub(crate) mod preview;
+pub(crate) mod process_runtime;
 pub(crate) mod runtime;
 pub(crate) mod settings;
 pub(crate) mod source_metadata;
