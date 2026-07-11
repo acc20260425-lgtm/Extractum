@@ -143,6 +143,10 @@ OpenAI-compatible LLM URLs must use HTTPS unless the host is `localhost` or an I
 
 When a keyed legacy profile has a blank URL, backend state loading materializes the effective URL and displays it in Settings. If that SQLite write fails, loading fails closed. Run `npm.cmd run tauri dev` for MCP-enabled inspection; direct `npx tauri dev` does not load the MCP overlay. For a production CSP check, build with `--features csp-verification` and inspect the automatically opened DevTools.
 
+### YouTube thumbnail previews and CSP
+
+YouTube thumbnails are resolved by the backend and rendered as local `data:` URLs. Do not add YouTube or other remote hosts to the `img-src` CSP directive. When a preview is missing, inspect the thumbnail resolver result and confirm the rendered image source starts with `data:image/`; DevTools should show no CSP image refusal. The `src/lib/tauri-security-config-contract.test.ts` contract keeps remote HTTP(S) image origins out of `img-src` while allowing Tauri's local `http://asset.localhost` source.
+
 Ownership invariant: in CDP mode Extractum owns only the Playwright CDP connection and selected page reference. It must not close the user's Chrome, profile, context, or unrelated tabs.
 
 Operational rule:

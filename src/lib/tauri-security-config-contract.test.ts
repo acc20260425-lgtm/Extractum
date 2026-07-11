@@ -25,6 +25,25 @@ describe("Tauri security configuration", () => {
     expect(security.dangerousDisableAssetCspModification).toBe(false);
   });
 
+  it("does not allow remote image origins", () => {
+    const config = readJson("src-tauri/tauri.conf.json");
+    const app = config.app as Record<string, unknown>;
+    const security = app.security as Record<string, unknown>;
+    const csp = security.csp as string;
+    const imageDirective = csp
+      .split(";")
+      .map((directive) => directive.trim())
+      .find((directive) => directive.startsWith("img-src "));
+
+    expect(imageDirective).toBeDefined();
+    const remoteImageOrigins = imageDirective!
+      .split(/\s+/)
+      .slice(1)
+      .filter((source) => /^https?:\/\//.test(source) && source !== "http://asset.localhost");
+
+    expect(remoteImageOrigins).toEqual([]);
+  });
+
   it("limits the MCP overlay to exposing the global Tauri object", () => {
     expect(readJson("src-tauri/tauri.mcp.conf.json")).toEqual({
       app: { withGlobalTauri: true },
