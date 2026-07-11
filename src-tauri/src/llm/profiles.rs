@@ -252,13 +252,14 @@ pub(super) async fn resolve_profile_from_pool(
     let profile = load_profile_from_pool(pool, secret_store, &profile_id).await?;
     let provider = ProviderKind::parse(&profile.provider)?;
     let api_key = read_profile_api_key(secret_store, &profile_id).await?;
+    let base_url = normalize_base_url(provider, Some(&profile.base_url))?;
 
     Ok(ResolvedLlmProfile {
         profile_id,
         provider,
         default_model: profile.default_model,
         api_key,
-        base_url: profile.base_url,
+        base_url,
     })
 }
 
@@ -445,6 +446,34 @@ mod tests {
         assert_eq!(resolved.default_model, "gemini-2.0-flash");
         assert_eq!(resolved.api_key.expose_secret(), "alt-key");
         assert_eq!(resolved.base_url, "");
+    }
+
+    #[tokio::test]
+    async fn legacy_remote_http_profile_is_rejected_before_request_configuration() {
+        let pool = memory_pool().await;
+        let (_store, secret_store) = memory_secret_store();
+
+        sqlx::query("INSERT INTO app_settings (key, value) VALUES (?, ?), (?, ?), (?, ?)")
+            .bind("llm.profile.legacy.provider")
+            .bind("openai_compatible")
+            .bind("llm.profile.legacy.default_model")
+            .bind("legacy-model")
+            .bind("llm.profile.legacy.base_url")
+            .bind("http://192.0.2.1/v1")
+            .execute(&pool)
+            .await
+            .expect("seed legacy profile");
+
+        let error = match resolve_profile_from_pool(&pool, &secret_store, Some("legacy")).await {
+            Ok(_) => panic!("reject legacy remote HTTP profile before it reaches request configuration"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(
+            error.message,
+            "HTTP base URL must use localhost or a loopback IP address"
+        );
     }
 
     #[tokio::test]
