@@ -246,10 +246,18 @@ ACK, EOF-driven exit, or reap does not complete in budget:
 Remove the Tauri shell transport enum arm, `request_shell`, `CommandEvent`
 buffer reassembly, and transport-specific shell force-cleanup branch. The JSONL
 request/response implementation is shared by Node-script and bundled-binary
-modes.
+modes. Because no other project code or capability uses `tauri-plugin-shell`,
+also remove `.plugin(tauri_plugin_shell::init())` from `lib.rs` and remove the
+Cargo dependency. Keep `bundle.externalBin` in `tauri.conf.json`: Tauri must
+still package `gemini-browser-sidecar`; only runtime spawning changes.
 
 The existing Drop implementation remains a best-effort fallback, not the
 normal shutdown path. Its behavior must stay non-panicking.
+
+The user-triggered mid-session provider stop preserves its current lifecycle:
+send protocol Stop, receive ACK, then remove the sidecar from state and let its
+contained Drop fallback initiate tree termination and best-effort reap. The
+shutdown-only stdin-EOF wait is not added to this command in this slice.
 
 ## CDP Chrome Lifecycle
 
@@ -313,11 +321,12 @@ Automated tests cover:
 - sidecar graceful Stop ACK is followed by stdin closure and EOF-driven process
   exit before force cleanup is considered;
 - bundled sidecar path resolution matches `current_exe()` layout on Windows and
-  non-Windows, and a release smoke launches the packaged binary directly;
+  non-Windows;
 - both direct sidecar modes use `hide_console_window` on Windows and drain
   stderr without logging raw sidecar output;
 - source contracts confirm the legacy Tauri shell transport/event-buffer code
-  is removed;
+  plus plugin registration/dependency are removed while `bundle.externalBin`
+  remains configured;
 - shutdown cancellation releases a mutex held by an in-flight long sidecar
   request before the graceful/force path takes its handle;
 - a cancelled/partially written sidecar request taints the transport and skips
@@ -368,6 +377,11 @@ On Windows, using a release GUI build:
   owned `yt-dlp.exe` or contained post-assignment helper descendant remains;
 - start the Gemini sidecar and Extractum-owned CDP Chrome, close Extractum, and
   verify both owned processes terminate;
+- in a packaged release, verify the bundled sidecar launches directly from the
+  `current_exe()` directory without `tauri-plugin-shell`;
+- close Extractum with an idle, untainted sidecar and verify logs/test telemetry
+  show Stop ACK, stdin EOF closure, and normal process exit with no force-cleanup
+  warning;
 - close Extractum with no active external processes;
 - confirm normal total exit delay is at most approximately three seconds plus
   small scheduling/process-reap overhead;
@@ -387,7 +401,8 @@ Update:
 
 - `docs/project.md`: external-process ownership and bounded shutdown;
 - `docs/browser-providers-llm-troubleshooting.md`: sidecar/Chrome cleanup and
-  recovery diagnostics;
+  recovery diagnostics, direct bundled spawn, and required `externalBin`
+  packaging;
 - `AGENTS.md`: require explicit kill/reap ownership for new child processes and
   prohibit dropping process futures as cancellation;
 - `docs/value-registry.md` only if implementation introduces a persisted or API
@@ -403,6 +418,8 @@ Update:
   crash; pre-assignment descendants remain an explicit limitation.
 - An idle, untainted Gemini sidecar receives graceful Stop before bounded force
   cleanup; a tainted transport skips directly to force cleanup.
+- Release packaging retains `externalBin`, launches the bundled sidecar through
+  Tokio, and no longer registers or depends on `tauri-plugin-shell`.
 - Extractum-owned CDP Chrome receives contained-tree termination and is normally
   reaped; the hard watchdog remains the documented degradation path. Unrelated
   Chrome is untouched.
