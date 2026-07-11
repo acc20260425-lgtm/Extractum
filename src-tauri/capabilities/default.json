@@ -7,10 +7,6 @@
     "core:default",
     "mcp-bridge:default",
     "dialog:allow-open",
-    "opener:default",
-    "sql:default",
-    "sql:allow-execute",
-    "sql:allow-select",
-    "sql:allow-load"
+    "opener:default"
   ]
 }

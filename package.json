@@ -36,7 +36,7 @@
     "verify": "node scripts/verify.mjs",
     "smoke:analysis": "node scripts/analysis-smoke.mjs",
     "smoke:cancellation": "node scripts/cancellation-smoke.mjs",
-    "tauri": "tauri"
+    "tauri": "node scripts/tauri.mjs"
   },
   "license": "MIT",
   "dependencies": {
