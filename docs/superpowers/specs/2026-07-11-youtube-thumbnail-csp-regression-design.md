@@ -6,23 +6,23 @@ Restore YouTube preview images without adding remote origins to the Tauri CSP.
 
 ## Scope
 
-The Rust backend resolves a stored YouTube thumbnail URL to a local temporary file and returns a Tauri asset URL for the frontend to render. The cache is process-local: it is created for the current app run and cleared at startup, so no thumbnails become persistent user data.
+The Rust backend resolves a stored YouTube thumbnail URL to an in-memory data URL for the frontend to render. The cache is process-local and contains no filesystem or SQLite state.
 
 ## Data flow
 
 1. A frontend view requests a preview for a stored thumbnail URL.
 2. Rust validates that the URL uses HTTPS and that its host is an allowlisted YouTube thumbnail host.
-3. Rust downloads the bytes once into the current temporary cache under a SHA-256 URL-derived filename.
-4. Rust returns the local asset URL. Repeated requests return the cached asset URL without another download.
+3. Rust downloads bytes once with redirects disabled, validates image magic bytes and size, then encodes a data URL.
+4. Rust returns the data URL. Repeated and concurrent requests share a cached/in-flight result without another download.
 5. The frontend uses that returned URL for `<img>`; download or validation errors leave its existing placeholder visible.
 
 ## Safety and errors
 
-- The frontend never loads a remote thumbnail URL directly.
+- The frontend never loads a remote thumbnail URL directly; it only receives `data:` URLs.
 - CSP remains without remote origins.
-- URL validation rejects non-HTTPS URLs and non-YouTube thumbnail hosts.
+- URL validation rejects non-HTTPS URLs and hosts outside `i.ytimg.com`, `i9.ytimg.com`, `img.youtube.com`, and `yt3.ggpht.com`.
 - Download failures and unsupported content do not leak secrets or crash the UI.
-- The cache is cleared at startup and is not written to SQLite.
+- The in-memory cache ends with the app process and is not written to SQLite.
 
 ## Testing
 
