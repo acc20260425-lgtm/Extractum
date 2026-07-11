@@ -86,7 +86,7 @@ git commit -m "feat: separate production and MCP Tauri config"
 **Interfaces:**
 - Produces: MCP builder `Builder::new().bind_address("127.0.0.1").build()` registered only under `cfg(dev)`.
 
-- [ ] **Step 1: Extend the source contract test** to require `#[cfg(dev)]` around MCP plus every `seed_*`/`clear_*` import and handler registration, and reject `#[cfg(debug_assertions)]` for those blocks.
+- [ ] **Step 1: Extend the source contract test** to require `#[cfg(dev)]` around MCP plus every `seed_*`/`clear_*` import and handler registration. Reject `#[cfg(debug_assertions)]` only when it gates those named MCP/fixture blocks; do not ban `debug_assertions` elsewhere in `lib.rs`.
 - [ ] **Step 2: Run RED.**
 
 Run: `npm.cmd run test -- src/lib/tauri-security-config-contract.test.ts`
@@ -131,7 +131,7 @@ assert!(normalize_base_url(ProviderKind::OpenAiCompatible, Some("http://example.
 
 - [ ] **Step 2: Run RED.**
 
-Run: `cargo test --manifest-path src-tauri/Cargo.toml llm::tests::normalize_base_url -- --nocapture`
+Run: `cargo test --manifest-path src-tauri/Cargo.toml normalize_base_url -- --nocapture`
 Expected: remote HTTP case FAILS.
 
 - [ ] **Step 3: Validate parsed hosts.** Accept HTTP only for case-insensitive `localhost` or `url.host().and_then(|h| h.parse::<IpAddr>().ok()).is_some_and(|ip| ip.is_loopback())`; return `AppError::validation` before request construction.
@@ -147,12 +147,15 @@ git commit -m "fix: reject remote plaintext LLM endpoints"
 **Files:**
 - Modify: `src-tauri/src/llm/mod.rs`
 - Modify: `src-tauri/src/llm/profiles.rs`
+- Inspect/Modify: `src/routes/settings/+page.svelte`
+- Modify: `src/lib/api/llm.test.ts`
+- Modify: `src/lib/settings-profile-ux-contract.test.ts`
 
 **Interfaces:**
 - Produces: normalized credential scope `(ProviderKind, Option<Origin>)`; idempotent `materialize_keyed_profile_base_url`; fail-closed state loading.
 
 - [ ] **Step 1: Add failing scope tests** for provider/scheme/host/effective-port changes, path-only changes, blank versus explicit default, replacement key, cleared key, and unchanged scope.
-- [ ] **Step 2: Add failing persistence tests** proving keyed legacy profiles are written during both state load and resolution, unkeyed profiles remain blank, repeat materialization is harmless, and a forced DB write failure makes state load return an error.
+- [ ] **Step 2: Add failing persistence tests** proving keyed legacy profiles are written during both state load and resolution, unkeyed profiles remain blank, repeat materialization is harmless, and a forced DB write failure makes state load return an error. Make the test pool single-connection with `SqlitePoolOptions::new().max_connections(1)`, seed the keyed legacy profile, then execute `PRAGMA query_only = ON`; reads and keyring lookup still succeed, while the materialization write deterministically fails. This implements the fail-closed rule already recorded in the design's Error Handling section.
 
 ```rust
 assert_eq!(state.profiles[0].base_url, DEFAULT_OPENAI_COMPAT_BASE_URL);
@@ -166,13 +169,24 @@ Expected: new scope/materialization tests FAIL.
 
 - [ ] **Step 4: Implement scope comparison and save validation.** Expand defaults before origin comparison; require a replacement key or prior clear when scope changes; persist the effective URL whenever a key is created, replaced, or retained.
 - [ ] **Step 5: Implement shared idempotent materialization.** After keyring lookup, write the normalized effective URL when keyed and missing/blank; call it from state loading and request resolution, propagating DB errors without logging secrets.
-- [ ] **Step 6: Run all LLM tests and commit.**
+- [ ] **Step 6: Verify the frontend consequence explicitly.** Add an API test whose `get_llm_profiles` response contains a keyed OpenAI-compatible profile with `base_url: "http://localhost:20128/v1"` and assert the wrapper preserves that explicit value. Inspect `+page.svelte` and add/update the settings contract to require `baseUrl = profile.base_url`, so selecting the profile displays the materialized URL rather than replacing it with an empty/default sentinel. If the existing assignment already satisfies the contract, retain the production code unchanged and record that fact in the test name.
+
+```ts
+invokeMock.mockResolvedValueOnce({
+  active_profile: "work",
+  profiles: [{ profile_id: "work", provider: "openai_compatible", default_model: "model", api_key_configured: true, base_url: "http://localhost:20128/v1" }],
+});
+await expect(getLlmProfiles()).resolves.toMatchObject({ profiles: [{ base_url: "http://localhost:20128/v1" }] });
+```
+
+- [ ] **Step 7: Run Rust and frontend LLM/settings tests and commit.**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml llm -- --nocapture`
+Run: `npm.cmd run test -- src/lib/api/llm.test.ts src/lib/settings-profile-ux-contract.test.ts`
 Expected: PASS.
 
 ```powershell
-git add src-tauri/src/llm/mod.rs src-tauri/src/llm/profiles.rs
+git add src-tauri/src/llm/mod.rs src-tauri/src/llm/profiles.rs src/routes/settings/+page.svelte src/lib/api/llm.test.ts src/lib/settings-profile-ux-contract.test.ts
 git commit -m "feat: bind LLM keys to provider origins"
 ```
 
@@ -247,7 +261,14 @@ git diff --check
 
 Expected: PASS, except a pre-existing failure must be recorded with evidence and must not conceal a new regression.
 
-- [ ] **Step 2: Run manual MCP verification.** Start `npm.cmd run tauri dev`; confirm localhost connection, window discovery, JS result, screenshot, element picker, IPC monitor start/capture/stop; then run `npm.cmd run smoke:cancellation` and stop the app.
+- [ ] **Step 2: Run manual MCP verification.** Start `npm.cmd run tauri dev`; obtain the discovered MCP Bridge port, then verify its actual listener address:
+
+```powershell
+$appPid = (Get-Process -Name extractum | Sort-Object StartTime -Descending | Select-Object -First 1).Id
+Get-NetTCPConnection -State Listen | Where-Object { $_.OwningProcess -eq $appPid } | Select-Object LocalAddress, LocalPort, OwningProcess
+```
+
+Expected: the row whose port matches MCP discovery has `LocalAddress` exactly `127.0.0.1`; no row for that port uses `0.0.0.0`, `::`, or a LAN address. Then confirm window discovery, JS result, screenshot, element picker, IPC monitor start/capture/stop; run `npm.cmd run smoke:cancellation` and stop the app.
 - [ ] **Step 3: Run self-managed analysis smoke only after ports are free.**
 
 Run: `npm.cmd run smoke:analysis`
