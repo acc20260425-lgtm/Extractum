@@ -25,7 +25,7 @@ pub use runtime::{
     preflight_youtube_summary_run, start_youtube_summary_run, update_prompt_pack_run,
     PromptPackRunState,
 };
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 pub use runtime::{
     clear_prompt_pack_cancellation_smoke_fixture, seed_prompt_pack_cancellation_smoke_fixture,
 };

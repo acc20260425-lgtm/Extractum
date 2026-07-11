@@ -1,7 +1,7 @@
 mod chat;
 mod corpus;
 mod events;
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 mod fixtures;
 mod groups;
 pub(crate) mod models;
@@ -39,7 +39,7 @@ pub(crate) use self::corpus::{
     push_analysis_document_kind_filter, resolve_analysis_sources, AnalysisSourceResolutionError,
     AnalysisSourceResolutionErrorCode, YoutubeCorpusMode,
 };
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 pub use self::fixtures::{
     clear_analysis_redesign_fixture_active_runs, clear_analysis_redesign_fixtures,
     seed_analysis_redesign_fixtures,

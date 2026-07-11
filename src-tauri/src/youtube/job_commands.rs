@@ -77,7 +77,7 @@ pub(crate) async fn list_source_jobs(
     jobs::list_source_job_records(state.inner(), filter).await
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 #[tauri::command]
 pub(crate) async fn seed_source_job_cancellation_smoke_fixture(
     handle: AppHandle,
@@ -86,7 +86,7 @@ pub(crate) async fn seed_source_job_cancellation_smoke_fixture(
     jobs::seed_source_job_cancellation_smoke_fixture(handle, state.inner()).await
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 #[tauri::command]
 pub(crate) async fn clear_source_job_cancellation_smoke_fixture(
     state: tauri::State<'_, SourceJobState>,

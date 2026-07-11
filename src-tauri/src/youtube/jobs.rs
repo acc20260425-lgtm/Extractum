@@ -30,7 +30,7 @@ use super::source_metadata::{
 };
 
 pub(crate) const SOURCE_JOB_EVENT: &str = "sources://source-job";
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 const SOURCE_JOB_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID: i64 = -900_001;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -363,7 +363,7 @@ impl SourceJobState {
         inner.jobs.get(job_id).cloned()
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(dev)]
     async fn remove_cancellation_smoke_fixture_jobs(&self) -> usize {
         let mut inner = self.inner.lock().await;
         let job_ids = inner
@@ -382,7 +382,7 @@ impl SourceJobState {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 pub(crate) async fn seed_source_job_cancellation_smoke_fixture(
     handle: AppHandle,
     state: &SourceJobState,
@@ -408,14 +408,14 @@ pub(crate) async fn seed_source_job_cancellation_smoke_fixture(
     Ok(record)
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 pub(crate) async fn clear_source_job_cancellation_smoke_fixture(
     state: &SourceJobState,
 ) -> AppResult<usize> {
     Ok(state.remove_cancellation_smoke_fixture_jobs().await)
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 async fn seed_source_job_cancellation_smoke_fixture_in_state(
     state: &SourceJobState,
 ) -> AppResult<SourceJobRecord> {
@@ -443,7 +443,7 @@ async fn seed_source_job_cancellation_smoke_fixture_in_state(
         .ok_or_else(|| AppError::not_found(format!("Source job {} not found", record.job_id)))
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 async fn finish_cancelled_source_job_cancellation_smoke_fixture(
     state: &SourceJobState,
     job_id: &str,

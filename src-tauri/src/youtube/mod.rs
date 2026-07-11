@@ -13,5 +13,6 @@ pub(crate) mod runtime;
 pub(crate) mod settings;
 pub(crate) mod source_metadata;
 pub(crate) mod transcript_reader;
+pub(crate) mod thumbnail;
 pub(crate) mod url;
 pub(crate) mod ytdlp;

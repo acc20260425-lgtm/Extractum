@@ -109,6 +109,7 @@ use youtube::settings::{
     clear_youtube_auth, get_youtube_auth_status, get_youtube_settings, save_youtube_cookies,
     save_youtube_settings,
 };
+use youtube::thumbnail::{resolve_youtube_thumbnail, YoutubeThumbnailState};
 use youtube::transcript_reader::list_youtube_transcript_segments;
 
 mod notebooklm_export;
@@ -167,6 +168,7 @@ pub fn run() {
         .manage(GeminiBrowserState::new())
         .manage(GeminiBrowserJobRuntime::default())
         .manage(SourceIdentityRepairState::new())
+        .manage(YoutubeThumbnailState::new())
         .manage(SecretStoreState::system())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -355,7 +357,8 @@ pub fn run() {
             save_youtube_settings,
             get_youtube_auth_status,
             save_youtube_cookies,
-            clear_youtube_auth
+            clear_youtube_auth,
+            resolve_youtube_thumbnail
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

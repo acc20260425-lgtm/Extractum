@@ -724,6 +724,7 @@ Scope: frontend-local state, filters, tabs, badges, and view-model values. Most 
 | UI badges | `BadgeVariant` | `default`, `warning`, `member`, `info`, `success`, `danger`, `neutral` | `src/lib/components/ui/types.ts` | Shared presentation variants. |
 | Toasts | `ToastKind` | `error`, `success`, `info` | `src/lib/toasts.ts` | User notification tone. |
 | App errors | `AppErrorKind` | `validation`, `not_found`, `auth`, `network`, `conflict`, `internal` | `src/lib/app-error.ts` | Frontend error contract used by diagnostics formatting. |
+| YouTube thumbnail resolver result | `kind` | `success`, `terminal_error`, `transient_error` | `src-tauri/src/youtube/thumbnail.rs` | Non-persistent IPC result. `terminal_error` is safe to memoize for the process; `transient_error` retries on a later component mount. |
 | Diagnostics tone classifier | success bucket | `available`, `current`, `synced`, `ready`, `succeeded`, `completed`, `complete`, `none` | `src/lib/diagnostics-view-model.ts` | Classifier-only values, not a canonical backend enum. |
 | Diagnostics tone classifier | info bucket | `pending`, `queued`, `running`, `cancel_requested`, `partial`, `present` | `src/lib/diagnostics-view-model.ts` | Classifier-only values. |
 | Diagnostics tone classifier | warning bucket | `never_synced`, `missing_key`, `not_configured`, `unavailable`, `not_found`, `timed_out`, `cancelled` | `src/lib/diagnostics-view-model.ts` | Classifier-only values. |

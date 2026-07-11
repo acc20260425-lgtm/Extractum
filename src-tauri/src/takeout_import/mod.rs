@@ -346,7 +346,7 @@ pub async fn list_takeout_source_import_jobs(
     Ok(state.list_jobs().await)
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 #[tauri::command]
 pub async fn seed_takeout_cancellation_smoke_fixture(
     handle: AppHandle,
@@ -355,7 +355,7 @@ pub async fn seed_takeout_cancellation_smoke_fixture(
     state::seed_takeout_cancellation_smoke_fixture(handle, state.inner()).await
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 #[tauri::command]
 pub async fn clear_takeout_cancellation_smoke_fixture(
     state: tauri::State<'_, TakeoutImportState>,

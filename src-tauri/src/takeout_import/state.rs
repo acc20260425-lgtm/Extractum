@@ -10,11 +10,11 @@ use crate::job_helpers::{ActiveJobGuards, CancellationState};
 use crate::time::now_secs;
 
 const TAKEOUT_IMPORT_EVENT: &str = "sources://takeout-import";
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 const TAKEOUT_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID: i64 = -910_001;
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 const TAKEOUT_CANCELLATION_SMOKE_FIXTURE_ACCOUNT_ID: i64 = -910_002;
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 const TAKEOUT_CANCELLATION_SMOKE_FIXTURE_BATCH_ID: i64 = -910_003;
 const STATUS_QUEUED: &str = "queued";
 pub(crate) const STATUS_RUNNING: &str = "running";
@@ -218,7 +218,7 @@ impl TakeoutImportState {
         jobs
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(dev)]
     async fn remove_cancellation_smoke_fixture_jobs(&self) -> usize {
         let mut inner = self.inner.lock().await;
         let job_ids = inner
@@ -236,7 +236,7 @@ impl TakeoutImportState {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 pub(crate) async fn seed_takeout_cancellation_smoke_fixture(
     handle: AppHandle,
     state: &TakeoutImportState,
@@ -262,14 +262,14 @@ pub(crate) async fn seed_takeout_cancellation_smoke_fixture(
     Ok(record)
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 pub(crate) async fn clear_takeout_cancellation_smoke_fixture(
     state: &TakeoutImportState,
 ) -> AppResult<usize> {
     Ok(state.remove_cancellation_smoke_fixture_jobs().await)
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 async fn seed_takeout_cancellation_smoke_fixture_in_state(
     state: &TakeoutImportState,
 ) -> AppResult<TakeoutImportJobRecord> {
@@ -293,7 +293,7 @@ async fn seed_takeout_cancellation_smoke_fixture_in_state(
         .ok_or_else(|| AppError::not_found(format!("Takeout job {} not found", record.job_id)))
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 async fn finish_cancelled_takeout_cancellation_smoke_fixture(
     state: &TakeoutImportState,
     job_id: &str,

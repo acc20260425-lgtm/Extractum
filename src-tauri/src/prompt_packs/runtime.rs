@@ -39,7 +39,7 @@ const TRANSCRIPT_ANALYSIS_STAGE_JSON: &str =
     include_str!("../../prompt-packs/youtube_summary/1.0.0/runtime/transcript_analysis.json");
 const SYNTHESIS_STAGE_JSON: &str =
     include_str!("../../prompt-packs/youtube_summary/1.0.0/runtime/synthesis.json");
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 const PROMPT_PACK_CANCELLATION_SMOKE_FIXTURE_LABEL: &str =
     "__prompt_pack_cancellation_smoke_fixture__";
 
@@ -1888,7 +1888,7 @@ pub async fn cleanup_interrupted_prompt_pack_runs(handle: AppHandle) {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 #[tauri::command]
 pub async fn seed_prompt_pack_cancellation_smoke_fixture(
     handle: AppHandle,
@@ -1898,7 +1898,7 @@ pub async fn seed_prompt_pack_cancellation_smoke_fixture(
     seed_prompt_pack_cancellation_smoke_fixture_in_pool(&pool, state.inner()).await
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 #[tauri::command]
 pub async fn clear_prompt_pack_cancellation_smoke_fixture(
     handle: AppHandle,
@@ -1908,7 +1908,7 @@ pub async fn clear_prompt_pack_cancellation_smoke_fixture(
     clear_prompt_pack_cancellation_smoke_fixture_in_pool(&pool, state.inner()).await
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 async fn seed_prompt_pack_cancellation_smoke_fixture_in_pool(
     pool: &SqlitePool,
     state: &PromptPackRunState,
@@ -1952,7 +1952,7 @@ async fn seed_prompt_pack_cancellation_smoke_fixture_in_pool(
         .ok_or_else(|| AppError::not_found(format!("Prompt Pack run {run_id} not found")))
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 async fn clear_prompt_pack_cancellation_smoke_fixture_in_pool(
     pool: &SqlitePool,
     state: &PromptPackRunState,
@@ -1977,7 +1977,7 @@ async fn clear_prompt_pack_cancellation_smoke_fixture_in_pool(
     Ok(deleted)
 }
 
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 async fn prompt_pack_cancellation_smoke_fixture_run_ids(pool: &SqlitePool) -> AppResult<Vec<i64>> {
     sqlx::query_scalar(
         "SELECT id FROM prompt_pack_runs
