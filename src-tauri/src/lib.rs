@@ -186,6 +186,11 @@ pub fn run() {
 
     builder
         .setup(|app| {
+            #[cfg(feature = "csp-verification")]
+            if let Some(window) = app.get_webview_window("main") {
+                window.open_devtools();
+            }
+
             app.state::<GeminiBrowserState>()
                 .init_status_snapshot(app.handle())?;
             let worker_handle = app.handle().clone();

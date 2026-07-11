@@ -66,4 +66,14 @@ describe("Tauri security configuration", () => {
       );
     }
   });
+
+  it("keeps production DevTools behind the CSP verification feature", () => {
+    const cargoToml = readSource("src-tauri/Cargo.toml");
+    const source = readSource("src-tauri/src/lib.rs");
+
+    expect(cargoToml).toContain('csp-verification = ["tauri/devtools"]');
+    expect(source).toMatch(
+      /#\[cfg\(feature = "csp-verification"\)\]\s*if let Some\(window\) = app\.get_webview_window\("main"\)\s*\{\s*window\.open_devtools\(\);\s*\}/s,
+    );
+  });
 });
