@@ -6,6 +6,7 @@ use tempfile::NamedTempFile;
 use tokio::process::Command;
 use tokio::time::timeout;
 
+use crate::child_process::hide_console_window;
 use crate::error::{AppError, AppResult};
 
 use super::cookies::validate_netscape_cookie_file;
@@ -62,6 +63,7 @@ pub(crate) async fn run_ytdlp_with_options(
     let output = timeout(options.timeout, async {
         let mut command = Command::new("yt-dlp");
         command.args(&command_args);
+        hide_console_window(&mut command);
         command.output().await
     })
     .await

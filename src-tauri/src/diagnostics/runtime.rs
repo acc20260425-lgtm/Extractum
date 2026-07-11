@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use tokio::process::Command;
 
+use crate::child_process::hide_console_window;
 use crate::error::AppResult;
 use crate::llm::{
     llm_request_kind_diagnostic_key, llm_request_state_diagnostic_key,
@@ -113,12 +114,11 @@ pub(crate) async fn check_ytdlp_runtime() -> DiagnosticRuntimeCheck {
     // This intentionally does not cache because the first diagnostics slice is
     // called on demand. If a future UI polls this command, add caching above the
     // command boundary instead of spawning yt-dlp repeatedly.
-    match tokio::time::timeout(
-        YTDLP_DIAGNOSTIC_TIMEOUT,
-        Command::new("yt-dlp").arg("--version").output(),
-    )
-    .await
-    {
+    let mut command = Command::new("yt-dlp");
+    command.arg("--version");
+    hide_console_window(&mut command);
+
+    match tokio::time::timeout(YTDLP_DIAGNOSTIC_TIMEOUT, command.output()).await {
         Ok(Ok(output)) if output.status.success() => {
             let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
             DiagnosticRuntimeCheck {

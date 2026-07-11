@@ -3,6 +3,7 @@ use std::time::Duration;
 use serde::Serialize;
 use tokio::process::Command;
 
+use crate::child_process::hide_console_window;
 use crate::error::{AppError, AppResult};
 
 const YTDLP_RUNTIME_CHECK_TIMEOUT: Duration = Duration::from_secs(5);
@@ -17,11 +18,10 @@ pub struct YoutubeRuntimeStatusDto {
 
 #[tauri::command]
 pub async fn get_youtube_runtime_status() -> AppResult<YoutubeRuntimeStatusDto> {
-    let output = tokio::time::timeout(
-        YTDLP_RUNTIME_CHECK_TIMEOUT,
-        Command::new("yt-dlp").arg("--version").output(),
-    )
-    .await;
+    let mut command = Command::new("yt-dlp");
+    command.arg("--version");
+    hide_console_window(&mut command);
+    let output = tokio::time::timeout(YTDLP_RUNTIME_CHECK_TIMEOUT, command.output()).await;
 
     match output {
         Ok(Ok(output)) if output.status.success() => {
