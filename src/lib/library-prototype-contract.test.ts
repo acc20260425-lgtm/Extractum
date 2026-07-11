@@ -3,6 +3,7 @@ import routeSource from "../routes/projects/library/+page.svelte?raw";
 import screenSource from "./components/research-projects/LibraryScreen.svelte?raw";
 import filterRailSource from "./components/research-projects/LibraryFilterRail.svelte?raw";
 import workspaceSource from "./components/research-projects/LibraryWorkspace.svelte?raw";
+import libraryCatalogGridSource from "./ui/library-catalog-grid.ts?raw";
 import inspectorSource from "./components/research-projects/LibraryInspector.svelte?raw";
 
 describe("Library prototype contract", () => {
@@ -30,16 +31,17 @@ describe("Library prototype contract", () => {
     expect(workspaceSource).toContain('data-ui-action="library-edit"');
     expect(workspaceSource).toContain('data-ui-action="library-delete"');
     expect(workspaceSource).toContain('disabled={!selectedSource}');
-    expect(workspaceSource).toContain('header: "Source"');
-    expect(workspaceSource).toContain('{ id: "title", header: "Source", width: 320, cell: LibrarySourceCell }');
-    expect(workspaceSource).toContain('header: "Type"');
-    expect(workspaceSource).toContain('header: "Status"');
-    expect(workspaceSource).toContain('header: "Projects"');
-    expect(workspaceSource).toContain('header: "Items"');
-    expect(workspaceSource).toContain('header: "Added"');
-    expect(workspaceSource).toContain('header: "Last synced"');
-    expect(workspaceSource).toContain('{ id: "createdAt", header: "Added", width: 136, dateTimeFormat: "datetime" }');
-    expect(workspaceSource).toContain('{ id: "lastSyncedAt", header: "Last synced", width: 136, dateTimeFormat: "datetime" }');
+    expect(workspaceSource).toContain("libraryCatalogGridColumns");
+    expect(libraryCatalogGridSource).toContain('header: "Source"');
+    expect(libraryCatalogGridSource).toContain('id: "title"');
+    expect(libraryCatalogGridSource).toContain('header: "Type"');
+    expect(libraryCatalogGridSource).toContain('header: "Status"');
+    expect(libraryCatalogGridSource).toContain('header: "Projects"');
+    expect(libraryCatalogGridSource).toContain('header: "Items"');
+    expect(libraryCatalogGridSource).toContain('header: "Added"');
+    expect(libraryCatalogGridSource).toContain('header: "Last synced"');
+    expect(libraryCatalogGridSource).toMatch(/id: "createdAt"[\s\S]*dateTimeFormat: "datetime"/);
+    expect(libraryCatalogGridSource).toMatch(/id: "lastSyncedAt"[\s\S]*dateTimeFormat: "datetime"/);
     expect(workspaceSource).not.toContain("@svar-ui/");
     expect(workspaceSource).not.toContain("$lib/components/ui/");
   });

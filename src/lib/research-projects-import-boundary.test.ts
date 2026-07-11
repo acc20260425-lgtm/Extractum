@@ -82,9 +82,14 @@ describe("research projects import boundaries", () => {
       path.join(repoRoot, "src/lib/components/research-projects/ConnectFromLibrary.svelte"),
       "utf8",
     );
+    const projectSourceGridSource = readFileSync(
+      path.join(repoRoot, "src/lib/ui/research-projects-project-source-grid.ts"),
+      "utf8",
+    );
 
-    expect(sourcesTabSource).toContain(
-      '{ id: "addedAt", header: "Added to project at", width: 180, dateTimeFormat: "datetime" }',
+    expect(sourcesTabSource).toContain("projectSourceGridColumns");
+    expect(projectSourceGridSource).toMatch(
+      /id: "addedAt"[\s\S]*header: "Added to project at"[\s\S]*dateTimeFormat: "datetime"/,
     );
     expect(connectFromLibrarySource).toContain(
       '{ id: "lastCollectedAt", header: "Последний сбор", width: 140, dateTimeFormat: "datetime" }',
