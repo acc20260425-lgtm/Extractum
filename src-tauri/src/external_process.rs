@@ -10,7 +10,8 @@ pub(crate) const GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
 pub(crate) const SHUTDOWN_WATCHDOG_TIMEOUT: Duration = Duration::from_secs(4);
 
 pub(crate) type ExitCallback = Arc<dyn Fn(i32) + Send + Sync>;
-pub(crate) type WatchdogScheduler = Arc<dyn Fn(ShutdownTiming, ExitCallback) + Send + Sync>;
+pub(crate) type WatchdogTask = Box<dyn FnOnce() + Send>;
+pub(crate) type WatchdogScheduler = Arc<dyn Fn(ShutdownTiming, WatchdogTask) + Send + Sync>;
 pub(crate) type ShutdownCleanup =
     Pin<Box<dyn Future<Output = Result<(), ShutdownCleanupError>> + Send + 'static>>;
 
@@ -107,10 +108,23 @@ impl ExternalProcessShutdownState {
     }
 
     pub(crate) async fn wait_for_startups(&self) {
+        self.wait_for_startups_with_after_check(|| {}).await;
+    }
+
+    async fn wait_for_startups_with_after_check<F>(&self, after_check: F)
+    where
+        F: FnOnce(),
+    {
+        let mut after_check = Some(after_check);
         loop {
             let notified = self.0.startup_idle.notified();
+            tokio::pin!(notified);
+            notified.as_mut().enable();
             if self.0.inner.lock().active_startups == 0 {
                 return;
+            }
+            if let Some(after_check) = after_check.take() {
+                after_check();
             }
             notified.await;
         }
@@ -130,12 +144,31 @@ impl ExternalProcessShutdownState {
     }
 
     pub(crate) fn run_watchdog(&self, exit: &ExitCallback) -> bool {
-        if self.phase() == ShutdownPhase::Completed {
-            return false;
-        }
-        self.complete();
-        exit(self.exit_code());
+        let exit_code = {
+            let mut admission = self.0.inner.lock();
+            if admission.phase != ShutdownPhase::ShuttingDown {
+                return false;
+            }
+            admission.phase = ShutdownPhase::Completed;
+            admission.first_exit_code.unwrap_or(0)
+        };
+        exit(exit_code);
         true
+    }
+
+    pub(crate) fn schedule_watchdog(
+        &self,
+        timing: ShutdownTiming,
+        scheduler: &WatchdogScheduler,
+        exit: ExitCallback,
+    ) {
+        let state = self.clone();
+        scheduler(
+            timing,
+            Box::new(move || {
+                state.run_watchdog(&exit);
+            }),
+        );
     }
 }
 
@@ -174,6 +207,20 @@ mod tests {
         drop(permit);
         state.wait_for_startups().await;
         assert_eq!(state.exit_code(), 23);
+    }
+
+    #[tokio::test]
+    async fn permit_drop_between_waiter_registration_and_await_does_not_stall_shutdown() {
+        let state = ExternalProcessShutdownState::new();
+        let permit = state.try_admit().expect("running admits");
+        state.begin_shutdown(None);
+
+        tokio::time::timeout(
+            Duration::from_millis(10),
+            state.wait_for_startups_with_after_check(|| drop(permit)),
+        )
+        .await
+        .expect("a drop after the count check wakes the registered waiter");
     }
 
     #[test]
@@ -226,6 +273,61 @@ mod tests {
         state.complete();
         assert!(!state.run_watchdog(&exit));
         assert_eq!(*calls.lock().unwrap(), vec![23]);
+    }
+
+    #[tokio::test]
+    async fn concurrent_watchdogs_invoke_exit_once() {
+        let state = ExternalProcessShutdownState::new();
+        state.begin_shutdown(Some(23));
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let recorded_calls = calls.clone();
+        let exit: ExitCallback = Arc::new(move |code| recorded_calls.lock().unwrap().push(code));
+        let barrier = Arc::new(Barrier::new(3));
+
+        let first = {
+            let state = state.clone();
+            let exit = exit.clone();
+            let barrier = barrier.clone();
+            tokio::spawn(async move {
+                barrier.wait().await;
+                state.run_watchdog(&exit)
+            })
+        };
+        let second = {
+            let state = state.clone();
+            let exit = exit.clone();
+            let barrier = barrier.clone();
+            tokio::spawn(async move {
+                barrier.wait().await;
+                state.run_watchdog(&exit)
+            })
+        };
+
+        barrier.wait().await;
+        let results = [first.await.unwrap(), second.await.unwrap()];
+        assert_eq!(results.into_iter().filter(|result| *result).count(), 1);
+        assert_eq!(*calls.lock().unwrap(), vec![23]);
+    }
+
+    #[test]
+    fn injected_watchdog_scheduler_receives_timing_and_runs_the_gated_callback() {
+        let state = ExternalProcessShutdownState::new();
+        state.begin_shutdown(Some(23));
+        let timings = Arc::new(Mutex::new(Vec::new()));
+        let recorded_timings = timings.clone();
+        let scheduler: WatchdogScheduler = Arc::new(move |timing, watchdog| {
+            recorded_timings.lock().unwrap().push(timing);
+            watchdog();
+        });
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let recorded_calls = calls.clone();
+        let exit: ExitCallback = Arc::new(move |code| recorded_calls.lock().unwrap().push(code));
+
+        state.schedule_watchdog(ShutdownTiming::default(), &scheduler, exit);
+
+        assert_eq!(*timings.lock().unwrap(), vec![ShutdownTiming::default()]);
+        assert_eq!(*calls.lock().unwrap(), vec![23]);
+        assert_eq!(state.phase(), ShutdownPhase::Completed);
     }
 
     #[test]
