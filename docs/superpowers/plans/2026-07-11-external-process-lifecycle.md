@@ -16,6 +16,7 @@
 - Preserve `bundle.externalBin`; remove `tauri-plugin-shell` only after bundled Tokio launch works.
 - Graceful shutdown has one three-second budget; the independent watchdog exits at approximately four seconds with the original exit code.
 - Windows pre-assignment descendants and non-Windows crash containment remain documented limitations.
+- Normalize CRLF/LF before every raw-source assertion in `external-process-lifecycle-contract.test.ts`, reusing the newline-normalization pattern from `hidden-child-process-contract.test.ts` rather than matching Windows line endings ad hoc.
 - Follow TDD for every task and commit only task-owned files.
 
 ---
@@ -28,7 +29,7 @@
 - Create: `src/lib/external-process-lifecycle-contract.test.ts`
 
 **Interfaces:**
-- Produces: `ExternalProcessShutdownState`, `ShutdownPhase`, `AdmissionPermit`, `ShutdownTiming`, and test-injectable exit/watchdog callbacks.
+- Produces: cheap-clone `ExternalProcessShutdownState(Arc<ExternalProcessShutdownInner>)`, `ShutdownPhase`, `'static` `AdmissionPermit`, `ShutdownTiming`, and test-injectable exit/watchdog callbacks. `try_admit(&self)` clones the state wrapper into the permit, so a permit can move into a spawned task even when admission began through borrowed Tauri managed state.
 - Consumes: no subsystem process types.
 
 - [ ] **Step 1: Write failing Rust tests** for admission permit races, one transition to shutdown, rejection after closure, preserved first exit code, repeated requests, concurrent cleanup execution, failure isolation, and watchdog fallback.
@@ -45,7 +46,7 @@ assert_eq!(state.exit_code(), 23);
 
 Use injected `Arc<dyn Fn(i32) + Send + Sync>` and a test watchdog scheduler so tests record exit calls instead of terminating the test process.
 
-- [ ] **Step 2: Write the failing source contract.** Require `mod external_process;`, managed state registration, phase names `running/shutting_down/completed`, no persisted/API phase strings, and constants for three/four-second budgets.
+- [ ] **Step 2: Write the failing source contract.** Normalize imported Rust sources to LF first. Require `mod external_process;`, managed state registration, phase names `running/shutting_down/completed`, no persisted/API phase strings, and constants for three/four-second budgets.
 
 - [ ] **Step 3: Run RED.**
 
@@ -58,12 +59,15 @@ Expected: FAIL because the module and contracts do not exist.
 ```rust
 pub(crate) enum ShutdownPhase { Running, ShuttingDown, Completed }
 
-pub(crate) struct ExternalProcessShutdownState {
+struct ExternalProcessShutdownInner {
     inner: Mutex<AdmissionState>,
     startup_idle: Notify,
 }
 
-pub(crate) struct AdmissionPermit { state: Arc<ExternalProcessShutdownState> }
+#[derive(Clone)]
+pub(crate) struct ExternalProcessShutdownState(Arc<ExternalProcessShutdownInner>);
+
+pub(crate) struct AdmissionPermit { state: ExternalProcessShutdownState }
 ```
 
 - [ ] **Step 5: Run GREEN and commit.**
@@ -135,10 +139,10 @@ git commit -m "feat: contain Windows child process trees"
 - Consumes: `AdmissionPermit`, `ProcessTreeGuard`, existing `hide_console_window`.
 
 - [ ] **Step 1: Write failing registry tests** for reservation-before-spawn, spawn failure rollback, admission race, operation removal, shutdown cancellation, and rejection after shutdown.
-- [ ] **Step 2: Write failing managed-runner tests** using an injected launcher for normal output, non-zero exit, NotFound, timeout, dropped caller future, >1 MiB stdout/stderr, and stuck reap.
+- [ ] **Step 2: Write failing managed-runner tests** using an injected launcher for normal output, non-zero exit, NotFound, timeout, dropped caller future, >1 MiB stdout/stderr, and stuck reap. The large-output fake must model OS-pipe backpressure: its child `wait()` remains pending until the stdout/stderr readers have drained/released the simulated finite pipe. Include a short timeout assertion showing that a deliberately sequential wait-before-drain harness stalls, while the managed concurrent runner completes; an in-memory byte vector that lets `wait()` finish immediately is not an adequate regression test.
 
 ```rust
-let launcher = FakeYtdlpLauncher::with_large_output(1_048_577);
+let launcher = FakeYtdlpLauncher::with_backpressured_output(1_048_577);
 let output = runner.run_with(&launcher, args, options).await?;
 assert!(output.stdout.len() > 1_048_576);
 assert!(registry.is_empty().await);
@@ -178,7 +182,7 @@ git commit -m "feat: manage yt-dlp process lifecycle"
 - Modify: `src/lib/external-process-lifecycle-contract.test.ts`
 
 **Interfaces:**
-- Produces: one Tokio JSONL transport for Node-script and bundled binary; `shutdown_sidecar`; state-level request cancellation/taint.
+- Produces: one Tokio JSONL transport for Node-script and bundled binary; `shutdown_sidecar`; state-level request cancellation/taint; a test seam composed from boxed/generic `AsyncRead + Unpin + Send` and `AsyncWrite + Unpin + Send` streams plus a small child-lifecycle adapter (`wait`, force terminate/reap, stdin ownership). Transport tests use `tokio::io::duplex` and a fake child whose EOF/exit completion is explicitly controlled.
 - Consumes: admission coordinator, `ProcessTreeGuard`, `hide_console_window`.
 
 - [ ] **Step 1: Add failing launch/path tests** for dev Node command and bundled `current_exe().parent()/gemini-browser-sidecar[.exe]` resolution.
@@ -219,7 +223,7 @@ git commit -m "refactor: own bundled sidecar with Tokio"
 - Consumes: admission coordinator and `ProcessTreeGuard::assign_std`.
 
 - [ ] **Step 1: Add failing unit tests** with an injected std-child adapter for spawn failure, assignment failure cleanup, explicit shutdown kill/wait once, Drop fallback, and delegated-child exit detection.
-- [ ] **Step 2: Extend source contracts** requiring `spawn_blocking` around spawn/assign and kill/wait, and forbidding termination of Chrome not held by `GeminiBrowserState`.
+- [ ] **Step 2: Extend source contracts** requiring `spawn_blocking` around spawn/assign and kill/wait. Make the ownership rule mechanically checkable by forbidding broad termination/enumeration mechanisms in `cdp_chrome.rs`: `taskkill`, `CreateToolhelp32Snapshot`, `Process32First`, `Process32Next`, and `sysinfo`. Cleanup may act only through the child/process-tree handle stored in `GeminiBrowserState`.
 - [ ] **Step 3: Run RED.**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml gemini_browser::cdp_chrome -- --nocapture`
@@ -246,11 +250,11 @@ git commit -m "feat: manage CDP Chrome lifecycle"
 - Modify: `src/lib/external-process-lifecycle-contract.test.ts`
 
 **Interfaces:**
-- Produces: `handle_exit_requested`; concurrent subsystem cleanup; OS-thread watchdog.
+- Produces: `handle_exit_requested`; concurrent subsystem cleanup; OS-thread watchdog; a structured sanitized shutdown-warning helper carrying only `operation_id` and a static `stage`.
 - Consumes: YouTube registry shutdown, Gemini sidecar shutdown, Chrome shutdown.
 
 - [ ] **Step 1: Add failing coordinator integration tests** for concurrent subsystem start, shared three-second deadline, force phase, subsystem error isolation, first exit-code preservation, one cleanup task, and OS-thread watchdog callback.
-- [ ] **Step 2: Add failing source contract** requiring `RunEvent::ExitRequested`, `prevent_exit`, original `code`, and no terminal `.run(...).expect(...)` shortcut.
+- [ ] **Step 2: Add failing source contract** requiring `RunEvent::ExitRequested`, `prevent_exit`, original `code`, and no terminal `.run(...).expect(...)` shortcut. Also require all lifecycle cleanup warnings to go through the structured helper whose payload contains only `operation_id` and static `stage`; source-contract fixtures must reject warning formatting that includes arguments, cookies, prompts, stdout/stderr, profile directories, executable paths, or raw child errors. Normalize CRLF before these assertions.
 - [ ] **Step 3: Run RED.**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml external_process -- --nocapture`
@@ -304,7 +308,7 @@ Expected: PASS, bundled sidecar remains beside the release executable.
 
 - [ ] **Step 5: Verify yt-dlp lifecycle.** Start a long operation, cancel it, repeat and close Extractum, capture owned PIDs before action, and confirm direct process plus post-assignment test descendants terminate. Verify timeout errors remain unchanged.
 - [ ] **Step 6: Verify sidecar lifecycle.** Launch the packaged binary directly through Extractum, close with idle sidecar, and confirm Stop ACK → stdin EOF → normal exit with no force warning. Repeat with a deliberately stalled/tainted request and confirm bounded force cleanup.
-- [ ] **Step 7: Verify Chrome and app exit.** Start Extractum-owned CDP Chrome, close app, verify owned process cleanup and unrelated Chrome survival. Check empty-state exit, original nonzero exit-code preservation, normal ≈3-second target, and ≈4-second watchdog cap.
+- [ ] **Step 7: Verify Chrome and app exit.** Start Extractum-owned CDP Chrome, close app, verify owned process cleanup and unrelated Chrome survival. Check empty-state exit, normal ≈3-second target, and ≈4-second watchdog cap. Preserve a nonzero requested exit code through the injected exit callback in Task 6 automated tests; no live GUI trigger is required.
 - [ ] **Step 8: Verify Windows crash containment.** Force-terminate Extractum while an assigned OS test tree is active; confirm descendants created after assignment terminate. Record pre-assignment limitation rather than claiming atomic containment.
 - [ ] **Step 9: Record exact commands/results and commit.**
 
