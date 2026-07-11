@@ -9,14 +9,16 @@ npm.cmd run tauri build -- --no-bundle --features csp-verification
 ```
 
 Result: completed successfully (exit code 0) and produced
-`src-tauri/target/release/extractum.exe`. The build emitted 11 pre-existing Rust
-warnings.
+`src-tauri/target/release/extractum.exe`. The build emitted 11 Rust warnings.
+
+Release automation was unavailable because the automation bridge is gated by
+`#[cfg(dev)]`; the GUI evidence below is user-observed.
 
 ## Manual release-GUI observations
 
 The release executable was launched from
 `src-tauri/target/release/extractum.exe`. The user manually exercised each path
-and reported that "there is no window" for all of them. This is user-observed
+and reported `окна нет` ("there is no window") for all of them. This is user-observed
 desktop evidence, not automation evidence.
 
 | Path | User observation |
