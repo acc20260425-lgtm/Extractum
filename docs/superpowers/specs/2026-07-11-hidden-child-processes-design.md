@@ -1,7 +1,7 @@
 # Hidden Child Processes on Windows Design
 
 **Date:** 2026-07-11  
-**Status:** revised after design review; awaiting renewed approval
+**Status:** approved for implementation planning
 
 ## Problem
 
