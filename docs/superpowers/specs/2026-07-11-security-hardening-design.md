@@ -113,26 +113,29 @@ test verifies that hydration actually succeeds.
 Create `src-tauri/tauri.mcp.conf.json`, merged through Tauri CLI `--config` for
 development only. It:
 
-- sets `app.withGlobalTauri` to `true`;
-- defines `app.security.devCsp` with the base CSP restrictions;
-- adds only the Vite HMR WebSocket connection needed by the local dev server,
-  currently `ws://localhost:1421`;
-- does not add `unsafe-eval` or remote origins.
+- sets only `app.withGlobalTauri` to `true`;
+- does not override production CSP or add network origins.
 
-When `devCsp` is absent, Tauri can also apply the base CSP during development.
-The explicit development policy makes the HMR exception visible, but a Vite
-session is not proof that compile-time CSP modification and bundled asset
-loading work in the production protocol.
+Desktop `tauri dev` loads `devUrl` directly as an external HTTP page from Vite.
+Source inspection of the locked Tauri `2.10.3` implementation confirms that
+`devCsp` is selected internally but is not injected into this external
+response; dev-server proxying is enabled only for mobile. Therefore the MCP
+overlay must not pretend to enforce CSP or contain an HMR WebSocket exception.
 
-The HMR WebSocket endpoint is already configured in `vite.config.js`. A
-regression test must load the Vite configuration with `TAURI_DEV_HOST` set and
-assert that the overlay's WebSocket scheme, host, and port match `server.hmr`,
-so the two configuration files cannot drift silently.
+Vite has two HMR branches, neither of which belongs in the Tauri overlay. The
+normal desktop workflow leaves `TAURI_DEV_HOST` unset, so HMR uses the dev
+server origin on port `1420`. With `TAURI_DEV_HOST` set for host/mobile use,
+Vite explicitly uses that host on port `1421`. Any future development CSP must
+be enforced by the Vite server itself and cover these branches dynamically.
 
 The MCP Bridge permission remains available to the main window only during
 `tauri dev`. Change Rust plugin registration from `cfg(debug_assertions)` to
 `cfg(dev)`. Consequently, `tauri build --debug` remains a normal non-MCP bundle
 with `withGlobalTauri: false`, rather than a partially enabled bridge.
+
+Apply the same `cfg(dev)` boundary to the existing `seed_*` and `clear_*` smoke
+fixture command imports and registrations. They are development tooling and
+must not remain callable from a `tauri build --debug` webview.
 
 ### Window capabilities
 
@@ -199,9 +202,10 @@ The implementation is accepted only if live MCP verification confirms:
 - IPC monitor start, event capture, and stop.
 
 Failure under the production CSP must not be addressed by relaxing production
-policy. Any required exception must be proven necessary and placed only in the
-MCP development overlay. If the bridge requires `unsafe-eval`, implementation
-stops for design review instead of adding it automatically.
+policy without proving the exact bundled application requirement. The MCP
+overlay does not alter CSP. If an enforced development-server CSP is added in a
+future slice and the bridge requires `unsafe-eval`, implementation stops for
+design review instead of adding it automatically.
 
 ## LLM Endpoint Transport Policy
 
@@ -232,8 +236,17 @@ missing base URL to the provider default. For OpenAI-compatible profiles, an
 empty base URL and the explicit current default
 `http://localhost:20128/v1` therefore have the same origin. A provider without
 a configurable endpoint has no URL origin component. If a future release
-changes a provider default, a legacy profile whose endpoint was not persisted
-explicitly must not silently carry its existing key to the new origin.
+changes a provider default, existing keys must remain bound to the origin at
+which they were configured.
+
+The persistence mechanism makes that rule executable: whenever a save creates,
+replaces, or preserves a configured key, it writes the effective normalized
+base URL explicitly instead of storing a blank/default sentinel. During this
+slice, a one-time startup backfill also materializes the current effective base
+URL for every legacy profile that has a configured key but a missing or blank
+endpoint setting. The backfill runs before such profiles can be resolved for a
+request. Profiles without keys may continue to use an implicit provider
+default.
 
 Path-only changes under the same origin do not require a new key. Provider,
 scheme, host, or effective-port changes do.
@@ -273,15 +286,17 @@ Automated coverage must include:
   flag forms, and the `--` delimiter;
 - base config has `withGlobalTauri: false`, a non-null CSP, and asset CSP
   modification enabled;
-- MCP overlay enables the global API and adds only local development access;
-- overlay HMR WebSocket origin matches the resolved Vite HMR configuration;
+- MCP overlay changes only `withGlobalTauri` and contains no CSP/HMR exception;
 - frontend capability contains no SQL permissions;
 - MCP plugin binding is localhost-only;
-- MCP plugin registration is gated by `cfg(dev)`, not `debug_assertions`;
+- source-level contract checks confirm MCP and fixture command imports and
+  registrations use `cfg(dev)`, not `debug_assertions`;
 - remote HTTP is rejected while HTTPS, IPv4 loopback HTTP, and bracketed IPv6
   loopback HTTP are accepted;
 - blank/missing and explicit provider-default endpoints normalize to the same
   credential origin;
+- saves with configured keys materialize their effective base URL;
+- startup backfill materializes legacy keyed profiles before request use;
 - unchanged provider/origin preserves a key;
 - provider, scheme, host, and port changes require a replacement key;
 - path-only changes preserve a key;
@@ -316,11 +331,27 @@ npm.cmd run tauri build -- --no-bundle
 ```
 
 Launch the generated release executable and smoke-test hydration plus the main
-screens: analysis, projects, project library, settings, and diagnostics. The
-test must confirm that navigation and basic interactions work without CSP
-violations and that no MCP Bridge listener is present. This check is required
-because the Vite development server cannot prove that Tauri's compile-time CSP
-asset modification and production asset protocol work correctly.
+screens: analysis, projects, project library, settings, and diagnostics. Confirm
+that navigation and basic interactions work and that no MCP Bridge listener is
+present.
+
+Absence of CSP violations is observed through a separate verification-only
+release-profile build. Add a Cargo feature such as `csp-verification` that
+enables `tauri/devtools`, plus a feature-gated setup hook that opens DevTools.
+Build it with the same production CSP and bundled assets using a config overlay
+that does not modify security policy:
+
+```powershell
+npm.cmd run tauri build -- --no-bundle --features csp-verification --config src-tauri/tauri.csp-verification.conf.json
+```
+
+Inspect the WebView console while repeating the smoke navigation and require no
+`securitypolicyviolation`/CSP refusal messages. Automated config tests must
+prove that this overlay changes only the window's DevTools setting. The normal
+release build remains free of the feature and cannot open DevTools. These
+checks are required because the Vite development server cannot prove that
+Tauri's compile-time CSP asset modification and production asset protocol work
+correctly.
 
 ## Documentation
 
@@ -351,8 +382,11 @@ only by the project `tauri dev` workflow.
   arguments.
 - `npm.cmd run tauri build` uses `withGlobalTauri: false` and the production CSP.
 - `npm.cmd run tauri build -- --debug` does not register the MCP Bridge.
+- `npm.cmd run tauri build -- --debug` exposes none of the development fixture
+  commands gated by `cfg(dev)`.
 - The built release application hydrates and its main screens work under the
-  effective production CSP without CSP violations.
+  effective production CSP; the verification-only DevTools build shows no CSP
+  violations during the same smoke path.
 - MCP Bridge listens only on localhost and passes the defined live smoke checks.
 - The main webview cannot load, select, or execute SQLite through plugin
   permissions.
