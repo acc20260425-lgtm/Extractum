@@ -7,6 +7,7 @@ Specs for shipped or superseded work should move to
 
 Active specs:
 
+- [2026-07-11 External process lifecycle](2026-07-11-external-process-lifecycle-design.md)
 - [2026-06-04 YouTube source specialization](2026-06-04-youtube-source-specialization-design.md)
 - [2026-06-13 Library prototype](2026-06-13-library-prototype-design.md)
 - [2026-06-13 Library source metadata](2026-06-13-library-source-metadata-design.md)
