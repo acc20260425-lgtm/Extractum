@@ -31,7 +31,7 @@ use prompt_packs::{
     preflight_youtube_summary_run, start_youtube_summary_run, update_prompt_pack_run,
     PromptPackRunState,
 };
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 use prompt_packs::{
     clear_prompt_pack_cancellation_smoke_fixture, seed_prompt_pack_cancellation_smoke_fixture,
 };
@@ -73,7 +73,7 @@ use takeout_import::{
     list_takeout_source_import_jobs, run_takeout_export_dc_spike,
     start_takeout_migrated_history_import, start_takeout_source_import, TakeoutImportState,
 };
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 use takeout_import::{
     clear_takeout_cancellation_smoke_fixture, seed_takeout_cancellation_smoke_fixture,
 };
@@ -98,7 +98,7 @@ use youtube::job_commands::{
     cancel_source_job, list_source_jobs, retry_failed_youtube_playlist_videos,
     sync_youtube_playlist_video, sync_youtube_source,
 };
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 use youtube::job_commands::{
     clear_source_job_cancellation_smoke_fixture, seed_source_job_cancellation_smoke_fixture,
 };
@@ -141,7 +141,7 @@ use analysis::{
     resolve_analysis_trace_refs, start_analysis_report, update_analysis_prompt_template,
     update_analysis_source_group, AnalysisState,
 };
-#[cfg(debug_assertions)]
+#[cfg(dev)]
 use analysis::{
     clear_analysis_redesign_fixture_active_runs, clear_analysis_redesign_fixtures,
     seed_analysis_redesign_fixtures,
@@ -177,8 +177,12 @@ pub fn run() {
                 .build(),
         );
 
-    #[cfg(debug_assertions)]
-    let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+    #[cfg(dev)]
+    let builder = builder.plugin(
+        tauri_plugin_mcp_bridge::Builder::new()
+            .bind_address("127.0.0.1")
+            .build(),
+    );
 
     builder
         .setup(|app| {
@@ -251,9 +255,9 @@ pub fn run() {
             get_prompt_pack_stage_artifact,
             get_prompt_pack_validation_findings,
             list_prompt_pack_audit_events,
-            #[cfg(debug_assertions)]
+            #[cfg(dev)]
             seed_prompt_pack_cancellation_smoke_fixture,
-            #[cfg(debug_assertions)]
+            #[cfg(dev)]
             clear_prompt_pack_cancellation_smoke_fixture,
             get_source_identity_repair_status,
             preview_source_identity_repair,
@@ -270,9 +274,9 @@ pub fn run() {
             cancel_takeout_source_import,
             list_takeout_source_import_jobs,
             list_takeout_import_recovery_states,
-            #[cfg(debug_assertions)]
+            #[cfg(dev)]
             seed_takeout_cancellation_smoke_fixture,
-            #[cfg(debug_assertions)]
+            #[cfg(dev)]
             clear_takeout_cancellation_smoke_fixture,
             run_takeout_export_dc_spike,
             list_source_items,
@@ -320,11 +324,11 @@ pub fn run() {
             ask_analysis_run_question,
             start_analysis_report,
             cancel_analysis_run,
-            #[cfg(debug_assertions)]
+            #[cfg(dev)]
             seed_analysis_redesign_fixtures,
-            #[cfg(debug_assertions)]
+            #[cfg(dev)]
             clear_analysis_redesign_fixture_active_runs,
-            #[cfg(debug_assertions)]
+            #[cfg(dev)]
             clear_analysis_redesign_fixtures,
             preview_youtube_source,
             add_youtube_source,
@@ -333,9 +337,9 @@ pub fn run() {
             cancel_source_job,
             list_source_jobs,
             retry_failed_youtube_playlist_videos,
-            #[cfg(debug_assertions)]
+            #[cfg(dev)]
             seed_source_job_cancellation_smoke_fixture,
-            #[cfg(debug_assertions)]
+            #[cfg(dev)]
             clear_source_job_cancellation_smoke_fixture,
             get_youtube_runtime_status,
             list_youtube_source_summaries,
