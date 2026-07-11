@@ -65,6 +65,14 @@ Runtime secrets are intentionally split from repository files:
   `.playwright-mcp`, `.worktrees`, `tmp`, `artifacts`, and `kilo.json` stays
   ignored.
 
+## Tauri security boundary
+
+`npm.cmd run tauri dev` is the MCP-enabled development command. It invokes the repository wrapper, which applies the dev-only MCP overlay. Direct `npx tauri dev` is not an MCP workflow. Production and debug builds do not expose the global Tauri object, MCP, or fixture commands; the bridge binds only to `127.0.0.1` in development.
+
+The frontend receives no SQL permissions. Rust owns database access. LLM credentials remain in OS secure storage and are bound to the provider plus normalized URL origin. Remote plaintext `http://` endpoints are rejected; only HTTPS plus localhost/loopback HTTP is accepted. Loading a keyed legacy profile materializes its effective URL into backend-owned settings and fails closed if the write fails.
+
+To inspect the production CSP, build with `npm.cmd run tauri build -- --no-bundle --features csp-verification`. That verification-only feature enables DevTools; ordinary release builds do not.
+
 Workspace-local live DB backups and validation snapshots are private artifacts
 even when they are ignored by git. Keep them only as long as they are needed
 for debugging or audit evidence, store durable copies outside the repository

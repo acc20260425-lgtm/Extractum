@@ -137,6 +137,12 @@ CDP attach mode connects to a user-controlled Chrome instance:
 
 Security invariant: CDP must remain loopback-only. Valid endpoints are local HTTP base URLs such as `http://127.0.0.1:9222` or `http://localhost:9222`. Reject remote hosts, credentials, non-HTTP schemes, port `0`, paths, query strings, and hashes.
 
+## LLM transport and credential boundary
+
+OpenAI-compatible LLM URLs must use HTTPS unless the host is `localhost` or an IP loopback address. A saved key is scoped to the selected provider and URL origin (scheme, host, effective port); changing scope requires a replacement key or clearing the old one. Path-only URL changes keep the same scope.
+
+When a keyed legacy profile has a blank URL, backend state loading materializes the effective URL and displays it in Settings. If that SQLite write fails, loading fails closed. Run `npm.cmd run tauri dev` for MCP-enabled inspection; direct `npx tauri dev` does not load the MCP overlay. For a production CSP check, build with `--features csp-verification` and inspect the automatically opened DevTools.
+
 Ownership invariant: in CDP mode Extractum owns only the Playwright CDP connection and selected page reference. It must not close the user's Chrome, profile, context, or unrelated tabs.
 
 Operational rule:

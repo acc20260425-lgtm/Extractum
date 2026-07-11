@@ -83,6 +83,15 @@ The settings flow now manages reusable LLM provider profiles:
 - OpenAI-compatible profiles persist a configurable `base_url`, used both for model discovery and live requests;
 - `/settings` can save a profile without activating it, save and activate it, and run a live provider smoke test against the currently edited form.
 
+### Tauri security and MCP development
+
+- Use `npm.cmd run tauri dev` for the supported MCP-enabled development workflow. Direct `npx tauri dev` deliberately does not apply the MCP overlay.
+- Production and `npm.cmd run tauri build -- --debug` keep `withGlobalTauri` disabled; MCP and fixture commands are development-only and bind to `127.0.0.1`.
+- The frontend has no SQL capability. SQLite remains backend-owned.
+- OpenAI-compatible endpoints require HTTPS, except `http://localhost` and loopback IP addresses. A saved API key is bound to its provider and origin; changing either requires replacing or clearing the key.
+- Keyed legacy profiles materialize their effective base URL visibly in Settings. If this materialization cannot be persisted, profile-state loading fails closed. Profiles with no key stay blank; legacy profiles that are never loaded remain dormant until first use.
+- For production CSP inspection only, build with `npm.cmd run tauri build -- --no-bundle --features csp-verification`; the verification build opens DevTools automatically. Do not add `unsafe-eval` or remote CSP origins.
+
 ### Analysis
 
 Analysis currently works on already-synced local data only.

@@ -23,10 +23,12 @@ Use **Chrome MCP** (`mcp__Claude_in_Chrome__*`) to interact:
 ## Mode B — Full Tauri app (native window, release-like)
 
 ```powershell
-Start-Process powershell -ArgumentList "-NoProfile -Command `"cd 'G:\Develop\Extractum'; npx tauri dev`""
+Start-Process powershell -ArgumentList "-NoProfile -Command `"cd 'G:\Develop\Extractum'; npm.cmd run tauri dev`""
 ```
 
 Wait ~30-60s for Rust compilation + Vite. Tauri window opens automatically.
+
+This is the MCP-enabled workflow. Do not use direct `npx tauri dev`: it bypasses the dev-only MCP overlay. Run MCP smoke checks before `npm.cmd run smoke:analysis`; ensure the app and its ports are stopped before that self-managed smoke starts.
 
 Use **Computer Use MCP** (`mcp__computer-use__*`) to interact:
 - `screenshot` → see current state
