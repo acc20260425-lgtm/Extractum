@@ -4,7 +4,7 @@
 
 **Goal:** Restore YouTube previews without remote CSP image origins.
 
-**Architecture:** Rust fetches only allowlisted HTTPS YouTube thumbnail hosts with redirects disabled, validates image magic bytes, and returns typed data-URL results with in-flight dedup only. One Svelte thumbnail component owns a bounded 128-entry success LRU and placeholder/fallback rendering.
+**Architecture:** Rust fetches only allowlisted HTTPS YouTube thumbnail hosts with redirects disabled, validates image magic bytes, and returns typed data-URL results with in-flight dedup and a six-permit fetch semaphore. One Svelte thumbnail component resolves only once visible and uses a module-level 128-entry success LRU.
 
 **Tech Stack:** Tauri/Rust, reqwest, base64, SvelteKit, Vitest.
 
@@ -13,13 +13,13 @@
 - Do not add remote image origins or weaken CSP.
 - Allow only `i.ytimg.com`, `i9.ytimg.com`, `img.youtube.com`, `yt3.ggpht.com` over HTTPS.
 - Disable redirects; validate JPEG/PNG/WebP magic bytes and enforce a 1 MiB response limit.
-- Backend deduplicates only in-flight requests. Frontend keeps at most 128 successful data URLs and terminal validation errors; transient network/HTTP errors are retried later.
+- Backend deduplicates only in-flight requests and permits six fetches concurrently. Frontend keeps at most 128 successful data URLs and terminal validation errors in module-level state; transient network/HTTP errors retry only on the next component mount.
 
 ### Task 1: Backend data URL resolver
 
 **Files:** `src-tauri/src/youtube/thumbnail.rs`, `src-tauri/src/youtube/mod.rs`, `src-tauri/src/lib.rs`.
 
-- [ ] Write RED Rust tests for host/scheme rejection, redirect-disabled client policy, 1 MiB limit, magic-byte rejection, typed terminal/transient errors, and concurrent in-flight dedup.
+- [ ] Write RED Rust tests for host/scheme rejection, redirect-disabled client policy, 1 MiB limit, magic-byte rejection, typed terminal/transient errors, concurrent in-flight dedup, and six-permit fetch limiting.
 - [ ] Implement `YoutubeThumbnailState` and `resolve_youtube_thumbnail(url)` command returning a typed data-URL result; register state/command.
 - [ ] Run focused Rust tests; commit `fix: proxy YouTube thumbnails through memory`.
 
@@ -27,8 +27,8 @@
 
 **Files:** `src/lib/components/youtube-thumbnail.svelte`, `src/lib/youtube-thumbnail.ts`, `src/lib/youtube-thumbnail.test.ts`, thumbnail-owning components.
 
-- [ ] Write RED Vitest tests for a 128-entry success LRU, terminal validation memoization, transient retry, and `url` plus local `fallbackSrc` rendering.
-- [ ] Implement `YoutubeThumbnail` as the only async owner and replace direct remote thumbnail `<img>` usages while passing existing avatar data URLs as `fallbackSrc`.
+- [ ] Write RED Vitest tests for module-level 128-entry success LRU, terminal validation memoization, transient retry on next mount, IntersectionObserver visibility gating, and `url` plus local `fallbackSrc` rendering.
+- [ ] Implement `YoutubeThumbnail` as the only async owner, gated by IntersectionObserver, and replace direct remote thumbnail `<img>` usages while passing existing avatar data URLs as `fallbackSrc`.
 - [ ] Run focused frontend tests; commit `fix: render YouTube previews from backend data URLs`.
 
 ### Task 3: CSP regression verification
