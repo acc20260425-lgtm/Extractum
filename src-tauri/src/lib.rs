@@ -1,6 +1,7 @@
 mod analysis_documents;
 mod apalis_jobs;
 mod archive_read_model;
+mod child_process;
 mod compression;
 mod db;
 mod diagnostics;
