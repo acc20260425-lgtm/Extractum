@@ -131,7 +131,10 @@ impl ExternalProcessShutdownState {
     }
 
     pub(crate) fn complete(&self) {
-        self.0.inner.lock().phase = ShutdownPhase::Completed;
+        let mut admission = self.0.inner.lock();
+        if admission.phase == ShutdownPhase::ShuttingDown {
+            admission.phase = ShutdownPhase::Completed;
+        }
     }
 
     pub(crate) async fn run_cleanup_steps(&self, cleanup_steps: Vec<ShutdownCleanup>) {
@@ -235,9 +238,31 @@ mod tests {
         assert_eq!(state.phase(), ShutdownPhase::Completed);
     }
 
+    #[test]
+    fn completed_coordinator_never_admits_new_work() {
+        let state = ExternalProcessShutdownState::new();
+
+        assert!(state.begin_shutdown(None));
+        state.complete();
+
+        assert_eq!(state.phase(), ShutdownPhase::Completed);
+        assert!(state.try_admit().is_err());
+    }
+
+    #[tokio::test]
+    async fn cleanup_cannot_complete_a_running_coordinator_or_bypass_admission() {
+        let state = ExternalProcessShutdownState::new();
+
+        state.run_cleanup_steps(Vec::new()).await;
+
+        assert_eq!(state.phase(), ShutdownPhase::Running);
+        drop(state.try_admit().expect("running state remains open"));
+    }
+
     #[tokio::test]
     async fn cleanup_steps_start_concurrently_and_continue_after_a_failure() {
         let state = ExternalProcessShutdownState::new();
+        state.begin_shutdown(None);
         let barrier = Arc::new(Barrier::new(2));
         let completed = Arc::new(Mutex::new(Vec::new()));
 
