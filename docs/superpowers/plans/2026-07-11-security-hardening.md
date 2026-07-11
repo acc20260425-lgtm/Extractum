@@ -262,4 +262,3 @@ Expected: PASS with fixture cleanup; it launches and stops its own isolated app.
 git add docs/superpowers/verification/2026-07-11-security-hardening.md
 git commit -m "docs: record security hardening verification"
 ```
-
