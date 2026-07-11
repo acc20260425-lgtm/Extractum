@@ -31,6 +31,7 @@
 - [ ] **Step 1: Write the failing source contract.** Require `mod child_process;`, the named constant, `#[cfg(windows)]`, `creation_flags(CREATE_NO_WINDOW)`, a non-Windows unchanged return path, and the unit assertion. Also assert that `gemini_browser/sidecar.rs` and `gemini_browser/cdp_chrome.rs` do not import this helper.
 
 ```ts
+expect(libSource).toContain("mod child_process;");
 expect(childProcessSource).toContain("pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;");
 expect(childProcessSource).toMatch(/#\[cfg\(windows\)\][\s\S]*creation_flags\(CREATE_NO_WINDOW\)/);
 expect(childProcessSource).toContain("assert_eq!(CREATE_NO_WINDOW, 0x0800_0000)");
@@ -39,7 +40,9 @@ expect(childProcessSource).toContain("assert_eq!(CREATE_NO_WINDOW, 0x0800_0000)"
 - [ ] **Step 2: Run RED.**
 
 Run: `npm.cmd run test -- src/lib/hidden-child-process-contract.test.ts`
-Expected: FAIL because `src-tauri/src/child_process.rs` does not exist.
+Expected: FAIL with a Vite module-resolution error because the raw-imported
+`src-tauri/src/child_process.rs` file does not exist yet. This is the intended
+RED, not a test-infrastructure failure.
 
 - [ ] **Step 3: Implement the minimal helper.**
 
@@ -93,19 +96,25 @@ git commit -m "feat: add hidden Windows child process helper"
 **Interfaces:**
 - Consumes: `crate::child_process::hide_console_window` from Task 1.
 
-- [ ] **Step 1: Extend the failing contract** so each of the three files imports and calls `hide_console_window(&mut command)` before `.output()`, and none calls `creation_flags` directly.
+- [ ] **Step 1: Extend the failing contract** with `test.each` so each of the three files imports and calls `hide_console_window(&mut command)` before `.output()`, and none calls `creation_flags` directly. The string contract checks the import/call shape; the focused Rust tests and `cargo check` remain the authoritative compiler check that the import resolves and the borrow/type usage is valid.
 
 ```ts
-for (const source of [youtubeRuntimeSource, diagnosticsRuntimeSource, ytdlpSource]) {
+test.each([
+  ["youtube runtime", youtubeRuntimeSource],
+  ["diagnostics runtime", diagnosticsRuntimeSource],
+  ["yt-dlp execution", ytdlpSource],
+])("%s hides the child console", (_name, source) => {
+  expect(source).toContain("use crate::child_process::hide_console_window;");
   expect(source).toContain("hide_console_window(&mut command)");
   expect(source).not.toContain("creation_flags(");
-}
+});
 ```
 
 - [ ] **Step 2: Run RED.**
 
 Run: `npm.cmd run test -- src/lib/hidden-child-process-contract.test.ts`
-Expected: FAIL naming all three unmigrated launchers.
+Expected: three separately reported failing cases, one for each unmigrated
+launcher. Partial migration leaves only its remaining cases red.
 
 - [ ] **Step 3: Migrate the three launchers.** Build a mutable command, add the existing arguments, call `hide_console_window`, then preserve the existing `.output()` and timeout/error flow.
 
@@ -124,8 +133,9 @@ Run: `cargo test --manifest-path src-tauri/Cargo.toml diagnostics::runtime -- --
 Run: `cargo test --manifest-path src-tauri/Cargo.toml youtube::ytdlp -- --nocapture`
 Expected: PASS.
 
-- [ ] **Step 5: Run broad Rust verification and commit.**
+- [ ] **Step 5: Run broad Rust and Vitest verification and commit.**
 
+Run: `npm.cmd run test`
 Run: `cargo check --manifest-path src-tauri/Cargo.toml`
 Run: `cargo test --manifest-path src-tauri/Cargo.toml`
 Run: `git diff --check`
