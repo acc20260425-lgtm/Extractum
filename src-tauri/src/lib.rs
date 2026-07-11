@@ -1,3 +1,5 @@
+mod external_process;
+use external_process::ExternalProcessShutdownState;
 mod analysis_documents;
 mod apalis_jobs;
 mod archive_read_model;
@@ -159,6 +161,7 @@ pub fn run() {
     prepare_database().expect("database preparation failed");
 
     let builder = tauri::Builder::default()
+        .manage(ExternalProcessShutdownState::new())
         .manage(TelegramState::new())
         .manage(SourceIngestLocks::new())
         .manage(TakeoutImportState::new())
