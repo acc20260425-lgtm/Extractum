@@ -13,13 +13,13 @@
 - Do not add remote image origins or weaken CSP.
 - Allow only `i.ytimg.com`, `i9.ytimg.com`, `img.youtube.com`, `yt3.ggpht.com` over HTTPS.
 - Disable redirects; validate JPEG/PNG/WebP magic bytes and enforce a 1 MiB response limit.
-- Backend deduplicates only in-flight requests and permits six fetches concurrently. Frontend keeps at most 128 successful data URLs and terminal validation errors in module-level state; transient network/HTTP errors retry only on the next component mount.
+- Backend deduplicates only in-flight requests and permits six fetches concurrently. Frontend keeps successful data URLs and terminal validation errors in the same 128-entry module-level LRU; transient network/HTTP errors retry only on the next component mount.
 
 ### Task 1: Backend data URL resolver
 
 **Files:** `src-tauri/src/youtube/thumbnail.rs`, `src-tauri/src/youtube/mod.rs`, `src-tauri/src/lib.rs`.
 
-- [ ] Write RED Rust tests for host/scheme rejection, redirect-disabled client policy, 1 MiB limit, magic-byte rejection, typed terminal/transient errors, concurrent in-flight dedup, and six-permit fetch limiting.
+- [ ] Write RED Rust tests for host/scheme rejection, redirect-disabled client policy, 1 MiB limit, magic-byte rejection, typed terminal/transient errors, concurrent in-flight dedup, and six-permit fetch limiting. Use a held mock fetcher plus barrier/oneshot signals to measure peak concurrency; do not use sleep-based timing.
 - [ ] Implement `YoutubeThumbnailState` and `resolve_youtube_thumbnail(url)` command returning a typed data-URL result; register state/command.
 - [ ] Run focused Rust tests; commit `fix: proxy YouTube thumbnails through memory`.
 
@@ -27,7 +27,7 @@
 
 **Files:** `src/lib/components/youtube-thumbnail.svelte`, `src/lib/youtube-thumbnail.ts`, `src/lib/youtube-thumbnail.test.ts`, thumbnail-owning components.
 
-- [ ] Write RED Vitest tests for module-level 128-entry success LRU, terminal validation memoization, transient retry on next mount, IntersectionObserver visibility gating, and `url` plus local `fallbackSrc` rendering.
+- [ ] Write RED Vitest tests for module-level 128-entry LRU, terminal validation memoization, transient retry on next mount, IntersectionObserver visibility gating, and `url` plus local `fallbackSrc` rendering. Stub IntersectionObserver in jsdom test setup and manually invoke its callback with `isIntersecting: true`.
 - [ ] Implement `YoutubeThumbnail` as the only async owner, gated by IntersectionObserver, and replace direct remote thumbnail `<img>` usages while passing existing avatar data URLs as `fallbackSrc`.
 - [ ] Run focused frontend tests; commit `fix: render YouTube previews from backend data URLs`.
 
