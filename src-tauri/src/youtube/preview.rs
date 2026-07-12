@@ -116,6 +116,7 @@ pub(crate) async fn fetch_metadata(
         YtdlpRunOptions {
             timeout: YTDLP_PREVIEW_TIMEOUT,
             cookies,
+            cancellation: None,
         },
     )
     .await?;

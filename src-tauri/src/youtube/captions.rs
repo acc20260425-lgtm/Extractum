@@ -51,6 +51,7 @@ pub(crate) async fn fetch_transcript_for_video(
         YtdlpRunOptions {
             timeout: YOUTUBE_CAPTION_DOWNLOAD_TIMEOUT,
             cookies,
+            cancellation: None,
         },
     )
     .await?;

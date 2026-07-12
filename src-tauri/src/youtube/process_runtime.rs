@@ -83,13 +83,19 @@ impl YoutubeProcessRegistry {
 
     pub(crate) async fn cancel_and_wait(&self) {
         self.cancel_all();
-        loop {
+        let wait_for_empty = async {
+          loop {
             let notified = self.inner.empty.notified();
             tokio::pin!(notified);
             notified.as_mut().enable();
             if self.inner.operations.lock().expect("youtube process registry lock").is_empty() { return; }
             notified.await;
-        }
+          }
+        };
+        // A detached reaper retains the child/cookie/guard until it completes,
+        // but application exit must hand off to its watchdog rather than wait
+        // indefinitely for an uncooperative external process.
+        let _ = timeout(REAP_TIMEOUT, wait_for_empty).await;
     }
 
 }
@@ -169,11 +175,37 @@ pub(crate) async fn run_ytdlp_managed(
     timeout_message: String,
     _cookie: Option<CookieLifetimeGuard>,
 ) -> AppResult<(String, String)> {
-    run_ytdlp_managed_with_cookie(registry, shutdown, &SystemYtdlpLauncher, args, timeout_budget, timeout_message, _cookie).await
+    run_ytdlp_managed_with_cancellation(registry, shutdown, args, timeout_budget, timeout_message, _cookie, None).await
+}
+
+pub(crate) async fn run_ytdlp_managed_with_cancellation(
+    registry: &YoutubeProcessRegistry,
+    shutdown: &ExternalProcessShutdownState,
+    args: &[String],
+    timeout_budget: Duration,
+    timeout_message: String,
+    cookie: Option<CookieLifetimeGuard>,
+    cancellation: Option<CancellationToken>,
+) -> AppResult<(String, String)> {
+    run_ytdlp_managed_with_owned_cookie(
+        registry, shutdown, &SystemYtdlpLauncher, args, timeout_budget, timeout_message, cookie, cancellation,
+    ).await
 }
 
 async fn run_ytdlp_managed_with_cookie<L: YtdlpLauncher>(registry: &YoutubeProcessRegistry, shutdown: &ExternalProcessShutdownState, launcher: &L, args: &[String], timeout_budget: Duration, timeout_message: String, cookie: Option<CookieLifetimeGuard>) -> AppResult<(String, String)> {
-    run_ytdlp_managed_with_owned_cookie(registry, shutdown, launcher, args, timeout_budget, timeout_message, cookie).await
+    run_ytdlp_managed_with_owned_cookie(registry, shutdown, launcher, args, timeout_budget, timeout_message, cookie, None).await
+}
+
+async fn run_ytdlp_managed_with_external_cancellation<L: YtdlpLauncher>(
+    registry: &YoutubeProcessRegistry,
+    shutdown: &ExternalProcessShutdownState,
+    launcher: &L,
+    args: &[String],
+    timeout_budget: Duration,
+    timeout_message: String,
+    cancellation: CancellationToken,
+) -> AppResult<(String, String)> {
+    run_ytdlp_managed_with_owned_cookie(registry, shutdown, launcher, args, timeout_budget, timeout_message, None, Some(cancellation)).await
 }
 
 async fn run_ytdlp_managed_with<L: YtdlpLauncher>(
@@ -184,11 +216,11 @@ async fn run_ytdlp_managed_with<L: YtdlpLauncher>(
     timeout_budget: Duration,
     timeout_message: String,
 ) -> AppResult<(String, String)> {
-    run_ytdlp_managed_with_owned_cookie(registry, shutdown, launcher, args, timeout_budget, timeout_message, None).await
+    run_ytdlp_managed_with_owned_cookie(registry, shutdown, launcher, args, timeout_budget, timeout_message, None, None).await
 }
 
 async fn run_ytdlp_managed_with_owned_cookie<L: YtdlpLauncher>(
-    registry: &YoutubeProcessRegistry, shutdown: &ExternalProcessShutdownState, launcher: &L, args: &[String], timeout_budget: Duration, timeout_message: String, cookie: Option<CookieLifetimeGuard>,
+    registry: &YoutubeProcessRegistry, shutdown: &ExternalProcessShutdownState, launcher: &L, args: &[String], timeout_budget: Duration, timeout_message: String, cookie: Option<CookieLifetimeGuard>, external_cancellation: Option<CancellationToken>,
 ) -> AppResult<(String, String)> {
     let permit = shutdown.try_admit().map_err(|_| AppError::network("Application is shutting down".to_string()))?;
     let operation = registry.reserve()?;
@@ -208,7 +240,7 @@ async fn run_ytdlp_managed_with_owned_cookie<L: YtdlpLauncher>(
     let (completed, result) = oneshot::channel();
     tokio::spawn(async move {
         let _ = completed.send(manage_spawned_ytdlp(
-            spawned, operation, cookie, stdout, stderr, cancellation, timeout_budget, timeout_message,
+            spawned, operation, cookie, stdout, stderr, cancellation, external_cancellation.unwrap_or_else(CancellationToken::new), timeout_budget, timeout_message,
         ).await);
     });
     // The managed task now owns the child, process tree, cookie, streams, and
@@ -221,28 +253,32 @@ async fn run_ytdlp_managed_with_owned_cookie<L: YtdlpLauncher>(
 async fn manage_spawned_ytdlp(
     mut spawned: Box<dyn SpawnedYtdlp>, operation: ManagedYtdlpGuard, cookie: Option<CookieLifetimeGuard>,
     stdout: Box<dyn tokio::io::AsyncRead + Unpin + Send>, stderr: Box<dyn tokio::io::AsyncRead + Unpin + Send>,
-    cancellation: CancellationToken, timeout_budget: Duration, timeout_message: String,
+    cancellation: CancellationToken, external_cancellation: CancellationToken, timeout_budget: Duration, timeout_message: String,
 ) -> AppResult<(String, String)> {
-    let stdout_task = tokio::spawn(async move { let mut reader = stdout; let mut data = Vec::new(); reader.read_to_end(&mut data).await.map(|_| data) });
-    let stderr_task = tokio::spawn(async move { let mut reader = stderr; let mut data = Vec::new(); reader.read_to_end(&mut data).await.map(|_| data) });
+    let mut stdout_task = tokio::spawn(async move { let mut reader = stdout; let mut data = Vec::new(); reader.read_to_end(&mut data).await.map(|_| data) });
+    let mut stderr_task = tokio::spawn(async move { let mut reader = stderr; let mut data = Vec::new(); reader.read_to_end(&mut data).await.map(|_| data) });
     enum Outcome { Exited(std::io::Result<std::process::ExitStatus>), Cancelled, TimedOut }
     let outcome = tokio::select! {
         status = spawned.wait() => Outcome::Exited(status),
         _ = cancellation.cancelled() => Outcome::Cancelled,
+        _ = external_cancellation.cancelled() => Outcome::Cancelled,
         _ = tokio::time::sleep(timeout_budget) => Outcome::TimedOut,
     };
     let status = match outcome {
         Outcome::Exited(Ok(status)) => status,
         Outcome::Exited(Err(error)) => {
             let returned = AppError::network(format!("Failed to run yt-dlp: {error}"));
+            stdout_task.abort(); stderr_task.abort();
             if terminate_and_reap(&mut *spawned).await.is_err() { detach_owned_reap(spawned, cookie, operation); }
             return Err(returned);
         }
         Outcome::Cancelled => {
+            stdout_task.abort(); stderr_task.abort();
             if let Err(_) = terminate_and_reap(&mut *spawned).await { detach_owned_reap(spawned, cookie, operation); return Err(AppError::network("yt-dlp operation cancelled".to_string())); }
             return Err(AppError::network("yt-dlp operation cancelled".to_string()));
         }
         Outcome::TimedOut => {
+            stdout_task.abort(); stderr_task.abort();
             if let Err(_) = terminate_and_reap(&mut *spawned).await { detach_owned_reap(spawned, cookie, operation); return Err(AppError::network(timeout_message)); }
             return Err(AppError::network(timeout_message));
         }
@@ -286,7 +322,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{detach_reap_with_cookie, detach_cookie_for_test, drain_output_while_waiting, run_ytdlp_managed_with, run_ytdlp_managed_with_cookie, CookieLifetimeGuard, SpawnedYtdlp, YtdlpLauncher, YoutubeProcessRegistry};
+    use super::{detach_reap_with_cookie, detach_cookie_for_test, drain_output_while_waiting, run_ytdlp_managed_with, run_ytdlp_managed_with_cookie, run_ytdlp_managed_with_external_cancellation, CookieLifetimeGuard, SpawnedYtdlp, YtdlpLauncher, YoutubeProcessRegistry};
     use crate::error::AppErrorKind;
     use crate::external_process::ExternalProcessShutdownState;
     use std::future::Future;
@@ -425,6 +461,41 @@ mod tests {
         tokio::time::timeout(Duration::from_millis(200), reap_started.notified()).await.expect("shutdown cancellation reaps child");
         release.notify_waiters();
         tokio::time::timeout(Duration::from_millis(200), async { while !registry.is_empty().await { tokio::task::yield_now().await; } }).await.expect("reaped operation removed");
+    }
+
+    #[tokio::test]
+    async fn external_source_job_cancellation_reaps_its_managed_operation() {
+        let (stdout, _) = tokio::io::duplex(16);
+        let (stderr, _) = tokio::io::duplex(16);
+        let started = Arc::new(Notify::new());
+        let reap_started = Arc::new(Notify::new());
+        let release = Arc::new(Notify::new());
+        let launcher = Arc::new(FakeYtdlpLauncher { child: Mutex::new(Some(Box::new(CallerDroppedChild {
+            stdout: Some(stdout), stderr: Some(stderr), started: started.clone(),
+            reap_started: reap_started.clone(), release: release.clone(),
+        }))) });
+        let registry = Arc::new(YoutubeProcessRegistry::new());
+        let shutdown = Arc::new(ExternalProcessShutdownState::new());
+        let source_job_cancellation = tokio_util::sync::CancellationToken::new();
+        let run = tokio::spawn({
+            let launcher = launcher.clone();
+            let registry = registry.clone();
+            let shutdown = shutdown.clone();
+            let source_job_cancellation = source_job_cancellation.clone();
+            async move {
+                run_ytdlp_managed_with_external_cancellation(
+                    &registry, &shutdown, launcher.as_ref(), &[], Duration::from_secs(30),
+                    "timeout".to_string(), source_job_cancellation,
+                ).await
+            }
+        });
+        tokio::time::timeout(Duration::from_millis(200), started.notified()).await.expect("child starts");
+        source_job_cancellation.cancel();
+        tokio::time::timeout(Duration::from_millis(200), reap_started.notified()).await.expect("source cancellation starts reaping");
+        release.notify_waiters();
+        let error = run.await.expect("managed task joins").expect_err("source cancellation returns cancellation error");
+        assert_eq!(error.kind, AppErrorKind::Network);
+        assert!(registry.is_empty().await);
     }
 
     impl SpawnedYtdlp for StuckReapChild {

@@ -677,8 +677,9 @@ async fn run_source_job_steps(
             job.message = Some("Refreshing YouTube metadata.".to_string());
         })
         .await;
-        run_source_job_step_with_cancel(
+        run_source_job_step_with_cancel_and_processes(
             cancellation_token.clone(),
+            handle.state::<YoutubeProcessRegistry>().inner().clone(),
             sync_youtube_metadata(handle, sync_source_id),
         )
         .await?;
@@ -693,8 +694,9 @@ async fn run_source_job_steps(
             job.message = Some("Syncing YouTube transcript.".to_string());
         })
         .await;
-        run_source_job_step_with_cancel(
+        run_source_job_step_with_cancel_and_processes(
             cancellation_token.clone(),
+            handle.state::<YoutubeProcessRegistry>().inner().clone(),
             sync_youtube_transcript(handle, sync_source_id),
         )
         .await?;
@@ -705,8 +707,9 @@ async fn run_source_job_steps(
         })
         .await;
         warnings.extend(
-            run_source_job_step_with_cancel(
+            run_source_job_step_with_cancel_and_processes(
                 cancellation_token.clone(),
+                handle.state::<YoutubeProcessRegistry>().inner().clone(),
                 sync_youtube_comments(handle, sync_source_id),
             )
             .await?,
@@ -734,6 +737,32 @@ where
     tokio::select! {
         result = future => result,
         _ = cancellation_token.cancelled() => Err(AppError::validation("Source job cancelled")),
+    }
+}
+
+async fn run_source_job_step_with_cancel_and_processes<Fut, T>(
+    cancellation_token: Option<CancellationToken>,
+    registry: YoutubeProcessRegistry,
+    future: Fut,
+) -> AppResult<T>
+where
+    Fut: Future<Output = AppResult<T>>,
+{
+    let Some(cancellation_token) = cancellation_token else {
+        return future.await;
+    };
+
+    if cancellation_token.is_cancelled() {
+        registry.cancel_all();
+        return Err(AppError::validation("Source job cancelled"));
+    }
+
+    tokio::select! {
+        result = future => result,
+        _ = cancellation_token.cancelled() => {
+            registry.cancel_all();
+            Err(AppError::validation("Source job cancelled"))
+        },
     }
 }
 

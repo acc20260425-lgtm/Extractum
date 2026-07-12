@@ -32,6 +32,7 @@ pub(crate) async fn fetch_video_metadata(
         YtdlpRunOptions {
             timeout: YOUTUBE_METADATA_TIMEOUT,
             cookies,
+            cancellation: None,
         },
     )
     .await?;
@@ -106,6 +107,7 @@ pub(crate) async fn fetch_playlist_metadata_page(
         YtdlpRunOptions {
             timeout: YOUTUBE_METADATA_TIMEOUT,
             cookies,
+            cancellation: None,
         },
     )
     .await?;

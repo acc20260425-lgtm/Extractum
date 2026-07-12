@@ -3,11 +3,12 @@ use std::path::Path;
 use std::time::Duration;
 
 use tempfile::NamedTempFile;
+use tokio_util::sync::CancellationToken;
 use crate::error::{AppError, AppResult};
 use crate::external_process::ExternalProcessShutdownState;
 
 use super::cookies::validate_netscape_cookie_file;
-use super::process_runtime::{run_ytdlp_managed, CookieLifetimeGuard, YoutubeProcessRegistry};
+use super::process_runtime::{run_ytdlp_managed_with_cancellation, CookieLifetimeGuard, YoutubeProcessRegistry};
 
 pub(crate) const YTDLP_PREVIEW_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -20,6 +21,7 @@ pub(crate) struct YtdlpOutput {
 pub(crate) struct YtdlpRunOptions {
     pub(crate) timeout: Duration,
     pub(crate) cookies: Option<String>,
+    pub(crate) cancellation: Option<CancellationToken>,
 }
 
 #[allow(dead_code)]
@@ -35,6 +37,7 @@ pub(crate) async fn run_ytdlp(
         YtdlpRunOptions {
             timeout: YTDLP_PREVIEW_TIMEOUT,
             cookies: None,
+            cancellation: None,
         },
     )
     .await
@@ -66,8 +69,8 @@ pub(crate) async fn run_ytdlp_with_options(
     let command_args = ytdlp_command_args(args, cookie_file.as_ref().map(|file| file.path()));
     let cookie_guard = cookie_file.map(CookieLifetimeGuard::new);
 
-    let (stdout, stderr) = run_ytdlp_managed(
-        registry, shutdown, &command_args, options.timeout, timeout_message(options.timeout), cookie_guard,
+    let (stdout, stderr) = run_ytdlp_managed_with_cancellation(
+        registry, shutdown, &command_args, options.timeout, timeout_message(options.timeout), cookie_guard, options.cancellation,
     ).await?;
 
     Ok(YtdlpOutput { stdout, stderr })

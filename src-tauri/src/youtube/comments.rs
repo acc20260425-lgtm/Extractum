@@ -33,6 +33,7 @@ pub(crate) async fn fetch_comments_for_video(
         YtdlpRunOptions {
             timeout: YOUTUBE_COMMENTS_FETCH_TIMEOUT,
             cookies,
+            cancellation: None,
         },
     )
     .await?;
