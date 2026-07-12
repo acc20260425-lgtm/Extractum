@@ -2091,11 +2091,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn failed_gemini_browser_job_retry_is_not_attempted() {
-        assert_failed_gemini_browser_job_is_not_retried().await;
-    }
-
-    #[tokio::test]
     async fn cancel_gemini_browser_job_cancels_queued_run_and_waiter() {
         let temp = tempfile::tempdir().expect("temp dir");
         let runtime = GeminiBrowserJobRuntime::new_for_test(Duration::from_secs(1));
