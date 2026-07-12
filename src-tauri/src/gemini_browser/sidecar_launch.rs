@@ -14,6 +14,20 @@ pub(crate) enum GeminiBrowserBuildProfile {
 
 pub(crate) const GEMINI_BROWSER_SIDECAR_NAME: &str = "gemini-browser-sidecar";
 
+pub(crate) fn bundled_sidecar_path(executable: &Path) -> PathBuf {
+    let directory = executable.parent().unwrap_or_else(|| Path::new("."));
+    let filename = if cfg!(windows) {
+        format!("{GEMINI_BROWSER_SIDECAR_NAME}.exe")
+    } else {
+        GEMINI_BROWSER_SIDECAR_NAME.to_string()
+    };
+    directory.join(filename)
+}
+
+pub(crate) fn bundled_sidecar_path_from_current_exe() -> std::io::Result<PathBuf> {
+    std::env::current_exe().map(|executable| bundled_sidecar_path(&executable))
+}
+
 pub(crate) fn dev_sidecar_script(repo_root: &Path) -> PathBuf {
     repo_root
         .join("sidecars")
@@ -147,6 +161,14 @@ mod tests {
             GeminiBrowserSidecarLaunch::Bundled {
                 name: "gemini-browser-sidecar".to_string()
             }
+        );
+    }
+
+    #[test]
+    fn bundled_sidecar_path_is_beside_the_packaged_executable() {
+        assert_eq!(
+            bundled_sidecar_path(Path::new("C:/Extractum/extractum.exe")),
+            PathBuf::from("C:/Extractum/gemini-browser-sidecar.exe"),
         );
     }
 }

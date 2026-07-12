@@ -13,6 +13,7 @@ use super::{
 pub struct GeminiBrowserState {
     active_run_id: Mutex<Option<String>>,
     cancellation: Mutex<Option<CancellationToken>>,
+    sidecar_tainted: Mutex<bool>,
     sidecar: Mutex<Option<super::sidecar::GeminiBrowserSidecarProcess>>,
     cdp_chrome: Mutex<Option<super::cdp_chrome::ChromeCdpProcess>>,
     status_snapshot: RwLock<Option<GeminiBrowserProviderStatus>>,
@@ -168,6 +169,7 @@ impl GeminiBrowserState {
         *self.active_run_id.lock().await = Some(run_id);
         let token = CancellationToken::new();
         *self.cancellation.lock().await = Some(token.clone());
+        *self.sidecar_tainted.lock().await = false;
         token
     }
 
@@ -182,10 +184,27 @@ impl GeminiBrowserState {
     pub async fn request_stop(&self) -> bool {
         if let Some(token) = self.cancellation.lock().await.as_ref() {
             token.cancel();
+            *self.sidecar_tainted.lock().await = true;
             true
         } else {
             false
         }
+    }
+
+    pub(crate) async fn cancellation_token(&self) -> Option<CancellationToken> {
+        self.cancellation.lock().await.clone()
+    }
+
+    pub(crate) async fn mark_sidecar_tainted(&self) {
+        *self.sidecar_tainted.lock().await = true;
+    }
+
+    pub(crate) async fn sidecar_tainted(&self) -> bool {
+        *self.sidecar_tainted.lock().await
+    }
+
+    pub(crate) async fn clear_sidecar_taint(&self) {
+        *self.sidecar_tainted.lock().await = false;
     }
 
     pub(crate) async fn sidecar(
@@ -215,6 +234,16 @@ mod tests {
         assert!(token.is_cancelled());
         state.finish_run("run-1").await;
         assert_eq!(state.active_run_id().await, None);
+    }
+
+    #[tokio::test]
+    async fn cancelled_run_marks_the_sidecar_transport_tainted() {
+        let state = GeminiBrowserState::new();
+        let token = state.start_run("run-1".to_string()).await;
+        assert!(state.request_stop().await);
+        assert!(token.is_cancelled());
+        assert!(state.cancellation_token().await.expect("active token").is_cancelled());
+        assert!(state.sidecar_tainted().await);
     }
 
     #[test]

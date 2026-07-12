@@ -1,19 +1,18 @@
-use std::{path::PathBuf, process::Stdio};
+use std::{path::PathBuf, process::Stdio, time::Duration};
 
 use serde::Deserialize;
-use tauri::AppHandle;
-use tauri_plugin_shell::{
-    process::{CommandChild, CommandEvent},
-    ShellExt,
-};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin, ChildStdout, Command};
+use tauri::{AppHandle, Manager};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::process::Command;
+use tokio::process::{Child, ChildStdin, ChildStdout};
 use tokio::runtime::Handle;
+use tokio::time::timeout;
 
 use crate::error::{AppError, AppResult};
+use crate::{external_process::ExternalProcessShutdownState, process_tree::ProcessTreeGuard};
 
 use super::sidecar_launch::{
-    resolve_launch_mode, GeminiBrowserBuildProfile, GeminiBrowserSidecarLaunch,
+    bundled_sidecar_path_from_current_exe, resolve_launch_mode, GeminiBrowserBuildProfile, GeminiBrowserSidecarLaunch,
 };
 use super::{
     GeminiBrowserProviderConfig, GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind,
@@ -31,13 +30,9 @@ struct SidecarLine {
 enum GeminiBrowserSidecarTransport {
     Node {
         child: Option<Child>,
-        stdin: ChildStdin,
+        stdin: Option<ChildStdin>,
         stdout: BufReader<ChildStdout>,
-    },
-    Shell {
-        child: Option<CommandChild>,
-        rx: tauri::async_runtime::Receiver<CommandEvent>,
-        stdout_buffer: String,
+        process_tree: ProcessTreeGuard,
     },
 }
 
@@ -76,44 +71,55 @@ impl GeminiBrowserSidecarProcess {
             dev_script.exists(),
         ) {
             GeminiBrowserSidecarLaunch::DevNodeScript { node, script } => {
-                Self::spawn_node_script(node, script).await
+                Self::spawn_node_script(handle, node, script).await
             }
-            GeminiBrowserSidecarLaunch::Bundled { name } => Self::spawn_bundled(handle, name).await,
+            GeminiBrowserSidecarLaunch::Bundled { .. } => Self::spawn_bundled(handle).await,
         }
     }
 
-    async fn spawn_node_script(node: String, script_path: PathBuf) -> AppResult<Self> {
+    async fn spawn_node_script(handle: &AppHandle, node: String, script_path: PathBuf) -> AppResult<Self> {
         let child = Command::new(node)
             .arg(script_path)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|error| {
                 AppError::internal(format!("Failed to start Gemini browser sidecar: {error}"))
             })?;
-        Self::from_node_child(child)
+        Self::install_node_child(handle, child).await
     }
 
-    async fn spawn_bundled(handle: &AppHandle, name: String) -> AppResult<Self> {
-        let command = handle.shell().sidecar(name).map_err(|error| {
-            AppError::internal(format!("Gemini sidecar bundle is unavailable: {error}"))
-        })?;
-        let (rx, child) = command.spawn().map_err(|error| {
+    async fn spawn_bundled(handle: &AppHandle) -> AppResult<Self> {
+        let path = bundled_sidecar_path_from_current_exe()
+            .map_err(|error| AppError::internal(format!("Gemini sidecar bundle is unavailable: {error}")))?;
+        let mut command = Command::new(path);
+        command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        crate::child_process::hide_console_window(&mut command);
+        let child = command.spawn().map_err(|error| {
             AppError::internal(format!("Failed to start bundled Gemini sidecar: {error}"))
         })?;
-
-        Ok(Self {
-            transport: GeminiBrowserSidecarTransport::Shell {
-                child: Some(child),
-                rx,
-                stdout_buffer: String::new(),
-            },
-            next_id: 1,
-        })
+        Self::install_node_child(handle, child).await
     }
 
-    fn from_node_child(mut child: Child) -> AppResult<Self> {
+    async fn install_node_child(handle: &AppHandle, mut child: Child) -> AppResult<Self> {
+        let shutdown = handle
+            .state::<ExternalProcessShutdownState>()
+            .inner()
+            .clone();
+        let _admission = shutdown
+            .try_admit()
+            .map_err(|_| AppError::internal("Gemini browser sidecar is shutting down"))?;
+        let process_tree = ProcessTreeGuard::new()
+            .map_err(|_| AppError::internal("Failed to contain Gemini browser sidecar"))?;
+        if process_tree.assign_tokio(&child).is_err() {
+            let _ = child.kill().await;
+            return Err(AppError::internal("Failed to contain Gemini browser sidecar"));
+        }
+        Self::from_node_child(child, process_tree)
+    }
+
+    fn from_node_child(mut child: Child, process_tree: ProcessTreeGuard) -> AppResult<Self> {
         let stdin = child
             .stdin
             .take()
@@ -122,11 +128,17 @@ impl GeminiBrowserSidecarProcess {
             .stdout
             .take()
             .ok_or_else(|| AppError::internal("Gemini browser sidecar stdout was unavailable"))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| AppError::internal("Gemini browser sidecar stderr was unavailable"))?;
+        tokio::spawn(drain_sidecar_stderr(stderr));
         Ok(Self {
             transport: GeminiBrowserSidecarTransport::Node {
                 child: Some(child),
-                stdin,
+                stdin: Some(stdin),
                 stdout: BufReader::new(stdout),
+                process_tree,
             },
             next_id: 1,
         })
@@ -141,17 +153,22 @@ impl GeminiBrowserSidecarProcess {
 
         match &mut self.transport {
             GeminiBrowserSidecarTransport::Node { stdin, stdout, .. } => {
+                let stdin = stdin.as_mut().ok_or_else(|| {
+                    AppError::internal("Gemini browser sidecar stdin was already closed")
+                })?;
                 request_node(stdin, stdout, &id, command).await
             }
-            GeminiBrowserSidecarTransport::Shell {
-                child,
-                rx,
-                stdout_buffer,
-            } => {
-                let child = child.as_mut().ok_or_else(|| {
-                    AppError::internal("Bundled Gemini browser sidecar was already stopped")
-                })?;
-                request_shell(child, rx, stdout_buffer, &id, command).await
+        }
+    }
+
+    async fn graceful_shutdown(mut self) {
+        let _ = self.request(GeminiBrowserSidecarCommand::Stop).await;
+        let GeminiBrowserSidecarTransport::Node { child, stdin, process_tree, .. } = &mut self.transport;
+        stdin.take();
+        if let Some(child) = child.as_mut() {
+            if timeout(Duration::from_secs(1), child.wait()).await.is_err() {
+                let _ = process_tree.terminate();
+                let _ = child.kill().await;
             }
         }
     }
@@ -160,7 +177,8 @@ impl GeminiBrowserSidecarProcess {
 impl Drop for GeminiBrowserSidecarProcess {
     fn drop(&mut self) {
         match &mut self.transport {
-            GeminiBrowserSidecarTransport::Node { child, .. } => {
+            GeminiBrowserSidecarTransport::Node { child, process_tree, .. } => {
+                let _ = process_tree.terminate();
                 if let Some(mut child) = child.take() {
                     let _ = child.start_kill();
                     if let Some(handle) = Handle::try_current().ok() {
@@ -174,11 +192,6 @@ impl Drop for GeminiBrowserSidecarProcess {
                     }
                 }
             }
-            GeminiBrowserSidecarTransport::Shell { child, .. } => {
-                if let Some(child) = child.take() {
-                    let _ = child.kill();
-                }
-            }
         }
     }
 }
@@ -189,6 +202,19 @@ async fn request_node(
     id: &str,
     command: GeminiBrowserSidecarCommand,
 ) -> AppResult<GeminiBrowserSidecarResponse> {
+    request_jsonl(stdin, stdout, id, command).await
+}
+
+async fn request_jsonl<W, R>(
+    stdin: &mut W,
+    stdout: &mut BufReader<R>,
+    id: &str,
+    command: GeminiBrowserSidecarCommand,
+) -> AppResult<GeminiBrowserSidecarResponse>
+where
+    W: AsyncWrite + Unpin + Send,
+    R: AsyncRead + Unpin + Send,
+{
     let envelope = GeminiBrowserSidecarEnvelope {
         id: id.to_string(),
         command,
@@ -222,55 +248,12 @@ async fn request_node(
     }
 }
 
-async fn request_shell(
-    child: &mut CommandChild,
-    rx: &mut tauri::async_runtime::Receiver<CommandEvent>,
-    stdout_buffer: &mut String,
-    id: &str,
-    command: GeminiBrowserSidecarCommand,
-) -> AppResult<GeminiBrowserSidecarResponse> {
-    let envelope = GeminiBrowserSidecarEnvelope {
-        id: id.to_string(),
-        command,
-    };
-    let mut line =
-        serde_json::to_string(&envelope).map_err(|error| AppError::internal(error.to_string()))?;
-    line.push('\n');
-    child.write(line.as_bytes()).map_err(|error| {
-        AppError::internal(format!(
-            "Failed to write bundled Gemini sidecar request: {error}"
-        ))
-    })?;
-
-    while let Some(event) = rx.recv().await {
-        match event {
-            CommandEvent::Stdout(bytes) => {
-                stdout_buffer.push_str(&String::from_utf8_lossy(&bytes));
-                while let Some(line) = take_complete_jsonl_line(stdout_buffer) {
-                    if let Some(response) = decode_sidecar_line_for_request(id, &line)? {
-                        return Ok(response);
-                    }
-                }
-            }
-            CommandEvent::Stderr(_) => {}
-            CommandEvent::Error(message) => {
-                return Err(AppError::internal(format!(
-                    "Bundled Gemini browser sidecar errored: {message}"
-                )));
-            }
-            CommandEvent::Terminated(payload) => {
-                return Err(AppError::internal(format!(
-                    "Bundled Gemini browser sidecar exited without a response: code={:?}",
-                    payload.code
-                )));
-            }
-            _ => {}
-        }
-    }
-
-    Err(AppError::internal(
-        "Bundled Gemini browser sidecar exited without a response",
-    ))
+async fn drain_sidecar_stderr<R>(mut stderr: R)
+where
+    R: AsyncRead + Unpin + Send + 'static,
+{
+    let mut buffer = [0_u8; 8_192];
+    while stderr.read(&mut buffer).await.ok().is_some_and(|read| read > 0) {}
 }
 
 fn decode_sidecar_line(id: &str, response_line: &str) -> AppResult<GeminiBrowserSidecarResponse> {
@@ -314,7 +297,19 @@ async fn request_sidecar(
     let process = sidecar
         .as_mut()
         .ok_or_else(|| AppError::internal("Gemini browser sidecar was not initialized"))?;
-    match process.request(command).await {
+    let response = if let Some(cancellation) = state.cancellation_token().await {
+        tokio::select! {
+            response = process.request(command) => response,
+            _ = cancellation.cancelled() => {
+                state.mark_sidecar_tainted().await;
+                *sidecar = None;
+                return Err(AppError::internal("Gemini browser sidecar request was cancelled"));
+            }
+        }
+    } else {
+        process.request(command).await
+    };
+    match response {
         Ok(GeminiBrowserSidecarResponse::Error { message }) => Err(AppError::internal(message)),
         Ok(response) => Ok(response),
         Err(error) => {
@@ -465,9 +460,15 @@ pub(crate) async fn send_single(
     }
 }
 
-pub(crate) async fn stop(handle: &AppHandle, state: &GeminiBrowserState) -> AppResult<()> {
-    let _ = request_sidecar(handle, state, GeminiBrowserSidecarCommand::Stop).await;
-    *state.sidecar().await = None;
+pub(crate) async fn stop(_handle: &AppHandle, state: &GeminiBrowserState) -> AppResult<()> {
+    let tainted = state.sidecar_tainted().await;
+    let process = state.sidecar().await.take();
+    if !tainted {
+        if let Some(process) = process {
+            process.graceful_shutdown().await;
+        }
+    }
+    state.clear_sidecar_taint().await;
     Ok(())
 }
 
@@ -545,16 +546,42 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn shell_transport_waits_for_complete_jsonl_line_across_stdout_events() {
-        let mut buffer = String::new();
-        buffer.push_str("{\"id\":\"expected\"");
-        assert!(take_complete_jsonl_line(&mut buffer).is_none());
+    async fn jsonl_transport_round_trips_a_duplex_request() {
+        let (client, server) = tokio::io::duplex(1024);
+        let (client_read, mut client_write) = tokio::io::split(client);
+        let (server_read, mut server_write) = tokio::io::split(server);
+        let server = tokio::spawn(async move {
+            let mut lines = BufReader::new(server_read).lines();
+            let request = lines.next_line().await.expect("read request").expect("request line");
+            assert!(request.contains("gemini-sidecar-1"));
+            server_write
+                .write_all(b"{\"id\":\"gemini-sidecar-1\",\"response\":{\"type\":\"ack\"}}\n")
+                .await
+                .expect("write response");
+        });
 
-        buffer.push_str(",\"response\":{\"type\":\"ack\"}}\n");
-        let line = take_complete_jsonl_line(&mut buffer).expect("complete line");
+        let response = request_jsonl(
+            &mut client_write,
+            &mut BufReader::new(client_read),
+            "gemini-sidecar-1",
+            GeminiBrowserSidecarCommand::Stop,
+        )
+        .await
+        .expect("JSONL response");
 
-        let response = decode_sidecar_line("expected", &line).expect("decode response");
+        server.await.expect("sidecar task");
         assert!(matches!(response, GeminiBrowserSidecarResponse::Ack));
+    }
+
+    #[tokio::test]
+    async fn stderr_drain_consumes_sidecar_output_concurrently() {
+        let (mut writer, reader) = tokio::io::duplex(1024);
+        let drain = tokio::spawn(drain_sidecar_stderr(reader));
+
+        writer.write_all(b"sidecar diagnostic\n").await.expect("write stderr");
+        drop(writer);
+
+        drain.await.expect("stderr drain completes");
     }
 
     #[test]

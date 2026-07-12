@@ -20,6 +20,13 @@ pub(crate) struct ProcessTreeGuard {
     termination_state: AtomicU8,
 }
 
+// Windows job handles are kernel objects that may be operated on from any thread.
+// Access to termination is serialized by `termination_state`.
+#[cfg(windows)]
+unsafe impl Send for ProcessTreeGuard {}
+#[cfg(windows)]
+unsafe impl Sync for ProcessTreeGuard {}
+
 #[cfg(windows)]
 impl ProcessTreeGuard {
     pub(crate) fn new() -> anyhow::Result<Self> {
@@ -149,6 +156,13 @@ mod tests {
         thread,
         time::{Duration, SystemTime, UNIX_EPOCH},
     };
+
+    #[test]
+    fn process_tree_guard_can_be_owned_by_async_application_state() {
+        fn assert_send_sync<T: Send + Sync>() {}
+
+        assert_send_sync::<ProcessTreeGuard>();
+    }
 
     fn sleeping_child() -> std::process::Child {
         Command::new("powershell.exe")

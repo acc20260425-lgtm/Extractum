@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import libSource from "../../src-tauri/src/lib.rs?raw";
 import coordinatorSource from "../../src-tauri/src/external_process.rs?raw";
 import processTreeSource from "../../src-tauri/src/process_tree.rs?raw";
+import sidecarSource from "../../src-tauri/src/gemini_browser/sidecar.rs?raw";
+import sidecarLaunchSource from "../../src-tauri/src/gemini_browser/sidecar_launch.rs?raw";
+import cargoSource from "../../src-tauri/Cargo.toml?raw";
+import tauriConfigSource from "../../src-tauri/tauri.conf.json?raw";
 
 const normalized = (source: string) => source.replace(/\r\n/g, "\n");
 
@@ -28,5 +32,21 @@ describe("external process lifecycle contract", () => {
     expect(processTree).toContain("AssignProcessToJobObject");
     expect(processTree).not.toContain("OpenProcess");
     expect(processTree).not.toMatch(/\.pid\s*\(/);
+  });
+
+  it("owns the Gemini sidecar with Tokio rather than the shell plugin", () => {
+    const sidecar = normalized(sidecarSource);
+    const launch = normalized(sidecarLaunchSource);
+    const lib = normalized(libSource);
+
+    expect(sidecar).toContain("tokio::process::Command");
+    expect(sidecar).toContain("hide_console_window");
+    expect(launch).toContain("current_exe");
+    expect(tauriConfigSource).toContain("gemini-browser-sidecar");
+    expect(sidecar).not.toContain("CommandChild");
+    expect(sidecar).not.toContain("CommandEvent");
+    expect(sidecar).not.toContain("request_shell");
+    expect(lib).not.toContain("tauri_plugin_shell");
+    expect(normalized(cargoSource)).not.toContain("tauri-plugin-shell");
   });
 });
