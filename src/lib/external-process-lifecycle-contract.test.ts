@@ -62,4 +62,14 @@ describe("external process lifecycle contract", () => {
     expect(commands).toContain("spawn_blocking");
     expect(cdpChrome).not.toMatch(/taskkill|CreateToolhelp32Snapshot|Process32First|Process32Next|sysinfo/);
   });
+
+  it("coordinates external-process cleanup from the Tauri exit event", () => {
+    const lib = normalized(libSource);
+
+    expect(lib).toContain("RunEvent::ExitRequested");
+    expect(lib).toContain("prevent_exit");
+    expect(lib).toContain("GRACEFUL_SHUTDOWN_TIMEOUT");
+    expect(lib).toContain("SHUTDOWN_WATCHDOG_TIMEOUT");
+    expect(lib).toContain("std::thread::spawn");
+  });
 });

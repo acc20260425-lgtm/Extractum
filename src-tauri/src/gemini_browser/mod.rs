@@ -15,6 +15,8 @@ pub use commands::{
     gemini_bridge_stop,
 };
 pub(crate) use commands::{provider_status, send_single_prompt};
+pub(crate) use cdp_chrome::shutdown_cdp_chrome;
+pub(crate) use sidecar::shutdown_sidecar;
 pub(crate) use jobs::{
     cancel_gemini_browser_job, start_gemini_browser_job_worker, GeminiBrowserJobRuntime,
 };

@@ -186,6 +186,13 @@ pub(crate) fn spawn_chrome_cdp(spec: &ChromeCdpLaunchSpec) -> AppResult<ChromeCd
     })))
 }
 
+pub(crate) async fn shutdown_cdp_chrome(state: &super::GeminiBrowserState) {
+    let process = state.cdp_chrome_process().await.take();
+    if let Some(mut process) = process {
+        let _ = tokio::task::spawn_blocking(move || process.shutdown()).await;
+    }
+}
+
 pub(crate) async fn wait_for_cdp_endpoint(endpoint: &str) -> AppResult<()> {
     wait_for_cdp_endpoint_core(endpoint, CDP_READY_TIMEOUT, CDP_READY_POLL_INTERVAL).await
 }

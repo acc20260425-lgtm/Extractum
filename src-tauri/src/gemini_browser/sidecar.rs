@@ -472,6 +472,10 @@ pub(crate) async fn stop(_handle: &AppHandle, state: &GeminiBrowserState) -> App
     Ok(())
 }
 
+pub(crate) async fn shutdown_sidecar(handle: &AppHandle, state: &GeminiBrowserState) {
+    let _ = stop(handle, state).await;
+}
+
 pub(crate) fn sidecar_unavailable_result(
     request: GeminiBrowserRunRequest,
 ) -> GeminiBrowserRunResult {

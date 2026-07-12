@@ -1,5 +1,5 @@
 mod external_process;
-use external_process::ExternalProcessShutdownState;
+use external_process::{ExternalProcessShutdownState, GRACEFUL_SHUTDOWN_TIMEOUT, SHUTDOWN_WATCHDOG_TIMEOUT};
 mod process_tree;
 mod analysis_documents;
 mod apalis_jobs;
@@ -375,9 +375,25 @@ pub fn run() {
                     api.prevent_exit();
                     let registry = app.state::<YoutubeProcessRegistry>().inner().clone();
                     let handle = app.clone();
+                    let watchdog_shutdown = shutdown.clone();
+                    let watchdog_handle = handle.clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(SHUTDOWN_WATCHDOG_TIMEOUT);
+                        let exit: external_process::ExitCallback =
+                            std::sync::Arc::new(move |code| watchdog_handle.exit(code));
+                        watchdog_shutdown.run_watchdog(&exit);
+                    });
                     tauri::async_runtime::spawn(async move {
                         shutdown.wait_for_startups().await;
-                        registry.cancel_and_wait().await;
+                        let gemini_state = handle.state::<GeminiBrowserState>().inner();
+                        let cleanup = async {
+                            tokio::join!(
+                                registry.cancel_and_wait(),
+                                gemini_browser::shutdown_sidecar(&handle, gemini_state),
+                                gemini_browser::shutdown_cdp_chrome(gemini_state),
+                            );
+                        };
+                        let _ = tokio::time::timeout(GRACEFUL_SHUTDOWN_TIMEOUT, cleanup).await;
                         shutdown.complete();
                         handle.exit(shutdown.exit_code());
                     });
