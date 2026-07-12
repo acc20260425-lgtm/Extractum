@@ -33,6 +33,19 @@ They include line wrapping, import ordering, block layout, and expression
 formatting. Keeping them outstanding adds unrelated noise to future module
 decomposition work.
 
+The repository currently has no CI workflow, hook, package script, or project
+verification command that enforces `cargo fmt --check`. This slice creates a
+manual baseline only; it does not prevent formatting debt from returning.
+
+The formatter used to record the baseline is:
+
+```text
+rustfmt 1.9.0-stable (59807616e1 2026-04-14)
+```
+
+No `rustfmt.toml` or `.rustfmt.toml` exists, so the baseline uses that
+formatter version's default style.
+
 ## Selected Design
 
 Run:
@@ -46,13 +59,14 @@ Do not manually edit, simplify, rename, reorder behavior, or combine this work
 with another refactor.
 
 Commit all formatter output as one isolated `style:` commit. A single commit is
-preferred because the repository-wide formatting gate becomes green only when
-the complete formatter output lands together.
+preferred because it keeps mechanical review and future history filtering
+simple and separates the repository-wide churn from semantic changes.
 
 ## Rejected Alternatives
 
-- Splitting by subsystem would make each diff smaller but leave intermediate
-  commits with a failing repository-wide formatting gate.
+- Splitting by subsystem would make each diff smaller but leave the formatter
+  baseline incomplete across intermediate commits and complicate blame
+  filtering.
 - Formatting only recently touched files would preserve unrelated formatting
   debt and fail to establish a clean baseline.
 - Manually reproducing rustfmt changes would be slower and less reliable than
@@ -66,20 +80,44 @@ Only the 17 listed Rust files may change. No documentation, Cargo manifests,
 lockfiles, migrations, TypeScript, Svelte, JSON, configuration, generated
 assets, or string-value registries may change.
 
-After formatting, compare the actual changed-file set with the allowlist. Any
-extra file stops the slice for investigation. A missing allowlisted file is
-acceptable only if a fresh formatter version no longer changes it; the final
-actual set must still be a subset of the recorded allowlist.
+Before formatting, record `cargo fmt --version` and require the exact version
+shown above. A version mismatch stops the slice before any files are changed;
+formatter policy or toolchain upgrades require a revised design.
+
+After formatting, compare the repo-relative paths from
+`git status --short --untracked-files=all` with the allowlist. Do not compare
+against formatter output because Windows rustfmt paths use the
+`\\?\G:\...` absolute-path form. Any extra changed file stops the slice for
+investigation. A missing allowlisted file is acceptable only if the pinned
+formatter no longer changes it; the final actual set must still be a subset of
+the recorded allowlist.
 
 No value registry update is required because no status, state, kind, mode,
 phase, type, provider, subtype, scope, severity, wire value, or persisted value
 changes.
 
+## Required Follow-Up
+
+The formatting commit hash is known only after this slice completes. A small
+follow-up must:
+
+- choose and add an enforcement mechanism for `cargo fmt --check`—CI when a
+  workflow exists, a repository hook, or an explicit project verification
+  convention—and document the chosen developer command;
+- create `.git-blame-ignore-revs` containing the formatting commit hash;
+- document the optional local command
+  `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
+
+Until that follow-up lands, the clean formatting baseline is not automatically
+enforced. This limitation is accepted for the mechanical cleanup slice.
+
 ## Verification
 
-- Record the pre-change formatter failure and exact 17-file allowlist.
+- Record the exact formatter version, pre-change formatter failure, and
+  17-file allowlist.
 - Run the formatter once without manual edits.
-- Verify that all changed paths are allowlisted Rust files.
+- Use `git status --short --untracked-files=all` to verify that all changed
+  repo-relative paths are allowlisted Rust files.
 - Run `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` and require
   exit 0 with no diff output.
 - Run `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` and
@@ -96,3 +134,5 @@ changes.
 - `cargo check --all-targets` passes with zero warnings.
 - The full Rust test suite passes.
 - The formatting cleanup is committed separately with a `style:` message.
+- The follow-up enforcement and blame-ignore work is explicitly handed off
+  after the style commit hash is known.
