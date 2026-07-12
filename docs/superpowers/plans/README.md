@@ -7,6 +7,7 @@ still useful as execution history. Otherwise, Git history is enough.
 
 Active plans:
 
+- [2026-07-12 YouTube Summary runtime selection](2026-07-12-youtube-summary-runtime-selection.md)
 - [2026-07-11 External process lifecycle](2026-07-11-external-process-lifecycle.md)
 - [2026-06-03 UX/UI improvements](2026-06-03-ux-ui-improvements.md)
 - [2026-06-04 YouTube source specialization](2026-06-04-youtube-source-specialization.md)

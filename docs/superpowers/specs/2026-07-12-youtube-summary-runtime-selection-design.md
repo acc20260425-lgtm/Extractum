@@ -1,6 +1,6 @@
 # YouTube Summary Runtime Selection Design
 
-**Status:** proposed for user review
+**Status:** approved for implementation planning
 
 ## Problem
 
