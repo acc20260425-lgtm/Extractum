@@ -16,10 +16,12 @@ cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 ```
 
 The repository has no CI workflow or shared Git hook. `package.json` exposes
-frontend and aggregate verification commands, while `AGENTS.md` requires
+frontend and aggregate verification commands. The aggregate `verify` pipeline
+already runs frontend tests and checks followed by `cargo check`, `cargo test`,
+and a Git whitespace check, but it does not run rustfmt. `AGENTS.md` requires
 `cargo check` after Rust changes but does not require a formatting check.
-Consequently, the baseline is clean but is not protected by the project's
-normal Rust validation convention.
+Consequently, the baseline is clean but is not protected by either the normal
+Rust validation convention or a full aggregate verification run.
 
 The mechanical style commit also becomes the apparent author of many lines in
 plain `git blame`, even though it changed their layout rather than their
@@ -49,6 +51,12 @@ changes require both `npm.cmd run check:rustfmt` and `cargo check` when no
 Superpowers workflow supplies its own validation steps. This is an explicit
 project verification convention, not an automatic commit or server-side gate.
 
+Add `npm run check:rustfmt` to `scripts/verify.mjs` as a normal aggregate
+verification step before `cargo check`. The aggregate must call the package
+script through its existing `npmStep` helper rather than duplicate the Cargo
+arguments. This makes every full `npm.cmd run verify` exercise the same public
+formatting command documented for focused Rust validation.
+
 Add `.git-blame-ignore-revs` containing the full formatting commit hash and a
 short comment explaining why the revision is ignored. Document this optional,
 per-clone setup command in `AGENTS.md`:
@@ -65,13 +73,15 @@ execute it automatically or modify a developer's local Git configuration.
 The implementation owns only:
 
 - `package.json`;
+- `scripts/verify.mjs`;
 - `AGENTS.md`;
 - `.git-blame-ignore-revs`.
 
-It does not modify Rust source, the aggregate `npm.cmd run verify` pipeline,
-Git hooks, CI workflows, formatter configuration, application behavior, or
-runtime dependencies. It does not update `docs/value-registry.md` because no
-runtime or persisted string value changes.
+It does not modify Rust source, Git hooks, CI workflows, formatter
+configuration, application behavior, or runtime dependencies. The only change
+to the aggregate `npm.cmd run verify` pipeline is inserting the formatting
+check before `cargo check`. It does not update `docs/value-registry.md` because
+no runtime or persisted string value changes.
 
 ## Rejected Alternatives
 
@@ -83,10 +93,9 @@ runtime or persisted string value changes.
   dependency-cache behavior is a separate infrastructure decision.
 - Adding Rust formatting to the existing frontend `check` command would blur
   that command's established Svelte/TypeScript purpose.
-- Adding the check to the full `verify` pipeline would strengthen one optional
-  aggregate path but would not make the Rust-specific developer command or
-  validation convention explicit. That integration can be considered later
-  together with CI.
+- Relying only on the package script and `AGENTS.md` convention would leave the
+  repository's existing aggregate verification pipeline able to pass without
+  checking the Rust formatting baseline.
 - Automatically setting `blame.ignoreRevsFile` would mutate local developer
   configuration without explicit consent.
 
@@ -107,10 +116,23 @@ commits. Neither state changes repository history.
 - Mechanically verify that the full 40-character hash in
   `.git-blame-ignore-revs` resolves to the `style: format rust sources` commit.
 - Run `npm.cmd run check:rustfmt`; require exit 0 and no formatting diff.
+- Prove the command's negative behavior with an intentionally malformed copy
+  of one workspace Rust line: preserve the file's exact original bytes, make a
+  controlled formatting-only edit, require `npm.cmd run check:rustfmt` to exit
+  nonzero and leave those malformed bytes unchanged, then restore the original
+  bytes in an unconditional cleanup step. Confirm the worktree returns exactly
+  to its pre-probe state. Do not use this probe on a pre-existing dirty file.
 - Run `npm.cmd run check`; require the unchanged frontend validation command
   to pass, because `package.json` was edited.
+- Run `npm.cmd run verify`; require its output to include the new
+  `npm run check:rustfmt` step and require the complete aggregate pipeline to
+  pass.
+- Run
+  `git blame --ignore-revs-file .git-blame-ignore-revs -- src-tauri/src/youtube/process_runtime.rs`;
+  require exit 0 and confirm the formatting commit is absent from the emitted
+  attributions. This verifies the ignore file without changing Git config.
 - Run `git diff --check`.
-- Inspect the final diff and require exactly the three scoped files.
+- Inspect the final diff and require exactly the four scoped files.
 - Confirm `git config --get blame.ignoreRevsFile` is not changed by the
   implementation; the optional setup remains a user action.
 
@@ -119,8 +141,12 @@ commits. Neither state changes repository history.
 - `npm.cmd run check:rustfmt` is a documented, check-only project command.
 - `AGENTS.md` requires the Rust formatting check after Rust or Tauri backend
   changes and documents the optional blame configuration command.
+- `npm.cmd run verify` runs the public `check:rustfmt` package script before
+  `cargo check`.
 - `.git-blame-ignore-revs` contains the exact full hash of the isolated style
-  commit.
-- No hook, CI workflow, Rust source, runtime behavior, aggregate verify
-  behavior, or local Git configuration changes.
+  commit and works with Git's command-line `--ignore-revs-file` option.
+- The positive and negative checks prove that `check:rustfmt` detects drift
+  without rewriting the malformed file.
+- No hook, CI workflow, Rust source, runtime behavior, unrelated aggregate
+  verify behavior, or local Git configuration changes.
 - All specified validation commands pass.
