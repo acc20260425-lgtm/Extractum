@@ -101,12 +101,12 @@ Add tests in the existing `migrations.rs` test module:
    table itself, so such a query would correctly fail with `no such table`.
    This deterministically proves the all-or-nothing boundary.
 2. **Concurrent independent-database stress test.** Start multiple tasks at a
-   barrier. Each task creates its own file-backed SQLite database with a pool
-   of five connections, calls `apply_all_migrations_for_test_pool`, verifies
-   that `Jobs` has 14 columns and that the idempotency migration is recorded,
-   then performs a real `apalis-sqlite` enqueue. This exercises the production
-   shape of the previously failing boundary while preserving independent DB
-   paths.
+   barrier on a Tokio multi-thread runtime with four worker threads. Each task
+   creates its own file-backed SQLite database with a pool of five connections,
+   calls `apply_all_migrations_for_test_pool`, verifies that `Jobs` has 14
+   columns and that the idempotency migration is recorded, then performs a real
+   `apalis-sqlite` enqueue. This exercises the multithreaded shape of the
+   previously failing full suite while preserving independent DB paths.
 3. Keep the existing migration checksum, history compatibility, and schema
    tests unchanged.
 

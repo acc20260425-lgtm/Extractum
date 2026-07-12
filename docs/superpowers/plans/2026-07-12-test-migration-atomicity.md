@@ -67,7 +67,7 @@ $commitsBatch = $source -match 'transaction\s*\.commit\(\)\s*\.await'
 "HAS_TRANSACTION=$hasTransaction"
 "TRANSACTION_EXECUTOR_COUNT=$transactionExecutors"
 "COMMITS_BATCH=$commitsBatch"
-if (-not $hasBatchFunction -or -not $hasTransaction -or $transactionExecutors -lt 3 -or -not $commitsBatch) { exit 1 }
+if (-not $hasBatchFunction -or -not $hasTransaction -or $transactionExecutors -ne 3 -or -not $commitsBatch) { exit 1 }
 ```
 
 Expected: exit 1 with both booleans `False`, executor count 0, and commit
@@ -132,7 +132,7 @@ async fn test_migration_batch_rolls_back_schema_and_history_together() {
     assert_eq!(visible_tables, 0);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn concurrent_test_migrations_publish_complete_apalis_schemas() {
     const DATABASE_COUNT: usize = 16;
 
@@ -314,10 +314,14 @@ Run:
 ```powershell
 $failedRuns = @()
 1..10 | ForEach-Object {
-    & cargo test --manifest-path src-tauri/Cargo.toml --lib `
+    $output = & cargo test --manifest-path src-tauri/Cargo.toml --lib `
         migrations::tests::concurrent_test_migrations_publish_complete_apalis_schemas `
-        -- --exact *> $null
-    if ($LASTEXITCODE -ne 0) { $failedRuns += $_ }
+        -- --exact 2>&1
+    $cargoExit = $LASTEXITCODE
+    if ($cargoExit -ne 0) {
+        $output
+        $failedRuns += $_
+    }
 }
 "STRESS_FAILURE_COUNT=$($failedRuns.Count)"
 "STRESS_FAILED_RUNS=$($failedRuns -join ',')"
