@@ -52,7 +52,8 @@ pub(crate) struct AdmissionRejected;
 
 #[derive(Debug)]
 pub(crate) enum ShutdownCleanupError {
-    #[allow(dead_code)] // Current subsystem shutdown adapters are infallible; tests cover isolation.
+    #[allow(dead_code)]
+    // Current subsystem shutdown adapters are infallible; tests cover isolation.
     Failed,
 }
 
@@ -302,9 +303,7 @@ mod tests {
     fn tokio_aligned_clock() -> MonotonicClock {
         let std_origin = Instant::now();
         let tokio_origin = tokio::time::Instant::now();
-        Arc::new(move || {
-            std_origin + tokio::time::Instant::now().duration_since(tokio_origin)
-        })
+        Arc::new(move || std_origin + tokio::time::Instant::now().duration_since(tokio_origin))
     }
 
     fn phase(state: &ExternalProcessShutdownState) -> ShutdownPhase {
@@ -322,8 +321,7 @@ mod tests {
         let (scheduler, _, watchdog) = recording_scheduler();
         let calls = Arc::new(Mutex::new(Vec::new()));
         let recorded_calls = calls.clone();
-        let exit: ExitCallback =
-            Arc::new(move |code| recorded_calls.lock().unwrap().push(code));
+        let exit: ExitCallback = Arc::new(move |code| recorded_calls.lock().unwrap().push(code));
         let timing = ShutdownTiming {
             graceful: Duration::from_secs(3),
             watchdog: Duration::from_secs(4),
@@ -395,8 +393,7 @@ mod tests {
         let (scheduler, _, _) = recording_scheduler();
         let calls = Arc::new(Mutex::new(Vec::new()));
         let recorded_calls = calls.clone();
-        let exit: ExitCallback =
-            Arc::new(move |code| recorded_calls.lock().unwrap().push(code));
+        let exit: ExitCallback = Arc::new(move |code| recorded_calls.lock().unwrap().push(code));
         let ShutdownStart::Started(run) = state.start(
             Some(23),
             ShutdownTiming::default(),
@@ -481,13 +478,7 @@ mod tests {
             ShutdownStart::Started(_)
         ));
         assert!(matches!(
-            state.start(
-                Some(99),
-                ShutdownTiming::default(),
-                &scheduler,
-                exit,
-                clock
-            ),
+            state.start(Some(99), ShutdownTiming::default(), &scheduler, exit, clock),
             ShutdownStart::AlreadyShuttingDown
         ));
         assert_eq!(timings.lock().unwrap().len(), 1);
@@ -500,8 +491,7 @@ mod tests {
         let (scheduler, _, watchdog) = recording_scheduler();
         let calls = Arc::new(Mutex::new(Vec::new()));
         let recorded_calls = calls.clone();
-        let exit: ExitCallback =
-            Arc::new(move |code| recorded_calls.lock().unwrap().push(code));
+        let exit: ExitCallback = Arc::new(move |code| recorded_calls.lock().unwrap().push(code));
         let clock: MonotonicClock = Arc::new(Instant::now);
 
         let _ = state.start(
@@ -514,13 +504,7 @@ mod tests {
         watchdog.lock().unwrap().take().unwrap()();
 
         assert!(matches!(
-            state.start(
-                Some(99),
-                ShutdownTiming::default(),
-                &scheduler,
-                exit,
-                clock
-            ),
+            state.start(Some(99), ShutdownTiming::default(), &scheduler, exit, clock),
             ShutdownStart::Completed
         ));
         assert_eq!(*calls.lock().unwrap(), vec![23]);
@@ -668,7 +652,13 @@ mod tests {
 
     #[test]
     fn timing_exposes_the_graceful_and_watchdog_budgets() {
-        assert_eq!(ShutdownTiming::default().graceful, GRACEFUL_SHUTDOWN_TIMEOUT);
-        assert_eq!(ShutdownTiming::default().watchdog, SHUTDOWN_WATCHDOG_TIMEOUT);
+        assert_eq!(
+            ShutdownTiming::default().graceful,
+            GRACEFUL_SHUTDOWN_TIMEOUT
+        );
+        assert_eq!(
+            ShutdownTiming::default().watchdog,
+            SHUTDOWN_WATCHDOG_TIMEOUT
+        );
     }
 }
