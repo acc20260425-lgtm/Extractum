@@ -260,6 +260,7 @@ where
     while stderr.read(&mut buffer).await.ok().is_some_and(|read| read > 0) {}
 }
 
+#[cfg(test)]
 fn decode_sidecar_line(id: &str, response_line: &str) -> AppResult<GeminiBrowserSidecarResponse> {
     decode_sidecar_line_for_request(id, response_line)?
         .ok_or_else(|| AppError::internal("Gemini browser sidecar response id mismatch"))
@@ -277,6 +278,7 @@ fn decode_sidecar_line_for_request(
     Ok(Some(response.response))
 }
 
+#[cfg(test)]
 fn take_complete_jsonl_line(buffer: &mut String) -> Option<String> {
     while let Some(newline_index) = buffer.find('\n') {
         let line: String = buffer.drain(..=newline_index).collect();

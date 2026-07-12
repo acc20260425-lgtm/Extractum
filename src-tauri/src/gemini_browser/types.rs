@@ -141,6 +141,7 @@ pub enum GeminiBrowserRunStatus {
 }
 
 impl GeminiBrowserRunStatus {
+    #[cfg(test)]
     pub fn is_success(&self) -> bool {
         matches!(self, Self::Ok | Self::Ready)
     }

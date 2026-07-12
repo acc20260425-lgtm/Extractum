@@ -25,16 +25,18 @@ pub(crate) use jobs::{
     enqueue_gemini_browser_job_to_storage, open_gemini_browser_job_storage,
     setup_gemini_browser_apalis_storage, GeminiBrowserArtifactMode, GeminiBrowserJob,
 };
+#[cfg(test)]
+pub(crate) use types::{GeminiBrowserDebugErrorStage, GeminiBrowserRunDebugSummary};
 pub(crate) use paths::{chrome_cdp_profile_dir, path_string, profile_dir, run_dir, runs_dir};
 pub(crate) use run_log::{
     create_queued_run, finish_run, list_runs, mark_running, read_run, recorded_run_dir,
 };
 pub use state::GeminiBrowserState;
 pub use types::{
-    GeminiBrowserAnswerCompletionReason, GeminiBrowserArtifactRefs, GeminiBrowserDebugErrorStage,
+    GeminiBrowserAnswerCompletionReason, GeminiBrowserArtifactRefs,
     GeminiBrowserProviderConfig, GeminiBrowserProviderMode, GeminiBrowserProviderStatus,
-    GeminiBrowserProviderStatusKind, GeminiBrowserRun, GeminiBrowserRunDebugSummary,
-    GeminiBrowserRunLogSummary, GeminiBrowserRunRequest, GeminiBrowserRunResult,
-    GeminiBrowserRunStatus, GeminiBrowserSidecarCommand, GeminiBrowserSidecarEnvelope,
-    GeminiBrowserSidecarResponse, GeminiBrowserStartChromeResult,
+    GeminiBrowserProviderStatusKind, GeminiBrowserRun, GeminiBrowserRunLogSummary,
+    GeminiBrowserRunRequest, GeminiBrowserRunResult, GeminiBrowserRunStatus,
+    GeminiBrowserSidecarCommand, GeminiBrowserSidecarEnvelope, GeminiBrowserSidecarResponse,
+    GeminiBrowserStartChromeResult,
 };

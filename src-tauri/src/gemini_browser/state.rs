@@ -56,6 +56,7 @@ impl GeminiBrowserState {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn set_status_snapshot(&self, status: GeminiBrowserProviderStatus) {
         *self.status_snapshot.write() = Some(status);
     }
