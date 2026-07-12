@@ -95,9 +95,11 @@ Add tests in the existing `migrations.rs` test module:
 
 1. **Atomic rollback test.** Invoke the private batch function with a valid
    initial migration followed by a deliberately invalid migration. Require an
-   error and verify that neither the schema created by the valid migration nor
-   its history row is visible afterward. This deterministically proves the
-   all-or-nothing boundary.
+   error, then query `sqlite_master` and verify that neither the schema created
+   by the valid migration nor the `_sqlx_migrations` table exists afterward.
+   Do not query a history row directly: correct rollback removes the history
+   table itself, so such a query would correctly fail with `no such table`.
+   This deterministically proves the all-or-nothing boundary.
 2. **Concurrent independent-database stress test.** Start multiple tasks at a
    barrier. Each task creates its own file-backed SQLite database with a pool
    of five connections, calls `apply_all_migrations_for_test_pool`, verifies
@@ -115,9 +117,12 @@ the original race is probabilistic, it is not required to fail on every
 pre-fix run.
 
 Final verification runs the focused migration tests, the complete Gemini jobs
-tests, and three full Rust-suite runs. Any recurrence of `table Jobs has N
-columns but M values were supplied` fails the slice and reopens investigation
-rather than being retried away.
+tests, and three full Rust-suite runs. Any database/schema-shaped failure at a
+test migration, Apalis setup, or enqueue boundary that refers to `Jobs`
+reopens investigation rather than being retried away. This includes the known
+column/value mismatch and possible post-fix forms such as a missing `Jobs`
+table (`no such table: Jobs`), missing-column errors, or
+`database schema has changed`.
 
 ## Failure Handling
 
@@ -161,12 +166,14 @@ tests. It does not modify:
 
 - `apply_all_migrations_for_test_pool` applies the entire migration batch and
   history on one transaction-owned SQLite connection.
-- A forced mid-batch SQL failure leaves no earlier schema or history visible.
+- A forced mid-batch SQL failure leaves neither earlier schema nor the
+  `_sqlx_migrations` table visible.
 - Parallel independent file-backed databases finish with 14-column `Jobs`
   tables and accept real Apalis enqueue operations.
 - Existing migration and Gemini jobs tests pass.
-- Three consecutive full Rust-suite runs pass without the schema-race
-  signature.
+- Three consecutive full Rust-suite runs pass without any `Jobs` table
+  existence, column-shape, or schema-visibility failure at migration, setup, or
+  enqueue boundaries.
 - `cargo check --all-targets` and `npm.cmd run check:rustfmt` pass with zero
   warnings or formatting differences.
 - Production code paths, migration contents, dependencies, and runtime
