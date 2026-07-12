@@ -69,7 +69,8 @@ condition because PowerShell 5.1 may expand the first native stderr
 
 - [ ] **Step 3: Migrate test imports to the production helper**
 
-Replace the test module imports with this complete block:
+Replace only the existing multiline `use super` block and the existing
+`use crate::error` statement with this block:
 
 ```rust
 use super::{
@@ -83,7 +84,8 @@ use super::{
 use crate::error::{AppError, AppErrorKind};
 ```
 
-Keep the existing `CancellationToken` import immediately below this block.
+Keep `use std::collections::BTreeSet;` above this block and the existing
+`CancellationToken` import below it unchanged.
 
 - [ ] **Step 4: Migrate and strengthen the two tests**
 
@@ -129,8 +131,10 @@ Run:
 cargo test --manifest-path src-tauri/Cargo.toml source_job_step_with_process_cancel -- --nocapture
 ```
 
-Expected: both renamed tests pass. The old helper still exists at this point,
-so the warning remains until Step 6.
+Expected: both renamed tests pass. The old helper still exists at this point
+and is unused in both normal and test builds, so Cargo may print the same
+dead-code diagnostic once for the lib target and again for the test target.
+These expected warnings disappear in Step 6.
 
 - [ ] **Step 6: Delete the obsolete helper**
 
