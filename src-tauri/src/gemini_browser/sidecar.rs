@@ -12,7 +12,8 @@ use crate::error::{AppError, AppResult};
 use crate::{external_process::ExternalProcessShutdownState, process_tree::ProcessTreeGuard};
 
 use super::sidecar_launch::{
-    bundled_sidecar_path_from_current_exe, resolve_launch_mode, GeminiBrowserBuildProfile, GeminiBrowserSidecarLaunch,
+    bundled_sidecar_path_from_current_exe, resolve_launch_mode, GeminiBrowserBuildProfile,
+    GeminiBrowserSidecarLaunch,
 };
 use super::{
     GeminiBrowserProviderConfig, GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind,
@@ -90,16 +91,16 @@ impl GeminiBrowserSidecarProcess {
         let mut command = Command::new(node);
         command.arg(script_path);
         configure_sidecar_command(&mut command);
-        let child = command.spawn()
-            .map_err(|error| {
-                AppError::internal(format!("Failed to start Gemini browser sidecar: {error}"))
-            })?;
+        let child = command.spawn().map_err(|error| {
+            AppError::internal(format!("Failed to start Gemini browser sidecar: {error}"))
+        })?;
         Self::install_node_child(child, process_tree).await
     }
 
     async fn spawn_bundled() -> AppResult<Self> {
-        let path = bundled_sidecar_path_from_current_exe()
-            .map_err(|error| AppError::internal(format!("Gemini sidecar bundle is unavailable: {error}")))?;
+        let path = bundled_sidecar_path_from_current_exe().map_err(|error| {
+            AppError::internal(format!("Gemini sidecar bundle is unavailable: {error}"))
+        })?;
         let process_tree = ProcessTreeGuard::new()
             .map_err(|_| AppError::internal("Failed to contain Gemini browser sidecar"))?;
         let mut command = Command::new(path);
@@ -110,10 +111,15 @@ impl GeminiBrowserSidecarProcess {
         Self::install_node_child(child, process_tree).await
     }
 
-    async fn install_node_child(mut child: Child, process_tree: ProcessTreeGuard) -> AppResult<Self> {
+    async fn install_node_child(
+        mut child: Child,
+        process_tree: ProcessTreeGuard,
+    ) -> AppResult<Self> {
         if process_tree.assign_tokio(&child).is_err() {
             let _ = child.kill().await;
-            return Err(AppError::internal("Failed to contain Gemini browser sidecar"));
+            return Err(AppError::internal(
+                "Failed to contain Gemini browser sidecar",
+            ));
         }
         Self::from_node_child(child, process_tree)
     }
@@ -162,7 +168,12 @@ impl GeminiBrowserSidecarProcess {
 
     async fn graceful_shutdown(mut self) {
         let _ = self.request(GeminiBrowserSidecarCommand::Stop).await;
-        let GeminiBrowserSidecarTransport::Node { child, stdin, process_tree, .. } = &mut self.transport;
+        let GeminiBrowserSidecarTransport::Node {
+            child,
+            stdin,
+            process_tree,
+            ..
+        } = &mut self.transport;
         stdin.take();
         if let Some(child) = child.as_mut() {
             if timeout(Duration::from_secs(1), child.wait()).await.is_err() {
@@ -174,14 +185,22 @@ impl GeminiBrowserSidecarProcess {
 }
 
 fn configure_sidecar_command(command: &mut Command) {
-    command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
+    command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
     crate::child_process::hide_console_window(command);
 }
 
 impl Drop for GeminiBrowserSidecarProcess {
     fn drop(&mut self) {
         match &mut self.transport {
-            GeminiBrowserSidecarTransport::Node { child, process_tree, .. } => {
+            GeminiBrowserSidecarTransport::Node {
+                child,
+                process_tree,
+                ..
+            } => {
                 let _ = process_tree.terminate();
                 if let Some(mut child) = child.take() {
                     let _ = child.start_kill();
@@ -257,7 +276,12 @@ where
     R: AsyncRead + Unpin + Send + 'static,
 {
     let mut buffer = [0_u8; 8_192];
-    while stderr.read(&mut buffer).await.ok().is_some_and(|read| read > 0) {}
+    while stderr
+        .read(&mut buffer)
+        .await
+        .ok()
+        .is_some_and(|read| read > 0)
+    {}
 }
 
 #[cfg(test)]
@@ -562,7 +586,11 @@ mod tests {
         let (server_read, mut server_write) = tokio::io::split(server);
         let server = tokio::spawn(async move {
             let mut lines = BufReader::new(server_read).lines();
-            let request = lines.next_line().await.expect("read request").expect("request line");
+            let request = lines
+                .next_line()
+                .await
+                .expect("read request")
+                .expect("request line");
             assert!(request.contains("gemini-sidecar-1"));
             server_write
                 .write_all(b"{\"id\":\"gemini-sidecar-1\",\"response\":{\"type\":\"ack\"}}\n")
@@ -588,7 +616,10 @@ mod tests {
         let (mut writer, reader) = tokio::io::duplex(1024);
         let drain = tokio::spawn(drain_sidecar_stderr(reader));
 
-        writer.write_all(b"sidecar diagnostic\n").await.expect("write stderr");
+        writer
+            .write_all(b"sidecar diagnostic\n")
+            .await
+            .expect("write stderr");
         drop(writer);
 
         drain.await.expect("stderr drain completes");

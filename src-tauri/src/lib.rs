@@ -2,7 +2,6 @@ mod external_process;
 use external_process::{
     ExternalProcessShutdownState, ShutdownCleanup, ShutdownStart, ShutdownTiming,
 };
-mod process_tree;
 mod analysis_documents;
 mod apalis_jobs;
 mod archive_read_model;
@@ -10,6 +9,7 @@ mod child_process;
 mod compression;
 mod db;
 mod diagnostics;
+mod process_tree;
 use apalis_jobs::{apalis_jobs_list, apalis_jobs_prune_terminal};
 use diagnostics::get_diagnostic_summary;
 mod error;
@@ -109,8 +109,8 @@ use youtube::job_commands::{
     clear_source_job_cancellation_smoke_fixture, seed_source_job_cancellation_smoke_fixture,
 };
 use youtube::jobs::SourceJobState;
-use youtube::process_runtime::YoutubeProcessRegistry;
 use youtube::preview::{add_youtube_source, preview_youtube_source};
+use youtube::process_runtime::YoutubeProcessRegistry;
 use youtube::runtime::get_youtube_runtime_status;
 use youtube::settings::{
     clear_youtube_auth, get_youtube_auth_status, get_youtube_settings, save_youtube_cookies,
@@ -393,8 +393,7 @@ pub fn run() {
                                     Ok(())
                                 });
                                 let sidecar: ShutdownCleanup = Box::pin(async move {
-                                    let state =
-                                        sidecar_handle.state::<GeminiBrowserState>();
+                                    let state = sidecar_handle.state::<GeminiBrowserState>();
                                     gemini_browser::shutdown_sidecar(
                                         &sidecar_handle,
                                         state.inner(),

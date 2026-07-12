@@ -243,7 +243,11 @@ mod tests {
         let token = state.start_run("run-1".to_string()).await;
         assert!(state.request_stop().await);
         assert!(token.is_cancelled());
-        assert!(state.cancellation_token().await.expect("active token").is_cancelled());
+        assert!(state
+            .cancellation_token()
+            .await
+            .expect("active token")
+            .is_cancelled());
         assert!(state.sidecar_tainted().await);
     }
 

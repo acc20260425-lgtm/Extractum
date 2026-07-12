@@ -12,8 +12,8 @@ use super::dto::{
     YoutubeCaptionTrack, YoutubeCaptionTrackKind, YoutubeTranscript, YoutubeTranscriptSegment,
     YoutubeVideoMetadata,
 };
-use super::ytdlp::{run_ytdlp_with_options, YtdlpRunOptions, YTDLP_PREVIEW_TIMEOUT};
 use super::process_runtime::YoutubeProcessRegistry;
+use super::ytdlp::{run_ytdlp_with_options, YtdlpRunOptions, YTDLP_PREVIEW_TIMEOUT};
 
 pub(crate) const YOUTUBE_CAPTION_DOWNLOAD_TIMEOUT: Duration = YTDLP_PREVIEW_TIMEOUT;
 

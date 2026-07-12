@@ -711,10 +711,12 @@ mod tests {
             .await
             .expect("canonical");
 
-        assert!(canonical["outputs"]["pack_data"]["youtube_summary"]["videos"][0]["summary_text"]
-            .as_str()
-            .unwrap()
-            .starts_with("# Gem-анализ"));
+        assert!(
+            canonical["outputs"]["pack_data"]["youtube_summary"]["videos"][0]["summary_text"]
+                .as_str()
+                .unwrap()
+                .starts_with("# Gem-анализ")
+        );
     }
 
     #[tokio::test]

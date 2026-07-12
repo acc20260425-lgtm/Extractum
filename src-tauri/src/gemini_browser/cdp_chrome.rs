@@ -325,7 +325,11 @@ mod tests {
     #[test]
     fn explicit_shutdown_kills_and_reaps_the_owned_child_once() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let child = FakeChromeChild { events: events.clone(), exited: false, kill_error: None };
+        let child = FakeChromeChild {
+            events: events.clone(),
+            exited: false,
+            kill_error: None,
+        };
         let mut process = ChromeCdpProcess::with_test_child(Box::new(child));
 
         process.shutdown().expect("first shutdown");
@@ -337,7 +341,11 @@ mod tests {
     #[test]
     fn drop_falls_back_to_owned_child_shutdown() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let child = FakeChromeChild { events: events.clone(), exited: false, kill_error: None };
+        let child = FakeChromeChild {
+            events: events.clone(),
+            exited: false,
+            kill_error: None,
+        };
 
         drop(ChromeCdpProcess::with_test_child(Box::new(child)));
 
@@ -347,7 +355,11 @@ mod tests {
     #[test]
     fn shutdown_does_not_claim_or_kill_an_already_exited_child() {
         let events = Arc::new(Mutex::new(Vec::new()));
-        let child = FakeChromeChild { events: events.clone(), exited: true, kill_error: None };
+        let child = FakeChromeChild {
+            events: events.clone(),
+            exited: true,
+            kill_error: None,
+        };
         let mut process = ChromeCdpProcess::with_test_child(Box::new(child));
 
         process.shutdown().expect("shutdown observes child exit");
@@ -365,7 +377,9 @@ mod tests {
         };
         let mut process = ChromeCdpProcess::with_test_child(Box::new(child));
 
-        process.shutdown().expect("already-exited child remains a successful shutdown");
+        process
+            .shutdown()
+            .expect("already-exited child remains a successful shutdown");
 
         assert_eq!(*events.lock().expect("events lock"), ["kill", "wait"]);
     }

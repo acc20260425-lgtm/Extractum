@@ -1141,7 +1141,10 @@ mod tests {
 
         let mut unsafe_refs = Vec::new();
         for table in tables {
-            let pragma = format!("PRAGMA foreign_key_list({})", quote_sqlite_identifier(&table));
+            let pragma = format!(
+                "PRAGMA foreign_key_list({})",
+                quote_sqlite_identifier(&table)
+            );
             let rows = sqlx::query(&pragma)
                 .fetch_all(&pool)
                 .await
@@ -1156,8 +1159,9 @@ mod tests {
                 let delete_safe = matches!(on_delete.as_str(), "CASCADE" | "SET NULL")
                     || (table == "project_sources" && on_delete == "RESTRICT");
                 if !delete_safe {
-                    unsafe_refs
-                        .push(format!("{table}.{from_column} -> sources ON DELETE {on_delete}"));
+                    unsafe_refs.push(format!(
+                        "{table}.{from_column} -> sources ON DELETE {on_delete}"
+                    ));
                 }
             }
         }
@@ -1204,13 +1208,15 @@ mod tests {
         .await
         .expect("seed analysis document");
 
-        let outcome = delete_project_youtube_video_source_from_library_in_pool(
-            &pool, project.id, 31,
-        )
-        .await
-        .expect("delete project video source");
+        let outcome =
+            delete_project_youtube_video_source_from_library_in_pool(&pool, project.id, 31)
+                .await
+                .expect("delete project video source");
 
-        assert_eq!(outcome.status, DeleteProjectYoutubeVideoSourceStatus::Deleted);
+        assert_eq!(
+            outcome.status,
+            DeleteProjectYoutubeVideoSourceStatus::Deleted
+        );
         assert!(outcome.blocking_projects.is_empty());
         assert_eq!(outcome.remaining_blocking_project_count, 0);
         assert_eq!(
@@ -1218,7 +1224,11 @@ mod tests {
             0
         );
         assert_eq!(
-            count_rows(&pool, "SELECT COUNT(*) FROM project_sources WHERE source_id = 31").await,
+            count_rows(
+                &pool,
+                "SELECT COUNT(*) FROM project_sources WHERE source_id = 31"
+            )
+            .await,
             0
         );
         assert_eq!(
@@ -1300,7 +1310,11 @@ mod tests {
             1
         );
         assert_eq!(
-            count_rows(&pool, "SELECT COUNT(*) FROM project_sources WHERE source_id = 40").await,
+            count_rows(
+                &pool,
+                "SELECT COUNT(*) FROM project_sources WHERE source_id = 40"
+            )
+            .await,
             3
         );
     }
@@ -1355,10 +1369,11 @@ mod tests {
             .expect("link invalid types");
 
         for (source_id, label) in [(60, "playlist"), (61, "telegram")] {
-            let error =
-                delete_project_youtube_video_source_from_library_in_pool(&pool, project.id, source_id)
-                    .await
-                    .expect_err("invalid source should be rejected");
+            let error = delete_project_youtube_video_source_from_library_in_pool(
+                &pool, project.id, source_id,
+            )
+            .await
+            .expect_err("invalid source should be rejected");
             assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
             assert!(
                 error.message.contains("Only YouTube video"),

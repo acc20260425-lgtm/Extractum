@@ -77,7 +77,10 @@ fn credential_scope(
         .port_or_known_default()
         .ok_or_else(|| AppError::validation("Base URL must include a known port"))?;
 
-    Ok((provider, Some((parsed.scheme().to_ascii_lowercase(), host, port))))
+    Ok((
+        provider,
+        Some((parsed.scheme().to_ascii_lowercase(), host, port)),
+    ))
 }
 
 async fn read_setting(pool: &Pool<Sqlite>, key: &str) -> AppResult<Option<String>> {
@@ -541,7 +544,9 @@ mod tests {
             .expect("seed legacy profile");
 
         let error = match resolve_profile_from_pool(&pool, &secret_store, Some("legacy")).await {
-            Ok(_) => panic!("reject legacy remote HTTP profile before it reaches request configuration"),
+            Ok(_) => {
+                panic!("reject legacy remote HTTP profile before it reaches request configuration")
+            }
             Err(error) => error,
         };
 
@@ -635,26 +640,20 @@ mod tests {
 
     #[test]
     fn credential_scope_uses_provider_origin_and_effective_port_but_not_path() {
-        let localhost_default = credential_scope(
-            ProviderKind::OpenAiCompatible,
-            "http://localhost:20128/v1",
-        )
-        .expect("localhost scope");
+        let localhost_default =
+            credential_scope(ProviderKind::OpenAiCompatible, "http://localhost:20128/v1")
+                .expect("localhost scope");
         let same_origin_other_path = credential_scope(
             ProviderKind::OpenAiCompatible,
             "http://LOCALHOST:20128/other",
         )
         .expect("same origin scope");
-        let different_scheme = credential_scope(
-            ProviderKind::OpenAiCompatible,
-            "https://localhost:20128/v1",
-        )
-        .expect("scheme scope");
-        let different_port = credential_scope(
-            ProviderKind::OpenAiCompatible,
-            "http://localhost:20129/v1",
-        )
-        .expect("port scope");
+        let different_scheme =
+            credential_scope(ProviderKind::OpenAiCompatible, "https://localhost:20128/v1")
+                .expect("scheme scope");
+        let different_port =
+            credential_scope(ProviderKind::OpenAiCompatible, "http://localhost:20129/v1")
+                .expect("port scope");
 
         assert_eq!(localhost_default, same_origin_other_path);
         assert_ne!(localhost_default, different_scheme);

@@ -7,8 +7,8 @@ use crate::external_process::ExternalProcessShutdownState;
 use crate::time::ymd_to_unix_midnight;
 
 use super::dto::{YoutubeComment, YoutubeVideoMetadata};
-use super::ytdlp::{run_ytdlp_with_options, YtdlpRunOptions};
 use super::process_runtime::YoutubeProcessRegistry;
+use super::ytdlp::{run_ytdlp_with_options, YtdlpRunOptions};
 
 pub(crate) const DEFAULT_MAX_COMMENTS_PER_VIDEO: usize = 1_000;
 pub(crate) const YOUTUBE_COMMENTS_FETCH_TIMEOUT: Duration = Duration::from_secs(120);

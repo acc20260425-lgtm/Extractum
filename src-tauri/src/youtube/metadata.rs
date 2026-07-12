@@ -10,9 +10,9 @@ use super::dto::{
     YoutubePlaylistItemMetadata, YoutubePlaylistMetadata, YoutubePreview, YoutubePreviewKind,
     YoutubeVideoForm, YoutubeVideoMetadata,
 };
+use super::process_runtime::YoutubeProcessRegistry;
 use super::url::{YoutubeParsedUrl, YoutubeUrlKind};
 use super::ytdlp::{run_ytdlp_with_options, YtdlpRunOptions, YTDLP_PREVIEW_TIMEOUT};
-use super::process_runtime::YoutubeProcessRegistry;
 
 pub(crate) const PLAYLIST_METADATA_PAGE_SIZE: i64 = 200;
 pub(crate) const YOUTUBE_METADATA_TIMEOUT: Duration = YTDLP_PREVIEW_TIMEOUT;
@@ -53,7 +53,9 @@ pub(crate) async fn fetch_playlist_metadata(
     loop {
         let end = start + PLAYLIST_METADATA_PAGE_SIZE - 1;
         let range = format!("{start}-{end}");
-        let mut page = fetch_playlist_metadata_page(registry, shutdown, playlist_url, &range, cookies.clone()).await?;
+        let mut page =
+            fetch_playlist_metadata_page(registry, shutdown, playlist_url, &range, cookies.clone())
+                .await?;
         let page_len = page.items.len();
 
         if base.is_none() {
