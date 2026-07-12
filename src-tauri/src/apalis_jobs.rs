@@ -158,6 +158,7 @@ async fn apalis_jobs_list_from_pool(
     })
 }
 
+#[cfg(test)]
 async fn apalis_jobs_prune_terminal_from_pool(
     pool: &SqlitePool,
     now_secs: i64,
