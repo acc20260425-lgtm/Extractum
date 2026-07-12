@@ -367,6 +367,22 @@ pub fn run() {
             clear_youtube_auth,
             resolve_youtube_thumbnail
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building Tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested { code, api, .. } = event {
+                let shutdown = app.state::<ExternalProcessShutdownState>().inner().clone();
+                if shutdown.begin_shutdown(code) {
+                    api.prevent_exit();
+                    let registry = app.state::<YoutubeProcessRegistry>().inner().clone();
+                    let handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        shutdown.wait_for_startups().await;
+                        registry.cancel_and_wait().await;
+                        shutdown.complete();
+                        handle.exit(shutdown.exit_code());
+                    });
+                }
+            }
+        });
 }
