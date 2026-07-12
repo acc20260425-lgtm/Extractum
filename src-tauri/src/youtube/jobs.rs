@@ -719,27 +719,6 @@ async fn run_source_job_steps(
     Ok(warnings)
 }
 
-async fn run_source_job_step_with_cancel<Fut, T>(
-    cancellation_token: Option<CancellationToken>,
-    future: Fut,
-) -> AppResult<T>
-where
-    Fut: Future<Output = AppResult<T>>,
-{
-    let Some(cancellation_token) = cancellation_token else {
-        return future.await;
-    };
-
-    if cancellation_token.is_cancelled() {
-        return Err(AppError::validation("Source job cancelled"));
-    }
-
-    tokio::select! {
-        result = future => result,
-        _ = cancellation_token.cancelled() => Err(AppError::validation("Source job cancelled")),
-    }
-}
-
 async fn run_source_job_step_with_cancel_and_processes<Fut, T>(
     cancellation_token: Option<CancellationToken>,
     registry: YoutubeProcessRegistry,
@@ -1207,11 +1186,12 @@ mod tests {
     use super::{
         clear_source_job_cancellation_smoke_fixture,
         finish_cancelled_source_job_cancellation_smoke_fixture, retryable_playlist_video_rows,
-        run_source_job_step_with_cancel, seed_source_job_cancellation_smoke_fixture_in_state,
-        SourceJobListFilter, SourceJobState, SourceJobStatus, SourceJobType, YoutubeSyncOptions,
+        run_source_job_step_with_cancel_and_processes,
+        seed_source_job_cancellation_smoke_fixture_in_state, SourceJobListFilter, SourceJobState,
+        SourceJobStatus, SourceJobType, YoutubeProcessRegistry, YoutubeSyncOptions,
         SOURCE_JOB_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID,
     };
-    use crate::error::{AppError, AppErrorKind, AppResult};
+    use crate::error::{AppError, AppErrorKind};
     use tokio_util::sync::CancellationToken;
 
     #[tokio::test]
@@ -1510,23 +1490,33 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn source_job_step_cancel_wrapper_allows_completed_future() {
-        let result = run_source_job_step_with_cancel(None, async { Ok::<_, AppError>("done") })
-            .await
-            .expect("step result");
+    async fn source_job_step_with_process_cancel_allows_completed_future() {
+        let result = run_source_job_step_with_cancel_and_processes(
+            None,
+            YoutubeProcessRegistry::new(),
+            async { Ok::<_, AppError>("done") },
+        )
+        .await
+        .expect("step result");
 
         assert_eq!(result, "done");
     }
 
     #[tokio::test]
-    async fn source_job_step_cancel_wrapper_interrupts_pending_future() {
+    async fn source_job_step_with_process_cancel_interrupts_pending_future() {
         let token = CancellationToken::new();
         token.cancel();
 
-        let result: AppResult<()> =
-            run_source_job_step_with_cancel(Some(token), std::future::pending()).await;
+        let error = run_source_job_step_with_cancel_and_processes(
+            Some(token),
+            YoutubeProcessRegistry::new(),
+            std::future::pending::<crate::error::AppResult<()>>(),
+        )
+        .await
+        .expect_err("cancelled source step");
 
-        assert!(result.is_err());
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(error.message, "Source job cancelled");
     }
 
     #[tokio::test]
