@@ -16,6 +16,7 @@ type GeminiBrowserApalisTask<IdType> =
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ApalisQueueInspectionMode {
+    #[cfg(test)]
     Supported,
     DegradedRunLogOnly,
 }
@@ -27,9 +28,14 @@ pub(crate) fn apalis_queue_inspection_mode() -> ApalisQueueInspectionMode {
 pub(crate) fn startup_reconciliation_checks_queued_runs_against_apalis(
     mode: ApalisQueueInspectionMode,
 ) -> bool {
-    matches!(mode, ApalisQueueInspectionMode::Supported)
+    match mode {
+        #[cfg(test)]
+        ApalisQueueInspectionMode::Supported => true,
+        ApalisQueueInspectionMode::DegradedRunLogOnly => false,
+    }
 }
 
+#[cfg(test)]
 pub(crate) fn run_status_for_queue_state(
     state: &str,
 ) -> Option<crate::gemini_browser::GeminiBrowserRunStatus> {
@@ -82,21 +88,11 @@ pub(crate) enum GeminiBrowserWorkerStatus {
 
 impl Default for GeminiBrowserJobRuntime {
     fn default() -> Self {
-        let (worker_status, _) = tokio::sync::watch::channel(GeminiBrowserWorkerStatus::Starting);
-        Self {
-            waiters: parking_lot::Mutex::new(std::collections::HashMap::new()),
-            cancelled_runs: parking_lot::Mutex::new(std::collections::HashSet::new()),
-            worker_status,
-            worker_execution_timeout: std::time::Duration::from_secs(
-                DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS,
-            ),
-            waiter_timeout: std::time::Duration::from_secs(
-                DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS + 5,
-            ),
-            worker_hard_guard_timeout: std::time::Duration::from_secs(
-                DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS + 15,
-            ),
-        }
+        Self::new_with_timeouts(
+            std::time::Duration::from_secs(DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS + 5),
+            std::time::Duration::from_secs(DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS),
+            std::time::Duration::from_secs(DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS + 15),
+        )
     }
 }
 
@@ -590,6 +586,7 @@ fn run_log_entry_by_id(
         .find(|run| run.run_id == run_id))
 }
 
+#[cfg(test)]
 fn run_log_is_cancelled(
     runs_root: &std::path::Path,
     run_id: &str,
