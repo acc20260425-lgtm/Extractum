@@ -291,8 +291,20 @@ pub fn build_migrations() -> Vec<Migration> {
 pub(crate) async fn apply_all_migrations_for_test_pool(
     pool: &sqlx::SqlitePool,
 ) -> crate::error::AppResult<()> {
+    apply_migration_batch_for_test_pool(pool, build_migrations()).await
+}
+
+#[cfg(test)]
+async fn apply_migration_batch_for_test_pool(
+    pool: &sqlx::SqlitePool,
+    migrations: Vec<Migration>,
+) -> crate::error::AppResult<()> {
     use sha2::{Digest, Sha384};
 
+    let mut transaction = pool
+        .begin()
+        .await
+        .map_err(crate::error::AppError::database)?;
     sqlx::raw_sql(
         "CREATE TABLE IF NOT EXISTS _sqlx_migrations (
             version BIGINT PRIMARY KEY,
@@ -303,13 +315,13 @@ pub(crate) async fn apply_all_migrations_for_test_pool(
             execution_time BIGINT NOT NULL
         )",
     )
-    .execute(pool)
+    .execute(&mut *transaction)
     .await
     .map_err(crate::error::AppError::database)?;
 
-    for migration in build_migrations() {
+    for migration in migrations {
         sqlx::raw_sql(migration.sql)
-            .execute(pool)
+            .execute(&mut *transaction)
             .await
             .map_err(crate::error::AppError::database)?;
         let checksum = Sha384::digest(migration.sql.as_bytes()).to_vec();
@@ -327,20 +339,34 @@ pub(crate) async fn apply_all_migrations_for_test_pool(
         .bind(true)
         .bind(checksum)
         .bind(0_i64)
-        .execute(pool)
+        .execute(&mut *transaction)
         .await
         .map_err(crate::error::AppError::database)?;
     }
+
+    transaction
+        .commit()
+        .await
+        .map_err(crate::error::AppError::database)?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        apalis_sqlite_migrations, apply_all_migrations_for_test_pool, build_migrations,
-        current_schema_baseline_migration, prepare_database_at_path,
+        apalis_sqlite_migrations, apply_all_migrations_for_test_pool,
+        apply_migration_batch_for_test_pool, build_migrations, current_schema_baseline_migration,
+        prepare_database_at_path,
     };
+    use apalis::prelude::TaskSink;
     use sha2::{Digest, Sha384};
+    use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
+    use std::{
+        sync::{Arc, Barrier},
+        time::Duration,
+    };
+    use tauri_plugin_sql::{Migration, MigrationKind};
+    use tokio::task::JoinSet;
 
     const FROZEN_BASELINE_SHA384: &str =
         "88d7ee88f58531ebed340f2b9a8f1d02ba0ff6eec17b7e2a0d5f1a293cbd14e26a40c9155985c1652538ff0e9df70962";
@@ -396,6 +422,123 @@ mod tests {
             locking: true,
             no_tx: false,
         }
+    }
+
+    #[tokio::test]
+    async fn test_migration_batch_rolls_back_schema_and_history_together() {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("connect rollback test database");
+        let migrations = vec![
+            Migration {
+                version: 9_000_000_000_001,
+                description: "atomic rollback valid fixture",
+                sql: "CREATE TABLE migration_atomicity_probe (id INTEGER NOT NULL);",
+                kind: MigrationKind::Up,
+            },
+            Migration {
+                version: 9_000_000_000_002,
+                description: "atomic rollback invalid fixture",
+                sql: "THIS IS NOT VALID SQLITE;",
+                kind: MigrationKind::Up,
+            },
+        ];
+
+        apply_migration_batch_for_test_pool(&pool, migrations)
+            .await
+            .expect_err("invalid migration rolls back the complete batch");
+
+        let visible_tables: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*)
+             FROM sqlite_master
+             WHERE type = 'table'
+               AND name IN ('migration_atomicity_probe', '_sqlx_migrations')",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("inspect schema after rollback");
+        assert_eq!(visible_tables, 0);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_test_migrations_publish_complete_apalis_schemas() {
+        const DATABASE_COUNT: usize = 16;
+
+        let barrier = Arc::new(Barrier::new(DATABASE_COUNT));
+        let mut tasks = JoinSet::new();
+
+        for index in 0..DATABASE_COUNT {
+            let barrier = barrier.clone();
+            // The transactional helper future is not `Send` across threads
+            // (rustc "implementation of `Send` is not general enough"), so each
+            // worker owns a dedicated OS thread and current-thread runtime.
+            tasks.spawn_blocking(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("build concurrent migration worker runtime");
+                let temp_dir = tempfile::tempdir().expect("create concurrent migration temp dir");
+                let db_path = temp_dir.path().join("extractum.db");
+                let options = SqliteConnectOptions::new()
+                    .filename(&db_path)
+                    .create_if_missing(true)
+                    .journal_mode(SqliteJournalMode::Wal)
+                    .busy_timeout(Duration::from_secs(5));
+                let pool = runtime
+                    .block_on(
+                        SqlitePoolOptions::new()
+                            .max_connections(5)
+                            .connect_with(options),
+                    )
+                    .expect("connect concurrent migration database");
+
+                barrier.wait();
+                runtime.block_on(async {
+                    apply_all_migrations_for_test_pool(&pool)
+                        .await
+                        .expect("apply atomic test migrations");
+
+                    let jobs_columns: i64 =
+                        sqlx::query_scalar("SELECT COUNT(*) FROM pragma_table_info('Jobs')")
+                            .fetch_one(&pool)
+                            .await
+                            .expect("read Jobs columns");
+                    assert_eq!(
+                        jobs_columns, 14,
+                        "database {index} has incomplete Jobs schema"
+                    );
+
+                    let idempotency_history: i64 = sqlx::query_scalar(
+                        "SELECT COUNT(*) FROM _sqlx_migrations WHERE version = ?",
+                    )
+                    .bind(20260506101935_i64)
+                    .fetch_one(&pool)
+                    .await
+                    .expect("read idempotency migration history");
+                    assert_eq!(idempotency_history, 1);
+
+                    let mut storage =
+                        apalis_sqlite::SqliteStorage::new_in_queue(&pool, "migration-atomicity");
+                    storage
+                        .push(format!("migration-atomicity-{index}"))
+                        .await
+                        .expect("enqueue against complete Jobs schema");
+
+                    pool.close().await;
+                });
+                drop(temp_dir);
+            });
+        }
+
+        tokio::time::timeout(Duration::from_secs(30), async move {
+            while let Some(result) = tasks.join_next().await {
+                result.expect("concurrent migration task joins");
+            }
+        })
+        .await
+        .expect("concurrent migration stress completes");
     }
 
     #[test]
