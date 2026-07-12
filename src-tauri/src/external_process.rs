@@ -1,7 +1,7 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 use tokio::sync::Notify;
@@ -10,6 +10,7 @@ pub(crate) const GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
 pub(crate) const SHUTDOWN_WATCHDOG_TIMEOUT: Duration = Duration::from_secs(4);
 
 pub(crate) type ExitCallback = Arc<dyn Fn(i32) + Send + Sync>;
+pub(crate) type MonotonicClock = Arc<dyn Fn() -> Instant + Send + Sync>;
 pub(crate) type WatchdogTask = Box<dyn FnOnce() + Send>;
 pub(crate) type WatchdogScheduler = Arc<dyn Fn(ShutdownTiming, WatchdogTask) + Send + Sync>;
 pub(crate) type ShutdownCleanup =
@@ -68,6 +69,32 @@ pub(crate) struct AdmissionPermit {
     state: ExternalProcessShutdownState,
 }
 
+pub(crate) enum ShutdownStart {
+    Started(ShutdownRun),
+    AlreadyShuttingDown,
+    Completed,
+}
+
+pub(crate) struct ShutdownRun {
+    state: ExternalProcessShutdownState,
+    deadline: Instant,
+    clock: MonotonicClock,
+    exit: ExitCallback,
+}
+
+pub(crate) fn system_monotonic_clock() -> MonotonicClock {
+    Arc::new(Instant::now)
+}
+
+pub(crate) fn os_thread_watchdog_scheduler() -> WatchdogScheduler {
+    Arc::new(|timing, watchdog| {
+        std::thread::spawn(move || {
+            std::thread::sleep(timing.watchdog);
+            watchdog();
+        });
+    })
+}
+
 impl ExternalProcessShutdownState {
     pub(crate) fn new() -> Self {
         Self(Arc::new(ExternalProcessShutdownInner {
@@ -89,6 +116,37 @@ impl ExternalProcessShutdownState {
         admission.active_startups += 1;
         Ok(AdmissionPermit {
             state: self.clone(),
+        })
+    }
+
+    pub(crate) fn start(
+        &self,
+        code: Option<i32>,
+        timing: ShutdownTiming,
+        scheduler: &WatchdogScheduler,
+        exit: ExitCallback,
+        clock: MonotonicClock,
+    ) -> ShutdownStart {
+        {
+            let mut admission = self.0.inner.lock();
+            match admission.phase {
+                ShutdownPhase::Running => {
+                    admission.open = false;
+                    admission.first_exit_code = Some(code.unwrap_or(0));
+                    admission.phase = ShutdownPhase::ShuttingDown;
+                }
+                ShutdownPhase::ShuttingDown => return ShutdownStart::AlreadyShuttingDown,
+                ShutdownPhase::Completed => return ShutdownStart::Completed,
+            }
+        }
+
+        let deadline = clock() + timing.graceful;
+        self.schedule_watchdog(timing, scheduler, exit.clone());
+        ShutdownStart::Started(ShutdownRun {
+            state: self.clone(),
+            deadline,
+            clock,
+            exit,
         })
     }
 
@@ -194,8 +252,109 @@ impl Drop for AdmissionPermit {
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
     use tokio::sync::Barrier;
+
+    fn recording_scheduler() -> (
+        WatchdogScheduler,
+        Arc<Mutex<Vec<ShutdownTiming>>>,
+        Arc<Mutex<Option<WatchdogTask>>>,
+    ) {
+        let timings = Arc::new(Mutex::new(Vec::new()));
+        let watchdog = Arc::new(Mutex::new(None));
+        let recorded_timings = timings.clone();
+        let recorded_watchdog = watchdog.clone();
+        let scheduler: WatchdogScheduler = Arc::new(move |timing, task| {
+            recorded_timings.lock().unwrap().push(timing);
+            *recorded_watchdog.lock().unwrap() = Some(task);
+        });
+        (scheduler, timings, watchdog)
+    }
+
+    #[test]
+    fn start_returns_started_and_schedules_one_watchdog() {
+        let state = ExternalProcessShutdownState::new();
+        let (scheduler, timings, watchdog) = recording_scheduler();
+        let result = state.start(
+            Some(23),
+            ShutdownTiming::default(),
+            &scheduler,
+            Arc::new(|_| {}),
+            Arc::new(Instant::now),
+        );
+
+        assert!(matches!(result, ShutdownStart::Started(_)));
+        assert_eq!(
+            timings.lock().unwrap().as_slice(),
+            &[ShutdownTiming::default()]
+        );
+        assert!(watchdog.lock().unwrap().is_some());
+        assert_eq!(state.exit_code(), 23);
+        assert!(state.try_admit().is_err());
+    }
+
+    #[test]
+    fn repeated_start_does_not_replace_code_or_schedule_again() {
+        let state = ExternalProcessShutdownState::new();
+        let (scheduler, timings, _) = recording_scheduler();
+        let exit: ExitCallback = Arc::new(|_| {});
+        let clock: MonotonicClock = Arc::new(Instant::now);
+
+        assert!(matches!(
+            state.start(
+                Some(23),
+                ShutdownTiming::default(),
+                &scheduler,
+                exit.clone(),
+                clock.clone()
+            ),
+            ShutdownStart::Started(_)
+        ));
+        assert!(matches!(
+            state.start(
+                Some(99),
+                ShutdownTiming::default(),
+                &scheduler,
+                exit,
+                clock
+            ),
+            ShutdownStart::AlreadyShuttingDown
+        ));
+        assert_eq!(timings.lock().unwrap().len(), 1);
+        assert_eq!(state.exit_code(), 23);
+    }
+
+    #[test]
+    fn start_reports_completed_after_watchdog_claims_exit() {
+        let state = ExternalProcessShutdownState::new();
+        let (scheduler, _, watchdog) = recording_scheduler();
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let recorded_calls = calls.clone();
+        let exit: ExitCallback =
+            Arc::new(move |code| recorded_calls.lock().unwrap().push(code));
+        let clock: MonotonicClock = Arc::new(Instant::now);
+
+        let _ = state.start(
+            Some(23),
+            ShutdownTiming::default(),
+            &scheduler,
+            exit.clone(),
+            clock.clone(),
+        );
+        watchdog.lock().unwrap().take().unwrap()();
+
+        assert!(matches!(
+            state.start(
+                Some(99),
+                ShutdownTiming::default(),
+                &scheduler,
+                exit,
+                clock
+            ),
+            ShutdownStart::Completed
+        ));
+        assert_eq!(*calls.lock().unwrap(), vec![23]);
+    }
 
     #[tokio::test]
     async fn permits_acquired_before_shutdown_are_waited_for() {
