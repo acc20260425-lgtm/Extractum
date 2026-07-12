@@ -28,3 +28,11 @@ Date: 2026-07-12
 - `npm.cmd run check`: passed with 0 errors and 0 warnings.
 - `cargo test --manifest-path src-tauri/Cargo.toml`: 1116 tests passed; existing compiler warnings remain unchanged.
 - `git diff --check`: passed.
+
+Manual release GUI smoke after the corrective build:
+
+- `npm.cmd run tauri build -- --no-bundle --features csp-verification` passed and rebuilt both `extractum.exe` and the packaged `gemini-browser-sidecar.exe`.
+- Navigating the screens and running YouTube Summary through Gemini Browser produced no flashing terminal or console windows.
+- The successful browser-backed run used the packaged sidecar and an Extractum-owned CDP Chrome process.
+- Before shutdown: Extractum PID 25232 owned sidecar PID 16460 and Chrome root PID 25228.
+- A normal main-window close completed in approximately 0.6 seconds. Extractum, the sidecar, and the owned Chrome root were gone afterward, while unrelated Chrome PID 15540 remained alive.
