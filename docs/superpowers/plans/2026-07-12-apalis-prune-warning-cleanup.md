@@ -58,27 +58,19 @@ exit $cargoExit
 Expected: `CARGO_EXIT=0`, informational count 2, and one diagnostic names
 `apalis_jobs_prune_terminal_from_pool` in `src\apalis_jobs.rs`. The named
 diagnostic is the RED condition; the repository-wide count is informational.
+On PowerShell 5.1, native stderr may render its first `ErrorRecord` across
+multiple lines and make the informational count appear as 3 instead of 2; this
+does not affect the required substring assertion.
 
 - [ ] **Step 3: Add the test-only compilation boundary**
 
-Change only the wrapper declaration to:
+Add this attribute immediately above the existing wrapper declaration:
 
 ```rust
 #[cfg(test)]
-async fn apalis_jobs_prune_terminal_from_pool(
-    pool: &SqlitePool,
-    now_secs: i64,
-) -> crate::error::AppResult<ApalisJobsPruneTerminalResponse> {
-    apalis_jobs_prune_terminal_from_pool_with_hours(
-        pool,
-        now_secs,
-        TERMINAL_PRUNE_OLDER_THAN_HOURS,
-    )
-    .await
-}
 ```
 
-Do not change `apalis_jobs_prune_terminal` or
+Do not reformat the wrapper body. Do not change `apalis_jobs_prune_terminal` or
 `apalis_jobs_prune_terminal_from_pool_with_hours`.
 
 - [ ] **Step 4: Run focused Apalis tests**
@@ -112,6 +104,8 @@ exit $cargoExit
 
 Expected: `CARGO_EXIT=0`, no warning from `apalis_jobs.rs`, and informational
 count 1 naming only `run_source_job_step_with_cancel` in `youtube/jobs.rs`.
+On PowerShell 5.1, the informational count may be one higher because of native
+stderr `ErrorRecord` rendering; the two path assertions remain authoritative.
 
 - [ ] **Step 6: Review and commit the implementation**
 
