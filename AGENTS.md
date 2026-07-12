@@ -40,8 +40,9 @@ This file is a working contract for AI agents modifying the repository.
 - Use `npm.cmd` rather than `npm` in all validation commands on Windows.
 - When no Superpowers workflow is active, use focused tests for changed model, helper, or contract logic.
 - Run `npm.cmd run check` after broad Svelte or TypeScript changes.
-- When no Superpowers workflow is active, run `cargo check` after Rust or Tauri backend changes.
+- When no Superpowers workflow is active, run `npm.cmd run check:rustfmt` and `cargo check` after Rust or Tauri backend changes.
 - Do not claim checks pass unless you ran the relevant command and saw it pass.
+- To keep the repository-wide mechanical formatting commit out of local blame attribution, developers may run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once per clone; do not change local Git configuration automatically.
 
 ## 5. Data Grid & Date Formatting
 - `ExtractumDataGrid` date/time columns must use raw values plus `dateTimeFormat`.
