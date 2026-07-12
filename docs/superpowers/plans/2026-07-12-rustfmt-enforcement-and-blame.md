@@ -199,8 +199,8 @@ Expected: nested output includes `NEGATIVE_EXIT=1`,
 
 - [ ] **Step 8: Remove the temporary harness and run focused validation**
 
-Delete only `scripts/rustfmt-check-only-probe.mjs` using `apply_patch`, then
-run:
+Delete only `scripts/rustfmt-check-only-probe.mjs`, confirm it no longer
+exists, then run:
 
 ```powershell
 if (Test-Path scripts/rustfmt-check-only-probe.mjs) { exit 1 }
@@ -321,20 +321,32 @@ Run:
 ```powershell
 $configBefore = git config --local --get blame.ignoreRevsFile
 $configBeforeExit = $LASTEXITCODE
-$blame = git blame --ignore-revs-file .git-blame-ignore-revs -- src-tauri/src/youtube/process_runtime.rs
-$blameExit = $LASTEXITCODE
-$styleAttribution = @($blame | Select-String -SimpleMatch 'acbe5bfd')
+$withoutOutput = git blame -- src-tauri/src/youtube/process_runtime.rs
+$withoutExit = $LASTEXITCODE
+$withOutput = git blame --ignore-revs-file .git-blame-ignore-revs -- src-tauri/src/youtube/process_runtime.rs
+$withExit = $LASTEXITCODE
+$without = @($withoutOutput | Select-String -SimpleMatch 'acbe5bfd').Count
+$with = @($withOutput | Select-String -SimpleMatch 'acbe5bfd').Count
+$limit = [math]::Max(10, [int]($without / 10))
 $configAfter = git config --local --get blame.ignoreRevsFile
 $configAfterExit = $LASTEXITCODE
-"BLAME_EXIT=$blameExit"
-"STYLE_ATTRIBUTION_COUNT=$($styleAttribution.Count)"
+"WITHOUT_EXIT=$withoutExit"
+"WITH_EXIT=$withExit"
+"WITHOUT_STYLE_ATTRIBUTION=$without"
+"WITH_STYLE_ATTRIBUTION=$with"
+"WITH_LIMIT=$limit"
 "CONFIG_UNCHANGED=$(($configBeforeExit -eq $configAfterExit) -and ($configBefore -eq $configAfter))"
-if ($blameExit -ne 0 -or $styleAttribution.Count -ne 0) { exit 1 }
+if ($withoutExit -ne 0 -or $withExit -ne 0) { exit 1 }
+if ($without -le 0 -or $with -ge $without -or $with -gt $limit) { exit 1 }
 if ($configBeforeExit -ne $configAfterExit -or $configBefore -ne $configAfter) { exit 1 }
 ```
 
-Expected: `BLAME_EXIT=0`, `STYLE_ATTRIBUTION_COUNT=0`, and
-`CONFIG_UNCHANGED=True`. Do not run the documented `git config` command.
+Expected on the recorded baseline: both blame commands exit 0, attribution
+drops from `600` lines without the ignore file to `9` with it, the permitted
+limit is `60`, and `CONFIG_UNCHANGED=True`. The pass/fail rule uses the
+differential threshold rather than requiring those informational counts to
+remain frozen. Git may retain the ignored commit on rustfmt-created lines that
+have no unambiguous parent. Do not run the documented `git config` command.
 
 - [ ] **Step 6: Run the complete aggregate verification**
 

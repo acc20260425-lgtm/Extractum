@@ -129,8 +129,11 @@ commits. Neither state changes repository history.
   pass.
 - Run
   `git blame --ignore-revs-file .git-blame-ignore-revs -- src-tauri/src/youtube/process_runtime.rs`;
-  require exit 0 and confirm the formatting commit is absent from the emitted
-  attributions. This verifies the ignore file without changing Git config.
+  require exit 0 and compare style-commit attribution counts with and without
+  the flag. The ignored count must decrease and must not exceed the larger of
+  10 lines or 10% of the unignored count. Git may retain the ignored commit for
+  rustfmt-created lines that have no unambiguous parent attribution. This
+  differential check verifies the ignore file without changing Git config.
 - Run `git diff --check`.
 - Inspect the final diff and require exactly the four scoped files.
 - Confirm `git config --get blame.ignoreRevsFile` is not changed by the
@@ -145,6 +148,9 @@ commits. Neither state changes repository history.
   `cargo check`.
 - `.git-blame-ignore-revs` contains the exact full hash of the isolated style
   commit and works with Git's command-line `--ignore-revs-file` option.
+- Applying the ignore file substantially reduces style-commit blame
+  attribution under the documented differential threshold; zero residual
+  attribution is not required.
 - The positive and negative checks prove that `check:rustfmt` detects drift
   without rewriting the malformed file.
 - No hook, CI workflow, Rust source, runtime behavior, unrelated aggregate
