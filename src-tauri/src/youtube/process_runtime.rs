@@ -15,7 +15,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::child_process::hide_console_window;
 use crate::error::{AppError, AppResult};
-use crate::external_process::ExternalProcessShutdownState;
+use crate::external_process::{warn_shutdown_stage, ExternalProcessShutdownState};
 use crate::process_tree::ProcessTreeGuard;
 
 use super::errors::classify_ytdlp_failure;
@@ -109,6 +109,7 @@ pub(crate) struct ManagedYtdlpGuard {
 
 impl ManagedYtdlpGuard {
     fn cancellation(&self) -> CancellationToken { self.cancellation.clone() }
+    fn id(&self) -> u64 { self.id }
     fn finish(&mut self) { if !self.finished { self.registry.operations.lock().expect("youtube process registry lock").remove(&self.id); self.finished = true; self.registry.empty.notify_waiters(); } }
 }
 
@@ -292,6 +293,8 @@ async fn manage_spawned_ytdlp(
 }
 
 fn detach_owned_reap(mut spawned: Box<dyn SpawnedYtdlp>, cookie: Option<CookieLifetimeGuard>, operation: ManagedYtdlpGuard) {
+    let operation_id = operation.id();
+    warn_shutdown_stage(operation_id, "yt_dlp_reap_detached");
     tokio::spawn(async move { let _operation = operation; let _cookie = cookie; let _ = spawned.kill_and_wait().await; });
 }
 

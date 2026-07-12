@@ -8,7 +8,7 @@ import youtubeRuntimeSource from "../../src-tauri/src/youtube/runtime.rs?raw";
 import ytdlpRuntimeSource from "../../src-tauri/src/youtube/process_runtime.rs?raw";
 
 describe("hidden child process contract", () => {
-  it("defines the Windows-only hidden-console helper and uses it for the bundled Gemini sidecar", () => {
+  it("defines the Windows-only hidden-console helper and uses it for every Gemini sidecar launch", () => {
     expect(libSource).toContain("mod child_process;");
     expect(childProcessSource).toContain(
       "pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;",
@@ -18,7 +18,7 @@ describe("hidden child process contract", () => {
     );
     expect(childProcessSource).toMatch(/command\r?\n}/);
     expect(childProcessSource).toContain("assert_eq!(CREATE_NO_WINDOW, 0x0800_0000)");
-    expect(sidecarSource).toContain("crate::child_process::hide_console_window(&mut command)");
+    expect(sidecarSource).toContain("crate::child_process::hide_console_window(command)");
     expect(sidecarSource).not.toContain("creation_flags(");
     expect(cdpChromeSource).not.toContain("hide_console_window");
   });

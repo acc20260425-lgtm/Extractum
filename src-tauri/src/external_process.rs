@@ -15,6 +15,10 @@ pub(crate) type WatchdogScheduler = Arc<dyn Fn(ShutdownTiming, WatchdogTask) + S
 pub(crate) type ShutdownCleanup =
     Pin<Box<dyn Future<Output = Result<(), ShutdownCleanupError>> + Send + 'static>>;
 
+pub(crate) fn warn_shutdown_stage(operation_id: u64, stage: &'static str) {
+    eprintln!("external process cleanup warning: operation_id={operation_id} stage={stage}");
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct ShutdownTiming {
     pub(crate) graceful: Duration,

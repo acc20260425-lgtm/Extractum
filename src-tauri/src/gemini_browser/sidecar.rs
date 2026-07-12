@@ -48,6 +48,13 @@ enum ResumeSidecarOutcome {
 
 impl GeminiBrowserSidecarProcess {
     async fn spawn(handle: &AppHandle) -> AppResult<Self> {
+        let shutdown = handle
+            .state::<ExternalProcessShutdownState>()
+            .inner()
+            .clone();
+        let _admission = shutdown
+            .try_admit()
+            .map_err(|_| AppError::internal("Gemini browser sidecar is shutting down"))?;
         let repo_root =
             std::env::current_dir().map_err(|error| AppError::internal(error.to_string()))?;
         let dev_script = super::sidecar_launch::dev_sidecar_script(&repo_root);
@@ -71,47 +78,39 @@ impl GeminiBrowserSidecarProcess {
             dev_script.exists(),
         ) {
             GeminiBrowserSidecarLaunch::DevNodeScript { node, script } => {
-                Self::spawn_node_script(handle, node, script).await
+                Self::spawn_node_script(node, script).await
             }
-            GeminiBrowserSidecarLaunch::Bundled { .. } => Self::spawn_bundled(handle).await,
+            GeminiBrowserSidecarLaunch::Bundled { .. } => Self::spawn_bundled().await,
         }
     }
 
-    async fn spawn_node_script(handle: &AppHandle, node: String, script_path: PathBuf) -> AppResult<Self> {
-        let child = Command::new(node)
-            .arg(script_path)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
+    async fn spawn_node_script(node: String, script_path: PathBuf) -> AppResult<Self> {
+        let process_tree = ProcessTreeGuard::new()
+            .map_err(|_| AppError::internal("Failed to contain Gemini browser sidecar"))?;
+        let mut command = Command::new(node);
+        command.arg(script_path);
+        configure_sidecar_command(&mut command);
+        let child = command.spawn()
             .map_err(|error| {
                 AppError::internal(format!("Failed to start Gemini browser sidecar: {error}"))
             })?;
-        Self::install_node_child(handle, child).await
+        Self::install_node_child(child, process_tree).await
     }
 
-    async fn spawn_bundled(handle: &AppHandle) -> AppResult<Self> {
+    async fn spawn_bundled() -> AppResult<Self> {
         let path = bundled_sidecar_path_from_current_exe()
             .map_err(|error| AppError::internal(format!("Gemini sidecar bundle is unavailable: {error}")))?;
+        let process_tree = ProcessTreeGuard::new()
+            .map_err(|_| AppError::internal("Failed to contain Gemini browser sidecar"))?;
         let mut command = Command::new(path);
-        command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-        crate::child_process::hide_console_window(&mut command);
+        configure_sidecar_command(&mut command);
         let child = command.spawn().map_err(|error| {
             AppError::internal(format!("Failed to start bundled Gemini sidecar: {error}"))
         })?;
-        Self::install_node_child(handle, child).await
+        Self::install_node_child(child, process_tree).await
     }
 
-    async fn install_node_child(handle: &AppHandle, mut child: Child) -> AppResult<Self> {
-        let shutdown = handle
-            .state::<ExternalProcessShutdownState>()
-            .inner()
-            .clone();
-        let _admission = shutdown
-            .try_admit()
-            .map_err(|_| AppError::internal("Gemini browser sidecar is shutting down"))?;
-        let process_tree = ProcessTreeGuard::new()
-            .map_err(|_| AppError::internal("Failed to contain Gemini browser sidecar"))?;
+    async fn install_node_child(mut child: Child, process_tree: ProcessTreeGuard) -> AppResult<Self> {
         if process_tree.assign_tokio(&child).is_err() {
             let _ = child.kill().await;
             return Err(AppError::internal("Failed to contain Gemini browser sidecar"));
@@ -172,6 +171,11 @@ impl GeminiBrowserSidecarProcess {
             }
         }
     }
+}
+
+fn configure_sidecar_command(command: &mut Command) {
+    command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
+    crate::child_process::hide_console_window(command);
 }
 
 impl Drop for GeminiBrowserSidecarProcess {

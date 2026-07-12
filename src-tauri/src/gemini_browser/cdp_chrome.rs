@@ -163,6 +163,8 @@ impl Drop for ChromeCdpProcess {
 }
 
 pub(crate) fn spawn_chrome_cdp(spec: &ChromeCdpLaunchSpec) -> AppResult<ChromeCdpProcess> {
+    let process_tree = ProcessTreeGuard::new()
+        .map_err(|_| AppError::internal("Failed to contain Chrome process tree"))?;
     let mut child = Command::new(&spec.chrome_path)
         .args(&spec.args)
         .spawn()
@@ -172,8 +174,6 @@ pub(crate) fn spawn_chrome_cdp(spec: &ChromeCdpLaunchSpec) -> AppResult<ChromeCd
             ))
         })?;
 
-    let process_tree = ProcessTreeGuard::new()
-        .map_err(|_| AppError::internal("Failed to contain Chrome process tree"))?;
     if process_tree.assign_std(&child).is_err() {
         let _ = child.kill();
         let _ = child.wait();

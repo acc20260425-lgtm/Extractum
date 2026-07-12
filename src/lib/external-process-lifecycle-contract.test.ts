@@ -6,6 +6,7 @@ import sidecarSource from "../../src-tauri/src/gemini_browser/sidecar.rs?raw";
 import sidecarLaunchSource from "../../src-tauri/src/gemini_browser/sidecar_launch.rs?raw";
 import cdpChromeSource from "../../src-tauri/src/gemini_browser/cdp_chrome.rs?raw";
 import geminiCommandsSource from "../../src-tauri/src/gemini_browser/commands.rs?raw";
+import youtubeProcessRuntimeSource from "../../src-tauri/src/youtube/process_runtime.rs?raw";
 import cargoSource from "../../src-tauri/Cargo.toml?raw";
 import tauriConfigSource from "../../src-tauri/tauri.conf.json?raw";
 
@@ -50,6 +51,18 @@ describe("external process lifecycle contract", () => {
     expect(sidecar).not.toContain("request_shell");
     expect(lib).not.toContain("tauri_plugin_shell");
     expect(normalized(cargoSource)).not.toContain("tauri-plugin-shell");
+
+    const admission = sidecar.indexOf(".try_admit()");
+    const launchDispatch = sidecar.indexOf("match resolve_launch_mode(");
+    expect(admission).toBeGreaterThanOrEqual(0);
+    expect(admission).toBeLessThan(launchDispatch);
+
+    const commandConfigurator = sidecar.match(
+      /fn configure_sidecar_command[\s\S]*?^}/m,
+    )?.[0];
+    expect(commandConfigurator).toContain("hide_console_window");
+    expect(commandConfigurator).toContain("kill_on_drop(true)");
+    expect(sidecar.match(/configure_sidecar_command\(&mut command\)/g)).toHaveLength(2);
   });
 
   it("owns CDP Chrome through the spawned child and its process tree", () => {
@@ -61,6 +74,8 @@ describe("external process lifecycle contract", () => {
     expect(cdpChrome).toContain("fn shutdown");
     expect(commands).toContain("spawn_blocking");
     expect(cdpChrome).not.toMatch(/taskkill|CreateToolhelp32Snapshot|Process32First|Process32Next|sysinfo/);
+    expect(cdpChrome.indexOf("ProcessTreeGuard::new()"))
+      .toBeLessThan(cdpChrome.indexOf(".spawn()"));
   });
 
   it("coordinates external-process cleanup from the Tauri exit event", () => {
@@ -71,5 +86,17 @@ describe("external process lifecycle contract", () => {
     expect(lib).toContain("GRACEFUL_SHUTDOWN_TIMEOUT");
     expect(lib).toContain("SHUTDOWN_WATCHDOG_TIMEOUT");
     expect(lib).toContain("std::thread::spawn");
+
+    const coordinator = normalized(coordinatorSource);
+    const warningHelper = coordinator.match(
+      /fn warn_shutdown_stage\(operation_id: u64, stage: &'static str\)[\s\S]*?^}/m,
+    )?.[0];
+    expect(warningHelper).toBeDefined();
+    expect(warningHelper).not.toMatch(
+      /args|cookie|prompt|stdout|stderr|profile|executable|path|error/i,
+    );
+    expect(normalized(youtubeProcessRuntimeSource)).toContain(
+      "warn_shutdown_stage(operation_id, \"yt_dlp_reap_detached\")",
+    );
   });
 });
