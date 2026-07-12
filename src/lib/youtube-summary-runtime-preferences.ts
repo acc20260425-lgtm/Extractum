@@ -43,7 +43,10 @@ export function saveYoutubeSummaryRuntimeProvider(
   runtimeProvider: PromptPackRuntimeProvider,
 ): void {
   try {
-    storage.setItem(RUNTIME_PROVIDER_KEY, runtimeProvider);
+    storage.setItem(
+      RUNTIME_PROVIDER_KEY,
+      runtimeProvider === "gemini_browser" ? "gemini_browser" : "api",
+    );
   } catch {
     // Storage availability must not block UI behavior.
   }
@@ -54,7 +57,10 @@ export function saveYoutubeSummaryBrowserProviderMode(
   browserProviderMode: GeminiBrowserProviderMode,
 ): void {
   try {
-    storage.setItem(BROWSER_PROVIDER_MODE_KEY, browserProviderMode);
+    storage.setItem(
+      BROWSER_PROVIDER_MODE_KEY,
+      browserProviderMode === "cdp_attach" ? "cdp_attach" : "managed",
+    );
   } catch {
     // Storage availability must not block UI behavior.
   }

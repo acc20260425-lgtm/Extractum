@@ -79,6 +79,22 @@ describe("youtube summary runtime preferences", () => {
     expect(storage.values.get("extractum.youtubeSummary.browserProviderMode")).toBe("cdp_attach");
   });
 
+  it("normalizes unsupported runtime values before saving", () => {
+    const storage = new MemoryStorage();
+
+    saveYoutubeSummaryRuntimeProvider(storage, "unsupported" as never);
+
+    expect(storage.values.get("extractum.youtubeSummary.runtimeProvider")).toBe("api");
+  });
+
+  it("normalizes unsupported browser modes before saving", () => {
+    const storage = new MemoryStorage();
+
+    saveYoutubeSummaryBrowserProviderMode(storage, "unsupported" as never);
+
+    expect(storage.values.get("extractum.youtubeSummary.browserProviderMode")).toBe("managed");
+  });
+
   it("ignores storage write failures", () => {
     const storage: RuntimePreferenceStorage = {
       getItem() {
