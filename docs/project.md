@@ -203,6 +203,7 @@ Implemented:
   `research/youtube_pipeline`, including legacy direct-LLM strategies and a
   file-backed agentic MoC workflow. This prototype is not production-integrated
   into the Tauri app; normal product YouTube Summary runs use Prompt Packs.
+- YouTube Summary remembers the last local API/Gemini Browser runtime and browser mode, and its launch button names the provider that will receive the run.
 - dedicated `/projects/runs` Prompt Pack runs screen with SVAR grid browsing,
   run label update, confirmed terminal run deletion, confirmed active run
   cancellation, and a from-scratch report workspace for videos, claims,

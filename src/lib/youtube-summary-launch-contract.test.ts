@@ -59,6 +59,22 @@ describe("youtube summary launch contract", () => {
     expect(dialog).toContain("browserProviderConfig:");
   });
 
+  it("restores runtime preferences before preflight and names the submitted provider", () => {
+    const dialog = readFileSync("src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte", "utf8");
+
+    expect(dialog).toContain("loadYoutubeSummaryRuntimePreferences");
+    expect(dialog).toContain("saveYoutubeSummaryRuntimeProvider");
+    expect(dialog).toContain("saveYoutubeSummaryBrowserProviderMode");
+    expect(dialog).toContain('runtimeProvider === "gemini_browser" ? "Run via Gemini Browser" : "Run via API"');
+    expect(dialog).not.toContain('runtimeProvider = "api";');
+    expect(dialog).toContain("function handleBrowserModeChange");
+    expect(dialog).toContain("onchange={handleBrowserModeChange}");
+
+    const openEffect = dialog.slice(dialog.indexOf("$effect(() =>"), dialog.indexOf("async function loadProfiles"));
+    expect(openEffect.indexOf("loadYoutubeSummaryRuntimePreferences"))
+      .toBeLessThan(openEffect.indexOf("runPreflight"));
+  });
+
   it("surfaces Gemini Browser runtime provenance in prompt pack run diagnostics", () => {
     const types = readFileSync("src/lib/types/prompt-packs.ts", "utf8");
     const runsPanel = readFileSync("src/lib/components/research-projects/YoutubeSummaryRunsPanel.svelte", "utf8");

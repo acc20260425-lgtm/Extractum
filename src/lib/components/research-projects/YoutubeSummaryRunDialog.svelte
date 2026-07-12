@@ -25,6 +25,11 @@
     YoutubeSummaryPreflightResponse,
   } from "$lib/types/prompt-packs";
   import { getLlmProfiles } from "$lib/api/llm";
+  import {
+    loadYoutubeSummaryRuntimePreferences,
+    saveYoutubeSummaryBrowserProviderMode,
+    saveYoutubeSummaryRuntimeProvider,
+  } from "$lib/youtube-summary-runtime-preferences";
   import type { LlmProfile } from "$lib/types/llm";
   import type {
     GeminiBrowserProviderConfig,
@@ -93,22 +98,33 @@
       ? browserSetupChecks.find((check) => check.state === "failed" || check.state === "action_needed") ?? null
       : null,
   );
+  const runButtonLabel = $derived(
+    runtimeProvider === "gemini_browser" ? "Run via Gemini Browser" : "Run via API",
+  );
 
   $effect(() => {
     if (open) {
       outputLanguage = "ru";
       controlPreset = "detailed_report";
-      runtimeProvider = "api";
-      browserProviderMode = "managed";
+      const preferences = loadYoutubeSummaryRuntimePreferences(runtimePreferenceStorage());
+      runtimeProvider = preferences.runtimeProvider;
+      browserProviderMode = preferences.browserProviderMode;
       cdpEndpoint = "http://127.0.0.1:9222";
       browserStatus = null;
       browserRuns = [];
       browserStatusLoadError = null;
+      preflight = null;
+      error = null;
       includeComments = false;
       void loadProfiles();
+      if (runtimeProvider === "gemini_browser") void refreshBrowserStatus();
       if (source) queueMicrotask(() => void runPreflight());
     }
   });
+
+  function runtimePreferenceStorage() {
+    return typeof localStorage === "undefined" ? null : localStorage;
+  }
 
   async function loadProfiles() {
     try {
@@ -160,7 +176,17 @@
 
   function handleRuntimeChange(event: Event) {
     runtimeProvider = (event.currentTarget as HTMLSelectElement).value as PromptPackRuntimeProvider;
+    const storage = runtimePreferenceStorage();
+    if (storage) saveYoutubeSummaryRuntimeProvider(storage, runtimeProvider);
     if (runtimeProvider === "gemini_browser") void refreshBrowserStatus();
+    void runPreflight();
+  }
+
+  function handleBrowserModeChange(event: Event) {
+    browserProviderMode = (event.currentTarget as HTMLSelectElement).value as GeminiBrowserProviderMode;
+    const storage = runtimePreferenceStorage();
+    if (storage) saveYoutubeSummaryBrowserProviderMode(storage, browserProviderMode);
+    void refreshBrowserStatus();
     void runPreflight();
   }
 
@@ -285,7 +311,7 @@
       {:else}
         <label>
           <span>Browser mode</span>
-          <select bind:value={browserProviderMode} aria-label="Browser Provider mode" onchange={() => { void refreshBrowserStatus(); void runPreflight(); }}>
+          <select bind:value={browserProviderMode} aria-label="Browser Provider mode" onchange={handleBrowserModeChange}>
             <option value="managed">Managed</option>
             <option value="cdp_attach">Attach Chrome</option>
           </select>
@@ -362,7 +388,7 @@
 
     <footer>
       <ExtractumButton type="button" variant="outline" onclick={() => void runPreflight()} disabled={!source || loading}>Refresh</ExtractumButton>
-      <ExtractumButton type="submit" disabled={!source || loading || !canStartYoutubeSummary(preflight) || Boolean(browserRuntimeBlockingCheck)}>Start</ExtractumButton>
+      <ExtractumButton type="submit" disabled={!source || loading || !canStartYoutubeSummary(preflight) || Boolean(browserRuntimeBlockingCheck)}>{runButtonLabel}</ExtractumButton>
     </footer>
   </form>
 </ExtractumDialog>
