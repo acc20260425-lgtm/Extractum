@@ -86,9 +86,12 @@ use super::{
 use apalis::prelude::TaskSink;
 use sha2::{Digest, Sha384};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Barrier},
+    time::Duration,
+};
 use tauri_plugin_sql::{Migration, MigrationKind};
-use tokio::{sync::Barrier, task::JoinSet};
+use tokio::task::JoinSet;
 ```
 
 Add these tests after `sha384_hex` and before the existing schema tests:
@@ -141,49 +144,64 @@ async fn concurrent_test_migrations_publish_complete_apalis_schemas() {
 
     for index in 0..DATABASE_COUNT {
         let barrier = barrier.clone();
-        tasks.spawn(async move {
-            let temp_dir = tempfile::tempdir().expect("create concurrent migration temp dir");
+        // The transactional helper future is not `Send` across threads
+        // (rustc "implementation of `Send` is not general enough"), so each
+        // worker owns a dedicated OS thread and current-thread runtime.
+        tasks.spawn_blocking(move || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("build concurrent migration worker runtime");
+            let temp_dir =
+                tempfile::tempdir().expect("create concurrent migration temp dir");
             let db_path = temp_dir.path().join("extractum.db");
             let options = SqliteConnectOptions::new()
                 .filename(&db_path)
                 .create_if_missing(true)
                 .journal_mode(SqliteJournalMode::Wal)
                 .busy_timeout(Duration::from_secs(5));
-            let pool = SqlitePoolOptions::new()
-                .max_connections(5)
-                .connect_with(options)
-                .await
+            let pool = runtime
+                .block_on(
+                    SqlitePoolOptions::new()
+                        .max_connections(5)
+                        .connect_with(options),
+                )
                 .expect("connect concurrent migration database");
 
-            barrier.wait().await;
-            apply_all_migrations_for_test_pool(&pool)
-                .await
-                .expect("apply atomic test migrations");
-
-            let jobs_columns: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM pragma_table_info('Jobs')")
-                    .fetch_one(&pool)
+            barrier.wait();
+            runtime.block_on(async {
+                apply_all_migrations_for_test_pool(&pool)
                     .await
-                    .expect("read Jobs columns");
-            assert_eq!(jobs_columns, 14, "database {index} has incomplete Jobs schema");
+                    .expect("apply atomic test migrations");
 
-            let idempotency_history: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM _sqlx_migrations WHERE version = ?",
-            )
-            .bind(20260506101935_i64)
-            .fetch_one(&pool)
-            .await
-            .expect("read idempotency migration history");
-            assert_eq!(idempotency_history, 1);
+                let jobs_columns: i64 =
+                    sqlx::query_scalar("SELECT COUNT(*) FROM pragma_table_info('Jobs')")
+                        .fetch_one(&pool)
+                        .await
+                        .expect("read Jobs columns");
+                assert_eq!(
+                    jobs_columns, 14,
+                    "database {index} has incomplete Jobs schema"
+                );
 
-            let mut storage =
-                apalis_sqlite::SqliteStorage::new_in_queue(&pool, "migration-atomicity");
-            storage
-                .push(format!("migration-atomicity-{index}"))
+                let idempotency_history: i64 = sqlx::query_scalar(
+                    "SELECT COUNT(*) FROM _sqlx_migrations WHERE version = ?",
+                )
+                .bind(20260506101935_i64)
+                .fetch_one(&pool)
                 .await
-                .expect("enqueue against complete Jobs schema");
+                .expect("read idempotency migration history");
+                assert_eq!(idempotency_history, 1);
 
-            pool.close().await;
+                let mut storage =
+                    apalis_sqlite::SqliteStorage::new_in_queue(&pool, "migration-atomicity");
+                storage
+                    .push(format!("migration-atomicity-{index}"))
+                    .await
+                    .expect("enqueue against complete Jobs schema");
+
+                pool.close().await;
+            });
             drop(temp_dir);
         });
     }
@@ -200,7 +218,10 @@ async fn concurrent_test_migrations_publish_complete_apalis_schemas() {
 
 Expected: the rollback test uses a one-connection memory pool so its schema
 inspection is deterministic. The stress test holds each temp directory until
-its pool is closed and performs a real 14-value Apalis insert.
+its pool is closed and performs a real 14-value Apalis insert. Async
+`JoinSet::spawn` is rejected by rustc because the SQLx transaction future does
+not satisfy the required generalized `Send`; blocking workers preserve real
+OS-thread parallelism without moving that future between threads.
 
 - [ ] **Step 4: Run the new tests to verify compile RED**
 
