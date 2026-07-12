@@ -15,9 +15,14 @@ pub(crate) type WatchdogTask = Box<dyn FnOnce() + Send>;
 pub(crate) type WatchdogScheduler = Arc<dyn Fn(ShutdownTiming, WatchdogTask) + Send + Sync>;
 pub(crate) type ShutdownCleanup =
     Pin<Box<dyn Future<Output = Result<(), ShutdownCleanupError>> + Send + 'static>>;
+pub(crate) type CleanupFactory = Box<dyn FnOnce() -> Vec<ShutdownCleanup> + Send + 'static>;
 
 pub(crate) fn warn_shutdown_stage(operation_id: u64, stage: &'static str) {
     eprintln!("external process cleanup warning: operation_id={operation_id} stage={stage}");
+}
+
+pub(crate) fn warn_shutdown_coordinator_stage(stage: &'static str) {
+    eprintln!("external process shutdown warning: stage={stage}");
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -161,10 +166,6 @@ impl ExternalProcessShutdownState {
         true
     }
 
-    pub(crate) fn phase(&self) -> ShutdownPhase {
-        self.0.inner.lock().phase
-    }
-
     pub(crate) fn exit_code(&self) -> i32 {
         self.0.inner.lock().first_exit_code.unwrap_or(0)
     }
@@ -199,16 +200,7 @@ impl ExternalProcessShutdownState {
         }
     }
 
-    pub(crate) async fn run_cleanup_steps(&self, cleanup_steps: Vec<ShutdownCleanup>) {
-        let mut tasks = tokio::task::JoinSet::new();
-        for cleanup in cleanup_steps {
-            tasks.spawn(cleanup);
-        }
-        while tasks.join_next().await.is_some() {}
-        self.complete();
-    }
-
-    pub(crate) fn run_watchdog(&self, exit: &ExitCallback) -> bool {
+    fn complete_and_exit(&self, exit: &ExitCallback) -> bool {
         let exit_code = {
             let mut admission = self.0.inner.lock();
             if admission.phase != ShutdownPhase::ShuttingDown {
@@ -219,6 +211,10 @@ impl ExternalProcessShutdownState {
         };
         exit(exit_code);
         true
+    }
+
+    pub(crate) fn run_watchdog(&self, exit: &ExitCallback) -> bool {
+        self.complete_and_exit(exit)
     }
 
     pub(crate) fn schedule_watchdog(
@@ -237,6 +233,58 @@ impl ExternalProcessShutdownState {
     }
 }
 
+impl ShutdownRun {
+    fn remaining(&self) -> Option<Duration> {
+        self.deadline
+            .checked_duration_since((self.clock)())
+            .filter(|remaining| !remaining.is_zero())
+    }
+
+    pub(crate) async fn coordinate(self, cleanup_factory: CleanupFactory) {
+        let Some(remaining) = self.remaining() else {
+            warn_shutdown_coordinator_stage("admission_deadline_elapsed");
+            self.state.complete_and_exit(&self.exit);
+            return;
+        };
+
+        if tokio::time::timeout(remaining, self.state.wait_for_startups())
+            .await
+            .is_err()
+        {
+            warn_shutdown_coordinator_stage("admission_deadline_elapsed");
+            self.state.complete_and_exit(&self.exit);
+            return;
+        }
+
+        let Some(remaining) = self.remaining() else {
+            warn_shutdown_coordinator_stage("cleanup_deadline_elapsed");
+            self.state.complete_and_exit(&self.exit);
+            return;
+        };
+
+        let cleanup = async move {
+            let mut tasks = tokio::task::JoinSet::new();
+            for step in cleanup_factory() {
+                tasks.spawn(step);
+            }
+            while let Some(result) = tasks.join_next().await {
+                match result {
+                    Ok(Ok(())) => {}
+                    Ok(Err(ShutdownCleanupError::Failed)) => {
+                        warn_shutdown_coordinator_stage("cleanup_failed");
+                    }
+                    Err(_) => warn_shutdown_coordinator_stage("cleanup_panicked"),
+                }
+            }
+        };
+
+        if tokio::time::timeout(remaining, cleanup).await.is_err() {
+            warn_shutdown_coordinator_stage("cleanup_deadline_elapsed");
+        }
+        self.state.complete_and_exit(&self.exit);
+    }
+}
+
 impl Drop for AdmissionPermit {
     fn drop(&mut self) {
         let mut admission = self.state.0.inner.lock();
@@ -251,6 +299,7 @@ impl Drop for AdmissionPermit {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
     use tokio::sync::Barrier;
@@ -271,6 +320,148 @@ mod tests {
         (scheduler, timings, watchdog)
     }
 
+    fn tokio_aligned_clock() -> MonotonicClock {
+        let std_origin = Instant::now();
+        let tokio_origin = tokio::time::Instant::now();
+        Arc::new(move || {
+            std_origin + tokio::time::Instant::now().duration_since(tokio_origin)
+        })
+    }
+
+    fn phase(state: &ExternalProcessShutdownState) -> ShutdownPhase {
+        state.0.inner.lock().phase
+    }
+
+    fn saved_exit_code(state: &ExternalProcessShutdownState) -> i32 {
+        state.0.inner.lock().first_exit_code.unwrap_or(0)
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn admission_wait_consumes_the_shared_graceful_budget() {
+        let state = ExternalProcessShutdownState::new();
+        let permit = state.try_admit().expect("running admits");
+        let (scheduler, _, watchdog) = recording_scheduler();
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let recorded_calls = calls.clone();
+        let exit: ExitCallback =
+            Arc::new(move |code| recorded_calls.lock().unwrap().push(code));
+        let timing = ShutdownTiming {
+            graceful: Duration::from_secs(3),
+            watchdog: Duration::from_secs(4),
+        };
+        let ShutdownStart::Started(run) =
+            state.start(None, timing, &scheduler, exit, tokio_aligned_clock())
+        else {
+            panic!("first request must start");
+        };
+        let factory_called = Arc::new(AtomicBool::new(false));
+        let recorded_factory = factory_called.clone();
+        let task = tokio::spawn(run.coordinate(Box::new(move || {
+            recorded_factory.store(true, Ordering::SeqCst);
+            vec![Box::pin(async {
+                tokio::time::sleep(Duration::from_secs(2)).await;
+                Ok(())
+            })]
+        })));
+
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(2)).await;
+        drop(permit);
+        tokio::task::yield_now().await;
+        assert!(factory_called.load(Ordering::SeqCst));
+        tokio::time::advance(Duration::from_secs(1)).await;
+        task.await.unwrap();
+
+        assert_eq!(*calls.lock().unwrap(), vec![0]);
+        watchdog.lock().unwrap().take().unwrap()();
+        assert_eq!(*calls.lock().unwrap(), vec![0]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn exhausted_admission_budget_skips_the_cleanup_factory() {
+        let state = ExternalProcessShutdownState::new();
+        let permit = state.try_admit().expect("running admits");
+        let (scheduler, _, _) = recording_scheduler();
+        let timing = ShutdownTiming {
+            graceful: Duration::from_secs(3),
+            watchdog: Duration::from_secs(4),
+        };
+        let ShutdownStart::Started(run) = state.start(
+            None,
+            timing,
+            &scheduler,
+            Arc::new(|_| {}),
+            tokio_aligned_clock(),
+        ) else {
+            panic!("first request must start");
+        };
+        let factory_called = Arc::new(AtomicBool::new(false));
+        let recorded_factory = factory_called.clone();
+        let task = tokio::spawn(run.coordinate(Box::new(move || {
+            recorded_factory.store(true, Ordering::SeqCst);
+            Vec::new()
+        })));
+
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(3)).await;
+        task.await.unwrap();
+
+        assert!(!factory_called.load(Ordering::SeqCst));
+        drop(permit);
+    }
+
+    #[tokio::test]
+    async fn cleanup_tasks_start_concurrently_and_isolate_error_and_panic() {
+        let state = ExternalProcessShutdownState::new();
+        let (scheduler, _, _) = recording_scheduler();
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let recorded_calls = calls.clone();
+        let exit: ExitCallback =
+            Arc::new(move |code| recorded_calls.lock().unwrap().push(code));
+        let ShutdownStart::Started(run) = state.start(
+            Some(23),
+            ShutdownTiming::default(),
+            &scheduler,
+            exit,
+            Arc::new(Instant::now),
+        ) else {
+            panic!("first request must start");
+        };
+        let started = Arc::new(AtomicUsize::new(0));
+        let settled = Arc::new(AtomicUsize::new(0));
+        let barrier = Arc::new(Barrier::new(4));
+        let mut cleanups: Vec<ShutdownCleanup> = Vec::new();
+
+        for outcome in [0_u8, 1, 2] {
+            let started = started.clone();
+            let settled = settled.clone();
+            let barrier = barrier.clone();
+            cleanups.push(Box::pin(async move {
+                started.fetch_add(1, Ordering::SeqCst);
+                barrier.wait().await;
+                match outcome {
+                    0 => {
+                        settled.fetch_add(1, Ordering::SeqCst);
+                        Ok(())
+                    }
+                    1 => {
+                        settled.fetch_add(1, Ordering::SeqCst);
+                        Err(ShutdownCleanupError::Failed)
+                    }
+                    _ => panic!("cleanup fixture panic"),
+                }
+            }));
+        }
+
+        let task = tokio::spawn(run.coordinate(Box::new(move || cleanups)));
+        barrier.wait().await;
+        assert_eq!(started.load(Ordering::SeqCst), 3);
+        task.await.unwrap();
+
+        assert_eq!(settled.load(Ordering::SeqCst), 2);
+        assert_eq!(*calls.lock().unwrap(), vec![23]);
+    }
+
     #[test]
     fn start_returns_started_and_schedules_one_watchdog() {
         let state = ExternalProcessShutdownState::new();
@@ -289,7 +480,7 @@ mod tests {
             &[ShutdownTiming::default()]
         );
         assert!(watchdog.lock().unwrap().is_some());
-        assert_eq!(state.exit_code(), 23);
+        assert_eq!(saved_exit_code(&state), 23);
         assert!(state.try_admit().is_err());
     }
 
@@ -321,7 +512,7 @@ mod tests {
             ShutdownStart::AlreadyShuttingDown
         ));
         assert_eq!(timings.lock().unwrap().len(), 1);
-        assert_eq!(state.exit_code(), 23);
+        assert_eq!(saved_exit_code(&state), 23);
     }
 
     #[test]
@@ -360,10 +551,20 @@ mod tests {
     async fn permits_acquired_before_shutdown_are_waited_for() {
         let state = ExternalProcessShutdownState::new();
         let permit = state.try_admit().expect("running admits");
+        let (scheduler, _, _) = recording_scheduler();
 
-        assert!(state.begin_shutdown(Some(23)));
+        assert!(matches!(
+            state.start(
+                Some(23),
+                ShutdownTiming::default(),
+                &scheduler,
+                Arc::new(|_| {}),
+                Arc::new(Instant::now)
+            ),
+            ShutdownStart::Started(_)
+        ));
         assert!(state.try_admit().is_err());
-        assert_eq!(state.phase(), ShutdownPhase::ShuttingDown);
+        assert_eq!(phase(&state), ShutdownPhase::ShuttingDown);
 
         let waiting = state.wait_for_startups();
         assert!(tokio::time::timeout(Duration::from_millis(10), waiting)
@@ -372,14 +573,21 @@ mod tests {
 
         drop(permit);
         state.wait_for_startups().await;
-        assert_eq!(state.exit_code(), 23);
+        assert_eq!(saved_exit_code(&state), 23);
     }
 
     #[tokio::test]
     async fn permit_drop_between_waiter_registration_and_await_does_not_stall_shutdown() {
         let state = ExternalProcessShutdownState::new();
         let permit = state.try_admit().expect("running admits");
-        state.begin_shutdown(None);
+        let (scheduler, _, _) = recording_scheduler();
+        let _ = state.start(
+            None,
+            ShutdownTiming::default(),
+            &scheduler,
+            Arc::new(|_| {}),
+            Arc::new(Instant::now),
+        );
 
         tokio::time::timeout(
             Duration::from_millis(10),
@@ -390,75 +598,21 @@ mod tests {
     }
 
     #[test]
-    fn only_the_first_shutdown_request_transitions_and_preserves_its_exit_code() {
-        let state = ExternalProcessShutdownState::new();
-
-        assert!(state.begin_shutdown(Some(23)));
-        assert!(!state.begin_shutdown(Some(9)));
-        assert_eq!(state.exit_code(), 23);
-        state.complete();
-        assert!(!state.begin_shutdown(Some(7)));
-        assert_eq!(state.phase(), ShutdownPhase::Completed);
-    }
-
-    #[test]
-    fn completed_coordinator_never_admits_new_work() {
-        let state = ExternalProcessShutdownState::new();
-
-        assert!(state.begin_shutdown(None));
-        state.complete();
-
-        assert_eq!(state.phase(), ShutdownPhase::Completed);
-        assert!(state.try_admit().is_err());
-    }
-
-    #[tokio::test]
-    async fn cleanup_cannot_complete_a_running_coordinator_or_bypass_admission() {
-        let state = ExternalProcessShutdownState::new();
-
-        state.run_cleanup_steps(Vec::new()).await;
-
-        assert_eq!(state.phase(), ShutdownPhase::Running);
-        drop(state.try_admit().expect("running state remains open"));
-    }
-
-    #[tokio::test]
-    async fn cleanup_steps_start_concurrently_and_continue_after_a_failure() {
-        let state = ExternalProcessShutdownState::new();
-        state.begin_shutdown(None);
-        let barrier = Arc::new(Barrier::new(2));
-        let completed = Arc::new(Mutex::new(Vec::new()));
-
-        let failing_barrier = barrier.clone();
-        let successful_completed = completed.clone();
-        state
-            .run_cleanup_steps(vec![
-                Box::pin(async move {
-                    failing_barrier.wait().await;
-                    Err(ShutdownCleanupError::Failed)
-                }),
-                Box::pin(async move {
-                    barrier.wait().await;
-                    successful_completed.lock().unwrap().push("successful");
-                    Ok(())
-                }),
-            ])
-            .await;
-
-        assert_eq!(*completed.lock().unwrap(), vec!["successful"]);
-        assert_eq!(state.phase(), ShutdownPhase::Completed);
-    }
-
-    #[test]
     fn watchdog_exits_with_the_preserved_code_unless_cleanup_completed() {
         let state = ExternalProcessShutdownState::new();
-        state.begin_shutdown(Some(23));
+        let (scheduler, _, _) = recording_scheduler();
         let calls = Arc::new(Mutex::new(Vec::new()));
         let recorded_calls = calls.clone();
         let exit: ExitCallback = Arc::new(move |code| recorded_calls.lock().unwrap().push(code));
+        let _ = state.start(
+            Some(23),
+            ShutdownTiming::default(),
+            &scheduler,
+            exit.clone(),
+            Arc::new(Instant::now),
+        );
 
         assert!(state.run_watchdog(&exit));
-        state.complete();
         assert!(!state.run_watchdog(&exit));
         assert_eq!(*calls.lock().unwrap(), vec![23]);
     }
@@ -466,10 +620,17 @@ mod tests {
     #[tokio::test]
     async fn concurrent_watchdogs_invoke_exit_once() {
         let state = ExternalProcessShutdownState::new();
-        state.begin_shutdown(Some(23));
+        let (scheduler, _, _) = recording_scheduler();
         let calls = Arc::new(Mutex::new(Vec::new()));
         let recorded_calls = calls.clone();
         let exit: ExitCallback = Arc::new(move |code| recorded_calls.lock().unwrap().push(code));
+        let _ = state.start(
+            Some(23),
+            ShutdownTiming::default(),
+            &scheduler,
+            exit.clone(),
+            Arc::new(Instant::now),
+        );
         let barrier = Arc::new(Barrier::new(3));
 
         let first = {
@@ -500,7 +661,6 @@ mod tests {
     #[test]
     fn injected_watchdog_scheduler_receives_timing_and_runs_the_gated_callback() {
         let state = ExternalProcessShutdownState::new();
-        state.begin_shutdown(Some(23));
         let timings = Arc::new(Mutex::new(Vec::new()));
         let recorded_timings = timings.clone();
         let scheduler: WatchdogScheduler = Arc::new(move |timing, watchdog| {
@@ -511,11 +671,20 @@ mod tests {
         let recorded_calls = calls.clone();
         let exit: ExitCallback = Arc::new(move |code| recorded_calls.lock().unwrap().push(code));
 
-        state.schedule_watchdog(ShutdownTiming::default(), &scheduler, exit);
+        assert!(matches!(
+            state.start(
+                Some(23),
+                ShutdownTiming::default(),
+                &scheduler,
+                exit,
+                Arc::new(Instant::now)
+            ),
+            ShutdownStart::Started(_)
+        ));
 
         assert_eq!(*timings.lock().unwrap(), vec![ShutdownTiming::default()]);
         assert_eq!(*calls.lock().unwrap(), vec![23]);
-        assert_eq!(state.phase(), ShutdownPhase::Completed);
+        assert_eq!(phase(&state), ShutdownPhase::Completed);
     }
 
     #[test]
