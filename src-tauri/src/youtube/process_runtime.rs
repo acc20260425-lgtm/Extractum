@@ -373,6 +373,36 @@ mod tests {
     impl YtdlpLauncher for FakeYtdlpLauncher {
         fn spawn(&self, _: &[String]) -> std::io::Result<Box<dyn SpawnedYtdlp>> { Ok(self.child.lock().unwrap().take().expect("one spawn")) }
     }
+
+    struct SpawnFailureLauncher;
+    impl YtdlpLauncher for SpawnFailureLauncher {
+        fn spawn(&self, _: &[String]) -> std::io::Result<Box<dyn SpawnedYtdlp>> {
+            Err(std::io::Error::new(std::io::ErrorKind::NotFound, "missing test binary"))
+        }
+    }
+
+    #[tokio::test]
+    async fn spawn_failure_rolls_back_the_registry_reservation() {
+        let registry = YoutubeProcessRegistry::new();
+        let shutdown = ExternalProcessShutdownState::new();
+        let error = run_ytdlp_managed_with(
+            &registry, &shutdown, &SpawnFailureLauncher, &[], Duration::from_secs(1), "timeout".to_string(),
+        ).await.expect_err("missing launcher fails");
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert!(registry.is_empty().await, "failed spawn releases its reservation");
+    }
+
+    #[tokio::test]
+    async fn shutdown_rejects_new_ytdlp_admission_before_spawn() {
+        let registry = YoutubeProcessRegistry::new();
+        let shutdown = ExternalProcessShutdownState::new();
+        assert!(shutdown.begin_shutdown(None));
+        let error = run_ytdlp_managed_with(
+            &registry, &shutdown, &SpawnFailureLauncher, &[], Duration::from_secs(1), "timeout".to_string(),
+        ).await.expect_err("shutdown rejects before spawning");
+        assert_eq!(error.kind, AppErrorKind::Network);
+        assert!(registry.is_empty().await);
+    }
     struct BackpressuredChild {
         stdout: Option<tokio::io::DuplexStream>, stderr: Option<tokio::io::DuplexStream>, done: Option<oneshot::Receiver<()>>, status: std::process::ExitStatus,
     }
