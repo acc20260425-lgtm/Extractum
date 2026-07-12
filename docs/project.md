@@ -440,6 +440,12 @@ LLM scheduling allows two running requests per `(provider, profile)` and priorit
   observations;
 - saved LLM API keys and Telegram `api_hash` values use OS secure storage;
 - YouTube cookies, when enabled, use OS secure storage and are written only to temporary backend cookie files for `yt-dlp`;
+
+## External process lifecycle
+
+`yt-dlp`, the Gemini sidecar, and Extractum-started CDP Chrome are owned backend processes. New starts are rejected once shutdown begins. On Windows each owned child is assigned to a Job Object; this contains descendants created after assignment, but cannot retroactively contain processes created before assignment.
+
+Application exit starts cleanup concurrently with a three-second graceful budget and a four-second watchdog. Gemini uses one Tokio JSONL transport in development and packaged builds; the packaged binary is resolved beside the executable and must remain declared in `bundle.externalBin`. A cancelled Gemini request taints its transport, so shutdown skips protocol `Stop` and terminates the owned process instead.
 - Telegram session files remain app-data files, but their contents are encrypted with per-account session keys stored in OS secure storage under `telegram.account.<account_id>.session_key`;
 - Telegram peer resolution can still fall back to dialog scanning, especially for private sources.
 - Takeout import does not download media bytes.

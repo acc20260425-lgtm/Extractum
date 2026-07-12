@@ -12,7 +12,7 @@ The Gemini path is:
 
 1. Settings UI calls `$lib/api/gemini-browser.ts`.
 2. Tauri commands in `src-tauri/src/gemini_browser/commands.rs` receive the request.
-3. Rust starts or reuses the Gemini browser sidecar from `src-tauri/src/gemini_browser/sidecar.rs`.
+3. Rust starts or reuses the Gemini browser sidecar from `src-tauri/src/gemini_browser/sidecar.rs`. Both dev Node and bundled modes use the same Tokio JSONL transport; the packaged binary is beside the app executable.
 4. Rust and the sidecar exchange one JSONL envelope per request.
 5. The sidecar adapter in `sidecars/gemini-browser/src/adapter.ts` controls Gemini through Playwright.
 6. DOM selectors come from `sidecars/gemini-browser/src/dom-contract.ts`.
