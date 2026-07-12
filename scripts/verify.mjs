@@ -30,6 +30,7 @@ function npmStep(title, scriptName) {
 const steps = [
   npmStep('npm run test', 'test'),
   npmStep('npm run check', 'check'),
+  npmStep('npm run check:rustfmt', 'check:rustfmt'),
   {
     title: 'cargo check --manifest-path src-tauri/Cargo.toml',
     command: 'cargo',

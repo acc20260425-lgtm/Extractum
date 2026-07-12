@@ -31,6 +31,7 @@
     "test:rust:prompt-pack-runs": "cargo test --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target/codex-project-runs --lib prompt_pack_run",
     "test:watch": "node scripts/run-vitest.mjs watch",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:rustfmt": "cargo fmt --manifest-path src-tauri/Cargo.toml -- --check",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "verify:project-runs": "npm run test:project-runs && npm run check && npm run test:rust:prompt-pack-runs",
     "verify": "node scripts/verify.mjs",
