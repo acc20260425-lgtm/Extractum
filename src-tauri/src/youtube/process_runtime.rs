@@ -327,7 +327,10 @@ where
 mod tests {
     use super::{detach_reap_with_cookie, detach_cookie_for_test, drain_output_while_waiting, run_ytdlp_managed_with, run_ytdlp_managed_with_cookie, run_ytdlp_managed_with_external_cancellation, CookieLifetimeGuard, SpawnedYtdlp, YtdlpLauncher, YoutubeProcessRegistry};
     use crate::error::AppErrorKind;
-    use crate::external_process::ExternalProcessShutdownState;
+    use crate::external_process::{
+        system_monotonic_clock, ExternalProcessShutdownState, ShutdownStart, ShutdownTiming,
+        WatchdogScheduler,
+    };
     use std::future::Future;
     use std::pin::Pin;
     use std::sync::{Arc, Mutex};
@@ -399,7 +402,17 @@ mod tests {
     async fn shutdown_rejects_new_ytdlp_admission_before_spawn() {
         let registry = YoutubeProcessRegistry::new();
         let shutdown = ExternalProcessShutdownState::new();
-        assert!(shutdown.begin_shutdown(None));
+        let scheduler: WatchdogScheduler = Arc::new(|_, _| {});
+        assert!(matches!(
+            shutdown.start(
+                None,
+                ShutdownTiming::default(),
+                &scheduler,
+                Arc::new(|_| {}),
+                system_monotonic_clock()
+            ),
+            ShutdownStart::Started(_)
+        ));
         let error = run_ytdlp_managed_with(
             &registry, &shutdown, &SpawnFailureLauncher, &[], Duration::from_secs(1), "timeout".to_string(),
         ).await.expect_err("shutdown rejects before spawning");

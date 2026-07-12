@@ -1,5 +1,7 @@
 mod external_process;
-use external_process::{ExternalProcessShutdownState, GRACEFUL_SHUTDOWN_TIMEOUT, SHUTDOWN_WATCHDOG_TIMEOUT};
+use external_process::{
+    ExternalProcessShutdownState, ShutdownCleanup, ShutdownStart, ShutdownTiming,
+};
 mod process_tree;
 mod analysis_documents;
 mod apalis_jobs;
@@ -371,32 +373,47 @@ pub fn run() {
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { code, api, .. } = event {
                 let shutdown = app.state::<ExternalProcessShutdownState>().inner().clone();
-                if shutdown.begin_shutdown(code) {
-                    api.prevent_exit();
-                    let registry = app.state::<YoutubeProcessRegistry>().inner().clone();
-                    let handle = app.clone();
-                    let watchdog_shutdown = shutdown.clone();
-                    let watchdog_handle = handle.clone();
-                    std::thread::spawn(move || {
-                        std::thread::sleep(SHUTDOWN_WATCHDOG_TIMEOUT);
-                        let exit: external_process::ExitCallback =
-                            std::sync::Arc::new(move |code| watchdog_handle.exit(code));
-                        watchdog_shutdown.run_watchdog(&exit);
-                    });
-                    tauri::async_runtime::spawn(async move {
-                        shutdown.wait_for_startups().await;
-                        let gemini_state = handle.state::<GeminiBrowserState>().inner();
-                        let cleanup = async {
-                            tokio::join!(
-                                registry.cancel_and_wait(),
-                                gemini_browser::shutdown_sidecar(&handle, gemini_state),
-                                gemini_browser::shutdown_cdp_chrome(gemini_state),
-                            );
-                        };
-                        let _ = tokio::time::timeout(GRACEFUL_SHUTDOWN_TIMEOUT, cleanup).await;
-                        shutdown.complete();
-                        handle.exit(shutdown.exit_code());
-                    });
+                let scheduler = external_process::os_thread_watchdog_scheduler();
+                let clock = external_process::system_monotonic_clock();
+                let exit_handle = app.clone();
+                let exit: external_process::ExitCallback =
+                    std::sync::Arc::new(move |code| exit_handle.exit(code));
+
+                match shutdown.start(code, ShutdownTiming::default(), &scheduler, exit, clock) {
+                    ShutdownStart::Started(run) => {
+                        api.prevent_exit();
+                        let registry = app.state::<YoutubeProcessRegistry>().inner().clone();
+                        let handle = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            run.coordinate(Box::new(move || {
+                                let sidecar_handle = handle.clone();
+                                let chrome_handle = handle.clone();
+                                let youtube: ShutdownCleanup = Box::pin(async move {
+                                    registry.cancel_and_wait().await;
+                                    Ok(())
+                                });
+                                let sidecar: ShutdownCleanup = Box::pin(async move {
+                                    let state =
+                                        sidecar_handle.state::<GeminiBrowserState>();
+                                    gemini_browser::shutdown_sidecar(
+                                        &sidecar_handle,
+                                        state.inner(),
+                                    )
+                                    .await;
+                                    Ok(())
+                                });
+                                let chrome: ShutdownCleanup = Box::pin(async move {
+                                    let state = chrome_handle.state::<GeminiBrowserState>();
+                                    gemini_browser::shutdown_cdp_chrome(state.inner()).await;
+                                    Ok(())
+                                });
+                                vec![youtube, sidecar, chrome]
+                            }))
+                            .await;
+                        });
+                    }
+                    ShutdownStart::AlreadyShuttingDown => api.prevent_exit(),
+                    ShutdownStart::Completed => {}
                 }
             }
         });

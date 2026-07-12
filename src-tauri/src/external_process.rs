@@ -52,6 +52,7 @@ pub(crate) struct AdmissionRejected;
 
 #[derive(Debug)]
 pub(crate) enum ShutdownCleanupError {
+    #[allow(dead_code)] // Current subsystem shutdown adapters are infallible; tests cover isolation.
     Failed,
 }
 
@@ -155,21 +156,6 @@ impl ExternalProcessShutdownState {
         })
     }
 
-    pub(crate) fn begin_shutdown(&self, code: Option<i32>) -> bool {
-        let mut admission = self.0.inner.lock();
-        if admission.phase != ShutdownPhase::Running {
-            return false;
-        }
-        admission.open = false;
-        admission.first_exit_code = Some(code.unwrap_or(0));
-        admission.phase = ShutdownPhase::ShuttingDown;
-        true
-    }
-
-    pub(crate) fn exit_code(&self) -> i32 {
-        self.0.inner.lock().first_exit_code.unwrap_or(0)
-    }
-
     pub(crate) async fn wait_for_startups(&self) {
         self.wait_for_startups_with_after_check(|| {}).await;
     }
@@ -190,13 +176,6 @@ impl ExternalProcessShutdownState {
                 after_check();
             }
             notified.await;
-        }
-    }
-
-    pub(crate) fn complete(&self) {
-        let mut admission = self.0.inner.lock();
-        if admission.phase == ShutdownPhase::ShuttingDown {
-            admission.phase = ShutdownPhase::Completed;
         }
     }
 

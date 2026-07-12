@@ -78,16 +78,25 @@ describe("external process lifecycle contract", () => {
       .toBeLessThan(cdpChrome.indexOf(".spawn()"));
   });
 
-  it("coordinates external-process cleanup from the Tauri exit event", () => {
+  it("delegates Tauri exit decisions to the shutdown coordinator", () => {
     const lib = normalized(libSource);
+    const coordinator = normalized(coordinatorSource);
 
     expect(lib).toContain("RunEvent::ExitRequested");
-    expect(lib).toContain("prevent_exit");
-    expect(lib).toContain("GRACEFUL_SHUTDOWN_TIMEOUT");
-    expect(lib).toContain("SHUTDOWN_WATCHDOG_TIMEOUT");
-    expect(lib).toContain("std::thread::spawn");
+    expect(lib).toMatch(
+      /ShutdownStart::Started\(run\)\s*=>\s*\{[\s\S]*?api\.prevent_exit\(\)[\s\S]*?run\.coordinate/,
+    );
+    expect(lib).toMatch(
+      /ShutdownStart::AlreadyShuttingDown\s*=>\s*api\.prevent_exit\(\)/,
+    );
+    expect(lib).toMatch(/ShutdownStart::Completed\s*=>\s*\{\}/);
+    expect(lib).not.toContain("GRACEFUL_SHUTDOWN_TIMEOUT");
+    expect(lib).not.toContain("SHUTDOWN_WATCHDOG_TIMEOUT");
+    expect(lib).not.toContain("shutdown.wait_for_startups()");
+    expect(lib).not.toContain("shutdown.complete()");
+    expect(coordinator).not.toContain("fn begin_shutdown(");
+    expect(coordinator).not.toMatch(/pub\(crate\) fn complete\(/);
 
-    const coordinator = normalized(coordinatorSource);
     const warningHelper = coordinator.match(
       /fn warn_shutdown_stage\(operation_id: u64, stage: &'static str\)[\s\S]*?^}/m,
     )?.[0];
@@ -95,6 +104,19 @@ describe("external process lifecycle contract", () => {
     expect(warningHelper).not.toMatch(
       /args|cookie|prompt|stdout|stderr|profile|executable|path|error/i,
     );
+    const coordinatorWarning = coordinator.match(
+      /fn warn_shutdown_coordinator_stage\(stage: &'static str\)[\s\S]*?^}/m,
+    )?.[0];
+    expect(coordinatorWarning).toBeDefined();
+    expect(coordinatorWarning).not.toMatch(
+      /operation_id|args|cookie|prompt|stdout|stderr|profile|executable|path|error/i,
+    );
+    const shutdownRunImpl = coordinator.match(
+      /impl ShutdownRun \{[\s\S]*?^}/m,
+    )?.[0];
+    expect(shutdownRunImpl).toBeDefined();
+    expect(shutdownRunImpl).toContain("warn_shutdown_coordinator_stage(");
+    expect(shutdownRunImpl).not.toContain("warn_shutdown_stage(");
     expect(normalized(youtubeProcessRuntimeSource)).toContain(
       "warn_shutdown_stage(operation_id, \"yt_dlp_reap_detached\")",
     );
