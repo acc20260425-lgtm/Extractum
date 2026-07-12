@@ -4,6 +4,8 @@ import coordinatorSource from "../../src-tauri/src/external_process.rs?raw";
 import processTreeSource from "../../src-tauri/src/process_tree.rs?raw";
 import sidecarSource from "../../src-tauri/src/gemini_browser/sidecar.rs?raw";
 import sidecarLaunchSource from "../../src-tauri/src/gemini_browser/sidecar_launch.rs?raw";
+import cdpChromeSource from "../../src-tauri/src/gemini_browser/cdp_chrome.rs?raw";
+import geminiCommandsSource from "../../src-tauri/src/gemini_browser/commands.rs?raw";
 import cargoSource from "../../src-tauri/Cargo.toml?raw";
 import tauriConfigSource from "../../src-tauri/tauri.conf.json?raw";
 
@@ -48,5 +50,16 @@ describe("external process lifecycle contract", () => {
     expect(sidecar).not.toContain("request_shell");
     expect(lib).not.toContain("tauri_plugin_shell");
     expect(normalized(cargoSource)).not.toContain("tauri-plugin-shell");
+  });
+
+  it("owns CDP Chrome through the spawned child and its process tree", () => {
+    const cdpChrome = normalized(cdpChromeSource);
+    const commands = normalized(geminiCommandsSource);
+
+    expect(cdpChrome).toContain("ProcessTreeGuard");
+    expect(cdpChrome).toContain("assign_std");
+    expect(cdpChrome).toContain("fn shutdown");
+    expect(commands).toContain("spawn_blocking");
+    expect(cdpChrome).not.toMatch(/taskkill|CreateToolhelp32Snapshot|Process32First|Process32Next|sysinfo/);
   });
 });

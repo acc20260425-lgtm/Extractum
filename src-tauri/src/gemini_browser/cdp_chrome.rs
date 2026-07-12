@@ -6,6 +6,7 @@ use std::time::Duration;
 use url::Url;
 
 use crate::error::{AppError, AppResult};
+use crate::process_tree::ProcessTreeGuard;
 
 use super::{
     path_string, GeminiBrowserProviderConfig, GeminiBrowserProviderMode,
@@ -92,26 +93,77 @@ pub(crate) fn build_chrome_cdp_launch_spec(
     })
 }
 
-#[derive(Debug)]
-pub(crate) struct ChromeCdpProcess {
+trait ChromeChild: Send {
+    fn kill(&mut self) -> std::io::Result<()>;
+    fn wait(&mut self) -> std::io::Result<std::process::ExitStatus>;
+    fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>>;
+}
+
+struct SystemChromeChild {
     child: Child,
+    process_tree: ProcessTreeGuard,
+}
+
+impl ChromeChild for SystemChromeChild {
+    fn kill(&mut self) -> std::io::Result<()> {
+        let _ = self.process_tree.terminate();
+        self.child.kill()
+    }
+
+    fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
+        self.child.wait()
+    }
+
+    fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        self.child.try_wait()
+    }
+}
+
+pub(crate) struct ChromeCdpProcess {
+    child: Box<dyn ChromeChild>,
+    shut_down: bool,
 }
 
 impl ChromeCdpProcess {
-    fn new(child: Child) -> Self {
-        Self { child }
+    fn new(child: Box<dyn ChromeChild>) -> Self {
+        Self {
+            child,
+            shut_down: false,
+        }
+    }
+
+    pub(crate) fn shutdown(&mut self) -> std::io::Result<()> {
+        if self.shut_down {
+            return Ok(());
+        }
+        self.shut_down = true;
+        if self.child.try_wait()?.is_none() {
+            let kill_result = self.child.kill();
+            let wait_result = self.child.wait();
+            if let Err(error) = kill_result {
+                if error.kind() != std::io::ErrorKind::InvalidInput {
+                    return Err(error);
+                }
+            }
+            wait_result?;
+        }
+        Ok(())
+    }
+
+    #[cfg(test)]
+    fn with_test_child(child: Box<dyn ChromeChild>) -> Self {
+        Self::new(child)
     }
 }
 
 impl Drop for ChromeCdpProcess {
     fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        let _ = self.shutdown();
     }
 }
 
 pub(crate) fn spawn_chrome_cdp(spec: &ChromeCdpLaunchSpec) -> AppResult<ChromeCdpProcess> {
-    let child = Command::new(&spec.chrome_path)
+    let mut child = Command::new(&spec.chrome_path)
         .args(&spec.args)
         .spawn()
         .map_err(|error| {
@@ -120,7 +172,18 @@ pub(crate) fn spawn_chrome_cdp(spec: &ChromeCdpLaunchSpec) -> AppResult<ChromeCd
             ))
         })?;
 
-    Ok(ChromeCdpProcess::new(child))
+    let process_tree = ProcessTreeGuard::new()
+        .map_err(|_| AppError::internal("Failed to contain Chrome process tree"))?;
+    if process_tree.assign_std(&child).is_err() {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(AppError::internal("Failed to contain Chrome process tree"));
+    }
+
+    Ok(ChromeCdpProcess::new(Box::new(SystemChromeChild {
+        child,
+        process_tree,
+    })))
 }
 
 pub(crate) async fn wait_for_cdp_endpoint(endpoint: &str) -> AppResult<()> {
@@ -225,6 +288,92 @@ fn cdp_port(endpoint: &str) -> AppResult<u16> {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
+
+    struct FakeChromeChild {
+        events: Arc<Mutex<Vec<&'static str>>>,
+        exited: bool,
+        kill_error: Option<std::io::ErrorKind>,
+    }
+
+    impl ChromeChild for FakeChromeChild {
+        fn kill(&mut self) -> std::io::Result<()> {
+            self.events.lock().expect("events lock").push("kill");
+            match self.kill_error {
+                Some(kind) => Err(std::io::Error::from(kind)),
+                None => Ok(()),
+            }
+        }
+
+        fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
+            self.events.lock().expect("events lock").push("wait");
+            Ok(success_exit_status())
+        }
+
+        fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+            Ok(self.exited.then(success_exit_status))
+        }
+    }
+
+    #[test]
+    fn explicit_shutdown_kills_and_reaps_the_owned_child_once() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let child = FakeChromeChild { events: events.clone(), exited: false, kill_error: None };
+        let mut process = ChromeCdpProcess::with_test_child(Box::new(child));
+
+        process.shutdown().expect("first shutdown");
+        process.shutdown().expect("second shutdown is idempotent");
+
+        assert_eq!(*events.lock().expect("events lock"), ["kill", "wait"]);
+    }
+
+    #[test]
+    fn drop_falls_back_to_owned_child_shutdown() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let child = FakeChromeChild { events: events.clone(), exited: false, kill_error: None };
+
+        drop(ChromeCdpProcess::with_test_child(Box::new(child)));
+
+        assert_eq!(*events.lock().expect("events lock"), ["kill", "wait"]);
+    }
+
+    #[test]
+    fn shutdown_does_not_claim_or_kill_an_already_exited_child() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let child = FakeChromeChild { events: events.clone(), exited: true, kill_error: None };
+        let mut process = ChromeCdpProcess::with_test_child(Box::new(child));
+
+        process.shutdown().expect("shutdown observes child exit");
+
+        assert!(events.lock().expect("events lock").is_empty());
+    }
+
+    #[test]
+    fn shutdown_reaps_when_the_child_has_already_exited_during_kill() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let child = FakeChromeChild {
+            events: events.clone(),
+            exited: false,
+            kill_error: Some(std::io::ErrorKind::InvalidInput),
+        };
+        let mut process = ChromeCdpProcess::with_test_child(Box::new(child));
+
+        process.shutdown().expect("already-exited child remains a successful shutdown");
+
+        assert_eq!(*events.lock().expect("events lock"), ["kill", "wait"]);
+    }
+
+    #[cfg(windows)]
+    fn success_exit_status() -> std::process::ExitStatus {
+        use std::os::windows::process::ExitStatusExt;
+        std::process::ExitStatus::from_raw(0)
+    }
+
+    #[cfg(not(windows))]
+    fn success_exit_status() -> std::process::ExitStatus {
+        use std::os::unix::process::ExitStatusExt;
+        std::process::ExitStatus::from_raw(0)
+    }
 
     #[test]
     fn launch_spec_uses_endpoint_port_and_dedicated_profile() {

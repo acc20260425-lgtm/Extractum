@@ -3,6 +3,7 @@ use tauri_plugin_opener::OpenerExt;
 use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 
 use crate::error::{AppError, AppResult};
+use crate::external_process::ExternalProcessShutdownState;
 
 use super::jobs::{
     cancel_gemini_browser_job, enqueue_gemini_browser_job, GeminiBrowserArtifactMode,
@@ -350,15 +351,28 @@ pub async fn gemini_bridge_start_cdp_chrome(
         chrome_cdp_profile_dir(&handle)?,
         browser_config.as_ref(),
     )?;
-    let process = cdp_chrome::spawn_chrome_cdp(&spec)?;
+    let shutdown = handle
+        .state::<ExternalProcessShutdownState>()
+        .inner()
+        .clone();
+    let permit = shutdown
+        .try_admit()
+        .map_err(|_| AppError::internal("Application is shutting down"))?;
+    let spawn_spec = spec.clone();
+    let process = tokio::task::spawn_blocking(move || cdp_chrome::spawn_chrome_cdp(&spawn_spec))
+        .await
+        .map_err(|_| AppError::internal("Chrome launch task did not complete"))??;
     {
         let mut cdp_process = state.cdp_chrome_process().await;
         *cdp_process = Some(process);
     }
+    drop(permit);
 
     if let Err(error) = cdp_chrome::wait_for_cdp_endpoint(&spec.cdp_endpoint).await {
-        let mut cdp_process = state.cdp_chrome_process().await;
-        cdp_process.take();
+        let process = state.cdp_chrome_process().await.take();
+        if let Some(mut process) = process {
+            let _ = tokio::task::spawn_blocking(move || process.shutdown()).await;
+        }
         return Err(error);
     }
     Ok(cdp_chrome::start_chrome_result(&spec))
@@ -479,9 +493,12 @@ pub async fn gemini_bridge_stop(
         return cancel_gemini_browser_job(&handle, &run_id).await;
     }
     state.request_stop().await;
-    {
-        let mut cdp_process = state.cdp_chrome_process().await;
-        cdp_process.take();
+    let process = state.cdp_chrome_process().await.take();
+    if let Some(mut process) = process {
+        tokio::task::spawn_blocking(move || process.shutdown())
+            .await
+            .map_err(|_| AppError::internal("Chrome shutdown task did not complete"))?
+            .map_err(|error| AppError::internal(format!("Failed to stop Chrome: {error}")))?;
     }
     sidecar::stop(&handle, &state).await
 }
