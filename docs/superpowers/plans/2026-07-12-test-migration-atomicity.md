@@ -371,8 +371,8 @@ Run:
 $schemaPatterns = @(
     'table Jobs has \d+ columns but \d+ values were supplied',
     'no such table:\s*Jobs',
-    'Jobs.{0,120}(has no column|no column named|schema)',
-    '(has no column|no column named).{0,120}Jobs',
+    'table Jobs has no column named',
+    'no such column:\s*Jobs\.',
     'database schema has changed'
 )
 1..3 | ForEach-Object {
