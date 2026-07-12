@@ -4,7 +4,11 @@
 
 **Goal:** Remove all production Rust warnings from `gemini_browser/` by expressing existing test-only boundaries without changing runtime behavior.
 
-**Architecture:** First gate the four test-only job/queue symbols in `jobs.rs` and verify its tests. Then gate test-only reexports and helpers in `mod.rs`, `sidecar.rs`, `state.rs`, and `types.rs`, reducing the repository warning baseline from 11 to 2.
+**Architecture:** First gate the three genuinely test-only job/queue symbols in
+`jobs.rs`, make `Default` reuse the production timeout constructor, and verify
+the job tests. Then gate test-only reexports and helpers in `mod.rs`,
+`sidecar.rs`, `state.rs`, and `types.rs`, reducing the repository warning
+baseline from 11 to 2.
 
 **Tech Stack:** Rust 2021, Cargo, Tokio, Apalis, Tauri.
 
@@ -16,27 +20,43 @@
 - Do not change serialized enum variants, JSON fields, Tauri commands, TypeScript types, or persisted values.
 - Do not edit `docs/project.md` or `docs/value-registry.md`.
 - Follow warning-RED → focused GREEN → production warning GREEN for each task.
+- Precondition: commit `048221a2` (`chore: clean youtube process runtime warnings`)
+  is present and `git status --short --untracked-files=all` is clean before
+  Task 1 begins.
 
 ---
 
-### Task 1: Gate Gemini Job Test Infrastructure
+### Task 1: Clean Gemini Job Test Infrastructure
 
 **Files:**
-- Modify: `src-tauri/src/gemini_browser/jobs.rs:17-44,103-157,583-599`
-- Test in place: `src-tauri/src/gemini_browser/jobs.rs:1110-2974`
+- Modify: `src-tauri/src/gemini_browser/jobs.rs:17-44,83-157,593-599`
+- Test in place: `src-tauri/src/gemini_browser/jobs.rs:1106-2974`
 
 **Interfaces:**
 - Retains production `ApalisQueueInspectionMode::DegradedRunLogOnly`.
 - Retains `startup_reconciliation_checks_queued_runs_against_apalis(mode) -> bool` on all builds.
-- Retains `Supported`, queue-status mapping, custom timeout construction, and run-log cancellation lookup in test builds.
+- Retains `Supported`, queue-status mapping, and run-log cancellation lookup in
+  test builds; production `Default` reuses custom timeout construction.
+
+- [ ] **Step 0: Verify the YouTube-slice precondition**
+
+Run:
+
+```powershell
+git merge-base --is-ancestor 048221a2 HEAD
+git status --short --untracked-files=all
+```
+
+Expected: the ancestry command exits 0 and status prints nothing.
 
 - [ ] **Step 1: Record the job warning RED baseline**
 
 Run:
 
 ```powershell
-$output = & cargo check --manifest-path src-tauri/Cargo.toml --message-format=short 2>&1
-$output | Where-Object { $_ -match 'src\\gemini_browser\\jobs.rs.*warning:' }
+$output = & cargo check --manifest-path src-tauri/Cargo.toml --all-targets --message-format=short 2>&1
+$text = $output | Out-String
+($text -split "`r?`n") | Where-Object { $_ -match 'gemini_browser\\jobs.rs.*warning:' }
 ```
 
 Expected: four warnings name `Supported`, `run_status_for_queue_state`, `new_with_timeouts`, and `run_log_is_cancelled`.
@@ -66,9 +86,25 @@ pub(crate) fn startup_reconciliation_checks_queued_runs_against_apalis(
 
 Do not change `apalis_queue_inspection_mode`; it continues returning `DegradedRunLogOnly`.
 
-- [ ] **Step 3: Gate the remaining job helpers**
+- [ ] **Step 3: Reuse timeout construction and gate the remaining test helpers**
 
-Add `#[cfg(test)]` immediately above these existing definitions without changing their bodies:
+Make `Default` delegate to the existing timeout constructor with the same values:
+
+```rust
+impl Default for GeminiBrowserJobRuntime {
+    fn default() -> Self {
+        Self::new_with_timeouts(
+            std::time::Duration::from_secs(DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS + 5),
+            std::time::Duration::from_secs(DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS),
+            std::time::Duration::from_secs(DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS + 15),
+        )
+    }
+}
+```
+
+Keep `new_with_timeouts` available in production without `#[cfg(test)]`. Add
+`#[cfg(test)]` immediately above only these two existing helpers, without
+changing their bodies:
 
 ```rust
 #[cfg(test)]
@@ -82,24 +118,6 @@ pub(crate) fn run_status_for_queue_state(
         "Failed" => Some(crate::gemini_browser::GeminiBrowserRunStatus::Failed),
         "Killed" => Some(crate::gemini_browser::GeminiBrowserRunStatus::Failed),
         _ => None,
-    }
-}
-
-#[cfg(test)]
-fn new_with_timeouts(
-    waiter_timeout: std::time::Duration,
-    worker_execution_timeout: std::time::Duration,
-    worker_hard_guard_timeout: std::time::Duration,
-) -> Self {
-    let (worker_status, _) =
-        tokio::sync::watch::channel(GeminiBrowserWorkerStatus::Starting);
-    Self {
-        waiters: parking_lot::Mutex::new(std::collections::HashMap::new()),
-        cancelled_runs: parking_lot::Mutex::new(std::collections::HashSet::new()),
-        worker_status,
-        waiter_timeout,
-        worker_execution_timeout,
-        worker_hard_guard_timeout,
     }
 }
 
@@ -129,17 +147,20 @@ Expected: all job tests pass, including supported/degraded inspection, queue-sta
 Run:
 
 ```powershell
-$output = & cargo check --manifest-path src-tauri/Cargo.toml --message-format=short 2>&1
+$output = & cargo check --manifest-path src-tauri/Cargo.toml --all-targets --message-format=short 2>&1
 $cargoExit = $LASTEXITCODE
-$warnings = $output | Where-Object { $_ -match 'warning:' -and $_ -notmatch '^warning: `extractum`' }
+$text = $output | Out-String
+$warnings = ($text -split "`r?`n") | Where-Object { $_ -match 'warning:' -and $_ -notmatch '^warning: `extractum`' }
 "CARGO_EXIT=$cargoExit"
-"WARNING_COUNT=$($warnings.Count)"
+"INFORMATIONAL_WARNING_COUNT=$($warnings.Count)"
 $warnings
-if ($warnings -match 'src\\gemini_browser\\jobs.rs') { exit 1 }
+if ($text -match 'src\\gemini_browser\\jobs.rs.*warning:') { exit 1 }
 exit $cargoExit
 ```
 
-Expected: `CARGO_EXIT=0`, `WARNING_COUNT=7`, and no warning from `gemini_browser/jobs.rs`.
+Expected: `CARGO_EXIT=0`, no warning from `gemini_browser/jobs.rs`, and an
+informational repository-wide count of 7. The per-file assertion is the pass/fail
+criterion; the count only records the current repository baseline.
 
 - [ ] **Step 6: Commit Task 1**
 
@@ -170,16 +191,20 @@ git commit -m "chore: gate gemini job test helpers"
 Run:
 
 ```powershell
-$output = & cargo check --manifest-path src-tauri/Cargo.toml --message-format=short 2>&1
-$output | Where-Object { $_ -match 'src\\gemini_browser\\.*warning:' }
+$output = & cargo check --manifest-path src-tauri/Cargo.toml --all-targets --message-format=short 2>&1
+$text = $output | Out-String
+($text -split "`r?`n") | Where-Object { $_ -match 'src\\gemini_browser\\.*warning:' }
 ```
 
-Expected: five warnings remain: two unused reexports, two sidecar helpers, one state helper, and one status helper are represented by five compiler diagnostics because the two reexports share one diagnostic.
+Expected: six unused symbols produce five compiler diagnostics: the two unused
+reexports share one diagnostic, followed by two sidecar helpers, one state
+helper, and one status helper.
 
 - [ ] **Step 2: Make debug-type reexports test-only**
 
-Replace the normal type reexport block with the complete list below, then add
-the test-only reexport:
+Replace the normal type reexport block with the complete list below, then place
+the test-only type reexport beside the existing `#[cfg(test)]` jobs reexport near
+the top of `mod.rs`:
 
 ```rust
 pub use types::{
@@ -260,17 +285,20 @@ Expected: all Gemini Browser tests pass, including jobs, commands, run log, side
 Run:
 
 ```powershell
-$output = & cargo check --manifest-path src-tauri/Cargo.toml --message-format=short 2>&1
+$output = & cargo check --manifest-path src-tauri/Cargo.toml --all-targets --message-format=short 2>&1
 $cargoExit = $LASTEXITCODE
-$warnings = $output | Where-Object { $_ -match 'warning:' -and $_ -notmatch '^warning: `extractum`' }
+$text = $output | Out-String
+$warnings = ($text -split "`r?`n") | Where-Object { $_ -match 'warning:' -and $_ -notmatch '^warning: `extractum`' }
 "CARGO_EXIT=$cargoExit"
-"WARNING_COUNT=$($warnings.Count)"
+"INFORMATIONAL_WARNING_COUNT=$($warnings.Count)"
 $warnings
-if ($warnings -match 'src\\gemini_browser\\') { exit 1 }
+if ($text -match 'src\\gemini_browser\\.*warning:') { exit 1 }
 exit $cargoExit
 ```
 
-Expected: `CARGO_EXIT=0`, `WARNING_COUNT=2`, with warnings only in `apalis_jobs.rs` and `youtube/jobs.rs`.
+Expected: `CARGO_EXIT=0`, no warning from `gemini_browser/`, and an informational
+repository-wide count of 2 with warnings only in `apalis_jobs.rs` and
+`youtube/jobs.rs`. The path assertion, not the count, is the pass/fail criterion.
 
 - [ ] **Step 7: Run full Rust verification**
 
@@ -278,9 +306,11 @@ Run:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml
+cargo check --manifest-path src-tauri/Cargo.toml --all-targets
 ```
 
-Expected: the full Rust suite passes with zero failures.
+Expected: the full Rust suite passes with zero failures and all targets check
+successfully with no warnings from `gemini_browser/`.
 
 - [ ] **Step 8: Commit Task 2**
 

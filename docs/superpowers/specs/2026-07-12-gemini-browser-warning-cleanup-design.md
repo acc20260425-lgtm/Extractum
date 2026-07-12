@@ -45,9 +45,11 @@ depend on the Rust module reexport.
 - Keep `startup_reconciliation_checks_queued_runs_against_apalis` exhaustive
   on both builds: production returns `false` for the degraded mode; the test
   build additionally returns `true` for `Supported`.
-- Compile `run_status_for_queue_state`,
-  `GeminiBrowserJobRuntime::new_with_timeouts`, and `run_log_is_cancelled` only
-  in tests. Their call sites are inside the in-file test module.
+- Compile `run_status_for_queue_state` and `run_log_is_cancelled` only in tests.
+  Their call sites are inside the in-file test module.
+- Keep `GeminiBrowserJobRuntime::new_with_timeouts` production-visible and make
+  `Default::default()` delegate to it with the existing default durations.
+  This removes duplicated construction without changing timeout values.
 
 ### Sidecar, State, and Status Helpers
 
@@ -88,8 +90,9 @@ terminal-status logic remains production-visible.
 ## Verification
 
 - Run focused tests for `gemini_browser`; all existing tests must pass.
-- Run `cargo check --manifest-path src-tauri/Cargo.toml`; it must exit zero and
-  emit no warning from `src/gemini_browser/`.
+- Run `cargo check --manifest-path src-tauri/Cargo.toml --all-targets`; it must
+  exit zero and emit no warning from `src/gemini_browser/` in either normal or
+  test targets.
 - The warning baseline must decrease from 11 warnings to 2, excluding Cargo's
   final summary line. The two remaining locations are `apalis_jobs.rs` and
   `youtube/jobs.rs`.
