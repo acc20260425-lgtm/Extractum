@@ -414,6 +414,63 @@ mod tests {
         fn kill_and_wait<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = std::io::Result<std::process::ExitStatus>> + Send + 'a>> { self.wait() }
     }
 
+    struct ImmediateChild {
+        stdout: Option<tokio::io::DuplexStream>,
+        stderr: Option<tokio::io::DuplexStream>,
+        result: Option<std::io::Result<std::process::ExitStatus>>,
+        reap_status: std::process::ExitStatus,
+    }
+
+    impl SpawnedYtdlp for ImmediateChild {
+        fn take_stdout(&mut self) -> Box<dyn tokio::io::AsyncRead + Unpin + Send> { Box::new(self.stdout.take().unwrap()) }
+        fn take_stderr(&mut self) -> Box<dyn tokio::io::AsyncRead + Unpin + Send> { Box::new(self.stderr.take().unwrap()) }
+        fn assign_process_tree(&mut self) -> anyhow::Result<()> { Ok(()) }
+        fn wait<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = std::io::Result<std::process::ExitStatus>> + Send + 'a>> {
+            Box::pin(async move { self.result.take().expect("wait once") })
+        }
+        fn kill_and_wait<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = std::io::Result<std::process::ExitStatus>> + Send + 'a>> {
+            Box::pin(async move { Ok(self.reap_status) })
+        }
+    }
+
+    #[tokio::test]
+    async fn injected_nonzero_exit_preserves_not_found_classification_and_releases_registry() {
+        let (stdout, stdout_writer) = tokio::io::duplex(64);
+        let (stderr, mut stderr_writer) = tokio::io::duplex(64);
+        drop(stdout_writer);
+        tokio::spawn(async move { stderr_writer.write_all(b"ERROR: Video unavailable").await.unwrap(); });
+        let failed = std::process::Command::new("cmd.exe").args(["/C", "exit 1"]).status().unwrap();
+        let reaped = std::process::Command::new("cmd.exe").args(["/C", "exit 0"]).status().unwrap();
+        let launcher = FakeYtdlpLauncher { child: Mutex::new(Some(Box::new(ImmediateChild {
+            stdout: Some(stdout), stderr: Some(stderr), result: Some(Ok(failed)), reap_status: reaped,
+        }))) };
+        let registry = YoutubeProcessRegistry::new();
+        let shutdown = ExternalProcessShutdownState::new();
+        let error = run_ytdlp_managed_with(&registry, &shutdown, &launcher, &[], Duration::from_secs(1), "timeout".to_string())
+            .await.expect_err("nonzero exit fails");
+        assert_eq!(error.kind, AppErrorKind::NotFound);
+        assert!(registry.is_empty().await);
+    }
+
+    #[tokio::test]
+    async fn injected_wait_error_reaps_the_child_before_releasing_registry() {
+        let (stdout, stdout_writer) = tokio::io::duplex(64);
+        let (stderr, stderr_writer) = tokio::io::duplex(64);
+        drop(stdout_writer);
+        drop(stderr_writer);
+        let reaped = std::process::Command::new("cmd.exe").args(["/C", "exit 0"]).status().unwrap();
+        let launcher = FakeYtdlpLauncher { child: Mutex::new(Some(Box::new(ImmediateChild {
+            stdout: Some(stdout), stderr: Some(stderr),
+            result: Some(Err(std::io::Error::other("injected wait failure"))), reap_status: reaped,
+        }))) };
+        let registry = YoutubeProcessRegistry::new();
+        let shutdown = ExternalProcessShutdownState::new();
+        let error = run_ytdlp_managed_with(&registry, &shutdown, &launcher, &[], Duration::from_secs(1), "timeout".to_string())
+            .await.expect_err("wait error fails");
+        assert_eq!(error.kind, AppErrorKind::Network);
+        assert!(registry.is_empty().await, "wait failure reaps before dropping the operation");
+    }
+
     #[tokio::test]
     async fn injected_launcher_drains_backpressured_output_before_waiting_for_exit() {
         const SIZE: usize = 1_048_577;
