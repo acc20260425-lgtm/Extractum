@@ -23,14 +23,17 @@ use super::errors::classify_ytdlp_failure;
 pub(crate) const REAP_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Keeps the credential-bearing temporary cookie file alive until the owned
-/// process (or its detached reaper) has definitely released it.
-pub(crate) struct CookieLifetimeGuard(Option<tempfile::NamedTempFile>);
-
-impl CookieLifetimeGuard {
-    pub(crate) fn new(cookie: tempfile::NamedTempFile) -> Self { Self(Some(cookie)) }
-    pub(crate) fn path(&self) -> &std::path::Path { self.0.as_ref().expect("owned cookie").path() }
+/// process (or its detached reaper) has definitely released it.  Callers read
+/// the path from the `NamedTempFile` before handing over ownership.
+pub(crate) struct CookieLifetimeGuard {
+    _cookie: tempfile::NamedTempFile,
 }
 
+impl CookieLifetimeGuard {
+    pub(crate) fn new(cookie: tempfile::NamedTempFile) -> Self { Self { _cookie: cookie } }
+}
+
+#[cfg(test)]
 fn detach_reap_with_cookie<F>(cookie: CookieLifetimeGuard, reap: F) -> tokio::task::JoinHandle<()>
 where
     F: Future<Output = ()> + Send + 'static,
@@ -41,6 +44,7 @@ where
     })
 }
 
+#[cfg(test)]
 fn detach_cookie_for_test(cookie: CookieLifetimeGuard) -> tokio::task::JoinHandle<()> {
     // The detached branch owns the credential file until its reaper has
     // completed; production timeout/cancellation wiring calls this same owner.
@@ -71,6 +75,7 @@ impl YoutubeProcessRegistry {
         Ok(ManagedYtdlpGuard { registry: self.inner.clone(), id, cancellation, finished: false })
     }
 
+    #[cfg(test)]
     pub(crate) async fn is_empty(&self) -> bool {
         self.inner.operations.lock().expect("youtube process registry lock").is_empty()
     }
@@ -168,17 +173,6 @@ impl SpawnedYtdlp for SystemSpawnedYtdlp {
 
 /// Spawn under shutdown admission and drain both pipes before awaiting process
 /// exit. The latter order prevents a full OS pipe from deadlocking wait().
-pub(crate) async fn run_ytdlp_managed(
-    registry: &YoutubeProcessRegistry,
-    shutdown: &ExternalProcessShutdownState,
-    args: &[String],
-    timeout_budget: Duration,
-    timeout_message: String,
-    _cookie: Option<CookieLifetimeGuard>,
-) -> AppResult<(String, String)> {
-    run_ytdlp_managed_with_cancellation(registry, shutdown, args, timeout_budget, timeout_message, _cookie, None).await
-}
-
 pub(crate) async fn run_ytdlp_managed_with_cancellation(
     registry: &YoutubeProcessRegistry,
     shutdown: &ExternalProcessShutdownState,
@@ -193,10 +187,12 @@ pub(crate) async fn run_ytdlp_managed_with_cancellation(
     ).await
 }
 
+#[cfg(test)]
 async fn run_ytdlp_managed_with_cookie<L: YtdlpLauncher>(registry: &YoutubeProcessRegistry, shutdown: &ExternalProcessShutdownState, launcher: &L, args: &[String], timeout_budget: Duration, timeout_message: String, cookie: Option<CookieLifetimeGuard>) -> AppResult<(String, String)> {
     run_ytdlp_managed_with_owned_cookie(registry, shutdown, launcher, args, timeout_budget, timeout_message, cookie, None).await
 }
 
+#[cfg(test)]
 async fn run_ytdlp_managed_with_external_cancellation<L: YtdlpLauncher>(
     registry: &YoutubeProcessRegistry,
     shutdown: &ExternalProcessShutdownState,
@@ -209,6 +205,7 @@ async fn run_ytdlp_managed_with_external_cancellation<L: YtdlpLauncher>(
     run_ytdlp_managed_with_owned_cookie(registry, shutdown, launcher, args, timeout_budget, timeout_message, None, Some(cancellation)).await
 }
 
+#[cfg(test)]
 async fn run_ytdlp_managed_with<L: YtdlpLauncher>(
     registry: &YoutubeProcessRegistry,
     shutdown: &ExternalProcessShutdownState,
@@ -256,8 +253,8 @@ async fn manage_spawned_ytdlp(
     stdout: Box<dyn tokio::io::AsyncRead + Unpin + Send>, stderr: Box<dyn tokio::io::AsyncRead + Unpin + Send>,
     cancellation: CancellationToken, external_cancellation: CancellationToken, timeout_budget: Duration, timeout_message: String,
 ) -> AppResult<(String, String)> {
-    let mut stdout_task = tokio::spawn(async move { let mut reader = stdout; let mut data = Vec::new(); reader.read_to_end(&mut data).await.map(|_| data) });
-    let mut stderr_task = tokio::spawn(async move { let mut reader = stderr; let mut data = Vec::new(); reader.read_to_end(&mut data).await.map(|_| data) });
+    let stdout_task = tokio::spawn(async move { let mut reader = stdout; let mut data = Vec::new(); reader.read_to_end(&mut data).await.map(|_| data) });
+    let stderr_task = tokio::spawn(async move { let mut reader = stderr; let mut data = Vec::new(); reader.read_to_end(&mut data).await.map(|_| data) });
     enum Outcome { Exited(std::io::Result<std::process::ExitStatus>), Cancelled, TimedOut }
     let outcome = tokio::select! {
         status = spawned.wait() => Outcome::Exited(status),
@@ -304,6 +301,7 @@ async fn terminate_and_reap(spawned: &mut dyn SpawnedYtdlp) -> AppResult<()> {
     Ok(())
 }
 
+#[cfg(test)]
 async fn drain_output_while_waiting<R>(stdout: R, stderr: R) -> std::io::Result<(Vec<u8>, Vec<u8>)>
 where
     R: tokio::io::AsyncRead + Unpin + Send + 'static,
