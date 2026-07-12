@@ -73,6 +73,19 @@ describe("youtube summary launch contract", () => {
     const openEffect = dialog.slice(dialog.indexOf("$effect(() =>"), dialog.indexOf("async function loadProfiles"));
     expect(openEffect.indexOf("loadYoutubeSummaryRuntimePreferences"))
       .toBeLessThan(openEffect.indexOf("runPreflight"));
+    expect(openEffect).toContain('if (preferences.runtimeProvider === "gemini_browser")');
+    expect(openEffect).toContain("queueMicrotask(() => void refreshBrowserStatus())");
+    expect(openEffect).not.toContain('if (runtimeProvider === "gemini_browser") void refreshBrowserStatus();');
+
+    const storageGuard = dialog.slice(
+      dialog.indexOf("function runtimePreferenceStorage"),
+      dialog.indexOf("async function loadProfiles"),
+    );
+    expect(storageGuard).toContain('typeof window === "undefined"');
+    expect(storageGuard).toContain("try {");
+    expect(storageGuard).toContain("return window.localStorage;");
+    expect(storageGuard).toContain("catch {");
+    expect(storageGuard).toContain("return null;");
   });
 
   it("surfaces Gemini Browser runtime provenance in prompt pack run diagnostics", () => {

@@ -117,13 +117,20 @@
       error = null;
       includeComments = false;
       void loadProfiles();
-      if (runtimeProvider === "gemini_browser") void refreshBrowserStatus();
+      if (preferences.runtimeProvider === "gemini_browser") {
+        queueMicrotask(() => void refreshBrowserStatus());
+      }
       if (source) queueMicrotask(() => void runPreflight());
     }
   });
 
   function runtimePreferenceStorage() {
-    return typeof localStorage === "undefined" ? null : localStorage;
+    if (typeof window === "undefined") return null;
+    try {
+      return window.localStorage;
+    } catch {
+      return null;
+    }
   }
 
   async function loadProfiles() {
