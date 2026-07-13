@@ -53,9 +53,13 @@ $specPresent = $LASTEXITCODE -eq 0
 "STATUS_COUNT=$($status.Count)"
 "APPROVED_SPEC_PRESENT=$specPresent"
 if ($status.Count -ne 0 -or -not $specPresent) { exit 1 }
+npm.cmd run check:rustfmt
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 ```
 
-Expected: `STATUS_COUNT=0`, `APPROVED_SPEC_PRESENT=True`, exit 0.
+Expected: `STATUS_COUNT=0`, `APPROVED_SPEC_PRESENT=True`, and the existing
+repository-wide Rust formatting baseline passes. This guarantees the later
+`cargo fmt` cannot introduce unrelated formatting changes into a clean tree.
 
 - [ ] **Step 2: Add the failing source-ownership contract**
 
@@ -136,8 +140,8 @@ RED, not an infrastructure failure.
 
 - [ ] **Step 4: Register the private module**
 
-In `src-tauri/src/prompt_packs/mod.rs`, add this line with the other private
-module declarations, immediately after `pub mod projections;`:
+In `src-tauri/src/prompt_packs/mod.rs`, add this line in alphabetical order,
+between `pub mod result_commands;` and `pub mod runtime;`:
 
 ```rust
 mod run_store;
@@ -484,7 +488,17 @@ cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_packs
 Expected: both commands exit 0 with no failed tests. The broader Prompt Pack
 filter covers storage callers outside the focused runtime tests.
 
-- [ ] **Step 11: Run the complete Rust suite**
+- [ ] **Step 11: Run the complete Vitest suite**
+
+Run:
+
+```powershell
+npm.cmd run test
+```
+
+Expected: exit 0 with no failed frontend or raw-source contract tests.
+
+- [ ] **Step 12: Run the complete Rust suite**
 
 Run:
 
@@ -494,13 +508,13 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 Expected: exit 0 with no failed unit, integration, or doc tests.
 
-- [ ] **Step 12: Verify formatting and all Rust targets with zero warnings**
+- [ ] **Step 13: Verify formatting and all Rust targets with zero warnings**
 
 Run:
 
 ```powershell
 npm.cmd run check:rustfmt
-$output = & cargo check --manifest-path src-tauri/Cargo.toml --all-targets --message-format=short 2>&1
+$output = & cmd.exe /d /c "cargo check --manifest-path src-tauri/Cargo.toml --all-targets --message-format=short 2>&1"
 $cargoExit = $LASTEXITCODE
 $text = $output | Out-String
 $warnings = ($text -split "`r?`n") | Where-Object {
@@ -513,14 +527,17 @@ if ($warnings.Count -ne 0) { exit 1 }
 exit $cargoExit
 ```
 
-Expected: rustfmt exits 0; `CARGO_EXIT=0`; `WARNING_COUNT=0`.
+Expected: rustfmt exits 0; `CARGO_EXIT=0`; `WARNING_COUNT=0`. Running native
+Cargo through `cmd.exe` makes redirected stderr ordinary text even under
+Windows PowerShell 5.1 and avoids `ErrorRecord` pipeline behavior.
 
-- [ ] **Step 13: Review exact scope and commit**
+- [ ] **Step 14: Review exact scope and commit**
 
 Run:
 
 ```powershell
 git diff --check
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $changed = @(git status --porcelain=v1 --untracked-files=all | ForEach-Object {
     $_.Substring(3).Replace('\', '/')
 })
