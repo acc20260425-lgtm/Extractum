@@ -44,6 +44,13 @@ Register it in `prompt_packs/mod.rs` as private
 `mod stage_request_policy;`. Do not re-export the module or any of its
 contents.
 
+`TRANSCRIPT_ANALYSIS_STAGE_JSON` and `SYNTHESIS_STAGE_JSON` are
+`include_str!` constants with paths resolved relative to their containing Rust
+source file. `stage_request_policy.rs` remains in the same directory as
+`runtime.rs`, so copy the relative paths unchanged. Moving the policy module
+into a subdirectory is outside this design because it would require adjusting
+and separately verifying those compile-time paths.
+
 `runtime.rs` continues to determine when a stage runs and which provider,
 profile, model, cancellation token, and persistence path it uses. It imports
 only the policy functions required to build an `LlmChatRequest` or calculate
@@ -63,8 +70,8 @@ Move these constants and private data structures to
 - `StageRuntimeConfiguration`;
 - `StageBudgetLimits`.
 
-Move these functions and expose them to the sibling `runtime` module with
-`pub(super)`:
+Move these functions and give them `pub(super)` visibility within the parent
+`prompt_packs` module. `runtime` is their only current production consumer:
 
 - `transcript_analysis_control_preset`;
 - `build_transcript_analysis_llm_request`;
@@ -184,7 +191,9 @@ currently have no direct content assertions:
   original input, invalid provider output, system role, and user role.
 
 Keep these new tests in `runtime::tests` with the other request-policy tests;
-after extraction only their imports change.
+write them first against the current private functions through `use super::...`.
+When the functions move, keep the test bodies and assertions unchanged and
+change only their imports to `stage_request_policy`.
 
 Add a focused raw-source contract that verifies:
 
