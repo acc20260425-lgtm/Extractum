@@ -1,17 +1,14 @@
-use std::future::Future;
-use std::time::Instant;
-
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio_util::sync::CancellationToken;
 
+use super::completion_transport::{RunCompletionRuntime, StageCompletionRequest};
 use super::dto::{
     PromptPackRunEvent, PromptPackRunSummaryDto, PromptPackRuntimeProvider, PromptPackStageRunDto,
     StartYoutubeSummaryRunOutcomeDto, StartYoutubeSummaryRunRequest,
     YoutubeSummaryPreflightFailure,
 };
 use super::json_repair::JsonRepairStageExecutionRequest;
-use super::run_control::run_with_prompt_pack_run_cancellation;
 pub use super::run_control::PromptPackRunState;
 use super::run_store::{
     delete_prompt_pack_run_in_pool, list_prompt_pack_run_stages_in_pool,
@@ -42,12 +39,10 @@ use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::llm::{
     resolve_effective_model, resolve_model_input_token_limit_for_backend,
-    resolve_model_output_token_limit_for_backend, resolve_profile_for_backend,
-    run_llm_collect_with_profile, LlmChatRequest, LlmRequestError, LlmRequestKind,
-    LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState, ResolvedLlmProfile,
+    resolve_profile_for_backend, LlmSchedulerState,
 };
 
-pub const PROMPT_PACK_RUN_EVENT: &str = "prompt-pack-run-event";
+pub use super::dto::PROMPT_PACK_RUN_EVENT;
 #[cfg(dev)]
 const PROMPT_PACK_CANCELLATION_SMOKE_FIXTURE_LABEL: &str =
     "__prompt_pack_cancellation_smoke_fixture__";
@@ -480,402 +475,6 @@ async fn load_run_runtime_config(pool: &SqlitePool, run_id: i64) -> AppResult<Ru
     )
 }
 
-#[derive(Clone)]
-enum RunCompletionRuntime {
-    Api {
-        profile: ResolvedLlmProfile,
-        model_override: Option<String>,
-    },
-    GeminiBrowser {
-        browser_provider_config: Option<crate::gemini_browser::GeminiBrowserProviderConfig>,
-    },
-}
-
-fn llm_chat_request_to_browser_prompt(request: &LlmChatRequest) -> AppResult<String> {
-    let mut sections = Vec::with_capacity(request.messages.len());
-    for message in &request.messages {
-        let label = match message.role.as_str() {
-            "system" => "System",
-            "user" => "User",
-            other => {
-                return Err(AppError::validation(format!(
-                    "Unsupported Browser Provider prompt message role: {other}"
-                )));
-            }
-        };
-        sections.push(format!("{label}:\n{}", message.content));
-    }
-    let prompt = sections.join("\n\n");
-    if prompt.trim().is_empty() {
-        return Err(AppError::validation(
-            "Browser Provider prompt cannot be empty",
-        ));
-    }
-    Ok(prompt)
-}
-
-fn browser_run_id_for_stage(
-    run_id: i64,
-    stage_run_id: i64,
-    repair_attempt_number: Option<i64>,
-    request_discriminator: Option<&str>,
-) -> String {
-    match (request_discriminator, repair_attempt_number) {
-        (Some(discriminator), _) => {
-            format!("prompt-pack-{run_id}-stage-{stage_run_id}-{discriminator}")
-        }
-        (None, Some(attempt_number)) => {
-            format!("prompt-pack-{run_id}-stage-{stage_run_id}-repair-{attempt_number}")
-        }
-        (None, None) => format!("prompt-pack-{run_id}-stage-{stage_run_id}"),
-    }
-}
-
-fn browser_run_source_for_stage(
-    run_id: i64,
-    stage_run_id: i64,
-    stage_name: &str,
-    request_discriminator: Option<&str>,
-) -> String {
-    let base =
-        format!("prompt_pack:youtube_summary:{stage_name}:run:{run_id}:stage:{stage_run_id}");
-    match request_discriminator {
-        Some(discriminator) => format!("{base}:{discriminator}"),
-        None => base,
-    }
-}
-
-fn browser_stage_completion_from_result(
-    result: crate::gemini_browser::GeminiBrowserRunResult,
-) -> AppResult<PromptPackLlmCompletion> {
-    let latency_ms = result.elapsed_ms as i64;
-    let text = super::gemini_browser_stage::browser_result_to_completion_text(result)?;
-    Ok(PromptPackLlmCompletion {
-        text,
-        input_tokens: None,
-        output_tokens: None,
-        latency_ms,
-    })
-}
-
-async fn run_api_llm_request(
-    handle: AppHandle,
-    profile: ResolvedLlmProfile,
-    run_cancellation_token: Option<CancellationToken>,
-    llm_request: LlmChatRequest,
-    run_id: i64,
-    stage_run_id: i64,
-    source_snapshot_id: Option<i64>,
-    stage_name: String,
-    phase: &'static str,
-    started_message: &'static str,
-) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
-    let request_id = llm_request.request_id.clone();
-    let provider = profile.provider.as_str().to_string();
-    let scheduler = handle.state::<LlmSchedulerState>();
-    let queued_handle = handle.clone();
-    let started_handle = handle.clone();
-    let queued_request_id = request_id.clone();
-    let started_request_id = request_id.clone();
-    let queued_stage_name = stage_name.clone();
-    let started_stage_name = stage_name;
-    let queued_phase = phase.to_string();
-    let started_phase = queued_phase.clone();
-    let scheduled_request = llm_request.clone();
-    let scheduled_profile = profile.clone();
-    let stage_cancellation_token = run_cancellation_token.clone();
-
-    match scheduler
-        .run_request(
-            LlmRequestMetadata {
-                request_id: request_id.clone(),
-                profile_id: profile.profile_id.clone(),
-                provider,
-                kind: LlmRequestKind::PromptPackStage,
-                priority: LlmRequestPriority::Background,
-                owner_run_id: Some(run_id),
-            },
-            move |position| {
-                let queued_message = if phase == "repair" {
-                    format!("JSON repair queued at position {position}")
-                } else {
-                    format!("LLM request queued at position {position}")
-                };
-                let _ = queued_handle.emit(
-                    PROMPT_PACK_RUN_EVENT,
-                    PromptPackRunEvent {
-                        run_id,
-                        request_id: queued_request_id.clone(),
-                        kind: "queued".to_string(),
-                        run_status: "running".to_string(),
-                        phase: queued_phase.clone(),
-                        stage_run_id: Some(stage_run_id),
-                        stage_name: Some(queued_stage_name.clone()),
-                        source_snapshot_id,
-                        queue_position: Some(position as i64),
-                        progress_current: None,
-                        progress_total: None,
-                        message: Some(queued_message),
-                        error: None,
-                    },
-                );
-            },
-            move |control| async move {
-                let _ = started_handle.emit(
-                    PROMPT_PACK_RUN_EVENT,
-                    PromptPackRunEvent {
-                        run_id,
-                        request_id: started_request_id,
-                        kind: "started".to_string(),
-                        run_status: "running".to_string(),
-                        phase: started_phase,
-                        stage_run_id: Some(stage_run_id),
-                        stage_name: Some(started_stage_name),
-                        source_snapshot_id,
-                        queue_position: None,
-                        progress_current: None,
-                        progress_total: None,
-                        message: Some(started_message.to_string()),
-                        error: None,
-                    },
-                );
-                let started_at = Instant::now();
-                let completion = run_with_prompt_pack_run_cancellation(
-                    stage_cancellation_token,
-                    control.run_cancellable(run_llm_collect_with_profile(
-                        &scheduled_request,
-                        &scheduled_profile,
-                    )),
-                )
-                .await?;
-                Ok((completion, started_at.elapsed().as_millis() as i64))
-            },
-        )
-        .await
-    {
-        Ok((completion, latency_ms)) => Ok(PromptPackLlmCompletion {
-            text: completion.text,
-            input_tokens: completion
-                .usage
-                .as_ref()
-                .and_then(|usage| usage.input_tokens),
-            output_tokens: completion
-                .usage
-                .as_ref()
-                .and_then(|usage| usage.output_tokens),
-            latency_ms,
-        }),
-        Err(LlmRequestError::Cancelled) => Err(YoutubeSummaryStageExecutionError::Cancelled),
-        Err(LlmRequestError::Failed(error)) => {
-            Err(YoutubeSummaryStageExecutionError::Failed(error))
-        }
-    }
-}
-
-async fn run_browser_llm_request(
-    handle: AppHandle,
-    pool: SqlitePool,
-    run_id: i64,
-    stage_run_id: i64,
-    browser_provider_config: Option<crate::gemini_browser::GeminiBrowserProviderConfig>,
-    run_cancellation_token: Option<CancellationToken>,
-    stage_name: String,
-    source_snapshot_id: Option<i64>,
-    phase: &'static str,
-    started_message: &'static str,
-    repair_attempt_number: Option<i64>,
-    request_discriminator: Option<&str>,
-    llm_request: LlmChatRequest,
-) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
-    let browser_run_id = browser_run_id_for_stage(
-        run_id,
-        stage_run_id,
-        repair_attempt_number,
-        request_discriminator,
-    );
-    if run_cancellation_token
-        .as_ref()
-        .is_some_and(CancellationToken::is_cancelled)
-    {
-        crate::gemini_browser::cancel_gemini_browser_job(&handle, &browser_run_id)
-            .await
-            .map_err(YoutubeSummaryStageExecutionError::Failed)?;
-        return Err(YoutubeSummaryStageExecutionError::Cancelled);
-    }
-
-    let prompt = llm_chat_request_to_browser_prompt(&llm_request)?;
-    let source =
-        browser_run_source_for_stage(run_id, stage_run_id, &stage_name, request_discriminator);
-    let queued_handle = handle.clone();
-    let started_handle = handle.clone();
-    let request_id = llm_request.request_id.clone();
-    let started_request_id = request_id.clone();
-    let queued_stage_name = stage_name.clone();
-    let started_stage_name = stage_name;
-    let queued_phase = phase.to_string();
-    let started_phase = queued_phase.clone();
-    let run_cancellation_for_stop = run_cancellation_token.clone();
-    let browser_state = handle.state::<crate::gemini_browser::GeminiBrowserState>();
-    let browser_run_id_for_cancel = browser_run_id.clone();
-
-    let _ = queued_handle.emit(
-        PROMPT_PACK_RUN_EVENT,
-        PromptPackRunEvent {
-            run_id,
-            request_id: request_id.clone(),
-            kind: "queued".to_string(),
-            run_status: "running".to_string(),
-            phase: queued_phase,
-            stage_run_id: Some(stage_run_id),
-            stage_name: Some(queued_stage_name),
-            source_snapshot_id,
-            queue_position: None,
-            progress_current: None,
-            progress_total: None,
-            message: Some("Browser Provider request queued".to_string()),
-            error: None,
-        },
-    );
-
-    let browser_future = async {
-        let _ = started_handle.emit(
-            PROMPT_PACK_RUN_EVENT,
-            PromptPackRunEvent {
-                run_id,
-                request_id: started_request_id,
-                kind: "started".to_string(),
-                run_status: "running".to_string(),
-                phase: started_phase,
-                stage_run_id: Some(stage_run_id),
-                stage_name: Some(started_stage_name),
-                source_snapshot_id,
-                queue_position: None,
-                progress_current: None,
-                progress_total: None,
-                message: Some(started_message.to_string()),
-                error: None,
-            },
-        );
-        crate::gemini_browser::send_single_prompt(
-            &handle,
-            &browser_state,
-            browser_run_id,
-            prompt,
-            Some(source),
-            Some("reduced".to_string()),
-            browser_provider_config,
-        )
-        .await
-        .map_err(LlmRequestError::Failed)
-    };
-
-    let cancel_handle = handle.clone();
-    let result = run_browser_stage_result_with_cancellation(
-        run_cancellation_token,
-        browser_future,
-        move || async move {
-            crate::gemini_browser::cancel_gemini_browser_job(
-                &cancel_handle,
-                &browser_run_id_for_cancel,
-            )
-            .await
-        },
-    )
-    .await?;
-
-    if run_cancellation_for_stop
-        .as_ref()
-        .is_some_and(CancellationToken::is_cancelled)
-    {
-        return Err(YoutubeSummaryStageExecutionError::Cancelled);
-    }
-
-    persist_browser_stage_provenance(&pool, stage_run_id, &result)
-        .await
-        .map_err(YoutubeSummaryStageExecutionError::Failed)?;
-
-    browser_stage_completion_from_result(result).map_err(YoutubeSummaryStageExecutionError::from)
-}
-
-async fn run_browser_stage_result_with_cancellation<BrowserFuture, CancelBrowser, CancelFuture>(
-    run_cancellation_token: Option<CancellationToken>,
-    browser_future: BrowserFuture,
-    cancel_browser_job: CancelBrowser,
-) -> Result<crate::gemini_browser::GeminiBrowserRunResult, YoutubeSummaryStageExecutionError>
-where
-    BrowserFuture:
-        Future<Output = Result<crate::gemini_browser::GeminiBrowserRunResult, LlmRequestError>>,
-    CancelBrowser: FnOnce() -> CancelFuture,
-    CancelFuture: Future<Output = AppResult<()>>,
-{
-    match run_with_prompt_pack_run_cancellation(run_cancellation_token, browser_future).await {
-        Ok(result) => Ok(result),
-        Err(LlmRequestError::Cancelled) => {
-            cancel_browser_job()
-                .await
-                .map_err(YoutubeSummaryStageExecutionError::Failed)?;
-            Err(YoutubeSummaryStageExecutionError::Cancelled)
-        }
-        Err(LlmRequestError::Failed(error)) => {
-            Err(YoutubeSummaryStageExecutionError::Failed(error))
-        }
-    }
-}
-
-async fn persist_browser_stage_provenance(
-    pool: &SqlitePool,
-    stage_run_id: i64,
-    result: &crate::gemini_browser::GeminiBrowserRunResult,
-) -> AppResult<()> {
-    let completion_reason = result
-        .debug_summary
-        .as_ref()
-        .and_then(|summary| serde_json::to_value(&summary.answer_completion_reason).ok())
-        .and_then(|value| value.as_str().map(ToOwned::to_owned))
-        .and_then(non_empty_string);
-    let provider_mode = result
-        .debug_summary
-        .as_ref()
-        .and_then(|summary| serde_json::to_value(&summary.mode).ok())
-        .and_then(|value| value.as_str().map(ToOwned::to_owned))
-        .and_then(non_empty_string);
-    let run_status = serde_json::to_value(&result.status)
-        .ok()
-        .and_then(|value| value.as_str().map(ToOwned::to_owned))
-        .and_then(non_empty_string);
-    let run_message = result.message.clone().and_then(non_empty_string);
-
-    sqlx::query(
-        "UPDATE prompt_pack_stage_runs
-         SET browser_run_id = ?,
-             browser_run_status = ?,
-             browser_completion_reason = ?,
-             browser_provider_mode = ?,
-             browser_run_message = ?,
-             updated_at = ?
-         WHERE id = ?",
-    )
-    .bind(&result.run_id)
-    .bind(run_status)
-    .bind(completion_reason)
-    .bind(provider_mode)
-    .bind(run_message)
-    .bind(now_string())
-    .bind(stage_run_id)
-    .execute(pool)
-    .await
-    .map_err(AppError::database)?;
-    Ok(())
-}
-
-fn non_empty_string(value: String) -> Option<String> {
-    if value.trim().is_empty() {
-        None
-    } else {
-        Some(value)
-    }
-}
-
 async fn run_transcript_analysis_stage_request(
     handle: AppHandle,
     pool: SqlitePool,
@@ -883,71 +482,39 @@ async fn run_transcript_analysis_stage_request(
     run_cancellation_token: Option<CancellationToken>,
     stage_request: TranscriptAnalysisStageExecutionRequest,
 ) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
-    let (profile_id, model_override, model_output_limit) = match &completion_runtime {
-        RunCompletionRuntime::Api {
-            profile,
-            model_override,
-        } => {
-            let effective_model = resolve_effective_model(profile, model_override.as_deref())?;
-            let model_output_limit =
-                resolve_model_output_token_limit_for_backend(profile, &effective_model).await;
-            (
-                Some(profile.profile_id.clone()),
-                model_override.clone(),
-                model_output_limit,
-            )
-        }
-        RunCompletionRuntime::GeminiBrowser { .. } => (None, None, None),
-    };
+    let model_context = completion_runtime.model_context().await?;
     let control_preset = transcript_analysis_control_preset(&stage_request.prompt_input_json);
     let stage_output_budget =
         transcript_analysis_stage_max_output_token_budget_for_control_preset(&control_preset)?;
-    let max_output_tokens =
-        transcript_analysis_max_output_tokens(stage_output_budget, model_output_limit);
+    let max_output_tokens = transcript_analysis_max_output_tokens(
+        stage_output_budget,
+        model_context.model_output_limit,
+    );
     let llm_request = build_transcript_analysis_llm_request(
         &stage_request,
-        profile_id,
-        model_override,
+        model_context.profile_id,
+        model_context.model_override,
         max_output_tokens,
     );
 
-    match completion_runtime {
-        RunCompletionRuntime::Api { profile, .. } => {
-            run_api_llm_request(
-                handle,
-                profile,
-                run_cancellation_token,
+    completion_runtime
+        .execute(
+            handle,
+            pool,
+            StageCompletionRequest {
                 llm_request,
-                stage_request.run_id,
-                stage_request.stage_run_id,
-                Some(stage_request.source_snapshot_id),
-                "youtube_summary/transcript_analysis".to_string(),
-                "transcript_analysis",
-                "Analyzing transcript",
-            )
-            .await
-        }
-        RunCompletionRuntime::GeminiBrowser {
-            browser_provider_config,
-        } => {
-            run_browser_llm_request(
-                handle,
-                pool,
-                stage_request.run_id,
-                stage_request.stage_run_id,
-                browser_provider_config,
+                run_id: stage_request.run_id,
+                stage_run_id: stage_request.stage_run_id,
+                source_snapshot_id: Some(stage_request.source_snapshot_id),
+                stage_name: "youtube_summary/transcript_analysis".to_string(),
+                phase: "transcript_analysis",
+                started_message: "Analyzing transcript",
+                repair_attempt_number: None,
+                request_discriminator: None,
                 run_cancellation_token,
-                "youtube_summary/transcript_analysis".to_string(),
-                Some(stage_request.source_snapshot_id),
-                "transcript_analysis",
-                "Analyzing transcript",
-                None,
-                None,
-                llm_request,
-            )
-            .await
-        }
-    }
+            },
+        )
+        .await
 }
 
 async fn run_synthesis_stage_request(
@@ -957,71 +524,39 @@ async fn run_synthesis_stage_request(
     run_cancellation_token: Option<CancellationToken>,
     stage_request: SynthesisStageExecutionRequest,
 ) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
-    let (profile_id, model_override, model_output_limit) = match &completion_runtime {
-        RunCompletionRuntime::Api {
-            profile,
-            model_override,
-        } => {
-            let effective_model = resolve_effective_model(profile, model_override.as_deref())?;
-            let model_output_limit =
-                resolve_model_output_token_limit_for_backend(profile, &effective_model).await;
-            (
-                Some(profile.profile_id.clone()),
-                model_override.clone(),
-                model_output_limit,
-            )
-        }
-        RunCompletionRuntime::GeminiBrowser { .. } => (None, None, None),
-    };
+    let model_context = completion_runtime.model_context().await?;
     let stage_output_budget = synthesis_stage_max_output_token_budget()?;
-    let max_output_tokens =
-        transcript_analysis_max_output_tokens(stage_output_budget, model_output_limit);
+    let max_output_tokens = transcript_analysis_max_output_tokens(
+        stage_output_budget,
+        model_context.model_output_limit,
+    );
     let llm_request = build_synthesis_llm_request(
         stage_request.run_id,
         stage_request.stage_run_id,
         stage_request.prompt_input_json.clone(),
-        profile_id,
-        model_override,
+        model_context.profile_id,
+        model_context.model_override,
         max_output_tokens,
     );
 
-    match completion_runtime {
-        RunCompletionRuntime::Api { profile, .. } => {
-            run_api_llm_request(
-                handle,
-                profile,
-                run_cancellation_token,
+    completion_runtime
+        .execute(
+            handle,
+            pool,
+            StageCompletionRequest {
                 llm_request,
-                stage_request.run_id,
-                stage_request.stage_run_id,
-                None,
-                "youtube_summary/synthesis".to_string(),
-                "synthesis",
-                "Synthesizing videos",
-            )
-            .await
-        }
-        RunCompletionRuntime::GeminiBrowser {
-            browser_provider_config,
-        } => {
-            run_browser_llm_request(
-                handle,
-                pool,
-                stage_request.run_id,
-                stage_request.stage_run_id,
-                browser_provider_config,
+                run_id: stage_request.run_id,
+                stage_run_id: stage_request.stage_run_id,
+                source_snapshot_id: None,
+                stage_name: "youtube_summary/synthesis".to_string(),
+                phase: "synthesis",
+                started_message: "Synthesizing videos",
+                repair_attempt_number: None,
+                request_discriminator: None,
                 run_cancellation_token,
-                "youtube_summary/synthesis".to_string(),
-                None,
-                "synthesis",
-                "Synthesizing videos",
-                None,
-                None,
-                llm_request,
-            )
-            .await
-        }
-    }
+            },
+        )
+        .await
 }
 
 async fn run_json_repair_stage_request(
@@ -1031,22 +566,7 @@ async fn run_json_repair_stage_request(
     run_cancellation_token: Option<CancellationToken>,
     stage_request: JsonRepairStageExecutionRequest,
 ) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
-    let (profile_id, model_override, model_output_limit) = match &completion_runtime {
-        RunCompletionRuntime::Api {
-            profile,
-            model_override,
-        } => {
-            let effective_model = resolve_effective_model(profile, model_override.as_deref())?;
-            let model_output_limit =
-                resolve_model_output_token_limit_for_backend(profile, &effective_model).await;
-            (
-                Some(profile.profile_id.clone()),
-                model_override.clone(),
-                model_output_limit,
-            )
-        }
-        RunCompletionRuntime::GeminiBrowser { .. } => (None, None, None),
-    };
+    let model_context = completion_runtime.model_context().await?;
     let stage_output_budget = if stage_request.stage_name == "youtube_summary/synthesis" {
         synthesis_stage_max_output_token_budget()?
     } else if stage_request.stage_name == "youtube_summary/transcript_analysis" {
@@ -1055,52 +575,35 @@ async fn run_json_repair_stage_request(
     } else {
         transcript_analysis_stage_max_output_token_budget()?
     };
-    let max_output_tokens =
-        transcript_analysis_max_output_tokens(stage_output_budget, model_output_limit);
+    let max_output_tokens = transcript_analysis_max_output_tokens(
+        stage_output_budget,
+        model_context.model_output_limit,
+    );
     let llm_request = build_json_repair_llm_request(
         &stage_request,
-        profile_id,
-        model_override,
+        model_context.profile_id,
+        model_context.model_override,
         max_output_tokens,
     );
 
-    match completion_runtime {
-        RunCompletionRuntime::Api { profile, .. } => {
-            run_api_llm_request(
-                handle,
-                profile,
-                run_cancellation_token,
+    completion_runtime
+        .execute(
+            handle,
+            pool,
+            StageCompletionRequest {
                 llm_request,
-                stage_request.run_id,
-                stage_request.stage_run_id,
-                None,
-                stage_request.stage_name.clone(),
-                "repair",
-                "Repairing provider JSON",
-            )
-            .await
-        }
-        RunCompletionRuntime::GeminiBrowser {
-            browser_provider_config,
-        } => {
-            run_browser_llm_request(
-                handle,
-                pool,
-                stage_request.run_id,
-                stage_request.stage_run_id,
-                browser_provider_config,
+                run_id: stage_request.run_id,
+                stage_run_id: stage_request.stage_run_id,
+                source_snapshot_id: None,
+                stage_name: stage_request.stage_name.clone(),
+                phase: "repair",
+                started_message: "Repairing provider JSON",
+                repair_attempt_number: Some(stage_request.attempt_number),
+                request_discriminator: None,
                 run_cancellation_token,
-                stage_request.stage_name.clone(),
-                None,
-                "repair",
-                "Repairing provider JSON",
-                Some(stage_request.attempt_number),
-                None,
-                llm_request,
-            )
-            .await
-        }
-    }
+            },
+        )
+        .await
 }
 
 async fn run_gem_analysis_part_stage_request(
@@ -1110,71 +613,37 @@ async fn run_gem_analysis_part_stage_request(
     run_cancellation_token: Option<CancellationToken>,
     stage_request: GemAnalysisPartStageExecutionRequest,
 ) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
-    let (profile_id, model_override, model_output_limit) = match &completion_runtime {
-        RunCompletionRuntime::Api {
-            profile,
-            model_override,
-        } => {
-            let effective_model = resolve_effective_model(profile, model_override.as_deref())?;
-            let model_output_limit =
-                resolve_model_output_token_limit_for_backend(profile, &effective_model).await;
-            (
-                Some(profile.profile_id.clone()),
-                model_override.clone(),
-                model_output_limit,
-            )
-        }
-        RunCompletionRuntime::GeminiBrowser { .. } => (None, None, None),
-    };
+    let model_context = completion_runtime.model_context().await?;
     let max_output_tokens =
-        gem_analysis_part_max_output_tokens(stage_request.part, model_output_limit);
+        gem_analysis_part_max_output_tokens(stage_request.part, model_context.model_output_limit);
     let llm_request = build_gem_analysis_part_llm_request(
         &stage_request,
-        profile_id,
-        model_override,
+        model_context.profile_id,
+        model_context.model_override,
         max_output_tokens,
     );
     let phase = gem_part_phase(stage_request.part);
     let started_message = gem_part_started_message(stage_request.part);
+    let request_discriminator = Some(gem_part_request_suffix(stage_request.part));
 
-    match completion_runtime {
-        RunCompletionRuntime::Api { profile, .. } => {
-            run_api_llm_request(
-                handle,
-                profile,
-                run_cancellation_token,
+    completion_runtime
+        .execute(
+            handle,
+            pool,
+            StageCompletionRequest {
                 llm_request,
-                stage_request.run_id,
-                stage_request.stage_run_id,
-                Some(stage_request.source_snapshot_id),
-                "youtube_summary/transcript_analysis".to_string(),
+                run_id: stage_request.run_id,
+                stage_run_id: stage_request.stage_run_id,
+                source_snapshot_id: Some(stage_request.source_snapshot_id),
+                stage_name: "youtube_summary/transcript_analysis".to_string(),
                 phase,
                 started_message,
-            )
-            .await
-        }
-        RunCompletionRuntime::GeminiBrowser {
-            browser_provider_config,
-        } => {
-            let discriminator = gem_part_request_suffix(stage_request.part);
-            run_browser_llm_request(
-                handle,
-                pool,
-                stage_request.run_id,
-                stage_request.stage_run_id,
-                browser_provider_config,
+                repair_attempt_number: None,
+                request_discriminator,
                 run_cancellation_token,
-                "youtube_summary/transcript_analysis".to_string(),
-                Some(stage_request.source_snapshot_id),
-                phase,
-                started_message,
-                None,
-                Some(discriminator.as_str()),
-                llm_request,
-            )
-            .await
-        }
-    }
+            },
+        )
+        .await
 }
 
 async fn run_gem_analysis_part_repair_request(
@@ -1184,70 +653,38 @@ async fn run_gem_analysis_part_repair_request(
     run_cancellation_token: Option<CancellationToken>,
     stage_request: GemAnalysisPartRepairRequest,
 ) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
-    let (profile_id, model_override, model_output_limit) = match &completion_runtime {
-        RunCompletionRuntime::Api {
-            profile,
-            model_override,
-        } => {
-            let effective_model = resolve_effective_model(profile, model_override.as_deref())?;
-            let model_output_limit =
-                resolve_model_output_token_limit_for_backend(profile, &effective_model).await;
-            (
-                Some(profile.profile_id.clone()),
-                model_override.clone(),
-                model_output_limit,
-            )
-        }
-        RunCompletionRuntime::GeminiBrowser { .. } => (None, None, None),
-    };
+    let model_context = completion_runtime.model_context().await?;
     let max_output_tokens =
-        gem_analysis_part_max_output_tokens(stage_request.part, model_output_limit);
+        gem_analysis_part_max_output_tokens(stage_request.part, model_context.model_output_limit);
     let llm_request = build_gem_analysis_part_repair_llm_request(
         &stage_request,
-        profile_id,
-        model_override,
+        model_context.profile_id,
+        model_context.model_override,
         max_output_tokens,
     );
+    let request_discriminator = Some(gem_part_repair_request_suffix(
+        stage_request.part,
+        stage_request.attempt_number,
+    ));
 
-    match completion_runtime {
-        RunCompletionRuntime::Api { profile, .. } => {
-            run_api_llm_request(
-                handle,
-                profile,
-                run_cancellation_token,
+    completion_runtime
+        .execute(
+            handle,
+            pool,
+            StageCompletionRequest {
                 llm_request,
-                stage_request.run_id,
-                stage_request.stage_run_id,
-                Some(stage_request.source_snapshot_id),
-                "youtube_summary/transcript_analysis".to_string(),
-                "gem_part_repair",
-                "Gem analysis: repairing part JSON",
-            )
-            .await
-        }
-        RunCompletionRuntime::GeminiBrowser {
-            browser_provider_config,
-        } => {
-            let discriminator =
-                gem_part_repair_request_suffix(stage_request.part, stage_request.attempt_number);
-            run_browser_llm_request(
-                handle,
-                pool,
-                stage_request.run_id,
-                stage_request.stage_run_id,
-                browser_provider_config,
+                run_id: stage_request.run_id,
+                stage_run_id: stage_request.stage_run_id,
+                source_snapshot_id: Some(stage_request.source_snapshot_id),
+                stage_name: "youtube_summary/transcript_analysis".to_string(),
+                phase: "gem_part_repair",
+                started_message: "Gem analysis: repairing part JSON",
+                repair_attempt_number: None,
+                request_discriminator,
                 run_cancellation_token,
-                "youtube_summary/transcript_analysis".to_string(),
-                Some(stage_request.source_snapshot_id),
-                "gem_part_repair",
-                "Gem analysis: repairing part JSON",
-                None,
-                Some(discriminator.as_str()),
-                llm_request,
-            )
-            .await
-        }
-    }
+            },
+        )
+        .await
 }
 
 fn gem_part_phase(part: GemAnalysisPart) -> &'static str {
@@ -1512,6 +949,12 @@ fn now_string() -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::super::completion_transport::{
+        browser_run_id_for_stage, browser_run_source_for_stage,
+        browser_stage_completion_from_result, llm_chat_request_to_browser_prompt,
+        persist_browser_stage_provenance, run_browser_stage_result_with_cancellation,
+    };
+    use super::super::run_control::run_with_prompt_pack_run_cancellation;
     use super::super::run_store::{
         delete_prompt_pack_run_in_pool, list_prompt_pack_run_stages_in_pool,
         list_prompt_pack_runs_in_pool, update_prompt_pack_run_in_pool,
@@ -1525,12 +968,8 @@ mod tests {
         transcript_analysis_stage_max_prompt_token_budget, DETAILED_REPORT_CONTROL_PRESET,
     };
     use super::{
-        browser_run_id_for_stage, browser_run_source_for_stage,
-        browser_runtime_start_blocking_failure, browser_stage_completion_from_result,
-        cleanup_interrupted_prompt_pack_runs_in_pool,
-        clear_prompt_pack_cancellation_smoke_fixture_in_pool, llm_chat_request_to_browser_prompt,
-        load_run_runtime_config, now_string, persist_browser_stage_provenance,
-        run_browser_stage_result_with_cancellation, run_with_prompt_pack_run_cancellation,
+        browser_runtime_start_blocking_failure, cleanup_interrupted_prompt_pack_runs_in_pool,
+        clear_prompt_pack_cancellation_smoke_fixture_in_pool, load_run_runtime_config, now_string,
         seed_prompt_pack_cancellation_smoke_fixture_in_pool, PromptPackRunState,
         RunRuntimeProvider, YoutubeSummaryStageExecutionError,
     };

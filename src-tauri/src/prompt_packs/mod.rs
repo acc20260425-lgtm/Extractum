@@ -1,3 +1,4 @@
+mod completion_transport;
 pub mod dto;
 pub(crate) mod gemini_browser_stage;
 pub mod json_repair;

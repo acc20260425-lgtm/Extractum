@@ -1,5 +1,7 @@
 use crate::gemini_browser::GeminiBrowserProviderConfig;
 
+pub const PROMPT_PACK_RUN_EVENT: &str = "prompt-pack-run-event";
+
 #[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum PromptPackRuntimeProvider {
