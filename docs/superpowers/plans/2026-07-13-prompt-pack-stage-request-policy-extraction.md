@@ -67,6 +67,17 @@ use crate::prompt_packs::youtube_summary::{
 };
 ```
 
+In the existing test-module `use super::{ ... };` block, insert both private
+builders immediately before the existing request-builder imports:
+
+```rust
+build_gem_analysis_part_llm_request, build_gem_analysis_part_repair_llm_request,
+build_synthesis_llm_request, build_transcript_analysis_llm_request,
+```
+
+This temporary `super` import is required because the characterization tests
+run before the functions move to the sibling policy module.
+
 Add these tests immediately before `transcript_analysis_llm_request_embeds_frozen_stage_input`:
 
 ```rust
@@ -397,6 +408,8 @@ Inside `runtime::tests`, remove these policy names from the existing `use super:
 ```text
 build_synthesis_llm_request
 build_transcript_analysis_llm_request
+build_gem_analysis_part_llm_request
+build_gem_analysis_part_repair_llm_request
 gem_input_cap
 synthesis_stage_max_output_token_budget
 transcript_analysis_max_output_tokens
@@ -406,7 +419,9 @@ transcript_analysis_stage_max_prompt_token_budget
 DETAILED_REPORT_CONTROL_PRESET
 ```
 
-Also ensure the two new Gem builders are not imported through `super`. Add this exact import immediately after the existing `use super::super::run_store::{ ... };` block:
+This explicitly removes the two temporary Gem-builder imports added in Step 2.
+Add this exact import immediately after the existing
+`use super::super::run_store::{ ... };` block:
 
 ```rust
 use super::super::stage_request_policy::{
