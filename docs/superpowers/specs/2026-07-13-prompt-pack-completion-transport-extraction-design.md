@@ -177,6 +177,13 @@ The string value, frontend listener, emitted payloads, ordering, and public
 path do not change. This move does not introduce a new registered value and
 does not require a `docs/value-registry.md` update.
 
+No current external Rust caller uses the runtime constant path, but preserving
+it is a deliberate compatibility choice rather than a response to a known
+consumer. Because `dto` is already a public module, making the shared constant
+public also creates the additional path
+`prompt_packs::dto::PROMPT_PACK_RUN_EVENT`. That additional path is accepted;
+the runtime re-export remains the compatibility path.
+
 ## Extraction Boundary
 
 Move to `completion_transport.rs`:
@@ -226,6 +233,46 @@ Each follows one common flow after the extraction:
 
 No stage function retains its own `Api`/`GeminiBrowser` dispatch.
 
+## Dependencies
+
+Unlike the earlier pure state and persistence extractions, this transport
+module intentionally depends on application infrastructure. Its allowed
+dependencies include:
+
+- `std::future::Future` and `std::time::Instant`;
+- `sqlx::SqlitePool`;
+- `tauri::{AppHandle, Emitter, Manager}` so it can access
+  `LlmSchedulerState` and emit transport events;
+- `tokio_util::sync::CancellationToken`;
+- `super::dto::{PromptPackRunEvent, PROMPT_PACK_RUN_EVENT}`;
+- `super::run_control::run_with_prompt_pack_run_cancellation`;
+- `super::gemini_browser_stage`;
+- the completion and stage-error types from `super::youtube_summary`;
+- `crate::gemini_browser`;
+- `crate::llm` profile, scheduler, request, execution, and error types;
+- `crate::error::{AppError, AppResult}`;
+- `crate::time::now_rfc3339_utc`.
+
+The module must not depend on `super::runtime`, Tauri command adapters,
+runtime-config loading, preflight/readiness helpers, interrupted-run cleanup,
+or smoke fixtures.
+
+Queued and started events continue to be emitted directly with
+`handle.emit(PROMPT_PACK_RUN_EVENT, ...)`. They deliberately do not call
+`runtime::emit_prompt_pack_run_event` and therefore do not call
+`PromptPackRunState::apply_event`. This is existing behavior and must not be
+"unified" during extraction.
+
+Import cleanup is part of the implementation plan. In particular,
+`std::future::Future`, `std::time::Instant`, the run-control cancellation
+helper, `resolve_model_output_token_limit_for_backend`,
+`run_llm_collect_with_profile`, `LlmRequestError`, `LlmRequestKind`,
+`LlmRequestMetadata`, `LlmRequestPriority`, and transport-only profile/request
+types leave runtime's production imports when no longer used there. Imports
+still required by commands, preflight, stage signatures, event emission, or
+tests remain. The implementation must rely on compiler/rustfmt feedback rather
+than preserving a stale import list mechanically.
+
 ## Behavioral Compatibility
 
 ### API transport
@@ -243,6 +290,18 @@ Preserve exactly:
 - mapping `LlmRequestError::Cancelled` to
   `YoutubeSummaryStageExecutionError::Cancelled`;
 - mapping `LlmRequestError::Failed` without extra wrapping.
+
+There is currently no dedicated Rust characterization test for the API
+queued/started payloads or the repair-specific queue message. This slice does
+not add a Tauri event-capture harness. Instead, transfer the bodies of
+`run_api_llm_request` and `run_browser_llm_request` statement-for-statement.
+Permitted edits are limited to module paths, imports, indentation, replacing
+individual parameters with fields of `StageCompletionRequest`, the event
+constant's path, and the explicitly selected timestamp helper. Do not reorder
+statements, route events through a different emitter, or alter event fields or
+message literals. The source contract also retains the repair queue literal
+and the direct `handle.emit` ownership marker. A richer event-capture harness
+is deferred unless transport behavior changes later.
 
 ### Gemini Browser transport
 
@@ -320,11 +379,17 @@ The contract verifies:
   `StageCompletionRequest`, `model_context`, `execute`, both provider runners,
   and the listed Browser helpers;
 - those definitions no longer remain in `runtime.rs`;
-- all five stage functions call `model_context()` and `execute()` and contain
-  no direct `RunCompletionRuntime::Api` or `GeminiBrowser` dispatch;
+- all five stage functions call `model_context()` and `execute()`;
+- the raw runtime source contains zero occurrences matching
+  `match completion_runtime` or `match &completion_runtime`; the RED baseline
+  is exactly ten such matches, two in each stage function, and the GREEN
+  baseline is zero;
 - `dto.rs` contains the single definition of the Rust
   `PROMPT_PACK_RUN_EVENT` constant;
 - `runtime.rs` publicly re-exports that constant;
+- `completion_transport.rs` retains the repair-specific
+  `JSON repair queued at position` literal and directly uses `handle.emit` for
+  queued/started transport events;
 - `completion_transport.rs` contains no Tauri commands, start/preflight or
   readiness functions, lifecycle cleanup, interrupted-run cleanup, or dev
   fixtures.
