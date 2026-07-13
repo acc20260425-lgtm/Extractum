@@ -30,18 +30,19 @@ SQL additions to accumulate beside unrelated orchestration code.
 
 ## Selected Architecture
 
-Add a private sibling module:
+Add a private sibling module. This diagram is a fragment of the existing
+`prompt_packs` tree, not its complete contents:
 
 ```text
 src-tauri/src/prompt_packs/
 |-- mod.rs
 |-- run_store.rs       # run catalog persistence and read models
 |-- runtime.rs         # Tauri adapters and execution orchestration
+|-- ...                # dto, projections, youtube_summary, and other modules
 `-- store.rs           # prompt-pack version lookup; unchanged
 ```
 
-Register it in `prompt_packs/mod.rs` as `pub(crate) mod run_store;` or the
-narrower private equivalent supported by all existing callers. It is not
+Register it in `prompt_packs/mod.rs` as private `mod run_store;`. It is not
 re-exported from `prompt_packs` and does not create a frontend-visible API.
 
 `runtime.rs` continues to own every Tauri command. Commands obtain the managed
@@ -50,7 +51,7 @@ SQLite pool and delegate storage work to functions imported from
 
 ## Extraction Boundary
 
-Move these functions and types to `run_store.rs` without changing their SQL or
+Move this catalog read/manage API to `run_store.rs` without changing its SQL or
 behavior:
 
 - `list_prompt_pack_runs_in_pool`;
@@ -62,10 +63,13 @@ behavior:
 - `RunSummaryRow`;
 - `impl From<RunSummaryRow> for PromptPackRunSummaryDto`.
 
-The pool-level functions used by runtime code or existing tests remain
-`pub(crate)`. Helpers that have no external caller remain private to
-`run_store.rs`. Visibility must be chosen per actual caller rather than making
-the entire module surface public.
+The five pool-level functions called by `runtime.rs` use `pub(super)`:
+`list_prompt_pack_runs_in_pool`, `update_prompt_pack_run_in_pool`,
+`delete_prompt_pack_run_in_pool`, `list_prompt_pack_run_stages_in_pool`, and
+`load_run_summary_optional`. This intentionally narrows the three existing
+`pub(crate)` functions and expands the two currently private functions only as
+far as their new sibling-module caller requires. `normalize_prompt_pack_run_label`,
+`RunSummaryRow`, and its DTO conversion remain private to `run_store.rs`.
 
 The following remain in `runtime.rs`:
 
@@ -77,9 +81,23 @@ The following remain in `runtime.rs`:
 - `now_string`, because it is used broadly throughout runtime execution and
   is not a run-store-specific primitive.
 
-The dev fixture helpers may call `run_store::load_run_summary_optional`, but
+`update_prompt_pack_run_in_pool` currently calls the runtime-local
+`now_string()`. After extraction it calls `crate::time::now_rfc3339_utc()`
+directly. This is the same implementation used by `now_string`; it avoids both
+a reverse `run_store -> runtime` dependency and another duplicated timestamp
+helper. Consolidating the other timestamp helpers remains a separate
+follow-up.
+
+The dev fixture helpers call `run_store::load_run_summary_optional`, but
 they are not moved in this slice because they coordinate both database rows
 and `PromptPackRunState`.
+
+Lifecycle and execution SQL intentionally remains in `runtime.rs`, including
+cancellation updates, stage provenance/status updates,
+`mark_prompt_pack_run_failed`, interrupted-run cleanup, and dev-fixture
+INSERT/DELETE operations. The new module owns only the enumerated catalog
+read/manage API; it does not own every query that references
+`prompt_pack_runs` or `prompt_pack_stage_runs`.
 
 ## Existing `store.rs`
 
@@ -122,12 +140,11 @@ responsibility for user-facing propagation or logging.
 ### Behavioral tests
 
 Keep the existing tests for listing, stage mapping, label normalization,
-updates, deletion guards, and missing rows. They may remain in the runtime test
-module while the first extraction is performed, importing the pool-level
-functions from `run_store`, or move into an in-file `run_store` test module if
-their fixtures can move without duplicating large runtime setup. Prefer moving
-tests that exercise only storage behavior; do not move mixed lifecycle tests
-solely to maximize line-count reduction.
+updates, deletion guards, and missing rows in `runtime::tests` for this slice.
+Only their imports change to reference `run_store`. They share the runtime
+module's substantial database fixture setup; moving or duplicating that setup
+would make this structural diff wider without improving behavior coverage.
+Test-module decomposition is a separate follow-up.
 
 ### Source contract
 
@@ -135,18 +152,22 @@ Add or extend a focused source-level contract that verifies:
 
 - `prompt_packs/mod.rs` registers `run_store`;
 - `runtime.rs` imports the extracted storage functions;
-- `run_store.rs` owns the `RunSummaryRow` mapping and run-catalog SQL;
-- the extracted function definitions no longer exist in `runtime.rs`.
+- `run_store.rs` owns `RunSummaryRow` and the five enumerated catalog
+  read/manage functions;
+- those five function definitions no longer exist in `runtime.rs`.
 
-The contract should check stable ownership markers, not exact formatting or
-line counts. SQL queries remain behaviorally covered by Rust tests.
+The contract must not assert that all SQL mentioning `prompt_pack_runs` or
+`prompt_pack_stage_runs` moved out of `runtime.rs`; lifecycle and fixture SQL is
+explicitly out of scope. It should check stable function/type ownership
+markers, not exact formatting or line counts. SQL behavior remains covered by
+Rust tests.
 
 ### Verification commands
 
 Run, at minimum:
 
 1. focused tests for the moved run-store behaviors;
-2. all `prompt_packs::runtime::tests` and any new `run_store::tests`;
+2. all `prompt_packs::runtime::tests`;
 3. the complete Rust test suite once;
 4. `npm.cmd run check:rustfmt`;
 5. `cargo check --manifest-path src-tauri/Cargo.toml --all-targets` with zero
@@ -167,7 +188,8 @@ registration, dependencies, prompt assets, or unrelated formatting.
 
 ## Acceptance Criteria
 
-1. Run-catalog SQL and `RunSummaryRow` mapping live in `run_store.rs`.
+1. The five enumerated catalog read/manage functions and `RunSummaryRow`
+   mapping live in `run_store.rs`.
 2. `runtime.rs` retains Tauri and lifecycle orchestration but no longer defines
    the extracted storage functions or row type.
 3. Public Tauri and Rust interfaces remain unchanged.
