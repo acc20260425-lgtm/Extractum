@@ -407,7 +407,8 @@ The shown `let browser_run_id` block is the first existing operation. Retain it
 once and retain every following statement through the function's closing brace
 exactly as currently written.
 
-The comments above describe the splice point; do not add them to production code. In `persist_browser_stage_provenance`, replace only:
+The snippets above show the exact splice points. In
+`persist_browser_stage_provenance`, replace only:
 
 ```rust
 .bind(now_string())
@@ -518,6 +519,15 @@ completion_runtime
 
 For the two Gem functions, calculate the existing discriminator before constructing the request and use:
 
+In `run_gem_analysis_part_stage_request`, preserve these existing local values
+when removing the surrounding provider match; the field shorthand below
+depends on them:
+
+```rust
+let phase = gem_part_phase(stage_request.part);
+let started_message = gem_part_started_message(stage_request.part);
+```
+
 ```rust
 // run_gem_analysis_part_stage_request
 let request_discriminator = Some(gem_part_request_suffix(stage_request.part));
@@ -592,6 +602,44 @@ At the bottom of `completion_transport.rs`, add:
 mod tests {
     use super::RunCompletionRuntime;
     use crate::llm::{ProviderKind, ResolvedLlmProfile};
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener,
+    };
+
+    async fn start_model_metadata_server() -> (String, tokio::task::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind model metadata server");
+        let base_url = format!("http://{}", listener.local_addr().expect("model endpoint"));
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("accept model request");
+            let mut request = Vec::new();
+            let mut chunk = [0_u8; 1024];
+            loop {
+                let read = socket.read(&mut chunk).await.expect("read model request");
+                assert!(read > 0, "model request ended before headers");
+                request.extend_from_slice(&chunk[..read]);
+                if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            let request = String::from_utf8_lossy(&request);
+            assert!(request.starts_with("GET /models "));
+
+            let body = r#"{"data":[{"id":"override-model","object":"model","owned_by":"test","context_length":32768,"max_output_tokens":8192}]}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                body.len(),
+                body,
+            );
+            socket
+                .write_all(response.as_bytes())
+                .await
+                .expect("write model response");
+        });
+        (base_url, server)
+    }
 
     #[tokio::test]
     async fn browser_model_context_has_no_api_fields() {
@@ -608,10 +656,7 @@ mod tests {
 
     #[tokio::test]
     async fn api_model_context_retains_profile_and_override() {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0")
-            .expect("bind unavailable model endpoint");
-        let base_url = format!("http://{}", listener.local_addr().expect("model endpoint"));
-        drop(listener);
+        let (base_url, server) = start_model_metadata_server().await;
         let runtime = RunCompletionRuntime::Api {
             profile: ResolvedLlmProfile {
                 profile_id: "profile-7".to_string(),
@@ -624,15 +669,22 @@ mod tests {
         };
 
         let context = runtime.model_context().await.expect("api context");
+        tokio::time::timeout(std::time::Duration::from_secs(2), server)
+            .await
+            .expect("model metadata server timeout")
+            .expect("model metadata server");
 
         assert_eq!(context.profile_id.as_deref(), Some("profile-7"));
         assert_eq!(context.model_override.as_deref(), Some("override-model"));
-        assert_eq!(context.model_output_limit, None);
+        assert_eq!(context.model_output_limit, Some(8_192));
     }
 }
 ```
 
-Expected: Browser context is explicitly empty; API context preserves profile/model override and exercises the existing unavailable-model-endpoint fallback to `None` without external network access.
+Expected: Browser context is explicitly empty; API context preserves
+profile/model override and resolves the expected output limit from a
+deterministic one-request loopback server without external network access or a
+timeout fallback.
 
 - [ ] **Step 9: Clean production imports and format the five scoped files**
 
