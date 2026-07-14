@@ -488,19 +488,30 @@ Expected: the new module is a statement-for-statement relocation of the existing
 
 - [ ] **Step 5: Rewire runtime and remove the old contiguous block**
 
-In `src-tauri/src/prompt_packs/runtime.rs`, replace:
+In `src-tauri/src/prompt_packs/runtime.rs`, make these three independent import edits.
+
+First, delete this complete line:
 
 ```rust
 use tokio_util::sync::CancellationToken;
+```
 
+Second, replace:
+
+```rust
 use super::completion_transport::{RunCompletionRuntime, StageCompletionRequest};
-use super::json_repair::JsonRepairStageExecutionRequest;
 ```
 
 with:
 
 ```rust
 use super::completion_transport::RunCompletionRuntime;
+```
+
+Third, delete this complete line:
+
+```rust
+use super::json_repair::JsonRepairStageExecutionRequest;
 ```
 
 Add this import beside the other sibling-module imports:
