@@ -20,6 +20,7 @@ Measurements on the current Windows development machine show distinct costs:
 | Full Vitest suite, `threads`, automatic workers | 65.09 s | Same files and tests |
 | Full Vitest suite, `threads`, 2 workers | 78.51 s | Slower than automatic selection |
 | Full Vitest suite, `threads`, 4 workers | 63.92 s | Similar to automatic selection |
+| `vitest run --changed`, clean tree | 4.11 s | Code 0, `No test files found` |
 | `npm.cmd run check` | 40.37 s | Zero diagnostics |
 | `npm.cmd run build` | 68.46 s | Frontend build only |
 | `cargo check`, root crate required rebuilding | 76.17 s | Current dev profile |
@@ -32,6 +33,12 @@ cold-build measurement. It still demonstrates that compiling the test target
 dominates execution of the tests. A historical release-build log records five
 minutes and eleven seconds for the Rust release profile, before frontend
 prerequisites.
+
+The full 156-file Vitest inventory comprises 145 files under `src`, five
+sidecar unit-test files, four research-adapter unit-test files, and two script
+test files. The separately managed research-adapter e2e directory is excluded
+by `run-vitest.mjs`. The node/jsdom count below refers only to the 145 files
+under `src`, not to the complete 156-file suite.
 
 `src-tauri/target` is approximately 357 GiB. About 223 GiB is the canonical
 `debug` directory. The rest includes many slice-specific `codex-*` target
@@ -105,8 +112,10 @@ The repository keeps two verification layers:
 ```text
 small change
     |
-    +-- frontend helper/model --> Git-changed Vitest set
-    +-- Svelte/UI change ------> Git-changed Vitest set + svelte-check
+    +-- dirty frontend change -> working-tree changed Vitest set
+    +-- checkpoint commit -----> last-commit changed Vitest set
+    +-- explicit source -------> related Vitest set
+    +-- Svelte/UI change ------> applicable focused set + svelte-check
     +-- Rust change -----------> focused Rust lib test + rustfmt + cargo check
     |
     `-- merge/push gate -------> full npm.cmd run verify
@@ -140,6 +149,7 @@ Add these package scripts:
 
 ```json
 "test:changed": "node scripts/run-vitest.mjs run --changed",
+"test:changed:last": "node scripts/run-vitest.mjs run --changed=HEAD~1",
 "test:related": "node scripts/run-vitest.mjs related --run",
 "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml --lib"
 ```
@@ -148,25 +158,38 @@ Example usage:
 
 ```powershell
 npm.cmd run test:changed
+npm.cmd run test:changed:last
 npm.cmd run test:related -- src/lib/some-model.ts
 npm.cmd run test:rust -- prompt_packs::runtime_config
 ```
 
-`test:changed` is the primary zero-argument frontend inner-loop command. Vitest
-collects staged, unstaged, and untracked Git changes and selects statically
-related tests. `test:related` remains the explicit tool for one or more known
-source paths.
+`test:changed` covers staged, unstaged, and untracked Git changes.
+`test:changed:last` adds the most recent checkpoint commit (`HEAD~1...HEAD`) to
+that working-tree set. The second form is necessary in this repository because
+small checkpoint commits leave the working tree clean frequently. For an
+older branch or comparison point, the equivalent explicit form is
+`npm.cmd run test -- --changed=<base>`.
 
-`run-vitest.mjs` normalizes positional paths passed to the `related` command
+`test:related` remains the explicit tool for one or more known source paths.
+No changed-file command is universally primary: use the working-tree form
+before a checkpoint and the last-commit/base form after one.
+
+`run-vitest.mjs` exports a pure `normalizeRelatedFileArgs` helper and uses it
+before spawning Vitest. For the `related` command, an argument is treated as a
+file operand when it does not begin with `-` and resolves to an existing file
+under the supplied/current working directory. Those operands are normalized
 from Windows backslashes to forward slashes. Both
 `src/lib/some-model.ts` and `src\lib\some-model.ts` therefore address the same
-file. The normalization is limited to related-file operands; it must not
-rewrite arbitrary test-name patterns or other Vitest commands.
+file. Options, non-file test-name patterns such as `-t "foo\bar"`, and
+arguments to commands other than `related` remain unchanged. The wrapper gains
+the same guarded-entrypoint pattern already used by `scripts/tauri.mjs`, so it
+can be imported without starting Vitest.
 
 `test:changed` and `test:related` are accelerators, not correctness gates.
 Vitest derives related tests from static imports; dynamic or external
-relationships may not be visible. In addition, `--changed` intentionally exits
-successfully when no related tests are found. A developer must use an explicit
+relationships may not be visible. In Vitest 4.1.5, `--changed` has been
+observed and must be reverified to exit successfully with code 0 when no
+related tests are found. A developer must use an explicit
 test file, a wider focused test, or the full suite when the relationship is not
 represented in the module graph or the selected set is unexpectedly empty.
 
@@ -270,19 +293,20 @@ Add `src/lib/development-loop-performance-contract.test.ts`. It should read
 the relevant files as raw text, normalize CRLF before textual assertions, and
 parse `package.json` for script assertions.
 
-The contract verifies machine-readable configuration and stable documentation
-anchors. It does not assert human prose. Specifically, it verifies that:
+The contract verifies evaluated configuration, machine-readable configuration,
+and stable documentation anchors. It does not assert human prose. Specifically,
+it verifies that:
 
-- the comment-stripped `vite.config.js` source contains the exact selected
-  Vitest block with `pool: "threads"` and no additional worker override;
+- importing the default `vite.config.js` export and resolving its async config
+  factory produces `config.test.pool === "threads"` and a `test` object without
+  an own `maxWorkers` property;
 - no separate root `vitest.config.{js,ts,mjs,mts,cjs,cts}` exists that could
   silently supersede the selected Vite configuration;
 - `test:changed` uses the existing `run-vitest.mjs` wrapper and Vitest's
   `run --changed` option;
+- `test:changed:last` uses `run --changed=HEAD~1`;
 - `test:related` uses the existing `run-vitest.mjs` wrapper and Vitest's
   `related --run` command;
-- `run-vitest.mjs` limits Windows-path normalization to positional operands of
-  the `related` command;
 - `test:rust` uses the canonical manifest, `--lib`, and no `--target-dir`;
 - `test:rust:prompt-pack-runs` contains no `--target-dir`;
 - the Cargo dev profile uses `line-tables-only` for workspace code and disables
@@ -292,6 +316,13 @@ anchors. It does not assert human prose. Specifically, it verifies that:
 
 The contract checks repository-owned configuration, not historical documents
 or filesystem contents under ignored `src-tauri/target`.
+
+The same test file imports `normalizeRelatedFileArgs` as ordinary executable
+code. Behavioral cases prove that an existing backslash-separated related
+path is normalized, `-t "foo\bar"` is unchanged, a non-existing operand is
+unchanged, and the same existing path is unchanged for a non-`related`
+command. These are unit tests of the wrapper API, not textual source-contract
+assertions.
 
 ## Failure Handling
 
@@ -312,9 +343,12 @@ affected files in a sequential/forked Vitest project.
 ### Changed/related-test gaps
 
 No-tests-found or an unexpectedly small changed/related set is a signal to run
-a known test file or the full suite. `test:changed` exits successfully on an
-empty set by Vitest design. Neither focused command may be presented as a
-merge gate.
+a known test file or the full suite. A clean tree is the common expected cause
+of an empty `test:changed` set in this checkpoint-heavy repository; use
+`test:changed:last` or an explicit base immediately after a commit. Vitest
+4.1.5 currently exits successfully on an empty changed set, and verification
+locks down that observed behavior. None of the focused commands may be
+presented as a merge gate.
 
 ### Cargo cache cleanup
 
@@ -328,9 +362,35 @@ Because cleanup is destructive and makes the next build cold, execution
 requires a separate user confirmation. Project scripts do not call
 `cargo clean` automatically.
 
+## Implementation Sequencing Constraint
+
+The implementation plan must request the cleanup decision before the first
+Cargo invocation that sees the new profile settings.
+
+1. Implement and commit the frontend pool, scripts, wrapper behavior, and
+   their frontend tests without changing the Cargo profile.
+2. On that clean checkpoint, verify the empty-tree `test:changed` result and
+   `test:changed:last`. Then make one isolated reversible source edit, verify
+   the working-tree changed set, and restore the edit.
+3. Ask whether the one-time Cargo cleanup is approved.
+4. Only then apply the permanent Cargo profile edit.
+5. If cleanup is approved, immediately confirm process safety and clean before
+   any Cargo check/test/build. If it is declined, proceed directly to the one
+   profile-triggered cold rebuild and do not clean the newly warmed cache in
+   the same execution.
+6. Run Cargo correctness checks, timings, and the full verification gate only
+   after the selected cleanup branch is complete.
+
+This ordering prevents the automated-correctness section from warming the new
+profile and then deleting it.
+
 ## Verification Strategy
 
 ### Automated correctness
+
+Execute these checks in the phases defined by the Implementation Sequencing
+Constraint above. Their list order does not authorize an early Cargo run with
+the new profile.
 
 - Run the new source-contract test.
 - Run a preflight source scan proving there is no `process.chdir()` call or
@@ -339,9 +399,11 @@ requires a separate user confirmation. Project scripts do not call
 - Run the full Vitest suite three times with the committed thread-pool
   configuration. The passing file and test inventories must not decrease from
   the pre-change baseline; additions made by this slice are expected.
-- Run `test:changed` with a reversible uncommitted change to a known source
-  file and confirm that it executes a nonzero changed set; restore the probe
-  edit immediately afterward.
+- After committing the frontend configuration and returning to a clean tree,
+  run `test:changed` and record its exit code and no-tests output.
+- On that same checkpoint, run `test:changed:last`, then make a reversible
+  uncommitted change to a known source file and confirm that `test:changed`
+  executes a nonzero set. Restore the probe edit immediately afterward.
 - Run `test:related` for a known source file and confirm that it executes a
   nonzero related set.
 - Run one focused Rust module through `test:rust`.
@@ -399,8 +461,9 @@ window.
 2. The baseline machine's median full Vitest duration is materially below its
    same-machine pre-change baseline. The previously observed 60-70-second
    range is evidence, not a hard acceptance threshold.
-3. Focused frontend and Rust commands are documented, executable, and reuse
-   existing wrappers and the canonical Cargo target.
+3. Working-tree, last-checkpoint, explicit-related, and focused Rust commands
+   are documented and executable; Rust commands reuse the canonical Cargo
+   target.
 4. Active repository scripts contain no slice-specific Cargo target directory.
 5. Ordinary dev/test compilation uses reduced debug information without
    changing release settings, debug assertions, MCP behavior, or application
