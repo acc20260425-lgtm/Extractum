@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Implement the approved design in `docs/superpowers/specs/2026-07-14-daily-development-loop-performance-design.md` at or after commit `92239f1e`.
+- Implement the final approved revision of `docs/superpowers/specs/2026-07-14-daily-development-loop-performance-design.md`, committed as `92239f1e`, or a descendant of that commit.
 - Use `npm.cmd`, not plain `npm`, for every npm-script command on Windows.
 - Keep `npm.cmd run verify` authoritative; do not remove, skip, weaken, or replace any step in `scripts/verify.mjs`.
 - Keep Vitest isolation enabled, retain per-file environments, and do not set `maxWorkers`, file-level concurrency, or a global DOM environment.
@@ -336,6 +336,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 ```
 
 The classifier intentionally normalizes any non-option argument that resolves to a file, including a file-valued option argument; it never rewrites the option token itself.
+Because importing the wrapper from a TypeScript test brings this `.mjs` file
+under the repository's strict `checkJs` analysis, resolve any wrapper type
+diagnostic with narrow JSDoc parameter/return annotations. Do not disable
+`checkJs`, add `@ts-ignore`, or weaken the project TypeScript settings.
 
 - [ ] **Step 10: Add the focused package scripts and remove the slice-specific target**
 
@@ -392,7 +396,12 @@ $allowed = @(
     'src/lib/development-loop-performance-contract.test.ts',
     'vite.config.js'
 )
-$paths = @($changed | ForEach-Object { $_.Substring(3) })
+$paths = @(
+    git diff --name-only
+    git diff --cached --name-only
+    git ls-files --others --exclude-standard
+) | Sort-Object -Unique
+$paths = @($paths)
 if (@($paths | Where-Object { $_ -notin $allowed }).Count -ne 0) { exit 1 }
 ```
 
@@ -412,12 +421,12 @@ git commit -m "perf: speed up frontend feedback loop"
 
 **Files:**
 - Create: `docs/superpowers/verification/2026-07-14-daily-development-loop-performance.md`
-- Temporary probe only, restore before writing evidence: `src/lib/api/llm.ts`
+- Temporary probe only, restore before writing evidence: `scripts/tauri.mjs`
 
 **Interfaces:**
 - Consumes: the clean Task 1 checkpoint and all four new package scripts.
 - Produces: measured frontend evidence, including three complete suite durations, the clean-tree result, the expected force-rerun result, and focused changed/related behavior.
-- Preserves: `src/lib/api/llm.ts` byte-for-byte after the reversible probe.
+- Preserves: `scripts/tauri.mjs` byte-for-byte after the reversible probe.
 
 - [ ] **Step 1: Confirm the checkpoint is clean and is the expected commit**
 
@@ -467,9 +476,9 @@ Expected: PASS and the full suite runs. Task 1 changed `vite.config.js` and `pac
 
 - [ ] **Step 4: Prove a normal dirty source produces a focused nonempty set**
 
-Use the executor's patch editor to add exactly this first-line probe to `src/lib/api/llm.ts`:
+Use the executor's patch editor to add exactly this first-line probe to `scripts/tauri.mjs`:
 
-```ts
+```js
 // Vitest changed-set verification probe; remove immediately after the command.
 ```
 
@@ -480,12 +489,15 @@ npm.cmd run test:changed
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 ```
 
-Expected: PASS with a nonzero related-test set that is smaller than the complete suite.
+Expected: PASS with a nonzero related-test set containing `scripts/tauri.test.ts`.
+This leaf script is not a Vitest force-rerun trigger, so a complete-suite run
+would be unexpected and must be investigated rather than accepted as focused
+selection.
 
 Remove exactly the probe line with the patch editor, then run:
 
 ```powershell
-git diff --exit-code -- src/lib/api/llm.ts
+git diff --exit-code -- scripts/tauri.mjs
 ```
 
 Expected: exit 0; the probe file is restored byte-for-byte.
@@ -584,7 +596,13 @@ git diff --check
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $changed = @(git status --short)
 $changed
-if ($changed.Count -ne 1 -or $changed[0].Substring(3) -ne 'docs/superpowers/verification/2026-07-14-daily-development-loop-performance.md') { exit 1 }
+$paths = @(
+    git diff --name-only
+    git diff --cached --name-only
+    git ls-files --others --exclude-standard
+) | Sort-Object -Unique
+$paths = @($paths)
+if ($paths.Count -ne 1 -or $paths[0] -ne 'docs/superpowers/verification/2026-07-14-daily-development-loop-performance.md') { exit 1 }
 git add -- docs/superpowers/verification/2026-07-14-daily-development-loop-performance.md
 git diff --cached --check
 git commit -m "docs: record frontend loop performance"
@@ -696,7 +714,7 @@ For the daily loop after a small change, choose the narrowest applicable command
 npm.cmd run test:changed
 npm.cmd run test:changed:last
 npm.cmd run test:related -- src/lib/some-model.ts
-npm.cmd run test:rust -- prompt_packs::runtime_config
+npm.cmd run test:rust -- prompt_packs::runtime::tests::load_run_runtime_config
 ```
 
 The working-tree command sees uncommitted changes; the last-checkpoint command
@@ -748,22 +766,31 @@ Expected: the current size and historical `codex-*` count are printed for eviden
 
 - [ ] **Step 9: Execute exactly the approved cleanup branch**
 
-If cleanup was **approved**, run the safety check first:
+If cleanup was **approved**, first close the Rust workspace/editor or disable
+rust-analyzer so it cannot start a new Cargo check between the process scan and
+cleanup. Then run the safety check and cleanup in the same PowerShell block:
 
 ```powershell
-$blocking = @(Get-Process cargo, rustc, extractum -ErrorAction SilentlyContinue)
+$blocking = @(Get-Process cargo, rustc, rust-analyzer, extractum -ErrorAction SilentlyContinue)
+$tauriNodeProcesses = @(
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Name -eq 'node.exe' -and
+            $_.CommandLine -match '(scripts[\\/]tauri\.mjs|tauri(?:\.js)?\s+dev)'
+        }
+)
 $blocking | Select-Object Id, ProcessName, Path
-if ($blocking.Count -ne 0) { exit 1 }
-```
-
-Expected: no Cargo, rustc, or Extractum process is running. Stop and resolve any listed process before cleanup; do not force-stop it merely to continue the plan.
-
-Then run the approved destructive command:
-
-```powershell
+$tauriNodeProcesses | Select-Object ProcessId, Name, CommandLine
+if ($blocking.Count -ne 0 -or $tauriNodeProcesses.Count -ne 0) { exit 1 }
 cargo clean --manifest-path src-tauri/Cargo.toml
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 ```
+
+Expected: no Cargo, rustc, rust-analyzer, Extractum, or Tauri-dev process is
+running and cleanup succeeds. Stop and resolve any listed process before
+cleanup; do not force-stop it merely to continue the plan. If cleanup loses a
+race and fails, re-establish process safety before retrying under the same
+explicit approval.
 
 If cleanup was **declined**, skip `cargo clean` completely and record `declined`; proceed directly to Step 10. Do not revisit cleanup after the new profile has warmed the target.
 
@@ -779,7 +806,7 @@ $watch.Stop()
 "FIRST_PROFILE_CARGO_CHECK_EXIT=$code"
 "FIRST_PROFILE_CARGO_CHECK_SECONDS=$([math]::Round($watch.Elapsed.TotalSeconds, 2))"
 if ($code -ne 0) { exit $code }
-$timingReport = Get-ChildItem -LiteralPath 'src-tauri/target/cargo-timings' -Filter 'cargo-timing*.html' |
+$timingReport = Get-ChildItem -LiteralPath 'src-tauri/target/cargo-timings' -Filter 'cargo-timing*.html' -ErrorAction SilentlyContinue |
     Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
 "CARGO_TIMING_REPORT=$($timingReport.FullName)"
@@ -809,8 +836,16 @@ Expected: full Cargo test passes. Record separately the wall time and the test-e
 Run:
 
 ```powershell
-npm.cmd run test:rust -- prompt_packs::runtime_config
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$focusedOutput = @(
+    cmd.exe /d /s /c "npm.cmd run test:rust -- prompt_packs::runtime::tests::load_run_runtime_config 2>&1"
+)
+$focusedCode = $LASTEXITCODE
+$focusedOutput | ForEach-Object { Write-Host $_ }
+$focusedText = $focusedOutput -join "`n"
+if (
+    $focusedCode -ne 0 -or
+    $focusedText -notmatch 'test result: ok\. [1-9][0-9]* passed;'
+) { exit 1 }
 
 $checkWatch = [Diagnostics.Stopwatch]::StartNew()
 cargo check --manifest-path src-tauri/Cargo.toml
@@ -830,6 +865,8 @@ if ($testCode -ne 0) { exit $testCode }
 ```
 
 Expected: focused filter and both complete no-op commands pass; no command contains `--target-dir`.
+The focused wrapper must report at least one passed test (the current prefix
+selects three runtime-config tests); exit code 0 with `0 passed` is a failure.
 
 - [ ] **Step 13: Record the rebuilt target and dominant timing units**
 
@@ -878,7 +915,12 @@ $allowed = @(
     'src-tauri/Cargo.toml',
     'src/lib/development-loop-performance-contract.test.ts'
 )
-$paths = @($changed | ForEach-Object { $_.Substring(3) })
+$paths = @(
+    git diff --name-only
+    git diff --cached --name-only
+    git ls-files --others --exclude-standard
+) | Sort-Object -Unique
+$paths = @($paths)
 if (@($paths | Where-Object { $_ -notin $allowed }).Count -ne 0) { exit 1 }
 git add -- AGENTS.md docs/project.md docs/superpowers/verification/2026-07-14-daily-development-loop-performance.md src-tauri/Cargo.toml src/lib/development-loop-performance-contract.test.ts
 git diff --cached --check
@@ -963,7 +1005,13 @@ git diff --check
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $changed = @(git status --short)
 $changed
-if ($changed.Count -ne 1 -or $changed[0].Substring(3) -ne 'docs/superpowers/verification/2026-07-14-daily-development-loop-performance.md') { exit 1 }
+$paths = @(
+    git diff --name-only
+    git diff --cached --name-only
+    git ls-files --others --exclude-standard
+) | Sort-Object -Unique
+$paths = @($paths)
+if ($paths.Count -ne 1 -or $paths[0] -ne 'docs/superpowers/verification/2026-07-14-daily-development-loop-performance.md') { exit 1 }
 git add -- docs/superpowers/verification/2026-07-14-daily-development-loop-performance.md
 git diff --cached --check
 git commit -m "docs: finalize daily loop verification"
