@@ -2,7 +2,8 @@
 
 ## Status
 
-Approved conversational design, pending review of this written specification.
+Written specification reviewed on 2026-07-14; blocking feedback addressed,
+pending final user approval for implementation planning.
 
 ## Context
 
@@ -79,7 +80,9 @@ No temporary experiment changes committed configuration or behavior.
 All measurements run on the same Windows workstation used for the previous
 baseline. The verification record captures the actual OS, CPU/logical-core
 count, memory, Node, npm, Vitest, rustc, and Cargo versions observed at
-execution time.
+execution time. It also records the active Windows power scheme and Microsoft
+Defender real-time-protection state. If either state cannot be queried, record
+`unavailable`; do not change security or power settings for the benchmark.
 
 Before measurements:
 
@@ -103,7 +106,9 @@ Run the complete repository suite three times through the existing
 all current per-file environments remain active.
 
 Use Vitest's JSON reporter to store machine-readable results in a temporary
-directory outside the repository. For every run, record:
+directory outside the repository. Pass an absolute system-temporary path to
+`--outputFile` and verify that the resolved path is outside the repository
+before starting Vitest. For every run, record:
 
 - wall-clock duration;
 - complete file and test inventory;
@@ -121,10 +126,26 @@ of seconds.
 
 ### Import-Duration Evidence
 
-On one of the three baseline runs, also enable Vitest's official experimental
-import-duration printing. Use it to identify repeated expensive imports that
-correlate with slow files. Import durations are diagnostic evidence, not values
-that can be subtracted directly from wall time.
+The design-time probe of the installed Vitest 4.1.5 expanded help confirmed
+`--experimental.importDurations.print <boolean|on-warn>`. Before the
+instrumented baseline run, verify that the installed CLI still contains
+`--experimental.importDurations.print <boolean|on-warn>`. On one of the three
+baseline runs, pass `--experimental.importDurations.print=true` and capture the
+CLI import breakdown in a separate absolute system-temporary log while the JSON
+report continues to use its own absolute `--outputFile` path.
+
+If the CLI option is missing, rejected, or produces no import breakdown after a
+successful nonempty run, use the documented config equivalent as a fallback:
+temporarily add
+`experimental: { importDurations: { print: true, limit: 10 } }` to the
+existing owned Vitest test-config object, run one equivalent instrumented
+baseline, and restore `vite.config.js` byte-for-byte with a hash check. If the
+fallback also produces no breakdown, record import profiling as unavailable
+and do not infer module-level import costs from the aggregate summary.
+
+Use successful import evidence to identify repeated expensive imports that
+correlate with the three-run slow-file tail. Import durations are diagnostic
+evidence, not values that can be subtracted directly from wall time.
 
 ### Conditional Isolation A/B
 
@@ -136,6 +157,10 @@ setup for process-global mutation, `process.chdir`, environment writes,
 unrestored fake timers, global mocks, module-cache assumptions, and shared
 external resources. An unresolved state owner disqualifies the file from the
 subset.
+
+The selected subset's three-run normal-isolation median must be at least 10
+seconds before running the A/B; below that floor, a 15% difference is too
+sensitive to process and scheduling noise for six additional runs to be useful.
 
 Run the same explicit file list three times with normal isolation and three
 times with `--no-isolate`, alternating the modes to reduce ordering bias. Every
@@ -202,6 +227,13 @@ The grouped inventory must cover the full library-test inventory exactly once;
 otherwise the report identifies the gap and does not use the incomplete groups
 to rank subsystems.
 
+If a substring module filter selects names outside its intended inventory,
+fall back to the exact full-name list: invoke each intended test with its full
+name and libtest's `--exact` flag, and verify one executed test per invocation.
+Use those exact runs to validate inventory and identify candidate tests. Do not
+compare their summed command wall time directly with a single-process module
+group because repeated process startup changes the measurement shape.
+
 If one top-level group dominates the observed critical path, partition only
 that group by its next module segment and repeat the same inventory check.
 
@@ -226,8 +258,12 @@ authorize changes in this slice.
 
 The final report selects exactly one outcome:
 
-1. **Vitest follow-up:** a repeatable node-file tail exists and the controlled
-   isolation A/B meets its 15% subset threshold without correctness drift.
+1. **Vitest follow-up:** a repeatable node-file tail exists and either the
+   controlled isolation A/B meets its 15% subset threshold without correctness
+   drift, or the import breakdown identifies a concrete shared expensive-import
+   hypothesis across multiple consistently slow files. An import-only finding
+   recommends a focused validation slice; it does not claim a measured saving
+   before that validation.
 2. **Rust-test follow-up:** a valid module or second-level group dominates the
    harness evidence and has one or more concrete, testable SQLite, wait,
    timeout, or serialization hypotheses.
@@ -256,6 +292,8 @@ thresholds.
   and report the dirty path; do not continue to tests or commit evidence.
 - If `--no-isolate` exposes a failure or state leak, stop that A/B, retain the
   normal-isolation baseline, and recommend against the tested subset.
+- If the normal-isolation subset median is below 10 seconds, skip the isolation
+  A/B and record that its percentage threshold would be noise-sensitive.
 - `cargo-nextest` is currently unavailable. Do not install it implicitly and do
   not treat its absence as a measurement failure.
 - Intermediate JSON, logs, and derived tables live under the system temporary
@@ -271,6 +309,8 @@ Create:
 The document contains:
 
 - environment and tool versions;
+- active Windows power scheme and Defender real-time-protection state, or an
+  explicit `unavailable` observation;
 - exact commands and starting commit;
 - all successful raw run durations and inventories;
 - Vitest distribution and top-file tables;
@@ -290,7 +330,11 @@ This is a documentation-and-measurement slice. Its correctness checks are:
 - clean starting tree and recorded commit;
 - successful inventories for every aggregated test run;
 - three successful repetitions where the design requires medians;
+- an absolute JSON `--outputFile` outside the repository for each Vitest run;
+- the installed-version import-duration CLI preflight and either its captured
+  breakdown, the reversible config fallback, or an explicit unavailable result;
 - exact restoration hash for the Rust edit probe;
+- exact restoration hash for `vite.config.js` if the import fallback runs;
 - no changed source or configuration file at the end;
 - `git diff --check` for the evidence document;
 - final status containing only the intended evidence document before commit.
@@ -303,7 +347,8 @@ because this slice leaves code and configuration byte-for-byte unchanged.
 
 1. No application, test, build, or repository workflow behavior changes.
 2. Vitest evidence includes three complete inventories, per-file medians,
-   distribution percentiles, environment classification, and a slow-file tail.
+   distribution percentiles, environment classification, a slow-file tail, and
+   a verified import-duration mechanism or explicit unavailable result.
 3. Cold, no-op, and small-edit Cargo measurements remain separately labeled.
 4. Rust evidence accounts for the full library-test inventory and distinguishes
    parallel full-suite, sequential, and module-filtered costs.
