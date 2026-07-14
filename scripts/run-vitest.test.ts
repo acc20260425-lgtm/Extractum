@@ -17,4 +17,11 @@ describe("run-vitest wrapper", () => {
   it("routes watch mode through the same wrapper defaults", () => {
     expect(packageJson.scripts["test:watch"]).toBe("node scripts/run-vitest.mjs watch");
   });
+
+  it("can be imported without starting Vitest", () => {
+    expect(runnerSource).toContain('import { pathToFileURL } from "node:url"');
+    expect(runnerSource).toMatch(
+      /if \(process\.argv\[1\] && import\.meta\.url === pathToFileURL\(process\.argv\[1\]\)\.href\) \{\s*runVitest\(\);\s*\}/s,
+    );
+  });
 });
