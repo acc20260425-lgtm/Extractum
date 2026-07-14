@@ -143,7 +143,7 @@ $scratch = (Get-Content -LiteralPath (Join-Path $env:TEMP 'extractum-performance
 $help = @(& node.exe node_modules/vitest/vitest.mjs --help --expand-help 2>&1)
 $helpCode = $LASTEXITCODE
 $help | Set-Content -LiteralPath (Join-Path $scratch 'vitest-expanded-help.txt') -Encoding UTF8
-$importFlagPresent = ($help -join "`n") -match '--experimental\.importDurations\.print <boolean\|on-warn>'
+$importFlagPresent = ($help -join "`n") -match '--experimental\.importDurations\.print\b'
 $nextest = @(& cargo.exe nextest --version 2>&1)
 $nextestCode = $LASTEXITCODE
 "VITEST_HELP_EXIT=$helpCode"
@@ -184,23 +184,23 @@ $vitestDir = Join-Path $scratch 'vitest'
 New-Item -ItemType Directory -Path $vitestDir -Force | Out-Null
 $repo = (Resolve-Path -LiteralPath '.').Path.TrimEnd('\')
 $help = Get-Content -LiteralPath (Join-Path $scratch 'vitest-expanded-help.txt') -Raw
-$cliImport = $help -match '--experimental\.importDurations\.print <boolean\|on-warn>'
+$cliImport = $help -match '--experimental\.importDurations\.print\b'
 
 for ($run = 1; $run -le 3; $run++) {
     $report = [IO.Path]::GetFullPath((Join-Path $vitestDir "run-$run.json"))
     if ($report.StartsWith($repo, [StringComparison]::OrdinalIgnoreCase)) { exit 1 }
     if ($run -eq 1 -and $cliImport) {
-        $args = @(
+        $vitestArgs = @(
             'scripts/run-vitest.mjs', 'run',
             '--reporter=json', '--reporter=default',
             "--outputFile.json=$report",
             '--experimental.importDurations.print=true'
         )
     } else {
-        $args = @('scripts/run-vitest.mjs', 'run', '--reporter=json', "--outputFile=$report")
+        $vitestArgs = @('scripts/run-vitest.mjs', 'run', '--reporter=json', "--outputFile=$report")
     }
     $watch = [Diagnostics.Stopwatch]::StartNew()
-    $output = @(& node.exe @args 2>&1)
+    $output = @(& node.exe @vitestArgs 2>&1)
     $code = $LASTEXITCODE
     $watch.Stop()
     $output | Set-Content -LiteralPath (Join-Path $vitestDir "run-$run.log") -Encoding UTF8
@@ -232,7 +232,7 @@ $vitestDir = Join-Path $scratch 'vitest'
 $metas = @(1..3 | ForEach-Object { Get-Content -LiteralPath (Join-Path $vitestDir "run-$_-meta.json") -Raw | ConvertFrom-Json })
 $inventories = @($metas | ForEach-Object { "$($_.files)/$($_.tests)" } | Sort-Object -Unique)
 $importLog = Join-Path $vitestDir 'run-1.log'
-$importCaptured = Test-Path -LiteralPath $importLog -and (Get-Content -LiteralPath $importLog -Raw) -match 'Import Duration Breakdown'
+$importCaptured = (Test-Path -LiteralPath $importLog) -and ((Get-Content -LiteralPath $importLog -Raw) -match 'Import Duration Breakdown')
 "INVENTORIES=$($inventories -join ',')"
 "IMPORT_BREAKDOWN_CAPTURED=$importCaptured"
 if ($inventories.Count -ne 1) { exit 1 }
@@ -454,11 +454,11 @@ for ($index=0; $index -lt $sequence.Count; $index++) {
     $mode = $sequence[$index]
     $run = $index + 1
     $report = [IO.Path]::GetFullPath((Join-Path $dir "ab-$run-$mode.json"))
-    $args = @('scripts/run-vitest.mjs','run','--reporter=json',"--outputFile=$report")
-    if ($mode -eq 'no-isolate') { $args += '--no-isolate' }
-    $args += $files
+    $vitestArgs = @('scripts/run-vitest.mjs','run','--reporter=json',"--outputFile=$report")
+    if ($mode -eq 'no-isolate') { $vitestArgs += '--no-isolate' }
+    $vitestArgs += $files
     $watch = [Diagnostics.Stopwatch]::StartNew()
-    $output = @(& node.exe @args 2>&1)
+    $output = @(& node.exe @vitestArgs 2>&1)
     $code = $LASTEXITCODE
     $watch.Stop()
     $json = if (Test-Path -LiteralPath $report) { Get-Content -LiteralPath $report -Raw | ConvertFrom-Json } else { $null }
@@ -530,7 +530,7 @@ $summary | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $dir 'c
 $summary | ConvertTo-Json -Depth 5
 ```
 
-Expected: the report parses, the duration is approximately the previously recorded 235 seconds, and top units include the cold-build leaders. Do not compare this duration directly with Task 3 Steps 2-4.
+Expected: the report parses, the duration is approximately the previously recorded 235 seconds, and top units include the cold-build leaders. PowerShell 5.1 may spend tens of seconds converting the roughly 21,000-line `UNIT_DATA` array; this is expected, not a hang. Do not compare this duration directly with Task 3 Steps 2-4.
 
 - [ ] **Step 2: Measure three no-op Cargo checks**
 
@@ -688,7 +688,7 @@ $inventory | Export-Csv -LiteralPath (Join-Path $dir 'top-level-inventory.csv') 
 $inventory | Format-Table
 ```
 
-Expected: a nonzero unique inventory (currently 1,125 library tests) grouped exactly once by top-level module.
+Expected: a nonzero unique inventory grouped exactly once by top-level module. Approximately 1,125 library tests existed when the plan was written, but the live unique count and later sum checks are authoritative.
 
 - [ ] **Step 2: Measure three warm full runs and one sequential run**
 
@@ -736,6 +736,40 @@ $tests = @(Get-Content -LiteralPath (Join-Path $dir 'test-names.txt'))
 $inventory = @(Import-Csv -LiteralPath (Join-Path $dir 'top-level-inventory.csv'))
 $rows = @()
 $fallbackRows = @()
+function Invoke-ExactChunks {
+    param(
+        [Parameter(Mandatory=$true)][string]$Module,
+        [Parameter(Mandatory=$true)][string[]]$Names
+    )
+    $chunks = [System.Collections.Generic.List[object]]::new()
+    $current = [System.Collections.Generic.List[string]]::new()
+    $length = 512
+    foreach ($name in $Names) {
+        $cost = $name.Length + 3
+        if ($current.Count -gt 0 -and $length + $cost -gt 24000) {
+            $chunks.Add([string[]]$current.ToArray())
+            $current = [System.Collections.Generic.List[string]]::new()
+            $length = 512
+        }
+        $current.Add($name)
+        $length += $cost
+    }
+    if ($current.Count -gt 0) { $chunks.Add([string[]]$current.ToArray()) }
+    $chunkRows = @()
+    $safeModule = $Module -replace '[^A-Za-z0-9_.-]', '_'
+    for ($index=0; $index -lt $chunks.Count; $index++) {
+        [string[]]$chunk = $chunks[$index]
+        $watch = [Diagnostics.Stopwatch]::StartNew()
+        $exactOutput = @(& cargo.exe test --manifest-path src-tauri/Cargo.toml --lib -- --exact @chunk 2>&1)
+        $exactCode = $LASTEXITCODE
+        $watch.Stop()
+        $exactOutput | Set-Content -LiteralPath (Join-Path $dir ("exact-$safeModule-$($index + 1).log")) -Encoding UTF8
+        $exactMatch = [regex]::Match(($exactOutput -join "`n"), 'test result: ok\. ([0-9]+) passed;.*finished in ([0-9.]+)s')
+        if ($exactCode -ne 0 -or -not $exactMatch.Success -or [int]$exactMatch.Groups[1].Value -ne $chunk.Count) { throw "Exact chunk failed for $Module" }
+        $chunkRows += [pscustomobject]@{module=$Module;chunk=$index + 1;expected=$chunk.Count;actual=[int]$exactMatch.Groups[1].Value;wall_seconds=[math]::Round($watch.Elapsed.TotalSeconds,3);harness_seconds=[double]$exactMatch.Groups[2].Value}
+    }
+    return $chunkRows
+}
 foreach ($item in $inventory) {
     $module = [string]$item.module
     $expected = [int]$item.expected_tests
@@ -753,14 +787,7 @@ foreach ($item in $inventory) {
         $rows += [pscustomobject]@{module=$module;expected=$expected;actual=$actual;wall_seconds=[math]::Round($watch.Elapsed.TotalSeconds,3);harness_seconds=[double]$match.Groups[2].Value;measurement='single filtered process'}
     } else {
         $intended = @($tests | Where-Object { $_.StartsWith("${module}::", [StringComparison]::Ordinal) })
-        foreach ($testName in $intended) {
-            $exactOutput = @(& cargo.exe test --manifest-path src-tauri/Cargo.toml --lib $testName -- --exact 2>&1)
-            $exactCode = $LASTEXITCODE
-            $exactText = $exactOutput -join "`n"
-            $exactMatch = [regex]::Match($exactText, 'test result: ok\. ([0-9]+) passed;.*finished in ([0-9.]+)s')
-            if ($exactCode -ne 0 -or -not $exactMatch.Success -or [int]$exactMatch.Groups[1].Value -ne 1) { exit 1 }
-            $fallbackRows += [pscustomobject]@{module=$module;test=$testName;harness_seconds=[double]$exactMatch.Groups[2].Value}
-        }
+        $fallbackRows += @(Invoke-ExactChunks -Module $module -Names ([string[]]$intended))
         $rows += [pscustomobject]@{module=$module;expected=$expected;actual=$intended.Count;wall_seconds='';harness_seconds='';measurement='exact-list inventory only; process timings not comparable'}
     }
 }
@@ -793,13 +820,7 @@ if ($dominant) {
         } else {
             $secondPrefix = "$($item.module)::"
             $intended = @($tests | Where-Object { $_.StartsWith($secondPrefix, [StringComparison]::Ordinal) })
-            foreach ($testName in $intended) {
-                $exactOutput = @(& cargo.exe test --manifest-path src-tauri/Cargo.toml --lib $testName -- --exact 2>&1)
-                $exactCode = $LASTEXITCODE
-                $exactMatch = [regex]::Match(($exactOutput -join "`n"), 'test result: ok\. ([0-9]+) passed;.*finished in ([0-9.]+)s')
-                if ($exactCode -ne 0 -or -not $exactMatch.Success -or [int]$exactMatch.Groups[1].Value -ne 1) { exit 1 }
-                $fallbackRows += [pscustomobject]@{module=$item.module;test=$testName;harness_seconds=[double]$exactMatch.Groups[2].Value}
-            }
+            $fallbackRows += @(Invoke-ExactChunks -Module $item.module -Names ([string[]]$intended))
             $secondRows += [pscustomobject]@{module=$item.module;expected=[int]$item.expected_tests;actual=$intended.Count;wall_seconds='';harness_seconds='';measurement='exact-list inventory only; process timings not comparable'}
         }
     }
@@ -810,7 +831,7 @@ $fallbackRows | Export-Csv -LiteralPath (Join-Path $dir 'exact-fallback-tests.cs
 $rows | Format-Table
 ```
 
-Expected: the top-level expected and actual sums equal the complete inventory. Substring collisions use exact-list validation and have no comparable group wall time. The operational definition of a dominant group is at least 25% of the median parallel full-harness duration; only that case creates the second-level table.
+Expected: the top-level expected and actual sums equal the complete inventory. Substring collisions use exact full-name chunks capped at 24,000 argument characters (the current libtest was verified with multiple names in one `--exact` invocation); their process timings are not compared with a normal group. The operational definition of a dominant group is at least 25% of the median parallel full-harness duration; only that case creates the second-level table.
 
 - [ ] **Step 4: Capture static hypotheses for the slowest valid groups**
 
@@ -872,6 +893,7 @@ $required = @(
     'preflight.json',
     'vitest/vitest-file-medians.csv',
     'vitest/vitest-summary.json',
+    'vitest/import-mechanism.txt',
     'cargo/cold-summary.json',
     'cargo/noop-runs.csv',
     'cargo/noop-summary.json',
@@ -882,12 +904,16 @@ $required = @(
     'rust-tests/static-candidate-scan.txt'
 )
 $missing = @($required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $scratch $_)) })
+$abSummary = Test-Path -LiteralPath (Join-Path $scratch 'vitest/vitest-ab-summary.json')
+$abSkipped = Test-Path -LiteralPath (Join-Path $scratch 'vitest/vitest-ab-skipped.txt')
+$abArtifactValid = $abSummary -xor $abSkipped
 "VITE_HASH_RESTORED=$($viteHash -eq $preflight.vite_config_sha256)"
 "RUST_HASH_RESTORED=$($rustHash -eq $preflight.runtime_config_sha256)"
 "STATUS_COUNT=$($status.Count)"
 "CODEX_TARGET_COUNT=$($codexTargets.Count)"
 "MISSING_ARTIFACTS=$($missing.Count)"
-if ($viteHash -ne $preflight.vite_config_sha256 -or $rustHash -ne $preflight.runtime_config_sha256 -or $status.Count -ne 0 -or $codexTargets.Count -ne 0 -or $missing.Count -ne 0) {
+"AB_ARTIFACT_EXACTLY_ONE=$abArtifactValid"
+if ($viteHash -ne $preflight.vite_config_sha256 -or $rustHash -ne $preflight.runtime_config_sha256 -or $status.Count -ne 0 -or $codexTargets.Count -ne 0 -or $missing.Count -ne 0 -or -not $abArtifactValid) {
     $status
     $missing
     exit 1

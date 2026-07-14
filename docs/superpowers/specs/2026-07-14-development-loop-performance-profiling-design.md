@@ -127,11 +127,12 @@ of seconds.
 
 The design-time probe of the installed Vitest 4.1.5 expanded help confirmed
 `--experimental.importDurations.print <boolean|on-warn>`. Before the
-instrumented baseline run, verify that the installed CLI still contains
-`--experimental.importDurations.print <boolean|on-warn>`. On one of the three
-baseline runs, pass `--experimental.importDurations.print=true` and capture the
-CLI import breakdown in a separate absolute system-temporary log while the JSON
-report continues to use its own absolute `--outputFile` path.
+instrumented baseline run, verify that the installed CLI still contains the
+`--experimental.importDurations.print` option token without coupling the check
+to its descriptive type text. On one of the three baseline runs, pass
+`--experimental.importDurations.print=true` and capture the CLI import
+breakdown in a separate absolute system-temporary log while the JSON report
+continues to use its own absolute `--outputFile` path.
 
 If the CLI option is missing, rejected, or produces no import breakdown after a
 successful nonempty run, use the documented config equivalent as a fallback:
@@ -227,11 +228,12 @@ otherwise the report identifies the gap and does not use the incomplete groups
 to rank subsystems.
 
 If a substring module filter selects names outside its intended inventory,
-fall back to the exact full-name list: invoke each intended test with its full
-name and libtest's `--exact` flag, and verify one executed test per invocation.
-Use those exact runs to validate inventory and identify candidate tests. Do not
-compare their summed command wall time directly with a single-process module
-group because repeated process startup changes the measurement shape.
+fall back to the exact full-name list. Pass full names to libtest with
+`--exact` in chunks kept safely below the Windows command-line limit, and
+verify that each chunk executes exactly its listed count. Use those exact runs
+to validate inventory and identify candidate tests. Do not compare chunked
+fallback wall time directly with a normal single-filter module group because
+the number of processes and argument shape differ.
 
 If one top-level group dominates the observed critical path, partition only
 that group by its next module segment and repeat the same inventory check.
