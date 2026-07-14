@@ -2,8 +2,7 @@
 
 ## Status
 
-Written specification reviewed on 2026-07-14; blocking feedback addressed,
-pending final user approval for implementation planning.
+Approved for implementation planning on 2026-07-14 after written-spec review.
 
 ## Context
 
