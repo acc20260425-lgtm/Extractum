@@ -12,6 +12,7 @@ use super::run_store::{
     delete_prompt_pack_run_in_pool, list_prompt_pack_run_stages_in_pool,
     list_prompt_pack_runs_in_pool, load_run_summary_optional, update_prompt_pack_run_in_pool,
 };
+use super::runtime_config::{load_run_runtime_config, RunRuntimeProvider};
 use super::stage_execution::{
     run_gem_analysis_part_repair_request, run_gem_analysis_part_stage_request,
     run_json_repair_stage_request, run_synthesis_stage_request,
@@ -413,61 +414,6 @@ async fn execute_youtube_summary_run(
     .await
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum RunRuntimeProvider {
-    Api,
-    GeminiBrowser,
-}
-
-impl RunRuntimeProvider {
-    fn parse(value: &str) -> AppResult<Self> {
-        match value {
-            "api" => Ok(Self::Api),
-            "gemini_browser" => Ok(Self::GeminiBrowser),
-            other => Err(AppError::validation(format!(
-                "Unsupported prompt-pack runtime provider: {other}"
-            ))),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-struct RunRuntimeConfig {
-    runtime_provider: RunRuntimeProvider,
-    profile_id: Option<String>,
-    model_override: Option<String>,
-    browser_provider_config: Option<crate::gemini_browser::GeminiBrowserProviderConfig>,
-}
-
-async fn load_run_runtime_config(pool: &SqlitePool, run_id: i64) -> AppResult<RunRuntimeConfig> {
-    sqlx::query_as::<_, (Option<String>, Option<String>, String, Option<String>)>(
-        "SELECT provider_profile_id, model, runtime_provider, browser_provider_config_json
-         FROM prompt_pack_runs
-         WHERE id = ?",
-    )
-    .bind(run_id)
-    .fetch_one(pool)
-    .await
-    .map_err(AppError::database)
-    .and_then(
-        |(profile_id, model_override, runtime_provider, browser_config_json)| {
-            let browser_provider_config = browser_config_json
-                .as_deref()
-                .map(serde_json::from_str)
-                .transpose()
-                .map_err(|error| {
-                    AppError::internal(format!("parse Browser Provider config snapshot: {error}"))
-                })?;
-            Ok(RunRuntimeConfig {
-                runtime_provider: RunRuntimeProvider::parse(&runtime_provider)?,
-                profile_id,
-                model_override,
-                browser_provider_config,
-            })
-        },
-    )
-}
-
 async fn mark_prompt_pack_run_failed(
     handle: &AppHandle,
     run_id: i64,
@@ -724,6 +670,7 @@ mod tests {
         delete_prompt_pack_run_in_pool, list_prompt_pack_run_stages_in_pool,
         list_prompt_pack_runs_in_pool, update_prompt_pack_run_in_pool,
     };
+    use super::super::runtime_config::{load_run_runtime_config, RunRuntimeProvider};
     use super::super::stage_request_policy::{
         build_gem_analysis_part_llm_request, build_gem_analysis_part_repair_llm_request,
         build_synthesis_llm_request, build_transcript_analysis_llm_request, gem_input_cap,
@@ -734,9 +681,8 @@ mod tests {
     };
     use super::{
         browser_runtime_start_blocking_failure, cleanup_interrupted_prompt_pack_runs_in_pool,
-        clear_prompt_pack_cancellation_smoke_fixture_in_pool, load_run_runtime_config, now_string,
+        clear_prompt_pack_cancellation_smoke_fixture_in_pool, now_string,
         seed_prompt_pack_cancellation_smoke_fixture_in_pool, PromptPackRunState,
-        RunRuntimeProvider,
     };
     use crate::gemini_browser::{GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind};
     use crate::llm::{LlmChatRequest, LlmMessage, LlmRequestError};
@@ -1245,13 +1191,8 @@ mod tests {
 
     #[tokio::test]
     async fn load_run_runtime_config_rejects_unsupported_provider() {
-        let pool = test_pool_with_prompt_pack_runs([(
-            103,
-            None,
-            "queued",
-            "2026-06-21T00:00:00Z",
-        )])
-        .await;
+        let pool =
+            test_pool_with_prompt_pack_runs([(103, None, "queued", "2026-06-21T00:00:00Z")]).await;
         let mut connection = pool.acquire().await.expect("acquire test connection");
         sqlx::query("PRAGMA ignore_check_constraints = ON")
             .execute(&mut *connection)
@@ -1280,13 +1221,8 @@ mod tests {
 
     #[tokio::test]
     async fn load_run_runtime_config_rejects_malformed_browser_config() {
-        let pool = test_pool_with_prompt_pack_runs([(
-            104,
-            None,
-            "queued",
-            "2026-06-21T00:00:00Z",
-        )])
-        .await;
+        let pool =
+            test_pool_with_prompt_pack_runs([(104, None, "queued", "2026-06-21T00:00:00Z")]).await;
         sqlx::query(
             "UPDATE prompt_pack_runs
              SET runtime_provider = 'gemini_browser',
