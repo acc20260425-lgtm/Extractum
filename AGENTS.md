@@ -44,6 +44,18 @@ This file is a working contract for AI agents modifying the repository.
 - Do not claim checks pass unless you ran the relevant command and saw it pass.
 - To keep the repository-wide mechanical formatting commit out of local blame attribution, developers may run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once per clone; do not change local Git configuration automatically.
 
+<!-- daily-development-loop -->
+- Use the smallest relevant daily-loop command after a small change:
+  - dirty frontend work: `npm.cmd run test:changed`;
+  - the most recent linear checkpoint: `npm.cmd run test:changed:last`;
+  - a known frontend source: `npm.cmd run test:related -- <forward-or-backslash-path>`;
+  - focused Rust library tests: `npm.cmd run test:rust -- <test-filter>`;
+  - broad Svelte/TypeScript work: also run `npm.cmd run check`;
+  - Rust/Tauri work: also run `npm.cmd run check:rustfmt` and `cargo check --manifest-path src-tauri/Cargo.toml`.
+- Changed/related commands are accelerators, not merge gates. An empty or unexpectedly small selection requires an explicit test or a wider run; `npm.cmd run verify` remains the full gate.
+- Ordinary Cargo commands must share canonical `src-tauri/target`; do not create slice-specific `codex-*` targets for sequential work.
+- For rare dependency-level native debugging, start clean, temporarily set both `[profile.dev] debug` and `[profile.dev.package."*"] debug` to `2`, set `CARGO_TARGET_DIR` to an absolute isolated native-debug directory, run `npm.cmd run tauri dev`, then restore the manifest. Never commit the temporary profile edit.
+
 ## 5. Data Grid & Date Formatting
 - `ExtractumDataGrid` date/time columns must use raw values plus `dateTimeFormat`.
 - Do not pre-format grid date/time values into label-only columns.

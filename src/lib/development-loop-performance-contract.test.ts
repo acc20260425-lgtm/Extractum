@@ -44,6 +44,21 @@ describe("daily development loop configuration", () => {
     expect(packageJson.scripts["test:rust"]).not.toContain("--target-dir");
     expect(packageJson.scripts["test:rust:prompt-pack-runs"]).not.toContain("--target-dir");
   });
+
+  it("uses reduced dev debug information without a custom target", () => {
+    const cargoToml = readSource("src-tauri/Cargo.toml");
+    expect(cargoToml).toMatch(
+      /\[profile\.dev\]\s*\ndebug = "line-tables-only"/,
+    );
+    expect(cargoToml).toMatch(
+      /\[profile\.dev\.package\."\*"\]\s*\ndebug = false/,
+    );
+  });
+
+  it("keeps stable daily-loop documentation anchors", () => {
+    expect(readSource("AGENTS.md")).toContain("<!-- daily-development-loop -->");
+    expect(readSource("docs/project.md")).toContain("<!-- daily-development-loop -->");
+  });
 });
 
 describe("related-test path normalization", () => {

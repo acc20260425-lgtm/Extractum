@@ -52,5 +52,11 @@ tempfile = "3"
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }
 
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }

@@ -43,8 +43,42 @@ related command also confirmed Windows backslash-path normalization.
 
 ## Cargo Profile and Cache
 
-Status at this checkpoint: the Cargo profile has not been changed, the cleanup
-decision has not been requested, and no new-profile Cargo command has run.
+The user explicitly approved the one-time cleanup. Immediately before it, no
+`cargo`, `rustc`, `rust-analyzer`, Extractum, or Tauri-dev process was running.
+`cargo clean` removed 166,392 files / 359.0 GiB. This was the only cleanup; the
+new profile was not warmed and then deleted.
+
+| Observation | Value |
+| --- | ---: |
+| Target before cleanup | 358.95 GiB |
+| Historical `codex-*` targets before cleanup | 18 |
+| First `cargo check --timings` after cleanup/profile change | 234.84 s |
+| First full `cargo test` after cleanup/profile change | 203.00 s |
+| First full Rust test harness | 1,125 passed in 18.10 s |
+| Transitional post-test `cargo check` | 5.15 s |
+| Steady no-op `cargo check` | 1.08 s |
+| Repeated full `cargo test` | 21.25 s |
+| Repeated Rust test harness | 1,125 passed in 17.70 s |
+| Target after canonical warm-up | 4.36 GiB |
+| `codex-*` targets after warm-up | 0 |
+
+The focused wrapper selected and passed three
+`prompt_packs::runtime::tests::load_run_runtime_config*` tests, so its green
+result was not a zero-test false positive. Ordinary commands created no new
+slice-specific target.
+
+Cargo timing report:
+`src-tauri/target/cargo-timings/cargo-timing-20260714T180231751Z-a54253738dfaee23.html`.
+The three longest units in that cold report were:
+
+| Unit | Duration |
+| --- | ---: |
+| `windows 0.61.3` | 42.82 s |
+| `tauri-utils 2.8.3` | 27.35 s |
+| `extractum 0.2.0` | 26.22 s |
+
+These cold/profile-triggered measurements are recorded as operational evidence
+and are not compared directly with the old partially warmed build baseline.
 
 ## Final Gates
 

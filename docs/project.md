@@ -15,13 +15,39 @@ This document is the shortest current-state snapshot of the repository.
 Run baseline full-project verification before committing or merging:
 
 ```bash
-npm run verify
+npm.cmd run verify
 ```
 
 This command runs frontend tests, Svelte checks, Rust check/tests, and
 `git diff HEAD --check`. It is a baseline local gate; CI, Rust formatting/lint
 policy, and broader live Telegram/LLM event-flow validation remain separate
 stabilization work.
+
+<!-- daily-development-loop -->
+For the daily loop after a small change, choose the narrowest applicable command:
+
+```powershell
+npm.cmd run test:changed
+npm.cmd run test:changed:last
+npm.cmd run test:related -- src/lib/some-model.ts
+npm.cmd run test:rust -- prompt_packs::runtime::tests::load_run_runtime_config
+```
+
+The working-tree command sees uncommitted changes; the last-checkpoint command
+uses `HEAD~1`, which means the first parent after a merge. Use
+`npm.cmd run test -- --changed=<base>` when a different merge base is intended.
+Changed/related selection follows the module graph and may be empty or
+incomplete for dynamic relationships, so it is not a replacement for the full
+`npm.cmd run verify` gate.
+
+Normal Rust checks and tests share `src-tauri/target`; avoid per-task target
+directories during sequential development. Ordinary dev/test builds retain
+workspace line tables and omit dependency debug information. For rare native
+inspection of dependency variables, begin with a clean tree, temporarily set
+both `[profile.dev] debug` and `[profile.dev.package."*"] debug` to `2`, point
+`CARGO_TARGET_DIR` at an absolute isolated directory, and launch the usual
+MCP-enabled `npm.cmd run tauri dev`. Restore the manifest afterward and never
+commit that temporary profile change.
 
 For the YouTube Summary / Prompt Pack project-runs slice, use the narrower
 verification scripts while iterating:
