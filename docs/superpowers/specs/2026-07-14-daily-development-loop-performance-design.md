@@ -170,6 +170,10 @@ small checkpoint commits leave the working tree clean frequently. For an
 older branch or comparison point, the equivalent explicit form is
 `npm.cmd run test -- --changed=<base>`.
 
+`HEAD~1` names the first parent of a merge commit. That is appropriate for the
+ordinary linear checkpoint workflow. After a merge, use an explicit
+`--changed=<base>` when the intended comparison base is not the first parent.
+
 `test:related` remains the explicit tool for one or more known source paths.
 No changed-file command is universally primary: use the working-tree form
 before a checkpoint and the last-commit/base form after one.
@@ -181,17 +185,21 @@ under the supplied/current working directory. Those operands are normalized
 from Windows backslashes to forward slashes. Both
 `src/lib/some-model.ts` and `src\lib\some-model.ts` therefore address the same
 file. Options, non-file test-name patterns such as `-t "foo\bar"`, and
-arguments to commands other than `related` remain unchanged. The wrapper gains
-the same guarded-entrypoint pattern already used by `scripts/tauri.mjs`, so it
-can be imported without starting Vitest.
+arguments to commands other than `related` remain unchanged. A value supplied
+to a path-taking option is also normalized when it does not start with `-` and
+resolves to an existing file. That broader syntactic classification is
+intentional and harmless because the transformation changes only path
+separators. The wrapper gains the same guarded-entrypoint pattern already used
+by `scripts/tauri.mjs`, so it can be imported without starting Vitest.
 
 `test:changed` and `test:related` are accelerators, not correctness gates.
 Vitest derives related tests from static imports; dynamic or external
 relationships may not be visible. In Vitest 4.1.5, `--changed` has been
-observed and must be reverified to exit successfully with code 0 when no
-related tests are found. A developer must use an explicit
-test file, a wider focused test, or the full suite when the relationship is not
-represented in the module graph or the selected set is unexpectedly empty.
+observed to exit with code 0 when no related tests are found; verification
+re-confirms that behavior against the committed configuration. A developer
+must use an explicit test file, a wider focused test, or the full suite when
+the relationship is not represented in the module graph or the selected set
+is unexpectedly empty.
 
 The existing `test:rust:prompt-pack-runs` script keeps its behavior and filter
 but drops its slice-specific `--target-dir`. It reuses the canonical Cargo
@@ -293,13 +301,21 @@ Add `src/lib/development-loop-performance-contract.test.ts`. It should read
 the relevant files as raw text, normalize CRLF before textual assertions, and
 parse `package.json` for script assertions.
 
-The contract verifies evaluated configuration, machine-readable configuration,
-and stable documentation anchors. It does not assert human prose. Specifically,
-it verifies that:
+The contract verifies evaluated configuration data, machine-readable
+configuration, and stable documentation anchors. It does not assert human
+prose. `vite.config.js` exports the selected test settings as a pure named
+constant such as `VITEST_TEST_CONFIG` and assigns that same constant to the
+factory's `test` property. The contract imports the named constant instead of
+invoking the async config factory a second time. This avoids re-running
+`tailwindcss()`, `sveltekit()`, and `svelteTesting()` plugin factories inside
+the contract test and avoids making the contract depend on generated
+`.svelte-kit` state beyond Vitest's normal configuration load. Specifically,
+the contract verifies that:
 
-- importing the default `vite.config.js` export and resolving its async config
-  factory produces `config.test.pool === "threads"` and a `test` object without
-  an own `maxWorkers` property;
+- importing `VITEST_TEST_CONFIG` produces `pool === "threads"` and an object
+  without an own `maxWorkers` property;
+- a narrow source assertion confirms that the Vite factory uses
+  `test: VITEST_TEST_CONFIG`, without matching the constant's exact formatting;
 - no separate root `vitest.config.{js,ts,mjs,mts,cjs,cts}` exists that could
   silently supersede the selected Vite configuration;
 - `test:changed` uses the existing `run-vitest.mjs` wrapper and Vitest's
@@ -320,9 +336,10 @@ or filesystem contents under ignored `src-tauri/target`.
 The same test file imports `normalizeRelatedFileArgs` as ordinary executable
 code. Behavioral cases prove that an existing backslash-separated related
 path is normalized, `-t "foo\bar"` is unchanged, a non-existing operand is
-unchanged, and the same existing path is unchanged for a non-`related`
-command. These are unit tests of the wrapper API, not textual source-contract
-assertions.
+unchanged, an existing path supplied as a path-valued flag argument is
+normalized under the documented syntactic rule, and the same existing path is
+unchanged for a non-`related` command. These are unit tests of the wrapper API,
+not textual source-contract assertions.
 
 ## Failure Handling
 
@@ -370,8 +387,12 @@ Cargo invocation that sees the new profile settings.
 1. Implement and commit the frontend pool, scripts, wrapper behavior, and
    their frontend tests without changing the Cargo profile.
 2. On that clean checkpoint, verify the empty-tree `test:changed` result and
-   `test:changed:last`. Then make one isolated reversible source edit, verify
-   the working-tree changed set, and restore the edit.
+   `test:changed:last`. Because the checkpoint changes `vite.config.js` and
+   `package.json`, which are default Vitest `forceRerunTriggers`, the
+   last-checkpoint command is expected to run the full suite; that is correct,
+   not a failure of related-test selection. Then make one isolated reversible
+   edit to an ordinary source file, verify that the working-tree changed set is
+   focused and nonempty, and restore the edit.
 3. Ask whether the one-time Cargo cleanup is approved.
 4. Only then apply the permanent Cargo profile edit.
 5. If cleanup is approved, immediately confirm process safety and clean before
@@ -401,9 +422,11 @@ the new profile.
   the pre-change baseline; additions made by this slice are expected.
 - After committing the frontend configuration and returning to a clean tree,
   run `test:changed` and record its exit code and no-tests output.
-- On that same checkpoint, run `test:changed:last`, then make a reversible
-  uncommitted change to a known source file and confirm that `test:changed`
-  executes a nonzero set. Restore the probe edit immediately afterward.
+- On that same checkpoint, run `test:changed:last` and expect the full suite
+  because the checkpoint contains default Vitest force-rerun triggers. Then
+  make a reversible uncommitted change to a known ordinary source file and
+  confirm that `test:changed` executes a focused nonzero set. Restore the probe
+  edit immediately afterward.
 - Run `test:related` for a known source file and confirm that it executes a
   nonzero related set.
 - Run one focused Rust module through `test:rust`.
