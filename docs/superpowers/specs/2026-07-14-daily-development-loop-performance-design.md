@@ -150,6 +150,12 @@ npm.cmd run test:related -- src/lib/some-model.ts
 npm.cmd run test:rust -- prompt_packs::runtime_config
 ```
 
+`run-vitest.mjs` normalizes positional paths passed to the `related` command
+from Windows backslashes to forward slashes. Both
+`src/lib/some-model.ts` and `src\lib\some-model.ts` therefore address the same
+file. The normalization is limited to related-file operands; it must not
+rewrite arbitrary test-name patterns or other Vitest commands.
+
 `test:related` is an accelerator, not a correctness gate. Vitest derives
 related tests from static imports; dynamic or external relationships may not
 be visible. A developer must use an explicit test file, a wider focused test,
@@ -197,19 +203,33 @@ reducing compiler work and artifact size. Browser DevTools, Tauri MCP Bridge,
 Rust debug assertions, and application behavior are unaffected.
 
 Full native inspection of dependency variables is not the ordinary workflow.
-When it is required, the developer may override the dev debug setting for that
-session and use an explicitly isolated temporary target, for example in
-PowerShell:
+`CARGO_PROFILE_DEV_DEBUG=2` alone is not a valid escape hatch: Cargo's
+`[profile.dev.package."*"]` override has higher precedence and would keep
+dependency debug information disabled.
+
+When dependency-level native inspection is required, the supported procedure
+is an explicit temporary edit of both permanent settings:
+
+1. Start from a clean worktree.
+2. Temporarily change `[profile.dev] debug` to `2` and
+   `[profile.dev.package."*"] debug` to `2` in `src-tauri/Cargo.toml`.
+3. Point `CARGO_TARGET_DIR` at an absolute, isolated native-debug directory.
+4. Start the normal MCP-enabled Tauri wrapper.
+5. After the session, restore both Cargo settings and verify that the only
+   remaining diff is intentional work.
+
+For example, after the temporary manifest edit:
 
 ```powershell
-$env:CARGO_PROFILE_DEV_DEBUG = "2"
 $env:CARGO_TARGET_DIR = Join-Path (Get-Location).Path "src-tauri/target/native-debug"
 npm.cmd run tauri dev
 ```
 
-That escape hatch retains the normal MCP-enabled wrapper. Its target directory
-must not become an input to ordinary checks and should be removed manually
-when no longer needed.
+This procedure is intentionally manual rather than hidden in a script: the
+manifest diff makes the exceptional compilation mode visible and reviewable.
+It retains the normal MCP-enabled wrapper. The isolated target must not become
+an input to ordinary checks and should be removed manually when no longer
+needed. The temporary profile edit must never be committed.
 
 ## Documentation and Ownership
 
@@ -225,24 +245,33 @@ Update `docs/project.md` verification guidance with the same public workflow
 at a less agent-specific level. `scripts/verify.mjs` keeps its sequence and
 coverage. It benefits from the Vitest and Cargo configuration automatically.
 
+Both documentation files receive a stable
+`<!-- daily-development-loop -->` anchor. The source contract checks only this
+anchor, not the surrounding prose, so editorial rewrites do not break tests.
+
 ## Source Contract
 
 Add `src/lib/development-loop-performance-contract.test.ts`. It should read
 the relevant files as raw text, normalize CRLF before textual assertions, and
 parse `package.json` for script assertions.
 
-The contract verifies that:
+The contract verifies machine-readable configuration and stable documentation
+anchors. It does not assert human prose. Specifically, it verifies that:
 
-- `vite.config.js` configures Vitest with `pool: "threads"`;
-- no fixed `maxWorkers` is introduced in the selected configuration;
+- the comment-stripped `vite.config.js` source contains the exact selected
+  Vitest block with `pool: "threads"` and no additional worker override;
+- no separate root `vitest.config.{js,ts,mjs,mts,cjs,cts}` exists that could
+  silently supersede the selected Vite configuration;
 - `test:related` uses the existing `run-vitest.mjs` wrapper and Vitest's
   `related --run` command;
+- `run-vitest.mjs` limits Windows-path normalization to positional operands of
+  the `related` command;
 - `test:rust` uses the canonical manifest, `--lib`, and no `--target-dir`;
 - `test:rust:prompt-pack-runs` contains no `--target-dir`;
 - the Cargo dev profile uses `line-tables-only` for workspace code and disables
   dependency debug information;
-- active workflow guidance names the canonical target policy and retains the
-  full `verify` gate.
+- `AGENTS.md` and `docs/project.md` contain the stable
+  `<!-- daily-development-loop -->` anchor.
 
 The contract checks repository-owned configuration, not historical documents
 or filesystem contents under ignored `src-tauri/target`.
@@ -250,6 +279,13 @@ or filesystem contents under ignored `src-tauri/target`.
 ## Failure Handling
 
 ### Thread-pool regressions
+
+Before committing the pool change, scan test sources for `process.chdir()` and
+direct assignment to or deletion from `process.env`. Worker threads do not
+support `process.chdir()`, and direct environment mutation may leak between
+files executed by the same worker. The current test tree contains neither
+pattern; read-only references and source-contract string fixtures are not
+violations.
 
 If repeated full-suite runs reveal a test that depends on process-global
 state, do not revert the entire suite to forks and do not disable isolation
@@ -279,9 +315,12 @@ requires a separate user confirmation. Project scripts do not call
 ### Automated correctness
 
 - Run the new source-contract test.
+- Run a preflight source scan proving there is no `process.chdir()` call or
+  direct `process.env` mutation in the test inventory. The scan must match
+  executable mutation syntax, not harmless reads or quoted fixture text.
 - Run the full Vitest suite three times with the committed thread-pool
-  configuration; every run must report all 156 files and 1,253 tests passing,
-  unless the test inventory intentionally changes in the same branch.
+  configuration. The passing file and test inventories must not decrease from
+  the pre-change baseline; additions made by this slice are expected.
 - Run `test:related` for a known source file and confirm that it executes a
   nonzero related set.
 - Run one focused Rust module through `test:rust`.
@@ -301,32 +340,38 @@ Record at least:
 - target-directory size before and after any separately approved cleanup and
   canonical cache warm-up.
 
-The expected Vitest result on the baseline machine is approximately 60-70
-seconds rather than 130 seconds. This is an evidence target, not a portable
-pass/fail threshold.
+The previously observed 60-70-second Vitest range is contextual evidence for
+the baseline machine, not a portable pass/fail threshold. Acceptance depends
+on a material median improvement over the same-machine pre-change baseline.
 
 ### One-time cleanup and warm-up
 
 After separate approval:
 
-1. Confirm there are no running Cargo, rustc, Tauri, or application processes
+1. Apply the permanent profile settings, but do not run Cargo with the new
+   profile yet.
+2. Confirm there are no running Cargo, rustc, Tauri, or application processes
    using `src-tauri/target`.
-2. Run `cargo clean --manifest-path src-tauri/Cargo.toml`.
-3. Rebuild the canonical cache with `cargo check` and full `cargo test`.
-4. Record cold and subsequent no-op durations.
-5. Record the rebuilt target size and confirm that normal commands create no
+3. Run `cargo clean --manifest-path src-tauri/Cargo.toml`.
+4. Rebuild the canonical cache with `cargo check` and full `cargo test`.
+5. Record cold and subsequent no-op durations.
+6. Record the rebuilt target size and confirm that normal commands create no
    `codex-*` target directories.
 
 The cold rebuild is expected to be slow and is not compared directly with the
-old partially warmed measurements.
+old partially warmed measurements. The profile change and cleanup should form
+one cold-cache event: do not warm the new profile and then immediately delete
+that new cache. If cleanup is declined, accept the profile-triggered cold
+rebuild and leave old artifacts for a later, separately chosen maintenance
+window.
 
 ## Acceptance Criteria
 
 1. The full Vitest suite passes repeatedly with the thread pool and retains
    its complete test inventory.
-2. The baseline machine's median full Vitest duration is materially below the
-   130.49-second baseline, with approximately 60-70 seconds as the expected
-   range.
+2. The baseline machine's median full Vitest duration is materially below its
+   same-machine pre-change baseline. The previously observed 60-70-second
+   range is evidence, not a hard acceptance threshold.
 3. Focused frontend and Rust commands are documented, executable, and reuse
    existing wrappers and the canonical Cargo target.
 4. Active repository scripts contain no slice-specific Cargo target directory.
