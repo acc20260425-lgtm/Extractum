@@ -87,14 +87,20 @@ Immediately after `load_run_runtime_config_reads_api_and_browser_rows`, add:
             "2026-06-21T00:00:00Z",
         )])
         .await;
+        let mut connection = pool.acquire().await.expect("acquire test connection");
+        sqlx::query("PRAGMA ignore_check_constraints = ON")
+            .execute(&mut *connection)
+            .await
+            .expect("allow corrupted runtime provider fixture");
         sqlx::query(
             "UPDATE prompt_pack_runs
              SET runtime_provider = 'unsupported'
              WHERE id = 103",
         )
-        .execute(&pool)
+        .execute(&mut *connection)
         .await
         .expect("set unsupported runtime provider");
+        drop(connection);
 
         let error = load_run_runtime_config(&pool, 103)
             .await
@@ -108,7 +114,7 @@ Immediately after `load_run_runtime_config_reads_api_and_browser_rows`, add:
     }
 ```
 
-Expected: the new test uses the existing loader and asserts the exact stable validation message.
+Expected: the new test disables CHECK enforcement only on one explicitly acquired test connection to model a corrupted/legacy persisted row, then uses the existing loader and asserts the exact stable validation message. Production database constraints remain unchanged.
 
 - [ ] **Step 3: Add the malformed-Browser-config characterization test**
 
