@@ -85,12 +85,9 @@ describe("Prompt Pack stage request policy ownership", () => {
     );
   });
 
-  it("keeps execution lifecycle messages in runtime", () => {
+  it("keeps execution lifecycle messages out of request policy", () => {
     const policy = normalized(stageRequestPolicySource);
-    const runtime = normalized(runtimeSource);
 
-    expect(runtime).toMatch(/^fn gem_part_phase\s*\(/m);
-    expect(runtime).toMatch(/^fn gem_part_started_message\s*\(/m);
     expect(policy).not.toMatch(/^fn gem_part_phase\s*\(/m);
     expect(policy).not.toMatch(/^fn gem_part_started_message\s*\(/m);
   });

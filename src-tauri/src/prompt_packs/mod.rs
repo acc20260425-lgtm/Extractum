@@ -11,6 +11,7 @@ mod run_control;
 mod run_store;
 pub mod runtime;
 pub mod seed;
+mod stage_execution;
 pub mod stage_io;
 pub mod stage_output_normalization;
 mod stage_request_policy;

@@ -4,6 +4,7 @@ import completionTransportSource from "../../src-tauri/src/prompt_packs/completi
 import dtoSource from "../../src-tauri/src/prompt_packs/dto.rs?raw";
 import promptPacksModuleSource from "../../src-tauri/src/prompt_packs/mod.rs?raw";
 import runtimeSource from "../../src-tauri/src/prompt_packs/runtime.rs?raw";
+import stageExecutionSource from "../../src-tauri/src/prompt_packs/stage_execution.rs?raw";
 
 const normalized = (source: string) => source.replace(/\r\n/g, "\n");
 const matches = (source: string, pattern: RegExp) => source.match(pattern) ?? [];
@@ -46,15 +47,16 @@ describe("Prompt Pack completion transport ownership", () => {
     expect(runtime).not.toMatch(/async fn run_browser_llm_request\s*\(/);
   });
 
-  it("removes all five stage-level provider matches", () => {
+  it("keeps all five stage bridges behind the transport interface", () => {
     const runtime = normalized(runtimeSource);
+    const stageExecution = normalized(stageExecutionSource);
 
     expect(matches(runtime, /match\s+&?completion_runtime\b/g)).toHaveLength(0);
     expect(
-      matches(runtime, /completion_runtime\.model_context\(\)\.await\?/g),
+      matches(stageExecution, /completion_runtime\.model_context\(\)\.await\?/g),
     ).toHaveLength(5);
     expect(
-      matches(runtime, /completion_runtime\s*\.execute\s*\(/g),
+      matches(stageExecution, /completion_runtime\s*\.execute\s*\(/g),
     ).toHaveLength(5);
   });
 
