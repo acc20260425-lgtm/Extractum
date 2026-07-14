@@ -1244,6 +1244,74 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn load_run_runtime_config_rejects_unsupported_provider() {
+        let pool = test_pool_with_prompt_pack_runs([(
+            103,
+            None,
+            "queued",
+            "2026-06-21T00:00:00Z",
+        )])
+        .await;
+        let mut connection = pool.acquire().await.expect("acquire test connection");
+        sqlx::query("PRAGMA ignore_check_constraints = ON")
+            .execute(&mut *connection)
+            .await
+            .expect("allow corrupted runtime provider fixture");
+        sqlx::query(
+            "UPDATE prompt_pack_runs
+             SET runtime_provider = 'unsupported'
+             WHERE id = 103",
+        )
+        .execute(&mut *connection)
+        .await
+        .expect("set unsupported runtime provider");
+        drop(connection);
+
+        let error = load_run_runtime_config(&pool, 103)
+            .await
+            .expect_err("unsupported provider");
+
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+        assert_eq!(
+            error.message,
+            "Unsupported prompt-pack runtime provider: unsupported"
+        );
+    }
+
+    #[tokio::test]
+    async fn load_run_runtime_config_rejects_malformed_browser_config() {
+        let pool = test_pool_with_prompt_pack_runs([(
+            104,
+            None,
+            "queued",
+            "2026-06-21T00:00:00Z",
+        )])
+        .await;
+        sqlx::query(
+            "UPDATE prompt_pack_runs
+             SET runtime_provider = 'gemini_browser',
+                 browser_provider_config_json = '{not-json'
+             WHERE id = 104",
+        )
+        .execute(&pool)
+        .await
+        .expect("set malformed browser config");
+
+        let error = load_run_runtime_config(&pool, 104)
+            .await
+            .expect_err("malformed browser config");
+
+        assert_eq!(error.kind, crate::error::AppErrorKind::Internal);
+        assert!(
+            error
+                .message
+                .starts_with("parse Browser Provider config snapshot:"),
+            "unexpected error message: {}",
+            error.message
+        );
+    }
+
+    #[tokio::test]
     async fn list_prompt_pack_runs_returns_recent_runs_for_project() {
         let pool = test_pool_with_prompt_pack_runs([
             (41, Some(7), "complete", "2026-06-14T10:00:00Z"),
