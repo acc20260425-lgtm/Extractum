@@ -82,5 +82,34 @@ and are not compared directly with the old partially warmed build baseline.
 
 ## Final Gates
 
-Status at this checkpoint: final mixed frontend/Rust gates have not run because
-the Cargo-profile task is still pending.
+| Gate | Result |
+| --- | --- |
+| Focused daily-loop source contract | 1 file / 10 tests passed in 2.51 s |
+| Three full frontend checkpoint runs | passed; 68.72 s median wall time (see Frontend Checkpoint) |
+| `npm.cmd run check` | passed; 0 errors and 0 warnings |
+| `npm.cmd run check:rustfmt` | passed |
+| Focused Rust wrapper | 3 tests passed; 1,122 filtered out |
+| Full Cargo test inside `verify` | 1,125 tests passed in 18.03 s |
+| Full `npm.cmd run verify` | exit 0 in 117.85 s |
+
+The authoritative gate retained the final inventory: 157 frontend test files
+and 1,264 tests passed in 68.96 seconds, followed by the Svelte/TypeScript,
+rustfmt, Cargo check, and complete Cargo test stages.
+
+## Acceptance Summary
+
+- The frontend inventory was retained and grew from the 156-file / 1,253-test
+  baseline to 157 files / 1,264 tests at the final gate.
+- The three-run frontend checkpoint median was 68.72 seconds, materially below
+  the same-machine 130.49-second forks baseline. This is measured evidence, not
+  a portable timing guarantee.
+- Dirty-tree, last-checkpoint, explicit-related, focused frontend-contract, and
+  focused Rust commands all executed successfully; focused probes selected
+  nonzero test sets.
+- Ordinary Rust work reused the canonical `src-tauri/target`, and no new
+  `codex-*` target appeared.
+- The reduced dev debug profile is active: workspace line tables are retained
+  while dependency debug information is disabled.
+- The explicitly approved one-time cleanup was performed before warming the new
+  profile, and it was not repeated afterward.
+- The unchanged authoritative `npm.cmd run verify` gate passed end to end.
