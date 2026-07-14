@@ -105,8 +105,8 @@ The repository keeps two verification layers:
 ```text
 small change
     |
-    +-- frontend helper/model --> related Vitest files
-    +-- Svelte/UI change ------> related Vitest files + svelte-check
+    +-- frontend helper/model --> Git-changed Vitest set
+    +-- Svelte/UI change ------> Git-changed Vitest set + svelte-check
     +-- Rust change -----------> focused Rust lib test + rustfmt + cargo check
     |
     `-- merge/push gate -------> full npm.cmd run verify
@@ -139,6 +139,7 @@ the test environment.
 Add these package scripts:
 
 ```json
+"test:changed": "node scripts/run-vitest.mjs run --changed",
 "test:related": "node scripts/run-vitest.mjs related --run",
 "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml --lib"
 ```
@@ -146,9 +147,15 @@ Add these package scripts:
 Example usage:
 
 ```powershell
+npm.cmd run test:changed
 npm.cmd run test:related -- src/lib/some-model.ts
 npm.cmd run test:rust -- prompt_packs::runtime_config
 ```
+
+`test:changed` is the primary zero-argument frontend inner-loop command. Vitest
+collects staged, unstaged, and untracked Git changes and selects statically
+related tests. `test:related` remains the explicit tool for one or more known
+source paths.
 
 `run-vitest.mjs` normalizes positional paths passed to the `related` command
 from Windows backslashes to forward slashes. Both
@@ -156,15 +163,23 @@ from Windows backslashes to forward slashes. Both
 file. The normalization is limited to related-file operands; it must not
 rewrite arbitrary test-name patterns or other Vitest commands.
 
-`test:related` is an accelerator, not a correctness gate. Vitest derives
-related tests from static imports; dynamic or external relationships may not
-be visible. A developer must use an explicit test file, a wider focused test,
-or the full suite when the relationship is not represented in the module
-graph.
+`test:changed` and `test:related` are accelerators, not correctness gates.
+Vitest derives related tests from static imports; dynamic or external
+relationships may not be visible. In addition, `--changed` intentionally exits
+successfully when no related tests are found. A developer must use an explicit
+test file, a wider focused test, or the full suite when the relationship is not
+represented in the module graph or the selected set is unexpectedly empty.
 
 The existing `test:rust:prompt-pack-runs` script keeps its behavior and filter
 but drops its slice-specific `--target-dir`. It reuses the canonical Cargo
 cache.
+
+The slice does not split Vitest into node and DOM projects. Vitest already uses
+`node` by default: 126 of the current 145 frontend test files use that default,
+while 19 DOM component files opt into jsdom with per-file
+`@vitest-environment jsdom` directives. A project split would add
+configuration and startup surfaces without removing a repository-wide DOM
+cost, because no such global cost exists.
 
 ## Cargo Target-Directory Policy
 
@@ -237,7 +252,7 @@ Update `AGENTS.md` with:
 
 - the subsystem-based inner-loop matrix;
 - the canonical-target rule;
-- the fact that `test:related` is not a full gate;
+- the fact that `test:changed` and `test:related` are not full gates;
 - the native-debug escape hatch;
 - continued use of `npm.cmd` on Windows.
 
@@ -262,6 +277,8 @@ anchors. It does not assert human prose. Specifically, it verifies that:
   Vitest block with `pool: "threads"` and no additional worker override;
 - no separate root `vitest.config.{js,ts,mjs,mts,cjs,cts}` exists that could
   silently supersede the selected Vite configuration;
+- `test:changed` uses the existing `run-vitest.mjs` wrapper and Vitest's
+  `run --changed` option;
 - `test:related` uses the existing `run-vitest.mjs` wrapper and Vitest's
   `related --run` command;
 - `run-vitest.mjs` limits Windows-path normalization to positional operands of
@@ -292,10 +309,11 @@ state, do not revert the entire suite to forks and do not disable isolation
 globally. Identify the state owner and either fix the test or isolate only the
 affected files in a sequential/forked Vitest project.
 
-### Related-test gaps
+### Changed/related-test gaps
 
-No-tests-found or an unexpectedly small related set is a signal to run a
-known test file or the full suite. `test:related` must not be presented as a
+No-tests-found or an unexpectedly small changed/related set is a signal to run
+a known test file or the full suite. `test:changed` exits successfully on an
+empty set by Vitest design. Neither focused command may be presented as a
 merge gate.
 
 ### Cargo cache cleanup
@@ -321,6 +339,9 @@ requires a separate user confirmation. Project scripts do not call
 - Run the full Vitest suite three times with the committed thread-pool
   configuration. The passing file and test inventories must not decrease from
   the pre-change baseline; additions made by this slice are expected.
+- Run `test:changed` with a reversible uncommitted change to a known source
+  file and confirm that it executes a nonzero changed set; restore the probe
+  edit immediately afterward.
 - Run `test:related` for a known source file and confirm that it executes a
   nonzero related set.
 - Run one focused Rust module through `test:rust`.
@@ -334,9 +355,12 @@ Durations are recorded in a verification document, not asserted in tests.
 Record at least:
 
 - three full Vitest durations and their median;
+- changed-test duration and executed test count;
 - focused related-test duration and executed test count;
 - no-op Cargo check and test durations;
 - the first Cargo check/test after the committed profile change;
+- the current `cargo check --timings` report and its dominant compilation
+  units;
 - target-directory size before and after any separately approved cleanup and
   canonical cache warm-up.
 
@@ -353,7 +377,10 @@ After separate approval:
 2. Confirm there are no running Cargo, rustc, Tauri, or application processes
    using `src-tauri/target`.
 3. Run `cargo clean --manifest-path src-tauri/Cargo.toml`.
-4. Rebuild the canonical cache with `cargo check` and full `cargo test`.
+4. Rebuild the canonical cache with `cargo check --timings` and full
+   `cargo test`. Preserve the generated report under
+   `src-tauri/target/cargo-timings` as performance evidence before any later
+   cache maintenance.
 5. Record cold and subsequent no-op durations.
 6. Record the rebuilt target size and confirm that normal commands create no
    `codex-*` target directories.
@@ -390,10 +417,19 @@ window.
 Re-measure after this slice. If Rust source edits still make the inner loop
 unacceptably slow, investigate in this order:
 
-1. stable `cargo --timings` evidence for the current crate and dependency
-   graph;
-2. workstation-level `sccache` and linker evaluation;
-3. extraction of genuinely independent backend domains into workspace crates.
+1. Analyze the stable Cargo timing report captured during this slice.
+2. Profile the approximately 19-second Rust test execution floor; evaluate
+   disk-backed SQLite fixtures, real sleeps/timeouts, serialization, and
+   whether `cargo-nextest` improves safe test-level parallelism.
+3. Benchmark the bundled `rust-lld` linker against the default MSVC linker in
+   an isolated target and verify both focused test linking and a complete Tauri
+   release smoke before considering repository configuration. The current
+   toolchain contains `rust-lld.exe` and a small `-C linker=rust-lld` probe
+   succeeds, but neither fact proves compatibility or improvement for the full
+   Extractum binary.
+4. Evaluate workstation-level `sccache` for branch switches and cold rebuilds.
+5. Extract genuinely independent backend domains into workspace crates only
+   if timings show the root crate remains the dominant incremental cost.
 
 These follow-ups require their own design and must not be folded into this
 configuration slice without new evidence.
