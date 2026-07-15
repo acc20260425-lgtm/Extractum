@@ -901,6 +901,43 @@ if (@($bRows | Where-Object contains_icons_index).Count -ne 0) { exit 1 }
 
 Expected: every A subtree is nonempty and contains `icons/index.js`; no B subtree contains it. Global Lucide-index presence outside these roots is ignored.
 
+#### Approved Execution Correction: Scoped Attribution When Top 2000 Omits a Root
+
+During inline execution, both complete CLI runs passed, but the B global Top
+2000 omitted `Inspector.test.ts` and `RunDock.test.ts` after their import totals
+dropped. The original completeness check saw those names earlier in the normal
+test-result output and therefore produced a false `CLI_IMPORT_COMPLETE=True`.
+The parser correctly rejected the missing breakdown roots.
+
+The user approved this bounded correction on 2026-07-15: retain both complete
+instrumented A/B logs as suite-wide evidence, then run one additional scoped
+A/B pair containing exactly the three target tests. Use the scoped breakdowns
+only for qualitative subtree attribution; do not add their wall times to the
+complete-suite performance decision.
+
+Run for each exact byte-snapshot variant:
+
+```powershell
+$vitestArgs = @(
+    'scripts/run-vitest.mjs', 'run',
+    'src/lib/components/research-projects/ResearchProjectsShell.test.ts',
+    'src/lib/components/research-projects/Inspector.test.ts',
+    'src/lib/components/research-projects/RunDock.test.ts',
+    '--experimental.importDurations.print',
+    '--experimental.importDurations.limit=2000',
+    '--reporter=default'
+)
+node.exe @vitestArgs
+```
+
+Save the outputs as `vitest/import-scoped-A.log` and
+`vitest/import-scoped-B.log`, require both runs to pass and contain the
+breakdown plus all three roots, and copy them to the canonical `import-A.log`
+and `import-B.log` paths consumed by the subtree parser. Preserve
+`import-cli-A.log` and `import-cli-B.log` unchanged. Record
+`full CLI evidence plus scoped three-root CLI attribution, limit=2000` in
+`import-mechanism.txt`.
+
 ---
 
 ### Task 5: Compute the Retention Decision and Optional Single Retry
