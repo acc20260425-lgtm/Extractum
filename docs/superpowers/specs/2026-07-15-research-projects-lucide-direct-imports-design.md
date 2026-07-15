@@ -2,8 +2,7 @@
 
 ## Status
 
-Approved for written-spec review on 2026-07-15 after conversational design
-approval.
+Approved for implementation planning on 2026-07-15 after written-spec review.
 
 ## Context
 
