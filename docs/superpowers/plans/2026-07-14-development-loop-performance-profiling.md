@@ -210,7 +210,8 @@ for ($run = 1; $run -le 3; $run++) {
         exit = $code
         wall_seconds = [math]::Round($watch.Elapsed.TotalSeconds, 3)
         success = if ($json) { [bool]$json.success } else { $false }
-        files = if ($json) { [int]$json.numTotalTestSuites } else { 0 }
+        files = if ($json) { @($json.testResults).Count } else { 0 }
+        suites = if ($json) { [int]$json.numTotalTestSuites } else { 0 }
         tests = if ($json) { [int]$json.numTotalTests } else { 0 }
         report = $report
     }
@@ -428,9 +429,9 @@ for ($run=1; $run -le 3; $run++) {
     $json = if (Test-Path -LiteralPath $report) { Get-Content -LiteralPath $report -Raw | ConvertFrom-Json } else { $null }
     if ($json -and $null -eq $expectedTests) { $expectedTests = [int]$json.numTotalTests }
     $times += $watch.Elapsed.TotalSeconds
-    [ordered]@{run=$run;exit=$code;wall_seconds=[math]::Round($watch.Elapsed.TotalSeconds,3);files=$json.numTotalTestSuites;tests=$json.numTotalTests;success=$json.success} |
+    [ordered]@{run=$run;exit=$code;wall_seconds=[math]::Round($watch.Elapsed.TotalSeconds,3);files=@($json.testResults).Count;suites=$json.numTotalTestSuites;tests=$json.numTotalTests;success=$json.success} |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $dir "ab-qualify-$run-meta.json") -Encoding UTF8
-    if ($code -ne 0 -or -not $json.success -or $json.numTotalTestSuites -ne $files.Count -or $json.numTotalTests -ne $expectedTests) { exit 1 }
+    if ($code -ne 0 -or -not $json.success -or @($json.testResults).Count -ne $files.Count -or $json.numTotalTests -ne $expectedTests) { exit 1 }
 }
 $sorted = @($times | Sort-Object)
 $median = [double]$sorted[1]
@@ -466,8 +467,8 @@ for ($index=0; $index -lt $sequence.Count; $index++) {
     $watch.Stop()
     $json = if (Test-Path -LiteralPath $report) { Get-Content -LiteralPath $report -Raw | ConvertFrom-Json } else { $null }
     if ($json -and $null -eq $expectedTests) { $expectedTests = [int]$json.numTotalTests }
-    if ($code -ne 0 -or -not $json.success -or $json.numTotalTestSuites -ne $files.Count -or $json.numTotalTests -ne $expectedTests) { exit 1 }
-    $rows += [pscustomobject]@{run=$run;mode=$mode;wall_seconds=$watch.Elapsed.TotalSeconds;files=$json.numTotalTestSuites;tests=$json.numTotalTests}
+    if ($code -ne 0 -or -not $json.success -or @($json.testResults).Count -ne $files.Count -or $json.numTotalTests -ne $expectedTests) { exit 1 }
+    $rows += [pscustomobject]@{run=$run;mode=$mode;wall_seconds=$watch.Elapsed.TotalSeconds;files=@($json.testResults).Count;suites=$json.numTotalTestSuites;tests=$json.numTotalTests}
 }
 function Median([double[]]$v) { $s=@($v|Sort-Object); return [double]$s[1] }
 $isolate = Median ([double[]]@($rows | Where-Object mode -eq 'isolate').wall_seconds)
