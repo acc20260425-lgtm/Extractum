@@ -516,8 +516,8 @@ $durationMatch = [regex]::Match($html, '(?m)^DURATION = ([0-9.]+);')
 $unitsMatch = [regex]::Match($html, '(?s)const UNIT_DATA = (\[.*?\]);\s*const CONCURRENCY_DATA')
 $concurrencyMatch = [regex]::Match($html, '(?s)const CONCURRENCY_DATA = (\[.*?\]);')
 if (-not $durationMatch.Success -or -not $unitsMatch.Success -or -not $concurrencyMatch.Success) { exit 1 }
-$units = @($unitsMatch.Groups[1].Value | ConvertFrom-Json)
-$concurrency = @($concurrencyMatch.Groups[1].Value | ConvertFrom-Json)
+$units = @(($unitsMatch.Groups[1].Value | ConvertFrom-Json) | ForEach-Object { $_ })
+$concurrency = @(($concurrencyMatch.Groups[1].Value | ConvertFrom-Json) | ForEach-Object { $_ })
 $top = @($units | Sort-Object duration -Descending | Select-Object -First 10 name,version,target,mode,duration,start)
 $top | Export-Csv -LiteralPath (Join-Path $dir 'cold-top-units.csv') -NoTypeInformation -Encoding UTF8
 $summary = [ordered]@{
@@ -632,8 +632,8 @@ $durationMatch = [regex]::Match($html, '(?m)^DURATION = ([0-9.]+);')
 $unitsMatch = [regex]::Match($html, '(?s)const UNIT_DATA = (\[.*?\]);\s*const CONCURRENCY_DATA')
 $concurrencyMatch = [regex]::Match($html, '(?s)const CONCURRENCY_DATA = (\[.*?\]);')
 if (-not $durationMatch.Success -or -not $unitsMatch.Success -or -not $concurrencyMatch.Success) { exit 1 }
-$units = @($unitsMatch.Groups[1].Value | ConvertFrom-Json)
-$concurrency = @($concurrencyMatch.Groups[1].Value | ConvertFrom-Json)
+$units = @(($unitsMatch.Groups[1].Value | ConvertFrom-Json) | ForEach-Object { $_ })
+$concurrency = @(($concurrencyMatch.Groups[1].Value | ConvertFrom-Json) | ForEach-Object { $_ })
 $extractumUnits = @($units | Where-Object name -eq 'extractum' | Sort-Object duration -Descending)
 if ($extractumUnits.Count -eq 0) { exit 1 }
 $top = @($units | Sort-Object duration -Descending | Select-Object -First 10 name,version,target,mode,duration,start)
