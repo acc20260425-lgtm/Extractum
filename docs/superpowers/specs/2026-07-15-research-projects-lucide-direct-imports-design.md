@@ -82,11 +82,11 @@ identifier-to-module mappings:
 
 | Identifier | Direct module | Identifier | Direct module |
 | --- | --- | --- | --- |
-| `Activity` | `activity` | `AlertTriangle` | `alert-triangle` |
+| `Activity` | `activity` | `AlertTriangle` | `triangle-alert` |
 | `BookOpen` | `book-open` | `Braces` | `braces` |
 | `Check` | `check` | `ChevronDown` | `chevron-down` |
 | `ChevronLeft` | `chevron-left` | `ChevronRight` | `chevron-right` |
-| `Download` | `download` | `Edit3` | `edit-3` |
+| `Download` | `download` | `Edit3` | `pen-line` |
 | `ExternalLink` | `external-link` | `Eye` | `eye` |
 | `FileJson` | `file-json` | `FileText` | `file-text` |
 | `Folder` | `folder` | `FolderKanban` | `folder-kanban` |
@@ -94,14 +94,23 @@ identifier-to-module mappings:
 | `Link2` | `link-2` | `Minus` | `minus` |
 | `PanelLeftClose` | `panel-left-close` | `PanelLeftOpen` | `panel-left-open` |
 | `Pencil` | `pencil` | `Play` | `play` |
-| `PlayCircle` | `play-circle` | `Plus` | `plus` |
+| `PlayCircle` | `circle-play` | `Plus` | `plus` |
 | `RefreshCw` | `refresh-cw` | `Save` | `save` |
 | `Search` | `search` | `Settings` | `settings` |
 | `ShieldCheck` | `shield-check` | `Trash2` | `trash-2` |
-| `X` | `x` | `XCircle` | `x-circle` |
+| `X` | `x` | `XCircle` | `circle-x` |
 
 The full module path is `@lucide/svelte/icons/<direct-module>`. The table is
 implementation guidance, not permanent contract data.
+
+Four existing local identifiers use deprecated Lucide aliases at the package
+root. Import their canonical modules while preserving the local identifiers:
+`AlertTriangle` uses `triangle-alert`, `Edit3` uses `pen-line`, `PlayCircle`
+uses `circle-play`, and `XCircle` uses `circle-x`. In the installed package,
+the deprecated direct aliases re-export these same Svelte components, so this
+choice preserves rendering while avoiding paths already scheduled for removal
+upstream. Do not use `alert-triangle`, `edit-3`, `play-circle`, or `x-circle` in
+the candidate.
 
 One candidate is preferred over three smaller packages because the first
 two-file experiment already validated the direct-export mechanism. A single
@@ -256,11 +265,16 @@ The contract checks every discovered immediate Svelte file independently:
 - no import source equals the root `@lucide/svelte` export;
 - every Lucide package import starts with `@lucide/svelte/icons/`.
 
-Before applying B, the new contract must fail and identify the 20 remaining
-root-import components. After applying B it must pass. The test must not
-hard-code file names, icon identifiers, or the mapping table; ordinary feature
-work may add or remove components and icons while preserving the directory
-boundary.
+Before applying B, the new contract must fail and identify every current
+root-import component. Implement this as an aggregate offender list followed
+by `expect(offenders).toEqual([])`, rather than independent boolean assertions,
+so the RED diff reports all violating paths in one run. After applying B it
+must pass. The eager glob intentionally also covers components that do not use
+Lucide and the two components migrated by the preceding slice; this protects
+the directory boundary and automatically includes future immediate Svelte
+files. The test must not hard-code file names, icon identifiers, the expected
+offender count, or the mapping table. Ordinary feature work may add or remove
+components and icons while preserving the directory boundary.
 
 An ESLint `no-restricted-imports` rule remains the better future repository-wide
 mechanism, but adding an ESLint stack is out of scope. The raw source contract
@@ -314,8 +328,10 @@ separate evidence commit. If rejected, retain only the evidence commit.
   diagnostic rather than additive.
 - The remaining 36 out-of-scope root imports keep the Lucide index elsewhere
   in the suite. This slice claims only the selected directory boundary.
-- Package upgrades may rename direct exports. Such a change should be handled
-  explicitly rather than bypassing the contract with a new barrel.
+- Package upgrades may rename direct exports. The candidate already avoids the
+  four installed deprecated aliases in favor of their canonical modules; any
+  later export change should be handled explicitly rather than bypassing the
+  contract with a new barrel.
 - Sequential byte-snapshot switching is not transactional. Hash verification
   and immediate A restoration turn a partial transition into an explicit
   infrastructure failure rather than a measured mixed variant.
