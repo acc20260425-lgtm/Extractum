@@ -331,7 +331,7 @@ $vitestDir = Join-Path $scratch 'vitest'
 $repo = (Resolve-Path -LiteralPath '.').Path.TrimEnd('\')
 function Get-Median([double[]]$values) {
     $sorted = @($values | Sort-Object)
-    if ($sorted.Count % 2 -eq 1) { return [double]$sorted[[int]($sorted.Count / 2)] }
+    if ($sorted.Count % 2 -eq 1) { return [double]$sorted[[int][math]::Floor($sorted.Count / 2)] }
     return ([double]$sorted[$sorted.Count / 2 - 1] + [double]$sorted[$sorted.Count / 2]) / 2
 }
 function Get-NearestRank([double[]]$values, [double]$p) {
