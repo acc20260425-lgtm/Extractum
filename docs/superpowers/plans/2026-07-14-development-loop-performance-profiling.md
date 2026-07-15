@@ -390,7 +390,10 @@ $scratch = (Get-Content -LiteralPath (Join-Path $env:TEMP 'extractum-performance
 $vitestDir = Join-Path $scratch 'vitest'
 $summary = Get-Content -LiteralPath (Join-Path $vitestDir 'vitest-summary.json') -Raw | ConvertFrom-Json
 $rows = Import-Csv -LiteralPath (Join-Path $vitestDir 'vitest-file-medians.csv')
-$candidates = @($rows | Where-Object { $_.environment -eq 'node/default' -and [double]$_.median_ms -ge [double]$summary.p90_ms })
+function ConvertFrom-LocalDouble([string]$value) {
+    return [double]::Parse($value, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::CurrentCulture)
+}
+$candidates = @($rows | Where-Object { $_.environment -eq 'node/default' -and (ConvertFrom-LocalDouble $_.median_ms) -ge [double]$summary.p90_ms })
 $candidates.path | Set-Content -LiteralPath (Join-Path $vitestDir 'vitest-ab-candidates.txt') -Encoding UTF8
 "CANDIDATE_COUNT=$($candidates.Count)"
 $patterns = 'process\.chdir|process\.env(?:\.[A-Za-z_$][\w$]*|\[[^\]]+\])\s*(?:=|\+=|-=|\*=|/=|\?\?=|\|\|=|&&=)|useFakeTimers|setSystemTime|stubGlobal|vi\.mock|jest\.mock|setInterval|setTimeout|Mutex|globalThis\.'
@@ -795,8 +798,11 @@ $rows | Export-Csv -LiteralPath (Join-Path $dir 'top-level-groups.csv') -NoTypeI
 $fallbackRows | Export-Csv -LiteralPath (Join-Path $dir 'exact-fallback-tests.csv') -NoTypeInformation -Encoding UTF8
 if (($rows | Measure-Object expected -Sum).Sum -ne $tests.Count -or ($rows | Measure-Object actual -Sum).Sum -ne $tests.Count) { exit 1 }
 
+function ConvertFrom-LocalDouble([string]$value) {
+    return [double]::Parse($value, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::CurrentCulture)
+}
 $parallel = @(Import-Csv -LiteralPath (Join-Path $dir 'full-and-sequential.csv') | Where-Object kind -eq 'parallel')
-$parallelMedian = [double](@($parallel.harness_seconds | ForEach-Object {[double]$_} | Sort-Object)[1])
+$parallelMedian = [double](@($parallel.harness_seconds | ForEach-Object { ConvertFrom-LocalDouble $_ } | Sort-Object)[1])
 $valid = @($rows | Where-Object { $_.measurement -eq 'single filtered process' } | Sort-Object {[double]$_.harness_seconds} -Descending)
 $dominant = if ($valid.Count -gt 0 -and [double]$valid[0].harness_seconds -ge 0.25 * $parallelMedian) { $valid[0] } else { $null }
 if ($dominant) {
@@ -840,7 +846,10 @@ Run:
 ```powershell
 $scratch = (Get-Content -LiteralPath (Join-Path $env:TEMP 'extractum-performance-profiling-current.txt') -Raw).Trim()
 $dir = Join-Path $scratch 'rust-tests'
-$groups = @(Import-Csv -LiteralPath (Join-Path $dir 'top-level-groups.csv') | Where-Object { $_.measurement -eq 'single filtered process' } | Sort-Object {[double]$_.harness_seconds} -Descending | Select-Object -First 3)
+function ConvertFrom-LocalDouble([string]$value) {
+    return [double]::Parse($value, [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::CurrentCulture)
+}
+$groups = @(Import-Csv -LiteralPath (Join-Path $dir 'top-level-groups.csv') | Where-Object { $_.measurement -eq 'single filtered process' } | Sort-Object { ConvertFrom-LocalDouble $_.harness_seconds } -Descending | Select-Object -First 3)
 $patterns = 'SqlitePool|sqlite::memory|sqlite:|NamedTempFile|tempdir|std::thread::sleep|tokio::time::sleep|sleep\(|timeout\(|test-threads|Mutex|RwLock|Semaphore|Command::|process::Command|TcpListener|TcpStream'
 $scanPaths = @()
 foreach ($group in $groups) {
