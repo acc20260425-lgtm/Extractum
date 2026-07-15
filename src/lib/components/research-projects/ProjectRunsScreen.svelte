@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { RefreshCw, Save, Trash2, XCircle } from "@lucide/svelte";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import Save from "@lucide/svelte/icons/save";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
+  import XCircle from "@lucide/svelte/icons/circle-x";
   import {
     cancelPromptPackRun,
     deletePromptPackRun,

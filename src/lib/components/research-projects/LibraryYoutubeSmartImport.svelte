@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Eye, Plus } from "@lucide/svelte";
+  import Eye from "@lucide/svelte/icons/eye";
+  import Plus from "@lucide/svelte/icons/plus";
   import {
     ExtractumBadge,
     ExtractumButton,

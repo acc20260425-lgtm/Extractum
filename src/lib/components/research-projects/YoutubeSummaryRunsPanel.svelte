@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { RefreshCw, Trash2, XCircle } from "@lucide/svelte";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
+  import XCircle from "@lucide/svelte/icons/circle-x";
   import { ExtractumBadge, ExtractumButton } from "$lib/components/extractum-ui";
   import {
     cancelPromptPackRun,

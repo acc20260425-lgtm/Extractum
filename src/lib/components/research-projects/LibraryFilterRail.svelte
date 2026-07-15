@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { PanelLeftClose, PanelLeftOpen } from "@lucide/svelte";
+  import PanelLeftClose from "@lucide/svelte/icons/panel-left-close";
+  import PanelLeftOpen from "@lucide/svelte/icons/panel-left-open";
   import { ExtractumButton, ExtractumTreeDataGrid } from "$lib/components/extractum-ui";
   import type {
     LibraryCatalogFilterId,

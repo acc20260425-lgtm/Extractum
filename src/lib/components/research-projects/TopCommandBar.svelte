@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Download, Play } from "@lucide/svelte";
+  import Download from "@lucide/svelte/icons/download";
+  import Play from "@lucide/svelte/icons/play";
   import { ExtractumButton } from "$lib/components/extractum-ui";
   import { projectRunDisabledReason, type ResearchProjectView } from "$lib/ui/research-projects-model";
   import type { ProjectSourceRecord } from "$lib/types/projects";

@@ -1,6 +1,11 @@
 <script lang="ts">
   import { tick, onMount } from "svelte";
-  import { FolderKanban, ChevronDown, Folder, Plus, Pencil, Trash2 } from "@lucide/svelte";
+  import ChevronDown from "@lucide/svelte/icons/chevron-down";
+  import Folder from "@lucide/svelte/icons/folder";
+  import FolderKanban from "@lucide/svelte/icons/folder-kanban";
+  import Pencil from "@lucide/svelte/icons/pencil";
+  import Plus from "@lucide/svelte/icons/plus";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
   import BottomQueue from "./BottomQueue.svelte";
   import ConnectFromLibrary from "./ConnectFromLibrary.svelte";
   import LibraryAddSourceDialog from "./LibraryAddSourceDialog.svelte";

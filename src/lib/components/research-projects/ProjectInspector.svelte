@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { ChevronLeft, ChevronRight, Pencil, Play, PlayCircle, Trash2 } from "@lucide/svelte";
+  import ChevronLeft from "@lucide/svelte/icons/chevron-left";
+  import ChevronRight from "@lucide/svelte/icons/chevron-right";
+  import Pencil from "@lucide/svelte/icons/pencil";
+  import Play from "@lucide/svelte/icons/play";
+  import PlayCircle from "@lucide/svelte/icons/circle-play";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
   import { ExtractumButton } from "$lib/components/extractum-ui";
   import { projectRunDisabledReason } from "$lib/ui/research-projects-model";
   import type { AnalysisRunSummary } from "$lib/types/analysis";

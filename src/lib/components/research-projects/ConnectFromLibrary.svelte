@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { Check, Search, X } from "@lucide/svelte";
+  import Check from "@lucide/svelte/icons/check";
+  import Search from "@lucide/svelte/icons/search";
+  import X from "@lucide/svelte/icons/x";
   import {
     ExtractumButton,
     ExtractumDataGrid,

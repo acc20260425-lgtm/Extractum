@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Download } from "@lucide/svelte";
+  import Download from "@lucide/svelte/icons/download";
 
   // Note: the v10 mockup showed a progress bar + "62% · ~3 мин"; per the
   // session decision, run progress percentage is out of scope (the backend

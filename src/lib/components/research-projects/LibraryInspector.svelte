@@ -1,5 +1,8 @@
 <script lang="ts">
-  import { ExternalLink, Link2, PlayCircle, RefreshCw } from "@lucide/svelte";
+  import ExternalLink from "@lucide/svelte/icons/external-link";
+  import Link2 from "@lucide/svelte/icons/link-2";
+  import PlayCircle from "@lucide/svelte/icons/circle-play";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import { ExtractumButton, ProviderBadge, StatusBadge } from "$lib/components/extractum-ui";
   import type { LibraryCatalogSourceView } from "$lib/ui/library-catalog-model";
   import YoutubeSummaryRunDialog from "./YoutubeSummaryRunDialog.svelte";

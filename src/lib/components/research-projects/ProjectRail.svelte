@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Search } from "@lucide/svelte";
+  import Search from "@lucide/svelte/icons/search";
   import { ExtractumButton, ExtractumTextInput, StatusBadge } from "$lib/components/extractum-ui";
   import type { ResearchProjectView } from "$lib/ui/research-projects-model";
 

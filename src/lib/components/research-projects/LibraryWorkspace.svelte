@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { BookOpen, Edit3, Plus, RefreshCw, Trash2 } from "@lucide/svelte";
+  import BookOpen from "@lucide/svelte/icons/book-open";
+  import Edit3 from "@lucide/svelte/icons/pen-line";
+  import Plus from "@lucide/svelte/icons/plus";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
   import {
     ExtractumButton,
     ExtractumDataGrid,

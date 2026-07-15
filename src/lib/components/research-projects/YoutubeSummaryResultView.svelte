@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { AlertTriangle, FileText, RefreshCw } from "@lucide/svelte";
+  import AlertTriangle from "@lucide/svelte/icons/triangle-alert";
+  import FileText from "@lucide/svelte/icons/file-text";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import {
     getPromptPackResult,
     getPromptPackValidationFindings,

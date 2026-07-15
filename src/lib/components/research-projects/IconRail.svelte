@@ -1,12 +1,10 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import {
-    Activity,
-    FolderKanban,
-    Library,
-    Settings,
-    ShieldCheck,
-  } from "@lucide/svelte";
+  import Activity from "@lucide/svelte/icons/activity";
+  import FolderKanban from "@lucide/svelte/icons/folder-kanban";
+  import Library from "@lucide/svelte/icons/library";
+  import Settings from "@lucide/svelte/icons/settings";
+  import ShieldCheck from "@lucide/svelte/icons/shield-check";
 
   const items = [
     { href: "/projects", label: "Projects", icon: FolderKanban },

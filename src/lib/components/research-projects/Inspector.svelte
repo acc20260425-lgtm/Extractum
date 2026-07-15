@@ -12,7 +12,10 @@
 </script>
 
 <script lang="ts">
-  import { ChevronRight, ExternalLink, Minus, RefreshCw } from "@lucide/svelte";
+  import ChevronRight from "@lucide/svelte/icons/chevron-right";
+  import ExternalLink from "@lucide/svelte/icons/external-link";
+  import Minus from "@lucide/svelte/icons/minus";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
 
   let {
     open = true,

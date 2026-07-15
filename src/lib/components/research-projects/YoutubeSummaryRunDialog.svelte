@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { PlayCircle } from "@lucide/svelte";
+  import PlayCircle from "@lucide/svelte/icons/circle-play";
   import {
     ExtractumCheckbox,
     ExtractumButton,

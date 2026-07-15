@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { ExternalLink, RefreshCw, Trash2 } from "@lucide/svelte";
+  import ExternalLink from "@lucide/svelte/icons/external-link";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
   import { formatPeriod, formatTimestamp, runTargetLabel } from "$lib/analysis-utils";
   import { deleteAnalysisRun } from "$lib/api/analysis-runs";
   import { ExtractumButton } from "$lib/components/extractum-ui";

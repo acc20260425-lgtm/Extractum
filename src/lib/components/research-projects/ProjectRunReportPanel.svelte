@@ -1,6 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Braces, FileJson, Layers, RefreshCw } from "@lucide/svelte";
+  import Braces from "@lucide/svelte/icons/braces";
+  import FileJson from "@lucide/svelte/icons/file-json";
+  import Layers from "@lucide/svelte/icons/layers";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import {
     getPromptPackResult,
     getPromptPackStageArtifact,
