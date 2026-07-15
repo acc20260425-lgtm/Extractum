@@ -129,6 +129,11 @@ between runs and verify the corresponding hashes each time. This alternating
 order distributes gradual machine drift across both configurations; the
 discarded warm-ups reduce cold-start and Defender/cache asymmetry.
 
+Warm-up timings do not enter any aggregate, but a failed or empty warm-up is a
+stop signal. Investigate the failure and restart the protocol from the warm-up
+stage after resolving it; do not discard a failed warm-up and continue into
+recorded runs.
+
 For A and B separately, record the complete file/test inventory, the
 complete-suite median, and the median duration of
 `ProjectRailPanel.test.ts` and `SourcesTab.test.ts`. The target-file medians
@@ -139,7 +144,10 @@ After the recorded sequence, run one complete instrumented suite under A and
 one under B and capture both import breakdowns. These single runs answer a
 qualitative question: whether the target chains still attribute work to
 `@lucide/svelte/dist/icons/index.js`. Do not use their duration difference as
-a quantitative speedup estimate.
+a quantitative speedup estimate. Attribute the result through the per-file
+import trees rooted at `ProjectRailPanel.test.ts` and `SourcesTab.test.ts`, not
+by searching for `icons/index.js` in the global module list: the module is
+expected to remain globally present through the other root-import consumers.
 
 The import-duration mechanism follows the already validated profiling
 protocol: first verify and try Vitest's installed
@@ -187,6 +195,17 @@ speedup. Removing the measured barrel path with statistically indistinguishable
 wall time is still a successful result because it reduces known import work
 without a demonstrated regression.
 
+Predeclare one narrow retry for criterion 5. If every other criterion passes
+but the first three-run B median is more than 5% and no more than 8% slower
+than A, run exactly one additional recorded A/B/A/B/A/B sequence. Do not add
+another warm-up unless the measurement session was invalidated and restarted.
+Pool the original and repeated observations into six A and six B runs and
+recompute their medians; the pooled B median must be no more than 5% slower.
+A first-sequence regression above 8%, a failure of any other criterion, or a
+pooled regression above 5% rejects the candidate without another retry. This
+rule is fixed before measurements so that a repeat cannot be selected after
+seeing a convenient result.
+
 If any retention condition fails, restore both owned component paths from the
 recorded baseline commit with a path-scoped Git restore, verify their original
 byte hashes, do not add the contract test, and commit only a verification
@@ -197,7 +216,8 @@ rewrite the imports or line endings during restoration.
 
 After a successful retention decision, add
 `src/lib/lucide-direct-import-contract.test.ts`. The focused source contract
-reads the two Svelte files, normalizes CRLF/LF differences, and asserts:
+imports the two Svelte components with Vite's `?raw` query, normalizes CRLF/LF
+differences, and asserts:
 
 - neither file imports from the root `@lucide/svelte` export;
 - every Lucide package import present in those files uses an
@@ -210,6 +230,10 @@ permanent test inventory: ordinary feature work may add, remove, or rename an
 icon without editing a list in the contract. The implementation scope and
 final diff review, rather than a brittle attempt to infer icon semantics from
 source text, enforce that this slice does not add a local facade.
+
+The `?raw` imports are required rather than filesystem reads so Vitest includes
+both components in the test's module graph and reruns the contract when either
+component changes in watch mode.
 
 Adding the contract after the performance decision increases the final test
 inventory. That final inventory change is expected and is not compared with
@@ -240,6 +264,8 @@ with:
 - starting commit and environment details;
 - baseline and candidate command lines;
 - discarded warm-ups and the recorded A/B execution order;
+- whether the predeclared marginal-regression retry was triggered and, if so,
+  both the first-sequence and pooled medians;
 - all raw-artifact temporary paths;
 - per-run wall times, medians, inventories, and target-file timings;
 - qualitative before/after import-duration excerpts or structured summaries;
