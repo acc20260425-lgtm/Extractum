@@ -614,6 +614,7 @@ Expected: the command result and any new report path are recorded without exitin
 Use the reverse `apply_patch` to remove exactly the inert comment, then run:
 
 ```powershell
+rustfmt.exe --edition 2021 --config newline_style=Windows src-tauri/src/prompt_packs/runtime_config.rs
 $scratch = (Get-Content -LiteralPath (Join-Path $env:TEMP 'extractum-performance-profiling-current.txt') -Raw).Trim()
 $preflight = Get-Content -LiteralPath (Join-Path $scratch 'preflight.json') -Raw | ConvertFrom-Json
 $current = (Get-FileHash -Algorithm SHA256 'src-tauri/src/prompt_packs/runtime_config.rs').Hash
