@@ -2,8 +2,7 @@
 
 ## Status
 
-Conversational design approved on 2026-07-15. Revised after written-spec
-review; pending approval before implementation planning.
+Approved for implementation planning on 2026-07-15 after written-spec review.
 
 ## Context
 
