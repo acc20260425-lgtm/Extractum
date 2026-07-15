@@ -70,7 +70,7 @@ $nodeBlocking = @(
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object {
             $_.Name -eq 'node.exe' -and
-            $_.CommandLine -match '(vitest|vite(?:\.js)?|scripts[\\/]tauri\.mjs|tauri(?:\.js)?\s+dev)'
+            $_.CommandLine -match '((?:^|[\\/\s"-])vitest(?:\.mjs)?(?:\s|$)|(?:^|[\\/\s"])(?:bin[\\/])?vite(?:\.js)?(?:\s|$)|scripts[\\/]tauri\.mjs|tauri(?:\.js)?\s+dev)'
         }
 )
 $appBlocking = @(Get-Process extractum -ErrorAction SilentlyContinue)
@@ -320,7 +320,7 @@ Set-Variant $Variant
 $report = [IO.Path]::GetFullPath((Join-Path $vitestDir "$Label.json"))
 if ($report.StartsWith($repo, [StringComparison]::OrdinalIgnoreCase)) { throw 'Report path is inside repository.' }
 $watch = [Diagnostics.Stopwatch]::StartNew()
-$output = @(& node.exe scripts/run-vitest.mjs run --reporter=json "--outputFile=$report" 2>&1)
+$output = @(& node.exe scripts/run-vitest.mjs run --reporter=json --reporter=default "--outputFile.json=$report" 2>&1)
 $code = $LASTEXITCODE
 $watch.Stop()
 $output | Set-Content -LiteralPath (Join-Path $vitestDir "$Label.log") -Encoding UTF8
@@ -360,26 +360,64 @@ if ($LASTEXITCODE -ne 0) { throw 'Warm-up A failed; investigate and restart from
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Label 'warmup-B' -Variant 'B'
 if ($LASTEXITCODE -ne 0) { throw 'Warm-up B failed; investigate and restart from both warm-ups.' }
 $sequence = @('A','B','A','B','A','B')
+$candidate = Get-Content -LiteralPath (Join-Path $scratch 'candidate.json') -Raw | ConvertFrom-Json
+$paths = @([string]$candidate.project_path, [string]$candidate.sources_path)
+$earlyRejected = $false
 for ($index = 0; $index -lt $sequence.Count; $index++) {
     $number = $index + 1
     $label = "recorded-{0:D2}-{1}" -f $number, $sequence[$index]
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Label $label -Variant $sequence[$index] -Recorded
-    if ($LASTEXITCODE -ne 0) { throw "Recorded run failed: $label" }
+    if ($LASTEXITCODE -ne 0) {
+        git restore --source=$candidate.baseline_commit -- @paths
+        if ($LASTEXITCODE -ne 0) { throw "Recorded run $label failed and A restoration also failed." }
+        $aRestored = (Get-FileHash -Algorithm SHA256 $paths[0]).Hash -eq $candidate.project_a_sha256 -and
+                     (Get-FileHash -Algorithm SHA256 $paths[1]).Hash -eq $candidate.sources_a_sha256
+        if (-not $aRestored) { throw "Recorded run $label failed and A hashes were not restored." }
+        if ($sequence[$index] -eq 'A') {
+            [ordered]@{reason='baseline_recorded_failure';failed_label=$label;scratch=$scratch} |
+                ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scratch 'session-invalid.json') -Encoding UTF8
+            throw "Baseline A recorded run failed: $label. Preserve this scratch directory, investigate, create a fresh Task 1 scratch directory, and restart from both warm-ups. Do not combine sessions."
+        }
+        $decision = [ordered]@{
+            decision = 'rejected'
+            reason = 'candidate_recorded_failure'
+            failed_label = $label
+            retry_used = $false
+            repeat_failed = $false
+            runs_per_variant = 0
+            final_a_wall_median_seconds = $null
+            final_b_wall_median_seconds = $null
+            final_wall_delta_percent = $null
+            timing_gate = $false
+            inventory_gate = $false
+            source_gate = $false
+            import_gate = $false
+            correctness_gate = $false
+        }
+        $decision | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scratch 'decision.json') -Encoding UTF8
+        Set-Content -LiteralPath (Join-Path $scratch 'early-rejection.txt') -Value $label -Encoding UTF8
+        $earlyRejected = $true
+        break
+    }
 }
-$candidate = Get-Content -LiteralPath (Join-Path $scratch 'candidate.json') -Raw | ConvertFrom-Json
-$paths = @([string]$candidate.project_path, [string]$candidate.sources_path)
-$dirty = @(git diff --name-only)
-$unexpected = @($dirty | Where-Object { $_ -notin $paths })
-if ($dirty.Count -ne 2 -or $unexpected.Count -ne 0) { $dirty; exit 1 }
-if ((Get-FileHash -Algorithm SHA256 $paths[0]).Hash -ne $candidate.project_b_sha256 -or
-    (Get-FileHash -Algorithm SHA256 $paths[1]).Hash -ne $candidate.sources_b_sha256) { exit 1 }
+if ($earlyRejected) {
+    $status = @(git status --short --untracked-files=all 2>$null)
+    "EARLY_REJECTION=candidate_recorded_failure"
+    if ($status.Count -ne 0) { $status; exit 1 }
+} else {
+    $dirty = @(git diff --name-only)
+    $unexpected = @($dirty | Where-Object { $_ -notin $paths })
+    if ($dirty.Count -ne 2 -or $unexpected.Count -ne 0) { $dirty; exit 1 }
+    if ((Get-FileHash -Algorithm SHA256 $paths[0]).Hash -ne $candidate.project_b_sha256 -or
+        (Get-FileHash -Algorithm SHA256 $paths[1]).Hash -ne $candidate.sources_b_sha256) { exit 1 }
+}
 ```
 
-Expected: both warm-ups and all six recorded runs pass nonempty inventories. A warm-up failure stops before recorded runs. Final variant is B and only the two owned files are dirty.
+Expected on the normal path: both warm-ups and all six recorded runs pass nonempty inventories, each log includes readable default-reporter diagnostics, final variant is B, and only the two owned files are dirty. An A recorded failure invalidates the entire session and requires a fresh scratch plus restart from warm-ups. A B recorded failure conservatively rejects the candidate, restores exact A, records `decision.json`, skips Task 3 Step 3 and Tasks 4-6, and continues with the early-rejection evidence path in Task 7.
 
 - [ ] **Step 3: Verify recorded inventory equality before import profiling**
 
-Run:
+Run only when `early-rejection.txt` does not exist:
 
 ```powershell
 $scratch = (Get-Content -LiteralPath (Join-Path $env:TEMP 'extractum-lucide-import-current.txt') -Raw).Trim()
@@ -400,6 +438,8 @@ Expected: six recorded runs, three per side, and exactly one shared inventory.
 ---
 
 ### Task 4: Capture Comprehensive A and B Import Trees
+
+If Task 3 created `early-rejection.txt`, skip this entire task and continue at Task 7.
 
 **Files:**
 - Toggle temporarily: the two owned Svelte files
@@ -577,8 +617,13 @@ Run:
 $scratch = (Get-Content -LiteralPath (Join-Path $env:TEMP 'extractum-lucide-import-current.txt') -Raw).Trim()
 $vitestDir = Join-Path $scratch 'vitest'
 function Get-ImportSubtree([string[]]$lines, [string]$rootName) {
-    $start = -1
+    $breakdownStart = -1
     for ($i=0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match 'Import Duration Breakdown') { $breakdownStart = $i; break }
+    }
+    if ($breakdownStart -lt 0) { throw 'Import Duration Breakdown section not found.' }
+    $start = -1
+    for ($i=$breakdownStart + 1; $i -lt $lines.Count; $i++) {
         if ($lines[$i] -match [regex]::Escape($rootName)) { $start = $i; break }
     }
     if ($start -lt 0) { throw "Import root not found: $rootName" }
@@ -589,6 +634,7 @@ function Get-ImportSubtree([string[]]$lines, [string]$rootName) {
         if ($lines[$i] -notmatch $branchPattern) { break }
         $result.Add($lines[$i])
     }
+    if ($result.Count -le 1) { throw "Import subtree for $rootName has no branch rows; reporter format is not attributable." }
     return [string[]]$result.ToArray()
 }
 $roots = 'ProjectRailPanel.test.ts','SourcesTab.test.ts'
@@ -602,7 +648,7 @@ foreach ($variant in 'A','B') {
         $summary += [pscustomobject]@{
             variant = $variant
             root = $root
-            contains_icons_index = (($subtree -join "`n") -match 'icons/index\.js')
+            contains_icons_index = ((($subtree -join "`n").Replace('\','/')) -match 'icons/index\.js')
         }
     }
 }
@@ -619,6 +665,8 @@ Expected: both A target subtrees contain `icons/index.js`; neither B target subt
 ---
 
 ### Task 5: Compute the Retention Decision and Optional Single Retry
+
+If Task 3 already created `decision.json` with reason `candidate_recorded_failure`, skip this entire task and Task 6, then continue at Task 7.
 
 **Files:**
 - Toggle temporarily: the two owned Svelte files
@@ -657,9 +705,9 @@ function Get-Median([double[]]$values) {
     return ([double]$sorted[$sorted.Count / 2 - 1] + [double]$sorted[$sorted.Count / 2]) / 2
 }
 function Get-FileDuration([object]$report, [string]$suffix) {
-    $matches = @($report.testResults | Where-Object { ([string]$_.name).Replace('\','/').EndsWith($suffix, [StringComparison]::OrdinalIgnoreCase) })
-    if ($matches.Count -ne 1) { throw "Expected one test file ending in $suffix, got $($matches.Count)." }
-    return [double]$matches[0].endTime - [double]$matches[0].startTime
+    $found = @($report.testResults | Where-Object { ([string]$_.name).Replace('\','/').EndsWith($suffix, [StringComparison]::OrdinalIgnoreCase) })
+    if ($found.Count -ne 1) { throw "Expected one test file ending in $suffix, got $($found.Count)." }
+    return [double]$found[0].endTime - [double]$found[0].startTime
 }
 $rows = @()
 foreach ($metaFile in Get-ChildItem -LiteralPath $vitestDir -Filter 'recorded-*-meta.json' | Sort-Object Name) {
@@ -760,13 +808,16 @@ if ($initial.retry_required -and -not $repeatFailed) { $metaFiles += @(Get-Child
 $metas = @($metaFiles | Sort-Object Name | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json })
 $a = @($metas | Where-Object variant -eq 'A')
 $b = @($metas | Where-Object variant -eq 'B')
+$inventories = @($metas | ForEach-Object { "$($_.files)/$($_.tests)" } | Sort-Object -Unique)
+$inventoryGate = $inventories.Count -eq 1
+$allRunsPassed = @($metas | Where-Object { $_.exit -ne 0 -or -not $_.success -or $_.files -le 0 -or $_.tests -le 0 }).Count -eq 0
 $aMedian = Get-Median ([double[]]$a.wall_seconds)
 $bMedian = Get-Median ([double[]]$b.wall_seconds)
 $delta = (($bMedian - $aMedian) / $aMedian) * 100
 $expectedPerSide = if ($initial.retry_required -and -not $repeatFailed) { 6 } else { 3 }
 $timingGate = -not $repeatFailed -and $delta -le 5
 $retained = $a.Count -eq $expectedPerSide -and $b.Count -eq $expectedPerSide -and
-            [bool]$initial.inventory_equal -and [bool]$initial.source_gate -and
+            $inventoryGate -and $allRunsPassed -and [bool]$initial.source_gate -and
             [bool]$initial.import_gate -and [bool]$initial.correctness_gate -and $timingGate
 $decision = [ordered]@{
     decision = if ($retained) { 'retained' } else { 'rejected' }
@@ -776,8 +827,10 @@ $decision = [ordered]@{
     final_a_wall_median_seconds = [math]::Round($aMedian,3)
     final_b_wall_median_seconds = [math]::Round($bMedian,3)
     final_wall_delta_percent = [math]::Round($delta,3)
+    combined_inventory = if ($inventoryGate) { $inventories[0] } else { $inventories -join ',' }
+    all_performance_runs_passed = $allRunsPassed
     timing_gate = $timingGate
-    inventory_gate = [bool]$initial.inventory_equal
+    inventory_gate = $inventoryGate
     source_gate = [bool]$initial.source_gate
     import_gate = [bool]$initial.import_gate
     correctness_gate = [bool]$initial.correctness_gate
@@ -798,7 +851,7 @@ if ($retained) {
 }
 ```
 
-Expected: one `decision.json`. Retained leaves exact B hashes; rejected restores exact A hashes. No further timing retry is permitted.
+Expected: one `decision.json`. The final `inventory_gate` is recomputed across all three or all six runs per side, including every successful repeat run. Retained leaves exact B hashes; rejected restores exact A hashes. No further timing retry is permitted.
 
 ---
 
@@ -1002,22 +1055,50 @@ $required = @(
     'preflight.json',
     'candidate.json',
     'candidate.patch',
-    'decision.json',
-    'vitest/ab-runs.csv',
-    'vitest/ab-initial-summary.json',
-    'vitest/import-mechanism.txt',
-    'vitest/import-attribution.csv',
-    'vitest/import-A-ProjectRailPanel-subtree.txt',
-    'vitest/import-A-SourcesTab-subtree.txt',
-    'vitest/import-B-ProjectRailPanel-subtree.txt',
-    'vitest/import-B-SourcesTab-subtree.txt'
+    'decision.json'
 )
+$earlyRejection = $decision.reason -eq 'candidate_recorded_failure'
+if ($earlyRejection) {
+    $required += @(
+        'early-rejection.txt',
+        ("vitest/{0}-meta.json" -f $decision.failed_label),
+        ("vitest/{0}.log" -f $decision.failed_label)
+    )
+} else {
+    $required += @(
+        'vitest/ab-runs.csv',
+        'vitest/ab-initial-summary.json',
+        'vitest/import-mechanism.txt',
+        'vitest/import-attribution.csv',
+        'vitest/import-A-ProjectRailPanel-subtree.txt',
+        'vitest/import-A-SourcesTab-subtree.txt',
+        'vitest/import-B-ProjectRailPanel-subtree.txt',
+        'vitest/import-B-SourcesTab-subtree.txt'
+    )
+}
 $missing = @($required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $scratch $_)) })
+$warmupMetas = @(Get-ChildItem -LiteralPath (Join-Path $scratch 'vitest') -Filter 'warmup-*-meta.json' -ErrorAction SilentlyContinue)
+$recordedMetas = @(Get-ChildItem -LiteralPath (Join-Path $scratch 'vitest') -Filter 'recorded-*-meta.json' -ErrorAction SilentlyContinue)
+$initialRunArtifactsValid = if ($earlyRejection) {
+    $warmupMetas.Count -eq 2 -and $recordedMetas.Count -ge 1 -and $recordedMetas.Count -le 6
+} else {
+    $warmupMetas.Count -eq 2 -and $recordedMetas.Count -eq 6
+}
+$repeatMetas = @(Get-ChildItem -LiteralPath (Join-Path $scratch 'vitest') -Filter 'repeat-*-meta.json' -ErrorAction SilentlyContinue)
+$repeatArtifactsValid = if (-not $decision.retry_used) {
+    $repeatMetas.Count -eq 0
+} elseif ($decision.repeat_failed) {
+    (Test-Path -LiteralPath (Join-Path $scratch 'vitest/repeat-failed.txt')) -and $repeatMetas.Count -ge 1 -and $repeatMetas.Count -le 6
+} else {
+    $repeatMetas.Count -eq 6
+}
 $viteRestored = (Get-FileHash -Algorithm SHA256 'vite.config.js').Hash -eq $preflight.vite_config_sha256
 "DECISION=$($decision.decision)"
 "MISSING_ARTIFACTS=$($missing.Count)"
+"INITIAL_RUN_ARTIFACTS_VALID=$initialRunArtifactsValid"
+"REPEAT_ARTIFACTS_VALID=$repeatArtifactsValid"
 "VITE_HASH_RESTORED=$viteRestored"
-if ($missing.Count -ne 0 -or -not $viteRestored) { $missing; exit 1 }
+if ($missing.Count -ne 0 -or -not $initialRunArtifactsValid -or -not $repeatArtifactsValid -or -not $viteRestored) { $missing; exit 1 }
 if ($decision.decision -eq 'rejected') {
     $status = @(git status --short --untracked-files=all 2>$null)
     $aRestored = (Get-FileHash -Algorithm SHA256 $candidate.project_path).Hash -eq $candidate.project_a_sha256 -and
@@ -1028,7 +1109,7 @@ if ($decision.decision -eq 'rejected') {
 }
 ```
 
-Expected: all mandatory artifacts exist, Vite is byte-identical to preflight, and a rejected result has a clean exact-A worktree.
+Expected: all path-specific artifacts exist, every normal retry has exactly six `repeat-*-meta.json` files (or a bounded partial set plus `repeat-failed.txt`), Vite is byte-identical to preflight, and a rejected result has a clean exact-A worktree. An early B-run rejection requires its failed readable log/meta but does not falsely require import or aggregate artifacts that were never reached.
 
 - [ ] **Step 3: Write the verification document from literal artifacts**
 
@@ -1052,7 +1133,7 @@ Create `docs/superpowers/verification/2026-07-15-lucide-direct-import-validation
 ## Limitations
 ```
 
-Populate them with literal values from `preflight.json`, every warm-up/recorded metadata file, `ab-initial-summary.json`, `decision.json`, `import-mechanism.txt`, `import-attribution.csv`, and the four target subtree files. Include:
+For the normal completed protocol, populate them with literal values from `preflight.json`, every warm-up/recorded/repeat metadata file, `ab-initial-summary.json`, `decision.json`, `import-mechanism.txt`, `import-attribution.csv`, and the four target subtree files. Include:
 
 - the starting commit, tool versions, power scheme, and Defender observation;
 - both discarded warm-up results and the exact recorded order;
@@ -1064,6 +1145,8 @@ Populate them with literal values from `preflight.json`, every warm-up/recorded 
 - retained/rejected outcome and exact restoration state;
 - focused/check/full-gate results that actually ran;
 - the limitation that full-suite timing noise can still reject a correct candidate and that about 20 root-import consumers remain outside this slice.
+
+For an early `candidate_recorded_failure`, use the same headings but state explicitly that aggregate medians, import profiling, retry, focused checks, and the full gate were not reached. Include both warm-ups, every recorded run attempted through the failed B label, the readable failed log diagnosis, the conservative rejection reason, and exact A restoration. Do not invent missing retention results.
 
 Expected: a self-contained summary; raw logs and JSON remain outside the repository.
 
