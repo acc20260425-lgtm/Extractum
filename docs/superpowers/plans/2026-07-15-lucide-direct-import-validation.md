@@ -255,8 +255,23 @@ git apply --check -- $candidate.patch
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 git apply -- $candidate.patch
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-$bOk = (Get-FileHash -Algorithm SHA256 $paths[0]).Hash -eq $candidate.project_b_sha256 -and
-       (Get-FileHash -Algorithm SHA256 $paths[1]).Hash -eq $candidate.sources_b_sha256
+$candidate | Add-Member -NotePropertyName initial_project_b_sha256 -NotePropertyValue $candidate.project_b_sha256 -Force
+$candidate | Add-Member -NotePropertyName initial_sources_b_sha256 -NotePropertyValue $candidate.sources_b_sha256 -Force
+$candidate.project_b_sha256 = (Get-FileHash -Algorithm SHA256 $paths[0]).Hash
+$candidate.sources_b_sha256 = (Get-FileHash -Algorithm SHA256 $paths[1]).Hash
+$candidate | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scratch 'candidate.json') -Encoding UTF8
+git apply -R --check -- $candidate.patch
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+git apply -R -- $candidate.patch
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$aFirstRoundTrip = (Get-FileHash -Algorithm SHA256 $paths[0]).Hash -eq $candidate.project_a_sha256 -and
+                   (Get-FileHash -Algorithm SHA256 $paths[1]).Hash -eq $candidate.sources_a_sha256
+git apply --check -- $candidate.patch
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+git apply -- $candidate.patch
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$bReproduced = (Get-FileHash -Algorithm SHA256 $paths[0]).Hash -eq $candidate.project_b_sha256 -and
+               (Get-FileHash -Algorithm SHA256 $paths[1]).Hash -eq $candidate.sources_b_sha256
 git apply -R --check -- $candidate.patch
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 git apply -R -- $candidate.patch
@@ -265,13 +280,14 @@ $aRestored = (Get-FileHash -Algorithm SHA256 $paths[0]).Hash -eq $candidate.proj
              (Get-FileHash -Algorithm SHA256 $paths[1]).Hash -eq $candidate.sources_a_sha256
 $status = @(git status --short --untracked-files=all 2>$null)
 "A_INITIAL=$aOk"
-"B_APPLIED=$bOk"
+"A_FIRST_ROUND_TRIP=$aFirstRoundTrip"
+"B_REPRODUCED=$bReproduced"
 "A_RESTORED=$aRestored"
 "STATUS_COUNT=$($status.Count)"
-if (-not $aOk -or -not $bOk -or -not $aRestored -or $status.Count -ne 0) { $status; exit 1 }
+if (-not $aOk -or -not $aFirstRoundTrip -or -not $bReproduced -or -not $aRestored -or $status.Count -ne 0) { $status; exit 1 }
 ```
 
-Expected: all three booleans are `True`, the worktree returns to A, and it is clean.
+Expected: all four booleans are `True`, the worktree returns to A, and it is clean. The canonical B hashes are those reproduced by `git apply`; the initial editor-produced hashes remain in `candidate.json` only as line-ending diagnostics.
 
 ---
 
