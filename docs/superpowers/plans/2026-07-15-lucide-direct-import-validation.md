@@ -247,7 +247,7 @@ Run:
 $scratch = (Get-Content -LiteralPath (Join-Path $env:TEMP 'extractum-lucide-import-current.txt') -Raw).Trim()
 $candidate = Get-Content -LiteralPath (Join-Path $scratch 'candidate.json') -Raw | ConvertFrom-Json
 $paths = @([string]$candidate.project_path, [string]$candidate.sources_path)
-git restore --source=$candidate.baseline_commit -- @paths
+git restore --source=$($candidate.baseline_commit) -- @paths
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $aOk = (Get-FileHash -Algorithm SHA256 $paths[0]).Hash -eq $candidate.project_a_sha256 -and
        (Get-FileHash -Algorithm SHA256 $paths[1]).Hash -eq $candidate.sources_a_sha256
@@ -375,7 +375,7 @@ for ($index = 0; $index -lt $sequence.Count; $index++) {
             try { $failedMeta = Get-Content -LiteralPath $metaPath -Raw | ConvertFrom-Json }
             catch { $failedMeta = $null }
         }
-        git restore --source=$candidate.baseline_commit -- @paths
+        git restore --source=$($candidate.baseline_commit) -- @paths
         if ($LASTEXITCODE -ne 0) { throw "Recorded run $label failed and A restoration also failed." }
         $aRestored = (Get-FileHash -Algorithm SHA256 $paths[0]).Hash -eq $candidate.project_a_sha256 -and
                      (Get-FileHash -Algorithm SHA256 $paths[1]).Hash -eq $candidate.sources_a_sha256
@@ -805,7 +805,7 @@ for ($index = 0; $index -lt $sequence.Count; $index++) {
             try { $failedMeta = Get-Content -LiteralPath $metaPath -Raw | ConvertFrom-Json }
             catch { $failedMeta = $null }
         }
-        git restore --source=$candidate.baseline_commit -- @paths
+        git restore --source=$($candidate.baseline_commit) -- @paths
         if ($LASTEXITCODE -ne 0) { throw "Repeat run $label failed and A restoration also failed." }
         $aRestored = (Get-FileHash -Algorithm SHA256 $paths[0]).Hash -eq $candidate.project_a_sha256 -and
                      (Get-FileHash -Algorithm SHA256 $paths[1]).Hash -eq $candidate.sources_a_sha256
@@ -893,7 +893,7 @@ if ($retained) {
     $s = (Get-FileHash -Algorithm SHA256 $paths[1]).Hash
     if ($p -ne $candidate.project_b_sha256 -or $s -ne $candidate.sources_b_sha256) { exit 1 }
 } else {
-    git restore --source=$candidate.baseline_commit -- @paths
+    git restore --source=$($candidate.baseline_commit) -- @paths
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     $p = (Get-FileHash -Algorithm SHA256 $paths[0]).Hash
     $s = (Get-FileHash -Algorithm SHA256 $paths[1]).Hash
