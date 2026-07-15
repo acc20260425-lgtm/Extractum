@@ -2,16 +2,17 @@
 
 ## Status
 
-Conversational design approved on 2026-07-15. Pending written-spec review
-before implementation planning.
+Conversational design approved on 2026-07-15. Revised after written-spec
+review; pending approval before implementation planning.
 
 ## Context
 
 The development-loop profiling evidence in
 `docs/superpowers/verification/2026-07-14-development-loop-performance-profiling.md`
-identified `@lucide/svelte/dist/icons/index.js` as the largest measured import:
-13.77 seconds of self time and 15.52 seconds total in the instrumented Vitest
-run. The slow import appeared in paths that included
+identified `@lucide/svelte/dist/icons/index.js` as the largest measured import
+in one instrumented Vitest run: approximately 14 seconds of self time and 16
+seconds total. These single-run values establish an order of magnitude, not a
+repeatable timing baseline. The slow import appeared in paths that included
 `ProjectRailPanel.svelte` and `SourcesTab.svelte`.
 
 Both components currently import named icons from the package root:
@@ -26,6 +27,15 @@ exports in other components. The package marks itself as side-effect-free, but
 the measured Vitest import path still evaluates the generated icon index. This
 slice tests whether replacing the two measured root imports removes that path
 without changing UI behavior or making the complete suite slower.
+
+This is intentionally a small experiment. At design revision time, 22 Svelte
+files in `research-projects` imported the package root, so 20 remain outside
+the two-file candidate, and many slow test paths traverse shared components
+that continue to do so. A two-file change is therefore unlikely to move
+complete-suite wall time beyond the workstation's observed run-to-run noise.
+The sensitive evidence is the two target test-file durations and the
+disappearance of the barrel from their import paths. Complete-suite wall time
+is only a non-regression gate.
 
 ## Goal
 
@@ -84,6 +94,13 @@ the repository. A local facade is rejected because it could recreate the
 barrel behavior being measured. A Vite optimization is rejected because it is
 broader, less causal, and unnecessary for this package-supported path.
 
+An ESLint `no-restricted-imports` rule is the preferred scalable enforcement
+mechanism for a future broad migration, but this repository currently has no
+ESLint dependency or configuration. Adding a lint stack for two files would
+expand this experiment beyond its performance question. The retained
+candidate therefore uses the repository's existing source-contract convention
+and final diff review; a later migration may replace that contract with lint.
+
 ## Measurement Protocol
 
 ### Environment
@@ -98,17 +115,31 @@ protection state without changing either setting.
 Store raw JSON reports and import-duration logs under an absolute system
 temporary path outside the repository. Commit only the summarized evidence.
 
-### Baseline
+### Paired A/B Runs
 
-Before modifying either component:
+Treat the unchanged components as A and the direct-import candidate as B.
+Before measuring, record the baseline commit and byte hashes of both files,
+create the candidate as a reversible patch stored outside the repository, and
+verify that applying and reversing it produces the expected A and B hashes.
 
-1. Run the complete Vitest suite three times through the repository wrapper,
-   capturing JSON output and wall time for each run.
-2. Run one complete instrumented suite with import-duration reporting and
-   capture the import breakdown.
-3. Record the complete file/test inventory, the complete-suite median, the
-   target component-test durations, and the import chain through
-   `@lucide/svelte/dist/icons/index.js`.
+Run one discarded warm-up under A and one discarded warm-up under B. Then run
+the recorded sequence A/B/A/B/A/B, capturing complete-suite JSON output and
+wall time for every run. Apply or reverse only the owned candidate patch
+between runs and verify the corresponding hashes each time. This alternating
+order distributes gradual machine drift across both configurations; the
+discarded warm-ups reduce cold-start and Defender/cache asymmetry.
+
+For A and B separately, record the complete file/test inventory, the
+complete-suite median, and the median duration of
+`ProjectRailPanel.test.ts` and `SourcesTab.test.ts`. The target-file medians
+are the primary quantitative metric. The complete-suite median is not used to
+claim a measurable speedup from this narrow change.
+
+After the recorded sequence, run one complete instrumented suite under A and
+one under B and capture both import breakdowns. These single runs answer a
+qualitative question: whether the target chains still attribute work to
+`@lucide/svelte/dist/icons/index.js`. Do not use their duration difference as
+a quantitative speedup estimate.
 
 The import-duration mechanism follows the already validated profiling
 protocol: first verify and try Vitest's installed
@@ -117,19 +148,18 @@ or produces no breakdown, temporarily add the documented equivalent to the
 owned Vitest config, run the instrumented suite, then restore the config
 byte-for-byte and verify its hash.
 
-### Candidate
+### Candidate Isolation
 
-Apply only the two direct-import edits and repeat the same three complete runs
-and one instrumented run under the same conditions. Do not add the contract
-test until the A/B decision is complete; baseline and candidate performance
-runs must execute the same committed test inventory.
+Do not add the contract test until the A/B decision is complete. A and B
+performance runs must execute the same committed test inventory, and the two
+component imports must be the only source difference between them.
 
 Compare:
 
 - median complete-suite wall time;
 - all file and test counts;
 - the two target test-file durations;
-- the Lucide import-duration entries and import paths;
+- the qualitative Lucide import entries and import paths;
 - pass/fail and runtime errors.
 
 Individual file and import durations overlap under parallel execution. They
@@ -144,8 +174,9 @@ Retain the candidate only when all of the following hold:
    baseline. Live counts are authoritative; the previous 157-file and
    1,264-test observation is context, not a hard-coded assertion.
 3. Both target components have no root import from `@lucide/svelte`.
-4. The instrumented target paths no longer pass through
-   `@lucide/svelte/dist/icons/index.js`.
+4. The B instrumented target paths no longer pass through
+   `@lucide/svelte/dist/icons/index.js`; no conclusion depends on the numeric
+   difference between the single A and B import-duration runs.
 5. The candidate complete-suite median is no more than 5% slower than the
    baseline median.
 6. Targeted component tests and static/type checks remain green.
@@ -156,9 +187,11 @@ speedup. Removing the measured barrel path with statistically indistinguishable
 wall time is still a successful result because it reduces known import work
 without a demonstrated regression.
 
-If any retention condition fails, restore both component files byte-for-byte,
-do not add the contract test, and commit only a verification document that
-records the negative result and limitations.
+If any retention condition fails, restore both owned component paths from the
+recorded baseline commit with a path-scoped Git restore, verify their original
+byte hashes, do not add the contract test, and commit only a verification
+document that records the negative result and limitations. Do not manually
+rewrite the imports or line endings during restoration.
 
 ## Contract Protection
 
@@ -167,12 +200,16 @@ After a successful retention decision, add
 reads the two Svelte files, normalizes CRLF/LF differences, and asserts:
 
 - neither file imports from the root `@lucide/svelte` export;
-- every identifier listed in the mapping tables uses its exact direct module;
-- no local facade is substituted for the direct package path.
+- every Lucide package import present in those files uses an
+  `@lucide/svelte/icons/*` direct path.
 
 The contract intentionally covers only the two measured files. It must not
 ban root imports repository-wide or turn this experiment into an unreviewed
-mass migration.
+mass migration. The exact mapping tables are implementation guidance, not a
+permanent test inventory: ordinary feature work may add, remove, or rename an
+icon without editing a list in the contract. The implementation scope and
+final diff review, rather than a brittle attempt to infer icon semantics from
+source text, enforce that this slice does not add a local facade.
 
 Adding the contract after the performance decision increases the final test
 inventory. That final inventory change is expected and is not compared with
@@ -202,9 +239,10 @@ with:
 
 - starting commit and environment details;
 - baseline and candidate command lines;
+- discarded warm-ups and the recorded A/B execution order;
 - all raw-artifact temporary paths;
 - per-run wall times, medians, inventories, and target-file timings;
-- before/after import-duration excerpts or structured summaries;
+- qualitative before/after import-duration excerpts or structured summaries;
 - the calculated percentage delta;
 - every retention criterion and its observed result;
 - the final retain/reject decision and limitations.
@@ -216,12 +254,14 @@ audit trail in either case.
 
 ## Risks and Follow-Ups
 
-- Three runs reduce but do not eliminate machine noise; the 5% tolerance is a
-  local decision boundary, not a universal benchmark.
+- Warm-ups and alternating runs reduce but do not eliminate machine noise. The
+  5% complete-suite tolerance is a local non-regression boundary, not evidence
+  of a speedup, and noise may still reject a correct candidate.
 - A package upgrade may change direct export paths. The contract will make
   that change explicit rather than silently falling back to a barrel.
-- The two files may account for only part of the measured Lucide index cost.
-  A broader migration requires separate evidence and review.
+- The two files account for only part of the measured Lucide index cost. The
+  target-file medians and qualitative import-chain result are the sensitive
+  measures; a broader migration requires separate evidence and review.
 - If the barrel disappears but wall time remains unchanged, other expensive
   imports or test execution dominate the gate. Use the verification evidence,
   rather than expanding scope inside this slice, to choose a follow-up.
