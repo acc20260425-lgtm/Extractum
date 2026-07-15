@@ -422,6 +422,7 @@ $scratch = (Get-Content -LiteralPath (Join-Path $env:TEMP 'extractum-research-lu
 $preflight = Get-Content -LiteralPath (Join-Path $scratch 'preflight.json') -Raw | ConvertFrom-Json
 $rootOffenders = @()
 $badLucideImports = @()
+$deprecatedImports = @()
 foreach ($entry in $preflight.files) {
     $source = Get-Content -LiteralPath $entry.path -Raw
     if ($source -match 'from\s+["'']@lucide/svelte["'']') { $rootOffenders += $entry.path }
@@ -430,18 +431,20 @@ foreach ($entry in $preflight.files) {
         if (-not $specifier.StartsWith('@lucide/svelte/icons/')) {
             $badLucideImports += "$($entry.path):$specifier"
         }
+        if ($specifier -match '^@lucide/svelte/icons/(alert-triangle|edit-3|play-circle|x-circle)$') {
+            $deprecatedImports += "$($entry.path):$specifier"
+        }
     }
 }
-$deprecated = @(rg -n '@lucide/svelte/icons/(alert-triangle|edit-3|play-circle|x-circle)' 'src/lib/components/research-projects' -g '*.svelte')
 $changed = @(git diff --name-only | Sort-Object)
 $expected = @($preflight.files.path | Sort-Object)
 "ROOT_OFFENDERS=$($rootOffenders.Count)"
 "BAD_LUCIDE_IMPORTS=$($badLucideImports.Count)"
-"DEPRECATED_DIRECT_PATHS=$($deprecated.Count)"
+"DEPRECATED_DIRECT_PATHS=$($deprecatedImports.Count)"
 "CHANGED_COUNT=$($changed.Count)"
-if ($rootOffenders.Count -ne 0 -or $badLucideImports.Count -ne 0 -or $deprecated.Count -ne 0 -or
+if ($rootOffenders.Count -ne 0 -or $badLucideImports.Count -ne 0 -or $deprecatedImports.Count -ne 0 -or
     ($changed -join "`n") -ne ($expected -join "`n")) {
-    $rootOffenders; $badLucideImports; $deprecated
+    $rootOffenders; $badLucideImports; $deprecatedImports
     Compare-Object $expected $changed
     exit 1
 }
@@ -971,17 +974,21 @@ $bMedian = Get-Median ([double[]]$b.wall_seconds)
 $delta = (($bMedian - $aMedian) / $aMedian) * 100
 $rootOffenders = @()
 $badImports = @()
+$deprecatedImports = @()
 foreach ($file in Get-ChildItem -LiteralPath 'src/lib/components/research-projects' -Filter '*.svelte') {
     $source = Get-Content -LiteralPath $file.FullName -Raw
     if ($source -match 'from\s+["'']@lucide/svelte["'']') { $rootOffenders += $file.FullName }
     foreach ($match in [regex]::Matches($source, 'from\s+["''](@lucide/svelte[^"'']*)["'']')) {
-        if (-not $match.Groups[1].Value.StartsWith('@lucide/svelte/icons/')) {
-            $badImports += "$($file.FullName):$($match.Groups[1].Value)"
+        $specifier = $match.Groups[1].Value
+        if (-not $specifier.StartsWith('@lucide/svelte/icons/')) {
+            $badImports += "$($file.FullName):$specifier"
+        }
+        if ($specifier -match '^@lucide/svelte/icons/(alert-triangle|edit-3|play-circle|x-circle)$') {
+            $deprecatedImports += "$($file.FullName):$specifier"
         }
     }
 }
-$deprecated = @(rg -n '@lucide/svelte/icons/(alert-triangle|edit-3|play-circle|x-circle)' 'src/lib/components/research-projects' -g '*.svelte')
-$sourceGate = $rootOffenders.Count -eq 0 -and $badImports.Count -eq 0 -and $deprecated.Count -eq 0
+$sourceGate = $rootOffenders.Count -eq 0 -and $badImports.Count -eq 0 -and $deprecatedImports.Count -eq 0
 $attribution = @(Import-Csv -LiteralPath (Join-Path $vitestDir 'import-attribution.csv'))
 $aImportGate = @($attribution | Where-Object { $_.variant -eq 'A' -and $_.contains_icons_index -ne 'True' }).Count -eq 0
 $bImportGate = @($attribution | Where-Object { $_.variant -eq 'B' -and $_.contains_icons_index -eq 'True' }).Count -eq 0
@@ -1194,12 +1201,16 @@ function findOffenders(): string[] {
 
 describe("research-projects Lucide import boundary", () => {
   it("uses only direct Lucide icon modules", () => {
-    expect(findOffenders()).toEqual([]);
+    const offenders = findOffenders();
+    if (offenders.length > 0) {
+      console.error(offenders.join("\n"));
+    }
+    expect(offenders).toEqual([]);
   });
 });
 ```
 
-Expected: the contract discovers all immediate Svelte files through Vite and aggregates every non-direct Lucide import without hard-coding files, icons, or offender count.
+Expected: the contract discovers all immediate Svelte files through Vite and aggregates every non-direct Lucide import without hard-coding files, icons, or offender count. On RED it writes the complete offender list to stderr before the assertion, so Vitest diff truncation cannot hide paths.
 
 - [ ] **Step 3: Run the contract to prove RED identifies every current offender**
 
