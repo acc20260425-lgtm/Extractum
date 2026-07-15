@@ -24,6 +24,7 @@
 - Permit exactly one additional A/B/A/B/A/B sequence only when every other gate passes and the initial B median is more than 5% and no more than 8% slower than A.
 - Store the candidate patch outside the repository and verify A/B SHA-256 hashes after every transition.
 - A failed or empty warm-up invalidates the measurement session; investigate and restart from warm-ups rather than discarding the failure.
+- For recorded and retry runs, missing/unreadable run metadata means runner infrastructure failure and invalidates the session; a confirmed A failure also invalidates the session, while only a confirmed B failure rejects the candidate.
 - Do not push after the final commit unless the user separately requests it.
 
 ---
@@ -368,11 +369,29 @@ for ($index = 0; $index -lt $sequence.Count; $index++) {
     $label = "recorded-{0:D2}-{1}" -f $number, $sequence[$index]
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Label $label -Variant $sequence[$index] -Recorded
     if ($LASTEXITCODE -ne 0) {
+        $metaPath = Join-Path (Join-Path $scratch 'vitest') "$label-meta.json"
+        $failedMeta = $null
+        if (Test-Path -LiteralPath $metaPath) {
+            try { $failedMeta = Get-Content -LiteralPath $metaPath -Raw | ConvertFrom-Json }
+            catch { $failedMeta = $null }
+        }
         git restore --source=$candidate.baseline_commit -- @paths
         if ($LASTEXITCODE -ne 0) { throw "Recorded run $label failed and A restoration also failed." }
         $aRestored = (Get-FileHash -Algorithm SHA256 $paths[0]).Hash -eq $candidate.project_a_sha256 -and
                      (Get-FileHash -Algorithm SHA256 $paths[1]).Hash -eq $candidate.sources_a_sha256
         if (-not $aRestored) { throw "Recorded run $label failed and A hashes were not restored." }
+        if ($null -eq $failedMeta) {
+            [ordered]@{reason='runner_infrastructure_failure';failed_label=$label;failed_variant=$sequence[$index];scratch=$scratch} |
+                ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scratch 'session-invalid.json') -Encoding UTF8
+            throw "Runner failed before readable run metadata existed: $label. Preserve this scratch directory, investigate, create a fresh Task 1 scratch directory, and restart from both warm-ups. Do not combine sessions."
+        }
+        $confirmedRunFailure = $failedMeta.exit -ne 0 -or -not $failedMeta.success -or
+                               $failedMeta.files -le 0 -or $failedMeta.tests -le 0
+        if (-not $confirmedRunFailure) {
+            [ordered]@{reason='runner_post_meta_failure';failed_label=$label;failed_variant=$sequence[$index];scratch=$scratch} |
+                ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scratch 'session-invalid.json') -Encoding UTF8
+            throw "Runner failed after writing successful-looking metadata: $label. Treat this as infrastructure failure, preserve the scratch directory, investigate, and restart from fresh warm-ups."
+        }
         if ($sequence[$index] -eq 'A') {
             [ordered]@{reason='baseline_recorded_failure';failed_label=$label;scratch=$scratch} |
                 ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scratch 'session-invalid.json') -Encoding UTF8
@@ -413,7 +432,7 @@ if ($earlyRejected) {
 }
 ```
 
-Expected on the normal path: both warm-ups and all six recorded runs pass nonempty inventories, each log includes readable default-reporter diagnostics, final variant is B, and only the two owned files are dirty. An A recorded failure invalidates the entire session and requires a fresh scratch plus restart from warm-ups. A B recorded failure conservatively rejects the candidate, restores exact A, records `decision.json`, skips Task 3 Step 3 and Tasks 4-6, and continues with the early-rejection evidence path in Task 7.
+Expected on the normal path: both warm-ups and all six recorded runs pass nonempty inventories, each log includes readable default-reporter diagnostics, final variant is B, and only the two owned files are dirty. A runner failure without readable metadata, or with successful-looking metadata, is infrastructure failure; it restores exact A and invalidates the session. A confirmed A recorded failure follows the same invalidation path. Only a confirmed B recorded failure conservatively rejects the candidate, restores exact A, records `decision.json`, skips Task 3 Step 3 and Tasks 4-6, and continues with the early-rejection evidence path in Task 7.
 
 - [ ] **Step 3: Verify recorded inventory equality before import profiling**
 
@@ -771,6 +790,8 @@ If true, run:
 $scratch = (Get-Content -LiteralPath (Join-Path $env:TEMP 'extractum-lucide-import-current.txt') -Raw).Trim()
 $runner = Join-Path $scratch 'invoke-complete-variant.ps1'
 $vitestDir = Join-Path $scratch 'vitest'
+$candidate = Get-Content -LiteralPath (Join-Path $scratch 'candidate.json') -Raw | ConvertFrom-Json
+$paths = @([string]$candidate.project_path, [string]$candidate.sources_path)
 $sequence = @('A','B','A','B','A','B')
 $repeatFailed = $false
 for ($index = 0; $index -lt $sequence.Count; $index++) {
@@ -778,6 +799,34 @@ for ($index = 0; $index -lt $sequence.Count; $index++) {
     $label = "repeat-{0:D2}-{1}" -f $number, $sequence[$index]
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner -Label $label -Variant $sequence[$index] -Recorded
     if ($LASTEXITCODE -ne 0) {
+        $metaPath = Join-Path $vitestDir "$label-meta.json"
+        $failedMeta = $null
+        if (Test-Path -LiteralPath $metaPath) {
+            try { $failedMeta = Get-Content -LiteralPath $metaPath -Raw | ConvertFrom-Json }
+            catch { $failedMeta = $null }
+        }
+        git restore --source=$candidate.baseline_commit -- @paths
+        if ($LASTEXITCODE -ne 0) { throw "Repeat run $label failed and A restoration also failed." }
+        $aRestored = (Get-FileHash -Algorithm SHA256 $paths[0]).Hash -eq $candidate.project_a_sha256 -and
+                     (Get-FileHash -Algorithm SHA256 $paths[1]).Hash -eq $candidate.sources_a_sha256
+        if (-not $aRestored) { throw "Repeat run $label failed and A hashes were not restored." }
+        if ($null -eq $failedMeta) {
+            [ordered]@{reason='runner_infrastructure_failure';failed_label=$label;failed_variant=$sequence[$index];scratch=$scratch} |
+                ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scratch 'session-invalid.json') -Encoding UTF8
+            throw "Retry runner failed before readable run metadata existed: $label. Preserve this scratch directory, investigate, create a fresh Task 1 scratch directory, and restart from both warm-ups. Do not combine sessions."
+        }
+        $confirmedRunFailure = $failedMeta.exit -ne 0 -or -not $failedMeta.success -or
+                               $failedMeta.files -le 0 -or $failedMeta.tests -le 0
+        if (-not $confirmedRunFailure) {
+            [ordered]@{reason='runner_post_meta_failure';failed_label=$label;failed_variant=$sequence[$index];scratch=$scratch} |
+                ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scratch 'session-invalid.json') -Encoding UTF8
+            throw "Retry runner failed after writing successful-looking metadata: $label. Treat this as infrastructure failure, preserve the scratch directory, investigate, and restart from fresh warm-ups."
+        }
+        if ($sequence[$index] -eq 'A') {
+            [ordered]@{reason='baseline_repeat_failure';failed_label=$label;scratch=$scratch} |
+                ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scratch 'session-invalid.json') -Encoding UTF8
+            throw "Baseline A repeat run failed: $label. Preserve this scratch directory, investigate, create a fresh Task 1 scratch directory, and restart from both warm-ups. Do not combine sessions."
+        }
         Set-Content -LiteralPath (Join-Path $vitestDir 'repeat-failed.txt') -Value $label -Encoding UTF8
         $repeatFailed = $true
         break
@@ -786,7 +835,7 @@ for ($index = 0; $index -lt $sequence.Count; $index++) {
 "REPEAT_FAILED=$repeatFailed"
 ```
 
-Expected: normally, exactly six additional successful nonempty runs, no extra warm-up, and final variant B. A failure writes `repeat-failed.txt`, stops the sequence, and forces rejection in Step 3; do not retry again.
+Expected: normally, exactly six additional successful nonempty runs, no extra warm-up, and final variant B. Runner infrastructure failure or a confirmed A failure restores exact A, writes `session-invalid.json`, and invalidates the whole session; investigate and restart with fresh scratch and warm-ups. Only a confirmed B failure writes `repeat-failed.txt`, stops the sequence, and forces rejection in Step 3; do not retry again.
 
 - [ ] **Step 3: Make the deterministic final decision and restore the correct state**
 
@@ -821,6 +870,7 @@ $retained = $a.Count -eq $expectedPerSide -and $b.Count -eq $expectedPerSide -an
             [bool]$initial.import_gate -and [bool]$initial.correctness_gate -and $timingGate
 $decision = [ordered]@{
     decision = if ($retained) { 'retained' } else { 'rejected' }
+    reason = 'protocol_completed'
     retry_used = [bool]$initial.retry_required
     repeat_failed = $repeatFailed
     runs_per_variant = $expectedPerSide
@@ -1109,7 +1159,7 @@ if ($decision.decision -eq 'rejected') {
 }
 ```
 
-Expected: all path-specific artifacts exist, every normal retry has exactly six `repeat-*-meta.json` files (or a bounded partial set plus `repeat-failed.txt`), Vite is byte-identical to preflight, and a rejected result has a clean exact-A worktree. An early B-run rejection requires its failed readable log/meta but does not falsely require import or aggregate artifacts that were never reached.
+Expected: all path-specific artifacts exist, every normal retry has exactly six `repeat-*-meta.json` files (or a bounded partial set plus `repeat-failed.txt` after a confirmed B failure), Vite is byte-identical to preflight, and a rejected result has a clean exact-A worktree. An early B-run rejection has failed readable log/meta by construction but does not falsely require import or aggregate artifacts that were never reached. Infrastructure and A-run failures invalidate the session and never reach this final artifact check.
 
 - [ ] **Step 3: Write the verification document from literal artifacts**
 

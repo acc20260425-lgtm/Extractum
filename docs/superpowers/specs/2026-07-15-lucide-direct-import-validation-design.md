@@ -133,6 +133,16 @@ stop signal. Investigate the failure and restart the protocol from the warm-up
 stage after resolving it; do not discard a failed warm-up and continue into
 recorded runs.
 
+Classify a nonzero measurement-runner exit from its emitted run metadata. If
+the runner fails before it writes metadata, or its metadata cannot establish a
+failed/empty Vitest run, treat that as an infrastructure failure: restore exact
+A, preserve the scratch evidence, invalidate the whole session, and restart
+from fresh warm-ups after investigation. A confirmed failed A run has the same
+session-invalidating policy. A confirmed failed B run rejects the candidate.
+Apply this A/B policy consistently to both the initial and the one permitted
+retry sequence; do not reject B merely because an A or infrastructure step
+failed.
+
 For A and B separately, record the complete file/test inventory, the
 complete-suite median, and the median duration of
 `ProjectRailPanel.test.ts` and `SourcesTab.test.ts`. The target-file medians
