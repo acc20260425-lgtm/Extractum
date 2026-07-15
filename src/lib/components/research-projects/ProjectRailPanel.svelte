@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { List, Plus, RefreshCw, Search, X } from "@lucide/svelte";
+  import List from "@lucide/svelte/icons/list";
+  import Plus from "@lucide/svelte/icons/plus";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import Search from "@lucide/svelte/icons/search";
+  import X from "@lucide/svelte/icons/x";
   import {
     ExtractumButton,
     ExtractumDialog,

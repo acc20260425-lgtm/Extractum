@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { Library, RefreshCw, Download, Trash2, X, Plus } from "@lucide/svelte";
+  import Library from "@lucide/svelte/icons/library";
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
+  import Download from "@lucide/svelte/icons/download";
+  import Trash2 from "@lucide/svelte/icons/trash-2";
+  import X from "@lucide/svelte/icons/x";
+  import Plus from "@lucide/svelte/icons/plus";
   import {
     ExtractumButton,
     ExtractumDataGrid,
