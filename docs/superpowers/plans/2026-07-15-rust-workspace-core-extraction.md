@@ -62,8 +62,13 @@ PowerShell 5.1 on Windows, Node.js ESM, Vitest source-contract tests.
   one edit are not five incremental samples.
 - Fast metrics: five warmed samples and median.
 - `cargo test --no-run`: three samples.
-- Production `tauri build`: two samples; a third is allowed only if the first
-  two differ enough to affect the conclusion.
+- Production compile/package preparation uses
+  `npm.cmd run tauri -- build --no-bundle`: two samples; a third is allowed
+  only if the first two differ enough to affect the conclusion. Baseline MSI
+  bundling was already broken before workspace changes (`light.exe` failed
+  once and hung once), so WiX duration cannot provide a valid before/after
+  signal for this slice. The no-bundle command produces the same release
+  executable required by the production startup smoke.
 - Every PowerShell block that reads or writes measurement evidence must reload
   `$scratch` from the absolute locator file
   `$env:TEMP/extractum-workspace-core-current.txt`; variables do not persist
@@ -271,12 +276,18 @@ reports it. Do not combine compilation and execution numbers.
 Then run two sequential samples of:
 
 ```powershell
-npm.cmd run tauri build
+npm.cmd run tauri -- build --no-bundle
 ```
 
 Record wall time, exit status, and logs. Run a third production build only if
 the first two differ enough that the later comparison could change its
 conclusion.
+
+The two earlier full-bundle attempts are not timing samples: the first was a
+cold release compile followed by a WiX error, and the second timed out in WiX.
+Retain their logs only as environment evidence proving that MSI packaging was
+already unavailable on the baseline commit. Capture two fresh successful
+no-bundle samples before Task 2.
 
 Expected: all builds pass. Stop on any failure; do not classify a failed build
 as a timing sample.
@@ -699,8 +710,8 @@ session running during the release smoke.
 - [ ] **Step 6: Launch and smoke the built production application**
 
 Use the release artifact produced by the latest successful
-`npm.cmd run tauri build`. Resolve the actual executable from the build output;
-on the current Windows target the expected path is
+`npm.cmd run tauri -- build --no-bundle`. Resolve the actual executable from
+the build output; on the current Windows target the expected path is
 `src-tauri/target/release/extractum.exe`. Launch it visibly, confirm the main
 window renders and basic navigation works, then close it normally and confirm
 the process exits.
@@ -813,7 +824,7 @@ Record command wall time and harness duration separately.
 Run two samples of:
 
 ```powershell
-npm.cmd run tauri build
+npm.cmd run tauri -- build --no-bundle
 ```
 
 Use the same third-run rule as baseline. Every sample must pass.
@@ -868,6 +879,8 @@ Include:
 - Cargo timing report paths and interpretation;
 - focused, workspace, repository, and Tauri build results;
 - development and production startup smoke results;
+- the pre-existing baseline WiX failure/hang, the exclusion of MSI packaging
+  from this slice's before/after gate, and the separate follow-up status;
 - no-op and shell regression-gate outcomes;
 - an explicit statement that the later domain stop/go gate does not apply to
   this enabling slice;
