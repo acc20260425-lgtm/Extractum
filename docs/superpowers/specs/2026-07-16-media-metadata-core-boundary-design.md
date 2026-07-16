@@ -148,8 +148,25 @@ Add one characterization test for the existing absent-blob behavior:
 `decode_media_metadata(None)` returns `ItemMediaMetadata::default()`.
 
 Keep the grammers/content-kind tests in application `media.rs`. Their imports
-may consume the explicit facade, but their behavior and fixtures remain
-unchanged.
+are mechanically narrowed after the three pure tests move: the current shared
+`use super::{...}` list no longer needs the codec, label, or metadata items for
+the two remaining adapter tests. This import cleanup is part of the move, not a
+behavioral change.
+
+Moving the tests changes their module prefix. Inventory comparison therefore
+uses this fixed rename map rather than requiring the old full names to remain:
+
+| Baseline app test | Post-workspace core test |
+| --- | --- |
+| `media::tests::media_label_covers_known_and_fallback_kinds` | `media_metadata::tests::media_label_covers_known_and_fallback_kinds` |
+| `media::tests::media_metadata_roundtrip_through_zstd` | `media_metadata::tests::media_metadata_roundtrip_through_zstd` |
+| `media::tests::media_metadata_decode_failures_are_typed_internal_errors` | `media_metadata::tests::media_metadata_decode_failures_are_typed_internal_errors` |
+
+For each baseline name, the inventory gate accepts either the unchanged name
+or exactly its declared replacement. No other missing baseline name is
+allowed. Three tests move, one new absent-blob characterization test is added,
+and the two adapter tests remain under `media::tests`, so the complete Rust
+inventory must grow by exactly one.
 
 Add a source-level contract that verifies:
 
@@ -162,6 +179,7 @@ Add a source-level contract that verifies:
 - application `media.rs` explicitly re-exports the four items;
 - application `media.rs` no longer defines the metadata struct, codec
   functions, or label function;
+- the three moved pure-test names no longer occur in application `media.rs`;
 - neither side introduces a glob export.
 
 Verification covers:
@@ -170,7 +188,8 @@ Verification covers:
 - `extractum-core` checks and tests;
 - focused tests for `notebooklm_export`, `sources`, and `takeout_import`;
 - complete workspace formatting, checking, and tests;
-- before/after Rust test inventory with no missing test;
+- before/after Rust test inventory using the fixed three-entry rename map,
+  with no undeclared missing test and an exact net increase of one;
 - the repository-wide `npm.cmd run verify` gate;
 - `npm.cmd run tauri -- build --no-bundle` and release startup smoke.
 
@@ -207,7 +226,11 @@ increase its rebuild surface.
   serialization, or compression. Mechanical movement plus roundtrip tests and
   unchanged database fixtures protect the wire format.
 - **Lost tests after workspace movement:** the complete `--workspace
-  --all-targets` inventory is compared before and after.
+  --all-targets` inventory is compared through the fixed rename map, requires
+  both adapter tests to remain, and requires the exact `+1` total.
+- **Copied rather than moved tests:** the source contract forbids all three
+  pure-test names in application `media.rs`, while core execution requires
+  their renamed forms.
 - **Facade divergence:** the source contract requires an explicit four-item
   re-export and forbids duplicate application definitions.
 - **Scope expansion into Telegram extraction:** dependency checks reject
@@ -226,8 +249,9 @@ increase its rebuild surface.
 5. Stored data and typed error behavior are unchanged and require no migration.
 6. Core, focused consumer, workspace, repository, and no-bundle build checks
    pass.
-7. The complete Rust test inventory does not shrink and the moved pure tests
-   execute under `extractum-core`.
+7. The complete Rust test inventory grows by exactly one; the three declared
+   renamed tests execute under `extractum-core`, the two adapter tests remain
+   under `media::tests`, and no undeclared baseline test disappears.
 8. No performance claim or stop/go decision is made until the later
    `notebooklm_export` crate extraction.
 
