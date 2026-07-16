@@ -19,11 +19,11 @@ pub struct AppError {
 
 pub type AppResult<T> = Result<T, AppError>;
 
-pub(crate) fn database_error(error: impl std::fmt::Display) -> AppError {
+pub fn database_error(error: impl std::fmt::Display) -> AppError {
     AppError::database(error)
 }
 
-pub(crate) fn internal_error(error: impl std::fmt::Display) -> AppError {
+pub fn internal_error(error: impl std::fmt::Display) -> AppError {
     AppError::internal(error.to_string())
 }
 

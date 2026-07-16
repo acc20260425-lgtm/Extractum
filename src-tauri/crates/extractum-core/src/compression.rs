@@ -1,18 +1,18 @@
 use std::io::Cursor;
 
-pub(crate) fn compress_text(input: &str) -> Result<Vec<u8>, String> {
+pub fn compress_text(input: &str) -> Result<Vec<u8>, String> {
     compress_json_bytes(input.as_bytes())
 }
 
-pub(crate) fn compress_json_bytes(bytes: &[u8]) -> Result<Vec<u8>, String> {
+pub fn compress_json_bytes(bytes: &[u8]) -> Result<Vec<u8>, String> {
     zstd::encode_all(Cursor::new(bytes), 3).map_err(|e| e.to_string())
 }
 
-pub(crate) fn decompress_bytes(bytes: &[u8]) -> Result<Vec<u8>, String> {
+pub fn decompress_bytes(bytes: &[u8]) -> Result<Vec<u8>, String> {
     zstd::decode_all(Cursor::new(bytes)).map_err(|e| e.to_string())
 }
 
-pub(crate) fn decompress_text(bytes: &[u8]) -> Result<String, String> {
+pub fn decompress_text(bytes: &[u8]) -> Result<String, String> {
     let decoded = decompress_bytes(bytes)?;
     String::from_utf8(decoded).map_err(|e| e.to_string())
 }

@@ -1,0 +1,10 @@
+[package]
+name = "extractum-core"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+serde.workspace = true
+time.workspace = true
+zstd.workspace = true

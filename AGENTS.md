@@ -40,7 +40,7 @@ This file is a working contract for AI agents modifying the repository.
 - Use `npm.cmd` rather than `npm` in all validation commands on Windows.
 - When no Superpowers workflow is active, use focused tests for changed model, helper, or contract logic.
 - Run `npm.cmd run check` after broad Svelte or TypeScript changes.
-- When no Superpowers workflow is active, run `npm.cmd run check:rustfmt` and `cargo check` after Rust or Tauri backend changes.
+- When no Superpowers workflow is active, run `npm.cmd run check:rustfmt` and `cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets` after Rust or Tauri backend changes.
 - Do not claim checks pass unless you ran the relevant command and saw it pass.
 - To keep the repository-wide mechanical formatting commit out of local blame attribution, developers may run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once per clone; do not change local Git configuration automatically.
 
@@ -49,11 +49,12 @@ This file is a working contract for AI agents modifying the repository.
   - dirty frontend work: `npm.cmd run test:changed`;
   - the most recent linear checkpoint: `npm.cmd run test:changed:last`;
   - a known frontend source: `npm.cmd run test:related -- <forward-or-backslash-path>`;
-  - focused Rust library tests: `npm.cmd run test:rust -- <test-filter>`;
+  - focused root-package Rust tests: `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib <test-filter>`;
   - broad Svelte/TypeScript work: also run `npm.cmd run check`;
-  - Rust/Tauri work: also run `npm.cmd run check:rustfmt` and `cargo check --manifest-path src-tauri/Cargo.toml`.
+  - Rust/Tauri work: also run `npm.cmd run check:rustfmt` and `cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets`.
 - Changed/related commands are accelerators, not merge gates. An empty or unexpectedly small selection requires an explicit test or a wider run; `npm.cmd run verify` remains the full gate.
-- Ordinary Cargo commands must share canonical `src-tauri/target`; do not create slice-specific `codex-*` targets for sequential work.
+- Canonical full Rust checks and tests use `--workspace --all-targets`; focused root-package filters must select `-p extractum` explicitly.
+- Every workspace member shares canonical `src-tauri/target`; do not create slice-specific `codex-*` targets for sequential work.
 - For rare dependency-level native debugging, start clean, temporarily set both `[profile.dev] debug` and `[profile.dev.package."*"] debug` to `2`, set `CARGO_TARGET_DIR` to an absolute isolated native-debug directory, run `npm.cmd run tauri dev`, then restore the manifest. Never commit the temporary profile edit.
 
 ## 5. Data Grid & Date Formatting

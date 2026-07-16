@@ -1340,6 +1340,7 @@ dependencies = [
  "base64 0.22.1",
  "chacha20poly1305",
  "dirs",
+ "extractum-core",
  "grammers-client",
  "grammers-mtsender",
  "grammers-session",
@@ -1367,6 +1368,15 @@ dependencies = [
  "tower",
  "url",
  "windows-sys 0.59.0",
+ "zstd",
+]
+
+[[package]]
+name = "extractum-core"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "time",
  "zstd",
 ]
 

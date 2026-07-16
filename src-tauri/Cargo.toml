@@ -1,3 +1,16 @@
+[workspace]
+members = [".", "crates/extractum-core"]
+resolver = "2"
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
+zstd = "0.13"
+
 [package]
 name = "extractum"
 version = "0.2.0"
@@ -21,7 +34,7 @@ tauri-plugin-mcp-bridge = "0.11"
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
-serde = { version = "1", features = ["derive"] }
+serde = { workspace = true }
 serde_json = "1"
 apalis = "=1.0.0-rc.8"
 apalis-sqlite = "=1.0.0-rc.8"
@@ -34,7 +47,7 @@ grammers-client = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce
 grammers-session = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", default-features = false, features = ["serde"] }
 grammers-mtsender = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa" }
 grammers-tl-types = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", features = ["deserializable-functions"] }
-zstd = "0.13"
+zstd = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7"
 anyhow = "1.0"
@@ -44,10 +57,11 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 base64 = "0.22"
 chacha20poly1305 = { version = "0.10", features = ["std"] }
 rand_core = { version = "0.6", features = ["getrandom"] }
-time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
+time = { workspace = true }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 url = "2"
 tempfile = "3"
+extractum-core = { path = "crates/extractum-core" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }

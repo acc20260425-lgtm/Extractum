@@ -40,8 +40,10 @@ Changed/related selection follows the module graph and may be empty or
 incomplete for dynamic relationships, so it is not a replacement for the full
 `npm.cmd run verify` gate.
 
-Normal Rust checks and tests share `src-tauri/target`; avoid per-task target
-directories during sequential development. Ordinary dev/test builds retain
+Canonical full Rust checks and tests use `--workspace --all-targets`. Focused
+root-package filters select `-p extractum` explicitly. Every workspace member
+shares `src-tauri/target`; avoid per-task target directories during sequential
+development. Ordinary dev/test builds retain
 workspace line tables and omit dependency debug information. For rare native
 inspection of dependency variables, begin with a clean tree, temporarily set
 both `[profile.dev] debug` and `[profile.dev.package."*"] debug` to `2`, point

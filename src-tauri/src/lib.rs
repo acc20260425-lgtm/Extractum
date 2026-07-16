@@ -6,13 +6,21 @@ mod analysis_documents;
 mod apalis_jobs;
 mod archive_read_model;
 mod child_process;
-mod compression;
+mod compression {
+    pub(crate) use extractum_core::compression::{
+        compress_json_bytes, compress_text, decompress_bytes, decompress_text,
+    };
+}
 mod db;
 mod diagnostics;
 mod process_tree;
 use apalis_jobs::{apalis_jobs_list, apalis_jobs_prune_terminal};
 use diagnostics::get_diagnostic_summary;
-mod error;
+mod error {
+    pub(crate) use extractum_core::error::{
+        database_error, internal_error, AppError, AppErrorKind, AppResult,
+    };
+}
 mod forum_topics;
 mod ingest_provenance;
 mod job_helpers;
@@ -68,7 +76,9 @@ mod source_ingest;
 use source_ingest::SourceIngestLocks;
 
 mod sql_helpers;
-mod time;
+mod time {
+    pub(crate) use extractum_core::time::{now_rfc3339_utc, now_secs, ymd_to_unix_midnight};
+}
 mod tx;
 
 use tauri::Manager;

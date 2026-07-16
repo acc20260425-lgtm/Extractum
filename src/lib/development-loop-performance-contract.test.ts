@@ -36,10 +36,10 @@ describe("daily development loop configuration", () => {
       "node scripts/run-vitest.mjs related --run",
     );
     expect(packageJson.scripts["test:rust"]).toBe(
-      "cargo test --manifest-path src-tauri/Cargo.toml --lib",
+      "cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets",
     );
     expect(packageJson.scripts["test:rust:prompt-pack-runs"]).toBe(
-      "cargo test --manifest-path src-tauri/Cargo.toml --lib prompt_pack_run",
+      "cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_pack_run",
     );
     expect(packageJson.scripts["test:rust"]).not.toContain("--target-dir");
     expect(packageJson.scripts["test:rust:prompt-pack-runs"]).not.toContain("--target-dir");

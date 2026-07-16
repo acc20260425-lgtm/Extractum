@@ -1,14 +1,14 @@
 use time::macros::format_description;
 use time::{Date, PrimitiveDateTime, Time};
 
-pub(crate) fn now_secs() -> i64 {
+pub fn now_secs() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs() as i64
 }
 
-pub(crate) fn now_rfc3339_utc() -> String {
+pub fn now_rfc3339_utc() -> String {
     use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
     OffsetDateTime::from_unix_timestamp(now_secs())
@@ -17,7 +17,7 @@ pub(crate) fn now_rfc3339_utc() -> String {
         .expect("format current UTC timestamp")
 }
 
-pub(crate) fn ymd_to_unix_midnight(value: &str) -> Option<i64> {
+pub fn ymd_to_unix_midnight(value: &str) -> Option<i64> {
     let value = value.trim();
 
     let date = if value.len() == 8 && value.chars().all(|ch| ch.is_ascii_digit()) {

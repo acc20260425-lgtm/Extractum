@@ -32,14 +32,14 @@ const steps = [
   npmStep('npm run check', 'check'),
   npmStep('npm run check:rustfmt', 'check:rustfmt'),
   {
-    title: 'cargo check --manifest-path src-tauri/Cargo.toml',
+    title: 'cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets',
     command: 'cargo',
-    args: ['check', '--manifest-path', 'src-tauri/Cargo.toml']
+    args: ['check', '--manifest-path', 'src-tauri/Cargo.toml', '--workspace', '--all-targets']
   },
   {
-    title: 'cargo test --manifest-path src-tauri/Cargo.toml',
+    title: 'cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets',
     command: 'cargo',
-    args: ['test', '--manifest-path', 'src-tauri/Cargo.toml']
+    args: ['test', '--manifest-path', 'src-tauri/Cargo.toml', '--workspace', '--all-targets']
   },
   {
     title: 'git diff HEAD --check',
