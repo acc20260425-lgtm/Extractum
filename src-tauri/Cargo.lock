@@ -1341,6 +1341,7 @@ dependencies = [
  "chacha20poly1305",
  "dirs",
  "extractum-core",
+ "extractum-process",
  "grammers-client",
  "grammers-mtsender",
  "grammers-session",
@@ -1367,7 +1368,6 @@ dependencies = [
  "tokio-util",
  "tower",
  "url",
- "windows-sys 0.59.0",
  "zstd",
 ]
 
@@ -1379,6 +1379,16 @@ dependencies = [
  "serde_json",
  "time",
  "zstd",
+]
+
+[[package]]
+name = "extractum-process"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "parking_lot",
+ "tokio",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

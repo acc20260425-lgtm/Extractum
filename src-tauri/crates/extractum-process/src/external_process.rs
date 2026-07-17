@@ -6,29 +6,29 @@ use std::time::{Duration, Instant};
 use parking_lot::Mutex;
 use tokio::sync::Notify;
 
-pub(crate) const GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
-pub(crate) const SHUTDOWN_WATCHDOG_TIMEOUT: Duration = Duration::from_secs(4);
+const GRACEFUL_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
+const SHUTDOWN_WATCHDOG_TIMEOUT: Duration = Duration::from_secs(4);
 
-pub(crate) type ExitCallback = Arc<dyn Fn(i32) + Send + Sync>;
-pub(crate) type MonotonicClock = Arc<dyn Fn() -> Instant + Send + Sync>;
-pub(crate) type WatchdogTask = Box<dyn FnOnce() + Send>;
-pub(crate) type WatchdogScheduler = Arc<dyn Fn(ShutdownTiming, WatchdogTask) + Send + Sync>;
-pub(crate) type ShutdownCleanup =
+pub type ExitCallback = Arc<dyn Fn(i32) + Send + Sync>;
+pub type MonotonicClock = Arc<dyn Fn() -> Instant + Send + Sync>;
+pub type WatchdogTask = Box<dyn FnOnce() + Send>;
+pub type WatchdogScheduler = Arc<dyn Fn(ShutdownTiming, WatchdogTask) + Send + Sync>;
+pub type ShutdownCleanup =
     Pin<Box<dyn Future<Output = Result<(), ShutdownCleanupError>> + Send + 'static>>;
-pub(crate) type CleanupFactory = Box<dyn FnOnce() -> Vec<ShutdownCleanup> + Send + 'static>;
+pub type CleanupFactory = Box<dyn FnOnce() -> Vec<ShutdownCleanup> + Send + 'static>;
 
-pub(crate) fn warn_shutdown_stage(operation_id: u64, stage: &'static str) {
+pub fn warn_shutdown_stage(operation_id: u64, stage: &'static str) {
     eprintln!("external process cleanup warning: operation_id={operation_id} stage={stage}");
 }
 
-pub(crate) fn warn_shutdown_coordinator_stage(stage: &'static str) {
+fn warn_shutdown_coordinator_stage(stage: &'static str) {
     eprintln!("external process shutdown warning: stage={stage}");
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct ShutdownTiming {
-    pub(crate) graceful: Duration,
-    pub(crate) watchdog: Duration,
+pub struct ShutdownTiming {
+    pub graceful: Duration,
+    pub watchdog: Duration,
 }
 
 impl Default for ShutdownTiming {
@@ -41,17 +41,17 @@ impl Default for ShutdownTiming {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum ShutdownPhase {
+enum ShutdownPhase {
     Running,
     ShuttingDown,
     Completed,
 }
 
 #[derive(Debug)]
-pub(crate) struct AdmissionRejected;
+pub struct AdmissionRejected;
 
 #[derive(Debug)]
-pub(crate) enum ShutdownCleanupError {
+pub enum ShutdownCleanupError {
     #[allow(dead_code)]
     // Current subsystem shutdown adapters are infallible; tests cover isolation.
     Failed,
@@ -70,30 +70,30 @@ struct ExternalProcessShutdownInner {
 }
 
 #[derive(Clone)]
-pub(crate) struct ExternalProcessShutdownState(Arc<ExternalProcessShutdownInner>);
+pub struct ExternalProcessShutdownState(Arc<ExternalProcessShutdownInner>);
 
-pub(crate) struct AdmissionPermit {
+pub struct AdmissionPermit {
     state: ExternalProcessShutdownState,
 }
 
-pub(crate) enum ShutdownStart {
+pub enum ShutdownStart {
     Started(ShutdownRun),
     AlreadyShuttingDown,
     Completed,
 }
 
-pub(crate) struct ShutdownRun {
+pub struct ShutdownRun {
     state: ExternalProcessShutdownState,
     deadline: Instant,
     clock: MonotonicClock,
     exit: ExitCallback,
 }
 
-pub(crate) fn system_monotonic_clock() -> MonotonicClock {
+pub fn system_monotonic_clock() -> MonotonicClock {
     Arc::new(Instant::now)
 }
 
-pub(crate) fn os_thread_watchdog_scheduler() -> WatchdogScheduler {
+pub fn os_thread_watchdog_scheduler() -> WatchdogScheduler {
     Arc::new(|timing, watchdog| {
         std::thread::spawn(move || {
             std::thread::sleep(timing.watchdog);
@@ -103,7 +103,7 @@ pub(crate) fn os_thread_watchdog_scheduler() -> WatchdogScheduler {
 }
 
 impl ExternalProcessShutdownState {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self(Arc::new(ExternalProcessShutdownInner {
             inner: Mutex::new(AdmissionState {
                 open: true,
@@ -115,7 +115,7 @@ impl ExternalProcessShutdownState {
         }))
     }
 
-    pub(crate) fn try_admit(&self) -> Result<AdmissionPermit, AdmissionRejected> {
+    pub fn try_admit(&self) -> Result<AdmissionPermit, AdmissionRejected> {
         let mut admission = self.0.inner.lock();
         if !admission.open {
             return Err(AdmissionRejected);
@@ -126,7 +126,7 @@ impl ExternalProcessShutdownState {
         })
     }
 
-    pub(crate) fn start(
+    pub fn start(
         &self,
         code: Option<i32>,
         timing: ShutdownTiming,
@@ -157,7 +157,7 @@ impl ExternalProcessShutdownState {
         })
     }
 
-    pub(crate) async fn wait_for_startups(&self) {
+    async fn wait_for_startups(&self) {
         self.wait_for_startups_with_after_check(|| {}).await;
     }
 
@@ -193,11 +193,11 @@ impl ExternalProcessShutdownState {
         true
     }
 
-    pub(crate) fn run_watchdog(&self, exit: &ExitCallback) -> bool {
+    fn run_watchdog(&self, exit: &ExitCallback) -> bool {
         self.complete_and_exit(exit)
     }
 
-    pub(crate) fn schedule_watchdog(
+    fn schedule_watchdog(
         &self,
         timing: ShutdownTiming,
         scheduler: &WatchdogScheduler,
@@ -220,7 +220,7 @@ impl ShutdownRun {
             .filter(|remaining| !remaining.is_zero())
     }
 
-    pub(crate) async fn coordinate(self, cleanup_factory: CleanupFactory) {
+    pub async fn coordinate(self, cleanup_factory: CleanupFactory) {
         let Some(remaining) = self.remaining() else {
             warn_shutdown_coordinator_stage("admission_deadline_elapsed");
             self.state.complete_and_exit(&self.exit);

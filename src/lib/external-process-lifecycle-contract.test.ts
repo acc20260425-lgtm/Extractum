@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import libSource from "../../src-tauri/src/lib.rs?raw";
-import coordinatorSource from "../../src-tauri/src/external_process.rs?raw";
-import processTreeSource from "../../src-tauri/src/process_tree.rs?raw";
+import coordinatorSource from "../../src-tauri/crates/extractum-process/src/external_process.rs?raw";
+import processTreeSource from "../../src-tauri/crates/extractum-process/src/process_tree.rs?raw";
 import sidecarSource from "../../src-tauri/src/gemini_browser/sidecar.rs?raw";
 import sidecarLaunchSource from "../../src-tauri/src/gemini_browser/sidecar_launch.rs?raw";
 import cdpChromeSource from "../../src-tauri/src/gemini_browser/cdp_chrome.rs?raw";
@@ -17,7 +17,9 @@ describe("external process lifecycle contract", () => {
     const lib = normalized(libSource);
     const coordinator = normalized(coordinatorSource);
 
-    expect(lib).toContain("mod external_process;");
+    expect(lib).toMatch(
+      /mod\s+external_process\s*\{[\s\S]*pub\(crate\)\s+use\s+extractum_process::external_process::\*;/,
+    );
     expect(lib).toContain(".manage(ExternalProcessShutdownState::new())");
     expect(coordinator).toContain("Running");
     expect(coordinator).toContain("ShuttingDown");
