@@ -350,4 +350,11 @@ mod tests {
 
         assert_eq!(error.kind, crate::error::AppErrorKind::Internal);
     }
+
+    #[test]
+    fn absent_media_metadata_decodes_to_default() {
+        let decoded = decode_media_metadata(None).expect("decode absent metadata");
+
+        assert_eq!(decoded, ItemMediaMetadata::default());
+    }
 }
