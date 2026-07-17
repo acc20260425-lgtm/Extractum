@@ -325,8 +325,10 @@ integration tests, WiX/MSI packaging concerns.
 3. Mechanical moves only inside a slice: facade modules preserve `crate::`
    paths; consumers are never mass-rewritten in the same slice.
 4. Every `pub(crate)` → `pub` widening is enumerated in the spec and checked
-   by a source contract; glob exports are forbidden; test-only helpers are
-   not exported.
+   by a source contract; glob exports are forbidden in crate roots and public
+   API facades. A private app-side compatibility facade may use a glob only
+   when its phase spec explicitly authorizes it and the source contract proves
+   that the facade remains private. Test-only helpers are not exported.
 5. Each new crate gets a Vitest source-boundary contract (dependency roots,
    curated `lib.rs`, forbidden imports, moved-not-copied tests) and the
    workspace-member allowlists in existing contracts are updated in the same

@@ -121,9 +121,13 @@ src-tauri/crates/extractum-process/
     process_tree.rs
 ```
 
-The crate may depend on `tokio`, `parking_lot`, `anyhow`, and target-specific
-`windows-sys`. It does not need `extractum-core` today. Tauri, SQLx, Apalis,
-Gemini Browser, YouTube, and the application crate are forbidden dependencies.
+The exact direct dependency roots are `tokio`, `parking_lot`, `anyhow`, and
+target-specific `windows-sys`. `anyhow` is required by the fully qualified
+`anyhow::Result`, `anyhow!`, and `bail!` uses in `process_tree.rs`; it is not an
+unused allowance. The crate does not need `extractum-core` today. Tauri, SQLx,
+Apalis, Gemini Browser, YouTube, and the application crate are forbidden
+dependencies. The implementation plan derives the manifest from actual moved
+uses and the source contract rejects any additional direct dependency root.
 
 `lib.rs` exposes the three named modules without root glob exports:
 
@@ -175,7 +179,12 @@ mod process_tree {
 ```
 
 The globs are permitted only inside these private compatibility facades. The
-new crate's public root remains curated and does not use glob re-exports.
+new crate's public root remains curated and does not use glob re-exports. This
+is an intentional exception to the general no-glob rule: a future public item
+added to one of the three process modules will also become reachable through
+the corresponding private application module. The source contract therefore
+proves that each facade remains private, while public-surface review remains
+mandatory for every later addition to `extractum-process`.
 
 ### Phase 3 tests and retention
 
@@ -188,7 +197,17 @@ The current 20 tests move with their implementations:
 The post-extraction inventory must contain all 20 in `extractum-process`, none
 duplicated in the application crate, and no reduction in total workspace test
 count. Focused process tests, full workspace tests/checks, Windows process-tree
-behavior, and the non-Windows build surface must pass.
+behavior, and the non-Windows build surface must pass. Portability is checked
+explicitly rather than inferred from a Windows `--all-targets` build. The plan
+first checks for `x86_64-unknown-linux-gnu`; if absent, it requests approval to
+run `rustup target add x86_64-unknown-linux-gnu`, then runs:
+
+```powershell
+cargo check --manifest-path src-tauri/Cargo.toml -p extractum-process --all-targets --target x86_64-unknown-linux-gnu
+```
+
+If the target cannot be installed, Phase 3 stops with a documented blocker;
+the portability gate is not silently treated as passed.
 
 Phase 3 is retained when correctness passes and the application shell probe
 regresses by no more than both 5% and 0.5 seconds. The focused process metric
@@ -240,9 +259,12 @@ not rewritten in this slice.
 
 ### Engine dependencies
 
-The engine may depend on `extractum-core`, `extractum-process`, serde,
-serde_json, tokio, tokio-util, parking_lot, time, url, and protocol-level
-libraries required by the moved code.
+The expected exact direct dependency roots are `extractum-core`,
+`extractum-process`, `serde`, `serde_json`, `tokio`, `tokio-util`,
+`parking_lot`, `time`, `url`, and `reqwest`. The implementation plan recomputes
+this list after the internal split, names every resulting manifest dependency,
+and rejects unused or unspecified roots rather than retaining a generic
+"protocol-level libraries" allowance.
 
 It must not depend on Tauri, any Tauri plugin, SQLx, Apalis, Apalis SQLite,
 Tower worker registration, application migrations, `crate::db`, or
@@ -391,8 +413,10 @@ Source contracts enforce:
 - unchanged external consumer paths within each extraction slice;
 - `job_helpers` remaining app-side;
 - forbidden dependencies/imports in both new crates;
-- both `db::get_pool` calls remaining app-side;
-- `CancellationToken` and domain transitions residing in engine code;
+- no `crate::db`, `get_pool`, SQLx, or Apalis reference in the engine crate;
+- no construction or storage of the Gemini execution `CancellationToken` in
+  the app-side Gemini adapter;
+- no definition of domain run-transition helpers in the app-side adapter;
 - SQL/Apalis storage functions residing only in the app adapter.
 
 ## Measurement and Retention
@@ -414,6 +438,11 @@ improvement. The retained application shell probe may regress by no more than
 both 5% and 0.5 seconds. Focused success does not prove downstream integration;
 the app package checkpoint and full workspace gates remain mandatory.
 
+Evidence also records the absolute post-extraction focused-check median and
+compares it with the repository's approximate 1–2 second focused-package
+reference band. This is a diagnostic comparison across phases 4–6, not an
+additional retention threshold.
+
 ## Verification
 
 Each Rust task uses the narrow owning-package RED/GREEN test and focused check
@@ -430,6 +459,12 @@ Phase 4 additionally requires the complete app Gemini group, complete engine
 tests, `npm.cmd run check`, a release
 `npm.cmd run tauri -- build --no-bundle`, startup smoke, sidecar/CDP smoke, and
 shutdown smoke with an active external process.
+
+The engine's cfg portability is checked with the same installed Linux target:
+
+```powershell
+cargo check --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --all-targets --target x86_64-unknown-linux-gnu
+```
 
 MSI/WiX remains excluded because its failure predates these changes; the
 verification record states this explicitly.
