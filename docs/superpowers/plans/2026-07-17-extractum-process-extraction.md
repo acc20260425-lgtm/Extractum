@@ -53,11 +53,10 @@ Windows Job Objects through windows-sys, Vitest 4 source contracts, PowerShell
 - Enumerate every `pub(crate)` visibility decision. Do not expose test-only
   seams or mechanically widen the entire files.
 - Preserve all 20 process test names without duplication or loss.
-- The non-Windows cfg surface is a required cross-target check, not an inferred
-  property of Windows `--all-targets`.
-- Installing `x86_64-unknown-linux-gnu` changes the local Rust toolchain and
-  requires explicit user approval. If installation is unavailable, record a
-  blocker and stop before editing production files.
+- Phase 3 acceptance runs only on the canonical Windows/MSVC environment. Do
+  not install or invoke a Linux Rust target for this slice.
+- Move the existing `#[cfg(not(windows))]` process-tree stub byte-for-byte, but
+  do not treat its compilation as Phase 3 acceptance evidence.
 - Use canonical `src-tauri/target`; do not set `CARGO_TARGET_DIR`, pass
   `--target-dir`, or run `cargo clean`.
 - Use `npm.cmd`, not plain `npm`, for npm scripts on Windows.
@@ -153,7 +152,7 @@ npm.cmd run verify
 
 ---
 
-### Task 1: Establish Baseline, Portability, Inventory, and Measurements
+### Task 1: Establish Baseline, Windows Environment, Inventory, and Measurements
 
 **Files:**
 
@@ -212,29 +211,23 @@ if ($active.Count -ne 0) { exit 1 }
 Expected: no matching process. Close the editor if rust-analyzer immediately
 respawns Cargo; do not kill unrelated user processes automatically.
 
-- [ ] **Step 3: Install or confirm the Linux check target before editing**
+- [ ] **Step 3: Confirm the canonical Windows/MSVC environment before editing**
 
-Run the read-only check:
-
-```powershell
-$target = 'x86_64-unknown-linux-gnu'
-$installed = @(rustup target list --installed)
-$installed
-if ($target -notin $installed) {
-  Write-Error "$target is missing; stop and request explicit user approval for rustup target add"
-  exit 1
-}
-```
-
-If and only if the user approves the toolchain mutation, run:
+Run:
 
 ```powershell
-rustup target add x86_64-unknown-linux-gnu
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$isWindows = [Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+  [Runtime.InteropServices.OSPlatform]::Windows
+)
+$hostLine = (& rustc -vV | Select-String '^host:').Line
+$host = ($hostLine -replace '^host:\s*', '').Trim()
+"IS_WINDOWS=$isWindows HOST=$host"
+if (-not $isWindows -or $host -ne 'x86_64-pc-windows-msvc') { exit 1 }
 ```
 
-Then rerun the read-only check. Expected: the target appears exactly once. An
-installation/network failure is a blocker, not permission to waive the gate.
+Expected: `IS_WINDOWS=True HOST=x86_64-pc-windows-msvc`. A different host is
+a blocker for this Windows-only Phase 3 plan; do not substitute a cross-target
+check.
 
 - [ ] **Step 4: Create the isolated measurement scratch and environment record**
 
@@ -1263,7 +1256,7 @@ Tasks 3 and 4 pass.
 
 ---
 
-### Task 3: Verify Portability, Inventory, Consumer Stability, and Retention
+### Task 3: Verify Windows Surface, Inventory, Consumer Stability, and Retention
 
 **Files:**
 
@@ -1304,22 +1297,21 @@ if ($active.Count -ne 0) { exit 1 }
 
 Expected: clean candidate HEAD and no active toolchain/app process.
 
-- [ ] **Step 2: Prove the non-Windows cfg surface**
+- [ ] **Step 2: Prove the Windows process-crate surface on the canonical host**
 
 Run:
 
 ```powershell
-$target = 'x86_64-unknown-linux-gnu'
-if ($target -notin @(rustup target list --installed)) {
-  throw "$target disappeared after the approved precondition"
-}
-cargo check --manifest-path src-tauri/Cargo.toml -p extractum-process --all-targets --target $target
+$hostLine = (& rustc -vV | Select-String '^host:').Line
+$host = ($hostLine -replace '^host:\s*', '').Trim()
+if ($host -ne 'x86_64-pc-windows-msvc') { throw "Unexpected Rust host: $host" }
+cargo check --manifest-path src-tauri/Cargo.toml -p extractum-process --all-targets
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 ```
 
-Expected: the process crate, its test targets, and the non-Windows
-`ProcessTreeGuard` implementation type-check. No linker or Linux runtime is
-required by `cargo check`.
+Expected: the process crate, its test targets, and Windows job-object surface
+type-check on `x86_64-pc-windows-msvc`. The moved non-Windows stub remains in
+source but is outside this slice's acceptance gate.
 
 - [ ] **Step 3: Capture and compare the complete post-extraction inventory**
 
@@ -1958,7 +1950,8 @@ with these headings and actual values; do not prefill PASS values:
 - Power profile: `<literal value>`
 - Defender state: `<literal value>`
 - Canonical target: `<absolute path>`
-- Linux check target: `x86_64-unknown-linux-gnu`
+- Platform/host: `Windows / x86_64-pc-windows-msvc`
+- Cross-target scope: `not an acceptance gate for Windows-only Phase 3`
 
 ## Boundary Evidence
 
@@ -1994,7 +1987,7 @@ with these headings and actual values; do not prefill PASS values:
 - Boundary RED observation: `<literal failure reason>`
 - Boundary GREEN: `<literal Vitest count>`
 - Focused process tests/check: `<literal results>`
-- Linux cross-target check: `<literal result>`
+- Windows process-crate check: `<literal result>`
 - App dependent checkpoint: `<literal result>`
 - Completion outcome: `<passed | failed gate name from completion-failure.json>`
 - Workspace check/test: `<literal result or skipped on negative path>`
@@ -2057,7 +2050,7 @@ Report:
 - retained/reverted outcome;
 - exact shell delta and whether repeat was used;
 - process test inventory result;
-- cross-target result;
+- Windows host and process-crate check result;
 - full-gate results or explicitly skipped gates;
 - release smoke result when retained.
 
