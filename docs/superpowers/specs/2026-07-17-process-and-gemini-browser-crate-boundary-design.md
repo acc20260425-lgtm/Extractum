@@ -196,18 +196,20 @@ The current 20 tests move with their implementations:
 
 The post-extraction inventory must contain all 20 in `extractum-process`, none
 duplicated in the application crate, and no reduction in total workspace test
-count. Focused process tests, full workspace tests/checks, Windows process-tree
-behavior, and the non-Windows build surface must pass. Portability is checked
-explicitly rather than inferred from a Windows `--all-targets` build. The plan
-first checks for `x86_64-unknown-linux-gnu`; if absent, it requests approval to
-run `rustup target add x86_64-unknown-linux-gnu`, then runs:
+count. Focused process tests, full workspace tests/checks, and Windows
+process-tree behavior must pass on the repository's canonical Windows/MSVC
+environment. Phase 3 has no Linux-target installation precondition or
+cross-target acceptance gate because the current application is Windows-only.
 
 ```powershell
-cargo check --manifest-path src-tauri/Cargo.toml -p extractum-process --all-targets --target x86_64-unknown-linux-gnu
+cargo check --manifest-path src-tauri/Cargo.toml -p extractum-process --all-targets
 ```
 
-If the target cannot be installed, Phase 3 stops with a documented blocker;
-the portability gate is not silently treated as passed.
+The existing `#[cfg(not(windows))]` no-op implementation moves byte-for-byte
+with `process_tree.rs`; this slice does not delete or redesign historical
+compatibility code. Its compilation is not Phase 3 acceptance evidence. This
+scoped decision does not silently alter Phase 4's separately documented
+verification requirements.
 
 Phase 3 is retained when correctness passes and the application shell probe
 regresses by no more than both 5% and 0.5 seconds. The focused process metric
@@ -460,7 +462,8 @@ tests, `npm.cmd run check`, a release
 `npm.cmd run tauri -- build --no-bundle`, startup smoke, sidecar/CDP smoke, and
 shutdown smoke with an active external process.
 
-The engine's cfg portability is checked with the same installed Linux target:
+Phase 4 retains its own engine-portability requirement, independent of the
+Windows-only Phase 3 verification scope:
 
 ```powershell
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-gemini-browser --all-targets --target x86_64-unknown-linux-gnu
