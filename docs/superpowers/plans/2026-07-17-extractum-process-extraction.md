@@ -1292,8 +1292,14 @@ $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-process-current.txt') -R
 $candidate = (Get-Content (Join-Path $scratch 'candidate-commit.txt') -Raw).Trim()
 $head = (git rev-parse HEAD).Trim()
 $status = @(git status --short --untracked-files=all)
-"CANDIDATE=$candidate HEAD=$head STATUS_COUNT=$($status.Count)"
-if ($candidate -ne $head -or $status.Count -ne 0) { exit 1 }
+git merge-base --is-ancestor $candidate HEAD
+$candidateIsAncestor = $LASTEXITCODE -eq 0
+$implementationDrift = @(
+  git diff --name-only "${candidate}..HEAD" -- src-tauri src/lib
+)
+"CANDIDATE=$candidate HEAD=$head ANCESTOR=$candidateIsAncestor STATUS_COUNT=$($status.Count) IMPLEMENTATION_DRIFT=$($implementationDrift.Count)"
+if (-not $candidateIsAncestor -or $status.Count -ne 0 -or
+    $implementationDrift.Count -ne 0) { exit 1 }
 
 $names = @('cargo', 'rustc', 'rust-analyzer', 'extractum')
 $active = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
@@ -1303,7 +1309,10 @@ $active | Select-Object Id, ProcessName
 if ($active.Count -ne 0) { exit 1 }
 ```
 
-Expected: clean candidate HEAD and no active toolchain/app process.
+Expected: the extraction candidate is an ancestor of clean HEAD, no Rust or
+contract implementation changed after it, and no toolchain/app process is
+active. Protocol-document repair commits may follow the candidate without
+changing the code under measurement or the commit reverted on rejection.
 
 - [ ] **Step 2: Prove the Windows process-crate surface on the canonical host**
 
@@ -1639,7 +1648,11 @@ Run:
 ```powershell
 $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-process-current.txt') -Raw).Trim()
 $candidate = (Get-Content (Join-Path $scratch 'candidate-commit.txt') -Raw).Trim()
-if ((git rev-parse HEAD).Trim() -ne $candidate) { exit 1 }
+git merge-base --is-ancestor $candidate HEAD
+if ($LASTEXITCODE -ne 0) { exit 1 }
+if (@(git diff --name-only "${candidate}..HEAD" -- src-tauri src/lib).Count -ne 0) {
+  exit 1
+}
 if (@(git status --short --untracked-files=all).Count -ne 0) { exit 1 }
 foreach ($name in @('post-domain', 'post-shell')) {
   $source = Get-Content (Join-Path $scratch "$name-source.json") -Raw | ConvertFrom-Json
@@ -1649,8 +1662,8 @@ foreach ($name in @('post-domain', 'post-shell')) {
 }
 ```
 
-Expected: clean candidate commit and exact restoration of both logical probe
-files.
+Expected: clean HEAD containing the unchanged candidate implementation and
+exact restoration of both logical probe files.
 
 ---
 
