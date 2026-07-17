@@ -62,15 +62,11 @@ Expected: `git status --short` prints nothing and the ancestry check exits 0. If
 Create `src/lib/focused-rust-loop-contract.test.ts` with exactly:
 
 ```typescript
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-const repoRoot = path.resolve(import.meta.dirname, "..", "..");
-const readSource = (relativePath: string) =>
-  readFileSync(path.join(repoRoot, relativePath), "utf8").replace(/\r\n/g, "\n");
+import agentGuidanceRaw from "../../AGENTS.md?raw";
 
-const agentGuidance = readSource("AGENTS.md");
+const agentGuidance = agentGuidanceRaw.replace(/\r\n/g, "\n");
 const policyAnchor = "<!-- focused-rust-loop -->";
 const policyStart = agentGuidance.indexOf(policyAnchor);
 const nextHeading = policyStart < 0 ? -1 : agentGuidance.indexOf("\n## ", policyStart);
@@ -124,10 +120,20 @@ describe("focused Rust loop repository policy", () => {
 Run:
 
 ```powershell
-npm.cmd run test -- src/lib/focused-rust-loop-contract.test.ts
+$artifactDir = Join-Path $env:TEMP 'extractum-focused-rust-loop'
+New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
+$redLog = Join-Path $artifactDir 'contract-red.log'
+$redExitFile = Join-Path $artifactDir 'contract-red-exit.txt'
+cmd.exe /d /c "npm.cmd run test -- src/lib/focused-rust-loop-contract.test.ts > `"$redLog`" 2>&1"
+$redExit = $LASTEXITCODE
+Set-Content -LiteralPath $redExitFile -Value $redExit -Encoding ascii
+$output = Get-Content -LiteralPath $redLog -Raw
+$output
+if ($redExit -eq 0) { throw 'Focused-loop contract passed before the policy existed' }
+if ($output -notmatch 'Tests\s+3 failed') { throw 'RED run did not execute all three failing contract tests' }
 ```
 
-Expected: exit code is nonzero; all three named tests fail with `missing focused Rust loop policy anchor`. If the command passes, stop because the RED baseline was not demonstrated. If Vitest reports zero matched tests, fix the test invocation before continuing.
+Expected: exit code is nonzero; all three named tests fail with `missing focused Rust loop policy anchor`. The literal output and exit code remain in `%TEMP%\extractum-focused-rust-loop` for the verification document. If the command passes or Vitest reports zero matched tests, stop and fix the RED setup before continuing.
 
 - [ ] **Step 4: Replace the conflicting validation sentence and daily-loop block**
 
@@ -179,7 +185,8 @@ Then replace the complete block from `<!-- daily-development-loop -->` through t
 Run:
 
 ```powershell
-$log = Join-Path $env:TEMP 'extractum-focused-rust-loop-green.log'
+$artifactDir = Join-Path $env:TEMP 'extractum-focused-rust-loop'
+$log = Join-Path $artifactDir 'contract-green.log'
 cmd.exe /d /c "npm.cmd run test -- src/lib/focused-rust-loop-contract.test.ts > `"$log`" 2>&1"
 $exitCode = $LASTEXITCODE
 $output = Get-Content -LiteralPath $log -Raw
@@ -281,53 +288,71 @@ Expected: exit code 0 with no output.
 Run:
 
 ```powershell
-npm.cmd run test
+$artifactDir = Join-Path $env:TEMP 'extractum-focused-rust-loop'
+$fullLog = Join-Path $artifactDir 'frontend-full.log'
+cmd.exe /d /c "npm.cmd run test > `"$fullLog`" 2>&1"
+$exitCode = $LASTEXITCODE
+$output = Get-Content -LiteralPath $fullLog -Raw
+$output
+if ($exitCode -ne 0) { throw "Full frontend suite failed with exit code $exitCode" }
+if ($output -notmatch 'Test Files\s+\d+ passed' -or $output -notmatch 'Tests\s+\d+ passed') {
+  throw 'Full frontend suite did not report a non-empty passing inventory'
+}
 ```
 
-Expected: exit code 0 and a non-empty inventory including the three focused-loop contract tests.
+Expected: exit code 0 and a non-empty inventory including the three focused-loop contract tests. The literal output remains in `%TEMP%\extractum-focused-rust-loop\frontend-full.log`.
 
 - [ ] **Step 5: Run the canonical end-of-slice gate**
 
 Run:
 
 ```powershell
-npm.cmd run verify
+$artifactDir = Join-Path $env:TEMP 'extractum-focused-rust-loop'
+$verifyLog = Join-Path $artifactDir 'verify.log'
+cmd.exe /d /c "npm.cmd run verify > `"$verifyLog`" 2>&1"
+$exitCode = $LASTEXITCODE
+$output = Get-Content -LiteralPath $verifyLog -Raw
+$output
+if ($exitCode -ne 0) { throw "Repository verification failed with exit code $exitCode" }
+$requiredStages = @(
+  '=== npm run test ===',
+  '=== npm run check ===',
+  '=== npm run check:rustfmt ===',
+  '=== cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets ===',
+  '=== cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets ===',
+  '=== git diff HEAD --check ===',
+  'All verification checks passed.'
+)
+foreach ($stage in $requiredStages) {
+  if (-not $output.Contains($stage)) { throw "Verification log is missing stage: $stage" }
+}
 ```
 
-Expected: `All verification checks passed.` after the full frontend suite, Svelte check, rustfmt check, workspace Cargo check, workspace Cargo test, and diff check. A failure in any stage blocks completion.
+Expected: `All verification checks passed.` after every required stage. The literal output remains in `%TEMP%\extractum-focused-rust-loop\verify.log`; a failure or missing stage blocks completion.
 
-- [ ] **Step 6: Record verification evidence**
+- [ ] **Step 6: Record verification evidence from literal artifacts**
 
-After Steps 3–5 pass, create `docs/superpowers/verification/2026-07-17-focused-rust-loop-enforcement.md` with exactly:
+Read the saved artifacts before writing evidence:
 
-```markdown
-# Focused Rust Loop Enforcement Verification
-
-**Date:** 2026-07-17
-**Spec:** `docs/superpowers/specs/2026-07-17-focused-rust-loop-design.md`
-
-## RED Evidence
-
-- `npm.cmd run test -- src/lib/focused-rust-loop-contract.test.ts`
-- Result before the policy edit: expected failure in all three contract tests because `<!-- focused-rust-loop -->` was absent.
-
-## GREEN Evidence
-
-- `npm.cmd run test -- src/lib/focused-rust-loop-contract.test.ts`
-- Result: PASS, 3 tests executed.
-- `npm.cmd run test`
-- Result: PASS; the full frontend inventory included the focused-loop contract.
-
-## Completion Gate
-
-- `npm.cmd run verify`
-- Result: PASS, including Svelte check, rustfmt, full workspace Cargo check, full workspace Cargo test, and diff check.
-
-## Scope
-
-- Runtime behavior, Cargo manifests, production source, `scripts/verify.mjs`, and Superpowers skills were unchanged.
-- Enforcement is owned by `AGENTS.md` and `src/lib/focused-rust-loop-contract.test.ts`.
+```powershell
+$artifactDir = Join-Path $env:TEMP 'extractum-focused-rust-loop'
+Get-Content -LiteralPath (Join-Path $artifactDir 'contract-red-exit.txt')
+Select-String -LiteralPath (Join-Path $artifactDir 'contract-red.log') -Pattern 'Test Files|Tests\s'
+Select-String -LiteralPath (Join-Path $artifactDir 'contract-green.log') -Pattern 'Test Files|Tests\s'
+Select-String -LiteralPath (Join-Path $artifactDir 'frontend-full.log') -Pattern 'Test Files|Tests\s'
+Select-String -LiteralPath (Join-Path $artifactDir 'verify.log') -Pattern '^===|All verification checks passed\.'
 ```
+
+Create `docs/superpowers/verification/2026-07-17-focused-rust-loop-enforcement.md` with `apply_patch`. Use these headings in order: `Purpose`, `RED Evidence`, `GREEN Evidence`, `Full Frontend Inventory`, `Completion Gate`, and `Scope`. Populate them only from the literal artifacts:
+
+- record the RED command, its actual nonzero exit code, and the exact `Test Files`/`Tests` summary lines from `contract-red.log`;
+- record the GREEN command and exact three-test summary from `contract-green.log`;
+- record the exact full frontend `Test Files` and `Tests` counts from `frontend-full.log`;
+- list every observed `=== ... ===` verify stage and quote the final success line from `verify.log`;
+- state that runtime behavior, Cargo manifests, production source, `scripts/verify.mjs`, and Superpowers skills were unchanged;
+- name `AGENTS.md` and `src/lib/focused-rust-loop-contract.test.ts` as the enforcement owners.
+
+Do not write `PASS`, a count, or a stage that is absent from its literal artifact. Do not modify the approved specification while recording evidence.
 
 - [ ] **Step 7: Run final focused evidence after the documentation edit**
 
