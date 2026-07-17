@@ -238,7 +238,7 @@ $ErrorActionPreference = 'Stop'
 $head = (git rev-parse HEAD).Trim()
 $sessionId = "{0}-{1}" -f ([DateTimeOffset]::Now.ToString('yyyyMMddTHHmmssfff')),
   ([guid]::NewGuid().ToString('N'))
-$scratch = Join-Path $env:TEMP "extractum-process-$head-$sessionId"
+$scratch = Join-Path $env:TEMP "extractum-process-$sessionId"
 New-Item -ItemType Directory -Path $scratch | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $scratch 'measurements') | Out-Null
 $locator = Join-Path $env:TEMP 'extractum-process-current.txt'
@@ -272,7 +272,9 @@ $power = try { (powercfg /getactivescheme | Out-String).Trim() } catch { "unavai
 ) | Set-Content -LiteralPath (Join-Path $scratch 'environment.txt')
 ```
 
-Expected: one new absolute scratch directory outside the repository. If
+Expected: one new absolute scratch directory outside the repository. The HEAD
+remains recorded in `environment.txt` instead of the directory name so nested
+measurement artifacts stay below the traditional Windows path-length limit. If
 `src-tauri/target` does not yet exist, run one no-op app check first and repeat
 this step; do not invent another target directory. Every invocation creates a
 new timestamp/GUID path and atomically replaces the locator. Never delete or
