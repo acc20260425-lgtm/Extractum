@@ -284,9 +284,9 @@ Run sequentially:
 ```powershell
 $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-notebooklm-render-current.txt') -Raw).Trim()
 $runner = Join-Path $scratch 'invoke-probe.ps1'
-& powershell.exe -NoLogo -NoProfile -File $runner -SourceKey app -Label 'warmup-app'
+& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -SourceKey app -Label 'warmup-app'
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-& powershell.exe -NoLogo -NoProfile -File $runner -SourceKey core -Label 'warmup-core'
+& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -SourceKey core -Label 'warmup-core'
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 ```
 
@@ -304,7 +304,7 @@ $runner = Join-Path $scratch 'invoke-probe.ps1'
 for ($index = 1; $index -le 5; $index++) {
   foreach ($variant in @('app','core')) {
     $label = "recorded-$index-$variant"
-    & powershell.exe -NoLogo -NoProfile -File $runner -SourceKey $variant -Label $label
+    & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -SourceKey $variant -Label $label
     if ($LASTEXITCODE -ne 0) {
       $metaPath = Join-Path $scratch "runs/$label-meta.json"
       if (-not (Test-Path $metaPath)) { throw 'Infrastructure failure: metadata absent' }
@@ -328,10 +328,10 @@ Run one discarded warm-up and five recorded samples using the core probe:
 ```powershell
 $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-notebooklm-render-current.txt') -Raw).Trim()
 $runner = Join-Path $scratch 'invoke-probe.ps1'
-& powershell.exe -NoLogo -NoProfile -File $runner -SourceKey core -Label 'focused-warmup' -FocusedCore
+& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -SourceKey core -Label 'focused-warmup' -FocusedCore
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 for ($index = 1; $index -le 5; $index++) {
-  & powershell.exe -NoLogo -NoProfile -File $runner -SourceKey core `
+  & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -SourceKey core `
     -Label "focused-$index" -FocusedCore
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
@@ -538,14 +538,14 @@ Run discarded warm-ups and five alternating pairs:
 
 ```powershell
 $runner = Join-Path $scratch 'invoke-probe.ps1'
-& powershell.exe -NoLogo -NoProfile -File $runner -SourceKey app -Label 'stage1-baseline-warmup-domain'
+& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -SourceKey app -Label 'stage1-baseline-warmup-domain'
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-& powershell.exe -NoLogo -NoProfile -File $runner -SourceKey shell -Label 'stage1-baseline-warmup-shell'
+& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -SourceKey shell -Label 'stage1-baseline-warmup-shell'
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 for ($index = 1; $index -le 5; $index++) {
-  & powershell.exe -NoLogo -NoProfile -File $runner -SourceKey app -Label "stage1-baseline-domain-$index"
+  & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -SourceKey app -Label "stage1-baseline-domain-$index"
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-  & powershell.exe -NoLogo -NoProfile -File $runner -SourceKey shell -Label "stage1-baseline-shell-$index"
+  & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -SourceKey shell -Label "stage1-baseline-shell-$index"
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 ```
@@ -1055,14 +1055,14 @@ Run:
 
 ```powershell
 $runner = Join-Path $scratch 'invoke-probe.ps1'
-& powershell.exe -NoLogo -NoProfile -File $runner -SourceKey post-domain -Label 'stage1-post-warmup-domain'
+& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -SourceKey post-domain -Label 'stage1-post-warmup-domain'
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-& powershell.exe -NoLogo -NoProfile -File $runner -SourceKey post-shell -Label 'stage1-post-warmup-shell'
+& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -SourceKey post-shell -Label 'stage1-post-warmup-shell'
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 for ($index = 1; $index -le 5; $index++) {
-  & powershell.exe -NoLogo -NoProfile -File $runner -SourceKey post-domain -Label "stage1-post-domain-$index"
+  & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -SourceKey post-domain -Label "stage1-post-domain-$index"
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-  & powershell.exe -NoLogo -NoProfile -File $runner -SourceKey post-shell -Label "stage1-post-shell-$index"
+  & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner -SourceKey post-shell -Label "stage1-post-shell-$index"
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 ```
