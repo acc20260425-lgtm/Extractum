@@ -746,7 +746,7 @@ const oldImplementations = [
   readOptionalSource("src-tauri/src/external_process.rs"),
   readOptionalSource("src-tauri/src/child_process.rs"),
   readOptionalSource("src-tauri/src/process_tree.rs"),
-].join("\n");
+].join("");
 
 const publicNames = (source: string) =>
   Array.from(
