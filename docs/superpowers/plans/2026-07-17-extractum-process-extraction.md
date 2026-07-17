@@ -35,6 +35,9 @@ Windows Job Objects through windows-sys, Vitest 4 source contracts, PowerShell
   shell probes use the normative full workspace (`--workspace --all-targets`).
   Every timed probe is preceded by an untimed no-op check against the restored
   tree so restoration work cannot leak into the next sample.
+- Protocol roots and baseline/post/repeat attempts use timestamp/GUID IDs.
+  Infrastructure failures preserve an `invalid*.json` marker and their raw
+  logs; retries create a new attempt and update the relevant locator.
 - Retention requires all correctness gates and application-shell regression
   no greater than both 5% and 0.5 seconds.
 - A primary shell result that fails the retention cap but is no worse than
@@ -239,13 +242,19 @@ Run:
 
 ```powershell
 $head = (git rev-parse HEAD).Trim()
-$scratch = Join-Path $env:TEMP "extractum-process-$head"
-if (Test-Path -LiteralPath $scratch) {
-  throw "Scratch already exists: $scratch"
-}
+$sessionId = "{0}-{1}" -f ([DateTimeOffset]::Now.ToString('yyyyMMddTHHmmssfff')),
+  ([guid]::NewGuid().ToString('N'))
+$scratch = Join-Path $env:TEMP "extractum-process-$head-$sessionId"
 New-Item -ItemType Directory -Path $scratch | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $scratch 'runs') | Out-Null
-$scratch | Set-Content -LiteralPath (Join-Path $env:TEMP 'extractum-process-current.txt')
+New-Item -ItemType Directory -Path (Join-Path $scratch 'measurements') | Out-Null
+$locator = Join-Path $env:TEMP 'extractum-process-current.txt'
+$locatorTemp = "$locator.$sessionId.tmp"
+$scratch | Set-Content -LiteralPath $locatorTemp
+if (Test-Path -LiteralPath $locator) {
+  [IO.File]::Replace($locatorTemp, $locator, $null)
+} else {
+  Move-Item -LiteralPath $locatorTemp -Destination $locator
+}
 
 $defender = try {
   Get-MpComputerStatus |
@@ -257,6 +266,7 @@ $defender = try {
 $power = try { (powercfg /getactivescheme | Out-String).Trim() } catch { "unavailable" }
 @(
   "head=$head"
+  "session_id=$sessionId"
   "started_at=$([DateTimeOffset]::Now.ToString('o'))"
   "cargo=$((& cargo -V) | Out-String).Trim()"
   "rustc=$((& rustc -Vv) | Out-String).Trim()"
@@ -268,7 +278,32 @@ $power = try { (powercfg /getactivescheme | Out-String).Trim() } catch { "unavai
 
 Expected: one new absolute scratch directory outside the repository. If
 `src-tauri/target` does not yet exist, run one no-op app check first and repeat
-this step; do not invent another target directory.
+this step; do not invent another target directory. Every invocation creates a
+new timestamp/GUID path and atomically replaces the locator. Never delete or
+reuse an older scratch root. When restarting the whole protocol, first write
+an `invalid-session.json` with the failure stage, reason, and timestamp into
+the old root, then rerun this step; the old evidence remains available but is
+excluded from all summaries.
+
+Use this explicit whole-protocol restart only before a valid baseline summary
+exists (later baseline/post/repeat failures use their attempt-level restart):
+
+```powershell
+$locator = Join-Path $env:TEMP 'extractum-process-current.txt'
+$oldScratch = (Get-Content $locator -Raw).Trim()
+if (Test-Path (Join-Path $oldScratch 'baseline-summary.json')) {
+  throw 'Use the attempt-level restart; a valid baseline already exists'
+}
+[ordered]@{
+  classification = 'infrastructure_failure'
+  stage = 'pre_baseline'
+  invalidated_at = [DateTimeOffset]::Now.ToString('o')
+  reason = 'pre-baseline setup or runner infrastructure failed'
+} | ConvertTo-Json | Set-Content (Join-Path $oldScratch 'invalid-session.json')
+```
+
+After this marker is written, rerun Step 4. Its new GUID root replaces the
+locator without deleting or overwriting `$oldScratch`.
 
 - [ ] **Step 5: Capture the full baseline test inventory and exact process set**
 
@@ -530,25 +565,48 @@ Run:
 ```powershell
 $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-process-current.txt') -Raw).Trim()
 $runner = Join-Path $scratch 'invoke-cargo-probe.ps1'
+$attemptId = "baseline-{0}-{1}" -f ([DateTimeOffset]::Now.ToString('yyyyMMddTHHmmssfff')),
+  ([guid]::NewGuid().ToString('N'))
+$attempt = Join-Path $scratch "measurements/$attemptId"
+New-Item -ItemType Directory -Path (Join-Path $attempt 'runs') -Force | Out-Null
+$attempt | Set-Content (Join-Path $scratch 'baseline-current.txt')
 $domain = Get-Content (Join-Path $scratch 'baseline-domain-source.json') -Raw | ConvertFrom-Json
 $shell = Get-Content (Join-Path $scratch 'baseline-shell-source.json') -Raw | ConvertFrom-Json
+
+function Invalidate-Attempt($reason) {
+  $restored =
+    ((Get-FileHash $domain.path -Algorithm SHA256).Hash -eq $domain.sha256) -and
+    ((Get-FileHash $shell.path -Algorithm SHA256).Hash -eq $shell.sha256)
+  [ordered]@{
+    stage = 'baseline'
+    attempt = $attemptId
+    invalidated_at = [DateTimeOffset]::Now.ToString('o')
+    reason = $reason
+    source_bytes_restored = $restored
+  } | ConvertTo-Json | Set-Content (Join-Path $attempt 'invalid.json')
+  if (-not $restored) { throw 'Cannot restart baseline: probe bytes are not restored' }
+}
 
 function Invoke-CheckedProbe($source, $mode, $package, $label) {
   $runnerArgs = @(
     '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $runner,
     '-Path', $source.path, '-Mode', $mode, '-Label', $label,
-    '-ExpectedSha256', $source.sha256, '-Scratch', $scratch
+    '-ExpectedSha256', $source.sha256, '-Scratch', $attempt
   )
   if ($mode -eq 'focused') { $runnerArgs += @('-Package', $package) }
   & powershell.exe @runnerArgs
   $code = $LASTEXITCODE
-  $metaPath = Join-Path $scratch "runs/$label-meta.json"
-  if (-not (Test-Path $metaPath)) { throw "Infrastructure failure: $label metadata missing" }
+  $metaPath = Join-Path $attempt "runs/$label-meta.json"
+  if (-not (Test-Path $metaPath)) {
+    Invalidate-Attempt "$label metadata missing"
+    throw "Infrastructure failure: $label metadata missing"
+  }
   $meta = Get-Content $metaPath -Raw | ConvertFrom-Json
   if ($meta.sync_started -and $meta.sync_exit_code -ne 0) {
     throw "Confirmed baseline synchronization Cargo failure: $label"
   }
   if ($code -eq 2 -or -not $meta.started -or -not $meta.restored) {
+    Invalidate-Attempt "$label did not complete with restored bytes"
     throw "Infrastructure failure: invalidate this measurement session"
   }
   if ($code -ne 0 -or $meta.exit_code -ne 0) {
@@ -568,7 +626,11 @@ foreach ($index in 1..5) {
 
 Expected: all 18 probes pass and restore both files. The three warm-ups are
 discarded. The reserve series is used only if Task 3 classifies the primary
-post-shell result as marginal.
+post-shell result as marginal. On infrastructure failure, verify both source
+hashes, keep the failed attempt with `invalid.json`, and rerun this entire step;
+it creates a new attempt and replaces `baseline-current.txt`. Never retry a
+label inside the invalid attempt. A confirmed baseline Cargo failure is not
+retryable measurement noise and stops the slice.
 
 - [ ] **Step 11: Compute and persist baseline medians**
 
@@ -576,8 +638,10 @@ Run:
 
 ```powershell
 $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-process-current.txt') -Raw).Trim()
+$attempt = (Get-Content (Join-Path $scratch 'baseline-current.txt') -Raw).Trim()
+if (Test-Path (Join-Path $attempt 'invalid.json')) { throw 'Active baseline attempt is invalid' }
 function Get-Series([string]$pattern) {
-  @(Get-ChildItem (Join-Path $scratch 'runs') -Filter $pattern |
+  @(Get-ChildItem (Join-Path $attempt 'runs') -Filter $pattern |
     ForEach-Object { Get-Content $_.FullName -Raw | ConvertFrom-Json } |
     Where-Object { $_.label -notmatch 'warmup' })
 }
@@ -590,6 +654,7 @@ $domain = Get-Series 'baseline-domain-*-meta.json'
 $shell = Get-Series 'baseline-shell-?-meta.json'
 $reserve = Get-Series 'baseline-shell-reserve-*-meta.json'
 $summary = [ordered]@{
+  attempt = $attempt
   domain_samples_ms = @($domain.elapsed_ms)
   domain_median_ms = Get-Median @($domain.elapsed_ms)
   shell_samples_ms = @($shell.elapsed_ms)
@@ -1356,25 +1421,48 @@ Run:
 ```powershell
 $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-process-current.txt') -Raw).Trim()
 $runner = Join-Path $scratch 'invoke-cargo-probe.ps1'
+$attemptId = "post-{0}-{1}" -f ([DateTimeOffset]::Now.ToString('yyyyMMddTHHmmssfff')),
+  ([guid]::NewGuid().ToString('N'))
+$attempt = Join-Path $scratch "measurements/$attemptId"
+New-Item -ItemType Directory -Path (Join-Path $attempt 'runs') -Force | Out-Null
+$attempt | Set-Content (Join-Path $scratch 'post-current.txt')
 $domain = Get-Content (Join-Path $scratch 'post-domain-source.json') -Raw | ConvertFrom-Json
 $shell = Get-Content (Join-Path $scratch 'post-shell-source.json') -Raw | ConvertFrom-Json
+
+function Invalidate-Attempt($reason) {
+  $restored =
+    ((Get-FileHash $domain.path -Algorithm SHA256).Hash -eq $domain.sha256) -and
+    ((Get-FileHash $shell.path -Algorithm SHA256).Hash -eq $shell.sha256)
+  [ordered]@{
+    stage = 'post'
+    attempt = $attemptId
+    invalidated_at = [DateTimeOffset]::Now.ToString('o')
+    reason = $reason
+    source_bytes_restored = $restored
+  } | ConvertTo-Json | Set-Content (Join-Path $attempt 'invalid.json')
+  if (-not $restored) { throw 'Cannot restart post measurements: probe bytes are not restored' }
+}
 
 function Invoke-CheckedProbe($source, $mode, $package, $label) {
   $runnerArgs = @(
     '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $runner,
     '-Path', $source.path, '-Mode', $mode, '-Label', $label,
-    '-ExpectedSha256', $source.sha256, '-Scratch', $scratch
+    '-ExpectedSha256', $source.sha256, '-Scratch', $attempt
   )
   if ($mode -eq 'focused') { $runnerArgs += @('-Package', $package) }
   & powershell.exe @runnerArgs
   $code = $LASTEXITCODE
-  $metaPath = Join-Path $scratch "runs/$label-meta.json"
-  if (-not (Test-Path $metaPath)) { throw "Infrastructure failure: $label metadata missing" }
+  $metaPath = Join-Path $attempt "runs/$label-meta.json"
+  if (-not (Test-Path $metaPath)) {
+    Invalidate-Attempt "$label metadata missing"
+    throw "Infrastructure failure: $label metadata missing"
+  }
   $meta = Get-Content $metaPath -Raw | ConvertFrom-Json
   if ($meta.sync_started -and $meta.sync_exit_code -ne 0) {
     throw "Confirmed candidate synchronization Cargo failure: $label"
   }
   if ($code -eq 2 -or -not $meta.started -or -not $meta.restored) {
+    Invalidate-Attempt "$label did not complete with restored bytes"
     throw "Infrastructure failure: invalidate the post measurement session"
   }
   if ($code -ne 0 -or $meta.exit_code -ne 0) {
@@ -1391,7 +1479,10 @@ foreach ($index in 1..5) {
 ```
 
 Expected: 12 probes pass; two warm-ups are excluded. The focused process
-series is diagnostic. The shell series determines retention.
+series is diagnostic. The shell series determines retention. On infrastructure
+failure, verify both source hashes, preserve the failed attempt with
+`invalid.json`, and rerun this whole step. The new attempt replaces only
+`post-current.txt`; the valid baseline attempt and summary remain unchanged.
 
 - [ ] **Step 7: Compute the primary decision before any repeat**
 
@@ -1400,8 +1491,10 @@ Run:
 ```powershell
 $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-process-current.txt') -Raw).Trim()
 $baseline = Get-Content (Join-Path $scratch 'baseline-summary.json') -Raw | ConvertFrom-Json
+$postAttempt = (Get-Content (Join-Path $scratch 'post-current.txt') -Raw).Trim()
+if (Test-Path (Join-Path $postAttempt 'invalid.json')) { throw 'Active post attempt is invalid' }
 function Get-Series([string]$pattern) {
-  @(Get-ChildItem (Join-Path $scratch 'runs') -Filter $pattern |
+  @(Get-ChildItem (Join-Path $postAttempt 'runs') -Filter $pattern |
     ForEach-Object { Get-Content $_.FullName -Raw | ConvertFrom-Json } |
     Where-Object { $_.label -notmatch 'warmup' })
 }
@@ -1423,6 +1516,7 @@ $shellPercent = if ($baseline.shell_median_ms -eq 0) {
 $primaryPass = $shellDelta -le 500 -and $shellPercent -le 5.0
 $marginal = -not $primaryPass -and $shellDelta -le 800 -and $shellPercent -le 8.0
 $summary = [ordered]@{
+  attempt = $postAttempt
   domain_samples_ms = @($domain.elapsed_ms)
   domain_median_ms = $domainMedian
   domain_delta_ms = $domainMedian - [int64]$baseline.domain_median_ms
@@ -1457,21 +1551,42 @@ $repeatSamples = @()
 $repeatMedian = $null
 $repeatDelta = $null
 $repeatPercent = $null
+$repeatAttempt = $null
 
 if ($post.marginal_repeat_allowed) {
   $repeatUsed = $true
+  $attemptId = "repeat-{0}-{1}" -f ([DateTimeOffset]::Now.ToString('yyyyMMddTHHmmssfff')),
+    ([guid]::NewGuid().ToString('N'))
+  $repeatAttempt = Join-Path $scratch "measurements/$attemptId"
+  New-Item -ItemType Directory -Path (Join-Path $repeatAttempt 'runs') -Force | Out-Null
+  $repeatAttempt | Set-Content (Join-Path $scratch 'repeat-current.txt')
+  function Invalidate-Repeat($reason) {
+    $restored = (Get-FileHash $shell.path -Algorithm SHA256).Hash -eq $shell.sha256
+    [ordered]@{
+      stage = 'repeat'
+      attempt = $attemptId
+      invalidated_at = [DateTimeOffset]::Now.ToString('o')
+      reason = $reason
+      source_bytes_restored = $restored
+    } | ConvertTo-Json | Set-Content (Join-Path $repeatAttempt 'invalid.json')
+    if (-not $restored) { throw 'Cannot restart repeat: probe bytes are not restored' }
+  }
   function Invoke-RepeatProbe($label) {
     & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner `
       -Path $shell.path -Mode workspace -Label $label `
-      -ExpectedSha256 $shell.sha256 -Scratch $scratch
+      -ExpectedSha256 $shell.sha256 -Scratch $repeatAttempt
     $code = $LASTEXITCODE
-    $metaPath = Join-Path $scratch "runs/$label-meta.json"
-    if (-not (Test-Path $metaPath)) { throw "Infrastructure repeat failure" }
+    $metaPath = Join-Path $repeatAttempt "runs/$label-meta.json"
+    if (-not (Test-Path $metaPath)) {
+      Invalidate-Repeat "$label metadata missing"
+      throw "Infrastructure repeat failure"
+    }
     $meta = Get-Content $metaPath -Raw | ConvertFrom-Json
     if ($meta.sync_started -and $meta.sync_exit_code -ne 0) {
       throw "Confirmed synchronization Cargo failure in repeat"
     }
     if ($code -eq 2 -or -not $meta.started -or -not $meta.restored) {
+      Invalidate-Repeat "$label did not complete with restored bytes"
       throw "Infrastructure repeat failure: invalidate repeat session"
     }
     if ($code -ne 0 -or $meta.exit_code -ne 0) {
@@ -1480,7 +1595,7 @@ if ($post.marginal_repeat_allowed) {
   }
   Invoke-RepeatProbe 'post-shell-repeat-warmup'
   foreach ($index in 1..5) { Invoke-RepeatProbe "post-shell-repeat-$index" }
-  $metas = @(Get-ChildItem (Join-Path $scratch 'runs') -Filter 'post-shell-repeat-?-meta.json' |
+  $metas = @(Get-ChildItem (Join-Path $repeatAttempt 'runs') -Filter 'post-shell-repeat-?-meta.json' |
     ForEach-Object { Get-Content $_.FullName -Raw | ConvertFrom-Json })
   $repeatSamples = @($metas.elapsed_ms)
   $sorted = @($repeatSamples | Sort-Object)
@@ -1496,6 +1611,7 @@ $decision = [ordered]@{
   reason = 'protocol_completed'
   primary_shell_pass = [bool]$post.primary_shell_pass
   repeat_used = $repeatUsed
+  repeat_attempt = $repeatAttempt
   repeat_samples_ms = $repeatSamples
   repeat_median_ms = $repeatMedian
   repeat_delta_ms = $repeatDelta
@@ -1512,7 +1628,8 @@ Expected:
 
 - primary pass: no repeat files and `retain_candidate=true`;
 - marginal primary: exactly one five-sample repeat compared with the reserved
-  baseline series;
+  baseline series; an infrastructure failure preserves that repeat attempt as
+  invalid and requires rerunning all of Step 8 in a new repeat attempt;
 - non-marginal fail: no repeat and `retain_candidate=false`.
 
 - [ ] **Step 9: Verify the candidate is still committed and byte-clean**
@@ -1694,6 +1811,7 @@ $decisionPath = Join-Path $scratch 'decision.json'
 $decision = Get-Content $decisionPath -Raw | ConvertFrom-Json
 $process = $null
 $smokeFailure = $null
+$cleanupFailure = $null
 if ($decision.retain_candidate) {
   try {
     $exe = (Resolve-Path 'src-tauri/target/release/extractum.exe').Path
@@ -1706,9 +1824,38 @@ if ($decision.retain_candidate) {
   } catch {
     $smokeFailure = $_.Exception.Message
   } finally {
-    if ($null -ne $process -and -not $process.HasExited) {
-      Stop-Process -Id $process.Id -Force
+    if ($null -ne $process) {
+      try {
+        $process.Refresh()
+        if (-not $process.HasExited) {
+          Stop-Process -Id $process.Id -Force -ErrorAction Stop
+          if (-not $process.WaitForExit(10000)) {
+            throw "Timed out waiting for process $($process.Id) to exit"
+          }
+        }
+        $process.Refresh()
+        if (-not $process.HasExited -or
+            $null -ne (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) {
+          throw "Process $($process.Id) is still observable after cleanup"
+        }
+      } catch {
+        $cleanupFailure = $_.Exception.Message
+      }
     }
+  }
+  if ($null -ne $cleanupFailure) {
+    $cleanupArtifact = Join-Path $scratch (
+      'startup-smoke-infrastructure-failure-{0}-{1}.json' -f
+      ([DateTimeOffset]::Now.ToString('yyyyMMddTHHmmssfff')),
+      ([guid]::NewGuid().ToString('N'))
+    )
+    [ordered]@{
+      gate = 'startup-smoke-cleanup'
+      classification = 'infrastructure_failure'
+      error = $cleanupFailure
+      process_id = if ($null -ne $process) { $process.Id } else { $null }
+    } | ConvertTo-Json | Set-Content $cleanupArtifact
+    throw "Startup smoke cleanup is unconfirmed: $cleanupFailure"
   }
   if ($null -ne $smokeFailure) {
     [ordered]@{
@@ -1734,7 +1881,11 @@ if ($decision.retain_candidate) {
 Expected on success: the release executable remains alive for five seconds,
 is stopped by PID, and the path becomes finally retained. Expected on failure:
 the process is still cleaned up, the failed smoke joins the negative
-evidence/revert path, and no `extractum` process remains.
+evidence/revert path, and no `extractum` process remains. A cleanup error does
+not retain or reject the candidate: it writes
+the uniquely named `startup-smoke-infrastructure-failure-*.json`, stops the
+protocol, and requires the process to be terminated and the smoke rerun before
+any final decision.
 
 - [ ] **Step 2B: On the rejected path, write the negative decision before rollback**
 
@@ -1802,6 +1953,8 @@ with these headings and actual values; do not prefill PASS values:
 ## Environment
 
 - Cargo/Rust versions: `<literal environment.txt values>`
+- Measurement session/attempt IDs: `<valid baseline, post, and optional repeat>`
+- Invalidated attempts: `<paths and reasons, or none; excluded from medians>`
 - Power profile: `<literal value>`
 - Defender state: `<literal value>`
 - Canonical target: `<absolute path>`
