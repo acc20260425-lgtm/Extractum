@@ -22,6 +22,9 @@ Completed and in-flight slices governed by their own documents:
   Closed 2026-07-17 with a `no_go` preflight (commit `1cf1485b`): the
   full-workspace hypothesis is falsified; the crate was not created. See
   `docs/superpowers/verification/2026-07-17-notebooklm-render-crate-boundary.md`.
+- [`2026-07-17-focused-rust-loop-design.md`](2026-07-17-focused-rust-loop-design.md)
+  — focused package commands, extraction-retention thresholds, plan-shape
+  requirements, and unchanged end-of-slice workspace gates. Approved.
 
 ## Evidence Base
 
@@ -114,12 +117,12 @@ products:
    this loop only if it materially shrinks what the application crate itself
    recompiles. The Stage 0 surrogate in the render spec measures exactly this
    claim against the already-extracted `extractum-core`.
-2. **Focused package loop** — `cargo check -p <crate> --all-targets` and
-   focused package tests. This loop benefits from extraction almost by
-   definition (the domain stops paying for the application crate), but
-   adopting it as the acceptance metric is a product decision. Per the render
-   spec, it requires a revised spec with newly calibrated thresholds and
-   explicit user approval; it must never silently replace a failed
+2. **Focused package loop** — `cargo check --manifest-path
+   src-tauri/Cargo.toml -p <crate> --all-targets` and focused package tests.
+   This loop benefits from extraction almost by definition (the domain stops
+   paying for the application crate). Its use as the acceptance metric for
+   hot-module phases 4–6 is governed by
+   `2026-07-17-focused-rust-loop-design.md`; it never replaces a failed
    full-workspace gate.
 
 The commit-history ROI argument (hot modules gain the most) applies fully to
@@ -128,10 +131,11 @@ main branch point.
 
 ## Decision Framework
 
-- Predeclared thresholds, five warmed samples with medians, byte-for-byte
-  probe restoration, session invalidation on infrastructure failure, and
-  documented negative outcomes are inherited from the render spec's protocol
-  by every future phase.
+- Byte-for-byte probe restoration, warmed median sampling, session
+  invalidation on infrastructure failure, and documented negative outcomes
+  are inherited as common mechanics from the render spec. For hot-module
+  phases 4–6, the focused-loop spec is the normative source for commands,
+  thresholds, and failure classification.
 - Domain retention gate: ≥25% and ≥2.0 s median improvement on the domain
   probe; shell regression ≤5% and ≤0.5 s. Thresholds are fixed before
   observation and never recalibrated afterward.
@@ -150,12 +154,14 @@ main branch point.
 - **Outcome recorded 2026-07-17:** Stage 0 returned `no_go`
   (app 9,090 ms vs core surrogate 9,100 ms, −0.11%; focused core 1,020 ms).
   The project owner selected **(a) + (b)**: the focused package loop becomes
-  the acceptance metric for the hot-module phases 4–6 (pending its own
-  respec with freshly measured thresholds), and phase 8 proceeds on
+  the acceptance metric for the hot-module phases 4–6 under the approved
+  focused-loop respec, and phase 8 proceeds on
   dependency-hygiene justification with performance as diagnostic evidence.
   Development verification in this repository is performed by an LLM agent
-  following the superpowers plans, so the focused-loop workflow is adopted by
-  editing the standing plan templates and skills, not by human habit change.
+  following Superpowers plans, so the focused-loop workflow is adopted through
+  mandatory `AGENTS.md` policy and generated-plan structure. Universal
+  Superpowers skills remain unchanged unless later evidence shows systematic
+  policy violations.
   Full workspace gates remain unchanged as end-of-slice verification.
   - A failed gate never justifies weakening correctness gates, and a
     reverted candidate leaves no partial split behind.
@@ -304,10 +310,11 @@ integration tests, WiX/MSI packaging concerns.
 1. Fresh evidence first: recompute the module co-change matrix and the
    candidate's fan-in/fan-out before writing the spec; history shifts (e.g.
    `gemini_browser` did not exist three months ago).
-2. Measurement protocol, failure classification, rename-map inventory
-   comparison, and negative-outcome documentation are inherited from the
-   render spec; thresholds are predeclared per phase and never adjusted after
-   observation.
+2. Common measurement mechanics, rename-map inventory comparison, and
+   negative-outcome documentation are inherited from the render spec. For
+   hot-module phases 4–6, focused commands, thresholds, and failure
+   classification come from the focused-loop spec; thresholds are declared
+   before observation and never adjusted afterward.
 3. Mechanical moves only inside a slice: facade modules preserve `crate::`
    paths; consumers are never mass-rewritten in the same slice.
 4. Every `pub(crate)` → `pub` widening is enumerated in the spec and checked
@@ -333,7 +340,7 @@ integration tests, WiX/MSI packaging concerns.
 | `analysis/trace.rs` direct `zstd::` → `core::compression` | phase 7 at the latest |
 | `sources::test_support` ownership (fixture crate vs app-side integration tests) | first producer-domain extraction whose tests consume it |
 | WiX MSI diagnosis (`light.exe` failure/hang, likely ICE validation in non-interactive sessions) | separate follow-up task; unblocks restoring full-bundle gates |
-| Focused-loop metric respec | **Triggered 2026-07-17** by the render-slice `no_go`; branch (a)+(b) selected. Next: measure LLM-session cargo usage, then write the focused-loop workflow spec |
+| Focused-loop metric respec | **Completed 2026-07-17**: branch (a)+(b), commands, thresholds, failure policy, and plan structure are defined in `2026-07-17-focused-rust-loop-design.md` |
 
 ## Non-Goals
 
