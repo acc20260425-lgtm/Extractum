@@ -15,7 +15,7 @@ use windows_sys::Win32::{
 };
 
 #[cfg(windows)]
-pub struct ProcessTreeGuard {
+pub(crate) struct ProcessTreeGuard {
     job: HANDLE,
     termination_state: AtomicU8,
 }
@@ -29,7 +29,7 @@ unsafe impl Sync for ProcessTreeGuard {}
 
 #[cfg(windows)]
 impl ProcessTreeGuard {
-    pub fn new() -> anyhow::Result<Self> {
+    pub(crate) fn new() -> anyhow::Result<Self> {
         let job = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
         if job.is_null() {
             anyhow::bail!("failed to create Windows process containment job");
@@ -56,14 +56,14 @@ impl ProcessTreeGuard {
         })
     }
 
-    pub fn assign_tokio(&self, child: &tokio::process::Child) -> anyhow::Result<()> {
+    pub(crate) fn assign_tokio(&self, child: &tokio::process::Child) -> anyhow::Result<()> {
         let raw_handle = child
             .raw_handle()
             .ok_or_else(|| anyhow::anyhow!("owned child process handle is unavailable"))?;
         self.assign_raw(raw_handle)
     }
 
-    pub fn assign_std(&self, child: &std::process::Child) -> anyhow::Result<()> {
+    pub(crate) fn assign_std(&self, child: &std::process::Child) -> anyhow::Result<()> {
         self.assign_raw(child.as_raw_handle())
     }
 
@@ -75,7 +75,7 @@ impl ProcessTreeGuard {
         Ok(())
     }
 
-    pub fn terminate(&self) -> anyhow::Result<()> {
+    pub(crate) fn terminate(&self) -> anyhow::Result<()> {
         loop {
             match self.termination_state.load(Ordering::Acquire) {
                 TERMINATION_COMPLETE => return Ok(()),
@@ -124,23 +124,23 @@ impl Drop for ProcessTreeGuard {
 }
 
 #[cfg(not(windows))]
-pub struct ProcessTreeGuard;
+pub(crate) struct ProcessTreeGuard;
 
 #[cfg(not(windows))]
 impl ProcessTreeGuard {
-    pub fn new() -> anyhow::Result<Self> {
+    pub(crate) fn new() -> anyhow::Result<Self> {
         Ok(Self)
     }
 
-    pub fn assign_tokio(&self, _child: &tokio::process::Child) -> anyhow::Result<()> {
+    pub(crate) fn assign_tokio(&self, _child: &tokio::process::Child) -> anyhow::Result<()> {
         Ok(())
     }
 
-    pub fn assign_std(&self, _child: &std::process::Child) -> anyhow::Result<()> {
+    pub(crate) fn assign_std(&self, _child: &std::process::Child) -> anyhow::Result<()> {
         Ok(())
     }
 
-    pub fn terminate(&self) -> anyhow::Result<()> {
+    pub(crate) fn terminate(&self) -> anyhow::Result<()> {
         Ok(())
     }
 }

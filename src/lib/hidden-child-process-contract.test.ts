@@ -1,6 +1,6 @@
 import { describe, expect, it, test } from "vitest";
 import libSource from "../../src-tauri/src/lib.rs?raw";
-import childProcessSource from "../../src-tauri/crates/extractum-process/src/child_process.rs?raw";
+import childProcessSource from "../../src-tauri/src/child_process.rs?raw";
 import sidecarSource from "../../src-tauri/src/gemini_browser/sidecar.rs?raw";
 import cdpChromeSource from "../../src-tauri/src/gemini_browser/cdp_chrome.rs?raw";
 import diagnosticsRuntimeSource from "../../src-tauri/src/diagnostics/runtime.rs?raw";
@@ -9,11 +9,9 @@ import ytdlpRuntimeSource from "../../src-tauri/src/youtube/process_runtime.rs?r
 
 describe("hidden child process contract", () => {
   it("defines the Windows-only hidden-console helper and uses it for every Gemini sidecar launch", () => {
-    expect(libSource).toMatch(
-      /mod\s+child_process\s*\{[\s\S]*pub\(crate\)\s+use\s+extractum_process::child_process::\*;/,
-    );
+    expect(libSource).toContain("mod child_process;");
     expect(childProcessSource).toContain(
-      "pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;",
+      "pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;",
     );
     expect(childProcessSource).toMatch(
       /#\[cfg\(windows\)\][\s\S]*creation_flags\(CREATE_NO_WINDOW\)/,

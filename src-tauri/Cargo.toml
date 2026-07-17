@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/extractum-core", "crates/extractum-process"]
+members = [".", "crates/extractum-core"]
 resolver = "2"
 
 [workspace.package]
@@ -7,13 +7,9 @@ version = "0.2.0"
 edition = "2021"
 
 [workspace.dependencies]
-anyhow = "1.0"
-parking_lot = "0.12"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
-tokio = { version = "1", features = ["full"] }
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }
 zstd = "0.13"
 
 [package]
@@ -43,7 +39,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 apalis = "=1.0.0-rc.8"
 apalis-sqlite = "=1.0.0-rc.8"
-parking_lot = { workspace = true }
+parking_lot = "0.12"
 tower = { version = "0.5", features = ["timeout", "util"] }
 secrecy = "0.8"
 jsonschema = { version = "0.46.5", default-features = false }
@@ -53,9 +49,9 @@ grammers-session = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901c
 grammers-mtsender = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa" }
 grammers-tl-types = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", features = ["deserializable-functions"] }
 zstd = { workspace = true }
-tokio = { workspace = true }
+tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7"
-anyhow = { workspace = true }
+anyhow = "1.0"
 sha2 = "0.10"
 dirs = "6"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
@@ -67,13 +63,15 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 url = "2"
 tempfile = "3"
 extractum-core = { path = "crates/extractum-core" }
-extractum-process = { path = "crates/extractum-process" }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["test-util"] }
+tokio = { version = "1", features = ["test-util"] }
 
 [profile.dev]
 debug = "line-tables-only"
 
 [profile.dev.package."*"]
 debug = false
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }

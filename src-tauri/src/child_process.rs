@@ -1,9 +1,9 @@
 use tokio::process::Command;
 
 #[cfg_attr(not(any(windows, test)), allow(dead_code))]
-pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-pub fn hide_console_window(command: &mut Command) -> &mut Command {
+pub(crate) fn hide_console_window(command: &mut Command) -> &mut Command {
     #[cfg(windows)]
     command.creation_flags(CREATE_NO_WINDOW);
     command

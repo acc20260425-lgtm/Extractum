@@ -1,15 +1,11 @@
-mod external_process {
-    pub(crate) use extractum_process::external_process::*;
-}
+mod external_process;
 use external_process::{
     ExternalProcessShutdownState, ShutdownCleanup, ShutdownStart, ShutdownTiming,
 };
 mod analysis_documents;
 mod apalis_jobs;
 mod archive_read_model;
-mod child_process {
-    pub(crate) use extractum_process::child_process::*;
-}
+mod child_process;
 mod compression {
     pub(crate) use extractum_core::compression::{
         compress_json_bytes, compress_text, decompress_bytes, decompress_text,
@@ -17,9 +13,7 @@ mod compression {
 }
 mod db;
 mod diagnostics;
-mod process_tree {
-    pub(crate) use extractum_process::process_tree::*;
-}
+mod process_tree;
 use apalis_jobs::{apalis_jobs_list, apalis_jobs_prune_terminal};
 use diagnostics::get_diagnostic_summary;
 mod error {
