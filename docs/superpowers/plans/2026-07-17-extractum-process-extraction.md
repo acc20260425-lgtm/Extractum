@@ -312,12 +312,12 @@ $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-process-current.txt') -R
 $stdout = Join-Path $scratch 'baseline-inventory.stdout.log'
 $stderr = Join-Path $scratch 'baseline-inventory.stderr.log'
 $cargoExe = (Get-Command cargo.exe).Source
-$args = @(
+$cargoArgs = @(
   'test', '--manifest-path', 'src-tauri/Cargo.toml', '--workspace',
   '--all-targets', '--', '--list'
 )
-$process = Start-Process -FilePath $cargoExe -ArgumentList $args -Wait -PassThru `
-  -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+& $cargoExe @cargoArgs 1> $stdout 2> $stderr
+$exitCode = $LASTEXITCODE
 $lines = @(
   @(Get-Content -LiteralPath $stdout -ErrorAction SilentlyContinue)
   @(Get-Content -LiteralPath $stderr -ErrorAction SilentlyContinue)
@@ -332,12 +332,12 @@ $processNames = @($unique | Where-Object {
 $unique | Set-Content -LiteralPath (Join-Path $scratch 'baseline-test-names.txt')
 $processNames | Set-Content -LiteralPath (Join-Path $scratch 'process-test-names.txt')
 @{
-  exit = $process.ExitCode
+  exit = $exitCode
   count = $names.Count
   unique_count = $unique.Count
   process_count = $processNames.Count
 } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scratch 'baseline-inventory.json')
-if ($process.ExitCode -ne 0 -or $names.Count -eq 0 -or
+if ($exitCode -ne 0 -or $names.Count -eq 0 -or
     $unique.Count -ne $names.Count -or $processNames.Count -ne 20) { exit 1 }
 ```
 
