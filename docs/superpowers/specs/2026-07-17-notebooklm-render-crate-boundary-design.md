@@ -1,6 +1,6 @@
 # NotebookLM Render Crate Boundary Design
 
-**Status:** Approved in conversation; awaiting written-spec review  
+**Status:** Approved in conversation; awaiting written-spec review
 **Date:** 2026-07-17
 
 ## Summary
