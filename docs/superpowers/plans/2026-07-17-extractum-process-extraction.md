@@ -250,7 +250,7 @@ if (Test-Path -LiteralPath $locator) {
 }
 
 $defender = try {
-  Get-MpComputerStatus |
+  Get-MpComputerStatus -ErrorAction Stop |
     Select-Object AMServiceEnabled, AntivirusEnabled, RealTimeProtectionEnabled |
     ConvertTo-Json -Compress
 } catch {
@@ -261,8 +261,8 @@ $power = try { (powercfg /getactivescheme | Out-String).Trim() } catch { "unavai
   "head=$head"
   "session_id=$sessionId"
   "started_at=$([DateTimeOffset]::Now.ToString('o'))"
-  "cargo=$((& cargo -V) | Out-String).Trim()"
-  "rustc=$((& rustc -Vv) | Out-String).Trim()"
+  "cargo=$(((& cargo -V) | Out-String).Trim())"
+  "rustc=$(((& rustc -Vv) | Out-String).Trim())"
   "target_dir=$((Resolve-Path 'src-tauri/target').Path)"
   "power=$power"
   "defender=$defender"
