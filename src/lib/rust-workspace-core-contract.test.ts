@@ -34,7 +34,7 @@ describe("Rust workspace core contract", () => {
   it("defines the minimal core package through workspace dependencies", () => {
     expect(coreCargo).not.toBe("");
     expect(coreCargo).toMatch(/name\s*=\s*"extractum-core"/);
-    for (const dependency of ["serde", "time", "zstd"]) {
+    for (const dependency of ["serde", "serde_json", "time", "zstd"]) {
       expect(coreCargo).toMatch(new RegExp(`${dependency}\\.workspace\\s*=\\s*true`));
     }
     expect(coreCargo).not.toMatch(/\[profile\./);
@@ -42,7 +42,13 @@ describe("Rust workspace core contract", () => {
 
   it("keeps a curated core and explicit private application wrappers", () => {
     expect(coreLib).toBe(
-      ["pub mod compression;", "pub mod error;", "pub mod time;", ""].join("\n"),
+      [
+        "pub mod compression;",
+        "pub mod error;",
+        "pub mod media_metadata;",
+        "pub mod time;",
+        "",
+      ].join("\n"),
     );
     expect(coreLib).not.toMatch(/pub\s+use\s+[^;]*\*/);
 

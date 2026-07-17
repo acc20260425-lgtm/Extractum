@@ -1,23 +1,12 @@
 use grammers_client::{media::Media, tl};
-use serde::{Deserialize, Serialize};
 
-use crate::compression::{compress_json_bytes, decompress_bytes};
-use crate::error::{AppError, AppResult};
+pub(crate) use extractum_core::media_metadata::{
+    decode_media_metadata, encode_media_metadata, media_label, ItemMediaMetadata,
+};
 
 pub(crate) const CONTENT_KIND_TEXT_ONLY: &str = "text_only";
 pub(crate) const CONTENT_KIND_TEXT_WITH_MEDIA: &str = "text_with_media";
 pub(crate) const CONTENT_KIND_MEDIA_ONLY: &str = "media_only";
-
-#[derive(Clone, Default, Serialize, Deserialize, Debug, PartialEq)]
-pub(crate) struct ItemMediaMetadata {
-    pub(crate) summary: Option<String>,
-    pub(crate) file_name: Option<String>,
-    pub(crate) mime_type: Option<String>,
-    pub(crate) size_bytes: Option<i64>,
-    pub(crate) width: Option<i32>,
-    pub(crate) height: Option<i32>,
-    pub(crate) duration_seconds: Option<f64>,
-}
 
 pub(crate) struct ExtractedMediaPayload {
     pub(crate) kind: String,
@@ -28,20 +17,6 @@ pub(crate) struct ExtractedItemPayload {
     pub(crate) content: Option<String>,
     pub(crate) content_kind: &'static str,
     pub(crate) media: Option<ExtractedMediaPayload>,
-}
-
-pub(crate) fn encode_media_metadata(metadata: &ItemMediaMetadata) -> AppResult<Vec<u8>> {
-    let json =
-        serde_json::to_vec(metadata).map_err(|error| AppError::internal(error.to_string()))?;
-    compress_json_bytes(&json).map_err(AppError::internal)
-}
-
-pub(crate) fn decode_media_metadata(bytes: Option<&[u8]>) -> AppResult<ItemMediaMetadata> {
-    let Some(bytes) = bytes else {
-        return Ok(ItemMediaMetadata::default());
-    };
-    let decoded = decompress_bytes(bytes).map_err(AppError::internal)?;
-    serde_json::from_slice(&decoded).map_err(|error| AppError::internal(error.to_string()))
 }
 
 #[derive(Default)]
@@ -56,26 +31,6 @@ pub(crate) struct DocumentSignals {
 fn trimmed_non_empty(input: &str) -> Option<String> {
     let trimmed = input.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_string())
-}
-
-pub(crate) fn media_label(kind: &str) -> &'static str {
-    match kind {
-        "photo" => "Photo",
-        "video" => "Video",
-        "audio" => "Audio",
-        "voice" => "Voice message",
-        "image" => "Image",
-        "animation" => "Animation",
-        "sticker" => "Sticker",
-        "contact" => "Contact card",
-        "poll" => "Poll",
-        "location" => "Location",
-        "live_location" => "Live location",
-        "venue" => "Venue",
-        "webpage" => "Web page preview",
-        "dice" => "Dice",
-        _ => "Document",
-    }
 }
 
 pub(crate) fn derive_content_kind(has_content: bool, has_media: bool) -> &'static str {
@@ -280,9 +235,8 @@ pub(crate) fn extract_item_payload(
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_media_metadata, derive_content_kind, derive_document_media_kind,
-        encode_media_metadata, media_label, DocumentSignals, ItemMediaMetadata,
-        CONTENT_KIND_MEDIA_ONLY, CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA,
+        derive_content_kind, derive_document_media_kind, DocumentSignals, CONTENT_KIND_MEDIA_ONLY,
+        CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA,
     };
 
     #[test]
@@ -317,44 +271,5 @@ mod tests {
             ..DocumentSignals::default()
         };
         assert_eq!(derive_document_media_kind(&image), "image");
-    }
-
-    #[test]
-    fn media_label_covers_known_and_fallback_kinds() {
-        assert_eq!(media_label("photo"), "Photo");
-        assert_eq!(media_label("live_location"), "Live location");
-        assert_eq!(media_label("unknown"), "Document");
-    }
-
-    #[test]
-    fn media_metadata_roundtrip_through_zstd() {
-        let original = ItemMediaMetadata {
-            summary: Some("Video".to_string()),
-            file_name: Some("clip.mp4".to_string()),
-            mime_type: Some("video/mp4".to_string()),
-            size_bytes: Some(42),
-            width: Some(1920),
-            height: Some(1080),
-            duration_seconds: Some(12.5),
-        };
-
-        let encoded = encode_media_metadata(&original).expect("encode");
-        let decoded = decode_media_metadata(Some(&encoded)).expect("decode");
-
-        assert_eq!(decoded, original);
-    }
-
-    #[test]
-    fn media_metadata_decode_failures_are_typed_internal_errors() {
-        let error = decode_media_metadata(Some(&[0x00])).expect_err("reject corrupt metadata");
-
-        assert_eq!(error.kind, crate::error::AppErrorKind::Internal);
-    }
-
-    #[test]
-    fn absent_media_metadata_decodes_to_default() {
-        let decoded = decode_media_metadata(None).expect("decode absent metadata");
-
-        assert_eq!(decoded, ItemMediaMetadata::default());
     }
 }

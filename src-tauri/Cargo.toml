@@ -8,6 +8,7 @@ edition = "2021"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
 zstd = "0.13"
 
@@ -35,7 +36,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 serde = { workspace = true }
-serde_json = "1"
+serde_json = { workspace = true }
 apalis = "=1.0.0-rc.8"
 apalis-sqlite = "=1.0.0-rc.8"
 parking_lot = "0.12"
