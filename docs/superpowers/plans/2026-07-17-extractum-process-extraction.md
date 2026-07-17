@@ -31,6 +31,10 @@ Windows Job Objects through windows-sys, Vitest 4 source contracts, PowerShell
   `process_tree.rs`; `job_helpers.rs` remains app-side.
 - Phase 3 is architecturally justified. Its focused-package measurement is
   diagnostic, not a retention gate.
+- Domain probes use an explicit package (`-p ... --all-targets`); application
+  shell probes use the normative full workspace (`--workspace --all-targets`).
+  Every timed probe is preceded by an untimed no-op check against the restored
+  tree so restoration work cannot leak into the next sample.
 - Retention requires all correctness gates and application-shell regression
   no greater than both 5% and 0.5 seconds.
 - A primary shell result that fails the retention cap but is no worse than
@@ -88,6 +92,8 @@ Windows Job Objects through windows-sys, Vitest 4 source contracts, PowerShell
   from the new crate and assert the private facade.
 - `src/lib/hidden-child-process-contract.test.ts` — read the new helper and
   assert the private facade/public cross-crate constant.
+- `docs/superpowers/specs/2026-07-17-crate-roadmap.md` — record the literal
+  retained or not-retained Phase 3 outcome.
 
 **Delete after byte-preserving moves:**
 
@@ -123,6 +129,16 @@ cross-crate interface is:
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets
 ```
 
+Measurement scope is deliberately asymmetric:
+
+```powershell
+# Domain before/after (with the owning package substituted after extraction)
+cargo check --manifest-path src-tauri/Cargo.toml -p <package> --all-targets
+
+# Application shell before/after
+cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets
+```
+
 End-of-slice completion gates are:
 
 ```powershell
@@ -152,8 +168,10 @@ npm.cmd run verify
   `consumer-hashes.json`, `environment.txt`, `baseline-summary.json`, and an
   executable byte-restoring probe runner in scratch.
 - Provides the runner interface consumed by Task 3:
-  `invoke-cargo-probe.ps1 -Path <absolute-or-repo-path> -Package <name>
-  -Label <unique-label> -ExpectedSha256 <hash> -Scratch <absolute-path>`.
+  `invoke-cargo-probe.ps1 -Path <absolute-or-repo-path> -Mode
+  <focused|workspace> [-Package <name>] -Label <unique-label>
+  -ExpectedSha256 <hash> -Scratch <absolute-path>`. Focused probes require a
+  package; workspace probes reject one.
 
 - [ ] **Step 1: Require a clean, committed, approved starting point**
 
@@ -371,7 +389,9 @@ Write `$scratch/invoke-cargo-probe.ps1` with this complete content:
 ```powershell
 param(
   [Parameter(Mandatory = $true)][string]$Path,
-  [Parameter(Mandatory = $true)][string]$Package,
+  [Parameter(Mandatory = $true)]
+  [ValidateSet('focused', 'workspace')][string]$Mode,
+  [string]$Package = '',
   [Parameter(Mandatory = $true)][string]$Label,
   [Parameter(Mandatory = $true)][string]$ExpectedSha256,
   [Parameter(Mandatory = $true)][string]$Scratch
@@ -379,9 +399,17 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $metaPath = Join-Path $Scratch "runs/$Label-meta.json"
+$syncStdoutPath = Join-Path $Scratch "runs/$Label.sync.stdout.log"
+$syncStderrPath = Join-Path $Scratch "runs/$Label.sync.stderr.log"
 $stdoutPath = Join-Path $Scratch "runs/$Label.stdout.log"
 $stderrPath = Join-Path $Scratch "runs/$Label.stderr.log"
 if (Test-Path -LiteralPath $metaPath) { throw "Duplicate label: $Label" }
+if ($Mode -eq 'focused' -and [string]::IsNullOrWhiteSpace($Package)) {
+  throw 'Focused mode requires -Package'
+}
+if ($Mode -eq 'workspace' -and -not [string]::IsNullOrWhiteSpace($Package)) {
+  throw 'Workspace mode must not receive -Package'
+}
 
 $resolved = (Resolve-Path -LiteralPath $Path).Path
 $startingHash = (Get-FileHash -LiteralPath $resolved -Algorithm SHA256).Hash
@@ -397,7 +425,10 @@ $combined = New-Object byte[] ($original.Length + $suffix.Length)
 $meta = [ordered]@{
   label = $Label
   path = $Path
+  mode = $Mode
   package = $Package
+  sync_started = $false
+  sync_exit_code = $null
   started = $false
   completed = $false
   restored = $false
@@ -408,12 +439,28 @@ $meta = [ordered]@{
 }
 
 try {
-  [IO.File]::WriteAllBytes($resolved, $combined)
   $cargoExe = (Get-Command cargo.exe).Source
-  $arguments = @(
-    'check', '--manifest-path', 'src-tauri/Cargo.toml',
-    '-p', $Package, '--all-targets'
-  )
+  $arguments = @('check', '--manifest-path', 'src-tauri/Cargo.toml')
+  if ($Mode -eq 'focused') {
+    $arguments += @('-p', $Package)
+  } else {
+    $arguments += '--workspace'
+  }
+  $arguments += '--all-targets'
+
+  # Synchronize Cargo to the restored tree outside the timed sample. Without
+  # this no-op check, alternating probes can charge restoration work to the
+  # next logical edit.
+  $sync = Start-Process -FilePath $cargoExe -ArgumentList $arguments -Wait `
+    -PassThru -NoNewWindow -RedirectStandardOutput $syncStdoutPath `
+    -RedirectStandardError $syncStderrPath
+  $meta.sync_started = $true
+  $meta.sync_exit_code = $sync.ExitCode
+  if ($sync.ExitCode -ne 0) {
+    throw "Untimed synchronization check failed with $($sync.ExitCode)"
+  }
+
+  [IO.File]::WriteAllBytes($resolved, $combined)
   $watch = [Diagnostics.Stopwatch]::StartNew()
   $process = Start-Process -FilePath $cargoExe -ArgumentList $arguments -Wait `
     -PassThru -NoNewWindow -RedirectStandardOutput $stdoutPath `
@@ -432,7 +479,9 @@ try {
   $meta | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $metaPath
 }
 
-if (-not $meta.started -or -not $meta.completed -or -not $meta.restored) { exit 2 }
+if (-not $meta.completed -or -not $meta.restored -or -not $meta.sync_started) { exit 2 }
+if ($meta.sync_exit_code -ne 0) { exit 1 }
+if (-not $meta.started) { exit 2 }
 if ($meta.exit_code -ne 0) { exit 1 }
 exit 0
 ```
@@ -446,7 +495,9 @@ $runner = Join-Path $scratch 'invoke-cargo-probe.ps1'
 if (-not (Test-Path -LiteralPath $runner)) { exit 1 }
 $runnerText = Get-Content -LiteralPath $runner -Raw
 if ($runnerText -notmatch 'cargo-measurement-probe' -or
-    $runnerText -notmatch '\[IO\.File\]::WriteAllBytes') { exit 1 }
+    $runnerText -notmatch '\[IO\.File\]::WriteAllBytes' -or
+    $runnerText -notmatch "ValidateSet\('focused', 'workspace'\)" -or
+    $runnerText -notmatch 'sync_started') { exit 1 }
 ```
 
 Expected: the runner exists only under scratch. This is the only plan step
@@ -482,14 +533,21 @@ $runner = Join-Path $scratch 'invoke-cargo-probe.ps1'
 $domain = Get-Content (Join-Path $scratch 'baseline-domain-source.json') -Raw | ConvertFrom-Json
 $shell = Get-Content (Join-Path $scratch 'baseline-shell-source.json') -Raw | ConvertFrom-Json
 
-function Invoke-CheckedProbe($source, $label) {
-  & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner `
-    -Path $source.path -Package extractum -Label $label `
-    -ExpectedSha256 $source.sha256 -Scratch $scratch
+function Invoke-CheckedProbe($source, $mode, $package, $label) {
+  $runnerArgs = @(
+    '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $runner,
+    '-Path', $source.path, '-Mode', $mode, '-Label', $label,
+    '-ExpectedSha256', $source.sha256, '-Scratch', $scratch
+  )
+  if ($mode -eq 'focused') { $runnerArgs += @('-Package', $package) }
+  & powershell.exe @runnerArgs
   $code = $LASTEXITCODE
   $metaPath = Join-Path $scratch "runs/$label-meta.json"
   if (-not (Test-Path $metaPath)) { throw "Infrastructure failure: $label metadata missing" }
   $meta = Get-Content $metaPath -Raw | ConvertFrom-Json
+  if ($meta.sync_started -and $meta.sync_exit_code -ne 0) {
+    throw "Confirmed baseline synchronization Cargo failure: $label"
+  }
   if ($code -eq 2 -or -not $meta.started -or -not $meta.restored) {
     throw "Infrastructure failure: invalidate this measurement session"
   }
@@ -498,13 +556,13 @@ function Invoke-CheckedProbe($source, $label) {
   }
 }
 
-Invoke-CheckedProbe $domain 'baseline-domain-warmup'
-Invoke-CheckedProbe $shell 'baseline-shell-warmup'
-Invoke-CheckedProbe $shell 'baseline-shell-reserve-warmup'
+Invoke-CheckedProbe $domain 'focused' 'extractum' 'baseline-domain-warmup'
+Invoke-CheckedProbe $shell 'workspace' '' 'baseline-shell-warmup'
+Invoke-CheckedProbe $shell 'workspace' '' 'baseline-shell-reserve-warmup'
 foreach ($index in 1..5) {
-  Invoke-CheckedProbe $domain "baseline-domain-$index"
-  Invoke-CheckedProbe $shell "baseline-shell-$index"
-  Invoke-CheckedProbe $shell "baseline-shell-reserve-$index"
+  Invoke-CheckedProbe $domain 'focused' 'extractum' "baseline-domain-$index"
+  Invoke-CheckedProbe $shell 'workspace' '' "baseline-shell-$index"
+  Invoke-CheckedProbe $shell 'workspace' '' "baseline-shell-reserve-$index"
 }
 ```
 
@@ -1301,14 +1359,21 @@ $runner = Join-Path $scratch 'invoke-cargo-probe.ps1'
 $domain = Get-Content (Join-Path $scratch 'post-domain-source.json') -Raw | ConvertFrom-Json
 $shell = Get-Content (Join-Path $scratch 'post-shell-source.json') -Raw | ConvertFrom-Json
 
-function Invoke-CheckedProbe($source, $package, $label) {
-  & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner `
-    -Path $source.path -Package $package -Label $label `
-    -ExpectedSha256 $source.sha256 -Scratch $scratch
+function Invoke-CheckedProbe($source, $mode, $package, $label) {
+  $runnerArgs = @(
+    '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $runner,
+    '-Path', $source.path, '-Mode', $mode, '-Label', $label,
+    '-ExpectedSha256', $source.sha256, '-Scratch', $scratch
+  )
+  if ($mode -eq 'focused') { $runnerArgs += @('-Package', $package) }
+  & powershell.exe @runnerArgs
   $code = $LASTEXITCODE
   $metaPath = Join-Path $scratch "runs/$label-meta.json"
   if (-not (Test-Path $metaPath)) { throw "Infrastructure failure: $label metadata missing" }
   $meta = Get-Content $metaPath -Raw | ConvertFrom-Json
+  if ($meta.sync_started -and $meta.sync_exit_code -ne 0) {
+    throw "Confirmed candidate synchronization Cargo failure: $label"
+  }
   if ($code -eq 2 -or -not $meta.started -or -not $meta.restored) {
     throw "Infrastructure failure: invalidate the post measurement session"
   }
@@ -1317,11 +1382,11 @@ function Invoke-CheckedProbe($source, $package, $label) {
   }
 }
 
-Invoke-CheckedProbe $domain 'extractum-process' 'post-domain-warmup'
-Invoke-CheckedProbe $shell 'extractum' 'post-shell-warmup'
+Invoke-CheckedProbe $domain 'focused' 'extractum-process' 'post-domain-warmup'
+Invoke-CheckedProbe $shell 'workspace' '' 'post-shell-warmup'
 foreach ($index in 1..5) {
-  Invoke-CheckedProbe $domain 'extractum-process' "post-domain-$index"
-  Invoke-CheckedProbe $shell 'extractum' "post-shell-$index"
+  Invoke-CheckedProbe $domain 'focused' 'extractum-process' "post-domain-$index"
+  Invoke-CheckedProbe $shell 'workspace' '' "post-shell-$index"
 }
 ```
 
@@ -1397,12 +1462,15 @@ if ($post.marginal_repeat_allowed) {
   $repeatUsed = $true
   function Invoke-RepeatProbe($label) {
     & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $runner `
-      -Path $shell.path -Package extractum -Label $label `
+      -Path $shell.path -Mode workspace -Label $label `
       -ExpectedSha256 $shell.sha256 -Scratch $scratch
     $code = $LASTEXITCODE
     $metaPath = Join-Path $scratch "runs/$label-meta.json"
     if (-not (Test-Path $metaPath)) { throw "Infrastructure repeat failure" }
     $meta = Get-Content $metaPath -Raw | ConvertFrom-Json
+    if ($meta.sync_started -and $meta.sync_exit_code -ne 0) {
+      throw "Confirmed synchronization Cargo failure in repeat"
+    }
     if ($code -eq 2 -or -not $meta.started -or -not $meta.restored) {
       throw "Infrastructure repeat failure: invalidate repeat session"
     }
@@ -1481,7 +1549,9 @@ files.
 
 **Interfaces:**
 
-- Consumes `decision.json`; no human judgment changes its boolean.
+- Consumes `decision.json`; no human judgment changes its boolean. A confirmed
+  completion failure may mechanically change provisional retention to
+  `not_retained` with reason `completion_failure`.
 - Produces one committed verification record with status `retained` or
   `not_retained` and literal commands/results.
 - A retained path leaves `extractum-process` in the workspace. A rejected path
@@ -1498,102 +1568,184 @@ $decision = Get-Content (Join-Path $scratch 'decision.json') -Raw | ConvertFrom-
 $decision | Format-List
 if ($decision.reason -ne 'protocol_completed') { exit 1 }
 if ($decision.retain_candidate) {
-  'PATH=retained' | Set-Content (Join-Path $scratch 'final-path.txt')
+  'PATH=provisionally_retained' | Set-Content (Join-Path $scratch 'current-path.txt')
 } else {
-  'PATH=not_retained' | Set-Content (Join-Path $scratch 'final-path.txt')
+  'PATH=not_retained' | Set-Content (Join-Path $scratch 'current-path.txt')
 }
-Get-Content (Join-Path $scratch 'final-path.txt')
+Get-Content (Join-Path $scratch 'current-path.txt')
 ```
 
-Expected: exactly one path selected. Never reinterpret a failing metric as an
-architectural exception; Phase 3 already has its explicit architectural rule,
-and the shell cap remains binding.
+Expected: exactly one provisional path selected. Never reinterpret a failing
+metric as an architectural exception; Phase 3 already has its explicit
+architectural rule, the shell cap remains binding, and a provisional retained
+path can still become `not_retained` on a completion failure.
 
-- [ ] **Step 2A: On the retained path, run focused and dependent Rust gates**
+- [ ] **Step 2A: Run every command-based completion gate and route a failure**
 
-Run this step only when `decision.retain_candidate` is true:
+Run this step only while `decision.retain_candidate` is true. The first
+started command that exits nonzero, or a test gate that selects the wrong
+inventory, is a confirmed completion failure. It changes the decision to
+`not_retained` and joins Step 2B; it must not leave the candidate in an
+unclassified state.
 
 ```powershell
-cargo test --manifest-path src-tauri/Cargo.toml -p extractum-process --all-targets
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-cargo check --manifest-path src-tauri/Cargo.toml -p extractum-process --all-targets
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-process-current.txt') -Raw).Trim()
-$youtubeStdout = Join-Path $scratch 'youtube-process.stdout.log'
-$youtubeStderr = Join-Path $scratch 'youtube-process.stderr.log'
-$youtubeProcess = Start-Process -FilePath (Get-Command cargo.exe).Source -Wait -PassThru `
-  -NoNewWindow -RedirectStandardOutput $youtubeStdout -RedirectStandardError $youtubeStderr `
-  -ArgumentList @('test', '--manifest-path', 'src-tauri/Cargo.toml', '-p',
-    'extractum', '--lib', 'youtube::process_runtime::')
-$youtubeOutput = @(
-  @(Get-Content -LiteralPath $youtubeStdout -ErrorAction SilentlyContinue)
-  @(Get-Content -LiteralPath $youtubeStderr -ErrorAction SilentlyContinue)
-) | ForEach-Object { $_.ToString() }
-$youtubeOutput
-if ($youtubeProcess.ExitCode -ne 0 -or
-    -not (($youtubeOutput -join "`n") -match 'test result: ok\. [1-9][0-9]* passed')) {
-  exit 1
+$decisionPath = Join-Path $scratch 'decision.json'
+$decision = Get-Content $decisionPath -Raw | ConvertFrom-Json
+if ($decision.retain_candidate) {
+  $cargoExe = (Get-Command cargo.exe).Source
+  $cmdExe = (Get-Command cmd.exe).Source
+  $gates = @(
+    [pscustomobject]@{ name = 'process-tests'; file = $cargoExe; args = @(
+      'test', '--manifest-path', 'src-tauri/Cargo.toml', '-p',
+      'extractum-process', '--all-targets'); pattern = 'test result: ok\. 20 passed' },
+    [pscustomobject]@{ name = 'process-check'; file = $cargoExe; args = @(
+      'check', '--manifest-path', 'src-tauri/Cargo.toml', '-p',
+      'extractum-process', '--all-targets'); pattern = '' },
+    [pscustomobject]@{ name = 'app-check'; file = $cargoExe; args = @(
+      'check', '--manifest-path', 'src-tauri/Cargo.toml', '-p',
+      'extractum', '--all-targets'); pattern = '' },
+    [pscustomobject]@{ name = 'youtube-process-tests'; file = $cargoExe; args = @(
+      'test', '--manifest-path', 'src-tauri/Cargo.toml', '-p',
+      'extractum', '--lib', 'youtube::process_runtime::');
+      pattern = 'test result: ok\. [1-9][0-9]* passed' },
+    [pscustomobject]@{ name = 'rustfmt'; file = $cmdExe; args = @(
+      '/d', '/c', 'npm.cmd', 'run', 'check:rustfmt'); pattern = '' },
+    [pscustomobject]@{ name = 'workspace-check'; file = $cargoExe; args = @(
+      'check', '--manifest-path', 'src-tauri/Cargo.toml', '--workspace',
+      '--all-targets'); pattern = '' },
+    [pscustomobject]@{ name = 'workspace-tests'; file = $cargoExe; args = @(
+      'test', '--manifest-path', 'src-tauri/Cargo.toml', '--workspace',
+      '--all-targets'); pattern = '' },
+    [pscustomobject]@{ name = 'verify'; file = $cmdExe; args = @(
+      '/d', '/c', 'npm.cmd', 'run', 'verify'); pattern = '' },
+    [pscustomobject]@{ name = 'release-no-bundle'; file = $cmdExe; args = @(
+      '/d', '/c', 'npm.cmd', 'run', 'tauri', '--', 'build', '--no-bundle');
+      pattern = '' }
+  )
+
+  $results = @()
+  $failure = $null
+  foreach ($gate in $gates) {
+    $stdout = Join-Path $scratch "completion-$($gate.name).stdout.log"
+    $stderr = Join-Path $scratch "completion-$($gate.name).stderr.log"
+    try {
+      $process = Start-Process -FilePath $gate.file -ArgumentList $gate.args `
+        -Wait -PassThru -NoNewWindow -RedirectStandardOutput $stdout `
+        -RedirectStandardError $stderr
+    } catch {
+      [ordered]@{
+        gate = $gate.name
+        classification = 'infrastructure_failure'
+        error = $_.Exception.Message
+      } | ConvertTo-Json | Set-Content `
+        (Join-Path $scratch 'completion-infrastructure-failure.json')
+      throw
+    }
+    $output = @(
+      @(Get-Content $stdout -ErrorAction SilentlyContinue)
+      @(Get-Content $stderr -ErrorAction SilentlyContinue)
+    ) | ForEach-Object { $_.ToString() }
+    $patternOk = [string]::IsNullOrEmpty($gate.pattern) -or
+      (($output -join "`n") -match $gate.pattern)
+    $result = [pscustomobject]@{
+      gate = $gate.name
+      exit_code = $process.ExitCode
+      inventory_pattern_ok = $patternOk
+    }
+    $results += $result
+    if ($process.ExitCode -ne 0 -or -not $patternOk) {
+      $failure = $result
+      break
+    }
+  }
+  $results | ConvertTo-Json -Depth 4 |
+    Set-Content (Join-Path $scratch 'completion-gates.json')
+
+  if ($null -ne $failure) {
+    $failure | ConvertTo-Json -Depth 4 |
+      Set-Content (Join-Path $scratch 'completion-failure.json')
+    $decision.retain_candidate = $false
+    $decision.reason = 'completion_failure'
+    $decision | Add-Member -NotePropertyName completion_gate `
+      -NotePropertyValue $failure.gate -Force
+    $decision | ConvertTo-Json -Depth 6 | Set-Content $decisionPath
+    'PATH=not_retained' | Set-Content (Join-Path $scratch 'current-path.txt')
+  }
 }
 ```
 
-Expected: 20 process tests, both package checks, and a nonzero YouTube process
-runtime test selection pass.
+Expected on success: all nine records pass, including exactly 20 process tests
+and a nonzero YouTube selection; the decision stays provisionally retained.
+Expected on confirmed gate failure: `completion-failure.json` names the first
+failed gate, the decision becomes `completion_failure`, later gates are not
+run, and execution continues at Step 2B. An infrastructure start failure is
+recorded separately and stops the session without blaming or reverting the
+candidate.
 
-- [ ] **Step 3A: On the retained path, run all completion gates**
+- [ ] **Step 3A: On the retained path, smoke the release executable**
 
-Run this step only when `decision.retain_candidate` is true:
-
-```powershell
-npm.cmd run check:rustfmt
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-npm.cmd run verify
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-npm.cmd run tauri -- build --no-bundle
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-```
-
-Expected: formatting, workspace check/test, the repository verify pipeline,
-and release no-bundle build all pass. Preserve literal console summaries for
-the evidence document.
-
-- [ ] **Step 4A: On the retained path, smoke the release executable**
-
-Run this step only when `decision.retain_candidate` is true:
+Re-read `decision.json` and run this step only while
+`decision.retain_candidate` is true:
 
 ```powershell
-$exe = (Resolve-Path 'src-tauri/target/release/extractum.exe').Path
+$scratch = (Get-Content (Join-Path $env:TEMP 'extractum-process-current.txt') -Raw).Trim()
+$decisionPath = Join-Path $scratch 'decision.json'
+$decision = Get-Content $decisionPath -Raw | ConvertFrom-Json
 $process = $null
-try {
-  $process = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden
-  Start-Sleep -Seconds 5
-  $process.Refresh()
-  if ($process.HasExited) {
-    throw "Release executable exited early with code $($process.ExitCode)"
+$smokeFailure = $null
+if ($decision.retain_candidate) {
+  try {
+    $exe = (Resolve-Path 'src-tauri/target/release/extractum.exe').Path
+    $process = Start-Process -FilePath $exe -PassThru -WindowStyle Hidden
+    Start-Sleep -Seconds 5
+    $process.Refresh()
+    if ($process.HasExited) {
+      throw "Release executable exited early with code $($process.ExitCode)"
+    }
+  } catch {
+    $smokeFailure = $_.Exception.Message
+  } finally {
+    if ($null -ne $process -and -not $process.HasExited) {
+      Stop-Process -Id $process.Id -Force
+    }
   }
-} finally {
-  if ($null -ne $process -and -not $process.HasExited) {
-    Stop-Process -Id $process.Id -Force
+  if ($null -ne $smokeFailure) {
+    [ordered]@{
+      gate = 'startup-smoke'
+      classification = 'completion_failure'
+      error = $smokeFailure
+    } | ConvertTo-Json | Set-Content `
+      (Join-Path $scratch 'completion-failure.json')
+    $decision.retain_candidate = $false
+    $decision.reason = 'completion_failure'
+    $decision | Add-Member -NotePropertyName completion_gate `
+      -NotePropertyValue 'startup-smoke' -Force
+    $decision | ConvertTo-Json -Depth 6 | Set-Content $decisionPath
+    'PATH=not_retained' | Set-Content (Join-Path $scratch 'current-path.txt')
+  } else {
+    [ordered]@{ gate = 'startup-smoke'; passed = $true } | ConvertTo-Json |
+      Set-Content (Join-Path $scratch 'startup-smoke.json')
+    'PATH=retained' | Set-Content (Join-Path $scratch 'current-path.txt')
   }
 }
 ```
 
-Expected: the release executable remains alive for five seconds and is then
-stopped by PID. Do not leave an `extractum` process running.
+Expected on success: the release executable remains alive for five seconds,
+is stopped by PID, and the path becomes finally retained. Expected on failure:
+the process is still cleaned up, the failed smoke joins the negative
+evidence/revert path, and no `extractum` process remains.
 
 - [ ] **Step 2B: On the rejected path, write the negative decision before rollback**
 
-Run this step only when `decision.retain_candidate` is false. Create
+Re-read `decision.json` and run this step whenever
+`decision.retain_candidate` is false. Create
 `docs/superpowers/verification/2026-07-17-extractum-process-extraction.md`
 with the document structure in Step 5, status `not_retained`, and literal
-baseline/post/repeat metrics. State that correctness up to the measurement
-point passed but the shell cap did not. Do not claim completion gates that were
-intentionally skipped.
+baseline/post/repeat metrics. For `protocol_completed`, state that the shell
+cap failed. For `completion_failure`, name the failed gate from
+`completion-failure.json`, list prior gates that passed, and state that later
+gates were skipped. Do not describe either branch as retained.
 
 - [ ] **Step 3B: On the rejected path, revert the candidate non-destructively**
 
@@ -1691,6 +1843,7 @@ with these headings and actual values; do not prefill PASS values:
 - Focused process tests/check: `<literal results>`
 - Linux cross-target check: `<literal result>`
 - App dependent checkpoint: `<literal result>`
+- Completion outcome: `<passed | failed gate name from completion-failure.json>`
 - Workspace check/test: `<literal result or skipped on negative path>`
 - `npm.cmd run verify`: `<literal result or skipped>`
 - Release no-bundle/startup smoke: `<literal result or skipped>`
@@ -1707,10 +1860,11 @@ negative record clearly distinguishes skipped gates from passing gates.
 Update `docs/superpowers/specs/2026-07-17-crate-roadmap.md` from the literal
 decision at the same time:
 
-- retained: mark Phase 3 completed with the candidate/evidence commits and
-  identify Phase 4 planning as the next authorized step;
-- not retained: mark Phase 3 not retained with the shell-cap result and keep
-  Phase 4 blocked pending a new approved design.
+- retained: mark Phase 3 completed with the candidate commit and verification
+  document, and identify Phase 4 planning as the next authorized step;
+- not retained: mark Phase 3 not retained with the exact performance or
+  completion-failure reason and rollback commit, and keep Phase 4 blocked
+  pending a new approved design.
 
 Do not change phase ordering or thresholds while recording the result.
 
