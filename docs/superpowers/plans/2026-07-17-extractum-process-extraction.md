@@ -1330,12 +1330,12 @@ $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-process-current.txt') -R
 $stdout = Join-Path $scratch 'post-inventory.stdout.log'
 $stderr = Join-Path $scratch 'post-inventory.stderr.log'
 $cargoExe = (Get-Command cargo.exe).Source
-$args = @(
+$postArgs = @(
   'test', '--manifest-path', 'src-tauri/Cargo.toml', '--workspace',
   '--all-targets', '--', '--list'
 )
-$process = Start-Process -FilePath $cargoExe -ArgumentList $args -Wait -PassThru `
-  -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+& $cargoExe @postArgs 1> $stdout 2> $stderr
+$exitCode = $LASTEXITCODE
 $lines = @(
   @(Get-Content -LiteralPath $stdout -ErrorAction SilentlyContinue)
   @(Get-Content -LiteralPath $stderr -ErrorAction SilentlyContinue)
@@ -1353,7 +1353,7 @@ $postProcess = @($unique | Where-Object {
 $missingProcess = @($processBaseline | Where-Object { $_ -notin $postProcess })
 $extraProcess = @($postProcess | Where-Object { $_ -notin $processBaseline })
 $comparison = [ordered]@{
-  exit = $process.ExitCode
+  exit = $exitCode
   baseline_count = $baseline.Count
   post_count = $unique.Count
   missing_count = $missing.Count
@@ -1365,7 +1365,7 @@ $comparison = [ordered]@{
 $comparison | ConvertTo-Json -Depth 5 |
   Set-Content -LiteralPath (Join-Path $scratch 'inventory-comparison.json')
 $comparison | Format-List
-if ($process.ExitCode -ne 0 -or $unique.Count -ne $names.Count -or
+if ($exitCode -ne 0 -or $unique.Count -ne $names.Count -or
     $unique.Count -lt $baseline.Count -or
     $missing.Count -ne 0 -or $postProcess.Count -ne 20 -or
     $missingProcess.Count -ne 0 -or $extraProcess.Count -ne 0) { exit 1 }
