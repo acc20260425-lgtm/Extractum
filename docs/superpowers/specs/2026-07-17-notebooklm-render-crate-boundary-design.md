@@ -5,10 +5,11 @@
 
 ## Summary
 
-Extract the pure NotebookLM rendering pipeline from the Tauri application into
-a second domain crate, `extractum-notebooklm-render`, only if a controlled
-before/after experiment demonstrates a material improvement in incremental
-`cargo check` time.
+First run a cheap surrogate experiment against the already-extracted
+`extractum-core`. Extract the pure NotebookLM rendering pipeline into a second
+domain crate, `extractum-notebooklm-render`, only if that preflight demonstrates
+that an extracted dependency can materially improve the full incremental
+workspace-check loop on this repository and machine.
 
 The candidate boundary contains seven existing modules:
 
@@ -40,9 +41,10 @@ for preserving the complete test inventory when module paths change.
 - filesystem and manifest lifecycle.
 
 The goal of this slice is not merely to reduce the size of the application
-module. The goal is to prove that placing the pure rendering pipeline behind a
-crate boundary produces a meaningful improvement in the daily incremental
-compile loop without slowing edits to the remaining application shell.
+module. The goal is to test, before implementation, whether a crate boundary
+can improve the full incremental workspace-check loop without slowing edits to
+the remaining application shell. Focused package checks are a different daily
+workflow and are not allowed to substitute for the selected workspace metric.
 
 ## Investigation Evidence
 
@@ -63,6 +65,18 @@ These seven modules use only the standard library plus `serde`, `serde_json`,
 `time`, and the already-extracted media metadata API from `extractum-core`.
 They do not use Tauri, SQLx, grammers, database pools, readiness state, or
 application process state.
+
+The earlier workspace/core experiment already provides a warning against the
+original measurement model. Its application-domain comment probe measured
+7,608 ms before and 7,632 ms after the first core extraction (+0.32%). Its
+application-shell probe measured 7,592 ms before and 7,634 ms after (+0.55%).
+Both probe files remained in the application crate, so this evidence shows that
+the first split did not accelerate app-file edits; it does not directly measure
+an edit inside an extracted dependency. Stage 0 below supplies that missing
+comparison before another extraction is attempted. The older 39.7-second
+incremental value from the 2026-07-14 profiling session was captured under a
+colder cache state and is not the baseline for this design. Current thresholds
+therefore apply only to fresh, same-session paired measurements.
 
 The remaining modules have application-facing dependencies:
 
@@ -204,34 +218,62 @@ No Cargo, rustc, rust-analyzer, Tauri, or Extractum process may be active when a
 measurement sequence begins. Use the existing `src-tauri/target`; do not create
 slice-specific target directories and do not run `cargo clean`.
 
-### Probes
+### Stage 0: Surrogate Go/No-Go
 
-Capture two baseline probes before changing workspace structure:
+Before changing a manifest or moving a source file, run a paired experiment
+using boundaries that already exist:
 
-1. **Domain probe:** an inert, reversible comment edit in
+1. **Application-domain probe:** an inert, reversible comment edit in
    `notebooklm_export/renderer.rs`.
-2. **Shell probe:** an inert, reversible comment edit in the surviving
+2. **Extracted-dependency surrogate:** the same inert comment edit in
+   `extractum-core/src/media_metadata.rs`.
+
+Both probes use the full command:
+
+```powershell
+cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets
+```
+
+Alternate the two variants after one discarded warm-up per variant, recording
+five successful cycles of each. In every cycle, restore the file byte-for-byte
+and run a no-op check before the next edit. Store raw logs, hashes, and JSON
+summaries outside the repository.
+
+The surrogate is a go only when its median is at least 25% and at least 2.0
+seconds faster than the fresh application-domain median. These thresholds
+express a user-visible minimum improvement; they are not calibrated from the
+obsolete 39.7-second cold-cache sample.
+
+If the surrogate fails either threshold, stop the slice before implementation.
+Write a verification record for the negative preflight, retain no production
+or workspace-structure change, and do not spend time on the seven-module move,
+post-extraction measurements, release build, or test-rename migration.
+
+For diagnostic context only, also measure the focused surrogate loop with
+`cargo check -p extractum-core --all-targets`. A fast focused result does not
+override a failed workspace go/no-go decision. Choosing focused package work as
+the product goal requires a revised specification and user approval.
+
+### Stage 1: Candidate Measurement
+
+Stage 1 exists only after the surrogate passes.
+
+Capture fresh baselines for:
+
+1. **Domain probe:** the same comment edit in
+   `notebooklm_export/renderer.rs`.
+2. **Shell probe:** the same comment edit in the surviving
    `notebooklm_export/mod.rs`.
 
-For each probe:
-
-1. run one discarded warm-up cycle;
-2. perform five recorded cycles;
-3. in each cycle, insert the exact probe comment, run
-   `cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets`,
-   record wall time and exit status, restore the file byte-for-byte, and run a
-   no-op check before the next cycle;
-4. store raw logs and JSON summaries in a temporary directory outside the
-   repository.
-
 After extraction, repeat the domain probe in the same logical `renderer.rs` at
-its new crate path. Repeat the shell probe in the unchanged application
-`notebooklm_export/mod.rs`.
+its new crate path and repeat the shell probe in the unchanged application
+file. Use one discarded warm-up and five recorded cycles per variant, preserve
+byte-for-byte restoration, and keep all raw artifacts outside the repository.
 
 Also capture one `cargo build --timings` report and repeated no-op check values
 before and after. These are diagnostic evidence, not hard retention gates.
 
-### Predeclared Retention Gates
+### Predeclared Candidate Retention Gates
 
 Retain the extraction only when all of these are true:
 
@@ -242,14 +284,10 @@ Retain the extraction only when all of these are true:
    absolutely;
 5. the complete Rust test inventory and all correctness gates pass.
 
-Both shell limits must be satisfied. The thresholds are fixed before any
-candidate measurement. Individual runs may not be discarded after results are
-visible, except for the single predeclared warm-up.
-
-If the candidate fails a performance or correctness gate, restore the complete
-pre-extraction source and manifest state byte-for-byte. Preserve the negative
-experiment and raw measurements in the verification record; do not retain a
-partial crate split.
+Both shell limits must be satisfied. Individual runs may not be discarded
+after results are visible, except for each predeclared warm-up. If the candidate
+fails, restore the complete pre-extraction state byte-for-byte and preserve the
+negative result without retaining a partial crate split.
 
 ## Test Inventory
 
@@ -261,6 +299,7 @@ cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets -- --l
 
 The 22 tests in the seven candidate modules move with their implementations:
 
+- `model`: 0, so it has no rename-map entries;
 - `filename`: 5;
 - `links`: 1;
 - `media`: 2;
@@ -318,7 +357,11 @@ metric for this slice.
 
 ## Acceptance Criteria
 
-The slice is accepted only when:
+The measurement slice is accepted when Stage 0 produces five valid paired
+samples per variant, restores both probe files byte-for-byte, and records the
+predeclared go/no-go decision without changing thresholds after observation.
+
+The crate extraction is retained only when:
 
 1. the seven pure modules and their 22 tests exist only in
    `extractum-notebooklm-render`;
@@ -328,10 +371,13 @@ The slice is accepted only when:
 4. the new crate has exactly the approved dependency roots and curated API;
 5. the full test inventory is preserved through the explicit rename map;
 6. all automated and release gates pass;
-7. the predeclared domain and shell performance thresholds pass.
+7. Stage 0 passed both surrogate thresholds;
+8. the predeclared Stage 1 domain and shell thresholds pass.
 
-If criterion 7 fails, the correct accepted outcome is a documented negative
-experiment with no retained production-code or workspace-structure change.
+If Stage 0 fails, the correct accepted outcome is a documented negative
+preflight with no implementation attempt. If Stage 1 fails, the correct
+accepted outcome is a documented negative candidate with no retained
+production-code or workspace-structure change.
 
 ## Non-Goals
 
@@ -344,6 +390,8 @@ experiment with no retained production-code or workspace-structure change.
 - Splitting the seven-module candidate into several tiny crates.
 - Adding `cargo-nextest`, sccache, linker changes, or a new target directory.
 - Optimizing release build or WiX packaging time.
+- Claiming focused package-check speed as an improvement to rust-analyzer or
+  the full workspace-check loop.
 
 ## Rejected Alternatives
 
@@ -366,10 +414,20 @@ The command, progress, DB, filesystem, and rendering responsibilities are too
 intertwined for a mechanical first extraction. A full move would be a broader
 architecture project rather than a bounded compile-time experiment.
 
+### Use focused package commands as the current acceptance metric
+
+`cargo check -p extractum-notebooklm-render --all-targets` and focused package
+tests are the workflow most likely to benefit from a crate split. That is a
+valid alternative product goal, but it does not accelerate the selected full
+workspace command and should not be introduced silently after a failed
+surrogate. It requires a separately approved revision with newly calibrated
+focused-loop thresholds.
+
 ## Follow-Up
 
 If the candidate is retained, use the measurement evidence to decide whether a
-later slice should isolate SQL row mapping from orchestration. That follow-up
-requires its own dependency map and design. If the candidate is rejected, do
-not attempt a larger NotebookLM crate until profiling identifies a different
+later slice should isolate SQL row mapping from orchestration. If Stage 0
+rejects the workspace hypothesis, decide explicitly whether focused package
+development is valuable enough to justify a new spec. Do not attempt a larger
+NotebookLM crate until profiling identifies a different full-workspace
 compile-time boundary.
