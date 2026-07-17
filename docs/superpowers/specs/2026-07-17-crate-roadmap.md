@@ -17,7 +17,8 @@ Completed and in-flight slices governed by their own documents:
   — approved just-in-time boundary for phase 3 `extractum-process` and the
   phase 4 focused Gemini Browser engine. The Phase 3 implementation plan is
   [`2026-07-17-extractum-process-extraction.md`](../plans/2026-07-17-extractum-process-extraction.md);
-  execution is pending.
+  execution was measured and not retained; see the verification record linked
+  in Phase 3.
 
 - `2026-07-15-rust-workspace-crate-extraction-design.md` — workspace +
   `extractum-core` (`error`, `time`, `compression`). Done.
@@ -238,14 +239,18 @@ crate was created; the branch selected in "Decision Framework" governs all
 later phases. The seven-module boundary remains a valid future candidate
 under the focused-loop metric if a phase ever needs it.
 
-### Phase 3 — `extractum-process` (approved, plan ready)
+### Phase 3 — `extractum-process` (not retained)
 
 `external_process`, `child_process`, and `process_tree` become shared
 OS-process infrastructure below Gemini Browser, YouTube, and diagnostics.
 `job_helpers` stays app-side. The approved JIT boundary, facade requirement,
 fresh evidence, and architectural-only justification are defined in
-`2026-07-17-process-and-gemini-browser-crate-boundary-design.md`. Execution
-follows `../plans/2026-07-17-extractum-process-extraction.md`.
+`2026-07-17-process-and-gemini-browser-crate-boundary-design.md`. Candidate
+`b364756c` improved the focused median from 9171 ms to 2049 ms, but regressed
+the app-shell median from 9135 ms to 10177 ms (+1042 ms / +11.41%), beyond the
+approved +500 ms / +5% cap. It was not retained and was rolled back in
+`c47372dc`; see
+[`2026-07-17-extractum-process-extraction.md`](../verification/2026-07-17-extractum-process-extraction.md).
 
 ### Phase 4 — `extractum-gemini-browser` (boundary approved)
 
@@ -253,8 +258,8 @@ follows `../plans/2026-07-17-extractum-process-extraction.md`.
 self-contained (only 7 joint commits with `prompt_packs`). Depends on
 process infrastructure + core. The approved design keeps Tauri commands,
 application paths, SQL/Apalis storage, and worker registration app-side while
-extracting the portable automation engine. Phase 4 planning starts only after
-phase 3 is retained.
+extracting the portable automation engine. Phase 4 remains blocked because
+phase 3 was not retained; continuing requires a new approved design.
 
 ### Phase 5 — `extractum-llm`
 
