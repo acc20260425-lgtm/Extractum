@@ -136,8 +136,8 @@ main branch point.
   are inherited as common mechanics from the render spec. For hot-module
   phases 4–6, the focused-loop spec is the normative source for commands,
   thresholds, and failure classification.
-- Domain retention gate: ≥25% and ≥2.0 s median improvement on the domain
-  probe; shell regression ≤5% and ≤0.5 s. Thresholds are fixed before
+- Hot-module domain retention and shell-regression gates are defined by
+  `2026-07-17-focused-rust-loop-design.md`. Thresholds are fixed before
   observation and never recalibrated afterward.
 - **Branch on the render slice outcome:**
   - **Stage 0 go, Stage 1 retain** — the full-workspace hypothesis holds on
@@ -340,7 +340,7 @@ integration tests, WiX/MSI packaging concerns.
 | `analysis/trace.rs` direct `zstd::` → `core::compression` | phase 7 at the latest |
 | `sources::test_support` ownership (fixture crate vs app-side integration tests) | first producer-domain extraction whose tests consume it |
 | WiX MSI diagnosis (`light.exe` failure/hang, likely ICE validation in non-interactive sessions) | separate follow-up task; unblocks restoring full-bundle gates |
-| Focused-loop metric respec | **Completed 2026-07-17**: branch (a)+(b), commands, thresholds, failure policy, and plan structure are defined in `2026-07-17-focused-rust-loop-design.md` |
+| Focused-loop metric respec | **Spec approved 2026-07-17; enforcement pending**: branch (a)+(b), commands, thresholds, failure policy, and plan structure are defined in `2026-07-17-focused-rust-loop-design.md`; complete after the `AGENTS.md` policy and contract are green |
 
 ## Non-Goals
 

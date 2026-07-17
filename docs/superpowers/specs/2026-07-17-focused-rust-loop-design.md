@@ -5,12 +5,12 @@
 
 ## Purpose
 
-This specification defines the Rust inner-development loop used by Codex in
-Extractum after the crate-roadmap Stage 0 experiment falsified the claim that
-editing an extracted dependency materially accelerates a full-workspace
-check. It makes focused package checks and tests the normal feedback loop for
-small Rust changes while preserving full-workspace checks as mandatory
-end-of-slice correctness gates.
+This specification defines the Rust inner-development loop used by LLM agents
+working in this repository after the crate-roadmap Stage 0 experiment
+falsified the claim that editing an extracted dependency materially
+accelerates a full-workspace check. It makes focused package checks and tests
+the normal feedback loop for small Rust changes while preserving
+full-workspace checks as mandatory end-of-slice correctness gates.
 
 The policy is project-specific. It is adopted through `AGENTS.md` and the
 required structure of generated implementation plans. Repository or installed
@@ -105,6 +105,25 @@ The normal Rust task sequence is:
 This ordering keeps repeated feedback cheap without reducing final coverage.
 All workspace members continue to share canonical `src-tauri/target`; the
 focused loop must not create slice-specific target directories.
+
+The first Rust check in a session may be a cold 39.7–55.6 second run rather
+than a warm 1–2 second focused run. That expected warm-up cost is not a policy
+violation or, by itself, evidence of a build problem; subsequent inner-loop
+commands provide the useful warm comparison.
+
+## Deferred Integration Feedback
+
+A focused check of an extracted package proves that package and its own test
+targets compile. It does not compile downstream consumers such as the
+`extractum` application. This defers some integration feedback in exchange for
+the faster repeated loop.
+
+When a task changes a public cross-crate interface, its implementation plan
+must add a checkpoint for the immediate dependent package, commonly
+`cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`.
+Unchanged internal implementation work does not pay that dependent-package
+cost after every edit. The end-of-slice workspace gates remain the final
+backstop for all downstream consumers.
 
 ## Implementation-Plan Contract
 
@@ -251,7 +270,9 @@ RED/GREEN pressure-testing workflow.
 3. A zero-test filtered run is explicitly rejected as evidence.
 4. The source contract demonstrates RED before the policy lands and GREEN
    afterward.
-5. The crate roadmap links this specification and marks the respec complete.
+5. Before enforcement lands, the crate roadmap links this approved
+   specification and marks enforcement pending; the implementation slice
+   closes the item only after the `AGENTS.md` policy and contract are green.
 6. Repository Superpowers skills remain unchanged.
 7. The focused contract test, full frontend test suite, and `npm.cmd run
    verify` pass.
