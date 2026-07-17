@@ -1,6 +1,6 @@
 # NotebookLM Render Crate Boundary Design
 
-**Status:** Approved in conversation; awaiting written-spec review
+**Status:** Approved in conversation
 **Date:** 2026-07-17
 
 ## Summary
@@ -228,6 +228,12 @@ using boundaries that already exist:
 2. **Extracted-dependency surrogate:** the same inert comment edit in
    `extractum-core/src/media_metadata.rs`.
 
+This surrogate is intentionally conservative: under `--all-targets`, a core
+edit also checks core's own test targets and touches a dependency shared more
+broadly than the proposed render crate, so it may slightly overstate the cost
+of editing the future render crate. Record that asymmetry when interpreting a
+result close to either threshold; it does not relax the predeclared gate.
+
 Both probes use the full command:
 
 ```powershell
@@ -238,6 +244,15 @@ Alternate the two variants after one discarded warm-up per variant, recording
 five successful cycles of each. In every cycle, restore the file byte-for-byte
 and run a no-op check before the next edit. Store raw logs, hashes, and JSON
 summaries outside the repository.
+
+The implementation plan must preserve the established measurement-failure
+classification. Missing run metadata, failure before Cargo starts, or an
+unconfirmed runner result is an infrastructure failure: invalidate the whole
+measurement session and restart from both warm-ups. A recorded Cargo invocation
+with complete metadata and a nonzero exit is a confirmed probe failure: stop
+and investigate it rather than treating it as a timing sample or silently
+continuing. No failed run may be replaced piecemeal inside an otherwise valid
+sequence.
 
 The surrogate is a go only when its median is at least 25% and at least 2.0
 seconds faster than the fresh application-domain median. These thresholds
