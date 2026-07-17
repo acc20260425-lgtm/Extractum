@@ -24,7 +24,8 @@ Completed and in-flight slices governed by their own documents:
   `docs/superpowers/verification/2026-07-17-notebooklm-render-crate-boundary.md`.
 - [`2026-07-17-focused-rust-loop-design.md`](2026-07-17-focused-rust-loop-design.md)
   — focused package commands, extraction-retention thresholds, plan-shape
-  requirements, and unchanged end-of-slice workspace gates. Approved.
+  requirements, and unchanged end-of-slice workspace gates. Enforced through
+  `AGENTS.md` and `src/lib/focused-rust-loop-contract.test.ts`.
 
 ## Evidence Base
 
@@ -340,7 +341,7 @@ integration tests, WiX/MSI packaging concerns.
 | `analysis/trace.rs` direct `zstd::` → `core::compression` | phase 7 at the latest |
 | `sources::test_support` ownership (fixture crate vs app-side integration tests) | first producer-domain extraction whose tests consume it |
 | WiX MSI diagnosis (`light.exe` failure/hang, likely ICE validation in non-interactive sessions) | separate follow-up task; unblocks restoring full-bundle gates |
-| Focused-loop metric respec | **Spec approved 2026-07-17; enforcement pending**: branch (a)+(b), commands, thresholds, failure policy, and plan structure are defined in `2026-07-17-focused-rust-loop-design.md`; complete after the `AGENTS.md` policy and contract are green |
+| Focused-loop metric respec | **Completed 2026-07-17**: branch (a)+(b), commands, thresholds, failure policy, and plan structure are enforced through `AGENTS.md` and `src/lib/focused-rust-loop-contract.test.ts` |
 
 ## Non-Goals
 
