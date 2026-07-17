@@ -283,9 +283,10 @@ Run sequentially:
 
 ```powershell
 $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-notebooklm-render-current.txt') -Raw).Trim()
-& (Join-Path $scratch 'invoke-probe.ps1') -SourceKey app -Label 'warmup-app'
+$runner = Join-Path $scratch 'invoke-probe.ps1'
+& powershell.exe -NoLogo -NoProfile -File $runner -SourceKey app -Label 'warmup-app'
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-& (Join-Path $scratch 'invoke-probe.ps1') -SourceKey core -Label 'warmup-core'
+& powershell.exe -NoLogo -NoProfile -File $runner -SourceKey core -Label 'warmup-core'
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 ```
 
@@ -299,10 +300,11 @@ Run:
 
 ```powershell
 $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-notebooklm-render-current.txt') -Raw).Trim()
+$runner = Join-Path $scratch 'invoke-probe.ps1'
 for ($index = 1; $index -le 5; $index++) {
   foreach ($variant in @('app','core')) {
     $label = "recorded-$index-$variant"
-    & (Join-Path $scratch 'invoke-probe.ps1') -SourceKey $variant -Label $label
+    & powershell.exe -NoLogo -NoProfile -File $runner -SourceKey $variant -Label $label
     if ($LASTEXITCODE -ne 0) {
       $metaPath = Join-Path $scratch "runs/$label-meta.json"
       if (-not (Test-Path $metaPath)) { throw 'Infrastructure failure: metadata absent' }
@@ -325,10 +327,11 @@ Run one discarded warm-up and five recorded samples using the core probe:
 
 ```powershell
 $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-notebooklm-render-current.txt') -Raw).Trim()
-& (Join-Path $scratch 'invoke-probe.ps1') -SourceKey core -Label 'focused-warmup' -FocusedCore
+$runner = Join-Path $scratch 'invoke-probe.ps1'
+& powershell.exe -NoLogo -NoProfile -File $runner -SourceKey core -Label 'focused-warmup' -FocusedCore
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 for ($index = 1; $index -le 5; $index++) {
-  & (Join-Path $scratch 'invoke-probe.ps1') -SourceKey core `
+  & powershell.exe -NoLogo -NoProfile -File $runner -SourceKey core `
     -Label "focused-$index" -FocusedCore
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
@@ -344,6 +347,7 @@ Run:
 $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-notebooklm-render-current.txt') -Raw).Trim()
 function Get-Median([long[]]$Values) {
   $sorted = @($Values | Sort-Object)
+  if ($sorted.Count -eq 0) { throw 'Median requires at least one value' }
   if ($sorted.Count % 2 -eq 1) { return [double]$sorted[[int]($sorted.Count / 2)] }
   return ($sorted[$sorted.Count / 2 - 1] + $sorted[$sorted.Count / 2]) / 2.0
 }
@@ -534,14 +538,14 @@ Run discarded warm-ups and five alternating pairs:
 
 ```powershell
 $runner = Join-Path $scratch 'invoke-probe.ps1'
-& $runner -SourceKey app -Label 'stage1-baseline-warmup-domain'
+& powershell.exe -NoLogo -NoProfile -File $runner -SourceKey app -Label 'stage1-baseline-warmup-domain'
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-& $runner -SourceKey shell -Label 'stage1-baseline-warmup-shell'
+& powershell.exe -NoLogo -NoProfile -File $runner -SourceKey shell -Label 'stage1-baseline-warmup-shell'
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 for ($index = 1; $index -le 5; $index++) {
-  & $runner -SourceKey app -Label "stage1-baseline-domain-$index"
+  & powershell.exe -NoLogo -NoProfile -File $runner -SourceKey app -Label "stage1-baseline-domain-$index"
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-  & $runner -SourceKey shell -Label "stage1-baseline-shell-$index"
+  & powershell.exe -NoLogo -NoProfile -File $runner -SourceKey shell -Label "stage1-baseline-shell-$index"
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 ```
@@ -551,7 +555,9 @@ Validate and summarize with:
 ```powershell
 function Get-Median([long[]]$Values) {
   $sorted = @($Values | Sort-Object)
-  return [double]$sorted[2]
+  if ($sorted.Count -eq 0) { throw 'Median requires at least one value' }
+  if ($sorted.Count % 2 -eq 1) { return [double]$sorted[[int]($sorted.Count / 2)] }
+  return ($sorted[$sorted.Count / 2 - 1] + $sorted[$sorted.Count / 2]) / 2.0
 }
 $metas = @(Get-ChildItem (Join-Path $scratch 'runs') -Filter 'stage1-baseline-*-meta.json' |
   ForEach-Object { Get-Content $_.FullName -Raw | ConvertFrom-Json })
@@ -585,8 +591,10 @@ cargo build --manifest-path src-tauri/Cargo.toml --workspace --all-targets --tim
 ```
 
 Record the newest `src-tauri/target/cargo-timings/cargo-timing*.html` path and
-SHA-256 in scratch, remove the comment byte-for-byte, and run one restoring
-check. These values are diagnostic, not retention gates.
+SHA-256 in scratch. Apply the comment from a saved byte array and wrap the
+build in `try/finally`; the `finally` block must restore the saved bytes and
+verify the starting SHA-256 before one restoring check. These values are
+diagnostic, not retention gates.
 
 ---
 
@@ -679,13 +687,19 @@ editing implementation files.
 In `src-tauri/Cargo.toml`:
 
 1. add `"crates/extractum-notebooklm-render"` to `[workspace].members`;
-2. add
+2. add `extractum-core = { path = "crates/extractum-core" }` under
+   `[workspace.dependencies]` and change the root package declaration to
+   `extractum-core = { workspace = true }`;
+3. add
    `extractum-notebooklm-render = { path = "crates/extractum-notebooklm-render" }`
    under `[workspace.dependencies]`;
-3. add `extractum-notebooklm-render = { workspace = true }` under the root
+4. add `extractum-notebooklm-render = { workspace = true }` under the root
    package `[dependencies]`;
-4. leave all external versions, profiles, target settings, and existing
-   `extractum-core` declarations unchanged.
+5. leave all external versions, profiles, target settings, and external
+   dependency declarations unchanged.
+
+Step 2 is required before the new crate can inherit
+`extractum-core.workspace = true`.
 
 Create the new manifest exactly as:
 
@@ -880,7 +894,23 @@ git commit -m "refactor: extract notebooklm render crate"
 ```
 
 Record this commit hash as `candidate_commit` in scratch. Do not yet call the
-candidate retained.
+candidate retained. Also record the committed shell shape that the post probe
+must protect:
+
+```powershell
+$scratch = (Get-Content (Join-Path $env:TEMP 'extractum-notebooklm-render-current.txt') -Raw).Trim()
+$candidateCommit = (git rev-parse HEAD).Trim()
+$shellPath = 'src-tauri/src/notebooklm_export/mod.rs'
+@{
+  candidate_commit = $candidateCommit
+  path = $shellPath
+  sha256 = (Get-FileHash $shellPath -Algorithm SHA256).Hash
+  blob = (git rev-parse "$candidateCommit`:$shellPath").Trim()
+} | ConvertTo-Json | Set-Content (Join-Path $scratch 'candidate-shell.json')
+```
+
+Expected: the working-tree SHA-256 describes the committed candidate file and
+the Git blob resolves at `candidate_commit`.
 
 ---
 
@@ -991,9 +1021,13 @@ Run:
 
 ```powershell
 $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-notebooklm-render-current.txt') -Raw).Trim()
-$shellBaseline = Get-Content (Join-Path $scratch 'shell-source.json') -Raw | ConvertFrom-Json
-if ((Get-FileHash $shellBaseline.path -Algorithm SHA256).Hash -ne $shellBaseline.sha256) {
-  throw 'Application shell changed since its Stage 1 baseline'
+$candidateShell = Get-Content (Join-Path $scratch 'candidate-shell.json') -Raw | ConvertFrom-Json
+$candidateHead = (git rev-parse HEAD).Trim()
+$candidateBlob = (git rev-parse "$candidateHead`:$($candidateShell.path)").Trim()
+if ($candidateHead -ne $candidateShell.candidate_commit -or
+    $candidateBlob -ne $candidateShell.blob -or
+    (Get-FileHash $candidateShell.path -Algorithm SHA256).Hash -ne $candidateShell.sha256) {
+  throw 'Application shell changed after the candidate commit'
 }
 $postSources = @{
   'post-domain' = 'src-tauri/crates/extractum-notebooklm-render/src/renderer.rs'
@@ -1011,8 +1045,9 @@ foreach ($entry in $postSources.GetEnumerator()) {
 }
 ```
 
-Expected: the unchanged shell hash matches its baseline and both post snapshots
-exist outside the repository.
+Expected: the shell matches its committed candidate shape, which intentionally
+differs from the pre-extraction baseline because it now contains compatibility
+facades; both post snapshots exist outside the repository.
 
 - [ ] **Step 2: Run post-extraction domain and shell series**
 
@@ -1020,14 +1055,14 @@ Run:
 
 ```powershell
 $runner = Join-Path $scratch 'invoke-probe.ps1'
-& $runner -SourceKey post-domain -Label 'stage1-post-warmup-domain'
+& powershell.exe -NoLogo -NoProfile -File $runner -SourceKey post-domain -Label 'stage1-post-warmup-domain'
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-& $runner -SourceKey post-shell -Label 'stage1-post-warmup-shell'
+& powershell.exe -NoLogo -NoProfile -File $runner -SourceKey post-shell -Label 'stage1-post-warmup-shell'
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 for ($index = 1; $index -le 5; $index++) {
-  & $runner -SourceKey post-domain -Label "stage1-post-domain-$index"
+  & powershell.exe -NoLogo -NoProfile -File $runner -SourceKey post-domain -Label "stage1-post-domain-$index"
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-  & $runner -SourceKey post-shell -Label "stage1-post-shell-$index"
+  & powershell.exe -NoLogo -NoProfile -File $runner -SourceKey post-shell -Label "stage1-post-shell-$index"
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 ```
@@ -1061,7 +1096,9 @@ Run:
 ```powershell
 function Get-Median([long[]]$Values) {
   $sorted = @($Values | Sort-Object)
-  return [double]$sorted[2]
+  if ($sorted.Count -eq 0) { throw 'Median requires at least one value' }
+  if ($sorted.Count % 2 -eq 1) { return [double]$sorted[[int]($sorted.Count / 2)] }
+  return ($sorted[$sorted.Count / 2 - 1] + $sorted[$sorted.Count / 2]) / 2.0
 }
 $baseline = Get-Content (Join-Path $scratch 'stage1-baseline-summary.json') -Raw | ConvertFrom-Json
 $inventory = Get-Content (Join-Path $scratch 'stage1-inventory-comparison.json') -Raw | ConvertFrom-Json

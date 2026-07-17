@@ -281,8 +281,11 @@ Capture fresh baselines for:
    `notebooklm_export/mod.rs`.
 
 After extraction, repeat the domain probe in the same logical `renderer.rs` at
-its new crate path and repeat the shell probe in the unchanged application
-file. Use one discarded warm-up and five recorded cycles per variant, preserve
+its new crate path and repeat the shell probe in `notebooklm_export/mod.rs` in
+the committed candidate shape that contains the compatibility facades. The
+shell file is expected to differ from its pre-extraction baseline; it must not
+change between the candidate commit and the post-candidate measurement. Use
+one discarded warm-up and five recorded cycles per variant, preserve
 byte-for-byte restoration, and keep all raw artifacts outside the repository.
 
 Also capture one `cargo build --timings` report and repeated no-op check values
