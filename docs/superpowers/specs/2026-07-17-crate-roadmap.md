@@ -19,7 +19,9 @@ Completed and in-flight slices governed by their own documents:
   `media_metadata` into core. Done.
 - `2026-07-17-notebooklm-render-crate-boundary-design.md` — Stage 0
   surrogate preflight, then conditional `extractum-notebooklm-render`.
-  In flight; its outcome selects the branch in "Decision Framework" below.
+  Closed 2026-07-17 with a `no_go` preflight (commit `1cf1485b`): the
+  full-workspace hypothesis is falsified; the crate was not created. See
+  `docs/superpowers/verification/2026-07-17-notebooklm-render-crate-boundary.md`.
 
 ## Evidence Base
 
@@ -145,6 +147,16 @@ main branch point.
     dependency hygiene, grammers removal), with performance recorded as
     diagnostic evidence, not a gate;
     (c) stop extracting and keep the workspace at core + retained slices.
+- **Outcome recorded 2026-07-17:** Stage 0 returned `no_go`
+  (app 9,090 ms vs core surrogate 9,100 ms, −0.11%; focused core 1,020 ms).
+  The project owner selected **(a) + (b)**: the focused package loop becomes
+  the acceptance metric for the hot-module phases 4–6 (pending its own
+  respec with freshly measured thresholds), and phase 8 proceeds on
+  dependency-hygiene justification with performance as diagnostic evidence.
+  Development verification in this repository is performed by an LLM agent
+  following the superpowers plans, so the focused-loop workflow is adopted by
+  editing the standing plan templates and skills, not by human habit change.
+  Full workspace gates remain unchanged as end-of-slice verification.
   - A failed gate never justifies weakening correctness gates, and a
     reverted candidate leaves no partial split behind.
 
@@ -201,12 +213,17 @@ paths; profiles stay in the workspace root; canonical target proven.
 Pure model/codec/label split from the grammers adapter; rename-map inventory
 protocol established.
 
-### Phase 2 — `extractum-notebooklm-render` (in flight, conditional)
+### Phase 2 — `extractum-notebooklm-render` (closed: negative preflight)
 
 Seven pure modules (~1,593 lines, 22 tests) behind a Stage 0 surrogate
-preflight and Stage 1 retention gates. Beyond its own value, this slice is the
-gatekeeper experiment for the full-workspace hypothesis. Its outcome selects
-the branch in "Decision Framework".
+preflight and Stage 1 retention gates. The gatekeeper experiment for the
+full-workspace hypothesis returned `no_go` on 2026-07-17: editing the
+already-extracted `extractum-core` was not faster than editing application
+code under the full workspace check (−0.11%, both gates missed by orders of
+magnitude), while the focused package check measured ~1.0 s vs ~9.1 s. No
+crate was created; the branch selected in "Decision Framework" governs all
+later phases. The seven-module boundary remains a valid future candidate
+under the focused-loop metric if a phase ever needs it.
 
 ### Phase 3 — `extractum-process` (small, decided just-in-time)
 
@@ -316,7 +333,7 @@ integration tests, WiX/MSI packaging concerns.
 | `analysis/trace.rs` direct `zstd::` → `core::compression` | phase 7 at the latest |
 | `sources::test_support` ownership (fixture crate vs app-side integration tests) | first producer-domain extraction whose tests consume it |
 | WiX MSI diagnosis (`light.exe` failure/hang, likely ICE validation in non-interactive sessions) | separate follow-up task; unblocks restoring full-bundle gates |
-| Focused-loop metric respec | Stage 0 no-go on the render slice, if extraction is to continue for performance reasons |
+| Focused-loop metric respec | **Triggered 2026-07-17** by the render-slice `no_go`; branch (a)+(b) selected. Next: measure LLM-session cargo usage, then write the focused-loop workflow spec |
 
 ## Non-Goals
 
