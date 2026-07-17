@@ -220,9 +220,9 @@ $isWindows = [Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
   [Runtime.InteropServices.OSPlatform]::Windows
 )
 $hostLine = (& rustc -vV | Select-String '^host:').Line
-$host = ($hostLine -replace '^host:\s*', '').Trim()
-"IS_WINDOWS=$isWindows HOST=$host"
-if (-not $isWindows -or $host -ne 'x86_64-pc-windows-msvc') { exit 1 }
+$rustHost = ($hostLine -replace '^host:\s*', '').Trim()
+"IS_WINDOWS=$isWindows HOST=$rustHost"
+if (-not $isWindows -or $rustHost -ne 'x86_64-pc-windows-msvc') { exit 1 }
 ```
 
 Expected: `IS_WINDOWS=True HOST=x86_64-pc-windows-msvc`. A different host is
@@ -1303,8 +1303,8 @@ Run:
 
 ```powershell
 $hostLine = (& rustc -vV | Select-String '^host:').Line
-$host = ($hostLine -replace '^host:\s*', '').Trim()
-if ($host -ne 'x86_64-pc-windows-msvc') { throw "Unexpected Rust host: $host" }
+$rustHost = ($hostLine -replace '^host:\s*', '').Trim()
+if ($rustHost -ne 'x86_64-pc-windows-msvc') { throw "Unexpected Rust host: $rustHost" }
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum-process --all-targets
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 ```
