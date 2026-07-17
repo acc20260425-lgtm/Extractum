@@ -1173,18 +1173,21 @@ Run:
 $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-process-current.txt') -Raw).Trim()
 $narrowStdout = Join-Path $scratch 'narrow-process.stdout.log'
 $narrowStderr = Join-Path $scratch 'narrow-process.stderr.log'
-$narrowProcess = Start-Process -FilePath (Get-Command cargo.exe).Source -Wait -PassThru `
-  -NoNewWindow -RedirectStandardOutput $narrowStdout -RedirectStandardError $narrowStderr `
-  -ArgumentList @('test', '--manifest-path', 'src-tauri/Cargo.toml', '-p',
-    'extractum-process', '--lib',
-    'external_process::tests::timing_exposes_the_graceful_and_watchdog_budgets',
-    '--', '--exact')
+$cargoExe = (Get-Command cargo.exe).Source
+$narrowArgs = @(
+  'test', '--manifest-path', 'src-tauri/Cargo.toml', '-p',
+  'extractum-process', '--lib',
+  'external_process::tests::timing_exposes_the_graceful_and_watchdog_budgets',
+  '--', '--exact'
+)
+& $cargoExe @narrowArgs 1> $narrowStdout 2> $narrowStderr
+$narrowExitCode = $LASTEXITCODE
 $narrowOutput = @(
   @(Get-Content -LiteralPath $narrowStdout -ErrorAction SilentlyContinue)
   @(Get-Content -LiteralPath $narrowStderr -ErrorAction SilentlyContinue)
 ) | ForEach-Object { $_.ToString() }
 $narrowOutput
-if ($narrowProcess.ExitCode -ne 0 -or
+if ($narrowExitCode -ne 0 -or
     -not (($narrowOutput -join "`n") -match 'test result: ok\. 1 passed')) { exit 1 }
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum-process --all-targets
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
