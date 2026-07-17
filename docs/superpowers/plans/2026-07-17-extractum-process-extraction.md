@@ -234,6 +234,7 @@ check.
 Run:
 
 ```powershell
+$ErrorActionPreference = 'Stop'
 $head = (git rev-parse HEAD).Trim()
 $sessionId = "{0}-{1}" -f ([DateTimeOffset]::Now.ToString('yyyyMMddTHHmmssfff')),
   ([guid]::NewGuid().ToString('N'))
@@ -242,9 +243,11 @@ New-Item -ItemType Directory -Path $scratch | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $scratch 'measurements') | Out-Null
 $locator = Join-Path $env:TEMP 'extractum-process-current.txt'
 $locatorTemp = "$locator.$sessionId.tmp"
+$locatorBackup = "$locator.$sessionId.bak"
 $scratch | Set-Content -LiteralPath $locatorTemp
 if (Test-Path -LiteralPath $locator) {
-  [IO.File]::Replace($locatorTemp, $locator, $null)
+  [IO.File]::Replace($locatorTemp, $locator, $locatorBackup)
+  Remove-Item -LiteralPath $locatorBackup
 } else {
   Move-Item -LiteralPath $locatorTemp -Destination $locator
 }
