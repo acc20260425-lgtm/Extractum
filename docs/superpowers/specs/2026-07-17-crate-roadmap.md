@@ -15,7 +15,9 @@ Completed and in-flight slices governed by their own documents:
 
 - [`2026-07-17-process-and-gemini-browser-crate-boundary-design.md`](2026-07-17-process-and-gemini-browser-crate-boundary-design.md)
   — approved just-in-time boundary for phase 3 `extractum-process` and the
-  phase 4 focused Gemini Browser engine; implementation planning pending.
+  phase 4 focused Gemini Browser engine. The Phase 3 implementation plan is
+  [`2026-07-17-extractum-process-extraction.md`](../plans/2026-07-17-extractum-process-extraction.md);
+  execution is pending.
 
 - `2026-07-15-rust-workspace-crate-extraction-design.md` — workspace +
   `extractum-core` (`error`, `time`, `compression`). Done.
@@ -236,13 +238,14 @@ crate was created; the branch selected in "Decision Framework" governs all
 later phases. The seven-module boundary remains a valid future candidate
 under the focused-loop metric if a phase ever needs it.
 
-### Phase 3 — `extractum-process` (approved, planning pending)
+### Phase 3 — `extractum-process` (approved, plan ready)
 
 `external_process`, `child_process`, and `process_tree` become shared
 OS-process infrastructure below Gemini Browser, YouTube, and diagnostics.
 `job_helpers` stays app-side. The approved JIT boundary, facade requirement,
 fresh evidence, and architectural-only justification are defined in
-`2026-07-17-process-and-gemini-browser-crate-boundary-design.md`.
+`2026-07-17-process-and-gemini-browser-crate-boundary-design.md`. Execution
+follows `../plans/2026-07-17-extractum-process-extraction.md`.
 
 ### Phase 4 — `extractum-gemini-browser` (boundary approved)
 
