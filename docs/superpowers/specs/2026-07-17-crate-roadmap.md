@@ -13,6 +13,10 @@ dependency map, and fresh co-change statistics before execution.
 
 Completed and in-flight slices governed by their own documents:
 
+- [`2026-07-17-process-and-gemini-browser-crate-boundary-design.md`](2026-07-17-process-and-gemini-browser-crate-boundary-design.md)
+  — approved just-in-time boundary for phase 3 `extractum-process` and the
+  phase 4 focused Gemini Browser engine; implementation planning pending.
+
 - `2026-07-15-rust-workspace-crate-extraction-design.md` — workspace +
   `extractum-core` (`error`, `time`, `compression`). Done.
 - `2026-07-16-media-metadata-core-boundary-design.md` — pure
@@ -232,20 +236,22 @@ crate was created; the branch selected in "Decision Framework" governs all
 later phases. The seven-module boundary remains a valid future candidate
 under the focused-loop metric if a phase ever needs it.
 
-### Phase 3 — `extractum-process` (small, decided just-in-time)
+### Phase 3 — `extractum-process` (approved, planning pending)
 
-`external_process`, `child_process`, `process_tree` (possibly `job_helpers`):
-OS-process infrastructure used by `gemini_browser`, `youtube`, and `llm`. It
-does not belong in `extractum-core` (core stays pure of OS orchestration).
-Decide during phase 4 preparation whether it becomes a crate or temporarily
-stays app-side; all of it is recent code, so re-snapshot before deciding.
+`external_process`, `child_process`, and `process_tree` become shared
+OS-process infrastructure below Gemini Browser, YouTube, and diagnostics.
+`job_helpers` stays app-side. The approved JIT boundary, facade requirement,
+fresh evidence, and architectural-only justification are defined in
+`2026-07-17-process-and-gemini-browser-crate-boundary-design.md`.
 
-### Phase 4 — `extractum-gemini-browser`
+### Phase 4 — `extractum-gemini-browser` (boundary approved)
 
 ~6,800 lines, 39 commits in its first month, 59% solo, structurally
 self-contained (only 7 joint commits with `prompt_packs`). Depends on
-process infrastructure + core. JIT preparation: separate Tauri command/state
-adapters from the automation engine; inventory its `db::get_pool` usage.
+process infrastructure + core. The approved design keeps Tauri commands,
+application paths, SQL/Apalis storage, and worker registration app-side while
+extracting the portable automation engine. Phase 4 planning starts only after
+phase 3 is retained.
 
 ### Phase 5 — `extractum-llm`
 
