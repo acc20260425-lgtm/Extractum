@@ -40,7 +40,7 @@ This file is a working contract for AI agents modifying the repository.
 - Use `npm.cmd` rather than `npm` in all validation commands on Windows.
 - When no Superpowers workflow is active, use focused tests for changed model, helper, or contract logic.
 - Run `npm.cmd run check` after broad Svelte or TypeScript changes.
-- When no Superpowers workflow is active, run `npm.cmd run check:rustfmt` and `cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets` after Rust or Tauri backend changes.
+- When no Superpowers workflow is active, use the focused Rust loop below during implementation and run the full completion gates before claiming Rust or Tauri backend work complete.
 - Do not claim checks pass unless you ran the relevant command and saw it pass.
 - To keep the repository-wide mechanical formatting commit out of local blame attribution, developers may run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once per clone; do not change local Git configuration automatically.
 
@@ -50,10 +50,24 @@ This file is a working contract for AI agents modifying the repository.
   - the most recent linear checkpoint: `npm.cmd run test:changed:last`;
   - a known frontend source: `npm.cmd run test:related -- <forward-or-backslash-path>`;
   - focused root-package Rust tests: `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib <test-filter>`;
-  - broad Svelte/TypeScript work: also run `npm.cmd run check`;
-  - Rust/Tauri work: also run `npm.cmd run check:rustfmt` and `cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets`.
+  - broad Svelte/TypeScript work: also run `npm.cmd run check`.
 - Changed/related commands are accelerators, not merge gates. An empty or unexpectedly small selection requires an explicit test or a wider run; `npm.cmd run verify` remains the full gate.
-- Canonical full Rust checks and tests use `--workspace --all-targets`; focused root-package filters must select `-p extractum` explicitly.
+
+<!-- focused-rust-loop -->
+- Every implementation plan that changes Rust must include a `## Rust Verification Loops` section naming affected packages, narrow RED/GREEN tests, focused checks, package checkpoints, and end-of-slice workspace gates.
+- After a small Rust change, use the owning package explicitly:
+  - exact RED/GREEN test: `cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib <full-test-name> -- --exact`;
+  - focused check: `cargo check --manifest-path src-tauri/Cargo.toml -p <package> --all-targets`;
+  - task checkpoint: `cargo test --manifest-path src-tauri/Cargo.toml -p <package> --all-targets`.
+- Use `-p extractum` while code belongs to the application; use the extracted domain package after it moves. Check every directly affected package separately.
+- A filtered Cargo run that reports `0 tests` is not verification. List tests first when the exact name is unknown, then run a non-empty selection.
+- The first Rust check in a session may be cold and slower; this expected warm-up is not a loop violation or, by itself, evidence of a build problem.
+- A focused check of an extracted package does not compile downstream consumers. When a public cross-crate interface changes, add a checkpoint for the immediate dependent package; unchanged internal work does not pay that cost after every edit.
+- Focused checks are accelerators, not completion evidence. At the end of every Rust slice run:
+  - `npm.cmd run check:rustfmt`;
+  - `cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets`;
+  - `cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets`;
+  - `npm.cmd run verify`.
 - Every workspace member shares canonical `src-tauri/target`; do not create slice-specific `codex-*` targets for sequential work.
 - For rare dependency-level native debugging, start clean, temporarily set both `[profile.dev] debug` and `[profile.dev.package."*"] debug` to `2`, set `CARGO_TARGET_DIR` to an absolute isolated native-debug directory, run `npm.cmd run tauri dev`, then restore the manifest. Never commit the temporary profile edit.
 
