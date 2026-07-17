@@ -1390,7 +1390,9 @@ Run:
 
 ```powershell
 $scratch = (Get-Content (Join-Path $env:TEMP 'extractum-process-current.txt') -Raw).Trim()
-$baseline = @(Get-Content (Join-Path $scratch 'consumer-hashes.json') -Raw | ConvertFrom-Json)
+$decoded = Get-Content (Join-Path $scratch 'consumer-hashes.json') -Raw |
+  ConvertFrom-Json
+$baseline = @($decoded)
 $changed = @($baseline | Where-Object {
   -not (Test-Path -LiteralPath $_.path) -or
   (Get-FileHash -LiteralPath $_.path -Algorithm SHA256).Hash -ne $_.sha256
