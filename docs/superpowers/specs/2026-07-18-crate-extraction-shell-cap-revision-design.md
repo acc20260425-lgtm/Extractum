@@ -1,6 +1,6 @@
 # Crate Extraction Shell-Cap Revision Design
 
-**Status:** Approved design; written-spec review requested
+**Status:** Approved for implementation
 
 **Date:** 2026-07-18
 
