@@ -3,6 +3,18 @@
 **Status:** Approved in conversation
 **Date:** 2026-07-17
 
+**Current extraction-performance authority:**
+[`2026-07-18-crate-extraction-shell-cap-revision-design.md`](2026-07-18-crate-extraction-shell-cap-revision-design.md)
+
+The revision applies prospectively and to the approved exact Phase 3
+reapplication. Historical measurements and decisions remain governed by the
+thresholds frozen for their original sessions.
+
+This authority supersedes only the shell-cap and marginal-repeat clauses in
+`2026-07-17-process-and-gemini-browser-crate-boundary-design.md`. That design's
+boundary, facade, dependency, correctness, and restoration requirements remain
+active for the exact Phase 3 reapplication.
+
 ## Purpose
 
 This specification defines the Rust inner-development loop used by LLM agents
@@ -149,8 +161,10 @@ For a crate-extraction plan, the section must additionally name:
 - the pre-extraction command against `-p extractum`;
 - the post-extraction command against the new package;
 - the matched logical probe source before and after the move;
-- the predeclared retention and shell-regression thresholds;
-- the measurement artifact and negative-outcome path.
+- the focused improvement gate and 2,000 ms / 20% per-slice shell cap;
+- the canonical 9,135 ms anchor and 15,000 ms cumulative shell ceiling;
+- the five-sample, four-within-300-ms validity rule;
+- the measurement artifact, invalid-session path, and negative-outcome path.
 
 ## Extraction Performance Protocol
 
@@ -174,14 +188,21 @@ The comparison uses the same logical domain edit:
 
 Baseline and candidate measurements each use:
 
-1. no active `cargo`, `rustc`, `rust-analyzer`, or Tauri process;
+1. no active `cargo`, `rustc`, `rust-analyzer`, Tauri, or competing build
+   process;
 2. recorded Rust/Cargo versions, power profile, and Defender state;
 3. one discarded warm-up;
 4. five recorded samples;
 5. the median of the five samples;
 6. the shared canonical target directory;
 7. byte-for-byte probe restoration plus SHA-256 verification after every
-   sample.
+   sample;
+8. at least four of the five samples within 300 ms of its own median.
+
+An unstable baseline or candidate series invalidates the complete measurement
+session. It is not a performance failure, and none of its medians may be used
+for retention. A fresh session may start only after the quiet-window preflight
+passes again.
 
 Thresholds are fixed before candidate measurements and are never adjusted in
 response to observed results.
@@ -195,17 +216,31 @@ The focused domain check must improve by both:
 
 The application-shell probe may regress by no more than both:
 
-- 5%; and
-- 0.5 seconds in absolute median wall time.
+- 20%; and
+- 2,000 ms in absolute median wall time.
+
+The valid post-slice application-shell median must also be no more than
+15,000 ms against the canonical pre-Phase 3 anchor of 9,135 ms. Crossing that
+cumulative roadmap ceiling blocks automatic retention and requires a new
+owner-approved policy revision. Unused cumulative budget does not raise the
+per-slice 2,000 ms / 20% cap.
 
 The shell probe uses an inert edit in a source file retained by `extractum`.
 It is measured before and after extraction with the full-workspace check,
 because it exists to detect a cost imposed on ordinary application work.
 
-Passing only one side of either paired threshold is insufficient. A correct
-candidate that misses the performance threshold records an honest negative
-result; its thresholds are not recalibrated afterward. Any architectural-only
-retention must already be authorized by the relevant phase specification.
+Passing only one side of either paired threshold is insufficient.
+Values exactly at 2,000 ms / 20% pass. There is
+no marginal-performance repeat: a valid result passes or fails directly.
+Measurement invalidation and corrected infrastructure retries remain separate
+from performance classification.
+
+The exact Phase 3 reapplication is the single exception to a new gating shell
+decision: its already-valid historical 10,177 ms result was accepted by the
+owner revision. Fresh post-reapplication samples are non-gating ledger
+diagnostics and cannot produce a performance no-go for that exact candidate.
+This exception does not apply when reconstructed bytes differ materially from
+`b364756c`; that case is a new candidate with fresh preregistered timing.
 
 ## Failure Classification
 
@@ -213,15 +248,21 @@ retention must already be authorized by the relevant phase specification.
   is absent, an unrelated process invalidated the session, or probe bytes were
   not restored. Discard the entire affected measurement session and restart
   from its warm-up.
+- **Measurement invalidation:** fewer than four of five values in either shell
+  series are within 300 ms of that series median. Discard the complete session,
+  classify no performance result, re-establish the quiet window, and start a
+  fresh session from its warm-up.
 - **Baseline failure:** the baseline command or test fails. Stop and restore a
   valid baseline before measuring a candidate.
 - **Candidate correctness failure:** the candidate does not compile in its
   focused package or its focused tests fail. Do not measure or retain it as a
   performance success.
-- **Performance no-go:** the correct candidate misses either focused-domain
-  improvement threshold or either application-shell regression cap. Record
-  the negative result and follow the phase's already-approved retain/revert
-  branch.
+- **Performance no-go:** except for the exact Phase 3 reapplication described
+  above, the correct candidate misses either focused-domain improvement
+  threshold, either side of the 2,000 ms / 20% per-slice shell cap, or the
+  15,000 ms cumulative shell ceiling. Record the negative result and follow
+  the phase's already-approved retain/revert branch. A cumulative ceiling
+  crossing requires a separate owner policy revision before retention.
 - **Completion failure:** any end-of-slice workspace gate fails. The slice is
   incomplete regardless of focused-loop results; this class is not folded
   into candidate measurement evidence.
@@ -240,7 +281,10 @@ invariants:
   package selection;
 - the policy rejects a zero-test result;
 - full check and test commands use `--workspace --all-targets`;
-- Rust plans are required to name focused and completion commands separately.
+- Rust plans are required to name focused and completion commands separately;
+- the crate-extraction shell contract pins the current per-slice cap,
+  cumulative ceiling, stability rule, and absence of a marginal-performance
+  repeat.
 
 The contract normalizes CRLF/LF and avoids exact prose, indentation, or whole
 paragraph assertions. Performance thresholds remain normative in this spec;
@@ -255,12 +299,17 @@ The implementation slice may change:
 - `docs/superpowers/specs/2026-07-17-crate-roadmap.md` for the status and link
   to this approved specification;
 - one focused-loop source-contract test;
+- `src/lib/crate-extraction-shell-cap-contract.test.ts` for the current
+  extraction-performance policy;
 - its implementation plan and verification evidence.
 
 It does not change Cargo manifests, production Rust code, `scripts/verify.mjs`,
 or any Superpowers skill. A later skill change requires evidence that agents
 systematically violate the repository policy and must follow the skill
 RED/GREEN pressure-testing workflow.
+
+This revision changes no Rust source, Cargo manifest, product behavior, or
+historical verification record.
 
 ## Acceptance Criteria
 

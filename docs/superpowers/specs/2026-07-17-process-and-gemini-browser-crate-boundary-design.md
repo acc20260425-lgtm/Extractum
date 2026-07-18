@@ -3,6 +3,14 @@
 **Status:** Approved in conversation
 **Date:** 2026-07-17
 
+**Current extraction-performance policy:**
+[`2026-07-18-crate-extraction-shell-cap-revision-design.md`](2026-07-18-crate-extraction-shell-cap-revision-design.md)
+
+The revision supersedes this document's shell-cap, cumulative/validity, and
+marginal-repeat clauses. This document's architecture and correctness
+requirements remain active for the exact Phase 3 reapplication and Phase 4
+boundary.
+
 ## Purpose
 
 This specification fixes the just-in-time boundary for crate-roadmap phases 3
