@@ -113,6 +113,12 @@ Windows/MSVC.
   immutable attempt-result evaluation are independently serialized artifacts,
   so the fixture deep-clones the latter; production arithmetic and assertions
   are unchanged.
+- A fourth pre-A0 protocol replacement on 2026-07-18 corrects Windows
+  PowerShell inline-module quoting discovered by the first frozen validation.
+  PowerShell removed inner double quotes from a script variable passed to
+  `node -e`; both validation snippets now use JavaScript single-quoted module
+  specifiers and path strings. The failed validation stopped before state
+  installation, target creation, or A0, and its prior lock is superseded.
 - This plan and its normative design are preregistration inputs committed
   before Task 0. Do not edit or tick their checkboxes during execution; track
   progress in the execution session/plan tool. Any amendment requires a new
@@ -7723,12 +7729,12 @@ manual approximation—through every state and final restore:
 $diagnosticMainRoot = (Resolve-Path -LiteralPath 'G:\Develop\Extractum').Path
 $diagnosticValidationRoot = (Resolve-Path -LiteralPath (Join-Path $diagnosticMainRoot '.worktrees\process-shell-diagnostic-validation')).Path
 $diagnosticInstallScript = @'
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 const [worktree, mainRoot, state, artifactDir] = process.argv.slice(1);
-const { installState } = await import(pathToFileURL(path.join(worktree, "scripts", "process-shell-diagnostic", "git-state.mjs")).href);
-const protocolLock = JSON.parse(await readFile(path.join(worktree, "scripts", "process-shell-diagnostic", "protocol-lock.json"), "utf8"));
+const { installState } = await import(pathToFileURL(path.join(worktree, 'scripts', 'process-shell-diagnostic', 'git-state.mjs')).href);
+const protocolLock = JSON.parse(await readFile(path.join(worktree, 'scripts', 'process-shell-diagnostic', 'protocol-lock.json'), 'utf8'));
 const evidence = await installState({ state, worktree, mainRoot, protocolLock, artifactDir });
 if (!evidence.srcTauriTree || !evidence.canonicalLibSha256) throw new Error(`missing state evidence for ${state}`);
 '@
@@ -7789,12 +7795,12 @@ $diagnosticManifest = Join-Path $diagnosticValidationRoot 'src-tauri\Cargo.toml'
 foreach ($diagnosticState in @('B', 'C', 'E')) {
     $diagnosticStateArtifacts = Join-Path $env:TEMP "extractum-process-state-validation-$diagnosticState-$([guid]::NewGuid())"
     $diagnosticInstallScript = @'
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 const [worktree, mainRoot, state, artifactDir] = process.argv.slice(1);
-const { installState } = await import(pathToFileURL(path.join(worktree, "scripts", "process-shell-diagnostic", "git-state.mjs")).href);
-const protocolLock = JSON.parse(await readFile(path.join(worktree, "scripts", "process-shell-diagnostic", "protocol-lock.json"), "utf8"));
+const { installState } = await import(pathToFileURL(path.join(worktree, 'scripts', 'process-shell-diagnostic', 'git-state.mjs')).href);
+const protocolLock = JSON.parse(await readFile(path.join(worktree, 'scripts', 'process-shell-diagnostic', 'protocol-lock.json'), 'utf8'));
 await installState({ state, worktree, mainRoot, protocolLock, artifactDir });
 '@
     node --input-type=module -e $diagnosticInstallScript "$diagnosticValidationRoot" "$diagnosticMainRoot" "$diagnosticState" "$diagnosticStateArtifacts"
