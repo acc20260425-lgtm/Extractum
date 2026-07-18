@@ -1,6 +1,6 @@
 # Process Shell Regression Diagnostic Design
 
-**Status:** Approved in conversation; written review pending
+**Status:** Approved
 
 **Date:** 2026-07-18
 
