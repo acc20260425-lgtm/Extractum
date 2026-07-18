@@ -1,4 +1,4 @@
-import { lstat, readFile, realpath } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
@@ -25,6 +25,12 @@ export const D_BLOB_ANCHORS = Object.freeze({
   "src-tauri/crates/extractum-process/src/lib.rs": "4f7819ef7d2773b735b5edc61e162e4e034efb66",
   "src-tauri/crates/extractum-process/src/process_tree.rs": "365283e9f8accf4db91feca73bd8437db3b08c50",
   "src-tauri/src/lib.rs": "d84b653870eda9378c0d490894801850a97db68d",
+});
+
+export const DIAGNOSTIC_SIDECAR_PLACEHOLDER = Object.freeze({
+  relativePath: "src-tauri/binaries/gemini-browser-sidecar-x86_64-pc-windows-msvc.exe",
+  size: 0,
+  sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 });
 
 const WINDOWS_TABLE = "target.'cfg(windows)'.dependencies";
@@ -248,6 +254,67 @@ export function validateStateManifests({
 
 function normalizedPath(value) {
   return path.resolve(value).replaceAll("/", "\\").toLowerCase();
+}
+
+export async function ensureDiagnosticSidecarPlaceholder({ worktree }) {
+  try {
+    const resolvedWorktree = await realpath(worktree);
+    const placeholderPath = path.join(
+      resolvedWorktree,
+      ...DIAGNOSTIC_SIDECAR_PLACEHOLDER.relativePath.split("/"),
+    );
+    const placeholderParent = path.dirname(placeholderPath);
+    await mkdir(placeholderParent, { recursive: true });
+    const resolvedParent = await realpath(placeholderParent);
+    if (normalizedPath(resolvedParent) !== normalizedPath(placeholderParent)) {
+      throw new ProtocolError(
+        "environment_sidecar_placeholder_invalid",
+        "sidecar placeholder parent resolves through a link",
+        { placeholderParent, resolvedParent },
+      );
+    }
+    try {
+      const handle = await open(placeholderPath, "wx");
+      await handle.close();
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+    }
+    const info = await lstat(placeholderPath);
+    if (!info.isFile() || info.isSymbolicLink() || info.size !== DIAGNOSTIC_SIDECAR_PLACEHOLDER.size) {
+      throw new ProtocolError(
+        "environment_sidecar_placeholder_invalid",
+        "sidecar placeholder must be an empty regular file",
+        { placeholderPath, size: info.size, symbolicLink: info.isSymbolicLink() },
+      );
+    }
+    const resolvedPlaceholder = await realpath(placeholderPath);
+    if (normalizedPath(resolvedPlaceholder) !== normalizedPath(placeholderPath)) {
+      throw new ProtocolError(
+        "environment_sidecar_placeholder_invalid",
+        "sidecar placeholder resolves through a link",
+        { placeholderPath, resolvedPlaceholder },
+      );
+    }
+    const actualSha256 = await sha256File(placeholderPath);
+    if (actualSha256 !== DIAGNOSTIC_SIDECAR_PLACEHOLDER.sha256) {
+      throw new ProtocolError(
+        "environment_sidecar_placeholder_invalid",
+        "sidecar placeholder hash mismatch",
+        { placeholderPath, actualSha256 },
+      );
+    }
+    return {
+      ...DIAGNOSTIC_SIDECAR_PLACEHOLDER,
+      absolutePath: placeholderPath,
+    };
+  } catch (error) {
+    if (error instanceof ProtocolError) throw error;
+    throw new ProtocolError(
+      "environment_sidecar_placeholder_invalid",
+      error?.message ?? String(error),
+      { worktree, code: error?.code ?? null },
+    );
+  }
 }
 
 async function rejectReparsePoint(candidate) {

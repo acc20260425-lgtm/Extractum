@@ -77,6 +77,17 @@ the experiment to the main checkout's target. The experiment never runs
 `cargo clean`; all states intentionally reuse only the isolated experiment
 target so the sequence measures normal incremental behavior.
 
+Before the first Cargo command, every validation and measurement worktree
+materializes the ignored regular file
+`src-tauri/binaries/gemini-browser-sidecar-x86_64-pc-windows-msvc.exe` with
+size `0` and SHA-256
+`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
+Tauri 2 requires the target-triple `bundle.externalBin` path to exist even for
+`cargo check`; this diagnostic-only placeholder is never executed or bundled,
+is identical for every state, and is recorded in the attempt result. The real
+ignored sidecar binary from the main checkout is mutable build output and must
+not be copied into an experiment worktree.
+
 The worktree, main checkout, resolved target paths, starting commits, Rust and
 Cargo versions, host triple, power profile, Defender status, and relevant
 Cargo environment variables are captured before A0. Measurement starts only

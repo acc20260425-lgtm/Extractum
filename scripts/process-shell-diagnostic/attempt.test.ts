@@ -22,6 +22,14 @@ function fixture(overrides: Record<string, unknown> = {}) {
   let currentBlock = "A0";
 
   const deps = {
+    prepareWorktreeFn: async () => {
+      calls.push({ kind: "prepare-worktree" });
+      return {
+        relativePath: "src-tauri/binaries/gemini-browser-sidecar-x86_64-pc-windows-msvc.exe",
+        size: 0,
+        sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      };
+    },
     installStateFn: async ({ state }: { state: string }) => {
       currentBlock = state === "A-final" ? currentBlock : state;
       calls.push({ kind: "install", state });
@@ -108,6 +116,8 @@ describe("process shell diagnostic attempt", () => {
     const result = await runAttempt(spec, value.deps);
     expect(result.kind).toBe("valid");
     expect(result.evaluation.classification).toBe("not_reproduced");
+    expect(value.calls[0]).toEqual({ kind: "prepare-worktree" });
+    expect(result.worktreePrerequisite).toMatchObject({ size: 0 });
     expect(value.calls.filter((call) => call.kind === "install").map((call) => call.state)).toEqual([
       "A0", "B", "A1", "C", "A2", "D", "A3", "A-final",
     ]);
@@ -159,6 +169,18 @@ describe("process shell diagnostic attempt", () => {
     const result = await runAttempt(spec, value.deps);
     expect(result).toMatchObject({ kind: "infrastructure_invalid", reasons: ["protocol_violation"] });
     expect(value.calls.at(-1)).toEqual({ kind: "install", state: "A-final" });
+  });
+
+  it("classifies an invalid sidecar prerequisite as environment-invalid and restores A", async () => {
+    const value = fixture();
+    value.deps.prepareWorktreeFn = async () => {
+      throw Object.assign(new Error("sidecar placeholder"), {
+        kind: "environment_sidecar_placeholder_invalid",
+      });
+    };
+    const result = await runAttempt(spec, value.deps);
+    expect(result).toMatchObject({ kind: "infrastructure_invalid", reasons: ["environment_invalid"] });
+    expect(value.calls.filter((call) => call.kind === "install")).toEqual([{ kind: "install", state: "A-final" }]);
   });
 
   it("persists a nested dirty-probe timeout as command_timeout", async () => {

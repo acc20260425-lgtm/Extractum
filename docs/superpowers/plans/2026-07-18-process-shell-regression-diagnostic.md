@@ -66,6 +66,11 @@ Windows/MSVC.
   `git restore --source=24c313a767a25284123b24ea3a4b8c083007c817 --staged --worktree -- src-tauri`.
   A tree-ish checkout by pathspec is forbidden because it does not remove
   state-added paths that are absent from A.
+- Before the first Cargo command, every validation and attempt worktree gets the
+  same ignored zero-byte Tauri sidecar placeholder at
+  `src-tauri/binaries/gemini-browser-sidecar-x86_64-pc-windows-msvc.exe`; its
+  size, regular-file status, non-link path, and empty-file SHA-256 are verified
+  and persisted. The real mutable sidecar binary is never copied from main.
 - E starts from C. Its empty crate has exactly `anyhow`, `parking_lot`, and
   `tokio` workspace dependencies, target-specific `windows-sys.workspace =
   true`, and `tokio/test-util` as its only dev feature. Process code and
@@ -139,6 +144,14 @@ Windows/MSVC.
   `restore --staged --worktree`; exact tree/blob/inventory checks remain. The
   smoke stopped before Cargo target creation or A0, its worktree was restored to
   A-final and removed, and the prior lock is superseded.
+- An eighth pre-A0 protocol replacement on 2026-07-18 records the ignored Tauri
+  sidecar prerequisite exposed by the first cold B application check. Tauri 2's
+  build-time resource discovery requires the host-triple `externalBin` path to
+  exist even under `cargo check`; the canonical zero-byte ignored placeholder
+  passed the isolated rerun. Production now materializes and attests that exact
+  placeholder before A0 in every attempt, and validation invokes the same
+  helper. No real sidecar is copied, the failed check created only the disposable
+  validation target, A0 never started, and the prior lock is superseded.
 - This plan and its normative design are preregistration inputs committed
   before Task 0. Do not edit or tick their checkboxes during execution; track
   progress in the execution session/plan tool. Any amendment requires a new
@@ -1851,24 +1864,27 @@ Expected: only the Task 2 runtime and test are committed.
   `writeAtomicJsonExclusive`, and `sha256File`.
 - Produces `installState({ state, worktree, mainRoot, protocolLock,
   artifactDir })`, `verifyTargetIsolation({ metadata, worktree, mainRoot })`,
-  `validateStateManifests(...)`, `validateLockDelta(...)`, and frozen Git anchors used by the freezer and
-  attempt runner.
+  `ensureDiagnosticSidecarPlaceholder({ worktree })`,
+  `validateStateManifests(...)`, `validateLockDelta(...)`, and frozen Git
+  anchors used by the freezer and attempt runner.
 
 - [ ] **Step 1: Write the state-contract RED tests**
 
 Create `scripts/process-shell-diagnostic/git-state.test.ts`:
 
 ```ts
-import { mkdtemp, mkdir, readFile } from "node:fs/promises";
+import { lstat, mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
   aRestoreArgs,
+  DIAGNOSTIC_SIDECAR_PLACEHOLDER,
   D_BLOB_ANCHORS,
   STATE_TREE_ANCHORS,
   dRestoreArgs,
+  ensureDiagnosticSidecarPlaceholder,
   validateLockDelta,
   validateStateManifests,
   verifyTargetIsolation,
@@ -1995,6 +2011,31 @@ describe("process shell diagnostic Git states", () => {
       "--",
       "src-tauri",
     ]);
+  });
+
+  it("materializes the exact empty Tauri sidecar placeholder idempotently", async () => {
+    const parent = await mkdtemp(path.join(os.tmpdir(), "extractum-psd-sidecar-"));
+    const worktree = path.join(parent, "attempt");
+    await mkdir(worktree, { recursive: true });
+    const first = await ensureDiagnosticSidecarPlaceholder({ worktree });
+    const second = await ensureDiagnosticSidecarPlaceholder({ worktree });
+    expect(first).toEqual(second);
+    expect(first).toMatchObject(DIAGNOSTIC_SIDECAR_PLACEHOLDER);
+    const info = await lstat(path.join(worktree, ...DIAGNOSTIC_SIDECAR_PLACEHOLDER.relativePath.split("/")));
+    expect(info.isFile()).toBe(true);
+    expect(info.isSymbolicLink()).toBe(false);
+    expect(info.size).toBe(0);
+  });
+
+  it("rejects a nonempty preexisting Tauri sidecar placeholder", async () => {
+    const parent = await mkdtemp(path.join(os.tmpdir(), "extractum-psd-sidecar-invalid-"));
+    const worktree = path.join(parent, "attempt");
+    const placeholder = path.join(worktree, ...DIAGNOSTIC_SIDECAR_PLACEHOLDER.relativePath.split("/"));
+    await mkdir(path.dirname(placeholder), { recursive: true });
+    await writeFile(placeholder, "not empty", "utf8");
+    await expect(ensureDiagnosticSidecarPlaceholder({ worktree })).rejects.toMatchObject({
+      kind: "environment_sidecar_placeholder_invalid",
+    });
   });
 
   it("accepts B only with a dependency-free empty crate and no app edge", () => {
@@ -2353,7 +2394,7 @@ dependencies) is byte-identical to baseline. Only the `extractum` and new
 Create `scripts/process-shell-diagnostic/git-state.mjs`:
 
 ```js
-import { lstat, readFile, realpath } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
@@ -2380,6 +2421,12 @@ export const D_BLOB_ANCHORS = Object.freeze({
   "src-tauri/crates/extractum-process/src/lib.rs": "4f7819ef7d2773b735b5edc61e162e4e034efb66",
   "src-tauri/crates/extractum-process/src/process_tree.rs": "365283e9f8accf4db91feca73bd8437db3b08c50",
   "src-tauri/src/lib.rs": "d84b653870eda9378c0d490894801850a97db68d",
+});
+
+export const DIAGNOSTIC_SIDECAR_PLACEHOLDER = Object.freeze({
+  relativePath: "src-tauri/binaries/gemini-browser-sidecar-x86_64-pc-windows-msvc.exe",
+  size: 0,
+  sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 });
 
 const WINDOWS_TABLE = "target.'cfg(windows)'.dependencies";
@@ -2603,6 +2650,67 @@ export function validateStateManifests({
 
 function normalizedPath(value) {
   return path.resolve(value).replaceAll("/", "\\").toLowerCase();
+}
+
+export async function ensureDiagnosticSidecarPlaceholder({ worktree }) {
+  try {
+    const resolvedWorktree = await realpath(worktree);
+    const placeholderPath = path.join(
+      resolvedWorktree,
+      ...DIAGNOSTIC_SIDECAR_PLACEHOLDER.relativePath.split("/"),
+    );
+    const placeholderParent = path.dirname(placeholderPath);
+    await mkdir(placeholderParent, { recursive: true });
+    const resolvedParent = await realpath(placeholderParent);
+    if (normalizedPath(resolvedParent) !== normalizedPath(placeholderParent)) {
+      throw new ProtocolError(
+        "environment_sidecar_placeholder_invalid",
+        "sidecar placeholder parent resolves through a link",
+        { placeholderParent, resolvedParent },
+      );
+    }
+    try {
+      const handle = await open(placeholderPath, "wx");
+      await handle.close();
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+    }
+    const info = await lstat(placeholderPath);
+    if (!info.isFile() || info.isSymbolicLink() || info.size !== DIAGNOSTIC_SIDECAR_PLACEHOLDER.size) {
+      throw new ProtocolError(
+        "environment_sidecar_placeholder_invalid",
+        "sidecar placeholder must be an empty regular file",
+        { placeholderPath, size: info.size, symbolicLink: info.isSymbolicLink() },
+      );
+    }
+    const resolvedPlaceholder = await realpath(placeholderPath);
+    if (normalizedPath(resolvedPlaceholder) !== normalizedPath(placeholderPath)) {
+      throw new ProtocolError(
+        "environment_sidecar_placeholder_invalid",
+        "sidecar placeholder resolves through a link",
+        { placeholderPath, resolvedPlaceholder },
+      );
+    }
+    const actualSha256 = await sha256File(placeholderPath);
+    if (actualSha256 !== DIAGNOSTIC_SIDECAR_PLACEHOLDER.sha256) {
+      throw new ProtocolError(
+        "environment_sidecar_placeholder_invalid",
+        "sidecar placeholder hash mismatch",
+        { placeholderPath, actualSha256 },
+      );
+    }
+    return {
+      ...DIAGNOSTIC_SIDECAR_PLACEHOLDER,
+      absolutePath: placeholderPath,
+    };
+  } catch (error) {
+    if (error instanceof ProtocolError) throw error;
+    throw new ProtocolError(
+      "environment_sidecar_placeholder_invalid",
+      error?.message ?? String(error),
+      { worktree, code: error?.code ?? null },
+    );
+  }
 }
 
 async function rejectReparsePoint(candidate) {
@@ -2870,7 +2978,8 @@ committed; tracked `src-tauri` remains A.
   protocolLock }, deps?) -> AttemptResult`. Dependency injection exists only
   for deterministic tests; production uses the Task 1–3 functions.
 - An attempt writes once beneath `<sessionDir>/attempts/<attemptId>` and always
-  installs/verifies `A-final` before returning any result.
+  materializes and records the exact ignored Tauri sidecar placeholder before
+  A0, then installs/verifies `A-final` before returning any result.
 
 - [ ] **Step 1: Write attempt-order RED tests**
 
@@ -2901,6 +3010,14 @@ function fixture(overrides: Record<string, unknown> = {}) {
   let currentBlock = "A0";
 
   const deps = {
+    prepareWorktreeFn: async () => {
+      calls.push({ kind: "prepare-worktree" });
+      return {
+        relativePath: "src-tauri/binaries/gemini-browser-sidecar-x86_64-pc-windows-msvc.exe",
+        size: 0,
+        sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      };
+    },
     installStateFn: async ({ state }: { state: string }) => {
       currentBlock = state === "A-final" ? currentBlock : state;
       calls.push({ kind: "install", state });
@@ -2987,6 +3104,8 @@ describe("process shell diagnostic attempt", () => {
     const result = await runAttempt(spec, value.deps);
     expect(result.kind).toBe("valid");
     expect(result.evaluation.classification).toBe("not_reproduced");
+    expect(value.calls[0]).toEqual({ kind: "prepare-worktree" });
+    expect(result.worktreePrerequisite).toMatchObject({ size: 0 });
     expect(value.calls.filter((call) => call.kind === "install").map((call) => call.state)).toEqual([
       "A0", "B", "A1", "C", "A2", "D", "A3", "A-final",
     ]);
@@ -3038,6 +3157,18 @@ describe("process shell diagnostic attempt", () => {
     const result = await runAttempt(spec, value.deps);
     expect(result).toMatchObject({ kind: "infrastructure_invalid", reasons: ["protocol_violation"] });
     expect(value.calls.at(-1)).toEqual({ kind: "install", state: "A-final" });
+  });
+
+  it("classifies an invalid sidecar prerequisite as environment-invalid and restores A", async () => {
+    const value = fixture();
+    value.deps.prepareWorktreeFn = async () => {
+      throw Object.assign(new Error("sidecar placeholder"), {
+        kind: "environment_sidecar_placeholder_invalid",
+      });
+    };
+    const result = await runAttempt(spec, value.deps);
+    expect(result).toMatchObject({ kind: "infrastructure_invalid", reasons: ["environment_invalid"] });
+    expect(value.calls.filter((call) => call.kind === "install")).toEqual([{ kind: "install", state: "A-final" }]);
   });
 
   it("persists a nested dirty-probe timeout as command_timeout", async () => {
@@ -3136,7 +3267,11 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-import { installState, verifyTargetIsolation } from "./git-state.mjs";
+import {
+  ensureDiagnosticSidecarPlaceholder,
+  installState,
+  verifyTargetIsolation,
+} from "./git-state.mjs";
 import { PROTOCOL, evaluateAttempt, summarizeBlock } from "./protocol.mjs";
 import {
   assertCommandOk,
@@ -3278,6 +3413,7 @@ export async function verifyTargetPreflight({ block, worktree, mainRoot, artifac
 }
 
 const productionDependencies = {
+  prepareWorktreeFn: ensureDiagnosticSidecarPlaceholder,
   installStateFn: installState,
   verifyTargetPreflightFn: verifyTargetPreflight,
   captureStateInventoryFn: captureStateInventory,
@@ -3483,9 +3619,11 @@ export async function runAttempt(spec, injected = {}) {
   const attemptDir = path.join(spec.sessionDir, "attempts", spec.attemptId);
   const startedAt = new Date().toISOString();
   const blocks = {};
+  let worktreePrerequisite = null;
   let result;
 
   try {
+    worktreePrerequisite = await deps.prepareWorktreeFn({ worktree: spec.worktree });
     for (const block of PROTOCOL.baseSequence) {
       blocks[block] = await runBlock({ block, spec, attemptDir, deps });
     }
@@ -3510,6 +3648,7 @@ export async function runAttempt(spec, injected = {}) {
       reasons: evaluation.reasons ?? [],
       startedAt,
       endedAt: new Date().toISOString(),
+      worktreePrerequisite,
       blocks,
       evaluation,
     };
@@ -3521,6 +3660,7 @@ export async function runAttempt(spec, injected = {}) {
       reasons: [errorReason(error)],
       startedAt,
       endedAt: new Date().toISOString(),
+      worktreePrerequisite,
       blocks,
       error: {
         name: error?.name ?? "Error",
@@ -3558,6 +3698,7 @@ export async function runAttempt(spec, injected = {}) {
       reasons: [errorReason(error)],
       startedAt,
       endedAt: new Date().toISOString(),
+      worktreePrerequisite,
       blocks,
       error: {
         name: error?.name ?? "Error",
@@ -5620,6 +5761,7 @@ Insert these rows into the Task 1 process-shell diagnostic table in
 | `valid` | kind | Valid attempt | Every command and validity rule passed and a terminal diagnostic classification exists. | diagnostic coordinator | terminal | none | n/a | yes | attempt result, numbered ledger |
 | `stability_invalid` | kind | Stability invalid | Anchor range or central-five stability invalidated the complete attempt. | diagnostic coordinator | terminal | inspect_error | n/a | yes | attempt result, numbered ledger |
 | `infrastructure_invalid` | kind | Infrastructure invalid | A command, metadata, restore, state, target, or environment contract invalidated the attempt. | diagnostic coordinator | terminal | inspect_error | n/a | yes | attempt result, numbered ledger |
+| `environment_sidecar_placeholder_invalid` | error kind | Sidecar placeholder invalid | The diagnostic-only Tauri external-bin placeholder could not be created or was not the exact empty regular non-link file. | diagnostic attempt runner | terminal | inspect_error | n/a | yes | attempt result error |
 | `awaiting_stability_disposition` | status | Awaiting stability disposition | Resume must record a corrected cause or explicitly consume one unexplained-stability result. | diagnostic coordinator | transitional | choose | n/a | yes | coordinator result |
 | `awaiting_correction` | status | Awaiting correction | An objective infrastructure cause must be recorded and corrected before a fresh attempt. | diagnostic coordinator | transitional | configure | n/a | yes | coordinator result |
 | `completed` | status | Completed | A valid or terminal precision outcome permanently closes this same-protocol session. | diagnostic coordinator | terminal | none | n/a | yes | coordinator result, session ledger |
@@ -5651,7 +5793,7 @@ Insert these rows into the Task 1 process-shell diagnostic table in
 | `target_invalid` | reason | Target invalid | Workspace or target isolation evidence violated the frozen contract. | diagnostic attempt runner | terminal | inspect_error | n/a | yes | attempt result, ledger |
 | `metadata_invalid` | reason | Metadata invalid | Required Cargo duration, timing, checked-package, direct-rustc-edge, or inventory evidence was absent or inconsistent. | diagnostic attempt runner | terminal | inspect_error | n/a | yes | attempt result, ledger |
 | `state_invalid` | reason | State invalid | Patch, tree, blob, manifest, or state evidence disagreed with the lock. | diagnostic attempt runner | terminal | inspect_error | n/a | yes | attempt result, ledger |
-| `environment_invalid` | reason | Environment invalid | Platform, host, attestation, or quiescence evidence violated the preregistration. | diagnostic attempt runner | terminal | inspect_error | n/a | yes | attempt result, ledger |
+| `environment_invalid` | reason | Environment invalid | Platform, host, attestation, quiescence, or worktree-prerequisite evidence violated the preregistration. | diagnostic attempt runner | terminal | inspect_error | n/a | yes | attempt result, ledger |
 | `protocol_violation` | reason | Protocol violation | An otherwise unmapped harness invariant failed; detailed `error.kind` remains diagnostic, not a decision taxonomy. | diagnostic attempt runner | terminal | inspect_error | n/a | yes | attempt result, ledger |
 | `coordinator_failure` | reason | Coordinator failure | Worktree creation, pinning, or coordinator control failed outside an attempt probe. | diagnostic coordinator | terminal | inspect_error | n/a | yes | coordinator failure, ledger |
 | `coordinator_interrupted` | reason | Coordinator interrupted | Resume found an unfinished attempt without a durable result artifact. | diagnostic coordinator | terminal | inspect_error | n/a | yes | interruption result, ledger |
@@ -7731,9 +7873,24 @@ $diagnosticValidationTarget = Join-Path $diagnosticValidationRoot 'src-tauri\tar
 if (Test-Path -LiteralPath $diagnosticValidationTarget) {
     throw 'Fresh validation worktree unexpectedly contains a target directory.'
 }
+$diagnosticPrerequisiteScript = @'
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+const [worktree] = process.argv.slice(1);
+const { ensureDiagnosticSidecarPlaceholder } = await import(pathToFileURL(path.join(worktree, 'scripts', 'process-shell-diagnostic', 'git-state.mjs')).href);
+const evidence = await ensureDiagnosticSidecarPlaceholder({ worktree });
+process.stdout.write(`${JSON.stringify(evidence)}\n`);
+'@
+$diagnosticPrerequisiteJson = node --input-type=module -e $diagnosticPrerequisiteScript "$diagnosticValidationRoot"
+if ($LASTEXITCODE -ne 0) { throw 'Validation sidecar placeholder preparation failed.' }
+$diagnosticPrerequisite = $diagnosticPrerequisiteJson | ConvertFrom-Json
+if ($diagnosticPrerequisite.size -ne 0 -or $diagnosticPrerequisite.sha256 -ne 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855') {
+    throw 'Validation sidecar placeholder evidence mismatch.'
+}
 ```
 
-Expected: detached HEAD equals `$diagnosticLockCommit`; target is absent. This
+Expected: detached HEAD equals `$diagnosticLockCommit`; target is absent; the
+production helper reports the exact ignored zero-byte sidecar placeholder. This
 target is separate from every later measurement target and from main.
 
 - [ ] **Step 3: Validate A, B, C, E, and exact historical D in the validation target**

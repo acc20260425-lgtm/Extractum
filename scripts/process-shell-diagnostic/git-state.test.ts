@@ -1,13 +1,15 @@
-import { mkdtemp, mkdir, readFile } from "node:fs/promises";
+import { lstat, mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
   aRestoreArgs,
+  DIAGNOSTIC_SIDECAR_PLACEHOLDER,
   D_BLOB_ANCHORS,
   STATE_TREE_ANCHORS,
   dRestoreArgs,
+  ensureDiagnosticSidecarPlaceholder,
   validateLockDelta,
   validateStateManifests,
   verifyTargetIsolation,
@@ -134,6 +136,31 @@ describe("process shell diagnostic Git states", () => {
       "--",
       "src-tauri",
     ]);
+  });
+
+  it("materializes the exact empty Tauri sidecar placeholder idempotently", async () => {
+    const parent = await mkdtemp(path.join(os.tmpdir(), "extractum-psd-sidecar-"));
+    const worktree = path.join(parent, "attempt");
+    await mkdir(worktree, { recursive: true });
+    const first = await ensureDiagnosticSidecarPlaceholder({ worktree });
+    const second = await ensureDiagnosticSidecarPlaceholder({ worktree });
+    expect(first).toEqual(second);
+    expect(first).toMatchObject(DIAGNOSTIC_SIDECAR_PLACEHOLDER);
+    const info = await lstat(path.join(worktree, ...DIAGNOSTIC_SIDECAR_PLACEHOLDER.relativePath.split("/")));
+    expect(info.isFile()).toBe(true);
+    expect(info.isSymbolicLink()).toBe(false);
+    expect(info.size).toBe(0);
+  });
+
+  it("rejects a nonempty preexisting Tauri sidecar placeholder", async () => {
+    const parent = await mkdtemp(path.join(os.tmpdir(), "extractum-psd-sidecar-invalid-"));
+    const worktree = path.join(parent, "attempt");
+    const placeholder = path.join(worktree, ...DIAGNOSTIC_SIDECAR_PLACEHOLDER.relativePath.split("/"));
+    await mkdir(path.dirname(placeholder), { recursive: true });
+    await writeFile(placeholder, "not empty", "utf8");
+    await expect(ensureDiagnosticSidecarPlaceholder({ worktree })).rejects.toMatchObject({
+      kind: "environment_sidecar_placeholder_invalid",
+    });
   });
 
   it("accepts B only with a dependency-free empty crate and no app edge", () => {

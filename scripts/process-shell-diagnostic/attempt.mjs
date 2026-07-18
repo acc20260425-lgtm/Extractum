@@ -2,7 +2,11 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-import { installState, verifyTargetIsolation } from "./git-state.mjs";
+import {
+  ensureDiagnosticSidecarPlaceholder,
+  installState,
+  verifyTargetIsolation,
+} from "./git-state.mjs";
 import { PROTOCOL, evaluateAttempt, summarizeBlock } from "./protocol.mjs";
 import {
   assertCommandOk,
@@ -144,6 +148,7 @@ export async function verifyTargetPreflight({ block, worktree, mainRoot, artifac
 }
 
 const productionDependencies = {
+  prepareWorktreeFn: ensureDiagnosticSidecarPlaceholder,
   installStateFn: installState,
   verifyTargetPreflightFn: verifyTargetPreflight,
   captureStateInventoryFn: captureStateInventory,
@@ -349,9 +354,11 @@ export async function runAttempt(spec, injected = {}) {
   const attemptDir = path.join(spec.sessionDir, "attempts", spec.attemptId);
   const startedAt = new Date().toISOString();
   const blocks = {};
+  let worktreePrerequisite = null;
   let result;
 
   try {
+    worktreePrerequisite = await deps.prepareWorktreeFn({ worktree: spec.worktree });
     for (const block of PROTOCOL.baseSequence) {
       blocks[block] = await runBlock({ block, spec, attemptDir, deps });
     }
@@ -376,6 +383,7 @@ export async function runAttempt(spec, injected = {}) {
       reasons: evaluation.reasons ?? [],
       startedAt,
       endedAt: new Date().toISOString(),
+      worktreePrerequisite,
       blocks,
       evaluation,
     };
@@ -387,6 +395,7 @@ export async function runAttempt(spec, injected = {}) {
       reasons: [errorReason(error)],
       startedAt,
       endedAt: new Date().toISOString(),
+      worktreePrerequisite,
       blocks,
       error: {
         name: error?.name ?? "Error",
@@ -424,6 +433,7 @@ export async function runAttempt(spec, injected = {}) {
       reasons: [errorReason(error)],
       startedAt,
       endedAt: new Date().toISOString(),
+      worktreePrerequisite,
       blocks,
       error: {
         name: error?.name ?? "Error",
