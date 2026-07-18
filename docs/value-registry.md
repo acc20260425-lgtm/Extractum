@@ -922,3 +922,24 @@ Use this checklist whenever a change introduces or renames a `status`, `state`, 
 | Docs | Does this registry already contain the family? | Extend the existing row/group instead of creating a competing duplicate. |
 
 Recommended review phrase: `Value registry checked: owner, persistence, API mirror, UI display, fixtures.`
+
+## Process-shell diagnostic artifact classifications
+
+Representative source:
+
+- `scripts/process-shell-diagnostic/protocol.mjs`
+
+These values classify an immutable experimental `decision.json`. The harness
+owns them. They are persisted only in temporary raw artifacts and the committed
+verification document; they do not enter SQLite, product APIs, UI state, or
+product fixtures.
+
+| Value | Type | Name | Meaning | Source of truth | Lifecycle | User action | UI tone | Stable? | Current usage |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `membership_configuration` | kind | Membership configuration | The empty dependency-free member already crosses the material threshold. | diagnostic protocol | taxonomy | none | n/a | yes | `decision.json`, verification document |
+| `edge_related_configuration` | kind | Edge-related configuration | B is below threshold and C crosses it after adding only the app dependency edge. | diagnostic protocol | taxonomy | none | n/a | yes | `decision.json`, verification document |
+| `manifest_related` | kind | Manifest-related | Conditional E reproduces D while retaining process code in the app. | diagnostic protocol | taxonomy | none | n/a | yes | `decision.json`, verification document |
+| `boundary_composite` | kind | Boundary composite | D reproduces the effect but E does not, isolating the remaining D-specific code boundary/facade composite. | diagnostic protocol | taxonomy | none | n/a | yes | `decision.json`, verification document |
+| `not_reproduced` | kind | Not reproduced | Every declared variant remains below both the material threshold and shell cap. | diagnostic protocol | terminal | none | n/a | yes | `decision.json`, verification document |
+| `threshold_disagreement` | kind | Threshold disagreement | The absolute material threshold and existing shell-cap rule disagree. | diagnostic protocol | terminal | inspect_error | n/a | yes | `decision.json`, verification document |
+| `environment_precision_insufficient` | kind | Environment precision insufficient | Two unexplained stability-invalid attempts show that the environment cannot support the preregistered precision. | diagnostic protocol | terminal | inspect_error | n/a | yes | session ledger, `decision.json`, verification document |
