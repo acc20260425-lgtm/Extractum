@@ -1,0 +1,62 @@
+diff --git a/src-tauri/Cargo.lock b/src-tauri/Cargo.lock
+index f552ed4ad5d150d8a3214aaa189df75b51986227..793645edaab045c43a0323084e32656cc3c13c2e 100644
+--- a/src-tauri/Cargo.lock
++++ b/src-tauri/Cargo.lock
+@@ -1341,6 +1341,7 @@ dependencies = [
+  "chacha20poly1305",
+  "dirs",
+  "extractum-core",
++ "extractum-process",
+  "grammers-client",
+  "grammers-mtsender",
+  "grammers-session",
+@@ -1381,6 +1382,10 @@ dependencies = [
+  "zstd",
+ ]
+
++[[package]]
++name = "extractum-process"
++version = "0.2.0"
++
+ [[package]]
+ name = "fancy-regex"
+ version = "0.18.0"
+diff --git a/src-tauri/Cargo.toml b/src-tauri/Cargo.toml
+index c7739a16b80e6427e15984efdbf3b7eac69f6c24..326171b9dbd8b6888ea1f88644302a99ccac2825 100644
+--- a/src-tauri/Cargo.toml
++++ b/src-tauri/Cargo.toml
+@@ -1,5 +1,5 @@
+ [workspace]
+-members = [".", "crates/extractum-core"]
++members = [".", "crates/extractum-core", "crates/extractum-process"]
+ resolver = "2"
+
+ [workspace.package]
+@@ -63,6 +63,7 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
+ url = "2"
+ tempfile = "3"
+ extractum-core = { path = "crates/extractum-core" }
++extractum-process = { path = "crates/extractum-process" }
+
+ [dev-dependencies]
+ tokio = { version = "1", features = ["test-util"] }
+diff --git a/src-tauri/crates/extractum-process/Cargo.toml b/src-tauri/crates/extractum-process/Cargo.toml
+new file mode 100644
+index 0000000000000000000000000000000000000000..7db0070d79edfb2d90d75624c20dac795f639292
+--- /dev/null
++++ b/src-tauri/crates/extractum-process/Cargo.toml
+@@ -0,0 +1,5 @@
++[package]
++name = "extractum-process"
++version.workspace = true
++edition.workspace = true
++publish = false
+diff --git a/src-tauri/crates/extractum-process/src/lib.rs b/src-tauri/crates/extractum-process/src/lib.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6fc3851561a9d25b792e7423dc793c6ece3b8bb2
+--- /dev/null
++++ b/src-tauri/crates/extractum-process/src/lib.rs
+@@ -0,0 +1,3 @@
++#![forbid(unsafe_code)]
++
++// Membership/edge diagnostic fixture intentionally has no public API.
