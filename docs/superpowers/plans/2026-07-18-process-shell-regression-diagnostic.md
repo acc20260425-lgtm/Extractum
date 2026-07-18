@@ -102,6 +102,12 @@ Windows/MSVC.
   resolver-capable `cargo metadata` (without `--no-deps`), then proves the
   result stable with the same command plus `--locked`; `cargo generate-lockfile`
   remains forbidden.
+- A second pre-A0 preregistration correction on 2026-07-18 resolves the Task 4
+  RED suite's command-result classification mismatch. A Cargo result already
+  classified as `command_failed` remains `command_failed`; only an otherwise
+  successful result missing required close/timing fields becomes
+  `required_cargo_metadata_missing`. Therefore `requireCargoMetadata` uses the
+  default `assertCommandOk` failure kind before validating those fields.
 - This plan and its normative design are preregistration inputs committed
   before Task 0. Do not edit or tick their checkboxes during execution; track
   progress in the execution session/plan tool. Any amendment requires a new
@@ -3114,7 +3120,7 @@ function taskkillExe() {
 }
 
 function requireCargoMetadata(result, label) {
-  assertCommandOk(result, label, "required_cargo_metadata_missing");
+  assertCommandOk(result, label);
   if (
     result.closeObserved !== true ||
     !Number.isFinite(result.elapsedMs) ||
