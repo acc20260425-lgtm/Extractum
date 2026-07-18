@@ -44,8 +44,15 @@ export function aRestoreArgs() {
   ];
 }
 
-export function dCheckoutArgs() {
-  return ["checkout", PROTOCOL.candidateCommit, "--", "src-tauri"];
+export function dRestoreArgs() {
+  return [
+    "restore",
+    `--source=${PROTOCOL.candidateCommit}`,
+    "--staged",
+    "--worktree",
+    "--",
+    "src-tauri",
+  ];
 }
 
 function normalizedState(state) {
@@ -358,7 +365,7 @@ export async function installState({ state, worktree, mainRoot, protocolLock, ar
     await git({ ...shared, label: `${prefix}.patch-check`, args: ["apply", "--check", "--index", patchPath] });
     await git({ ...shared, label: `${prefix}.patch-apply`, args: ["apply", "--index", patchPath] });
   } else if (kind === "D") {
-    await git({ ...shared, label: `${prefix}.candidate-checkout`, args: dCheckoutArgs() });
+    await git({ ...shared, label: `${prefix}.candidate-restore`, args: dRestoreArgs() });
   }
 
   await verifyOnlySrcTauriChanged(shared);

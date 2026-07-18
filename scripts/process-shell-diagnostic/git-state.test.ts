@@ -7,7 +7,7 @@ import {
   aRestoreArgs,
   D_BLOB_ANCHORS,
   STATE_TREE_ANCHORS,
-  dCheckoutArgs,
+  dRestoreArgs,
   validateLockDelta,
   validateStateManifests,
   verifyTargetIsolation,
@@ -117,7 +117,7 @@ describe("process shell diagnostic Git states", () => {
     }
   });
 
-  it("uses the exact approved A restore and D checkout commands", () => {
+  it("uses the exact approved A and D restore commands", () => {
     expect(aRestoreArgs()).toEqual([
       "restore",
       "--source=24c313a767a25284123b24ea3a4b8c083007c817",
@@ -126,9 +126,11 @@ describe("process shell diagnostic Git states", () => {
       "--",
       "src-tauri",
     ]);
-    expect(dCheckoutArgs()).toEqual([
-      "checkout",
-      "b364756c7b5768d644321afeaeb81ec04e2481a4",
+    expect(dRestoreArgs()).toEqual([
+      "restore",
+      "--source=b364756c7b5768d644321afeaeb81ec04e2481a4",
+      "--staged",
+      "--worktree",
       "--",
       "src-tauri",
     ]);

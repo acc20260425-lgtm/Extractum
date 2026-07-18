@@ -140,10 +140,11 @@ intended one.
 
 The implementation plan must reconstruct D mechanically inside the verified
 experiment worktree with this exact command, never by manually recreating or
-copying candidate files:
+copying candidate files. `restore --staged --worktree` is required so paths
+present in A but absent from the candidate are removed:
 
 ```powershell
-git checkout b364756c7b5768d644321afeaeb81ec04e2481a4 -- src-tauri
+git restore --source=b364756c7b5768d644321afeaeb81ec04e2481a4 --staged --worktree -- src-tauri
 ```
 
 Before any D warm-up, the runner compares the complete tracked path, mode, and

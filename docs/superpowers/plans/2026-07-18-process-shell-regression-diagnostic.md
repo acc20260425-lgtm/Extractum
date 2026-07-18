@@ -60,7 +60,7 @@ Windows/MSVC.
   synchronization, warm-ups, no-op, or acceptance samples.
 - B is an empty dependency-free `extractum-process` workspace member. C adds
   only the app-to-empty-crate path edge. D is reconstructed only with
-  `git checkout b364756c7b5768d644321afeaeb81ec04e2481a4 -- src-tauri` and
+  `git restore --source=b364756c7b5768d644321afeaeb81ec04e2481a4 --staged --worktree -- src-tauri` and
   exact path/mode/blob/tree/diff verification.
 - Every A restoration uses
   `git restore --source=24c313a767a25284123b24ea3a4b8c083007c817 --staged --worktree -- src-tauri`.
@@ -131,6 +131,14 @@ Windows/MSVC.
   so validation now uses `git restore --source=24c313a767a25284123b24ea3a4b8c083007c817 --staged --worktree -- src-tauri`
   before A validation, D reconstruction, and final cleanup. No A0 command had
   started, and the prior lock is superseded.
+- A seventh pre-A0 protocol replacement on 2026-07-18 applies the same complete
+  pathspec restoration rule to D. The production installer smoke after C proved
+  that `git checkout b364756c7b5768d644321afeaeb81ec04e2481a4 -- src-tauri`
+  leaves A paths that are absent from the historical candidate, producing the
+  wrong subtree. Production and manual D installation now use candidate
+  `restore --staged --worktree`; exact tree/blob/inventory checks remain. The
+  smoke stopped before Cargo target creation or A0, its worktree was restored to
+  A-final and removed, and the prior lock is superseded.
 - This plan and its normative design are preregistration inputs committed
   before Task 0. Do not edit or tick their checkboxes during execution; track
   progress in the execution session/plan tool. Any amendment requires a new
@@ -1860,7 +1868,7 @@ import {
   aRestoreArgs,
   D_BLOB_ANCHORS,
   STATE_TREE_ANCHORS,
-  dCheckoutArgs,
+  dRestoreArgs,
   validateLockDelta,
   validateStateManifests,
   verifyTargetIsolation,
@@ -1970,7 +1978,7 @@ describe("process shell diagnostic Git states", () => {
     }
   });
 
-  it("uses the exact approved A restore and D checkout commands", () => {
+  it("uses the exact approved A and D restore commands", () => {
     expect(aRestoreArgs()).toEqual([
       "restore",
       "--source=24c313a767a25284123b24ea3a4b8c083007c817",
@@ -1979,9 +1987,11 @@ describe("process shell diagnostic Git states", () => {
       "--",
       "src-tauri",
     ]);
-    expect(dCheckoutArgs()).toEqual([
-      "checkout",
-      "b364756c7b5768d644321afeaeb81ec04e2481a4",
+    expect(dRestoreArgs()).toEqual([
+      "restore",
+      "--source=b364756c7b5768d644321afeaeb81ec04e2481a4",
+      "--staged",
+      "--worktree",
       "--",
       "src-tauri",
     ]);
@@ -2389,8 +2399,15 @@ export function aRestoreArgs() {
   ];
 }
 
-export function dCheckoutArgs() {
-  return ["checkout", PROTOCOL.candidateCommit, "--", "src-tauri"];
+export function dRestoreArgs() {
+  return [
+    "restore",
+    `--source=${PROTOCOL.candidateCommit}`,
+    "--staged",
+    "--worktree",
+    "--",
+    "src-tauri",
+  ];
 }
 
 function normalizedState(state) {
@@ -2703,7 +2720,7 @@ export async function installState({ state, worktree, mainRoot, protocolLock, ar
     await git({ ...shared, label: `${prefix}.patch-check`, args: ["apply", "--check", "--index", patchPath] });
     await git({ ...shared, label: `${prefix}.patch-apply`, args: ["apply", "--index", patchPath] });
   } else if (kind === "D") {
-    await git({ ...shared, label: `${prefix}.candidate-checkout`, args: dCheckoutArgs() });
+    await git({ ...shared, label: `${prefix}.candidate-restore`, args: dRestoreArgs() });
   }
 
   await verifyOnlySrcTauriChanged(shared);
@@ -7766,7 +7783,7 @@ if ($diagnosticInstalledStatus.Count -ne 0) {
 ```
 
 Expected: all six production calls write their real state evidence, B/C/E use
-canonical committed patch blobs, D executes the literal candidate checkout and
+canonical committed patch blobs, D executes the exact candidate restoration and
 inventory comparison, and `A-final` leaves exact A. A failure here occurs before
 A0 and is fixed only by a new committed/frozen protocol.
 
@@ -7837,8 +7854,8 @@ $diagnosticValidationRoot = (Resolve-Path -LiteralPath (Join-Path $diagnosticMai
 $diagnosticManifest = Join-Path $diagnosticValidationRoot 'src-tauri\Cargo.toml'
 git -C "$diagnosticValidationRoot" restore --source=24c313a767a25284123b24ea3a4b8c083007c817 --staged --worktree -- src-tauri
 if ($LASTEXITCODE -ne 0) { throw 'A restore before D failed.' }
-git -C "$diagnosticValidationRoot" checkout b364756c7b5768d644321afeaeb81ec04e2481a4 -- src-tauri
-if ($LASTEXITCODE -ne 0) { throw 'Literal D checkout failed.' }
+git -C "$diagnosticValidationRoot" restore --source=b364756c7b5768d644321afeaeb81ec04e2481a4 --staged --worktree -- src-tauri
+if ($LASTEXITCODE -ne 0) { throw 'Exact D restoration failed.' }
 git -C "$diagnosticValidationRoot" diff --quiet b364756c7b5768d644321afeaeb81ec04e2481a4 -- src-tauri
 if ($LASTEXITCODE -ne 0) { throw 'D differs from the historical candidate.' }
 $diagnosticDRootTreeOutput = @(git -C "$diagnosticValidationRoot" write-tree)
