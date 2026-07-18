@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import focusedLoopDesignRaw from "../../docs/superpowers/specs/2026-07-17-focused-rust-loop-design.md?raw";
+import crateRoadmapRaw from "../../docs/superpowers/specs/2026-07-17-crate-roadmap.md?raw";
+import shellCapRevisionRaw from "../../docs/superpowers/specs/2026-07-18-crate-extraction-shell-cap-revision-design.md?raw";
+import anomalyV2DesignRaw from "../../docs/superpowers/specs/2026-07-18-process-shell-anomaly-v2-design.md?raw";
+import valueRegistryRaw from "../../docs/value-registry.md?raw";
 import processBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-17-process-and-gemini-browser-crate-boundary-design.md?raw";
 
 const normalize = (value: string) => value.replace(/\r\n/g, "\n");
@@ -13,6 +17,10 @@ const sectionBetween = (value: string, start: string, end: string) => {
   return value.slice(startIndex, endIndex);
 };
 const focusedLoopDesign = normalize(focusedLoopDesignRaw);
+const crateRoadmap = normalize(crateRoadmapRaw);
+const shellCapRevision = normalize(shellCapRevisionRaw);
+const anomalyV2Design = normalize(anomalyV2DesignRaw);
+const valueRegistry = normalize(valueRegistryRaw);
 const processBoundaryDesign = normalize(processBoundaryDesignRaw);
 const samplingPolicy = sectionBetween(
   focusedLoopDesign,
@@ -63,5 +71,44 @@ describe("crate extraction shell-cap repository policy", () => {
     );
     expect(processBoundaryDesign).toContain("architecture and correctness");
     expect(processBoundaryDesign).toContain("requirements remain active");
+  });
+
+  it("records the cumulative roadmap and moot anomaly disposition", () => {
+    expect(crateRoadmap).toContain(
+      "2026-07-18-crate-extraction-shell-cap-revision-design.md",
+    );
+    expect(crateRoadmap).toContain("15,000 ms");
+    expect(crateRoadmap).toContain("5,865 ms");
+    expect(crateRoadmap).toContain(
+      "| Reapplied Phase 3 | pending valid post-reapplication median |",
+    );
+    expect(crateRoadmap).toContain(
+      "Phase 3 — `extractum-process` (approved for exact-candidate reapplication)",
+    );
+    expect(crateRoadmap).toContain("non-gating before/after");
+    expect(crateRoadmap).toContain("shell samples and validity counts");
+    expect(crateRoadmap).toContain(
+      "If reconstruction differs materially from `b364756c`",
+    );
+    expect(crateRoadmap).toContain(
+      "requires a separately approved plan",
+    );
+    expect(crateRoadmap).toContain("fresh preregistered timing under the revised");
+    expect(crateRoadmap).toContain(
+      "Phase 4 remains blocked until the exact Phase 3 candidate is integrated",
+    );
+    expect(anomalyV2Design).toContain(
+      "**Status:** `moot` for the current crate roadmap",
+    );
+    expect(anomalyV2Design).toContain(
+      "2026-07-18-crate-extraction-shell-cap-revision-design.md",
+    );
+    expect(anomalyV2Design).toContain("current v1 harness is not");
+    expect(anomalyV2Design).toContain("production-ready infrastructure");
+    expect(valueRegistry).toContain("| `moot` | roadmap disposition |");
+    expect(valueRegistry).toContain("`moot` is documentation-only");
+    expect(shellCapRevision).toContain(
+      "**Status:** Implemented; current shell-cap authority",
+    );
   });
 });

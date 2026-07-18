@@ -1,6 +1,6 @@
 # Crate Extraction Shell-Cap Revision Design
 
-**Status:** Approved for implementation
+**Status:** Implemented; current shell-cap authority
 
 **Date:** 2026-07-18
 

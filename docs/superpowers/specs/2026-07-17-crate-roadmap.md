@@ -33,6 +33,9 @@ Completed and in-flight slices governed by their own documents:
   — focused package commands, extraction-retention thresholds, plan-shape
   requirements, and unchanged end-of-slice workspace gates. Enforced through
   `AGENTS.md` and `src/lib/focused-rust-loop-contract.test.ts`.
+- [`2026-07-18-crate-extraction-shell-cap-revision-design.md`](2026-07-18-crate-extraction-shell-cap-revision-design.md)
+  — current 2,000 ms / 20% per-slice cap, 15,000 ms cumulative ceiling,
+  measurement-validity rule, and Phase 3/v2 disposition.
 
 ## Evidence Base
 
@@ -144,9 +147,13 @@ main branch point.
   are inherited as common mechanics from the render spec. For hot-module
   phases 4–6, the focused-loop spec is the normative source for commands,
   thresholds, and failure classification.
-- Hot-module domain retention and shell-regression gates are defined by
-  `2026-07-17-focused-rust-loop-design.md`. Thresholds are fixed before
-  observation and never recalibrated afterward.
+- For decisions after 2026-07-18, hot-module retention and shell-regression
+  gates come from `2026-07-18-crate-extraction-shell-cap-revision-design.md`
+  and the updated focused-loop specification. Historical sessions retain their
+  originally frozen thresholds.
+- Every slice must pass both its 2,000 ms / 20% local shell cap and the
+  15,000 ms cumulative shell ceiling. A ceiling crossing requires a separate
+  owner-approved policy revision before retention.
 - **Branch on the render slice outcome:**
   - **Stage 0 go, Stage 1 retain** — the full-workspace hypothesis holds on
     this machine. Continue the phase sequence below with the same gates.
@@ -173,6 +180,16 @@ main branch point.
   Full workspace gates remain unchanged as end-of-slice verification.
   - A failed gate never justifies weakening correctness gates, and a
     reverted candidate leaves no partial split behind.
+
+## Roadmap Shell Budget
+
+The cumulative ceiling is measured on the same workstation/probe family as the
+canonical pre-Phase 3 shell median. Only valid series enter this ledger.
+
+| Checkpoint | Valid shell median | Remaining to 15,000 ms | Disposition |
+| --- | ---: | ---: | --- |
+| Pre-Phase 3 | 9,135 ms | 5,865 ms | canonical anchor |
+| Reapplied Phase 3 | pending valid post-reapplication median | pending | non-gating measurement required before Phase 4 timing |
 
 ## Target Crate Map (end state, revisable per phase)
 
@@ -239,18 +256,31 @@ crate was created; the branch selected in "Decision Framework" governs all
 later phases. The seven-module boundary remains a valid future candidate
 under the focused-loop metric if a phase ever needs it.
 
-### Phase 3 — `extractum-process` (not retained)
+### Phase 3 — `extractum-process` (approved for exact-candidate reapplication)
 
 `external_process`, `child_process`, and `process_tree` become shared
 OS-process infrastructure below Gemini Browser, YouTube, and diagnostics.
-`job_helpers` stays app-side. The approved JIT boundary, facade requirement,
-fresh evidence, and architectural-only justification are defined in
-`2026-07-17-process-and-gemini-browser-crate-boundary-design.md`. Candidate
-`b364756c` improved the focused median from 9171 ms to 2049 ms, but regressed
-the app-shell median from 9135 ms to 10177 ms (+1042 ms / +11.41%), beyond the
-approved +500 ms / +5% cap. It was not retained and was rolled back in
-`c47372dc`; see
-[`2026-07-17-extractum-process-extraction.md`](../verification/2026-07-17-extractum-process-extraction.md).
+`job_helpers` stays app-side. Candidate `b364756c` improved the focused median
+from 9,171 ms to 2,049 ms and regressed the app-shell median from 9,135 ms to
+10,177 ms (+1,042 ms / +11.41%). It correctly failed the original 500 ms / 5%
+gate and was reverted in `c47372dc`; that historical result remains unchanged.
+
+The approved 2026-07-18 shell-cap revision accepts the same evidence under the
+new 2,000 ms / 20% rule. Reapply the exact historical candidate without a new
+gating performance experiment, verify its historical tree/blob identity, and
+rerun current correctness and completion gates. Record non-gating before/after
+shell samples and validity counts; a valid post median seeds the cumulative
+ledger. If those diagnostics are invalid, Phase 3 may still retain after all
+correctness/completion gates pass, but Phase 4 must establish a valid baseline
+before its own performance decision.
+
+The v2/v3 anomaly track is moot for this roadmap. It is not a prerequisite for
+Phase 3 or Phase 4, and its reviewed harness remediation remains deferred.
+
+If reconstruction differs materially from `b364756c`, stop the exact-candidate
+path. The result is a new candidate and requires a separately approved plan
+with fresh preregistered timing under the revised local, cumulative, and
+validity rules.
 
 ### Phase 4 — `extractum-gemini-browser` (boundary approved)
 
@@ -258,8 +288,10 @@ approved +500 ms / +5% cap. It was not retained and was rolled back in
 self-contained (only 7 joint commits with `prompt_packs`). Depends on
 process infrastructure + core. The approved design keeps Tauri commands,
 application paths, SQL/Apalis storage, and worker registration app-side while
-extracting the portable automation engine. Phase 4 remains blocked because
-phase 3 was not retained; continuing requires a new approved design.
+extracting the portable automation engine.
+Phase 4 remains blocked until the exact Phase 3 candidate is integrated and a
+valid shell baseline exists for Phase 4 measurement. No additional v2/v3
+diagnostic approval is required.
 
 ### Phase 5 — `extractum-llm`
 
@@ -326,10 +358,14 @@ integration tests, WiX/MSI packaging concerns.
    candidate's fan-in/fan-out before writing the spec; history shifts (e.g.
    `gemini_browser` did not exist three months ago).
 2. Common measurement mechanics, rename-map inventory comparison, and
-   negative-outcome documentation are inherited from the render spec. For
-   hot-module phases 4–6, focused commands, thresholds, and failure
-   classification come from the focused-loop spec; thresholds are declared
-   before observation and never adjusted afterward.
+   negative-outcome documentation are inherited from the render and focused-
+   loop specs. For Phase 4 and later, every shell decision uses five-sample
+   baseline/candidate series, requires at least four values within 300 ms of
+   each series median, and applies both the 2,000 ms / 20% per-slice cap and
+   the 15,000 ms cumulative ceiling. An unstable series invalidates the
+   session rather than failing the candidate. The exact historical Phase 3
+   reapplication instead records non-gating diagnostics under its explicit
+   owner exception.
 3. Mechanical moves only inside a slice: facade modules preserve `crate::`
    paths; consumers are never mass-rewritten in the same slice.
 4. Every `pub(crate)` → `pub` widening is enumerated in the spec and checked
@@ -357,7 +393,8 @@ integration tests, WiX/MSI packaging concerns.
 | `analysis/trace.rs` direct `zstd::` → `core::compression` | phase 7 at the latest |
 | `sources::test_support` ownership (fixture crate vs app-side integration tests) | first producer-domain extraction whose tests consume it |
 | WiX MSI diagnosis (`light.exe` failure/hang, likely ICE validation in non-interactive sessions) | separate follow-up task; unblocks restoring full-bundle gates |
-| Focused-loop metric respec | **Completed 2026-07-17**: branch (a)+(b), commands, thresholds, failure policy, and plan structure are enforced through `AGENTS.md` and `src/lib/focused-rust-loop-contract.test.ts` |
+| Focused-loop metric respec | **Completed 2026-07-17; revised 2026-07-18**: focused commands and the domain gate remain; shell retention now uses 2,000 ms / 20%, the 15,000 ms cumulative ceiling, and the 4/5-within-300-ms validity rule. |
+| Process-shell anomaly v2/v3 | **Moot for the current roadmap**: reopen only for a separately approved task requiring sub-second precision or causal attribution; v1 harness remediation remains deferred. |
 
 ## Non-Goals
 

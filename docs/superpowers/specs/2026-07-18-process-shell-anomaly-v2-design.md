@@ -1,8 +1,20 @@
 # Process Shell Anomaly Qualification v2 Design
 
-**Status:** Approved design; written-spec review requested
+**Status:** `moot` for the current crate roadmap; preserved historical design
 
 **Date:** 2026-07-18
+
+## Current Roadmap Disposition
+
+The owner decision in
+[`2026-07-18-crate-extraction-shell-cap-revision-design.md`](2026-07-18-crate-extraction-shell-cap-revision-design.md)
+accepts the observed Phase 3 shell cost. V2 and a possible v3 no longer control
+Phase 3 retention or Phase 4 entry and must not run as roadmap prerequisites.
+
+This technical design remains preserved for a future owner-approved task that
+genuinely requires sub-second precision or causal attribution. Its reviewed v1
+harness remediation is deferred with it; the current v1 harness is not
+production-ready infrastructure for another protocol.
 
 **Archived v1 protocol commit:**
 `783c46a1eacce8c92b5e73efbaed247ef57a99d6`

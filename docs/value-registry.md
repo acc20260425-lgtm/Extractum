@@ -928,6 +928,7 @@ Recommended review phrase: `Value registry checked: owner, persistence, API mirr
 Representative source:
 
 - `scripts/process-shell-diagnostic/protocol.mjs`
+- `docs/superpowers/specs/2026-07-18-process-shell-anomaly-v2-design.md`
 
 These values classify an immutable experimental `decision.json`. The harness
 owns them. They are persisted only in temporary raw artifacts and the committed
@@ -943,6 +944,7 @@ product fixtures.
 | `not_reproduced` | kind | Not reproduced | Every declared variant remains below both the material threshold and shell cap. | diagnostic protocol | terminal | none | n/a | yes | `decision.json`, verification document |
 | `threshold_disagreement` | kind | Threshold disagreement | The absolute material threshold and existing shell-cap rule disagree. | diagnostic protocol | terminal | inspect_error | n/a | yes | `decision.json`, verification document |
 | `environment_precision_insufficient` | kind | Environment precision insufficient | Two unexplained stability-invalid attempts show that the environment cannot support the preregistered precision. | diagnostic protocol | terminal | inspect_error | n/a | yes | session ledger, `decision.json`, verification document |
+| `moot` | roadmap disposition | Moot | The approved anomaly protocol no longer controls the crate roadmap after an explicit owner policy revision; its design remains preserved for a separately approved precision/causality task. | shell-cap revision / crate roadmap | terminal | none | n/a | yes | v2 design, crate roadmap |
 | `valid` | kind | Valid attempt | Every command and validity rule passed and a terminal diagnostic classification exists. | diagnostic coordinator | terminal | none | n/a | yes | attempt result, numbered ledger |
 | `stability_invalid` | kind | Stability invalid | Anchor range or central-five stability invalidated the complete attempt. | diagnostic coordinator | terminal | inspect_error | n/a | yes | attempt result, numbered ledger |
 | `infrastructure_invalid` | kind | Infrastructure invalid | A command, metadata, restore, state, target, or environment contract invalidated the attempt. | diagnostic coordinator | terminal | inspect_error | n/a | yes | attempt result, numbered ledger |
@@ -983,3 +985,7 @@ product fixtures.
 | `coordinator_failure` | reason | Coordinator failure | Worktree creation, pinning, or coordinator control failed outside an attempt probe. | diagnostic coordinator | terminal | inspect_error | n/a | yes | coordinator failure, ledger |
 | `coordinator_interrupted` | reason | Coordinator interrupted | Resume found an unfinished attempt without a durable result artifact. | diagnostic coordinator | terminal | inspect_error | n/a | yes | interruption result, ledger |
 | `final_restore_evidence_missing` | reason | Final restore evidence missing | A result could not prove exact final A and is therefore infrastructure-invalid. | diagnostic coordinator | terminal | inspect_error | n/a | yes | failure result, ledger |
+
+`moot` is documentation-only. It is not persisted in SQLite, exposed through a
+product API, rendered in the UI, or used by product fixtures. The diagnostic
+harness continues to own only its historical artifact classifications.
