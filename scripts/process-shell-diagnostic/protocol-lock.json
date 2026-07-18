@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "protocolVersion": 1,
+  "baselineCommit": "24c313a767a25284123b24ea3a4b8c083007c817",
+  "candidateCommit": "b364756c7b5768d644321afeaeb81ec04e2481a4",
+  "generatedBy": "scripts/process-shell-diagnostic/freeze.mjs",
+  "frozenInputs": [
+    {
+      "path": "docs/superpowers/plans/2026-07-18-process-shell-regression-diagnostic.md",
+      "size": 352845,
+      "sha256": "4ab2ae2a46de618898176dc6e365d5213ae545f3dc3cf68bd20a3477f1004d5c",
+      "gitBlob": "3b5ab5bdcde6ec460d048ea2b79c93da828bfa16"
+    },
+    {
+      "path": "docs/superpowers/specs/2026-07-18-process-shell-regression-diagnostic-design.md",
+      "size": 23817,
+      "sha256": "9d7a0fae45908a9cbe010963f05f28d4dc2516bc1ed32aa0cabb87d6328b0825",
+      "gitBlob": "08c39210bd5202ad1920ec0667a873841c56e0b4"
+    },
+    {
+      "path": "docs/value-registry.md",
+      "size": 95599,
+      "sha256": "7c189211209335b6f817a61e01a8c55db70d8be1aaae9644b8d4a3ca0b9f049c",
+      "gitBlob": "8fb2f86a034ee1d59637234799daf2382fe101c3"
+    },
+    {
+      "path": "scripts/process-shell-diagnostic/attempt.mjs",
+      "size": 14518,
+      "sha256": "8069c6a6df0693dee6e3c323f2cd1def6ff4917f5b8e494fde2473e1c06eec8a",
+      "gitBlob": "c68164ff9529c8ea763370130745a19e08ca8f93"
+    },
+    {
+      "path": "scripts/process-shell-diagnostic/attempt.test.ts",
+      "size": 10512,
+      "sha256": "a72c99a5225b3cc20391c8b368dd72064911e35bd5fc547d539df9573700f380",
+      "gitBlob": "70fec93676d1016668c2f6395f62dd2e410c5807"
+    },
+    {
+      "path": "scripts/process-shell-diagnostic/coordinator.mjs",
+      "size": 46658,
+      "sha256": "9123b447a4d2fd7f16058016fc980b9f5c4da2dd6dd667c4d39b77753ca6a72f",
+      "gitBlob": "f50eb6172ceb4d4639baf8aab2ee3605f2844b46"
+    },
+    {
+      "path": "scripts/process-shell-diagnostic/coordinator.test.ts",
+      "size": 35919,
+      "sha256": "9dc65aedbeb46ce1e167ef34a4d6a17a211179ba5a56a976fbb45528c8b7584e",
+      "gitBlob": "4a031ce1b86506de816de2c6e5064e66cd4ddc81"
+    },
+    {
+      "path": "scripts/process-shell-diagnostic/freeze.mjs",
+      "size": 10265,
+      "sha256": "b168fa1ef566af13cc36354ab8a3f83f2812fdfbe11fda90438ec712ea155c76",
+      "gitBlob": "7f08592b0c5f081c37a3fca63a049eea689462e7"
+    },
+    {
+      "path": "scripts/process-shell-diagnostic/git-state.mjs",
+      "size": 18518,
+      "sha256": "81fc9def4263a9dcb626d44301dfd2a3413cd95964fbeb2d239099fc1b67ebc0",
+      "gitBlob": "de9a1bca6e8412a913c852923e5c594e670e172a"
+    },
+    {
+      "path": "scripts/process-shell-diagnostic/git-state.test.ts",
+      "size": 8428,
+      "sha256": "ac2d43423271890ab0c66582361e3201d9d61f74e3a18e71003a513139c9ca0b",
+      "gitBlob": "f570ab07ef0750a49b246056b3c45e30cccc46af"
+    },
+    {
+      "path": "scripts/process-shell-diagnostic/protocol.mjs",
+      "size": 7073,
+      "sha256": "3bce94d252fc92fb35051996427ce4e2af9432e93cbce26b166dd7990eb13011",
+      "gitBlob": "7c24bdd31213e42654f691a618c859208d8076b0"
+    },
+    {
+      "path": "scripts/process-shell-diagnostic/protocol.test.ts",
+      "size": 5266,
+      "sha256": "89f8834b18d2b9542659e79264bdb2764aa575ee980f94f1c2570da33c3f0a5e",
+      "gitBlob": "8d06aff4590a4b3a5d7528c6a96c4428bd231a59"
+    },
+    {
+      "path": "scripts/process-shell-diagnostic/report.mjs",
+      "size": 39043,
+      "sha256": "3d40c2b83e0314a755ffeda54d38de34288e731d9c011230277008c790dd2ecf",
+      "gitBlob": "24f8024960e050494510dcfbb1413fffe62feaa8"
+    },
+    {
+      "path": "scripts/process-shell-diagnostic/report.test.ts",
+      "size": 15018,
+      "sha256": "55fd1af7e23b37680314ca01649ebcb3776b4b6766b1a275f5038ef3e8039986",
+      "gitBlob": "50bb0885239be1efc89450e2b5bb44d118a03291"
+    },
+    {
+      "path": "scripts/process-shell-diagnostic/runtime.mjs",
+      "size": 22247,
+      "sha256": "ee4a3118179362738fea7df900825859f017aa4c525872488621e15254bc4cf3",
+      "gitBlob": "ff6898a027c3f260d5add78fff2db8d9057c3f25"
+    },
+    {
+      "path": "scripts/process-shell-diagnostic/runtime.test.ts",
+      "size": 11606,
+      "sha256": "b34a380bde16e7e378ce18daa1b02f70e9cb249c61038c10c88823b10f676355",
+      "gitBlob": "22166d1b4aaa87cef9228de195c2659f879d80fe"
+    },
+    {
+      "path": "scripts/process-shell-diagnostic/states/B.patch",
+      "size": 1569,
+      "sha256": "b7e0d341aa909eff31eb95c4dd0bcf5bb4d1b16e1055f4478a7a2380e25fb869",
+      "gitBlob": "2a5bc5b48148fe8c21755a86218325150280ec18"
+    },
+    {
+      "path": "scripts/process-shell-diagnostic/states/C.patch",
+      "size": 2061,
+      "sha256": "c9fca4cbdbbf176deee6ab374e3e7b078263cecad7b890d9d72f82193585cbc0",
+      "gitBlob": "02947a7943690fd03c6d02bf1a2352e8076d77ea"
+    },
+    {
+      "path": "scripts/process-shell-diagnostic/states/E.patch",
+      "size": 4265,
+      "sha256": "a697e9778f69b6206395bd4c675d81fd6c7196f039774ad096f71e8f6080e9f5",
+      "gitBlob": "480161ce6dea4cd4e1edb16d0b239402214a4214"
+    }
+  ],
+  "states": {
+    "A": {
+      "source": "24c313a767a25284123b24ea3a4b8c083007c817",
+      "srcTauriTree": "fd9711a041432ef420e7b09d56a46131a2a52a2a",
+      "changedPaths": []
+    },
+    "B": {
+      "source": "scripts/process-shell-diagnostic/states/B.patch",
+      "base": "A",
+      "patch": "scripts/process-shell-diagnostic/states/B.patch",
+      "patchSha256": "b7e0d341aa909eff31eb95c4dd0bcf5bb4d1b16e1055f4478a7a2380e25fb869",
+      "srcTauriTree": "34ba61e94780ac68db1bcb38edc23dfbdcfa44a3",
+      "changedPaths": [
+        "M\tsrc-tauri/Cargo.lock",
+        "M\tsrc-tauri/Cargo.toml",
+        "A\tsrc-tauri/crates/extractum-process/Cargo.toml",
+        "A\tsrc-tauri/crates/extractum-process/src/lib.rs"
+      ]
+    },
+    "C": {
+      "source": "scripts/process-shell-diagnostic/states/C.patch",
+      "base": "A",
+      "patch": "scripts/process-shell-diagnostic/states/C.patch",
+      "patchSha256": "c9fca4cbdbbf176deee6ab374e3e7b078263cecad7b890d9d72f82193585cbc0",
+      "srcTauriTree": "cb07b39d4f2b2598f76c495f5f0a8287006c2fbf",
+      "changedPaths": [
+        "M\tsrc-tauri/Cargo.lock",
+        "M\tsrc-tauri/Cargo.toml",
+        "A\tsrc-tauri/crates/extractum-process/Cargo.toml",
+        "A\tsrc-tauri/crates/extractum-process/src/lib.rs"
+      ]
+    },
+    "D": {
+      "source": "b364756c7b5768d644321afeaeb81ec04e2481a4",
+      "srcTauriTree": "77e2d163ccc8bddf3ea051cb995909888cae9aba",
+      "changedPaths": [
+        "M\tsrc-tauri/Cargo.lock",
+        "M\tsrc-tauri/Cargo.toml",
+        "A\tsrc-tauri/crates/extractum-process/Cargo.toml",
+        "R073\tsrc-tauri/src/child_process.rs\tsrc-tauri/crates/extractum-process/src/child_process.rs",
+        "R092\tsrc-tauri/src/external_process.rs\tsrc-tauri/crates/extractum-process/src/external_process.rs",
+        "A\tsrc-tauri/crates/extractum-process/src/lib.rs",
+        "R092\tsrc-tauri/src/process_tree.rs\tsrc-tauri/crates/extractum-process/src/process_tree.rs",
+        "M\tsrc-tauri/src/lib.rs"
+      ],
+      "blobs": {
+        "src-tauri/Cargo.lock": "6368e32cd3a3853d4a7114ce256258e834bafdd4",
+        "src-tauri/Cargo.toml": "c2037473a1257dd33a8e5b5fe81905e77dad084a",
+        "src-tauri/crates/extractum-process/Cargo.toml": "3e078647dc293d95f401e15b8842776fae003ddb",
+        "src-tauri/crates/extractum-process/src/child_process.rs": "9599017ed2ad826bc73f8e72f084042eacd8b58a",
+        "src-tauri/crates/extractum-process/src/external_process.rs": "3cf7f073923b513381df09b7443090a4a41adc11",
+        "src-tauri/crates/extractum-process/src/lib.rs": "4f7819ef7d2773b735b5edc61e162e4e034efb66",
+        "src-tauri/crates/extractum-process/src/process_tree.rs": "365283e9f8accf4db91feca73bd8437db3b08c50",
+        "src-tauri/src/lib.rs": "d84b653870eda9378c0d490894801850a97db68d"
+      },
+      "absentPaths": [
+        "src-tauri/src/child_process.rs",
+        "src-tauri/src/external_process.rs",
+        "src-tauri/src/process_tree.rs"
+      ]
+    },
+    "E": {
+      "source": "scripts/process-shell-diagnostic/states/E.patch",
+      "base": "A",
+      "patch": "scripts/process-shell-diagnostic/states/E.patch",
+      "patchSha256": "a697e9778f69b6206395bd4c675d81fd6c7196f039774ad096f71e8f6080e9f5",
+      "srcTauriTree": "8fb850c0fefe0b30fcf4ec3288d33b8b3ac641d7",
+      "changedPaths": [
+        "M\tsrc-tauri/Cargo.lock",
+        "M\tsrc-tauri/Cargo.toml",
+        "A\tsrc-tauri/crates/extractum-process/Cargo.toml",
+        "A\tsrc-tauri/crates/extractum-process/src/lib.rs"
+      ]
+    }
+  }
+}
