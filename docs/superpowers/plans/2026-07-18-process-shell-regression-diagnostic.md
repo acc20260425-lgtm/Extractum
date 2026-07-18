@@ -125,6 +125,12 @@ Windows/MSVC.
   The unsandboxed parallel harness crossed Vitest's default five-second limit;
   this test-only ceiling does not change the frozen 30-minute production
   command timeout or termination algorithm.
+- A sixth pre-A0 protocol replacement on 2026-07-18 makes the Task 7 manual A
+  restorations obey the already-preregistered restoration contract. A pathspec
+  `checkout` does not remove paths introduced by B/C/E that are absent from A,
+  so validation now uses `git restore --source=24c313a767a25284123b24ea3a4b8c083007c817 --staged --worktree -- src-tauri`
+  before A validation, D reconstruction, and final cleanup. No A0 command had
+  started, and the prior lock is superseded.
 - This plan and its normative design are preregistration inputs committed
   before Task 0. Do not edit or tick their checkboxes during execution; track
   progress in the execution session/plan tool. Any amendment requires a new
@@ -7771,7 +7777,7 @@ $diagnosticMainRoot = (Resolve-Path -LiteralPath 'G:\Develop\Extractum').Path
 $diagnosticValidationRoot = (Resolve-Path -LiteralPath (Join-Path $diagnosticMainRoot '.worktrees\process-shell-diagnostic-validation')).Path
 $diagnosticValidationTarget = Join-Path $diagnosticValidationRoot 'src-tauri\target'
 $diagnosticManifest = Join-Path $diagnosticValidationRoot 'src-tauri\Cargo.toml'
-git -C "$diagnosticValidationRoot" checkout 24c313a767a25284123b24ea3a4b8c083007c817 -- src-tauri
+git -C "$diagnosticValidationRoot" restore --source=24c313a767a25284123b24ea3a4b8c083007c817 --staged --worktree -- src-tauri
 if ($LASTEXITCODE -ne 0) { throw 'A installation failed.' }
 $diagnosticMetadataJson = cargo metadata --manifest-path "$diagnosticManifest" --format-version 1 --no-deps --locked
 if ($LASTEXITCODE -ne 0) { throw 'A locked metadata failed.' }
@@ -7829,7 +7835,7 @@ blob/tree comparison:
 $diagnosticMainRoot = (Resolve-Path -LiteralPath 'G:\Develop\Extractum').Path
 $diagnosticValidationRoot = (Resolve-Path -LiteralPath (Join-Path $diagnosticMainRoot '.worktrees\process-shell-diagnostic-validation')).Path
 $diagnosticManifest = Join-Path $diagnosticValidationRoot 'src-tauri\Cargo.toml'
-git -C "$diagnosticValidationRoot" checkout 24c313a767a25284123b24ea3a4b8c083007c817 -- src-tauri
+git -C "$diagnosticValidationRoot" restore --source=24c313a767a25284123b24ea3a4b8c083007c817 --staged --worktree -- src-tauri
 if ($LASTEXITCODE -ne 0) { throw 'A restore before D failed.' }
 git -C "$diagnosticValidationRoot" checkout b364756c7b5768d644321afeaeb81ec04e2481a4 -- src-tauri
 if ($LASTEXITCODE -ne 0) { throw 'Literal D checkout failed.' }
@@ -7871,7 +7877,7 @@ Run:
 $diagnosticProtocolRoot = (Resolve-Path -LiteralPath 'G:\Develop\Extractum\.worktrees\process-shell-diagnostic-implementation').Path
 $diagnosticMainRoot = (Resolve-Path -LiteralPath 'G:\Develop\Extractum').Path
 $diagnosticValidationRoot = (Resolve-Path -LiteralPath (Join-Path $diagnosticMainRoot '.worktrees\process-shell-diagnostic-validation')).Path
-git -C "$diagnosticValidationRoot" checkout 24c313a767a25284123b24ea3a4b8c083007c817 -- src-tauri
+git -C "$diagnosticValidationRoot" restore --source=24c313a767a25284123b24ea3a4b8c083007c817 --staged --worktree -- src-tauri
 if ($LASTEXITCODE -ne 0) { throw 'Final A restoration failed.' }
 git -C "$diagnosticValidationRoot" diff --quiet HEAD -- src-tauri
 if ($LASTEXITCODE -ne 0) { throw 'Final A worktree diff is not clean.' }
