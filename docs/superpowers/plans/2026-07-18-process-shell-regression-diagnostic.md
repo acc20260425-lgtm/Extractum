@@ -62,6 +62,10 @@ Windows/MSVC.
   only the app-to-empty-crate path edge. D is reconstructed only with
   `git checkout b364756c7b5768d644321afeaeb81ec04e2481a4 -- src-tauri` and
   exact path/mode/blob/tree/diff verification.
+- Every A restoration uses
+  `git restore --source=24c313a767a25284123b24ea3a4b8c083007c817 --staged --worktree -- src-tauri`.
+  A tree-ish checkout by pathspec is forbidden because it does not remove
+  state-added paths that are absent from A.
 - E starts from C. Its empty crate has exactly `anyhow`, `parking_lot`, and
   `tokio` workspace dependencies, target-specific `windows-sys.workspace =
   true`, and `tokio/test-util` as its only dev feature. Process code and
@@ -92,6 +96,12 @@ Windows/MSVC.
 - Protocol source, design, plan, patches, thresholds, commands, and state
   hashes are committed and SHA-256-frozen before A0. Any edit after A0
   invalidates the current attempt; do not patch the running protocol.
+- The owner approved a pre-A0 preregistration amendment on 2026-07-18 after
+  Cargo 1.95 demonstrated that `cargo metadata --no-deps` leaves the resolver
+  and lockfile untouched. Task 3 generates each state lock delta with
+  resolver-capable `cargo metadata` (without `--no-deps`), then proves the
+  result stable with the same command plus `--locked`; `cargo generate-lockfile`
+  remains forbidden.
 - This plan and its normative design are preregistration inputs committed
   before Task 0. Do not edit or tick their checkboxes during execution; track
   progress in the execution session/plan tool. Any amendment requires a new
@@ -1818,6 +1828,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  aRestoreArgs,
   D_BLOB_ANCHORS,
   STATE_TREE_ANCHORS,
   dCheckoutArgs,
@@ -1930,7 +1941,15 @@ describe("process shell diagnostic Git states", () => {
     }
   });
 
-  it("uses the exact approved D checkout command", () => {
+  it("uses the exact approved A restore and D checkout commands", () => {
+    expect(aRestoreArgs()).toEqual([
+      "restore",
+      "--source=24c313a767a25284123b24ea3a4b8c083007c817",
+      "--staged",
+      "--worktree",
+      "--",
+      "src-tauri",
+    ]);
     expect(dCheckoutArgs()).toEqual([
       "checkout",
       "b364756c7b5768d644321afeaeb81ec04e2481a4",
@@ -2074,8 +2093,8 @@ Perform this step only in the clean implementation worktree. Begin every
 fixture from the frozen A bytes:
 
 ```powershell
-git checkout 24c313a767a25284123b24ea3a4b8c083007c817 -- src-tauri
-if ($LASTEXITCODE -ne 0) { throw 'Frozen A checkout failed.' }
+git restore --source=24c313a767a25284123b24ea3a4b8c083007c817 --staged --worktree -- src-tauri
+if ($LASTEXITCODE -ne 0) { throw 'Frozen A restore failed.' }
 git diff --quiet -- src-tauri
 if ($LASTEXITCODE -ne 0) { throw 'Frozen A worktree is not clean.' }
 git diff --cached --quiet HEAD -- src-tauri
@@ -2109,13 +2128,13 @@ emit a full-index patch without shell redirection, then reverse that exact
 patch back to A:
 
 ```powershell
-cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --no-deps | Out-Null
+cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'B lock resolution failed.' }
-cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --no-deps --locked | Out-Null
+cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --locked | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'B lock is not stable under --locked.' }
 git diff -- src-tauri/Cargo.lock
 if ($LASTEXITCODE -ne 0) { throw 'B lock diff inspection failed.' }
-cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --no-deps --locked
+cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --locked
 if ($LASTEXITCODE -ne 0) { throw 'B final locked metadata failed.' }
 git add -- src-tauri
 if ($LASTEXITCODE -ne 0) { throw 'B staging failed.' }
@@ -2159,13 +2178,13 @@ For C, apply this complete A-to-C edit with `apply_patch`:
 Then generate and reverse C exactly as B:
 
 ```powershell
-cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --no-deps | Out-Null
+cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'C lock resolution failed.' }
-cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --no-deps --locked | Out-Null
+cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --locked | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'C lock is not stable under --locked.' }
 git diff -- src-tauri/Cargo.lock
 if ($LASTEXITCODE -ne 0) { throw 'C lock diff inspection failed.' }
-cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --no-deps --locked
+cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --locked
 if ($LASTEXITCODE -ne 0) { throw 'C final locked metadata failed.' }
 git add -- src-tauri
 if ($LASTEXITCODE -ne 0) { throw 'C staging failed.' }
@@ -2250,13 +2269,13 @@ by B/C:
 Generate and reverse E:
 
 ```powershell
-cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --no-deps | Out-Null
+cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'E lock resolution failed.' }
-cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --no-deps --locked | Out-Null
+cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --locked | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'E lock is not stable under --locked.' }
 git diff -- src-tauri/Cargo.lock
 if ($LASTEXITCODE -ne 0) { throw 'E lock diff inspection failed.' }
-cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --no-deps --locked
+cargo metadata --manifest-path src-tauri/Cargo.toml --format-version 1 --locked
 if ($LASTEXITCODE -ne 0) { throw 'E final locked metadata failed.' }
 git add -- src-tauri
 if ($LASTEXITCODE -ne 0) { throw 'E staging failed.' }
@@ -2280,13 +2299,15 @@ Expected: E metadata contains all four named dependency roots on the empty
 crate, the app retains its inherited `windows-sys` edge, no process source has
 moved, and all six quiet/check commands exit 0.
 
-For B/C/E, the unlocked metadata call is used only to minimally extend the
-existing baseline lock; `cargo generate-lockfile` is forbidden because it can
-re-resolve unrelated packages. Before Task 3 commits, the `validateLockDelta`
-tests and production check below must prove that every third-party package
-block (name, version, source, checksum, and dependencies) is byte-identical to
-baseline. Only the `extractum` and new `extractum-process` package records may
-differ according to the state contract.
+For B/C/E, the resolver-capable metadata call is used only to minimally extend
+the existing baseline lock. Both the generating call and its `--locked`
+verification intentionally omit `--no-deps`; that option suppresses the
+resolver and cannot materialize or verify a lock delta. `cargo generate-lockfile`
+is forbidden because it can re-resolve unrelated packages. Before Task 3
+commits, the `validateLockDelta` tests and production check below must prove
+that every third-party package block (name, version, source, checksum, and
+dependencies) is byte-identical to baseline. Only the `extractum` and new
+`extractum-process` package records may differ according to the state contract.
 
 - [ ] **Step 4: Implement manifest, tree, inventory, and target verification**
 
@@ -2327,6 +2348,17 @@ const PROCESS_PATHS = [
   "src-tauri/crates/extractum-process/Cargo.toml",
   "src-tauri/crates/extractum-process/src/lib.rs",
 ];
+
+export function aRestoreArgs() {
+  return [
+    "restore",
+    `--source=${PROTOCOL.baselineCommit}`,
+    "--staged",
+    "--worktree",
+    "--",
+    "src-tauri",
+  ];
+}
 
 export function dCheckoutArgs() {
   return ["checkout", PROTOCOL.candidateCommit, "--", "src-tauri"];
@@ -2624,7 +2656,7 @@ export async function installState({ state, worktree, mainRoot, protocolLock, ar
   await git({
     ...shared,
     label: `${prefix}.restore-a`,
-    args: ["checkout", PROTOCOL.baselineCommit, "--", "src-tauri"],
+    args: aRestoreArgs(),
   });
 
   if (["B", "C", "E"].includes(kind)) {
