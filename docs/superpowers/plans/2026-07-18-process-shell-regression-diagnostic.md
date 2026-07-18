@@ -119,6 +119,12 @@ Windows/MSVC.
   `node -e`; both validation snippets now use JavaScript single-quoted module
   specifiers and path strings. The failed validation stopped before state
   installation, target creation, or A0, and its prior lock is superseded.
+- A fifth pre-A0 protocol replacement on 2026-07-18 gives the Windows
+  process-tree characterization test an explicit 30-second Vitest timeout and
+  requires that harness check to run outside a restricted process sandbox.
+  The unsandboxed parallel harness crossed Vitest's default five-second limit;
+  this test-only ceiling does not change the frozen 30-minute production
+  command timeout or termination algorithm.
 - This plan and its normative design are preregistration inputs committed
   before Task 0. Do not edit or tick their checkboxes during execution; track
   progress in the execution session/plan tool. Any amendment requires a new
@@ -934,7 +940,7 @@ describe("process shell diagnostic runtime", () => {
     expect(result.taskkill.survivors).toEqual([]);
     const grandchildPid = Number(await readFile(pidFile, "utf8"));
     expect(() => process.kill(grandchildPid, 0)).toThrow();
-  });
+  }, 30_000);
 
   it("runs sync before mutation and restores from the disk recovery copy", async () => {
     const dir = await scratch();
@@ -7709,7 +7715,9 @@ target is separate from every later measurement target and from main.
 
 - [ ] **Step 3: Validate A, B, C, E, and exact historical D in the validation target**
 
-Run the harness tests first:
+Run the harness tests first. The Windows process-tree characterization uses
+`Get-CimInstance` and `taskkill`; an agent running with restricted process
+permissions must execute this test command outside that sandbox:
 
 ```powershell
 $diagnosticProtocolRoot = (Resolve-Path -LiteralPath 'G:\Develop\Extractum\.worktrees\process-shell-diagnostic-implementation').Path

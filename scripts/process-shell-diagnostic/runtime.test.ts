@@ -126,7 +126,7 @@ describe("process shell diagnostic runtime", () => {
     expect(result.taskkill.survivors).toEqual([]);
     const grandchildPid = Number(await readFile(pidFile, "utf8"));
     expect(() => process.kill(grandchildPid, 0)).toThrow();
-  });
+  }, 30_000);
 
   it("runs sync before mutation and restores from the disk recovery copy", async () => {
     const dir = await scratch();
