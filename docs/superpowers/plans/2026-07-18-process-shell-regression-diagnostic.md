@@ -1812,7 +1812,7 @@ Expected: only the Task 2 runtime and test are committed.
 Create `scripts/process-shell-diagnostic/git-state.test.ts`:
 
 ```ts
-import { mkdtemp, mkdir } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -1920,6 +1920,14 @@ describe("process shell diagnostic Git states", () => {
       "src-tauri/crates/extractum-process/src/process_tree.rs": "365283e9f8accf4db91feca73bd8437db3b08c50",
       "src-tauri/src/lib.rs": "d84b653870eda9378c0d490894801850a97db68d",
     });
+  });
+
+  it("requires every generated B/C/E patch to carry a Cargo.lock text hunk", async () => {
+    for (const state of ["B", "C", "E"]) {
+      const patch = await readFile(new URL(`./states/${state}.patch`, import.meta.url), "utf8");
+      expect(patch).toContain("diff --git a/src-tauri/Cargo.lock b/src-tauri/Cargo.lock");
+      expect(patch).toMatch(/--- a\/src-tauri\/Cargo\.lock\r?\n\+\+\+ b\/src-tauri\/Cargo\.lock\r?\n@@ /);
+    }
   });
 
   it("uses the exact approved D checkout command", () => {
@@ -2056,8 +2064,9 @@ Run:
 npm.cmd run test -- scripts/process-shell-diagnostic/git-state.test.ts
 ```
 
-Expected: FAIL because `git-state.mjs` does not exist; Vitest must collect all
-ten tests.
+Expected: FAIL during module resolution because `git-state.mjs` does not
+exist. The source declares eleven cases, including the B/C/E
+`Cargo.lock`-hunk contract; a zero-exit or skipped-suite run is not RED.
 
 - [ ] **Step 3: Author the three complete A-to-state patches mechanically**
 
@@ -2744,7 +2753,8 @@ git diff --check
 if ($LASTEXITCODE -ne 0) { throw 'Task 3 diff check failed.' }
 ```
 
-Expected: one file, ten tests PASS; all three patches apply cleanly to A;
+Expected: one file, eleven tests PASS; every patch contains a `Cargo.lock`
+hunk; all three patches apply cleanly to A;
 the lock contract rejects any third-party package drift; `git diff --check`
 prints nothing.
 
