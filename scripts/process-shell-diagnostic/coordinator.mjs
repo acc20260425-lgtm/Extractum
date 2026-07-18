@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 
 import { installState } from "./git-state.mjs";
 import { runAttempt } from "./attempt.mjs";
+import { verifyFrozenProtocol } from "./freeze.mjs";
 import { PROTOCOL, reduceRetry } from "./protocol.mjs";
 import {
   hasTerminationUnconfirmed,
@@ -84,20 +85,6 @@ export function assertControlCommandResult(result, label, allowFailure = false, 
   if (result?.classification !== "ok" && !(allowFailure && completedNonzero)) {
     throw new ProtocolError("preflight_command_failed", label, { result, stderr });
   }
-}
-
-async function resolveProtocolCommitProduction({ protocolRoot, artifactDir }) {
-  const value = await controlCommand({
-    label: "protocol-head",
-    command: "git.exe",
-    args: ["rev-parse", "HEAD"],
-    cwd: protocolRoot,
-    artifactDir,
-  });
-  if (!/^[0-9a-f]{40}$/.test(value.stdout)) {
-    throw new ProtocolError("protocol_commit_invalid", value.stdout);
-  }
-  return value.stdout;
 }
 
 async function captureEnvironmentProduction({
@@ -273,7 +260,7 @@ const DEFAULT_DEPENDENCIES = Object.freeze({
   uuidFn: randomUUID,
   nowFn: () => new Date().toISOString(),
   processEnv: process.env,
-  resolveProtocolCommitFn: resolveProtocolCommitProduction,
+  verifyFrozenProtocolFn: verifyFrozenProtocol,
   captureEnvironmentFn: captureEnvironmentProduction,
   createDetachedWorktreeFn: createDetachedWorktreeProduction,
   runAttemptFn: runAttempt,
@@ -436,11 +423,32 @@ function manifestFromLocator(locatorPath, locatorRecord, environment) {
   };
 }
 
+function splitVerifiedProtocol(verified) {
+  const { protocolLock, ...protocol } = verified;
+  return { protocol, protocolLock };
+}
+
+function assertSameProtocolPin(actual, expected) {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new ProtocolError("protocol_pin_mismatch", "worktree/session protocol pin differs", {
+      actual,
+      expected,
+    });
+  }
+}
+
 async function loadManifest(sessionDir, deps, { processAttested = false } = {}) {
   const locatorPath = path.join(path.dirname(sessionDir), LOCATOR_NAME);
   const locatorRecord = JSON.parse(await readFile(locatorPath, "utf8"));
   if (path.resolve(locatorRecord.sessionDir) !== path.resolve(sessionDir)) {
     throw new ProtocolError("session_locator_path_mismatch", locatorRecord.sessionDir);
+  }
+  const resumed = splitVerifiedProtocol(
+    await deps.verifyFrozenProtocolFn({ repoRoot: locatorRecord.protocolRoot }),
+  );
+  assertSameProtocolPin(resumed.protocol, locatorRecord.protocol);
+  if (JSON.stringify(resumed.protocolLock) !== JSON.stringify(locatorRecord.protocolLock)) {
+    throw new ProtocolError("protocol_lock_seed_mismatch", "verified lock differs from locator WAL");
   }
   await mkdir(sessionDir, { recursive: true });
   let manifest = await readOptionalJson(locatorRecord.sessionManifestPath);
@@ -567,6 +575,39 @@ async function finishAttempt({ manifest, startedEvent, result, resultPath, envir
 
 function coordinatorArtifactPath(manifest, attemptId, name) {
   return path.join(manifest.sessionDir, "coordinator", attemptId, name);
+}
+
+function coordinatorFailureResult(attemptId, error) {
+  return {
+    schemaVersion: 1,
+    attemptId,
+    kind: "infrastructure_invalid",
+    reasons: ["coordinator_failure"],
+    evaluation: null,
+    finalState: null,
+    blocks: {},
+    error: {
+      name: error?.name ?? "Error",
+      kind: error?.kind ?? "coordinator_failure",
+      message: error?.message ?? String(error),
+    },
+  };
+}
+
+async function verifyAttemptCompletionPins(manifest, startedEvent, deps) {
+  for (const [scope, repoRoot] of [
+    ["attempt", startedEvent.worktree],
+    ["protocol", manifest.protocolRoot],
+  ]) {
+    const completed = splitVerifiedProtocol(await deps.verifyFrozenProtocolFn({ repoRoot }));
+    assertSameProtocolPin(completed.protocol, manifest.protocol);
+    if (JSON.stringify(completed.protocolLock) !== JSON.stringify(manifest.protocolLock)) {
+      throw new ProtocolError(
+        "post_attempt_protocol_lock_mismatch",
+        `${startedEvent.attemptId}:${scope}`,
+      );
+    }
+  }
 }
 
 function finalAProven(manifest, result) {
@@ -774,6 +815,16 @@ async function recoverStartedAttempt(manifest, startedEvent, deps, { processAtte
   if (result.attemptId !== startedEvent.attemptId) {
     throw new ProtocolError("attempt_result_identity_mismatch", startedEvent.attemptId);
   }
+  if (resultPath === normalPath) {
+    try {
+      await verifyAttemptCompletionPins(manifest, startedEvent, deps);
+    } catch (error) {
+      if (error?.simulatedCrash === true) throw error;
+      result = coordinatorFailureResult(startedEvent.attemptId, error);
+      resultPath = failurePath;
+      await publishJsonIdempotent(resultPath, result, deps);
+    }
+  }
   const normalized = await normalizeResultArtifact({
     manifest,
     startedEvent,
@@ -851,6 +902,13 @@ async function launchAttempt(manifest, retryState, deps, processAttested) {
       protocolCommit: manifest.protocol.protocolCommit,
       artifactDir: attemptDir,
     });
+    const attemptVerified = splitVerifiedProtocol(
+      await deps.verifyFrozenProtocolFn({ repoRoot: worktree }),
+    );
+    assertSameProtocolPin(attemptVerified.protocol, manifest.protocol);
+    if (JSON.stringify(attemptVerified.protocolLock) !== JSON.stringify(manifest.protocolLock)) {
+      throw new ProtocolError("attempt_protocol_lock_mismatch", attemptId);
+    }
     await appendLedger(manifest.sessionDir, {
       type: "worktree_created",
       attemptId,
@@ -870,24 +928,12 @@ async function launchAttempt(manifest, retryState, deps, processAttested) {
     if (JSON.stringify(persisted) !== JSON.stringify(result)) {
       throw new ProtocolError("attempt_return_artifact_mismatch", attemptId);
     }
+    await verifyAttemptCompletionPins(manifest, startedEvent, deps);
     await deps.afterAttemptObservedFn({ attemptId, resultPath });
   } catch (error) {
     if (error?.simulatedCrash === true) throw error;
     const terminationUnconfirmed = hasTerminationUnconfirmed(error);
-    coordinatorFailure = {
-      schemaVersion: 1,
-      attemptId,
-      kind: "infrastructure_invalid",
-      reasons: ["coordinator_failure"],
-      evaluation: null,
-      finalState: null,
-      blocks: {},
-      error: {
-        name: error?.name ?? "Error",
-        kind: error?.kind ?? "coordinator_failure",
-        message: error?.message ?? String(error),
-      },
-    };
+    coordinatorFailure = coordinatorFailureResult(attemptId, error);
     if (terminationUnconfirmed) {
       let markerError = null;
       let failurePublicationError = null;
@@ -942,6 +988,9 @@ export async function startSession(options, overrides = {}) {
   const mainRoot = path.resolve(options.mainRoot);
   const protocolRoot = path.resolve(options.protocolRoot);
   const scratchParent = path.resolve(options.scratchParent);
+  const verifiedProtocol = await deps.verifyFrozenProtocolFn({ repoRoot: protocolRoot });
+  const { protocol, protocolLock } = splitVerifiedProtocol(verifiedProtocol);
+  const protocolLockPath = path.join(protocolRoot, ...protocol.lockPath.split("/"));
   const locatorPath = path.join(scratchParent, LOCATOR_NAME);
   await mkdir(scratchParent, { recursive: true });
   await assertMissing(locatorPath, "session_locator_exists");
@@ -954,15 +1003,6 @@ export async function startSession(options, overrides = {}) {
   }
   const sessionId = deps.uuidFn();
   const sessionDir = path.join(scratchParent, `process-shell-session-${sessionId}`);
-  const protocolLockPath = path.join(
-    protocolRoot,
-    "scripts",
-    "process-shell-diagnostic",
-    "protocol-lock.json",
-  );
-  const protocolLock = JSON.parse(await readFile(protocolLockPath, "utf8"));
-  const bootstrapDir = path.join(scratchParent, `bootstrap-${sessionId}`);
-  const protocolCommit = await deps.resolveProtocolCommitFn({ protocolRoot, artifactDir: bootstrapDir });
   const locatorRecord = {
     schemaVersion: 1,
     sessionId,
@@ -975,7 +1015,7 @@ export async function startSession(options, overrides = {}) {
     sessionManifestPath: path.join(sessionDir, "session-manifest.json"),
     protocolLockPath,
     protocolLock,
-    protocol: { protocolCommit },
+    protocol,
   };
   // The external locator is the bootstrap reservation WAL. Nothing creates the
   // final session directory until this exact recovery seed is durable.
@@ -992,7 +1032,7 @@ export async function startSession(options, overrides = {}) {
   await appendLedger(sessionDir, {
     type: "session_started",
     sessionId,
-    protocolCommit,
+    protocolCommit: protocol.protocolCommit,
     retryState: { ...INITIAL_RETRY_STATE },
   }, deps);
   return launchAttempt(manifest, { ...INITIAL_RETRY_STATE }, deps, true);

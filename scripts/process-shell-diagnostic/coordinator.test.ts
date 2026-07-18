@@ -63,7 +63,23 @@ function fake(attempts: Array<(spec: Record<string, string>) => Record<string, u
       uuidFn: () => "session-fixed",
       nowFn: () => "2026-07-18T12:00:00.000Z",
       processEnv: {},
-      resolveProtocolCommitFn: async () => "a".repeat(40),
+      verifyFrozenProtocolFn: async (_input: { repoRoot: string }) => ({
+        protocolCommit: "a".repeat(40),
+        lockPath: "scripts/process-shell-diagnostic/protocol-lock.json",
+        lockBlob: "b".repeat(40),
+        lockSha256: "c".repeat(64),
+        protocolVersion: 1,
+        protocolLock: {
+          schemaVersion: 1,
+          states: {
+            A: { srcTauriTree: "a-tree" },
+            B: { srcTauriTree: "b-tree" },
+            C: { srcTauriTree: "c-tree" },
+            D: { srcTauriTree: "d-tree" },
+            E: { srcTauriTree: "e-tree" },
+          },
+        },
+      }),
       captureEnvironmentFn: async () => ({
         platform: "win32",
         host: "x86_64-pc-windows-msvc",
@@ -733,6 +749,114 @@ describe("process shell diagnostic coordinator", () => {
     ])).toEqual({
       command: "resume",
       options: { sessionDir: "G:\\scratch\\session", unexplainedStability: true, processAttested: true },
+    });
+  });
+
+  it("pins the lock-containing commit, blob, and SHA in the immutable manifest", async () => {
+    const input = await paths();
+    const value = fake([attempt("valid")]);
+    const result = await startSession({ ...input, processAttested: true }, value.dependencies);
+    const manifest = JSON.parse(
+      await readFile(path.join(result.sessionDir, "session-manifest.json"), "utf8"),
+    );
+    expect(manifest.protocol).toEqual({
+      protocolCommit: "a".repeat(40),
+      lockPath: "scripts/process-shell-diagnostic/protocol-lock.json",
+      lockBlob: "b".repeat(40),
+      lockSha256: "c".repeat(64),
+      protocolVersion: 1,
+    });
+  });
+
+  it("invalidates a valid Cargo result when the protocol root changes mid-flight", async () => {
+    const input = await paths();
+    const value = fake([attempt("valid")]);
+    const baseRun = value.dependencies.runAttemptFn;
+    const baseVerify = value.dependencies.verifyFrozenProtocolFn;
+    let cargoCompleted = false;
+    const result = await startSession(
+      { ...input, processAttested: true },
+      {
+        ...value.dependencies,
+        runAttemptFn: async (spec: Record<string, string>) => {
+          const completed = await baseRun(spec);
+          cargoCompleted = true;
+          return completed;
+        },
+        verifyFrozenProtocolFn: async ({ repoRoot }: { repoRoot: string }) => {
+          const verified = await baseVerify({ repoRoot });
+          return cargoCompleted && path.resolve(repoRoot) === path.resolve(input.protocolRoot)
+            ? { ...verified, lockSha256: "d".repeat(64) }
+            : verified;
+        },
+      },
+    );
+    expect(result.status).toBe("awaiting_correction");
+    expect(JSON.parse(await readFile(result.attempts[0].resultPath, "utf8"))).toMatchObject({
+      kind: "infrastructure_invalid",
+      reasons: ["coordinator_failure"],
+      error: { kind: "protocol_pin_mismatch" },
+    });
+  });
+
+  it("rechecks the attempt-worktree pin when resuming a durable pre-check result", async () => {
+    const input = await paths();
+    const value = fake([attempt("valid")]);
+    const baseRun = value.dependencies.runAttemptFn;
+    const baseVerify = value.dependencies.verifyFrozenProtocolFn;
+    let cargoCompleted = false;
+    let crashBeforePostCheck = true;
+    await expect(startSession(
+      { ...input, processAttested: true },
+      {
+        ...value.dependencies,
+        runAttemptFn: async (spec: Record<string, string>) => {
+          const completed = await baseRun(spec);
+          cargoCompleted = true;
+          return completed;
+        },
+        verifyFrozenProtocolFn: async ({ repoRoot }: { repoRoot: string }) => {
+          if (
+            cargoCompleted
+            && crashBeforePostCheck
+            && path.resolve(repoRoot) !== path.resolve(input.protocolRoot)
+          ) {
+            crashBeforePostCheck = false;
+            throw Object.assign(new Error("simulated crash"), { simulatedCrash: true });
+          }
+          return baseVerify({ repoRoot });
+        },
+      },
+    )).rejects.toThrow("simulated crash");
+    const sessionDir = path.join(input.scratchParent, "process-shell-session-session-fixed");
+    let failurePublicationCrash = false;
+    await expect(resumeSession(
+      { sessionDir, processAttested: true },
+      {
+        ...value.dependencies,
+        verifyFrozenProtocolFn: async ({ repoRoot }: { repoRoot: string }) => {
+          const verified = await baseVerify({ repoRoot });
+          return path.resolve(repoRoot) === path.resolve(input.protocolRoot)
+            ? verified
+            : { ...verified, lockSha256: "d".repeat(64) };
+        },
+        afterDurableWriteFn: async ({ target }: { target: string }) => {
+          if (!failurePublicationCrash && target.endsWith("coordinator-failure.json")) {
+            failurePublicationCrash = true;
+            throw Object.assign(new Error("simulated failure-publication crash"), { simulatedCrash: true });
+          }
+        },
+      },
+    )).rejects.toThrow("simulated failure-publication crash");
+    const recovered = await resumeSession(
+      { sessionDir, processAttested: true },
+      { ...value.dependencies, verifyFrozenProtocolFn: baseVerify },
+    );
+    expect(recovered.status).toBe("awaiting_correction");
+    expect(JSON.parse(await readFile(recovered.attempts[0].resultPath, "utf8"))).toMatchObject({
+      kind: "infrastructure_invalid",
+      reasons: ["coordinator_failure"],
+      error: { kind: "protocol_pin_mismatch" },
     });
   });
 });
