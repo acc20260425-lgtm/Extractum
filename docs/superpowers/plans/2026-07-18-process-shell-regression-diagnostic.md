@@ -108,6 +108,11 @@ Windows/MSVC.
   successful result missing required close/timing fields becomes
   `required_cargo_metadata_missing`. Therefore `requireCargoMetadata` uses the
   default `assertCommandOk` failure kind before validating those fields.
+- A third pre-A0 preregistration correction on 2026-07-18 removes accidental
+  object aliasing from the Task 6 report fixture. The decision evaluation and
+  immutable attempt-result evaluation are independently serialized artifacts,
+  so the fixture deep-clones the latter; production arithmetic and assertions
+  are unchanged.
 - This plan and its normative design are preregistration inputs committed
   before Task 0. Do not edit or tick their checkboxes during execution; track
   progress in the execution session/plan tool. Any amendment requires a new
@@ -5808,7 +5813,7 @@ const causal = {
   attemptResults: [{
     attemptId: "attempt-001",
     kind: "valid",
-    evaluation,
+    evaluation: structuredClone(evaluation),
     blocks: Object.fromEntries(
       Object.entries(evaluation.summaries).map(([name, value]) => [
         name,
