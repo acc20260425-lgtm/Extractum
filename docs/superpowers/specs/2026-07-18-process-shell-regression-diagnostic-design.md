@@ -45,9 +45,13 @@ thresholds, or start Phase 4.
 - Add the contingent tail `E -> A4` only when A0 through A3 are provisionally
   drift-valid, B and C are below the material-effect threshold, and D meets or
   exceeds it.
-- Budget 60–120 minutes. This includes the cold first build in the fresh
-  worktree and rebuilds caused by six state transitions, or eight when E is
-  triggered.
+- Allow exactly one identical-protocol retry after a first unexplained
+  stability invalidation; the second unexplained stability invalidation is the
+  terminal `environment_precision_insufficient` anomaly.
+- Budget 60–120 minutes per attempt. This includes the cold first build in the
+  fresh worktree and rebuilds caused by six state transitions, or eight when E
+  is triggered. The single preregistered stability retry gives the planned
+  two-attempt stability path a 120–240 minute budget.
 
 Thresholds, ordering, sample counts, validity rules, the E trigger, and the
 decision table are frozen before the first warm-up. Observed results cannot
@@ -134,6 +138,25 @@ not participate in Cargo timing and are not a variable in D. Correctness and
 tree-shape checks still prove that the reconstructed Rust candidate is the
 intended one.
 
+The implementation plan must reconstruct D mechanically inside the verified
+experiment worktree with this exact command, never by manually recreating or
+copying candidate files:
+
+```powershell
+git checkout b364756c7b5768d644321afeaeb81ec04e2481a4 -- src-tauri
+```
+
+Before any D warm-up, the runner compares the complete tracked path, mode, and
+blob-hash inventory under `src-tauri` with `git ls-tree -r` for the historical
+commit, compares the indexed/worktree subtree with the historical
+`b364756c:src-tauri` tree hash, and requires this exact check to pass:
+
+```powershell
+git diff --quiet b364756c7b5768d644321afeaeb81ec04e2481a4 -- src-tauri
+```
+
+Any missing, extra, or byte-different tracked file invalidates the attempt.
+
 ### E — contingent manifest bisection
 
 E is permitted only when A0 through A3 are drift-valid, both B and C have
@@ -145,8 +168,13 @@ applies only D's workspace-dependency/manifest migration:
 - `anyhow`, `parking_lot`, `tokio`, and `windows-sys` are declared in
   `[workspace.dependencies]`;
 - existing application dependencies inherit those declarations;
-- the empty `extractum-process` manifest receives D's normal and dev
-  dependency declarations, including `tokio/test-util`;
+- the empty `extractum-process` manifest has exactly
+  `anyhow.workspace = true`, `parking_lot.workspace = true`, and
+  `tokio.workspace = true` under `[dependencies]`;
+- it has exactly `windows-sys.workspace = true` under
+  `[target.'cfg(windows)'.dependencies]`;
+- it has exactly `tokio = { workspace = true, features = ["test-util"] }`
+  under `[dev-dependencies]` and no other dependency roots;
 - no process source, facade, visibility, or behavior moves.
 
 Because the process implementation remains in the application, its
@@ -300,14 +328,39 @@ The entire session is invalid if any of the following occurs:
 - fewer or more than the preregistered samples are used.
 
 An invalid attempt remains immutable with its failure reason and raw
-artifacts. A new whole-session attempt is allowed only after an objective
-infrastructure cause has been recorded and corrected. The new attempt must use
-a new attempt directory, new worktree, and fresh worktree-local target, then
-repeat the full fixed sequence from cold A0; an invalid attempt's cache is
-never reused. A completed session that passes every validity rule cannot be
-rerun to seek better medians. Locators may not silently replace a valid
-attempt, and there is no optional repeat or post-result marginal window in
-this diagnostic.
+artifacts. For timeout, missing metadata, restore/hash failure, unexpected
+checked units, process interference, or another non-stability invalidation, a
+new whole-session attempt is allowed only after an objective infrastructure
+cause has been recorded and corrected.
+
+Anchor-range and central-five failures use a separate preregistered path. If
+an objective, correctable cause is identified, it is recorded and corrected
+before an ordinary fresh attempt. The runner maintains a monotonic
+`unexplained_stability_invalid_count`. A completed attempt invalidated by an
+anchor-range or central-five failure without an objective, correctable cause
+increments it; explained stability failures and non-stability infrastructure
+failures neither increment nor reset it. At count 1, exactly one fresh retry
+with the unchanged protocol is allowed. At count 2, the diagnostic terminates
+as `environment_precision_insufficient`: the environment does not support the
+declared 300 ms precision. No B/C/D/E causal classification is made, and any
+further run of the same protocol is forbidden.
+
+A non-stability infrastructure failure while the count is 1 may be retried
+after its objective cause is corrected; it does not consume or replace the
+pending second stability result.
+
+Every allowed new attempt uses a new attempt directory, new worktree, and
+fresh worktree-local target, then repeats the full fixed sequence from cold
+A0; an invalid attempt's cache is never reused. A completed session that
+passes every validity rule cannot be rerun to seek better medians. Locators
+may not silently replace a valid attempt. There is no optional performance
+repeat or post-result marginal window beyond the one fixed stability retry.
+
+The terminal stability outcome routes to the anomaly branch. Any follow-up
+requires a separate preregistration and may change the sample count,
+interleaving/counterbalancing, or stability threshold only before the new
+attempt begins; none of those parameters may be relaxed within this
+experiment after its data are observed.
 
 ## Protocol Immutability
 
@@ -339,6 +392,7 @@ diagnostic rather than a reason to erase an earlier crossing.
 | E is materially slower | The threshold is first crossed after the manifest migration; that migration, feature unification, dependency declarations, or their interaction with C is implicated. | Redesign the manifest change and run a new preregistered confirmation before reconsidering Phase 3. Do not blame the process boundary alone. |
 | E is below threshold while D is materially slower | D's concrete boundary composite is implicated: source/test relocation, visibility/facades, dependency ownership, and removal of the app's direct `windows-sys` edge. | Redesign that boundary and permit a new, separately approved Phase 3 attempt; Phase 4 stays blocked until it succeeds or its dependency design changes. |
 | B, C, and D are all below threshold, and none violates the existing 5% cap | The original +1,042 ms regression is not reproduced under controlled anchors. | Treat the original run as unstable evidence and run a new preregistered direct A/D A/B confirmation before changing Phase 3's recorded outcome. |
+| `unexplained_stability_invalid_count` reaches 2 | The machine does not support the protocol's declared 300 ms precision; no variant effect is classified. | Record `environment_precision_insufficient`, keep Phase 4 blocked, and require a separately preregistered design using more samples, interleaving/counterbalancing, or a stability threshold fixed before new data. |
 
 If the session is valid but produces a contradictory/non-monotone pattern not
 covered by the table, no roadmap decision is made. The anomaly is documented
@@ -373,12 +427,16 @@ The immutable session directory contains at least:
 - Cargo timing HTML and fingerprint logs from diagnostic probes only;
 - computed A references, deltas, A-anchor range, E-trigger decision, validity,
   and final classification;
+- `unexplained_stability_invalid_count` and the terminal
+  `environment_precision_insufficient` classification when applicable;
 - an invalid-session record for every abandoned attempt;
 - a repository verification document summarizing the raw evidence without
   replacing it.
 
 The verification document records the elapsed time honestly. The estimate is
-60–120 minutes, not an acceptance condition.
+60–120 minutes per attempt and 120–240 minutes for the planned two-attempt
+stability path. Separately corrected infrastructure failures can add elapsed
+time; elapsed time is not an acceptance condition.
 
 ## Completion and Cleanup
 
