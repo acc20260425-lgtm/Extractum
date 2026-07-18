@@ -264,11 +264,15 @@ OS-process infrastructure below Gemini Browser, YouTube, and diagnostics.
 from 9,171 ms to 2,049 ms and regressed the app-shell median from 9,135 ms to
 10,177 ms (+1,042 ms / +11.41%). It correctly failed the original 500 ms / 5%
 gate and was reverted in `c47372dc`; that historical result remains unchanged.
+The original evidence remains in
+[`2026-07-17-extractum-process-extraction.md`](../verification/2026-07-17-extractum-process-extraction.md).
 
 The approved 2026-07-18 shell-cap revision accepts the same evidence under the
 new 2,000 ms / 20% rule. Reapply the exact historical candidate without a new
-gating performance experiment, verify its historical tree/blob identity, and
-rerun current correctness and completion gates. Record non-gating before/after
+gating performance experiment. The follow-on plan must freeze a historical
+tree/blob identity manifest covering every file and hunk that constitutes
+candidate `b364756c`, verify every manifest entry, and rerun current correctness
+and completion gates. Record non-gating before/after
 shell samples and validity counts; a valid post median seeds the cumulative
 ledger. If those diagnostics are invalid, Phase 3 may still retain after all
 correctness/completion gates pass, but Phase 4 must establish a valid baseline
@@ -277,10 +281,11 @@ before its own performance decision.
 The v2/v3 anomaly track is moot for this roadmap. It is not a prerequisite for
 Phase 3 or Phase 4, and its reviewed harness remediation remains deferred.
 
-If reconstruction differs materially from `b364756c`, stop the exact-candidate
-path. The result is a new candidate and requires a separately approved plan
-with fresh preregistered timing under the revised local, cumulative, and
-validity rules.
+Treat any mismatch against the frozen historical tree/blob identity manifest
+as material and stop the exact-candidate path. The result is a new candidate
+and requires a separately approved plan with
+fresh preregistered timing under the revised local, cumulative, and validity
+rules.
 
 ### Phase 4 — `extractum-gemini-browser` (boundary approved)
 
@@ -290,8 +295,8 @@ process infrastructure + core. The approved design keeps Tauri commands,
 application paths, SQL/Apalis storage, and worker registration app-side while
 extracting the portable automation engine.
 Phase 4 remains blocked until the exact Phase 3 candidate is integrated and a
-valid shell baseline exists for Phase 4 measurement. No additional v2/v3
-diagnostic approval is required.
+valid shell baseline exists for Phase 4 measurement.
+No additional v2/v3 diagnostic approval is required.
 
 ### Phase 5 — `extractum-llm`
 
@@ -360,12 +365,12 @@ integration tests, WiX/MSI packaging concerns.
 2. Common measurement mechanics, rename-map inventory comparison, and
    negative-outcome documentation are inherited from the render and focused-
    loop specs. For Phase 4 and later, every shell decision uses five-sample
-   baseline/candidate series, requires at least four values within 300 ms of
-   each series median, and applies both the 2,000 ms / 20% per-slice cap and
-   the 15,000 ms cumulative ceiling. An unstable series invalidates the
-   session rather than failing the candidate. The exact historical Phase 3
-   reapplication instead records non-gating diagnostics under its explicit
-   owner exception.
+   baseline/candidate series, requires at least four values with absolute
+   deviation <= 300 ms from each series median, and applies both the
+   2,000 ms / 20% per-slice cap and the 15,000 ms cumulative ceiling. An
+   unstable series invalidates the session rather than failing the candidate.
+   The exact historical Phase 3 reapplication instead records non-gating
+   diagnostics under its explicit owner exception.
 3. Mechanical moves only inside a slice: facade modules preserve `crate::`
    paths; consumers are never mass-rewritten in the same slice.
 4. Every `pub(crate)` → `pub` widening is enumerated in the spec and checked

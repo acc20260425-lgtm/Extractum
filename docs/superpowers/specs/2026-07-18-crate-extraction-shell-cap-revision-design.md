@@ -58,8 +58,8 @@ canonical pre-Phase 3 measurement instead of permitting each extraction to add
 Future shell measurements run in the focused-loop quiet window with no active
 Cargo, rustc, Rust Analyzer, Tauri, or competing build process. Baseline and
 candidate series retain five recorded samples and their median, but each
-series is valid only when at least four of its five samples lie within 300 ms
-of that series median.
+series is valid only when at least four of its five samples have absolute
+deviation <= 300 ms from that series median.
 
 An unstable series makes the measurement session invalid. It is neither a
 performance failure nor a near-threshold repeat, and no retention decision may
@@ -119,14 +119,17 @@ completion gates, but Phase 4 must establish a valid shell baseline before its
 own performance decision.
 
 The implementation must reconstruct the candidate from historical commit
-`b364756c`, verify the intended tree/blob identity, and rerun all current
-correctness and completion gates. Phase 3 is retained only after those gates
-pass. Phase 4 remains blocked until the reapplied Phase 3 change is integrated;
-it does not start merely because this policy document exists.
+`b364756c` and freeze a historical tree/blob identity manifest covering every
+file and hunk that constitutes the candidate. It must verify every manifest
+entry and rerun all current correctness and completion gates. Phase 3 is
+retained only after those gates pass. Phase 4 remains blocked until the
+reapplied Phase 3 change is integrated; it does not start merely because this
+policy document exists.
 
-If the reconstructed boundary differs materially from the historical
-candidate, it is a new candidate and requires fresh preregistered timing
-evidence under the revised cap.
+For this exception, `materially different` is objective: any mismatch against
+the frozen historical tree/blob identity manifest is material. The result is a
+new candidate and requires fresh preregistered timing evidence under the
+revised cap.
 
 ## Documentation and Contract Changes
 
@@ -148,8 +151,11 @@ Implementation will:
    its technical contents;
 7. leave historical extraction and diagnostic records untouched.
 
-No product behavior, API, persistence, UI, migration, or value-registry entry
-changes as part of this policy revision.
+No product behavior, API, persistence, UI, or migration changes as part of this
+policy revision.
+The implementation registers the document-only `moot` roadmap disposition in
+`docs/value-registry.md` solely to record its governance owner and confirm its
+lack of product impact.
 
 ## Verification
 

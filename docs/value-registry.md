@@ -930,10 +930,13 @@ Representative source:
 - `scripts/process-shell-diagnostic/protocol.mjs`
 - `docs/superpowers/specs/2026-07-18-process-shell-anomaly-v2-design.md`
 
-These values classify an immutable experimental `decision.json`. The harness
-owns them. They are persisted only in temporary raw artifacts and the committed
-verification document; they do not enter SQLite, product APIs, UI state, or
-product fixtures.
+Except for the documentation-only `moot` roadmap disposition, these values
+classify an immutable experimental `decision.json`. The harness owns those
+experimental classifications. They are persisted only in temporary raw
+artifacts and the committed verification document; they do not enter SQLite,
+product APIs, UI state, or product fixtures.
+`moot` does not classify an experimental `decision.json`; the shell-cap
+revision and crate roadmap own it.
 
 | Value | Type | Name | Meaning | Source of truth | Lifecycle | User action | UI tone | Stable? | Current usage |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -986,6 +989,7 @@ product fixtures.
 | `coordinator_interrupted` | reason | Coordinator interrupted | Resume found an unfinished attempt without a durable result artifact. | diagnostic coordinator | terminal | inspect_error | n/a | yes | interruption result, ledger |
 | `final_restore_evidence_missing` | reason | Final restore evidence missing | A result could not prove exact final A and is therefore infrastructure-invalid. | diagnostic coordinator | terminal | inspect_error | n/a | yes | failure result, ledger |
 
-`moot` is documentation-only. It is not persisted in SQLite, exposed through a
-product API, rendered in the UI, or used by product fixtures. The diagnostic
-harness continues to own only its historical artifact classifications.
+`moot` is documentation-only. It is not persisted in SQLite.
+It is not exposed through a product API. It is not rendered in the UI.
+It is not used by product fixtures. The diagnostic harness continues to own
+only its historical artifact classifications.

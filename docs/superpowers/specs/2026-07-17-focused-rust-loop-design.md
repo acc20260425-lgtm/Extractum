@@ -197,7 +197,8 @@ Baseline and candidate measurements each use:
 6. the shared canonical target directory;
 7. byte-for-byte probe restoration plus SHA-256 verification after every
    sample;
-8. at least four of the five samples within 300 ms of its own median.
+8. at least four of the five samples are within 300 ms of the series' own
+   median (absolute deviation <= 300 ms).
 
 An unstable baseline or candidate series invalidates the complete measurement
 session. It is not a performance failure, and none of its medians may be used
@@ -239,8 +240,10 @@ The exact Phase 3 reapplication is the single exception to a new gating shell
 decision: its already-valid historical 10,177 ms result was accepted by the
 owner revision. Fresh post-reapplication samples are non-gating ledger
 diagnostics and cannot produce a performance no-go for that exact candidate.
-This exception does not apply when reconstructed bytes differ materially from
-`b364756c`; that case is a new candidate with fresh preregistered timing.
+The follow-on plan must use a frozen historical tree/blob identity manifest
+covering every file and hunk that constitutes candidate `b364756c`. The
+exact-candidate exception treats any mismatch against that manifest as
+material: the result is a new candidate with fresh preregistered timing.
 
 ## Failure Classification
 
@@ -249,9 +252,9 @@ This exception does not apply when reconstructed bytes differ materially from
   not restored. Discard the entire affected measurement session and restart
   from its warm-up.
 - **Measurement invalidation:** fewer than four of five values in either shell
-  series are within 300 ms of that series median. Discard the complete session,
-  classify no performance result, re-establish the quiet window, and start a
-  fresh session from its warm-up.
+  series have absolute deviation <= 300 ms from that series median. Discard the
+  complete session, classify no performance result, re-establish the quiet
+  window, and start a fresh session from its warm-up.
 - **Baseline failure:** the baseline command or test fails. Stop and restore a
   valid baseline before measuring a candidate.
 - **Candidate correctness failure:** the candidate does not compile in its
