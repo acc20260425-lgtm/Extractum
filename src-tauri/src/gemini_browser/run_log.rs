@@ -5,9 +5,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 
-use crate::error::{AppError, AppResult};
-
-use super::paths::safe_run_id;
+use super::domain_error::{GeminiBrowserError, GeminiBrowserResult};
+use super::run_id::safe_run_id;
 use super::{
     GeminiBrowserRun, GeminiBrowserRunLogSummary, GeminiBrowserRunResult, GeminiBrowserRunStatus,
 };
@@ -22,7 +21,7 @@ fn now_string() -> String {
         .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_string())
 }
 
-fn run_file_path(runs_dir: &Path, run_id: &str) -> AppResult<PathBuf> {
+fn run_file_path(runs_dir: &Path, run_id: &str) -> GeminiBrowserResult<PathBuf> {
     Ok(runs_dir.join(safe_run_id(run_id)?).join(RUN_FILE))
 }
 
@@ -44,10 +43,11 @@ pub(crate) fn create_queued_run(
     run_id: &str,
     source: &str,
     prompt: &str,
-) -> AppResult<GeminiBrowserRun> {
+) -> GeminiBrowserResult<GeminiBrowserRun> {
     prune_expired_runs(runs_dir)?;
     let run_dir = runs_dir.join(safe_run_id(run_id)?);
-    fs::create_dir_all(&run_dir).map_err(|error| AppError::internal(error.to_string()))?;
+    fs::create_dir_all(&run_dir)
+        .map_err(|error| GeminiBrowserError::persistence(error.to_string()))?;
     let now = now_string();
     let run = GeminiBrowserRun {
         run_id: run_id.to_string(),
@@ -62,7 +62,7 @@ pub(crate) fn create_queued_run(
     Ok(run)
 }
 
-pub(crate) fn mark_running(runs_dir: &Path, run_id: &str) -> AppResult<GeminiBrowserRun> {
+pub(crate) fn mark_running(runs_dir: &Path, run_id: &str) -> GeminiBrowserResult<GeminiBrowserRun> {
     let mut run = read_run_file(&run_file_path(runs_dir, run_id)?)?;
     run.status = GeminiBrowserRunStatus::Running;
     run.updated_at = now_string();
@@ -74,7 +74,7 @@ pub(crate) fn finish_run(
     runs_dir: &Path,
     run_id: &str,
     result: GeminiBrowserRunResult,
-) -> AppResult<GeminiBrowserRun> {
+) -> GeminiBrowserResult<GeminiBrowserRun> {
     let mut run = read_run_file(&run_file_path(runs_dir, run_id)?)?;
     run.status = result.status.clone();
     run.updated_at = now_string();
@@ -83,15 +83,20 @@ pub(crate) fn finish_run(
     Ok(run)
 }
 
-pub(crate) fn list_runs(runs_dir: &Path, limit: usize) -> AppResult<GeminiBrowserRunLogSummary> {
+pub(crate) fn list_runs(
+    runs_dir: &Path,
+    limit: usize,
+) -> GeminiBrowserResult<GeminiBrowserRunLogSummary> {
     prune_expired_runs(runs_dir)?;
     if !runs_dir.exists() {
         return Ok(GeminiBrowserRunLogSummary { runs: Vec::new() });
     }
     let mut runs = Vec::new();
-    for entry in fs::read_dir(runs_dir).map_err(|error| AppError::internal(error.to_string()))? {
+    for entry in fs::read_dir(runs_dir)
+        .map_err(|error| GeminiBrowserError::persistence(error.to_string()))?
+    {
         let path = entry
-            .map_err(|error| AppError::internal(error.to_string()))?
+            .map_err(|error| GeminiBrowserError::persistence(error.to_string()))?
             .path()
             .join(RUN_FILE);
         if path.exists() {
@@ -103,62 +108,71 @@ pub(crate) fn list_runs(runs_dir: &Path, limit: usize) -> AppResult<GeminiBrowse
     Ok(GeminiBrowserRunLogSummary { runs })
 }
 
-pub(crate) fn read_run(runs_dir: &Path, run_id: &str) -> AppResult<GeminiBrowserRun> {
+pub(crate) fn read_run(runs_dir: &Path, run_id: &str) -> GeminiBrowserResult<GeminiBrowserRun> {
     prune_expired_runs(runs_dir)?;
     let path = run_file_path(runs_dir, run_id)?;
     if !path.exists() {
-        return Err(AppError::not_found("Gemini browser run was not found"));
+        return Err(GeminiBrowserError::not_found(
+            "Gemini browser run was not found",
+        ));
     }
     read_run_file(&path)
 }
 
-pub(crate) fn recorded_run_dir(runs_dir: &Path, run_id: &str) -> AppResult<PathBuf> {
+pub(crate) fn recorded_run_dir(runs_dir: &Path, run_id: &str) -> GeminiBrowserResult<PathBuf> {
     prune_expired_runs(runs_dir)?;
     let safe_id = safe_run_id(run_id)?;
     let dir = runs_dir.join(&safe_id);
     let result_path = dir.join(RUN_FILE);
     if !result_path.exists() {
-        return Err(AppError::validation("Gemini browser run was not found"));
+        return Err(GeminiBrowserError::validation(
+            "Gemini browser run was not found",
+        ));
     }
     let run = read_run_file(&result_path)?;
     let _recorded_run_dir = run
         .result
         .as_ref()
         .and_then(|result| result.artifacts.run_dir.as_deref())
-        .ok_or_else(|| AppError::validation("Gemini browser run folder is not available"))?;
+        .ok_or_else(|| {
+            GeminiBrowserError::validation("Gemini browser run folder is not available")
+        })?;
 
     dir.canonicalize().map_err(|error| {
-        AppError::internal(format!(
+        GeminiBrowserError::persistence(format!(
             "Failed to resolve Gemini browser run folder: {error}"
         ))
     })
 }
 
-fn read_run_file(path: &Path) -> AppResult<GeminiBrowserRun> {
-    let content =
-        fs::read_to_string(path).map_err(|error| AppError::internal(error.to_string()))?;
-    serde_json::from_str(&content).map_err(|error| AppError::internal(error.to_string()))
+fn read_run_file(path: &Path) -> GeminiBrowserResult<GeminiBrowserRun> {
+    let content = fs::read_to_string(path)
+        .map_err(|error| GeminiBrowserError::persistence(error.to_string()))?;
+    serde_json::from_str(&content)
+        .map_err(|error| GeminiBrowserError::persistence(error.to_string()))
 }
 
-fn write_run(path: &Path, run: &GeminiBrowserRun) -> AppResult<()> {
-    let content =
-        serde_json::to_string_pretty(run).map_err(|error| AppError::internal(error.to_string()))?;
-    fs::write(path, content).map_err(|error| AppError::internal(error.to_string()))
+fn write_run(path: &Path, run: &GeminiBrowserRun) -> GeminiBrowserResult<()> {
+    let content = serde_json::to_string_pretty(run)
+        .map_err(|error| GeminiBrowserError::persistence(error.to_string()))?;
+    fs::write(path, content).map_err(|error| GeminiBrowserError::persistence(error.to_string()))
 }
 
-fn prune_expired_runs(runs_dir: &Path) -> AppResult<()> {
+fn prune_expired_runs(runs_dir: &Path) -> GeminiBrowserResult<()> {
     prune_expired_runs_at(runs_dir, OffsetDateTime::now_utc())
 }
 
-fn prune_expired_runs_at(runs_dir: &Path, now: OffsetDateTime) -> AppResult<()> {
+fn prune_expired_runs_at(runs_dir: &Path, now: OffsetDateTime) -> GeminiBrowserResult<()> {
     if !runs_dir.exists() {
         return Ok(());
     }
 
     let cutoff = now - Duration::hours(RUN_RETENTION_HOURS);
-    for entry in fs::read_dir(runs_dir).map_err(|error| AppError::internal(error.to_string()))? {
+    for entry in fs::read_dir(runs_dir)
+        .map_err(|error| GeminiBrowserError::persistence(error.to_string()))?
+    {
         let run_dir = entry
-            .map_err(|error| AppError::internal(error.to_string()))?
+            .map_err(|error| GeminiBrowserError::persistence(error.to_string()))?
             .path();
         if !run_dir.is_dir() {
             continue;
@@ -180,7 +194,9 @@ fn prune_expired_runs_at(runs_dir: &Path, now: OffsetDateTime) -> AppResult<()> 
     Ok(())
 }
 
-fn run_updated_at_or_modified_at(result_path: &Path) -> AppResult<Option<OffsetDateTime>> {
+fn run_updated_at_or_modified_at(
+    result_path: &Path,
+) -> GeminiBrowserResult<Option<OffsetDateTime>> {
     if let Ok(content) = fs::read_to_string(result_path) {
         if let Ok(run) = serde_json::from_str::<GeminiBrowserRun>(&content) {
             if let Ok(updated_at) = OffsetDateTime::parse(&run.updated_at, &Rfc3339) {
@@ -192,11 +208,11 @@ fn run_updated_at_or_modified_at(result_path: &Path) -> AppResult<Option<OffsetD
     file_modified_at(result_path)
 }
 
-fn file_modified_at(path: &Path) -> AppResult<Option<OffsetDateTime>> {
+fn file_modified_at(path: &Path) -> GeminiBrowserResult<Option<OffsetDateTime>> {
     let modified = match fs::metadata(path).and_then(|metadata| metadata.modified()) {
         Ok(modified) => modified,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(AppError::internal(error.to_string())),
+        Err(error) => return Err(GeminiBrowserError::persistence(error.to_string())),
     };
     Ok(system_time_to_offset_datetime(modified))
 }
@@ -206,11 +222,11 @@ fn system_time_to_offset_datetime(value: SystemTime) -> Option<OffsetDateTime> {
     OffsetDateTime::from_unix_timestamp(duration.as_secs() as i64).ok()
 }
 
-fn remove_run_dir(run_dir: &Path) -> AppResult<()> {
+fn remove_run_dir(run_dir: &Path) -> GeminiBrowserResult<()> {
     match fs::remove_dir_all(run_dir) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(AppError::internal(error.to_string())),
+        Err(error) => Err(GeminiBrowserError::persistence(error.to_string())),
     }
 }
 
@@ -299,13 +315,26 @@ mod tests {
     }
 
     #[test]
+    fn get_run_core_returns_exact_run_from_log() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        create_queued_run(temp.path(), "run-core", "settings_test", "hello")
+            .expect("create queued run");
+        let run = super::read_run(temp.path(), "run-core").expect("read exact run");
+        assert_eq!(run.run_id, "run-core");
+        assert_eq!(run.status, GeminiBrowserRunStatus::Queued);
+    }
+
+    #[test]
     fn read_run_returns_validation_error_for_missing_run() {
         let temp = tempfile::tempdir().expect("create temp dir");
 
         let error = super::read_run(temp.path(), "missing-run").expect_err("missing run errors");
 
-        assert_eq!(error.kind, crate::error::AppErrorKind::NotFound);
-        assert_eq!(error.message, "Gemini browser run was not found");
+        assert_eq!(
+            error.kind(),
+            crate::gemini_browser::domain_error::GeminiBrowserErrorKind::NotFound
+        );
+        assert_eq!(error.message(), "Gemini browser run was not found");
     }
 
     #[test]

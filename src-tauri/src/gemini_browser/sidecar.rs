@@ -1,8 +1,7 @@
 use std::{path::PathBuf, process::Stdio, time::Duration};
 
-use serde::Deserialize;
 use tauri::{AppHandle, Manager};
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tokio::process::{Child, ChildStdin, ChildStdout};
 use tokio::runtime::Handle;
@@ -12,21 +11,16 @@ use crate::error::AppResult;
 use crate::{external_process::ExternalProcessShutdownState, process_tree::ProcessTreeGuard};
 
 use super::domain_error::{GeminiBrowserError, GeminiBrowserResult};
+use super::protocol::{classify_resume_response, GeminiBrowserJsonlCodec, ResumeSidecarOutcome};
 use super::sidecar_launch::{
-    bundled_sidecar_path_from_current_exe, resolve_launch_mode, GeminiBrowserBuildProfile,
+    bundled_sidecar_path, resolve_launch_mode, GeminiBrowserBuildProfile,
     GeminiBrowserSidecarLaunch,
 };
 use super::{
     GeminiBrowserProviderConfig, GeminiBrowserProviderStatus, GeminiBrowserRunRequest,
-    GeminiBrowserRunResult, GeminiBrowserRunStatus, GeminiBrowserSidecarCommand,
-    GeminiBrowserSidecarEnvelope, GeminiBrowserSidecarResponse, GeminiBrowserState,
+    GeminiBrowserRunResult, GeminiBrowserSidecarCommand, GeminiBrowserSidecarResponse,
+    GeminiBrowserState,
 };
-
-#[derive(Deserialize)]
-struct SidecarLine {
-    id: String,
-    response: GeminiBrowserSidecarResponse,
-}
 
 enum GeminiBrowserSidecarTransport {
     Node {
@@ -37,14 +31,14 @@ enum GeminiBrowserSidecarTransport {
     },
 }
 
-pub(crate) struct GeminiBrowserSidecarProcess {
-    transport: GeminiBrowserSidecarTransport,
-    next_id: u64,
+fn bundled_sidecar_path_from_current_exe() -> std::io::Result<PathBuf> {
+    std::env::current_exe().map(|executable| bundled_sidecar_path(&executable))
 }
 
-enum ResumeSidecarOutcome {
-    Status(GeminiBrowserProviderStatus),
-    LegacyAck,
+pub(crate) struct GeminiBrowserSidecarProcess {
+    transport: GeminiBrowserSidecarTransport,
+    codec: GeminiBrowserJsonlCodec,
+    next_id: u64,
 }
 
 impl GeminiBrowserSidecarProcess {
@@ -151,6 +145,7 @@ impl GeminiBrowserSidecarProcess {
                 stdout: BufReader::new(stdout),
                 process_tree,
             },
+            codec: GeminiBrowserJsonlCodec::new(),
             next_id: 1,
         })
     }
@@ -162,12 +157,13 @@ impl GeminiBrowserSidecarProcess {
         let id = format!("gemini-sidecar-{}", self.next_id);
         self.next_id += 1;
 
+        let codec = &mut self.codec;
         match &mut self.transport {
             GeminiBrowserSidecarTransport::Node { stdin, stdout, .. } => {
                 let stdin = stdin.as_mut().ok_or_else(|| {
                     GeminiBrowserError::transport("Gemini browser sidecar stdin was already closed")
                 })?;
-                request_node(stdin, stdout, &id, command).await
+                request_node(stdin, stdout, codec, &id, command).await
             }
         }
     }
@@ -228,15 +224,17 @@ impl Drop for GeminiBrowserSidecarProcess {
 async fn request_node(
     stdin: &mut ChildStdin,
     stdout: &mut BufReader<ChildStdout>,
+    codec: &mut GeminiBrowserJsonlCodec,
     id: &str,
     command: GeminiBrowserSidecarCommand,
 ) -> GeminiBrowserResult<GeminiBrowserSidecarResponse> {
-    request_jsonl(stdin, stdout, id, command).await
+    request_jsonl(stdin, stdout, codec, id, command).await
 }
 
 async fn request_jsonl<W, R>(
     stdin: &mut W,
     stdout: &mut BufReader<R>,
+    codec: &mut GeminiBrowserJsonlCodec,
     id: &str,
     command: GeminiBrowserSidecarCommand,
 ) -> GeminiBrowserResult<GeminiBrowserSidecarResponse>
@@ -244,14 +242,8 @@ where
     W: AsyncWrite + Unpin + Send,
     R: AsyncRead + Unpin + Send,
 {
-    let envelope = GeminiBrowserSidecarEnvelope {
-        id: id.to_string(),
-        command,
-    };
-    let mut line = serde_json::to_string(&envelope)
-        .map_err(|error| GeminiBrowserError::protocol(error.to_string()))?;
-    line.push('\n');
-    stdin.write_all(line.as_bytes()).await.map_err(|error| {
+    let line = codec.encode_request(id, &command)?;
+    stdin.write_all(&line).await.map_err(|error| {
         GeminiBrowserError::transport(format!("Failed to write Gemini sidecar request: {error}"))
     })?;
     stdin.flush().await.map_err(|error| {
@@ -259,21 +251,18 @@ where
     })?;
 
     loop {
-        let mut response_line = String::new();
-        let bytes = stdout
-            .read_line(&mut response_line)
-            .await
-            .map_err(|error| {
-                GeminiBrowserError::transport(format!(
-                    "Failed to read Gemini sidecar response: {error}"
-                ))
-            })?;
+        let mut response_chunk = [0_u8; 8_192];
+        let bytes = stdout.read(&mut response_chunk).await.map_err(|error| {
+            GeminiBrowserError::transport(format!(
+                "Failed to read Gemini sidecar response: {error}"
+            ))
+        })?;
         if bytes == 0 {
             return Err(GeminiBrowserError::transport(
                 "Gemini browser sidecar exited without a response",
             ));
         }
-        if let Some(response) = decode_sidecar_line_for_request(id, &response_line)? {
+        if let Some(response) = codec.push_response_bytes(id, &response_chunk[..bytes])? {
             return Ok(response);
         }
     }
@@ -290,41 +279,6 @@ where
         .ok()
         .is_some_and(|read| read > 0)
     {}
-}
-
-#[cfg(test)]
-fn decode_sidecar_line(
-    id: &str,
-    response_line: &str,
-) -> GeminiBrowserResult<GeminiBrowserSidecarResponse> {
-    decode_sidecar_line_for_request(id, response_line)?
-        .ok_or_else(|| GeminiBrowserError::protocol("Gemini browser sidecar response id mismatch"))
-}
-
-fn decode_sidecar_line_for_request(
-    id: &str,
-    response_line: &str,
-) -> GeminiBrowserResult<Option<GeminiBrowserSidecarResponse>> {
-    let response: SidecarLine = serde_json::from_str(response_line).map_err(|error| {
-        GeminiBrowserError::protocol(format!("Invalid Gemini sidecar response: {error}"))
-    })?;
-    if response.id != id {
-        return Ok(None);
-    }
-    Ok(Some(response.response))
-}
-
-#[cfg(test)]
-fn take_complete_jsonl_line(buffer: &mut String) -> Option<String> {
-    while let Some(newline_index) = buffer.find('\n') {
-        let line: String = buffer.drain(..=newline_index).collect();
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        return Some(trimmed.to_string());
-    }
-    None
 }
 
 async fn request_sidecar(
@@ -452,18 +406,6 @@ pub(crate) async fn resume(
     }
 }
 
-fn classify_resume_response(
-    response: GeminiBrowserSidecarResponse,
-) -> GeminiBrowserResult<ResumeSidecarOutcome> {
-    match response {
-        GeminiBrowserSidecarResponse::Status { status } => Ok(ResumeSidecarOutcome::Status(status)),
-        GeminiBrowserSidecarResponse::Ack => Ok(ResumeSidecarOutcome::LegacyAck),
-        _ => Err(GeminiBrowserError::protocol(
-            "Unexpected Gemini sidecar resume response",
-        )),
-    }
-}
-
 pub(crate) async fn send_single(
     handle: &AppHandle,
     state: &GeminiBrowserState,
@@ -507,110 +449,9 @@ pub(crate) async fn shutdown_sidecar(handle: &AppHandle, state: &GeminiBrowserSt
     let _ = stop(handle, state).await;
 }
 
-pub(crate) fn sidecar_unavailable_result(
-    request: GeminiBrowserRunRequest,
-) -> GeminiBrowserRunResult {
-    GeminiBrowserRunResult {
-        run_id: request.run_id,
-        status: GeminiBrowserRunStatus::Failed,
-        text: None,
-        message: Some("Gemini browser sidecar is unavailable.".to_string()),
-        manual_action: None,
-        artifacts: Default::default(),
-        elapsed_ms: 0,
-        debug_summary: None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn decode_sidecar_line_rejects_mismatched_ids() {
-        let line = r#"{"id":"other","response":{"type":"ack"}}"#;
-
-        let error = decode_sidecar_line("expected", line).unwrap_err();
-
-        assert!(error.to_string().contains("response id mismatch"));
-    }
-
-    #[test]
-    fn decode_sidecar_line_accepts_ack_for_matching_id() {
-        let line = r#"{"id":"expected","response":{"type":"ack"}}"#;
-
-        let response = decode_sidecar_line("expected", line).expect("decode response");
-
-        assert!(matches!(response, GeminiBrowserSidecarResponse::Ack));
-    }
-
-    #[test]
-    fn decode_sidecar_line_for_request_skips_stale_response_ids() {
-        let stale = r#"{"id":"previous","response":{"type":"ack"}}"#;
-        let expected = r#"{"id":"expected","response":{"type":"ack"}}"#;
-
-        assert!(decode_sidecar_line_for_request("expected", stale)
-            .expect("decode stale response")
-            .is_none());
-        assert!(matches!(
-            decode_sidecar_line_for_request("expected", expected)
-                .expect("decode expected response"),
-            Some(GeminiBrowserSidecarResponse::Ack)
-        ));
-    }
-
-    #[test]
-    fn take_complete_jsonl_lines_handles_partial_and_multiple_chunks() {
-        let mut buffer = String::new();
-        buffer.push_str("{\"id\":\"one\"");
-        assert!(take_complete_jsonl_line(&mut buffer).is_none());
-
-        buffer.push_str(
-            ",\"response\":{\"type\":\"ack\"}}\n\n{\"id\":\"two\",\"response\":{\"type\":\"ack\"}}\n",
-        );
-
-        assert_eq!(
-            take_complete_jsonl_line(&mut buffer).as_deref(),
-            Some(r#"{"id":"one","response":{"type":"ack"}}"#)
-        );
-        assert_eq!(
-            take_complete_jsonl_line(&mut buffer).as_deref(),
-            Some(r#"{"id":"two","response":{"type":"ack"}}"#)
-        );
-        assert!(take_complete_jsonl_line(&mut buffer).is_none());
-    }
-
-    #[tokio::test]
-    async fn jsonl_transport_round_trips_a_duplex_request() {
-        let (client, server) = tokio::io::duplex(1024);
-        let (client_read, mut client_write) = tokio::io::split(client);
-        let (server_read, mut server_write) = tokio::io::split(server);
-        let server = tokio::spawn(async move {
-            let mut lines = BufReader::new(server_read).lines();
-            let request = lines
-                .next_line()
-                .await
-                .expect("read request")
-                .expect("request line");
-            assert!(request.contains("gemini-sidecar-1"));
-            server_write
-                .write_all(b"{\"id\":\"gemini-sidecar-1\",\"response\":{\"type\":\"ack\"}}\n")
-                .await
-                .expect("write response");
-        });
-
-        let response = request_jsonl(
-            &mut client_write,
-            &mut BufReader::new(client_read),
-            "gemini-sidecar-1",
-            GeminiBrowserSidecarCommand::Stop,
-        )
-        .await
-        .expect("JSONL response");
-
-        server.await.expect("sidecar task");
-        assert!(matches!(response, GeminiBrowserSidecarResponse::Ack));
-    }
 
     #[tokio::test]
     async fn stderr_drain_consumes_sidecar_output_concurrently() {
@@ -624,13 +465,5 @@ mod tests {
         drop(writer);
 
         drain.await.expect("stderr drain completes");
-    }
-
-    #[test]
-    fn resume_response_classifies_legacy_ack_for_retry() {
-        let outcome = classify_resume_response(GeminiBrowserSidecarResponse::Ack)
-            .expect("classify resume response");
-
-        assert!(matches!(outcome, ResumeSidecarOutcome::LegacyAck));
     }
 }

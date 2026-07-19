@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 
 use tauri::{AppHandle, Manager};
 
+use super::executor::domain_error_to_app;
+use super::run_id::safe_run_id;
 use crate::error::{AppError, AppResult};
 
 pub(crate) const GEMINI_BROWSER_DIR: &str = "gemini-browser";
@@ -37,26 +39,9 @@ pub(crate) fn runs_dir(handle: &AppHandle) -> AppResult<PathBuf> {
 }
 
 pub(crate) fn run_dir(handle: &AppHandle, run_id: &str) -> AppResult<PathBuf> {
-    let path = runs_dir(handle)?.join(safe_run_id(run_id)?);
+    let path = runs_dir(handle)?.join(safe_run_id(run_id).map_err(domain_error_to_app)?);
     fs::create_dir_all(&path).map_err(|error| AppError::internal(error.to_string()))?;
     Ok(path)
-}
-
-pub(crate) fn safe_run_id(run_id: &str) -> AppResult<String> {
-    let candidate = run_id.trim();
-    if candidate.is_empty() {
-        return Err(AppError::validation("run_id cannot be empty"));
-    }
-    if candidate
-        .chars()
-        .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
-    {
-        Ok(candidate.to_string())
-    } else {
-        Err(AppError::validation(
-            "run_id can only contain ASCII letters, numbers, dashes, and underscores",
-        ))
-    }
 }
 
 pub(crate) fn path_string(path: &Path) -> String {

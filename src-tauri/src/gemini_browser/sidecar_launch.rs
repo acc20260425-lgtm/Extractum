@@ -24,10 +24,6 @@ pub(crate) fn bundled_sidecar_path(executable: &Path) -> PathBuf {
     directory.join(filename)
 }
 
-pub(crate) fn bundled_sidecar_path_from_current_exe() -> std::io::Result<PathBuf> {
-    std::env::current_exe().map(|executable| bundled_sidecar_path(&executable))
-}
-
 pub(crate) fn dev_sidecar_script(repo_root: &Path) -> PathBuf {
     repo_root
         .join("sidecars")

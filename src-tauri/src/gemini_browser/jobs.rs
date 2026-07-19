@@ -712,7 +712,7 @@ async fn process_gemini_browser_job(
             {
                 Ok(result) => result,
                 Err(_error) => {
-                    crate::gemini_browser::sidecar::sidecar_unavailable_result(fallback_request)
+                    crate::gemini_browser::protocol::sidecar_unavailable_result(fallback_request)
                 }
             },
         )
