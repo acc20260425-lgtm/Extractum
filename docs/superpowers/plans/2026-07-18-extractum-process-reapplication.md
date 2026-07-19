@@ -22,10 +22,12 @@
 - Fresh shell diagnostics are strictly non-gating: one discarded warm-up and five recorded samples before and after, using the same fixed inert suffix in `src-tauri/src/lib.rs` and `cargo check --manifest-path src-tauri/Cargo.toml --locked --workspace --all-targets`.
 - A shell series is stable only when at least four of five samples have absolute deviation `<= 300 ms` from their own median. Either unstable series invalidates the complete session; do not perform a stability retry or marginal repeat.
 - The fresh diagnostic session has zero retries. A command-start failure, timeout, unconfirmed process-tree termination, target-lock/`.cargo-lock` contention, `Access denied`/`Отказано в доступе`, quiet-window failure, or runner/artifact/restoration failure makes that series and the complete diagnostic session invalid; after confirmed child termination and exact source restoration, continue correctness gates without rejecting the candidate. If termination or restoration cannot be confirmed, stop all further child commands and use `source-recovery.bin` for manual recovery.
+- Qualify the scratch runner before the zero-retry baseline: the existing descendant Job Object preflight plus one synthetic `self-test` cycle on a `%TEMP%` copy must pass before the baseline series starts. The initial environment/quiet preflight has its own stable one-shot claim before its scan; runner qualification remains outside the measured baseline, but none of their evidence may be selectively discarded. After a recorded, reviewed plan/runner correction, qualification restarts only against a newly committed implementation base in a fresh workflow-owned worktree and scratch session; a failed qualification consumes no baseline attempt and never evaluates the candidate.
 - Fresh shell values, including a delta above `2,000 ms / 20%` or a valid post median above `15,000 ms`, cannot reject this exact Phase 3 candidate. Only correctness, completion, or identity failure can prevent retention.
 - Only a complete valid baseline/post session may seed the roadmap ledger. If the session is invalid, Phase 3 may retain but Phase 4 remains blocked until a valid five-sample baseline exists.
 - The historical plan, historical verification, both regression-diagnostic specs/plans/verifications/artifacts/worktrees, the v2 technical body, and `scripts/process-shell-diagnostic/**` are immutable.
 - Do not start Phase 4 in this plan. Successful Phase 3 plus a valid post median authorizes a separate Phase 4 implementation plan; invalid diagnostics preserve its baseline prerequisite.
+- In the startup smoke, loading/compiling/constructing the Job Object helper, atomic launch/assignment, process observation, and cleanup are infrastructure operations. They may only write `startup-smoke-infrastructure-failure.json` and stop without retaining or reverting. `completion-failure.json` is allowed only when `StartAssigned` returned an assigned application process, its exit code was readable during the five-second observation window, and cleanup was subsequently confirmed.
 - Every PowerShell block is a fresh process and is self-contained. In the same invocation, execute `Set-StrictMode -Version Latest` immediately before each shown `Run` body (or immediately after a scratch script's `param` block), reload persisted variables, and explicitly inspect native exit codes. Do not depend on variables or `$ErrorActionPreference` from an earlier block; set `ErrorActionPreference = 'Continue'` locally while capturing native stderr.
 - Every patch fingerprint is rendered with the canonical Git options `-O NUL --no-renames --full-index --binary --unified=3 --no-color --indent-heuristic --diff-algorithm=myers --no-ext-diff --no-textconv --src-prefix=a/ --dst-prefix=b/`. These flags are identity data, not presentation preferences; do not omit or reorder their semantic effect through local Git config.
 
@@ -88,7 +90,7 @@ The blob/mode table proves each path state. The no-renames full-index binary pat
 
 ### Scratch only
 
-- Create below `%TEMP%/extractum-process-reapplication-*`: environment, runner, source recovery bytes, raw logs, samples, validity summaries, inventories, consumer hashes, completion results, and report preview.
+- Create below `%TEMP%/extractum-process-reapplication-*`: environment, Job Object and runner qualification artifacts, stable atomic environment/baseline/post claims, synthetic source copy, source recovery bytes, raw logs, samples, validity summaries, inventories, consumer hashes, completion results, and report preview.
 
 ## Rust Verification Loops
 
@@ -436,6 +438,9 @@ $repoRaw = @(git rev-parse --show-toplevel)
 $repoCode = $LASTEXITCODE
 if ($repoCode -ne 0 -or $repoRaw.Count -ne 1) { throw 'Not inside the repository.' }
 $repo = ([string]$repoRaw[0]).Trim()
+$repoFull = [IO.Path]::GetFullPath($repo).TrimEnd('\')
+$targetFull = [IO.Path]::GetFullPath(
+  (Join-Path $repoFull 'src-tauri/target')).TrimEnd('\')
 $branchRaw = @(git branch --show-current)
 $branchCode = $LASTEXITCODE
 if ($branchCode -ne 0 -or $branchRaw.Count -ne 1) {
@@ -458,14 +463,22 @@ $hostTriple = (rustc -vV | Select-String '^host:' | ForEach-Object {
 if ($hostTriple -ne 'x86_64-pc-windows-msvc') {
   throw "Phase 3 requires x86_64-pc-windows-msvc, got $hostTriple"
 }
+$identityRaw = @(git rev-parse HEAD)
+$identityCode = $LASTEXITCODE
+$baseRaw = @(git rev-parse 'HEAD^')
+$baseCode = $LASTEXITCODE
+if ($identityCode -ne 0 -or $baseCode -ne 0 -or
+    $identityRaw.Count -ne 1 -or $baseRaw.Count -ne 1) {
+  throw 'Could not resolve the identity commit and implementation base.'
+}
+$identityCommit = ([string]$identityRaw[0]).Trim()
+$implementationBase = ([string]$baseRaw[0]).Trim()
 $sessionId = '{0}-{1}' -f `
   ([DateTimeOffset]::Now.ToString('yyyyMMddTHHmmssfff')), `
   ([guid]::NewGuid().ToString('N'))
 $scratch = Join-Path $env:TEMP "extractum-process-reapplication-$sessionId"
 New-Item -ItemType Directory -Path $scratch | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $scratch 'attempts') | Out-Null
-$scratch | Set-Content -LiteralPath `
-  (Join-Path $env:TEMP 'extractum-process-reapplication-current.txt')
 
 $quietScript = Join-Path $scratch 'assert-quiet-window.ps1'
 @'
@@ -498,16 +511,92 @@ if ($blocking.Count -ne 0) {
   throw "Quiet window is not exclusive; see $ArtifactPath"
 }
 '@ | Set-Content -LiteralPath $quietScript
-& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $quietScript `
-  -ArtifactPath (Join-Path $scratch 'quiet-initial.json')
-$initialQuietValid = ($LASTEXITCODE -eq 0)
+$gitCommonRaw = @(git rev-parse --git-common-dir)
+if ($LASTEXITCODE -ne 0 -or $gitCommonRaw.Count -ne 1) {
+  throw 'Could not resolve the shared Git directory before environment claim.'
+}
+$gitCommon = (Resolve-Path -LiteralPath ([string]$gitCommonRaw[0])).Path
+$claimMaterial = '{0}|{1}' -f $gitCommon.ToLowerInvariant(), `
+  $implementationBase
+$claimHasher = [Security.Cryptography.SHA256]::Create()
+try {
+  $claimKey = -join ($claimHasher.ComputeHash(
+    [Text.Encoding]::UTF8.GetBytes($claimMaterial)) | ForEach-Object {
+      $_.ToString('x2')
+    })
+} finally { $claimHasher.Dispose() }
+$claimRoot = Join-Path $env:TEMP `
+  "extractum-process-reapplication-claims/$claimKey"
+New-Item -ItemType Directory -Path $claimRoot -Force | Out-Null
+$environmentClaimPath = Join-Path $claimRoot 'environment-preflight.json'
+if (Test-Path -LiteralPath $environmentClaimPath) {
+  throw "Environment preflight is already claimed at $environmentClaimPath; never launch the initial quiet-window again for this implementation base."
+}
+$environmentClaimPayload = [ordered]@{
+  stage = 'environment-preflight'
+  claimed_at = [DateTimeOffset]::Now.ToString('o')
+  scratch = $scratch
+  repository = $repoFull
+  target = $targetFull
+  identity_commit = $identityCommit
+  implementation_base = $implementationBase
+  quiet_artifact = (Join-Path $scratch 'quiet-initial.json')
+} | ConvertTo-Json
+$environmentClaimBytes =
+  [Text.UTF8Encoding]::new($false).GetBytes($environmentClaimPayload)
+$environmentClaimTempPath = '{0}.{1}.tmp' -f `
+  $environmentClaimPath, ([guid]::NewGuid().ToString('N'))
+$environmentClaimStream = $null
+try {
+  $environmentClaimStream = [IO.File]::Open(
+    $environmentClaimTempPath,
+    [IO.FileMode]::CreateNew,
+    [IO.FileAccess]::Write,
+    [IO.FileShare]::None)
+  $environmentClaimStream.Write(
+    $environmentClaimBytes, 0, $environmentClaimBytes.Length)
+  $environmentClaimStream.Flush($true)
+} catch [IO.IOException] {
+  throw "Could not atomically claim the environment preflight: $($_.Exception.Message)"
+} finally {
+  if ($null -ne $environmentClaimStream) {
+    $environmentClaimStream.Dispose()
+  }
+}
+try {
+  [IO.File]::Move($environmentClaimTempPath, $environmentClaimPath)
+} catch [IO.IOException] {
+  throw "Could not atomically publish the environment preflight claim: $($_.Exception.Message)"
+}
+$scratch | Set-Content -LiteralPath `
+  (Join-Path $env:TEMP 'extractum-process-reapplication-current.txt')
+$claimRoot | Set-Content -LiteralPath `
+  (Join-Path $scratch 'diagnostic-claim-root.txt')
+$savedErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$initialQuietStartError = $null
+try {
+  & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $quietScript `
+    -ArtifactPath (Join-Path $scratch 'quiet-initial.json') `
+    1> (Join-Path $scratch 'quiet-initial.stdout.log') `
+    2> (Join-Path $scratch 'quiet-initial.stderr.log')
+  $initialQuietCode = $LASTEXITCODE
+} catch {
+  $initialQuietCode = -1
+  $initialQuietStartError = $_.Exception.Message
+} finally {
+  $ErrorActionPreference = $savedErrorActionPreference
+}
+$initialQuietValid = ($initialQuietCode -eq 0)
 if (-not $initialQuietValid -and
     -not (Test-Path -LiteralPath (Join-Path $scratch 'quiet-initial.json'))) {
   [ordered]@{
     checked_at = [DateTimeOffset]::Now.ToString('o')
     cim_available = $false
     blocking_count = $null
-    error = 'quiet-window subprocess failed before writing its normal artifact'
+    error = if ($null -ne $initialQuietStartError) {
+      "quiet-window subprocess start failed: $initialQuietStartError"
+    } else { 'quiet-window subprocess failed before writing its normal artifact' }
   } | ConvertTo-Json | Set-Content -LiteralPath `
     (Join-Path $scratch 'quiet-initial.json')
 }
@@ -522,7 +611,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not enumerate Git worktrees.' }
 if ([string]::IsNullOrWhiteSpace($mainWorktree)) {
   throw 'Could not identify the main worktree.'
 }
-$repoFull = [IO.Path]::GetFullPath($repo).TrimEnd('\')
 $mainFull = [IO.Path]::GetFullPath($mainWorktree).TrimEnd('\')
 if ($repoFull -eq $mainFull) { throw 'Measurement worktree is the main worktree.' }
 $power = try {
@@ -535,16 +623,6 @@ $defender = try {
   $mp = Get-MpComputerStatus -ErrorAction Stop
   "real_time=$($mp.RealTimeProtectionEnabled); antivirus=$($mp.AntivirusEnabled)"
 } catch { "unavailable: $($_.Exception.Message)" }
-$identityRaw = @(git rev-parse HEAD)
-$identityCode = $LASTEXITCODE
-$baseRaw = @(git rev-parse 'HEAD^')
-$baseCode = $LASTEXITCODE
-if ($identityCode -ne 0 -or $baseCode -ne 0 -or
-    $identityRaw.Count -ne 1 -or $baseRaw.Count -ne 1) {
-  throw 'Could not resolve the identity commit and implementation base.'
-}
-$identityCommit = ([string]$identityRaw[0]).Trim()
-$implementationBase = ([string]$baseRaw[0]).Trim()
 $rustcVersionRaw = @(rustc --version)
 $rustcVersionCode = $LASTEXITCODE
 $cargoVersionRaw = @(cargo --version)
@@ -557,17 +635,20 @@ $rustcVersion = ([string]$rustcVersionRaw[0]).Trim()
 $cargoVersion = ([string]$cargoVersionRaw[0]).Trim()
 [ordered]@{
   session_id = $sessionId
-  repository = $repo
+  repository = $repoFull
   main_worktree = $mainFull
   branch = $branch
   identity_commit = $identityCommit
   implementation_base = $implementationBase
+  diagnostic_claim_root = $claimRoot
+  environment_preflight_claim_sha256 =
+    (Get-FileHash -LiteralPath $environmentClaimPath -Algorithm SHA256).Hash
   rustc = $rustcVersion
   cargo = $cargoVersion
   host = $hostTriple
   power = $power
   defender = $defender
-  target = (Join-Path $repo 'src-tauri/target')
+  target = $targetFull
   main_target = (Join-Path $mainFull 'src-tauri/target')
   cargo_target_dir_environment = $null
   initial_quiet_valid = $initialQuietValid
@@ -576,7 +657,7 @@ $cargoVersion = ([string]$cargoVersionRaw[0]).Trim()
   (Join-Path $scratch 'environment.json')
 ```
 
-Expected: a clean non-main branch, Windows/MSVC host, a recorded CIM command-line scan covering Cargo/Rust/Tauri/Vite/npm/node build activity, a fresh scratch directory, and both the pre-identity `implementation_base` and committed `identity_commit`. A failed/unavailable initial scan records `initial_quiet_valid=false`; it does not stop correctness work, but Step 5 must invalidate the zero-retry diagnostic session without starting its Cargo probe. If Cargo later reports `target/**/.cargo-lock: Access denied`, classify it as infrastructure contention; do not delete lock files or the target.
+Expected: a clean non-main branch, Windows/MSVC host, a fresh scratch directory, and both the pre-identity `implementation_base` and committed `identity_commit`. Before the CIM scan, a stable `environment-preflight.json` is atomically claimed from canonical Git common directory plus `implementation_base`; an existing claim forbids a second initial quiet-window launch for the same approved plan base. The scan covers Cargo/Rust/Tauri/Vite/npm/node build activity. A failed/unavailable scan records `initial_quiet_valid=false`; it does not stop correctness work, but Step 5 must invalidate the zero-retry diagnostic session without starting its Cargo probe. If Cargo later reports `target/**/.cargo-lock: Access denied`, classify it as infrastructure contention; do not delete lock files or the target.
 
 - [ ] **Step 2: Verify every historical object and current preimage**
 
@@ -859,6 +940,7 @@ $ErrorActionPreference = 'Stop'
 if ($null -eq ('ExtractumOwnedJob' -as [type])) {
   Add-Type -TypeDefinition @'
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -867,6 +949,11 @@ using System.Text;
 public sealed class ExtractumOwnedJob : IDisposable
 {
     private IntPtr handle;
+
+    public bool LastProcessCreated { get; private set; }
+    public bool LastProcessAssigned { get; private set; }
+    public bool LastLaunchTerminationConfirmed { get; private set; }
+    public uint LastProcessId { get; private set; }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct BasicLimitInformation
@@ -1014,8 +1101,19 @@ public sealed class ExtractumOwnedJob : IDisposable
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
 
-    [DllImport("kernel32.dll")]
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool CloseHandle(IntPtr handle);
+
+    private static void RecordCloseFailure(
+        IntPtr value, string label, List<Exception> failures)
+    {
+        if (value == IntPtr.Zero || value == InvalidHandleValue)
+            return;
+        if (!CloseHandle(value))
+            failures.Add(new Win32Exception(
+                Marshal.GetLastWin32Error(), "CloseHandle(" + label + ")"));
+    }
 
     public ExtractumOwnedJob()
     {
@@ -1033,9 +1131,17 @@ public sealed class ExtractumOwnedJob : IDisposable
             if (!SetInformationJobObject(handle, 9, pointer, (uint)length))
                 throw new Win32Exception(Marshal.GetLastWin32Error());
         }
-        catch
+        catch (Exception setupError)
         {
-            CloseHandle(handle);
+            if (!CloseHandle(handle))
+            {
+                var closeError = new Win32Exception(
+                    Marshal.GetLastWin32Error(), "CloseHandle(job constructor)");
+                throw new AggregateException(
+                    "Job Object setup and cleanup both failed.",
+                    setupError,
+                    closeError);
+            }
             handle = IntPtr.Zero;
             throw;
         }
@@ -1049,6 +1155,10 @@ public sealed class ExtractumOwnedJob : IDisposable
         string applicationPath, string arguments, string currentDirectory,
         string stdoutPath, string stderrPath, bool hidden)
     {
+        LastProcessCreated = false;
+        LastProcessAssigned = false;
+        LastLaunchTerminationConfirmed = true;
+        LastProcessId = 0;
         var security = new SecurityAttributes
         {
             nLength = Marshal.SizeOf(typeof(SecurityAttributes)),
@@ -1060,6 +1170,7 @@ public sealed class ExtractumOwnedJob : IDisposable
         var processInfo = new ProcessInformation();
         Process process = null;
         bool resumed = false;
+        bool launchCleanupConfirmed = true;
         try
         {
             stdoutHandle = CreateFile(
@@ -1094,11 +1205,15 @@ public sealed class ExtractumOwnedJob : IDisposable
             if (!CreateProcess(
                     applicationPath, new StringBuilder(command),
                     IntPtr.Zero, IntPtr.Zero, true, flags, IntPtr.Zero,
-                    currentDirectory, ref startup, out processInfo))
+                     currentDirectory, ref startup, out processInfo))
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "CreateProcessW");
+            LastProcessCreated = true;
+            LastLaunchTerminationConfirmed = false;
+            LastProcessId = processInfo.dwProcessId;
             if (!AssignProcessToJobObject(handle, processInfo.hProcess))
                 throw new Win32Exception(
                     Marshal.GetLastWin32Error(), "AssignProcessToJobObject");
+            LastProcessAssigned = true;
             process = Process.GetProcessById((int)processInfo.dwProcessId);
             // Force Process to own a second, durable handle before the native
             // creation handle is closed and before the process can run/exit.
@@ -1115,6 +1230,7 @@ public sealed class ExtractumOwnedJob : IDisposable
             Exception cleanupError = null;
             if (processInfo.hProcess != IntPtr.Zero && !resumed)
             {
+                launchCleanupConfirmed = false;
                 if (!TerminateProcess(processInfo.hProcess, 1))
                     cleanupError = new InvalidOperationException(
                         "UNCONFIRMED_PROCESS pid=" + processInfo.dwProcessId +
@@ -1130,6 +1246,11 @@ public sealed class ExtractumOwnedJob : IDisposable
                             "UNCONFIRMED_PROCESS pid=" + processInfo.dwProcessId +
                             ": suspended process termination wait returned " + waitResult,
                             startError);
+                    else
+                    {
+                        launchCleanupConfirmed = true;
+                        LastLaunchTerminationConfirmed = true;
+                    }
                 }
             }
             if (process != null)
@@ -1140,16 +1261,72 @@ public sealed class ExtractumOwnedJob : IDisposable
         }
         finally
         {
-            if (processInfo.hThread != IntPtr.Zero)
-                CloseHandle(processInfo.hThread);
-            if (processInfo.hProcess != IntPtr.Zero)
-                CloseHandle(processInfo.hProcess);
-            if (stdinHandle != IntPtr.Zero && stdinHandle != InvalidHandleValue)
-                CloseHandle(stdinHandle);
-            if (stdoutHandle != IntPtr.Zero && stdoutHandle != InvalidHandleValue)
-                CloseHandle(stdoutHandle);
-            if (stderrHandle != IntPtr.Zero && stderrHandle != InvalidHandleValue)
-                CloseHandle(stderrHandle);
+            var closeFailures = new List<Exception>();
+            RecordCloseFailure(processInfo.hThread, "primary thread", closeFailures);
+            RecordCloseFailure(processInfo.hProcess, "created process", closeFailures);
+            RecordCloseFailure(stdinHandle, "stdin", closeFailures);
+            RecordCloseFailure(stdoutHandle, "stdout", closeFailures);
+            RecordCloseFailure(stderrHandle, "stderr", closeFailures);
+            if (closeFailures.Count != 0)
+            {
+                var closeError = new AggregateException(
+                    "One or more native launch handles could not be closed.",
+                    closeFailures);
+                if (resumed && process != null)
+                {
+                    var resumedCleanupFailures = new List<Exception>();
+                    bool empty = false;
+                    try
+                    {
+                        if (!TerminateJobObject(handle, 1))
+                            throw new Win32Exception(
+                                Marshal.GetLastWin32Error(),
+                                "TerminateJobObject after native handle cleanup failure");
+                        uint waitResult = WaitForSingleObject(process.Handle, 10000);
+                        if (waitResult != WaitObject0)
+                            throw new InvalidOperationException(
+                                "resumed process termination wait returned " + waitResult);
+                        empty = WaitForEmpty(10000) && ActiveProcesses == 0;
+                    }
+                    catch (Exception cleanupQueryError)
+                    {
+                        resumedCleanupFailures.Add(cleanupQueryError);
+                    }
+                    LastLaunchTerminationConfirmed = empty;
+                    try
+                    {
+                        process.Dispose();
+                    }
+                    catch (Exception processDisposeError)
+                    {
+                        resumedCleanupFailures.Add(processDisposeError);
+                    }
+                    if (!LastLaunchTerminationConfirmed)
+                    {
+                        resumedCleanupFailures.Insert(0, closeError);
+                        throw new InvalidOperationException(
+                            "UNCONFIRMED_PROCESS pid=" + processInfo.dwProcessId +
+                            ": native handle cleanup failed after resume and the " +
+                            "assigned process tree could not be confirmed terminated",
+                            new AggregateException(resumedCleanupFailures));
+                    }
+                    if (resumedCleanupFailures.Count != 0)
+                    {
+                        resumedCleanupFailures.Insert(0, closeError);
+                        throw new AggregateException(
+                            "Assigned process tree terminated, but managed/native cleanup failed.",
+                            resumedCleanupFailures);
+                    }
+                }
+                else if (!launchCleanupConfirmed)
+                {
+                    throw new InvalidOperationException(
+                        "UNCONFIRMED_PROCESS pid=" + processInfo.dwProcessId +
+                        ": launch and native handle cleanup both failed",
+                        closeError);
+                }
+                throw closeError;
+            }
         }
     }
 
@@ -1197,7 +1374,9 @@ public sealed class ExtractumOwnedJob : IDisposable
     {
         if (handle != IntPtr.Zero)
         {
-            CloseHandle(handle);
+            if (!CloseHandle(handle))
+                throw new Win32Exception(
+                    Marshal.GetLastWin32Error(), "CloseHandle(Job Object)");
             handle = IntPtr.Zero;
         }
     }
@@ -1247,13 +1426,22 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $result = [ordered]@{
   passed = $false
-  termination_confirmed = $true
+  termination_confirmed = $false
   active_after = $null
+  job_helper_sha256 = $null
+  launch_process_created = $false
+  launch_process_assigned = $false
+  launch_termination_confirmed = $false
+  launch_process_id = $null
+  descendant_pid = $null
+  descendant_absent = $false
   error = $null
 }
 $job = $null
 $process = $null
 try {
+  $result.job_helper_sha256 =
+    (Get-FileHash -LiteralPath $JobHelperPath -Algorithm SHA256).Hash
   . $JobHelperPath
   $job = [ExtractumOwnedJob]::new()
   $powershellPath = (Get-Command powershell.exe -ErrorAction Stop).Source
@@ -1275,6 +1463,12 @@ try {
   if (-not (Test-Path -LiteralPath $ReadyPath)) {
     throw 'Assigned parent did not report its descendant.'
   }
+  $descendantPid = 0
+  $descendantText = (Get-Content -LiteralPath $ReadyPath -Raw).Trim()
+  if (-not [int]::TryParse($descendantText, [ref]$descendantPid)) {
+    throw 'Assigned parent reported an invalid descendant PID.'
+  }
+  $result.descendant_pid = $descendantPid
   if ([uint32]$job.ActiveProcesses -lt 2) {
     throw 'Job Object did not inherit the assigned parent descendant.'
   }
@@ -1285,12 +1479,16 @@ try {
   if (-not $job.WaitForEmpty(10000) -or [uint32]$job.ActiveProcesses -ne 0) {
     throw 'Job Object remained active after termination.'
   }
+  $result.descendant_absent =
+    $null -eq (Get-Process -Id $descendantPid -ErrorAction SilentlyContinue) -and
+    $null -eq (Get-CimInstance Win32_Process -Filter `
+      "ProcessId = $descendantPid" -ErrorAction Stop)
+  if (-not $result.descendant_absent) {
+    throw 'Assigned descendant remained observable after Job Object termination.'
+  }
   $result.passed = $true
 } catch {
   $result.error = $_.Exception.Message
-  if ($result.error -like 'UNCONFIRMED_PROCESS*') {
-    $result.termination_confirmed = $false
-  }
 } finally {
   try {
     if ($null -ne $process) {
@@ -1301,12 +1499,40 @@ try {
       }
     }
     if ($null -ne $job) {
+      $result.launch_process_created = [bool]$job.LastProcessCreated
+      $result.launch_process_assigned = [bool]$job.LastProcessAssigned
+      $result.launch_termination_confirmed =
+        [bool]$job.LastLaunchTerminationConfirmed
+      $result.launch_process_id = if ([uint32]$job.LastProcessId -ne 0) {
+        [int]$job.LastProcessId
+      } else { $null }
       if ([uint32]$job.ActiveProcesses -ne 0) {
         $job.Terminate(1)
         [void]$job.WaitForEmpty(10000)
       }
       $result.active_after = [uint32]$job.ActiveProcesses
-      if ($result.active_after -ne 0) {
+      $rootAbsent = if ($null -ne $process) {
+        $process.Refresh()
+        $process.HasExited
+      } elseif ($result.launch_process_created) {
+        $result.launch_termination_confirmed -and
+          $null -eq (Get-Process -Id $result.launch_process_id `
+            -ErrorAction SilentlyContinue)
+      } else { $true }
+      $result.termination_confirmed = $rootAbsent -and
+        $result.active_after -eq 0
+    } else {
+      # Constructor failure happened before a Job or child could exist.
+      $result.launch_termination_confirmed = $true
+      $result.termination_confirmed = $true
+    }
+    if ($null -ne $result.descendant_pid) {
+      $result.descendant_absent =
+        $null -eq (Get-Process -Id $result.descendant_pid `
+          -ErrorAction SilentlyContinue) -and
+        $null -eq (Get-CimInstance Win32_Process -Filter `
+          "ProcessId = $($result.descendant_pid)" -ErrorAction Stop)
+      if (-not $result.descendant_absent) {
         $result.termination_confirmed = $false
       }
     }
@@ -1317,7 +1543,15 @@ try {
       $cleanupText
     } else { "$($result.error); $cleanupText" }
   } finally {
-    if ($null -ne $job) { $job.Dispose() }
+    try {
+      if ($null -ne $job) { $job.Dispose() }
+    } catch {
+      $result.termination_confirmed = $false
+      $disposeText = "Job disposal failure: $($_.Exception.Message)"
+      $result.error = if ([string]::IsNullOrWhiteSpace([string]$result.error)) {
+        $disposeText
+      } else { "$($result.error); $disposeText" }
+    }
     $result | ConvertTo-Json | Set-Content -LiteralPath $ResultPath
   }
 }
@@ -1341,21 +1575,24 @@ try {
 $jobProbeResult = if (Test-Path -LiteralPath $jobProbeResultPath) {
   Get-Content -LiteralPath $jobProbeResultPath -Raw | ConvertFrom-Json
 } else { $null }
+$jobHelperHash = (Get-FileHash -LiteralPath $jobHelper -Algorithm SHA256).Hash
 if ($jobProbeCode -eq 0) {
   if ($null -eq $jobProbeResult -or -not [bool]$jobProbeResult.passed -or
-      -not [bool]$jobProbeResult.termination_confirmed) {
+      -not [bool]$jobProbeResult.termination_confirmed -or
+      -not [bool]$jobProbeResult.descendant_absent -or
+      $jobProbeResult.job_helper_sha256 -ne $jobHelperHash) {
     throw 'Job Object preflight exit/artifact mismatch.'
   }
 } elseif ($jobProbeCode -eq 2 -and $null -ne $jobProbeResult -and
     -not [bool]$jobProbeResult.passed -and
     [bool]$jobProbeResult.termination_confirmed) {
-  Write-Warning 'Job Object preflight failed safely; both shell series are invalid and must not start.'
+  throw 'Job Object qualification failed safely before measurement. Preserve scratch, correct and review the committed plan/runner, and restart with fresh scratch; no diagnostic attempt was consumed.'
 } else {
   throw 'Job Object preflight termination is unconfirmed; stop all further child commands.'
 }
 ```
 
-Exit `0` enables the runner. Exit `2` plus `termination_confirmed=true` records a safe infrastructure-invalid preflight and disables both shell series without blocking correctness work. Any missing/inconsistent artifact, exit `3`, or unconfirmed termination stops all further child commands. Never fall back to parent-PID-only proof.
+Exit `0` enables runner qualification. Exit `2` plus `termination_confirmed=true` stops before measurement for a recorded, reviewed harness correction and a fresh workflow/scratch restart; it does not consume the zero-retry diagnostic attempt or evaluate the candidate. Any missing/inconsistent artifact, exit `3`, or unconfirmed termination stops all further child commands. Never fall back to parent-PID-only proof.
 
 Then create `$scratch/invoke-shell-series.ps1` with this complete content. It is scratch infrastructure, not repository source:
 
@@ -1365,26 +1602,104 @@ param(
   [Parameter(Mandatory = $true)][string]$SourcePath,
   [Parameter(Mandatory = $true)][string]$ExpectedSha256,
   [Parameter(Mandatory = $true)][string]$AttemptRoot,
-  [Parameter(Mandatory = $true)][string]$JobHelperPath
+  [Parameter(Mandatory = $true)][string]$JobHelperPath,
+  [ValidateSet('series', 'self-test')][string]$Mode = 'series'
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-. $JobHelperPath
-New-Item -ItemType Directory -Path $AttemptRoot -Force | Out-Null
-$runs = Join-Path $AttemptRoot 'runs'
-New-Item -ItemType Directory -Path $runs -Force | Out-Null
-$resolved = (Resolve-Path -LiteralPath $SourcePath).Path
-$original = [IO.File]::ReadAllBytes($resolved)
-[IO.File]::WriteAllBytes((Join-Path $AttemptRoot 'source-recovery.bin'), $original)
-$cargo = (Get-Command cargo.exe).Source
-$cargoArgs = @(
-  'check', '--manifest-path', 'src-tauri/Cargo.toml', '--locked',
-  '--workspace', '--all-targets'
-)
+$runs = $null
+$resolved = $null
+$original = $null
+$commandPath = $null
+$commandArgs = @()
+$selfTestObservationPath = $null
 $probeSuffix = [Text.Encoding]::UTF8.GetBytes(
   "`n// cargo-measurement-probe: extractum-process-reapplication-shell`n"
 )
+try {
+  . $JobHelperPath
+  New-Item -ItemType Directory -Path $AttemptRoot -Force | Out-Null
+  $runs = Join-Path $AttemptRoot 'runs'
+  New-Item -ItemType Directory -Path $runs -Force | Out-Null
+  $resolved = (Resolve-Path -LiteralPath $SourcePath).Path
+  $original = [IO.File]::ReadAllBytes($resolved)
+  $recoveryPath = Join-Path $AttemptRoot 'source-recovery.bin'
+  [IO.File]::WriteAllBytes($recoveryPath, $original)
+  if ($Mode -eq 'self-test') {
+    $commandPath = (Get-Command powershell.exe -ErrorAction Stop).Source
+    $selfTestObservationPath = Join-Path $AttemptRoot `
+      'self-test-observations.txt'
+    $escapedSource = $resolved.Replace("'", "''")
+    $escapedRecovery = $recoveryPath.Replace("'", "''")
+    $escapedObservations = $selfTestObservationPath.Replace("'", "''")
+    $suffixBase64 = [Convert]::ToBase64String($probeSuffix)
+    $probeScript = @(
+      '$ErrorActionPreference = ''Stop'''
+      ('$sourcePath = ''{0}''' -f $escapedSource)
+      ('$recoveryPath = ''{0}''' -f $escapedRecovery)
+      ('$observationPath = ''{0}''' -f $escapedObservations)
+      ('$suffixBase64 = ''{0}''' -f $suffixBase64)
+      '$original = [IO.File]::ReadAllBytes($recoveryPath)'
+      '$actual = [IO.File]::ReadAllBytes($sourcePath)'
+      '$observations = @()'
+      'if (Test-Path -LiteralPath $observationPath) {'
+      '  $observations = @(Get-Content -LiteralPath $observationPath)'
+      '}'
+      'if ($observations.Count -eq 0) {'
+      '  $state = ''sync'''
+      '  $expected = $original'
+      '} elseif ($observations.Count -eq 1 -and '
+      '    $observations[0] -match ''^sync\|[0-9A-F]{64}$'') {'
+      '  $state = ''timed'''
+      '  $suffix = [Convert]::FromBase64String($suffixBase64)'
+      '  $expected = New-Object byte[] ($original.Length + $suffix.Length)'
+      '  [Array]::Copy($original, 0, $expected, 0, $original.Length)'
+      '  [Array]::Copy($suffix, 0, $expected, $original.Length, $suffix.Length)'
+      '} else { exit 43 }'
+      'if (-not [Collections.StructuralComparisons]::StructuralEqualityComparer.Equals('
+      '    $actual, $expected)) { exit 41 }'
+      '$hash = (Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash'
+      '"$state|$hash" | Add-Content -LiteralPath $observationPath -Encoding ASCII'
+      'exit 0'
+    ) -join "`n"
+    $encodedProbe = [Convert]::ToBase64String(
+      [Text.Encoding]::Unicode.GetBytes($probeScript)
+    )
+    $commandArgs = @('-NoLogo', '-NoProfile', '-EncodedCommand', $encodedProbe)
+  } else {
+    $commandPath = (Get-Command cargo.exe -ErrorAction Stop).Source
+    $commandArgs = @(
+      'check', '--manifest-path', 'src-tauri/Cargo.toml', '--locked',
+      '--workspace', '--all-targets'
+    )
+  }
+} catch {
+  $bootstrapError = $_.Exception.Message
+  $bootstrapRestored = if ($null -ne $resolved) {
+    try {
+      (Get-FileHash -LiteralPath $resolved -Algorithm SHA256).Hash -eq
+        $ExpectedSha256
+    } catch { $false }
+  } else { $true }
+  try {
+    New-Item -ItemType Directory -Path $AttemptRoot -Force | Out-Null
+    [ordered]@{
+      stage = $Stage
+      mode = $Mode
+      phase = 'bootstrap'
+      classification = 'infrastructure_invalid'
+      error = $bootstrapError
+      child_started = $false
+      termination_confirmed = $true
+      source_restored = $bootstrapRestored
+    } | ConvertTo-Json | Set-Content -LiteralPath `
+      (Join-Path $AttemptRoot 'runner-infrastructure-failure.json')
+  } catch {
+    Write-Error "Runner bootstrap artifact failed: $($_.Exception.Message)"
+  }
+  exit 2
+}
 
 function Test-InfrastructureLog([string]$stdoutPath, [string]$stderrPath) {
   $text = @(
@@ -1416,7 +1731,7 @@ function Get-LiveProcessTreeIds([int]$rootId) {
     ForEach-Object { [int]$_.ProcessId })
 }
 
-function Invoke-BoundedCargo(
+function Invoke-BoundedCommand(
   [string]$label,
   [string]$stdoutPath,
   [string]$stderrPath,
@@ -1432,6 +1747,10 @@ function Invoke-BoundedCargo(
     taskkill_exit_code = $null
     job_assigned = $false
     job_active_processes = $null
+    launch_process_created = $false
+    launch_process_assigned = $false
+    launch_termination_confirmed = $false
+    launch_process_id = $null
     remaining_tree_ids = @()
     owned_tree_ids = @()
     termination_confirmed = $false
@@ -1449,13 +1768,16 @@ function Invoke-BoundedCargo(
     $job = [ExtractumOwnedJob]::new()
     $watch = [Diagnostics.Stopwatch]::StartNew()
     $process = $job.StartAssigned(
-      $cargo,
-      ($cargoArgs -join ' '),
+      $commandPath,
+      ($commandArgs -join ' '),
       (Get-Location).Path,
       $stdoutPath,
       $stderrPath,
       $true)
     $result.started = $true
+    $result.launch_process_created = [bool]$job.LastProcessCreated
+    $result.launch_process_assigned = [bool]$job.LastProcessAssigned
+    $result.launch_process_id = [int]$job.LastProcessId
     $result.process_id = $process.Id
     $result.job_assigned = $true
     if (-not $process.WaitForExit($timeoutMs)) {
@@ -1585,10 +1907,43 @@ function Invoke-BoundedCargo(
         $result.error += "; cleanup failure: $($_.Exception.Message)"
       }
     } else {
-      $result.termination_confirmed = $runnerError -notlike 'UNCONFIRMED_PROCESS*'
-      if ($result.termination_confirmed -and $null -ne $job) {
-        $job.Dispose()
-        $job = $null
+      if ($null -eq $job) {
+        # Constructor failure happened before a Job or child could exist.
+        $result.launch_termination_confirmed = $true
+        $result.termination_confirmed = $true
+      } else {
+        try {
+          $result.launch_process_created = [bool]$job.LastProcessCreated
+          $result.launch_process_assigned = [bool]$job.LastProcessAssigned
+          $result.launch_termination_confirmed =
+            [bool]$job.LastLaunchTerminationConfirmed
+          $result.launch_process_id = if ([uint32]$job.LastProcessId -ne 0) {
+            [int]$job.LastProcessId
+          } else { $null }
+          $result.process_id = $result.launch_process_id
+          $result.job_assigned = $result.launch_process_assigned
+          $result.job_active_processes = [uint32]$job.ActiveProcesses
+          $result.remaining_tree_ids = if (
+              $null -ne $result.launch_process_id -and
+              $null -ne (Get-Process -Id $result.launch_process_id `
+                -ErrorAction SilentlyContinue)) {
+            @($result.launch_process_id)
+          } else { @() }
+          $result.termination_confirmed =
+            (-not $result.launch_process_created -or
+              $result.launch_termination_confirmed) -and
+            $result.job_active_processes -eq 0 -and
+            $result.remaining_tree_ids.Count -eq 0
+          if (-not $result.termination_confirmed) {
+            $result.error += '; structured launch cleanup proof is incomplete'
+          } else {
+            $job.Dispose()
+            $job = $null
+          }
+        } catch {
+          $result.termination_confirmed = $false
+          $result.error += "; launch-state/cleanup inspection failed: $($_.Exception.Message)"
+        }
       }
     }
   }
@@ -1603,6 +1958,7 @@ function Invoke-One([string]$label, [bool]$recorded) {
   $timedErr = Join-Path $runs "$label.stderr.log"
   $meta = [ordered]@{
     stage = $Stage
+    mode = $Mode
     label = $label
     recorded = $recorded
     sync_exit_code = $null
@@ -1610,6 +1966,13 @@ function Invoke-One([string]$label, [bool]$recorded) {
     elapsed_ms = $null
     sync = $null
     timed = $null
+    sync_expected_sha256 = if ($Mode -eq 'self-test') {
+      $ExpectedSha256
+    } else { $null }
+    sync_observed_sha256 = $null
+    timed_expected_sha256 = $null
+    timed_observed_sha256 = $null
+    self_test_observations = @()
     termination_confirmed = $true
     restored = $false
     classification = $null
@@ -1621,38 +1984,71 @@ function Invoke-One([string]$label, [bool]$recorded) {
     if ($startingHash -ne $ExpectedSha256) {
       throw "INFRASTRUCTURE: starting source hash mismatch for $label"
     }
-    $sync = Invoke-BoundedCargo "$label-sync" $syncOut $syncErr 900000
+    $safeToRestore = $false
+    $sync = Invoke-BoundedCommand "$label-sync" $syncOut $syncErr 900000
     $meta.sync = $sync
     $meta.sync_exit_code = $sync.exit_code
     $meta.termination_confirmed = $sync.termination_confirmed
     if (-not $sync.termination_confirmed) {
-      $safeToRestore = $false
       throw "INFRASTRUCTURE: synchronization termination unconfirmed for $label"
     }
+    $safeToRestore = $true
     if ($sync.infrastructure) {
       throw "INFRASTRUCTURE: synchronization $($sync.error) for $label"
     }
     if ($sync.exit_code -ne 0) {
-      throw "CARGO_FAILURE: synchronization check failed for $label"
+      throw "COMMAND_FAILURE: synchronization command failed for $label"
+    }
+    if ($Mode -eq 'self-test') {
+      $syncObservations = @(
+        Get-Content -LiteralPath $selfTestObservationPath -ErrorAction Stop |
+          ForEach-Object { [string]$_ }
+      )
+      $expectedSyncLine = "sync|$ExpectedSha256"
+      if ($syncObservations.Count -ne 1 -or
+          $syncObservations[0] -cne $expectedSyncLine) {
+        throw 'INFRASTRUCTURE: self-test sync did not observe exact original bytes'
+      }
+      $meta.sync_observed_sha256 = $ExpectedSha256
+      $meta.self_test_observations = @($syncObservations)
     }
     $combined = New-Object byte[] ($original.Length + $probeSuffix.Length)
     [Array]::Copy($original, 0, $combined, 0, $original.Length)
     [Array]::Copy($probeSuffix, 0, $combined, $original.Length, $probeSuffix.Length)
     [IO.File]::WriteAllBytes($resolved, $combined)
-    $timed = Invoke-BoundedCargo "$label-timed" $timedOut $timedErr 900000
+    if ($Mode -eq 'self-test') {
+      $meta.timed_expected_sha256 =
+        (Get-FileHash -LiteralPath $resolved -Algorithm SHA256).Hash
+    }
+    $safeToRestore = $false
+    $timed = Invoke-BoundedCommand "$label-timed" $timedOut $timedErr 900000
     $meta.timed = $timed
     $meta.timed_exit_code = $timed.exit_code
     $meta.elapsed_ms = $timed.elapsed_ms
     $meta.termination_confirmed = $timed.termination_confirmed
     if (-not $timed.termination_confirmed) {
-      $safeToRestore = $false
       throw "INFRASTRUCTURE: timed termination unconfirmed for $label"
     }
+    $safeToRestore = $true
     if ($timed.infrastructure) {
       throw "INFRASTRUCTURE: timed $($timed.error) for $label"
     }
     if ($timed.exit_code -ne 0) {
-      throw "CARGO_FAILURE: timed check failed for $label"
+      throw "COMMAND_FAILURE: timed command failed for $label"
+    }
+    if ($Mode -eq 'self-test') {
+      $timedObservations = @(
+        Get-Content -LiteralPath $selfTestObservationPath -ErrorAction Stop |
+          ForEach-Object { [string]$_ }
+      )
+      $expectedTimedLine = "timed|$($meta.timed_expected_sha256)"
+      if ($timedObservations.Count -ne 2 -or
+          $timedObservations[0] -cne "sync|$ExpectedSha256" -or
+          $timedObservations[1] -cne $expectedTimedLine) {
+        throw 'INFRASTRUCTURE: self-test timed command did not observe exact suffixed bytes'
+      }
+      $meta.timed_observed_sha256 = $meta.timed_expected_sha256
+      $meta.self_test_observations = @($timedObservations)
     }
   } catch {
     $meta.error = $_.Exception.Message
@@ -1669,7 +2065,7 @@ function Invoke-One([string]$label, [bool]$recorded) {
       }
     }
     if ($null -eq $meta.error) { $meta.classification = 'ok' }
-    elseif ($meta.error -like 'CARGO_FAILURE:*') {
+    elseif ($meta.error -like 'COMMAND_FAILURE:*') {
       $meta.classification = 'command_failed'
     } else {
       $meta.classification = 'infrastructure_invalid'
@@ -1678,19 +2074,25 @@ function Invoke-One([string]$label, [bool]$recorded) {
   }
   if (-not $meta.termination_confirmed -or -not $meta.restored) { return 2 }
   if ($null -ne $meta.error) {
-    if ($meta.error -like 'CARGO_FAILURE:*') { return 1 }
+    if ($meta.error -like 'COMMAND_FAILURE:*') { return 1 }
     return 2
   }
   return 0
 }
 
 try {
-  $labels = @('warmup', 'sample-1', 'sample-2', 'sample-3', 'sample-4', 'sample-5')
+  $labels = if ($Mode -eq 'self-test') {
+    @('self-test')
+  } else {
+    @('warmup', 'sample-1', 'sample-2', 'sample-3', 'sample-4', 'sample-5')
+  }
   foreach ($label in $labels) {
-    $code = Invoke-One $label ($label -ne 'warmup')
+    $recorded = $Mode -eq 'self-test' -or $label -ne 'warmup'
+    $code = Invoke-One $label $recorded
     if ($code -ne 0) {
       [ordered]@{
         stage = $Stage
+        mode = $Mode
         failed_label = $label
         exit_code = $code
         classification = if ($code -eq 1) { 'command_failed' } else { 'infrastructure_invalid' }
@@ -1701,6 +2103,41 @@ try {
         (Join-Path $AttemptRoot 'failure.json')
       exit $code
     }
+  }
+
+  if ($Mode -eq 'self-test') {
+    $meta = Get-Content -LiteralPath `
+      (Join-Path $runs 'self-test-meta.json') -Raw | ConvertFrom-Json
+    if ($meta.classification -ne 'ok' -or -not [bool]$meta.restored -or
+        -not [bool]$meta.termination_confirmed -or
+        $meta.sync_exit_code -ne 0 -or $meta.timed_exit_code -ne 0 -or
+        -not [bool]$meta.sync.job_assigned -or
+        -not [bool]$meta.timed.job_assigned -or
+        $meta.sync.job_active_processes -ne 0 -or
+        $meta.timed.job_active_processes -ne 0 -or
+        $meta.sync_expected_sha256 -cne $ExpectedSha256 -or
+        $meta.sync_observed_sha256 -cne $ExpectedSha256 -or
+        $meta.timed_expected_sha256 -cne $meta.timed_observed_sha256 -or
+        @($meta.self_test_observations).Count -ne 2 -or
+        $meta.self_test_observations[0] -cne "sync|$ExpectedSha256" -or
+        $meta.self_test_observations[1] -cne
+          "timed|$($meta.timed_expected_sha256)") {
+      throw 'Synthetic runner cycle did not prove launch, ownership, exit, and restoration.'
+    }
+    [ordered]@{
+      stage = $Stage
+      mode = $Mode
+      passed = $true
+      source_sha256 = $ExpectedSha256
+      sync_observed_sha256 = $meta.sync_observed_sha256
+      timed_observed_sha256 = $meta.timed_observed_sha256
+      probe_suffix_base64 = [Convert]::ToBase64String($probeSuffix)
+      observations = @($meta.self_test_observations)
+      source_restored = $true
+      meta_file = 'runs/self-test-meta.json'
+    } | ConvertTo-Json | Set-Content -LiteralPath `
+      (Join-Path $AttemptRoot 'summary.json')
+    exit 0
   }
 
   $samples = @(Get-ChildItem -LiteralPath $runs -Filter 'sample-*-meta.json' |
@@ -1726,10 +2163,31 @@ try {
     (Join-Path $AttemptRoot 'summary.json')
   exit 0
 } catch {
+  $outerError = $_.Exception.Message
+  $knownMeta = @()
+  $metaInspectionFailed = $false
+  try {
+    $knownMeta = @(
+      Get-ChildItem -LiteralPath $runs -Filter '*-meta.json' `
+        -ErrorAction Stop | ForEach-Object {
+          Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json
+        }
+    )
+  } catch { $metaInspectionFailed = $true }
+  $expectedMetaCount = if ($Mode -eq 'self-test') { 1 } else { 6 }
+  $outerTerminationConfirmed = -not $metaInspectionFailed -and
+    $knownMeta.Count -eq $expectedMetaCount -and
+    @($knownMeta | Where-Object {
+      -not [bool]$_.termination_confirmed
+    }).Count -eq 0
   [ordered]@{
     stage = $Stage
+    mode = $Mode
+    phase = 'runner-summary'
     classification = 'infrastructure_invalid'
-    error = $_.Exception.Message
+    error = $outerError
+    child_started = ($knownMeta.Count -ne 0)
+    termination_confirmed = $outerTerminationConfirmed
     source_restored = try {
       (Get-FileHash -LiteralPath $resolved -Algorithm SHA256).Hash -eq $ExpectedSha256
     } catch { $false }
@@ -1739,7 +2197,200 @@ try {
 }
 ```
 
-After creating it, inspect both scratch files and confirm they contain `--locked`, `source-recovery.bin`, the fixed `extractum-process-reapplication-shell` suffix, bounded waits, atomic suspended creation/Job Object assignment/resume, authoritative active-process checks, `taskkill /T /F` as supplementary cleanup evidence, confirmed termination before restoration, separate Cargo/infrastructure classifications, five sample labels, and the `300` ms stability calculation.
+Run one synthetic cycle through the actual runner before any baseline probe. It uses the already-qualified descendant Job Object helper, a deterministic `%TEMP%` fixture plus working copy, and two bounded observing `powershell.exe -EncodedCommand` launches; it does not invoke Cargo, touch `src-tauri/target`, read or mutate the measured source:
+
+```powershell
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$scratch = (Get-Content -LiteralPath `
+  (Join-Path $env:TEMP 'extractum-process-reapplication-current.txt') -Raw).Trim()
+function Stop-RunnerQualification(
+  [string]$message,
+  [int]$exitCode,
+  [string]$attempt,
+  [bool]$sourceRestored,
+  [bool]$recoveryMatches,
+  [bool]$terminationConfirmed
+) {
+  [ordered]@{
+    gate = 'runner-self-test'
+    classification = 'infrastructure_invalid'
+    error = $message
+    exit_code = $exitCode
+    attempt = $attempt
+    source_restored = $sourceRestored
+    recovery_matches = $recoveryMatches
+    termination_confirmed = $terminationConfirmed
+  } | ConvertTo-Json | Set-Content -LiteralPath `
+    (Join-Path $scratch 'runner-self-test-failure.json')
+  if (-not $sourceRestored -or -not $terminationConfirmed) {
+    throw 'Synthetic runner termination/restoration is unconfirmed; stop all further child commands.'
+  }
+  throw 'Synthetic runner qualification failed safely before measurement. Correct and review the committed plan/runner, then restart with fresh scratch; no diagnostic attempt was consumed.'
+}
+$qualificationPath = Join-Path $scratch 'runner-qualification.json'
+if (Test-Path -LiteralPath $qualificationPath) {
+  throw 'Runner is already qualified in this scratch session; do not rerun qualification.'
+}
+if ((Test-Path -LiteralPath `
+      (Join-Path $scratch 'runner-self-test-current.txt')) -or
+    (Test-Path -LiteralPath `
+      (Join-Path $scratch 'runner-self-test-failure.json'))) {
+  throw 'Prior qualification evidence must be archived after a committed harness correction before qualification is repeated.'
+}
+$jobHelperPath = Join-Path $scratch 'job-object.ps1'
+$runnerPath = Join-Path $scratch 'invoke-shell-series.ps1'
+$jobPreflightPath = Join-Path $scratch 'job-object-preflight.json'
+$jobPreflight = Get-Content -LiteralPath $jobPreflightPath -Raw |
+  ConvertFrom-Json
+$jobHelperHash = (Get-FileHash -LiteralPath $jobHelperPath -Algorithm SHA256).Hash
+$runnerHash = (Get-FileHash -LiteralPath $runnerPath -Algorithm SHA256).Hash
+if (-not [bool]$jobPreflight.passed -or
+    -not [bool]$jobPreflight.termination_confirmed -or
+    -not [bool]$jobPreflight.descendant_absent -or
+    $jobPreflight.job_helper_sha256 -cne $jobHelperHash) {
+  throw 'Job Object qualification is missing, failed, or stale; do not run the runner self-test.'
+}
+$fixtureOriginal = Join-Path $scratch 'runner-self-test-original.bin'
+$selfTestSource = Join-Path $scratch 'runner-self-test-working.rs'
+$fixtureBytes = [Text.UTF8Encoding]::new($false).GetBytes(
+  "extractum-runner-self-test-fixture`r`nexact-bytes-v1`n"
+)
+$declaredSuffix = [Text.Encoding]::UTF8.GetBytes(
+  "`n// cargo-measurement-probe: extractum-process-reapplication-shell`n"
+)
+$declaredSuffixBase64 = [Convert]::ToBase64String($declaredSuffix)
+$declaredTimedBytes = New-Object byte[] `
+  ($fixtureBytes.Length + $declaredSuffix.Length)
+[Array]::Copy($fixtureBytes, 0, $declaredTimedBytes, 0, $fixtureBytes.Length)
+[Array]::Copy(
+  $declaredSuffix, 0, $declaredTimedBytes, $fixtureBytes.Length,
+  $declaredSuffix.Length)
+$declaredHasher = [Security.Cryptography.SHA256]::Create()
+try {
+  $declaredTimedHash = -join ($declaredHasher.ComputeHash($declaredTimedBytes) |
+    ForEach-Object { $_.ToString('X2') })
+} finally { $declaredHasher.Dispose() }
+[IO.File]::WriteAllBytes($fixtureOriginal, $fixtureBytes)
+[IO.File]::WriteAllBytes($selfTestSource, $fixtureBytes)
+$selfTestHash = (Get-FileHash -LiteralPath $selfTestSource -Algorithm SHA256).Hash
+$selfTestId = 'runner-self-test-{0}-{1}' -f `
+  ([DateTimeOffset]::Now.ToString('yyyyMMddTHHmmssfff')), `
+  ([guid]::NewGuid().ToString('N'))
+$selfTestAttempt = Join-Path $scratch $selfTestId
+$selfTestAttempt | Set-Content -LiteralPath `
+  (Join-Path $scratch 'runner-self-test-current.txt')
+$savedErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try {
+  & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File `
+    $runnerPath `
+    -Stage 'runner-self-test' -Mode 'self-test' `
+    -SourcePath $selfTestSource -ExpectedSha256 $selfTestHash `
+    -AttemptRoot $selfTestAttempt `
+    -JobHelperPath $jobHelperPath `
+    1> (Join-Path $scratch 'runner-self-test.stdout.log') `
+    2> (Join-Path $scratch 'runner-self-test.stderr.log')
+  $selfTestCode = $LASTEXITCODE
+} catch {
+  $selfTestCode = -1
+} finally {
+  $ErrorActionPreference = $savedErrorActionPreference
+}
+$sourceRestored =
+  ((Get-FileHash -LiteralPath $selfTestSource -Algorithm SHA256).Hash -eq
+    $selfTestHash)
+$recoveryPath = Join-Path $selfTestAttempt 'source-recovery.bin'
+$recoveryMatches = (Test-Path -LiteralPath $recoveryPath) -and
+  ((Get-FileHash -LiteralPath $recoveryPath -Algorithm SHA256).Hash -eq
+    $selfTestHash)
+$metaFiles = @(Get-ChildItem -LiteralPath (Join-Path $selfTestAttempt 'runs') `
+  -Filter '*-meta.json' -ErrorAction SilentlyContinue)
+$meta = if ($metaFiles.Count -eq 1) {
+  Get-Content -LiteralPath $metaFiles[0].FullName -Raw | ConvertFrom-Json
+} else { $null }
+$syncResult = if ($null -ne $meta) { $meta.sync } else { $null }
+$timedResult = if ($null -ne $meta) { $meta.timed } else { $null }
+$terminationConfirmed = $null -ne $meta -and
+  [bool]$meta.termination_confirmed -and
+  ($null -eq $syncResult -or [bool]$syncResult.termination_confirmed) -and
+  ($null -eq $timedResult -or [bool]$timedResult.termination_confirmed)
+$bootstrapFailurePath = Join-Path $selfTestAttempt `
+  'runner-infrastructure-failure.json'
+if ($null -eq $meta -and (Test-Path -LiteralPath $bootstrapFailurePath)) {
+  $bootstrapFailure = Get-Content -LiteralPath $bootstrapFailurePath -Raw |
+    ConvertFrom-Json
+  $terminationConfirmed = [bool]$bootstrapFailure.termination_confirmed -and
+    -not [bool]$bootstrapFailure.child_started
+}
+if ($selfTestCode -ne 0) {
+  Stop-RunnerQualification 'Runner returned a nonzero self-test exit.' `
+    $selfTestCode $selfTestAttempt $sourceRestored $recoveryMatches `
+    $terminationConfirmed
+}
+$summaryPath = Join-Path $selfTestAttempt 'summary.json'
+if (-not (Test-Path -LiteralPath $summaryPath) -or $metaFiles.Count -ne 1) {
+  Stop-RunnerQualification 'Synthetic runner success artifacts are incomplete.' `
+    2 $selfTestAttempt $sourceRestored $recoveryMatches $terminationConfirmed
+}
+$summary = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+$unexpectedFailures = @(
+  @('failure.json', 'runner-infrastructure-failure.json') |
+    ForEach-Object { Join-Path $selfTestAttempt $_ } |
+    Where-Object { Test-Path -LiteralPath $_ }
+)
+$observations = @($meta.self_test_observations)
+if (-not [bool]$summary.passed -or $summary.mode -ne 'self-test' -or
+    $meta.mode -ne 'self-test' -or $meta.classification -ne 'ok' -or
+    -not [bool]$meta.restored -or -not $terminationConfirmed -or
+    $meta.sync_exit_code -ne 0 -or $meta.timed_exit_code -ne 0 -or
+    -not [bool]$meta.sync.job_assigned -or
+    -not [bool]$meta.timed.job_assigned -or
+    $meta.sync.job_active_processes -ne 0 -or
+    $meta.timed.job_active_processes -ne 0 -or
+    $meta.sync_expected_sha256 -cne $selfTestHash -or
+    $meta.sync_observed_sha256 -cne $selfTestHash -or
+    $summary.probe_suffix_base64 -cne $declaredSuffixBase64 -or
+    $meta.timed_expected_sha256 -cne $declaredTimedHash -or
+    $meta.timed_observed_sha256 -cne $declaredTimedHash -or
+    $observations.Count -ne 2 -or
+    $observations[0] -cne "sync|$selfTestHash" -or
+    $observations[1] -cne "timed|$declaredTimedHash" -or
+    -not $sourceRestored -or -not $recoveryMatches -or
+    $unexpectedFailures.Count -ne 0) {
+  Stop-RunnerQualification `
+    'Synthetic runner artifacts do not prove a clean mutation/restoration cycle.' `
+    2 $selfTestAttempt $sourceRestored $recoveryMatches $terminationConfirmed
+}
+[ordered]@{
+  passed = $true
+  qualified_at = [DateTimeOffset]::Now.ToString('o')
+  job_helper_sha256 = $jobHelperHash
+  runner_sha256 = $runnerHash
+  job_preflight_sha256 =
+    (Get-FileHash -LiteralPath $jobPreflightPath -Algorithm SHA256).Hash
+  self_test_attempt = $selfTestAttempt
+  self_test_summary_sha256 =
+    (Get-FileHash -LiteralPath $summaryPath -Algorithm SHA256).Hash
+  self_test_meta_sha256 =
+    (Get-FileHash -LiteralPath $metaFiles[0].FullName -Algorithm SHA256).Hash
+  fixture_sha256 = $selfTestHash
+  declared_probe_suffix_base64 = $declaredSuffixBase64
+  declared_timed_sha256 = $declaredTimedHash
+  sync_observed_sha256 = $meta.sync_observed_sha256
+  timed_observed_sha256 = $meta.timed_observed_sha256
+  observations = @($observations)
+  source_restored = $sourceRestored
+  recovery_matches = $recoveryMatches
+  termination_confirmed = $terminationConfirmed
+} | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $qualificationPath
+```
+
+Expected: the earlier descendant preflight proves forced tree termination with no live Job Object processes and binds that proof to the helper hash. The runner self-test proves that its sync child saw the exact fixture, its timed child saw the exact fixture plus the literal fixed suffix, and the working copy and recovery bytes ended exact. The receipt binds both qualified scratch programs and all qualification evidence. All of this must pass before Step 5. A qualification failure is not a baseline sample and does not consume the zero-retry session.
+
+If qualification fails safely, preserve the entire failed scratch directory, correct and review the committed plan/runner, and restart Task 1 only after that correction creates a new committed implementation base, in a fresh workflow-owned worktree and scratch session. The old scratch and its consumed environment-preflight claim remain evidence; neither is deleted, overwritten, or reused. No baseline claim exists yet, so this does not retry the zero-retry baseline. Missing correction evidence, an unchanged implementation base, or unconfirmed termination/restoration forbids a restart.
+
+After creating and qualifying it, inspect both scratch files and confirm they contain `--locked`, `source-recovery.bin`, the fixed `extractum-process-reapplication-shell` suffix, bounded waits, atomic suspended creation/Job Object assignment/resume, authoritative active-process checks, `taskkill /T /F` as supplementary cleanup evidence, confirmed termination before restoration, separate command/infrastructure classifications, explicit `series`/`self-test` modes, five measured sample labels, and the `300` ms stability calculation.
 
 - [ ] **Step 5: Run the single predeclared baseline stability series**
 
@@ -1750,59 +2401,296 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $scratch = (Get-Content -LiteralPath `
   (Join-Path $env:TEMP 'extractum-process-reapplication-current.txt') -Raw).Trim()
-& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File `
-  (Join-Path $scratch 'assert-quiet-window.ps1') -ArtifactPath `
-  (Join-Path $scratch 'quiet-baseline.json')
-$quietCode = $LASTEXITCODE
 $environment = Get-Content -LiteralPath (Join-Path $scratch 'environment.json') `
   -Raw | ConvertFrom-Json
-$jobPreflightPath = Join-Path $scratch 'job-object-preflight.json'
-$jobPreflight = if (Test-Path -LiteralPath $jobPreflightPath) {
-  Get-Content -LiteralPath $jobPreflightPath -Raw | ConvertFrom-Json
-} else { $null }
-if ($null -ne $jobPreflight -and
-    -not [bool]$jobPreflight.termination_confirmed) {
-  throw 'Job Object preflight termination became unconfirmed; stop all child commands.'
+if (-not [string]::IsNullOrWhiteSpace($env:CARGO_TARGET_DIR)) {
+  throw 'CARGO_TARGET_DIR changed after environment capture.'
 }
-$diagnosticInvalidReason = if (-not [bool]$environment.initial_quiet_valid) {
-  'initial quiet-window preflight failed; zero-retry series not started'
-} elseif ($null -eq $jobPreflight -or -not [bool]$jobPreflight.passed) {
-  'Job Object preflight failed safely; zero-retry series not started'
-} elseif ($quietCode -ne 0) {
-  'baseline quiet-window preflight failed; zero-retry series not started'
+$baselineRepoRaw = @(git rev-parse --show-toplevel)
+$baselineRepoCode = $LASTEXITCODE
+$baselineHeadRaw = @(git rev-parse HEAD)
+$baselineHeadCode = $LASTEXITCODE
+$baselineStatus = @(git status --porcelain=v1)
+$baselineStatusCode = $LASTEXITCODE
+if ($baselineRepoCode -ne 0 -or $baselineHeadCode -ne 0 -or
+    $baselineStatusCode -ne 0 -or $baselineRepoRaw.Count -ne 1 -or
+    $baselineHeadRaw.Count -ne 1) {
+  throw 'Could not bind the baseline claim to the current worktree.'
+}
+$baselineRepo = [IO.Path]::GetFullPath(
+  ([string]$baselineRepoRaw[0]).Trim()).TrimEnd('\')
+$baselineTarget = [IO.Path]::GetFullPath(
+  (Join-Path $baselineRepo 'src-tauri/target')).TrimEnd('\')
+$baselineHead = ([string]$baselineHeadRaw[0]).Trim()
+if ($baselineRepo -ne [string]$environment.repository -or
+    $baselineTarget -ne [string]$environment.target -or
+    $baselineHead -ne [string]$environment.identity_commit -or
+    $baselineStatus.Count -ne 0) {
+  throw 'Baseline claim requires the captured clean identity worktree and target.'
+}
+$qualificationPath = Join-Path $scratch 'runner-qualification.json'
+$qualification = if (Test-Path -LiteralPath $qualificationPath) {
+  Get-Content -LiteralPath $qualificationPath -Raw | ConvertFrom-Json
 } else { $null }
-if ($null -ne $diagnosticInvalidReason) { $quietCode = 1 }
+if ($null -eq $qualification -or -not [bool]$qualification.passed -or
+    -not [bool]$qualification.termination_confirmed -or
+    -not [bool]$qualification.source_restored -or
+    -not [bool]$qualification.recovery_matches) {
+  throw 'Runner qualification is missing or failed; stop before claiming the diagnostic session.'
+}
+$jobHelperPath = Join-Path $scratch 'job-object.ps1'
+$runnerPath = Join-Path $scratch 'invoke-shell-series.ps1'
+$jobPreflightPath = Join-Path $scratch 'job-object-preflight.json'
+$qualifiedAttempt = [string]$qualification.self_test_attempt
+if ([string]::IsNullOrWhiteSpace($qualifiedAttempt)) {
+  throw 'Runner qualification has no self-test attempt; stop before claiming the diagnostic session.'
+}
+$qualifiedSummary = Join-Path $qualifiedAttempt 'summary.json'
+$qualifiedMeta = Join-Path $qualifiedAttempt 'runs/self-test-meta.json'
+$currentSelfTest = Join-Path $scratch 'runner-self-test-current.txt'
+$qualificationCurrent = if (Test-Path -LiteralPath $currentSelfTest) {
+  (Get-Content -LiteralPath $currentSelfTest -Raw).Trim()
+} else { '' }
+if ($qualifiedAttempt -ne $qualificationCurrent -or
+    -not (Test-Path -LiteralPath $jobHelperPath) -or
+    -not (Test-Path -LiteralPath $runnerPath) -or
+    -not (Test-Path -LiteralPath $jobPreflightPath) -or
+    -not (Test-Path -LiteralPath $qualifiedSummary) -or
+    -not (Test-Path -LiteralPath $qualifiedMeta) -or
+    (Get-FileHash -LiteralPath $jobHelperPath -Algorithm SHA256).Hash -cne
+      $qualification.job_helper_sha256 -or
+    (Get-FileHash -LiteralPath $runnerPath -Algorithm SHA256).Hash -cne
+      $qualification.runner_sha256 -or
+    (Get-FileHash -LiteralPath $jobPreflightPath -Algorithm SHA256).Hash -cne
+      $qualification.job_preflight_sha256 -or
+    (Get-FileHash -LiteralPath $qualifiedSummary -Algorithm SHA256).Hash -cne
+      $qualification.self_test_summary_sha256 -or
+    (Get-FileHash -LiteralPath $qualifiedMeta -Algorithm SHA256).Hash -cne
+      $qualification.self_test_meta_sha256 -or
+    (Test-Path -LiteralPath `
+      (Join-Path $scratch 'runner-self-test-failure.json'))) {
+  throw 'Runner qualification is missing, failed, or stale; stop before claiming the diagnostic session.'
+}
 $sourcePath = 'src-tauri/src/lib.rs'
 $sourceHash = (Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash
-[ordered]@{ path = $sourcePath; sha256 = $sourceHash } |
-  ConvertTo-Json | Set-Content -LiteralPath `
-  (Join-Path $scratch 'baseline-source.json')
 $attemptId = 'baseline-{0}-{1}' -f `
   ([DateTimeOffset]::Now.ToString('yyyyMMddTHHmmssfff')), `
   ([guid]::NewGuid().ToString('N'))
 $attempt = Join-Path $scratch "attempts/$attemptId"
+$gitCommonRaw = @(git rev-parse --git-common-dir)
+if ($LASTEXITCODE -ne 0 -or $gitCommonRaw.Count -ne 1) {
+  throw 'Could not resolve the shared Git directory before diagnostic claim.'
+}
+$gitCommon = (Resolve-Path -LiteralPath ([string]$gitCommonRaw[0])).Path
+$claimMaterial = '{0}|{1}' -f $gitCommon.ToLowerInvariant(), `
+  $environment.implementation_base
+$claimHasher = [Security.Cryptography.SHA256]::Create()
+try {
+  $claimKey = -join ($claimHasher.ComputeHash(
+    [Text.Encoding]::UTF8.GetBytes($claimMaterial)) | ForEach-Object {
+      $_.ToString('x2')
+    })
+} finally { $claimHasher.Dispose() }
+$claimRoot = Join-Path $env:TEMP `
+  "extractum-process-reapplication-claims/$claimKey"
+$persistedClaimRoot = (Get-Content -LiteralPath `
+  (Join-Path $scratch 'diagnostic-claim-root.txt') -Raw).Trim()
+if ($persistedClaimRoot -ne $claimRoot -or
+    [string]$environment.diagnostic_claim_root -ne $claimRoot) {
+  throw 'Persisted diagnostic claim root does not match the recomputed stable root.'
+}
+$environmentClaimPath = Join-Path $claimRoot 'environment-preflight.json'
+if (-not (Test-Path -LiteralPath $environmentClaimPath)) {
+  throw 'Stable environment preflight claim is missing; never recreate it.'
+}
+$environmentClaim = Get-Content -LiteralPath $environmentClaimPath -Raw |
+  ConvertFrom-Json
+$environmentClaimHash =
+  (Get-FileHash -LiteralPath $environmentClaimPath -Algorithm SHA256).Hash
+if ($environmentClaim.stage -ne 'environment-preflight' -or
+    $environmentClaim.scratch -ne $scratch -or
+    $environmentClaim.repository -ne $baselineRepo -or
+    $environmentClaim.target -ne $baselineTarget -or
+    $environmentClaim.identity_commit -ne $environment.identity_commit -or
+    $environmentClaim.implementation_base -ne
+      $environment.implementation_base -or
+    $environmentClaim.quiet_artifact -ne
+      (Join-Path $scratch 'quiet-initial.json') -or
+    $environmentClaimHash -cne
+      $environment.environment_preflight_claim_sha256) {
+  throw 'Environment preflight claim is missing, mismatched, or stale.'
+}
+$initialQuietPath = Join-Path $scratch 'quiet-initial.json'
+$initialQuiet = Get-Content -LiteralPath $initialQuietPath -Raw |
+  ConvertFrom-Json
+$derivedInitialQuietValid = [bool]$initialQuiet.cim_available -and
+  [int]$initialQuiet.blocking_count -eq 0
+if ([bool]$environment.initial_quiet_valid -ne $derivedInitialQuietValid) {
+  throw 'Environment initial quiet-window result is inconsistent with its artifact.'
+}
+$environmentHash = (Get-FileHash -LiteralPath `
+  (Join-Path $scratch 'environment.json') -Algorithm SHA256).Hash
+$initialQuietHash =
+  (Get-FileHash -LiteralPath $initialQuietPath -Algorithm SHA256).Hash
+$baselineClaimPath = Join-Path $claimRoot 'baseline.json'
+if (Test-Path -LiteralPath $baselineClaimPath) {
+  throw "Zero-retry baseline is already claimed at $baselineClaimPath; never launch quiet-window or Cargo again."
+}
+$claimPayload = [ordered]@{
+  stage = 'baseline'
+  claimed_at = [DateTimeOffset]::Now.ToString('o')
+  scratch = $scratch
+  attempt = $attempt
+  repository = $baselineRepo
+  target = $baselineTarget
+  head_commit = $baselineHead
+  implementation_base = $environment.implementation_base
+  identity_commit = $environment.identity_commit
+  environment_preflight_claim_sha256 = $environmentClaimHash
+  environment_sha256 = $environmentHash
+  initial_quiet_sha256 = $initialQuietHash
+  qualification_sha256 =
+    (Get-FileHash -LiteralPath $qualificationPath -Algorithm SHA256).Hash
+  runner_sha256 = $qualification.runner_sha256
+  source_sha256 = $sourceHash
+} | ConvertTo-Json
+$claimBytes = [Text.UTF8Encoding]::new($false).GetBytes($claimPayload)
+$baselineClaimTempPath = '{0}.{1}.tmp' -f `
+  $baselineClaimPath, ([guid]::NewGuid().ToString('N'))
+$claimStream = $null
+try {
+  $claimStream = [IO.File]::Open(
+    $baselineClaimTempPath,
+    [IO.FileMode]::CreateNew,
+    [IO.FileAccess]::Write,
+    [IO.FileShare]::None)
+  $claimStream.Write($claimBytes, 0, $claimBytes.Length)
+  $claimStream.Flush($true)
+} catch [IO.IOException] {
+  throw "Could not atomically claim the zero-retry baseline: $($_.Exception.Message)"
+} finally {
+  if ($null -ne $claimStream) { $claimStream.Dispose() }
+}
+try {
+  [IO.File]::Move($baselineClaimTempPath, $baselineClaimPath)
+} catch [IO.IOException] {
+  throw "Could not atomically publish the zero-retry baseline claim: $($_.Exception.Message)"
+}
+[ordered]@{ path = $sourcePath; sha256 = $sourceHash } |
+  ConvertTo-Json | Set-Content -LiteralPath `
+  (Join-Path $scratch 'baseline-source.json')
+$attempt | Set-Content -LiteralPath (Join-Path $scratch 'baseline-current.txt')
+$diagnosticInvalidReason = if (-not [bool]$environment.initial_quiet_valid) {
+  'initial quiet-window preflight failed after the one-shot session claim'
+} else {
+  $savedErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File `
+      (Join-Path $scratch 'assert-quiet-window.ps1') -ArtifactPath `
+      (Join-Path $scratch 'quiet-baseline.json') `
+      1> (Join-Path $scratch 'quiet-baseline.stdout.log') `
+      2> (Join-Path $scratch 'quiet-baseline.stderr.log')
+    $quietCode = $LASTEXITCODE
+  } catch {
+    $quietCode = -1
+  } finally {
+    $ErrorActionPreference = $savedErrorActionPreference
+  }
+  if ($quietCode -ne 0) {
+    'baseline quiet-window preflight failed after the one-shot session claim'
+  } else { $null }
+}
+$quietCode = if ($null -ne $diagnosticInvalidReason) { 1 } else { 0 }
 if ($quietCode -ne 0) {
   New-Item -ItemType Directory -Path $attempt -Force | Out-Null
   [ordered]@{
     stage = 'baseline'
     classification = 'infrastructure_invalid'
     error = $diagnosticInvalidReason
+    child_started = $false
+    termination_confirmed = $true
     source_restored = $true
   } | ConvertTo-Json | Set-Content -LiteralPath `
     (Join-Path $attempt 'runner-infrastructure-failure.json')
   $probeCode = 2
 } else {
-  & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File `
-    (Join-Path $scratch 'invoke-shell-series.ps1') -Stage 'baseline' `
-    -SourcePath $sourcePath -ExpectedSha256 $sourceHash -AttemptRoot $attempt `
-    -JobHelperPath (Join-Path $scratch 'job-object.ps1')
-  $probeCode = $LASTEXITCODE
+  $savedErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  $probeStartError = $null
+  try {
+    & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File `
+      (Join-Path $scratch 'invoke-shell-series.ps1') -Stage 'baseline' `
+      -Mode 'series' -SourcePath $sourcePath -ExpectedSha256 $sourceHash `
+      -AttemptRoot $attempt `
+      -JobHelperPath (Join-Path $scratch 'job-object.ps1') `
+      1> (Join-Path $scratch 'baseline-runner.stdout.log') `
+      2> (Join-Path $scratch 'baseline-runner.stderr.log')
+    $probeCode = $LASTEXITCODE
+  } catch {
+    $probeCode = 2
+    $probeStartError = $_.Exception.Message
+  } finally {
+    $ErrorActionPreference = $savedErrorActionPreference
+  }
+  if ($null -ne $probeStartError) {
+    New-Item -ItemType Directory -Path $attempt -Force | Out-Null
+    [ordered]@{
+      stage = 'baseline'
+      phase = 'runner-process-start'
+      classification = 'infrastructure_invalid'
+      error = $probeStartError
+      child_started = $false
+      termination_confirmed = $true
+      source_restored = $true
+    } | ConvertTo-Json | Set-Content -LiteralPath `
+      (Join-Path $attempt 'runner-infrastructure-failure.json')
+  }
 }
-$attempt | Set-Content -LiteralPath (Join-Path $scratch 'baseline-current.txt')
 if ((Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash -ne $sourceHash) {
   throw 'Baseline probe bytes were not restored; stop all child commands.'
 }
-if ($probeCode -eq 1) { throw 'Confirmed baseline Cargo failure.' }
+if ($probeCode -eq 1) {
+  $commandFailurePath = Join-Path $attempt 'failure.json'
+  $commandFailure = if (Test-Path -LiteralPath $commandFailurePath) {
+    Get-Content -LiteralPath $commandFailurePath -Raw | ConvertFrom-Json
+  } else { $null }
+  $failedMetaPath = if ($null -ne $commandFailure) {
+    Join-Path $attempt "runs/$($commandFailure.failed_label)-meta.json"
+  } else { $null }
+  $failedMeta = if ($null -ne $failedMetaPath -and
+      (Test-Path -LiteralPath $failedMetaPath)) {
+    Get-Content -LiteralPath $failedMetaPath -Raw | ConvertFrom-Json
+  } else { $null }
+  $commandFailureProven = $null -ne $commandFailure -and
+    $commandFailure.exit_code -eq 1 -and
+    $commandFailure.stage -eq 'baseline' -and
+    $commandFailure.classification -eq 'command_failed' -and
+    [bool]$commandFailure.source_restored -and
+    $null -ne $failedMeta -and $failedMeta.mode -eq 'series' -and
+    $failedMeta.stage -eq 'baseline' -and
+    $failedMeta.label -eq $commandFailure.failed_label -and
+    $failedMeta.classification -eq 'command_failed' -and
+    $failedMeta.error -like 'COMMAND_FAILURE:*' -and
+    [bool]$failedMeta.restored -and [bool]$failedMeta.termination_confirmed
+  if (-not $commandFailureProven) {
+    [ordered]@{
+      stage = 'baseline'
+      phase = 'command-failure-routing'
+      classification = 'infrastructure_invalid'
+      error = 'Exit 1 lacked coherent command-failure/restoration/termination evidence.'
+      child_started = ($null -ne $failedMeta)
+      termination_confirmed = if ($null -ne $failedMeta) {
+        [bool]$failedMeta.termination_confirmed
+      } else { $false }
+      source_restored = $true
+    } | ConvertTo-Json | Set-Content -LiteralPath `
+      (Join-Path $attempt 'runner-infrastructure-failure.json')
+    $probeCode = 2
+  } else {
+    throw 'Confirmed baseline Cargo failure.'
+  }
+}
 if ($probeCode -eq 2) {
   $runMeta = @(Get-ChildItem -LiteralPath (Join-Path $attempt 'runs') `
     -Filter '*-meta.json' -ErrorAction SilentlyContinue | ForEach-Object {
@@ -1819,12 +2707,19 @@ if ($probeCode -eq 2) {
         [int64]$meta.elapsed_ms
       }
     })
-  $failurePath = if (Test-Path -LiteralPath (Join-Path $attempt 'failure.json')) {
-    Join-Path $attempt 'failure.json'
-  } else {
+  $failurePath = if (Test-Path -LiteralPath `
+      (Join-Path $attempt 'runner-infrastructure-failure.json')) {
     Join-Path $attempt 'runner-infrastructure-failure.json'
+  } else {
+    Join-Path $attempt 'failure.json'
   }
   $failure = Get-Content -LiteralPath $failurePath -Raw | ConvertFrom-Json
+  if ((Split-Path -Leaf $failurePath) -eq
+      'runner-infrastructure-failure.json' -and
+      ($null -eq $failure.PSObject.Properties['termination_confirmed'] -or
+        -not [bool]$failure.termination_confirmed)) {
+    throw 'Baseline infrastructure routing cannot confirm child termination; stop all further child commands.'
+  }
   [ordered]@{
     stage = 'baseline'
     samples_ms = @($partialSamples)
@@ -1839,12 +2734,135 @@ if ($probeCode -eq 2) {
     (Join-Path $attempt 'summary.json')
 }
 if ($probeCode -notin @(0, 2)) { throw "Unexpected baseline probe exit $probeCode" }
-$summary = Get-Content -LiteralPath (Join-Path $attempt 'summary.json') -Raw |
+$summaryPath = Join-Path $attempt 'summary.json'
+$summary = Get-Content -LiteralPath $summaryPath -Raw |
   ConvertFrom-Json
+function Test-CompletedSeriesSummary(
+  [object]$value,
+  [string]$expectedStage,
+  [string]$expectedSourceHash
+) {
+  $samples = @($value.samples_ms)
+  if ($value.stage -ne $expectedStage -or
+      $value.source_sha256 -cne $expectedSourceHash -or
+      [int]$value.required_stable_count -ne 4 -or
+      [int]$value.max_absolute_deviation_ms -ne 300 -or
+      @($samples | Where-Object { $null -eq $_ }).Count -ne 0) {
+    return $false
+  }
+  if ($null -ne $value.median_ms -and $null -ne $value.stable_count) {
+    if ($samples.Count -ne 5) { return $false }
+    $sorted = @($samples | ForEach-Object { [int64]$_ } | Sort-Object)
+    $median = [int64]$sorted[2]
+    $stableCount = @($samples | Where-Object {
+      [Math]::Abs([int64]$_ - $median) -le 300
+    }).Count
+    return [int64]$value.median_ms -eq $median -and
+      [int]$value.stable_count -eq $stableCount -and
+      [bool]$value.series_valid -eq ($stableCount -ge 4)
+  }
+  return -not [bool]$value.series_valid -and
+    $null -eq $value.median_ms -and $null -eq $value.stable_count -and
+    $samples.Count -le 5 -and
+    $null -ne $value.PSObject.Properties['invalid_reason'] -and
+    -not [string]::IsNullOrWhiteSpace([string]$value.invalid_reason)
+}
+if (-not (Test-CompletedSeriesSummary $summary 'baseline' $sourceHash)) {
+  throw 'Baseline summary is incomplete or structurally incoherent.'
+}
+$baselineClaimHash =
+  (Get-FileHash -LiteralPath $baselineClaimPath -Algorithm SHA256).Hash
+$baselineCompletionPath = Join-Path $attempt 'baseline-completion.json'
+$baselineCompletionPayload = [ordered]@{
+  stage = 'baseline-completion'
+  completed_at = [DateTimeOffset]::Now.ToString('o')
+  scratch = $scratch
+  attempt = $attempt
+  repository = $baselineRepo
+  target = $baselineTarget
+  head_commit = $baselineHead
+  baseline_claim_sha256 = $baselineClaimHash
+  summary_sha256 =
+    (Get-FileHash -LiteralPath $summaryPath -Algorithm SHA256).Hash
+  qualification_sha256 =
+    (Get-FileHash -LiteralPath $qualificationPath -Algorithm SHA256).Hash
+  runner_sha256 = $qualification.runner_sha256
+  source_sha256 = $sourceHash
+  source_restored = $true
+  termination_confirmed = $true
+  probe_exit_code = $probeCode
+} | ConvertTo-Json
+$baselineCompletionBytes =
+  [Text.UTF8Encoding]::new($false).GetBytes($baselineCompletionPayload)
+$baselineCompletionTempPath = '{0}.{1}.tmp' -f `
+  $baselineCompletionPath, ([guid]::NewGuid().ToString('N'))
+$baselineCompletionStream = $null
+$baselineCompletionError = $null
+try {
+  $baselineCompletionStream = [IO.File]::Open(
+    $baselineCompletionTempPath,
+    [IO.FileMode]::CreateNew,
+    [IO.FileAccess]::Write,
+    [IO.FileShare]::None)
+  $baselineCompletionStream.Write(
+    $baselineCompletionBytes, 0, $baselineCompletionBytes.Length)
+  $baselineCompletionStream.Flush($true)
+} catch {
+  $baselineCompletionError = $_.Exception.Message
+} finally {
+  if ($null -ne $baselineCompletionStream) {
+    $baselineCompletionStream.Dispose()
+  }
+}
+if ($null -eq $baselineCompletionError) {
+  try {
+    [IO.File]::Move($baselineCompletionTempPath, $baselineCompletionPath)
+  } catch {
+    $baselineCompletionError = $_.Exception.Message
+  }
+}
+if ($null -ne $baselineCompletionError) {
+  $artifactFailurePath = Join-Path $claimRoot `
+    'diagnostic-artifact-failure.json'
+  $artifactFailurePayload = [ordered]@{
+    stage = 'diagnostic-artifact-failure'
+    failure_stage = 'baseline-completion'
+    recorded_at = [DateTimeOffset]::Now.ToString('o')
+    scratch = $scratch
+    attempt = $attempt
+    error = $baselineCompletionError
+    baseline_claim_sha256 = $baselineClaimHash
+    summary_sha256 =
+      (Get-FileHash -LiteralPath $summaryPath -Algorithm SHA256).Hash
+    source_sha256 = $sourceHash
+    source_restored = $true
+    termination_confirmed = $true
+  } | ConvertTo-Json
+  $artifactFailureBytes =
+    [Text.UTF8Encoding]::new($false).GetBytes($artifactFailurePayload)
+  $artifactFailureTempPath = '{0}.{1}.tmp' -f `
+    $artifactFailurePath, ([guid]::NewGuid().ToString('N'))
+  $artifactFailureStream = $null
+  try {
+    $artifactFailureStream = [IO.File]::Open(
+      $artifactFailureTempPath,
+      [IO.FileMode]::CreateNew,
+      [IO.FileAccess]::Write,
+      [IO.FileShare]::None)
+    $artifactFailureStream.Write(
+      $artifactFailureBytes, 0, $artifactFailureBytes.Length)
+    $artifactFailureStream.Flush($true)
+  } finally {
+    if ($null -ne $artifactFailureStream) {
+      $artifactFailureStream.Dispose()
+    }
+  }
+  [IO.File]::Move($artifactFailureTempPath, $artifactFailurePath)
+}
 $summary | Format-List
 ```
 
-Expected: one discarded warm-up, five recorded samples, restored source bytes, median, and stability count. Do not repeat either a completed stability-invalid series or an infrastructure-invalid series. Exit `2` writes a synthetic invalid summary and continues only after every started child is confirmed terminated and the source hash is exact; otherwise stop all further child commands.
+Expected: a current hash-bound qualification receipt and the matching stable environment-preflight claim are required before the stable baseline claim. The baseline claim binds the environment and initial quiet-window artifacts and is durably created before consuming that recorded result or launching the baseline quiet-window or any Cargo child. One warm-up is discarded, five samples are recorded, source bytes are restored, and median/stability are written. An existing claim forbids every later baseline quiet/Cargo launch. Exit `2` writes a synthetic invalid summary only after every started child is confirmed terminated and the source hash is exact; an unproven exit `1` is infrastructure and fail-stops when termination is not proven.
 
 - [ ] **Step 6: Checkpoint the unchanged baseline**
 
@@ -1853,6 +2871,160 @@ Run:
 ```powershell
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$scratch = (Get-Content -LiteralPath `
+  (Join-Path $env:TEMP 'extractum-process-reapplication-current.txt') -Raw).Trim()
+$environment = Get-Content -LiteralPath (Join-Path $scratch 'environment.json') `
+  -Raw | ConvertFrom-Json
+$claimRoot = [string]$environment.diagnostic_claim_root
+$baselineClaimPath = Join-Path $claimRoot 'baseline.json'
+$baselineClaim = Get-Content -LiteralPath $baselineClaimPath -Raw |
+  ConvertFrom-Json
+$baselineCompletionPath = Join-Path `
+  ([string]$baselineClaim.attempt) 'baseline-completion.json'
+$artifactFailurePath = Join-Path $claimRoot `
+  'diagnostic-artifact-failure.json'
+$environmentClaimPath = Join-Path $claimRoot 'environment-preflight.json'
+$qualificationPath = Join-Path $scratch 'runner-qualification.json'
+$runnerPath = Join-Path $scratch 'invoke-shell-series.ps1'
+$initialQuietPath = Join-Path $scratch 'quiet-initial.json'
+$environmentClaim = Get-Content -LiteralPath $environmentClaimPath -Raw |
+  ConvertFrom-Json
+$qualification = Get-Content -LiteralPath $qualificationPath -Raw |
+  ConvertFrom-Json
+$environmentClaimHash =
+  (Get-FileHash -LiteralPath $environmentClaimPath -Algorithm SHA256).Hash
+$qualificationHash =
+  (Get-FileHash -LiteralPath $qualificationPath -Algorithm SHA256).Hash
+$runnerHash = (Get-FileHash -LiteralPath $runnerPath -Algorithm SHA256).Hash
+function Test-RecoverySeriesSummary([object]$value, [string]$sourceHash) {
+  $samples = @($value.samples_ms)
+  if ($value.stage -ne 'baseline' -or $value.source_sha256 -cne $sourceHash -or
+      [int]$value.required_stable_count -ne 4 -or
+      [int]$value.max_absolute_deviation_ms -ne 300) { return $false }
+  if ($null -ne $value.median_ms -and $null -ne $value.stable_count) {
+    if ($samples.Count -ne 5) { return $false }
+    $sorted = @($samples | ForEach-Object { [int64]$_ } | Sort-Object)
+    $median = [int64]$sorted[2]
+    $stable = @($samples | Where-Object {
+      [Math]::Abs([int64]$_ - $median) -le 300
+    }).Count
+    return [int64]$value.median_ms -eq $median -and
+      [int]$value.stable_count -eq $stable -and
+      [bool]$value.series_valid -eq ($stable -ge 4)
+  }
+  return -not [bool]$value.series_valid -and
+    $null -eq $value.median_ms -and $null -eq $value.stable_count -and
+    $samples.Count -le 5 -and
+    -not [string]::IsNullOrWhiteSpace([string]$value.invalid_reason)
+}
+$baselineCompletionValid = $false
+if (Test-Path -LiteralPath $baselineCompletionPath) {
+  try {
+    $baselineCompletion = Get-Content -LiteralPath $baselineCompletionPath -Raw |
+      ConvertFrom-Json
+    $baselineSummaryPath = Join-Path `
+      ([string]$baselineClaim.attempt) 'summary.json'
+    $baselineSummary = Get-Content -LiteralPath $baselineSummaryPath -Raw |
+      ConvertFrom-Json
+    $baselineCompletionValid =
+      [bool]$qualification.passed -and
+      [bool]$qualification.termination_confirmed -and
+      $qualification.runner_sha256 -ceq $runnerHash -and
+      $environmentClaim.stage -eq 'environment-preflight' -and
+      $environmentClaim.scratch -eq $scratch -and
+      $environmentClaim.repository -eq $environment.repository -and
+      $environmentClaim.target -eq $environment.target -and
+      $environmentClaim.identity_commit -eq $environment.identity_commit -and
+      $environmentClaim.implementation_base -eq $environment.implementation_base -and
+      $environmentClaimHash -ceq $environment.environment_preflight_claim_sha256 -and
+      $baselineClaim.stage -eq 'baseline' -and
+      $baselineClaim.scratch -eq $scratch -and
+      $baselineClaim.repository -eq $environment.repository -and
+      $baselineClaim.target -eq $environment.target -and
+      $baselineClaim.head_commit -eq $environment.identity_commit -and
+      $baselineClaim.implementation_base -eq $environment.implementation_base -and
+      $baselineClaim.identity_commit -eq $environment.identity_commit -and
+      $baselineClaim.environment_preflight_claim_sha256 -ceq $environmentClaimHash -and
+      $baselineClaim.environment_sha256 -ceq
+        (Get-FileHash -LiteralPath (Join-Path $scratch 'environment.json') `
+          -Algorithm SHA256).Hash -and
+      $baselineClaim.initial_quiet_sha256 -ceq
+        (Get-FileHash -LiteralPath $initialQuietPath -Algorithm SHA256).Hash -and
+      $baselineClaim.qualification_sha256 -ceq $qualificationHash -and
+      $baselineClaim.runner_sha256 -ceq $runnerHash -and
+      (Test-RecoverySeriesSummary $baselineSummary $baselineClaim.source_sha256) -and
+      $baselineCompletion.stage -eq 'baseline-completion' -and
+      $baselineCompletion.scratch -eq $scratch -and
+      $baselineCompletion.attempt -eq $baselineClaim.attempt -and
+      $baselineCompletion.repository -eq $environment.repository -and
+      $baselineCompletion.target -eq $environment.target -and
+      $baselineCompletion.head_commit -eq $environment.identity_commit -and
+      $baselineCompletion.baseline_claim_sha256 -ceq
+        (Get-FileHash -LiteralPath $baselineClaimPath -Algorithm SHA256).Hash -and
+      $baselineCompletion.summary_sha256 -ceq
+        (Get-FileHash -LiteralPath $baselineSummaryPath -Algorithm SHA256).Hash -and
+      $baselineCompletion.qualification_sha256 -ceq $qualificationHash -and
+      $baselineCompletion.runner_sha256 -ceq $runnerHash -and
+      $baselineCompletion.source_sha256 -ceq $baselineClaim.source_sha256 -and
+      [bool]$baselineCompletion.source_restored -and
+      [bool]$baselineCompletion.termination_confirmed -and
+      [int]$baselineCompletion.probe_exit_code -in @(0, 2)
+  } catch { $baselineCompletionValid = $false }
+}
+if (-not $baselineCompletionValid -and
+    -not (Test-Path -LiteralPath $artifactFailurePath)) {
+  if ((Get-FileHash -LiteralPath 'src-tauri/src/lib.rs' -Algorithm SHA256).Hash `
+      -cne $baselineClaim.source_sha256) {
+    throw 'Interrupted baseline cannot prove exact source restoration.'
+  }
+  $allProcesses = @(Get-CimInstance Win32_Process -ErrorAction Stop)
+  $liveRunner = @($allProcesses | Where-Object {
+    $_.ProcessId -ne $PID -and
+    [string]$_.CommandLine -match [regex]::Escape($runnerPath)
+  })
+  $blockingBuild = @($allProcesses | Where-Object {
+    $name = [string]$_.Name
+    $command = [string]$_.CommandLine
+    $name -match '^(cargo.*|rustc|rust-analyzer|extractum|tauri|vite)\.exe$' -or
+      ($name -match '^(node|npm|npx)(\.exe|\.cmd)?$' -and
+        $command -match '(?i)(vite|tauri|svelte-kit|cargo)')
+  })
+  if ($blockingBuild.Count -ne 0 -or $liveRunner.Count -ne 0) {
+    throw 'Interrupted baseline termination is not independently confirmed.'
+  }
+  $summaryPath = Join-Path ([string]$baselineClaim.attempt) 'summary.json'
+  $artifactFailurePayload = [ordered]@{
+    stage = 'diagnostic-artifact-failure'
+    failure_stage = 'baseline-completion-missing-or-invalid'
+    recorded_at = [DateTimeOffset]::Now.ToString('o')
+    scratch = $scratch
+    attempt = $baselineClaim.attempt
+    error = 'Atomic baseline completion receipt is missing, malformed, or mismatched.'
+    baseline_claim_sha256 =
+      (Get-FileHash -LiteralPath $baselineClaimPath -Algorithm SHA256).Hash
+    summary_sha256 = if (Test-Path -LiteralPath $summaryPath) {
+      (Get-FileHash -LiteralPath $summaryPath -Algorithm SHA256).Hash
+    } else { $null }
+    source_sha256 = $baselineClaim.source_sha256
+    source_restored = $true
+    termination_confirmed = $true
+  } | ConvertTo-Json
+  $artifactFailureBytes =
+    [Text.UTF8Encoding]::new($false).GetBytes($artifactFailurePayload)
+  $artifactFailureTempPath = '{0}.{1}.tmp' -f `
+    $artifactFailurePath, ([guid]::NewGuid().ToString('N'))
+  $artifactFailureStream = [IO.File]::Open(
+    $artifactFailureTempPath,
+    [IO.FileMode]::CreateNew,
+    [IO.FileAccess]::Write,
+    [IO.FileShare]::None)
+  try {
+    $artifactFailureStream.Write(
+      $artifactFailureBytes, 0, $artifactFailureBytes.Length)
+    $artifactFailureStream.Flush($true)
+  } finally { $artifactFailureStream.Dispose() }
+  [IO.File]::Move($artifactFailureTempPath, $artifactFailurePath)
+}
 git status --short
 if ($LASTEXITCODE -ne 0) { throw 'Could not inspect baseline status.' }
 if (@(git status --porcelain=v1).Count -ne 0) {
@@ -2658,6 +3830,8 @@ $scratch = (Get-Content -LiteralPath `
   (Join-Path $env:TEMP 'extractum-process-reapplication-current.txt') -Raw).Trim()
 $reapplicationCommit = (Get-Content -LiteralPath `
   (Join-Path $scratch 'reapplication-commit.txt') -Raw).Trim()
+$postRepoRaw = @(git rev-parse --show-toplevel)
+$postRepoCode = $LASTEXITCODE
 $postHeadRaw = @(git rev-parse HEAD)
 $postHeadCode = $LASTEXITCODE
 $postStatus = @(git status --porcelain=v1)
@@ -2665,70 +3839,348 @@ $postStatusCode = $LASTEXITCODE
 $postHead = if ($postHeadRaw.Count -eq 1) {
   ([string]$postHeadRaw[0]).Trim()
 } else { $null }
-if ($postHeadCode -ne 0 -or $postStatusCode -ne 0) {
+if ($postRepoCode -ne 0 -or $postHeadCode -ne 0 -or
+    $postStatusCode -ne 0 -or $postRepoRaw.Count -ne 1) {
   throw 'Post-series Git preflight failed as infrastructure; do not start diagnostics.'
 }
 if ($postHeadRaw.Count -ne 1 -or $postHead -ne $reapplicationCommit -or
     $postStatus.Count -ne 0) {
   throw 'Post series requires the clean exact reapplication commit at HEAD.'
 }
-& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File `
-  (Join-Path $scratch 'assert-quiet-window.ps1') -ArtifactPath `
-  (Join-Path $scratch 'quiet-post.json')
-$quietCode = $LASTEXITCODE
-$jobPreflightPath = Join-Path $scratch 'job-object-preflight.json'
-$jobPreflight = if (Test-Path -LiteralPath $jobPreflightPath) {
-  Get-Content -LiteralPath $jobPreflightPath -Raw | ConvertFrom-Json
-} else { $null }
-if ($null -ne $jobPreflight -and
-    -not [bool]$jobPreflight.termination_confirmed) {
-  throw 'Job Object preflight termination became unconfirmed; stop all child commands.'
+$environment = Get-Content -LiteralPath (Join-Path $scratch 'environment.json') `
+  -Raw | ConvertFrom-Json
+if (-not [string]::IsNullOrWhiteSpace($env:CARGO_TARGET_DIR)) {
+  throw 'CARGO_TARGET_DIR changed after environment capture.'
 }
-$diagnosticInvalidReason = if ($null -eq $jobPreflight -or
-    -not [bool]$jobPreflight.passed) {
-  'Job Object preflight failed safely; zero-retry series not started'
-} elseif ($quietCode -ne 0) {
-  'post quiet-window preflight failed; zero-retry series not started'
-} else { $null }
-if ($null -ne $diagnosticInvalidReason) { $quietCode = 1 }
+$postRepo = [IO.Path]::GetFullPath(
+  ([string]$postRepoRaw[0]).Trim()).TrimEnd('\')
+$postTarget = [IO.Path]::GetFullPath(
+  (Join-Path $postRepo 'src-tauri/target')).TrimEnd('\')
+if ($postRepo -ne [string]$environment.repository -or
+    $postTarget -ne [string]$environment.target) {
+  throw 'Post claim requires the captured worktree and canonical target.'
+}
+$qualificationPath = Join-Path $scratch 'runner-qualification.json'
+$qualification = Get-Content -LiteralPath $qualificationPath -Raw |
+  ConvertFrom-Json
+$gitCommonRaw = @(git rev-parse --git-common-dir)
+if ($LASTEXITCODE -ne 0 -or $gitCommonRaw.Count -ne 1) {
+  throw 'Could not recompute the shared Git directory before post claim.'
+}
+$gitCommon = (Resolve-Path -LiteralPath ([string]$gitCommonRaw[0])).Path
+$claimMaterial = '{0}|{1}' -f $gitCommon.ToLowerInvariant(), `
+  $environment.implementation_base
+$claimHasher = [Security.Cryptography.SHA256]::Create()
+try {
+  $claimKey = -join ($claimHasher.ComputeHash(
+    [Text.Encoding]::UTF8.GetBytes($claimMaterial)) | ForEach-Object {
+      $_.ToString('x2')
+    })
+} finally { $claimHasher.Dispose() }
+$claimRoot = Join-Path $env:TEMP `
+  "extractum-process-reapplication-claims/$claimKey"
+$persistedClaimRoot = (Get-Content -LiteralPath `
+  (Join-Path $scratch 'diagnostic-claim-root.txt') -Raw).Trim()
+if ($persistedClaimRoot -ne $claimRoot -or
+    [string]$environment.diagnostic_claim_root -ne $claimRoot) {
+  throw 'Persisted diagnostic claim root does not match the recomputed stable root.'
+}
+$artifactFailurePath = Join-Path $claimRoot `
+  'diagnostic-artifact-failure.json'
+if (Test-Path -LiteralPath $artifactFailurePath) {
+  $artifactFailure = Get-Content -LiteralPath $artifactFailurePath -Raw |
+    ConvertFrom-Json
+  if ($artifactFailure.stage -ne 'diagnostic-artifact-failure' -or
+      $artifactFailure.scratch -ne $scratch -or
+      -not [bool]$artifactFailure.source_restored -or
+      -not [bool]$artifactFailure.termination_confirmed) {
+    throw 'Diagnostic artifact-failure routing is unsafe or stale.'
+  }
+  [ordered]@{
+    stage = 'post'
+    classification = 'infrastructure_invalid'
+    skipped = $true
+    reason = 'baseline diagnostic artifact chain already failed; post was not claimed or launched'
+    artifact_failure_sha256 =
+      (Get-FileHash -LiteralPath $artifactFailurePath -Algorithm SHA256).Hash
+  } | ConvertTo-Json | Set-Content -LiteralPath `
+    (Join-Path $scratch 'post-skipped.json')
+  return
+}
+$baselineClaimPath = Join-Path $claimRoot 'baseline.json'
+$baselineClaim = Get-Content -LiteralPath $baselineClaimPath -Raw |
+  ConvertFrom-Json
+$environmentClaimPath = Join-Path $claimRoot 'environment-preflight.json'
+$environmentClaim = Get-Content -LiteralPath $environmentClaimPath -Raw |
+  ConvertFrom-Json
+$environmentClaimHash =
+  (Get-FileHash -LiteralPath $environmentClaimPath -Algorithm SHA256).Hash
+$environmentHash = (Get-FileHash -LiteralPath `
+  (Join-Path $scratch 'environment.json') -Algorithm SHA256).Hash
+$initialQuietPath = Join-Path $scratch 'quiet-initial.json'
+$initialQuietHash =
+  (Get-FileHash -LiteralPath $initialQuietPath -Algorithm SHA256).Hash
+$currentQualificationHash =
+  (Get-FileHash -LiteralPath $qualificationPath -Algorithm SHA256).Hash
+$baselineClaimHash =
+  (Get-FileHash -LiteralPath $baselineClaimPath -Algorithm SHA256).Hash
+$baselineAttempt = (Get-Content -LiteralPath `
+  (Join-Path $scratch 'baseline-current.txt') -Raw).Trim()
+$baselineSummaryPath = Join-Path $baselineAttempt 'summary.json'
+$baselineCompletionPath = Join-Path $baselineAttempt 'baseline-completion.json'
+$baselineSummary = Get-Content -LiteralPath $baselineSummaryPath -Raw |
+  ConvertFrom-Json
+$baselineCompletion = Get-Content -LiteralPath $baselineCompletionPath -Raw |
+  ConvertFrom-Json
+$baselineSummaryHash =
+  (Get-FileHash -LiteralPath $baselineSummaryPath -Algorithm SHA256).Hash
+$baselineCompletionHash =
+  (Get-FileHash -LiteralPath $baselineCompletionPath -Algorithm SHA256).Hash
+function Test-CompletedSeriesSummary(
+  [object]$value,
+  [string]$expectedStage,
+  [string]$expectedSourceHash
+) {
+  $samples = @($value.samples_ms)
+  if ($value.stage -ne $expectedStage -or
+      $value.source_sha256 -cne $expectedSourceHash -or
+      [int]$value.required_stable_count -ne 4 -or
+      [int]$value.max_absolute_deviation_ms -ne 300 -or
+      @($samples | Where-Object { $null -eq $_ }).Count -ne 0) {
+    return $false
+  }
+  if ($null -ne $value.median_ms -and $null -ne $value.stable_count) {
+    if ($samples.Count -ne 5) { return $false }
+    $sorted = @($samples | ForEach-Object { [int64]$_ } | Sort-Object)
+    $median = [int64]$sorted[2]
+    $stableCount = @($samples | Where-Object {
+      [Math]::Abs([int64]$_ - $median) -le 300
+    }).Count
+    return [int64]$value.median_ms -eq $median -and
+      [int]$value.stable_count -eq $stableCount -and
+      [bool]$value.series_valid -eq ($stableCount -ge 4)
+  }
+  return -not [bool]$value.series_valid -and
+    $null -eq $value.median_ms -and $null -eq $value.stable_count -and
+    $samples.Count -le 5 -and
+    $null -ne $value.PSObject.Properties['invalid_reason'] -and
+    -not [string]::IsNullOrWhiteSpace([string]$value.invalid_reason)
+}
+if (-not [bool]$qualification.passed -or
+    -not [bool]$qualification.termination_confirmed -or
+    $environmentClaim.stage -ne 'environment-preflight' -or
+    $environmentClaim.scratch -ne $scratch -or
+    $environmentClaim.repository -ne $postRepo -or
+    $environmentClaim.target -ne $postTarget -or
+    $environmentClaim.identity_commit -ne $environment.identity_commit -or
+    $environmentClaim.implementation_base -ne
+      $environment.implementation_base -or
+    $environmentClaim.quiet_artifact -ne $initialQuietPath -or
+    $environmentClaimHash -cne
+      $environment.environment_preflight_claim_sha256 -or
+    $baselineClaim.stage -ne 'baseline' -or
+    $baselineClaim.scratch -ne $scratch -or
+    $baselineClaim.attempt -ne $baselineAttempt -or
+    $baselineClaim.repository -ne $postRepo -or
+    $baselineClaim.target -ne $postTarget -or
+    $baselineClaim.head_commit -ne $environment.identity_commit -or
+    $baselineClaim.qualification_sha256 -cne $currentQualificationHash -or
+    $baselineClaim.environment_preflight_claim_sha256 -cne
+      $environmentClaimHash -or
+    $baselineClaim.environment_sha256 -cne $environmentHash -or
+    $baselineClaim.initial_quiet_sha256 -cne $initialQuietHash -or
+    $baselineClaim.implementation_base -ne $environment.implementation_base -or
+    $baselineClaim.identity_commit -ne $environment.identity_commit -or
+    $baselineClaim.runner_sha256 -cne $qualification.runner_sha256 -or
+    $baselineSummary.source_sha256 -cne $baselineClaim.source_sha256 -or
+    -not (Test-CompletedSeriesSummary $baselineSummary 'baseline' `
+      $baselineClaim.source_sha256) -or
+    $baselineCompletion.stage -ne 'baseline-completion' -or
+    $baselineCompletion.scratch -ne $scratch -or
+    $baselineCompletion.attempt -ne $baselineAttempt -or
+    $baselineCompletion.repository -ne $postRepo -or
+    $baselineCompletion.target -ne $postTarget -or
+    $baselineCompletion.head_commit -ne $environment.identity_commit -or
+    $baselineCompletion.baseline_claim_sha256 -cne $baselineClaimHash -or
+    $baselineCompletion.summary_sha256 -cne $baselineSummaryHash -or
+    $baselineCompletion.qualification_sha256 -cne
+      $currentQualificationHash -or
+    $baselineCompletion.runner_sha256 -cne $qualification.runner_sha256 -or
+    $baselineCompletion.source_sha256 -cne $baselineClaim.source_sha256 -or
+    -not [bool]$baselineCompletion.source_restored -or
+    -not [bool]$baselineCompletion.termination_confirmed -or
+    [int]$baselineCompletion.probe_exit_code -notin @(0, 2) -or
+    (Get-FileHash -LiteralPath (Join-Path $scratch 'job-object.ps1') `
+      -Algorithm SHA256).Hash -cne $qualification.job_helper_sha256 -or
+    (Get-FileHash -LiteralPath (Join-Path $scratch 'invoke-shell-series.ps1') `
+      -Algorithm SHA256).Hash -cne $qualification.runner_sha256) {
+  throw 'Post runner qualification or baseline claim is missing, failed, or stale; stop before claiming post.'
+}
 $sourcePath = 'src-tauri/src/lib.rs'
 $sourceHash = (Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash
-[ordered]@{ path = $sourcePath; sha256 = $sourceHash } |
-  ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scratch 'post-source.json')
 $attemptId = 'post-{0}-{1}' -f `
   ([DateTimeOffset]::Now.ToString('yyyyMMddTHHmmssfff')), `
   ([guid]::NewGuid().ToString('N'))
 $attempt = Join-Path $scratch "attempts/$attemptId"
+$postClaimPath = Join-Path $claimRoot 'post.json'
+if (Test-Path -LiteralPath $postClaimPath) {
+  throw "Zero-retry post series is already claimed at $postClaimPath; never launch quiet-window or Cargo again."
+}
+$postClaimPayload = [ordered]@{
+  stage = 'post'
+  claimed_at = [DateTimeOffset]::Now.ToString('o')
+  scratch = $scratch
+  attempt = $attempt
+  repository = $postRepo
+  target = $postTarget
+  head_commit = $postHead
+  reapplication_commit = $reapplicationCommit
+  implementation_base = $environment.implementation_base
+  identity_commit = $environment.identity_commit
+  environment_preflight_claim_sha256 = $environmentClaimHash
+  baseline_claim_sha256 = $baselineClaimHash
+  baseline_completion_sha256 = $baselineCompletionHash
+  baseline_summary_sha256 = $baselineSummaryHash
+  qualification_sha256 = $currentQualificationHash
+  runner_sha256 = $qualification.runner_sha256
+  source_sha256 = $sourceHash
+} | ConvertTo-Json
+$postClaimBytes = [Text.UTF8Encoding]::new($false).GetBytes($postClaimPayload)
+$postClaimTempPath = '{0}.{1}.tmp' -f `
+  $postClaimPath, ([guid]::NewGuid().ToString('N'))
+$postClaimStream = $null
+try {
+  $postClaimStream = [IO.File]::Open(
+    $postClaimTempPath,
+    [IO.FileMode]::CreateNew,
+    [IO.FileAccess]::Write,
+    [IO.FileShare]::None)
+  $postClaimStream.Write($postClaimBytes, 0, $postClaimBytes.Length)
+  $postClaimStream.Flush($true)
+} catch [IO.IOException] {
+  throw "Could not atomically claim the zero-retry post series: $($_.Exception.Message)"
+} finally {
+  if ($null -ne $postClaimStream) { $postClaimStream.Dispose() }
+}
+try {
+  [IO.File]::Move($postClaimTempPath, $postClaimPath)
+} catch [IO.IOException] {
+  throw "Could not atomically publish the zero-retry post claim: $($_.Exception.Message)"
+}
+[ordered]@{ path = $sourcePath; sha256 = $sourceHash } |
+  ConvertTo-Json | Set-Content -LiteralPath (Join-Path $scratch 'post-source.json')
+$attempt | Set-Content -LiteralPath (Join-Path $scratch 'post-current.txt')
+$savedErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try {
+  & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File `
+    (Join-Path $scratch 'assert-quiet-window.ps1') -ArtifactPath `
+    (Join-Path $scratch 'quiet-post.json') `
+    1> (Join-Path $scratch 'quiet-post.stdout.log') `
+    2> (Join-Path $scratch 'quiet-post.stderr.log')
+  $quietCode = $LASTEXITCODE
+} catch {
+  $quietCode = -1
+} finally {
+  $ErrorActionPreference = $savedErrorActionPreference
+}
+$diagnosticInvalidReason = if ($quietCode -ne 0) {
+  'post quiet-window preflight failed after the one-shot post claim'
+} else { $null }
 if ($quietCode -ne 0) {
   New-Item -ItemType Directory -Path $attempt -Force | Out-Null
   [ordered]@{
     stage = 'post'
     classification = 'infrastructure_invalid'
     error = $diagnosticInvalidReason
+    child_started = $false
+    termination_confirmed = $true
     source_restored = $true
   } | ConvertTo-Json | Set-Content -LiteralPath `
     (Join-Path $attempt 'runner-infrastructure-failure.json')
   $probeCode = 2
 } else {
-  & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File `
-    (Join-Path $scratch 'invoke-shell-series.ps1') -Stage 'post' `
-    -SourcePath $sourcePath -ExpectedSha256 $sourceHash -AttemptRoot $attempt `
-    -JobHelperPath (Join-Path $scratch 'job-object.ps1')
-  $probeCode = $LASTEXITCODE
+  $savedErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  $probeStartError = $null
+  try {
+    & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File `
+      (Join-Path $scratch 'invoke-shell-series.ps1') -Stage 'post' `
+      -Mode 'series' -SourcePath $sourcePath -ExpectedSha256 $sourceHash `
+      -AttemptRoot $attempt `
+      -JobHelperPath (Join-Path $scratch 'job-object.ps1') `
+      1> (Join-Path $scratch 'post-runner.stdout.log') `
+      2> (Join-Path $scratch 'post-runner.stderr.log')
+    $probeCode = $LASTEXITCODE
+  } catch {
+    $probeCode = 2
+    $probeStartError = $_.Exception.Message
+  } finally {
+    $ErrorActionPreference = $savedErrorActionPreference
+  }
+  if ($null -ne $probeStartError) {
+    New-Item -ItemType Directory -Path $attempt -Force | Out-Null
+    [ordered]@{
+      stage = 'post'
+      phase = 'runner-process-start'
+      classification = 'infrastructure_invalid'
+      error = $probeStartError
+      child_started = $false
+      termination_confirmed = $true
+      source_restored = $true
+    } | ConvertTo-Json | Set-Content -LiteralPath `
+      (Join-Path $attempt 'runner-infrastructure-failure.json')
+  }
 }
-$attempt | Set-Content -LiteralPath (Join-Path $scratch 'post-current.txt')
 if ((Get-FileHash -LiteralPath $sourcePath -Algorithm SHA256).Hash -ne $sourceHash) {
   throw 'Post probe bytes were not restored; stop all child commands.'
 }
 if ($probeCode -eq 1) {
+  $commandFailurePath = Join-Path $attempt 'failure.json'
+  $commandFailure = if (Test-Path -LiteralPath $commandFailurePath) {
+    Get-Content -LiteralPath $commandFailurePath -Raw | ConvertFrom-Json
+  } else { $null }
+  $failedMetaPath = if ($null -ne $commandFailure) {
+    Join-Path $attempt "runs/$($commandFailure.failed_label)-meta.json"
+  } else { $null }
+  $failedMeta = if ($null -ne $failedMetaPath -and
+      (Test-Path -LiteralPath $failedMetaPath)) {
+    Get-Content -LiteralPath $failedMetaPath -Raw | ConvertFrom-Json
+  } else { $null }
+  $commandFailureProven = $null -ne $commandFailure -and
+    $commandFailure.exit_code -eq 1 -and
+    $commandFailure.stage -eq 'post' -and
+    $commandFailure.classification -eq 'command_failed' -and
+    [bool]$commandFailure.source_restored -and
+    $null -ne $failedMeta -and $failedMeta.mode -eq 'series' -and
+    $failedMeta.stage -eq 'post' -and
+    $failedMeta.label -eq $commandFailure.failed_label -and
+    $failedMeta.classification -eq 'command_failed' -and
+    $failedMeta.error -like 'COMMAND_FAILURE:*' -and
+    [bool]$failedMeta.restored -and [bool]$failedMeta.termination_confirmed
+  if ($commandFailureProven) {
+    [ordered]@{
+      gate = 'post-shell-probe'
+      exit_code = 1
+      classification = 'command_failed'
+      attempt = $attempt
+    } | ConvertTo-Json | Set-Content -LiteralPath `
+      (Join-Path $scratch 'candidate-correctness-failure.json')
+    throw 'Confirmed candidate Cargo failure during post probe.'
+  }
   [ordered]@{
-    gate = 'post-shell-probe'
-    exit_code = 1
-    classification = 'command_failed'
-    attempt = $attempt
+    stage = 'post'
+    phase = 'command-failure-routing'
+    classification = 'infrastructure_invalid'
+    error = 'Exit 1 lacked coherent command-failure/restoration/termination evidence.'
+    child_started = ($null -ne $failedMeta)
+    termination_confirmed = if ($null -ne $failedMeta) {
+      [bool]$failedMeta.termination_confirmed
+    } else { $false }
+    source_restored = $true
   } | ConvertTo-Json | Set-Content -LiteralPath `
-    (Join-Path $scratch 'candidate-correctness-failure.json')
-  throw 'Confirmed candidate Cargo failure during post probe.'
+    (Join-Path $attempt 'runner-infrastructure-failure.json')
+  $probeCode = 2
 }
 if ($probeCode -eq 2) {
   $runMeta = @(Get-ChildItem -LiteralPath (Join-Path $attempt 'runs') `
@@ -2746,12 +4198,19 @@ if ($probeCode -eq 2) {
         [int64]$meta.elapsed_ms
       }
     })
-  $failurePath = if (Test-Path -LiteralPath (Join-Path $attempt 'failure.json')) {
-    Join-Path $attempt 'failure.json'
-  } else {
+  $failurePath = if (Test-Path -LiteralPath `
+      (Join-Path $attempt 'runner-infrastructure-failure.json')) {
     Join-Path $attempt 'runner-infrastructure-failure.json'
+  } else {
+    Join-Path $attempt 'failure.json'
   }
   $failure = Get-Content -LiteralPath $failurePath -Raw | ConvertFrom-Json
+  if ((Split-Path -Leaf $failurePath) -eq
+      'runner-infrastructure-failure.json' -and
+      ($null -eq $failure.PSObject.Properties['termination_confirmed'] -or
+        -not [bool]$failure.termination_confirmed)) {
+    throw 'Post infrastructure routing cannot confirm child termination; stop all further child commands.'
+  }
   [ordered]@{
     stage = 'post'
     samples_ms = @($partialSamples)
@@ -2766,11 +4225,105 @@ if ($probeCode -eq 2) {
     (Join-Path $attempt 'summary.json')
 }
 if ($probeCode -notin @(0, 2)) { throw "Unexpected post probe exit $probeCode" }
-Get-Content -LiteralPath (Join-Path $attempt 'summary.json') -Raw |
-  ConvertFrom-Json | Format-List
+$postSummaryPath = Join-Path $attempt 'summary.json'
+$postSummary = Get-Content -LiteralPath $postSummaryPath -Raw |
+  ConvertFrom-Json
+if (-not (Test-CompletedSeriesSummary $postSummary 'post' $sourceHash)) {
+  throw 'Post summary is incomplete or structurally incoherent.'
+}
+$postClaimHash =
+  (Get-FileHash -LiteralPath $postClaimPath -Algorithm SHA256).Hash
+$postCompletionPath = Join-Path $attempt 'post-completion.json'
+$postCompletionPayload = [ordered]@{
+  stage = 'post-completion'
+  completed_at = [DateTimeOffset]::Now.ToString('o')
+  scratch = $scratch
+  attempt = $attempt
+  repository = $postRepo
+  target = $postTarget
+  head_commit = $postHead
+  reapplication_commit = $reapplicationCommit
+  post_claim_sha256 = $postClaimHash
+  summary_sha256 =
+    (Get-FileHash -LiteralPath $postSummaryPath -Algorithm SHA256).Hash
+  qualification_sha256 = $currentQualificationHash
+  runner_sha256 = $qualification.runner_sha256
+  source_sha256 = $sourceHash
+  source_restored = $true
+  termination_confirmed = $true
+  probe_exit_code = $probeCode
+} | ConvertTo-Json
+$postCompletionBytes =
+  [Text.UTF8Encoding]::new($false).GetBytes($postCompletionPayload)
+$postCompletionTempPath = '{0}.{1}.tmp' -f `
+  $postCompletionPath, ([guid]::NewGuid().ToString('N'))
+$postCompletionStream = $null
+$postCompletionError = $null
+try {
+  $postCompletionStream = [IO.File]::Open(
+    $postCompletionTempPath,
+    [IO.FileMode]::CreateNew,
+    [IO.FileAccess]::Write,
+    [IO.FileShare]::None)
+  $postCompletionStream.Write(
+    $postCompletionBytes, 0, $postCompletionBytes.Length)
+  $postCompletionStream.Flush($true)
+} catch {
+  $postCompletionError = $_.Exception.Message
+} finally {
+  if ($null -ne $postCompletionStream) {
+    $postCompletionStream.Dispose()
+  }
+}
+if ($null -eq $postCompletionError) {
+  try {
+    [IO.File]::Move($postCompletionTempPath, $postCompletionPath)
+  } catch {
+    $postCompletionError = $_.Exception.Message
+  }
+}
+if ($null -ne $postCompletionError) {
+  $artifactFailurePath = Join-Path $claimRoot `
+    'diagnostic-artifact-failure.json'
+  $artifactFailurePayload = [ordered]@{
+    stage = 'diagnostic-artifact-failure'
+    failure_stage = 'post-completion'
+    recorded_at = [DateTimeOffset]::Now.ToString('o')
+    scratch = $scratch
+    attempt = $attempt
+    error = $postCompletionError
+    post_claim_sha256 = $postClaimHash
+    summary_sha256 =
+      (Get-FileHash -LiteralPath $postSummaryPath -Algorithm SHA256).Hash
+    source_sha256 = $sourceHash
+    source_restored = $true
+    termination_confirmed = $true
+  } | ConvertTo-Json
+  $artifactFailureBytes =
+    [Text.UTF8Encoding]::new($false).GetBytes($artifactFailurePayload)
+  $artifactFailureTempPath = '{0}.{1}.tmp' -f `
+    $artifactFailurePath, ([guid]::NewGuid().ToString('N'))
+  $artifactFailureStream = $null
+  try {
+    $artifactFailureStream = [IO.File]::Open(
+      $artifactFailureTempPath,
+      [IO.FileMode]::CreateNew,
+      [IO.FileAccess]::Write,
+      [IO.FileShare]::None)
+    $artifactFailureStream.Write(
+      $artifactFailureBytes, 0, $artifactFailureBytes.Length)
+    $artifactFailureStream.Flush($true)
+  } finally {
+    if ($null -ne $artifactFailureStream) {
+      $artifactFailureStream.Dispose()
+    }
+  }
+  [IO.File]::Move($artifactFailureTempPath, $artifactFailurePath)
+}
+$postSummary | Format-List
 ```
 
-Expected: one warm-up discarded, five post samples recorded, and exact facade bytes restored. Do not retry either stability or infrastructure invalidity. Exit `2` produces an invalid summary only after confirmed termination/restoration; exit `1` records a confirmed correctness failure and enters Step 5.
+Expected: the post step recomputes the stable claim root, revalidates the bound qualification/baseline claim, and durably creates its one-shot post claim before quiet-window or Cargo. One warm-up is discarded, five post samples are recorded, and exact facade bytes are restored. An existing post claim forbids a retry. Exit `2` produces an invalid summary only after confirmed termination/restoration; exit `1` enters Step 5 only with coherent command-failure, stage/label, restoration, and termination evidence.
 
 - [ ] **Step 2: Classify validity and cumulative ledger eligibility without a performance gate**
 
@@ -2781,14 +4334,470 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $scratch = (Get-Content -LiteralPath `
   (Join-Path $env:TEMP 'extractum-process-reapplication-current.txt') -Raw).Trim()
+$environmentPath = Join-Path $scratch 'environment.json'
+$environment = Get-Content -LiteralPath $environmentPath -Raw |
+  ConvertFrom-Json
+$classificationRepo = [IO.Path]::GetFullPath(
+  ([string]$environment.repository)).TrimEnd('\')
+$classificationTarget = [IO.Path]::GetFullPath(
+  ([string]$environment.target)).TrimEnd('\')
+$reapplicationCommit = (Get-Content -LiteralPath `
+  (Join-Path $scratch 'reapplication-commit.txt') -Raw).Trim()
+$classificationHead = $reapplicationCommit
+$claimRoot = [string]$environment.diagnostic_claim_root
+$persistedClaimRoot = (Get-Content -LiteralPath `
+  (Join-Path $scratch 'diagnostic-claim-root.txt') -Raw).Trim()
+if ($persistedClaimRoot -ne $claimRoot -or
+    [string]::IsNullOrWhiteSpace($claimRoot)) {
+  throw 'Classification claim root does not match the stable root.'
+}
+$artifactFailurePath = Join-Path $claimRoot `
+  'diagnostic-artifact-failure.json'
+$postClaimPath = Join-Path $claimRoot 'post.json'
+if (-not (Test-Path -LiteralPath $artifactFailurePath) -and
+    (Test-Path -LiteralPath $postClaimPath)) {
+  $recoveryPostClaim = Get-Content -LiteralPath $postClaimPath -Raw |
+    ConvertFrom-Json
+  $recoveryPostCompletion = Join-Path `
+    ([string]$recoveryPostClaim.attempt) 'post-completion.json'
+  $recoverySummaryPath = Join-Path `
+    ([string]$recoveryPostClaim.attempt) 'summary.json'
+  $recoveryQualificationPath = Join-Path $scratch 'runner-qualification.json'
+  $recoveryRunnerPath = Join-Path $scratch 'invoke-shell-series.ps1'
+  $recoveryEnvironmentClaimPath = Join-Path $claimRoot `
+    'environment-preflight.json'
+  $recoveryBaselineClaimPath = Join-Path $claimRoot 'baseline.json'
+  $recoveryBaselineClaim = Get-Content -LiteralPath `
+    $recoveryBaselineClaimPath -Raw | ConvertFrom-Json
+  $recoveryBaselineSummaryPath = Join-Path `
+    ([string]$recoveryBaselineClaim.attempt) 'summary.json'
+  $recoveryBaselineCompletionPath = Join-Path `
+    ([string]$recoveryBaselineClaim.attempt) 'baseline-completion.json'
+  $recoveryQualification = Get-Content -LiteralPath `
+    $recoveryQualificationPath -Raw | ConvertFrom-Json
+  $recoveryQualificationHash = (Get-FileHash -LiteralPath `
+    $recoveryQualificationPath -Algorithm SHA256).Hash
+  $recoveryRunnerHash = (Get-FileHash -LiteralPath `
+    $recoveryRunnerPath -Algorithm SHA256).Hash
+  function Test-PostRecoverySummary([object]$value, [string]$sourceHash) {
+    $samples = @($value.samples_ms)
+    if ($value.stage -ne 'post' -or $value.source_sha256 -cne $sourceHash -or
+        [int]$value.required_stable_count -ne 4 -or
+        [int]$value.max_absolute_deviation_ms -ne 300) { return $false }
+    if ($null -ne $value.median_ms -and $null -ne $value.stable_count) {
+      if ($samples.Count -ne 5) { return $false }
+      $sorted = @($samples | ForEach-Object { [int64]$_ } | Sort-Object)
+      $median = [int64]$sorted[2]
+      $stable = @($samples | Where-Object {
+        [Math]::Abs([int64]$_ - $median) -le 300
+      }).Count
+      return [int64]$value.median_ms -eq $median -and
+        [int]$value.stable_count -eq $stable -and
+        [bool]$value.series_valid -eq ($stable -ge 4)
+    }
+    return -not [bool]$value.series_valid -and
+      $null -eq $value.median_ms -and $null -eq $value.stable_count -and
+      $samples.Count -le 5 -and
+      -not [string]::IsNullOrWhiteSpace([string]$value.invalid_reason)
+  }
+  $recoveryPostCompletionValid = $false
+  if (Test-Path -LiteralPath $recoveryPostCompletion) {
+    try {
+      $recoveryCompletion = Get-Content -LiteralPath `
+        $recoveryPostCompletion -Raw | ConvertFrom-Json
+      $recoverySummary = Get-Content -LiteralPath $recoverySummaryPath -Raw |
+        ConvertFrom-Json
+      $recoveryPostCompletionValid =
+        [bool]$recoveryQualification.passed -and
+        [bool]$recoveryQualification.termination_confirmed -and
+        $recoveryQualification.runner_sha256 -ceq $recoveryRunnerHash -and
+        $recoveryPostClaim.stage -eq 'post' -and
+        $recoveryPostClaim.scratch -eq $scratch -and
+        $recoveryPostClaim.repository -eq $classificationRepo -and
+        $recoveryPostClaim.target -eq $classificationTarget -and
+        $recoveryPostClaim.head_commit -eq $reapplicationCommit -and
+        $recoveryPostClaim.reapplication_commit -eq $reapplicationCommit -and
+        $recoveryPostClaim.implementation_base -eq $environment.implementation_base -and
+        $recoveryPostClaim.identity_commit -eq $environment.identity_commit -and
+        $recoveryPostClaim.environment_preflight_claim_sha256 -ceq
+          (Get-FileHash -LiteralPath $recoveryEnvironmentClaimPath `
+            -Algorithm SHA256).Hash -and
+        $recoveryPostClaim.baseline_claim_sha256 -ceq
+          (Get-FileHash -LiteralPath $recoveryBaselineClaimPath `
+            -Algorithm SHA256).Hash -and
+        $recoveryPostClaim.baseline_completion_sha256 -ceq
+          (Get-FileHash -LiteralPath $recoveryBaselineCompletionPath `
+            -Algorithm SHA256).Hash -and
+        $recoveryPostClaim.baseline_summary_sha256 -ceq
+          (Get-FileHash -LiteralPath $recoveryBaselineSummaryPath `
+            -Algorithm SHA256).Hash -and
+        $recoveryPostClaim.qualification_sha256 -ceq
+          $recoveryQualificationHash -and
+        $recoveryPostClaim.runner_sha256 -ceq $recoveryRunnerHash -and
+        $recoveryPostClaim.source_sha256 -ceq
+          (Get-FileHash -LiteralPath 'src-tauri/src/lib.rs' `
+            -Algorithm SHA256).Hash -and
+        (Test-PostRecoverySummary $recoverySummary `
+          $recoveryPostClaim.source_sha256) -and
+        $recoveryCompletion.stage -eq 'post-completion' -and
+        $recoveryCompletion.scratch -eq $scratch -and
+        $recoveryCompletion.attempt -eq $recoveryPostClaim.attempt -and
+        $recoveryCompletion.repository -eq $classificationRepo -and
+        $recoveryCompletion.target -eq $classificationTarget -and
+        $recoveryCompletion.head_commit -eq $reapplicationCommit -and
+        $recoveryCompletion.reapplication_commit -eq $reapplicationCommit -and
+        $recoveryCompletion.post_claim_sha256 -ceq
+          (Get-FileHash -LiteralPath $postClaimPath -Algorithm SHA256).Hash -and
+        $recoveryCompletion.summary_sha256 -ceq
+          (Get-FileHash -LiteralPath $recoverySummaryPath -Algorithm SHA256).Hash -and
+        $recoveryCompletion.qualification_sha256 -ceq
+          $recoveryQualificationHash -and
+        $recoveryCompletion.runner_sha256 -ceq $recoveryRunnerHash -and
+        $recoveryCompletion.source_sha256 -ceq
+          $recoveryPostClaim.source_sha256 -and
+        [bool]$recoveryCompletion.source_restored -and
+        [bool]$recoveryCompletion.termination_confirmed -and
+        [int]$recoveryCompletion.probe_exit_code -in @(0, 2)
+    } catch { $recoveryPostCompletionValid = $false }
+  }
+  if (-not $recoveryPostCompletionValid) {
+    if ((Get-FileHash -LiteralPath 'src-tauri/src/lib.rs' -Algorithm SHA256).Hash `
+          -cne $recoveryPostClaim.source_sha256) {
+      throw 'Interrupted post cannot prove exact source restoration.'
+    }
+    $runnerPath = Join-Path $scratch 'invoke-shell-series.ps1'
+    $allProcesses = @(Get-CimInstance Win32_Process -ErrorAction Stop)
+    $liveRunner = @($allProcesses | Where-Object {
+      $_.ProcessId -ne $PID -and
+      [string]$_.CommandLine -match [regex]::Escape($runnerPath)
+    })
+    $blockingBuild = @($allProcesses | Where-Object {
+      $name = [string]$_.Name
+      $command = [string]$_.CommandLine
+      $name -match '^(cargo.*|rustc|rust-analyzer|extractum|tauri|vite)\.exe$' -or
+        ($name -match '^(node|npm|npx)(\.exe|\.cmd)?$' -and
+          $command -match '(?i)(vite|tauri|svelte-kit|cargo)')
+    })
+    if ($blockingBuild.Count -ne 0 -or $liveRunner.Count -ne 0) {
+      throw 'Interrupted post termination is not independently confirmed.'
+    }
+    $artifactFailurePayload = [ordered]@{
+      stage = 'diagnostic-artifact-failure'
+      failure_stage = 'post-completion-missing-or-invalid'
+      recorded_at = [DateTimeOffset]::Now.ToString('o')
+      scratch = $scratch
+      attempt = $recoveryPostClaim.attempt
+      error = 'Atomic post completion receipt is missing, malformed, or mismatched.'
+      post_claim_sha256 =
+        (Get-FileHash -LiteralPath $postClaimPath -Algorithm SHA256).Hash
+      summary_sha256 = if (Test-Path -LiteralPath $recoverySummaryPath) {
+        (Get-FileHash -LiteralPath $recoverySummaryPath -Algorithm SHA256).Hash
+      } else { $null }
+      source_sha256 = $recoveryPostClaim.source_sha256
+      source_restored = $true
+      termination_confirmed = $true
+    } | ConvertTo-Json
+    $artifactFailureBytes =
+      [Text.UTF8Encoding]::new($false).GetBytes($artifactFailurePayload)
+    $artifactFailureTempPath = '{0}.{1}.tmp' -f `
+      $artifactFailurePath, ([guid]::NewGuid().ToString('N'))
+    $artifactFailureStream = [IO.File]::Open(
+      $artifactFailureTempPath,
+      [IO.FileMode]::CreateNew,
+      [IO.FileAccess]::Write,
+      [IO.FileShare]::None)
+    try {
+      $artifactFailureStream.Write(
+        $artifactFailureBytes, 0, $artifactFailureBytes.Length)
+      $artifactFailureStream.Flush($true)
+    } finally { $artifactFailureStream.Dispose() }
+    [IO.File]::Move($artifactFailureTempPath, $artifactFailurePath)
+  }
+}
+if (Test-Path -LiteralPath $artifactFailurePath) {
+  $artifactFailure = Get-Content -LiteralPath $artifactFailurePath -Raw |
+    ConvertFrom-Json
+  if ($artifactFailure.stage -ne 'diagnostic-artifact-failure' -or
+      $artifactFailure.scratch -ne $scratch -or
+      -not [bool]$artifactFailure.source_restored -or
+      -not [bool]$artifactFailure.termination_confirmed) {
+    throw 'Diagnostic artifact failure lacks safe invalid-session routing proof.'
+  }
+  function Get-OptionalInvalidSummary([string]$pointerName, [string]$stage) {
+    try {
+      $pointerPath = Join-Path $scratch $pointerName
+      if (Test-Path -LiteralPath $pointerPath) {
+        $attemptPath = (Get-Content -LiteralPath $pointerPath -Raw).Trim()
+        $summaryPath = Join-Path $attemptPath 'summary.json'
+        if (Test-Path -LiteralPath $summaryPath) {
+          return Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+        }
+      }
+    } catch { }
+    return [pscustomobject][ordered]@{
+      stage = $stage
+      samples_ms = @()
+      median_ms = $null
+      stable_count = $null
+      required_stable_count = 4
+      max_absolute_deviation_ms = 300
+      series_valid = $false
+      invalid_reason = 'diagnostic artifact chain failed before a bound summary'
+      source_sha256 = $null
+    }
+  }
+  $invalidBaseline = Get-OptionalInvalidSummary `
+    'baseline-current.txt' 'baseline'
+  $invalidPost = Get-OptionalInvalidSummary 'post-current.txt' 'post'
+  [ordered]@{
+    gating = $false
+    repeat_used = $false
+    baseline_attempt = if (Test-Path -LiteralPath `
+        (Join-Path $scratch 'baseline-current.txt')) {
+      (Get-Content -LiteralPath `
+        (Join-Path $scratch 'baseline-current.txt') -Raw).Trim()
+    } else { $null }
+    post_attempt = if (Test-Path -LiteralPath `
+        (Join-Path $scratch 'post-current.txt')) {
+      (Get-Content -LiteralPath `
+        (Join-Path $scratch 'post-current.txt') -Raw).Trim()
+    } else { $null }
+    baseline = $invalidBaseline
+    post = $invalidPost
+    session_valid = $false
+    invalid_reason = 'diagnostic artifact/completion chain failure'
+    artifact_failure = $artifactFailure
+    artifact_failure_sha256 =
+      (Get-FileHash -LiteralPath $artifactFailurePath -Algorithm SHA256).Hash
+    delta_ms = $null
+    delta_percent = $null
+    cumulative_ceiling_ms = 15000
+    remaining_ms = $null
+    cumulative_ceiling_exceeded = $false
+    candidate_rejected_by_diagnostics = $false
+  } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath `
+    (Join-Path $scratch 'measurement-summary.json')
+  Get-Content -LiteralPath (Join-Path $scratch 'measurement-summary.json') -Raw
+  return
+}
+if (-not [string]::IsNullOrWhiteSpace($env:CARGO_TARGET_DIR)) {
+  throw 'CARGO_TARGET_DIR changed after environment capture.'
+}
+$classificationRepoRaw = @(git rev-parse --show-toplevel)
+$classificationRepoCode = $LASTEXITCODE
+$classificationHeadRaw = @(git rev-parse HEAD)
+$classificationHeadCode = $LASTEXITCODE
+$classificationStatus = @(git status --porcelain=v1)
+$classificationStatusCode = $LASTEXITCODE
+if ($classificationRepoCode -ne 0 -or $classificationHeadCode -ne 0 -or
+    $classificationStatusCode -ne 0 -or
+    $classificationRepoRaw.Count -ne 1 -or
+    $classificationHeadRaw.Count -ne 1) {
+  throw 'Could not bind classification to the current worktree.'
+}
+$actualClassificationRepo = [IO.Path]::GetFullPath(
+  ([string]$classificationRepoRaw[0]).Trim()).TrimEnd('\')
+$actualClassificationTarget = [IO.Path]::GetFullPath(
+  (Join-Path $actualClassificationRepo 'src-tauri/target')).TrimEnd('\')
+$actualClassificationHead = ([string]$classificationHeadRaw[0]).Trim()
+if ($actualClassificationRepo -ne $classificationRepo -or
+    $actualClassificationTarget -ne $classificationTarget -or
+    $actualClassificationHead -ne $classificationHead -or
+    $classificationStatus.Count -ne 0) {
+  throw 'Classification requires the captured clean candidate worktree and target.'
+}
+$gitCommonRaw = @(git rev-parse --git-common-dir)
+if ($LASTEXITCODE -ne 0 -or $gitCommonRaw.Count -ne 1) {
+  throw 'Could not recompute the stable diagnostic claim root.'
+}
+$gitCommon = (Resolve-Path -LiteralPath ([string]$gitCommonRaw[0])).Path
+$claimMaterial = '{0}|{1}' -f $gitCommon.ToLowerInvariant(), `
+  $environment.implementation_base
+$claimHasher = [Security.Cryptography.SHA256]::Create()
+try {
+  $claimKey = -join ($claimHasher.ComputeHash(
+    [Text.Encoding]::UTF8.GetBytes($claimMaterial)) | ForEach-Object {
+      $_.ToString('x2')
+    })
+} finally { $claimHasher.Dispose() }
+$recomputedClaimRoot = Join-Path $env:TEMP `
+  "extractum-process-reapplication-claims/$claimKey"
+if ($recomputedClaimRoot -ne $claimRoot) {
+  throw 'Classification claim root does not match the stable root.'
+}
+$environmentClaimPath = Join-Path $claimRoot 'environment-preflight.json'
+$baselineClaimPath = Join-Path $claimRoot 'baseline.json'
+$qualificationPath = Join-Path $scratch 'runner-qualification.json'
+$initialQuietPath = Join-Path $scratch 'quiet-initial.json'
+$environmentClaim = Get-Content -LiteralPath $environmentClaimPath -Raw |
+  ConvertFrom-Json
+$baselineClaim = Get-Content -LiteralPath $baselineClaimPath -Raw |
+  ConvertFrom-Json
+$postClaim = Get-Content -LiteralPath $postClaimPath -Raw |
+  ConvertFrom-Json
+$qualification = Get-Content -LiteralPath $qualificationPath -Raw |
+  ConvertFrom-Json
 $baselineAttempt = (Get-Content -LiteralPath `
   (Join-Path $scratch 'baseline-current.txt') -Raw).Trim()
 $postAttempt = (Get-Content -LiteralPath `
   (Join-Path $scratch 'post-current.txt') -Raw).Trim()
-$baseline = Get-Content -LiteralPath (Join-Path $baselineAttempt 'summary.json') `
-  -Raw | ConvertFrom-Json
-$post = Get-Content -LiteralPath (Join-Path $postAttempt 'summary.json') `
-  -Raw | ConvertFrom-Json
+$attemptsRoot = [IO.Path]::GetFullPath(
+  (Join-Path $scratch 'attempts')).TrimEnd('\') + '\'
+$baselineAttemptFull = [IO.Path]::GetFullPath($baselineAttempt)
+$postAttemptFull = [IO.Path]::GetFullPath($postAttempt)
+if (-not $baselineAttemptFull.StartsWith(
+      $attemptsRoot, [StringComparison]::OrdinalIgnoreCase) -or
+    -not $postAttemptFull.StartsWith(
+      $attemptsRoot, [StringComparison]::OrdinalIgnoreCase)) {
+  throw 'Claimed measurement attempts escaped the session attempts root.'
+}
+$baselineSummaryPath = Join-Path $baselineAttempt 'summary.json'
+$postSummaryPath = Join-Path $postAttempt 'summary.json'
+$baselineCompletionPath = Join-Path $baselineAttempt 'baseline-completion.json'
+$postCompletionPath = Join-Path $postAttempt 'post-completion.json'
+$baseline = Get-Content -LiteralPath $baselineSummaryPath -Raw |
+  ConvertFrom-Json
+$post = Get-Content -LiteralPath $postSummaryPath -Raw |
+  ConvertFrom-Json
+$baselineCompletion = Get-Content -LiteralPath $baselineCompletionPath -Raw |
+  ConvertFrom-Json
+$postCompletion = Get-Content -LiteralPath $postCompletionPath -Raw |
+  ConvertFrom-Json
+$environmentClaimHash =
+  (Get-FileHash -LiteralPath $environmentClaimPath -Algorithm SHA256).Hash
+$environmentHash =
+  (Get-FileHash -LiteralPath $environmentPath -Algorithm SHA256).Hash
+$initialQuietHash =
+  (Get-FileHash -LiteralPath $initialQuietPath -Algorithm SHA256).Hash
+$qualificationHash =
+  (Get-FileHash -LiteralPath $qualificationPath -Algorithm SHA256).Hash
+$baselineClaimHash =
+  (Get-FileHash -LiteralPath $baselineClaimPath -Algorithm SHA256).Hash
+$postClaimHash =
+  (Get-FileHash -LiteralPath $postClaimPath -Algorithm SHA256).Hash
+$baselineSummaryHash =
+  (Get-FileHash -LiteralPath $baselineSummaryPath -Algorithm SHA256).Hash
+$postSummaryHash =
+  (Get-FileHash -LiteralPath $postSummaryPath -Algorithm SHA256).Hash
+$baselineCompletionHash =
+  (Get-FileHash -LiteralPath $baselineCompletionPath -Algorithm SHA256).Hash
+$postCompletionHash =
+  (Get-FileHash -LiteralPath $postCompletionPath -Algorithm SHA256).Hash
+$currentSourceHash = (Get-FileHash -LiteralPath 'src-tauri/src/lib.rs' `
+  -Algorithm SHA256).Hash
+$runnerHash = (Get-FileHash -LiteralPath `
+  (Join-Path $scratch 'invoke-shell-series.ps1') -Algorithm SHA256).Hash
+$jobHelperHash = (Get-FileHash -LiteralPath `
+  (Join-Path $scratch 'job-object.ps1') -Algorithm SHA256).Hash
+function Test-CompletedSeriesSummary(
+  [object]$value,
+  [string]$expectedStage,
+  [string]$expectedSourceHash
+) {
+  $samples = @($value.samples_ms)
+  if ($value.stage -ne $expectedStage -or
+      $value.source_sha256 -cne $expectedSourceHash -or
+      [int]$value.required_stable_count -ne 4 -or
+      [int]$value.max_absolute_deviation_ms -ne 300 -or
+      @($samples | Where-Object { $null -eq $_ }).Count -ne 0) {
+    return $false
+  }
+  if ($null -ne $value.median_ms -and $null -ne $value.stable_count) {
+    if ($samples.Count -ne 5) { return $false }
+    $sorted = @($samples | ForEach-Object { [int64]$_ } | Sort-Object)
+    $median = [int64]$sorted[2]
+    $stableCount = @($samples | Where-Object {
+      [Math]::Abs([int64]$_ - $median) -le 300
+    }).Count
+    return [int64]$value.median_ms -eq $median -and
+      [int]$value.stable_count -eq $stableCount -and
+      [bool]$value.series_valid -eq ($stableCount -ge 4)
+  }
+  return -not [bool]$value.series_valid -and
+    $null -eq $value.median_ms -and $null -eq $value.stable_count -and
+    $samples.Count -le 5 -and
+    $null -ne $value.PSObject.Properties['invalid_reason'] -and
+    -not [string]::IsNullOrWhiteSpace([string]$value.invalid_reason)
+}
+if (-not [bool]$qualification.passed -or
+    -not [bool]$qualification.termination_confirmed -or
+    $qualification.runner_sha256 -cne $runnerHash -or
+    $qualification.job_helper_sha256 -cne $jobHelperHash -or
+    $environmentClaim.stage -ne 'environment-preflight' -or
+    $environmentClaim.scratch -ne $scratch -or
+    $environmentClaim.repository -ne $classificationRepo -or
+    $environmentClaim.target -ne $classificationTarget -or
+    $environmentClaim.identity_commit -ne $environment.identity_commit -or
+    $environmentClaim.implementation_base -ne
+      $environment.implementation_base -or
+    $environmentClaim.quiet_artifact -ne $initialQuietPath -or
+    $environmentClaimHash -cne
+      $environment.environment_preflight_claim_sha256 -or
+    $baselineClaim.stage -ne 'baseline' -or
+    $baselineClaim.scratch -ne $scratch -or
+    $baselineClaim.attempt -ne $baselineAttempt -or
+    $baselineClaim.repository -ne $classificationRepo -or
+    $baselineClaim.target -ne $classificationTarget -or
+    $baselineClaim.head_commit -ne $environment.identity_commit -or
+    $baselineClaim.implementation_base -ne $environment.implementation_base -or
+    $baselineClaim.identity_commit -ne $environment.identity_commit -or
+    $baselineClaim.environment_preflight_claim_sha256 -cne
+      $environmentClaimHash -or
+    $baselineClaim.environment_sha256 -cne $environmentHash -or
+    $baselineClaim.initial_quiet_sha256 -cne $initialQuietHash -or
+    $baselineClaim.qualification_sha256 -cne $qualificationHash -or
+    $baselineClaim.runner_sha256 -cne $runnerHash -or
+    -not (Test-CompletedSeriesSummary $baseline 'baseline' `
+      $baselineClaim.source_sha256) -or
+    $baselineCompletion.stage -ne 'baseline-completion' -or
+    $baselineCompletion.scratch -ne $scratch -or
+    $baselineCompletion.attempt -ne $baselineAttempt -or
+    $baselineCompletion.repository -ne $classificationRepo -or
+    $baselineCompletion.target -ne $classificationTarget -or
+    $baselineCompletion.head_commit -ne $environment.identity_commit -or
+    $baselineCompletion.baseline_claim_sha256 -cne $baselineClaimHash -or
+    $baselineCompletion.summary_sha256 -cne $baselineSummaryHash -or
+    $baselineCompletion.qualification_sha256 -cne $qualificationHash -or
+    $baselineCompletion.runner_sha256 -cne $runnerHash -or
+    $baselineCompletion.source_sha256 -cne $baselineClaim.source_sha256 -or
+    -not [bool]$baselineCompletion.source_restored -or
+    -not [bool]$baselineCompletion.termination_confirmed -or
+    [int]$baselineCompletion.probe_exit_code -notin @(0, 2) -or
+    $postClaim.stage -ne 'post' -or
+    $postClaim.scratch -ne $scratch -or
+    $postClaim.attempt -ne $postAttempt -or
+    $postClaim.repository -ne $classificationRepo -or
+    $postClaim.target -ne $classificationTarget -or
+    $postClaim.head_commit -ne $reapplicationCommit -or
+    $postClaim.reapplication_commit -ne $reapplicationCommit -or
+    $postClaim.implementation_base -ne $environment.implementation_base -or
+    $postClaim.identity_commit -ne $environment.identity_commit -or
+    $postClaim.environment_preflight_claim_sha256 -cne $environmentClaimHash -or
+    $postClaim.baseline_claim_sha256 -cne $baselineClaimHash -or
+    $postClaim.baseline_completion_sha256 -cne $baselineCompletionHash -or
+    $postClaim.baseline_summary_sha256 -cne $baselineSummaryHash -or
+    $postClaim.qualification_sha256 -cne $qualificationHash -or
+    $postClaim.runner_sha256 -cne $runnerHash -or
+    $postClaim.source_sha256 -cne $currentSourceHash -or
+    -not (Test-CompletedSeriesSummary $post 'post' `
+      $postClaim.source_sha256) -or
+    $postCompletion.stage -ne 'post-completion' -or
+    $postCompletion.scratch -ne $scratch -or
+    $postCompletion.attempt -ne $postAttempt -or
+    $postCompletion.repository -ne $classificationRepo -or
+    $postCompletion.target -ne $classificationTarget -or
+    $postCompletion.head_commit -ne $reapplicationCommit -or
+    $postCompletion.reapplication_commit -ne $reapplicationCommit -or
+    $postCompletion.post_claim_sha256 -cne $postClaimHash -or
+    $postCompletion.summary_sha256 -cne $postSummaryHash -or
+    $postCompletion.qualification_sha256 -cne $qualificationHash -or
+    $postCompletion.runner_sha256 -cne $runnerHash -or
+    $postCompletion.source_sha256 -cne $postClaim.source_sha256 -or
+    -not [bool]$postCompletion.source_restored -or
+    -not [bool]$postCompletion.termination_confirmed -or
+    [int]$postCompletion.probe_exit_code -notin @(0, 2)) {
+  throw 'Measurement claim/completion chain is incomplete, mismatched, or stale.'
+}
 $sessionValid = [bool]$baseline.series_valid -and [bool]$post.series_valid -and
   $null -ne $baseline.median_ms -and $null -ne $post.median_ms
 $deltaMs = if ($null -ne $baseline.median_ms -and $null -ne $post.median_ms) {
@@ -2803,6 +4812,11 @@ $remainingMs = if ($sessionValid) { 15000 - [int64]$post.median_ms } else { $nul
   repeat_used = $false
   baseline_attempt = $baselineAttempt
   post_attempt = $postAttempt
+  environment_preflight_claim_sha256 = $environmentClaimHash
+  baseline_claim_sha256 = $baselineClaimHash
+  baseline_completion_sha256 = $baselineCompletionHash
+  post_claim_sha256 = $postClaimHash
+  post_completion_sha256 = $postCompletionHash
   baseline = $baseline
   post = $post
   session_valid = $sessionValid
@@ -2905,6 +4919,8 @@ Expected: all eight named gates pass. `npm.cmd run verify` intentionally repeats
 
 - [ ] **Step 4: Reprove identity after wrappers, then run the hidden startup smoke**
 
+Routing invariant: helper load/compile, Job Object construction, atomic start/assignment, observation, and cleanup are infrastructure. They must never create `completion-failure.json` or authorize Step 5. Only a readable early exit from the application returned by `StartAssigned`, followed by confirmed zero-process cleanup, is a completion failure.
+
 Run:
 
 ```powershell
@@ -2989,6 +5005,7 @@ if ($wrapperStatus.Count -ne 0) {
 $process = $null
 $launchFailure = $null
 $completionFailure = $null
+$completionExitCode = $null
 $cleanupFailure = $null
 $smokeJob = $null
 $smokeJobAssigned = $false
@@ -3041,7 +5058,9 @@ try {
           [void]$ownedSmokeIds.Add($id)
         }
         if ($process.HasExited) {
-          $completionFailure = "Release executable exited early with code $($process.ExitCode)"
+          $completionExitCode = $process.ExitCode
+          $completionFailure =
+            "Release executable exited early with code $completionExitCode"
           break
         }
       }
@@ -3094,8 +5113,15 @@ try {
   }
   if ($null -ne $smokeJob -and
       ($null -eq $process -or $smokeJobActiveProcesses -eq 0)) {
-    $smokeJob.Dispose()
-    $smokeJob = $null
+    try {
+      $smokeJob.Dispose()
+      $smokeJob = $null
+    } catch {
+      $disposeText = "Job Object disposal failed: $($_.Exception.Message)"
+      $cleanupFailure = if ([string]::IsNullOrWhiteSpace([string]$cleanupFailure)) {
+        $disposeText
+      } else { "$cleanupFailure; $disposeText" }
+    }
   }
 }
 if ($null -ne $cleanupFailure) {
@@ -3122,9 +5148,23 @@ if ($null -ne $launchFailure) {
   throw 'Startup launch/observation failed as infrastructure; do not revert.'
 }
 if ($null -ne $completionFailure) {
+  if ($null -eq $process -or $null -eq $completionExitCode -or
+      -not $smokeJobAssigned -or
+      $smokeJobActiveProcesses -ne 0) {
+    [ordered]@{
+      gate = 'startup-smoke-routing'
+      classification = 'infrastructure_invalid'
+      error = 'Early-exit evidence lacks confirmed Job Object assignment/cleanup.'
+      process_id = if ($null -ne $process) { $process.Id } else { $null }
+      job_assigned = $smokeJobAssigned
+      job_active_processes = $smokeJobActiveProcesses
+    } | ConvertTo-Json | Set-Content -LiteralPath `
+      (Join-Path $scratch 'startup-smoke-infrastructure-failure.json')
+    throw 'Startup smoke routing proof failed as infrastructure; do not revert.'
+  }
   [ordered]@{
     gate = 'startup-smoke'
-    exit_code = 1
+    application_exit_code = $completionExitCode
     classification = 'command_failed'
     error = $completionFailure
   } | ConvertTo-Json | Set-Content -LiteralPath `
@@ -3143,7 +5183,26 @@ if ($null -ne $completionFailure) {
   (Join-Path $scratch 'startup-smoke.json')
 ```
 
-Expected: committed identity remains exact, repository remains clean, release executable stays alive for five seconds, and full process-tree cleanup is confirmed. Resolve/start/observation/cleanup failures are infrastructure-only; only a successfully started executable that exits inside the five-second window is a completion failure.
+Expected: committed identity remains exact, repository remains clean, release executable stays alive for five seconds, and full process-tree cleanup is confirmed. Resolve/start/observation/cleanup/disposal failures are infrastructure-only. A completion failure requires `StartAssigned` to return an assigned application process, a readable actual application exit code inside the five-second window, and subsequently confirmed zero-process cleanup.
+
+If the smoke writes `startup-smoke-infrastructure-failure.json`, stop this gate and investigate; never enter Step 5. A retry is allowed only after separately recording confirmed process-tree termination and the corrected objective infrastructure cause. Before that retry, preserve the current veto artifact in history without deleting or overwriting it:
+
+```powershell
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$scratch = (Get-Content -LiteralPath `
+  (Join-Path $env:TEMP 'extractum-process-reapplication-current.txt') -Raw).Trim()
+$smokeInfrastructure = Join-Path $scratch `
+  'startup-smoke-infrastructure-failure.json'
+if (-not (Test-Path -LiteralPath $smokeInfrastructure)) {
+  throw 'No current startup-smoke infrastructure artifact to archive.'
+}
+$history = Join-Path $scratch ('startup-smoke-history/{0}' -f `
+  [DateTimeOffset]::Now.ToString('yyyyMMddTHHmmssfff'))
+New-Item -ItemType Directory -Path $history -Force | Out-Null
+Move-Item -LiteralPath $smokeInfrastructure -Destination `
+  (Join-Path $history 'startup-smoke-infrastructure-failure.json')
+```
 
 - [ ] **Step 5: Route any identity, correctness, or completion failure before success documentation**
 
@@ -3161,6 +5220,11 @@ $reapplicationCommit = (Get-Content -LiteralPath `
 $manifest = Get-Content -LiteralPath `
   'docs/superpowers/verification/2026-07-18-extractum-process-reapplication-identity.json' `
   -Raw | ConvertFrom-Json
+$startupSmokeInfrastructure = Join-Path $scratch `
+  'startup-smoke-infrastructure-failure.json'
+if (Test-Path -LiteralPath $startupSmokeInfrastructure) {
+  throw 'Current startup-smoke infrastructure evidence forbids the negative/revert branch.'
+}
 $materialArtifacts = @(
   'identity-failure.json'
   'candidate-correctness-failure.json'
@@ -3461,7 +5525,7 @@ if ($LASTEXITCODE -ne 0 -or $status.Count -ne 0) {
 
 Expected: the negative execution ends with identity commit, exact candidate commit, automatic revert commit, negative evidence commit, and a clean branch. Stop this plan and do not start Phase 4.
 
-An infrastructure-only artifact (`candidate-gate-infrastructure-failure.json`, `completion-infrastructure-failure.json`, runner exit `2`, or unconfirmed smoke cleanup) never authorizes this branch. Preserve it, regain a confirmed quiet/terminated state, and resume the same correctness gate; the diagnostic series itself remains invalid and is never retried.
+An infrastructure-only artifact (`candidate-gate-infrastructure-failure.json`, `completion-infrastructure-failure.json`, runner exit `2`, or `startup-smoke-infrastructure-failure.json` from helper load/compilation/construction, atomic launch/assignment, observation, cleanup, or disposal) never authorizes this branch. Preserve it, regain a separately recorded confirmed quiet/terminated state, correct the objective infrastructure cause, and resume the same correctness gate; the diagnostic series itself remains invalid and is never retried.
 
 - [ ] **Step 6: Write the retained-evidence RED contract**
 
