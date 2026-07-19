@@ -1341,6 +1341,7 @@ dependencies = [
  "chacha20poly1305",
  "dirs",
  "extractum-core",
+ "extractum-gemini-browser",
  "grammers-client",
  "grammers-mtsender",
  "grammers-session",
@@ -1379,6 +1380,20 @@ dependencies = [
  "serde_json",
  "time",
  "zstd",
+]
+
+[[package]]
+name = "extractum-gemini-browser"
+version = "0.2.0"
+dependencies = [
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "time",
+ "tokio",
+ "tokio-util",
+ "url",
 ]
 
 [[package]]

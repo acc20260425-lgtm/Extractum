@@ -6,12 +6,12 @@ use tokio::sync::OnceCell;
 use tokio_util::sync::CancellationToken;
 
 use super::{
-    domain_error::{GeminiBrowserError, GeminiBrowserResult},
+    error::{GeminiBrowserError, GeminiBrowserResult},
     GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind, GeminiBrowserRunStatus,
 };
 
 #[derive(Default)]
-pub(crate) struct GeminiBrowserDomainState {
+pub struct GeminiBrowserDomainState {
     active: Mutex<Option<ActiveRunControl>>,
     status_snapshot: RwLock<Option<GeminiBrowserProviderStatus>>,
     startup_reconciliation: OnceCell<()>,
@@ -21,7 +21,7 @@ pub(crate) struct GeminiBrowserDomainState {
 pub(crate) struct ActiveRunControl {
     run_id: String,
     cancellation: CancellationToken,
-    stop_result: Arc<OnceCell<Option<super::domain_error::GeminiBrowserError>>>,
+    stop_result: Arc<OnceCell<Option<super::error::GeminiBrowserError>>>,
 }
 
 impl ActiveRunControl {
@@ -33,7 +33,7 @@ impl ActiveRunControl {
         self.cancellation.clone()
     }
 
-    pub(crate) fn stop_result(&self) -> &OnceCell<Option<super::domain_error::GeminiBrowserError>> {
+    pub(crate) fn stop_result(&self) -> &OnceCell<Option<super::error::GeminiBrowserError>> {
         &self.stop_result
     }
 }
@@ -151,7 +151,7 @@ impl GeminiBrowserDomainState {
             .map(|active| active.run_id.clone())
     }
 
-    pub(crate) fn active_run_id_snapshot(&self) -> Option<String> {
+    pub fn active_run_id_snapshot(&self) -> Option<String> {
         self.active
             .lock()
             .as_ref()

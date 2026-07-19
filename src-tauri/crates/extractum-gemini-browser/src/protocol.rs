@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 use super::{
-    domain_error::{GeminiBrowserError, GeminiBrowserResult},
+    error::{GeminiBrowserError, GeminiBrowserResult},
     GeminiBrowserProviderStatus, GeminiBrowserRunRequest, GeminiBrowserRunResult,
     GeminiBrowserRunStatus, GeminiBrowserSidecarCommand, GeminiBrowserSidecarEnvelope,
     GeminiBrowserSidecarResponse,
@@ -14,22 +14,22 @@ struct SidecarLine {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum ResumeSidecarOutcome {
+pub enum ResumeSidecarOutcome {
     Status(GeminiBrowserProviderStatus),
     LegacyAck,
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct GeminiBrowserJsonlCodec {
+pub struct GeminiBrowserJsonlCodec {
     buffer: Vec<u8>,
 }
 
 impl GeminiBrowserJsonlCodec {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 
-    pub(crate) fn encode_request(
+    pub fn encode_request(
         &self,
         id: &str,
         command: &GeminiBrowserSidecarCommand,
@@ -44,7 +44,7 @@ impl GeminiBrowserJsonlCodec {
         Ok(encoded)
     }
 
-    pub(crate) fn push_response_bytes(
+    pub fn push_response_bytes(
         &mut self,
         expected_id: &str,
         chunk: &[u8],
@@ -81,7 +81,7 @@ fn trim_ascii_whitespace(value: &[u8]) -> &[u8] {
     &value[start..end]
 }
 
-pub(crate) fn classify_resume_response(
+pub fn classify_resume_response(
     response: GeminiBrowserSidecarResponse,
 ) -> GeminiBrowserResult<ResumeSidecarOutcome> {
     match response {

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use url::Url;
 
 use super::{
-    domain_error::{GeminiBrowserError, GeminiBrowserResult},
+    error::{GeminiBrowserError, GeminiBrowserResult},
     GeminiBrowserProviderConfig, GeminiBrowserProviderMode, GeminiBrowserStartChromeResult,
 };
 
@@ -11,13 +11,13 @@ const DEFAULT_CDP_ENDPOINT: &str = "http://127.0.0.1:9222";
 const GEMINI_URL: &str = "https://gemini.google.com/app";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ChromeCdpLaunchSpec {
-    pub(crate) args: Vec<String>,
-    pub(crate) browser_profile_dir: String,
-    pub(crate) cdp_endpoint: String,
+pub struct ChromeCdpLaunchSpec {
+    pub args: Vec<String>,
+    pub browser_profile_dir: String,
+    pub cdp_endpoint: String,
 }
 
-pub(crate) fn build_chrome_cdp_launch_spec(
+pub fn build_chrome_cdp_launch_spec(
     browser_profile_dir: PathBuf,
     config: Option<&GeminiBrowserProviderConfig>,
 ) -> GeminiBrowserResult<ChromeCdpLaunchSpec> {
@@ -35,7 +35,7 @@ pub(crate) fn build_chrome_cdp_launch_spec(
     })
 }
 
-pub(crate) fn start_chrome_result(spec: &ChromeCdpLaunchSpec) -> GeminiBrowserStartChromeResult {
+pub fn start_chrome_result(spec: &ChromeCdpLaunchSpec) -> GeminiBrowserStartChromeResult {
     GeminiBrowserStartChromeResult {
         browser_profile_dir: spec.browser_profile_dir.clone(),
         cdp_endpoint: spec.cdp_endpoint.clone(),

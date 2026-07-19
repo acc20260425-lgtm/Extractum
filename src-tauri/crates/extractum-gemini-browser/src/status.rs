@@ -3,17 +3,20 @@ use std::{path::Path, time::Duration};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use super::{
-    browser_executor::{BrowserExecutor, BrowserSessionContext, StatusObserver},
-    domain_error::{GeminiBrowserErrorKind, GeminiBrowserResult},
-    portable_state::GeminiBrowserDomainState,
-    run_log, GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind, GeminiBrowserRun,
+    error::{GeminiBrowserErrorKind, GeminiBrowserResult},
+    executor::{BrowserExecutor, BrowserSessionContext},
+    run_log,
+    state::GeminiBrowserDomainState,
+    GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind, GeminiBrowserRun,
     GeminiBrowserRunStatus,
 };
+
+pub use super::executor::StatusObserver;
 
 const STATUS_SNAPSHOT_RUN_SCAN_LIMIT: usize = 200;
 const STATUS_SNAPSHOT_ACTIVITY_GRACE_MINUTES: i64 = 30;
 
-pub(crate) async fn read_provider_status(
+pub async fn read_provider_status(
     state: &GeminiBrowserDomainState,
     executor: &dyn BrowserExecutor,
     session: BrowserSessionContext,
@@ -46,7 +49,7 @@ pub(crate) async fn read_provider_status(
     }
 }
 
-pub(crate) fn read_reconciled_status_snapshot(
+pub fn read_reconciled_status_snapshot(
     state: &GeminiBrowserDomainState,
     runs_dir: &Path,
     browser_profile_dir: String,
@@ -64,7 +67,7 @@ pub(crate) fn read_reconciled_status_snapshot(
     }
 }
 
-pub(crate) async fn open_provider(
+pub async fn open_provider(
     executor: &dyn BrowserExecutor,
     observer: &dyn StatusObserver,
     session: BrowserSessionContext,
@@ -74,7 +77,7 @@ pub(crate) async fn open_provider(
     Ok(status)
 }
 
-pub(crate) async fn resume_provider(
+pub async fn resume_provider(
     executor: &dyn BrowserExecutor,
     observer: &dyn StatusObserver,
     session: BrowserSessionContext,
@@ -178,9 +181,9 @@ mod tests {
     };
 
     use super::*;
-    use crate::gemini_browser::{
-        browser_executor::{BrowserExecutorFuture, BrowserRunContext, BrowserStopReason},
-        domain_error::GeminiBrowserError,
+    use crate::{
+        error::GeminiBrowserError,
+        executor::{BrowserExecutorFuture, BrowserRunContext, BrowserStopReason},
         GeminiBrowserRunResult,
     };
 

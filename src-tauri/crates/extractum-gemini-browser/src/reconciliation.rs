@@ -1,12 +1,12 @@
 use std::{collections::BTreeMap, future::Future};
 
 use super::{
-    domain_error::GeminiBrowserResult, portable_state::GeminiBrowserDomainState,
-    GeminiBrowserArtifactRefs, GeminiBrowserRun, GeminiBrowserRunResult, GeminiBrowserRunStatus,
+    error::GeminiBrowserResult, state::GeminiBrowserDomainState, GeminiBrowserArtifactRefs,
+    GeminiBrowserRun, GeminiBrowserRunResult, GeminiBrowserRunStatus,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum NormalizedQueueState {
+pub enum NormalizedQueueState {
     Queued,
     Running,
     Succeeded,
@@ -14,28 +14,26 @@ pub(crate) enum NormalizedQueueState {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum QueueInspectionSnapshot {
+pub enum QueueInspectionSnapshot {
     Unavailable,
     Available(BTreeMap<String, NormalizedQueueState>),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct StartupReconciliationSnapshot {
-    pub(crate) runs: Vec<GeminiBrowserRun>,
-    pub(crate) queue: QueueInspectionSnapshot,
+pub struct StartupReconciliationSnapshot {
+    pub runs: Vec<GeminiBrowserRun>,
+    pub queue: QueueInspectionSnapshot,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum ReconciliationAction {
+pub enum ReconciliationAction {
     Finish {
         run_id: String,
         result: GeminiBrowserRunResult,
     },
 }
 
-pub(crate) fn reconcile_startup(
-    snapshot: StartupReconciliationSnapshot,
-) -> Vec<ReconciliationAction> {
+pub fn reconcile_startup(snapshot: StartupReconciliationSnapshot) -> Vec<ReconciliationAction> {
     snapshot
         .runs
         .into_iter()
@@ -93,7 +91,7 @@ fn reconcile_run(
     })
 }
 
-pub(crate) async fn ensure_startup_reconciled<Load, LoadFuture, Apply, ApplyFuture>(
+pub async fn ensure_startup_reconciled<Load, LoadFuture, Apply, ApplyFuture>(
     state: &GeminiBrowserDomainState,
     load_snapshot: Load,
     apply_actions: Apply,
@@ -129,5 +127,74 @@ fn failed_result(run_id: &str, message: &str) -> GeminiBrowserRunResult {
         artifacts: GeminiBrowserArtifactRefs::default(),
         elapsed_ms: 0,
         debug_summary: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn run(run_id: &str, status: GeminiBrowserRunStatus) -> GeminiBrowserRun {
+        GeminiBrowserRun {
+            run_id: run_id.to_string(),
+            source: "settings_test".to_string(),
+            status,
+            prompt_preview: "hello".to_string(),
+            created_at: "2026-07-19T00:00:00Z".to_string(),
+            updated_at: "2026-07-19T00:00:00Z".to_string(),
+            result: None,
+        }
+    }
+
+    fn message(action: &ReconciliationAction) -> Option<&str> {
+        match action {
+            ReconciliationAction::Finish { result, .. } => result.message.as_deref(),
+        }
+    }
+
+    #[test]
+    fn restart_reconciliation_degraded_leaves_queued_run_log_records() {
+        let actions = reconcile_startup(StartupReconciliationSnapshot {
+            runs: vec![run("queued", GeminiBrowserRunStatus::Queued)],
+            queue: QueueInspectionSnapshot::Unavailable,
+        });
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn degraded_apalis_queue_inspection_leaves_queued_run_log_records_for_worker_entry() {
+        let actions = reconcile_startup(StartupReconciliationSnapshot {
+            runs: vec![run("queued", GeminiBrowserRunStatus::Queued)],
+            queue: QueueInspectionSnapshot::Unavailable,
+        });
+        assert_eq!(actions, Vec::<ReconciliationAction>::new());
+    }
+
+    #[test]
+    fn restart_reconciliation_matrix_handles_supported_apalis_states() {
+        let runs = vec![
+            run("queued", GeminiBrowserRunStatus::Queued),
+            run("missing", GeminiBrowserRunStatus::Queued),
+            run("running", GeminiBrowserRunStatus::Running),
+            run("done", GeminiBrowserRunStatus::Queued),
+            run("failed", GeminiBrowserRunStatus::Running),
+        ];
+        let queue = BTreeMap::from([
+            ("queued".to_string(), NormalizedQueueState::Queued),
+            ("running".to_string(), NormalizedQueueState::Running),
+            ("done".to_string(), NormalizedQueueState::Succeeded),
+            ("failed".to_string(), NormalizedQueueState::Failed),
+        ]);
+        let actions = reconcile_startup(StartupReconciliationSnapshot {
+            runs,
+            queue: QueueInspectionSnapshot::Available(queue),
+        });
+        assert_eq!(actions.len(), 4);
+        let messages = actions.iter().filter_map(message).collect::<Vec<_>>();
+        assert!(messages.contains(&"Gemini Browser queued job was missing from Apalis storage"));
+        assert!(messages.contains(&"Gemini Browser worker was interrupted before completion"));
+        assert!(messages
+            .contains(&"Gemini Browser Apalis job completed before run log captured a result"));
+        assert!(messages.contains(&"Gemini Browser Apalis job failed before completion"));
     }
 }

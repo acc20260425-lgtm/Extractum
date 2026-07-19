@@ -22,7 +22,15 @@ const projectGuidance = readSource("docs/project.md");
 describe("Rust workspace core contract", () => {
   it("owns the application and core from the src-tauri workspace root", () => {
     expect(rootCargo).toContain("[workspace]");
-    expect(rootCargo).toMatch(/members\s*=\s*\[[\s\S]*"\."[\s\S]*"crates\/extractum-core"[\s\S]*\]/);
+    const members = rootCargo
+      .match(/^members\s*=\s*\[([^\]]+)\]$/m)?.[1]
+      .split(",")
+      .map((member) => member.trim().replace(/^"|"$/g, ""));
+    expect(members).toEqual([
+      ".",
+      "crates/extractum-core",
+      "crates/extractum-gemini-browser",
+    ]);
     expect(rootCargo).toMatch(/resolver\s*=\s*"2"/);
     expect(rootCargo).toContain("[workspace.dependencies]");
     expect(rootCargo).toContain("[profile.dev]");

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{oneshot, watch};
 
 use super::{
-    domain_error::{GeminiBrowserError, GeminiBrowserResult},
+    error::{GeminiBrowserError, GeminiBrowserResult},
     GeminiBrowserProviderConfig, GeminiBrowserRunRequest, GeminiBrowserRunResult,
 };
 
@@ -21,20 +21,20 @@ type GeminiBrowserWaiterSender = oneshot::Sender<GeminiBrowserWaiterResult>;
 pub(crate) type GeminiBrowserWaiterReceiver = oneshot::Receiver<GeminiBrowserWaiterResult>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct QueuedGeminiBrowserJob {
-    pub(crate) run_id: String,
-    pub(crate) queue_position: Option<usize>,
+pub struct QueuedGeminiBrowserJob {
+    pub run_id: String,
+    pub queue_position: Option<usize>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum GeminiBrowserArtifactMode {
+pub enum GeminiBrowserArtifactMode {
     Reduced,
     Full,
 }
 
 impl GeminiBrowserArtifactMode {
-    pub(crate) fn from_wire(value: Option<&str>) -> GeminiBrowserResult<Self> {
+    pub fn from_wire(value: Option<&str>) -> GeminiBrowserResult<Self> {
         match value.unwrap_or("reduced") {
             "reduced" => Ok(Self::Reduced),
             "full" => Ok(Self::Full),
@@ -44,7 +44,7 @@ impl GeminiBrowserArtifactMode {
         }
     }
 
-    pub(crate) fn as_wire(&self) -> &'static str {
+    pub fn as_wire(&self) -> &'static str {
         match self {
             Self::Reduced => "reduced",
             Self::Full => "full",
@@ -53,16 +53,16 @@ impl GeminiBrowserArtifactMode {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub(crate) struct GeminiBrowserJob {
-    pub(crate) run_id: String,
-    pub(crate) prompt: String,
-    pub(crate) source: String,
-    pub(crate) artifact_mode: GeminiBrowserArtifactMode,
-    pub(crate) browser_config: Option<GeminiBrowserProviderConfig>,
+pub struct GeminiBrowserJob {
+    pub run_id: String,
+    pub prompt: String,
+    pub source: String,
+    pub artifact_mode: GeminiBrowserArtifactMode,
+    pub browser_config: Option<GeminiBrowserProviderConfig>,
 }
 
 impl GeminiBrowserJob {
-    pub(crate) fn run_request(&self) -> GeminiBrowserRunRequest {
+    pub fn run_request(&self) -> GeminiBrowserRunRequest {
         GeminiBrowserRunRequest {
             run_id: self.run_id.clone(),
             prompt: self.prompt.clone(),
@@ -84,7 +84,7 @@ pub(crate) enum GeminiBrowserWorkerStatus {
     },
 }
 
-pub(crate) struct GeminiBrowserJobRuntime {
+pub struct GeminiBrowserJobRuntime {
     waiters: Mutex<HashMap<String, GeminiBrowserWaiterSender>>,
     cancelled_runs: Mutex<HashSet<String>>,
     worker_status: watch::Sender<GeminiBrowserWorkerStatus>,
@@ -221,7 +221,7 @@ impl GeminiBrowserJobRuntime {
         self.execution_timeout
     }
 
-    pub(crate) fn worker_hard_guard_timeout(&self) -> Duration {
+    pub fn worker_hard_guard_timeout(&self) -> Duration {
         self.worker_hard_guard_timeout
     }
 
@@ -307,7 +307,7 @@ fn worker_status_enqueue_result(status: GeminiBrowserWorkerStatus) -> WorkerRead
     }
 }
 
-pub(crate) async fn run_registered_worker<Setup, SetupFuture, WorkerFuture, WorkerError>(
+pub async fn run_registered_worker<Setup, SetupFuture, WorkerFuture, WorkerError>(
     runtime: &GeminiBrowserJobRuntime,
     setup: Setup,
 ) -> GeminiBrowserResult<()>
@@ -340,6 +340,157 @@ where
 mod tests {
     use super::*;
 
+    fn result(run_id: &str) -> GeminiBrowserRunResult {
+        GeminiBrowserRunResult {
+            run_id: run_id.to_string(),
+            status: super::super::GeminiBrowserRunStatus::Ok,
+            text: Some("answer".to_string()),
+            message: None,
+            manual_action: None,
+            artifacts: super::super::GeminiBrowserArtifactRefs::default(),
+            elapsed_ms: 1,
+            debug_summary: None,
+        }
+    }
+
+    #[test]
+    fn gemini_browser_job_serializes_queue_payload() {
+        let job = GeminiBrowserJob {
+            run_id: "run-1".to_string(),
+            prompt: "hello".to_string(),
+            source: "settings_test".to_string(),
+            artifact_mode: GeminiBrowserArtifactMode::Reduced,
+            browser_config: None,
+        };
+        let json = serde_json::to_value(job).expect("serialize job");
+        assert_eq!(json["run_id"], "run-1");
+        assert_eq!(json["artifact_mode"], "reduced");
+    }
+
+    #[tokio::test]
+    async fn worker_status_blocks_enqueue_when_startup_failed() {
+        let runtime = GeminiBrowserJobRuntime::default();
+        runtime.mark_worker_failed("startup failed");
+        let error = runtime
+            .ensure_worker_ready_for_enqueue()
+            .await
+            .expect_err("failed worker blocks enqueue");
+        assert!(error.message().contains("startup failed"));
+    }
+
+    #[tokio::test]
+    async fn worker_status_allows_enqueue_after_ready() {
+        let runtime = GeminiBrowserJobRuntime::default();
+        runtime.mark_worker_ready("2026-07-19T00:00:00Z".to_string());
+        runtime
+            .ensure_worker_ready_for_enqueue()
+            .await
+            .expect("ready worker allows enqueue");
+    }
+
+    #[tokio::test]
+    async fn worker_status_times_out_while_starting() {
+        let runtime = GeminiBrowserJobRuntime::default();
+        let error = runtime
+            .ensure_worker_ready_for_enqueue_with_timeout(Duration::from_millis(1))
+            .await
+            .expect_err("starting worker times out");
+        assert_eq!(
+            error.kind(),
+            super::super::error::GeminiBrowserErrorKind::Timeout
+        );
+    }
+
+    #[tokio::test]
+    async fn waiter_receives_terminal_worker_result() {
+        let runtime = GeminiBrowserJobRuntime::new_for_test(Duration::from_secs(1));
+        let receiver = runtime.register_waiter("run-result").expect("waiter");
+        let expected = result("run-result");
+        runtime.complete_waiter("run-result", Ok(expected.clone()));
+        assert_eq!(
+            runtime
+                .wait_for_registered_result("run-result", receiver)
+                .await
+                .expect("terminal result"),
+            expected
+        );
+    }
+
+    #[tokio::test]
+    async fn wait_for_result_removes_waiter_when_worker_channel_closes() {
+        let runtime = GeminiBrowserJobRuntime::new_for_test(Duration::from_secs(1));
+        let receiver = runtime.register_waiter("run-closed").expect("waiter");
+        runtime.remove_waiter("run-closed");
+        let error = runtime
+            .wait_for_registered_result("run-closed", receiver)
+            .await
+            .expect_err("closed channel");
+        assert_eq!(
+            error.kind(),
+            super::super::error::GeminiBrowserErrorKind::Invariant
+        );
+        assert!(!runtime.has_waiter("run-closed"));
+    }
+
+    #[tokio::test]
+    async fn register_waiter_rejects_duplicate_run_id() {
+        let runtime = GeminiBrowserJobRuntime::default();
+        let _first = runtime.register_waiter("duplicate").expect("first waiter");
+        let error = runtime.register_waiter("duplicate").expect_err("duplicate");
+        assert_eq!(
+            error.kind(),
+            super::super::error::GeminiBrowserErrorKind::Conflict
+        );
+    }
+
+    #[tokio::test]
+    async fn complete_waiter_ignores_dropped_receiver() {
+        let runtime = GeminiBrowserJobRuntime::default();
+        let receiver = runtime.register_waiter("dropped").expect("waiter");
+        drop(receiver);
+        runtime.complete_waiter("dropped", Ok(result("dropped")));
+        assert!(!runtime.has_waiter("dropped"));
+    }
+
+    #[test]
+    fn runtime_tracks_and_clears_cancelled_run_ids() {
+        let runtime = GeminiBrowserJobRuntime::default();
+        runtime.request_cancel("cancelled");
+        assert!(runtime.is_cancelled("cancelled"));
+        runtime.clear_cancelled("cancelled");
+        assert!(!runtime.is_cancelled("cancelled"));
+    }
+
+    #[tokio::test]
+    async fn worker_startup_failure_marks_runtime_failed() {
+        let runtime = GeminiBrowserJobRuntime::default();
+        let error = run_registered_worker(&runtime, || async {
+            Err::<std::future::Ready<Result<(), String>>, _>(GeminiBrowserError::invariant(
+                "setup failed",
+            ))
+        })
+        .await
+        .expect_err("startup failure");
+        assert_eq!(error.message(), "setup failed");
+        assert!(
+            matches!(runtime.worker_status_for_test(), GeminiBrowserWorkerStatus::Failed { error, .. } if error.contains("setup failed"))
+        );
+    }
+
+    #[tokio::test]
+    async fn worker_run_failure_marks_runtime_failed() {
+        let runtime = GeminiBrowserJobRuntime::default();
+        let error = run_registered_worker(&runtime, || async {
+            Ok(async { Err::<(), _>("worker failed") })
+        })
+        .await
+        .expect_err("worker failure");
+        assert_eq!(error.message(), "worker failed");
+        assert!(
+            matches!(runtime.worker_status_for_test(), GeminiBrowserWorkerStatus::Failed { error, .. } if error.contains("worker failed"))
+        );
+    }
+
     #[tokio::test]
     async fn wait_for_result_removes_waiter_on_timeout() {
         let runtime =
@@ -353,7 +504,7 @@ mod tests {
             .expect_err("timeout error");
         assert_eq!(
             error.kind(),
-            super::super::domain_error::GeminiBrowserErrorKind::Timeout
+            super::super::error::GeminiBrowserErrorKind::Timeout
         );
         assert_eq!(
             error.message(),

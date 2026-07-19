@@ -6,7 +6,7 @@ use std::time::Duration;
 use crate::error::{AppError, AppResult};
 use crate::process_tree::ProcessTreeGuard;
 
-use super::cdp_contract::ChromeCdpLaunchSpec;
+use extractum_gemini_browser::ChromeCdpLaunchSpec;
 
 const CDP_READY_TIMEOUT: Duration = Duration::from_secs(10);
 const CDP_READY_POLL_INTERVAL: Duration = Duration::from_millis(200);

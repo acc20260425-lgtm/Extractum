@@ -1,20 +1,20 @@
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum GeminiBrowserSidecarLaunch {
+pub enum GeminiBrowserSidecarLaunch {
     Bundled { name: String },
     DevNodeScript { node: String, script: PathBuf },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum GeminiBrowserBuildProfile {
+pub enum GeminiBrowserBuildProfile {
     Debug,
     Release,
 }
 
-pub(crate) const GEMINI_BROWSER_SIDECAR_NAME: &str = "gemini-browser-sidecar";
+pub const GEMINI_BROWSER_SIDECAR_NAME: &str = "gemini-browser-sidecar";
 
-pub(crate) fn bundled_sidecar_path(executable: &Path) -> PathBuf {
+pub fn bundled_sidecar_path(executable: &Path) -> PathBuf {
     let directory = executable.parent().unwrap_or_else(|| Path::new("."));
     let filename = if cfg!(windows) {
         format!("{GEMINI_BROWSER_SIDECAR_NAME}.exe")
@@ -24,7 +24,7 @@ pub(crate) fn bundled_sidecar_path(executable: &Path) -> PathBuf {
     directory.join(filename)
 }
 
-pub(crate) fn dev_sidecar_script(repo_root: &Path) -> PathBuf {
+pub fn dev_sidecar_script(repo_root: &Path) -> PathBuf {
     repo_root
         .join("sidecars")
         .join("gemini-browser")
@@ -32,7 +32,7 @@ pub(crate) fn dev_sidecar_script(repo_root: &Path) -> PathBuf {
         .join("index.js")
 }
 
-pub(crate) fn resolve_launch_mode(
+pub fn resolve_launch_mode(
     build_profile: GeminiBrowserBuildProfile,
     force_dev: bool,
     force_bundled: bool,

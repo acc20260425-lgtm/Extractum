@@ -1,6 +1,6 @@
-use super::domain_error::{GeminiBrowserError, GeminiBrowserResult};
+use super::error::{GeminiBrowserError, GeminiBrowserResult};
 
-pub(crate) fn safe_run_id(run_id: &str) -> GeminiBrowserResult<String> {
+pub fn safe_run_id(run_id: &str) -> GeminiBrowserResult<String> {
     let candidate = run_id.trim();
     if candidate.is_empty() {
         return Err(GeminiBrowserError::validation("run_id cannot be empty"));

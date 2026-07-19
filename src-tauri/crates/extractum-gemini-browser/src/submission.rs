@@ -1,19 +1,18 @@
 use std::{future::Future, path::Path};
 
 use super::{
-    browser_executor::StatusObserver,
-    domain_error::{GeminiBrowserError, GeminiBrowserResult},
-    portable_state::GeminiBrowserDomainState,
+    error::{GeminiBrowserError, GeminiBrowserResult},
+    executor::StatusObserver,
     run_log,
-    runtime::{
-        GeminiBrowserArtifactMode, GeminiBrowserJob, GeminiBrowserJobRuntime,
-        QueuedGeminiBrowserJob,
-    },
+    runtime::{GeminiBrowserArtifactMode, GeminiBrowserJob, GeminiBrowserJobRuntime},
+    state::GeminiBrowserDomainState,
     GeminiBrowserArtifactRefs, GeminiBrowserProviderConfig, GeminiBrowserProviderStatusKind,
     GeminiBrowserRunRequest, GeminiBrowserRunResult, GeminiBrowserRunStatus,
 };
 
-pub(crate) async fn submit_and_wait<Enqueue, EnqueueFuture>(
+pub use super::runtime::QueuedGeminiBrowserJob;
+
+pub async fn submit_and_wait<Enqueue, EnqueueFuture>(
     runs_dir: &Path,
     runtime: &GeminiBrowserJobRuntime,
     state: &GeminiBrowserDomainState,
@@ -208,7 +207,7 @@ mod tests {
         .expect_err("duplicate");
         assert_eq!(
             error.kind(),
-            super::super::domain_error::GeminiBrowserErrorKind::Conflict
+            super::super::error::GeminiBrowserErrorKind::Conflict
         );
     }
 
@@ -239,7 +238,7 @@ mod tests {
         .expect_err("duplicate waiter");
         assert_eq!(
             error.kind(),
-            super::super::domain_error::GeminiBrowserErrorKind::Conflict
+            super::super::error::GeminiBrowserErrorKind::Conflict
         );
         runtime.remove_waiter("waiter");
     }
@@ -287,7 +286,7 @@ mod tests {
         .expect_err("invalid");
         assert_eq!(
             error.kind(),
-            super::super::domain_error::GeminiBrowserErrorKind::Validation
+            super::super::error::GeminiBrowserErrorKind::Validation
         );
         assert!(run_log::list_runs(temp.path(), 10)
             .expect("runs")
@@ -314,7 +313,7 @@ mod tests {
         .expect_err("log failure");
         assert_eq!(
             error.kind(),
-            super::super::domain_error::GeminiBrowserErrorKind::Persistence
+            super::super::error::GeminiBrowserErrorKind::Persistence
         );
         assert!(!runtime.has_waiter("log-fail"));
     }

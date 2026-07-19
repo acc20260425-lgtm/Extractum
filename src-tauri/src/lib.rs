@@ -211,8 +211,6 @@ pub fn run() {
                 window.open_devtools();
             }
 
-            app.state::<GeminiBrowserState>()
-                .init_status_snapshot(app.handle())?;
             let worker_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(error) = start_gemini_browser_job_worker(worker_handle).await {

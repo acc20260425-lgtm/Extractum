@@ -1,24 +1,10 @@
-mod browser_executor;
 mod cdp_chrome;
-mod cdp_contract;
 mod commands;
-mod domain_error;
-mod execution;
 mod executor;
 mod jobs;
 mod paths;
-mod portable_state;
-mod protocol;
-mod reconciliation;
-mod run_id;
-mod run_log;
-mod runtime;
 mod sidecar;
-mod sidecar_launch;
 mod state;
-mod status;
-mod submission;
-mod types;
 
 pub(crate) use cdp_chrome::shutdown_cdp_chrome;
 pub use commands::{
@@ -35,12 +21,14 @@ pub(crate) use jobs::{
     setup_gemini_browser_apalis_storage,
 };
 pub(crate) use paths::{chrome_cdp_profile_dir, path_string, profile_dir, run_dir, runs_dir};
-pub(crate) use runtime::GeminiBrowserJobRuntime;
-#[cfg(test)]
-pub(crate) use runtime::{GeminiBrowserArtifactMode, GeminiBrowserJob};
 pub(crate) use sidecar::shutdown_sidecar;
 pub use state::GeminiBrowserState;
-pub use types::{
+
+pub(crate) use extractum_gemini_browser::{
+    create_queued_run, finish_run, list_runs, mark_running, read_run, recorded_run_dir,
+    GeminiBrowserJobRuntime,
+};
+pub use extractum_gemini_browser::{
     GeminiBrowserAnswerCompletionReason, GeminiBrowserArtifactRefs, GeminiBrowserProviderConfig,
     GeminiBrowserProviderMode, GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind,
     GeminiBrowserRun, GeminiBrowserRunLogSummary, GeminiBrowserRunRequest, GeminiBrowserRunResult,
@@ -48,50 +36,8 @@ pub use types::{
     GeminiBrowserSidecarResponse, GeminiBrowserStartChromeResult,
 };
 #[cfg(test)]
-pub(crate) use types::{GeminiBrowserDebugErrorStage, GeminiBrowserRunDebugSummary};
-
-pub(crate) fn create_queued_run(
-    runs_dir: &std::path::Path,
-    run_id: &str,
-    source: &str,
-    prompt: &str,
-) -> crate::error::AppResult<GeminiBrowserRun> {
-    run_log::create_queued_run(runs_dir, run_id, source, prompt)
-        .map_err(executor::domain_error_to_app)
-}
-
-pub(crate) fn mark_running(
-    runs_dir: &std::path::Path,
-    run_id: &str,
-) -> crate::error::AppResult<GeminiBrowserRun> {
-    run_log::mark_running(runs_dir, run_id).map_err(executor::domain_error_to_app)
-}
-
-pub(crate) fn finish_run(
-    runs_dir: &std::path::Path,
-    run_id: &str,
-    result: GeminiBrowserRunResult,
-) -> crate::error::AppResult<GeminiBrowserRun> {
-    run_log::finish_run(runs_dir, run_id, result).map_err(executor::domain_error_to_app)
-}
-
-pub(crate) fn list_runs(
-    runs_dir: &std::path::Path,
-    limit: usize,
-) -> crate::error::AppResult<GeminiBrowserRunLogSummary> {
-    run_log::list_runs(runs_dir, limit).map_err(executor::domain_error_to_app)
-}
-
-pub(crate) fn read_run(
-    runs_dir: &std::path::Path,
-    run_id: &str,
-) -> crate::error::AppResult<GeminiBrowserRun> {
-    run_log::read_run(runs_dir, run_id).map_err(executor::domain_error_to_app)
-}
-
-pub(crate) fn recorded_run_dir(
-    runs_dir: &std::path::Path,
-    run_id: &str,
-) -> crate::error::AppResult<std::path::PathBuf> {
-    run_log::recorded_run_dir(runs_dir, run_id).map_err(executor::domain_error_to_app)
-}
+pub(crate) use extractum_gemini_browser::{GeminiBrowserArtifactMode, GeminiBrowserJob};
+#[cfg(test)]
+pub(crate) use extractum_gemini_browser::{
+    GeminiBrowserDebugErrorStage, GeminiBrowserRunDebugSummary,
+};

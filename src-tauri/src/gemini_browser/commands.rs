@@ -4,19 +4,21 @@ use tauri_plugin_opener::OpenerExt;
 use crate::error::{AppError, AppResult};
 use crate::external_process::ExternalProcessShutdownState;
 
-use super::browser_executor::{BrowserExecutor, BrowserSessionContext, BrowserStopReason};
 use super::executor::{
     app_error_to_domain, domain_error_to_app, AppBrowserExecutor, AppStatusObserver,
     DomainErrorContext,
 };
 use super::jobs::{cancel_gemini_browser_job, enqueue_gemini_browser_job};
-use super::runtime::GeminiBrowserJobRuntime;
-use super::submission::submit_and_wait;
 use super::{
-    cdp_chrome, cdp_contract, chrome_cdp_profile_dir, list_runs, path_string, profile_dir,
-    read_run, recorded_run_dir, runs_dir, GeminiBrowserProviderConfig, GeminiBrowserProviderStatus,
-    GeminiBrowserRun, GeminiBrowserRunLogSummary, GeminiBrowserRunRequest,
-    GeminiBrowserRunResult, GeminiBrowserStartChromeResult, GeminiBrowserState,
+    cdp_chrome, chrome_cdp_profile_dir, list_runs, path_string, profile_dir, read_run,
+    recorded_run_dir, runs_dir, GeminiBrowserProviderConfig, GeminiBrowserProviderStatus,
+    GeminiBrowserRun, GeminiBrowserRunLogSummary, GeminiBrowserRunRequest, GeminiBrowserRunResult,
+    GeminiBrowserStartChromeResult, GeminiBrowserState,
+};
+use extractum_gemini_browser::{
+    build_chrome_cdp_launch_spec, open_provider, read_provider_status,
+    read_reconciled_status_snapshot, resume_provider, start_chrome_result, submit_and_wait,
+    BrowserExecutor, BrowserSessionContext, BrowserStopReason, GeminiBrowserJobRuntime,
 };
 
 #[tauri::command]
@@ -34,7 +36,7 @@ pub async fn gemini_bridge_status_snapshot(
     state: State<'_, GeminiBrowserState>,
 ) -> AppResult<GeminiBrowserProviderStatus> {
     super::jobs::ensure_gemini_browser_startup_reconciled(&handle).await?;
-    super::status::read_reconciled_status_snapshot(
+    read_reconciled_status_snapshot(
         state.domain(),
         &runs_dir(&handle)?,
         path_string(&profile_dir(&handle)?),
@@ -50,7 +52,7 @@ pub(crate) async fn provider_status(
     let browser_profile_dir = path_string(&profile_dir(handle)?);
     let executor = AppBrowserExecutor::new(handle, state);
     super::jobs::ensure_gemini_browser_startup_reconciled(handle).await?;
-    super::status::read_provider_status(
+    read_provider_status(
         state.domain(),
         &executor,
         BrowserSessionContext {
@@ -65,7 +67,7 @@ pub(crate) async fn provider_status(
 }
 
 fn get_run_core(runs_root: &std::path::Path, run_id: &str) -> AppResult<GeminiBrowserRun> {
-    read_run(runs_root, run_id)
+    read_run(runs_root, run_id).map_err(domain_error_to_app)
 }
 
 #[tauri::command]
@@ -75,7 +77,7 @@ pub async fn gemini_bridge_open_browser(
     browser_config: Option<GeminiBrowserProviderConfig>,
 ) -> AppResult<GeminiBrowserProviderStatus> {
     let executor = AppBrowserExecutor::new(&handle, &state);
-    super::status::open_provider(
+    open_provider(
         &executor,
         &AppStatusObserver,
         BrowserSessionContext {
@@ -94,11 +96,9 @@ pub async fn gemini_bridge_start_cdp_chrome(
     browser_config: Option<GeminiBrowserProviderConfig>,
 ) -> AppResult<GeminiBrowserStartChromeResult> {
     let chrome_path = cdp_chrome::find_chrome_executable();
-    let spec = cdp_contract::build_chrome_cdp_launch_spec(
-        chrome_cdp_profile_dir(&handle)?,
-        browser_config.as_ref(),
-    )
-    .map_err(domain_error_to_app)?;
+    let spec =
+        build_chrome_cdp_launch_spec(chrome_cdp_profile_dir(&handle)?, browser_config.as_ref())
+            .map_err(domain_error_to_app)?;
     let shutdown = handle
         .state::<ExternalProcessShutdownState>()
         .inner()
@@ -125,7 +125,7 @@ pub async fn gemini_bridge_start_cdp_chrome(
         }
         return Err(error);
     }
-    Ok(cdp_contract::start_chrome_result(&spec))
+    Ok(start_chrome_result(&spec))
 }
 
 #[tauri::command]
@@ -197,7 +197,7 @@ pub async fn gemini_bridge_resume(
     browser_config: Option<GeminiBrowserProviderConfig>,
 ) -> AppResult<GeminiBrowserProviderStatus> {
     let executor = AppBrowserExecutor::new(&handle, &state);
-    super::status::resume_provider(
+    resume_provider(
         &executor,
         &AppStatusObserver,
         BrowserSessionContext {
@@ -217,7 +217,6 @@ pub async fn gemini_bridge_stop(
     if let Some(run_id) = state.active_run_id().await {
         return cancel_gemini_browser_job(&handle, &run_id).await;
     }
-    state.request_stop().await;
     AppBrowserExecutor::new(&handle, &state)
         .stop(BrowserStopReason::Requested)
         .await
@@ -230,7 +229,7 @@ pub async fn gemini_bridge_list_runs(
     limit: Option<usize>,
 ) -> AppResult<GeminiBrowserRunLogSummary> {
     super::jobs::ensure_gemini_browser_startup_reconciled(&handle).await?;
-    list_runs(&runs_dir(&handle)?, limit.unwrap_or(20))
+    list_runs(&runs_dir(&handle)?, limit.unwrap_or(20)).map_err(domain_error_to_app)
 }
 
 #[tauri::command]
@@ -244,7 +243,7 @@ pub async fn gemini_bridge_get_run(
 
 #[tauri::command]
 pub async fn gemini_bridge_open_run_folder(handle: AppHandle, run_id: String) -> AppResult<()> {
-    let dir = recorded_run_dir(&runs_dir(&handle)?, &run_id)?;
+    let dir = recorded_run_dir(&runs_dir(&handle)?, &run_id).map_err(domain_error_to_app)?;
     handle
         .opener()
         .open_path(path_string(&dir), None::<&str>)
@@ -269,9 +268,9 @@ mod tests {
         GeminiBrowserArtifactMode, GeminiBrowserJob, GeminiBrowserJobRuntime,
         QueuedGeminiBrowserJob,
     };
-    use super::super::run_log::read_run;
     use super::super::{mark_running, GeminiBrowserProviderStatusKind};
     use super::*;
+    use extractum_gemini_browser::read_run;
 
     #[tokio::test]
     async fn legacy_disabled_provider_status_uses_cached_snapshot_when_sidecar_is_busy() {

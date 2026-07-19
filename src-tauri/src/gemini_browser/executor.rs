@@ -2,14 +2,12 @@ use tauri::AppHandle;
 
 use crate::error::{AppError, AppErrorKind, AppResult};
 
-use super::{
-    browser_executor::{
-        BrowserExecutor, BrowserExecutorFuture, BrowserRunContext, BrowserSessionContext,
-        BrowserStopReason, StatusObserver,
-    },
-    domain_error::{GeminiBrowserError, GeminiBrowserErrorKind},
-    sidecar, GeminiBrowserProviderStatus, GeminiBrowserState,
+use extractum_gemini_browser::{
+    BrowserExecutor, BrowserExecutorFuture, BrowserRunContext, BrowserSessionContext,
+    BrowserStopReason, GeminiBrowserError, GeminiBrowserErrorKind, StatusObserver,
 };
+
+use super::{sidecar, GeminiBrowserProviderStatus, GeminiBrowserState};
 
 #[derive(Clone, Copy)]
 pub(crate) enum DomainErrorContext {
@@ -192,7 +190,7 @@ mod tests {
     };
 
     use super::{discard_abandoned_transport, domain_error_to_app};
-    use crate::gemini_browser::domain_error::GeminiBrowserError;
+    use extractum_gemini_browser::GeminiBrowserError;
 
     #[test]
     fn gemini_browser_error_maps_to_exact_legacy_app_error_json() {

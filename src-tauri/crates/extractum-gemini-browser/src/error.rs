@@ -1,9 +1,9 @@
 use std::fmt;
 
-pub(crate) type GeminiBrowserResult<T> = Result<T, GeminiBrowserError>;
+pub type GeminiBrowserResult<T> = Result<T, GeminiBrowserError>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum GeminiBrowserErrorKind {
+pub enum GeminiBrowserErrorKind {
     Validation,
     NotFound,
     Conflict,
@@ -17,17 +17,17 @@ pub(crate) enum GeminiBrowserErrorKind {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct GeminiBrowserError {
+pub struct GeminiBrowserError {
     kind: GeminiBrowserErrorKind,
     message: String,
 }
 
 impl GeminiBrowserError {
-    pub(crate) fn kind(&self) -> GeminiBrowserErrorKind {
+    pub fn kind(&self) -> GeminiBrowserErrorKind {
         self.kind
     }
 
-    pub(crate) fn message(&self) -> &str {
+    pub fn message(&self) -> &str {
         &self.message
     }
 
@@ -38,43 +38,43 @@ impl GeminiBrowserError {
         }
     }
 
-    pub(crate) fn validation(message: impl Into<String>) -> Self {
+    pub fn validation(message: impl Into<String>) -> Self {
         Self::new(GeminiBrowserErrorKind::Validation, message)
     }
 
-    pub(crate) fn not_found(message: impl Into<String>) -> Self {
+    pub fn not_found(message: impl Into<String>) -> Self {
         Self::new(GeminiBrowserErrorKind::NotFound, message)
     }
 
-    pub(crate) fn conflict(message: impl Into<String>) -> Self {
+    pub fn conflict(message: impl Into<String>) -> Self {
         Self::new(GeminiBrowserErrorKind::Conflict, message)
     }
 
-    pub(crate) fn persistence(message: impl Into<String>) -> Self {
+    pub fn persistence(message: impl Into<String>) -> Self {
         Self::new(GeminiBrowserErrorKind::Persistence, message)
     }
 
-    pub(crate) fn protocol(message: impl Into<String>) -> Self {
+    pub fn protocol(message: impl Into<String>) -> Self {
         Self::new(GeminiBrowserErrorKind::Protocol, message)
     }
 
-    pub(crate) fn transport(message: impl Into<String>) -> Self {
+    pub fn transport(message: impl Into<String>) -> Self {
         Self::new(GeminiBrowserErrorKind::Transport, message)
     }
 
-    pub(crate) fn browser(message: impl Into<String>) -> Self {
+    pub fn browser(message: impl Into<String>) -> Self {
         Self::new(GeminiBrowserErrorKind::Browser, message)
     }
 
-    pub(crate) fn timeout(message: impl Into<String>) -> Self {
+    pub fn timeout(message: impl Into<String>) -> Self {
         Self::new(GeminiBrowserErrorKind::Timeout, message)
     }
 
-    pub(crate) fn cancellation(message: impl Into<String>) -> Self {
+    pub fn cancellation(message: impl Into<String>) -> Self {
         Self::new(GeminiBrowserErrorKind::Cancellation, message)
     }
 
-    pub(crate) fn invariant(message: impl Into<String>) -> Self {
+    pub fn invariant(message: impl Into<String>) -> Self {
         Self::new(GeminiBrowserErrorKind::Invariant, message)
     }
 }

@@ -1,24 +1,24 @@
 use std::{path::Path, path::PathBuf, time::Duration};
 
 use super::{
-    browser_executor::{BrowserExecutor, BrowserRunContext, BrowserStopReason, StatusObserver},
-    domain_error::{GeminiBrowserError, GeminiBrowserErrorKind, GeminiBrowserResult},
-    portable_state::{ActiveRunControl, GeminiBrowserDomainState},
+    error::{GeminiBrowserError, GeminiBrowserErrorKind, GeminiBrowserResult},
+    executor::{BrowserExecutor, BrowserRunContext, BrowserStopReason, StatusObserver},
     run_log,
     runtime::{GeminiBrowserJob, GeminiBrowserJobRuntime},
+    state::{ActiveRunControl, GeminiBrowserDomainState},
     GeminiBrowserArtifactRefs, GeminiBrowserRunResult, GeminiBrowserRunStatus,
 };
 
 #[derive(Clone, Debug)]
-pub(crate) struct DeliveredJobInput {
-    pub(crate) job: GeminiBrowserJob,
-    pub(crate) runs_dir: PathBuf,
-    pub(crate) browser_profile_dir: String,
-    pub(crate) artifact_dir: String,
+pub struct DeliveredJobInput {
+    pub job: GeminiBrowserJob,
+    pub runs_dir: PathBuf,
+    pub browser_profile_dir: String,
+    pub artifact_dir: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum DeliveryOutcome {
+pub enum DeliveryOutcome {
     Completed {
         result: GeminiBrowserRunResult,
     },
@@ -39,7 +39,7 @@ pub(crate) enum DeliveryOutcome {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum CancelRunOutcome {
+pub enum CancelRunOutcome {
     ActiveCancellationRequested {
         stop_error: Option<GeminiBrowserError>,
     },
@@ -68,7 +68,7 @@ async fn stop_executor_once(
         .clone()
 }
 
-pub(crate) async fn execute_delivered_job(
+pub async fn execute_delivered_job(
     runtime: &GeminiBrowserJobRuntime,
     state: &GeminiBrowserDomainState,
     executor: &dyn BrowserExecutor,
@@ -147,7 +147,7 @@ pub(crate) async fn execute_delivered_job(
     }
 }
 
-pub(crate) async fn cancel_run(
+pub async fn cancel_run(
     runs_dir: &Path,
     runtime: &GeminiBrowserJobRuntime,
     state: &GeminiBrowserDomainState,
@@ -281,7 +281,7 @@ mod tests {
     use super::*;
 
     use super::super::{
-        browser_executor::{BrowserExecutorFuture, BrowserSessionContext},
+        executor::{BrowserExecutorFuture, BrowserSessionContext},
         GeminiBrowserArtifactMode, GeminiBrowserProviderConfig, GeminiBrowserProviderStatus,
         GeminiBrowserProviderStatusKind,
     };
@@ -754,5 +754,154 @@ mod tests {
         assert_eq!(state.active_run_id().await, None);
         assert!(!runtime.is_cancelled("run-timeout-first"));
         assert!(!runtime.is_cancelled("run-success-next"));
+    }
+
+    #[tokio::test]
+    async fn cancel_missing_run_returns_without_run_log_side_effects() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let outcome = cancel_run(
+            temp.path(),
+            &GeminiBrowserJobRuntime::default(),
+            &GeminiBrowserDomainState::default(),
+            &BlockingExecutor::new(Ok(success_result("unused")), None),
+            &RecordingObserver::default(),
+            "missing",
+        )
+        .await
+        .expect("missing cancellation");
+        assert_eq!(outcome, CancelRunOutcome::Missing);
+        assert!(run_log::list_runs(temp.path(), 10)
+            .expect("runs")
+            .runs
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn cancel_queued_run_updates_terminal_snapshot() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        run_log::create_queued_run(temp.path(), "queued-snapshot", "settings_test", "hello")
+            .expect("queued run");
+        let state = GeminiBrowserDomainState::default();
+        let observer = RecordingObserver::default();
+        let outcome = cancel_run(
+            temp.path(),
+            &GeminiBrowserJobRuntime::default(),
+            &state,
+            &BlockingExecutor::new(Ok(success_result("unused")), None),
+            &observer,
+            "queued-snapshot",
+        )
+        .await
+        .expect("cancel queued");
+        assert!(matches!(outcome, CancelRunOutcome::QueuedCancelled { .. }));
+        let snapshot = state.status_snapshot_option().expect("terminal snapshot");
+        assert_eq!(snapshot.status, GeminiBrowserProviderStatusKind::Stopped);
+        assert_eq!(snapshot.latest_message.as_deref(), Some("Cancelled"));
+        assert_eq!(observer.0.lock().last(), Some(&snapshot));
+    }
+
+    #[tokio::test]
+    async fn restart_worker_entry_skips_terminal_cancelled_run_log() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let input = setup_input(&temp, "terminal-cancelled");
+        let cancelled = cancelled_result("terminal-cancelled");
+        run_log::finish_run(temp.path(), "terminal-cancelled", cancelled.clone())
+            .expect("terminal run");
+        let executor = BlockingExecutor::new(Ok(success_result("unused")), None);
+        let outcome = execute_delivered_job(
+            &GeminiBrowserJobRuntime::default(),
+            &GeminiBrowserDomainState::default(),
+            &executor,
+            &RecordingObserver::default(),
+            input,
+        )
+        .await
+        .expect("terminal delivery");
+        assert_eq!(
+            outcome,
+            DeliveryOutcome::AlreadyTerminal {
+                result: Some(cancelled)
+            }
+        );
+        assert!(executor.stop_reasons.lock().is_empty());
+    }
+
+    #[tokio::test]
+    async fn restart_worker_entry_acknowledges_missing_run_log_without_sidecar() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let input = DeliveredJobInput {
+            job: job("missing-delivery"),
+            runs_dir: temp.path().to_path_buf(),
+            browser_profile_dir: "profile".to_string(),
+            artifact_dir: temp.path().join("missing-delivery").display().to_string(),
+        };
+        let executor = BlockingExecutor::new(Ok(success_result("unused")), None);
+        let outcome = execute_delivered_job(
+            &GeminiBrowserJobRuntime::default(),
+            &GeminiBrowserDomainState::default(),
+            &executor,
+            &RecordingObserver::default(),
+            input,
+        )
+        .await
+        .expect("missing delivery");
+        assert_eq!(outcome, DeliveryOutcome::AlreadyTerminal { result: None });
+        assert!(executor.stop_reasons.lock().is_empty());
+    }
+
+    #[tokio::test]
+    async fn worker_handler_marks_run_running_and_terminal() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let input = setup_input(&temp, "worker-success");
+        let expected = success_result("worker-success");
+        let executor = BlockingExecutor::new(Ok(expected.clone()), None);
+        executor.release_send.notify_one();
+        let outcome = execute_delivered_job(
+            &GeminiBrowserJobRuntime::default(),
+            &GeminiBrowserDomainState::default(),
+            &executor,
+            &RecordingObserver::default(),
+            input,
+        )
+        .await
+        .expect("delivery");
+        assert_eq!(
+            outcome,
+            DeliveryOutcome::Completed {
+                result: expected.clone()
+            }
+        );
+        let run = run_log::read_run(temp.path(), "worker-success").expect("run");
+        assert_eq!(run.status, GeminiBrowserRunStatus::Ok);
+        assert_eq!(run.result, Some(expected));
+    }
+
+    #[tokio::test]
+    async fn worker_handler_converts_executor_error_to_terminal_failed_result() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let input = setup_input(&temp, "worker-failure");
+        let executor =
+            BlockingExecutor::new(Err(GeminiBrowserError::browser("executor failed")), None);
+        executor.release_send.notify_one();
+        let outcome = execute_delivered_job(
+            &GeminiBrowserJobRuntime::default(),
+            &GeminiBrowserDomainState::default(),
+            &executor,
+            &RecordingObserver::default(),
+            input,
+        )
+        .await
+        .expect("delivery terminalizes error");
+        let result = match outcome {
+            DeliveryOutcome::Failed { result } => result,
+            other => panic!("unexpected outcome: {other:?}"),
+        };
+        assert_eq!(result.message.as_deref(), Some("executor failed"));
+        assert_eq!(
+            run_log::read_run(temp.path(), "worker-failure")
+                .expect("run")
+                .result,
+            Some(result)
+        );
     }
 }

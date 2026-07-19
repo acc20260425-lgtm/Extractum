@@ -1,38 +1,38 @@
 use std::{future::Future, pin::Pin, time::Duration};
 
 use super::{
-    domain_error::GeminiBrowserResult,
+    error::GeminiBrowserResult,
     types::{
         GeminiBrowserProviderConfig, GeminiBrowserProviderStatus, GeminiBrowserRunRequest,
         GeminiBrowserRunResult,
     },
 };
 
-pub(crate) type BrowserExecutorFuture<'a, T> =
+pub type BrowserExecutorFuture<'a, T> =
     Pin<Box<dyn Future<Output = GeminiBrowserResult<T>> + Send + 'a>>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct BrowserSessionContext {
-    pub(crate) browser_profile_dir: String,
-    pub(crate) browser_config: Option<GeminiBrowserProviderConfig>,
+pub struct BrowserSessionContext {
+    pub browser_profile_dir: String,
+    pub browser_config: Option<GeminiBrowserProviderConfig>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct BrowserRunContext {
-    pub(crate) request: GeminiBrowserRunRequest,
-    pub(crate) browser_profile_dir: String,
-    pub(crate) artifact_dir: String,
-    pub(crate) browser_config: Option<GeminiBrowserProviderConfig>,
+pub struct BrowserRunContext {
+    pub request: GeminiBrowserRunRequest,
+    pub browser_profile_dir: String,
+    pub artifact_dir: String,
+    pub browser_config: Option<GeminiBrowserProviderConfig>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum BrowserStopReason {
+pub enum BrowserStopReason {
     Requested,
     Cancelled { run_id: String },
     TimedOut { run_id: String, timeout: Duration },
 }
 
-pub(crate) trait BrowserExecutor: Send + Sync {
+pub trait BrowserExecutor: Send + Sync {
     fn status(
         &self,
         context: BrowserSessionContext,
@@ -50,6 +50,6 @@ pub(crate) trait BrowserExecutor: Send + Sync {
     fn stop(&self, reason: BrowserStopReason) -> BrowserExecutorFuture<'_, ()>;
 }
 
-pub(crate) trait StatusObserver: Send + Sync {
+pub trait StatusObserver: Send + Sync {
     fn publish(&self, status: &GeminiBrowserProviderStatus);
 }

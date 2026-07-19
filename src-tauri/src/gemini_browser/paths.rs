@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
 use super::executor::domain_error_to_app;
-use super::run_id::safe_run_id;
 use crate::error::{AppError, AppResult};
+use extractum_gemini_browser::safe_run_id;
 
 pub(crate) const GEMINI_BROWSER_DIR: &str = "gemini-browser";
 pub(crate) const PROFILE_DIR: &str = "profile";

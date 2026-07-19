@@ -10,16 +10,15 @@ use tokio::time::timeout;
 use crate::error::AppResult;
 use crate::{external_process::ExternalProcessShutdownState, process_tree::ProcessTreeGuard};
 
-use super::domain_error::{GeminiBrowserError, GeminiBrowserResult};
-use super::protocol::{classify_resume_response, GeminiBrowserJsonlCodec, ResumeSidecarOutcome};
-use super::sidecar_launch::{
-    bundled_sidecar_path, resolve_launch_mode, GeminiBrowserBuildProfile,
-    GeminiBrowserSidecarLaunch,
-};
 use super::{
     GeminiBrowserProviderConfig, GeminiBrowserProviderStatus, GeminiBrowserRunRequest,
     GeminiBrowserRunResult, GeminiBrowserSidecarCommand, GeminiBrowserSidecarResponse,
     GeminiBrowserState,
+};
+use extractum_gemini_browser::{
+    bundled_sidecar_path, classify_resume_response, resolve_launch_mode, GeminiBrowserBuildProfile,
+    GeminiBrowserError, GeminiBrowserJsonlCodec, GeminiBrowserResult, GeminiBrowserSidecarLaunch,
+    ResumeSidecarOutcome,
 };
 
 enum GeminiBrowserSidecarTransport {
@@ -52,7 +51,7 @@ impl GeminiBrowserSidecarProcess {
         })?;
         let repo_root = std::env::current_dir()
             .map_err(|error| GeminiBrowserError::transport(error.to_string()))?;
-        let dev_script = super::sidecar_launch::dev_sidecar_script(&repo_root);
+        let dev_script = extractum_gemini_browser::dev_sidecar_script(&repo_root);
         let build_profile = if cfg!(debug_assertions) {
             GeminiBrowserBuildProfile::Debug
         } else {

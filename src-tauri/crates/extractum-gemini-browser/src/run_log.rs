@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 
-use super::domain_error::{GeminiBrowserError, GeminiBrowserResult};
+use super::error::{GeminiBrowserError, GeminiBrowserResult};
 use super::run_id::safe_run_id;
 use super::{
     GeminiBrowserRun, GeminiBrowserRunLogSummary, GeminiBrowserRunResult, GeminiBrowserRunStatus,
@@ -38,7 +38,7 @@ fn prompt_preview(prompt: &str) -> String {
     }
 }
 
-pub(crate) fn create_queued_run(
+pub fn create_queued_run(
     runs_dir: &Path,
     run_id: &str,
     source: &str,
@@ -62,7 +62,7 @@ pub(crate) fn create_queued_run(
     Ok(run)
 }
 
-pub(crate) fn mark_running(runs_dir: &Path, run_id: &str) -> GeminiBrowserResult<GeminiBrowserRun> {
+pub fn mark_running(runs_dir: &Path, run_id: &str) -> GeminiBrowserResult<GeminiBrowserRun> {
     let mut run = read_run_file(&run_file_path(runs_dir, run_id)?)?;
     run.status = GeminiBrowserRunStatus::Running;
     run.updated_at = now_string();
@@ -70,7 +70,7 @@ pub(crate) fn mark_running(runs_dir: &Path, run_id: &str) -> GeminiBrowserResult
     Ok(run)
 }
 
-pub(crate) fn finish_run(
+pub fn finish_run(
     runs_dir: &Path,
     run_id: &str,
     result: GeminiBrowserRunResult,
@@ -83,10 +83,7 @@ pub(crate) fn finish_run(
     Ok(run)
 }
 
-pub(crate) fn list_runs(
-    runs_dir: &Path,
-    limit: usize,
-) -> GeminiBrowserResult<GeminiBrowserRunLogSummary> {
+pub fn list_runs(runs_dir: &Path, limit: usize) -> GeminiBrowserResult<GeminiBrowserRunLogSummary> {
     prune_expired_runs(runs_dir)?;
     if !runs_dir.exists() {
         return Ok(GeminiBrowserRunLogSummary { runs: Vec::new() });
@@ -108,7 +105,7 @@ pub(crate) fn list_runs(
     Ok(GeminiBrowserRunLogSummary { runs })
 }
 
-pub(crate) fn read_run(runs_dir: &Path, run_id: &str) -> GeminiBrowserResult<GeminiBrowserRun> {
+pub fn read_run(runs_dir: &Path, run_id: &str) -> GeminiBrowserResult<GeminiBrowserRun> {
     prune_expired_runs(runs_dir)?;
     let path = run_file_path(runs_dir, run_id)?;
     if !path.exists() {
@@ -119,7 +116,7 @@ pub(crate) fn read_run(runs_dir: &Path, run_id: &str) -> GeminiBrowserResult<Gem
     read_run_file(&path)
 }
 
-pub(crate) fn recorded_run_dir(runs_dir: &Path, run_id: &str) -> GeminiBrowserResult<PathBuf> {
+pub fn recorded_run_dir(runs_dir: &Path, run_id: &str) -> GeminiBrowserResult<PathBuf> {
     prune_expired_runs(runs_dir)?;
     let safe_id = safe_run_id(run_id)?;
     let dir = runs_dir.join(&safe_id);
@@ -237,7 +234,7 @@ mod tests {
     use tempfile::tempdir;
     use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 
-    use crate::gemini_browser::{
+    use crate::{
         create_queued_run, finish_run, list_runs, mark_running,
         GeminiBrowserAnswerCompletionReason, GeminiBrowserArtifactRefs,
         GeminiBrowserDebugErrorStage, GeminiBrowserProviderMode, GeminiBrowserRunDebugSummary,
@@ -330,10 +327,7 @@ mod tests {
 
         let error = super::read_run(temp.path(), "missing-run").expect_err("missing run errors");
 
-        assert_eq!(
-            error.kind(),
-            crate::gemini_browser::domain_error::GeminiBrowserErrorKind::NotFound
-        );
+        assert_eq!(error.kind(), crate::error::GeminiBrowserErrorKind::NotFound);
         assert_eq!(error.message(), "Gemini browser run was not found");
     }
 

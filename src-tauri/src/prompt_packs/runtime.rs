@@ -846,7 +846,8 @@ mod tests {
                     &runs_root,
                     &browser_run_id_for_hook,
                     cancelled_browser_result(&browser_run_id_for_hook),
-                )?;
+                )
+                .map_err(|error| crate::error::AppError::internal(error.to_string()))?;
                 Ok(())
             },
         );
@@ -910,7 +911,8 @@ mod tests {
                     &runs_root,
                     &browser_run_id_for_hook,
                     cancelled_browser_result(&browser_run_id_for_hook),
-                )?;
+                )
+                .map_err(|error| crate::error::AppError::internal(error.to_string()))?;
                 Ok(())
             },
         );
