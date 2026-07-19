@@ -375,7 +375,7 @@ mod tests {
         state.set_status_snapshot(GeminiBrowserDomainState::not_started_status(
             "profile-dir".to_string(),
         ));
-        let _token = state.start_run("active-run".to_string()).await;
+        state.start_run("active-run".to_string()).await;
         let status =
             read_reconciled_status_snapshot(&state, temp.path(), "profile-dir".to_string())
                 .expect("active snapshot");

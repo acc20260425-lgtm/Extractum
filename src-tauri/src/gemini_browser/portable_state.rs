@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::sync::Arc;
 
 use parking_lot::{Mutex, RwLock};
 use tokio::sync::OnceCell;
@@ -11,10 +12,30 @@ use super::{
 
 #[derive(Default)]
 pub(crate) struct GeminiBrowserDomainState {
-    active_run_id: Mutex<Option<String>>,
-    cancellation: Mutex<Option<CancellationToken>>,
+    active: Mutex<Option<ActiveRunControl>>,
     status_snapshot: RwLock<Option<GeminiBrowserProviderStatus>>,
     startup_reconciliation: OnceCell<()>,
+}
+
+#[derive(Clone)]
+pub(crate) struct ActiveRunControl {
+    run_id: String,
+    cancellation: CancellationToken,
+    stop_result: Arc<OnceCell<Option<super::domain_error::GeminiBrowserError>>>,
+}
+
+impl ActiveRunControl {
+    pub(crate) fn run_id(&self) -> &str {
+        &self.run_id
+    }
+
+    pub(crate) fn cancellation(&self) -> CancellationToken {
+        self.cancellation.clone()
+    }
+
+    pub(crate) fn stop_result(&self) -> &OnceCell<Option<super::domain_error::GeminiBrowserError>> {
+        &self.stop_result
+    }
 }
 
 impl GeminiBrowserDomainState {
@@ -124,39 +145,55 @@ impl GeminiBrowserDomainState {
     }
 
     pub(crate) async fn active_run_id(&self) -> Option<String> {
-        self.active_run_id.lock().clone()
+        self.active
+            .lock()
+            .as_ref()
+            .map(|active| active.run_id.clone())
     }
 
     pub(crate) fn active_run_id_snapshot(&self) -> Option<String> {
-        self.active_run_id.lock().clone()
+        self.active
+            .lock()
+            .as_ref()
+            .map(|active| active.run_id.clone())
     }
 
-    pub(crate) async fn start_run(&self, run_id: String) -> CancellationToken {
-        *self.active_run_id.lock() = Some(run_id);
-        let token = CancellationToken::new();
-        *self.cancellation.lock() = Some(token.clone());
-        token
+    pub(crate) async fn start_run(&self, run_id: String) {
+        *self.active.lock() = Some(ActiveRunControl {
+            run_id,
+            cancellation: CancellationToken::new(),
+            stop_result: Arc::new(OnceCell::new()),
+        });
+    }
+
+    pub(crate) fn active_control(&self, run_id: &str) -> Option<ActiveRunControl> {
+        self.active
+            .lock()
+            .as_ref()
+            .filter(|active| active.run_id == run_id)
+            .cloned()
+    }
+
+    pub(crate) fn cancel_active(&self, run_id: &str) -> Option<ActiveRunControl> {
+        let active = self.active_control(run_id)?;
+        active.cancellation.cancel();
+        Some(active)
     }
 
     pub(crate) async fn finish_run(&self, run_id: &str) {
-        let mut active = self.active_run_id.lock();
-        if active.as_deref() == Some(run_id) {
+        let mut active = self.active.lock();
+        if active.as_ref().map(|active| active.run_id.as_str()) == Some(run_id) {
             *active = None;
-            *self.cancellation.lock() = None;
         }
     }
 
     pub(crate) async fn request_stop(&self) -> bool {
-        if let Some(token) = self.cancellation.lock().as_ref() {
-            token.cancel();
+        if let Some(active) = self.active.lock().as_ref() {
+            active.cancellation.cancel();
             true
         } else {
             false
         }
-    }
-
-    pub(crate) async fn cancellation_token(&self) -> Option<CancellationToken> {
-        self.cancellation.lock().clone()
     }
 }
 
@@ -167,11 +204,12 @@ mod tests {
     #[tokio::test]
     async fn state_tracks_active_run_and_cancellation() {
         let state = GeminiBrowserDomainState::default();
-        let token = state.start_run("run-1".to_string()).await;
-        assert!(!token.is_cancelled());
+        state.start_run("run-1".to_string()).await;
+        let active = state.active_control("run-1").expect("active control");
+        assert!(!active.cancellation().is_cancelled());
         assert_eq!(state.active_run_id().await, Some("run-1".to_string()));
         assert!(state.request_stop().await);
-        assert!(token.is_cancelled());
+        assert!(active.cancellation().is_cancelled());
         state.finish_run("run-1").await;
         assert_eq!(state.active_run_id().await, None);
     }

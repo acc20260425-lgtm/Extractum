@@ -1,21 +1,33 @@
 use apalis::prelude::{IntervalStrategy, StrategyBuilder, WorkerBuilderExt};
 use apalis_sqlite::TaskBuilderExt;
-use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
+use super::execution::{cancel_run, execute_delivered_job, DeliveredJobInput, DeliveryOutcome};
+use super::executor::{app_error_to_domain, AppStatusObserver, DomainErrorContext};
+use super::reconciliation::{
+    ensure_startup_reconciled, QueueInspectionSnapshot, ReconciliationAction,
+    StartupReconciliationSnapshot,
+};
+use super::runtime::{
+    run_registered_worker, GeminiBrowserArtifactMode, GeminiBrowserJob, GeminiBrowserJobRuntime,
+    GeminiBrowserWorkerStatus, QueuedGeminiBrowserJob,
+};
 use crate::gemini_browser::{
-    browser_executor::{BrowserExecutor, BrowserRunContext, BrowserStopReason},
+    browser_executor::{BrowserExecutor, BrowserStopReason},
     executor::{domain_error_to_app, AppBrowserExecutor},
 };
 
+enum GeminiBrowserWorkerEntryDecision {
+    Execute(crate::gemini_browser::GeminiBrowserRun),
+    Acknowledged,
+    Terminal {
+        run: crate::gemini_browser::GeminiBrowserRun,
+        result: crate::gemini_browser::GeminiBrowserRunResult,
+    },
+}
+
 pub(crate) const GEMINI_BROWSER_QUEUE_NAME: &str = "gemini-browser";
 const GEMINI_BROWSER_QUEUE_POLL_INTERVAL_MS: u64 = 100;
-const DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS: u64 = 20 * 60;
-pub(crate) type GeminiBrowserWaiterResult =
-    crate::error::AppResult<crate::gemini_browser::GeminiBrowserRunResult>;
-type GeminiBrowserWaiterSender = tokio::sync::oneshot::Sender<GeminiBrowserWaiterResult>;
-pub(crate) type GeminiBrowserWaiterReceiver =
-    tokio::sync::oneshot::Receiver<GeminiBrowserWaiterResult>;
 type GeminiBrowserApalisTask<IdType> =
     apalis::prelude::Task<GeminiBrowserJob, apalis_sqlite::SqliteContext, IdType>;
 
@@ -54,10 +66,327 @@ pub(crate) fn run_status_for_queue_state(
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct QueuedGeminiBrowserJob {
-    pub run_id: String,
-    pub queue_position: Option<usize>,
+#[cfg(any())]
+mod legacy_domain_runtime {
+    use super::*;
+
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    pub(crate) struct QueuedGeminiBrowserJob {
+        pub run_id: String,
+        pub queue_position: Option<usize>,
+    }
+
+    pub(crate) trait GeminiBrowserApalisStorageAccess {
+        fn pool(&self) -> &sqlx::SqlitePool;
+    }
+
+    impl<T, C, F> GeminiBrowserApalisStorageAccess for apalis_sqlite::SqliteStorage<T, C, F> {
+        fn pool(&self) -> &sqlx::SqlitePool {
+            self.pool()
+        }
+    }
+
+    pub(crate) struct GeminiBrowserJobRuntime {
+        waiters: parking_lot::Mutex<std::collections::HashMap<String, GeminiBrowserWaiterSender>>,
+        cancelled_runs: parking_lot::Mutex<std::collections::HashSet<String>>,
+        worker_status: tokio::sync::watch::Sender<GeminiBrowserWorkerStatus>,
+        waiter_timeout: std::time::Duration,
+        worker_execution_timeout: std::time::Duration,
+        worker_hard_guard_timeout: std::time::Duration,
+    }
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub(crate) enum GeminiBrowserWorkerStatus {
+        Starting,
+        Ready {
+            started_at: String,
+        },
+        Failed {
+            started_at: Option<String>,
+            error: String,
+        },
+    }
+
+    impl Default for GeminiBrowserJobRuntime {
+        fn default() -> Self {
+            Self::new_with_timeouts(
+                std::time::Duration::from_secs(DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS + 5),
+                std::time::Duration::from_secs(DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS),
+                std::time::Duration::from_secs(DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS + 15),
+            )
+        }
+    }
+
+    impl GeminiBrowserJobRuntime {
+        #[cfg(test)]
+        pub(crate) fn new_for_test(worker_execution_timeout: std::time::Duration) -> Self {
+            Self::new_for_test_with_timeouts(
+                worker_execution_timeout + std::time::Duration::from_millis(50),
+                worker_execution_timeout,
+                worker_execution_timeout + std::time::Duration::from_millis(100),
+            )
+        }
+
+        #[cfg(test)]
+        pub(crate) fn new_for_test_with_timeouts(
+            waiter_timeout: std::time::Duration,
+            worker_execution_timeout: std::time::Duration,
+            worker_hard_guard_timeout: std::time::Duration,
+        ) -> Self {
+            assert!(
+                worker_execution_timeout < waiter_timeout,
+                "worker execution timeout must be lower than waiter timeout"
+            );
+            assert!(
+                waiter_timeout < worker_hard_guard_timeout,
+                "waiter timeout must be lower than hard guard timeout"
+            );
+            Self::new_with_timeouts(
+                waiter_timeout,
+                worker_execution_timeout,
+                worker_hard_guard_timeout,
+            )
+        }
+
+        #[cfg(test)]
+        pub(crate) fn new_for_waiter_timeout_test(waiter_timeout: std::time::Duration) -> Self {
+            Self::new_with_timeouts(
+                waiter_timeout,
+                waiter_timeout + std::time::Duration::from_millis(50),
+                waiter_timeout + std::time::Duration::from_millis(100),
+            )
+        }
+
+        fn new_with_timeouts(
+            waiter_timeout: std::time::Duration,
+            worker_execution_timeout: std::time::Duration,
+            worker_hard_guard_timeout: std::time::Duration,
+        ) -> Self {
+            let (worker_status, _) =
+                tokio::sync::watch::channel(GeminiBrowserWorkerStatus::Starting);
+            Self {
+                waiters: parking_lot::Mutex::new(std::collections::HashMap::new()),
+                cancelled_runs: parking_lot::Mutex::new(std::collections::HashSet::new()),
+                worker_status,
+                waiter_timeout,
+                worker_execution_timeout,
+                worker_hard_guard_timeout,
+            }
+        }
+
+        pub(crate) fn register_waiter(
+            &self,
+            run_id: &str,
+        ) -> crate::error::AppResult<GeminiBrowserWaiterReceiver> {
+            let mut waiters = self.waiters.lock();
+            if waiters.contains_key(run_id) {
+                return Err(crate::error::AppError::conflict(format!(
+                    "Run '{run_id}' already has an active Gemini Browser waiter"
+                )));
+            }
+
+            let (sender, receiver) = tokio::sync::oneshot::channel();
+            waiters.insert(run_id.to_string(), sender);
+            Ok(receiver)
+        }
+
+        pub(crate) fn complete_waiter(&self, run_id: &str, result: GeminiBrowserWaiterResult) {
+            if let Some(sender) = self.waiters.lock().remove(run_id) {
+                let _ = sender.send(result);
+            }
+        }
+
+        pub(crate) fn remove_waiter(&self, run_id: &str) {
+            self.waiters.lock().remove(run_id);
+        }
+
+        pub(crate) fn has_waiter(&self, run_id: &str) -> bool {
+            self.waiters.lock().contains_key(run_id)
+        }
+
+        #[cfg(test)]
+        pub(crate) fn has_waiter_for_test(&self, run_id: &str) -> bool {
+            self.has_waiter(run_id)
+        }
+
+        #[cfg(test)]
+        pub(crate) fn worker_status_for_test(&self) -> GeminiBrowserWorkerStatus {
+            self.worker_status.borrow().clone()
+        }
+
+        pub(crate) async fn wait_for_registered_result(
+            &self,
+            run_id: &str,
+            receiver: GeminiBrowserWaiterReceiver,
+        ) -> crate::error::AppResult<crate::gemini_browser::GeminiBrowserRunResult> {
+            match tokio::time::timeout(self.waiter_timeout, receiver).await {
+                Ok(Ok(result)) => {
+                    self.remove_waiter(run_id);
+                    result
+                }
+                Ok(Err(_)) => {
+                    self.remove_waiter(run_id);
+                    Err(crate::error::AppError::internal(
+                        "Gemini Browser worker channel closed unexpectedly",
+                    ))
+                }
+                Err(_) => {
+                    self.remove_waiter(run_id);
+                    Err(crate::error::AppError::internal(
+                        "Gemini Browser job timed out waiting for worker result",
+                    ))
+                }
+            }
+        }
+
+        pub(crate) fn worker_execution_timeout(&self) -> std::time::Duration {
+            self.worker_execution_timeout
+        }
+
+        pub(crate) fn worker_hard_guard_timeout(&self) -> std::time::Duration {
+            self.worker_hard_guard_timeout
+        }
+
+        pub(crate) fn mark_worker_ready(&self, started_at: String) {
+            self.worker_status
+                .send_replace(GeminiBrowserWorkerStatus::Ready { started_at });
+        }
+
+        pub(crate) fn mark_worker_failed(&self, error: impl Into<String>) {
+            self.worker_status
+                .send_replace(GeminiBrowserWorkerStatus::Failed {
+                    started_at: None,
+                    error: error.into(),
+                });
+        }
+
+        pub(crate) async fn ensure_worker_ready_for_enqueue(&self) -> crate::error::AppResult<()> {
+            self.ensure_worker_ready_for_enqueue_with_timeout(std::time::Duration::from_secs(5))
+                .await
+        }
+
+        pub(crate) async fn ensure_worker_ready_for_enqueue_with_timeout(
+            &self,
+            timeout: std::time::Duration,
+        ) -> crate::error::AppResult<()> {
+            match Self::worker_status_enqueue_result(self.worker_status.borrow().clone()) {
+                WorkerReadinessDecision::Ready => return Ok(()),
+                WorkerReadinessDecision::Failed(error) => return Err(error),
+                WorkerReadinessDecision::Starting => {}
+            }
+
+            let mut receiver = self.worker_status.subscribe();
+            let wait_for_ready = async move {
+                loop {
+                    receiver.changed().await.map_err(|_| {
+                        crate::error::AppError::internal(
+                            "Gemini Browser worker status channel closed unexpectedly",
+                        )
+                    })?;
+                    match Self::worker_status_enqueue_result(receiver.borrow().clone()) {
+                        WorkerReadinessDecision::Ready => return Ok(()),
+                        WorkerReadinessDecision::Failed(error) => return Err(error),
+                        WorkerReadinessDecision::Starting => {}
+                    }
+                }
+            };
+
+            tokio::time::timeout(timeout, wait_for_ready)
+                .await
+                .unwrap_or_else(|_| {
+                    Err(crate::error::AppError::internal(
+                        "Gemini Browser worker is still starting",
+                    ))
+                })
+        }
+
+        fn worker_status_enqueue_result(
+            status: GeminiBrowserWorkerStatus,
+        ) -> WorkerReadinessDecision {
+            match status {
+                GeminiBrowserWorkerStatus::Starting => WorkerReadinessDecision::Starting,
+                GeminiBrowserWorkerStatus::Ready { .. } => WorkerReadinessDecision::Ready,
+                GeminiBrowserWorkerStatus::Failed { error, .. } => {
+                    WorkerReadinessDecision::Failed(crate::error::AppError::internal(format!(
+                        "Gemini Browser worker failed to start: {error}"
+                    )))
+                }
+            }
+        }
+
+        pub(crate) fn request_cancel(&self, run_id: &str) {
+            self.cancelled_runs.lock().insert(run_id.to_string());
+        }
+
+        pub(crate) fn is_cancelled(&self, run_id: &str) -> bool {
+            self.cancelled_runs.lock().contains(run_id)
+        }
+
+        pub(crate) fn clear_cancelled(&self, run_id: &str) {
+            self.cancelled_runs.lock().remove(run_id);
+        }
+    }
+
+    enum WorkerReadinessDecision {
+        Starting,
+        Ready,
+        Failed(crate::error::AppError),
+    }
+
+    enum GeminiBrowserWorkerEntryDecision {
+        Execute(crate::gemini_browser::GeminiBrowserRun),
+        Acknowledged,
+        Terminal {
+            run: crate::gemini_browser::GeminiBrowserRun,
+            result: crate::gemini_browser::GeminiBrowserRunResult,
+        },
+    }
+
+    #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+    #[serde(rename_all = "snake_case")]
+    pub(crate) enum GeminiBrowserArtifactMode {
+        Reduced,
+        Full,
+    }
+
+    impl GeminiBrowserArtifactMode {
+        pub(crate) fn from_wire(value: Option<&str>) -> crate::error::AppResult<Self> {
+            match value.unwrap_or("reduced") {
+                "reduced" => Ok(Self::Reduced),
+                "full" => Ok(Self::Full),
+                other => Err(crate::error::AppError::validation(format!(
+                    "unsupported Gemini Browser artifact_mode '{other}'"
+                ))),
+            }
+        }
+
+        pub(crate) fn as_wire(&self) -> &'static str {
+            match self {
+                Self::Reduced => "reduced",
+                Self::Full => "full",
+            }
+        }
+    }
+
+    #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+    pub(crate) struct GeminiBrowserJob {
+        pub run_id: String,
+        pub prompt: String,
+        pub source: String,
+        pub artifact_mode: GeminiBrowserArtifactMode,
+        pub browser_config: Option<crate::gemini_browser::GeminiBrowserProviderConfig>,
+    }
+
+    impl GeminiBrowserJob {
+        pub(crate) fn run_request(&self) -> crate::gemini_browser::GeminiBrowserRunRequest {
+            crate::gemini_browser::GeminiBrowserRunRequest {
+                run_id: self.run_id.clone(),
+                prompt: self.prompt.clone(),
+                source: self.source.clone(),
+                artifact_mode: self.artifact_mode.as_wire().to_string(),
+            }
+        }
+    }
 }
 
 pub(crate) trait GeminiBrowserApalisStorageAccess {
@@ -67,305 +396,6 @@ pub(crate) trait GeminiBrowserApalisStorageAccess {
 impl<T, C, F> GeminiBrowserApalisStorageAccess for apalis_sqlite::SqliteStorage<T, C, F> {
     fn pool(&self) -> &sqlx::SqlitePool {
         self.pool()
-    }
-}
-
-pub(crate) struct GeminiBrowserJobRuntime {
-    waiters: parking_lot::Mutex<std::collections::HashMap<String, GeminiBrowserWaiterSender>>,
-    cancelled_runs: parking_lot::Mutex<std::collections::HashSet<String>>,
-    worker_status: tokio::sync::watch::Sender<GeminiBrowserWorkerStatus>,
-    waiter_timeout: std::time::Duration,
-    worker_execution_timeout: std::time::Duration,
-    worker_hard_guard_timeout: std::time::Duration,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum GeminiBrowserWorkerStatus {
-    Starting,
-    Ready {
-        started_at: String,
-    },
-    Failed {
-        started_at: Option<String>,
-        error: String,
-    },
-}
-
-impl Default for GeminiBrowserJobRuntime {
-    fn default() -> Self {
-        Self::new_with_timeouts(
-            std::time::Duration::from_secs(DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS + 5),
-            std::time::Duration::from_secs(DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS),
-            std::time::Duration::from_secs(DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS + 15),
-        )
-    }
-}
-
-impl GeminiBrowserJobRuntime {
-    #[cfg(test)]
-    pub(crate) fn new_for_test(worker_execution_timeout: std::time::Duration) -> Self {
-        Self::new_for_test_with_timeouts(
-            worker_execution_timeout + std::time::Duration::from_millis(50),
-            worker_execution_timeout,
-            worker_execution_timeout + std::time::Duration::from_millis(100),
-        )
-    }
-
-    #[cfg(test)]
-    pub(crate) fn new_for_test_with_timeouts(
-        waiter_timeout: std::time::Duration,
-        worker_execution_timeout: std::time::Duration,
-        worker_hard_guard_timeout: std::time::Duration,
-    ) -> Self {
-        assert!(
-            worker_execution_timeout < waiter_timeout,
-            "worker execution timeout must be lower than waiter timeout"
-        );
-        assert!(
-            waiter_timeout < worker_hard_guard_timeout,
-            "waiter timeout must be lower than hard guard timeout"
-        );
-        Self::new_with_timeouts(
-            waiter_timeout,
-            worker_execution_timeout,
-            worker_hard_guard_timeout,
-        )
-    }
-
-    #[cfg(test)]
-    pub(crate) fn new_for_waiter_timeout_test(waiter_timeout: std::time::Duration) -> Self {
-        Self::new_with_timeouts(
-            waiter_timeout,
-            waiter_timeout + std::time::Duration::from_millis(50),
-            waiter_timeout + std::time::Duration::from_millis(100),
-        )
-    }
-
-    fn new_with_timeouts(
-        waiter_timeout: std::time::Duration,
-        worker_execution_timeout: std::time::Duration,
-        worker_hard_guard_timeout: std::time::Duration,
-    ) -> Self {
-        let (worker_status, _) = tokio::sync::watch::channel(GeminiBrowserWorkerStatus::Starting);
-        Self {
-            waiters: parking_lot::Mutex::new(std::collections::HashMap::new()),
-            cancelled_runs: parking_lot::Mutex::new(std::collections::HashSet::new()),
-            worker_status,
-            waiter_timeout,
-            worker_execution_timeout,
-            worker_hard_guard_timeout,
-        }
-    }
-
-    pub(crate) fn register_waiter(
-        &self,
-        run_id: &str,
-    ) -> crate::error::AppResult<GeminiBrowserWaiterReceiver> {
-        let mut waiters = self.waiters.lock();
-        if waiters.contains_key(run_id) {
-            return Err(crate::error::AppError::conflict(format!(
-                "Run '{run_id}' already has an active Gemini Browser waiter"
-            )));
-        }
-
-        let (sender, receiver) = tokio::sync::oneshot::channel();
-        waiters.insert(run_id.to_string(), sender);
-        Ok(receiver)
-    }
-
-    pub(crate) fn complete_waiter(&self, run_id: &str, result: GeminiBrowserWaiterResult) {
-        if let Some(sender) = self.waiters.lock().remove(run_id) {
-            let _ = sender.send(result);
-        }
-    }
-
-    pub(crate) fn remove_waiter(&self, run_id: &str) {
-        self.waiters.lock().remove(run_id);
-    }
-
-    pub(crate) fn has_waiter(&self, run_id: &str) -> bool {
-        self.waiters.lock().contains_key(run_id)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn has_waiter_for_test(&self, run_id: &str) -> bool {
-        self.has_waiter(run_id)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn worker_status_for_test(&self) -> GeminiBrowserWorkerStatus {
-        self.worker_status.borrow().clone()
-    }
-
-    pub(crate) async fn wait_for_registered_result(
-        &self,
-        run_id: &str,
-        receiver: GeminiBrowserWaiterReceiver,
-    ) -> crate::error::AppResult<crate::gemini_browser::GeminiBrowserRunResult> {
-        match tokio::time::timeout(self.waiter_timeout, receiver).await {
-            Ok(Ok(result)) => {
-                self.remove_waiter(run_id);
-                result
-            }
-            Ok(Err(_)) => {
-                self.remove_waiter(run_id);
-                Err(crate::error::AppError::internal(
-                    "Gemini Browser worker channel closed unexpectedly",
-                ))
-            }
-            Err(_) => {
-                self.remove_waiter(run_id);
-                Err(crate::error::AppError::internal(
-                    "Gemini Browser job timed out waiting for worker result",
-                ))
-            }
-        }
-    }
-
-    pub(crate) fn worker_execution_timeout(&self) -> std::time::Duration {
-        self.worker_execution_timeout
-    }
-
-    pub(crate) fn worker_hard_guard_timeout(&self) -> std::time::Duration {
-        self.worker_hard_guard_timeout
-    }
-
-    pub(crate) fn mark_worker_ready(&self, started_at: String) {
-        self.worker_status
-            .send_replace(GeminiBrowserWorkerStatus::Ready { started_at });
-    }
-
-    pub(crate) fn mark_worker_failed(&self, error: impl Into<String>) {
-        self.worker_status
-            .send_replace(GeminiBrowserWorkerStatus::Failed {
-                started_at: None,
-                error: error.into(),
-            });
-    }
-
-    pub(crate) async fn ensure_worker_ready_for_enqueue(&self) -> crate::error::AppResult<()> {
-        self.ensure_worker_ready_for_enqueue_with_timeout(std::time::Duration::from_secs(5))
-            .await
-    }
-
-    pub(crate) async fn ensure_worker_ready_for_enqueue_with_timeout(
-        &self,
-        timeout: std::time::Duration,
-    ) -> crate::error::AppResult<()> {
-        match Self::worker_status_enqueue_result(self.worker_status.borrow().clone()) {
-            WorkerReadinessDecision::Ready => return Ok(()),
-            WorkerReadinessDecision::Failed(error) => return Err(error),
-            WorkerReadinessDecision::Starting => {}
-        }
-
-        let mut receiver = self.worker_status.subscribe();
-        let wait_for_ready = async move {
-            loop {
-                receiver.changed().await.map_err(|_| {
-                    crate::error::AppError::internal(
-                        "Gemini Browser worker status channel closed unexpectedly",
-                    )
-                })?;
-                match Self::worker_status_enqueue_result(receiver.borrow().clone()) {
-                    WorkerReadinessDecision::Ready => return Ok(()),
-                    WorkerReadinessDecision::Failed(error) => return Err(error),
-                    WorkerReadinessDecision::Starting => {}
-                }
-            }
-        };
-
-        tokio::time::timeout(timeout, wait_for_ready)
-            .await
-            .unwrap_or_else(|_| {
-                Err(crate::error::AppError::internal(
-                    "Gemini Browser worker is still starting",
-                ))
-            })
-    }
-
-    fn worker_status_enqueue_result(status: GeminiBrowserWorkerStatus) -> WorkerReadinessDecision {
-        match status {
-            GeminiBrowserWorkerStatus::Starting => WorkerReadinessDecision::Starting,
-            GeminiBrowserWorkerStatus::Ready { .. } => WorkerReadinessDecision::Ready,
-            GeminiBrowserWorkerStatus::Failed { error, .. } => {
-                WorkerReadinessDecision::Failed(crate::error::AppError::internal(format!(
-                    "Gemini Browser worker failed to start: {error}"
-                )))
-            }
-        }
-    }
-
-    pub(crate) fn request_cancel(&self, run_id: &str) {
-        self.cancelled_runs.lock().insert(run_id.to_string());
-    }
-
-    pub(crate) fn is_cancelled(&self, run_id: &str) -> bool {
-        self.cancelled_runs.lock().contains(run_id)
-    }
-
-    pub(crate) fn clear_cancelled(&self, run_id: &str) {
-        self.cancelled_runs.lock().remove(run_id);
-    }
-}
-
-enum WorkerReadinessDecision {
-    Starting,
-    Ready,
-    Failed(crate::error::AppError),
-}
-
-enum GeminiBrowserWorkerEntryDecision {
-    Execute(crate::gemini_browser::GeminiBrowserRun),
-    Acknowledged,
-    Terminal {
-        run: crate::gemini_browser::GeminiBrowserRun,
-        result: crate::gemini_browser::GeminiBrowserRunResult,
-    },
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum GeminiBrowserArtifactMode {
-    Reduced,
-    Full,
-}
-
-impl GeminiBrowserArtifactMode {
-    pub(crate) fn from_wire(value: Option<&str>) -> crate::error::AppResult<Self> {
-        match value.unwrap_or("reduced") {
-            "reduced" => Ok(Self::Reduced),
-            "full" => Ok(Self::Full),
-            other => Err(crate::error::AppError::validation(format!(
-                "unsupported Gemini Browser artifact_mode '{other}'"
-            ))),
-        }
-    }
-
-    pub(crate) fn as_wire(&self) -> &'static str {
-        match self {
-            Self::Reduced => "reduced",
-            Self::Full => "full",
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub(crate) struct GeminiBrowserJob {
-    pub run_id: String,
-    pub prompt: String,
-    pub source: String,
-    pub artifact_mode: GeminiBrowserArtifactMode,
-    pub browser_config: Option<crate::gemini_browser::GeminiBrowserProviderConfig>,
-}
-
-impl GeminiBrowserJob {
-    pub(crate) fn run_request(&self) -> crate::gemini_browser::GeminiBrowserRunRequest {
-        crate::gemini_browser::GeminiBrowserRunRequest {
-            run_id: self.run_id.clone(),
-            prompt: self.prompt.clone(),
-            source: self.source.clone(),
-            artifact_mode: self.artifact_mode.as_wire().to_string(),
-        }
     }
 }
 
@@ -504,15 +534,18 @@ pub(crate) async fn cancel_gemini_browser_job(
     let state = handle.state::<crate::gemini_browser::GeminiBrowserState>();
     let runs_root = crate::gemini_browser::runs_dir(handle)?;
 
-    cancel_gemini_browser_job_core(
-        &runtime,
-        &state,
+    let executor = AppBrowserExecutor::new(handle, &state);
+    cancel_run(
         &runs_root,
+        &runtime,
+        state.domain(),
+        &executor,
+        &AppStatusObserver,
         run_id,
-        |result| update_terminal_status_snapshot_best_effort(handle, &state, result),
-        || stop_active_gemini_browser_sidecar(handle, &state, run_id),
     )
     .await
+    .map(|_| ())
+    .map_err(domain_error_to_app)
 }
 
 async fn cancel_gemini_browser_job_core<BeforeEmitTerminalSnapshot, StopActive, StopFut>(
@@ -626,12 +659,18 @@ pub(crate) async fn start_gemini_browser_job_worker(
     handle: tauri::AppHandle,
 ) -> crate::error::AppResult<()> {
     let runtime = handle.state::<GeminiBrowserJobRuntime>();
-    start_gemini_browser_job_worker_core(runtime.inner(), || {
+    run_registered_worker(runtime.inner(), || {
         let setup_handle = handle.clone();
         async move {
-            let pool = crate::db::get_pool(&setup_handle).await?;
-            setup_gemini_browser_apalis_storage(&pool).await?;
-            ensure_gemini_browser_startup_reconciled(&setup_handle).await?;
+            let pool = crate::db::get_pool(&setup_handle)
+                .await
+                .map_err(|error| app_error_to_domain(error, DomainErrorContext::Persistence))?;
+            setup_gemini_browser_apalis_storage(&pool)
+                .await
+                .map_err(|error| app_error_to_domain(error, DomainErrorContext::Persistence))?;
+            ensure_gemini_browser_startup_reconciled(&setup_handle)
+                .await
+                .map_err(|error| app_error_to_domain(error, DomainErrorContext::Persistence))?;
             let storage = apalis_sqlite::SqliteStorage::new_with_config(
                 &pool,
                 &gemini_browser_queue_config(),
@@ -649,24 +688,37 @@ pub(crate) async fn start_gemini_browser_job_worker(
         }
     })
     .await
+    .map_err(domain_error_to_app)
 }
 
 pub(crate) async fn ensure_gemini_browser_startup_reconciled(
     handle: &tauri::AppHandle,
 ) -> crate::error::AppResult<()> {
     let state = handle.state::<crate::gemini_browser::GeminiBrowserState>();
-    let handle = handle.clone();
-    state
-        .ensure_startup_reconciled(move || async move {
-            let runs_root = crate::gemini_browser::runs_dir(&handle)?;
-            reconcile_gemini_browser_run_log_at_startup(
-                &runs_root,
-                apalis_queue_inspection_mode(),
-                |_run_id| Ok(None),
-            )?;
+    let load_handle = handle.clone();
+    let apply_handle = handle.clone();
+    ensure_startup_reconciled(
+        state.domain(),
+        move || async move {
+            let runs_root = crate::gemini_browser::runs_dir(&load_handle)
+                .map_err(|error| app_error_to_domain(error, DomainErrorContext::Persistence))?;
+            Ok(StartupReconciliationSnapshot {
+                runs: super::run_log::list_runs(&runs_root, usize::MAX)?.runs,
+                queue: QueueInspectionSnapshot::Unavailable,
+            })
+        },
+        move |actions| async move {
+            let runs_root = crate::gemini_browser::runs_dir(&apply_handle)
+                .map_err(|error| app_error_to_domain(error, DomainErrorContext::Persistence))?;
+            for action in actions {
+                let ReconciliationAction::Finish { run_id, result } = action;
+                super::run_log::finish_run(&runs_root, &run_id, result)?;
+            }
             Ok(())
-        })
-        .await
+        },
+    )
+    .await
+    .map_err(domain_error_to_app)
 }
 
 async fn process_gemini_browser_job(
@@ -676,62 +728,33 @@ async fn process_gemini_browser_job(
     let handle = &*handle;
     let runtime = handle.state::<GeminiBrowserJobRuntime>();
     let state = handle.state::<crate::gemini_browser::GeminiBrowserState>();
-    let runs_root = crate::gemini_browser::runs_dir(handle)?;
-
-    match reconcile_gemini_browser_worker_entry(&runtime, &state, &runs_root, &job).await? {
-        GeminiBrowserWorkerEntryDecision::Execute(running_run) => {
-            let _running_run = running_run;
-            update_running_status_snapshot_best_effort(handle, &state, &job.run_id);
-        }
-        GeminiBrowserWorkerEntryDecision::Acknowledged => return Ok(()),
-        GeminiBrowserWorkerEntryDecision::Terminal { run, result } => {
-            let _run = run;
-            update_terminal_status_snapshot_best_effort(handle, &state, &result);
-            return Ok(());
-        }
-    }
-
-    let request = job.run_request();
-    let fallback_request = request.clone();
-    let browser_profile_dir =
-        crate::gemini_browser::path_string(&crate::gemini_browser::profile_dir(handle)?);
-    let artifact_dir =
-        crate::gemini_browser::path_string(&crate::gemini_browser::run_dir(handle, &job.run_id)?);
-    let browser_config = job.browser_config.clone();
     let executor = AppBrowserExecutor::new(handle, &state);
-    let sidecar_future = async {
-        Ok(
-            match executor
-                .send(BrowserRunContext {
-                    request,
-                    browser_profile_dir,
-                    artifact_dir,
-                    browser_config,
-                })
-                .await
-            {
-                Ok(result) => result,
-                Err(_error) => {
-                    crate::gemini_browser::protocol::sidecar_unavailable_result(fallback_request)
-                }
-            },
-        )
-    };
-
-    let result = run_job_with_execution_timeout(
-        handle,
+    let outcome = execute_delivered_job(
         &runtime,
-        &state,
-        &runs_root,
-        job.clone(),
-        sidecar_future,
+        state.domain(),
+        &executor,
+        &AppStatusObserver,
+        DeliveredJobInput {
+            runs_dir: crate::gemini_browser::runs_dir(handle)?,
+            browser_profile_dir: crate::gemini_browser::path_string(
+                &crate::gemini_browser::profile_dir(handle)?,
+            ),
+            artifact_dir: crate::gemini_browser::path_string(&crate::gemini_browser::run_dir(
+                handle,
+                &job.run_id,
+            )?),
+            job,
+        },
     )
-    .await?;
-
-    if !is_worker_timeout_result(&job, &result) {
-        finish_completed_job(handle, &runtime, &state, &runs_root, &job, result).await?;
+    .await
+    .map_err(|error| -> apalis::prelude::BoxDynError { Box::new(domain_error_to_app(error)) })?;
+    if let DeliveryOutcome::Cancelled { stop_error, .. }
+    | DeliveryOutcome::TimedOut { stop_error, .. } = &outcome
+    {
+        if let Some(error) = stop_error {
+            eprintln!("Gemini Browser stop diagnostic: {error}");
+        }
     }
-
     Ok(())
 }
 
@@ -1039,18 +1062,6 @@ fn terminal_apalis_state_result(
             "Gemini Browser Apalis job completed before run log captured a result",
         ),
     }
-}
-
-fn is_worker_timeout_result(
-    job: &GeminiBrowserJob,
-    result: &crate::gemini_browser::GeminiBrowserRunResult,
-) -> bool {
-    result.run_id == job.run_id
-        && result.status == crate::gemini_browser::GeminiBrowserRunStatus::Failed
-        && result
-            .message
-            .as_deref()
-            .is_some_and(|message| message.starts_with("Gemini Browser job timed out after "))
 }
 
 async fn start_gemini_browser_job_worker_core<Setup, SetupFut, RunFut, RunError>(
@@ -1826,7 +1837,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn wait_for_result_removes_waiter_on_timeout() {
+    async fn legacy_disabled_wait_for_result_removes_waiter_on_timeout() {
         let temp = tempfile::tempdir().expect("temp dir");
         let job = test_job("run-timeout");
         crate::gemini_browser::create_queued_run(
@@ -1845,6 +1856,7 @@ mod tests {
             .wait_for_registered_result("run-timeout", receiver)
             .await
             .expect_err("timeout error");
+        let error = crate::gemini_browser::executor::domain_error_to_app(error);
 
         assert_eq!(error.kind, crate::error::AppErrorKind::Internal);
         assert_eq!(
@@ -2127,7 +2139,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cancel_gemini_browser_job_cancels_queued_run_and_waiter() {
+    async fn legacy_disabled_cancel_gemini_browser_job_cancels_queued_run_and_waiter() {
         let temp = tempfile::tempdir().expect("temp dir");
         let runtime = GeminiBrowserJobRuntime::new_for_test(Duration::from_secs(1));
         let state = crate::gemini_browser::GeminiBrowserState::new();
@@ -2262,7 +2274,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cancel_gemini_browser_job_requests_stop_for_active_run() {
+    async fn legacy_disabled_cancel_gemini_browser_job_requests_stop_for_active_run() {
         let temp = tempfile::tempdir().expect("temp dir");
         let runtime = GeminiBrowserJobRuntime::new_for_test(Duration::from_secs(1));
         let state = crate::gemini_browser::GeminiBrowserState::new();
@@ -2275,7 +2287,12 @@ mod tests {
         )
         .expect("create queued run");
         crate::gemini_browser::mark_running(temp.path(), &job.run_id).expect("mark running");
-        let token = state.start_run(job.run_id.clone()).await;
+        state.start_run(job.run_id.clone()).await;
+        let token = state
+            .domain()
+            .active_control(&job.run_id)
+            .expect("active control")
+            .cancellation();
         let stopped = Arc::new(AtomicUsize::new(0));
 
         cancel_gemini_browser_job_core(&runtime, &state, temp.path(), &job.run_id, |_result| {}, {
@@ -2389,7 +2406,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn worker_timeout_marks_run_failed_and_processes_next_job() {
+    async fn legacy_disabled_worker_timeout_marks_run_failed_and_processes_next_job() {
         let temp_dir = tempfile::tempdir().expect("create temp dir");
         let db_path = temp_dir.path().join("extractum.db");
         let pool = sqlite_file_pool(&db_path).await;
@@ -2524,7 +2541,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn worker_timeout_clears_active_and_cancelled_state() {
+    async fn legacy_disabled_worker_timeout_clears_active_and_cancelled_state() {
         let temp_dir = tempfile::tempdir().expect("create temp dir");
         let db_path = temp_dir.path().join("extractum.db");
         let pool = sqlite_file_pool(&db_path).await;

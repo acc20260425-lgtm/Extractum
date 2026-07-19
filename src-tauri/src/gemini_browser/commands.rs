@@ -5,15 +5,18 @@ use crate::error::{AppError, AppResult};
 use crate::external_process::ExternalProcessShutdownState;
 
 use super::browser_executor::{BrowserExecutor, BrowserSessionContext, BrowserStopReason};
-use super::executor::{domain_error_to_app, AppBrowserExecutor, AppStatusObserver};
-use super::jobs::{cancel_gemini_browser_job, enqueue_gemini_browser_job, GeminiBrowserJobRuntime};
-use super::submission::{send_single_prompt_enqueue_core, SendSinglePromptEnqueueError};
+use super::executor::{
+    app_error_to_domain, domain_error_to_app, AppBrowserExecutor, AppStatusObserver,
+    DomainErrorContext,
+};
+use super::jobs::{cancel_gemini_browser_job, enqueue_gemini_browser_job};
+use super::runtime::GeminiBrowserJobRuntime;
+use super::submission::submit_and_wait;
 use super::{
     cdp_chrome, cdp_contract, chrome_cdp_profile_dir, list_runs, path_string, profile_dir,
     read_run, recorded_run_dir, runs_dir, GeminiBrowserProviderConfig, GeminiBrowserProviderStatus,
-    GeminiBrowserProviderStatusKind, GeminiBrowserRun, GeminiBrowserRunLogSummary,
-    GeminiBrowserRunRequest, GeminiBrowserRunResult, GeminiBrowserStartChromeResult,
-    GeminiBrowserState,
+    GeminiBrowserRun, GeminiBrowserRunLogSummary, GeminiBrowserRunRequest,
+    GeminiBrowserRunResult, GeminiBrowserStartChromeResult, GeminiBrowserState,
 };
 
 #[tauri::command]
@@ -148,50 +151,21 @@ pub(crate) async fn send_single_prompt(
 
     let runs_root = runs_dir(handle)?;
     let runtime = handle.state::<GeminiBrowserJobRuntime>();
-    let handoff = send_single_prompt_enqueue_core(
+    submit_and_wait(
         &runs_root,
         &runtime,
+        state.domain(),
+        &AppStatusObserver,
         request.clone(),
         browser_config.clone(),
-        |job| enqueue_gemini_browser_job(handle, job),
+        |job| async move {
+            enqueue_gemini_browser_job(handle, job)
+                .await
+                .map_err(|error| app_error_to_domain(error, DomainErrorContext::Persistence))
+        },
     )
-    .await;
-    let handoff = match handoff {
-        Ok(handoff) => handoff,
-        Err(SendSinglePromptEnqueueError::EnqueueFailed {
-            run_id,
-            source,
-            failed_result,
-        }) => {
-            debug_assert_eq!(failed_result.run_id, run_id);
-            if let Err(error) = state.update_status_snapshot(handle, |status| {
-                status.status =
-                    GeminiBrowserState::provider_status_kind_for_run_status(&failed_result.status);
-                status.active_run_id = None;
-                status.queue_depth = 0;
-                status.latest_message = failed_result.message.clone();
-                status.manual_action = failed_result.manual_action.clone();
-            }) {
-                eprintln!("Gemini Browser enqueue failure status snapshot update failed: {error}");
-            }
-            return Err(source);
-        }
-        Err(SendSinglePromptEnqueueError::App(error)) => return Err(error),
-    };
-
-    if let Err(error) = state.update_status_snapshot(handle, |status| {
-        status.status = GeminiBrowserProviderStatusKind::Running;
-        status.active_run_id = None;
-        status.queue_depth = 1;
-        status.latest_message = Some("Queued".to_string());
-        status.manual_action = None;
-    }) {
-        eprintln!("Gemini Browser queued status snapshot update failed: {error}");
-    }
-
-    runtime
-        .wait_for_registered_result(&request.run_id, handoff.waiter)
-        .await
+    .await
+    .map_err(domain_error_to_app)
 }
 
 #[tauri::command]

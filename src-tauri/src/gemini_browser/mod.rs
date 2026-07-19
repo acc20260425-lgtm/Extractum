@@ -3,13 +3,16 @@ mod cdp_chrome;
 mod cdp_contract;
 mod commands;
 mod domain_error;
+mod execution;
 mod executor;
 mod jobs;
 mod paths;
 mod portable_state;
 mod protocol;
+mod reconciliation;
 mod run_id;
 mod run_log;
+mod runtime;
 mod sidecar;
 mod sidecar_launch;
 mod state;
@@ -25,15 +28,16 @@ pub use commands::{
     gemini_bridge_stop,
 };
 pub(crate) use commands::{provider_status, send_single_prompt};
-pub(crate) use jobs::{
-    cancel_gemini_browser_job, start_gemini_browser_job_worker, GeminiBrowserJobRuntime,
-};
+pub(crate) use jobs::{cancel_gemini_browser_job, start_gemini_browser_job_worker};
 #[cfg(test)]
 pub(crate) use jobs::{
     enqueue_gemini_browser_job_to_storage, open_gemini_browser_job_storage,
-    setup_gemini_browser_apalis_storage, GeminiBrowserArtifactMode, GeminiBrowserJob,
+    setup_gemini_browser_apalis_storage,
 };
 pub(crate) use paths::{chrome_cdp_profile_dir, path_string, profile_dir, run_dir, runs_dir};
+pub(crate) use runtime::GeminiBrowserJobRuntime;
+#[cfg(test)]
+pub(crate) use runtime::{GeminiBrowserArtifactMode, GeminiBrowserJob};
 pub(crate) use sidecar::shutdown_sidecar;
 pub use state::GeminiBrowserState;
 pub use types::{

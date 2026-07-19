@@ -293,18 +293,7 @@ async fn request_sidecar(
     let process = sidecar.as_mut().ok_or_else(|| {
         GeminiBrowserError::invariant("Gemini browser sidecar was not initialized")
     })?;
-    let response = if let Some(cancellation) = state.cancellation_token().await {
-        tokio::select! {
-            response = process.request(command) => response,
-            _ = cancellation.cancelled() => {
-                state.mark_sidecar_tainted().await;
-                *sidecar = None;
-                return Err(GeminiBrowserError::cancellation("Gemini browser sidecar request was cancelled"));
-            }
-        }
-    } else {
-        process.request(command).await
-    };
+    let response = process.request(command).await;
     match response {
         Ok(GeminiBrowserSidecarResponse::Error { message }) => {
             Err(GeminiBrowserError::browser(message))

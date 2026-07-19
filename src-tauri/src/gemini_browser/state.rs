@@ -1,7 +1,6 @@
 use std::future::Future;
 
 use tokio::sync::{Mutex, MutexGuard};
-use tokio_util::sync::CancellationToken;
 
 use super::{
     executor::{app_error_to_domain, domain_error_to_app, DomainErrorContext},
@@ -79,9 +78,9 @@ impl GeminiBrowserState {
         self.domain.active_run_id().await
     }
 
-    pub async fn start_run(&self, run_id: String) -> CancellationToken {
+    pub async fn start_run(&self, run_id: String) {
         *self.sidecar_tainted.lock().await = false;
-        self.domain.start_run(run_id).await
+        self.domain.start_run(run_id).await;
     }
 
     pub async fn finish_run(&self, run_id: &str) {
@@ -94,10 +93,6 @@ impl GeminiBrowserState {
             *self.sidecar_tainted.lock().await = true;
         }
         requested
-    }
-
-    pub(crate) async fn cancellation_token(&self) -> Option<CancellationToken> {
-        self.domain.cancellation_token().await
     }
 
     pub(crate) async fn mark_sidecar_tainted(&self) {
