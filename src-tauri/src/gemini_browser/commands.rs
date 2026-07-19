@@ -5,13 +5,17 @@ use time::{format_description::well_known::Rfc3339, Duration, OffsetDateTime};
 use crate::error::{AppError, AppResult};
 use crate::external_process::ExternalProcessShutdownState;
 
+use super::browser_executor::{
+    BrowserExecutor, BrowserSessionContext, BrowserStopReason, StatusObserver,
+};
+use super::executor::{domain_error_to_app, AppBrowserExecutor, AppStatusObserver};
 use super::jobs::{
     cancel_gemini_browser_job, enqueue_gemini_browser_job, GeminiBrowserArtifactMode,
     GeminiBrowserJob, GeminiBrowserJobRuntime, GeminiBrowserWaiterReceiver, QueuedGeminiBrowserJob,
 };
 use super::{
     cdp_chrome, chrome_cdp_profile_dir, create_queued_run, finish_run, list_runs, path_string,
-    profile_dir, read_run, recorded_run_dir, runs_dir, sidecar, GeminiBrowserProviderConfig,
+    profile_dir, read_run, recorded_run_dir, runs_dir, GeminiBrowserProviderConfig,
     GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind, GeminiBrowserRun,
     GeminiBrowserRunLogSummary, GeminiBrowserRunRequest, GeminiBrowserRunResult,
     GeminiBrowserRunStatus, GeminiBrowserStartChromeResult, GeminiBrowserState,
@@ -47,18 +51,32 @@ pub(crate) async fn provider_status(
     browser_config: Option<GeminiBrowserProviderConfig>,
 ) -> AppResult<GeminiBrowserProviderStatus> {
     let browser_profile_dir = path_string(&profile_dir(handle)?);
+    let executor = AppBrowserExecutor::new(handle, state);
     provider_status_read_core(
         || super::jobs::ensure_gemini_browser_startup_reconciled(handle),
         || state.active_run_id(),
         |active_run_id| {
-            sidecar::status(
-                handle,
-                state,
-                browser_profile_dir,
+            let session = BrowserSessionContext {
+                browser_profile_dir: browser_profile_dir.clone(),
                 browser_config,
-                active_run_id,
-                0,
-            )
+            };
+            async move {
+                match executor.status(session).await {
+                    Ok(mut status) => {
+                        status.active_run_id = active_run_id;
+                        status.queue_depth = 0;
+                        Ok(status)
+                    }
+                    Err(_) => Ok(GeminiBrowserProviderStatus {
+                        status: GeminiBrowserProviderStatusKind::NotStarted,
+                        manual_action: None,
+                        active_run_id,
+                        queue_depth: 0,
+                        browser_profile_dir,
+                        latest_message: Some("Gemini browser sidecar is not running.".to_string()),
+                    }),
+                }
+            }
         },
         std::time::Duration::from_millis(250),
         || state.status_snapshot(handle),
@@ -331,13 +349,16 @@ pub async fn gemini_bridge_open_browser(
     state: State<'_, GeminiBrowserState>,
     browser_config: Option<GeminiBrowserProviderConfig>,
 ) -> AppResult<GeminiBrowserProviderStatus> {
-    sidecar::open_browser(
-        &handle,
-        &state,
-        path_string(&profile_dir(&handle)?),
-        browser_config,
-    )
-    .await
+    let executor = AppBrowserExecutor::new(&handle, &state);
+    let status = executor
+        .open(BrowserSessionContext {
+            browser_profile_dir: path_string(&profile_dir(&handle)?),
+            browser_config,
+        })
+        .await
+        .map_err(domain_error_to_app)?;
+    AppStatusObserver.publish(&status);
+    Ok(status)
 }
 
 #[tauri::command]
@@ -475,13 +496,16 @@ pub async fn gemini_bridge_resume(
     state: State<'_, GeminiBrowserState>,
     browser_config: Option<GeminiBrowserProviderConfig>,
 ) -> AppResult<GeminiBrowserProviderStatus> {
-    sidecar::resume(
-        &handle,
-        &state,
-        path_string(&profile_dir(&handle)?),
-        browser_config,
-    )
-    .await
+    let executor = AppBrowserExecutor::new(&handle, &state);
+    let status = executor
+        .resume(BrowserSessionContext {
+            browser_profile_dir: path_string(&profile_dir(&handle)?),
+            browser_config,
+        })
+        .await
+        .map_err(domain_error_to_app)?;
+    AppStatusObserver.publish(&status);
+    Ok(status)
 }
 
 #[tauri::command]
@@ -493,14 +517,10 @@ pub async fn gemini_bridge_stop(
         return cancel_gemini_browser_job(&handle, &run_id).await;
     }
     state.request_stop().await;
-    let process = state.cdp_chrome_process().await.take();
-    if let Some(mut process) = process {
-        tokio::task::spawn_blocking(move || process.shutdown())
-            .await
-            .map_err(|_| AppError::internal("Chrome shutdown task did not complete"))?
-            .map_err(|error| AppError::internal(format!("Failed to stop Chrome: {error}")))?;
-    }
-    sidecar::stop(&handle, &state).await
+    AppBrowserExecutor::new(&handle, &state)
+        .stop(BrowserStopReason::Requested)
+        .await
+        .map_err(domain_error_to_app)
 }
 
 #[tauri::command]

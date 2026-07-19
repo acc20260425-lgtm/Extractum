@@ -3,6 +3,11 @@ use apalis_sqlite::TaskBuilderExt;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 
+use crate::gemini_browser::{
+    browser_executor::{BrowserExecutor, BrowserRunContext, BrowserStopReason},
+    executor::{domain_error_to_app, AppBrowserExecutor},
+};
+
 pub(crate) const GEMINI_BROWSER_QUEUE_NAME: &str = "gemini-browser";
 const GEMINI_BROWSER_QUEUE_POLL_INTERVAL_MS: u64 = 100;
 const DEFAULT_WORKER_EXECUTION_TIMEOUT_SECS: u64 = 20 * 60;
@@ -505,7 +510,7 @@ pub(crate) async fn cancel_gemini_browser_job(
         &runs_root,
         run_id,
         |result| update_terminal_status_snapshot_best_effort(handle, &state, result),
-        || stop_active_gemini_browser_sidecar(handle, &state),
+        || stop_active_gemini_browser_sidecar(handle, &state, run_id),
     )
     .await
 }
@@ -572,8 +577,14 @@ where
 async fn stop_active_gemini_browser_sidecar(
     handle: &tauri::AppHandle,
     state: &crate::gemini_browser::GeminiBrowserState,
+    run_id: &str,
 ) -> crate::error::AppResult<()> {
-    crate::gemini_browser::sidecar::stop(handle, state).await
+    AppBrowserExecutor::new(handle, state)
+        .stop(BrowserStopReason::Cancelled {
+            run_id: run_id.to_string(),
+        })
+        .await
+        .map_err(domain_error_to_app)
 }
 
 fn run_log_entry_by_id(
@@ -687,17 +698,17 @@ async fn process_gemini_browser_job(
     let artifact_dir =
         crate::gemini_browser::path_string(&crate::gemini_browser::run_dir(handle, &job.run_id)?);
     let browser_config = job.browser_config.clone();
+    let executor = AppBrowserExecutor::new(handle, &state);
     let sidecar_future = async {
         Ok(
-            match crate::gemini_browser::sidecar::send_single(
-                handle,
-                &state,
-                request,
-                browser_profile_dir,
-                artifact_dir,
-                browser_config,
-            )
-            .await
+            match executor
+                .send(BrowserRunContext {
+                    request,
+                    browser_profile_dir,
+                    artifact_dir,
+                    browser_config,
+                })
+                .await
             {
                 Ok(result) => result,
                 Err(_error) => {
@@ -877,9 +888,13 @@ async fn finish_timed_out_job(
     update_terminal_status_snapshot_best_effort(handle, state, &result);
 
     if should_stop_sidecar {
+        let executor = AppBrowserExecutor::new(handle, state);
         let _ = tokio::time::timeout(
             std::time::Duration::from_secs(3),
-            crate::gemini_browser::sidecar::stop(handle, state),
+            executor.stop(BrowserStopReason::TimedOut {
+                run_id: job.run_id.clone(),
+                timeout: runtime.worker_execution_timeout(),
+            }),
         )
         .await;
     }

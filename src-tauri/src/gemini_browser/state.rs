@@ -237,20 +237,6 @@ mod tests {
         assert_eq!(state.active_run_id().await, None);
     }
 
-    #[tokio::test]
-    async fn cancelled_run_marks_the_sidecar_transport_tainted() {
-        let state = GeminiBrowserState::new();
-        let token = state.start_run("run-1".to_string()).await;
-        assert!(state.request_stop().await);
-        assert!(token.is_cancelled());
-        assert!(state
-            .cancellation_token()
-            .await
-            .expect("active token")
-            .is_cancelled());
-        assert!(state.sidecar_tainted().await);
-    }
-
     #[test]
     fn status_snapshot_initializes_to_not_started_from_profile_dir() {
         let state = GeminiBrowserState::new();

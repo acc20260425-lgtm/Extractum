@@ -1,5 +1,8 @@
+mod browser_executor;
 mod cdp_chrome;
 mod commands;
+mod domain_error;
+mod executor;
 mod jobs;
 mod paths;
 mod run_log;
