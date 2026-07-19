@@ -3,8 +3,10 @@
 > **Status: COMPLETED HISTORICAL PLAN; DO NOT RE-EXECUTE.** Its policy was
 > superseded on 2026-07-19 by the advisory timing rules in
 > `docs/superpowers/specs/2026-07-17-crate-roadmap.md`. The planned Phase 3
-> follow-on was canceled before execution. The body below records the policy
-> implementation as originally approved; it is not current execution authority.
+> follow-on was canceled before completion and never retained; see its
+> [cancellation disposition](../verification/2026-07-19-extractum-process-reapplication-cancellation.md).
+> The body below records the policy implementation as originally approved; it
+> is not current execution authority.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

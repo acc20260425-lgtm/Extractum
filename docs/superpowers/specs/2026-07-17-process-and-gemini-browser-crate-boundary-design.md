@@ -4,8 +4,10 @@
 **Date:** 2026-07-17
 
 > **Current disposition:** Phase 3 was reverted and not retained. Its exact
-> reapplication plan was canceled before execution on 2026-07-19. This
-> document remains historical architecture evidence, not authority to replay
+> reapplication workflow was canceled before completion and never retained on
+> 2026-07-19; see the
+> [cancellation disposition](../verification/2026-07-19-extractum-process-reapplication-cancellation.md).
+> This document remains historical architecture evidence, not authority to replay
 > Phase 3 or start Phase 4. The current
 > [`crate roadmap`](2026-07-17-crate-roadmap.md) requires a fresh Phase 4
 > boundary that does not assume a retained `extractum-process` crate.

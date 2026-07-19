@@ -16,8 +16,11 @@ Completed and in-flight slices governed by their own documents:
 
 - [`2026-07-17-process-and-gemini-browser-crate-boundary-design.md`](2026-07-17-process-and-gemini-browser-crate-boundary-design.md)
   — historical boundary proposal for phases 3 and 4. Phase 3 was measured,
-  reverted, and not retained. Its later exact-reapplication plan was canceled
-  before execution on 2026-07-19. Phase 4 now requires a fresh boundary design
+  reverted, and not retained. Its later exact-reapplication workflow ran setup
+  and an isolated exact replay, but was canceled before completion and never
+  merged or retained. The durable
+  [cancellation disposition](../verification/2026-07-19-extractum-process-reapplication-cancellation.md)
+  records the recovered sequence. Phase 4 now requires a fresh boundary design
   that does not assume a retained `extractum-process` crate.
 
 - `2026-07-15-rust-workspace-crate-extraction-design.md` — workspace +
@@ -157,9 +160,12 @@ main branch point.
   power-profile metadata, a shell A/B series, a stability retry, or a
   cumulative timing ledger.
 - Record the duration already emitted by the mandatory end-of-slice workspace
-  check as an operational signal. Repeated ordinary workspace checks at or
-  above 15,000 ms open a separately approved diagnostic task; they do not fail
-  or revert the extraction slice.
+  check as an operational signal. One completed crate-extraction slice
+  contributes one ordinary workspace result. Two consecutive completed
+  crate-extraction slices whose ordinary workspace results are each at or
+  above 15,000 ms trigger a separate owner-approved performance investigation;
+  they do not fail or revert either extraction slice. Do not rerun the check or
+  add timing samples for this rule.
 - **Historical branch outcome:** Stage 0 returned `no_go` on 2026-07-17
   (app 9,090 ms vs core surrogate 9,100 ms, −0.11%; focused core 1,020 ms).
   The project owner selected the focused package loop plus architectural
@@ -186,8 +192,17 @@ following values are historical context, not automatic retention gates:
 | Historical Phase 3 candidate | 10,177 ms | candidate reverted and not retained |
 
 For future slices, record the duration of the mandatory workspace check without
-adding a separate shell A/B experiment. Repeated ordinary results at or above
-15,000 ms trigger a separate performance investigation.
+adding a separate shell A/B experiment. For this rule, one completed
+crate-extraction slice contributes one ordinary workspace result: the duration
+already emitted by its successful mandatory end-of-slice
+`cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets`.
+Two consecutive completed crate-extraction slices whose ordinary workspace
+results are each at or above 15,000 ms trigger a separate owner-approved
+performance investigation. A completed result below 15,000 ms breaks the
+sequence; failed, canceled, and incomplete slices contribute no result. Do not
+rerun the check or add timing samples for this rule. Consecutive means adjacent
+completed extraction slices in roadmap order; historical measurements,
+focused checks, tests, diagnostics, and same-slice reruns do not count.
 
 ## Target Crate Map (end state, revisable per phase)
 
@@ -267,9 +282,17 @@ The original evidence remains in
 
 The later exact-reapplication plan
 [`2026-07-18-extractum-process-reapplication.md`](../plans/2026-07-18-extractum-process-reapplication.md)
-was canceled by the project owner before execution on 2026-07-19. No process
-crate, post-reapplication baseline, or cumulative-ledger entry exists. The
-2026-07-18 shell-cap revision no longer authorizes reapplication.
+was partially executed. The first attempt stopped before candidate replay after
+false-positive quiet-window failures. The corrected second attempt created an
+exact but unmerged candidate commit in an isolated worktree. On 2026-07-19 the
+project owner canceled the workflow before completion or retention because the
+replay and measurement machinery had grown beyond the value of the decision.
+This records no broader owner intent and no negative correctness judgment about
+the isolated candidate.
+The recovered sequence is preserved in the
+[`2026-07-19 cancellation disposition`](../verification/2026-07-19-extractum-process-reapplication-cancellation.md).
+No process crate, post-reapplication baseline, or cumulative-ledger entry exists.
+The 2026-07-18 shell-cap revision no longer authorizes reapplication.
 
 Any future `extractum-process` attempt starts as a new phase with a fresh
 owner-approved spec, dependency evidence, plan, and advisory measurement. It
@@ -279,16 +302,20 @@ track remains moot and cancellation does not reactivate it.
 ### Phase 4 — `extractum-gemini-browser` (awaiting a new boundary design)
 
 ~6,800 lines, 39 commits in its first month, 59% solo, structurally
-self-contained (only 7 joint commits with `prompt_packs`). Depends on
-process infrastructure + core. The historical proposal kept Tauri commands,
-application paths, SQL/Apalis storage, and worker registration app-side while
-extracting the portable automation engine.
+self-contained (only 7 joint commits with `prompt_packs`). Its process and core
+needs remain, but no ownership or dependency direction is approved for a
+future crate. The historical proposal kept Tauri commands, application paths,
+SQL/Apalis storage, and worker registration app-side while extracting the
+portable automation engine.
 
 Phase 4 has not started. Because Phase 3 was not retained and its reapplication
-was canceled, Phase 4 requires a fresh owner-approved boundary that either
-keeps the process dependency app-side behind a narrow interface or proposes a
-different dependency arrangement. It has no Phase 3 timing prerequisite and
-does not require the v2/v3 anomaly protocol.
+was canceled, Phase 4 requires a fresh owner-approved boundary. The historical
+rejection of an app-side narrow interface—then described as extracting Gemini
+first behind temporary process traits—assumed an imminent retained process
+crate; that premise is now void. This does not preselect a replacement: the
+fresh design may reconsider that interface class or choose another ownership
+and dependency arrangement. It has no Phase 3 timing prerequisite and does not
+require the v2/v3 anomaly protocol.
 
 ### Phase 5 — `extractum-llm`
 
@@ -362,8 +389,11 @@ integration tests, WiX/MSI packaging concerns.
    Do not add a quiet-window harness, process-tree coordinator, Defender or
    power-profile capture, formal stability rule, automatic retry, shell A/B,
    or cumulative ledger. Timing never overrides correctness or automatically
-   rejects a slice. Record the mandatory workspace-check duration; repeated
-   ordinary results at or above 15,000 ms route to a separate diagnostic.
+   rejects a slice. Record one ordinary workspace result from each completed
+   slice's mandatory workspace check. Two consecutive completed crate-extraction
+   slices whose ordinary workspace results are each at or above 15,000 ms
+   trigger a separate owner-approved performance investigation; do not rerun
+   the check or add timing samples for this rule.
 3. Mechanical moves only inside a slice: facade modules preserve `crate::`
    paths; consumers are never mass-rewritten in the same slice.
 4. Every `pub(crate)` → `pub` widening is enumerated in the spec and checked

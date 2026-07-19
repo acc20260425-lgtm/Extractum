@@ -1,10 +1,16 @@
 # Extractum Process Exact Reapplication Implementation Plan
 
-> **Status: CANCELED 2026-07-19 — DO NOT EXECUTE OR RESUME.** The project owner
-> withdrew the complete plan before any task was executed. It is retained only
-> as a historical design record. Any future process-crate work requires a fresh
-> owner-approved spec and plan; no claim, baseline, manifest, worktree, or
-> measurement described below is current roadmap state.
+> **Status: CANCELED 2026-07-19 — DO NOT EXECUTE OR RESUME.** The first attempt
+> stopped before candidate replay after false-positive quiet-window failures.
+> A corrected second attempt reached an exact, isolated candidate replay, but
+> the workflow did not complete and the replay was not merged. The project
+> owner then canceled the workflow; no
+> process crate was retained in `main`. This file remains only as a historical
+> design record. See the durable
+> [cancellation disposition](../verification/2026-07-19-extractum-process-reapplication-cancellation.md).
+> Any future process-crate work requires a fresh owner-approved spec and plan;
+> no claim, baseline, manifest, worktree, or measurement described below is
+> current roadmap state.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

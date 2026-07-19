@@ -6,9 +6,11 @@ import processBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-17-pr
 import shellCapRevisionRaw from "../../docs/superpowers/specs/2026-07-18-crate-extraction-shell-cap-revision-design.md?raw";
 import anomalyV2DesignRaw from "../../docs/superpowers/specs/2026-07-18-process-shell-anomaly-v2-design.md?raw";
 import reapplicationPlanRaw from "../../docs/superpowers/plans/2026-07-18-extractum-process-reapplication.md?raw";
+import cancellationDispositionRaw from "../../docs/superpowers/verification/2026-07-19-extractum-process-reapplication-cancellation.md?raw";
 
 const normalize = (value: string) => value.replace(/\r\n/g, "\n");
-const compact = (value: string) => normalize(value).replace(/\s+/g, " ");
+const compact = (value: string) =>
+  normalize(value).replace(/\n>\s?/g, "\n").replace(/\s+/g, " ");
 const sectionBetween = (value: string, start: string, end: string) => {
   const startIndex = value.indexOf(start);
   const endIndex = value.indexOf(end, startIndex + start.length);
@@ -24,6 +26,7 @@ const processBoundaryDesign = compact(processBoundaryDesignRaw);
 const shellCapRevision = compact(shellCapRevisionRaw);
 const anomalyV2Design = compact(anomalyV2DesignRaw);
 const reapplicationPlan = compact(reapplicationPlanRaw);
+const cancellationDisposition = compact(cancellationDispositionRaw);
 const samplingPolicy = compact(
   sectionBetween(
     focusedLoopDesign,
@@ -88,7 +91,31 @@ describe("crate extraction timing policy", () => {
       "historical 25% / 2.0-second focused gate, 2,000 ms / 20% shell cap, and cumulative ledger are no longer active policy",
     );
     expect(advisoryPolicy).toContain(
-      "Repeated ordinary workspace checks at or above 15,000 ms trigger a separate owner-approved performance investigation",
+      "one completed crate-extraction slice contributes one ordinary workspace result",
+    );
+    expect(advisoryPolicy).toContain(
+      "Two consecutive completed crate-extraction slices whose ordinary workspace results are each at or above 15,000 ms trigger a separate owner-approved performance investigation",
+    );
+    expect(advisoryPolicy).toContain(
+      "successful mandatory end-of-slice `cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets`",
+    );
+    expect(advisoryPolicy).toContain(
+      "A completed result below 15,000 ms breaks the sequence; failed, canceled, and incomplete slices contribute no result",
+    );
+    expect(advisoryPolicy).toContain(
+      "historical measurements do not seed the sequence",
+    );
+    expect(advisoryPolicy).toContain(
+      "Focused checks, tests, diagnostics, and same-slice reruns do not count",
+    );
+    expect(advisoryPolicy).toContain(
+      "Do not rerun the check or add timing samples for this rule",
+    );
+    expect(roadmapTiming).toContain(
+      "Two consecutive completed crate-extraction slices whose ordinary workspace results are each at or above 15,000 ms trigger a separate owner-approved performance investigation",
+    );
+    expect(roadmapTiming).toContain(
+      "Consecutive means adjacent completed extraction slices in roadmap order",
     );
     expect(failurePolicy).toContain("There is no protocol-mandated retry");
     expect(failurePolicy).toContain(
@@ -113,10 +140,20 @@ describe("crate extraction timing policy", () => {
       "Phase 3 — `extractum-process` (closed: not retained)",
     );
     expect(phase3Roadmap).toContain(
-      "was canceled by the project owner before execution on 2026-07-19",
+      "The first attempt stopped before candidate replay",
+    );
+    expect(phase3Roadmap).toContain(
+      "The corrected second attempt created an exact but unmerged candidate commit",
     );
     expect(phase3Roadmap).toContain(
       "No process crate, post-reapplication baseline, or cumulative-ledger entry exists",
+    );
+    expect(phase3Roadmap).toContain(
+      "the replay and measurement machinery had grown beyond the value of the decision",
+    );
+    expect(phase3Roadmap).toContain("This records no broader owner intent");
+    expect(phase3Roadmap).toContain(
+      "2026-07-19-extractum-process-reapplication-cancellation.md",
     );
     expect(phase3Roadmap).toContain(
       "Any future `extractum-process` attempt starts as a new phase",
@@ -127,6 +164,16 @@ describe("crate extraction timing policy", () => {
     expect(phase4Roadmap).toContain(
       "requires a fresh owner-approved boundary",
     );
+    expect(phase4Roadmap).toContain(
+      "The historical rejection of an app-side narrow interface",
+    );
+    expect(phase4Roadmap).toContain(
+      "no ownership or dependency direction is approved",
+    );
+    expect(phase4Roadmap).toContain(
+      "assumed an imminent retained process crate; that premise is now void",
+    );
+    expect(phase4Roadmap).toContain("This does not preselect a replacement");
     expect(phase4Roadmap).toContain("It has no Phase 3 timing prerequisite");
     expect(shellCapRevision).toContain(
       "Superseded 2026-07-19; historical policy record",
@@ -134,16 +181,82 @@ describe("crate extraction timing policy", () => {
     expect(shellCapRevision).toContain(
       "must not be used as current execution authority",
     );
+    expect(shellCapRevision).toContain(
+      "canceled before completion and never retained",
+    );
     expect(processBoundaryDesign).toContain(
       "execution authority withdrawn 2026-07-19",
     );
     expect(processBoundaryDesign).toContain("not authority to replay");
     expect(processBoundaryDesign).toContain("Phase 3 or start Phase 4");
+    expect(processBoundaryDesign).toContain(
+      "canceled before completion and never retained",
+    );
     expect(reapplicationPlan).toContain(
       "CANCELED 2026-07-19 — DO NOT EXECUTE OR RESUME",
     );
     expect(reapplicationPlan).toContain(
+      "The first attempt stopped before candidate replay",
+    );
+    expect(reapplicationPlan).toContain(
+      "A corrected second attempt reached an exact, isolated candidate replay",
+    );
+    expect(reapplicationPlan).toContain(
+      "the workflow did not complete and the replay was not merged",
+    );
+    expect(reapplicationPlan).toContain(
+      "2026-07-19-extractum-process-reapplication-cancellation.md",
+    );
+    expect(reapplicationPlan).not.toContain(
       "withdrew the complete plan before any task was executed",
+    );
+    expect(phase3Roadmap).not.toMatch(/canceled.{0,80}before execution/);
+    expect(shellCapRevision).not.toContain(
+      "reapplication was canceled before execution",
+    );
+    expect(processBoundaryDesign).not.toContain(
+      "reapplication plan was canceled before execution",
+    );
+    expect(cancellationDisposition).toContain(
+      "18 and then 16 idle `@hypothesi/tauri-mcp-server` processes",
+    );
+    expect(cancellationDisposition).toContain(
+      "No candidate path was changed in that first attempt",
+    );
+    expect(cancellationDisposition).toContain(
+      "`f9274194111977b4cb722937bde62bf5f2bc6be2`",
+    );
+    expect(cancellationDisposition).toContain(
+      "`49b596d3e21cfc8f07904caf97a9673d4b6418e0`",
+    );
+    expect(cancellationDisposition).toContain(
+      "`6c431a54aef00c1e2f2f9be6693f7660f942fedf`",
+    );
+    expect(cancellationDisposition).toContain(
+      "matches historical candidate `b364756c`",
+    );
+    expect(cancellationDisposition).toContain(
+      "canonical no-renames stable patch ID",
+    );
+    expect(cancellationDisposition).toContain(
+      "`fb767db0e8d2a9c6e743da4446b1f4da2c43f775`",
+    );
+    for (const correctionCommit of [
+      "791912785d1e62179a93658c3e72e16895c36439",
+      "0f4b040a5e45a0dc50be1378ac15b1e1fc6b32f3",
+      "4a2bb11ea0a351754f6c56a1ee5f0329b9ef40e0",
+      "9bcd2cfea6ad961eae2f6437fa2c59b161b89e23",
+    ]) {
+      expect(cancellationDisposition).toContain(`\`${correctionCommit}\``);
+    }
+    expect(cancellationDisposition).toContain(
+      "extractum-process-reapplication-20260719T141033776-f11b55c13fae45c8a20c5ad35d927d8a",
+    );
+    expect(cancellationDisposition).toContain(
+      "extractum-process-reapplication-20260719T152723364-1fb2e3afe159491bbe23ee5b13c34e7c",
+    );
+    expect(cancellationDisposition).toContain(
+      "never merged into `main`",
     );
     expect(anomalyV2Design).toContain("`moot` for the current crate roadmap");
   });

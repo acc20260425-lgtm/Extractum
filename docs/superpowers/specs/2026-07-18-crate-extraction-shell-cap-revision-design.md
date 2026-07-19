@@ -7,7 +7,9 @@
 > **Current disposition:** The owner-approved 2026-07-19 revision of
 > [`2026-07-17-crate-roadmap.md`](2026-07-17-crate-roadmap.md) replaces the
 > automatic shell/focused timing gates with a small advisory focused-loop
-> measurement. The exact Phase 3 reapplication was canceled before execution.
+> measurement. The exact Phase 3 reapplication was canceled before completion
+> and never retained; its recovered execution record is preserved in the
+> [cancellation disposition](../verification/2026-07-19-extractum-process-reapplication-cancellation.md).
 > The thresholds, cumulative ledger, validity rule, and Phase 3 directives
 > below are preserved only to explain decisions made under this historical
 > policy and must not be used as current execution authority.

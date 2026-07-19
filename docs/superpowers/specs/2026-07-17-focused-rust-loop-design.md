@@ -211,9 +211,17 @@ not automatically retain, reject, or revert a correct slice. The historical
 25% / 2.0-second focused gate, 2,000 ms / 20% shell cap, and cumulative ledger
 are no longer active policy.
 
-Repeated ordinary workspace checks at or above 15,000 ms trigger a separate
-owner-approved performance investigation. A single result does not fail the
-slice, and the extraction plan does not automatically repeat timing samples.
+For this rule, one completed crate-extraction slice contributes one ordinary
+workspace result: the duration already emitted by its successful mandatory
+end-of-slice `cargo check --manifest-path src-tauri/Cargo.toml --workspace
+--all-targets`. Two consecutive completed crate-extraction slices whose
+ordinary workspace results are each at or above 15,000 ms trigger a separate
+owner-approved performance investigation. A completed result below 15,000 ms
+breaks the sequence; failed, canceled, and incomplete slices contribute no
+result. Consecutive means adjacent completed extraction slices in roadmap order;
+historical measurements do not seed the sequence. Focused checks, tests,
+diagnostics, and same-slice reruns do not count. Do not rerun the check or add
+timing samples for this rule. Timing never fails or reverts either slice.
 
 ## Failure Classification
 
@@ -230,8 +238,10 @@ slice, and the extraction plan does not automatically repeat timing samples.
   focused package or its focused tests fail. This is a correctness failure,
   independently of any timing result.
 - **Advisory regression:** record the values and interpretation. Timing alone
-  cannot reject or revert the slice. If ordinary workspace checks are
-  repeatedly at or above 15,000 ms, open a separate diagnostic task.
+  cannot reject or revert the slice. Two consecutive completed crate-extraction
+  slices whose ordinary workspace results are each at or above 15,000 ms
+  trigger the separate owner-approved performance investigation defined above;
+  same-slice reruns and non-completion checks do not count.
 - **Completion failure:** any end-of-slice workspace gate fails. The slice is
   incomplete regardless of focused-loop results; this class is not folded
   into candidate measurement evidence.
