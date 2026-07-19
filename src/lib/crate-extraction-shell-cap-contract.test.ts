@@ -228,6 +228,19 @@ describe("crate extraction timing policy", () => {
     expect(geminiBoundaryDesign).toContain(
       "A response that completes after cancellation is ignored",
     );
+    for (const legacyMessage of [
+      "Gemini Browser job timed out waiting for worker result",
+      "Gemini Browser job timed out after {seconds}s",
+      "Cancelled",
+    ]) {
+      expect(geminiBoundaryDesign).toContain(`\`"${legacyMessage}"\``);
+    }
+    expect(geminiBoundaryDesign).toContain(
+      "persisted pretty-JSON run-log bytes for both timeout paths and for queued and active cancellation",
+    );
+    expect(geminiBoundaryDesign).toContain(
+      "inventory `types.rs`, `run_log.rs`, and every moved fragment for direct or facade-backed `extractum-core` API use",
+    );
     expect(geminiBoundaryDesign).toContain(
       "one discarded warm-up and three recorded samples",
     );
@@ -246,6 +259,7 @@ describe("crate extraction timing policy", () => {
     expect(geminiBoundaryDesign).toContain(
       "npm.cmd run smoke:gemini-browser-sidecar:resume:node -- --expect-manual-action=start_chrome_cdp",
     );
+    expect(geminiBoundaryDesign).not.toContain("applicable process-smoke");
     expect(shellCapRevision).toContain(
       "Superseded 2026-07-19; historical policy record",
     );

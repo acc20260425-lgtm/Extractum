@@ -108,6 +108,15 @@ and must justify any additional root explicitly.
 `extractum-core` is not prescribed merely to match the roadmap diagram. The
 new crate defines its own non-serialized domain error and should depend on
 core only if the prepared implementation has an actual retained core use.
+Before generating either manifest, the implementation plan must inventory
+`types.rs`, `run_log.rs`, and every moved fragment for direct or facade-backed
+`extractum-core` API use, including `error`, `time`, `media_metadata`, and
+`compression`. The current snapshot finds only app-facade `AppError` /
+`AppResult` use in `run_log.rs` and no other core use in those two files; the
+pre-manifest inventory must reprove that fact or name and justify the exact
+core dependency before Cargo compilation becomes the first detector. Resolve
+any mismatch in the preparation checkpoint; do not patch the manifest or move
+source ad hoc inside the mechanical extraction checkpoint.
 
 Forbidden dependencies include Tauri and its plugins, SQLx, Apalis,
 Apalis-SQLite, Tower worker layers, `extractum-process`, `windows-sys`, and any
@@ -265,6 +274,17 @@ The app owns the explicit mapping from domain errors to the existing
 IPC error serialization. Timeout and cancellation decisions must no longer
 depend on matching message text such as `"timed out"`.
 
+Typed classification must preserve the existing outward text byte-for-byte:
+the waiter error is `"Gemini Browser job timed out waiting for worker result"`,
+the execution result uses `"Gemini Browser job timed out after {seconds}s"`,
+and cancellation uses `"Cancelled"`. Characterization must pin the exact
+`GeminiBrowserRunResult` fields, serde JSON, and persisted pretty-JSON run-log
+bytes for both timeout paths and for queued and active cancellation. Tests may
+normalize only pre-existing nondeterministic timestamp fields; status, message,
+elapsed-time, and other stable fields remain exact. Replacing the string-based
+detector is an internal classification change, not permission to rewrite user-
+visible messages or run-log representation.
+
 No new serialized `status`, `state`, `kind`, `mode`, or related string value is
 introduced. If implementation discovers that a new serialized value is
 actually necessary, it is outside this approved design and requires the
@@ -330,7 +350,10 @@ separately verified checkpoints:
 1. **Characterization and seam preparation:** add or identify exact tests for
    transition ordering, cancellation, timeout, reconciliation, status
    publication, and process adapter behavior; introduce the permanent
-   `BrowserExecutor` seam inside the app without moving files.
+   `BrowserExecutor` seam inside the app without moving files. Before replacing
+   `is_worker_timeout_result`, record RED/GREEN characterization for the exact
+   waiter-timeout, execution-timeout, queued-cancellation, and
+   active-cancellation result fields and persisted JSON bytes declared above.
 2. **Mechanical extraction:** create the workspace member, move prepared
    domain modules/tests, split the mixed files according to the table above,
    and preserve the private app facade and external consumer paths.
@@ -415,6 +438,8 @@ A dedicated Vitest source-boundary contract must enforce:
 - domain run-transition helpers residing only in the new crate;
 - removal of app-side message-prefix timeout detection, including the current
   `is_worker_timeout_result` path;
+- exact preservation tests for both legacy timeout messages, the cancellation
+  message, their serialized result fields, and persisted run-log JSON;
 - test-only helpers remaining non-public.
 
 The test-map assertion must use a frozen set of all 94 baseline names, parse
@@ -530,7 +555,7 @@ plan.
 - A baseline correctness failure stops implementation until the retained
   workspace is green.
 - A candidate package, app-dependent, workspace, portability, build, startup,
-  or applicable process-smoke failure keeps the slice incomplete.
+  or fixed sidecar/CDP/shutdown smoke failure keeps the slice incomplete.
 - A measurement failure stops only the advisory measurement after exact probe
   restoration; it is not converted into a candidate correctness failure.
 - A process-smoke harness failure is infrastructure until the helper itself is
@@ -551,17 +576,20 @@ plan.
    migrations, worker registration, and process shutdown remain app-side.
 5. The private app facade preserves existing external Rust consumer paths and
    IPC/serde behavior.
-6. Every one of the 94 baseline Gemini tests has one declared and passing
+6. Typed timeout/cancellation replaces string classification without changing
+   the exact existing result messages, stable serde fields, or persisted
+   run-log JSON bytes.
+7. Every one of the 94 baseline Gemini tests has one declared and passing
    owner; new characterization tests also pass.
-7. The source-boundary contract proves the dependency, visibility,
+8. The source-boundary contract proves the dependency, visibility,
    moved-not-copied, and forbidden-process invariants.
-8. New-crate, app-dependent, workspace, Linux portability, no-bundle, startup,
+9. New-crate, app-dependent, workspace, Linux portability, no-bundle, startup,
    and the fixed sidecar/CDP/shutdown smoke gates pass.
-9. The advisory record contains either the focused raw values/medians and
+10. The advisory record contains either the focused raw values/medians and
    ordinary workspace duration, or an explicit `incomplete / no conclusion`
    result with exact probe restoration proven; neither outcome adds a timing
    veto.
-10. A literal verification document records the final module/test inventories,
+11. A literal verification document records the final module/test inventories,
     commands, results, and any infrastructure exclusions.
 
 ## Non-Goals
