@@ -241,7 +241,42 @@ compact complete Vitest confirmation reported 170 files and 1,376 tests passed
 with zero failures. `check:rustfmt` and the full Cargo workspace test also
 exited 0.
 
-## 12. Result and next roadmap action
+## 12. Post-execution source-ownership remediation (2026-07-20)
+
+A later independent source audit found six `#[cfg(any())]` items retained in
+the application after extraction: five in `gemini_browser/jobs.rs` and one in
+`gemini_browser/commands.rs`. They contained compile-disabled copies of the
+moved domain implementation and 53 renamed `legacy_disabled_*` tests. The
+blocks never participated in a build and did not change runtime behavior, but
+they violated the approved moved-not-copied source-ownership boundary.
+
+A new boundary-contract case was written first. Together with the roadmap
+status assertion it produced the expected RED result: 2 files, 2 failed and 8
+passed tests. The cleanup then removed the exact 2,813-line disabled ranges
+from `jobs.rs` and the 604-line disabled item plus its adjacent separator from
+`commands.rs`, while preserving the live Apalis/process adapters and the 11
+app-owned tests. Rustfmt removed five now-redundant blank separators from
+`jobs.rs`. The roadmap's stale `Implementation is pending` sentence was
+changed to `Implementation is complete and retained`.
+
+Focused GREEN evidence:
+
+- the two source contracts passed 2 files and 10 tests;
+- `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`
+  exited 0;
+- `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`
+  passed 1,030 tests;
+- `npm.cmd run check:rustfmt` exited 0.
+
+The first full verification attempt had one unrelated coordinator test exceed
+its 5-second Vitest limit by 80 ms while the other 1,376 tests passed. The
+unchanged test then passed in isolation in 487 ms. An unchanged full rerun of
+`npm.cmd run verify` exited 0: 170 Vitest files and 1,377 tests passed,
+Svelte-check reported zero errors and warnings, rustfmt passed, and the full
+Cargo workspace check and test passed. This closes the source-ownership gap;
+the retained Phase 4 result is unchanged.
+
+## 13. Result and next roadmap action
 
 **Result: implemented and retained.**
 

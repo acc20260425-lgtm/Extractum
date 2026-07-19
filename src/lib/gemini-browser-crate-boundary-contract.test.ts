@@ -327,6 +327,12 @@ describe("Gemini Browser crate boundary", () => {
     expect(testNames(appRust).filter((name) => frozen.has(name as never)).sort()).toEqual([...appOwnedBaselineTests].sort());
   });
 
+  it("does not retain compile-disabled legacy domain copies app-side", () => {
+    const appSource = appRust.join("\n");
+    expect(appSource).not.toMatch(/#\s*\[\s*cfg\s*\(\s*any\s*\(\s*\)\s*\)\s*\]/);
+    expect(appSource).not.toMatch(/\blegacy_disabled_[A-Za-z0-9_]+\b/);
+  });
+
   it("keeps process Tauri SQL Apalis and worker infrastructure app-side", () => {
     const crateSource = crateRust.join("\n");
     const appSource = appRust.join("\n");

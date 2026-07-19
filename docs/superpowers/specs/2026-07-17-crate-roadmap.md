@@ -2,7 +2,7 @@
 
 **Status:** Strategic reference; revised and owner-approved 2026-07-19
 **Date:** 2026-07-17
-**Last revised:** 2026-07-19
+**Last revised:** 2026-07-20
 
 ## Purpose
 
@@ -25,7 +25,8 @@ Completed and in-flight slices governed by their own documents:
 - [`2026-07-19-gemini-browser-crate-boundary-design.md`](2026-07-19-gemini-browser-crate-boundary-design.md)
   — owner-approved Phase 4 boundary. The portable Gemini domain engine moves
   behind a permanent browser-level executor port; all concrete sidecar/CDP
-  process ownership remains in the application. Implementation is pending.
+  process ownership remains in the application. Implementation is complete and
+  retained.
 
 - `2026-07-15-rust-workspace-crate-extraction-design.md` — workspace +
   `extractum-core` (`error`, `time`, `compression`). Done.

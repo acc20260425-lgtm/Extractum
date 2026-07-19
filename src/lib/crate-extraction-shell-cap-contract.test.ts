@@ -151,6 +151,7 @@ describe("crate extraction timing policy", () => {
     expect(crateRoadmap).toContain(
       "**Status:** Strategic reference; revised and owner-approved 2026-07-19",
     );
+    expect(crateRoadmap).not.toContain("Implementation is pending.");
     expect(roadmapTiming).toContain("There is no cumulative shell ledger");
     expect(roadmapTiming).toContain(
       "| Historical Phase 3 candidate | 10,177 ms | candidate reverted and not retained |",
