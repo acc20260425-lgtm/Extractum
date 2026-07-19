@@ -1,5 +1,11 @@
 # Crate Extraction Shell-Cap Revision Implementation Plan
 
+> **Status: COMPLETED HISTORICAL PLAN; DO NOT RE-EXECUTE.** Its policy was
+> superseded on 2026-07-19 by the advisory timing rules in
+> `docs/superpowers/specs/2026-07-17-crate-roadmap.md`. The planned Phase 3
+> follow-on was canceled before execution. The body below records the policy
+> implementation as originally approved; it is not current execution authority.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the approved 2,000 ms / 20% per-slice shell cap, 15,000 ms cumulative ceiling, stability rule, and v2/v3 disposition the enforced repository policy for future crate extractions.

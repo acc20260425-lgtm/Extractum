@@ -1,19 +1,16 @@
 # Focused Rust Development Loop Design
 
-**Status:** Approved in conversation
+**Status:** Approved; timing policy simplified 2026-07-19
 **Date:** 2026-07-17
+**Last revised:** 2026-07-19
 
-**Current extraction-performance authority:**
-[`2026-07-18-crate-extraction-shell-cap-revision-design.md`](2026-07-18-crate-extraction-shell-cap-revision-design.md)
+**Current extraction-timing authority:**
+[`2026-07-17-crate-roadmap.md`](2026-07-17-crate-roadmap.md)
 
-The revision applies prospectively and to the approved exact Phase 3
-reapplication. Historical measurements and decisions remain governed by the
-thresholds frozen for their original sessions.
-
-This authority supersedes only the shell-cap and marginal-repeat clauses in
-`2026-07-17-process-and-gemini-browser-crate-boundary-design.md`. That design's
-boundary, facade, dependency, correctness, and restoration requirements remain
-active for the exact Phase 3 reapplication.
+The 2026-07-19 roadmap revision makes compile-time measurement advisory,
+cancels the exact Phase 3 reapplication, and supersedes the automatic timing
+gates in the 2026-07-18 shell-cap revision. Historical measurements and
+decisions remain governed by the protocols frozen for their original sessions.
 
 ## Purpose
 
@@ -43,10 +40,11 @@ does not by itself improve the full-workspace loop: Cargo must still re-check
 the large application crate above the edited dependency. The focused package
 loop, however, avoided that work and was about nine times faster.
 
-The project owner therefore selected the crate-roadmap branch `(a) + (b)`:
+The project owner therefore selected the crate-roadmap branch `(a) + (b)`,
+later simplified on 2026-07-19:
 
 - hot-module extraction phases 4–6 use the focused package loop as their
-  performance acceptance metric;
+  advisory compile-time metric;
 - dependency-hygiene phases may proceed on their architectural justification,
   with performance retained as diagnostic evidence;
 - full-workspace correctness gates are never weakened or replaced.
@@ -161,19 +159,20 @@ For a crate-extraction plan, the section must additionally name:
 - the pre-extraction command against `-p extractum`;
 - the post-extraction command against the new package;
 - the matched logical probe source before and after the move;
-- the focused improvement gate and 2,000 ms / 20% per-slice shell cap;
-- the canonical 9,135 ms anchor and 15,000 ms cumulative shell ceiling;
-- the five-sample, four-within-300-ms validity rule;
-- the measurement artifact, invalid-session path, and negative-outcome path.
+- one discarded warm-up plus three recorded samples per state;
+- raw values, median, and exact probe-restoration check;
+- the mandatory workspace-check command whose emitted duration is recorded;
+- an explicit statement that timing is advisory and cannot automatically
+  retain, reject, or revert the slice.
 
 ## Extraction Performance Protocol
 
 ### Primary metric
 
-For hot-module phases 4–6, the primary performance metric is the median of
+For hot-module phases 4–6, the advisory performance metric is the median of
 `cargo check --manifest-path src-tauri/Cargo.toml -p <package> --all-targets`.
 Focused test durations are recorded as diagnostic evidence and must pass, but
-they are not mixed into the compile-time retention calculation.
+they are not mixed into the compile-time comparison.
 
 The comparison uses the same logical domain edit:
 
@@ -188,84 +187,51 @@ The comparison uses the same logical domain edit:
 
 Baseline and candidate measurements each use:
 
-1. no active `cargo`, `rustc`, `rust-analyzer`, Tauri, or competing build
-   process;
-2. recorded Rust/Cargo versions, power profile, and Defender state;
-3. one discarded warm-up;
-4. five recorded samples;
-5. the median of the five samples;
-6. the shared canonical target directory;
-7. byte-for-byte probe restoration plus SHA-256 verification after every
-   sample;
-8. at least four of the five samples are within 300 ms of the series' own
-   median (absolute deviation <= 300 ms).
+1. the shared canonical target directory and sequential Cargo commands;
+2. one discarded warm-up;
+3. three recorded samples;
+4. the raw values and median of three;
+5. byte-for-byte probe restoration in a `finally` path;
+6. one SHA-256 source check and one clean-worktree check after the complete
+   series.
 
-An unstable baseline or candidate series invalidates the complete measurement
-session. It is not a performance failure, and none of its medians may be used
-for retention. A fresh session may start only after the quiet-window preflight
-passes again.
+Do not add an active-process scanner, quiet-window coordinator, Job Object,
+power-profile or Defender capture, formal stability test, automatic retry, or
+per-sample artifact ledger. Avoid knowingly running a competing build, but do
+not turn that expectation into another measurement harness.
 
-Thresholds are fixed before candidate measurements and are never adjusted in
-response to observed results.
+There is no separate application-shell A/B series. Record the duration emitted
+by the mandatory end-of-slice workspace check instead.
 
-### Retention gates
+### Advisory interpretation
 
-The focused domain check must improve by both:
+Report the focused baseline median, candidate median, absolute delta, and
+percentage delta. The values inform the owner and future roadmap work; they do
+not automatically retain, reject, or revert a correct slice. The historical
+25% / 2.0-second focused gate, 2,000 ms / 20% shell cap, and cumulative ledger
+are no longer active policy.
 
-- at least 25%; and
-- at least 2.0 seconds in absolute median wall time.
-
-The application-shell probe may regress by no more than both:
-
-- 20%; and
-- 2,000 ms in absolute median wall time.
-
-The valid post-slice application-shell median must also be no more than
-15,000 ms against the canonical pre-Phase 3 anchor of 9,135 ms. Crossing that
-cumulative roadmap ceiling blocks automatic retention and requires a new
-owner-approved policy revision. Unused cumulative budget does not raise the
-per-slice 2,000 ms / 20% cap.
-
-The shell probe uses an inert edit in a source file retained by `extractum`.
-It is measured before and after extraction with the full-workspace check,
-because it exists to detect a cost imposed on ordinary application work.
-
-Passing only one side of either paired threshold is insufficient.
-Values exactly at 2,000 ms / 20% pass. There is
-no marginal-performance repeat: a valid result passes or fails directly.
-Measurement invalidation and corrected infrastructure retries remain separate
-from performance classification.
-
-The exact Phase 3 reapplication is the single exception to a new gating shell
-decision: its already-valid historical 10,177 ms result was accepted by the
-owner revision. Fresh post-reapplication samples are non-gating ledger
-diagnostics and cannot produce a performance no-go for that exact candidate.
-The follow-on plan must use a frozen historical tree/blob identity manifest
-covering every file and hunk that constitutes candidate `b364756c`. The
-exact-candidate exception treats any mismatch against that manifest as
-material: the result is a new candidate with fresh preregistered timing.
+Repeated ordinary workspace checks at or above 15,000 ms trigger a separate
+owner-approved performance investigation. A single result does not fail the
+slice, and the extraction plan does not automatically repeat timing samples.
 
 ## Failure Classification
 
-- **Infrastructure failure:** the command did not start, measurement metadata
-  is absent, an unrelated process invalidated the session, or probe bytes were
-  not restored. Discard the entire affected measurement session and restart
-  from its warm-up.
-- **Measurement invalidation:** fewer than four of five values in either shell
-  series have absolute deviation <= 300 ms from that series median. Discard the
-  complete session, classify no performance result, re-establish the quiet
-  window, and start a fresh session from its warm-up.
+- **Measurement failure:** a timing command did not start, did not finish, or
+  probe restoration cannot be proven. Record no performance conclusion and
+  stop the timing procedure. There is no protocol-mandated retry.
+- **Incomplete advisory series:** preserve the values already observed, mark
+  the comparison incomplete, and continue only after exact source restoration
+  is proven. Do not manufacture a median or convert this into a candidate
+  failure.
 - **Baseline failure:** the baseline command or test fails. Stop and restore a
   valid baseline before measuring a candidate.
 - **Candidate correctness failure:** the candidate does not compile in its
-  focused package or its focused tests fail. Do not measure or retain it as a
-  performance success.
-- **Performance no-go:** except for the exact Phase 3 reapplication described
-  above, the correct candidate misses either focused-domain improvement
-  threshold, either side of the 2,000 ms / 20% per-slice shell cap, or the
-  15,000 ms cumulative shell ceiling. Record the negative result and follow
-  the phase's already-approved retain/revert branch. A cumulative ceiling
-  crossing requires a separate owner policy revision before retention.
+  focused package or its focused tests fail. This is a correctness failure,
+  independently of any timing result.
+- **Advisory regression:** record the values and interpretation. Timing alone
+  cannot reject or revert the slice. If ordinary workspace checks are
+  repeatedly at or above 15,000 ms, open a separate diagnostic task.
 - **Completion failure:** any end-of-slice workspace gate fails. The slice is
   incomplete regardless of focused-loop results; this class is not folded
   into candidate measurement evidence.
@@ -285,14 +251,13 @@ invariants:
 - the policy rejects a zero-test result;
 - full check and test commands use `--workspace --all-targets`;
 - Rust plans are required to name focused and completion commands separately;
-- the crate-extraction shell contract pins the current per-slice cap,
-  cumulative ceiling, stability rule, and absence of a marginal-performance
-  repeat.
+- the crate-extraction timing contract pins one warm-up plus three samples per
+  state, advisory-only interpretation, absence of shell A/B and cumulative
+  ledger, and the canceled Phase 3 reapplication.
 
 The contract normalizes CRLF/LF and avoids exact prose, indentation, or whole
-paragraph assertions. Performance thresholds remain normative in this spec;
-`AGENTS.md` may reference the spec rather than duplicate its full measurement
-protocol.
+paragraph assertions. `AGENTS.md` may reference this spec rather than duplicate
+the advisory measurement protocol; its correctness loops remain unchanged.
 
 ## Scope
 

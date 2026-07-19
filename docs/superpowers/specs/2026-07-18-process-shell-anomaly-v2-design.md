@@ -6,10 +6,12 @@
 
 ## Current Roadmap Disposition
 
-The owner decision in
-[`2026-07-18-crate-extraction-shell-cap-revision-design.md`](2026-07-18-crate-extraction-shell-cap-revision-design.md)
-accepts the observed Phase 3 shell cost. V2 and a possible v3 no longer control
-Phase 3 retention or Phase 4 entry and must not run as roadmap prerequisites.
+The current
+[`crate roadmap`](2026-07-17-crate-roadmap.md) closes Phase 3 as not retained,
+cancels its exact reapplication, and makes future compile-time measurements
+advisory. V2 and a possible v3 remain moot, do not control Phase 4 entry, and
+must not run as roadmap prerequisites. Canceling reapplication does not
+reactivate this anomaly track.
 
 This technical design remains preserved for a future owner-approved task that
 genuinely requires sub-second precision or causal attribution. Its reviewed v1

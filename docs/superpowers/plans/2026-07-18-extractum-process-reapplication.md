@@ -1,5 +1,11 @@
 # Extractum Process Exact Reapplication Implementation Plan
 
+> **Status: CANCELED 2026-07-19 — DO NOT EXECUTE OR RESUME.** The project owner
+> withdrew the complete plan before any task was executed. It is retained only
+> as a historical design record. Any future process-crate work requires a fresh
+> owner-approved spec and plan; no claim, baseline, manifest, worktree, or
+> measurement described below is current roadmap state.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Reapply the exact historical `extractum-process` candidate from `b364756c`, retain it only after current correctness and completion gates pass, and record fresh non-gating shell diagnostics for the Phase 4 baseline decision.

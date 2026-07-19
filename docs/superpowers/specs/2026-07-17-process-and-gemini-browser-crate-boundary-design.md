@@ -1,15 +1,14 @@
 # Process and Gemini Browser Crate Boundary Design
 
-**Status:** Approved in conversation
+**Status:** Historical Phase 3/4 proposal; execution authority withdrawn 2026-07-19
 **Date:** 2026-07-17
 
-**Current extraction-performance policy:**
-[`2026-07-18-crate-extraction-shell-cap-revision-design.md`](2026-07-18-crate-extraction-shell-cap-revision-design.md)
-
-The revision supersedes this document's shell-cap, cumulative/validity, and
-marginal-repeat clauses. This document's architecture and correctness
-requirements remain active for the exact Phase 3 reapplication and Phase 4
-boundary.
+> **Current disposition:** Phase 3 was reverted and not retained. Its exact
+> reapplication plan was canceled before execution on 2026-07-19. This
+> document remains historical architecture evidence, not authority to replay
+> Phase 3 or start Phase 4. The current
+> [`crate roadmap`](2026-07-17-crate-roadmap.md) requires a fresh Phase 4
+> boundary that does not assume a retained `extractum-process` crate.
 
 ## Purpose
 

@@ -1,7 +1,8 @@
 # Rust Crate Extraction Roadmap
 
-**Status:** Strategic reference, approved in conversation
+**Status:** Strategic reference; revised and owner-approved 2026-07-19
 **Date:** 2026-07-17
+**Last revised:** 2026-07-19
 
 ## Purpose
 
@@ -14,11 +15,10 @@ dependency map, and fresh co-change statistics before execution.
 Completed and in-flight slices governed by their own documents:
 
 - [`2026-07-17-process-and-gemini-browser-crate-boundary-design.md`](2026-07-17-process-and-gemini-browser-crate-boundary-design.md)
-  — approved just-in-time boundary for phase 3 `extractum-process` and the
-  phase 4 focused Gemini Browser engine. The Phase 3 implementation plan is
-  [`2026-07-17-extractum-process-extraction.md`](../plans/2026-07-17-extractum-process-extraction.md);
-  execution was measured and not retained; see the verification record linked
-  in Phase 3.
+  — historical boundary proposal for phases 3 and 4. Phase 3 was measured,
+  reverted, and not retained. Its later exact-reapplication plan was canceled
+  before execution on 2026-07-19. Phase 4 now requires a fresh boundary design
+  that does not assume a retained `extractum-process` crate.
 
 - `2026-07-15-rust-workspace-crate-extraction-design.md` — workspace +
   `extractum-core` (`error`, `time`, `compression`). Done.
@@ -30,12 +30,13 @@ Completed and in-flight slices governed by their own documents:
   full-workspace hypothesis is falsified; the crate was not created. See
   `docs/superpowers/verification/2026-07-17-notebooklm-render-crate-boundary.md`.
 - [`2026-07-17-focused-rust-loop-design.md`](2026-07-17-focused-rust-loop-design.md)
-  — focused package commands, extraction-retention thresholds, plan-shape
-  requirements, and unchanged end-of-slice workspace gates. Enforced through
-  `AGENTS.md` and `src/lib/focused-rust-loop-contract.test.ts`.
+  — focused package commands, advisory extraction timing, plan-shape
+  requirements, and unchanged end-of-slice correctness gates. Enforced through
+  `AGENTS.md` and the focused-loop source contracts.
 - [`2026-07-18-crate-extraction-shell-cap-revision-design.md`](2026-07-18-crate-extraction-shell-cap-revision-design.md)
-  — current 2,000 ms / 20% per-slice cap, 15,000 ms cumulative ceiling,
-  measurement-validity rule, and Phase 3/v2 disposition.
+  — historical shell-cap revision. Its automatic retention gates, cumulative
+  ledger, and Phase 3 reapplication authorization are superseded by this
+  roadmap revision; its recorded historical measurements remain valid.
 
 ## Evidence Base
 
@@ -131,8 +132,8 @@ products:
 2. **Focused package loop** — `cargo check --manifest-path
    src-tauri/Cargo.toml -p <crate> --all-targets` and focused package tests.
    This loop benefits from extraction almost by definition (the domain stops
-   paying for the application crate). Its use as the acceptance metric for
-   hot-module phases 4–6 is governed by
+   paying for the application crate). Its use as the advisory compile-time
+   metric for hot-module phases 4–6 is governed by
    `2026-07-17-focused-rust-loop-design.md`; it never replaces a failed
    full-workspace gate.
 
@@ -142,36 +143,29 @@ main branch point.
 
 ## Decision Framework
 
-- Byte-for-byte probe restoration, warmed median sampling, session
-  invalidation on infrastructure failure, and documented negative outcomes
-  are inherited as common mechanics from the render spec. For hot-module
-  phases 4–6, the focused-loop spec is the normative source for commands,
-  thresholds, and failure classification.
-- For decisions after 2026-07-18, hot-module retention and shell-regression
-  gates come from `2026-07-18-crate-extraction-shell-cap-revision-design.md`
-  and the updated focused-loop specification. Historical sessions retain their
-  originally frozen thresholds.
-- Every slice must pass both its 2,000 ms / 20% local shell cap and the
-  15,000 ms cumulative shell ceiling. A ceiling crossing requires a separate
-  owner-approved policy revision before retention.
-- **Branch on the render slice outcome:**
-  - **Stage 0 go, Stage 1 retain** — the full-workspace hypothesis holds on
-    this machine. Continue the phase sequence below with the same gates.
-  - **Stage 0 no-go (or Stage 1 revert)** — the full-workspace hypothesis is
-    falsified for this repository shape. Before any further extraction,
-    choose explicitly, with a user-approved spec revision, one of:
-    (a) adopt the focused package loop as the acceptance metric for hot-module
-    phases and recalibrate thresholds for it;
-    (b) proceed on architectural justification only (boundary enforcement,
-    dependency hygiene, grammers removal), with performance recorded as
-    diagnostic evidence, not a gate;
-    (c) stop extracting and keep the workspace at core + retained slices.
-- **Outcome recorded 2026-07-17:** Stage 0 returned `no_go`
+- Rename-map inventory comparison, exact probe restoration, and documented
+  negative outcomes remain common mechanics. For hot-module phases 4–6, the
+  focused-loop spec is the normative source for commands, the small advisory
+  sample, and failure classification.
+- For decisions after 2026-07-19, compile-time measurements are advisory.
+  Correctness and completion gates remain mandatory, but timing alone never
+  automatically retains, rejects, or reverts a slice. Historical sessions keep
+  the thresholds and decisions frozen in their own records.
+- Hot-module phases measure only the focused package loop with one discarded
+  warm-up and three recorded samples before and after extraction. Record the
+  raw values and median. Do not require a quiet-window harness, Defender or
+  power-profile metadata, a shell A/B series, a stability retry, or a
+  cumulative timing ledger.
+- Record the duration already emitted by the mandatory end-of-slice workspace
+  check as an operational signal. Repeated ordinary workspace checks at or
+  above 15,000 ms open a separately approved diagnostic task; they do not fail
+  or revert the extraction slice.
+- **Historical branch outcome:** Stage 0 returned `no_go` on 2026-07-17
   (app 9,090 ms vs core surrogate 9,100 ms, −0.11%; focused core 1,020 ms).
-  The project owner selected **(a) + (b)**: the focused package loop becomes
-  the acceptance metric for the hot-module phases 4–6 under the approved
-  focused-loop respec, and phase 8 proceeds on
-  dependency-hygiene justification with performance as diagnostic evidence.
+  The project owner selected the focused package loop plus architectural
+  justification. On 2026-07-19 the timing part was simplified further: focused
+  timing is advisory for hot-module phases, and phase 8 continues on
+  dependency-hygiene justification.
   Development verification in this repository is performed by an LLM agent
   following Superpowers plans, so the focused-loop workflow is adopted through
   mandatory `AGENTS.md` policy and generated-plan structure. Universal
@@ -181,15 +175,19 @@ main branch point.
   - A failed gate never justifies weakening correctness gates, and a
     reverted candidate leaves no partial split behind.
 
-## Roadmap Shell Budget
+## Roadmap Timing Signals
 
-The cumulative ceiling is measured on the same workstation/probe family as the
-canonical pre-Phase 3 shell median. Only valid series enter this ledger.
+There is no cumulative shell ledger and no pending Phase 3 baseline. The
+following values are historical context, not automatic retention gates:
 
-| Checkpoint | Valid shell median | Remaining to 15,000 ms | Disposition |
-| --- | ---: | ---: | --- |
-| Pre-Phase 3 | 9,135 ms | 5,865 ms | canonical anchor |
-| Reapplied Phase 3 | pending valid post-reapplication median | pending | non-gating measurement required before Phase 4 timing |
+| Checkpoint | Shell median | Disposition |
+| --- | ---: | --- |
+| Pre-Phase 3 | 9,135 ms | historical retained-workspace reference |
+| Historical Phase 3 candidate | 10,177 ms | candidate reverted and not retained |
+
+For future slices, record the duration of the mandatory workspace check without
+adding a separate shell A/B experiment. Repeated ordinary results at or above
+15,000 ms trigger a separate performance investigation.
 
 ## Target Crate Map (end state, revisable per phase)
 
@@ -206,10 +204,10 @@ extractum (app shell: commands, state, db, migrations, apalis_jobs,
   ├── extractum-telegram          (phase 8: telegram, accounts,
   │     └── extractum-core         session store, secret store,
   │                                grammers media adapter)
-  ├── extractum-notebooklm-render (phase 2, conditional on gates)
+  ├── extractum-notebooklm-render (phase 2 closed no_go; future fresh design)
   │     └── extractum-core
-  ├── extractum-process           (phase 3, if justified: external_process,
-  │     └── extractum-core         child_process, process_tree)
+  ├── extractum-process           (phase 3 closed, not retained; future only
+  │     └── extractum-core         through a fresh owner-approved design)
   ├── extractum-sources           (phase 9+: storage/read-model layer)
   │     └── extractum-core
   └── extractum-core              (done: error, time, compression,
@@ -256,7 +254,7 @@ crate was created; the branch selected in "Decision Framework" governs all
 later phases. The seven-module boundary remains a valid future candidate
 under the focused-loop metric if a phase ever needs it.
 
-### Phase 3 — `extractum-process` (approved for exact-candidate reapplication)
+### Phase 3 — `extractum-process` (closed: not retained)
 
 `external_process`, `child_process`, and `process_tree` become shared
 OS-process infrastructure below Gemini Browser, YouTube, and diagnostics.
@@ -267,36 +265,30 @@ gate and was reverted in `c47372dc`; that historical result remains unchanged.
 The original evidence remains in
 [`2026-07-17-extractum-process-extraction.md`](../verification/2026-07-17-extractum-process-extraction.md).
 
-The approved 2026-07-18 shell-cap revision accepts the same evidence under the
-new 2,000 ms / 20% rule. Reapply the exact historical candidate without a new
-gating performance experiment. The follow-on plan must freeze a historical
-tree/blob identity manifest covering every file and hunk that constitutes
-candidate `b364756c`, verify every manifest entry, and rerun current correctness
-and completion gates. Record non-gating before/after
-shell samples and validity counts; a valid post median seeds the cumulative
-ledger. If those diagnostics are invalid, Phase 3 may still retain after all
-correctness/completion gates pass, but Phase 4 must establish a valid baseline
-before its own performance decision.
+The later exact-reapplication plan
+[`2026-07-18-extractum-process-reapplication.md`](../plans/2026-07-18-extractum-process-reapplication.md)
+was canceled by the project owner before execution on 2026-07-19. No process
+crate, post-reapplication baseline, or cumulative-ledger entry exists. The
+2026-07-18 shell-cap revision no longer authorizes reapplication.
 
-The v2/v3 anomaly track is moot for this roadmap. It is not a prerequisite for
-Phase 3 or Phase 4, and its reviewed harness remediation remains deferred.
+Any future `extractum-process` attempt starts as a new phase with a fresh
+owner-approved spec, dependency evidence, plan, and advisory measurement. It
+must not replay or resume the canceled plan implicitly. The v2/v3 anomaly
+track remains moot and cancellation does not reactivate it.
 
-Treat any mismatch against the frozen historical tree/blob identity manifest
-as material and stop the exact-candidate path. The result is a new candidate
-and requires a separately approved plan with
-fresh preregistered timing under the revised local, cumulative, and validity
-rules.
-
-### Phase 4 — `extractum-gemini-browser` (boundary approved)
+### Phase 4 — `extractum-gemini-browser` (awaiting a new boundary design)
 
 ~6,800 lines, 39 commits in its first month, 59% solo, structurally
 self-contained (only 7 joint commits with `prompt_packs`). Depends on
-process infrastructure + core. The approved design keeps Tauri commands,
+process infrastructure + core. The historical proposal kept Tauri commands,
 application paths, SQL/Apalis storage, and worker registration app-side while
 extracting the portable automation engine.
-Phase 4 remains blocked until the exact Phase 3 candidate is integrated and a
-valid shell baseline exists for Phase 4 measurement.
-No additional v2/v3 diagnostic approval is required.
+
+Phase 4 has not started. Because Phase 3 was not retained and its reapplication
+was canceled, Phase 4 requires a fresh owner-approved boundary that either
+keeps the process dependency app-side behind a narrow interface or proposes a
+different dependency arrangement. It has no Phase 3 timing prerequisite and
+does not require the v2/v3 anomaly protocol.
 
 ### Phase 5 — `extractum-llm`
 
@@ -362,15 +354,16 @@ integration tests, WiX/MSI packaging concerns.
 1. Fresh evidence first: recompute the module co-change matrix and the
    candidate's fan-in/fan-out before writing the spec; history shifts (e.g.
    `gemini_browser` did not exist three months ago).
-2. Common measurement mechanics, rename-map inventory comparison, and
-   negative-outcome documentation are inherited from the render and focused-
-   loop specs. For Phase 4 and later, every shell decision uses five-sample
-   baseline/candidate series, requires at least four values with absolute
-   deviation <= 300 ms from each series median, and applies both the
-   2,000 ms / 20% per-slice cap and the 15,000 ms cumulative ceiling. An
-   unstable series invalidates the session rather than failing the candidate.
-   The exact historical Phase 3 reapplication instead records non-gating
-   diagnostics under its explicit owner exception.
+2. Compile-time measurement is advisory and deliberately small. For hot-module
+   phases, use the same logical focused-package probe before and after the
+   extraction, with one discarded warm-up and three recorded samples per
+   state. Record raw values and the median. Restore probe bytes in a `finally`
+   path and verify the source hash plus clean worktree once after each series.
+   Do not add a quiet-window harness, process-tree coordinator, Defender or
+   power-profile capture, formal stability rule, automatic retry, shell A/B,
+   or cumulative ledger. Timing never overrides correctness or automatically
+   rejects a slice. Record the mandatory workspace-check duration; repeated
+   ordinary results at or above 15,000 ms route to a separate diagnostic.
 3. Mechanical moves only inside a slice: facade modules preserve `crate::`
    paths; consumers are never mass-rewritten in the same slice.
 4. Every `pub(crate)` → `pub` widening is enumerated in the spec and checked
@@ -386,8 +379,8 @@ integration tests, WiX/MSI packaging concerns.
    trigger), grammers, tokio, or OS-process code.
 7. Release evidence = `--no-bundle` build + startup smoke; MSI stays excluded
    until the WiX follow-up lands.
-8. `lib.rs` churn is expected shell noise; the shell probe exists to bound
-   it, not to forbid it.
+8. `lib.rs` churn is expected shell noise. Observe its cost through the
+   mandatory workspace check rather than a separate shell A/B probe.
 
 ## Deferred Items and Triggers
 
@@ -398,7 +391,8 @@ integration tests, WiX/MSI packaging concerns.
 | `analysis/trace.rs` direct `zstd::` → `core::compression` | phase 7 at the latest |
 | `sources::test_support` ownership (fixture crate vs app-side integration tests) | first producer-domain extraction whose tests consume it |
 | WiX MSI diagnosis (`light.exe` failure/hang, likely ICE validation in non-interactive sessions) | separate follow-up task; unblocks restoring full-bundle gates |
-| Focused-loop metric respec | **Completed 2026-07-17; revised 2026-07-18**: focused commands and the domain gate remain; shell retention now uses 2,000 ms / 20%, the 15,000 ms cumulative ceiling, and the 4/5-within-300-ms validity rule. |
+| Focused-loop metric respec | **Completed 2026-07-17; simplified 2026-07-19**: correctness commands remain mandatory; focused timing is advisory with one warm-up plus three samples per state; shell A/B, automatic timing vetoes, stability retries, and the cumulative ledger are retired. |
+| Phase 3 exact reapplication | **Canceled 2026-07-19**: do not execute or resume the historical plan; any future process-crate attempt requires a fresh owner-approved design. |
 | Process-shell anomaly v2/v3 | **Moot for the current roadmap**: reopen only for a separately approved task requiring sub-second precision or causal attribution; v1 harness remediation remains deferred. |
 
 ## Non-Goals

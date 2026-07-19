@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import focusedLoopDesignRaw from "../../docs/superpowers/specs/2026-07-17-focused-rust-loop-design.md?raw";
 import crateRoadmapRaw from "../../docs/superpowers/specs/2026-07-17-crate-roadmap.md?raw";
+import processBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-17-process-and-gemini-browser-crate-boundary-design.md?raw";
 import shellCapRevisionRaw from "../../docs/superpowers/specs/2026-07-18-crate-extraction-shell-cap-revision-design.md?raw";
 import anomalyV2DesignRaw from "../../docs/superpowers/specs/2026-07-18-process-shell-anomaly-v2-design.md?raw";
-import valueRegistryRaw from "../../docs/value-registry.md?raw";
-import processBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-17-process-and-gemini-browser-crate-boundary-design.md?raw";
+import reapplicationPlanRaw from "../../docs/superpowers/plans/2026-07-18-extractum-process-reapplication.md?raw";
 
 const normalize = (value: string) => value.replace(/\r\n/g, "\n");
+const compact = (value: string) => normalize(value).replace(/\s+/g, " ");
 const sectionBetween = (value: string, start: string, end: string) => {
   const startIndex = value.indexOf(start);
   const endIndex = value.indexOf(end, startIndex + start.length);
@@ -16,189 +17,134 @@ const sectionBetween = (value: string, start: string, end: string) => {
   }
   return value.slice(startIndex, endIndex);
 };
-const sectionFrom = (value: string, start: string) => {
-  const startIndex = value.indexOf(start);
-  if (startIndex < 0) {
-    throw new Error(`Missing policy section: ${start}`);
-  }
-  return value.slice(startIndex);
-};
+
 const focusedLoopDesign = normalize(focusedLoopDesignRaw);
 const crateRoadmap = normalize(crateRoadmapRaw);
-const shellCapRevision = normalize(shellCapRevisionRaw);
-const anomalyV2Design = normalize(anomalyV2DesignRaw);
-const valueRegistry = normalize(valueRegistryRaw);
-const processBoundaryDesign = normalize(processBoundaryDesignRaw);
-const samplingPolicy = sectionBetween(
-  focusedLoopDesign,
-  "### Sampling",
-  "### Retention gates",
+const processBoundaryDesign = compact(processBoundaryDesignRaw);
+const shellCapRevision = compact(shellCapRevisionRaw);
+const anomalyV2Design = compact(anomalyV2DesignRaw);
+const reapplicationPlan = compact(reapplicationPlanRaw);
+const samplingPolicy = compact(
+  sectionBetween(
+    focusedLoopDesign,
+    "### Sampling",
+    "### Advisory interpretation",
+  ),
 );
-const retentionPolicy = sectionBetween(
-  focusedLoopDesign,
-  "### Retention gates",
-  "## Failure Classification",
+const advisoryPolicy = compact(
+  sectionBetween(
+    focusedLoopDesign,
+    "### Advisory interpretation",
+    "## Failure Classification",
+  ),
 );
-const failurePolicy = sectionBetween(
-  focusedLoopDesign,
-  "## Failure Classification",
-  "## Repository Enforcement",
+const failurePolicy = compact(
+  sectionBetween(
+    focusedLoopDesign,
+    "## Failure Classification",
+    "## Repository Enforcement",
+  ),
 );
-const roadmapBudget = sectionBetween(
-  crateRoadmap,
-  "## Roadmap Shell Budget",
-  "## Target Crate Map",
+const roadmapTiming = compact(
+  sectionBetween(
+    crateRoadmap,
+    "## Roadmap Timing Signals",
+    "## Target Crate Map",
+  ),
 );
-const phase3Roadmap = sectionBetween(
-  crateRoadmap,
-  "### Phase 3 —",
-  "### Phase 4 —",
+const phase3Roadmap = compact(
+  sectionBetween(crateRoadmap, "### Phase 3 —", "### Phase 4 —"),
 );
-const phase4Roadmap = sectionBetween(
-  crateRoadmap,
-  "### Phase 4 —",
-  "### Phase 5 —",
-);
-const anomalyDisposition = sectionBetween(
-  anomalyV2Design,
-  "## Current Roadmap Disposition",
-  "**Archived v1 protocol commit:**",
-);
-const phase3Revision = sectionBetween(
-  shellCapRevision,
-  "## Phase 3 Consequence",
-  "## Documentation and Contract Changes",
-);
-const revisionContract = sectionBetween(
-  shellCapRevision,
-  "## Documentation and Contract Changes",
-  "## Verification",
-);
-const processShellRegistry = sectionFrom(
-  valueRegistry,
-  "## Process-shell diagnostic artifact classifications",
+const phase4Roadmap = compact(
+  sectionBetween(crateRoadmap, "### Phase 4 —", "### Phase 5 —"),
 );
 
-describe("crate extraction shell-cap repository policy", () => {
-  it("pins the revised focused-loop thresholds and validity rule", () => {
+describe("crate extraction timing policy", () => {
+  it("keeps focused timing small and advisory", () => {
     expect(focusedLoopDesign).toContain(
-      "2026-07-18-crate-extraction-shell-cap-revision-design.md",
-    );
-    expect(retentionPolicy).toContain("no more than both");
-    expect(retentionPolicy).toContain("- 20%; and");
-    expect(retentionPolicy).toContain("- 2,000 ms in absolute median wall time");
-    expect(retentionPolicy).toContain("Values exactly at 2,000 ms / 20% pass");
-    expect(retentionPolicy).toContain("9,135 ms");
-    expect(retentionPolicy).toContain("15,000 ms");
-    expect(retentionPolicy).toContain("no marginal-performance repeat");
-    expect(retentionPolicy).toContain("exact Phase 3 reapplication");
-    expect(retentionPolicy).toContain("cannot produce a performance no-go");
-    expect(retentionPolicy).toContain(
-      "frozen historical tree/blob identity manifest",
-    );
-    expect(retentionPolicy).toContain("any mismatch");
-    expect(samplingPolicy).toContain("at least four of the five samples");
-    expect(samplingPolicy).toContain("absolute deviation <= 300 ms");
-    expect(samplingPolicy).toContain("not a performance failure");
-    expect(samplingPolicy).toContain("quiet-window preflight");
-    expect(failurePolicy).toContain("Measurement invalidation");
-    expect(failurePolicy).toContain("15,000 ms cumulative shell ceiling");
-    expect(retentionPolicy).not.toContain("- 5%; and");
-    expect(retentionPolicy).not.toContain(
-      "0.5 seconds in absolute median wall time",
-    );
-    expect(retentionPolicy).not.toContain("800 ms / 8%");
-    expect(focusedLoopDesign).toContain(
-      "2026-07-17-process-and-gemini-browser-crate-boundary-design.md",
+      "**Status:** Approved; timing policy simplified 2026-07-19",
     );
     expect(focusedLoopDesign).toContain(
-      "shell-cap and marginal-repeat clauses",
+      "[`2026-07-17-crate-roadmap.md`](2026-07-17-crate-roadmap.md)",
     );
-    expect(retentionPolicy).toContain("at least 25%");
-    expect(retentionPolicy).toContain("at least 2.0 seconds");
-    expect(processBoundaryDesign).toContain(
-      "2026-07-18-crate-extraction-shell-cap-revision-design.md",
+    expect(samplingPolicy).toContain("one discarded warm-up");
+    expect(samplingPolicy).toContain("three recorded samples");
+    expect(samplingPolicy).toContain("raw values and median of three");
+    expect(samplingPolicy).toContain("probe restoration in a `finally` path");
+    expect(samplingPolicy).toContain("one SHA-256 source check");
+    expect(samplingPolicy).toContain("one clean-worktree check");
+    expect(samplingPolicy).toContain("no separate application-shell A/B series");
+    expect(samplingPolicy).toContain(
+      "Record the duration emitted by the mandatory end-of-slice workspace check",
     );
-    expect(processBoundaryDesign).toContain("architecture and correctness");
-    expect(processBoundaryDesign).toContain("requirements remain active");
+    expect(samplingPolicy).toContain("Do not add an active-process scanner");
+    expect(samplingPolicy).not.toContain("five recorded samples");
+    expect(samplingPolicy).not.toContain("300 ms");
+    expect(samplingPolicy).toContain("quiet-window coordinator");
+    expect(advisoryPolicy).toContain(
+      "do not automatically retain, reject, or revert a correct slice",
+    );
+    expect(advisoryPolicy).toContain(
+      "historical 25% / 2.0-second focused gate, 2,000 ms / 20% shell cap, and cumulative ledger are no longer active policy",
+    );
+    expect(advisoryPolicy).toContain(
+      "Repeated ordinary workspace checks at or above 15,000 ms trigger a separate owner-approved performance investigation",
+    );
+    expect(failurePolicy).toContain("There is no protocol-mandated retry");
+    expect(failurePolicy).toContain(
+      "Timing alone cannot reject or revert the slice",
+    );
+    expect(focusedLoopDesign).not.toContain("### Retention gates");
   });
 
-  it("records the cumulative roadmap and moot anomaly disposition", () => {
+  it("records the canceled Phase 3 and fresh-design requirement for Phase 4", () => {
     expect(crateRoadmap).toContain(
-      "2026-07-18-crate-extraction-shell-cap-revision-design.md",
+      "**Status:** Strategic reference; revised and owner-approved 2026-07-19",
     );
-    expect(roadmapBudget).toContain("15,000 ms");
-    expect(roadmapBudget).toContain("5,865 ms");
-    expect(roadmapBudget.match(/\| Reapplied Phase 3 \|/g)).toHaveLength(1);
-    expect(roadmapBudget).toContain(
-      "| Reapplied Phase 3 | pending valid post-reapplication median | " +
-        "pending | non-gating measurement required before Phase 4 timing |",
+    expect(roadmapTiming).toContain("There is no cumulative shell ledger");
+    expect(roadmapTiming).toContain(
+      "| Historical Phase 3 candidate | 10,177 ms | candidate reverted and not retained |",
     );
-    expect(phase3Roadmap).toContain(
-      "Phase 3 — `extractum-process` (approved for exact-candidate reapplication)",
-    );
-    expect(phase3Roadmap).toContain("non-gating before/after");
-    expect(phase3Roadmap).toContain("shell samples and validity counts");
-    expect(phase3Roadmap).toContain(
-      "frozen historical tree/blob identity manifest",
-    );
-    expect(phase3Roadmap).toContain("any mismatch");
-    expect(phase3Roadmap).toContain("stop the exact-candidate path");
-    expect(phase3Roadmap).toContain(
-      "requires a separately approved plan",
+    expect(roadmapTiming).not.toContain("Reapplied Phase 3");
+    expect(roadmapTiming).toContain(
+      "record the duration of the mandatory workspace check",
     );
     expect(phase3Roadmap).toContain(
-      "fresh preregistered timing under the revised",
+      "Phase 3 — `extractum-process` (closed: not retained)",
     );
     expect(phase3Roadmap).toContain(
-      "2026-07-17-extractum-process-extraction.md",
+      "was canceled by the project owner before execution on 2026-07-19",
+    );
+    expect(phase3Roadmap).toContain(
+      "No process crate, post-reapplication baseline, or cumulative-ledger entry exists",
+    );
+    expect(phase3Roadmap).toContain(
+      "Any future `extractum-process` attempt starts as a new phase",
     );
     expect(phase4Roadmap).toContain(
-      "Phase 4 remains blocked until the exact Phase 3 candidate is integrated",
+      "Phase 4 — `extractum-gemini-browser` (awaiting a new boundary design)",
     );
     expect(phase4Roadmap).toContain(
-      "valid shell baseline exists for Phase 4 measurement",
+      "requires a fresh owner-approved boundary",
     );
-    expect(phase4Roadmap).toContain(
-      "No additional v2/v3 diagnostic approval is required",
-    );
-    expect(phase4Roadmap).not.toContain(
-      "Additional v2/v3 diagnostic approval is required",
-    );
-    expect(anomalyV2Design).toContain(
-      "**Status:** `moot` for the current crate roadmap",
-    );
-    expect(anomalyDisposition).toContain(
-      "2026-07-18-crate-extraction-shell-cap-revision-design.md",
-    );
-    expect(anomalyDisposition).toContain("must not run as roadmap prerequisites");
-    expect(anomalyDisposition).not.toContain("must run as roadmap prerequisites");
-    expect(anomalyDisposition).toContain("current v1 harness is not");
-    expect(anomalyDisposition).toContain("production-ready infrastructure");
-    expect(processShellRegistry).toContain(
-      "| `moot` | roadmap disposition | Moot | " +
-        "The approved anomaly protocol no longer controls the crate roadmap after an explicit owner policy revision; " +
-        "its design remains preserved for a separately approved precision/causality task. | " +
-        "shell-cap revision / crate roadmap | terminal | none | n/a | yes | v2 design, crate roadmap |",
-    );
-    expect(processShellRegistry).toContain(
-      "`moot` does not classify an experimental `decision.json`",
-    );
-    expect(processShellRegistry).toContain("`moot` is documentation-only");
-    expect(processShellRegistry).toContain("not persisted in SQLite");
-    expect(processShellRegistry).toContain("not exposed through a product API");
-    expect(processShellRegistry).toContain("not rendered in the UI");
-    expect(processShellRegistry).toContain("not used by product fixtures");
+    expect(phase4Roadmap).toContain("It has no Phase 3 timing prerequisite");
     expect(shellCapRevision).toContain(
-      "**Status:** Implemented; current shell-cap authority",
+      "Superseded 2026-07-19; historical policy record",
     );
-    expect(phase3Revision).toContain(
-      "frozen historical tree/blob identity manifest",
+    expect(shellCapRevision).toContain(
+      "must not be used as current execution authority",
     );
-    expect(phase3Revision).toContain("any mismatch");
-    expect(revisionContract).toContain(
-      "document-only `moot` roadmap disposition",
+    expect(processBoundaryDesign).toContain(
+      "execution authority withdrawn 2026-07-19",
     );
-    expect(revisionContract).not.toContain("or value-registry entry");
+    expect(processBoundaryDesign).toContain("not authority to replay");
+    expect(processBoundaryDesign).toContain("Phase 3 or start Phase 4");
+    expect(reapplicationPlan).toContain(
+      "CANCELED 2026-07-19 — DO NOT EXECUTE OR RESUME",
+    );
+    expect(reapplicationPlan).toContain(
+      "withdrew the complete plan before any task was executed",
+    );
+    expect(anomalyV2Design).toContain("`moot` for the current crate roadmap");
   });
 });
