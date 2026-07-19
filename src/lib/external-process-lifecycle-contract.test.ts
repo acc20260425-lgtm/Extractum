@@ -3,7 +3,7 @@ import libSource from "../../src-tauri/src/lib.rs?raw";
 import coordinatorSource from "../../src-tauri/src/external_process.rs?raw";
 import processTreeSource from "../../src-tauri/src/process_tree.rs?raw";
 import sidecarSource from "../../src-tauri/src/gemini_browser/sidecar.rs?raw";
-import sidecarLaunchSource from "../../src-tauri/src/gemini_browser/sidecar_launch.rs?raw";
+import sidecarLaunchSource from "../../src-tauri/crates/extractum-gemini-browser/src/sidecar_launch.rs?raw";
 import cdpChromeSource from "../../src-tauri/src/gemini_browser/cdp_chrome.rs?raw";
 import geminiCommandsSource from "../../src-tauri/src/gemini_browser/commands.rs?raw";
 import youtubeProcessRuntimeSource from "../../src-tauri/src/youtube/process_runtime.rs?raw";
@@ -44,7 +44,9 @@ describe("external process lifecycle contract", () => {
 
     expect(sidecar).toContain("tokio::process::Command");
     expect(sidecar).toContain("hide_console_window");
-    expect(launch).toContain("current_exe");
+    expect(sidecar).toContain("std::env::current_exe");
+    expect(launch).toContain("pub fn bundled_sidecar_path");
+    expect(launch).not.toContain("current_exe");
     expect(tauriConfigSource).toContain("gemini-browser-sidecar");
     expect(sidecar).not.toContain("CommandChild");
     expect(sidecar).not.toContain("CommandEvent");
