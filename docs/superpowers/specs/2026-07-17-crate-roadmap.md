@@ -20,8 +20,12 @@ Completed and in-flight slices governed by their own documents:
   and an isolated exact replay, but was canceled before completion and never
   merged or retained. The durable
   [cancellation disposition](../verification/2026-07-19-extractum-process-reapplication-cancellation.md)
-  records the recovered sequence. Phase 4 now requires a fresh boundary design
-  that does not assume a retained `extractum-process` crate.
+  records the recovered sequence. Its Phase 4 clauses are superseded by the
+  current design below.
+- [`2026-07-19-gemini-browser-crate-boundary-design.md`](2026-07-19-gemini-browser-crate-boundary-design.md)
+  — owner-approved Phase 4 boundary. The portable Gemini domain engine moves
+  behind a permanent browser-level executor port; all concrete sidecar/CDP
+  process ownership remains in the application. Implementation is pending.
 
 - `2026-07-15-rust-workspace-crate-extraction-design.md` — workspace +
   `extractum-core` (`error`, `time`, `compression`). Done.
@@ -299,23 +303,35 @@ owner-approved spec, dependency evidence, plan, and advisory measurement. It
 must not replay or resume the canceled plan implicitly. The v2/v3 anomaly
 track remains moot and cancellation does not reactivate it.
 
-### Phase 4 — `extractum-gemini-browser` (awaiting a new boundary design)
+### Phase 4 — `extractum-gemini-browser` (boundary approved; implementation pending)
 
-~6,800 lines, 39 commits in its first month, 59% solo, structurally
-self-contained (only 7 joint commits with `prompt_packs`). Its process and core
-needs remain, but no ownership or dependency direction is approved for a
-future crate. The historical proposal kept Tauri commands, application paths,
-SQL/Apalis storage, and worker registration app-side while extracting the
-portable automation engine.
+The fresh 2026-07-19 snapshot contains 10 files, approximately 6,770 lines,
+and 94 Rust tests. Since 2026-06-01, 39 commits touched the module; under the
+current Rust-domain classification, 28 of 39 (71.8%) touched no other
+categorized Rust domain and 8 jointly touched `prompt_packs`. This method
+excludes shell files and differs from the frozen 2026-07-17 repository-wide
+bucket that produced the historical 59% / 7 figures.
 
-Phase 4 has not started. Because Phase 3 was not retained and its reapplication
-was canceled, Phase 4 requires a fresh owner-approved boundary. The historical
-rejection of an app-side narrow interface—then described as extracting Gemini
-first behind temporary process traits—assumed an imminent retained process
-crate; that premise is now void. This does not preselect a replacement: the
-fresh design may reconsider that interface class or choose another ownership
-and dependency arrangement. It has no Phase 3 timing prerequisite and does not
-require the v2/v3 anomaly protocol.
+The owner-approved
+[`Gemini Browser crate boundary`](2026-07-19-gemini-browser-crate-boundary-design.md)
+moves DTOs, protocol and run-log behavior, portable runtime state, submission
+and status decisions, job lifecycle, typed timeout/cancellation, and startup
+reconciliation into `extractum-gemini-browser`. Tauri commands, application
+paths, SQLx/Apalis storage and worker registration, and all concrete
+sidecar/CDP spawn, handles, containment, kill/reap, and shutdown remain in
+`extractum`.
+
+A permanent domain-level `BrowserExecutor` connects those owners without
+exposing PID, child, pipe, process-tree, or Windows types. It does not recreate
+`extractum-process`. The historical rejection of an app-side narrow interface
+assumed an imminent retained process crate; that premise is void and the new
+stable domain port is now selected explicitly.
+
+Phase 4 has not started and requires one implementation plan. It has no Phase
+3 timing or reapplication prerequisite and does not require the v2/v3 anomaly
+protocol. Compile-time evidence follows the small advisory focused-loop policy;
+correctness, workspace, portability, no-bundle, startup, and the fixed Phase 4
+sidecar/CDP/shutdown smoke gates remain mandatory.
 
 ### Phase 5 — `extractum-llm`
 

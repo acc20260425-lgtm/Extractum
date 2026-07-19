@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import focusedLoopDesignRaw from "../../docs/superpowers/specs/2026-07-17-focused-rust-loop-design.md?raw";
 import crateRoadmapRaw from "../../docs/superpowers/specs/2026-07-17-crate-roadmap.md?raw";
 import processBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-17-process-and-gemini-browser-crate-boundary-design.md?raw";
+import geminiBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-19-gemini-browser-crate-boundary-design.md?raw";
 import shellCapRevisionRaw from "../../docs/superpowers/specs/2026-07-18-crate-extraction-shell-cap-revision-design.md?raw";
 import anomalyV2DesignRaw from "../../docs/superpowers/specs/2026-07-18-process-shell-anomaly-v2-design.md?raw";
 import reapplicationPlanRaw from "../../docs/superpowers/plans/2026-07-18-extractum-process-reapplication.md?raw";
@@ -23,6 +24,7 @@ const sectionBetween = (value: string, start: string, end: string) => {
 const focusedLoopDesign = normalize(focusedLoopDesignRaw);
 const crateRoadmap = normalize(crateRoadmapRaw);
 const processBoundaryDesign = compact(processBoundaryDesignRaw);
+const geminiBoundaryDesign = compact(geminiBoundaryDesignRaw);
 const shellCapRevision = compact(shellCapRevisionRaw);
 const anomalyV2Design = compact(anomalyV2DesignRaw);
 const reapplicationPlan = compact(reapplicationPlanRaw);
@@ -61,6 +63,27 @@ const phase3Roadmap = compact(
 const phase4Roadmap = compact(
   sectionBetween(crateRoadmap, "### Phase 4 —", "### Phase 5 —"),
 );
+const appOwnedGeminiBaselineTests = [
+  "explicit_shutdown_kills_and_reaps_the_owned_child_once",
+  "drop_falls_back_to_owned_child_shutdown",
+  "shutdown_does_not_claim_or_kill_an_already_exited_child",
+  "shutdown_reaps_when_the_child_has_already_exited_during_kill",
+  "wait_for_cdp_endpoint_accepts_json_version_response",
+  "wait_for_cdp_endpoint_reports_unreachable_endpoint",
+  "stderr_drain_consumes_sidecar_output_concurrently",
+  "cancelled_run_marks_the_sidecar_transport_tainted",
+  "apalis_storage_uses_shared_main_extractum_db_identity",
+  "apalis_sqlite_storage_uses_app_managed_schema_and_worker_processes_one_job",
+  "apalis_storage_preserves_existing_sqlx_migration_history_table",
+  "apalis_storage_shares_extractum_db_without_locking_app_pool",
+  "enqueue_duplicate_run_id_returns_conflict",
+  "enqueue_persists_job_before_worker_startup",
+  "worker_picks_up_job_quickly_after_idle",
+  "restart_worker_processes_pending_job_after_runtime_restart",
+  "apalis_sqlite_status_probe_documents_actual_status_values",
+  "gemini_browser_jobs_are_built_with_one_total_attempt",
+  "failed_gemini_browser_job_is_not_retried",
+];
 
 describe("crate extraction timing policy", () => {
   it("keeps focused timing small and advisory", () => {
@@ -124,7 +147,7 @@ describe("crate extraction timing policy", () => {
     expect(focusedLoopDesign).not.toContain("### Retention gates");
   });
 
-  it("records the canceled Phase 3 and fresh-design requirement for Phase 4", () => {
+  it("records the canceled Phase 3 and approved independent Phase 4 boundary", () => {
     expect(crateRoadmap).toContain(
       "**Status:** Strategic reference; revised and owner-approved 2026-07-19",
     );
@@ -159,22 +182,70 @@ describe("crate extraction timing policy", () => {
       "Any future `extractum-process` attempt starts as a new phase",
     );
     expect(phase4Roadmap).toContain(
-      "Phase 4 — `extractum-gemini-browser` (awaiting a new boundary design)",
+      "Phase 4 — `extractum-gemini-browser` (boundary approved; implementation pending)",
     );
     expect(phase4Roadmap).toContain(
-      "requires a fresh owner-approved boundary",
+      "2026-07-19-gemini-browser-crate-boundary-design.md",
     );
     expect(phase4Roadmap).toContain(
-      "The historical rejection of an app-side narrow interface",
+      "28 of 39 (71.8%) touched no other categorized Rust domain",
     );
     expect(phase4Roadmap).toContain(
-      "no ownership or dependency direction is approved",
+      "all concrete sidecar/CDP spawn, handles, containment, kill/reap, and shutdown remain in `extractum`",
     );
     expect(phase4Roadmap).toContain(
-      "assumed an imminent retained process crate; that premise is now void",
+      "A permanent domain-level `BrowserExecutor`",
     );
-    expect(phase4Roadmap).toContain("This does not preselect a replacement");
-    expect(phase4Roadmap).toContain("It has no Phase 3 timing prerequisite");
+    expect(phase4Roadmap).toContain("It does not recreate `extractum-process`");
+    expect(phase4Roadmap).toContain(
+      "It has no Phase 3 timing or reapplication prerequisite",
+    );
+    expect(geminiBoundaryDesign).toContain(
+      "**Status:** Owner-approved; implementation pending",
+    );
+    expect(geminiBoundaryDesign).toContain(
+      "supersedes only the Phase 4 architecture, dependency, measurement, and execution clauses",
+    );
+    expect(geminiBoundaryDesign).toContain(
+      "There is no dependency from `extractum-gemini-browser` back to `extractum` and no dependency on `extractum-process`",
+    );
+    expect(geminiBoundaryDesign).toContain(
+      "PID values, `Child`, `Command`, stdin/stdout handles, `ProcessTreeGuard`, shutdown-admission types, `windows-sys`, and process-tree operations never cross the new crate's public API",
+    );
+    expect(geminiBoundaryDesign).toContain(
+      "The approved disposition is 75 tests in `extractum-gemini-browser` and 19 in `extractum`",
+    );
+    expect(appOwnedGeminiBaselineTests).toHaveLength(19);
+    for (const testName of appOwnedGeminiBaselineTests) {
+      expect(geminiBoundaryDesign).toContain(`\`${testName}\``);
+    }
+    expect(geminiBoundaryDesign).toContain(
+      "use a frozen set of all 94 baseline names",
+    );
+    expect(geminiBoundaryDesign).toContain(
+      "The crate does not pass its `CancellationToken` into `BrowserExecutor`",
+    );
+    expect(geminiBoundaryDesign).toContain(
+      "A response that completes after cancellation is ignored",
+    );
+    expect(geminiBoundaryDesign).toContain(
+      "one discarded warm-up and three recorded samples",
+    );
+    expect(geminiBoundaryDesign).toContain(
+      "timing alone never rejects, reverts, or retains the slice",
+    );
+    expect(geminiBoundaryDesign).toContain(
+      "Two adjacent completed crate-extraction slices whose ordinary workspace-check results are each at or above 15,000 ms trigger a separate owner-approved performance investigation",
+    );
+    expect(geminiBoundaryDesign).toContain(
+      "must not build a new quiet-window, Job Object, or process-scanning measurement harness",
+    );
+    expect(geminiBoundaryDesign).toContain(
+      "npm.cmd run smoke:gemini-browser-sidecar:binary",
+    );
+    expect(geminiBoundaryDesign).toContain(
+      "npm.cmd run smoke:gemini-browser-sidecar:resume:node -- --expect-manual-action=start_chrome_cdp",
+    );
     expect(shellCapRevision).toContain(
       "Superseded 2026-07-19; historical policy record",
     );
@@ -188,7 +259,10 @@ describe("crate extraction timing policy", () => {
       "execution authority withdrawn 2026-07-19",
     );
     expect(processBoundaryDesign).toContain("not authority to replay");
-    expect(processBoundaryDesign).toContain("Phase 3 or start Phase 4");
+    expect(processBoundaryDesign).toContain("Phase 3 or implement Phase 4");
+    expect(processBoundaryDesign).toContain(
+      "2026-07-19-gemini-browser-crate-boundary-design.md",
+    );
     expect(processBoundaryDesign).toContain(
       "canceled before completion and never retained",
     );

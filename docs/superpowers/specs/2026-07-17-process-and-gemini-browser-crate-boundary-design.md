@@ -8,9 +8,11 @@
 > 2026-07-19; see the
 > [cancellation disposition](../verification/2026-07-19-extractum-process-reapplication-cancellation.md).
 > This document remains historical architecture evidence, not authority to replay
-> Phase 3 or start Phase 4. The current
-> [`crate roadmap`](2026-07-17-crate-roadmap.md) requires a fresh Phase 4
-> boundary that does not assume a retained `extractum-process` crate.
+> Phase 3 or implement Phase 4. Its Phase 4 clauses are superseded by the
+> owner-approved
+> [`2026-07-19 Gemini Browser boundary`](2026-07-19-gemini-browser-crate-boundary-design.md),
+> which does not assume a retained `extractum-process` crate. The current
+> [`crate roadmap`](2026-07-17-crate-roadmap.md) remains the strategic authority.
 
 ## Purpose
 
