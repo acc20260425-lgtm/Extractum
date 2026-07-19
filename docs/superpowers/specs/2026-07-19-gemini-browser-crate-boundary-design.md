@@ -1,6 +1,6 @@
 # Gemini Browser Crate Boundary Design
 
-**Status:** Owner-approved; implementation pending
+**Status:** Implemented and retained; [verification](../verification/2026-07-19-extractum-gemini-browser-extraction.md)
 **Date:** 2026-07-19
 
 **Roadmap authority:**

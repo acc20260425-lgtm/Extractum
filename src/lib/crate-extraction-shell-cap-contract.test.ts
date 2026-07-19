@@ -182,10 +182,13 @@ describe("crate extraction timing policy", () => {
       "Any future `extractum-process` attempt starts as a new phase",
     );
     expect(phase4Roadmap).toContain(
-      "Phase 4 — `extractum-gemini-browser` (boundary approved; implementation pending)",
+      "Phase 4 — `extractum-gemini-browser` (done: retained)",
     );
     expect(phase4Roadmap).toContain(
       "2026-07-19-gemini-browser-crate-boundary-design.md",
+    );
+    expect(phase4Roadmap).toContain(
+      "2026-07-19-extractum-gemini-browser-extraction.md",
     );
     expect(phase4Roadmap).toContain(
       "28 of 39 (71.8%) touched no other categorized Rust domain",
@@ -201,7 +204,10 @@ describe("crate extraction timing policy", () => {
       "It has no Phase 3 timing or reapplication prerequisite",
     );
     expect(geminiBoundaryDesign).toContain(
-      "**Status:** Owner-approved; implementation pending",
+      "**Status:** Implemented and retained; [verification](../verification/2026-07-19-extractum-gemini-browser-extraction.md)",
+    );
+    expect(geminiBoundaryDesign).toContain(
+      "2026-07-19-extractum-gemini-browser-extraction.md",
     );
     expect(geminiBoundaryDesign).toContain(
       "supersedes only the Phase 4 architecture, dependency, measurement, and execution clauses",

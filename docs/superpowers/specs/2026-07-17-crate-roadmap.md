@@ -190,10 +190,11 @@ main branch point.
 There is no cumulative shell ledger and no pending Phase 3 baseline. The
 following values are historical context, not automatic retention gates:
 
-| Checkpoint | Shell median | Disposition |
+| Checkpoint | Recorded duration | Disposition |
 | --- | ---: | --- |
 | Pre-Phase 3 | 9,135 ms | historical retained-workspace reference |
 | Historical Phase 3 candidate | 10,177 ms | candidate reverted and not retained |
+| Phase 4 `extractum-gemini-browser` | 1,620 ms | completed and retained; [verification](../verification/2026-07-19-extractum-gemini-browser-extraction.md) |
 
 For future slices, record the duration of the mandatory workspace check without
 adding a separate shell A/B experiment. For this rule, one completed
@@ -303,7 +304,7 @@ owner-approved spec, dependency evidence, plan, and advisory measurement. It
 must not replay or resume the canceled plan implicitly. The v2/v3 anomaly
 track remains moot and cancellation does not reactivate it.
 
-### Phase 4 — `extractum-gemini-browser` (boundary approved; implementation pending)
+### Phase 4 — `extractum-gemini-browser` (done: retained)
 
 The fresh 2026-07-19 snapshot contains 10 files, approximately 6,770 lines,
 and 94 Rust tests. Since 2026-06-01, 39 commits touched the module; under the
@@ -327,11 +328,16 @@ exposing PID, child, pipe, process-tree, or Windows types. It does not recreate
 assumed an imminent retained process crate; that premise is void and the new
 stable domain port is now selected explicitly.
 
-Phase 4 has not started and requires one implementation plan. It has no Phase
-3 timing or reapplication prerequisite and does not require the v2/v3 anomaly
-protocol. Compile-time evidence follows the small advisory focused-loop policy;
-correctness, workspace, portability, no-bundle, startup, and the fixed Phase 4
-sidecar/CDP/shutdown smoke gates remain mandatory.
+Phase 4 is retained through the
+[`Gemini Browser crate extraction verification`](../verification/2026-07-19-extractum-gemini-browser-extraction.md).
+It has no Phase 3 timing or reapplication prerequisite and did not use the
+v2/v3 anomaly protocol. The final crate production dependencies are
+`parking_lot`, `serde`, `serde_json`, `time`, `tokio`, `tokio-util`, and `url`;
+the application retains one path edge to the crate. The frozen 94-test
+inventory is owned 75 tests by `extractum-gemini-browser` and 19 by
+`extractum`. The retained ordinary workspace-check result is 1,620 ms, below
+15,000 ms, so it breaks rather than advances the adjacent-slice investigation
+sequence. Phase 5 is the next JIT boundary design and has not started.
 
 ### Phase 5 — `extractum-llm`
 

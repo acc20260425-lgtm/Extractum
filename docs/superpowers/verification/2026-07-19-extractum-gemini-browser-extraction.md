@@ -2,7 +2,7 @@
 
 ## 1. Scope and commits
 
-Phase 4 attempted to extract the portable Gemini Browser domain engine into
+Phase 4 extracts the portable Gemini Browser domain engine into
 `extractum-gemini-browser` while retaining concrete process, Tauri, Apalis, and
 application-error adapters in `extractum`.
 
@@ -13,9 +13,11 @@ Implementation commits:
 - `0e58f25a refactor: prepare Gemini browser portable modules`
 - `bee0a812 refactor: prepare Gemini browser job engine`
 - `9b52a9de refactor: extract Gemini browser domain crate`
+- `d599d376 test: update lifecycle contract for Gemini crate`
 
-The retained-documentation commit was not created because the final repository
-verification gate failed.
+The first completion attempt was recorded as incomplete. The focused
+remediation commit updated the lifecycle source contract to the moved portable
+launch module; a new retained-path attempt then passed every mandatory gate.
 
 ## 2. Final ownership and dependency roots
 
@@ -152,15 +154,16 @@ The single direct mandatory command was:
 cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets
 ```
 
-Its exact Cargo line was:
+The retained-path attempt's exact Cargo line was:
 
 ```text
-Finished `dev` profile [unoptimized + debuginfo] target(s) in 38.14s
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.62s
 ```
 
-The mechanical conversion was `$workspaceCheckMs = 38140`. Because the slice
-was not retained, this is recorded as evidence only and is not promoted into
-the roadmap timing row.
+The mechanical conversion was `$workspaceCheckMs = 1620`. This completed
+result is below 15,000 ms, so it breaks rather than advances the roadmap's
+adjacent-completed-slice investigation sequence. The earlier failed attempt's
+38.14-second check is not a roadmap signal.
 
 ## 10. Sidecar, CDP, no-bundle, startup, and shutdown evidence
 
@@ -178,7 +181,7 @@ the roadmap timing row.
 - Closing the main window normally removed both PID `20908` and PID `25192`;
   neither process required force-stop.
 
-## 11. Infrastructure, exclusions, and final failing gate
+## 11. Infrastructure, exclusions, and remediation
 
 MSI/WiX packaging was intentionally excluded; the required release gate used
 `--no-bundle`.
@@ -189,7 +192,7 @@ The first no-bundle controller timed out after 124 seconds while its owned Cargo
 compile continued. Its exit status was therefore discarded; a subsequent
 single controlled rerun exited 0 and supplied the build evidence above.
 
-The retained path stopped at this command:
+The first completion attempt stopped at this command:
 
 ```powershell
 npm.cmd run verify
@@ -221,23 +224,30 @@ EPERM: operation not permitted, open 'G:\Develop\Extractum\.svelte-kit\generated
 Verification failed during: npm run test
 ```
 
-The missing `sidecar_launch.rs` import is a repository contract regression
-caused by the extraction path move. The two artifact assertion failures and the
-process-tree classification failure must also be reproduced and resolved or
-classified before the retained gate may be attempted again. The `.svelte-kit`
-EPERM is recorded as infrastructure noise, but it does not waive the four test
-failures.
+The missing `sidecar_launch.rs` import was a repository contract regression
+caused by the extraction path move. Focused RED/GREEN updated that contract to
+read `crates/extractum-gemini-browser/src/sidecar_launch.rs`, require
+`std::env::current_exe` app-side, and require `bundled_sidecar_path` portable.
+
+The two artifact assertions received `null` because sandbox execution could
+not overwrite existing generated artifact files. The process-tree diagnostic
+captured `taskkill` exit code 1 with `ERROR: Access denied`, so its conservative
+`termination_unconfirmed` classification was correct. Both unchanged test
+groups passed outside the sandbox. The combined focused confirmation passed 3
+files and 42 tests.
+
+The retained-path `npm.cmd run verify` then exited 0 outside the sandbox. A
+compact complete Vitest confirmation reported 170 files and 1,376 tests passed
+with zero failures. `check:rustfmt` and the full Cargo workspace test also
+exited 0.
 
 ## 12. Result and next roadmap action
 
-**Result: incomplete / not retained.**
+**Result: implemented and retained.**
 
-The specification remains `Owner-approved; implementation pending`; the Phase
-4 roadmap heading remains `boundary approved; implementation pending`; no
-verification link or timing-row retention signal was added to either document.
+The specification links this verification with status `Implemented and
+retained`. The roadmap records Phase 4 as `done: retained`, the 75/19 ownership
+split, final dependency roots, and the 1,620 ms ordinary workspace result.
 
-Next required remediation: update the external-process lifecycle contract to
-the new portable `sidecar_launch` location, reproduce and correct the two
-`answer_extraction` assertion/type mismatches, and reproduce the process-shell
-grandchild termination classification mismatch. Then rerun the failed focused
-tests and the complete Task 9 gate sequence under a new retained-path attempt.
+Next roadmap action: start the Phase 5 `extractum-llm` JIT boundary design. It
+has not started.
