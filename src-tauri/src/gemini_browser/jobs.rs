@@ -1812,6 +1812,15 @@ mod tests {
 
     #[tokio::test]
     async fn wait_for_result_removes_waiter_on_timeout() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let job = test_job("run-timeout");
+        crate::gemini_browser::create_queued_run(
+            temp.path(),
+            &job.run_id,
+            &job.source,
+            &job.prompt,
+        )
+        .expect("create queued run");
         let runtime =
             GeminiBrowserJobRuntime::new_for_waiter_timeout_test(Duration::from_millis(1));
         let receiver = runtime
@@ -1822,10 +1831,22 @@ mod tests {
             .await
             .expect_err("timeout error");
 
-        assert!(error
-            .to_string()
-            .contains("timed out waiting for worker result"));
+        assert_eq!(error.kind, crate::error::AppErrorKind::Internal);
+        assert_eq!(
+            error.message,
+            "Gemini Browser job timed out waiting for worker result"
+        );
+        assert_eq!(
+            serde_json::to_string(&error).expect("serialize app error"),
+            "{\"kind\":\"internal\",\"message\":\"Gemini Browser job timed out waiting for worker result\"}"
+        );
         assert!(!runtime.has_waiter_for_test("run-timeout"));
+        let raw = std::fs::read_to_string(temp.path().join("run-timeout/result.json"))
+            .expect("read queued run");
+        assert_eq!(
+            normalize_persisted_timestamps(&raw),
+            expected_non_terminal_run_json("run-timeout", "queued")
+        );
     }
 
     #[tokio::test]
@@ -2123,14 +2144,22 @@ mod tests {
             .await
             .expect("waiter channel open")
             .expect("cancelled result");
+        let cancelled = cancelled_run_result_for_id("run-cancel-queued");
+        assert_eq!(waiter_result, cancelled);
         assert_eq!(
-            waiter_result.status,
-            crate::gemini_browser::GeminiBrowserRunStatus::Cancelled
+            serde_json::to_string(&cancelled).expect("serialize cancelled result"),
+            "{\"run_id\":\"run-cancel-queued\",\"status\":\"cancelled\",\"text\":null,\"message\":\"Cancelled\",\"manual_action\":null,\"artifacts\":{\"run_dir\":null,\"html\":null,\"screenshot\":null,\"telemetry\":null,\"answer_extraction\":null,\"artifact_write_error\":null},\"elapsed_ms\":0,\"debug_summary\":null}"
         );
         assert!(!runtime.is_cancelled(&job.run_id));
         assert_eq!(
             read_run_by_id(temp.path(), &job.run_id).status,
             crate::gemini_browser::GeminiBrowserRunStatus::Cancelled
+        );
+        let raw = std::fs::read_to_string(temp.path().join("run-cancel-queued/result.json"))
+            .expect("read cancelled run");
+        assert_eq!(
+            normalize_persisted_timestamps(&raw),
+            expected_terminal_run_json("run-cancel-queued", "cancelled", "Cancelled", 0)
         );
 
         let executed = Arc::new(AtomicUsize::new(0));
@@ -2251,6 +2280,12 @@ mod tests {
             read_run_by_id(temp.path(), &job.run_id).status,
             crate::gemini_browser::GeminiBrowserRunStatus::Running
         );
+        let raw = std::fs::read_to_string(temp.path().join("run-cancel-active/result.json"))
+            .expect("read running run");
+        assert_eq!(
+            normalize_persisted_timestamps(&raw),
+            expected_non_terminal_run_json("run-cancel-active", "running")
+        );
 
         let result = run_job_with_executor_for_test(
             temp.path(),
@@ -2272,9 +2307,17 @@ mod tests {
         )
         .await
         .expect("worker writes terminal cancelled result");
+        let cancelled = cancelled_run_result_for_id("run-cancel-active");
+        assert_eq!(result, cancelled);
         assert_eq!(
-            result.status,
-            crate::gemini_browser::GeminiBrowserRunStatus::Cancelled
+            serde_json::to_string(&cancelled).expect("serialize cancelled result"),
+            "{\"run_id\":\"run-cancel-active\",\"status\":\"cancelled\",\"text\":null,\"message\":\"Cancelled\",\"manual_action\":null,\"artifacts\":{\"run_dir\":null,\"html\":null,\"screenshot\":null,\"telemetry\":null,\"answer_extraction\":null,\"artifact_write_error\":null},\"elapsed_ms\":0,\"debug_summary\":null}"
+        );
+        let raw = std::fs::read_to_string(temp.path().join("run-cancel-active/result.json"))
+            .expect("read cancelled run");
+        assert_eq!(
+            normalize_persisted_timestamps(&raw),
+            expected_terminal_run_json("run-cancel-active", "cancelled", "Cancelled", 0)
         );
     }
 
@@ -2398,15 +2441,21 @@ mod tests {
             .await
             .expect("caller receives worker timeout result");
 
+        let expected_first_result = crate::gemini_browser::GeminiBrowserRunResult {
+            run_id: "run-timeout-first".to_string(),
+            status: crate::gemini_browser::GeminiBrowserRunStatus::Failed,
+            text: None,
+            message: Some("Gemini Browser job timed out after 0s".to_string()),
+            manual_action: None,
+            artifacts: crate::gemini_browser::GeminiBrowserArtifactRefs::default(),
+            elapsed_ms: 25,
+            debug_summary: None,
+        };
+        assert_eq!(first_result, expected_first_result);
         assert_eq!(
-            first_result.status,
-            crate::gemini_browser::GeminiBrowserRunStatus::Failed
+            serde_json::to_string(&first_result).expect("serialize timeout result"),
+            "{\"run_id\":\"run-timeout-first\",\"status\":\"failed\",\"text\":null,\"message\":\"Gemini Browser job timed out after 0s\",\"manual_action\":null,\"artifacts\":{\"run_dir\":null,\"html\":null,\"screenshot\":null,\"telemetry\":null,\"answer_extraction\":null,\"artifact_write_error\":null},\"elapsed_ms\":25,\"debug_summary\":null}"
         );
-        assert!(first_result
-            .message
-            .as_deref()
-            .unwrap_or("")
-            .contains("timed out"));
         assert!(
             started.elapsed() < runtime.worker_hard_guard_timeout(),
             "run log should be terminal before hard guard deadline"
@@ -2428,6 +2477,17 @@ mod tests {
             .and_then(|result| result.message.as_deref())
             .unwrap_or("")
             .contains("timed out"));
+        let raw = std::fs::read_to_string(runs_dir.join("run-timeout-first/result.json"))
+            .expect("read timeout run");
+        assert_eq!(
+            normalize_persisted_timestamps(&raw),
+            expected_terminal_run_json(
+                "run-timeout-first",
+                "failed",
+                "Gemini Browser job timed out after 0s",
+                25,
+            )
+        );
 
         let second_run = read_run_by_id(&runs_dir, "run-timeout-second");
         assert_eq!(
@@ -2879,6 +2939,78 @@ mod tests {
             .connect_with(options)
             .await
             .expect("connect sqlite file pool")
+    }
+
+    fn replace_json_string_value(raw: &mut String, field: &str) {
+        let key = format!("\"{field}\"");
+        let key_start = raw.find(&key).unwrap_or_else(|| panic!("missing {field}"));
+        let after_key = key_start + key.len();
+        let open_quote = after_key
+            + raw[after_key..]
+                .find('"')
+                .unwrap_or_else(|| panic!("missing opening quote for {field}"));
+        let close_quote = open_quote
+            + 1
+            + raw[open_quote + 1..]
+                .find('"')
+                .unwrap_or_else(|| panic!("missing closing quote for {field}"));
+        raw.replace_range(open_quote + 1..close_quote, "<timestamp>");
+    }
+
+    fn normalize_persisted_timestamps(raw: &str) -> String {
+        let mut normalized = raw.to_string();
+        replace_json_string_value(&mut normalized, "created_at");
+        replace_json_string_value(&mut normalized, "updated_at");
+        normalized
+    }
+
+    fn expected_non_terminal_run_json(run_id: &str, status: &str) -> String {
+        format!(
+            r#"{{
+  "run_id": "{run_id}",
+  "source": "settings_test",
+  "status": "{status}",
+  "prompt_preview": "hello",
+  "created_at": "<timestamp>",
+  "updated_at": "<timestamp>",
+  "result": null
+}}"#
+        )
+    }
+
+    fn expected_terminal_run_json(
+        run_id: &str,
+        status: &str,
+        message: &str,
+        elapsed_ms: u64,
+    ) -> String {
+        format!(
+            r#"{{
+  "run_id": "{run_id}",
+  "source": "settings_test",
+  "status": "{status}",
+  "prompt_preview": "hello",
+  "created_at": "<timestamp>",
+  "updated_at": "<timestamp>",
+  "result": {{
+    "run_id": "{run_id}",
+    "status": "{status}",
+    "text": null,
+    "message": "{message}",
+    "manual_action": null,
+    "artifacts": {{
+      "run_dir": null,
+      "html": null,
+      "screenshot": null,
+      "telemetry": null,
+      "answer_extraction": null,
+      "artifact_write_error": null
+    }},
+    "elapsed_ms": {elapsed_ms},
+    "debug_summary": null
+  }}
+}}"#
+        )
     }
 
     fn test_job(run_id: &str) -> GeminiBrowserJob {
