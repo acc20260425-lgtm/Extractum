@@ -26,7 +26,7 @@ Both black-box partial-input precedence seams passed: saved API key plus configu
 
 ## Frozen Test Inventory
 
-The baseline contained exactly 51 frozen Rust LLM test names. Final exact ownership is 36 baseline names in `extractum-llm` and 15 in `extractum`, each occurring once. Cargo execution lists 37 crate tests and 19 app LLM tests because five characterization/boundary tests were added separately: one safe resolved-profile test, two partial-input profile-access tests, one typed scheduler-error test, and one IPC/event/error-shape test.
+The baseline contained exactly 51 frozen Rust LLM test names. Final exact ownership is 36 baseline names in `extractum-llm` and 15 in `extractum`, each occurring once. Cargo execution lists 37 crate tests and 19 app LLM tests because five Rust tests were added separately: one safe resolved-profile test, two partial-input profile-access tests, and two IPC/event/error serialization tests.
 
 No disabled `#[cfg(any())]` or `#[cfg(FALSE)]` copy exists in either owner.
 
