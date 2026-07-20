@@ -1,4 +1,4 @@
-use crate::error::{AppError, AppResult};
+use extractum_core::error::{AppError, AppResult};
 
 pub(super) fn find_event_boundary(buffer: &[u8]) -> Option<(usize, usize)> {
     if buffer.len() < 2 {
@@ -66,6 +66,6 @@ mod tests {
     fn sse_data_decode_failures_are_typed_internal_errors() {
         let error = parse_sse_data(&[0xff]).expect_err("reject invalid utf-8");
 
-        assert_eq!(error.kind, crate::error::AppErrorKind::Internal);
+        assert_eq!(error.kind, extractum_core::error::AppErrorKind::Internal);
     }
 }

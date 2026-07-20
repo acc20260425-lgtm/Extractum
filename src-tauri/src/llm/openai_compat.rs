@@ -3,7 +3,7 @@ use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use tokio::time::{sleep, Duration};
 
-use crate::error::{AppError, AppResult};
+use extractum_core::error::{AppError, AppResult};
 
 use super::streaming::{find_event_boundary, parse_sse_data};
 use super::{
@@ -234,7 +234,7 @@ fn map_openai_compat_model(model: OpenAiCompatModel) -> LlmProviderModel {
     }
 }
 
-pub(in crate::llm) async fn stream_openai_compat_response<F>(
+pub(super) async fn stream_openai_compat_response<F>(
     request: &LlmChatRequest,
     profile: &ResolvedLlmProfile,
     on_delta: &mut F,
@@ -408,8 +408,9 @@ mod tests {
         OpenAiCompatChatChunk, OpenAiCompatModel, OpenAiCompatModelsResponse,
         OpenAiCompatProviderConfig,
     };
-    use crate::error::AppErrorKind;
-    use crate::llm::{
+    use extractum_core::error::AppErrorKind;
+
+    use super::super::{
         LlmChatRequest, LlmMessage, LlmProviderAccess, ProviderKind, ResolvedLlmProfile,
     };
     use std::sync::{

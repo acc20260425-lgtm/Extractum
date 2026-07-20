@@ -3,7 +3,7 @@ use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use tokio::time::{sleep, Duration};
 
-use crate::error::{AppError, AppResult};
+use extractum_core::error::{AppError, AppResult};
 
 use super::streaming::{find_event_boundary, parse_sse_data};
 use super::{resolve_effective_model, LlmChatRequest, LlmCompletion, LlmProviderModel};
@@ -229,7 +229,7 @@ fn map_gemini_model(model: GeminiModel) -> LlmProviderModel {
     }
 }
 
-pub(in crate::llm) async fn stream_gemini_response<F>(
+pub(super) async fn stream_gemini_response<F>(
     request: &LlmChatRequest,
     profile: &ResolvedLlmProfile,
     on_delta: &mut F,
@@ -432,8 +432,9 @@ mod tests {
         map_gemini_model, map_usage, GeminiContent, GeminiGenerateContentResponse, GeminiModel,
         GeminiPart,
     };
-    use crate::error::AppErrorKind;
-    use crate::llm::{LlmChatRequest, LlmMessage};
+    use extractum_core::error::AppErrorKind;
+
+    use super::super::{LlmChatRequest, LlmMessage};
     use reqwest::StatusCode;
 
     #[test]

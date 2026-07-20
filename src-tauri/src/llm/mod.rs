@@ -6,6 +6,7 @@ use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::secret_store::SecretStoreState;
 
+mod app_types;
 mod gemini;
 mod openai_compat;
 mod profiles;
@@ -15,6 +16,7 @@ mod scheduler;
 mod streaming;
 mod types;
 
+pub use app_types::{LlmProfile, LlmProfilesState, LlmStreamEvent};
 use profiles::{
     clear_profile_api_key, delete_profile_from_pool, load_profiles_state_from_pool,
     resolve_profile_from_pool, resolve_provider_access_from_pool, save_profile_to_pool,
@@ -31,13 +33,11 @@ pub(crate) use runner::{
     validate_request,
 };
 pub(crate) use scheduler::{
-    LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmRequestSnapshot,
+    llm_request_kind_diagnostic_key, llm_request_state_diagnostic_key, LlmRequestError,
+    LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmRequestSnapshot,
     LlmRequestSnapshotState, LlmSchedulerState,
 };
-pub use types::{
-    LlmChatRequest, LlmMessage, LlmProfile, LlmProfilesState, LlmProviderModel, LlmStreamEvent,
-    LlmUsage,
-};
+pub use types::{LlmChatRequest, LlmMessage, LlmProviderModel, LlmUsage};
 pub(crate) use types::{LlmCompletion, LlmProviderAccess, ResolvedLlmProfile};
 
 const LLM_RESPONSE_EVENT: &str = "llm://response";
@@ -139,23 +139,6 @@ pub async fn get_llm_profiles(
 ) -> AppResult<LlmProfilesState> {
     let pool = get_pool(&handle).await?;
     load_profiles_state_from_pool(&pool, &secret_store).await
-}
-
-pub(crate) fn llm_request_kind_diagnostic_key(kind: LlmRequestKind) -> &'static str {
-    match kind {
-        LlmRequestKind::ProviderTest => "provider_test",
-        LlmRequestKind::AnalysisChat => "analysis_chat",
-        LlmRequestKind::AnalysisReportMap => "analysis_report_map",
-        LlmRequestKind::AnalysisReportReduce => "analysis_report_reduce",
-        LlmRequestKind::PromptPackStage => "prompt_pack_stage",
-    }
-}
-
-pub(crate) fn llm_request_state_diagnostic_key(state: LlmRequestSnapshotState) -> &'static str {
-    match state {
-        LlmRequestSnapshotState::Queued => "queued",
-        LlmRequestSnapshotState::Running => "running",
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -487,9 +470,8 @@ pub async fn cancel_llm_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        cancelled_stream_event, failed_stream_event, llm_request_kind_diagnostic_key,
-        llm_request_state_diagnostic_key, load_provider_diagnostics_from_pool,
-        save_profile_to_pool, LlmRequestKind, LlmRequestSnapshotState, LlmUsage, StreamEvent,
+        cancelled_stream_event, failed_stream_event, load_provider_diagnostics_from_pool,
+        save_profile_to_pool, LlmUsage, StreamEvent,
     };
     use crate::error::AppError;
 
@@ -570,26 +552,6 @@ mod tests {
         assert_eq!(
             serde_json::to_value(failed).unwrap()["error"],
             serde_json::json!("LLM request failed: transport"),
-        );
-    }
-
-    #[test]
-    fn llm_request_diagnostic_keys_are_stable_snake_case() {
-        assert_eq!(
-            llm_request_kind_diagnostic_key(LlmRequestKind::AnalysisChat),
-            "analysis_chat"
-        );
-        assert_eq!(
-            llm_request_kind_diagnostic_key(LlmRequestKind::AnalysisReportReduce),
-            "analysis_report_reduce"
-        );
-        assert_eq!(
-            llm_request_state_diagnostic_key(LlmRequestSnapshotState::Queued),
-            "queued"
-        );
-        assert_eq!(
-            llm_request_state_diagnostic_key(LlmRequestSnapshotState::Running),
-            "running"
         );
     }
 

@@ -6,7 +6,7 @@ use serde::Serialize;
 use tokio::sync::{Mutex, Notify};
 use tokio_util::sync::CancellationToken;
 
-use crate::error::{AppError, AppResult};
+use extractum_core::error::{AppError, AppResult};
 
 const DEFAULT_CONCURRENCY_LIMIT: usize = 2;
 
@@ -36,6 +36,16 @@ pub enum LlmRequestKind {
     PromptPackStage,
 }
 
+pub fn llm_request_kind_diagnostic_key(kind: LlmRequestKind) -> &'static str {
+    match kind {
+        LlmRequestKind::ProviderTest => "provider_test",
+        LlmRequestKind::AnalysisChat => "analysis_chat",
+        LlmRequestKind::AnalysisReportMap => "analysis_report_map",
+        LlmRequestKind::AnalysisReportReduce => "analysis_report_reduce",
+        LlmRequestKind::PromptPackStage => "prompt_pack_stage",
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct SchedulerKey {
     provider: String,
@@ -43,7 +53,7 @@ struct SchedulerKey {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct LlmRequestMetadata {
+pub struct LlmRequestMetadata {
     pub request_id: String,
     pub profile_id: String,
     pub provider: String,
@@ -57,6 +67,13 @@ pub(crate) struct LlmRequestMetadata {
 pub enum LlmRequestSnapshotState {
     Queued,
     Running,
+}
+
+pub fn llm_request_state_diagnostic_key(state: LlmRequestSnapshotState) -> &'static str {
+    match state {
+        LlmRequestSnapshotState::Queued => "queued",
+        LlmRequestSnapshotState::Running => "running",
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -81,7 +98,7 @@ impl LlmRequestMetadata {
 }
 
 #[derive(Clone)]
-pub(crate) struct LlmRequestControl {
+pub struct LlmRequestControl {
     token: CancellationToken,
 }
 
@@ -96,7 +113,7 @@ impl LlmRequestControl {
         self.token.cancel();
     }
 
-    pub fn is_cancelled(&self) -> bool {
+    fn is_cancelled(&self) -> bool {
         self.token.is_cancelled()
     }
 
@@ -117,7 +134,7 @@ impl LlmRequestControl {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum LlmRequestError {
+pub enum LlmRequestError {
     Cancelled,
     Failed(AppError),
 }
@@ -463,11 +480,11 @@ impl LlmSchedulerState {
         controls.len()
     }
 
-    pub(crate) async fn request_snapshots(&self) -> Vec<LlmRequestSnapshot> {
+    pub async fn request_snapshots(&self) -> Vec<LlmRequestSnapshot> {
         self.inner.lock().await.snapshots()
     }
 
-    pub(crate) async fn active_owner_run_ids(&self) -> HashSet<i64> {
+    pub async fn active_owner_run_ids(&self) -> HashSet<i64> {
         self.inner
             .lock()
             .await
@@ -513,10 +530,31 @@ mod tests {
     use tokio::time::{timeout, Duration};
 
     use super::{
-        LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority,
-        LlmRequestSnapshotState, LlmSchedulerState,
+        llm_request_kind_diagnostic_key, llm_request_state_diagnostic_key, LlmRequestError,
+        LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmRequestSnapshotState,
+        LlmSchedulerState,
     };
-    use crate::error::{AppError, AppErrorKind};
+    use extractum_core::error::{AppError, AppErrorKind};
+
+    #[test]
+    fn llm_request_diagnostic_keys_are_stable_snake_case() {
+        assert_eq!(
+            llm_request_kind_diagnostic_key(LlmRequestKind::AnalysisChat),
+            "analysis_chat"
+        );
+        assert_eq!(
+            llm_request_kind_diagnostic_key(LlmRequestKind::AnalysisReportReduce),
+            "analysis_report_reduce"
+        );
+        assert_eq!(
+            llm_request_state_diagnostic_key(LlmRequestSnapshotState::Queued),
+            "queued"
+        );
+        assert_eq!(
+            llm_request_state_diagnostic_key(LlmRequestSnapshotState::Running),
+            "running"
+        );
+    }
 
     fn metadata(
         request_id: &str,

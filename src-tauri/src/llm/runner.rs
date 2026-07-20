@@ -1,6 +1,6 @@
 use tokio::time::{timeout, Duration};
 
-use crate::error::{AppError, AppResult};
+use extractum_core::error::{AppError, AppResult};
 
 use super::gemini::stream_gemini_response;
 use super::openai_compat::{stream_openai_compat_response, OpenAiCompatProviderConfig};
@@ -8,7 +8,7 @@ use super::{LlmChatRequest, LlmCompletion, ProviderKind, ResolvedLlmProfile};
 
 const LLM_STREAM_TIMEOUT_SECS: u64 = 90;
 
-pub(crate) fn validate_request(request: &LlmChatRequest) -> AppResult<()> {
+pub fn validate_request(request: &LlmChatRequest) -> AppResult<()> {
     if request.request_id.trim().is_empty() {
         return Err(AppError::validation("request_id cannot be empty"));
     }
@@ -26,7 +26,7 @@ pub(crate) fn validate_request(request: &LlmChatRequest) -> AppResult<()> {
     Ok(())
 }
 
-pub(crate) fn resolve_effective_model(
+pub fn resolve_effective_model(
     profile: &ResolvedLlmProfile,
     model_override: Option<&str>,
 ) -> AppResult<String> {
@@ -64,7 +64,7 @@ where
     }
 }
 
-pub(crate) async fn run_llm_collect_with_profile(
+pub async fn run_llm_collect_with_profile(
     request: &LlmChatRequest,
     profile: &ResolvedLlmProfile,
 ) -> AppResult<LlmCompletion> {
@@ -84,7 +84,7 @@ pub(crate) async fn run_llm_collect_with_profile(
     }
 }
 
-pub(crate) async fn run_llm_stream_with_profile<F>(
+pub async fn run_llm_stream_with_profile<F>(
     request: &LlmChatRequest,
     profile: &ResolvedLlmProfile,
     mut on_delta: F,
@@ -111,8 +111,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::{resolve_effective_model, run_llm_collect_with_profile, validate_request};
-    use crate::error::AppErrorKind;
-    use crate::llm::{LlmChatRequest, LlmProviderAccess, ProviderKind, ResolvedLlmProfile};
+    use extractum_core::error::AppErrorKind;
+
+    use super::super::{LlmChatRequest, LlmProviderAccess, ProviderKind, ResolvedLlmProfile};
 
     #[test]
     fn validate_request_returns_typed_validation_error() {

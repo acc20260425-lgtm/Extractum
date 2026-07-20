@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use tokio::time::{timeout, Duration};
 
-use crate::error::{AppError, AppResult};
+use extractum_core::error::{AppError, AppResult};
 
 use super::gemini::list_gemini_models;
 use super::openai_compat::{list_openai_compat_models, OpenAiCompatProviderConfig};
@@ -193,8 +193,9 @@ mod tests {
         model_input_token_limit_from_models, model_output_token_limit_from_models,
         normalize_base_url, ProviderKind,
     };
-    use crate::error::AppErrorKind;
-    use crate::llm::LlmProviderModel;
+    use extractum_core::error::AppErrorKind;
+
+    use super::super::LlmProviderModel;
 
     #[test]
     fn provider_parse_returns_typed_validation_error() {
