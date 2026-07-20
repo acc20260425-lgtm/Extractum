@@ -1342,6 +1342,7 @@ dependencies = [
  "dirs",
  "extractum-core",
  "extractum-gemini-browser",
+ "extractum-llm",
  "grammers-client",
  "grammers-mtsender",
  "grammers-session",
@@ -1394,6 +1395,19 @@ dependencies = [
  "tokio",
  "tokio-util",
  "url",
+]
+
+[[package]]
+name = "extractum-llm"
+version = "0.2.0"
+dependencies = [
+ "extractum-core",
+ "reqwest 0.12.28",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]

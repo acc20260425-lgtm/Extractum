@@ -7,38 +7,26 @@ use crate::error::{AppError, AppResult};
 use crate::secret_store::SecretStoreState;
 
 mod app_types;
-mod gemini;
-mod openai_compat;
 mod profiles;
-mod provider;
-mod runner;
-mod scheduler;
-mod streaming;
-mod types;
 
 pub use app_types::{LlmProfile, LlmProfilesState, LlmStreamEvent};
+use extractum_llm::list_provider_models;
+pub(crate) use extractum_llm::{
+    llm_request_kind_diagnostic_key, llm_request_state_diagnostic_key, normalize_base_url,
+    resolve_effective_model,
+    resolve_model_input_token_limit as resolve_model_input_token_limit_for_backend,
+    resolve_model_output_token_limit as resolve_model_output_token_limit_for_backend,
+    run_llm_collect_with_profile, run_llm_stream_with_profile, validate_request, LlmCompletion,
+    LlmProviderAccess, LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority,
+    LlmRequestSnapshot, LlmRequestSnapshotState, LlmSchedulerState, ProviderKind,
+    ResolvedLlmProfile,
+};
+pub use extractum_llm::{LlmChatRequest, LlmMessage, LlmProviderModel, LlmUsage};
 use profiles::{
     clear_profile_api_key, delete_profile_from_pool, load_profiles_state_from_pool,
     resolve_profile_from_pool, resolve_provider_access_from_pool, save_profile_to_pool,
     set_active_profile_in_pool, validate_profile_id, validate_profile_input,
 };
-use provider::list_provider_models;
-pub(crate) use provider::{
-    normalize_base_url,
-    resolve_model_input_token_limit as resolve_model_input_token_limit_for_backend,
-    resolve_model_output_token_limit as resolve_model_output_token_limit_for_backend, ProviderKind,
-};
-pub(crate) use runner::{
-    resolve_effective_model, run_llm_collect_with_profile, run_llm_stream_with_profile,
-    validate_request,
-};
-pub(crate) use scheduler::{
-    llm_request_kind_diagnostic_key, llm_request_state_diagnostic_key, LlmRequestError,
-    LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmRequestSnapshot,
-    LlmRequestSnapshotState, LlmSchedulerState,
-};
-pub use types::{LlmChatRequest, LlmMessage, LlmProviderModel, LlmUsage};
-pub(crate) use types::{LlmCompletion, LlmProviderAccess, ResolvedLlmProfile};
 
 const LLM_RESPONSE_EVENT: &str = "llm://response";
 const DEFAULT_PROFILE_ID: &str = "default";

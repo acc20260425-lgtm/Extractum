@@ -41,7 +41,7 @@ const lockDependencies = (block: string) => {
   const match = block.match(/^dependencies = \[\n([\s\S]*?)^\]$/m);
   return match
     ? [...match[1].matchAll(/^ "([^"]+)",?$/gm)]
-        .map((entry) => entry[1])
+        .map((entry) => entry[1].replace(/ \d+\..*$/, ""))
         .sort()
     : [];
 };
@@ -163,12 +163,12 @@ pub use runner::{
 };
 pub use scheduler::{
     llm_request_kind_diagnostic_key, llm_request_state_diagnostic_key, LlmRequestControl,
-    LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority,
-    LlmRequestSnapshot, LlmRequestSnapshotState, LlmSchedulerState,
+    LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmRequestSnapshot,
+    LlmRequestSnapshotState, LlmSchedulerState,
 };
 pub use types::{
-    LlmChatRequest, LlmCompletion, LlmMessage, LlmProviderAccess, LlmProviderModel,
-    LlmUsage, ResolvedLlmProfile,
+    LlmChatRequest, LlmCompletion, LlmMessage, LlmProviderAccess, LlmProviderModel, LlmUsage,
+    ResolvedLlmProfile,
 };
 `;
 
@@ -286,7 +286,9 @@ describe("extractum-llm crate boundary", () => {
     }
     expect(appMod).toContain('const LLM_RESPONSE_EVENT: &str = "llm://response";');
     expect(frontendApi).toContain('export const LLM_RESPONSE_EVENT = "llm://response";');
-    expect(frontendTypes).toMatch(/kind:\s*"queued"\s*\|\s*"started"\s*\|\s*"delta"\s*\|\s*"completed"\s*\|\s*"failed"\s*\|\s*"cancelled"/);
+    expect(frontendTypes).toMatch(/type LlmStreamEventKind\s*=\s*\|\s*"queued"\s*\|\s*"started"\s*\|\s*"delta"\s*\|\s*"completed"\s*\|\s*"failed"\s*\|\s*"cancelled"/);
+    expect(frontendTypes).toContain("kind: LlmStreamEventKind;");
+    for (const field of ["queue_position: number | null", "delta: string | null", "text: string | null", "usage: LlmUsage | null", "error: string | null"]) expect(frontendTypes).toContain(field);
     expect(profiles).toMatch(/llm\.active_provider_profile/);
     expect(profiles).toMatch(/llm\.profile\.\{profile_id\}\.provider/);
     expect(profiles).toMatch(/llm\.profile\.\{profile_id\}\.default_model/);

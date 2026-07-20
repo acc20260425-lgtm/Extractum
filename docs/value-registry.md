@@ -568,7 +568,8 @@ Archive/readiness fallback reasons:
 
 Representative backend sources:
 
-- `src-tauri/src/llm/scheduler.rs`
+- `src-tauri/crates/extractum-llm/src/scheduler.rs`
+- `src-tauri/crates/extractum-llm/src/provider.rs`
 - `src-tauri/src/llm/mod.rs`
 - `src-tauri/src/migrations/baseline_reset.rs`
 - `src-tauri/src/sources/legacy_metadata_cleanup.rs`

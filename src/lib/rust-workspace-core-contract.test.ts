@@ -30,6 +30,7 @@ describe("Rust workspace core contract", () => {
       ".",
       "crates/extractum-core",
       "crates/extractum-gemini-browser",
+      "crates/extractum-llm",
     ]);
     expect(rootCargo).toMatch(/resolver\s*=\s*"2"/);
     expect(rootCargo).toContain("[workspace.dependencies]");
