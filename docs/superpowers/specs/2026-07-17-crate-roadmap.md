@@ -371,9 +371,11 @@ The approved baseline disposition is 36 of the 51 existing tests in
 `extractum-llm` and 15 in `extractum`, with every name owned exactly once. The
 expected crate dependency roots are `extractum-core`, `reqwest`, `secrecy`,
 `serde`, `serde_json`, `tokio`, and `tokio-util`, subject to a final
-pre-manifest use/feature inventory. Phase 5 uses the small advisory focused
-measurement and all mandatory correctness gates; timing alone cannot reject,
-revert, or retain the slice.
+pre-manifest use/feature inventory. `reqwest` and `secrecy` become new canonical
+workspace dependency roots, and their current app declarations switch to
+workspace inheritance because both packages retain direct uses. Phase 5 uses
+the small advisory focused measurement and all mandatory correctness gates;
+timing alone cannot reject, revert, or retain the slice.
 
 ### Phase 6 — `extractum-prompt-packs`
 

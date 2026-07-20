@@ -22,9 +22,9 @@ provider, streaming, request, and scheduling work can be checked without
 recompiling the application package. Application-specific persistence,
 credentials, Tauri IPC, events, and diagnostics remain in `extractum`.
 
-The extraction must preserve current behavior and consumer paths. It is an
-ownership change, not an LLM feature redesign, storage abstraction, provider
-rewrite, or IPC migration.
+The extraction must preserve current behavior and consumer import paths. It is
+an ownership change, not an LLM feature redesign, storage abstraction,
+provider rewrite, or IPC migration.
 
 ## Decision
 
@@ -135,6 +135,16 @@ The expected direct production dependency roots are:
 - `secrecy`;
 - `serde` and `serde_json`;
 - `tokio` and `tokio-util`.
+
+`reqwest` and `secrecy` are each currently declared exactly once, in the
+application `[dependencies]`, and are absent from `[workspace.dependencies]`.
+Because the application retains direct uses while `extractum-llm` becomes a
+second consumer, Phase 5 must add both canonical declarations to
+`[workspace.dependencies]` and convert both the app and new crate to workspace
+inheritance. This is a required manifest transition, not cleanup of an
+existing duplicate. The pre-manifest inventory must choose and contract-pin
+the exact `reqwest` feature placement; no package-local version declaration
+may remain afterward.
 
 The implementation plan must derive exact Cargo features from the prepared
 moved code before creating the manifest. It must omit unused expected roots
@@ -256,6 +266,20 @@ that access value for execution. Its public getters are exactly `profile_id`,
 the crate can read the secret privately. The preparation checkpoint changes
 current field access to this API and proves behavior before the move.
 
+The private app facade preserves the `crate::llm::ResolvedLlmProfile` import,
+but it cannot preserve construction through a cross-crate struct literal. The
+preparation checkpoint must therefore migrate both current external
+construction sites while the type still belongs to `extractum`:
+
+- `analysis/report/tests/harness.rs::sample_resolved_profile`;
+- the `ResolvedLlmProfile` fixture in
+  `prompt_packs/completion_transport.rs::api_model_context_retains_profile_and_override`.
+
+After that checkpoint, no `ResolvedLlmProfile { ... }` literal may remain
+outside the owning module. Current evidence finds no `.api_key` read outside
+`src-tauri/src/llm`, so removing public field access does not require an
+external secret migration.
+
 `LlmRequestMetadata` remains a plain construction DTO because analysis,
 prompt-packs, account-deletion tests, and the app command all build it. Its
 fields may be public. `LlmCompletion` remains readable by downstream adapters.
@@ -350,6 +374,25 @@ resolution that rejects before task spawning returns a command error and emits
 no lifecycle event.
 
 ### Errors, timeouts, and retries
+
+Phase 5 deliberately differs from Phase 4's `GeminiBrowserError` strategy.
+The Gemini Browser crate owns a job lifecycle with domain-specific timeout,
+cancellation, protocol, browser, and terminal-outcome distinctions that must
+be mapped by its app adapter; introducing its domain error also replaced an
+unsafe string-classification boundary. LLM provider and validation failures,
+by contrast, already use the shared core `AppError` taxonomy throughout
+analysis and prompt-pack consumers, while `LlmRequestError` separately
+preserves cancellation versus `Failed(AppError)`. Replacing that established
+identity with a second domain error would add widespread translation without
+adding a missing semantic distinction.
+
+Future JIT crate designs apply the semantic rule rather than forcing one error
+style for consistency: reuse core `AppError` when the shared
+validation/auth/network/conflict/internal taxonomy is the actual public
+contract; introduce a crate-specific domain error when the crate owns
+additional recoverable states or lifecycle outcomes that require an explicit
+adapter mapping. Phases 6 and 7 may therefore consume both patterns without
+normalizing either one merely for uniformity.
 
 Provider, validation, scheduler, and streaming failures continue to use
 `extractum_core::error::AppError { kind, message }`. A rejected Tauri command
@@ -505,13 +548,13 @@ must separately prove that no renamed implementation or test copy remains.
 The plan must inventory and update the workspace-member array in
 `rust-workspace-core-contract.test.ts`, the workspace-member string in
 `gemini-browser-crate-boundary-contract.test.ts`, and that file's exact
-`[workspace.dependencies]` name/text allowlist. In particular, promoting the
-currently duplicated `reqwest` or `secrecy` declarations to workspace
-dependencies requires an intentional allowlist update. The plan must also
-update the scheduler/model ownership paths in `docs/value-registry.md` and
-inventory any source contract that reads a current `src-tauri/src/llm` path
-before the physical move, so `npm.cmd run verify` is not the first stale-path
-detector.
+`[workspace.dependencies]` name/text allowlist. The latter must explicitly add
+the new canonical `reqwest` and `secrecy` roots while the app assertions change
+from their current single package-local version declarations to workspace
+inheritance. The plan must also update the scheduler/model ownership paths in
+`docs/value-registry.md` and inventory any source contract that reads a current
+`src-tauri/src/llm` path before the physical move, so `npm.cmd run verify` is
+not the first stale-path detector.
 
 ## Implementation Shape
 
@@ -521,8 +564,12 @@ The implementation plan must use these checkpoints:
    characterization, dependency roots, and visibility map;
 2. prepare mixed-file seams and the safe `ResolvedLlmProfile`
    plus `LlmProviderAccess` APIs while all production code still belongs to
-   `extractum`; run exact RED/GREEN additions, baseline characterization tests,
-   and the app package checkpoint;
+   `extractum`; migrate
+   `analysis/report/tests/harness.rs::sample_resolved_profile` and
+   `prompt_packs/completion_transport.rs::api_model_context_retains_profile_and_override`
+   away from struct literals, prove no external literal remains, then run exact
+   RED/GREEN additions, baseline characterization tests, and the app package
+   checkpoint;
 3. add a RED source-boundary contract that expects the new crate and exact
    ownership;
 4. run and restore the complete baseline advisory timing series against the
@@ -684,7 +731,8 @@ Phase 5 is complete only when all of the following are true:
    owner in the crate.
 4. Profiles, credentials, Tauri IPC/events, SQLx, and diagnostic aggregation
    remain app-owned.
-5. The private app facade preserves existing Rust consumer paths.
+5. The private app facade preserves existing Rust import paths, and both
+   external resolved-profile struct literals were migrated during preparation.
 6. The secrets inside `LlmProviderAccess` and `ResolvedLlmProfile` are neither
    serializable nor publicly readable.
 7. All nine command payload/result contracts, six-event lifecycle, distinct
