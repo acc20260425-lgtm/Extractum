@@ -266,6 +266,27 @@ impl StreamEvent {
     }
 }
 
+fn failed_stream_event(
+    request_id: String,
+    provider: String,
+    model: String,
+    error: &AppError,
+) -> LlmStreamEvent {
+    StreamEvent::new(request_id, "failed", provider, model)
+        .error(error.to_string())
+        .build()
+}
+
+fn cancelled_stream_event(
+    request_id: String,
+    provider: String,
+    model: String,
+) -> LlmStreamEvent {
+    StreamEvent::new(request_id, "cancelled", provider, model)
+        .error("Request cancelled.".to_string())
+        .build()
+}
+
 pub(crate) async fn resolve_profile_for_backend(
     handle: &AppHandle,
     requested_profile_id: Option<&str>,
@@ -627,22 +648,22 @@ pub async fn ask_llm_stream(
             Err(LlmRequestError::Failed(error)) => {
                 emit_response_event(
                     &failed_handle,
-                    &StreamEvent::new(failed_request_id, "failed", failed_provider, failed_model)
-                        .error(error.to_string())
-                        .build(),
+                    &failed_stream_event(
+                        failed_request_id,
+                        failed_provider,
+                        failed_model,
+                        &error,
+                    ),
                 );
             }
             Err(LlmRequestError::Cancelled) => {
                 emit_response_event(
                     &cancelled_handle,
-                    &StreamEvent::new(
+                    &cancelled_stream_event(
                         cancelled_request_id,
-                        "cancelled",
                         cancelled_provider,
                         cancelled_model,
-                    )
-                    .error("Request cancelled.".to_string())
-                    .build(),
+                    ),
                 );
             }
         }
@@ -673,13 +694,76 @@ pub async fn cancel_llm_request(
 #[cfg(test)]
 mod tests {
     use super::{
+        cancelled_stream_event, failed_stream_event,
         llm_request_kind_diagnostic_key, llm_request_state_diagnostic_key,
         load_provider_diagnostics_from_pool, model_input_token_limit_from_models,
         model_output_token_limit_from_models, normalize_base_url, save_profile_to_pool,
-        LlmRequestKind, LlmRequestSnapshotState, ProviderKind,
+        LlmRequestKind, LlmRequestSnapshotState, LlmUsage, ProviderKind, StreamEvent,
     };
-    use crate::error::AppErrorKind;
+    use crate::error::{AppError, AppErrorKind};
     use crate::llm::LlmProviderModel;
+
+    #[test]
+    fn llm_stream_events_serialize_exact_lifecycle_contract() {
+        let base = || {
+            (
+                "request-1".to_string(),
+                "gemini".to_string(),
+                "gemini-2.5-flash".to_string(),
+            )
+        };
+        let (request_id, provider, model) = base();
+        let queued = StreamEvent::new(request_id, "queued", provider, model)
+            .queue_position(2)
+            .build();
+        let (request_id, provider, model) = base();
+        let started = StreamEvent::new(request_id, "started", provider, model).build();
+        let (request_id, provider, model) = base();
+        let delta = StreamEvent::new(request_id, "delta", provider, model)
+            .delta("hello".to_string())
+            .build();
+        let (request_id, provider, model) = base();
+        let completed = StreamEvent::new(request_id, "completed", provider, model)
+            .text("hello".to_string())
+            .usage(Some(LlmUsage {
+                input_tokens: Some(3),
+                output_tokens: Some(2),
+                total_tokens: Some(5),
+            }))
+            .build();
+        let failure = AppError::network("LLM request failed: transport");
+        let (request_id, provider, model) = base();
+        let failed = failed_stream_event(request_id, provider, model, &failure);
+        let (request_id, provider, model) = base();
+        let cancelled = cancelled_stream_event(request_id, provider, model);
+
+        assert_eq!(serde_json::to_string(&queued).unwrap(), r#"{"request_id":"request-1","kind":"queued","queue_position":2,"delta":null,"text":null,"provider":"gemini","model":"gemini-2.5-flash","usage":null,"error":null}"#);
+        assert_eq!(serde_json::to_string(&started).unwrap(), r#"{"request_id":"request-1","kind":"started","queue_position":null,"delta":null,"text":null,"provider":"gemini","model":"gemini-2.5-flash","usage":null,"error":null}"#);
+        assert_eq!(serde_json::to_string(&delta).unwrap(), r#"{"request_id":"request-1","kind":"delta","queue_position":null,"delta":"hello","text":null,"provider":"gemini","model":"gemini-2.5-flash","usage":null,"error":null}"#);
+        assert_eq!(serde_json::to_string(&completed).unwrap(), r#"{"request_id":"request-1","kind":"completed","queue_position":null,"delta":null,"text":"hello","provider":"gemini","model":"gemini-2.5-flash","usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5},"error":null}"#);
+        assert_eq!(serde_json::to_string(&failed).unwrap(), r#"{"request_id":"request-1","kind":"failed","queue_position":null,"delta":null,"text":null,"provider":"gemini","model":"gemini-2.5-flash","usage":null,"error":"LLM request failed: transport"}"#);
+        assert_eq!(serde_json::to_string(&cancelled).unwrap(), r#"{"request_id":"request-1","kind":"cancelled","queue_position":null,"delta":null,"text":null,"provider":"gemini","model":"gemini-2.5-flash","usage":null,"error":"Request cancelled."}"#);
+    }
+
+    #[test]
+    fn llm_command_errors_and_failed_events_keep_distinct_json_shapes() {
+        let error = AppError::network("LLM request failed: transport");
+        assert_eq!(
+            serde_json::to_string(&error).unwrap(),
+            r#"{"kind":"network","message":"LLM request failed: transport"}"#,
+        );
+
+        let failed = failed_stream_event(
+            "request-1".to_string(),
+            "gemini".to_string(),
+            "gemini-2.5-flash".to_string(),
+            &error,
+        );
+        assert_eq!(
+            serde_json::to_value(failed).unwrap()["error"],
+            serde_json::json!("LLM request failed: transport"),
+        );
+    }
 
     #[test]
     fn provider_parse_returns_typed_validation_error() {

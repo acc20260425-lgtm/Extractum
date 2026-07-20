@@ -3,11 +3,13 @@ import {
   askLlmStream,
   cancelLlmRequest,
   clearLlmProfileApiKey,
+  deleteLlmProfile,
   getLlmProfiles,
   LLM_RESPONSE_EVENT,
   listLlmProviderModels,
   listenToLlmResponses,
   saveLlmProfile,
+  setActiveLlmProfile,
 } from "./llm";
 import type { LlmStreamEvent } from "$lib/types/llm";
 
@@ -74,6 +76,20 @@ describe("llm api wrappers", () => {
 
     await expect(getLlmProfiles()).resolves.toMatchObject({
       profiles: [{ base_url: "http://localhost:20128/v1" }],
+    });
+  });
+
+  it("wraps active-profile and profile-deletion commands", async () => {
+    invokeMock.mockResolvedValue({ active_profile: "default", profiles: [] });
+
+    await setActiveLlmProfile("work");
+    expect(invokeMock).toHaveBeenLastCalledWith("set_active_llm_profile", {
+      profileId: "work",
+    });
+
+    await deleteLlmProfile("work");
+    expect(invokeMock).toHaveBeenLastCalledWith("delete_llm_profile", {
+      profileId: "work",
     });
   });
 
