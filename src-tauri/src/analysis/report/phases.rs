@@ -114,11 +114,11 @@ pub(super) async fn run_map_phase(
     for (index, chunk) in chunks.into_iter().enumerate() {
         let task_handle = ctx.handle.clone();
         let task_profile = ctx.resolved_profile.clone();
-        let task_profile_id = ctx.resolved_profile.profile_id.clone();
+        let task_profile_id = ctx.resolved_profile.profile_id().to_string();
         let chunk_request =
             build_map_request(ctx.run_id, task_profile_id, index + 1, total_chunks, &chunk);
         let chunk_request_id = chunk_request.request_id.clone();
-        let chunk_provider = task_profile.provider.as_str().to_string();
+        let chunk_provider = task_profile.provider().as_str().to_string();
         let chunk_counter = completed_chunks.clone();
         let chunk_message_count = chunk.len() as i64;
         let run_id = ctx.run_id;
@@ -132,7 +132,7 @@ pub(super) async fn run_map_phase(
             let scheduler = task_handle.state::<LlmSchedulerState>();
             let request_meta = LlmRequestMetadata {
                 request_id: chunk_request.request_id.clone(),
-                profile_id: task_profile.profile_id.clone(),
+                profile_id: task_profile.profile_id().to_string(),
                 provider: chunk_provider.clone(),
                 kind: LlmRequestKind::AnalysisReportMap,
                 priority: LlmRequestPriority::Background,
@@ -292,7 +292,7 @@ pub(super) async fn run_reduce_phase(
 
     let reduce_request = build_reduce_request(ReduceRequestParams {
         run_id: ctx.run_id,
-        profile_id: ctx.resolved_profile.profile_id.clone(),
+        profile_id: ctx.resolved_profile.profile_id().to_string(),
         scope_label: &input.scope_label,
         output_language: &input.output_language,
         prompt_template: &input.prompt_template,
@@ -302,7 +302,7 @@ pub(super) async fn run_reduce_phase(
         model_override: input.model_override.clone(),
     });
     let reduce_request_id = reduce_request.request_id.clone();
-    let reduce_provider = ctx.resolved_profile.provider.as_str().to_string();
+    let reduce_provider = ctx.resolved_profile.provider().as_str().to_string();
     let scheduler = ctx.handle.state::<LlmSchedulerState>();
     let queued_handle = ctx.handle.clone();
     let started_handle = ctx.handle.clone();
@@ -326,7 +326,7 @@ pub(super) async fn run_reduce_phase(
         .run_request(
             LlmRequestMetadata {
                 request_id: reduce_request.request_id.clone(),
-                profile_id: ctx.resolved_profile.profile_id.clone(),
+                profile_id: ctx.resolved_profile.profile_id().to_string(),
                 provider: reduce_provider.clone(),
                 kind: LlmRequestKind::AnalysisReportReduce,
                 priority: LlmRequestPriority::Background,

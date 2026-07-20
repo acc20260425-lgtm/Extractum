@@ -5,7 +5,7 @@ use crate::error::{AppError, AppResult};
 use crate::secret_store::{llm_profile_api_key_secret, SecretStoreState};
 
 use super::{
-    normalize_base_url, ProviderKind, DEFAULT_MODEL, DEFAULT_PROFILE_ID, DEFAULT_PROVIDER,
+    normalize_base_url, LlmProviderAccess, ProviderKind, DEFAULT_MODEL, DEFAULT_PROFILE_ID,
 };
 use super::{LlmProfile, LlmProfilesState, ResolvedLlmProfile};
 
@@ -157,7 +157,7 @@ async fn load_profile_from_pool(
     let profile_id = normalize_profile_id(profile_id)?;
     let provider = read_setting(pool, &profile_provider_key(&profile_id))
         .await?
-        .unwrap_or_else(|| DEFAULT_PROVIDER.to_string());
+        .unwrap_or_else(|| ProviderKind::Gemini.as_str().to_string());
     let default_model = read_setting(pool, &profile_model_key(&profile_id))
         .await?
         .unwrap_or_else(|| DEFAULT_MODEL.to_string());
@@ -273,11 +273,19 @@ pub(super) async fn load_profiles_state_from_pool(
     })
 }
 
-pub(super) async fn resolve_profile_from_pool(
+struct ResolvedProfileMaterial {
+    profile_id: String,
+    provider: ProviderKind,
+    default_model: String,
+    api_key: SecretString,
+    base_url: String,
+}
+
+async fn resolve_profile_material_from_pool(
     pool: &Pool<Sqlite>,
     secret_store: &SecretStoreState,
     requested_profile_id: Option<&str>,
-) -> AppResult<ResolvedLlmProfile> {
+) -> AppResult<ResolvedProfileMaterial> {
     let profiles_state = load_profiles_state_from_pool(pool, secret_store).await?;
     let profile_id = requested_profile_id
         .map(normalize_profile_id)
@@ -300,13 +308,57 @@ pub(super) async fn resolve_profile_from_pool(
     let api_key = read_profile_api_key(secret_store, &profile_id).await?;
     let base_url = normalize_base_url(provider, Some(&profile.base_url))?;
 
-    Ok(ResolvedLlmProfile {
+    Ok(ResolvedProfileMaterial {
         profile_id,
         provider,
         default_model: profile.default_model,
         api_key,
         base_url,
     })
+}
+
+pub(super) async fn resolve_profile_from_pool(
+    pool: &Pool<Sqlite>,
+    secret_store: &SecretStoreState,
+    requested_profile_id: Option<&str>,
+) -> AppResult<ResolvedLlmProfile> {
+    let material =
+        resolve_profile_material_from_pool(pool, secret_store, requested_profile_id).await?;
+    Ok(ResolvedLlmProfile::new(
+        material.profile_id,
+        material.default_model,
+        LlmProviderAccess::new(material.provider, material.api_key, material.base_url),
+    ))
+}
+
+pub(super) async fn resolve_provider_access_from_pool(
+    pool: &Pool<Sqlite>,
+    secret_store: &SecretStoreState,
+    provider: ProviderKind,
+    requested_profile_id: Option<&str>,
+    configured_api_key: Option<SecretString>,
+    configured_base_url: Option<String>,
+) -> AppResult<LlmProviderAccess> {
+    let material =
+        resolve_profile_material_from_pool(pool, secret_store, requested_profile_id).await?;
+    let provider_matches = material.provider == provider;
+
+    let api_key = configured_api_key.unwrap_or_else(|| {
+        if provider_matches {
+            material.api_key
+        } else {
+            SecretString::new(String::new())
+        }
+    });
+    let base_url = if let Some(base_url) = configured_base_url {
+        normalize_base_url(provider, Some(&base_url))?
+    } else if provider_matches {
+        material.base_url
+    } else {
+        normalize_base_url(provider, None)?
+    };
+
+    Ok(LlmProviderAccess::new(provider, api_key, base_url))
 }
 
 async fn materialize_keyed_profile_base_url(
@@ -418,16 +470,22 @@ pub(super) async fn delete_profile_from_pool(
 mod tests {
     use super::{
         clear_profile_api_key, credential_scope, delete_profile_from_pool,
-        load_profiles_state_from_pool, resolve_profile_from_pool, save_profile_to_pool,
-        set_active_profile_in_pool, validate_profile_id,
+        load_profiles_state_from_pool, resolve_profile_from_pool,
+        resolve_profile_material_from_pool, resolve_provider_access_from_pool,
+        save_profile_to_pool, set_active_profile_in_pool, validate_profile_id,
     };
     use crate::error::AppErrorKind;
-    use crate::llm::ProviderKind;
+    use crate::llm::{list_provider_models, ProviderKind};
     use crate::secret_store::tests::InMemorySecretStore;
     use crate::secret_store::{llm_profile_api_key_secret, SecretStoreState};
-    use secrecy::ExposeSecret;
+    use secrecy::{ExposeSecret, SecretString};
     use sqlx::sqlite::SqlitePoolOptions;
     use std::sync::Arc;
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener,
+        time::{timeout, Duration},
+    };
 
     async fn memory_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -457,6 +515,65 @@ mod tests {
         let store = Arc::new(InMemorySecretStore::new());
         let state = SecretStoreState::new(store.clone());
         (store, state)
+    }
+
+    async fn start_model_list_server(
+        expected_path: &'static str,
+        expected_bearer: &'static str,
+    ) -> (String, tokio::task::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind model-list server");
+        let origin = format!(
+            "http://{}",
+            listener.local_addr().expect("model-list server address")
+        );
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("accept model-list request");
+            let mut request = Vec::new();
+            let mut chunk = [0_u8; 1024];
+            loop {
+                let read = socket
+                    .read(&mut chunk)
+                    .await
+                    .expect("read model-list request");
+                assert!(read > 0, "model-list request ended before headers");
+                request.extend_from_slice(&chunk[..read]);
+                if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    break;
+                }
+            }
+
+            let request = String::from_utf8(request).expect("model-list request is UTF-8");
+            assert!(
+                request.starts_with(format!("GET {expected_path} ").as_str()),
+                "unexpected model-list request path"
+            );
+            assert!(
+                request.to_ascii_lowercase().contains(
+                    format!(
+                        "authorization: bearer {}",
+                        expected_bearer.to_ascii_lowercase()
+                    )
+                    .as_str()
+                ),
+                "model-list request omitted the expected bearer credential"
+            );
+
+            let body = r#"{"data":[]}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                body.len(),
+                body,
+            );
+            socket
+                .write_all(response.as_bytes())
+                .await
+                .expect("write model-list response");
+        });
+
+        (origin, server)
     }
 
     async fn setting_value(pool: &sqlx::SqlitePool, key: &str) -> Option<String> {
@@ -521,10 +638,96 @@ mod tests {
         let resolved = resolve_profile_from_pool(&pool, &secret_store, None)
             .await
             .expect("resolve active");
-        assert_eq!(resolved.profile_id, "alt");
-        assert_eq!(resolved.default_model, "gemini-2.0-flash");
-        assert_eq!(resolved.api_key.expose_secret(), "alt-key");
-        assert_eq!(resolved.base_url, "");
+        assert_eq!(resolved.profile_id(), "alt");
+        assert_eq!(resolved.provider(), ProviderKind::Gemini);
+        assert_eq!(resolved.default_model(), "gemini-2.0-flash");
+        assert_eq!(resolved.base_url(), "");
+        let material = resolve_profile_material_from_pool(&pool, &secret_store, None)
+            .await
+            .expect("resolve active material");
+        assert_eq!(material.api_key.expose_secret(), "alt-key");
+    }
+
+    #[tokio::test]
+    async fn provider_access_resolution_uses_saved_key_with_configured_base_url() {
+        let pool = memory_pool().await;
+        let (_store, secret_store) = memory_secret_store();
+        let (origin, server) = start_model_list_server("/v1/models", "saved-key").await;
+
+        save_profile_to_pool(
+            &pool,
+            &secret_store,
+            "default",
+            "openai_compatible",
+            "saved-model",
+            Some("saved-key"),
+            &format!("{origin}/old"),
+            true,
+        )
+        .await
+        .expect("save OpenAI-compatible profile");
+
+        let access = resolve_provider_access_from_pool(
+            &pool,
+            &secret_store,
+            ProviderKind::OpenAiCompatible,
+            Some("default"),
+            None,
+            Some(format!("{origin}/v1")),
+        )
+        .await
+        .expect("resolve saved key with configured base URL");
+
+        let models = timeout(Duration::from_secs(2), list_provider_models(&access))
+            .await
+            .expect("model listing timed out")
+            .expect("list provider models");
+        assert!(models.is_empty());
+        timeout(Duration::from_secs(2), server)
+            .await
+            .expect("model-list server timed out")
+            .expect("model-list server failed");
+    }
+
+    #[tokio::test]
+    async fn provider_access_resolution_uses_configured_key_with_saved_base_url() {
+        let pool = memory_pool().await;
+        let (_store, secret_store) = memory_secret_store();
+        let (origin, server) = start_model_list_server("/v1/models", "configured-key").await;
+
+        save_profile_to_pool(
+            &pool,
+            &secret_store,
+            "default",
+            "openai_compatible",
+            "saved-model",
+            Some("saved-key"),
+            &format!("{origin}/v1"),
+            true,
+        )
+        .await
+        .expect("save OpenAI-compatible profile");
+
+        let access = resolve_provider_access_from_pool(
+            &pool,
+            &secret_store,
+            ProviderKind::OpenAiCompatible,
+            Some("default"),
+            Some(SecretString::new("configured-key".to_string())),
+            None,
+        )
+        .await
+        .expect("resolve configured key with saved base URL");
+
+        let models = timeout(Duration::from_secs(2), list_provider_models(&access))
+            .await
+            .expect("model listing timed out")
+            .expect("list provider models");
+        assert!(models.is_empty());
+        timeout(Duration::from_secs(2), server)
+            .await
+            .expect("model-list server timed out")
+            .expect("model-list server failed");
     }
 
     #[tokio::test]
@@ -792,8 +995,16 @@ mod tests {
         let resolved = resolve_profile_from_pool(&pool, &secret_store, Some("default"))
             .await
             .expect("resolve profile");
-        assert_eq!(resolved.default_model, "gemini-2.5-pro");
-        assert_eq!(resolved.api_key.expose_secret(), "initial-key");
+        assert_eq!(resolved.default_model(), "gemini-2.5-pro");
+        assert_eq!(
+            secret_store
+                .get_secret(llm_profile_api_key_secret("default"))
+                .await
+                .expect("read stored key")
+                .expect("stored key")
+                .expose_secret(),
+            "initial-key"
+        );
     }
 
     #[tokio::test]
@@ -821,14 +1032,11 @@ mod tests {
             .expect("load state");
 
         assert!(!state.profiles[0].api_key_configured);
-        assert_eq!(
-            resolve_profile_from_pool(&pool, &secret_store, Some("default"))
-                .await
-                .expect("resolve profile")
-                .api_key
-                .expose_secret(),
-            ""
-        );
+        assert!(secret_store
+            .get_secret(llm_profile_api_key_secret("default"))
+            .await
+            .expect("read cleared key")
+            .is_none());
     }
 
     #[tokio::test]

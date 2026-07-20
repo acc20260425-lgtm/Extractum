@@ -58,7 +58,7 @@ impl RunCompletionRuntime {
                 let model_output_limit =
                     resolve_model_output_token_limit_for_backend(profile, &effective_model).await;
                 Ok(CompletionModelContext {
-                    profile_id: Some(profile.profile_id.clone()),
+                    profile_id: Some(profile.profile_id().to_string()),
                     model_override: model_override.clone(),
                     model_output_limit,
                 })
@@ -170,7 +170,7 @@ async fn run_api_llm_request(
         ..
     } = request;
     let request_id = llm_request.request_id.clone();
-    let provider = profile.provider.as_str().to_string();
+    let provider = profile.provider().as_str().to_string();
     let scheduler = handle.state::<LlmSchedulerState>();
     let queued_handle = handle.clone();
     let started_handle = handle.clone();
@@ -188,7 +188,7 @@ async fn run_api_llm_request(
         .run_request(
             LlmRequestMetadata {
                 request_id: request_id.clone(),
-                profile_id: profile.profile_id.clone(),
+                profile_id: profile.profile_id().to_string(),
                 provider,
                 kind: LlmRequestKind::PromptPackStage,
                 priority: LlmRequestPriority::Background,
@@ -486,7 +486,7 @@ fn non_empty_string(value: String) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::RunCompletionRuntime;
-    use crate::llm::{ProviderKind, ResolvedLlmProfile};
+    use crate::llm::{LlmProviderAccess, ProviderKind, ResolvedLlmProfile};
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         net::TcpListener,
@@ -543,13 +543,15 @@ mod tests {
     async fn api_model_context_retains_profile_and_override() {
         let (base_url, server) = start_model_metadata_server().await;
         let runtime = RunCompletionRuntime::Api {
-            profile: ResolvedLlmProfile {
-                profile_id: "profile-7".to_string(),
-                provider: ProviderKind::OpenAiCompatible,
-                default_model: "default-model".to_string(),
-                api_key: "test-api-key".to_string().into(),
-                base_url,
-            },
+            profile: ResolvedLlmProfile::new(
+                "profile-7".to_string(),
+                "default-model".to_string(),
+                LlmProviderAccess::new(
+                    ProviderKind::OpenAiCompatible,
+                    "test-api-key".to_string().into(),
+                    base_url,
+                ),
+            ),
             model_override: Some("override-model".to_string()),
         };
 

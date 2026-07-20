@@ -237,10 +237,11 @@ pub(in crate::llm) async fn stream_gemini_response<F>(
 where
     F: FnMut(&str),
 {
-    if profile.api_key.expose_secret().trim().is_empty() {
+    let access = profile.provider_access();
+    if access.api_key().expose_secret().trim().is_empty() {
         return Err(AppError::auth(format!(
             "Profile '{}' does not have a Gemini API key configured",
-            profile.profile_id
+            profile.profile_id()
         )));
     }
 
@@ -254,7 +255,7 @@ where
     for attempt in 1..=GEMINI_STREAM_MAX_ATTEMPTS {
         let candidate = client
             .post(url.clone())
-            .header("x-goog-api-key", profile.api_key.expose_secret())
+            .header("x-goog-api-key", access.api_key().expose_secret())
             .header("Content-Type", "application/json")
             .json(&request_body)
             .send()
@@ -355,7 +356,7 @@ where
     }
 
     Ok(LlmCompletion {
-        provider: profile.provider.as_str().to_string(),
+        provider: profile.provider().as_str().to_string(),
         model,
         text: full_text,
         usage: last_usage,

@@ -243,10 +243,11 @@ pub(in crate::llm) async fn stream_openai_compat_response<F>(
 where
     F: FnMut(&str),
 {
-    if profile.api_key.expose_secret().trim().is_empty() {
+    let access = profile.provider_access();
+    if access.api_key().expose_secret().trim().is_empty() {
         return Err(AppError::auth(format!(
             "Profile '{}' does not have an {} API key configured",
-            profile.profile_id,
+            profile.profile_id(),
             config.provider.display_name()
         )));
     }
@@ -260,7 +261,7 @@ where
     for attempt in 1..=OPENAI_COMPAT_STREAM_MAX_ATTEMPTS {
         let candidate = match client
             .post(url.clone())
-            .bearer_auth(profile.api_key.expose_secret())
+            .bearer_auth(access.api_key().expose_secret())
             .header("Content-Type", "application/json")
             .json(&request_body)
             .send()
@@ -347,7 +348,7 @@ where
     }
 
     Ok(LlmCompletion {
-        provider: profile.provider.as_str().to_string(),
+        provider: profile.provider().as_str().to_string(),
         model,
         text: full_text,
         usage: last_usage,
@@ -408,7 +409,9 @@ mod tests {
         OpenAiCompatProviderConfig,
     };
     use crate::error::AppErrorKind;
-    use crate::llm::{LlmChatRequest, LlmMessage, ProviderKind, ResolvedLlmProfile};
+    use crate::llm::{
+        LlmChatRequest, LlmMessage, LlmProviderAccess, ProviderKind, ResolvedLlmProfile,
+    };
     use std::sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -644,13 +647,15 @@ mod tests {
             provider: ProviderKind::OpenAiCompatible,
             base_url,
         };
-        let profile = ResolvedLlmProfile {
-            profile_id: "default".to_string(),
-            provider: ProviderKind::OpenAiCompatible,
-            default_model: "if/kimi-k2-thinking".to_string(),
-            api_key: "test-key".to_string().into(),
-            base_url: config.base_url.clone(),
-        };
+        let profile = ResolvedLlmProfile::new(
+            "default".to_string(),
+            "if/kimi-k2-thinking".to_string(),
+            LlmProviderAccess::new(
+                ProviderKind::OpenAiCompatible,
+                "test-key".to_string().into(),
+                config.base_url.clone(),
+            ),
+        );
         let request = LlmChatRequest {
             request_id: "retry-test".to_string(),
             profile_id: None,

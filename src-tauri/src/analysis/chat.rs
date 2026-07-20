@@ -450,8 +450,8 @@ pub async fn ask_analysis_run_question(
         let scheduler = app_handle.state::<LlmSchedulerState>();
         let request_meta = analysis_chat_request_metadata(
             &request,
-            resolved_profile.profile_id.clone(),
-            resolved_profile.provider.as_str().to_string(),
+            resolved_profile.profile_id().to_string(),
+            resolved_profile.provider().as_str().to_string(),
             run_id,
         );
         let queued_handle = app_handle.clone();

@@ -36,8 +36,8 @@ fn report_run_input_carries_resolved_profile_snapshot() {
         },
     };
 
-    assert_eq!(input.resolved_profile.profile_id, "research");
-    assert_eq!(input.resolved_profile.default_model, "gemini-2.5-flash");
+    assert_eq!(input.resolved_profile.profile_id(), "research");
+    assert_eq!(input.resolved_profile.default_model(), "gemini-2.5-flash");
 }
 
 #[test]

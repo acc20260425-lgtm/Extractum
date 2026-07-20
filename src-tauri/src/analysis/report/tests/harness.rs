@@ -1,5 +1,5 @@
 use crate::analysis::models::{AnalysisPromptTemplate, ChunkSummary, CorpusMessage};
-use crate::llm::{ProviderKind, ResolvedLlmProfile};
+use crate::llm::{LlmProviderAccess, ProviderKind, ResolvedLlmProfile};
 use sqlx::SqlitePool;
 
 pub(super) const SAMPLE_JSON: &str = r#"{"summary":"Brief","topics":["sync"],"notable_points":["Point"],"candidate_refs":["s1-i2"]}"#;
@@ -43,13 +43,15 @@ pub(super) fn sample_corpus_message() -> CorpusMessage {
 }
 
 pub(super) fn sample_resolved_profile() -> ResolvedLlmProfile {
-    ResolvedLlmProfile {
-        profile_id: "research".to_string(),
-        provider: ProviderKind::Gemini,
-        default_model: "gemini-2.5-flash".to_string(),
-        api_key: "secret-key".to_string().into(),
-        base_url: String::new(),
-    }
+    ResolvedLlmProfile::new(
+        "research".to_string(),
+        "gemini-2.5-flash".to_string(),
+        LlmProviderAccess::new(
+            ProviderKind::Gemini,
+            "secret-key".to_string().into(),
+            String::new(),
+        ),
+    )
 }
 
 pub(super) async fn request_cancel_pool_with_runs() -> SqlitePool {
