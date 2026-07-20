@@ -832,11 +832,25 @@ The selected solution is a crate-private `#[cfg(test)]` schema fixture:
 The approved ordered allowlist is the twelve canonical application files
 `0001` through `0012`. This retains the baseline, source, project, prompt-pack,
 and current project redesign prerequisites; applying only `0006`–`0011` is
-insufficient. The implementation plan must compare this allowlist with the
-non-Apalis prefix of the app migration registry and characterize every table,
-column, index, and foreign-key shape consumed by moved tests. A later app
-migration that changes a consumed shape must update the fixture contract in
-the same change.
+insufficient.
+
+The dedicated boundary contract must enforce this as a standing
+source-contract assertion, not a one-time planning check. Its parser:
+
+1. reads the initial `vec![...]` prefix of `build_migrations()` up to
+   `migrations.extend(apalis_sqlite_migrations())`;
+2. resolves each ordered migration function to its `sql: *_SQL` constant and
+   that constant to its canonical `include_str!("../migrations/...")` path;
+3. reads the fixture's explicit ordered `(path, include_str!(...))` allowlist;
+4. normalizes both sides to repository-relative SQL paths and requires exact
+   ordered equality.
+
+An unparseable registry shape is a contract failure, not permission to skip the
+check. Any added, removed, reordered, or newly registered non-Apalis migration
+therefore fails the contract until the fixture and its consumed-shape
+characterizations are updated in the same change, or a new owner-approved
+design explicitly changes the policy. The contract also characterizes every
+table, column, index, and foreign-key shape consumed by moved tests.
 
 Apalis migration files and the checksum-sensitive inline Apalis SQL are not
 part of this reduced fixture. The fixture must not create or claim equivalence
@@ -869,7 +883,9 @@ Before creating the crate, add a deliberately RED
   ABI as specified;
 - the opaque execution-ticket and two-phase profile-resolution handoffs;
 - canonical asset bytes/path and centralized include ownership;
-- the narrow test-only canonical migration SQL allowance.
+- the narrow test-only canonical migration SQL allowance and the standing exact
+  ordered parity between its fixture list and the registered non-Apalis
+  migration prefix.
 
 Update without weakening:
 
@@ -890,6 +906,26 @@ the move so `npm.cmd run verify` is not the first stale-path detector.
 
 All behavioral seam work occurs while prompt-pack code is still app-owned and
 the full package can compile it together.
+
+Checkpoints 1–4 each end in a separately identifiable green commit. Every such
+checkpoint is behavior-preserving, leaves the existing app-owned module as the
+production implementation, runs its named non-empty focused tests, and passes:
+
+```powershell
+cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets
+```
+
+Checkpoint 4 additionally runs the full app-package test checkpoint before the
+RED contract is introduced. A checkpoint may contain smaller RED/GREEN commits
+during development, but its boundary commit must contain no failing test or
+dependency on an uncommitted later checkpoint. The slice may stop after any
+completed green checkpoint and retain the independently useful preparation;
+that outcome is a valid paused Phase 6, not a failed all-or-nothing extraction.
+
+Checkpoint 5 is different by construction: it is a separate intentionally RED
+source-contract commit. Existing application behavior and app-package checks
+remain green; the new contract must fail only on the absent member/path/move.
+It is not combined with the mechanical extraction commit.
 
 ### Checkpoint 1 — freeze and characterize
 
@@ -1036,18 +1072,38 @@ reclassifies a correctness failure.
 ## Failure and Rollback
 
 A characterization, preparation, contract, package, workspace, release, or
-confirmed startup failure stops retention. Fix the failure in the checkpoint
-that owns it; do not hide behavioral corrections inside the mechanical move.
+confirmed startup failure stops progression and retention of the current
+checkpoint or extraction candidate; it does not automatically invalidate an
+earlier green checkpoint. Fix the failure in the checkpoint that owns it; do
+not hide behavioral corrections inside the mechanical move.
+
+Rollback follows the checkpoint ladder:
+
+1. before a checkpoint reaches its green boundary commit, correct or abandon
+   only that in-progress work; do not rewrite earlier checkpoint history;
+2. after any green Checkpoint 1–4 boundary, the owner may pause the slice,
+   retain all completed green commits, and record the last completed checkpoint
+   in a short durable disposition and the roadmap;
+3. if a completed preparation checkpoint is not independently worth retaining,
+   revert that checkpoint and any later dependent preparation checkpoints in
+   reverse order with ordinary `git revert`; earlier green checkpoints remain;
+4. if work stops after the Checkpoint 5 RED commit but before extraction,
+   revert only that unique RED commit and retain Checkpoints 1–4;
+5. if the mechanical extraction or its completion gates fail, preserve the
+   failed candidate in Git history, revert the extraction commit first and the
+   RED contract commit second, then decide each earlier green preparation
+   checkpoint independently.
+
+Resuming later starts from the last retained green checkpoint after confirming
+its identity and gates. No stop condition authorizes `git reset`, destructive
+path checkout, or manual deletion of evidence.
 
 An advisory timing failure is not a correctness failure. Restore the probe,
 record no conclusion, and continue only after source identity and clean-tree
 proof.
 
-If the candidate is not retained, preserve any material failed candidate in
-Git history and revert the unique extraction commit before the unique RED
-contract commit. Do not use `git reset`, destructive path checkout, or manual
-deletion to erase evidence. Write a verification disposition and restore the
-roadmap to a truthful non-retained Phase 6 state.
+If the candidate is not retained, write a verification disposition and restore
+the roadmap to the truthful retained-checkpoint or non-retained Phase 6 state.
 
 ## Non-Goals
 
@@ -1086,7 +1142,9 @@ Phase 6 may be recorded as implemented and retained only when:
 8. the crate root, visibility map, manifest, lockfile, reverse-edge rules, and
    moved-not-copied inventory satisfy the dedicated boundary contract;
 9. the crate-private schema fixture uses only canonical single-owned SQL,
-   remains test-only, and matches its declared reduced scope;
+   remains test-only, matches its declared reduced scope, and is held in exact
+   ordered parity with the registered non-Apalis migration prefix by a standing
+   source contract;
 10. crate, immediate-app, workspace, repository, release, and startup gates
     pass;
 11. advisory timing and ordinary workspace timing are recorded honestly and
@@ -1103,11 +1161,13 @@ reviewed. It must include:
   baseline identities;
 - an exact production/test file map, visibility-widening map, source DTO map,
   port API, root re-export allowlist, table allowlist, dependency/features
-  allowlist, asset map, migration-fixture allowlist, and Cargo.lock assertions;
+  allowlist, asset map, migration-fixture allowlist, its registry-parity parser
+  and assertions, and Cargo.lock assertions;
 - named RED/GREEN tests and the `## Rust Verification Loops` section required
   by repository policy;
 - preparation commits before the intentionally RED contract and mechanical
-  move;
+  move, with one separately identifiable green boundary per Checkpoint 1–4 and
+  the checkpoint rollback/pause ladder;
 - the small advisory timing protocol without additional machinery;
 - fail-fast commands, scoped staging, non-destructive rollback, release/startup
   evidence, verification document, and roadmap/contract completion update.

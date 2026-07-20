@@ -462,6 +462,30 @@ describe("crate extraction timing policy", () => {
       "There is no production prompt-pack query of `projects`",
     );
     expect(promptPacksBoundaryDesign).toContain(
+      "standing source-contract assertion, not a one-time planning check",
+    );
+    expect(promptPacksBoundaryDesign).toContain(
+      "initial `vec![...]` prefix of `build_migrations()`",
+    );
+    expect(promptPacksBoundaryDesign).toContain(
+      "requires exact ordered equality",
+    );
+    expect(promptPacksBoundaryDesign).toContain(
+      "Any added, removed, reordered, or newly registered non-Apalis migration therefore fails the contract",
+    );
+    expect(promptPacksBoundaryDesign).toContain(
+      "Checkpoints 1–4 each end in a separately identifiable green commit",
+    );
+    expect(promptPacksBoundaryDesign).toContain(
+      "The slice may stop after any completed green checkpoint and retain the independently useful preparation",
+    );
+    expect(promptPacksBoundaryDesign).toContain(
+      "revert only that unique RED commit and retain Checkpoints 1–4",
+    );
+    expect(promptPacksBoundaryDesign).toContain(
+      "decide each earlier green preparation checkpoint independently",
+    );
+    expect(promptPacksBoundaryDesign).toContain(
       "Timing remains deliberately small and cannot veto a correct extraction",
     );
   });
