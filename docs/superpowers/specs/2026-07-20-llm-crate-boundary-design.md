@@ -1,6 +1,6 @@
 # LLM Crate Boundary Design
 
-**Status:** Owner-approved; implementation not started
+**Status:** Implemented and retained; [verification](../verification/2026-07-20-extractum-llm-extraction.md)
 **Date:** 2026-07-20
 
 **Roadmap authority:**

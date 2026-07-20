@@ -4,6 +4,8 @@ import focusedLoopDesignRaw from "../../docs/superpowers/specs/2026-07-17-focuse
 import crateRoadmapRaw from "../../docs/superpowers/specs/2026-07-17-crate-roadmap.md?raw";
 import processBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-17-process-and-gemini-browser-crate-boundary-design.md?raw";
 import geminiBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-19-gemini-browser-crate-boundary-design.md?raw";
+import llmBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-20-llm-crate-boundary-design.md?raw";
+import llmVerificationRaw from "../../docs/superpowers/verification/2026-07-20-extractum-llm-extraction.md?raw";
 import shellCapRevisionRaw from "../../docs/superpowers/specs/2026-07-18-crate-extraction-shell-cap-revision-design.md?raw";
 import anomalyV2DesignRaw from "../../docs/superpowers/specs/2026-07-18-process-shell-anomaly-v2-design.md?raw";
 import reapplicationPlanRaw from "../../docs/superpowers/plans/2026-07-18-extractum-process-reapplication.md?raw";
@@ -25,6 +27,8 @@ const focusedLoopDesign = normalize(focusedLoopDesignRaw);
 const crateRoadmap = normalize(crateRoadmapRaw);
 const processBoundaryDesign = compact(processBoundaryDesignRaw);
 const geminiBoundaryDesign = compact(geminiBoundaryDesignRaw);
+const llmBoundaryDesign = compact(llmBoundaryDesignRaw);
+const llmVerification = compact(llmVerificationRaw);
 const shellCapRevision = compact(shellCapRevisionRaw);
 const anomalyV2Design = compact(anomalyV2DesignRaw);
 const reapplicationPlan = compact(reapplicationPlanRaw);
@@ -62,6 +66,9 @@ const phase3Roadmap = compact(
 );
 const phase4Roadmap = compact(
   sectionBetween(crateRoadmap, "### Phase 4 —", "### Phase 5 —"),
+);
+const phase5Roadmap = compact(
+  sectionBetween(crateRoadmap, "### Phase 5 —", "### Phase 6 —"),
 );
 const appOwnedGeminiBaselineTests = [
   "explicit_shutdown_kills_and_reaps_the_owned_child_once",
@@ -354,5 +361,53 @@ describe("crate extraction timing policy", () => {
       "never merged into `main`",
     );
     expect(anomalyV2Design).toContain("`moot` for the current crate roadmap");
+  });
+
+  it("records retained Phase 5 ownership, advisory timing, and Phase 6 next", () => {
+    expect(llmBoundaryDesign).toContain(
+      "**Status:** Implemented and retained; [verification](../verification/2026-07-20-extractum-llm-extraction.md)",
+    );
+    expect(phase5Roadmap).toContain(
+      "Phase 5 — `extractum-llm` (done: retained)",
+    );
+    expect(phase5Roadmap).toContain("2026-07-20-extractum-llm-extraction.md");
+    for (const dependency of [
+      "extractum-core",
+      "reqwest",
+      "secrecy",
+      "serde",
+      "serde_json",
+      "tokio",
+      "tokio-util",
+    ]) {
+      expect(phase5Roadmap).toContain(`\`${dependency}\``);
+    }
+    expect(phase5Roadmap).toContain("owned exactly 36/15 by crate/app");
+    expect(phase5Roadmap).toContain("one-shot focused timing series were incomplete");
+    expect(phase5Roadmap).toContain("there is no median and no performance conclusion");
+    expect(phase5Roadmap).toContain("Timing was advisory and did not decide retention");
+    expect(phase5Roadmap).toContain("10,410 ms, below 15,000 ms");
+    expect(phase5Roadmap).toContain("Phase 4's 1,620 ms result");
+    expect(phase5Roadmap).toContain("Phase 6 `extractum-prompt-packs` is next");
+    expect(phase5Roadmap).toContain("fresh owner-approved JIT boundary design");
+    expect(llmVerification).toContain("BASELINE_RAW_MS=[]");
+    expect(llmVerification).toContain("CANDIDATE_RAW_MS=[]");
+    expect(llmVerification).toContain("no median / no performance conclusion");
+    expect(llmVerification).toContain(
+      "Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.41s",
+    );
+    expect(llmVerification).toContain("The mechanical result is 10,410 ms");
+    expect(llmVerification).toContain("Timing did not decide retention");
+    for (const disallowed of [
+      "shell A/B",
+      "quiet-window coordinator",
+      "active-process scanner",
+      "Job Object",
+      "protocol-mandated retry",
+      "cumulative ledger",
+    ]) {
+      expect(llmVerification).not.toContain(disallowed);
+      expect(phase5Roadmap).not.toContain(disallowed);
+    }
   });
 });

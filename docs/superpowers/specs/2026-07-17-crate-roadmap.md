@@ -338,44 +338,38 @@ the application retains one path edge to the crate. The frozen 94-test
 inventory is owned 75 tests by `extractum-gemini-browser` and 19 by
 `extractum`. The retained ordinary workspace-check result is 1,620 ms, below
 15,000 ms, so it breaks rather than advances the adjacent-slice investigation
-sequence. Phase 5 now has an owner-approved JIT boundary design; implementation
-has not started.
+sequence. Phase 5 is now implemented and retained under its owner-approved JIT
+boundary design.
 
-### Phase 5 — `extractum-llm` (designed; implementation not started)
+### Phase 5 — `extractum-llm` (done: retained)
 
-The fresh 2026-07-20 snapshot contains 8 files, 4,717 lines, and 51 statically
-inventoried Rust tests. Since 2026-06-01, 19 commits touched the module; under
-the current Rust-domain classification, 12 of 19 (63.2%) touched no other
-categorized Rust domain. Raw joint-touch counts are `prompt_packs` 4,
-`analysis` 3, `youtube` 3, and `telegram` 2. This method excludes shell files
-and differs from the historical wider-window `analysis + llm = 12` and
-`llm + telegram = 6` figures, which remain context rather than current
-ownership evidence.
+The owner-approved [LLM crate boundary](2026-07-20-llm-crate-boundary-design.md)
+is implemented and retained; see the
+[verification](../verification/2026-07-20-extractum-llm-extraction.md).
+`extractum-llm` now owns provider clients and model policy, request/completion
+DTOs, streaming, execution, timeout/retry behavior, and scheduler/cancellation.
+The application retains all nine Tauri commands, `llm://response` events, SQLx
+profile persistence, `app_settings`, SecretStore/keyring credentials, profile
+lifecycle, and diagnostics behind the private `crate::llm` facade.
 
-The owner-approved
-[`LLM crate boundary`](2026-07-20-llm-crate-boundary-design.md) moves provider
-clients, provider/model rules, request and completion DTOs, streaming,
-execution, and scheduler/cancellation behavior into `extractum-llm`. Tauri
-commands and events, SQLx profile persistence, `app_settings`, SecretStore and
-keyring credentials, profile lifecycle, and diagnostic aggregation remain in
-`extractum` behind the existing private `crate::llm` facade. No profile-store
-or secret-store port is introduced.
+The crate's exact direct production dependency roots are `extractum-core`,
+`reqwest`, `secrecy`, `serde`, `serde_json`, `tokio`, and `tokio-util`.
+`reqwest` and `secrecy` are canonical workspace dependencies inherited by both
+packages. The frozen 51-name inventory is owned exactly 36/15 by crate/app;
+five new characterization tests are recorded separately.
 
-There is no current direct Telegram-module consumer of `crate::llm`; the live
-seam is account deletion consulting scheduler-owned run IDs, while the recent
-Telegram joint work is credential/diagnostic infrastructure. Keeping profile
-storage and secrets app-side prevents that seam from becoming a reverse
-dependency or future crate cycle.
+Both one-shot focused timing series were incomplete because the patch helper
+could not execute `codex.exe` in the sandbox. Source SHA-256 and Git blob
+identity, restoration, and clean-tree proofs passed; there is no median and no
+performance conclusion. Timing was advisory and did not decide retention.
 
-The approved baseline disposition is 36 of the 51 existing tests in
-`extractum-llm` and 15 in `extractum`, with every name owned exactly once. The
-expected crate dependency roots are `extractum-core`, `reqwest`, `secrecy`,
-`serde`, `serde_json`, `tokio`, and `tokio-util`, subject to a final
-pre-manifest use/feature inventory. `reqwest` and `secrecy` become new canonical
-workspace dependency roots, and their current app declarations switch to
-workspace inheritance because both packages retain direct uses. Phase 5 uses
-the small advisory focused measurement and all mandatory correctness gates;
-timing alone cannot reject, revert, or retain the slice.
+The ordinary mandatory workspace check completed in 10,410 ms, below 15,000
+ms. It cannot form an adjacent above-threshold pair with Phase 4's 1,620 ms
+result, so no performance investigation is triggered.
+
+Phase 6 `extractum-prompt-packs` is next and still requires a fresh
+owner-approved JIT boundary design; this result does not authorize
+implementation directly.
 
 ### Phase 6 — `extractum-prompt-packs`
 
