@@ -5,6 +5,7 @@ import crateRoadmapRaw from "../../docs/superpowers/specs/2026-07-17-crate-roadm
 import processBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-17-process-and-gemini-browser-crate-boundary-design.md?raw";
 import geminiBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-19-gemini-browser-crate-boundary-design.md?raw";
 import llmBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-20-llm-crate-boundary-design.md?raw";
+import promptPacksBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-20-prompt-packs-crate-boundary-design.md?raw";
 import llmVerificationRaw from "../../docs/superpowers/verification/2026-07-20-extractum-llm-extraction.md?raw";
 import shellCapRevisionRaw from "../../docs/superpowers/specs/2026-07-18-crate-extraction-shell-cap-revision-design.md?raw";
 import anomalyV2DesignRaw from "../../docs/superpowers/specs/2026-07-18-process-shell-anomaly-v2-design.md?raw";
@@ -28,6 +29,7 @@ const crateRoadmap = normalize(crateRoadmapRaw);
 const processBoundaryDesign = compact(processBoundaryDesignRaw);
 const geminiBoundaryDesign = compact(geminiBoundaryDesignRaw);
 const llmBoundaryDesign = compact(llmBoundaryDesignRaw);
+const promptPacksBoundaryDesign = compact(promptPacksBoundaryDesignRaw);
 const llmVerification = compact(llmVerificationRaw);
 const shellCapRevision = compact(shellCapRevisionRaw);
 const anomalyV2Design = compact(anomalyV2DesignRaw);
@@ -69,6 +71,9 @@ const phase4Roadmap = compact(
 );
 const phase5Roadmap = compact(
   sectionBetween(crateRoadmap, "### Phase 5 —", "### Phase 6 —"),
+);
+const phase6Roadmap = compact(
+  sectionBetween(crateRoadmap, "### Phase 6", "### Phase 7"),
 );
 const appOwnedGeminiBaselineTests = [
   "explicit_shutdown_kills_and_reaps_the_owned_child_once",
@@ -363,7 +368,7 @@ describe("crate extraction timing policy", () => {
     expect(anomalyV2Design).toContain("`moot` for the current crate roadmap");
   });
 
-  it("records retained Phase 5 ownership, advisory timing, and Phase 6 next", () => {
+  it("records retained Phase 5 ownership, advisory timing, and Phase 6 authorization", () => {
     expect(llmBoundaryDesign).toContain(
       "**Status:** Implemented and retained; [verification](../verification/2026-07-20-extractum-llm-extraction.md)",
     );
@@ -388,8 +393,9 @@ describe("crate extraction timing policy", () => {
     expect(phase5Roadmap).toContain("Timing was advisory and did not decide retention");
     expect(phase5Roadmap).toContain("10,410 ms, below 15,000 ms");
     expect(phase5Roadmap).toContain("Phase 4's 1,620 ms result");
-    expect(phase5Roadmap).toContain("Phase 6 `extractum-prompt-packs` is next");
-    expect(phase5Roadmap).toContain("fresh owner-approved JIT boundary design");
+    expect(phase5Roadmap).toContain("Phase 6 `extractum-prompt-packs` remains next");
+    expect(phase5Roadmap).toContain("fresh JIT boundary design is now owner-approved");
+    expect(phase5Roadmap).toContain("implementation is not authorized");
     expect(llmVerification).toContain("BASELINE_RAW_MS=[]");
     expect(llmVerification).toContain("CANDIDATE_RAW_MS=[]");
     expect(llmVerification).toContain("no median / no performance conclusion");
@@ -409,5 +415,54 @@ describe("crate extraction timing policy", () => {
       expect(llmVerification).not.toContain(disallowed);
       expect(phase5Roadmap).not.toContain(disallowed);
     }
+  });
+
+  it("records the approved Phase 6 prompt-pack boundary without authorizing implementation", () => {
+    expect(promptPacksBoundaryDesign).toContain(
+      "**Status:** Owner-approved; implementation not started",
+    );
+    expect(phase6Roadmap).toContain(
+      "design approved; implementation not started",
+    );
+    expect(phase6Roadmap).toContain(
+      "2026-07-20-prompt-packs-crate-boundary-design.md",
+    );
+    expect(phase6Roadmap).toContain(
+      "46 files / 19,037 lines and 225 baseline Rust test identities",
+    );
+    expect(phase6Roadmap).toContain("118 commits touched `prompt_packs`");
+    expect(phase6Roadmap).toContain("92 (78.0%)");
+    expect(phase6Roadmap).toContain(
+      "223 identities in the new crate and two foreign-source SQL-adapter identities in the app",
+    );
+    expect(phase6Roadmap).toContain("32 prompt-pack-owned tables");
+    expect(phase6Roadmap).toContain(
+      "The app retains Tauri commands/events/spawning, `get_pool`, migrations, profile/secret resolution, foreign source reads, and concrete Gemini Browser operations",
+    );
+    expect(phase6Roadmap).toContain(
+      "Implementation requires a separate plan and an explicit owner instruction",
+    );
+    expect(phase6Roadmap).toContain(
+      "one warm-up plus three focused samples per state",
+    );
+    expect(phase6Roadmap).toContain(
+      "no quiet-window, retry, shell A/B, or cumulative-ledger machinery",
+    );
+
+    expect(promptPacksBoundaryDesign).toContain(
+      "The approved final partition is 223 identities in `extractum-prompt-packs` and two in `extractum`",
+    );
+    expect(promptPacksBoundaryDesign).toContain(
+      "transcript_text_for_source_uses_segment_renderer",
+    );
+    expect(promptPacksBoundaryDesign).toContain(
+      "comment_snapshot_selection_is_deterministic_when_enabled",
+    );
+    expect(promptPacksBoundaryDesign).toContain(
+      "There is no production prompt-pack query of `projects`",
+    );
+    expect(promptPacksBoundaryDesign).toContain(
+      "Timing remains deliberately small and cannot veto a correct extraction",
+    );
   });
 });

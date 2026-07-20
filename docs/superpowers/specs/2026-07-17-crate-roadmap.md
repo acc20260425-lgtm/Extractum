@@ -367,18 +367,32 @@ The ordinary mandatory workspace check completed in 10,410 ms, below 15,000
 ms. It cannot form an adjacent above-threshold pair with Phase 4's 1,620 ms
 result, so no performance investigation is triggered.
 
-Phase 6 `extractum-prompt-packs` is next and still requires a fresh
-owner-approved JIT boundary design; this result does not authorize
-implementation directly.
+Phase 6 `extractum-prompt-packs` remains next. Its fresh JIT boundary design is
+now owner-approved, but implementation is not authorized by the Phase 5 result
+or by the design document alone.
 
-### Phase 6 — `extractum-prompt-packs`
+### Phase 6 — `extractum-prompt-packs` (design approved; implementation not started)
 
-~19,000 lines, 79% solo, 50 commits in the last month: the highest-value
-extraction in the repository under either loop metric. Depends on
-gemini-browser + llm + core; its `sources`/`db` access is the main JIT design
-work (pool-level functions, narrow read interfaces). Expect the largest
-visibility-widening review; the layered decision (three crates) is already
-fixed.
+The owner-approved
+[Phase 6 boundary design](2026-07-20-prompt-packs-crate-boundary-design.md)
+refreshes the current scope to 46 files / 19,037 lines and 225 baseline Rust
+test identities. Since 2026-06-01, 118 commits touched `prompt_packs`; 92
+(78.0%) touched no other categorized Rust domain. The frozen test partition is
+223 identities in the new crate and two foreign-source SQL-adapter identities
+in the app.
+
+The selected preparation-first boundary gives the crate prompt-pack lifecycle,
+YouTube Summary orchestration, validation, and SQL for the 32 prompt-pack-owned
+tables. The app retains Tauri commands/events/spawning, `get_pool`, migrations,
+profile/secret resolution, foreign source reads, and concrete Gemini Browser
+operations. The crate depends downward on `extractum-llm`,
+`extractum-gemini-browser`, and `extractum-core`; foreign source data crosses a
+narrow owned-value reader, and Browser work crosses an object-safe app port.
+The private app facade preserves current Rust consumer paths.
+
+Implementation requires a separate plan and an explicit owner instruction.
+Timing remains advisory: one warm-up plus three focused samples per state, with
+no quiet-window, retry, shell A/B, or cumulative-ledger machinery.
 
 ### Phase 7 — `extractum-analysis`
 
