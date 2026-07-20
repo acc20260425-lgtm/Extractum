@@ -338,15 +338,42 @@ the application retains one path edge to the crate. The frozen 94-test
 inventory is owned 75 tests by `extractum-gemini-browser` and 19 by
 `extractum`. The retained ordinary workspace-check result is 1,620 ms, below
 15,000 ms, so it breaks rather than advances the adjacent-slice investigation
-sequence. Phase 5 is the next JIT boundary design and has not started.
+sequence. Phase 5 now has an owner-approved JIT boundary design; implementation
+has not started.
 
-### Phase 5 — `extractum-llm`
+### Phase 5 — `extractum-llm` (designed; implementation not started)
 
-~4,700 lines. Shared layer for `prompt_packs`, `analysis`, and `telegram`
-(12/… joint commits with analysis). Extracted before its consumers so they
-can depend on it as a crate. Watch the `llm + telegram` seam (6 joint
-commits): auth/client responsibilities may need to stay app-side or move to
-the telegram phase.
+The fresh 2026-07-20 snapshot contains 8 files, 4,717 lines, and 51 statically
+inventoried Rust tests. Since 2026-06-01, 19 commits touched the module; under
+the current Rust-domain classification, 12 of 19 (63.2%) touched no other
+categorized Rust domain. Raw joint-touch counts are `prompt_packs` 4,
+`analysis` 3, `youtube` 3, and `telegram` 2. This method excludes shell files
+and differs from the historical wider-window `analysis + llm = 12` and
+`llm + telegram = 6` figures, which remain context rather than current
+ownership evidence.
+
+The owner-approved
+[`LLM crate boundary`](2026-07-20-llm-crate-boundary-design.md) moves provider
+clients, provider/model rules, request and completion DTOs, streaming,
+execution, and scheduler/cancellation behavior into `extractum-llm`. Tauri
+commands and events, SQLx profile persistence, `app_settings`, SecretStore and
+keyring credentials, profile lifecycle, and diagnostic aggregation remain in
+`extractum` behind the existing private `crate::llm` facade. No profile-store
+or secret-store port is introduced.
+
+There is no current direct Telegram-module consumer of `crate::llm`; the live
+seam is account deletion consulting scheduler-owned run IDs, while the recent
+Telegram joint work is credential/diagnostic infrastructure. Keeping profile
+storage and secrets app-side prevents that seam from becoming a reverse
+dependency or future crate cycle.
+
+The approved baseline disposition is 36 of the 51 existing tests in
+`extractum-llm` and 15 in `extractum`, with every name owned exactly once. The
+expected crate dependency roots are `extractum-core`, `reqwest`, `secrecy`,
+`serde`, `serde_json`, `tokio`, and `tokio-util`, subject to a final
+pre-manifest use/feature inventory. Phase 5 uses the small advisory focused
+measurement and all mandatory correctness gates; timing alone cannot reject,
+revert, or retain the slice.
 
 ### Phase 6 — `extractum-prompt-packs`
 
