@@ -5,7 +5,7 @@ use extractum_gemini_browser::{
 };
 use tauri::{AppHandle, Manager};
 
-use super::browser_port::{
+use extractum_prompt_packs::{
     PromptPackBrowserCancelRequest, PromptPackBrowserExecutor, PromptPackBrowserFuture,
     PromptPackBrowserRunRequest, PromptPackBrowserStatusRequest,
 };
@@ -171,7 +171,7 @@ mod tests {
     };
 
     use super::{delegate_cancel, delegate_status, delegate_submit, BrowserAdapterBackend};
-    use crate::prompt_packs::browser_port::{
+    use extractum_prompt_packs::{
         PromptPackBrowserCancelRequest, PromptPackBrowserFuture, PromptPackBrowserRunRequest,
         PromptPackBrowserStatusRequest,
     };

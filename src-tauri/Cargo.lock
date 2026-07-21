@@ -1343,11 +1343,11 @@ dependencies = [
  "extractum-core",
  "extractum-gemini-browser",
  "extractum-llm",
+ "extractum-prompt-packs",
  "grammers-client",
  "grammers-mtsender",
  "grammers-session",
  "grammers-tl-types",
- "jsonschema",
  "keyring",
  "parking_lot",
  "rand_core 0.6.4",
@@ -1406,6 +1406,24 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "extractum-prompt-packs"
+version = "0.2.0"
+dependencies = [
+ "extractum-core",
+ "extractum-gemini-browser",
+ "extractum-llm",
+ "jsonschema",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "tempfile",
+ "time",
  "tokio",
  "tokio-util",
 ]

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { readPromptPackDomainSource } from "./prompt-pack-contract-paths";
+import {
+  promptPackCrateExtracted,
+  readPromptPackDomainSource,
+} from "./prompt-pack-contract-paths";
 
 const completionTransportSource = readPromptPackDomainSource("completion_transport.rs");
 const dtoSource = readPromptPackDomainSource("dto.rs");
@@ -44,7 +47,16 @@ describe("Prompt Pack completion transport ownership", () => {
       expect(transport).toMatch(new RegExp(`(?:async\\s+)?fn\\s+${helper}\\b`));
       expect(runtime).not.toMatch(new RegExp(`(?:async\\s+)?fn\\s+${helper}\\b`));
     }
-    expect(transport).toContain("resolve_model_output_token_limit_for_backend");
+    const outputTokenLimitResolver = promptPackCrateExtracted
+      ? "resolve_model_output_token_limit"
+      : "resolve_model_output_token_limit_for_backend";
+    const legacyOutputTokenLimitResolver = promptPackCrateExtracted
+      ? "resolve_model_output_token_limit_for_backend"
+      : "resolve_model_output_token_limit";
+    expect(transport).toMatch(new RegExp(`\\b${outputTokenLimitResolver}\\b`));
+    expect(transport).not.toMatch(
+      new RegExp(`\\b${legacyOutputTokenLimitResolver}\\b`),
+    );
     expect(runtime).not.toMatch(/^enum RunCompletionRuntime\s*\{/m);
     expect(runtime).not.toMatch(/async fn run_api_llm_request\s*\(/);
     expect(runtime).not.toMatch(/async fn run_browser_llm_request\s*\(/);

@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Emitter};
 
-use super::events::{PromptPackEvent, PromptPackEventSink};
+use extractum_prompt_packs::{PromptPackEvent, PromptPackEventSink};
 
 pub const PROMPT_PACK_RUN_EVENT: &str = "prompt-pack-run-event";
 
@@ -64,7 +64,7 @@ impl PromptPackEventSink for TauriPromptPackEventSink {
 #[cfg(test)]
 mod tests {
     use super::{PromptPackRunEvent, PROMPT_PACK_RUN_EVENT};
-    use crate::prompt_packs::events::PromptPackEvent;
+    use extractum_prompt_packs::PromptPackEvent;
 
     #[test]
     fn typed_events_map_to_exact_legacy_ipc_payloads() {

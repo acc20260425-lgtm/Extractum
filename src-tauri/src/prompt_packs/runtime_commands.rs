@@ -5,31 +5,28 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
 use super::browser_adapter::TauriGeminiBrowserPort;
-use super::dto::{
-    ListPromptPackRunsRequest, PreflightYoutubeSummaryRunRequest, PromptPackRunSummaryDto,
-    PromptPackRuntimeProvider, PromptPackStageRunDto, StartYoutubeSummaryRunOutcomeDto,
-    StartYoutubeSummaryRunRequest, YoutubeSummaryPreflightResponse,
-};
 use super::event_adapter::TauriPromptPackEventSink;
-use super::events::PromptPackEventSink;
-use super::runtime::{
+use super::source_adapter::AppPromptPackSourceReader;
+use crate::db::get_pool;
+use crate::error::AppResult;
+use crate::llm::{resolve_profile_for_backend, LlmSchedulerState};
+use extractum_prompt_packs::{
     cancel_prompt_pack_run_in_pool, cleanup_interrupted_prompt_pack_runs_in_pool,
     delete_prompt_pack_run_in_pool, execute_prepared_api_run, execute_prepared_browser_run,
     fail_run_execution, list_active_prompt_pack_runs_in_pool, list_prompt_pack_run_stages_in_pool,
     list_prompt_pack_runs_in_pool,
     preflight_youtube_summary_run as preflight_youtube_summary_run_service, prepare_run_execution,
-    start_youtube_summary_run_service, update_prompt_pack_run_in_pool, PreparedRunExecution,
-    PromptPackRunState, RunExecutionTicket,
+    start_youtube_summary_run_service, update_prompt_pack_run_in_pool, ListPromptPackRunsRequest,
+    PreflightYoutubeSummaryRunRequest, PreparedRunExecution, PromptPackEventSink,
+    PromptPackRunState, PromptPackRunSummaryDto, PromptPackRuntimeProvider, PromptPackStageRunDto,
+    RunExecutionTicket, StartYoutubeSummaryRunOutcomeDto, StartYoutubeSummaryRunRequest,
+    YoutubeSummaryPreflightResponse,
 };
 #[cfg(dev)]
-use super::runtime::{
+use extractum_prompt_packs::{
     clear_prompt_pack_cancellation_smoke_fixture_in_pool,
     seed_prompt_pack_cancellation_smoke_fixture_in_pool,
 };
-use super::source_adapter::AppPromptPackSourceReader;
-use crate::db::get_pool;
-use crate::error::AppResult;
-use crate::llm::{resolve_profile_for_backend, LlmSchedulerState};
 
 type ExecutionTask = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
 

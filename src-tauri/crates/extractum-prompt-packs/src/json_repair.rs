@@ -1,0 +1,265 @@
+use sqlx::SqlitePool;
+
+use super::stage_io::{
+    build_transcript_analysis_stage_input, extract_json_payload, insert_stage_artifact_in_pool,
+    insert_stage_artifact_in_transaction, SYNTHESIS_OUTPUT_SCHEMA_ID,
+    TRANSCRIPT_ANALYSIS_OUTPUT_SCHEMA_ID,
+};
+use super::stage_output_normalization::{
+    normalize_synthesis_output_for_runtime, normalize_transcript_analysis_output_for_runtime,
+};
+use super::validation::{
+    quarantine_prompt_pack_validation_error, validate_and_quarantine_synthesis_output,
+    validate_synthesis_output_with_allowed_refs, validate_transcript_analysis_output,
+};
+use super::youtube_summary::entities::{
+    build_or_quarantine_intermediate_entities_for_transcript_stage,
+    insert_intermediate_entities_artifact_in_transaction,
+    load_required_allowed_refs_for_live_synthesis,
+};
+use super::youtube_summary::LlmCompletion;
+use extractum_core::error::{AppError, AppResult};
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct JsonRepairStageExecutionRequest {
+    pub run_id: i64,
+    pub stage_run_id: i64,
+    pub stage_name: String,
+    pub attempt_number: i64,
+    pub prompt_input_json: String,
+    pub raw_output: String,
+    pub error_message: String,
+}
+
+pub(crate) async fn insert_json_repair_input_artifact(
+    pool: &SqlitePool,
+    request: &JsonRepairStageExecutionRequest,
+) -> AppResult<()> {
+    let content = serde_json::json!({
+        "stage": request.stage_name,
+        "failed_attempt_number": request.attempt_number - 1,
+        "repair_attempt_number": request.attempt_number,
+        "error_message": request.error_message,
+        "prompt_input_json": request.prompt_input_json,
+        "raw_output": request.raw_output
+    })
+    .to_string();
+    insert_stage_artifact_in_pool(
+        pool,
+        request.run_id,
+        request.stage_run_id,
+        "repair_input",
+        request.attempt_number,
+        1,
+        &content,
+    )
+    .await
+}
+
+pub(crate) async fn execute_transcript_analysis_stage_repair_completion(
+    pool: &SqlitePool,
+    stage_run_id: i64,
+    completion: LlmCompletion,
+    attempt_number: i64,
+) -> AppResult<()> {
+    let (run_id,): (i64,) =
+        sqlx::query_as("SELECT run_id FROM prompt_pack_stage_runs WHERE id = ?")
+            .bind(stage_run_id)
+            .fetch_one(pool)
+            .await
+            .map_err(AppError::database)?;
+    let input = build_transcript_analysis_stage_input(pool, stage_run_id).await?;
+
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET stage_status = 'running', updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(now_string())
+    .bind(stage_run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "raw_output",
+        attempt_number,
+        2,
+        &completion.text,
+    )
+    .await?;
+    let parsed = extract_json_payload(&completion.text)?;
+    let parsed = normalize_transcript_analysis_output_for_runtime(&parsed);
+    validate_transcript_analysis_output(&input, &parsed)
+        .map_err(|error| AppError::validation(error.message))?;
+    let intermediate_graph = build_or_quarantine_intermediate_entities_for_transcript_stage(
+        pool,
+        run_id,
+        stage_run_id,
+        &parsed,
+        attempt_number,
+    )
+    .await?;
+    let metrics = serde_json::json!({
+        "input_tokens": completion.input_tokens,
+        "output_tokens": completion.output_tokens,
+        "latency_ms": completion.latency_ms,
+        "schema_id": TRANSCRIPT_ANALYSIS_OUTPUT_SCHEMA_ID,
+        "validation_error_count": 0,
+        "attempt_number": attempt_number,
+        "repaired_from_attempt": attempt_number - 1
+    });
+    let parsed_json = serde_json::to_string(&parsed)
+        .map_err(|error| AppError::internal(format!("serialize parsed output: {error}")))?;
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
+    insert_stage_artifact_in_transaction(
+        &mut tx,
+        run_id,
+        stage_run_id,
+        "metrics",
+        attempt_number,
+        4,
+        &metrics.to_string(),
+    )
+    .await?;
+    insert_intermediate_entities_artifact_in_transaction(
+        &mut tx,
+        run_id,
+        stage_run_id,
+        &intermediate_graph,
+        attempt_number,
+    )
+    .await?;
+    insert_stage_artifact_in_transaction(
+        &mut tx,
+        run_id,
+        stage_run_id,
+        "parsed_output",
+        attempt_number,
+        3,
+        &parsed_json,
+    )
+    .await?;
+    mark_stage_repaired_in_transaction(&mut tx, stage_run_id).await?;
+    tx.commit().await.map_err(AppError::database)?;
+    Ok(())
+}
+
+pub(crate) async fn execute_synthesis_stage_repair_completion(
+    pool: &SqlitePool,
+    stage_run_id: i64,
+    completion: LlmCompletion,
+    attempt_number: i64,
+) -> AppResult<()> {
+    let (run_id,): (i64,) =
+        sqlx::query_as("SELECT run_id FROM prompt_pack_stage_runs WHERE id = ?")
+            .bind(stage_run_id)
+            .fetch_one(pool)
+            .await
+            .map_err(AppError::database)?;
+
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET stage_status = 'running', updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(now_string())
+    .bind(stage_run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
+
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "raw_output",
+        attempt_number,
+        2,
+        &completion.text,
+    )
+    .await?;
+    let parsed = extract_json_payload(&completion.text)?;
+    let parsed = normalize_synthesis_output_for_runtime(&parsed);
+    validate_and_quarantine_synthesis_output(pool, run_id, stage_run_id, &parsed).await?;
+    let allowed_refs = load_required_allowed_refs_for_live_synthesis(pool, run_id).await?;
+    if let Err(error) = validate_synthesis_output_with_allowed_refs(
+        &parsed,
+        &allowed_refs.source_refs,
+        &allowed_refs.claim_refs,
+        &allowed_refs.evidence_refs,
+    ) {
+        let validation_message = error.message.clone();
+        quarantine_prompt_pack_validation_error(pool, run_id, stage_run_id, &parsed, error).await?;
+        return Err(AppError::validation(validation_message));
+    }
+    let parsed_json = serde_json::to_string(&parsed).map_err(|error| {
+        AppError::internal(format!("serialize synthesis parsed output: {error}"))
+    })?;
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "parsed_output",
+        attempt_number,
+        3,
+        &parsed_json,
+    )
+    .await?;
+    let metrics = serde_json::json!({
+        "input_tokens": completion.input_tokens,
+        "output_tokens": completion.output_tokens,
+        "latency_ms": completion.latency_ms,
+        "schema_id": SYNTHESIS_OUTPUT_SCHEMA_ID,
+        "validation_error_count": 0,
+        "attempt_number": attempt_number,
+        "repaired_from_attempt": attempt_number - 1
+    });
+    insert_stage_artifact_in_pool(
+        pool,
+        run_id,
+        stage_run_id,
+        "metrics",
+        attempt_number,
+        4,
+        &metrics.to_string(),
+    )
+    .await?;
+    mark_stage_repaired(pool, stage_run_id).await
+}
+
+async fn mark_stage_repaired(pool: &SqlitePool, stage_run_id: i64) -> AppResult<()> {
+    let mut tx = pool.begin().await.map_err(AppError::database)?;
+    mark_stage_repaired_in_transaction(&mut tx, stage_run_id).await?;
+    tx.commit().await.map_err(AppError::database)?;
+    Ok(())
+}
+
+async fn mark_stage_repaired_in_transaction(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    stage_run_id: i64,
+) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE prompt_pack_stage_runs
+         SET stage_status = 'succeeded',
+             error_message = NULL,
+             latest_message = 'Repaired JSON output',
+             completed_at = ?,
+             updated_at = ?
+         WHERE id = ?",
+    )
+    .bind(now_string())
+    .bind(now_string())
+    .bind(stage_run_id)
+    .execute(&mut **tx)
+    .await
+    .map_err(AppError::database)?;
+    Ok(())
+}
+
+fn now_string() -> String {
+    extractum_core::time::now_rfc3339_utc()
+}

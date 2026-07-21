@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { readPromptPackDomainSource } from "./prompt-pack-contract-paths";
+import {
+  promptPackCrateExtracted,
+  readPromptPackDomainSource,
+} from "./prompt-pack-contract-paths";
 
 const promptPacksModuleSource = readPromptPackDomainSource("lib.rs", "mod.rs");
 const runtimeSource = readPromptPackDomainSource("runtime.rs");
@@ -73,13 +76,27 @@ describe("Prompt Pack runtime config ownership", () => {
     expect(runtime).toContain("RunRuntimeProvider::GeminiBrowser");
     expect(runtime).not.toContain("resolve_profile_for_backend");
     expect(runtime).toContain("resolve_effective_model");
-    expect(runtime).toContain("resolve_model_input_token_limit_for_backend");
+    const inputTokenLimitResolver = promptPackCrateExtracted
+      ? "resolve_model_input_token_limit"
+      : "resolve_model_input_token_limit_for_backend";
+    const legacyInputTokenLimitResolver = promptPackCrateExtracted
+      ? "resolve_model_input_token_limit_for_backend"
+      : "resolve_model_input_token_limit";
+    expect(runtime).toMatch(new RegExp(`\\b${inputTokenLimitResolver}\\b`));
+    expect(runtime).not.toMatch(
+      new RegExp(`\\b${legacyInputTokenLimitResolver}\\b`),
+    );
     expect(runtime).toContain("RunCompletionRuntime::Api");
     expect(runtime).toContain("RunCompletionRuntime::GeminiBrowser");
     expect(runtimeCommands).toContain("prepare_run_execution");
     expect(runtimeCommands).toContain("resolve_profile_for_backend");
-    expect(runtimeCommands.indexOf("resolve_profile_for_backend")).toBeGreaterThan(
-      runtimeCommands.indexOf("prepare_run_execution"),
+    const executionTaskStart = runtimeCommands.indexOf(
+      "fn build_youtube_summary_execution_task",
+    );
+    expect(executionTaskStart).toBeGreaterThanOrEqual(0);
+    const executionTask = runtimeCommands.slice(executionTaskStart);
+    expect(executionTask.indexOf("resolve_profile_for_backend")).toBeGreaterThan(
+      executionTask.indexOf("prepare_run_execution"),
     );
   });
 
@@ -92,6 +109,7 @@ describe("Prompt Pack runtime config ownership", () => {
       "RunCompletionRuntime",
       "resolve_profile_for_backend",
       "resolve_effective_model",
+      "resolve_model_input_token_limit",
       "resolve_model_input_token_limit_for_backend",
       "YoutubeSummaryStageExecutionRequest",
       "PromptPackRunState",

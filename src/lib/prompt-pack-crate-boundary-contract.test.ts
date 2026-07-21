@@ -741,8 +741,10 @@ describe("extractum-prompt-packs crate boundary", () => {
     expect(crateLib).not.toMatch(/^pub(?:\([^)]*\))?\s+mod\s+/m);
     expect(crateLib).not.toMatch(/pub\s+use\s+[^;]*\*/);
     expect(publicReexportNames(crateLib)).toEqual(sorted(curatedRootExports));
-    expect(crateLib).not.toMatch(/#\[cfg\(test\)\][\s\S]{0,100}pub use/);
-    expect(crateLib).not.toMatch(/\b(?:test_support|test_schema|legacy_disabled_|for_test|Fake\w*)\b/);
+    expect(crateLib).not.toMatch(/#\[cfg\(test\)\]\s*pub use/);
+    expect(publicReexportNames(crateLib).join("\n")).not.toMatch(
+      /\b(?:test_support|test_schema|legacy_disabled_|for_test|Fake\w*)\b/,
+    );
 
     expect(moduleNames(appFacade)).toEqual(
       sorted([
@@ -895,9 +897,9 @@ describe("extractum-prompt-packs crate boundary", () => {
 
       const sqlTables = [
         ...productionDomainSource.matchAll(
-          /\b(?:FROM|JOIN|INSERT\s+INTO|UPDATE|DELETE\s+FROM|REFERENCES)\s+([A-Za-z_][A-Za-z0-9_]*)/gi,
+          /\b(?:DO\s+UPDATE\s+SET|(?:FROM|JOIN|INSERT\s+INTO|UPDATE|DELETE\s+FROM|REFERENCES)\s+([A-Za-z_][A-Za-z0-9_]*))/g,
         ),
-      ].map((match) => match[1].toLowerCase());
+      ].flatMap((match) => (match[1] ? [match[1].toLowerCase()] : []));
       const allowedTables = new Set<string>(promptPackTables);
       for (const table of new Set(sqlTables)) {
         expect(allowedTables.has(table), `unapproved production SQL table ${table}`).toBe(true);

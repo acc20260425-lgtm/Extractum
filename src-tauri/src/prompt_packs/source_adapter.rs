@@ -1,13 +1,13 @@
 use sqlx::SqlitePool;
 
-use super::source_port::{
+use crate::compression::decompress_text;
+use crate::error::AppError;
+use extractum_prompt_packs::{
     CommentBodyReadRequest, CommentCandidateReadRequest, PromptPackCommentCandidate,
     PromptPackPlaylistItemRecord, PromptPackPortFuture, PromptPackSourceReader,
     PromptPackSourceRecord, PromptPackTranscriptSegment, PromptPackYoutubeVideoRecord,
     YoutubeVideoReadRequest,
 };
-use crate::compression::decompress_text;
-use crate::error::AppError;
 
 #[derive(Clone)]
 pub struct AppPromptPackSourceReader {
@@ -208,17 +208,21 @@ impl PromptPackSourceReader for AppPromptPackSourceReader {
 }
 
 #[cfg(test)]
+#[path = "youtube_summary/test_support.rs"]
+mod source_adapter_test_support;
+
+#[cfg(test)]
 mod tests {
+    use super::source_adapter_test_support::{
+        insert_comment, insert_playlist, insert_playlist_item, insert_transcript,
+        insert_youtube_video, migrated_pool,
+    };
     use super::AppPromptPackSourceReader;
     use crate::compression::compress_text;
-    use crate::prompt_packs::source_port::{
+    use extractum_prompt_packs::{
         CommentBodyReadRequest, CommentCandidateReadRequest, PromptPackCommentCandidate,
         PromptPackPlaylistItemRecord, PromptPackSourceReader, PromptPackSourceRecord,
         PromptPackTranscriptSegment, PromptPackYoutubeVideoRecord, YoutubeVideoReadRequest,
-    };
-    use crate::prompt_packs::youtube_summary::test_support::{
-        insert_comment, insert_playlist, insert_playlist_item, insert_transcript,
-        insert_youtube_video, migrated_pool,
     };
 
     #[tokio::test]

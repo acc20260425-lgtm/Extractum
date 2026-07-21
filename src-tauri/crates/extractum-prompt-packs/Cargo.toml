@@ -1,0 +1,22 @@
+[package]
+name = "extractum-prompt-packs"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+extractum-core = { path = "../extractum-core" }
+extractum-gemini-browser = { path = "../extractum-gemini-browser" }
+extractum-llm = { path = "../extractum-llm" }
+jsonschema = { version = "0.46.5", default-features = false }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sqlx.workspace = true
+tokio = { workspace = true, features = ["macros", "sync"] }
+tokio-util.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+time.workspace = true
+tokio = { workspace = true, features = ["io-util", "net", "rt", "time"] }

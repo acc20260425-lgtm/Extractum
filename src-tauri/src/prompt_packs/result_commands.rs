@@ -1,16 +1,13 @@
 use tauri::AppHandle;
 
-use super::dto::{
-    PromptPackAuditEventDto, PromptPackResultDto, PromptPackStageArtifactDto,
-    PromptPackStageArtifactSummaryDto, PromptPackValidationFindingDto,
-};
-use super::result_service::{
-    get_prompt_pack_result_in_pool, get_prompt_pack_stage_artifact_in_pool,
-    get_prompt_pack_validation_findings_in_pool, list_prompt_pack_audit_events_in_pool,
-    list_prompt_pack_stage_artifacts_in_pool,
-};
 use crate::db::get_pool;
 use crate::error::AppResult;
+use extractum_prompt_packs::{
+    get_prompt_pack_result_in_pool, get_prompt_pack_stage_artifact_in_pool,
+    get_prompt_pack_validation_findings_in_pool, list_prompt_pack_audit_events_in_pool,
+    list_prompt_pack_stage_artifacts_in_pool, PromptPackAuditEventDto, PromptPackResultDto,
+    PromptPackStageArtifactDto, PromptPackStageArtifactSummaryDto, PromptPackValidationFindingDto,
+};
 
 #[tauri::command]
 pub async fn get_prompt_pack_result(
