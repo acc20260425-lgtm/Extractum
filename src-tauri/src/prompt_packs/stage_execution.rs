@@ -24,7 +24,7 @@ use crate::llm::LlmSchedulerState;
 
 pub(super) async fn run_transcript_analysis_stage_request(
     pool: &SqlitePool,
-    scheduler: &LlmSchedulerState,
+    scheduler: Option<&LlmSchedulerState>,
     events: Arc<dyn PromptPackEventSink>,
     completion_runtime: RunCompletionRuntime,
     run_cancellation_token: Option<CancellationToken>,
@@ -68,7 +68,7 @@ pub(super) async fn run_transcript_analysis_stage_request(
 
 pub(super) async fn run_synthesis_stage_request(
     pool: &SqlitePool,
-    scheduler: &LlmSchedulerState,
+    scheduler: Option<&LlmSchedulerState>,
     events: Arc<dyn PromptPackEventSink>,
     completion_runtime: RunCompletionRuntime,
     run_cancellation_token: Option<CancellationToken>,
@@ -112,7 +112,7 @@ pub(super) async fn run_synthesis_stage_request(
 
 pub(super) async fn run_json_repair_stage_request(
     pool: &SqlitePool,
-    scheduler: &LlmSchedulerState,
+    scheduler: Option<&LlmSchedulerState>,
     events: Arc<dyn PromptPackEventSink>,
     completion_runtime: RunCompletionRuntime,
     run_cancellation_token: Option<CancellationToken>,
@@ -161,7 +161,7 @@ pub(super) async fn run_json_repair_stage_request(
 
 pub(super) async fn run_gem_analysis_part_stage_request(
     pool: &SqlitePool,
-    scheduler: &LlmSchedulerState,
+    scheduler: Option<&LlmSchedulerState>,
     events: Arc<dyn PromptPackEventSink>,
     completion_runtime: RunCompletionRuntime,
     run_cancellation_token: Option<CancellationToken>,
@@ -203,7 +203,7 @@ pub(super) async fn run_gem_analysis_part_stage_request(
 
 pub(super) async fn run_gem_analysis_part_repair_request(
     pool: &SqlitePool,
-    scheduler: &LlmSchedulerState,
+    scheduler: Option<&LlmSchedulerState>,
     events: Arc<dyn PromptPackEventSink>,
     completion_runtime: RunCompletionRuntime,
     run_cancellation_token: Option<CancellationToken>,

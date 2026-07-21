@@ -1,24 +1,24 @@
 use std::sync::Arc;
 
 use sqlx::SqlitePool;
-use tauri::{AppHandle, Manager, State};
 
-use super::browser_adapter::TauriGeminiBrowserPort;
 use super::browser_port::{PromptPackBrowserExecutor, PromptPackBrowserStatusRequest};
 use super::completion_transport::RunCompletionRuntime;
 use super::dto::{
-    PromptPackRunSummaryDto, PromptPackRuntimeProvider, PromptPackStageRunDto,
-    StartYoutubeSummaryRunOutcomeDto, StartYoutubeSummaryRunRequest,
-    YoutubeSummaryPreflightFailure,
+    ListPromptPackRunsRequest, PreflightYoutubeSummaryRunRequest, PromptPackRunSummaryDto,
+    PromptPackRuntimeProvider, PromptPackStageRunDto, StartYoutubeSummaryRunOutcomeDto,
+    StartYoutubeSummaryRunRequest, YoutubeSummaryPreflightFailure, YoutubeSummaryPreflightResponse,
 };
-use super::event_adapter::TauriPromptPackEventSink;
 use super::events::{PromptPackEvent, PromptPackEventSink};
 pub use super::run_control::PromptPackRunState;
 use super::run_store::{
-    delete_prompt_pack_run_in_pool, list_prompt_pack_run_stages_in_pool,
-    list_prompt_pack_runs_in_pool, load_run_summary_optional, update_prompt_pack_run_in_pool,
+    delete_prompt_pack_run_in_pool as delete_prompt_pack_run_row,
+    list_prompt_pack_run_stages_in_pool as list_prompt_pack_run_stages_rows,
+    list_prompt_pack_runs_in_pool as list_prompt_pack_run_rows, load_run_summary_optional,
+    update_prompt_pack_run_in_pool as update_prompt_pack_run_row,
 };
 use super::runtime_config::{load_run_runtime_config, RunRuntimeProvider};
+use super::source_port::PromptPackSourceReader;
 use super::stage_execution::{
     run_gem_analysis_part_repair_request, run_gem_analysis_part_stage_request,
     run_json_repair_stage_request, run_synthesis_stage_request,
@@ -28,111 +28,136 @@ use super::stage_request_policy::{
     gem_input_cap, transcript_analysis_stage_max_prompt_token_budget,
 };
 use super::youtube_summary::{
+    create_youtube_summary_run_skeleton_with_source,
     execute_youtube_summary_run_with_stage_executor_with_options,
     load_youtube_summary_run_by_client_request_id_in_pool, model_budget_for_runtime,
-    preflight_youtube_summary_in_pool, start_youtube_summary_run_in_pool,
-    start_youtube_summary_run_with_preflight_failures_in_pool, GemAnalysisInputBudget,
-    YoutubeSummaryExecutionOptions, YoutubeSummaryRunExecutionOutcome,
-    YoutubeSummaryStageExecutionRequest,
+    preflight_youtube_summary, GemAnalysisInputBudget, YoutubeSummaryExecutionOptions,
+    YoutubeSummaryRunExecutionOutcome, YoutubeSummaryStageExecutionRequest,
 };
-use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::llm::{
-    resolve_effective_model, resolve_model_input_token_limit_for_backend,
-    resolve_profile_for_backend, LlmSchedulerState,
+    resolve_effective_model, resolve_model_input_token_limit_for_backend, LlmSchedulerState,
+    ResolvedLlmProfile,
 };
 
 #[cfg(dev)]
 const PROMPT_PACK_CANCELLATION_SMOKE_FIXTURE_LABEL: &str =
     "__prompt_pack_cancellation_smoke_fixture__";
 
-#[tauri::command]
-pub async fn preflight_youtube_summary_run(
-    handle: AppHandle,
-    project_id: Option<i64>,
-    source_ids: Vec<i64>,
-    profile_id: Option<String>,
-    model_override: Option<String>,
-    runtime_provider: Option<PromptPackRuntimeProvider>,
-    browser_provider_config: Option<crate::gemini_browser::GeminiBrowserProviderConfig>,
-    output_language: String,
-    control_preset: String,
-    evidence_mode: String,
-    include_comments: bool,
-) -> AppResult<super::dto::YoutubeSummaryPreflightResponse> {
-    let pool = get_pool(&handle).await?;
-    let runtime_provider = runtime_provider.unwrap_or_default();
-    preflight_youtube_summary_in_pool(
-        &pool,
-        super::dto::PreflightYoutubeSummaryRunRequest::new(
-            project_id,
-            source_ids,
-            profile_id,
-            model_override,
-            runtime_provider,
-            browser_provider_config,
-            output_language,
-            control_preset,
-            evidence_mode,
-            include_comments,
-        ),
-        model_budget_for_runtime(runtime_provider),
-    )
-    .await
+pub struct StartServiceOutcome {
+    pub response: StartYoutubeSummaryRunOutcomeDto,
+    pub execution_ticket: Option<RunExecutionTicket>,
 }
 
-#[tauri::command]
-pub async fn start_youtube_summary_run(
-    handle: AppHandle,
-    state: State<'_, PromptPackRunState>,
-    client_request_id: String,
-    project_id: Option<i64>,
-    source_ids: Vec<i64>,
+pub struct RunExecutionTicket {
+    run_id: i64,
+}
+
+impl RunExecutionTicket {
+    pub fn run_id(&self) -> i64 {
+        self.run_id
+    }
+}
+
+pub enum PreparedRunExecution {
+    Api(PreparedApiRunExecution),
+    GeminiBrowser(PreparedBrowserRunExecution),
+}
+
+pub struct PreparedApiRunExecution {
+    run_id: i64,
     profile_id: Option<String>,
     model_override: Option<String>,
-    runtime_provider: Option<PromptPackRuntimeProvider>,
+}
+
+impl PreparedApiRunExecution {
+    pub fn profile_id(&self) -> Option<&str> {
+        self.profile_id.as_deref()
+    }
+
+    pub fn model_override(&self) -> Option<&str> {
+        self.model_override.as_deref()
+    }
+}
+
+pub struct PreparedBrowserRunExecution {
+    run_id: i64,
     browser_provider_config: Option<crate::gemini_browser::GeminiBrowserProviderConfig>,
-    output_language: String,
-    control_preset: String,
-    evidence_mode: String,
-    include_comments: bool,
-) -> AppResult<StartYoutubeSummaryRunOutcomeDto> {
-    let pool = get_pool(&handle).await?;
-    let runtime_provider = runtime_provider.unwrap_or_default();
-    let request = StartYoutubeSummaryRunRequest::new(
-        client_request_id,
-        project_id,
-        source_ids,
-        profile_id,
-        model_override,
-        runtime_provider,
-        browser_provider_config,
-        output_language,
-        control_preset,
-        evidence_mode,
-        include_comments,
-    );
-    let browser = TauriGeminiBrowserPort::new(handle.clone());
-    let outcome = if request.client_request_id().trim().is_empty() {
-        start_youtube_summary_run_in_pool(&pool, request).await?
-    } else if let Some(run) =
-        load_youtube_summary_run_by_client_request_id_in_pool(&pool, request.client_request_id())
+}
+
+pub(crate) async fn preflight_youtube_summary_run_service_impl(
+    source: &dyn PromptPackSourceReader,
+    request: PreflightYoutubeSummaryRunRequest,
+) -> AppResult<YoutubeSummaryPreflightResponse> {
+    let model_budget = model_budget_for_runtime(request.runtime_provider);
+    preflight_youtube_summary(source, request, model_budget).await
+}
+
+pub(crate) use preflight_youtube_summary_run_service_impl as preflight_youtube_summary_run;
+
+pub(crate) async fn start_youtube_summary_run_service(
+    pool: &SqlitePool,
+    state: &PromptPackRunState,
+    source: &dyn PromptPackSourceReader,
+    browser: &dyn PromptPackBrowserExecutor,
+    events: &dyn PromptPackEventSink,
+    request: StartYoutubeSummaryRunRequest,
+) -> AppResult<StartServiceOutcome> {
+    if request.client_request_id().trim().is_empty() {
+        return Err(AppError::validation("client_request_id cannot be empty"));
+    }
+
+    let response = if let Some(run) =
+        load_youtube_summary_run_by_client_request_id_in_pool(pool, request.client_request_id())
             .await?
     {
         StartYoutubeSummaryRunOutcomeDto::Started { run }
     } else {
         let runtime_failures =
-            browser_runtime_start_failures_for_request(&browser, &request).await?;
-        start_youtube_summary_run_with_preflight_failures_in_pool(&pool, request, runtime_failures)
-            .await?
+            browser_runtime_start_failures_for_request(browser, &request).await?;
+        if let Some(run) =
+            load_youtube_summary_run_by_client_request_id_in_pool(pool, request.client_request_id())
+                .await?
+        {
+            StartYoutubeSummaryRunOutcomeDto::Started { run }
+        } else {
+            let preflight_request = PreflightYoutubeSummaryRunRequest::new(
+                request.project_id,
+                request.source_ids.clone(),
+                request.profile_id().map(str::to_owned),
+                request.model_override().map(str::to_owned),
+                request.runtime_provider(),
+                request.browser_provider_config.clone(),
+                request.output_language.clone(),
+                request.control_preset.clone(),
+                request.evidence_mode.clone(),
+                request.include_comments,
+            );
+            let mut preflight = preflight_youtube_summary_run(source, preflight_request).await?;
+            preflight.blocking_failures.extend(runtime_failures);
+            if preflight.included_videos.is_empty() || !preflight.blocking_failures.is_empty() {
+                StartYoutubeSummaryRunOutcomeDto::Blocked { preflight }
+            } else {
+                let run_id =
+                    create_youtube_summary_run_skeleton_with_source(pool, source, request, 0)
+                        .await?;
+                let run = load_run_summary_optional(pool, run_id)
+                    .await?
+                    .ok_or_else(|| {
+                        AppError::not_found(format!("Prompt Pack run {run_id} not found"))
+                    })?;
+                StartYoutubeSummaryRunOutcomeDto::Started { run }
+            }
+        }
     };
-    if let StartYoutubeSummaryRunOutcomeDto::Started { run } = &outcome {
-        let should_spawn = run.run_status == "queued" && state.track_if_absent(run.run_id).await?;
-        if should_spawn {
-            let events = TauriPromptPackEventSink::new(handle.clone());
+
+    let execution_ticket = match &response {
+        StartYoutubeSummaryRunOutcomeDto::Started { run }
+            if run.run_status == "queued" && state.track_if_absent(run.run_id).await? =>
+        {
             emit_prompt_pack_run_event(
-                &state,
-                &events,
+                state,
+                events,
                 PromptPackEvent {
                     run_id: run.run_id,
                     request_id: format!("run-{}", run.run_id),
@@ -150,10 +175,14 @@ pub async fn start_youtube_summary_run(
                 },
             )
             .await;
-            spawn_youtube_summary_execution(handle.clone(), run.run_id);
+            Some(RunExecutionTicket { run_id: run.run_id })
         }
-    }
-    Ok(outcome)
+        _ => None,
+    };
+    Ok(StartServiceOutcome {
+        response,
+        execution_ticket,
+    })
 }
 
 async fn browser_runtime_start_failures_for_request(
@@ -196,14 +225,13 @@ fn browser_runtime_start_blocking_failure(
     })
 }
 
-#[tauri::command]
-pub async fn cancel_prompt_pack_run(
-    handle: AppHandle,
-    state: State<'_, PromptPackRunState>,
-    scheduler: State<'_, LlmSchedulerState>,
+pub(crate) async fn cancel_prompt_pack_run_in_pool(
+    pool: &SqlitePool,
+    state: &PromptPackRunState,
+    scheduler: &LlmSchedulerState,
+    events: &dyn PromptPackEventSink,
     run_id: i64,
 ) -> AppResult<()> {
-    let pool = get_pool(&handle).await?;
     state.request_cancel(run_id).await?;
     scheduler.cancel_run_requests(run_id).await;
     sqlx::query(
@@ -214,13 +242,12 @@ pub async fn cancel_prompt_pack_run(
     .bind(now_string())
     .bind(now_string())
     .bind(run_id)
-    .execute(&pool)
+    .execute(pool)
     .await
     .map_err(AppError::database)?;
-    let events = TauriPromptPackEventSink::new(handle.clone());
     emit_prompt_pack_run_event(
-        &state,
-        &events,
+        state,
+        events,
         PromptPackEvent {
             run_id,
             request_id: format!("cancel-{run_id}"),
@@ -241,101 +268,110 @@ pub async fn cancel_prompt_pack_run(
     Ok(())
 }
 
-#[tauri::command]
-pub async fn update_prompt_pack_run(
-    handle: AppHandle,
+pub(crate) async fn update_prompt_pack_run_in_pool(
+    pool: &SqlitePool,
     run_id: i64,
     run_label: Option<String>,
 ) -> AppResult<PromptPackRunSummaryDto> {
-    let pool = get_pool(&handle).await?;
-    update_prompt_pack_run_in_pool(&pool, run_id, run_label).await
+    update_prompt_pack_run_row(pool, run_id, run_label).await
 }
 
-#[tauri::command]
-pub async fn delete_prompt_pack_run(
-    handle: AppHandle,
-    state: State<'_, PromptPackRunState>,
+pub(crate) async fn delete_prompt_pack_run_in_pool(
+    pool: &SqlitePool,
+    state: &PromptPackRunState,
     run_id: i64,
 ) -> AppResult<()> {
-    let pool = get_pool(&handle).await?;
-    delete_prompt_pack_run_in_pool(&pool, run_id).await?;
+    delete_prompt_pack_run_row(pool, run_id).await?;
     state.finish(run_id).await;
     Ok(())
 }
 
-fn spawn_youtube_summary_execution(handle: AppHandle, run_id: i64) {
-    tauri::async_runtime::spawn(async move {
-        let result = execute_youtube_summary_run(handle.clone(), run_id).await;
-        match result {
-            Ok(outcome) => emit_youtube_summary_terminal_event(&handle, outcome).await,
-            Err(error) => {
-                if let Err(mark_error) =
-                    mark_prompt_pack_run_failed(&handle, run_id, &error.message).await
-                {
-                    eprintln!("Prompt Pack run {run_id} failed and could not be marked failed: {mark_error}");
-                }
-                emit_youtube_summary_terminal_event(
-                    &handle,
-                    YoutubeSummaryRunExecutionOutcome {
-                        run_id,
-                        run_status: "failed".to_string(),
-                        progress_current: 0,
-                        progress_total: 0,
-                        message: error.message,
-                    },
-                )
-                .await;
-            }
+pub(crate) async fn prepare_run_execution(
+    pool: &SqlitePool,
+    ticket: &RunExecutionTicket,
+) -> AppResult<PreparedRunExecution> {
+    let config = load_run_runtime_config(pool, ticket.run_id()).await?;
+    Ok(match config.runtime_provider {
+        RunRuntimeProvider::Api => PreparedRunExecution::Api(PreparedApiRunExecution {
+            run_id: ticket.run_id(),
+            profile_id: config.profile_id,
+            model_override: config.model_override,
+        }),
+        RunRuntimeProvider::GeminiBrowser => {
+            PreparedRunExecution::GeminiBrowser(PreparedBrowserRunExecution {
+                run_id: ticket.run_id(),
+                browser_provider_config: config.browser_provider_config,
+            })
         }
-    });
+    })
 }
 
-async fn execute_youtube_summary_run(
-    handle: AppHandle,
-    run_id: i64,
+pub(crate) async fn execute_prepared_api_run(
+    pool: &SqlitePool,
+    state: &PromptPackRunState,
+    scheduler: &LlmSchedulerState,
+    events: Arc<dyn PromptPackEventSink>,
+    prepared: PreparedApiRunExecution,
+    profile: ResolvedLlmProfile,
 ) -> AppResult<YoutubeSummaryRunExecutionOutcome> {
-    let pool = get_pool(&handle).await?;
-    let browser: Arc<dyn PromptPackBrowserExecutor> =
-        Arc::new(TauriGeminiBrowserPort::new(handle.clone()));
-    let events: Arc<dyn PromptPackEventSink> =
-        Arc::new(TauriPromptPackEventSink::new(handle.clone()));
-    let config = load_run_runtime_config(&pool, run_id).await?;
-    let (completion_runtime, model_input_limit) = match config.runtime_provider {
-        RunRuntimeProvider::Api => {
-            let profile =
-                resolve_profile_for_backend(&handle, config.profile_id.as_deref()).await?;
-            let effective_model =
-                resolve_effective_model(&profile, config.model_override.as_deref())?;
-            let model_input_limit =
-                resolve_model_input_token_limit_for_backend(&profile, &effective_model).await;
-            (
-                RunCompletionRuntime::Api {
-                    profile,
-                    model_override: config.model_override.clone(),
-                },
-                model_input_limit,
-            )
-        }
-        RunRuntimeProvider::GeminiBrowser => (
-            RunCompletionRuntime::GeminiBrowser {
-                browser,
-                browser_provider_config: config.browser_provider_config.clone(),
-            },
-            None,
-        ),
-    };
+    let effective_model = resolve_effective_model(&profile, prepared.model_override.as_deref())?;
+    let model_input_limit =
+        resolve_model_input_token_limit_for_backend(&profile, &effective_model).await;
+    execute_prepared_run(
+        pool,
+        state,
+        Some(scheduler),
+        events,
+        prepared.run_id,
+        RunCompletionRuntime::Api {
+            profile,
+            model_override: prepared.model_override,
+        },
+        model_input_limit,
+    )
+    .await
+}
+
+pub(crate) async fn execute_prepared_browser_run(
+    pool: &SqlitePool,
+    state: &PromptPackRunState,
+    browser: Arc<dyn PromptPackBrowserExecutor>,
+    events: Arc<dyn PromptPackEventSink>,
+    prepared: PreparedBrowserRunExecution,
+) -> AppResult<YoutubeSummaryRunExecutionOutcome> {
+    execute_prepared_run(
+        pool,
+        state,
+        None,
+        events,
+        prepared.run_id,
+        RunCompletionRuntime::GeminiBrowser {
+            browser,
+            browser_provider_config: prepared.browser_provider_config,
+        },
+        None,
+    )
+    .await
+}
+
+async fn execute_prepared_run(
+    pool: &SqlitePool,
+    state: &PromptPackRunState,
+    scheduler: Option<&LlmSchedulerState>,
+    events: Arc<dyn PromptPackEventSink>,
+    run_id: i64,
+    completion_runtime: RunCompletionRuntime,
+    model_input_limit: Option<usize>,
+) -> AppResult<YoutubeSummaryRunExecutionOutcome> {
     let prompt_budget = transcript_analysis_stage_max_prompt_token_budget()?;
     let execution_options = YoutubeSummaryExecutionOptions {
         gem_input_budget: GemAnalysisInputBudget {
             max_input_tokens: gem_input_cap(model_input_limit, prompt_budget),
         },
     };
-    let run_cancellation_token = handle
-        .state::<PromptPackRunState>()
-        .child_token(run_id)
-        .await;
+    let run_cancellation_token = state.child_token(run_id).await;
     emit_prompt_pack_run_event(
-        &handle.state::<PromptPackRunState>(),
+        state,
         events.as_ref(),
         PromptPackEvent {
             run_id,
@@ -356,24 +392,22 @@ async fn execute_youtube_summary_run(
     .await;
 
     let stage_pool = pool.clone();
-    let stage_events = events;
-    execute_youtube_summary_run_with_stage_executor_with_options(
-        &pool,
+    let stage_events = events.clone();
+    let outcome = execute_youtube_summary_run_with_stage_executor_with_options(
+        pool,
         run_id,
         execution_options,
         move |stage_request| {
-            let handle = handle.clone();
             let pool = stage_pool.clone();
             let completion_runtime = completion_runtime.clone();
             let events = stage_events.clone();
             let run_cancellation_token = run_cancellation_token.clone();
             async move {
-                let scheduler = handle.state::<LlmSchedulerState>();
                 match stage_request {
                     YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request) => {
                         run_transcript_analysis_stage_request(
                             &pool,
-                            scheduler.inner(),
+                            scheduler,
                             events,
                             completion_runtime,
                             run_cancellation_token,
@@ -384,7 +418,7 @@ async fn execute_youtube_summary_run(
                     YoutubeSummaryStageExecutionRequest::Synthesis(request) => {
                         run_synthesis_stage_request(
                             &pool,
-                            scheduler.inner(),
+                            scheduler,
                             events,
                             completion_runtime,
                             run_cancellation_token,
@@ -395,7 +429,7 @@ async fn execute_youtube_summary_run(
                     YoutubeSummaryStageExecutionRequest::JsonRepair(request) => {
                         run_json_repair_stage_request(
                             &pool,
-                            scheduler.inner(),
+                            scheduler,
                             events,
                             completion_runtime,
                             run_cancellation_token,
@@ -406,7 +440,7 @@ async fn execute_youtube_summary_run(
                     YoutubeSummaryStageExecutionRequest::GemAnalysisPart(request) => {
                         run_gem_analysis_part_stage_request(
                             &pool,
-                            scheduler.inner(),
+                            scheduler,
                             events,
                             completion_runtime,
                             run_cancellation_token,
@@ -417,7 +451,7 @@ async fn execute_youtube_summary_run(
                     YoutubeSummaryStageExecutionRequest::GemAnalysisPartRepair(request) => {
                         run_gem_analysis_part_repair_request(
                             &pool,
-                            scheduler.inner(),
+                            scheduler,
                             events,
                             completion_runtime,
                             run_cancellation_token,
@@ -430,15 +464,19 @@ async fn execute_youtube_summary_run(
         },
         |_| {},
     )
-    .await
+    .await?;
+    emit_youtube_summary_terminal_event(state, events.as_ref(), &outcome).await;
+    Ok(outcome)
 }
 
-async fn mark_prompt_pack_run_failed(
-    handle: &AppHandle,
-    run_id: i64,
-    message: &str,
+pub(crate) async fn fail_run_execution(
+    pool: &SqlitePool,
+    state: &PromptPackRunState,
+    events: Arc<dyn PromptPackEventSink>,
+    ticket: &RunExecutionTicket,
+    error: &AppError,
 ) -> AppResult<()> {
-    let pool = get_pool(handle).await?;
+    let run_id = ticket.run_id();
     sqlx::query(
         "UPDATE prompt_pack_runs
          SET run_status = 'failed',
@@ -448,34 +486,45 @@ async fn mark_prompt_pack_run_failed(
              updated_at = ?
          WHERE id = ? AND run_status IN ('queued', 'running')",
     )
-    .bind(message)
+    .bind(&error.message)
     .bind(now_string())
     .bind(now_string())
     .bind(run_id)
-    .execute(&pool)
+    .execute(pool)
     .await
     .map_err(AppError::database)?;
+    emit_youtube_summary_terminal_event(
+        state,
+        events.as_ref(),
+        &YoutubeSummaryRunExecutionOutcome {
+            run_id,
+            run_status: "failed".to_string(),
+            progress_current: 0,
+            progress_total: 0,
+            message: error.message.clone(),
+        },
+    )
+    .await;
     Ok(())
 }
 
 async fn emit_youtube_summary_terminal_event(
-    handle: &AppHandle,
-    outcome: YoutubeSummaryRunExecutionOutcome,
+    state: &PromptPackRunState,
+    events: &dyn PromptPackEventSink,
+    outcome: &YoutubeSummaryRunExecutionOutcome,
 ) {
-    let state = handle.state::<PromptPackRunState>();
-    let events = TauriPromptPackEventSink::new(handle.clone());
     let event_kind = match outcome.run_status.as_str() {
         "complete" => "completed",
         other => other,
     };
     emit_prompt_pack_run_event(
-        &state,
-        &events,
+        state,
+        events,
         PromptPackEvent {
             run_id: outcome.run_id,
             request_id: format!("run-{}-terminal", outcome.run_id),
             kind: event_kind.to_string(),
-            run_status: outcome.run_status,
+            run_status: outcome.run_status.clone(),
             phase: "terminal".to_string(),
             stage_run_id: None,
             stage_name: None,
@@ -483,50 +532,39 @@ async fn emit_youtube_summary_terminal_event(
             queue_position: None,
             progress_current: Some(outcome.progress_current),
             progress_total: Some(outcome.progress_total),
-            message: Some(outcome.message),
+            message: Some(outcome.message.clone()),
             error: None,
         },
     )
     .await;
 }
 
-#[tauri::command]
-pub async fn list_prompt_pack_runs(
-    handle: AppHandle,
-    project_id: Option<i64>,
-    limit: Option<i64>,
+pub(crate) async fn list_prompt_pack_runs_in_pool(
+    pool: &SqlitePool,
+    request: ListPromptPackRunsRequest,
 ) -> AppResult<Vec<PromptPackRunSummaryDto>> {
-    let pool = get_pool(&handle).await?;
-    list_prompt_pack_runs_in_pool(
-        &pool,
-        super::dto::ListPromptPackRunsRequest::new(project_id, limit),
-    )
-    .await
+    list_prompt_pack_run_rows(pool, request).await
 }
 
-#[tauri::command]
-pub async fn list_active_prompt_pack_runs(
-    handle: AppHandle,
-    state: State<'_, PromptPackRunState>,
+pub(crate) async fn list_active_prompt_pack_runs_in_pool(
+    pool: &SqlitePool,
+    state: &PromptPackRunState,
 ) -> AppResult<Vec<PromptPackRunSummaryDto>> {
-    let pool = get_pool(&handle).await?;
     let ids = state.active_run_ids().await;
     let mut runs = Vec::new();
     for run_id in ids {
-        if let Some(run) = load_run_summary_optional(&pool, run_id).await? {
+        if let Some(run) = load_run_summary_optional(pool, run_id).await? {
             runs.push(run);
         }
     }
     Ok(runs)
 }
 
-#[tauri::command]
-pub async fn list_prompt_pack_run_stages(
-    handle: AppHandle,
+pub(crate) async fn list_prompt_pack_run_stages_in_pool(
+    pool: &SqlitePool,
     run_id: i64,
 ) -> AppResult<Vec<PromptPackStageRunDto>> {
-    let pool = get_pool(&handle).await?;
-    list_prompt_pack_run_stages_in_pool(&pool, run_id).await
+    list_prompt_pack_run_stages_rows(pool, run_id).await
 }
 
 pub(crate) async fn cleanup_interrupted_prompt_pack_runs_in_pool(
@@ -551,40 +589,8 @@ pub(crate) async fn cleanup_interrupted_prompt_pack_runs_in_pool(
     Ok(())
 }
 
-pub async fn cleanup_interrupted_prompt_pack_runs(handle: AppHandle) {
-    match get_pool(&handle).await {
-        Ok(pool) => {
-            let state = handle.state::<PromptPackRunState>();
-            if let Err(error) = cleanup_interrupted_prompt_pack_runs_in_pool(&pool, &state).await {
-                eprintln!("Prompt Pack cleanup failed: {error}");
-            }
-        }
-        Err(error) => eprintln!("Prompt Pack cleanup skipped: {error}"),
-    }
-}
-
 #[cfg(dev)]
-#[tauri::command]
-pub async fn seed_prompt_pack_cancellation_smoke_fixture(
-    handle: AppHandle,
-    state: State<'_, PromptPackRunState>,
-) -> AppResult<PromptPackRunSummaryDto> {
-    let pool = get_pool(&handle).await?;
-    seed_prompt_pack_cancellation_smoke_fixture_in_pool(&pool, state.inner()).await
-}
-
-#[cfg(dev)]
-#[tauri::command]
-pub async fn clear_prompt_pack_cancellation_smoke_fixture(
-    handle: AppHandle,
-    state: State<'_, PromptPackRunState>,
-) -> AppResult<i64> {
-    let pool = get_pool(&handle).await?;
-    clear_prompt_pack_cancellation_smoke_fixture_in_pool(&pool, state.inner()).await
-}
-
-#[cfg(dev)]
-async fn seed_prompt_pack_cancellation_smoke_fixture_in_pool(
+pub(crate) async fn seed_prompt_pack_cancellation_smoke_fixture_in_pool(
     pool: &SqlitePool,
     state: &PromptPackRunState,
 ) -> AppResult<PromptPackRunSummaryDto> {
@@ -628,7 +634,7 @@ async fn seed_prompt_pack_cancellation_smoke_fixture_in_pool(
 }
 
 #[cfg(dev)]
-async fn clear_prompt_pack_cancellation_smoke_fixture_in_pool(
+pub(crate) async fn clear_prompt_pack_cancellation_smoke_fixture_in_pool(
     pool: &SqlitePool,
     state: &PromptPackRunState,
 ) -> AppResult<i64> {
@@ -701,15 +707,28 @@ mod tests {
     };
     use super::{
         browser_runtime_start_blocking_failure, cleanup_interrupted_prompt_pack_runs_in_pool,
-        clear_prompt_pack_cancellation_smoke_fixture_in_pool, now_string,
-        seed_prompt_pack_cancellation_smoke_fixture_in_pool, PromptPackRunState,
+        clear_prompt_pack_cancellation_smoke_fixture_in_pool, fail_run_execution, now_string,
+        prepare_run_execution, seed_prompt_pack_cancellation_smoke_fixture_in_pool,
+        start_youtube_summary_run_service, PreparedRunExecution, PromptPackRunState,
+        RunExecutionTicket,
     };
     use crate::gemini_browser::{GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind};
     use crate::llm::{LlmChatRequest, LlmMessage, LlmRequestError};
     use crate::migrations::apply_all_migrations_for_test_pool;
-    use crate::prompt_packs::dto::ListPromptPackRunsRequest;
-    use crate::prompt_packs::events::PromptPackEvent;
+    use crate::prompt_packs::browser_port::{
+        PromptPackBrowserCancelRequest, PromptPackBrowserExecutor, PromptPackBrowserFuture,
+        PromptPackBrowserRunRequest, PromptPackBrowserStatusRequest,
+    };
+    use crate::prompt_packs::dto::{
+        ListPromptPackRunsRequest, PromptPackRuntimeProvider, StartYoutubeSummaryRunOutcomeDto,
+        StartYoutubeSummaryRunRequest,
+    };
+    use crate::prompt_packs::events::{PromptPackEvent, PromptPackEventSink};
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
+    use crate::prompt_packs::source_port::PromptPackTranscriptSegment;
+    use crate::prompt_packs::youtube_summary::test_support::{
+        insert_youtube_video, start_request, ScriptedPromptPackSourceReader,
+    };
     use crate::prompt_packs::youtube_summary::{
         GemAnalysisPart, GemAnalysisPartRepairRequest, GemAnalysisPartStageExecutionRequest,
         TranscriptAnalysisStageExecutionRequest, YoutubeSummaryStageExecutionError,
@@ -719,6 +738,274 @@ mod tests {
         Arc, Mutex,
     };
     use tokio_util::sync::CancellationToken;
+
+    #[derive(Default)]
+    struct RecordingBrowser {
+        status_reads: AtomicUsize,
+    }
+
+    impl PromptPackBrowserExecutor for RecordingBrowser {
+        fn read_status(
+            &self,
+            _request: PromptPackBrowserStatusRequest,
+        ) -> PromptPackBrowserFuture<'_, GeminiBrowserProviderStatus> {
+            self.status_reads.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async {
+                Ok(GeminiBrowserProviderStatus {
+                    status: GeminiBrowserProviderStatusKind::Ready,
+                    manual_action: None,
+                    active_run_id: None,
+                    queue_depth: 0,
+                    browser_profile_dir: "profile".to_string(),
+                    latest_message: Some("Ready".to_string()),
+                })
+            })
+        }
+
+        fn submit(
+            &self,
+            _request: PromptPackBrowserRunRequest,
+        ) -> PromptPackBrowserFuture<'_, crate::gemini_browser::GeminiBrowserRunResult> {
+            Box::pin(async { panic!("start service must not submit Browser work") })
+        }
+
+        fn cancel(
+            &self,
+            _request: PromptPackBrowserCancelRequest,
+        ) -> PromptPackBrowserFuture<'_, ()> {
+            Box::pin(async { panic!("start service must not cancel Browser work") })
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingEvents {
+        values: Mutex<Vec<PromptPackEvent>>,
+    }
+
+    impl PromptPackEventSink for RecordingEvents {
+        fn emit(&self, event: PromptPackEvent) {
+            self.values.lock().expect("event log").push(event);
+        }
+    }
+
+    fn browser_start_request(
+        client_request_id: &str,
+        source_id: i64,
+    ) -> StartYoutubeSummaryRunRequest {
+        StartYoutubeSummaryRunRequest::new(
+            client_request_id.to_string(),
+            None,
+            vec![source_id],
+            None,
+            None,
+            PromptPackRuntimeProvider::GeminiBrowser,
+            None,
+            "en".to_string(),
+            "standard".to_string(),
+            "standard".to_string(),
+            false,
+        )
+    }
+
+    fn ready_source(source_id: i64) -> ScriptedPromptPackSourceReader {
+        ScriptedPromptPackSourceReader::ready_video(
+            source_id,
+            vec![PromptPackTranscriptSegment::new(
+                0,
+                1_000,
+                "A complete owned transcript segment.".to_string(),
+            )],
+        )
+    }
+
+    trait AmbiguousIfClone<A> {
+        fn assert_not_clone() {}
+    }
+
+    impl<T: ?Sized> AmbiguousIfClone<()> for T {}
+    impl<T: ?Sized + Clone> AmbiguousIfClone<u8> for T {}
+
+    #[tokio::test]
+    async fn start_service_rejects_empty_id_before_browser_or_source_ports() {
+        let pool = test_pool_with_prompt_pack_runs([]).await;
+        let state = PromptPackRunState::new();
+        let source = ready_source(71);
+        let browser = RecordingBrowser::default();
+        let events = RecordingEvents::default();
+
+        let result = start_youtube_summary_run_service(
+            &pool,
+            &state,
+            &source,
+            &browser,
+            &events,
+            browser_start_request("   ", 71),
+        )
+        .await;
+        let error = match result {
+            Err(error) => error,
+            Ok(_) => panic!("empty request id must fail"),
+        };
+
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+        assert!(source.calls().is_empty());
+        assert_eq!(browser.status_reads.load(Ordering::SeqCst), 0);
+        assert!(events.values.lock().expect("event log").is_empty());
+    }
+
+    #[tokio::test]
+    async fn start_service_returns_existing_before_browser_or_source_ports() {
+        let pool =
+            test_pool_with_prompt_pack_runs([(71, None, "complete", "2026-07-20T00:00:00Z")]).await;
+        sqlx::query(
+            "UPDATE prompt_pack_runs
+             SET client_request_id = 'existing-terminal', runtime_provider = 'gemini_browser'
+             WHERE id = 71",
+        )
+        .execute(&pool)
+        .await
+        .expect("mark existing request");
+        let state = PromptPackRunState::new();
+        let source = ready_source(71);
+        let browser = RecordingBrowser::default();
+        let events = RecordingEvents::default();
+
+        let outcome = start_youtube_summary_run_service(
+            &pool,
+            &state,
+            &source,
+            &browser,
+            &events,
+            browser_start_request("existing-terminal", 71),
+        )
+        .await
+        .expect("existing outcome");
+
+        assert!(matches!(
+            outcome.response,
+            StartYoutubeSummaryRunOutcomeDto::Started { ref run } if run.run_id == 71
+        ));
+        assert!(outcome.execution_ticket.is_none());
+        assert!(source.calls().is_empty());
+        assert_eq!(browser.status_reads.load(Ordering::SeqCst), 0);
+        assert!(events.values.lock().expect("event log").is_empty());
+    }
+
+    #[tokio::test]
+    async fn start_service_issues_ticket_after_queued_event_and_new_tracking() {
+        let pool = test_pool_with_prompt_pack_runs([]).await;
+        insert_youtube_video(&pool, 72, "video-72").await;
+        let state = PromptPackRunState::new();
+        let source = ready_source(72);
+        let browser = RecordingBrowser::default();
+        let events = RecordingEvents::default();
+
+        let outcome = start_youtube_summary_run_service(
+            &pool,
+            &state,
+            &source,
+            &browser,
+            &events,
+            start_request("new-ticket", vec![72]),
+        )
+        .await
+        .expect("new start outcome");
+        let run_id = match &outcome.response {
+            StartYoutubeSummaryRunOutcomeDto::Started { run } => run.run_id,
+            StartYoutubeSummaryRunOutcomeDto::Blocked { .. } => panic!("expected queued run"),
+        };
+        let ticket = outcome.execution_ticket.expect("execution ticket");
+
+        assert_eq!(ticket.run_id(), run_id);
+        assert!(state.active_run_ids().await.contains(&run_id));
+        let emitted = events.values.lock().expect("event log");
+        assert_eq!(emitted.len(), 1);
+        assert_eq!(emitted[0].kind, "queued");
+        assert_eq!(emitted[0].run_id, run_id);
+        assert_eq!(browser.status_reads.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn start_service_returns_ticket_for_untracked_existing_queued_run() {
+        let pool =
+            test_pool_with_prompt_pack_runs([(73, None, "queued", "2026-07-20T00:00:00Z")]).await;
+        sqlx::query(
+            "UPDATE prompt_pack_runs SET client_request_id = 'existing-queued' WHERE id = 73",
+        )
+        .execute(&pool)
+        .await
+        .expect("mark existing request");
+        let state = PromptPackRunState::new();
+        let source = ready_source(73);
+        let browser = RecordingBrowser::default();
+        let events = RecordingEvents::default();
+
+        let outcome = start_youtube_summary_run_service(
+            &pool,
+            &state,
+            &source,
+            &browser,
+            &events,
+            start_request("existing-queued", vec![73]),
+        )
+        .await
+        .expect("existing queued outcome");
+
+        assert_eq!(
+            outcome.execution_ticket.expect("execution ticket").run_id(),
+            73
+        );
+        assert!(source.calls().is_empty());
+        assert_eq!(browser.status_reads.load(Ordering::SeqCst), 0);
+        assert_eq!(events.values.lock().expect("event log").len(), 1);
+    }
+
+    #[tokio::test]
+    async fn prepare_execution_borrows_the_same_ticket_for_terminal_failure() {
+        let _ = <RunExecutionTicket as AmbiguousIfClone<_>>::assert_not_clone;
+        let pool = test_pool_with_prompt_pack_runs([]).await;
+        insert_youtube_video(&pool, 74, "video-74").await;
+        let state = PromptPackRunState::new();
+        let source = ready_source(74);
+        let browser = RecordingBrowser::default();
+        let queued_events = RecordingEvents::default();
+        let outcome = start_youtube_summary_run_service(
+            &pool,
+            &state,
+            &source,
+            &browser,
+            &queued_events,
+            start_request("borrowed-ticket", vec![74]),
+        )
+        .await
+        .expect("new start outcome");
+        let ticket = outcome.execution_ticket.expect("execution ticket");
+        let run_id = ticket.run_id();
+        let prepared = prepare_run_execution(&pool, &ticket)
+            .await
+            .expect("prepare API execution");
+        assert!(matches!(prepared, PreparedRunExecution::Api(_)));
+
+        let terminal_events = Arc::new(RecordingEvents::default());
+        let failure = crate::error::AppError::internal("profile resolution failed");
+        fail_run_execution(&pool, &state, terminal_events.clone(), &ticket, &failure)
+            .await
+            .expect("terminal failure");
+
+        assert_eq!(ticket.run_id(), run_id);
+        let status: String =
+            sqlx::query_scalar("SELECT run_status FROM prompt_pack_runs WHERE id = ?")
+                .bind(run_id)
+                .fetch_one(&pool)
+                .await
+                .expect("failed status");
+        assert_eq!(status, "failed");
+        assert!(!state.active_run_ids().await.contains(&run_id));
+        let terminal = terminal_events.values.lock().expect("event log");
+        assert_eq!(terminal.len(), 1);
+        assert_eq!(terminal[0].kind, "failed");
+        assert_eq!(terminal[0].run_id, run_id);
+    }
 
     #[test]
     fn now_string_uses_current_utc_time() {
@@ -880,21 +1167,29 @@ mod tests {
     fn start_source_applies_queued_state_and_event_before_spawned_profile_resolution() {
         let source = include_str!("runtime.rs");
         let start_begin = source
-            .find("pub async fn start_youtube_summary_run(")
-            .expect("start command");
+            .find("async fn start_youtube_summary_run_service(")
+            .expect("start service");
         let start_end = source[start_begin..]
             .find("async fn browser_runtime_start_failures_for_request(")
             .map(|offset| start_begin + offset)
-            .expect("start command end");
+            .expect("start service end");
         let start = &source[start_begin..start_end];
-        let event = start
-            .find("emit_prompt_pack_run_event(")
-            .expect("queued event publication");
-        let spawn = start
-            .find("spawn_youtube_summary_execution(")
-            .expect("spawn directive");
-        assert!(event < spawn);
-        assert!(!start.contains("resolve_profile_for_backend"));
+        let first_lookup = start
+            .find("load_youtube_summary_run_by_client_request_id_in_pool(")
+            .expect("first idempotency lookup");
+        let readiness = start
+            .find("browser_runtime_start_failures_for_request(")
+            .expect("Browser readiness");
+        let second_lookup = start[readiness..]
+            .find("load_youtube_summary_run_by_client_request_id_in_pool(")
+            .map(|offset| readiness + offset)
+            .expect("second idempotency lookup");
+        let preflight = start
+            .find("preflight_youtube_summary_run(source, preflight_request).await")
+            .expect("outer preflight");
+        assert!(first_lookup < readiness);
+        assert!(readiness < second_lookup);
+        assert!(second_lookup < preflight);
 
         let emitter_begin = source
             .find("async fn emit_prompt_pack_run_event(")
@@ -909,20 +1204,6 @@ mod tests {
             .expect("state transition");
         let publish = emitter.find("events.emit(event)").expect("event emission");
         assert!(apply_state < publish);
-
-        let spawn_begin = source
-            .find("fn spawn_youtube_summary_execution(")
-            .expect("spawn helper");
-        let execution_begin = source
-            .find("async fn execute_youtube_summary_run(")
-            .expect("execution helper");
-        let spawn_body = &source[spawn_begin..execution_begin];
-        assert!(spawn_body.contains("tauri::async_runtime::spawn(async move"));
-        assert!(spawn_body.contains("execute_youtube_summary_run(handle.clone(), run_id).await"));
-        assert!(!spawn_body.contains("resolve_profile_for_backend"));
-
-        let execution = &source[execution_begin..];
-        assert!(execution.contains("resolve_profile_for_backend(&handle"));
     }
 
     #[tokio::test]

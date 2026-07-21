@@ -78,12 +78,15 @@ impl RunCompletionRuntime {
     pub(super) async fn execute(
         self,
         pool: &SqlitePool,
-        scheduler: &LlmSchedulerState,
+        scheduler: Option<&LlmSchedulerState>,
         events: Arc<dyn PromptPackEventSink>,
         request: StageCompletionRequest,
     ) -> Result<PromptPackLlmCompletion, YoutubeSummaryStageExecutionError> {
         match self {
             Self::Api { profile, .. } => {
+                let scheduler = scheduler.ok_or_else(|| {
+                    AppError::internal("API prompt-pack execution requires an LLM scheduler")
+                })?;
                 run_api_llm_request(scheduler, events, profile, request).await
             }
             Self::GeminiBrowser {
