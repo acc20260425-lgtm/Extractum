@@ -228,7 +228,7 @@ fn unix_timestamp() -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::seed_builtin_prompt_packs_in_pool;
+    use super::{seed_builtin_prompt_packs_in_pool, sha384_hex};
     use crate::migrations::apply_all_migrations_for_test_pool;
 
     async fn test_pool_with_migrations() -> sqlx::SqlitePool {
@@ -239,6 +239,87 @@ mod tests {
             .await
             .expect("apply migrations");
         pool
+    }
+
+    #[tokio::test]
+    async fn bundled_assets_hashes_and_source_path_match_canonical_bytes() {
+        let assets = [
+            (
+                "pack.json",
+                include_str!("../../prompt-packs/youtube_summary/1.0.0/pack.json"),
+                "21d0e7803f25474bb761cbe5c9fe6e45ef363cf5d9c7f030f7c84ee02ef9b7d8dd3664dfed782a3e8c607b7a0f37cf06",
+            ),
+            (
+                "runtime/synthesis.json",
+                include_str!(
+                    "../../prompt-packs/youtube_summary/1.0.0/runtime/synthesis.json"
+                ),
+                "36b1c4653bc4befdcd168b482929f3b34980c58d9179cb0e0e3db9ac4d3760f9e66dc834ad6a799df6df62618b28d367",
+            ),
+            (
+                "runtime/transcript_analysis.json",
+                include_str!(
+                    "../../prompt-packs/youtube_summary/1.0.0/runtime/transcript_analysis.json"
+                ),
+                "92e2ea9f7fa89c20e8aaa538f3108a12c8b454e11741b82d29ea44907f2769e62a0828659d6eff10b84bc9122040a92f",
+            ),
+            (
+                "schemas/canonical-result.json",
+                include_str!(
+                    "../../prompt-packs/youtube_summary/1.0.0/schemas/canonical-result.json"
+                ),
+                "c7053e18b578fc9bfdd8427acb4ec2b8ff1aadff50463bad883d70998b9e11084ddfb77c630abcfeac0edc59222da263",
+            ),
+            (
+                "schemas/stage-io-youtube-summary-synthesis-output.json",
+                include_str!(
+                    "../../prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-synthesis-output.json"
+                ),
+                "127c29d5787f88fa163c28f06c16dbd1f75a1df1e502ffd115375a071d786ad6c3486d6fcdee82fe92164c1e41b89fc4",
+            ),
+            (
+                "schemas/stage-io-youtube-summary-transcript-analysis-input.json",
+                include_str!(
+                    "../../prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-transcript-analysis-input.json"
+                ),
+                "bb75aad9fd645912f723ad470a715f7b43c3af964ee4ea74cd84bebb635a1d3bc5bb0ac5460c9608e15eabee07b74419",
+            ),
+            (
+                "schemas/stage-io-youtube-summary-transcript-analysis-output.json",
+                include_str!(
+                    "../../prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-transcript-analysis-output.json"
+                ),
+                "9d3d32cf7b7bfd00fdc5ae6d74dac8ad06f488b05e31e52866553aeaa1cd836c1d6599d5dd21c2228abf51e4bcc5f693",
+            ),
+            (
+                "stages/transcript_analysis.json",
+                include_str!(
+                    "../../prompt-packs/youtube_summary/1.0.0/stages/transcript_analysis.json"
+                ),
+                "1b4f18dc3b1baf4b01389a6187d54b96ed689dc044aefd6338a2a176779f433359b0bdc77364fec1ef2ccb58a9088793",
+            ),
+        ];
+
+        for (path, content, expected_hash) in assets {
+            assert_eq!(sha384_hex(content.as_bytes()), expected_hash, "{path}");
+        }
+
+        let pool = test_pool_with_migrations().await;
+        seed_builtin_prompt_packs_in_pool(&pool)
+            .await
+            .expect("seed bundled pack");
+        let bundled_source_path = sqlx::query_scalar::<_, String>(
+            "SELECT bundled_source_path FROM prompt_pack_versions
+             WHERE pack_id = 'youtube_summary' AND pack_version = '1.0.0'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("read bundled source path");
+
+        assert_eq!(
+            bundled_source_path,
+            "src-tauri/prompt-packs/youtube_summary/1.0.0"
+        );
     }
 
     #[tokio::test]

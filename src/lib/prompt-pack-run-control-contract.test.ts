@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import promptPacksModuleSource from "../../src-tauri/src/prompt_packs/mod.rs?raw";
-import runControlSource from "../../src-tauri/src/prompt_packs/run_control.rs?raw";
-import runtimeSource from "../../src-tauri/src/prompt_packs/runtime.rs?raw";
+import { readPromptPackDomainSource } from "./prompt-pack-contract-paths";
+
+const promptPacksModuleSource = readPromptPackDomainSource("lib.rs", "mod.rs");
+const runControlSource = readPromptPackDomainSource("run_control.rs");
+const runtimeSource = readPromptPackDomainSource("runtime.rs");
 
 const normalized = (source: string) => source.replace(/\r\n/g, "\n");
 

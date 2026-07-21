@@ -4,6 +4,7 @@ import {
   getPromptPackResult,
   getPromptPackStageArtifact,
   getPromptPackValidationFindings,
+  cancelPromptPackRun,
   deletePromptPackRun,
   listenToPromptPackRunEvents,
   listActivePromptPackRuns,
@@ -204,7 +205,11 @@ describe("prompt pack api wrappers", () => {
     });
   });
 
-  it("wraps project run update and delete commands", async () => {
+  it("wraps run cancellation update and delete commands with camelCase payload keys", async () => {
+    invokeMock.mockResolvedValueOnce(undefined);
+    await expect(cancelPromptPackRun(42)).resolves.toBeUndefined();
+    expect(invokeMock).toHaveBeenLastCalledWith("cancel_prompt_pack_run", { runId: 42 });
+
     invokeMock.mockResolvedValueOnce({
       runId: 42,
       projectId: 7,

@@ -68,6 +68,21 @@ async fn start_returns_existing_run_for_duplicate_client_request_id() {
 }
 
 #[tokio::test]
+async fn empty_client_request_id_returns_before_any_database_or_source_read() {
+    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("connect deliberately unmigrated pool");
+    let request = start_request("", vec![901]);
+
+    let error = start_youtube_summary_run_in_pool(&pool, request)
+        .await
+        .expect_err("empty client request id must fail before querying the pool");
+
+    assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+    assert_eq!(error.message, "client_request_id cannot be empty");
+}
+
+#[tokio::test]
 async fn start_with_recomputed_blocking_preflight_returns_response_without_run() {
     let pool = test_pool_with_youtube_video_without_transcript().await;
     seed_builtin_prompt_packs_in_pool(&pool)
@@ -140,9 +155,11 @@ async fn duplicate_start_ignores_runtime_blocking_failure() {
         .await
         .expect("first start")
         .expect_started("first start");
+    let mut duplicate_request = request;
+    duplicate_request.source_ids = vec![999_999];
     let second = start_youtube_summary_run_with_preflight_failures_in_pool(
         &pool,
-        request,
+        duplicate_request,
         vec![YoutubeSummaryPreflightFailure {
             source_id: None,
             reason: "browser_provider_not_ready".to_string(),
@@ -162,6 +179,78 @@ async fn duplicate_start_ignores_runtime_blocking_failure() {
     .await
     .expect("run count");
     assert_eq!(run_count, 1);
+}
+
+#[test]
+fn snapshot_start_source_preserves_repeated_preflight_and_post_insert_fresh_reads() {
+    let outer_source = include_str!("mod.rs");
+    let snapshot_source = include_str!("snapshots.rs");
+
+    let outer_start = outer_source
+        .find("pub(crate) async fn start_youtube_summary_run_with_preflight_failures_in_pool")
+        .expect("outer start function");
+    let outer_preflight = outer_source[outer_start..]
+        .find("preflight_youtube_summary_in_pool(")
+        .expect("outer preflight");
+    let skeleton_call = outer_source[outer_start..]
+        .find("create_youtube_summary_run_skeleton_in_pool(")
+        .expect("skeleton call");
+    assert!(outer_preflight < skeleton_call);
+
+    let skeleton_start = snapshot_source
+        .find("pub(crate) async fn create_youtube_summary_run_skeleton_in_pool")
+        .expect("skeleton function");
+    let skeleton = &snapshot_source[skeleton_start..];
+    let repeated_preflight = skeleton
+        .find("preflight_youtube_summary_in_pool(")
+        .expect("repeated skeleton preflight");
+    let run_insert = skeleton
+        .find("INSERT INTO prompt_pack_runs")
+        .expect("run insertion");
+    let post_insert_source_read = skeleton
+        .find("let Some(source) = load_source(pool, *source_id).await?")
+        .expect("post-insert source read");
+    let post_insert_snapshot_read = skeleton
+        .find("insert_source_snapshot(pool, run_id, video")
+        .expect("post-insert video snapshot read");
+    let post_insert_material_read = skeleton
+        .find("insert_material_snapshots(")
+        .expect("post-insert material read");
+
+    assert!(repeated_preflight < run_insert);
+    assert!(run_insert < post_insert_source_read);
+    assert!(post_insert_source_read < post_insert_snapshot_read);
+    assert!(post_insert_snapshot_read < post_insert_material_read);
+}
+
+#[test]
+fn comment_snapshot_source_reads_candidates_for_estimates_then_selected_bodies_again() {
+    let source = include_str!("snapshots.rs");
+    let insertion_start = source
+        .find("async fn insert_material_snapshots(")
+        .expect("material insertion function");
+    let insertion = &source[insertion_start..];
+    let candidate_read = insertion
+        .find("freeze_comment_material_refs(pool, source_id, test_comment_policy())")
+        .expect("candidate comment read");
+    let selected_body_read = insertion
+        .find("load_comment_text(pool, source_id, comment.external_id.as_deref())")
+        .expect("selected comment body read");
+
+    assert!(candidate_read < selected_body_read);
+
+    let candidate_function = source
+        .find("pub(crate) async fn freeze_comment_material_refs(")
+        .expect("candidate function");
+    let candidate_body = &source[candidate_function..];
+    assert!(candidate_body.contains("content_zstd"));
+    assert!(candidate_body.contains("token_estimate: estimate_tokens(&text)"));
+
+    let selected_function = source
+        .find("async fn load_comment_text(")
+        .expect("selected body function");
+    let selected_body = &source[selected_function..];
+    assert!(selected_body.contains("SELECT content_zstd FROM items"));
 }
 
 #[tokio::test]

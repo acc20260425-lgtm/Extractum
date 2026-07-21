@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import completionTransportSource from "../../src-tauri/src/prompt_packs/completion_transport.rs?raw";
-import dtoSource from "../../src-tauri/src/prompt_packs/dto.rs?raw";
-import promptPacksModuleSource from "../../src-tauri/src/prompt_packs/mod.rs?raw";
-import runtimeSource from "../../src-tauri/src/prompt_packs/runtime.rs?raw";
-import stageExecutionSource from "../../src-tauri/src/prompt_packs/stage_execution.rs?raw";
+import { readPromptPackDomainSource } from "./prompt-pack-contract-paths";
+
+const completionTransportSource = readPromptPackDomainSource("completion_transport.rs");
+const dtoSource = readPromptPackDomainSource("dto.rs");
+const promptPacksModuleSource = readPromptPackDomainSource("lib.rs", "mod.rs");
+const runtimeSource = readPromptPackDomainSource("runtime.rs");
+const stageExecutionSource = readPromptPackDomainSource("stage_execution.rs");
 
 const normalized = (source: string) => source.replace(/\r\n/g, "\n");
 const matches = (source: string, pattern: RegExp) => source.match(pattern) ?? [];

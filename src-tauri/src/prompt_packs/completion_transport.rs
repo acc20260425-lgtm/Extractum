@@ -565,4 +565,25 @@ mod tests {
         assert_eq!(context.model_override.as_deref(), Some("override-model"));
         assert_eq!(context.model_output_limit, Some(8_192));
     }
+
+    #[test]
+    fn browser_provenance_is_persisted_before_completion_validation() {
+        let source = include_str!("completion_transport.rs");
+        let function_begin = source
+            .find("async fn run_browser_llm_request(")
+            .expect("Browser request function");
+        let function_end = source[function_begin..]
+            .find("pub(super) async fn run_browser_stage_result_with_cancellation")
+            .map(|offset| function_begin + offset)
+            .expect("Browser request function end");
+        let function = &source[function_begin..function_end];
+        let persist = function
+            .find("persist_browser_stage_provenance(&pool, stage_run_id, &result)")
+            .expect("provenance persistence");
+        let validate = function
+            .find("browser_stage_completion_from_result(result)")
+            .expect("completion validation");
+
+        assert!(persist < validate);
+    }
 }

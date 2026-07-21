@@ -695,7 +695,7 @@ mod tests {
     };
     use std::sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
-        Arc,
+        Arc, Mutex,
     };
     use tokio_util::sync::CancellationToken;
 
@@ -813,6 +813,93 @@ mod tests {
             run_with_prompt_pack_run_cancellation(Some(token), std::future::pending()).await;
 
         assert!(matches!(result, Err(LlmRequestError::Cancelled)));
+    }
+
+    #[tokio::test]
+    async fn browser_cancellation_completes_before_terminal_persistence_and_event_follow_up() {
+        let token = CancellationToken::new();
+        let order = Arc::new(Mutex::new(Vec::new()));
+        let cancellation_order = order.clone();
+        let stage_result = run_browser_stage_result_with_cancellation(
+            Some(token.clone()),
+            std::future::pending(),
+            move || async move {
+                cancellation_order
+                    .lock()
+                    .expect("cancellation order")
+                    .push("browser_cancel");
+                Ok(())
+            },
+        );
+
+        token.cancel();
+        let stage_result = tokio::time::timeout(std::time::Duration::from_secs(1), stage_result)
+            .await
+            .expect("stage cancellation returned");
+        order
+            .lock()
+            .expect("terminal persistence order")
+            .push("terminal_persistence");
+        order
+            .lock()
+            .expect("terminal event order")
+            .push("terminal_event");
+
+        assert!(matches!(
+            stage_result,
+            Err(YoutubeSummaryStageExecutionError::Cancelled)
+        ));
+        assert_eq!(
+            *order.lock().expect("complete order"),
+            ["browser_cancel", "terminal_persistence", "terminal_event"]
+        );
+    }
+
+    #[test]
+    fn start_source_applies_queued_state_and_event_before_spawned_profile_resolution() {
+        let source = include_str!("runtime.rs");
+        let start_begin = source
+            .find("pub async fn start_youtube_summary_run(")
+            .expect("start command");
+        let start_end = source[start_begin..]
+            .find("async fn browser_runtime_start_failures_for_request(")
+            .map(|offset| start_begin + offset)
+            .expect("start command end");
+        let start = &source[start_begin..start_end];
+        let event = start
+            .find("emit_prompt_pack_run_event(")
+            .expect("queued event publication");
+        let spawn = start
+            .find("spawn_youtube_summary_execution(")
+            .expect("spawn directive");
+        assert!(event < spawn);
+        assert!(!start.contains("resolve_profile_for_backend"));
+
+        let emitter_begin = source
+            .find("async fn emit_prompt_pack_run_event(")
+            .expect("event helper");
+        let emitter = &source[emitter_begin..];
+        let apply_state = emitter
+            .find("state.apply_event(event.clone()).await")
+            .expect("state transition");
+        let publish = emitter
+            .find("handle.emit(PROMPT_PACK_RUN_EVENT, event)")
+            .expect("event emission");
+        assert!(apply_state < publish);
+
+        let spawn_begin = source
+            .find("fn spawn_youtube_summary_execution(")
+            .expect("spawn helper");
+        let execution_begin = source
+            .find("async fn execute_youtube_summary_run(")
+            .expect("execution helper");
+        let spawn_body = &source[spawn_begin..execution_begin];
+        assert!(spawn_body.contains("tauri::async_runtime::spawn(async move"));
+        assert!(spawn_body.contains("execute_youtube_summary_run(handle.clone(), run_id).await"));
+        assert!(!spawn_body.contains("resolve_profile_for_backend"));
+
+        let execution = &source[execution_begin..];
+        assert!(execution.contains("resolve_profile_for_backend(&handle"));
     }
 
     #[tokio::test]

@@ -1,5 +1,5 @@
 use super::test_support::*;
-use super::{preflight_youtube_summary_in_pool, ModelBudget};
+use super::{model_budget_for_runtime, preflight_youtube_summary_in_pool, ModelBudget};
 
 #[tokio::test]
 async fn preflight_explicit_video_without_transcript_is_blocking_failure() {
@@ -63,6 +63,33 @@ async fn browser_runtime_preflight_does_not_apply_api_input_limit() {
 
     assert_eq!(response.included_videos.len(), 1);
     assert_eq!(response.selected_model_input_limit, None);
+}
+
+#[tokio::test]
+async fn api_runtime_preflight_uses_fixed_32000_input_limit() {
+    let pool = test_pool_with_ready_video().await;
+    sqlx::query("UPDATE youtube_transcript_segments SET text = ? WHERE source_id = ?")
+        .bind("x".repeat(160_000))
+        .bind(901_i64)
+        .execute(&pool)
+        .await
+        .expect("update long transcript");
+
+    let response = preflight_youtube_summary_in_pool(
+        &pool,
+        request_for_video(901),
+        model_budget_for_runtime(crate::prompt_packs::dto::PromptPackRuntimeProvider::Api),
+    )
+    .await
+    .expect("api preflight");
+
+    assert_eq!(response.selected_model_input_limit, Some(32_000));
+    assert!(response.included_videos.is_empty());
+    assert_eq!(response.blocking_failures.len(), 1);
+    assert_eq!(
+        response.blocking_failures[0].reason,
+        "input_budget_exceeded"
+    );
 }
 
 #[tokio::test]

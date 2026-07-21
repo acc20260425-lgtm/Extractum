@@ -75,6 +75,9 @@ const phase5Roadmap = compact(
 const phase6Roadmap = compact(
   sectionBetween(crateRoadmap, "### Phase 6", "### Phase 7"),
 );
+const phase6Status = phase6Roadmap.match(
+  /### Phase 6 — `extractum-prompt-packs` \(([^)]+)\)/,
+)?.[1];
 const appOwnedGeminiBaselineTests = [
   "explicit_shutdown_kills_and_reaps_the_owned_child_once",
   "drop_falls_back_to_owned_child_shutdown",
@@ -393,9 +396,11 @@ describe("crate extraction timing policy", () => {
     expect(phase5Roadmap).toContain("Timing was advisory and did not decide retention");
     expect(phase5Roadmap).toContain("10,410 ms, below 15,000 ms");
     expect(phase5Roadmap).toContain("Phase 4's 1,620 ms result");
-    expect(phase5Roadmap).toContain("Phase 6 `extractum-prompt-packs` remains next");
-    expect(phase5Roadmap).toContain("fresh JIT boundary design is now owner-approved");
-    expect(phase5Roadmap).toContain("implementation is not authorized");
+    expect(phase5Roadmap).toContain(
+      "At Phase 5 completion, Phase 6 `extractum-prompt-packs` remained next",
+    );
+    expect(phase5Roadmap).toContain("fresh JIT boundary design was owner-approved");
+    expect(phase5Roadmap).toContain("implementation was not authorized");
     expect(llmVerification).toContain("BASELINE_RAW_MS=[]");
     expect(llmVerification).toContain("CANDIDATE_RAW_MS=[]");
     expect(llmVerification).toContain("no median / no performance conclusion");
@@ -417,13 +422,20 @@ describe("crate extraction timing policy", () => {
     }
   });
 
-  it("records the approved Phase 6 prompt-pack boundary without authorizing implementation", () => {
+  it("records the approved Phase 6 prompt-pack boundary and closed lifecycle state", () => {
     expect(promptPacksBoundaryDesign).toContain(
       "**Status:** Owner-approved; implementation not started",
     );
-    expect(phase6Roadmap).toContain(
+    expect(phase6Status).toBeDefined();
+    expect([
       "design approved; implementation not started",
-    );
+      "preparation Checkpoint 1 retained",
+      "preparation Checkpoint 2 retained",
+      "preparation Checkpoint 3 retained",
+      "preparation Checkpoint 4 retained",
+      "done: retained",
+      "not retained",
+    ]).toContain(phase6Status);
     expect(phase6Roadmap).toContain(
       "2026-07-20-prompt-packs-crate-boundary-design.md",
     );
