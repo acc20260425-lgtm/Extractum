@@ -330,9 +330,9 @@ SHA-384 values are:
 | --- | --- |
 | pack.json | 21d0e7803f25474bb761cbe5c9fe6e45ef363cf5d9c7f030f7c84ee02ef9b7d8dd3664dfed782a3e8c607b7a0f37cf06 |
 | runtime/synthesis.json | 36b1c4653bc4befdcd168b482929f3b34980c58d9179cb0e0e3db9ac4d3760f9e66dc834ad6a799df6df62618b28d367 |
-| runtime/transcript_analysis.json | 92e2ea9f7fa89c20e8aaa538f3108a12c8b454e11741b82d29ea44907f2769e62a0828659d6eff10b84bc9122040a92f |
-| schemas/canonical-result.json | c7053e18b578fc9bfdd8427acb4ec2b8ff1aadff50463bad883d70998b9e11084ddfb77c630abcfeac0edc59222da263 |
-| schemas/stage-io-youtube-summary-synthesis-output.json | 127c29d5787f88fa163c28f06c16dbd1f75a1df1e502ffd115375a071d786ad6c3486d6fcdee82fe92164c1e41b89fc4 |
+| runtime/transcript_analysis.json | a9ba63c8ff582429866042aad354693cf9a583f5fc05f319189f44266d9eec6871b0ceb40758719a4b0d95dc8f25ee8f |
+| schemas/canonical-result.json | 067ac18d452b6ec6ca2000899d3e7d8df87ace30e4676c7f88080a59cc4731887032943c7ea961ac39b69ab17e9697fd |
+| schemas/stage-io-youtube-summary-synthesis-output.json | ff518213fba16805dfbde2c6c55f8d3ca204ca7f772fb2348cfc375e83070289bfd29623ea4af1b78044504e92a22dac |
 | schemas/stage-io-youtube-summary-transcript-analysis-input.json | bb75aad9fd645912f723ad470a715f7b43c3af964ee4ea74cd84bebb635a1d3bc5bb0ac5460c9608e15eabee07b74419 |
 | schemas/stage-io-youtube-summary-transcript-analysis-output.json | 9d3d32cf7b7bfd00fdc5ae6d74dac8ad06f488b05e31e52866553aeaa1cd836c1d6599d5dd21c2228abf51e4bcc5f693 |
 | stages/transcript_analysis.json | 1b4f18dc3b1baf4b01389a6187d54b96ed689dc044aefd6338a2a176779f433359b0bdc77364fec1ef2ccb58a9088793 |
@@ -343,6 +343,13 @@ The persisted value is unchanged:
 
 No runtime filesystem read, packaging copy, build script, or second asset copy
 was introduced.
+
+The eight asset paths have explicit Git EOL attributes matching these hashes:
+five CRLF assets, two LF assets, and the historically mixed-line-ending
+canonical-result schema stored byte-for-byte with `-text` and checked with
+`whitespace=cr-at-eol`. This makes the raw hash contract stable in the main
+checkout, linked worktrees, and fresh clones without false trailing-whitespace
+reports from Git.
 
 ## Focused, package, workspace, and repository gates
 
@@ -450,6 +457,20 @@ implementation, no duplicate test identity, no old domain module left in the
 app, no Tauri/app integration in production crate code, and no unapproved
 foreign SQL. Manual review therefore classifies the extraction as
 moved/split-not-copied; no behavior-bearing duplicate was retained.
+
+## Post-merge checkout remediation
+
+The first full verification from the main worktree discovered that Vitest also
+scanned the ignored linked worktree below `.worktrees/`, doubling source tests
+and importing Playwright suites into Vitest. The same run exposed that three
+asset hash expectations had captured CRLF-converted feature-worktree bytes
+instead of the owner-approved hashes in the execution plan.
+
+The Vitest wrapper now excludes `.worktrees/**`. The asset contract uses the
+eight approved hashes and requires the explicit per-file EOL attributes above.
+The canonical-result schema's exact mixed bytes are stored in Git rather than
+being line-ending normalized. Focused RED/GREEN and the repeated full merged
+verification cover both remediations.
 
 ## Result and next phase
 

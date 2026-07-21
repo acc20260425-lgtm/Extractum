@@ -503,15 +503,15 @@ const assetContract = {
   ],
   TRANSCRIPT_RUNTIME_JSON: [
     "runtime/transcript_analysis.json",
-    "92e2ea9f7fa89c20e8aaa538f3108a12c8b454e11741b82d29ea44907f2769e62a0828659d6eff10b84bc9122040a92f",
+    "a9ba63c8ff582429866042aad354693cf9a583f5fc05f319189f44266d9eec6871b0ceb40758719a4b0d95dc8f25ee8f",
   ],
   CANONICAL_RESULT_SCHEMA_JSON: [
     "schemas/canonical-result.json",
-    "c7053e18b578fc9bfdd8427acb4ec2b8ff1aadff50463bad883d70998b9e11084ddfb77c630abcfeac0edc59222da263",
+    "067ac18d452b6ec6ca2000899d3e7d8df87ace30e4676c7f88080a59cc4731887032943c7ea961ac39b69ab17e9697fd",
   ],
   SYNTHESIS_OUTPUT_SCHEMA_JSON: [
     "schemas/stage-io-youtube-summary-synthesis-output.json",
-    "127c29d5787f88fa163c28f06c16dbd1f75a1df1e502ffd115375a071d786ad6c3486d6fcdee82fe92164c1e41b89fc4",
+    "ff518213fba16805dfbde2c6c55f8d3ca204ca7f772fb2348cfc375e83070289bfd29623ea4af1b78044504e92a22dac",
   ],
   TRANSCRIPT_INPUT_SCHEMA_JSON: [
     "schemas/stage-io-youtube-summary-transcript-analysis-input.json",
@@ -1004,6 +1004,20 @@ describe("extractum-prompt-packs crate boundary", () => {
   });
 
   it("centralizes all eight canonical bundled assets", () => {
+    const attributes = read(".gitattributes");
+    for (const line of [
+      "src-tauri/prompt-packs/youtube_summary/1.0.0/pack.json text eol=crlf",
+      "src-tauri/prompt-packs/youtube_summary/1.0.0/runtime/synthesis.json text eol=crlf",
+      "src-tauri/prompt-packs/youtube_summary/1.0.0/runtime/transcript_analysis.json text eol=lf",
+      "src-tauri/prompt-packs/youtube_summary/1.0.0/schemas/canonical-result.json -text whitespace=cr-at-eol",
+      "src-tauri/prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-synthesis-output.json text eol=lf",
+      "src-tauri/prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-transcript-analysis-input.json text eol=crlf",
+      "src-tauri/prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-transcript-analysis-output.json text eol=crlf",
+      "src-tauri/prompt-packs/youtube_summary/1.0.0/stages/transcript_analysis.json text eol=crlf",
+    ]) {
+      expect(attributes).toContain(line);
+    }
+
     const assetsPath = domainPath("assets.rs");
     const assets = read(assetsPath);
     const expectedPrefix = crateExtracted

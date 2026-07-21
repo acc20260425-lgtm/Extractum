@@ -12,6 +12,7 @@ describe("run-vitest wrapper", () => {
   it("keeps Playwright e2e specs out of Vitest discovery", () => {
     expect(runnerSource).toContain("DEFAULT_EXCLUDES");
     expect(runnerSource).toContain("research/gemini_browser_adapter/tests/**");
+    expect(runnerSource).toContain(".worktrees/**");
   });
 
   it("routes watch mode through the same wrapper defaults", () => {

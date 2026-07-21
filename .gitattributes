@@ -2,3 +2,11 @@
 *.toml text eol=lf
 src-tauri/migrations/*.sql text eol=lf
 src-tauri/migrations/**/*.sql text eol=lf
+src-tauri/prompt-packs/youtube_summary/1.0.0/pack.json text eol=crlf
+src-tauri/prompt-packs/youtube_summary/1.0.0/runtime/synthesis.json text eol=crlf
+src-tauri/prompt-packs/youtube_summary/1.0.0/runtime/transcript_analysis.json text eol=lf
+src-tauri/prompt-packs/youtube_summary/1.0.0/schemas/canonical-result.json -text whitespace=cr-at-eol
+src-tauri/prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-synthesis-output.json text eol=lf
+src-tauri/prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-transcript-analysis-input.json text eol=crlf
+src-tauri/prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-transcript-analysis-output.json text eol=crlf
+src-tauri/prompt-packs/youtube_summary/1.0.0/stages/transcript_analysis.json text eol=crlf

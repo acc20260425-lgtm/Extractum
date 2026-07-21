@@ -4,7 +4,10 @@ import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
-const DEFAULT_EXCLUDES = ["research/gemini_browser_adapter/tests/**"];
+const DEFAULT_EXCLUDES = [
+  ".worktrees/**",
+  "research/gemini_browser_adapter/tests/**",
+];
 
 /**
  * @param {string[]} args
