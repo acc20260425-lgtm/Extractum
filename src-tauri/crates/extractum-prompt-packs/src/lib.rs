@@ -57,6 +57,7 @@ pub use runtime::{
     start_youtube_summary_run_service, update_prompt_pack_run_in_pool, PreparedApiRunExecution,
     PreparedBrowserRunExecution, PreparedRunExecution, RunExecutionTicket, StartServiceOutcome,
 };
+#[cfg(any(test, feature = "dev-fixtures"))]
 pub use runtime::{
     clear_prompt_pack_cancellation_smoke_fixture_in_pool,
     seed_prompt_pack_cancellation_smoke_fixture_in_pool,

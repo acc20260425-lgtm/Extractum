@@ -19,7 +19,7 @@ pub use runtime_commands::{
     list_active_prompt_pack_runs, list_prompt_pack_run_stages, list_prompt_pack_runs,
     preflight_youtube_summary_run, start_youtube_summary_run, update_prompt_pack_run,
 };
-#[cfg(dev)]
+#[cfg(all(dev, feature = "prompt-pack-dev-fixtures"))]
 pub use runtime_commands::{
     clear_prompt_pack_cancellation_smoke_fixture, seed_prompt_pack_cancellation_smoke_fixture,
 };

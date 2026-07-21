@@ -2,6 +2,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
+use sqlx::SqlitePool;
 use tauri::{AppHandle, Manager, State};
 
 use super::browser_adapter::TauriGeminiBrowserPort;
@@ -22,7 +23,7 @@ use extractum_prompt_packs::{
     RunExecutionTicket, StartYoutubeSummaryRunOutcomeDto, StartYoutubeSummaryRunRequest,
     YoutubeSummaryPreflightResponse,
 };
-#[cfg(dev)]
+#[cfg(all(dev, feature = "prompt-pack-dev-fixtures"))]
 use extractum_prompt_packs::{
     clear_prompt_pack_cancellation_smoke_fixture_in_pool,
     seed_prompt_pack_cancellation_smoke_fixture_in_pool,
@@ -114,16 +115,20 @@ pub async fn start_youtube_summary_run(
     )
     .await?;
     if let Some(ticket) = outcome.execution_ticket {
-        spawn_youtube_summary_execution(handle, ticket);
+        spawn_youtube_summary_execution(handle, pool, ticket);
     }
     Ok(outcome.response)
 }
 
-fn spawn_youtube_summary_execution(handle: AppHandle, ticket: RunExecutionTicket) {
+fn spawn_youtube_summary_execution(
+    handle: AppHandle,
+    pool: SqlitePool,
+    ticket: RunExecutionTicket,
+) {
     let build_handle = handle.clone();
     dispatch_execution_ticket(
         ticket,
-        move |ticket| build_youtube_summary_execution_task(build_handle, ticket),
+        move |ticket| build_youtube_summary_execution_task(build_handle, pool, ticket),
         |task| {
             tauri::async_runtime::spawn(task);
             // resolve_profile_for_backend runs only when the spawned task is polled.
@@ -133,19 +138,10 @@ fn spawn_youtube_summary_execution(handle: AppHandle, ticket: RunExecutionTicket
 
 fn build_youtube_summary_execution_task(
     handle: AppHandle,
+    pool: SqlitePool,
     ticket: RunExecutionTicket,
 ) -> ExecutionTask {
     Box::pin(async move {
-        let pool = match get_pool(&handle).await {
-            Ok(pool) => pool,
-            Err(error) => {
-                eprintln!(
-                    "Prompt Pack run {} could not acquire the application pool: {error}",
-                    ticket.run_id()
-                );
-                return;
-            }
-        };
         let state = handle.state::<PromptPackRunState>();
         let events: Arc<dyn PromptPackEventSink> =
             Arc::new(TauriPromptPackEventSink::new(handle.clone()));
@@ -278,7 +274,7 @@ pub async fn cleanup_interrupted_prompt_pack_runs(handle: AppHandle) {
     }
 }
 
-#[cfg(dev)]
+#[cfg(all(dev, feature = "prompt-pack-dev-fixtures"))]
 #[tauri::command]
 pub async fn seed_prompt_pack_cancellation_smoke_fixture(
     handle: AppHandle,
@@ -288,7 +284,7 @@ pub async fn seed_prompt_pack_cancellation_smoke_fixture(
     seed_prompt_pack_cancellation_smoke_fixture_in_pool(&pool, state.inner()).await
 }
 
-#[cfg(dev)]
+#[cfg(all(dev, feature = "prompt-pack-dev-fixtures"))]
 #[tauri::command]
 pub async fn clear_prompt_pack_cancellation_smoke_fixture(
     handle: AppHandle,
@@ -368,5 +364,30 @@ mod tests {
 
         assert_eq!(builds.load(Ordering::SeqCst), 1);
         assert_eq!(spawns.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn execution_task_reuses_start_pool_without_reacquisition() {
+        let source = include_str!("runtime_commands.rs");
+        let start_body = source
+            .split("pub async fn start_youtube_summary_run")
+            .nth(1)
+            .expect("start command")
+            .split("fn spawn_youtube_summary_execution")
+            .next()
+            .expect("start command body");
+        assert!(start_body.contains("spawn_youtube_summary_execution(handle, pool, ticket);"));
+
+        let task_body = source
+            .split("fn build_youtube_summary_execution_task")
+            .nth(1)
+            .expect("execution task builder")
+            .split("#[tauri::command]")
+            .next()
+            .expect("execution task body");
+        assert!(
+            !task_body.contains("get_pool("),
+            "the spawned task must reuse the pool acquired by the start command"
+        );
     }
 }

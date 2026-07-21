@@ -11,11 +11,15 @@ const readSource = (relativePath: string) => readFileSync(path.join(repoRoot, re
 describe("Tauri security configuration", () => {
   it("keeps the base configuration production-safe", () => {
     const config = readJson("src-tauri/tauri.conf.json");
+    const build = config.build as Record<string, unknown>;
     const app = config.app as Record<string, unknown>;
     const security = app.security as Record<string, unknown>;
     const csp = security.csp as string;
 
     expect(app.withGlobalTauri).toBe(false);
+    expect((build.features as string[] | undefined) ?? []).not.toContain(
+      "prompt-pack-dev-fixtures",
+    );
     expect(csp).toContain("default-src 'self'");
     expect(csp).toContain("connect-src 'self' ipc: http://ipc.localhost");
     expect(csp).toContain("img-src 'self' asset: http://asset.localhost data: blob:");
@@ -44,8 +48,9 @@ describe("Tauri security configuration", () => {
     expect(remoteImageOrigins).toEqual([]);
   });
 
-  it("limits the MCP overlay to exposing the global Tauri object", () => {
+  it("limits the MCP overlay to dev-only capabilities", () => {
     expect(readJson("src-tauri/tauri.mcp.conf.json")).toEqual({
+      build: { features: ["prompt-pack-dev-fixtures"] },
       app: { withGlobalTauri: true },
     });
   });
@@ -59,9 +64,11 @@ describe("Tauri security configuration", () => {
 
   it("limits MCP and fixture commands to dev builds on localhost", () => {
     const source = readSource("src-tauri/src/lib.rs");
-    const fixtureCommands = [
+    const promptPackFixtureCommands = [
       "seed_prompt_pack_cancellation_smoke_fixture",
       "clear_prompt_pack_cancellation_smoke_fixture",
+    ];
+    const fixtureCommands = [
       "seed_takeout_cancellation_smoke_fixture",
       "clear_takeout_cancellation_smoke_fixture",
       "seed_source_job_cancellation_smoke_fixture",
@@ -75,6 +82,20 @@ describe("Tauri security configuration", () => {
       /#\[cfg\(dev\)\]\s*let builder = builder\.plugin\(\s*tauri_plugin_mcp_bridge::Builder::new\(\)\s*\.bind_address\("127\.0\.0\.1"\)\s*\.build\(\),\s*\);/s,
     );
     expect(source).not.toMatch(/#\[cfg\(debug_assertions\)\][\s\S]{0,300}tauri_plugin_mcp_bridge/);
+
+    for (const command of promptPackFixtureCommands) {
+      expect(
+        source.match(
+          new RegExp(
+            `#\\[cfg\\(all\\(dev, feature = "prompt-pack-dev-fixtures"\\)\\)\\][\\s\\S]{0,400}\\b${command}\\b`,
+            "g",
+          ),
+        ),
+      ).toHaveLength(2);
+      expect(source).not.toMatch(
+        new RegExp(`#\\[cfg\\(debug_assertions\\)\\]\\s*${command}`),
+      );
+    }
 
     for (const command of fixtureCommands) {
       expect(

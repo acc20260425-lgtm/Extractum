@@ -45,7 +45,7 @@ use prompt_packs::{
     preflight_youtube_summary_run, start_youtube_summary_run, update_prompt_pack_run,
     PromptPackRunState,
 };
-#[cfg(dev)]
+#[cfg(all(dev, feature = "prompt-pack-dev-fixtures"))]
 use prompt_packs::{
     clear_prompt_pack_cancellation_smoke_fixture, seed_prompt_pack_cancellation_smoke_fixture,
 };
@@ -278,9 +278,9 @@ pub fn run() {
             get_prompt_pack_stage_artifact,
             get_prompt_pack_validation_findings,
             list_prompt_pack_audit_events,
-            #[cfg(dev)]
+            #[cfg(all(dev, feature = "prompt-pack-dev-fixtures"))]
             seed_prompt_pack_cancellation_smoke_fixture,
-            #[cfg(dev)]
+            #[cfg(all(dev, feature = "prompt-pack-dev-fixtures"))]
             clear_prompt_pack_cancellation_smoke_fixture,
             get_source_identity_repair_status,
             preview_source_identity_repair,

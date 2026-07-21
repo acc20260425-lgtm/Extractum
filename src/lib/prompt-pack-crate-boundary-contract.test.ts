@@ -380,6 +380,9 @@ version.workspace = true
 edition.workspace = true
 publish = false
 
+[features]
+dev-fixtures = []
+
 [dependencies]
 extractum-core = { path = "../extractum-core" }
 extractum-gemini-browser = { path = "../extractum-gemini-browser" }
@@ -625,6 +628,12 @@ describe("extractum-prompt-packs crate boundary", () => {
       "crates/extractum-prompt-packs",
     ]);
     expect(crateCargo).toBe(expectedCrateManifest);
+    expect(tomlSection(rootCargo, "features")).toContain(
+      'prompt-pack-dev-fixtures = ["extractum-prompt-packs/dev-fixtures"]',
+    );
+    expect(JSON.parse(read("src-tauri/tauri.mcp.conf.json")).build.features).toEqual([
+      "prompt-pack-dev-fixtures",
+    ]);
     expect(dependencyNames(tomlSection(crateCargo, "dependencies"))).toEqual(
       sorted([
         "extractum-core",
@@ -786,6 +795,39 @@ describe("extractum-prompt-packs crate boundary", () => {
     );
     expect(read(`${appRoot}/youtube_summary/mod.rs`)).toBe(
       "#[cfg(test)]\nmod snapshots_tests;\n#[cfg(test)]\nmod test_support;\n",
+    );
+  });
+
+  it("keeps cancellation smoke fixture services out of the production crate API", () => {
+    if (!crateExtracted) return;
+
+    const devGate = '#[cfg(any(test, feature = "dev-fixtures"))]';
+    const runtime = read(`${crateRoot}/src/runtime.rs`);
+    const crateLib = read(`${crateRoot}/src/lib.rs`);
+    const appRuntime = read(`${appRoot}/runtime_commands.rs`);
+    const appFacade = read(`${appRoot}/mod.rs`);
+    for (const symbol of [
+      "seed_prompt_pack_cancellation_smoke_fixture_in_pool",
+      "clear_prompt_pack_cancellation_smoke_fixture_in_pool",
+    ]) {
+      expect(runtime).toContain(`${devGate}\npub async fn ${symbol}`);
+    }
+    expect(crateLib).toMatch(
+      /#\[cfg\(any\(test, feature = "dev-fixtures"\)\)\]\npub use runtime::\{\s*clear_prompt_pack_cancellation_smoke_fixture_in_pool,\s*seed_prompt_pack_cancellation_smoke_fixture_in_pool,\s*\};/s,
+    );
+    expect(appRuntime).toMatch(
+      /#\[cfg\(all\(dev, feature = "prompt-pack-dev-fixtures"\)\)\]\nuse extractum_prompt_packs::\{\s*clear_prompt_pack_cancellation_smoke_fixture_in_pool,\s*seed_prompt_pack_cancellation_smoke_fixture_in_pool,\s*\};/s,
+    );
+    for (const symbol of [
+      "seed_prompt_pack_cancellation_smoke_fixture",
+      "clear_prompt_pack_cancellation_smoke_fixture",
+    ]) {
+      expect(appRuntime).toContain(
+        `#[cfg(all(dev, feature = "prompt-pack-dev-fixtures"))]\n#[tauri::command]\npub async fn ${symbol}`,
+      );
+    }
+    expect(appFacade).toMatch(
+      /#\[cfg\(all\(dev, feature = "prompt-pack-dev-fixtures"\)\)\]\npub use runtime_commands::\{\s*clear_prompt_pack_cancellation_smoke_fixture,\s*seed_prompt_pack_cancellation_smoke_fixture,\s*\};/s,
     );
   });
 

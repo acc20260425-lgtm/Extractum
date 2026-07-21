@@ -34,6 +34,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [features]
 csp-verification = ["tauri/devtools"]
+prompt-pack-dev-fixtures = ["extractum-prompt-packs/dev-fixtures"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

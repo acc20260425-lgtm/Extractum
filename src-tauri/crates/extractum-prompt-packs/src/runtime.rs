@@ -40,6 +40,7 @@ use extractum_llm::{
     resolve_effective_model, resolve_model_input_token_limit, LlmSchedulerState, ResolvedLlmProfile,
 };
 
+#[cfg(any(test, feature = "dev-fixtures"))]
 const PROMPT_PACK_CANCELLATION_SMOKE_FIXTURE_LABEL: &str =
     "__prompt_pack_cancellation_smoke_fixture__";
 
@@ -475,7 +476,7 @@ pub async fn fail_run_execution(
     error: &AppError,
 ) -> AppResult<()> {
     let run_id = ticket.run_id();
-    sqlx::query(
+    let persistence_result = sqlx::query(
         "UPDATE prompt_pack_runs
          SET run_status = 'failed',
              result_status = 'failed',
@@ -490,7 +491,7 @@ pub async fn fail_run_execution(
     .bind(run_id)
     .execute(pool)
     .await
-    .map_err(AppError::database)?;
+    .map_err(AppError::database);
     emit_youtube_summary_terminal_event(
         state,
         events.as_ref(),
@@ -503,7 +504,7 @@ pub async fn fail_run_execution(
         },
     )
     .await;
-    Ok(())
+    persistence_result.map(|_| ())
 }
 
 async fn emit_youtube_summary_terminal_event(
@@ -587,6 +588,7 @@ pub async fn cleanup_interrupted_prompt_pack_runs_in_pool(
     Ok(())
 }
 
+#[cfg(any(test, feature = "dev-fixtures"))]
 pub async fn seed_prompt_pack_cancellation_smoke_fixture_in_pool(
     pool: &SqlitePool,
     state: &PromptPackRunState,
@@ -630,6 +632,7 @@ pub async fn seed_prompt_pack_cancellation_smoke_fixture_in_pool(
         .ok_or_else(|| AppError::not_found(format!("Prompt Pack run {run_id} not found")))
 }
 
+#[cfg(any(test, feature = "dev-fixtures"))]
 pub async fn clear_prompt_pack_cancellation_smoke_fixture_in_pool(
     pool: &SqlitePool,
     state: &PromptPackRunState,
@@ -654,6 +657,7 @@ pub async fn clear_prompt_pack_cancellation_smoke_fixture_in_pool(
     Ok(deleted)
 }
 
+#[cfg(any(test, feature = "dev-fixtures"))]
 async fn prompt_pack_cancellation_smoke_fixture_run_ids(pool: &SqlitePool) -> AppResult<Vec<i64>> {
     sqlx::query_scalar(
         "SELECT id FROM prompt_pack_runs
@@ -997,6 +1001,50 @@ mod tests {
         assert_eq!(terminal.len(), 1);
         assert_eq!(terminal[0].kind, "failed");
         assert_eq!(terminal[0].run_id, run_id);
+    }
+
+    #[tokio::test]
+    async fn terminal_failure_cleans_state_and_emits_when_persistence_fails() {
+        let pool =
+            test_pool_with_prompt_pack_runs([(75, None, "queued", "2026-07-20T00:00:00Z")]).await;
+        let state = PromptPackRunState::new();
+        state.track(75).await.expect("track run");
+        let ticket = RunExecutionTicket { run_id: 75 };
+        let terminal_events = Arc::new(RecordingEvents::default());
+        let failure = extractum_core::error::AppError::internal("profile resolution failed");
+        sqlx::query("DROP TABLE prompt_pack_runs")
+            .execute(&pool)
+            .await
+            .expect("break terminal persistence");
+
+        let result =
+            fail_run_execution(&pool, &state, terminal_events.clone(), &ticket, &failure).await;
+
+        let persistence_error = result.expect_err("persistence failure must be returned");
+        assert!(
+            persistence_error.message.starts_with("Database error:"),
+            "unexpected error: {}",
+            persistence_error.message
+        );
+        assert!(!state.active_run_ids().await.contains(&75));
+        assert_eq!(
+            *terminal_events.values.lock().expect("event log"),
+            vec![PromptPackEvent {
+                run_id: 75,
+                request_id: "run-75-terminal".to_string(),
+                kind: "failed".to_string(),
+                run_status: "failed".to_string(),
+                phase: "terminal".to_string(),
+                stage_run_id: None,
+                stage_name: None,
+                source_snapshot_id: None,
+                queue_position: None,
+                progress_current: Some(0),
+                progress_total: Some(0),
+                message: Some("profile resolution failed".to_string()),
+                error: None,
+            }]
+        );
     }
 
     #[test]

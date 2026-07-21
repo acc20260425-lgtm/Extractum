@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 publish = false
 
+[features]
+dev-fixtures = []
+
 [dependencies]
 extractum-core = { path = "../extractum-core" }
 extractum-gemini-browser = { path = "../extractum-gemini-browser" }

@@ -1,4 +1,7 @@
 {
+  "build": {
+    "features": ["prompt-pack-dev-fixtures"]
+  },
   "app": {
     "withGlobalTauri": true
   }
