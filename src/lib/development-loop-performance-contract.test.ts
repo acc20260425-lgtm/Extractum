@@ -11,6 +11,12 @@ const readSource = (relativePath: string) =>
 const packageJson = JSON.parse(readSource("package.json")) as {
   scripts: Record<string, string>;
 };
+const promptPackCrateExtracted = existsSync(
+  path.join(
+    repoRoot,
+    "src-tauri/crates/extractum-prompt-packs/Cargo.toml",
+  ),
+);
 
 describe("daily development loop configuration", () => {
   it("uses adaptive Vitest threads through one owned config object", () => {
@@ -39,7 +45,9 @@ describe("daily development loop configuration", () => {
       "cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets",
     );
     expect(packageJson.scripts["test:rust:prompt-pack-runs"]).toBe(
-      "cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_pack_run",
+      promptPackCrateExtracted
+        ? "cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib prompt_pack_run"
+        : "cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_pack_run",
     );
     expect(packageJson.scripts["test:rust"]).not.toContain("--target-dir");
     expect(packageJson.scripts["test:rust:prompt-pack-runs"]).not.toContain("--target-dir");

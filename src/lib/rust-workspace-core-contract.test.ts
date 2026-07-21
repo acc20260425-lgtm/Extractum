@@ -3,6 +3,9 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = path.resolve(import.meta.dirname, "..", "..");
+const promptPackCrateExtracted = existsSync(
+  path.join(repoRoot, "src-tauri/crates/extractum-prompt-packs/Cargo.toml"),
+);
 const readSource = (relativePath: string) =>
   readFileSync(path.join(repoRoot, relativePath), "utf8").replace(/\r\n/g, "\n");
 const readOptionalSource = (relativePath: string) =>
@@ -26,12 +29,14 @@ describe("Rust workspace core contract", () => {
       .match(/^members\s*=\s*\[([^\]]+)\]$/m)?.[1]
       .split(",")
       .map((member) => member.trim().replace(/^"|"$/g, ""));
-    expect(members).toEqual([
+    const expectedMembers = [
       ".",
       "crates/extractum-core",
       "crates/extractum-gemini-browser",
       "crates/extractum-llm",
-    ]);
+      ...(promptPackCrateExtracted ? ["crates/extractum-prompt-packs"] : []),
+    ];
+    expect(members).toEqual(expectedMembers);
     expect(rootCargo).toMatch(/resolver\s*=\s*"2"/);
     expect(rootCargo).toContain("[workspace.dependencies]");
     expect(rootCargo).toContain("[profile.dev]");
@@ -47,6 +52,7 @@ describe("Rust workspace core contract", () => {
       expect(coreCargo).toMatch(new RegExp(`${dependency}\\.workspace\\s*=\\s*true`));
     }
     expect(coreCargo).not.toMatch(/\[profile\./);
+    expect(coreCargo).not.toContain("extractum-prompt-packs");
   });
 
   it("keeps a curated core and explicit private application wrappers", () => {
@@ -73,7 +79,9 @@ describe("Rust workspace core contract", () => {
       "cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets",
     );
     expect(packageJson.scripts["test:rust:prompt-pack-runs"]).toBe(
-      "cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_pack_run",
+      promptPackCrateExtracted
+        ? "cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib prompt_pack_run"
+        : "cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_pack_run",
     );
     expect(packageJson.scripts["check:rustfmt"]).toBe(
       "cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check",

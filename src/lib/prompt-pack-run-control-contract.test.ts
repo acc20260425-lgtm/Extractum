@@ -1,7 +1,16 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { readPromptPackDomainSource } from "./prompt-pack-contract-paths";
+import {
+  readPromptPackAppFacade,
+  readPromptPackDomainSource,
+} from "./prompt-pack-contract-paths";
 
+const crateExtracted = existsSync(
+  resolve(import.meta.dirname, "../../src-tauri/crates/extractum-prompt-packs/Cargo.toml"),
+);
+const appFacadeSource = readPromptPackAppFacade();
 const promptPacksModuleSource = readPromptPackDomainSource("lib.rs", "mod.rs");
 const runControlSource = readPromptPackDomainSource("run_control.rs");
 const runtimeSource = readPromptPackDomainSource("runtime.rs");
@@ -30,16 +39,23 @@ describe("Prompt Pack run control ownership", () => {
     );
   });
 
-  it("preserves both public PromptPackRunState paths", () => {
+  it("preserves the curated crate and exact app PromptPackRunState paths", () => {
+    const appFacade = normalized(appFacadeSource);
     const moduleSource = normalized(promptPacksModuleSource);
     const runtime = normalized(runtimeSource);
 
     expect(runtime).toMatch(
       /^pub use super::run_control::PromptPackRunState;$/m,
     );
-    expect(moduleSource).toMatch(
-      /pub use runtime::\{[\s\S]*?\bPromptPackRunState,\s*\n\};/,
-    );
+    expect(moduleSource).toMatch(/pub use [^;]*\bPromptPackRunState\b[^;]*;/);
+    const expectedAppExport = crateExtracted
+      ? "pub use extractum_prompt_packs::PromptPackRunState;"
+      : "pub use runtime::PromptPackRunState;";
+    const rejectedAppExport = crateExtracted
+      ? "pub use runtime::PromptPackRunState;"
+      : "pub use extractum_prompt_packs::PromptPackRunState;";
+    expect(appFacade).toContain(expectedAppExport);
+    expect(appFacade).not.toContain(rejectedAppExport);
   });
 
   it("keeps the exact terminal event cleanup set", () => {

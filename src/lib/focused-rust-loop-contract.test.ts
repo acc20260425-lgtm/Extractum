@@ -1,8 +1,20 @@
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import agentGuidanceRaw from "../../AGENTS.md?raw";
 
 const agentGuidance = agentGuidanceRaw.replace(/\r\n/g, "\n");
+const repoRoot = path.resolve(import.meta.dirname, "..", "..");
+const promptPackCrateExtracted = existsSync(
+  path.join(
+    repoRoot,
+    "src-tauri/crates/extractum-prompt-packs/Cargo.toml",
+  ),
+);
+const packageJson = JSON.parse(
+  readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+) as { scripts: Record<string, string> };
 const policyAnchor = "<!-- focused-rust-loop -->";
 const policyStart = agentGuidance.indexOf(policyAnchor);
 const nextHeading = policyStart < 0 ? -1 : agentGuidance.indexOf("\n## ", policyStart);
@@ -29,6 +41,14 @@ describe("focused Rust loop repository policy", () => {
     expect(focusedPolicy).toContain(focusedTest);
     expect(focusedPolicy).toContain(packageCheckpoint);
     expect(focusedPolicy).toContain("-p extractum");
+    expect(focusedPolicy).toContain(
+      "use the extracted domain package after it moves",
+    );
+    expect(packageJson.scripts["test:rust:prompt-pack-runs"]).toBe(
+      promptPackCrateExtracted
+        ? "cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib prompt_pack_run"
+        : "cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_pack_run",
+    );
     expect(focusedPolicy).toContain("src-tauri/target");
   });
 

@@ -4,6 +4,7 @@ import { readPromptPackDomainSource } from "./prompt-pack-contract-paths";
 
 const promptPacksModuleSource = readPromptPackDomainSource("lib.rs", "mod.rs");
 const runtimeSource = readPromptPackDomainSource("runtime.rs");
+const runtimeCommandsSource = readPromptPackDomainSource("runtime_commands.rs");
 const runtimeConfigSource = readPromptPackDomainSource("runtime_config.rs");
 
 const normalized = (source: string) => source.replace(/\r\n/g, "\n");
@@ -63,17 +64,23 @@ describe("Prompt Pack runtime config ownership", () => {
     expect(runtime).not.toContain(selectMarker);
   });
 
-  it("keeps resolution and completion-runtime construction in runtime", () => {
+  it("keeps model resolution domain-side and profile resolution in the app task", () => {
     const runtime = productionPart(runtimeSource);
+    const runtimeCommands = normalized(runtimeCommandsSource);
 
     expect(matches(runtime, /\bload_run_runtime_config\s*\(/g)).toHaveLength(1);
     expect(runtime).toContain("RunRuntimeProvider::Api");
     expect(runtime).toContain("RunRuntimeProvider::GeminiBrowser");
-    expect(runtime).toContain("resolve_profile_for_backend");
+    expect(runtime).not.toContain("resolve_profile_for_backend");
     expect(runtime).toContain("resolve_effective_model");
     expect(runtime).toContain("resolve_model_input_token_limit_for_backend");
     expect(runtime).toContain("RunCompletionRuntime::Api");
     expect(runtime).toContain("RunCompletionRuntime::GeminiBrowser");
+    expect(runtimeCommands).toContain("prepare_run_execution");
+    expect(runtimeCommands).toContain("resolve_profile_for_backend");
+    expect(runtimeCommands.indexOf("resolve_profile_for_backend")).toBeGreaterThan(
+      runtimeCommands.indexOf("prepare_run_execution"),
+    );
   });
 
   it("keeps orchestration dependencies out of runtime_config", () => {

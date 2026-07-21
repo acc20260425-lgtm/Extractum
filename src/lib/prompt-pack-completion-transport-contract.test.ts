@@ -4,6 +4,7 @@ import { readPromptPackDomainSource } from "./prompt-pack-contract-paths";
 
 const completionTransportSource = readPromptPackDomainSource("completion_transport.rs");
 const dtoSource = readPromptPackDomainSource("dto.rs");
+const eventAdapterSource = readPromptPackDomainSource("event_adapter.rs");
 const promptPacksModuleSource = readPromptPackDomainSource("lib.rs", "mod.rs");
 const runtimeSource = readPromptPackDomainSource("runtime.rs");
 const stageExecutionSource = readPromptPackDomainSource("stage_execution.rs");
@@ -62,28 +63,33 @@ describe("Prompt Pack completion transport ownership", () => {
     ).toHaveLength(5);
   });
 
-  it("keeps one event constant definition and the runtime compatibility path", () => {
+  it("keeps one app-owned event constant outside the portable transport", () => {
     const dto = normalized(dtoSource);
+    const eventAdapter = normalized(eventAdapterSource);
     const runtime = normalized(runtimeSource);
     const transport = normalized(completionTransportSource);
-    const combined = [dto, runtime, transport].join("\n");
+    const combined = [dto, eventAdapter, runtime, transport].join("\n");
 
     expect(
       matches(combined, /pub const PROMPT_PACK_RUN_EVENT\s*:/g),
     ).toHaveLength(1);
-    expect(dto).toContain(
+    expect(eventAdapter).toContain(
       'pub const PROMPT_PACK_RUN_EVENT: &str = "prompt-pack-run-event";',
     );
-    expect(runtime).toMatch(/^pub use super::dto::PROMPT_PACK_RUN_EVENT;$/m);
+    for (const portable of [dto, runtime, transport]) {
+      expect(portable).not.toMatch(/pub const PROMPT_PACK_RUN_EVENT\s*:/);
+    }
   });
 
-  it("preserves direct transport events and the repair queue text", () => {
+  it("preserves typed transport events and the repair queue text", () => {
     const transport = normalized(completionTransportSource);
 
     expect(transport).toContain("JSON repair queued at position {position}");
     expect(
-      matches(transport, /\.emit\(\s*PROMPT_PACK_RUN_EVENT,/g),
+      matches(transport, /\.emit\(PromptPackEvent\s*\{/g),
     ).toHaveLength(4);
+    expect(transport).toContain("PromptPackEventSink");
+    expect(transport).not.toMatch(/tauri::|AppHandle|Emitter/);
     expect(transport).not.toContain("emit_prompt_pack_run_event");
     expect(transport).not.toContain("apply_event");
   });

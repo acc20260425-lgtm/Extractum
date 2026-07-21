@@ -195,11 +195,19 @@ const profiles = read(`${appDir}/profiles.rs`);
 const appLib = read("src-tauri/src/lib.rs");
 const frontendTypes = read("src/lib/types/llm.ts");
 const frontendApi = read("src/lib/api/llm.ts");
+const promptPackCrateExtracted = existsSync(
+  path.join(
+    repoRoot,
+    "src-tauri/crates/extractum-prompt-packs/Cargo.toml",
+  ),
+);
 
 describe("extractum-llm crate boundary", () => {
   it("owns the exact workspace, manifest, lock, and feature dependency surface", () => {
     expect(tomlSection(rootCargo, "workspace")).toContain(
-      'members = [".", "crates/extractum-core", "crates/extractum-gemini-browser", "crates/extractum-llm"]',
+      promptPackCrateExtracted
+        ? 'members = [".", "crates/extractum-core", "crates/extractum-gemini-browser", "crates/extractum-llm", "crates/extractum-prompt-packs"]'
+        : 'members = [".", "crates/extractum-core", "crates/extractum-gemini-browser", "crates/extractum-llm"]',
     );
     expect((rootCargo.match(/extractum-llm\s*=\s*\{ path = "crates\/extractum-llm" \}/g) ?? []).length).toBe(1);
     expect(dependencyNames(tomlSection(crateCargo, "dependencies"))).toEqual(expectedCrateDependencies);
@@ -217,6 +225,10 @@ describe("extractum-llm crate boundary", () => {
     expect(tomlSection(crateCargo, "dev-dependencies")).toContain('tokio = { workspace = true, features = ["io-util", "net", "rt", "test-util"] }');
     expect(lockDependencies(lockPackage(cargoLock, "extractum-llm"))).toEqual(expectedCrateDependencies);
     expect(lockDependencies(lockPackage(cargoLock, "extractum")).filter((name) => name === "extractum-llm")).toEqual(["extractum-llm"]);
+    expect(crateCargo).not.toContain("extractum-prompt-packs");
+    expect(lockDependencies(lockPackage(cargoLock, "extractum-llm"))).not.toContain(
+      "extractum-prompt-packs",
+    );
   });
 
   it("exposes only the curated API and keeps credentials non-serializable", () => {

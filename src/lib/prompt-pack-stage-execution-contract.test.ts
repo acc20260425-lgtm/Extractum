@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { readPromptPackDomainSource } from "./prompt-pack-contract-paths";
@@ -5,6 +7,13 @@ import { readPromptPackDomainSource } from "./prompt-pack-contract-paths";
 const promptPacksModuleSource = readPromptPackDomainSource("lib.rs", "mod.rs");
 const runtimeSource = readPromptPackDomainSource("runtime.rs");
 const stageExecutionSource = readPromptPackDomainSource("stage_execution.rs");
+const repoRoot = path.resolve(import.meta.dirname, "..", "..");
+const crateExtracted = existsSync(
+  path.join(
+    repoRoot,
+    "src-tauri/crates/extractum-prompt-packs/Cargo.toml",
+  ),
+);
 
 const normalized = (source: string) => source.replace(/\r\n/g, "\n");
 const matches = (source: string, pattern: RegExp) => source.match(pattern) ?? [];
@@ -20,6 +29,22 @@ const stageFunctions = [
 const gemHelpers = ["gem_part_phase", "gem_part_started_message"] as const;
 
 describe("Prompt Pack stage execution ownership", () => {
+  it("keeps stage execution in exactly the active Prompt Pack package", () => {
+    expect(
+      existsSync(
+        path.join(repoRoot, "src-tauri/src/prompt_packs/stage_execution.rs"),
+      ),
+    ).toBe(!crateExtracted);
+    expect(
+      existsSync(
+        path.join(
+          repoRoot,
+          "src-tauri/crates/extractum-prompt-packs/src/stage_execution.rs",
+        ),
+      ),
+    ).toBe(crateExtracted);
+  });
+
   it("registers a private stage_execution sibling module", () => {
     const source = normalized(promptPacksModuleSource);
 

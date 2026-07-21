@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { readPromptPackDomainSource } from "./prompt-pack-contract-paths";
 
+const assetsSource = readPromptPackDomainSource("assets.rs");
 const promptPacksModuleSource = readPromptPackDomainSource("lib.rs", "mod.rs");
 const runtimeSource = readPromptPackDomainSource("runtime.rs");
 const stageRequestPolicySource = readPromptPackDomainSource("stage_request_policy.rs");
@@ -27,11 +28,14 @@ const extractedFunctions = [
 ] as const;
 
 const movedConstants = [
-  "TRANSCRIPT_ANALYSIS_STAGE_JSON",
-  "SYNTHESIS_STAGE_JSON",
   "DETAILED_REPORT_CONTROL_PRESET",
   "STANDARD_VIDEO_SUMMARY_PROMPT",
   "DETAILED_VIDEO_SUMMARY_PROMPT",
+] as const;
+
+const centralizedAssetConstants = [
+  "TRANSCRIPT_RUNTIME_JSON",
+  "SYNTHESIS_RUNTIME_JSON",
 ] as const;
 
 const movedStructs = [
@@ -64,13 +68,21 @@ describe("Prompt Pack stage request policy ownership", () => {
     expect(runtime).not.toMatch(runtimeDefinition);
   });
 
-  it("moves prompt assets and budget configuration without changing include paths", () => {
+  it("centralizes runtime assets while preserving prompt and budget policy", () => {
+    const assets = normalized(assetsSource);
     const policy = normalized(stageRequestPolicySource);
     const runtime = normalized(runtimeSource);
+    const productionRuntime = runtime.split("\n#[cfg(test)]", 1)[0];
 
     for (const constantName of movedConstants) {
       expect(policy).toMatch(new RegExp(`\\b${constantName}\\b`));
       expect(runtime).not.toMatch(new RegExp(`\\b(?:const|static)\\s+${constantName}\\b`));
+    }
+    for (const constantName of centralizedAssetConstants) {
+      expect(assets).toMatch(new RegExp(`\\bconst\\s+${constantName}\\b`));
+      expect(policy).toMatch(new RegExp(`\\b${constantName}\\b`));
+      expect(policy).not.toMatch(new RegExp(`\\bconst\\s+${constantName}\\b`));
+      expect(runtime).not.toMatch(new RegExp(`\\bconst\\s+${constantName}\\b`));
     }
     for (const structName of movedStructs) {
       expect(policy).toMatch(new RegExp(`^struct\\s+${structName}\\s*\\{`, "m"));
@@ -79,12 +91,8 @@ describe("Prompt Pack stage request policy ownership", () => {
     expect(policy).toMatch(
       /^pub\(super\) const DETAILED_REPORT_CONTROL_PRESET: &str = "detailed_report";$/m,
     );
-    expect(policy).toContain(
-      'include_str!("../../prompt-packs/youtube_summary/1.0.0/runtime/transcript_analysis.json")',
-    );
-    expect(policy).toContain(
-      'include_str!("../../prompt-packs/youtube_summary/1.0.0/runtime/synthesis.json")',
-    );
+    expect(policy).not.toContain("include_str!");
+    expect(productionRuntime).not.toContain("include_str!");
   });
 
   it("keeps execution lifecycle messages out of request policy", () => {

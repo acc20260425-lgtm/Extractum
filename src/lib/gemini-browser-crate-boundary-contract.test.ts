@@ -264,11 +264,19 @@ const crateLib = read("src-tauri/crates/extractum-gemini-browser/src/lib.rs");
 const facade = read("src-tauri/src/gemini_browser/mod.rs");
 const crateRust = rustSources("src-tauri/crates/extractum-gemini-browser/src");
 const appRust = rustSources("src-tauri/src/gemini_browser");
+const promptPackCrateExtracted = existsSync(
+  path.join(
+    repoRoot,
+    "src-tauri/crates/extractum-prompt-packs/Cargo.toml",
+  ),
+);
 
 describe("Gemini Browser crate boundary", () => {
   it("declares one app-to-domain edge and locked package", () => {
     expect(tomlSection(rootCargo, "workspace")).toContain(
-      'members = [".", "crates/extractum-core", "crates/extractum-gemini-browser", "crates/extractum-llm"]',
+      promptPackCrateExtracted
+        ? 'members = [".", "crates/extractum-core", "crates/extractum-gemini-browser", "crates/extractum-llm", "crates/extractum-prompt-packs"]'
+        : 'members = [".", "crates/extractum-core", "crates/extractum-gemini-browser", "crates/extractum-llm"]',
     );
     expect(tomlSection(rootCargo, "dependencies")).toContain(
       'extractum-gemini-browser = { path = "crates/extractum-gemini-browser" }',
@@ -278,25 +286,65 @@ describe("Gemini Browser crate boundary", () => {
       ["parking_lot", "serde", "serde_json", "tempfile", "time", "tokio", "tokio-util", "url"].sort(),
     );
     expect(lockDependencies(lockPackage(cargoLock, "extractum"))).toContain("extractum-gemini-browser");
+    expect(crateCargo).not.toContain("extractum-prompt-packs");
+    expect(lockDependencies(lockPackage(cargoLock, "extractum-gemini-browser"))).not.toContain(
+      "extractum-prompt-packs",
+    );
   });
 
   it("keeps the exact portable dependency and feature allowlist", () => {
     expect(dependencyNames(tomlSection(rootCargo, "workspace.dependencies"))).toEqual(
-      ["parking_lot", "reqwest", "secrecy", "serde", "serde_json", "tempfile", "time", "tokio", "tokio-util", "url", "zstd"].sort(),
+      (promptPackCrateExtracted
+        ? [
+            "parking_lot",
+            "reqwest",
+            "secrecy",
+            "serde",
+            "serde_json",
+            "sha2",
+            "sqlx",
+            "tempfile",
+            "time",
+            "tokio",
+            "tokio-util",
+            "url",
+            "zstd",
+          ]
+        : [
+            "parking_lot",
+            "reqwest",
+            "secrecy",
+            "serde",
+            "serde_json",
+            "tempfile",
+            "time",
+            "tokio",
+            "tokio-util",
+            "url",
+            "zstd",
+          ]).sort(),
     );
-    expect(tomlSection(rootCargo, "workspace.dependencies")).toBe([
-      'parking_lot = "0.12"',
-      'reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }',
-      'secrecy = "0.8"',
-      'serde = { version = "1", features = ["derive"] }',
-      'serde_json = "1"',
-      'tempfile = "3"',
-      'time = { version = "0.3", features = ["formatting", "parsing", "macros"] }',
-      'tokio = "1"',
-      'tokio-util = "0.7"',
-      'url = "2"',
-      'zstd = "0.13"',
-    ].join("\n"));
+    expect(tomlSection(rootCargo, "workspace.dependencies")).toBe(
+      [
+        'parking_lot = "0.12"',
+        'reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }',
+        'secrecy = "0.8"',
+        'serde = { version = "1", features = ["derive"] }',
+        'serde_json = "1"',
+        ...(promptPackCrateExtracted
+          ? [
+              'sha2 = "0.10"',
+              'sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }',
+            ]
+          : []),
+        'tempfile = "3"',
+        'time = { version = "0.3", features = ["formatting", "parsing", "macros"] }',
+        'tokio = "1"',
+        'tokio-util = "0.7"',
+        'url = "2"',
+        'zstd = "0.13"',
+      ].join("\n"),
+    );
     for (const inherited of ["parking_lot", "reqwest", "secrecy", "tokio-util", "url", "tempfile"]) {
       expect(tomlSection(rootCargo, "dependencies")).toMatch(new RegExp(`^${inherited}\\s*=\\s*\\{ workspace = true`, "m"));
     }

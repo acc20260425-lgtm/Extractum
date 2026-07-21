@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import focusedLoopDesignRaw from "../../docs/superpowers/specs/2026-07-17-focused-rust-loop-design.md?raw";
@@ -13,6 +15,15 @@ import reapplicationPlanRaw from "../../docs/superpowers/plans/2026-07-18-extrac
 import cancellationDispositionRaw from "../../docs/superpowers/verification/2026-07-19-extractum-process-reapplication-cancellation.md?raw";
 
 const normalize = (value: string) => value.replace(/\r\n/g, "\n");
+const repoRoot = path.resolve(import.meta.dirname, "..", "..");
+const promptPackCrateManifest = path.join(
+  repoRoot,
+  "src-tauri/crates/extractum-prompt-packs/Cargo.toml",
+);
+const promptPackCrateExtracted = existsSync(promptPackCrateManifest);
+const packageJson = JSON.parse(
+  readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+) as { scripts: Record<string, string> };
 const compact = (value: string) =>
   normalize(value).replace(/\n>\s?/g, "\n").replace(/\s+/g, " ");
 const sectionBetween = (value: string, start: string, end: string) => {
@@ -101,6 +112,25 @@ const appOwnedGeminiBaselineTests = [
 ];
 
 describe("crate extraction timing policy", () => {
+  it("tracks the exact Prompt Pack package owner through the extraction move", () => {
+    const appRuntime = path.join(
+      repoRoot,
+      "src-tauri/src/prompt_packs/runtime.rs",
+    );
+    const crateRuntime = path.join(
+      repoRoot,
+      "src-tauri/crates/extractum-prompt-packs/src/runtime.rs",
+    );
+
+    expect(existsSync(appRuntime)).toBe(!promptPackCrateExtracted);
+    expect(existsSync(crateRuntime)).toBe(promptPackCrateExtracted);
+    expect(packageJson.scripts["test:rust:prompt-pack-runs"]).toBe(
+      promptPackCrateExtracted
+        ? "cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib prompt_pack_run"
+        : "cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_pack_run",
+    );
+  });
+
   it("keeps focused timing small and advisory", () => {
     expect(focusedLoopDesign).toContain(
       "**Status:** Approved; timing policy simplified 2026-07-19",
