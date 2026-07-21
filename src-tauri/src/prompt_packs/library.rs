@@ -8,47 +8,47 @@ use crate::error::{AppError, AppResult};
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptPackLibraryDto {
-    pub packs: Vec<PromptPackDto>,
+    packs: Vec<PromptPackDto>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptPackDto {
-    pub pack_id: String,
-    pub display_name: String,
-    pub active_version: Option<PromptPackVersionDto>,
+    pack_id: String,
+    display_name: String,
+    active_version: Option<PromptPackVersionDto>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptPackVersionDto {
-    pub pack_version_id: i64,
-    pub pack_version: String,
-    pub schema_version: String,
-    pub lifecycle_status: String,
-    pub default_control_preset: String,
-    pub default_evidence_mode: String,
-    pub default_include_comments: bool,
-    pub stages: Vec<PromptPackStageTemplateDto>,
-    pub schema_assets: Vec<PromptPackSchemaAssetDto>,
+    pack_version_id: i64,
+    pack_version: String,
+    schema_version: String,
+    lifecycle_status: String,
+    default_control_preset: String,
+    default_evidence_mode: String,
+    default_include_comments: bool,
+    stages: Vec<PromptPackStageTemplateDto>,
+    schema_assets: Vec<PromptPackSchemaAssetDto>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptPackStageTemplateDto {
-    pub stage_name: String,
-    pub stage_order: i64,
-    pub provider_family: String,
-    pub input_schema_id: String,
-    pub output_schema_id: String,
+    stage_name: String,
+    stage_order: i64,
+    provider_family: String,
+    input_schema_id: String,
+    output_schema_id: String,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptPackSchemaAssetDto {
-    pub schema_id: String,
-    pub schema_kind: String,
-    pub content_hash: String,
+    schema_id: String,
+    schema_kind: String,
+    content_hash: String,
 }
 
 #[tauri::command]

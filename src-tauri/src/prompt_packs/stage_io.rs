@@ -398,19 +398,19 @@ mod tests {
             .expect("seed");
         insert_youtube_video(&pool, 901, "v-ready").await;
         insert_transcript(&pool, 901, "Ready transcript").await;
-        let request = StartYoutubeSummaryRunRequest {
-            client_request_id: "req-stage-input".to_string(),
-            project_id: None,
-            source_ids: vec![901],
-            profile_id: None,
-            model_override: Some("test-model".to_string()),
-            runtime_provider: crate::prompt_packs::dto::PromptPackRuntimeProvider::Api,
-            browser_provider_config: None,
-            output_language: "en".to_string(),
-            control_preset: "standard".to_string(),
-            evidence_mode: "standard".to_string(),
-            include_comments: false,
-        };
+        let request = StartYoutubeSummaryRunRequest::new(
+            "req-stage-input".to_string(),
+            None,
+            vec![901],
+            None,
+            Some("test-model".to_string()),
+            crate::prompt_packs::dto::PromptPackRuntimeProvider::Api,
+            None,
+            "en".to_string(),
+            "standard".to_string(),
+            "standard".to_string(),
+            false,
+        );
         let run_id = create_youtube_summary_run_skeleton_in_pool(&pool, request, 1)
             .await
             .expect("run skeleton");

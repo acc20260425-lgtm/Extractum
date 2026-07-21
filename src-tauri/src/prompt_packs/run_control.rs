@@ -19,24 +19,24 @@ impl PromptPackRunState {
         Self::default()
     }
 
-    pub async fn track(&self, run_id: i64) -> AppResult<()> {
+    pub(crate) async fn track(&self, run_id: i64) -> AppResult<()> {
         self.active.lock().await.insert(run_id);
         self.ensure_cancellation_token(run_id).await;
         Ok(())
     }
 
-    pub async fn track_if_absent(&self, run_id: i64) -> AppResult<bool> {
+    pub(crate) async fn track_if_absent(&self, run_id: i64) -> AppResult<bool> {
         let inserted = self.active.lock().await.insert(run_id);
         self.ensure_cancellation_token(run_id).await;
         Ok(inserted)
     }
 
-    pub async fn request_cancel(&self, run_id: i64) -> AppResult<()> {
+    pub(crate) async fn request_cancel(&self, run_id: i64) -> AppResult<()> {
         self.ensure_cancellation_token(run_id).await.cancel();
         Ok(())
     }
 
-    pub async fn child_token(&self, run_id: i64) -> Option<CancellationToken> {
+    pub(crate) async fn child_token(&self, run_id: i64) -> Option<CancellationToken> {
         self.cancellation_tokens
             .lock()
             .await
@@ -44,18 +44,18 @@ impl PromptPackRunState {
             .map(CancellationToken::child_token)
     }
 
-    pub async fn finish(&self, run_id: i64) {
+    pub(crate) async fn finish(&self, run_id: i64) {
         self.active.lock().await.remove(&run_id);
         self.cancellation_tokens.lock().await.remove(&run_id);
     }
 
-    pub async fn active_run_ids(&self) -> Vec<i64> {
+    pub(crate) async fn active_run_ids(&self) -> Vec<i64> {
         let mut ids = self.active.lock().await.iter().copied().collect::<Vec<_>>();
         ids.sort_unstable();
         ids
     }
 
-    pub async fn apply_event(&self, event: PromptPackRunEvent) {
+    pub(crate) async fn apply_event(&self, event: PromptPackRunEvent) {
         if matches!(
             event.kind.as_str(),
             "completed" | "partial" | "failed" | "cancelled" | "interrupted"

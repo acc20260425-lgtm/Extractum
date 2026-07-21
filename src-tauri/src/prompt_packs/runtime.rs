@@ -59,7 +59,7 @@ pub async fn preflight_youtube_summary_run(
     let runtime_provider = runtime_provider.unwrap_or_default();
     preflight_youtube_summary_in_pool(
         &pool,
-        super::dto::PreflightYoutubeSummaryRunRequest {
+        super::dto::PreflightYoutubeSummaryRunRequest::new(
             project_id,
             source_ids,
             profile_id,
@@ -70,7 +70,7 @@ pub async fn preflight_youtube_summary_run(
             control_preset,
             evidence_mode,
             include_comments,
-        },
+        ),
         model_budget_for_runtime(runtime_provider),
     )
     .await
@@ -94,7 +94,7 @@ pub async fn start_youtube_summary_run(
 ) -> AppResult<StartYoutubeSummaryRunOutcomeDto> {
     let pool = get_pool(&handle).await?;
     let runtime_provider = runtime_provider.unwrap_or_default();
-    let request = StartYoutubeSummaryRunRequest {
+    let request = StartYoutubeSummaryRunRequest::new(
         client_request_id,
         project_id,
         source_ids,
@@ -106,11 +106,11 @@ pub async fn start_youtube_summary_run(
         control_preset,
         evidence_mode,
         include_comments,
-    };
-    let outcome = if request.client_request_id.trim().is_empty() {
+    );
+    let outcome = if request.client_request_id().trim().is_empty() {
         start_youtube_summary_run_in_pool(&pool, request).await?
     } else if let Some(run) =
-        load_youtube_summary_run_by_client_request_id_in_pool(&pool, &request.client_request_id)
+        load_youtube_summary_run_by_client_request_id_in_pool(&pool, request.client_request_id())
             .await?
     {
         StartYoutubeSummaryRunOutcomeDto::Started { run }
@@ -153,7 +153,7 @@ async fn browser_runtime_start_failures_for_request(
     handle: &AppHandle,
     request: &StartYoutubeSummaryRunRequest,
 ) -> AppResult<Vec<YoutubeSummaryPreflightFailure>> {
-    if request.runtime_provider != PromptPackRuntimeProvider::GeminiBrowser {
+    if request.runtime_provider() != PromptPackRuntimeProvider::GeminiBrowser {
         return Ok(Vec::new());
     }
 
@@ -479,7 +479,7 @@ pub async fn list_prompt_pack_runs(
     let pool = get_pool(&handle).await?;
     list_prompt_pack_runs_in_pool(
         &pool,
-        super::dto::ListPromptPackRunsRequest { project_id, limit },
+        super::dto::ListPromptPackRunsRequest::new(project_id, limit),
     )
     .await
 }
@@ -1345,15 +1345,10 @@ mod tests {
         ])
         .await;
 
-        let runs = list_prompt_pack_runs_in_pool(
-            &pool,
-            ListPromptPackRunsRequest {
-                project_id: Some(7),
-                limit: Some(20),
-            },
-        )
-        .await
-        .expect("recent runs");
+        let runs =
+            list_prompt_pack_runs_in_pool(&pool, ListPromptPackRunsRequest::new(Some(7), Some(20)))
+                .await
+                .expect("recent runs");
 
         assert_eq!(
             runs.iter().map(|run| run.run_id).collect::<Vec<_>>(),

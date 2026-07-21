@@ -75,30 +75,30 @@ pub(crate) async fn start_youtube_summary_run_with_preflight_failures_in_pool(
     request: StartYoutubeSummaryRunRequest,
     extra_blocking_failures: Vec<YoutubeSummaryPreflightFailure>,
 ) -> AppResult<StartYoutubeSummaryRunOutcomeDto> {
-    if request.client_request_id.trim().is_empty() {
+    if request.client_request_id().trim().is_empty() {
         return Err(AppError::validation("client_request_id cannot be empty"));
     }
 
-    if let Some(run) = load_run_by_client_request_id(pool, &request.client_request_id).await? {
+    if let Some(run) = load_run_by_client_request_id(pool, request.client_request_id()).await? {
         return Ok(StartYoutubeSummaryRunOutcomeDto::Started { run });
     }
 
-    let preflight_request = PreflightYoutubeSummaryRunRequest {
-        project_id: request.project_id,
-        source_ids: request.source_ids.clone(),
-        profile_id: request.profile_id.clone(),
-        model_override: request.model_override.clone(),
-        runtime_provider: request.runtime_provider,
-        browser_provider_config: request.browser_provider_config.clone(),
-        output_language: request.output_language.clone(),
-        control_preset: request.control_preset.clone(),
-        evidence_mode: request.evidence_mode.clone(),
-        include_comments: request.include_comments,
-    };
+    let preflight_request = PreflightYoutubeSummaryRunRequest::new(
+        request.project_id,
+        request.source_ids.clone(),
+        request.profile_id().map(str::to_owned),
+        request.model_override().map(str::to_owned),
+        request.runtime_provider(),
+        request.browser_provider_config.clone(),
+        request.output_language.clone(),
+        request.control_preset.clone(),
+        request.evidence_mode.clone(),
+        request.include_comments,
+    );
     let mut preflight = preflight_youtube_summary_in_pool(
         pool,
         preflight_request,
-        model_budget_for_runtime(request.runtime_provider),
+        model_budget_for_runtime(request.runtime_provider()),
     )
     .await?;
     preflight.blocking_failures.extend(extra_blocking_failures);

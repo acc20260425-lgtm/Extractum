@@ -17,37 +17,37 @@ pub(crate) async fn migrated_pool() -> sqlx::SqlitePool {
 }
 
 pub(crate) fn request_for_video(source_id: i64) -> PreflightYoutubeSummaryRunRequest {
-    PreflightYoutubeSummaryRunRequest {
-        project_id: None,
-        source_ids: vec![source_id],
-        profile_id: None,
-        model_override: Some("test-model".to_string()),
-        runtime_provider: PromptPackRuntimeProvider::Api,
-        browser_provider_config: None,
-        output_language: "en".to_string(),
-        control_preset: "standard".to_string(),
-        evidence_mode: "standard".to_string(),
-        include_comments: false,
-    }
+    PreflightYoutubeSummaryRunRequest::new(
+        None,
+        vec![source_id],
+        None,
+        Some("test-model".to_string()),
+        PromptPackRuntimeProvider::Api,
+        None,
+        "en".to_string(),
+        "standard".to_string(),
+        "standard".to_string(),
+        false,
+    )
 }
 
 pub(crate) fn start_request(
     client_request_id: &str,
     source_ids: Vec<i64>,
 ) -> StartYoutubeSummaryRunRequest {
-    StartYoutubeSummaryRunRequest {
-        client_request_id: client_request_id.to_string(),
-        project_id: None,
+    StartYoutubeSummaryRunRequest::new(
+        client_request_id.to_string(),
+        None,
         source_ids,
-        profile_id: None,
-        model_override: Some("test-model".to_string()),
-        runtime_provider: PromptPackRuntimeProvider::Api,
-        browser_provider_config: None,
-        output_language: "en".to_string(),
-        control_preset: "standard".to_string(),
-        evidence_mode: "standard".to_string(),
-        include_comments: false,
-    }
+        None,
+        Some("test-model".to_string()),
+        PromptPackRuntimeProvider::Api,
+        None,
+        "en".to_string(),
+        "standard".to_string(),
+        "standard".to_string(),
+        false,
+    )
 }
 
 pub(crate) fn request_for_playlist(source_id: i64) -> PreflightYoutubeSummaryRunRequest {

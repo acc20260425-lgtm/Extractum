@@ -28,136 +28,218 @@ impl PromptPackRuntimeProvider {
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
 pub struct PreflightYoutubeSummaryRunRequest {
-    pub project_id: Option<i64>,
-    pub source_ids: Vec<i64>,
-    pub profile_id: Option<String>,
-    pub model_override: Option<String>,
+    pub(crate) project_id: Option<i64>,
+    pub(crate) source_ids: Vec<i64>,
+    pub(crate) profile_id: Option<String>,
+    pub(crate) model_override: Option<String>,
     #[serde(default)]
-    pub runtime_provider: PromptPackRuntimeProvider,
+    pub(crate) runtime_provider: PromptPackRuntimeProvider,
     #[serde(default)]
-    pub browser_provider_config: Option<GeminiBrowserProviderConfig>,
-    pub output_language: String,
-    pub control_preset: String,
-    pub evidence_mode: String,
-    pub include_comments: bool,
+    pub(crate) browser_provider_config: Option<GeminiBrowserProviderConfig>,
+    pub(crate) output_language: String,
+    pub(crate) control_preset: String,
+    pub(crate) evidence_mode: String,
+    pub(crate) include_comments: bool,
+}
+
+impl PreflightYoutubeSummaryRunRequest {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        project_id: Option<i64>,
+        source_ids: Vec<i64>,
+        profile_id: Option<String>,
+        model_override: Option<String>,
+        runtime_provider: PromptPackRuntimeProvider,
+        browser_provider_config: Option<GeminiBrowserProviderConfig>,
+        output_language: String,
+        control_preset: String,
+        evidence_mode: String,
+        include_comments: bool,
+    ) -> Self {
+        Self {
+            project_id,
+            source_ids,
+            profile_id,
+            model_override,
+            runtime_provider,
+            browser_provider_config,
+            output_language,
+            control_preset,
+            evidence_mode,
+            include_comments,
+        }
+    }
 }
 
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StartYoutubeSummaryRunRequest {
-    pub client_request_id: String,
-    pub project_id: Option<i64>,
-    pub source_ids: Vec<i64>,
-    pub profile_id: Option<String>,
-    pub model_override: Option<String>,
+    pub(crate) client_request_id: String,
+    pub(crate) project_id: Option<i64>,
+    pub(crate) source_ids: Vec<i64>,
+    pub(crate) profile_id: Option<String>,
+    pub(crate) model_override: Option<String>,
     #[serde(default)]
-    pub runtime_provider: PromptPackRuntimeProvider,
+    pub(crate) runtime_provider: PromptPackRuntimeProvider,
     #[serde(default)]
-    pub browser_provider_config: Option<GeminiBrowserProviderConfig>,
-    pub output_language: String,
-    pub control_preset: String,
-    pub evidence_mode: String,
-    pub include_comments: bool,
+    pub(crate) browser_provider_config: Option<GeminiBrowserProviderConfig>,
+    pub(crate) output_language: String,
+    pub(crate) control_preset: String,
+    pub(crate) evidence_mode: String,
+    pub(crate) include_comments: bool,
+}
+
+impl StartYoutubeSummaryRunRequest {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        client_request_id: String,
+        project_id: Option<i64>,
+        source_ids: Vec<i64>,
+        profile_id: Option<String>,
+        model_override: Option<String>,
+        runtime_provider: PromptPackRuntimeProvider,
+        browser_provider_config: Option<GeminiBrowserProviderConfig>,
+        output_language: String,
+        control_preset: String,
+        evidence_mode: String,
+        include_comments: bool,
+    ) -> Self {
+        Self {
+            client_request_id,
+            project_id,
+            source_ids,
+            profile_id,
+            model_override,
+            runtime_provider,
+            browser_provider_config,
+            output_language,
+            control_preset,
+            evidence_mode,
+            include_comments,
+        }
+    }
+
+    pub fn client_request_id(&self) -> &str {
+        &self.client_request_id
+    }
+
+    pub fn runtime_provider(&self) -> PromptPackRuntimeProvider {
+        self.runtime_provider
+    }
+
+    pub fn profile_id(&self) -> Option<&str> {
+        self.profile_id.as_deref()
+    }
+
+    pub fn model_override(&self) -> Option<&str> {
+        self.model_override.as_deref()
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct YoutubeSummaryPreflightResponse {
-    pub pack_id: String,
-    pub pack_version: String,
-    pub included_videos: Vec<YoutubeSummaryPreflightVideo>,
-    pub skipped_videos: Vec<YoutubeSummaryPreflightSkippedVideo>,
-    pub blocking_failures: Vec<YoutubeSummaryPreflightFailure>,
-    pub estimated_input_tokens: i64,
-    pub selected_model_input_limit: Option<i64>,
+    pub(crate) pack_id: String,
+    pub(crate) pack_version: String,
+    pub(crate) included_videos: Vec<YoutubeSummaryPreflightVideo>,
+    pub(crate) skipped_videos: Vec<YoutubeSummaryPreflightSkippedVideo>,
+    pub(crate) blocking_failures: Vec<YoutubeSummaryPreflightFailure>,
+    pub(crate) estimated_input_tokens: i64,
+    pub(crate) selected_model_input_limit: Option<i64>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct YoutubeSummaryPreflightVideo {
-    pub source_id: i64,
-    pub video_id: String,
-    pub title: String,
-    pub estimated_input_tokens: i64,
+    pub(crate) source_id: i64,
+    pub(crate) video_id: String,
+    pub(crate) title: String,
+    pub(crate) estimated_input_tokens: i64,
 }
 
 #[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct YoutubeSummaryPreflightSkippedVideo {
-    pub source_id: Option<i64>,
-    pub video_id: Option<String>,
-    pub title: Option<String>,
-    pub reason: String,
+    pub(crate) source_id: Option<i64>,
+    pub(crate) video_id: Option<String>,
+    pub(crate) title: Option<String>,
+    pub(crate) reason: String,
 }
 
 #[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct YoutubeSummaryPreflightFailure {
-    pub source_id: Option<i64>,
-    pub reason: String,
-    pub message: Option<String>,
+    pub(crate) source_id: Option<i64>,
+    pub(crate) reason: String,
+    pub(crate) message: Option<String>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptPackRunEvent {
-    pub run_id: i64,
-    pub request_id: String,
-    pub kind: String,
-    pub run_status: String,
-    pub phase: String,
-    pub stage_run_id: Option<i64>,
-    pub stage_name: Option<String>,
-    pub source_snapshot_id: Option<i64>,
-    pub queue_position: Option<i64>,
-    pub progress_current: Option<i64>,
-    pub progress_total: Option<i64>,
-    pub message: Option<String>,
-    pub error: Option<String>,
+    pub(crate) run_id: i64,
+    pub(crate) request_id: String,
+    pub(crate) kind: String,
+    pub(crate) run_status: String,
+    pub(crate) phase: String,
+    pub(crate) stage_run_id: Option<i64>,
+    pub(crate) stage_name: Option<String>,
+    pub(crate) source_snapshot_id: Option<i64>,
+    pub(crate) queue_position: Option<i64>,
+    pub(crate) progress_current: Option<i64>,
+    pub(crate) progress_total: Option<i64>,
+    pub(crate) message: Option<String>,
+    pub(crate) error: Option<String>,
 }
 
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListPromptPackRunsRequest {
-    pub project_id: Option<i64>,
-    pub limit: Option<i64>,
+    pub(crate) project_id: Option<i64>,
+    pub(crate) limit: Option<i64>,
+}
+
+impl ListPromptPackRunsRequest {
+    pub fn new(project_id: Option<i64>, limit: Option<i64>) -> Self {
+        Self { project_id, limit }
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptPackRunSummaryDto {
-    pub run_id: i64,
-    pub project_id: Option<i64>,
-    pub run_label: Option<String>,
-    pub runtime_provider: String,
-    pub pack_id: String,
-    pub pack_version: String,
-    pub run_status: String,
-    pub result_status: String,
-    pub created_at: String,
-    pub started_at: Option<String>,
-    pub completed_at: Option<String>,
-    pub latest_message: Option<String>,
-    pub progress_current: Option<i64>,
-    pub progress_total: Option<i64>,
-    pub queue_position: Option<i64>,
+    pub(crate) run_id: i64,
+    pub(crate) project_id: Option<i64>,
+    pub(crate) run_label: Option<String>,
+    pub(crate) runtime_provider: String,
+    pub(crate) pack_id: String,
+    pub(crate) pack_version: String,
+    pub(crate) run_status: String,
+    pub(crate) result_status: String,
+    pub(crate) created_at: String,
+    pub(crate) started_at: Option<String>,
+    pub(crate) completed_at: Option<String>,
+    pub(crate) latest_message: Option<String>,
+    pub(crate) progress_current: Option<i64>,
+    pub(crate) progress_total: Option<i64>,
+    pub(crate) queue_position: Option<i64>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptPackStageRunDto {
-    pub stage_run_id: i64,
-    pub run_id: i64,
-    pub source_snapshot_id: Option<i64>,
-    pub stage_name: String,
-    pub stage_order: i64,
-    pub stage_status: String,
-    pub latest_message: Option<String>,
-    pub browser_run_id: Option<String>,
-    pub browser_run_status: Option<String>,
-    pub browser_completion_reason: Option<String>,
-    pub browser_provider_mode: Option<String>,
-    pub browser_run_message: Option<String>,
+    pub(crate) stage_run_id: i64,
+    pub(crate) run_id: i64,
+    pub(crate) source_snapshot_id: Option<i64>,
+    pub(crate) stage_name: String,
+    pub(crate) stage_order: i64,
+    pub(crate) stage_status: String,
+    pub(crate) latest_message: Option<String>,
+    pub(crate) browser_run_id: Option<String>,
+    pub(crate) browser_run_status: Option<String>,
+    pub(crate) browser_completion_reason: Option<String>,
+    pub(crate) browser_provider_mode: Option<String>,
+    pub(crate) browser_run_message: Option<String>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
@@ -174,56 +256,56 @@ pub enum StartYoutubeSummaryRunOutcomeDto {
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptPackResultDto {
-    pub run_id: i64,
-    pub result_status: String,
-    pub canonical: serde_json::Value,
-    pub storage_warning: Option<String>,
+    pub(crate) run_id: i64,
+    pub(crate) result_status: String,
+    pub(crate) canonical: serde_json::Value,
+    pub(crate) storage_warning: Option<String>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptPackStageArtifactSummaryDto {
-    pub stage_run_id: i64,
-    pub artifact_kind: String,
-    pub attempt_number: i64,
-    pub artifact_index: i64,
-    pub content_type: String,
-    pub content_hash: String,
-    pub created_at: String,
+    pub(crate) stage_run_id: i64,
+    pub(crate) artifact_kind: String,
+    pub(crate) attempt_number: i64,
+    pub(crate) artifact_index: i64,
+    pub(crate) content_type: String,
+    pub(crate) content_hash: String,
+    pub(crate) created_at: String,
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptPackStageArtifactDto {
-    pub stage_run_id: i64,
-    pub artifact_kind: String,
-    pub attempt_number: i64,
-    pub artifact_index: i64,
-    pub content_type: String,
-    pub content: serde_json::Value,
-    pub created_at: String,
+    pub(crate) stage_run_id: i64,
+    pub(crate) artifact_kind: String,
+    pub(crate) attempt_number: i64,
+    pub(crate) artifact_index: i64,
+    pub(crate) content_type: String,
+    pub(crate) content: serde_json::Value,
+    pub(crate) created_at: String,
 }
 
 #[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptPackValidationFindingDto {
-    pub run_id: i64,
-    pub stage_run_id: Option<i64>,
-    pub severity: String,
-    pub code: String,
-    pub message: String,
-    pub object_path: Option<String>,
-    pub created_at: String,
+    pub(crate) run_id: i64,
+    pub(crate) stage_run_id: Option<i64>,
+    pub(crate) severity: String,
+    pub(crate) code: String,
+    pub(crate) message: String,
+    pub(crate) object_path: Option<String>,
+    pub(crate) created_at: String,
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PromptPackAuditEventDto {
-    pub run_id: i64,
-    pub event_kind: String,
-    pub message: Option<String>,
-    pub payload: Option<serde_json::Value>,
-    pub created_at: String,
+    pub(crate) run_id: i64,
+    pub(crate) event_kind: String,
+    pub(crate) message: Option<String>,
+    pub(crate) payload: Option<serde_json::Value>,
+    pub(crate) created_at: String,
 }
 
 impl StartYoutubeSummaryRunOutcomeDto {
@@ -251,6 +333,27 @@ impl StartYoutubeSummaryRunOutcomeDto {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn crate_boundary_constructors_and_accessors_preserve_serialized_shapes() {
+        let request = StartYoutubeSummaryRunRequest::new(
+            "client-1".into(),
+            Some(7),
+            vec![11],
+            Some("profile-1".into()),
+            Some("model-1".into()),
+            PromptPackRuntimeProvider::Api,
+            None,
+            "English".into(),
+            "detailed_report".into(),
+            "strict".into(),
+            true,
+        );
+        assert_eq!(request.client_request_id(), "client-1");
+        assert_eq!(request.runtime_provider(), PromptPackRuntimeProvider::Api);
+        assert_eq!(request.profile_id(), Some("profile-1"));
+        assert_eq!(request.model_override(), Some("model-1"));
+    }
 
     fn serialized_run_summary() -> PromptPackRunSummaryDto {
         PromptPackRunSummaryDto {

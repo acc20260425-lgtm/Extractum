@@ -371,7 +371,7 @@ At Phase 5 completion, Phase 6 `extractum-prompt-packs` remained next. Its
 fresh JIT boundary design was owner-approved, but implementation was not
 authorized by the Phase 5 result or by the design document alone.
 
-### Phase 6 — `extractum-prompt-packs` (preparation Checkpoint 1 retained)
+### Phase 6 — `extractum-prompt-packs` (preparation Checkpoint 2 retained)
 
 The owner-approved
 [Phase 6 boundary design](2026-07-20-prompt-packs-crate-boundary-design.md)
