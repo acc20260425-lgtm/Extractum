@@ -4,7 +4,7 @@ use std::future::Future;
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
 
-use super::dto::PromptPackRunEvent;
+use super::events::PromptPackEvent;
 use crate::error::AppResult;
 use crate::llm::LlmRequestError;
 
@@ -55,7 +55,7 @@ impl PromptPackRunState {
         ids
     }
 
-    pub(crate) async fn apply_event(&self, event: PromptPackRunEvent) {
+    pub(crate) async fn apply_event(&self, event: &PromptPackEvent) {
         if matches!(
             event.kind.as_str(),
             "completed" | "partial" | "failed" | "cancelled" | "interrupted"
@@ -92,5 +92,63 @@ where
     tokio::select! {
         result = future => result,
         _ = run_cancellation_token.cancelled() => Err(LlmRequestError::Cancelled),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+
+    use super::PromptPackRunState;
+    use crate::prompt_packs::events::{PromptPackEvent, PromptPackEventSink};
+
+    struct StateObservingSink {
+        state: Arc<PromptPackRunState>,
+        observed_active: AtomicBool,
+    }
+
+    impl PromptPackEventSink for StateObservingSink {
+        fn emit(&self, event: PromptPackEvent) {
+            let active = self
+                .state
+                .active
+                .try_lock()
+                .expect("state lock must be released before synchronous emit")
+                .contains(&event.run_id);
+            self.observed_active.store(active, Ordering::SeqCst);
+        }
+    }
+
+    #[tokio::test]
+    async fn apply_event_updates_state_before_synchronous_sink_observes_it() {
+        let state = Arc::new(PromptPackRunState::new());
+        state.track(77).await.expect("track run");
+        let sink = StateObservingSink {
+            state: state.clone(),
+            observed_active: AtomicBool::new(true),
+        };
+        let event = PromptPackEvent {
+            run_id: 77,
+            request_id: "run-77-terminal".to_string(),
+            kind: "completed".to_string(),
+            run_status: "complete".to_string(),
+            phase: "terminal".to_string(),
+            stage_run_id: None,
+            stage_name: None,
+            source_snapshot_id: None,
+            queue_position: None,
+            progress_current: Some(1),
+            progress_total: Some(1),
+            message: Some("Completed".to_string()),
+            error: None,
+        };
+
+        state.apply_event(&event).await;
+        sink.emit(event);
+
+        assert!(!sink.observed_active.load(Ordering::SeqCst));
     }
 }

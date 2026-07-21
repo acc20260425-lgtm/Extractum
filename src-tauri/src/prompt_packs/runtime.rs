@@ -1,12 +1,18 @@
-use sqlx::SqlitePool;
-use tauri::{AppHandle, Emitter, Manager, State};
+use std::sync::Arc;
 
+use sqlx::SqlitePool;
+use tauri::{AppHandle, Manager, State};
+
+use super::browser_adapter::TauriGeminiBrowserPort;
+use super::browser_port::{PromptPackBrowserExecutor, PromptPackBrowserStatusRequest};
 use super::completion_transport::RunCompletionRuntime;
 use super::dto::{
-    PromptPackRunEvent, PromptPackRunSummaryDto, PromptPackRuntimeProvider, PromptPackStageRunDto,
+    PromptPackRunSummaryDto, PromptPackRuntimeProvider, PromptPackStageRunDto,
     StartYoutubeSummaryRunOutcomeDto, StartYoutubeSummaryRunRequest,
     YoutubeSummaryPreflightFailure,
 };
+use super::event_adapter::TauriPromptPackEventSink;
+use super::events::{PromptPackEvent, PromptPackEventSink};
 pub use super::run_control::PromptPackRunState;
 use super::run_store::{
     delete_prompt_pack_run_in_pool, list_prompt_pack_run_stages_in_pool,
@@ -36,7 +42,6 @@ use crate::llm::{
     resolve_profile_for_backend, LlmSchedulerState,
 };
 
-pub use super::dto::PROMPT_PACK_RUN_EVENT;
 #[cfg(dev)]
 const PROMPT_PACK_CANCELLATION_SMOKE_FIXTURE_LABEL: &str =
     "__prompt_pack_cancellation_smoke_fixture__";
@@ -107,6 +112,7 @@ pub async fn start_youtube_summary_run(
         evidence_mode,
         include_comments,
     );
+    let browser = TauriGeminiBrowserPort::new(handle.clone());
     let outcome = if request.client_request_id().trim().is_empty() {
         start_youtube_summary_run_in_pool(&pool, request).await?
     } else if let Some(run) =
@@ -116,17 +122,18 @@ pub async fn start_youtube_summary_run(
         StartYoutubeSummaryRunOutcomeDto::Started { run }
     } else {
         let runtime_failures =
-            browser_runtime_start_failures_for_request(&handle, &request).await?;
+            browser_runtime_start_failures_for_request(&browser, &request).await?;
         start_youtube_summary_run_with_preflight_failures_in_pool(&pool, request, runtime_failures)
             .await?
     };
     if let StartYoutubeSummaryRunOutcomeDto::Started { run } = &outcome {
         let should_spawn = run.run_status == "queued" && state.track_if_absent(run.run_id).await?;
         if should_spawn {
+            let events = TauriPromptPackEventSink::new(handle.clone());
             emit_prompt_pack_run_event(
-                &handle,
                 &state,
-                PromptPackRunEvent {
+                &events,
+                PromptPackEvent {
                     run_id: run.run_id,
                     request_id: format!("run-{}", run.run_id),
                     kind: "queued".to_string(),
@@ -150,20 +157,18 @@ pub async fn start_youtube_summary_run(
 }
 
 async fn browser_runtime_start_failures_for_request(
-    handle: &AppHandle,
+    browser: &dyn PromptPackBrowserExecutor,
     request: &StartYoutubeSummaryRunRequest,
 ) -> AppResult<Vec<YoutubeSummaryPreflightFailure>> {
     if request.runtime_provider() != PromptPackRuntimeProvider::GeminiBrowser {
         return Ok(Vec::new());
     }
 
-    let browser_state = handle.state::<crate::gemini_browser::GeminiBrowserState>();
-    let status = crate::gemini_browser::provider_status(
-        handle,
-        &browser_state,
-        request.browser_provider_config.clone(),
-    )
-    .await?;
+    let status = browser
+        .read_status(PromptPackBrowserStatusRequest::new(
+            request.browser_provider_config.clone(),
+        ))
+        .await?;
 
     Ok(browser_runtime_start_blocking_failure(&status)
         .into_iter()
@@ -212,10 +217,11 @@ pub async fn cancel_prompt_pack_run(
     .execute(&pool)
     .await
     .map_err(AppError::database)?;
+    let events = TauriPromptPackEventSink::new(handle.clone());
     emit_prompt_pack_run_event(
-        &handle,
         &state,
-        PromptPackRunEvent {
+        &events,
+        PromptPackEvent {
             run_id,
             request_id: format!("cancel-{run_id}"),
             kind: "cancelled".to_string(),
@@ -289,6 +295,10 @@ async fn execute_youtube_summary_run(
     run_id: i64,
 ) -> AppResult<YoutubeSummaryRunExecutionOutcome> {
     let pool = get_pool(&handle).await?;
+    let browser: Arc<dyn PromptPackBrowserExecutor> =
+        Arc::new(TauriGeminiBrowserPort::new(handle.clone()));
+    let events: Arc<dyn PromptPackEventSink> =
+        Arc::new(TauriPromptPackEventSink::new(handle.clone()));
     let config = load_run_runtime_config(&pool, run_id).await?;
     let (completion_runtime, model_input_limit) = match config.runtime_provider {
         RunRuntimeProvider::Api => {
@@ -308,6 +318,7 @@ async fn execute_youtube_summary_run(
         }
         RunRuntimeProvider::GeminiBrowser => (
             RunCompletionRuntime::GeminiBrowser {
+                browser,
                 browser_provider_config: config.browser_provider_config.clone(),
             },
             None,
@@ -324,9 +335,9 @@ async fn execute_youtube_summary_run(
         .child_token(run_id)
         .await;
     emit_prompt_pack_run_event(
-        &handle,
         &handle.state::<PromptPackRunState>(),
-        PromptPackRunEvent {
+        events.as_ref(),
+        PromptPackEvent {
             run_id,
             request_id: format!("run-{run_id}-started"),
             kind: "started".to_string(),
@@ -345,6 +356,7 @@ async fn execute_youtube_summary_run(
     .await;
 
     let stage_pool = pool.clone();
+    let stage_events = events;
     execute_youtube_summary_run_with_stage_executor_with_options(
         &pool,
         run_id,
@@ -353,13 +365,16 @@ async fn execute_youtube_summary_run(
             let handle = handle.clone();
             let pool = stage_pool.clone();
             let completion_runtime = completion_runtime.clone();
+            let events = stage_events.clone();
             let run_cancellation_token = run_cancellation_token.clone();
             async move {
+                let scheduler = handle.state::<LlmSchedulerState>();
                 match stage_request {
                     YoutubeSummaryStageExecutionRequest::TranscriptAnalysis(request) => {
                         run_transcript_analysis_stage_request(
-                            handle,
-                            pool,
+                            &pool,
+                            scheduler.inner(),
+                            events,
                             completion_runtime,
                             run_cancellation_token,
                             request,
@@ -368,8 +383,9 @@ async fn execute_youtube_summary_run(
                     }
                     YoutubeSummaryStageExecutionRequest::Synthesis(request) => {
                         run_synthesis_stage_request(
-                            handle,
-                            pool,
+                            &pool,
+                            scheduler.inner(),
+                            events,
                             completion_runtime,
                             run_cancellation_token,
                             request,
@@ -378,8 +394,9 @@ async fn execute_youtube_summary_run(
                     }
                     YoutubeSummaryStageExecutionRequest::JsonRepair(request) => {
                         run_json_repair_stage_request(
-                            handle,
-                            pool,
+                            &pool,
+                            scheduler.inner(),
+                            events,
                             completion_runtime,
                             run_cancellation_token,
                             request,
@@ -388,8 +405,9 @@ async fn execute_youtube_summary_run(
                     }
                     YoutubeSummaryStageExecutionRequest::GemAnalysisPart(request) => {
                         run_gem_analysis_part_stage_request(
-                            handle,
-                            pool,
+                            &pool,
+                            scheduler.inner(),
+                            events,
                             completion_runtime,
                             run_cancellation_token,
                             request,
@@ -398,8 +416,9 @@ async fn execute_youtube_summary_run(
                     }
                     YoutubeSummaryStageExecutionRequest::GemAnalysisPartRepair(request) => {
                         run_gem_analysis_part_repair_request(
-                            handle,
-                            pool,
+                            &pool,
+                            scheduler.inner(),
+                            events,
                             completion_runtime,
                             run_cancellation_token,
                             request,
@@ -444,14 +463,15 @@ async fn emit_youtube_summary_terminal_event(
     outcome: YoutubeSummaryRunExecutionOutcome,
 ) {
     let state = handle.state::<PromptPackRunState>();
+    let events = TauriPromptPackEventSink::new(handle.clone());
     let event_kind = match outcome.run_status.as_str() {
         "complete" => "completed",
         other => other,
     };
     emit_prompt_pack_run_event(
-        handle,
         &state,
-        PromptPackRunEvent {
+        &events,
+        PromptPackEvent {
             run_id: outcome.run_id,
             request_id: format!("run-{}-terminal", outcome.run_id),
             kind: event_kind.to_string(),
@@ -646,12 +666,12 @@ async fn prompt_pack_cancellation_smoke_fixture_run_ids(pool: &SqlitePool) -> Ap
 }
 
 async fn emit_prompt_pack_run_event(
-    handle: &AppHandle,
     state: &PromptPackRunState,
-    event: PromptPackRunEvent,
+    events: &dyn PromptPackEventSink,
+    event: PromptPackEvent,
 ) {
-    state.apply_event(event.clone()).await;
-    let _ = handle.emit(PROMPT_PACK_RUN_EVENT, event);
+    state.apply_event(&event).await;
+    events.emit(event);
 }
 
 fn now_string() -> String {
@@ -687,7 +707,8 @@ mod tests {
     use crate::gemini_browser::{GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind};
     use crate::llm::{LlmChatRequest, LlmMessage, LlmRequestError};
     use crate::migrations::apply_all_migrations_for_test_pool;
-    use crate::prompt_packs::dto::{ListPromptPackRunsRequest, PromptPackRunEvent};
+    use crate::prompt_packs::dto::ListPromptPackRunsRequest;
+    use crate::prompt_packs::events::PromptPackEvent;
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
     use crate::prompt_packs::youtube_summary::{
         GemAnalysisPart, GemAnalysisPartRepairRequest, GemAnalysisPartStageExecutionRequest,
@@ -878,13 +899,15 @@ mod tests {
         let emitter_begin = source
             .find("async fn emit_prompt_pack_run_event(")
             .expect("event helper");
-        let emitter = &source[emitter_begin..];
+        let emitter_end = source[emitter_begin..]
+            .find("fn now_string()")
+            .map(|offset| emitter_begin + offset)
+            .expect("event helper end");
+        let emitter = &source[emitter_begin..emitter_end];
         let apply_state = emitter
-            .find("state.apply_event(event.clone()).await")
+            .find("state.apply_event(&event).await")
             .expect("state transition");
-        let publish = emitter
-            .find("handle.emit(PROMPT_PACK_RUN_EVENT, event)")
-            .expect("event emission");
+        let publish = emitter.find("events.emit(event)").expect("event emission");
         assert!(apply_state < publish);
 
         let spawn_begin = source
@@ -1090,7 +1113,7 @@ mod tests {
 
         state.track(42).await.expect("track");
         state
-            .apply_event(PromptPackRunEvent {
+            .apply_event(&PromptPackEvent {
                 run_id: 42,
                 request_id: "req-42".to_string(),
                 kind: "completed".to_string(),

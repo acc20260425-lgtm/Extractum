@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use sqlx::SqlitePool;
-use tauri::AppHandle;
 use tokio_util::sync::CancellationToken;
 
 use super::completion_transport::{RunCompletionRuntime, StageCompletionRequest};
+use super::events::PromptPackEventSink;
 use super::json_repair::JsonRepairStageExecutionRequest;
 use super::stage_request_policy::{
     build_gem_analysis_part_llm_request, build_gem_analysis_part_repair_llm_request,
@@ -18,10 +20,12 @@ use super::youtube_summary::{
     LlmCompletion as PromptPackLlmCompletion, SynthesisStageExecutionRequest,
     TranscriptAnalysisStageExecutionRequest, YoutubeSummaryStageExecutionError,
 };
+use crate::llm::LlmSchedulerState;
 
 pub(super) async fn run_transcript_analysis_stage_request(
-    handle: AppHandle,
-    pool: SqlitePool,
+    pool: &SqlitePool,
+    scheduler: &LlmSchedulerState,
+    events: Arc<dyn PromptPackEventSink>,
     completion_runtime: RunCompletionRuntime,
     run_cancellation_token: Option<CancellationToken>,
     stage_request: TranscriptAnalysisStageExecutionRequest,
@@ -43,8 +47,9 @@ pub(super) async fn run_transcript_analysis_stage_request(
 
     completion_runtime
         .execute(
-            handle,
             pool,
+            scheduler,
+            events,
             StageCompletionRequest {
                 llm_request,
                 run_id: stage_request.run_id,
@@ -62,8 +67,9 @@ pub(super) async fn run_transcript_analysis_stage_request(
 }
 
 pub(super) async fn run_synthesis_stage_request(
-    handle: AppHandle,
-    pool: SqlitePool,
+    pool: &SqlitePool,
+    scheduler: &LlmSchedulerState,
+    events: Arc<dyn PromptPackEventSink>,
     completion_runtime: RunCompletionRuntime,
     run_cancellation_token: Option<CancellationToken>,
     stage_request: SynthesisStageExecutionRequest,
@@ -85,8 +91,9 @@ pub(super) async fn run_synthesis_stage_request(
 
     completion_runtime
         .execute(
-            handle,
             pool,
+            scheduler,
+            events,
             StageCompletionRequest {
                 llm_request,
                 run_id: stage_request.run_id,
@@ -104,8 +111,9 @@ pub(super) async fn run_synthesis_stage_request(
 }
 
 pub(super) async fn run_json_repair_stage_request(
-    handle: AppHandle,
-    pool: SqlitePool,
+    pool: &SqlitePool,
+    scheduler: &LlmSchedulerState,
+    events: Arc<dyn PromptPackEventSink>,
     completion_runtime: RunCompletionRuntime,
     run_cancellation_token: Option<CancellationToken>,
     stage_request: JsonRepairStageExecutionRequest,
@@ -132,8 +140,9 @@ pub(super) async fn run_json_repair_stage_request(
 
     completion_runtime
         .execute(
-            handle,
             pool,
+            scheduler,
+            events,
             StageCompletionRequest {
                 llm_request,
                 run_id: stage_request.run_id,
@@ -151,8 +160,9 @@ pub(super) async fn run_json_repair_stage_request(
 }
 
 pub(super) async fn run_gem_analysis_part_stage_request(
-    handle: AppHandle,
-    pool: SqlitePool,
+    pool: &SqlitePool,
+    scheduler: &LlmSchedulerState,
+    events: Arc<dyn PromptPackEventSink>,
     completion_runtime: RunCompletionRuntime,
     run_cancellation_token: Option<CancellationToken>,
     stage_request: GemAnalysisPartStageExecutionRequest,
@@ -172,8 +182,9 @@ pub(super) async fn run_gem_analysis_part_stage_request(
 
     completion_runtime
         .execute(
-            handle,
             pool,
+            scheduler,
+            events,
             StageCompletionRequest {
                 llm_request,
                 run_id: stage_request.run_id,
@@ -191,8 +202,9 @@ pub(super) async fn run_gem_analysis_part_stage_request(
 }
 
 pub(super) async fn run_gem_analysis_part_repair_request(
-    handle: AppHandle,
-    pool: SqlitePool,
+    pool: &SqlitePool,
+    scheduler: &LlmSchedulerState,
+    events: Arc<dyn PromptPackEventSink>,
     completion_runtime: RunCompletionRuntime,
     run_cancellation_token: Option<CancellationToken>,
     stage_request: GemAnalysisPartRepairRequest,
@@ -213,8 +225,9 @@ pub(super) async fn run_gem_analysis_part_repair_request(
 
     completion_runtime
         .execute(
-            handle,
             pool,
+            scheduler,
+            events,
             StageCompletionRequest {
                 llm_request,
                 run_id: stage_request.run_id,

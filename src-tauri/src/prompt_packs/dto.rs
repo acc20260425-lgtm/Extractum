@@ -1,7 +1,5 @@
 use crate::gemini_browser::GeminiBrowserProviderConfig;
 
-pub const PROMPT_PACK_RUN_EVENT: &str = "prompt-pack-run-event";
-
 #[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum PromptPackRuntimeProvider {
@@ -174,24 +172,6 @@ pub struct YoutubeSummaryPreflightFailure {
     pub(crate) message: Option<String>,
 }
 
-#[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct PromptPackRunEvent {
-    pub(crate) run_id: i64,
-    pub(crate) request_id: String,
-    pub(crate) kind: String,
-    pub(crate) run_status: String,
-    pub(crate) phase: String,
-    pub(crate) stage_run_id: Option<i64>,
-    pub(crate) stage_name: Option<String>,
-    pub(crate) source_snapshot_id: Option<i64>,
-    pub(crate) queue_position: Option<i64>,
-    pub(crate) progress_current: Option<i64>,
-    pub(crate) progress_total: Option<i64>,
-    pub(crate) message: Option<String>,
-    pub(crate) error: Option<String>,
-}
-
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListPromptPackRunsRequest {
@@ -333,6 +313,7 @@ impl StartYoutubeSummaryRunOutcomeDto {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prompt_packs::event_adapter::{PromptPackRunEvent, PROMPT_PACK_RUN_EVENT};
 
     #[test]
     fn crate_boundary_constructors_and_accessors_preserve_serialized_shapes() {

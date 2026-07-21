@@ -1,5 +1,9 @@
+mod browser_adapter;
+mod browser_port;
 mod completion_transport;
 pub mod dto;
+mod event_adapter;
+mod events;
 pub(crate) mod gemini_browser_stage;
 pub mod json_repair;
 pub mod library;
