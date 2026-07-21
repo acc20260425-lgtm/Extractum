@@ -155,8 +155,8 @@ pub(crate) async fn get_prompt_pack_library_in_pool(
 #[cfg(test)]
 mod tests {
     use super::get_prompt_pack_library_in_pool;
-    use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
+    use crate::prompt_packs::test_schema::prompt_pack_test_pool;
     use std::path::PathBuf;
 
     fn prompt_pack_domain_root() -> PathBuf {
@@ -209,12 +209,7 @@ mod tests {
     }
 
     async fn seeded_pool() -> sqlx::SqlitePool {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("connect memory sqlite");
-        apply_all_migrations_for_test_pool(&pool)
-            .await
-            .expect("apply migrations");
+        let pool = prompt_pack_test_pool().await;
         seed_builtin_prompt_packs_in_pool(&pool)
             .await
             .expect("seed");

@@ -653,8 +653,8 @@ mod tests {
     use super::build_youtube_summary_canonical_result;
     use crate::compression::compress_text;
     use crate::error::AppResult;
-    use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
+    use crate::prompt_packs::test_schema::prompt_pack_test_pool;
     use crate::prompt_packs::youtube_summary::gem_analysis::assemble_gem_analysis_transcript_output;
     use crate::prompt_packs::youtube_summary::outputs::execute_transcript_analysis_stage_with_completion;
     use crate::prompt_packs::youtube_summary::test_support::{
@@ -921,12 +921,7 @@ mod tests {
     }
 
     async fn test_pool_with_successful_stage_artifacts() -> sqlx::SqlitePool {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("connect memory sqlite");
-        apply_all_migrations_for_test_pool(&pool)
-            .await
-            .expect("apply migrations");
+        let pool = prompt_pack_test_pool().await;
         seed_builtin_prompt_packs_in_pool(&pool)
             .await
             .expect("seed");

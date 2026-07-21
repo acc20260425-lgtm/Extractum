@@ -712,7 +712,6 @@ mod tests {
     };
     use crate::gemini_browser::{GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind};
     use crate::llm::{LlmChatRequest, LlmMessage, LlmRequestError};
-    use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::browser_port::{
         PromptPackBrowserCancelRequest, PromptPackBrowserExecutor, PromptPackBrowserFuture,
         PromptPackBrowserRunRequest, PromptPackBrowserStatusRequest,
@@ -724,6 +723,7 @@ mod tests {
     use crate::prompt_packs::events::{PromptPackEvent, PromptPackEventSink};
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
     use crate::prompt_packs::source_port::PromptPackTranscriptSegment;
+    use crate::prompt_packs::test_schema::prompt_pack_test_pool;
     use crate::prompt_packs::youtube_summary::test_support::{
         insert_youtube_video, start_request, ScriptedPromptPackSourceReader,
     };
@@ -2174,12 +2174,7 @@ mod tests {
     async fn test_pool_with_prompt_pack_runs<const N: usize>(
         rows: [(i64, Option<i64>, &str, &str); N],
     ) -> sqlx::SqlitePool {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("connect memory sqlite");
-        apply_all_migrations_for_test_pool(&pool)
-            .await
-            .expect("apply migrations");
+        let pool = prompt_pack_test_pool().await;
         seed_builtin_prompt_packs_in_pool(&pool)
             .await
             .expect("seed");

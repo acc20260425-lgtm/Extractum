@@ -1,5 +1,7 @@
 use sqlx::SqlitePool;
 
+#[cfg(test)]
+mod app_test_support;
 pub(crate) mod entities;
 #[cfg(test)]
 mod entities_tests;

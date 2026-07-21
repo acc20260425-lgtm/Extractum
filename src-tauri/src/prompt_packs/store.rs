@@ -20,15 +20,10 @@ pub(crate) async fn require_prompt_pack_version_id(
 
 #[cfg(test)]
 mod tests {
-    use crate::migrations::apply_all_migrations_for_test_pool;
+    use crate::prompt_packs::test_schema::prompt_pack_test_pool;
 
     async fn test_pool_with_prompt_pack_schema() -> sqlx::SqlitePool {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("connect memory sqlite");
-        apply_all_migrations_for_test_pool(&pool)
-            .await
-            .expect("apply migrations");
+        let pool = prompt_pack_test_pool().await;
         seed_minimal_pack_version(&pool).await;
         pool
     }

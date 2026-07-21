@@ -208,12 +208,12 @@ fn sha384_hex(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::{seed_builtin_prompt_packs_in_pool, sha384_hex};
-    use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::assets::{
         CANONICAL_RESULT_SCHEMA_JSON, PACK_JSON, SYNTHESIS_OUTPUT_SCHEMA_JSON,
         SYNTHESIS_RUNTIME_JSON, TRANSCRIPT_INPUT_SCHEMA_JSON, TRANSCRIPT_OUTPUT_SCHEMA_JSON,
         TRANSCRIPT_RUNTIME_JSON, TRANSCRIPT_STAGE_JSON,
     };
+    use crate::prompt_packs::test_schema::prompt_pack_test_pool;
     use std::path::{Path, PathBuf};
 
     fn prompt_pack_domain_root() -> PathBuf {
@@ -263,13 +263,7 @@ mod tests {
     }
 
     async fn test_pool_with_migrations() -> sqlx::SqlitePool {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("connect memory sqlite");
-        apply_all_migrations_for_test_pool(&pool)
-            .await
-            .expect("apply migrations");
-        pool
+        prompt_pack_test_pool().await
     }
 
     #[tokio::test]

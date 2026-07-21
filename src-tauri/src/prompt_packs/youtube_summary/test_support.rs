@@ -1,6 +1,5 @@
 use super::{create_youtube_summary_run_skeleton_in_pool, LlmCompletion};
 use crate::compression::compress_text;
-use crate::migrations::apply_all_migrations_for_test_pool;
 use crate::prompt_packs::dto::{
     PreflightYoutubeSummaryRunRequest, PromptPackRuntimeProvider, StartYoutubeSummaryRunRequest,
 };
@@ -11,17 +10,12 @@ use crate::prompt_packs::source_port::{
     PromptPackSourceRecord, PromptPackTranscriptSegment, PromptPackYoutubeVideoRecord,
     YoutubeVideoReadRequest,
 };
+use crate::prompt_packs::test_schema::prompt_pack_test_pool;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 pub(crate) async fn migrated_pool() -> sqlx::SqlitePool {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .expect("connect memory sqlite");
-    apply_all_migrations_for_test_pool(&pool)
-        .await
-        .expect("apply migrations");
-    pool
+    prompt_pack_test_pool().await
 }
 
 pub(crate) fn request_for_video(source_id: i64) -> PreflightYoutubeSummaryRunRequest {

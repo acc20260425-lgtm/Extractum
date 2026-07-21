@@ -28,6 +28,8 @@ pub mod stage_io;
 pub mod stage_output_normalization;
 mod stage_request_policy;
 pub mod store;
+#[cfg(test)]
+mod test_schema;
 pub mod validation;
 pub mod youtube_summary;
 

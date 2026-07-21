@@ -574,9 +574,9 @@ mod tests {
         validate_and_quarantine_synthesis_output, validate_synthesis_output,
         validate_synthesis_output_with_allowed_refs, validate_transcript_analysis_output,
     };
-    use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
     use crate::prompt_packs::stage_io::{extract_json_payload, TranscriptAnalysisStageInput};
+    use crate::prompt_packs::test_schema::prompt_pack_test_pool;
 
     #[test]
     fn transcript_analysis_output_rejects_unknown_material_ref() {
@@ -1126,12 +1126,7 @@ mod tests {
     }
 
     async fn test_pool_with_synthesis_stage() -> sqlx::SqlitePool {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("connect memory sqlite");
-        apply_all_migrations_for_test_pool(&pool)
-            .await
-            .expect("apply migrations");
+        let pool = prompt_pack_test_pool().await;
         seed_builtin_prompt_packs_in_pool(&pool)
             .await
             .expect("seed");

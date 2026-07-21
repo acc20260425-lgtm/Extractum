@@ -1114,6 +1114,7 @@ async fn mark_result_validation_failed_in_transaction(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prompt_packs::test_schema::prompt_pack_test_pool;
 
     #[test]
     fn validate_youtube_summary_canonical_result_valid_minimal_has_no_errors() {
@@ -2164,12 +2165,7 @@ mod tests {
     }
 
     async fn test_pool_with_canonical_result_ready() -> sqlx::SqlitePool {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("connect memory sqlite");
-        crate::migrations::apply_all_migrations_for_test_pool(&pool)
-            .await
-            .expect("apply migrations");
+        let pool = prompt_pack_test_pool().await;
         crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool(&pool)
             .await
             .expect("seed");

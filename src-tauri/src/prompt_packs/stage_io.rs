@@ -280,9 +280,9 @@ fn sha384_hex(bytes: &[u8]) -> String {
 mod tests {
     use super::{build_transcript_analysis_stage_input, insert_stage_artifact_in_pool};
     use crate::error::{AppError, AppResult};
-    use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::dto::StartYoutubeSummaryRunRequest;
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
+    use crate::prompt_packs::test_schema::prompt_pack_test_pool;
     use crate::prompt_packs::youtube_summary::create_youtube_summary_run_skeleton_in_pool;
 
     #[derive(Clone, Debug, PartialEq, Eq)]
@@ -387,12 +387,7 @@ mod tests {
     }
 
     async fn test_pool_with_frozen_youtube_summary_run() -> (sqlx::SqlitePool, i64) {
-        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-            .await
-            .expect("connect memory sqlite");
-        apply_all_migrations_for_test_pool(&pool)
-            .await
-            .expect("apply migrations");
+        let pool = prompt_pack_test_pool().await;
         seed_builtin_prompt_packs_in_pool(&pool)
             .await
             .expect("seed");
