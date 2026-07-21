@@ -21,7 +21,6 @@ mod result_validation;
 pub(crate) mod snapshots;
 #[cfg(test)]
 mod snapshots_tests;
-pub(crate) mod sources;
 pub(crate) mod store;
 pub(crate) mod synthesis_execution;
 pub(crate) mod synthesis_input;
@@ -37,14 +36,16 @@ use super::dto::{
     PreflightYoutubeSummaryRunRequest, PromptPackRuntimeProvider, StartYoutubeSummaryRunOutcomeDto,
     StartYoutubeSummaryRunRequest, YoutubeSummaryPreflightFailure,
 };
+use super::source_adapter::AppPromptPackSourceReader;
+use super::source_port::{PromptPackSourceReader, PromptPackTranscriptSegment};
 use crate::error::{AppError, AppResult};
 #[cfg(test)]
 pub(crate) use execution::execute_youtube_summary_run_with_stage_executor;
 pub(crate) use execution::{
     execute_youtube_summary_run_with_stage_executor_with_options, YoutubeSummaryExecutionOptions,
 };
-pub(crate) use preflight::preflight_youtube_summary_in_pool;
-pub(crate) use snapshots::create_youtube_summary_run_skeleton_in_pool;
+pub(crate) use preflight::preflight_youtube_summary;
+pub(crate) use snapshots::create_youtube_summary_run_skeleton_with_source;
 use store::{load_run_by_client_request_id, load_run_summary};
 #[allow(unused_imports)]
 pub(crate) use types::GemAnalysisInputBudget;
@@ -60,7 +61,17 @@ pub(crate) async fn start_youtube_summary_run_in_pool(
     pool: &SqlitePool,
     request: StartYoutubeSummaryRunRequest,
 ) -> AppResult<StartYoutubeSummaryRunOutcomeDto> {
-    start_youtube_summary_run_with_preflight_failures_in_pool(pool, request, Vec::new()).await
+    let source = AppPromptPackSourceReader::new(pool.clone());
+    start_youtube_summary_run_with_source(pool, &source, request).await
+}
+
+pub(crate) async fn start_youtube_summary_run_with_source(
+    pool: &SqlitePool,
+    source: &dyn PromptPackSourceReader,
+    request: StartYoutubeSummaryRunRequest,
+) -> AppResult<StartYoutubeSummaryRunOutcomeDto> {
+    start_youtube_summary_run_with_preflight_failures_and_source(pool, source, request, Vec::new())
+        .await
 }
 
 pub(crate) async fn load_youtube_summary_run_by_client_request_id_in_pool(
@@ -72,6 +83,22 @@ pub(crate) async fn load_youtube_summary_run_by_client_request_id_in_pool(
 
 pub(crate) async fn start_youtube_summary_run_with_preflight_failures_in_pool(
     pool: &SqlitePool,
+    request: StartYoutubeSummaryRunRequest,
+    extra_blocking_failures: Vec<YoutubeSummaryPreflightFailure>,
+) -> AppResult<StartYoutubeSummaryRunOutcomeDto> {
+    let source = AppPromptPackSourceReader::new(pool.clone());
+    start_youtube_summary_run_with_preflight_failures_and_source(
+        pool,
+        &source,
+        request,
+        extra_blocking_failures,
+    )
+    .await
+}
+
+async fn start_youtube_summary_run_with_preflight_failures_and_source(
+    pool: &SqlitePool,
+    source: &dyn PromptPackSourceReader,
     request: StartYoutubeSummaryRunRequest,
     extra_blocking_failures: Vec<YoutubeSummaryPreflightFailure>,
 ) -> AppResult<StartYoutubeSummaryRunOutcomeDto> {
@@ -95,8 +122,8 @@ pub(crate) async fn start_youtube_summary_run_with_preflight_failures_in_pool(
         request.evidence_mode.clone(),
         request.include_comments,
     );
-    let mut preflight = preflight_youtube_summary_in_pool(
-        pool,
+    let mut preflight = preflight_youtube_summary(
+        source,
         preflight_request,
         model_budget_for_runtime(request.runtime_provider()),
     )
@@ -107,9 +134,28 @@ pub(crate) async fn start_youtube_summary_run_with_preflight_failures_in_pool(
         return Ok(StartYoutubeSummaryRunOutcomeDto::Blocked { preflight });
     }
 
-    let run_id = create_youtube_summary_run_skeleton_in_pool(pool, request, 0).await?;
+    let run_id = create_youtube_summary_run_skeleton_with_source(pool, source, request, 0).await?;
     let run = load_run_summary(pool, run_id).await?;
     Ok(StartYoutubeSummaryRunOutcomeDto::Started { run })
+}
+
+pub(crate) async fn preflight_youtube_summary_in_pool(
+    pool: &SqlitePool,
+    request: PreflightYoutubeSummaryRunRequest,
+    model_budget: ModelBudget,
+) -> AppResult<super::dto::YoutubeSummaryPreflightResponse> {
+    let source = AppPromptPackSourceReader::new(pool.clone());
+    preflight_youtube_summary(&source, request, model_budget).await
+}
+
+pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
+    pool: &SqlitePool,
+    request: StartYoutubeSummaryRunRequest,
+    pack_version_id_hint: i64,
+) -> AppResult<i64> {
+    let source = AppPromptPackSourceReader::new(pool.clone());
+    create_youtube_summary_run_skeleton_with_source(pool, &source, request, pack_version_id_hint)
+        .await
 }
 
 pub(crate) fn model_budget_for_runtime(runtime_provider: PromptPackRuntimeProvider) -> ModelBudget {
@@ -129,4 +175,12 @@ pub(crate) fn now_string() -> String {
 
 pub(crate) fn estimate_tokens(text: &str) -> i64 {
     ((text.chars().count() as f64) / 4.0).ceil() as i64
+}
+
+pub(crate) fn render_transcript_snapshot_text(segments: &[PromptPackTranscriptSegment]) -> String {
+    segments
+        .iter()
+        .map(PromptPackTranscriptSegment::text)
+        .collect::<Vec<_>>()
+        .join("\n")
 }

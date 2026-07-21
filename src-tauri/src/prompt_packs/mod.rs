@@ -12,6 +12,8 @@ mod run_store;
 pub mod runtime;
 mod runtime_config;
 pub mod seed;
+mod source_adapter;
+mod source_port;
 mod stage_execution;
 pub mod stage_io;
 pub mod stage_output_normalization;

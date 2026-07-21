@@ -1,16 +1,20 @@
 use sqlx::SqlitePool;
 
-use super::preflight::preflight_youtube_summary_in_pool;
-use super::sources::{
-    load_source, render_transcript_snapshot_text, transcript_snapshot_segments_for_source,
-};
+use super::preflight::preflight_youtube_summary;
 use super::store::{ensure_pack_version, load_run_by_client_request_id};
-use super::{estimate_tokens, model_budget_for_runtime, now_string, SYNTHESIS_STAGE_NAME};
-use crate::compression::{compress_text, decompress_text};
+use super::{
+    estimate_tokens, model_budget_for_runtime, now_string, render_transcript_snapshot_text,
+    SYNTHESIS_STAGE_NAME,
+};
+use crate::compression::compress_text;
 use crate::error::{AppError, AppResult};
 use crate::prompt_packs::dto::{
     PreflightYoutubeSummaryRunRequest, StartYoutubeSummaryRunRequest,
     YoutubeSummaryPreflightResponse, YoutubeSummaryPreflightVideo,
+};
+use crate::prompt_packs::source_port::{
+    CommentBodyReadRequest, CommentCandidateReadRequest, PromptPackSourceReader,
+    YoutubeVideoReadRequest,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,8 +30,9 @@ pub(crate) struct CommentMaterialRef {
     pub token_estimate: i64,
 }
 
-pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
+pub(crate) async fn create_youtube_summary_run_skeleton_with_source(
     pool: &SqlitePool,
+    source: &dyn PromptPackSourceReader,
     request: StartYoutubeSummaryRunRequest,
     _pack_version_id_hint: i64,
 ) -> AppResult<i64> {
@@ -41,8 +46,8 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
     let include_comments =
         effective_include_comments(&request.control_preset, request.include_comments);
     let pack_version_id = ensure_pack_version(pool).await?;
-    let preflight = preflight_youtube_summary_in_pool(
-        pool,
+    let preflight = preflight_youtube_summary(
+        source,
         PreflightYoutubeSummaryRunRequest {
             project_id: request.project_id,
             source_ids: request.source_ids.clone(),
@@ -125,10 +130,10 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
     .map_err(AppError::database)?;
 
     for source_id in &request.source_ids {
-        let Some(source) = load_source(pool, *source_id).await? else {
+        let Some(source_record) = source.load_source(*source_id).await? else {
             continue;
         };
-        let scope_kind = match source.source_subtype.as_deref() {
+        let scope_kind = match source_record.source_subtype() {
             Some("playlist") => "playlist",
             _ => "explicit_video",
         };
@@ -140,11 +145,11 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
              VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(run_id)
-        .bind(source.id)
-        .bind(&source.source_type)
-        .bind(source.source_subtype.as_deref().unwrap_or("video"))
+        .bind(source_record.id())
+        .bind(source_record.source_type())
+        .bind(source_record.source_subtype().unwrap_or("video"))
         .bind(scope_kind)
-        .bind(&source.title)
+        .bind(source_record.title())
         .bind(&now)
         .execute(pool)
         .await
@@ -153,9 +158,10 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
 
     for (index, video) in preflight.included_videos.iter().enumerate() {
         let source_ref_id = format!("source_ref_{}", index + 1);
-        insert_source_snapshot(pool, run_id, video, &source_ref_id, &now).await?;
+        insert_source_snapshot(pool, source, run_id, video, &source_ref_id, &now).await?;
         insert_material_snapshots(
             pool,
+            source,
             run_id,
             video.source_id,
             &source_ref_id,
@@ -164,7 +170,7 @@ pub(crate) async fn create_youtube_summary_run_skeleton_in_pool(
         )
         .await?;
     }
-    insert_origins(pool, run_id, &request, &preflight, &now).await?;
+    insert_origins(pool, source, run_id, &request, &preflight, &now).await?;
     insert_stage_skeleton(pool, run_id, preflight.included_videos.len(), &now).await?;
 
     Ok(run_id)
@@ -176,27 +182,39 @@ fn effective_include_comments(control_preset: &str, include_comments: bool) -> b
 
 async fn insert_source_snapshot(
     pool: &SqlitePool,
+    source: &dyn PromptPackSourceReader,
     run_id: i64,
     video: &YoutubeSummaryPreflightVideo,
     source_ref_id: &str,
     now: &str,
 ) -> AppResult<i64> {
+    let source_record = source
+        .load_source(video.source_id)
+        .await?
+        .ok_or_else(|| AppError::validation("source disappeared before snapshot creation"))?;
+    let video_record = source
+        .load_video(YoutubeVideoReadRequest::new(video.source_id))
+        .await?
+        .ok_or_else(|| AppError::validation("video disappeared before snapshot creation"))?;
+    let title = video_record.title().or_else(|| source_record.title());
+
     sqlx::query(
         "INSERT OR IGNORE INTO prompt_pack_run_source_snapshots (
             run_id, source_id, source_ref_id, video_id, title, channel_title,
             published_at, url, created_at
          )
-         SELECT ?, yvs.source_id, ?, yvs.video_id, COALESCE(yvs.title, sources.title),
-                yvs.channel_title, yvs.published_at, yvs.canonical_url, ?
-         FROM youtube_video_sources yvs
-         JOIN sources ON sources.id = yvs.source_id
-         WHERE yvs.source_id = ?
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ",
     )
     .bind(run_id)
+    .bind(video_record.source_id())
     .bind(source_ref_id)
+    .bind(video_record.video_id())
+    .bind(title)
+    .bind(video_record.channel_title())
+    .bind(video_record.published_at())
+    .bind(video_record.canonical_url())
     .bind(now)
-    .bind(video.source_id)
     .execute(pool)
     .await
     .map_err(AppError::database)?;
@@ -214,6 +232,7 @@ async fn insert_source_snapshot(
 
 async fn insert_material_snapshots(
     pool: &SqlitePool,
+    source: &dyn PromptPackSourceReader,
     run_id: i64,
     source_id: i64,
     source_ref_id: &str,
@@ -229,12 +248,19 @@ async fn insert_material_snapshots(
     .await
     .map_err(AppError::database)?;
 
-    let transcript_segments = transcript_snapshot_segments_for_source(pool, source_id).await?;
+    let transcript_segments = source.load_transcript_segments(source_id).await?;
     let transcript = render_transcript_snapshot_text(&transcript_segments);
     if !transcript.trim().is_empty() {
         let metadata = serde_json::json!({
             "kind": "youtube_transcript_segments",
-            "segments": transcript_segments,
+            "segments": transcript_segments
+                .iter()
+                .map(|segment| serde_json::json!({
+                    "start_ms": segment.start_ms(),
+                    "end_ms": segment.end_ms(),
+                    "text": segment.text(),
+                }))
+                .collect::<Vec<_>>(),
         });
         insert_material(
             pool,
@@ -251,14 +277,10 @@ async fn insert_material_snapshots(
         .await?;
     }
 
-    if let Some(description) = sqlx::query_scalar::<_, String>(
-        "SELECT description FROM youtube_video_sources WHERE source_id = ?",
-    )
-    .bind(source_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(AppError::database)?
-    {
+    let video = source
+        .load_video(YoutubeVideoReadRequest::new(source_id))
+        .await?;
+    if let Some(description) = video.as_ref().and_then(|video| video.description()) {
         insert_material(
             pool,
             run_id,
@@ -275,12 +297,18 @@ async fn insert_material_snapshots(
     }
 
     if include_comments {
-        for (index, comment) in freeze_comment_material_refs(pool, source_id, test_comment_policy())
-            .await?
-            .into_iter()
-            .enumerate()
+        for (index, comment) in
+            freeze_comment_material_refs(source, source_id, test_comment_policy())
+                .await?
+                .into_iter()
+                .enumerate()
         {
-            let text = load_comment_text(pool, source_id, comment.external_id.as_deref()).await?;
+            let text = source
+                .load_comment_body(CommentBodyReadRequest::new(
+                    source_id,
+                    comment.external_id.clone(),
+                ))
+                .await?;
             insert_material(
                 pool,
                 run_id,
@@ -341,6 +369,7 @@ async fn insert_material(
 
 async fn insert_origins(
     pool: &SqlitePool,
+    source: &dyn PromptPackSourceReader,
     run_id: i64,
     request: &StartYoutubeSummaryRunRequest,
     preflight: &YoutubeSummaryPreflightResponse,
@@ -358,46 +387,34 @@ async fn insert_origins(
         .await
         .map_err(AppError::database)?;
 
-        let Some(source) = load_source(pool, *source_id).await? else {
+        let Some(source_record) = source.load_source(*source_id).await? else {
             continue;
         };
-        if source.source_subtype.as_deref() == Some("playlist") {
-            let rows = sqlx::query_as::<_, (Option<i64>, String)>(
-                "SELECT video_source_id, video_id
-                 FROM youtube_playlist_items
-                 WHERE playlist_source_id = ? AND is_removed_from_playlist = 0
-                 ORDER BY position ASC, id ASC",
-            )
-            .bind(source_id)
-            .fetch_all(pool)
-            .await
-            .map_err(AppError::database)?;
-            for (video_source_id, video_id) in rows {
+        if source_record.source_subtype() == Some("playlist") {
+            let rows = source.load_playlist_items(*source_id).await?;
+            for row in rows {
                 insert_one_origin(
                     pool,
                     run_id,
                     scope_id,
-                    video_source_id,
-                    &video_id,
+                    row.video_source_id(),
+                    row.video_id(),
                     preflight,
                     now,
                 )
                 .await?;
             }
         } else {
-            let video_id = sqlx::query_scalar::<_, String>(
-                "SELECT video_id FROM youtube_video_sources WHERE source_id = ?",
-            )
-            .bind(source_id)
-            .fetch_one(pool)
-            .await
-            .map_err(AppError::database)?;
+            let video = source
+                .load_video(YoutubeVideoReadRequest::new(*source_id))
+                .await?
+                .ok_or_else(|| AppError::validation("video disappeared before origin creation"))?;
             insert_one_origin(
                 pool,
                 run_id,
                 scope_id,
                 Some(*source_id),
-                &video_id,
+                video.video_id(),
                 preflight,
                 now,
             )
@@ -583,58 +600,24 @@ pub(crate) fn test_comment_policy() -> CommentSelectionPolicy {
 }
 
 pub(crate) async fn freeze_comment_material_refs(
-    pool: &SqlitePool,
+    source: &dyn PromptPackSourceReader,
     source_id: i64,
     policy: CommentSelectionPolicy,
 ) -> AppResult<Vec<CommentMaterialRef>> {
-    let rows = sqlx::query_as::<_, (i64, String, Option<Vec<u8>>)>(
-        "SELECT id, external_id, content_zstd
-         FROM items
-         WHERE source_id = ? AND item_kind = 'youtube_comment'
-         ORDER BY published_at IS NULL ASC, published_at ASC, external_id ASC, id ASC
-         LIMIT ?",
-    )
-    .bind(source_id)
-    .bind(policy.comment_count_cap as i64)
-    .fetch_all(pool)
-    .await
-    .map_err(AppError::database)?;
+    let rows = source
+        .select_comment_candidates(CommentCandidateReadRequest::new(
+            source_id,
+            policy.comment_count_cap as i64,
+        ))
+        .await?;
 
     let mut refs = Vec::with_capacity(rows.len());
-    for (index, (_id, external_id, content_zstd)) in rows.into_iter().enumerate() {
-        let text = match content_zstd {
-            Some(bytes) => decompress_text(&bytes).unwrap_or_default(),
-            None => String::new(),
-        };
+    for (index, candidate) in rows.into_iter().enumerate() {
         refs.push(CommentMaterialRef {
-            external_id: Some(external_id),
+            external_id: candidate.external_id().map(str::to_owned),
             material_ref_id: format!("m_comment_{}", index + 1),
-            token_estimate: estimate_tokens(&text).min(policy.comment_token_cap),
+            token_estimate: estimate_tokens(candidate.body()).min(policy.comment_token_cap),
         });
     }
     Ok(refs)
-}
-
-async fn load_comment_text(
-    pool: &SqlitePool,
-    source_id: i64,
-    external_id: Option<&str>,
-) -> AppResult<String> {
-    let Some(external_id) = external_id else {
-        return Ok(String::new());
-    };
-    let bytes = sqlx::query_scalar::<_, Vec<u8>>(
-        "SELECT content_zstd FROM items
-         WHERE source_id = ? AND item_kind = 'youtube_comment' AND external_id = ?
-         LIMIT 1",
-    )
-    .bind(source_id)
-    .bind(external_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(AppError::database)?;
-    Ok(bytes
-        .as_deref()
-        .and_then(|bytes| decompress_text(bytes).ok())
-        .unwrap_or_default())
 }

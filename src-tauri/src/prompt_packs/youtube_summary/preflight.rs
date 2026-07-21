@@ -1,19 +1,30 @@
-use sqlx::SqlitePool;
-
-use super::sources::{
-    load_playlist_candidates, load_source, load_video_candidate, transcript_text_for_source,
-    PlaylistCandidate, VideoCandidate,
-};
-use super::{estimate_tokens, ModelBudget};
+use super::{estimate_tokens, render_transcript_snapshot_text, ModelBudget};
 use crate::error::AppResult;
 use crate::prompt_packs::dto::{
     PreflightYoutubeSummaryRunRequest, YoutubeSummaryPreflightFailure,
     YoutubeSummaryPreflightResponse, YoutubeSummaryPreflightSkippedVideo,
     YoutubeSummaryPreflightVideo,
 };
+use crate::prompt_packs::source_port::{PromptPackSourceReader, YoutubeVideoReadRequest};
 
-pub(crate) async fn preflight_youtube_summary_in_pool(
-    pool: &SqlitePool,
+struct VideoCandidate {
+    source_id: i64,
+    video_id: String,
+    title: String,
+    description: Option<String>,
+    is_playlist_child: bool,
+}
+
+enum PlaylistCandidate {
+    Linked(VideoCandidate),
+    Unlinked {
+        video_id: String,
+        title: Option<String>,
+    },
+}
+
+pub(crate) async fn preflight_youtube_summary(
+    source: &dyn PromptPackSourceReader,
     request: PreflightYoutubeSummaryRunRequest,
     model_budget: ModelBudget,
 ) -> AppResult<YoutubeSummaryPreflightResponse> {
@@ -23,7 +34,7 @@ pub(crate) async fn preflight_youtube_summary_in_pool(
     let mut estimated_input_tokens = 0;
 
     for source_id in request.source_ids {
-        let Some(source) = load_source(pool, source_id).await? else {
+        let Some(source_record) = source.load_source(source_id).await? else {
             blocking_failures.push(YoutubeSummaryPreflightFailure {
                 source_id: Some(source_id),
                 reason: "source_not_found".to_string(),
@@ -32,20 +43,21 @@ pub(crate) async fn preflight_youtube_summary_in_pool(
             continue;
         };
 
-        if source.source_type != "youtube" {
+        if source_record.source_type() != "youtube" {
             blocking_failures.push(YoutubeSummaryPreflightFailure {
-                source_id: Some(source.id),
+                source_id: Some(source_record.id()),
                 reason: "unsupported_source_type".to_string(),
                 message: Some("Only YouTube sources can be summarized".to_string()),
             });
             continue;
         }
 
-        match source.source_subtype.as_deref() {
+        match source_record.source_subtype() {
             Some("video") => {
-                if let Some(video) = load_video_candidate(pool, source.id, false).await? {
+                if let Some(video) = load_video_candidate(source, source_record.id(), false).await?
+                {
                     classify_video(
-                        pool,
+                        source,
                         video,
                         model_budget,
                         &mut included_videos,
@@ -56,19 +68,19 @@ pub(crate) async fn preflight_youtube_summary_in_pool(
                     .await?;
                 } else {
                     blocking_failures.push(YoutubeSummaryPreflightFailure {
-                        source_id: Some(source.id),
+                        source_id: Some(source_record.id()),
                         reason: "missing_video_metadata".to_string(),
                         message: Some("YouTube video metadata is missing".to_string()),
                     });
                 }
             }
             Some("playlist") => {
-                let children = load_playlist_candidates(pool, source.id).await?;
+                let children = load_playlist_candidates(source, source_record.id()).await?;
                 if children.is_empty() {
                     skipped_videos.push(YoutubeSummaryPreflightSkippedVideo {
-                        source_id: Some(source.id),
+                        source_id: Some(source_record.id()),
                         video_id: None,
-                        title: source.title,
+                        title: source_record.title().map(str::to_owned),
                         reason: "empty_playlist".to_string(),
                     });
                 }
@@ -76,7 +88,7 @@ pub(crate) async fn preflight_youtube_summary_in_pool(
                     match child {
                         PlaylistCandidate::Linked(video) => {
                             classify_video(
-                                pool,
+                                source,
                                 video,
                                 model_budget,
                                 &mut included_videos,
@@ -98,7 +110,7 @@ pub(crate) async fn preflight_youtube_summary_in_pool(
                 }
             }
             _ => blocking_failures.push(YoutubeSummaryPreflightFailure {
-                source_id: Some(source.id),
+                source_id: Some(source_record.id()),
                 reason: "unsupported_source_subtype".to_string(),
                 message: Some("Only YouTube video and playlist sources are supported".to_string()),
             }),
@@ -125,7 +137,7 @@ pub(crate) async fn preflight_youtube_summary_in_pool(
 }
 
 async fn classify_video(
-    pool: &SqlitePool,
+    source: &dyn PromptPackSourceReader,
     video: VideoCandidate,
     model_budget: ModelBudget,
     included_videos: &mut Vec<YoutubeSummaryPreflightVideo>,
@@ -133,7 +145,8 @@ async fn classify_video(
     blocking_failures: &mut Vec<YoutubeSummaryPreflightFailure>,
     estimated_input_tokens: &mut i64,
 ) -> AppResult<()> {
-    let transcript_text = transcript_text_for_source(pool, video.source_id).await?;
+    let transcript_segments = source.load_transcript_segments(video.source_id).await?;
+    let transcript_text = render_transcript_snapshot_text(&transcript_segments);
     if transcript_text.trim().is_empty() {
         if video.is_playlist_child {
             skipped_videos.push(YoutubeSummaryPreflightSkippedVideo {
@@ -186,4 +199,50 @@ async fn classify_video(
         estimated_input_tokens: token_estimate,
     });
     Ok(())
+}
+
+async fn load_video_candidate(
+    source: &dyn PromptPackSourceReader,
+    source_id: i64,
+    is_playlist_child: bool,
+) -> AppResult<Option<VideoCandidate>> {
+    Ok(source
+        .load_video(YoutubeVideoReadRequest::new(source_id))
+        .await?
+        .map(|video| VideoCandidate {
+            source_id: video.source_id(),
+            video_id: video.video_id().to_string(),
+            title: video
+                .title()
+                .map(str::to_owned)
+                .unwrap_or_else(|| video.video_id().to_string()),
+            description: video.description().map(str::to_owned),
+            is_playlist_child,
+        }))
+}
+
+async fn load_playlist_candidates(
+    source: &dyn PromptPackSourceReader,
+    playlist_source_id: i64,
+) -> AppResult<Vec<PlaylistCandidate>> {
+    let rows = source.load_playlist_items(playlist_source_id).await?;
+    let mut candidates = Vec::with_capacity(rows.len());
+    for row in rows {
+        if let Some(source_id) = row.video_source_id() {
+            if let Some(video) = load_video_candidate(source, source_id, true).await? {
+                candidates.push(PlaylistCandidate::Linked(video));
+            } else {
+                candidates.push(PlaylistCandidate::Unlinked {
+                    video_id: row.video_id().to_string(),
+                    title: row.title().map(str::to_owned),
+                });
+            }
+        } else {
+            candidates.push(PlaylistCandidate::Unlinked {
+                video_id: row.video_id().to_string(),
+                title: row.title().map(str::to_owned),
+            });
+        }
+    }
+    Ok(candidates)
 }

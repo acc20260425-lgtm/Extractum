@@ -5,6 +5,14 @@ use crate::prompt_packs::dto::{
     PreflightYoutubeSummaryRunRequest, PromptPackRuntimeProvider, StartYoutubeSummaryRunRequest,
 };
 use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
+use crate::prompt_packs::source_port::{
+    CommentBodyReadRequest, CommentCandidateReadRequest, PromptPackCommentCandidate,
+    PromptPackPlaylistItemRecord, PromptPackPortFuture, PromptPackSourceReader,
+    PromptPackSourceRecord, PromptPackTranscriptSegment, PromptPackYoutubeVideoRecord,
+    YoutubeVideoReadRequest,
+};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 pub(crate) async fn migrated_pool() -> sqlx::SqlitePool {
     let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -48,6 +56,187 @@ pub(crate) fn start_request(
         "standard".to_string(),
         false,
     )
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum SourceReadCall {
+    LoadSource(i64),
+    LoadVideo(i64),
+    LoadPlaylistItems(i64),
+    LoadTranscriptSegments(i64),
+    SelectCommentCandidates {
+        source_id: i64,
+        limit: i64,
+    },
+    LoadCommentBody {
+        source_id: i64,
+        external_id: Option<String>,
+    },
+}
+
+#[derive(Clone)]
+pub(crate) struct ScriptedPromptPackSourceReader {
+    calls: Arc<Mutex<Vec<SourceReadCall>>>,
+    sources: HashMap<i64, PromptPackSourceRecord>,
+    videos: HashMap<i64, PromptPackYoutubeVideoRecord>,
+    playlist_items: HashMap<i64, Vec<PromptPackPlaylistItemRecord>>,
+    transcripts: HashMap<i64, Vec<PromptPackTranscriptSegment>>,
+    comment_candidates: HashMap<i64, Vec<PromptPackCommentCandidate>>,
+    comment_bodies: HashMap<(i64, Option<String>), String>,
+}
+
+impl ScriptedPromptPackSourceReader {
+    pub(crate) fn ready_video(
+        source_id: i64,
+        transcript_segments: Vec<PromptPackTranscriptSegment>,
+    ) -> Self {
+        Self {
+            calls: Arc::new(Mutex::new(Vec::new())),
+            sources: HashMap::from([(
+                source_id,
+                PromptPackSourceRecord::new(
+                    source_id,
+                    "youtube".to_string(),
+                    Some("video".to_string()),
+                    Some(format!("Source {source_id}")),
+                ),
+            )]),
+            videos: HashMap::from([(
+                source_id,
+                PromptPackYoutubeVideoRecord::new(
+                    source_id,
+                    format!("video-{source_id}"),
+                    format!("https://www.youtube.com/watch?v=video-{source_id}"),
+                    Some(format!("Video {source_id}")),
+                    Some("Scripted channel".to_string()),
+                    Some("2026-07-20T10:00:00Z".to_string()),
+                    Some("Scripted description".to_string()),
+                ),
+            )]),
+            playlist_items: HashMap::new(),
+            transcripts: HashMap::from([(source_id, transcript_segments)]),
+            comment_candidates: HashMap::new(),
+            comment_bodies: HashMap::new(),
+        }
+    }
+
+    pub(crate) fn with_comments(
+        mut self,
+        source_id: i64,
+        candidates: Vec<PromptPackCommentCandidate>,
+        bodies: Vec<(Option<String>, String)>,
+    ) -> Self {
+        self.comment_candidates.insert(source_id, candidates);
+        self.comment_bodies.extend(
+            bodies
+                .into_iter()
+                .map(|(external_id, body)| ((source_id, external_id), body)),
+        );
+        self
+    }
+
+    pub(crate) fn calls(&self) -> Vec<SourceReadCall> {
+        self.calls.lock().expect("source call log").clone()
+    }
+}
+
+impl PromptPackSourceReader for ScriptedPromptPackSourceReader {
+    fn load_source(
+        &self,
+        source_id: i64,
+    ) -> PromptPackPortFuture<'_, Option<PromptPackSourceRecord>> {
+        self.calls
+            .lock()
+            .expect("source call log")
+            .push(SourceReadCall::LoadSource(source_id));
+        let result = self.sources.get(&source_id).cloned();
+        Box::pin(async move { Ok(result) })
+    }
+
+    fn load_video(
+        &self,
+        request: YoutubeVideoReadRequest,
+    ) -> PromptPackPortFuture<'_, Option<PromptPackYoutubeVideoRecord>> {
+        let source_id = request.source_id();
+        self.calls
+            .lock()
+            .expect("source call log")
+            .push(SourceReadCall::LoadVideo(source_id));
+        let result = self.videos.get(&source_id).cloned();
+        Box::pin(async move { Ok(result) })
+    }
+
+    fn load_playlist_items(
+        &self,
+        playlist_source_id: i64,
+    ) -> PromptPackPortFuture<'_, Vec<PromptPackPlaylistItemRecord>> {
+        self.calls
+            .lock()
+            .expect("source call log")
+            .push(SourceReadCall::LoadPlaylistItems(playlist_source_id));
+        let result = self
+            .playlist_items
+            .get(&playlist_source_id)
+            .cloned()
+            .unwrap_or_default();
+        Box::pin(async move { Ok(result) })
+    }
+
+    fn load_transcript_segments(
+        &self,
+        source_id: i64,
+    ) -> PromptPackPortFuture<'_, Vec<PromptPackTranscriptSegment>> {
+        self.calls
+            .lock()
+            .expect("source call log")
+            .push(SourceReadCall::LoadTranscriptSegments(source_id));
+        let result = self
+            .transcripts
+            .get(&source_id)
+            .cloned()
+            .unwrap_or_default();
+        Box::pin(async move { Ok(result) })
+    }
+
+    fn select_comment_candidates(
+        &self,
+        request: CommentCandidateReadRequest,
+    ) -> PromptPackPortFuture<'_, Vec<PromptPackCommentCandidate>> {
+        let source_id = request.source_id();
+        let limit = request.limit();
+        self.calls
+            .lock()
+            .expect("source call log")
+            .push(SourceReadCall::SelectCommentCandidates { source_id, limit });
+        let mut result = self
+            .comment_candidates
+            .get(&source_id)
+            .cloned()
+            .unwrap_or_default();
+        result.truncate(limit.max(0) as usize);
+        Box::pin(async move { Ok(result) })
+    }
+
+    fn load_comment_body(
+        &self,
+        request: CommentBodyReadRequest,
+    ) -> PromptPackPortFuture<'_, String> {
+        let source_id = request.source_id();
+        let external_id = request.external_id().map(str::to_owned);
+        self.calls
+            .lock()
+            .expect("source call log")
+            .push(SourceReadCall::LoadCommentBody {
+                source_id,
+                external_id: external_id.clone(),
+            });
+        let result = self
+            .comment_bodies
+            .get(&(source_id, external_id))
+            .cloned()
+            .unwrap_or_default();
+        Box::pin(async move { Ok(result) })
+    }
 }
 
 pub(crate) fn request_for_playlist(source_id: i64) -> PreflightYoutubeSummaryRunRequest {

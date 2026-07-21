@@ -4,7 +4,6 @@ use sqlx::SqlitePool;
 
 use super::outputs::execute_transcript_analysis_stage_with_completion_and_metrics_extension;
 use super::progress::is_run_cancelled;
-use super::sources::TranscriptSnapshotSegment;
 use super::transcript_execution::TranscriptStageRow;
 use super::{
     estimate_tokens, GemAnalysisInputBudget, GemAnalysisPart, GemAnalysisPartRepairRequest,
@@ -13,6 +12,7 @@ use super::{
 };
 use crate::compression::decompress_text;
 use crate::error::{AppError, AppResult};
+use crate::prompt_packs::source_port::PromptPackTranscriptSegment;
 use crate::prompt_packs::stage_io::TranscriptAnalysisStageInput;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -216,10 +216,21 @@ pub(crate) async fn load_gem_analysis_materials(
 
 fn transcript_segments_from_metadata_zstd(
     metadata_zstd: &[u8],
-) -> Option<Vec<TranscriptSnapshotSegment>> {
+) -> Option<Vec<PromptPackTranscriptSegment>> {
     let metadata = decompress_text(metadata_zstd).ok()?;
     let value = serde_json::from_str::<serde_json::Value>(&metadata).ok()?;
-    serde_json::from_value(value.get("segments")?.clone()).ok()
+    value
+        .get("segments")?
+        .as_array()?
+        .iter()
+        .map(|segment| {
+            Some(PromptPackTranscriptSegment::new(
+                segment.get("start_ms")?.as_i64()?,
+                segment.get("end_ms")?.as_i64()?,
+                segment.get("text")?.as_str()?.to_string(),
+            ))
+        })
+        .collect()
 }
 
 fn format_timestamp_ms(start_ms: i64) -> String {
@@ -227,10 +238,16 @@ fn format_timestamp_ms(start_ms: i64) -> String {
     format!("[{:02}:{:02}]", total_seconds / 60, total_seconds % 60)
 }
 
-fn render_timestamped_segments(segments: &[TranscriptSnapshotSegment]) -> String {
+fn render_timestamped_segments(segments: &[PromptPackTranscriptSegment]) -> String {
     segments
         .iter()
-        .map(|segment| format!("{} {}", format_timestamp_ms(segment.start_ms), segment.text))
+        .map(|segment| {
+            format!(
+                "{} {}",
+                format_timestamp_ms(segment.start_ms()),
+                segment.text()
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }

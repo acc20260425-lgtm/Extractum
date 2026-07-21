@@ -1,18 +1,21 @@
 use super::snapshots::{
-    create_youtube_summary_run_skeleton_in_pool, freeze_comment_material_refs, test_comment_policy,
-};
-use super::sources::{
-    render_transcript_snapshot_text, transcript_snapshot_segments_for_source,
-    transcript_text_for_source,
+    create_youtube_summary_run_skeleton_with_source, freeze_comment_material_refs,
+    test_comment_policy, CommentSelectionPolicy,
 };
 use super::test_support::*;
 use super::{
+    create_youtube_summary_run_skeleton_in_pool, render_transcript_snapshot_text,
     start_youtube_summary_run_in_pool, start_youtube_summary_run_with_preflight_failures_in_pool,
+    start_youtube_summary_run_with_source,
 };
 use crate::compression::decompress_text;
 use crate::gemini_browser::{GeminiBrowserProviderConfig, GeminiBrowserProviderMode};
 use crate::prompt_packs::dto::{PromptPackRuntimeProvider, YoutubeSummaryPreflightFailure};
 use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
+use crate::prompt_packs::source_adapter::AppPromptPackSourceReader;
+use crate::prompt_packs::source_port::{
+    PromptPackCommentCandidate, PromptPackSourceReader, PromptPackTranscriptSegment,
+};
 
 #[tokio::test]
 async fn start_freezes_one_canonical_video_snapshot_with_multiple_origins() {
@@ -187,31 +190,31 @@ fn snapshot_start_source_preserves_repeated_preflight_and_post_insert_fresh_read
     let snapshot_source = include_str!("snapshots.rs");
 
     let outer_start = outer_source
-        .find("pub(crate) async fn start_youtube_summary_run_with_preflight_failures_in_pool")
+        .find("async fn start_youtube_summary_run_with_preflight_failures_and_source")
         .expect("outer start function");
     let outer_preflight = outer_source[outer_start..]
-        .find("preflight_youtube_summary_in_pool(")
+        .find("preflight_youtube_summary(")
         .expect("outer preflight");
     let skeleton_call = outer_source[outer_start..]
-        .find("create_youtube_summary_run_skeleton_in_pool(")
+        .find("create_youtube_summary_run_skeleton_with_source(")
         .expect("skeleton call");
     assert!(outer_preflight < skeleton_call);
 
     let skeleton_start = snapshot_source
-        .find("pub(crate) async fn create_youtube_summary_run_skeleton_in_pool")
+        .find("pub(crate) async fn create_youtube_summary_run_skeleton_with_source")
         .expect("skeleton function");
     let skeleton = &snapshot_source[skeleton_start..];
     let repeated_preflight = skeleton
-        .find("preflight_youtube_summary_in_pool(")
+        .find("preflight_youtube_summary(")
         .expect("repeated skeleton preflight");
     let run_insert = skeleton
         .find("INSERT INTO prompt_pack_runs")
         .expect("run insertion");
     let post_insert_source_read = skeleton
-        .find("let Some(source) = load_source(pool, *source_id).await?")
+        .find("let Some(source_record) = source.load_source(*source_id).await?")
         .expect("post-insert source read");
     let post_insert_snapshot_read = skeleton
-        .find("insert_source_snapshot(pool, run_id, video")
+        .find("insert_source_snapshot(pool, source, run_id, video")
         .expect("post-insert video snapshot read");
     let post_insert_material_read = skeleton
         .find("insert_material_snapshots(")
@@ -231,10 +234,10 @@ fn comment_snapshot_source_reads_candidates_for_estimates_then_selected_bodies_a
         .expect("material insertion function");
     let insertion = &source[insertion_start..];
     let candidate_read = insertion
-        .find("freeze_comment_material_refs(pool, source_id, test_comment_policy())")
+        .find("freeze_comment_material_refs(source, source_id")
         .expect("candidate comment read");
     let selected_body_read = insertion
-        .find("load_comment_text(pool, source_id, comment.external_id.as_deref())")
+        .find(".load_comment_body(")
         .expect("selected comment body read");
 
     assert!(candidate_read < selected_body_read);
@@ -243,14 +246,9 @@ fn comment_snapshot_source_reads_candidates_for_estimates_then_selected_bodies_a
         .find("pub(crate) async fn freeze_comment_material_refs(")
         .expect("candidate function");
     let candidate_body = &source[candidate_function..];
-    assert!(candidate_body.contains("content_zstd"));
-    assert!(candidate_body.contains("token_estimate: estimate_tokens(&text)"));
-
-    let selected_function = source
-        .find("async fn load_comment_text(")
-        .expect("selected body function");
-    let selected_body = &source[selected_function..];
-    assert!(selected_body.contains("SELECT content_zstd FROM items"));
+    assert!(candidate_body.contains(".select_comment_candidates("));
+    assert!(candidate_body.contains("estimate_tokens(candidate.body())"));
+    assert!(!candidate_body.contains("SELECT content_zstd FROM items"));
 }
 
 #[tokio::test]
@@ -292,14 +290,20 @@ async fn transcript_snapshot_text_is_rendered_from_structured_segments() {
 #[tokio::test]
 async fn transcript_text_for_source_uses_segment_renderer() {
     let pool = test_pool_with_ready_video().await;
+    let source = AppPromptPackSourceReader::new(pool);
 
-    let segments = transcript_snapshot_segments_for_source(&pool, 901)
+    let segments = source
+        .load_transcript_segments(901)
         .await
         .expect("segments");
     let rendered = render_transcript_snapshot_text(&segments);
-    let legacy_text = transcript_text_for_source(&pool, 901).await.expect("text");
+    let reread = source
+        .load_transcript_segments(901)
+        .await
+        .expect("segments reread");
+    let adapter_text = render_transcript_snapshot_text(&reread);
 
-    assert_eq!(legacy_text, rendered);
+    assert_eq!(adapter_text, rendered);
 }
 
 #[tokio::test]
@@ -371,11 +375,12 @@ async fn duplicate_client_request_id_preserves_existing_runtime_provider() {
 #[tokio::test]
 async fn comment_snapshot_selection_is_deterministic_when_enabled() {
     let pool = test_pool_with_comments_out_of_order().await;
+    let source = AppPromptPackSourceReader::new(pool);
 
-    let first = freeze_comment_material_refs(&pool, 901, test_comment_policy())
+    let first = freeze_comment_material_refs(&source, 901, test_comment_policy())
         .await
         .expect("first freeze");
-    let second = freeze_comment_material_refs(&pool, 901, test_comment_policy())
+    let second = freeze_comment_material_refs(&source, 901, test_comment_policy())
         .await
         .expect("second freeze");
 
@@ -413,4 +418,190 @@ async fn gem_analysis_freezes_comments_even_when_include_comments_is_false() {
 
     assert!(comment_materials > 0);
     assert!(include_comments);
+}
+
+#[tokio::test]
+async fn runnable_start_uses_complete_fresh_source_read_sequence() {
+    let pool = test_pool_with_ready_video().await;
+    let source = ScriptedPromptPackSourceReader::ready_video(
+        901,
+        vec![PromptPackTranscriptSegment::new(
+            0,
+            1_000,
+            "scripted transcript".to_string(),
+        )],
+    )
+    .with_comments(
+        901,
+        vec![
+            PromptPackCommentCandidate::new(
+                Some("comment-1".to_string()),
+                "candidate one".to_string(),
+            ),
+            PromptPackCommentCandidate::new(
+                Some("comment-2".to_string()),
+                "candidate two".to_string(),
+            ),
+        ],
+        vec![
+            (Some("comment-1".to_string()), "fresh body one".to_string()),
+            (Some("comment-2".to_string()), "fresh body two".to_string()),
+        ],
+    );
+    let mut request = start_request("req-complete-source-sequence", vec![901]);
+    request.include_comments = true;
+
+    start_youtube_summary_run_with_source(&pool, &source, request)
+        .await
+        .expect("start with scripted source")
+        .expect_started("scripted start");
+
+    assert_eq!(
+        source.calls(),
+        vec![
+            SourceReadCall::LoadSource(901),
+            SourceReadCall::LoadVideo(901),
+            SourceReadCall::LoadTranscriptSegments(901),
+            SourceReadCall::LoadSource(901),
+            SourceReadCall::LoadVideo(901),
+            SourceReadCall::LoadTranscriptSegments(901),
+            SourceReadCall::LoadSource(901),
+            SourceReadCall::LoadSource(901),
+            SourceReadCall::LoadVideo(901),
+            SourceReadCall::LoadTranscriptSegments(901),
+            SourceReadCall::LoadVideo(901),
+            SourceReadCall::SelectCommentCandidates {
+                source_id: 901,
+                limit: 50,
+            },
+            SourceReadCall::LoadCommentBody {
+                source_id: 901,
+                external_id: Some("comment-1".to_string()),
+            },
+            SourceReadCall::LoadCommentBody {
+                source_id: 901,
+                external_id: Some("comment-2".to_string()),
+            },
+            SourceReadCall::LoadSource(901),
+            SourceReadCall::LoadVideo(901),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn selected_comment_body_is_reloaded_after_candidate_estimation() {
+    let pool = test_pool_with_ready_video().await;
+    let source = ScriptedPromptPackSourceReader::ready_video(
+        901,
+        vec![PromptPackTranscriptSegment::new(
+            0,
+            1_000,
+            "scripted transcript".to_string(),
+        )],
+    )
+    .with_comments(
+        901,
+        vec![PromptPackCommentCandidate::new(
+            Some("comment-fresh".to_string()),
+            "candidate body used only for estimate".to_string(),
+        )],
+        vec![(
+            Some("comment-fresh".to_string()),
+            "fresh body persisted later".to_string(),
+        )],
+    );
+    let mut request = start_request("req-fresh-comment-body", vec![901]);
+    request.include_comments = true;
+
+    let run_id = create_youtube_summary_run_skeleton_with_source(&pool, &source, request, 1)
+        .await
+        .expect("create run with scripted comments");
+    let text_zstd: Vec<u8> = sqlx::query_scalar(
+        "SELECT text_zstd FROM prompt_pack_run_material_snapshots
+         WHERE run_id = ? AND material_kind = 'comment'",
+    )
+    .bind(run_id)
+    .fetch_one(&pool)
+    .await
+    .expect("read frozen comment");
+    let frozen = decompress_text(&text_zstd).expect("decompress frozen comment");
+
+    assert_eq!(frozen, "fresh body persisted later");
+    let calls = source.calls();
+    let candidate_index = calls
+        .iter()
+        .position(|call| matches!(call, SourceReadCall::SelectCommentCandidates { .. }))
+        .expect("candidate read");
+    let body_index = calls
+        .iter()
+        .position(|call| matches!(call, SourceReadCall::LoadCommentBody { .. }))
+        .expect("body read");
+    assert!(candidate_index < body_index);
+}
+
+#[tokio::test]
+async fn transcript_material_policy_uses_owned_segment_reader_values() {
+    let pool = test_pool_with_ready_video().await;
+    let source = ScriptedPromptPackSourceReader::ready_video(
+        901,
+        vec![
+            PromptPackTranscriptSegment::new(111, 222, "owned first".to_string()),
+            PromptPackTranscriptSegment::new(333, 444, "owned second".to_string()),
+        ],
+    );
+    let request = start_request("req-owned-transcript-segments", vec![901]);
+
+    let run_id = create_youtube_summary_run_skeleton_with_source(&pool, &source, request, 1)
+        .await
+        .expect("create run with owned transcript segments");
+    let (text_zstd, metadata_zstd): (Vec<u8>, Vec<u8>) = sqlx::query_as(
+        "SELECT text_zstd, metadata_json_zstd
+         FROM prompt_pack_run_material_snapshots
+         WHERE run_id = ? AND material_kind = 'transcript'",
+    )
+    .bind(run_id)
+    .fetch_one(&pool)
+    .await
+    .expect("read transcript snapshot");
+    let text = decompress_text(&text_zstd).expect("decompress transcript");
+    let metadata = decompress_text(&metadata_zstd).expect("decompress transcript metadata");
+    let metadata: serde_json::Value = serde_json::from_str(&metadata).expect("metadata JSON");
+
+    assert_eq!(text, "owned first\nowned second");
+    assert_eq!(metadata["segments"][0]["start_ms"], 111);
+    assert_eq!(metadata["segments"][0]["end_ms"], 222);
+    assert_eq!(metadata["segments"][1]["text"], "owned second");
+}
+
+#[tokio::test]
+async fn comment_material_ref_policy_preserves_order_and_token_cap() {
+    let source = ScriptedPromptPackSourceReader::ready_video(901, Vec::new()).with_comments(
+        901,
+        vec![
+            PromptPackCommentCandidate::new(
+                Some("comment-first".to_string()),
+                "abcdefghijklmnop".to_string(),
+            ),
+            PromptPackCommentCandidate::new(Some("comment-second".to_string()), "x".to_string()),
+        ],
+        Vec::new(),
+    );
+
+    let refs = freeze_comment_material_refs(
+        &source,
+        901,
+        CommentSelectionPolicy {
+            comment_count_cap: 50,
+            comment_token_cap: 2,
+        },
+    )
+    .await
+    .expect("freeze comment refs");
+
+    assert_eq!(refs[0].external_id.as_deref(), Some("comment-first"));
+    assert_eq!(refs[0].material_ref_id, "m_comment_1");
+    assert_eq!(refs[0].token_estimate, 2);
+    assert_eq!(refs[1].external_id.as_deref(), Some("comment-second"));
+    assert_eq!(refs[1].material_ref_id, "m_comment_2");
+    assert_eq!(refs[1].token_estimate, 1);
 }
