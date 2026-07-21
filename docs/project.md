@@ -66,6 +66,14 @@ npm run verify:project-runs
 The first Rust run after a clean target can be slow because Cargo warms the
 test target; subsequent runs are expected to be much faster.
 
+`src-tauri/crates/extractum-prompt-packs/src/` owns Prompt Pack lifecycle,
+YouTube Summary orchestration, validation, and prompt-pack-table persistence.
+`src-tauri/src/prompt_packs/` is the private application compatibility facade:
+it owns Tauri commands/events/spawning, pool acquisition, profile/secret
+resolution, foreign source reads, and concrete Gemini Browser adapters.
+Migrations and bundled assets remain app-owned at `src-tauri/migrations/` and
+`src-tauri/prompt-packs/`.
+
 For the local Python YouTube pipeline research prototype, use:
 
 ```bash
@@ -493,18 +501,19 @@ Application exit closes external-process admission and starts one shared three-s
 6. `src-tauri/src/analysis/`
 7. `src-tauri/src/llm/`
 8. `src-tauri/src/diagnostics/`
-9. `src-tauri/src/prompt_packs/`
-10. `src/routes/projects/`
-11. `src/lib/components/research-projects/`
-12. `research/youtube_pipeline/` for research-only YouTube summary pipeline work
-13. `src/routes/analysis/+page.svelte`
-14. `src/lib/components/analysis/`
-15. `src/routes/settings/+page.svelte`
-16. `src/routes/diagnostics/+page.svelte`
-17. `src/lib/diagnostics-view-model.ts`
-18. `src/routes/sources/+page.svelte`
-19. `src-tauri/src/error.rs`
-20. `src-tauri/src/migrations.rs`
+9. `src-tauri/crates/extractum-prompt-packs/src/`
+10. `src-tauri/src/prompt_packs/` for application adapters and command facade
+11. `src/routes/projects/`
+12. `src/lib/components/research-projects/`
+13. `research/youtube_pipeline/` for research-only YouTube summary pipeline work
+14. `src/routes/analysis/+page.svelte`
+15. `src/lib/components/analysis/`
+16. `src/routes/settings/+page.svelte`
+17. `src/routes/diagnostics/+page.svelte`
+18. `src/lib/diagnostics-view-model.ts`
+19. `src/routes/sources/+page.svelte`
+20. `src-tauri/src/error.rs`
+21. `src-tauri/src/migrations.rs`
 
 Related deep dive: `docs/takeout-source-import.md`.
 

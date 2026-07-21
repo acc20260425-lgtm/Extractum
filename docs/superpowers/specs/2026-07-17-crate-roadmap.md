@@ -196,6 +196,8 @@ following values are historical context, not automatic retention gates:
 | Pre-Phase 3 | 9,135 ms | historical retained-workspace reference |
 | Historical Phase 3 candidate | 10,177 ms | candidate reverted and not retained |
 | Phase 4 `extractum-gemini-browser` | 1,620 ms | completed and retained; [verification](../verification/2026-07-19-extractum-gemini-browser-extraction.md) |
+| Phase 5 `extractum-llm` | 10,410 ms | completed and retained; below 15,000 ms |
+| Phase 6 `extractum-prompt-packs` | 11,669 ms | completed and retained; below 15,000 ms; [verification](../verification/2026-07-20-extractum-prompt-packs-extraction.md) |
 
 For future slices, record the duration of the mandatory workspace check without
 adding a separate shell A/B experiment. For this rule, one completed
@@ -371,28 +373,46 @@ At Phase 5 completion, Phase 6 `extractum-prompt-packs` remained next. Its
 fresh JIT boundary design was owner-approved, but implementation was not
 authorized by the Phase 5 result or by the design document alone.
 
-### Phase 6 — `extractum-prompt-packs` (preparation Checkpoint 4 retained)
+### Phase 6 — `extractum-prompt-packs` (done: retained)
 
 The owner-approved
 [Phase 6 boundary design](2026-07-20-prompt-packs-crate-boundary-design.md)
-refreshes the current scope to 46 files / 19,037 lines and 225 baseline Rust
+is implemented and retained; see the
+[verification](../verification/2026-07-20-extractum-prompt-packs-extraction.md).
+The refreshed start scope was 46 files / 19,037 lines and 225 baseline Rust
 test identities. Since 2026-06-01, 118 commits touched `prompt_packs`; 92
-(78.0%) touched no other categorized Rust domain. The frozen test partition is
-223 identities in the new crate and two foreign-source SQL-adapter identities
-in the app.
+(78.0%) touched no other categorized Rust domain.
 
-The selected preparation-first boundary gives the crate prompt-pack lifecycle,
-YouTube Summary orchestration, validation, and SQL for the 32 prompt-pack-owned
-tables. The app retains Tauri commands/events/spawning, `get_pool`, migrations,
+`extractum-prompt-packs` now owns prompt-pack lifecycle, YouTube Summary
+orchestration, validation, and SQL for the 32 prompt-pack-owned tables. The
+app retains Tauri commands/events/spawning, `get_pool`, migrations,
 profile/secret resolution, foreign source reads, and concrete Gemini Browser
-operations. The crate depends downward on `extractum-llm`,
-`extractum-gemini-browser`, and `extractum-core`; foreign source data crosses a
-narrow owned-value reader, and Browser work crosses an object-safe app port.
-The private app facade preserves current Rust consumer paths.
+operations behind its private compatibility facade. The crate depends
+downward on `extractum-llm`, `extractum-gemini-browser`, and
+`extractum-core`; foreign source data crosses a narrow owned-value reader, and
+Browser work crosses an object-safe app port.
 
-Implementation requires a separate plan and an explicit owner instruction.
-Timing remains advisory: one warm-up plus three focused samples per state, with
-no quiet-window, retry, shell A/B, or cumulative-ledger machinery.
+The frozen Appendix A partition is exactly 223 crate identities and two
+foreign-source SQL-adapter identities in the app. The crate runs 25 new
+characterization tests and the app Prompt Pack modules run 10 new adapter
+characterizations, all outside the 225-name baseline.
+
+The baseline focused samples were 11,286 ms, 9,669 ms, and 9,006 ms
+(median 9,669 ms). Candidate samples were collected, but raw-byte restoration
+failed before a mechanical exact repair; the protocol disposition is
+`incomplete / no performance conclusion`, with no admitted candidate median
+or causal performance claim. Timing was advisory and did not decide retention.
+
+The ordinary mandatory workspace check completed in 11,669 ms, below 15,000
+ms. Phase 5 was 10,410 ms, also below 15,000 ms, so no adjacent-pair
+investigation is triggered. Mechanically, because Phase 5 was below the
+threshold, even a Phase 6 ordinary result at or above 15,000 ms would only be
+the first possible member of an adjacent above-threshold pair and would not
+trigger an investigation by itself.
+
+Phase 7 remains future work. It requires a fresh owner-approved JIT boundary
+design and explicit implementation instruction; the Phase 6 result does not
+authorize it.
 
 ### Phase 7 — `extractum-analysis`
 
@@ -400,7 +420,8 @@ no quiet-window, retry, shell A/B, or cumulative-ledger machinery.
 `sources` read-models (13 joint commits) — the boundary design must decide
 which read-model contracts move, stay, or get duplicated as views. Its
 `trace.rs` direct `zstd::` usage is consolidated behind `core::compression`
-here at the latest.
+here at the latest. This is only a future candidate until a fresh
+owner-approved JIT design and explicit implementation instruction exist.
 
 ### Phase 8 — `extractum-telegram`
 

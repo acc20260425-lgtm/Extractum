@@ -871,9 +871,9 @@ Scope: values found in SQL migrations, bundled prompt-pack assets, seed code, an
 | Area | Name | Values | Source | Notes |
 | --- | --- | --- | --- | --- |
 | Prompt-pack version source | `origin_kind` | `bundled`, `user` | `src-tauri/migrations/0006_prompt_pack_mvp.sql`, `src-tauri/prompt-packs/youtube_summary/1.0.0/pack.json` | Persisted. `bundled` is the built-in pack source; `user` blocks seed overwrite collisions. |
-| Prompt-pack lifecycle | `lifecycle_status` | `draft`, `active`, `archived` | `src-tauri/migrations/0006_prompt_pack_mvp.sql`, `src-tauri/src/prompt_packs/seed.rs` | Persisted version lifecycle. |
-| Prompt-pack schema assets | `schema_kind` | `canonical_result`, `stage_input`, `stage_output`, `pack_data_schema` | `src-tauri/migrations/0006_prompt_pack_mvp.sql`, `src-tauri/src/prompt_packs/seed.rs` | `pack_data_schema` is SQL-allowed even if current bundle seeds only the other three. |
-| Prompt-pack source scope | `scope_kind` | `explicit_video`, `playlist` | `src-tauri/migrations/0006_prompt_pack_mvp.sql`, `src-tauri/src/prompt_packs/youtube_summary/snapshots.rs` | Source snapshot scope. |
+| Prompt-pack lifecycle | `lifecycle_status` | `draft`, `active`, `archived` | `src-tauri/migrations/0006_prompt_pack_mvp.sql`, `src-tauri/crates/extractum-prompt-packs/src/seed.rs` | Persisted version lifecycle. |
+| Prompt-pack schema assets | `schema_kind` | `canonical_result`, `stage_input`, `stage_output`, `pack_data_schema` | `src-tauri/migrations/0006_prompt_pack_mvp.sql`, `src-tauri/crates/extractum-prompt-packs/src/seed.rs` | `pack_data_schema` is SQL-allowed even if current bundle seeds only the other three. |
+| Prompt-pack source scope | `scope_kind` | `explicit_video`, `playlist` | `src-tauri/migrations/0006_prompt_pack_mvp.sql`, `src-tauri/crates/extractum-prompt-packs/src/youtube_summary/snapshots.rs` | Source snapshot scope. |
 | Prompt-pack source inclusion | `inclusion_status` | `included`, `skipped`, `blocking` | `src-tauri/migrations/0006_prompt_pack_mvp.sql` | Persisted source-origin inclusion outcome. |
 | Prompt-pack material | `material_kind` | `transcript`, `description`, `comment` | `src-tauri/migrations/0006_prompt_pack_mvp.sql` | Material refs captured into prompt-pack snapshots. |
 | Prompt-pack stage artifacts | `artifact_kind` | `prompt_input`, `raw_output`, `parsed_output`, `metrics`, `error`, `repair_input`, `intermediate_entities` | `src-tauri/migrations/0006_prompt_pack_mvp.sql`, `src-tauri/migrations/0009_prompt_pack_intermediate_entities_artifacts.sql` | `intermediate_entities` was added after the MVP migration. |
@@ -881,8 +881,8 @@ Scope: values found in SQL migrations, bundled prompt-pack assets, seed code, an
 | Prompt-pack validation severity | `severity` | `info`, `warning`, `error` | `src-tauri/migrations/0006_prompt_pack_mvp.sql` | `code` is still free-form text. |
 | Prompt-pack provider family | `provider_family` | `generic_chat` | `src-tauri/prompt-packs/youtube_summary/1.0.0/stages/transcript_analysis.json`, runtime assets | Bundled asset value; not SQL-constrained. |
 | Prompt-pack validator mode | `validator_mode` | `stage_output` | `src-tauri/prompt-packs/youtube_summary/1.0.0/stages/transcript_analysis.json` | Bundled stage template value; not SQL-constrained. |
-| Prompt-pack control preset | `control_preset` | `standard`, `detailed_report`, `gem_analysis` | `src-tauri/prompt-packs/youtube_summary/1.0.0/pack.json`, `src-tauri/src/prompt_packs/runtime.rs`, `src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte` | `standard` is default; `detailed_report` is a UI/runtime mode; `gem_analysis` is a single-video sequential multi-request mode. |
-| Prompt-pack evidence mode | `evidence_mode` | `standard`, `narrative_only` | `src-tauri/prompt-packs/youtube_summary/1.0.0/pack.json`, `src-tauri/src/prompt_packs/youtube_summary/result_validation.rs` | `narrative_only` changes validation expectations for empty videos. |
+| Prompt-pack control preset | `control_preset` | `standard`, `detailed_report`, `gem_analysis` | `src-tauri/prompt-packs/youtube_summary/1.0.0/pack.json`, `src-tauri/crates/extractum-prompt-packs/src/runtime.rs`, `src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte` | `standard` is default; `detailed_report` is a UI/runtime mode; `gem_analysis` is a single-video sequential multi-request mode. |
+| Prompt-pack evidence mode | `evidence_mode` | `standard`, `narrative_only` | `src-tauri/prompt-packs/youtube_summary/1.0.0/pack.json`, `src-tauri/crates/extractum-prompt-packs/src/youtube_summary/result_validation.rs` | `narrative_only` changes validation expectations for empty videos. |
 
 ### Telegram history and source metadata values
 

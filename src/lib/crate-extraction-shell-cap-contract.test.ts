@@ -9,6 +9,7 @@ import geminiBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-19-gem
 import llmBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-20-llm-crate-boundary-design.md?raw";
 import promptPacksBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-20-prompt-packs-crate-boundary-design.md?raw";
 import llmVerificationRaw from "../../docs/superpowers/verification/2026-07-20-extractum-llm-extraction.md?raw";
+import promptPacksVerificationRaw from "../../docs/superpowers/verification/2026-07-20-extractum-prompt-packs-extraction.md?raw";
 import shellCapRevisionRaw from "../../docs/superpowers/specs/2026-07-18-crate-extraction-shell-cap-revision-design.md?raw";
 import anomalyV2DesignRaw from "../../docs/superpowers/specs/2026-07-18-process-shell-anomaly-v2-design.md?raw";
 import reapplicationPlanRaw from "../../docs/superpowers/plans/2026-07-18-extractum-process-reapplication.md?raw";
@@ -42,6 +43,7 @@ const geminiBoundaryDesign = compact(geminiBoundaryDesignRaw);
 const llmBoundaryDesign = compact(llmBoundaryDesignRaw);
 const promptPacksBoundaryDesign = compact(promptPacksBoundaryDesignRaw);
 const llmVerification = compact(llmVerificationRaw);
+const promptPacksVerification = compact(promptPacksVerificationRaw);
 const shellCapRevision = compact(shellCapRevisionRaw);
 const anomalyV2Design = compact(anomalyV2DesignRaw);
 const reapplicationPlan = compact(reapplicationPlanRaw);
@@ -452,9 +454,9 @@ describe("crate extraction timing policy", () => {
     }
   });
 
-  it("records the approved Phase 6 prompt-pack boundary and closed lifecycle state", () => {
+  it("records the retained Phase 6 prompt-pack boundary and closed lifecycle state", () => {
     expect(promptPacksBoundaryDesign).toContain(
-      "**Status:** Owner-approved; implementation not started",
+      "**Status:** Implemented and retained; [verification](../verification/2026-07-20-extractum-prompt-packs-extraction.md)",
     );
     expect(phase6Status).toBeDefined();
     expect([
@@ -466,8 +468,12 @@ describe("crate extraction timing policy", () => {
       "done: retained",
       "not retained",
     ]).toContain(phase6Status);
+    expect(phase6Status).toBe("done: retained");
     expect(phase6Roadmap).toContain(
       "2026-07-20-prompt-packs-crate-boundary-design.md",
+    );
+    expect(phase6Roadmap).toContain(
+      "2026-07-20-extractum-prompt-packs-extraction.md",
     );
     expect(phase6Roadmap).toContain(
       "46 files / 19,037 lines and 225 baseline Rust test identities",
@@ -475,20 +481,48 @@ describe("crate extraction timing policy", () => {
     expect(phase6Roadmap).toContain("118 commits touched `prompt_packs`");
     expect(phase6Roadmap).toContain("92 (78.0%)");
     expect(phase6Roadmap).toContain(
-      "223 identities in the new crate and two foreign-source SQL-adapter identities in the app",
+      "exactly 223 crate identities and two foreign-source SQL-adapter identities in the app",
     );
     expect(phase6Roadmap).toContain("32 prompt-pack-owned tables");
     expect(phase6Roadmap).toContain(
       "The app retains Tauri commands/events/spawning, `get_pool`, migrations, profile/secret resolution, foreign source reads, and concrete Gemini Browser operations",
     );
     expect(phase6Roadmap).toContain(
-      "Implementation requires a separate plan and an explicit owner instruction",
+      "25 new characterization tests and the app Prompt Pack modules run 10 new adapter characterizations",
     );
     expect(phase6Roadmap).toContain(
-      "one warm-up plus three focused samples per state",
+      "11,286 ms, 9,669 ms, and 9,006 ms",
     );
     expect(phase6Roadmap).toContain(
-      "no quiet-window, retry, shell A/B, or cumulative-ledger machinery",
+      "incomplete / no performance conclusion",
+    );
+    expect(phase6Roadmap).toContain("Timing was advisory and did not decide retention");
+    expect(phase6Roadmap).toContain("11,669 ms, below 15,000 ms");
+    expect(phase6Roadmap).toContain("Phase 5 was 10,410 ms");
+    expect(phase6Roadmap).toContain(
+      "fresh owner-approved JIT boundary design and explicit implementation instruction",
+    );
+
+    expect(promptPacksVerification).toContain(
+      "**Result: implemented and retained.**",
+    );
+    expect(promptPacksVerification).toContain(
+      "223 baseline identities in extractum-prompt-packs",
+    );
+    expect(promptPacksVerification).toContain(
+      "total new Prompt Pack characterizations: 35",
+    );
+    expect(promptPacksVerification).toContain(
+      "BASELINE_RAW_MS=[11286, 9669, 9006]",
+    );
+    expect(promptPacksVerification).toContain(
+      "CANDIDATE_DISPOSITION=incomplete / no performance conclusion",
+    );
+    expect(promptPacksVerification).toContain(
+      "workspace_check,1,11669",
+    );
+    expect(promptPacksVerification).toContain(
+      "PID 13480 remained alive after five seconds",
     );
 
     expect(promptPacksBoundaryDesign).toContain(
