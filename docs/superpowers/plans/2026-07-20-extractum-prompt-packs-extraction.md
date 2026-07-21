@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Authority: `docs/superpowers/specs/2026-07-20-prompt-packs-crate-boundary-design.md` at owner-approved status. Do not infer permission for Phase 7 or reopen the canceled process-crate work.
-- Start from clean commit `7d748cf94c8de0a0f263900549d530a4b52260a7`; if `HEAD` differs, record the new identity and re-run Task 1 inventories before editing.
+- Start from a clean commit at or after evidence commit `7d748cf94c8de0a0f263900549d530a4b52260a7`; never roll back to that commit. Record the actual `HEAD`, prove the evidence commit is its ancestor, and re-run Task 1 inventories before editing whenever `HEAD` is newer.
 - Checkpoints 1–4 each end at a separately identifiable green commit. The application remains the production owner until the mechanical extraction commit.
 - Checkpoint 5 is intentionally RED and is committed separately. It may fail only because the future member/path/move is absent.
 - The move changes ownership, module-relative imports, manifest inheritance, and the centralized asset/test-migration prefixes. It must not change algorithms, SQL text, serialized values, messages, schemas, provider policy, cancellation behavior, or preflight count.
@@ -30,6 +30,24 @@
 - Advisory timing cannot veto retention. One warm-up plus three samples per state, no retries; interrupted/failed series means `incomplete / no performance conclusion` after byte restoration.
 - Use `npm.cmd`, not `npm`, on Windows. A filtered Cargo command that does not print `running 1 test` is a failed verification.
 - Stage only files named by the current task. Preserve unrelated user changes and never use `git reset`, destructive checkout, or history rewriting.
+
+### Phase 6 Roadmap Status State Machine
+
+The parenthetical suffix of the Phase 6 roadmap heading is a closed lifecycle vocabulary. `src/lib/crate-extraction-shell-cap-contract.test.ts` must parse the suffix and accept exactly one of these complete values:
+
+```text
+design approved; implementation not started
+preparation Checkpoint 1 retained
+preparation Checkpoint 2 retained
+preparation Checkpoint 3 retained
+preparation Checkpoint 4 retained
+done: retained
+not retained
+```
+
+Task 1 installs this standing assertion and changes the roadmap to `preparation Checkpoint 1 retained` in the same green commit. Each later green preparation boundary changes only the checkpoint number in its own commit. `done: retained` is written only after every completion gate; `not retained` is written only by a durable negative disposition when no preparation checkpoint remains the truthful retained state. Every other Phase 6 scope, ownership, timing, and approval assertion in the shell-cap contract remains strict.
+
+The Phase 5 sentence is historical evidence, not the live Phase 6 state. Task 1 changes it once to `At Phase 5 completion, Phase 6 \`extractum-prompt-packs\` remained next`; the shell-cap contract pins that past-tense sentence in every Phase 6 state. It must never branch on crate-manifest existence or continue claiming in the present tense that Phase 6 "remains next".
 
 ---
 
@@ -77,6 +95,8 @@ npm.cmd run verify
 
 - Create: `src/lib/prompt-pack-application-contract.test.ts`
 - Create: `src/lib/prompt-pack-contract-paths.ts`
+- Modify: `docs/superpowers/specs/2026-07-17-crate-roadmap.md`
+- Modify: `src/lib/crate-extraction-shell-cap-contract.test.ts`
 - Modify: `src/lib/api/prompt-packs.test.ts`
 - Modify: `src-tauri/src/prompt_packs/dto.rs`
 - Modify: `src-tauri/src/prompt_packs/runtime.rs`
@@ -94,17 +114,21 @@ npm.cmd run verify
 - [ ] **Step 1: Prove identity and a clean start**
 
 ```powershell
-$phase6Expected = '7d748cf94c8de0a0f263900549d530a4b52260a7'
+$phase6Evidence = '7d748cf94c8de0a0f263900549d530a4b52260a7'
 $phase6Head = (git rev-parse HEAD).Trim()
-if ($phase6Head -ne $phase6Expected) {
-  Write-Host "HEAD changed from the approved evidence: $phase6Head"
+git merge-base --is-ancestor $phase6Evidence $phase6Head
+if ($LASTEXITCODE -ne 0) {
+  throw "HEAD must be at or after Phase 6 evidence commit $phase6Evidence; do not roll back"
+}
+if ($phase6Head -ne $phase6Evidence) {
+  Write-Host "HEAD is newer than the approved evidence; refreshing every Task 1 inventory from: $phase6Head"
 }
 $phase6Dirty = @(git status --porcelain=v1 --untracked-files=all)
 if ($phase6Dirty.Count -ne 0) { throw 'Phase 6 must start from a clean worktree' }
 git status --short
 ```
 
-Expected: no status lines. A different clean `HEAD` is allowed only after recording it in the verification draft and repeating all inventories in this task.
+Expected: no status lines and successful ancestry proof. A newer clean `HEAD` is allowed only after recording it in the verification draft and repeating all inventories in this task.
 
 - [ ] **Step 2: Freeze the executable Cargo inventory**
 
@@ -239,7 +263,38 @@ Browser provenance is persisted before completion validation
 
 Do not refactor production code in this step; expose only `#[cfg(test)]` hooks where a source-order assertion otherwise cannot observe the boundary.
 
-- [ ] **Step 7: Run exact focused and source tests**
+- [ ] **Step 7: Install the lifecycle-status contract and record Checkpoint 1**
+
+In `src/lib/crate-extraction-shell-cap-contract.test.ts`, replace only the fixed Phase 6 status assertion with a fail-closed extraction of the roadmap heading suffix and the exact closed set from `Phase 6 Roadmap Status State Machine`. Require a match before indexing it; do not use a loose regex such as `Checkpoint \d` and do not remove or union any other assertion. The core check is:
+
+```typescript
+const phase6Status = phase6Roadmap.match(
+  /### Phase 6 — `extractum-prompt-packs` \(([^)]+)\)/,
+)?.[1];
+
+expect(phase6Status).toBeDefined();
+expect([
+  "design approved; implementation not started",
+  "preparation Checkpoint 1 retained",
+  "preparation Checkpoint 2 retained",
+  "preparation Checkpoint 3 retained",
+  "preparation Checkpoint 4 retained",
+  "done: retained",
+  "not retained",
+]).toContain(phase6Status);
+```
+
+Also make the three Phase 5 assertions permanently historical and exact: require `At Phase 5 completion, Phase 6 \`extractum-prompt-packs\` remained next`, `fresh JIT boundary design was owner-approved`, and `implementation was not authorized`. In the roadmap, change that paragraph to the same past tense and change only the Phase 6 heading suffix to `preparation Checkpoint 1 retained`. Keep the owner-instruction prerequisite and all Phase 6 boundary/timing prose unchanged.
+
+Run the standing contract immediately:
+
+```powershell
+npm.cmd run test -- src/lib/crate-extraction-shell-cap-contract.test.ts
+```
+
+Expected: the contract passes with the exact Checkpoint 1 state and no present-tense `Phase 6 \`extractum-prompt-packs\` remains next` assertion survives.
+
+- [ ] **Step 8: Run exact focused and source tests**
 
 ```powershell
 Invoke-ExactRust extractum 'prompt_packs::dto::tests::start_outcomes_serialize_exact_ipc_contract'
@@ -252,18 +307,19 @@ Invoke-ExactRust extractum 'prompt_packs::gemini_browser_stage::tests::timeout_l
 Invoke-ExactRust extractum 'prompt_packs::runtime::tests::cleanup_interrupted_prompt_pack_runs_marks_stale_active_rows_interrupted'
 Invoke-ExactRust extractum 'prompt_packs::seed::tests::bundled_assets_hashes_and_source_path_match_canonical_bytes'
 npm.cmd run test -- src/lib/prompt-pack-application-contract.test.ts src/lib/api/prompt-packs.test.ts src/lib/prompt-pack-completion-transport-contract.test.ts src/lib/prompt-pack-run-control-contract.test.ts src/lib/prompt-pack-run-store-contract.test.ts src/lib/prompt-pack-runtime-config-contract.test.ts src/lib/prompt-pack-stage-execution-contract.test.ts src/lib/prompt-pack-stage-request-policy-contract.test.ts
+npm.cmd run test -- src/lib/crate-extraction-shell-cap-contract.test.ts
 cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets
 ```
 
 Expected: each exact Rust invocation prints `running 1 test`; Vitest and the app check pass.
 
-- [ ] **Step 8: Review and commit Checkpoint 1 GREEN**
+- [ ] **Step 9: Review and commit Checkpoint 1 GREEN**
 
 ```powershell
 git diff --check
 git status --short
-git add src/lib/prompt-pack-application-contract.test.ts src/lib/prompt-pack-contract-paths.ts src/lib/api/prompt-packs.test.ts src/lib/prompt-pack-completion-transport-contract.test.ts src/lib/prompt-pack-run-control-contract.test.ts src/lib/prompt-pack-run-store-contract.test.ts src/lib/prompt-pack-runtime-config-contract.test.ts src/lib/prompt-pack-stage-execution-contract.test.ts src/lib/prompt-pack-stage-request-policy-contract.test.ts src-tauri/src/prompt_packs/dto.rs src-tauri/src/prompt_packs/runtime.rs src-tauri/src/prompt_packs/completion_transport.rs src-tauri/src/prompt_packs/seed.rs src-tauri/src/prompt_packs/youtube_summary/preflight_tests.rs src-tauri/src/prompt_packs/youtube_summary/snapshots_tests.rs
-git commit -m "test: characterize prompt-pack boundary"
+git add docs/superpowers/specs/2026-07-17-crate-roadmap.md src/lib/crate-extraction-shell-cap-contract.test.ts src/lib/prompt-pack-application-contract.test.ts src/lib/prompt-pack-contract-paths.ts src/lib/api/prompt-packs.test.ts src/lib/prompt-pack-completion-transport-contract.test.ts src/lib/prompt-pack-run-control-contract.test.ts src/lib/prompt-pack-run-store-contract.test.ts src/lib/prompt-pack-runtime-config-contract.test.ts src/lib/prompt-pack-stage-execution-contract.test.ts src/lib/prompt-pack-stage-request-policy-contract.test.ts src-tauri/src/prompt_packs/dto.rs src-tauri/src/prompt_packs/runtime.rs src-tauri/src/prompt_packs/completion_transport.rs src-tauri/src/prompt_packs/seed.rs src-tauri/src/prompt_packs/youtube_summary/preflight_tests.rs src-tauri/src/prompt_packs/youtube_summary/snapshots_tests.rs
+git commit -m "test: characterize prompt-pack boundary and start phase 6"
 ```
 
 Expected: clean Checkpoint 1 commit; no unrelated paths staged.
@@ -272,6 +328,7 @@ Expected: clean Checkpoint 1 commit; no unrelated paths staged.
 
 **Files:**
 
+- Modify: `docs/superpowers/specs/2026-07-17-crate-roadmap.md`
 - Modify: `src-tauri/src/prompt_packs/dto.rs`
 - Modify: `src-tauri/src/prompt_packs/library.rs`
 - Modify: `src-tauri/src/prompt_packs/run_control.rs`
@@ -362,11 +419,16 @@ Expected: all exact tests run once and pass; app all-target check passes.
 
 - [ ] **Step 5: Commit Checkpoint 2 GREEN**
 
+After the code gates pass, change only the Phase 6 roadmap heading suffix from `preparation Checkpoint 1 retained` to `preparation Checkpoint 2 retained`, then prove the standing lifecycle contract remains GREEN:
+
 ```powershell
+npm.cmd run test -- src/lib/crate-extraction-shell-cap-contract.test.ts
 git diff --check
-git add src-tauri/src/prompt_packs/dto.rs src-tauri/src/prompt_packs/library.rs src-tauri/src/prompt_packs/run_control.rs src-tauri/src/prompt_packs/runtime.rs src-tauri/src/prompt_packs/stage_io.rs src-tauri/src/prompt_packs/youtube_summary/mod.rs src-tauri/src/prompt_packs/youtube_summary/test_support.rs src-tauri/src/prompt_packs/youtube_summary/snapshots_tests.rs
+git add docs/superpowers/specs/2026-07-17-crate-roadmap.md src-tauri/src/prompt_packs/dto.rs src-tauri/src/prompt_packs/library.rs src-tauri/src/prompt_packs/run_control.rs src-tauri/src/prompt_packs/runtime.rs src-tauri/src/prompt_packs/stage_io.rs src-tauri/src/prompt_packs/youtube_summary/mod.rs src-tauri/src/prompt_packs/youtube_summary/test_support.rs src-tauri/src/prompt_packs/youtube_summary/snapshots_tests.rs
 git commit -m "refactor: prepare prompt-pack public construction"
 ```
+
+Expected: the Checkpoint 2 commit is independently GREEN and its roadmap status is truthful if execution pauses here.
 
 ### Task 3: Introduce the Source Reader and App SQL Adapter
 
@@ -537,6 +599,7 @@ git commit -m "refactor: isolate prompt-pack browser and events"
 **Files:**
 
 - Create: `src-tauri/src/prompt_packs/runtime_commands.rs`
+- Modify: `docs/superpowers/specs/2026-07-17-crate-roadmap.md`
 - Modify: `src-tauri/src/prompt_packs/runtime.rs`
 - Modify: `src-tauri/src/prompt_packs/runtime_config.rs`
 - Modify: `src-tauri/src/prompt_packs/completion_transport.rs`
@@ -645,9 +708,12 @@ cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets
 
 - [ ] **Step 6: Commit Checkpoint 3 GREEN**
 
+After the code gates pass, change only the Phase 6 roadmap heading suffix from `preparation Checkpoint 2 retained` to `preparation Checkpoint 3 retained`, then prove the standing lifecycle contract remains GREEN:
+
 ```powershell
+npm.cmd run test -- src/lib/crate-extraction-shell-cap-contract.test.ts
 git diff --check
-git add src-tauri/src/prompt_packs/runtime_commands.rs src-tauri/src/prompt_packs/runtime.rs src-tauri/src/prompt_packs/runtime_config.rs src-tauri/src/prompt_packs/completion_transport.rs src-tauri/src/prompt_packs/stage_execution.rs src-tauri/src/prompt_packs/mod.rs
+git add docs/superpowers/specs/2026-07-17-crate-roadmap.md src-tauri/src/prompt_packs/runtime_commands.rs src-tauri/src/prompt_packs/runtime.rs src-tauri/src/prompt_packs/runtime_config.rs src-tauri/src/prompt_packs/completion_transport.rs src-tauri/src/prompt_packs/stage_execution.rs src-tauri/src/prompt_packs/mod.rs
 git commit -m "refactor: prepare prompt-pack execution handoff"
 ```
 
@@ -1312,6 +1378,7 @@ git commit -m "refactor: isolate prompt-pack pool services and assets"
 - Create: `src-tauri/src/prompt_packs/test_schema.rs`
 - Create: `src-tauri/src/prompt_packs/youtube_summary/domain_snapshots_tests.rs`
 - Create: `src-tauri/src/prompt_packs/youtube_summary/app_test_support.rs`
+- Modify: `docs/superpowers/specs/2026-07-17-crate-roadmap.md`
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/snapshots_tests.rs`
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/test_support.rs`
 - Modify: `src-tauri/src/prompt_packs/youtube_summary/mod.rs`
@@ -1400,9 +1467,12 @@ Expected: the filtered run is non-empty and the full package run executes all 22
 
 - [ ] **Step 6: Commit Checkpoint 4 GREEN**
 
+After the code gates pass, change only the Phase 6 roadmap heading suffix from `preparation Checkpoint 3 retained` to `preparation Checkpoint 4 retained`, then prove the standing lifecycle contract remains GREEN:
+
 ```powershell
+npm.cmd run test -- src/lib/crate-extraction-shell-cap-contract.test.ts
 git diff --check
-git add src-tauri/src/prompt_packs/test_schema.rs src-tauri/src/prompt_packs/youtube_summary/domain_snapshots_tests.rs src-tauri/src/prompt_packs/youtube_summary/app_test_support.rs src-tauri/src/prompt_packs/youtube_summary/snapshots_tests.rs src-tauri/src/prompt_packs/youtube_summary/test_support.rs src-tauri/src/prompt_packs/youtube_summary/mod.rs src-tauri/src/prompt_packs/library.rs src-tauri/src/prompt_packs/projections.rs src-tauri/src/prompt_packs/result_builder.rs src-tauri/src/prompt_packs/runtime.rs src-tauri/src/prompt_packs/seed.rs src-tauri/src/prompt_packs/stage_io.rs src-tauri/src/prompt_packs/store.rs src-tauri/src/prompt_packs/validation.rs src-tauri/src/prompt_packs/youtube_summary/result_validation.rs
+git add docs/superpowers/specs/2026-07-17-crate-roadmap.md src-tauri/src/prompt_packs/test_schema.rs src-tauri/src/prompt_packs/youtube_summary/domain_snapshots_tests.rs src-tauri/src/prompt_packs/youtube_summary/app_test_support.rs src-tauri/src/prompt_packs/youtube_summary/snapshots_tests.rs src-tauri/src/prompt_packs/youtube_summary/test_support.rs src-tauri/src/prompt_packs/youtube_summary/mod.rs src-tauri/src/prompt_packs/library.rs src-tauri/src/prompt_packs/projections.rs src-tauri/src/prompt_packs/result_builder.rs src-tauri/src/prompt_packs/runtime.rs src-tauri/src/prompt_packs/seed.rs src-tauri/src/prompt_packs/stage_io.rs src-tauri/src/prompt_packs/store.rs src-tauri/src/prompt_packs/validation.rs src-tauri/src/prompt_packs/youtube_summary/result_validation.rs
 git commit -m "test: prepare prompt-pack crate fixtures"
 ```
 
@@ -1471,7 +1541,11 @@ Any unmatched function, constant, include, array shape, or registry shape is a t
 
 - [ ] **Step 4: Update the existing contracts without weakening them**
 
-Update the workspace, focused-loop, performance, and shell-cap contracts with an exact two-state branch keyed only by existence of `src-tauri/crates/extractum-prompt-packs/Cargo.toml`: before extraction they require the old exact member/owner list; after extraction they require the new exact member/owner list. This is not a permissive union. Lower-boundary forbidden-edge lists include `extractum-prompt-packs` immediately in both states. Keep the six Prompt Pack raw-path contracts dual-state through `prompt-pack-contract-paths.ts`; they must be GREEN before and after the move. Inventory `rg -n "src-tauri[/\\\\]src[/\\\\]prompt_packs|prompt_packs/" src/lib -g "*.test.ts"` and add any newly discovered path consumer to this task.
+Update the workspace/member/owner/path portions of the workspace, focused-loop, performance, and shell-cap contracts with an exact two-state branch keyed only by existence of `src-tauri/crates/extractum-prompt-packs/Cargo.toml`: before extraction they require the old exact member/owner list; after extraction they require the new exact member/owner list. This is not a permissive union. Lower-boundary forbidden-edge lists include `extractum-prompt-packs` immediately in both states.
+
+Keep the Phase 6 lifecycle assertion installed by Task 1 independent from that manifest branch: it parses the exact roadmap status and accepts only the seven declared values. Do not infer lifecycle state from `Cargo.toml`; after the mechanical move the manifest exists while the last retained roadmap state truthfully remains `preparation Checkpoint 4 retained` until completion evidence changes it to `done: retained`. Preserve every non-status Phase 6 assertion unchanged.
+
+Keep the six Prompt Pack raw-path contracts dual-state through `prompt-pack-contract-paths.ts`; they must be GREEN before and after the move. Inventory `rg -n "src-tauri[/\\\\]src[/\\\\]prompt_packs|prompt_packs/" src/lib -g "*.test.ts"` and add any newly discovered path consumer to this task.
 
 - [ ] **Step 5: Prove the dedicated contract is RED for the intended reason only**
 
@@ -1986,7 +2060,7 @@ Do not infer a causal performance conclusion from the advisory numbers.
 
 - [ ] **Step 4: Update status and ownership documentation**
 
-Set the Phase 6 spec status to implemented/retained and link the verification document. Update the roadmap with the retained crate, actual ordinary workspace duration, advisory timing disposition, and Phase 7 only as a future fresh JIT design. State mechanically that Phase 5 was `10,410 ms`, below `15,000 ms`, so even a Phase 6 ordinary result at or above `15,000 ms` is only the first possible member of an adjacent pair and does not trigger an investigation by itself. Update `docs/project.md`, `docs/value-registry.md`, and the shell-cap contract for ownership/path changes only; do not add or rename registry values.
+Set the Phase 6 spec status to implemented/retained and link the verification document. Change the roadmap heading from `preparation Checkpoint 4 retained` to the exact terminal status `done: retained`; do not use that status before every completion gate above passes. Update the roadmap with the retained crate, actual ordinary workspace duration, advisory timing disposition, and Phase 7 only as a future fresh JIT design. State mechanically that Phase 5 was `10,410 ms`, below `15,000 ms`, so even a Phase 6 ordinary result at or above `15,000 ms` is only the first possible member of an adjacent pair and does not trigger an investigation by itself. Update `docs/project.md`, `docs/value-registry.md`, and the shell-cap contract for ownership/path changes only; preserve the lifecycle vocabulary and do not add or rename registry values.
 
 - [ ] **Step 5: Validate documentation/contracts and commit**
 
@@ -2004,8 +2078,8 @@ Expected: focused contracts pass and final status is clean.
 ## Pause and Rollback Ladder
 
 1. Before a checkpoint reaches its green boundary commit, correct or abandon only that in-progress work. Do not rewrite earlier checkpoint history.
-2. After Checkpoint 1, 2, 3, or 4, the owner may pause and retain all completed green commits. Write a short verification disposition and update the roadmap with the last completed checkpoint.
-3. If a retained preparation checkpoint is not independently useful, revert it and later dependent preparation commits in reverse order using ordinary `git revert`; preserve earlier green commits.
+2. Every Checkpoint 1, 2, 3, or 4 green boundary commit already contains its exact `preparation Checkpoint N retained` roadmap status and a GREEN shell-cap contract. If the owner pauses there, write a short verification disposition that confirms that existing status; do not create a different lifecycle transition merely because execution paused.
+3. If a retained preparation checkpoint is not independently useful, revert it and later dependent preparation commits in reverse order using ordinary `git revert`; preserve earlier green commits. The roadmap then returns mechanically to the last retained checkpoint state. Use `not retained` only in a durable owner closure when no preparation checkpoint remains the truthful retained state; if reverting Checkpoint 1 also removes the standing lifecycle assertion, the closure commit must restore that exact seven-value assertion before recording `not retained`.
 4. If work stops after Checkpoint 5 but before extraction, revert only `test: define prompt-pack crate boundary` and keep Checkpoints 1–4.
 5. If the extraction or a completion gate fails and cannot be corrected as a purely mechanical wiring defect, stage only the exact candidate/evidence paths, commit them as `refactor: preserve failed prompt-pack extraction`, and write the verification disposition. Then use ordinary `git revert <failed-candidate-commit>` followed by `git revert <checkpoint-5-red-commit>`; decide each earlier green checkpoint independently. If the candidate already has the Task 10 extraction commit plus a later fix commit, revert the fix first, the extraction second, and the RED contract third.
 6. Timing interruption is not a correctness failure: remove the marker, prove SHA-256 restoration and clean status, record `incomplete / no performance conclusion`, and continue only after restoration.
