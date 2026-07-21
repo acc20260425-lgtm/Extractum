@@ -1,42 +1,28 @@
+use extractum_core::compression::compress_text;
+use extractum_core::error::{AppError, AppResult};
+use extractum_core::time::now_secs;
 use sha2::{Digest, Sha384};
 use sqlx::SqlitePool;
-use tauri::AppHandle;
 
+use super::assets::{
+    BUNDLED_SOURCE_PATH, CANONICAL_RESULT_SCHEMA_JSON, PACK_JSON, TRANSCRIPT_INPUT_SCHEMA_JSON,
+    TRANSCRIPT_OUTPUT_SCHEMA_JSON, TRANSCRIPT_STAGE_JSON,
+};
 use super::models::{BuiltinPackAsset, BuiltinSchemaAsset, BuiltinStageTemplateAsset};
-use crate::compression::compress_text;
-use crate::db::get_pool;
-use crate::error::{AppError, AppResult};
-
-const PACK_JSON: &str = include_str!("../../prompt-packs/youtube_summary/1.0.0/pack.json");
-const TRANSCRIPT_ANALYSIS_JSON: &str =
-    include_str!("../../prompt-packs/youtube_summary/1.0.0/stages/transcript_analysis.json");
-const INPUT_SCHEMA_JSON: &str = include_str!(
-    "../../prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-transcript-analysis-input.json"
-);
-const OUTPUT_SCHEMA_JSON: &str = include_str!(
-    "../../prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-transcript-analysis-output.json"
-);
-const CANONICAL_RESULT_JSON: &str =
-    include_str!("../../prompt-packs/youtube_summary/1.0.0/schemas/canonical-result.json");
-
-pub async fn seed_builtin_prompt_packs(handle: AppHandle) -> AppResult<()> {
-    let pool = get_pool(&handle).await?;
-    seed_builtin_prompt_packs_in_pool(&pool).await
-}
 
 pub(crate) async fn seed_builtin_prompt_packs_in_pool(pool: &SqlitePool) -> AppResult<()> {
     let pack: BuiltinPackAsset = serde_json::from_str(PACK_JSON)
         .map_err(|error| AppError::internal(format!("Parse bundled pack.json: {error}")))?;
-    let stage: BuiltinStageTemplateAsset = serde_json::from_str(TRANSCRIPT_ANALYSIS_JSON)
+    let stage: BuiltinStageTemplateAsset = serde_json::from_str(TRANSCRIPT_STAGE_JSON)
         .map_err(|error| AppError::internal(format!("Parse bundled stage template: {error}")))?;
     let schemas = schema_assets();
-    let content_hash = bundled_content_hash(&[PACK_JSON, TRANSCRIPT_ANALYSIS_JSON])
+    let content_hash = bundled_content_hash(&[PACK_JSON, TRANSCRIPT_STAGE_JSON])
         + &schemas
             .iter()
             .map(|schema| bundled_content_hash(&[schema.content]))
             .collect::<String>();
     let content_hash = format!("sha384-{}", sha384_hex(content_hash.as_bytes()));
-    let now = unix_timestamp();
+    let now = now_secs();
 
     let existing = sqlx::query_as::<_, (String, String)>(
         "SELECT origin_kind, content_hash FROM prompt_pack_versions WHERE pack_id = ? AND pack_version = ?",
@@ -96,7 +82,7 @@ pub(crate) async fn seed_builtin_prompt_packs_in_pool(pool: &SqlitePool) -> AppR
     .bind(&pack.origin_kind)
     .bind(&pack.lifecycle_status)
     .bind(&content_hash)
-    .bind("src-tauri/prompt-packs/youtube_summary/1.0.0")
+    .bind(BUNDLED_SOURCE_PATH)
     .bind(&pack.default_control_preset)
     .bind(&pack.default_evidence_mode)
     .bind(pack.default_include_comments)
@@ -188,17 +174,17 @@ fn schema_assets() -> Vec<BuiltinSchemaAsset> {
         BuiltinSchemaAsset {
             schema_id: "stage-io/youtube_summary_transcript_analysis_input",
             schema_kind: "stage_input",
-            content: INPUT_SCHEMA_JSON,
+            content: TRANSCRIPT_INPUT_SCHEMA_JSON,
         },
         BuiltinSchemaAsset {
             schema_id: "stage-io/youtube_summary_transcript_analysis_output",
             schema_kind: "stage_output",
-            content: OUTPUT_SCHEMA_JSON,
+            content: TRANSCRIPT_OUTPUT_SCHEMA_JSON,
         },
         BuiltinSchemaAsset {
             schema_id: "canonical-result/youtube_summary",
             schema_kind: "canonical_result",
-            content: CANONICAL_RESULT_JSON,
+            content: CANONICAL_RESULT_SCHEMA_JSON,
         },
     ]
 }
@@ -219,17 +205,62 @@ fn sha384_hex(bytes: &[u8]) -> String {
         .collect::<String>()
 }
 
-fn unix_timestamp() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_secs() as i64)
-        .unwrap_or(0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::{seed_builtin_prompt_packs_in_pool, sha384_hex};
     use crate::migrations::apply_all_migrations_for_test_pool;
+    use crate::prompt_packs::assets::{
+        CANONICAL_RESULT_SCHEMA_JSON, PACK_JSON, SYNTHESIS_OUTPUT_SCHEMA_JSON,
+        SYNTHESIS_RUNTIME_JSON, TRANSCRIPT_INPUT_SCHEMA_JSON, TRANSCRIPT_OUTPUT_SCHEMA_JSON,
+        TRANSCRIPT_RUNTIME_JSON, TRANSCRIPT_STAGE_JSON,
+    };
+    use std::path::{Path, PathBuf};
+
+    fn prompt_pack_domain_root() -> PathBuf {
+        let manifest_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let prepared_root = manifest_root.join("src/prompt_packs");
+        if prepared_root.is_dir() {
+            prepared_root
+        } else {
+            manifest_root.join("src")
+        }
+    }
+
+    fn collect_rust_sources(root: &Path, sources: &mut Vec<PathBuf>) {
+        for entry in std::fs::read_dir(root)
+            .unwrap_or_else(|error| panic!("read {}: {error}", root.display()))
+        {
+            let path = entry.expect("read Prompt Pack source entry").path();
+            if path.is_dir() {
+                collect_rust_sources(&path, sources);
+            } else if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
+                sources.push(path);
+            }
+        }
+    }
+
+    fn asset_source_owners(asset_path: &str) -> Vec<String> {
+        let root = prompt_pack_domain_root();
+        let needle = format!("prompt-packs/youtube_summary/1.0.0/{asset_path}");
+        let mut sources = Vec::new();
+        collect_rust_sources(&root, &mut sources);
+        let mut owners = sources
+            .into_iter()
+            .filter(|path| {
+                std::fs::read_to_string(path)
+                    .map(|source| source.contains(&needle))
+                    .unwrap_or(false)
+            })
+            .map(|path| {
+                path.strip_prefix(&root)
+                    .expect("Prompt Pack source under root")
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect::<Vec<_>>();
+        owners.sort();
+        owners
+    }
 
     async fn test_pool_with_migrations() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -246,62 +277,53 @@ mod tests {
         let assets = [
             (
                 "pack.json",
-                include_str!("../../prompt-packs/youtube_summary/1.0.0/pack.json"),
+                PACK_JSON,
                 "21d0e7803f25474bb761cbe5c9fe6e45ef363cf5d9c7f030f7c84ee02ef9b7d8dd3664dfed782a3e8c607b7a0f37cf06",
             ),
             (
                 "runtime/synthesis.json",
-                include_str!(
-                    "../../prompt-packs/youtube_summary/1.0.0/runtime/synthesis.json"
-                ),
+                SYNTHESIS_RUNTIME_JSON,
                 "36b1c4653bc4befdcd168b482929f3b34980c58d9179cb0e0e3db9ac4d3760f9e66dc834ad6a799df6df62618b28d367",
             ),
             (
                 "runtime/transcript_analysis.json",
-                include_str!(
-                    "../../prompt-packs/youtube_summary/1.0.0/runtime/transcript_analysis.json"
-                ),
+                TRANSCRIPT_RUNTIME_JSON,
                 "92e2ea9f7fa89c20e8aaa538f3108a12c8b454e11741b82d29ea44907f2769e62a0828659d6eff10b84bc9122040a92f",
             ),
             (
                 "schemas/canonical-result.json",
-                include_str!(
-                    "../../prompt-packs/youtube_summary/1.0.0/schemas/canonical-result.json"
-                ),
+                CANONICAL_RESULT_SCHEMA_JSON,
                 "c7053e18b578fc9bfdd8427acb4ec2b8ff1aadff50463bad883d70998b9e11084ddfb77c630abcfeac0edc59222da263",
             ),
             (
                 "schemas/stage-io-youtube-summary-synthesis-output.json",
-                include_str!(
-                    "../../prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-synthesis-output.json"
-                ),
+                SYNTHESIS_OUTPUT_SCHEMA_JSON,
                 "127c29d5787f88fa163c28f06c16dbd1f75a1df1e502ffd115375a071d786ad6c3486d6fcdee82fe92164c1e41b89fc4",
             ),
             (
                 "schemas/stage-io-youtube-summary-transcript-analysis-input.json",
-                include_str!(
-                    "../../prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-transcript-analysis-input.json"
-                ),
+                TRANSCRIPT_INPUT_SCHEMA_JSON,
                 "bb75aad9fd645912f723ad470a715f7b43c3af964ee4ea74cd84bebb635a1d3bc5bb0ac5460c9608e15eabee07b74419",
             ),
             (
                 "schemas/stage-io-youtube-summary-transcript-analysis-output.json",
-                include_str!(
-                    "../../prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-transcript-analysis-output.json"
-                ),
+                TRANSCRIPT_OUTPUT_SCHEMA_JSON,
                 "9d3d32cf7b7bfd00fdc5ae6d74dac8ad06f488b05e31e52866553aeaa1cd836c1d6599d5dd21c2228abf51e4bcc5f693",
             ),
             (
                 "stages/transcript_analysis.json",
-                include_str!(
-                    "../../prompt-packs/youtube_summary/1.0.0/stages/transcript_analysis.json"
-                ),
+                TRANSCRIPT_STAGE_JSON,
                 "1b4f18dc3b1baf4b01389a6187d54b96ed689dc044aefd6338a2a176779f433359b0bdc77364fec1ef2ccb58a9088793",
             ),
         ];
 
         for (path, content, expected_hash) in assets {
             assert_eq!(sha384_hex(content.as_bytes()), expected_hash, "{path}");
+            assert_eq!(
+                asset_source_owners(path),
+                vec!["assets.rs".to_string()],
+                "{path} must have exactly one compile-time owner"
+            );
         }
 
         let pool = test_pool_with_migrations().await;

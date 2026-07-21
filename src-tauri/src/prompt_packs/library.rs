@@ -1,9 +1,6 @@
+use extractum_core::error::{AppError, AppResult};
 use serde::Serialize;
 use sqlx::SqlitePool;
-use tauri::AppHandle;
-
-use crate::db::get_pool;
-use crate::error::{AppError, AppResult};
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -49,12 +46,6 @@ pub struct PromptPackSchemaAssetDto {
     schema_id: String,
     schema_kind: String,
     content_hash: String,
-}
-
-#[tauri::command]
-pub async fn get_prompt_pack_library(handle: AppHandle) -> AppResult<PromptPackLibraryDto> {
-    let pool = get_pool(&handle).await?;
-    get_prompt_pack_library_in_pool(&pool).await
 }
 
 pub(crate) async fn get_prompt_pack_library_in_pool(
@@ -166,6 +157,56 @@ mod tests {
     use super::get_prompt_pack_library_in_pool;
     use crate::migrations::apply_all_migrations_for_test_pool;
     use crate::prompt_packs::seed::seed_builtin_prompt_packs_in_pool;
+    use std::path::PathBuf;
+
+    fn prompt_pack_domain_root() -> PathBuf {
+        let manifest_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let prepared_root = manifest_root.join("src/prompt_packs");
+        if prepared_root.is_dir() {
+            prepared_root
+        } else {
+            manifest_root.join("src")
+        }
+    }
+
+    fn assert_defines_pool_service(source_file: &str, function_name: &str) {
+        let path = prompt_pack_domain_root().join(source_file);
+        let source = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+        assert!(
+            source.contains(&format!("fn {function_name}(")),
+            "{source_file} must define {function_name}"
+        );
+    }
+
+    fn assert_portable_pool_service_allowlist() {
+        assert_defines_pool_service("library.rs", "get_prompt_pack_library_in_pool");
+        assert_defines_pool_service("seed.rs", "seed_builtin_prompt_packs_in_pool");
+
+        for function_name in [
+            "cancel_prompt_pack_run_in_pool",
+            "update_prompt_pack_run_in_pool",
+            "delete_prompt_pack_run_in_pool",
+            "list_prompt_pack_runs_in_pool",
+            "list_active_prompt_pack_runs_in_pool",
+            "list_prompt_pack_run_stages_in_pool",
+            "cleanup_interrupted_prompt_pack_runs_in_pool",
+            "seed_prompt_pack_cancellation_smoke_fixture_in_pool",
+            "clear_prompt_pack_cancellation_smoke_fixture_in_pool",
+        ] {
+            assert_defines_pool_service("runtime.rs", function_name);
+        }
+
+        for function_name in [
+            "get_prompt_pack_result_in_pool",
+            "list_prompt_pack_stage_artifacts_in_pool",
+            "get_prompt_pack_stage_artifact_in_pool",
+            "get_prompt_pack_validation_findings_in_pool",
+            "list_prompt_pack_audit_events_in_pool",
+        ] {
+            assert_defines_pool_service("result_service.rs", function_name);
+        }
+    }
 
     async fn seeded_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -182,6 +223,8 @@ mod tests {
 
     #[tokio::test]
     async fn get_prompt_pack_library_returns_active_youtube_summary_pack() {
+        assert_portable_pool_service_allowlist();
+
         let pool = seeded_pool().await;
 
         let library = get_prompt_pack_library_in_pool(&pool)

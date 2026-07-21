@@ -1,3 +1,4 @@
+mod assets;
 mod browser_adapter;
 mod browser_port;
 mod completion_transport;
@@ -7,16 +8,19 @@ mod events;
 pub(crate) mod gemini_browser_stage;
 pub mod json_repair;
 pub mod library;
+mod library_command;
 pub mod models;
 pub mod projections;
 pub mod result_builder;
 pub mod result_commands;
+mod result_service;
 mod run_control;
 mod run_store;
 pub mod runtime;
 mod runtime_commands;
 mod runtime_config;
 pub mod seed;
+mod seed_command;
 mod source_adapter;
 mod source_port;
 mod stage_execution;
@@ -27,7 +31,7 @@ pub mod store;
 pub mod validation;
 pub mod youtube_summary;
 
-pub use library::get_prompt_pack_library;
+pub use library_command::get_prompt_pack_library;
 pub use result_commands::{
     get_prompt_pack_result, get_prompt_pack_stage_artifact, get_prompt_pack_validation_findings,
     list_prompt_pack_audit_events, list_prompt_pack_stage_artifacts,
@@ -42,4 +46,4 @@ pub use runtime_commands::{
 pub use runtime_commands::{
     clear_prompt_pack_cancellation_smoke_fixture, seed_prompt_pack_cancellation_smoke_fixture,
 };
-pub use seed::seed_builtin_prompt_packs;
+pub use seed_command::seed_builtin_prompt_packs;

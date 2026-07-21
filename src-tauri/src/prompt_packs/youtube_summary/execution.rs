@@ -1,5 +1,7 @@
 use std::future::Future;
 
+use extractum_core::error::{AppError, AppResult};
+use extractum_core::time::now_rfc3339_utc;
 use sqlx::SqlitePool;
 
 #[cfg(test)]
@@ -27,7 +29,6 @@ use super::{
     YoutubeSummaryRunExecutionOutcome, YoutubeSummaryStageExecutionError,
     YoutubeSummaryStageExecutionRequest,
 };
-use crate::error::{AppError, AppResult};
 use crate::prompt_packs::json_repair::{
     execute_transcript_analysis_stage_repair_completion, insert_json_repair_input_artifact,
     JsonRepairStageExecutionRequest,
@@ -410,7 +411,5 @@ where
 }
 
 fn now_string() -> String {
-    time::OffsetDateTime::now_utc()
-        .format(&time::format_description::well_known::Rfc3339)
-        .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_string())
+    now_rfc3339_utc()
 }

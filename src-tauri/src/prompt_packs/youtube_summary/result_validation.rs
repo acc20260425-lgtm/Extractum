@@ -1,11 +1,13 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
+use extractum_core::error::{AppError, AppResult};
+use extractum_core::time::now_rfc3339_utc;
 use jsonschema::{error::ValidationErrorKind, ValidationError, Validator};
 use serde_json::Value;
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
-use crate::error::{AppError, AppResult};
+use super::super::assets::CANONICAL_RESULT_SCHEMA_JSON;
 use crate::prompt_packs::projections::persist_final_result_in_transaction;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -211,10 +213,8 @@ fn canonical_result_validator() -> Result<&'static Validator, String> {
     static VALIDATOR: OnceLock<Result<Validator, String>> = OnceLock::new();
     VALIDATOR
         .get_or_init(|| {
-            let schema: serde_json::Value = serde_json::from_str(include_str!(
-                "../../../prompt-packs/youtube_summary/1.0.0/schemas/canonical-result.json"
-            ))
-            .map_err(|error| format!("invalid canonical result schema JSON: {error}"))?;
+            let schema: serde_json::Value = serde_json::from_str(CANONICAL_RESULT_SCHEMA_JSON)
+                .map_err(|error| format!("invalid canonical result schema JSON: {error}"))?;
             jsonschema::validator_for(&schema)
                 .map_err(|error| format!("invalid canonical result schema: {error}"))
         })
@@ -1049,7 +1049,7 @@ async fn replace_result_level_findings_in_transaction(
     .await
     .map_err(AppError::database)?;
 
-    let now = crate::time::now_rfc3339_utc();
+    let now = now_rfc3339_utc();
     for finding in findings {
         sqlx::query(
             "INSERT INTO prompt_pack_result_validation_findings (
@@ -1075,7 +1075,7 @@ async fn mark_result_validation_failed_in_transaction(
     tx: &mut Transaction<'_, Sqlite>,
     run_id: i64,
 ) -> AppResult<()> {
-    let now = crate::time::now_rfc3339_utc();
+    let now = now_rfc3339_utc();
     let message = "Canonical result validation failed; result was not persisted";
     sqlx::query("DELETE FROM prompt_pack_results WHERE run_id = ?")
         .bind(run_id)

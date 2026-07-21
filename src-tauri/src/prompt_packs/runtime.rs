@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use extractum_core::error::{AppError, AppResult};
+use extractum_core::time::now_rfc3339_utc;
 use sqlx::SqlitePool;
 
 use super::browser_port::{PromptPackBrowserExecutor, PromptPackBrowserStatusRequest};
@@ -34,7 +36,6 @@ use super::youtube_summary::{
     preflight_youtube_summary, GemAnalysisInputBudget, YoutubeSummaryExecutionOptions,
     YoutubeSummaryRunExecutionOutcome, YoutubeSummaryStageExecutionRequest,
 };
-use crate::error::{AppError, AppResult};
 use crate::llm::{
     resolve_effective_model, resolve_model_input_token_limit_for_backend, LlmSchedulerState,
     ResolvedLlmProfile,
@@ -681,7 +682,7 @@ async fn emit_prompt_pack_run_event(
 }
 
 fn now_string() -> String {
-    crate::time::now_rfc3339_utc()
+    now_rfc3339_utc()
 }
 
 #[cfg(test)]
@@ -692,10 +693,6 @@ mod tests {
         persist_browser_stage_provenance, run_browser_stage_result_with_cancellation,
     };
     use super::super::run_control::run_with_prompt_pack_run_cancellation;
-    use super::super::run_store::{
-        delete_prompt_pack_run_in_pool, list_prompt_pack_run_stages_in_pool,
-        list_prompt_pack_runs_in_pool, update_prompt_pack_run_in_pool,
-    };
     use super::super::runtime_config::{load_run_runtime_config, RunRuntimeProvider};
     use super::super::stage_request_policy::{
         build_gem_analysis_part_llm_request, build_gem_analysis_part_repair_llm_request,
@@ -707,10 +704,11 @@ mod tests {
     };
     use super::{
         browser_runtime_start_blocking_failure, cleanup_interrupted_prompt_pack_runs_in_pool,
-        clear_prompt_pack_cancellation_smoke_fixture_in_pool, fail_run_execution, now_string,
-        prepare_run_execution, seed_prompt_pack_cancellation_smoke_fixture_in_pool,
-        start_youtube_summary_run_service, PreparedRunExecution, PromptPackRunState,
-        RunExecutionTicket,
+        clear_prompt_pack_cancellation_smoke_fixture_in_pool, delete_prompt_pack_run_in_pool,
+        fail_run_execution, list_prompt_pack_run_stages_in_pool, list_prompt_pack_runs_in_pool,
+        now_string, prepare_run_execution, seed_prompt_pack_cancellation_smoke_fixture_in_pool,
+        start_youtube_summary_run_service, update_prompt_pack_run_in_pool, PreparedRunExecution,
+        PromptPackRunState, RunExecutionTicket,
     };
     use crate::gemini_browser::{GeminiBrowserProviderStatus, GeminiBrowserProviderStatusKind};
     use crate::llm::{LlmChatRequest, LlmMessage, LlmRequestError};
@@ -1830,13 +1828,14 @@ mod tests {
             (42, Some(7), "complete", "2026-06-14T11:00:00Z"),
         ])
         .await;
+        let state = PromptPackRunState::new();
 
-        let active_error = delete_prompt_pack_run_in_pool(&pool, 41)
+        let active_error = delete_prompt_pack_run_in_pool(&pool, &state, 41)
             .await
             .expect_err("active run delete rejected");
         assert_eq!(active_error.kind, crate::error::AppErrorKind::Conflict);
 
-        delete_prompt_pack_run_in_pool(&pool, 42)
+        delete_prompt_pack_run_in_pool(&pool, &state, 42)
             .await
             .expect("delete complete run");
         let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM prompt_pack_runs WHERE id = 42")

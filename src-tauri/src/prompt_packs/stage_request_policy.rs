@@ -1,17 +1,14 @@
+use extractum_core::error::{AppError, AppResult};
 use serde::Deserialize;
 
+use super::assets::{SYNTHESIS_RUNTIME_JSON, TRANSCRIPT_RUNTIME_JSON};
 use super::json_repair::JsonRepairStageExecutionRequest;
 use super::youtube_summary::{
     GemAnalysisPart, GemAnalysisPartRepairRequest, GemAnalysisPartStageExecutionRequest,
     TranscriptAnalysisStageExecutionRequest,
 };
-use crate::error::{AppError, AppResult};
 use crate::llm::{LlmChatRequest, LlmMessage};
 
-const TRANSCRIPT_ANALYSIS_STAGE_JSON: &str =
-    include_str!("../../prompt-packs/youtube_summary/1.0.0/runtime/transcript_analysis.json");
-const SYNTHESIS_STAGE_JSON: &str =
-    include_str!("../../prompt-packs/youtube_summary/1.0.0/runtime/synthesis.json");
 #[derive(Deserialize)]
 struct StageRuntimeConfigAsset {
     runtime_configuration: Option<StageRuntimeConfiguration>,
@@ -349,11 +346,11 @@ pub(super) fn build_json_repair_llm_request(
 }
 
 pub(super) fn transcript_analysis_stage_max_output_token_budget() -> AppResult<i64> {
-    stage_max_output_token_budget(TRANSCRIPT_ANALYSIS_STAGE_JSON, "transcript-analysis")
+    stage_max_output_token_budget(TRANSCRIPT_RUNTIME_JSON, "transcript-analysis")
 }
 
 pub(super) fn transcript_analysis_stage_max_prompt_token_budget() -> AppResult<i64> {
-    stage_max_prompt_token_budget(TRANSCRIPT_ANALYSIS_STAGE_JSON, "transcript-analysis")
+    stage_max_prompt_token_budget(TRANSCRIPT_RUNTIME_JSON, "transcript-analysis")
 }
 
 pub(super) fn transcript_analysis_stage_max_output_token_budget_for_control_preset(
@@ -368,7 +365,7 @@ pub(super) fn transcript_analysis_stage_max_output_token_budget_for_control_pres
 }
 
 pub(super) fn synthesis_stage_max_output_token_budget() -> AppResult<i64> {
-    stage_max_output_token_budget(SYNTHESIS_STAGE_JSON, "synthesis")
+    stage_max_output_token_budget(SYNTHESIS_RUNTIME_JSON, "synthesis")
 }
 
 fn stage_max_prompt_token_budget(asset_json: &str, label: &str) -> AppResult<i64> {

@@ -1,16 +1,17 @@
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
+use extractum_core::compression::compress_text;
+use extractum_core::error::{AppError, AppResult};
+use extractum_core::time::now_rfc3339_utc;
 use jsonschema::{error::ValidationErrorKind, ValidationError, Validator};
 use sqlx::SqlitePool;
 
+use super::assets::{SYNTHESIS_OUTPUT_SCHEMA_JSON, TRANSCRIPT_OUTPUT_SCHEMA_JSON};
 use super::stage_io::TranscriptAnalysisStageInput;
 use super::stage_output_normalization::{
     normalize_synthesis_output_for_runtime, normalize_transcript_analysis_output_for_schema,
 };
-use crate::compression::compress_text;
-use crate::error::{AppError, AppResult};
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PromptPackValidationError {
     pub message: String,
@@ -59,10 +60,10 @@ fn transcript_analysis_output_validator() -> Result<&'static Validator, PromptPa
     static VALIDATOR: OnceLock<Result<Validator, String>> = OnceLock::new();
     VALIDATOR
         .get_or_init(|| {
-            let schema: serde_json::Value = serde_json::from_str(include_str!(
-                "../../prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-transcript-analysis-output.json"
-            ))
-            .map_err(|error| format!("invalid transcript analysis output schema JSON: {error}"))?;
+            let schema: serde_json::Value = serde_json::from_str(TRANSCRIPT_OUTPUT_SCHEMA_JSON)
+                .map_err(|error| {
+                    format!("invalid transcript analysis output schema JSON: {error}")
+                })?;
             jsonschema::validator_for(&schema)
                 .map_err(|error| format!("invalid transcript analysis output schema: {error}"))
         })
@@ -134,7 +135,7 @@ pub(crate) async fn quarantine_prompt_pack_validation_error(
     .bind(&object_path)
     .bind(&validation_message)
     .bind(compress_text(&content).unwrap_or_default())
-    .bind(crate::time::now_rfc3339_utc())
+    .bind(now_rfc3339_utc())
     .execute(pool)
     .await
     .map_err(|db_error| {
@@ -186,10 +187,8 @@ fn synthesis_output_validator() -> Result<&'static Validator, PromptPackValidati
     static VALIDATOR: OnceLock<Result<Validator, String>> = OnceLock::new();
     VALIDATOR
         .get_or_init(|| {
-            let schema: serde_json::Value = serde_json::from_str(include_str!(
-                "../../prompt-packs/youtube_summary/1.0.0/schemas/stage-io-youtube-summary-synthesis-output.json"
-            ))
-            .map_err(|error| format!("invalid synthesis output schema JSON: {error}"))?;
+            let schema: serde_json::Value = serde_json::from_str(SYNTHESIS_OUTPUT_SCHEMA_JSON)
+                .map_err(|error| format!("invalid synthesis output schema JSON: {error}"))?;
             jsonschema::validator_for(&schema)
                 .map_err(|error| format!("invalid synthesis output schema: {error}"))
         })
