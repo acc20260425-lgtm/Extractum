@@ -648,6 +648,17 @@ tokio = { workspace = true, features = ["io-util", "net", "rt", "time"] }
 `runtime.rs`. The completion-transport tests require Tokio I/O, networking,
 runtime, and time support. No moved test uses Tokio's `test-util` API.
 
+Post-audit implementation note: Tauri emits `cfg(dev)` for the application
+package, not transitively for dependency crates. The retained implementation
+therefore exposes the crate-owned cancellation fixtures only under the
+non-default `dev-fixtures` feature (or `test`), maps the app feature
+`prompt-pack-dev-fixtures` to it, and gates every app import, command, facade
+export, and handler registration with
+`cfg(all(dev, feature = "prompt-pack-dev-fixtures"))`. The MCP development
+overlay enables that app feature; the base/release Tauri configuration does
+not. This preserves the two development commands without including their
+fixture implementation or IPC surface in an ordinary production build.
+
 Forbidden direct roots include:
 
 - Tauri and every Tauri plugin;

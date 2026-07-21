@@ -472,6 +472,51 @@ The canonical-result schema's exact mixed bytes are stored in Git rather than
 being line-ending normalized. Focused RED/GREEN and the repeated full merged
 verification cover both remediations.
 
+## Post-audit remediation
+
+Commit `fb39c6af` (`fix: close prompt-pack extraction audit gaps`) closes the
+four actionable findings from the retained-tree audit:
+
+- a terminal persistence failure now still removes the active run and emits
+  the terminal event before returning the persistence error;
+- the spawned execution task reuses the pool acquired by the start command
+  instead of acquiring a second pool;
+- crate-owned cancellation fixtures are available only to crate tests or the
+  non-default `dev-fixtures` feature, while the app commands require both
+  Tauri `dev` mode and `prompt-pack-dev-fixtures`; only the MCP development
+  overlay enables that feature, and the base/release configuration excludes
+  it;
+- the frozen source-reader baseline now asserts the exact typed transcript
+  segment order and joined bytes rather than comparing two paths backed by the
+  same query.
+
+The new terminal-cleanup and pool-reuse tests first failed against the audited
+tree and then passed with the fixes. The frozen-baseline mutation proof changed
+the adapter ordering from ascending to descending: the exact test failed with
+the reversed segment vector, then passed again after the mutation was removed.
+The prompt-pack boundary and Tauri security contracts passed 15/15 together;
+the final focused security run passed 6/6.
+
+Both application compile modes passed: ordinary features and
+`--features prompt-pack-dev-fixtures`. Package checkpoints passed 249/249 for
+`extractum-prompt-packs` and 786/786 for `extractum`. On the exact code commit,
+`npm.cmd run verify` passed 173/173 Vitest files and 1399/1399 tests,
+`svelte-check` reported 0 errors and 0 warnings, and rustfmt plus the complete
+workspace check/test gates passed.
+
+The ordinary production command `npm.cmd run tauri -- build --no-bundle`
+completed in release mode without the development feature. Its executable was
+`src-tauri/target/release/extractum.exe`, 39,557,120 bytes, SHA-256
+`1e4a813fc4a02d49546e893c5af57fbb7234b9d358301c78965bc4b4c876596b`.
+An exact-PID smoke started PID 18000 hidden, observed it alive after five
+seconds, stopped that PID, confirmed its bounded removal, and finished with
+zero Extractum processes. No provider request or live account-data mutation
+was performed.
+
+This section supersedes the earlier release/startup evidence for the current
+retained tree; the earlier section remains the historical evidence for the
+original extraction.
+
 ## Result and next phase
 
 **Result: implemented and retained.**
