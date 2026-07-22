@@ -1,6 +1,6 @@
 # Analysis Crate Boundary Design
 
-**Status:** Draft for owner review; implementation not started
+**Status:** Approved; implementation not started
 **Date:** 2026-07-22
 
 **Roadmap authority:**
@@ -11,7 +11,7 @@
 
 This specification defines the just-in-time Phase 7 boundary for
 `extractum-analysis`. It supersedes the short Phase 7 placeholder in the crate
-roadmap after owner approval. It does not authorize implementation, change the
+roadmap. Approval does not authorize implementation, change the
 retained Phase 4–6 boundaries, or authorize Phase 8.
 
 The design was informed by the local, intentionally untracked audit
@@ -286,14 +286,29 @@ helpers used wholly inside a crate-owned transaction are not restricted by
 that public boundary rule. Exactly four cross-boundary workflow families
 instead require one explicit app-owned SQLite transaction:
 
-1. analysis run reads: list/search/active summaries and detail reads used by
-   get, trace, delete, chat, and lifecycle paths, combined with foreign label
-   matching or enrichment;
+1. analysis run reads that actually combine crate-owned run data with
+   app-owned labels: `list_analysis_runs` foreign-label search and enriched
+   output, `list_active_analysis_runs` enriched summaries, `get_analysis_run`
+   enriched details, and only the legacy `ask_analysis_run_question` branch
+   where a null or blank `scope_label_snapshot` falls back to a live source or
+   project label;
 2. analysis source-group membership combined with foreign source titles and
    item counts for command and NotebookLM responses;
 3. project-list rows/material counts combined with batch analysis-run status,
    last-run, and active-run aggregates;
 4. project deletion across analysis-owned and project-owned rows.
+
+Family 1 is not permission to route every run-row read through a borrowed
+connection. `get_analysis_run_trace`, `resolve_analysis_trace_refs`,
+`delete_analysis_run`, `list_analysis_chat_messages`,
+`clear_analysis_chat_messages`, and cancellation, cleanup, and failure
+lifecycle reads do not consume foreign labels. Their analysis-owned
+projections and DML remain ordinary `&SqlitePool` operations. Within the four
+named coordinators above, the borrowed form is required only for the operation
+that composes an analysis run with app-owned matching or enrichment; unrelated
+status, existence, trace, snapshot, and child-row work remains ordinary. The
+legacy chat branch must re-read the required run fields on the same app-owned
+transaction used for its foreign-label fallback rather than combine snapshots.
 
 Every curated crate participant used by those workflows accepts a borrowed
 `&mut sqlx::SqliteConnection` as its first argument. A pool-taking overload,
@@ -937,11 +952,15 @@ A new `src/lib/analysis-crate-boundary-contract.test.ts` must verify:
   families named under SQL capability forms, each taking
   `&mut SqliteConnection` first; no participant acquires a pool/connection or
   begins, commits, or rolls back;
-- app coordinators for run reads/search and label enrichment, group/member
+- the exact Family 1 include set (`list_analysis_runs`,
+  `list_active_analysis_runs`, `get_analysis_run`, and only the legacy-label
+  branch of `ask_analysis_run_question`) and the explicit exclusion of both
+  trace commands, delete, chat list/clear, and lifecycle-only reads;
+- app coordinators for those Family 1 enrichment operations, group/member
   enrichment, project-list aggregate composition, and project deletion; each
   calls `pool.begin()`, passes the same `&mut *transaction` through every
-  app/crate SQL step, and alone commits or rolls back, with no participant-side
-  pool/acquire/autocommit fallback;
+  app/crate SQL step that participates in the composition, and alone commits
+  or rolls back, with no participant-side pool/acquire/autocommit fallback;
 - `skipped_unlinked_playlist_items` confined to the app-private resolution
   wrapper and absent from crate scope/ticket values;
 - curated `lib.rs`, no public modules/globs/test support, and the exhaustive
@@ -1003,6 +1022,10 @@ buildable and leaves a useful retained improvement if the extraction stops.
 - pin report/chat acceptance order, both corpus reads, profile-resolution
   timing, event payload/order/messages, cancellation, cleanup, AppError JSON,
   trace compatibility, and cross-domain delete/read behavior;
+- characterize the exact Family 1 include/exclude set before splitting the
+  current broad `fetch_run_row`: pin foreign search/enriched output for list,
+  active, and get, the null/blank-snapshot chat fallback, and the analysis-only
+  fields consumed by trace, delete, chat list/clear, and lifecycle paths;
 - advance the already-approved roadmap state to `preparation Checkpoint 1
   retained` only after the checkpoint is green.
 
@@ -1229,10 +1252,12 @@ Phase 7 may be recorded as implemented and retained only when:
    cancellation, cleanup, serialized errors, and the bounded non-waiting event
    adapter shape remain unchanged;
 8. run/group foreign labels and multi-term search retain filter-before-limit
-   behavior without foreign joins in the crate; run reads, group enrichment,
-   and project-list aggregate composition each execute within one explicit
-   app-owned read transaction, while project deletion remains one explicit
-   app-owned write transaction;
+   behavior without foreign joins in the crate; only the named Family 1
+   matching/enrichment operations, group enrichment, and project-list
+   aggregate composition execute within one explicit app-owned read
+   transaction, while the explicitly excluded analysis-only run reads remain
+   ordinary pool calls and project deletion remains one explicit app-owned
+   write transaction;
 9. trace compression uses `extractum-core` and remains compatible with
    existing bytes and error mapping;
 10. public API, visibility, manifest, lockfile, reverse-edge, and
@@ -1261,8 +1286,8 @@ reviewed and approved. It must include:
 - the exact six-table allowlist, foreign-table denylist, and a
   pool-versus-borrowed-connection transaction API map that enumerates every
   participant function and app coordinator under the four closed workflow
-  families, plus the separately green migration-fixture allowlist/parity
-  contract;
+  families, including the exact Family 1 include/exclude set, plus the
+  separately green migration-fixture allowlist/parity contract;
 - final signatures for `ResolvedAnalysisScope`, `AnalysisCorpusReader`,
   `AnalysisEventSink`, preparation/execution tickets, foreign label inputs,
   state lifecycle APIs, and constructors;

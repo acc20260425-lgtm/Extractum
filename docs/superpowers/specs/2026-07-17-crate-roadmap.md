@@ -2,7 +2,7 @@
 
 **Status:** Strategic reference; revised and owner-approved 2026-07-19
 **Date:** 2026-07-17
-**Last revised:** 2026-07-20
+**Last revised:** 2026-07-22
 
 ## Purpose
 
@@ -27,6 +27,10 @@ Completed and in-flight slices governed by their own documents:
   behind a permanent browser-level executor port; all concrete sidecar/CDP
   process ownership remains in the application. Implementation is complete and
   retained.
+- [`2026-07-22-analysis-crate-boundary-design.md`](2026-07-22-analysis-crate-boundary-design.md)
+  — owner-approved Phase 7 boundary. The analysis domain and its six tables
+  move behind app-owned foreign-data adapters; implementation has not started
+  and still requires a separate plan and explicit owner instruction.
 
 - `2026-07-15-rust-workspace-crate-extraction-design.md` — workspace +
   `extractum-core` (`error`, `time`, `compression`). Done.
@@ -410,18 +414,36 @@ threshold, even a Phase 6 ordinary result at or above 15,000 ms would only be
 the first possible member of an adjacent above-threshold pair and would not
 trigger an investigation by itself.
 
-Phase 7 remains future work. It requires a fresh owner-approved JIT boundary
-design and explicit implementation instruction; the Phase 6 result does not
-authorize it.
+Phase 7 now has an owner-approved
+[JIT boundary design](2026-07-22-analysis-crate-boundary-design.md), but
+implementation still requires a separate plan and explicit owner instruction;
+the Phase 6 result did not authorize it.
 
-### Phase 7 — `extractum-analysis`
+### Phase 7 — `extractum-analysis` (design approved; implementation not started)
 
-~13,200 lines, 65% solo, 40 recent commits. Depends on llm + core and on
-`sources` read-models (13 joint commits) — the boundary design must decide
-which read-model contracts move, stay, or get duplicated as views. Its
-`trace.rs` direct `zstd::` usage is consolidated behind `core::compression`
-here at the latest. This is only a future candidate until a fresh
-owner-approved JIT design and explicit implementation instruction exist.
+The owner-approved
+[Phase 7 boundary design](2026-07-22-analysis-crate-boundary-design.md) replaces
+the stale planning estimate with a fresh inventory: 54 Rust files / 13,187
+physical lines and 143 executable tests split exactly 95 crate / 48 app. Since
+2026-06-01, 49 commits touched analysis; 41 categorized commits (83.7%) touched
+no other Rust domain. Joint touches were led by `prompt_packs` 4, `llm` 4,
+`lib` 3, `projects` 3, and `youtube` 2.
+
+The selected boundary is justified by ownership rather than a promised
+focused-loop speedup. `extractum-analysis` owns the coherent analysis domain,
+portable execution/state, and runtime SQL for exactly six analysis tables. The
+app retains Tauri commands and spawning, migrations, credentials, events,
+foreign source/project reads, and cross-domain transaction coordination; its
+remaining analysis subtree is expected to stay substantial. Trace compression
+moves behind `extractum-core`, and the crate directly depends on
+`extractum-llm` plus the workspace SQLx feature set.
+
+Phase 7 records one ordinary mandatory workspace-check duration only. It adds
+no focused probe, warm-up, or sample series; timing is advisory and cannot
+invalidate or roll back a correct ownership boundary. The completed ordinary
+result still participates in the standing adjacent-results rule at 15,000 ms.
+Implementation requires a separate implementation plan and explicit owner
+instruction. This approval does not authorize Phase 8.
 
 ### Phase 8 — `extractum-telegram`
 

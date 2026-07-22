@@ -8,6 +8,7 @@ import processBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-17-pr
 import geminiBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-19-gemini-browser-crate-boundary-design.md?raw";
 import llmBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-20-llm-crate-boundary-design.md?raw";
 import promptPacksBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-20-prompt-packs-crate-boundary-design.md?raw";
+import analysisBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-22-analysis-crate-boundary-design.md?raw";
 import llmVerificationRaw from "../../docs/superpowers/verification/2026-07-20-extractum-llm-extraction.md?raw";
 import promptPacksVerificationRaw from "../../docs/superpowers/verification/2026-07-20-extractum-prompt-packs-extraction.md?raw";
 import shellCapRevisionRaw from "../../docs/superpowers/specs/2026-07-18-crate-extraction-shell-cap-revision-design.md?raw";
@@ -42,6 +43,7 @@ const processBoundaryDesign = compact(processBoundaryDesignRaw);
 const geminiBoundaryDesign = compact(geminiBoundaryDesignRaw);
 const llmBoundaryDesign = compact(llmBoundaryDesignRaw);
 const promptPacksBoundaryDesign = compact(promptPacksBoundaryDesignRaw);
+const analysisBoundaryDesign = compact(analysisBoundaryDesignRaw);
 const llmVerification = compact(llmVerificationRaw);
 const promptPacksVerification = compact(promptPacksVerificationRaw);
 const shellCapRevision = compact(shellCapRevisionRaw);
@@ -90,6 +92,12 @@ const phase6Roadmap = compact(
 );
 const phase6Status = phase6Roadmap.match(
   /### Phase 6 — `extractum-prompt-packs` \(([^)]+)\)/,
+)?.[1];
+const phase7Roadmap = compact(
+  sectionBetween(crateRoadmap, "### Phase 7", "### Phase 8"),
+);
+const phase7Status = phase7Roadmap.match(
+  /### Phase 7 — `extractum-analysis` \(([^)]+)\)/,
 )?.[1];
 const appOwnedGeminiBaselineTests = [
   "explicit_shutdown_kills_and_reaps_the_owned_child_once",
@@ -500,7 +508,7 @@ describe("crate extraction timing policy", () => {
     expect(phase6Roadmap).toContain("11,669 ms, below 15,000 ms");
     expect(phase6Roadmap).toContain("Phase 5 was 10,410 ms");
     expect(phase6Roadmap).toContain(
-      "fresh owner-approved JIT boundary design and explicit implementation instruction",
+      "implementation still requires a separate plan and explicit owner instruction",
     );
 
     expect(promptPacksVerification).toContain(
@@ -563,6 +571,55 @@ describe("crate extraction timing policy", () => {
     );
     expect(promptPacksBoundaryDesign).toContain(
       "Timing remains deliberately small and cannot veto a correct extraction",
+    );
+  });
+
+  it("records the approved Phase 7 analysis boundary without authorizing implementation", () => {
+    expect(analysisBoundaryDesign).toContain(
+      "**Status:** Approved; implementation not started",
+    );
+    expect(phase7Status).toBeDefined();
+    expect([
+      "design approved; implementation not started",
+      "preparation Checkpoint 1 retained",
+      "preparation Checkpoint 2 retained",
+      "preparation Checkpoint 3 retained",
+      "preparation Checkpoint 4 retained",
+      "preparation Checkpoint 5 retained",
+      "done: retained",
+      "not retained",
+    ]).toContain(phase7Status);
+    expect(phase7Status).toBe("design approved; implementation not started");
+    expect(phase7Roadmap).toContain(
+      "2026-07-22-analysis-crate-boundary-design.md",
+    );
+    expect(phase7Roadmap).toContain("54 Rust files / 13,187 physical lines");
+    expect(phase7Roadmap).toContain(
+      "143 executable tests split exactly 95 crate / 48 app",
+    );
+    expect(phase7Roadmap).toContain(
+      "49 commits touched analysis; 41 categorized commits (83.7%) touched no other Rust domain",
+    );
+    expect(phase7Roadmap).toContain(
+      "one ordinary mandatory workspace-check duration only",
+    );
+    expect(phase7Roadmap).toContain(
+      "no focused probe, warm-up, or sample series",
+    );
+    expect(phase7Roadmap).toContain(
+      "timing is advisory and cannot invalidate or roll back a correct ownership boundary",
+    );
+    expect(phase7Roadmap).toContain(
+      "standing adjacent-results rule at 15,000 ms",
+    );
+    expect(phase7Roadmap).toContain(
+      "Implementation requires a separate implementation plan and explicit owner instruction",
+    );
+    expect(analysisBoundaryDesign).toContain(
+      "No focused-loop speedup is promised; zero improvement or a slower result does not invalidate the ownership boundary or trigger rollback",
+    );
+    expect(analysisBoundaryDesign).toContain(
+      "Family 1 is not permission to route every run-row read through a borrowed connection",
     );
   });
 });
