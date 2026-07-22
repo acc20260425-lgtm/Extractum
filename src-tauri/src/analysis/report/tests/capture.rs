@@ -1,5 +1,5 @@
+use super::super::super::corpus::{CorpusLoadRequest, YoutubeCorpusMode};
 use super::super::capture_report_corpus;
-use crate::analysis::corpus::{CorpusLoadRequest, YoutubeCorpusMode};
 
 #[tokio::test]
 async fn capture_report_corpus_returns_reloaded_snapshot_before_provider_phases() {
@@ -71,7 +71,7 @@ async fn capture_report_corpus_returns_reloaded_snapshot_before_provider_phases(
         "INSERT INTO items (id, source_id, external_id, item_kind, author, published_at, ingested_at, content_kind, has_media, content_zstd)
          VALUES (10, 2, '10', 'telegram_message', 'Alice', 100, 100, 'text_only', 0, ?)",
     )
-    .bind(crate::compression::compress_text("captured text").expect("compress"))
+    .bind(extractum_core::compression::compress_text("captured text").expect("compress"))
     .execute(&pool)
     .await
     .expect("insert item");

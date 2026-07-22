@@ -1,5 +1,5 @@
-use crate::analysis::models::{AnalysisPromptTemplate, ChunkSummary, CorpusMessage};
-use crate::llm::{LlmProviderAccess, ProviderKind, ResolvedLlmProfile};
+use super::super::super::models::{AnalysisPromptTemplate, ChunkSummary, CorpusMessage};
+use extractum_llm::{LlmProviderAccess, ProviderKind, ResolvedLlmProfile};
 use sqlx::SqlitePool;
 
 pub(super) const SAMPLE_JSON: &str = r#"{"summary":"Brief","topics":["sync"],"notable_points":["Point"],"candidate_refs":["s1-i2"]}"#;

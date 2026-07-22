@@ -1,11 +1,13 @@
 use sqlx::{Pool, Sqlite};
 
-use crate::analysis::models::{
+use super::super::models::{
     AnalysisRunDetail, AnalysisRunMessage, AnalysisRunMessageCursor, AnalysisRunMessagesPage,
     AnalysisSnapshotState, CorpusMessage, StoredRunSnapshotRow,
 };
-use crate::compression::{decompress_bytes, decompress_text};
-use crate::error::{internal_error, AppError, AppResult};
+use extractum_core::{
+    compression::{decompress_bytes, decompress_text},
+    error::{internal_error, AppError, AppResult},
+};
 
 pub(crate) async fn load_run_snapshot_messages(
     pool: &Pool<Sqlite>,

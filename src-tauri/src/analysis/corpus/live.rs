@@ -1,9 +1,11 @@
 use sqlx::{Pool, QueryBuilder, Sqlite};
 
+use super::super::models::CorpusMessage;
 use super::{CorpusLoadRequest, YoutubeCorpusMode};
-use crate::analysis::models::CorpusMessage;
-use crate::compression::{compress_json_bytes, decompress_text};
-use crate::error::{internal_error, AppError, AppResult};
+use extractum_core::{
+    compression::{compress_json_bytes, decompress_text},
+    error::{internal_error, AppError, AppResult},
+};
 
 #[allow(dead_code)]
 pub(crate) fn live_corpus_ref(source_id: i64, item_id: i64) -> String {

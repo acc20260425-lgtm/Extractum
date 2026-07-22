@@ -1,29 +1,30 @@
 use tauri::{AppHandle, Manager};
 
 use crate::db::get_pool;
-use crate::error::{AppError, AppResult};
-use crate::llm::{
-    resolve_effective_model, resolve_model_input_token_limit_for_backend,
-    resolve_profile_for_backend, ResolvedLlmProfile,
-};
+use crate::llm::resolve_profile_for_backend;
+use extractum_core::error::{AppError, AppResult};
+use extractum_llm::{resolve_effective_model, resolve_model_input_token_limit, ResolvedLlmProfile};
 
 use super::corpus::{
     preflight_analysis_run, preflight_limit_error, resolve_analysis_sources, AnalysisRunPreflight,
     AnalysisRunPreflightLimits, AnalysisSourceResolutionError, CorpusLoadRequest,
     YoutubeCorpusMode,
 };
+use super::domain::{
+    now_secs, ANALYSIS_SCOPE_TYPE_PROJECT, ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
+    ANALYSIS_SCOPE_TYPE_SOURCE_GROUP, ANALYSIS_STATUS_CANCELLED, ANALYSIS_STATUS_COMPLETED,
+    ANALYSIS_STATUS_RUNNING, TEMPLATE_KIND_REPORT,
+};
 use super::events::emit_analysis_event;
-use super::models::{AnalysisChunkSummaryEvent, AnalysisPromptTemplate, AnalysisRunEvent};
+use super::models::{
+    AnalysisChunkSummaryEvent, AnalysisPromptTemplate, AnalysisRunEvent, AnalysisSourceKind,
+};
 use super::store::{
     fetch_prompt_template, fetch_source_group, find_active_duplicate_run, insert_analysis_run,
     set_run_status, AnalysisRunInsert, DuplicateRunLookup,
 };
 use super::trace::{build_trace_data, compress_trace_data};
-use super::{
-    now_secs, AnalysisState, ANALYSIS_SCOPE_TYPE_PROJECT, ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
-    ANALYSIS_SCOPE_TYPE_SOURCE_GROUP, ANALYSIS_STATUS_CANCELLED, ANALYSIS_STATUS_COMPLETED,
-    ANALYSIS_STATUS_RUNNING, TEMPLATE_KIND_REPORT,
-};
+use super::AnalysisState;
 
 mod capture;
 mod lifecycle;
@@ -52,38 +53,194 @@ pub(super) const INTERRUPTED_RUN_MESSAGE: &str =
 const CANCELLED_RUN_MESSAGE: &str = "Analysis run cancelled.";
 
 pub(crate) struct StartAnalysisReportRequest {
-    pub(crate) source_id: Option<i64>,
-    pub(crate) source_group_id: Option<i64>,
-    pub(crate) project_id: Option<i64>,
-    pub(crate) period_from: i64,
-    pub(crate) period_to: i64,
-    pub(crate) output_language: String,
-    pub(crate) prompt_template_id: i64,
-    pub(crate) model_override: Option<String>,
-    pub(crate) profile_id: Option<String>,
-    pub(crate) youtube_corpus_mode: Option<String>,
-    pub(crate) include_migrated_history: bool,
+    source_id: Option<i64>,
+    source_group_id: Option<i64>,
+    project_id: Option<i64>,
+    period_from: i64,
+    period_to: i64,
+    output_language: String,
+    prompt_template_id: i64,
+    model_override: Option<String>,
+    profile_id: Option<String>,
+    youtube_corpus_mode: Option<String>,
+    include_migrated_history: bool,
 }
 
-pub(crate) fn resolve_analysis_telegram_history_scope(
+impl StartAnalysisReportRequest {
+    fn validated_output_language(
+        period_from: i64,
+        period_to: i64,
+        output_language: String,
+    ) -> AppResult<String> {
+        if period_from > period_to {
+            return Err(AppError::validation(
+                "period_from must be less than or equal to period_to",
+            ));
+        }
+
+        let output_language = output_language.trim().to_string();
+        if output_language.is_empty() {
+            return Err(AppError::validation("Output language cannot be empty"));
+        }
+
+        Ok(output_language)
+    }
+
+    #[expect(clippy::too_many_arguments)]
+    pub fn from_command(
+        source_id: Option<i64>,
+        source_group_id: Option<i64>,
+        project_id: Option<i64>,
+        period_from: i64,
+        period_to: i64,
+        output_language: String,
+        prompt_template_id: i64,
+        model_override: Option<String>,
+        profile_id: Option<String>,
+        youtube_corpus_mode: Option<String>,
+        include_migrated_history: bool,
+    ) -> AppResult<Self> {
+        let output_language =
+            Self::validated_output_language(period_from, period_to, output_language)?;
+        match (source_id, source_group_id, project_id) {
+            (Some(source_id), None, None) => Self::for_source(
+                source_id,
+                period_from,
+                period_to,
+                output_language,
+                prompt_template_id,
+                model_override,
+                profile_id,
+                youtube_corpus_mode,
+                include_migrated_history,
+            ),
+            (None, Some(source_group_id), None) => Self::for_source_group(
+                source_group_id,
+                period_from,
+                period_to,
+                output_language,
+                prompt_template_id,
+                model_override,
+                profile_id,
+                youtube_corpus_mode,
+                include_migrated_history,
+            ),
+            (None, None, Some(project_id)) => Self::for_project(
+                project_id,
+                period_from,
+                period_to,
+                output_language,
+                prompt_template_id,
+                model_override,
+                profile_id,
+                youtube_corpus_mode,
+                include_migrated_history,
+            ),
+            _ => Err(AppError::validation("Select exactly one analysis scope")),
+        }
+    }
+
+    #[expect(clippy::too_many_arguments)]
+    pub fn for_source(
+        source_id: i64,
+        period_from: i64,
+        period_to: i64,
+        output_language: String,
+        prompt_template_id: i64,
+        model_override: Option<String>,
+        profile_id: Option<String>,
+        youtube_corpus_mode: Option<String>,
+        include_migrated_history: bool,
+    ) -> AppResult<Self> {
+        let output_language =
+            Self::validated_output_language(period_from, period_to, output_language)?;
+        Ok(Self {
+            source_id: Some(source_id),
+            source_group_id: None,
+            project_id: None,
+            period_from,
+            period_to,
+            output_language,
+            prompt_template_id,
+            model_override,
+            profile_id,
+            youtube_corpus_mode,
+            include_migrated_history,
+        })
+    }
+
+    #[expect(clippy::too_many_arguments)]
+    pub fn for_source_group(
+        source_group_id: i64,
+        period_from: i64,
+        period_to: i64,
+        output_language: String,
+        prompt_template_id: i64,
+        model_override: Option<String>,
+        profile_id: Option<String>,
+        youtube_corpus_mode: Option<String>,
+        include_migrated_history: bool,
+    ) -> AppResult<Self> {
+        let output_language =
+            Self::validated_output_language(period_from, period_to, output_language)?;
+        Ok(Self {
+            source_id: None,
+            source_group_id: Some(source_group_id),
+            project_id: None,
+            period_from,
+            period_to,
+            output_language,
+            prompt_template_id,
+            model_override,
+            profile_id,
+            youtube_corpus_mode,
+            include_migrated_history,
+        })
+    }
+
+    #[expect(clippy::too_many_arguments)]
+    pub fn for_project(
+        project_id: i64,
+        period_from: i64,
+        period_to: i64,
+        output_language: String,
+        prompt_template_id: i64,
+        model_override: Option<String>,
+        profile_id: Option<String>,
+        youtube_corpus_mode: Option<String>,
+        include_migrated_history: bool,
+    ) -> AppResult<Self> {
+        let output_language =
+            Self::validated_output_language(period_from, period_to, output_language)?;
+        Ok(Self {
+            source_id: None,
+            source_group_id: None,
+            project_id: Some(project_id),
+            period_from,
+            period_to,
+            output_language,
+            prompt_template_id,
+            model_override,
+            profile_id,
+            youtube_corpus_mode,
+            include_migrated_history,
+        })
+    }
+}
+
+pub fn resolve_analysis_telegram_history_scope(
     include_migrated_history: bool,
-    source_type: &str,
+    source_kind: AnalysisSourceKind,
 ) -> AppResult<(&'static str, bool)> {
-    if include_migrated_history && source_type != crate::sources::TELEGRAM_SOURCE_TYPE {
+    if include_migrated_history && source_kind != AnalysisSourceKind::Telegram {
         return Err(AppError::validation(
             "Migrated historical scope can be included only for Telegram analysis",
         ));
     }
     if include_migrated_history {
-        return Ok((
-            crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED,
-            true,
-        ));
+        return Ok(("current_plus_migrated", true));
     }
-    Ok((
-        crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT,
-        false,
-    ))
+    Ok(("current", false))
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -354,7 +511,7 @@ pub(crate) async fn start_analysis_report_run(
     let resolved_profile = resolve_profile_for_backend(&handle, profile_id.as_deref()).await?;
     let effective_model = resolve_effective_model(&resolved_profile, model_override.as_deref())?;
     let model_input_token_limit =
-        resolve_model_input_token_limit_for_backend(&resolved_profile, &effective_model).await;
+        resolve_model_input_token_limit(&resolved_profile, &effective_model).await;
     let chunk_target_chars = chunk_target_chars_for_model_input_limit(model_input_token_limit);
     let youtube_corpus_mode = YoutubeCorpusMode::from_wire(youtube_corpus_mode.as_deref())
         .map_err(AppError::validation)?;
@@ -438,11 +595,17 @@ pub(crate) async fn start_analysis_report_run(
     )
     .await
     .map_err(AnalysisSourceResolutionError::into_app_error)?;
+    let source_kind = match resolved_sources.source_type.as_str() {
+        "telegram" => AnalysisSourceKind::Telegram,
+        "youtube" => AnalysisSourceKind::Youtube,
+        other => {
+            return Err(AppError::validation(format!(
+                "Unsupported analysis corpus source_type '{other}'"
+            )))
+        }
+    };
     let (telegram_history_scope, include_migrated_history) =
-        resolve_analysis_telegram_history_scope(
-            include_migrated_history,
-            &resolved_sources.source_type,
-        )?;
+        resolve_analysis_telegram_history_scope(include_migrated_history, source_kind)?;
     let corpus_request = CorpusLoadRequest {
         source_type: resolved_sources.source_type.clone(),
         source_ids: resolved_sources.source_ids.clone(),

@@ -1,7 +1,7 @@
-use crate::analysis::corpus::{CorpusLoadRequest, YoutubeCorpusMode};
-use crate::analysis::models::{AnalysisRunDetail, CorpusMessage};
-use crate::compression::{compress_json_bytes, compress_text};
+use super::super::super::corpus::{CorpusLoadRequest, YoutubeCorpusMode};
+use super::super::super::models::{AnalysisRunDetail, AnalysisSnapshotState, CorpusMessage};
 use crate::youtube::dto::{YoutubeAvailabilityStatus, YoutubeVideoForm, YoutubeVideoMetadata};
+use extractum_core::compression::{compress_json_bytes, compress_text, decompress_bytes};
 pub(super) fn sample_corpus() -> Vec<CorpusMessage> {
     vec![
         CorpusMessage {
@@ -506,7 +506,7 @@ pub(super) async fn insert_youtube_transcript_segment(
 
 pub(super) fn decode_message_metadata_for_test(message: &CorpusMessage) -> serde_json::Value {
     let bytes = message.metadata_zstd.as_deref().expect("message metadata");
-    let decoded = crate::compression::decompress_bytes(bytes).expect("decompress metadata");
+    let decoded = decompress_bytes(bytes).expect("decompress metadata");
     serde_json::from_slice(&decoded).expect("parse metadata")
 }
 
@@ -537,7 +537,7 @@ pub(super) fn sample_run() -> AnalysisRunDetail {
         result_markdown: Some("Saved report".to_string()),
         error: None,
         has_trace_data: true,
-        snapshot_state: Some(crate::analysis::models::AnalysisSnapshotState::Captured),
+        snapshot_state: Some(AnalysisSnapshotState::Captured),
         snapshot_captured_at: Some("2026-05-18T10:00:00Z".to_string()),
         snapshot_error: None,
         created_at: 1_710_000_500,

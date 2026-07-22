@@ -1,6 +1,148 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
+use extractum_core::error::{AppError, AppResult};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AnalysisScopeKind {
+    SingleSource,
+    SourceGroup,
+    Project,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AnalysisSourceKind {
+    Telegram,
+    Youtube,
+}
+
+pub struct ResolvedAnalysisScope {
+    scope_kind: AnalysisScopeKind,
+    source_id: Option<i64>,
+    source_group_id: Option<i64>,
+    project_id: Option<i64>,
+    source_kind: AnalysisSourceKind,
+    source_ids: Vec<i64>,
+    scope_label_snapshot: String,
+}
+
+impl ResolvedAnalysisScope {
+    fn new(
+        scope_kind: AnalysisScopeKind,
+        identity: i64,
+        source_kind: AnalysisSourceKind,
+        source_ids: Vec<i64>,
+        scope_label_snapshot: String,
+    ) -> AppResult<Self> {
+        if identity <= 0 {
+            return Err(AppError::validation(
+                "Analysis scope identity must be positive",
+            ));
+        }
+        if source_ids.is_empty() || source_ids.iter().any(|source_id| *source_id <= 0) {
+            return Err(AppError::validation(
+                "Analysis scope must contain positive source IDs",
+            ));
+        }
+        let mut seen = std::collections::HashSet::new();
+        let source_ids = source_ids
+            .into_iter()
+            .filter(|source_id| seen.insert(*source_id))
+            .collect();
+        let scope_label_snapshot = scope_label_snapshot.trim().to_string();
+        if scope_label_snapshot.is_empty() {
+            return Err(AppError::validation("Analysis scope label cannot be empty"));
+        }
+        let (source_id, source_group_id, project_id) = match scope_kind {
+            AnalysisScopeKind::SingleSource => (Some(identity), None, None),
+            AnalysisScopeKind::SourceGroup => (None, Some(identity), None),
+            AnalysisScopeKind::Project => (None, None, Some(identity)),
+        };
+        Ok(Self {
+            scope_kind,
+            source_id,
+            source_group_id,
+            project_id,
+            source_kind,
+            source_ids,
+            scope_label_snapshot,
+        })
+    }
+
+    pub fn for_source(
+        source_id: i64,
+        source_kind: AnalysisSourceKind,
+        source_ids: Vec<i64>,
+        scope_label_snapshot: String,
+    ) -> AppResult<Self> {
+        Self::new(
+            AnalysisScopeKind::SingleSource,
+            source_id,
+            source_kind,
+            source_ids,
+            scope_label_snapshot,
+        )
+    }
+
+    pub fn for_source_group(
+        source_group_id: i64,
+        source_kind: AnalysisSourceKind,
+        source_ids: Vec<i64>,
+        scope_label_snapshot: String,
+    ) -> AppResult<Self> {
+        Self::new(
+            AnalysisScopeKind::SourceGroup,
+            source_group_id,
+            source_kind,
+            source_ids,
+            scope_label_snapshot,
+        )
+    }
+
+    pub fn for_project(
+        project_id: i64,
+        source_kind: AnalysisSourceKind,
+        source_ids: Vec<i64>,
+        scope_label_snapshot: String,
+    ) -> AppResult<Self> {
+        Self::new(
+            AnalysisScopeKind::Project,
+            project_id,
+            source_kind,
+            source_ids,
+            scope_label_snapshot,
+        )
+    }
+
+    pub fn scope_kind(&self) -> AnalysisScopeKind {
+        self.scope_kind
+    }
+
+    pub fn source_id(&self) -> Option<i64> {
+        self.source_id
+    }
+
+    pub fn source_group_id(&self) -> Option<i64> {
+        self.source_group_id
+    }
+
+    pub fn project_id(&self) -> Option<i64> {
+        self.project_id
+    }
+
+    pub fn source_kind(&self) -> AnalysisSourceKind {
+        self.source_kind
+    }
+
+    pub fn source_ids(&self) -> &[i64] {
+        &self.source_ids
+    }
+
+    pub fn scope_label_snapshot(&self) -> &str {
+        &self.scope_label_snapshot
+    }
+}
+
 #[derive(Serialize, FromRow)]
 pub struct AnalysisSourceOption {
     pub id: i64,

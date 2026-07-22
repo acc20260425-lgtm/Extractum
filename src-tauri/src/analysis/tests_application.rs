@@ -150,10 +150,10 @@ async fn run_reads_preserve_deleted_blank_and_snapshot_scope_labels() {
 
     let listed = list_analysis_run_summaries(
         &pool,
-        AnalysisRunListFilters {
-            limit: 20,
-            ..AnalysisRunListFilters::default()
-        },
+        AnalysisRunListFilters::for_analysis(
+            None, None, 20, None, None, None, None, None, None, None,
+        )
+        .expect("construct run-list filters"),
     )
     .await
     .expect("list runs");
@@ -236,11 +236,19 @@ async fn analysis_run_search_escapes_percent_underscore_and_backslash_before_lim
 
     let runs = list_analysis_run_summaries(
         &pool,
-        AnalysisRunListFilters {
-            limit: 1,
-            query: Some("alpha 100%_literal\\path quota".to_string()),
-            ..AnalysisRunListFilters::default()
-        },
+        AnalysisRunListFilters::for_analysis(
+            None,
+            None,
+            1,
+            Some("alpha 100%_literal\\path quota".to_string()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("construct search filters"),
     )
     .await
     .expect("search literal LIKE characters");

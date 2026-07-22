@@ -99,11 +99,19 @@ async fn missing_snapshot_run_exposes_capture_failed_state_but_no_saved_messages
 
     let summaries = crate::analysis::store::list_analysis_run_summaries(
         &pool,
-        crate::analysis::store::AnalysisRunListFilters {
-            query: Some(MISSING_SNAPSHOT_RUN_LABEL.to_string()),
-            limit: 100,
-            ..Default::default()
-        },
+        crate::analysis::store::AnalysisRunListFilters::for_analysis(
+            None,
+            None,
+            100,
+            Some(MISSING_SNAPSHOT_RUN_LABEL.to_string()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("construct fixture run filters"),
     )
     .await
     .expect("list fixture runs");
@@ -163,11 +171,19 @@ async fn capture_failed_snapshot_run_has_sanitized_error_trace_and_readable_repo
 
     let summaries = crate::analysis::store::list_analysis_run_summaries(
         &pool,
-        crate::analysis::store::AnalysisRunListFilters {
-            query: Some(CAPTURE_FAILED_SNAPSHOT_RUN_LABEL.to_string()),
-            limit: 100,
-            ..Default::default()
-        },
+        crate::analysis::store::AnalysisRunListFilters::for_analysis(
+            None,
+            None,
+            100,
+            Some(CAPTURE_FAILED_SNAPSHOT_RUN_LABEL.to_string()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("construct fixture run filters"),
     )
     .await
     .expect("list fixture runs");

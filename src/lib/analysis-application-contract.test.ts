@@ -102,10 +102,18 @@ const checkpointCharacterizationLeaves = new Set([
   "chat_persistence_failure_keeps_completed_answer_failure_message",
   "terminal_cleanup_removes_active_state_when_terminal_persistence_fails",
   "report_start_preserves_acceptance_order_and_two_corpus_reads",
+  "legacy_trace_bytes_decode_after_core_compression_handoff",
+  "decode_trace_data_returns_typed_internal_for_invalid_json",
+  "trace_ref_json_is_byte_compatible_for_telegram_and_youtube",
+  "start_analysis_report_request_constructors_preserve_source_group_and_project_scopes",
+  "analysis_run_list_filter_constructors_preserve_analysis_and_project_scopes",
+  "resolved_analysis_scope_rejects_zero_or_multiple_identities",
+  "resolved_analysis_scope_requires_nonempty_stable_sources_and_label",
 ]);
 
 function sourceIdentityPrefix(file: string): string {
   const relative = path.relative(currentAnalysisRoot, file).replaceAll("\\", "/");
+  if (relative === "tests_portable.rs") return "analysis::tests";
   const parts = relative.replace(/\.rs$/, "").split("/");
   if (parts.at(-1) === "mod") parts.pop();
   if (parts.includes("tests")) return ["analysis", ...parts].join("::");
@@ -312,6 +320,66 @@ describe("analysis application boundary", () => {
     expect(crate.filter((identity) => app.includes(identity))).toEqual([]);
     expect([...crate, ...app].sort()).toEqual(current);
     expect(new Set(frozen.map(({ final }) => final)).size).toBe(143);
+  });
+
+  it("stages checkpoint two portable values and safe construction without app compression ownership", () => {
+    const moduleSource = readAppAnalysisSource("mod.rs");
+    const domainSource = readAppAnalysisSource("domain_portable.rs");
+    const models = readAppAnalysisSource("models.rs");
+    const report = readAppAnalysisSource("report.rs");
+    const trace = readAppAnalysisSource("trace.rs");
+    const filters = readAppAnalysisSource("store/read_model.rs");
+    const reportCommands = readAppAnalysisSource("report_commands.rs");
+
+    expect(moduleSource.match(/include!\("tests_portable\.rs"\)/g) ?? []).toHaveLength(1);
+    expect(moduleSource).toContain('#[path = "domain_portable.rs"]');
+    expect(moduleSource).toContain('const ANALYSIS_RUN_EVENT: &str = "analysis://run"');
+    expect(moduleSource).toContain('const ANALYSIS_CHAT_EVENT: &str = "analysis://chat"');
+    expect(moduleSource).not.toContain('const TEMPLATE_KIND_REPORT: &str = "report"');
+    expect(domainSource).toContain('pub(crate) const TEMPLATE_KIND_REPORT: &str = "report"');
+    expect(domainSource).toContain("pub(crate) use extractum_core::time::now_secs");
+
+    expect(trace).toContain("compression::{compress_json_bytes, decompress_bytes}");
+    expect(trace).not.toMatch(/\bzstd::/);
+    expectOrdered(report, [
+      "let reduce_result = run_reduce_phase",
+      "let compressed_trace = compress_trace_data",
+      "Some(&reduce_result.completion.text)",
+      "Some(&compressed_trace)",
+    ]);
+
+    for (const constructor of ["from_command", "for_source", "for_source_group", "for_project"]) {
+      expect(report).toContain(`pub fn ${constructor}(`);
+    }
+    const requestFields = report.match(
+      /pub\(crate\) struct StartAnalysisReportRequest \{([\s\S]*?)\n\}/,
+    )?.[1];
+    expect(requestFields).toBeDefined();
+    expect(requestFields).not.toMatch(/\bpub(?:\(crate\))?\s+\w+\s*:/);
+    expect(reportCommands.indexOf("StartAnalysisReportRequest::from_command"))
+      .toBeLessThan(reportCommands.indexOf("start_analysis_report_run"));
+    expect(models).toContain("pub struct ResolvedAnalysisScope");
+    expect(models).toContain("pub enum AnalysisScopeKind");
+    expect(models).toContain("pub enum AnalysisSourceKind");
+    expect(models).not.toMatch(/pub\s+source_ids:\s*Vec<i64>/);
+    expect(filters).toContain("pub fn for_analysis(");
+    expect(filters).toContain("pub fn for_project(project_id: i64, limit: i64) -> Self");
+    expect(filters).toContain("pub fn foreign_label_search_terms(&self) -> &[String]");
+  });
+
+  it("requires analysis run-list tests to use the curated filter constructors", () => {
+    const uncheckedConstructions = [
+      "store/tests/read_model.rs",
+      "tests_application.rs",
+    ].flatMap((owner) => {
+      const source = readAppAnalysisSource(owner);
+      return [...source.matchAll(/AnalysisRunListFilters \{/g)].map((match) => {
+        const line = source.slice(0, match.index).split("\n").length;
+        return `${owner}:${line}`;
+      });
+    });
+
+    expect(uncheckedConstructions).toEqual([]);
   });
 
   it("freezes the 21 release, three project, and three dev command inventory", () => {

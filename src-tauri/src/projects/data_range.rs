@@ -1,6 +1,7 @@
 use sqlx::{QueryBuilder, Sqlite};
 use tauri::AppHandle;
 
+use crate::analysis::models::AnalysisSourceKind;
 use crate::analysis::{
     push_analysis_document_kind_filter, resolve_analysis_sources,
     resolve_analysis_telegram_history_scope, AnalysisSourceResolutionErrorCode, YoutubeCorpusMode,
@@ -63,8 +64,10 @@ pub(crate) async fn get_project_data_range_in_pool(
         .fetch_optional(pool)
         .await
         .map_err(AppError::database)?;
-        if let Some(source_type) = non_telegram_source_type {
-            resolve_analysis_telegram_history_scope(true, &source_type)?;
+        if non_telegram_source_type.is_some() {
+            return Err(AppError::validation(
+                "Migrated historical scope can be included only for Telegram analysis",
+            ));
         }
     }
 
@@ -80,8 +83,17 @@ pub(crate) async fn get_project_data_range_in_pool(
         }
         Err(error) => return Err(error.into_app_error()),
     };
+    let source_kind = match resolved.source_type.as_str() {
+        "telegram" => AnalysisSourceKind::Telegram,
+        "youtube" => AnalysisSourceKind::Youtube,
+        other => {
+            return Err(AppError::validation(format!(
+                "Unsupported analysis corpus source_type '{other}'"
+            )))
+        }
+    };
     let (_, include_migrated_history) =
-        resolve_analysis_telegram_history_scope(include_migrated_history, &resolved.source_type)?;
+        resolve_analysis_telegram_history_scope(include_migrated_history, source_kind)?;
 
     let mut query = QueryBuilder::<Sqlite>::new(
         r#"
@@ -500,5 +512,23 @@ mod tests {
 
         assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
         assert!(error.message.contains("Migrated historical scope"));
+    }
+
+    #[tokio::test]
+    async fn project_data_range_preserves_migrated_history_error_for_unknown_source_type() {
+        let pool = pool().await;
+        seed_project(&pool, 9).await;
+        seed_source(&pool, 90, "unknown", "feed").await;
+        attach(&pool, 9, 90).await;
+
+        let error = get_project_data_range_in_pool(&pool, 9, None, true)
+            .await
+            .expect_err("unknown source migrated history rejected");
+
+        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+        assert_eq!(
+            error.message,
+            "Migrated historical scope can be included only for Telegram analysis"
+        );
     }
 }

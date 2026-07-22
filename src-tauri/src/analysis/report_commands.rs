@@ -35,22 +35,18 @@ pub async fn start_analysis_report(
     youtube_corpus_mode: Option<String>,
     include_migrated_history: bool,
 ) -> AppResult<i64> {
-    report::start_analysis_report_run(
-        handle,
-        state.inner(),
-        StartAnalysisReportRequest {
-            source_id,
-            source_group_id,
-            project_id: None,
-            period_from,
-            period_to,
-            output_language,
-            prompt_template_id,
-            model_override,
-            profile_id,
-            youtube_corpus_mode,
-            include_migrated_history,
-        },
-    )
-    .await
+    let request = StartAnalysisReportRequest::from_command(
+        source_id,
+        source_group_id,
+        None,
+        period_from,
+        period_to,
+        output_language,
+        prompt_template_id,
+        model_override,
+        profile_id,
+        youtube_corpus_mode,
+        include_migrated_history,
+    )?;
+    report::start_analysis_report_run(handle, state.inner(), request).await
 }

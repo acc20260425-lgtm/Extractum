@@ -18,7 +18,7 @@ pub(crate) use self::source_resolution::{
 };
 use sqlx::{Pool, Sqlite};
 
-use crate::error::AppResult;
+use extractum_core::error::AppResult;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct AnalysisRunPreflightLimits {
@@ -60,7 +60,7 @@ pub(crate) enum YoutubeCorpusMode {
 }
 
 impl YoutubeCorpusMode {
-    pub(crate) fn from_wire(value: Option<&str>) -> Result<Self, String> {
+    pub fn from_wire(value: Option<&str>) -> Result<Self, String> {
         match value.unwrap_or("transcript_description") {
             "transcript_only" => Ok(Self::TranscriptOnly),
             "transcript_description" => Ok(Self::TranscriptDescription),
@@ -69,7 +69,7 @@ impl YoutubeCorpusMode {
         }
     }
 
-    pub(crate) fn as_wire(self) -> &'static str {
+    pub fn as_wire(self) -> &'static str {
         match self {
             Self::TranscriptOnly => "transcript_only",
             Self::TranscriptDescription => "transcript_description",
@@ -77,15 +77,23 @@ impl YoutubeCorpusMode {
         }
     }
 
-    pub(crate) fn includes_description(self) -> bool {
+    pub fn includes_description(self) -> bool {
         matches!(
             self,
             Self::TranscriptDescription | Self::TranscriptDescriptionComments
         )
     }
 
-    pub(crate) fn includes_comments(self) -> bool {
+    pub fn includes_comments(self) -> bool {
         matches!(self, Self::TranscriptDescriptionComments)
+    }
+}
+
+impl std::str::FromStr for YoutubeCorpusMode {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::from_wire(Some(value))
     }
 }
 

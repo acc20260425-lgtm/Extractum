@@ -789,24 +789,18 @@ pub async fn start_project_analysis(
     youtube_corpus_mode: Option<String>,
     include_migrated_history: bool,
 ) -> AppResult<i64> {
-    crate::analysis::report::start_analysis_report_run(
-        handle,
-        state.inner(),
-        crate::analysis::report::StartAnalysisReportRequest {
-            source_id: None,
-            source_group_id: None,
-            project_id: Some(project_id),
-            period_from,
-            period_to,
-            output_language,
-            prompt_template_id,
-            model_override,
-            profile_id,
-            youtube_corpus_mode,
-            include_migrated_history,
-        },
-    )
-    .await
+    let request = crate::analysis::report::StartAnalysisReportRequest::for_project(
+        project_id,
+        period_from,
+        period_to,
+        output_language,
+        prompt_template_id,
+        model_override,
+        profile_id,
+        youtube_corpus_mode,
+        include_migrated_history,
+    )?;
+    crate::analysis::report::start_analysis_report_run(handle, state.inner(), request).await
 }
 
 #[tauri::command]
@@ -818,19 +812,7 @@ pub async fn list_project_runs(
     ensure_project_exists(&pool, project_id).await?;
     crate::analysis::store::list_analysis_run_summaries(
         &pool,
-        crate::analysis::store::AnalysisRunListFilters {
-            source_id: None,
-            source_group_id: None,
-            project_id: Some(project_id),
-            limit: 5,
-            query: None,
-            status: Some("all".to_string()),
-            provider: None,
-            model: None,
-            template: None,
-            date_from: None,
-            date_to: None,
-        },
+        crate::analysis::store::AnalysisRunListFilters::for_project(project_id, 5),
     )
     .await
 }

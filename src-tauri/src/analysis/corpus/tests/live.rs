@@ -1,14 +1,13 @@
+use super::super::super::corpus::{
+    live_corpus_ref, load_corpus_messages, preflight_analysis_run, AnalysisRunPreflightLimits,
+    CorpusLoadRequest, YoutubeCorpusMode,
+};
 use super::harness::{
     corpus_request, decode_message_metadata_for_test, insert_youtube_transcript_segment,
     insert_youtube_video_source, insert_youtube_video_source_with_typed_metadata,
     rebuild_documents_for_sources, seed_analysis_source, seed_telegram_item, snapshot_pool,
 };
-use crate::analysis::corpus::{
-    live_corpus_ref, load_corpus_messages, preflight_analysis_run, AnalysisRunPreflightLimits,
-    CorpusLoadRequest, YoutubeCorpusMode,
-};
-use crate::compression::compress_text;
-use crate::error::AppErrorKind;
+use extractum_core::{compression::compress_text, error::AppErrorKind};
 #[tokio::test]
 async fn default_analysis_corpus_excludes_migrated_history_documents() {
     let pool = snapshot_pool().await;
@@ -490,6 +489,13 @@ fn youtube_corpus_mode_parses_wire_values_and_defaults() {
         YoutubeCorpusMode::TranscriptDescriptionComments
     );
     assert!(YoutubeCorpusMode::from_wire(Some("all_text")).is_err());
+    assert_eq!(
+        "transcript_only"
+            .parse::<YoutubeCorpusMode>()
+            .expect("parse transcript-only mode"),
+        YoutubeCorpusMode::TranscriptOnly,
+        "RED: CP2 YouTube corpus FromStr"
+    );
     assert_eq!(
         YoutubeCorpusMode::TranscriptOnly.as_wire(),
         "transcript_only"

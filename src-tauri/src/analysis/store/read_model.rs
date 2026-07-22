@@ -1,15 +1,17 @@
 use sqlx::{Pool, QueryBuilder, Sqlite};
 
-use super::super::models::{
-    AnalysisRunDetail, AnalysisRunRow, AnalysisRunSummary, AnalysisSnapshotState,
-};
-use super::super::{
+use super::super::domain::{
     ANALYSIS_SCOPE_TYPE_PROJECT, ANALYSIS_SCOPE_TYPE_SOURCE_GROUP, ANALYSIS_STATUS_CANCELLED,
     ANALYSIS_STATUS_COMPLETED, ANALYSIS_STATUS_FAILED, ANALYSIS_STATUS_QUEUED,
     ANALYSIS_STATUS_RUNNING,
 };
-use crate::error::{AppError, AppResult};
-use crate::time::ymd_to_unix_midnight;
+use super::super::models::{
+    AnalysisRunDetail, AnalysisRunRow, AnalysisRunSummary, AnalysisSnapshotState,
+};
+use extractum_core::{
+    error::{AppError, AppResult},
+    time::ymd_to_unix_midnight,
+};
 
 fn resolve_run_scope_label_parts(
     scope_type: &str,
@@ -166,6 +168,61 @@ pub(crate) struct AnalysisRunListFilters {
     pub(crate) template: Option<String>,
     pub(crate) date_from: Option<String>,
     pub(crate) date_to: Option<String>,
+    pub(crate) foreign_label_search_terms: Vec<String>,
+}
+
+impl AnalysisRunListFilters {
+    #[expect(clippy::too_many_arguments)]
+    pub fn for_analysis(
+        source_id: Option<i64>,
+        source_group_id: Option<i64>,
+        limit: i64,
+        query: Option<String>,
+        status: Option<String>,
+        provider: Option<String>,
+        model: Option<String>,
+        template: Option<String>,
+        date_from: Option<String>,
+        date_to: Option<String>,
+    ) -> AppResult<Self> {
+        if source_id.is_some() && source_group_id.is_some() {
+            return Err(AppError::validation(
+                "Pass only one of source_id, source_group_id, or project_id",
+            ));
+        }
+        let query = trimmed_filter(query);
+        let foreign_label_search_terms = query
+            .as_deref()
+            .map(|query| query.split_whitespace().map(str::to_string).collect())
+            .unwrap_or_default();
+        Ok(Self {
+            source_id,
+            source_group_id,
+            project_id: None,
+            limit: limit.clamp(1, 100),
+            query,
+            status: trimmed_filter(status),
+            provider: trimmed_filter(provider),
+            model: trimmed_filter(model),
+            template: trimmed_filter(template),
+            date_from: trimmed_filter(date_from),
+            date_to: trimmed_filter(date_to),
+            foreign_label_search_terms,
+        })
+    }
+
+    pub fn for_project(project_id: i64, limit: i64) -> Self {
+        Self {
+            project_id: Some(project_id),
+            limit: limit.clamp(1, 100),
+            status: Some("all".to_string()),
+            ..Self::default()
+        }
+    }
+
+    pub fn foreign_label_search_terms(&self) -> &[String] {
+        &self.foreign_label_search_terms
+    }
 }
 
 const ANALYSIS_RUN_LIST_SELECT: &str = r#"

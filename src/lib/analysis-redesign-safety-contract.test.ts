@@ -31,6 +31,9 @@ const storeBackendFacadeSource = crateOwned("store.rs");
 const storeReadModelSource = crateOwned("store/read_model.rs");
 const storeRunsSource = crateOwned("store/runs.rs");
 const storeSnapshotSource = crateOwned("store/snapshot.rs");
+const analysisModelsSource = crateOwned("models.rs");
+const reportBackendSource = crateOwned("report.rs");
+const traceBackendSource = crateOwned("trace.rs");
 
 const corpusBackendSource = [
   corpusBackendFacadeSource,
@@ -45,6 +48,16 @@ const storeBackendSource = [
 ].join("\n");
 
 describe("analysis redesign final safety contract", () => {
+  it("keeps analysis construction typed and trace compression core-owned", () => {
+    expect(analysisModelsSource).toContain("pub struct ResolvedAnalysisScope");
+    expect(analysisModelsSource).toContain("pub enum AnalysisSourceKind");
+    expect(analysisModelsSource).toContain("seen.insert(*source_id)");
+    expect(reportBackendSource).toContain("fn validated_output_language(");
+    expect(reportBackendSource).toContain("Select exactly one analysis scope");
+    expect(traceBackendSource).toContain("extractum_core::compression");
+    expect(traceBackendSource).not.toMatch(/\bzstd::/);
+  });
+
   it("keeps run snapshot and live source basis explicit in Source mode", () => {
     expect(reportSourceSurfaceSource).toContain("sourceViewBasis");
     expect(reportSourceSurfaceSource).toContain("run_snapshot");

@@ -1,9 +1,11 @@
 use sqlx::{Pool, Sqlite};
 
+use super::super::domain::ANALYSIS_STATUS_FAILED;
 use super::super::models::{CorpusMessage, StoredRunSnapshotRow};
-use super::super::ANALYSIS_STATUS_FAILED;
-use crate::compression::{compress_text, decompress_text};
-use crate::error::{internal_error, AppError, AppResult};
+use extractum_core::{
+    compression::{compress_text, decompress_text},
+    error::{internal_error, AppError, AppResult},
+};
 
 pub(crate) fn sanitize_snapshot_error(category: &str, raw: &str) -> String {
     let mut text = raw

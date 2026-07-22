@@ -1,7 +1,7 @@
+use super::super::super::models::CorpusMessage;
 use super::super::{
     capture_run_snapshot, mark_run_capture_failed, sanitize_provider_error, sanitize_snapshot_error,
 };
-use crate::analysis::models::CorpusMessage;
 
 async fn snapshot_store_pool() -> sqlx::SqlitePool {
     let pool = sqlx::SqlitePool::connect("sqlite::memory:")
@@ -201,7 +201,7 @@ async fn mark_run_capture_failed_sets_snapshot_error() {
     .await
     .expect("load run");
 
-    assert_eq!(row.0, crate::analysis::ANALYSIS_STATUS_FAILED);
+    assert_eq!(row.0, "failed");
     assert_eq!(row.1, row.2);
     assert_eq!(row.3, Some(1_710_000_500));
     assert!(!row.2.unwrap().contains("C:\\"));

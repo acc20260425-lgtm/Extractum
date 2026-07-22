@@ -2,19 +2,20 @@ use sqlx::{Pool, Sqlite};
 use tauri::{AppHandle, Manager};
 
 use crate::db::get_pool;
-use crate::error::{AppError, AppResult};
-use crate::llm::{
-    resolve_profile_for_backend, run_llm_stream_with_profile, LlmChatRequest, LlmMessage,
-    LlmRequestError, LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState,
+use crate::llm::resolve_profile_for_backend;
+use extractum_core::error::{AppError, AppResult};
+use extractum_llm::{
+    run_llm_stream_with_profile, LlmChatRequest, LlmMessage, LlmRequestError, LlmRequestKind,
+    LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState,
 };
 
 use super::corpus::load_run_snapshot_messages;
+use super::domain::{now_secs, validate_chat_role, validate_chat_turns, ANALYSIS_STATUS_COMPLETED};
 use super::events::emit_analysis_chat_event;
 use super::models::{
     AnalysisChatEvent, AnalysisChatMessage, AnalysisChatTurn, AnalysisRunDetail, CorpusMessage,
 };
 use super::store::{fetch_run_row, map_run_detail, resolve_run_scope_label};
-use super::{now_secs, validate_chat_role, validate_chat_turns, ANALYSIS_STATUS_COMPLETED};
 
 fn chat_search_terms(question: &str) -> Vec<String> {
     const STOP_WORDS: &[&str] = &[
@@ -108,7 +109,7 @@ fn clip_excerpt(content: &str, max_chars: usize) -> String {
 }
 
 fn history_scope_label_from_metadata(metadata_zstd: &[u8]) -> Option<&'static str> {
-    let bytes = crate::compression::decompress_bytes(metadata_zstd).ok()?;
+    let bytes = extractum_core::compression::decompress_bytes(metadata_zstd).ok()?;
     let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
     match value.get("history_scope").and_then(|value| value.as_str()) {
         Some("migrated") => Some("Migrated small-group history"),
@@ -552,13 +553,13 @@ pub async fn ask_analysis_run_question(
 
 #[cfg(test)]
 mod tests {
+    use super::super::models::{AnalysisRunDetail, CorpusMessage};
     use super::{
         analysis_chat_request_metadata, build_chat_request,
         completed_chat_persistence_failure_message, ensure_completed_chat_context,
         format_chat_context_messages, ChatRequestParams,
     };
-    use crate::analysis::models::{AnalysisRunDetail, CorpusMessage};
-    use crate::llm::LlmRequestKind;
+    use extractum_llm::LlmRequestKind;
 
     fn sample_run() -> AnalysisRunDetail {
         AnalysisRunDetail {
@@ -588,7 +589,7 @@ mod tests {
             result_markdown: Some("Saved report".to_string()),
             error: None,
             has_trace_data: true,
-            snapshot_state: Some(crate::analysis::models::AnalysisSnapshotState::Captured),
+            snapshot_state: Some(super::super::models::AnalysisSnapshotState::Captured),
             snapshot_captured_at: Some("2026-05-18T10:00:00Z".to_string()),
             snapshot_error: None,
             created_at: 1_710_000_500,
@@ -618,7 +619,7 @@ mod tests {
     fn chat_context_labels_migrated_history_scope_from_metadata() {
         let mut message = sample_message();
         message.metadata_zstd = Some(
-            crate::compression::compress_json_bytes(br#"{"history_scope":"migrated"}"#)
+            extractum_core::compression::compress_json_bytes(br#"{"history_scope":"migrated"}"#)
                 .expect("compress metadata"),
         );
 
@@ -704,7 +705,7 @@ mod tests {
 
     #[test]
     fn chat_persistence_failure_keeps_completed_answer_failure_message() {
-        let error = crate::error::AppError::database("insert failed");
+        let error = extractum_core::error::AppError::database("insert failed");
 
         assert_eq!(
             completed_chat_persistence_failure_message(&error),

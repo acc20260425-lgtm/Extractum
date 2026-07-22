@@ -1,15 +1,15 @@
-use std::io::Cursor;
-
 use super::models::{AnalysisTraceData, AnalysisTraceRef, CorpusMessage};
-use crate::compression::decompress_bytes;
-use crate::error::{internal_error, AppResult};
+use extractum_core::{
+    compression::{compress_json_bytes, decompress_bytes},
+    error::{internal_error, AppResult},
+};
 
 const TRACE_EXCERPT_MAX_CHARS: usize = 480;
 
 #[allow(dead_code)]
 pub(crate) fn compress_trace_data(trace_data: &AnalysisTraceData) -> AppResult<Vec<u8>> {
     let json = serde_json::to_vec(trace_data).map_err(internal_error)?;
-    zstd::encode_all(Cursor::new(json), 3).map_err(internal_error)
+    compress_json_bytes(&json).map_err(internal_error)
 }
 
 pub(crate) fn decode_trace_data(bytes: Option<&[u8]>) -> AppResult<AnalysisTraceData> {
@@ -17,7 +17,7 @@ pub(crate) fn decode_trace_data(bytes: Option<&[u8]>) -> AppResult<AnalysisTrace
         return Ok(AnalysisTraceData::default());
     };
 
-    let decoded = zstd::decode_all(Cursor::new(bytes)).map_err(internal_error)?;
+    let decoded = decompress_bytes(bytes).map_err(internal_error)?;
     serde_json::from_slice(&decoded).map_err(internal_error)
 }
 
@@ -273,10 +273,11 @@ pub(crate) fn build_trace_data(markdown: &str, corpus: &[CorpusMessage]) -> Anal
 
 #[cfg(test)]
 mod tests {
-    use super::{build_trace_refs, clip_excerpt, decode_trace_data, normalize_ref};
-    use crate::analysis::models::CorpusMessage;
-    use crate::compression::compress_json_bytes;
-    use crate::error::AppErrorKind;
+    use super::super::models::{AnalysisTraceData, AnalysisTraceRef, CorpusMessage};
+    use super::{
+        build_trace_refs, clip_excerpt, compress_trace_data, decode_trace_data, normalize_ref,
+    };
+    use extractum_core::{compression::compress_json_bytes, error::AppErrorKind};
 
     fn metadata_zstd(value: serde_json::Value) -> Vec<u8> {
         let json = serde_json::to_vec(&value).expect("serialize metadata");
@@ -372,6 +373,65 @@ mod tests {
     }
 
     #[test]
+    fn legacy_trace_bytes_decode_after_core_compression_handoff() {
+        let legacy_bytes = [
+            40, 181, 47, 253, 0, 88, 89, 0, 0, 123, 34, 114, 101, 102, 115, 34, 58, 91, 93, 125,
+        ];
+
+        let decoded = decode_trace_data(Some(&legacy_bytes)).expect("decode legacy trace bytes");
+
+        assert_eq!(decoded, AnalysisTraceData::default());
+    }
+
+    #[test]
+    fn decode_trace_data_returns_typed_internal_for_invalid_json() {
+        let compressed = compress_json_bytes(b"not-json").expect("compress invalid JSON bytes");
+
+        let error = decode_trace_data(Some(&compressed)).expect_err("invalid JSON should fail");
+
+        assert_eq!(error.kind, AppErrorKind::Internal);
+        assert!(!error.message.is_empty());
+    }
+
+    #[test]
+    fn trace_ref_json_is_byte_compatible_for_telegram_and_youtube() {
+        let trace = AnalysisTraceData {
+            refs: vec![
+                AnalysisTraceRef {
+                    r#ref: "s1-i2".to_string(),
+                    item_id: 2,
+                    source_id: 1,
+                    external_id: "2".to_string(),
+                    published_at: 1_710_000_000,
+                    excerpt: "Telegram excerpt".to_string(),
+                    youtube_url: None,
+                    youtube_timestamp_seconds: None,
+                    youtube_display_label: None,
+                    is_synthetic: false,
+                },
+                AnalysisTraceRef {
+                    r#ref: "s12-i400@754000ms".to_string(),
+                    item_id: 400,
+                    source_id: 12,
+                    external_id: "transcript:video123:en:manual".to_string(),
+                    published_at: 1_710_000_001,
+                    excerpt: "YouTube excerpt".to_string(),
+                    youtube_url: Some("https://www.youtube.com/watch?v=video123&t=754".to_string()),
+                    youtube_timestamp_seconds: Some(754),
+                    youtube_display_label: Some("Video title at 12:34".to_string()),
+                    is_synthetic: false,
+                },
+            ],
+        };
+
+        let compressed = compress_trace_data(&trace).expect("compress trace");
+        let json = extractum_core::compression::decompress_bytes(&compressed)
+            .expect("decompress trace JSON");
+
+        assert_eq!(json, serde_json::to_vec(&trace).expect("serialize trace"));
+    }
+
+    #[test]
     fn build_trace_refs_resolves_exact_youtube_timestamp_refs() {
         let refs = vec!["s12-i400@754000ms".to_string()];
         let corpus = vec![youtube_segment_message()];
@@ -405,7 +465,7 @@ mod tests {
 
     #[test]
     fn analysis_trace_ref_serializes_youtube_fields_as_null_for_telegram_refs() {
-        let reference = crate::analysis::models::AnalysisTraceRef {
+        let reference = AnalysisTraceRef {
             r#ref: "s1-i2".to_string(),
             item_id: 2,
             source_id: 1,

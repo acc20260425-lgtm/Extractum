@@ -1,9 +1,9 @@
+use super::super::super::models::{AnalysisRunDetail, AnalysisRunRow, AnalysisSnapshotState};
 use super::super::{
     list_analysis_run_summaries, map_run_detail, map_run_summary, resolve_run_scope_label,
     AnalysisRunListFilters,
 };
-use crate::analysis::models::{AnalysisRunDetail, AnalysisRunRow};
-use crate::error::AppErrorKind;
+use extractum_core::error::AppErrorKind;
 
 fn sample_run_row() -> AnalysisRunRow {
     AnalysisRunRow {
@@ -290,13 +290,19 @@ async fn list_analysis_run_summaries_applies_query_before_limit() {
 
     let runs = list_analysis_run_summaries(
         &pool,
-        AnalysisRunListFilters {
-            source_id: None,
-            source_group_id: None,
-            limit: 1,
-            query: Some("nebula".to_string()),
-            ..AnalysisRunListFilters::default()
-        },
+        AnalysisRunListFilters::for_analysis(
+            None,
+            None,
+            1,
+            Some("nebula".to_string()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("construct query filters"),
     )
     .await
     .expect("list runs");
@@ -334,14 +340,19 @@ async fn list_analysis_run_summaries_combines_scope_and_field_filters() {
 
     let runs = list_analysis_run_summaries(
         &pool,
-        AnalysisRunListFilters {
-            source_id: Some(1),
-            source_group_id: None,
-            limit: 50,
-            provider: Some("GEM".to_string()),
-            model: Some("pro".to_string()),
-            ..AnalysisRunListFilters::default()
-        },
+        AnalysisRunListFilters::for_analysis(
+            Some(1),
+            None,
+            50,
+            None,
+            None,
+            Some("GEM".to_string()),
+            Some("pro".to_string()),
+            None,
+            None,
+            None,
+        )
+        .expect("construct scope and field filters"),
     )
     .await
     .expect("list runs");
@@ -380,13 +391,19 @@ async fn list_analysis_run_summaries_filters_source_groups_and_template_names() 
 
     let runs = list_analysis_run_summaries(
         &pool,
-        AnalysisRunListFilters {
-            source_id: None,
-            source_group_id: Some(10),
-            limit: 50,
-            template: Some("incident".to_string()),
-            ..AnalysisRunListFilters::default()
-        },
+        AnalysisRunListFilters::for_analysis(
+            None,
+            Some(10),
+            50,
+            None,
+            None,
+            None,
+            None,
+            Some("incident".to_string()),
+            None,
+            None,
+        )
+        .expect("construct source-group template filters"),
     )
     .await
     .expect("list runs");
@@ -425,16 +442,9 @@ async fn list_analysis_run_summaries_filters_project_runs() {
     )
     .await;
 
-    let runs = list_analysis_run_summaries(
-        &pool,
-        AnalysisRunListFilters {
-            project_id: Some(7),
-            limit: 50,
-            ..AnalysisRunListFilters::default()
-        },
-    )
-    .await
-    .expect("list project runs");
+    let runs = list_analysis_run_summaries(&pool, AnalysisRunListFilters::for_project(7, 50))
+        .await
+        .expect("list project runs");
 
     assert_eq!(runs.iter().map(|run| run.id).collect::<Vec<_>>(), vec![1]);
     assert_eq!(runs[0].project_name.as_deref(), Some("Alpha Project"));
@@ -442,24 +452,25 @@ async fn list_analysis_run_summaries_filters_project_runs() {
 
 #[tokio::test]
 async fn list_analysis_run_summaries_rejects_both_scope_ids() {
-    let pool = run_list_pool().await;
-
-    let error = match list_analysis_run_summaries(
-        &pool,
-        AnalysisRunListFilters {
-            source_id: Some(1),
-            source_group_id: Some(10),
-            limit: 50,
-            ..AnalysisRunListFilters::default()
-        },
+    let error = AnalysisRunListFilters::for_analysis(
+        Some(1),
+        Some(10),
+        50,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
     )
-    .await
-    {
-        Ok(_) => panic!("both scope ids should fail"),
-        Err(error) => error,
-    };
+    .expect_err("both scope ids should fail");
 
     assert_eq!(error.kind, AppErrorKind::Validation);
+    assert_eq!(
+        error.message,
+        "Pass only one of source_id, source_group_id, or project_id"
+    );
 }
 
 #[tokio::test]
@@ -498,13 +509,19 @@ async fn list_analysis_run_summaries_filters_status_and_dates() {
 
     let completed = list_analysis_run_summaries(
         &pool,
-        AnalysisRunListFilters {
-            limit: 50,
-            status: Some("completed".to_string()),
-            date_from: Some("2024-01-02".to_string()),
-            date_to: Some("2024-01-02".to_string()),
-            ..AnalysisRunListFilters::default()
-        },
+        AnalysisRunListFilters::for_analysis(
+            None,
+            None,
+            50,
+            None,
+            Some("completed".to_string()),
+            None,
+            None,
+            None,
+            Some("2024-01-02".to_string()),
+            Some("2024-01-02".to_string()),
+        )
+        .expect("construct completed date filters"),
     )
     .await
     .expect("list completed");
@@ -515,13 +532,19 @@ async fn list_analysis_run_summaries_filters_status_and_dates() {
 
     let active = list_analysis_run_summaries(
         &pool,
-        AnalysisRunListFilters {
-            limit: 50,
-            status: Some("queued_running".to_string()),
-            date_from: Some("invalid".to_string()),
-            date_to: Some("2024-01-04".to_string()),
-            ..AnalysisRunListFilters::default()
-        },
+        AnalysisRunListFilters::for_analysis(
+            None,
+            None,
+            50,
+            None,
+            Some("queued_running".to_string()),
+            None,
+            None,
+            None,
+            Some("invalid".to_string()),
+            Some("2024-01-04".to_string()),
+        )
+        .expect("construct active date filters"),
     )
     .await
     .expect("list active");
@@ -540,11 +563,19 @@ async fn list_analysis_run_summaries_escapes_literal_like_characters() {
 
     let runs = list_analysis_run_summaries(
         &pool,
-        AnalysisRunListFilters {
-            limit: 50,
-            query: Some("100%_literal".to_string()),
-            ..AnalysisRunListFilters::default()
-        },
+        AnalysisRunListFilters::for_analysis(
+            None,
+            None,
+            50,
+            Some("100%_literal".to_string()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("construct literal query filters"),
     )
     .await
     .expect("list literal percent underscore");
@@ -583,11 +614,19 @@ async fn list_analysis_run_summaries_matches_all_query_terms_across_any_field() 
 
     let runs = list_analysis_run_summaries(
         &pool,
-        AnalysisRunListFilters {
-            limit: 50,
-            query: Some("alpha quota".to_string()),
-            ..AnalysisRunListFilters::default()
-        },
+        AnalysisRunListFilters::for_analysis(
+            None,
+            None,
+            50,
+            Some("alpha quota".to_string()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("construct term query filters"),
     )
     .await
     .expect("list terms");
@@ -613,7 +652,7 @@ fn map_run_summary_exposes_captured_snapshot_state() {
 
     assert_eq!(
         summary.snapshot_state,
-        Some(crate::analysis::models::AnalysisSnapshotState::Captured)
+        Some(AnalysisSnapshotState::Captured)
     );
     assert_eq!(
         summary.snapshot_captured_at.as_deref(),
@@ -628,13 +667,13 @@ fn completed_run_without_capture_marker_is_capture_failed() {
     row.snapshot_captured_at = None;
     row.snapshot_error = None;
     row.snapshot_message_count = 0;
-    row.status = crate::analysis::ANALYSIS_STATUS_COMPLETED.to_string();
+    row.status = "completed".to_string();
 
     let detail = map_run_detail(row);
 
     assert_eq!(
         detail.snapshot_state,
-        Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed)
+        Some(AnalysisSnapshotState::CaptureFailed)
     );
     assert_eq!(detail.snapshot_captured_at, None);
     assert_eq!(detail.snapshot_error, None);
@@ -646,13 +685,13 @@ fn map_run_summary_exposes_capture_failed_snapshot_state() {
     row.snapshot_captured_at = None;
     row.snapshot_error = Some("Snapshot capture failed".to_string());
     row.snapshot_message_count = 0;
-    row.status = crate::analysis::ANALYSIS_STATUS_FAILED.to_string();
+    row.status = "failed".to_string();
 
     let summary = map_run_summary(row);
 
     assert_eq!(
         summary.snapshot_state,
-        Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed)
+        Some(AnalysisSnapshotState::CaptureFailed)
     );
     assert_eq!(
         summary.snapshot_error.as_deref(),
@@ -666,7 +705,7 @@ fn map_run_summary_exposes_null_snapshot_state_for_active_runs_before_capture() 
     row.snapshot_captured_at = None;
     row.snapshot_error = None;
     row.snapshot_message_count = 0;
-    row.status = crate::analysis::ANALYSIS_STATUS_RUNNING.to_string();
+    row.status = "running".to_string();
 
     let summary = map_run_summary(row);
 
@@ -679,13 +718,13 @@ fn failed_terminal_run_without_capture_marker_is_capture_failed() {
     row.snapshot_captured_at = None;
     row.snapshot_error = None;
     row.snapshot_message_count = 0;
-    row.status = crate::analysis::ANALYSIS_STATUS_CANCELLED.to_string();
+    row.status = "cancelled".to_string();
 
     let summary = map_run_summary(row);
 
     assert_eq!(
         summary.snapshot_state,
-        Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed)
+        Some(AnalysisSnapshotState::CaptureFailed)
     );
 }
 
@@ -704,5 +743,60 @@ fn map_run_detail_exposes_youtube_corpus_mode() {
     assert_eq!(
         detail.youtube_corpus_mode,
         "transcript_description_comments"
+    );
+}
+
+#[test]
+fn analysis_run_list_filter_constructors_preserve_analysis_and_project_scopes() {
+    let analysis = AnalysisRunListFilters::for_analysis(
+        Some(11),
+        None,
+        250,
+        Some("  alpha   beta  ".to_string()),
+        Some(" all ".to_string()),
+        Some(" gemini ".to_string()),
+        None,
+        None,
+        Some(" 2026-07-01 ".to_string()),
+        None,
+    )
+    .expect("construct analysis filters");
+    let project = AnalysisRunListFilters::for_project(19, 500);
+
+    assert_eq!(analysis.source_id, Some(11), "RED: CP2 run list filters");
+    assert_eq!(analysis.source_group_id, None);
+    assert_eq!(analysis.project_id, None);
+    assert_eq!(analysis.limit, 100);
+    assert_eq!(analysis.query.as_deref(), Some("alpha   beta"));
+    assert_eq!(analysis.status.as_deref(), Some("all"));
+    assert_eq!(analysis.provider.as_deref(), Some("gemini"));
+    assert_eq!(analysis.date_from.as_deref(), Some("2026-07-01"));
+    assert_eq!(
+        analysis.foreign_label_search_terms(),
+        &["alpha".to_string(), "beta".to_string()]
+    );
+    assert_eq!(project.project_id, Some(19));
+    assert_eq!(project.source_id, None);
+    assert_eq!(project.source_group_id, None);
+    assert_eq!(project.limit, 100);
+    assert_eq!(project.status.as_deref(), Some("all"));
+
+    let error = AnalysisRunListFilters::for_analysis(
+        Some(1),
+        Some(2),
+        20,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect_err("multiple analysis scopes rejected");
+    assert_eq!(error.kind, AppErrorKind::Validation);
+    assert_eq!(
+        error.message,
+        "Pass only one of source_id, source_group_id, or project_id"
     );
 }

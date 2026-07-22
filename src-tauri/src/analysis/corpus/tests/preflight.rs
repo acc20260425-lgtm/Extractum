@@ -1,14 +1,14 @@
-use super::harness::{
-    corpus_request, insert_youtube_transcript_segment,
-    insert_youtube_video_source_with_typed_metadata, rebuild_documents_for_sources, snapshot_pool,
-};
-use crate::analysis::corpus::{
+use super::super::super::corpus::{
     estimate_message_input_chars, estimate_preflight_chunk_count, load_corpus_messages,
     model_limit_preflight_error, preflight_analysis_run, preflight_limit_error,
     AnalysisRunPreflight, AnalysisRunPreflightLimits, YoutubeCorpusMode,
 };
-use crate::analysis::models::CorpusMessage;
-use crate::compression::compress_text;
+use super::super::super::models::CorpusMessage;
+use super::harness::{
+    corpus_request, insert_youtube_transcript_segment,
+    insert_youtube_video_source_with_typed_metadata, rebuild_documents_for_sources, snapshot_pool,
+};
+use extractum_core::compression::compress_text;
 #[test]
 fn estimated_message_chars_match_report_chunk_accounting() {
     let message = CorpusMessage {
