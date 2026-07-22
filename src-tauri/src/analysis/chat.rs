@@ -163,6 +163,18 @@ fn ensure_completed_chat_context(
     Ok(())
 }
 
+pub(super) async fn load_chat_run_and_scope_label(
+    pool: &Pool<Sqlite>,
+    run_id: i64,
+) -> AppResult<(AnalysisRunDetail, String)> {
+    let run_row = fetch_run_row(pool, run_id)
+        .await?
+        .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
+    let run = map_run_detail(run_row);
+    let scope_label = resolve_run_scope_label(&run);
+    Ok((run, scope_label))
+}
+
 struct ChatRequestParams<'a> {
     run: &'a AnalysisRunDetail,
     profile_id: String,
@@ -338,6 +350,10 @@ async fn persist_chat_exchange(
     Ok(())
 }
 
+fn completed_chat_persistence_failure_message(error: &impl std::fmt::Display) -> String {
+    format!("Answer completed but chat history could not be saved: {error}")
+}
+
 #[tauri::command]
 pub async fn list_analysis_chat_messages(
     handle: AppHandle,
@@ -386,11 +402,7 @@ pub async fn ask_analysis_run_question(
     }
 
     let pool = get_pool(&handle).await?;
-    let run_row = fetch_run_row(&pool, run_id)
-        .await?
-        .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
-    let run = map_run_detail(run_row);
-    let scope_label = resolve_run_scope_label(&run);
+    let (run, scope_label) = load_chat_run_and_scope_label(&pool, run_id).await?;
 
     if run.status != ANALYSIS_STATUS_COMPLETED {
         return Err(AppError::validation(
@@ -503,9 +515,7 @@ pub async fn ask_analysis_run_question(
                     Ok(pool) => pool,
                     Err(error) => {
                         ChatEvent::new(failed_request_id, run_id, "failed")
-                            .error(format!(
-                                "Answer completed but chat history could not be saved: {error}"
-                            ))
+                            .error(completed_chat_persistence_failure_message(&error))
                             .emit(&failed_handle);
                         return;
                     }
@@ -515,9 +525,7 @@ pub async fn ask_analysis_run_question(
                     persist_chat_exchange(&pool, run_id, &question, &completion.text).await
                 {
                     ChatEvent::new(failed_request_id, run_id, "failed")
-                        .error(format!(
-                            "Answer completed but chat history could not be saved: {error}"
-                        ))
+                        .error(completed_chat_persistence_failure_message(&error))
                         .emit(&failed_handle);
                     return;
                 }
@@ -545,7 +553,8 @@ pub async fn ask_analysis_run_question(
 #[cfg(test)]
 mod tests {
     use super::{
-        analysis_chat_request_metadata, build_chat_request, ensure_completed_chat_context,
+        analysis_chat_request_metadata, build_chat_request,
+        completed_chat_persistence_failure_message, ensure_completed_chat_context,
         format_chat_context_messages, ChatRequestParams,
     };
     use crate::analysis::models::{AnalysisRunDetail, CorpusMessage};
@@ -691,5 +700,15 @@ mod tests {
 
         assert!(text.contains("source document"));
         assert!(!text.contains("message"));
+    }
+
+    #[test]
+    fn chat_persistence_failure_keeps_completed_answer_failure_message() {
+        let error = crate::error::AppError::database("insert failed");
+
+        assert_eq!(
+            completed_chat_persistence_failure_message(&error),
+            "Answer completed but chat history could not be saved: Database error: insert failed"
+        );
     }
 }

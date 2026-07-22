@@ -550,3 +550,6 @@ mod tests {
         assert_eq!(error.message, "Chat turns cannot be empty");
     }
 }
+
+#[cfg(test)]
+mod tests_application;

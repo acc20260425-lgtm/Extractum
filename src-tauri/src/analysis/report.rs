@@ -288,6 +288,19 @@ async fn run_report_pipeline(
     Ok(())
 }
 
+async fn await_report_terminal_and_cleanup<F, T>(
+    state: &AnalysisState,
+    run_id: i64,
+    terminal: F,
+) -> T
+where
+    F: std::future::Future<Output = T>,
+{
+    let result = terminal.await;
+    state.remove_active_report_run(run_id).await;
+    result
+}
+
 pub(crate) async fn start_analysis_report_run(
     handle: AppHandle,
     state: &AnalysisState,
@@ -512,37 +525,37 @@ pub(crate) async fn start_analysis_report_run(
 
     let app_handle = handle.clone();
     tokio::spawn(async move {
-        match run_report_pipeline(
-            app_handle.clone(),
-            ReportRunInput {
-                run_id,
-                scope_label,
-                corpus_request,
-                period_from,
-                period_to,
-                output_language,
-                prompt_template,
-                model_override,
-                resolved_profile,
-                chunk_target_chars,
-                preflight,
-            },
-        )
-        .await
-        {
-            Ok(()) => {}
-            Err(ReportRunError::Failed(error)) => fail_run(&app_handle, run_id, error).await,
-            Err(ReportRunError::CaptureFailed(error)) => {
-                fail_capture_run(&app_handle, run_id, error).await
+        let state = app_handle.state::<AnalysisState>();
+        await_report_terminal_and_cleanup(state.inner(), run_id, async {
+            match run_report_pipeline(
+                app_handle.clone(),
+                ReportRunInput {
+                    run_id,
+                    scope_label,
+                    corpus_request,
+                    period_from,
+                    period_to,
+                    output_language,
+                    prompt_template,
+                    model_override,
+                    resolved_profile,
+                    chunk_target_chars,
+                    preflight,
+                },
+            )
+            .await
+            {
+                Ok(()) => {}
+                Err(ReportRunError::Failed(error)) => fail_run(&app_handle, run_id, error).await,
+                Err(ReportRunError::CaptureFailed(error)) => {
+                    fail_capture_run(&app_handle, run_id, error).await
+                }
+                Err(ReportRunError::Cancelled(message)) => {
+                    cancel_run(&app_handle, run_id, message).await
+                }
             }
-            Err(ReportRunError::Cancelled(message)) => {
-                cancel_run(&app_handle, run_id, message).await
-            }
-        }
-        app_handle
-            .state::<AnalysisState>()
-            .remove_active_report_run(run_id)
-            .await;
+        })
+        .await;
     });
 
     Ok(run_id)

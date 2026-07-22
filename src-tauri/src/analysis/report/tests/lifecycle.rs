@@ -1,7 +1,38 @@
-use super::super::{mark_interrupted_analysis_runs, request_analysis_run_cancel_for_pool};
+use super::super::{
+    await_report_terminal_and_cleanup, mark_interrupted_analysis_runs,
+    request_analysis_run_cancel_for_pool,
+};
 use super::harness::{insert_cancel_request_run, request_cancel_pool_with_runs};
 use crate::error::AppErrorKind;
 use crate::llm::LlmSchedulerState;
+
+#[tokio::test]
+async fn terminal_cleanup_removes_active_state_when_terminal_persistence_fails() {
+    let pool = request_cancel_pool_with_runs().await;
+    let state = crate::analysis::AnalysisState::new();
+    let run_id = 407;
+    state.insert_active_report_run(run_id).await;
+    sqlx::query("DROP TABLE analysis_runs")
+        .execute(&pool)
+        .await
+        .expect("remove persistence target");
+
+    let persistence = await_report_terminal_and_cleanup(&state, run_id, async {
+        crate::analysis::store::set_run_status(
+            &pool,
+            run_id,
+            crate::analysis::ANALYSIS_STATUS_FAILED,
+            None,
+            None,
+            Some("terminal persistence failed"),
+            Some(1),
+        )
+        .await
+    })
+    .await;
+    assert!(persistence.is_err());
+    assert!(!state.active_report_run_ids().await.contains(&run_id));
+}
 
 #[tokio::test]
 async fn interrupted_cleanup_preserves_captured_snapshot_state_marker() {
