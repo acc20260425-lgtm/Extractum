@@ -68,6 +68,58 @@ function Invoke-ExactRustTest {
     }
 }
 
+function Invoke-NonEmptyRustSuite {
+    param(
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][string]$Package,
+        [Parameter(Mandatory = $true)][string]$TestFilter
+    )
+
+    $output = & cargo test --color never --manifest-path src-tauri/Cargo.toml -p $Package --lib $TestFilter -- --nocapture 2>&1
+    $exitCode = $LASTEXITCODE
+    $text = ($output | Out-String)
+    $text
+    if ($exitCode -ne 0) {
+        throw "$Label failed with exit code $exitCode"
+    }
+    $positiveRuns = @(
+        [regex]::Matches($text, '(?m)^[ \t]*running ([1-9][0-9]*) tests?[ \t]*\r?$') |
+            ForEach-Object { [int]$_.Groups[1].Value }
+    )
+    if ($positiveRuns.Count -eq 0) {
+        throw "$Label executed zero tests or produced no recognized libtest count"
+    }
+}
+
+function Invoke-NonEmptyRustTestList {
+    param(
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][string]$Package,
+        [string]$TestFilter = ''
+    )
+
+    $cargoArguments = @(
+        'test', '--color', 'never', '--manifest-path', 'src-tauri/Cargo.toml',
+        '-p', $Package, '--lib'
+    )
+    if ($TestFilter) { $cargoArguments += $TestFilter }
+    $cargoArguments += @('--', '--list')
+    $output = & cargo @cargoArguments 2>&1
+    $exitCode = $LASTEXITCODE
+    $text = ($output | Out-String)
+    $text
+    if ($exitCode -ne 0) {
+        throw "$Label failed with exit code $exitCode"
+    }
+    $listedCounts = @(
+        [regex]::Matches($text, '(?m)^[ \t]*([0-9]+) tests?,[ \t]+[0-9]+ benchmarks?[ \t]*\r?$') |
+            ForEach-Object { [int]$_.Groups[1].Value }
+    )
+    if ($listedCounts.Count -eq 0 -or ($listedCounts | Measure-Object -Sum).Sum -le 0) {
+        throw "$Label listed zero tests or produced no recognized libtest count"
+    }
+}
+
 function Invoke-CheckedNative {
     param(
         [Parameter(Mandatory = $true)][string]$Label,
@@ -219,6 +271,8 @@ These tests are additional to Appendix A's frozen 143. Before extraction use the
 
 `analysis_wire_contract_serializes_commands_events_and_errors_unchanged` is a Vitest title in `analysis-application-contract.test.ts`, not a Rust identity. `youtube_corpus_mode_parses_wire_values_and_defaults` already exists and remains part of Appendix A; it is rerun rather than counted as new.
 
+Every `Assert-ExactRustRuntimeRed` is a runtime RED, never a compile RED. Before invoking it, add the minimum compiling types, signatures, default/dummy behavior, and test double required by that one case, even when the full API contract is documented in a later numbered step of the same checkpoint. The test must compile, execute exactly once, and fail on its unique runtime marker; then implement that case GREEN before adding the next case. Step numbering groups the final responsibilities and does not authorize testing against an undefined API.
+
 During preparation, use the helper with a concrete identity from the task, for example:
 
 ```powershell
@@ -280,7 +334,7 @@ Assert-CleanWorktree 'Phase 7 start'
 $analysisFiles = Get-ChildItem -LiteralPath src-tauri/src/analysis -Recurse -File -Filter '*.rs'
 $analysisLines = ($analysisFiles | ForEach-Object { @(Get-Content -LiteralPath $_.FullName).Count } | Measure-Object -Sum).Sum
 "files=$($analysisFiles.Count) lines=$analysisLines"
-Invoke-CheckedNative 'baseline analysis identity list' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib 'analysis::' -- --list }
+Invoke-NonEmptyRustTestList -Label 'baseline analysis identity list' -Package extractum -TestFilter 'analysis::'
 ```
 
 Expected before new tests: clean worktree, approval commit is an ancestor, `54` Rust files, `13,187` physical lines, and exactly `143` `analysis::` test identities. If source has changed since approval, refresh the non-normative line estimate but do not silently alter Appendix A's 95/48 identity partition.
@@ -819,7 +873,9 @@ Assert-CleanWorktree 'Checkpoint 2 commit'
 
 - [ ] **Step 1: Define the owned corpus ABI and make the existing loader its app adapter.**
 
-Create `report/tests/corpus_port.rs` and add the minimal compiling port seam first. Process one test at a time; each assertion contains the exact unique marker below, reaches `running 1 test`, turns GREEN before the next test is written, and never shares a compile failure with another case:
+Create `report/tests/corpus_port.rs` and add the minimal compiling port seam first. Before the first RED, add the compiling skeleton of every CP3 port/execution signature referenced by these cases, including signatures whose normative contract appears later in the checkpoint; an undefined API is not an acceptable RED. This step also owns the stateful fake reader used by all three cases: it returns distinct message sets for its first and second calls, records both requests, and can return empty/error B. Assert exactly two calls; A controls synchronous acceptance and the exact later `Preflight passed: ...` started message; B alone is persisted/reloaded and controls chunk/map/reduce/trace. Empty/error B publishes `started/load_items` first, then preserves the current capture-failed status/event/error text.
+
+Process one test at a time; each assertion contains the exact unique marker below, reaches `running 1 test`, turns GREEN before the next test is written, and never shares a compile failure with another case:
 
 ```powershell
 Assert-ExactRustRuntimeRed extractum 'analysis::report::tests::corpus_port::report_execution_uses_distinct_preflight_and_capture_corpus_reads' 'src-tauri/src/analysis/report/tests/corpus_port.rs' 'RED: CP3 distinct corpus reads'
@@ -1132,17 +1188,15 @@ foreach ($testName in $fixtureSnapshotTests) {
 
 Retarget every affected `analysis-redesign-safety-contract` selector now: its explicit `before` path is the prepared corpus/store portable filename, and its `after` path is the final crate-relative filename. Do not wait for Task 7 or delete an assertion during the split.
 
-- [ ] **Step 6: RED/GREEN the independent A/B behavior.**
+- [ ] **Step 6: Re-run the independent A/B regression set.**
 
-Add a stateful fake reader that returns distinct message sets for its first and second calls, records both requests, and can return empty/error B. Run these exact tests under `extractum`:
+The stateful fake and all three runtime RED/GREEN cases were completed in Step 1. After the intervening corpus/store seam work, re-run these exact tests under `extractum` as regressions:
 
 ```text
 report_execution_uses_distinct_preflight_and_capture_corpus_reads
 started_load_items_uses_preflight_summary_before_empty_capture_failure
 started_load_items_uses_preflight_summary_before_error_capture_failure
 ```
-
-Assert exactly two calls; A controls synchronous acceptance and the exact later `Preflight passed: ...` started message; B alone is persisted/reloaded and controls chunk/map/reduce/trace. Empty/error B must publish `started/load_items` first, then preserve the current capture-failed status/event/error text.
 
 ```powershell
 $checkpoint3Green = @(
@@ -1158,9 +1212,9 @@ foreach ($testName in $checkpoint3Green) {
 - [ ] **Step 7: Run all retained live/scope/label witnesses.**
 
 ```powershell
-Invoke-CheckedNative 'Checkpoint 3 live corpus tests' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib 'analysis::corpus::tests::live::' -- --nocapture }
-Invoke-CheckedNative 'Checkpoint 3 scope tests' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib 'analysis::corpus::tests::source_resolution::' -- --nocapture }
-Invoke-CheckedNative 'Checkpoint 3 read-model tests' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib 'analysis::store::tests::read_model::' -- --nocapture }
+Invoke-NonEmptyRustSuite -Label 'Checkpoint 3 live corpus tests' -Package extractum -TestFilter 'analysis::corpus::tests::live::'
+Invoke-NonEmptyRustSuite -Label 'Checkpoint 3 scope tests' -Package extractum -TestFilter 'analysis::corpus::tests::source_resolution::'
+Invoke-NonEmptyRustSuite -Label 'Checkpoint 3 read-model tests' -Package extractum -TestFilter 'analysis::store::tests::read_model::'
 $projectDataRangeWitnesses = @(
     'projects::data_range::tests::project_data_range_returns_nulls_for_empty_project',
     'projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds',
@@ -1180,7 +1234,7 @@ Invoke-CheckedNative 'Checkpoint 3 package check' { cargo check --manifest-path 
 Invoke-CheckedNative 'Checkpoint 3 package tests' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets }
 ```
 
-Confirm each filtered selection is non-empty. Update roadmap and shell-cap to `preparation Checkpoint 3 retained` only after green.
+The helper makes every filtered selection fail closed when it executes zero tests. Update roadmap and shell-cap to `preparation Checkpoint 3 retained` only after green.
 
 - [ ] **Step 8: Commit the green checkpoint.**
 
@@ -1288,7 +1342,7 @@ Keep this in the single approved Checkpoint 4 commit: the owned runtime signatur
 
 - [ ] **Step 2: Define typed synchronous events.**
 
-Create `report/tests/runtime.rs` and the new chat test around a minimal compiling runtime seam. Process one case at a time; require its unique runtime marker and exact GREEN before adding the next test:
+Create `report/tests/runtime.rs` and the new chat test around a minimal compiling runtime seam. This step owns the four tests below and their minimal recording sink/runtime fixtures. Before each RED, add the compiling skeleton of every sink, ticket, and execution signature that case references from Steps 2–5; no case may use an undefined later API. Process one case at a time; require its unique runtime marker and exact GREEN before adding the next test:
 
 ```powershell
 Assert-ExactRustRuntimeRed extractum 'analysis::report::tests::runtime::report_execution_publishes_typed_events_in_existing_order' 'src-tauri/src/analysis/report/tests/runtime.rs' 'RED: CP4 report event order'
@@ -1493,9 +1547,9 @@ impl AnalysisReportCancellationWait {
 
 `prepare_report_run_cancellation_wait` is awaited before `tokio::spawn`, captures the existing child token inside an opaque non-serializable ticket, and returns `None` if the run has no token. The app then moves the armed ticket into the fixture waiter task and awaits `cancelled()`. This preserves the current capture-before-spawn race guarantee even if cancellation and active-state removal happen before the spawned task is first polled. The token and token map never cross the boundary. Keep `is_report_run_cancelled`, `report_run_child_token`, and `ensure_report_run_token` crate-private. Migrate `spawn_fixture_cancellation_waiters` and its frozen waiter test to this exact handshake before the move.
 
-- [ ] **Step 6: RED/GREEN runtime behavior.**
+- [ ] **Step 6: Re-run runtime behavior after capability rewiring.**
 
-Add the first four tests below and run them exactly. The fifth (`chat_profile_resolution_failure_is_async_after_request_id`) was added in Checkpoint 1 and is an explicit regression rerun, not a duplicate test:
+Re-run the four tests introduced and made GREEN in Step 2 after Steps 3–5 are complete. The fifth (`chat_profile_resolution_failure_is_async_after_request_id`) was added in Checkpoint 1 and is an explicit regression rerun, not a duplicate test or deferred addition:
 
 ```text
 report_execution_publishes_typed_events_in_existing_order
@@ -1523,16 +1577,16 @@ foreach ($testName in $checkpoint4Green) {
 - [ ] **Step 7: Run the checkpoint and commit.**
 
 ```powershell
-Invoke-CheckedNative 'Checkpoint 4 report tests' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib 'analysis::report::tests::' -- --nocapture }
-Invoke-CheckedNative 'Checkpoint 4 chat tests' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib 'analysis::chat::tests::' -- --nocapture }
-Invoke-CheckedNative 'Checkpoint 4 state tests' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib 'analysis::state::tests::' -- --nocapture }
+Invoke-NonEmptyRustSuite -Label 'Checkpoint 4 report tests' -Package extractum -TestFilter 'analysis::report::tests::'
+Invoke-NonEmptyRustSuite -Label 'Checkpoint 4 chat tests' -Package extractum -TestFilter 'analysis::chat::tests::'
+Invoke-NonEmptyRustSuite -Label 'Checkpoint 4 state tests' -Package extractum -TestFilter 'analysis::state::tests::'
 Invoke-CheckedNative 'Checkpoint 4 source contracts' { npm.cmd run test -- src/lib/analysis-application-contract.test.ts src/lib/analysis-redesign-safety-contract.test.ts src/lib/llm-crate-boundary-contract.test.ts src/lib/prompt-pack-crate-boundary-contract.test.ts }
 Invoke-CheckedNative 'Checkpoint 4 format' { cargo fmt --manifest-path src-tauri/Cargo.toml --all }
 Invoke-CheckedNative 'Checkpoint 4 package check' { cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets }
 Invoke-CheckedNative 'Checkpoint 4 package tests' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets }
 ```
 
-Confirm each selection is non-empty. Update roadmap and shell-cap to `preparation Checkpoint 4 retained`, run the shell-cap contract, inspect, and commit:
+The helper makes every filtered selection fail closed when it executes zero tests. Update roadmap and shell-cap to `preparation Checkpoint 4 retained`, run the shell-cap contract, inspect, and commit:
 
 ```powershell
 Invoke-CheckedNative 'Checkpoint 4 status contract' { npm.cmd run test -- src/lib/crate-extraction-shell-cap-contract.test.ts }
@@ -2307,7 +2361,7 @@ Scan crate tests separately rather than ignoring all `#[cfg(test)]`. Foreign-tab
 ```powershell
 Invoke-CheckedNative 'Checkpoint 5 contracts' { npm.cmd run test -- src/lib/analysis-application-contract.test.ts src/lib/analysis-migration-fixture-contract.test.ts src/lib/analysis-redesign-safety-contract.test.ts src/lib/prompt-pack-crate-boundary-contract.test.ts }
 Invoke-CheckedNative 'Checkpoint 5 portable-source contract' { npm.cmd run test -- src/lib/analysis-application-contract.test.ts -t 'keeps every mechanical-move source portable before extraction' }
-Invoke-CheckedNative 'Checkpoint 5 identity list' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib 'analysis::' -- --list }
+Invoke-NonEmptyRustTestList -Label 'Checkpoint 5 identity list' -Package extractum -TestFilter 'analysis::'
 Invoke-CheckedNative 'Checkpoint 5 format' { cargo fmt --manifest-path src-tauri/Cargo.toml --all }
 Invoke-CheckedNative 'Checkpoint 5 package tests' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets }
 Invoke-CheckedNative 'Checkpoint 5 package check' { cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets }
@@ -2699,8 +2753,8 @@ Expected: exact manifest/lock roots, fixture owner/root, public API, six-table S
 - [ ] **Step 9: Prove exact post-move inventories.**
 
 ```powershell
-Invoke-CheckedNative 'post-move crate identity list' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum-analysis --lib -- --list }
-Invoke-CheckedNative 'post-move app identity list' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib 'analysis::' -- --list }
+Invoke-NonEmptyRustTestList -Label 'post-move crate identity list' -Package extractum-analysis
+Invoke-NonEmptyRustTestList -Label 'post-move app identity list' -Package extractum -TestFilter 'analysis::'
 ```
 
 The boundary contract must find all 95 frozen crate identities under their final prefixes and all 48 retained identities under `analysis::`, each exactly once. New tests are reported separately.
@@ -2858,8 +2912,8 @@ Invoke-CheckedNative 'completion boundary contracts' { npm.cmd run test -- src/l
 - [ ] **Step 2: Reconfirm exact package ownership and package gates.**
 
 ```powershell
-Invoke-CheckedNative 'completion crate identity list' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum-analysis --lib -- --list }
-Invoke-CheckedNative 'completion app identity list' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib 'analysis::' -- --list }
+Invoke-NonEmptyRustTestList -Label 'completion crate identity list' -Package extractum-analysis
+Invoke-NonEmptyRustTestList -Label 'completion app identity list' -Package extractum -TestFilter 'analysis::'
 Invoke-CheckedNative 'completion crate check' { cargo check --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets }
 Invoke-CheckedNative 'completion crate tests' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets }
 Invoke-CheckedNative 'completion app check' { cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets }
