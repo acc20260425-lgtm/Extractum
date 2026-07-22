@@ -32,6 +32,16 @@ redesign analysis UX, prompts, map/reduce behavior, persistence values, IPC,
 source ingestion, schema, or task supervision. Preparatory refactors are made
 while code is still application-owned; the final physical move is mechanical.
 
+Phase 7 is justified primarily by domain ownership, not by a promised
+compile-time reduction. `extractum-analysis` still compiles against
+`extractum-llm` and the workspace SQLx feature set, so its focused check may
+show little or no timing improvement. The boundary remains valuable at zero
+timing gain because it isolates the six-table analysis domain and 95 portable
+tests, removes Tauri and foreign-schema knowledge from the engine, prevents a
+future sources-to-analysis reverse dependency, and gives analysis changes a
+package-scoped correctness loop. Advisory timing records what happened; it is
+not the business case or a retention threshold for this phase.
+
 ## Decision
 
 The selected design is a SQL-owning analysis crate behind a private
@@ -39,7 +49,10 @@ application facade:
 
 1. `extractum-analysis` owns analysis behavior and all runtime SQL for exactly
    six analysis tables;
-2. the app obtains and passes `SqlitePool`; migrations remain app-owned;
+2. the app passes `SqlitePool` to ordinary app-facing storage operations and a
+   borrowed `&mut SqliteConnection` to crate participants in the closed set of
+   shared-transaction workflow families defined below;
+   migrations remain app-owned;
 3. the app resolves source, source-group, and project scopes into an owned
    `ResolvedAnalysisScope` value;
 4. the app implements a narrow `AnalysisCorpusReader` that returns owned
@@ -127,7 +140,9 @@ The design adopts the audit's value/capability/port rule:
 
 - pass resolved scope and resolved profile as owned values;
 - pass `SqlitePool`, `LlmSchedulerState`, and `AnalysisState` as concrete
-  capabilities used by the domain;
+  capabilities used by ordinary domain calls, with borrowed
+  `SqliteConnection` only for the enumerated app-owned shared-transaction
+  workflow families;
 - use ports only for repeated app-owned corpus and event side effects;
 - keep Tauri and cross-domain coordination in the application.
 
@@ -264,6 +279,34 @@ starts the SQLx transaction, calls a curated analysis transaction function to
 delete project runs, deletes project-owned rows, and commits. This preserves
 atomicity without leaving raw analysis-table SQL in `projects`.
 
+### SQL capability forms
+
+Ordinary app-facing analysis storage functions accept `&SqlitePool`. Private
+helpers used wholly inside a crate-owned transaction are not restricted by
+that public boundary rule. Exactly four cross-boundary workflow families
+instead require one explicit app-owned SQLite transaction:
+
+1. analysis run reads: list/search/active summaries and detail reads used by
+   get, trace, delete, chat, and lifecycle paths, combined with foreign label
+   matching or enrichment;
+2. analysis source-group membership combined with foreign source titles and
+   item counts for command and NotebookLM responses;
+3. project-list rows/material counts combined with batch analysis-run status,
+   last-run, and active-run aggregates;
+4. project deletion across analysis-owned and project-owned rows.
+
+Every curated crate participant used by those workflows accepts a borrowed
+`&mut sqlx::SqliteConnection` as its first argument. A pool-taking overload,
+generic repository, or internal connection acquisition is forbidden for these
+paths. Each app coordinator calls `pool.begin()`, passes
+`&mut *transaction` through every app/crate SQL step on the same connection,
+and alone commits or rolls back. A bare acquired connection with autocommit
+statements is insufficient. Crate participants neither begin nor complete the
+transaction and must not call the pool. The implementation plan must enumerate
+the participant functions under these four closed workflow families, and the
+source contract must pin the executor-borrowing signature and call chain; a
+fifth workflow requires a design amendment.
+
 ## Resolved Scope Boundary
 
 The app resolves a source, source group, or project into an owned value before
@@ -278,7 +321,6 @@ pub struct ResolvedAnalysisScope {
     source_kind: AnalysisSourceKind,
     source_ids: Vec<i64>,
     scope_label_snapshot: String,
-    skipped_unlinked_playlist_items: usize,
 }
 ```
 
@@ -289,6 +331,19 @@ resolution and for groups only during group create/update, exactly as today.
 Report start trusts an already-persisted group's invariant and must not add a
 new rejection path for a legacy or corrupt mixed group. Accessors expose only
 values needed by execution and persistence.
+
+`skipped_unlinked_playlist_items` does not cross this boundary: current
+production execution and persistence never read it. The app resolver keeps it
+in an app-private resolution result alongside `ResolvedAnalysisScope` so the
+existing playlist-expansion characterization can still assert the diagnostic
+count. Only the scope value is passed to the crate or execution ticket.
+
+```rust
+struct AppAnalysisScopeResolution {
+    scope: ResolvedAnalysisScope,
+    skipped_unlinked_playlist_items: usize,
+}
+```
 
 The app resolver owns:
 
@@ -306,7 +361,10 @@ The crate owns source-group IDs, names, declared source type, membership rows,
 and group CRUD. Before a group write, the app resolves and validates the
 foreign source identities, then passes typed member values to the crate. When
 reading a group, the crate returns owned membership IDs and the app enriches
-the IPC DTO. The serialized group response remains unchanged.
+the IPC DTO. Group/member reads and foreign title/item-count enrichment run in
+one explicit app-owned read transaction using the connection-participant API;
+this applies to command responses and NotebookLM composition. The serialized
+group response remains unchanged.
 
 ## Corpus Read Boundary
 
@@ -361,7 +419,8 @@ enrichment and per-search-term matching:
 
 Fetching a broad page and filtering it in memory after `LIMIT` is forbidden.
 Foreign matching, the crate-owned run query, and returned-label enrichment run
-on the same app-opened SQLite read transaction/connection. This preserves the
+inside the same explicit app-opened SQLite read transaction. No step may
+acquire from the pool or fall back to autocommit. This preserves the
 single-snapshot behavior of the current JOIN if a source or project is renamed
 or deleted concurrently.
 
@@ -408,9 +467,12 @@ messages. The crate then preserves the current pipeline:
 9. persist the final report/trace/status before emitting `completed`;
 10. route typed terminal outcomes and always remove active state.
 
-The two reader calls are intentional. Preflight validates read A; the frozen
-snapshot and all later report/chat/trace behavior use read B. A one-read
-optimization is a non-goal.
+The two reader calls are intentional. Read A determines synchronous preflight
+and its summary remains in the execution ticket for the existing post-spawn
+`started/load_items` message. The frozen snapshot, chunking, map/reduce, and
+trace use read B. A one-read optimization is a non-goal. The crate must not
+cache or reuse corpus A as corpus B or assume `read A == read B`; the port is
+explicitly allowed to return different corpus contents on the second call.
 
 ## Chat Data Flow
 
@@ -464,7 +526,13 @@ The app implementation maps them to the existing payload DTOs and channels:
 
 The sink is infallible at the domain boundary because current Tauri emit
 errors are ignored. No event failure changes persisted status or terminal
-cleanup.
+cleanup. The synchronous ABI preserves event ordering but grants no permission
+to wait. Each app adapter method is limited to typed in-memory payload mapping
+followed by one best-effort `AppHandle::emit` call. The source contract rejects
+`await`, `block_on`, pool/SQL access, sleep/retry, explicit locks or channels,
+spawn/join, file/network I/O, and unapproved helper delegation in this thin
+adapter. This pins a bounded, non-waiting call shape rather than claiming a
+static test can prove a runtime latency bound.
 
 The following remain exact:
 
@@ -542,7 +610,10 @@ modules or internal rows.
 - `get_project_data_range` uses the typed corpus mode and app scope/source
   adapter; it does not import SQL helpers from analysis.
 - project-list run aggregates come from a batch analysis API and are composed
-  with project rows app-side.
+  with project rows app-side. The app coordinator opens one explicit read
+  transaction, reads project rows and material counts, passes the same
+  `&mut *transaction` to the crate batch-aggregate participant, and composes
+  the response from that single snapshot.
 - project deletion calls a transaction-scoped analysis delete API so its
   current cross-domain transaction remains atomic.
 
@@ -572,6 +643,12 @@ contains only the existing coarse `error_kind`, never raw error text. The app
 combines it with the other diagnostic domains.
 
 ## Command and IPC Ownership
+
+Command counts use one fixed vocabulary: 21 release commands in the analysis
+module plus three release project commands equal 24 analysis-facing release
+commands; three dev fixture commands are separate, for 27 entries in this
+inventory. Project deletion and the other named cross-domain consumers are
+covered compatibility paths, not additional members of the 27-command count.
 
 All 21 release analysis commands remain app-owned:
 
@@ -619,6 +696,12 @@ Characterization must prove:
 - Telegram and YouTube refs keep the same JSON shape;
 - invalid zstd and invalid JSON retain their current internal-error mapping;
 - compression errors do not change persisted or emitted text.
+
+The two frozen test identities `trace_data_roundtrips_through_zstd` and
+`decode_trace_data_returns_typed_internal_for_invalid_zstd` keep their current
+names. They describe the persisted wire codec, not direct dependency
+ownership; renaming them during the mechanical move would violate Appendix A
+without adding coverage.
 
 After confirming there is no other direct app use, the app's direct `zstd`
 dependency is removed. The workspace dependency remains because
@@ -726,6 +809,18 @@ disposition is:
 Production logic is moved, not copied. Temporary compatibility shims may exist
 only in a named green checkpoint and must be gone at final acceptance.
 
+`mod.rs` remains a private compatibility facade, but
+`src-tauri/src/analysis/**` is not expected to become a thin or empty facade
+directory. It remains the substantial app-owned integration subsystem for all
+analysis Tauri commands, report/chat spawn and profile coordination, the Tauri
+event sink, foreign scope/corpus/label SQL, dev fixtures, and 48 app-owned test
+identities (30 integration plus 18 fixtures). From the current inventory of 54
+files and 13,187 lines and the ownership map above, the planning estimate is
+roughly 30–36 Rust files and 6,000–7,000 physical lines remaining app-side
+(about 45–53% of current analysis LOC). Mixed-file splits may consolidate or
+add adapter modules, so the implementation plan's exact 54-file disposition
+map, not this estimate, is normative.
+
 ## Frozen Rust-Test Ownership
 
 The baseline is 143 logical Cargo identities, keyed by full module path and
@@ -758,9 +853,18 @@ a test is not a move.
 
 ## Crate-Private Test Schema Fixture
 
-The crate may define one private `#[cfg(test)] test_schema` module. It embeds
-canonical SQL with `include_str!` from the application migration directory;
-it does not copy SQL or import the app migration runner.
+Preparation defines one private `#[cfg(test)] test_schema` module at
+`src-tauri/src/analysis/test_schema.rs`; the mechanical move places it at
+`src-tauri/crates/extractum-analysis/src/test_schema.rs`. It embeds canonical
+SQL with `include_str!` from the application migration directory; it does not
+copy SQL or import the app migration runner.
+
+This is an intentional test-only layout dependency. The preparation file uses
+the exact relative root `../../migrations/`; the final crate file uses
+`../../../migrations/`. Those roots and every filename are pinned by the
+standing fixture contract. Moving or renaming the app migration directory
+therefore requires an explicit same-change fixture update and otherwise fails
+both the source contract and Rust compilation at `include_str!`.
 
 The exact ordered allowlist is the current non-Apalis prefix:
 
@@ -777,11 +881,35 @@ The exact ordered allowlist is the current non-Apalis prefix:
 11. `0011_prompt_pack_stage_browser_provenance.sql`
 12. `0012_projects_redesign.sql`
 
-A standing TypeScript contract parses `build_migrations()` up to, but not
-including, `apalis_sqlite_migrations()`, resolves each registration to its
-canonical SQL path, and requires exact ordered equality with this fixture
-allowlist. A new or reordered `0013` migration makes the contract RED until the
-fixture and consumed-shape characterizations are updated in the same change.
+For the analysis fixture, the fixture's Rust tuple/list is the single
+executable allowlist; the analysis TypeScript contract parses it rather than
+duplicating the 12 filenames. Parsing is fail-closed on duplicate entries,
+unrecognized syntax, or registry/fixture layout changes. The contract also
+parses `build_migrations()` up to, but not including,
+`apalis_sqlite_migrations()`, resolves each registration to its canonical SQL
+path, and requires exact ordered equality. A second assertion requires every
+allowlisted entry to have one `include_str!` and to be applied by the private
+fixture; the crate test then characterizes the consumed shapes after applying
+the whole list.
+
+Therefore any added, removed, or reordered non-Apalis registration, including
+a new `0013`, first makes registry parity RED, while an allowlist-only update
+leaves fixture wiring checks RED. Registry, allowlist, and include/application
+wiring must update atomically; consumed-shape characterizations must pass and
+change only when the migration changes a shape they consume. The existing
+prompt-pack parity contract covers the same registered non-Apalis prefix, so a
+registry or parsed migration/fixture layout change, including a migration
+directory move, must also leave that independently owned fixture and contract
+green in the same repository change.
+
+Checkpoint 5 creates the separately green standing contract
+`src/lib/analysis-migration-fixture-contract.test.ts`; parity protection does
+not wait for the intentionally RED crate-boundary contract in Checkpoint 6.
+The standing contract accepts exactly one fixture owner: the preparation path
+with `../../migrations/` or the final crate path with
+`../../../migrations/`. Both paths present, neither path present, a mismatched
+root, or an unparseable registry/fixture is RED. Checkpoint 7 moves the fixture
+and switches this same contract atomically without weakening it.
 
 The fixture is test-only and is not a second production migration engine.
 Minimal hand-written schemas are allowed only in explicitly named isolated
@@ -804,12 +932,32 @@ A new `src/lib/analysis-crate-boundary-contract.test.ts` must verify:
 - the exact six-table owned allowlist;
 - app ownership of migrations, `analysis_documents`, commands, event adapter,
   scope/corpus adapter, and dev fixtures;
+- ordinary crate storage APIs taking `&SqlitePool` versus the curated
+  transaction-participant functions for exactly the four closed workflow
+  families named under SQL capability forms, each taking
+  `&mut SqliteConnection` first; no participant acquires a pool/connection or
+  begins, commits, or rolls back;
+- app coordinators for run reads/search and label enrichment, group/member
+  enrichment, project-list aggregate composition, and project deletion; each
+  calls `pool.begin()`, passes the same `&mut *transaction` through every
+  app/crate SQL step, and alone commits or rolls back, with no participant-side
+  pool/acquire/autocommit fallback;
+- `skipped_unlinked_playlist_items` confined to the app-private resolution
+  wrapper and absent from crate scope/ticket values;
 - curated `lib.rs`, no public modules/globs/test support, and the exhaustive
   visibility-widening allowlist;
 - moved-not-copied production files and exact 95/48 test ownership;
-- exact ordered migration-fixture parity and consumed schema shapes;
+- the separately green standing migration-fixture contract, its
+  single-authored analysis-fixture allowlist, exact owner-relative include
+  root, ordered
+  registry parity, one include/application per entry, and consumed schema
+  shapes;
 - no reverse dependency from lower crates;
 - compression ownership and removal of the app's direct `zstd` root;
+- the non-blocking `AnalysisEventSink` adapter rule;
+- a named stateful-reader characterization proving distinct read A/read B
+  semantics and forbidding reuse of corpus A as corpus B while retaining the
+  A-derived started-event summary;
 - unchanged event channels, payload fields, command names/signatures, and
   `AppError` JSON.
 
@@ -871,7 +1019,12 @@ buildable and leaves a useful retained improvement if the extraction stops.
   and `AnalysisCorpusReader`;
 - move foreign SQL and source/project/playlist interpretation into app
   adapters;
-- preserve filter-before-limit, exact ordering, and both corpus reads.
+- preserve filter-before-limit, exact ordering, and both corpus reads;
+- add a stateful fake that returns different A and B corpora: A drives
+  synchronous preflight and the exact A-derived `started/load_items` message;
+  B alone is persisted/reloaded and drives chunk/map/reduce/trace; an
+  empty/error B emits that started event first and then retains capture-failed
+  behavior.
 
 ### Checkpoint 4 — runtime seam
 
@@ -885,8 +1038,10 @@ buildable and leaves a useful retained improvement if the extraction stops.
 - isolate the six-table store and transaction APIs;
 - replace projects, NotebookLM, account-deletion, and diagnostic table access
   with curated analysis APIs while preserving cross-domain transactions;
-- establish the private canonical migration fixture and standing parity test;
-- leave all 143 tests green under the application package.
+- establish the private canonical migration fixture and green
+  `analysis-migration-fixture-contract.test.ts` standing parity test;
+- leave all 143 baseline identities and every new preparation test green under
+  the application package.
 
 ### Checkpoint 6 — intentionally RED boundary contract
 
@@ -941,7 +1096,8 @@ cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib 'analysis::' 
 Focused exact tests must cover at least:
 
 - legacy/invalid trace decompression;
-- live corpus filtering, order, migrated history, and port behavior;
+- live corpus filtering, order, migrated history, and distinct A/B port
+  behavior including empty/error B;
 - snapshot roundtrip and no-live-fallback;
 - run read-model filtering and scope labels;
 - report cancellation and terminal cleanup;
@@ -976,6 +1132,8 @@ target or measurement worktree.
 
 For Phase 7, compile-time measurement is reduced to the duration of one
 ordinary mandatory workspace check. It is recorded as advisory evidence only.
+No focused-loop speedup is promised; zero improvement or a slower result does
+not invalidate the ownership boundary or trigger rollback.
 
 There is no focused probe, discarded warm-up, sample series, source mutation,
 quiet-window scan, process coordinator, stability rule, retry, A/B harness, or
@@ -1054,22 +1212,34 @@ Phase 7 may be recorded as implemented and retained only when:
 3. production crate code contains no Tauri, `AppHandle`, app pool lookup,
    application import, foreign-table SQL, direct zstd, or test support;
 4. all runtime SQL for the exact six owned tables resides in the crate, with
-   app-owned cross-domain transactions using curated transaction APIs;
+   ordinary APIs taking `&SqlitePool`; transaction participants are limited to
+   the four closed workflow families, borrow `&mut SqliteConnection` first,
+   and never own transaction lifecycle, while every corresponding app
+   coordinator begins and threads one `&mut *transaction` through every SQL
+   step;
 5. migrations and `analysis_documents` remain app/source-owned;
 6. scope resolution and corpus loading use owned values/ports and preserve
    provider validation, playlist expansion, ordering, refs, filters, and both
-   live reads;
+   independent live reads without caching A or assuming A equals B; A still
+   supplies the started-event preflight summary, B remains authoritative for
+   captured/executed content, and the skipped-playlist diagnostic remains
+   app-private;
 7. report/chat acceptance timing, profile timing, detached spawn behavior,
    LLM priorities, request IDs, event ordering, persistence ordering,
-   cancellation, cleanup, and serialized errors remain unchanged;
+   cancellation, cleanup, serialized errors, and the bounded non-waiting event
+   adapter shape remain unchanged;
 8. run/group foreign labels and multi-term search retain filter-before-limit
-   behavior without foreign joins in the crate;
+   behavior without foreign joins in the crate; run reads, group enrichment,
+   and project-list aggregate composition each execute within one explicit
+   app-owned read transaction, while project deletion remains one explicit
+   app-owned write transaction;
 9. trace compression uses `extractum-core` and remains compatible with
    existing bytes and error mapping;
 10. public API, visibility, manifest, lockfile, reverse-edge, and
     moved-not-copied contracts pass;
-11. the private test fixture uses canonical SQL and remains in exact ordered
-    parity with the registered non-Apalis migration prefix;
+11. the private test fixture uses canonical SQL and the correct owner-relative
+    include root; the green analysis and existing prompt-pack standing
+    contracts remain in ordered parity with the registered non-Apalis prefix;
 12. crate, immediate-app, workspace, repository, release, and startup gates
     pass;
 13. one ordinary workspace timing result is recorded as advisory evidence,
@@ -1083,22 +1253,28 @@ The implementation plan may be written only after this specification is
 reviewed and approved. It must include:
 
 - the exact Appendix A inventory and final Cargo paths;
-- an exact 54-file production/test disposition map;
+- an exact 54-file production/test disposition map plus a refreshed,
+  non-normative retained-app file/line estimate;
 - all 21 release analysis commands, three project commands, three dev commands,
   and cross-domain integration points;
 - the exact public root allowlist and every visibility widening;
-- the exact six-table allowlist, foreign-table denylist, transaction API map,
-  and migration-fixture allowlist/parity parser;
+- the exact six-table allowlist, foreign-table denylist, and a
+  pool-versus-borrowed-connection transaction API map that enumerates every
+  participant function and app coordinator under the four closed workflow
+  families, plus the separately green migration-fixture allowlist/parity
+  contract;
 - final signatures for `ResolvedAnalysisScope`, `AnalysisCorpusReader`,
   `AnalysisEventSink`, preparation/execution tickets, foreign label inputs,
   state lifecycle APIs, and constructors;
-- named RED/GREEN tests and the required `## Rust Verification Loops` section;
+- named RED/GREEN tests, including the stateful distinct-A/B reader test, and
+  the required `## Rust Verification Loops` section;
 - separately green preparation commits, one RED contract commit, one
   mechanical move commit, and the pause/rollback ladder;
 - exact manifest features, workspace allowlist updates, and `Cargo.lock`
   assertions;
 - the single ordinary advisory timing capture, full completion gates,
-  release/startup evidence, verification document, and roadmap update.
+  release/startup evidence, a verification document with the measured final
+  retained app file/line count, and the roadmap update.
 
 The existence of this specification does not authorize implementation.
 Execution begins only after explicit owner instruction following plan review.
