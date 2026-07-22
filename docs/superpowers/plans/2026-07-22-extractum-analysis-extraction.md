@@ -180,6 +180,9 @@ function Get-Task7AllowedPaths {
             Where-Object { $_ -match '(\.rs|\.ts|\.toml|Cargo\.lock)$' } |
             Sort-Object -Unique
     )
+    # 145 is the frozen unique union of whole-move sources/destinations,
+    # split-move sources/destinations, retained app paths, and singletons.
+    # Change it only together with those exact arrays and the disposition map.
     if ($paths.Count -ne 145) { throw "Task 7 exact allowlist drifted: expected 145 paths, found $($paths.Count)" }
     $paths
 }
@@ -260,11 +263,11 @@ Only the explicit workspace `cargo check` above is timed once for advisory evide
 - Create: `src-tauri/src/analysis/tests_application.rs`
 - Modify: `src-tauri/src/analysis/mod.rs`
 - Modify: `src-tauri/src/analysis/report/tests/lifecycle.rs`
-- Modify: `src-tauri/src/projects/mod.rs`
-- Modify: `src-tauri/src/projects/read_model.rs`
-- Modify: `src-tauri/src/account_deletion.rs`
-- Modify: `src-tauri/src/diagnostics/database.rs`
-- Modify: `src-tauri/src/notebooklm_export/query.rs`
+- Verify only: `src-tauri/src/projects/mod.rs`
+- Verify only: `src-tauri/src/projects/read_model.rs`
+- Verify only: `src-tauri/src/account_deletion.rs`
+- Verify only: `src-tauri/src/diagnostics/database.rs`
+- Verify only: `src-tauri/src/notebooklm_export/query.rs`
 - Modify: `docs/superpowers/specs/2026-07-17-crate-roadmap.md`
 
 - [ ] **Step 1: Capture identity and verify the frozen baseline.**
@@ -450,11 +453,6 @@ $task1Files = @(
     'src-tauri/src/analysis/tests_application.rs',
     'src-tauri/src/analysis/mod.rs',
     'src-tauri/src/analysis/report/tests/lifecycle.rs',
-    'src-tauri/src/projects/mod.rs',
-    'src-tauri/src/projects/read_model.rs',
-    'src-tauri/src/account_deletion.rs',
-    'src-tauri/src/diagnostics/database.rs',
-    'src-tauri/src/notebooklm_export/query.rs',
     'docs/superpowers/specs/2026-07-17-crate-roadmap.md'
 )
 Add-ScopedChanges -Label 'Checkpoint 1' -Allowed $task1Files
@@ -490,6 +488,7 @@ Assert-CleanWorktree 'Checkpoint 1 commit'
 - Modify: `src-tauri/src/analysis/corpus/tests/preflight.rs`
 - Modify: `src-tauri/src/analysis/fixtures/tests/snapshot.rs`
 - Modify: `src-tauri/src/projects/mod.rs`
+- Modify: `src-tauri/src/projects/data_range.rs`
 - Create: `src-tauri/src/analysis/domain_portable.rs`
 - Create: `src-tauri/src/analysis/tests_portable.rs`
 - Modify: `src/lib/analysis-application-contract.test.ts`
@@ -627,6 +626,8 @@ pub fn resolve_analysis_telegram_history_scope(
 ) -> AppResult<(&'static str, bool)>;
 ```
 
+`AnalysisRunListFilters::for_project` is intentionally infallible: the app has already validated the project identity, and this constructor carries only that ID plus the fixed/clamped project-list limit. `for_analysis` remains fallible because it normalizes and validates user-supplied query/date/filter values.
+
 The report constructors accept the current common tail in this exact order: `period_from`, `period_to`, `output_language`, `prompt_template_id`, `model_override`, `profile_id`, `youtube_corpus_mode`, `include_migrated_history`. Fields remain private. All constructors validate period first and output language second; `from_command` then requires exactly one scope `Option` to be present and dispatches to the matching specialized constructor. It deliberately does not reject a zero or negative contained ID before `get_pool`; the later scope lookup/constructor preserves the current not-found/validation timing. `start_analysis_report` calls `from_command` before fallible `get_pool`; project entry points call their specialized constructor before their analysis pool/template step. No public unchecked constructor exists. Migrate every struct literal now, including project command consumers and test harnesses. Extend the constructor characterization to prove `Some(0)` survives this early phase while missing or multiple `Some` identities fail before pool access.
 
 - [ ] **Step 4: Introduce and validate `ResolvedAnalysisScope`.**
@@ -686,18 +687,11 @@ pub fn source_ids(&self) -> &[i64];
 pub fn scope_label_snapshot(&self) -> &str;
 ```
 
-Enforce exactly one positive scope identity, non-empty positive source IDs, stable de-duplication that preserves first-occurrence order, and a non-empty trimmed fallback label. Add a characterization using input `[20, 10, 20]` and require output `[20, 10]`; numerical sorting is forbidden. Keep this app-private wrapper outside the crate API:
-
-```rust
-struct AppAnalysisScopeResolution {
-    scope: ResolvedAnalysisScope,
-    skipped_unlinked_playlist_items: usize,
-}
-```
-
-The skipped count must not enter a report ticket or crate value.
+Enforce exactly one positive scope identity, non-empty positive source IDs, stable de-duplication that preserves first-occurrence order, and a non-empty trimmed fallback label. Add a characterization using input `[20, 10, 20]` and require output `[20, 10]`; numerical sorting is forbidden. Checkpoint 3 wraps this value in the exact app-private `AppAnalysisScopeResolution` seam defined there. The skipped playlist count must not enter a report ticket or crate value.
 
 Parsing database/app source strings into `AnalysisSourceKind` remains app-owned: only exact existing `telegram` and `youtube` values construct the enum, while unknown values retain the current path-specific validation/internal error instead of introducing an `Unknown` wire variant.
+
+Migrate `projects/data_range.rs` in this checkpoint rather than during the mechanical move. Parse `youtube_corpus_mode` through the typed `YoutubeCorpusMode` API and convert its storage `source_type` to `AnalysisSourceKind` app-side before calling `resolve_analysis_telegram_history_scope`; an unknown storage value retains this path's exact current validation/internal mapping rather than gaining a new enum variant or generic parser error. Preserve the current early migrated-history rejection for a non-Telegram or unmaterialized YouTube project; do not wait for the Checkpoint 3 resolver split to recover it. This step changes no SQL ownership and introduces no exported app helper.
 
 Move the eight frozen root domain tests from the mixed `mod.rs` test module into `tests_portable.rs`; keep command/foreign integration tests under the app module. Until extraction, the existing `#[cfg(test)] mod tests` in `analysis/mod.rs` contains exactly one `include!("tests_portable.rs")`, so identities remain `analysis::tests::<leaf>` and the staging file is not declared as a second module. Task 7 removes that include and moves the file to crate `tests.rs`. This is a test-file split only and preserves every Appendix A leaf name.
 
@@ -722,6 +716,19 @@ $checkpoint2Green = @(
     'analysis::corpus::tests::live::youtube_corpus_mode_parses_wire_values_and_defaults'
 )
 foreach ($testName in $checkpoint2Green) {
+    Invoke-ExactRustTest -Package extractum -TestName $testName
+}
+$projectDataRangeWitnesses = @(
+    'projects::data_range::tests::project_data_range_returns_nulls_for_empty_project',
+    'projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds',
+    'projects::data_range::tests::project_data_range_includes_telegram_migrated_history_when_requested',
+    'projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources',
+    'projects::data_range::tests::project_data_range_returns_nulls_for_unmaterialized_playlist_project',
+    'projects::data_range::tests::project_data_range_rejects_mixed_provider_project',
+    'projects::data_range::tests::project_data_range_rejects_migrated_history_for_unmaterialized_playlist_project',
+    'projects::data_range::tests::project_data_range_rejects_migrated_history_for_non_telegram'
+)
+foreach ($testName in $projectDataRangeWitnesses) {
     Invoke-ExactRustTest -Package extractum -TestName $testName
 }
 ```
@@ -758,6 +765,7 @@ $task2Files = @(
     'src-tauri/src/analysis/domain_portable.rs',
     'src-tauri/src/analysis/tests_portable.rs',
     'src-tauri/src/projects/mod.rs',
+    'src-tauri/src/projects/data_range.rs',
     'src/lib/analysis-application-contract.test.ts',
     'src/lib/analysis-redesign-safety-contract.test.ts',
     'src/lib/crate-extraction-shell-cap-contract.test.ts',
@@ -803,6 +811,7 @@ Assert-CleanWorktree 'Checkpoint 2 commit'
 - Modify: `src-tauri/src/analysis/report.rs`
 - Modify: `src-tauri/src/analysis/chat.rs`
 - Modify: `src-tauri/src/projects/mod.rs`
+- Modify: `src-tauri/src/projects/data_range.rs`
 - Modify: `src/lib/analysis-application-contract.test.ts`
 - Modify: `src/lib/analysis-redesign-safety-contract.test.ts`
 - Modify: `src/lib/crate-extraction-shell-cap-contract.test.ts`
@@ -949,6 +958,36 @@ Refactor the app resolver to return `AppAnalysisScopeResolution`. Preserve:
 - stable source ordering and current no-linked-video messages.
 
 The crate-facing report path receives only `ResolvedAnalysisScope`; `skipped_unlinked_playlist_items` remains app-private and appears only in the existing playlist characterization.
+
+Freeze this app-only seam; it is not part of the crate root allowlist:
+
+```rust
+pub(crate) struct AppAnalysisScopeResolution {
+    scope: ResolvedAnalysisScope,
+    skipped_unlinked_playlist_items: usize,
+}
+
+impl AppAnalysisScopeResolution {
+    pub(crate) fn scope(&self) -> &ResolvedAnalysisScope;
+    pub(crate) fn skipped_unlinked_playlist_items(&self) -> usize;
+    pub(crate) fn into_scope(self) -> ResolvedAnalysisScope;
+}
+
+pub(crate) async fn resolve_analysis_sources(
+    pool: &SqlitePool,
+    source_id: Option<i64>,
+    source_group_id: Option<i64>,
+    project_id: Option<i64>,
+) -> Result<AppAnalysisScopeResolution, AnalysisSourceResolutionError>;
+```
+
+Migrate `get_project_data_range_in_pool` to this prepared app resolver and the typed `ResolvedAnalysisScope`. Preserve its exact order: project existence, typed corpus-mode parse, empty-project `None/None`, early migrated-history rejection from project source types, app scope resolution, typed `NoLinkedYoutubeVideos` to `None/None`, typed history policy, then range SQL. In particular, do not move the early history check behind scope resolution: an unmaterialized YouTube playlist must retain its validation error rather than become an empty range.
+
+Callers that need diagnostics read `skipped_unlinked_playlist_items()` before consuming the wrapper. Report preparation then calls `into_scope()` to pass the owned scope into the crate ticket; `projects/data_range.rs` only borrows through `scope()`. Do not add `Clone` merely to escape the private wrapper.
+
+Remove the imported `push_analysis_document_kind_filter`. `projects/data_range.rs` keeps its app-owned `analysis_documents`/foreign range SQL and defines a private, fixed-alias `d` predicate builder that matches `AnalysisSourceKind::{Telegram, Youtube}` and uses `YoutubeCorpusMode::{includes_description, includes_comments}` to emit the exact current document-kind predicates. It has no `pub`, no `AppResult`, no dynamic table alias, and no crate/API exposure. Make the corpus reader's original predicate helper module-private in `analysis/corpus/live.rs` and remove its re-exports from `analysis/corpus.rs` and `analysis/mod.rs`; only `AppAnalysisCorpusReader` calls it.
+
+Add the standing case `keeps project data range on typed app scope without analysis SQL helper imports` to `analysis-application-contract.test.ts`. It requires the typed mode and app resolver, the typed `NoLinkedYoutubeVideos` branch without string matching, the private fixed-alias local predicate, and no import/re-export of the corpus SQL helper. The case remains GREEN before and after Task 7; it does not forbid app-owned `analysis_documents` SQL in this project adapter.
 
 - [ ] **Step 3: Replace the broad run JOIN with typed staged enrichment.**
 
@@ -1122,6 +1161,20 @@ foreach ($testName in $checkpoint3Green) {
 Invoke-CheckedNative 'Checkpoint 3 live corpus tests' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib 'analysis::corpus::tests::live::' -- --nocapture }
 Invoke-CheckedNative 'Checkpoint 3 scope tests' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib 'analysis::corpus::tests::source_resolution::' -- --nocapture }
 Invoke-CheckedNative 'Checkpoint 3 read-model tests' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib 'analysis::store::tests::read_model::' -- --nocapture }
+$projectDataRangeWitnesses = @(
+    'projects::data_range::tests::project_data_range_returns_nulls_for_empty_project',
+    'projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds',
+    'projects::data_range::tests::project_data_range_includes_telegram_migrated_history_when_requested',
+    'projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources',
+    'projects::data_range::tests::project_data_range_returns_nulls_for_unmaterialized_playlist_project',
+    'projects::data_range::tests::project_data_range_rejects_mixed_provider_project',
+    'projects::data_range::tests::project_data_range_rejects_migrated_history_for_unmaterialized_playlist_project',
+    'projects::data_range::tests::project_data_range_rejects_migrated_history_for_non_telegram'
+)
+foreach ($testName in $projectDataRangeWitnesses) {
+    Invoke-ExactRustTest -Package extractum -TestName $testName
+}
+Invoke-CheckedNative 'Checkpoint 3 data-range boundary contract' { npm.cmd run test -- src/lib/analysis-application-contract.test.ts -t 'keeps project data range on typed app scope without analysis SQL helper imports' }
 Invoke-CheckedNative 'Checkpoint 3 format' { cargo fmt --manifest-path src-tauri/Cargo.toml --all }
 Invoke-CheckedNative 'Checkpoint 3 package check' { cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets }
 Invoke-CheckedNative 'Checkpoint 3 package tests' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets }
@@ -1163,6 +1216,7 @@ $task3Files = @(
     'src-tauri/src/analysis/report.rs',
     'src-tauri/src/analysis/chat.rs',
     'src-tauri/src/projects/mod.rs',
+    'src-tauri/src/projects/data_range.rs',
     'src/lib/analysis-application-contract.test.ts',
     'src/lib/analysis-redesign-safety-contract.test.ts',
     'src/lib/crate-extraction-shell-cap-contract.test.ts',
@@ -1218,7 +1272,21 @@ Assert-CleanWorktree 'Checkpoint 3 commit'
 - Modify: `src/lib/crate-extraction-shell-cap-contract.test.ts`
 - Modify: `docs/superpowers/specs/2026-07-17-crate-roadmap.md`
 
-- [ ] **Step 1: Define typed synchronous events.**
+- [ ] **Step 1: Make the single managed scheduler shareable and prove it green.**
+
+Before editing the event/report/chat seams, migrate the single Tauri-managed scheduler to `Arc<LlmSchedulerState>` in `lib.rs`, accounts, LLM commands, diagnostics, prompt-pack runtime, and every analysis command/phase lookup. Characterize that all command paths and `AppHandle` lookups observe the same `Arc` allocation; reject managing both raw and `Arc` scheduler states. Clone the `Arc` only across detached/`JoinSet` ownership boundaries. This is a representation change to the existing capability, not a new scheduler abstraction or dependency.
+
+Run the affected source contracts, full app check, and full app tests before proceeding:
+
+```powershell
+Invoke-CheckedNative 'Checkpoint 4 scheduler contracts' { npm.cmd run test -- src/lib/llm-crate-boundary-contract.test.ts src/lib/prompt-pack-crate-boundary-contract.test.ts src/lib/analysis-application-contract.test.ts }
+Invoke-CheckedNative 'Checkpoint 4 scheduler package check' { cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets }
+Invoke-CheckedNative 'Checkpoint 4 scheduler package tests' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets }
+```
+
+Keep this in the single approved Checkpoint 4 commit: the owned runtime signatures introduced below are the reason the scheduler must be clonable into `'static` work, and a separate retained commit/status would add a sixth preparation state not present in the approved design. If this isolated substep fails, fix or revert it before starting Step 2; do not debug both blast radii together.
+
+- [ ] **Step 2: Define typed synchronous events.**
 
 Create `report/tests/runtime.rs` and the new chat test around a minimal compiling runtime seam. Process one case at a time; require its unique runtime marker and exact GREEN before adding the next test:
 
@@ -1246,7 +1314,7 @@ pub trait AnalysisEventSink: Send + Sync + 'static {
 
 Move event construction into portable code. `TauriAnalysisEventSink` remains in `src-tauri/src/analysis/events.rs` and each method does only typed in-memory payload mapping followed by one best-effort `AppHandle::emit` to `analysis://run` or `analysis://chat`. The source contract rejects `async`, `.await`, `block_on`, pool/SQL access, sleep/retry, locks, channels, spawn/join, filesystem/network I/O, or delegation to an unapproved helper in the adapter.
 
-- [ ] **Step 2: Freeze the report tickets and execution API.**
+- [ ] **Step 3: Freeze the report tickets and execution API.**
 
 ```rust
 impl AnalysisReportPreparationTicket {
@@ -1325,7 +1393,7 @@ The app order is mechanically fixed: construct/validate `StartAnalysisReportRequ
 
 The retained app `capture_report_corpus_returns_reloaded_snapshot_before_provider_phases` integration test calls public production seam `capture_analysis_corpus` with the real app reader and a real pool. This keeps the adapter-to-snapshot subject; no public test harness or fake substitution is introduced.
 
-- [ ] **Step 3: Freeze the chat tickets and execution API.**
+- [ ] **Step 4: Freeze the chat tickets and execution API.**
 
 ```rust
 pub struct AskAnalysisRunQuestionRequest {
@@ -1394,11 +1462,9 @@ The two execute functions take owned `Arc<LlmSchedulerState>` and `Arc<dyn Analy
 
 The app prepares and immediately returns the request ID, spawns, resolves the profile inside that task, executes with interactive priority, then performs the same second pool lookup. `complete_analysis_chat` writes user and assistant turns in one transaction and publishes `completed` only after commit. Lookup/persistence failure publishes the exact current failure prefix.
 
-- [ ] **Step 4: Make portable capabilities explicit.**
+- [ ] **Step 5: Make portable capabilities explicit.**
 
 Remove `AppHandle` and `get_pool` from portable report/chat/state/phases/capture code. Pass `SqlitePool`, `AnalysisState`, `Arc<LlmSchedulerState>`, `ResolvedLlmProfile`, reader, and sink explicitly. The app alone owns the outer `tokio::spawn`. Internal map `JoinSet`, child tokens, request control, priorities, and request-ID construction remain crate logic.
-
-Before moving report/chat code, migrate the single Tauri-managed scheduler to `Arc<LlmSchedulerState>` in `lib.rs`, accounts, LLM commands, diagnostics, prompt-pack runtime, and analysis command adapters. Characterize that all command paths and `AppHandle` lookups observe the same `Arc` allocation; reject managing both raw and `Arc` scheduler states. Clone the `Arc` only across detached/`JoinSet` ownership boundaries. This is a representation change to the existing capability, not a new scheduler abstraction or dependency.
 
 Compile the prepared portable halves as `chat_engine.rs`, `report_engine.rs`, `report/lifecycle_portable.rs`, and `report/tests/mod_portable.rs`; the original `chat.rs`, `report.rs`, lifecycle wrapper, and test root retain only app integration. The original `report/tests/mod.rs` uses exactly one module-scope `include!("mod_portable.rs")` so moved baseline leaf identities retain the `analysis::report::tests::*` prefix before extraction; the staging file is never declared as `mod mod_portable`. Task 7 removes the include and renames the prepared file mechanically.
 
@@ -1427,7 +1493,7 @@ impl AnalysisReportCancellationWait {
 
 `prepare_report_run_cancellation_wait` is awaited before `tokio::spawn`, captures the existing child token inside an opaque non-serializable ticket, and returns `None` if the run has no token. The app then moves the armed ticket into the fixture waiter task and awaits `cancelled()`. This preserves the current capture-before-spawn race guarantee even if cancellation and active-state removal happen before the spawned task is first polled. The token and token map never cross the boundary. Keep `is_report_run_cancelled`, `report_run_child_token`, and `ensure_report_run_token` crate-private. Migrate `spawn_fixture_cancellation_waiters` and its frozen waiter test to this exact handshake before the move.
 
-- [ ] **Step 5: RED/GREEN runtime behavior.**
+- [ ] **Step 6: RED/GREEN runtime behavior.**
 
 Add the first four tests below and run them exactly. The fifth (`chat_profile_resolution_failure_is_async_after_request_id`) was added in Checkpoint 1 and is an explicit regression rerun, not a duplicate test:
 
@@ -1454,7 +1520,7 @@ foreach ($testName in $checkpoint4Green) {
 }
 ```
 
-- [ ] **Step 6: Run the checkpoint and commit.**
+- [ ] **Step 7: Run the checkpoint and commit.**
 
 ```powershell
 Invoke-CheckedNative 'Checkpoint 4 report tests' { cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib 'analysis::report::tests::' -- --nocapture }
@@ -1518,7 +1584,7 @@ Assert-CleanWorktree 'Checkpoint 4 commit'
 
 ## Frozen 54-File Disposition Map
 
-`A` remains under `src-tauri/src/analysis`; `C` moves to the same relative path under `src-tauri/crates/extractum-analysis/src`; `S` is split during a green preparation checkpoint and leaves both app and crate owners. This map covers the current 54 files exactly. Five additional moved paths are tracked separately from the one-path-per-disposition baseline: retained app `tests_application.rs`, plus crate `domain.rs`, `report/tests/corpus_port.rs`, `report/tests/runtime.rs`, and `test_schema.rs`. `domain.rs` contains only root behavior split from baseline `mod.rs`; the other four contain plan-added test/fixture code. The generated crate root `src/lib.rs` is a sixth non-baseline final path but is created in Task 7 rather than moved from the application tree.
+`A` remains under `src-tauri/src/analysis`; `C` moves to the same relative path under `src-tauri/crates/extractum-analysis/src`; `S` is split during a green preparation checkpoint and leaves both app and crate owners. This map covers the current 54 files exactly. Baseline `mod.rs` is the sole non-one-to-one row: it yields retained app `mod.rs` plus crate `domain.rs` and `tests.rs`; `domain.rs` is counted exactly once in the baseline crate subtotal below. Four plan-added paths sit outside the 54-row map: retained app `tests_application.rs`, plus crate `report/tests/corpus_port.rs`, `report/tests/runtime.rs`, and `test_schema.rs`. The generated crate root `src/lib.rs` is a separate final path created in Task 7.
 
 | # | Current relative path | LOC | Final disposition | Frozen tests |
 | ---: | --- | ---: | --- | ---: |
@@ -1545,7 +1611,7 @@ Assert-CleanWorktree 'Checkpoint 4 commit'
 | 21 | `fixtures/tests/snapshot.rs` | 226 | A | 4 A |
 | 22 | `fixtures/tests/summary.rs` | 25 | A | 1 A |
 | 23 | `groups.rs` | 315 | S: app commands/foreign validation/enrichment + `C/groups.rs` domain/CRUD | 3 A |
-| 24 | `mod.rs` | 552 | S: app facade/commands + `C/lib.rs` declarations + `C/tests.rs` root tests | 8 C |
+| 24 | `mod.rs` | 552 | S: app facade/commands + `C/domain.rs` root behavior + `C/tests.rs` root tests | 8 C |
 | 25 | `models.rs` | 300 | C | — |
 | 26 | `report.rs` | 552 | S: app prepare/spawn/profile/scope + `C/report.rs` engine | — |
 | 27 | `report/capture.rs` | 37 | C | — |
@@ -1624,7 +1690,7 @@ store/tests/setup.rs                 -> include!("setup_portable.rs")
 templates.rs                         -> include!("templates_store.rs")
 ```
 
-Only `corpus/tests/mod_portable.rs` and `store/tests/mod_portable.rs` remain uncompiled declaration roots until Task 7, because their declarations would collide with retained app modules. The contract rejects any other undeclared staging unit, double include, suffixed module declaration, or production copy. Temporary filenames and all temporary `include!` lines disappear in Task 7; no shim or copied implementation remains at acceptance.
+Only `corpus/tests/mod_portable.rs` and `store/tests/mod_portable.rs` remain uncompiled declaration roots until Task 7, because their `live`/`preflight` and `read_model`/`setup` declarations would collide with the same mixed leaf modules still declared by the retained app roots. `report/tests/mod_portable.rs` may compile through `include!` because its portable declarations do not overlap the sole retained app leaf, `capture`. Do not “symmetrize” these three roots. The contract rejects any other undeclared staging unit, double include, suffixed module declaration, or production copy. Temporary filenames and all temporary `include!` lines disappear in Task 7; no shim or copied implementation remains at acceptance.
 
 ## Frozen 143-Test Ownership
 
@@ -2358,7 +2424,7 @@ keeps command event and AppError wire contracts unchanged
 moves only pre-normalized portable sources
 ```
 
-The contract consumes the frozen maps in this plan and Appendix A directly. It asserts the 54 baseline dispositions separately from the five exact additional moved paths and the generated crate root `lib.rs`; post-move it requires 35 app Rust files and 45 crate Rust files. It rejects public modules/globs/test helpers/rows, forbidden dependencies, reverse lower-crate edges, foreign production SQL, a fifth transaction family, copied source files, disabled/renamed tests, wrong lock roots, missing `Cargo.lock` hunk, and weakened dual-path safety assertions.
+The contract consumes the frozen maps in this plan and Appendix A directly. It asserts all 54 baseline dispositions, including both crate outputs of baseline `mod.rs`, separately from the four plan-added paths and the generated crate root `lib.rs`; post-move it requires 35 app Rust files and 45 crate Rust files. It rejects public modules/globs/test helpers/rows, forbidden dependencies, reverse lower-crate edges, foreign production SQL, a fifth transaction family, copied source files, disabled/renamed tests, wrong lock roots, missing `Cargo.lock` hunk, and weakened dual-path safety assertions.
 
 `moves only pre-normalized portable sources` reuses the exact fail-closed source set from the Checkpoint 5 standing contract. Before extraction it inspects every whole-move and staging source; afterward it inspects every corresponding crate destination. It rejects the six app-root prefixes, Tauri/`AppHandle`/`get_pool`, and a missing or extra mapped source in both states, including the direct `extractum_core::time::ymd_to_unix_midnight` ownership assertion.
 
@@ -2599,6 +2665,8 @@ Do not copy a portable file and leave the staging source behind.
 - [ ] **Step 6: Rewire the private app facade mechanically.**
 
 `src-tauri/src/analysis/mod.rs` retains all command re-exports used by `src-tauri/src/lib.rs`, app adapters, fixtures, and app-owned tests. Import curated crate items explicitly; do not expose `extractum_analysis` as a public module and do not change Tauri command signatures or registration. Replace only module/import paths required by the move.
+
+`projects/data_range.rs` is already behaviorally complete from Checkpoints 2–3. Its Task 7 allowance covers only a mechanically necessary typed crate/facade import retarget; the standing contract must still reject the corpus SQL-helper import/re-export, a new port, public helper, changed query predicate, or reordered error path.
 
 - [ ] **Step 7: Update manifests and generate the lockfile through Cargo.**
 
@@ -2960,7 +3028,7 @@ if ($finalCrateFiles.Count -ne 45) { throw "Unexpected final crate Rust file cou
 Record all of the following, with raw commands and outcomes:
 
 - actual starting commit, Checkpoint 1–5 commits, RED contract commit, extraction commit, and any authorized wiring-fix commit;
-- final 54-file disposition, the five separately named additional moved paths, generated crate root `lib.rs`, exact `35` app / `45` crate Rust-file topology, and actual physical-line counts;
+- final 54-file disposition including both `mod.rs` crate outputs, the four separately named plan-added paths, generated crate root `lib.rs`, exact `35` app / `45` crate Rust-file topology, and actual physical-line counts;
 - exact frozen 95/48 inventory plus separately counted new tests;
 - 21 analysis, three project, and three dev command inventory;
 - public root and visibility allowlists;
@@ -3021,6 +3089,7 @@ Expected: clean worktree and a reviewable sequence of five green preparation com
 5. Use ordinary `git revert`; never use `git reset`, destructive checkout, forced branch deletion, or manual evidence deletion.
 6. If the candidate is not retained, create a durable verification disposition and set the roadmap to truthful `not retained` or the last retained preparation checkpoint.
 7. Timing failure or slowdown never triggers rollback. Infrastructure failure is recorded separately from an application completion failure.
+8. Treat `E0433`, an absolute app-root import, or a duplicate-module error originating in a moved/staging source as evidence that its owning green preparation checkpoint was incomplete. Revert the extraction/RED chain and amend that checkpoint; do not relabel it as an authorized Task 8 wiring fix. Only a defect confined to the Task 7-created crate root, app facade, destination path, manifest, or lock wiring may use the narrow wiring-fix path.
 
 Use this executable sequence for a failed extraction candidate. It never discards a dirty diff: it first validates the exact candidate path set, commits it for durable evidence, then reverts that preservation commit before the already-committed wiring/extraction/RED chain. Rehydrate exact SHAs by unique commit subject if execution variables were lost between sessions, verify ancestry, and stop on any ambiguity or conflict.
 
@@ -3068,7 +3137,7 @@ If a revert conflicts, stop with the conflict intact and investigate; do not use
 
 - [ ] Every authority and status line agrees; Phase 8 remains unauthorized.
 - [ ] Frozen counts reconcile: 54 current files / 13,187 LOC; 95 crate + 48 app = 143; 21 analysis + 3 project + 3 dev = 27; six owned tables; four transaction families/eight participants/nine coordinators.
-- [ ] Final file inventory is 35 app Rust files and 45 crate Rust files: baseline split plus exact additional moved paths app `tests_application.rs` and crate `domain.rs`, `report/tests/corpus_port.rs`, `report/tests/runtime.rs`, and `test_schema.rs`, plus generated crate root `lib.rs`.
+- [ ] Final file inventory is 35 app Rust files and 45 crate Rust files: baseline `mod.rs` contributes crate `domain.rs` and `tests.rs` exactly once; plan-added paths are app `tests_application.rs` and crate `report/tests/corpus_port.rs`, `report/tests/runtime.rs`, and `test_schema.rs`; generated crate root `lib.rs` is counted separately.
 - [ ] Every current file has one final disposition and every split used its prepared staging file.
 - [ ] Every Appendix A identity exists exactly once under its final Cargo owner; new tests are not substituted for frozen identities.
 - [ ] Family 1 includes only list, active, get, and legacy blank/null chat fallback; trace, delete, chat list/clear, and lifecycle reads remain pool calls.
