@@ -1,7 +1,8 @@
 use sqlx::{Pool, Sqlite};
 
-use super::super::corpus::{load_corpus_messages, CorpusLoadRequest};
-use super::super::models::CorpusMessage;
+use super::super::corpus::{
+    AnalysisCorpusMessage, AnalysisCorpusReader, AnalysisCorpusRequest, AppAnalysisCorpusReader,
+};
 use super::super::store::{capture_run_snapshot, sanitize_snapshot_error};
 use super::ReportRunError;
 
@@ -11,9 +12,10 @@ pub(super) async fn capture_report_corpus(
     pool: &Pool<Sqlite>,
     run_id: i64,
     scope_label: &str,
-    request: &CorpusLoadRequest,
-) -> Result<Vec<CorpusMessage>, ReportRunError> {
-    let corpus = load_corpus_messages(pool, request).await.map_err(|error| {
+    request: &AnalysisCorpusRequest,
+) -> Result<Vec<AnalysisCorpusMessage>, ReportRunError> {
+    let reader = AppAnalysisCorpusReader::new(pool.clone());
+    let corpus = reader.load_corpus(request.clone()).await.map_err(|error| {
         ReportRunError::CaptureFailed(sanitize_snapshot_error(
             "Corpus preload failed",
             &error.to_string(),

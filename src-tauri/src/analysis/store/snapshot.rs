@@ -1,7 +1,8 @@
 use sqlx::{Pool, Sqlite};
 
+use super::super::corpus::AnalysisCorpusMessage;
 use super::super::domain::ANALYSIS_STATUS_FAILED;
-use super::super::models::{CorpusMessage, StoredRunSnapshotRow};
+use super::super::models::StoredRunSnapshotRow;
 use extractum_core::{
     compression::{compress_text, decompress_text},
     error::{internal_error, AppError, AppResult},
@@ -77,40 +78,35 @@ pub(crate) fn sanitize_provider_error(category: &str, raw: &str) -> String {
     }
 }
 
-fn validate_snapshot_message(message: &CorpusMessage) -> AppResult<()> {
-    if message.r#ref.trim().is_empty() {
+fn validate_snapshot_message(message: &AnalysisCorpusMessage) -> AppResult<()> {
+    if message.reference().trim().is_empty() {
         return Err(internal_error("Snapshot message ref is required"));
     }
-    if message.content.trim().is_empty() {
+    if message.content().trim().is_empty() {
         return Err(internal_error(format!(
             "Snapshot message {} content is required",
-            message.r#ref
+            message.reference()
         )));
     }
-    if message.item_kind.as_deref().unwrap_or("").trim().is_empty() {
+    if message.item_kind().unwrap_or("").trim().is_empty() {
         return Err(internal_error(format!(
             "Snapshot message {} item_kind is required",
-            message.r#ref
+            message.reference()
         )));
     }
-    let source_type = message.source_type.as_deref().unwrap_or("").trim();
+    let source_type = message.source_type().unwrap_or("").trim();
     if source_type.is_empty() {
         return Err(internal_error(format!(
             "Snapshot message {} source_type is required",
-            message.r#ref
+            message.reference()
         )));
     }
     if matches!(source_type, "telegram" | "youtube")
-        && message
-            .source_subtype
-            .as_deref()
-            .unwrap_or("")
-            .trim()
-            .is_empty()
+        && message.source_subtype().unwrap_or("").trim().is_empty()
     {
         return Err(internal_error(format!(
             "Snapshot message {} source_subtype is required for {source_type}",
-            message.r#ref
+            message.reference()
         )));
     }
     Ok(())
@@ -119,7 +115,7 @@ fn validate_snapshot_message(message: &CorpusMessage) -> AppResult<()> {
 async fn load_run_snapshot_messages_on_transaction(
     tx: &mut sqlx::Transaction<'_, Sqlite>,
     run_id: i64,
-) -> AppResult<Vec<CorpusMessage>> {
+) -> AppResult<Vec<AnalysisCorpusMessage>> {
     let rows: Vec<StoredRunSnapshotRow> = sqlx::query_as(
         r#"
         SELECT
@@ -146,19 +142,19 @@ async fn load_run_snapshot_messages_on_transaction(
 
     rows.into_iter()
         .map(|row| {
-            Ok(CorpusMessage {
-                item_id: row.item_id,
-                source_id: row.source_id,
-                external_id: row.external_id,
-                published_at: row.published_at,
-                author: row.author,
-                content: decompress_text(&row.content_zstd).map_err(internal_error)?,
-                r#ref: row.r#ref,
-                item_kind: row.item_kind,
-                source_type: row.source_type,
-                source_subtype: row.source_subtype,
-                metadata_zstd: row.metadata_zstd,
-            })
+            Ok(AnalysisCorpusMessage::new(
+                row.item_id,
+                row.source_id,
+                row.external_id,
+                row.published_at,
+                row.author,
+                decompress_text(&row.content_zstd).map_err(internal_error)?,
+                row.r#ref,
+                row.item_kind,
+                row.source_type,
+                row.source_subtype,
+                row.metadata_zstd,
+            ))
         })
         .collect()
 }
@@ -167,8 +163,8 @@ pub(crate) async fn capture_run_snapshot(
     pool: &Pool<Sqlite>,
     run_id: i64,
     scope_label: &str,
-    corpus: &[CorpusMessage],
-) -> AppResult<Vec<CorpusMessage>> {
+    corpus: &[AnalysisCorpusMessage],
+) -> AppResult<Vec<AnalysisCorpusMessage>> {
     if corpus.is_empty() {
         return Err(internal_error("Snapshot capture failed: empty corpus"));
     }
@@ -201,7 +197,7 @@ pub(crate) async fn capture_run_snapshot(
         .map_err(AppError::database)?;
 
     for message in corpus {
-        let content_zstd = compress_text(&message.content).map_err(internal_error)?;
+        let content_zstd = compress_text(message.content()).map_err(internal_error)?;
         sqlx::query(
             r#"
             INSERT INTO analysis_run_messages (
@@ -222,17 +218,17 @@ pub(crate) async fn capture_run_snapshot(
             "#,
         )
         .bind(run_id)
-        .bind(message.item_id)
-        .bind(message.source_id)
-        .bind(&message.external_id)
-        .bind(&message.author)
-        .bind(message.published_at)
-        .bind(&message.r#ref)
+        .bind(message.item_id())
+        .bind(message.source_id())
+        .bind(message.external_id())
+        .bind(message.author())
+        .bind(message.published_at())
+        .bind(message.reference())
         .bind(content_zstd)
-        .bind(message.item_kind.as_deref())
-        .bind(message.source_type.as_deref())
-        .bind(message.source_subtype.as_deref())
-        .bind(message.metadata_zstd.as_deref())
+        .bind(message.item_kind())
+        .bind(message.source_type())
+        .bind(message.source_subtype())
+        .bind(message.metadata_zstd())
         .execute(&mut *tx)
         .await
         .map_err(AppError::database)?;
@@ -262,7 +258,7 @@ pub(crate) async fn persist_run_snapshot(
     pool: &Pool<Sqlite>,
     run_id: i64,
     scope_label: &str,
-    corpus: &[CorpusMessage],
+    corpus: &[AnalysisCorpusMessage],
 ) -> AppResult<()> {
     capture_run_snapshot(pool, run_id, scope_label, corpus)
         .await

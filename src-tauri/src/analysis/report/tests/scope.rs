@@ -1,5 +1,5 @@
 use super::super::super::corpus::{
-    AnalysisRunPreflight, AnalysisRunPreflightLimits, CorpusLoadRequest, YoutubeCorpusMode,
+    AnalysisCorpusRequest, AnalysisRunPreflight, AnalysisRunPreflightLimits, YoutubeCorpusMode,
 };
 use super::super::super::models::{AnalysisScopeKind, AnalysisSourceKind, ResolvedAnalysisScope};
 use super::super::{
@@ -12,15 +12,22 @@ use super::harness::{sample_prompt_template, sample_resolved_profile};
 fn report_run_input_carries_resolved_profile_snapshot() {
     let input = ReportRunInput {
         run_id: 9,
-        scope_label: "Source".to_string(),
-        corpus_request: CorpusLoadRequest {
-            source_type: crate::sources::TELEGRAM_SOURCE_TYPE.to_string(),
-            source_ids: vec![2],
-            period_from: 10,
-            period_to: 20,
-            youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
-            include_migrated_history: false,
-        },
+        scope: ResolvedAnalysisScope::for_source(
+            2,
+            AnalysisSourceKind::Telegram,
+            vec![2],
+            "Source".to_string(),
+        )
+        .expect("resolved scope"),
+        corpus_request: AnalysisCorpusRequest::new(
+            AnalysisSourceKind::Telegram,
+            vec![2],
+            10,
+            20,
+            YoutubeCorpusMode::TranscriptDescription,
+            false,
+        )
+        .expect("corpus request"),
         period_from: 10,
         period_to: 20,
         output_language: "English".to_string(),
@@ -28,17 +35,19 @@ fn report_run_input_carries_resolved_profile_snapshot() {
         model_override: Some("gemini-2.5-pro".to_string()),
         resolved_profile: sample_resolved_profile(),
         chunk_target_chars: 16_000,
-        preflight: AnalysisRunPreflight {
-            source_ids: vec![2],
-            message_count: 1,
-            estimated_input_chars: 500,
-            estimated_chunks: 1,
-            limits: AnalysisRunPreflightLimits::default(),
-        },
+        preflight: AnalysisRunPreflight::from_observation(
+            vec![2],
+            1,
+            500,
+            1,
+            AnalysisRunPreflightLimits::default(),
+        ),
     };
 
     assert_eq!(input.resolved_profile.profile_id(), "research");
     assert_eq!(input.resolved_profile.default_model(), "gemini-2.5-flash");
+    assert_eq!(input.scope.scope_kind(), AnalysisScopeKind::SingleSource);
+    assert_eq!(input.scope.scope_label_snapshot(), "Source");
 }
 
 #[test]

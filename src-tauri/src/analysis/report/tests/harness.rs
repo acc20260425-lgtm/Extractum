@@ -1,4 +1,5 @@
-use super::super::super::models::{AnalysisPromptTemplate, ChunkSummary, CorpusMessage};
+use super::super::super::corpus::AnalysisCorpusMessage;
+use super::super::super::models::{AnalysisPromptTemplate, ChunkSummary};
 use extractum_llm::{LlmProviderAccess, ProviderKind, ResolvedLlmProfile};
 use sqlx::SqlitePool;
 
@@ -26,20 +27,20 @@ pub(super) fn sample_prompt_template() -> AnalysisPromptTemplate {
     }
 }
 
-pub(super) fn sample_corpus_message() -> CorpusMessage {
-    CorpusMessage {
-        item_id: 1,
-        source_id: 2,
-        external_id: "42".to_string(),
-        published_at: 1_700_000_000,
-        author: Some("analyst".to_string()),
-        content: "Important update from the source".to_string(),
-        r#ref: "s2-i1".to_string(),
-        item_kind: Some("telegram_message".to_string()),
-        source_type: Some("telegram".to_string()),
-        source_subtype: Some("channel".to_string()),
-        metadata_zstd: None,
-    }
+pub(super) fn sample_corpus_message() -> AnalysisCorpusMessage {
+    AnalysisCorpusMessage::new(
+        1,
+        2,
+        "42".to_string(),
+        1_700_000_000,
+        Some("analyst".to_string()),
+        "Important update from the source".to_string(),
+        "s2-i1".to_string(),
+        Some("telegram_message".to_string()),
+        Some("telegram".to_string()),
+        Some("channel".to_string()),
+        None,
+    )
 }
 
 pub(super) fn sample_resolved_profile() -> ResolvedLlmProfile {
@@ -52,6 +53,52 @@ pub(super) fn sample_resolved_profile() -> ResolvedLlmProfile {
             String::new(),
         ),
     )
+}
+
+pub(super) async fn report_capture_pool(run_id: i64) -> SqlitePool {
+    let pool = SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("connect report capture sqlite");
+    sqlx::query(
+        "CREATE TABLE analysis_runs (
+            id INTEGER PRIMARY KEY,
+            status TEXT NOT NULL,
+            error TEXT,
+            scope_label_snapshot TEXT,
+            snapshot_captured_at TEXT,
+            snapshot_error TEXT,
+            completed_at INTEGER
+        )",
+    )
+    .execute(&pool)
+    .await
+    .expect("create report capture runs");
+    sqlx::query(
+        "CREATE TABLE analysis_run_messages (
+            run_id INTEGER NOT NULL,
+            item_id INTEGER NOT NULL,
+            source_id INTEGER NOT NULL,
+            external_id TEXT NOT NULL,
+            author TEXT,
+            published_at INTEGER NOT NULL,
+            ref TEXT NOT NULL,
+            content_zstd BLOB NOT NULL,
+            item_kind TEXT,
+            source_type TEXT,
+            source_subtype TEXT,
+            metadata_zstd BLOB,
+            PRIMARY KEY (run_id, ref)
+        )",
+    )
+    .execute(&pool)
+    .await
+    .expect("create report capture messages");
+    sqlx::query("INSERT INTO analysis_runs (id, status) VALUES (?, 'running')")
+        .bind(run_id)
+        .execute(&pool)
+        .await
+        .expect("insert report capture run");
+    pool
 }
 
 pub(super) async fn request_cancel_pool_with_runs() -> SqlitePool {

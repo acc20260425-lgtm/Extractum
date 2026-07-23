@@ -1,4 +1,5 @@
-use super::super::super::corpus::{CorpusLoadRequest, YoutubeCorpusMode};
+use super::super::super::corpus::{AnalysisCorpusRequest, YoutubeCorpusMode};
+use super::super::super::models::AnalysisSourceKind;
 use super::super::capture_report_corpus;
 
 #[tokio::test]
@@ -79,14 +80,15 @@ async fn capture_report_corpus_returns_reloaded_snapshot_before_provider_phases(
         .await
         .expect("rebuild docs");
 
-    let request = CorpusLoadRequest {
-        source_type: "telegram".to_string(),
-        source_ids: vec![2],
-        period_from: 1,
-        period_to: 1_000,
-        youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
-        include_migrated_history: false,
-    };
+    let request = AnalysisCorpusRequest::new(
+        AnalysisSourceKind::Telegram,
+        vec![2],
+        1,
+        1_000,
+        YoutubeCorpusMode::TranscriptDescription,
+        false,
+    )
+    .expect("construct capture request");
 
     let captured = capture_report_corpus(&pool, 1, "Frozen source", &request)
         .await
@@ -98,5 +100,5 @@ async fn capture_report_corpus_returns_reloaded_snapshot_before_provider_phases(
         .expect("delete live docs after capture");
 
     assert_eq!(captured.len(), 1);
-    assert_eq!(captured[0].content, "captured text");
+    assert_eq!(captured[0].content(), "captured text");
 }

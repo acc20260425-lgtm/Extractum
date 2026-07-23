@@ -1,66 +1,8 @@
-use super::harness::{create_project_scope_schema, sample_corpus, sample_run, snapshot_pool};
+use super::harness::{create_project_scope_schema, sample_run, snapshot_pool};
 use crate::analysis::corpus::{resolve_analysis_sources, AnalysisSourceResolutionErrorCode};
-use crate::analysis::store::persist_run_snapshot;
 
 use super::super::source_resolution::resolve_run_source_ids;
-#[tokio::test]
-async fn resolve_run_source_ids_prefers_snapshot_over_live_group_membership() {
-    let pool = snapshot_pool().await;
-    sqlx::query(
-        r#"
-        INSERT INTO analysis_source_groups (id, name, created_at, updated_at)
-        VALUES (9, 'Live group', 1, 1)
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("insert group");
-    sqlx::query(
-        r#"
-        INSERT INTO analysis_source_group_members (group_id, source_id, created_at)
-        VALUES (9, 77, 1)
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("insert live member");
-    sqlx::query(
-        r#"
-        INSERT INTO analysis_runs (
-            id,
-            run_type,
-            scope_type,
-            source_group_id,
-            period_from,
-            period_to,
-            output_language,
-            prompt_template_version,
-            provider_profile,
-            provider,
-            model,
-            status,
-            created_at
-        )
-        VALUES (1, 'report', 'source_group', 9, ?, ?, 'English', 1, 'default', 'gemini', 'model', 'completed', ?)
-        "#,
-    )
-    .bind(1_700_000_000_i64)
-    .bind(1_800_000_000_i64)
-    .bind(1_710_000_500_i64)
-    .execute(&pool)
-    .await
-    .expect("insert run");
-
-    persist_run_snapshot(&pool, 1, "Frozen group", &sample_corpus())
-        .await
-        .expect("persist snapshot");
-
-    let source_ids = resolve_run_source_ids(&pool, &sample_run())
-        .await
-        .expect("resolve source ids");
-
-    assert_eq!(source_ids, vec![2, 4]);
-}
+include!("source_resolution_portable.rs");
 
 #[tokio::test]
 async fn resolve_run_source_ids_loads_project_sources_without_snapshot() {
@@ -128,9 +70,12 @@ async fn playlist_expansion_excludes_unlinked_and_removed_rows() {
         .await
         .expect("resolve playlist scope");
 
-    assert_eq!(resolved.source_type, "youtube");
-    assert_eq!(resolved.source_ids, vec![20]);
-    assert_eq!(resolved.skipped_unlinked_playlist_items, 1);
+    assert_eq!(
+        resolved.scope().source_kind(),
+        crate::analysis::models::AnalysisSourceKind::Youtube
+    );
+    assert_eq!(resolved.scope().source_ids(), &[20]);
+    assert_eq!(resolved.skipped_unlinked_playlist_items(), 1);
 }
 
 #[tokio::test]
@@ -229,6 +174,9 @@ async fn resolve_analysis_sources_loads_single_provider_project() {
     let resolved = resolve_analysis_sources(&pool, None, None, Some(9))
         .await
         .expect("resolve project");
-    assert_eq!(resolved.source_type, "youtube");
-    assert_eq!(resolved.source_ids, vec![1, 2]);
+    assert_eq!(
+        resolved.scope().source_kind(),
+        crate::analysis::models::AnalysisSourceKind::Youtube
+    );
+    assert_eq!(resolved.scope().source_ids(), &[1, 2]);
 }

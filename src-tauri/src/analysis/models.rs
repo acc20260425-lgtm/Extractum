@@ -280,6 +280,153 @@ pub struct AnalysisRunDetail {
     pub(crate) snapshot_message_count: i64,
 }
 
+pub struct AnalysisForeignLabelMatch {
+    term: String,
+    source_ids: Vec<i64>,
+    project_ids: Vec<i64>,
+}
+
+impl AnalysisForeignLabelMatch {
+    pub fn new(term: String, source_ids: Vec<i64>, project_ids: Vec<i64>) -> AppResult<Self> {
+        let term = term.trim().to_string();
+        if term.is_empty() {
+            return Err(AppError::validation(
+                "Foreign label search term cannot be empty",
+            ));
+        }
+        if source_ids.iter().any(|id| *id <= 0) || project_ids.iter().any(|id| *id <= 0) {
+            return Err(AppError::validation("Foreign label IDs must be positive"));
+        }
+        Ok(Self {
+            term,
+            source_ids: stable_ids(source_ids),
+            project_ids: stable_ids(project_ids),
+        })
+    }
+
+    pub(crate) fn term(&self) -> &str {
+        &self.term
+    }
+    pub(crate) fn source_ids(&self) -> &[i64] {
+        &self.source_ids
+    }
+    pub(crate) fn project_ids(&self) -> &[i64] {
+        &self.project_ids
+    }
+}
+
+fn stable_ids(ids: Vec<i64>) -> Vec<i64> {
+    let mut seen = std::collections::HashSet::new();
+    ids.into_iter().filter(|id| seen.insert(*id)).collect()
+}
+
+pub struct AnalysisSourceLabel {
+    source_id: i64,
+    title: Option<String>,
+}
+
+impl AnalysisSourceLabel {
+    pub fn new(source_id: i64, title: Option<String>) -> AppResult<Self> {
+        if source_id <= 0 {
+            return Err(AppError::validation(
+                "Analysis source label ID must be positive",
+            ));
+        }
+        Ok(Self { source_id, title })
+    }
+    pub fn source_id(&self) -> i64 {
+        self.source_id
+    }
+    pub fn title(&self) -> Option<&str> {
+        self.title.as_deref()
+    }
+}
+
+pub struct AnalysisProjectLabel {
+    project_id: i64,
+    name: Option<String>,
+}
+
+impl AnalysisProjectLabel {
+    pub fn new(project_id: i64, name: Option<String>) -> AppResult<Self> {
+        if project_id <= 0 {
+            return Err(AppError::validation(
+                "Analysis project label ID must be positive",
+            ));
+        }
+        Ok(Self { project_id, name })
+    }
+    pub fn project_id(&self) -> i64 {
+        self.project_id
+    }
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+}
+
+pub struct AnalysisForeignLabels {
+    sources: Vec<AnalysisSourceLabel>,
+    projects: Vec<AnalysisProjectLabel>,
+}
+
+impl AnalysisForeignLabels {
+    pub fn new(
+        sources: Vec<AnalysisSourceLabel>,
+        projects: Vec<AnalysisProjectLabel>,
+    ) -> AppResult<Self> {
+        let mut source_ids = std::collections::HashSet::new();
+        let mut project_ids = std::collections::HashSet::new();
+        if sources
+            .iter()
+            .any(|label| !source_ids.insert(label.source_id()))
+            || projects
+                .iter()
+                .any(|label| !project_ids.insert(label.project_id()))
+        {
+            return Err(AppError::validation("Foreign labels must have unique IDs"));
+        }
+        Ok(Self { sources, projects })
+    }
+    pub(crate) fn source_title(&self, id: i64) -> Option<String> {
+        self.sources
+            .iter()
+            .find(|label| label.source_id == id)
+            .and_then(|label| label.title.clone())
+    }
+    pub(crate) fn project_name(&self, id: i64) -> Option<String> {
+        self.projects
+            .iter()
+            .find(|label| label.project_id == id)
+            .and_then(|label| label.name.clone())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum AnalysisForeignLabelRef {
+    Source(i64),
+    Project(i64),
+}
+
+pub struct AnalysisChatRun {
+    run: AnalysisRunDetail,
+}
+
+impl AnalysisChatRun {
+    pub fn needs_legacy_foreign_label(&self) -> bool {
+        self.run
+            .scope_label_snapshot
+            .as_deref()
+            .is_none_or(|label| label.trim().is_empty())
+            && (self.run.source_id.is_some() || self.run.project_id.is_some())
+    }
+    pub(crate) fn new(run: AnalysisRunDetail) -> Self {
+        Self { run }
+    }
+    pub(crate) fn into_detail(self) -> AnalysisRunDetail {
+        self.run
+    }
+}
+
 #[derive(Clone, Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub struct AnalysisRunMessageCursor {
     pub published_at: i64,
@@ -306,40 +453,6 @@ pub struct AnalysisRunMessagesPage {
     pub messages: Vec<AnalysisRunMessage>,
     pub next_cursor: Option<AnalysisRunMessageCursor>,
     pub has_more: bool,
-}
-
-#[derive(FromRow)]
-pub(crate) struct AnalysisRunRow {
-    pub(crate) id: i64,
-    pub(crate) run_type: String,
-    pub(crate) scope_type: String,
-    pub(crate) source_id: Option<i64>,
-    pub(crate) source_title: Option<String>,
-    pub(crate) source_group_id: Option<i64>,
-    pub(crate) source_group_name: Option<String>,
-    pub(crate) project_id: Option<i64>,
-    pub(crate) project_name: Option<String>,
-    pub(crate) period_from: i64,
-    pub(crate) period_to: i64,
-    pub(crate) output_language: String,
-    pub(crate) prompt_template_id: Option<i64>,
-    pub(crate) prompt_template_name: Option<String>,
-    pub(crate) prompt_template_version: i64,
-    pub(crate) provider_profile: String,
-    pub(crate) provider: String,
-    pub(crate) model: String,
-    pub(crate) youtube_corpus_mode: String,
-    pub(crate) telegram_history_scope: String,
-    pub(crate) status: String,
-    pub(crate) result_markdown: Option<String>,
-    pub(crate) trace_data_zstd: Option<Vec<u8>>,
-    pub(crate) scope_label_snapshot: Option<String>,
-    pub(crate) snapshot_captured_at: Option<String>,
-    pub(crate) snapshot_error: Option<String>,
-    pub(crate) snapshot_message_count: i64,
-    pub(crate) error: Option<String>,
-    pub(crate) created_at: i64,
-    pub(crate) completed_at: Option<i64>,
 }
 
 #[derive(FromRow)]
@@ -397,21 +510,6 @@ pub(crate) struct StoredRunSnapshotRow {
     pub(crate) published_at: i64,
     pub(crate) r#ref: String,
     pub(crate) content_zstd: Vec<u8>,
-    pub(crate) item_kind: Option<String>,
-    pub(crate) source_type: Option<String>,
-    pub(crate) source_subtype: Option<String>,
-    pub(crate) metadata_zstd: Option<Vec<u8>>,
-}
-
-#[derive(Clone)]
-pub(crate) struct CorpusMessage {
-    pub(crate) item_id: i64,
-    pub(crate) source_id: i64,
-    pub(crate) external_id: String,
-    pub(crate) published_at: i64,
-    pub(crate) author: Option<String>,
-    pub(crate) content: String,
-    pub(crate) r#ref: String,
     pub(crate) item_kind: Option<String>,
     pub(crate) source_type: Option<String>,
     pub(crate) source_subtype: Option<String>,

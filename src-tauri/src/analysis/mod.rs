@@ -1,5 +1,6 @@
 mod chat;
 mod corpus;
+mod corpus_portable;
 #[path = "domain_portable.rs"]
 mod domain;
 mod events;
@@ -24,7 +25,8 @@ use self::models::{
     AnalysisRunSummary, AnalysisSourceOption, AnalysisTraceData, AnalysisTraceRef,
 };
 use self::store::{
-    delete_saved_run, fetch_run_row, list_analysis_run_summaries, map_run_detail, map_run_summary,
+    delete_saved_run, get_analysis_run_in_pool, list_active_analysis_runs_in_pool,
+    list_analysis_runs_in_pool, load_analysis_run_status, load_analysis_run_trace_data,
     AnalysisRunListFilters,
 };
 use self::trace::{decode_trace_data, normalize_ref, try_build_trace_refs};
@@ -46,8 +48,8 @@ pub use self::chat::{
 };
 #[allow(unused_imports)]
 pub(crate) use self::corpus::{
-    push_analysis_document_kind_filter, resolve_analysis_sources, AnalysisSourceResolutionError,
-    AnalysisSourceResolutionErrorCode, YoutubeCorpusMode,
+    resolve_analysis_sources, resolve_analysis_telegram_history_scope,
+    AnalysisSourceResolutionError, AnalysisSourceResolutionErrorCode, YoutubeCorpusMode,
 };
 #[cfg(dev)]
 pub use self::fixtures::{
@@ -59,7 +61,6 @@ pub use self::groups::{
     update_analysis_source_group,
 };
 pub use self::report::cleanup_interrupted_analysis_runs;
-pub(crate) use self::report::resolve_analysis_telegram_history_scope;
 pub use self::report_commands::{cancel_analysis_run, start_analysis_report};
 pub use self::state::AnalysisState;
 pub use self::templates::{
@@ -125,7 +126,7 @@ pub async fn list_analysis_runs(
     )?;
     let pool = get_pool(&handle).await?;
 
-    list_analysis_run_summaries(&pool, filters).await
+    list_analysis_runs_in_pool(&pool, filters).await
 }
 
 #[tauri::command]
@@ -135,26 +136,20 @@ pub async fn list_active_analysis_runs(
 ) -> AppResult<Vec<AnalysisRunSummary>> {
     let pool = get_pool(&handle).await?;
     let active_ids = state.active_report_run_ids().await;
-    let mut active_runs = Vec::new();
-    let mut stale_ids = Vec::new();
-
-    for run_id in active_ids {
-        match fetch_run_row(&pool, run_id).await? {
-            Some(row)
-                if row.status == ANALYSIS_STATUS_QUEUED
-                    || row.status == ANALYSIS_STATUS_RUNNING =>
-            {
-                active_runs.push(map_run_summary(row));
-            }
-            _ => stale_ids.push(run_id),
-        }
-    }
+    let active_runs = list_active_analysis_runs_in_pool(&pool, &active_ids).await?;
+    let returned_ids = active_runs
+        .iter()
+        .map(|run| run.id)
+        .collect::<std::collections::HashSet<_>>();
+    let stale_ids = active_ids
+        .difference(&returned_ids)
+        .copied()
+        .collect::<Vec<_>>();
 
     for run_id in stale_ids {
         state.remove_active_report_run(run_id).await;
     }
 
-    active_runs.sort_by_key(|run| std::cmp::Reverse(run.created_at));
     Ok(active_runs)
 }
 
@@ -164,7 +159,7 @@ pub async fn get_analysis_run(
     run_id: i64,
 ) -> AppResult<Option<AnalysisRunDetail>> {
     let pool = get_pool(&handle).await?;
-    Ok(fetch_run_row(&pool, run_id).await?.map(map_run_detail))
+    get_analysis_run_in_pool(&pool, run_id).await
 }
 
 #[tauri::command]
@@ -210,11 +205,11 @@ pub async fn get_analysis_run_trace(
     run_id: i64,
 ) -> AppResult<AnalysisTraceData> {
     let pool = get_pool(&handle).await?;
-    let row = fetch_run_row(&pool, run_id)
+    let trace_data = load_analysis_run_trace_data(&pool, run_id)
         .await?
         .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
 
-    Ok(decode_trace_data(row.trace_data_zstd.as_deref())?)
+    Ok(decode_trace_data(trace_data.as_deref())?)
 }
 
 #[tauri::command]
@@ -224,11 +219,11 @@ pub async fn delete_analysis_run(
     run_id: i64,
 ) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
-    let row = fetch_run_row(&pool, run_id)
+    let status = load_analysis_run_status(&pool, run_id)
         .await?
         .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
 
-    if row.status == ANALYSIS_STATUS_QUEUED || row.status == ANALYSIS_STATUS_RUNNING {
+    if status == ANALYSIS_STATUS_QUEUED || status == ANALYSIS_STATUS_RUNNING {
         return Err(AppError::conflict(
             "Queued or running analysis runs cannot be deleted",
         ));

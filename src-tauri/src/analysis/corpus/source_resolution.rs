@@ -9,15 +9,37 @@ use super::super::{
 };
 #[cfg(test)]
 use crate::analysis::models::AnalysisRunDetail;
+use crate::analysis::models::{AnalysisSourceKind, ResolvedAnalysisScope};
 use crate::analysis::store::fetch_source_group;
 use crate::error::{AppError, AppResult};
 
-#[derive(Debug)]
-pub(crate) struct ResolvedAnalysisSources {
-    pub(crate) source_type: String,
-    pub(crate) source_ids: Vec<i64>,
-    #[allow(dead_code)]
-    pub(crate) skipped_unlinked_playlist_items: usize,
+pub(crate) struct AppAnalysisScopeResolution {
+    scope: ResolvedAnalysisScope,
+    skipped_unlinked_playlist_items: usize,
+}
+
+impl std::fmt::Debug for AppAnalysisScopeResolution {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("AppAnalysisScopeResolution")
+            .field(
+                "skipped_unlinked_playlist_items",
+                &self.skipped_unlinked_playlist_items,
+            )
+            .finish_non_exhaustive()
+    }
+}
+
+impl AppAnalysisScopeResolution {
+    pub(crate) fn scope(&self) -> &ResolvedAnalysisScope {
+        &self.scope
+    }
+    pub(crate) fn skipped_unlinked_playlist_items(&self) -> usize {
+        self.skipped_unlinked_playlist_items
+    }
+    pub(crate) fn into_scope(self) -> ResolvedAnalysisScope {
+        self.scope
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -71,6 +93,7 @@ struct AnalysisSourceScopeRow {
     id: i64,
     source_type: String,
     source_subtype: Option<String>,
+    title: Option<String>,
 }
 
 async fn load_source_scope_row(
@@ -79,7 +102,7 @@ async fn load_source_scope_row(
 ) -> AppResult<AnalysisSourceScopeRow> {
     sqlx::query_as(
         r#"
-        SELECT id, source_type, source_subtype
+        SELECT id, source_type, source_subtype, title
         FROM sources
         WHERE id = ?
         "#,
@@ -137,7 +160,7 @@ pub(crate) async fn resolve_analysis_sources(
     source_id: Option<i64>,
     source_group_id: Option<i64>,
     project_id: Option<i64>,
-) -> Result<ResolvedAnalysisSources, AnalysisSourceResolutionError> {
+) -> Result<AppAnalysisScopeResolution, AnalysisSourceResolutionError> {
     let selected_count = [
         source_id.is_some(),
         source_group_id.is_some(),
@@ -151,6 +174,7 @@ pub(crate) async fn resolve_analysis_sources(
     }
 
     let source_type: String;
+    let scope_label: String;
     let mut source_ids = Vec::new();
     let mut seen_source_ids = HashSet::new();
     let mut skipped_unlinked_playlist_items = 0usize;
@@ -158,6 +182,11 @@ pub(crate) async fn resolve_analysis_sources(
     if let Some(source_id) = source_id {
         let source = load_source_scope_row(pool, source_id).await?;
         source_type = source.source_type.clone();
+        scope_label = source
+            .title
+            .clone()
+            .filter(|title| !title.trim().is_empty())
+            .unwrap_or_else(|| format!("Source {source_id}"));
         push_scope_source(
             pool,
             source,
@@ -171,6 +200,14 @@ pub(crate) async fn resolve_analysis_sources(
             AppError::not_found(format!("Analysis source group {group_id} not found"))
         })?;
         source_type = group.source_type.clone();
+        scope_label = group.name.clone();
+
+        if group.members.is_empty() {
+            return Err(AppError::validation(
+                "The selected source group does not contain any sources",
+            )
+            .into());
+        }
 
         for member in group.members {
             let source = load_source_scope_row(pool, member.source_id).await?;
@@ -185,9 +222,15 @@ pub(crate) async fn resolve_analysis_sources(
         }
     } else {
         let project_id = project_id.expect("validated project_id");
+        scope_label = sqlx::query_scalar::<_, String>("SELECT name FROM projects WHERE id = ?")
+            .bind(project_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(AppError::database)?
+            .ok_or_else(|| AppError::not_found(format!("Project {project_id} not found")))?;
         let rows: Vec<AnalysisSourceScopeRow> = sqlx::query_as(
             r#"
-            SELECT s.id, s.source_type, s.source_subtype
+            SELECT s.id, s.source_type, s.source_subtype, s.title
             FROM project_sources ps
             JOIN sources s ON s.id = ps.source_id
             WHERE ps.project_id = ?
@@ -229,9 +272,31 @@ pub(crate) async fn resolve_analysis_sources(
         ));
     }
 
-    Ok(ResolvedAnalysisSources {
-        source_type,
-        source_ids,
+    let source_kind = match source_type.as_str() {
+        "telegram" => AnalysisSourceKind::Telegram,
+        "youtube" => AnalysisSourceKind::Youtube,
+        other => {
+            return Err(AppError::validation(format!(
+                "Unsupported analysis corpus source_type '{other}'"
+            ))
+            .into())
+        }
+    };
+    let scope = if let Some(source_id) = source_id {
+        ResolvedAnalysisScope::for_source(source_id, source_kind, source_ids, scope_label)
+    } else if let Some(group_id) = source_group_id {
+        ResolvedAnalysisScope::for_source_group(group_id, source_kind, source_ids, scope_label)
+    } else {
+        ResolvedAnalysisScope::for_project(
+            project_id.expect("validated project"),
+            source_kind,
+            source_ids,
+            scope_label,
+        )
+    }
+    .map_err(AnalysisSourceResolutionError::from)?;
+    Ok(AppAnalysisScopeResolution {
+        scope,
         skipped_unlinked_playlist_items,
     })
 }
@@ -306,7 +371,7 @@ pub(crate) async fn resolve_run_source_ids(
             .ok_or_else(|| format!("Analysis run {} is missing project_id", run.id))?;
         return resolve_analysis_sources(pool, None, None, Some(project_id))
             .await
-            .map(|resolved| resolved.source_ids)
+            .map(|resolved| resolved.into_scope().source_ids().to_vec())
             .map_err(|error| error.into_app_error().to_string());
     }
 

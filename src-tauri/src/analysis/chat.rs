@@ -9,13 +9,13 @@ use extractum_llm::{
     LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState,
 };
 
-use super::corpus::load_run_snapshot_messages;
+use super::corpus::{load_run_snapshot_messages, AnalysisCorpusMessage};
 use super::domain::{now_secs, validate_chat_role, validate_chat_turns, ANALYSIS_STATUS_COMPLETED};
 use super::events::emit_analysis_chat_event;
-use super::models::{
-    AnalysisChatEvent, AnalysisChatMessage, AnalysisChatTurn, AnalysisRunDetail, CorpusMessage,
+use super::models::{AnalysisChatEvent, AnalysisChatMessage, AnalysisChatTurn, AnalysisRunDetail};
+use super::store::{
+    analysis_run_exists, resolve_legacy_analysis_chat_run_in_pool, resolve_run_scope_label,
 };
-use super::store::{fetch_run_row, map_run_detail, resolve_run_scope_label};
 
 fn chat_search_terms(question: &str) -> Vec<String> {
     const STOP_WORDS: &[&str] = &[
@@ -71,8 +71,8 @@ fn chat_search_terms(question: &str) -> Vec<String> {
 
 fn find_chat_context_messages<'a>(
     question: &str,
-    corpus: &'a [CorpusMessage],
-) -> Vec<&'a CorpusMessage> {
+    corpus: &'a [AnalysisCorpusMessage],
+) -> Vec<&'a AnalysisCorpusMessage> {
     let terms = chat_search_terms(question);
     if terms.is_empty() {
         return corpus.iter().rev().take(6).collect();
@@ -81,12 +81,12 @@ fn find_chat_context_messages<'a>(
     let mut scored = corpus
         .iter()
         .filter_map(|message| {
-            let haystack = message.content.to_ascii_lowercase();
+            let haystack = message.content().to_ascii_lowercase();
             let score = terms
                 .iter()
                 .map(|term| usize::from(haystack.contains(term)))
                 .sum::<usize>();
-            (score > 0).then_some((score, message.published_at, message))
+            (score > 0).then_some((score, message.published_at(), message))
         })
         .collect::<Vec<_>>();
 
@@ -118,7 +118,7 @@ fn history_scope_label_from_metadata(metadata_zstd: &[u8]) -> Option<&'static st
     }
 }
 
-fn format_chat_context_messages(messages: &[&CorpusMessage]) -> String {
+fn format_chat_context_messages(messages: &[&AnalysisCorpusMessage]) -> String {
     if messages.is_empty() {
         return "No additional local source document matches were found for the current question."
             .to_string();
@@ -128,17 +128,16 @@ fn format_chat_context_messages(messages: &[&CorpusMessage]) -> String {
         .iter()
         .map(|message| {
             let history_scope = message
-                .metadata_zstd
-                .as_deref()
+                .metadata_zstd()
                 .and_then(history_scope_label_from_metadata)
                 .unwrap_or("Current supergroup history");
             format!(
                 "[{ref}] Date: {published_at}\nHistory scope: {history_scope}\nAuthor: {author}\nExcerpt:\n{excerpt}",
-                ref = message.r#ref,
-                published_at = message.published_at,
+                ref = message.reference(),
+                published_at = message.published_at(),
                 history_scope = history_scope,
-                author = message.author.as_deref().unwrap_or("unknown"),
-                excerpt = clip_excerpt(&message.content, 420)
+                author = message.author().unwrap_or("unknown"),
+                excerpt = clip_excerpt(message.content(), 420)
             )
         })
         .collect::<Vec<_>>()
@@ -147,7 +146,7 @@ fn format_chat_context_messages(messages: &[&CorpusMessage]) -> String {
 
 fn ensure_completed_chat_context(
     run: &AnalysisRunDetail,
-    snapshot: &[CorpusMessage],
+    snapshot: &[AnalysisCorpusMessage],
 ) -> AppResult<()> {
     if run.status != ANALYSIS_STATUS_COMPLETED {
         return Err(AppError::validation(
@@ -168,10 +167,9 @@ pub(super) async fn load_chat_run_and_scope_label(
     pool: &Pool<Sqlite>,
     run_id: i64,
 ) -> AppResult<(AnalysisRunDetail, String)> {
-    let run_row = fetch_run_row(pool, run_id)
+    let run = resolve_legacy_analysis_chat_run_in_pool(pool, run_id)
         .await?
-        .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
-    let run = map_run_detail(run_row);
+        .into_detail();
     let scope_label = resolve_run_scope_label(&run);
     Ok((run, scope_label))
 }
@@ -183,7 +181,7 @@ struct ChatRequestParams<'a> {
     history: &'a [AnalysisChatTurn],
     question: &'a str,
     report_markdown: &'a str,
-    context_messages: &'a [&'a CorpusMessage],
+    context_messages: &'a [&'a AnalysisCorpusMessage],
     model_override: Option<String>,
 }
 
@@ -361,7 +359,7 @@ pub async fn list_analysis_chat_messages(
     run_id: i64,
 ) -> AppResult<Vec<AnalysisChatMessage>> {
     let pool = get_pool(&handle).await?;
-    let exists = fetch_run_row(&pool, run_id).await?.is_some();
+    let exists = analysis_run_exists(&pool, run_id).await?;
     if !exists {
         return Err(AppError::not_found(format!(
             "Analysis run {run_id} not found"
@@ -373,7 +371,7 @@ pub async fn list_analysis_chat_messages(
 #[tauri::command]
 pub async fn clear_analysis_chat_messages(handle: AppHandle, run_id: i64) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
-    let exists = fetch_run_row(&pool, run_id).await?.is_some();
+    let exists = analysis_run_exists(&pool, run_id).await?;
     if !exists {
         return Err(AppError::not_found(format!(
             "Analysis run {run_id} not found"
@@ -553,7 +551,8 @@ pub async fn ask_analysis_run_question(
 
 #[cfg(test)]
 mod tests {
-    use super::super::models::{AnalysisRunDetail, CorpusMessage};
+    use super::super::corpus::AnalysisCorpusMessage;
+    use super::super::models::AnalysisRunDetail;
     use super::{
         analysis_chat_request_metadata, build_chat_request,
         completed_chat_persistence_failure_message, ensure_completed_chat_context,
@@ -599,28 +598,41 @@ mod tests {
         }
     }
 
-    fn sample_message() -> CorpusMessage {
-        CorpusMessage {
-            item_id: 9,
-            source_id: 3,
-            external_id: "abc".to_string(),
-            published_at: 1_710_000_000,
-            author: Some("analyst".to_string()),
-            content: "A matching source document excerpt".to_string(),
-            r#ref: "s3-i9".to_string(),
-            item_kind: Some("telegram_message".to_string()),
-            source_type: Some("telegram".to_string()),
-            source_subtype: None,
-            metadata_zstd: None,
-        }
+    fn sample_message() -> AnalysisCorpusMessage {
+        AnalysisCorpusMessage::new(
+            9,
+            3,
+            "abc".to_string(),
+            1_710_000_000,
+            Some("analyst".to_string()),
+            "A matching source document excerpt".to_string(),
+            "s3-i9".to_string(),
+            Some("telegram_message".to_string()),
+            Some("telegram".to_string()),
+            None,
+            None,
+        )
     }
 
     #[test]
     fn chat_context_labels_migrated_history_scope_from_metadata() {
-        let mut message = sample_message();
-        message.metadata_zstd = Some(
-            extractum_core::compression::compress_json_bytes(br#"{"history_scope":"migrated"}"#)
+        let message = AnalysisCorpusMessage::new(
+            9,
+            3,
+            "abc".to_string(),
+            1_710_000_000,
+            Some("analyst".to_string()),
+            "A matching source document excerpt".to_string(),
+            "s3-i9".to_string(),
+            Some("telegram_message".to_string()),
+            Some("telegram".to_string()),
+            None,
+            Some(
+                extractum_core::compression::compress_json_bytes(
+                    br#"{"history_scope":"migrated"}"#,
+                )
                 .expect("compress metadata"),
+            ),
         );
 
         let text = format_chat_context_messages(&[&message]);

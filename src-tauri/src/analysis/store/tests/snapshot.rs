@@ -1,4 +1,4 @@
-use super::super::super::models::CorpusMessage;
+use super::super::super::corpus::AnalysisCorpusMessage;
 use super::super::{
     capture_run_snapshot, mark_run_capture_failed, sanitize_provider_error, sanitize_snapshot_error,
 };
@@ -54,20 +54,20 @@ async fn snapshot_store_pool() -> sqlx::SqlitePool {
     pool
 }
 
-fn strict_snapshot_message(label: &str) -> CorpusMessage {
-    CorpusMessage {
-        item_id: 10,
-        source_id: 2,
-        external_id: label.to_string(),
-        published_at: 1_710_000_000,
-        author: Some("Alice".to_string()),
-        content: format!("content {label}"),
-        r#ref: format!("s2-i10-{label}"),
-        item_kind: Some("telegram_message".to_string()),
-        source_type: Some("telegram".to_string()),
-        source_subtype: Some("channel".to_string()),
-        metadata_zstd: None,
-    }
+fn strict_snapshot_message(label: &str) -> AnalysisCorpusMessage {
+    AnalysisCorpusMessage::new(
+        10,
+        2,
+        label.to_string(),
+        1_710_000_000,
+        Some("Alice".to_string()),
+        format!("content {label}"),
+        format!("s2-i10-{label}"),
+        Some("telegram_message".to_string()),
+        Some("telegram".to_string()),
+        Some("channel".to_string()),
+        None,
+    )
 }
 
 #[test]
@@ -130,7 +130,7 @@ async fn capture_run_snapshot_marks_captured_after_reload_and_replaces_rows() {
 
     assert_eq!(first.len(), 1);
     assert_eq!(second.len(), 1);
-    assert_eq!(second[0].external_id, "b");
+    assert_eq!(second[0].external_id(), "b");
 
     let count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM analysis_run_messages WHERE run_id = 1")
@@ -157,8 +157,19 @@ async fn capture_run_snapshot_marks_captured_after_reload_and_replaces_rows() {
 #[tokio::test]
 async fn capture_run_snapshot_rejects_missing_required_fields_without_marker() {
     let pool = snapshot_store_pool().await;
-    let mut message = strict_snapshot_message("bad");
-    message.item_kind = None;
+    let message = AnalysisCorpusMessage::new(
+        10,
+        2,
+        "bad".to_string(),
+        1_710_000_000,
+        Some("Alice".to_string()),
+        "content bad".to_string(),
+        "s2-i10-bad".to_string(),
+        None,
+        Some("telegram".to_string()),
+        Some("channel".to_string()),
+        None,
+    );
 
     let error = match capture_run_snapshot(&pool, 1, "Frozen scope", &[message]).await {
         Ok(_) => panic!("missing item_kind should fail"),

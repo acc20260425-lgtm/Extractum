@@ -1,6 +1,6 @@
 use super::chat::load_chat_run_and_scope_label;
 use super::store::{
-    fetch_run_row, list_analysis_run_summaries, map_run_detail, map_run_summary,
+    get_analysis_run_in_pool, list_active_analysis_runs_in_pool, list_analysis_runs_in_pool,
     AnalysisRunListFilters,
 };
 use crate::error::AppError;
@@ -148,7 +148,7 @@ async fn run_reads_preserve_deleted_blank_and_snapshot_scope_labels() {
         .await
         .expect("delete project");
 
-    let listed = list_analysis_run_summaries(
+    let listed = list_analysis_runs_in_pool(
         &pool,
         AnalysisRunListFilters::for_analysis(
             None, None, 20, None, None, None, None, None, None, None,
@@ -171,18 +171,18 @@ async fn run_reads_preserve_deleted_blank_and_snapshot_scope_labels() {
         ]
     );
 
-    let active = fetch_run_row(&pool, 2)
+    let active = list_active_analysis_runs_in_pool(&pool, &std::collections::HashSet::from([2]))
         .await
         .expect("fetch active")
-        .map(map_run_summary)
+        .into_iter()
+        .next()
         .expect("active exists");
     assert_eq!(active.status, "running");
     assert_eq!(active.scope_label, "   ");
 
-    let detail = fetch_run_row(&pool, 1)
+    let detail = get_analysis_run_in_pool(&pool, 1)
         .await
         .expect("get run")
-        .map(map_run_detail)
         .expect("run exists");
     assert_eq!(detail.scope_label, "Frozen source");
     assert_eq!(detail.source_title.as_deref(), Some("Live source"));
@@ -234,7 +234,7 @@ async fn analysis_run_search_escapes_percent_underscore_and_backslash_before_lim
     )
     .await;
 
-    let runs = list_analysis_run_summaries(
+    let runs = list_analysis_runs_in_pool(
         &pool,
         AnalysisRunListFilters::for_analysis(
             None,

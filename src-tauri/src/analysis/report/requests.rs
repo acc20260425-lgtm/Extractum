@@ -1,6 +1,7 @@
 use crate::llm::{LlmChatRequest, LlmMessage};
 
-use super::super::models::{AnalysisPromptTemplate, ChunkSummary, CorpusMessage};
+use super::super::corpus::AnalysisCorpusMessage;
+use super::super::models::{AnalysisPromptTemplate, ChunkSummary};
 use super::super::trace::normalize_ref;
 use super::super::{now_secs, ANALYSIS_FALLBACK_CHUNK_TARGET_CHARS};
 
@@ -11,17 +12,17 @@ const ANALYSIS_CHUNK_ESTIMATED_CHARS_PER_TOKEN: usize = 3;
 const ANALYSIS_CHUNK_MIN_TARGET_CHARS: usize = 2_000;
 
 pub(super) fn chunk_messages(
-    messages: &[CorpusMessage],
+    messages: &[AnalysisCorpusMessage],
     max_chars: usize,
-) -> Vec<Vec<CorpusMessage>> {
+) -> Vec<Vec<AnalysisCorpusMessage>> {
     let mut chunks = Vec::new();
     let mut current = Vec::new();
     let mut current_chars = 0usize;
 
     for message in messages {
-        let estimated_len = message.content.len()
-            + message.r#ref.len()
-            + message.author.as_deref().unwrap_or("").len()
+        let estimated_len = message.content().len()
+            + message.reference().len()
+            + message.author().unwrap_or("").len()
             + 64;
 
         if !current.is_empty() && current_chars + estimated_len > max_chars {
@@ -41,16 +42,16 @@ pub(super) fn chunk_messages(
     chunks
 }
 
-fn format_chunk_corpus(messages: &[CorpusMessage]) -> String {
+fn format_chunk_corpus(messages: &[AnalysisCorpusMessage]) -> String {
     messages
         .iter()
         .map(|message| {
             format!(
                 "[{ref}]\nDate: {published_at}\nAuthor: {author}\nContent:\n{content}",
-                ref = message.r#ref,
-                published_at = message.published_at,
-                author = message.author.as_deref().unwrap_or("unknown"),
-                content = message.content
+                ref = message.reference(),
+                published_at = message.published_at(),
+                author = message.author().unwrap_or("unknown"),
+                content = message.content()
             )
         })
         .collect::<Vec<_>>()
@@ -62,7 +63,7 @@ pub(super) fn build_map_request(
     profile_id: String,
     chunk_index: usize,
     total_chunks: usize,
-    messages: &[CorpusMessage],
+    messages: &[AnalysisCorpusMessage],
 ) -> LlmChatRequest {
     LlmChatRequest {
         request_id: format!("analysis-map-{run_id}-{chunk_index}-{}", now_secs()),

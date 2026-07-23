@@ -12,7 +12,8 @@ use crate::llm::{
     LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState, ResolvedLlmProfile,
 };
 
-use super::super::models::{AnalysisChunkSummaryEvent, ChunkSummary, CorpusMessage};
+use super::super::corpus::AnalysisCorpusMessage;
+use super::super::models::{AnalysisChunkSummaryEvent, ChunkSummary};
 use super::super::state::AnalysisState;
 use super::requests::{
     build_map_request, build_reduce_request, parse_chunk_summary, ReduceRequestParams,
@@ -96,7 +97,7 @@ where
 
 pub(super) async fn run_map_phase(
     ctx: &ReportPipelineContext,
-    chunks: Vec<Vec<CorpusMessage>>,
+    chunks: Vec<Vec<AnalysisCorpusMessage>>,
 ) -> Result<Vec<ChunkSummary>, ReportRunError> {
     ctx.emit(
         RunEvent::new(ctx.run_id, "progress", "map")
@@ -293,7 +294,7 @@ pub(super) async fn run_reduce_phase(
     let reduce_request = build_reduce_request(ReduceRequestParams {
         run_id: ctx.run_id,
         profile_id: ctx.resolved_profile.profile_id().to_string(),
-        scope_label: &input.scope_label,
+        scope_label: input.scope.scope_label_snapshot(),
         output_language: &input.output_language,
         prompt_template: &input.prompt_template,
         period_from: input.period_from,

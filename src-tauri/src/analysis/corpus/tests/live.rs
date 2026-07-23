@@ -1,7 +1,10 @@
 use super::super::super::corpus::{
-    live_corpus_ref, load_corpus_messages, preflight_analysis_run, AnalysisRunPreflightLimits,
-    CorpusLoadRequest, YoutubeCorpusMode,
+    live_corpus_ref, load_app_corpus_messages, preflight_analysis_corpus, AnalysisCorpusMessage,
+    AnalysisCorpusRequest, AnalysisRunPreflightLimits, AppAnalysisCorpusReader,
+    YoutubeCorpusMode as AppYoutubeCorpusMode,
 };
+use super::super::super::models::AnalysisSourceKind;
+include!("live_portable.rs");
 use super::harness::{
     corpus_request, decode_message_metadata_for_test, insert_youtube_transcript_segment,
     insert_youtube_video_source, insert_youtube_video_source_with_typed_metadata,
@@ -71,22 +74,23 @@ async fn opted_in_analysis_corpus_includes_migrated_rows_and_counts_preflight() 
         .await
         .expect("rebuild docs");
 
-    let request = CorpusLoadRequest {
-        source_type: "telegram".to_string(),
-        source_ids: vec![1],
-        period_from: 1,
-        period_to: 200,
-        youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
-        include_migrated_history: true,
-    };
+    let request = AnalysisCorpusRequest::new(
+        AnalysisSourceKind::Telegram,
+        vec![1],
+        1,
+        200,
+        AppYoutubeCorpusMode::TranscriptDescription,
+        true,
+    )
+    .expect("construct telegram request");
 
-    let corpus = load_corpus_messages(&pool, &request)
+    let corpus = load_app_corpus_messages(&pool, &request)
         .await
         .expect("load corpus");
     assert_eq!(
         corpus
             .iter()
-            .map(|message| message.item_id)
+            .map(AnalysisCorpusMessage::item_id)
             .collect::<Vec<_>>(),
         vec![11, 10]
     );
@@ -95,15 +99,16 @@ async fn opted_in_analysis_corpus_includes_migrated_rows_and_counts_preflight() 
     assert_eq!(migrated_metadata["history_scope"], "migrated");
     assert_eq!(migrated_metadata["migration_domain"], "migrated_from_chat");
 
-    let preflight = preflight_analysis_run(
-        &pool,
+    let reader = AppAnalysisCorpusReader::new(pool.clone());
+    let preflight = preflight_analysis_corpus(
+        &reader,
         &request,
         16000,
         AnalysisRunPreflightLimits::default(),
     )
     .await
     .expect("preflight");
-    assert_eq!(preflight.message_count, 2);
+    assert_eq!(preflight.message_count(), 2);
 }
 
 #[tokio::test]
@@ -122,23 +127,24 @@ async fn source_group_opt_in_includes_only_members_with_migrated_rows() {
         .await
         .expect("rebuild source 2");
 
-    let request = CorpusLoadRequest {
-        source_type: "telegram".to_string(),
-        source_ids: vec![1, 2],
-        period_from: 1,
-        period_to: 200,
-        youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
-        include_migrated_history: true,
-    };
+    let request = AnalysisCorpusRequest::new(
+        AnalysisSourceKind::Telegram,
+        vec![1, 2],
+        1,
+        200,
+        AppYoutubeCorpusMode::TranscriptDescription,
+        true,
+    )
+    .expect("construct source-group request");
 
-    let corpus = load_corpus_messages(&pool, &request)
+    let corpus = load_app_corpus_messages(&pool, &request)
         .await
         .expect("load corpus");
 
     assert_eq!(
         corpus
             .iter()
-            .map(|message| message.item_id)
+            .map(AnalysisCorpusMessage::item_id)
             .collect::<Vec<_>>(),
         vec![11, 20, 10]
     );
@@ -154,35 +160,37 @@ async fn explicit_analysis_opt_in_with_zero_migrated_rows_keeps_current_corpus()
         .await
         .expect("rebuild docs");
 
-    let request = CorpusLoadRequest {
-        source_type: "telegram".to_string(),
-        source_ids: vec![1],
-        period_from: 1,
-        period_to: 200,
-        youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
-        include_migrated_history: true,
-    };
+    let request = AnalysisCorpusRequest::new(
+        AnalysisSourceKind::Telegram,
+        vec![1],
+        1,
+        200,
+        AppYoutubeCorpusMode::TranscriptDescription,
+        true,
+    )
+    .expect("construct current-only request");
 
-    let corpus = load_corpus_messages(&pool, &request)
+    let corpus = load_app_corpus_messages(&pool, &request)
         .await
         .expect("load corpus");
     assert_eq!(
         corpus
             .iter()
-            .map(|message| message.item_id)
+            .map(AnalysisCorpusMessage::item_id)
             .collect::<Vec<_>>(),
         vec![10]
     );
 
-    let preflight = preflight_analysis_run(
-        &pool,
+    let reader = AppAnalysisCorpusReader::new(pool.clone());
+    let preflight = preflight_analysis_corpus(
+        &reader,
         &request,
         16000,
         AnalysisRunPreflightLimits::default(),
     )
     .await
     .expect("preflight");
-    assert_eq!(preflight.message_count, 1);
+    assert_eq!(preflight.message_count(), 1);
 }
 
 #[tokio::test]
@@ -203,22 +211,23 @@ async fn youtube_description_rows_use_typed_metadata_with_corrupt_source_blob() 
         .expect("corrupt source blob");
     rebuild_documents_for_sources(&pool, &[401]).await;
 
-    let request = CorpusLoadRequest {
-        source_type: "youtube".to_string(),
-        source_ids: vec![401],
-        period_from: 1,
-        period_to: i64::MAX,
-        youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
-        include_migrated_history: false,
-    };
-    let messages = load_corpus_messages(&pool, &request)
+    let request = AnalysisCorpusRequest::new(
+        AnalysisSourceKind::Youtube,
+        vec![401],
+        1,
+        i64::MAX,
+        AppYoutubeCorpusMode::TranscriptDescription,
+        false,
+    )
+    .expect("construct YouTube request");
+    let messages = load_app_corpus_messages(&pool, &request)
         .await
         .expect("load descriptions");
 
     assert_eq!(messages.len(), 1);
-    assert!(messages[0].content.contains("Typed description"));
+    assert!(messages[0].content().contains("Typed description"));
     assert!(messages[0]
-        .content
+        .content()
         .contains("URL: https://www.youtube.com/watch?v=video401"));
 }
 
@@ -233,15 +242,16 @@ async fn youtube_description_missing_typed_metadata_skips_without_decoding_sourc
     .expect("insert source");
     rebuild_documents_for_sources(&pool, &[402]).await;
 
-    let request = CorpusLoadRequest {
-        source_type: "youtube".to_string(),
-        source_ids: vec![402],
-        period_from: 1,
-        period_to: i64::MAX,
-        youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
-        include_migrated_history: false,
-    };
-    let messages = load_corpus_messages(&pool, &request)
+    let request = AnalysisCorpusRequest::new(
+        AnalysisSourceKind::Youtube,
+        vec![402],
+        1,
+        i64::MAX,
+        AppYoutubeCorpusMode::TranscriptDescription,
+        false,
+    )
+    .expect("construct missing-metadata request");
+    let messages = load_app_corpus_messages(&pool, &request)
         .await
         .expect("load descriptions");
 
@@ -278,15 +288,16 @@ async fn youtube_transcript_segment_evidence_uses_typed_source_context() {
         .expect("corrupt source blob");
     rebuild_documents_for_sources(&pool, &[403]).await;
 
-    let request = CorpusLoadRequest {
-        source_type: "youtube".to_string(),
-        source_ids: vec![403],
-        period_from: 1,
-        period_to: i64::MAX,
-        youtube_corpus_mode: YoutubeCorpusMode::TranscriptOnly,
-        include_migrated_history: false,
-    };
-    let messages = load_corpus_messages(&pool, &request)
+    let request = AnalysisCorpusRequest::new(
+        AnalysisSourceKind::Youtube,
+        vec![403],
+        1,
+        i64::MAX,
+        AppYoutubeCorpusMode::TranscriptOnly,
+        false,
+    )
+    .expect("construct transcript request");
+    let messages = load_app_corpus_messages(&pool, &request)
         .await
         .expect("load transcript segments");
 
@@ -340,15 +351,15 @@ async fn live_corpus_refs_use_local_item_ids() {
     let request = corpus_request(
         "telegram",
         vec![2, 4],
-        YoutubeCorpusMode::TranscriptDescription,
+        AppYoutubeCorpusMode::TranscriptDescription,
     );
-    let corpus = load_corpus_messages(&pool, &request)
+    let corpus = load_app_corpus_messages(&pool, &request)
         .await
         .expect("load live corpus");
 
     assert_eq!(corpus.len(), 2);
-    assert_eq!(corpus[0].r#ref, "s2-i11");
-    assert_eq!(corpus[1].r#ref, "s4-i12");
+    assert_eq!(corpus[0].reference(), "s2-i11");
+    assert_eq!(corpus[1].reference(), "s4-i12");
 }
 
 #[tokio::test]
@@ -370,20 +381,20 @@ async fn preflight_ref_format_matches_corpus_loader_ref_format() {
     .expect("insert item");
     rebuild_documents_for_sources(&pool, &[2]).await;
 
-    let corpus = load_corpus_messages(
+    let corpus = load_app_corpus_messages(
         &pool,
         &corpus_request(
             "telegram",
             vec![2],
-            YoutubeCorpusMode::TranscriptDescription,
+            AppYoutubeCorpusMode::TranscriptDescription,
         ),
     )
     .await
     .expect("load corpus");
 
     assert_eq!(
-        corpus[0].r#ref,
-        live_corpus_ref(corpus[0].source_id, corpus[0].item_id)
+        corpus[0].reference(),
+        live_corpus_ref(corpus[0].source_id(), corpus[0].item_id())
     );
 }
 
@@ -410,12 +421,12 @@ async fn load_corpus_messages_returns_typed_internal_for_corrupt_live_document_c
         .await
         .expect("corrupt live document content");
 
-    let error = match load_corpus_messages(
+    let error = match load_app_corpus_messages(
         &pool,
         &corpus_request(
             "telegram",
             vec![2],
-            YoutubeCorpusMode::TranscriptDescription,
+            AppYoutubeCorpusMode::TranscriptDescription,
         ),
     )
     .await
@@ -457,9 +468,9 @@ async fn load_corpus_messages_orders_transcript_segments_by_document_order_not_r
     .expect("insert late segment");
     rebuild_documents_for_sources(&pool, &[20]).await;
 
-    let corpus = load_corpus_messages(
+    let corpus = load_app_corpus_messages(
         &pool,
-        &corpus_request("youtube", vec![20], YoutubeCorpusMode::TranscriptOnly),
+        &corpus_request("youtube", vec![20], AppYoutubeCorpusMode::TranscriptOnly),
     )
     .await
     .expect("load corpus");
@@ -467,46 +478,9 @@ async fn load_corpus_messages_orders_transcript_segments_by_document_order_not_r
     assert_eq!(
         corpus
             .iter()
-            .map(|message| message.r#ref.as_str())
+            .map(AnalysisCorpusMessage::reference)
             .collect::<Vec<_>>(),
         vec!["s20-i21@900ms", "s20-i21@10000ms"]
-    );
-}
-
-#[test]
-fn youtube_corpus_mode_parses_wire_values_and_defaults() {
-    assert_eq!(
-        YoutubeCorpusMode::from_wire(None).expect("default mode"),
-        YoutubeCorpusMode::TranscriptDescription
-    );
-    assert_eq!(
-        YoutubeCorpusMode::from_wire(Some("transcript_only")).expect("transcript only"),
-        YoutubeCorpusMode::TranscriptOnly
-    );
-    assert_eq!(
-        YoutubeCorpusMode::from_wire(Some("transcript_description_comments"))
-            .expect("comments mode"),
-        YoutubeCorpusMode::TranscriptDescriptionComments
-    );
-    assert!(YoutubeCorpusMode::from_wire(Some("all_text")).is_err());
-    assert_eq!(
-        "transcript_only"
-            .parse::<YoutubeCorpusMode>()
-            .expect("parse transcript-only mode"),
-        YoutubeCorpusMode::TranscriptOnly,
-        "RED: CP2 YouTube corpus FromStr"
-    );
-    assert_eq!(
-        YoutubeCorpusMode::TranscriptOnly.as_wire(),
-        "transcript_only"
-    );
-    assert_eq!(
-        YoutubeCorpusMode::TranscriptDescription.as_wire(),
-        "transcript_description"
-    );
-    assert_eq!(
-        YoutubeCorpusMode::TranscriptDescriptionComments.as_wire(),
-        "transcript_description_comments"
     );
 }
 
@@ -539,20 +513,20 @@ async fn load_corpus_messages_filters_telegram_to_telegram_message() {
     .expect("insert mixed items");
     rebuild_documents_for_sources(&pool, &[2, 20]).await;
 
-    let corpus = load_corpus_messages(
+    let corpus = load_app_corpus_messages(
         &pool,
         &corpus_request(
             "telegram",
             vec![2, 20],
-            YoutubeCorpusMode::TranscriptDescription,
+            AppYoutubeCorpusMode::TranscriptDescription,
         ),
     )
     .await
     .expect("load telegram corpus");
 
     assert_eq!(corpus.len(), 1);
-    assert_eq!(corpus[0].external_id, "100");
-    assert_eq!(corpus[0].content, "Telegram message");
+    assert_eq!(corpus[0].external_id(), "100");
+    assert_eq!(corpus[0].content(), "Telegram message");
 }
 
 #[tokio::test]
@@ -585,16 +559,16 @@ async fn load_corpus_messages_filters_youtube_transcript_only_to_transcripts() {
     insert_youtube_transcript_segment(&pool, 21, 20, 754_000, "Transcript text").await;
     rebuild_documents_for_sources(&pool, &[20]).await;
 
-    let corpus = load_corpus_messages(
+    let corpus = load_app_corpus_messages(
         &pool,
-        &corpus_request("youtube", vec![20], YoutubeCorpusMode::TranscriptOnly),
+        &corpus_request("youtube", vec![20], AppYoutubeCorpusMode::TranscriptOnly),
     )
     .await
     .expect("load youtube transcript-only corpus");
 
     assert_eq!(corpus.len(), 1);
-    assert_eq!(corpus[0].external_id, "transcript:v1:en:manual");
-    assert_eq!(corpus[0].r#ref, "s20-i21@754000ms");
+    assert_eq!(corpus[0].external_id(), "transcript:v1:en:manual");
+    assert_eq!(corpus[0].reference(), "s20-i21@754000ms");
 }
 
 #[tokio::test]
@@ -627,22 +601,22 @@ async fn load_corpus_messages_includes_youtube_comment_only_in_comments_mode() {
     insert_youtube_transcript_segment(&pool, 21, 20, 754_000, "Transcript text").await;
     rebuild_documents_for_sources(&pool, &[20]).await;
 
-    let without_comments = load_corpus_messages(
+    let without_comments = load_app_corpus_messages(
         &pool,
         &corpus_request(
             "youtube",
             vec![20],
-            YoutubeCorpusMode::TranscriptDescription,
+            AppYoutubeCorpusMode::TranscriptDescription,
         ),
     )
     .await
     .expect("load youtube transcript+description corpus");
-    let with_comments = load_corpus_messages(
+    let with_comments = load_app_corpus_messages(
         &pool,
         &corpus_request(
             "youtube",
             vec![20],
-            YoutubeCorpusMode::TranscriptDescriptionComments,
+            AppYoutubeCorpusMode::TranscriptDescriptionComments,
         ),
     )
     .await
@@ -652,7 +626,7 @@ async fn load_corpus_messages_includes_youtube_comment_only_in_comments_mode() {
     assert_eq!(with_comments.len(), 2);
     assert!(with_comments
         .iter()
-        .any(|message| message.external_id == "comment:c1"));
+        .any(|message| message.external_id() == "comment:c1"));
 }
 
 #[tokio::test]
@@ -669,21 +643,21 @@ async fn description_mode_creates_synthetic_description_message() {
     .await;
     rebuild_documents_for_sources(&pool, &[20]).await;
 
-    let corpus = load_corpus_messages(
+    let corpus = load_app_corpus_messages(
         &pool,
         &corpus_request(
             "youtube",
             vec![20],
-            YoutubeCorpusMode::TranscriptDescription,
+            AppYoutubeCorpusMode::TranscriptDescription,
         ),
     )
     .await
     .expect("load youtube corpus");
 
     assert_eq!(corpus.len(), 1);
-    assert_eq!(corpus[0].item_id, 0);
-    assert_eq!(corpus[0].external_id, "description:video1");
-    assert_eq!(corpus[0].r#ref, "s20-i0");
-    assert!(corpus[0].content.contains("YouTube video description"));
-    assert!(corpus[0].content.contains("Description body"));
+    assert_eq!(corpus[0].item_id(), 0);
+    assert_eq!(corpus[0].external_id(), "description:video1");
+    assert_eq!(corpus[0].reference(), "s20-i0");
+    assert!(corpus[0].content().contains("YouTube video description"));
+    assert!(corpus[0].content().contains("Description body"));
 }

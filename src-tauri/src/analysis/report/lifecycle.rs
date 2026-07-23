@@ -7,7 +7,7 @@ use crate::llm::LlmSchedulerState;
 
 use super::super::state::AnalysisState;
 use super::super::store::{
-    fetch_run_row, mark_run_capture_failed, sanitize_provider_error, set_run_status,
+    load_analysis_run_status, mark_run_capture_failed, sanitize_provider_error, set_run_status,
 };
 use super::super::{
     now_secs, ANALYSIS_STATUS_CANCELLED, ANALYSIS_STATUS_FAILED, ANALYSIS_STATUS_QUEUED,
@@ -37,14 +37,25 @@ pub(super) async fn fail_run(handle: &AppHandle, run_id: i64, error: String) {
 }
 
 pub(super) async fn fail_capture_run(handle: &AppHandle, run_id: i64, error: String) {
-    if let Ok(pool) = get_pool(handle).await {
-        let _ = mark_run_capture_failed(&pool, run_id, &error, now_secs()).await;
+    let pool = get_pool(handle).await.ok();
+    persist_capture_failure_event(pool.as_ref(), run_id, &error, now_secs())
+        .await
+        .emit(handle);
+}
+
+pub(super) async fn persist_capture_failure_event(
+    pool: Option<&Pool<Sqlite>>,
+    run_id: i64,
+    error: &str,
+    completed_at: i64,
+) -> RunEvent {
+    if let Some(pool) = pool {
+        let _ = mark_run_capture_failed(pool, run_id, error, completed_at).await;
     }
 
     RunEvent::new(run_id, "failed", "persist")
         .message("Report run failed before snapshot capture completed.".to_string())
-        .error(error)
-        .emit(handle);
+        .error(error.to_string())
 }
 
 pub(super) async fn cancel_run(handle: &AppHandle, run_id: i64, message: String) {
@@ -97,11 +108,11 @@ pub(super) async fn request_analysis_run_cancel_for_pool(
     scheduler: &LlmSchedulerState,
     run_id: i64,
 ) -> AppResult<String> {
-    let run = fetch_run_row(pool, run_id)
+    let status = load_analysis_run_status(pool, run_id)
         .await?
         .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
 
-    if run.status != ANALYSIS_STATUS_QUEUED && run.status != ANALYSIS_STATUS_RUNNING {
+    if status != ANALYSIS_STATUS_QUEUED && status != ANALYSIS_STATUS_RUNNING {
         return Err(AppError::conflict(format!(
             "Analysis run {run_id} is not queued or running"
         )));
@@ -115,7 +126,7 @@ pub(super) async fn request_analysis_run_cancel_for_pool(
         )));
     }
 
-    Ok(run.status)
+    Ok(status)
 }
 
 pub(crate) async fn request_analysis_run_cancel(

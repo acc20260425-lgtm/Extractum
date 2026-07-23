@@ -18,10 +18,9 @@ async fn seeded_snapshot_runs_expose_captured_snapshot_state() {
                 .fetch_one(&pool)
                 .await
                 .expect("load fixture run id");
-        let detail = crate::analysis::store::fetch_run_row(&pool, run_id)
+        let detail = crate::analysis::store::get_analysis_run_in_pool(&pool, run_id)
             .await
             .expect("fetch fixture run")
-            .map(crate::analysis::store::map_run_detail)
             .expect("fixture run exists");
 
         assert_eq!(
@@ -97,7 +96,7 @@ async fn missing_snapshot_run_exposes_capture_failed_state_but_no_saved_messages
             .await
             .expect("load missing snapshot run");
 
-    let summaries = crate::analysis::store::list_analysis_run_summaries(
+    let summaries = crate::analysis::store::list_analysis_runs_in_pool(
         &pool,
         crate::analysis::store::AnalysisRunListFilters::for_analysis(
             None,
@@ -124,10 +123,9 @@ async fn missing_snapshot_run_exposes_capture_failed_state_but_no_saved_messages
         Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed)
     );
 
-    let detail = crate::analysis::store::fetch_run_row(&pool, run_id)
+    let detail = crate::analysis::store::get_analysis_run_in_pool(&pool, run_id)
         .await
         .expect("fetch missing snapshot run")
-        .map(crate::analysis::store::map_run_detail)
         .expect("missing snapshot run exists");
     assert_eq!(
         detail.snapshot_state,
@@ -169,7 +167,7 @@ async fn capture_failed_snapshot_run_has_sanitized_error_trace_and_readable_repo
             .await
             .expect("load capture failed snapshot run");
 
-    let summaries = crate::analysis::store::list_analysis_run_summaries(
+    let summaries = crate::analysis::store::list_analysis_runs_in_pool(
         &pool,
         crate::analysis::store::AnalysisRunListFilters::for_analysis(
             None,
@@ -200,10 +198,9 @@ async fn capture_failed_snapshot_run_has_sanitized_error_trace_and_readable_repo
         Some(CAPTURE_FAILED_SNAPSHOT_ERROR)
     );
 
-    let detail = crate::analysis::store::fetch_run_row(&pool, run_id)
+    let detail = crate::analysis::store::get_analysis_run_in_pool(&pool, run_id)
         .await
         .expect("fetch capture failed snapshot run")
-        .map(crate::analysis::store::map_run_detail)
         .expect("capture failed snapshot run exists");
     assert_eq!(detail.status, "failed");
     assert!(detail

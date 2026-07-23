@@ -127,10 +127,9 @@ async fn completed_run_without_snapshot_marker_is_capture_failed() {
     .await
     .expect("insert run");
 
-    let detail = super::store::fetch_run_row(&pool, 1)
+    let detail = super::store::get_analysis_run_in_pool(&pool, 1)
         .await
         .expect("fetch run")
-        .map(super::store::map_run_detail)
         .expect("run exists");
 
     assert_eq!(

@@ -1,38 +1,40 @@
-use super::super::super::corpus::{CorpusLoadRequest, YoutubeCorpusMode};
-use super::super::super::models::{AnalysisRunDetail, AnalysisSnapshotState, CorpusMessage};
+use super::super::super::corpus::{
+    AnalysisCorpusMessage, AnalysisCorpusRequest, YoutubeCorpusMode,
+};
+use super::super::super::models::{AnalysisRunDetail, AnalysisSnapshotState, AnalysisSourceKind};
 use crate::youtube::dto::{YoutubeAvailabilityStatus, YoutubeVideoForm, YoutubeVideoMetadata};
 use extractum_core::compression::{compress_json_bytes, compress_text, decompress_bytes};
-pub(super) fn sample_corpus() -> Vec<CorpusMessage> {
+pub(super) fn sample_corpus() -> Vec<AnalysisCorpusMessage> {
     vec![
-        CorpusMessage {
-            item_id: 11,
-            source_id: 2,
-            external_id: "100".to_string(),
-            published_at: 1_710_000_000,
-            author: Some("Alice".to_string()),
-            content: "First frozen message".to_string(),
-            r#ref: "s2-i11".to_string(),
-            item_kind: Some("youtube_transcript".to_string()),
-            source_type: Some("youtube".to_string()),
-            source_subtype: Some("video".to_string()),
-            metadata_zstd: Some(
+        AnalysisCorpusMessage::new(
+            11,
+            2,
+            "100".to_string(),
+            1_710_000_000,
+            Some("Alice".to_string()),
+            "First frozen message".to_string(),
+            "s2-i11".to_string(),
+            Some("youtube_transcript".to_string()),
+            Some("youtube".to_string()),
+            Some("video".to_string()),
+            Some(
                 compress_json_bytes(br#"{"video_id":"video2","item_kind":"youtube_transcript"}"#)
                     .expect("compress metadata"),
             ),
-        },
-        CorpusMessage {
-            item_id: 12,
-            source_id: 4,
-            external_id: "101".to_string(),
-            published_at: 1_710_000_100,
-            author: None,
-            content: "Second frozen message".to_string(),
-            r#ref: "s4-i12".to_string(),
-            item_kind: Some("telegram_message".to_string()),
-            source_type: Some("telegram".to_string()),
-            source_subtype: Some("channel".to_string()),
-            metadata_zstd: None,
-        },
+        ),
+        AnalysisCorpusMessage::new(
+            12,
+            4,
+            "101".to_string(),
+            1_710_000_100,
+            None,
+            "Second frozen message".to_string(),
+            "s4-i12".to_string(),
+            Some("telegram_message".to_string()),
+            Some("telegram".to_string()),
+            Some("channel".to_string()),
+            None,
+        ),
     ]
 }
 
@@ -297,15 +299,21 @@ pub(super) fn corpus_request(
     source_type: &str,
     source_ids: Vec<i64>,
     youtube_corpus_mode: YoutubeCorpusMode,
-) -> CorpusLoadRequest {
-    CorpusLoadRequest {
-        source_type: source_type.to_string(),
+) -> AnalysisCorpusRequest {
+    let source_kind = match source_type {
+        "telegram" => AnalysisSourceKind::Telegram,
+        "youtube" => AnalysisSourceKind::Youtube,
+        other => panic!("unsupported fixture source type {other}"),
+    };
+    AnalysisCorpusRequest::new(
+        source_kind,
         source_ids,
-        period_from: 1_700_000_000,
-        period_to: 1_800_000_000,
+        1_700_000_000,
+        1_800_000_000,
         youtube_corpus_mode,
-        include_migrated_history: false,
-    }
+        false,
+    )
+    .expect("construct corpus request")
 }
 
 pub(super) async fn rebuild_documents_for_sources(pool: &sqlx::SqlitePool, source_ids: &[i64]) {
@@ -504,8 +512,10 @@ pub(super) async fn insert_youtube_transcript_segment(
     .expect("insert youtube transcript segment");
 }
 
-pub(super) fn decode_message_metadata_for_test(message: &CorpusMessage) -> serde_json::Value {
-    let bytes = message.metadata_zstd.as_deref().expect("message metadata");
+pub(super) fn decode_message_metadata_for_test(
+    message: &AnalysisCorpusMessage,
+) -> serde_json::Value {
+    let bytes = message.metadata_zstd().expect("message metadata");
     let decoded = decompress_bytes(bytes).expect("decompress metadata");
     serde_json::from_slice(&decoded).expect("parse metadata")
 }

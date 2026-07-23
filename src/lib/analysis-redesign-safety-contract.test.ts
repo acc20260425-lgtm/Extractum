@@ -24,11 +24,14 @@ const crateOwned = (before: string, after = before) =>
   });
 
 const chatBackendSource = crateOwned("chat.rs");
-const corpusBackendFacadeSource = crateOwned("corpus.rs");
+const corpusBackendFacadeSource = crateOwned("corpus_portable.rs", "corpus.rs");
 const corpusSnapshotSource = crateOwned("corpus/snapshot.rs");
-const corpusSourceResolutionSource = crateOwned("corpus/source_resolution.rs");
+const corpusSourceResolutionSource = crateOwned(
+  "corpus/source_resolution_policy.rs",
+  "corpus/source_resolution.rs",
+);
 const storeBackendFacadeSource = crateOwned("store.rs");
-const storeReadModelSource = crateOwned("store/read_model.rs");
+const storeReadModelSource = crateOwned("store/owned_read_model.rs", "store/read_model.rs");
 const storeRunsSource = crateOwned("store/runs.rs");
 const storeSnapshotSource = crateOwned("store/snapshot.rs");
 const analysisModelsSource = crateOwned("models.rs");

@@ -1,5 +1,6 @@
 mod architecture;
 mod capture;
+mod corpus_port;
 mod harness;
 mod lifecycle;
 mod phases;

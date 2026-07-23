@@ -1,10 +1,17 @@
+#[path = "store/read_model.rs"]
+mod app_read_model;
+#[path = "store/owned_read_model.rs"]
 mod read_model;
 mod runs;
 mod setup;
 mod snapshot;
 
+pub(crate) use self::app_read_model::{
+    get_analysis_run_in_pool, list_active_analysis_runs_in_pool, list_analysis_runs_in_pool,
+    resolve_legacy_analysis_chat_run_in_pool,
+};
 pub(crate) use self::read_model::{
-    fetch_run_row, list_analysis_run_summaries, map_run_detail, map_run_summary,
+    analysis_run_exists, load_analysis_run_status, load_analysis_run_trace_data,
     resolve_run_scope_label, AnalysisRunListFilters,
 };
 pub(crate) use self::runs::{

@@ -589,7 +589,7 @@ describe("crate extraction timing policy", () => {
       "done: retained",
       "not retained",
     ]).toContain(phase7Status);
-    expect(phase7Status).toBe("preparation Checkpoint 2 retained");
+    expect(phase7Status).toBe("preparation Checkpoint 3 retained");
     expect(phase7Roadmap).toContain(
       "2026-07-22-analysis-crate-boundary-design.md",
     );

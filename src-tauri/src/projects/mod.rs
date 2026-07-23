@@ -810,7 +810,7 @@ pub async fn list_project_runs(
 ) -> AppResult<Vec<crate::analysis::models::AnalysisRunSummary>> {
     let pool = get_pool(&handle).await?;
     ensure_project_exists(&pool, project_id).await?;
-    crate::analysis::store::list_analysis_run_summaries(
+    crate::analysis::store::list_analysis_runs_in_pool(
         &pool,
         crate::analysis::store::AnalysisRunListFilters::for_project(project_id, 5),
     )

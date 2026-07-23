@@ -1,7 +1,6 @@
 use sqlx::{Pool, QueryBuilder, Sqlite};
 
-use super::super::models::CorpusMessage;
-use super::{CorpusLoadRequest, YoutubeCorpusMode};
+use super::{AnalysisCorpusMessage, AnalysisCorpusRequest, YoutubeCorpusMode};
 use extractum_core::{
     compression::{compress_json_bytes, decompress_text},
     error::{internal_error, AppError, AppResult},
@@ -12,15 +11,15 @@ pub(crate) fn live_corpus_ref(source_id: i64, item_id: i64) -> String {
     crate::analysis_documents::live_item_ref(source_id, item_id)
 }
 
-pub(crate) async fn load_corpus_messages(
+pub(crate) async fn load_app_corpus_messages(
     pool: &Pool<Sqlite>,
-    request: &CorpusLoadRequest,
-) -> AppResult<Vec<CorpusMessage>> {
-    if request.source_ids.is_empty() {
+    request: &AnalysisCorpusRequest,
+) -> AppResult<Vec<AnalysisCorpusMessage>> {
+    if request.source_ids().is_empty() {
         return Ok(Vec::new());
     }
 
-    if request.source_type == "telegram" {
+    if request.source_kind() == super::super::models::AnalysisSourceKind::Telegram {
         return load_telegram_corpus_messages(pool, request).await;
     }
 
@@ -64,7 +63,7 @@ struct TelegramCorpusRow {
 
 async fn fetch_telegram_corpus_rows(
     pool: &Pool<Sqlite>,
-    request: &CorpusLoadRequest,
+    request: &AnalysisCorpusRequest,
     include_migrated_rows: bool,
 ) -> AppResult<Vec<TelegramCorpusRow>> {
     let mut query = if include_migrated_rows {
@@ -114,13 +113,13 @@ async fn fetch_telegram_corpus_rows(
         )
     };
 
-    query.push_bind(request.period_from);
+    query.push_bind(request.period_from());
     if include_migrated_rows {
         query.push(" AND items.published_at <= ");
     } else {
         query.push(" AND d.published_at <= ");
     }
-    query.push_bind(request.period_to);
+    query.push_bind(request.period_to());
     if include_migrated_rows {
         query.push(" AND items.source_id IN (");
     } else {
@@ -128,7 +127,7 @@ async fn fetch_telegram_corpus_rows(
     }
     {
         let mut separated = query.separated(", ");
-        for source_id in &request.source_ids {
+        for source_id in request.source_ids() {
             separated.push_bind(source_id);
         }
     }
@@ -157,10 +156,10 @@ async fn fetch_telegram_corpus_rows(
 
 async fn load_telegram_corpus_messages(
     pool: &Pool<Sqlite>,
-    request: &CorpusLoadRequest,
-) -> AppResult<Vec<CorpusMessage>> {
+    request: &AnalysisCorpusRequest,
+) -> AppResult<Vec<AnalysisCorpusMessage>> {
     let mut rows = fetch_telegram_corpus_rows(pool, request, false).await?;
-    if request.include_migrated_history {
+    if request.include_migrated_history() {
         rows.extend(fetch_telegram_corpus_rows(pool, request, true).await?);
     }
 
@@ -173,29 +172,28 @@ async fn load_telegram_corpus_messages(
                 &row.history_peer_kind,
                 row.history_peer_id,
             )?;
-            Ok(CorpusMessage {
-                item_id: row.item_id,
-                source_id: row.source_id,
-                external_id: row.external_id,
-                published_at: row.published_at,
-                author: row.author,
-                content: decompress_text(&row.content_zstd).map_err(internal_error)?,
-                r#ref: row
-                    .ref_
+            Ok(AnalysisCorpusMessage::new(
+                row.item_id,
+                row.source_id,
+                row.external_id,
+                row.published_at,
+                row.author,
+                decompress_text(&row.content_zstd).map_err(internal_error)?,
+                row.ref_
                     .unwrap_or_else(|| live_corpus_ref(row.source_id, row.item_id)),
-                item_kind: Some("telegram_message".to_string()),
-                source_type: Some(row.source_type),
-                source_subtype: row.source_subtype,
-                metadata_zstd: Some(metadata_zstd),
-            })
+                Some("telegram_message".to_string()),
+                Some(row.source_type),
+                row.source_subtype,
+                Some(metadata_zstd),
+            ))
         })
         .collect::<AppResult<Vec<_>>>()?;
 
     messages.sort_by(|left, right| {
-        left.published_at
-            .cmp(&right.published_at)
-            .then_with(|| left.source_id.cmp(&right.source_id))
-            .then_with(|| left.r#ref.cmp(&right.r#ref))
+        left.published_at()
+            .cmp(&right.published_at())
+            .then_with(|| left.source_id().cmp(&right.source_id()))
+            .then_with(|| left.reference().cmp(right.reference()))
     });
 
     Ok(messages)
@@ -216,7 +214,7 @@ struct AnalysisDocumentRow {
     metadata_zstd: Option<Vec<u8>>,
 }
 
-pub(crate) fn push_analysis_document_kind_filter(
+fn push_analysis_document_kind_filter(
     query: &mut QueryBuilder<'_, Sqlite>,
     source_type: &str,
     youtube_corpus_mode: YoutubeCorpusMode,
@@ -255,8 +253,8 @@ pub(crate) fn push_analysis_document_kind_filter(
 
 async fn load_analysis_document_messages(
     pool: &Pool<Sqlite>,
-    request: &CorpusLoadRequest,
-) -> AppResult<Vec<CorpusMessage>> {
+    request: &AnalysisCorpusRequest,
+) -> AppResult<Vec<AnalysisCorpusMessage>> {
     let mut query = QueryBuilder::<Sqlite>::new(
         r#"
         SELECT
@@ -275,21 +273,24 @@ async fn load_analysis_document_messages(
         WHERE d.published_at >=
         "#,
     );
-    query.push_bind(request.period_from);
+    query.push_bind(request.period_from());
     query.push(" AND d.published_at <= ");
-    query.push_bind(request.period_to);
+    query.push_bind(request.period_to());
     query.push(" AND d.source_id IN (");
     {
         let mut separated = query.separated(", ");
-        for source_id in &request.source_ids {
+        for source_id in request.source_ids() {
             separated.push_bind(source_id);
         }
     }
     query.push(")");
     push_analysis_document_kind_filter(
         &mut query,
-        request.source_type.as_str(),
-        request.youtube_corpus_mode,
+        match request.source_kind() {
+            super::super::models::AnalysisSourceKind::Telegram => "telegram",
+            super::super::models::AnalysisSourceKind::Youtube => "youtube",
+        },
+        request.youtube_corpus_mode(),
         "d",
     )?;
     query.push(" ORDER BY d.published_at ASC, d.source_id ASC, d.document_order ASC, d.id ASC");
@@ -302,19 +303,19 @@ async fn load_analysis_document_messages(
 
     rows.into_iter()
         .map(|row| {
-            Ok(CorpusMessage {
-                item_id: row.item_id.unwrap_or(0),
-                source_id: row.source_id,
-                external_id: row.external_id,
-                published_at: row.published_at,
-                author: row.author,
-                content: decompress_text(&row.content_zstd).map_err(internal_error)?,
-                r#ref: row.ref_,
-                item_kind: Some(row.document_kind),
-                source_type: Some(row.source_type),
-                source_subtype: row.source_subtype,
-                metadata_zstd: row.metadata_zstd,
-            })
+            Ok(AnalysisCorpusMessage::new(
+                row.item_id.unwrap_or(0),
+                row.source_id,
+                row.external_id,
+                row.published_at,
+                row.author,
+                decompress_text(&row.content_zstd).map_err(internal_error)?,
+                row.ref_,
+                Some(row.document_kind),
+                Some(row.source_type),
+                row.source_subtype,
+                row.metadata_zstd,
+            ))
         })
         .collect()
 }

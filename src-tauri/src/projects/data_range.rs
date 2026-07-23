@@ -3,8 +3,8 @@ use tauri::AppHandle;
 
 use crate::analysis::models::AnalysisSourceKind;
 use crate::analysis::{
-    push_analysis_document_kind_filter, resolve_analysis_sources,
-    resolve_analysis_telegram_history_scope, AnalysisSourceResolutionErrorCode, YoutubeCorpusMode,
+    resolve_analysis_sources, resolve_analysis_telegram_history_scope,
+    AnalysisSourceResolutionErrorCode, YoutubeCorpusMode,
 };
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
@@ -19,6 +19,30 @@ fn push_source_ids(query: &mut QueryBuilder<'_, Sqlite>, source_ids: &[i64]) {
     let mut separated = query.separated(", ");
     for source_id in source_ids {
         separated.push_bind(*source_id);
+    }
+}
+
+fn push_analysis_document_kind_predicate(
+    query: &mut QueryBuilder<'_, Sqlite>,
+    source_kind: AnalysisSourceKind,
+    youtube_corpus_mode: YoutubeCorpusMode,
+) {
+    match source_kind {
+        AnalysisSourceKind::Telegram => {
+            query.push(" AND d.source_type = 'telegram' AND d.document_kind = 'telegram_message'");
+        }
+        AnalysisSourceKind::Youtube => {
+            query.push(
+                " AND d.source_type = 'youtube' AND d.document_kind IN ('youtube_transcript'",
+            );
+            if youtube_corpus_mode.includes_description() {
+                query.push(", 'youtube_description'");
+            }
+            if youtube_corpus_mode.includes_comments() {
+                query.push(", 'youtube_comment'");
+            }
+            query.push(")");
+        }
     }
 }
 
@@ -83,15 +107,8 @@ pub(crate) async fn get_project_data_range_in_pool(
         }
         Err(error) => return Err(error.into_app_error()),
     };
-    let source_kind = match resolved.source_type.as_str() {
-        "telegram" => AnalysisSourceKind::Telegram,
-        "youtube" => AnalysisSourceKind::Youtube,
-        other => {
-            return Err(AppError::validation(format!(
-                "Unsupported analysis corpus source_type '{other}'"
-            )))
-        }
-    };
+    let scope = resolved.scope();
+    let source_kind = scope.source_kind();
     let (_, include_migrated_history) =
         resolve_analysis_telegram_history_scope(include_migrated_history, source_kind)?;
 
@@ -104,14 +121,9 @@ pub(crate) async fn get_project_data_range_in_pool(
             WHERE d.source_id IN (
         "#,
     );
-    push_source_ids(&mut query, &resolved.source_ids);
+    push_source_ids(&mut query, scope.source_ids());
     query.push(")");
-    push_analysis_document_kind_filter(
-        &mut query,
-        resolved.source_type.as_str(),
-        youtube_corpus_mode,
-        "d",
-    )?;
+    push_analysis_document_kind_predicate(&mut query, source_kind, youtube_corpus_mode);
 
     if include_migrated_history {
         query.push(
@@ -124,7 +136,7 @@ pub(crate) async fn get_project_data_range_in_pool(
             WHERE items.source_id IN (
             "#,
         );
-        push_source_ids(&mut query, &resolved.source_ids);
+        push_source_ids(&mut query, scope.source_ids());
         query.push(
             r#")
               AND sources.source_type = 'telegram'

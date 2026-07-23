@@ -2,8 +2,9 @@ use sqlx::{Pool, Sqlite};
 
 use super::super::models::{
     AnalysisRunDetail, AnalysisRunMessage, AnalysisRunMessageCursor, AnalysisRunMessagesPage,
-    AnalysisSnapshotState, CorpusMessage, StoredRunSnapshotRow,
+    AnalysisSnapshotState, StoredRunSnapshotRow,
 };
+use super::AnalysisCorpusMessage;
 use extractum_core::{
     compression::{decompress_bytes, decompress_text},
     error::{internal_error, AppError, AppResult},
@@ -12,7 +13,7 @@ use extractum_core::{
 pub(crate) async fn load_run_snapshot_messages(
     pool: &Pool<Sqlite>,
     run_id: i64,
-) -> AppResult<Vec<CorpusMessage>> {
+) -> AppResult<Vec<AnalysisCorpusMessage>> {
     let rows: Vec<StoredRunSnapshotRow> = sqlx::query_as(
         r#"
         SELECT
@@ -39,19 +40,19 @@ pub(crate) async fn load_run_snapshot_messages(
 
     rows.into_iter()
         .map(|row| {
-            Ok(CorpusMessage {
-                item_id: row.item_id,
-                source_id: row.source_id,
-                external_id: row.external_id,
-                published_at: row.published_at,
-                author: row.author,
-                content: decompress_text(&row.content_zstd).map_err(internal_error)?,
-                r#ref: row.r#ref,
-                item_kind: row.item_kind,
-                source_type: row.source_type,
-                source_subtype: row.source_subtype,
-                metadata_zstd: row.metadata_zstd,
-            })
+            Ok(AnalysisCorpusMessage::new(
+                row.item_id,
+                row.source_id,
+                row.external_id,
+                row.published_at,
+                row.author,
+                decompress_text(&row.content_zstd).map_err(internal_error)?,
+                row.r#ref,
+                row.item_kind,
+                row.source_type,
+                row.source_subtype,
+                row.metadata_zstd,
+            ))
         })
         .collect()
 }
@@ -283,7 +284,7 @@ pub(crate) async fn list_run_snapshot_messages_page(
 pub(crate) async fn load_run_corpus_messages(
     pool: &Pool<Sqlite>,
     run: &AnalysisRunDetail,
-) -> AppResult<Vec<CorpusMessage>> {
+) -> AppResult<Vec<AnalysisCorpusMessage>> {
     let snapshot = load_run_snapshot_messages(pool, run.id).await?;
     ensure_captured_snapshot_rows(run, &snapshot)?;
     Ok(snapshot)
@@ -292,7 +293,7 @@ pub(crate) async fn load_run_corpus_messages(
 pub(crate) async fn load_trace_resolution_messages(
     pool: &Pool<Sqlite>,
     run: &AnalysisRunDetail,
-) -> AppResult<Vec<CorpusMessage>> {
+) -> AppResult<Vec<AnalysisCorpusMessage>> {
     let snapshot = load_run_snapshot_messages(pool, run.id).await?;
     ensure_captured_snapshot_rows(run, &snapshot)?;
     Ok(snapshot)
@@ -306,7 +307,7 @@ fn captured_snapshot_missing_error(run_id: i64) -> AppError {
 
 fn ensure_captured_snapshot_rows(
     run: &AnalysisRunDetail,
-    snapshot: &[CorpusMessage],
+    snapshot: &[AnalysisCorpusMessage],
 ) -> AppResult<()> {
     if run.snapshot_state == Some(AnalysisSnapshotState::Captured)
         && run.snapshot_message_count == 0

@@ -6,9 +6,10 @@ use extractum_core::error::{AppError, AppResult};
 use extractum_llm::{resolve_effective_model, resolve_model_input_token_limit, ResolvedLlmProfile};
 
 use super::corpus::{
-    preflight_analysis_run, preflight_limit_error, resolve_analysis_sources, AnalysisRunPreflight,
-    AnalysisRunPreflightLimits, AnalysisSourceResolutionError, CorpusLoadRequest,
-    YoutubeCorpusMode,
+    preflight_analysis_corpus as preflight_analysis_run, preflight_limit_error,
+    resolve_analysis_sources, resolve_analysis_telegram_history_scope, AnalysisCorpusRequest,
+    AnalysisRunPreflight, AnalysisRunPreflightLimits, AnalysisSourceResolutionError,
+    AppAnalysisCorpusReader, YoutubeCorpusMode,
 };
 use super::domain::{
     now_secs, ANALYSIS_SCOPE_TYPE_PROJECT, ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
@@ -17,11 +18,12 @@ use super::domain::{
 };
 use super::events::emit_analysis_event;
 use super::models::{
-    AnalysisChunkSummaryEvent, AnalysisPromptTemplate, AnalysisRunEvent, AnalysisSourceKind,
+    AnalysisChunkSummaryEvent, AnalysisPromptTemplate, AnalysisRunEvent, AnalysisScopeKind,
+    ResolvedAnalysisScope,
 };
 use super::store::{
-    fetch_prompt_template, fetch_source_group, find_active_duplicate_run, insert_analysis_run,
-    set_run_status, AnalysisRunInsert, DuplicateRunLookup,
+    capture_run_snapshot, fetch_prompt_template, find_active_duplicate_run, insert_analysis_run,
+    sanitize_snapshot_error, set_run_status, AnalysisRunInsert, DuplicateRunLookup,
 };
 use super::trace::{build_trace_data, compress_trace_data};
 use super::AnalysisState;
@@ -31,7 +33,9 @@ mod lifecycle;
 mod phases;
 mod requests;
 
+#[cfg(test)]
 use self::capture::capture_report_corpus;
+
 pub use self::lifecycle::cleanup_interrupted_analysis_runs;
 #[rustfmt::skip]
 #[cfg(test)] use self::lifecycle::request_analysis_run_cancel_for_pool;
@@ -51,6 +55,7 @@ use self::requests::{chunk_messages, chunk_target_chars_for_model_input_limit};
 pub(super) const INTERRUPTED_RUN_MESSAGE: &str =
     "Analysis run was interrupted when the app was restarted.";
 const CANCELLED_RUN_MESSAGE: &str = "Analysis run cancelled.";
+const SNAPSHOT_CAPTURE_FAILED_MESSAGE: &str = "Snapshot capture failed";
 
 pub(crate) struct StartAnalysisReportRequest {
     source_id: Option<i64>,
@@ -228,21 +233,6 @@ impl StartAnalysisReportRequest {
     }
 }
 
-pub fn resolve_analysis_telegram_history_scope(
-    include_migrated_history: bool,
-    source_kind: AnalysisSourceKind,
-) -> AppResult<(&'static str, bool)> {
-    if include_migrated_history && source_kind != AnalysisSourceKind::Telegram {
-        return Err(AppError::validation(
-            "Migrated historical scope can be included only for Telegram analysis",
-        ));
-    }
-    if include_migrated_history {
-        return Ok(("current_plus_migrated", true));
-    }
-    Ok(("current", false))
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum ReportRunError {
     Failed(String),
@@ -314,10 +304,14 @@ impl RunEvent {
     }
 }
 
+fn started_load_items_event(run_id: i64, message: String) -> RunEvent {
+    RunEvent::new(run_id, "started", "load_items").message(message)
+}
+
 struct ReportRunInput {
     run_id: i64,
-    scope_label: String,
-    corpus_request: CorpusLoadRequest,
+    scope: ResolvedAnalysisScope,
+    corpus_request: AnalysisCorpusRequest,
     period_from: i64,
     period_to: i64,
     output_language: String,
@@ -329,7 +323,7 @@ struct ReportRunInput {
 }
 
 fn validate_report_preflight(preflight: &AnalysisRunPreflight) -> AppResult<()> {
-    if preflight.message_count == 0 {
+    if preflight.message_count() == 0 {
         return Err(AppError::validation(
             "No synced source documents were found for the selected analysis scope and period",
         ));
@@ -340,6 +334,72 @@ fn validate_report_preflight(preflight: &AnalysisRunPreflight) -> AppResult<()> 
     }
 
     Ok(())
+}
+
+async fn load_execution_corpus<F>(
+    reader: &dyn super::corpus::AnalysisCorpusReader,
+    request: &AnalysisCorpusRequest,
+    preflight: &AnalysisRunPreflight,
+    mut on_started: F,
+) -> Result<Vec<super::corpus::AnalysisCorpusMessage>, ReportRunError>
+where
+    F: FnMut(String),
+{
+    on_started(format!(
+        "Preflight passed: {} documents, {} estimated chunks, {} estimated input characters.",
+        preflight.message_count(),
+        preflight.estimated_chunks(),
+        preflight.estimated_input_chars()
+    ));
+    let corpus = reader.load_corpus(request.clone()).await.map_err(|error| {
+        ReportRunError::CaptureFailed(sanitize_snapshot_error(
+            "Corpus preload failed",
+            &error.to_string(),
+        ))
+    })?;
+    if corpus.is_empty() {
+        return Err(ReportRunError::CaptureFailed(
+            SNAPSHOT_CAPTURE_FAILED_MESSAGE.to_string(),
+        ));
+    }
+    Ok(corpus)
+}
+
+mod execution_capture {
+    use super::*;
+
+    pub(super) struct CaptureReportCorpusInput<'a, F> {
+        pub(super) run_id: i64,
+        pub(super) scope_label: &'a str,
+        pub(super) reader: &'a dyn super::super::corpus::AnalysisCorpusReader,
+        pub(super) request: &'a AnalysisCorpusRequest,
+        pub(super) preflight: &'a AnalysisRunPreflight,
+        pub(super) on_started: F,
+    }
+
+    pub(super) async fn capture_report_corpus<F>(
+        pool: &sqlx::SqlitePool,
+        input: CaptureReportCorpusInput<'_, F>,
+    ) -> Result<Vec<super::super::corpus::AnalysisCorpusMessage>, ReportRunError>
+    where
+        F: FnMut(String),
+    {
+        let corpus = load_execution_corpus(
+            input.reader,
+            input.request,
+            input.preflight,
+            input.on_started,
+        )
+        .await?;
+        capture_run_snapshot(pool, input.run_id, input.scope_label, &corpus)
+            .await
+            .map_err(|error| {
+                ReportRunError::CaptureFailed(sanitize_snapshot_error(
+                    SNAPSHOT_CAPTURE_FAILED_MESSAGE,
+                    &error.to_string(),
+                ))
+            })
+    }
 }
 
 async fn run_report_pipeline(
@@ -371,17 +431,16 @@ async fn run_report_pipeline(
     .await
     .map_err(|error| ReportRunError::Failed(error.to_string()))?;
 
-    RunEvent::new(run_id, "started", "load_items")
-        .message(format!(
-            "Preflight passed: {} documents, {} estimated chunks, {} estimated input characters.",
-            input.preflight.message_count,
-            input.preflight.estimated_chunks,
-            input.preflight.estimated_input_chars
-        ))
-        .emit(&handle);
-
-    let corpus =
-        capture_report_corpus(&pool, run_id, &input.scope_label, &input.corpus_request).await?;
+    let reader = AppAnalysisCorpusReader::new(pool.clone());
+    let capture = execution_capture::CaptureReportCorpusInput {
+        run_id,
+        scope_label: input.scope.scope_label_snapshot(),
+        reader: &reader,
+        request: &input.corpus_request,
+        preflight: &input.preflight,
+        on_started: |message| started_load_items_event(run_id, message).emit(&handle),
+    };
+    let corpus = execution_capture::capture_report_corpus(&pool, capture).await?;
     if handle
         .state::<AnalysisState>()
         .is_report_run_cancelled(run_id)
@@ -516,107 +575,30 @@ pub(crate) async fn start_analysis_report_run(
     let youtube_corpus_mode = YoutubeCorpusMode::from_wire(youtube_corpus_mode.as_deref())
         .map_err(AppError::validation)?;
 
-    let (scope_type, resolved_source_id, resolved_group_id, resolved_project_id, scope_label) =
-        if let Some(source_id) = source_id {
-            let source_exists =
-                sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM sources WHERE id = ?)")
-                    .bind(source_id)
-                    .fetch_one(&pool)
-                    .await
-                    .map_err(AppError::database)?;
-            if source_exists == 0 {
-                return Err(AppError::not_found(format!("Source {source_id} not found")));
-            }
-
-            let source_title =
-                sqlx::query_scalar::<_, Option<String>>("SELECT title FROM sources WHERE id = ?")
-                    .bind(source_id)
-                    .fetch_optional(&pool)
-                    .await
-                    .map_err(AppError::database)?
-                    .flatten()
-                    .filter(|title| !title.trim().is_empty())
-                    .unwrap_or_else(|| format!("Source {source_id}"));
-
-            (
-                ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
-                Some(source_id),
-                None,
-                None,
-                source_title,
-            )
-        } else if let Some(group_id) = source_group_id {
-            let group = fetch_source_group(&pool, group_id).await?.ok_or_else(|| {
-                AppError::not_found(format!("Analysis source group {group_id} not found"))
-            })?;
-
-            if group.members.is_empty() {
-                return Err(AppError::validation(
-                    "The selected source group does not contain any sources",
-                ));
-            }
-
-            (
-                ANALYSIS_SCOPE_TYPE_SOURCE_GROUP,
-                None,
-                Some(group.id),
-                None,
-                group.name.clone(),
-            )
-        } else {
-            let project_id = project_id.expect("validated project_id");
-            let project = crate::projects::get_project_in_pool(&pool, project_id)
-                .await?
-                .ok_or_else(|| AppError::not_found(format!("Project {project_id} not found")))?;
-            let source_count: i64 =
-                sqlx::query_scalar("SELECT COUNT(*) FROM project_sources WHERE project_id = ?")
-                    .bind(project_id)
-                    .fetch_one(&pool)
-                    .await
-                    .map_err(AppError::database)?;
-            if source_count == 0 {
-                return Err(AppError::validation("Project does not contain any sources"));
-            }
-
-            (
-                ANALYSIS_SCOPE_TYPE_PROJECT,
-                None,
-                None,
-                Some(project.id),
-                project.name.clone(),
-            )
-        };
-
-    let resolved_sources = resolve_analysis_sources(
-        &pool,
-        resolved_source_id,
-        resolved_group_id,
-        resolved_project_id,
-    )
-    .await
-    .map_err(AnalysisSourceResolutionError::into_app_error)?;
-    let source_kind = match resolved_sources.source_type.as_str() {
-        "telegram" => AnalysisSourceKind::Telegram,
-        "youtube" => AnalysisSourceKind::Youtube,
-        other => {
-            return Err(AppError::validation(format!(
-                "Unsupported analysis corpus source_type '{other}'"
-            )))
-        }
+    let resolved_sources = resolve_analysis_sources(&pool, source_id, source_group_id, project_id)
+        .await
+        .map_err(AnalysisSourceResolutionError::into_app_error)?;
+    let resolved_scope = resolved_sources.into_scope();
+    let scope_type = match resolved_scope.scope_kind() {
+        AnalysisScopeKind::SingleSource => ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
+        AnalysisScopeKind::SourceGroup => ANALYSIS_SCOPE_TYPE_SOURCE_GROUP,
+        AnalysisScopeKind::Project => ANALYSIS_SCOPE_TYPE_PROJECT,
     };
+    let source_kind = resolved_scope.source_kind();
     let (telegram_history_scope, include_migrated_history) =
         resolve_analysis_telegram_history_scope(include_migrated_history, source_kind)?;
-    let corpus_request = CorpusLoadRequest {
-        source_type: resolved_sources.source_type.clone(),
-        source_ids: resolved_sources.source_ids.clone(),
+    let corpus_request = AnalysisCorpusRequest::new(
+        source_kind,
+        resolved_scope.source_ids().to_vec(),
         period_from,
         period_to,
         youtube_corpus_mode,
         include_migrated_history,
-    };
+    )?;
 
+    let reader = AppAnalysisCorpusReader::new(pool.clone());
     let preflight = preflight_analysis_run(
-        &pool,
+        &reader,
         &corpus_request,
         chunk_target_chars,
         AnalysisRunPreflightLimits::default(),
@@ -629,9 +611,9 @@ pub(crate) async fn start_analysis_report_run(
         &pool,
         &DuplicateRunLookup {
             scope_type,
-            source_id: resolved_source_id,
-            source_group_id: resolved_group_id,
-            project_id: resolved_project_id,
+            source_id: resolved_scope.source_id(),
+            source_group_id: resolved_scope.source_group_id(),
+            project_id: resolved_scope.project_id(),
             period_from,
             period_to,
             output_language: &output_language,
@@ -667,9 +649,9 @@ pub(crate) async fn start_analysis_report_run(
         &pool,
         &AnalysisRunInsert {
             scope_type,
-            source_id: resolved_source_id,
-            source_group_id: resolved_group_id,
-            project_id: resolved_project_id,
+            source_id: resolved_scope.source_id(),
+            source_group_id: resolved_scope.source_group_id(),
+            project_id: resolved_scope.project_id(),
             period_from,
             period_to,
             output_language: &output_language,
@@ -679,7 +661,7 @@ pub(crate) async fn start_analysis_report_run(
             model: &effective_model,
             youtube_corpus_mode,
             telegram_history_scope,
-            scope_label_snapshot: Some(&scope_label),
+            scope_label_snapshot: Some(resolved_scope.scope_label_snapshot()),
         },
     )
     .await?;
@@ -694,7 +676,7 @@ pub(crate) async fn start_analysis_report_run(
                 app_handle.clone(),
                 ReportRunInput {
                     run_id,
-                    scope_label,
+                    scope: resolved_scope,
                     corpus_request,
                     period_from,
                     period_to,

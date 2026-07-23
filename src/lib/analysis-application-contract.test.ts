@@ -109,10 +109,19 @@ const checkpointCharacterizationLeaves = new Set([
   "analysis_run_list_filter_constructors_preserve_analysis_and_project_scopes",
   "resolved_analysis_scope_rejects_zero_or_multiple_identities",
   "resolved_analysis_scope_requires_nonempty_stable_sources_and_label",
+  "report_execution_uses_distinct_preflight_and_capture_corpus_reads",
+  "started_load_items_uses_preflight_summary_before_empty_capture_failure",
+  "started_load_items_uses_preflight_summary_before_error_capture_failure",
 ]);
 
 function sourceIdentityPrefix(file: string): string {
-  const relative = path.relative(currentAnalysisRoot, file).replaceAll("\\", "/");
+  const relative = path
+    .relative(currentAnalysisRoot, file)
+    .replaceAll("\\", "/")
+    .replace(
+      /\/(live|preflight|source_resolution|read_model)_portable\.rs$/,
+      "/$1.rs",
+    );
   if (relative === "tests_portable.rs") return "analysis::tests";
   const parts = relative.replace(/\.rs$/, "").split("/");
   if (parts.at(-1) === "mod") parts.pop();
@@ -328,7 +337,7 @@ describe("analysis application boundary", () => {
     const models = readAppAnalysisSource("models.rs");
     const report = readAppAnalysisSource("report.rs");
     const trace = readAppAnalysisSource("trace.rs");
-    const filters = readAppAnalysisSource("store/read_model.rs");
+    const filters = readAppAnalysisSource("store/owned_read_model.rs");
     const reportCommands = readAppAnalysisSource("report_commands.rs");
 
     expect(moduleSource.match(/include!\("tests_portable\.rs"\)/g) ?? []).toHaveLength(1);
@@ -367,6 +376,60 @@ describe("analysis application boundary", () => {
     expect(filters).toContain("pub fn foreign_label_search_terms(&self) -> &[String]");
   });
 
+  it("keeps analysis run-list filters public with private state", () => {
+    const filters = readAppAnalysisSource("store/owned_read_model.rs");
+    const filterFields = filters.match(
+      /pub(?:\([^)]*\))?\s+struct AnalysisRunListFilters\s*\{([\s\S]*?)\n\}/,
+    )?.[1];
+    const filterImpl = filters.match(
+      /impl AnalysisRunListFilters\s*\{([\s\S]*?)\n\}\n\nconst ANALYSIS_RUN_LIST_SELECT/,
+    )?.[1];
+    const privateFields = filterFields ?? "";
+
+    expect(filters).toMatch(/(?:^|\n)pub struct AnalysisRunListFilters\s*\{/);
+    expect(filters).not.toMatch(
+      /(?:^|\n)pub\((?:crate|super)\)\s+struct AnalysisRunListFilters\s*\{/,
+    );
+    expect(filterFields).toBeDefined();
+    expect(privateFields).not.toMatch(
+      /^\s*pub(?:\([^)]*\))?\s+[a-z_][a-z0-9_]*\s*:/m,
+    );
+    expect(
+      [...privateFields.matchAll(/^\s*([a-z_][a-z0-9_]*)\s*:/gm)].map(
+        ([, field]) => field,
+      ),
+    ).toEqual([
+      "source_id",
+      "source_group_id",
+      "project_id",
+      "limit",
+      "query",
+      "status",
+      "provider",
+      "model",
+      "template",
+      "date_from",
+      "date_to",
+      "foreign_label_search_terms",
+    ]);
+    expect(filters).not.toMatch(
+      /#\[derive\((?=[^\]]*\bDefault\b)[^\]]*\)\]\s*pub struct AnalysisRunListFilters/,
+    );
+    expect(filters).not.toMatch(
+      /impl\s+Default\s+for\s+AnalysisRunListFilters/,
+    );
+    expect(filterImpl).toBeDefined();
+    expect(
+      [...(filterImpl ?? "").matchAll(/^\s*pub fn ([a-z_][a-z0-9_]*)/gm)].map(
+        ([, method]) => method,
+      ),
+    ).toEqual([
+      "for_analysis",
+      "for_project",
+      "foreign_label_search_terms",
+    ]);
+  });
+
   it("requires analysis run-list tests to use the curated filter constructors", () => {
     const uncheckedConstructions = [
       "store/tests/read_model.rs",
@@ -380,6 +443,385 @@ describe("analysis application boundary", () => {
     });
 
     expect(uncheckedConstructions).toEqual([]);
+  });
+
+  it("keeps project data range on typed app scope without analysis SQL helper imports", () => {
+    const dataRange = readFileSync(
+      path.join(repoRoot, "src-tauri/src/projects/data_range.rs"),
+      "utf8",
+    );
+    const analysisFacade = readAppAnalysisSource("mod.rs");
+    const corpusFacade = readAppAnalysisSource("corpus.rs");
+
+    expect(dataRange).toContain("YoutubeCorpusMode::from_wire");
+    expect(dataRange).toContain("resolve_analysis_sources(pool, None, None, Some(project_id))");
+    expect(dataRange).toContain("resolved.scope()");
+    expect(dataRange).toContain(
+      "AnalysisSourceResolutionErrorCode::NoLinkedYoutubeVideos",
+    );
+    const productionDataRange = dataRange.split("#[cfg(test)]")[0];
+    expect(productionDataRange).not.toMatch(/message\.(?:contains|starts_with)\(/);
+    expect(dataRange).toContain("fn push_analysis_document_kind_predicate(");
+    expect(dataRange).toContain("d.source_type = 'telegram'");
+    expect(dataRange).toContain("d.source_type = 'youtube'");
+    expect(dataRange).toContain("youtube_corpus_mode.includes_description()");
+    expect(dataRange).toContain("youtube_corpus_mode.includes_comments()");
+    expect(dataRange).not.toContain("push_analysis_document_kind_filter");
+    expect(dataRange).not.toMatch(/use\s+crate::analysis::[^;]*push_analysis_document_kind_filter/);
+    expect(corpusFacade).not.toMatch(/pub\(crate\)\s+use[^;]*push_analysis_document_kind_filter/);
+    expect(analysisFacade).not.toMatch(/pub\(crate\)\s+use[^;]*push_analysis_document_kind_filter/);
+  });
+
+  it("stages checkpoint three corpus and foreign-label boundaries under original identities", () => {
+    const corpus = readAppAnalysisSource("corpus_portable.rs");
+    const corpusAdapter = readAppAnalysisSource("corpus.rs");
+    const liveAdapter = readAppAnalysisSource("corpus/live.rs");
+    const scopeAdapter = readAppAnalysisSource("corpus/source_resolution.rs");
+    const ownedReadModel = readAppAnalysisSource("store/owned_read_model.rs");
+    const appReadModel = readAppAnalysisSource("store/read_model.rs");
+    const storeFacade = readAppAnalysisSource("store.rs");
+    const appReadModelTests = readAppAnalysisSource("store/tests/read_model.rs");
+    const portableReadModelTests = readAppAnalysisSource(
+      "store/tests/read_model_portable.rs",
+    );
+    const portableHarness = readAppAnalysisSource(
+      "corpus/tests/harness_portable.rs",
+    );
+    const appHarness = readAppAnalysisSource("corpus/tests/harness.rs");
+    const portableLeaves = [
+      readAppAnalysisSource("corpus/tests/live_portable.rs"),
+      readAppAnalysisSource("corpus/tests/preflight_portable.rs"),
+      readAppAnalysisSource("corpus/tests/source_resolution_portable.rs"),
+      portableReadModelTests,
+    ];
+
+    expect(corpus).toContain("pub trait AnalysisCorpusReader: Send + Sync + 'static");
+    expect(corpus).toContain("pub struct AnalysisCorpusRequest");
+    expect(corpus).toContain("pub struct AnalysisCorpusMessage");
+    expect(corpus).toContain("pub async fn preflight_analysis_corpus(");
+    expect(corpusAdapter).toContain("pub(crate) struct AppAnalysisCorpusReader");
+    expect(corpusAdapter).toContain("impl AnalysisCorpusReader for AppAnalysisCorpusReader");
+    expect(liveAdapter).toContain("pub(crate) async fn load_app_corpus_messages(");
+    expect(scopeAdapter).toContain("pub(crate) struct AppAnalysisScopeResolution");
+    expect(scopeAdapter).toContain("pub(crate) fn into_scope(self) -> ResolvedAnalysisScope");
+
+    for (const participant of [
+      "prepare_analysis_run_summaries",
+      "prepare_active_analysis_run_summaries",
+      "prepare_analysis_run_detail",
+      "prepare_legacy_analysis_chat_run",
+    ]) {
+      expect(ownedReadModel).toMatch(
+        new RegExp(
+          `pub async fn ${participant}\\(\\s*conn: &mut SqliteConnection,`,
+        ),
+      );
+      expect(storeFacade).not.toContain(participant);
+    }
+    expect(ownedReadModel).not.toMatch(/\bJOIN\s+sources\b/i);
+    expect(ownedReadModel).not.toMatch(/\bJOIN\s+projects\b/i);
+    for (const coordinator of [
+      "list_analysis_runs_in_pool",
+      "list_active_analysis_runs_in_pool",
+      "get_analysis_run_in_pool",
+      "resolve_legacy_analysis_chat_run_in_pool",
+    ]) {
+      expect(appReadModel).toContain(`async fn ${coordinator}(`);
+    }
+    expect(appReadModel).toContain("pool.begin().await");
+    expect(appReadModel).toContain("transaction.commit().await");
+
+    expect(appReadModelTests.match(/include!\("read_model_portable\.rs"\)/g) ?? [])
+      .toHaveLength(1);
+    expect(appReadModelTests).toContain(
+      "list_analysis_run_summaries_filters_project_runs",
+    );
+    expect(appReadModelTests).toContain(
+      "list_analysis_run_summaries_matches_all_query_terms_across_any_field",
+    );
+    expect(portableReadModelTests).not.toContain(
+      "list_analysis_run_summaries_filters_project_runs",
+    );
+    expect(portableReadModelTests).not.toContain(
+      "list_analysis_run_summaries_matches_all_query_terms_across_any_field",
+    );
+    for (const leaf of portableLeaves) {
+      expect(leaf).toMatch(/^use\s+/);
+      expect(leaf).not.toMatch(/\bcrate::(?:sources|youtube|analysis_documents)\b/);
+    }
+    expect(portableHarness).not.toMatch(
+      /\bcrate::(?:sources|youtube|analysis_documents)\b/,
+    );
+    expect(appHarness).toContain("create_youtube_typed_source_tables");
+    expect(appHarness).toContain("rebuild_analysis_documents_for_source");
+    expect(readAppAnalysisSource("corpus/tests/source_resolution_portable.rs"))
+      .not.toMatch(/\bresolve_run_source_ids\s*\(/);
+    expect(portableReadModelTests).not.toContain("AnalysisRunRow");
+    expect(portableReadModelTests).not.toMatch(/\bmap_run_detail\s*\(/);
+    expect(portableReadModelTests).not.toMatch(/\bmap_run_summary\s*\(/);
+    expect(portableReadModelTests).not.toContain(
+      "list_analysis_run_summaries_owned",
+    );
+    expect(portableReadModelTests).toContain("prepare_analysis_run_summaries");
+    expect(portableReadModelTests).toContain("prepare_analysis_run_detail");
+    expect(portableReadModelTests).toContain(".finish(");
+  });
+
+  it("keeps owned read-model staging compiled at its final module identity", () => {
+    const storeFacade = readAppAnalysisSource("store.rs");
+    const appReadModel = readAppAnalysisSource("store/read_model.rs");
+    const ownedReadModel = readAppAnalysisSource("store/owned_read_model.rs");
+    const portableReadModelTests = readAppAnalysisSource(
+      "store/tests/read_model_portable.rs",
+    );
+
+    expect(storeFacade).toContain(
+      '#[path = "store/read_model.rs"]\nmod app_read_model;',
+    );
+    expect(storeFacade).toContain(
+      '#[path = "store/owned_read_model.rs"]\nmod read_model;',
+    );
+    expect(storeFacade).not.toMatch(/pub(?:\([^)]*\))?\s+mod\s+read_model\b/);
+    expect(appReadModel).not.toMatch(
+      /#\[path\s*=\s*"owned_read_model\.rs"\]\s*mod\s+owned_read_model\s*;/,
+    );
+    expect(appReadModel).toMatch(/use\s+super::read_model::\{/);
+    expect(ownedReadModel).toMatch(/use\s+super::super::domain::\{/);
+    expect(ownedReadModel).toMatch(/use\s+super::super::models::\{/);
+    expect(ownedReadModel).not.toContain("super::super::super::");
+    expect(portableReadModelTests).toMatch(
+      /use\s+super::super::read_model::\{/,
+    );
+    expect(portableReadModelTests).not.toMatch(
+      /include!\(\s*"\.\.\/owned_read_model\.rs"\s*\)/,
+    );
+  });
+
+  it("curates the owned corpus facade and forbids legacy corpus compatibility types", () => {
+    const corpus = readAppAnalysisSource("corpus_portable.rs");
+    const corpusAdapter = readAppAnalysisSource("corpus.rs");
+    const corpusMessageBody = corpus.match(
+      /pub struct AnalysisCorpusMessage\s*\{([\s\S]*?)\n\}/,
+    )?.[1];
+    const authorizedConsumers = [
+      ...rustFiles(currentAnalysisRoot),
+      path.join(repoRoot, "src-tauri/src/projects/mod.rs"),
+      path.join(repoRoot, "src-tauri/src/projects/data_range.rs"),
+    ]
+      .map((file) => readFileSync(file, "utf8"))
+      .join("\n");
+
+    expect(corpusAdapter).not.toContain("corpus_portable::*");
+    for (const exported of [
+      "AnalysisCorpusMessage",
+      "AnalysisCorpusReader",
+      "AnalysisCorpusRequest",
+      "AnalysisPortFuture",
+      "AnalysisRunPreflight",
+      "AnalysisRunPreflightLimits",
+      "YoutubeCorpusMode",
+      "preflight_analysis_corpus",
+    ]) {
+      expect(corpusAdapter).toMatch(
+        new RegExp(`pub\\(crate\\) use super::corpus_portable::\\{[\\s\\S]*\\b${exported}\\b`),
+      );
+    }
+    expect(corpusMessageBody).toBeDefined();
+    expect(corpusMessageBody).not.toMatch(/\bpub(?:\([^)]*\))?\s+/);
+    for (const accessor of [
+      "item_id(&self) -> i64",
+      "source_id(&self) -> i64",
+      "external_id(&self) -> &str",
+      "published_at(&self) -> i64",
+      "author(&self) -> Option<&str>",
+      "content(&self) -> &str",
+      "reference(&self) -> &str",
+      "item_kind(&self) -> Option<&str>",
+      "source_type(&self) -> Option<&str>",
+      "source_subtype(&self) -> Option<&str>",
+      "metadata_zstd(&self) -> Option<&[u8]>",
+    ]) {
+      expect(corpus).toContain(`pub fn ${accessor}`);
+    }
+    expect(authorizedConsumers).not.toMatch(/\bCorpusLoadRequest\b/);
+    expect(authorizedConsumers).not.toMatch(/\bCorpusMessage\b/);
+  });
+
+  it("keeps raw analysis run rows and mappers inside the owned read model", () => {
+    const storeFacade = readAppAnalysisSource("store.rs");
+    const appReadModel = readAppAnalysisSource("store/read_model.rs");
+    const ownedReadModel = readAppAnalysisSource("store/owned_read_model.rs");
+    const models = readAppAnalysisSource("models.rs");
+    const lifecycle = readAppAnalysisSource("report/lifecycle.rs");
+    const applicationTests = readAppAnalysisSource("tests_application.rs");
+    const portableTests = readAppAnalysisSource("tests_portable.rs");
+
+    for (const broadExport of [
+      "fetch_run_row",
+      "map_run_detail",
+      "map_run_summary",
+      "list_analysis_run_summaries",
+      "list_analysis_run_summaries_owned",
+    ]) {
+      expect(storeFacade).not.toMatch(new RegExp(`\\b${broadExport}\\b`));
+    }
+    expect(appReadModel).not.toMatch(/\bfn\s+fetch_run_row\s*\(/);
+    expect(appReadModel).not.toMatch(/\bfn\s+list_analysis_run_summaries\s*\(/);
+    expect(ownedReadModel).not.toContain("list_analysis_run_summaries_owned");
+    expect(models).not.toContain("AnalysisRunRow");
+    expect(ownedReadModel).toMatch(/struct AnalysisRunRow\s*\{/);
+    expect(ownedReadModel).not.toMatch(
+      /pub(?:\([^)]*\))?\s+struct AnalysisRunRow\s*\{/,
+    );
+    expect(ownedReadModel).toMatch(/\nfn map_run_summary\s*\(/);
+    expect(ownedReadModel).toMatch(/\nfn map_run_detail\s*\(/);
+    expect(ownedReadModel).toMatch(/\nasync fn fetch_owned_run_row\s*\(/);
+
+    expect(lifecycle).toContain("load_analysis_run_status(pool, run_id)");
+    expect(lifecycle).not.toContain("fetch_run_row");
+    for (const consumer of [applicationTests, portableTests]) {
+      expect(consumer).not.toMatch(/\bfetch_run_row\b/);
+      expect(consumer).not.toMatch(/\bmap_run_detail\b/);
+      expect(consumer).not.toMatch(/\bmap_run_summary\b/);
+      expect(consumer).not.toMatch(/\blist_analysis_run_summaries\b/);
+    }
+  });
+
+  it("carries the resolved analysis scope through the report ticket", () => {
+    const report = readAppAnalysisSource("report.rs");
+    const phases = readAppAnalysisSource("report/phases.rs");
+    const models = readAppAnalysisSource("models.rs");
+    const resolver = readAppAnalysisSource("corpus/source_resolution.rs");
+    const scopeTests = readAppAnalysisSource("report/tests/scope.rs");
+    const ticketBody = report.match(
+      /struct ReportRunInput\s*\{([\s\S]*?)\n\}/,
+    )?.[1];
+    const scopeDerives = models.match(
+      /((?:#\[derive\([^\]]*\)\]\s*)*)pub struct ResolvedAnalysisScope/,
+    )?.[1];
+
+    expect(ticketBody).toBeDefined();
+    expect(ticketBody).toContain("scope: ResolvedAnalysisScope");
+    expect(ticketBody).not.toMatch(/\bscope_label\s*:/);
+    expect(scopeDerives).toBeDefined();
+    expect(scopeDerives).not.toMatch(/\bClone\b/);
+    expect(report).toContain("scope: resolved_scope");
+    expect(report).toContain("resolved_scope.source_ids().to_vec()");
+    expect(report).toContain("resolved_scope.scope_label_snapshot()");
+    expect(report).toContain("input.scope.scope_label_snapshot()");
+    expect(phases).toContain("input.scope.scope_label_snapshot()");
+    expect(report).not.toContain(
+      "SELECT EXISTS(SELECT 1 FROM sources WHERE id = ?)",
+    );
+    expect(report).not.toContain(
+      "SELECT COUNT(*) FROM project_sources WHERE project_id = ?",
+    );
+    expect(report).not.toContain("fetch_source_group(&pool");
+    expect(resolver).toContain(
+      '"The selected source group does not contain any sources"',
+    );
+    expect(scopeTests).toContain("assert_eq!(input.scope.scope_kind()");
+    expect(scopeTests).toContain("assert_eq!(input.scope.scope_label_snapshot()");
+  });
+
+  it("drives the frozen corpus port cases through capture and lifecycle seams", () => {
+    const corpusPort = readAppAnalysisSource("report/tests/corpus_port.rs");
+    const report = readAppAnalysisSource("report.rs");
+    const lifecycle = readAppAnalysisSource("report/lifecycle.rs");
+    const frozenNames = [
+      "report_execution_uses_distinct_preflight_and_capture_corpus_reads",
+      "started_load_items_uses_preflight_summary_before_empty_capture_failure",
+      "started_load_items_uses_preflight_summary_before_error_capture_failure",
+    ];
+
+    const testNames = [
+      ...corpusPort.matchAll(/async fn ([A-Za-z0-9_]+)\s*\(/g),
+    ].map((match) => match[1]);
+    expect(testNames).toEqual(frozenNames);
+    expect(corpusPort).toContain("execution_capture::capture_report_corpus");
+    expect(corpusPort).not.toContain("load_execution_corpus");
+    expect(corpusPort).not.toContain("fn started_event(");
+    expect(corpusPort.match(/started_load_items_event\(/g) ?? []).toHaveLength(3);
+    expect(report).toContain("fn started_load_items_event(run_id: i64, message: String) -> RunEvent");
+    expect(report).toContain("started_load_items_event(run_id, message).emit(&handle)");
+    expect(corpusPort.match(/reader\.request_log\(\)/g) ?? []).toHaveLength(3);
+    expect(corpusPort.match(/request\.clone\(\), request\.clone\(\)/g) ?? [])
+      .toHaveLength(3);
+    expect(corpusPort.match(/call_count\(\), 2/g) ?? []).toHaveLength(3);
+    for (const downstream of [
+      "load_run_snapshot_messages",
+      "chunk_messages",
+      "build_map_request",
+      "parse_chunk_summary",
+      "build_reduce_request",
+      "build_trace_data",
+    ]) {
+      expect(corpusPort).toContain(downstream);
+    }
+    expect(corpusPort.match(/persist_capture_failure_event/g) ?? [])
+      .toHaveLength(2);
+    expect(corpusPort).toContain("ANALYSIS_STATUS_FAILED");
+    expect(corpusPort).toContain(
+      "Report run failed before snapshot capture completed.",
+    );
+    expect(lifecycle).toContain("async fn persist_capture_failure_event(");
+    expect(lifecycle).toContain(
+      "persist_capture_failure_event(pool.as_ref(), run_id, &error, now_secs())",
+    );
+  });
+
+  it("keeps retained preflight integrations independent from portable imports", () => {
+    const retainedPreflight = readAppAnalysisSource("corpus/tests/preflight.rs");
+    const portablePreflight = readAppAnalysisSource(
+      "corpus/tests/preflight_portable.rs",
+    );
+    const retainedLive = readAppAnalysisSource("corpus/tests/live.rs");
+    const portableLive = readAppAnalysisSource("corpus/tests/live_portable.rs");
+    const retainedLiveWithoutPortableInclude = retainedLive.replace(
+      /^\s*include!\("live_portable\.rs"\);\s*$/m,
+      "",
+    );
+
+    expect(
+      retainedPreflight.match(/#\[tokio::test\]\s*async fn /g) ?? [],
+    ).toHaveLength(3);
+    expect(portablePreflight.match(/#\[test\]\s*fn /g) ?? []).toHaveLength(7);
+    expect(
+      retainedPreflight.match(/AppAnalysisCorpusReader::new\(/g) ?? [],
+    ).toHaveLength(3);
+    expect(
+      retainedPreflight.match(/\bpreflight_analysis_corpus\(/g) ?? [],
+    ).toHaveLength(3);
+    expect(retainedPreflight).toContain(
+      "AnalysisRunPreflightLimits as AppAnalysisRunPreflightLimits",
+    );
+    expect(
+      retainedPreflight.match(/AppAnalysisRunPreflightLimits::default\(\)/g) ?? [],
+    ).toHaveLength(3);
+
+    expect(retainedLive.match(/#\[tokio::test\]\s*async fn /g) ?? [])
+      .toHaveLength(15);
+    expect(portableLive.match(/#\[test\]\s*fn /g) ?? [])
+      .toHaveLength(1);
+    expect(retainedLive.match(/AppAnalysisCorpusReader::new\(/g) ?? [])
+      .toHaveLength(2);
+    expect(retainedLive.match(/\bpreflight_analysis_corpus\(/g) ?? [])
+      .toHaveLength(2);
+    expect(retainedLiveWithoutPortableInclude).toContain(
+      "YoutubeCorpusMode as AppYoutubeCorpusMode",
+    );
+    expect(
+      retainedLiveWithoutPortableInclude.match(
+        /\bAppYoutubeCorpusMode::/g,
+      ) ?? [],
+    ).toHaveLength(15);
+    expect(retainedLiveWithoutPortableInclude).not.toMatch(
+      /\bYoutubeCorpusMode::/,
+    );
+    expect(portableLive).toContain(
+      "use super::super::super::corpus::YoutubeCorpusMode;",
+    );
+    expect(portableLive).not.toContain("AppYoutubeCorpusMode");
   });
 
   it("freezes the 21 release, three project, and three dev command inventory", () => {

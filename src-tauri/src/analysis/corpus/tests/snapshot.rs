@@ -47,8 +47,8 @@ async fn run_snapshot_roundtrips_frozen_corpus() {
         .expect("load snapshot");
 
     assert_eq!(loaded.len(), corpus.len());
-    assert_eq!(loaded[0].r#ref, "s2-i11");
-    assert_eq!(loaded[1].content, "Second frozen message");
+    assert_eq!(loaded[0].reference(), "s2-i11");
+    assert_eq!(loaded[1].content(), "Second frozen message");
 }
 
 #[tokio::test]
@@ -358,12 +358,12 @@ async fn load_run_corpus_messages_uses_snapshot_when_available() {
         .expect("load run corpus");
 
     assert_eq!(corpus.len(), 2);
-    assert_eq!(corpus[0].external_id, "100");
-    assert_eq!(corpus[0].item_kind.as_deref(), Some("youtube_transcript"));
-    assert_eq!(corpus[0].source_type.as_deref(), Some("youtube"));
-    assert_eq!(corpus[0].source_subtype.as_deref(), Some("video"));
-    assert!(corpus[0].metadata_zstd.is_some());
-    assert_eq!(corpus[1].r#ref, "s4-i12");
+    assert_eq!(corpus[0].external_id(), "100");
+    assert_eq!(corpus[0].item_kind(), Some("youtube_transcript"));
+    assert_eq!(corpus[0].source_type(), Some("youtube"));
+    assert_eq!(corpus[0].source_subtype(), Some("video"));
+    assert!(corpus[0].metadata_zstd().is_some());
+    assert_eq!(corpus[1].reference(), "s4-i12");
 }
 
 #[tokio::test]
@@ -477,7 +477,7 @@ async fn source_group_membership_drift_after_capture_does_not_change_saved_run_c
     assert_eq!(
         corpus
             .iter()
-            .map(|message| message.source_id)
+            .map(|message| message.source_id())
             .collect::<Vec<_>>(),
         vec![2, 4]
     );
