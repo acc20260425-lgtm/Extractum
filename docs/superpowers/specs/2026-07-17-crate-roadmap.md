@@ -419,7 +419,7 @@ Phase 7 now has an owner-approved
 implementation still requires a separate plan and explicit owner instruction;
 the Phase 6 result did not authorize it.
 
-### Phase 7 — `extractum-analysis` (preparation Checkpoint 3 retained)
+### Phase 7 — `extractum-analysis` (preparation Checkpoint 4 retained)
 
 The owner-approved
 [Phase 7 boundary design](2026-07-22-analysis-crate-boundary-design.md) replaces

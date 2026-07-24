@@ -23,7 +23,7 @@ const crateOwned = (before: string, after = before) =>
     after: { owner: "crate", path: after },
   });
 
-const chatBackendSource = crateOwned("chat.rs");
+const chatBackendSource = crateOwned("chat_engine.rs", "chat.rs");
 const corpusBackendFacadeSource = crateOwned("corpus_portable.rs", "corpus.rs");
 const corpusSnapshotSource = crateOwned("corpus/snapshot.rs");
 const corpusSourceResolutionSource = crateOwned(
@@ -35,7 +35,11 @@ const storeReadModelSource = crateOwned("store/owned_read_model.rs", "store/read
 const storeRunsSource = crateOwned("store/runs.rs");
 const storeSnapshotSource = crateOwned("store/snapshot.rs");
 const analysisModelsSource = crateOwned("models.rs");
-const reportBackendSource = crateOwned("report.rs");
+const reportBackendSource = crateOwned("report_engine.rs", "report.rs");
+const reportLifecycleSource = crateOwned(
+  "report/lifecycle_portable.rs",
+  "report/lifecycle.rs",
+);
 const traceBackendSource = crateOwned("trace.rs");
 
 const corpusBackendSource = [
@@ -59,6 +63,19 @@ describe("analysis redesign final safety contract", () => {
     expect(reportBackendSource).toContain("Select exactly one analysis scope");
     expect(traceBackendSource).toContain("extractum_core::compression");
     expect(traceBackendSource).not.toMatch(/\bzstd::/);
+  });
+
+  it("keeps portable chat and report subjects free of application capabilities", () => {
+    const forbiddenApplicationCapability =
+      /\bAppHandle\b|\bget_pool\b|crate::(?:analysis|error|compression|llm|time|db)\b/;
+
+    for (const source of [
+      chatBackendSource,
+      reportBackendSource,
+      reportLifecycleSource,
+    ]) {
+      expect(source).not.toMatch(forbiddenApplicationCapability);
+    }
   });
 
   it("keeps run snapshot and live source basis explicit in Source mode", () => {

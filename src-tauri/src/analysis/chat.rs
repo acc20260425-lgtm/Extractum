@@ -1,357 +1,11 @@
-use sqlx::{Pool, Sqlite};
 use tauri::{AppHandle, Manager};
 
 use crate::db::get_pool;
 use crate::llm::resolve_profile_for_backend;
-use extractum_core::error::{AppError, AppResult};
-use extractum_llm::{
-    run_llm_stream_with_profile, LlmChatRequest, LlmMessage, LlmRequestError, LlmRequestKind,
-    LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState,
-};
 
-use super::corpus::{load_run_snapshot_messages, AnalysisCorpusMessage};
-use super::domain::{now_secs, validate_chat_role, validate_chat_turns, ANALYSIS_STATUS_COMPLETED};
-use super::events::emit_analysis_chat_event;
-use super::models::{AnalysisChatEvent, AnalysisChatMessage, AnalysisChatTurn, AnalysisRunDetail};
-use super::store::{
-    analysis_run_exists, resolve_legacy_analysis_chat_run_in_pool, resolve_run_scope_label,
-};
+use super::events::TauriAnalysisEventSink;
 
-fn chat_search_terms(question: &str) -> Vec<String> {
-    const STOP_WORDS: &[&str] = &[
-        "the",
-        "and",
-        "for",
-        "with",
-        "that",
-        "this",
-        "from",
-        "into",
-        "about",
-        "what",
-        "when",
-        "where",
-        "which",
-        "have",
-        "has",
-        "were",
-        "will",
-        "would",
-        "could",
-        "should",
-        "как",
-        "что",
-        "это",
-        "для",
-        "про",
-        "или",
-        "если",
-        "когда",
-        "какие",
-        "какой",
-        "где",
-        "после",
-        "над",
-        "под",
-        "ещё",
-        "also",
-        "over",
-    ];
-
-    let mut terms = question
-        .split(|c: char| !c.is_alphanumeric())
-        .map(|part| part.trim().to_ascii_lowercase())
-        .filter(|part| part.len() >= 3 && !STOP_WORDS.contains(&part.as_str()))
-        .collect::<Vec<_>>();
-    terms.sort();
-    terms.dedup();
-    terms.truncate(8);
-    terms
-}
-
-fn find_chat_context_messages<'a>(
-    question: &str,
-    corpus: &'a [AnalysisCorpusMessage],
-) -> Vec<&'a AnalysisCorpusMessage> {
-    let terms = chat_search_terms(question);
-    if terms.is_empty() {
-        return corpus.iter().rev().take(6).collect();
-    }
-
-    let mut scored = corpus
-        .iter()
-        .filter_map(|message| {
-            let haystack = message.content().to_ascii_lowercase();
-            let score = terms
-                .iter()
-                .map(|term| usize::from(haystack.contains(term)))
-                .sum::<usize>();
-            (score > 0).then_some((score, message.published_at(), message))
-        })
-        .collect::<Vec<_>>();
-
-    scored.sort_by(|left, right| right.0.cmp(&left.0).then_with(|| right.1.cmp(&left.1)));
-
-    scored
-        .into_iter()
-        .take(8)
-        .map(|(_, _, message)| message)
-        .collect()
-}
-
-fn clip_excerpt(content: &str, max_chars: usize) -> String {
-    if content.chars().count() <= max_chars {
-        return content.to_string();
-    }
-
-    let clipped = content.chars().take(max_chars).collect::<String>();
-    format!("{clipped}...")
-}
-
-fn history_scope_label_from_metadata(metadata_zstd: &[u8]) -> Option<&'static str> {
-    let bytes = extractum_core::compression::decompress_bytes(metadata_zstd).ok()?;
-    let value: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-    match value.get("history_scope").and_then(|value| value.as_str()) {
-        Some("migrated") => Some("Migrated small-group history"),
-        Some("current") => Some("Current supergroup history"),
-        _ => None,
-    }
-}
-
-fn format_chat_context_messages(messages: &[&AnalysisCorpusMessage]) -> String {
-    if messages.is_empty() {
-        return "No additional local source document matches were found for the current question."
-            .to_string();
-    }
-
-    messages
-        .iter()
-        .map(|message| {
-            let history_scope = message
-                .metadata_zstd()
-                .and_then(history_scope_label_from_metadata)
-                .unwrap_or("Current supergroup history");
-            format!(
-                "[{ref}] Date: {published_at}\nHistory scope: {history_scope}\nAuthor: {author}\nExcerpt:\n{excerpt}",
-                ref = message.reference(),
-                published_at = message.published_at(),
-                history_scope = history_scope,
-                author = message.author().unwrap_or("unknown"),
-                excerpt = clip_excerpt(message.content(), 420)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n\n---\n\n")
-}
-
-fn ensure_completed_chat_context(
-    run: &AnalysisRunDetail,
-    snapshot: &[AnalysisCorpusMessage],
-) -> AppResult<()> {
-    if run.status != ANALYSIS_STATUS_COMPLETED {
-        return Err(AppError::validation(
-            "Open a completed analysis run before asking follow-up questions",
-        ));
-    }
-
-    if snapshot.is_empty() {
-        return Err(AppError::conflict(
-            "This completed analysis run has no saved snapshot context for follow-up chat",
-        ));
-    }
-
-    Ok(())
-}
-
-pub(super) async fn load_chat_run_and_scope_label(
-    pool: &Pool<Sqlite>,
-    run_id: i64,
-) -> AppResult<(AnalysisRunDetail, String)> {
-    let run = resolve_legacy_analysis_chat_run_in_pool(pool, run_id)
-        .await?
-        .into_detail();
-    let scope_label = resolve_run_scope_label(&run);
-    Ok((run, scope_label))
-}
-
-struct ChatRequestParams<'a> {
-    run: &'a AnalysisRunDetail,
-    profile_id: String,
-    scope_label: &'a str,
-    history: &'a [AnalysisChatTurn],
-    question: &'a str,
-    report_markdown: &'a str,
-    context_messages: &'a [&'a AnalysisCorpusMessage],
-    model_override: Option<String>,
-}
-
-fn build_chat_request(params: ChatRequestParams<'_>) -> LlmChatRequest {
-    let mut messages = vec![
-        LlmMessage {
-            role: "system".to_string(),
-            content: format!(
-                "You answer follow-up questions about a saved source analysis report.\nAnswer in {}.\nUse markdown only.\nGround every important claim in the saved report or the provided source document excerpts.\nWhen referring to source evidence, cite refs like [s12-i845].\nDo not invent facts beyond the saved report and provided excerpts.",
-                params.run.output_language
-            ),
-        },
-        LlmMessage {
-            role: "user".to_string(),
-            content: format!(
-                "Saved report scope: {}\nSaved report period: {} to {}\n\nSaved report markdown:\n\n{}\n\nAdditional local source document matches for the current question:\n\n{}",
-                params.scope_label,
-                params.run.period_from,
-                params.run.period_to,
-                params.report_markdown,
-                format_chat_context_messages(params.context_messages)
-            ),
-        },
-    ];
-
-    messages.extend(params.history.iter().map(|turn| LlmMessage {
-        role: turn.role.clone(),
-        content: turn.content.clone(),
-    }));
-
-    messages.push(LlmMessage {
-        role: "user".to_string(),
-        content: params.question.trim().to_string(),
-    });
-
-    LlmChatRequest {
-        request_id: format!("analysis-chat-{}-{}", params.run.id, now_secs()),
-        profile_id: Some(params.profile_id),
-        messages,
-        model_override: params.model_override,
-        max_output_tokens: None,
-    }
-}
-
-fn analysis_chat_request_metadata(
-    request: &LlmChatRequest,
-    profile_id: String,
-    provider: String,
-    run_id: i64,
-) -> LlmRequestMetadata {
-    LlmRequestMetadata {
-        request_id: request.request_id.clone(),
-        profile_id,
-        provider,
-        kind: LlmRequestKind::AnalysisChat,
-        priority: LlmRequestPriority::Interactive,
-        owner_run_id: Some(run_id),
-    }
-}
-
-struct ChatEvent {
-    event: AnalysisChatEvent,
-}
-
-impl ChatEvent {
-    fn new(request_id: String, run_id: i64, kind: &str) -> Self {
-        Self {
-            event: AnalysisChatEvent {
-                request_id,
-                run_id,
-                kind: kind.to_string(),
-                queue_position: None,
-                delta: None,
-                message: None,
-                error: None,
-            },
-        }
-    }
-
-    fn queue_position(mut self, queue_position: usize) -> Self {
-        self.event.queue_position = Some(queue_position);
-        self
-    }
-
-    fn delta(mut self, delta: String) -> Self {
-        self.event.delta = Some(delta);
-        self
-    }
-
-    fn message(mut self, message: String) -> Self {
-        self.event.message = Some(message);
-        self
-    }
-
-    fn error(mut self, error: String) -> Self {
-        self.event.error = Some(error);
-        self
-    }
-
-    fn emit(self, handle: &AppHandle) {
-        emit_analysis_chat_event(handle, &self.event);
-    }
-}
-
-async fn load_chat_messages_from_pool(
-    pool: &Pool<Sqlite>,
-    run_id: i64,
-) -> AppResult<Vec<AnalysisChatMessage>> {
-    sqlx::query_as(
-        r#"
-        SELECT id, run_id, role, content, created_at
-        FROM analysis_chat_messages
-        WHERE run_id = ?
-        ORDER BY created_at ASC, id ASC
-        "#,
-    )
-    .bind(run_id)
-    .fetch_all(pool)
-    .await
-    .map_err(AppError::database)
-}
-
-async fn persist_chat_exchange(
-    pool: &Pool<Sqlite>,
-    run_id: i64,
-    user_question: &str,
-    assistant_answer: &str,
-) -> AppResult<()> {
-    validate_chat_role("user")?;
-    validate_chat_role("assistant")?;
-
-    let now = now_secs();
-    let mut tx = pool.begin().await.map_err(AppError::database)?;
-
-    sqlx::query(
-        r#"
-        INSERT INTO analysis_chat_messages (run_id, role, content, created_at)
-        VALUES (?, ?, ?, ?)
-        "#,
-    )
-    .bind(run_id)
-    .bind("user")
-    .bind(user_question)
-    .bind(now)
-    .execute(&mut *tx)
-    .await
-    .map_err(AppError::database)?;
-
-    sqlx::query(
-        r#"
-        INSERT INTO analysis_chat_messages (run_id, role, content, created_at)
-        VALUES (?, ?, ?, ?)
-        "#,
-    )
-    .bind(run_id)
-    .bind("assistant")
-    .bind(assistant_answer)
-    .bind(now)
-    .execute(&mut *tx)
-    .await
-    .map_err(AppError::database)?;
-
-    tx.commit().await.map_err(AppError::database)?;
-
-    Ok(())
-}
-
-fn completed_chat_persistence_failure_message(error: &impl std::fmt::Display) -> String {
-    format!("Answer completed but chat history could not be saved: {error}")
-}
+include!("chat_engine.rs");
 
 #[tauri::command]
 pub async fn list_analysis_chat_messages(
@@ -395,333 +49,65 @@ pub async fn ask_analysis_run_question(
     model_override: Option<String>,
     profile_id: Option<String>,
 ) -> AppResult<String> {
-    let question = question.trim().to_string();
-    if question.is_empty() {
-        return Err(AppError::validation("Question cannot be empty"));
-    }
-
+    let request = AskAnalysisRunQuestionRequest::new(run_id, question, model_override, profile_id)?;
     let pool = get_pool(&handle).await?;
-    let (run, scope_label) = load_chat_run_and_scope_label(&pool, run_id).await?;
-
-    if run.status != ANALYSIS_STATUS_COMPLETED {
-        return Err(AppError::validation(
-            "Open a completed analysis run before asking follow-up questions",
-        ));
-    }
-
-    let report_markdown = run
-        .result_markdown
-        .clone()
-        .filter(|text| !text.trim().is_empty())
-        .ok_or_else(|| {
-            AppError::conflict("The selected analysis run does not have a saved report")
-        })?;
-
-    let corpus = load_run_snapshot_messages(&pool, run.id).await?;
-    ensure_completed_chat_context(&run, &corpus)?;
-    let context_messages = find_chat_context_messages(&question, &corpus);
-    let effective_profile_id = profile_id.unwrap_or_else(|| run.provider_profile.clone());
-    let history = load_chat_messages_from_pool(&pool, run_id)
-        .await?
-        .into_iter()
-        .map(|message| AnalysisChatTurn {
-            role: message.role,
-            content: message.content,
-        })
-        .collect::<Vec<_>>();
-    validate_chat_turns(&history)?;
-    let request = build_chat_request(ChatRequestParams {
-        run: &run,
-        profile_id: effective_profile_id.clone(),
-        scope_label: &scope_label,
-        history: &history,
-        question: &question,
-        report_markdown: &report_markdown,
-        context_messages: &context_messages,
-        model_override: model_override.clone(),
-    });
-
-    let request_id = request.request_id.clone();
+    let run = resolve_legacy_analysis_chat_run_in_pool(&pool, run_id).await?;
+    let ticket = prepare_analysis_chat(&pool, request, run).await?;
+    let request_id = ticket.request_id().to_string();
+    let profile_id = ticket.profile_id().to_string();
     let emitted_request_id = request_id.clone();
     let app_handle = handle.clone();
     tokio::spawn(async move {
+        let sink = Arc::new(TauriAnalysisEventSink::new(app_handle.clone()));
         let resolved_profile =
-            match resolve_profile_for_backend(&app_handle, Some(effective_profile_id.as_str()))
-                .await
-            {
+            match resolve_profile_for_backend(&app_handle, Some(profile_id.as_str())).await {
                 Ok(profile) => profile,
                 Err(error) => {
-                    ChatEvent::new(emitted_request_id.clone(), run_id, "failed")
-                        .error(String::from(error))
-                        .emit(&app_handle);
+                    let error = AnalysisExecutionError::Failed(String::from(error));
+                    publish_analysis_chat_execution_error(
+                        sink.as_ref(),
+                        &emitted_request_id,
+                        run_id,
+                        &error,
+                    );
                     return;
                 }
             };
-
-        let scheduler = app_handle.state::<LlmSchedulerState>();
-        let request_meta = analysis_chat_request_metadata(
-            &request,
-            resolved_profile.profile_id().to_string(),
-            resolved_profile.provider().as_str().to_string(),
-            run_id,
-        );
-        let queued_handle = app_handle.clone();
-        let started_handle = app_handle.clone();
-        let delta_handle = app_handle.clone();
-        let completed_handle = app_handle.clone();
-        let failed_handle = app_handle.clone();
-        let cancelled_handle = app_handle.clone();
-        let queued_request_id = emitted_request_id.clone();
-        let started_request_id = emitted_request_id.clone();
-        let delta_request_id = emitted_request_id.clone();
-        let completed_request_id = emitted_request_id.clone();
-        let failed_request_id = emitted_request_id.clone();
-        let cancelled_request_id = emitted_request_id.clone();
-        let scheduled_request = request.clone();
-        let scheduled_profile = resolved_profile.clone();
-
-        match scheduler
-            .run_request(
-                request_meta,
-                move |position| {
-                    ChatEvent::new(queued_request_id.clone(), run_id, "queued")
-                        .queue_position(position)
-                        .message(format!("Answer queued at position {position}..."))
-                        .emit(&queued_handle);
-                },
-                move |control| async move {
-                    ChatEvent::new(started_request_id, run_id, "started")
-                        .message("Preparing grounded answer...".to_string())
-                        .emit(&started_handle);
-
-                    control
-                        .run_cancellable(run_llm_stream_with_profile(
-                            &scheduled_request,
-                            &scheduled_profile,
-                            |delta| {
-                                ChatEvent::new(delta_request_id.clone(), run_id, "delta")
-                                    .delta(delta.to_string())
-                                    .emit(&delta_handle);
-                            },
-                        ))
-                        .await
-                },
-            )
-            .await
-        {
-            Ok(completion) => {
-                let pool = match get_pool(&app_handle).await {
-                    Ok(pool) => pool,
-                    Err(error) => {
-                        ChatEvent::new(failed_request_id, run_id, "failed")
-                            .error(completed_chat_persistence_failure_message(&error))
-                            .emit(&failed_handle);
-                        return;
-                    }
-                };
-
-                if let Err(error) =
-                    persist_chat_exchange(&pool, run_id, &question, &completion.text).await
-                {
-                    ChatEvent::new(failed_request_id, run_id, "failed")
-                        .error(completed_chat_persistence_failure_message(&error))
-                        .emit(&failed_handle);
+        let scheduler = app_handle.state::<Arc<LlmSchedulerState>>().inner().clone();
+        let completion =
+            match execute_analysis_chat(scheduler, sink.clone(), ticket, resolved_profile).await {
+                Ok(completion) => completion,
+                Err(error) => {
+                    publish_analysis_chat_execution_error(
+                        sink.as_ref(),
+                        &emitted_request_id,
+                        run_id,
+                        &error,
+                    );
                     return;
                 }
-
-                ChatEvent::new(completed_request_id, run_id, "completed")
-                    .message("Answer completed.".to_string())
-                    .emit(&completed_handle);
+            };
+        let pool = match get_pool(&app_handle).await {
+            Ok(pool) => pool,
+            Err(error) => {
+                publish_analysis_chat_persistence_error(
+                    sink.as_ref(),
+                    &emitted_request_id,
+                    run_id,
+                    &error,
+                );
+                return;
             }
-            Err(LlmRequestError::Failed(error)) => {
-                ChatEvent::new(failed_request_id, run_id, "failed")
-                    .error(error.to_string())
-                    .emit(&failed_handle);
-            }
-            Err(LlmRequestError::Cancelled) => {
-                ChatEvent::new(cancelled_request_id, run_id, "cancelled")
-                    .message("Answer cancelled.".to_string())
-                    .emit(&cancelled_handle);
-            }
+        };
+        if let Err(error) = complete_analysis_chat(&pool, sink.as_ref(), completion).await {
+            publish_analysis_chat_persistence_error(
+                sink.as_ref(),
+                &emitted_request_id,
+                run_id,
+                &error,
+            );
         }
     });
 
     Ok(request_id)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::super::corpus::AnalysisCorpusMessage;
-    use super::super::models::AnalysisRunDetail;
-    use super::{
-        analysis_chat_request_metadata, build_chat_request,
-        completed_chat_persistence_failure_message, ensure_completed_chat_context,
-        format_chat_context_messages, ChatRequestParams,
-    };
-    use extractum_llm::LlmRequestKind;
-
-    fn sample_run() -> AnalysisRunDetail {
-        AnalysisRunDetail {
-            id: 42,
-            run_type: "report".to_string(),
-            scope_type: "single_source".to_string(),
-            source_id: Some(3),
-            source_title: Some("Source".to_string()),
-            source_group_id: None,
-            source_group_name: None,
-            project_id: None,
-            project_name: None,
-            scope_label: "Source".to_string(),
-            period_from: 10,
-            period_to: 20,
-            output_language: "English".to_string(),
-            prompt_template_id: Some(1),
-            prompt_template_name: Some("Default".to_string()),
-            prompt_template_version: 1,
-            provider_profile: "default".to_string(),
-            provider: "gemini".to_string(),
-            model: "gemini-2.5-flash".to_string(),
-            youtube_corpus_mode: "transcript_description".to_string(),
-            telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT
-                .to_string(),
-            status: "completed".to_string(),
-            result_markdown: Some("Saved report".to_string()),
-            error: None,
-            has_trace_data: true,
-            snapshot_state: Some(super::super::models::AnalysisSnapshotState::Captured),
-            snapshot_captured_at: Some("2026-05-18T10:00:00Z".to_string()),
-            snapshot_error: None,
-            created_at: 1_710_000_500,
-            completed_at: Some(1_710_000_600),
-            scope_label_snapshot: Some("Source".to_string()),
-            snapshot_message_count: 1,
-        }
-    }
-
-    fn sample_message() -> AnalysisCorpusMessage {
-        AnalysisCorpusMessage::new(
-            9,
-            3,
-            "abc".to_string(),
-            1_710_000_000,
-            Some("analyst".to_string()),
-            "A matching source document excerpt".to_string(),
-            "s3-i9".to_string(),
-            Some("telegram_message".to_string()),
-            Some("telegram".to_string()),
-            None,
-            None,
-        )
-    }
-
-    #[test]
-    fn chat_context_labels_migrated_history_scope_from_metadata() {
-        let message = AnalysisCorpusMessage::new(
-            9,
-            3,
-            "abc".to_string(),
-            1_710_000_000,
-            Some("analyst".to_string()),
-            "A matching source document excerpt".to_string(),
-            "s3-i9".to_string(),
-            Some("telegram_message".to_string()),
-            Some("telegram".to_string()),
-            None,
-            Some(
-                extractum_core::compression::compress_json_bytes(
-                    br#"{"history_scope":"migrated"}"#,
-                )
-                .expect("compress metadata"),
-            ),
-        );
-
-        let text = format_chat_context_messages(&[&message]);
-
-        assert!(text.contains("History scope: Migrated small-group history"));
-    }
-
-    #[test]
-    fn completed_chat_context_requires_saved_snapshot_messages() {
-        let error = ensure_completed_chat_context(&sample_run(), &[])
-            .expect_err("missing snapshot rejects completed chat");
-
-        assert_eq!(
-            error.message,
-            "This completed analysis run has no saved snapshot context for follow-up chat"
-        );
-    }
-
-    #[test]
-    fn completed_chat_context_accepts_saved_snapshot_messages() {
-        ensure_completed_chat_context(&sample_run(), &[sample_message()])
-            .expect("snapshot context enables completed chat");
-    }
-
-    #[test]
-    fn build_chat_request_uses_provider_neutral_source_document_wording() {
-        let message = sample_message();
-        let context_messages = vec![&message];
-        let request = build_chat_request(ChatRequestParams {
-            run: &sample_run(),
-            profile_id: "default".to_string(),
-            scope_label: "Source",
-            history: &[],
-            question: "What changed?",
-            report_markdown: "Saved report",
-            context_messages: &context_messages,
-            model_override: None,
-        });
-
-        assert!(request.messages[0]
-            .content
-            .contains("saved source analysis report"));
-        assert!(request.messages[0]
-            .content
-            .contains("source document excerpts"));
-        assert!(request.messages[0].content.contains("[s12-i845]"));
-        assert!(request.messages[1]
-            .content
-            .contains("Additional local source document matches"));
-    }
-
-    #[test]
-    fn analysis_chat_request_metadata_uses_run_owner() {
-        let request = build_chat_request(ChatRequestParams {
-            run: &sample_run(),
-            profile_id: "default".to_string(),
-            scope_label: "Source",
-            history: &[],
-            question: "What changed?",
-            report_markdown: "Saved report",
-            context_messages: &[],
-            model_override: None,
-        });
-        let metadata = analysis_chat_request_metadata(
-            &request,
-            "default".to_string(),
-            "gemini".to_string(),
-            42,
-        );
-
-        assert_eq!(metadata.kind, LlmRequestKind::AnalysisChat);
-        assert_eq!(metadata.owner_run_id, Some(42));
-    }
-
-    #[test]
-    fn empty_chat_context_uses_source_document_wording() {
-        let text = format_chat_context_messages(&[]);
-
-        assert!(text.contains("source document"));
-        assert!(!text.contains("message"));
-    }
-
-    #[test]
-    fn chat_persistence_failure_keeps_completed_answer_failure_message() {
-        let error = extractum_core::error::AppError::database("insert failed");
-
-        assert_eq!(
-            completed_chat_persistence_failure_message(&error),
-            "Answer completed but chat history could not be saved: Database error: insert failed"
-        );
-    }
 }

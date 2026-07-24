@@ -1,6 +1,6 @@
 use super::super::{finish_map_phase, run_analysis_step_with_cancel, ReportRunError};
 use super::harness::sample_chunk_summary;
-use crate::llm::LlmRequestError;
+use extractum_llm::LlmRequestError;
 use tokio_util::sync::CancellationToken;
 
 #[tokio::test]

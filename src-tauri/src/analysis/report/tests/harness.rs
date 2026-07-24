@@ -1,3 +1,7 @@
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
+use std::thread::JoinHandle;
+
 use super::super::super::corpus::AnalysisCorpusMessage;
 use super::super::super::models::{AnalysisPromptTemplate, ChunkSummary};
 use extractum_llm::{LlmProviderAccess, ProviderKind, ResolvedLlmProfile};
@@ -55,6 +59,65 @@ pub(super) fn sample_resolved_profile() -> ResolvedLlmProfile {
     )
 }
 
+fn read_http_request(stream: &mut TcpStream) {
+    let mut buffer = Vec::new();
+    let mut chunk = [0_u8; 1024];
+    let header_end = loop {
+        let read = stream.read(&mut chunk).expect("read completion request");
+        assert!(read > 0, "completion request ended before headers");
+        buffer.extend_from_slice(&chunk[..read]);
+        if let Some(position) = buffer.windows(4).position(|window| window == b"\r\n\r\n") {
+            break position + 4;
+        }
+    };
+    let headers = String::from_utf8_lossy(&buffer[..header_end]);
+    let content_length = headers
+        .lines()
+        .find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            name.eq_ignore_ascii_case("content-length")
+                .then(|| value.trim().parse::<usize>().ok())
+                .flatten()
+        })
+        .unwrap_or(0);
+    let body_read = buffer.len().saturating_sub(header_end);
+    if content_length > body_read {
+        let mut body_tail = vec![0_u8; content_length - body_read];
+        stream
+            .read_exact(&mut body_tail)
+            .expect("read completion request body");
+    }
+}
+
+pub(super) fn start_openai_compat_completion_server(
+    completions: Vec<String>,
+) -> (String, JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind completion server");
+    let base_url = format!(
+        "http://{}/v1",
+        listener.local_addr().expect("completion server address")
+    );
+    let server = std::thread::spawn(move || {
+        for completion in completions {
+            let (mut stream, _) = listener.accept().expect("accept completion request");
+            read_http_request(&mut stream);
+            let payload = serde_json::json!({
+                "choices": [{"delta": {"content": completion}}],
+            });
+            let body = format!("data: {payload}\n\ndata: [DONE]\n\n");
+            let response = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                body.len(),
+                body,
+            );
+            stream
+                .write_all(response.as_bytes())
+                .expect("write completion response");
+        }
+    });
+    (base_url, server)
+}
+
 pub(super) async fn report_capture_pool(run_id: i64) -> SqlitePool {
     let pool = SqlitePool::connect("sqlite::memory:")
         .await
@@ -63,6 +126,8 @@ pub(super) async fn report_capture_pool(run_id: i64) -> SqlitePool {
         "CREATE TABLE analysis_runs (
             id INTEGER PRIMARY KEY,
             status TEXT NOT NULL,
+            result_markdown TEXT,
+            trace_data_zstd BLOB,
             error TEXT,
             scope_label_snapshot TEXT,
             snapshot_captured_at TEXT,

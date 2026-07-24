@@ -26,18 +26,21 @@ async fn fixture_active_state_tracks_seeded_running_run() {
 
     assert_eq!(active_run_ids.len(), 1);
     assert!(active_run_ids.contains(&running_run_id));
-    let child_token = state
-        .report_run_child_token(running_run_id)
+    let cancellation_wait = state
+        .prepare_report_run_cancellation_wait(running_run_id)
         .await
-        .expect("child token");
+        .expect("prepare fixture cancellation wait");
 
     let fixture_run_ids = fixture_run_ids(&pool).await.expect("load fixture run ids");
     remove_fixture_active_runs(&state, &fixture_run_ids).await;
 
     assert!(state.active_report_run_ids().await.is_empty());
-    tokio::time::timeout(std::time::Duration::from_secs(1), child_token.cancelled())
-        .await
-        .expect("fixture child token cancelled");
+    tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        cancellation_wait.cancelled(),
+    )
+    .await
+    .expect("fixture child token cancelled");
 }
 
 #[tokio::test]
@@ -56,7 +59,23 @@ async fn fixture_cancel_waiter_marks_running_run_cancelled() {
             .fetch_one(&pool)
             .await
             .expect("load running run");
+    let cancellation_wait = state
+        .prepare_report_run_cancellation_wait(running_run_id)
+        .await
+        .expect("prepare fixture cancellation wait");
+    let (release_waiter, waiter_gate) = tokio::sync::oneshot::channel();
+    let waiter = tokio::spawn(async move {
+        waiter_gate.await.expect("release fixture waiter");
+        cancellation_wait.cancelled().await;
+    });
+
     state.request_report_run_cancel(running_run_id).await;
+    state.remove_active_report_run(running_run_id).await;
+    release_waiter.send(()).expect("release fixture waiter");
+    tokio::time::timeout(std::time::Duration::from_secs(1), waiter)
+        .await
+        .expect("fixture cancellation wait completed")
+        .expect("fixture waiter task completed");
 
     finish_cancelled_fixture_run(&pool, &state, running_run_id)
         .await

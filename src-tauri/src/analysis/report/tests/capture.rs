@@ -1,6 +1,8 @@
-use super::super::super::corpus::{AnalysisCorpusRequest, YoutubeCorpusMode};
+use super::super::super::corpus::{
+    AnalysisCorpusRequest, AppAnalysisCorpusReader, YoutubeCorpusMode,
+};
 use super::super::super::models::AnalysisSourceKind;
-use super::super::capture_report_corpus;
+use super::super::capture_analysis_corpus;
 
 #[tokio::test]
 async fn capture_report_corpus_returns_reloaded_snapshot_before_provider_phases() {
@@ -90,7 +92,8 @@ async fn capture_report_corpus_returns_reloaded_snapshot_before_provider_phases(
     )
     .expect("construct capture request");
 
-    let captured = capture_report_corpus(&pool, 1, "Frozen source", &request)
+    let reader = AppAnalysisCorpusReader::new(pool.clone());
+    let captured = capture_analysis_corpus(&pool, &reader, 1, "Frozen source", &request)
         .await
         .expect("capture report corpus");
 

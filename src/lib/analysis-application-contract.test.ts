@@ -20,6 +20,21 @@ const errorSource = readFileSync(
   path.join(repoRoot, "src-tauri/crates/extractum-core/src/error.rs"),
   "utf8",
 );
+const portableChatSource = () =>
+  readAnalysisContractSource({
+    before: "chat_engine.rs",
+    after: { owner: "crate", path: "chat.rs" },
+  });
+const portableReportSource = () =>
+  readAnalysisContractSource({
+    before: "report_engine.rs",
+    after: { owner: "crate", path: "report.rs" },
+  });
+const portableReportLifecycleSource = () =>
+  readAnalysisContractSource({
+    before: "report/lifecycle_portable.rs",
+    after: { owner: "crate", path: "report/lifecycle.rs" },
+  });
 
 const analysisRelease = [
   "list_analysis_sources",
@@ -76,7 +91,7 @@ const commandWireContracts = {
   clear_analysis_chat_messages: ["handle: AppHandle, run_id: i64 -> AppResult<()>", ["runId"]],
   ask_analysis_run_question: ["handle: AppHandle, run_id: i64, question: String, model_override: Option<String>, profile_id: Option<String> -> AppResult<String>", ["runId", "question", "modelOverride", "profileId"]],
   start_analysis_report: ["handle: AppHandle, state: tauri::State<'_, AnalysisState>, source_id: Option<i64>, source_group_id: Option<i64>, period_from: i64, period_to: i64, output_language: String, prompt_template_id: i64, model_override: Option<String>, profile_id: Option<String>, youtube_corpus_mode: Option<String>, include_migrated_history: bool -> AppResult<i64>", ["sourceId", "sourceGroupId", "periodFrom", "periodTo", "outputLanguage", "promptTemplateId", "modelOverride", "profileId", "youtubeCorpusMode", "includeMigratedHistory"]],
-  cancel_analysis_run: ["handle: AppHandle, state: tauri::State<'_, AnalysisState>, scheduler: tauri::State<'_, LlmSchedulerState>, run_id: i64 -> AppResult<()>", ["runId"]],
+  cancel_analysis_run: ["handle: AppHandle, state: tauri::State<'_, AnalysisState>, scheduler: tauri::State<'_, Arc<LlmSchedulerState>>, run_id: i64 -> AppResult<()>", ["runId"]],
   start_project_analysis: ["handle: AppHandle, state: tauri::State<'_, crate::analysis::AnalysisState>, project_id: i64, period_from: i64, period_to: i64, output_language: String, prompt_template_id: i64, model_override: Option<String>, profile_id: Option<String>, youtube_corpus_mode: Option<String>, include_migrated_history: bool -> AppResult<i64>", ["projectId", "periodFrom", "periodTo", "outputLanguage", "promptTemplateId", "modelOverride", "profileId", "youtubeCorpusMode", "includeMigratedHistory"]],
   list_project_runs: ["handle: AppHandle, project_id: i64 -> AppResult<Vec<crate::analysis::models::AnalysisRunSummary>>", ["projectId"]],
   get_project_data_range: ["handle: AppHandle, project_id: i64, youtube_corpus_mode: Option<String>, include_migrated_history: bool -> AppResult<ProjectDataRange>", ["projectId", "youtubeCorpusMode", "includeMigratedHistory"]],
@@ -118,6 +133,8 @@ function sourceIdentityPrefix(file: string): string {
   const relative = path
     .relative(currentAnalysisRoot, file)
     .replaceAll("\\", "/")
+    .replace(/^(chat|report)_engine\.rs$/, "$1.rs")
+    .replace(/^report\/lifecycle_portable\.rs$/, "report/lifecycle.rs")
     .replace(
       /\/(live|preflight|source_resolution|read_model)_portable\.rs$/,
       "/$1.rs",
@@ -250,6 +267,28 @@ function closingDelimiter(source: string, open: number, left: string, right: str
   throw new Error(`unclosed ${left}${right} delimiter`);
 }
 
+function uniqueRustBracedBody(
+  source: string,
+  opening: RegExp,
+  label: string,
+): string {
+  const flags = opening.flags.includes("g")
+    ? opening.flags
+    : `${opening.flags}g`;
+  const matches = [...source.matchAll(new RegExp(opening.source, flags))];
+  expect(matches, `${label} count`).toHaveLength(1);
+  const match = matches[0];
+  if (!match || match.index === undefined) {
+    throw new Error(`missing ${label}`);
+  }
+  const braceOffset = match[0].lastIndexOf("{");
+  if (braceOffset < 0) {
+    throw new Error(`missing ${label} opening brace`);
+  }
+  const open = match.index + braceOffset;
+  return source.slice(open + 1, closingDelimiter(source, open, "{", "}"));
+}
+
 function splitTopLevel(source: string): string[] {
   const parts: string[] = [];
   let start = 0;
@@ -317,25 +356,275 @@ describe("analysis application boundary", () => {
     expect(() => readAppAnalysisSource("missing.rs")).toThrow(/is missing/);
   });
 
+  it("stages checkpoint four portable engines through exact unsuffixed includes", () => {
+    const chatAdapter = readAppAnalysisSource("chat.rs");
+    const reportAdapter = readAppAnalysisSource("report.rs");
+    const lifecycleAdapter = readAppAnalysisSource("report/lifecycle.rs");
+    const testRoot = readAppAnalysisSource("report/tests/mod.rs");
+    const portableTestRoot = readAppAnalysisSource("report/tests/mod_portable.rs");
+
+    expect(chatAdapter.match(/include!\("chat_engine\.rs"\);/g) ?? []).toHaveLength(1);
+    expect(reportAdapter.match(/include!\("report_engine\.rs"\);/g) ?? []).toHaveLength(1);
+    expect(
+      lifecycleAdapter.match(/include!\("lifecycle_portable\.rs"\);/g) ?? [],
+    ).toHaveLength(1);
+    expect(testRoot.match(/include!\("mod_portable\.rs"\);/g) ?? []).toHaveLength(1);
+    expect(normalized(testRoot)).toBe(
+      'mod capture; include!("mod_portable.rs");',
+    );
+    expect(normalized(portableTestRoot)).toBe(
+      "mod architecture; mod corpus_port; mod harness; mod lifecycle; mod phases; mod preflight; mod requests; mod runtime; mod scope;",
+    );
+
+    for (const [adapter, suffixedModule] of [
+      [chatAdapter, "chat_engine"],
+      [reportAdapter, "report_engine"],
+      [lifecycleAdapter, "lifecycle_portable"],
+      [testRoot, "mod_portable"],
+    ] as const) {
+      expect(adapter).not.toMatch(new RegExp(`\\bmod\\s+${suffixedModule}\\s*;`));
+    }
+    expect(portableTestRoot).not.toMatch(/\bmod\s+capture\s*;/);
+
+    expect(chatAdapter).toContain("pub async fn ask_analysis_run_question");
+    expect(chatAdapter).toContain("get_pool(&handle)");
+    expect(reportAdapter).toContain("pub(crate) async fn start_analysis_report_run");
+    expect(reportAdapter).toContain("get_pool(&handle)");
+    expect(reportAdapter).not.toMatch(/\bimpl\s+RunEvent\s*\{/);
+    expect(reportAdapter).not.toContain("emit_analysis_event");
+    expect(lifecycleAdapter).toContain("pub async fn cleanup_interrupted_analysis_runs");
+    expect(lifecycleAdapter).toContain("get_pool");
+    expect(lifecycleAdapter).toContain(
+      "let sink = TauriAnalysisEventSink::new(handle.clone());",
+    );
+    expect(lifecycleAdapter).toContain(".publish(&sink);");
+    expect(lifecycleAdapter).not.toContain(".emit(handle)");
+  });
+
+  it("keeps checkpoint four portable subjects application-free and depth-stable", () => {
+    const forbiddenApplicationCapability =
+      /\bAppHandle\b|\bget_pool\b|crate::(?:analysis|error|compression|llm|time|db|sources)\b/;
+    const portableSources = [
+      portableChatSource(),
+      readAnalysisContractSource({
+        before: "models.rs",
+        after: { owner: "crate", path: "models.rs" },
+      }),
+      portableReportSource(),
+      portableReportLifecycleSource(),
+      readAppAnalysisSource("report/capture.rs"),
+      readAppAnalysisSource("report/phases.rs"),
+      readAppAnalysisSource("report/requests.rs"),
+      readAnalysisContractSource({
+        before: "report/tests/corpus_port.rs",
+        after: { owner: "crate", path: "report/tests/corpus_port.rs" },
+      }),
+      readAnalysisContractSource({
+        before: "report/tests/mod_portable.rs",
+        after: { owner: "crate", path: "report/tests/mod.rs" },
+      }),
+      readAnalysisContractSource({
+        before: "report/tests/runtime.rs",
+        after: { owner: "crate", path: "report/tests/runtime.rs" },
+      }),
+      ...[
+        "harness",
+        "lifecycle",
+        "phases",
+        "preflight",
+        "requests",
+        "scope",
+      ].map((leaf) => readAppAnalysisSource(`report/tests/${leaf}.rs`)),
+      readAnalysisContractSource({
+        before: "state.rs",
+        after: { owner: "crate", path: "state.rs" },
+      }),
+    ];
+
+    for (const source of portableSources) {
+      expect(source).not.toMatch(forbiddenApplicationCapability);
+    }
+    expect(portableChatSource()).toContain("pub async fn execute_analysis_chat");
+    expect(portableReportSource()).toContain("pub async fn execute_analysis_report");
+    expect(portableReportSource()).not.toMatch(
+      /#\[path\s*=\s*"report\/lifecycle(?:_portable)?\.rs"\]/,
+    );
+    expect(portableReportSource()).not.toContain('#[path = "report/lifecycle.rs"]');
+    expect(portableReportSource()).not.toContain(
+      "pub use self::lifecycle::cleanup_interrupted_analysis_runs",
+    );
+    expect(portableReportSource()).not.toMatch(
+      /pub(?:\(crate\))?\s+use\s+self::lifecycle::(?:\{[^}]*\brequest_analysis_run_cancel\b|request_analysis_run_cancel\s*;)/,
+    );
+    expect(portableReportLifecycleSource()).toContain(
+      "pub(super) async fn request_analysis_run_cancel_for_pool",
+    );
+    expect(readAppAnalysisSource("report.rs")).toContain(
+      "pub use self::lifecycle::cleanup_interrupted_analysis_runs",
+    );
+    expect(readAppAnalysisSource("report.rs")).toContain(
+      '#[path = "report/lifecycle.rs"]',
+    );
+    expect(readAppAnalysisSource("report.rs")).toContain(
+      "pub(crate) use self::lifecycle::request_analysis_run_cancel",
+    );
+  });
+
+  it("keeps the Tauri analysis event sink synchronous and side-effect minimal", () => {
+    const events = readAppAnalysisSource("events.rs");
+    expect(events).not.toContain("emit_analysis_event");
+    const implementation = uniqueRustBracedBody(
+      events,
+      /(?:^|\n)\s*impl\s+AnalysisEventSink\s+for\s+TauriAnalysisEventSink\s*\{/,
+      "TauriAnalysisEventSink implementation",
+    );
+    const publishRun = uniqueRustBracedBody(
+      implementation,
+      /(?:^|\n)\s*fn\s+publish_run\(\s*&self,\s*event:\s*AnalysisRunEvent\s*\)\s*\{/,
+      "TauriAnalysisEventSink::publish_run",
+    );
+    const publishChat = uniqueRustBracedBody(
+      implementation,
+      /(?:^|\n)\s*fn\s+publish_chat\(\s*&self,\s*event:\s*AnalysisChatEvent\s*\)\s*\{/,
+      "TauriAnalysisEventSink::publish_chat",
+    );
+    const forbiddenSideEffect =
+      /\basync\b|\.await\b|\bblock_on\b|\bget_pool\b|\bSqlitePool\b|\bsqlx\b|\b(?:SELECT|INSERT|UPDATE|DELETE)\b|\.acquire\s*\(|\.begin\s*\(|\bsleep\b|\bretry\b|\bbackoff\b|\b(?:Mutex|RwLock)\b|\.lock\s*\(|\b(?:channel|mpsc|oneshot|broadcast|watch)\b|\b(?:spawn|spawn_blocking|JoinSet|join)\b|\b(?:std|tokio)::(?:fs|net)\b|\b(?:File|OpenOptions|TcpStream|TcpListener|UdpSocket|reqwest|hyper)\b/;
+
+    expect(normalized(publishRun)).toBe(
+      "let _ = self.handle.emit(ANALYSIS_RUN_EVENT, &event);",
+    );
+    expect(normalized(publishChat)).toBe(
+      "let _ = self.handle.emit(ANALYSIS_CHAT_EVENT, &event);",
+    );
+    for (const [label, body] of [
+      ["publish_run", publishRun],
+      ["publish_chat", publishChat],
+    ] as const) {
+      expect(body.match(/\.emit\s*\(/g) ?? [], `${label} emit count`).toHaveLength(
+        1,
+      );
+      expect(body, `${label} forbidden side effect`).not.toMatch(
+        forbiddenSideEffect,
+      );
+    }
+    expect(normalized(implementation)).toBe(
+      "fn publish_run(&self, event: AnalysisRunEvent) { let _ = self.handle.emit(ANALYSIS_RUN_EVENT, &event); } fn publish_chat(&self, event: AnalysisChatEvent) { let _ = self.handle.emit(ANALYSIS_CHAT_EVENT, &event); }",
+    );
+  });
+
+  it("exposes only the opaque fixture cancellation wait capability", () => {
+    const state = readAppAnalysisSource("state.rs");
+    const fixtures = readAppAnalysisSource("fixtures.rs");
+    const waitFields = state.match(
+      /pub struct AnalysisReportCancellationWait\s*\{([\s\S]*?)\n\}/,
+    )?.[1];
+
+    for (const signature of [
+      "pub async fn insert_active_report_run(&self, run_id: i64)",
+      "pub async fn remove_active_report_run(&self, run_id: i64)",
+      "pub async fn active_report_run_ids(&self) -> HashSet<i64>",
+      "pub async fn request_report_run_cancel(&self, run_id: i64) -> bool",
+    ]) {
+      expect(state).toContain(signature);
+    }
+    expect(state).toMatch(
+      /pub async fn prepare_report_run_cancellation_wait\(\s*&self,\s*run_id: i64,\s*\) -> Option<AnalysisReportCancellationWait>/,
+    );
+    expect(state).toContain("pub async fn cancelled(self)");
+    expect(waitFields).toBeDefined();
+    expect(waitFields).not.toMatch(
+      /^\s*pub(?:\([^)]*\))?\s+[a-z_][a-z0-9_]*\s*:/m,
+    );
+    expect(state).not.toMatch(
+      /#\[derive\((?=[^\]]*\bSerialize\b)[^\]]*\)\]\s*pub struct AnalysisReportCancellationWait/,
+    );
+    expect(state).not.toMatch(/pub\s+fn\s+(?:token|into_token)\b/);
+    expect(state).toContain(
+      "pub(crate) async fn report_run_child_token(&self, run_id: i64)",
+    );
+    expect(state).toContain("async fn ensure_report_run_token(&self, run_id: i64)");
+
+    expectOrdered(fixtures.slice(fixtures.indexOf("async fn spawn_fixture_cancellation_waiters")), [
+      "prepare_report_run_cancellation_wait(run_id).await",
+      "tauri::async_runtime::spawn(async move",
+      "cancellation_wait.cancelled().await",
+    ]);
+    expect(fixtures).not.toContain(".report_run_child_token(run_id)");
+  });
+
   it("freezes the executable Appendix A partition at 95 crate and 48 app identities", () => {
     const frozen = parseAppendix();
     const current = executableAnalysisIdentities();
     const crate = frozen.filter(({ owner }) => owner === "crate").map(({ current }) => current);
     const app = frozen.filter(({ owner }) => owner === "app").map(({ current }) => current);
+    const checkpointFourAdditions = [
+      "analysis::chat::tests::chat_execution_persists_turns_before_completed_event",
+      "analysis::report::tests::runtime::report_execution_publishes_typed_events_in_existing_order",
+      "analysis::report::tests::runtime::terminal_cleanup_always_removes_active_report_state",
+    ];
+    const baseline = current.filter(
+      (identity) => !checkpointFourAdditions.includes(identity),
+    );
 
-    expect(current).toHaveLength(143);
+    expect(current).toHaveLength(146);
+    expect(
+      current.filter((identity) => checkpointFourAdditions.includes(identity)),
+    ).toEqual(checkpointFourAdditions.sort());
+    expect(baseline).toHaveLength(143);
     expect(crate).toHaveLength(95);
     expect(app).toHaveLength(48);
     expect(crate.filter((identity) => app.includes(identity))).toEqual([]);
-    expect([...crate, ...app].sort()).toEqual(current);
+    expect([...crate, ...app].sort()).toEqual(baseline);
     expect(new Set(frozen.map(({ final }) => final)).size).toBe(143);
+  });
+
+  it("manages one scheduler Arc and routes every app consumer through it", () => {
+    const production = (relativePath: string) =>
+      readFileSync(path.join(repoRoot, "src-tauri/src", relativePath), "utf8")
+        .split("#[cfg(test)]")[0];
+    const schedulerConsumers = [
+      "accounts.rs",
+      "diagnostics/mod.rs",
+      "llm/mod.rs",
+      "prompt_packs/runtime_commands.rs",
+      "analysis/chat.rs",
+      "analysis/chat_engine.rs",
+      "analysis/report.rs",
+      "analysis/report_engine.rs",
+      "analysis/report/phases.rs",
+      "analysis/report/lifecycle.rs",
+      "analysis/report/lifecycle_portable.rs",
+      "analysis/report_commands.rs",
+    ].map(production);
+    const allConsumers = schedulerConsumers.join("\n");
+
+    expect(
+      appLib.match(/\.manage\(Arc::new\(LlmSchedulerState::new\(\)\)\)/g) ?? [],
+    ).toHaveLength(1);
+    expect(appLib).not.toContain(".manage(LlmSchedulerState::new())");
+    expect(allConsumers).not.toMatch(
+      /(?:tauri::)?State<'_,\s*LlmSchedulerState\s*>/,
+    );
+    expect(allConsumers).not.toContain("state::<LlmSchedulerState>()");
+    expect(allConsumers).not.toContain("Arc::new(LlmSchedulerState::new())");
+
+    for (const requiredConsumer of [
+      "llm_scheduler: tauri::State<'_, Arc<LlmSchedulerState>>",
+      "state: tauri::State<'_, Arc<LlmSchedulerState>>",
+      "scheduler: State<'_, Arc<LlmSchedulerState>>",
+      "scheduler: tauri::State<'_, Arc<LlmSchedulerState>>",
+      "state::<Arc<LlmSchedulerState>>()",
+    ]) {
+      expect(allConsumers).toContain(requiredConsumer);
+    }
   });
 
   it("stages checkpoint two portable values and safe construction without app compression ownership", () => {
     const moduleSource = readAppAnalysisSource("mod.rs");
     const domainSource = readAppAnalysisSource("domain_portable.rs");
     const models = readAppAnalysisSource("models.rs");
-    const report = readAppAnalysisSource("report.rs");
+    const report = portableReportSource();
     const trace = readAppAnalysisSource("trace.rs");
     const filters = readAppAnalysisSource("store/owned_read_model.rs");
     const reportCommands = readAppAnalysisSource("report_commands.rs");
@@ -361,7 +650,7 @@ describe("analysis application boundary", () => {
       expect(report).toContain(`pub fn ${constructor}(`);
     }
     const requestFields = report.match(
-      /pub\(crate\) struct StartAnalysisReportRequest \{([\s\S]*?)\n\}/,
+      /(?:^|\n)pub struct StartAnalysisReportRequest \{([\s\S]*?)\n\}/,
     )?.[1];
     expect(requestFields).toBeDefined();
     expect(requestFields).not.toMatch(/\bpub(?:\(crate\))?\s+\w+\s*:/);
@@ -374,6 +663,146 @@ describe("analysis application boundary", () => {
     expect(filters).toContain("pub fn for_analysis(");
     expect(filters).toContain("pub fn for_project(project_id: i64, limit: i64) -> Self");
     expect(filters).toContain("pub fn foreign_label_search_terms(&self) -> &[String]");
+  });
+
+  it("freezes opaque report tickets and the explicit execution API", () => {
+    const report = portableReportSource();
+    const capture = readAppAnalysisSource("report/capture.rs");
+    const ticketNames = [
+      "AnalysisReportPreparationTicket",
+      "AnalysisReportScopeTicket",
+      "AnalysisReportExecutionTicket",
+    ];
+
+    for (const ticketName of ticketNames) {
+      const fields = report.match(
+        new RegExp(`(?:^|\\n)pub struct ${ticketName} \\{([\\s\\S]*?)\\n\\}`),
+      )?.[1];
+      expect(fields, `${ticketName} declaration`).toBeDefined();
+      expect(fields).not.toMatch(
+        /^\s*pub(?:\([^)]*\))?\s+[a-z_][a-z0-9_]*\s*:/m,
+      );
+      expect(report).not.toMatch(
+        new RegExp(
+          `#\\[derive\\((?=[^\\]]*\\bSerialize\\b)[^\\]]*\\)\\]\\s*pub struct ${ticketName}`,
+        ),
+      );
+    }
+    expect(report).not.toMatch(
+      /#\[derive\((?=[^\]]*\bDebug\b)[^\]]*\)\]\s*pub struct AnalysisReportExecutionTicket/,
+    );
+
+    for (const accessor of [
+      "pub fn requested_profile_id(&self) -> Option<&str>",
+      "pub fn model_override(&self) -> Option<&str>",
+      "pub fn resolve_youtube_corpus_mode(self) -> AppResult<AnalysisReportScopeTicket>",
+      "pub fn scope_kind(&self) -> AnalysisScopeKind",
+      "pub fn scope_id(&self) -> i64",
+      "pub fn youtube_corpus_mode(&self) -> YoutubeCorpusMode",
+      "pub fn run_id(&self) -> i64",
+    ]) {
+      expect(report).toContain(accessor);
+    }
+
+    const executionError = report.match(
+      /pub enum AnalysisExecutionError \{([\s\S]*?)\n\}/,
+    )?.[1];
+    expect(executionError).toBeDefined();
+    expect(
+      [...(executionError ?? "").matchAll(/^\s*([A-Z][A-Za-z]+)\(/gm)].map(
+        ([, variant]) => variant,
+      ),
+    ).toEqual(["Cancelled", "CaptureFailed", "Failed"]);
+
+    for (const signature of [
+      /pub async fn prepare_analysis_report\(\s*pool: &SqlitePool,\s*request: StartAnalysisReportRequest,\s*\) -> AppResult<AnalysisReportPreparationTicket>/,
+      /pub async fn prepare_analysis_report_execution\(\s*pool: &SqlitePool,\s*state: &AnalysisState,\s*reader: &dyn AnalysisCorpusReader,\s*preparation: AnalysisReportScopeTicket,\s*scope: ResolvedAnalysisScope,\s*resolved_profile: ResolvedLlmProfile,\s*effective_model: String,\s*model_input_token_limit: Option<usize>,\s*\) -> AppResult<AnalysisReportExecutionTicket>/,
+      /pub async fn execute_analysis_report\(\s*pool: &SqlitePool,\s*state: &AnalysisState,\s*scheduler: Arc<LlmSchedulerState>,\s*reader: &dyn AnalysisCorpusReader,\s*sink: Arc<dyn AnalysisEventSink>,\s*ticket: AnalysisReportExecutionTicket,\s*\) -> Result<\(\), AnalysisExecutionError>/,
+      /pub async fn finalize_analysis_report_execution\(\s*pool: Option<&SqlitePool>,\s*state: &AnalysisState,\s*sink: &dyn AnalysisEventSink,\s*run_id: i64,\s*outcome: Result<\(\), AnalysisExecutionError>,\s*\)/,
+    ]) {
+      expect(report).toMatch(signature);
+    }
+    expect(report).toContain("pub use self::capture::capture_analysis_corpus");
+    expect(capture).toMatch(
+      /pub async fn capture_analysis_corpus\(\s*pool: &SqlitePool,\s*reader: &dyn AnalysisCorpusReader,\s*run_id: i64,\s*scope_label: &str,\s*request: &AnalysisCorpusRequest,\s*\) -> Result<Vec<AnalysisCorpusMessage>, AnalysisExecutionError>/,
+    );
+  });
+
+  it("freezes opaque chat tickets and the explicit execution API", () => {
+    const chat = portableChatSource();
+    const chatAdapter = readAppAnalysisSource("chat.rs");
+    const requestFields = chat.match(
+      /(?:^|\n)pub struct AskAnalysisRunQuestionRequest \{([\s\S]*?)\n\}/,
+    )?.[1];
+    expect(requestFields).toBeDefined();
+    expect(
+      [...(requestFields ?? "").matchAll(/^\s+([a-z_]+):\s*([^,]+),$/gm)]
+        .map(([, name, type]) => `${name}: ${type}`),
+    ).toEqual([
+      "run_id: i64",
+      "question: String",
+      "model_override: Option<String>",
+      "profile_id: Option<String>",
+    ]);
+    expect(requestFields).not.toMatch(
+      /^\s*pub(?:\([^)]*\))?\s+[a-z_][a-z0-9_]*\s*:/m,
+    );
+
+    for (const ticketName of [
+      "AskAnalysisRunQuestionRequest",
+      "AnalysisChatExecutionTicket",
+      "AnalysisChatCompletionTicket",
+    ]) {
+      expect(chat).not.toMatch(
+        new RegExp(
+          `#\\[derive\\((?=[^\\]]*\\bSerialize\\b)[^\\]]*\\)\\]\\s*pub struct ${ticketName}`,
+        ),
+      );
+    }
+    for (const accessor of [
+      "pub fn request_id(&self) -> &str",
+      "pub fn profile_id(&self) -> &str",
+      "pub fn run_id(&self) -> i64",
+    ]) {
+      expect(chat).toContain(accessor);
+    }
+
+    for (const signature of [
+      /pub fn new\(\s*run_id: i64,\s*question: String,\s*model_override: Option<String>,\s*profile_id: Option<String>,\s*\) -> AppResult<Self>/,
+      /pub async fn prepare_analysis_chat\(\s*pool: &SqlitePool,\s*request: AskAnalysisRunQuestionRequest,\s*run: AnalysisChatRun,\s*\) -> AppResult<AnalysisChatExecutionTicket>/,
+      /pub async fn execute_analysis_chat\(\s*scheduler: Arc<LlmSchedulerState>,\s*sink: Arc<dyn AnalysisEventSink>,\s*ticket: AnalysisChatExecutionTicket,\s*resolved_profile: ResolvedLlmProfile,\s*\) -> Result<AnalysisChatCompletionTicket, AnalysisExecutionError>/,
+      /pub async fn complete_analysis_chat\(\s*pool: &SqlitePool,\s*sink: &dyn AnalysisEventSink,\s*completion: AnalysisChatCompletionTicket,\s*\) -> AppResult<\(\)>/,
+      /pub fn publish_analysis_chat_execution_error\(\s*sink: &dyn AnalysisEventSink,\s*request_id: &str,\s*run_id: i64,\s*error: &AnalysisExecutionError,\s*\)/,
+      /pub fn publish_analysis_chat_persistence_error\(\s*sink: &dyn AnalysisEventSink,\s*request_id: &str,\s*run_id: i64,\s*error: &AppError,\s*\)/,
+    ]) {
+      expect(chat).toMatch(signature);
+    }
+
+    const command = chatAdapter.slice(
+      chatAdapter.indexOf("pub async fn ask_analysis_run_question"),
+    );
+    expect(command).toContain(
+      "resolve_legacy_analysis_chat_run_in_pool(&pool, run_id)",
+    );
+    expect(command).not.toMatch(/\brequest\.run_id\b/);
+    expectOrdered(command, [
+      "AskAnalysisRunQuestionRequest::new(",
+      "get_pool(&handle)",
+      "resolve_legacy_analysis_chat_run_in_pool",
+      "prepare_analysis_chat(",
+      "let request_id = ticket.request_id().to_string()",
+      "let profile_id = ticket.profile_id().to_string()",
+      "tokio::spawn(async move",
+      "resolve_profile_for_backend",
+      "execute_analysis_chat(",
+      "get_pool(&app_handle)",
+      "complete_analysis_chat(",
+      "Ok(request_id)",
+    ]);
+    expect(command.match(/tokio::spawn\(async move/g) ?? []).toHaveLength(1);
+    expect(command).not.toContain(".run_request(");
+    expect(command).not.toContain("persist_chat_exchange(");
+    expect(command).not.toContain(".emit(");
   });
 
   it("keeps analysis run-list filters public with private state", () => {
@@ -652,7 +1081,7 @@ describe("analysis application boundary", () => {
     const appReadModel = readAppAnalysisSource("store/read_model.rs");
     const ownedReadModel = readAppAnalysisSource("store/owned_read_model.rs");
     const models = readAppAnalysisSource("models.rs");
-    const lifecycle = readAppAnalysisSource("report/lifecycle.rs");
+    const lifecycle = portableReportLifecycleSource();
     const applicationTests = readAppAnalysisSource("tests_application.rs");
     const portableTests = readAppAnalysisSource("tests_portable.rs");
 
@@ -688,7 +1117,7 @@ describe("analysis application boundary", () => {
   });
 
   it("carries the resolved analysis scope through the report ticket", () => {
-    const report = readAppAnalysisSource("report.rs");
+    const report = portableReportSource();
     const phases = readAppAnalysisSource("report/phases.rs");
     const models = readAppAnalysisSource("models.rs");
     const resolver = readAppAnalysisSource("corpus/source_resolution.rs");
@@ -705,9 +1134,9 @@ describe("analysis application boundary", () => {
     expect(ticketBody).not.toMatch(/\bscope_label\s*:/);
     expect(scopeDerives).toBeDefined();
     expect(scopeDerives).not.toMatch(/\bClone\b/);
-    expect(report).toContain("scope: resolved_scope");
-    expect(report).toContain("resolved_scope.source_ids().to_vec()");
-    expect(report).toContain("resolved_scope.scope_label_snapshot()");
+    expect(report).toMatch(/input:\s*ReportRunInput\s*\{[\s\S]*?\bscope,/);
+    expect(report).toContain("scope.source_ids().to_vec()");
+    expect(report).toContain("scope.scope_label_snapshot()");
     expect(report).toContain("input.scope.scope_label_snapshot()");
     expect(phases).toContain("input.scope.scope_label_snapshot()");
     expect(report).not.toContain(
@@ -726,8 +1155,8 @@ describe("analysis application boundary", () => {
 
   it("drives the frozen corpus port cases through capture and lifecycle seams", () => {
     const corpusPort = readAppAnalysisSource("report/tests/corpus_port.rs");
-    const report = readAppAnalysisSource("report.rs");
-    const lifecycle = readAppAnalysisSource("report/lifecycle.rs");
+    const report = portableReportSource();
+    const lifecycle = portableReportLifecycleSource();
     const frozenNames = [
       "report_execution_uses_distinct_preflight_and_capture_corpus_reads",
       "started_load_items_uses_preflight_summary_before_empty_capture_failure",
@@ -738,12 +1167,17 @@ describe("analysis application boundary", () => {
       ...corpusPort.matchAll(/async fn ([A-Za-z0-9_]+)\s*\(/g),
     ].map((match) => match[1]);
     expect(testNames).toEqual(frozenNames);
-    expect(corpusPort).toContain("execution_capture::capture_report_corpus");
+    expect(corpusPort).toContain("capture_analysis_corpus");
+    expect(corpusPort).not.toContain("execution_capture::capture_report_corpus");
     expect(corpusPort).not.toContain("load_execution_corpus");
     expect(corpusPort).not.toContain("fn started_event(");
     expect(corpusPort.match(/started_load_items_event\(/g) ?? []).toHaveLength(3);
-    expect(report).toContain("fn started_load_items_event(run_id: i64, message: String) -> RunEvent");
-    expect(report).toContain("started_load_items_event(run_id, message).emit(&handle)");
+    expect(report).toContain(
+      "fn started_load_items_event(run_id: i64, preflight: &AnalysisRunPreflight) -> RunEvent",
+    );
+    expect(report).toContain(
+      "started_load_items_event(run_id, &input.preflight).publish(sink.as_ref())",
+    );
     expect(corpusPort.match(/reader\.request_log\(\)/g) ?? []).toHaveLength(3);
     expect(corpusPort.match(/request\.clone\(\), request\.clone\(\)/g) ?? [])
       .toHaveLength(3);
@@ -765,8 +1199,8 @@ describe("analysis application boundary", () => {
       "Report run failed before snapshot capture completed.",
     );
     expect(lifecycle).toContain("async fn persist_capture_failure_event(");
-    expect(lifecycle).toContain(
-      "persist_capture_failure_event(pool.as_ref(), run_id, &error, now_secs())",
+    expect(report).toContain(
+      "self::lifecycle::persist_capture_failure_event(pool, run_id, &error, now_secs())",
     );
   });
 
@@ -956,14 +1390,8 @@ describe("analysis application boundary", () => {
       before: "mod.rs",
       after: { owner: "app", path: "mod.rs" },
     });
-    const chat = readAnalysisContractSource({
-      before: "chat.rs",
-      after: { owner: "crate", path: "chat.rs" },
-    });
-    const report = readAnalysisContractSource({
-      before: "report.rs",
-      after: { owner: "crate", path: "report.rs" },
-    });
+    const chat = portableChatSource();
+    const report = portableReportSource();
     const requests = readAnalysisContractSource({
       before: "report/requests.rs",
       after: { owner: "crate", path: "report/requests.rs" },
@@ -972,10 +1400,7 @@ describe("analysis application boundary", () => {
       before: "report/phases.rs",
       after: { owner: "crate", path: "report/phases.rs" },
     });
-    const lifecycle = readAnalysisContractSource({
-      before: "report/lifecycle.rs",
-      after: { owner: "crate", path: "report/lifecycle.rs" },
-    });
+    const lifecycle = portableReportLifecycleSource();
     const wireWitness = readAppAnalysisSource("tests_application.rs");
 
     const contextParams = new Set(["handle", "state", "scheduler", "repair_state"]);
@@ -1013,10 +1438,10 @@ describe("analysis application boundary", () => {
       'ChatEvent::new(queued_request_id.clone(), run_id, "queued")',
       'ChatEvent::new(started_request_id, run_id, "started")',
       'ChatEvent::new(delta_request_id.clone(), run_id, "delta")',
-      'ChatEvent::new(completed_request_id, run_id, "completed")',
+      'ChatEvent::new(completion.request_id, completion.run_id, "completed")',
     ]);
-    expect(chat).toContain('ChatEvent::new(failed_request_id, run_id, "failed")');
-    expect(chat).toContain('ChatEvent::new(cancelled_request_id, run_id, "cancelled")');
+    expect(chat).toContain('ChatEvent::new(request_id.to_string(), run_id, "failed")');
+    expect(chat).toContain('ChatEvent::new(request_id.to_string(), run_id, "cancelled")');
     expectOrdered(report, [
       'RunEvent::new(run_id, "started", "load_items")',
       'RunEvent::new(run_id, "progress", "chunking")',
@@ -1034,7 +1459,7 @@ describe("analysis application boundary", () => {
       'RunEvent::new(run_id, "delta", "reduce")',
     ]);
     expect(lifecycle).toContain('RunEvent::new(run_id, "failed", "persist")');
-    expect(lifecycle).toContain('RunEvent::new(run_id, "cancelled", "persist")');
+    expect(report).toContain('RunEvent::new(run_id, "cancelled", "persist")');
     for (const terminal of [
       "Answer completed.", "Answer cancelled.", "Analysis run cancelled.",
       "Report run failed.", "Report run failed before snapshot capture completed.",

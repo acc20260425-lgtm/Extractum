@@ -166,7 +166,7 @@ fn build_youtube_summary_execution_task(
                         execute_prepared_api_run(
                             &pool,
                             state.inner(),
-                            handle.state::<LlmSchedulerState>().inner(),
+                            handle.state::<Arc<LlmSchedulerState>>().inner().as_ref(),
                             events.clone(),
                             api,
                             profile,
@@ -204,12 +204,19 @@ fn build_youtube_summary_execution_task(
 pub async fn cancel_prompt_pack_run(
     handle: AppHandle,
     state: State<'_, PromptPackRunState>,
-    scheduler: State<'_, LlmSchedulerState>,
+    scheduler: State<'_, Arc<LlmSchedulerState>>,
     run_id: i64,
 ) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
     let events = TauriPromptPackEventSink::new(handle);
-    cancel_prompt_pack_run_in_pool(&pool, state.inner(), scheduler.inner(), &events, run_id).await
+    cancel_prompt_pack_run_in_pool(
+        &pool,
+        state.inner(),
+        scheduler.inner().as_ref(),
+        &events,
+        run_id,
+    )
+    .await
 }
 
 #[tauri::command]

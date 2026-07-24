@@ -1,6 +1,6 @@
 use super::super::validate_report_preflight;
-use crate::analysis::corpus::{AnalysisRunPreflight, AnalysisRunPreflightLimits};
-use crate::error::AppErrorKind;
+use super::super::super::corpus::{AnalysisRunPreflight, AnalysisRunPreflightLimits};
+use extractum_core::error::AppErrorKind;
 
 #[test]
 fn validate_report_preflight_rejects_empty_corpus() {

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde::Serialize;
 use sqlx::{Pool, Sqlite};
 use tauri::AppHandle;
@@ -135,7 +137,7 @@ pub async fn delete_account(
     takeout_state: tauri::State<'_, TakeoutImportState>,
     source_job_state: tauri::State<'_, SourceJobState>,
     analysis_state: tauri::State<'_, AnalysisState>,
-    llm_scheduler: tauri::State<'_, LlmSchedulerState>,
+    llm_scheduler: tauri::State<'_, Arc<LlmSchedulerState>>,
     secret_store: tauri::State<'_, SecretStoreState>,
     account_id: i64,
 ) -> AppResult<()> {
@@ -147,7 +149,7 @@ pub async fn delete_account(
         takeout_state.inner(),
         source_job_state.inner(),
         analysis_state.inner(),
-        llm_scheduler.inner(),
+        llm_scheduler.inner().as_ref(),
     )
     .await?;
     delete_account_row_from_pool(&pool, account_id).await?;

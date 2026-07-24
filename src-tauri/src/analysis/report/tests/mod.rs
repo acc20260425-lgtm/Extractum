@@ -1,9 +1,3 @@
-mod architecture;
 mod capture;
-mod corpus_port;
-mod harness;
-mod lifecycle;
-mod phases;
-mod preflight;
-mod requests;
-mod scope;
+
+include!("mod_portable.rs");

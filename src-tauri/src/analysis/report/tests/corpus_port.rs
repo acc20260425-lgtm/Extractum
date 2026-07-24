@@ -14,7 +14,7 @@ use super::super::requests::{
     build_map_request, build_reduce_request, chunk_messages, parse_chunk_summary,
     ReduceRequestParams,
 };
-use super::super::ReportRunError;
+use super::super::{capture_analysis_corpus, AnalysisExecutionError};
 use super::harness::{report_capture_pool, sample_prompt_template};
 
 enum CorpusReply {
@@ -134,21 +134,10 @@ async fn report_execution_uses_distinct_preflight_and_capture_corpus_reads() -> 
     .await?;
     let expected_started = expected_started_message(&preflight);
     let mut events = Vec::new();
-    let capture = super::super::execution_capture::capture_report_corpus(
-        &pool,
-        super::super::execution_capture::CaptureReportCorpusInput {
-            run_id,
-            scope_label: "Frozen B scope",
-            reader: &reader,
-            request: &request,
-            preflight: &preflight,
-            on_started: |message| {
-                events.push(super::super::started_load_items_event(run_id, message).event)
-            },
-        },
-    )
-    .await
-    .expect("capture corpus through production seam");
+    events.push(super::super::started_load_items_event(run_id, &preflight).event);
+    let capture = capture_analysis_corpus(&pool, &reader, run_id, "Frozen B scope", &request)
+        .await
+        .expect("capture corpus through production seam");
 
     assert_eq!(reader.request_log(), vec![request.clone(), request.clone()]);
     assert_eq!(reader.call_count(), 2);
@@ -228,22 +217,10 @@ async fn started_load_items_uses_preflight_summary_before_empty_capture_failure(
     .await?;
     let expected_started = expected_started_message(&preflight);
     let mut events = Vec::new();
-    let result = super::super::execution_capture::capture_report_corpus(
-        &pool,
-        super::super::execution_capture::CaptureReportCorpusInput {
-            run_id,
-            scope_label: "Frozen B scope",
-            reader: &reader,
-            request: &request,
-            preflight: &preflight,
-            on_started: |message| {
-                events.push(super::super::started_load_items_event(run_id, message).event)
-            },
-        },
-    )
-    .await;
+    events.push(super::super::started_load_items_event(run_id, &preflight).event);
+    let result = capture_analysis_corpus(&pool, &reader, run_id, "Frozen B scope", &request).await;
     let error = match result {
-        Err(ReportRunError::CaptureFailed(error)) => error,
+        Err(AnalysisExecutionError::CaptureFailed(error)) => error,
         other => panic!("expected production capture failure, got {other:?}"),
     };
     assert_eq!(error, "Snapshot capture failed");
@@ -299,22 +276,10 @@ async fn started_load_items_uses_preflight_summary_before_error_capture_failure(
     .await?;
     let expected_started = expected_started_message(&preflight);
     let mut events = Vec::new();
-    let result = super::super::execution_capture::capture_report_corpus(
-        &pool,
-        super::super::execution_capture::CaptureReportCorpusInput {
-            run_id,
-            scope_label: "Frozen B scope",
-            reader: &reader,
-            request: &request,
-            preflight: &preflight,
-            on_started: |message| {
-                events.push(super::super::started_load_items_event(run_id, message).event)
-            },
-        },
-    )
-    .await;
+    events.push(super::super::started_load_items_event(run_id, &preflight).event);
+    let result = capture_analysis_corpus(&pool, &reader, run_id, "Frozen B scope", &request).await;
     let error = match result {
-        Err(ReportRunError::CaptureFailed(error)) => error,
+        Err(AnalysisExecutionError::CaptureFailed(error)) => error,
         other => panic!("expected production capture failure, got {other:?}"),
     };
     assert_eq!(error, "capture source unavailable");

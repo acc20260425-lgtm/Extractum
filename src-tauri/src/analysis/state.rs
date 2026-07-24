@@ -8,6 +8,16 @@ pub struct AnalysisState {
     report_run_tokens: Mutex<HashMap<i64, CancellationToken>>,
 }
 
+pub struct AnalysisReportCancellationWait {
+    token: CancellationToken,
+}
+
+impl AnalysisReportCancellationWait {
+    pub async fn cancelled(self) {
+        self.token.cancelled().await;
+    }
+}
+
 impl AnalysisState {
     pub fn new() -> Self {
         Self {
@@ -16,7 +26,7 @@ impl AnalysisState {
         }
     }
 
-    pub(crate) async fn insert_active_report_run(&self, run_id: i64) {
+    pub async fn insert_active_report_run(&self, run_id: i64) {
         self.active_report_runs.lock().await.insert(run_id);
         self.report_run_tokens
             .lock()
@@ -24,16 +34,16 @@ impl AnalysisState {
             .insert(run_id, CancellationToken::new());
     }
 
-    pub(crate) async fn remove_active_report_run(&self, run_id: i64) {
+    pub async fn remove_active_report_run(&self, run_id: i64) {
         self.active_report_runs.lock().await.remove(&run_id);
         self.report_run_tokens.lock().await.remove(&run_id);
     }
 
-    pub(crate) async fn active_report_run_ids(&self) -> HashSet<i64> {
+    pub async fn active_report_run_ids(&self) -> HashSet<i64> {
         self.active_report_runs.lock().await.clone()
     }
 
-    pub(super) async fn request_report_run_cancel(&self, run_id: i64) -> bool {
+    pub async fn request_report_run_cancel(&self, run_id: i64) -> bool {
         let active_runs = self.active_report_runs.lock().await;
         if !active_runs.contains(&run_id) {
             return false;
@@ -57,6 +67,19 @@ impl AnalysisState {
             .await
             .get(&run_id)
             .map(CancellationToken::child_token)
+    }
+
+    pub async fn prepare_report_run_cancellation_wait(
+        &self,
+        run_id: i64,
+    ) -> Option<AnalysisReportCancellationWait> {
+        self.report_run_tokens
+            .lock()
+            .await
+            .get(&run_id)
+            .map(|token| AnalysisReportCancellationWait {
+                token: token.child_token(),
+            })
     }
 
     async fn ensure_report_run_token(&self, run_id: i64) -> CancellationToken {

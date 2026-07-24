@@ -1,4 +1,6 @@
 mod external_process;
+use std::sync::Arc;
+
 use external_process::{
     ExternalProcessShutdownState, ShutdownCleanup, ShutdownStart, ShutdownTiming,
 };
@@ -183,7 +185,7 @@ pub fn run() {
         .manage(SourceJobState::new())
         .manage(AnalysisState::new())
         .manage(PromptPackRunState::new())
-        .manage(LlmSchedulerState::new())
+        .manage(Arc::new(LlmSchedulerState::new()))
         .manage(GeminiBrowserState::new())
         .manage(GeminiBrowserJobRuntime::default())
         .manage(SourceIdentityRepairState::new())

@@ -1,7 +1,6 @@
-use super::chat::load_chat_run_and_scope_label;
 use super::store::{
     get_analysis_run_in_pool, list_active_analysis_runs_in_pool, list_analysis_runs_in_pool,
-    AnalysisRunListFilters,
+    resolve_legacy_analysis_chat_run_in_pool, resolve_run_scope_label, AnalysisRunListFilters,
 };
 use crate::error::AppError;
 use serde_json::json;
@@ -277,11 +276,12 @@ async fn chat_legacy_label_fallback_rereads_run_on_the_foreign_label_snapshot() 
     .await;
 
     let read_label = async || {
-        let (run, scope_label) = load_chat_run_and_scope_label(&pool, 1)
+        let run = resolve_legacy_analysis_chat_run_in_pool(&pool, 1)
             .await
-            .expect("read chat run context");
+            .expect("read chat run context")
+            .into_detail();
         assert_eq!(run.id, 1);
-        scope_label
+        resolve_run_scope_label(&run)
     };
     assert_eq!(read_label().await, "Frozen label");
     sqlx::query("UPDATE sources SET title = 'Live label B' WHERE id = 1")
@@ -394,6 +394,73 @@ fn ordered(source: &str, markers: &[&str]) {
     }
 }
 
+struct FailingReportAcceptanceReader {
+    calls: std::sync::atomic::AtomicUsize,
+}
+
+impl FailingReportAcceptanceReader {
+    fn new() -> Self {
+        Self {
+            calls: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+
+    fn call_count(&self) -> usize {
+        self.calls.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+impl super::corpus::AnalysisCorpusReader for FailingReportAcceptanceReader {
+    fn load_corpus(
+        &self,
+        _request: super::corpus::AnalysisCorpusRequest,
+    ) -> super::corpus::AnalysisPortFuture<'_, Vec<super::corpus::AnalysisCorpusMessage>> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Box::pin(async { Err(AppError::internal("preflight A failed")) })
+    }
+}
+
+async fn report_acceptance_pool() -> sqlx::SqlitePool {
+    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("connect report acceptance pool");
+    for statement in [
+        r#"CREATE TABLE analysis_prompt_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            template_kind TEXT NOT NULL,
+            body TEXT NOT NULL,
+            version INTEGER NOT NULL DEFAULT 1,
+            is_builtin BOOLEAN NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )"#,
+        "CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+        "CREATE TABLE analysis_runs (id INTEGER PRIMARY KEY AUTOINCREMENT)",
+        "CREATE TABLE sources (
+            id INTEGER PRIMARY KEY,
+            source_type TEXT NOT NULL,
+            source_subtype TEXT,
+            title TEXT
+        )",
+    ] {
+        sqlx::query(statement)
+            .execute(&pool)
+            .await
+            .expect("create report acceptance schema");
+    }
+    pool
+}
+
+fn report_request_error(
+    result: Result<super::report::StartAnalysisReportRequest, AppError>,
+) -> AppError {
+    match result {
+        Ok(_) => panic!("report request unexpectedly succeeded"),
+        Err(error) => error,
+    }
+}
+
 #[test]
 fn chat_profile_resolution_failure_is_async_after_request_id() {
     let source = include_str!("chat.rs");
@@ -404,19 +471,38 @@ fn chat_profile_resolution_failure_is_async_after_request_id() {
     ordered(
         command,
         &[
-            "let request = build_chat_request",
-            "let request_id = request.request_id.clone()",
+            "let request = AskAnalysisRunQuestionRequest::new(",
+            "let pool = get_pool(&handle).await?",
+            "resolve_legacy_analysis_chat_run_in_pool(&pool, run_id)",
+            "prepare_analysis_chat(&pool, request, run)",
+            "let request_id = ticket.request_id().to_string()",
+            "let profile_id = ticket.profile_id().to_string()",
             "tokio::spawn(async move",
             "resolve_profile_for_backend",
-            "ChatEvent::new(emitted_request_id.clone(), run_id, \"failed\")",
+            "execute_analysis_chat(",
+            "get_pool(&app_handle)",
+            "complete_analysis_chat(",
             "Ok(request_id)",
         ],
     );
+    assert_eq!(command.matches("tokio::spawn(async move").count(), 1);
+    assert!(!command.contains(".run_request("));
+    assert!(!command.contains("persist_chat_exchange("));
+    assert!(!command.contains(".emit("));
+    assert!(!command.contains("request.run_id"));
 }
 
-#[test]
-fn report_start_preserves_acceptance_order_and_two_corpus_reads() {
+#[tokio::test]
+async fn report_start_preserves_acceptance_order_and_two_corpus_reads() {
+    use super::models::{AnalysisSourceKind, ResolvedAnalysisScope};
+    use super::report::{
+        prepare_analysis_report, prepare_analysis_report_execution, StartAnalysisReportRequest,
+    };
+    use crate::error::AppErrorKind;
+    use crate::llm::{LlmProviderAccess, ProviderKind, ResolvedLlmProfile};
+
     let source = include_str!("report.rs");
+    let portable_engine_source = include_str!("report_engine.rs");
     let start = source
         .find("pub(crate) async fn start_analysis_report_run")
         .expect("report start");
@@ -424,43 +510,353 @@ fn report_start_preserves_acceptance_order_and_two_corpus_reads() {
     ordered(
         command,
         &[
-            "if period_from > period_to",
-            "output_language.trim()",
-            "selected_count",
             "get_pool(&handle)",
-            "fetch_prompt_template",
+            "prepare_analysis_report(&pool, request)",
             "resolve_profile_for_backend",
             "resolve_effective_model",
+            "resolve_model_input_token_limit",
+            "resolve_youtube_corpus_mode()",
             "resolve_analysis_sources",
-            "preflight_analysis_run",
-            "find_active_duplicate_run",
-            "insert_analysis_run",
-            "insert_active_report_run",
+            "prepare_analysis_report_execution(",
+            "let run_id = ticket.run_id()",
             "tokio::spawn(async move",
-            "await_report_terminal_and_cleanup",
-            "run_report_pipeline",
+            "get_pool(&app_handle)",
+            "execute_analysis_report(",
+            "get_pool(&app_handle)",
+            "finalize_analysis_report_execution(",
             "Ok(run_id)",
         ],
     );
-    let terminal_cleanup = &source[source
-        .find("async fn await_report_terminal_and_cleanup")
-        .expect("terminal cleanup helper")..start];
+    assert_eq!(command.matches("tokio::spawn(async move").count(), 1);
+    let preparation = &portable_engine_source[portable_engine_source
+        .find("pub async fn prepare_analysis_report_execution")
+        .expect("execution preparation")
+        ..portable_engine_source
+            .find("pub async fn execute_analysis_report")
+            .expect("report execution")];
+    assert_eq!(preparation.matches("preflight_analysis_run(").count(), 1);
+    let pipeline = &portable_engine_source[portable_engine_source
+        .find("async fn run_report_pipeline_with_capabilities")
+        .expect("portable report pipeline")..];
+    assert_eq!(pipeline.matches("capture_analysis_corpus(").count(), 1);
+
+    let command_adapter = include_str!("report_commands.rs");
     ordered(
-        terminal_cleanup,
+        command_adapter,
         &[
-            "let result = terminal.await",
-            "remove_active_report_run",
-            "result",
+            "StartAnalysisReportRequest::from_command",
+            "start_analysis_report_run",
         ],
     );
-    let pipeline = &source[source
-        .find("async fn run_report_pipeline")
-        .expect("pipeline")..start];
-    assert_eq!(command.matches("preflight_analysis_run(").count(), 1);
-    assert_eq!(pipeline.matches("capture_report_corpus(").count(), 1);
-    assert!(
-        command.find("preflight_analysis_run(").unwrap()
-            < command.find("tokio::spawn(async move").unwrap()
+
+    let invalid_period = report_request_error(StartAnalysisReportRequest::from_command(
+        Some(2),
+        None,
+        None,
+        20,
+        10,
+        "English".to_string(),
+        1,
+        None,
+        None,
+        None,
+        false,
+    ));
+    assert_eq!(invalid_period.kind, AppErrorKind::Validation);
+    assert_eq!(
+        invalid_period.message,
+        "period_from must be less than or equal to period_to"
     );
-    assert!(pipeline.contains("capture_report_corpus(&pool"));
+    let invalid_language = report_request_error(StartAnalysisReportRequest::from_command(
+        Some(2),
+        None,
+        None,
+        10,
+        20,
+        "   ".to_string(),
+        1,
+        None,
+        None,
+        None,
+        false,
+    ));
+    assert_eq!(invalid_language.kind, AppErrorKind::Validation);
+    assert_eq!(invalid_language.message, "Output language cannot be empty");
+    for invalid_scope in [
+        StartAnalysisReportRequest::from_command(
+            None,
+            None,
+            None,
+            10,
+            20,
+            "English".to_string(),
+            1,
+            None,
+            None,
+            None,
+            false,
+        ),
+        StartAnalysisReportRequest::from_command(
+            Some(2),
+            Some(3),
+            None,
+            10,
+            20,
+            "English".to_string(),
+            1,
+            None,
+            None,
+            None,
+            false,
+        ),
+    ] {
+        let error = report_request_error(invalid_scope);
+        assert_eq!(error.kind, AppErrorKind::Validation);
+        assert_eq!(error.message, "Select exactly one analysis scope");
+    }
+
+    let missing_schema_pool = sqlx::SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("connect missing-schema pool");
+    let missing_schema_request = StartAnalysisReportRequest::for_source(
+        2,
+        10,
+        20,
+        "English".to_string(),
+        1,
+        None,
+        Some("prod west".to_string()),
+        Some("invalid-youtube-mode".to_string()),
+        false,
+    )
+    .expect("construct missing-schema request");
+    let missing_schema_error =
+        match prepare_analysis_report(&missing_schema_pool, missing_schema_request).await {
+            Ok(_) => panic!("missing template schema unexpectedly succeeded"),
+            Err(error) => error,
+        };
+    assert_eq!(missing_schema_error.kind, AppErrorKind::Internal);
+
+    let pool = report_acceptance_pool().await;
+    let missing_template_request = StartAnalysisReportRequest::for_source(
+        2,
+        10,
+        20,
+        "English".to_string(),
+        99,
+        None,
+        Some("prod west".to_string()),
+        Some("invalid-youtube-mode".to_string()),
+        false,
+    )
+    .expect("construct missing-template request");
+    let missing_template_error =
+        match prepare_analysis_report(&pool, missing_template_request).await {
+            Ok(_) => panic!("missing template unexpectedly succeeded"),
+            Err(error) => error,
+        };
+    assert_eq!(missing_template_error.kind, AppErrorKind::NotFound);
+    assert_eq!(
+        missing_template_error.message,
+        "Analysis prompt template 99 not found"
+    );
+
+    let invalid_youtube_request = StartAnalysisReportRequest::for_source(
+        0,
+        10,
+        20,
+        "English".to_string(),
+        1,
+        None,
+        None,
+        Some("invalid-youtube-mode".to_string()),
+        false,
+    )
+    .expect("construct invalid-youtube request");
+    let invalid_youtube_preparation = prepare_analysis_report(&pool, invalid_youtube_request)
+        .await
+        .expect("prepare invalid-youtube request");
+    let invalid_youtube_error = match invalid_youtube_preparation.resolve_youtube_corpus_mode() {
+        Ok(_) => panic!("invalid YouTube mode unexpectedly succeeded"),
+        Err(error) => error,
+    };
+    assert_eq!(invalid_youtube_error.kind, AppErrorKind::Validation);
+    assert_eq!(
+        invalid_youtube_error.message,
+        "Unsupported youtube_corpus_mode 'invalid-youtube-mode'"
+    );
+
+    let reader = FailingReportAcceptanceReader::new();
+    let missing_source_request = StartAnalysisReportRequest::for_source(
+        0,
+        10,
+        20,
+        "English".to_string(),
+        1,
+        None,
+        None,
+        Some("transcript_description".to_string()),
+        false,
+    )
+    .expect("construct missing-source request");
+    let missing_source_preparation = prepare_analysis_report(&pool, missing_source_request)
+        .await
+        .expect("prepare missing-source request")
+        .resolve_youtube_corpus_mode()
+        .expect("resolve valid YouTube mode");
+    let missing_source_error = match super::corpus::resolve_analysis_sources(
+        &pool,
+        Some(missing_source_preparation.scope_id()),
+        None,
+        None,
+    )
+    .await
+    {
+        Ok(_) => panic!("source zero unexpectedly resolved"),
+        Err(error) => error.into_app_error(),
+    };
+    assert_eq!(missing_source_error.kind, AppErrorKind::NotFound);
+    assert_eq!(missing_source_error.message, "Source 0 not found");
+    assert_eq!(reader.call_count(), 0);
+
+    let preflight_request = StartAnalysisReportRequest::for_source(
+        2,
+        10,
+        20,
+        "English".to_string(),
+        1,
+        None,
+        None,
+        Some("transcript_description".to_string()),
+        false,
+    )
+    .expect("construct preflight request");
+    let preflight_preparation = prepare_analysis_report(&pool, preflight_request)
+        .await
+        .expect("prepare preflight request")
+        .resolve_youtube_corpus_mode()
+        .expect("resolve preflight YouTube mode");
+    let scope = ResolvedAnalysisScope::for_source(
+        2,
+        AnalysisSourceKind::Telegram,
+        vec![2],
+        "Source 2".to_string(),
+    )
+    .expect("construct resolved scope");
+    let resolved_profile = ResolvedLlmProfile::new(
+        "research".to_string(),
+        "test-model".to_string(),
+        LlmProviderAccess::new(
+            ProviderKind::OpenAiCompatible,
+            "secret-key".to_string().into(),
+            "http://127.0.0.1:9/v1".to_string(),
+        ),
+    );
+    let state = super::AnalysisState::new();
+    let preflight_error = match prepare_analysis_report_execution(
+        &pool,
+        &state,
+        &reader,
+        preflight_preparation,
+        scope,
+        resolved_profile,
+        "test-model".to_string(),
+        Some(4_096),
+    )
+    .await
+    {
+        Ok(_) => panic!("failing preflight unexpectedly created a run"),
+        Err(error) => error,
+    };
+    assert_eq!(preflight_error.kind, AppErrorKind::Internal);
+    assert_eq!(preflight_error.message, "preflight A failed");
+    assert_eq!(reader.call_count(), 1);
+    let run_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM analysis_runs")
+        .fetch_one(&pool)
+        .await
+        .expect("count report acceptance runs");
+    assert_eq!(run_count, 0);
+    assert!(state.active_report_run_ids().await.is_empty());
+}
+
+#[tokio::test]
+async fn report_profile_resolution_failure_prevents_run_creation() {
+    use super::report::{prepare_analysis_report, StartAnalysisReportRequest};
+    use crate::error::AppErrorKind;
+    use crate::llm::resolve_profile_for_backend_in_pool;
+    use crate::secret_store::tests::InMemorySecretStore;
+    use crate::secret_store::SecretStoreState;
+    use std::sync::Arc;
+
+    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("connect report precedence pool");
+    for statement in [
+        r#"CREATE TABLE analysis_prompt_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            template_kind TEXT NOT NULL,
+            body TEXT NOT NULL,
+            version INTEGER NOT NULL DEFAULT 1,
+            is_builtin BOOLEAN NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )"#,
+        "CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+        "CREATE TABLE analysis_runs (id INTEGER PRIMARY KEY AUTOINCREMENT)",
+    ] {
+        sqlx::query(statement)
+            .execute(&pool)
+            .await
+            .expect("create report precedence schema");
+    }
+    let request = StartAnalysisReportRequest::for_source(
+        0,
+        10,
+        20,
+        "English".to_string(),
+        1,
+        None,
+        Some("prod west".to_string()),
+        Some("invalid-youtube-mode".to_string()),
+        false,
+    )
+    .expect("construct conflicting report request");
+    let state = super::AnalysisState::new();
+    let preparation = prepare_analysis_report(&pool, request)
+        .await
+        .expect("template preparation precedes profile resolution");
+    let secret_store = SecretStoreState::new(Arc::new(InMemorySecretStore::new()));
+
+    let profile_error = match resolve_profile_for_backend_in_pool(
+        &pool,
+        &secret_store,
+        preparation.requested_profile_id(),
+    )
+    .await
+    {
+        Ok(_) => panic!("invalid profile must fail before later conflicts"),
+        Err(error) => error,
+    };
+
+    assert_eq!(
+        profile_error.kind,
+        AppErrorKind::Validation,
+        "RED: CP4 profile precedence"
+    );
+    assert_eq!(
+        profile_error.message,
+        "Profile ID can only contain ASCII letters, numbers, dashes, and underscores"
+    );
+    let youtube_error = match preparation.resolve_youtube_corpus_mode() {
+        Ok(_) => panic!("invalid YouTube mode is the later conflicting failure"),
+        Err(error) => error,
+    };
+    assert_eq!(youtube_error.kind, AppErrorKind::Validation);
+    let run_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM analysis_runs")
+        .fetch_one(&pool)
+        .await
+        .expect("count report runs");
+    assert_eq!(run_count, 0);
+    assert!(state.active_report_run_ids().await.is_empty());
 }

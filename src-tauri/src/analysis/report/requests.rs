@@ -1,4 +1,4 @@
-use crate::llm::{LlmChatRequest, LlmMessage};
+use extractum_llm::{LlmChatRequest, LlmMessage};
 
 use super::super::corpus::AnalysisCorpusMessage;
 use super::super::models::{AnalysisPromptTemplate, ChunkSummary};

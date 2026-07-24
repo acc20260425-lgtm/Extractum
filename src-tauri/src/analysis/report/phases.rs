@@ -3,17 +3,16 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use sqlx::{Pool, Sqlite};
-use tauri::{AppHandle, Manager};
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
-use crate::llm::{
+use extractum_llm::{
     run_llm_collect_with_profile, run_llm_stream_with_profile, LlmCompletion, LlmRequestError,
     LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState, ResolvedLlmProfile,
 };
 
 use super::super::corpus::AnalysisCorpusMessage;
-use super::super::models::{AnalysisChunkSummaryEvent, ChunkSummary};
+use super::super::models::{AnalysisChunkSummaryEvent, AnalysisEventSink, ChunkSummary};
 use super::super::state::AnalysisState;
 use super::requests::{
     build_map_request, build_reduce_request, parse_chunk_summary, ReduceRequestParams,
@@ -36,21 +35,18 @@ pub(super) fn finish_map_phase(
         })
 }
 
-pub(super) struct ReportPipelineContext {
-    pub(super) handle: AppHandle,
+pub(super) struct ReportPipelineContext<'a> {
     pub(super) pool: Pool<Sqlite>,
+    pub(super) state: &'a AnalysisState,
+    pub(super) scheduler: Arc<LlmSchedulerState>,
+    pub(super) sink: Arc<dyn AnalysisEventSink>,
     pub(super) resolved_profile: ResolvedLlmProfile,
     pub(super) run_id: i64,
 }
 
-impl ReportPipelineContext {
+impl ReportPipelineContext<'_> {
     pub(super) async fn ensure_not_cancelled(&self) -> Result<(), ReportRunError> {
-        if self
-            .handle
-            .state::<AnalysisState>()
-            .is_report_run_cancelled(self.run_id)
-            .await
-        {
+        if self.state.is_report_run_cancelled(self.run_id).await {
             return Err(ReportRunError::Cancelled(CANCELLED_RUN_MESSAGE.to_string()));
         }
 
@@ -58,14 +54,14 @@ impl ReportPipelineContext {
     }
 
     async fn cancel_children(&self) {
-        self.handle
-            .state::<LlmSchedulerState>()
+        self.scheduler
+            .as_ref()
             .cancel_run_requests(self.run_id)
             .await;
     }
 
     pub(super) fn emit(&self, event: RunEvent) {
-        event.emit(&self.handle);
+        event.publish(self.sink.as_ref());
     }
 }
 
@@ -96,7 +92,7 @@ where
 }
 
 pub(super) async fn run_map_phase(
-    ctx: &ReportPipelineContext,
+    ctx: &ReportPipelineContext<'_>,
     chunks: Vec<Vec<AnalysisCorpusMessage>>,
 ) -> Result<Vec<ChunkSummary>, ReportRunError> {
     ctx.emit(
@@ -113,7 +109,8 @@ pub(super) async fn run_map_phase(
     let mut join_set = JoinSet::new();
     let total_chunks = chunks.len();
     for (index, chunk) in chunks.into_iter().enumerate() {
-        let task_handle = ctx.handle.clone();
+        let task_scheduler = ctx.scheduler.clone();
+        let task_sink = ctx.sink.clone();
         let task_profile = ctx.resolved_profile.clone();
         let task_profile_id = ctx.resolved_profile.profile_id().to_string();
         let chunk_request =
@@ -123,14 +120,9 @@ pub(super) async fn run_map_phase(
         let chunk_counter = completed_chunks.clone();
         let chunk_message_count = chunk.len() as i64;
         let run_id = ctx.run_id;
-        let cancellation_token = ctx
-            .handle
-            .state::<AnalysisState>()
-            .report_run_child_token(ctx.run_id)
-            .await;
+        let cancellation_token = ctx.state.report_run_child_token(ctx.run_id).await;
 
         join_set.spawn(async move {
-            let scheduler = task_handle.state::<LlmSchedulerState>();
             let request_meta = LlmRequestMetadata {
                 request_id: chunk_request.request_id.clone(),
                 profile_id: task_profile.profile_id().to_string(),
@@ -139,10 +131,10 @@ pub(super) async fn run_map_phase(
                 priority: LlmRequestPriority::Background,
                 owner_run_id: Some(run_id),
             };
-            let queued_handle = task_handle.clone();
-            let started_handle = task_handle.clone();
-            let failed_handle = task_handle.clone();
-            let cancelled_handle = task_handle.clone();
+            let queued_sink = task_sink.clone();
+            let started_sink = task_sink.clone();
+            let failed_sink = task_sink.clone();
+            let cancelled_sink = task_sink.clone();
             let queued_counter = chunk_counter.clone();
             let started_counter = chunk_counter.clone();
             let queued_request_id = chunk_request_id.clone();
@@ -153,7 +145,8 @@ pub(super) async fn run_map_phase(
             let scheduled_profile = task_profile.clone();
             let step_cancellation_token = cancellation_token.clone();
 
-            match scheduler
+            match task_scheduler
+                .as_ref()
                 .run_request(
                     request_meta,
                     move |position| {
@@ -170,7 +163,7 @@ pub(super) async fn run_map_phase(
                                 queued_counter.load(Ordering::SeqCst) as i64,
                                 total_chunks as i64,
                             )
-                            .emit(&queued_handle);
+                            .publish(queued_sink.as_ref());
                     },
                     move |control| async move {
                         RunEvent::new(run_id, "started", "map")
@@ -184,7 +177,7 @@ pub(super) async fn run_map_phase(
                                 started_counter.load(Ordering::SeqCst) as i64,
                                 total_chunks as i64,
                             )
-                            .emit(&started_handle);
+                            .publish(started_sink.as_ref());
 
                         run_analysis_step_with_cancel(
                             step_cancellation_token,
@@ -219,7 +212,7 @@ pub(super) async fn run_map_phase(
                             notable_points: summary.notable_points.clone(),
                             candidate_refs: summary.candidate_refs.clone(),
                         })
-                        .emit(&task_handle);
+                        .publish(task_sink.as_ref());
                     Ok::<(usize, ChunkSummary), ReportRunError>((index, summary))
                 }
                 Err(LlmRequestError::Failed(error)) => {
@@ -232,7 +225,7 @@ pub(super) async fn run_map_phase(
                             total_chunks as i64,
                         )
                         .error(error.clone())
-                        .emit(&failed_handle);
+                        .publish(failed_sink.as_ref());
                     Err(ReportRunError::Failed(error))
                 }
                 Err(LlmRequestError::Cancelled) => {
@@ -247,7 +240,7 @@ pub(super) async fn run_map_phase(
                             chunk_counter.load(Ordering::SeqCst) as i64,
                             total_chunks as i64,
                         )
-                        .emit(&cancelled_handle);
+                        .publish(cancelled_sink.as_ref());
                     Err(ReportRunError::Cancelled(CANCELLED_RUN_MESSAGE.to_string()))
                 }
             }
@@ -282,7 +275,7 @@ pub(super) async fn run_map_phase(
 }
 
 pub(super) async fn run_reduce_phase(
-    ctx: &ReportPipelineContext,
+    ctx: &ReportPipelineContext<'_>,
     input: &ReportRunInput,
     chunk_summaries: &[ChunkSummary],
 ) -> Result<ReducePhaseResult, ReportRunError> {
@@ -304,12 +297,11 @@ pub(super) async fn run_reduce_phase(
     });
     let reduce_request_id = reduce_request.request_id.clone();
     let reduce_provider = ctx.resolved_profile.provider().as_str().to_string();
-    let scheduler = ctx.handle.state::<LlmSchedulerState>();
-    let queued_handle = ctx.handle.clone();
-    let started_handle = ctx.handle.clone();
-    let delta_handle = ctx.handle.clone();
-    let failed_handle = ctx.handle.clone();
-    let cancelled_handle = ctx.handle.clone();
+    let queued_sink = ctx.sink.clone();
+    let started_sink = ctx.sink.clone();
+    let delta_sink = ctx.sink.clone();
+    let failed_sink = ctx.sink.clone();
+    let cancelled_sink = ctx.sink.clone();
     let queued_request_id = reduce_request_id.clone();
     let started_request_id = reduce_request_id.clone();
     let delta_request_id = reduce_request_id.clone();
@@ -318,12 +310,10 @@ pub(super) async fn run_reduce_phase(
     let reduce_request_for_stream = reduce_request.clone();
     let reduce_profile = ctx.resolved_profile.clone();
     let run_id = ctx.run_id;
-    let cancellation_token = ctx
-        .handle
-        .state::<AnalysisState>()
-        .report_run_child_token(ctx.run_id)
-        .await;
-    let completion = match scheduler
+    let cancellation_token = ctx.state.report_run_child_token(ctx.run_id).await;
+    let completion = match ctx
+        .scheduler
+        .as_ref()
         .run_request(
             LlmRequestMetadata {
                 request_id: reduce_request.request_id.clone(),
@@ -338,13 +328,13 @@ pub(super) async fn run_reduce_phase(
                     .request_id(queued_request_id.clone())
                     .queue_position(position)
                     .message(format!("Final report queued at position {}...", position))
-                    .emit(&queued_handle);
+                    .publish(queued_sink.as_ref());
             },
             move |control| async move {
                 RunEvent::new(run_id, "started", "reduce")
                     .request_id(started_request_id)
                     .message("Writing final report...".to_string())
-                    .emit(&started_handle);
+                    .publish(started_sink.as_ref());
 
                 run_analysis_step_with_cancel(
                     cancellation_token,
@@ -355,7 +345,7 @@ pub(super) async fn run_reduce_phase(
                             RunEvent::new(run_id, "delta", "reduce")
                                 .request_id(delta_request_id.clone())
                                 .delta(delta.to_string())
-                                .emit(&delta_handle);
+                                .publish(delta_sink.as_ref());
                         },
                     )),
                 )
@@ -371,14 +361,14 @@ pub(super) async fn run_reduce_phase(
                 .request_id(failed_request_id)
                 .message("Final report generation failed.".to_string())
                 .error(error.clone())
-                .emit(&failed_handle);
+                .publish(failed_sink.as_ref());
             return Err(ReportRunError::Failed(error));
         }
         Err(LlmRequestError::Cancelled) => {
             RunEvent::new(run_id, "cancelled", "reduce")
                 .request_id(cancelled_request_id)
                 .message("Final report generation cancelled.".to_string())
-                .emit(&cancelled_handle);
+                .publish(cancelled_sink.as_ref());
             return Err(ReportRunError::Cancelled(CANCELLED_RUN_MESSAGE.to_string()));
         }
     };

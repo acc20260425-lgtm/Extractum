@@ -501,6 +501,11 @@ pub struct AnalysisChatEvent {
     pub error: Option<String>,
 }
 
+pub trait AnalysisEventSink: Send + Sync + 'static {
+    fn publish_run(&self, event: AnalysisRunEvent);
+    fn publish_chat(&self, event: AnalysisChatEvent);
+}
+
 #[derive(FromRow)]
 pub(crate) struct StoredRunSnapshotRow {
     pub(crate) item_id: i64,

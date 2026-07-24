@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 mod database;
 mod dto;
 mod redaction;
@@ -32,14 +34,14 @@ pub(crate) async fn get_diagnostic_summary(
     handle: AppHandle,
     telegram_state: tauri::State<'_, TelegramState>,
     source_job_state: tauri::State<'_, SourceJobState>,
-    llm_scheduler: tauri::State<'_, LlmSchedulerState>,
+    llm_scheduler: tauri::State<'_, Arc<LlmSchedulerState>>,
     secret_store: tauri::State<'_, SecretStoreState>,
 ) -> AppResult<DiagnosticSummary> {
     build_diagnostic_summary(
         &handle,
         telegram_state.inner(),
         source_job_state.inner(),
-        llm_scheduler.inner(),
+        llm_scheduler.inner().as_ref(),
         secret_store.inner(),
     )
     .await

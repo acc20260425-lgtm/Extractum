@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use tauri::AppHandle;
 
 use crate::error::AppResult;
@@ -10,10 +12,11 @@ use super::AnalysisState;
 pub async fn cancel_analysis_run(
     handle: AppHandle,
     state: tauri::State<'_, AnalysisState>,
-    scheduler: tauri::State<'_, LlmSchedulerState>,
+    scheduler: tauri::State<'_, Arc<LlmSchedulerState>>,
     run_id: i64,
 ) -> AppResult<()> {
-    report::request_analysis_run_cancel(&handle, state.inner(), scheduler.inner(), run_id).await
+    report::request_analysis_run_cancel(&handle, state.inner(), scheduler.inner().as_ref(), run_id)
+        .await
 }
 
 #[tauri::command]

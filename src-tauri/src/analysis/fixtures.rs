@@ -155,12 +155,13 @@ async fn finish_cancelled_fixture_run(
 async fn spawn_fixture_cancellation_waiters(handle: AppHandle, run_ids: Vec<i64>) {
     for run_id in run_ids {
         let state = handle.state::<AnalysisState>();
-        let Some(token) = state.report_run_child_token(run_id).await else {
+        let Some(cancellation_wait) = state.prepare_report_run_cancellation_wait(run_id).await
+        else {
             continue;
         };
         let task_handle = handle.clone();
         tauri::async_runtime::spawn(async move {
-            token.cancelled().await;
+            cancellation_wait.cancelled().await;
             let Ok(pool) = get_pool(&task_handle).await else {
                 return;
             };

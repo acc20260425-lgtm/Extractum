@@ -1,15 +1,25 @@
 use super::super::{
-    await_report_terminal_and_cleanup, mark_interrupted_analysis_runs,
-    request_analysis_run_cancel_for_pool,
+    finalize_analysis_report_execution, mark_interrupted_analysis_runs,
+    request_analysis_run_cancel_for_pool, AnalysisExecutionError,
 };
+use super::super::super::state::AnalysisState;
+use super::super::super::{ANALYSIS_STATUS_CANCELLED, ANALYSIS_STATUS_COMPLETED, ANALYSIS_STATUS_RUNNING};
 use super::harness::{insert_cancel_request_run, request_cancel_pool_with_runs};
-use crate::error::AppErrorKind;
-use crate::llm::LlmSchedulerState;
+use extractum_core::error::AppErrorKind;
+use extractum_llm::LlmSchedulerState;
+
+struct NoopAnalysisEventSink;
+
+impl super::super::super::models::AnalysisEventSink for NoopAnalysisEventSink {
+    fn publish_run(&self, _event: super::super::super::models::AnalysisRunEvent) {}
+
+    fn publish_chat(&self, _event: super::super::super::models::AnalysisChatEvent) {}
+}
 
 #[tokio::test]
 async fn terminal_cleanup_removes_active_state_when_terminal_persistence_fails() {
     let pool = request_cancel_pool_with_runs().await;
-    let state = crate::analysis::AnalysisState::new();
+    let state = AnalysisState::new();
     let run_id = 407;
     state.insert_active_report_run(run_id).await;
     sqlx::query("DROP TABLE analysis_runs")
@@ -17,20 +27,17 @@ async fn terminal_cleanup_removes_active_state_when_terminal_persistence_fails()
         .await
         .expect("remove persistence target");
 
-    let persistence = await_report_terminal_and_cleanup(&state, run_id, async {
-        crate::analysis::store::set_run_status(
-            &pool,
-            run_id,
-            crate::analysis::ANALYSIS_STATUS_FAILED,
-            None,
-            None,
-            Some("terminal persistence failed"),
-            Some(1),
-        )
-        .await
-    })
+    finalize_analysis_report_execution(
+        Some(&pool),
+        &state,
+        &NoopAnalysisEventSink,
+        run_id,
+        Err(AnalysisExecutionError::Failed(
+            "terminal persistence failed".to_string(),
+        )),
+    )
     .await;
-    assert!(persistence.is_err());
+
     assert!(!state.active_report_run_ids().await.contains(&run_id));
 }
 
@@ -71,7 +78,7 @@ async fn interrupted_cleanup_preserves_captured_snapshot_state_marker() {
     .await
     .expect("load run");
 
-    assert_eq!(row.0, crate::analysis::ANALYSIS_STATUS_CANCELLED);
+    assert_eq!(row.0, ANALYSIS_STATUS_CANCELLED);
     assert_eq!(row.1.as_deref(), Some("2026-05-18T10:00:00Z"));
     assert_eq!(row.2, None);
 }
@@ -79,7 +86,7 @@ async fn interrupted_cleanup_preserves_captured_snapshot_state_marker() {
 #[tokio::test]
 async fn request_analysis_run_cancel_missing_run_keeps_not_found_message() {
     let pool = request_cancel_pool_with_runs().await;
-    let state = crate::analysis::AnalysisState::new();
+    let state = AnalysisState::new();
     let scheduler = LlmSchedulerState::new();
     let run_id = 404;
 
@@ -94,8 +101,8 @@ async fn request_analysis_run_cancel_missing_run_keeps_not_found_message() {
 #[tokio::test]
 async fn request_analysis_run_cancel_completed_run_keeps_conflict_message() {
     let pool = request_cancel_pool_with_runs().await;
-    insert_cancel_request_run(&pool, 405, crate::analysis::ANALYSIS_STATUS_COMPLETED).await;
-    let state = crate::analysis::AnalysisState::new();
+    insert_cancel_request_run(&pool, 405, ANALYSIS_STATUS_COMPLETED).await;
+    let state = AnalysisState::new();
     let scheduler = LlmSchedulerState::new();
     let run_id = 405;
 
@@ -113,8 +120,8 @@ async fn request_analysis_run_cancel_completed_run_keeps_conflict_message() {
 #[tokio::test]
 async fn request_analysis_run_cancel_running_but_inactive_keeps_conflict_message() {
     let pool = request_cancel_pool_with_runs().await;
-    insert_cancel_request_run(&pool, 406, crate::analysis::ANALYSIS_STATUS_RUNNING).await;
-    let state = crate::analysis::AnalysisState::new();
+    insert_cancel_request_run(&pool, 406, ANALYSIS_STATUS_RUNNING).await;
+    let state = AnalysisState::new();
     let scheduler = LlmSchedulerState::new();
     let run_id = 406;
 

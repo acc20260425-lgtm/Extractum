@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use secrecy::SecretString;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
@@ -110,14 +112,22 @@ pub(crate) async fn resolve_profile_for_backend(
 ) -> AppResult<ResolvedLlmProfile> {
     let pool = get_pool(handle).await?;
     let secret_store = handle.state::<SecretStoreState>();
-    resolve_profile_from_pool(&pool, &secret_store, requested_profile_id).await
+    resolve_profile_for_backend_in_pool(&pool, &secret_store, requested_profile_id).await
+}
+
+pub(crate) async fn resolve_profile_for_backend_in_pool(
+    pool: &sqlx::SqlitePool,
+    secret_store: &SecretStoreState,
+    requested_profile_id: Option<&str>,
+) -> AppResult<ResolvedLlmProfile> {
+    resolve_profile_from_pool(pool, secret_store, requested_profile_id).await
 }
 
 #[tauri::command]
 pub async fn get_llm_request_snapshots(
-    state: tauri::State<'_, LlmSchedulerState>,
+    state: tauri::State<'_, Arc<LlmSchedulerState>>,
 ) -> AppResult<Vec<LlmRequestSnapshot>> {
-    Ok(state.request_snapshots().await)
+    Ok(state.inner().as_ref().request_snapshots().await)
 }
 
 #[tauri::command]
@@ -323,7 +333,7 @@ pub async fn ask_llm_stream(
         owner_run_id: None,
     };
     tokio::spawn(async move {
-        let scheduler = app_handle.state::<LlmSchedulerState>();
+        let scheduler = app_handle.state::<Arc<LlmSchedulerState>>();
         let queued_handle = app_handle.clone();
         let started_handle = app_handle.clone();
         let delta_handle = app_handle.clone();
@@ -350,6 +360,8 @@ pub async fn ask_llm_stream(
         let scheduled_profile = resolved_profile.clone();
 
         match scheduler
+            .inner()
+            .as_ref()
             .run_request(
                 request_meta,
                 move |position| {
@@ -438,7 +450,7 @@ pub async fn ask_llm_stream(
 
 #[tauri::command]
 pub async fn cancel_llm_request(
-    state: tauri::State<'_, LlmSchedulerState>,
+    state: tauri::State<'_, Arc<LlmSchedulerState>>,
     request_id: String,
 ) -> AppResult<()> {
     let request_id = request_id.trim().to_string();
@@ -446,7 +458,7 @@ pub async fn cancel_llm_request(
         return Err(AppError::validation("request_id cannot be empty"));
     }
 
-    if state.cancel_request(&request_id).await {
+    if state.inner().as_ref().cancel_request(&request_id).await {
         Ok(())
     } else {
         Err(AppError::not_found(format!(

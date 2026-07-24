@@ -57,10 +57,7 @@ fn telegram_history_scope_opt_in_preserves_policy_when_zero_migrated_rows_match(
             .expect("resolve Telegram opt-in");
 
     assert!(include_migrated_history);
-    assert_eq!(
-        scope,
-        crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED
-    );
+    assert_eq!(scope, "current_plus_migrated");
 }
 
 #[test]
