@@ -30,6 +30,14 @@ describe("daily development loop configuration", () => {
     expect(readSource("vite.config.js")).toMatch(/\btest:\s*VITEST_TEST_CONFIG\b/);
   });
 
+  it("gives the filesystem-heavy coordinator suite an explicit timeout", () => {
+    expect(
+      readSource("scripts/process-shell-diagnostic/coordinator.test.ts"),
+    ).toContain(
+      'describe("process shell diagnostic coordinator", { timeout: 30_000 }, () => {',
+    );
+  });
+
   it("has no separate root Vitest config", () => {
     for (const extension of ["js", "ts", "mjs", "mts", "cjs", "cts"]) {
       expect(existsSync(path.join(repoRoot, `vitest.config.${extension}`))).toBe(false);

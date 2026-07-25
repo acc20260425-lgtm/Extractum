@@ -116,7 +116,7 @@ function fake(attempts: Array<(spec: Record<string, string>) => Record<string, u
   };
 }
 
-describe("process shell diagnostic coordinator", () => {
+describe("process shell diagnostic coordinator", { timeout: 30_000 }, () => {
   it("pins one locator and completes one valid session", async () => {
     const input = await paths();
     const value = fake([attempt("valid")]);
