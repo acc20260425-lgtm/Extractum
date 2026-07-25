@@ -1,9 +1,18 @@
+use std::sync::Arc;
+
+use extractum_analysis::{
+    execute_analysis_report, finalize_analysis_report_execution, AnalysisEventSink,
+    AnalysisExecutionError, AnalysisScopeKind, AnalysisState,
+};
+pub(crate) use extractum_analysis::{
+    prepare_analysis_report, prepare_analysis_report_execution, StartAnalysisReportRequest,
+};
+use extractum_core::error::AppResult;
+use extractum_llm::{resolve_effective_model, resolve_model_input_token_limit, LlmSchedulerState};
 use tauri::{AppHandle, Manager};
 
 use crate::db::get_pool;
 use crate::llm::resolve_profile_for_backend;
-
-use extractum_llm::{resolve_effective_model, resolve_model_input_token_limit};
 
 use super::corpus::{
     resolve_analysis_sources, AnalysisSourceResolutionError, AppAnalysisCorpusReader,
@@ -12,8 +21,6 @@ use super::events::TauriAnalysisEventSink;
 
 #[path = "report/lifecycle.rs"]
 mod lifecycle;
-
-include!("report_engine.rs");
 
 pub use self::lifecycle::cleanup_interrupted_analysis_runs;
 pub(crate) use self::lifecycle::request_analysis_run_cancel;

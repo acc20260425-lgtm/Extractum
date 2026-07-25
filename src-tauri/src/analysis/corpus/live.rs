@@ -1,10 +1,11 @@
-use sqlx::{Pool, QueryBuilder, Sqlite};
-
-use super::{AnalysisCorpusMessage, AnalysisCorpusRequest, YoutubeCorpusMode};
+use extractum_analysis::{
+    AnalysisCorpusMessage, AnalysisCorpusRequest, AnalysisSourceKind, YoutubeCorpusMode,
+};
 use extractum_core::{
     compression::{compress_json_bytes, decompress_text},
     error::{internal_error, AppError, AppResult},
 };
+use sqlx::{Pool, QueryBuilder, Sqlite};
 
 #[allow(dead_code)]
 pub(crate) fn live_corpus_ref(source_id: i64, item_id: i64) -> String {
@@ -19,7 +20,7 @@ pub(crate) async fn load_app_corpus_messages(
         return Ok(Vec::new());
     }
 
-    if request.source_kind() == super::super::models::AnalysisSourceKind::Telegram {
+    if request.source_kind() == AnalysisSourceKind::Telegram {
         return load_telegram_corpus_messages(pool, request).await;
     }
 
@@ -287,8 +288,8 @@ async fn load_analysis_document_messages(
     push_analysis_document_kind_filter(
         &mut query,
         match request.source_kind() {
-            super::super::models::AnalysisSourceKind::Telegram => "telegram",
-            super::super::models::AnalysisSourceKind::Youtube => "youtube",
+            AnalysisSourceKind::Telegram => "telegram",
+            AnalysisSourceKind::Youtube => "youtube",
         },
         request.youtube_corpus_mode(),
         "d",

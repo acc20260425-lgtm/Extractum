@@ -1,8 +1,6 @@
 use sqlx::SqlitePool;
 
-use super::domain::{
-    now_secs, TEMPLATE_KIND_CHAT, TEMPLATE_KIND_REPORT,
-};
+use super::domain::{now_secs, TEMPLATE_KIND_CHAT, TEMPLATE_KIND_REPORT};
 use super::models::AnalysisPromptTemplate;
 use super::store::ensure_builtin_report_template;
 use extractum_core::error::{AppError, AppResult};

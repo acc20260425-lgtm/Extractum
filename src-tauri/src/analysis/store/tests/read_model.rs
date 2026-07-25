@@ -1,8 +1,5 @@
-use super::super::{
-    list_analysis_runs_in_pool, AnalysisRunListFilters as AppAnalysisRunListFilters,
-};
-
-include!("read_model_portable.rs");
+use super::super::list_analysis_runs_in_pool;
+use extractum_analysis::AnalysisRunListFilters as AppAnalysisRunListFilters;
 
 async fn app_run_list_pool() -> sqlx::SqlitePool {
     let pool = sqlx::SqlitePool::connect("sqlite::memory:")

@@ -1,8 +1,7 @@
-use super::super::super::corpus::{
-    AnalysisCorpusRequest, AppAnalysisCorpusReader, YoutubeCorpusMode,
+use super::super::super::corpus::AppAnalysisCorpusReader;
+use extractum_analysis::{
+    capture_analysis_corpus, AnalysisCorpusRequest, AnalysisSourceKind, YoutubeCorpusMode,
 };
-use super::super::super::models::AnalysisSourceKind;
-use super::super::capture_analysis_corpus;
 
 #[tokio::test]
 async fn capture_report_corpus_returns_reloaded_snapshot_before_provider_phases() {

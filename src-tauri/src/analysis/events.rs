@@ -1,6 +1,6 @@
+use extractum_analysis::{AnalysisChatEvent, AnalysisEventSink, AnalysisRunEvent};
 use tauri::{AppHandle, Emitter};
 
-use super::models::{AnalysisChatEvent, AnalysisEventSink, AnalysisRunEvent};
 use super::{ANALYSIS_CHAT_EVENT, ANALYSIS_RUN_EVENT};
 
 pub(super) struct TauriAnalysisEventSink {

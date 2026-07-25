@@ -1,8 +1,14 @@
+use extractum_analysis::{
+    create_analysis_prompt_template as create_analysis_prompt_template_in_pool,
+    delete_analysis_prompt_template as delete_analysis_prompt_template_in_pool,
+    list_analysis_prompt_templates as list_analysis_prompt_templates_in_pool,
+    update_analysis_prompt_template as update_analysis_prompt_template_in_pool,
+    AnalysisPromptTemplate,
+};
+use extractum_core::error::AppResult;
 use tauri::AppHandle;
 
 use crate::db::get_pool;
-
-include!("templates_store.rs");
 
 #[tauri::command]
 pub async fn list_analysis_prompt_templates(

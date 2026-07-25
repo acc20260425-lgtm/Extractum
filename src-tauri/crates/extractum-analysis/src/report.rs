@@ -28,6 +28,7 @@ use super::AnalysisState;
 
 #[path = "report/capture.rs"]
 mod capture;
+mod lifecycle;
 #[path = "report/phases.rs"]
 mod phases;
 #[path = "report/requests.rs"]
@@ -544,6 +545,9 @@ pub async fn finalize_analysis_report_execution(
     }
     state.remove_active_report_run(run_id).await;
 }
+
+#[cfg(test)]
+mod tests;
 
 pub(super) struct RunEvent {
     event: AnalysisRunEvent,

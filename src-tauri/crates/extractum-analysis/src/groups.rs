@@ -74,10 +74,7 @@ impl AnalysisSourceGroupRecord {
     }
 }
 
-fn normalize_source_group_input(
-    name: &str,
-    source_ids: Vec<i64>,
-) -> AppResult<(String, Vec<i64>)> {
+fn normalize_source_group_input(name: &str, source_ids: Vec<i64>) -> AppResult<(String, Vec<i64>)> {
     let name = name.trim().to_string();
     if name.is_empty() {
         return Err(AppError::validation("Source group name cannot be empty"));
@@ -173,12 +170,8 @@ pub async fn load_analysis_source_groups_for_enrichment(
 
     let mut groups = Vec::with_capacity(rows.len());
     for row in rows {
-        let member_source_ids =
-            load_analysis_source_group_member_ids(&mut *conn, row.id).await?;
-        groups.push(build_analysis_source_group_record(
-            row,
-            member_source_ids,
-        )?);
+        let member_source_ids = load_analysis_source_group_member_ids(&mut *conn, row.id).await?;
+        groups.push(build_analysis_source_group_record(row, member_source_ids)?);
     }
     Ok(groups)
 }

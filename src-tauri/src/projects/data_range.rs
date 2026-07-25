@@ -1,13 +1,12 @@
 use sqlx::{QueryBuilder, Sqlite};
 use tauri::AppHandle;
 
-use crate::analysis::models::AnalysisSourceKind;
-use crate::analysis::{
-    resolve_analysis_sources, resolve_analysis_telegram_history_scope,
-    AnalysisSourceResolutionErrorCode, YoutubeCorpusMode,
-};
+use crate::analysis::{resolve_analysis_sources, AnalysisSourceResolutionErrorCode};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use extractum_analysis::{
+    resolve_analysis_telegram_history_scope, AnalysisSourceKind, YoutubeCorpusMode,
+};
 
 #[derive(Clone, Debug, serde::Serialize, PartialEq, Eq)]
 pub struct ProjectDataRange {

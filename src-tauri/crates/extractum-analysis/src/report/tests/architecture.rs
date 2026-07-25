@@ -1,11 +1,11 @@
 #[test]
 fn analysis_report_workflow_file_has_no_tauri_command_adapters() {
-    let source = include_str!("../../report_engine.rs");
+    let source = include_str!("../../report.rs");
     let command_attribute = ["#[tauri", "::command]"].join("");
 
     assert!(
         !source.contains(&command_attribute),
-        "Analysis report command adapters should live outside src/analysis/report.rs"
+        "Analysis report command adapters should live outside extractum-analysis/src/report.rs"
     );
     assert!(
         source.contains("pub async fn execute_analysis_report"),

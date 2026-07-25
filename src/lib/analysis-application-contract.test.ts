@@ -4,8 +4,10 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  isAnalysisCrateExtracted,
   readAnalysisContractSource,
   readAppAnalysisSource,
+  readCrateAnalysisSource,
 } from "./analysis-contract-paths";
 
 const repoRoot = path.resolve(import.meta.dirname, "../..");
@@ -93,8 +95,8 @@ const commandWireContracts = {
   ask_analysis_run_question: ["handle: AppHandle, run_id: i64, question: String, model_override: Option<String>, profile_id: Option<String> -> AppResult<String>", ["runId", "question", "modelOverride", "profileId"]],
   start_analysis_report: ["handle: AppHandle, state: tauri::State<'_, AnalysisState>, source_id: Option<i64>, source_group_id: Option<i64>, period_from: i64, period_to: i64, output_language: String, prompt_template_id: i64, model_override: Option<String>, profile_id: Option<String>, youtube_corpus_mode: Option<String>, include_migrated_history: bool -> AppResult<i64>", ["sourceId", "sourceGroupId", "periodFrom", "periodTo", "outputLanguage", "promptTemplateId", "modelOverride", "profileId", "youtubeCorpusMode", "includeMigratedHistory"]],
   cancel_analysis_run: ["handle: AppHandle, state: tauri::State<'_, AnalysisState>, scheduler: tauri::State<'_, Arc<LlmSchedulerState>>, run_id: i64 -> AppResult<()>", ["runId"]],
-  start_project_analysis: ["handle: AppHandle, state: tauri::State<'_, crate::analysis::AnalysisState>, project_id: i64, period_from: i64, period_to: i64, output_language: String, prompt_template_id: i64, model_override: Option<String>, profile_id: Option<String>, youtube_corpus_mode: Option<String>, include_migrated_history: bool -> AppResult<i64>", ["projectId", "periodFrom", "periodTo", "outputLanguage", "promptTemplateId", "modelOverride", "profileId", "youtubeCorpusMode", "includeMigratedHistory"]],
-  list_project_runs: ["handle: AppHandle, project_id: i64 -> AppResult<Vec<crate::analysis::models::AnalysisRunSummary>>", ["projectId"]],
+  start_project_analysis: ["handle: AppHandle, state: tauri::State<'_, AnalysisState>, project_id: i64, period_from: i64, period_to: i64, output_language: String, prompt_template_id: i64, model_override: Option<String>, profile_id: Option<String>, youtube_corpus_mode: Option<String>, include_migrated_history: bool -> AppResult<i64>", ["projectId", "periodFrom", "periodTo", "outputLanguage", "promptTemplateId", "modelOverride", "profileId", "youtubeCorpusMode", "includeMigratedHistory"]],
+  list_project_runs: ["handle: AppHandle, project_id: i64 -> AppResult<Vec<AnalysisRunSummary>>", ["projectId"]],
   get_project_data_range: ["handle: AppHandle, project_id: i64, youtube_corpus_mode: Option<String>, include_migrated_history: bool -> AppResult<ProjectDataRange>", ["projectId", "youtubeCorpusMode", "includeMigratedHistory"]],
   seed_analysis_redesign_fixtures: ["handle: AppHandle, state: State<'_, AnalysisState> -> AppResult<AnalysisRedesignFixtureSummary>", []],
   clear_analysis_redesign_fixtures: ["handle: AppHandle, state: State<'_, AnalysisState> -> AppResult<AnalysisRedesignFixtureSummary>", []],
@@ -110,60 +112,218 @@ function rustFiles(root: string): string[] {
 }
 
 const currentAnalysisRoot = path.join(repoRoot, "src-tauri/src/analysis");
-const checkpointCharacterizationLeaves = new Set([
-  "run_reads_preserve_deleted_blank_and_snapshot_scope_labels",
-  "analysis_run_search_escapes_percent_underscore_and_backslash_before_limit",
-  "chat_legacy_label_fallback_rereads_run_on_the_foreign_label_snapshot",
-  "chat_profile_resolution_failure_is_async_after_request_id",
-  "chat_persistence_failure_keeps_completed_answer_failure_message",
-  "terminal_cleanup_removes_active_state_when_terminal_persistence_fails",
-  "report_start_preserves_acceptance_order_and_two_corpus_reads",
-  "legacy_trace_bytes_decode_after_core_compression_handoff",
-  "decode_trace_data_returns_typed_internal_for_invalid_json",
-  "trace_ref_json_is_byte_compatible_for_telegram_and_youtube",
-  "start_analysis_report_request_constructors_preserve_source_group_and_project_scopes",
-  "analysis_run_list_filter_constructors_preserve_analysis_and_project_scopes",
-  "resolved_analysis_scope_rejects_zero_or_multiple_identities",
-  "resolved_analysis_scope_requires_nonempty_stable_sources_and_label",
-  "report_execution_uses_distinct_preflight_and_capture_corpus_reads",
-  "started_load_items_uses_preflight_summary_before_empty_capture_failure",
-  "started_load_items_uses_preflight_summary_before_error_capture_failure",
-]);
+const analysisCrateRoot = path.join(
+  repoRoot,
+  "src-tauri/crates/extractum-analysis/src",
+);
+const analysisExtracted = isAnalysisCrateExtracted();
 
-function sourceIdentityPrefix(file: string): string {
-  const relative = path
-    .relative(currentAnalysisRoot, file)
-    .replaceAll("\\", "/")
-    .replace(/^(chat|report)_engine\.rs$/, "$1.rs")
-    .replace(/^report\/lifecycle_portable\.rs$/, "report/lifecycle.rs")
-    .replace(
-      /\/(live|preflight|source_resolution|read_model|setup)_portable\.rs$/,
-      "/$1.rs",
-    );
-  if (relative === "tests_portable.rs") return "analysis::tests";
+type ExecutableAnalysisIdentity = {
+  identity: string;
+  owner: "app" | "crate";
+};
+
+function sourceIdentityPrefix(
+  root: string,
+  owner: "app" | "crate",
+  file: string,
+): string {
+  let relative = path
+    .relative(root, file)
+    .replaceAll("\\", "/");
+  if (owner === "app" && !analysisExtracted) {
+    relative = relative
+      .replace(/^(chat|report)_engine\.rs$/, "$1.rs")
+      .replace(/^report\/lifecycle_portable\.rs$/, "report/lifecycle.rs")
+      .replace(
+        /\/(live|preflight|source_resolution|read_model|setup)_portable\.rs$/,
+        "/$1.rs",
+      );
+  }
+  relative = relative.replace(/\.rs$/, "");
   const parts = relative.replace(/\.rs$/, "").split("/");
   if (parts.at(-1) === "mod") parts.pop();
-  if (parts.includes("tests")) return ["analysis", ...parts].join("::");
-  if (parts.length === 0) return "analysis::tests";
-  return ["analysis", ...parts, "tests"].join("::");
+  if (owner === "app") {
+    if (relative === "tests_portable") return "analysis::tests";
+    if (relative === "tests_application") return "analysis::tests_application";
+    if (parts.includes("tests")) return ["analysis", ...parts].join("::");
+    return ["analysis", ...parts, "tests"].join("::");
+  }
+  if (relative === "tests") return "tests";
+  if (parts.includes("tests")) return parts.join("::");
+  return [...parts, "tests"].join("::");
 }
 
-function executableAnalysisIdentities(): string[] {
-  return rustFiles(currentAnalysisRoot)
-    .filter((file) => path.basename(file) !== "tests_application.rs")
-    .flatMap((file) => {
+function executableAnalysisIdentities(): ExecutableAnalysisIdentity[] {
+  const roots: Array<{ owner: "app" | "crate"; root: string }> = [
+    { owner: "app", root: currentAnalysisRoot },
+    ...(analysisExtracted
+      ? [{ owner: "crate" as const, root: analysisCrateRoot }]
+      : []),
+  ];
+  return roots
+    .flatMap(({ owner, root }) => rustFiles(root).flatMap((file) => {
       const source = readFileSync(file, "utf8");
-      const prefix = sourceIdentityPrefix(file);
+      const prefix = sourceIdentityPrefix(root, owner, file);
       return [
         ...source.matchAll(
-          /^\s*#\[(?:tokio::)?test\]\s*(?:#\[[^\n]+\]\s*)*(?:async\s+)?fn\s+([A-Za-z0-9_]+)\s*\(/gm,
+          /^\s*#\[(?:(?:tokio|sqlx)::)?test(?:\s*\([^\]]*\))?\]\s*(?:#\[[^\n]+\]\s*)*(?:async\s+)?fn\s+([A-Za-z0-9_]+)\s*\(/gm,
         ),
-      ]
-        .filter((match) => !checkpointCharacterizationLeaves.has(match[1]))
-        .map((match) => `${prefix}::${match[1]}`);
-    })
-    .sort();
+      ].map((match) => ({
+        identity: `${prefix}::${match[1]}`,
+        owner,
+      }));
+    }))
+    .sort((left, right) => left.identity.localeCompare(right.identity));
 }
+
+const planAddedTests = [
+  {
+    current:
+      "analysis::chat::tests::chat_persistence_failure_keeps_completed_answer_failure_message",
+    final:
+      "chat::tests::chat_persistence_failure_keeps_completed_answer_failure_message",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::chat::tests::chat_execution_persists_turns_before_completed_event",
+    final: "chat::tests::chat_execution_persists_turns_before_completed_event",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::report::tests::corpus_port::report_execution_uses_distinct_preflight_and_capture_corpus_reads",
+    final:
+      "report::tests::corpus_port::report_execution_uses_distinct_preflight_and_capture_corpus_reads",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::report::tests::corpus_port::started_load_items_uses_preflight_summary_before_empty_capture_failure",
+    final:
+      "report::tests::corpus_port::started_load_items_uses_preflight_summary_before_empty_capture_failure",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::report::tests::corpus_port::started_load_items_uses_preflight_summary_before_error_capture_failure",
+    final:
+      "report::tests::corpus_port::started_load_items_uses_preflight_summary_before_error_capture_failure",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::report::tests::lifecycle::terminal_cleanup_removes_active_state_when_terminal_persistence_fails",
+    final:
+      "report::tests::lifecycle::terminal_cleanup_removes_active_state_when_terminal_persistence_fails",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::report::tests::runtime::report_execution_publishes_typed_events_in_existing_order",
+    final:
+      "report::tests::runtime::report_execution_publishes_typed_events_in_existing_order",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::report::tests::runtime::terminal_cleanup_always_removes_active_report_state",
+    final:
+      "report::tests::runtime::terminal_cleanup_always_removes_active_report_state",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::report::tests::scope::start_analysis_report_request_constructors_preserve_source_group_and_project_scopes",
+    final:
+      "report::tests::scope::start_analysis_report_request_constructors_preserve_source_group_and_project_scopes",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::report::tests::scope::resolved_analysis_scope_rejects_zero_or_multiple_identities",
+    final:
+      "report::tests::scope::resolved_analysis_scope_rejects_zero_or_multiple_identities",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::report::tests::scope::resolved_analysis_scope_requires_nonempty_stable_sources_and_label",
+    final:
+      "report::tests::scope::resolved_analysis_scope_requires_nonempty_stable_sources_and_label",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::store::tests::read_model::analysis_run_list_filter_constructors_preserve_analysis_and_project_scopes",
+    final:
+      "store::tests::read_model::analysis_run_list_filter_constructors_preserve_analysis_and_project_scopes",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::test_schema::tests::canonical_fixture_applies_analysis_consumed_schema",
+    final:
+      "test_schema::tests::canonical_fixture_applies_analysis_consumed_schema",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::test_schema::tests::canonical_fixture_preserves_analysis_owned_indexes_and_foreign_keys",
+    final:
+      "test_schema::tests::canonical_fixture_preserves_analysis_owned_indexes_and_foreign_keys",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::trace::tests::legacy_trace_bytes_decode_after_core_compression_handoff",
+    final:
+      "trace::tests::legacy_trace_bytes_decode_after_core_compression_handoff",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::trace::tests::decode_trace_data_returns_typed_internal_for_invalid_json",
+    final:
+      "trace::tests::decode_trace_data_returns_typed_internal_for_invalid_json",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::trace::tests::trace_ref_json_is_byte_compatible_for_telegram_and_youtube",
+    final:
+      "trace::tests::trace_ref_json_is_byte_compatible_for_telegram_and_youtube",
+    owner: "crate" as const,
+  },
+  {
+    current:
+      "analysis::corpus::source_resolution::tests::source_group_resolution_orders_members_by_title_then_id_before_playlist_expansion",
+    final:
+      "analysis::corpus::source_resolution::tests::source_group_resolution_orders_members_by_title_then_id_before_playlist_expansion",
+    owner: "app" as const,
+  },
+  {
+    current:
+      "analysis::groups::tests::prepare_analysis_source_group_input_preserves_baseline_error_precedence",
+    final:
+      "analysis::groups::tests::prepare_analysis_source_group_input_preserves_baseline_error_precedence",
+    owner: "app" as const,
+  },
+  ...[
+    "run_reads_preserve_deleted_blank_and_snapshot_scope_labels",
+    "analysis_run_search_escapes_percent_underscore_and_backslash_before_limit",
+    "chat_legacy_label_fallback_rereads_run_on_the_foreign_label_snapshot",
+    "analysis_wire_values_serialize_to_exact_json_objects",
+    "chat_profile_resolution_failure_is_async_after_request_id",
+    "report_start_preserves_acceptance_order_and_two_corpus_reads",
+    "report_profile_resolution_failure_prevents_run_creation",
+  ].map((name) => ({
+    current: `analysis::tests_application::${name}`,
+    final: `analysis::tests_application::${name}`,
+    owner: "app" as const,
+  })),
+] as const;
 
 type FrozenIdentity = {
   current: string;
@@ -318,6 +478,13 @@ function commandSignature(source: string, name: string): { signature: string; pa
   const body = source.indexOf("{", close);
   const returns = source.slice(close + 1, body).trim().replace(/^->\s*/, "").replace(/\s+/g, " ");
   return { signature: `${params.join(", ")} -> ${returns}`, params };
+}
+
+function canonicalWireSignature(signature: string): string {
+  return signature
+    .replace(/\bcrate::analysis::models::/g, "")
+    .replace(/\bcrate::analysis::/g, "")
+    .replace(/\bextractum_analysis::/g, "");
 }
 
 function camelCase(value: string): string {
@@ -3378,6 +3545,7 @@ describe("analysis application boundary", () => {
   });
 
   it("uses a manifest-keyed fail-closed dual-owner source selector", () => {
+    expect(isAnalysisCrateExtracted()).toBe(analysisExtracted);
     expect(readAppAnalysisSource("mod.rs")).toContain("mod chat;");
     expect(
       readAnalysisContractSource({
@@ -3385,6 +3553,13 @@ describe("analysis application boundary", () => {
         after: { owner: "app", path: "mod.rs" },
       }),
     ).toContain("mod chat;");
+    if (analysisExtracted) {
+      expect(readCrateAnalysisSource("lib.rs")).toContain("mod chat;");
+    } else {
+      expect(() => readCrateAnalysisSource("lib.rs")).toThrow(
+        /before extraction/,
+      );
+    }
     expect(() => readAppAnalysisSource("../lib.rs")).toThrow(/escapes selected root/);
     expect(() => readAppAnalysisSource("missing.rs")).toThrow(/is missing/);
   });
@@ -3394,17 +3569,36 @@ describe("analysis application boundary", () => {
     const reportAdapter = readAppAnalysisSource("report.rs");
     const lifecycleAdapter = readAppAnalysisSource("report/lifecycle.rs");
     const testRoot = readAppAnalysisSource("report/tests/mod.rs");
-    const portableTestRoot = readAppAnalysisSource("report/tests/mod_portable.rs");
+    const portableTestRoot = readAnalysisContractSource({
+      before: "report/tests/mod_portable.rs",
+      after: { owner: "crate", path: "report/tests/mod.rs" },
+    });
 
-    expect(chatAdapter.match(/include!\("chat_engine\.rs"\);/g) ?? []).toHaveLength(1);
-    expect(reportAdapter.match(/include!\("report_engine\.rs"\);/g) ?? []).toHaveLength(1);
-    expect(
-      lifecycleAdapter.match(/include!\("lifecycle_portable\.rs"\);/g) ?? [],
-    ).toHaveLength(1);
-    expect(testRoot.match(/include!\("mod_portable\.rs"\);/g) ?? []).toHaveLength(1);
-    expect(normalized(testRoot)).toBe(
-      'mod capture; include!("mod_portable.rs");',
-    );
+    if (analysisExtracted) {
+      expect(chatAdapter).not.toMatch(/\binclude!\s*\(/);
+      expect(reportAdapter).not.toMatch(/\binclude!\s*\(/);
+      expect(lifecycleAdapter).not.toMatch(/\binclude!\s*\(/);
+      expect(normalized(testRoot)).toBe("mod capture;");
+      expect(readCrateAnalysisSource("report.rs")).toMatch(
+        /(?:^|\n)mod lifecycle;/,
+      );
+      expect(readCrateAnalysisSource("report.rs")).toMatch(
+        /#\[cfg\(test\)\]\s*mod tests;/,
+      );
+    } else {
+      expect(chatAdapter.match(/include!\("chat_engine\.rs"\);/g) ?? [])
+        .toHaveLength(1);
+      expect(reportAdapter.match(/include!\("report_engine\.rs"\);/g) ?? [])
+        .toHaveLength(1);
+      expect(
+        lifecycleAdapter.match(/include!\("lifecycle_portable\.rs"\);/g) ?? [],
+      ).toHaveLength(1);
+      expect(testRoot.match(/include!\("mod_portable\.rs"\);/g) ?? [])
+        .toHaveLength(1);
+      expect(normalized(testRoot)).toBe(
+        'mod capture; include!("mod_portable.rs");',
+      );
+    }
     expect(normalized(portableTestRoot)).toBe(
       "mod architecture; mod corpus_port; mod harness; mod lifecycle; mod phases; mod preflight; mod requests; mod runtime; mod scope;",
     );
@@ -3437,7 +3631,9 @@ describe("analysis application boundary", () => {
       "let sink = TauriAnalysisEventSink::new(handle.clone());",
     );
     expect(lifecycleAdapter).toContain(
-      "super::request_analysis_run_cancel_in_pool(&pool, state, scheduler, &sink, run_id).await",
+      analysisExtracted
+        ? "request_analysis_run_cancel_in_pool(&pool, state, scheduler, &sink, run_id).await"
+        : "super::request_analysis_run_cancel_in_pool(&pool, state, scheduler, &sink, run_id).await",
     );
     expect(lifecycleAdapter).not.toContain(".publish(&sink);");
     expect(lifecycleAdapter).not.toContain(".emit(handle)");
@@ -3461,9 +3657,18 @@ describe("analysis application boundary", () => {
       }),
       portableReportSource(),
       portableReportLifecycleSource(),
-      readAppAnalysisSource("report/capture.rs"),
-      readAppAnalysisSource("report/phases.rs"),
-      readAppAnalysisSource("report/requests.rs"),
+      readAnalysisContractSource({
+        before: "report/capture.rs",
+        after: { owner: "crate", path: "report/capture.rs" },
+      }),
+      readAnalysisContractSource({
+        before: "report/phases.rs",
+        after: { owner: "crate", path: "report/phases.rs" },
+      }),
+      readAnalysisContractSource({
+        before: "report/requests.rs",
+        after: { owner: "crate", path: "report/requests.rs" },
+      }),
       readAnalysisContractSource({
         before: "report/tests/corpus_port.rs",
         after: { owner: "crate", path: "report/tests/corpus_port.rs" },
@@ -3483,7 +3688,11 @@ describe("analysis application boundary", () => {
         "preflight",
         "requests",
         "scope",
-      ].map((leaf) => readAppAnalysisSource(`report/tests/${leaf}.rs`)),
+      ].map((leaf) =>
+        readAnalysisContractSource({
+          before: `report/tests/${leaf}.rs`,
+          after: { owner: "crate", path: `report/tests/${leaf}.rs` },
+        })),
       readAnalysisContractSource({
         before: "state.rs",
         after: { owner: "crate", path: "state.rs" },
@@ -3563,7 +3772,10 @@ describe("analysis application boundary", () => {
   });
 
   it("exposes only the opaque fixture cancellation wait capability", () => {
-    const state = readAppAnalysisSource("state.rs");
+    const state = readAnalysisContractSource({
+      before: "state.rs",
+      after: { owner: "crate", path: "state.rs" },
+    });
     const fixtures = readAppAnalysisSource("fixtures.rs");
     const waitFields = state.match(
       /pub struct AnalysisReportCancellationWait\s*\{([\s\S]*?)\n\}/,
@@ -3604,53 +3816,75 @@ describe("analysis application boundary", () => {
 
   it("freezes the executable Appendix A partition at 95 crate and 48 app identities", () => {
     const frozen = parseAppendix();
-    const current = executableAnalysisIdentities();
-    const crate = frozen.filter(({ owner }) => owner === "crate").map(({ current }) => current);
-    const app = frozen.filter(({ owner }) => owner === "app").map(({ current }) => current);
-    const checkpointFourAdditions = [
-      "analysis::chat::tests::chat_execution_persists_turns_before_completed_event",
-      "analysis::corpus::source_resolution::tests::source_group_resolution_orders_members_by_title_then_id_before_playlist_expansion",
-      "analysis::groups::tests::prepare_analysis_source_group_input_preserves_baseline_error_precedence",
-      "analysis::report::tests::runtime::report_execution_publishes_typed_events_in_existing_order",
-      "analysis::report::tests::runtime::terminal_cleanup_always_removes_active_report_state",
-      "analysis::test_schema::tests::canonical_fixture_applies_analysis_consumed_schema",
-      "analysis::test_schema::tests::canonical_fixture_preserves_analysis_owned_indexes_and_foreign_keys",
-    ];
-    const baseline = current.filter(
-      (identity) => !checkpointFourAdditions.includes(identity),
-    );
+    const actual = executableAnalysisIdentities();
+    const expectedFrozen = frozen.map((identity) =>
+      analysisExtracted ? identity.final : identity.current);
+    const expectedAdded = planAddedTests.map((identity) =>
+      analysisExtracted ? identity.final : identity.current);
+    const expected = [...expectedFrozen, ...expectedAdded].sort();
 
-    expect(current).toHaveLength(150);
-    expect(
-      current.filter((identity) => checkpointFourAdditions.includes(identity)),
-    ).toEqual(checkpointFourAdditions.sort());
-    expect(baseline).toHaveLength(143);
-    expect(crate).toHaveLength(95);
-    expect(app).toHaveLength(48);
-    expect(crate.filter((identity) => app.includes(identity))).toEqual([]);
-    expect([...crate, ...app].sort()).toEqual(baseline);
+    expect(actual.map(({ identity }) => identity)).toEqual(expected);
+    expect(actual).toHaveLength(169);
+    expect(expectedFrozen).toHaveLength(143);
+    expect(expectedAdded).toHaveLength(26);
+    expect(frozen.filter(({ owner }) => owner === "crate")).toHaveLength(95);
+    expect(frozen.filter(({ owner }) => owner === "app")).toHaveLength(48);
+    expect(planAddedTests.filter(({ owner }) => owner === "crate"))
+      .toHaveLength(17);
+    expect(planAddedTests.filter(({ owner }) => owner === "app"))
+      .toHaveLength(9);
+    const expectedOwners = new Map([
+      ...frozen.map((identity) => [
+        analysisExtracted ? identity.final : identity.current,
+        analysisExtracted ? identity.owner : "app",
+      ] as const),
+      ...planAddedTests.map((identity) => [
+        analysisExtracted ? identity.final : identity.current,
+        analysisExtracted ? identity.owner : "app",
+      ] as const),
+    ]);
+    for (const identity of actual) {
+      expect(identity.owner, identity.identity).toBe(
+        expectedOwners.get(identity.identity),
+      );
+    }
+    expect(new Set(expectedFrozen).size).toBe(143);
+    expect(new Set(expectedAdded).size).toBe(26);
+    expect(expectedFrozen.filter((identity) => expectedAdded.includes(identity)))
+      .toEqual([]);
     expect(new Set(frozen.map(({ final }) => final)).size).toBe(143);
   });
 
   it("manages one scheduler Arc and routes every app consumer through it", () => {
-    const production = (relativePath: string) =>
+    const appProduction = (relativePath: string) =>
       readFileSync(path.join(repoRoot, "src-tauri/src", relativePath), "utf8")
         .split("#[cfg(test)]")[0];
-    const schedulerConsumers = [
+    const appSchedulerConsumers = [
       "accounts.rs",
       "diagnostics/mod.rs",
       "llm/mod.rs",
       "prompt_packs/runtime_commands.rs",
       "analysis/chat.rs",
-      "analysis/chat_engine.rs",
       "analysis/report.rs",
-      "analysis/report_engine.rs",
-      "analysis/report/phases.rs",
       "analysis/report/lifecycle.rs",
-      "analysis/report/lifecycle_portable.rs",
       "analysis/report_commands.rs",
-    ].map(production);
-    const allConsumers = schedulerConsumers.join("\n");
+    ].map(appProduction);
+    const portableSchedulerConsumers = [
+      portableChatSource(),
+      portableReportSource(),
+      readAnalysisContractSource({
+        before: "report/phases.rs",
+        after: { owner: "crate", path: "report/phases.rs" },
+      }),
+      portableReportLifecycleSource(),
+    ].map((source) => source.split("#[cfg(test)]")[0]);
+    const allConsumers = [
+      ...appSchedulerConsumers,
+      ...portableSchedulerConsumers,
+    ].join("\n");
+
+    expect(appSchedulerConsumers).toHaveLength(8);
+    expect(portableSchedulerConsumers).toHaveLength(4);
 
     expect(
       appLib.match(/\.manage\(Arc::new\(LlmSchedulerState::new\(\)\)\)/g) ?? [],
@@ -3675,15 +3909,35 @@ describe("analysis application boundary", () => {
 
   it("stages checkpoint two portable values and safe construction without app compression ownership", () => {
     const moduleSource = readAppAnalysisSource("mod.rs");
-    const domainSource = readAppAnalysisSource("domain_portable.rs");
-    const models = readAppAnalysisSource("models.rs");
+    const domainSource = readAnalysisContractSource({
+      before: "domain_portable.rs",
+      after: { owner: "crate", path: "domain.rs" },
+    });
+    const models = readAnalysisContractSource({
+      before: "models.rs",
+      after: { owner: "crate", path: "models.rs" },
+    });
     const report = portableReportSource();
-    const trace = readAppAnalysisSource("trace.rs");
-    const filters = readAppAnalysisSource("store/owned_read_model.rs");
+    const trace = readAnalysisContractSource({
+      before: "trace.rs",
+      after: { owner: "crate", path: "trace.rs" },
+    });
+    const filters = readAnalysisContractSource({
+      before: "store/owned_read_model.rs",
+      after: { owner: "crate", path: "store/read_model.rs" },
+    });
     const reportCommands = readAppAnalysisSource("report_commands.rs");
 
-    expect(moduleSource.match(/include!\("tests_portable\.rs"\)/g) ?? []).toHaveLength(1);
-    expect(moduleSource).toContain('#[path = "domain_portable.rs"]');
+    if (analysisExtracted) {
+      const crateRoot = readCrateAnalysisSource("lib.rs");
+      expect(moduleSource).not.toMatch(/tests_portable|domain_portable/);
+      expect(crateRoot).toMatch(/(?:^|\n)mod domain;/);
+      expect(crateRoot).toMatch(/#\[cfg\(test\)\]\s*mod tests;/);
+    } else {
+      expect(moduleSource.match(/include!\("tests_portable\.rs"\)/g) ?? [])
+        .toHaveLength(1);
+      expect(moduleSource).toContain('#[path = "domain_portable.rs"]');
+    }
     expect(moduleSource).toContain('const ANALYSIS_RUN_EVENT: &str = "analysis://run"');
     expect(moduleSource).toContain('const ANALYSIS_CHAT_EVENT: &str = "analysis://chat"');
     expect(moduleSource).not.toContain('const TEMPLATE_KIND_REPORT: &str = "report"');
@@ -3720,7 +3974,10 @@ describe("analysis application boundary", () => {
 
   it("freezes opaque report tickets and the explicit execution API", () => {
     const report = portableReportSource();
-    const capture = readAppAnalysisSource("report/capture.rs");
+    const capture = readAnalysisContractSource({
+      before: "report/capture.rs",
+      after: { owner: "crate", path: "report/capture.rs" },
+    });
     const ticketNames = [
       "AnalysisReportPreparationTicket",
       "AnalysisReportScopeTicket",
@@ -3859,7 +4116,10 @@ describe("analysis application boundary", () => {
   });
 
   it("keeps analysis run-list filters public with private state", () => {
-    const filters = readAppAnalysisSource("store/owned_read_model.rs");
+    const filters = readAnalysisContractSource({
+      before: "store/owned_read_model.rs",
+      after: { owner: "crate", path: "store/read_model.rs" },
+    });
     const filterFields = filters.match(
       /pub(?:\([^)]*\))?\s+struct AnalysisRunListFilters\s*\{([\s\S]*?)\n\}/,
     )?.[1];
@@ -3955,25 +4215,42 @@ describe("analysis application boundary", () => {
   });
 
   it("stages checkpoint three corpus and foreign-label boundaries under original identities", () => {
-    const corpus = readAppAnalysisSource("corpus_portable.rs");
+    const corpus = readAnalysisContractSource({
+      before: "corpus_portable.rs",
+      after: { owner: "crate", path: "corpus.rs" },
+    });
     const corpusAdapter = readAppAnalysisSource("corpus.rs");
     const liveAdapter = readAppAnalysisSource("corpus/live.rs");
     const scopeAdapter = readAppAnalysisSource("corpus/source_resolution.rs");
-    const ownedReadModel = readAppAnalysisSource("store/owned_read_model.rs");
+    const ownedReadModel = readAnalysisContractSource({
+      before: "store/owned_read_model.rs",
+      after: { owner: "crate", path: "store/read_model.rs" },
+    });
     const appReadModel = readAppAnalysisSource("store/read_model.rs");
     const storeFacade = readAppAnalysisSource("store.rs");
     const appReadModelTests = readAppAnalysisSource("store/tests/read_model.rs");
-    const portableReadModelTests = readAppAnalysisSource(
-      "store/tests/read_model_portable.rs",
-    );
-    const portableHarness = readAppAnalysisSource(
-      "corpus/tests/harness_portable.rs",
-    );
+    const portableReadModelTests = readAnalysisContractSource({
+      before: "store/tests/read_model_portable.rs",
+      after: { owner: "crate", path: "store/tests/read_model.rs" },
+    });
+    const portableHarness = readAnalysisContractSource({
+      before: "corpus/tests/harness_portable.rs",
+      after: { owner: "crate", path: "corpus/tests/harness.rs" },
+    });
     const appHarness = readAppAnalysisSource("corpus/tests/harness.rs");
     const portableLeaves = [
-      readAppAnalysisSource("corpus/tests/live_portable.rs"),
-      readAppAnalysisSource("corpus/tests/preflight_portable.rs"),
-      readAppAnalysisSource("corpus/tests/source_resolution_portable.rs"),
+      readAnalysisContractSource({
+        before: "corpus/tests/live_portable.rs",
+        after: { owner: "crate", path: "corpus/tests/live.rs" },
+      }),
+      readAnalysisContractSource({
+        before: "corpus/tests/preflight_portable.rs",
+        after: { owner: "crate", path: "corpus/tests/preflight.rs" },
+      }),
+      readAnalysisContractSource({
+        before: "corpus/tests/source_resolution_portable.rs",
+        after: { owner: "crate", path: "corpus/tests/source_resolution.rs" },
+      }),
       portableReadModelTests,
     ];
 
@@ -4013,8 +4290,16 @@ describe("analysis application boundary", () => {
     expect(appReadModel).toContain("pool.begin().await");
     expect(appReadModel).toContain("transaction.commit().await");
 
-    expect(appReadModelTests.match(/include!\("read_model_portable\.rs"\)/g) ?? [])
-      .toHaveLength(1);
+    if (analysisExtracted) {
+      expect(appReadModelTests).not.toMatch(/read_model_portable/);
+      expect(appReadModel).toMatch(
+        /use\s+extractum_analysis::\{[\s\S]*?\bprepare_analysis_run_summaries\b/,
+      );
+    } else {
+      expect(
+        appReadModelTests.match(/include!\("read_model_portable\.rs"\)/g) ?? [],
+      ).toHaveLength(1);
+    }
     expect(appReadModelTests).toContain(
       "list_analysis_run_summaries_filters_project_runs",
     );
@@ -4036,7 +4321,10 @@ describe("analysis application boundary", () => {
     );
     expect(appHarness).toContain("create_youtube_typed_source_tables");
     expect(appHarness).toContain("rebuild_analysis_documents_for_source");
-    expect(readAppAnalysisSource("corpus/tests/source_resolution_portable.rs"))
+    expect(readAnalysisContractSource({
+      before: "corpus/tests/source_resolution_portable.rs",
+      after: { owner: "crate", path: "corpus/tests/source_resolution.rs" },
+    }))
       .not.toMatch(/\bresolve_run_source_ids\s*\(/);
     expect(portableReadModelTests).not.toContain("AnalysisRunRow");
     expect(portableReadModelTests).not.toMatch(/\bmap_run_detail\s*\(/);
@@ -4069,11 +4357,20 @@ describe("analysis application boundary", () => {
       after: { owner: "crate", path: "store/tests/read_model.rs" },
     });
 
-    expect(storeFacade.match(/include!\("store_portable\.rs"\);/g) ?? [])
-      .toHaveLength(1);
-    expect(storeFacade).not.toMatch(
-      /\bmod\s+(?:read_model|runs|setup|snapshot|tests|store_portable)\s*;/,
-    );
+    if (analysisExtracted) {
+      expect(storeFacade).not.toMatch(/store_portable|owned_read_model/);
+      expect(
+        [...storeFacade.matchAll(
+          /(?:^|\n)\s*(?:#\[[^\]]+\]\s*)*mod\s+([a-z_]+)\s*;/g,
+        )].map((match) => match[1]),
+      ).toEqual(["read_model", "setup", "tests"]);
+    } else {
+      expect(storeFacade.match(/include!\("store_portable\.rs"\);/g) ?? [])
+        .toHaveLength(1);
+      expect(storeFacade).not.toMatch(
+        /\bmod\s+(?:read_model|runs|setup|snapshot|tests|store_portable)\s*;/,
+      );
+    }
     for (const moduleName of ["read_model", "runs", "setup", "snapshot"]) {
       expect(
         portableStoreFacade.match(
@@ -4106,8 +4403,15 @@ describe("analysis application boundary", () => {
         "mod snapshot;",
       ].join("\n"),
     );
-    expect(appReadModel.match(/include!\("owned_read_model\.rs"\);/g) ?? [])
-      .toHaveLength(1);
+    if (analysisExtracted) {
+      expect(appReadModel).not.toMatch(/\binclude!\s*\(/);
+      expect(appReadModel).toMatch(
+        /use\s+extractum_analysis::\{[\s\S]*?\bprepare_analysis_run_detail\b/,
+      );
+    } else {
+      expect(appReadModel.match(/include!\("owned_read_model\.rs"\);/g) ?? [])
+        .toHaveLength(1);
+    }
     expect(appReadModel).not.toMatch(
       /#\[path\s*=\s*"owned_read_model\.rs"\]\s*mod\s+owned_read_model\s*;/,
     );
@@ -4124,13 +4428,17 @@ describe("analysis application boundary", () => {
   });
 
   it("curates the owned corpus facade and forbids legacy corpus compatibility types", () => {
-    const corpus = readAppAnalysisSource("corpus_portable.rs");
+    const corpus = readAnalysisContractSource({
+      before: "corpus_portable.rs",
+      after: { owner: "crate", path: "corpus.rs" },
+    });
     const corpusAdapter = readAppAnalysisSource("corpus.rs");
     const corpusMessageBody = corpus.match(
       /pub struct AnalysisCorpusMessage\s*\{([\s\S]*?)\n\}/,
     )?.[1];
     const authorizedConsumers = [
       ...rustFiles(currentAnalysisRoot),
+      ...(analysisExtracted ? rustFiles(analysisCrateRoot) : []),
       path.join(repoRoot, "src-tauri/src/projects/mod.rs"),
       path.join(repoRoot, "src-tauri/src/projects/data_range.rs"),
     ]
@@ -4138,7 +4446,7 @@ describe("analysis application boundary", () => {
       .join("\n");
 
     expect(corpusAdapter).not.toContain("corpus_portable::*");
-    for (const exported of [
+    const corpusExports = [
       "AnalysisCorpusMessage",
       "AnalysisCorpusReader",
       "AnalysisCorpusRequest",
@@ -4147,10 +4455,37 @@ describe("analysis application boundary", () => {
       "AnalysisRunPreflightLimits",
       "YoutubeCorpusMode",
       "preflight_analysis_corpus",
-    ]) {
-      expect(corpusAdapter).toMatch(
-        new RegExp(`pub\\(crate\\) use super::corpus_portable::\\{[\\s\\S]*\\b${exported}\\b`),
+    ] as const;
+    if (analysisExtracted) {
+      const crateRoot = readCrateAnalysisSource("lib.rs");
+      const adapterExports = [
+        ...corpusAdapter.matchAll(
+          /pub\(crate\)\s+use\s+extractum_analysis::\{([\s\S]*?)\};/g,
+        ),
+      ].flatMap((match) => splitTopLevel(match[1]));
+      expect(adapterExports).toEqual([
+        "AnalysisCorpusMessage",
+        "AnalysisCorpusReader",
+        "AnalysisCorpusRequest",
+        "AnalysisPortFuture",
+        "YoutubeCorpusMode",
+      ]);
+      for (const exported of corpusExports) {
+        expect(crateRoot).toMatch(
+          new RegExp(`pub use corpus::\\{[\\s\\S]*?\\b${exported}\\b`),
+        );
+      }
+      expect(corpusAdapter).toContain(
+        "pub(crate) use extractum_analysis::resolve_analysis_telegram_history_scope;",
       );
+    } else {
+      for (const exported of corpusExports) {
+        expect(corpusAdapter).toMatch(
+          new RegExp(
+            `pub\\(crate\\) use super::corpus_portable::\\{[\\s\\S]*\\b${exported}\\b`,
+          ),
+        );
+      }
     }
     expect(corpusMessageBody).toBeDefined();
     expect(corpusMessageBody).not.toMatch(/\bpub(?:\([^)]*\))?\s+/);
@@ -4176,11 +4511,20 @@ describe("analysis application boundary", () => {
   it("keeps raw analysis run rows and mappers inside the owned read model", () => {
     const storeFacade = readAppAnalysisSource("store.rs");
     const appReadModel = readAppAnalysisSource("store/read_model.rs");
-    const ownedReadModel = readAppAnalysisSource("store/owned_read_model.rs");
-    const models = readAppAnalysisSource("models.rs");
+    const ownedReadModel = readAnalysisContractSource({
+      before: "store/owned_read_model.rs",
+      after: { owner: "crate", path: "store/read_model.rs" },
+    });
+    const models = readAnalysisContractSource({
+      before: "models.rs",
+      after: { owner: "crate", path: "models.rs" },
+    });
     const lifecycle = portableReportLifecycleSource();
     const applicationTests = readAppAnalysisSource("tests_application.rs");
-    const portableTests = readAppAnalysisSource("tests_portable.rs");
+    const portableTests = readAnalysisContractSource({
+      before: "tests_portable.rs",
+      after: { owner: "crate", path: "tests.rs" },
+    });
 
     for (const broadExport of [
       "fetch_run_row",
@@ -4215,10 +4559,19 @@ describe("analysis application boundary", () => {
 
   it("carries the resolved analysis scope through the report ticket", () => {
     const report = portableReportSource();
-    const phases = readAppAnalysisSource("report/phases.rs");
-    const models = readAppAnalysisSource("models.rs");
+    const phases = readAnalysisContractSource({
+      before: "report/phases.rs",
+      after: { owner: "crate", path: "report/phases.rs" },
+    });
+    const models = readAnalysisContractSource({
+      before: "models.rs",
+      after: { owner: "crate", path: "models.rs" },
+    });
     const resolver = readAppAnalysisSource("corpus/source_resolution.rs");
-    const scopeTests = readAppAnalysisSource("report/tests/scope.rs");
+    const scopeTests = readAnalysisContractSource({
+      before: "report/tests/scope.rs",
+      after: { owner: "crate", path: "report/tests/scope.rs" },
+    });
     const ticketBody = report.match(
       /struct ReportRunInput\s*\{([\s\S]*?)\n\}/,
     )?.[1];
@@ -4251,7 +4604,10 @@ describe("analysis application boundary", () => {
   });
 
   it("drives the frozen corpus port cases through capture and lifecycle seams", () => {
-    const corpusPort = readAppAnalysisSource("report/tests/corpus_port.rs");
+    const corpusPort = readAnalysisContractSource({
+      before: "report/tests/corpus_port.rs",
+      after: { owner: "crate", path: "report/tests/corpus_port.rs" },
+    });
     const report = portableReportSource();
     const lifecycle = portableReportLifecycleSource();
     const frozenNames = [
@@ -4303,11 +4659,15 @@ describe("analysis application boundary", () => {
 
   it("keeps retained preflight integrations independent from portable imports", () => {
     const retainedPreflight = readAppAnalysisSource("corpus/tests/preflight.rs");
-    const portablePreflight = readAppAnalysisSource(
-      "corpus/tests/preflight_portable.rs",
-    );
+    const portablePreflight = readAnalysisContractSource({
+      before: "corpus/tests/preflight_portable.rs",
+      after: { owner: "crate", path: "corpus/tests/preflight.rs" },
+    });
     const retainedLive = readAppAnalysisSource("corpus/tests/live.rs");
-    const portableLive = readAppAnalysisSource("corpus/tests/live_portable.rs");
+    const portableLive = readAnalysisContractSource({
+      before: "corpus/tests/live_portable.rs",
+      after: { owner: "crate", path: "corpus/tests/live.rs" },
+    });
     const retainedLiveWithoutPortableInclude = retainedLive.replace(
       /^\s*include!\("live_portable\.rs"\);\s*$/m,
       "",
@@ -4353,6 +4713,13 @@ describe("analysis application boundary", () => {
       "use super::super::super::corpus::YoutubeCorpusMode;",
     );
     expect(portableLive).not.toContain("AppYoutubeCorpusMode");
+    if (analysisExtracted) {
+      expect(retainedPreflight).not.toMatch(/\binclude!\s*\(/);
+      expect(retainedLive).not.toMatch(/\binclude!\s*\(/);
+    } else {
+      expect(retainedPreflight).toContain('include!("preflight_portable.rs");');
+      expect(retainedLive).toContain('include!("live_portable.rs");');
+    }
   });
 
   it("freezes the 21 release, three project, and three dev command inventory", () => {
@@ -4564,9 +4931,21 @@ describe("analysis application boundary", () => {
     ]) {
       expect(publicRunReexports.filter((entry) => entry === item), item).toHaveLength(1);
     }
-    expect(analysisFacade).toMatch(
-      /pub\(crate\)\s+use\s+self::store::\{[\s\S]*?\banalysis_run_ids_depending_on_sources\b[\s\S]*?\bload_analysis_run_diagnostics\b[\s\S]*?\};/,
-    );
+    if (analysisExtracted) {
+      expect(analysisFacade).toMatch(
+        /pub\(crate\)\s+use\s+extractum_analysis::\{[\s\S]*?\banalysis_run_ids_depending_on_sources\b[\s\S]*?\bdelete_project_analysis_runs\b[\s\S]*?\bload_analysis_run_diagnostics\b[\s\S]*?\};/,
+      );
+      expect(accountDeletionProduction).toMatch(
+        /use\s+extractum_analysis::\{\s*analysis_run_ids_depending_on_sources,\s*AnalysisState\s*\};/,
+      );
+      expect(diagnosticsProduction).toContain(
+        "use extractum_analysis::load_analysis_run_diagnostics;",
+      );
+    } else {
+      expect(analysisFacade).toMatch(
+        /pub\(crate\)\s+use\s+self::store::\{[\s\S]*?\banalysis_run_ids_depending_on_sources\b[\s\S]*?\bload_analysis_run_diagnostics\b[\s\S]*?\};/,
+      );
+    }
 
     expectOrdered(accountDeletionProduction, [
       "analysis_state.active_report_run_ids().await",
@@ -4602,13 +4981,19 @@ describe("analysis application boundary", () => {
       /pub\s+async\s+fn\s+cleanup_interrupted_analysis_runs\s*\(\s*handle:\s*AppHandle\s*\)\s*\{/,
       "silent startup analysis cleanup",
     );
-    expect(normalized(cleanup)).toBe(
-      normalized(`
-        if let Ok(pool) = get_pool(&handle).await {
-            let _ = super::mark_interrupted_analysis_runs(&pool).await;
-        }
-      `),
-    );
+    expect(normalized(cleanup)).toBe(normalized(
+      analysisExtracted
+        ? `
+          if let Ok(pool) = get_pool(&handle).await {
+              let _ = mark_interrupted_analysis_runs(&pool).await;
+          }
+        `
+        : `
+          if let Ok(pool) = get_pool(&handle).await {
+              let _ = super::mark_interrupted_analysis_runs(&pool).await;
+          }
+        `,
+    ));
     expect(fixtures).toContain("prepare_report_run_cancellation_wait(run_id).await");
     expect(fixtures).toContain("cancellation_wait.cancelled().await");
     expect(fixtures).not.toMatch(/\b(?:active_report_runs|report_run_tokens|report_run_child_token)\b/);
@@ -4972,9 +5357,18 @@ describe("analysis application boundary", () => {
     expect(
       facadeReexports.filter((entry) => entry === "delete_project_analysis_runs"),
     ).toHaveLength(1);
-    expect(projectProduction).toContain(
-      "use crate::analysis::delete_project_analysis_runs;",
-    );
+    if (analysisExtracted) {
+      expect(projectProduction).toMatch(
+        /use\s+extractum_analysis::\{[\s\S]*?\bdelete_project_analysis_runs\b[\s\S]*?\bAnalysisRunListFilters\b[\s\S]*?\bAnalysisRunSummary\b[\s\S]*?\bAnalysisState\b[\s\S]*?\bStartAnalysisReportRequest\b[\s\S]*?\};/,
+      );
+      expect(projectProduction).not.toContain(
+        "use crate::analysis::delete_project_analysis_runs;",
+      );
+    } else {
+      expect(projectProduction).toContain(
+        "use crate::analysis::delete_project_analysis_runs;",
+      );
+    }
 
     const coordinator = uniqueRustBracedBody(
       projectProduction,
@@ -5038,7 +5432,8 @@ describe("analysis application boundary", () => {
         ? projectSources
         : analysisSources;
       const actual = commandSignature(source, name);
-      expect(actual.signature, name).toBe(expectedSignature);
+      expect(canonicalWireSignature(actual.signature), name)
+        .toBe(expectedSignature);
       const actualWireParams = actual.params
         .map((param) => param.slice(0, param.indexOf(":")))
         .filter((param) => !contextParams.has(param))
@@ -5092,7 +5487,10 @@ describe("analysis application boundary", () => {
     for (const terminal of [
       "Answer completed.", "Answer cancelled.", "Analysis run cancelled.",
       "Report run failed.", "Report run failed before snapshot capture completed.",
-    ]) expect(`${analysisSources}\n${chat}\n${report}`).toContain(terminal);
+    ]) {
+      expect(`${analysisSources}\n${chat}\n${report}\n${lifecycle}`)
+        .toContain(terminal);
+    }
     expect(errorSource).toContain("#[serde(rename_all = \"snake_case\")]");
     expect(errorSource).toMatch(/pub struct AppError\s*{\s*pub kind: AppErrorKind,\s*pub message: String,/s);
   });
@@ -5117,20 +5515,20 @@ describe("analysis application boundary", () => {
 
     const files = analysisSourceFiles();
     for (const move of allMoves) expect(frozenMoveSource(move), `missing frozen move source: ${move.before}`).not.toBe("");
-    const crateRoot = path.join(repoRoot, "src-tauri/crates/extractum-analysis/src");
-    const extracted = existsSync(crateRoot);
-    const appExpected = extracted
+    const appExpected = analysisExtracted
       ? [...retainedAnalysisFiles]
       : [...retainedAnalysisFiles, ...allMoves.map((move) => move.before)];
     expectExactInventory(
       files.map(({ relative }) => relative),
       appExpected,
-      extracted ? "post-extraction app analysis files" : "pre-extraction app analysis files",
+      analysisExtracted
+        ? "post-extraction app analysis files"
+        : "pre-extraction app analysis files",
     );
-    expect(appExpected).toHaveLength(extracted ? 35 : 79);
-    if (extracted) {
-      const crateFiles = rustFiles(crateRoot).map((file) =>
-        path.relative(crateRoot, file).replaceAll("\\", "/"));
+    expect(appExpected).toHaveLength(analysisExtracted ? 35 : 79);
+    if (analysisExtracted) {
+      const crateFiles = rustFiles(analysisCrateRoot).map((file) =>
+        path.relative(analysisCrateRoot, file).replaceAll("\\", "/"));
       expectExactInventory(
         crateFiles,
         [...allMoves.map((move) => move.after), "lib.rs"],
@@ -5271,7 +5669,7 @@ describe("analysis application boundary", () => {
     );
     expectExactInventory(
       appReachability.cfgOnly.map(({ relative }) => relative),
-      existsSync(crateSourceRoot)
+      analysisExtracted
         ? expectedCfgOnlyAppRustFiles.filter((relative) => !movedAppPaths.has(relative))
         : expectedCfgOnlyAppRustFiles,
       "cfg(test/dev)-only app Rust files",
@@ -5282,7 +5680,7 @@ describe("analysis application boundary", () => {
     ]);
     expectExactInventory(
       appInventory.map(({ relative }) => relative).filter((relative) => !cfgClassified.has(relative)),
-      existsSync(crateSourceRoot) ? [] : frozenUnreachableStagingTestFiles,
+      analysisExtracted ? [] : frozenUnreachableStagingTestFiles,
       "frozen unreachable staging test files",
     );
     expect(appReachability.production.map(({ relative }) => relative)).toContain("projects/read_model.rs");
@@ -5292,7 +5690,7 @@ describe("analysis application boundary", () => {
       ...frozenUnreachableStagingTestFiles,
     ]);
     const appFiles = appInventory.filter(({ relative }) => !productionExclusions.has(relative));
-    const crateFiles = existsSync(crateSourceRoot)
+    const crateFiles = analysisExtracted
       ? rustModuleReachability(rustFiles(crateSourceRoot).map((file) => ({
         relative: path.relative(crateSourceRoot, file).replaceAll("\\", "/"),
         source: readFileSync(file, "utf8"),
@@ -5305,6 +5703,15 @@ describe("analysis application boundary", () => {
     const unresolvedProductionConsumers = files.flatMap(({ relative, source }) =>
       unresolvedConsumerInventory(relative, productionRust(source))
         .map(unresolvedConsumerIdentity));
+    const notebookExportSourceFingerprint = analysisExtracted
+      ? "4ce6899ba162eab0cc0155c5f0a57d460a5eec1ba372b7816ed51678ab3c67e6"
+      : "63929f7402132bd7860e06b050ccc70e1d214cc70d699cc3c524d7786c231d9f";
+    const notebookArchiveBodyFingerprint = analysisExtracted
+      ? "94c56fc8c1c0b0bf5643792f6cdac45e0b6b31bc423240d61f63f9301c5400a5"
+      : "2965c448aa0fd5bf74706df2609d6f52a2f30400736eb417ebe037ea3977252c";
+    const notebookReplyBodyFingerprint = analysisExtracted
+      ? "9b94e015798718e328bc265b0afa1e7f3575c8de94d4817718daff9b5489ce1d"
+      : "f4a3902360ed77d4750749e55c73db371c54fd2e117828bc9187f0f4e8ec4333";
     expect(
       unresolvedProductionConsumers,
       "production unresolved executable SQL consumer inventory",
@@ -5330,15 +5737,15 @@ describe("analysis application boundary", () => {
       "archive_read_model.rs:load_item_rows_from_archive:a59af0755d3e1a73942858d45dda36002f6c779c26114e0b20a0f8ae2f613701:614cf0c69848b64862d37ae81366d0b350d733d49962af946cc6600f4a0e6311:query_as::<_, StoredItemRow>:&sql",
       "ingest_provenance.rs:mark_takeout_migrated_history_deferred:1e716e0b820fddb837c9ec72740ac920ac00e0ef6f944d524dab6fa1d702f43c:cb2e8a7c4137c5c87ebbaf0b55a7f00b11bd55f7be1b0b2d68338b8f565ee584:query:&query",
       "ingest_provenance.rs:mark_takeout_only_my_messages_fallback:2c841ccea10b1458a4d404e826470c460488c48fbc8eaf675a0b54cd890c24a9:cb2e8a7c4137c5c87ebbaf0b55a7f00b11bd55f7be1b0b2d68338b8f565ee584:query:&query",
-      "notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:63929f7402132bd7860e06b050ccc70e1d214cc70d699cc3c524d7786c231d9f:query_as:&sql",
-      "notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:63929f7402132bd7860e06b050ccc70e1d214cc70d699cc3c524d7786c231d9f:query_as:&sql",
-      "notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:63929f7402132bd7860e06b050ccc70e1d214cc70d699cc3c524d7786c231d9f:query_as:&sql",
-      "notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:63929f7402132bd7860e06b050ccc70e1d214cc70d699cc3c524d7786c231d9f:query_as:&sql",
-      "notebooklm_export/query.rs:load_export_messages_from_archive:2965c448aa0fd5bf74706df2609d6f52a2f30400736eb417ebe037ea3977252c:63929f7402132bd7860e06b050ccc70e1d214cc70d699cc3c524d7786c231d9f:query_as:&sql",
-      "notebooklm_export/query.rs:load_export_messages_from_archive:2965c448aa0fd5bf74706df2609d6f52a2f30400736eb417ebe037ea3977252c:63929f7402132bd7860e06b050ccc70e1d214cc70d699cc3c524d7786c231d9f:query_as:&sql",
-      "notebooklm_export/query.rs:load_export_messages_from_archive:2965c448aa0fd5bf74706df2609d6f52a2f30400736eb417ebe037ea3977252c:63929f7402132bd7860e06b050ccc70e1d214cc70d699cc3c524d7786c231d9f:query_as:&sql",
-      "notebooklm_export/query.rs:load_export_messages_from_archive:2965c448aa0fd5bf74706df2609d6f52a2f30400736eb417ebe037ea3977252c:63929f7402132bd7860e06b050ccc70e1d214cc70d699cc3c524d7786c231d9f:query_as:&sql",
-      "notebooklm_export/query.rs:load_reply_contexts_from_archive:f4a3902360ed77d4750749e55c73db371c54fd2e117828bc9187f0f4e8ec4333:63929f7402132bd7860e06b050ccc70e1d214cc70d699cc3c524d7786c231d9f:query_as::<_, ReplyLookupRow>:&sql",
+      `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
+      `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
+      `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
+      `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
+      `notebooklm_export/query.rs:load_export_messages_from_archive:${notebookArchiveBodyFingerprint}:${notebookExportSourceFingerprint}:query_as:&sql`,
+      `notebooklm_export/query.rs:load_export_messages_from_archive:${notebookArchiveBodyFingerprint}:${notebookExportSourceFingerprint}:query_as:&sql`,
+      `notebooklm_export/query.rs:load_export_messages_from_archive:${notebookArchiveBodyFingerprint}:${notebookExportSourceFingerprint}:query_as:&sql`,
+      `notebooklm_export/query.rs:load_export_messages_from_archive:${notebookArchiveBodyFingerprint}:${notebookExportSourceFingerprint}:query_as:&sql`,
+      `notebooklm_export/query.rs:load_reply_contexts_from_archive:${notebookReplyBodyFingerprint}:${notebookExportSourceFingerprint}:query_as::<_, ReplyLookupRow>:&sql`,
       "sources/items/query.rs:load_scoped_item_rows:d66387533b2124c77cda52f669c19538dc937908a12741d7281acb7eeae0753d:aa85dcdecd6845f1a8196197186e47cdc6209d27a3ffed30f2c2177251009f07:query_as::<_, BrowsableItemRow>:&sql",
       "sources/items/query.rs:load_item_cursor:3bd13b5ceeae1ce12f2ec66669307973299cf953ac2efd1fae0568172d44fdaf:aa85dcdecd6845f1a8196197186e47cdc6209d27a3ffed30f2c2177251009f07:query_as::<_, BrowsableItemRow>:&sql",
       "sources/store.rs:delete_source_from_pool:f57c3fb2c5b7e0dab204d1ac4120eb119fde4c13a720a412e03feb126f616e8d:6f39efca07515d448c8f3fb4e2fbeca4dc5354c14adcf6b5331914f4d8cde7b4:query:&format!( \"PRAGMA busy_timeout = {SOURCE_DELETE_BUSY_TIMEOUT_MS}\" )",
@@ -6240,11 +6647,17 @@ describe("analysis application boundary", () => {
       .map((move) => ({ relative: move.before, source: frozenMoveSource(move) }));
     const unresolvedMovingConsumers = movingSources.flatMap(({ relative, source }) =>
       unresolvedConsumerInventory(relative, source).map(unresolvedConsumerIdentity));
+    const chatExecutionFingerprint = analysisExtracted
+      ? "551123334a658eeb318b997d0167ef9026bde7121ff9e61822bbe23e2ddef81c"
+      : "80725a1f678c48be1b0b10b0e20840bb7ba238a2a4eeb2d5be04602405bf1e0f";
+    const chatSourceFingerprint = analysisExtracted
+      ? "9ba11787faa64f211c763876fa63fac51bd7dd8f767dbc5f0470919d4de44f37"
+      : "26f83ba867a65bc4e99902fe804827ac6ebaeb83a862f8970f271f628b88bb17";
     expect(
       unresolvedMovingConsumers,
       "moving source unresolved executable SQL consumer inventory",
     ).toEqual([
-      "chat_engine.rs:tests::chat_execution_persists_turns_before_completed_event:80725a1f678c48be1b0b10b0e20840bb7ba238a2a4eeb2d5be04602405bf1e0f:26f83ba867a65bc4e99902fe804827ac6ebaeb83a862f8970f271f628b88bb17:query:statement",
+      `chat_engine.rs:tests::chat_execution_persists_turns_before_completed_event:${chatExecutionFingerprint}:${chatSourceFingerprint}:query:statement`,
     ]);
     for (const { relative, source } of movingSources) {
       const executable = maskRustComments(source, true);
@@ -6274,7 +6687,7 @@ describe("analysis application boundary", () => {
       ...fullAppReachability.cfgOnly.map(({ relative }) => relative),
       ...frozenUnreachableStagingTestFiles,
     ]);
-    const crateInventory = existsSync(crateSourceRoot)
+    const crateInventory = analysisExtracted
       ? rustFiles(crateSourceRoot).map((file) => ({
         relative: `analysis-crate/${path.relative(crateSourceRoot, file).replaceAll("\\", "/")}`,
         source: readFileSync(file, "utf8"),

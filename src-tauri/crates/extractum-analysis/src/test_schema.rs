@@ -2,51 +2,51 @@
 const ANALYSIS_TEST_MIGRATIONS: [(&str, &str); 12] = [
     (
         "src-tauri/migrations/0001_current_schema_baseline.sql",
-        include_str!("../../migrations/0001_current_schema_baseline.sql"),
+        include_str!("../../../migrations/0001_current_schema_baseline.sql"),
     ),
     (
         "src-tauri/migrations/0002_migrated_history_opt_in_schema.sql",
-        include_str!("../../migrations/0002_migrated_history_opt_in_schema.sql"),
+        include_str!("../../../migrations/0002_migrated_history_opt_in_schema.sql"),
     ),
     (
         "src-tauri/migrations/0003_analysis_telegram_history_scope.sql",
-        include_str!("../../migrations/0003_analysis_telegram_history_scope.sql"),
+        include_str!("../../../migrations/0003_analysis_telegram_history_scope.sql"),
     ),
     (
         "src-tauri/migrations/0004_source_delete_cascade_indexes.sql",
-        include_str!("../../migrations/0004_source_delete_cascade_indexes.sql"),
+        include_str!("../../../migrations/0004_source_delete_cascade_indexes.sql"),
     ),
     (
         "src-tauri/migrations/0005_projects_mvp.sql",
-        include_str!("../../migrations/0005_projects_mvp.sql"),
+        include_str!("../../../migrations/0005_projects_mvp.sql"),
     ),
     (
         "src-tauri/migrations/0006_prompt_pack_mvp.sql",
-        include_str!("../../migrations/0006_prompt_pack_mvp.sql"),
+        include_str!("../../../migrations/0006_prompt_pack_mvp.sql"),
     ),
     (
         "src-tauri/migrations/0007_prompt_pack_run_idempotency.sql",
-        include_str!("../../migrations/0007_prompt_pack_run_idempotency.sql"),
+        include_str!("../../../migrations/0007_prompt_pack_run_idempotency.sql"),
     ),
     (
         "src-tauri/migrations/0008_prompt_pack_run_labels.sql",
-        include_str!("../../migrations/0008_prompt_pack_run_labels.sql"),
+        include_str!("../../../migrations/0008_prompt_pack_run_labels.sql"),
     ),
     (
         "src-tauri/migrations/0009_prompt_pack_intermediate_entities_artifacts.sql",
-        include_str!("../../migrations/0009_prompt_pack_intermediate_entities_artifacts.sql"),
+        include_str!("../../../migrations/0009_prompt_pack_intermediate_entities_artifacts.sql"),
     ),
     (
         "src-tauri/migrations/0010_prompt_pack_runtime_provider.sql",
-        include_str!("../../migrations/0010_prompt_pack_runtime_provider.sql"),
+        include_str!("../../../migrations/0010_prompt_pack_runtime_provider.sql"),
     ),
     (
         "src-tauri/migrations/0011_prompt_pack_stage_browser_provenance.sql",
-        include_str!("../../migrations/0011_prompt_pack_stage_browser_provenance.sql"),
+        include_str!("../../../migrations/0011_prompt_pack_stage_browser_provenance.sql"),
     ),
     (
         "src-tauri/migrations/0012_projects_redesign.sql",
-        include_str!("../../migrations/0012_projects_redesign.sql"),
+        include_str!("../../../migrations/0012_projects_redesign.sql"),
     ),
 ];
 

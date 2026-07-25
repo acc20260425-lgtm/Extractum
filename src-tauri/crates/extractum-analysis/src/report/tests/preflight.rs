@@ -1,5 +1,5 @@
-use super::super::validate_report_preflight;
 use super::super::super::corpus::{AnalysisRunPreflight, AnalysisRunPreflightLimits};
+use super::super::validate_report_preflight;
 use extractum_core::error::AppErrorKind;
 
 #[test]

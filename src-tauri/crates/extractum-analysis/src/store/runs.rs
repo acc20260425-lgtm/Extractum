@@ -152,9 +152,7 @@ pub async fn load_analysis_run_diagnostics(
                 run_type: row.try_get("run_type").map_err(AppError::database)?,
                 scope_type: row.try_get("scope_type").map_err(AppError::database)?,
                 status: row.try_get("status").map_err(AppError::database)?,
-                snapshot_state: row
-                    .try_get("snapshot_state")
-                    .map_err(AppError::database)?,
+                snapshot_state: row.try_get("snapshot_state").map_err(AppError::database)?,
                 error_kind: row.try_get("error_kind").map_err(AppError::database)?,
                 count: row.try_get("count").map_err(AppError::database)?,
             })

@@ -1,14 +1,13 @@
-use super::super::super::corpus::{
-    load_app_corpus_messages, preflight_analysis_corpus,
-    AnalysisRunPreflightLimits as AppAnalysisRunPreflightLimits, AppAnalysisCorpusReader,
-    YoutubeCorpusMode,
-};
+use super::super::super::corpus::{load_app_corpus_messages, AppAnalysisCorpusReader};
 use super::harness::{
     corpus_request, insert_youtube_transcript_segment,
     insert_youtube_video_source_with_typed_metadata, rebuild_documents_for_sources, snapshot_pool,
 };
+use extractum_analysis::{
+    preflight_analysis_corpus, AnalysisRunPreflightLimits as AppAnalysisRunPreflightLimits,
+    YoutubeCorpusMode,
+};
 use extractum_core::compression::compress_text;
-include!("preflight_portable.rs");
 #[tokio::test]
 async fn preflight_counts_eligible_text_messages_for_sources() {
     let pool = snapshot_pool().await;

@@ -4,6 +4,8 @@ use super::super::{
     MISSING_SNAPSHOT_RUN_LABEL,
 };
 use super::harness::{count, fixture_pool};
+use crate::analysis::store::{get_analysis_run_in_pool, list_analysis_runs_in_pool};
+use extractum_analysis::{AnalysisRunListFilters, AnalysisSnapshotState};
 #[tokio::test]
 async fn seeded_snapshot_runs_expose_captured_snapshot_state() {
     let pool = fixture_pool().await;
@@ -18,14 +20,14 @@ async fn seeded_snapshot_runs_expose_captured_snapshot_state() {
                 .fetch_one(&pool)
                 .await
                 .expect("load fixture run id");
-        let detail = crate::analysis::store::get_analysis_run_in_pool(&pool, run_id)
+        let detail = get_analysis_run_in_pool(&pool, run_id)
             .await
             .expect("fetch fixture run")
             .expect("fixture run exists");
 
         assert_eq!(
             detail.snapshot_state,
-            Some(crate::analysis::models::AnalysisSnapshotState::Captured),
+            Some(AnalysisSnapshotState::Captured),
             "{label} should expose captured snapshot state"
         );
         assert!(
@@ -96,9 +98,9 @@ async fn missing_snapshot_run_exposes_capture_failed_state_but_no_saved_messages
             .await
             .expect("load missing snapshot run");
 
-    let summaries = crate::analysis::store::list_analysis_runs_in_pool(
+    let summaries = list_analysis_runs_in_pool(
         &pool,
-        crate::analysis::store::AnalysisRunListFilters::for_analysis(
+        AnalysisRunListFilters::for_analysis(
             None,
             None,
             100,
@@ -120,16 +122,16 @@ async fn missing_snapshot_run_exposes_capture_failed_state_but_no_saved_messages
         .expect("missing snapshot summary");
     assert_eq!(
         summary.snapshot_state,
-        Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed)
+        Some(AnalysisSnapshotState::CaptureFailed)
     );
 
-    let detail = crate::analysis::store::get_analysis_run_in_pool(&pool, run_id)
+    let detail = get_analysis_run_in_pool(&pool, run_id)
         .await
         .expect("fetch missing snapshot run")
         .expect("missing snapshot run exists");
     assert_eq!(
         detail.snapshot_state,
-        Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed)
+        Some(AnalysisSnapshotState::CaptureFailed)
     );
     assert_eq!(detail.snapshot_error, None);
 
@@ -167,9 +169,9 @@ async fn capture_failed_snapshot_run_has_sanitized_error_trace_and_readable_repo
             .await
             .expect("load capture failed snapshot run");
 
-    let summaries = crate::analysis::store::list_analysis_runs_in_pool(
+    let summaries = list_analysis_runs_in_pool(
         &pool,
-        crate::analysis::store::AnalysisRunListFilters::for_analysis(
+        AnalysisRunListFilters::for_analysis(
             None,
             None,
             100,
@@ -191,14 +193,14 @@ async fn capture_failed_snapshot_run_has_sanitized_error_trace_and_readable_repo
         .expect("capture failed summary");
     assert_eq!(
         summary.snapshot_state,
-        Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed)
+        Some(AnalysisSnapshotState::CaptureFailed)
     );
     assert_eq!(
         summary.snapshot_error.as_deref(),
         Some(CAPTURE_FAILED_SNAPSHOT_ERROR)
     );
 
-    let detail = crate::analysis::store::get_analysis_run_in_pool(&pool, run_id)
+    let detail = get_analysis_run_in_pool(&pool, run_id)
         .await
         .expect("fetch capture failed snapshot run")
         .expect("capture failed snapshot run exists");
@@ -210,7 +212,7 @@ async fn capture_failed_snapshot_run_has_sanitized_error_trace_and_readable_repo
         .contains("This capture-failed fixture report remains readable."));
     assert_eq!(
         detail.snapshot_state,
-        Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed)
+        Some(AnalysisSnapshotState::CaptureFailed)
     );
     assert_eq!(
         detail.snapshot_error.as_deref(),

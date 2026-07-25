@@ -1,11 +1,11 @@
 use sqlx::{Pool, Sqlite};
 
-use crate::analysis::{analysis_run_ids_depending_on_sources, AnalysisState};
 use crate::error::{AppError, AppResult};
 use crate::llm::LlmSchedulerState;
 use crate::source_ingest::SourceIngestLocks;
 use crate::takeout_import::TakeoutImportState;
 use crate::youtube::jobs::SourceJobState;
+use extractum_analysis::{analysis_run_ids_depending_on_sources, AnalysisState};
 
 pub(crate) const ACCOUNT_DELETE_ACTIVE_WORK_CONFLICT_MESSAGE: &str =
     "Cannot delete account while source sync, import, source job, or analysis work is running for its sources. Stop or wait for the active work, then try again.";
@@ -151,13 +151,13 @@ mod tests {
     use super::*;
     use std::sync::Arc;
 
-    use crate::analysis::AnalysisState;
     use crate::error::{AppError, AppErrorKind};
     use crate::ingest_provenance::TAKEOUT_HISTORY_SCOPE_CURRENT;
     use crate::llm::{LlmRequestKind, LlmRequestMetadata, LlmRequestPriority, LlmSchedulerState};
     use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
     use crate::takeout_import::TakeoutImportState;
     use crate::youtube::jobs::{SourceJobState, SourceJobType, YoutubeSyncOptions};
+    use extractum_analysis::AnalysisState;
     use tokio::sync::Notify;
     use tokio::time::{timeout, Duration};
 

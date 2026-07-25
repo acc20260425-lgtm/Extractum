@@ -1,12 +1,18 @@
-use super::harness::{create_project_scope_schema, sample_run, snapshot_pool};
+use super::harness::{create_project_scope_schema, snapshot_pool};
 use crate::analysis::corpus::{resolve_analysis_sources, AnalysisSourceResolutionErrorCode};
+use crate::migrations::apply_all_migrations_for_test_pool;
+use extractum_analysis::AnalysisSourceKind;
 
 use super::super::source_resolution::resolve_run_source_ids;
-include!("source_resolution_portable.rs");
 
 #[tokio::test]
 async fn resolve_run_source_ids_loads_project_sources_without_snapshot() {
-    let pool = snapshot_pool().await;
+    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+        .await
+        .expect("connect memory sqlite");
+    apply_all_migrations_for_test_pool(&pool)
+        .await
+        .expect("apply migrations");
     sqlx::query(
         r#"
         INSERT INTO projects (id, name, created_at, updated_at)
@@ -18,6 +24,20 @@ async fn resolve_run_source_ids_loads_project_sources_without_snapshot() {
     .expect("insert project");
     sqlx::query(
         r#"
+        INSERT INTO sources (
+            id, source_type, source_subtype, external_id, title,
+            is_active, is_member, created_at
+        )
+        VALUES
+            (2, 'youtube', 'video', 'video-2', 'Source 2', 1, 0, 1),
+            (4, 'youtube', 'video', 'video-4', 'Source 4', 1, 0, 1)
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("insert sources");
+    sqlx::query(
+        r#"
         INSERT INTO project_sources (project_id, source_id, added_at)
         VALUES (9, 2, 1), (9, 4, 2)
         "#,
@@ -26,14 +46,27 @@ async fn resolve_run_source_ids_loads_project_sources_without_snapshot() {
     .await
     .expect("insert project sources");
 
-    let mut run = sample_run();
-    run.scope_type = crate::analysis::ANALYSIS_SCOPE_TYPE_PROJECT.to_string();
-    run.source_group_id = None;
-    run.source_group_name = None;
-    run.project_id = Some(9);
-    run.project_name = Some("Live project".to_string());
-    run.scope_label = "Live project".to_string();
-    run.scope_label_snapshot = None;
+    sqlx::query(
+        r#"
+        INSERT INTO analysis_runs (
+            id, run_type, scope_type, project_id, period_from, period_to,
+            output_language, prompt_template_version, provider_profile, provider,
+            model, youtube_corpus_mode, status, created_at
+        )
+        VALUES (
+            1, 'report', 'project', 9, 1700000000, 1800000000,
+            'English', 1, 'default', 'gemini',
+            'gemini-2.5-flash', 'transcript_description', 'completed', 1710000500
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("insert project analysis run");
+    let run = crate::analysis::store::get_analysis_run_in_pool(&pool, 1)
+        .await
+        .expect("load project analysis run")
+        .expect("project analysis run exists");
 
     let source_ids = resolve_run_source_ids(&pool, &run)
         .await
@@ -70,10 +103,7 @@ async fn playlist_expansion_excludes_unlinked_and_removed_rows() {
         .await
         .expect("resolve playlist scope");
 
-    assert_eq!(
-        resolved.scope().source_kind(),
-        crate::analysis::models::AnalysisSourceKind::Youtube
-    );
+    assert_eq!(resolved.scope().source_kind(), AnalysisSourceKind::Youtube);
     assert_eq!(resolved.scope().source_ids(), &[20]);
     assert_eq!(resolved.skipped_unlinked_playlist_items(), 1);
 }
@@ -174,9 +204,6 @@ async fn resolve_analysis_sources_loads_single_provider_project() {
     let resolved = resolve_analysis_sources(&pool, None, None, Some(9))
         .await
         .expect("resolve project");
-    assert_eq!(
-        resolved.scope().source_kind(),
-        crate::analysis::models::AnalysisSourceKind::Youtube
-    );
+    assert_eq!(resolved.scope().source_kind(), AnalysisSourceKind::Youtube);
     assert_eq!(resolved.scope().source_ids(), &[1, 2]);
 }

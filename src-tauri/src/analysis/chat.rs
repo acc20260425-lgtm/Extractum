@@ -1,3 +1,14 @@
+use std::sync::Arc;
+
+use extractum_analysis::{
+    clear_analysis_chat_messages as clear_analysis_chat_messages_in_pool, complete_analysis_chat,
+    execute_analysis_chat, list_analysis_chat_messages as list_analysis_chat_messages_in_pool,
+    prepare_analysis_chat, publish_analysis_chat_execution_error,
+    publish_analysis_chat_persistence_error, AnalysisChatMessage, AnalysisExecutionError,
+    AskAnalysisRunQuestionRequest,
+};
+use extractum_core::error::AppResult;
+use extractum_llm::LlmSchedulerState;
 use tauri::{AppHandle, Manager};
 
 use crate::db::get_pool;
@@ -5,8 +16,6 @@ use crate::llm::resolve_profile_for_backend;
 
 use super::events::TauriAnalysisEventSink;
 use super::store::resolve_legacy_analysis_chat_run_in_pool;
-
-include!("chat_engine.rs");
 
 #[tauri::command]
 pub async fn list_analysis_chat_messages(

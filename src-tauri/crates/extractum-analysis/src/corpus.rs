@@ -5,6 +5,14 @@ use extractum_core::error::{AppError, AppResult};
 
 use super::models::AnalysisSourceKind;
 
+pub(crate) mod snapshot;
+pub(crate) mod source_resolution;
+
+#[cfg(test)]
+pub(crate) use self::snapshot::{list_run_snapshot_messages_page, load_run_corpus_messages};
+pub(crate) use self::snapshot::{load_run_snapshot_messages, load_trace_resolution_messages};
+pub(crate) use self::source_resolution::resolve_analysis_telegram_history_scope;
+
 pub type AnalysisPortFuture<'a, T> = Pin<Box<dyn Future<Output = AppResult<T>> + Send + 'a>>;
 
 pub trait AnalysisCorpusReader: Send + Sync + 'static {
@@ -323,6 +331,9 @@ pub async fn preflight_analysis_corpus(
         limits,
     ))
 }
+
+#[cfg(test)]
+mod tests;
 
 pub(crate) fn preflight_limit_error(preflight: &AnalysisRunPreflight) -> Option<String> {
     let limits = preflight.limits();

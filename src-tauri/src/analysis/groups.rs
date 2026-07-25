@@ -1,15 +1,21 @@
+use extractum_analysis::{
+    create_analysis_source_group as create_analysis_source_group_in_pool,
+    delete_analysis_source_group as delete_analysis_source_group_in_pool,
+    update_analysis_source_group as update_analysis_source_group_in_pool, AnalysisSourceGroup,
+    AnalysisSourceGroupInput, AnalysisSourceKind,
+};
+use extractum_core::error::{AppError, AppResult};
+use sqlx::{QueryBuilder, Sqlite, SqlitePool};
 use tauri::AppHandle;
 
 use crate::db::get_pool;
-use sqlx::{QueryBuilder, Sqlite};
 
-use super::models::AnalysisSourceGroup;
 use super::store::{
     ensure_sources_exist, get_analysis_source_group_response_in_pool,
     list_analysis_source_groups_in_pool,
 };
 
-include!("groups_store.rs");
+pub(crate) use extractum_analysis::load_analysis_source_group_for_enrichment;
 
 async fn validate_group_source_type(
     pool: &SqlitePool,
@@ -148,8 +154,8 @@ mod tests {
     use super::{
         parse_analysis_source_kind, prepare_analysis_source_group_input, validate_group_source_type,
     };
-    use crate::analysis::models::AnalysisSourceKind;
     use crate::error::AppErrorKind;
+    use extractum_analysis::AnalysisSourceKind;
 
     async fn source_type_pool() -> sqlx::SqlitePool {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")

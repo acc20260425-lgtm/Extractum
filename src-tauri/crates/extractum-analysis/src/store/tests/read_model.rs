@@ -1,8 +1,8 @@
-use super::super::read_model::{
-    prepare_analysis_run_detail, prepare_analysis_run_summaries, AnalysisRunListFilters,
-};
 use super::super::super::models::{
     AnalysisForeignLabelMatch, AnalysisForeignLabels, AnalysisSnapshotState, AnalysisSourceLabel,
+};
+use super::super::read_model::{
+    prepare_analysis_run_detail, prepare_analysis_run_summaries, AnalysisRunListFilters,
 };
 use extractum_core::error::AppErrorKind;
 
@@ -89,9 +89,9 @@ async fn run_list_pool() -> sqlx::SqlitePool {
             id, name, source_type, created_at, updated_at
          ) VALUES (10, 'Research Group', 'telegram', 1, 1)",
     )
-        .execute(&pool)
-        .await
-        .expect("insert group");
+    .execute(&pool)
+    .await
+    .expect("insert group");
     sqlx::query(
             "INSERT INTO analysis_prompt_templates (id, name, template_kind, body, version, is_builtin, created_at, updated_at) VALUES (1, 'Weekly Digest', 'report', 'body', 1, 0, 1, 1), (2, 'Incident Review', 'report', 'body', 1, 0, 1, 1)",
         )
@@ -218,13 +218,13 @@ async fn insert_snapshot_run(
                 run_id, item_id, source_id, external_id, published_at, ref, content_zstd
              ) VALUES (1, ?, 2, ?, ?, ?, x'00')",
         )
-            .bind(index as i64 + 1)
-            .bind(format!("{}", index + 1))
-            .bind(index as i64 + 1)
-            .bind(format!("s2-i{}", index + 1))
-            .execute(pool)
-            .await
-            .expect("insert snapshot message");
+        .bind(index as i64 + 1)
+        .bind(format!("{}", index + 1))
+        .bind(index as i64 + 1)
+        .bind(format!("s2-i{}", index + 1))
+        .execute(pool)
+        .await
+        .expect("insert snapshot message");
     }
 }
 

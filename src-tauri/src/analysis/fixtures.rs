@@ -2,11 +2,10 @@ use serde::Serialize;
 use sqlx::{Pool, Sqlite};
 use tauri::{AppHandle, Manager, State};
 
-use super::store::set_run_status;
 use super::AnalysisState;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
-use crate::time::now_secs;
+use extractum_core::time::now_secs;
 
 mod seed;
 
@@ -138,16 +137,17 @@ async fn finish_cancelled_fixture_run(
     state: &AnalysisState,
     run_id: i64,
 ) -> AppResult<()> {
-    set_run_status(
-        pool,
-        run_id,
-        crate::analysis::ANALYSIS_STATUS_CANCELLED,
-        None,
-        None,
-        Some(CANCELLED_RUN_MESSAGE),
-        Some(now_secs()),
+    sqlx::query(
+        "UPDATE analysis_runs
+         SET status = 'cancelled', error = ?, completed_at = ?
+         WHERE id = ?",
     )
-    .await?;
+    .bind(CANCELLED_RUN_MESSAGE)
+    .bind(now_secs())
+    .bind(run_id)
+    .execute(pool)
+    .await
+    .map_err(AppError::database)?;
     state.remove_active_report_run(run_id).await;
     Ok(())
 }

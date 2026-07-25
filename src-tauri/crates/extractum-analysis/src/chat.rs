@@ -526,10 +526,7 @@ pub async fn list_analysis_chat_messages_in_pool(
     load_chat_messages_from_pool(pool, run_id).await
 }
 
-pub async fn clear_analysis_chat_messages_in_pool(
-    pool: &SqlitePool,
-    run_id: i64,
-) -> AppResult<()> {
+pub async fn clear_analysis_chat_messages_in_pool(pool: &SqlitePool, run_id: i64) -> AppResult<()> {
     if !analysis_run_exists(pool, run_id).await? {
         return Err(AppError::not_found(format!(
             "Analysis run {run_id} not found"
@@ -622,9 +619,9 @@ mod tests {
         AnalysisChatEvent, AnalysisChatRun, AnalysisEventSink, AnalysisRunDetail, AnalysisRunEvent,
     };
     use super::{
-        analysis_chat_request_metadata, build_chat_request, complete_analysis_chat,
-        completed_chat_persistence_failure_message, ensure_completed_chat_context,
-        clear_analysis_chat_messages_in_pool, execute_analysis_chat, format_chat_context_messages,
+        analysis_chat_request_metadata, build_chat_request, clear_analysis_chat_messages_in_pool,
+        complete_analysis_chat, completed_chat_persistence_failure_message,
+        ensure_completed_chat_context, execute_analysis_chat, format_chat_context_messages,
         list_analysis_chat_messages_in_pool, prepare_analysis_chat,
         publish_analysis_chat_execution_error, publish_analysis_chat_persistence_error,
         AskAnalysisRunQuestionRequest, ChatRequestParams,
@@ -1170,12 +1167,10 @@ mod tests {
         clear_analysis_chat_messages_in_pool(&pool, 77)
             .await
             .expect("clear persisted chat rows");
-        assert!(
-            list_analysis_chat_messages_in_pool(&pool, 77)
-                .await
-                .expect("list cleared chat rows")
-                .is_empty()
-        );
+        assert!(list_analysis_chat_messages_in_pool(&pool, 77)
+            .await
+            .expect("list cleared chat rows")
+            .is_empty());
         server.join().expect("chat completion server");
     }
 }

@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/extractum-core", "crates/extractum-gemini-browser", "crates/extractum-llm", "crates/extractum-prompt-packs"]
+members = [".", "crates/extractum-core", "crates/extractum-gemini-browser", "crates/extractum-llm", "crates/extractum-prompt-packs", "crates/extractum-analysis"]
 resolver = "2"
 
 [workspace.package]
@@ -57,7 +57,6 @@ grammers-client = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce
 grammers-session = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", default-features = false, features = ["serde"] }
 grammers-mtsender = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa" }
 grammers-tl-types = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", features = ["deserializable-functions"] }
-zstd = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true }
 anyhow = "1.0"
@@ -72,6 +71,7 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 url = { workspace = true }
 tempfile = { workspace = true }
 extractum-core = { path = "crates/extractum-core" }
+extractum-analysis = { path = "crates/extractum-analysis" }
 extractum-gemini-browser = { path = "crates/extractum-gemini-browser" }
 extractum-llm = { path = "crates/extractum-llm" }
 extractum-prompt-packs = { path = "crates/extractum-prompt-packs" }

@@ -1,8 +1,14 @@
-include!("owned_read_model.rs");
+use std::collections::HashSet;
 
-use sqlx::SqlitePool;
-
-use super::super::models::{AnalysisProjectLabel, AnalysisSourceLabel};
+use extractum_analysis::{
+    load_analysis_chat_run, prepare_active_analysis_run_summaries, prepare_analysis_run_detail,
+    prepare_analysis_run_summaries, prepare_legacy_analysis_chat_run, AnalysisChatRun,
+    AnalysisForeignLabelMatch, AnalysisForeignLabelRef, AnalysisForeignLabels,
+    AnalysisProjectLabel, AnalysisRunDetail, AnalysisRunListFilters, AnalysisRunSummary,
+    AnalysisSourceLabel,
+};
+use extractum_core::error::{AppError, AppResult};
+use sqlx::{QueryBuilder, Sqlite, SqliteConnection, SqlitePool};
 
 fn escaped_foreign_label_like_contains(value: &str) -> String {
     format!(

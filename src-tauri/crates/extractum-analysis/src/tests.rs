@@ -57,9 +57,18 @@ async fn completed_run_without_snapshot_marker_is_capture_failed() {
     .await
     .expect("insert run");
 
-    let detail = super::store::get_analysis_run_in_pool(&pool, 1)
+    let mut connection = pool
+        .acquire()
         .await
-        .expect("fetch run")
+        .expect("acquire analysis test connection");
+    let enrichment = super::store::prepare_analysis_run_detail(&mut *connection, 1)
+        .await
+        .expect("prepare run detail");
+    let labels = super::models::AnalysisForeignLabels::new(Vec::new(), Vec::new())
+        .expect("build empty foreign labels");
+    let detail = enrichment
+        .finish(labels)
+        .expect("finish run detail")
         .expect("run exists");
 
     assert_eq!(
@@ -132,12 +141,9 @@ fn template_kind_validation_returns_typed_error() {
 
 #[test]
 fn source_group_input_validation_returns_typed_error() {
-    let error = AnalysisSourceGroupInput::new(
-        "  ".to_string(),
-        AnalysisSourceKind::Telegram,
-        vec![1],
-    )
-    .expect_err("reject empty name");
+    let error =
+        AnalysisSourceGroupInput::new("  ".to_string(), AnalysisSourceKind::Telegram, vec![1])
+            .expect_err("reject empty name");
 
     assert_eq!(error.kind, AppErrorKind::Validation);
     assert_eq!(error.message, "Source group name cannot be empty");

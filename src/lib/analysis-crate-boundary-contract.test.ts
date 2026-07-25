@@ -4708,7 +4708,7 @@ describe("analysis crate boundary", () => {
         ? "store"
         : directModule.startsWith("report/")
           ? "report"
-          : directModule;
+          : directModule.replace(/\//g, "::");
       return topLevelPublicDefinitions([file]).map((preparedName) => {
         const finalName = finalNameByPrepared.get(preparedName) ?? preparedName;
         return `${module}::${preparedName}->${finalName}`;
@@ -5512,6 +5512,12 @@ describe("analysis crate boundary", () => {
         .map((consumer) => `${file.relative}:${consumer}`));
     const appUnresolved = app.flatMap((file) =>
       unresolvedSqlInventory(file.relative, file.source));
+    const corpusLiveSourceFingerprint = extracted
+      ? "e381e12ef540b1c480105cf13e9edb0240129a88295fe7b19c3826d9723c67f1"
+      : "7849ae49551d7627df09c6fe7ffd76f03fe8ba8fc6fa4d8fe27631123574ee75";
+    const notebookExportSourceFingerprint = extracted
+      ? "e5ce8f4c7a525702ec74385a9059af358c9a8211d1605e3d667bce034fc67f91"
+      : "02f29dae9838edfa219cadd1bae38764f2b87380783a455888b6413010fc0991";
     expect(
       portableUnresolved,
       "portable production unresolved SQL consumer inventory",
@@ -5523,25 +5529,25 @@ describe("analysis crate boundary", () => {
       appUnresolved,
       "all-app production unresolved SQL consumer inventory",
     ).toEqual([
-      "analysis/corpus/live.rs:push_analysis_document_kind_filter:2232ead4131e520b5236f3c26dd81965d52188ce205cbb15ed8edd0bb13fec13:7849ae49551d7627df09c6fe7ffd76f03fe8ba8fc6fa4d8fe27631123574ee75:query_builder_push:table_alias",
-      "analysis/corpus/live.rs:push_analysis_document_kind_filter:2232ead4131e520b5236f3c26dd81965d52188ce205cbb15ed8edd0bb13fec13:7849ae49551d7627df09c6fe7ffd76f03fe8ba8fc6fa4d8fe27631123574ee75:query_builder_push:table_alias",
-      "analysis/corpus/live.rs:push_analysis_document_kind_filter:2232ead4131e520b5236f3c26dd81965d52188ce205cbb15ed8edd0bb13fec13:7849ae49551d7627df09c6fe7ffd76f03fe8ba8fc6fa4d8fe27631123574ee75:query_builder_push:table_alias",
-      "analysis/corpus/live.rs:push_analysis_document_kind_filter:2232ead4131e520b5236f3c26dd81965d52188ce205cbb15ed8edd0bb13fec13:7849ae49551d7627df09c6fe7ffd76f03fe8ba8fc6fa4d8fe27631123574ee75:query_builder_push:table_alias",
+      `analysis/corpus/live.rs:push_analysis_document_kind_filter:2232ead4131e520b5236f3c26dd81965d52188ce205cbb15ed8edd0bb13fec13:${corpusLiveSourceFingerprint}:query_builder_push:table_alias`,
+      `analysis/corpus/live.rs:push_analysis_document_kind_filter:2232ead4131e520b5236f3c26dd81965d52188ce205cbb15ed8edd0bb13fec13:${corpusLiveSourceFingerprint}:query_builder_push:table_alias`,
+      `analysis/corpus/live.rs:push_analysis_document_kind_filter:2232ead4131e520b5236f3c26dd81965d52188ce205cbb15ed8edd0bb13fec13:${corpusLiveSourceFingerprint}:query_builder_push:table_alias`,
+      `analysis/corpus/live.rs:push_analysis_document_kind_filter:2232ead4131e520b5236f3c26dd81965d52188ce205cbb15ed8edd0bb13fec13:${corpusLiveSourceFingerprint}:query_builder_push:table_alias`,
       "apalis_jobs.rs:apalis_jobs_prune_terminal_from_pool_with_hours:24948064c5dfb5fe043faf79c4bf4d05981516a9f5840bbec0bf0541dedd7adf:05b1185e47ec480cdeab26d4c62f499a747ac87a701a5830ecfca1eaf3095ba7:query_builder_push:&done_at_epoch",
       "apalis_jobs.rs:fetch_job_summaries:e3f8a21ab8453e7638518b00acd97e8b934c1f51080c257bd38db95b66f33216:05b1185e47ec480cdeab26d4c62f499a747ac87a701a5830ecfca1eaf3095ba7:query_builder_push:text_expr(schema, \"id\", \"''\")",
       "apalis_jobs.rs:fetch_payloads_for_ids:5735685cb0084ad5a0b182cfe13df418fdddb9b4eb2eb212e52b6c4110117814:05b1185e47ec480cdeab26d4c62f499a747ac87a701a5830ecfca1eaf3095ba7:query_builder_push:text_expr(schema, \"id\", \"''\")",
       "archive_read_model.rs:load_item_rows_from_archive:723126e361dfda6c463279e599a7d20d30fc0768543d46b8a07e056eb880496d:7f696cedd49b194c8de5579349f85150b2fe5f05a836554f874ffef84b36a913:query_as:&sql",
       "ingest_provenance.rs:mark_takeout_migrated_history_deferred:c6b01d419d14e767d3411693b5b15b2d1201eaf6c811b4ab568392e0c90e822c:bfd9f8555486d10a1f4976e59a49e7c87ad01ca0b64662b97891a94bd958f94d:query:&query",
       "ingest_provenance.rs:mark_takeout_only_my_messages_fallback:c73be9308109c5aa4b724423ccc547e0f7380fdb30bfff26f29ad4f93cfded64:bfd9f8555486d10a1f4976e59a49e7c87ad01ca0b64662b97891a94bd958f94d:query:&query",
-      "notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:02f29dae9838edfa219cadd1bae38764f2b87380783a455888b6413010fc0991:query_as:&sql",
-      "notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:02f29dae9838edfa219cadd1bae38764f2b87380783a455888b6413010fc0991:query_as:&sql",
-      "notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:02f29dae9838edfa219cadd1bae38764f2b87380783a455888b6413010fc0991:query_as:&sql",
-      "notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:02f29dae9838edfa219cadd1bae38764f2b87380783a455888b6413010fc0991:query_as:&sql",
-      "notebooklm_export/query.rs:load_export_messages_from_archive:e65baa887a73e82ca531e193b82a7cfc7de0bfbc446b930dc6839ab019ec0574:02f29dae9838edfa219cadd1bae38764f2b87380783a455888b6413010fc0991:query_as:&sql",
-      "notebooklm_export/query.rs:load_export_messages_from_archive:e65baa887a73e82ca531e193b82a7cfc7de0bfbc446b930dc6839ab019ec0574:02f29dae9838edfa219cadd1bae38764f2b87380783a455888b6413010fc0991:query_as:&sql",
-      "notebooklm_export/query.rs:load_export_messages_from_archive:e65baa887a73e82ca531e193b82a7cfc7de0bfbc446b930dc6839ab019ec0574:02f29dae9838edfa219cadd1bae38764f2b87380783a455888b6413010fc0991:query_as:&sql",
-      "notebooklm_export/query.rs:load_export_messages_from_archive:e65baa887a73e82ca531e193b82a7cfc7de0bfbc446b930dc6839ab019ec0574:02f29dae9838edfa219cadd1bae38764f2b87380783a455888b6413010fc0991:query_as:&sql",
-      "notebooklm_export/query.rs:load_reply_contexts_from_archive:66738ed721e900eb0f17ec4c586505676b218d8db107cd91b70148cc4a157458:02f29dae9838edfa219cadd1bae38764f2b87380783a455888b6413010fc0991:query_as:&sql",
+      `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
+      `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
+      `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
+      `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
+      `notebooklm_export/query.rs:load_export_messages_from_archive:e65baa887a73e82ca531e193b82a7cfc7de0bfbc446b930dc6839ab019ec0574:${notebookExportSourceFingerprint}:query_as:&sql`,
+      `notebooklm_export/query.rs:load_export_messages_from_archive:e65baa887a73e82ca531e193b82a7cfc7de0bfbc446b930dc6839ab019ec0574:${notebookExportSourceFingerprint}:query_as:&sql`,
+      `notebooklm_export/query.rs:load_export_messages_from_archive:e65baa887a73e82ca531e193b82a7cfc7de0bfbc446b930dc6839ab019ec0574:${notebookExportSourceFingerprint}:query_as:&sql`,
+      `notebooklm_export/query.rs:load_export_messages_from_archive:e65baa887a73e82ca531e193b82a7cfc7de0bfbc446b930dc6839ab019ec0574:${notebookExportSourceFingerprint}:query_as:&sql`,
+      `notebooklm_export/query.rs:load_reply_contexts_from_archive:66738ed721e900eb0f17ec4c586505676b218d8db107cd91b70148cc4a157458:${notebookExportSourceFingerprint}:query_as:&sql`,
       "sources/items/query.rs:load_scoped_item_rows:bfb50958f6b5793b0731984b9e12200dd5459f1b5c6e77699e073202b5d525d0:429bc8566779242fc32476367b6cb587010ce1dc79b6c6ceb508e10730ef9c3a:query_as:&sql",
       "sources/items/query.rs:load_item_cursor:f8cae30a17e3e8b3502f58c8b655e7a958f33c1ba4884a6e169d1ff636466652:429bc8566779242fc32476367b6cb587010ce1dc79b6c6ceb508e10730ef9c3a:query_as:&sql",
       "sources/store.rs:delete_source_from_pool:f57c3fb2c5b7e0dab204d1ac4120eb119fde4c13a720a412e03feb126f616e8d:830aa5a38060767eeb3c8875abcff435d9c5dfe389be2a9fb9fe886355fb8470:query:&format!( \"PRAGMA busy_timeout = {SOURCE_DELETE_BUSY_TIMEOUT_MS}\" )",
@@ -5728,7 +5734,7 @@ describe("analysis crate boundary", () => {
       crateTestUnresolved,
       "exact vetted crate-test unresolved SQL consumer inventory",
     ).toEqual([
-      `${extracted ? "chat.rs" : "chat_engine.rs"}:chat_execution_persists_turns_before_completed_event:94cd4e00a832b84026c636bfde8a5da25e7fe026f2006a95745f7062c5790e02:query:statement`,
+      `${extracted ? "chat.rs" : "chat_engine.rs"}:chat_execution_persists_turns_before_completed_event:${extracted ? "919782bccff127d7653fde08dcb032eacae40d811f33f8a28be16561bf6bea8c" : "94cd4e00a832b84026c636bfde8a5da25e7fe026f2006a95745f7062c5790e02"}:query:statement`,
     ]);
     for (const file of crateDomainFiles) {
       const withoutTests = file.source.split("");

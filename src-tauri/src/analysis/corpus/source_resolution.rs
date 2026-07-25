@@ -2,16 +2,12 @@ use std::collections::HashSet;
 
 use sqlx::{Pool, QueryBuilder, Sqlite};
 
-use super::super::groups::get_analysis_source_group_record;
-#[cfg(test)]
-use super::super::{
-    ANALYSIS_SCOPE_TYPE_PROJECT, ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
-    ANALYSIS_SCOPE_TYPE_SOURCE_GROUP,
-};
-#[cfg(test)]
-use crate::analysis::models::AnalysisRunDetail;
-use crate::analysis::models::{AnalysisSourceKind, ResolvedAnalysisScope};
 use crate::error::{AppError, AppResult};
+#[cfg(test)]
+use extractum_analysis::AnalysisRunDetail;
+use extractum_analysis::{
+    get_analysis_source_group_record, AnalysisSourceKind, ResolvedAnalysisScope,
+};
 
 pub(crate) struct AppAnalysisScopeResolution {
     scope: ResolvedAnalysisScope,
@@ -382,14 +378,14 @@ pub(crate) async fn resolve_run_source_ids(
         return Ok(snapshot_source_ids);
     }
 
-    if run.scope_type == ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE {
+    if run.scope_type == "single_source" {
         let source_id = run
             .source_id
             .ok_or_else(|| format!("Analysis run {} is missing source_id", run.id))?;
         return Ok(vec![source_id]);
     }
 
-    if run.scope_type == ANALYSIS_SCOPE_TYPE_SOURCE_GROUP {
+    if run.scope_type == "source_group" {
         let group_id = run
             .source_group_id
             .ok_or_else(|| format!("Analysis run {} is missing source_group_id", run.id))?;
@@ -399,7 +395,7 @@ pub(crate) async fn resolve_run_source_ids(
         return Ok(group.member_source_ids().to_vec());
     }
 
-    if run.scope_type == ANALYSIS_SCOPE_TYPE_PROJECT {
+    if run.scope_type == "project" {
         let project_id = run
             .project_id
             .ok_or_else(|| format!("Analysis run {} is missing project_id", run.id))?;
@@ -415,11 +411,16 @@ pub(crate) async fn resolve_run_source_ids(
 #[cfg(test)]
 mod tests {
     use super::resolve_analysis_sources;
-    use crate::analysis::test_schema::analysis_test_pool;
+    use crate::migrations::apply_all_migrations_for_test_pool;
 
     #[tokio::test]
     async fn source_group_resolution_orders_members_by_title_then_id_before_playlist_expansion() {
-        let pool = analysis_test_pool().await;
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect memory sqlite");
+        apply_all_migrations_for_test_pool(&pool)
+            .await
+            .expect("apply migrations");
         sqlx::query(
             r#"
             INSERT INTO sources (

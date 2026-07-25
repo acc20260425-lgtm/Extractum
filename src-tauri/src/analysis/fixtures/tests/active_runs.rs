@@ -3,7 +3,7 @@ use super::super::{
     remove_fixture_active_runs, seed_analysis_redesign_fixtures_in_pool, RUNNING_RUN_LABEL,
 };
 use super::harness::fixture_pool;
-use crate::analysis::AnalysisState;
+use extractum_analysis::AnalysisState;
 #[tokio::test]
 async fn fixture_active_state_tracks_seeded_running_run() {
     let pool = fixture_pool().await;
@@ -86,7 +86,7 @@ async fn fixture_cancel_waiter_marks_running_run_cancelled() {
         .fetch_one(&pool)
         .await
         .expect("load status");
-    assert_eq!(status, crate::analysis::ANALYSIS_STATUS_CANCELLED);
+    assert_eq!(status, "cancelled");
     assert!(!state
         .active_report_run_ids()
         .await

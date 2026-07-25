@@ -17,6 +17,12 @@ const crateManifest = path.join(
   "src-tauri/crates/extractum-analysis/Cargo.toml",
 );
 
+export function isAnalysisCrateExtracted(): boolean {
+  const extracted = existsSync(crateManifest);
+  assertLayout(extracted);
+  return extracted;
+}
+
 function assertLayout(extracted: boolean): void {
   const appExists = existsSync(appRoot);
   const crateExists = existsSync(crateRoot);
@@ -66,13 +72,12 @@ function readSelected(root: string, relativePath: string): string {
 }
 
 export function readAppAnalysisSource(relativePath: string): string {
-  assertLayout(existsSync(crateManifest));
+  isAnalysisCrateExtracted();
   return readSelected(appRoot, relativePath);
 }
 
 export function readCrateAnalysisSource(relativePath: string): string {
-  const extracted = existsSync(crateManifest);
-  assertLayout(extracted);
+  const extracted = isAnalysisCrateExtracted();
   if (!extracted) {
     throw new Error("Cannot read an analysis crate path before extraction");
   }
@@ -82,8 +87,7 @@ export function readCrateAnalysisSource(relativePath: string): string {
 export function readAnalysisContractSource(
   source: AnalysisContractSource,
 ): string {
-  const extracted = existsSync(crateManifest);
-  assertLayout(extracted);
+  const extracted = isAnalysisCrateExtracted();
   if (!extracted) return readSelected(appRoot, source.before);
   return source.after.owner === "app"
     ? readSelected(appRoot, source.after.path)

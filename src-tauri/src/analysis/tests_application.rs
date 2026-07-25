@@ -1,8 +1,9 @@
 use super::store::{
     get_analysis_run_in_pool, list_active_analysis_runs_in_pool, list_analysis_runs_in_pool,
-    resolve_legacy_analysis_chat_run_in_pool, resolve_run_scope_label, AnalysisRunListFilters,
+    resolve_legacy_analysis_chat_run_in_pool,
 };
 use crate::error::AppError;
+use extractum_analysis::AnalysisRunListFilters;
 use serde_json::json;
 
 async fn application_read_pool() -> sqlx::SqlitePool {
@@ -276,12 +277,15 @@ async fn chat_legacy_label_fallback_rereads_run_on_the_foreign_label_snapshot() 
     .await;
 
     let read_label = async || {
-        let run = resolve_legacy_analysis_chat_run_in_pool(&pool, 1)
+        let _chat_run = resolve_legacy_analysis_chat_run_in_pool(&pool, 1)
             .await
-            .expect("read chat run context")
-            .into_detail();
+            .expect("read opaque chat run context");
+        let run = get_analysis_run_in_pool(&pool, 1)
+            .await
+            .expect("read observable run detail")
+            .expect("run detail exists");
         assert_eq!(run.id, 1);
-        resolve_run_scope_label(&run)
+        run.scope_label
     };
     assert_eq!(read_label().await, "Frozen label");
     sqlx::query("UPDATE sources SET title = 'Live label B' WHERE id = 1")
@@ -308,7 +312,7 @@ async fn chat_legacy_label_fallback_rereads_run_on_the_foreign_label_snapshot() 
 
 #[test]
 fn analysis_wire_values_serialize_to_exact_json_objects() {
-    use super::models::{AnalysisChatEvent, AnalysisChunkSummaryEvent, AnalysisRunEvent};
+    use extractum_analysis::{AnalysisChatEvent, AnalysisChunkSummaryEvent, AnalysisRunEvent};
 
     let run_event = AnalysisRunEvent {
         run_id: 41,
@@ -453,7 +457,7 @@ async fn report_acceptance_pool() -> sqlx::SqlitePool {
 }
 
 fn report_request_error(
-    result: Result<super::report::StartAnalysisReportRequest, AppError>,
+    result: Result<extractum_analysis::StartAnalysisReportRequest, AppError>,
 ) -> AppError {
     match result {
         Ok(_) => panic!("report request unexpectedly succeeded"),
@@ -494,15 +498,15 @@ fn chat_profile_resolution_failure_is_async_after_request_id() {
 
 #[tokio::test]
 async fn report_start_preserves_acceptance_order_and_two_corpus_reads() {
-    use super::models::{AnalysisSourceKind, ResolvedAnalysisScope};
-    use super::report::{
-        prepare_analysis_report, prepare_analysis_report_execution, StartAnalysisReportRequest,
-    };
     use crate::error::AppErrorKind;
     use crate::llm::{LlmProviderAccess, ProviderKind, ResolvedLlmProfile};
+    use extractum_analysis::{
+        prepare_analysis_report, prepare_analysis_report_execution, AnalysisSourceKind,
+        AnalysisState, ResolvedAnalysisScope, StartAnalysisReportRequest,
+    };
 
     let source = include_str!("report.rs");
-    let portable_engine_source = include_str!("report_engine.rs");
+    let portable_engine_source = include_str!("../../crates/extractum-analysis/src/report.rs");
     let start = source
         .find("pub(crate) async fn start_analysis_report_run")
         .expect("report start");
@@ -752,7 +756,7 @@ async fn report_start_preserves_acceptance_order_and_two_corpus_reads() {
             "http://127.0.0.1:9/v1".to_string(),
         ),
     );
-    let state = super::AnalysisState::new();
+    let state = AnalysisState::new();
     let preflight_error = match prepare_analysis_report_execution(
         &pool,
         &state,
@@ -822,7 +826,7 @@ async fn report_profile_resolution_failure_prevents_run_creation() {
         false,
     )
     .expect("construct conflicting report request");
-    let state = super::AnalysisState::new();
+    let state = extractum_analysis::AnalysisState::new();
     let preparation = prepare_analysis_report(&pool, request)
         .await
         .expect("template preparation precedes profile resolution");

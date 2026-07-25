@@ -1,12 +1,11 @@
+use extractum_analysis::{
+    load_analysis_source_group_for_enrichment, load_analysis_source_groups_for_enrichment,
+    AnalysisSourceGroup, AnalysisSourceGroupMember, AnalysisSourceGroupRecord, AnalysisSourceKind,
+};
+use extractum_core::error::{AppError, AppResult};
 use sqlx::{QueryBuilder, Sqlite, SqliteConnection};
 
-use super::super::groups::{
-    load_analysis_source_group_for_enrichment, load_analysis_source_groups_for_enrichment,
-    AnalysisSourceGroupRecord,
-};
-use super::super::models::{AnalysisSourceGroup, AnalysisSourceGroupMember, AnalysisSourceKind};
-
-include!("owned_setup.rs");
+use sqlx::SqlitePool;
 
 pub(crate) async fn ensure_sources_exist(pool: &SqlitePool, source_ids: &[i64]) -> AppResult<()> {
     for source_id in source_ids {
@@ -95,8 +94,7 @@ pub(crate) async fn get_analysis_source_group_response_in_pool(
     group_id: i64,
 ) -> AppResult<Option<AnalysisSourceGroup>> {
     let mut transaction = pool.begin().await.map_err(AppError::database)?;
-    let record =
-        load_analysis_source_group_for_enrichment(&mut *transaction, group_id).await?;
+    let record = load_analysis_source_group_for_enrichment(&mut *transaction, group_id).await?;
     let group = match record {
         Some(record) => Some(enrich_analysis_source_group(&mut *transaction, record).await?),
         None => None,

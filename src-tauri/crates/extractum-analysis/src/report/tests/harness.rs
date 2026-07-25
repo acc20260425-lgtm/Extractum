@@ -129,10 +129,10 @@ pub(super) async fn report_capture_pool(run_id: i64) -> SqlitePool {
             1, 'research', 'gemini', 'gemini-2.5-flash', 'running', 1
          )",
     )
-        .bind(run_id)
-        .execute(&pool)
-        .await
-        .expect("insert report capture run");
+    .bind(run_id)
+    .execute(&pool)
+    .await
+    .expect("insert report capture run");
     pool
 }
 

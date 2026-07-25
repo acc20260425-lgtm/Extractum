@@ -23,5 +23,3 @@ async fn ensure_sources_exist_returns_typed_not_found_error() {
     assert_eq!(error.kind, SourceStoreErrorKind::NotFound);
     assert_eq!(error.message, "Source 7 not found");
 }
-
-include!("setup_portable.rs");

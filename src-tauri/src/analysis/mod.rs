@@ -1,46 +1,30 @@
 mod chat;
 mod corpus;
-mod corpus_portable;
-#[path = "domain_portable.rs"]
-mod domain;
 mod events;
 #[cfg(dev)]
 mod fixtures;
 mod groups;
-pub(crate) mod models;
 pub(crate) mod report;
 mod report_commands;
-mod state;
 pub(crate) mod store;
 mod templates;
-#[cfg(test)]
-mod test_schema;
-mod trace;
 
+use extractum_analysis::{
+    delete_analysis_run as delete_analysis_run_in_pool,
+    get_analysis_run_trace as get_analysis_run_trace_in_pool,
+    list_analysis_run_messages as list_analysis_run_messages_in_pool,
+    resolve_analysis_trace_refs as resolve_analysis_trace_refs_in_pool, AnalysisRunDetail,
+    AnalysisRunListFilters, AnalysisRunMessageCursor, AnalysisRunMessagesPage, AnalysisRunSummary,
+    AnalysisSourceOption, AnalysisTraceData, AnalysisTraceRef,
+};
 use tauri::AppHandle;
 
-use self::corpus::list_run_snapshot_messages_page as list_analysis_run_messages_in_pool;
-use self::models::{
-    AnalysisChatTurn, AnalysisRunDetail, AnalysisRunMessageCursor, AnalysisRunMessagesPage,
-    AnalysisRunSummary, AnalysisSourceOption, AnalysisTraceData, AnalysisTraceRef,
-};
 use self::store::{
-    delete_analysis_run as delete_analysis_run_in_pool, get_analysis_run_in_pool,
-    list_active_analysis_runs_in_pool, list_analysis_runs_in_pool, AnalysisRunListFilters,
+    get_analysis_run_in_pool, list_active_analysis_runs_in_pool, list_analysis_runs_in_pool,
 };
-use self::trace::{get_analysis_run_trace_in_pool, resolve_analysis_trace_refs_in_pool};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::sources::{require_source_identity_ready, SourceIdentityRepairState};
-
-pub(crate) use self::domain::{
-    default_report_template_body, now_secs, validate_chat_role, validate_chat_turns,
-    ANALYSIS_FALLBACK_CHUNK_TARGET_CHARS, ANALYSIS_RUN_TYPE_REPORT, ANALYSIS_SCOPE_TYPE_PROJECT,
-    ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE, ANALYSIS_SCOPE_TYPE_SOURCE_GROUP, ANALYSIS_STATUS_CANCELLED,
-    ANALYSIS_STATUS_COMPLETED, ANALYSIS_STATUS_FAILED, ANALYSIS_STATUS_QUEUED,
-    ANALYSIS_STATUS_RUNNING, DEFAULT_REPORT_TEMPLATE_NAME, TEMPLATE_KIND_CHAT,
-    TEMPLATE_KIND_REPORT,
-};
 
 pub use self::chat::{
     ask_analysis_run_question, clear_analysis_chat_messages, list_analysis_chat_messages,
@@ -55,6 +39,7 @@ pub use self::fixtures::{
     clear_analysis_redesign_fixture_active_runs, clear_analysis_redesign_fixtures,
     seed_analysis_redesign_fixtures,
 };
+#[allow(unused_imports)]
 pub(crate) use self::groups::load_analysis_source_group_for_enrichment;
 pub use self::groups::{
     create_analysis_source_group, delete_analysis_source_group, list_analysis_source_groups,
@@ -62,14 +47,15 @@ pub use self::groups::{
 };
 pub use self::report::cleanup_interrupted_analysis_runs;
 pub use self::report_commands::{cancel_analysis_run, start_analysis_report};
-pub use self::state::AnalysisState;
-pub(crate) use self::store::{
-    analysis_run_ids_depending_on_sources, delete_project_analysis_runs,
-    load_analysis_run_diagnostics,
-};
 pub use self::templates::{
     create_analysis_prompt_template, delete_analysis_prompt_template,
     list_analysis_prompt_templates, update_analysis_prompt_template,
+};
+pub use extractum_analysis::AnalysisState;
+#[allow(unused_imports)]
+pub(crate) use extractum_analysis::{
+    analysis_run_ids_depending_on_sources, delete_project_analysis_runs,
+    load_analysis_run_diagnostics,
 };
 
 const ANALYSIS_RUN_EVENT: &str = "analysis://run";
@@ -261,11 +247,6 @@ pub async fn resolve_analysis_trace_refs(
 
     let pool = get_pool(&handle).await?;
     resolve_analysis_trace_refs_in_pool(&pool, run_id, refs).await
-}
-
-#[cfg(test)]
-mod tests {
-    include!("tests_portable.rs");
 }
 
 #[cfg(test)]

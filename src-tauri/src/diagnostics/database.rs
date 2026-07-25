@@ -1,8 +1,8 @@
 use sqlx::{Pool, Row, Sqlite};
 
-use crate::analysis::load_analysis_run_diagnostics;
 use crate::error::{AppError, AppResult};
 use crate::migrations::build_migrations;
+use extractum_analysis::load_analysis_run_diagnostics;
 
 use super::{
     DiagnosticAnalysisRunCount, DiagnosticAnalysisRunsInfo, DiagnosticDatabaseInfo,

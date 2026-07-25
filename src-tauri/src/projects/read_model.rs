@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use tauri::AppHandle;
 
-use crate::analysis::store::{load_project_analysis_run_aggregates, ProjectAnalysisRunAggregate};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
+use extractum_analysis::{load_project_analysis_run_aggregates, ProjectAnalysisRunAggregate};
 
 #[derive(Clone, Copy, Debug, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

@@ -2,13 +2,13 @@ use std::collections::{HashMap, HashSet};
 
 use sqlx::{FromRow, QueryBuilder, Sqlite};
 
-use crate::analysis::{load_analysis_source_group_for_enrichment, models::AnalysisSourceKind};
 use crate::error::{AppError, AppResult};
 use crate::notebooklm_export::message_mapping::{
     map_export_rows, reply_snippet, ExportMessageRow, ReplyContext, ReplyLookupRow,
 };
 use crate::notebooklm_export::model::{NotebookLmExportMessage, NotebookLmExportSource};
 use crate::readiness::{is_ready_current, ReadinessStatus};
+use extractum_analysis::{load_analysis_source_group_for_enrichment, AnalysisSourceKind};
 
 #[derive(FromRow)]
 struct SourceRow {

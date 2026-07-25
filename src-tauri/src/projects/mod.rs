@@ -3,7 +3,6 @@ mod read_model;
 
 use tauri::AppHandle;
 
-use crate::analysis::delete_project_analysis_runs;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::library_sources::LibraryCatalogStatus;
@@ -13,6 +12,10 @@ use crate::sources::{
 };
 use crate::tx::{begin_immediate_with_foreign_keys, commit, rollback};
 use crate::youtube::jobs::SourceJobState;
+use extractum_analysis::{
+    delete_project_analysis_runs, AnalysisRunListFilters, AnalysisRunSummary, AnalysisState,
+    StartAnalysisReportRequest,
+};
 
 #[allow(unused_imports)]
 pub(crate) use data_range::get_project_data_range_in_pool;
@@ -775,7 +778,7 @@ pub async fn delete_project_youtube_video_source_from_library(
 )]
 pub async fn start_project_analysis(
     handle: AppHandle,
-    state: tauri::State<'_, crate::analysis::AnalysisState>,
+    state: tauri::State<'_, AnalysisState>,
     project_id: i64,
     period_from: i64,
     period_to: i64,
@@ -786,7 +789,7 @@ pub async fn start_project_analysis(
     youtube_corpus_mode: Option<String>,
     include_migrated_history: bool,
 ) -> AppResult<i64> {
-    let request = crate::analysis::report::StartAnalysisReportRequest::for_project(
+    let request = StartAnalysisReportRequest::for_project(
         project_id,
         period_from,
         period_to,
@@ -804,12 +807,12 @@ pub async fn start_project_analysis(
 pub async fn list_project_runs(
     handle: AppHandle,
     project_id: i64,
-) -> AppResult<Vec<crate::analysis::models::AnalysisRunSummary>> {
+) -> AppResult<Vec<AnalysisRunSummary>> {
     let pool = get_pool(&handle).await?;
     ensure_project_exists(&pool, project_id).await?;
     crate::analysis::store::list_analysis_runs_in_pool(
         &pool,
-        crate::analysis::store::AnalysisRunListFilters::for_project(project_id, 5),
+        AnalysisRunListFilters::for_project(project_id, 5),
     )
     .await
 }
