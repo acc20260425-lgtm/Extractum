@@ -270,14 +270,34 @@ const promptPackCrateExtracted = existsSync(
     "src-tauri/crates/extractum-prompt-packs/Cargo.toml",
   ),
 );
+const analysisCrateExtracted = existsSync(
+  path.join(repoRoot, "src-tauri/crates/extractum-analysis/Cargo.toml"),
+);
 
 describe("Gemini Browser crate boundary", () => {
   it("declares one app-to-domain edge and locked package", () => {
-    expect(tomlSection(rootCargo, "workspace")).toContain(
-      promptPackCrateExtracted
-        ? 'members = [".", "crates/extractum-core", "crates/extractum-gemini-browser", "crates/extractum-llm", "crates/extractum-prompt-packs"]'
-        : 'members = [".", "crates/extractum-core", "crates/extractum-gemini-browser", "crates/extractum-llm"]',
-    );
+    const members = tomlSection(rootCargo, "workspace")
+      .match(/^members\s*=\s*\[([^\]]+)\]$/m)?.[1]
+      .split(",")
+      .map((member) => member.trim().replace(/^"|"$/g, ""));
+    expect(members).toEqual([
+      ".",
+      "crates/extractum-core",
+      "crates/extractum-gemini-browser",
+      "crates/extractum-llm",
+      ...(promptPackCrateExtracted ? ["crates/extractum-prompt-packs"] : []),
+      ...(analysisCrateExtracted ? ["crates/extractum-analysis"] : []),
+    ]);
+    expect(
+      tomlSection(rootCargo, "dependencies").match(
+        /^extractum-analysis = \{ path = "crates\/extractum-analysis" \}$/gm,
+      ) ?? [],
+    ).toHaveLength(analysisCrateExtracted ? 1 : 0);
+    expect(
+      rootCargo
+        .split("\n")
+        .filter((line) => line.includes("extractum-analysis")),
+    ).toHaveLength(analysisCrateExtracted ? 2 : 0);
     expect(tomlSection(rootCargo, "dependencies")).toContain(
       'extractum-gemini-browser = { path = "crates/extractum-gemini-browser" }',
     );
@@ -287,8 +307,12 @@ describe("Gemini Browser crate boundary", () => {
     );
     expect(lockDependencies(lockPackage(cargoLock, "extractum"))).toContain("extractum-gemini-browser");
     expect(crateCargo).not.toContain("extractum-prompt-packs");
+    expect(crateCargo).not.toContain("extractum-analysis");
     expect(lockDependencies(lockPackage(cargoLock, "extractum-gemini-browser"))).not.toContain(
       "extractum-prompt-packs",
+    );
+    expect(lockDependencies(lockPackage(cargoLock, "extractum-gemini-browser"))).not.toContain(
+      "extractum-analysis",
     );
   });
 

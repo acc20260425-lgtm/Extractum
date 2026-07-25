@@ -23,6 +23,11 @@ const promptPackCrateManifest = path.join(
   "src-tauri/crates/extractum-prompt-packs/Cargo.toml",
 );
 const promptPackCrateExtracted = existsSync(promptPackCrateManifest);
+const analysisCrateManifest = path.join(
+  repoRoot,
+  "src-tauri/crates/extractum-analysis/Cargo.toml",
+);
+const analysisCrateExtracted = existsSync(analysisCrateManifest);
 const packageJson = JSON.parse(
   readFileSync(path.join(repoRoot, "package.json"), "utf8"),
 ) as { scripts: Record<string, string> };
@@ -572,6 +577,17 @@ describe("crate extraction timing policy", () => {
     expect(promptPacksBoundaryDesign).toContain(
       "Timing remains deliberately small and cannot veto a correct extraction",
     );
+  });
+
+  it("tracks the exact analysis package owner through the extraction move", () => {
+    const appModels = path.join(repoRoot, "src-tauri/src/analysis/models.rs");
+    const crateModels = path.join(
+      repoRoot,
+      "src-tauri/crates/extractum-analysis/src/models.rs",
+    );
+
+    expect(existsSync(appModels)).toBe(!analysisCrateExtracted);
+    expect(existsSync(crateModels)).toBe(analysisCrateExtracted);
   });
 
   it("records the approved Phase 7 analysis boundary without authorizing implementation", () => {

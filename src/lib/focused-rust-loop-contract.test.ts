@@ -15,6 +15,11 @@ const promptPackCrateExtracted = existsSync(
 const packageJson = JSON.parse(
   readFileSync(path.join(repoRoot, "package.json"), "utf8"),
 ) as { scripts: Record<string, string> };
+const analysisOrientedPackageScripts = Object.entries(packageJson.scripts).filter(
+  ([name, command]) =>
+    name.toLowerCase().includes("analysis") ||
+    command.toLowerCase().includes("analysis"),
+);
 const policyAnchor = "<!-- focused-rust-loop -->";
 const policyStart = agentGuidance.indexOf(policyAnchor);
 const nextHeading = policyStart < 0 ? -1 : agentGuidance.indexOf("\n## ", policyStart);
@@ -50,6 +55,9 @@ describe("focused Rust loop repository policy", () => {
         : "cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib prompt_pack_run",
     );
     expect(focusedPolicy).toContain("src-tauri/target");
+    expect(analysisOrientedPackageScripts).toEqual([
+      ["smoke:analysis", "node scripts/analysis-smoke.mjs"],
+    ]);
   });
 
   it("separates focused feedback from full completion gates", () => {

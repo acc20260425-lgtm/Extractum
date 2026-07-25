@@ -6,12 +6,30 @@ const repoRoot = path.resolve(import.meta.dirname, "..", "..");
 const promptPackCrateExtracted = existsSync(
   path.join(repoRoot, "src-tauri/crates/extractum-prompt-packs/Cargo.toml"),
 );
+const analysisCrateExtracted = existsSync(
+  path.join(repoRoot, "src-tauri/crates/extractum-analysis/Cargo.toml"),
+);
 const readSource = (relativePath: string) =>
   readFileSync(path.join(repoRoot, relativePath), "utf8").replace(/\r\n/g, "\n");
 const readOptionalSource = (relativePath: string) =>
   existsSync(path.join(repoRoot, relativePath)) ? readSource(relativePath) : "";
+const tomlSection = (source: string, heading: string) => {
+  const marker = `[${heading}]`;
+  const start = source.indexOf(marker);
+  if (start < 0) return "";
+  const bodyStart = start + marker.length;
+  const next = source.slice(bodyStart).search(/^\[\[?[^\n]+\]?\]$/m);
+  return source.slice(bodyStart, next < 0 ? undefined : bodyStart + next).trim();
+};
+const lockPackage = (source: string, name: string) =>
+  source
+    .split(/(?=^\[\[package\]\]$)/m)
+    .find((block) => block.includes(`\nname = "${name}"\n`)) ?? "";
+const analysisLockDependencyPattern =
+  /^ "extractum-analysis(?: [^"]+)?",?$/m;
 
 const rootCargo = readSource("src-tauri/Cargo.toml");
+const cargoLock = readSource("src-tauri/Cargo.lock");
 const rootLib = readSource("src-tauri/src/lib.rs");
 const coreCargo = readOptionalSource("src-tauri/crates/extractum-core/Cargo.toml");
 const coreLib = readOptionalSource("src-tauri/crates/extractum-core/src/lib.rs");
@@ -35,8 +53,19 @@ describe("Rust workspace core contract", () => {
       "crates/extractum-gemini-browser",
       "crates/extractum-llm",
       ...(promptPackCrateExtracted ? ["crates/extractum-prompt-packs"] : []),
+      ...(analysisCrateExtracted ? ["crates/extractum-analysis"] : []),
     ];
     expect(members).toEqual(expectedMembers);
+    expect(
+      tomlSection(rootCargo, "dependencies").match(
+        /^extractum-analysis = \{ path = "crates\/extractum-analysis" \}$/gm,
+      ) ?? [],
+    ).toHaveLength(analysisCrateExtracted ? 1 : 0);
+    expect(
+      rootCargo
+        .split("\n")
+        .filter((line) => line.includes("extractum-analysis")),
+    ).toHaveLength(analysisCrateExtracted ? 2 : 0);
     expect(rootCargo).toMatch(/resolver\s*=\s*"2"/);
     expect(rootCargo).toContain("[workspace.dependencies]");
     expect(rootCargo).toContain("[profile.dev]");
@@ -53,6 +82,13 @@ describe("Rust workspace core contract", () => {
     }
     expect(coreCargo).not.toMatch(/\[profile\./);
     expect(coreCargo).not.toContain("extractum-prompt-packs");
+    expect(coreCargo).not.toContain("extractum-analysis");
+    expect(' "extractum-analysis 0.2.0",').toMatch(
+      analysisLockDependencyPattern,
+    );
+    expect(lockPackage(cargoLock, "extractum-core")).not.toMatch(
+      analysisLockDependencyPattern,
+    );
   });
 
   it("keeps a curated core and explicit private application wrappers", () => {

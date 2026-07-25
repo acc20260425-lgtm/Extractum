@@ -11,6 +11,11 @@ const readSource = (relativePath: string) =>
 const packageJson = JSON.parse(readSource("package.json")) as {
   scripts: Record<string, string>;
 };
+const analysisOrientedPackageScripts = Object.entries(packageJson.scripts).filter(
+  ([name, command]) =>
+    name.toLowerCase().includes("analysis") ||
+    command.toLowerCase().includes("analysis"),
+);
 const promptPackCrateExtracted = existsSync(
   path.join(
     repoRoot,
@@ -51,6 +56,9 @@ describe("daily development loop configuration", () => {
     );
     expect(packageJson.scripts["test:rust"]).not.toContain("--target-dir");
     expect(packageJson.scripts["test:rust:prompt-pack-runs"]).not.toContain("--target-dir");
+    expect(analysisOrientedPackageScripts).toEqual([
+      ["smoke:analysis", "node scripts/analysis-smoke.mjs"],
+    ]);
   });
 
   it("uses reduced dev debug information without a custom target", () => {

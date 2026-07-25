@@ -8,6 +8,9 @@ const appRoot = "src-tauri/src/prompt_packs";
 const crateRoot = "src-tauri/crates/extractum-prompt-packs";
 const crateManifestPath = `${crateRoot}/Cargo.toml`;
 const crateExtracted = existsSync(path.join(repositoryRoot, crateManifestPath));
+const analysisCrateExtracted = existsSync(
+  path.join(repositoryRoot, "src-tauri/crates/extractum-analysis/Cargo.toml"),
+);
 
 const normalize = (value: string) => value.replace(/\r\n/g, "\n");
 const toRepositoryPath = (absolutePath: string) =>
@@ -626,6 +629,7 @@ describe("extractum-prompt-packs crate boundary", () => {
       "crates/extractum-gemini-browser",
       "crates/extractum-llm",
       "crates/extractum-prompt-packs",
+      ...(analysisCrateExtracted ? ["crates/extractum-analysis"] : []),
     ]);
     expect(crateCargo).toBe(expectedCrateManifest);
     expect(tomlSection(rootCargo, "features")).toContain(
@@ -663,6 +667,16 @@ describe("extractum-prompt-packs crate boundary", () => {
         /^extractum-prompt-packs = \{ path = "crates\/extractum-prompt-packs" \}$/gm,
       ) ?? [],
     ).toHaveLength(1);
+    expect(
+      appDependencies.match(
+        /^extractum-analysis = \{ path = "crates\/extractum-analysis" \}$/gm,
+      ) ?? [],
+    ).toHaveLength(analysisCrateExtracted ? 1 : 0);
+    expect(
+      rootCargo
+        .split("\n")
+        .filter((line) => line.includes("extractum-analysis")),
+    ).toHaveLength(analysisCrateExtracted ? 2 : 0);
     expect(appDependencies).toContain("sha2 = { workspace = true }");
     expect(appDependencies).toContain("sqlx = { workspace = true }");
     expect(appDependencies).not.toMatch(/^jsonschema\s*=/m);
@@ -685,6 +699,10 @@ describe("extractum-prompt-packs crate boundary", () => {
         "tokio",
         "tokio-util",
       ]),
+    );
+    expect(crateCargo).not.toContain("extractum-analysis");
+    expect(lockDependencies(cratePackages[0])).not.toContain(
+      "extractum-analysis",
     );
     const appPackage = lockPackages(cargoLock, "extractum");
     expect(appPackage).toHaveLength(1);

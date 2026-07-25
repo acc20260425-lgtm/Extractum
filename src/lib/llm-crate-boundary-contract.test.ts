@@ -201,14 +201,34 @@ const promptPackCrateExtracted = existsSync(
     "src-tauri/crates/extractum-prompt-packs/Cargo.toml",
   ),
 );
+const analysisCrateExtracted = existsSync(
+  path.join(repoRoot, "src-tauri/crates/extractum-analysis/Cargo.toml"),
+);
 
 describe("extractum-llm crate boundary", () => {
   it("owns the exact workspace, manifest, lock, and feature dependency surface", () => {
-    expect(tomlSection(rootCargo, "workspace")).toContain(
-      promptPackCrateExtracted
-        ? 'members = [".", "crates/extractum-core", "crates/extractum-gemini-browser", "crates/extractum-llm", "crates/extractum-prompt-packs"]'
-        : 'members = [".", "crates/extractum-core", "crates/extractum-gemini-browser", "crates/extractum-llm"]',
-    );
+    const members = tomlSection(rootCargo, "workspace")
+      .match(/^members\s*=\s*\[([^\]]+)\]$/m)?.[1]
+      .split(",")
+      .map((member) => member.trim().replace(/^"|"$/g, ""));
+    expect(members).toEqual([
+      ".",
+      "crates/extractum-core",
+      "crates/extractum-gemini-browser",
+      "crates/extractum-llm",
+      ...(promptPackCrateExtracted ? ["crates/extractum-prompt-packs"] : []),
+      ...(analysisCrateExtracted ? ["crates/extractum-analysis"] : []),
+    ]);
+    expect(
+      tomlSection(rootCargo, "dependencies").match(
+        /^extractum-analysis = \{ path = "crates\/extractum-analysis" \}$/gm,
+      ) ?? [],
+    ).toHaveLength(analysisCrateExtracted ? 1 : 0);
+    expect(
+      rootCargo
+        .split("\n")
+        .filter((line) => line.includes("extractum-analysis")),
+    ).toHaveLength(analysisCrateExtracted ? 2 : 0);
     expect((rootCargo.match(/extractum-llm\s*=\s*\{ path = "crates\/extractum-llm" \}/g) ?? []).length).toBe(1);
     expect(dependencyNames(tomlSection(crateCargo, "dependencies"))).toEqual(expectedCrateDependencies);
     expect(dependencyNames(tomlSection(crateCargo, "dev-dependencies"))).toEqual(["tokio"]);
@@ -226,8 +246,12 @@ describe("extractum-llm crate boundary", () => {
     expect(lockDependencies(lockPackage(cargoLock, "extractum-llm"))).toEqual(expectedCrateDependencies);
     expect(lockDependencies(lockPackage(cargoLock, "extractum")).filter((name) => name === "extractum-llm")).toEqual(["extractum-llm"]);
     expect(crateCargo).not.toContain("extractum-prompt-packs");
+    expect(crateCargo).not.toContain("extractum-analysis");
     expect(lockDependencies(lockPackage(cargoLock, "extractum-llm"))).not.toContain(
       "extractum-prompt-packs",
+    );
+    expect(lockDependencies(lockPackage(cargoLock, "extractum-llm"))).not.toContain(
+      "extractum-analysis",
     );
   });
 
