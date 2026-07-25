@@ -513,7 +513,7 @@ describe("crate extraction timing policy", () => {
     expect(phase6Roadmap).toContain("11,669 ms, below 15,000 ms");
     expect(phase6Roadmap).toContain("Phase 5 was 10,410 ms");
     expect(phase6Roadmap).toContain(
-      "implementation still requires a separate plan and explicit owner instruction",
+      "Phase 7 is implemented and retained",
     );
 
     expect(promptPacksVerification).toContain(
@@ -590,9 +590,9 @@ describe("crate extraction timing policy", () => {
     expect(existsSync(crateModels)).toBe(analysisCrateExtracted);
   });
 
-  it("records the approved Phase 7 analysis boundary without authorizing implementation", () => {
+  it("records the retained Phase 7 analysis boundary and closed lifecycle state", () => {
     expect(analysisBoundaryDesign).toContain(
-      "**Status:** Approved; implementation not started",
+      "**Status:** Implemented and retained; [verification](../verification/2026-07-22-extractum-analysis-extraction.md)",
     );
     expect(phase7Status).toBeDefined();
     expect([
@@ -605,7 +605,7 @@ describe("crate extraction timing policy", () => {
       "done: retained",
       "not retained",
     ]).toContain(phase7Status);
-    expect(phase7Status).toBe("preparation Checkpoint 5 retained");
+    expect(phase7Status).toBe("done: retained");
     expect(phase7Roadmap).toContain(
       "2026-07-22-analysis-crate-boundary-design.md",
     );
@@ -628,8 +628,30 @@ describe("crate extraction timing policy", () => {
     expect(phase7Roadmap).toContain(
       "standing adjacent-results rule at 15,000 ms",
     );
-    expect(phase7Roadmap).toContain(
+    expect(phase7Roadmap).not.toContain(
       "Implementation requires a separate implementation plan and explicit owner instruction",
+    );
+    expect(phase7Roadmap).toContain(
+      "2026-07-22-extractum-analysis-extraction.md",
+    );
+    expect(phase7Roadmap).toContain(
+      "35 app Rust files / 7,230 physical lines and 45 crate Rust files / 11,336 physical lines",
+    );
+    expect(phase7Roadmap).toContain(
+      "The check completed in 5,162 ms, below 15,000 ms",
+    );
+    expect(phase7Roadmap).toContain("Phase 8 remains unapproved");
+    expect(roadmapTiming).toContain(
+      "Phase 7 `extractum-analysis` | 5,162 ms | completed and retained; below 15,000 ms",
+    );
+    expect(analysisBoundaryDesign).toContain(
+      "used `#[path]` and plain `mod` declarations, not the implementation plan's stale model of 19 temporary `include!` seams",
+    );
+    expect(analysisBoundaryDesign).toContain(
+      "`corpus/tests/harness_portable.rs`, `corpus/tests/mod_portable.rs`, and `store/tests/mod_portable.rs`",
+    );
+    expect(analysisBoundaryDesign).toContain(
+      "35 app Rust files / 7,230 physical lines and 45 crate Rust files / 11,336 physical lines",
     );
     expect(analysisBoundaryDesign).toContain(
       "No focused-loop speedup is promised; zero improvement or a slower result does not invalidate the ownership boundary or trigger rollback",

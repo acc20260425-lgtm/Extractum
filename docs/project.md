@@ -74,6 +74,19 @@ resolution, foreign source reads, and concrete Gemini Browser adapters.
 Migrations and bundled assets remain app-owned at `src-tauri/migrations/` and
 `src-tauri/prompt-packs/`.
 
+`src-tauri/crates/extractum-analysis/src/` owns the portable analysis domain,
+report/chat execution, state and cancellation behavior, snapshots and traces,
+and runtime persistence for exactly six analysis-owned tables. It depends on
+`extractum-core` and `extractum-llm` and exposes a curated root API without
+public submodules or test support.
+
+`src-tauri/src/analysis/` remains the private application compatibility
+facade. It owns Tauri commands and event adaptation, detached spawning, pool
+acquisition, profile and credential resolution, foreign source/project/corpus
+reads, dev fixtures, and cross-domain transaction coordination. Analysis
+migrations remain application-owned at `src-tauri/migrations/` and registered
+through `src-tauri/src/migrations.rs`.
+
 For the local Python YouTube pipeline research prototype, use:
 
 ```bash
@@ -498,22 +511,23 @@ Application exit closes external-process admission and starts one shared three-s
 3. `src-tauri/src/youtube/`
 4. `src-tauri/src/takeout_import/mod.rs`
 5. `src-tauri/src/takeout_import/raw_parse.rs`
-6. `src-tauri/src/analysis/`
-7. `src-tauri/src/llm/`
-8. `src-tauri/src/diagnostics/`
-9. `src-tauri/crates/extractum-prompt-packs/src/`
-10. `src-tauri/src/prompt_packs/` for application adapters and command facade
-11. `src/routes/projects/`
-12. `src/lib/components/research-projects/`
-13. `research/youtube_pipeline/` for research-only YouTube summary pipeline work
-14. `src/routes/analysis/+page.svelte`
-15. `src/lib/components/analysis/`
-16. `src/routes/settings/+page.svelte`
-17. `src/routes/diagnostics/+page.svelte`
-18. `src/lib/diagnostics-view-model.ts`
-19. `src/routes/sources/+page.svelte`
-20. `src-tauri/src/error.rs`
-21. `src-tauri/src/migrations.rs`
+6. `src-tauri/crates/extractum-analysis/src/` for the portable analysis domain and owned persistence
+7. `src-tauri/src/analysis/` for application adapters and command facade
+8. `src-tauri/src/llm/`
+9. `src-tauri/src/diagnostics/`
+10. `src-tauri/crates/extractum-prompt-packs/src/`
+11. `src-tauri/src/prompt_packs/` for application adapters and command facade
+12. `src/routes/projects/`
+13. `src/lib/components/research-projects/`
+14. `research/youtube_pipeline/` for research-only YouTube summary pipeline work
+15. `src/routes/analysis/+page.svelte`
+16. `src/lib/components/analysis/`
+17. `src/routes/settings/+page.svelte`
+18. `src/routes/diagnostics/+page.svelte`
+19. `src/lib/diagnostics-view-model.ts`
+20. `src/routes/sources/+page.svelte`
+21. `src-tauri/src/error.rs`
+22. `src-tauri/src/migrations.rs`
 
 Related deep dive: `docs/takeout-source-import.md`.
 

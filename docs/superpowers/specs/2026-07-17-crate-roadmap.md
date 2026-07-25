@@ -2,7 +2,7 @@
 
 **Status:** Strategic reference; revised and owner-approved 2026-07-19
 **Date:** 2026-07-17
-**Last revised:** 2026-07-22
+**Last revised:** 2026-07-25
 
 ## Purpose
 
@@ -28,9 +28,10 @@ Completed and in-flight slices governed by their own documents:
   process ownership remains in the application. Implementation is complete and
   retained.
 - [`2026-07-22-analysis-crate-boundary-design.md`](2026-07-22-analysis-crate-boundary-design.md)
-  — owner-approved Phase 7 boundary. The analysis domain and its six tables
-  move behind app-owned foreign-data adapters; implementation has not started
-  and still requires a separate plan and explicit owner instruction.
+  — implemented and retained Phase 7 boundary. The analysis domain and its six
+  tables moved behind app-owned foreign-data adapters; the retained result is
+  recorded in the
+  [verification document](../verification/2026-07-22-extractum-analysis-extraction.md).
 
 - `2026-07-15-rust-workspace-crate-extraction-design.md` — workspace +
   `extractum-core` (`error`, `time`, `compression`). Done.
@@ -202,6 +203,7 @@ following values are historical context, not automatic retention gates:
 | Phase 4 `extractum-gemini-browser` | 1,620 ms | completed and retained; [verification](../verification/2026-07-19-extractum-gemini-browser-extraction.md) |
 | Phase 5 `extractum-llm` | 10,410 ms | completed and retained; below 15,000 ms |
 | Phase 6 `extractum-prompt-packs` | 11,669 ms | completed and retained; below 15,000 ms; [verification](../verification/2026-07-20-extractum-prompt-packs-extraction.md) |
+| Phase 7 `extractum-analysis` | 5,162 ms | completed and retained; below 15,000 ms; [verification](../verification/2026-07-22-extractum-analysis-extraction.md) |
 
 For future slices, record the duration of the mandatory workspace check without
 adding a separate shell A/B experiment. For this rule, one completed
@@ -414,12 +416,12 @@ threshold, even a Phase 6 ordinary result at or above 15,000 ms would only be
 the first possible member of an adjacent above-threshold pair and would not
 trigger an investigation by itself.
 
-Phase 7 now has an owner-approved
-[JIT boundary design](2026-07-22-analysis-crate-boundary-design.md), but
-implementation still requires a separate plan and explicit owner instruction;
-the Phase 6 result did not authorize it.
+Phase 7 is implemented and retained under the
+[JIT boundary design](2026-07-22-analysis-crate-boundary-design.md). The
+[verification document](../verification/2026-07-22-extractum-analysis-extraction.md)
+records the retained result. Phase 8 remains separately unapproved.
 
-### Phase 7 — `extractum-analysis` (preparation Checkpoint 5 retained)
+### Phase 7 — `extractum-analysis` (done: retained)
 
 The owner-approved
 [Phase 7 boundary design](2026-07-22-analysis-crate-boundary-design.md) replaces
@@ -428,22 +430,32 @@ physical lines and 143 executable tests split exactly 95 crate / 48 app. Since
 2026-06-01, 49 commits touched analysis; 41 categorized commits (83.7%) touched
 no other Rust domain. Joint touches were led by `prompt_packs` 4, `llm` 4,
 `lib` 3, `projects` 3, and `youtube` 2.
+The retained evidence is recorded in the
+[Phase 7 verification](../verification/2026-07-22-extractum-analysis-extraction.md).
+
+The retained result contains exactly 35 app Rust files / 7,230 physical lines
+and 45 crate Rust files / 11,336 physical lines. The frozen Cargo ownership is
+95 crate identities and 48 app identities; all additional tests are reported
+separately in the verification document.
 
 The selected boundary is justified by ownership rather than a promised
 focused-loop speedup. `extractum-analysis` owns the coherent analysis domain,
 portable execution/state, and runtime SQL for exactly six analysis tables. The
 app retains Tauri commands and spawning, migrations, credentials, events,
 foreign source/project reads, and cross-domain transaction coordination; its
-remaining analysis subtree is expected to stay substantial. Trace compression
-moves behind `extractum-core`, and the crate directly depends on
+remaining analysis subtree stays substantial. Trace compression uses
+`extractum-core`, and the crate directly depends on
 `extractum-llm` plus the workspace SQLx feature set.
 
-Phase 7 records one ordinary mandatory workspace-check duration only. It adds
-no focused probe, warm-up, or sample series; timing is advisory and cannot
-invalidate or roll back a correct ownership boundary. The completed ordinary
-result still participates in the standing adjacent-results rule at 15,000 ms.
-Implementation requires a separate implementation plan and explicit owner
-instruction. This approval does not authorize Phase 8.
+Phase 7 recorded one ordinary mandatory workspace-check duration only. The
+check completed in 5,162 ms, below 15,000 ms. It added no focused probe,
+warm-up, or sample series; timing is advisory and cannot invalidate or roll
+back a correct ownership boundary, and it did not decide retention. The result
+participates in the standing adjacent-results rule at 15,000 ms and breaks any
+qualifying sequence because it is below the threshold.
+
+Phase 8 remains unapproved and requires its own fresh design, plan, and
+explicit owner authorization.
 
 ### Phase 8 — `extractum-telegram`
 

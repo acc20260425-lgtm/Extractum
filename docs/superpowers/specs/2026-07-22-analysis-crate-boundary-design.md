@@ -1,6 +1,6 @@
 # Analysis Crate Boundary Design
 
-**Status:** Approved; implementation not started
+**Status:** Implemented and retained; [verification](../verification/2026-07-22-extractum-analysis-extraction.md)
 **Date:** 2026-07-22
 
 **Roadmap authority:**
@@ -11,8 +11,10 @@
 
 This specification defines the just-in-time Phase 7 boundary for
 `extractum-analysis`. It supersedes the short Phase 7 placeholder in the crate
-roadmap. Approval does not authorize implementation, change the
-retained Phase 4–6 boundaries, or authorize Phase 8.
+roadmap. Its original approval did not by itself authorize implementation,
+change the retained Phase 4–6 boundaries, or authorize Phase 8. Phase 7 was
+subsequently implemented under the separately approved execution plan; Phase 8
+remains unauthorized.
 
 The design was informed by the local, intentionally untracked audit
 `reference/2026-07-20-crate-extraction-refactoring-analysis.md`. Its conclusions
@@ -824,17 +826,25 @@ disposition is:
 Production logic is moved, not copied. Temporary compatibility shims may exist
 only in a named green checkpoint and must be gone at final acceptance.
 
+The retained preparation topology used `#[path]` and plain `mod` declarations,
+not the implementation plan's stale model of 19 temporary `include!` seams.
+Exactly three staging files were intentionally unreachable before the move:
+`corpus/tests/harness_portable.rs`, `corpus/tests/mod_portable.rs`, and
+`store/tests/mod_portable.rs`. All three became ordinary reachable crate files
+after extraction, and no temporary include seam remains.
+
 `mod.rs` remains a private compatibility facade, but
 `src-tauri/src/analysis/**` is not expected to become a thin or empty facade
-directory. It remains the substantial app-owned integration subsystem for all
-analysis Tauri commands, report/chat spawn and profile coordination, the Tauri
-event sink, foreign scope/corpus/label SQL, dev fixtures, and 48 app-owned test
-identities (30 integration plus 18 fixtures). From the current inventory of 54
-files and 13,187 lines and the ownership map above, the planning estimate is
-roughly 30–36 Rust files and 6,000–7,000 physical lines remaining app-side
-(about 45–53% of current analysis LOC). Mixed-file splits may consolidate or
-add adapter modules, so the implementation plan's exact 54-file disposition
-map, not this estimate, is normative.
+directory. It remains the substantial app-owned integration subsystem for
+analysis Tauri commands, report/chat spawning and profile coordination, the
+Tauri event sink, foreign scope/corpus/label SQL, dev fixtures, and 48
+app-owned frozen test identities. The retained topology is exactly 35 app Rust
+files / 7,230 physical lines and 45 crate Rust files / 11,336 physical lines.
+
+The baseline `mod.rs` contributes crate `domain.rs` and `tests.rs` exactly
+once. The separately added paths are app `tests_application.rs` and crate
+`report/tests/corpus_port.rs`, `report/tests/runtime.rs`, and `test_schema.rs`;
+the generated crate root `lib.rs` is counted separately.
 
 ## Frozen Rust-Test Ownership
 
