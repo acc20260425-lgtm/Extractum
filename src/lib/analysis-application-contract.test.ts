@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   isAnalysisCrateExtracted,
+  normalizeAnalysisContractSourceText,
   readAnalysisContractSource,
   readAppAnalysisSource,
   readCrateAnalysisSource,
@@ -1456,7 +1457,10 @@ function enclosingRustFunctionRange(
 }
 
 function normalizedExecutableRust(source: string): string {
-  const executable = maskRustComments(source, false);
+  const executable = maskRustComments(
+    normalizeAnalysisContractSourceText(source),
+    false,
+  );
   let normalizedSource = "";
   let pendingWhitespace = false;
   const appendWhitespace = (): void => {
@@ -3050,6 +3054,17 @@ const projectSources = rustFiles(path.join(repoRoot, "src-tauri/src/projects"))
   .join("\n");
 
 describe("analysis application boundary", () => {
+  it("normalizes checkout line endings before matching and fingerprinting", () => {
+    const lf = "fn query() {\n  let sql = r#\"SELECT\n1\"#;\n}\n";
+    const crlf = lf.replaceAll("\n", "\r\n");
+    const cr = lf.replaceAll("\n", "\r");
+
+    expect(normalizeAnalysisContractSourceText(crlf)).toBe(lf);
+    expect(normalizeAnalysisContractSourceText(cr)).toBe(lf);
+    expect(normalizedExecutableRust(crlf)).toBe(normalizedExecutableRust(lf));
+    expect(normalizedExecutableRust(cr)).toBe(normalizedExecutableRust(lf));
+  });
+
   it("detects transaction controls through imported sqlx query aliases", () => {
     const source = `
       use sqlx::{query as statement, raw_sql as batch};
@@ -5734,9 +5749,9 @@ describe("analysis application boundary", () => {
       "apalis_jobs.rs:fetch_payloads_for_ids:5735685cb0084ad5a0b182cfe13df418fdddb9b4eb2eb212e52b6c4110117814:05b1185e47ec480cdeab26d4c62f499a747ac87a701a5830ecfca1eaf3095ba7:query_builder_push:blob_or_text_expr(schema, \"job\")",
       "apalis_jobs.rs:fetch_payloads_for_ids:5735685cb0084ad5a0b182cfe13df418fdddb9b4eb2eb212e52b6c4110117814:05b1185e47ec480cdeab26d4c62f499a747ac87a701a5830ecfca1eaf3095ba7:query_builder_push:blob_or_text_expr(schema, \"last_result\")",
       "apalis_jobs.rs:fetch_payloads_for_ids:5735685cb0084ad5a0b182cfe13df418fdddb9b4eb2eb212e52b6c4110117814:05b1185e47ec480cdeab26d4c62f499a747ac87a701a5830ecfca1eaf3095ba7:query_builder_push:blob_or_text_expr(schema, \"metadata\")",
-      "archive_read_model.rs:load_item_rows_from_archive:a59af0755d3e1a73942858d45dda36002f6c779c26114e0b20a0f8ae2f613701:614cf0c69848b64862d37ae81366d0b350d733d49962af946cc6600f4a0e6311:query_as::<_, StoredItemRow>:&sql",
-      "ingest_provenance.rs:mark_takeout_migrated_history_deferred:1e716e0b820fddb837c9ec72740ac920ac00e0ef6f944d524dab6fa1d702f43c:cb2e8a7c4137c5c87ebbaf0b55a7f00b11bd55f7be1b0b2d68338b8f565ee584:query:&query",
-      "ingest_provenance.rs:mark_takeout_only_my_messages_fallback:2c841ccea10b1458a4d404e826470c460488c48fbc8eaf675a0b54cd890c24a9:cb2e8a7c4137c5c87ebbaf0b55a7f00b11bd55f7be1b0b2d68338b8f565ee584:query:&query",
+      "archive_read_model.rs:load_item_rows_from_archive:8dd2a5f19a6a016668b832bf98eab1e0baa0b67cbcd32d3f019edea60a13a8a7:e57b034252ca308fe6c2c72cd803b6542a761604c3aabedf5481b6ef49accf23:query_as::<_, StoredItemRow>:&sql",
+      "ingest_provenance.rs:mark_takeout_migrated_history_deferred:c1cf2a46340d983cdc4b17fc9d9b5d55fbb44e1fc86dc8f9c77d3775a738af3d:d938b75a13bb7f4e16e66a570144c3cc5749739433130f87611b96dab7baa0b7:query:&query",
+      "ingest_provenance.rs:mark_takeout_only_my_messages_fallback:43259a95d59cdd4db1407e3af3d0937060a333423c5008e0f00b61e9d1c2bf12:d938b75a13bb7f4e16e66a570144c3cc5749739433130f87611b96dab7baa0b7:query:&query",
       `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
       `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
       `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
@@ -5746,14 +5761,14 @@ describe("analysis application boundary", () => {
       `notebooklm_export/query.rs:load_export_messages_from_archive:${notebookArchiveBodyFingerprint}:${notebookExportSourceFingerprint}:query_as:&sql`,
       `notebooklm_export/query.rs:load_export_messages_from_archive:${notebookArchiveBodyFingerprint}:${notebookExportSourceFingerprint}:query_as:&sql`,
       `notebooklm_export/query.rs:load_reply_contexts_from_archive:${notebookReplyBodyFingerprint}:${notebookExportSourceFingerprint}:query_as::<_, ReplyLookupRow>:&sql`,
-      "sources/items/query.rs:load_scoped_item_rows:d66387533b2124c77cda52f669c19538dc937908a12741d7281acb7eeae0753d:aa85dcdecd6845f1a8196197186e47cdc6209d27a3ffed30f2c2177251009f07:query_as::<_, BrowsableItemRow>:&sql",
-      "sources/items/query.rs:load_item_cursor:3bd13b5ceeae1ce12f2ec66669307973299cf953ac2efd1fae0568172d44fdaf:aa85dcdecd6845f1a8196197186e47cdc6209d27a3ffed30f2c2177251009f07:query_as::<_, BrowsableItemRow>:&sql",
-      "sources/store.rs:delete_source_from_pool:f57c3fb2c5b7e0dab204d1ac4120eb119fde4c13a720a412e03feb126f616e8d:6f39efca07515d448c8f3fb4e2fbeca4dc5354c14adcf6b5331914f4d8cde7b4:query:&format!( \"PRAGMA busy_timeout = {SOURCE_DELETE_BUSY_TIMEOUT_MS}\" )",
-      "takeout_import/validation_diagnostics.rs:scalar_i64:f7d827bd898cd0cd75ffb1152e53d54534dbacdd22cdd7befd324847a41dee8f:08169cd48009d565ed1ec6601b3942120940e9064fe8a202632de76c226dea62:query_scalar:sql",
-      "takeout_import/validation_diagnostics.rs:push_mismatch_category:068f1c3248bbbe7d9519155502f1f53d840c219db4a185a0f28c327d400ed473:08169cd48009d565ed1ec6601b3942120940e9064fe8a202632de76c226dea62:query_scalar:sample_sql",
-      "topic_memberships.rs:rebuild_topic_memberships_for_source_on_connection:2d51ed120a918c9c4352cf2f8f749d694f73b7d7aadc893feff04bf057938eee:aa647617e502a41de0b9607a161046369cdb50f91ceb3492237e33ecdc98df96:query:&insert_sql",
-      "topic_memberships.rs:resolve_scoped_topic_memberships_on_connection:0131a0b7d88cfeaa46cdfc84a9103f61c186f31b90a3202692e553b804c43568:aa647617e502a41de0b9607a161046369cdb50f91ceb3492237e33ecdc98df96:query:&insert_sql",
-      "topic_memberships.rs:resolve_scoped_topic_memberships_on_connection:0131a0b7d88cfeaa46cdfc84a9103f61c186f31b90a3202692e553b804c43568:aa647617e502a41de0b9607a161046369cdb50f91ceb3492237e33ecdc98df96:query_scalar::<_, i64>:&eligible_sql",
+      "sources/items/query.rs:load_scoped_item_rows:c2fc5684aa0042787e68af601b66b3e72eb0dc8b6a5733be08870feafeb3a13f:432d7f537661761553773e9a1b9083e92fd4f873e4205b513aaa3b4d92338add:query_as::<_, BrowsableItemRow>:&sql",
+      "sources/items/query.rs:load_item_cursor:2c9ef963c3ec312b3fb89a4863419196380548e5e6afd0100d3a63be07f4de00:432d7f537661761553773e9a1b9083e92fd4f873e4205b513aaa3b4d92338add:query_as::<_, BrowsableItemRow>:&sql",
+      "sources/store.rs:delete_source_from_pool:f57c3fb2c5b7e0dab204d1ac4120eb119fde4c13a720a412e03feb126f616e8d:048b8f5d768f5c8b075505c6f73da4ce5e805c841b57b0bc714ab31a1e1e2a54:query:&format!( \"PRAGMA busy_timeout = {SOURCE_DELETE_BUSY_TIMEOUT_MS}\" )",
+      "takeout_import/validation_diagnostics.rs:scalar_i64:f7d827bd898cd0cd75ffb1152e53d54534dbacdd22cdd7befd324847a41dee8f:ee2183e9150108c029ce1482613464456e6323ec80b64400f1f1478c45b277eb:query_scalar:sql",
+      "takeout_import/validation_diagnostics.rs:push_mismatch_category:068f1c3248bbbe7d9519155502f1f53d840c219db4a185a0f28c327d400ed473:ee2183e9150108c029ce1482613464456e6323ec80b64400f1f1478c45b277eb:query_scalar:sample_sql",
+      "topic_memberships.rs:rebuild_topic_memberships_for_source_on_connection:8492a6d57388761a564774ee507c761263c23740782e3ae236e7c9c2d88d3299:e6e8534af6f578f52a29e408ecd82f27f69f70042129a03521b38bf417af52a3:query:&insert_sql",
+      "topic_memberships.rs:resolve_scoped_topic_memberships_on_connection:a2ef104c67e930c6107e1e690175337157663dc31cd11ecaacde2cd791968231:e6e8534af6f578f52a29e408ecd82f27f69f70042129a03521b38bf417af52a3:query:&insert_sql",
+      "topic_memberships.rs:resolve_scoped_topic_memberships_on_connection:a2ef104c67e930c6107e1e690175337157663dc31cd11ecaacde2cd791968231:e6e8534af6f578f52a29e408ecd82f27f69f70042129a03521b38bf417af52a3:query_scalar::<_, i64>:&eligible_sql",
     ]);
     const tokenOwners = new Map<string, Set<string>>();
     for (const { relative, source } of files) for (const table of sqlTableTokens(productionRust(source))) {

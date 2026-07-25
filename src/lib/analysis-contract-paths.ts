@@ -17,6 +17,10 @@ const crateManifest = path.join(
   "src-tauri/crates/extractum-analysis/Cargo.toml",
 );
 
+export function normalizeAnalysisContractSourceText(source: string): string {
+  return source.replace(/\r\n?/g, "\n");
+}
+
 export function isAnalysisCrateExtracted(): boolean {
   const extracted = existsSync(crateManifest);
   assertLayout(extracted);
@@ -68,7 +72,9 @@ function readSelected(root: string, relativePath: string): string {
   ) {
     throw new Error(`Analysis contract path escapes selected root: ${relativePath}`);
   }
-  return readFileSync(realSelected, "utf8");
+  return normalizeAnalysisContractSourceText(
+    readFileSync(realSelected, "utf8"),
+  );
 }
 
 export function readAppAnalysisSource(relativePath: string): string {
