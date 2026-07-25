@@ -3,6 +3,7 @@ mod read_model;
 
 use tauri::AppHandle;
 
+use crate::analysis::delete_project_analysis_runs;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::library_sources::LibraryCatalogStatus;
@@ -514,23 +515,19 @@ pub(crate) async fn delete_project_in_pool(
     pool: &sqlx::SqlitePool,
     project_id: i64,
 ) -> AppResult<()> {
-    let mut tx = pool.begin().await.map_err(AppError::database)?;
-    sqlx::query("DELETE FROM analysis_runs WHERE project_id = ?")
-        .bind(project_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(AppError::database)?;
+    let mut transaction = pool.begin().await.map_err(AppError::database)?;
+    delete_project_analysis_runs(&mut *transaction, project_id).await?;
     sqlx::query("DELETE FROM project_sources WHERE project_id = ?")
         .bind(project_id)
-        .execute(&mut *tx)
+        .execute(&mut *transaction)
         .await
         .map_err(AppError::database)?;
     let result = sqlx::query("DELETE FROM projects WHERE id = ?")
         .bind(project_id)
-        .execute(&mut *tx)
+        .execute(&mut *transaction)
         .await
         .map_err(AppError::database)?;
-    tx.commit().await.map_err(AppError::database)?;
+    transaction.commit().await.map_err(AppError::database)?;
 
     if result.rows_affected() == 0 {
         return Err(AppError::not_found(format!(

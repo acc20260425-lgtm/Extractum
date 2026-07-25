@@ -2,8 +2,9 @@ use super::corpus::AnalysisCorpusMessage;
 use super::models::{AnalysisTraceData, AnalysisTraceRef};
 use extractum_core::{
     compression::{compress_json_bytes, decompress_bytes},
-    error::{internal_error, AppResult},
+    error::{internal_error, AppError, AppResult},
 };
+use sqlx::SqlitePool;
 
 const TRACE_EXCERPT_MAX_CHARS: usize = 480;
 
@@ -20,6 +21,73 @@ pub(crate) fn decode_trace_data(bytes: Option<&[u8]>) -> AppResult<AnalysisTrace
 
     let decoded = decompress_bytes(bytes).map_err(internal_error)?;
     serde_json::from_slice(&decoded).map_err(internal_error)
+}
+
+pub async fn get_analysis_run_trace_in_pool(
+    pool: &SqlitePool,
+    run_id: i64,
+) -> AppResult<AnalysisTraceData> {
+    let trace_data: Option<Option<Vec<u8>>> =
+        sqlx::query_scalar("SELECT trace_data_zstd FROM analysis_runs WHERE id = ?")
+            .bind(run_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(AppError::database)?;
+    let trace_data = trace_data
+        .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
+    decode_trace_data(trace_data.as_deref())
+}
+
+#[derive(sqlx::FromRow)]
+struct TraceResolutionRunContext {
+    snapshot_captured: i64,
+    snapshot_error: Option<String>,
+    snapshot_message_count: i64,
+}
+
+pub async fn resolve_analysis_trace_refs_in_pool(
+    pool: &SqlitePool,
+    run_id: i64,
+    refs: Vec<String>,
+) -> AppResult<Vec<AnalysisTraceRef>> {
+    let mut normalized_refs = refs
+        .into_iter()
+        .filter_map(|reference| normalize_ref(&reference))
+        .collect::<Vec<_>>();
+    normalized_refs.sort();
+    normalized_refs.dedup();
+    if normalized_refs.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let context = sqlx::query_as::<_, TraceResolutionRunContext>(
+        r#"
+        SELECT
+            CASE WHEN snapshot_captured_at IS NOT NULL THEN 1 ELSE 0 END AS snapshot_captured,
+            snapshot_error,
+            (
+                SELECT COUNT(*)
+                FROM analysis_run_messages
+                WHERE run_id = analysis_runs.id
+            ) AS snapshot_message_count
+        FROM analysis_runs
+        WHERE id = ?
+        "#,
+    )
+    .bind(run_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(AppError::database)?
+    .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
+
+    let corpus = super::corpus::load_trace_resolution_messages(
+        pool,
+        run_id,
+        context.snapshot_captured != 0 && context.snapshot_error.is_none(),
+        context.snapshot_message_count,
+    )
+    .await?;
+    try_build_trace_refs(&normalized_refs, &corpus)
 }
 
 pub(crate) fn normalize_ref(candidate: &str) -> Option<String> {
@@ -356,6 +424,10 @@ mod tests {
     #[test]
     fn normalize_ref_accepts_item_refs() {
         assert_eq!(normalize_ref("[s12-i845]").as_deref(), Some("s12-i845"));
+        assert_eq!(
+            normalize_ref("s999999999999999999999999-i999999999999999999999999").as_deref(),
+            Some("s999999999999999999999999-i999999999999999999999999")
+        );
         assert_eq!(
             normalize_ref("s12-i400@754000ms").as_deref(),
             Some("s12-i400@754000ms")

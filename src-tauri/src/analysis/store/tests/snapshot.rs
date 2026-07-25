@@ -4,53 +4,19 @@ use super::super::{
 };
 
 async fn snapshot_store_pool() -> sqlx::SqlitePool {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .expect("connect memory sqlite");
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
     sqlx::query(
-        r#"
-            CREATE TABLE analysis_runs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                scope_label_snapshot TEXT,
-                snapshot_captured_at TEXT,
-                snapshot_error TEXT,
-                status TEXT,
-                result_markdown TEXT,
-                trace_data_zstd BLOB,
-                error TEXT,
-                completed_at INTEGER
-            )
-            "#,
+        "INSERT INTO analysis_runs (
+            id, run_type, scope_type, period_from, period_to, output_language,
+            prompt_template_version, provider_profile, provider, model, status, created_at
+         ) VALUES (
+            1, 'report', 'single_source', 1, 2, 'English',
+            1, 'default', 'gemini', 'gemini-2.5-flash', 'running', 1
+         )",
     )
     .execute(&pool)
     .await
-    .expect("create runs");
-    sqlx::query(
-        r#"
-            CREATE TABLE analysis_run_messages (
-                run_id INTEGER NOT NULL,
-                item_id INTEGER NOT NULL,
-                source_id INTEGER NOT NULL,
-                external_id TEXT NOT NULL,
-                author TEXT,
-                published_at INTEGER NOT NULL,
-                ref TEXT NOT NULL,
-                content_zstd BLOB NOT NULL,
-                item_kind TEXT,
-                source_type TEXT,
-                source_subtype TEXT,
-                metadata_zstd BLOB,
-                PRIMARY KEY (run_id, ref)
-            )
-            "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("create messages");
-    sqlx::query("INSERT INTO analysis_runs (id, status) VALUES (1, 'running')")
-        .execute(&pool)
-        .await
-        .expect("insert run");
+    .expect("insert run");
     pool
 }
 

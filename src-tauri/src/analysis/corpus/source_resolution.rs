@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
-use sqlx::{Pool, Sqlite};
+use sqlx::{Pool, QueryBuilder, Sqlite};
 
+use super::super::groups::get_analysis_source_group_record;
 #[cfg(test)]
 use super::super::{
     ANALYSIS_SCOPE_TYPE_PROJECT, ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE,
@@ -10,7 +11,6 @@ use super::super::{
 #[cfg(test)]
 use crate::analysis::models::AnalysisRunDetail;
 use crate::analysis::models::{AnalysisSourceKind, ResolvedAnalysisScope};
-use crate::analysis::store::fetch_source_group;
 use crate::error::{AppError, AppResult};
 
 pub(crate) struct AppAnalysisScopeResolution {
@@ -114,6 +114,38 @@ async fn load_source_scope_row(
     .ok_or_else(|| AppError::not_found(format!("Source {source_id} not found")))
 }
 
+async fn load_source_scope_rows(
+    pool: &Pool<Sqlite>,
+    source_ids: &[i64],
+) -> AppResult<Vec<AnalysisSourceScopeRow>> {
+    let mut query = QueryBuilder::<Sqlite>::new(
+        "SELECT id, source_type, source_subtype, title FROM sources WHERE id IN (",
+    );
+    {
+        let mut separated = query.separated(", ");
+        for source_id in source_ids {
+            separated.push_bind(source_id);
+        }
+    }
+    query.push(") ORDER BY COALESCE(title, ''), id");
+
+    let rows: Vec<AnalysisSourceScopeRow> = query
+        .build_query_as()
+        .fetch_all(pool)
+        .await
+        .map_err(AppError::database)?;
+    if rows.len() != source_ids.len() {
+        let loaded_ids = rows.iter().map(|row| row.id).collect::<HashSet<_>>();
+        if let Some(source_id) = source_ids
+            .iter()
+            .find(|source_id| !loaded_ids.contains(source_id))
+        {
+            return Err(AppError::not_found(format!("Source {source_id} not found")));
+        }
+    }
+    Ok(rows)
+}
+
 async fn linked_playlist_video_source_ids(
     pool: &Pool<Sqlite>,
     playlist_source_id: i64,
@@ -196,21 +228,27 @@ pub(crate) async fn resolve_analysis_sources(
         )
         .await?;
     } else if let Some(group_id) = source_group_id {
-        let group = fetch_source_group(pool, group_id).await?.ok_or_else(|| {
-            AppError::not_found(format!("Analysis source group {group_id} not found"))
-        })?;
-        source_type = group.source_type.clone();
-        scope_label = group.name.clone();
+        let group = get_analysis_source_group_record(pool, group_id)
+            .await?
+            .ok_or_else(|| {
+                AppError::not_found(format!("Analysis source group {group_id} not found"))
+            })?;
+        source_type = match group.source_kind() {
+            AnalysisSourceKind::Telegram => "telegram",
+            AnalysisSourceKind::Youtube => "youtube",
+        }
+        .to_string();
+        scope_label = group.name().to_string();
 
-        if group.members.is_empty() {
+        if group.member_source_ids().is_empty() {
             return Err(AppError::validation(
                 "The selected source group does not contain any sources",
             )
             .into());
         }
 
-        for member in group.members {
-            let source = load_source_scope_row(pool, member.source_id).await?;
+        let sources = load_source_scope_rows(pool, group.member_source_ids()).await?;
+        for source in sources {
             push_scope_source(
                 pool,
                 source,
@@ -355,14 +393,10 @@ pub(crate) async fn resolve_run_source_ids(
         let group_id = run
             .source_group_id
             .ok_or_else(|| format!("Analysis run {} is missing source_group_id", run.id))?;
-        let group = fetch_source_group(pool, group_id)
+        let group = get_analysis_source_group_record(pool, group_id)
             .await?
             .ok_or_else(|| format!("Analysis source group {group_id} not found"))?;
-        return Ok(group
-            .members
-            .into_iter()
-            .map(|member| member.source_id)
-            .collect());
+        return Ok(group.member_source_ids().to_vec());
     }
 
     if run.scope_type == ANALYSIS_SCOPE_TYPE_PROJECT {
@@ -376,4 +410,85 @@ pub(crate) async fn resolve_run_source_ids(
     }
 
     Err(format!("Unsupported analysis scope '{}'", run.scope_type))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_analysis_sources;
+    use crate::analysis::test_schema::analysis_test_pool;
+
+    #[tokio::test]
+    async fn source_group_resolution_orders_members_by_title_then_id_before_playlist_expansion() {
+        let pool = analysis_test_pool().await;
+        sqlx::query(
+            r#"
+            INSERT INTO sources (
+                id, source_type, source_subtype, external_id, title, created_at
+            )
+            VALUES
+                (10, 'youtube', 'playlist', 'playlist-10', 'Charlie playlist', 1),
+                (20, 'youtube', 'video', 'video-20', 'Bravo video', 1),
+                (21, 'youtube', 'video', 'video-21', 'Linked video 21', 1),
+                (30, 'youtube', 'video', 'video-30', 'Linked video 30', 1),
+                (40, 'youtube', 'video', 'video-40', 'Alpha video', 1),
+                (50, 'youtube', 'video', 'video-50', '', 1),
+                (60, 'youtube', 'video', 'video-60', NULL, 1),
+                (70, 'youtube', 'video', 'video-70', 'Delta video', 1),
+                (71, 'youtube', 'video', 'video-71', 'Delta video', 1)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert youtube sources");
+        sqlx::query(
+            r#"
+            INSERT INTO analysis_source_groups (
+                id, name, source_type, created_at, updated_at
+            )
+            VALUES (9, 'Ordered YouTube group', 'youtube', 1, 1)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert youtube source group");
+        sqlx::query(
+            r#"
+            INSERT INTO analysis_source_group_members (group_id, source_id, created_at)
+            VALUES
+                (9, 71, 1),
+                (9, 60, 1),
+                (9, 50, 1),
+                (9, 10, 1),
+                (9, 20, 1),
+                (9, 40, 1),
+                (9, 70, 1)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert group members");
+        sqlx::query(
+            r#"
+            INSERT INTO youtube_playlist_items (
+                playlist_source_id, video_source_id, video_id, position,
+                availability_status, is_removed_from_playlist
+            )
+            VALUES
+                (10, 30, 'video-30', 1, 'available', 0),
+                (10, 21, 'video-21', 2, 'available', 0)
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .expect("insert playlist members");
+
+        let resolved = resolve_analysis_sources(&pool, None, Some(9), None)
+            .await
+            .expect("resolve source group");
+
+        assert_eq!(
+            resolved.scope().source_ids(),
+            &[50, 60, 40, 20, 30, 21, 70, 71]
+        );
+    }
 }

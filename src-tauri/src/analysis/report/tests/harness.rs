@@ -119,46 +119,16 @@ pub(super) fn start_openai_compat_completion_server(
 }
 
 pub(super) async fn report_capture_pool(run_id: i64) -> SqlitePool {
-    let pool = SqlitePool::connect("sqlite::memory:")
-        .await
-        .expect("connect report capture sqlite");
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
     sqlx::query(
-        "CREATE TABLE analysis_runs (
-            id INTEGER PRIMARY KEY,
-            status TEXT NOT NULL,
-            result_markdown TEXT,
-            trace_data_zstd BLOB,
-            error TEXT,
-            scope_label_snapshot TEXT,
-            snapshot_captured_at TEXT,
-            snapshot_error TEXT,
-            completed_at INTEGER
-        )",
+        "INSERT INTO analysis_runs (
+            id, run_type, scope_type, period_from, period_to, output_language,
+            prompt_template_version, provider_profile, provider, model, status, created_at
+         ) VALUES (
+            ?, 'report', 'single_source', 1, 2, 'English',
+            1, 'research', 'gemini', 'gemini-2.5-flash', 'running', 1
+         )",
     )
-    .execute(&pool)
-    .await
-    .expect("create report capture runs");
-    sqlx::query(
-        "CREATE TABLE analysis_run_messages (
-            run_id INTEGER NOT NULL,
-            item_id INTEGER NOT NULL,
-            source_id INTEGER NOT NULL,
-            external_id TEXT NOT NULL,
-            author TEXT,
-            published_at INTEGER NOT NULL,
-            ref TEXT NOT NULL,
-            content_zstd BLOB NOT NULL,
-            item_kind TEXT,
-            source_type TEXT,
-            source_subtype TEXT,
-            metadata_zstd BLOB,
-            PRIMARY KEY (run_id, ref)
-        )",
-    )
-    .execute(&pool)
-    .await
-    .expect("create report capture messages");
-    sqlx::query("INSERT INTO analysis_runs (id, status) VALUES (?, 'running')")
         .bind(run_id)
         .execute(&pool)
         .await
@@ -167,65 +137,7 @@ pub(super) async fn report_capture_pool(run_id: i64) -> SqlitePool {
 }
 
 pub(super) async fn request_cancel_pool_with_runs() -> SqlitePool {
-    let pool = SqlitePool::connect("sqlite::memory:")
-        .await
-        .expect("connect memory sqlite");
-
-    sqlx::query(
-        "CREATE TABLE analysis_runs (
-            id INTEGER PRIMARY KEY,
-            run_type TEXT NOT NULL DEFAULT 'report',
-            scope_type TEXT NOT NULL DEFAULT 'single_source',
-            source_id INTEGER,
-            source_group_id INTEGER,
-            project_id INTEGER,
-            period_from INTEGER NOT NULL DEFAULT 0,
-            period_to INTEGER NOT NULL DEFAULT 0,
-            output_language TEXT NOT NULL DEFAULT 'English',
-            prompt_template_id INTEGER NOT NULL DEFAULT 1,
-            prompt_template_version INTEGER NOT NULL DEFAULT 1,
-            provider_profile TEXT NOT NULL DEFAULT 'research',
-            provider TEXT NOT NULL DEFAULT 'gemini',
-            model TEXT NOT NULL DEFAULT 'gemini-2.5-flash',
-            youtube_corpus_mode TEXT NOT NULL DEFAULT 'transcript_description',
-            telegram_history_scope TEXT,
-            status TEXT NOT NULL,
-            result_markdown TEXT,
-            trace_data_zstd BLOB,
-            scope_label_snapshot TEXT,
-            snapshot_captured_at TEXT,
-            snapshot_error TEXT,
-            error TEXT,
-            created_at INTEGER NOT NULL DEFAULT 1,
-            completed_at INTEGER
-        )",
-    )
-    .execute(&pool)
-    .await
-    .expect("create analysis_runs");
-
-    sqlx::query("CREATE TABLE sources (id INTEGER PRIMARY KEY, title TEXT)")
-        .execute(&pool)
-        .await
-        .expect("create sources");
-    sqlx::query("CREATE TABLE analysis_source_groups (id INTEGER PRIMARY KEY, name TEXT)")
-        .execute(&pool)
-        .await
-        .expect("create groups");
-    sqlx::query("CREATE TABLE projects (id INTEGER PRIMARY KEY, name TEXT)")
-        .execute(&pool)
-        .await
-        .expect("create projects");
-    sqlx::query("CREATE TABLE analysis_prompt_templates (id INTEGER PRIMARY KEY, name TEXT)")
-        .execute(&pool)
-        .await
-        .expect("create templates");
-    sqlx::query("CREATE TABLE analysis_run_messages (run_id INTEGER NOT NULL)")
-        .execute(&pool)
-        .await
-        .expect("create run messages");
-
-    pool
+    super::super::super::test_schema::analysis_test_pool().await
 }
 
 pub(super) async fn insert_cancel_request_run(pool: &SqlitePool, run_id: i64, status: &str) {

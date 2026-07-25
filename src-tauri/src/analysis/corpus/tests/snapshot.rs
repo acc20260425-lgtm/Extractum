@@ -1,15 +1,58 @@
-use super::harness::{rebuild_documents_for_sources, sample_corpus, sample_run, snapshot_pool};
-use crate::analysis::corpus::{
+use super::super::super::corpus::{
     list_run_snapshot_messages_page, load_run_corpus_messages, load_run_snapshot_messages,
-    load_trace_resolution_messages, ListRunSnapshotMessagesRequest,
+    load_trace_resolution_messages,
 };
-use crate::analysis::models::AnalysisRunMessageCursor;
-use crate::analysis::store::persist_run_snapshot;
-use crate::compression::compress_text;
-use crate::error::AppErrorKind;
+use super::super::super::domain::ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE;
+use super::super::super::models::{AnalysisRunMessageCursor, AnalysisSnapshotState};
+use super::super::super::store::persist_run_snapshot;
+use super::super::super::trace::resolve_analysis_trace_refs_in_pool;
+use super::harness::{sample_corpus, sample_run};
+use extractum_core::compression::compress_text;
+use extractum_core::error::AppErrorKind;
+
+async fn insert_orphan_group_member_with_foreign_keys_restored(
+    pool: &sqlx::SqlitePool,
+    group_id: i64,
+    source_id: i64,
+) {
+    let mut connection = pool
+        .acquire()
+        .await
+        .expect("acquire sole membership connection");
+    sqlx::query("PRAGMA foreign_keys = OFF")
+        .execute(&mut *connection)
+        .await
+        .expect("disable foreign keys for orphan membership");
+
+    let insert_result = sqlx::query(
+        "INSERT INTO analysis_source_group_members (group_id, source_id, created_at)
+         VALUES (?, ?, 1)",
+    )
+    .bind(group_id)
+    .bind(source_id)
+    .execute(&mut *connection)
+    .await;
+
+    let restore_result = sqlx::query("PRAGMA foreign_keys = ON")
+        .execute(&mut *connection)
+        .await;
+    let restored_result = sqlx::query_scalar::<_, i64>("PRAGMA foreign_keys")
+        .fetch_one(&mut *connection)
+        .await;
+
+    restore_result.expect("restore foreign keys after orphan membership");
+    assert_eq!(
+        restored_result.expect("read restored foreign-keys pragma"),
+        1,
+        "foreign keys must be restored before releasing the sole connection"
+    );
+    drop(connection);
+    insert_result.expect("insert orphan group member");
+}
+
 #[tokio::test]
 async fn run_snapshot_roundtrips_frozen_corpus() {
-    let pool = snapshot_pool().await;
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
     sqlx::query(
         r#"
         INSERT INTO analysis_runs (
@@ -53,7 +96,7 @@ async fn run_snapshot_roundtrips_frozen_corpus() {
 
 #[tokio::test]
 async fn list_run_snapshot_messages_page_reads_saved_snapshot_only() {
-    let pool = snapshot_pool().await;
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
     sqlx::query(
         r#"
         INSERT INTO analysis_runs (
@@ -75,18 +118,9 @@ async fn list_run_snapshot_messages_page_reads_saved_snapshot_only() {
         .await
         .expect("persist snapshot");
 
-    let page = list_run_snapshot_messages_page(
-        &pool,
-        ListRunSnapshotMessagesRequest {
-            run_id: 1,
-            after: None,
-            limit: 1,
-            source_id: None,
-            around_ref: None,
-        },
-    )
-    .await
-    .expect("load first page");
+    let page = list_run_snapshot_messages_page(&pool, 1, None, Some(1), None, None)
+        .await
+        .expect("load first page");
 
     assert_eq!(page.messages.len(), 1);
     assert_eq!(page.messages[0].content, "First frozen message");
@@ -101,36 +135,19 @@ async fn list_run_snapshot_messages_page_reads_saved_snapshot_only() {
     );
     assert!(page.has_more);
 
-    let second_page = list_run_snapshot_messages_page(
-        &pool,
-        ListRunSnapshotMessagesRequest {
-            run_id: 1,
-            after: page.next_cursor,
-            limit: 1,
-            source_id: None,
-            around_ref: None,
-        },
-    )
-    .await
-    .expect("load second page");
+    let second_page =
+        list_run_snapshot_messages_page(&pool, 1, page.next_cursor, Some(1), None, None)
+            .await
+            .expect("load second page");
 
     assert_eq!(second_page.messages.len(), 1);
     assert_eq!(second_page.messages[0].content, "Second frozen message");
     assert!(!second_page.has_more);
     assert_eq!(second_page.next_cursor, None);
 
-    let filtered_page = list_run_snapshot_messages_page(
-        &pool,
-        ListRunSnapshotMessagesRequest {
-            run_id: 1,
-            after: None,
-            limit: 25,
-            source_id: Some(4),
-            around_ref: None,
-        },
-    )
-    .await
-    .expect("load source-filtered page");
+    let filtered_page = list_run_snapshot_messages_page(&pool, 1, None, Some(25), Some(4), None)
+        .await
+        .expect("load source-filtered page");
 
     assert_eq!(filtered_page.messages.len(), 1);
     assert_eq!(filtered_page.messages[0].source_id, 4);
@@ -139,7 +156,7 @@ async fn list_run_snapshot_messages_page_reads_saved_snapshot_only() {
 
 #[tokio::test]
 async fn list_run_snapshot_messages_page_returns_typed_internal_for_corrupt_snapshot_content() {
-    let pool = snapshot_pool().await;
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
     sqlx::query(
         r#"
         INSERT INTO analysis_runs (
@@ -164,18 +181,7 @@ async fn list_run_snapshot_messages_page_returns_typed_internal_for_corrupt_snap
         .await
         .expect("corrupt snapshot content");
 
-    let error = match list_run_snapshot_messages_page(
-        &pool,
-        ListRunSnapshotMessagesRequest {
-            run_id: 1,
-            after: None,
-            limit: 25,
-            source_id: None,
-            around_ref: None,
-        },
-    )
-    .await
-    {
+    let error = match list_run_snapshot_messages_page(&pool, 1, None, Some(25), None, None).await {
         Ok(_) => panic!("corrupt snapshot content should fail"),
         Err(error) => error,
     };
@@ -187,7 +193,7 @@ async fn list_run_snapshot_messages_page_returns_typed_internal_for_corrupt_snap
 
 #[tokio::test]
 async fn list_run_snapshot_messages_page_starts_at_around_ref() {
-    let pool = snapshot_pool().await;
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
     sqlx::query(
         r#"
         INSERT INTO analysis_runs (
@@ -209,18 +215,10 @@ async fn list_run_snapshot_messages_page_starts_at_around_ref() {
         .await
         .expect("persist snapshot");
 
-    let page = list_run_snapshot_messages_page(
-        &pool,
-        ListRunSnapshotMessagesRequest {
-            run_id: 1,
-            after: None,
-            limit: 10,
-            source_id: None,
-            around_ref: Some("s4-i12".to_string()),
-        },
-    )
-    .await
-    .expect("load around ref");
+    let page =
+        list_run_snapshot_messages_page(&pool, 1, None, Some(10), None, Some("s4-i12".to_string()))
+            .await
+            .expect("load around ref");
 
     assert_eq!(
         page.messages
@@ -233,7 +231,7 @@ async fn list_run_snapshot_messages_page_starts_at_around_ref() {
 
 #[tokio::test]
 async fn list_run_snapshot_messages_page_does_not_fall_back_to_live_source() {
-    let pool = snapshot_pool().await;
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
     sqlx::query(
         r#"
         INSERT INTO analysis_runs (
@@ -241,7 +239,7 @@ async fn list_run_snapshot_messages_page_does_not_fall_back_to_live_source() {
             output_language, prompt_template_version, provider_profile, provider,
             model, status, created_at
         )
-        VALUES (1, 'report', 'single_source', 2, ?, ?, 'English', 1, 'default', 'gemini', 'model', 'completed', ?)
+        VALUES (1, 'report', 'single_source', -2, ?, ?, 'English', 1, 'default', 'gemini', 'model', 'completed', ?)
         "#,
     )
     .bind(1_700_000_000_i64)
@@ -252,32 +250,27 @@ async fn list_run_snapshot_messages_page_does_not_fall_back_to_live_source() {
     .expect("insert run");
 
     sqlx::query(
-        "INSERT INTO items (id, source_id, external_id, item_kind, author, published_at, content_zstd)
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO sources (
+            id, source_type, source_subtype, external_id, title, created_at
+         ) VALUES (-2, 'youtube', 'video', 'sentinel-video', 'Sentinel source', 1)",
     )
-    .bind(11_i64)
-    .bind(2_i64)
-    .bind("100")
-    .bind("telegram_message")
-    .bind("Alice")
+    .execute(&pool)
+    .await
+    .expect("insert private source sentinel");
+    sqlx::query(
+        "INSERT INTO items (
+            id, source_id, external_id, item_kind, author, published_at, ingested_at, content_zstd
+         ) VALUES (-11, -2, 'sentinel-item', 'youtube_comment', 'Sentinel', ?, 1, ?)",
+    )
     .bind(1_710_000_000_i64)
     .bind(compress_text("Live source message").expect("compress live message"))
     .execute(&pool)
     .await
-    .expect("insert live item");
+    .expect("insert private item sentinel");
 
-    let page = list_run_snapshot_messages_page(
-        &pool,
-        ListRunSnapshotMessagesRequest {
-            run_id: 1,
-            after: None,
-            limit: 25,
-            source_id: None,
-            around_ref: None,
-        },
-    )
-    .await
-    .expect("load snapshot-only page");
+    let page = list_run_snapshot_messages_page(&pool, 1, None, Some(25), None, None)
+        .await
+        .expect("load snapshot-only page");
 
     assert_eq!(page.messages, Vec::new());
     assert_eq!(page.next_cursor, None);
@@ -286,27 +279,50 @@ async fn list_run_snapshot_messages_page_does_not_fall_back_to_live_source() {
 
 #[tokio::test]
 async fn trace_resolution_does_not_fall_back_to_live_source_for_completed_missing_snapshot() {
-    let pool = snapshot_pool().await;
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
     sqlx::query(
-        "INSERT INTO items (id, source_id, external_id, item_kind, author, published_at, content_zstd)
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO sources (
+            id, source_type, source_subtype, external_id, title, created_at
+         ) VALUES (-2, 'youtube', 'video', 'sentinel-video', 'Sentinel source', 1)",
     )
-    .bind(11_i64)
-    .bind(2_i64)
-    .bind("100")
-    .bind("telegram_message")
-    .bind("Alice")
+    .execute(&pool)
+    .await
+    .expect("insert private source sentinel");
+    sqlx::query(
+        "INSERT INTO items (
+            id, source_id, external_id, item_kind, author, published_at, ingested_at, content_zstd
+         ) VALUES (-11, -2, 'sentinel-item', 'youtube_comment', 'Sentinel', ?, 1, ?)",
+    )
     .bind(1_710_000_000_i64)
     .bind(compress_text("Live source text").expect("compress live text"))
     .execute(&pool)
     .await
-    .expect("insert live item");
+    .expect("insert private item sentinel");
 
-    let messages = load_trace_resolution_messages(&pool, &sample_run())
+    sqlx::query(
+        "INSERT INTO analysis_runs (
+            id, run_type, scope_type, source_id, period_from, period_to,
+            output_language, prompt_template_version, provider_profile, provider,
+            model, status, created_at
+         ) VALUES (
+            1, 'report', 'single_source', -2, 1, 2,
+            'English', 1, 'default', 'gemini', 'model', 'completed', 1
+         )",
+    )
+    .execute(&pool)
+    .await
+    .expect("insert completed run without snapshot");
+
+    let messages = load_trace_resolution_messages(&pool, 1, false, 0)
         .await
-        .expect("load trace resolution messages");
-
+        .expect("load trace resolution messages from saved snapshot only");
     assert!(messages.is_empty());
+
+    let refs = resolve_analysis_trace_refs_in_pool(&pool, 1, vec!["s2-i11".to_string()])
+        .await
+        .expect("resolve trace refs from saved snapshot only");
+
+    assert!(refs.is_empty());
 }
 
 #[test]
@@ -322,7 +338,7 @@ fn run_message_cursor_uses_ref_and_published_at() {
 
 #[tokio::test]
 async fn load_run_corpus_messages_uses_snapshot_when_available() {
-    let pool = snapshot_pool().await;
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
     sqlx::query(
         r#"
         INSERT INTO analysis_runs (
@@ -368,13 +384,13 @@ async fn load_run_corpus_messages_uses_snapshot_when_available() {
 
 #[tokio::test]
 async fn load_run_corpus_messages_does_not_reconstruct_completed_capture_failed_from_live_rows() {
-    let pool = snapshot_pool().await;
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
     sqlx::query(
         "INSERT INTO analysis_runs (
             id, run_type, scope_type, source_id, period_from, period_to, output_language,
             prompt_template_version, provider_profile, provider, model, status, created_at
          )
-         VALUES (1, 'report', 'single_source', 2, ?, ?, 'English', 1, 'default', 'gemini', 'model', 'completed', ?)",
+         VALUES (1, 'report', 'single_source', -2, ?, ?, 'English', 1, 'default', 'gemini', 'model', 'completed', ?)",
     )
     .bind(1_700_000_000_i64)
     .bind(1_800_000_000_i64)
@@ -383,22 +399,47 @@ async fn load_run_corpus_messages_does_not_reconstruct_completed_capture_failed_
     .await
     .expect("insert run");
     sqlx::query(
-        "INSERT INTO items (id, source_id, external_id, item_kind, author, published_at, content_zstd)
-         VALUES (11, 2, '100', 'telegram_message', 'Alice', ?, ?)",
+        "INSERT INTO sources (
+            id, source_type, source_subtype, external_id, title, created_at
+         ) VALUES (-2, 'youtube', 'video', 'sentinel-video', 'Sentinel source', 1)",
     )
-    .bind(1_710_000_000_i64)
-    .bind(compress_text("live drift").expect("compress"))
     .execute(&pool)
     .await
-    .expect("insert live item");
-    rebuild_documents_for_sources(&pool, &[2]).await;
+    .expect("insert private source sentinel");
+    let live_content = compress_text("live drift").expect("compress live sentinel");
+    sqlx::query(
+        "INSERT INTO items (
+            id, source_id, external_id, item_kind, author, published_at, ingested_at, content_zstd
+         ) VALUES (-11, -2, 'sentinel-item', 'youtube_comment', 'Sentinel', ?, 1, ?)",
+    )
+    .bind(1_710_000_000_i64)
+    .bind(&live_content)
+    .execute(&pool)
+    .await
+    .expect("insert private item sentinel");
+    sqlx::query(
+        "INSERT INTO analysis_documents (
+            id, source_id, item_id, document_key, document_kind, source_type,
+            source_subtype, external_id, author, published_at, document_order,
+            ref, content_zstd, created_at, updated_at
+         ) VALUES (
+            -21, -2, -11, 'item:-11', 'youtube_comment', 'youtube',
+            'video', 'sentinel-item', 'Sentinel', ?, 0,
+            's-2-i-11', ?, 1, 1
+         )",
+    )
+    .bind(1_710_000_000_i64)
+    .bind(&live_content)
+    .execute(&pool)
+    .await
+    .expect("insert private document sentinel");
 
     let mut run = sample_run();
     run.id = 1;
-    run.scope_type = crate::analysis::ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE.to_string();
-    run.source_id = Some(2);
+    run.scope_type = ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE.to_string();
+    run.source_id = Some(-2);
     run.source_group_id = None;
-    run.snapshot_state = Some(crate::analysis::models::AnalysisSnapshotState::CaptureFailed);
+    run.snapshot_state = Some(AnalysisSnapshotState::CaptureFailed);
     run.snapshot_captured_at = None;
     run.snapshot_error = None;
     run.snapshot_message_count = 0;
@@ -412,12 +453,12 @@ async fn load_run_corpus_messages_does_not_reconstruct_completed_capture_failed_
 
 #[tokio::test]
 async fn captured_marker_with_missing_rows_returns_corrupt_snapshot_error() {
-    let pool = snapshot_pool().await;
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
     let mut run = sample_run();
-    run.scope_type = crate::analysis::ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE.to_string();
+    run.scope_type = ANALYSIS_SCOPE_TYPE_SINGLE_SOURCE.to_string();
     run.source_id = Some(2);
     run.source_group_id = None;
-    run.snapshot_state = Some(crate::analysis::models::AnalysisSnapshotState::Captured);
+    run.snapshot_state = Some(AnalysisSnapshotState::Captured);
     run.snapshot_captured_at = Some("2026-05-18T10:00:00Z".to_string());
     run.snapshot_error = None;
     run.snapshot_message_count = 0;
@@ -432,15 +473,11 @@ async fn captured_marker_with_missing_rows_returns_corrupt_snapshot_error() {
 
 #[tokio::test]
 async fn source_group_membership_drift_after_capture_does_not_change_saved_run_corpus() {
-    let pool = snapshot_pool().await;
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
     sqlx::query("INSERT INTO analysis_source_groups (id, name, source_type, created_at, updated_at) VALUES (9, 'Group', 'telegram', 1, 1)")
         .execute(&pool)
         .await
         .expect("insert group");
-    sqlx::query("INSERT INTO analysis_source_group_members (group_id, source_id, created_at) VALUES (9, 2, 1), (9, 4, 1)")
-        .execute(&pool)
-        .await
-        .expect("insert original members");
     sqlx::query(
         "INSERT INTO analysis_runs (
             id, run_type, scope_type, source_group_id, period_from, period_to, output_language,
@@ -457,15 +494,22 @@ async fn source_group_membership_drift_after_capture_does_not_change_saved_run_c
     persist_run_snapshot(&pool, 1, "Frozen group", &sample_corpus())
         .await
         .expect("persist snapshot");
-    sqlx::query("DELETE FROM analysis_source_group_members WHERE group_id = 9 AND source_id = 4")
-        .execute(&pool)
-        .await
-        .expect("remove member after capture");
+    insert_orphan_group_member_with_foreign_keys_restored(&pool, 9, 2).await;
+    let live_member_ids = sqlx::query_scalar::<_, i64>(
+        "SELECT source_id
+         FROM analysis_source_group_members
+         WHERE group_id = 9
+         ORDER BY source_id",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("load drifted live membership");
+    assert_eq!(live_member_ids, vec![2]);
 
     let mut run = sample_run();
     run.id = 1;
     run.source_group_id = Some(9);
-    run.snapshot_state = Some(crate::analysis::models::AnalysisSnapshotState::Captured);
+    run.snapshot_state = Some(AnalysisSnapshotState::Captured);
     run.snapshot_captured_at = Some("2026-05-18T10:00:00Z".to_string());
     run.snapshot_message_count = 2;
 

@@ -1,5 +1,6 @@
 use sqlx::{Pool, Row, Sqlite};
 
+use crate::analysis::load_analysis_run_diagnostics;
 use crate::error::{AppError, AppResult};
 use crate::migrations::build_migrations;
 
@@ -45,7 +46,7 @@ pub(crate) async fn load_database_diagnostics(
             counts: load_item_counts(pool).await?,
         },
         DiagnosticAnalysisRunsInfo {
-            counts: load_analysis_run_counts(pool).await?,
+            counts: load_diagnostic_analysis_run_counts(pool).await?,
         },
         DiagnosticIngestInfo {
             batches: load_ingest_batch_counts(pool).await?,
@@ -169,51 +170,22 @@ async fn load_item_counts(pool: &Pool<Sqlite>) -> AppResult<Vec<DiagnosticItemCo
         .collect()
 }
 
-async fn load_analysis_run_counts(
+async fn load_diagnostic_analysis_run_counts(
     pool: &Pool<Sqlite>,
 ) -> AppResult<Vec<DiagnosticAnalysisRunCount>> {
-    // Raw analysis error text is read only to derive a coarse error_kind.
-    // It must never be selected into, copied into, or summarized in the DTO.
-    let rows = sqlx::query(
-        "SELECT
-            provider,
-            run_type,
-            scope_type,
-            status,
-            CASE
-                WHEN snapshot_captured_at IS NOT NULL THEN 'captured'
-                WHEN snapshot_error IS NOT NULL THEN 'failed'
-                ELSE 'not_captured'
-            END AS snapshot_state,
-            CASE
-                WHEN error IS NULL OR TRIM(error) = '' THEN 'none'
-                WHEN LOWER(error) LIKE '%timeout%' OR LOWER(error) LIKE '%network%' THEN 'network'
-                WHEN LOWER(error) LIKE '%unauthorized%' OR LOWER(error) LIKE '%forbidden%' OR LOWER(error) LIKE '%api key%' THEN 'auth'
-                WHEN LOWER(error) LIKE '%invalid%' THEN 'validation'
-                ELSE 'internal'
-            END AS error_kind,
-            COUNT(*) AS count
-         FROM analysis_runs
-         GROUP BY provider, run_type, scope_type, status, snapshot_state, error_kind
-         ORDER BY provider, run_type, scope_type, status, snapshot_state, error_kind",
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(AppError::database)?;
-
-    rows.into_iter()
-        .map(|row| {
-            Ok(DiagnosticAnalysisRunCount {
-                provider: row.try_get("provider").map_err(AppError::database)?,
-                run_type: row.try_get("run_type").map_err(AppError::database)?,
-                scope_type: row.try_get("scope_type").map_err(AppError::database)?,
-                status: row.try_get("status").map_err(AppError::database)?,
-                snapshot_state: row.try_get("snapshot_state").map_err(AppError::database)?,
-                error_kind: row.try_get("error_kind").map_err(AppError::database)?,
-                count: row.try_get("count").map_err(AppError::database)?,
-            })
+    let counts = load_analysis_run_diagnostics(pool).await?;
+    Ok(counts
+        .into_iter()
+        .map(|count| DiagnosticAnalysisRunCount {
+            provider: count.provider().to_string(),
+            run_type: count.run_type().to_string(),
+            scope_type: count.scope_type().to_string(),
+            status: count.status().to_string(),
+            snapshot_state: count.snapshot_state().to_string(),
+            error_kind: count.error_kind().to_string(),
+            count: count.count(),
         })
-        .collect()
+        .collect())
 }
 
 async fn load_ingest_batch_counts(

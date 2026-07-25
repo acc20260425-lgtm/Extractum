@@ -13,23 +13,22 @@ mod report_commands;
 mod state;
 pub(crate) mod store;
 mod templates;
+#[cfg(test)]
+mod test_schema;
 mod trace;
 
 use tauri::AppHandle;
 
-use self::corpus::{
-    list_run_snapshot_messages_page, load_trace_resolution_messages, ListRunSnapshotMessagesRequest,
-};
+use self::corpus::list_run_snapshot_messages_page as list_analysis_run_messages_in_pool;
 use self::models::{
     AnalysisChatTurn, AnalysisRunDetail, AnalysisRunMessageCursor, AnalysisRunMessagesPage,
     AnalysisRunSummary, AnalysisSourceOption, AnalysisTraceData, AnalysisTraceRef,
 };
 use self::store::{
-    delete_saved_run, get_analysis_run_in_pool, list_active_analysis_runs_in_pool,
-    list_analysis_runs_in_pool, load_analysis_run_status, load_analysis_run_trace_data,
-    AnalysisRunListFilters,
+    delete_analysis_run as delete_analysis_run_in_pool, get_analysis_run_in_pool,
+    list_active_analysis_runs_in_pool, list_analysis_runs_in_pool, AnalysisRunListFilters,
 };
-use self::trace::{decode_trace_data, normalize_ref, try_build_trace_refs};
+use self::trace::{get_analysis_run_trace_in_pool, resolve_analysis_trace_refs_in_pool};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::sources::{require_source_identity_ready, SourceIdentityRepairState};
@@ -56,6 +55,7 @@ pub use self::fixtures::{
     clear_analysis_redesign_fixture_active_runs, clear_analysis_redesign_fixtures,
     seed_analysis_redesign_fixtures,
 };
+pub(crate) use self::groups::load_analysis_source_group_for_enrichment;
 pub use self::groups::{
     create_analysis_source_group, delete_analysis_source_group, list_analysis_source_groups,
     update_analysis_source_group,
@@ -63,6 +63,10 @@ pub use self::groups::{
 pub use self::report::cleanup_interrupted_analysis_runs;
 pub use self::report_commands::{cancel_analysis_run, start_analysis_report};
 pub use self::state::AnalysisState;
+pub(crate) use self::store::{
+    analysis_run_ids_depending_on_sources, delete_project_analysis_runs,
+    load_analysis_run_diagnostics,
+};
 pub use self::templates::{
     create_analysis_prompt_template, delete_analysis_prompt_template,
     list_analysis_prompt_templates, update_analysis_prompt_template,
@@ -70,6 +74,57 @@ pub use self::templates::{
 
 const ANALYSIS_RUN_EVENT: &str = "analysis://run";
 const ANALYSIS_CHAT_EVENT: &str = "analysis://chat";
+
+fn is_analysis_trace_ref_digits(value: &str) -> bool {
+    !value.is_empty() && value.chars().all(|character| character.is_ascii_digit())
+}
+
+fn parse_analysis_trace_ref_millis(value: &str) -> Option<i64> {
+    is_analysis_trace_ref_digits(value)
+        .then(|| value.parse::<i64>().ok())
+        .flatten()
+}
+
+fn has_normalizable_analysis_trace_ref(refs: &[String]) -> bool {
+    refs.iter().any(|reference| {
+        let candidate = reference.trim().trim_matches('[').trim_matches(']');
+        let Some((source_part, item_part)) = candidate.split_once("-i") else {
+            return false;
+        };
+        let Some(source_digits) = source_part.strip_prefix('s') else {
+            return false;
+        };
+        if !is_analysis_trace_ref_digits(source_digits) {
+            return false;
+        }
+
+        let (item_digits, timestamp_suffix) = match item_part.split_once('@') {
+            Some((digits, suffix)) => (digits, Some(suffix)),
+            None => (item_part, None),
+        };
+        if !is_analysis_trace_ref_digits(item_digits) {
+            return false;
+        }
+
+        let Some(suffix) = timestamp_suffix else {
+            return true;
+        };
+        let Some(body) = suffix.strip_suffix("ms") else {
+            return false;
+        };
+        if let Some((start, end)) = body.split_once('-') {
+            let (Some(start), Some(end)) = (
+                parse_analysis_trace_ref_millis(start),
+                parse_analysis_trace_ref_millis(end),
+            ) else {
+                return false;
+            };
+            end >= start
+        } else {
+            parse_analysis_trace_ref_millis(body).is_some()
+        }
+    })
+}
 
 #[tauri::command]
 pub async fn list_analysis_sources(
@@ -172,31 +227,7 @@ pub async fn list_analysis_run_messages(
     around_ref: Option<String>,
 ) -> AppResult<AnalysisRunMessagesPage> {
     let pool = get_pool(&handle).await?;
-    let exists =
-        sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM analysis_runs WHERE id = ?)")
-            .bind(run_id)
-            .fetch_one(&pool)
-            .await
-            .map_err(AppError::database)?;
-
-    if exists == 0 {
-        return Err(AppError::not_found(format!(
-            "Analysis run {run_id} not found"
-        )));
-    }
-
-    let limit = limit.unwrap_or(100).clamp(1, 500) as usize;
-    list_run_snapshot_messages_page(
-        &pool,
-        ListRunSnapshotMessagesRequest {
-            run_id,
-            after,
-            limit,
-            source_id,
-            around_ref,
-        },
-    )
-    .await
+    list_analysis_run_messages_in_pool(&pool, run_id, after, limit, source_id, around_ref).await
 }
 
 #[tauri::command]
@@ -205,11 +236,7 @@ pub async fn get_analysis_run_trace(
     run_id: i64,
 ) -> AppResult<AnalysisTraceData> {
     let pool = get_pool(&handle).await?;
-    let trace_data = load_analysis_run_trace_data(&pool, run_id)
-        .await?
-        .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
-
-    Ok(decode_trace_data(trace_data.as_deref())?)
+    get_analysis_run_trace_in_pool(&pool, run_id).await
 }
 
 #[tauri::command]
@@ -219,19 +246,7 @@ pub async fn delete_analysis_run(
     run_id: i64,
 ) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
-    let status = load_analysis_run_status(&pool, run_id)
-        .await?
-        .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
-
-    if status == ANALYSIS_STATUS_QUEUED || status == ANALYSIS_STATUS_RUNNING {
-        return Err(AppError::conflict(
-            "Queued or running analysis runs cannot be deleted",
-        ));
-    }
-
-    delete_saved_run(&pool, run_id).await?;
-    state.remove_active_report_run(run_id).await;
-    Ok(())
+    delete_analysis_run_in_pool(&pool, state.inner(), run_id).await
 }
 
 #[tauri::command]
@@ -240,24 +255,12 @@ pub async fn resolve_analysis_trace_refs(
     run_id: i64,
     refs: Vec<String>,
 ) -> AppResult<Vec<AnalysisTraceRef>> {
-    let mut normalized_refs = refs
-        .into_iter()
-        .filter_map(|reference| normalize_ref(&reference))
-        .collect::<Vec<_>>();
-    normalized_refs.sort();
-    normalized_refs.dedup();
-
-    if normalized_refs.is_empty() {
+    if !has_normalizable_analysis_trace_ref(&refs) {
         return Ok(Vec::new());
     }
 
     let pool = get_pool(&handle).await?;
-    let run = get_analysis_run(handle.clone(), run_id)
-        .await?
-        .ok_or_else(|| AppError::not_found(format!("Analysis run {run_id} not found")))?;
-
-    let corpus = load_trace_resolution_messages(&pool, &run).await?;
-    try_build_trace_refs(&normalized_refs, &corpus)
+    resolve_analysis_trace_refs_in_pool(&pool, run_id, refs).await
 }
 
 #[cfg(test)]

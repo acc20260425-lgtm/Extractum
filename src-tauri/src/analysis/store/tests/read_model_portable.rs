@@ -82,88 +82,13 @@ impl RunListFixture {
 }
 
 async fn run_list_pool() -> sqlx::SqlitePool {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .expect("connect memory sqlite");
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
 
     sqlx::query(
-        r#"
-            CREATE TABLE analysis_source_groups (
-                id INTEGER PRIMARY KEY,
-                name TEXT NOT NULL
-            )
-            "#,
+        "INSERT INTO analysis_source_groups (
+            id, name, source_type, created_at, updated_at
+         ) VALUES (10, 'Research Group', 'telegram', 1, 1)",
     )
-    .execute(&pool)
-    .await
-    .expect("create groups");
-
-    sqlx::query(
-        r#"
-            CREATE TABLE analysis_prompt_templates (
-                id INTEGER PRIMARY KEY,
-                name TEXT NOT NULL,
-                template_kind TEXT NOT NULL,
-                body TEXT NOT NULL,
-                version INTEGER NOT NULL DEFAULT 1,
-                is_builtin BOOLEAN NOT NULL DEFAULT 0,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
-            )
-            "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("create templates");
-
-    sqlx::query(
-        r#"
-            CREATE TABLE analysis_runs (
-                id INTEGER PRIMARY KEY,
-                run_type TEXT NOT NULL DEFAULT 'report',
-                scope_type TEXT NOT NULL DEFAULT 'single_source',
-                source_id INTEGER,
-                source_group_id INTEGER,
-                project_id INTEGER,
-                period_from INTEGER NOT NULL DEFAULT 0,
-                period_to INTEGER NOT NULL DEFAULT 0,
-                output_language TEXT NOT NULL DEFAULT 'English',
-                prompt_template_id INTEGER,
-                prompt_template_version INTEGER NOT NULL DEFAULT 1,
-                provider_profile TEXT NOT NULL DEFAULT 'default',
-                provider TEXT NOT NULL DEFAULT 'gemini',
-                model TEXT NOT NULL DEFAULT 'gemini-2.5-flash',
-                youtube_corpus_mode TEXT NOT NULL DEFAULT 'transcript_description',
-                telegram_history_scope TEXT NOT NULL DEFAULT 'current',
-                status TEXT NOT NULL DEFAULT 'completed',
-                result_markdown TEXT,
-                trace_data_zstd BLOB,
-                scope_label_snapshot TEXT,
-                snapshot_captured_at TEXT,
-                snapshot_error TEXT,
-                error TEXT,
-                created_at INTEGER NOT NULL,
-                completed_at INTEGER
-            )
-            "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("create runs");
-
-    sqlx::query(
-        r#"
-            CREATE TABLE analysis_run_messages (
-                run_id INTEGER NOT NULL,
-                ref TEXT NOT NULL
-            )
-            "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("create run messages");
-
-    sqlx::query("INSERT INTO analysis_source_groups (id, name) VALUES (10, 'Research Group')")
         .execute(&pool)
         .await
         .expect("insert group");
@@ -288,7 +213,14 @@ async fn insert_snapshot_run(
     .expect("insert snapshot run");
 
     for index in 0..snapshot_message_count {
-        sqlx::query("INSERT INTO analysis_run_messages (run_id, ref) VALUES (1, ?)")
+        sqlx::query(
+            "INSERT INTO analysis_run_messages (
+                run_id, item_id, source_id, external_id, published_at, ref, content_zstd
+             ) VALUES (1, ?, 2, ?, ?, ?, x'00')",
+        )
+            .bind(index as i64 + 1)
+            .bind(format!("{}", index + 1))
+            .bind(index as i64 + 1)
             .bind(format!("s2-i{}", index + 1))
             .execute(pool)
             .await

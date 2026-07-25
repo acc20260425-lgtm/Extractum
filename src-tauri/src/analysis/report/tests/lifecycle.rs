@@ -43,25 +43,17 @@ async fn terminal_cleanup_removes_active_state_when_terminal_persistence_fails()
 
 #[tokio::test]
 async fn interrupted_cleanup_preserves_captured_snapshot_state_marker() {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .expect("connect memory sqlite");
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
     sqlx::query(
-        "CREATE TABLE analysis_runs (
-            id INTEGER PRIMARY KEY,
-            status TEXT NOT NULL,
-            error TEXT,
-            completed_at INTEGER,
-            snapshot_captured_at TEXT,
-            snapshot_error TEXT
-        )",
-    )
-    .execute(&pool)
-    .await
-    .expect("create runs");
-    sqlx::query(
-        "INSERT INTO analysis_runs (id, status, snapshot_captured_at, snapshot_error)
-         VALUES (1, 'running', '2026-05-18T10:00:00Z', NULL)",
+        "INSERT INTO analysis_runs (
+            id, run_type, scope_type, period_from, period_to, output_language,
+            prompt_template_version, provider_profile, provider, model, status,
+            snapshot_captured_at, snapshot_error, created_at
+         ) VALUES (
+            1, 'report', 'single_source', 1, 2, 'English',
+            1, 'research', 'gemini', 'gemini-2.5-flash', 'running',
+            '2026-05-18T10:00:00Z', NULL, 1
+         )",
     )
     .execute(&pool)
     .await

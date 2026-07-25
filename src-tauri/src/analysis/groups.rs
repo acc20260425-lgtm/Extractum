@@ -1,49 +1,25 @@
 use tauri::AppHandle;
 
 use crate::db::get_pool;
-use crate::error::{AppError, AppResult};
-use sqlx::{Pool, QueryBuilder, Sqlite};
+use sqlx::{QueryBuilder, Sqlite};
 
-use super::models::{AnalysisSourceGroup, AnalysisSourceGroupRow};
-use super::now_secs;
-use super::store::{ensure_sources_exist, fetch_source_group};
+use super::models::AnalysisSourceGroup;
+use super::store::{
+    ensure_sources_exist, get_analysis_source_group_response_in_pool,
+    list_analysis_source_groups_in_pool,
+};
 
-pub(crate) fn normalize_source_group_input(
-    name: &str,
-    source_ids: Vec<i64>,
-) -> AppResult<(String, Vec<i64>)> {
-    let name = name.trim().to_string();
-    if name.is_empty() {
-        return Err(AppError::validation("Source group name cannot be empty"));
-    }
-
-    let mut source_ids = source_ids
-        .into_iter()
-        .filter(|source_id| *source_id > 0)
-        .collect::<Vec<_>>();
-    source_ids.sort_unstable();
-    source_ids.dedup();
-
-    if source_ids.is_empty() {
-        return Err(AppError::validation(
-            "Select at least one source for the group",
-        ));
-    }
-
-    Ok((name, source_ids))
-}
+include!("groups_store.rs");
 
 async fn validate_group_source_type(
-    pool: &Pool<Sqlite>,
-    group_source_type: &str,
+    pool: &SqlitePool,
+    source_kind: AnalysisSourceKind,
     source_ids: &[i64],
 ) -> AppResult<()> {
-    if !matches!(group_source_type, "telegram" | "youtube") {
-        return Err(AppError::validation(
-            "Analysis group source_type must be telegram or youtube",
-        ));
-    }
-
+    let group_source_type = match source_kind {
+        AnalysisSourceKind::Telegram => "telegram",
+        AnalysisSourceKind::Youtube => "youtube",
+    };
     let mut query =
         QueryBuilder::<Sqlite>::new("SELECT id, source_type FROM sources WHERE id IN (");
     {
@@ -76,28 +52,50 @@ async fn validate_group_source_type(
     Ok(())
 }
 
+fn parse_analysis_source_kind(source_type: &str) -> AppResult<AnalysisSourceKind> {
+    match source_type {
+        "telegram" => Ok(AnalysisSourceKind::Telegram),
+        "youtube" => Ok(AnalysisSourceKind::Youtube),
+        _ => Err(AppError::validation(
+            "Analysis group source_type must be telegram or youtube",
+        )),
+    }
+}
+
+async fn prepare_analysis_source_group_input(
+    pool: &SqlitePool,
+    name: String,
+    source_type: String,
+    source_ids: Vec<i64>,
+) -> AppResult<AnalysisSourceGroupInput> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err(AppError::validation("Source group name cannot be empty"));
+    }
+
+    let mut source_ids = source_ids
+        .into_iter()
+        .filter(|source_id| *source_id > 0)
+        .collect::<Vec<_>>();
+    source_ids.sort_unstable();
+    source_ids.dedup();
+    if source_ids.is_empty() {
+        return Err(AppError::validation(
+            "Select at least one source for the group",
+        ));
+    }
+
+    ensure_sources_exist(pool, &source_ids).await?;
+    let source_kind = parse_analysis_source_kind(&source_type)?;
+    let input = AnalysisSourceGroupInput::new(name, source_kind, source_ids)?;
+    validate_group_source_type(pool, input.source_kind(), input.source_ids()).await?;
+    Ok(input)
+}
+
 #[tauri::command]
 pub async fn list_analysis_source_groups(handle: AppHandle) -> AppResult<Vec<AnalysisSourceGroup>> {
     let pool = get_pool(&handle).await?;
-    let rows = sqlx::query_as::<_, AnalysisSourceGroupRow>(
-        r#"
-        SELECT id, name, source_type, created_at, updated_at
-        FROM analysis_source_groups
-        ORDER BY updated_at DESC, id DESC
-        "#,
-    )
-    .fetch_all(&pool)
-    .await
-    .map_err(AppError::database)?;
-
-    let mut groups = Vec::with_capacity(rows.len());
-    for row in rows {
-        if let Some(group) = fetch_source_group(&pool, row.id).await? {
-            groups.push(group);
-        }
-    }
-
-    Ok(groups)
+    list_analysis_source_groups_in_pool(&pool).await
 }
 
 #[tauri::command]
@@ -108,46 +106,11 @@ pub async fn create_analysis_source_group(
     source_ids: Vec<i64>,
 ) -> AppResult<AnalysisSourceGroup> {
     let pool = get_pool(&handle).await?;
-    let (name, source_ids) = normalize_source_group_input(&name, source_ids)?;
-    ensure_sources_exist(&pool, &source_ids).await?;
-    validate_group_source_type(&pool, &source_type, &source_ids).await?;
+    let input = prepare_analysis_source_group_input(&pool, name, source_type, source_ids).await?;
+    let group_id = create_analysis_source_group_in_pool(&pool, input).await?;
 
-    let now = now_secs();
-    let mut tx = pool.begin().await.map_err(AppError::database)?;
-
-    let group_id: i64 = sqlx::query_scalar(
-        r#"
-        INSERT INTO analysis_source_groups (name, source_type, created_at, updated_at)
-        VALUES (?, ?, ?, ?)
-        RETURNING id
-        "#,
-    )
-    .bind(&name)
-    .bind(&source_type)
-    .bind(now)
-    .bind(now)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(AppError::database)?;
-
-    for source_id in source_ids {
-        sqlx::query(
-            r#"
-            INSERT INTO analysis_source_group_members (group_id, source_id, created_at)
-            VALUES (?, ?, ?)
-            "#,
-        )
-        .bind(group_id)
-        .bind(source_id)
-        .bind(now)
-        .execute(&mut *tx)
-        .await
-        .map_err(AppError::database)?;
-    }
-
-    tx.commit().await.map_err(AppError::database)?;
-
-    fetch_source_group(&pool, group_id).await?.ok_or_else(|| {
+    let response = get_analysis_source_group_response_in_pool(&pool, group_id).await?;
+    response.ok_or_else(|| {
         AppError::not_found(format!(
             "Analysis source group {group_id} not found after creation"
         ))
@@ -163,65 +126,11 @@ pub async fn update_analysis_source_group(
     source_ids: Vec<i64>,
 ) -> AppResult<AnalysisSourceGroup> {
     let pool = get_pool(&handle).await?;
-    let (name, source_ids) = normalize_source_group_input(&name, source_ids)?;
-    ensure_sources_exist(&pool, &source_ids).await?;
-    validate_group_source_type(&pool, &source_type, &source_ids).await?;
+    let input = prepare_analysis_source_group_input(&pool, name, source_type, source_ids).await?;
+    update_analysis_source_group_in_pool(&pool, group_id, input).await?;
 
-    let exists = sqlx::query_scalar::<_, i64>(
-        "SELECT EXISTS(SELECT 1 FROM analysis_source_groups WHERE id = ?)",
-    )
-    .bind(group_id)
-    .fetch_one(&pool)
-    .await
-    .map_err(AppError::database)?;
-    if exists == 0 {
-        return Err(AppError::not_found(format!(
-            "Analysis source group {group_id} not found"
-        )));
-    }
-
-    let now = now_secs();
-    let mut tx = pool.begin().await.map_err(AppError::database)?;
-
-    sqlx::query(
-        r#"
-        UPDATE analysis_source_groups
-        SET name = ?, source_type = ?, updated_at = ?
-        WHERE id = ?
-        "#,
-    )
-    .bind(&name)
-    .bind(&source_type)
-    .bind(now)
-    .bind(group_id)
-    .execute(&mut *tx)
-    .await
-    .map_err(AppError::database)?;
-
-    sqlx::query("DELETE FROM analysis_source_group_members WHERE group_id = ?")
-        .bind(group_id)
-        .execute(&mut *tx)
-        .await
-        .map_err(AppError::database)?;
-
-    for source_id in source_ids {
-        sqlx::query(
-            r#"
-            INSERT INTO analysis_source_group_members (group_id, source_id, created_at)
-            VALUES (?, ?, ?)
-            "#,
-        )
-        .bind(group_id)
-        .bind(source_id)
-        .bind(now)
-        .execute(&mut *tx)
-        .await
-        .map_err(AppError::database)?;
-    }
-
-    tx.commit().await.map_err(AppError::database)?;
-
-    fetch_source_group(&pool, group_id).await?.ok_or_else(|| {
+    let response = get_analysis_source_group_response_in_pool(&pool, group_id).await?;
+    response.ok_or_else(|| {
         AppError::not_found(format!(
             "Analysis source group {group_id} not found after update"
         ))
@@ -231,24 +140,15 @@ pub async fn update_analysis_source_group(
 #[tauri::command]
 pub async fn delete_analysis_source_group(handle: AppHandle, group_id: i64) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
-    let result = sqlx::query("DELETE FROM analysis_source_groups WHERE id = ?")
-        .bind(group_id)
-        .execute(&pool)
-        .await
-        .map_err(AppError::database)?;
-
-    if result.rows_affected() == 0 {
-        return Err(AppError::not_found(format!(
-            "Analysis source group {group_id} not found"
-        )));
-    }
-
-    Ok(())
+    delete_analysis_source_group_in_pool(&pool, group_id).await
 }
 
 #[cfg(test)]
 mod tests {
-    use super::validate_group_source_type;
+    use super::{
+        parse_analysis_source_kind, prepare_analysis_source_group_input, validate_group_source_type,
+    };
+    use crate::analysis::models::AnalysisSourceKind;
     use crate::error::AppErrorKind;
 
     async fn source_type_pool() -> sqlx::SqlitePool {
@@ -266,20 +166,87 @@ mod tests {
         .execute(&pool)
         .await
         .expect("create sources");
-        sqlx::query("INSERT INTO sources (id, source_type) VALUES (1, 'telegram'), (2, 'youtube')")
-            .execute(&pool)
-            .await
-            .expect("insert sources");
+        sqlx::query(
+            "INSERT INTO sources (id, source_type)
+             VALUES (1, 'telegram'), (2, 'youtube'), (4, 'youtube')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert sources");
         pool
     }
 
     #[tokio::test]
-    async fn validate_group_source_type_rejects_unknown_group_type() {
+    async fn prepare_analysis_source_group_input_preserves_baseline_error_precedence() {
         let pool = source_type_pool().await;
 
-        let error = validate_group_source_type(&pool, "rss", &[1])
-            .await
-            .expect_err("reject unsupported group source type");
+        let blank_name = prepare_analysis_source_group_input(
+            &pool,
+            "   ".to_string(),
+            "rss".to_string(),
+            vec![2],
+        )
+        .await
+        .expect_err("blank name wins before unsupported source type");
+        assert_eq!(blank_name.kind, AppErrorKind::Validation);
+        assert_eq!(blank_name.message, "Source group name cannot be empty");
+
+        let no_positive_ids = prepare_analysis_source_group_input(
+            &pool,
+            "Group".to_string(),
+            "rss".to_string(),
+            vec![0, -1, -7],
+        )
+        .await
+        .expect_err("empty normalized IDs win before unsupported source type");
+        assert_eq!(no_positive_ids.kind, AppErrorKind::Validation);
+        assert_eq!(
+            no_positive_ids.message,
+            "Select at least one source for the group"
+        );
+
+        let missing_source = prepare_analysis_source_group_input(
+            &pool,
+            "Group".to_string(),
+            "rss".to_string(),
+            vec![7, 7, -1],
+        )
+        .await
+        .expect_err("missing normalized source wins before unsupported source type");
+        assert_eq!(missing_source.kind, AppErrorKind::NotFound);
+        assert_eq!(missing_source.message, "Source 7 not found");
+
+        let unsupported_type = prepare_analysis_source_group_input(
+            &pool,
+            "Group".to_string(),
+            "rss".to_string(),
+            vec![2],
+        )
+        .await
+        .expect_err("unsupported source type wins after an existing source");
+        assert_eq!(unsupported_type.kind, AppErrorKind::Validation);
+        assert_eq!(
+            unsupported_type.message,
+            "Analysis group source_type must be telegram or youtube"
+        );
+
+        let input = prepare_analysis_source_group_input(
+            &pool,
+            "  YouTube group  ".to_string(),
+            "youtube".to_string(),
+            vec![4, 2, 4, -1, 2],
+        )
+        .await
+        .expect("prepare valid source group input");
+        assert_eq!(input.name(), "YouTube group");
+        assert_eq!(input.source_kind(), AnalysisSourceKind::Youtube);
+        assert_eq!(input.source_ids(), &[2, 4]);
+    }
+
+    #[tokio::test]
+    async fn validate_group_source_type_rejects_unknown_group_type() {
+        let error =
+            parse_analysis_source_kind("rss").expect_err("reject unsupported group source type");
 
         assert_eq!(error.kind, AppErrorKind::Validation);
         assert_eq!(
@@ -292,7 +259,7 @@ mod tests {
     async fn validate_group_source_type_rejects_mixed_provider_membership() {
         let pool = source_type_pool().await;
 
-        let error = validate_group_source_type(&pool, "youtube", &[1, 2])
+        let error = validate_group_source_type(&pool, AnalysisSourceKind::Youtube, &[1, 2])
             .await
             .expect_err("reject telegram source in youtube group");
 
@@ -305,10 +272,10 @@ mod tests {
     async fn validate_group_source_type_accepts_matching_provider_membership() {
         let pool = source_type_pool().await;
 
-        validate_group_source_type(&pool, "youtube", &[2])
+        validate_group_source_type(&pool, AnalysisSourceKind::Youtube, &[2])
             .await
             .expect("matching youtube source");
-        validate_group_source_type(&pool, "telegram", &[1])
+        validate_group_source_type(&pool, AnalysisSourceKind::Telegram, &[1])
             .await
             .expect("matching telegram source");
     }

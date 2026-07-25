@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use sqlx::FromRow;
+use sqlx::{FromRow, QueryBuilder, Sqlite};
 
+use crate::analysis::{load_analysis_source_group_for_enrichment, models::AnalysisSourceKind};
 use crate::error::{AppError, AppResult};
 use crate::notebooklm_export::message_mapping::{
     map_export_rows, reply_snippet, ExportMessageRow, ReplyContext, ReplyLookupRow,
@@ -31,13 +32,6 @@ pub(crate) struct NotebookLmExportSourceGroupMember {
     pub(crate) source_id: i64,
     pub(crate) source_title: Option<String>,
     pub(crate) source_type: String,
-}
-
-#[derive(FromRow)]
-struct SourceGroupRow {
-    id: i64,
-    name: String,
-    source_type: String,
 }
 
 #[derive(FromRow)]
@@ -109,54 +103,69 @@ pub(crate) async fn load_export_source(
     })
 }
 
-pub(crate) async fn load_export_source_group(
+pub(crate) async fn load_export_source_group_in_pool(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source_group_id: i64,
 ) -> AppResult<NotebookLmExportSourceGroup> {
-    let group = sqlx::query_as::<_, SourceGroupRow>(
-        r#"
-        SELECT id, name, source_type
-        FROM analysis_source_groups
-        WHERE id = ?
-        "#,
-    )
-    .bind(source_group_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(AppError::database)?
-    .ok_or_else(|| AppError::not_found(format!("Source group {source_group_id} not found")))?;
+    let mut transaction = pool.begin().await.map_err(AppError::database)?;
+    let record = load_analysis_source_group_for_enrichment(&mut *transaction, source_group_id)
+        .await?
+        .ok_or_else(|| AppError::not_found(format!("Source group {source_group_id} not found")))?;
 
-    let members = sqlx::query_as::<_, SourceGroupMemberRow>(
-        r#"
-        SELECT
-            sources.id AS source_id,
-            sources.title AS source_title,
-            sources.source_type AS source_type
-        FROM analysis_source_group_members members
-        JOIN sources ON sources.id = members.source_id
-        WHERE members.group_id = ?
-        ORDER BY COALESCE(sources.title, ''), sources.id
-        "#,
-    )
-    .bind(source_group_id)
-    .fetch_all(pool)
-    .await
-    .map_err(AppError::database)?
-    .into_iter()
-    .map(|row| NotebookLmExportSourceGroupMember {
-        source_id: row.source_id,
-        source_title: row.source_title,
-        source_type: row.source_type,
-    })
-    .collect();
+    let mut members = Vec::new();
+    if !record.member_source_ids().is_empty() {
+        let mut query = QueryBuilder::<Sqlite>::new(
+            r#"
+            SELECT
+                sources.id AS source_id,
+                sources.title AS source_title,
+                sources.source_type AS source_type
+            FROM sources
+            WHERE sources.id IN (
+            "#,
+        );
+        {
+            let mut separated = query.separated(", ");
+            for source_id in record.member_source_ids() {
+                separated.push_bind(source_id);
+            }
+        }
+        query.push(
+            r#"
+            )
+            ORDER BY COALESCE(sources.title, ''), sources.id
+            "#,
+        );
+        members = query
+            .build_query_as::<SourceGroupMemberRow>()
+            .fetch_all(&mut *transaction)
+            .await
+            .map_err(AppError::database)?
+            .into_iter()
+            .map(|row| NotebookLmExportSourceGroupMember {
+                source_id: row.source_id,
+                source_title: row.source_title,
+                source_type: row.source_type,
+            })
+            .collect();
+    }
 
-    Ok(NotebookLmExportSourceGroup {
-        id: group.id,
-        name: group.name,
-        source_type: group.source_type,
+    let source_type = match record.source_kind() {
+        AnalysisSourceKind::Telegram => "telegram",
+        AnalysisSourceKind::Youtube => "youtube",
+    }
+    .to_string();
+    let group = NotebookLmExportSourceGroup {
+        id: record.id(),
+        name: record.name().to_string(),
+        source_type,
         members,
-    })
+    };
+    transaction.commit().await.map_err(AppError::database)?;
+    Ok(group)
 }
+
+pub(crate) use self::load_export_source_group_in_pool as load_export_source_group;
 
 pub(crate) async fn select_notebooklm_export_loader(
     pool: &sqlx::Pool<sqlx::Sqlite>,

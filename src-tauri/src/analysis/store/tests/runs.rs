@@ -1,57 +1,40 @@
-use super::super::{delete_saved_run, set_run_status};
-use crate::analysis::models::AnalysisPromptTemplate;
-use crate::error::AppErrorKind;
+use super::super::super::models::AnalysisPromptTemplate;
+use super::super::super::state::AnalysisState;
+use super::super::{delete_analysis_run, set_run_status};
+use extractum_core::error::AppErrorKind;
+
+const HISTORY_SCOPE_CURRENT: &str = "current";
+const HISTORY_SCOPE_CURRENT_PLUS_MIGRATED: &str = "current_plus_migrated";
+
+async fn insert_test_run(pool: &sqlx::SqlitePool, run_id: i64, status: &str) {
+    sqlx::query(
+        "INSERT INTO analysis_runs (
+            id, run_type, scope_type, period_from, period_to, output_language,
+            prompt_template_version, provider_profile, provider, model, status, created_at
+         ) VALUES (
+            ?, 'report', 'single_source', 1, 2, 'English',
+            1, 'default', 'gemini', 'gemini-2.5-flash', ?, 1
+         )",
+    )
+    .bind(run_id)
+    .bind(status)
+    .execute(pool)
+    .await
+    .expect("insert test run");
+}
 
 async fn status_update_pool() -> sqlx::SqlitePool {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .expect("connect memory sqlite");
-    sqlx::query(
-        r#"
-        CREATE TABLE analysis_runs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            scope_label_snapshot TEXT,
-            snapshot_captured_at TEXT,
-            snapshot_error TEXT,
-            status TEXT,
-            result_markdown TEXT,
-            trace_data_zstd BLOB,
-            error TEXT,
-            completed_at INTEGER
-        )
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("create runs");
-    sqlx::query("INSERT INTO analysis_runs (id, status) VALUES (1, 'running')")
-        .execute(&pool)
-        .await
-        .expect("insert run");
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
+    insert_test_run(&pool, 1, "running").await;
     pool
 }
 
 #[tokio::test]
 async fn delete_saved_run_returns_typed_not_found_error() {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .expect("connect memory sqlite");
-    sqlx::query("CREATE TABLE analysis_runs (id INTEGER PRIMARY KEY)")
-        .execute(&pool)
-        .await
-        .expect("create runs");
-    sqlx::query(
-        "CREATE TABLE analysis_chat_messages (id INTEGER PRIMARY KEY, run_id INTEGER NOT NULL)",
-    )
-    .execute(&pool)
-    .await
-    .expect("create chat messages");
-    sqlx::query("CREATE TABLE analysis_run_messages (run_id INTEGER NOT NULL, ref TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .expect("create run messages");
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
+    let state = AnalysisState::new();
 
-    let error = delete_saved_run(&pool, 42)
+    let error = delete_analysis_run(&pool, &state, 42)
         .await
         .expect_err("missing run should fail");
 
@@ -72,7 +55,7 @@ async fn provider_failure_status_update_does_not_write_snapshot_error() {
     set_run_status(
         &pool,
         1,
-        crate::analysis::ANALYSIS_STATUS_FAILED,
+        super::super::super::ANALYSIS_STATUS_FAILED,
         None,
         None,
         Some("Provider network failed"),
@@ -102,7 +85,7 @@ async fn cancellation_after_capture_does_not_write_snapshot_error() {
     set_run_status(
         &pool,
         1,
-        crate::analysis::ANALYSIS_STATUS_CANCELLED,
+        super::super::super::ANALYSIS_STATUS_CANCELLED,
         None,
         None,
         Some("Analysis run cancelled."),
@@ -121,46 +104,10 @@ async fn cancellation_after_capture_does_not_write_snapshot_error() {
 
 #[tokio::test]
 async fn insert_analysis_run_persists_youtube_corpus_mode() {
+    use super::super::super::corpus::YoutubeCorpusMode;
     use super::super::{insert_analysis_run, AnalysisRunInsert};
-    use crate::analysis::corpus::YoutubeCorpusMode;
 
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .expect("connect memory sqlite");
-    sqlx::query(
-        r#"
-            CREATE TABLE analysis_runs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_type TEXT NOT NULL,
-                scope_type TEXT NOT NULL,
-                source_id INTEGER,
-                source_group_id INTEGER,
-                project_id INTEGER,
-                period_from INTEGER NOT NULL,
-                period_to INTEGER NOT NULL,
-                output_language TEXT NOT NULL,
-                prompt_template_id INTEGER,
-                prompt_template_version INTEGER NOT NULL,
-                provider_profile TEXT NOT NULL,
-                provider TEXT NOT NULL,
-                model TEXT NOT NULL,
-                youtube_corpus_mode TEXT NOT NULL DEFAULT 'transcript_description',
-                telegram_history_scope TEXT,
-                status TEXT NOT NULL,
-                result_markdown TEXT,
-                trace_data_zstd BLOB,
-                scope_label_snapshot TEXT,
-                snapshot_captured_at TEXT,
-                snapshot_error TEXT,
-                error TEXT,
-                created_at INTEGER NOT NULL,
-                completed_at INTEGER
-            )
-            "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("create runs");
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
 
     let template = AnalysisPromptTemplate {
         id: 5,
@@ -188,7 +135,7 @@ async fn insert_analysis_run_persists_youtube_corpus_mode() {
             provider: "gemini",
             model: "gemini-2.5-flash",
             youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescriptionComments,
-            telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT,
+            telegram_history_scope: HISTORY_SCOPE_CURRENT,
             scope_label_snapshot: None,
         },
     )
@@ -208,48 +155,12 @@ async fn insert_analysis_run_persists_youtube_corpus_mode() {
 
 #[tokio::test]
 async fn duplicate_lookup_matches_telegram_history_scope() {
+    use super::super::super::corpus::YoutubeCorpusMode;
     use super::super::{
         find_active_duplicate_run, insert_analysis_run, AnalysisRunInsert, DuplicateRunLookup,
     };
-    use crate::analysis::corpus::YoutubeCorpusMode;
 
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .expect("connect memory sqlite");
-    sqlx::query(
-        r#"
-            CREATE TABLE analysis_runs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_type TEXT NOT NULL,
-                scope_type TEXT NOT NULL,
-                source_id INTEGER,
-                source_group_id INTEGER,
-                project_id INTEGER,
-                period_from INTEGER NOT NULL,
-                period_to INTEGER NOT NULL,
-                output_language TEXT NOT NULL,
-                prompt_template_id INTEGER,
-                prompt_template_version INTEGER NOT NULL,
-                provider_profile TEXT NOT NULL,
-                provider TEXT NOT NULL,
-                model TEXT NOT NULL,
-                youtube_corpus_mode TEXT NOT NULL DEFAULT 'transcript_description',
-                telegram_history_scope TEXT,
-                status TEXT NOT NULL,
-                result_markdown TEXT,
-                trace_data_zstd BLOB,
-                scope_label_snapshot TEXT,
-                snapshot_captured_at TEXT,
-                snapshot_error TEXT,
-                error TEXT,
-                created_at INTEGER NOT NULL,
-                completed_at INTEGER
-            )
-            "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("create runs");
+    let pool = super::super::super::test_schema::analysis_test_pool().await;
 
     let template = AnalysisPromptTemplate {
         id: 5,
@@ -277,7 +188,7 @@ async fn duplicate_lookup_matches_telegram_history_scope() {
             provider: "gemini",
             model: "gemini-2.5-flash",
             youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
-            telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT,
+            telegram_history_scope: HISTORY_SCOPE_CURRENT,
             scope_label_snapshot: None,
         },
     )
@@ -304,8 +215,7 @@ async fn duplicate_lookup_matches_telegram_history_scope() {
             provider: "gemini",
             model: "gemini-2.5-flash",
             youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
-            telegram_history_scope:
-                crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED,
+            telegram_history_scope: HISTORY_SCOPE_CURRENT_PLUS_MIGRATED,
             scope_label_snapshot: None,
         },
     )
@@ -332,18 +242,13 @@ async fn duplicate_lookup_matches_telegram_history_scope() {
         telegram_history_scope,
     };
 
-    let current_duplicate = find_active_duplicate_run(
-        &pool,
-        &lookup(crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT),
-    )
-    .await
-    .expect("current duplicate lookup");
-    let current_plus_migrated_duplicate = find_active_duplicate_run(
-        &pool,
-        &lookup(crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED),
-    )
-    .await
-    .expect("migrated duplicate lookup");
+    let current_duplicate = find_active_duplicate_run(&pool, &lookup(HISTORY_SCOPE_CURRENT))
+        .await
+        .expect("current duplicate lookup");
+    let current_plus_migrated_duplicate =
+        find_active_duplicate_run(&pool, &lookup(HISTORY_SCOPE_CURRENT_PLUS_MIGRATED))
+            .await
+            .expect("migrated duplicate lookup");
 
     assert_eq!(current_duplicate, Some(current_run_id));
     assert_eq!(current_plus_migrated_duplicate, Some(migrated_run_id));
@@ -351,11 +256,12 @@ async fn duplicate_lookup_matches_telegram_history_scope() {
 
 #[tokio::test]
 async fn duplicate_lookup_keeps_project_and_source_group_scopes_separate() {
+    use super::super::super::corpus::YoutubeCorpusMode;
     use super::super::{
         find_active_duplicate_run, insert_analysis_run, AnalysisRunInsert, DuplicateRunLookup,
     };
-    use crate::analysis::corpus::YoutubeCorpusMode;
 
+    // partial schema: isolates owned duplicate-scope matching from the canonical project FK.
     let pool = sqlx::SqlitePool::connect("sqlite::memory:")
         .await
         .expect("connect memory sqlite");
@@ -420,7 +326,7 @@ async fn duplicate_lookup_keeps_project_and_source_group_scopes_separate() {
             provider: "gemini",
             model: "gemini-2.5-flash",
             youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
-            telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT,
+            telegram_history_scope: HISTORY_SCOPE_CURRENT,
             scope_label_snapshot: Some("Group"),
         },
     )
@@ -441,7 +347,7 @@ async fn duplicate_lookup_keeps_project_and_source_group_scopes_separate() {
             provider: "gemini",
             model: "gemini-2.5-flash",
             youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
-            telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT,
+            telegram_history_scope: HISTORY_SCOPE_CURRENT,
             scope_label_snapshot: Some("Project"),
         },
     )
@@ -462,7 +368,7 @@ async fn duplicate_lookup_keeps_project_and_source_group_scopes_separate() {
             provider_profile: "default",
             model: "gemini-2.5-flash",
             youtube_corpus_mode: YoutubeCorpusMode::TranscriptDescription,
-            telegram_history_scope: crate::sources::ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT,
+            telegram_history_scope: HISTORY_SCOPE_CURRENT,
         },
     )
     .await
@@ -474,12 +380,14 @@ async fn duplicate_lookup_keeps_project_and_source_group_scopes_separate() {
 
 #[tokio::test]
 async fn delete_saved_run_removes_run_and_saved_children() {
+    // partial schema: omits cascade FKs so delete_saved_run must delete both owned child tables.
     let pool = sqlx::SqlitePool::connect("sqlite::memory:")
         .await
         .expect("connect memory sqlite");
     sqlx::query(
         "CREATE TABLE analysis_runs (
                 id INTEGER PRIMARY KEY,
+                status TEXT NOT NULL,
                 snapshot_captured_at TEXT,
                 snapshot_error TEXT
             )",
@@ -498,7 +406,7 @@ async fn delete_saved_run_removes_run_and_saved_children() {
         .await
         .expect("create run messages");
 
-    sqlx::query("INSERT INTO analysis_runs (id) VALUES (42)")
+    sqlx::query("INSERT INTO analysis_runs (id, status) VALUES (42, 'completed')")
         .execute(&pool)
         .await
         .expect("insert run");
@@ -511,7 +419,11 @@ async fn delete_saved_run_removes_run_and_saved_children() {
         .await
         .expect("insert saved corpus");
 
-    delete_saved_run(&pool, 42).await.expect("delete saved run");
+    let state = AnalysisState::new();
+    state.insert_active_report_run(42).await;
+    delete_analysis_run(&pool, &state, 42)
+        .await
+        .expect("delete saved run");
 
     let runs = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM analysis_runs")
         .fetch_one(&pool)
@@ -529,4 +441,5 @@ async fn delete_saved_run_removes_run_and_saved_children() {
     assert_eq!(runs, 0);
     assert_eq!(chat_messages, 0);
     assert_eq!(saved_messages, 0);
+    assert!(state.active_report_run_ids().await.is_empty());
 }

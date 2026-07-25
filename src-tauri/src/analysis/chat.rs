@@ -4,6 +4,7 @@ use crate::db::get_pool;
 use crate::llm::resolve_profile_for_backend;
 
 use super::events::TauriAnalysisEventSink;
+use super::store::resolve_legacy_analysis_chat_run_in_pool;
 
 include!("chat_engine.rs");
 
@@ -13,32 +14,13 @@ pub async fn list_analysis_chat_messages(
     run_id: i64,
 ) -> AppResult<Vec<AnalysisChatMessage>> {
     let pool = get_pool(&handle).await?;
-    let exists = analysis_run_exists(&pool, run_id).await?;
-    if !exists {
-        return Err(AppError::not_found(format!(
-            "Analysis run {run_id} not found"
-        )));
-    }
-    load_chat_messages_from_pool(&pool, run_id).await
+    list_analysis_chat_messages_in_pool(&pool, run_id).await
 }
 
 #[tauri::command]
 pub async fn clear_analysis_chat_messages(handle: AppHandle, run_id: i64) -> AppResult<()> {
     let pool = get_pool(&handle).await?;
-    let exists = analysis_run_exists(&pool, run_id).await?;
-    if !exists {
-        return Err(AppError::not_found(format!(
-            "Analysis run {run_id} not found"
-        )));
-    }
-
-    sqlx::query("DELETE FROM analysis_chat_messages WHERE run_id = ?")
-        .bind(run_id)
-        .execute(&pool)
-        .await
-        .map_err(AppError::database)?;
-
-    Ok(())
+    clear_analysis_chat_messages_in_pool(&pool, run_id).await
 }
 
 #[tauri::command]

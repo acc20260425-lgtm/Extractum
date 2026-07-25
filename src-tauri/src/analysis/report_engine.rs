@@ -34,10 +34,10 @@ mod phases;
 mod requests;
 
 pub use self::capture::capture_analysis_corpus;
-#[rustfmt::skip]
-#[cfg(test)] use self::lifecycle::request_analysis_run_cancel_for_pool;
-#[allow(unused_imports)]
-pub(crate) use self::lifecycle::mark_interrupted_analysis_runs;
+use self::lifecycle::{
+    mark_interrupted_analysis_runs as mark_interrupted_analysis_runs_in_store,
+    request_analysis_run_cancel_for_pool,
+};
 #[rustfmt::skip]
 #[cfg(test)] use self::phases::{finish_map_phase, run_analysis_step_with_cancel};
 use self::phases::{run_map_phase, run_reduce_phase, ReportPipelineContext};
@@ -51,6 +51,24 @@ use self::requests::{chunk_messages, chunk_target_chars_for_model_input_limit};
 pub(super) const INTERRUPTED_RUN_MESSAGE: &str =
     "Analysis run was interrupted when the app was restarted.";
 const CANCELLED_RUN_MESSAGE: &str = "Analysis run cancelled.";
+
+pub async fn mark_interrupted_analysis_runs(pool: &SqlitePool) -> AppResult<()> {
+    mark_interrupted_analysis_runs_in_store(pool).await
+}
+
+pub async fn request_analysis_run_cancel_in_pool(
+    pool: &SqlitePool,
+    state: &AnalysisState,
+    scheduler: &LlmSchedulerState,
+    sink: &dyn AnalysisEventSink,
+    run_id: i64,
+) -> AppResult<()> {
+    let status = request_analysis_run_cancel_for_pool(pool, state, scheduler, run_id).await?;
+    RunEvent::new(run_id, "progress", &status)
+        .message("Cancelling analysis run...".to_string())
+        .publish(sink);
+    Ok(())
+}
 
 pub struct StartAnalysisReportRequest {
     source_id: Option<i64>,

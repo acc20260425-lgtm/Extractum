@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
 use tauri::AppHandle;
 
+use crate::analysis::store::{load_project_analysis_run_aggregates, ProjectAnalysisRunAggregate};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 
@@ -33,28 +36,34 @@ struct ProjectSummaryRow {
     description: Option<String>,
     source_count: i64,
     material_count: i64,
-    latest_run_status: Option<String>,
-    last_run_at: Option<i64>,
-    has_active_run: i64,
     pinned: i64,
     archived_at: Option<i64>,
     updated_at: i64,
 }
 
-fn project_status(row: &ProjectSummaryRow) -> ProjectStatus {
-    if row.has_active_run > 0 {
+fn project_status(
+    row: &ProjectSummaryRow,
+    aggregate: Option<&ProjectAnalysisRunAggregate>,
+) -> ProjectStatus {
+    if aggregate
+        .map(ProjectAnalysisRunAggregate::has_active_run)
+        .unwrap_or(false)
+    {
         ProjectStatus::Running
     } else if row.source_count == 0 {
         ProjectStatus::Empty
-    } else if row.latest_run_status.as_deref() == Some("failed") {
+    } else if aggregate.and_then(ProjectAnalysisRunAggregate::latest_run_status) == Some("failed") {
         ProjectStatus::NeedsAttention
     } else {
         ProjectStatus::Ready
     }
 }
 
-fn map_project_summary(row: ProjectSummaryRow) -> ProjectSummary {
-    let status = project_status(&row);
+fn map_project_summary(
+    row: ProjectSummaryRow,
+    aggregate: Option<&ProjectAnalysisRunAggregate>,
+) -> ProjectSummary {
+    let status = project_status(&row, aggregate);
     ProjectSummary {
         id: row.id,
         name: row.name,
@@ -62,7 +71,7 @@ fn map_project_summary(row: ProjectSummaryRow) -> ProjectSummary {
         source_count: row.source_count,
         material_count: row.material_count,
         status,
-        last_run_at: row.last_run_at,
+        last_run_at: aggregate.and_then(ProjectAnalysisRunAggregate::last_run_at),
         pinned: row.pinned != 0,
         archived: row.archived_at.is_some(),
         updated_at: row.updated_at,
@@ -72,6 +81,7 @@ fn map_project_summary(row: ProjectSummaryRow) -> ProjectSummary {
 pub(crate) async fn list_research_projects_in_pool(
     pool: &sqlx::SqlitePool,
 ) -> AppResult<Vec<ProjectSummary>> {
+    let mut transaction = pool.begin().await.map_err(AppError::database)?;
     let rows: Vec<ProjectSummaryRow> = sqlx::query_as(
         r#"
         WITH resolved_material_sources AS (
@@ -113,26 +123,6 @@ pub(crate) async fn list_research_projects_in_pool(
             p.description,
             COALESCE(source_counts.source_count, 0) AS source_count,
             COALESCE(material_counts.material_count, 0) AS material_count,
-            (
-                SELECT ar.status
-                FROM analysis_runs ar
-                WHERE ar.project_id = p.id
-                ORDER BY ar.created_at DESC, ar.id DESC
-                LIMIT 1
-            ) AS latest_run_status,
-            (
-                SELECT ar.created_at
-                FROM analysis_runs ar
-                WHERE ar.project_id = p.id
-                ORDER BY ar.created_at DESC, ar.id DESC
-                LIMIT 1
-            ) AS last_run_at,
-            CASE WHEN EXISTS (
-                SELECT 1
-                FROM analysis_runs ar
-                WHERE ar.project_id = p.id
-                  AND ar.status IN ('queued', 'running')
-            ) THEN 1 ELSE 0 END AS has_active_run,
             p.pinned,
             p.archived_at,
             p.updated_at
@@ -146,11 +136,26 @@ pub(crate) async fn list_research_projects_in_pool(
             p.id DESC
         "#,
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *transaction)
     .await
     .map_err(AppError::database)?;
 
-    Ok(rows.into_iter().map(map_project_summary).collect())
+    let project_ids = rows.iter().map(|row| row.id).collect::<Vec<_>>();
+    let aggregates = load_project_analysis_run_aggregates(&mut *transaction, &project_ids).await?;
+    let aggregates_by_project_id = aggregates
+        .into_iter()
+        .map(|aggregate| (aggregate.project_id(), aggregate))
+        .collect::<HashMap<_, _>>();
+    let projects = rows
+        .into_iter()
+        .map(|row| {
+            let aggregate = aggregates_by_project_id.get(&row.id);
+            map_project_summary(row, aggregate)
+        })
+        .collect();
+
+    transaction.commit().await.map_err(AppError::database)?;
+    Ok(projects)
 }
 
 #[tauri::command]

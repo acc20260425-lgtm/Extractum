@@ -1,85 +1,15 @@
-use super::groups::normalize_source_group_input;
+use super::groups::AnalysisSourceGroupInput;
+use super::models::AnalysisSourceKind;
 use super::store::ensure_builtin_report_template;
 use super::templates::validate_template_kind;
-use super::trace::compress_trace_data;
+use super::trace::{compress_trace_data, get_analysis_run_trace_in_pool};
 use super::{
-    decode_trace_data, validate_chat_role, AnalysisChatTurn, AnalysisTraceData, AnalysisTraceRef,
-    TEMPLATE_KIND_REPORT,
+    validate_chat_role, AnalysisChatTurn, AnalysisTraceData, AnalysisTraceRef, TEMPLATE_KIND_REPORT,
 };
 use extractum_core::error::AppErrorKind;
 
 async fn memory_pool() -> sqlx::SqlitePool {
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:")
-        .await
-        .expect("connect memory sqlite");
-    sqlx::query(
-        r#"
-        CREATE TABLE analysis_prompt_templates (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            template_kind TEXT NOT NULL,
-            body TEXT NOT NULL,
-            version INTEGER NOT NULL DEFAULT 1,
-            is_builtin BOOLEAN NOT NULL DEFAULT 0,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
-        )
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("create templates");
-    sqlx::query("CREATE TABLE sources (id INTEGER PRIMARY KEY, title TEXT)")
-        .execute(&pool)
-        .await
-        .expect("create sources");
-    sqlx::query("CREATE TABLE analysis_source_groups (id INTEGER PRIMARY KEY, name TEXT)")
-        .execute(&pool)
-        .await
-        .expect("create source groups");
-    sqlx::query("CREATE TABLE projects (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .expect("create projects");
-    sqlx::query(
-        r#"
-        CREATE TABLE analysis_runs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            run_type TEXT NOT NULL,
-            scope_type TEXT NOT NULL,
-            source_id INTEGER,
-            source_group_id INTEGER,
-            project_id INTEGER,
-            period_from INTEGER NOT NULL,
-            period_to INTEGER NOT NULL,
-            output_language TEXT NOT NULL,
-            prompt_template_id INTEGER,
-            prompt_template_version INTEGER NOT NULL,
-            provider_profile TEXT NOT NULL,
-            provider TEXT NOT NULL,
-            model TEXT NOT NULL,
-            youtube_corpus_mode TEXT NOT NULL DEFAULT 'transcript_description',
-            telegram_history_scope TEXT,
-            status TEXT NOT NULL,
-            result_markdown TEXT,
-            trace_data_zstd BLOB,
-            scope_label_snapshot TEXT,
-            snapshot_captured_at TEXT,
-            snapshot_error TEXT,
-            error TEXT,
-            created_at INTEGER NOT NULL,
-            completed_at INTEGER
-        )
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("create runs");
-    sqlx::query("CREATE TABLE analysis_run_messages (run_id INTEGER NOT NULL, ref TEXT NOT NULL)")
-        .execute(&pool)
-        .await
-        .expect("create run messages");
-    pool
+    super::test_schema::analysis_test_pool().await
 }
 
 #[tokio::test]
@@ -138,8 +68,8 @@ async fn completed_run_without_snapshot_marker_is_capture_failed() {
     );
 }
 
-#[test]
-fn trace_data_roundtrips_through_zstd() {
+#[tokio::test]
+async fn trace_data_roundtrips_through_zstd() {
     let trace = AnalysisTraceData {
         refs: vec![AnalysisTraceRef {
             r#ref: "s12-i321".to_string(),
@@ -156,18 +86,40 @@ fn trace_data_roundtrips_through_zstd() {
     };
 
     let compressed = compress_trace_data(&trace).expect("compress");
-    let decoded = decode_trace_data(Some(&compressed)).expect("decode");
+    let pool = memory_pool().await;
+    sqlx::query(
+        "INSERT INTO analysis_runs (
+            id, run_type, scope_type, period_from, period_to, output_language,
+            prompt_template_version, provider_profile, provider, model, status,
+            trace_data_zstd, created_at
+         ) VALUES (
+            1, 'report', 'single_source', 1, 2, 'English',
+            1, 'default', 'gemini', 'model', 'completed', ?, 1
+         )",
+    )
+    .bind(compressed)
+    .execute(&pool)
+    .await
+    .expect("insert traced run");
+
+    let decoded = get_analysis_run_trace_in_pool(&pool, 1)
+        .await
+        .expect("load trace");
     assert_eq!(decoded, trace);
 }
 
 #[test]
 fn source_group_input_is_trimmed_and_deduplicated() {
-    let (name, source_ids) =
-        normalize_source_group_input("  Core sources  ", vec![4, 2, 4, -1, 2])
-            .expect("normalize source group");
+    let input = AnalysisSourceGroupInput::new(
+        "  Core sources  ".to_string(),
+        AnalysisSourceKind::Telegram,
+        vec![4, 2, 4, -1, 2],
+    )
+    .expect("normalize source group");
 
-    assert_eq!(name, "Core sources");
-    assert_eq!(source_ids, vec![2, 4]);
+    assert_eq!(input.name(), "Core sources");
+    assert_eq!(input.source_kind(), AnalysisSourceKind::Telegram);
+    assert_eq!(input.source_ids(), &[2, 4]);
 }
 
 #[test]
@@ -180,10 +132,25 @@ fn template_kind_validation_returns_typed_error() {
 
 #[test]
 fn source_group_input_validation_returns_typed_error() {
-    let error = normalize_source_group_input("  ", vec![1]).expect_err("reject empty name");
+    let error = AnalysisSourceGroupInput::new(
+        "  ".to_string(),
+        AnalysisSourceKind::Telegram,
+        vec![1],
+    )
+    .expect_err("reject empty name");
 
     assert_eq!(error.kind, AppErrorKind::Validation);
     assert_eq!(error.message, "Source group name cannot be empty");
+
+    let error = AnalysisSourceGroupInput::new(
+        "Core sources".to_string(),
+        AnalysisSourceKind::Telegram,
+        vec![0, -1],
+    )
+    .expect_err("reject all-nonpositive source ids");
+
+    assert_eq!(error.kind, AppErrorKind::Validation);
+    assert_eq!(error.message, "Select at least one source for the group");
 }
 
 #[test]

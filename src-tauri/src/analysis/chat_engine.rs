@@ -15,9 +15,7 @@ use super::models::{
     AnalysisRunDetail,
 };
 use super::report::AnalysisExecutionError;
-use super::store::{
-    analysis_run_exists, resolve_legacy_analysis_chat_run_in_pool, resolve_run_scope_label,
-};
+use super::store::{analysis_run_exists, resolve_run_scope_label};
 
 fn chat_search_terms(question: &str) -> Vec<String> {
     const STOP_WORDS: &[&str] = &[
@@ -516,6 +514,36 @@ pub fn publish_analysis_chat_persistence_error(
         .publish(sink);
 }
 
+pub async fn list_analysis_chat_messages_in_pool(
+    pool: &SqlitePool,
+    run_id: i64,
+) -> AppResult<Vec<AnalysisChatMessage>> {
+    if !analysis_run_exists(pool, run_id).await? {
+        return Err(AppError::not_found(format!(
+            "Analysis run {run_id} not found"
+        )));
+    }
+    load_chat_messages_from_pool(pool, run_id).await
+}
+
+pub async fn clear_analysis_chat_messages_in_pool(
+    pool: &SqlitePool,
+    run_id: i64,
+) -> AppResult<()> {
+    if !analysis_run_exists(pool, run_id).await? {
+        return Err(AppError::not_found(format!(
+            "Analysis run {run_id} not found"
+        )));
+    }
+
+    sqlx::query("DELETE FROM analysis_chat_messages WHERE run_id = ?")
+        .bind(run_id)
+        .execute(pool)
+        .await
+        .map_err(AppError::database)?;
+    Ok(())
+}
+
 async fn load_chat_messages_from_pool(
     pool: &Pool<Sqlite>,
     run_id: i64,
@@ -596,7 +624,8 @@ mod tests {
     use super::{
         analysis_chat_request_metadata, build_chat_request, complete_analysis_chat,
         completed_chat_persistence_failure_message, ensure_completed_chat_context,
-        execute_analysis_chat, format_chat_context_messages, prepare_analysis_chat,
+        clear_analysis_chat_messages_in_pool, execute_analysis_chat, format_chat_context_messages,
+        list_analysis_chat_messages_in_pool, prepare_analysis_chat,
         publish_analysis_chat_execution_error, publish_analysis_chat_persistence_error,
         AskAnalysisRunQuestionRequest, ChatRequestParams,
     };
@@ -885,6 +914,33 @@ mod tests {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:")
             .await
             .expect("connect failure-event pool");
+        sqlx::query("CREATE TABLE analysis_runs (id INTEGER PRIMARY KEY)")
+            .execute(&pool)
+            .await
+            .expect("create failure-event runs");
+        sqlx::query(
+            "CREATE TABLE analysis_chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .expect("create failure-event chat messages");
+        let list_error = match list_analysis_chat_messages_in_pool(&pool, 77).await {
+            Ok(_) => panic!("missing run list should fail"),
+            Err(error) => error,
+        };
+        let clear_error = clear_analysis_chat_messages_in_pool(&pool, 77)
+            .await
+            .expect_err("missing run clear should fail");
+        for error in [list_error, clear_error] {
+            assert_eq!(error.kind, extractum_core::error::AppErrorKind::NotFound);
+            assert_eq!(error.message, "Analysis run 77 not found");
+        }
         let sink = RecordingChatEventSink::new(pool);
         publish_analysis_chat_persistence_error(&sink, "request-1", 77, &error);
         publish_analysis_chat_execution_error(
@@ -942,6 +998,7 @@ mod tests {
             .await
             .expect("connect chat runtime pool");
         for statement in [
+            "CREATE TABLE analysis_runs (id INTEGER PRIMARY KEY)",
             "CREATE TABLE analysis_chat_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 run_id INTEGER NOT NULL,
@@ -969,6 +1026,10 @@ mod tests {
                 .await
                 .expect("create chat runtime schema");
         }
+        sqlx::query("INSERT INTO analysis_runs (id) VALUES (77)")
+            .execute(&pool)
+            .await
+            .expect("insert chat runtime run");
         sqlx::query(
             "INSERT INTO analysis_run_messages (
                 run_id, item_id, source_id, external_id, author, published_at, ref,
@@ -1093,6 +1154,28 @@ mod tests {
                 .await
                 .expect("load persisted chat rows");
         assert_eq!(persisted, expected_rows);
+        let listed = list_analysis_chat_messages_in_pool(&pool, 77)
+            .await
+            .expect("list persisted chat rows");
+        assert_eq!(
+            listed
+                .iter()
+                .map(|message| (message.role.as_str(), message.content.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("user", "What changed?"),
+                ("assistant", "Grounded answer [s2-i1]."),
+            ]
+        );
+        clear_analysis_chat_messages_in_pool(&pool, 77)
+            .await
+            .expect("clear persisted chat rows");
+        assert!(
+            list_analysis_chat_messages_in_pool(&pool, 77)
+                .await
+                .expect("list cleared chat rows")
+                .is_empty()
+        );
         server.join().expect("chat completion server");
     }
 }

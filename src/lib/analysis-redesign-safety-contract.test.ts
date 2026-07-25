@@ -30,7 +30,7 @@ const corpusSourceResolutionSource = crateOwned(
   "corpus/source_resolution_policy.rs",
   "corpus/source_resolution.rs",
 );
-const storeBackendFacadeSource = crateOwned("store.rs");
+const storeBackendFacadeSource = crateOwned("store_portable.rs", "store.rs");
 const storeReadModelSource = crateOwned("store/owned_read_model.rs", "store/read_model.rs");
 const storeRunsSource = crateOwned("store/runs.rs");
 const storeSnapshotSource = crateOwned("store/snapshot.rs");

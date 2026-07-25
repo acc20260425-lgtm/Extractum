@@ -1,4 +1,4 @@
-use sqlx::{Pool, Sqlite};
+use sqlx::{Pool, Sqlite, SqlitePool};
 
 use super::super::models::{
     AnalysisRunDetail, AnalysisRunMessage, AnalysisRunMessageCursor, AnalysisRunMessagesPage,
@@ -65,6 +65,39 @@ pub(crate) struct ListRunSnapshotMessagesRequest {
     pub(crate) around_ref: Option<String>,
 }
 
+pub async fn list_run_snapshot_messages_page(
+    pool: &SqlitePool,
+    run_id: i64,
+    after: Option<AnalysisRunMessageCursor>,
+    limit: Option<i64>,
+    source_id: Option<i64>,
+    around_ref: Option<String>,
+) -> AppResult<AnalysisRunMessagesPage> {
+    let exists =
+        sqlx::query_scalar::<_, i64>("SELECT EXISTS(SELECT 1 FROM analysis_runs WHERE id = ?)")
+            .bind(run_id)
+            .fetch_one(pool)
+            .await
+            .map_err(AppError::database)?;
+    if exists == 0 {
+        return Err(AppError::not_found(format!(
+            "Analysis run {run_id} not found"
+        )));
+    }
+
+    list_run_snapshot_messages_page_with_request(
+        pool,
+        ListRunSnapshotMessagesRequest {
+            run_id,
+            after,
+            limit: limit.unwrap_or(100).clamp(1, 500) as usize,
+            source_id,
+            around_ref,
+        },
+    )
+    .await
+}
+
 fn decode_optional_metadata_json(
     metadata_zstd: Option<&[u8]>,
 ) -> AppResult<Option<serde_json::Value>> {
@@ -94,7 +127,7 @@ fn run_message_from_snapshot_row(row: StoredRunSnapshotRow) -> AppResult<Analysi
     })
 }
 
-pub(crate) async fn list_run_snapshot_messages_page(
+async fn list_run_snapshot_messages_page_with_request(
     pool: &Pool<Sqlite>,
     request: ListRunSnapshotMessagesRequest,
 ) -> AppResult<AnalysisRunMessagesPage> {
@@ -292,10 +325,14 @@ pub(crate) async fn load_run_corpus_messages(
 
 pub(crate) async fn load_trace_resolution_messages(
     pool: &Pool<Sqlite>,
-    run: &AnalysisRunDetail,
+    run_id: i64,
+    snapshot_is_captured: bool,
+    snapshot_message_count: i64,
 ) -> AppResult<Vec<AnalysisCorpusMessage>> {
-    let snapshot = load_run_snapshot_messages(pool, run.id).await?;
-    ensure_captured_snapshot_rows(run, &snapshot)?;
+    let snapshot = load_run_snapshot_messages(pool, run_id).await?;
+    if snapshot_is_captured && snapshot_message_count == 0 && snapshot.is_empty() {
+        return Err(captured_snapshot_missing_error(run_id));
+    }
     Ok(snapshot)
 }
 

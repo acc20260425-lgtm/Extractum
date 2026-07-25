@@ -1,8 +1,6 @@
-use std::collections::{BTreeSet, HashSet};
-
 use sqlx::{Pool, Sqlite};
 
-use crate::analysis::AnalysisState;
+use crate::analysis::{analysis_run_ids_depending_on_sources, AnalysisState};
 use crate::error::{AppError, AppResult};
 use crate::llm::LlmSchedulerState;
 use crate::source_ingest::SourceIngestLocks;
@@ -117,76 +115,18 @@ async fn collect_account_deletion_blockers(
         });
     }
     let active_run_ids = analysis_state.active_report_run_ids().await;
-    for run_id in run_ids_depending_on_sources(pool, &active_run_ids, owned_source_ids).await? {
+    for run_id in
+        analysis_run_ids_depending_on_sources(pool, &active_run_ids, owned_source_ids).await?
+    {
         blocking_work.push(AccountDeletionBlocker::AnalysisRun { run_id });
     }
     let llm_owner_run_ids = llm_scheduler.active_owner_run_ids().await;
-    for run_id in run_ids_depending_on_sources(pool, &llm_owner_run_ids, owned_source_ids).await? {
+    for run_id in
+        analysis_run_ids_depending_on_sources(pool, &llm_owner_run_ids, owned_source_ids).await?
+    {
         blocking_work.push(AccountDeletionBlocker::LlmRequest { run_id });
     }
     Ok(blocking_work)
-}
-
-async fn run_ids_depending_on_sources(
-    pool: &Pool<Sqlite>,
-    candidate_run_ids: &HashSet<i64>,
-    owned_source_ids: &[i64],
-) -> AppResult<BTreeSet<i64>> {
-    if candidate_run_ids.is_empty() || owned_source_ids.is_empty() {
-        return Ok(BTreeSet::new());
-    }
-
-    let owned = owned_source_ids.iter().copied().collect::<HashSet<_>>();
-    let mut blocked = BTreeSet::new();
-    let rows = sqlx::query_as::<_, AnalysisRunScopeRow>(
-        "SELECT id, source_id, source_group_id FROM analysis_runs ORDER BY id ASC",
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(AppError::database)?;
-
-    for row in rows {
-        if !candidate_run_ids.contains(&row.id) {
-            continue;
-        }
-        if row
-            .source_id
-            .is_some_and(|source_id| owned.contains(&source_id))
-        {
-            blocked.insert(row.id);
-            continue;
-        }
-        if let Some(group_id) = row.source_group_id {
-            if group_has_owned_source(pool, group_id, &owned).await? {
-                blocked.insert(row.id);
-            }
-        }
-    }
-    Ok(blocked)
-}
-
-async fn group_has_owned_source(
-    pool: &Pool<Sqlite>,
-    group_id: i64,
-    owned_source_ids: &HashSet<i64>,
-) -> AppResult<bool> {
-    let source_ids = sqlx::query_scalar::<_, i64>(
-        "SELECT source_id FROM analysis_source_group_members WHERE group_id = ?",
-    )
-    .bind(group_id)
-    .fetch_all(pool)
-    .await
-    .map_err(AppError::database)?;
-    Ok(source_ids
-        .into_iter()
-        .any(|source_id| owned_source_ids.contains(&source_id)))
-}
-
-#[derive(sqlx::FromRow)]
-struct AnalysisRunScopeRow {
-    id: i64,
-    source_id: Option<i64>,
-    source_group_id: Option<i64>,
 }
 
 async fn account_exists(pool: &Pool<Sqlite>, account_id: i64) -> AppResult<bool> {
