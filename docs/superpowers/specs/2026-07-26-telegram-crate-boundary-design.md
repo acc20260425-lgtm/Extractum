@@ -130,7 +130,8 @@ The refreshed read-only snapshot was taken on 2026-07-26 at
   YouTube, diagnostics, and startup. It is generic application infrastructure,
   not a Telegram-owned module.
 - `media.rs` has eleven external consumers, but only its Grammers adapter is
-  part of Phase 8; pure media metadata already belongs to `extractum-core`.
+  part of Phase 8; provider-neutral media metadata already belongs to
+  `extractum-core`, while the Telegram-ingest middle layer is assigned below.
 
 The fresh evidence supports a physical Grammers boundary but rejects the stale
 whole-file ownership map.
@@ -216,13 +217,52 @@ application workflow completion.
   warnings, provenance, terminal status, command wrappers, task spawn, and UI
   events;
 - diagnostics and all cross-domain integration tests;
-- pure media metadata encoding, decoding, and labels already delegated to
-  `extractum-core`.
+- the private `crate::media` compatibility facade over provider-neutral core
+  metadata plus the Telegram-owned ingest payload.
 
 The app may hold `TelegramRuntime` as managed state, but the runtime's internal
 clients, login tokens, sessions, and runners remain private to the crate.
 
-## Three Retainable Sub-Slices
+## Media Value Ownership
+
+Phase 8 completes rather than reverses the historical Phase 1 split:
+
+- `extractum-core::media_metadata` remains the single owner of the
+  provider-neutral `ItemMediaMetadata`, its codec, and `media_label`;
+- `extractum-telegram` becomes the single owner of the Telegram-ingest payload
+  and classification layer that Phase 1 intentionally left beside the
+  Grammers adapter;
+- application `media.rs` remains a private compatibility facade and contains
+  no independent definition after 8C.
+
+The middle layer is dependency-pure but semantically the output of Telegram
+live/raw adapters; moving it into core would make provider-specific ingest
+DTOs foundational merely to avoid a public Telegram value. Phase 8 therefore
+uses the lower owning domain, `extractum-telegram`, rather than broadening
+core.
+
+The disposition is exact and forbids duplicate or conversion-only types:
+
+- current `ExtractedMediaPayload` is renamed once to public
+  `TelegramMediaPayload` with the same `kind` and
+  `ItemMediaMetadata` fields;
+- current `ExtractedItemPayload` is not retained as a second public DTO; its
+  `content`, `content_kind`, and optional media fields become fields of
+  `TelegramMessageDraft`;
+- current `SourceItemInsert` becomes the single `TelegramMessageDraft`
+  provider-to-storage hand-off, also carrying its existing author, published
+  time, canonical raw payload, reply/context, and identity data;
+- `DocumentSignals`, the content-kind constants, `derive_content_kind`, and
+  `derive_document_media_kind` move with the Telegram adapter; only items
+  required by app construction/tests are curated public API, and the remaining
+  helpers stay crate-private.
+
+App SQL accepts `TelegramMessageDraft` directly. There is no app mirror DTO,
+no `ExtractedItemPayload` to `TelegramMessageDraft` mapping, and no duplicate
+media payload. The two current media classification tests move to
+`extractum-telegram` through the frozen test-identity map.
+
+## Three Separately Green Sub-Slices
 
 The crate is intentionally not created in 8A or 8B. Current Takeout obtains
 the same raw client and session owned by the runtime. Moving runtime/session
@@ -241,8 +281,14 @@ It must:
 
 - freeze executable test identities and characterize externally observable
   behavior before refactoring;
+- verify the exact 43 helper-dependent plus three credential-SQL app
+  assignments below, classify each of the other 73 identities by subject, and
+  commit the literal immutable 119-entry map before any test module is split;
 - introduce owned Telegram DTOs, typed error categories, and opaque
   runtime/login/session concepts behind the private `crate::telegram` facade;
+- establish the exact single-owner media disposition above, preserve the
+  `crate::media` facade, and prepare `TelegramMessageDraft` as the single
+  `SourceItemInsert` replacement rather than a mapped duplicate;
 - separate session codec behavior from app path/keyring/file operations;
 - introduce `TelegramApiHash` and `SessionEncryptionKey` secret wrappers;
 - pin exact command, event, status, session, secret, and error compatibility;
@@ -274,6 +320,10 @@ It must:
 - place every crate-assigned production symbol and implementation-local test
   into its final portable file unit behind the private app facade, so 8C does
   not split a mixed Rust file;
+- build the exact `src-tauri/src/telegram_impl/**` staging layout declared
+  below, including the concrete Takeout file split;
+- complete the separately green workspace-dependency normalization checkpoint
+  without changing the app's direct dependency graph;
 - freeze the complete symbol and test move map while keeping all preparation
   contracts GREEN.
 
@@ -288,9 +338,17 @@ At 8B completion:
 - the app remains fully buildable because the physical crate edge has not yet
   been introduced.
 
-8B is useful and retainable even if 8C is deferred: it leaves a cleaner
-single-package architecture without duplicating a runtime or exposing raw
-protocol types.
+`8B preparation retained; 8C pending` is not an extraction success or an
+independently claimed dependency benefit. Its full disposition is:
+
+> 8B preparation retained; 8C pending: all runtime/session/live-source/Takeout
+> package seams are prepared and contract-GREEN inside `extractum`; no crate or
+> workspace edge exists yet, all four Grammers roots remain app-owned, and
+> Phase 8's dependency-removal outcome is incomplete.
+
+This means only that the separately green preparation is recoverable. If 8C is
+deferred or canceled, the owner explicitly chooses whether to retain or revert
+that overhead; the roadmap does not report Phase 8 as successful.
 
 ### 8C — single mechanical extraction and dependency cleanup
 
@@ -343,12 +401,14 @@ exact signatures and constructor visibility before 8A code begins:
   zeroization through its secret container, no `Debug` secret output, and no
   getter;
 - `TelegramMessageDraft`: owned message identity, content, author, reply,
-  raw-context, and media data needed by app persistence;
+  raw-context, and media data needed by app persistence; it is the single
+  renamed/re-homed form of current `SourceItemInsert` and absorbs the current
+  `ExtractedItemPayload` fields;
 - `PeerDescriptor`: owned Telegram identity, typed peer kind, membership, and
   metadata needed by resolution and persistence;
 - `ForumTopicSnapshot`: owned topic data;
-- `TelegramMediaPayload`: owned media payload compatible with
-  `extractum-core` media metadata;
+- `TelegramMediaPayload`: the single renamed/re-homed form of current
+  `ExtractedMediaPayload`, containing `ItemMediaMetadata` from core;
 - `MessageRange`, `TakeoutPage`, and `TakeoutMessage`: owned Takeout operation
   values;
 - `TelegramError`: a typed, non-IPC error returned to the app facade.
@@ -523,9 +583,46 @@ started.
 
 ## Manifest and Dependency Contract
 
-8A and 8B do not create a crate or move a Grammers dependency declaration.
-8C adds `crates/extractum-telegram` as a workspace member and adds one
-application path dependency on it.
+The physical final crate path is
+`src-tauri/crates/extractum-telegram`. The workspace-member spelling
+`crates/extractum-telegram` is relative to `src-tauri/Cargo.toml`; no
+repository-root `crates/` directory is created.
+
+8A does not create a crate or change dependency ownership.
+
+8B contains a named, separately green **workspace dependency normalization**
+checkpoint in the existing `src-tauri/Cargo.toml`:
+
+1. promote `base64`, `chacha20poly1305`, `rand_core`, and all four pinned
+   Grammers roots from app-inline declarations into
+   `[workspace.dependencies]`;
+2. make the application inherit the same roots without removing any direct
+   app edge or changing any effective version, Git revision, default feature,
+   or explicit feature;
+3. run `cargo metadata --locked` and regenerate the lockfile only if Cargo's
+   resolved package/dependency data changes.
+
+The normalized declarations preserve this exact baseline:
+
+```toml
+base64 = "0.22"
+chacha20poly1305 = { version = "0.10", features = ["std"] }
+grammers-client = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", default-features = false }
+grammers-session = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", default-features = false, features = ["serde"] }
+grammers-mtsender = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa" }
+grammers-tl-types = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", features = ["deserializable-functions"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+```
+
+Promotion alone is expected to leave the resolved graph unchanged, so the
+checkpoint must not fabricate a `Cargo.lock` hunk. It records either the
+actual generated hunk or byte identity of the lockfile.
+
+8C adds `crates/extractum-telegram` as a workspace member, makes its package
+manifest inherit the prepared roots, adds one application path dependency on
+the crate, and removes the app's direct Grammers plus session-only crypto
+edges. That package-graph change must have its own generated
+`src-tauri/Cargo.lock` hunk.
 
 The intended final crate production dependency roots are:
 
@@ -542,16 +639,35 @@ The intended final crate production dependency roots are:
 - `serde_json`;
 - `tokio`.
 
-The implementation plan must verify actual use before generating the manifest
-and may remove an unused root. Adding another root requires an explicit design
-amendment rather than an opportunistic extraction change.
+This list is the audited expected baseline, not permission to add capabilities
+speculatively. The implementation plan must verify actual imports against the
+frozen 8B file map and may remove an unused root. It may also add a root that
+is a direct, demonstrated dependency of an already-approved moved file, or
+refine dependency features, without amending this design. The manifest
+contract must name that evidence.
+
+A new root or feature that introduces a new capability or owner — including
+SQL, Tauri/IPC, keyring, independent HTTP/network transport, filesystem,
+process, or OS integration not already frozen in the move map — requires a
+design amendment. Neighboring crates using a dependency is not evidence that
+this crate needs it.
+
+The expected production Tokio features include `rt`, `sync`, and `time`;
+`time` is required by the current avatar timeout. Test-only `macros`,
+`test-util`, or other features belong in the exact dev-dependency contract.
+`tokio-util` is not implied merely because adjacent crates use it: Takeout job
+cancellation stays app-owned. If the frozen final file map proves another
+portable Tokio/Tokio-util use, the implementation plan may declare the minimal
+root/features and cite the exact source use.
 
 The four Grammers roots keep the exact current Codeberg revision and effective
 features. In particular:
 
 - `grammers-client` keeps default features disabled;
 - `grammers-session` keeps default features disabled and `serde` enabled;
+- `grammers-mtsender` keeps its effective default features;
 - `grammers-tl-types` keeps `deserializable-functions`;
+- `grammers-tl-types` keeps its effective default features;
 - the Takeout owner carries the `deserializable-functions` requirement.
 
 Canonical versions and Git pins belong in `[workspace.dependencies]`; package
@@ -559,32 +675,149 @@ manifests inherit them. `base64` remains an app dependency where independently
 used, while session-only crypto roots leave the app when their last app use is
 moved.
 
-The 8C manifest patch must include the corresponding
-`src-tauri/Cargo.lock` hunk and pass `cargo metadata --locked`. Any separately
-justified manifest change during 8A/8B carries its own lockfile hunk and may
-not pre-move a Grammers ownership edge.
+Every manifest checkpoint must pass `cargo metadata --locked`. 8B proves
+normalization preserved the app's direct dependency graph; 8C proves the new
+crate owns the direct Grammers edges and the app does not.
+
+### Direct-dependency proof
+
+The primary final absence proof parses JSON from:
+
+```powershell
+cargo metadata --manifest-path src-tauri/Cargo.toml --locked --format-version 1
+```
+
+The standing contract must:
+
+1. resolve `metadata.workspace_members` back to packages and find exactly one
+   `extractum` at the expected app manifest plus one `extractum-telegram` at
+   the canonicalized physical
+   `src-tauri/crates/extractum-telegram/Cargo.toml`;
+2. require exactly one `extractum-telegram` declaration total from `extractum`,
+   with normal kind, no target, rename, or source, and the canonicalized
+   expected path; require exactly one corresponding immediate resolved edge
+   whose sole dependency-kind entry is normal and target-free;
+3. require zero direct `grammers-client`, `grammers-session`,
+   `grammers-mtsender`, or `grammers-tl-types` declarations from `extractum`
+   across normal, development, build, and target-qualified dependency kinds;
+4. map the app resolve node's immediate dependency package IDs back through
+   `packages[].id` and require zero immediate resolved Grammers packages,
+   rather than comparing Cargo-normalized alias strings;
+5. require all four direct Grammers roots on `extractum-telegram`, with the
+   exact Codeberg source/revision, default-feature policy, and explicit feature
+   arrays declared above;
+6. compare resolved node feature sets, order-independently, to
+   `grammers-client = []`, `grammers-session = ["serde"]`,
+   `grammers-mtsender = []`, and
+   `grammers-tl-types = ["default", "deserializable-functions",
+   "impl-debug", "impl-from-enum", "impl-from-type", "tl-api",
+   "tl-mtproto"]`;
+7. parse the declared Git `rev` query and resolved source commit fragment and
+   require each to equal the full
+   `1f901ce6e973fdcf0e74267f3d8efad5c729daaa`, not merely contain a
+   substring;
+8. remove the app's immediate `extractum-telegram` edge from a copy of the
+   resolve graph and prove that no Grammers package remains reachable from the
+   app node.
+
+Grammers packages are intentionally allowed elsewhere in `packages` and as
+transitive app dependencies through `extractum-telegram`; the graph-cut proves
+that every such app path passes through the owning crate. A global package-name
+ban would reject the desired graph and is forbidden.
+
+The secondary source scan covers every app-owned Rust source and test. It
+checks imports and fully qualified paths, raw `tl::` uses, aliases, re-exports,
+and raw Grammers/TL type names. A passing grep without the metadata proof is
+not dependency evidence.
+
+## 8B Staging Layout
+
+The 2,828-line `takeout_import/mod.rs` is not moved or split ad hoc during 8C.
+8B prepares the future crate layout inside the application at the exact
+physical path:
+
+```text
+src-tauri/src/telegram_impl/
+  lib.rs
+  dto.rs
+  error.rs
+  runtime.rs
+  session.rs
+  media.rs
+  live/
+    mod.rs
+    avatar.rs
+    peer.rs
+    messages.rs
+    topics.rs
+  takeout/
+    mod.rs
+    types.rs
+    transport.rs
+    export_dc.rs
+    operations.rs
+    pagination.rs
+    raw_parse.rs
+    forum_topics.rs
+```
+
+The application connects this tree only through private
+`#[path = "telegram_impl/lib.rs"] mod telegram_impl;`. By the end of 8B every
+file in this staging tree is package-portable: it imports no application
+module, SQLx, Tauri, keyring type, or app `AppError`.
+
+The Takeout staging boundary is concrete:
+
+- `transport.rs` owns the raw transport half of current
+  `export_dc_invoke_with_provenance`;
+- `export_dc.rs` owns export-DC selection and invocation;
+- `operations.rs` owns Telegram self-check, init/finish, peer validation,
+  migration detect/revalidate, count/history/search/page operations, and pure
+  attempt/fallback outcomes;
+- `raw_parse.rs` owns peer/TL identity conversion and raw response
+  classification/parsing;
+- `pagination.rs` owns range, page, and cursor rules;
+- `forum_topics.rs` owns the remote forum-topic operation;
+- `types.rs` owns the pure Takeout inputs, outputs, attempts, and fallback
+  metadata.
+
+The app-owned `takeout_import/mod.rs` keeps commands, jobs, cancellation and
+selection loops, persistence, provenance recording, warnings, progress/event
+emission, and terminal batch finalization. Concrete crate operations return
+pure results plus attempt/fallback metadata; only the app records that metadata
+as provenance.
+
+8C then moves `src-tauri/src/telegram_impl/**` without behavior or logic edits to
+`src-tauri/crates/extractum-telegram/src/**`, replaces the private module with
+the path dependency, and leaves app coordinators in place. “Mechanical” here
+means no behavior or logic edit: only the frozen module-path, import,
+visibility, manifest, and lockfile changes are allowed.
 
 ## Current-File Disposition
 
 The implementation plans must freeze a symbol-level move map. The minimum
 disposition is:
 
-| Current path | Crate-owned portion | App-owned portion |
-| --- | --- | --- |
-| `telegram.rs` | client/runtime/login/session ownership | commands, SQL/secret resolution, status/event mapping |
-| `telegram_session_store.rs` | saved-session model, codec, encryption, Grammers conversion | app-data path, keyring adapter, file lifecycle |
-| `media.rs` | Grammers-to-pure media adapter | private compatibility facade; core metadata remains in core |
-| `sources/avatar.rs` | Telegram photo transport | cache paths, writes, cleanup and app presentation |
-| `sources/identity.rs` | Grammers peer conversion | DB rows, normalization and source identity policy |
-| `sources/items.rs` | message/author/reply/raw/media conversion | SQL and cross-domain item transaction |
-| `sources/peer_resolution.rs` | remote resolve and peer mapping | planning, DB identity, cache and orchestration |
-| `sources/sync.rs` | live message retrieval and pure identity mapping | locks, settings, persistence and finalization |
-| `sources/topics.rs` | remote topic retrieval and mapping | SQL upsert/read models and refresh coordination |
-| `takeout_import/export_dc.rs` | export-DC and concrete raw invocation | app error/event adaptation if any remains |
-| `takeout_import/forum_topics.rs` | remote Telegram topic operation | batch warnings and refresh coordination |
-| `takeout_import/mod.rs` | raw transport, migration probes and page operations | commands, jobs, cancellation, provenance and persistence loop |
-| `takeout_import/pagination.rs` | raw page/range parsing and cursor rules | no Grammers-bearing app portion |
-| `takeout_import/raw_parse.rs` | raw TL-to-owned draft conversion | no Grammers-bearing app portion |
+| Current path | Physical LOC | Crate-owned portion | App-owned portion |
+| --- | ---: | --- | --- |
+| `takeout_import/mod.rs` | 2,828 | raw transport, migration probes, validation, remote operations, response classification | commands, jobs, cancellation, provenance, persistence and finalization |
+| `sources/items.rs` | 2,136 | message/author/reply/raw/media conversion | SQL and cross-domain item transaction |
+| `sources/peer_resolution.rs` | 1,198 | remote resolve and peer mapping | planning, DB identity, cache and orchestration |
+| `sources/topics.rs` | 817 | remote topic retrieval and mapping | SQL upsert/read models and refresh coordination |
+| `telegram.rs` | 712 | client/runtime/login/session ownership | commands, SQL/secret resolution, status/event mapping |
+| `takeout_import/raw_parse.rs` | 645 | raw TL-to-owned draft conversion | no Grammers-bearing app portion |
+| `takeout_import/pagination.rs` | 569 | raw page/range parsing and cursor rules | no Grammers-bearing app portion |
+| `sources/sync.rs` | 550 | live message retrieval and pure identity mapping | locks, settings, persistence and finalization |
+| `telegram_session_store.rs` | 463 | saved-session model, codec, encryption, Grammers conversion | app-data path, keyring adapter, file lifecycle |
+| `sources/identity.rs` | 380 | Grammers peer conversion | DB rows, normalization and source identity policy |
+| `takeout_import/export_dc.rs` | 360 | export-DC and concrete raw invocation | app error/event adaptation if any remains |
+| `media.rs` | 275 | Telegram media payload/classification and Grammers adapter | private compatibility facade; provider-neutral core values remain in core |
+| `takeout_import/forum_topics.rs` | 238 | remote Telegram topic operation | batch warnings and refresh coordination |
+| `sources/avatar.rs` | 110 | Telegram photo transport | cache paths, writes, cleanup and app presentation |
+
+The 14-file perimeter is 11,281 physical lines. The four largest files are
+61.9% of it; the eight largest are 83.8%. These verified shares are descriptive
+only and do not replace the symbol-level move map.
 
 `accounts.rs`, `account_deletion.rs`, `secret_store.rs`,
 `sources/test_support.rs`, Takeout state/recovery, migrations, diagnostics, and
@@ -610,6 +843,146 @@ Raw Grammers/TL/session/error fixtures move with the owning crate test. App
 tests switch to pure DTOs and opaque fake capabilities. The crate receives no
 dev dependency on the application or app test-support modules.
 
+The committed map is a literal immutable baseline, not a count recomputed from
+the changing tree. Every entry has the form:
+
+```text
+{
+  baseline_package,
+  baseline_full_id,
+  staged_path,
+  final_owner,
+  final_full_id,
+  companion_final_ids
+}
+```
+
+`companion_final_ids` is normally empty. It is populated only when an existing
+mixed integration identity must retain one primary owner while a new test
+captures the other side of the split.
+
+8B proves the app-only executable identities against that same map. 8C proves
+the union of app and crate identities against it. A renamed or deleted path
+cannot silently remove an identity from the baseline.
+
+### Application fixture audit
+
+The audit of all 119 perimeter tests quantifies the deferred
+`sources::test_support` problem before producer code moves:
+
+- exactly 43 SQL/integration tests use one or more of the seven app-only
+  helpers `memory_pool_with_sources`,
+  `memory_pool_with_source_items_and_topics`,
+  `create_analysis_documents_table`,
+  `create_ingest_provenance_tables`,
+  `create_migrated_history_capability_tables`,
+  `create_item_identity_indexes`, and
+  `create_archive_read_model_tables`;
+- those 43 identities remain in `extractum`, because their subject is
+  app-owned tables, transactions, provenance, topic membership, watermarks, or
+  cross-domain derived writes;
+- three credential SQL identities also remain in `extractum` because account
+  SQL remains app-owned:
+  `legacy_api_hash_migrates_to_secret_store_and_blanks_column`,
+  `legacy_api_hash_remains_when_secret_write_fails`, and
+  `missing_secure_api_hash_for_blank_legacy_account_is_auth_error`;
+- the remaining 73 identities have no aggregate owner. 8A must assign each one
+  from its actual subject before any test move; app diagnostics, routing,
+  cancellation, warning, request/read-model, storage/codec, and other
+  non-protocol tests remain app-owned during Phase 8. Moving an identity to
+  `extractum-core` is a separate slice, not a third Phase 8 owner.
+
+The exact 43 app-fixture identities are frozen by module:
+
+- `sources::identity::tests` (2):
+  `load_telegram_identity_returns_typed_row`,
+  `load_telegram_runtime_source_pairs_source_with_typed_identity`;
+- `sources::sync::tests` (3):
+  `determine_sync_policy_only_applies_initial_settings_on_first_sync`,
+  `finalize_sync_updates_source_state_and_typed_avatar_cache`,
+  `finalize_sync_preserves_existing_legacy_metadata_blob`;
+- `sources::items::tests` (19):
+  `insert_source_item_writes_payload_and_skips_duplicates`,
+  `insert_telegram_source_item_skips_duplicate_native_identity_without_updating_payload`,
+  `telegram_insert_outcome_returns_item_ids_for_insert_and_duplicate`,
+  `telegram_insert_writes_analysis_document_in_same_writer_transaction`,
+  `single_telegram_insert_maintains_ready_archive_model`,
+  `telegram_insert_with_observation_records_insert_duplicate_and_skipped_rows`,
+  `takeout_observation_insert_marks_ready_archive_model_stale_without_per_item_build`,
+  `insert_telegram_source_item_resolves_topic_membership_only_for_new_item`,
+  `scoped_resolution_increments_unresolved_count_for_inserted_unmatched_item`,
+  `insert_telegram_source_item_allows_same_message_id_in_different_history_domains`,
+  `migrated_small_group_insert_skips_current_history_derived_writes`,
+  `migrated_insert_idempotency_uses_old_chat_native_identity`,
+  `youtube_transcript_upsert_targets_non_telegram_partial_unique_index`,
+  `upsert_youtube_transcript_item_updates_existing_text_and_returns_id`,
+  `youtube_comment_upsert_targets_non_telegram_partial_unique_index`,
+  `youtube_comment_upsert_writes_analysis_document_and_updates_content`,
+  `list_source_items_enriches_youtube_comment_rows_from_raw_payload`,
+  `list_source_items_keeps_base_youtube_comment_when_raw_payload_is_malformed`,
+  `upsert_youtube_comment_item_updates_existing_text_and_reaction_count`;
+- `sources::topics::tests` (5):
+  `forum_topic_refresh_gate_uses_typed_identity_not_legacy_kind`,
+  `forum_topic_gate_ignores_malformed_source_metadata_when_typed_identity_exists`,
+  `list_source_forum_topics_returns_sorted_topics_and_uncategorized_bucket`,
+  `upsert_forum_topics_refresh_preserves_missing_topics_and_marks_deleted`,
+  `topic_refresh_rebuilds_materialized_memberships`;
+- `takeout_import::tests` (12):
+  `channel_private_count_probe_records_fallback_before_search_continuation`,
+  `export_dc_fallback_provenance_records_once_before_finalize`,
+  `channel_private_validation_preflight_records_fallback_and_continues`,
+  `takeout_subtype_load_uses_typed_identity_not_legacy_kind`,
+  `takeout_subtype_load_ignores_malformed_source_metadata_when_typed_identity_exists`,
+  `takeout_parsed_items_with_same_message_id_insert_under_different_history_peers`,
+  `takeout_duplicate_parsed_item_updates_topic_unresolved_count_once`,
+  `locked_start_conflict_creates_no_provenance_rows`,
+  `locked_start_allows_only_one_batch_for_same_source`,
+  `migrated_history_start_records_use_same_source_takeout_lock`,
+  `migrated_history_start_requires_available_capability`,
+  `historical_batch_completion_does_not_advance_source_watermark`;
+- `takeout_import::forum_topics::tests` (2):
+  `takeout_forum_topic_refresh_failure_records_warning_before_batch_finalize`,
+  `takeout_forum_topic_refresh_success_records_no_warning`.
+
+Mixed production files and test modules split by subject rather than moving as
+whole files. Crate-local tests may use Grammers TL values, `MemorySession`,
+pure DTOs, injected futures, and in-memory secret implementations. They may
+not copy app schemas or SQL fixture helpers. No app dev dependency, reverse
+dependency, or fixture crate is introduced.
+
+Two of the 43 retained app identities currently combine raw TL parsing with SQL
+assertions:
+
+- `takeout_parsed_items_with_same_message_id_insert_under_different_history_peers`;
+- `takeout_duplicate_parsed_item_updates_topic_unresolved_count_once`.
+
+8A first characterizes their complete current assertions. 8B then keeps each
+baseline identity app-side with preconstructed `TelegramMessageDraft` inputs
+for its storage/transaction subject, moves the raw TL fixture constructor into
+the portable staging tree, and adds these staged companion identities. They
+still execute under `extractum` during 8B but have final owner
+`extractum-telegram`:
+
+- `raw_parse_preserves_distinct_history_peer_identity_for_equal_message_ids`;
+- `raw_parse_preserves_identical_native_identity_for_same_peer_and_message_id`.
+
+The literal map records those companion IDs and the boundary contract proves
+that the app plus crate assertions jointly cover the characterized behavior.
+The second crate companion proves identical native identity for equal peer and
+message IDs; its retained app baseline proves the duplicate storage path is
+skipped and increments the unresolved count only once.
+These are the two known mandatory decompositions. If the 8A classification
+proves another genuinely mixed subject, its approved plan must name and
+characterize the split before changing the baseline test; a design amendment
+is required only if the split changes behavior or the approved ownership/API
+boundary.
+
+`sources::items::tests::media_metadata_roundtrip_through_zstd` is explicitly
+not a Telegram-crate candidate. It remains an app facade/storage contract for
+all of Phase 8; any later move to `extractum-core` is separately designed. The
+existing
+`media-metadata-core-contract.test.ts` must remain GREEN throughout Phase 8.
+
 Required standing contracts include:
 
 1. a Phase 8 roadmap/status contract in
@@ -617,14 +990,18 @@ Required standing contracts include:
 2. a new `telegram-crate-boundary-contract.test.ts`;
 3. exact workspace-member allowlist updates in all existing crate contracts;
 4. a curated crate-root/public-API allowlist;
-5. final absence of Grammers roots and Rust source/test references from the
-   app package;
+5. primary metadata-graph proof of final direct dependency ownership, plus the
+   secondary absence scan over app Rust source/tests;
 6. the exact 8B prepared implementation symbol map and intentionally absent
    crate/workspace edge;
-7. moved-not-copied source and test ownership;
-8. exact Grammers Git revision and feature ownership;
-9. required `Cargo.lock` changes for manifest-changing slices;
-10. frozen command/event/status/session/secret string contracts.
+7. the literal immutable 119-entry test-identity map, the exact 43
+   helper-dependent plus three credential-SQL app assignments, and the two
+   declared companion-test decompositions;
+8. moved-not-copied source and test ownership;
+9. exact Grammers Git revision and feature ownership;
+10. actual `Cargo.lock` changes or proved byte identity for each manifest
+    checkpoint;
+11. frozen command/event/status/session/secret string contracts.
 
 8B ends with GREEN preparation contracts. 8C begins by committing the final
 boundary contract intentionally RED only because the crate, workspace edge,
@@ -692,7 +1069,7 @@ Every retained sub-slice ends with:
 
 ```powershell
 npm.cmd run check:rustfmt
-cargo metadata --manifest-path src-tauri/Cargo.toml --locked --no-deps
+cargo metadata --manifest-path src-tauri/Cargo.toml --locked --format-version 1
 cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets
 cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets
 npm.cmd run verify
@@ -762,8 +1139,8 @@ The rollback ladder preserves useful green work:
    commit, never repaired by an unrelated follow-up mutation.
 
 Roadmap states must distinguish at least draft, approved/not-started, the
-plan-declared 8A checkpoint states, `8A retained`, `8B retained`,
-`done: retained`, and `not retained`.
+plan-declared preparation checkpoint states, `8A preparation retained`,
+`8B preparation retained; 8C pending`, `done: retained`, and `not retained`.
 
 No failure authorizes `git reset`, destructive path checkout, deletion of
 evidence, or silent resumption from a stale plan. Timing failure or slowdown is
@@ -807,17 +1184,26 @@ The design outcome is complete only when:
    remain single-owner workflows with their current ordering;
 7. `extractum-telegram` has no Tauri, SQLx, keyring, application, or foreign
    domain dependency;
-8. the crate public API is curated and contains no Grammers or secret-bearing
-   public field/getter;
-9. the application package has one path edge to `extractum-telegram` and no
-   direct Grammers dependency;
-10. app Rust, including tests, contains no Grammers import, path, raw TL type,
-    or direct dependency workaround;
-11. the exact Grammers revision and required features live with the crate
+8. `extractum-core` uniquely owns provider-neutral media metadata, while
+   `extractum-telegram` uniquely owns `TelegramMediaPayload`, classification,
+   and the single `TelegramMessageDraft` persistence hand-off; no mirror DTO,
+   duplicate payload, or conversion-only layer exists;
+9. all 119 baseline identities are explicitly classified by subject; the 43
+   helper-dependent and three credential-SQL identities remain app-owned, the
+   two declared mixed identities have named crate companions, and no
+   app/crate test-dependency cycle exists;
+10. the crate public API is curated and contains no Grammers or secret-bearing
+    public field/getter;
+11. parsed Cargo metadata proves the application package has one path edge to
+    `extractum-telegram` and no direct Grammers dependency while permitting the
+    intended transitive Grammers graph only through that edge;
+12. app Rust, including tests, contains no Grammers import, path, raw TL type,
+    alias/re-export, or direct dependency workaround;
+13. the exact Grammers revision and required features live with the crate
     dependency owner and the lockfile is current;
-12. crate, app, workspace, frontend/full verification, release build, and
+14. crate, app, workspace, frontend/full verification, release build, and
     startup gates pass;
-13. timing is recorded as advisory evidence only and does not decide
+15. timing is recorded as advisory evidence only and does not decide
     correctness or retention.
 
 ## Implementation-Plan Requirements
@@ -833,10 +1219,22 @@ Each plan must:
 - start at the current clean HEAD and record drift from this evidence snapshot;
 - refresh direct Grammers paths, fan-in/fan-out, manifest roots/features, and
   exact Cargo test identities;
-- include a symbol-level source map and a test-identity ownership map;
+- include a symbol-level source map and the committed literal test-identity
+  map with `baseline_package`, `baseline_full_id`, `staged_path`,
+  `final_owner`, `final_full_id`, and normally empty
+  `companion_final_ids`;
+- preserve the exact 43 helper-dependent plus three credential-SQL app
+  assignments, classify the residual 73 individually, implement the two
+  predeclared companion-test decompositions, and forbid a reverse
+  dev-dependency or copied app schema;
+- make 8B produce the exact `src-tauri/src/telegram_impl/**` staging tree and
+  make 8C move it mechanically to
+  `src-tauri/crates/extractum-telegram/src/**`;
 - state exact public API and visibility changes;
 - name RED/GREEN tests and non-empty suite helpers before implementation;
 - include exact manifest and `Cargo.lock` expectations;
+- make the parsed direct-dependency metadata contract primary and the complete
+  app Rust/source scan secondary;
 - update boundary/status/workspace-member contracts atomically;
 - use separately green commits for preparation, RED contract, extraction, and
   verification disposition;

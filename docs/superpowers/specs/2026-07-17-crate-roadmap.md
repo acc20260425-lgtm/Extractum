@@ -116,9 +116,12 @@ Strongest co-change pairs (commits touching 2–6 modules; `lib` and
   a standalone cold-build and dependency-hygiene win.
 - `analysis/trace.rs` calls `zstd::` directly, bypassing
   `core::compression` (recorded backlog item).
-- `sources::test_support` is consumed by 10+ modules across domains; any
-  producer-domain extraction must resolve test-fixture ownership first
-  (dev-dependencies cannot form cycles).
+- The Phase 8 audit resolves the Telegram perimeter's
+  known `sources::test_support` consumers: 43 SQL/integration identities remain
+  app-owned and three credential SQL identities remain beside account
+  persistence. The other 73 perimeter identities require individual
+  subject-based assignment in the 8A literal map; no aggregate crate ownership
+  is presumed and no app dev-dependency or fixture crate is introduced.
 
 ### Measured compile-time evidence so far
 
@@ -479,14 +482,14 @@ The four pinned roots remain the final outcome:
 revision and required features move with `extractum-telegram`; no Grammers,
 raw TL, SQLx, Tauri, or keyring type may appear in its public API.
 
-The boundary is now split into three independently green and retainable
-sub-slices:
+The boundary is split into three separately green, recoverable sub-slices;
+only 8C completes the dependency-removal outcome:
 
 1. 8A freezes behavior and prepares DTO, error, opaque-handle, secret-wrapper,
    and session/file seams while code remains in the app;
 2. 8B completes every live-source and Takeout pure-value seam inside the app,
-   including concrete Takeout operations, while runtime/session and all raw
-   consumers can still compile in one package;
+   prepares the exact future crate file tree, and normalizes shared dependency
+   declarations without moving any direct app edge;
 3. 8C creates the crate, mechanically moves the complete prepared
    runtime/session/live/Takeout Grammers perimeter, and removes all four app
    dependency roots.
@@ -501,6 +504,19 @@ session-file operations, migrations, source/item/topic transactions, Takeout
 jobs/cancellation/provenance, events, diagnostics, and cross-domain tests.
 The historical `accounts.rs`/`secret_store.rs` whole-file ownership assumption
 is explicitly void.
+
+`extractum-core` continues to own provider-neutral media metadata and its
+codec. `extractum-telegram` owns the Telegram-ingest media payload and
+classification layer, with one `TelegramMessageDraft` hand-off accepted
+directly by app persistence; no mirror DTO or conversion-only layer is added.
+The 119-test audit keeps 43 `sources::test_support` SQL/integration identities
+and three credential SQL identities in the app. 8A must classify the residual
+73 individually; several are app diagnostics, routing, cancellation, warning,
+request/read-model, or storage/codec contracts rather than crate tests.
+
+An 8B pause is reported only as `8B preparation retained; 8C pending`: it is
+recoverable green preparation, not a completed extraction or an independent
+dependency benefit. All four Grammers roots remain app-owned until 8C.
 
 Phase 8 overrides the hot-module sample-series default. Each retained
 sub-slice records only the duration already emitted by its mandatory ordinary
@@ -582,7 +598,7 @@ integration tests, WiX/MSI packaging concerns.
 | `sql_helpers` + `tx` into core (adds `sqlx`) | first extracted crate that needs them |
 | `youtube::dto` → `sources` | immediately before `sources` or `youtube` becomes a crate |
 | `analysis/trace.rs` direct `zstd::` → `core::compression` | phase 7 at the latest |
-| `sources::test_support` ownership (fixture crate vs app-side integration tests) | first producer-domain extraction whose tests consume it |
+| `sources::test_support` ownership (fixture crate vs app-side integration tests) | **Partially resolved and an 8A entry gate**: 43 Telegram-perimeter SQL/integration identities stay app-side and three credential SQL identities stay with account persistence; the literal map must classify the residual 73 by subject before refactoring. No fixture crate or reverse dev-dependency. |
 | WiX MSI diagnosis (`light.exe` failure/hang, likely ICE validation in non-interactive sessions) | separate follow-up task; unblocks restoring full-bundle gates |
 | Focused-loop metric respec | **Completed 2026-07-17; simplified 2026-07-19**: correctness commands remain mandatory; focused timing is advisory with one warm-up plus three samples per state; shell A/B, automatic timing vetoes, stability retries, and the cumulative ledger are retired. |
 | Phase 3 exact reapplication | **Canceled 2026-07-19**: do not execute or resume the historical plan; any future process-crate attempt requires a fresh owner-approved design. |

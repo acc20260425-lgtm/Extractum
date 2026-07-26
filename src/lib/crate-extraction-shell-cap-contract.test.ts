@@ -733,8 +733,8 @@ describe("crate extraction timing policy", () => {
     expect([
       "design drafted; awaiting owner approval",
       "design approved; implementation not started",
-      "8A retained",
-      "8B retained",
+      "8A preparation retained",
+      "8B preparation retained; 8C pending",
       "done: retained",
       "not retained",
     ]).toContain(phase8Status);
@@ -764,6 +764,18 @@ describe("crate extraction timing policy", () => {
       "The historical `accounts.rs`/`secret_store.rs` whole-file ownership assumption is explicitly void",
     );
     expect(phase8Roadmap).toContain(
+      "`extractum-telegram` owns the Telegram-ingest media payload and classification layer",
+    );
+    expect(phase8Roadmap).toContain(
+      "43 `sources::test_support` SQL/integration identities",
+    );
+    expect(phase8Roadmap).toContain(
+      "8A must classify the residual 73 individually",
+    );
+    expect(phase8Roadmap).toContain(
+      "`8B preparation retained; 8C pending`",
+    );
+    expect(phase8Roadmap).toContain(
       "There is no focused probe, warm-up, median, quiet-window, retry, worktree, or timing harness",
     );
     expect(phase8Roadmap).toContain(
@@ -790,6 +802,87 @@ describe("crate extraction timing policy", () => {
     );
     expect(telegramBoundaryDesign).toContain(
       "`TelegramApiHash`: API-hash secret material with zeroization",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "`extractum-telegram` becomes the single owner of the Telegram-ingest payload",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "current `ExtractedMediaPayload` is renamed once to public",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "current `ExtractedItemPayload` is not retained as a second public DTO",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "App SQL accepts `TelegramMessageDraft` directly",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "The committed map is a literal immutable baseline",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "exactly 43 SQL/integration tests use one or more of the seven app-only",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "the remaining 73 identities have no aggregate owner",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "No app dev dependency, reverse dependency, or fixture crate is introduced",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "`raw_parse_preserves_distinct_history_peer_identity_for_equal_message_ids`",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "`raw_parse_preserves_identical_native_identity_for_same_peer_and_message_id`",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "`media-metadata-core-contract.test.ts` must remain GREEN throughout Phase 8",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "The 2,828-line `takeout_import/mod.rs` is not moved or split ad hoc during 8C",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      '`#[path = "telegram_impl/lib.rs"] mod telegram_impl;`',
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "The four largest files are 61.9% of it; the eight largest are 83.8%",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "The primary final absence proof parses JSON",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "Grammers packages are intentionally allowed elsewhere in `packages` and as transitive app dependencies",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "remove the app's immediate `extractum-telegram` edge from a copy of the resolve graph",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      '`grammers-tl-types = ["default", "deserializable-functions", "impl-debug", "impl-from-enum", "impl-from-type", "tl-api", "tl-mtproto"]`',
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "A passing grep without the metadata proof is not dependency evidence",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "8B contains a named, separately green **workspace dependency normalization**",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "checkpoint must not fabricate a `Cargo.lock` hunk",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      'grammers-client = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", default-features = false }',
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "The expected production Tokio features include `rt`, `sync`, and `time`",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "`tokio-util` is not implied merely because adjacent crates use it",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "parsed Cargo metadata proves the application package has one path edge",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "`8B preparation retained; 8C pending` is not an extraction success or an independently claimed dependency benefit",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "`8B preparation retained; 8C pending`",
     );
     expect(telegramBoundaryDesign).toContain(
       "8B and 8C are not combined into one implementation plan",
