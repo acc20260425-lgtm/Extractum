@@ -1102,6 +1102,16 @@ largest files are 61.9% and its eight largest are 83.8%. The complete known
 verified figures are descriptive only and do not replace the symbol-level
 move map.
 
+The immutable ownership/move surface remains 19 paths / 140 tests.
+`src-tauri/src/sources/store.rs` is the sole known dependent-only raw-client
+consumer outside that map. Its 24 app tests stay outside the ownership map and
+run as broad store regressions in 8A Checkpoint 5; none directly invokes
+`list_telegram_sources` or `add_telegram_source`, so the Checkpoint 5 runtime
+lookup test plus lifecycle-gated source contract—not this suite—prove the
+caller-lock rewrite. The complete Phase 8 implementation touch surface is
+therefore the 19 ownership/move paths plus this one dependent-only path: 19
+ownership/move paths plus one dependent-only consumer with 24 regressions.
+
 `accounts.rs`, `account_deletion.rs`, `secret_store.rs`,
 `sources/test_support.rs`, Takeout state/recovery, migrations, diagnostics, and
 command registration are explicitly app-owned.

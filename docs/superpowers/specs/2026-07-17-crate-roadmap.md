@@ -486,6 +486,16 @@ known production move-and-touch surface is 19 files / 13,422 physical lines /
 140 test attributes. The implementation map must follow type fan-out to a
 fixed point rather than stop at direct Grammers imports.
 
+The immutable ownership/move surface remains 19 paths / 140 tests.
+`src-tauri/src/sources/store.rs` is the sole known dependent-only raw-client
+consumer outside that map. Its 24 app tests stay outside the ownership map and
+run as broad store regressions in 8A Checkpoint 5; none directly invokes
+`list_telegram_sources` or `add_telegram_source`, so the Checkpoint 5 runtime
+lookup test plus lifecycle-gated source contract—not this suite—prove the
+caller-lock rewrite. The complete Phase 8 implementation touch surface is
+therefore the 19 ownership/move paths plus this one dependent-only path: 19
+ownership/move paths plus one dependent-only consumer with 24 regressions.
+
 The four pinned roots remain the final outcome:
 `grammers-client`, `grammers-session`, `grammers-mtsender`, and
 `grammers-tl-types` leave the application package entirely. The exact Codeberg
