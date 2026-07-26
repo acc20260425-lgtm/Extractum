@@ -191,23 +191,23 @@ pub(crate) struct TelegramMessageIdentity {
 }
 
 impl TelegramMessageIdentity {
-    pub(crate) fn validate(&self) -> crate::error::AppResult<()> {
+    pub(crate) fn validate(&self) -> extractum_core::error::AppResult<()> {
         if !matches!(
             self.history_peer_kind.as_str(),
             TELEGRAM_PEER_KIND_CHANNEL | TELEGRAM_PEER_KIND_CHAT | TELEGRAM_PEER_KIND_USER
         ) {
-            return Err(crate::error::AppError::validation(format!(
+            return Err(extractum_core::error::AppError::validation(format!(
                 "Unsupported Telegram history peer kind '{}'",
                 self.history_peer_kind
             )));
         }
         if self.history_peer_id <= 0 {
-            return Err(crate::error::AppError::validation(
+            return Err(extractum_core::error::AppError::validation(
                 "Telegram history peer id must be positive",
             ));
         }
         if self.telegram_message_id <= 0 {
-            return Err(crate::error::AppError::validation(
+            return Err(extractum_core::error::AppError::validation(
                 "Telegram message id must be positive",
             ));
         }
@@ -412,9 +412,37 @@ mod tests {
             migration_domain: None,
             is_migrated_history: false,
         };
+        let invalid_kind_error = invalid_kind.validate().expect_err("reject kind");
         assert_eq!(
-            invalid_kind.validate().expect_err("reject kind").kind,
-            crate::error::AppErrorKind::Validation
+            invalid_kind_error.kind,
+            extractum_core::error::AppErrorKind::Validation
+        );
+        assert_eq!(
+            invalid_kind_error.message,
+            "Unsupported Telegram history peer kind 'supergroup'"
+        );
+        assert_eq!(
+            serde_json::to_string(&invalid_kind_error).expect("serialize invalid kind"),
+            r#"{"kind":"validation","message":"Unsupported Telegram history peer kind 'supergroup'"}"#
+        );
+        let validation_kind = invalid_kind_error.kind;
+
+        let invalid_peer_id = TelegramMessageIdentity {
+            history_peer_kind: TELEGRAM_PEER_KIND_CHANNEL.to_string(),
+            history_peer_id: 0,
+            telegram_message_id: 1,
+            migration_domain: None,
+            is_migrated_history: false,
+        };
+        let invalid_peer_id_error = invalid_peer_id.validate().expect_err("reject peer id");
+        assert_eq!(invalid_peer_id_error.kind, validation_kind);
+        assert_eq!(
+            invalid_peer_id_error.message,
+            "Telegram history peer id must be positive"
+        );
+        assert_eq!(
+            serde_json::to_string(&invalid_peer_id_error).expect("serialize invalid peer id"),
+            r#"{"kind":"validation","message":"Telegram history peer id must be positive"}"#
         );
 
         let invalid_message = TelegramMessageIdentity {
@@ -424,9 +452,58 @@ mod tests {
             migration_domain: None,
             is_migrated_history: false,
         };
+        let invalid_message_error = invalid_message.validate().expect_err("reject message id");
         assert_eq!(
-            invalid_message.validate().expect_err("reject id").kind,
-            crate::error::AppErrorKind::Validation
+            invalid_message_error.kind,
+            extractum_core::error::AppErrorKind::Validation
+        );
+        assert_eq!(
+            invalid_message_error.message,
+            "Telegram message id must be positive"
+        );
+        assert_eq!(
+            serde_json::to_string(&invalid_message_error).expect("serialize invalid message id"),
+            r#"{"kind":"validation","message":"Telegram message id must be positive"}"#
+        );
+
+        let multiple_invalid_ids = TelegramMessageIdentity {
+            history_peer_kind: TELEGRAM_PEER_KIND_CHANNEL.to_string(),
+            history_peer_id: 0,
+            telegram_message_id: 0,
+            migration_domain: None,
+            is_migrated_history: false,
+        };
+        let id_precedence_error = multiple_invalid_ids
+            .validate()
+            .expect_err("reject peer id before message id");
+        assert_eq!(id_precedence_error.kind, validation_kind);
+        assert_eq!(
+            id_precedence_error.message,
+            "Telegram history peer id must be positive"
+        );
+        assert_eq!(
+            serde_json::to_string(&id_precedence_error).expect("serialize id precedence error"),
+            r#"{"kind":"validation","message":"Telegram history peer id must be positive"}"#
+        );
+
+        let multiple_invalid = TelegramMessageIdentity {
+            history_peer_kind: "supergroup".to_string(),
+            history_peer_id: 0,
+            telegram_message_id: 0,
+            migration_domain: None,
+            is_migrated_history: false,
+        };
+        let precedence_error = multiple_invalid
+            .validate()
+            .expect_err("reject multiple invalid values in precedence order");
+        assert_eq!(precedence_error.kind, validation_kind);
+        assert_eq!(
+            precedence_error.message,
+            "Unsupported Telegram history peer kind 'supergroup'"
+        );
+        assert_eq!(
+            serde_json::to_string(&precedence_error).expect("serialize precedence error"),
+            r#"{"kind":"validation","message":"Unsupported Telegram history peer kind 'supergroup'"}"#
         );
     }
 }
