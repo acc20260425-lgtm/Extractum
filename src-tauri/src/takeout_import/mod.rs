@@ -1760,7 +1760,7 @@ async fn import_takeout_history_pages(
                 update_takeout_max_message_id(&pool, batch_id, imported.max_message_id).await?;
             }
             match raw_parse::parse_raw_message(&source.title, message) {
-                Ok(Some(item)) => {
+                Ok(Some(mut item)) => {
                     let parsed_identity = item.telegram_identity.clone().ok_or_else(|| {
                         AppError::validation(
                             "Parsed Takeout Telegram item is missing native message identity",
@@ -1772,22 +1772,18 @@ async fn import_takeout_history_pages(
                             parsed_identity.telegram_message_id,
                             migrated_from_chat_id,
                         );
+                        item.telegram_identity = Some(identity);
                         crate::sources::insert_telegram_source_item_with_observation_in_context(
                             &pool,
                             batch_id,
                             source.id,
-                            identity,
                             item,
                             crate::sources::TelegramInsertContext::MigratedSmallGroupHistory,
                         )
                         .await?
                     } else {
                         crate::sources::insert_telegram_source_item_with_observation(
-                            &pool,
-                            batch_id,
-                            source.id,
-                            parsed_identity,
-                            item,
+                            &pool, batch_id, source.id, item,
                         )
                         .await?
                     };
@@ -2430,28 +2426,16 @@ mod tests {
         let current_item = raw_parse::parse_raw_message(&None, current)
             .expect("parse current")
             .expect("current item");
-        let current_identity = current_item
-            .telegram_identity
-            .clone()
-            .expect("current identity");
         let migrated_item = raw_parse::parse_raw_message(&None, migrated)
             .expect("parse migrated")
             .expect("migrated item");
-        let migrated_identity = migrated_item
-            .telegram_identity
-            .clone()
-            .expect("migrated identity");
 
-        assert!(
-            insert_telegram_source_item(&pool, 1, current_identity, current_item)
-                .await
-                .expect("insert current")
-        );
-        assert!(
-            insert_telegram_source_item(&pool, 1, migrated_identity, migrated_item)
-                .await
-                .expect("insert migrated")
-        );
+        assert!(insert_telegram_source_item(&pool, 1, current_item)
+            .await
+            .expect("insert current"));
+        assert!(insert_telegram_source_item(&pool, 1, migrated_item)
+            .await
+            .expect("insert migrated"));
 
         let item_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM items WHERE source_id = 1 AND external_id = '42'",
@@ -2490,28 +2474,16 @@ mod tests {
         let first_item = raw_parse::parse_raw_message(&None, first)
             .expect("parse first")
             .expect("first item");
-        let first_identity = first_item
-            .telegram_identity
-            .clone()
-            .expect("first identity");
         let duplicate_item = raw_parse::parse_raw_message(&None, duplicate)
             .expect("parse duplicate")
             .expect("duplicate item");
-        let duplicate_identity = duplicate_item
-            .telegram_identity
-            .clone()
-            .expect("duplicate identity");
 
-        assert!(
-            insert_telegram_source_item(&pool, 1, first_identity, first_item)
-                .await
-                .expect("insert first")
-        );
-        assert!(
-            !insert_telegram_source_item(&pool, 1, duplicate_identity, duplicate_item)
-                .await
-                .expect("skip duplicate")
-        );
+        assert!(insert_telegram_source_item(&pool, 1, first_item)
+            .await
+            .expect("insert first"));
+        assert!(!insert_telegram_source_item(&pool, 1, duplicate_item)
+            .await
+            .expect("skip duplicate"));
 
         let state: (String, i64) = sqlx::query_as(
             "SELECT status, unresolved_count FROM telegram_topic_resolution_state WHERE source_id = 1",

@@ -6,12 +6,14 @@ use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::media::extract_item_payload;
 use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
-use crate::telegram::TelegramState;
+use crate::telegram::{
+    TelegramMessageDraft, TelegramMessageIdentity, TelegramState, ITEM_KIND_TELEGRAM_MESSAGE,
+    TELEGRAM_PEER_KIND_CHANNEL, TELEGRAM_PEER_KIND_CHAT, TELEGRAM_PEER_KIND_USER,
+};
 
 use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
 use super::items::{
     build_raw_payload, extract_telegram_context, insert_telegram_source_item, message_author,
-    SourceItemInsert,
 };
 use super::peer_resolution::resolve_and_refresh_peer;
 use super::refresh_forum_topics;
@@ -20,10 +22,7 @@ use super::settings::{
     SECONDS_PER_DAY,
 };
 use super::store::load_source;
-use super::types::{
-    now_secs, SourceSyncTarget, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
-    TELEGRAM_PEER_KIND_CHANNEL, TELEGRAM_PEER_KIND_CHAT, TELEGRAM_PEER_KIND_USER,
-};
+use super::types::{now_secs, SourceSyncTarget};
 
 #[derive(Serialize)]
 pub struct SyncResult {
@@ -134,7 +133,7 @@ async fn persist_items(
             max_message_id = message_id;
         }
 
-        let item_payload = match extract_item_payload(&message) {
+        let (content, content_kind, media) = match extract_item_payload(&message) {
             Some(payload) => payload,
             None => {
                 skipped += 1;
@@ -144,23 +143,29 @@ async fn persist_items(
 
         let author = message_author(&message);
         let telegram_context = extract_telegram_context(&message);
-        let raw_data = build_raw_payload(&message, &source.title, &author, &item_payload)?;
+        let raw_data = build_raw_payload(
+            &message,
+            &source.title,
+            &author,
+            content.as_deref(),
+            content_kind,
+            media.as_ref(),
+        )?;
 
         let identity = fallback_message_identity(peer, message_id)?;
-        let telegram_identity = Some(identity.clone());
         let inserted_item = insert_telegram_source_item(
             pool,
             source.id,
-            identity,
-            SourceItemInsert {
-                external_id: message_id.to_string(),
+            TelegramMessageDraft {
+                telegram_identity: Some(identity),
+                telegram_context,
+                content,
+                content_kind,
+                media,
                 item_kind: ITEM_KIND_TELEGRAM_MESSAGE.to_string(),
                 author,
                 published_at,
-                payload: item_payload,
                 raw_data,
-                telegram_context,
-                telegram_identity,
             },
         )
         .await?;

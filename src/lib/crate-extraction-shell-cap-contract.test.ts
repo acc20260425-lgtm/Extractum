@@ -711,7 +711,7 @@ describe("crate extraction timing policy", () => {
       "The check completed in 5,162 ms, below 15,000 ms",
     );
     expect(phase7Roadmap).toContain(
-      "Phase 8 has an owner-approved boundary; 8A preparation Checkpoint 2 is retained",
+      "Phase 8 has an owner-approved boundary; 8A preparation Checkpoint 3 is retained",
     );
     expect(roadmapTiming).toContain(
       "Phase 7 `extractum-analysis` | 5,162 ms | completed and retained; below 15,000 ms",
@@ -776,7 +776,7 @@ describe("crate extraction timing policy", () => {
 
   it("records the retained Phase 8A Telegram preparation checkpoint", () => {
     expect(telegramBoundaryDesign).toContain(
-      "**Status:** Approved; 8A preparation Checkpoint 2 retained",
+      "**Status:** Approved; 8A preparation Checkpoint 3 retained",
     );
     expect(phase8Status).toBeDefined();
     expect([
@@ -792,7 +792,7 @@ describe("crate extraction timing policy", () => {
       "done: retained",
       "not retained",
     ]).toContain(phase8Status);
-    expect(phase8Status).toBe("8A preparation Checkpoint 2 retained");
+    expect(phase8Status).toBe("8A preparation Checkpoint 3 retained");
     expect(phase8Roadmap).toContain(
       "2026-07-26-telegram-crate-boundary-design.md",
     );

@@ -3,16 +3,16 @@ use serde_json::json;
 
 use crate::media::{
     derive_content_kind, derive_document_media_kind, media_label, DocumentSignals,
-    ExtractedItemPayload, ExtractedMediaPayload, ItemMediaMetadata,
+    ItemMediaMetadata, TelegramMediaPayload,
 };
-use crate::sources::{
-    SourceItemInsert, TelegramItemContext, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
+use crate::telegram::{
+    TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
 };
 
 pub(crate) fn parse_raw_message(
     source_title: &Option<String>,
     message: tl::types::Message,
-) -> Result<Option<SourceItemInsert>, String> {
+) -> Result<Option<TelegramMessageDraft>, String> {
     let content = trimmed_non_empty(&message.message);
     let media = message.media.as_ref().and_then(extract_raw_media_payload);
     let has_content = content.is_some();
@@ -23,11 +23,6 @@ pub(crate) fn parse_raw_message(
     }
 
     let content_kind = derive_content_kind(has_content, has_media);
-    let payload = ExtractedItemPayload {
-        content,
-        content_kind,
-        media,
-    };
     let author = raw_message_author(&message);
     let telegram_context = extract_raw_telegram_context(&message);
     let telegram_identity = raw_message_identity(&message);
@@ -36,41 +31,42 @@ pub(crate) fn parse_raw_message(
         "peer_id": peer_id_string(&message.peer_id),
         "sender_id": message.from_id.as_ref().map(peer_id_string),
         "published_at": message.date,
-        "text": payload.content.as_deref(),
-        "content_kind": payload.content_kind,
-        "has_media": payload.media.is_some(),
-        "media_kind": payload.media.as_ref().map(|media| &media.kind),
-        "media_metadata": payload.media.as_ref().map(|media| &media.metadata),
+        "text": content.as_deref(),
+        "content_kind": content_kind,
+        "has_media": media.is_some(),
+        "media_kind": media.as_ref().map(|media| &media.kind),
+        "media_metadata": media.as_ref().map(|media| &media.metadata),
         "post_author": message.post_author.as_deref(),
         "source_title": source_title.as_deref(),
         "author": author.as_deref(),
     }))
     .map_err(|error| error.to_string())?;
 
-    Ok(Some(SourceItemInsert {
-        external_id: message.id.to_string(),
+    Ok(Some(TelegramMessageDraft {
+        telegram_identity: Some(telegram_identity),
+        telegram_context,
+        content,
+        content_kind,
+        media,
         item_kind: ITEM_KIND_TELEGRAM_MESSAGE.to_string(),
         author,
         published_at: i64::from(message.date),
-        payload,
         raw_data,
-        telegram_context,
-        telegram_identity: Some(telegram_identity),
     }))
 }
 
-fn extract_raw_media_payload(media: &tl::enums::MessageMedia) -> Option<ExtractedMediaPayload> {
+fn extract_raw_media_payload(media: &tl::enums::MessageMedia) -> Option<TelegramMediaPayload> {
     match media {
         tl::enums::MessageMedia::Photo(photo) => extract_photo_media_payload(photo),
         tl::enums::MessageMedia::Document(document) => extract_document_media_payload(document),
-        tl::enums::MessageMedia::Contact(contact) => Some(ExtractedMediaPayload {
+        tl::enums::MessageMedia::Contact(contact) => Some(TelegramMediaPayload {
             kind: "contact".to_string(),
             metadata: ItemMediaMetadata {
                 summary: Some(contact_summary(contact)),
                 ..ItemMediaMetadata::default()
             },
         }),
-        tl::enums::MessageMedia::Poll(_) => Some(ExtractedMediaPayload {
+        tl::enums::MessageMedia::Poll(_) => Some(TelegramMediaPayload {
             kind: "poll".to_string(),
             metadata: ItemMediaMetadata {
                 summary: Some("Poll".to_string()),
@@ -81,7 +77,7 @@ fn extract_raw_media_payload(media: &tl::enums::MessageMedia) -> Option<Extracte
         tl::enums::MessageMedia::GeoLive(_) => {
             Some(raw_summary_media("live_location", "Live location"))
         }
-        tl::enums::MessageMedia::Venue(venue) => Some(ExtractedMediaPayload {
+        tl::enums::MessageMedia::Venue(venue) => Some(TelegramMediaPayload {
             kind: "venue".to_string(),
             metadata: ItemMediaMetadata {
                 summary: trimmed_non_empty(&venue.title).or_else(|| Some("Venue".to_string())),
@@ -99,7 +95,7 @@ fn extract_raw_media_payload(media: &tl::enums::MessageMedia) -> Option<Extracte
 
 fn extract_photo_media_payload(
     media: &tl::types::MessageMediaPhoto,
-) -> Option<ExtractedMediaPayload> {
+) -> Option<TelegramMediaPayload> {
     let photo = match media.photo.as_ref()? {
         tl::enums::Photo::Photo(photo) => photo,
         tl::enums::Photo::Empty(_) => {
@@ -132,7 +128,7 @@ fn extract_photo_media_payload(
         }
     }
 
-    Some(ExtractedMediaPayload {
+    Some(TelegramMediaPayload {
         kind: "photo".to_string(),
         metadata,
     })
@@ -140,7 +136,7 @@ fn extract_photo_media_payload(
 
 fn extract_document_media_payload(
     media: &tl::types::MessageMediaDocument,
-) -> Option<ExtractedMediaPayload> {
+) -> Option<TelegramMediaPayload> {
     let document = match media.document.as_ref()? {
         tl::enums::Document::Document(document) => document,
         tl::enums::Document::Empty(_) => return Some(raw_summary_media("document", "Document")),
@@ -198,7 +194,7 @@ fn extract_document_media_payload(
         summary = format!("Sticker {alt}");
     }
 
-    Some(ExtractedMediaPayload {
+    Some(TelegramMediaPayload {
         kind,
         metadata: ItemMediaMetadata {
             summary: Some(summary),
@@ -282,8 +278,8 @@ fn peer_id_string(peer: &tl::enums::Peer) -> String {
     }
 }
 
-fn raw_summary_media(kind: &str, summary: &str) -> ExtractedMediaPayload {
-    ExtractedMediaPayload {
+fn raw_summary_media(kind: &str, summary: &str) -> TelegramMediaPayload {
+    TelegramMediaPayload {
         kind: kind.to_string(),
         metadata: ItemMediaMetadata {
             summary: Some(summary.to_string()),
@@ -446,12 +442,18 @@ mod tests {
             .expect("parse raw message")
             .expect("message item");
 
-        assert_eq!(item.external_id, "42");
+        assert_eq!(
+            item.telegram_identity
+                .as_ref()
+                .expect("identity")
+                .telegram_message_id,
+            42
+        );
         assert_eq!(item.author.as_deref(), Some("user:77"));
         assert_eq!(item.published_at, 1234);
-        assert_eq!(item.payload.content.as_deref(), Some("hello"));
-        assert_eq!(item.payload.content_kind, "text_only");
-        assert!(item.payload.media.is_none());
+        assert_eq!(item.content.as_deref(), Some("hello"));
+        assert_eq!(item.content_kind, "text_only");
+        assert!(item.media.is_none());
         assert_eq!(item.telegram_context.reply_to_msg_id, Some(7));
         assert_eq!(
             item.telegram_context.reply_to_peer_kind.as_deref(),
@@ -526,7 +528,18 @@ mod tests {
                 .history_peer_id,
             777
         );
-        assert_eq!(current_item.external_id, migrated_item.external_id);
+        assert_eq!(
+            current_item
+                .telegram_identity
+                .as_ref()
+                .unwrap()
+                .telegram_message_id,
+            migrated_item
+                .telegram_identity
+                .as_ref()
+                .unwrap()
+                .telegram_message_id
+        );
     }
 
     #[test]
@@ -573,9 +586,9 @@ mod tests {
         let item = parse_raw_message(&None, message)
             .expect("parse raw message")
             .expect("message item");
-        let media = item.payload.media.expect("photo media");
+        let media = item.media.expect("photo media");
 
-        assert_eq!(item.payload.content_kind, "media_only");
+        assert_eq!(item.content_kind, "media_only");
         assert_eq!(media.kind, "photo");
         assert_eq!(media.metadata.summary.as_deref(), Some("Photo"));
         assert_eq!(media.metadata.width, Some(1280));
@@ -626,9 +639,9 @@ mod tests {
         let item = parse_raw_message(&None, message)
             .expect("parse raw message")
             .expect("message item");
-        let media = item.payload.media.expect("document media");
+        let media = item.media.expect("document media");
 
-        assert_eq!(item.payload.content_kind, "text_with_media");
+        assert_eq!(item.content_kind, "text_with_media");
         assert_eq!(media.kind, "image");
         assert_eq!(media.metadata.file_name.as_deref(), Some("image.png"));
         assert_eq!(media.metadata.mime_type.as_deref(), Some("image/png"));

@@ -67,6 +67,9 @@ const ownershipMovePaths = [
   ...wiringPaths,
 ].sort();
 
+const checkpointThreeMediaOwnerPath =
+  "src-tauri/src/telegram/media.rs";
+
 const checkpointOneRawConsumerPaths = [
   ...directGrammersPaths,
   "src-tauri/src/sources/store.rs",
@@ -169,8 +172,16 @@ const phase8Status = /### Phase 8 — `extractum-telegram` \(([^)]+)\)/.exec(
   roadmap,
 )?.[1];
 if (!phase8Status) throw new Error("Missing Phase 8 roadmap status");
-const lifecycle =
+const statusLifecycle =
   telegramContractPaths.telegramLifecycleFromStatus(phase8Status);
+const checkpoint3LeavesExist = [
+  "src-tauri/src/telegram/dto.rs",
+  "src-tauri/src/telegram/media.rs",
+].every((relativePath) => existsSync(path.join(repoRoot, relativePath)));
+const lifecycle =
+  statusLifecycle === "8a-checkpoint-2" && checkpoint3LeavesExist
+    ? "8a-checkpoint-3"
+    : statusLifecycle;
 
 function sectionBetween(source: string, start: string, end: string): string {
   const startIndex = source.indexOf(start);
@@ -543,6 +554,330 @@ function assertFacadeInventory(
   );
 }
 
+function checkpointThreeAppRustSources(
+  sourceOverrides: ReadonlyMap<string, string> = new Map(),
+): ReadonlyMap<string, string> {
+  return new Map(
+    rustPathsUnder("src-tauri/src").map((relativePath) => [
+      relativePath,
+      sourceOverrides.get(relativePath)
+      ?? telegramContractPaths.readTelegramContractFile(relativePath),
+    ]),
+  );
+}
+
+function productionRustSource(source: string): string {
+  const searchable = maskRustLexicalNonCode(source);
+  const testModule =
+    /#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*mod\s+tests\b/.exec(
+      searchable,
+    );
+  return testModule?.index === undefined
+    ? source
+    : source.slice(0, testModule.index);
+}
+
+function assertCheckpointThreeOwnershipContract(
+  sourceOverrides: ReadonlyMap<string, string> = new Map(),
+): void {
+  const sources = checkpointThreeAppRustSources(sourceOverrides);
+  const searchableSources = [...sources.entries()].map(
+    ([relativePath, source]) => [
+      relativePath,
+      maskRustLexicalNonCode(source),
+    ] as const,
+  );
+  const forbidden = [
+    /\bstruct\s+SourceItemInsert\b/g,
+    /\bstruct\s+ExtractedItemPayload\b/g,
+    /\bstruct\s+ExtractedMediaPayload\b/g,
+    /\bfn\s+insert_source_item\s*\(/g,
+    /#\s*\[\s*allow\s*\(\s*dead_code\s*\)\s*\]\s*(?:pub(?:\s*\([^)]*\))?\s+)?(?:fn\s+insert_source_item\b|external_id\s*:)/g,
+  ];
+  const forbiddenSites = searchableSources.flatMap(
+    ([relativePath, source]) =>
+      forbidden.flatMap((expression) =>
+        [...source.matchAll(expression)].map(
+          (match) => `${relativePath}:${normalize(match[0]).trim()}`,
+        )
+      ),
+  );
+  expect(
+    forbiddenSites,
+    "Checkpoint 3 ownership contract: forbidden legacy declarations",
+  ).toEqual([]);
+
+  const owners = [
+    {
+      label: "TelegramMessageIdentity",
+      expression: /\bpub\s+struct\s+TelegramMessageIdentity\b/g,
+      path: "src-tauri/src/telegram/dto.rs",
+    },
+    {
+      label: "TelegramItemContext",
+      expression: /\bpub\s+struct\s+TelegramItemContext\b/g,
+      path: "src-tauri/src/telegram/dto.rs",
+    },
+    {
+      label: "TelegramMessageDraft",
+      expression: /\bpub\s+struct\s+TelegramMessageDraft\b/g,
+      path: "src-tauri/src/telegram/dto.rs",
+    },
+    {
+      label: "TelegramMediaPayload",
+      expression: /\bpub\s+struct\s+TelegramMediaPayload\b/g,
+      path: checkpointThreeMediaOwnerPath,
+    },
+    {
+      label: "DocumentSignals",
+      expression: /\bpub\s*\(\s*crate\s*\)\s+struct\s+DocumentSignals\b/g,
+      path: checkpointThreeMediaOwnerPath,
+    },
+    {
+      label: "ITEM_KIND_TELEGRAM_MESSAGE",
+      expression: /\bpub\s+const\s+ITEM_KIND_TELEGRAM_MESSAGE\b/g,
+      path: "src-tauri/src/telegram/dto.rs",
+    },
+    ...[
+      "TELEGRAM_PEER_KIND_CHANNEL",
+      "TELEGRAM_PEER_KIND_CHAT",
+      "TELEGRAM_PEER_KIND_USER",
+    ].map((label) => ({
+      label,
+      expression: new RegExp(
+        `\\bpub\\s*\\(\\s*crate\\s*\\)\\s+const\\s+${label}\\b`,
+        "g",
+      ),
+      path: "src-tauri/src/telegram/dto.rs",
+    })),
+    ...[
+      "CONTENT_KIND_TEXT_ONLY",
+      "CONTENT_KIND_TEXT_WITH_MEDIA",
+    ].map((label) => ({
+      label,
+      expression: new RegExp(
+        `\\bpub\\s*\\(\\s*crate\\s*\\)\\s+const\\s+${label}\\b`,
+        "g",
+      ),
+      path: checkpointThreeMediaOwnerPath,
+    })),
+    {
+      label: "CONTENT_KIND_MEDIA_ONLY",
+      expression: /\bconst\s+CONTENT_KIND_MEDIA_ONLY\b/g,
+      path: checkpointThreeMediaOwnerPath,
+    },
+  ];
+  for (const owner of owners) {
+    const sites = searchableSources.flatMap(([relativePath, source]) =>
+      [...source.matchAll(owner.expression)].map(() => relativePath)
+    );
+    expect(
+      sites,
+      `Checkpoint 3 ownership contract: sole ${owner.label} owner`,
+    ).toEqual([owner.path]);
+  }
+
+  const dto =
+    sourceOverrides.get("src-tauri/src/telegram/dto.rs")
+    ?? telegramContractPaths.readTelegramContractFile(
+      "src-tauri/src/telegram/dto.rs",
+    );
+  expect(
+    rustStructBody(dto, "TelegramMessageDraft"),
+    "Checkpoint 3 ownership contract: draft external_id removal",
+  ).not.toMatch(/\bpub\s+external_id\s*:/);
+}
+
+function assertCheckpointThreeApiContract(
+  sourceOverrides: ReadonlyMap<string, string> = new Map(),
+): void {
+  const read = (relativePath: string): string =>
+    sourceOverrides.get(relativePath)
+    ?? telegramContractPaths.readTelegramContractFile(relativePath);
+  const itemsPath = "src-tauri/src/sources/items.rs";
+  const dtoPath = "src-tauri/src/telegram/dto.rs";
+  const telegramPath = "src-tauri/src/telegram.rs";
+  const appMediaPath = "src-tauri/src/media.rs";
+  const items = read(itemsPath);
+  const media = read(checkpointThreeMediaOwnerPath);
+  const dto = read(dtoPath);
+  const telegram = read(telegramPath);
+  const appMedia = read(appMediaPath);
+
+  const expectedItemDeclarations = new Map([
+    [
+      "prepare_source_item",
+      "fn prepare_source_item(draft: &crate::telegram::TelegramMessageDraft,) -> extractum_core::error::AppResult<Option<PreparedSourceItem>>",
+    ],
+    [
+      "insert_telegram_source_item",
+      "pub(crate) async fn insert_telegram_source_item(pool: &sqlx::Pool<sqlx::Sqlite>, source_id: i64, draft: crate::telegram::TelegramMessageDraft,) -> extractum_core::error::AppResult<bool>",
+    ],
+    [
+      "insert_telegram_source_item_outcome",
+      "pub(crate) async fn insert_telegram_source_item_outcome(pool: &sqlx::Pool<sqlx::Sqlite>, source_id: i64, draft: crate::telegram::TelegramMessageDraft,) -> extractum_core::error::AppResult<TelegramItemInsertOutcome>",
+    ],
+    [
+      "insert_telegram_source_item_with_observation",
+      "pub(crate) async fn insert_telegram_source_item_with_observation(pool: &sqlx::Pool<sqlx::Sqlite>, batch_id: i64, source_id: i64, draft: crate::telegram::TelegramMessageDraft,) -> extractum_core::error::AppResult<TelegramItemInsertOutcome>",
+    ],
+    [
+      "insert_telegram_source_item_with_observation_in_context",
+      "pub(crate) async fn insert_telegram_source_item_with_observation_in_context(pool: &sqlx::Pool<sqlx::Sqlite>, batch_id: i64, source_id: i64, draft: TelegramMessageDraft, insert_context: TelegramInsertContext,) -> AppResult<TelegramItemInsertOutcome>",
+    ],
+    [
+      "insert_telegram_source_item_on_connection",
+      "async fn insert_telegram_source_item_on_connection(conn: &mut sqlx::SqliteConnection, source_id: i64, draft: TelegramMessageDraft, insert_context: TelegramInsertContext, archive_maintenance: ArchiveReadMaintenanceMode,) -> AppResult<TelegramItemInsertOutcome>",
+    ],
+  ]);
+  for (const [name, declaration] of expectedItemDeclarations) {
+    expect(
+      normalizedRustFunctionDeclaration(items, name),
+      `Checkpoint 3 API contract: exact ${name} declaration`,
+    ).toBe(declaration);
+  }
+  expect(
+    normalizedRustFunctionDeclaration(media, "extract_item_payload"),
+    "Checkpoint 3 API contract: exact unnamed extract_item_payload tuple",
+  ).toBe(
+    "pub(crate) fn extract_item_payload(message: &grammers_client::message::Message,) -> Option<(Option<String>, &'static str, Option<TelegramMediaPayload>)>",
+  );
+
+  expect(
+    normalizedRustUseDeclarations(telegram, "dto"),
+    "Checkpoint 3 API contract: exact Telegram DTO facade",
+  ).toEqual([
+    "pub(crate) use dto::{TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE, TELEGRAM_PEER_KIND_CHANNEL, TELEGRAM_PEER_KIND_CHAT, TELEGRAM_PEER_KIND_USER,};",
+  ]);
+  expect(
+    normalizedRustUseDeclarations(telegram, "media"),
+    "Checkpoint 3 API contract: exact Telegram media facade",
+  ).toEqual([
+    "#[allow(unused_imports)] pub(crate) use media::{derive_content_kind, derive_document_media_kind, extract_item_payload, DocumentSignals, TelegramMediaPayload, CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA,};",
+  ]);
+  expect(
+    normalizedRustUseDeclarations(appMedia, "crate::telegram"),
+    "Checkpoint 3 API contract: exact app media compatibility facade",
+  ).toEqual([
+    "pub(crate) use crate::telegram::{derive_content_kind, derive_document_media_kind, extract_item_payload, DocumentSignals, TelegramMediaPayload,};",
+    "#[cfg(test)] pub(crate) use crate::telegram::{CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA};",
+  ]);
+  expect(
+    normalizedRustUseDeclarations(
+      appMedia,
+      "extractum_core::media_metadata",
+    ),
+    "Checkpoint 3 API contract: exact provider-neutral media facade",
+  ).toEqual([
+    "pub(crate) use extractum_core::media_metadata::{decode_media_metadata, encode_media_metadata, media_label, ItemMediaMetadata,};",
+  ]);
+  expect(
+    `${maskRustLexicalNonCode(telegram)}\n${maskRustLexicalNonCode(appMedia)}`,
+    "Checkpoint 3 API contract: facades stay curated",
+  ).not.toMatch(/\bpub\s*\(\s*crate\s*\)\s+use\s+[^;]*::\s*\*/);
+
+  const telegramStructure = maskRustLexicalNonCode(telegram);
+  expect(
+    [...telegramStructure.matchAll(
+      /\b(?:pub(?:\s*\([^)]*\))?\s+)?mod\s+(dto|media)\s*;/g,
+    )].map((match) =>
+      normalize(match[0]).trim()
+    ),
+    "Checkpoint 3 API contract: private Telegram leaves",
+  ).toEqual(["mod dto;", "mod media;"]);
+  expect(
+    normalizedRustUseDeclarations(dto, "super::media"),
+    "Checkpoint 3 API contract: future-owner relative leaf import",
+  ).toEqual(["use super::media::TelegramMediaPayload;"]);
+  expect(
+    `${maskRustLexicalNonCode(dto)}\n${maskRustLexicalNonCode(media)}`,
+    "Checkpoint 3 API contract: future-owner leaves avoid app facades",
+  ).not.toMatch(/\bcrate::(?:telegram|media)\b/);
+
+  const appSources = checkpointThreeAppRustSources(sourceOverrides);
+  const directLeafImports = [...appSources.entries()]
+    .filter(
+      ([relativePath]) =>
+        relativePath !== dtoPath
+        && relativePath !== checkpointThreeMediaOwnerPath,
+    )
+    .flatMap(([relativePath, source]) =>
+      [...maskRustLexicalNonCode(source).matchAll(
+        /\bcrate::telegram::(?:dto|media)\b/g,
+      )].map((match) => `${relativePath}:${match[0]}`)
+    );
+  expect(
+    directLeafImports,
+    "Checkpoint 3 API contract: app consumers use facades",
+  ).toEqual([]);
+
+  const expectedAppTelegramImports = new Map<string, string[]>([
+    [
+      itemsPath,
+      [
+        "use crate::telegram::{TelegramItemContext, TelegramMediaPayload, TelegramMessageDraft, ITEM_KIND_TELEGRAM_MESSAGE,};",
+      ],
+    ],
+    [
+      "src-tauri/src/sources/sync.rs",
+      [
+        "use crate::telegram::{TelegramMessageDraft, TelegramMessageIdentity, TelegramState, ITEM_KIND_TELEGRAM_MESSAGE, TELEGRAM_PEER_KIND_CHANNEL, TELEGRAM_PEER_KIND_CHAT, TELEGRAM_PEER_KIND_USER,};",
+      ],
+    ],
+    [
+      "src-tauri/src/takeout_import/raw_parse.rs",
+      [
+        "use crate::telegram::{TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,};",
+      ],
+    ],
+    [
+      "src-tauri/src/sources/mod.rs",
+      [
+        "#[allow(unused_imports)] pub(crate) use crate::telegram::{TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,};",
+      ],
+    ],
+  ]);
+  for (const [relativePath, expected] of expectedAppTelegramImports) {
+    expect(
+      normalizedRustUseDeclarations(
+        productionRustSource(read(relativePath)),
+        "crate::telegram",
+      ),
+      `Checkpoint 3 API contract: exact app facade import in ${relativePath}`,
+    ).toEqual(expected);
+  }
+
+  expect(
+    normalize(productionRustSource(read(
+      "src-tauri/src/ingest_provenance.rs",
+    ))),
+    "Checkpoint 3 API contract: ingest provenance facade import",
+  ).toContain("use crate::telegram::TelegramMessageIdentity;");
+  expect(
+    normalize(productionRustSource(read(
+      "src-tauri/src/takeout_import/migrated_history.rs",
+    ))),
+    "Checkpoint 3 API contract: migrated identity facade path",
+  ).toContain("crate::telegram::TelegramMessageIdentity");
+  expect(
+    normalizedRustUseDeclarations(
+      productionRustSource(read(
+        "src-tauri/src/takeout_import/raw_parse.rs",
+      )),
+      "crate::media",
+    ),
+    "Checkpoint 3 API contract: raw parser compatibility facade import",
+  ).toEqual([
+    "use crate::media::{derive_content_kind, derive_document_media_kind, media_label, DocumentSignals, ItemMediaMetadata, TelegramMediaPayload,};",
+  ]);
+  expect(
+    normalize(productionRustSource(read(
+      "src-tauri/src/sources/sync.rs",
+    ))),
+    "Checkpoint 3 API contract: live media compatibility import",
+  ).toContain("use crate::media::extract_item_payload;");
+}
+
 function assertCheckpointOneRootInventory(
   value: telegramContractPaths.TelegramLifecycle,
   pathExists: (relativePath: string) => boolean = (relativePath) =>
@@ -709,6 +1044,88 @@ function rustFunctionOriginalBody(source: string, name: string): string {
 
 function rustFunctionBody(source: string, name: string): string {
   return maskRustLexicalNonCode(rustFunctionOriginalBody(source, name));
+}
+
+function rustStructBody(source: string, name: string): string {
+  const searchable = maskRustLexicalNonCode(source);
+  const declaration = new RegExp(`\\bstruct\\s+${name}\\s*\\{`).exec(
+    searchable,
+  );
+  if (!declaration || declaration.index === undefined) {
+    throw new Error(`Missing Rust struct: ${name}`);
+  }
+  const open = searchable.indexOf("{", declaration.index);
+  const close = rustClosingBraceIndex(source, open, `struct ${name}`);
+  return maskRustLexicalNonCode(source.slice(open + 1, close));
+}
+
+function normalizedRustFunctionDeclaration(
+  source: string,
+  name: string,
+): string {
+  const searchable = maskRustLexicalNonCode(source);
+  const declaration = new RegExp(
+    `(^|\\n)[\\t ]*((?:pub(?:\\s*\\(\\s*crate\\s*\\))?\\s+)?(?:async\\s+)?fn\\s+${name}\\s*\\()`,
+    "g",
+  );
+  const matches = [...searchable.matchAll(declaration)];
+  if (
+    matches.length !== 1
+    || matches[0].index === undefined
+    || matches[0][2] === undefined
+  ) {
+    throw new Error(
+      `Expected one active Rust function declaration for ${name}, found ${matches.length}`,
+    );
+  }
+  const start =
+    matches[0].index + matches[0][0].lastIndexOf(matches[0][2]);
+  const open = searchable.indexOf("{", start + matches[0][2].length);
+  if (open < 0) throw new Error(`Missing Rust function body for ${name}`);
+  return searchable
+    .slice(start, open)
+    .replace(/\s+/g, " ")
+    .replace(/\(\s+/g, "(")
+    .replace(/\s+\)/g, ")")
+    .trim();
+}
+
+function normalizedRustUseDeclarations(
+  source: string,
+  target: string,
+): string[] {
+  const searchable = maskRustLexicalNonCode(source);
+  const escapedTarget = target.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const declaration = new RegExp(
+    `(?:#\\[[^\\]\\r\\n]+\\]\\s*)*(?:pub\\s*\\(\\s*crate\\s*\\)\\s+)?use\\s+${escapedTarget}::(\\{|\\*|[A-Za-z_][A-Za-z0-9_]*)`,
+    "g",
+  );
+  return [...searchable.matchAll(declaration)].map((match) => {
+    if (match.index === undefined) {
+      throw new Error(`Missing Rust use declaration index for ${target}`);
+    }
+    const open = match[1] === "{"
+      ? searchable.indexOf("{", match.index)
+      : -1;
+    const end =
+      open >= 0 && open < match.index + match[0].length
+        ? rustClosingBraceIndex(
+          searchable,
+          open,
+          `${target} use declaration`,
+        )
+        : searchable.indexOf(";", match.index);
+    const semicolon = searchable.indexOf(";", end);
+    if (end < 0 || semicolon < 0) {
+      throw new Error(`Unclosed Rust use declaration for ${target}`);
+    }
+    return searchable
+      .slice(match.index, semicolon + 1)
+      .replace(/\s+/g, " ")
+      .replace(/\{\s+/g, "{")
+      .replace(/\s+\}/g, "}")
+      .trim();
+  });
 }
 
 function normalizedRustCommandDeclaration(
@@ -1699,10 +2116,10 @@ describe("Phase 8 Telegram crate boundary", () => {
 });
 
 describe("literal immutable Telegram test map", () => {
-  it("records only the truthful retained Checkpoint 2 lifecycle state", () => {
-    expect(phase8Status).toBe("8A preparation Checkpoint 2 retained");
+  it("records only the truthful retained Checkpoint 3 lifecycle state", () => {
+    expect(phase8Status).toBe("8A preparation Checkpoint 3 retained");
     expect(design).toContain(
-      "**Status:** Approved; 8A preparation Checkpoint 2 retained",
+      "**Status:** Approved; 8A preparation Checkpoint 3 retained",
     );
   });
 
@@ -2526,7 +2943,7 @@ describe("Checkpoint 1 core-error seam", () => {
       telegramContractPaths.readTelegramContractFile(typesPath);
     const mediaSource =
       telegramContractPaths.readTelegramContractFile(
-        "src-tauri/src/media.rs",
+        checkpointThreeMediaOwnerPath,
       );
     const checkpoint3Source =
       `// Checkpoint 3 DTO split shifts retained source lines.\n${source}`;
@@ -2534,11 +2951,153 @@ describe("Checkpoint 1 core-error seam", () => {
       assertFacadeInventory(
         new Map([
           [typesPath, checkpoint3Source],
-          ["src-tauri/src/telegram/media.rs", mediaSource],
+          [checkpointThreeMediaOwnerPath, mediaSource],
         ]),
         "8a-checkpoint-3",
       ),
     ).not.toThrow();
+  });
+
+  it("rejects legacy seams and duplicate Telegram owners across the complete Rust perimeter", () => {
+    const overrides = new Map<string, string>([
+      [
+        "src-tauri/src/takeout_import/raw_parse.rs",
+        `${telegramContractPaths.readTelegramContractFile(
+          "src-tauri/src/takeout_import/raw_parse.rs",
+        )}\nstruct ExtractedMediaPayload;\n`,
+      ],
+      [
+        "src-tauri/src/sources/types.rs",
+        `${telegramContractPaths.readTelegramContractFile(
+          "src-tauri/src/sources/types.rs",
+        )}\npub struct TelegramMessageDraft;\n`,
+      ],
+    ]);
+
+    expect(() =>
+      assertCheckpointThreeOwnershipContract(overrides),
+    ).toThrow(/Checkpoint 3 ownership contract/);
+  });
+
+  it("rejects mutated persistence signatures, tuple shape, facade allowlist, and import directions", () => {
+    const itemsPath = "src-tauri/src/sources/items.rs";
+    const mediaPath = "src-tauri/src/telegram/media.rs";
+    const telegramPath = "src-tauri/src/telegram.rs";
+    const dtoPath = "src-tauri/src/telegram/dto.rs";
+    const syncPath = "src-tauri/src/sources/sync.rs";
+    const sources = new Map(
+      [itemsPath, mediaPath, telegramPath, dtoPath, syncPath].map(
+        (relativePath) => [
+          relativePath,
+          telegramContractPaths.readTelegramContractFile(relativePath),
+        ],
+      ),
+    );
+    const mutations = [
+      new Map([
+        [
+          itemsPath,
+          sources
+            .get(itemsPath)!
+            .replace(
+              "draft: crate::telegram::TelegramMessageDraft,",
+              "identity: crate::telegram::TelegramMessageIdentity,\n    draft: crate::telegram::TelegramMessageDraft,",
+            ),
+        ],
+      ]),
+      new Map([
+        [
+          mediaPath,
+          sources
+            .get(mediaPath)!
+            .replace(
+              "Option<(Option<String>, &'static str, Option<TelegramMediaPayload>)>",
+              "Option<TelegramMediaPayload>",
+            ),
+        ],
+      ]),
+      new Map([
+        [
+          telegramPath,
+          sources
+            .get(telegramPath)!
+            .replace(
+              "TelegramMediaPayload,",
+              "TelegramMediaPayload, TelegramLoginAttempt,",
+            ),
+        ],
+      ]),
+      new Map([
+        [
+          dtoPath,
+          sources
+            .get(dtoPath)!
+            .replace(
+              "use super::media::TelegramMediaPayload;",
+              "use crate::telegram::media::TelegramMediaPayload;",
+            ),
+        ],
+      ]),
+      new Map([
+        [
+          syncPath,
+          sources
+            .get(syncPath)!
+            .replace(
+              "use crate::telegram::{",
+              "use crate::telegram::dto::{",
+            ),
+        ],
+      ]),
+    ];
+
+    for (const mutation of mutations) {
+      expect(() =>
+        assertCheckpointThreeApiContract(mutation),
+      ).toThrow(/Checkpoint 3 API contract/);
+    }
+  });
+
+  it("installs the actual Telegram media leaf in the Checkpoint 3 facade fixture", () => {
+    expect(checkpointThreeMediaOwnerPath).toBe(
+      "src-tauri/src/telegram/media.rs",
+    );
+    const mediaSource =
+      telegramContractPaths.readTelegramContractFile(
+        checkpointThreeMediaOwnerPath,
+      );
+    expect(mediaSource).toContain(
+      "use grammers_client::{media::Media, tl};",
+    );
+  });
+
+  it("removes legacy seams and keeps singular Telegram DTO/media owners", () => {
+    assertCheckpointThreeOwnershipContract();
+    const dto =
+      telegramContractPaths.readTelegramContractFile(
+        "src-tauri/src/telegram/dto.rs",
+      );
+    const draftBody = rustStructBody(dto, "TelegramMessageDraft");
+
+    expect(
+      [...draftBody.matchAll(/\bpub\s+([a-z_][a-z0-9_]*)\s*:/g)].map(
+        (match) => match[1],
+      ),
+    ).toEqual([
+      "telegram_identity",
+      "telegram_context",
+      "content",
+      "content_kind",
+      "author",
+      "published_at",
+      "raw_data",
+      "item_kind",
+      "media",
+    ]);
+  });
+
+  it("pins exact Checkpoint 3 persistence, tuple, facade, and import surfaces", () => {
+    assertCheckpointThreeApiContract();
   });
 
   it("rejects moving a facade reference while preserving aggregate counts", () => {
@@ -2547,7 +3106,10 @@ describe("Checkpoint 1 core-error seam", () => {
       telegramContractPaths.readTelegramContractFile(typesPath);
     const relocated = source
       .replace("crate::error", "crate::errors")
-      .replace("extractum_core::error", "crate::error");
+      .replace(
+        "use serde::Serialize;",
+        "use serde::Serialize;\nuse crate::error as relocated_error;",
+      );
     expect(countMatches(relocated, /\bcrate::error\b/g)).toBe(
       countMatches(source, /\bcrate::error\b/g),
     );

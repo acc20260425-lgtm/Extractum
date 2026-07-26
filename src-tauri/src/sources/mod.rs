@@ -34,14 +34,17 @@ pub use topics::SourceForumTopicRecord;
 #[allow(unused_imports)]
 pub use types::{SourceRecord, SourceType, TelegramSourceInfo, TelegramSourceKind};
 
+#[allow(unused_imports)]
+pub(crate) use crate::telegram::{
+    TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
+};
 pub(crate) use identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
 #[allow(unused_imports)]
 pub(crate) use items::{
-    insert_source_item, insert_telegram_source_item, insert_telegram_source_item_outcome,
+    insert_telegram_source_item, insert_telegram_source_item_outcome,
     insert_telegram_source_item_with_observation,
     insert_telegram_source_item_with_observation_in_context, upsert_youtube_comment_item,
-    upsert_youtube_transcript_item, SourceItemInsert, TelegramInsertContext, TelegramItemContext,
-    TelegramItemInsertOutcome,
+    upsert_youtube_transcript_item, TelegramInsertContext, TelegramItemInsertOutcome,
 };
 pub(crate) use peer_resolution::{resolve_and_refresh_peer, ResolvedSyncPeer};
 pub(crate) use store::{
@@ -50,8 +53,8 @@ pub(crate) use store::{
 };
 pub(crate) use sync::finalize_sync;
 pub(crate) use types::{
-    SourceSyncTarget, StoredItemRow, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
-    MIGRATED_HISTORY_STATUS_AVAILABLE, MIGRATED_HISTORY_STATUS_UNAVAILABLE,
-    NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP, NOTEBOOKLM_HISTORY_SCOPE_MIGRATED_SMALL_GROUP,
-    TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+    SourceSyncTarget, StoredItemRow, MIGRATED_HISTORY_STATUS_AVAILABLE,
+    MIGRATED_HISTORY_STATUS_UNAVAILABLE, NOTEBOOKLM_HISTORY_SCOPE_CURRENT_SUPERGROUP,
+    NOTEBOOKLM_HISTORY_SCOPE_MIGRATED_SMALL_GROUP, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
+    TELEGRAM_KIND_SUPERGROUP,
 };
