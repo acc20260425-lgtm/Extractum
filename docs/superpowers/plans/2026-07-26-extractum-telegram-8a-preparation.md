@@ -485,7 +485,9 @@ impl TelegramApiHash {
 }
 
 #[derive(Clone)]
-pub struct SessionEncryptionKey(secrecy::SecretVec<u8>);
+pub struct SessionEncryptionKey(
+    std::sync::Arc<secrecy::SecretVec<u8>>,
+);
 
 impl SessionEncryptionKey {
     pub fn try_from_encoded(
@@ -606,6 +608,13 @@ impl TelegramRuntime {
     );
 }
 ```
+
+The private `Arc` in `SessionEncryptionKey` is required by the pinned
+`secrecy` 0.8 API: `SecretVec<u8>` itself is not `Clone` because that release
+does not implement `CloneableSecret` for `u8`. Sharing the secret container
+preserves the frozen public `Clone` capability without adding a plaintext
+exposure or secret copy; the key bytes remain zeroized when the last clone is
+dropped.
 
 The two private enums above are the exact safe test seam: Grammers owns `LoginToken`'s fields and exposes no safe constructor, so tests use `Test(u64)` without fabricating or transmuting a dependency type. `TelegramClientHandle::raw_client` returns the Grammers variant and treats the test variant as unreachable; runtime unit tests never call a raw adapter. Neither enum is public or re-exported, and production builds contain only the Grammers variants.
 
