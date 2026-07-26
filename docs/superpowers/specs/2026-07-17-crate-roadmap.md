@@ -2,7 +2,7 @@
 
 **Status:** Strategic reference; revised and owner-approved 2026-07-19
 **Date:** 2026-07-17
-**Last revised:** 2026-07-25
+**Last revised:** 2026-07-26
 
 ## Purpose
 
@@ -32,6 +32,11 @@ Completed and in-flight slices governed by their own documents:
   tables moved behind app-owned foreign-data adapters; the retained result is
   recorded in the
   [verification document](../verification/2026-07-22-extractum-analysis-extraction.md).
+- [`2026-07-26-telegram-crate-boundary-design.md`](2026-07-26-telegram-crate-boundary-design.md)
+  — Phase 8 boundary draft awaiting owner review. It replaces the stale
+  five-file cluster with three separately retainable sub-slices that remove
+  the full current Grammers perimeter without moving app-owned SQL, secrets,
+  events, or Takeout job orchestration.
 
 - `2026-07-15-rust-workspace-crate-extraction-design.md` — workspace +
   `extractum-core` (`error`, `time`, `compression`). Done.
@@ -230,9 +235,8 @@ extractum (app shell: commands, state, db, migrations, apalis_jobs,
   ├── extractum-analysis          (phase 7)
   │     ├── extractum-llm
   │     └── extractum-core
-  ├── extractum-telegram          (phase 8: telegram, accounts,
-  │     └── extractum-core         session store, secret store,
-  │                                grammers media adapter)
+  ├── extractum-telegram          (phase 8: Grammers runtime/session,
+  │     └── extractum-core         live-source and Takeout adapters)
   ├── extractum-notebooklm-render (phase 2 closed no_go; future fresh design)
   │     └── extractum-core
   ├── extractum-process           (phase 3 closed, not retained; future only
@@ -454,17 +458,61 @@ back a correct ownership boundary, and it did not decide retention. The result
 participates in the standing adjacent-results rule at 15,000 ms and breaks any
 qualifying sequence because it is below the threshold.
 
-Phase 8 remains unapproved and requires its own fresh design, plan, and
-explicit owner authorization.
+Phase 8 now has a fresh boundary draft awaiting written owner approval.
+Implementation remains unauthorized and requires three separately reviewed
+plans plus explicit owner instructions.
 
-### Phase 8 — `extractum-telegram`
+### Phase 8 — `extractum-telegram` (design drafted; awaiting owner approval)
 
-Dormant cluster: `telegram`, `accounts`, `telegram_session_store`,
-`secret_store`, plus the grammers half of `media.rs` (the adapter that
-converts `grammers_client::Media` into pure payloads). Outcome: the four
-pinned grammers git dependencies leave the application crate entirely. The
-extraction must design the payload hand-off into `sources` so ingest keeps
-receiving pure values.
+The fresh
+[Phase 8 boundary draft](2026-07-26-telegram-crate-boundary-design.md)
+supersedes the dormant whole-file cluster. At
+`4023cbd535cddd96908c1dd44f15913b4f408a6c`, direct Grammers coupling spans
+14 production Rust files / 11,281 physical lines / 119 test attributes across
+Telegram runtime/session, live sources, and Takeout. The historical five-file
+ceiling was only 2,047 physical lines / 22 test attributes and could not remove
+the dependencies promised by this phase.
+
+The four pinned roots remain the final outcome:
+`grammers-client`, `grammers-session`, `grammers-mtsender`, and
+`grammers-tl-types` leave the application package entirely. The exact Codeberg
+revision and required features move with `extractum-telegram`; no Grammers,
+raw TL, SQLx, Tauri, or keyring type may appear in its public API.
+
+The boundary is now split into three independently green and retainable
+sub-slices:
+
+1. 8A freezes behavior and prepares DTO, error, opaque-handle, secret-wrapper,
+   and session/file seams while code remains in the app;
+2. 8B completes every live-source and Takeout pure-value seam inside the app,
+   including concrete Takeout operations, while runtime/session and all raw
+   consumers can still compile in one package;
+3. 8C creates the crate, mechanically moves the complete prepared
+   runtime/session/live/Takeout Grammers perimeter, and removes all four app
+   dependency roots.
+
+The single-package preparation order is required: moving runtime/session
+before raw Takeout would either expose `Client`/`MemorySession` publicly or
+duplicate the runtime. Both outcomes are forbidden.
+
+The app permanently retains all twelve account/Telegram Tauri commands,
+account SQL and cross-domain deletion, generic `SecretStore`, app-data and
+session-file operations, migrations, source/item/topic transactions, Takeout
+jobs/cancellation/provenance, events, diagnostics, and cross-domain tests.
+The historical `accounts.rs`/`secret_store.rs` whole-file ownership assumption
+is explicitly void.
+
+Phase 8 overrides the hot-module sample-series default. Each retained
+sub-slice records only the duration already emitted by its mandatory ordinary
+workspace check. There is no focused probe, warm-up, median, quiet-window,
+retry, worktree, or timing harness. Intermediate 8A/8B values are diagnostic;
+only a completed 8C result becomes Phase 8's single input to the adjacent
+completed-phase 15,000 ms observation rule. A workspace check repeated
+internally by `npm.cmd run verify` is a correctness gate, not another admitted
+timing result.
+
+This draft does not authorize implementation. After written design approval,
+8A, 8B, and 8C each require a separate plan and explicit owner instruction.
 
 ### Phase 9+ — Ingest decomposition (gradual, bottom-up)
 

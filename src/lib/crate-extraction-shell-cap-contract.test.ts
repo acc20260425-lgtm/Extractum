@@ -9,6 +9,7 @@ import geminiBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-19-gem
 import llmBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-20-llm-crate-boundary-design.md?raw";
 import promptPacksBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-20-prompt-packs-crate-boundary-design.md?raw";
 import analysisBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-22-analysis-crate-boundary-design.md?raw";
+import telegramBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-26-telegram-crate-boundary-design.md?raw";
 import analysisExtractionPlanRaw from "../../docs/superpowers/plans/2026-07-22-extractum-analysis-extraction.md?raw";
 import analysisExtractionVerificationRaw from "../../docs/superpowers/verification/2026-07-22-extractum-analysis-extraction.md?raw";
 import llmVerificationRaw from "../../docs/superpowers/verification/2026-07-20-extractum-llm-extraction.md?raw";
@@ -51,6 +52,7 @@ const geminiBoundaryDesign = compact(geminiBoundaryDesignRaw);
 const llmBoundaryDesign = compact(llmBoundaryDesignRaw);
 const promptPacksBoundaryDesign = compact(promptPacksBoundaryDesignRaw);
 const analysisBoundaryDesign = compact(analysisBoundaryDesignRaw);
+const telegramBoundaryDesign = compact(telegramBoundaryDesignRaw);
 const analysisExtractionPlan = compact(analysisExtractionPlanRaw);
 const analysisStagingDisposition = compact(
   sectionBetween(
@@ -116,6 +118,12 @@ const phase7Roadmap = compact(
 );
 const phase7Status = phase7Roadmap.match(
   /### Phase 7 — `extractum-analysis` \(([^)]+)\)/,
+)?.[1];
+const phase8Roadmap = compact(
+  sectionBetween(crateRoadmap, "### Phase 8", "### Phase 9+"),
+);
+const phase8Status = phase8Roadmap.match(
+  /### Phase 8 — `extractum-telegram` \(([^)]+)\)/,
 )?.[1];
 const appOwnedGeminiBaselineTests = [
   "explicit_shutdown_kills_and_reaps_the_owned_child_once",
@@ -653,7 +661,9 @@ describe("crate extraction timing policy", () => {
     expect(phase7Roadmap).toContain(
       "The check completed in 5,162 ms, below 15,000 ms",
     );
-    expect(phase7Roadmap).toContain("Phase 8 remains unapproved");
+    expect(phase7Roadmap).toContain(
+      "Phase 8 now has a fresh boundary draft awaiting written owner approval",
+    );
     expect(roadmapTiming).toContain(
       "Phase 7 `extractum-analysis` | 5,162 ms | completed and retained; below 15,000 ms",
     );
@@ -712,6 +722,89 @@ describe("crate extraction timing policy", () => {
     );
     expect(analysisExtractionVerification).toContain(
       "This remediation removed every warning introduced by the Phase 7 extraction",
+    );
+  });
+
+  it("records the reviewable Phase 8 Telegram boundary draft without authorizing implementation", () => {
+    expect(telegramBoundaryDesign).toContain(
+      "**Status:** Draft for owner review; implementation not authorized",
+    );
+    expect(phase8Status).toBeDefined();
+    expect([
+      "design drafted; awaiting owner approval",
+      "design approved; implementation not started",
+      "8A retained",
+      "8B retained",
+      "done: retained",
+      "not retained",
+    ]).toContain(phase8Status);
+    expect(phase8Status).toBe("design drafted; awaiting owner approval");
+    expect(phase8Roadmap).toContain(
+      "2026-07-26-telegram-crate-boundary-design.md",
+    );
+    expect(phase8Roadmap).toContain(
+      "14 production Rust files / 11,281 physical lines / 119 test attributes",
+    );
+    expect(phase8Roadmap).toContain(
+      "The historical five-file ceiling was only 2,047 physical lines / 22 test attributes",
+    );
+    expect(phase8Roadmap).toContain(
+      "8A freezes behavior and prepares DTO, error, opaque-handle, secret-wrapper",
+    );
+    expect(phase8Roadmap).toContain(
+      "8B completes every live-source and Takeout pure-value seam inside the app",
+    );
+    expect(phase8Roadmap).toContain(
+      "8C creates the crate, mechanically moves the complete prepared",
+    );
+    expect(phase8Roadmap).toContain(
+      "moving runtime/session before raw Takeout would either expose `Client`/`MemorySession` publicly or duplicate the runtime",
+    );
+    expect(phase8Roadmap).toContain(
+      "The historical `accounts.rs`/`secret_store.rs` whole-file ownership assumption is explicitly void",
+    );
+    expect(phase8Roadmap).toContain(
+      "There is no focused probe, warm-up, median, quiet-window, retry, worktree, or timing harness",
+    );
+    expect(phase8Roadmap).toContain(
+      "only a completed 8C result becomes Phase 8's single input",
+    );
+    expect(phase8Roadmap).toContain(
+      "A workspace check repeated internally by `npm.cmd run verify` is a correctness gate, not another admitted timing result",
+    );
+    expect(phase8Roadmap).toContain(
+      "This draft does not authorize implementation",
+    );
+
+    expect(telegramBoundaryDesign).toContain(
+      "The current tree no longer supports the old whole-module idea",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "`extractum-telegram` therefore has no SQLx production dependency",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "There is no public generic `invoke<R: RemoteCall>` equivalent",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "The generic secure-store implementation and its LLM/YouTube namespaces never move",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "`TelegramApiHash`: API-hash secret material with zeroization",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "8B and 8C are not combined into one implementation plan",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "Intermediate 8A and 8B values are diagnostic only",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "`npm.cmd run verify` may internally execute another workspace check as a correctness gate",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "eliminating its duplicate correctness work requires a separate owner-approved verification-workflow change",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "No implementation plan is written before the written specification is explicitly approved",
     );
   });
 });
