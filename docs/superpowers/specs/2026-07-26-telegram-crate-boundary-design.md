@@ -297,8 +297,16 @@ facade, so the full known production move-and-touch surface is 19 files,
 13,422 physical lines, and 140 test attributes. The literal identity map
 covers all 140, not only the original 119. Of the 21 type-closure identities,
 `sources::types::tests::telegram_message_identity_validation_rejects_invalid_values`
-moves with the identity; the other 20 remain app-owned unless the 8A inventory
-proves a subject mismatch before any refactor.
+moves with the identity; the other 20 baseline primaries remain app-owned.
+One of those 20,
+`sources::types::tests::item_kind_constants_match_persisted_wire_values`, is a
+predeclared mixed subject: its app identity retains only the two YouTube wire
+assertions, while crate companion
+`telegram_item_kind_constant_matches_persisted_wire_value` owns the
+`ITEM_KIND_TELEGRAM_MESSAGE == "telegram_message"` assertion.
+The closure therefore has 21 immutable baseline entries and 22 final
+executable identities: 20 app primaries, one crate primary, and this one crate
+companion.
 
 Ownership is exact:
 
@@ -309,7 +317,8 @@ Ownership is exact:
   `telegram_impl/dto.rs`;
 - `ITEM_KIND_TELEGRAM_MESSAGE` moves once with the Telegram DTOs and is
   publicly re-exported for app persistence/provenance; no second literal owner
-  is introduced;
+  is introduced, and its persisted wire value is tested by the owning crate
+  companion;
 - `TelegramMessageDraft`, `TelegramMessageIdentity`, and
   `TelegramItemContext` are public owned values of `extractum-telegram`;
 - `ingest_provenance.rs` and `takeout_import/migrated_history.rs` change only
@@ -386,11 +395,55 @@ It must:
 - move the identity/context/item-kind vocabulary into its declared DTO owner,
   preserve all identity validation strings, and remove the dead generic insert
   seam exactly as declared above;
+- complete the separately green core-facade inventory and identity-seam
+  normalization checkpoint below before moving any DTO or test into the
+  staging tree;
 - separate session codec behavior from app path/keyring/file operations;
 - introduce `TelegramApiHash` and `SessionEncryptionKey` secret wrappers;
 - pin exact command, event, status, session, secret, and error compatibility;
 - preserve every current dependency declaration until the preparation is
   green.
+
+#### First 8A checkpoint: core-facade inventory and identity-seam normalization
+
+At the frozen evidence snapshot, the exact 19-file production
+move-and-touch perimeter contains 166 `crate::<root>` references. Exactly 50
+are mechanically equivalent paths resolving through three application
+re-export facades:
+
+- 43 `crate::error` references;
+- five `crate::compression` references;
+- two `crate::time` references.
+
+The counts separate predictable path noise from ownership work, but the
+standing mechanical-move rule forbids a mass rewrite of app consumers.
+Therefore 8A does not replace all 50 references across mixed and app-owned
+regions. Its first separately committed GREEN checkpoint records the
+166-reference inventory and changes exactly the six `crate::error` paths in
+the final-owner `TelegramMessageIdentity::validate` implementation and its
+moving
+`sources::types::tests::telegram_message_identity_validation_rejects_invalid_values`
+test to direct `extractum_core::error` paths. This includes both
+`AppErrorKind::Validation` assertions. The new exact message, serialization,
+and precedence characterizations use the same direct-core path from birth.
+
+No production control flow or observable behavior, error kind/message/JSON,
+existing test identity, visibility, or dependency declaration changes in that
+checkpoint. The other 44 known core-facade references remain unchanged in this
+checkpoint. App-owned consumers retain their facade paths; future-owner
+references normalize only as their symbols enter staging during 8B. App-owned
+sentinels in
+`TelegramSourceKind`/`SourceItemsCursor`, item/peer/sync compression, and
+Takeout persistence time calls prove that the checkpoint did not expand into a
+consumer-wide rewrite.
+
+During 8B, a separately green portable-tree import checkpoint requires zero
+`crate::error`, `crate::compression`, or `crate::time` references inside the
+exact `src-tauri/src/telegram_impl/**` staging tree and requires direct
+`extractum_core` paths there. It changes paths only as final-owner symbols enter
+their portable files; it does not mass-rewrite app-owned source. Every other
+`crate::<root>` reference remains input to the 8B symbol/coupling map and must
+be resolved by ownership rather than global replacement.
 
 8A may contain multiple separately committed preparation checkpoints. A pause
 after any green checkpoint is legitimate and the roadmap must name the last
@@ -829,11 +882,15 @@ closure:
 - `grammers-client`: `default-features = false`, no explicit features;
 - `grammers-session`: `default-features = false`, explicit `serde`;
 - `grammers-mtsender`: default features enabled by the omitted
-  `default-features` key, no explicit features; the pinned package currently
-  defines no `default` feature, so its resolved feature set is empty;
+  `default-features` key, no explicit features;
 - `grammers-tl-types`: default features enabled by the omitted
   `default-features` key, explicit `deserializable-functions`;
 - the Takeout owner carries the `deserializable-functions` requirement.
+
+This direct declaration policy is normative. The package-defined and resolved
+feature sets, including the effective `grammers-mtsender` result, are derived
+only from locked Cargo metadata and the generated baseline below; they are not
+hard-coded as prose assertions.
 
 Resolved feature closure is not maintained as a literal array in this design.
 At the clean identity commit of the 8B implementation plan, a canonical
@@ -945,7 +1002,8 @@ The root staging files have unambiguous owners:
   classification constants and helpers, and the Grammers media adapter;
 - `error.rs` contains only crate-private protocol/retry/fallback
   classification and terminal `AppError` construction; it exports no parallel
-  error type;
+  error type. The filename is retained for that private failure-translation
+  role and does not imply a public Telegram error taxonomy;
 - Takeout-specific public values remain in `takeout/types.rs` and are curated
   through `lib.rs`.
 
@@ -1083,7 +1141,7 @@ the changing tree. Every entry has the form:
 ```
 
 `companion_final_ids` is normally empty. It is populated only when an existing
-mixed integration identity must retain one primary owner while a new test
+mixed-subject baseline identity must retain one primary owner while a new test
 captures the other side of the split.
 
 8B proves the app-only executable identities against that same map. 8C proves
@@ -1196,11 +1254,29 @@ that the app plus crate assertions jointly cover the characterized behavior.
 The second crate companion proves identical native identity for equal peer and
 message IDs; its retained app baseline proves the duplicate storage path is
 skipped and increments the unresolved count only once.
-These are the two known mandatory decompositions. If the 8A classification
+
+The third known mixed identity comes from the 21-test type closure:
+
+- the app keeps the baseline full ID
+  `sources::types::tests::item_kind_constants_match_persisted_wire_values`
+  with only `youtube_transcript` and `youtube_comment` persisted-wire
+  assertions;
+- `extractum-telegram` adds companion
+  `dto::tests::telegram_item_kind_constant_matches_persisted_wire_value` with
+  staged ID
+  `telegram_impl::dto::tests::telegram_item_kind_constant_matches_persisted_wire_value`
+  and the sole
+  `ITEM_KIND_TELEGRAM_MESSAGE == "telegram_message"` assertion.
+
+These are the three known mandatory decompositions. If the 8A classification
 proves another genuinely mixed subject, its approved plan must name and
 characterize the split before changing the baseline test; a design amendment
 is required only if the split changes behavior or the approved ownership/API
 boundary.
+
+Across the complete identity map, 140 immutable baseline identities map to
+143 final executable identities: one primary for every baseline plus the three
+predeclared crate companions.
 
 `sources::items::tests::media_metadata_roundtrip_through_zstd` is explicitly
 not a Telegram-crate candidate. It remains an app facade/storage contract for
@@ -1221,8 +1297,8 @@ Required standing contracts include:
    crate/workspace edge;
 7. the literal immutable 140-entry test-identity map, the exact 43
    helper-dependent plus three credential-SQL app assignments, and the two
-   declared companion-test decompositions, plus the 21-identity type-closure
-   addendum;
+   raw-TL/SQL companion-test decompositions, plus the 21-identity type-closure
+   addendum and its declared item-kind companion decomposition;
 8. moved-not-copied source and test ownership;
 9. exact Grammers Git revision and feature ownership;
 10. actual `Cargo.lock` changes or proved byte identity for each manifest
@@ -1421,8 +1497,9 @@ The design outcome is complete only when:
 9. all 140 baseline identities are explicitly classified by subject; the
    original 119 retain the exact 43 helper-dependent and three credential-SQL
    app assignments, the 21-identity type closure has one identity-validation
-   move plus 20 app owners, the two declared mixed identities have named crate
-   companions, and no app/crate test-dependency cycle exists;
+   move plus 20 app primary owners, the three declared mixed identities have
+   named crate companions, the final union contains exactly 143 executable
+   identities, and no app/crate test-dependency cycle exists;
 10. the crate public API matches the existing-symbol visibility allowlist plus
     the predeclared new operation signatures, returns core `AppResult`
     directly, and contains no public `TelegramError`, Grammers type, or
@@ -1433,7 +1510,9 @@ The design outcome is complete only when:
 12. app Rust, including tests, contains no Grammers import, path, raw TL type,
     alias/re-export, or direct dependency workaround; existing
     `crate::telegram_impl::` consumer paths remain byte-identical behind the
-    private explicit facade;
+    private explicit facade; the first 8A checkpoint directly normalizes the
+    six identity-seam error paths, and the final 8B staging tree contains no
+    `crate::error`, `crate::compression`, or `crate::time` reference;
 13. the exact Grammers revision and direct declaration policy live with the
     crate dependency owner, the generated required/forbidden feature baseline
     passes without unclassified feature keys, and the lockfile is current;
@@ -1462,11 +1541,18 @@ Each plan must:
   `companion_final_ids`;
 - preserve the exact 43 helper-dependent plus three credential-SQL app
   assignments, classify the residual 73 individually, implement the two
-  predeclared companion-test decompositions, classify the 21 type-closure
-  identities as declared, and forbid a reverse dev-dependency or copied app
+  predeclared raw-TL/SQL companion-test decompositions, classify the 21
+  type-closure identities as declared, implement its predeclared item-kind
+  companion decomposition, and forbid a reverse dev-dependency or copied app
   schema;
 - map the dead generic-insert baseline test to the retained Telegram insert
   path while removing `insert_source_item` and draft `external_id`;
+- make the first 8A implementation checkpoint record the complete root
+  inventory and directly normalize exactly the six identity-seam error paths;
+  preserve all behavior/test identities and app-owned facade consumers, then
+  make the 8B portable-tree checkpoint prove absence of all three declared
+  core-facade roots inside staging while leaving every other `crate::<root>`
+  for the ownership map;
 - make 8B produce the exact `src-tauri/src/telegram_impl/**` staging tree and
   make 8C move it mechanically to
   `src-tauri/crates/extractum-telegram/src/**`;

@@ -507,6 +507,17 @@ only 8C completes the dependency-removal outcome:
    runtime/session/live/Takeout Grammers perimeter, and removes all four app
    dependency roots.
 
+The first separately green 8A checkpoint inventories core-facade path noise
+across the frozen 19-file perimeter: 43 `crate::error`, five
+`crate::compression`, and two `crate::time` references out of 166 total
+`crate::<root>` references. The standing mechanical-move rule forbids a mass
+rewrite of app consumers, so 8A directly normalizes only the six error paths
+inside the final-owner identity validation implementation/test—including its
+two `AppErrorKind::Validation` assertions. A separate GREEN 8B portable-tree
+checkpoint requires zero occurrences of those three app-facade roots inside
+staging. App-owned facade consumers stay unchanged; every other
+`crate::<root>` remains for the 8B ownership map.
+
 The single-package preparation order is required: moving runtime/session
 before raw Takeout would either expose `Client`/`MemorySession` publicly or
 duplicate the runtime. Both outcomes are forbidden.
@@ -548,6 +559,13 @@ identities and three credential SQL identities in the app. 8A must classify
 the residual 73 individually and add the 21-identity transitive type closure;
 several remain app diagnostics, routing, cancellation, warning,
 request/read-model, or storage/codec contracts rather than crate tests.
+Within that closure, the app-owned
+`item_kind_constants_match_persisted_wire_values` identity retains the two
+YouTube assertions and gains crate companion
+`dto::tests::telegram_item_kind_constant_matches_persisted_wire_value` for the
+Telegram persisted wire constant. Together with the two raw-TL/SQL splits,
+Phase 8 therefore has three predeclared companion decompositions: 140 baseline
+identities map to exactly 143 final executable identities.
 
 An 8B pause is reported only as `8B preparation retained; 8C pending`: it is
 recoverable green preparation, not a completed extraction or an independent

@@ -60,6 +60,13 @@ const telegramTypePerimeter = compact(
     "## Three Separately Green Sub-Slices",
   ),
 );
+const telegramSubSlices = compact(
+  sectionBetween(
+    normalize(telegramBoundaryDesignRaw),
+    "## Three Separately Green Sub-Slices",
+    "## Public Rust API",
+  ),
+);
 const telegramVisibilityAllowlist = compact(
   sectionBetween(
     normalize(telegramBoundaryDesignRaw),
@@ -86,6 +93,13 @@ const telegramDisposition = compact(
     normalize(telegramBoundaryDesignRaw),
     "## Current-File Disposition",
     "## Test Ownership and Boundary Contracts",
+  ),
+);
+const telegramTestOwnership = compact(
+  sectionBetween(
+    normalize(telegramBoundaryDesignRaw),
+    "## Test Ownership and Boundary Contracts",
+    "## Draft and Approval Synchronization",
   ),
 );
 const analysisExtractionPlan = compact(analysisExtractionPlanRaw);
@@ -796,6 +810,21 @@ describe("crate extraction timing policy", () => {
       "8C creates the crate, mechanically moves the complete prepared",
     );
     expect(phase8Roadmap).toContain(
+      "The first separately green 8A checkpoint inventories core-facade path noise",
+    );
+    expect(phase8Roadmap).toContain(
+      "43 `crate::error`, five `crate::compression`, and two `crate::time` references",
+    );
+    expect(phase8Roadmap).toContain(
+      "8A directly normalizes only the six error paths inside the final-owner identity validation implementation/test",
+    );
+    expect(phase8Roadmap).toContain(
+      "A separate GREEN 8B portable-tree checkpoint requires zero occurrences",
+    );
+    expect(phase8Roadmap).toContain(
+      "App-owned facade consumers stay unchanged",
+    );
+    expect(phase8Roadmap).toContain(
       "moving runtime/session before raw Takeout would either expose `Client`/`MemorySession` publicly or duplicate the runtime",
     );
     expect(phase8Roadmap).toContain(
@@ -830,6 +859,18 @@ describe("crate extraction timing policy", () => {
     );
     expect(phase8Roadmap).toContain(
       "dead test-only generic `insert_source_item` and unused draft `external_id` are removed",
+    );
+    expect(phase8Roadmap).toContain(
+      "`item_kind_constants_match_persisted_wire_values` identity retains the two YouTube assertions",
+    );
+    expect(phase8Roadmap).toContain(
+      "`dto::tests::telegram_item_kind_constant_matches_persisted_wire_value`",
+    );
+    expect(phase8Roadmap).toContain(
+      "three predeclared companion decompositions",
+    );
+    expect(phase8Roadmap).toContain(
+      "140 baseline identities map to exactly 143 final executable identities",
     );
     expect(phase8Roadmap).toContain(
       "43 `sources::test_support` SQL/integration identities",
@@ -893,7 +934,16 @@ describe("crate extraction timing policy", () => {
       "`sources::types::tests::telegram_message_identity_validation_rejects_invalid_values` moves with the identity",
     );
     expect(telegramTypePerimeter).toContain(
-      "the other 20 remain app-owned",
+      "the other 20 baseline primaries remain app-owned",
+    );
+    expect(telegramTypePerimeter).toContain(
+      "`sources::types::tests::item_kind_constants_match_persisted_wire_values`",
+    );
+    expect(telegramTypePerimeter).toContain(
+      "`telegram_item_kind_constant_matches_persisted_wire_value` owns the `ITEM_KIND_TELEGRAM_MESSAGE == \"telegram_message\"` assertion",
+    );
+    expect(telegramTypePerimeter).toContain(
+      "21 immutable baseline entries and 22 final executable identities",
     );
     expect(telegramTypePerimeter).toContain(
       "`Unsupported Telegram history peer kind '{}'`",
@@ -912,6 +962,48 @@ describe("crate extraction timing policy", () => {
     );
     expect(telegramTypePerimeter).toContain(
       '`{"kind":"validation","message":"<the exact message above>"}`',
+    );
+    expect(telegramSubSlices).toContain(
+      "#### First 8A checkpoint: core-facade inventory and identity-seam normalization",
+    );
+    expect(telegramSubSlices).toContain(
+      "contains 166 `crate::<root>` references",
+    );
+    expect(telegramSubSlices).toContain(
+      "43 `crate::error` references",
+    );
+    expect(telegramSubSlices).toContain(
+      "five `crate::compression` references",
+    );
+    expect(telegramSubSlices).toContain(
+      "two `crate::time` references",
+    );
+    expect(telegramSubSlices).toContain(
+      "8A does not replace all 50 references across mixed and app-owned regions",
+    );
+    expect(telegramSubSlices).toContain(
+      "changes exactly the six `crate::error` paths",
+    );
+    expect(telegramSubSlices).toContain(
+      "`sources::types::tests::telegram_message_identity_validation_rejects_invalid_values` test to direct `extractum_core::error` paths",
+    );
+    expect(telegramSubSlices).toContain(
+      "This includes both `AppErrorKind::Validation` assertions",
+    );
+    expect(telegramSubSlices).toContain(
+      "The other 44 known core-facade references remain unchanged in this checkpoint",
+    );
+    expect(telegramSubSlices).toContain(
+      "App-owned consumers retain their facade paths; future-owner references normalize only as their symbols enter staging during 8B",
+    );
+    expect(telegramSubSlices).toContain(
+      "App-owned sentinels in `TelegramSourceKind`/`SourceItemsCursor`, item/peer/sync compression, and Takeout persistence time calls",
+    );
+    expect(telegramSubSlices).toContain(
+      "During 8B, a separately green portable-tree import checkpoint requires zero `crate::error`, `crate::compression`, or `crate::time` references inside the exact `src-tauri/src/telegram_impl/**` staging tree",
+    );
+    expect(telegramSubSlices).toContain(
+      "it does not mass-rewrite app-owned source",
     );
     const expectedTelegramDispositionPaths = [
       "takeout_import/mod.rs",
@@ -960,6 +1052,9 @@ describe("crate extraction timing policy", () => {
     expect(telegramBoundaryDesign).toContain(
       "`media.rs` owns `TelegramMediaPayload`, `DocumentSignals`",
     );
+    expect(telegramStagingContract).toContain(
+      "The filename is retained for that private failure-translation role and does not imply a public Telegram error taxonomy",
+    );
     expect(telegramBoundaryDesign).toContain(
       "`extractum_core::error::{AppError, AppResult}` remains the Rust boundary",
     );
@@ -971,6 +1066,21 @@ describe("crate extraction timing policy", () => {
     );
     expect(telegramBoundaryDesign).toContain(
       "The committed map is a literal immutable baseline",
+    );
+    expect(telegramTestOwnership).toContain(
+      "`companion_final_ids` is normally empty. It is populated only when an existing mixed-subject baseline identity",
+    );
+    expect(telegramTestOwnership).toContain(
+      "These are the three known mandatory decompositions",
+    );
+    expect(telegramTestOwnership).toContain(
+      "`sources::types::tests::item_kind_constants_match_persisted_wire_values` with only `youtube_transcript` and `youtube_comment` persisted-wire assertions",
+    );
+    expect(telegramTestOwnership).toContain(
+      "`dto::tests::telegram_item_kind_constant_matches_persisted_wire_value` with staged ID `telegram_impl::dto::tests::telegram_item_kind_constant_matches_persisted_wire_value` and the sole `ITEM_KIND_TELEGRAM_MESSAGE == \"telegram_message\"` assertion",
+    );
+    expect(telegramTestOwnership).toContain(
+      "140 immutable baseline identities map to 143 final executable identities",
     );
     expect(telegramBoundaryDesign).toContain(
       "exactly 43 SQL/integration tests use one or more of the seven app-only",
@@ -1041,8 +1151,11 @@ describe("crate extraction timing policy", () => {
     expect(telegramBoundaryDesign).toContain(
       "the forbidden set consisting of every key in `packages[].features` that is not required",
     );
-    expect(telegramBoundaryDesign).toContain(
-      "the pinned package currently defines no `default` feature",
+    expect(telegramManifestContract).toContain(
+      "The package-defined and resolved feature sets, including the effective `grammers-mtsender` result, are derived only from locked Cargo metadata",
+    );
+    expect(telegramManifestContract).toContain(
+      "they are not hard-coded as prose assertions",
     );
     expect(telegramManifestContract).toContain(
       "require the current package feature-key universe to equal the recorded universe",
