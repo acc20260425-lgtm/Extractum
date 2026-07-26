@@ -2109,14 +2109,13 @@ Clone the current raw client/session at the same ownership points as today. Do n
 
 ```powershell
 Invoke-ExactRustTest extractum 'telegram::runtime::tests::initialization_maps_authorization_and_last_insert_wins_without_aborting_replaced_runner'
-Invoke-CheckedNative 'store lookup lock-ownership contract' {
-    npm.cmd run test -- src/lib/telegram-crate-boundary-contract.test.ts
-}
 Assert-ExactRustIdentitySet -Package extractum -Prefix 'sources::store::tests::' -Expected $sourcesStoreBroadRegressionTestIds
 Invoke-NonEmptyRustSuite -Label 'source store broad regressions' -Package extractum -TestFilter 'sources::store::tests::'
 Invoke-NonEmptyRustSuite -Label 'source sync broad regressions' -Package extractum -TestFilter 'sources::sync::tests::'
 Invoke-NonEmptyRustSuite -Label 'Takeout broad regressions' -Package extractum -TestFilter 'takeout_import::tests::'
 ```
+
+Do not run the lifecycle-gated Telegram boundary contract before the Checkpoint 5 status update: while the roadmap still truthfully retains Checkpoint 4, that contract must reject the nine Checkpoint 5 identities and future consumer layout introduced by this task. The required first GREEN run for the new layout is the existing post-status invocation in Step 8 after both status authorities advance together.
 
 The boundary contract requires exactly the two `pub(crate)` handle adapters, the one `pub(super)` session accessor, the two app-only lookup functions, and the consumer map above. It rejects any other raw accessor, constructor/conversion, consumer, visibility, raw type re-export, or caller-held lock around either lookup. The exact 24 store, six source-sync, and 17 Takeout identities are broad regression suites, not direct facade/command/lookup/deadlock coverage: none invokes `list_telegram_sources`, `add_telegram_source`, `sync_telegram_source`, `run_takeout_export_dc_spike`, `run_takeout_migrated_history_import`, or `run_takeout_source_import`. The four sync/Takeout substitutions do not change lock discipline because current `get_authorized_runtime` already accepts `&TelegramState` and locks internally; compilation plus the lifecycle-gated source contract—not the filtered-suite labels—prove the type/accessor rewrites. The adapters' and lookup functions' mandatory removal belongs to 8B. Preserve the existing `clear_account_runtime` and `TelegramState::diagnostic_status_counts` compatibility facade so `accounts.rs` and diagnostics remain byte-identical; their SQL/event/aggregation ownership is unchanged.
 
