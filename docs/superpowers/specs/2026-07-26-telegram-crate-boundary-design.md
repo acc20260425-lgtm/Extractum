@@ -1,6 +1,6 @@
 # Telegram Crate Boundary Design
 
-**Status:** Draft for owner review; implementation not authorized
+**Status:** Approved; implementation not started
 **Date:** 2026-07-26
 
 **Roadmap authority:**
@@ -11,7 +11,7 @@
 
 This specification defines the just-in-time Phase 8 boundary for
 `extractum-telegram`. It supersedes the short Phase 8 placeholder in the crate
-roadmap. Approval of this document will not authorize implementation. Phase 8
+roadmap. Approval of this document does not authorize implementation. Phase 8
 is deliberately split into three separately planned and separately retained
 sub-slices, and each sub-slice requires an explicit owner instruction.
 
@@ -1317,7 +1317,7 @@ tests.
 
 ## Draft and Approval Synchronization
 
-This draft commit must atomically:
+The prior draft commit atomically:
 
 1. add this specification with status `Draft for owner review`;
 2. update the Phase 8 roadmap entry to `design drafted; awaiting owner
@@ -1327,8 +1327,8 @@ This draft commit must atomically:
    draft state and the Phase 8 timing override;
 4. run the focused contract test.
 
-After the owner reviews the committed text and explicitly approves it, a
-separate synchronization commit must:
+After the owner reviewed the committed text and explicitly approved it, this
+separate synchronization commit atomically:
 
 1. change this document to `Approved; implementation not started`;
 2. change the roadmap to `design approved; implementation not started`;
@@ -1576,5 +1576,5 @@ Each plan must:
 - stop and amend the design if an unexpected dependency, raw public type,
   transaction owner, wire change, or cross-domain port is required.
 
-Implementation may not begin from this draft or from approval alone. The owner
+Implementation may not begin from approval alone. The owner
 must explicitly authorize the next plan after reviewing it.

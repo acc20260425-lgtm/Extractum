@@ -711,7 +711,7 @@ describe("crate extraction timing policy", () => {
       "The check completed in 5,162 ms, below 15,000 ms",
     );
     expect(phase7Roadmap).toContain(
-      "Phase 8 now has a fresh boundary draft awaiting written owner approval",
+      "Phase 8 has an owner-approved boundary; implementation has not started",
     );
     expect(roadmapTiming).toContain(
       "Phase 7 `extractum-analysis` | 5,162 ms | completed and retained; below 15,000 ms",
@@ -774,9 +774,9 @@ describe("crate extraction timing policy", () => {
     );
   });
 
-  it("records the reviewable Phase 8 Telegram boundary draft without authorizing implementation", () => {
+  it("records the approved Phase 8 Telegram boundary without authorizing implementation", () => {
     expect(telegramBoundaryDesign).toContain(
-      "**Status:** Draft for owner review; implementation not authorized",
+      "**Status:** Approved; implementation not started",
     );
     expect(phase8Status).toBeDefined();
     expect([
@@ -787,7 +787,7 @@ describe("crate extraction timing policy", () => {
       "done: retained",
       "not retained",
     ]).toContain(phase8Status);
-    expect(phase8Status).toBe("design drafted; awaiting owner approval");
+    expect(phase8Status).toBe("design approved; implementation not started");
     expect(phase8Roadmap).toContain(
       "2026-07-26-telegram-crate-boundary-design.md",
     );
@@ -891,7 +891,7 @@ describe("crate extraction timing policy", () => {
       "A workspace check repeated internally by `npm.cmd run verify` is a correctness gate, not another admitted timing result",
     );
     expect(phase8Roadmap).toContain(
-      "This draft does not authorize implementation",
+      "The approved design does not authorize implementation",
     );
 
     expect(telegramBoundaryDesign).toContain(

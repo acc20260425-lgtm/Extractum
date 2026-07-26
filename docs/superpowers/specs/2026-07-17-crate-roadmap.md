@@ -33,7 +33,8 @@ Completed and in-flight slices governed by their own documents:
   recorded in the
   [verification document](../verification/2026-07-22-extractum-analysis-extraction.md).
 - [`2026-07-26-telegram-crate-boundary-design.md`](2026-07-26-telegram-crate-boundary-design.md)
-  — Phase 8 boundary draft awaiting owner review. It replaces the stale
+  — owner-approved Phase 8 boundary; implementation has not started. It
+  replaces the stale
   five-file cluster with three separately retainable sub-slices that remove
   the full current Grammers perimeter without moving app-owned SQL, secrets,
   events, or Takeout job orchestration.
@@ -426,7 +427,8 @@ trigger an investigation by itself.
 Phase 7 is implemented and retained under the
 [JIT boundary design](2026-07-22-analysis-crate-boundary-design.md). The
 [verification document](../verification/2026-07-22-extractum-analysis-extraction.md)
-records the retained result. Phase 8 remains separately unapproved.
+records the retained result. Phase 8 is separately approved; implementation
+has not started.
 
 ### Phase 7 — `extractum-analysis` (done: retained)
 
@@ -461,14 +463,14 @@ back a correct ownership boundary, and it did not decide retention. The result
 participates in the standing adjacent-results rule at 15,000 ms and breaks any
 qualifying sequence because it is below the threshold.
 
-Phase 8 now has a fresh boundary draft awaiting written owner approval.
-Implementation remains unauthorized and requires three separately reviewed
-plans plus explicit owner instructions.
+Phase 8 has an owner-approved boundary; implementation has not started.
+Execution still requires three separately reviewed plans plus explicit owner
+instructions.
 
-### Phase 8 — `extractum-telegram` (design drafted; awaiting owner approval)
+### Phase 8 — `extractum-telegram` (design approved; implementation not started)
 
-The fresh
-[Phase 8 boundary draft](2026-07-26-telegram-crate-boundary-design.md)
+The owner-approved
+[Phase 8 boundary design](2026-07-26-telegram-crate-boundary-design.md)
 supersedes the dormant whole-file cluster. At
 `4023cbd535cddd96908c1dd44f15913b4f408a6c`, direct Grammers coupling spans
 14 production Rust files / 11,281 physical lines / 119 test attributes across
@@ -580,8 +582,8 @@ completed-phase 15,000 ms observation rule. A workspace check repeated
 internally by `npm.cmd run verify` is a correctness gate, not another admitted
 timing result.
 
-This draft does not authorize implementation. After written design approval,
-8A, 8B, and 8C each require a separate plan and explicit owner instruction.
+The approved design does not authorize implementation. 8A, 8B, and 8C each
+require a separate plan and explicit owner instruction.
 
 ### Phase 9+ — Ingest decomposition (gradual, bottom-up)
 
