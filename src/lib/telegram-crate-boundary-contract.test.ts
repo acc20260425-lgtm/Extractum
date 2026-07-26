@@ -690,17 +690,365 @@ function rustClosingBraceIndex(
   throw new Error(`Unclosed Rust block: ${label}`);
 }
 
-function rustFunctionBody(source: string, name: string): string {
+function rustFunctionOriginalBody(source: string, name: string): string {
+  const searchable = maskRustLexicalNonCode(source);
   const declaration = new RegExp(
-    `\\b(?:async\\s+)?fn\\s+${name}\\s*\\(`,
-  ).exec(source);
+    `\\b(?:async\\s+)?fn\\s+${name}(?:\\s*<[^>{}]*>)?\\s*\\(`,
+  ).exec(searchable);
   if (!declaration || declaration.index === undefined) {
     throw new Error(`Missing Rust function: ${name}`);
   }
-  const open = source.indexOf("{", declaration.index + declaration[0].length);
+  const open = searchable.indexOf(
+    "{",
+    declaration.index + declaration[0].length,
+  );
   if (open < 0) throw new Error(`Missing Rust function body: ${name}`);
   const close = rustClosingBraceIndex(source, open, `function ${name}`);
   return source.slice(open + 1, close);
+}
+
+function rustFunctionBody(source: string, name: string): string {
+  return maskRustLexicalNonCode(rustFunctionOriginalBody(source, name));
+}
+
+function normalizedRustCommandDeclaration(
+  source: string,
+  name: string,
+): string {
+  const searchable = maskRustLexicalNonCode(source);
+  const declaration = new RegExp(
+    `#\\[tauri::command\\]\\s*pub\\s+async\\s+fn\\s+${name}\\s*\\(`,
+    "g",
+  );
+  const matches = [...searchable.matchAll(declaration)];
+  if (matches.length !== 1 || matches[0].index === undefined) {
+    throw new Error(
+      `Expected one exact #[tauri::command] declaration for ${name}, found ${matches.length}`,
+    );
+  }
+  const open = searchable.indexOf(
+    "{",
+    matches[0].index + matches[0][0].length,
+  );
+  if (open < 0) throw new Error(`Missing command body for ${name}`);
+  return source
+    .slice(matches[0].index, open)
+    .replace(/\s+/g, " ")
+    .replace(/\(\s+/g, "(")
+    .replace(/\s+\)/g, ")")
+    .trim();
+}
+
+function rustCommandIpcKeys(
+  declaration: string,
+  name: string,
+): string[] {
+  const parameterStart = declaration.indexOf(`fn ${name}(`);
+  if (parameterStart < 0) {
+    throw new Error(`Missing normalized command parameters for ${name}`);
+  }
+  const start = parameterStart + `fn ${name}(`.length;
+  const parameters: string[] = [];
+  let angleDepth = 0;
+  let parameter = "";
+  for (let index = start; index < declaration.length; index += 1) {
+    const character = declaration[index];
+    if (character === "<") angleDepth += 1;
+    if (character === ">") angleDepth -= 1;
+    if (character === ")" && angleDepth === 0) {
+      if (parameter.trim()) parameters.push(parameter.trim());
+      break;
+    }
+    if (character === "," && angleDepth === 0) {
+      if (parameter.trim()) parameters.push(parameter.trim());
+      parameter = "";
+      continue;
+    }
+    parameter += character;
+  }
+  return parameters.flatMap((entry) => {
+    const separator = entry.indexOf(":");
+    if (separator < 0) {
+      throw new Error(`Malformed command parameter for ${name}: ${entry}`);
+    }
+    const parameterName = entry.slice(0, separator).trim();
+    const parameterType = entry.slice(separator + 1).trim();
+    if (
+      parameterType === "AppHandle" ||
+      parameterType.startsWith("tauri::State<")
+    ) {
+      return [];
+    }
+    return [
+      parameterName.replace(/_([a-z0-9])/g, (_match, letter: string) =>
+        letter.toUpperCase(),
+      ),
+    ];
+  });
+}
+
+function activeInvokeHandlerRegistrations(source: string): string[] {
+  const searchable = maskRustLexicalNonCode(source);
+  const invocation =
+    /\.invoke_handler\s*\(\s*tauri::generate_handler!\s*\[/g;
+  return [...searchable.matchAll(invocation)].map((match) => {
+    const start = searchable.indexOf("[", match.index);
+    let depth = 0;
+    for (let index = start; index < searchable.length; index += 1) {
+      if (searchable[index] === "[") depth += 1;
+      if (searchable[index] === "]") depth -= 1;
+      if (depth === 0) {
+        return searchable.slice(start + 1, index).trim();
+      }
+    }
+    throw new Error("Unclosed tauri::generate_handler! registration");
+  });
+}
+
+function assertLiveSyncIteratorSelection(body: string): void {
+  const normalized = maskRustLexicalNonCode(body).replace(/\s+/g, " ");
+  expect(normalized).toMatch(
+    /let mut messages = if let Some\(settings\) = sync_policy\.initial_sync_settings\.as_ref\(\) \{ match settings\.initial_sync_mode \{ InitialSyncMode::RecentMessages => client \.iter_messages\(peer\) \.limit\(settings\.initial_sync_value as usize\), InitialSyncMode::RecentDays => client\.iter_messages\(peer\), \} \} else \{ client\.iter_messages\(peer\) \};/,
+  );
+}
+
+function rustCallArguments(source: string, name: string): string[] {
+  const searchable = maskRustLexicalNonCode(source);
+  const declaration = new RegExp(`\\b${name}\\s*\\(`, "g");
+  return [...searchable.matchAll(declaration)].map((match) => {
+    const open = searchable.indexOf("(", match.index);
+    let depth = 0;
+    for (let index = open; index < searchable.length; index += 1) {
+      if (searchable[index] === "(") depth += 1;
+      if (searchable[index] === ")") depth -= 1;
+      if (depth === 0) return searchable.slice(open + 1, index);
+    }
+    throw new Error(`Unclosed Rust call: ${name}`);
+  });
+}
+
+function rustActiveOriginalCallArguments(
+  source: string,
+  name: string,
+): string[] {
+  const searchable = maskRustLexicalNonCode(source);
+  const declaration = new RegExp(
+    `${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\(`,
+    "g",
+  );
+  return [...searchable.matchAll(declaration)].map((match) => {
+    const open = searchable.indexOf("(", match.index);
+    let depth = 0;
+    for (let index = open; index < searchable.length; index += 1) {
+      if (searchable[index] === "(") depth += 1;
+      if (searchable[index] === ")") depth -= 1;
+      if (depth === 0) return source.slice(open + 1, index);
+    }
+    throw new Error(`Unclosed Rust call: ${name}`);
+  });
+}
+
+function normalizeRustFormattingWhitespace(source: string): string {
+  let normalized = "";
+  let pendingWhitespace = false;
+
+  const appendPendingWhitespace = (): void => {
+    if (pendingWhitespace && normalized.length > 0) normalized += " ";
+    pendingWhitespace = false;
+  };
+
+  for (let index = 0; index < source.length; index += 1) {
+    const lexicalEnd = rustLexicalNonCodeEnd(
+      source,
+      index,
+      "active call arguments",
+    );
+    if (lexicalEnd !== undefined) {
+      if (
+        source.startsWith("//", index)
+        || source.startsWith("/*", index)
+      ) {
+        pendingWhitespace = true;
+      } else {
+        appendPendingWhitespace();
+        normalized += source.slice(index, lexicalEnd + 1);
+      }
+      index = lexicalEnd;
+      continue;
+    }
+    if (/\s/u.test(source[index])) {
+      pendingWhitespace = true;
+      continue;
+    }
+    appendPendingWhitespace();
+    normalized += source[index];
+  }
+
+  return normalized;
+}
+
+function normalizedActiveCallArguments(
+  source: string,
+  name: string,
+): string[] {
+  return rustActiveOriginalCallArguments(source, name).map((argumentsSource) =>
+    normalizeRustFormattingWhitespace(argumentsSource),
+  );
+}
+
+function assertAuthorizedRuntimeAuthArguments(source: string): void {
+  const authorizedRuntimeOriginal = rustFunctionOriginalBody(
+    source,
+    "get_authorized_runtime",
+  );
+  expect(
+    normalizedActiveCallArguments(
+      authorizedRuntimeOriginal,
+      "AppError::auth",
+    ),
+  ).toEqual([
+    'format!("Account {account_id} not initialized")',
+    'format!( "Account {account_id} is not authenticated" )',
+  ]);
+}
+
+function assertWrappedTakeoutCalls(
+  source: string,
+  functionName: string,
+  expectedMarkers: readonly string[],
+): void {
+  const wrappers = rustCallArguments(
+    rustFunctionBody(source, functionName),
+    "run_takeout_step_with_cancel",
+  );
+  expect(wrappers, `${functionName} cancellation wrappers`).toHaveLength(
+    expectedMarkers.length,
+  );
+  wrappers.forEach((wrapper, index) => {
+    expect(
+      wrapper,
+      `${functionName} remote wrapper ${index + 1}`,
+    ).toContain(expectedMarkers[index]);
+  });
+}
+
+function assertTakeoutObservableBoundaries(source: string): void {
+  assertWrappedTakeoutCalls(source, "run_takeout_migrated_history_import", [
+    "resolve_and_refresh_peer(",
+    "prepare_export_dc_alias(",
+    "export_dc_invoke_with_provenance(",
+    "revalidate_migrated_from_chat_id(",
+    "export_dc_invoke_with_provenance(",
+    "takeout_history_count_probe(",
+    "finish_takeout_session(",
+  ]);
+  assertWrappedTakeoutCalls(source, "run_takeout_source_import", [
+    "resolve_and_refresh_peer(",
+    "tl::functions::users::GetUsers",
+    "prepare_export_dc_alias(",
+    "export_dc_invoke_with_provenance(",
+  ]);
+  assertWrappedTakeoutCalls(
+    source,
+    "run_started_takeout_source_import_inner",
+    [
+      "validate_takeout_peer(",
+      "detect_supergroup_migration(",
+      "export_dc_invoke_with_provenance(",
+      "takeout_history_count_probe(",
+      "finish_takeout_session(",
+    ],
+  );
+  assertWrappedTakeoutCalls(source, "import_takeout_history_pages", [
+    "takeout_history_page_response(",
+  ]);
+
+  const pages = rustFunctionBody(source, "import_takeout_history_pages");
+  expect(pages.replace(/\s+/g, " ")).toMatch(
+    /update_and_emit\(handle, &takeout_state, job_id, \|job\| \{ job\.inserted = imported\.inserted; job\.skipped = imported\.skipped; job\.progress_current = Some\(\(imported\.inserted \+ imported\.skipped\)\.min\(total\)\); job\.progress_total = Some\(total\); job\.warnings = warnings\.clone\(\); \}\) \.await;/,
+  );
+  expectOrdered(
+    pages,
+    [
+      "insert_telegram_source_item_with_observation",
+      ".await?",
+      "update_and_emit(handle, &takeout_state, job_id",
+      "job.inserted = imported.inserted",
+      "job.skipped = imported.skipped",
+      "job.progress_current = Some((imported.inserted + imported.skipped).min(total))",
+      "job.progress_total = Some(total)",
+      "job.warnings = warnings.clone()",
+      ".await",
+    ],
+    "Takeout persist-before-exact-page-progress callback",
+  );
+
+  const job = rustFunctionBody(source, "run_takeout_import_job");
+  const remoteStart = job.indexOf("match run_takeout_source_import");
+  const initialCancelled = job.slice(0, remoteStart);
+  expectOrdered(
+    initialCancelled,
+    [
+      "finish_job(&job_id",
+      "job.status = STATUS_CANCELLED.to_string()",
+      "job.phase = PHASE_CANCELLED.to_string()",
+      "emit_takeout_import_event(&handle, &record)",
+    ],
+    "Takeout initial-cancel finish-mutate-emit",
+  );
+  const completedStart = job.indexOf("Ok(outcome)", remoteStart);
+  const errorStart = job.indexOf("Err(error)", completedStart);
+  expectOrdered(
+    job.slice(completedStart, errorStart),
+    [
+      "finish_job(&job_id",
+      "job.status = STATUS_COMPLETED.to_string()",
+      "job.phase = PHASE_COMPLETED.to_string()",
+      "emit_takeout_import_event(&handle, &record)",
+    ],
+    "Takeout completed finish-mutate-emit",
+  );
+  const errorBranch = job.slice(errorStart);
+  const cancelledStart = errorBranch.indexOf(
+    "if takeout_state.is_cancel_requested(&job_id).await",
+  );
+  const failedStart = errorBranch.indexOf("} else {", cancelledStart);
+  expectOrdered(
+    errorBranch.slice(cancelledStart, failedStart),
+    [
+      "finish_job(&job_id",
+      "job.status = STATUS_CANCELLED.to_string()",
+      "job.phase = PHASE_CANCELLED.to_string()",
+      "emit_takeout_import_event(&handle, &record)",
+    ],
+    "Takeout error-cancel finish-mutate-emit",
+  );
+  expectOrdered(
+    errorBranch.slice(failedStart),
+    [
+      "finish_job(&job_id",
+      "job.status = STATUS_FAILED.to_string()",
+      "job.phase = PHASE_FAILED.to_string()",
+      "job.error = Some(terminal_error.clone())",
+      "emit_takeout_import_event(&handle, &record)",
+    ],
+    "Takeout failed finish-mutate-emit",
+  );
+}
+
+function expectOrdered(
+  source: string,
+  markers: readonly string[],
+  label: string,
+): void {
+  let previous = -1;
+  for (const marker of markers) {
+    const current = source.indexOf(marker, previous + 1);
+    expect(current, `${label}: missing or reordered ${marker}`).toBeGreaterThan(
+      previous,
+    );
+    previous = current;
+  }
 }
 
 type RustSemanticItemSpan = {
@@ -941,6 +1289,186 @@ const addedIdentities = parseAddedIdentities();
 const storeIdentities = parseStoreIdentities();
 
 describe("Phase 8 Telegram crate boundary", () => {
+  it("ignores block-comment, line-comment, and raw-string function declarations", () => {
+    const source = String.raw`
+      /* fn sample() { fake_block(); } */
+      // fn sample() { fake_line(); }
+      const FAKE: &str = r###"fn sample() { fake_raw(); }"###;
+      fn sample() { real_body(); }
+    `;
+    expect(rustFunctionBody(source, "sample").trim()).toBe("real_body();");
+
+    const commandSource = String.raw`
+      /* #[tauri::command] pub async fn sample(fake: String) -> AppResult<()> { fake_block(); } */
+      // #[tauri::command] pub async fn sample(fake: String) -> AppResult<()> { fake_line(); }
+      const FAKE: &str = r###"#[tauri::command] pub async fn sample(fake: String) -> AppResult<()> { fake_raw(); }"###;
+      #[tauri::command]
+      pub async fn sample(account_id: i64) -> AppResult<bool> { Ok(true) }
+    `;
+    expect(normalizedRustCommandDeclaration(commandSource, "sample")).toBe(
+      "#[tauri::command] pub async fn sample(account_id: i64) -> AppResult<bool>",
+    );
+  });
+
+  it("finds every active invoke-handler registration and ignores lexical fakes", () => {
+    const source = String.raw`
+      /* app.invoke_handler(tauri::generate_handler![fake_block]) */
+      // app.invoke_handler(tauri::generate_handler![fake_line])
+      const FAKE: &str = r###"app.invoke_handler(tauri::generate_handler![fake_raw])"###;
+      app.invoke_handler(tauri::generate_handler![first]);
+      app.invoke_handler(tauri::generate_handler![second]);
+    `;
+    expect(activeInvokeHandlerRegistrations(source)).toEqual([
+      "first",
+      "second",
+    ]);
+  });
+
+  it("rejects dead handler command text inside the active registration", () => {
+    const source = String.raw`
+      app.invoke_handler(tauri::generate_handler![
+        active_command,
+        // dead_command,
+        /* dead_command */
+      ]);
+    `;
+    const registrations = activeInvokeHandlerRegistrations(source);
+    expect(registrations).toHaveLength(1);
+    expect(countMatches(registrations[0], /\bdead_command\b/g)).toBe(0);
+  });
+
+  it("rejects dead wrapper remote text inside comments and strings", () => {
+    const source = String.raw`
+      run_takeout_step_with_cancel(token, async {
+        // expected_remote()
+        let dead = "expected_remote()";
+        active_remote()
+      })
+    `;
+    const wrappers = rustCallArguments(
+      source,
+      "run_takeout_step_with_cancel",
+    );
+    expect(wrappers).toHaveLength(1);
+    expect(wrappers[0]).not.toContain("expected_remote(");
+  });
+
+  it("rejects dead canonical live-sync text beside mutated active code", () => {
+    const body = String.raw`
+      /*
+      let mut messages = if let Some(settings) = sync_policy.initial_sync_settings.as_ref() {
+        match settings.initial_sync_mode {
+          InitialSyncMode::RecentMessages => client
+            .iter_messages(peer)
+            .limit(settings.initial_sync_value as usize),
+          InitialSyncMode::RecentDays => client.iter_messages(peer),
+        }
+      } else {
+        client.iter_messages(peer)
+      };
+      */
+      let mut messages = client.iter_messages(peer);
+    `;
+    expect(() => assertLiveSyncIteratorSelection(body)).toThrow();
+  });
+
+  it("rejects a line-comment literal that spoofs an active result", () => {
+    const source = String.raw`
+      fn sample() {
+        Ok("changed".to_string());
+        // Ok("expected".to_string());
+      }
+    `;
+    expect(
+      normalizedActiveCallArguments(
+        rustFunctionOriginalBody(source, "sample"),
+        "Ok",
+      ),
+    ).toEqual(['"changed".to_string()']);
+  });
+
+  it("rejects a block-comment literal that spoofs an active constructor", () => {
+    const source = String.raw`
+      fn sample() {
+        AppError::auth("changed");
+        /* AppError::auth("expected"); */
+      }
+    `;
+    expect(
+      normalizedActiveCallArguments(
+        rustFunctionOriginalBody(source, "sample"),
+        "AppError::auth",
+      ),
+    ).toEqual(['"changed"']);
+  });
+
+  it("preserves double internal spaces in an active string literal", () => {
+    const source = String.raw`
+      fn sample() {
+        Ok("Code  sent".to_string());
+      }
+    `;
+    expect(
+      normalizedActiveCallArguments(
+        rustFunctionOriginalBody(source, "sample"),
+        "Ok",
+      ),
+    ).toEqual(['"Code  sent".to_string()']);
+  });
+
+  it("rejects doubled internal spaces in the active authorized-runtime Auth literal", () => {
+    const source = telegramContractPaths.readTelegramContractFile(
+      "src-tauri/src/telegram.rs",
+    );
+    const mutation = source.replace(
+      '"Account {account_id} is not authenticated"',
+      '"Account {account_id} is not  authenticated"',
+    );
+    expect(mutation).not.toBe(source);
+    expect(() => assertAuthorizedRuntimeAuthArguments(mutation)).toThrow();
+  });
+
+  it("rejects a live-sync mutation that bounds the RecentDays match arm", () => {
+    const source =
+      telegramContractPaths.readTelegramContractFile(
+        "src-tauri/src/sources/sync.rs",
+      );
+    const body = rustFunctionBody(source, "persist_items");
+    const mutation = body.replace(
+      "InitialSyncMode::RecentDays => client.iter_messages(peer),",
+      "InitialSyncMode::RecentDays => client.iter_messages(peer).limit(settings.initial_sync_value as usize),",
+    );
+    expect(mutation).not.toBe(body);
+    expect(() => assertLiveSyncIteratorSelection(mutation)).toThrow();
+  });
+
+  it("rejects Takeout mutations that bypass cancellation, progress, or terminal emission order", () => {
+    const source =
+      telegramContractPaths.readTelegramContractFile(
+        "src-tauri/src/takeout_import/mod.rs",
+      );
+    const unwrappedRemote = source.replace(
+      "let resolved_peer = run_takeout_step_with_cancel(",
+      "let resolved_peer = bypass_takeout_cancel(",
+    );
+    const wrongProgress = source.replace(
+      "Some((imported.inserted + imported.skipped).min(total))",
+      "Some((imported.inserted + imported.skipped).max(total))",
+    );
+    const wrongCompletedOrder = source.replace(
+      "job.status = STATUS_COMPLETED.to_string();",
+      "job.status = STATUS_RUNNING.to_string();",
+    );
+    expect(unwrappedRemote).not.toBe(source);
+    expect(wrongProgress).not.toBe(source);
+    expect(wrongCompletedOrder).not.toBe(source);
+    expect(() => assertTakeoutObservableBoundaries(unwrappedRemote)).toThrow();
+    expect(() => assertTakeoutObservableBoundaries(wrongProgress)).toThrow();
+    expect(() =>
+      assertTakeoutObservableBoundaries(wrongCompletedOrder),
+    ).toThrow();
+  });
+
   it("scans Rust function braces lexically across strings and comments", () => {
     const source = String.raw`
       fn sample() {
@@ -1171,10 +1699,10 @@ describe("Phase 8 Telegram crate boundary", () => {
 });
 
 describe("literal immutable Telegram test map", () => {
-  it("records only the truthful retained Checkpoint 1 lifecycle state", () => {
-    expect(phase8Status).toBe("8A preparation Checkpoint 1 retained");
+  it("records only the truthful retained Checkpoint 2 lifecycle state", () => {
+    expect(phase8Status).toBe("8A preparation Checkpoint 2 retained");
     expect(design).toContain(
-      "**Status:** Approved; 8A preparation Checkpoint 1 retained",
+      "**Status:** Approved; 8A preparation Checkpoint 2 retained",
     );
   });
 
@@ -1935,19 +2463,23 @@ describe("Checkpoint 1 core-error seam", () => {
       source,
       "telegram_message_identity_validation_rejects_invalid_values",
     );
+    const characterizationOriginalBody = rustFunctionOriginalBody(
+      source,
+      "telegram_message_identity_validation_rejects_invalid_values",
+    );
     expect(validationBody).not.toContain("crate::error");
     expect(characterizationBody).not.toContain("crate::error");
-    expect(characterizationBody).toContain(
+    expect(characterizationOriginalBody).toContain(
       "Unsupported Telegram history peer kind 'supergroup'",
     );
-    expect(characterizationBody).toContain(
+    expect(characterizationOriginalBody).toContain(
       "Telegram history peer id must be positive",
     );
-    expect(characterizationBody).toContain(
+    expect(characterizationOriginalBody).toContain(
       "Telegram message id must be positive",
     );
-    expect(characterizationBody).toContain('"kind":"validation"');
-    expect(characterizationBody).toContain("multiple invalid values");
+    expect(characterizationOriginalBody).toContain('"kind":"validation"');
+    expect(characterizationOriginalBody).toContain("multiple invalid values");
   });
 
   it("sentinel-preserves the other 44 core-facade references", () => {
@@ -2022,5 +2554,771 @@ describe("Checkpoint 1 core-error seam", () => {
     expect(() =>
       assertFacadeInventory(new Map([[typesPath, relocated]])),
     ).toThrow(/site inventory/);
+  });
+});
+
+describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
+  it("pins all twelve command declarations, registration entries, and default camelCase IPC keys", () => {
+    const accountsPath = "src-tauri/src/accounts.rs";
+    const telegramPath = "src-tauri/src/telegram.rs";
+    const accounts =
+      telegramContractPaths.readTelegramContractFile(accountsPath);
+    const telegram =
+      telegramContractPaths.readTelegramContractFile(telegramPath);
+    const lib =
+      telegramContractPaths.readTelegramContractFile("src-tauri/src/lib.rs");
+    const commands = [
+      {
+        name: "list_accounts",
+        source: accounts,
+        declaration:
+          "#[tauri::command] pub async fn list_accounts(handle: AppHandle) -> AppResult<Vec<AccountRecord>>",
+      },
+      {
+        name: "get_account",
+        source: accounts,
+        declaration:
+          "#[tauri::command] pub async fn get_account(handle: AppHandle, account_id: i64) -> AppResult<Option<AccountRecord>>",
+      },
+      {
+        name: "create_account",
+        source: accounts,
+        declaration:
+          "#[tauri::command] pub async fn create_account(handle: AppHandle, secret_store: tauri::State<'_, SecretStoreState>, label: String, api_id: i64, api_hash: String,) -> AppResult<AccountRecord>",
+      },
+      {
+        name: "set_account_phone",
+        source: accounts,
+        declaration:
+          "#[tauri::command] pub async fn set_account_phone(handle: AppHandle, account_id: i64, phone: String) -> AppResult<()>",
+      },
+      {
+        name: "clear_account_phone",
+        source: accounts,
+        declaration:
+          "#[tauri::command] pub async fn clear_account_phone(handle: AppHandle, account_id: i64) -> AppResult<()>",
+      },
+      {
+        name: "delete_account",
+        source: accounts,
+        declaration:
+          "#[tauri::command] pub async fn delete_account(handle: AppHandle, state: tauri::State<'_, TelegramState>, source_locks: tauri::State<'_, SourceIngestLocks>, takeout_state: tauri::State<'_, TakeoutImportState>, source_job_state: tauri::State<'_, SourceJobState>, analysis_state: tauri::State<'_, AnalysisState>, llm_scheduler: tauri::State<'_, Arc<LlmSchedulerState>>, secret_store: tauri::State<'_, SecretStoreState>, account_id: i64,) -> AppResult<()>",
+      },
+      {
+        name: "tg_init",
+        source: telegram,
+        declaration:
+          "#[tauri::command] pub async fn tg_init(handle: AppHandle, state: tauri::State<'_, TelegramState>, secret_store: tauri::State<'_, SecretStoreState>, account_id: i64,) -> AppResult<bool>",
+      },
+      {
+        name: "tg_is_authenticated",
+        source: telegram,
+        declaration:
+          "#[tauri::command] pub async fn tg_is_authenticated(state: tauri::State<'_, TelegramState>, account_id: i64,) -> AppResult<bool>",
+      },
+      {
+        name: "tg_get_account_statuses",
+        source: telegram,
+        declaration:
+          "#[tauri::command] pub async fn tg_get_account_statuses(state: tauri::State<'_, TelegramState>, account_ids: Vec<i64>,) -> AppResult<Vec<AccountRuntimeStatus>>",
+      },
+      {
+        name: "tg_send_code",
+        source: telegram,
+        declaration:
+          "#[tauri::command] pub async fn tg_send_code(state: tauri::State<'_, TelegramState>, account_id: i64, phone: String,) -> AppResult<String>",
+      },
+      {
+        name: "tg_sign_in",
+        source: telegram,
+        declaration:
+          "#[tauri::command] pub async fn tg_sign_in(handle: AppHandle, state: tauri::State<'_, TelegramState>, secret_store: tauri::State<'_, SecretStoreState>, account_id: i64, code: String,) -> AppResult<bool>",
+      },
+      {
+        name: "tg_logout",
+        source: telegram,
+        declaration:
+          "#[tauri::command] pub async fn tg_logout(handle: AppHandle, state: tauri::State<'_, TelegramState>, secret_store: tauri::State<'_, SecretStoreState>, account_id: i64,) -> AppResult<bool>",
+      },
+    ] as const;
+
+    const registrations = activeInvokeHandlerRegistrations(lib);
+    expect(registrations).toHaveLength(1);
+    const handler = registrations[0];
+
+    expect(commands.map(({ name }) => name)).toEqual([
+      "list_accounts",
+      "get_account",
+      "create_account",
+      "set_account_phone",
+      "clear_account_phone",
+      "delete_account",
+      "tg_init",
+      "tg_is_authenticated",
+      "tg_get_account_statuses",
+      "tg_send_code",
+      "tg_sign_in",
+      "tg_logout",
+    ]);
+    expect(
+      commands.map(({ name, source }) => [
+        name,
+        rustCommandIpcKeys(
+          normalizedRustCommandDeclaration(source, name),
+          name,
+        ),
+      ]),
+    ).toEqual([
+      ["list_accounts", []],
+      ["get_account", ["accountId"]],
+      ["create_account", ["label", "apiId", "apiHash"]],
+      ["set_account_phone", ["accountId", "phone"]],
+      ["clear_account_phone", ["accountId"]],
+      ["delete_account", ["accountId"]],
+      ["tg_init", ["accountId"]],
+      ["tg_is_authenticated", ["accountId"]],
+      ["tg_get_account_statuses", ["accountIds"]],
+      ["tg_send_code", ["accountId", "phone"]],
+      ["tg_sign_in", ["accountId", "code"]],
+      ["tg_logout", ["accountId"]],
+    ]);
+    for (const { name, source, declaration } of commands) {
+      expect(normalizedRustCommandDeclaration(source, name)).toBe(declaration);
+      expect(countMatches(handler, new RegExp(`\\b${name}\\b`, "g"))).toBe(1);
+    }
+
+    const accountsStructure = maskRustLexicalNonCode(accounts);
+    const telegramStructure = maskRustLexicalNonCode(telegram);
+    expect(accounts).toContain(
+      "SELECT id, label, api_id, phone, created_at FROM accounts",
+    );
+    expect(accountsStructure).toContain("check_account_deletion(");
+    expect(accountsStructure).toContain("source_locks.inner()");
+    expect(accountsStructure).toContain("takeout_state.inner()");
+    expect(accountsStructure).toContain("source_job_state.inner()");
+    expect(accountsStructure).toContain("analysis_state.inner()");
+    expect(accountsStructure).toContain("llm_scheduler.inner().as_ref()");
+    expect(telegramStructure).toContain(
+      "async fn resolve_account_credentials(",
+    );
+    expect(telegram).toContain("SELECT id, api_id, api_hash FROM accounts");
+
+    const futureOwnerLeaves = rustPathsUnder("src-tauri/src/telegram").map(
+      (relativePath) =>
+        telegramContractPaths.readTelegramContractFile(relativePath),
+    ).join("\n");
+    const futureOwnerStructure = maskRustLexicalNonCode(futureOwnerLeaves);
+    expect(futureOwnerStructure).not.toMatch(/#\[tauri::command\]/);
+    expect(futureOwnerStructure).not.toMatch(
+      /\b(?:list_accounts|get_account|create_account|set_account_phone|clear_account_phone|delete_account|tg_init|tg_is_authenticated|tg_get_account_statuses|tg_send_code|tg_sign_in|tg_logout)\s*\(/,
+    );
+    expect(futureOwnerStructure).not.toMatch(
+      /\b(?:sqlx|check_account_deletion|generate_handler|AccountCredentials|resolve_account_credentials)\b/,
+    );
+  });
+
+  it("pins Telegram event emission, status mutation, login result, and session ordering", () => {
+    const telegram =
+      telegramContractPaths.readTelegramContractFile(
+        "src-tauri/src/telegram.rs",
+      );
+    const session =
+      telegramContractPaths.readTelegramContractFile(
+        "src-tauri/src/telegram_session_store.rs",
+      );
+
+    expectOrdered(
+      rustFunctionBody(telegram, "set_account_status"),
+      [
+        "let runtime_status = AccountRuntimeStatus",
+        "let mut statuses = state.statuses.lock().await",
+        "statuses.insert(account_id, runtime_status.clone())",
+        "drop(statuses)",
+        "let _ = handle.emit(TELEGRAM_ACCOUNT_STATUS_EVENT, &runtime_status)",
+      ],
+      "account status state-before-best-effort-event order",
+    );
+    const restoreBody = rustFunctionBody(
+      telegram,
+      "restore_telegram_accounts",
+    );
+    expect(
+      countMatches(
+        restoreBody,
+        /let _ = handle\.emit\(\s*TELEGRAM_RESTORE_FAILURE_EVENT/g,
+      ),
+    ).toBe(2);
+    expectOrdered(
+      rustFunctionBody(telegram, "init_account_client"),
+      [
+        "STATUS_RESTORING",
+        "load_session(handle, secret_store, account_id).await?",
+        "is_authorized()",
+        "accounts.insert(",
+        "STATUS_READY",
+        "STATUS_REAUTH_REQUIRED",
+        "set_account_status(handle, state, account_id, status, None).await",
+        "Ok(is_auth)",
+      ],
+      "restore and initialization status order",
+    );
+    const sendCodeBody = rustFunctionBody(telegram, "tg_send_code");
+    const sendCodeOriginal = rustFunctionOriginalBody(
+      telegram,
+      "tg_send_code",
+    );
+    expectOrdered(
+      sendCodeBody,
+      [
+        "AppError::auth(",
+        "request_login_code(&phone, &ac.api_hash.clone())",
+        ".map_err(AppError::telegram_network)?",
+        "ac.phone = Some(phone)",
+        "ac.login_token = Some(token)",
+        "Ok(",
+      ],
+      "send-code remote and state order",
+    );
+    expect(
+      normalizedActiveCallArguments(sendCodeOriginal, "AppError::auth"),
+    ).toEqual(['"Account not initialized"']);
+    expect(normalizedActiveCallArguments(sendCodeOriginal, "Ok")).toEqual([
+      '"Code sent".to_string()',
+    ]);
+    const signInBody = rustFunctionBody(telegram, "tg_sign_in");
+    const signInOriginal = rustFunctionOriginalBody(telegram, "tg_sign_in");
+    expectOrdered(
+      signInBody,
+      [
+        "AppError::auth(",
+        "AppError::auth(",
+        ".sign_in(token, &code)",
+        ".map_err(AppError::telegram_network)?",
+        "ac.login_token = None",
+        "save_session(&handle, &secret_store, account_id, &session_to_save)",
+        "set_account_status(&handle, &state, account_id, STATUS_READY, None).await",
+        "Ok(true)",
+      ],
+      "sign-in remote-save-status-result order",
+    );
+    expect(
+      normalizedActiveCallArguments(signInOriginal, "AppError::auth"),
+    ).toEqual([
+      '"Account not initialized"',
+      '"Call tg_send_code first"',
+    ]);
+    expect(normalizedActiveCallArguments(signInOriginal, "Ok")).toEqual([
+      "true",
+    ]);
+    const credentialsBody = rustFunctionBody(
+      telegram,
+      "resolve_account_credentials",
+    );
+    const credentialsOriginal = rustFunctionOriginalBody(
+      telegram,
+      "resolve_account_credentials",
+    );
+    expect(credentialsBody).toContain("AppError::auth(format!(");
+    expect(
+      normalizedActiveCallArguments(
+        credentialsOriginal,
+        "AppError::auth",
+      ),
+    ).toEqual([
+      'format!( "Telegram API hash for account {} is missing from secure storage. Recreate the account credentials.", credentials.id )',
+    ]);
+    expect(rustFunctionBody(telegram, "get_client")).toContain(
+      "AppError::auth(format!(",
+    );
+    expect(
+      normalizedActiveCallArguments(
+        rustFunctionOriginalBody(telegram, "get_client"),
+        "AppError::auth",
+      ),
+    ).toEqual([
+      'format!("Account {account_id} not initialized")',
+    ]);
+    const authorizedRuntimeBody = rustFunctionBody(
+      telegram,
+      "get_authorized_runtime",
+    ).replace(/\s+/g, " ");
+    expect(authorizedRuntimeBody).toContain("AppError::auth(format!(");
+    assertAuthorizedRuntimeAuthArguments(telegram);
+    expect(
+      normalizedActiveCallArguments(
+        rustFunctionOriginalBody(telegram, "tg_logout"),
+        "Ok",
+      ),
+    ).toEqual(["true"]);
+    expectOrdered(
+      rustFunctionBody(telegram, "tg_logout"),
+      ["clear_account_runtime(", "Ok(true)"],
+      "logout clear-result ownership",
+    );
+    expectOrdered(
+      rustFunctionBody(telegram, "clear_account_runtime"),
+      [
+        "accounts.remove(&account_id)",
+        "ac.client.sign_out().await",
+        "runner.abort()",
+        "delete_session(handle, secret_store, account_id).await?",
+        "STATUS_NOT_INITIALIZED",
+        "Ok(())",
+      ],
+      "logout client-session-status order",
+    );
+
+    const sessionStructure = maskRustLexicalNonCode(session);
+    const sessionPathBody = rustFunctionBody(session, "session_path");
+    const sessionPathOriginal = rustFunctionOriginalBody(
+      session,
+      "session_path",
+    );
+    expect(sessionPathBody).toContain("Ok(app_dir.join(format!(");
+    expect(
+      normalizedActiveCallArguments(sessionPathOriginal, "format!"),
+    ).toEqual(['"telegram_{account_id}.session.json"']);
+    expect(countMatches(sessionStructure, /\bsession_temp_path\s*\(/g)).toBe(3);
+    expect(countMatches(
+      sessionStructure,
+      /path\.with_extension\s*\(/g,
+    )).toBe(1);
+    expectOrdered(
+      rustFunctionBody(session, "write_atomic"),
+      [
+        "let tmp_path = session_temp_path(path)",
+        "fs::write(&tmp_path, contents)",
+        "fs::rename(&tmp_path, path)",
+      ],
+      "session write-before-rename order",
+    );
+    expect(
+      countMatches(
+        rustFunctionBody(session, "write_atomic"),
+        /map_err\(\|error\| AppError::internal\(error\.to_string\(\)\)\)/g,
+      ),
+    ).toBe(2);
+    expectOrdered(
+      rustFunctionBody(session, "write_encrypted_session_file"),
+      [
+        "ensure_session_key(secret_store, account_id).await?",
+        "encrypt_saved_session(account_id, &key, saved)?",
+        "serde_json::to_string(&envelope)",
+        "write_atomic(path, &json)",
+      ],
+      "session key-encrypt-write order",
+    );
+    expect(rustFunctionBody(session, "encrypt_saved_session")).toContain(
+      "map_err(|_| AppError::internal(",
+    );
+    const encodeErrors = normalizedActiveCallArguments(
+      rustFunctionOriginalBody(session, "decode_base64"),
+      "AppError::internal",
+    );
+    expect(encodeErrors).toEqual([
+      'format!( "Invalid encrypted Telegram session encoding: {error}" )',
+    ]);
+    const encryptErrors = normalizedActiveCallArguments(
+      rustFunctionOriginalBody(session, "encrypt_saved_session"),
+      "AppError::internal",
+    );
+    expect(encryptErrors).toContain('"Invalid Telegram session key length"');
+    expect(encryptErrors).toContain('"Failed to encrypt Telegram session"');
+    const decryptErrors = normalizedActiveCallArguments(
+      rustFunctionOriginalBody(session, "decrypt_saved_session"),
+      "AppError::internal",
+    );
+    for (const exactArgument of [
+      '"Unsupported encrypted Telegram session format",',
+      '"Invalid Telegram session key length"',
+      '"Invalid encrypted Telegram session nonce length",',
+      '"Failed to decrypt Telegram session"',
+    ]) {
+      expect(decryptErrors).toContain(exactArgument);
+    }
+    expectOrdered(
+      rustFunctionBody(session, "delete_session_from_path"),
+      [
+        "fs::remove_file(path)",
+        "std::io::ErrorKind::NotFound",
+        "delete_secret(telegram_account_session_key_secret(account_id))",
+      ],
+      "session file-before-key deletion order",
+    );
+    const loadSessionBody = rustFunctionBody(
+      session,
+      "load_session_from_path",
+    );
+    const loadSessionOriginal = rustFunctionOriginalBody(
+      session,
+      "load_session_from_path",
+    );
+    expectOrdered(
+      loadSessionBody,
+      [
+        "if !path.exists()",
+        "fs::read_to_string(path)",
+        "serde_json::from_str::<EncryptedSessionEnvelope>(&json)",
+        "read_session_key(secret_store, account_id)",
+        "AppError::auth(format!(",
+        "decrypt_saved_session(account_id, &key, &envelope)?",
+        "serde_json::from_str::<SavedSession>(&json)",
+        "write_encrypted_session_file(path, secret_store, account_id, &saved).await?",
+        "AppError::internal(",
+      ],
+      "encrypted-then-legacy session compatibility order",
+    );
+    expect(
+      normalizedActiveCallArguments(loadSessionOriginal, "AppError::auth"),
+    ).toEqual([
+      'format!( "Telegram session key for account {account_id} is missing from secure storage. Sign in again." )',
+    ]);
+    expect(
+      normalizedActiveCallArguments(
+        loadSessionOriginal,
+        "AppError::internal",
+      ),
+    ).toContain('"Telegram session file is not a supported format",');
+  });
+
+  it("pins Takeout mutation-before-event and terminal cancellation selection", () => {
+    const state =
+      telegramContractPaths.readTelegramContractFile(
+        "src-tauri/src/takeout_import/state.rs",
+      );
+    const takeout =
+      telegramContractPaths.readTelegramContractFile(
+        "src-tauri/src/takeout_import/mod.rs",
+      );
+
+    const requestCancelBody = rustFunctionBody(state, "request_cancel");
+    expectOrdered(
+      requestCancelBody,
+      [
+        "is_terminal_status(&inner.jobs.get(job_id)?.status)",
+        "inner.cancel_requested.request(job_id)",
+        "job.status = STATUS_CANCEL_REQUESTED.to_string()",
+        "job.message = Some(",
+        "Some(job.clone())",
+      ],
+      "Takeout cancellation state order",
+    );
+    expect(
+      normalizedActiveCallArguments(
+        rustFunctionOriginalBody(state, "request_cancel"),
+        "Some",
+      ),
+    ).toContain('"Cancel requested.".to_string()');
+    expectOrdered(
+      rustFunctionBody(state, "finish_job"),
+      [
+        "update(job)",
+        "job.finished_at = Some(now_secs())",
+        "inner.active_jobs.release_by_job_id(job_id)",
+        "inner.cancel_requested.clear(job_id)",
+        "inner.jobs.get(job_id).cloned()",
+      ],
+      "Takeout terminal cleanup order",
+    );
+    expectOrdered(
+      rustFunctionBody(state, "update_and_emit"),
+      [
+        "state.update_job(job_id, update).await",
+        "emit_takeout_import_event(handle, &record)",
+      ],
+      "Takeout update-before-event order",
+    );
+    expect(rustFunctionBody(state, "emit_takeout_import_event").trim()).toBe(
+      "let _ = handle.emit(TAKEOUT_IMPORT_EVENT, record);",
+    );
+    expect(rustFunctionBody(state, "is_terminal_status")).toContain(
+      "matches!(status, STATUS_FAILED | STATUS_CANCELLED | STATUS_COMPLETED)",
+    );
+
+    const jobBody = rustFunctionBody(takeout, "run_takeout_import_job");
+    expectOrdered(
+      jobBody,
+      [
+        "job.status = STATUS_RUNNING.to_string()",
+        "emit_takeout_import_event(&handle, &running_record)",
+        "if takeout_state.is_cancel_requested(&job_id).await",
+        "TerminalBatchStatus::Cancelled",
+        "job.status = STATUS_CANCELLED.to_string()",
+        "emit_takeout_import_event(&handle, &record)",
+        "match run_takeout_source_import(&handle, &job_id, batch_id).await",
+      ],
+      "Takeout initial cancellation and remote-start order",
+    );
+    expectOrdered(
+      jobBody.slice(jobBody.indexOf("match run_takeout_source_import")),
+      [
+        "Ok(outcome)",
+        "finish_job(&job_id",
+        "job.status = STATUS_COMPLETED.to_string()",
+        "emit_takeout_import_event(&handle, &record)",
+        "Err(error)",
+        "if takeout_state.is_cancel_requested(&job_id).await",
+        "TerminalBatchStatus::Cancelled",
+        "job.status = STATUS_CANCELLED.to_string()",
+        "TerminalBatchStatus::Failed",
+        "job.status = STATUS_FAILED.to_string()",
+      ],
+      "Takeout terminal status selection order",
+    );
+  });
+
+  it("freezes live message selection, fallback identity, and persist-finalize boundaries", () => {
+    const sync =
+      telegramContractPaths.readTelegramContractFile(
+        "src-tauri/src/sources/sync.rs",
+      );
+    const policy = rustFunctionBody(sync, "determine_sync_policy");
+    expect(policy).toContain(
+      "Some(now_secs() - settings.initial_sync_value * SECONDS_PER_DAY)",
+    );
+    expect(policy).toContain("InitialSyncMode::RecentMessages => None");
+
+    const persist = rustFunctionBody(sync, "persist_items");
+    assertLiveSyncIteratorSelection(persist);
+    expectOrdered(
+      persist,
+      [
+        ".iter_messages(peer)",
+        ".limit(settings.initial_sync_value as usize)",
+        "while let Some(message) = messages",
+        "if sync_policy.previous_last_sync > 0 && message_id <= sync_policy.previous_last_sync",
+        "if let Some(cutoff) = sync_policy.initial_sync_cutoff",
+        "if published_at < cutoff",
+        "extract_item_payload(&message)",
+        "fallback_message_identity(peer, message_id)?",
+        "insert_telegram_source_item(",
+        ".await?",
+        "Ok(IngestOutcome",
+      ],
+      "live fetch-filter-incremental-persist order",
+    );
+    expect(persist).not.toMatch(/\.(?:reverse|sort|sort_by|sort_by_key)\s*\(/);
+    const fallback = rustFunctionBody(sync, "fallback_message_identity");
+    expectOrdered(
+      fallback,
+      [
+        "PeerKind::User => TELEGRAM_PEER_KIND_USER",
+        "PeerKind::Chat => TELEGRAM_PEER_KIND_CHAT",
+        "PeerKind::Channel => TELEGRAM_PEER_KIND_CHANNEL",
+        "fallback_peer.id.bare_id()",
+        "history_peer_kind",
+        "history_peer_id",
+        "telegram_message_id",
+        "migration_domain: None",
+        "is_migrated_history: false",
+      ],
+      "fallback identity vocabulary and shape",
+    );
+    expectOrdered(
+      rustFunctionBody(sync, "sync_telegram_source"),
+      [
+        "get_authorized_runtime(&state, account_id).await?",
+        "resolve_and_refresh_peer(",
+        "refresh_forum_topics(",
+        "determine_sync_policy(&pool, &source).await?",
+        "persist_items(&pool, &client, resolved_peer.peer, &source, &sync_policy).await?",
+        "finalize_sync(",
+        "Ok(SyncResult",
+      ],
+      "live resolve-fetch-persist-finalize order",
+    );
+  });
+
+  it("freezes Takeout range/page/fallback, incremental persistence, warnings, and finalization", () => {
+    const takeout =
+      telegramContractPaths.readTelegramContractFile(
+        "src-tauri/src/takeout_import/mod.rs",
+      );
+    const pagination =
+      telegramContractPaths.readTelegramContractFile(
+        "src-tauri/src/takeout_import/pagination.rs",
+      );
+    const rawParse =
+      telegramContractPaths.readTelegramContractFile(
+        "src-tauri/src/takeout_import/raw_parse.rs",
+      );
+    const paginationStructure = maskRustLexicalNonCode(pagination);
+    const rawParseStructure = maskRustLexicalNonCode(rawParse);
+    const takeoutStructure = maskRustLexicalNonCode(takeout);
+    assertTakeoutObservableBoundaries(takeout);
+
+    expect(paginationStructure).toContain(
+      "const TAKEOUT_HISTORY_PAGE_LIMIT: i32 = 100",
+    );
+    expectOrdered(
+      rustFunctionBody(pagination, "takeout_page_request"),
+      [
+        "TakeoutPaginationCursor::TDesktop",
+        "offset_id: largest_id_plus_one",
+        "add_offset: -TAKEOUT_HISTORY_PAGE_LIMIT",
+        "limit: TAKEOUT_HISTORY_PAGE_LIMIT",
+        "TakeoutPaginationCursor::DescendingFallback",
+        "add_offset: 0",
+      ],
+      "Takeout page request cursor order",
+    );
+    expect(paginationStructure).toContain(
+      "TakeoutPaginationProfile::TDesktop",
+    );
+    expect(paginationStructure).toContain(
+      "TakeoutPaginationProfile::DescendingFallback",
+    );
+
+    const started = rustFunctionBody(
+      takeout,
+      "run_started_takeout_source_import_inner",
+    );
+    expectOrdered(
+      started,
+      [
+        "PHASE_VALIDATING_PEER",
+        "validate_takeout_peer(",
+        "detect_supergroup_migration(",
+        "PHASE_LOADING_SPLITS",
+        "GetSplitRanges",
+        "select_history_splits(",
+        "PHASE_COUNTING",
+        "for range in selected_ranges",
+        "takeout_history_count_probe(",
+        "update_takeout_split_metadata(",
+        "PHASE_IMPORTING_HISTORY",
+        "import_takeout_history_ranges(",
+        "if takeout_state.is_cancel_requested(job_id).await",
+        "PHASE_FINISHING_TAKEOUT",
+        "record_export_dc_attempt_if_needed(",
+        "finish_takeout_session(",
+        "record_export_dc_fallback_if_needed(",
+        "refresh_forum_topics_after_completed_takeout(",
+        "finalize_sync(",
+        "finalize_ingest_batch(",
+        "Ok(TakeoutImportOutcome",
+      ],
+      "Takeout operation-warning-finalize order",
+    );
+
+    const pages = rustFunctionBody(takeout, "import_takeout_history_pages");
+    expectOrdered(
+      pages,
+      [
+        "TakeoutPaginationProfile::TDesktop",
+        "if takeout_state.is_cancel_requested(job_id).await",
+        "let request = takeout_page_request(cursor)",
+        "takeout_history_page_response(",
+        "let page = parse_takeout_page(response, profile)?",
+        "let advance = next_takeout_cursor(cursor, &page, &range)",
+        "should_restart_with_descending_fallback(",
+        "takeout_pagination_fallback_warning(reason, &range)",
+        "update_and_emit(",
+        "TakeoutPaginationProfile::DescendingFallback",
+        "for message in page.messages",
+        "update_takeout_max_message_id(",
+        "raw_parse::parse_raw_message(",
+        "insert_telegram_source_item_with_observation",
+        "update_and_emit(",
+        "if takeout_state.is_cancel_requested(job_id).await",
+        "page.is_terminal_response",
+        "cursor = advance.cursor",
+      ],
+      "Takeout page fetch-persist-event-cancel-cursor order",
+    );
+    const countProbe = rustFunctionBody(takeout, "takeout_history_count_probe");
+    expectOrdered(
+      countProbe,
+      [
+        "takeout_get_history(",
+        "supports_only_my_messages_fallback(",
+        "is_channel_private_error(&error)",
+        "record_only_my_messages_fallback_if_needed(",
+        "takeout_search_my_messages(",
+        "only_my_messages: true",
+      ],
+      "Takeout count channel-private fallback order",
+    );
+    const pageResponse = rustFunctionBody(
+      takeout,
+      "takeout_history_page_response",
+    );
+    expectOrdered(
+      pageResponse,
+      [
+        "if *only_my_messages",
+        "takeout_search_my_messages(",
+        "match takeout_get_history(",
+        "is_channel_private_error(&error)",
+        "*only_my_messages = true",
+        "record_only_my_messages_fallback_if_needed(",
+        "takeout_search_my_messages(",
+      ],
+      "Takeout page channel-private fallback order",
+    );
+    expectOrdered(
+      rustFunctionBody(takeout, "record_only_my_messages_fallback_if_needed"),
+      [
+        "push_warning_once(",
+        "mark_takeout_only_my_messages_fallback(",
+        "*only_my_messages_recorded = true",
+      ],
+      "Takeout warning-before-provenance order",
+    );
+    expectOrdered(
+      rustFunctionBody(takeout, "export_dc_invoke_with_provenance"),
+      [
+        "record_export_dc_attempt_if_needed(",
+        "export_dc_invoke(",
+        "record_export_dc_fallback_if_needed(",
+      ],
+      "Takeout export attempt-before-remote-before-fallback order",
+    );
+    expect(rawParseStructure).toContain(
+      "let telegram_identity = raw_message_identity(&message);",
+    );
+    expect(rawParseStructure).toContain(
+      "tl::enums::Peer::User(peer) => (      , peer.user_id)",
+    );
+    expect(rawParseStructure).toContain(
+      "tl::enums::Peer::Chat(peer) => (      , peer.chat_id)",
+    );
+    expect(rawParseStructure).toContain(
+      "tl::enums::Peer::Channel(peer) => (         , peer.channel_id)",
+    );
+    expect(rawParseStructure).toContain(
+      "telegram_message_id: i64::from(message.id)",
+    );
+    expect(takeoutStructure).not.toMatch(
+      /\btrait\s+\w*(?:Provider|Remote)\b/,
+    );
+  });
+
+  it("uses one production session temp-path helper with the frozen extension", () => {
+    const source =
+      telegramContractPaths.readTelegramContractFile(
+        "src-tauri/src/telegram_session_store.rs",
+      );
+    const helperBody = rustFunctionBody(source, "session_temp_path");
+    const helperOriginal = rustFunctionOriginalBody(
+      source,
+      "session_temp_path",
+    );
+    expect(helperBody.trim()).toMatch(/^path\.with_extension\(\s+\)$/);
+    expect(helperOriginal.trim()).toBe(
+      'path.with_extension("session.json.tmp")',
+    );
+    expect(
+      countMatches(
+        maskRustLexicalNonCode(source),
+        /\bsession_temp_path\s*\(/g,
+      ),
+    ).toBe(3);
+    expect(rustFunctionBody(source, "write_atomic")).toContain(
+      "let tmp_path = session_temp_path(path);",
+    );
+    expect(rustFunctionBody(source, "write_atomic")).not.toContain(
+      "path.with_extension(",
+    );
   });
 });

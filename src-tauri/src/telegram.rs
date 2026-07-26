@@ -539,9 +539,12 @@ pub(crate) async fn get_authorized_runtime(
 #[cfg(test)]
 mod tests {
     use super::{
-        get_account_credentials_from_pool, telegram_api_id, AccountRuntimeStatus, TelegramState,
+        get_account_credentials_from_pool, restore_failure_message, telegram_api_id,
+        AccountRuntimeStatus, RestoreFailureEvent, TelegramState, STATUS_NOT_INITIALIZED,
+        STATUS_READY, STATUS_REAUTH_REQUIRED, STATUS_RESTORE_FAILED, STATUS_RESTORING,
+        TELEGRAM_ACCOUNT_STATUS_EVENT, TELEGRAM_RESTORE_FAILURE_EVENT,
     };
-    use crate::error::AppErrorKind;
+    use crate::error::{AppError, AppErrorKind, AppResult};
     use crate::secret_store::tests::InMemorySecretStore;
     use crate::secret_store::{telegram_account_api_hash_secret, SecretStoreState};
     use secrecy::ExposeSecret;
@@ -600,6 +603,107 @@ mod tests {
 
         assert_eq!(error.kind, AppErrorKind::Validation);
         assert_eq!(error.message, "Telegram API ID is out of range");
+    }
+
+    #[test]
+    fn telegram_status_and_event_payload_contract_is_exact() {
+        assert_eq!(
+            TELEGRAM_RESTORE_FAILURE_EVENT, "telegram://restore-failure",
+            "RED: CP2 Telegram status and event payload"
+        );
+        assert_eq!(TELEGRAM_ACCOUNT_STATUS_EVENT, "telegram://account-status");
+        assert_eq!(
+            [
+                STATUS_NOT_INITIALIZED,
+                STATUS_RESTORING,
+                STATUS_READY,
+                STATUS_REAUTH_REQUIRED,
+                STATUS_RESTORE_FAILED,
+            ],
+            [
+                "not_initialized",
+                "restoring",
+                "ready",
+                "reauth_required",
+                "restore_failed",
+            ]
+        );
+
+        assert_eq!(
+            serde_json::to_string(&RestoreFailureEvent {
+                message: "restore failed".to_string(),
+            })
+            .expect("serialize restore failure"),
+            r#"{"message":"restore failed"}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&AccountRuntimeStatus {
+                account_id: 7,
+                status: STATUS_READY.to_string(),
+                message: None,
+            })
+            .expect("serialize account status without message"),
+            r#"{"account_id":7,"status":"ready","message":null}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&AccountRuntimeStatus {
+                account_id: 7,
+                status: STATUS_RESTORE_FAILED.to_string(),
+                message: Some("restore failed".to_string()),
+            })
+            .expect("serialize account status with message"),
+            r#"{"account_id":7,"status":"restore_failed","message":"restore failed"}"#
+        );
+        assert_eq!(restore_failure_message(""), "Unknown restore error");
+        assert_eq!(
+            restore_failure_message("transport disconnected"),
+            "transport disconnected"
+        );
+
+        let auth_errors = [
+            AppError::auth("Account not initialized"),
+            AppError::auth("Call tg_send_code first"),
+            AppError::auth("Account 7 not initialized"),
+            AppError::auth("Account 7 is not authenticated"),
+            AppError::auth(
+                "Telegram API hash for account 7 is missing from secure storage. Recreate the account credentials.",
+            ),
+        ];
+        let expected_auth_json = [
+            r#"{"kind":"auth","message":"Account not initialized"}"#,
+            r#"{"kind":"auth","message":"Call tg_send_code first"}"#,
+            r#"{"kind":"auth","message":"Account 7 not initialized"}"#,
+            r#"{"kind":"auth","message":"Account 7 is not authenticated"}"#,
+            r#"{"kind":"auth","message":"Telegram API hash for account 7 is missing from secure storage. Recreate the account credentials."}"#,
+        ];
+        for (error, expected_json) in auth_errors.into_iter().zip(expected_auth_json) {
+            assert_eq!(error.kind, AppErrorKind::Auth);
+            assert_eq!(
+                serde_json::to_string(&error).expect("serialize auth error"),
+                expected_json
+            );
+        }
+
+        let network_error = AppError::telegram_network("transport disconnected");
+        assert_eq!(network_error.kind, AppErrorKind::Network);
+        assert_eq!(
+            network_error.message,
+            "Telegram request failed: transport disconnected"
+        );
+        assert_eq!(
+            serde_json::to_string(&network_error).expect("serialize network error"),
+            r#"{"kind":"network","message":"Telegram request failed: transport disconnected"}"#
+        );
+
+        let code_sent_result: AppResult<String> = Ok("Code sent".to_string());
+        assert_eq!(
+            code_sent_result.expect("successful send-code result"),
+            "Code sent"
+        );
+        let sign_in_result: AppResult<bool> = Ok(true);
+        let logout_result: AppResult<bool> = Ok(true);
+        assert!(sign_in_result.expect("successful sign-in result"));
+        assert!(logout_result.expect("successful logout result"));
     }
 
     #[tokio::test]

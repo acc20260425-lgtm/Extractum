@@ -463,11 +463,11 @@ back a correct ownership boundary, and it did not decide retention. The result
 participates in the standing adjacent-results rule at 15,000 ms and breaks any
 qualifying sequence because it is below the threshold.
 
-Phase 8 has an owner-approved boundary; 8A preparation Checkpoint 1 is
+Phase 8 has an owner-approved boundary; 8A preparation Checkpoint 2 is
 retained. Further execution follows the three separately reviewed plans and
 requires explicit owner instructions.
 
-### Phase 8 — `extractum-telegram` (8A preparation Checkpoint 1 retained)
+### Phase 8 — `extractum-telegram` (8A preparation Checkpoint 2 retained)
 
 The owner-approved
 [Phase 8 boundary design](2026-07-26-telegram-crate-boundary-design.md)

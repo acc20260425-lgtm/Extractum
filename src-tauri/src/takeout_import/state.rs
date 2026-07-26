@@ -333,15 +333,117 @@ fn is_terminal_status(status: &str) -> bool {
 mod tests {
     use super::{
         clear_takeout_cancellation_smoke_fixture,
-        finish_cancelled_takeout_cancellation_smoke_fixture,
-        seed_takeout_cancellation_smoke_fixture_in_state, TakeoutImportState, STATUS_CANCELLED,
-        STATUS_CANCEL_REQUESTED, STATUS_COMPLETED, STATUS_FAILED, STATUS_RUNNING,
-        TAKEOUT_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID,
+        finish_cancelled_takeout_cancellation_smoke_fixture, is_terminal_status,
+        seed_takeout_cancellation_smoke_fixture_in_state, TakeoutImportJobRecord,
+        TakeoutImportState, STATUS_CANCELLED, STATUS_CANCEL_REQUESTED, STATUS_COMPLETED,
+        STATUS_FAILED, STATUS_QUEUED, STATUS_RUNNING, TAKEOUT_CANCELLATION_SMOKE_FIXTURE_SOURCE_ID,
+        TAKEOUT_IMPORT_EVENT,
     };
     use crate::error::AppErrorKind;
     use crate::ingest_provenance::{
         TAKEOUT_HISTORY_SCOPE_CURRENT, TAKEOUT_HISTORY_SCOPE_MIGRATED_SMALL_GROUP,
     };
+
+    #[tokio::test]
+    async fn takeout_event_status_and_cancellation_contract_is_exact() {
+        assert_eq!(
+            TAKEOUT_IMPORT_EVENT, "sources://takeout-import",
+            "RED: CP2 Takeout event status cancellation"
+        );
+        assert_eq!(
+            [
+                STATUS_QUEUED,
+                STATUS_RUNNING,
+                STATUS_CANCEL_REQUESTED,
+                STATUS_FAILED,
+                STATUS_CANCELLED,
+                STATUS_COMPLETED,
+            ],
+            [
+                "queued",
+                "running",
+                "cancel_requested",
+                "failed",
+                "cancelled",
+                "completed",
+            ]
+        );
+        assert!(!is_terminal_status(STATUS_QUEUED));
+        assert!(!is_terminal_status(STATUS_RUNNING));
+        assert!(!is_terminal_status(STATUS_CANCEL_REQUESTED));
+        assert!(is_terminal_status(STATUS_FAILED));
+        assert!(is_terminal_status(STATUS_CANCELLED));
+        assert!(is_terminal_status(STATUS_COMPLETED));
+
+        let payload = TakeoutImportJobRecord {
+            job_id: "takeout-7".to_string(),
+            batch_id: 70,
+            source_id: 71,
+            account_id: 72,
+            history_scope: "current".to_string(),
+            status: STATUS_RUNNING.to_string(),
+            phase: "importing_history".to_string(),
+            message: None,
+            inserted: 3,
+            skipped: 4,
+            progress_current: Some(5),
+            progress_total: None,
+            started_at: 6,
+            finished_at: None,
+            warnings: vec!["fallback used".to_string()],
+            error: None,
+        };
+        assert_eq!(
+            serde_json::to_string(&payload).expect("serialize Takeout event payload"),
+            r#"{"job_id":"takeout-7","batch_id":70,"source_id":71,"account_id":72,"history_scope":"current","status":"running","phase":"importing_history","message":null,"inserted":3,"skipped":4,"progress_current":5,"progress_total":null,"started_at":6,"finished_at":null,"warnings":["fallback used"],"error":null}"#
+        );
+
+        let state = TakeoutImportState::new();
+        let queued = state
+            .create_job(71, 72, 70, TAKEOUT_HISTORY_SCOPE_CURRENT)
+            .await
+            .expect("create queued job");
+        assert_eq!(queued.status, STATUS_QUEUED);
+        assert_eq!(queued.phase, super::PHASE_QUEUED);
+        assert_eq!(queued.message.as_deref(), Some("Takeout import queued."));
+        let token = state
+            .cancellation_token(&queued.job_id)
+            .await
+            .expect("active job cancellation token");
+        assert!(!token.is_cancelled());
+
+        let cancel_requested = state
+            .request_cancel(&queued.job_id)
+            .await
+            .expect("request cancellation");
+        assert_eq!(cancel_requested.status, STATUS_CANCEL_REQUESTED);
+        assert_eq!(
+            cancel_requested.message.as_deref(),
+            Some("Cancel requested.")
+        );
+        assert!(token.is_cancelled());
+        assert!(state.is_cancel_requested(&queued.job_id).await);
+
+        let cancelled = state
+            .finish_job(&queued.job_id, |job| {
+                job.status = STATUS_CANCELLED.to_string();
+                job.phase = super::PHASE_CANCELLED.to_string();
+                job.message = Some("Takeout import cancelled.".to_string());
+                job.error = None;
+            })
+            .await
+            .expect("finish cancelled job");
+        assert_eq!(cancelled.status, STATUS_CANCELLED);
+        assert_eq!(cancelled.phase, super::PHASE_CANCELLED);
+        assert_eq!(
+            cancelled.message.as_deref(),
+            Some("Takeout import cancelled.")
+        );
+        assert!(cancelled.finished_at.is_some());
+        assert!(!state.is_cancel_requested(&queued.job_id).await);
+        assert!(state.cancellation_token(&queued.job_id).await.is_none());
+        assert!(state.request_cancel(&queued.job_id).await.is_none());
+    }
 
     #[tokio::test]
     async fn job_state_rejects_duplicate_active_source_jobs() {

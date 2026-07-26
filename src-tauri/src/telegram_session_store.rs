@@ -190,8 +190,12 @@ async fn ensure_session_key(
     decode_base64(&encoded)
 }
 
+fn session_temp_path(path: &std::path::Path) -> std::path::PathBuf {
+    path.with_extension("session.json.tmp")
+}
+
 fn write_atomic(path: &Path, contents: &str) -> AppResult<()> {
-    let tmp_path = path.with_extension("session.json.tmp");
+    let tmp_path = session_temp_path(path);
     fs::write(&tmp_path, contents).map_err(|error| AppError::internal(error.to_string()))?;
     fs::rename(&tmp_path, path).map_err(|error| AppError::internal(error.to_string()))
 }
@@ -294,7 +298,11 @@ async fn load_session_from_path(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::secret_store::tests::InMemorySecretStore;
+    use crate::secret_store::{
+        telegram_account_api_hash_secret, telegram_account_session_key_secret,
+        tests::InMemorySecretStore, SECRET_SERVICE_NAME,
+    };
+    use extractum_core::error::AppErrorKind;
     use secrecy::ExposeSecret;
     use std::fs;
 
@@ -307,6 +315,228 @@ mod tests {
     async fn sample_saved_session() -> SavedSession {
         let session = Arc::new(MemorySession::default());
         memory_session_to_saved(&session).await
+    }
+
+    fn assert_error_contract(
+        error: AppError,
+        expected_kind: AppErrorKind,
+        expected_message: &str,
+        expected_json: &str,
+    ) {
+        assert_eq!(error.kind, expected_kind);
+        assert_eq!(error.message, expected_message);
+        assert_eq!(
+            serde_json::to_string(&error).expect("serialize AppError"),
+            expected_json
+        );
+    }
+
+    #[tokio::test]
+    async fn session_path_temp_path_and_error_contract_is_exact() {
+        assert_eq!(SECRET_SERVICE_NAME, "org.ai.extractum");
+        assert_eq!(
+            telegram_account_api_hash_secret(7),
+            "telegram.account.7.api_hash"
+        );
+        assert_eq!(
+            telegram_account_session_key_secret(7),
+            "telegram.account.7.session_key"
+        );
+        let session_file = PathBuf::from("telegram_7.session.json");
+        assert_eq!(session_file.to_string_lossy(), "telegram_7.session.json");
+        assert_eq!(
+            session_temp_path(&session_file),
+            PathBuf::from("telegram_7.session.session.json.tmp"),
+            "RED: CP2 session path and error contract"
+        );
+
+        assert_eq!(ENVELOPE_VERSION, 1);
+        assert_eq!(ENVELOPE_ALGORITHM, "XChaCha20-Poly1305");
+        assert_eq!(SESSION_KEY_BYTES, 32);
+        assert_eq!(
+            associated_data(7),
+            "org.ai.extractum.telegram.session.v1.account.7"
+        );
+        assert_eq!(encode_base64(&[0xff, 0xee]), "_-4");
+        assert_eq!(
+            decode_base64("_-4").expect("decode URL-safe base64"),
+            vec![0xff, 0xee]
+        );
+        assert!(!encode_base64(&[0xff, 0xee]).contains('='));
+
+        let deterministic_envelope = EncryptedSessionEnvelope {
+            version: 1,
+            algorithm: "XChaCha20-Poly1305".to_string(),
+            nonce: "AA".to_string(),
+            ciphertext: "AQI".to_string(),
+        };
+        assert_eq!(
+            serde_json::to_string(&deterministic_envelope).expect("serialize envelope"),
+            r#"{"version":1,"algorithm":"XChaCha20-Poly1305","nonce":"AA","ciphertext":"AQI"}"#
+        );
+
+        let saved = sample_saved_session().await;
+        let key = [7u8; SESSION_KEY_BYTES];
+        let encrypted =
+            encrypt_saved_session(7, &key, &saved).expect("encrypt canonical saved session");
+        assert_eq!(encrypted.version, 1);
+        assert_eq!(encrypted.algorithm, "XChaCha20-Poly1305");
+        assert_eq!(
+            decode_base64(&encrypted.nonce).expect("decode nonce").len(),
+            24
+        );
+        assert!(!encrypted.nonce.contains('='));
+        assert!(!encrypted.ciphertext.contains('='));
+        let decrypted =
+            decrypt_saved_session(7, &key, &encrypted).expect("decrypt canonical envelope");
+        assert_eq!(decrypted.home_dc, saved.home_dc);
+
+        assert_error_contract(
+            AppError::internal("Failed to encrypt Telegram session"),
+            AppErrorKind::Internal,
+            "Failed to encrypt Telegram session",
+            r#"{"kind":"internal","message":"Failed to encrypt Telegram session"}"#,
+        );
+        assert_error_contract(
+            decode_base64("*").expect_err("reject malformed base64"),
+            AppErrorKind::Internal,
+            "Invalid encrypted Telegram session encoding: Invalid symbol 42, offset 0.",
+            r#"{"kind":"internal","message":"Invalid encrypted Telegram session encoding: Invalid symbol 42, offset 0."}"#,
+        );
+        assert_error_contract(
+            match encrypt_saved_session(7, &[0; SESSION_KEY_BYTES - 1], &saved) {
+                Ok(_) => panic!("invalid encryption key must fail"),
+                Err(error) => error,
+            },
+            AppErrorKind::Internal,
+            "Invalid Telegram session key length",
+            r#"{"kind":"internal","message":"Invalid Telegram session key length"}"#,
+        );
+        assert_error_contract(
+            match decrypt_saved_session(
+                7,
+                &key,
+                &EncryptedSessionEnvelope {
+                    version: 2,
+                    algorithm: ENVELOPE_ALGORITHM.to_string(),
+                    nonce: encrypted.nonce.clone(),
+                    ciphertext: encrypted.ciphertext.clone(),
+                },
+            ) {
+                Ok(_) => panic!("unsupported envelope must fail"),
+                Err(error) => error,
+            },
+            AppErrorKind::Internal,
+            "Unsupported encrypted Telegram session format",
+            r#"{"kind":"internal","message":"Unsupported encrypted Telegram session format"}"#,
+        );
+        assert_error_contract(
+            match decrypt_saved_session(7, &[0; SESSION_KEY_BYTES - 1], &encrypted) {
+                Ok(_) => panic!("invalid decryption key must fail"),
+                Err(error) => error,
+            },
+            AppErrorKind::Internal,
+            "Invalid Telegram session key length",
+            r#"{"kind":"internal","message":"Invalid Telegram session key length"}"#,
+        );
+        assert_error_contract(
+            match decrypt_saved_session(
+                7,
+                &key,
+                &EncryptedSessionEnvelope {
+                    version: ENVELOPE_VERSION,
+                    algorithm: ENVELOPE_ALGORITHM.to_string(),
+                    nonce: encode_base64(&[0; 23]),
+                    ciphertext: encrypted.ciphertext.clone(),
+                },
+            ) {
+                Ok(_) => panic!("invalid nonce length must fail"),
+                Err(error) => error,
+            },
+            AppErrorKind::Internal,
+            "Invalid encrypted Telegram session nonce length",
+            r#"{"kind":"internal","message":"Invalid encrypted Telegram session nonce length"}"#,
+        );
+        assert_error_contract(
+            match decrypt_saved_session(8, &key, &encrypted) {
+                Ok(_) => panic!("wrong-account AAD must reject ciphertext"),
+                Err(error) => error,
+            },
+            AppErrorKind::Internal,
+            "Failed to decrypt Telegram session",
+            r#"{"kind":"internal","message":"Failed to decrypt Telegram session"}"#,
+        );
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let encrypted_path = temp.path().join("telegram_7.session.json");
+        fs::write(
+            &encrypted_path,
+            serde_json::to_string(&encrypted).expect("serialize encrypted envelope"),
+        )
+        .expect("write encrypted envelope");
+        let (_missing_store, missing_secret_store) = memory_secret_store();
+        assert_error_contract(
+            match load_session_from_path(&encrypted_path, &missing_secret_store, 7).await {
+                Ok(_) => panic!("missing key must fail"),
+                Err(error) => error,
+            },
+            AppErrorKind::Auth,
+            "Telegram session key for account 7 is missing from secure storage. Sign in again.",
+            r#"{"kind":"auth","message":"Telegram session key for account 7 is missing from secure storage. Sign in again."}"#,
+        );
+
+        let malformed_path = temp.path().join("telegram_8.session.json");
+        fs::write(&malformed_path, "{}").expect("write malformed envelope");
+        let (_malformed_store, malformed_secret_store) = memory_secret_store();
+        assert_error_contract(
+            match load_session_from_path(&malformed_path, &malformed_secret_store, 8).await {
+                Ok(_) => panic!("malformed envelope must fail"),
+                Err(error) => error,
+            },
+            AppErrorKind::Internal,
+            "Telegram session file is not a supported format",
+            r#"{"kind":"internal","message":"Telegram session file is not a supported format"}"#,
+        );
+
+        let legacy_path = temp.path().join("telegram_9.session.json");
+        let legacy_json = serde_json::to_string(&saved).expect("serialize legacy session");
+        fs::write(&legacy_path, &legacy_json).expect("write legacy session");
+        let (legacy_store, legacy_secret_store) = memory_secret_store();
+        legacy_store.fail_set("secure store unavailable");
+        assert_error_contract(
+            match load_session_from_path(&legacy_path, &legacy_secret_store, 9).await {
+                Ok(_) => panic!("legacy encryption key write must fail"),
+                Err(error) => error,
+            },
+            AppErrorKind::Internal,
+            "secure store unavailable",
+            r#"{"kind":"internal","message":"secure store unavailable"}"#,
+        );
+        assert_eq!(
+            fs::read_to_string(&legacy_path).expect("legacy file remains readable"),
+            legacy_json
+        );
+
+        let delete_path = temp.path().join("telegram_10.session.json");
+        let (delete_store, delete_secret_store) = memory_secret_store();
+        write_encrypted_session_file(&delete_path, &delete_secret_store, 10, &saved)
+            .await
+            .expect("write session before deletion");
+        delete_store.fail_delete("secure delete unavailable");
+        assert_error_contract(
+            delete_session_from_path(&delete_path, &delete_secret_store, 10)
+                .await
+                .expect_err("secret deletion must fail after file deletion"),
+            AppErrorKind::Internal,
+            "secure delete unavailable",
+            r#"{"kind":"internal","message":"secure delete unavailable"}"#,
+        );
+        assert!(!delete_path.exists());
+        assert!(delete_secret_store
+            .get_secret(telegram_account_session_key_secret(10))
+            .await
+            .expect("read retained key")
+            .is_some());
     }
 
     #[tokio::test]
