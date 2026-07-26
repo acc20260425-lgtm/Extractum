@@ -174,7 +174,7 @@ function Assert-ExactRustIdentitySet {
     }
 }
 
-$sourcesStoreDependentTestIds = @(
+$sourcesStoreBroadRegressionTestIds = @(
     'sources::store::tests::avatar_cache_key_skips_non_telegram_metadata'
     'sources::store::tests::delete_source_from_pool_enables_foreign_keys_and_cascades_dependents'
     'sources::store::tests::delete_source_is_blocked_when_source_is_used_by_project'
@@ -689,7 +689,7 @@ Phase 8A preserves the current concurrency and linearization behavior exactly:
 
 Consequently, queued code requests run in lock order and the later successful request replaces the attempt; clear waits for an in-flight code request or sign-in; code queued after clear observes `Account not initialized`; and an initialization prepared concurrently with a code request may insert afterward and discard that attempt. Runtime-map linearization does not make the later file persistence or status/event work atomic with the map.
 
-The app-owned root facade retains two distinct lookup semantics with these exact temporary signatures:
+The app-owned root facade preserves—rather than retains by name—the two current lookup semantics through these exact temporary signatures:
 
 ```rust
 pub(crate) async fn get_client(
@@ -703,7 +703,7 @@ pub(crate) async fn get_authorized_client(
 ) -> extractum_core::error::AppResult<TelegramClientHandle>;
 ```
 
-`get_client` delegates to `TelegramRuntime::initialized_client`, performs no `is_authorized` call, and preserves exact missing-account text `Account {account_id} not initialized`. `get_authorized_client` delegates to the public runtime operation and preserves both the same missing-account text and `Account {account_id} is not authenticated`. These app-only free functions are not final crate API and disappear in 8B after their consumers become owned operations.
+Current `get_client(&HashMap<i64, AccountClient>, account_id) -> &Client` is replaced, not merely moved: the Phase 8A form delegates to `TelegramRuntime::initialized_client`, owns its single lock internally, returns an owned opaque handle, and intentionally narrows `pub` to `pub(crate)` because the containing `telegram` module is already application-private and has no external crate consumer. It performs no `is_authorized` call and preserves exact missing-account text `Account {account_id} not initialized`. Current `get_authorized_runtime -> AuthorizedTelegramRuntime` is replaced by `get_authorized_client -> TelegramClientHandle`; it delegates to the public runtime operation and preserves both the same missing-account text and `Account {account_id} is not authenticated`. `AuthorizedTelegramRuntime` and `get_authorized_runtime` must be absent after Checkpoint 5. These app-only free functions are not final crate API and disappear in 8B after their consumers become owned operations.
 
 The session codec and app adapter use this exact split:
 
@@ -729,7 +729,7 @@ pub async fn encode_session_json(
 
 The owning private module may import `secrecy::ExposeSecret` and expose a contained value only inside the narrow encryption/decryption or Grammers-construction statement that consumes it. The exposed borrow is never returned, stored outside the opaque owner, formatted, logged, serialized as plaintext, or made reachable through a field/getter/trait implementation. Source contracts distinguish this required private internal use from forbidden public exposure.
 
-The only app-visible raw adapters are `TelegramClientHandle::raw_client` and `TelegramClientHandle::raw_session` with the exact signatures above. `TelegramSession::raw_memory_session` is `pub(super)` leaf-internal and exists only so the sibling runtime can initialize Grammers. There is no raw constructor, consuming conversion, mutable accessor, public raw accessor, or raw type re-export. Phase 8B must remove both `pub(crate)` handle adapters and both app-only lookup functions after their consumers become owned operations.
+The only app-visible raw adapters are `TelegramClientHandle::raw_client` and `TelegramClientHandle::raw_session` with the exact signatures above. `raw_session` is not dead code in 8A: `takeout_import/mod.rs` is its sole path consumer, with exactly three workflow sites—export-DC spike, migrated history, and current history—where the cloned session remains an input to export-DC alias preparation/transport. Do not add `#[allow(dead_code)]` to the adapter. `TelegramSession::raw_memory_session` is `pub(super)` leaf-internal and exists only so the sibling runtime can initialize Grammers. There is no raw constructor, consuming conversion, mutable accessor, public raw accessor, or raw type re-export. Phase 8B must remove both `pub(crate)` handle adapters and both app-only lookup functions after their consumers become owned operations.
 
 `TelegramMessageIdentity::validate()` preserves exact branch order, `AppErrorKind::Validation`, messages, and JSON:
 
@@ -747,7 +747,7 @@ This is the symbol-level authority for Phase 8A and the input to the later 8B pl
 
 | Current path | Stage in 8A | Remain app-owned in 8A |
 | --- | --- | --- |
-| `telegram.rs` | `AccountClient` internals become `TelegramRuntime`; raw `Client`/session clone becomes private `TelegramClientHandle`; `LoginToken` becomes private `TelegramLoginAttempt`; runtime init/auth/code/sign-in/clear/client lookup implementations move to `telegram/runtime.rs` | `AccountCredentials`, `AccountRuntimeStatus`, `RestoreFailureEvent`, `TelegramState` facade/status map, credential SQL/secret resolution, `telegram_api_id`, `set_account_status`, restore loop, all six `tg_*` commands, event emission |
+| `telegram.rs` | `AccountClient` internals become `TelegramRuntime`; raw `Client`/session clone and `AuthorizedTelegramRuntime` are eliminated in favor of private-field `TelegramClientHandle`; `LoginToken` becomes private `TelegramLoginAttempt`; runtime init/auth/code/sign-in/clear/client lookup implementations move to `telegram/runtime.rs` | `AccountCredentials`, `AccountRuntimeStatus`, `RestoreFailureEvent`, `TelegramState` facade/status map, credential SQL/secret resolution, `telegram_api_id`, `set_account_status`, restore loop, all six `tg_*` commands, event emission; temporary `get_authorized_client` replaces `get_authorized_runtime`, while temporary `get_client` changes from caller-locked `&HashMap -> &Client` to internally locked `&TelegramState -> TelegramClientHandle` and narrows `pub` to `pub(crate)`; both temporary lookups disappear in 8B |
 | `telegram_session_store.rs` | `SavedSession`, `EncryptedSessionEnvelope`, AAD/base64/encrypt/decrypt, MemorySession conversion, and codec-subject tests move to `telegram/session.rs`; public opaque `TelegramSession` and secret key wrapper are introduced there | `session_path`, `session_exists`, secret-store reads/writes/deletes, temp path, filesystem write/rename/delete, legacy migration coordination, and adapter-subject tests |
 | `media.rs` | `ExtractedMediaPayload -> TelegramMediaPayload`; `ExtractedItemPayload` fields merge into `TelegramMessageDraft`; `DocumentSignals`, content constants/classifiers, Grammers media conversion, and two classification tests move to `telegram/media.rs` | private compatibility re-exports only; provider-neutral metadata remains owned by `extractum-core` |
 | `sources/types.rs` | `TelegramMessageIdentity`, `TELEGRAM_PEER_KIND_{CHANNEL,CHAT,USER}`, and `ITEM_KIND_TELEGRAM_MESSAGE` move to `telegram/dto.rs`; the identity test moves and the Telegram wire assertion becomes a companion test | every other constant/type/test; the baseline item-kind test retains only YouTube assertions |
@@ -771,7 +771,7 @@ No symbol assigned to “later 8B” is physically moved by this plan unless it 
 
 ## Literal Immutable 140-Test Identity Map
 
-This table is executable plan data. Task 1's TypeScript contract parses it directly and requires exactly 140 unique baseline rows, 99 app primaries, 41 future-crate primaries, and exactly three future-crate companions. Those rows define the 143 eventual baseline-derived identities, not the complete executable test total at the end of 8A. `staged_path` is the final 8B app-side portable path even for a value first prepared under `telegram/*.rs` in 8A. App primaries keep their current path unless the row states another final identity.
+This table is executable plan data. Task 1's TypeScript contract parses it directly and requires exactly 140 unique baseline rows, 99 app primaries, 41 future-crate primaries, and exactly three future-crate companions. Those rows define the 143 eventual baseline-derived identities, not the complete executable test total at the end of 8A. `staged_path` is mapping metadata for the final 8B app-side portable path even for a value first prepared under `telegram/*.rs` in 8A; during baseline and 8A it is explicitly not a filesystem-existence assertion. App primaries keep their current path unless the row states another final identity.
 
 | baseline_package | baseline_full_id | staged_path | final_owner | final_full_id | companion_final_ids |
 | --- | --- | --- | --- | --- | --- |
@@ -1088,7 +1088,7 @@ $expectedFixedPoint = @(
     'src-tauri/src/takeout_import/migrated_history.rs'
 ) | Sort-Object -Unique
 
-$fanPattern = '\b(get_client|get_authorized_runtime|AuthorizedTelegramRuntime|MemorySession|LoginToken|TelegramMessageIdentity|TelegramItemContext|SourceItemInsert|ExtractedItemPayload|ExtractedMediaPayload|ITEM_KIND_TELEGRAM_MESSAGE)\b'
+$fanPattern = '(?:\b(get_client|get_authorized_runtime|AuthorizedTelegramRuntime|AccountClient|raw_client|raw_session|MemorySession|LoginToken|TelegramMessageIdentity|TelegramItemContext|SourceItemInsert|ExtractedItemPayload|ExtractedMediaPayload|ITEM_KIND_TELEGRAM_MESSAGE)\b|\.accounts\s*\.lock\s*\(\s*\)\s*\.await\b)'
 $fanOutput = & rg -l $fanPattern src-tauri/src --glob '*.rs'
 if ($LASTEXITCODE -ne 0) { $fanOutput; throw 'Moved-type fan-in/fan-out refresh failed or selected no files' }
 $actualFixedPoint = @(
@@ -1107,6 +1107,8 @@ $dependentOnlyPaths = @($actualFixedPoint | Where-Object { $_ -eq 'src-tauri/src
 if ($dependentOnlyPaths.Count -ne 1) { throw 'Expected sources/store.rs as the sole dependent-only path' }
 ```
 
+`$directOutput` is the raw-type import/qualification sentinel: any file that directly names `Client`, `PeerRef`, `Media`, `Message`, or another raw Grammers type through a `grammers_*` path enters that set. `$fanPattern` separately catches application wrapper/accessor/type names plus direct `.accounts.lock().await` access, including inferred raw values whose concrete type is absent from the consumer text. Do not add bare `Client|Media|Message` tokens to the same repository-wide regex: they currently collide with Gemini, YouTube, NotebookLM, and ordinary message/media vocabulary without detecting fully inferred propagation. The standing contract instead rejects any new raw `pub`/`pub(crate) use`, raw type alias, raw-returning facade function/field, or raw accessor outside exact baseline `AccountClient`, `AuthorizedTelegramRuntime`, `get_client`, `get_authorized_runtime` and the later status-gated adapter allowlist.
+
 Manually inspect every `rg` match grouped by moved/raw symbol. For every `as` alias, re-export, wrapper return, or field that changes the searched identifier, add that new identifier to `$fanPattern` and repeat the scan. Continue until an iteration adds neither a path nor a seed; record the terminal exact 19-owner plus one-dependent disposition. A new path, raw-client/session consumer, or symbol owner is not folded into the plan: stop for a design/plan amendment. Task 1 turns this terminal inventory into a standing fail-closed source contract so later checkpoints cannot silently add an alias or consumer.
 
 - [ ] **Step 3: Synchronize the approved bounded correction and commit it alone.**
@@ -1115,7 +1117,7 @@ Update the design evidence and implementation requirements to say:
 
 - the immutable ownership/move surface remains 19 paths / 140 tests;
 - `src-tauri/src/sources/store.rs` is the sole known dependent-only raw-client consumer outside that map;
-- its 24 app tests stay outside the ownership map and run as dependent regressions in 8A Checkpoint 5;
+- its 24 app tests stay outside the ownership map and run as broad store regressions in 8A Checkpoint 5; none directly invokes `list_telegram_sources` or `add_telegram_source`, so the Checkpoint 5 runtime lookup test plus lifecycle-gated source contract—not this suite—prove the caller-lock rewrite;
 - the complete Phase 8 implementation touch surface is therefore the 19 ownership/move paths plus this one dependent-only path.
 
 Mirror the same bounded statement in the Phase 8 roadmap. Do not change the current approval/status strings. Prove the spec and roadmap agree, the manifest/lock hashes still equal Step 1, and run:
@@ -1259,10 +1261,10 @@ Independently freeze the dependent-only store suite without adding it to the 140
 Assert-ExactRustIdentitySet `
   -Package extractum `
   -Prefix 'sources::store::tests::' `
-  -Expected $sourcesStoreDependentTestIds
+  -Expected $sourcesStoreBroadRegressionTestIds
 ```
 
-The TypeScript boundary contract parses the single committed `$sourcesStoreDependentTestIds` literal from this plan and requires exactly 24 unique identities, all under `sources::store::tests::`, declared exactly once in `sources/store.rs`, and absent from the immutable 140-row ownership map. It does not spawn Cargo. `Assert-ExactRustIdentitySet` is the separate executable Cargo-list proof at CP1, CP5, and Task 6.
+The TypeScript boundary contract parses the single committed `$sourcesStoreBroadRegressionTestIds` literal from this plan and requires exactly 24 unique identities, all under `sources::store::tests::`, declared exactly once in `sources/store.rs`, and absent from the immutable 140-row ownership map. It does not spawn Cargo. `Assert-ExactRustIdentitySet` is the separate executable Cargo-list proof at CP1, CP5, and Task 6.
 
 - [ ] **Step 3: Implement the standing literal-map and lifecycle contract.**
 
@@ -1272,6 +1274,17 @@ The TypeScript boundary contract parses the single committed `$sourcesStoreDepen
 2. 8A future-owner leaves under `src-tauri/src/telegram/*.rs`;
 3. 8B staging under `src-tauri/src/telegram_impl/**`;
 4. 8C crate sources plus retained app consumers.
+
+In baseline and every 8A checkpoint, the parser never passes a row's `staged_path` directly to a filesystem-existence assertion. For the four prepared leaves it uses this closed lifecycle map:
+
+```text
+src-tauri/src/telegram_impl/dto.rs     -> src-tauri/src/telegram/dto.rs
+src-tauri/src/telegram_impl/media.rs   -> src-tauri/src/telegram/media.rs
+src-tauri/src/telegram_impl/session.rs -> src-tauri/src/telegram/session.rs
+src-tauri/src/telegram_impl/runtime.rs -> src-tauri/src/telegram/runtime.rs
+```
+
+Before each leaf's Checkpoint 3–5 introduction it resolves that row to the current baseline source path; other future-owner rows remain on their current baseline paths throughout 8A. Literal `staged_path` existence becomes mandatory only in the corresponding approved 8B lifecycle state.
 
 `telegram-crate-boundary-contract.test.ts` parses the literal table from this committed plan; never copy its rows into TypeScript. It fails on malformed rows, duplicate baseline/final identities, missing paths, owner values outside `extractum|extractum-telegram`, or companions outside the exact three declared IDs. It asserts:
 
@@ -1318,7 +1331,7 @@ telegram_session_store=1
 
 The standing contract keeps this immutable baseline table as evidence. It also encodes Task 0's terminal direct-Grammers and moved/raw-symbol seed sets, rejects an unexpected alias/re-export/wrapper consumer, and requires `sources/store.rs` to remain the sole dependent-only path outside the 19 ownership/move paths. In the Checkpoint 1 layout after Step 5 it requires the live tree to contain exactly 160 references with `error=37` and every other root count unchanged, plus the exact six direct-core replacements; it must not keep asserting the obsolete live count of 166. When later checkpoints physically split named owners, the contract follows the lifecycle path map, keeps the six direct-core paths and 44 app-facade sentinels, and no longer applies the CP1 aggregate to a different file layout.
 
-Require the Task 0 design/roadmap addendum to be present and contractually encode `src-tauri/src/sources/store.rs` as the sole app-only dependent consumer of `get_client`, not a moved owner. Its exact 24-identity set is the separate `$sourcesStoreDependentTestIds` contract above and is not added to the immutable ownership/move map; Task 5 proves membership again and then runs it as a dependent regression suite when the facade call changes. Discovery of any other raw-client/session consumer stops the plan for amendment.
+Require the Task 0 design/roadmap addendum to be present and contractually encode `src-tauri/src/sources/store.rs` as the sole app-only dependent consumer of `get_client`, not a moved owner. Its exact 24-identity set is the separate `$sourcesStoreBroadRegressionTestIds` contract above and is not added to the immutable ownership/move map; Task 5 proves membership again and runs it only as a broad store regression suite. The contract explicitly records that none of those 24 identities invokes `list_telegram_sources` or `add_telegram_source`; direct evidence for their facade rewrite is the existing status-gated runtime lookup identity plus the exact command-body source assertions in Task 5. Discovery of any other raw-client/session consumer stops the plan for amendment.
 
 - [ ] **Step 5: Strengthen identity characterization, then normalize exactly six paths.**
 
@@ -1943,7 +1956,7 @@ Assert-ExactRustRuntimeRed extractum `
 Invoke-ExactRustTest extractum 'telegram::runtime::tests::missing_account_authentication_is_false'
 ```
 
-For the first test, use callback barriers to prepare two initializations concurrently with distinct `TelegramSession` values, release them in the opposite order, and prove that the last `accounts.insert` wins by comparing the current initialized handle's session with `Arc::ptr_eq` inside the private module. Assert `Ready` and `ReauthRequired` mapping and prove the replaced runner was detached because its drop probe has not fired in the assertion window. The TypeScript source contract separately pins the existing app-facade initialization-error branch: it clears whichever map entry exists when the error is handled before recording/emitting `restore_failed`; this plan characterizes that race and does not improve it.
+For the first test, use callback barriers to prepare two initializations concurrently with distinct `TelegramSession` values, release them in the opposite order, and prove that the last `accounts.insert` wins. Call `runtime.initialized_client(account_id).await` directly with no externally held map guard, compare the returned handle's session with `Arc::ptr_eq` inside the private module, then call it for a missing ID and assert exact Auth text `Account {account_id} not initialized`. This is the direct executable lookup proof; the Task 5 source contract separately proves that both store commands relinquish their old caller-held locks. Also assert `Ready` and `ReauthRequired` mapping and prove the replaced runner was detached because its drop probe has not fired in the assertion window. The TypeScript source contract separately pins the existing app-facade initialization-error branch: it clears whichever map entry exists when the error is handled before recording/emitting `restore_failed`; this plan characterizes that race and does not improve it.
 
 - [ ] **Step 3: RED/GREEN login-attempt state transitions one at a time.**
 
@@ -1983,7 +1996,7 @@ Block a code request, queue clear, and prove clear neither signs out nor drops t
 
 Split the current SQL row from resolved credentials so legacy `accounts.api_hash` is read as an app-local `String`, immediately moved into `secrecy::SecretString`, and thereafter carried only as `TelegramApiHash`. Secure-store reads remain `SecretString`; do not convert them back to ordinary `String`, clone plaintext, log it, or add a getter. The three credential-SQL baseline identities must remain GREEN and app-owned.
 
-Keep the root-facade `get_client(&TelegramState, account_id)` and `get_authorized_client(&TelegramState, account_id)` signatures exact. The former delegates to `initialized_client` without an authorization probe; the latter delegates to `authorized_client`. This distinction is observable error timing and is not collapsed.
+Install the root-facade `get_client(&TelegramState, account_id)` and `get_authorized_client(&TelegramState, account_id)` signatures exactly. The former is a deliberate signature/ownership rewrite and `pub -> pub(crate)` visibility narrowing, delegates to `initialized_client` without an authorization probe, and owns no second lock outside the runtime. The latter replaces `get_authorized_runtime` and delegates to `authorized_client`. This distinction is observable error timing and is not collapsed. The boundary contract requires zero `AuthorizedTelegramRuntime` and zero `get_authorized_runtime` declarations/imports/calls from Checkpoint 5 onward.
 
 Add:
 
@@ -2012,16 +2025,58 @@ telegram/runtime.rs initialization only:
     TelegramSession::raw_memory_session (pub(super), not app-visible)
 ```
 
+Replace these two exact current caller-locked blocks:
+
+```rust
+// current list_telegram_sources — remove in Checkpoint 5
+let client = {
+    let accounts = state.accounts.lock().await;
+    crate::telegram::get_client(&accounts, account_id)
+        .await?
+        .clone()
+};
+
+// current add_telegram_source — remove in Checkpoint 5
+let client = {
+    let accounts = state.accounts.lock().await;
+    crate::telegram::get_client(&accounts, request.account_id)
+        .await?
+        .clone()
+};
+```
+
+with these two exact internally locked forms:
+
+```rust
+// list_telegram_sources
+let client_handle =
+    crate::telegram::get_client(state.inner(), account_id).await?;
+let client = client_handle.raw_client().clone();
+
+// add_telegram_source
+let client_handle =
+    crate::telegram::get_client(state.inner(), request.account_id).await?;
+let client = client_handle.raw_client().clone();
+```
+
+Delete both old blocks completely. The lifecycle-gated TypeScript contract requires exactly these two `get_client(state.inner(), ...)` calls in the named command bodies at Checkpoint 5 and rejects `state.accounts`, `.accounts.lock`, or `get_client(&accounts` in either body. Before Checkpoint 5 it requires the two exact current caller-locked forms above instead, so the contract cannot pass early on the future layout.
+
+For Takeout, rename the private spike helper to `run_export_dc_spike_for_handle` and accept `TelegramClientHandle`, not `AuthorizedTelegramRuntime` or a raw tuple. The export-DC spike, migrated-history import, and current-history import each clone `handle.raw_client()` and `Arc::clone(handle.raw_session())` at the same current ownership point; the spike's cloned session remains the argument to `prepare_export_dc_alias`. `takeout_import/mod.rs` is the sole `raw_session` path and contains exactly three workflow invocations. `sources/sync.rs` consumes only `raw_client`; both store commands consume only `raw_client`; the boundary contract rejects `raw_session` everywhere else and rejects any `#[allow(dead_code)]` on either adapter.
+
 Clone the current raw client/session at the same ownership points as today. Do not broaden lock scope, but preserve the existing asymmetric rule exactly: initialized/authorized lookup releases the accounts lock before its network authorization await, while request-code, sign-in, and clear/sign-out retain the single global accounts lock across their network awaits. Preserve behavior and run:
 
 ```powershell
-Assert-ExactRustIdentitySet -Package extractum -Prefix 'sources::store::tests::' -Expected $sourcesStoreDependentTestIds
-Invoke-NonEmptyRustSuite -Label 'source store dependent tests' -Package extractum -TestFilter 'sources::store::tests::'
+Invoke-ExactRustTest extractum 'telegram::runtime::tests::initialization_maps_authorization_and_last_insert_wins_without_aborting_replaced_runner'
+Invoke-CheckedNative 'store lookup lock-ownership contract' {
+    npm.cmd run test -- src/lib/telegram-crate-boundary-contract.test.ts
+}
+Assert-ExactRustIdentitySet -Package extractum -Prefix 'sources::store::tests::' -Expected $sourcesStoreBroadRegressionTestIds
+Invoke-NonEmptyRustSuite -Label 'source store broad regressions' -Package extractum -TestFilter 'sources::store::tests::'
 Invoke-NonEmptyRustSuite -Label 'source sync dependent tests' -Package extractum -TestFilter 'sources::sync::tests::'
 Invoke-NonEmptyRustSuite -Label 'Takeout dependent tests' -Package extractum -TestFilter 'takeout_import::tests::'
 ```
 
-The boundary contract requires exactly the two `pub(crate)` handle adapters, the one `pub(super)` session accessor, the two app-only lookup functions, and the consumer map above. It rejects any other raw accessor, constructor/conversion, consumer, visibility, or raw type re-export. Their mandatory removal belongs to 8B. Preserve the existing `clear_account_runtime` and `TelegramState::diagnostic_status_counts` compatibility facade so `accounts.rs` and diagnostics remain byte-identical; their SQL/event/aggregation ownership is unchanged.
+The boundary contract requires exactly the two `pub(crate)` handle adapters, the one `pub(super)` session accessor, the two app-only lookup functions, and the consumer map above. It rejects any other raw accessor, constructor/conversion, consumer, visibility, raw type re-export, or caller-held lock around either lookup. The exact 24 store identities remain a broad regression suite and are not represented as direct command/deadlock coverage. The adapters' and lookup functions' mandatory removal belongs to 8B. Preserve the existing `clear_account_runtime` and `TelegramState::diagnostic_status_counts` compatibility facade so `accounts.rs` and diagnostics remain byte-identical; their SQL/event/aggregation ownership is unchanged.
 
 - [ ] **Step 7: Enforce public API, secrecy, and ownership absence rules.**
 
@@ -2113,7 +2168,7 @@ $task6CargoHashes = Get-CargoIdentityHashes
 Run the committed map contract, list the current app tests fail-closed, and prove:
 
 ```powershell
-Assert-ExactRustIdentitySet -Package extractum -Prefix 'sources::store::tests::' -Expected $sourcesStoreDependentTestIds
+Assert-ExactRustIdentitySet -Package extractum -Prefix 'sources::store::tests::' -Expected $sourcesStoreBroadRegressionTestIds
 ```
 
 ```text
@@ -2159,6 +2214,7 @@ Create the verification document with:
 - six-path core normalization proof and 44 sentinel references;
 - command/event/status/error/session/secret compatibility results;
 - DTO/media/session/runtime ownership and public-API/secrecy scans;
+- direct initialized-client lookup evidence, exact two-command caller-lock removal, explicit classification of the 24 store tests as broad rather than command/deadlock coverage, old authorized-runtime symbol absence, and the exact three Takeout `raw_session` workflow sites;
 - manifest/lock hashes and locked metadata;
 - explicit no-crate/no-edge/all-Grammers-app-owned statement;
 - explicit “Phase 8 incomplete; 8B not authorized” statement;
@@ -2276,5 +2332,7 @@ Record the final SHA in the handoff only. Do not amend the committed verificatio
 - [ ] Public API equals the allowlist; no public raw Grammers/TL/SQLx/Tauri/keyring/secret getter/error conversion exists.
 - [ ] DTO/media/session/runtime leaves live under `src-tauri/src/telegram`, not `telegram_impl` or a new crate.
 - [ ] App filesystem/secret/SQL/event/Takeout ownership is intact; temporary raw adapters are crate-private and enumerated for 8B removal.
+- [ ] Both `sources/store.rs` commands call `get_client(state.inner(), ...)` without an outer accounts lock; the direct runtime lookup identity and lifecycle-gated source contract are GREEN, while the 24 store identities are recorded only as broad regressions.
+- [ ] `AuthorizedTelegramRuntime`/`get_authorized_runtime` are absent; only the three enumerated Takeout workflows consume `raw_session`, with no dead-code allowance.
 - [ ] Verification contains fresh command output, exact checkpoint SHAs, hashes, advisory timing, and truthful incomplete-Phase-8 disposition.
 - [ ] Worktree is clean after the final retained commit.
