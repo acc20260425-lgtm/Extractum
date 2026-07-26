@@ -16,6 +16,7 @@ use crate::telegram_session_store;
 
 mod dto;
 mod media;
+mod session;
 
 pub(crate) use dto::{
     TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
@@ -25,6 +26,10 @@ pub(crate) use dto::{
 pub(crate) use media::{
     derive_content_kind, derive_document_media_kind, extract_item_payload, DocumentSignals,
     TelegramMediaPayload, CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA,
+};
+pub(crate) use session::{
+    decode_session_json, encode_session_json, session_json_requires_existing_key,
+    SessionEncryptionKey, TelegramSession,
 };
 
 const STATUS_NOT_INITIALIZED: &str = "not_initialized";
@@ -43,7 +48,7 @@ struct AccountCredentials {
 
 pub struct AccountClient {
     pub client: Client,
-    pub session: Arc<MemorySession>,
+    pub session: TelegramSession,
     pub api_hash: String,
     pub login_token: Option<LoginToken>,
     pub phone: Option<String>,
@@ -220,7 +225,7 @@ async fn init_account_client(
     set_account_status(handle, state, account_id, STATUS_RESTORING, None).await;
 
     let session = telegram_session_store::load_session(handle, secret_store, account_id).await?;
-    let pool = SenderPool::new(Arc::clone(&session), api_id);
+    let pool = SenderPool::new(Arc::clone(session.raw_memory_session()), api_id);
 
     let runner = tokio::spawn(async move {
         let _ = pool.runner.run().await;
@@ -486,7 +491,7 @@ pub async fn tg_sign_in(
             .await
             .map_err(AppError::telegram_network)?;
         ac.login_token = None;
-        Arc::clone(&ac.session)
+        ac.session.clone()
     };
 
     telegram_session_store::save_session(&handle, &secret_store, account_id, &session_to_save)
@@ -531,7 +536,7 @@ pub(crate) async fn get_authorized_runtime(
 
         AuthorizedTelegramRuntime {
             client: account.client.clone(),
-            session: Arc::clone(&account.session),
+            session: Arc::clone(account.session.raw_memory_session()),
         }
     };
 

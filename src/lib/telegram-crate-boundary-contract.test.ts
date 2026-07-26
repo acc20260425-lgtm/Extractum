@@ -178,10 +178,17 @@ const checkpoint3LeavesExist = [
   "src-tauri/src/telegram/dto.rs",
   "src-tauri/src/telegram/media.rs",
 ].every((relativePath) => existsSync(path.join(repoRoot, relativePath)));
-const lifecycle =
+const checkpointThreeLifecycle =
   statusLifecycle === "8a-checkpoint-2" && checkpoint3LeavesExist
     ? "8a-checkpoint-3"
     : statusLifecycle;
+const checkpoint4LeafExists = existsSync(
+  path.join(repoRoot, "src-tauri/src/telegram/session.rs"),
+);
+const lifecycle =
+  checkpointThreeLifecycle === "8a-checkpoint-3" && checkpoint4LeafExists
+    ? "8a-checkpoint-4"
+    : checkpointThreeLifecycle;
 
 function sectionBetween(source: string, start: string, end: string): string {
   const startIndex = source.indexOf(start);
@@ -577,6 +584,120 @@ function productionRustSource(source: string): string {
     : source.slice(0, testModule.index);
 }
 
+type RustItemBoundary = Readonly<
+  { kind: "body"; index: number } | { kind: "semicolon"; index: number }
+>;
+
+function rustItemBoundary(
+  source: string,
+  searchable: string,
+  start: number,
+  label: string,
+): RustItemBoundary {
+  let parenDepth = 0;
+  let squareDepth = 0;
+  for (let index = start; index < searchable.length; index += 1) {
+    const character = searchable[index];
+    if (character === "(") parenDepth += 1;
+    if (character === ")") parenDepth -= 1;
+    if (character === "[") squareDepth += 1;
+    if (character === "]") squareDepth -= 1;
+    if (parenDepth < 0 || squareDepth < 0) {
+      throw new Error(`${label} found an unmatched item delimiter`);
+    }
+    if (character === "{") {
+      const close = rustClosingBraceIndex(source, index, label);
+      if (parenDepth > 0 || squareDepth > 0) {
+        index = close;
+        continue;
+      }
+      let next = close + 1;
+      while (/\s/.test(searchable[next] ?? "")) next += 1;
+      if (searchable[next] === ">" || searchable[next] === ",") {
+        index = close;
+        continue;
+      }
+      return { kind: "body", index };
+    }
+    if (
+      character === ";"
+      && parenDepth === 0
+      && squareDepth === 0
+    ) {
+      return { kind: "semicolon", index };
+    }
+  }
+  throw new Error(`${label} found an item without a terminator`);
+}
+
+function maskExactCfgTestItemSpans(source: string): string {
+  const searchable = maskRustLexicalNonCode(source);
+  const ranges: Array<{ start: number; end: number }> = [];
+  for (
+    const match of searchable.matchAll(
+      /#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]/g,
+    )
+  ) {
+    if (match.index === undefined) continue;
+    const previous = ranges.at(-1);
+    if (previous && match.index < previous.end) continue;
+    if (rustBraceDepthBefore(searchable, match.index) !== 0) {
+      throw new Error(
+        "Checkpoint 4 cfg(test) inventory does not support nested item attributes",
+      );
+    }
+
+    let cursor = match.index + match[0].length;
+    while (cursor < searchable.length) {
+      while (/\s/.test(searchable[cursor] ?? "")) cursor += 1;
+      if (searchable[cursor] !== "#") break;
+      let bracket = cursor + 1;
+      while (/\s/.test(searchable[bracket] ?? "")) bracket += 1;
+      if (searchable[bracket] !== "[") break;
+      let depth = 1;
+      bracket += 1;
+      while (bracket < searchable.length && depth > 0) {
+        if (searchable[bracket] === "[") depth += 1;
+        if (searchable[bracket] === "]") depth -= 1;
+        bracket += 1;
+      }
+      if (depth !== 0) {
+        throw new Error(
+          "Checkpoint 4 cfg(test) inventory found an unclosed item attribute",
+        );
+      }
+      cursor = bracket;
+    }
+
+    const boundary = rustItemBoundary(
+      source,
+      searchable,
+      cursor,
+      "Checkpoint 4 cfg(test) inventory",
+    );
+    let end: number;
+    if (boundary.kind === "semicolon") {
+      end = boundary.index + 1;
+    } else {
+      end = rustClosingBraceIndex(
+        source,
+        boundary.index,
+        "Checkpoint 4 cfg(test) item",
+      ) + 1;
+    }
+    ranges.push({ start: match.index, end });
+  }
+
+  let result = "";
+  let cursor = 0;
+  for (const { start, end } of ranges) {
+    result += source.slice(cursor, start);
+    result += source.slice(start, end).replace(/[^\r\n]/g, " ");
+    cursor = end;
+  }
+  return result + source.slice(cursor);
+}
+
 function assertCheckpointThreeOwnershipContract(
   sourceOverrides: ReadonlyMap<string, string> = new Map(),
 ): void {
@@ -756,6 +877,12 @@ function assertCheckpointThreeApiContract(
     "#[allow(unused_imports)] pub(crate) use media::{derive_content_kind, derive_document_media_kind, extract_item_payload, DocumentSignals, TelegramMediaPayload, CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA,};",
   ]);
   expect(
+    normalizedRustUseDeclarations(telegram, "session"),
+    "Checkpoint 4 API contract: exact Telegram session facade",
+  ).toEqual([
+    "pub(crate) use session::{decode_session_json, encode_session_json, session_json_requires_existing_key, SessionEncryptionKey, TelegramSession,};",
+  ]);
+  expect(
     normalizedRustUseDeclarations(appMedia, "crate::telegram"),
     "Checkpoint 3 API contract: exact app media compatibility facade",
   ).toEqual([
@@ -779,19 +906,21 @@ function assertCheckpointThreeApiContract(
   const telegramStructure = maskRustLexicalNonCode(telegram);
   expect(
     [...telegramStructure.matchAll(
-      /\b(?:pub(?:\s*\([^)]*\))?\s+)?mod\s+(dto|media)\s*;/g,
+      /\b(?:pub(?:\s*\([^)]*\))?\s+)?mod\s+(dto|media|session)\s*;/g,
     )].map((match) =>
       normalize(match[0]).trim()
     ),
     "Checkpoint 3 API contract: private Telegram leaves",
-  ).toEqual(["mod dto;", "mod media;"]);
+  ).toEqual(["mod dto;", "mod media;", "mod session;"]);
   expect(
     normalizedRustUseDeclarations(dto, "super::media"),
     "Checkpoint 3 API contract: future-owner relative leaf import",
   ).toEqual(["use super::media::TelegramMediaPayload;"]);
   expect(
-    `${maskRustLexicalNonCode(dto)}\n${maskRustLexicalNonCode(media)}`,
-    "Checkpoint 3 API contract: future-owner leaves avoid app facades",
+    `${maskRustLexicalNonCode(dto)}\n${maskRustLexicalNonCode(media)}\n${
+      maskRustLexicalNonCode(read("src-tauri/src/telegram/session.rs"))
+    }`,
+    "Checkpoint 3/4 API contract: future-owner leaves avoid app facades",
   ).not.toMatch(/\bcrate::(?:telegram|media)\b/);
 
   const appSources = checkpointThreeAppRustSources(sourceOverrides);
@@ -803,7 +932,7 @@ function assertCheckpointThreeApiContract(
     )
     .flatMap(([relativePath, source]) =>
       [...maskRustLexicalNonCode(source).matchAll(
-        /\bcrate::telegram::(?:dto|media)\b/g,
+        /\bcrate::telegram::(?:dto|media|session)\b/g,
       )].map((match) => `${relativePath}:${match[0]}`)
     );
   expect(
@@ -876,6 +1005,337 @@ function assertCheckpointThreeApiContract(
     ))),
     "Checkpoint 3 API contract: live media compatibility import",
   ).toContain("use crate::media::extract_item_payload;");
+}
+
+function assertCheckpointFourSessionContract(
+  sourceOverrides: ReadonlyMap<string, string> = new Map(),
+): void {
+  const read = (relativePath: string): string =>
+    sourceOverrides.get(relativePath)
+    ?? telegramContractPaths.readTelegramContractFile(relativePath);
+  const sessionPath = "src-tauri/src/telegram/session.rs";
+  const adapterPath = "src-tauri/src/telegram_session_store.rs";
+  const telegramPath = "src-tauri/src/telegram.rs";
+  const session = read(sessionPath);
+  const adapter = read(adapterPath);
+  const telegram = read(telegramPath);
+  const sessionProduction = maskExactCfgTestItemSpans(session);
+  const sessionStructure = maskRustLexicalNonCode(session);
+  const sessionImplBlocks = rustImplBlocks(sessionProduction);
+  const adapterProduction = maskExactCfgTestItemSpans(adapter);
+  const adapterStructure = maskRustLexicalNonCode(adapterProduction);
+  const appSources = checkpointThreeAppRustSources(sourceOverrides);
+  const wrapperNames = [
+    "SessionEncryptionKey",
+    "TelegramSession",
+  ] as const;
+  const wrapperToken = new RegExp(
+    `(?:^|[^A-Za-z0-9_#])(?:r#)?(?:${wrapperNames.join("|")})\\b`,
+  );
+  const wrapperSourceInventories = [...appSources.entries()]
+    .filter(([, source]) =>
+      wrapperToken.test(maskRustLexicalNonCode(source))
+    )
+    .map(([relativePath, source]) => {
+      const production = maskExactCfgTestItemSpans(source);
+      return {
+        relativePath,
+        implBlocks: rustImplBlocks(
+          production,
+          `Checkpoint 4 impl inventory ${relativePath}`,
+        ),
+        aliases: rustWrapperAliasNames(production, wrapperNames),
+        visibleFreeFunctions: visibleRustFreeFunctions(
+          production,
+          `Checkpoint 4 free-function inventory ${relativePath}`,
+        ),
+      };
+    });
+  exactInventory(
+    wrapperSourceInventories.flatMap(({ relativePath, implBlocks }) =>
+      implBlocks
+        .filter(({ header }) =>
+          wrapperNames.some((wrapper) =>
+            rustTypeReferenceRegex(wrapper).test(header)
+          )
+        )
+        .map(({ header }) => `${relativePath}|${header}`)
+    ),
+    [
+      `${sessionPath}|SessionEncryptionKey`,
+      `${sessionPath}|TelegramSession`,
+    ],
+    "Checkpoint 4 ownership contract: app-wide exact wrapper impl inventory",
+  );
+  exactInventory(
+    wrapperSourceInventories.flatMap(
+      ({ relativePath, aliases }) =>
+        aliases.map((alias) => `${relativePath}|${alias}`),
+    ),
+    [],
+    "Checkpoint 4 ownership contract: no wrapper alias declarations",
+  );
+  const rawTelegramOrSecretSurface =
+    /(?:\bgrammers_(?:client|session|mtsender|tl_types)\b|\b(?:AccountClient|AuthorizedTelegramRuntime|MemorySession|RawClient|RawSession|SecretString|SecretVec|ExposeSecret)\b|\bVec\s*<\s*u8\s*>|\[\s*u8\b)/;
+  exactInventory(
+    wrapperSourceInventories.flatMap(
+      ({ relativePath, visibleFreeFunctions }) =>
+        visibleFreeFunctions
+          .filter(({ signature }) =>
+            wrapperNames.some((wrapper) =>
+              rustTypeReferenceRegex(wrapper).test(signature)
+            )
+            && rawTelegramOrSecretSurface.test(signature)
+          )
+          .map(({ header }) => `${relativePath}|${header}`),
+    ),
+    [],
+    "Checkpoint 4 secrecy contract: no app-wide visible free wrapper-to-raw signatures",
+  );
+
+  for (const owner of [
+    ["SavedSession", /\bstruct\s+SavedSession\b/g],
+    ["EncryptedSessionEnvelope", /\bstruct\s+EncryptedSessionEnvelope\b/g],
+  ] as const) {
+    const sites = [...appSources.entries()].flatMap(
+      ([relativePath, source]) =>
+        [...maskRustLexicalNonCode(source).matchAll(owner[1])].map(
+          () => relativePath,
+        ),
+    );
+    expect(
+      sites,
+      `Checkpoint 4 ownership contract: sole ${owner[0]} owner`,
+    ).toEqual([sessionPath]);
+  }
+
+  expect(
+    normalize(sessionStructure),
+    "Checkpoint 4 API contract: Arc-backed cloneable session key",
+  ).toMatch(
+    /#\s*\[\s*derive\s*\(\s*Clone\s*\)\s*\]\s*pub struct SessionEncryptionKey\s*\(\s*Arc\s*<\s*SecretVec\s*<\s*u8\s*>\s*>\s*\)\s*;/,
+  );
+  expect(
+    normalize(sessionStructure),
+    "Checkpoint 4 API contract: opaque Telegram session",
+  ).toMatch(
+    /#\s*\[\s*derive\s*\(\s*Clone\s*\)\s*\]\s*pub struct TelegramSession\s*\{\s*inner\s*:\s*Arc\s*<\s*MemorySession\s*>\s*,?\s*\}/,
+  );
+  expect(
+    rustStructBody(session, "TelegramSession"),
+    "Checkpoint 4 API contract: TelegramSession field stays private",
+  ).not.toMatch(/\bpub(?:\s*\([^)]*\))?\s+inner\s*:/);
+
+  const exactDeclarations = new Map([
+    [
+      "try_from_encoded",
+      "pub fn try_from_encoded(encoded: SecretString) -> AppResult<Self>",
+    ],
+    [
+      "generate",
+      "pub fn generate() -> (Self, SecretString)",
+    ],
+    [
+      "empty",
+      "pub fn empty() -> Self",
+    ],
+    [
+      "raw_memory_session",
+      "pub(super) fn raw_memory_session(&self) -> &Arc<MemorySession>",
+    ],
+    [
+      "session_json_requires_existing_key",
+      "pub fn session_json_requires_existing_key(json: &str) -> AppResult<bool>",
+    ],
+    [
+      "decode_session_json",
+      "pub fn decode_session_json(json: &str, account_id: i64, key: Option<&SessionEncryptionKey>,) -> AppResult<TelegramSession>",
+    ],
+    [
+      "encode_session_json",
+      "pub async fn encode_session_json(session: &TelegramSession, account_id: i64, key: &SessionEncryptionKey,) -> AppResult<String>",
+    ],
+  ]);
+  for (const [name, declaration] of exactDeclarations) {
+    expect(
+      normalizedRustFunctionDeclaration(session, name),
+      `Checkpoint 4 API contract: exact ${name} declaration`,
+    ).toBe(declaration);
+  }
+
+  expect(
+    visibleInherentAssociatedItemInventory(
+      sessionImplBlocks,
+      "SessionEncryptionKey",
+    ),
+    "Checkpoint 4 API contract: complete visible session-key associated-item inventory",
+  ).toEqual([
+    "pub fn try_from_encoded",
+    "pub fn generate",
+  ]);
+  expect(
+    visibleInherentAssociatedItemInventory(
+      sessionImplBlocks,
+      "TelegramSession",
+    ),
+    "Checkpoint 4 API contract: complete visible Telegram-session associated-item inventory",
+  ).toEqual([
+    "pub fn empty",
+    "pub(super) fn raw_memory_session",
+  ]);
+  for (const wrapper of wrapperNames) {
+    expect(
+      explicitTraitImplInventory(sessionImplBlocks, wrapper),
+      `Checkpoint 4 secrecy contract: ${wrapper} has no raw/conversion trait surface`,
+    ).toEqual([]);
+  }
+
+  expect(
+    countMatches(
+      sessionStructure,
+      /\bpub\s*\(\s*super\s*\)\s+fn\s+raw_memory_session\s*\(/g,
+    ),
+    "Checkpoint 4 API contract: sole sibling raw session accessor",
+  ).toBe(1);
+  expect(
+    sessionStructure,
+    "Checkpoint 4 API contract: no app-visible raw session accessor",
+  ).not.toMatch(
+    /\bpub(?:\s*\(\s*crate\s*\))?\s+fn\s+raw_memory_session\s*\(/,
+  );
+
+  expect(
+    sessionStructure,
+    "Checkpoint 4 secrecy contract: no secret Debug/public getter/trait exposure",
+  ).not.toMatch(
+    /(?:derive\s*\([^)]*\bDebug\b[^)]*\)\s*pub struct SessionEncryptionKey|impl\s+(?:std::fmt::)?Debug\s+for\s+SessionEncryptionKey|impl\s+(?:secrecy::)?ExposeSecret\s+for\s+SessionEncryptionKey|\bpub(?:\s*\([^)]*\))?\s+fn\s+(?:as_bytes|expose_secret|key_bytes|raw_key)\s*\()/,
+  );
+  expect(
+    countMatches(
+      maskRustLexicalNonCode(sessionProduction),
+      /\.expose_secret\s*\(\s*\)/g,
+    ),
+    "Checkpoint 4 secrecy contract: exact private decode/encrypt/decrypt sinks",
+  ).toBe(3);
+  expect(
+    countMatches(adapterStructure, /\.expose_secret\s*\(\s*\)/g),
+    "Checkpoint 4 secrecy contract: sole generated-secret persistence sink",
+  ).toBe(1);
+
+  expect(
+    sessionStructure,
+    "Checkpoint 4 ownership contract: codec owns no app path/fs/keyring/store capability",
+  ).not.toMatch(
+    /\b(?:SecretStore|SecretStoreState|keyring|AppHandle|tauri|Path|PathBuf)\b|std::(?:fs|path)\b|telegram_account_session_key_secret/,
+  );
+  expect(
+    adapterStructure,
+    "Checkpoint 4 ownership contract: adapter owns no raw session or codec implementation",
+  ).not.toMatch(
+    /\bgrammers_session\b|\bMemorySession\b|\b(?:SavedSession|EncryptedSessionEnvelope)\b|\b(?:XChaCha20Poly1305|XNonce|Payload)\b|\b(?:encode_base64|decode_base64|associated_data|encrypt_saved_session|decrypt_saved_session)\b/,
+  );
+  expect(
+    normalizedRustUseDeclarations(telegram, "session"),
+    "Checkpoint 4 API contract: curated session facade",
+  ).toEqual([
+    "pub(crate) use session::{decode_session_json, encode_session_json, session_json_requires_existing_key, SessionEncryptionKey, TelegramSession,};",
+  ]);
+
+  expectOrdered(
+    rustFunctionBody(session, "memory_session_to_saved"),
+    [
+      "session.home_dc_id()",
+      "session.updates_state().await",
+      "for dc_id in 1..=5i32",
+      "session.dc_option(dc_id)",
+      "SavedSession",
+    ],
+    "Checkpoint 4 codec MemorySession snapshot order",
+  );
+  expect(
+    rustFunctionBody(session, "saved_to_telegram_session"),
+    "Checkpoint 4 codec deliberately excludes peer cache from the envelope",
+  ).toContain("peer_infos: HashMap::new()");
+  expectOrdered(
+    rustFunctionBody(session, "session_json_requires_existing_key"),
+    [
+      "serde_json::from_str::<EncryptedSessionEnvelope>(json)",
+      "return Ok(true)",
+      "serde_json::from_str::<SavedSession>(json)",
+      "return Ok(false)",
+      "AppError::internal(",
+    ],
+    "Checkpoint 4 encrypted-before-legacy classifier order",
+  );
+  expectOrdered(
+    rustFunctionBody(session, "decode_session_json"),
+    [
+      "serde_json::from_str::<EncryptedSessionEnvelope>(json)",
+      "AppError::auth(format!(",
+      "decrypt_saved_session(account_id, key, &envelope)?",
+      "serde_json::from_str::<SavedSession>(json)",
+      "saved_to_telegram_session(saved)",
+      "AppError::internal(",
+    ],
+    "Checkpoint 4 encrypted-before-legacy decode order",
+  );
+  expectOrdered(
+    rustFunctionBody(session, "encode_session_json"),
+    [
+      "memory_session_to_saved(session).await",
+      "encrypt_saved_session(account_id, key, &saved)?",
+      "serde_json::to_string(&envelope)",
+    ],
+    "Checkpoint 4 snapshot-encrypt-serialize order",
+  );
+
+  expectOrdered(
+    rustFunctionBody(adapter, "ensure_session_key"),
+    [
+      "read_session_key(secret_store, account_id).await?",
+      "SessionEncryptionKey::generate()",
+      "set_secret(",
+      "encoded.expose_secret()",
+      "Ok(key)",
+    ],
+    "Checkpoint 4 key read-generate-store order",
+  );
+  expectOrdered(
+    rustFunctionBody(adapter, "write_encrypted_session_file"),
+    [
+      "ensure_session_key(secret_store, account_id).await?",
+      "encode_session_json(session, account_id, &key).await?",
+      "write_atomic(path, &json)",
+    ],
+    "Checkpoint 4 save key-encode-write order",
+  );
+  expectOrdered(
+    rustFunctionBody(adapter, "load_session_from_path"),
+    [
+      "if !path.exists()",
+      "TelegramSession::empty()",
+      "fs::read_to_string(path)",
+      "session_json_requires_existing_key(&json)?",
+      "if requires_existing_key",
+      "read_session_key(secret_store, account_id).await?",
+      "return decode_session_json(&json, account_id, key.as_ref())",
+      "let session = decode_session_json(&json, account_id, None)?",
+      "ensure_session_key(secret_store, account_id).await?",
+      "encode_session_json(&session, account_id, &key).await?",
+      "write_atomic(path, &encrypted)?",
+      "Ok(session)",
+    ],
+    "Checkpoint 4 classify/key/decode/legacy-migrate order",
+  );
+  expectOrdered(
+    rustFunctionBody(adapter, "delete_session_from_path"),
+    [
+      "fs::remove_file(path)",
+      "std::io::ErrorKind::NotFound",
+      "delete_secret(telegram_account_session_key_secret(account_id))",
+    ],
+    "Checkpoint 4 file-before-key deletion order",
+  );
 }
 
 function assertCheckpointOneRootInventory(
@@ -1059,13 +1519,284 @@ function rustStructBody(source: string, name: string): string {
   return maskRustLexicalNonCode(source.slice(open + 1, close));
 }
 
+function rustBraceDepthBefore(source: string, end: number): number {
+  let depth = 0;
+  for (let index = 0; index < end; index += 1) {
+    if (source[index] === "{") depth += 1;
+    if (source[index] === "}") depth -= 1;
+    if (depth < 0) {
+      throw new Error(
+        "Checkpoint 4 Rust inventory encountered an unmatched closing brace",
+      );
+    }
+  }
+  return depth;
+}
+
+type RustImplBlock = Readonly<{ header: string; body: string }>;
+
+function isRustImplItemCandidate(
+  searchable: string,
+  implIndex: number,
+): boolean {
+  let cursor = implIndex;
+  while (cursor > 0) {
+    while (cursor > 0 && /\s/.test(searchable[cursor - 1] ?? "")) {
+      cursor -= 1;
+    }
+    const qualifier = /([A-Za-z_][A-Za-z0-9_]*)$/.exec(
+      searchable.slice(0, cursor),
+    )?.[1];
+    if (
+      qualifier === undefined
+      || !["const", "default", "unsafe"].includes(qualifier)
+    ) {
+      break;
+    }
+    cursor -= qualifier.length;
+  }
+  while (cursor > 0 && /\s/.test(searchable[cursor - 1] ?? "")) {
+    cursor -= 1;
+  }
+  return cursor === 0 || /[{};\]]/.test(searchable[cursor - 1] ?? "");
+}
+
+function rustImplBlocks(
+  source: string,
+  label = "Checkpoint 4 impl inventory",
+): RustImplBlock[] {
+  const searchable = maskRustLexicalNonCode(source);
+  const blocks: Array<{ header: string; body: string }> = [];
+  for (const match of searchable.matchAll(/\bimpl\b/g)) {
+    if (match.index === undefined) continue;
+    if (!isRustImplItemCandidate(searchable, match.index)) continue;
+    const headerStart = match.index + match[0].length;
+    const boundary = rustItemBoundary(
+      source,
+      searchable,
+      headerStart,
+      label,
+    );
+    if (boundary.kind !== "body") {
+      throw new Error(
+        "Checkpoint 4 Rust inventory found an impl without a body",
+      );
+    }
+    const open = boundary.index;
+    const close = rustClosingBraceIndex(
+      source,
+      open,
+      label,
+    );
+    blocks.push({
+      header: normalize(searchable.slice(headerStart, open)).trim(),
+      body: searchable.slice(open + 1, close),
+    });
+  }
+  return blocks;
+}
+
+function rustTypeReferenceRegex(typeName: string): RegExp {
+  return new RegExp(
+    `(?:^|[^A-Za-z0-9_#])(?:r#)?${typeName}\\b`,
+  );
+}
+
+function rustWrapperAliasNames(
+  source: string,
+  typeNames: readonly string[],
+): string[] {
+  const searchable = maskRustLexicalNonCode(source);
+  const typeAlternation = typeNames.join("|");
+  const identifier = "(?:r#)?[A-Za-z_][A-Za-z0-9_]*";
+  const aliases: string[] = [];
+  for (const declaration of searchable.matchAll(/\buse\b([^;]*);/g)) {
+    for (
+      const alias of (declaration[1] ?? "").matchAll(
+        new RegExp(
+          `(?:r#)?(?:${typeAlternation})\\s+as\\s+(${identifier})\\b`,
+          "g",
+        ),
+      )
+    ) {
+      if (alias[1] !== undefined) aliases.push(alias[1].replace(/^r#/, ""));
+    }
+  }
+  for (
+    const declaration of searchable.matchAll(
+      new RegExp(`\\btype\\s+(${identifier})\\b([^;]*);`, "g"),
+    )
+  ) {
+    const tail = declaration[2] ?? "";
+    const equals = tail.indexOf("=");
+    if (equals < 0) continue;
+    const target = tail.slice(equals + 1);
+    if (
+      !typeNames.some((typeName) =>
+        rustTypeReferenceRegex(typeName).test(target)
+      )
+    ) {
+      continue;
+    }
+    if (declaration[1] !== undefined) {
+      aliases.push(declaration[1].replace(/^r#/, ""));
+    }
+  }
+  return aliases;
+}
+
+function rustTopLevelItemHeaders(
+  body: string,
+  label: string,
+): string[] {
+  const headers: string[] = [];
+  let cursor = 0;
+  while (cursor < body.length) {
+    while (/\s/.test(body[cursor] ?? "")) cursor += 1;
+    if (cursor >= body.length) break;
+    const boundary = rustItemBoundary(
+      body,
+      body,
+      cursor,
+      label,
+    );
+    const header = normalize(body.slice(cursor, boundary.index)).trim();
+    if (header.length > 0) headers.push(header);
+    cursor = boundary.kind === "semicolon"
+      ? boundary.index + 1
+      : rustClosingBraceIndex(body, boundary.index, label) + 1;
+  }
+  return headers;
+}
+
+type RustVisibleFreeFunction = Readonly<{
+  header: string;
+  signature: string;
+}>;
+
+function visibleRustFreeFunctions(
+  source: string,
+  label: string,
+): RustVisibleFreeFunction[] {
+  const searchable = maskRustLexicalNonCode(source);
+  const inventory: RustVisibleFreeFunction[] = [];
+  const visitScope = (start: number, end: number): void => {
+    let cursor = start;
+    while (cursor < end) {
+      while (cursor < end && /\s/.test(searchable[cursor] ?? "")) {
+        cursor += 1;
+      }
+      if (cursor >= end) break;
+      const boundary = rustItemBoundary(
+        source,
+        searchable,
+        cursor,
+        label,
+      );
+      const header = normalize(
+        searchable.slice(cursor, boundary.index),
+      ).trim();
+      const visibleFunction =
+        /\bpub(?:\s*\(\s*[^)]+?\s*\))?\s+(?:(?:async|const|default|unsafe)\s+)*(?:extern\s+)?fn\s+(?:r#)?[A-Za-z_][A-Za-z0-9_]*\b/
+          .exec(header);
+      if (visibleFunction?.index !== undefined) {
+        inventory.push({
+          header,
+          signature: header.slice(
+            visibleFunction.index + visibleFunction[0].length,
+          ),
+        });
+      }
+      if (boundary.kind === "semicolon") {
+        cursor = boundary.index + 1;
+        continue;
+      }
+      const close = rustClosingBraceIndex(
+        source,
+        boundary.index,
+        label,
+      );
+      if (
+        /\bmod\s+(?:r#)?[A-Za-z_][A-Za-z0-9_]*\s*$/.test(header)
+      ) {
+        visitScope(boundary.index + 1, close);
+      }
+      cursor = close + 1;
+    }
+  };
+  visitScope(0, searchable.length);
+  return inventory;
+}
+
+function visibleInherentAssociatedItemInventory(
+  implBlocks: ReadonlyArray<RustImplBlock>,
+  typeName: string,
+): string[] {
+  const inherentType = new RegExp(
+    `^(?:(?:(?:r#)?[A-Za-z_][A-Za-z0-9_]*)\\s*::\\s*)*(?:r#)?${typeName}(?:\\s+where\\b.*)?$`,
+  );
+  const inventory: string[] = [];
+  for (
+    const { header, body } of implBlocks
+      .filter(({ header }) => inherentType.test(header))
+  ) {
+    for (
+      const itemHeader of rustTopLevelItemHeaders(
+        body,
+        `Checkpoint 4 ${typeName} associated-item inventory`,
+      )
+    ) {
+      const visibility =
+        /\bpub(?:\s*\(\s*([^)]+?)\s*\))?/.exec(itemHeader);
+      if (!visibility) continue;
+      const normalizedVisibility = visibility[1] === undefined
+        ? "pub"
+        : `pub(${visibility[1].replace(/\s+/g, "")})`;
+      const associatedItem =
+        /\bfn\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\b/.exec(itemHeader)
+        ?? /\bconst\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\b/.exec(
+          itemHeader,
+        )
+        ?? /\btype\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\b/.exec(
+          itemHeader,
+        );
+      if (associatedItem?.[1] === undefined) {
+        throw new Error(
+          `Checkpoint 4 ${typeName} inventory found an unsupported visible associated item`,
+        );
+      }
+      const kind = /\bfn\s+(?:r#)?[A-Za-z_]/.test(itemHeader)
+        ? "fn"
+        : /\bconst\s+(?:r#)?[A-Za-z_]/.test(itemHeader)
+        ? "const"
+        : "type";
+      inventory.push(
+        `${normalizedVisibility} ${kind} ${associatedItem[1]}`,
+      );
+    }
+  }
+  return inventory;
+}
+
+function explicitTraitImplInventory(
+  implBlocks: ReadonlyArray<RustImplBlock>,
+  typeName: string,
+): string[] {
+  const wrapperReference = rustTypeReferenceRegex(typeName);
+  return implBlocks
+    .map(({ header }) => header)
+    .filter((header) =>
+      /\sfor\s/.test(header) && wrapperReference.test(header)
+    );
+}
+
 function normalizedRustFunctionDeclaration(
   source: string,
   name: string,
 ): string {
   const searchable = maskRustLexicalNonCode(source);
   const declaration = new RegExp(
-    `(^|\\n)[\\t ]*((?:pub(?:\\s*\\(\\s*crate\\s*\\))?\\s+)?(?:async\\s+)?fn\\s+${name}\\s*\\()`,
+    `(^|\\n)[\\t ]*((?:pub(?:\\s*\\(\\s*(?:crate|super)\\s*\\))?\\s+)?(?:async\\s+)?fn\\s+${name}\\s*\\()`,
     "g",
   );
   const matches = [...searchable.matchAll(declaration)];
@@ -2116,10 +2847,10 @@ describe("Phase 8 Telegram crate boundary", () => {
 });
 
 describe("literal immutable Telegram test map", () => {
-  it("records only the truthful retained Checkpoint 3 lifecycle state", () => {
-    expect(phase8Status).toBe("8A preparation Checkpoint 3 retained");
+  it("records only the truthful retained Checkpoint 4 lifecycle state", () => {
+    expect(phase8Status).toBe("8A preparation Checkpoint 4 retained");
     expect(design).toContain(
-      "**Status:** Approved; 8A preparation Checkpoint 3 retained",
+      "**Status:** Approved; 8A preparation Checkpoint 4 retained",
     );
   });
 
@@ -2314,6 +3045,24 @@ describe("literal immutable Telegram test map", () => {
       ]),
     );
     assertAddedIdentityDeclarations(addedIdentities, lifecycle, rustSources);
+  });
+
+  it("reconciles the exact active Checkpoint 4 identity accounting", () => {
+    expect(lifecycle).toBe("8a-checkpoint-4");
+    const activeAdded = addedIdentities.filter(
+      ({ checkpoint }) => checkpoint <= 4,
+    );
+    expect(activeAdded).toHaveLength(9);
+    const activeCompanions = activeAdded.filter(({ currentId }) =>
+      currentId.endsWith(
+        "::telegram_item_kind_constant_matches_persisted_wire_value",
+      ),
+    );
+    expect(activeCompanions).toHaveLength(1);
+    expect(identityRows).toHaveLength(140);
+    expect(identityRows.length + activeCompanions.length).toBe(141);
+    expect(activeAdded.length - activeCompanions.length).toBe(8);
+    expect(identityRows.length + activeAdded.length).toBe(149);
   });
 
   it("rejects a plan-added leaf declaration under the wrong module", () => {
@@ -3100,6 +3849,472 @@ describe("Checkpoint 1 core-error seam", () => {
     assertCheckpointThreeApiContract();
   });
 
+  it("isolates the opaque Telegram session codec from the app adapter", () => {
+    assertCheckpointFourSessionContract();
+  });
+
+  const checkpointFourSessionPath = "src-tauri/src/telegram/session.rs";
+  const checkpointFourAdapterPath =
+    "src-tauri/src/telegram_session_store.rs";
+  const checkpointFourSession =
+    telegramContractPaths.readTelegramContractFile(
+      checkpointFourSessionPath,
+    );
+  const checkpointFourAdapter =
+    telegramContractPaths.readTelegramContractFile(
+      checkpointFourAdapterPath,
+    );
+  it.each([
+    {
+      name: "widened raw-session accessor",
+      mutation: new Map([
+        [
+          checkpointFourSessionPath,
+          checkpointFourSession.replace(
+            "pub(super) fn raw_memory_session(",
+            "pub(crate) fn raw_memory_session(",
+          ),
+        ],
+      ]),
+    },
+    {
+      name: "session key loses Arc",
+      mutation: new Map([
+        [
+          checkpointFourSessionPath,
+          checkpointFourSession.replace(
+            "pub struct SessionEncryptionKey(Arc<SecretVec<u8>>);",
+            "pub struct SessionEncryptionKey(SecretVec<u8>);",
+          ),
+        ],
+      ]),
+    },
+    {
+      name: "public as_bytes secret getter",
+      mutation: new Map([
+        [
+          checkpointFourSessionPath,
+          `${checkpointFourSession}\nimpl SessionEncryptionKey { pub fn as_bytes(&self) -> &[u8] { &[] } }\n`,
+        ],
+      ]),
+    },
+    {
+      name: "codec owns SecretStore",
+      mutation: new Map([
+        [
+          checkpointFourSessionPath,
+          `${checkpointFourSession}\nuse crate::secret_store::SecretStoreState;\n`,
+        ],
+      ]),
+    },
+    {
+      name: "adapter duplicates encrypted envelope",
+      mutation: new Map([
+        [
+          checkpointFourAdapterPath,
+          `${checkpointFourAdapter}\nstruct EncryptedSessionEnvelope;\n`,
+        ],
+      ]),
+    },
+    {
+      name: "legacy key creation precedes decode",
+      mutation: new Map([
+        [
+          checkpointFourAdapterPath,
+          checkpointFourAdapter.replace(
+            "let session = decode_session_json(&json, account_id, None)?;\n    let key = ensure_session_key(secret_store, account_id).await?;",
+            "let key = ensure_session_key(secret_store, account_id).await?;\n    let session = decode_session_json(&json, account_id, None)?;",
+          ),
+        ],
+      ]),
+    },
+  ])(
+    "rejects Checkpoint 4 standing mutation: $name",
+    ({ mutation }) => {
+      expect(
+        [...mutation.entries()].some(([relativePath, source]) =>
+          source
+          !== (
+            relativePath === checkpointFourSessionPath
+              ? checkpointFourSession
+              : checkpointFourAdapter
+          )
+        ),
+        "Checkpoint 4 mutation changes its source fixture",
+      ).toBe(true);
+      expect(() =>
+        assertCheckpointFourSessionContract(mutation),
+      ).toThrow(/Checkpoint 4/);
+    },
+  );
+
+  it.each([
+    {
+      name: "alternate public raw-session method",
+      addition:
+        "impl TelegramSession { pub fn memory_session(&self) -> &Arc<MemorySession> { &self.inner } }",
+    },
+    {
+      name: "alternate public secret-material method",
+      addition:
+        "impl SessionEncryptionKey { pub fn material(&self) -> &[u8] { &[] } }",
+    },
+    {
+      name: "generic ExposeSecret implementation",
+      addition:
+        "impl secrecy::ExposeSecret<Vec<u8>> for SessionEncryptionKey { fn expose_secret(&self) -> &Vec<u8> { unimplemented!() } }",
+    },
+    {
+      name: "AsRef implementation",
+      addition:
+        "impl AsRef<[u8]> for SessionEncryptionKey { fn as_ref(&self) -> &[u8] { &[] } }",
+    },
+    {
+      name: "Into conversion implementation",
+      addition:
+        "impl Into<Vec<u8>> for SessionEncryptionKey { fn into(self) -> Vec<u8> { Vec::new() } }",
+    },
+    {
+      name: "nested production-module raw-session method",
+      addition:
+        "mod nested_session_escape { use super::*; impl TelegramSession { pub fn memory_session(&self) -> &Arc<MemorySession> { &self.inner } } }",
+    },
+    {
+      name: "TelegramSession source conversion",
+      addition:
+        "impl From<TelegramSession> for Arc<MemorySession> { fn from(session: TelegramSession) -> Self { session.inner } }",
+    },
+    {
+      name: "SessionEncryptionKey source conversion",
+      addition:
+        "impl From<SessionEncryptionKey> for Vec<u8> { fn from(_key: SessionEncryptionKey) -> Self { Vec::new() } }",
+    },
+  ])(
+    "rejects Checkpoint 4 alternate wrapper exposure mutation: $name",
+    ({ addition }) => {
+      const mutatedSession = checkpointFourSession.replace(
+        "\n#[cfg(test)]\nmod tests",
+        `\n${addition}\n\n#[cfg(test)]\nmod tests`,
+      );
+      expect(
+        mutatedSession,
+        "Checkpoint 4 alternate exposure mutation changes its source fixture",
+      ).not.toBe(checkpointFourSession);
+      expect(() =>
+        assertCheckpointFourSessionContract(
+          new Map([
+            [checkpointFourSessionPath, mutatedSession],
+          ]),
+        )
+      ).toThrow(/Checkpoint 4/);
+    },
+  );
+
+  it("rejects Checkpoint 4 cfg-order production accessor after the test module", () => {
+    const mutatedSession =
+      `${checkpointFourSession}\nimpl TelegramSession { pub fn memory_session(&self) -> &Arc<MemorySession> { &self.inner } }\n`;
+    expect(
+      mutatedSession,
+      "Checkpoint 4 after-test production mutation changes its source fixture",
+    ).not.toBe(checkpointFourSession);
+    expect(() =>
+      assertCheckpointFourSessionContract(
+        new Map([
+          [checkpointFourSessionPath, mutatedSession],
+        ]),
+      )
+    ).toThrow(/Checkpoint 4/);
+  });
+
+  it("rejects Checkpoint 4 adapter cfg-order production raw signature after the test module", () => {
+    const mutatedAdapter =
+      `${checkpointFourAdapter}\nfn adapter_raw_session_escape(_: &grammers_session::storages::MemorySession) {}\n`;
+    expect(
+      mutatedAdapter,
+      "Checkpoint 4 after-test adapter mutation changes its source fixture",
+    ).not.toBe(checkpointFourAdapter);
+    expect(() =>
+      assertCheckpointFourSessionContract(
+        new Map([
+          [checkpointFourAdapterPath, mutatedAdapter],
+        ]),
+      )
+    ).toThrow(/Checkpoint 4/);
+  });
+
+  it("excludes Checkpoint 4 cfg-order standalone test-only impl methods", () => {
+    const mutatedSession = checkpointFourSession.replace(
+      "\n#[cfg(test)]\nmod tests",
+      "\n#[cfg(test)]\nimpl TelegramSession { pub fn test_only_probe(&self) {} }\n\n#[cfg(test)]\nmod tests",
+    );
+    expect(
+      mutatedSession,
+      "Checkpoint 4 standalone cfg(test) fixture changes its source",
+    ).not.toBe(checkpointFourSession);
+    expect(() =>
+      assertCheckpointFourSessionContract(
+        new Map([
+          [checkpointFourSessionPath, mutatedSession],
+        ]),
+      )
+    ).not.toThrow();
+  });
+
+  it("excludes Checkpoint 4 cfg-order array-signature test-only items", () => {
+    const mutatedSession = checkpointFourSession.replace(
+      "\n#[cfg(test)]\nmod tests",
+      "\n#[cfg(test)]\nfn cfg_array_probe() -> [u8; 32] {\n    impl TelegramSession { pub fn test_only_array_probe(&self) {} }\n    [0; 32]\n}\n\n#[cfg(test)]\nmod tests",
+    );
+    expect(
+      mutatedSession,
+      "Checkpoint 4 cfg(test) array-signature fixture changes its source",
+    ).not.toBe(checkpointFourSession);
+    expect(() =>
+      assertCheckpointFourSessionContract(
+        new Map([
+          [checkpointFourSessionPath, mutatedSession],
+        ]),
+      )
+    ).not.toThrow();
+  });
+
+  it("excludes Checkpoint 4 cfg-order braced-const-generic test-only items", () => {
+    const mutatedSession = checkpointFourSession.replace(
+      "\n#[cfg(test)]\nmod tests",
+      "\n#[cfg(test)]\nfn cfg_const_probe<const N: usize>() -> Foo<{ N }> {\n    impl TelegramSession { pub fn test_only_const_probe(&self) {} }\n    unimplemented!()\n}\n\n#[cfg(test)]\nmod tests",
+    );
+    expect(
+      mutatedSession,
+      "Checkpoint 4 cfg(test) const-generic fixture changes its source",
+    ).not.toBe(checkpointFourSession);
+    expect(() =>
+      assertCheckpointFourSessionContract(
+        new Map([
+          [checkpointFourSessionPath, mutatedSession],
+        ]),
+      )
+    ).not.toThrow();
+  });
+
+  it("rejects Checkpoint 4 cfg-order production impl after a test-only comparison", () => {
+    const mutatedSession = checkpointFourSession.replace(
+      "\n#[cfg(test)]\nmod tests",
+      "\n#[cfg(test)]\nconst TEST_ONLY: bool = 1 < 2;\nimpl TelegramSession { pub fn memory_session(&self) -> &Arc<MemorySession> { &self.inner } }\nfn angle_sentinel() -> usize { 0 }\n\n#[cfg(test)]\nmod tests",
+    );
+    expect(
+      mutatedSession,
+      "Checkpoint 4 cfg(test) comparison fixture changes its source",
+    ).not.toBe(checkpointFourSession);
+    expect(() =>
+      assertCheckpointFourSessionContract(
+        new Map([
+          [checkpointFourSessionPath, mutatedSession],
+        ]),
+      )
+    ).toThrow(/Checkpoint 4/);
+  });
+
+  it("rejects Checkpoint 4 production inherent impl with a braced const header", () => {
+    const mutatedSession = checkpointFourSession.replace(
+      "\n#[cfg(test)]\nmod tests",
+      "\nimpl TelegramSession where [(); { 1 }]: Sized {\n    pub fn memory_session(&self) -> &Arc<MemorySession> { &self.inner }\n}\n\n#[cfg(test)]\nmod tests",
+    );
+    expect(
+      mutatedSession,
+      "Checkpoint 4 inherent braced-const fixture changes its source",
+    ).not.toBe(checkpointFourSession);
+    expect(() =>
+      assertCheckpointFourSessionContract(
+        new Map([
+          [checkpointFourSessionPath, mutatedSession],
+        ]),
+      )
+    ).toThrow(/Checkpoint 4/);
+  });
+
+  it("rejects Checkpoint 4 production trait impl with a braced const header", () => {
+    const mutatedSession = checkpointFourSession.replace(
+      "\n#[cfg(test)]\nmod tests",
+      "\nimpl Into<[u8; { SESSION_KEY_BYTES }]> for SessionEncryptionKey {\n    fn into(self) -> [u8; SESSION_KEY_BYTES] { [0; SESSION_KEY_BYTES] }\n}\n\n#[cfg(test)]\nmod tests",
+    );
+    expect(
+      mutatedSession,
+      "Checkpoint 4 trait braced-const fixture changes its source",
+    ).not.toBe(checkpointFourSession);
+    expect(() =>
+      assertCheckpointFourSessionContract(
+        new Map([
+          [checkpointFourSessionPath, mutatedSession],
+        ]),
+      )
+    ).toThrow(/Checkpoint 4/);
+  });
+
+  it("rejects Checkpoint 4 production generic visible methods", () => {
+    const mutatedSession = checkpointFourSession.replace(
+      "\n#[cfg(test)]\nmod tests",
+      "\nimpl TelegramSession {\n    pub fn memory_session<T>(&self) -> &Arc<MemorySession> { &self.inner }\n}\n\n#[cfg(test)]\nmod tests",
+    );
+    expect(
+      mutatedSession,
+      "Checkpoint 4 generic visible method fixture changes its source",
+    ).not.toBe(checkpointFourSession);
+    expect(() =>
+      assertCheckpointFourSessionContract(
+        new Map([
+          [checkpointFourSessionPath, mutatedSession],
+        ]),
+      )
+    ).toThrow(/Checkpoint 4/);
+  });
+
+  it("rejects Checkpoint 4 production visible associated raw-session consts", () => {
+    const mutatedSession = checkpointFourSession.replace(
+      "impl TelegramSession {\n    pub fn empty",
+      "impl TelegramSession {\n    pub const MEMORY_SESSION: for<'a> fn(&'a Self) -> &'a Arc<MemorySession> = Self::raw_memory_session;\n\n    pub fn empty",
+    );
+    expect(
+      mutatedSession,
+      "Checkpoint 4 visible associated const fixture changes its source",
+    ).not.toBe(checkpointFourSession);
+    expect(() =>
+      assertCheckpointFourSessionContract(
+        new Map([
+          [checkpointFourSessionPath, mutatedSession],
+        ]),
+      )
+    ).toThrow(/Checkpoint 4/);
+  });
+
+  it("rejects Checkpoint 4 production raw-identifier wrapper impls", () => {
+    const mutatedSession = checkpointFourSession.replace(
+      "\n#[cfg(test)]\nmod tests",
+      "\nimpl r#TelegramSession {\n    pub fn memory_session(&self) -> &Arc<MemorySession> { &self.inner }\n}\n\n#[cfg(test)]\nmod tests",
+    );
+    expect(
+      mutatedSession,
+      "Checkpoint 4 raw-identifier wrapper fixture changes its source",
+    ).not.toBe(checkpointFourSession);
+    expect(() =>
+      assertCheckpointFourSessionContract(
+        new Map([
+          [checkpointFourSessionPath, mutatedSession],
+        ]),
+      )
+    ).toThrow(/Checkpoint 4/);
+  });
+
+  it("rejects Checkpoint 4 production cross-module wrapper impls", () => {
+    const telegramPath = "src-tauri/src/telegram.rs";
+    const telegram =
+      telegramContractPaths.readTelegramContractFile(telegramPath);
+    const mutatedTelegram = telegram.replace(
+      "\n#[cfg(test)]\nmod tests",
+      "\nimpl TelegramSession {\n    pub fn memory_session(&self) {}\n}\n\n#[cfg(test)]\nmod tests",
+    );
+    expect(
+      mutatedTelegram,
+      "Checkpoint 4 cross-module wrapper fixture changes its source",
+    ).not.toBe(telegram);
+    expect(() =>
+      assertCheckpointFourSessionContract(
+        new Map([
+          [telegramPath, mutatedTelegram],
+        ]),
+      )
+    ).toThrow(/Checkpoint 4/);
+  });
+
+  it("rejects Checkpoint 4 production visible free raw-session unwraps", () => {
+    const telegramPath = "src-tauri/src/telegram.rs";
+    const telegram =
+      telegramContractPaths.readTelegramContractFile(telegramPath);
+    const mutatedTelegram = telegram.replace(
+      "\n#[cfg(test)]\nmod tests",
+      "\npub(crate) fn raw_session_escape(session: &TelegramSession) -> &Arc<MemorySession> { session.raw_memory_session() }\n\n#[cfg(test)]\nmod tests",
+    );
+    expect(
+      mutatedTelegram,
+      "Checkpoint 4 visible free raw-session fixture changes its source",
+    ).not.toBe(telegram);
+    expect(() =>
+      assertCheckpointFourSessionContract(
+        new Map([
+          [telegramPath, mutatedTelegram],
+        ]),
+      )
+    ).toThrow(/Checkpoint 4/);
+  });
+
+  it.each([
+    [
+      "use alias",
+      "use crate::telegram::session::TelegramSession as Alias;",
+    ],
+    [
+      "type alias",
+      "type Alias = TelegramSession;",
+    ],
+  ])("rejects Checkpoint 4 production %s wrapper impls", (_, alias) => {
+    const telegramPath = "src-tauri/src/telegram.rs";
+    const telegram =
+      telegramContractPaths.readTelegramContractFile(telegramPath);
+    const mutatedTelegram = telegram.replace(
+      "\n#[cfg(test)]\nmod tests",
+      `\n${alias}\nimpl Alias {\n    pub fn memory_session(&self) {}\n}\n\n#[cfg(test)]\nmod tests`,
+    );
+    expect(
+      mutatedTelegram,
+      "Checkpoint 4 aliased wrapper fixture changes its source",
+    ).not.toBe(telegram);
+    expect(() =>
+      assertCheckpointFourSessionContract(
+        new Map([
+          [telegramPath, mutatedTelegram],
+        ]),
+      )
+    ).toThrow(/Checkpoint 4/);
+  });
+
+  it("rejects Checkpoint 4 production chained wrapper aliases", () => {
+    const telegramPath = "src-tauri/src/telegram.rs";
+    const telegram =
+      telegramContractPaths.readTelegramContractFile(telegramPath);
+    const mutatedTelegram = telegram.replace(
+      "\n#[cfg(test)]\nmod tests",
+      "\ntype WrapperAlias = TelegramSession;\ntype ChainedAlias = WrapperAlias;\nimpl ChainedAlias {\n    pub fn memory_session(&self) {}\n}\n\n#[cfg(test)]\nmod tests",
+    );
+    expect(
+      mutatedTelegram,
+      "Checkpoint 4 chained wrapper alias fixture changes its source",
+    ).not.toBe(telegram);
+    expect(() =>
+      assertCheckpointFourSessionContract(
+        new Map([
+          [telegramPath, mutatedTelegram],
+        ]),
+      )
+    ).toThrow(/Checkpoint 4/);
+  });
+
+  it("rejects Checkpoint 4 nested cfg(test) enum variant masking", () => {
+    const mutatedSession = checkpointFourSession.replace(
+      "\n#[cfg(test)]\nmod tests",
+      "\nenum CfgVariantProbe {\n    #[cfg(test)]\n    TestOnly { marker: bool },\n    Production,\n}\nimpl TelegramSession { pub fn memory_session(&self) -> &Arc<MemorySession> { &self.inner } }\n\n#[cfg(test)]\nmod tests",
+    );
+    expect(
+      mutatedSession,
+      "Checkpoint 4 nested cfg(test) variant fixture changes its source",
+    ).not.toBe(checkpointFourSession);
+    expect(() =>
+      assertCheckpointFourSessionContract(
+        new Map([
+          [checkpointFourSessionPath, mutatedSession],
+        ]),
+      )
+    ).toThrow(/Checkpoint 4/);
+  });
+
   it("rejects moving a facade reference while preserving aggregate counts", () => {
     const typesPath = "src-tauri/src/sources/types.rs";
     const source =
@@ -3284,9 +4499,13 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
       telegramContractPaths.readTelegramContractFile(
         "src-tauri/src/telegram.rs",
       );
-    const session =
+    const sessionAdapter =
       telegramContractPaths.readTelegramContractFile(
         "src-tauri/src/telegram_session_store.rs",
+      );
+    const sessionCodec =
+      telegramContractPaths.readTelegramContractFile(
+        "src-tauri/src/telegram/session.rs",
       );
 
     expectOrdered(
@@ -3430,23 +4649,34 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
       "logout client-session-status order",
     );
 
-    const sessionStructure = maskRustLexicalNonCode(session);
-    const sessionPathBody = rustFunctionBody(session, "session_path");
+    const sessionAdapterStructure =
+      maskRustLexicalNonCode(sessionAdapter);
+    const sessionPathBody = rustFunctionBody(
+      sessionAdapter,
+      "session_path",
+    );
     const sessionPathOriginal = rustFunctionOriginalBody(
-      session,
+      sessionAdapter,
       "session_path",
     );
     expect(sessionPathBody).toContain("Ok(app_dir.join(format!(");
     expect(
       normalizedActiveCallArguments(sessionPathOriginal, "format!"),
     ).toEqual(['"telegram_{account_id}.session.json"']);
-    expect(countMatches(sessionStructure, /\bsession_temp_path\s*\(/g)).toBe(3);
-    expect(countMatches(
-      sessionStructure,
-      /path\.with_extension\s*\(/g,
-    )).toBe(1);
+    expect(
+      countMatches(
+        sessionAdapterStructure,
+        /\bsession_temp_path\s*\(/g,
+      ),
+    ).toBe(3);
+    expect(
+      countMatches(
+        sessionAdapterStructure,
+        /path\.with_extension\s*\(/g,
+      ),
+    ).toBe(1);
     expectOrdered(
-      rustFunctionBody(session, "write_atomic"),
+      rustFunctionBody(sessionAdapter, "write_atomic"),
       [
         "let tmp_path = session_temp_path(path)",
         "fs::write(&tmp_path, contents)",
@@ -3456,38 +4686,30 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
     );
     expect(
       countMatches(
-        rustFunctionBody(session, "write_atomic"),
+        rustFunctionBody(sessionAdapter, "write_atomic"),
         /map_err\(\|error\| AppError::internal\(error\.to_string\(\)\)\)/g,
       ),
     ).toBe(2);
-    expectOrdered(
-      rustFunctionBody(session, "write_encrypted_session_file"),
-      [
-        "ensure_session_key(secret_store, account_id).await?",
-        "encrypt_saved_session(account_id, &key, saved)?",
-        "serde_json::to_string(&envelope)",
-        "write_atomic(path, &json)",
-      ],
-      "session key-encrypt-write order",
-    );
-    expect(rustFunctionBody(session, "encrypt_saved_session")).toContain(
-      "map_err(|_| AppError::internal(",
-    );
+
+    assertCheckpointFourSessionContract();
+    expect(
+      rustFunctionBody(sessionCodec, "encrypt_saved_session"),
+    ).toContain("map_err(|_| AppError::internal(");
     const encodeErrors = normalizedActiveCallArguments(
-      rustFunctionOriginalBody(session, "decode_base64"),
+      rustFunctionOriginalBody(sessionCodec, "decode_base64"),
       "AppError::internal",
     );
     expect(encodeErrors).toEqual([
       'format!( "Invalid encrypted Telegram session encoding: {error}" )',
     ]);
     const encryptErrors = normalizedActiveCallArguments(
-      rustFunctionOriginalBody(session, "encrypt_saved_session"),
+      rustFunctionOriginalBody(sessionCodec, "encrypt_saved_session"),
       "AppError::internal",
     );
     expect(encryptErrors).toContain('"Invalid Telegram session key length"');
     expect(encryptErrors).toContain('"Failed to encrypt Telegram session"');
     const decryptErrors = normalizedActiveCallArguments(
-      rustFunctionOriginalBody(session, "decrypt_saved_session"),
+      rustFunctionOriginalBody(sessionCodec, "decrypt_saved_session"),
       "AppError::internal",
     );
     for (const exactArgument of [
@@ -3498,46 +4720,20 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
     ]) {
       expect(decryptErrors).toContain(exactArgument);
     }
-    expectOrdered(
-      rustFunctionBody(session, "delete_session_from_path"),
-      [
-        "fs::remove_file(path)",
-        "std::io::ErrorKind::NotFound",
-        "delete_secret(telegram_account_session_key_secret(account_id))",
-      ],
-      "session file-before-key deletion order",
-    );
-    const loadSessionBody = rustFunctionBody(
-      session,
-      "load_session_from_path",
-    );
-    const loadSessionOriginal = rustFunctionOriginalBody(
-      session,
-      "load_session_from_path",
-    );
-    expectOrdered(
-      loadSessionBody,
-      [
-        "if !path.exists()",
-        "fs::read_to_string(path)",
-        "serde_json::from_str::<EncryptedSessionEnvelope>(&json)",
-        "read_session_key(secret_store, account_id)",
-        "AppError::auth(format!(",
-        "decrypt_saved_session(account_id, &key, &envelope)?",
-        "serde_json::from_str::<SavedSession>(&json)",
-        "write_encrypted_session_file(path, secret_store, account_id, &saved).await?",
-        "AppError::internal(",
-      ],
-      "encrypted-then-legacy session compatibility order",
-    );
     expect(
-      normalizedActiveCallArguments(loadSessionOriginal, "AppError::auth"),
+      normalizedActiveCallArguments(
+        rustFunctionOriginalBody(sessionCodec, "decode_session_json"),
+        "AppError::auth",
+      ),
     ).toEqual([
       'format!( "Telegram session key for account {account_id} is missing from secure storage. Sign in again." )',
     ]);
     expect(
       normalizedActiveCallArguments(
-        loadSessionOriginal,
+        rustFunctionOriginalBody(
+          sessionCodec,
+          "session_json_requires_existing_key",
+        ),
         "AppError::internal",
       ),
     ).toContain('"Telegram session file is not a supported format",');
