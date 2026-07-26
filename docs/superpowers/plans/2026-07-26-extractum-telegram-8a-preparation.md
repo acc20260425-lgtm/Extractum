@@ -729,7 +729,7 @@ pub async fn encode_session_json(
 
 The owning private module may import `secrecy::ExposeSecret` and expose a contained value only inside the narrow encryption/decryption or Grammers-construction statement that consumes it. The exposed borrow is never returned, stored outside the opaque owner, formatted, logged, serialized as plaintext, or made reachable through a field/getter/trait implementation. Source contracts distinguish this required private internal use from forbidden public exposure.
 
-The only app-visible raw adapters are `TelegramClientHandle::raw_client` and `TelegramClientHandle::raw_session` with the exact signatures above. `raw_session` is not dead code in 8A: `takeout_import/mod.rs` is its sole path consumer, with exactly three workflow sites—export-DC spike, migrated history, and current history—where the cloned session remains an input to export-DC alias preparation/transport. Do not add `#[allow(dead_code)]` to the adapter. `TelegramSession::raw_memory_session` is `pub(super)` leaf-internal and exists only so the sibling runtime can initialize Grammers. There is no raw constructor, consuming conversion, mutable accessor, public raw accessor, or raw type re-export. Phase 8B must remove both `pub(crate)` handle adapters and both app-only lookup functions after their consumers become owned operations.
+The only app-visible raw adapters are `TelegramClientHandle::raw_client` and `TelegramClientHandle::raw_session` with the exact signatures above. `raw_session` is not dead code in 8A: `takeout_import/mod.rs` is its sole path consumer, with exactly three workflow sites—export-DC spike, migrated history, and current history—where the cloned session remains an input to export-DC alias preparation/transport. The baseline `#[allow(dead_code)]` on `AuthorizedTelegramRuntime.session` is a redundant legacy annotation despite those three reads: the lifecycle-gated contract permits that exact field annotation only through Checkpoint 4, then Checkpoint 5 removes it with `AuthorizedTelegramRuntime`. From Checkpoint 5 onward, neither new handle adapter may carry `#[allow(dead_code)]`. `TelegramSession::raw_memory_session` is `pub(super)` leaf-internal and exists only so the sibling runtime can initialize Grammers. There is no raw constructor, consuming conversion, mutable accessor, public raw accessor, or raw type re-export. Phase 8B must remove both `pub(crate)` handle adapters and both app-only lookup functions after their consumers become owned operations.
 
 `TelegramMessageIdentity::validate()` preserves exact branch order, `AppErrorKind::Validation`, messages, and JSON:
 
@@ -958,7 +958,7 @@ The exact test-only runtime seam is frozen in `Frozen Phase 8A Public and Intern
 
 **Interfaces:**
 
-- **Consumes:** the owner-approved plan at the actual clean `HEAD`, approval ancestor `9f56a4584b0c2abb331c1b2ab7f198ccb89db042`, the current four direct Grammers declarations, the fixed-point 19 ownership paths, and dependent-only `sources/store.rs`.
+- **Consumes:** the owner-approved plan at the actual clean `HEAD`, approval ancestor `9f56a4584b0c2abb331c1b2ab7f198ccb89db042`, the current four direct Grammers declarations, the exact 19 symbol-discovered paths, the separate wiring-only `src-tauri/src/lib.rs`, and their classified 20-path union: 19 ownership/move paths plus dependent-only `sources/store.rs`.
 - **Produces:** one docs-only authority-synchronization commit whose only paths are the design and roadmap, whose status strings are unchanged, and whose durable correction says “19 ownership/move paths plus one dependent-only consumer with 24 regressions.”
 - **Hands to Task 1:** `$authoritySyncCommit`, the pre-sync starting SHA, exact terminal path inventories, and unchanged manifest/lock hashes.
 
@@ -1078,10 +1078,9 @@ if (($actualDirectGrammersPaths -join "`n") -ne ($expectedDirectGrammersPaths -j
     throw 'Direct Grammers production path set drifted'
 }
 
-$expectedFixedPoint = @(
+$expectedDiscoveredFixedPoint = @(
     $expectedDirectGrammersPaths
     'src-tauri/src/ingest_provenance.rs'
-    'src-tauri/src/lib.rs'
     'src-tauri/src/sources/mod.rs'
     'src-tauri/src/sources/store.rs'
     'src-tauri/src/sources/types.rs'
@@ -1091,23 +1090,57 @@ $expectedFixedPoint = @(
 $fanPattern = '(?:\b(get_client|get_authorized_runtime|AuthorizedTelegramRuntime|AccountClient|raw_client|raw_session|MemorySession|LoginToken|TelegramMessageIdentity|TelegramItemContext|SourceItemInsert|ExtractedItemPayload|ExtractedMediaPayload|ITEM_KIND_TELEGRAM_MESSAGE)\b|\.accounts\s*\.lock\s*\(\s*\)\s*\.await\b)'
 $fanOutput = & rg -l $fanPattern src-tauri/src --glob '*.rs'
 if ($LASTEXITCODE -ne 0) { $fanOutput; throw 'Moved-type fan-in/fan-out refresh failed or selected no files' }
-$actualFixedPoint = @(
+$actualDiscoveredFixedPoint = @(
     $actualDirectGrammersPaths
     ($fanOutput | ForEach-Object { $_.Replace('\', '/') })
-    'src-tauri/src/lib.rs'
 ) | Sort-Object -Unique
-if (($actualFixedPoint -join "`n") -ne ($expectedFixedPoint -join "`n")) {
-    Compare-Object $expectedFixedPoint $actualFixedPoint
-    throw 'Phase 8 fixed-point path set drifted'
+if (($actualDiscoveredFixedPoint -join "`n") -ne ($expectedDiscoveredFixedPoint -join "`n")) {
+    Compare-Object $expectedDiscoveredFixedPoint $actualDiscoveredFixedPoint
+    throw 'Phase 8 symbol-discovered fixed-point path set drifted'
+}
+if ($actualDiscoveredFixedPoint.Count -ne 19) {
+    throw "Expected 19 symbol-discovered paths, found $($actualDiscoveredFixedPoint.Count)"
 }
 
-$ownershipMovePaths = @($actualFixedPoint | Where-Object { $_ -ne 'src-tauri/src/sources/store.rs' })
+$wiringPaths = @(
+    'src-tauri/src/lib.rs'
+) | Sort-Object -Unique
+foreach ($wiringPath in $wiringPaths) {
+    if (-not (Test-Path -LiteralPath $wiringPath -PathType Leaf)) {
+        throw "Required explicit wiring path is missing: $wiringPath"
+    }
+}
+$unexpectedWiringDiscovery = @(
+    $actualDiscoveredFixedPoint | Where-Object { $wiringPaths -contains $_ }
+)
+if ($unexpectedWiringDiscovery.Count -ne 0) {
+    $unexpectedWiringDiscovery
+    throw 'Explicit wiring path unexpectedly entered symbol discovery; amend its classification'
+}
+
+$expectedCompleteSurface = @(
+    $expectedDiscoveredFixedPoint
+    $wiringPaths
+) | Sort-Object -Unique
+$actualCompleteSurface = @(
+    $actualDiscoveredFixedPoint
+    $wiringPaths
+) | Sort-Object -Unique
+if (
+    ($actualCompleteSurface -join "`n") -ne ($expectedCompleteSurface -join "`n") -or
+    $actualCompleteSurface.Count -ne 20
+) {
+    Compare-Object $expectedCompleteSurface $actualCompleteSurface
+    throw 'Phase 8 complete 20-path touch surface drifted'
+}
+
+$ownershipMovePaths = @($actualCompleteSurface | Where-Object { $_ -ne 'src-tauri/src/sources/store.rs' })
 if ($ownershipMovePaths.Count -ne 19) { throw "Expected 19 ownership/move paths, found $($ownershipMovePaths.Count)" }
-$dependentOnlyPaths = @($actualFixedPoint | Where-Object { $_ -eq 'src-tauri/src/sources/store.rs' })
+$dependentOnlyPaths = @($actualDiscoveredFixedPoint | Where-Object { $_ -eq 'src-tauri/src/sources/store.rs' })
 if ($dependentOnlyPaths.Count -ne 1) { throw 'Expected sources/store.rs as the sole dependent-only path' }
 ```
 
-`$directOutput` is the raw-type import/qualification sentinel: any file that directly names `Client`, `PeerRef`, `Media`, `Message`, or another raw Grammers type through a `grammers_*` path enters that set. `$fanPattern` separately catches application wrapper/accessor/type names plus direct `.accounts.lock().await` access, including inferred raw values whose concrete type is absent from the consumer text. Do not add bare `Client|Media|Message` tokens to the same repository-wide regex: they currently collide with Gemini, YouTube, NotebookLM, and ordinary message/media vocabulary without detecting fully inferred propagation. The standing contract instead rejects any new raw `pub`/`pub(crate) use`, raw type alias, raw-returning facade function/field, or raw accessor outside exact baseline `AccountClient`, `AuthorizedTelegramRuntime`, `get_client`, `get_authorized_runtime` and the later status-gated adapter allowlist.
+`$directOutput` is the raw-type import/qualification sentinel: any file that directly names `Client`, `PeerRef`, `Media`, `Message`, or another raw Grammers type through a `grammers_*` path enters that set. `$fanPattern` separately catches application wrapper/accessor/type names plus direct `.accounts.lock().await` access, including inferred raw values whose concrete type is absent from the consumer text. `$actualDiscoveredFixedPoint` contains only the 19 paths discovered by those scans: 18 ownership/move paths plus dependent-only `sources/store.rs`. `src-tauri/src/lib.rs` is separately named, existence-checked, and required not to overlap discovery in `$wiringPaths` because it is explicit application wiring, not a moved/raw-symbol match. `$actualCompleteSurface` is their exact 20-path union, yielding 19 ownership/move paths plus one dependent-only path. Do not add bare `Client|Media|Message` tokens to the same repository-wide regex: they currently collide with Gemini, YouTube, NotebookLM, and ordinary message/media vocabulary without detecting fully inferred propagation. The standing contract instead rejects any new raw `pub`/`pub(crate) use`, raw type alias, raw-returning facade function/field, or raw accessor outside exact baseline `AccountClient`, `AuthorizedTelegramRuntime`, `get_client`, `get_authorized_runtime` and the later status-gated adapter allowlist.
 
 Manually inspect every `rg` match grouped by moved/raw symbol. For every `as` alias, re-export, wrapper return, or field that changes the searched identifier, add that new identifier to `$fanPattern` and repeat the scan. Continue until an iteration adds neither a path nor a seed; record the terminal exact 19-owner plus one-dependent disposition. A new path, raw-client/session consumer, or symbol owner is not folded into the plan: stop for a design/plan amendment. Task 1 turns this terminal inventory into a standing fail-closed source contract so later checkpoints cannot silently add an alias or consumer.
 
@@ -1329,7 +1362,7 @@ analysis_documents=2; tx=2; forum_topics=1; readiness=1;
 telegram_session_store=1
 ```
 
-The standing contract keeps this immutable baseline table as evidence. It also encodes Task 0's terminal direct-Grammers and moved/raw-symbol seed sets, rejects an unexpected alias/re-export/wrapper consumer, and requires `sources/store.rs` to remain the sole dependent-only path outside the 19 ownership/move paths. In the Checkpoint 1 layout after Step 5 it requires the live tree to contain exactly 160 references with `error=37` and every other root count unchanged, plus the exact six direct-core replacements; it must not keep asserting the obsolete live count of 166. When later checkpoints physically split named owners, the contract follows the lifecycle path map, keeps the six direct-core paths and 44 app-facade sentinels, and no longer applies the CP1 aggregate to a different file layout.
+The standing contract keeps this immutable baseline table as evidence. It also encodes Task 0's terminal direct-Grammers and moved/raw-symbol seed sets, rejects an unexpected alias/re-export/wrapper consumer, and separately asserts exactly 19 symbol-discovered paths, wiring-only set `{src-tauri/src/lib.rs}`, zero overlap, and their exact 20-path union. It then classifies that union as 19 ownership/move paths plus sole dependent-only `sources/store.rs`; the wiring path is never presented as scanner output. In the Checkpoint 1 layout after Step 5 it requires the live tree to contain exactly 160 references with `error=37` and every other root count unchanged, plus the exact six direct-core replacements; it must not keep asserting the obsolete live count of 166. When later checkpoints physically split named owners, the contract follows the lifecycle path map, keeps the six direct-core paths and 44 app-facade sentinels, and no longer applies the CP1 aggregate to a different file layout.
 
 Require the Task 0 design/roadmap addendum to be present and contractually encode `src-tauri/src/sources/store.rs` as the sole app-only dependent consumer of `get_client`, not a moved owner. Its exact 24-identity set is the separate `$sourcesStoreBroadRegressionTestIds` contract above and is not added to the immutable ownership/move map; Task 5 proves membership again and runs it only as a broad store regression suite. The contract explicitly records that none of those 24 identities invokes `list_telegram_sources` or `add_telegram_source`; direct evidence for their facade rewrite is the existing status-gated runtime lookup identity plus the exact command-body source assertions in Task 5. Discovery of any other raw-client/session consumer stops the plan for amendment.
 
@@ -2061,7 +2094,7 @@ let client = client_handle.raw_client().clone();
 
 Delete both old blocks completely. The lifecycle-gated TypeScript contract requires exactly these two `get_client(state.inner(), ...)` calls in the named command bodies at Checkpoint 5 and rejects `state.accounts`, `.accounts.lock`, or `get_client(&accounts` in either body. Before Checkpoint 5 it requires the two exact current caller-locked forms above instead, so the contract cannot pass early on the future layout.
 
-For Takeout, rename the private spike helper to `run_export_dc_spike_for_handle` and accept `TelegramClientHandle`, not `AuthorizedTelegramRuntime` or a raw tuple. The export-DC spike, migrated-history import, and current-history import each clone `handle.raw_client()` and `Arc::clone(handle.raw_session())` at the same current ownership point; the spike's cloned session remains the argument to `prepare_export_dc_alias`. `takeout_import/mod.rs` is the sole `raw_session` path and contains exactly three workflow invocations. `sources/sync.rs` consumes only `raw_client`; both store commands consume only `raw_client`; the boundary contract rejects `raw_session` everywhere else and rejects any `#[allow(dead_code)]` on either adapter.
+For Takeout, rename the private spike helper to `run_export_dc_spike_for_handle` and accept `TelegramClientHandle`, not `AuthorizedTelegramRuntime` or a raw tuple. The export-DC spike, migrated-history import, and current-history import each clone `handle.raw_client()` and `Arc::clone(handle.raw_session())` at the same current ownership point; the spike's cloned session remains the argument to `prepare_export_dc_alias`. `takeout_import/mod.rs` is the sole `raw_session` path and contains exactly three workflow invocations. At Checkpoint 5 the lifecycle contract pins `sources/sync.rs` to exactly one `get_authorized_client(state.inner(), account_id)`, one `raw_client`, and zero `raw_session` calls; it pins Takeout to exactly three authorized lookups, three `raw_client` calls, and three `raw_session` calls distributed only across spike, migrated-history, and current-history workflows. Both store commands consume only `raw_client`; the boundary contract rejects `raw_session` everywhere else. Its lifecycle rule permits the exact baseline legacy-field `#[allow(dead_code)]` only through Checkpoint 4, requires that annotation and `AuthorizedTelegramRuntime` to disappear together at Checkpoint 5, and rejects `#[allow(dead_code)]` on either new adapter.
 
 Clone the current raw client/session at the same ownership points as today. Do not broaden lock scope, but preserve the existing asymmetric rule exactly: initialized/authorized lookup releases the accounts lock before its network authorization await, while request-code, sign-in, and clear/sign-out retain the single global accounts lock across their network awaits. Preserve behavior and run:
 
@@ -2072,11 +2105,11 @@ Invoke-CheckedNative 'store lookup lock-ownership contract' {
 }
 Assert-ExactRustIdentitySet -Package extractum -Prefix 'sources::store::tests::' -Expected $sourcesStoreBroadRegressionTestIds
 Invoke-NonEmptyRustSuite -Label 'source store broad regressions' -Package extractum -TestFilter 'sources::store::tests::'
-Invoke-NonEmptyRustSuite -Label 'source sync dependent tests' -Package extractum -TestFilter 'sources::sync::tests::'
-Invoke-NonEmptyRustSuite -Label 'Takeout dependent tests' -Package extractum -TestFilter 'takeout_import::tests::'
+Invoke-NonEmptyRustSuite -Label 'source sync broad regressions' -Package extractum -TestFilter 'sources::sync::tests::'
+Invoke-NonEmptyRustSuite -Label 'Takeout broad regressions' -Package extractum -TestFilter 'takeout_import::tests::'
 ```
 
-The boundary contract requires exactly the two `pub(crate)` handle adapters, the one `pub(super)` session accessor, the two app-only lookup functions, and the consumer map above. It rejects any other raw accessor, constructor/conversion, consumer, visibility, raw type re-export, or caller-held lock around either lookup. The exact 24 store identities remain a broad regression suite and are not represented as direct command/deadlock coverage. The adapters' and lookup functions' mandatory removal belongs to 8B. Preserve the existing `clear_account_runtime` and `TelegramState::diagnostic_status_counts` compatibility facade so `accounts.rs` and diagnostics remain byte-identical; their SQL/event/aggregation ownership is unchanged.
+The boundary contract requires exactly the two `pub(crate)` handle adapters, the one `pub(super)` session accessor, the two app-only lookup functions, and the consumer map above. It rejects any other raw accessor, constructor/conversion, consumer, visibility, raw type re-export, or caller-held lock around either lookup. The exact 24 store, six source-sync, and 17 Takeout identities are broad regression suites, not direct facade/command/lookup/deadlock coverage: none invokes `list_telegram_sources`, `add_telegram_source`, `sync_telegram_source`, `run_takeout_export_dc_spike`, `run_takeout_migrated_history_import`, or `run_takeout_source_import`. The four sync/Takeout substitutions do not change lock discipline because current `get_authorized_runtime` already accepts `&TelegramState` and locks internally; compilation plus the lifecycle-gated source contract—not the filtered-suite labels—prove the type/accessor rewrites. The adapters' and lookup functions' mandatory removal belongs to 8B. Preserve the existing `clear_account_runtime` and `TelegramState::diagnostic_status_counts` compatibility facade so `accounts.rs` and diagnostics remain byte-identical; their SQL/event/aggregation ownership is unchanged.
 
 - [ ] **Step 7: Enforce public API, secrecy, and ownership absence rules.**
 
@@ -2214,7 +2247,7 @@ Create the verification document with:
 - six-path core normalization proof and 44 sentinel references;
 - command/event/status/error/session/secret compatibility results;
 - DTO/media/session/runtime ownership and public-API/secrecy scans;
-- direct initialized-client lookup evidence, exact two-command caller-lock removal, explicit classification of the 24 store tests as broad rather than command/deadlock coverage, old authorized-runtime symbol absence, and the exact three Takeout `raw_session` workflow sites;
+- direct initialized-client lookup evidence; lifecycle-gated proof of two store `get_client` sites, one source-sync authorized/raw-client site, and three Takeout authorized/raw-client/raw-session workflows; explicit classification of the 24/6/17 filtered suites as broad rather than direct facade/command/lookup/deadlock coverage; and old authorized-runtime symbol/legacy dead-code annotation absence;
 - manifest/lock hashes and locked metadata;
 - explicit no-crate/no-edge/all-Grammers-app-owned statement;
 - explicit “Phase 8 incomplete; 8B not authorized” statement;
@@ -2333,6 +2366,7 @@ Record the final SHA in the handoff only. Do not amend the committed verificatio
 - [ ] DTO/media/session/runtime leaves live under `src-tauri/src/telegram`, not `telegram_impl` or a new crate.
 - [ ] App filesystem/secret/SQL/event/Takeout ownership is intact; temporary raw adapters are crate-private and enumerated for 8B removal.
 - [ ] Both `sources/store.rs` commands call `get_client(state.inner(), ...)` without an outer accounts lock; the direct runtime lookup identity and lifecycle-gated source contract are GREEN, while the 24 store identities are recorded only as broad regressions.
+- [ ] The source-sync and Takeout lifecycle assertions prove the exact 1/3 authorized-lookup and raw-adapter callsites; their six/17 filtered identities are recorded only as broad regressions.
 - [ ] `AuthorizedTelegramRuntime`/`get_authorized_runtime` are absent; only the three enumerated Takeout workflows consume `raw_session`, with no dead-code allowance.
 - [ ] Verification contains fresh command output, exact checkpoint SHAs, hashes, advisory timing, and truthful incomplete-Phase-8 disposition.
 - [ ] Worktree is clean after the final retained commit.
