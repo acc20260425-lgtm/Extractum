@@ -476,17 +476,30 @@ Telegram runtime/session, live sources, and Takeout. The historical five-file
 ceiling was only 2,047 physical lines / 22 test attributes and could not remove
 the dependencies promised by this phase.
 
+Following moved values through their known type fan-out adds
+`sources/types.rs`, `ingest_provenance.rs`, and
+`takeout_import/migrated_history.rs`, plus the `sources/mod.rs` re-export
+shell. Required private-facade wiring also touches app `lib.rs`: the complete
+known production move-and-touch surface is 19 files / 13,422 physical lines /
+140 test attributes. The implementation map must follow type fan-out to a
+fixed point rather than stop at direct Grammers imports.
+
 The four pinned roots remain the final outcome:
 `grammers-client`, `grammers-session`, `grammers-mtsender`, and
 `grammers-tl-types` leave the application package entirely. The exact Codeberg
 revision and required features move with `extractum-telegram`; no Grammers,
 raw TL, SQLx, Tauri, or keyring type may appear in its public API.
+Direct default-feature and explicit-feature declarations are frozen exactly.
+Resolved Grammers features are checked against a sorted required/forbidden
+baseline generated from locked Cargo metadata at the clean 8B identity commit,
+not against hand-maintained feature arrays.
 
 The boundary is split into three separately green, recoverable sub-slices;
 only 8C completes the dependency-removal outcome:
 
-1. 8A freezes behavior and prepares DTO, error, opaque-handle, secret-wrapper,
-   and session/file seams while code remains in the app;
+1. 8A freezes behavior, the 140-entry identity map, and prepares DTO, shared
+   core-error, opaque-handle, secret-wrapper, and session/file seams while code
+   remains in the app;
 2. 8B completes every live-source and Takeout pure-value seam inside the app,
    prepares the exact future crate file tree, and normalizes shared dependency
    declarations without moving any direct app edge;
@@ -497,6 +510,16 @@ only 8C completes the dependency-removal outcome:
 The single-package preparation order is required: moving runtime/session
 before raw Takeout would either expose `Client`/`MemorySession` publicly or
 duplicate the runtime. Both outcomes are forbidden.
+
+By the end of 8B, staged modules use only relative `self::`/`super::` paths,
+while app-owned callers use the exact `crate::telegram_impl::` prefix. 8C
+preserves staged files byte-for-byte, proves relative-path/content-hash
+identity, and replaces the vacated staged app `lib.rs` with a private explicit
+compatibility facade. Consumer paths remain byte-identical, as required by the
+standing mechanical-move rule; only manifest and lockfile ownership changes.
+The boundary specification enumerates every existing-symbol visibility
+widening/rename; 8A/8B establish that final allowlist and 8C makes no visibility
+change.
 
 The app permanently retains all twelve account/Telegram Tauri commands,
 account SQL and cross-domain deletion, generic `SecretStore`, app-data and
@@ -509,9 +532,21 @@ is explicitly void.
 codec. `extractum-telegram` owns the Telegram-ingest media payload and
 classification layer, with one `TelegramMessageDraft` hand-off accepted
 directly by app persistence; no mirror DTO or conversion-only layer is added.
-The 119-test audit keeps 43 `sources::test_support` SQL/integration identities
-and three credential SQL identities in the app. 8A must classify the residual
-73 individually; several are app diagnostics, routing, cancellation, warning,
+Public fallible Telegram operations return the existing
+`extractum_core::error::AppResult` directly. No public `TelegramError` or
+app-facade error conversion layer is introduced; protocol retry/fallback
+classification remains crate-private.
+`TelegramMessageIdentity`, `TelegramItemContext`, and the Telegram item-kind
+constant move with `TelegramMessageDraft`; app-owned provenance and migrated
+history consume those public values without moving SQL/policy. The dead
+test-only generic `insert_source_item` and unused draft `external_id` are
+removed during the rename, with their baseline test mapped to the retained
+Telegram insertion path.
+
+The original 119-test audit keeps 43 `sources::test_support` SQL/integration
+identities and three credential SQL identities in the app. 8A must classify
+the residual 73 individually and add the 21-identity transitive type closure;
+several remain app diagnostics, routing, cancellation, warning,
 request/read-model, or storage/codec contracts rather than crate tests.
 
 An 8B pause is reported only as `8B preparation retained; 8C pending`: it is

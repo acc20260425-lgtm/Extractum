@@ -53,6 +53,41 @@ const llmBoundaryDesign = compact(llmBoundaryDesignRaw);
 const promptPacksBoundaryDesign = compact(promptPacksBoundaryDesignRaw);
 const analysisBoundaryDesign = compact(analysisBoundaryDesignRaw);
 const telegramBoundaryDesign = compact(telegramBoundaryDesignRaw);
+const telegramTypePerimeter = compact(
+  sectionBetween(
+    normalize(telegramBoundaryDesignRaw),
+    "## Transitive Type Perimeter",
+    "## Three Separately Green Sub-Slices",
+  ),
+);
+const telegramVisibilityAllowlist = compact(
+  sectionBetween(
+    normalize(telegramBoundaryDesignRaw),
+    "### Public visibility allowlist",
+    "The public API must not contain:",
+  ),
+);
+const telegramManifestContract = compact(
+  sectionBetween(
+    normalize(telegramBoundaryDesignRaw),
+    "## Manifest and Dependency Contract",
+    "## 8B Staging Layout",
+  ),
+);
+const telegramStagingContract = compact(
+  sectionBetween(
+    normalize(telegramBoundaryDesignRaw),
+    "## 8B Staging Layout",
+    "## Current-File Disposition",
+  ),
+);
+const telegramDisposition = compact(
+  sectionBetween(
+    normalize(telegramBoundaryDesignRaw),
+    "## Current-File Disposition",
+    "## Test Ownership and Boundary Contracts",
+  ),
+);
 const analysisExtractionPlan = compact(analysisExtractionPlanRaw);
 const analysisStagingDisposition = compact(
   sectionBetween(
@@ -746,10 +781,13 @@ describe("crate extraction timing policy", () => {
       "14 production Rust files / 11,281 physical lines / 119 test attributes",
     );
     expect(phase8Roadmap).toContain(
+      "19 files / 13,422 physical lines / 140 test attributes",
+    );
+    expect(phase8Roadmap).toContain(
       "The historical five-file ceiling was only 2,047 physical lines / 22 test attributes",
     );
     expect(phase8Roadmap).toContain(
-      "8A freezes behavior and prepares DTO, error, opaque-handle, secret-wrapper",
+      "8A freezes behavior, the 140-entry identity map, and prepares DTO",
     );
     expect(phase8Roadmap).toContain(
       "8B completes every live-source and Takeout pure-value seam inside the app",
@@ -765,6 +803,33 @@ describe("crate extraction timing policy", () => {
     );
     expect(phase8Roadmap).toContain(
       "`extractum-telegram` owns the Telegram-ingest media payload and classification layer",
+    );
+    expect(phase8Roadmap).toContain(
+      "`extractum_core::error::AppResult` directly",
+    );
+    expect(phase8Roadmap).toContain(
+      "No public `TelegramError` or app-facade error conversion layer is introduced",
+    );
+    expect(phase8Roadmap).toContain(
+      "sorted required/forbidden baseline generated from locked Cargo metadata",
+    );
+    expect(phase8Roadmap).toContain(
+      "staged modules use only relative `self::`/`super::` paths",
+    );
+    expect(phase8Roadmap).toContain(
+      "8C preserves staged files byte-for-byte",
+    );
+    expect(phase8Roadmap).toContain(
+      "Consumer paths remain byte-identical, as required by the standing mechanical-move rule",
+    );
+    expect(phase8Roadmap).toContain(
+      "8C makes no visibility change",
+    );
+    expect(phase8Roadmap).toContain(
+      "`TelegramMessageIdentity`, `TelegramItemContext`, and the Telegram item-kind constant move",
+    );
+    expect(phase8Roadmap).toContain(
+      "dead test-only generic `insert_source_item` and unused draft `external_id` are removed",
     );
     expect(phase8Roadmap).toContain(
       "43 `sources::test_support` SQL/integration identities",
@@ -816,6 +881,95 @@ describe("crate extraction timing policy", () => {
       "App SQL accepts `TelegramMessageDraft` directly",
     );
     expect(telegramBoundaryDesign).toContain(
+      "the full known production move-and-touch surface is 19 files, 13,422 physical lines, and 140 test attributes",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "The complete known disposition is:",
+    );
+    expect(telegramTypePerimeter).toContain(
+      "Of the 21 type-closure identities",
+    );
+    expect(telegramTypePerimeter).toContain(
+      "`sources::types::tests::telegram_message_identity_validation_rejects_invalid_values` moves with the identity",
+    );
+    expect(telegramTypePerimeter).toContain(
+      "the other 20 remain app-owned",
+    );
+    expect(telegramTypePerimeter).toContain(
+      "`Unsupported Telegram history peer kind '{}'`",
+    );
+    expect(telegramTypePerimeter).toContain(
+      "`Telegram history peer id must be positive`",
+    );
+    expect(telegramTypePerimeter).toContain(
+      "`Telegram message id must be positive`",
+    );
+    expect(telegramTypePerimeter).toContain(
+      "Checks run in this exact order: supported peer kind, positive peer ID, then positive message ID; the first failing branch wins",
+    );
+    expect(telegramTypePerimeter).toContain(
+      "Every branch returns `AppErrorKind::Validation`",
+    );
+    expect(telegramTypePerimeter).toContain(
+      '`{"kind":"validation","message":"<the exact message above>"}`',
+    );
+    const expectedTelegramDispositionPaths = [
+      "takeout_import/mod.rs",
+      "sources/items.rs",
+      "sources/peer_resolution.rs",
+      "ingest_provenance.rs",
+      "sources/topics.rs",
+      "telegram.rs",
+      "takeout_import/raw_parse.rs",
+      "takeout_import/pagination.rs",
+      "sources/sync.rs",
+      "telegram_session_store.rs",
+      "sources/types.rs",
+      "lib.rs",
+      "sources/identity.rs",
+      "takeout_import/export_dc.rs",
+      "takeout_import/migrated_history.rs",
+      "media.rs",
+      "takeout_import/forum_topics.rs",
+      "sources/avatar.rs",
+      "sources/mod.rs",
+    ];
+    for (const currentPath of expectedTelegramDispositionPaths) {
+      expect(telegramDisposition).toContain(`| \`${currentPath}\` |`);
+    }
+    expect(
+      [...telegramDisposition.matchAll(/\| `([^`]+\.rs)` \|/g)].map(
+        (match) => match[1],
+      ),
+    ).toEqual(expectedTelegramDispositionPaths);
+    expect(telegramBoundaryDesign).toContain(
+      "`TelegramMessageIdentity`, its `validate()` behavior",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "`TelegramItemContext` moves from `sources/items.rs`",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "`TelegramMessageDraft` has no `external_id` field",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "`insert_telegram_source_item_writes_payload_and_skips_duplicates`",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "`dto.rs` owns `TelegramMessageDraft`, `TelegramMessageIdentity`, `TelegramItemContext`",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "`media.rs` owns `TelegramMediaPayload`, `DocumentSignals`",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "`extractum_core::error::{AppError, AppResult}` remains the Rust boundary",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "No public `TelegramError` or parallel terminal-error taxonomy is introduced",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "the app facade performs no error conversion",
+    );
+    expect(telegramBoundaryDesign).toContain(
       "The committed map is a literal immutable baseline",
     );
     expect(telegramBoundaryDesign).toContain(
@@ -843,7 +997,28 @@ describe("crate extraction timing policy", () => {
       '`#[path = "telegram_impl/lib.rs"] mod telegram_impl;`',
     );
     expect(telegramBoundaryDesign).toContain(
-      "The four largest files are 61.9% of it; the eight largest are 83.8%",
+      "uses only `self::`/`super::` relative module paths",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "every app-owned source outside the staging tree refers to staged public API only through the exact `crate::telegram_impl::` prefix",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "The move preserves every staged source file byte-for-byte",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "After moving the staged `lib.rs`, 8C creates a new private compatibility facade",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "explicit curated `pub(crate) use extractum_telegram::{...};` allowlist; no glob is authorized",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "every consumer `crate::telegram_impl::` path remain byte-identical",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "requires exact path and byte-hash equality",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "its four largest files are 61.9% and its eight largest are 83.8%",
     );
     expect(telegramBoundaryDesign).toContain(
       "The primary final absence proof parses JSON",
@@ -855,7 +1030,31 @@ describe("crate extraction timing policy", () => {
       "remove the app's immediate `extractum-telegram` edge from a copy of the resolve graph",
     );
     expect(telegramBoundaryDesign).toContain(
-      '`grammers-tl-types = ["default", "deserializable-functions", "impl-debug", "impl-from-enum", "impl-from-type", "tl-api", "tl-mtproto"]`',
+      "Resolved feature closure is not maintained as a literal array in this design",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "generate and commit an order-independent feature baseline",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "the required set from `resolve.nodes[].features`",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "the forbidden set consisting of every key in `packages[].features` that is not required",
+    );
+    expect(telegramBoundaryDesign).toContain(
+      "the pinned package currently defines no `default` feature",
+    );
+    expect(telegramManifestContract).toContain(
+      "require the current package feature-key universe to equal the recorded universe",
+    );
+    expect(telegramManifestContract).toContain(
+      "Any change to the direct default-feature or explicit-feature declaration policy of the four pinned Grammers roots requires a design amendment",
+    );
+    expect(telegramManifestContract).not.toContain(
+      "refine dependency features, without amending this design",
+    );
+    expect(telegramManifestContract).not.toContain(
+      "`grammers-mtsender = []`",
     );
     expect(telegramBoundaryDesign).toContain(
       "A passing grep without the metadata proof is not dependency evidence",
@@ -868,6 +1067,15 @@ describe("crate extraction timing policy", () => {
     );
     expect(telegramBoundaryDesign).toContain(
       'grammers-client = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", default-features = false }',
+    );
+    expect(telegramBoundaryDesign).toContain(
+      'grammers-session = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", default-features = false, features = ["serde"] }',
+    );
+    expect(telegramBoundaryDesign).toContain(
+      'grammers-mtsender = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa" }',
+    );
+    expect(telegramBoundaryDesign).toContain(
+      'grammers-tl-types = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", features = ["deserializable-functions"] }',
     );
     expect(telegramBoundaryDesign).toContain(
       "The expected production Tokio features include `rt`, `sync`, and `time`",
@@ -898,6 +1106,81 @@ describe("crate extraction timing policy", () => {
     );
     expect(telegramBoundaryDesign).toContain(
       "No implementation plan is written before the written specification is explicitly approved",
+    );
+    expect(telegramStagingContract).toContain(
+      "No staged source contains `crate::`",
+    );
+    expect(telegramStagingContract).toContain(
+      "Inside the moved tree, no module path, import, visibility, or source text changes in 8C",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "The complete existing-symbol widening/rename allowlist is:",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "`SourceItemInsert` becomes public `TelegramMessageDraft`",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "are exactly `telegram_identity`, `telegram_context`, `content`, `content_kind`, `author`, `published_at`, `raw_data`, `item_kind`, and `media`",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "`TelegramMessageIdentity` and its five fields",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "`history_peer_kind`, `history_peer_id`, `telegram_message_id`, `migration_domain`, and `is_migrated_history`",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "`TelegramItemContext` and its five fields",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "`reply_to_msg_id`, `reply_to_peer_kind`, `reply_to_peer_id`, `reply_to_top_id`, and `reaction_count`",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "`ExtractedMediaPayload` becomes public `TelegramMediaPayload`",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "with exactly public `kind` and `metadata` fields",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "current `ResolvedTelegramSource` becomes public `PeerDescriptor`",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "`external_id`, `title`, `source_subtype`, `is_member`, `username`, `access_hash`, and `avatar_bytes`",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "current `ForumTopicSnapshot`",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "`topic_id`, `top_message_id`, `title`, `icon_color`, `icon_emoji_id`, `is_closed`, `is_pinned`, `is_hidden`, and `sort_order`",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "`ITEM_KIND_TELEGRAM_MESSAGE` becomes one public constant",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "No existing free function is widened in place",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "8C changes no visibility",
+    );
+    expect(telegramVisibilityAllowlist).toContain(
+      "reject any other `pub` item",
+    );
+    expect(telegramBoundaryDesign).not.toContain(
+      "`TelegramError` is a Rust-domain error",
+    );
+    expect(telegramBoundaryDesign).not.toContain(
+      "application modules or `AppError`",
+    );
+    expect(telegramBoundaryDesign).not.toContain(
+      "The minimum disposition is:",
+    );
+    expect(telegramBoundaryDesign).not.toContain(
+      "only the frozen module-path, import, visibility",
+    );
+    expect(telegramBoundaryDesign).not.toContain(
+      "the exact prefix substitution `crate::telegram_impl::` to `extractum_telegram::`",
+    );
+    expect(telegramBoundaryDesign).not.toContain(
+      "the implementation plan freezes the exact signatures and constructor visibility before 8A code begins",
     );
   });
 });
