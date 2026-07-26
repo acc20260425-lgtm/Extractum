@@ -30,6 +30,7 @@ impl AppAnalysisScopeResolution {
     pub(crate) fn scope(&self) -> &ResolvedAnalysisScope {
         &self.scope
     }
+    #[cfg(test)]
     pub(crate) fn skipped_unlinked_playlist_items(&self) -> usize {
         self.skipped_unlinked_playlist_items
     }

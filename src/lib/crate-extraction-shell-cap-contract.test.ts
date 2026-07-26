@@ -9,6 +9,8 @@ import geminiBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-19-gem
 import llmBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-20-llm-crate-boundary-design.md?raw";
 import promptPacksBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-20-prompt-packs-crate-boundary-design.md?raw";
 import analysisBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-22-analysis-crate-boundary-design.md?raw";
+import analysisExtractionPlanRaw from "../../docs/superpowers/plans/2026-07-22-extractum-analysis-extraction.md?raw";
+import analysisExtractionVerificationRaw from "../../docs/superpowers/verification/2026-07-22-extractum-analysis-extraction.md?raw";
 import llmVerificationRaw from "../../docs/superpowers/verification/2026-07-20-extractum-llm-extraction.md?raw";
 import promptPacksVerificationRaw from "../../docs/superpowers/verification/2026-07-20-extractum-prompt-packs-extraction.md?raw";
 import shellCapRevisionRaw from "../../docs/superpowers/specs/2026-07-18-crate-extraction-shell-cap-revision-design.md?raw";
@@ -49,6 +51,17 @@ const geminiBoundaryDesign = compact(geminiBoundaryDesignRaw);
 const llmBoundaryDesign = compact(llmBoundaryDesignRaw);
 const promptPacksBoundaryDesign = compact(promptPacksBoundaryDesignRaw);
 const analysisBoundaryDesign = compact(analysisBoundaryDesignRaw);
+const analysisExtractionPlan = compact(analysisExtractionPlanRaw);
+const analysisStagingDisposition = compact(
+  sectionBetween(
+    normalize(analysisExtractionPlanRaw),
+    "## Post-execution staging disposition",
+    "## Frozen 143-Test Ownership",
+  ),
+);
+const analysisExtractionVerification = compact(
+  analysisExtractionVerificationRaw,
+);
 const llmVerification = compact(llmVerificationRaw);
 const promptPacksVerification = compact(promptPacksVerificationRaw);
 const shellCapRevision = compact(shellCapRevisionRaw);
@@ -658,6 +671,47 @@ describe("crate extraction timing policy", () => {
     );
     expect(analysisBoundaryDesign).toContain(
       "Family 1 is not permission to route every run-row read through a borrowed connection",
+    );
+    expect(analysisExtractionPlan).toContain(
+      "## Post-execution staging disposition",
+    );
+    expect(analysisExtractionPlan).toContain(
+      "The 19-entry `include!` map above is the original pre-execution design, not execution evidence",
+    );
+    expect(analysisStagingDisposition).toContain(
+      "Retained Checkpoint 5 commit `1a69e568` had 21 staging files",
+    );
+    expect(analysisStagingDisposition).toContain(
+      "15 module-scope `include!` seams",
+    );
+    expect(analysisStagingDisposition).toContain(
+      "two plain staging declarations, `corpus_portable` and `source_resolution_policy`",
+    );
+    expect(analysisStagingDisposition).toContain(
+      "one staging `#[path]` declaration, compiling `domain_portable.rs` as `domain`",
+    );
+    const unreachableInventory = analysisStagingDisposition.match(
+      /exactly three intentionally unreachable staging test files: (.*?)\. The analysis tree/,
+    )?.[1];
+    expect(unreachableInventory).toBeDefined();
+    expect([
+      ...(unreachableInventory ?? "").matchAll(/`([^`]+)`/g),
+    ].map((match) => match[1])).toEqual([
+      "corpus/tests/harness_portable.rs",
+      "corpus/tests/mod_portable.rs",
+      "store/tests/mod_portable.rs",
+    ]);
+    expect(analysisStagingDisposition).toContain(
+      "ten `#[path]` declarations in total: that one staging declaration plus nine namespace adapters",
+    );
+    expect(analysisExtractionVerification).not.toContain(
+      "Only pre-existing `dead_code`/unused warnings remain; no warning was widened into this slice.",
+    );
+    expect(analysisExtractionVerification).toContain(
+      "The post-execution audit found Phase 7-introduced dead-code and unused-facade warnings",
+    );
+    expect(analysisExtractionVerification).toContain(
+      "This remediation removed every warning introduced by the Phase 7 extraction",
     );
   });
 });

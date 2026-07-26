@@ -6351,9 +6351,14 @@ describe("analysis crate boundary", () => {
     ]);
     for (const signature of [
       "pub(crate) fn scope(&self) -> &ResolvedAnalysisScope",
-      "pub(crate) fn skipped_unlinked_playlist_items(&self) -> usize",
       "pub(crate) fn into_scope(self) -> ResolvedAnalysisScope",
     ]) expect(appScopeResolution).toContain(signature);
+    expect(
+      appScopeResolution,
+      "playlist skip diagnostic accessor remains characterization-only",
+    ).toMatch(
+      /#\[cfg\(test\)\]\s+pub\(crate\)\s+fn\s+skipped_unlinked_playlist_items\s*\(\s*&self\s*\)\s*->\s*usize/,
+    );
     for (const marker of [
       "pub struct ResolvedAnalysisScope",
       "scope_kind: AnalysisScopeKind",
@@ -7038,6 +7043,55 @@ describe("analysis crate boundary", () => {
       expect(architecture).not.toContain(
         'include_str!("../../report_engine.rs")',
       );
+    }
+  });
+
+  it("removes Phase 7 extraction-only dead code and unused facade surface", () => {
+    const forbiddenByFile = new Map<string, readonly string[]>([
+      [
+        "src-tauri/crates/extractum-analysis/src/models.rs",
+        ["AnalysisSourceGroupRow"],
+      ],
+      [
+        "src-tauri/crates/extractum-analysis/src/store/read_model.rs",
+        ["load_analysis_run_trace_data"],
+      ],
+      ["src-tauri/src/lib.rs", ["internal_error"]],
+      [
+        "src-tauri/src/sources/mod.rs",
+        [
+          "ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT",
+          "ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED",
+          "TELEGRAM_SOURCE_TYPE",
+        ],
+      ],
+      [
+        "src-tauri/src/sources/types.rs",
+        [
+          "ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT",
+          "ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED",
+        ],
+      ],
+      [
+        "src-tauri/src/llm/mod.rs",
+        [
+          "resolve_model_input_token_limit_for_backend",
+          "resolve_model_output_token_limit_for_backend",
+          "run_llm_collect_with_profile",
+          "LlmCompletion",
+          "LlmRequestSnapshotState",
+        ],
+      ],
+    ]);
+
+    for (const [relativePath, identifiers] of forbiddenByFile) {
+      const source = read(relativePath);
+      for (const identifier of identifiers) {
+        expect(
+          source,
+          `${relativePath} retains extraction-only ${identifier}`,
+        ).not.toMatch(new RegExp(`\\b${identifier}\\b`));
+      }
     }
   });
 });

@@ -455,15 +455,6 @@ pub struct AnalysisRunMessagesPage {
     pub has_more: bool,
 }
 
-#[derive(FromRow)]
-pub(crate) struct AnalysisSourceGroupRow {
-    pub(crate) id: i64,
-    pub(crate) name: String,
-    pub(crate) source_type: String,
-    pub(crate) created_at: i64,
-    pub(crate) updated_at: i64,
-}
-
 #[derive(Serialize)]
 pub struct AnalysisRunEvent {
     pub run_id: i64,

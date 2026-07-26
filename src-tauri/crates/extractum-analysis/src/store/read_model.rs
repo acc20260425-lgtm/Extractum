@@ -664,17 +664,6 @@ pub(crate) async fn load_analysis_run_status(
         .map_err(AppError::database)
 }
 
-pub(crate) async fn load_analysis_run_trace_data(
-    pool: &Pool<Sqlite>,
-    run_id: i64,
-) -> AppResult<Option<Option<Vec<u8>>>> {
-    sqlx::query_scalar("SELECT trace_data_zstd FROM analysis_runs WHERE id = ?")
-        .bind(run_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(AppError::database)
-}
-
 pub async fn prepare_active_analysis_run_summaries(
     conn: &mut SqliteConnection,
     run_ids: &HashSet<i64>,

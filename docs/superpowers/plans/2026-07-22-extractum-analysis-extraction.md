@@ -1746,6 +1746,31 @@ templates.rs                         -> include!("templates_store.rs")
 
 Only `corpus/tests/mod_portable.rs` and `store/tests/mod_portable.rs` remain uncompiled declaration roots until Task 7, because their `live`/`preflight` and `read_model`/`setup` declarations would collide with the same mixed leaf modules still declared by the retained app roots. `report/tests/mod_portable.rs` may compile through `include!` because its portable declarations do not overlap the sole retained app leaf, `capture`. Do not “symmetrize” these three roots. The contract rejects any other undeclared staging unit, double include, suffixed module declaration, or production copy. Temporary filenames and all temporary `include!` lines disappear in Task 7; no shim or copied implementation remains at acceptance.
 
+## Post-execution staging disposition
+
+This executed-plan addendum supersedes the pre-execution compilation-wiring
+claims in this section and in Task 7; the frozen file dispositions and test
+ownership remain unchanged. The 19-entry `include!` map above is the original
+pre-execution design, not execution evidence.
+
+Retained Checkpoint 5 commit `1a69e568` had 21 staging files. It used `#[path]`
+and plain `mod` declarations alongside 15 module-scope `include!` seams:
+
+- two plain staging declarations, `corpus_portable` and
+  `source_resolution_policy`;
+- one staging `#[path]` declaration, compiling `domain_portable.rs` as
+  `domain`;
+- exactly three intentionally unreachable staging test files:
+  `corpus/tests/harness_portable.rs`, `corpus/tests/mod_portable.rs`, and
+  `store/tests/mod_portable.rs`.
+
+The analysis tree contained ten `#[path]` declarations in total: that one
+staging declaration plus nine namespace adapters to existing unsuffixed
+modules. The variance changed compilation wiring only; frozen Cargo
+identities, file dispositions, APIs, and behavior remained green. Mechanical
+extraction commit `aaf9c165` made all three staging files reachable and
+removed every staging filename and temporary seam.
+
 ## Frozen 143-Test Ownership
 
 The implementation does not maintain a second hand-copied identity registry. `analysis-application-contract.test.ts` and the final boundary contract parse the exact leaves and prefixes from Appendix A of the approved specification, then compare them with executable Cargo inventories.
@@ -2620,6 +2645,11 @@ templates_store.rs
 ```
 
 The corresponding original paths already contain only the retained app halves. Before moving, the contract proves the exhaustive include map above and separately proves the exact declarations in the two uncompiled root staging files. After each compiled staging `git mv`, remove only its matching temporary `include!` line from the retained app file; the moved crate module owns the same body directly. If any portable behavior is still interleaved with an app adapter, stop and amend the owning green checkpoint; do not split it during this task.
+
+Post-execution disposition: the preceding paragraph records the original
+Task 7 procedure. The retained execution used the compiled-equivalent wiring
+recorded in [Post-execution staging disposition](#post-execution-staging-disposition);
+that addendum is authoritative evidence for the tree that actually ran.
 
 - [ ] **Step 3: Create the exact manifest and private crate root.**
 

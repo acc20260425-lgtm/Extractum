@@ -31,11 +31,6 @@ pub(crate) const TELEGRAM_HISTORY_SCOPE_LABEL_CURRENT: &str = "Current supergrou
 #[allow(dead_code)]
 pub(crate) const TELEGRAM_HISTORY_SCOPE_LABEL_MIGRATED: &str = "Migrated small-group history";
 #[allow(dead_code)]
-pub(crate) const ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT: &str = "current";
-#[allow(dead_code)]
-pub(crate) const ANALYSIS_TELEGRAM_HISTORY_SCOPE_CURRENT_PLUS_MIGRATED: &str =
-    "current_plus_migrated";
-#[allow(dead_code)]
 pub(crate) const TELEGRAM_MESSAGE_HISTORY_SCOPE_CURRENT: &str = "current";
 #[allow(dead_code)]
 pub(crate) const TELEGRAM_MESSAGE_HISTORY_SCOPE_MIGRATED: &str = "migrated";

@@ -19,9 +19,7 @@ mod process_tree;
 use apalis_jobs::{apalis_jobs_list, apalis_jobs_prune_terminal};
 use diagnostics::get_diagnostic_summary;
 mod error {
-    pub(crate) use extractum_core::error::{
-        database_error, internal_error, AppError, AppErrorKind, AppResult,
-    };
+    pub(crate) use extractum_core::error::{database_error, AppError, AppErrorKind, AppResult};
 }
 mod forum_topics;
 mod ingest_provenance;

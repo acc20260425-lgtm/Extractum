@@ -719,8 +719,15 @@ cargo metadata --manifest-path src-tauri/Cargo.toml --locked --format-version 1
 # exit 0
 ```
 
-Only pre-existing `dead_code`/unused warnings remain; no warning was widened
-into this slice.
+### Post-execution audit remediation (2026-07-26)
+
+The post-execution audit found Phase 7-introduced dead-code and unused-facade
+warnings that the original statement below the gate transcript had
+misclassified. This remediation removed every warning introduced by the
+Phase 7 extraction and also pruned adjacent previously stale facade imports
+identified by the same audit. The analysis crate now completes its focused
+all-target check without warnings; the application check retains only
+warnings outside the Phase 7 analysis boundary.
 
 ## Single advisory timing observation
 
