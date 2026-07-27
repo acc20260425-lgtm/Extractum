@@ -172,6 +172,15 @@ const phase8Status = /### Phase 8 — `extractum-telegram` \(([^)]+)\)/.exec(
   roadmap,
 )?.[1];
 if (!phase8Status) throw new Error("Missing Phase 8 roadmap status");
+const designPhase8StatusMatches = [
+  ...design.matchAll(/^\*\*Status:\*\* (.+)$/gm),
+];
+if (designPhase8StatusMatches.length !== 1) {
+  throw new Error(
+    `Expected exactly one Phase 8 design status, found ${designPhase8StatusMatches.length}`,
+  );
+}
+const designPhase8Status = designPhase8StatusMatches[0][1];
 const statusLifecycle =
   telegramContractPaths.telegramLifecycleFromStatus(phase8Status);
 const checkpoint3LeavesExist = [
@@ -189,6 +198,18 @@ const lifecycle =
   checkpointThreeLifecycle === "8a-checkpoint-3" && checkpoint4LeafExists
     ? "8a-checkpoint-4"
     : checkpointThreeLifecycle;
+const retainedPreparationStates = [
+  {
+    roadmapStatus: "8A preparation Checkpoint 5 retained",
+    designStatus: "Approved; 8A preparation Checkpoint 5 retained",
+    lifecycle: "8a-checkpoint-5",
+  },
+  {
+    roadmapStatus: "8A preparation retained",
+    designStatus: "Approved; 8A preparation retained; 8B not started",
+    lifecycle: "8a-retained",
+  },
+] as const;
 
 function sectionBetween(source: string, start: string, end: string): string {
   const startIndex = source.indexOf(start);
@@ -4187,11 +4208,12 @@ describe("Phase 8 Telegram crate boundary", () => {
 });
 
 describe("literal immutable Telegram test map", () => {
-  it("records only the truthful retained Checkpoint 5 lifecycle state", () => {
-    expect(phase8Status).toBe("8A preparation Checkpoint 5 retained");
-    expect(design).toContain(
-      "**Status:** Approved; 8A preparation Checkpoint 5 retained",
-    );
+  it("records only the truthful retained 8A lifecycle states", () => {
+    expect(retainedPreparationStates).toContainEqual({
+      roadmapStatus: phase8Status,
+      designStatus: designPhase8Status,
+      lifecycle,
+    });
   });
 
   it("parses the plan table without copied rows and freezes all identity totals", () => {
@@ -4387,8 +4409,10 @@ describe("literal immutable Telegram test map", () => {
     assertAddedIdentityDeclarations(addedIdentities, lifecycle, rustSources);
   });
 
-  it("reconciles the exact active Checkpoint 5 identity accounting", () => {
-    expect(lifecycle).toBe("8a-checkpoint-5");
+  it("reconciles the exact active retained 8A identity accounting", () => {
+    expect(
+      retainedPreparationStates.map(({ lifecycle: state }) => state),
+    ).toContain(lifecycle);
     const activeAdded = addedIdentities.filter(
       ({ checkpoint }) => checkpoint <= 5,
     );
