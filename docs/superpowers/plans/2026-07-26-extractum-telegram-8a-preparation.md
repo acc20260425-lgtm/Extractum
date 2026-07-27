@@ -2197,6 +2197,8 @@ exact_changed_paths | owning_allowed_set | focused_rerun | checkpoint_rerun
 
 Initialize it as `none`. Each fix row must name one Checkpoint 1–5 owner; `exact_changed_paths` must be a non-empty strict subset of that checkpoint's committed `Allowed` array; both rerun columns contain the literal command plus exit/result evidence, not “passed.” A failure spanning two checkpoint scopes is not a fix row: stop for a plan amendment. The verification document records `Fix ledger: none` or every row in sequence and includes every fix SHA in its changed-path and rollback manifest.
 
+The single dated repository-contract correction below is the only exception to the one-owner/strict-subset rule. It cannot be generalized to another failure, path, or checkpoint.
+
 - [ ] **Step 1: Reconcile source, executable identities, and checkpoint SHAs.**
 
 Start from the clean Checkpoint 5 commit when the fix ledger is `none`, or from the clean latest ledger fix commit otherwise, and freeze Task 6 Cargo identity:
@@ -2314,6 +2316,391 @@ $fixResult = Commit-ScopedFix `
 
 Never mix Task 6 status/evidence edits into a fix commit. A failed gate that cannot be assigned to one owner, requires a path outside its `Allowed` set, or changes an approved contract stops execution for a plan amendment. Timing never authorizes a fix or rollback.
 
+#### Observed 2026-07-27: cross-checkpoint repository-contract correction
+
+- [ ] **Authorize only the observed correction.**
+
+The literal `npm.cmd run verify` failed from clean fix HEAD
+`69032633fc2346d56e0854475be045cfb3e8a35b` with three retained-contract
+defects:
+
+1. `analysis-application-contract.test.ts` still found exactly 38 production
+   SQL-consumer records, but two `ingest_provenance.rs` whole-source hashes
+   and one `sources/store.rs` whole-source hash were stale;
+2. `analysis-crate-boundary-contract.test.ts` expected all-app production
+   breadth `121`, observed `125`, and carried the same three stale
+   whole-source hashes;
+3. the Checkpoint 5 mutation case
+   `sync authorized lookup through function-value alias` exceeded Vitest's
+   default `5000ms` only under the full-suite load.
+
+The root cause is bounded: Checkpoint 3 added two reachable production files
+and changed the import-only `ingest_provenance.rs` source hash, Checkpoint 4
+added one reachable file, Checkpoint 5 added one reachable file and changed
+an unrelated command body in `sources/store.rs`, and Checkpoint 5 omitted a
+local timeout for its heavy mutation table. The SQL record count remains
+exactly `38`; no product behavior, SQL text, SQL ownership, migration,
+command, or wire contract regressed.
+
+This correction is authorized only after the failed Task 6 draft has been
+copied/moved into the unique recovery directory by the procedure above and
+the repository has been restored to a clean tree. Commit this plan amendment
+alone before editing a contract:
+
+```powershell
+$task6RepositoryCorrectionAmendmentAllowed = @(
+    'docs/superpowers/plans/2026-07-26-extractum-telegram-8a-preparation.md'
+)
+$task6RepositoryCorrectionCargoHashes = Get-CargoIdentityHashes
+$amendmentPaths = @(
+    Assert-ScopedChanges `
+      -Label 'Task 6 repository-correction amendment' `
+      -Allowed $task6RepositoryCorrectionAmendmentAllowed `
+      -RequireChanges |
+      Sort-Object -Unique
+)
+if (($amendmentPaths -join "`n") -ne
+    (($task6RepositoryCorrectionAmendmentAllowed | Sort-Object) -join "`n")) {
+    throw "Repository-correction amendment must change exactly its one plan file"
+}
+Commit-ScopedCheckpoint `
+  -Label 'Task 6 repository-correction amendment' `
+  -Allowed $task6RepositoryCorrectionAmendmentAllowed `
+  -StartingCargoHashes $task6RepositoryCorrectionCargoHashes `
+  -Message 'docs: authorize Phase 8A repository contract correction'
+$task6RepositoryCorrectionAmendmentSha = (& git rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or !$task6RepositoryCorrectionAmendmentSha) {
+    throw 'Could not record repository-correction amendment SHA'
+}
+```
+
+After this amendment commit, the correction allowlist is exactly these three
+test contracts and no other file:
+
+```powershell
+$task6RepositoryCorrectionAllowed = @(
+    'src/lib/analysis-application-contract.test.ts'
+    'src/lib/analysis-crate-boundary-contract.test.ts'
+    'src/lib/telegram-crate-boundary-contract.test.ts'
+)
+Assert-CleanWorktree 'Task 6 repository-contract correction start'
+```
+
+No production, documentation, roadmap/design/status, Cargo manifest, or lock
+file may change in the correction commit. The Cargo hashes must remain:
+
+```text
+src-tauri/Cargo.toml  81A773E6FFB5E4BC1AF7C25D2B3F723424E060A515289B2CB28B7C45360A31FF
+src-tauri/Cargo.lock  720E38EA632D7B932B2A23D1481528845EC9304376035B1C851C546EA402E43C
+```
+
+- [ ] **Capture the two focused snapshot REDs.**
+
+Run:
+
+```powershell
+npm.cmd run test -- src/lib/analysis-application-contract.test.ts -t 'keeps analysis SQL ownership and borrowed coordinator capabilities fail closed'
+npm.cmd run test -- src/lib/analysis-crate-boundary-contract.test.ts -t 'keeps production SQL in the exact six-table owner'
+```
+
+Require the first command to exit nonzero with `1 failed | 50 skipped (51)`,
+the same `38` expected/actual records, and only the two ingest plus one store
+whole-source hash differences below. Require the second to exit nonzero with
+`1 failed | 15 skipped (16)` and exact breadth evidence
+`expected 125 to be 121`.
+
+- [ ] **Update only the exact analysis snapshots and expose the parser RED.**
+
+Make these literal replacements:
+
+```text
+src/lib/analysis-application-contract.test.ts
+  ingest source hash, exactly 2 occurrences:
+    d938b75a13bb7f4e16e66a570144c3cc5749739433130f87611b96dab7baa0b7
+    -> a327cabba5f1ab4f3af5c2f405ccb56a4500dc2bc736d8dc33a220f128323bde
+  store source hash, exactly 1 occurrence:
+    048b8f5d768f5c8b075505c6f73da4ce5e805c841b57b0bc714ab31a1e1e2a54
+    -> e510e682120b6566460fddf405f6c45d31ee7e96b399948fe91b75a51fa4a92d
+
+src/lib/analysis-crate-boundary-contract.test.ts
+  all-app production graph breadth, exactly 1 occurrence:
+    toBe(121) -> toBe(125)
+  ingest source hash, exactly 2 occurrences:
+    bfd9f8555486d10a1f4976e59a49e7c87ad01ca0b64662b97891a94bd958f94d
+    -> 5a7f28da697b149cf3ba2f9ff01074aa662ea5f6a56c983e8ee24f83816372a2
+  store source hash, exactly 1 occurrence:
+    830aa5a38060767eeb3c8875abcff435d9c5dfe389be2a9fb9fe886355fb8470
+    -> 28a8eb092ae42884e8b06bd6681bc36c8378cb1facea61fd8076b6ed284e3895
+```
+
+Rerun the exact analysis-crate focused command. It must remain runtime RED,
+now with exact evidence
+`telegram/runtime.rs: unmatched Rust opening brace`; a different failure
+does not authorize the parser change.
+
+- [ ] **Add the cfg-disabled block-match-arm regression probe, then make it GREEN.**
+
+In the existing `keeps production SQL in the exact six-table owner` case,
+place this probe before the production-source traversal:
+
+```typescript
+const cfgMatchArmProbe = productionRust(`
+  match client {
+    TelegramClientInner::Grammers(client) => live(client),
+    #[cfg(test)]
+    TelegramClientInner::Test { .. } => {
+      unreachable!("test-only")
+    }
+  }
+`);
+expect(cfgMatchArmProbe).not.toContain("TelegramClientInner::Test");
+expect(normalized(cfgMatchArmProbe)).toContain(
+  "TelegramClientInner::Grammers(client) => live(client),",
+);
+expect(() => rustBraceRegions(cfgMatchArmProbe)).not.toThrow();
+```
+
+After inserting the probe and before changing `disabledItemEnd`, rerun the
+exact analysis-crate focused command and require a nonzero runtime RED from
+the cfg-disabled no-trailing-comma match arm. After the helper change, rerun
+it and require `1 passed | 15 skipped (16)`.
+
+The valid Rust arm in `src-tauri/src/telegram/runtime.rs` is evidence and must
+not change. In `productionRust.disabledItemEnd`, add a
+`topLevelMatchArm` boolean. Set it only after encountering `=>` while the
+delimiter stack is empty. When the next top-level `{` is the match-arm body,
+return the body's `closingDelimiter(...) + 1`, consuming a following
+top-level comma when present; for an expression arm, permit its top-level
+comma to terminate the disabled arm. The minimal control flow is:
+
+```typescript
+let topLevelMatchArm = false;
+// inside the scan, before opening-delimiter handling:
+if (
+  stack.length === 0
+  && token === "="
+  && syntax[index + 1] === ">"
+) {
+  topLevelMatchArm = true;
+  index += 1;
+  continue;
+}
+// replace the existing top-level braced-item return:
+if (
+  token === "{"
+  && stack.length === 0
+  && (bracedItem || topLevelMatchArm)
+) {
+  const bodyEnd = closingDelimiter(syntax, index, "{", "}") + 1;
+  if (!topLevelMatchArm) return bodyEnd;
+  let armEnd = bodyEnd;
+  while (armEnd < syntax.length && /\s/.test(syntax[armEnd])) armEnd += 1;
+  return syntax[armEnd] === "," ? armEnd + 1 : bodyEnd;
+}
+// widen only the existing top-level comma condition:
+if (
+  stack.length === 0
+  && token === ","
+  && (commaTerminated || topLevelMatchArm)
+) return index + 1;
+```
+
+Do not change cfg field, enum-variant, item, `cfg(any(...))`, or `cfg_attr`
+handling. The existing probes for those forms plus the new no-trailing-comma
+match-arm probe must all remain GREEN.
+
+- [ ] **Apply the one local Checkpoint 5 timeout.**
+
+The focused command
+
+```powershell
+npm.cmd run test -- src/lib/telegram-crate-boundary-contract.test.ts -t 'sync authorized lookup through functi'
+```
+
+The unique `functi` prefix is intentional: Vitest 4.1.5 renders the
+parameterized `$name` as `sync authorized lookup through functi…`, while the
+full phrase selects zero tests. Require exactly
+`1 passed | 127 skipped (128)` (observed about `2.2s`); a zero-test filter is
+not evidence. This focused case is semantic GREEN, so do not manufacture a
+focused RED. The accepted runtime RED is the exact `5000ms` timeout already
+captured from the literal full `npm.cmd run verify`. Add only `10_000` as the
+third argument of the existing Checkpoint 5 runtime-mutation `it.each` block:
+
+```typescript
+-  });
++  }, 10_000);
+```
+
+Do not set a file, suite, Vitest, or global timeout.
+
+- [ ] **Run the correction verification sequence with exact counts.**
+
+Run the focused and full analysis contracts:
+
+```powershell
+Invoke-CheckedNative 'corrected analysis application focus' {
+    npm.cmd run test -- src/lib/analysis-application-contract.test.ts -t 'keeps analysis SQL ownership and borrowed coordinator capabilities fail closed'
+}
+Invoke-CheckedNative 'corrected analysis crate focus' {
+    npm.cmd run test -- src/lib/analysis-crate-boundary-contract.test.ts -t 'keeps production SQL in the exact six-table owner'
+}
+Invoke-CheckedNative 'corrected full analysis contracts' {
+    npm.cmd run test -- src/lib/analysis-application-contract.test.ts src/lib/analysis-crate-boundary-contract.test.ts
+}
+```
+
+Require `1 passed | 50 skipped (51)`, `1 passed | 15 skipped (16)`, and then
+two files with exactly `67 passed`.
+
+Run the full Telegram and current Checkpoint 5 status contracts:
+
+```powershell
+Invoke-CheckedNative 'corrected full Telegram boundary' {
+    npm.cmd run test -- src/lib/telegram-crate-boundary-contract.test.ts
+}
+Invoke-CheckedNative 'current Checkpoint 5 shell-cap contract' {
+    npm.cmd run test -- src/lib/crate-extraction-shell-cap-contract.test.ts
+}
+```
+
+Require exactly `128 passed` and `8 passed`, respectively. Then run all nine
+Task 5 exact Rust identities:
+
+```powershell
+$task5RepositoryCorrectionExactIds = @(
+    'telegram::runtime::tests::initialization_maps_authorization_and_last_insert_wins_without_aborting_replaced_runner'
+    'telegram::runtime::tests::missing_account_authentication_is_false'
+    'telegram::runtime::tests::request_login_code_serializes_queued_requests_and_later_success_replaces_attempt'
+    'telegram::runtime::tests::sign_in_without_code_request_preserves_auth_error'
+    'telegram::runtime::tests::failed_sign_in_retains_pending_attempt'
+    'telegram::runtime::tests::successful_sign_in_serializes_clear_then_returns_session_and_clears_attempt'
+    'telegram::runtime::tests::clear_account_waits_for_inflight_request_then_aborts_runner_and_ignores_sign_out_failure'
+    'telegram::runtime::tests::authorized_client_preserves_missing_and_unauthenticated_errors'
+    'telegram::tests::runtime_status_maps_to_existing_wire_strings'
+)
+foreach ($identity in $task5RepositoryCorrectionExactIds) {
+    Invoke-ExactRustTest extractum $identity
+}
+Assert-ExactRustIdentitySet `
+  -Package extractum `
+  -Prefix 'sources::store::tests::' `
+  -Expected $sourcesStoreBroadRegressionTestIds
+```
+
+Require each exact identity to report `1 passed` and `718 filtered out`, and
+the store identity assertion to report the exact `24/24` set. Run these four
+broad suites and require the exact `7/24/6/17` counts:
+
+```powershell
+Invoke-NonEmptyRustSuite -Label 'Telegram app broad regressions' -Package extractum -TestFilter 'telegram::tests::'
+Invoke-NonEmptyRustSuite -Label 'source store broad regressions' -Package extractum -TestFilter 'sources::store::tests::'
+Invoke-NonEmptyRustSuite -Label 'source sync broad regressions' -Package extractum -TestFilter 'sources::sync::tests::'
+Invoke-NonEmptyRustSuite -Label 'Takeout broad regressions' -Package extractum -TestFilter 'takeout_import::tests::'
+```
+
+Finish the pre-commit gates:
+
+```powershell
+Invoke-CheckedNative 'repository-correction rustfmt' { npm.cmd run check:rustfmt }
+Invoke-CheckedNative 'repository-correction Svelte check' { npm.cmd run check }
+Invoke-CheckedNative 'repository-correction app check' {
+    cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets
+}
+Invoke-CheckedNative 'repository-correction app tests' {
+    cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets
+}
+Invoke-CheckedNative 'repository-correction full Vitest under load' {
+    npm.cmd run test
+}
+```
+
+Require rustfmt clean, Svelte `0 errors and 0 warnings`, Cargo check exit
+`0`, app tests `719 passed` plus the zero-test binary, and the full Vitest
+load `177 passed` files with exactly `1608 passed` tests. The last command is
+the load-bearing GREEN for the local `10_000` timeout.
+
+- [ ] **Commit exactly the three contracts and append special ledger row 2.**
+
+Before staging, require exactly the full `3/3` allowlist, unchanged Cargo
+hashes, and both diff checks:
+
+```powershell
+$repositoryCorrectionPaths = @(
+    Assert-ScopedChanges `
+      -Label 'Task 6 repository-contract correction' `
+      -Allowed $task6RepositoryCorrectionAllowed `
+      -RequireChanges |
+      Sort-Object -Unique
+)
+if (($repositoryCorrectionPaths -join "`n") -ne
+    (($task6RepositoryCorrectionAllowed | Sort-Object) -join "`n")) {
+    throw "Repository-contract correction must change exactly 3/3 paths"
+}
+Commit-ScopedCheckpoint `
+  -Label 'Task 6 repository-contract correction' `
+  -Allowed $task6RepositoryCorrectionAllowed `
+  -StartingCargoHashes $task6RepositoryCorrectionCargoHashes `
+  -Message 'test: reconcile Phase 8A repository contracts'
+$task6RepositoryCorrectionSha = (& git rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or !$task6RepositoryCorrectionSha) {
+    throw 'Could not record repository-contract correction SHA'
+}
+```
+
+Append ledger row `2` with:
+
+```text
+owning_checkpoint:
+  3-5 (plan-amended repository-contract correction)
+owning_allowed_set and exact_changed_paths:
+  src/lib/analysis-application-contract.test.ts
+  src/lib/analysis-crate-boundary-contract.test.ts
+  src/lib/telegram-crate-boundary-contract.test.ts
+failing_gate:
+  npm.cmd run verify => nonzero; 38-record 2+1 hash drift; expected/actual
+  breadth 121/125; CP5 function-value-alias timeout at 5000ms
+failure_summary:
+  authorized by $task6RepositoryCorrectionAmendmentSha; CP3 +2/import-only
+  ingest hash, CP4 +1, CP5 +1/unrelated store command hash and local-timeout
+  gap; no product/SQL behavior regression
+focused_rerun:
+  npm.cmd run test -- src/lib/analysis-application-contract.test.ts -t
+  'keeps analysis SQL ownership and borrowed coordinator capabilities fail
+  closed' => exit 0; 1 passed | 50 skipped (51)
+  npm.cmd run test -- src/lib/analysis-crate-boundary-contract.test.ts -t
+  'keeps production SQL in the exact six-table owner' => exit 0;
+  1 passed | 15 skipped (16)
+  npm.cmd run test -- src/lib/telegram-crate-boundary-contract.test.ts -t
+  'sync authorized lookup through functi' => exit 0;
+  1 passed | 127 skipped (128)
+checkpoint_rerun:
+  npm.cmd run test -- src/lib/analysis-application-contract.test.ts
+  src/lib/analysis-crate-boundary-contract.test.ts => exit 0; 2 files;
+  67 passed
+  npm.cmd run test -- src/lib/telegram-crate-boundary-contract.test.ts =>
+  exit 0; 128 passed
+  npm.cmd run test -- src/lib/crate-extraction-shell-cap-contract.test.ts =>
+  exit 0; 8 passed
+  cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets
+  => exit 0; 719 passed plus zero-test binary
+  npm.cmd run test => exit 0; 177 files; 1608 passed
+```
+
+For this observed trigger only, row 2's exact three-path
+`owning_allowed_set` may span Checkpoints 3–5 and
+`exact_changed_paths == owning_allowed_set`; this explicitly overrides the
+ordinary single-owner/strict-subset rule and nothing else.
+
+Add both `$task6RepositoryCorrectionAmendmentSha` and
+`$task6RepositoryCorrectionSha` as separate chronological entries in the
+verification document's commit ledger, changed-path/range manifest, and
+rollback order. Row 2's `fix_sha` is
+`$task6RepositoryCorrectionSha`; its failure summary names the amendment
+SHA. Restart Task 6 at Step 1 from the clean correction SHA and regenerate
+the draft from committed state rather than reapplying recovery scratch.
+Discard the failed attempt's timing: the restarted final-tree completion
+block supplies the only recorded duration.
+
 Replace the verification document's sole `PENDING` marker with exact package/workspace/repository gate results and the advisory duration. Confirm that file contains no placeholder. After this evidence edit, do not change any retained file unless a failed final-tree gate requires restarting Task 6.
 
 - [ ] **Step 6: Verify the exact final tree and commit verification.**
@@ -2356,7 +2743,10 @@ Record the final SHA in the handoff only. Do not amend the committed verificatio
 
 - Checkpoints 1–5 are ordinary independently GREEN commits. A pause retains the last completed checkpoint and records its exact roadmap/design status.
 - Task 0 is a separately committed durable evidence correction, not a code checkpoint. Retain it through ordinary checkpoint rollback unless a new owner-approved evidence amendment supersedes it.
-- The committed verification rollback manifest includes Task 0, Checkpoints 1–5, every fix SHA with its owner, and an explicit `final evidence SHA: handoff-only (not self-recorded)` slot. The post-commit handoff fills that slot outside the document and gives the executable order. Any rollback below CP5 first reverts final evidence, then all post-CP5 fix commits in reverse sequence, then Checkpoints 5 down through N+1. A fix still needed by retained Checkpoint N or earlier is reapplied/reimplemented against that retained tree under a new SHA and must pass the same owner-compatible current-state subset before the rollback disposition is committed; never retain a CP5-shaped fix above reverted checkpoints. A full 8A rollback reverts final evidence, every fix in reverse sequence, and Checkpoints 5→1; retain Task 0 unless its authority correction is separately superseded.
+- The committed verification rollback manifest includes Task 0, Checkpoints 1–5, every ordinary fix SHA with its owner, the repository-correction amendment SHA, repository-correction row 2 SHA, and an explicit `final evidence SHA: handoff-only (not self-recorded)` slot. The post-commit handoff fills that slot outside the document and gives the executable order.
+- The canonical reverse order for the observed history is: final evidence SHA → repository-correction row 2 SHA → repository-correction amendment SHA → earlier ordinary fix rows in reverse sequence (currently Fix 1 `69032633fc2346d56e0854475be045cfb3e8a35b`) → Checkpoint 5 → Checkpoint 4 → Checkpoint 3 → Checkpoint 2 → Checkpoint 1. When rolling back below the repository correction, revert row 2 first but retain its separately committed plan amendment as durable authority unless a new owner-approved authority amendment explicitly supersedes it; in that ordinary case the amendment's position in the reverse list is a retained/no-op step, not an implicit revert.
+- Any rollback below CP5 then continues through earlier ordinary fix rows in reverse sequence and Checkpoints 5 down through N+1. A fix still needed by retained Checkpoint N or earlier is reapplied/reimplemented against that retained tree under a new SHA and must pass the same owner-compatible current-state subset before the rollback disposition is committed; never retain a CP5-shaped fix above reverted checkpoints.
+- A full 8A rollback reverts final evidence, repository-correction row 2, every earlier ordinary fix in reverse sequence, and Checkpoints 5→1. It retains both the repository-correction plan amendment and Task 0 as durable authority unless either is separately superseded; if an owner-approved superseding authority explicitly requires reverting the plan amendment, revert it at its canonical position between row 2 and the earlier ordinary fixes.
 - If dirty failed work contains useful evidence, first validate an exact path allowlist and commit only that evidence; never use `git reset --hard`, destructive checkout, or deletion of evidence.
 - After rollback, run the last retained checkpoint's exact tests/contracts, `cargo check -p extractum --all-targets`, `cargo test -p extractum --all-targets`, and locked metadata.
 - Prove no crate/member/path edge exists, all Grammers roots remain app-owned, manifest/lock match the retained checkpoint, and the worktree is clean.
@@ -2369,7 +2759,7 @@ Record the final SHA in the handoff only. Do not amend the committed verificatio
 - [ ] The literal map still parses as 140 rows / 99 app / 41 crate / three companions with no duplicate baseline or final identity.
 - [ ] The three mandatory decompositions and dead-insert test remap are exact.
 - [ ] No baseline identity disappeared behind a zero-test filter or deleted source path.
-- [ ] The complete diff contains no migration, frontend runtime/UI, manifest, lockfile, dependency, feature, revision, persisted/wire value, command signature/registration, event name/payload/order, runtime status value, or transaction change. Only the explicitly named test-contract frontend files and the planned roadmap/design authority-status progression may change.
+- [ ] The complete retained range contains no migration, frontend runtime/UI, manifest, lockfile, dependency, feature, revision, persisted/wire value, command signature/registration, event name/payload/order, runtime status value, or transaction change. Implementation/correction commits change only the explicitly named test-contract frontend files and the planned roadmap/design authority-status progression; the sole separately committed authority exception is `docs/superpowers/plans/2026-07-26-extractum-telegram-8a-preparation.md` from the dated repository-correction amendment, which authorizes no production path, other documentation path, or status change.
 - [ ] Public API equals the allowlist; no public raw Grammers/TL/SQLx/Tauri/keyring/secret getter/error conversion exists.
 - [ ] DTO/media/session/runtime leaves live under `src-tauri/src/telegram`, not `telegram_impl` or a new crate.
 - [ ] App filesystem/secret/SQL/event/Takeout ownership is intact; temporary raw adapters are crate-private and enumerated for 8B removal.
