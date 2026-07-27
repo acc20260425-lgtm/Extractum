@@ -1,6 +1,6 @@
 #![allow(clippy::needless_borrow, clippy::too_many_arguments)]
 
-use std::future::Future;
+use std::{future::Future, sync::Arc};
 
 use grammers_client::{tl, Client};
 use serde::Serialize;
@@ -24,7 +24,7 @@ use crate::sources::{
     SourceIdentityRepairState, TelegramSourceKind, MIGRATED_HISTORY_STATUS_AVAILABLE,
     TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
 };
-use crate::telegram::{get_authorized_runtime, AuthorizedTelegramRuntime, TelegramState};
+use crate::telegram::{get_authorized_client, TelegramClientHandle, TelegramState};
 use crate::time::now_secs;
 use grammers_session::types::{PeerKind, PeerRef};
 
@@ -386,18 +386,25 @@ pub async fn run_takeout_export_dc_spike(
         AppError::validation(format!("Source {source_id} is not linked to an account"))
     })?;
     let telegram_source_subtype = load_takeout_source_subtype(&pool, source.id).await?;
-    let runtime = get_authorized_runtime(&state, account_id).await?;
+    let client_handle = get_authorized_client(state.inner(), account_id).await?;
 
-    run_export_dc_spike_for_runtime(source.id, account_id, &telegram_source_subtype, runtime).await
+    run_export_dc_spike_for_handle(
+        source.id,
+        account_id,
+        &telegram_source_subtype,
+        client_handle,
+    )
+    .await
 }
 
-async fn run_export_dc_spike_for_runtime(
+async fn run_export_dc_spike_for_handle(
     source_id: i64,
     account_id: i64,
     telegram_source_subtype: &str,
-    runtime: AuthorizedTelegramRuntime,
+    handle: TelegramClientHandle,
 ) -> AppResult<TakeoutExportDcSpikeResult> {
-    let client = runtime.client;
+    let client = handle.raw_client().clone();
+    let session = Arc::clone(handle.raw_session());
     client
         .invoke(&tl::functions::users::GetUsers {
             id: vec![tl::enums::InputUser::UserSelf],
@@ -405,7 +412,7 @@ async fn run_export_dc_spike_for_runtime(
         .await
         .map_err(|e| AppError::network(format!("Telegram self check failed: {e}")))?;
 
-    let alias = prepare_export_dc_alias(&runtime.session).await?;
+    let alias = prepare_export_dc_alias(&session).await?;
     let init_request = takeout_init_request_for_source_subtype(telegram_source_subtype)?;
     let mut warnings = Vec::new();
     let mut fallback_used = false;
@@ -699,9 +706,9 @@ async fn run_takeout_migrated_history_import(
     let account_id = source.account_id.ok_or_else(|| {
         AppError::validation(format!("Source {} is not linked to an account", source.id))
     })?;
-    let runtime = get_authorized_runtime(&telegram_state, account_id).await?;
-    let client = runtime.client;
-    let session = runtime.session;
+    let client_handle = get_authorized_client(telegram_state.inner(), account_id).await?;
+    let client = client_handle.raw_client().clone();
+    let session = Arc::clone(client_handle.raw_session());
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_RESOLVING_SOURCE.to_string();
@@ -955,9 +962,9 @@ async fn run_takeout_source_import(
     let account_id = source.account_id.ok_or_else(|| {
         AppError::validation(format!("Source {} is not linked to an account", source.id))
     })?;
-    let runtime = get_authorized_runtime(&telegram_state, account_id).await?;
-    let client = runtime.client;
-    let session = runtime.session;
+    let client_handle = get_authorized_client(telegram_state.inner(), account_id).await?;
+    let client = client_handle.raw_client().clone();
+    let session = Arc::clone(client_handle.raw_session());
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_RESOLVING_SOURCE.to_string();

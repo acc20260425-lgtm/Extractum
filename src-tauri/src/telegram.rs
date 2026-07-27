@@ -1,13 +1,8 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
-use grammers_client::{client::LoginToken, Client};
-use grammers_mtsender::SenderPool;
-use grammers_session::storages::MemorySession;
-use secrecy::ExposeSecret;
+use secrecy::{ExposeSecret, SecretString};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
@@ -16,6 +11,7 @@ use crate::telegram_session_store;
 
 mod dto;
 mod media;
+mod runtime;
 mod session;
 
 pub(crate) use dto::{
@@ -26,6 +22,9 @@ pub(crate) use dto::{
 pub(crate) use media::{
     derive_content_kind, derive_document_media_kind, extract_item_payload, DocumentSignals,
     TelegramMediaPayload, CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA,
+};
+pub(crate) use runtime::{
+    TelegramApiHash, TelegramClientHandle, TelegramRuntime, TelegramRuntimeStatus,
 };
 pub(crate) use session::{
     decode_session_json, encode_session_json, session_json_requires_existing_key,
@@ -39,27 +38,24 @@ const STATUS_REAUTH_REQUIRED: &str = "reauth_required";
 const STATUS_RESTORE_FAILED: &str = "restore_failed";
 const TELEGRAM_RESTORE_FAILURE_EVENT: &str = "telegram://restore-failure";
 
-#[derive(Debug, sqlx::FromRow)]
-struct AccountCredentials {
+fn runtime_status_to_wire(status: TelegramRuntimeStatus) -> &'static str {
+    match status {
+        TelegramRuntimeStatus::Ready => STATUS_READY,
+        TelegramRuntimeStatus::ReauthRequired => STATUS_REAUTH_REQUIRED,
+    }
+}
+
+#[derive(sqlx::FromRow)]
+struct AccountCredentialsRow {
     id: i64,
     api_id: i64,
     api_hash: String,
 }
 
-pub struct AccountClient {
-    pub client: Client,
-    pub session: TelegramSession,
-    pub api_hash: String,
-    pub login_token: Option<LoginToken>,
-    pub phone: Option<String>,
-    pub runner: JoinHandle<()>,
-}
-
-#[derive(Clone)]
-pub(crate) struct AuthorizedTelegramRuntime {
-    pub(crate) client: Client,
-    #[allow(dead_code)]
-    pub(crate) session: Arc<MemorySession>,
+struct AccountCredentials {
+    id: i64,
+    api_id: i64,
+    api_hash: TelegramApiHash,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -76,14 +72,14 @@ pub struct RestoreFailureEvent {
 
 /// Global state: map of account_id -> active client and runtime readiness
 pub struct TelegramState {
-    pub accounts: Mutex<HashMap<i64, AccountClient>>,
-    pub statuses: Mutex<HashMap<i64, AccountRuntimeStatus>>,
+    runtime: TelegramRuntime,
+    statuses: Mutex<HashMap<i64, AccountRuntimeStatus>>,
 }
 
 impl TelegramState {
     pub fn new() -> Self {
         Self {
-            accounts: Mutex::new(HashMap::new()),
+            runtime: TelegramRuntime::new(),
             statuses: Mutex::new(HashMap::new()),
         }
     }
@@ -102,7 +98,7 @@ impl TelegramState {
     }
 }
 
-async fn list_account_credentials(handle: &AppHandle) -> AppResult<Vec<AccountCredentials>> {
+async fn list_account_credentials(handle: &AppHandle) -> AppResult<Vec<AccountCredentialsRow>> {
     let pool = get_pool(handle).await?;
     sqlx::query_as("SELECT id, api_id, api_hash FROM accounts ORDER BY created_at ASC")
         .fetch_all(&pool)
@@ -124,7 +120,7 @@ async fn get_account_credentials_from_pool(
     secret_store: &SecretStoreState,
     account_id: i64,
 ) -> AppResult<AccountCredentials> {
-    let credentials: AccountCredentials =
+    let credentials: AccountCredentialsRow =
         sqlx::query_as("SELECT id, api_id, api_hash FROM accounts WHERE id = ?")
             .bind(account_id)
             .fetch_optional(pool)
@@ -137,19 +133,33 @@ async fn get_account_credentials_from_pool(
 async fn resolve_account_credentials(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     secret_store: &SecretStoreState,
-    mut credentials: AccountCredentials,
+    credentials: AccountCredentialsRow,
 ) -> AppResult<AccountCredentials> {
-    let key = telegram_account_api_hash_secret(credentials.id);
-    if !credentials.api_hash.trim().is_empty() {
-        let api_hash = credentials.api_hash.trim().to_string();
-        secret_store.set_secret(key, api_hash.clone()).await?;
+    let AccountCredentialsRow {
+        id,
+        api_id,
+        mut api_hash,
+    } = credentials;
+    let key = telegram_account_api_hash_secret(id);
+    if !api_hash.trim().is_empty() {
+        let trimmed_end = api_hash.trim_end().len();
+        api_hash.truncate(trimmed_end);
+        let trimmed_start = api_hash.len() - api_hash.trim_start().len();
+        api_hash.drain(..trimmed_start);
+        let api_hash = SecretString::new(api_hash);
+        secret_store
+            .set_secret(key, api_hash.expose_secret())
+            .await?;
         sqlx::query("UPDATE accounts SET api_hash = '' WHERE id = ?")
-            .bind(credentials.id)
+            .bind(id)
             .execute(pool)
             .await
             .map_err(AppError::database)?;
-        credentials.api_hash = api_hash;
-        return Ok(credentials);
+        return Ok(AccountCredentials {
+            id,
+            api_id,
+            api_hash: TelegramApiHash::new(api_hash),
+        });
     }
 
     let api_hash = secret_store
@@ -159,11 +169,14 @@ async fn resolve_account_credentials(
         .ok_or_else(|| {
             AppError::auth(format!(
                 "Telegram API hash for account {} is missing from secure storage. Recreate the account credentials.",
-                credentials.id
+                id
             ))
         })?;
-    credentials.api_hash = api_hash.expose_secret().to_string();
-    Ok(credentials)
+    Ok(AccountCredentials {
+        id,
+        api_id,
+        api_hash: TelegramApiHash::new(api_hash),
+    })
 }
 
 fn telegram_api_id(api_id: i64) -> AppResult<i32> {
@@ -199,16 +212,7 @@ pub async fn clear_account_runtime(
     account_id: i64,
     sign_out: bool,
 ) -> AppResult<()> {
-    let mut accounts = state.accounts.lock().await;
-    if let Some(ac) = accounts.remove(&account_id) {
-        let runner = ac.runner;
-        if sign_out {
-            let _ = ac.client.sign_out().await;
-        }
-        runner.abort();
-    }
-    drop(accounts);
-
+    state.runtime.clear_account(account_id, sign_out).await;
     telegram_session_store::delete_session(handle, secret_store, account_id).await?;
     set_account_status(handle, state, account_id, STATUS_NOT_INITIALIZED, None).await;
     Ok(())
@@ -220,45 +224,25 @@ async fn init_account_client(
     secret_store: &SecretStoreState,
     account_id: i64,
     api_id: i32,
-    api_hash: String,
+    api_hash: TelegramApiHash,
 ) -> AppResult<bool> {
     set_account_status(handle, state, account_id, STATUS_RESTORING, None).await;
 
     let session = telegram_session_store::load_session(handle, secret_store, account_id).await?;
-    let pool = SenderPool::new(Arc::clone(session.raw_memory_session()), api_id);
-
-    let runner = tokio::spawn(async move {
-        let _ = pool.runner.run().await;
-    });
-
-    let client = Client::new(pool.handle);
-    let is_auth = client
-        .is_authorized()
-        .await
-        .map_err(AppError::telegram_network)?;
-
-    let mut accounts = state.accounts.lock().await;
-    accounts.insert(
+    let runtime_status = state
+        .runtime
+        .initialize_account(account_id, api_id, api_hash, session)
+        .await?;
+    set_account_status(
+        handle,
+        state,
         account_id,
-        AccountClient {
-            client,
-            session,
-            api_hash,
-            login_token: None,
-            phone: None,
-            runner,
-        },
-    );
-    drop(accounts);
+        runtime_status_to_wire(runtime_status),
+        None,
+    )
+    .await;
 
-    let status = if is_auth {
-        STATUS_READY
-    } else {
-        STATUS_REAUTH_REQUIRED
-    };
-    set_account_status(handle, state, account_id, status, None).await;
-
-    Ok(is_auth)
+    Ok(runtime_status == TelegramRuntimeStatus::Ready)
 }
 
 fn restore_failure_message(error: impl std::fmt::Display) -> String {
@@ -344,12 +328,7 @@ pub async fn restore_telegram_accounts(handle: AppHandle) {
         .await;
 
         if let Err(error) = init_result {
-            {
-                let mut clients = state.accounts.lock().await;
-                if let Some(ac) = clients.remove(&account.id) {
-                    ac.runner.abort();
-                }
-            }
+            state.runtime.clear_account(account.id, false).await;
             set_account_status(
                 &handle,
                 &state,
@@ -386,11 +365,7 @@ pub async fn tg_init(
     {
         Ok(is_auth) => Ok(is_auth),
         Err(error) => {
-            let mut accounts = state.accounts.lock().await;
-            if let Some(ac) = accounts.remove(&account_id) {
-                ac.runner.abort();
-            }
-            drop(accounts);
+            state.runtime.clear_account(account_id, false).await;
             set_account_status(
                 &handle,
                 &state,
@@ -409,19 +384,7 @@ pub async fn tg_is_authenticated(
     state: tauri::State<'_, TelegramState>,
     account_id: i64,
 ) -> AppResult<bool> {
-    let client = {
-        let accounts = state.accounts.lock().await;
-        accounts.get(&account_id).map(|ac| ac.client.clone())
-    };
-
-    if let Some(client) = client {
-        Ok(client
-            .is_authorized()
-            .await
-            .map_err(AppError::telegram_network)?)
-    } else {
-        Ok(false)
-    }
+    state.runtime.is_authenticated(account_id).await
 }
 
 #[tauri::command]
@@ -451,20 +414,7 @@ pub async fn tg_send_code(
     account_id: i64,
     phone: String,
 ) -> AppResult<String> {
-    let mut accounts = state.accounts.lock().await;
-    let ac = accounts
-        .get_mut(&account_id)
-        .ok_or_else(|| AppError::auth("Account not initialized"))?;
-
-    let token = ac
-        .client
-        .request_login_code(&phone, &ac.api_hash.clone())
-        .await
-        .map_err(AppError::telegram_network)?;
-
-    ac.phone = Some(phone);
-    ac.login_token = Some(token);
-
+    state.runtime.request_login_code(account_id, phone).await?;
     Ok("Code sent".to_string())
 }
 
@@ -476,23 +426,7 @@ pub async fn tg_sign_in(
     account_id: i64,
     code: String,
 ) -> AppResult<bool> {
-    let session_to_save = {
-        let mut accounts = state.accounts.lock().await;
-        let ac = accounts
-            .get_mut(&account_id)
-            .ok_or_else(|| AppError::auth("Account not initialized"))?;
-        let token = ac
-            .login_token
-            .as_ref()
-            .ok_or_else(|| AppError::auth("Call tg_send_code first"))?;
-
-        ac.client
-            .sign_in(token, &code)
-            .await
-            .map_err(AppError::telegram_network)?;
-        ac.login_token = None;
-        ac.session.clone()
-    };
+    let session_to_save = state.runtime.sign_in(account_id, code).await?;
 
     telegram_session_store::save_session(&handle, &secret_store, account_id, &session_to_save)
         .await?;
@@ -512,55 +446,28 @@ pub async fn tg_logout(
     Ok(true)
 }
 
-/// Returns the Client for a given account_id (for use in other modules).
-/// Caller must hold the lock.
-pub async fn get_client(
-    accounts: &HashMap<i64, AccountClient>,
-    account_id: i64,
-) -> AppResult<&Client> {
-    accounts
-        .get(&account_id)
-        .map(|ac| &ac.client)
-        .ok_or_else(|| AppError::auth(format!("Account {account_id} not initialized")))
-}
-
-pub(crate) async fn get_authorized_runtime(
+pub(crate) async fn get_client(
     state: &TelegramState,
     account_id: i64,
-) -> AppResult<AuthorizedTelegramRuntime> {
-    let runtime = {
-        let accounts = state.accounts.lock().await;
-        let account = accounts
-            .get(&account_id)
-            .ok_or_else(|| AppError::auth(format!("Account {account_id} not initialized")))?;
+) -> extractum_core::error::AppResult<TelegramClientHandle> {
+    state.runtime.initialized_client(account_id).await
+}
 
-        AuthorizedTelegramRuntime {
-            client: account.client.clone(),
-            session: Arc::clone(account.session.raw_memory_session()),
-        }
-    };
-
-    if !runtime
-        .client
-        .is_authorized()
-        .await
-        .map_err(AppError::telegram_network)?
-    {
-        return Err(AppError::auth(format!(
-            "Account {account_id} is not authenticated"
-        )));
-    }
-
-    Ok(runtime)
+pub(crate) async fn get_authorized_client(
+    state: &TelegramState,
+    account_id: i64,
+) -> extractum_core::error::AppResult<TelegramClientHandle> {
+    state.runtime.authorized_client(account_id).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        get_account_credentials_from_pool, restore_failure_message, telegram_api_id,
-        AccountRuntimeStatus, RestoreFailureEvent, TelegramState, STATUS_NOT_INITIALIZED,
-        STATUS_READY, STATUS_REAUTH_REQUIRED, STATUS_RESTORE_FAILED, STATUS_RESTORING,
-        TELEGRAM_ACCOUNT_STATUS_EVENT, TELEGRAM_RESTORE_FAILURE_EVENT,
+        get_account_credentials_from_pool, restore_failure_message, runtime_status_to_wire,
+        telegram_api_id, AccountRuntimeStatus, RestoreFailureEvent, TelegramRuntimeStatus,
+        TelegramState, STATUS_NOT_INITIALIZED, STATUS_READY, STATUS_REAUTH_REQUIRED,
+        STATUS_RESTORE_FAILED, STATUS_RESTORING, TELEGRAM_ACCOUNT_STATUS_EVENT,
+        TELEGRAM_RESTORE_FAILURE_EVENT,
     };
     use crate::error::{AppError, AppErrorKind, AppResult};
     use crate::secret_store::tests::InMemorySecretStore;
@@ -621,6 +528,20 @@ mod tests {
 
         assert_eq!(error.kind, AppErrorKind::Validation);
         assert_eq!(error.message, "Telegram API ID is out of range");
+    }
+
+    #[test]
+    fn runtime_status_maps_to_existing_wire_strings() {
+        assert_eq!(
+            runtime_status_to_wire(TelegramRuntimeStatus::Ready),
+            STATUS_READY,
+            "RED: CP5 app runtime status mapping"
+        );
+        assert_eq!(
+            runtime_status_to_wire(TelegramRuntimeStatus::ReauthRequired),
+            STATUS_REAUTH_REQUIRED,
+            "RED: CP5 app runtime status mapping"
+        );
     }
 
     #[test]
@@ -730,11 +651,10 @@ mod tests {
         let (_store, secret_store) = memory_secret_store();
         let account_id = insert_account(&pool, "legacy-hash").await;
 
-        let credentials = get_account_credentials_from_pool(&pool, &secret_store, account_id)
+        get_account_credentials_from_pool(&pool, &secret_store, account_id)
             .await
             .expect("load credentials");
 
-        assert_eq!(credentials.api_hash, "legacy-hash");
         assert_eq!(stored_api_hash(&pool, account_id).await, "");
         assert_eq!(
             secret_store
@@ -753,9 +673,11 @@ mod tests {
         store.fail_set("secure store unavailable");
         let account_id = insert_account(&pool, "legacy-hash").await;
 
-        let error = get_account_credentials_from_pool(&pool, &secret_store, account_id)
-            .await
-            .expect_err("secret write should fail");
+        let error = match get_account_credentials_from_pool(&pool, &secret_store, account_id).await
+        {
+            Ok(_) => panic!("secret write should fail"),
+            Err(error) => error,
+        };
 
         assert_eq!(error.kind, AppErrorKind::Internal);
         assert_eq!(error.message, "secure store unavailable");
@@ -768,9 +690,11 @@ mod tests {
         let (_store, secret_store) = memory_secret_store();
         let account_id = insert_account(&pool, "").await;
 
-        let error = get_account_credentials_from_pool(&pool, &secret_store, account_id)
-            .await
-            .expect_err("missing secret should fail");
+        let error = match get_account_credentials_from_pool(&pool, &secret_store, account_id).await
+        {
+            Ok(_) => panic!("missing secret should fail"),
+            Err(error) => error,
+        };
 
         assert_eq!(error.kind, AppErrorKind::Auth);
         assert_eq!(
@@ -778,6 +702,28 @@ mod tests {
             format!(
                 "Telegram API hash for account {account_id} is missing from secure storage. Recreate the account credentials."
             )
+        );
+
+        secret_store
+            .set_secret(telegram_account_api_hash_secret(account_id), " \t\r\n ")
+            .await
+            .expect("store whitespace-only API hash");
+        let whitespace_error =
+            match get_account_credentials_from_pool(&pool, &secret_store, account_id).await {
+                Ok(_) => panic!("RED: CP5 whitespace-only secure API hash must fail"),
+                Err(error) => error,
+            };
+        assert_eq!(
+            whitespace_error.kind,
+            AppErrorKind::Auth,
+            "RED: CP5 whitespace-only secure API hash must fail"
+        );
+        assert_eq!(
+            whitespace_error.message,
+            format!(
+                "Telegram API hash for account {account_id} is missing from secure storage. Recreate the account credentials."
+            ),
+            "RED: CP5 whitespace-only secure API hash must fail"
         );
     }
 

@@ -405,7 +405,7 @@ function rawConsumerPaths(
   sources: ReadonlyMap<string, string>,
 ): string[] {
   const rawConsumer =
-    /grammers_(?:client|session|mtsender|tl_types)|\b(?:get_client|get_authorized_runtime|AuthorizedTelegramRuntime|AccountClient|raw_client|raw_session|MemorySession|LoginToken)\b|\.accounts\s*\.lock\s*\(\s*\)\s*\.await/;
+    /grammers_(?:client|session|mtsender|tl_types)|\b(?:get_client|get_authorized_client|get_authorized_runtime|TelegramApiHash|TelegramClientHandle|TelegramRuntime|AuthorizedTelegramRuntime|AccountClient|raw_client|raw_session|MemorySession|LoginToken)\b|\.accounts\s*\.lock\s*\(\s*\)\s*\.await/;
   return [...sources.entries()]
     .filter(([, source]) => rawConsumer.test(source))
     .map(([relativePath]) => relativePath);
@@ -460,11 +460,10 @@ function assertRawConsumerInventory(
     );
   }
   if (checkpointNumber(value) >= 5) {
-    expectedApp = expectedApp.map((relativePath) =>
-      relativePath === "src-tauri/src/telegram.rs"
-        ? "src-tauri/src/telegram/runtime.rs"
-        : relativePath,
-    );
+    expectedApp = [
+      ...expectedApp,
+      "src-tauri/src/telegram/runtime.rs",
+    ];
   }
   exactInventory(
     actualApp,
@@ -642,9 +641,7 @@ function maskExactCfgTestItemSpans(source: string): string {
     const previous = ranges.at(-1);
     if (previous && match.index < previous.end) continue;
     if (rustBraceDepthBefore(searchable, match.index) !== 0) {
-      throw new Error(
-        "Checkpoint 4 cfg(test) inventory does not support nested item attributes",
-      );
+      continue;
     }
 
     let cursor = match.index + match[0].length;
@@ -1338,6 +1335,660 @@ function assertCheckpointFourSessionContract(
   );
 }
 
+function assertAccountCredentialsRowHasNoSecretDebug(
+  sourceOverrides: ReadonlyMap<string, string> = new Map(),
+  appSources = checkpointThreeAppRustSources(sourceOverrides),
+): void {
+  const ownerPath = "src-tauri/src/telegram.rs";
+  const ownerSource = appSources.get(ownerPath);
+  if (ownerSource === undefined) {
+    throw new Error(
+      "Checkpoint 5 secrecy contract: AccountCredentialsRow owner is missing",
+    );
+  }
+  const ownerProduction = maskExactCfgTestItemSpans(ownerSource);
+  const structure = maskRustLexicalNonCode(ownerProduction);
+  expect(
+    structure,
+    "Checkpoint 5 secrecy contract: plaintext AccountCredentialsRow must not derive Debug",
+  ).not.toMatch(
+    /#\s*\[\s*derive\s*\([^)]*\bDebug\b[^)]*\)\s*\]\s*(?:#\s*\[[^\]]+\]\s*)*struct\s+AccountCredentialsRow\b/,
+  );
+  expect(
+    rustStructOuterAttributeInventory(
+      ownerProduction,
+      ["AccountCredentialsRow"],
+      "Checkpoint 5 AccountCredentialsRow outer-attribute inventory",
+    ),
+    "Checkpoint 5 secrecy contract: exact AccountCredentialsRow outer attributes",
+  ).toEqual([
+    "AccountCredentialsRow|#[derive(sqlx::FromRow)]",
+  ]);
+  const productionSources = [...appSources.entries()].flatMap(
+    ([relativePath, source]) =>
+      source.includes("AccountCredentialsRow")
+        ? [[relativePath, maskExactCfgTestItemSpans(source)] as const]
+        : [],
+  );
+  const explicitTraitImpls = productionSources.flatMap(
+    ([relativePath, source]) =>
+      explicitTraitImplInventory(
+        rustImplBlocks(
+          source,
+          "Checkpoint 5 AccountCredentialsRow impl inventory",
+        ),
+        "AccountCredentialsRow",
+      ).map((header) => `${relativePath}|${header}`),
+  );
+  expect(
+    explicitTraitImpls,
+    "Checkpoint 5 secrecy contract: plaintext AccountCredentialsRow has no explicit trait surface",
+  ).toEqual([]);
+  const aliases = productionSources.flatMap(([relativePath, source]) =>
+    rustWrapperAliasNames(source, ["AccountCredentialsRow"]).map(
+      (alias) => `${relativePath}|${alias}`,
+    ),
+  );
+  expect(
+    aliases,
+    "Checkpoint 5 secrecy contract: plaintext AccountCredentialsRow has no alias escape",
+  ).toEqual([]);
+}
+
+function assertCheckpointFiveRuntimeContract(
+  sourceOverrides: ReadonlyMap<string, string> = new Map(),
+): void {
+  const read = (relativePath: string): string =>
+    sourceOverrides.get(relativePath)
+    ?? telegramContractPaths.readTelegramContractFile(relativePath);
+  const runtimePath = "src-tauri/src/telegram/runtime.rs";
+  const telegramPath = "src-tauri/src/telegram.rs";
+  const storePath = "src-tauri/src/sources/store.rs";
+  const syncPath = "src-tauri/src/sources/sync.rs";
+  const takeoutPath = "src-tauri/src/takeout_import/mod.rs";
+  const runtime = read(runtimePath);
+  const telegram = read(telegramPath);
+  const store = read(storePath);
+  const sync = read(syncPath);
+  const takeout = read(takeoutPath);
+  const runtimeProduction = maskExactCfgTestItemSpans(runtime);
+  const runtimeStructure = maskRustLexicalNonCode(runtimeProduction);
+  const runtimeUnmaskedStructure = maskRustLexicalNonCode(runtime);
+  const telegramProduction = maskExactCfgTestItemSpans(telegram);
+  const telegramStructure = maskRustLexicalNonCode(telegramProduction);
+  const storeProduction = maskExactCfgTestItemSpans(store);
+  const syncProduction = maskExactCfgTestItemSpans(sync);
+  const takeoutProduction = maskExactCfgTestItemSpans(takeout);
+  const appSources = checkpointThreeAppRustSources(sourceOverrides);
+  const runtimeWrapperNames = [
+    "TelegramApiHash",
+    "TelegramClientHandle",
+    "TelegramLoginAttempt",
+    "TelegramRuntime",
+  ];
+  const runtimeWrapperSourceEntries = [...appSources.entries()].filter(
+    ([, source]) =>
+      runtimeWrapperNames.some((typeName) => source.includes(typeName)),
+  );
+  const runtimeWrapperAliases = runtimeWrapperSourceEntries.flatMap(
+    ([relativePath, source]) =>
+      rustWrapperAliasNames(
+        maskExactCfgTestItemSpans(source),
+        runtimeWrapperNames,
+      ).map((alias) => `${relativePath}|${alias}`),
+  );
+  expect(
+    runtimeWrapperAliases,
+    "Checkpoint 5 API contract: runtime wrappers have no type or use aliases",
+  ).toEqual([]);
+  const sensitiveMacroNames = [
+    ...runtimeWrapperNames,
+    "AccountCredentialsRow",
+  ];
+  const sensitiveMacroInventory = [...appSources.entries()]
+    .filter(([, source]) =>
+      sensitiveMacroNames.some((typeName) => source.includes(typeName))
+    )
+    .flatMap(
+      ([relativePath, source]) =>
+        rustSensitiveMacroInventory(
+          maskExactCfgTestItemSpans(source),
+          sensitiveMacroNames,
+          `Checkpoint 5 sensitive macro inventory ${relativePath}`,
+        ).map((evidence) => `${relativePath}|${evidence}`),
+    );
+  expect(
+    sensitiveMacroInventory,
+    "Checkpoint 5 API contract: runtime wrappers and plaintext credential row have no macro escape",
+  ).toEqual([]);
+  const runtimeWrapperImpls = runtimeWrapperSourceEntries.flatMap(
+    ([relativePath, source]) => {
+      const production = maskExactCfgTestItemSpans(source);
+      const aliases = rustWrapperAliasNames(production, runtimeWrapperNames);
+      const targetNames = [...runtimeWrapperNames, ...aliases];
+      return rustImplBlocks(
+        production,
+        `Checkpoint 5 runtime wrapper impl inventory ${relativePath}`,
+      )
+        .filter(({ header }) =>
+          targetNames.some((typeName) =>
+            rustTypeReferenceRegex(typeName).test(header),
+          )
+        )
+        .map(({ header }) => `${relativePath}|${header}`);
+    },
+  );
+  expect(
+    runtimeWrapperImpls,
+    "Checkpoint 5 API contract: exact runtime wrapper impl sites and headers",
+  ).toEqual([
+    `${runtimePath}|TelegramApiHash`,
+    `${runtimePath}|TelegramClientHandle`,
+    `${runtimePath}|TelegramRuntime`,
+  ]);
+  const appProductionStructure = [...appSources.entries()]
+    .map(([relativePath, source]) =>
+      `${relativePath}\n${
+        maskRustLexicalNonCode(maskExactCfgTestItemSpans(source))
+      }`
+    )
+    .join("\n");
+  const runtimeImpls = rustImplBlocks(
+    runtimeProduction,
+    "Checkpoint 5 runtime impl inventory",
+  );
+  expect(
+    rustStructOuterAttributeInventory(
+      runtimeProduction,
+      runtimeWrapperNames,
+      "Checkpoint 5 runtime wrapper outer-attribute inventory",
+    ),
+    "Checkpoint 5 API contract: exact runtime wrapper outer attributes",
+  ).toEqual([
+    "TelegramApiHash|#[derive(Clone)]",
+    "TelegramClientHandle|#[derive(Clone)]",
+    "TelegramLoginAttempt|",
+    "TelegramRuntime|",
+  ]);
+  const inherentBody = (typeName: string, marker: string): string => {
+    const matches = runtimeImpls.filter(
+      ({ header, body }) =>
+        header === typeName && body.includes(marker),
+    );
+    expect(
+      matches,
+      `Checkpoint 5 API contract: sole ${typeName} impl with ${marker}`,
+    ).toHaveLength(1);
+    return matches[0].body;
+  };
+  assertAccountCredentialsRowHasNoSecretDebug(sourceOverrides, appSources);
+
+  expect(
+    visibleRustTopLevelItemInventory(
+      runtimeProduction,
+      "Checkpoint 5 runtime visible top-level inventory",
+    ),
+    "Checkpoint 5 API contract: exact visible runtime top-level items",
+  ).toEqual([
+    "root|pub struct TelegramApiHash",
+    "root|pub enum TelegramRuntimeStatus",
+    "root|pub struct TelegramClientHandle",
+    "root|pub struct TelegramLoginAttempt",
+    "root|pub struct TelegramRuntime",
+  ]);
+  expect(
+    normalize(runtimeStructure),
+    "Checkpoint 5 API contract: opaque API hash",
+  ).toMatch(
+    /#\s*\[\s*derive\s*\(\s*Clone\s*\)\s*\]\s*pub struct TelegramApiHash\s*\(\s*SecretString\s*\)\s*;/,
+  );
+  expect(
+    normalize(runtimeStructure),
+    "Checkpoint 5 API contract: closed status vocabulary",
+  ).toMatch(
+    /#\s*\[\s*derive\s*\(\s*Clone\s*,\s*Copy\s*,\s*Debug\s*,\s*Eq\s*,\s*PartialEq\s*\)\s*\]\s*pub enum TelegramRuntimeStatus\s*\{\s*Ready\s*,\s*ReauthRequired\s*,?\s*\}/,
+  );
+  for (const typeName of [
+    "TelegramClientHandle",
+    "TelegramLoginAttempt",
+    "TelegramRuntime",
+  ]) {
+    expect(
+      rustStructBody(runtimeProduction, typeName),
+      `Checkpoint 5 API contract: ${typeName} fields stay private`,
+    ).not.toMatch(/\bpub(?:\s*\([^)]*\))?\s+[A-Za-z_][A-Za-z0-9_]*\s*:/);
+  }
+
+  const apiHashImpl = inherentBody("TelegramApiHash", "pub fn new");
+  expect(
+    normalizedRustFunctionDeclaration(apiHashImpl, "new"),
+    "Checkpoint 5 API contract: exact API-hash constructor",
+  ).toBe("pub fn new(value: SecretString) -> Self");
+  expect(
+    visibleInherentAssociatedItemInventory(runtimeImpls, "TelegramApiHash"),
+    "Checkpoint 5 API contract: complete API-hash surface",
+  ).toEqual(["pub fn new"]);
+  expect(
+    visibleInherentAssociatedItemInventory(
+      runtimeImpls,
+      "TelegramClientHandle",
+    ),
+    "Checkpoint 5 API contract: exact temporary raw adapters",
+  ).toEqual([
+    "pub(crate) fn raw_client",
+    "pub(crate) fn raw_session",
+  ]);
+  expect(
+    normalizedRustFunctionDeclaration(
+      inherentBody("TelegramClientHandle", "raw_client"),
+      "raw_client",
+    ),
+    "Checkpoint 5 API contract: exact raw-client adapter",
+  ).toBe(
+    "pub(crate) fn raw_client(&self) -> &grammers_client::Client",
+  );
+  expect(
+    normalizedRustFunctionDeclaration(
+      inherentBody("TelegramClientHandle", "raw_session"),
+      "raw_session",
+    ),
+    "Checkpoint 5 API contract: exact raw-session adapter",
+  ).toBe(
+    "pub(crate) fn raw_session(&self) -> &std::sync::Arc<grammers_session::storages::MemorySession>",
+  );
+
+  const runtimeImpl = inherentBody("TelegramRuntime", "initialize_account");
+  const exactRuntimeDeclarations = new Map([
+    ["new", "pub fn new() -> Self"],
+    [
+      "initialize_account",
+      "pub async fn initialize_account(&self, account_id: i64, api_id: i32, api_hash: TelegramApiHash, session: TelegramSession,) -> extractum_core::error::AppResult<TelegramRuntimeStatus>",
+    ],
+    [
+      "is_authenticated",
+      "pub async fn is_authenticated(&self, account_id: i64,) -> extractum_core::error::AppResult<bool>",
+    ],
+    [
+      "request_login_code",
+      "pub async fn request_login_code(&self, account_id: i64, phone: String,) -> extractum_core::error::AppResult<()>",
+    ],
+    [
+      "sign_in",
+      "pub async fn sign_in(&self, account_id: i64, code: String,) -> extractum_core::error::AppResult<TelegramSession>",
+    ],
+    [
+      "authorized_client",
+      "pub async fn authorized_client(&self, account_id: i64,) -> extractum_core::error::AppResult<TelegramClientHandle>",
+    ],
+    [
+      "initialized_client",
+      "pub(super) async fn initialized_client(&self, account_id: i64,) -> extractum_core::error::AppResult<TelegramClientHandle>",
+    ],
+    [
+      "clear_account",
+      "pub async fn clear_account(&self, account_id: i64, sign_out: bool)",
+    ],
+  ]);
+  for (const [name, declaration] of exactRuntimeDeclarations) {
+    expect(
+      normalizedRustFunctionDeclaration(runtimeImpl, name),
+      `Checkpoint 5 API contract: exact ${name} declaration`,
+    ).toBe(declaration);
+  }
+  expect(
+    visibleInherentAssociatedItemInventory(runtimeImpls, "TelegramRuntime"),
+    "Checkpoint 5 API contract: complete runtime surface",
+  ).toEqual([
+    "pub fn new",
+    "pub fn initialize_account",
+    "pub fn is_authenticated",
+    "pub fn request_login_code",
+    "pub fn sign_in",
+    "pub fn authorized_client",
+    "pub(super) fn initialized_client",
+    "pub fn clear_account",
+  ]);
+  for (const wrapper of [
+    "TelegramApiHash",
+    "TelegramClientHandle",
+    "TelegramLoginAttempt",
+    "TelegramRuntime",
+  ]) {
+    expect(
+      explicitTraitImplInventory(runtimeImpls, wrapper),
+      `Checkpoint 5 secrecy contract: ${wrapper} has no conversion/raw trait surface`,
+    ).toEqual([]);
+  }
+
+  expect(
+    runtimeStructure,
+    "Checkpoint 5 secrecy contract: no secret Debug/getter/exposure trait",
+  ).not.toMatch(
+    /(?:derive\s*\([^)]*\bDebug\b[^)]*\)\s*pub struct TelegramApiHash|impl\s+(?:std::fmt::)?Debug\s+for\s+TelegramApiHash|impl\s+(?:secrecy::)?ExposeSecret\s+for\s+TelegramApiHash|\bpub(?:\s*\([^)]*\))?\s+fn\s+(?:as_str|expose_secret|api_hash|raw_hash)\s*\()/,
+  );
+  expect(
+    countMatches(runtimeStructure, /\.expose_secret\s*\(\s*\)/g),
+    "Checkpoint 5 secrecy contract: sole Grammers API-hash sink",
+  ).toBe(1);
+  expect(
+    runtimeStructure,
+    "Checkpoint 5 ownership contract: runtime owns no app capabilities",
+  ).not.toMatch(
+    /\b(?:sqlx|tauri|SecretStore|SecretStoreState|keyring|AppHandle|PathBuf)\b|std::(?:fs|path)\b|\bcrate::error\b/,
+  );
+  expect(
+    runtimeUnmaskedStructure,
+    "Checkpoint 5 API contract: callback seam stays private and test-only",
+  ).toMatch(
+    /#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*type TelegramRuntimeTestFuture\b/,
+  );
+  expect(
+    runtimeUnmaskedStructure,
+    "Checkpoint 5 API contract: no callback seam item is visible",
+  ).not.toMatch(
+    /\bpub(?:\s*\([^)]*\))?\s+(?:type|struct|fn)\s+TelegramRuntimeTest/,
+  );
+
+  expect(
+    normalizedRustUseDeclarations(telegramProduction, "runtime"),
+    "Checkpoint 5 API contract: curated runtime facade",
+  ).toEqual([
+    "pub(crate) use runtime::{TelegramApiHash, TelegramClientHandle, TelegramRuntime, TelegramRuntimeStatus,};",
+  ]);
+  expect(
+    normalizedRustFunctionDeclaration(telegramProduction, "get_client"),
+    "Checkpoint 5 API contract: exact initialized lookup facade",
+  ).toBe(
+    "pub(crate) async fn get_client(state: &TelegramState, account_id: i64,) -> extractum_core::error::AppResult<TelegramClientHandle>",
+  );
+  expect(
+    normalizedRustFunctionDeclaration(
+      telegramProduction,
+      "get_authorized_client",
+    ),
+    "Checkpoint 5 API contract: exact authorized lookup facade",
+  ).toBe(
+    "pub(crate) async fn get_authorized_client(state: &TelegramState, account_id: i64,) -> extractum_core::error::AppResult<TelegramClientHandle>",
+  );
+  expect(rustFunctionBody(telegramProduction, "get_client").trim()).toBe(
+    "state.runtime.initialized_client(account_id).await",
+  );
+  expect(
+    rustFunctionBody(telegramProduction, "get_authorized_client").trim(),
+  ).toBe("state.runtime.authorized_client(account_id).await");
+  expect(
+    appProductionStructure,
+    "Checkpoint 5 ownership contract: legacy runtime seams are absent",
+  ).not.toMatch(
+    /\b(?:AccountClient|AuthorizedTelegramRuntime|get_authorized_runtime)\b/,
+  );
+
+  expect(
+    normalize(rustStructBody(telegramProduction, "AccountCredentialsRow"))
+      .replace(/\s+/g, " ")
+      .trim(),
+    "Checkpoint 5 app contract: SQL row retains the only app plaintext hash field",
+  ).toBe("id: i64, api_id: i64, api_hash: String,");
+  expect(
+    normalize(rustStructBody(telegramProduction, "AccountCredentials"))
+      .replace(/\s+/g, " ")
+      .trim(),
+    "Checkpoint 5 app contract: resolved credentials carry only the opaque hash",
+  ).toBe("id: i64, api_id: i64, api_hash: TelegramApiHash,");
+  expect(
+    countMatches(telegramStructure, /\.expose_secret\s*\(\s*\)/g),
+    "Checkpoint 5 secrecy contract: exact app secure-store validation/write sinks",
+  ).toBe(2);
+  expect(
+    rustFunctionBody(telegramProduction, "resolve_account_credentials"),
+    "Checkpoint 5 secrecy contract: secure-store reads are never stringified or cloned",
+  ).not.toMatch(
+    /api_hash\.(?:to_string|clone)\s*\(|expose_secret\s*\(\s*\)\s*\.(?:to_string|clone)\s*\(|credentials\.api_hash\s*=/,
+  );
+  expect(
+    telegramStructure,
+    "Checkpoint 5 secrecy contract: no plaintext hash log or serialization path",
+  ).not.toMatch(
+    /(?:e?println!|dbg!|tracing::\w+!|serde_json::to_\w+)\s*\([^;]*api_hash/,
+  );
+
+  const storeBodies = [
+    ["list_telegram_sources", "account_id"],
+    ["add_telegram_source", "request.account_id"],
+  ] as const;
+  for (const [functionName, accountExpression] of storeBodies) {
+    const body = rustFunctionBody(storeProduction, functionName);
+    expect(
+      normalize(body),
+      `Checkpoint 5 consumer contract: ${functionName} uses the initialized handle`,
+    ).toContain(
+      `crate::telegram::get_client(state.inner(), ${accountExpression}).await?`,
+    );
+    expect(
+      rustNamedCallCount(body, "get_client"),
+      `Checkpoint 5 consumer contract: ${functionName} sole initialized lookup`,
+    ).toBe(1);
+    expect(
+      rustIdentifierReferenceInventory(body, "raw_client"),
+      `Checkpoint 5 consumer contract: ${functionName} sole raw client`,
+    ).toEqual(["call"]);
+    expect(
+      body,
+      `Checkpoint 5 consumer contract: ${functionName} owns no caller lock`,
+    ).not.toMatch(
+      /\bstate\.accounts\b|\.accounts\s*\.lock\s*\(|get_client\s*\(\s*&accounts/,
+    );
+  }
+
+  const syncBody = rustFunctionBody(syncProduction, "sync_telegram_source");
+  expect(normalize(syncBody)).toContain(
+    "crate::telegram::get_authorized_client(state.inner(), account_id).await?",
+  );
+  expect(
+    rustNamedCallCount(syncBody, "get_authorized_client"),
+    "Checkpoint 5 consumer contract: sync sole authorized lookup",
+  ).toBe(1);
+  expect(
+    rustIdentifierReferenceInventory(syncBody, "raw_client"),
+    "Checkpoint 5 consumer contract: sync sole raw client",
+  ).toEqual(["call"]);
+  expect(
+    rustIdentifierReferenceInventory(syncBody, "raw_session"),
+    "Checkpoint 5 consumer contract: sync owns no raw session",
+  ).toEqual([]);
+
+  const takeoutWorkflows = [
+    "run_export_dc_spike_for_handle",
+    "run_takeout_migrated_history_import",
+    "run_takeout_source_import",
+  ] as const;
+  for (const functionName of takeoutWorkflows) {
+    const body = rustFunctionBody(takeoutProduction, functionName);
+    expect(
+      rustIdentifierReferenceInventory(body, "raw_client"),
+      `Checkpoint 5 consumer contract: ${functionName} raw client`,
+    ).toEqual(["call"]);
+    expect(
+      rustIdentifierReferenceInventory(body, "raw_session"),
+      `Checkpoint 5 consumer contract: ${functionName} raw session`,
+    ).toEqual(["call"]);
+  }
+  const takeoutLookupWorkflows = [
+    ["run_takeout_export_dc_spike", "state.inner()"],
+    ["run_takeout_migrated_history_import", "telegram_state.inner()"],
+    ["run_takeout_source_import", "telegram_state.inner()"],
+  ] as const;
+  for (const [functionName, stateExpression] of takeoutLookupWorkflows) {
+    const body = rustFunctionBody(takeoutProduction, functionName);
+    expect(
+      normalize(body),
+      `Checkpoint 5 consumer contract: ${functionName} authorized lookup arguments`,
+    ).toContain(
+      `get_authorized_client(${stateExpression}, account_id).await?`,
+    );
+    expect(
+      rustNamedCallCount(body, "get_authorized_client"),
+      `Checkpoint 5 consumer contract: ${functionName} sole authorized lookup`,
+    ).toBe(1);
+  }
+  expect(
+    normalizedRustFunctionDeclaration(
+      takeoutProduction,
+      "run_export_dc_spike_for_handle",
+    ),
+    "Checkpoint 5 consumer contract: exact Takeout spike handle",
+  ).toBe(
+    "async fn run_export_dc_spike_for_handle(source_id: i64, account_id: i64, telegram_source_subtype: &str, handle: TelegramClientHandle,) -> AppResult<TakeoutExportDcSpikeResult>",
+  );
+
+  const initializedLookupSites = [...appSources.entries()].flatMap(
+    ([relativePath, source]) =>
+      Array.from(
+        { length: rustNamedCallCount(
+          maskExactCfgTestItemSpans(source),
+          "get_client",
+        ) },
+        (_, index) => `${relativePath}#${index + 1}`,
+      ),
+  );
+  const identifierReferenceSites = (name: string): string[] =>
+    [...appSources.entries()].flatMap(([relativePath, source]) => {
+      const counts = new Map<string, number>();
+      return rustIdentifierReferenceInventory(
+        maskExactCfgTestItemSpans(source),
+        name,
+      ).map((kind) => {
+        const occurrence = (counts.get(kind) ?? 0) + 1;
+        counts.set(kind, occurrence);
+        return `${relativePath}|${kind}#${occurrence}`;
+      });
+    });
+  const authorizedLookupSites = [...appSources.entries()].flatMap(
+    ([relativePath, source]) =>
+      Array.from(
+        { length: rustNamedCallCount(
+          maskExactCfgTestItemSpans(source),
+          "get_authorized_client",
+        ) },
+        (_, index) => `${relativePath}#${index + 1}`,
+      ),
+  );
+  exactInventory(
+    identifierReferenceSites("get_client"),
+    [
+      `${storePath}|call#1`,
+      `${storePath}|call#2`,
+      `${telegramPath}|declaration#1`,
+    ],
+    "Checkpoint 5 consumer contract: exact initialized-lookup identifier references",
+  );
+  exactInventory(
+    identifierReferenceSites("get_authorized_client"),
+    [
+      `${syncPath}|call#1`,
+      `${takeoutPath}|import#1`,
+      `${takeoutPath}|call#1`,
+      `${takeoutPath}|call#2`,
+      `${takeoutPath}|call#3`,
+      `${telegramPath}|declaration#1`,
+    ],
+    "Checkpoint 5 consumer contract: exact authorized-lookup identifier references",
+  );
+  exactInventory(
+    initializedLookupSites,
+    [
+      `${storePath}#1`,
+      `${storePath}#2`,
+    ],
+    "Checkpoint 5 consumer contract: exact initialized-lookup call sites",
+  );
+  exactInventory(
+    authorizedLookupSites,
+    [
+      `${syncPath}#1`,
+      `${takeoutPath}#1`,
+      `${takeoutPath}#2`,
+      `${takeoutPath}#3`,
+    ],
+    "Checkpoint 5 consumer contract: exact authorized-lookup call sites",
+  );
+  exactInventory(
+    identifierReferenceSites("raw_client"),
+    [
+      `${runtimePath}|declaration#1`,
+      `${storePath}|call#1`,
+      `${storePath}|call#2`,
+      `${syncPath}|call#1`,
+      `${takeoutPath}|call#1`,
+      `${takeoutPath}|call#2`,
+      `${takeoutPath}|call#3`,
+    ],
+    "Checkpoint 5 consumer contract: exact raw-client identifier references",
+  );
+  exactInventory(
+    identifierReferenceSites("raw_session"),
+    [
+      `${runtimePath}|declaration#1`,
+      `${takeoutPath}|call#1`,
+      `${takeoutPath}|call#2`,
+      `${takeoutPath}|call#3`,
+    ],
+    "Checkpoint 5 consumer contract: exact raw-session identifier references",
+  );
+  expect(
+    runtimeStructure,
+    "Checkpoint 5 API contract: adapters have no dead-code escape hatch",
+  ).not.toMatch(
+    /#\s*\[\s*allow\s*\(\s*dead_code\s*\)\s*\]\s*pub\s*\(\s*crate\s*\)\s+fn\s+raw_(?:client|session)/,
+  );
+
+  expectOrdered(
+    rustFunctionBody(telegramProduction, "init_account_client"),
+    [
+      "STATUS_RESTORING",
+      "load_session(handle, secret_store, account_id).await?",
+      ".initialize_account(account_id, api_id, api_hash, session)",
+      "runtime_status_to_wire(runtime_status)",
+      "runtime_status == TelegramRuntimeStatus::Ready",
+    ],
+    "Checkpoint 5 app contract: restore-runtime-status order",
+  );
+  for (const functionName of [
+    "restore_telegram_accounts",
+    "tg_init",
+  ]) {
+    const body = rustFunctionBody(telegramProduction, functionName);
+    expectOrdered(
+      body,
+      [
+        "init_account_client(",
+        "runtime.clear_account(",
+        "STATUS_RESTORE_FAILED",
+      ],
+      `Checkpoint 5 app contract: ${functionName} clears the current entry before restore_failed`,
+    );
+  }
+  expectOrdered(
+    rustFunctionBody(telegramProduction, "clear_account_runtime"),
+    [
+      "runtime.clear_account(account_id, sign_out).await",
+      "delete_session(handle, secret_store, account_id).await?",
+      "STATUS_NOT_INITIALIZED",
+    ],
+    "Checkpoint 5 app contract: runtime-file-status clear order",
+  );
+  expectOrdered(
+    rustFunctionBody(telegramProduction, "tg_sign_in"),
+    [
+      "runtime.sign_in(account_id, code).await?",
+      "save_session(&handle, &secret_store, account_id, &session_to_save)",
+      "STATUS_READY",
+      "Ok(true)",
+    ],
+    "Checkpoint 5 app contract: runtime-save-status sign-in order",
+  );
+}
+
 function assertCheckpointOneRootInventory(
   value: telegramContractPaths.TelegramLifecycle,
   pathExists: (relativePath: string) => boolean = (relativePath) =>
@@ -1596,10 +2247,480 @@ function rustImplBlocks(
   return blocks;
 }
 
+type RustAuditToken = Readonly<{
+  kind: "word" | "punctuation";
+  text: string;
+  start: number;
+  end: number;
+  rawIdentifier: boolean;
+}>;
+
+const rustPatternWhitespace = new Set([
+  "\u0009",
+  "\u000A",
+  "\u000B",
+  "\u000C",
+  "\u000D",
+  "\u0020",
+  "\u0085",
+  "\u200E",
+  "\u200F",
+  "\u2028",
+  "\u2029",
+]);
+const rust2021StrictOrReservedKeywords = new Set([
+  "abstract",
+  "as",
+  "async",
+  "await",
+  "become",
+  "box",
+  "break",
+  "const",
+  "continue",
+  "crate",
+  "do",
+  "dyn",
+  "else",
+  "enum",
+  "extern",
+  "false",
+  "final",
+  "fn",
+  "for",
+  "if",
+  "impl",
+  "in",
+  "let",
+  "loop",
+  "macro",
+  "match",
+  "mod",
+  "move",
+  "mut",
+  "override",
+  "priv",
+  "pub",
+  "ref",
+  "return",
+  "self",
+  "Self",
+  "static",
+  "struct",
+  "super",
+  "trait",
+  "true",
+  "try",
+  "type",
+  "typeof",
+  "unsafe",
+  "unsized",
+  "use",
+  "virtual",
+  "where",
+  "while",
+  "yield",
+]);
+const rustSimplePathKeywords = new Set(["crate", "self", "Self", "super"]);
+
+function isConservativeRustWordStart(codePoint: string): boolean {
+  if (codePoint.length === 0 || rustPatternWhitespace.has(codePoint)) {
+    return false;
+  }
+  const scalar = codePoint.codePointAt(0);
+  if (scalar === undefined) return false;
+  if (scalar > 0x7F) return true;
+  return codePoint === "_"
+    || (codePoint >= "A" && codePoint <= "Z")
+    || (codePoint >= "a" && codePoint <= "z");
+}
+
+function isConservativeRustWordContinue(codePoint: string): boolean {
+  if (isConservativeRustWordStart(codePoint)) return true;
+  return codePoint >= "0" && codePoint <= "9";
+}
+
+function rustCodePointAt(
+  source: string,
+  index: number,
+): Readonly<{ text: string; width: number }> {
+  const value = source.codePointAt(index);
+  if (value === undefined) return { text: "", width: 0 };
+  const text = String.fromCodePoint(value);
+  return { text, width: text.length };
+}
+
+function rustAuditTokens(searchable: string): RustAuditToken[] {
+  const tokens: RustAuditToken[] = [];
+  for (let index = 0; index < searchable.length;) {
+    const codePoint = rustCodePointAt(searchable, index);
+    if (rustPatternWhitespace.has(codePoint.text)) {
+      index += codePoint.width;
+      continue;
+    }
+
+    if (searchable.startsWith("r#", index)) {
+      const rawStart = rustCodePointAt(searchable, index + 2);
+      if (isConservativeRustWordStart(rawStart.text)) {
+        let cursor = index + 2 + rawStart.width;
+        while (cursor < searchable.length) {
+          const next = rustCodePointAt(searchable, cursor);
+          if (!isConservativeRustWordContinue(next.text)) break;
+          cursor += next.width;
+        }
+        tokens.push({
+          kind: "word",
+          text: searchable.slice(index, cursor),
+          start: index,
+          end: cursor,
+          rawIdentifier: true,
+        });
+        index = cursor;
+        continue;
+      }
+    }
+
+    if (isConservativeRustWordStart(codePoint.text)) {
+      let cursor = index + codePoint.width;
+      while (cursor < searchable.length) {
+        const next = rustCodePointAt(searchable, cursor);
+        if (!isConservativeRustWordContinue(next.text)) break;
+        cursor += next.width;
+      }
+      tokens.push({
+        kind: "word",
+        text: searchable.slice(index, cursor),
+        start: index,
+        end: cursor,
+        rawIdentifier: false,
+      });
+      index = cursor;
+      continue;
+    }
+
+    tokens.push({
+      kind: "punctuation",
+      text: codePoint.text,
+      start: index,
+      end: index + codePoint.width,
+      rawIdentifier: false,
+    });
+    index += codePoint.width;
+  }
+  return tokens;
+}
+
+function normalizedRustAuditIdentifierAt(
+  tokens: readonly RustAuditToken[],
+  tokenIndex: number,
+): string | undefined {
+  const token = tokens[tokenIndex];
+  if (token?.kind !== "word") return undefined;
+  const preceding = tokens[tokenIndex - 1];
+  if (preceding?.kind === "punctuation" && preceding.text === "'") {
+    return undefined;
+  }
+  return token.rawIdentifier ? token.text.slice(2) : token.text;
+}
+
+function isRustAuditKeywordAt(
+  tokens: readonly RustAuditToken[],
+  tokenIndex: number,
+  keyword: string,
+): boolean {
+  const token = tokens[tokenIndex];
+  return token?.kind === "word"
+    && !token.rawIdentifier
+    && token.text === keyword;
+}
+
+function rustAuditDelimiterPairs(
+  tokens: readonly RustAuditToken[],
+  label: string,
+): ReadonlyMap<number, number> {
+  const closingFor = new Map([
+    ["(", ")"],
+    ["[", "]"],
+    ["{", "}"],
+  ]);
+  const closing = new Set(closingFor.values());
+  const stack: Array<{
+    tokenIndex: number;
+    expected: string;
+  }> = [];
+  const pairs = new Map<number, number>();
+  for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex += 1) {
+    const token = tokens[tokenIndex];
+    const expected = closingFor.get(token.text);
+    if (expected !== undefined) {
+      stack.push({ tokenIndex, expected });
+      continue;
+    }
+    if (!closing.has(token.text)) continue;
+    const open = stack.at(-1);
+    if (open === undefined || open.expected !== token.text) {
+      throw new Error(
+        `${label} found a mismatched closing delimiter at offset ${token.start}`,
+      );
+    }
+    stack.pop();
+    pairs.set(open.tokenIndex, tokenIndex);
+  }
+  const unclosed = stack.at(-1);
+  if (unclosed !== undefined) {
+    throw new Error(
+      `${label} found an unclosed delimiter at offset ${
+        tokens[unclosed.tokenIndex].start
+      }`,
+    );
+  }
+  return pairs;
+}
+
+function canEndRust2021SimplePathSegment(
+  tokens: readonly RustAuditToken[],
+  tokenIndex: number,
+): boolean {
+  const token = tokens[tokenIndex];
+  const identifier = normalizedRustAuditIdentifierAt(tokens, tokenIndex);
+  if (token?.kind !== "word" || identifier === undefined) return false;
+  if (token.rawIdentifier) return true;
+  if (rustSimplePathKeywords.has(identifier)) return true;
+  return !rust2021StrictOrReservedKeywords.has(identifier);
+}
+
+function rustAuditLineColumn(
+  source: string,
+  offset: number,
+): Readonly<{ line: number; column: number }> {
+  let line = 1;
+  let column = 1;
+  for (let index = 0; index < offset;) {
+    const codePoint = rustCodePointAt(source, index);
+    if (codePoint.text === "\r") {
+      const next = rustCodePointAt(source, index + codePoint.width);
+      index += codePoint.width;
+      if (next.text === "\n") index += next.width;
+      line += 1;
+      column = 1;
+      continue;
+    }
+    index += codePoint.width;
+    if (codePoint.text === "\n") {
+      line += 1;
+      column = 1;
+    } else {
+      column += 1;
+    }
+  }
+  return { line, column };
+}
+
+function rustSensitiveMacroInventory(
+  source: string,
+  sensitiveNames: readonly string[],
+  label: string,
+): string[] {
+  const searchable = maskRustLexicalNonCode(source);
+  const tokens = rustAuditTokens(searchable);
+  const delimiterPairs = rustAuditDelimiterPairs(tokens, label);
+  const sensitiveSet = new Set(sensitiveNames);
+  const inventory: string[] = [];
+  const referencedSensitiveNames = (
+    start: number,
+    end: number,
+  ): Set<string> => {
+    const referenced = new Set<string>();
+    for (let tokenIndex = start; tokenIndex < end; tokenIndex += 1) {
+      const identifier = normalizedRustAuditIdentifierAt(tokens, tokenIndex);
+      if (identifier === undefined) continue;
+      if (sensitiveSet.has(identifier)) referenced.add(identifier);
+    }
+    return referenced;
+  };
+  for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex += 1) {
+    if (
+      isRustAuditKeywordAt(tokens, tokenIndex, "macro_rules")
+      && tokens[tokenIndex + 1]?.text === "!"
+      && normalizedRustAuditIdentifierAt(tokens, tokenIndex + 2)
+        !== undefined
+    ) {
+      const openIndex = tokenIndex + 3;
+      const closeIndex = delimiterPairs.get(openIndex);
+      if (closeIndex !== undefined) {
+        const position = rustAuditLineColumn(
+          source,
+          tokens[tokenIndex].start,
+        );
+        for (
+          const sensitiveName
+          of referencedSensitiveNames(openIndex + 1, closeIndex)
+        ) {
+          inventory.push(
+            `macro_rules@${tokens[tokenIndex].start}/${
+              position.line
+            }:${position.column}|${sensitiveName}`,
+          );
+        }
+      }
+    }
+
+    const bang = tokens[tokenIndex];
+    if (
+      bang.kind !== "punctuation"
+      || bang.text !== "!"
+      || !canEndRust2021SimplePathSegment(tokens, tokenIndex - 1)
+    ) {
+      continue;
+    }
+    const openIndex = tokenIndex + 1;
+    const closeIndex = delimiterPairs.get(openIndex);
+    if (closeIndex === undefined) continue;
+    const referencedNames = referencedSensitiveNames(
+      openIndex + 1,
+      closeIndex,
+    );
+    if (referencedNames.size === 0) continue;
+    const position = rustAuditLineColumn(source, bang.start);
+    for (const sensitiveName of referencedNames) {
+      inventory.push(
+        `bang@${bang.start}/${position.line}:${
+          position.column
+        }|${sensitiveName}`,
+      );
+    }
+  }
+  return inventory;
+}
+
 function rustTypeReferenceRegex(typeName: string): RegExp {
   return new RegExp(
     `(?:^|[^A-Za-z0-9_#])(?:r#)?${typeName}\\b`,
   );
+}
+
+function rustAuditSemicolonEnd(
+  tokens: readonly RustAuditToken[],
+  delimiterPairs: ReadonlyMap<number, number>,
+  start: number,
+): number | undefined {
+  for (let tokenIndex = start; tokenIndex < tokens.length; tokenIndex += 1) {
+    const paired = delimiterPairs.get(tokenIndex);
+    if (paired !== undefined) {
+      tokenIndex = paired;
+      continue;
+    }
+    const text = tokens[tokenIndex].text;
+    if (text === ";") return tokenIndex;
+    if (text === ")" || text === "]" || text === "}") return undefined;
+  }
+  return undefined;
+}
+
+function rustAuditTopLevelTokenIndex(
+  tokens: readonly RustAuditToken[],
+  delimiterPairs: ReadonlyMap<number, number>,
+  start: number,
+  end: number,
+  predicate: (token: RustAuditToken, tokenIndex: number) => boolean,
+): number | undefined {
+  for (let tokenIndex = start; tokenIndex < end; tokenIndex += 1) {
+    const token = tokens[tokenIndex];
+    if (predicate(token, tokenIndex)) return tokenIndex;
+    const paired = delimiterPairs.get(tokenIndex);
+    if (paired !== undefined && paired < end) tokenIndex = paired;
+  }
+  return undefined;
+}
+
+function rustAuditPathIdentifiers(
+  tokens: readonly RustAuditToken[],
+  start: number,
+  end: number,
+): string[] {
+  const identifiers: string[] = [];
+  for (let tokenIndex = start; tokenIndex < end; tokenIndex += 1) {
+    const identifier = normalizedRustAuditIdentifierAt(tokens, tokenIndex);
+    if (identifier !== undefined) identifiers.push(identifier);
+  }
+  return identifiers;
+}
+
+function rustUseTreeAliasNames(
+  tokens: readonly RustAuditToken[],
+  delimiterPairs: ReadonlyMap<number, number>,
+  wrapperNames: ReadonlySet<string>,
+  start: number,
+  end: number,
+  prefix: readonly string[] = [],
+): string[] {
+  const openBrace = rustAuditTopLevelTokenIndex(
+    tokens,
+    delimiterPairs,
+    start,
+    end,
+    (token) => token.text === "{",
+  );
+  if (openBrace !== undefined) {
+    const closeBrace = delimiterPairs.get(openBrace);
+    if (closeBrace === undefined || closeBrace > end) return [];
+    const nextPrefix = [
+      ...prefix,
+      ...rustAuditPathIdentifiers(tokens, start, openBrace),
+    ];
+    const aliases: string[] = [];
+    let itemStart = openBrace + 1;
+    for (
+      let tokenIndex = openBrace + 1;
+      tokenIndex < closeBrace;
+      tokenIndex += 1
+    ) {
+      const paired = delimiterPairs.get(tokenIndex);
+      if (paired !== undefined && paired < closeBrace) {
+        tokenIndex = paired;
+        continue;
+      }
+      if (tokens[tokenIndex].text !== ",") continue;
+      aliases.push(
+        ...rustUseTreeAliasNames(
+          tokens,
+          delimiterPairs,
+          wrapperNames,
+          itemStart,
+          tokenIndex,
+          nextPrefix,
+        ),
+      );
+      itemStart = tokenIndex + 1;
+    }
+    aliases.push(
+      ...rustUseTreeAliasNames(
+        tokens,
+        delimiterPairs,
+        wrapperNames,
+        itemStart,
+        closeBrace,
+        nextPrefix,
+      ),
+    );
+    return aliases;
+  }
+
+  const asIndex = rustAuditTopLevelTokenIndex(
+    tokens,
+    delimiterPairs,
+    start,
+    end,
+    (_, tokenIndex) => isRustAuditKeywordAt(tokens, tokenIndex, "as"),
+  );
+  if (asIndex === undefined) return [];
+  const alias = normalizedRustAuditIdentifierAt(tokens, asIndex + 1);
+  if (alias === undefined) return [];
+  const leaf = rustAuditPathIdentifiers(tokens, start, asIndex);
+  const target = leaf.at(-1) === "self"
+    ? prefix.at(-1)
+    : leaf.at(-1);
+  return target !== undefined && wrapperNames.has(target) ? [alias] : [];
 }
 
 function rustWrapperAliasNames(
@@ -1607,39 +2728,62 @@ function rustWrapperAliasNames(
   typeNames: readonly string[],
 ): string[] {
   const searchable = maskRustLexicalNonCode(source);
-  const typeAlternation = typeNames.join("|");
-  const identifier = "(?:r#)?[A-Za-z_][A-Za-z0-9_]*";
+  const tokens = rustAuditTokens(searchable);
+  const delimiterPairs = rustAuditDelimiterPairs(
+    tokens,
+    "Rust wrapper alias inventory",
+  );
+  const wrapperNames = new Set(typeNames);
   const aliases: string[] = [];
-  for (const declaration of searchable.matchAll(/\buse\b([^;]*);/g)) {
-    for (
-      const alias of (declaration[1] ?? "").matchAll(
-        new RegExp(
-          `(?:r#)?(?:${typeAlternation})\\s+as\\s+(${identifier})\\b`,
-          "g",
+
+  for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex += 1) {
+    if (isRustAuditKeywordAt(tokens, tokenIndex, "type")) {
+      const alias = normalizedRustAuditIdentifierAt(tokens, tokenIndex + 1);
+      const semicolon = rustAuditSemicolonEnd(
+        tokens,
+        delimiterPairs,
+        tokenIndex + 1,
+      );
+      if (alias === undefined || semicolon === undefined) continue;
+      const equals = rustAuditTopLevelTokenIndex(
+        tokens,
+        delimiterPairs,
+        tokenIndex + 2,
+        semicolon,
+        (token) => token.text === "=",
+      );
+      if (equals === undefined) continue;
+      const targetsWrapper = Array.from(
+        { length: semicolon - equals - 1 },
+        (_, offset) => normalizedRustAuditIdentifierAt(
+          tokens,
+          equals + offset + 1,
         ),
-      )
-    ) {
-      if (alias[1] !== undefined) aliases.push(alias[1].replace(/^r#/, ""));
-    }
-  }
-  for (
-    const declaration of searchable.matchAll(
-      new RegExp(`\\btype\\s+(${identifier})\\b([^;]*);`, "g"),
-    )
-  ) {
-    const tail = declaration[2] ?? "";
-    const equals = tail.indexOf("=");
-    if (equals < 0) continue;
-    const target = tail.slice(equals + 1);
-    if (
-      !typeNames.some((typeName) =>
-        rustTypeReferenceRegex(typeName).test(target)
-      )
-    ) {
+      ).some((identifier) =>
+        identifier !== undefined && wrapperNames.has(identifier)
+      );
+      if (targetsWrapper) aliases.push(alias);
+      tokenIndex = semicolon;
       continue;
     }
-    if (declaration[1] !== undefined) {
-      aliases.push(declaration[1].replace(/^r#/, ""));
+
+    if (isRustAuditKeywordAt(tokens, tokenIndex, "use")) {
+      const semicolon = rustAuditSemicolonEnd(
+        tokens,
+        delimiterPairs,
+        tokenIndex + 1,
+      );
+      if (semicolon === undefined) continue;
+      aliases.push(
+        ...rustUseTreeAliasNames(
+          tokens,
+          delimiterPairs,
+          wrapperNames,
+          tokenIndex + 1,
+          semicolon,
+        ),
+      );
+      tokenIndex = semicolon;
     }
   }
   return aliases;
@@ -1725,6 +2869,173 @@ function visibleRustFreeFunctions(
     }
   };
   visitScope(0, searchable.length);
+  return inventory;
+}
+
+function splitLeadingRustOuterAttributes(header: string): {
+  attributes: string[];
+  declaration: string;
+} {
+  const attributes: string[] = [];
+  let cursor = 0;
+  while (cursor < header.length) {
+    while (/\s/.test(header[cursor] ?? "")) cursor += 1;
+    if (header[cursor] !== "#") break;
+    let bracket = cursor + 1;
+    while (/\s/.test(header[bracket] ?? "")) bracket += 1;
+    if (header[bracket] !== "[") break;
+    let depth = 1;
+    bracket += 1;
+    while (bracket < header.length && depth > 0) {
+      if (header[bracket] === "[") depth += 1;
+      if (header[bracket] === "]") depth -= 1;
+      bracket += 1;
+    }
+    if (depth !== 0) {
+      throw new Error(
+        "Checkpoint 5 visible-item inventory found an unclosed outer attribute",
+      );
+    }
+    attributes.push(header.slice(cursor, bracket).trim());
+    cursor = bracket;
+  }
+  return {
+    attributes,
+    declaration: header.slice(cursor).trim(),
+  };
+}
+
+function rustStructOuterAttributeInventory(
+  source: string,
+  typeNames: readonly string[],
+  label: string,
+): string[] {
+  const typeNameSet = new Set(typeNames);
+  return rustTopLevelItemHeaders(
+    maskRustLexicalNonCode(source),
+    label,
+  ).flatMap((header) => {
+    const { attributes, declaration } =
+      splitLeadingRustOuterAttributes(header);
+    const tokens = rustAuditTokens(declaration);
+    const structIndex = tokens.findIndex((_, tokenIndex) =>
+      isRustAuditKeywordAt(tokens, tokenIndex, "struct")
+    );
+    if (structIndex < 0) return [];
+    const typeName = normalizedRustAuditIdentifierAt(
+      tokens,
+      structIndex + 1,
+    );
+    if (typeName === undefined || !typeNameSet.has(typeName)) return [];
+    return [
+      `${typeName}|${
+        attributes.map((attribute) => normalize(attribute).trim()).join("|")
+      }`,
+    ];
+  });
+}
+
+function visibleRustTopLevelItemInventory(
+  source: string,
+  label: string,
+): string[] {
+  const searchable = maskRustLexicalNonCode(source);
+  const inventory: string[] = [];
+  const visitScope = (
+    start: number,
+    end: number,
+    scope: readonly string[],
+  ): void => {
+    let cursor = start;
+    while (cursor < end) {
+      while (cursor < end && /\s/.test(searchable[cursor] ?? "")) {
+        cursor += 1;
+      }
+      if (cursor >= end) break;
+      const boundary = rustItemBoundary(
+        source,
+        searchable,
+        cursor,
+        label,
+      );
+      const header = normalize(
+        searchable.slice(cursor, boundary.index),
+      ).trim();
+      const { attributes, declaration } =
+        splitLeadingRustOuterAttributes(header);
+      const testOnly = attributes.some((attribute) =>
+        /^#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]$/.test(attribute)
+      );
+      const visibility =
+        /^pub(?:\s*\(\s*([^)]+?)\s*\))?(?=\s)/.exec(declaration);
+      const macroExport = attributes.some((attribute) =>
+        /^#\s*\[\s*macro_export(?:\s*\([^)]*\))?\s*\]$/.test(
+          attribute,
+        )
+      );
+      const itemDeclaration = visibility
+        ? declaration.slice(visibility[0].length).trim()
+        : declaration;
+      if (!testOnly && (visibility || macroExport)) {
+        const normalizedVisibility = macroExport && !visibility
+          ? "pub"
+          : visibility?.[1] === undefined
+          ? "pub"
+          : `pub(${visibility[1].replace(/\s+/g, "")})`;
+        let item: string | undefined;
+        const functionItem =
+          /^(?:(?:async|const|default|unsafe)\s+)*(?:extern\s+)?fn\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\b/
+            .exec(itemDeclaration);
+        const namedItem =
+          /^(?:unsafe\s+|auto\s+)?(struct|enum|union|trait|type|const|static|mod|macro)\s+(?:mut\s+)?(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\b/
+            .exec(itemDeclaration);
+        const macroRules =
+          /^macro_rules\s*!\s*(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\b/
+            .exec(itemDeclaration);
+        if (functionItem?.[1] !== undefined) {
+          item = `fn ${functionItem[1]}`;
+        } else if (namedItem?.[2] !== undefined) {
+          item = `${namedItem[1]} ${namedItem[2]}`;
+        } else if (macroRules?.[1] !== undefined) {
+          item = `macro ${macroRules[1]}`;
+        } else if (/^use\b/.test(itemDeclaration)) {
+          item = "use";
+        } else if (/^extern\s+crate\b/.test(itemDeclaration)) {
+          item = "extern crate";
+        }
+        if (!item || !normalizedVisibility) {
+          throw new Error(
+            `${label} found an unsupported visible top-level item`,
+          );
+        }
+        inventory.push(
+          `${scope.length === 0 ? "root" : scope.join("::")}|${normalizedVisibility} ${item}`,
+        );
+      }
+      if (boundary.kind === "semicolon") {
+        cursor = boundary.index + 1;
+        continue;
+      }
+      const close = rustClosingBraceIndex(
+        source,
+        boundary.index,
+        label,
+      );
+      const inlineModule =
+        /^mod\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(
+          itemDeclaration,
+        );
+      if (!testOnly && inlineModule?.[1] !== undefined) {
+        visitScope(
+          boundary.index + 1,
+          close,
+          [...scope, inlineModule[1]],
+        );
+      }
+      cursor = close + 1;
+    }
+  };
+  visitScope(0, searchable.length, []);
   return inventory;
 }
 
@@ -1996,6 +3307,63 @@ function rustActiveOriginalCallArguments(
   });
 }
 
+function rustNamedCallCount(source: string, name: string): number {
+  const searchable = maskRustLexicalNonCode(source);
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return [...searchable.matchAll(
+    new RegExp(`\\b${escapedName}\\s*\\(`, "g"),
+  )].filter((match) => {
+    if (match.index === undefined) return false;
+    return !/\bfn\s*$/.test(searchable.slice(0, match.index));
+  }).length;
+}
+
+function rustIdentifierReferenceInventory(
+  source: string,
+  name: string,
+): string[] {
+  const searchable = maskRustLexicalNonCode(source);
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const useSpans = [...searchable.matchAll(/\buse\b/g)].flatMap(
+    (match) => {
+      if (match.index === undefined) return [];
+      const end = searchable.indexOf(";", match.index);
+      return end < 0 ? [] : [{ start: match.index, end }];
+    },
+  );
+  return [...searchable.matchAll(
+    new RegExp(`\\b${escapedName}\\b`, "g"),
+  )].map((match) => {
+    if (match.index === undefined) {
+      throw new Error(`Missing Rust identifier index for ${name}`);
+    }
+    const prefix = searchable.slice(0, match.index);
+    if (/\bfn\s*$/.test(prefix)) return "declaration";
+    const suffix = searchable.slice(match.index + match[0].length);
+    if (/^\s*\(/.test(suffix)) return "call";
+    const useSpan = useSpans.find(
+      ({ start, end }) => start < match.index! && match.index! < end,
+    );
+    if (useSpan) {
+      const useSource = searchable.slice(useSpan.start, useSpan.end + 1);
+      const withinUse = match.index - useSpan.start;
+      const afterIdentifier = useSource.slice(
+        withinUse + match[0].length,
+      );
+      if (/^\s+as\b/.test(afterIdentifier)) return "import-alias";
+      const beforeUse = searchable.slice(
+        Math.max(0, useSpan.start - 100),
+        useSpan.start,
+      );
+      if (/\bpub(?:\s*\([^)]*\))?\s*$/.test(beforeUse)) {
+        return "reexport";
+      }
+      return "import";
+    }
+    return "reference";
+  });
+}
+
 function normalizeRustFormattingWhitespace(source: string): string {
   let normalized = "";
   let pendingWhitespace = false;
@@ -2042,22 +3410,6 @@ function normalizedActiveCallArguments(
   return rustActiveOriginalCallArguments(source, name).map((argumentsSource) =>
     normalizeRustFormattingWhitespace(argumentsSource),
   );
-}
-
-function assertAuthorizedRuntimeAuthArguments(source: string): void {
-  const authorizedRuntimeOriginal = rustFunctionOriginalBody(
-    source,
-    "get_authorized_runtime",
-  );
-  expect(
-    normalizedActiveCallArguments(
-      authorizedRuntimeOriginal,
-      "AppError::auth",
-    ),
-  ).toEqual([
-    'format!("Account {account_id} not initialized")',
-    'format!( "Account {account_id} is not authenticated" )',
-  ]);
 }
 
 function assertWrappedTakeoutCalls(
@@ -2564,18 +3916,6 @@ describe("Phase 8 Telegram crate boundary", () => {
     ).toEqual(['"Code  sent".to_string()']);
   });
 
-  it("rejects doubled internal spaces in the active authorized-runtime Auth literal", () => {
-    const source = telegramContractPaths.readTelegramContractFile(
-      "src-tauri/src/telegram.rs",
-    );
-    const mutation = source.replace(
-      '"Account {account_id} is not authenticated"',
-      '"Account {account_id} is not  authenticated"',
-    );
-    expect(mutation).not.toBe(source);
-    expect(() => assertAuthorizedRuntimeAuthArguments(mutation)).toThrow();
-  });
-
   it("rejects a live-sync mutation that bounds the RecentDays match arm", () => {
     const source =
       telegramContractPaths.readTelegramContractFile(
@@ -2847,10 +4187,10 @@ describe("Phase 8 Telegram crate boundary", () => {
 });
 
 describe("literal immutable Telegram test map", () => {
-  it("records only the truthful retained Checkpoint 4 lifecycle state", () => {
-    expect(phase8Status).toBe("8A preparation Checkpoint 4 retained");
+  it("records only the truthful retained Checkpoint 5 lifecycle state", () => {
+    expect(phase8Status).toBe("8A preparation Checkpoint 5 retained");
     expect(design).toContain(
-      "**Status:** Approved; 8A preparation Checkpoint 4 retained",
+      "**Status:** Approved; 8A preparation Checkpoint 5 retained",
     );
   });
 
@@ -3047,12 +4387,12 @@ describe("literal immutable Telegram test map", () => {
     assertAddedIdentityDeclarations(addedIdentities, lifecycle, rustSources);
   });
 
-  it("reconciles the exact active Checkpoint 4 identity accounting", () => {
-    expect(lifecycle).toBe("8a-checkpoint-4");
+  it("reconciles the exact active Checkpoint 5 identity accounting", () => {
+    expect(lifecycle).toBe("8a-checkpoint-5");
     const activeAdded = addedIdentities.filter(
-      ({ checkpoint }) => checkpoint <= 4,
+      ({ checkpoint }) => checkpoint <= 5,
     );
-    expect(activeAdded).toHaveLength(9);
+    expect(activeAdded).toHaveLength(18);
     const activeCompanions = activeAdded.filter(({ currentId }) =>
       currentId.endsWith(
         "::telegram_item_kind_constant_matches_persisted_wire_value",
@@ -3061,8 +4401,8 @@ describe("literal immutable Telegram test map", () => {
     expect(activeCompanions).toHaveLength(1);
     expect(identityRows).toHaveLength(140);
     expect(identityRows.length + activeCompanions.length).toBe(141);
-    expect(activeAdded.length - activeCompanions.length).toBe(8);
-    expect(identityRows.length + activeAdded.length).toBe(149);
+    expect(activeAdded.length - activeCompanions.length).toBe(17);
+    expect(identityRows.length + activeAdded.length).toBe(158);
   });
 
   it("rejects a plan-added leaf declaration under the wrong module", () => {
@@ -3312,11 +4652,10 @@ describe("frozen Telegram source ownership perimeter", () => {
         ? "src-tauri/src/telegram/session.rs"
         : relativePath,
     );
-    const checkpoint5 = checkpoint4.map((relativePath) =>
-      relativePath === "src-tauri/src/telegram.rs"
-        ? "src-tauri/src/telegram/runtime.rs"
-        : relativePath,
-    );
+    const checkpoint5 = [
+      ...checkpoint4,
+      "src-tauri/src/telegram/runtime.rs",
+    ];
 
     assertRawConsumerInventory(
       "8a-checkpoint-1",
@@ -3429,7 +4768,7 @@ describe("frozen Telegram source ownership perimeter", () => {
     );
 
     const fanPattern =
-      /(?:\b(?:get_client|get_authorized_runtime|AuthorizedTelegramRuntime|AccountClient|raw_client|raw_session|MemorySession|LoginToken|TelegramMessageIdentity|TelegramItemContext|SourceItemInsert|ExtractedItemPayload|ExtractedMediaPayload|ITEM_KIND_TELEGRAM_MESSAGE)\b|\.accounts\s*\.lock\s*\(\s*\)\s*\.await\b)/;
+      /(?:\b(?:get_client|get_authorized_client|get_authorized_runtime|TelegramApiHash|TelegramClientHandle|TelegramRuntime|AuthorizedTelegramRuntime|AccountClient|raw_client|raw_session|MemorySession|LoginToken|TelegramMessageIdentity|TelegramItemContext|SourceItemInsert|ExtractedItemPayload|ExtractedMediaPayload|ITEM_KIND_TELEGRAM_MESSAGE)\b|\.accounts\s*\.lock\s*\(\s*\)\s*\.await\b)/;
     const fanPaths = appRustPaths.filter((relativePath) =>
       fanPattern.test(sources.get(relativePath) ?? ""),
     );
@@ -3853,6 +5192,475 @@ describe("Checkpoint 1 core-error seam", () => {
     assertCheckpointFourSessionContract();
   });
 
+  it("keeps the plaintext Telegram credential row out of Debug", () => {
+    assertAccountCredentialsRowHasNoSecretDebug();
+  });
+
+  it(
+    "isolates the opaque Telegram runtime and its temporary raw consumer map",
+    () => {
+      assertCheckpointFiveRuntimeContract();
+    },
+    10_000,
+  );
+
+  const checkpointFiveRuntimePath =
+    "src-tauri/src/telegram/runtime.rs";
+  const checkpointFiveTelegramPath = "src-tauri/src/telegram.rs";
+  const checkpointFiveStorePath = "src-tauri/src/sources/store.rs";
+  const checkpointFiveSyncPath = "src-tauri/src/sources/sync.rs";
+  const checkpointFiveRuntime =
+    telegramContractPaths.readTelegramContractFile(
+      checkpointFiveRuntimePath,
+    );
+  const checkpointFiveTelegram =
+    telegramContractPaths.readTelegramContractFile(
+      checkpointFiveTelegramPath,
+    );
+  const checkpointFiveStore =
+    telegramContractPaths.readTelegramContractFile(checkpointFiveStorePath);
+  const checkpointFiveSync =
+    telegramContractPaths.readTelegramContractFile(checkpointFiveSyncPath);
+  it.each([
+    {
+      name: "widened raw-client adapter",
+      mutation: new Map([
+        [
+          checkpointFiveRuntimePath,
+          checkpointFiveRuntime.replace(
+            "pub(crate) fn raw_client(",
+            "pub fn raw_client(",
+          ),
+        ],
+      ]),
+    },
+    {
+      name: "post-test API-hash plaintext getter",
+      mutation: new Map([
+        [
+          checkpointFiveRuntimePath,
+          `${checkpointFiveRuntime}
+impl TelegramApiHash {
+    pub fn as_str(&self) -> &str {
+        self.0.expose_secret()
+    }
+}
+`,
+        ],
+      ]),
+    },
+    {
+      name: "extra crate-visible runtime free function",
+      mutation: new Map([
+        [
+          checkpointFiveRuntimePath,
+          `${checkpointFiveRuntime}
+pub(crate) fn extra_runtime_seam() {}
+`,
+        ],
+      ]),
+    },
+    {
+      name: "legacy authorized runtime type in runtime owner",
+      mutation: new Map([
+        [
+          checkpointFiveRuntimePath,
+          `${checkpointFiveRuntime}
+struct AuthorizedTelegramRuntime;
+`,
+        ],
+      ]),
+    },
+    {
+      name: "public API-hash field",
+      mutation: new Map([
+        [
+          checkpointFiveRuntimePath,
+          checkpointFiveRuntime.replace(
+            "pub struct TelegramApiHash(SecretString);",
+            "pub struct TelegramApiHash(pub SecretString);",
+          ),
+        ],
+      ]),
+    },
+    {
+      name: "API hash cfg_attr derives Debug",
+      mutation: new Map([
+        [
+          checkpointFiveRuntimePath,
+          checkpointFiveRuntime.replace(
+            "#[derive(Clone)]\npub struct TelegramApiHash(SecretString);",
+            "#[cfg_attr(all(), derive(Debug))]\n#[derive(Clone)]\npub struct TelegramApiHash(SecretString);",
+          ),
+        ],
+      ]),
+    },
+    {
+      name: "runtime macro exposes the opaque API hash",
+      mutation: new Map([
+        [
+          checkpointFiveRuntimePath,
+          `${checkpointFiveRuntime}
+macro_rules! expose_runtime_wrapper {
+    ($target:ty) => {
+        impl secrecy::ExposeSecret<str> for $target {
+            fn expose_secret(&self) -> &str {
+                secrecy::ExposeSecret::expose_secret(&self.0)
+            }
+        }
+    };
+}
+
+expose_runtime_wrapper!(TelegramApiHash);
+`,
+        ],
+      ]),
+    },
+    {
+      name: "runtime nested macro exposes the opaque API hash",
+      mutation: new Map([
+        [
+          checkpointFiveRuntimePath,
+          `${checkpointFiveRuntime}
+macro_rules! expose_runtime_wrapper {
+    ($target:ty) => {
+        impl secrecy::ExposeSecret<str> for $target {
+            fn expose_secret(&self) -> &str {
+                secrecy::ExposeSecret::expose_secret(&self.0)
+            }
+        }
+    };
+}
+
+macro_rules! forward_exposure {
+    () => {
+        expose_runtime_wrapper!(TelegramApiHash);
+    };
+}
+
+forward_exposure!();
+`,
+        ],
+      ]),
+    },
+    {
+      name: "runtime Unicode macro exposes the opaque API hash",
+      mutation: new Map([
+        [
+          checkpointFiveRuntimePath,
+          `${checkpointFiveRuntime}
+macro_rules! раскрыть_обертку {
+    ($target:ty) => {
+        impl secrecy::ExposeSecret<str> for $target {
+            fn expose_secret(&self) -> &str {
+                secrecy::ExposeSecret::expose_secret(&self.0)
+            }
+        }
+    };
+}
+
+раскрыть_обертку!(TelegramApiHash);
+`,
+        ],
+      ]),
+    },
+    {
+      name: "runtime macro adds credential-row Debug",
+      mutation: new Map([
+        [
+          checkpointFiveRuntimePath,
+          `${checkpointFiveRuntime}
+macro_rules! add_debug {
+    ($target:ty) => {
+        impl std::fmt::Debug for $target {
+            fn fmt(
+                &self,
+                formatter: &mut std::fmt::Formatter<'_>,
+            ) -> std::fmt::Result {
+                formatter
+                    .debug_struct("AccountCredentialsRow")
+                    .field("api_hash", &self.api_hash)
+                    .finish()
+            }
+        }
+    };
+}
+
+add_debug!(super::AccountCredentialsRow);
+`,
+        ],
+      ]),
+    },
+    {
+      name: "runtime macro generates runtime wrapper alias",
+      mutation: new Map([
+        [
+          checkpointFiveRuntimePath,
+          `${checkpointFiveRuntime}
+macro_rules! make_alias {
+    ($name:ident) => {
+        type $name = TelegramApiHash;
+    };
+}
+
+make_alias!(HiddenHash);
+`,
+        ],
+      ]),
+    },
+    {
+      name: "sync Unicode type alias exposes the opaque API hash",
+      mutation: new Map([
+        [
+          checkpointFiveSyncPath,
+          `${checkpointFiveSync}
+type Хэш = crate::telegram::TelegramApiHash;
+
+impl secrecy::ExposeSecret<str> for Хэш {
+    fn expose_secret(&self) -> &str {
+        panic!("Unicode type alias exposure escape")
+    }
+}
+`,
+        ],
+      ]),
+    },
+    {
+      name: "sync Unicode use alias exposes the opaque API hash",
+      mutation: new Map([
+        [
+          checkpointFiveSyncPath,
+          `${checkpointFiveSync}
+use crate::{telegram::{TelegramApiHash as Хэш}};
+
+impl secrecy::ExposeSecret<str> for Хэш {
+    fn expose_secret(&self) -> &str {
+        panic!("Unicode use alias exposure escape")
+    }
+}
+`,
+        ],
+      ]),
+    },
+    {
+      name: "runtime Unicode type alias adds credential-row Debug",
+      mutation: new Map([
+        [
+          checkpointFiveRuntimePath,
+          `${checkpointFiveRuntime}
+type Строка = super::AccountCredentialsRow;
+
+impl std::fmt::Debug for Строка {
+    fn fmt(&self, _formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        panic!("Unicode type alias Debug escape")
+    }
+}
+`,
+        ],
+      ]),
+    },
+    {
+      name: "runtime Unicode use alias adds credential-row Debug",
+      mutation: new Map([
+        [
+          checkpointFiveRuntimePath,
+          `${checkpointFiveRuntime}
+use super::{AccountCredentialsRow as Строка};
+
+impl std::fmt::Debug for Строка {
+    fn fmt(&self, _formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        panic!("Unicode use alias Debug escape")
+    }
+}
+`,
+        ],
+      ]),
+    },
+    {
+      name: "plaintext credential row derives Debug",
+      mutation: new Map([
+        [
+          checkpointFiveTelegramPath,
+          checkpointFiveTelegram.replace(
+            "#[derive(sqlx::FromRow)]\nstruct AccountCredentialsRow",
+            "#[derive(\n    sqlx::FromRow,\n    Debug,\n)]\nstruct AccountCredentialsRow",
+          ),
+        ],
+      ]),
+    },
+    {
+      name: "plaintext credential row cfg_attr derives Debug",
+      mutation: new Map([
+        [
+          checkpointFiveTelegramPath,
+          checkpointFiveTelegram.replace(
+            "#[derive(sqlx::FromRow)]\nstruct AccountCredentialsRow",
+            "#[derive(sqlx::FromRow)]\n#[cfg_attr(all(), derive(Debug))]\nstruct AccountCredentialsRow",
+          ),
+        ],
+      ]),
+    },
+    {
+      name: "plaintext credential row implements Debug manually",
+      mutation: new Map([
+        [
+          checkpointFiveTelegramPath,
+          `${checkpointFiveTelegram}
+impl std::fmt::Debug for AccountCredentialsRow {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("AccountCredentialsRow")
+            .field("api_hash", &self.api_hash)
+            .finish()
+    }
+}
+`,
+        ],
+      ]),
+    },
+    {
+      name: "plaintext credential row implements aliased Debug",
+      mutation: new Map([
+        [
+          checkpointFiveTelegramPath,
+          `${checkpointFiveTelegram}
+use std::fmt::Debug as SensitiveFormatter;
+
+impl SensitiveFormatter for AccountCredentialsRow {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("AccountCredentialsRow")
+            .field("api_hash", &self.api_hash)
+            .finish()
+    }
+}
+`,
+        ],
+      ]),
+    },
+    {
+      name: "plaintext credential row implements aliased Debug in child runtime module",
+      mutation: new Map([
+        [
+          checkpointFiveRuntimePath,
+          `${checkpointFiveRuntime}
+use std::fmt::Debug as SensitiveFormatter;
+
+impl SensitiveFormatter for super::AccountCredentialsRow {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("AccountCredentialsRow")
+            .field("api_hash", &self.api_hash)
+            .finish()
+    }
+}
+`,
+        ],
+      ]),
+    },
+    {
+      name: "store caller-held account lock",
+      mutation: new Map([
+        [
+          checkpointFiveStorePath,
+          checkpointFiveStore.replace(
+            "let client_handle = crate::telegram::get_client(state.inner(), account_id).await?;",
+            "let _accounts = state.accounts.lock().await;\n    let client_handle = crate::telegram::get_client(state.inner(), account_id).await?;",
+          ),
+        ],
+      ]),
+    },
+    {
+      name: "sync raw-session escape",
+      mutation: new Map([
+        [
+          checkpointFiveSyncPath,
+          checkpointFiveSync.replace(
+            "let client = client_handle.raw_client().clone();",
+            "let client = client_handle.raw_client().clone();\n    let _session = client_handle.raw_session();",
+          ),
+        ],
+      ]),
+    },
+    {
+      name: "sync UFCS raw-session escape",
+      mutation: new Map([
+        [
+          checkpointFiveSyncPath,
+          checkpointFiveSync.replace(
+            "let client = client_handle.raw_client().clone();",
+            "let client = client_handle.raw_client().clone();\n    let _session = crate::telegram::TelegramClientHandle::raw_session(&client_handle);",
+          ),
+        ],
+      ]),
+    },
+    {
+      name: "sync function-value raw-client escape",
+      mutation: new Map([
+        [
+          checkpointFiveSyncPath,
+          checkpointFiveSync.replace(
+            "let client = client_handle.raw_client().clone();",
+            "let client = client_handle.raw_client().clone();\n    let raw = crate::telegram::TelegramClientHandle::raw_client;\n    let _duplicate_client = raw(&client_handle);",
+          ),
+        ],
+      ]),
+    },
+    {
+      name: "sync aliases and exposes the opaque API hash",
+      mutation: new Map([
+        [
+          checkpointFiveSyncPath,
+          `${checkpointFiveSync}
+type HashAlias = crate::telegram::TelegramApiHash;
+
+impl secrecy::ExposeSecret<str> for HashAlias {
+    fn expose_secret(&self) -> &str {
+        panic!("secret exposure escape")
+    }
+}
+`,
+        ],
+      ]),
+    },
+    {
+      name: "duplicate sync authorized lookup",
+      mutation: new Map([
+        [
+          checkpointFiveSyncPath,
+          checkpointFiveSync.replace(
+            "let client_handle = crate::telegram::get_authorized_client(state.inner(), account_id).await?;",
+            "let _ignored_handle = crate::telegram::get_authorized_client(state.inner(), account_id).await?;\n    let client_handle = crate::telegram::get_authorized_client(state.inner(), account_id).await?;",
+          ),
+        ],
+      ]),
+    },
+    {
+      name: "sync authorized lookup through function-value alias",
+      mutation: new Map([
+        [
+          checkpointFiveSyncPath,
+          checkpointFiveSync.replace(
+            "let client_handle = crate::telegram::get_authorized_client(state.inner(), account_id).await?;",
+            "let lookup = crate::telegram::get_authorized_client;\n    let _ignored_handle = lookup(state.inner(), account_id).await?;\n    let client_handle = crate::telegram::get_authorized_client(state.inner(), account_id).await?;",
+          ),
+        ],
+      ]),
+    },
+  ])("rejects Checkpoint 5 runtime mutation: $name", ({ mutation }) => {
+    for (const [relativePath, source] of mutation) {
+      expect(
+        source,
+        `Checkpoint 5 mutation changes ${relativePath}`,
+      ).not.toBe(
+        telegramContractPaths.readTelegramContractFile(relativePath),
+      );
+    }
+    expect(() =>
+      assertCheckpointFiveRuntimeContract(mutation)
+    ).toThrow(/Checkpoint 5/);
+  });
+
   const checkpointFourSessionPath = "src-tauri/src/telegram/session.rs";
   const checkpointFourAdapterPath =
     "src-tauri/src/telegram_session_store.rs";
@@ -4058,6 +5866,225 @@ describe("Checkpoint 1 core-error seam", () => {
         ]),
       )
     ).not.toThrow();
+  });
+
+  it("keeps nested cfg(test) attributes in their production container", () => {
+    const source = String.raw`
+      enum RuntimeHandle {
+        Production,
+        #[cfg(test)]
+        Test,
+      }
+
+      #[cfg(test)]
+      fn top_level_test_helper() {}
+    `;
+    const masked = maskExactCfgTestItemSpans(source);
+    expect(masked).toContain("#[cfg(test)]\n        Test");
+    expect(masked).not.toContain("top_level_test_helper");
+    expect(masked).toContain("enum RuntimeHandle");
+  });
+
+  it("excludes test-only items inside inline production modules from visible inventory", () => {
+    const source = String.raw`
+      mod nested {
+        #[cfg(test)]
+        pub fn test_only_visible_helper() {}
+
+        pub struct ProductionType;
+      }
+    `;
+    expect(
+      visibleRustTopLevelItemInventory(
+        source,
+        "Checkpoint 5 nested cfg(test) parser fixture",
+      ),
+    ).toEqual(["nested|pub struct ProductionType"]);
+  });
+
+  it("classifies attributed visible const functions as functions", () => {
+    const source = String.raw`
+      #[allow(dead_code)]
+      pub const fn frozen_value() -> usize {
+        7
+      }
+    `;
+    expect(
+      visibleRustTopLevelItemInventory(
+        source,
+        "Checkpoint 5 visible const-function parser fixture",
+      ),
+    ).toEqual(["root|pub fn frozen_value"]);
+  });
+
+  it("characterizes the Checkpoint 5 macro tokenizer positive forms", () => {
+    const fixtures = [
+      "обертка!(TelegramApiHash);",
+      "r#раскрыть!(r#TelegramApiHash);",
+      "crate /* path */ :: macros :: r#expose /* bang */ ! /* body */ [TelegramClientHandle];",
+      "$crate::expose!{TelegramLoginAttempt};",
+      "outer!(inner!((TelegramRuntime)));",
+      "round!((TelegramApiHash));",
+      "square![[TelegramClientHandle]];",
+      "curly!{{TelegramRuntime}};",
+      // Synthetic over-approximation tripwire; this is not compile-valid Rust.
+      "\u{1F980}!(TelegramApiHash);",
+    ];
+
+    for (const source of fixtures) {
+      const inventory = rustSensitiveMacroInventory(
+        source,
+        [
+          "TelegramApiHash",
+          "TelegramClientHandle",
+          "TelegramLoginAttempt",
+          "TelegramRuntime",
+        ],
+        "Checkpoint 5 macro tokenizer positive fixture",
+      );
+      expect(inventory, source).not.toEqual([]);
+      expect(
+        inventory.every((evidence) =>
+          /^bang@\d+\/\d+:\d+\|Telegram(?:ApiHash|ClientHandle|LoginAttempt|Runtime)$/
+            .test(evidence)
+        ),
+        source,
+      ).toBe(true);
+    }
+  });
+
+  it("characterizes the Checkpoint 5 macro tokenizer negative forms", () => {
+    const source = String.raw`
+      macro_rules! TelegramApiHash { () => {}; }
+      let _ = left != (TelegramApiHash);
+      let _ = !(TelegramApiHash);
+      if !(TelegramApiHash) {}
+      return !(TelegramApiHash);
+      #![allow(TelegramApiHash)]
+      fn never_returns() -> ! { loop {} }
+      'label: loop { break 'label !(uses::<TelegramApiHash>()); }
+      takes_lifetime!('TelegramApiHash);
+      let _ = "fake!(TelegramApiHash)";
+      let _ = r#"fake!(TelegramClientHandle)"#;
+      let _ = '!';
+      // fake!(TelegramLoginAttempt)
+      /* fake!(TelegramRuntime) */
+      обертка!(UnrelatedType);
+    `;
+    expect(
+      rustSensitiveMacroInventory(
+        source,
+        [
+          "TelegramApiHash",
+          "TelegramClientHandle",
+          "TelegramLoginAttempt",
+          "TelegramRuntime",
+        ],
+        "Checkpoint 5 macro tokenizer negative fixture",
+      ),
+    ).toEqual([]);
+  });
+
+  it("fails closed on mismatched or unclosed Checkpoint 5 macro tokenizer delimiters", () => {
+    for (
+      const source of [
+        "fn broken(]",
+        "audit!(TelegramApiHash]",
+        "audit!{TelegramApiHash",
+      ]
+    ) {
+      expect(() =>
+        rustSensitiveMacroInventory(
+          source,
+          ["TelegramApiHash"],
+          "Checkpoint 5 macro tokenizer delimiter fixture",
+        )
+      ).toThrow(/Checkpoint 5 macro tokenizer delimiter fixture/);
+    }
+  });
+
+  it("characterizes the Checkpoint 5 alias tokenizer positive forms", () => {
+    const source = String.raw`
+      type Хэш = crate::telegram::TelegramApiHash;
+      type r#Строка = super::AccountCredentialsRow;
+      use crate::telegram::TelegramApiHash as DirectAlias;
+      use crate::{telegram::{TelegramApiHash as ХэшИзUse}};
+      use super::{AccountCredentialsRow as r#СтрокаИзUse};
+      use crate::telegram::TelegramApiHash::{self as Сам};
+      use crate /* path */ :: telegram :: {
+        TelegramApiHash /* alias */ as Коммент,
+      };
+    `;
+    expect(
+      rustWrapperAliasNames(source, [
+        "TelegramApiHash",
+        "AccountCredentialsRow",
+      ]),
+    ).toEqual([
+      "Хэш",
+      "Строка",
+      "DirectAlias",
+      "ХэшИзUse",
+      "СтрокаИзUse",
+      "Сам",
+      "Коммент",
+    ]);
+  });
+
+  it("characterizes the Checkpoint 5 alias tokenizer negative forms", () => {
+    const source = String.raw`
+      type TelegramApiHash = OtherType;
+      type UnicodeNeighbor = crate::telegram::TelegramApiHashХ;
+      type PrefixNeighbor = crate::telegram::СтрокаAccountCredentialsRow;
+      type Lifetime<'TelegramApiHash> = &'TelegramApiHash OtherType;
+      use crate::telegram::TelegramApiHash;
+      use crate::telegram::*;
+      use OtherType as TelegramApiHash;
+      use crate::telegram::TelegramApiHashХ as UnicodeNeighborUse;
+      use crate::telegram::СтрокаAccountCredentialsRow as PrefixNeighborUse;
+      use crate::{telegram::{OtherType as TelegramApiHash}};
+      use crate::telegram::OtherType as OtherAlias;
+      // type Comment = TelegramApiHash;
+      /* use AccountCredentialsRow as CommentAlias; */
+      const TEXT: &str = "type StringAlias = TelegramApiHash;";
+      takes_lifetime!('AccountCredentialsRow);
+    `;
+    expect(
+      rustWrapperAliasNames(source, [
+        "TelegramApiHash",
+        "AccountCredentialsRow",
+      ]),
+    ).toEqual([]);
+  });
+
+  it("characterizes sensitive struct outer-attribute masking and nested brackets", () => {
+    const source = String.raw`
+      // #[derive(Debug)] pub struct TelegramApiHash;
+      const TEXT: &str =
+        "#[derive(Debug)] pub struct TelegramClientHandle;";
+      #[derive(Clone)]
+      /* [masked comment brackets] */
+      #[audit[nested[deep]]]
+      pub struct TelegramApiHash(SecretString);
+
+      pub struct TelegramRuntime {
+        marker: [u8; 1],
+      }
+    `;
+    expect(
+      rustStructOuterAttributeInventory(
+        source,
+        [
+          "TelegramApiHash",
+          "TelegramClientHandle",
+          "TelegramRuntime",
+        ],
+        "Checkpoint 5 outer-attribute characterization",
+      ),
+    ).toEqual([
+      "TelegramApiHash|#[derive(Clone)]|#[audit[nested[deep]]]",
+      "TelegramRuntime|",
+    ]);
   });
 
   it("excludes Checkpoint 4 cfg-order array-signature test-only items", () => {
@@ -4534,12 +6561,9 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
       [
         "STATUS_RESTORING",
         "load_session(handle, secret_store, account_id).await?",
-        "is_authorized()",
-        "accounts.insert(",
-        "STATUS_READY",
-        "STATUS_REAUTH_REQUIRED",
-        "set_account_status(handle, state, account_id, status, None).await",
-        "Ok(is_auth)",
+        ".initialize_account(account_id, api_id, api_hash, session)",
+        "runtime_status_to_wire(runtime_status)",
+        "runtime_status == TelegramRuntimeStatus::Ready",
       ],
       "restore and initialization status order",
     );
@@ -4551,18 +6575,14 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
     expectOrdered(
       sendCodeBody,
       [
-        "AppError::auth(",
-        "request_login_code(&phone, &ac.api_hash.clone())",
-        ".map_err(AppError::telegram_network)?",
-        "ac.phone = Some(phone)",
-        "ac.login_token = Some(token)",
+        "state.runtime.request_login_code(account_id, phone).await?",
         "Ok(",
       ],
       "send-code remote and state order",
     );
     expect(
       normalizedActiveCallArguments(sendCodeOriginal, "AppError::auth"),
-    ).toEqual(['"Account not initialized"']);
+    ).toEqual([]);
     expect(normalizedActiveCallArguments(sendCodeOriginal, "Ok")).toEqual([
       '"Code sent".to_string()',
     ]);
@@ -4571,11 +6591,7 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
     expectOrdered(
       signInBody,
       [
-        "AppError::auth(",
-        "AppError::auth(",
-        ".sign_in(token, &code)",
-        ".map_err(AppError::telegram_network)?",
-        "ac.login_token = None",
+        "state.runtime.sign_in(account_id, code).await?",
         "save_session(&handle, &secret_store, account_id, &session_to_save)",
         "set_account_status(&handle, &state, account_id, STATUS_READY, None).await",
         "Ok(true)",
@@ -4584,10 +6600,7 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
     );
     expect(
       normalizedActiveCallArguments(signInOriginal, "AppError::auth"),
-    ).toEqual([
-      '"Account not initialized"',
-      '"Call tg_send_code first"',
-    ]);
+    ).toEqual([]);
     expect(normalizedActiveCallArguments(signInOriginal, "Ok")).toEqual([
       "true",
     ]);
@@ -4606,25 +6619,14 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
         "AppError::auth",
       ),
     ).toEqual([
-      'format!( "Telegram API hash for account {} is missing from secure storage. Recreate the account credentials.", credentials.id )',
+      'format!( "Telegram API hash for account {} is missing from secure storage. Recreate the account credentials.", id )',
     ]);
-    expect(rustFunctionBody(telegram, "get_client")).toContain(
-      "AppError::auth(format!(",
+    expect(rustFunctionBody(telegram, "get_client").trim()).toBe(
+      "state.runtime.initialized_client(account_id).await",
     );
-    expect(
-      normalizedActiveCallArguments(
-        rustFunctionOriginalBody(telegram, "get_client"),
-        "AppError::auth",
-      ),
-    ).toEqual([
-      'format!("Account {account_id} not initialized")',
-    ]);
-    const authorizedRuntimeBody = rustFunctionBody(
-      telegram,
-      "get_authorized_runtime",
-    ).replace(/\s+/g, " ");
-    expect(authorizedRuntimeBody).toContain("AppError::auth(format!(");
-    assertAuthorizedRuntimeAuthArguments(telegram);
+    expect(rustFunctionBody(telegram, "get_authorized_client").trim()).toBe(
+      "state.runtime.authorized_client(account_id).await",
+    );
     expect(
       normalizedActiveCallArguments(
         rustFunctionOriginalBody(telegram, "tg_logout"),
@@ -4639,9 +6641,7 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
     expectOrdered(
       rustFunctionBody(telegram, "clear_account_runtime"),
       [
-        "accounts.remove(&account_id)",
-        "ac.client.sign_out().await",
-        "runner.abort()",
+        "runtime.clear_account(account_id, sign_out).await",
         "delete_session(handle, secret_store, account_id).await?",
         "STATUS_NOT_INITIALIZED",
         "Ok(())",
@@ -4875,7 +6875,8 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
     expectOrdered(
       rustFunctionBody(sync, "sync_telegram_source"),
       [
-        "get_authorized_runtime(&state, account_id).await?",
+        "get_authorized_client(state.inner(), account_id).await?",
+        "client_handle.raw_client().clone()",
         "resolve_and_refresh_peer(",
         "refresh_forum_topics(",
         "determine_sync_policy(&pool, &source).await?",
