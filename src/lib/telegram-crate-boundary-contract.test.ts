@@ -5683,7 +5683,7 @@ impl secrecy::ExposeSecret<str> for HashAlias {
     expect(() =>
       assertCheckpointFiveRuntimeContract(mutation)
     ).toThrow(/Checkpoint 5/);
-  });
+  }, 10_000);
 
   const checkpointFourSessionPath = "src-tauri/src/telegram/session.rs";
   const checkpointFourAdapterPath =

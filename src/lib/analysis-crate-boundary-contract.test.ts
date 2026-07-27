@@ -547,11 +547,43 @@ function productionRust(source: string): string {
       "[": "]",
       "{": "}",
     };
+    let topLevelMatchArm = false;
+    let matchArmRhsStart: number | undefined;
+    let bareBlockEndCandidate: number | undefined;
     for (let index = cursor; index < syntax.length; index += 1) {
       const token = syntax[index];
+      if (
+        stack.length === 0
+        && token === "="
+        && syntax[index + 1] === ">"
+      ) {
+        if (topLevelMatchArm) {
+          if (bareBlockEndCandidate !== undefined) {
+            return bareBlockEndCandidate;
+          }
+          throw new Error(
+            "cfg(test/dev) compound match arm has no terminating comma",
+          );
+        }
+        topLevelMatchArm = true;
+        matchArmRhsStart = index + 2;
+        index += 1;
+        continue;
+      }
       if (pairs[token]) {
-        if (token === "{" && stack.length === 0 && bracedItem) {
-          return closingDelimiter(syntax, index, "{", "}") + 1;
+        if (token === "{" && stack.length === 0) {
+          if (bracedItem && !topLevelMatchArm) {
+            return closingDelimiter(syntax, index, "{", "}") + 1;
+          }
+          if (
+            topLevelMatchArm
+            && bareBlockEndCandidate === undefined
+            && matchArmRhsStart !== undefined
+            && syntax.slice(matchArmRhsStart, index).trim().length === 0
+          ) {
+            bareBlockEndCandidate =
+              closingDelimiter(syntax, index, "{", "}") + 1;
+          }
         }
         stack.push(pairs[token]);
         continue;
@@ -561,8 +593,20 @@ function productionRust(source: string): string {
         continue;
       }
       if (stack.length === 0 && token === ";") return index + 1;
-      if (stack.length === 0 && token === "," && commaTerminated) {
+      if (
+        stack.length === 0
+        && token === ","
+        && (commaTerminated || topLevelMatchArm)
+      ) {
         return index + 1;
+      }
+      if (stack.length === 0 && token === "}" && topLevelMatchArm) {
+        if (bareBlockEndCandidate !== undefined) {
+          return bareBlockEndCandidate;
+        }
+        throw new Error(
+          "cfg(test/dev) compound match arm has no terminating comma",
+        );
       }
       if (stack.length === 0 && token === "{") {
         return closingDelimiter(syntax, index, "{", "}") + 1;
@@ -4911,13 +4955,60 @@ describe("analysis crate boundary", () => {
 
   // Repository-wide fail-closed SQL analysis can exceed Vitest's 5s default.
   it("keeps production SQL in the exact six-table owner", () => {
+    const cfgMatchArmProbe = productionRust(`
+      match client {
+        TelegramClientInner::Grammers(client) => live_before(client),
+        #[cfg(test)]
+        TelegramClientInner::TestIf => if condition {
+          hidden_then()
+        } else {
+          hidden_else()
+        },
+        #[cfg(test)]
+        TelegramClientInner::TestMethod { .. } =>
+          Probe { value: hidden_value() }.hidden_method(),
+        #[cfg(test)]
+        TelegramClientInner::TestBlockMethod => {
+          hidden_block_value()
+        }.hidden_block_method(),
+        #[cfg(test)]
+        TelegramClientInner::TestBlock { .. } => {
+          hidden_terminal_block()
+        }
+        TelegramClientInner::LiveAfter(client) => live_after(client),
+      }
+    `);
+    expect(
+      [
+        "TelegramClientInner::TestIf",
+        "TelegramClientInner::TestMethod",
+        "TelegramClientInner::TestBlockMethod",
+        "TelegramClientInner::TestBlock",
+        "hidden_then",
+        "hidden_else",
+        "hidden_value",
+        "hidden_method",
+        "hidden_block_value",
+        "hidden_block_method",
+        "hidden_terminal_block",
+      ].filter((marker) => cfgMatchArmProbe.includes(marker)),
+      "cfg-disabled match-arm bodies must not remain in production Rust",
+    ).toEqual([]);
+    expect(normalized(cfgMatchArmProbe)).toContain(
+      "TelegramClientInner::Grammers(client) => live_before(client),",
+    );
+    expect(normalized(cfgMatchArmProbe)).toContain(
+      "TelegramClientInner::LiveAfter(client) => live_after(client),",
+    );
+    expect(() => rustBraceRegions(cfgMatchArmProbe)).not.toThrow();
+
     const portable = portableProductionFiles();
     const app = appProductionFiles();
     expect(
       [...ownedTables].filter((table) => !schemaTables.has(table)),
       "all six owned tables must exist in canonical migrations",
     ).toEqual([]);
-    expect(app.length, "all-app production graph breadth").toBe(121);
+    expect(app.length, "all-app production graph breadth").toBe(125);
     for (const requiredPath of [
       "lib.rs",
       "main.rs",
@@ -5537,8 +5628,8 @@ describe("analysis crate boundary", () => {
       "apalis_jobs.rs:fetch_job_summaries:e3f8a21ab8453e7638518b00acd97e8b934c1f51080c257bd38db95b66f33216:05b1185e47ec480cdeab26d4c62f499a747ac87a701a5830ecfca1eaf3095ba7:query_builder_push:text_expr(schema, \"id\", \"''\")",
       "apalis_jobs.rs:fetch_payloads_for_ids:5735685cb0084ad5a0b182cfe13df418fdddb9b4eb2eb212e52b6c4110117814:05b1185e47ec480cdeab26d4c62f499a747ac87a701a5830ecfca1eaf3095ba7:query_builder_push:text_expr(schema, \"id\", \"''\")",
       "archive_read_model.rs:load_item_rows_from_archive:723126e361dfda6c463279e599a7d20d30fc0768543d46b8a07e056eb880496d:7f696cedd49b194c8de5579349f85150b2fe5f05a836554f874ffef84b36a913:query_as:&sql",
-      "ingest_provenance.rs:mark_takeout_migrated_history_deferred:c6b01d419d14e767d3411693b5b15b2d1201eaf6c811b4ab568392e0c90e822c:bfd9f8555486d10a1f4976e59a49e7c87ad01ca0b64662b97891a94bd958f94d:query:&query",
-      "ingest_provenance.rs:mark_takeout_only_my_messages_fallback:c73be9308109c5aa4b724423ccc547e0f7380fdb30bfff26f29ad4f93cfded64:bfd9f8555486d10a1f4976e59a49e7c87ad01ca0b64662b97891a94bd958f94d:query:&query",
+      "ingest_provenance.rs:mark_takeout_migrated_history_deferred:c6b01d419d14e767d3411693b5b15b2d1201eaf6c811b4ab568392e0c90e822c:5a7f28da697b149cf3ba2f9ff01074aa662ea5f6a56c983e8ee24f83816372a2:query:&query",
+      "ingest_provenance.rs:mark_takeout_only_my_messages_fallback:c73be9308109c5aa4b724423ccc547e0f7380fdb30bfff26f29ad4f93cfded64:5a7f28da697b149cf3ba2f9ff01074aa662ea5f6a56c983e8ee24f83816372a2:query:&query",
       `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
       `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
       `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
@@ -5550,7 +5641,7 @@ describe("analysis crate boundary", () => {
       `notebooklm_export/query.rs:load_reply_contexts_from_archive:66738ed721e900eb0f17ec4c586505676b218d8db107cd91b70148cc4a157458:${notebookExportSourceFingerprint}:query_as:&sql`,
       "sources/items/query.rs:load_scoped_item_rows:bfb50958f6b5793b0731984b9e12200dd5459f1b5c6e77699e073202b5d525d0:429bc8566779242fc32476367b6cb587010ce1dc79b6c6ceb508e10730ef9c3a:query_as:&sql",
       "sources/items/query.rs:load_item_cursor:f8cae30a17e3e8b3502f58c8b655e7a958f33c1ba4884a6e169d1ff636466652:429bc8566779242fc32476367b6cb587010ce1dc79b6c6ceb508e10730ef9c3a:query_as:&sql",
-      "sources/store.rs:delete_source_from_pool:f57c3fb2c5b7e0dab204d1ac4120eb119fde4c13a720a412e03feb126f616e8d:830aa5a38060767eeb3c8875abcff435d9c5dfe389be2a9fb9fe886355fb8470:query:&format!( \"PRAGMA busy_timeout = {SOURCE_DELETE_BUSY_TIMEOUT_MS}\" )",
+      "sources/store.rs:delete_source_from_pool:f57c3fb2c5b7e0dab204d1ac4120eb119fde4c13a720a412e03feb126f616e8d:28a8eb092ae42884e8b06bd6681bc36c8378cb1facea61fd8076b6ed284e3895:query:&format!( \"PRAGMA busy_timeout = {SOURCE_DELETE_BUSY_TIMEOUT_MS}\" )",
       "takeout_import/validation_diagnostics.rs:scalar_i64:f7d827bd898cd0cd75ffb1152e53d54534dbacdd22cdd7befd324847a41dee8f:c10c3ed708c568efa64586bb5a6e8da9b3a037866b1ec5e4c604f2ba0dd03a9d:query_scalar:sql",
       "takeout_import/validation_diagnostics.rs:distribution:edacbda83ddb78e356b2db59916e5025eabfd93cd42058ecb1f837e5e94a70ee:c10c3ed708c568efa64586bb5a6e8da9b3a037866b1ec5e4c604f2ba0dd03a9d:query_as:sql",
       "takeout_import/validation_diagnostics.rs:push_mismatch_category:068f1c3248bbbe7d9519155502f1f53d840c219db4a185a0f28c327d400ed473:c10c3ed708c568efa64586bb5a6e8da9b3a037866b1ec5e4c604f2ba0dd03a9d:query_scalar:sample_sql",
