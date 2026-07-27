@@ -2509,6 +2509,131 @@ Do not change cfg field, enum-variant, item, `cfg(any(...))`, or `cfg_attr`
 handling. The existing probes for those forms plus the new no-trailing-comma
 match-arm probe must all remain GREEN.
 
+#### Observed 2026-07-27 quality review: match-arm continuation safety
+
+- [ ] **Supersede only the premature match-arm body return.**
+
+Before the repository-contract correction commit, code-quality review found
+that the minimal `topLevelMatchArm` control flow above returns after the first
+top-level `{` in every match-arm RHS. That is correct for the observed terminal
+bare block, but it leaves disabled Rust behind for valid comma-terminated
+expressions such as:
+
+```rust
+#[cfg(test)]
+TestIf => if flag { hidden_then() } else { hidden_else() },
+#[cfg(test)]
+TestStruct => Probe { value: hidden_value() }.hidden_method(),
+#[cfg(test)]
+TestBlock => { hidden_block_value() }.hidden_block_method(),
+```
+
+The focused analysis-crate test reproduced this review finding before the
+parser-safety helper change: `1 failed | 15 skipped (16)`, with the disabled
+`hidden_else` and `hidden_method` sentinels still present. This is a parser
+regression inside the already authorized
+`src/lib/analysis-crate-boundary-contract.test.ts` correction, not a new
+production or checkpoint defect. It does not authorize another path, timeout,
+snapshot, breadth, production, Cargo, status, or documentation change.
+
+The correction worktree at discovery contains exactly the same three
+`$task6RepositoryCorrectionAllowed` paths, the index is empty, and Cargo
+identity is unchanged. Preserve the test-first RED rather than rewriting
+history: commit this plan-only safety amendment while the three correction
+paths remain unstaged. This is the sole exception to the clean-worktree
+precondition for an authority commit:
+
+```powershell
+$task6ParserSafetyAmendmentAllowed = @(
+    'docs/superpowers/plans/2026-07-26-extractum-telegram-8a-preparation.md'
+)
+git add -- $task6ParserSafetyAmendmentAllowed
+if ($LASTEXITCODE -ne 0) {
+    throw 'Could not stage parser-safety amendment'
+}
+$parserSafetyStaged = @(& git diff --cached --name-only) |
+    ForEach-Object { $_.Trim().Replace('\', '/') } |
+    Where-Object { $_ } |
+    Sort-Object -Unique
+$parserSafetyUnstaged = @(& git diff --name-only) |
+    ForEach-Object { $_.Trim().Replace('\', '/') } |
+    Where-Object { $_ } |
+    Sort-Object -Unique
+if (($parserSafetyStaged -join "`n") -ne
+    (($task6ParserSafetyAmendmentAllowed | Sort-Object) -join "`n")) {
+    throw 'Parser-safety amendment staged scope is not exact'
+}
+if (($parserSafetyUnstaged -join "`n") -ne
+    (($task6RepositoryCorrectionAllowed | Sort-Object) -join "`n")) {
+    throw 'Parser-safety amendment must leave exactly the 3/3 correction paths unstaged'
+}
+Assert-CargoIdentityUnchanged $task6RepositoryCorrectionCargoHashes
+& git diff --check
+if ($LASTEXITCODE -ne 0) { throw 'Parser-safety unstaged diff check failed' }
+& git diff --cached --check
+if ($LASTEXITCODE -ne 0) { throw 'Parser-safety staged diff check failed' }
+& git commit -m 'docs: harden Phase 8A cfg match-arm correction'
+if ($LASTEXITCODE -ne 0) {
+    throw 'Could not commit parser-safety amendment'
+}
+$task6ParserSafetyAmendmentSha = (& git rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or !$task6ParserSafetyAmendmentSha) {
+    throw 'Could not record parser-safety amendment SHA'
+}
+```
+
+After that commit, require an empty index and exactly the three correction
+paths still unstaged. The earlier body-end return at lines 2471-2498 is
+superseded only for match arms; keep its pre-arrow braced-item behavior.
+
+- [ ] **Extend the RED probe and implement the bounded state machine.**
+
+The one analysis-crate probe must contain all of these forms in the same
+synthetic `match`, with a live arm before and after them:
+
+1. comma-terminated `if { ... } else { ... }`;
+2. comma-terminated `Probe { ... }.method()`;
+3. comma-terminated `{ ... }.method()`;
+4. terminal bare `{ ... }` without a comma before the following live arm.
+
+Assert that every disabled sentinel and disabled pattern is absent, both live
+arms remain, and `rustBraceRegions` does not throw. Before changing the helper,
+require the focused test to remain RED and name exactly `hidden_else`,
+`hidden_method`, and `hidden_block_method` as leaked continuation sentinels.
+Then change only `disabledItemEnd`:
+
+1. retain `topLevelMatchArm`, and add `matchArmRhsStart` plus
+   `bareBlockEndCandidate`;
+2. set match-arm state only at the first `=>` whose delimiter stack is empty;
+3. when the first top-level RHS token is `{`, record its
+   `closingDelimiter(...) + 1` as `bareBlockEndCandidate`, but do not return
+   and do not skip normal delimiter-stack scanning;
+4. continue through `else`, struct/block postfix calls, operators, and nested
+   delimiters until the existing top-level comma returns the end of the whole
+   disabled arm;
+5. if a second top-level `=>` or the unmatched parent `}` is reached before a
+   comma and `bareBlockEndCandidate` exists, return that candidate. This is the
+   no-trailing-comma terminal bare-block boundary and leaves the following live
+   pattern or parent brace untouched;
+6. if that boundary is reached without a candidate, throw rather than guess at
+   a compound expression-arm boundary.
+
+Do not update the candidate for later braces: it is eligible only when
+`syntax.slice(matchArmRhsStart, openingBraceIndex).trim()` is empty. Therefore
+a braced pattern before the first arrow and braces inside `if`, struct
+literals, calls, closures, or a following live pattern cannot replace the
+terminal bare-block boundary. Keep the widened match-arm top-level comma
+condition. Do not change the treatment of semicolon items, fields, variants,
+ordinary braced items, non-`test/dev` cfg expressions, strings, or comments.
+This is not a general Rust parser: no-comma boundaries for `if`, `loop`,
+`async`, `unsafe`, or `const` RHS forms and angle-bracket/turbofish delimiter
+parsing remain outside this correction.
+
+Require the focused analysis-crate test to become
+`1 passed | 15 skipped (16)`, the two analysis files to report exactly
+`67 passed`, and a fresh code-quality re-review to approve this state machine
+and all four regression forms before running the longer correction gates.
+
 - [ ] **Apply the one local Checkpoint 5 timeout.**
 
 The focused command
@@ -2660,9 +2785,11 @@ failing_gate:
   npm.cmd run verify => nonzero; 38-record 2+1 hash drift; expected/actual
   breadth 121/125; CP5 function-value-alias timeout at 5000ms
 failure_summary:
-  authorized by $task6RepositoryCorrectionAmendmentSha; CP3 +2/import-only
+  authorized by $task6RepositoryCorrectionAmendmentSha and
+  $task6ParserSafetyAmendmentSha; CP3 +2/import-only
   ingest hash, CP4 +1, CP5 +1/unrelated store command hash and local-timeout
-  gap; no product/SQL behavior regression
+  gap; pre-commit quality RED additionally closed the cfg-disabled
+  match-arm continuation leak; no product/SQL behavior regression
 focused_rerun:
   npm.cmd run test -- src/lib/analysis-application-contract.test.ts -t
   'keeps analysis SQL ownership and borrowed coordinator capabilities fail
@@ -2691,12 +2818,12 @@ For this observed trigger only, row 2's exact three-path
 `exact_changed_paths == owning_allowed_set`; this explicitly overrides the
 ordinary single-owner/strict-subset rule and nothing else.
 
-Add both `$task6RepositoryCorrectionAmendmentSha` and
-`$task6RepositoryCorrectionSha` as separate chronological entries in the
-verification document's commit ledger, changed-path/range manifest, and
-rollback order. Row 2's `fix_sha` is
-`$task6RepositoryCorrectionSha`; its failure summary names the amendment
-SHA. Restart Task 6 at Step 1 from the clean correction SHA and regenerate
+Add `$task6RepositoryCorrectionAmendmentSha`,
+`$task6ParserSafetyAmendmentSha`, and `$task6RepositoryCorrectionSha` as
+separate chronological entries in the verification document's commit ledger,
+changed-path/range manifest, and rollback order. Row 2's `fix_sha` is
+`$task6RepositoryCorrectionSha`; its failure summary names both amendment
+SHAs. Restart Task 6 at Step 1 from the clean correction SHA and regenerate
 the draft from committed state rather than reapplying recovery scratch.
 Discard the failed attempt's timing: the restarted final-tree completion
 block supplies the only recorded duration.
@@ -2743,10 +2870,10 @@ Record the final SHA in the handoff only. Do not amend the committed verificatio
 
 - Checkpoints 1–5 are ordinary independently GREEN commits. A pause retains the last completed checkpoint and records its exact roadmap/design status.
 - Task 0 is a separately committed durable evidence correction, not a code checkpoint. Retain it through ordinary checkpoint rollback unless a new owner-approved evidence amendment supersedes it.
-- The committed verification rollback manifest includes Task 0, Checkpoints 1–5, every ordinary fix SHA with its owner, the repository-correction amendment SHA, repository-correction row 2 SHA, and an explicit `final evidence SHA: handoff-only (not self-recorded)` slot. The post-commit handoff fills that slot outside the document and gives the executable order.
-- The canonical reverse order for the observed history is: final evidence SHA → repository-correction row 2 SHA → repository-correction amendment SHA → earlier ordinary fix rows in reverse sequence (currently Fix 1 `69032633fc2346d56e0854475be045cfb3e8a35b`) → Checkpoint 5 → Checkpoint 4 → Checkpoint 3 → Checkpoint 2 → Checkpoint 1. When rolling back below the repository correction, revert row 2 first but retain its separately committed plan amendment as durable authority unless a new owner-approved authority amendment explicitly supersedes it; in that ordinary case the amendment's position in the reverse list is a retained/no-op step, not an implicit revert.
+- The committed verification rollback manifest includes Task 0, Checkpoints 1–5, every ordinary fix SHA with its owner, both repository-correction amendment SHAs, repository-correction row 2 SHA, and an explicit `final evidence SHA: handoff-only (not self-recorded)` slot. The post-commit handoff fills that slot outside the document and gives the executable order.
+- The canonical reverse order for the observed history is: final evidence SHA → repository-correction row 2 SHA → parser-safety amendment SHA → repository-correction amendment SHA → earlier ordinary fix rows in reverse sequence (currently Fix 1 `69032633fc2346d56e0854475be045cfb3e8a35b`) → Checkpoint 5 → Checkpoint 4 → Checkpoint 3 → Checkpoint 2 → Checkpoint 1. When rolling back below the repository correction, revert row 2 first but retain both separately committed plan amendments as durable authority unless a new owner-approved authority amendment explicitly supersedes one; in that ordinary case each amendment's position in the reverse list is a retained/no-op step, not an implicit revert.
 - Any rollback below CP5 then continues through earlier ordinary fix rows in reverse sequence and Checkpoints 5 down through N+1. A fix still needed by retained Checkpoint N or earlier is reapplied/reimplemented against that retained tree under a new SHA and must pass the same owner-compatible current-state subset before the rollback disposition is committed; never retain a CP5-shaped fix above reverted checkpoints.
-- A full 8A rollback reverts final evidence, repository-correction row 2, every earlier ordinary fix in reverse sequence, and Checkpoints 5→1. It retains both the repository-correction plan amendment and Task 0 as durable authority unless either is separately superseded; if an owner-approved superseding authority explicitly requires reverting the plan amendment, revert it at its canonical position between row 2 and the earlier ordinary fixes.
+- A full 8A rollback reverts final evidence, repository-correction row 2, every earlier ordinary fix in reverse sequence, and Checkpoints 5→1. It retains both repository-correction plan amendments and Task 0 as durable authority unless one is separately superseded; if an owner-approved superseding authority explicitly requires reverting an amendment, revert it at its canonical position between row 2 and the earlier ordinary fixes.
 - If dirty failed work contains useful evidence, first validate an exact path allowlist and commit only that evidence; never use `git reset --hard`, destructive checkout, or deletion of evidence.
 - After rollback, run the last retained checkpoint's exact tests/contracts, `cargo check -p extractum --all-targets`, `cargo test -p extractum --all-targets`, and locked metadata.
 - Prove no crate/member/path edge exists, all Grammers roots remain app-owned, manifest/lock match the retained checkpoint, and the worktree is clean.
@@ -2759,7 +2886,7 @@ Record the final SHA in the handoff only. Do not amend the committed verificatio
 - [ ] The literal map still parses as 140 rows / 99 app / 41 crate / three companions with no duplicate baseline or final identity.
 - [ ] The three mandatory decompositions and dead-insert test remap are exact.
 - [ ] No baseline identity disappeared behind a zero-test filter or deleted source path.
-- [ ] The complete retained range contains no migration, frontend runtime/UI, manifest, lockfile, dependency, feature, revision, persisted/wire value, command signature/registration, event name/payload/order, runtime status value, or transaction change. Implementation/correction commits change only the explicitly named test-contract frontend files and the planned roadmap/design authority-status progression; the sole separately committed authority exception is `docs/superpowers/plans/2026-07-26-extractum-telegram-8a-preparation.md` from the dated repository-correction amendment, which authorizes no production path, other documentation path, or status change.
+- [ ] The complete retained range contains no migration, frontend runtime/UI, manifest, lockfile, dependency, feature, revision, persisted/wire value, command signature/registration, event name/payload/order, runtime status value, or transaction change. Implementation/correction commits change only the explicitly named test-contract frontend files and the planned roadmap/design authority-status progression; the only separately committed authority exceptions are the two dated amendments to `docs/superpowers/plans/2026-07-26-extractum-telegram-8a-preparation.md`, which authorize no production path, other documentation path, or status change.
 - [ ] Public API equals the allowlist; no public raw Grammers/TL/SQLx/Tauri/keyring/secret getter/error conversion exists.
 - [ ] DTO/media/session/runtime leaves live under `src-tauri/src/telegram`, not `telegram_impl` or a new crate.
 - [ ] App filesystem/secret/SQL/event/Takeout ownership is intact; temporary raw adapters are crate-private and enumerated for 8B removal.
