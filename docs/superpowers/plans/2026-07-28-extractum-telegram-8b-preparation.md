@@ -107,18 +107,49 @@ redesign.
 - [ ] Start only from a clean commit that tracks this exact plan. `git ls-files --error-unmatch docs/superpowers/plans/2026-07-28-extractum-telegram-8b-preparation.md` must succeed.
 - [ ] Record the actual start SHA and prove `dd14161386a946dfd070e25dae06bbb99ac62cfb` is an ancestor. Never reset, check out, or destructively restore the repository to that SHA.
 - [ ] Inspect `git status --short`, the complete scoped diff, and the staged diff before every commit. Stage only the task allowlist; preserve unrelated user changes.
-- [ ] Every Checkpoint 1–8 is independently GREEN, separately committed, and truthfully represented in the roadmap/design status in that same commit. Dirty work never advances status.
+- [ ] Every Checkpoint 1–8 is independently GREEN, separately committed, and
+  truthfully represented in the roadmap/design status in that same commit.
+  Implementation and pre-status gates remain on the preceding retained status.
+  The exact uncommitted `Checkpoint N retained` pair may be written only as the
+  candidate lifecycle selector immediately before the final checkpoint gates;
+  it is not retained until those gates pass and the same commit records it. A
+  failed candidate gate restores the preceding pair before any further fix.
 - [ ] Use the canonical shared `src-tauri/target`. Do not create a worktree, alternate target, timing harness, process scanner, quiet-window protocol, retry loop, or temporary Cargo profile.
 - [ ] Phase 8B keeps exactly six workspace members. It creates no `extractum-telegram` package, member, manifest, path dependency, package metadata node, or resolved edge.
 - [ ] All four Grammers roots remain direct dependencies of `extractum` throughout 8B. Dependency-removal benefit is not claimed before 8C.
 - [ ] Do not edit migrations, schemas, frontend runtime/UI code, command signatures/registration, IPC/event payloads, persisted status values, secret identifiers, session format/path/AAD, transaction ownership, outer cancellation-select boundaries, message order/limits/cutoffs, fallback rules, or durable progress boundaries.
 - [ ] Do not introduce SQL, Tauri, keyring, filesystem, app-module, `crate::error`, `crate::compression`, or `crate::time` imports into `src-tauri/src/telegram_impl/**`.
-- [ ] Staged-to-staged references use only `self::` and `super::`. No staged file contains `crate::`, an application alias, or an application re-export. Raw Grammers types remain private implementation details or parameters/results of the literal restricted bridge allowlist; none is externally public or root-re-exported.
-- [ ] Every application reference to staged API uses an explicit `crate::telegram_impl::...` path. Do not add `use crate::telegram_impl as ...`, a second facade, a glob, or a duplicate DTO.
+- [ ] Staged-to-staged references use only `self::` and `super::`. No staged
+  file contains `crate::`, an application alias, or an application re-export.
+  Raw Grammers types remain private implementation details, parameters/results
+  of the literal final restricted bridge allowlist, or members of the exact
+  CP3→CP6 transitional raw bridge frozen below; none is externally public or
+  root-re-exported.
+- [ ] Except for the exact CP3→CP6 package-private media compatibility facade
+  and the exact CP3→CP6 application-facing members of the transitional raw
+  bridge frozen below, every application reference to staged API uses an
+  explicit `crate::telegram_impl::...` path. Do not add
+  `use crate::telegram_impl as ...`, another facade, a glob, or a duplicate
+  DTO.
 - [ ] Public fallible operations return `extractum_core::error::AppResult<T>` directly. The root does not re-export `AppError`/`AppResult` and defines no `TelegramError`.
 - [ ] The public API contains no `Client`, `MemorySession`, `LoginToken`, `PeerRef`, `RemoteCall`, `InvocationError`, raw `tl::*`, SQLx, Tauri, keyring, secret getter, or app type.
-- [ ] Restricted `pub(super)` bridges are allowed only for the literal internal bridge allowlist frozen below. They are not root-re-exported. The contract rejects every other restricted bridge and every externally reachable public item outside the frozen API.
-- [ ] The only lifecycle-gated exception to the terminal root API is the exact four-item CP3→CP6 media compatibility set frozen below. It has exact consumers and is completely removed/demoted before CP7; it authorizes no public module, glob, or fifth item.
+- [ ] At CP7/CP8, restricted `pub(super)` bridges are allowed only for the
+  literal 67-entry final internal bridge allowlist frozen below. They are not
+  root-re-exported. At CP3→CP6, the only additional staged restricted/package
+  bridge is the exact transitional raw bridge named in the next bullet. The
+  contract rejects every other restricted bridge and every externally
+  reachable public item outside the frozen API.
+- [ ] The only lifecycle-gated exceptions to the terminal API/visibility rules
+  are: (a) the exact four-item CP3→CP6 media compatibility set, including its
+  staged-root export and package-private `src-tauri/src/media.rs` facade for the
+  exact frozen consumers; and (b) the exact CP3→CP6 transitional raw bridge
+  `TelegramClientHandle::{raw_client,raw_session}`,
+  `TelegramSession::raw_memory_session`,
+  `telegram::{get_client,get_authorized_client}`, and
+  `{ResolvedSyncPeer::peer,legacy_peer_ref_from_descriptor}`. The staged raw
+  accessors retain only their existing package/super visibility and exact
+  callsites. Both exception sets are completely removed/demoted before CP7 and
+  authorize no public module, glob, fifth media item, or additional raw bridge.
 - [ ] Remove `TelegramClientHandle::{raw_client,raw_session}` and app helpers `get_client`/`get_authorized_client` only after their last consumers use owned operations; none may exist at Checkpoint 7 or 8.
 - [ ] App persistence remains incremental. It processes every `LiveMessage` and every `TakeoutMessage` in order, records max IDs before skip/parse decisions exactly as today, and returns a per-entry error only after prior entries have been durably handled.
 - [ ] Every live batch performs exactly one raw `messages.getHistory` invoke with `1 <= limit <= 100`; do not build it by draining `MessageIter::next`. It preserves newest-to-oldest order, exact offset-id/offset-date advancement, the pinned Grammers terminal rule, and per-message conversion after app cutoffs.
@@ -138,7 +169,11 @@ redesign.
 Task 1 installs this closed vocabulary atomically in `telegram-contract-paths.ts`, the Telegram boundary contract, and the shell-cap contract:
 
 1. roadmap `8A preparation retained`; design `Approved; 8A preparation retained; 8B not started` — starting state;
-2. roadmap `8B preparation Checkpoint 1 retained` through `8B preparation Checkpoint 8 retained`; design `Approved; 8B preparation Checkpoint N retained` — only after the named checkpoint gates pass;
+2. roadmap `8B preparation Checkpoint 1 retained` through
+   `8B preparation Checkpoint 8 retained`; design
+   `Approved; 8B preparation Checkpoint N retained` — the exact uncommitted
+   pair selects the candidate lifecycle for the final named gates and becomes
+   retained only when those gates pass and the checkpoint commit records it;
 3. roadmap `8B preparation retained; 8C pending`; design `Approved; 8B preparation retained; 8C pending` — only after Checkpoint 8 release/startup evidence and the durable verification document;
 4. `done: retained` and `not retained` remain future/rollback states and are not produced by this plan.
 
@@ -1171,7 +1206,10 @@ Every listed bridge is spelled `pub(super)` at its leaf or is reached through
 one `pub(super)` parent facade; no `pub(crate)`, `pub(in ...)`, root export, or
 other restricted production visibility is allowed. This keeps staged files
 free of `crate::` and lets sibling modules collaborate without expanding the
-future crate API.
+future crate API. This paragraph governs the CP7/CP8 final inventory. The exact
+CP3→CP6 raw bridge is a separately generated transitional inventory, may retain
+only the existing package/super visibility frozen above, and is excluded from
+`restrictedFinalSymbols`.
 
 The final media bridge that replaces the transitional `DocumentSignals`
 cross-module construction is exact:
@@ -1628,6 +1666,11 @@ format drift. The Telegram boundary contract executes `--check`, so
 - [ ] Authorize the content-addressed 8A map import and all generated authority
   artifact paths. Keep the design/roadmap status at the starting state; 8B has
   not started.
+- [ ] Copy the checkpoint candidate-status rule into the authority: dirty
+  implementation remains on the preceding retained pair; the exact
+  uncommitted next-checkpoint pair exists only to select the final lifecycle
+  gates, becomes retained only in the GREEN checkpoint commit, and is restored
+  before any fix after a failed gate.
 - [ ] Run:
 
 ```powershell
@@ -2250,7 +2293,9 @@ Invoke-CheckedNative 'commit Task 4' {
 
 - Create: `src-tauri/src/telegram_impl/live/messages.rs`
 - Create: `src-tauri/src/telegram_impl/live/topics.rs`
-- Modify: `src-tauri/src/telegram_impl/{lib,dto,error,media,runtime}.rs`
+- Modify:
+  `src-tauri/src/telegram_impl/{lib,dto,error,media,runtime,session}.rs`
+- Modify: `src-tauri/src/telegram_impl/live/mod.rs`
 - Modify:
   `src-tauri/src/sources/{items,peer_resolution,sync,topics,mod}.rs`
 - Modify: `src-tauri/src/takeout_import/forum_topics.rs` to use the shared
@@ -2511,7 +2556,9 @@ Invoke-CheckedNative 'commit Task 6' {
 - Create: `src-tauri/src/telegram_impl/takeout/pagination.rs`
 - Create: `src-tauri/src/telegram_impl/takeout/raw_parse.rs`
 - Create: `src-tauri/src/telegram_impl/takeout/forum_topics.rs`
-- Modify: `src-tauri/src/telegram_impl/{lib,error,runtime}.rs`
+- Modify:
+  `src-tauri/src/telegram_impl/{lib,error,media,runtime,session}.rs`
+- Modify: `src-tauri/src/{media,telegram}.rs`
 - Modify:
   `src-tauri/src/takeout_import/{mod,forum_topics,migrated_history}.rs`
 - Modify:
@@ -2519,7 +2566,10 @@ Invoke-CheckedNative 'commit Task 6' {
   peer/topic coordination requires it
 - Delete after successful relocation:
   `src-tauri/src/takeout_import/{export_dc,pagination,raw_parse}.rs`
-- Modify: all affected boundary contracts and two status docs
+- Modify: `src/lib/telegram-crate-boundary-contract.test.ts`
+- Modify:
+  `docs/superpowers/specs/2026-07-26-telegram-crate-boundary-design.md`
+- Modify: `docs/superpowers/specs/2026-07-17-crate-roadmap.md`
 
 ### Task 7A: Owned Transport and Attempt/Fallback Ordering
 
@@ -2944,8 +2994,6 @@ Invoke-CheckedNative 'commit Task 7' {
 - Modify:
   `docs/superpowers/specs/2026-07-26-telegram-crate-boundary-design.md`
 - Modify: `docs/superpowers/specs/2026-07-17-crate-roadmap.md`
-- Update project/agent docs only if the final architecture or commands changed
-  beyond the already-approved authority
 
 ### Task 8A: Content-Address the Exact Portable Tree
 
