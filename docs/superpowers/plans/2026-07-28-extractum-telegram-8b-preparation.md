@@ -78,6 +78,9 @@ Explicit approval of this plan also approves only the following clarification:
   `Grammers client configuration must enable auto_cache_peers` when
   `auto_cache_peers` is false, and pass the validated value to
   `Client::with_configuration`;
+- keep `initialize_grammers_client` configuration-free at its call boundary:
+  it accepts only `api_id` and `session`, and materializes/validates the
+  default configuration inside its own body;
 - intentionally replace pinned Grammers' `Messages::NotModified` panic on the
   live `hash = 0` history path with
   `AppError::network("Telegram returned messagesNotModified for live history batch")`,
@@ -121,6 +124,7 @@ redesign.
 - [ ] Every live batch performs exactly one raw `messages.getHistory` invoke with `1 <= limit <= 100`; do not build it by draining `MessageIter::next`. It preserves newest-to-oldest order, exact offset-id/offset-date advancement, the pinned Grammers terminal rule, and per-message conversion after app cutoffs.
 - [ ] The raw live batch reproduces the pinned Grammers peer-map/session-cache update before returning and performs no second remote call.
 - [ ] Grammers client construction explicitly materializes `grammers_client::client::ClientConfiguration::default()`, rejects `auto_cache_peers == false` with `AppError::internal("Grammers client configuration must enable auto_cache_peers")` before `SenderPool::new` or `tokio::spawn`, and calls `Client::with_configuration`. The raw live batch may reproduce the enabled cache side effect only under this fail-closed construction invariant.
+- [ ] `initialize_grammers_client` retains the exact configuration-free signature frozen in Task 3. It must not accept `ClientConfiguration`, `auto_cache_peers`, a configuration factory, or any equivalent injected policy. Making the otherwise unreachable false-default branch testable by parameterizing this function moves the invariant to its caller, is forbidden, and requires an approved plan/design amendment.
 - [ ] The one declared error-behavior exception is `Messages::NotModified` for `messages.getHistory { hash: 0 }`: pinned Grammers panics, while Extractum deliberately returns `AppErrorKind::Network` with exact message `Telegram returned messagesNotModified for live history batch`. This aligns live history with the existing Takeout page/count typed-rejection convention; it neither unwinds nor accepts `NotModified.count`. No other panic/error-kind/message/JSON behavior may change.
 - [ ] The app records an export-DC attempt before each concrete remote call and drains fallback metadata after success, error, or cancellation. On a terminal remote error, failure to record export-DC fallback metadata is best-effort and the original remote error wins. Only-my-messages persistence is mandatory and completes before the explicit search continuation.
 - [ ] Avatar download remains staged; avatar cache keys/paths/writes/cleanup and base64/data-URL presentation remain app-owned. The app creates `DialogListing` with the exact 4,000 ms list budget, converts each returned descriptor before requesting the next one, and staged `next()` preserves dialog-next/avatar interleaving plus the exact 750 ms per-photo timeout.
@@ -1154,7 +1158,14 @@ line; no nested brace syntax is legal. Task 1's
 expands only the remaining single-level brace groups, and materializes the
 sorted canonical 67-entry result as `restrictedFinalSymbols` in the generated
 symbol artifact. The TypeScript contract consumes that generated array instead
-of maintaining or parsing a second pagination list.
+of maintaining or parsing a second pagination list. Flattening also
+deliberately closes two omissions in the old nested notation by listing the
+`TakeoutPageRequest` and `TakeoutCursorAdvance` types themselves. This is not
+formatting-only drift: the sibling-visible `takeout_page_request` and
+`next_takeout_cursor` functions return those types, respectively, so the types
+must themselves be `pub(super)`. The separate `pagination_state` bridge retains
+its frozen `(TakeoutPaginationProfile, TakeoutPaginationCursor, usize)` return
+tuple.
 
 Every listed bridge is spelled `pub(super)` at its leaf or is reached through
 one `pub(super)` parent facade; no `pub(crate)`, `pub(in ...)`, root export, or
@@ -1739,8 +1750,9 @@ keeps Checkpoint 1 on the application-owned pre-staging layout
   symbol-disposition artifact. The CP7/CP8 source contract must compare the
   complete normalized production `pub(super)` inventory to generated
   `restrictedFinalSymbols`; it must not hard-code a second pagination list.
-  Mutation cases delete `TakeoutPaginationCursor::new` and widen one
-  `TakeoutPageRequest` field, and both must fail the focused contract.
+  Mutation cases delete `TakeoutPaginationCursor::new`, delete either returned
+  type entry (`TakeoutPageRequest` or `TakeoutCursorAdvance`), and widen one
+  `TakeoutPageRequest` field; every case must fail the focused contract.
   Starting at Checkpoint 3, also require
   `initialize_grammers_client` to materialize
   `grammers_client::client::ClientConfiguration::default()`, fail closed on
@@ -1748,8 +1760,12 @@ keeps Checkpoint 1 on the application-owned pre-staging layout
   do so before `SenderPool::new`/`tokio::spawn`, and construct through
   `Client::with_configuration`; reject a missing or inverted guard, the wrong
   configuration path, post-spawn validation, or a return to implicit
-  `Client::new`. Require both exact session accessors at CP3 through CP6, then
-  at CP7/CP8 require exactly one restricted
+  `Client::new`. Parse and enforce the exact two-parameter function signature;
+  mutation cases that add a `ClientConfiguration`, boolean, factory, or
+  generic configuration input must fail even if the body still calls
+  `ClientConfiguration::default()`. Require the default construction and guard
+  inside this function body, not in a caller/helper. Require both exact session
+  accessors at CP3 through CP6, then at CP7/CP8 require exactly one restricted
   `clone_memory_session` definition and zero `raw_memory_session` identifiers
   across production and tests. At Checkpoint 1 these future conditions are
   authority-only; current source is still the retained 8A layout.
@@ -1948,29 +1964,42 @@ accepted.
   reuse and keep `authorized_client` behavior/signature unchanged.
 - [ ] In `initialize_grammers_client`, replace the implicit
   `grammers_client::Client::new(pool.handle)` with this fail-closed
-  construction invariant:
+  construction invariant. Keep its exact signature; do not add a configuration
+  parameter merely to make the false-default branch reachable in a unit test:
 
 ```rust
-let configuration =
-    grammers_client::client::ClientConfiguration::default();
-if !configuration.auto_cache_peers {
-    return Err(extractum_core::error::AppError::internal(
-        "Grammers client configuration must enable auto_cache_peers",
-    ));
+async fn initialize_grammers_client(
+    api_id: i32,
+    session: &TelegramSession,
+) -> extractum_core::error::AppResult<(TelegramClientInner, JoinHandle<()>, bool)> {
+    let configuration =
+        grammers_client::client::ClientConfiguration::default();
+    if !configuration.auto_cache_peers {
+        return Err(AppError::internal(
+            "Grammers client configuration must enable auto_cache_peers",
+        ));
+    }
+    let pool = SenderPool::new(session.clone_memory_session(), api_id);
+    let runner = tokio::spawn(async move {
+        let _ = pool.runner.run().await;
+    });
+    let client =
+        grammers_client::Client::with_configuration(pool.handle, configuration);
+    let is_authorized = client
+        .is_authorized()
+        .await
+        .map_err(AppError::telegram_network)?;
+    Ok((TelegramClientInner::Grammers(client), runner, is_authorized))
 }
-let pool = SenderPool::new(session.clone_memory_session(), api_id);
-let runner = tokio::spawn(async move {
-    let _ = pool.runner.run().await;
-});
-let client =
-    grammers_client::Client::with_configuration(pool.handle, configuration);
 ```
 
   The pinned default is true, so this does not change the retained runtime
   path. It turns the outer Grammers cache gate into an executable precondition:
   a future default/configuration drift fails during client initialization
   before any detached runner exists, instead of letting the raw live path cache
-  peers under different rules.
+  peers under different rules. The false branch is intentionally unreachable
+  under the pinned default and is protected structurally; do not weaken the
+  ownership invariant to manufacture runtime coverage.
 - [ ] At CP3, add the permanent restricted bridge exactly as
   `TelegramSession::clone_memory_session(&self) -> Arc<MemorySession>` with
   body `Arc::clone(&self.inner)`. Keep the existing borrowed
