@@ -534,6 +534,37 @@ The single-package preparation order is required: moving runtime/session
 before raw Takeout would either expose `Client`/`MemorySession` publicly or
 duplicate the runtime. Both outcomes are forbidden.
 
+The explicitly approved
+[Phase 8B preparation plan](../plans/2026-07-28-extractum-telegram-8b-preparation.md)
+is the narrow API authority. Its sole architecture amendment adds the
+private-field stateful opaque `DialogListing` and `TakeoutTransport`
+capabilities; neither is a generic invocation, repository, event, callback,
+cursor, or stream abstraction. The frozen public surface also adds
+`LiveMessageBatch`, `LiveMessage`, `TakeoutAttempt`,
+`TakeoutFallbackKind`, `TakeoutFallback`, `TakeoutPeer`, `MessageRange`,
+`TakeoutCount`, `TakeoutPage`, and `TakeoutMessage`, with every field private.
+`PeerLocator`, a public raw/generic cursor or stream other than the exact
+opaque `DialogListing`, and a generic invocation/provenance callback remain
+forbidden.
+
+The plan content-addresses the immutable retained 8A 140-row map and
+18-addition table and authorizes only the named generated authority artifacts:
+`src/lib/telegram-8b-staging-sha256.json` through
+`scripts/telegram-staging-sha256.mjs`,
+`scripts/telegram-8b-symbol-map.mjs`, and
+`src/lib/telegram-grammers-feature-baseline.json` through
+`scripts/telegram-grammers-feature-baseline.mjs`. The complete signatures,
+67-entry final restricted bridge allowlist, CP3-through-CP6 media/raw
+exceptions, symbol disposition, test counts, and live/Takeout transition
+protocols are copied into the boundary design and are not broadened here.
+
+During 8B implementation, dirty work remains on the preceding retained
+roadmap/design status pair. The exact uncommitted next-checkpoint pair exists
+only as the candidate lifecycle selector for the final checkpoint gates. It
+becomes retained only in the same GREEN checkpoint commit; a failed gate
+restores the preceding retained pair before any fix. This authority amendment
+does not advance the current `8A preparation retained` status.
+
 By the end of 8B, staged modules use only relative `self::`/`super::` paths,
 while app-owned callers use the exact `crate::telegram_impl::` prefix. 8C
 preserves staged files byte-for-byte, proves relative-path/content-hash

@@ -9,6 +9,9 @@
 **Verification-loop authority:**
 [`2026-07-17-focused-rust-loop-design.md`](2026-07-17-focused-rust-loop-design.md)
 
+**Approved Phase 8B narrow-API authority:**
+[`2026-07-28-extractum-telegram-8b-preparation.md`](../plans/2026-07-28-extractum-telegram-8b-preparation.md)
+
 This specification defines the just-in-time Phase 8 boundary for
 `extractum-telegram`. It supersedes the short Phase 8 placeholder in the crate
 roadmap. Approval of this document does not authorize implementation. Phase 8
@@ -51,7 +54,8 @@ application facade:
    job/provenance state, and every cross-domain transaction;
 4. the boundary consists only of owned values, the shared
    `extractum-core` `AppResult` contract, and opaque runtime/login/client
-   handles;
+   handles plus the concrete stateful opaque `DialogListing` and
+   `TakeoutTransport` capabilities;
 5. no public crate API exposes Grammers, SQLx, Tauri, keyring, raw TL,
    `RemoteCall`, or `InvocationError`;
 6. the physical work is divided into contract/session preparation (8A), full
@@ -62,6 +66,14 @@ application facade:
    the dependency-removal outcome;
 8. timing is reduced to the already-mandatory ordinary workspace check and is
    advisory only.
+
+The two concrete stateful opaque capabilities are the sole architecture
+amendment approved with the Phase 8B plan. `DialogListing` is only the frozen
+budgeted dialog/avatar operation and `TakeoutTransport` is only the frozen
+concrete Takeout operation set. Neither type is a generic invocation,
+repository, event, callback, cursor, or stream abstraction. No `PeerLocator`,
+public raw/generic cursor or stream other than the exact opaque
+`DialogListing`, or generic invocation/provenance callback is authorized.
 
 The final invariant is stronger than merely hiding imports behind an
 application module: after 8C the `extractum` package has no direct Grammers
@@ -567,8 +579,11 @@ exact signatures of newly introduced operations before its RED contract:
 - `ForumTopicSnapshot`: owned topic data;
 - `TelegramMediaPayload`: the single renamed/re-homed form of current
   `ExtractedMediaPayload`, containing `ItemMediaMetadata` from core;
-- `MessageRange`, `TakeoutPage`, and `TakeoutMessage`: owned Takeout operation
-  values.
+- `DialogListing`, `LiveMessageBatch`, and `LiveMessage`: private-field,
+  owned live-operation values;
+- `TakeoutAttempt`, `TakeoutFallbackKind`, `TakeoutFallback`, `TakeoutPeer`,
+  `TakeoutTransport`, `MessageRange`, `TakeoutCount`, `TakeoutPage`, and
+  `TakeoutMessage`: private-field owned Takeout operation values.
 
 Public fallible operations return
 `extractum_core::error::AppResult<T>` directly. The crate does not re-export
@@ -604,9 +619,12 @@ No existing free function is widened in place. `ExtractedItemPayload` is
 absorbed rather than exported. `DocumentSignals`, media/content helpers and
 constants, raw Takeout/TL request and pagination types, session envelope
 structs, protocol classifiers, and test helpers remain private. Opaque runtime,
-client, login, session, secret, and new owned Takeout values are introduced as
-new final seam types rather than widening a raw existing type; their fields
-remain private unless this specification already names them as an owned DTO.
+client, login, session, secret, live-operation, and Takeout values are
+introduced as new final seam types rather than widening a raw existing type.
+Every field on `DialogListing`, `LiveMessageBatch`, `LiveMessage`,
+`TakeoutAttempt`, `TakeoutFallback`, `TakeoutPeer`, `TakeoutTransport`,
+`MessageRange`, `TakeoutCount`, `TakeoutPage`, and `TakeoutMessage` remains
+private.
 
 The 8A/8B source contract must enumerate the public items above and the exact
 new operation signatures, reject any other `pub` item, and prove the same
@@ -628,6 +646,1099 @@ The public API must not contain:
 Public widening is allowlist-only. Each `pub(crate)` to `pub` change must
 already appear in the specification allowlist, be mapped by the implementation
 plan, and be enforced by the source-boundary contract.
+
+## Phase 8B Narrow API and Lifecycle Authority
+
+The approved Phase 8B plan freezes the following execution-state, count,
+signature, visibility, transition, symbol-disposition, portable-tree, and
+generated-artifact authority. These clauses are copied here before RED and
+supersede every broader narrative clause in this design:
+- [ ] Inspect `git status --short`, the complete scoped diff, and the staged diff before every commit. Stage only the task allowlist; preserve unrelated user changes.
+- [ ] Every Checkpoint 1–8 is independently GREEN, separately committed, and
+  truthfully represented in the roadmap/design status in that same commit.
+  Implementation and pre-status gates remain on the preceding retained status.
+  The exact uncommitted `Checkpoint N retained` pair may be written only as the
+  candidate lifecycle selector immediately before the final checkpoint gates;
+  it is not retained until those gates pass and the same commit records it. A
+  failed candidate gate restores the preceding pair before any further fix.
+- [ ] Use the canonical shared `src-tauri/target`. Do not create a worktree, alternate target, timing harness, process scanner, quiet-window protocol, retry loop, or temporary Cargo profile.
+- [ ] Phase 8B keeps exactly six workspace members. It creates no `extractum-telegram` package, member, manifest, path dependency, package metadata node, or resolved edge.
+- [ ] All four Grammers roots remain direct dependencies of `extractum` throughout 8B. Dependency-removal benefit is not claimed before 8C.
+- [ ] Do not edit migrations, schemas, frontend runtime/UI code, command signatures/registration, IPC/event payloads, persisted status values, secret identifiers, session format/path/AAD, transaction ownership, outer cancellation-select boundaries, message order/limits/cutoffs, fallback rules, or durable progress boundaries.
+- [ ] Do not introduce SQL, Tauri, keyring, filesystem, app-module, `crate::error`, `crate::compression`, or `crate::time` imports into `src-tauri/src/telegram_impl/**`.
+- [ ] Staged-to-staged references use only `self::` and `super::`. No staged
+  file contains `crate::`, an application alias, or an application re-export.
+  Raw Grammers types remain private implementation details, parameters/results
+  of the literal final restricted bridge allowlist, or members of the exact
+  CP3→CP6 transitional raw bridge frozen below; none is externally public or
+  root-re-exported.
+- [ ] Except for the exact CP3→CP6 package-private media compatibility facade
+  and the exact CP3→CP6 application-facing members of the transitional raw
+  bridge frozen below, every application reference to staged API uses an
+  explicit `crate::telegram_impl::...` path. Do not add
+  `use crate::telegram_impl as ...`, another facade, a glob, or a duplicate
+  DTO.
+- [ ] Public fallible operations return `extractum_core::error::AppResult<T>` directly. The root does not re-export `AppError`/`AppResult` and defines no `TelegramError`.
+- [ ] The public API contains no `Client`, `MemorySession`, `LoginToken`, `PeerRef`, `RemoteCall`, `InvocationError`, raw `tl::*`, SQLx, Tauri, keyring, secret getter, or app type.
+- [ ] At CP7/CP8, restricted `pub(super)` bridges are allowed only for the
+  literal 67-entry final internal bridge allowlist frozen below. They are not
+  root-re-exported. At CP3→CP6, the only additional staged restricted/package
+  bridge is the exact transitional raw bridge named in the next bullet. The
+  contract rejects every other restricted bridge and every externally
+  reachable public item outside the frozen API.
+- [ ] The only lifecycle-gated exceptions to the terminal API/visibility rules
+  are: (a) the exact four-item CP3→CP6 media compatibility set, including its
+  staged-root export and package-private `src-tauri/src/media.rs` facade for the
+  exact frozen consumers; and (b) the exact CP3→CP6 transitional raw bridge
+  `TelegramClientHandle::{raw_client,raw_session}`,
+  `TelegramSession::raw_memory_session`,
+  `telegram::{get_client,get_authorized_client}`, and
+  `{ResolvedSyncPeer::peer,legacy_peer_ref_from_descriptor}`. The staged raw
+  accessors retain only their existing package/super visibility and exact
+  callsites. Both exception sets are completely removed/demoted before CP7 and
+  authorize no public module, glob, fifth media item, or additional raw bridge.
+- [ ] Remove `TelegramClientHandle::{raw_client,raw_session}` and app helpers `get_client`/`get_authorized_client` only after their last consumers use owned operations; none may exist at Checkpoint 7 or 8.
+- [ ] App persistence remains incremental. It processes every `LiveMessage` and every `TakeoutMessage` in order, records max IDs before skip/parse decisions exactly as today, and returns a per-entry error only after prior entries have been durably handled.
+- [ ] Every live batch performs exactly one raw `messages.getHistory` invoke with `1 <= limit <= 100`; do not build it by draining `MessageIter::next`. It preserves newest-to-oldest order, exact offset-id/offset-date advancement, the pinned Grammers terminal rule, and per-message conversion after app cutoffs.
+- [ ] The raw live batch reproduces the pinned Grammers peer-map/session-cache update before returning and performs no second remote call.
+- [ ] Grammers client construction explicitly materializes `grammers_client::client::ClientConfiguration::default()`, rejects `auto_cache_peers == false` with `AppError::internal("Grammers client configuration must enable auto_cache_peers")` before `SenderPool::new` or `tokio::spawn`, and calls `Client::with_configuration`. The raw live batch may reproduce the enabled cache side effect only under this fail-closed construction invariant.
+- [ ] `initialize_grammers_client` retains the exact configuration-free signature frozen in Task 3. It must not accept `ClientConfiguration`, `auto_cache_peers`, a configuration factory, or any equivalent injected policy. Making the otherwise unreachable false-default branch testable by parameterizing this function moves the invariant to its caller, is forbidden, and requires an approved plan/design amendment.
+- [ ] The one declared error-behavior exception is `Messages::NotModified` for `messages.getHistory { hash: 0 }`: pinned Grammers panics, while Extractum deliberately returns `AppErrorKind::Network` with exact message `Telegram returned messagesNotModified for live history batch`. This aligns live history with the existing Takeout page/count typed-rejection convention; it neither unwinds nor accepts `NotModified.count`. No other panic/error-kind/message/JSON behavior may change.
+- [ ] The app records an export-DC attempt before each concrete remote call and drains fallback metadata after success, error, or cancellation. On a terminal remote error, failure to record export-DC fallback metadata is best-effort and the original remote error wins. Only-my-messages persistence is mandatory and completes before the explicit search continuation.
+- [ ] Avatar download remains staged; avatar cache keys/paths/writes/cleanup and base64/data-URL presentation remain app-owned. The app creates `DialogListing` with the exact 4,000 ms list budget, converts each returned descriptor before requesting the next one, and staged `next()` preserves dialog-next/avatar interleaving plus the exact 750 ms per-photo timeout.
+- [ ] The immutable 140 primaries and three declared companions remain the only baseline decompositions. Any fourth decomposition or identity rename stops for a plan/design amendment.
+- [ ] Every exact Rust RED is a runtime RED: a compiling test executes exactly once, fails for the named semantic reason, and contains no compiler error. A compile failure or zero-test filter is never RED evidence.
+- [ ] No live credentialed Telegram mutation is a gate. Deterministic tests prove login, source, session, and Takeout behavior.
+- [ ] If implementation requires another public type, dependency, raw escape hatch, transaction owner, wire change, cross-domain port, or generic invocation/repository/event abstraction, stop before code and amend the approved design and plan.
+
+### Phase 8B Status State Machine
+
+Task 1 installs this closed vocabulary atomically in `telegram-contract-paths.ts`, the Telegram boundary contract, and the shell-cap contract:
+
+1. roadmap `8A preparation retained`; design `Approved; 8A preparation retained; 8B not started` — starting state;
+2. roadmap `8B preparation Checkpoint 1 retained` through
+   `8B preparation Checkpoint 8 retained`; design
+   `Approved; 8B preparation Checkpoint N retained` — the exact uncommitted
+   pair selects the candidate lifecycle for the final named gates and becomes
+   retained only when those gates pass and the checkpoint commit records it;
+3. roadmap `8B preparation retained; 8C pending`; design `Approved; 8B preparation retained; 8C pending` — only after Checkpoint 8 release/startup evidence and the durable verification document;
+4. `done: retained` and `not retained` remain future/rollback states and are not produced by this plan.
+
+`TelegramLifecycle` gains exact `8b-checkpoint-1` through `8b-checkpoint-8` values; the existing terminal 8B layout becomes `8b-preparation`. Per-path resolution is checkpoint-aware:
+
+| Staged owner path | First physical owner checkpoint |
+| --- | ---: |
+| `telegram_impl/{lib,dto,media,runtime,session}.rs` | 3 |
+| `telegram_impl/live/{mod,avatar,peer}.rs` | 4 |
+| `telegram_impl/live/{messages,topics}.rs` | 5 |
+| `telegram_impl/error.rs` | 4 |
+| `telegram_impl/takeout/**` | 7 |
+
+Checkpoint 6 adds the two raw-parse companion assertions at their current `takeout_import::raw_parse::tests` temporary IDs; Checkpoint 7 moves them to the staged IDs. No lifecycle infers a path from existence alone.
+
+## Normative Immutable Test Authority
+
+The immutable map is included here by exact content-addressed reference:
+
+```text
+source_path = docs/superpowers/plans/2026-07-26-extractum-telegram-8a-preparation.md
+start_heading = ## Literal Immutable 140-Test Identity Map
+end_marker = LF + ### Exact New-Test Identity Map
+normalized_lf_bytes = 37436
+sha256 = ceab6cef728d396bf2136207f2130974dee2cc0be3c5184eabd8c8de5e58b3ca
+```
+
+The retained 8A addition table is independently content-addressed:
+
+```text
+source_path = docs/superpowers/plans/2026-07-26-extractum-telegram-8a-preparation.md
+start_heading = ### Exact New-Test Identity Map
+end_marker = LF + --- + LF
+normalized_lf_bytes = 3717
+sha256 = a8dce5a0a00ac8cdcf83ef7eab2304f482e7c3967ec26ab8c8270d6fde42f539
+```
+
+Task 1 makes the contract normalize CRLF to LF, slice exactly between those headings, verify byte count and SHA-256 before parsing, and continue to require:
+
+```text
+140 immutable primaries = 99 app + 41 future-owner
+3 companions = item-kind + 2 deferred raw-parse companions
+143 eventual baseline-derived identities
+18 Phase-8A additions = 1 companion + 17 additional verification
+8A retained = 141 baseline-derived / 158 tracked
+8B before new seam tests = 143 baseline-derived / 160 tracked
+```
+
+No task edits the imported table or its 8A exact-addition table. A hash mismatch stops execution and requires a reviewed authority amendment.
+
+### Exact Phase 8B New-Test Table
+
+These 15 seam tests are additional verification, not new baseline companions.
+Fourteen belong to the staged future owner; one is the app-owned live batch
+coordinator test required to preserve incremental durability and the raw
+message limit:
+
+| Checkpoint | Exact identity | Subject |
+| ---: | --- | --- |
+| 3 | `telegram_impl::runtime::tests::client_preserves_missing_account_error_without_authorization_check` | non-authorized opaque lookup |
+| 4 | `telegram_impl::live::avatar::tests::peer_photo_bytes_returns_owned_bytes_and_suppresses_timeout_and_transport_failure` | 750 ms owned-byte avatar behavior |
+| 4 | `telegram_impl::live::peer::tests::dialog_listing_preserves_dialog_avatar_interleaving_and_budget` | dialog/avatar interleaving, 4 s cutoff, order, and owned descriptors |
+| 4 | `telegram_impl::live::peer::tests::resolution_primitives_preserve_username_dialog_and_subtype_outcomes` | app-owned plan primitives and exact outcomes |
+| 5 | `telegram_impl::live::messages::tests::message_batch_preserves_single_fetch_order_limit_offsets_and_terminal_rule` | one raw invoke, cache update under the validated `auto_cache_peers` invariant, 1..=100 limit, offsets, ordering, terminal rule, typed `NotModified` rejection |
+| 5 | `telegram_impl::live::messages::tests::live_message_maps_owned_draft_and_skips_empty_payload` | per-entry conversion and empty skip |
+| 5 | `telegram_impl::live::topics::tests::forum_topic_pages_preserve_order_deleted_ids_and_terminal_cursor` | owned topics/deletions/pagination |
+| 5 | `sources::sync::tests::telegram_batch_loop_preserves_entry_durability_limits_and_stops_after_error` | app coordinator durability, raw-message limit, and no post-error fetch |
+| 7 | `telegram_impl::takeout::transport::tests::transport_reports_attempt_and_fallback_after_success_or_error` | attempt snapshot and fallback queue after success/error |
+| 7 | `telegram_impl::takeout::operations::tests::start_takeout_returns_owned_session_and_selected_ranges` | self-check/init/split selection |
+| 7 | `telegram_impl::takeout::operations::tests::migration_probe_and_revalidation_return_owned_chat_identity` | migration detect/revalidate |
+| 7 | `telegram_impl::takeout::operations::tests::history_count_preserves_channel_private_fallback_outcome` | classified fallback queue and owned only-my count |
+| 7 | `telegram_impl::takeout::operations::tests::history_page_and_search_return_owned_takeout_messages` | concrete page/search operations |
+| 7 | `telegram_impl::takeout::operations::tests::finish_takeout_preserves_success_and_error_mapping` | concrete finish behavior |
+| 7 | `telegram_impl::takeout::forum_topics::tests::forum_topic_operation_returns_owned_snapshots` | post-Takeout remote topic result |
+
+The two deferred companions are separate and retain their design-mandated IDs:
+
+```text
+telegram_impl::takeout::raw_parse::tests::raw_parse_preserves_distinct_history_peer_identity_for_equal_message_ids
+telegram_impl::takeout::raw_parse::tests::raw_parse_preserves_identical_native_identity_for_same_peer_and_message_id
+```
+
+Starting from 719 current library identities, Phase 8B adds exactly 17 tests:
+two companions plus 15 additional seam tests. The final executable library set
+is therefore exactly 736 unique IDs. The Phase 8 tracked subset is exactly 175:
+104 app identities and 71 staged future-owner identities. Any other count
+requires a plan amendment before implementation continues.
+
+Checkpoint accounting is exact:
+
+| Retained checkpoint | Unique `extractum` library IDs | Present baseline-derived | Present Phase-8 tracked |
+| ---: | ---: | ---: | ---: |
+| 1 | 719 | 141 | 158 |
+| 2 | 719 | 141 | 158 |
+| 3 | 720 | 141 | 159 |
+| 4 | 723 | 141 | 162 |
+| 5 | 727 | 141 | 166 |
+| 6 | 729 | 143 | 168 |
+| 7 | 736 | 143 | 175 |
+| 8 | 736 | 143 | 175 |
+
+## Exact Portable Tree
+
+Checkpoint 7 must produce exactly these 19 Rust files and no other file below the root:
+
+```text
+src-tauri/src/telegram_impl/
+  lib.rs
+  dto.rs
+  error.rs
+  runtime.rs
+  session.rs
+  media.rs
+  live/
+    mod.rs
+    avatar.rs
+    peer.rs
+    messages.rs
+    topics.rs
+  takeout/
+    mod.rs
+    types.rs
+    transport.rs
+    export_dc.rs
+    operations.rs
+    pagination.rs
+    raw_parse.rs
+    forum_topics.rs
+```
+
+Checkpoint 8 writes `src/lib/telegram-8b-staging-sha256.json` with schema:
+
+```json
+{
+  "schemaVersion": 1,
+  "algorithm": "sha256",
+  "root": "src-tauri/src/telegram_impl",
+  "files": [
+    { "path": "dto.rs", "sha256": "generated lowercase SHA-256" }
+  ]
+}
+```
+
+The real artifact contains 19 records sorted by forward-slash relative path. `scripts/telegram-staging-sha256.mjs --write` is the only generator; `--check` recomputes from bytes and fails on a missing/extra path, order drift, root drift, or hash mismatch. The 8C plan must compare the same relative-path/hash records against `src-tauri/crates/extractum-telegram/src`.
+
+## Frozen Final Public API
+
+Task 0 copies this exact signature authority into the design. Task 1 makes the
+source contract reject any other terminal root re-export, `pub` item, public
+field, or public method and lifecycle-gates the exact CP3→CP6 media exception
+described below.
+
+```rust
+// telegram_impl/dto.rs
+pub const ITEM_KIND_TELEGRAM_MESSAGE: &str = "telegram_message";
+
+pub struct TelegramMessageIdentity {
+    pub history_peer_kind: String,
+    pub history_peer_id: i64,
+    pub telegram_message_id: i64,
+    pub migration_domain: Option<String>,
+    pub is_migrated_history: bool,
+}
+impl TelegramMessageIdentity {
+    pub fn validate(&self) -> extractum_core::error::AppResult<()>;
+}
+
+pub struct TelegramItemContext {
+    pub reply_to_msg_id: Option<i64>,
+    pub reply_to_peer_kind: Option<String>,
+    pub reply_to_peer_id: Option<String>,
+    pub reply_to_top_id: Option<i64>,
+    pub reaction_count: Option<i64>,
+}
+
+pub struct TelegramMessageDraft {
+    pub telegram_identity: Option<TelegramMessageIdentity>,
+    pub telegram_context: TelegramItemContext,
+    pub content: Option<String>,
+    pub content_kind: &'static str,
+    pub author: Option<String>,
+    pub published_at: i64,
+    pub raw_data: Vec<u8>,
+    pub item_kind: String,
+    pub media: Option<TelegramMediaPayload>,
+}
+
+pub struct PeerDescriptor {
+    pub external_id: String,
+    pub title: String,
+    pub source_subtype: String,
+    pub is_member: bool,
+    pub username: Option<String>,
+    pub access_hash: Option<i64>,
+    pub avatar_bytes: Option<Vec<u8>>,
+}
+
+pub struct ForumTopicSnapshot {
+    pub topic_id: i64,
+    pub top_message_id: i64,
+    pub title: String,
+    pub icon_color: i64,
+    pub icon_emoji_id: Option<i64>,
+    pub is_closed: bool,
+    pub is_pinned: bool,
+    pub is_hidden: bool,
+    pub sort_order: i64,
+}
+
+// telegram_impl/media.rs
+pub struct TelegramMediaPayload {
+    pub kind: String,
+    pub metadata: extractum_core::media_metadata::ItemMediaMetadata,
+}
+
+// telegram_impl/session.rs
+pub struct SessionEncryptionKey(/* private secret container */);
+impl SessionEncryptionKey {
+    pub fn try_from_encoded(
+        encoded: secrecy::SecretString,
+    ) -> extractum_core::error::AppResult<Self>;
+    pub fn generate() -> (Self, secrecy::SecretString);
+}
+
+pub struct TelegramSession { /* private Grammers session */ }
+impl TelegramSession {
+    pub fn empty() -> Self;
+    pub(super) fn clone_memory_session(
+        &self,
+    ) -> std::sync::Arc<grammers_session::storages::MemorySession>;
+}
+
+pub fn session_json_requires_existing_key(
+    json: &str,
+) -> extractum_core::error::AppResult<bool>;
+pub fn decode_session_json(
+    json: &str,
+    account_id: i64,
+    key: Option<&SessionEncryptionKey>,
+) -> extractum_core::error::AppResult<TelegramSession>;
+pub async fn encode_session_json(
+    session: &TelegramSession,
+    account_id: i64,
+    key: &SessionEncryptionKey,
+) -> extractum_core::error::AppResult<String>;
+
+// telegram_impl/runtime.rs
+pub struct TelegramApiHash(/* private secret container */);
+impl TelegramApiHash {
+    pub fn new(value: secrecy::SecretString) -> Self;
+}
+
+pub enum TelegramRuntimeStatus {
+    Ready,
+    ReauthRequired,
+}
+
+pub struct TelegramClientHandle { /* private client/session capability */ }
+pub struct TelegramLoginAttempt { /* private login token and phone */ }
+pub struct TelegramRuntime { /* private account map/test callbacks */ }
+
+impl TelegramRuntime {
+    pub fn new() -> Self;
+    pub async fn initialize_account(
+        &self,
+        account_id: i64,
+        api_id: i32,
+        api_hash: TelegramApiHash,
+        session: TelegramSession,
+    ) -> extractum_core::error::AppResult<TelegramRuntimeStatus>;
+    pub async fn is_authenticated(
+        &self,
+        account_id: i64,
+    ) -> extractum_core::error::AppResult<bool>;
+    pub async fn request_login_code(
+        &self,
+        account_id: i64,
+        phone: String,
+    ) -> extractum_core::error::AppResult<()>;
+    pub async fn sign_in(
+        &self,
+        account_id: i64,
+        code: String,
+    ) -> extractum_core::error::AppResult<TelegramSession>;
+    pub async fn client(
+        &self,
+        account_id: i64,
+    ) -> extractum_core::error::AppResult<TelegramClientHandle>;
+    pub async fn authorized_client(
+        &self,
+        account_id: i64,
+    ) -> extractum_core::error::AppResult<TelegramClientHandle>;
+    pub async fn clear_account(&self, account_id: i64, sign_out: bool);
+}
+
+// telegram_impl/live/peer.rs
+pub struct DialogListing { /* private dialog iterator/start/budget/client */ }
+
+// telegram_impl/live/messages.rs
+pub struct LiveMessageBatch { /* private messages/offset/terminal fields */ }
+pub struct LiveMessage { /* private raw message plus owned peer lookup */ }
+
+impl LiveMessageBatch {
+    pub fn take_messages(&mut self) -> Vec<LiveMessage>;
+    pub fn is_terminal(&self) -> bool;
+    pub fn next_offset_id(&self) -> i32;
+    pub fn next_offset_date(&self) -> i32;
+}
+impl LiveMessage {
+    pub fn message_id(&self) -> i64;
+    pub fn published_at(&self) -> i64;
+    pub fn into_draft(
+        self,
+        source_title: Option<&str>,
+    ) -> extractum_core::error::AppResult<Option<TelegramMessageDraft>>;
+}
+
+// telegram_impl/runtime.rs; delegates through live::* restricted facades
+impl TelegramClientHandle {
+    pub fn dialog_listing(
+        &self,
+        avatar_budget_ms: u64,
+    ) -> DialogListing;
+    pub async fn resolve_dialog_peer(
+        &self,
+        peer_id: i64,
+        expected_subtype: Option<&str>,
+    ) -> extractum_core::error::AppResult<PeerDescriptor>;
+    pub async fn resolve_username(
+        &self,
+        username: &str,
+        expected_subtype: Option<&str>,
+    ) -> extractum_core::error::AppResult<Option<PeerDescriptor>>;
+    pub async fn peer_avatar_bytes(
+        &self,
+        peer: &PeerDescriptor,
+    ) -> Option<Vec<u8>>;
+    pub async fn fetch_message_batch(
+        &self,
+        peer: &PeerDescriptor,
+        offset_id: i32,
+        offset_date: i32,
+        limit: usize,
+    ) -> extractum_core::error::AppResult<LiveMessageBatch>;
+    pub async fn fetch_forum_topics(
+        &self,
+        peer: &PeerDescriptor,
+    ) -> extractum_core::error::AppResult<
+        Option<(Vec<ForumTopicSnapshot>, Vec<i64>)>,
+    >;
+}
+
+impl DialogListing {
+    pub async fn next(
+        &mut self,
+    ) -> extractum_core::error::AppResult<Option<PeerDescriptor>>;
+}
+
+// telegram_impl/takeout/types.rs
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TakeoutFallbackKind {
+    ExportDc,
+    OnlyMyMessages,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TakeoutAttempt { /* private home_dc_id/export_dc_id fields */ }
+impl TakeoutAttempt {
+    pub fn home_dc_id(&self) -> i32;
+    pub fn export_dc_id(&self) -> i32;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TakeoutFallback { /* private kind/warning/provenance fields */ }
+impl TakeoutFallback {
+    pub fn kind(&self) -> TakeoutFallbackKind;
+    pub fn warning(&self) -> &str;
+    pub fn provenance_message(&self) -> Option<&str>;
+}
+
+// telegram_impl/takeout/transport.rs
+pub struct TakeoutTransport { /* private client/DC/fallback state */ }
+impl TakeoutTransport {
+    pub fn export_dc_attempt(&self) -> TakeoutAttempt;
+    pub fn drain_fallbacks(&mut self) -> Vec<TakeoutFallback>;
+}
+
+// telegram_impl/takeout/types.rs
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TakeoutPeer { /* private subtype/kind/id/access-hash fields */ }
+impl TakeoutPeer {
+    pub fn from_descriptor(
+        descriptor: &PeerDescriptor,
+    ) -> extractum_core::error::AppResult<Self>;
+    pub fn peer_kind(&self) -> &'static str;
+    pub fn peer_id(&self) -> i64;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MessageRange { /* private min/max fields */ }
+impl MessageRange {
+    pub fn min_id(&self) -> i32;
+    pub fn max_id(&self) -> i32;
+}
+
+pub struct TakeoutCount { /* private count/only-my fields */ }
+impl TakeoutCount {
+    pub fn count(&self) -> i64;
+    pub fn only_my_messages(&self) -> bool;
+}
+
+pub struct TakeoutPage { /* private cursor/messages/continuation fields */ }
+impl TakeoutPage {
+    pub fn take_messages(&mut self) -> Vec<TakeoutMessage>;
+    pub fn has_next(&self) -> bool;
+    pub fn only_my_messages(&self) -> bool;
+    pub fn take_pagination_fallback_warning(&mut self) -> Option<String>;
+}
+
+pub struct TakeoutMessage { /* private raw TL message */ }
+impl TakeoutMessage {
+    pub fn message_id(&self) -> i64;
+    pub fn into_draft(
+        self,
+        source_title: Option<&str>,
+    ) -> extractum_core::error::AppResult<Option<TelegramMessageDraft>>;
+}
+
+// telegram_impl/runtime.rs; delegates through takeout::* restricted facades
+impl TelegramClientHandle {
+    pub async fn takeout_self_check(
+        &self,
+    ) -> extractum_core::error::AppResult<()>;
+    pub async fn prepare_takeout(
+        &self,
+    ) -> extractum_core::error::AppResult<TakeoutTransport>;
+    pub async fn takeout_forum_topics(
+        &self,
+        peer: &PeerDescriptor,
+    ) -> extractum_core::error::AppResult<
+        Option<(Vec<ForumTopicSnapshot>, Vec<i64>)>,
+    >;
+}
+
+impl TakeoutTransport {
+    pub async fn init(
+        &mut self,
+        source_subtype: &str,
+    ) -> extractum_core::error::AppResult<i64>;
+    pub async fn message_ranges(
+        &mut self,
+        takeout_id: i64,
+        source_subtype: &str,
+    ) -> extractum_core::error::AppResult<(i64, Vec<MessageRange>)>;
+    pub async fn validate_peer(
+        &mut self,
+        takeout_id: i64,
+        peer: &TakeoutPeer,
+        source_subtype: &str,
+    ) -> extractum_core::error::AppResult<()>;
+    pub async fn detect_supergroup_migration(
+        &mut self,
+        takeout_id: i64,
+        peer: &TakeoutPeer,
+        source_subtype: &str,
+    ) -> extractum_core::error::AppResult<Option<i64>>;
+    pub async fn revalidate_migrated_peer(
+        &mut self,
+        takeout_id: i64,
+        peer: &TakeoutPeer,
+    ) -> extractum_core::error::AppResult<Option<(i64, TakeoutPeer)>>;
+    pub async fn history_count(
+        &mut self,
+        takeout_id: i64,
+        peer: &TakeoutPeer,
+        range: &MessageRange,
+        source_subtype: &str,
+    ) -> extractum_core::error::AppResult<TakeoutCount>;
+    pub async fn search_my_history_count(
+        &mut self,
+        takeout_id: i64,
+        peer: &TakeoutPeer,
+        range: &MessageRange,
+    ) -> extractum_core::error::AppResult<TakeoutCount>;
+    pub async fn history_page(
+        &mut self,
+        takeout_id: i64,
+        peer: &TakeoutPeer,
+        range: &MessageRange,
+        count: &TakeoutCount,
+        previous: Option<&TakeoutPage>,
+    ) -> extractum_core::error::AppResult<TakeoutPage>;
+    pub async fn search_my_history_page(
+        &mut self,
+        takeout_id: i64,
+        peer: &TakeoutPeer,
+        range: &MessageRange,
+        count: &TakeoutCount,
+        previous: Option<&TakeoutPage>,
+    ) -> extractum_core::error::AppResult<TakeoutPage>;
+    pub async fn finish(
+        &mut self,
+        takeout_id: i64,
+        success: bool,
+    ) -> extractum_core::error::AppResult<()>;
+}
+```
+
+`TelegramApiHash`, `TelegramRuntimeStatus`, `TelegramClientHandle`,
+`DialogListing`,
+`TelegramLoginAttempt`, `TelegramRuntime`, `SessionEncryptionKey`,
+`TelegramSession`, `session_json_requires_existing_key`,
+`decode_session_json`, and `encode_session_json` retain their Phase 8A
+external visibility/signatures. There are two explicit internal/API-surface
+changes: add public `TelegramRuntime::client`, and add restricted
+`TelegramSession::clone_memory_session(&self) -> Arc<MemorySession>` while the
+borrowed restricted
+`TelegramSession::raw_memory_session(&self) -> &Arc<MemorySession>` coexists
+only through CP6 and is deleted at CP7. This is a coexist-then-replace
+transition, not an in-place signature change. `initialized_client` stays
+private and `authorized_client` stays public.
+Private derives and test-only constructors are allowed; no additional
+externally reachable production `pub` item exists at CP7/CP8. The exact
+CP3→CP6 media compatibility exports named below are the only lifecycle-gated
+exception and are removed/demoted at CP7.
+
+The exact restricted internal bridge allowlist is below. A name on the
+`live::{...}` or `takeout::{...}` line is a `pub(super)` parent facade called
+only by `runtime.rs`, except that
+`takeout/forum_topics.rs` is the one additional caller of
+`live::fetch_forum_topics`. A leaf name is `pub(super)` to its immediate
+parent. Public inherent methods listed in the API block are not duplicated
+here.
+
+```text
+live::{dialog_listing,resolve_dialog_peer,resolve_username,peer_avatar_bytes,fetch_message_batch,fetch_forum_topics}
+live::avatar::{peer_photo_bytes_with_timeout,peer_photo_bytes}
+live::peer::{DialogListing::new,resolve_dialog_peer,resolve_username,peer_avatar_bytes}
+live::messages::fetch_message_batch
+live::topics::fetch_forum_topics
+media::{derive_content_kind,derive_document_media_kind_from_parts,extract_item_payload}
+error::{is_non_forum_topic_refresh_error,is_channel_private_error,should_fallback_export_dc_error}
+session::TelegramSession::{clone_memory_session,cache_peer_infos}
+takeout::{takeout_self_check,prepare_takeout,takeout_forum_topics}
+takeout::export_dc::{prepare_export_dc_alias,export_dc_invoke,finish_takeout_session}
+takeout::forum_topics::takeout_forum_topics
+takeout::operations::takeout_self_check
+takeout::pagination::TakeoutPaginationProfile
+takeout::pagination::TakeoutPageRequest
+takeout::pagination::TakeoutPageRequest::offset_id
+takeout::pagination::TakeoutPageRequest::add_offset
+takeout::pagination::TakeoutPageRequest::limit
+takeout::pagination::TakeoutPaginationCursor
+takeout::pagination::TakeoutPaginationCursor::new
+takeout::pagination::TakeoutCursorAdvance
+takeout::pagination::TakeoutCursorAdvance::cursor
+takeout::pagination::TakeoutCursorAdvance::advanced
+takeout::pagination::TakeoutCursorAdvance::reached_range_start
+takeout::pagination::TakeoutPaginationFallbackReason
+takeout::pagination::select_history_splits
+takeout::pagination::takeout_page_request
+takeout::pagination::next_takeout_cursor
+takeout::pagination::should_restart_with_descending_fallback
+takeout::pagination::takeout_pagination_fallback_warning
+takeout::pagination::parse_takeout_page
+takeout::raw_parse::{parse_raw_message,peer_ref_identity,messages_response_count}
+takeout::transport::TakeoutTransport::{new,queue_fallback,client,session,home_dc_id,export_dc_id}
+takeout::types::TakeoutAttempt::new
+takeout::types::TakeoutFallback::new
+takeout::types::TakeoutPeer::{new,source_subtype,access_hash}
+takeout::types::MessageRange::new
+takeout::types::TakeoutCount::new
+takeout::types::TakeoutPage::{from_parts,pagination_state}
+takeout::types::TakeoutMessage::from_raw
+```
+
+The pagination subsection is intentionally one fully qualified symbol per
+line; no nested brace syntax is legal. Task 1's
+`scripts/telegram-8b-symbol-map.mjs` parses this entire fenced allowlist,
+expands only the remaining single-level brace groups, and materializes the
+sorted canonical 67-entry result as `restrictedFinalSymbols` in the generated
+symbol artifact. The TypeScript contract consumes that generated array instead
+of maintaining or parsing a second pagination list. Flattening also
+deliberately closes two omissions in the old nested notation by listing the
+`TakeoutPageRequest` and `TakeoutCursorAdvance` types themselves. This is not
+formatting-only drift: the sibling-visible `takeout_page_request` and
+`next_takeout_cursor` functions return those types, respectively, so the types
+must themselves be `pub(super)`. The separate `pagination_state` bridge retains
+its frozen `(TakeoutPaginationProfile, TakeoutPaginationCursor, usize)` return
+tuple.
+
+Every listed bridge is spelled `pub(super)` at its leaf or is reached through
+one `pub(super)` parent facade; no `pub(crate)`, `pub(in ...)`, root export, or
+other restricted production visibility is allowed. This keeps staged files
+free of `crate::` and lets sibling modules collaborate without expanding the
+future crate API. This paragraph governs the CP7/CP8 final inventory. The exact
+CP3→CP6 raw bridge is a separately generated transitional inventory, may retain
+only the existing package/super visibility frozen above, and is excluded from
+`restrictedFinalSymbols`.
+
+The final media bridge that replaces the transitional `DocumentSignals`
+cross-module construction is exact:
+
+```rust
+pub(super) fn derive_document_media_kind_from_parts(
+    mime_type: Option<&str>,
+    has_video: bool,
+    has_audio: bool,
+    is_voice: bool,
+    is_animated: bool,
+) -> &'static str;
+```
+
+`DocumentSignals` and all five fields are private again at CP7. The bridge
+reuses the existing classifier and introduces no second classification rule.
+
+The pagination types on the allowlist are `pub(super)` only to the `takeout`
+parent; they are neither root exports nor public API. `TakeoutPage` stores that
+restricted state and exposes it to sibling operations only as:
+
+```rust
+pub(super) fn pagination_state(
+    &self,
+) -> (
+    TakeoutPaginationProfile,
+    TakeoutPaginationCursor,
+    usize,
+);
+```
+
+This is the sole internal cursor-state bridge and does not authorize a public
+cursor/stream.
+
+The live batch implementation is additionally frozen as follows:
+
+- `fetch_message_batch` validates `1 <= limit <= 100`, constructs exactly one
+  raw `tl::functions::messages::GetHistory` request with the supplied
+  `offset_id` and `offset_date`, and performs exactly one `Client::invoke`;
+- it maps the response's messages/users/chats into private owned lookup state
+  sufficient to preserve current author, reply, media, raw-data, and fallback
+  identity behavior without a second remote call;
+- before returning, it reproduces pinned Grammers `build_peer_map` behavior and
+  updates the runtime's in-memory `TelegramSession` peer cache only after
+  runtime construction has validated that
+  `ClientConfiguration.auto_cache_peers` is true, and then for exactly those
+  response peers for which pinned Grammers `Peer::auth().is_some()` is true.
+  This preserves both levels of the pinned condition. The inner predicate
+  includes ordinary chats with default auth and excludes min users/channels
+  whose auth is unavailable; it is not an access-hash-only predicate;
+- newest-to-oldest response order is retained;
+- `Messages::Messages` is terminal; `Messages::Slice` and
+  `Messages::ChannelMessages` are terminal exactly when empty or when the first
+  returned message ID is less than or equal to the request limit, matching the
+  pinned Grammers `fill_buffer` rule;
+- for this `GetHistory` request whose `hash` is exactly zero,
+  `Messages::NotModified` is the one intentional divergence from pinned
+  `fill_buffer`: pinned Grammers panics, whereas the owned live operation
+  returns `AppErrorKind::Network` with exact message
+  `Telegram returned messagesNotModified for live history batch`. It does not
+  use `NotModified.count`. This matches the existing Extractum Takeout
+  convention, whose operation-specific messages remain exactly
+  `Telegram returned messagesNotModified for Takeout history page` and
+  `Telegram returned messagesNotModified for Takeout history count probe`;
+- a non-terminal batch advances both offsets from its last raw message;
+- the app checks prior-ID and date cutoffs before `into_draft`, then updates
+  `max_message_id`, converts, and persists/skips in that order. It never asks
+  for the next batch after a cutoff or conversion/persistence error.
+
+The Takeout transition protocol is also part of the API authority:
+
+1. before each standalone concrete `TakeoutTransport` call, the app performs
+   the existing cancellation pre-check and durably deduplicates both
+   `transport.export_dc_attempt().home_dc_id()` and
+   `transport.export_dc_attempt().export_dc_id()`. For a classified
+   history-to-search pair, the one outer pre-check covers both calls; the app
+   records the current attempt again immediately before search but performs no
+   second cancellation pre-check or select;
+2. one existing outer `run_takeout_step_with_cancel` future contains the
+   concrete history call and, when needed, fallback persistence plus the
+   explicit only-my search continuation; no second cancellation select or
+   pre-check is inserted between them;
+3. the app captures the outer future result and every completed recorder result
+   without `?`; after success, error, or cancellation it drains all fallback
+   metadata and applies the exact `FallbackRecordState` protocol in Task 7B
+   before propagating the captured result. A completed recorder failure is
+   never called again;
+4. `validate_peer` may return `Ok(())` with an `OnlyMyMessages` fallback;
+5. `history_count` or `history_page` returns the classified channel-private
+   error and queues `OnlyMyMessages`; after the app durably records that
+   fallback, it immediately calls the corresponding
+   `search_my_history_count` or `search_my_history_page` concrete operation;
+6. no progress event, durable page update, second select/pre-check, or unrelated
+   job-state decision is inserted between that fallback record and search
+   continuation; dropping the one outer future preserves the existing
+   cancellation point;
+7. a validation-level `OnlyMyMessages` warning is metadata only: every range
+   still tries `history_count` first. Only a classified history error makes the
+   returned `TakeoutCount::only_my_messages()` route that range's pages through
+   search;
+8. shifted-export-DC → home-DC remains internal to one concrete call. Its
+   `ExportDc` fallback is drained after either success or error;
+9. pagination fallback remains page-local, may recur for separate ranges, and
+   is exposed only through `TakeoutPage::take_pagination_fallback_warning`.
+
+The root re-export allowlist is exactly:
+
+```text
+ITEM_KIND_TELEGRAM_MESSAGE
+TelegramMessageIdentity
+TelegramItemContext
+TelegramMessageDraft
+PeerDescriptor
+ForumTopicSnapshot
+TelegramMediaPayload
+TelegramApiHash
+TelegramRuntimeStatus
+TelegramClientHandle
+DialogListing
+TelegramLoginAttempt
+TelegramRuntime
+SessionEncryptionKey
+TelegramSession
+session_json_requires_existing_key
+decode_session_json
+encode_session_json
+LiveMessageBatch
+LiveMessage
+TakeoutAttempt
+TakeoutFallbackKind
+TakeoutFallback
+TakeoutPeer
+TakeoutTransport
+MessageRange
+TakeoutCount
+TakeoutPage
+TakeoutMessage
+```
+
+There are no public modules or glob exports. `DocumentSignals`, all
+media/content helpers, raw peer/TL/request/response/pagination types, protocol
+classifiers, session envelopes, test callbacks, and constructors not named
+above remain private or appear only on the exact restricted bridge allowlist.
+
+At CP3 through CP6 only, `telegram_impl/lib.rs` additionally re-exports this
+exact compatibility set for the not-yet-moved app consumers:
+
+```text
+DocumentSignals (including its five current fields)
+derive_content_kind
+derive_document_media_kind
+extract_item_payload
+```
+
+`src-tauri/src/media.rs` re-exports that same set package-privately during the
+transition. No other transitional public item is legal. Task 5 removes the
+`extract_item_payload` live-sync consumer; Task 7 moves raw parsing, deletes the
+remaining app compatibility re-exports, removes these four root exports, and
+demotes the leaf helpers/fields to their final private or exact `pub(super)`
+visibility before CP7 is retained.
+
+## Symbol-Level Source Map
+
+The two file/responsibility tables immediately below are a readable layout
+summary only. They do not authorize a catch-all move, an unnamed helper, or
+checkpoint drift. The literal production-symbol disposition table that
+follows them is normative and is materialized by
+`scripts/telegram-8b-symbol-map.mjs`.
+
+| Final staged owner | Current production source and exact responsibility |
+| --- | --- |
+| `telegram_impl/lib.rs` | New private module shell and curated exports; replaces the future-owner module declarations/re-exports at the top of `telegram.rs`. |
+| `telegram_impl/dto.rs` | Move all production/tests from `telegram/dto.rs`; move `ResolvedTelegramSource` into public `PeerDescriptor`; move `ForumTopicSnapshot` from `sources/topics.rs`. |
+| `telegram_impl/error.rs` | Private shell at CP4; move `is_non_forum_topic_refresh_error` at CP5, then `is_channel_private_error` and export-DC local-transport classification at CP7; terminal `AppError` construction only. |
+| `telegram_impl/runtime.rs` | Move all production/tests from `telegram/runtime.rs`; add `TelegramRuntime::client`; own every public `TelegramClientHandle` method and delegate through the exact restricted live/Takeout parent facades; remove raw client/session adapters at Checkpoint 7. |
+| `telegram_impl/session.rs` | Move all production/tests from `telegram/session.rs`, including the opaque session/key, envelope/legacy codec, AAD, base64, encryption logic, and permanent restricted `clone_memory_session`/peer-cache bridges. |
+| `telegram_impl/media.rs` | Move all production/tests from `telegram/media.rs`, including the Grammers media adapter and private content/media classifiers. |
+| `telegram_impl/live/mod.rs` | Private live module shell. |
+| `telegram_impl/live/avatar.rs` | Move `TELEGRAM_SOURCE_PHOTO_TIMEOUT_MS`, `peer_photo_bytes_with_timeout`, and raw avatar download from `sources/avatar.rs`; expose owned bytes only. |
+| `telegram_impl/live/peer.rs` | Own `DialogListing` and its public `next`; move username/dialog transport lookup, raw peer mapping/reconstruction, subtype/member/access-hash helpers, and budgeted dialog/avatar listing from `sources/{peer_resolution,identity,store}.rs`. |
+| `telegram_impl/live/messages.rs` | Move raw history fetch and message/media/author/reply/raw-payload/fallback-identity adaptation from `sources/{sync,items}.rs`; own the single-invoke batch seam. |
+| `telegram_impl/live/topics.rs` | Move `fetch_all_forum_topics`, cursor/date helpers, raw mapping, and the private topic fetch shared with Takeout. |
+| `telegram_impl/takeout/mod.rs` | Private Takeout module shell and curated internal exports. |
+| `telegram_impl/takeout/types.rs` | Own `TakeoutAttempt`, `TakeoutFallback*`, `TakeoutPeer`, `MessageRange`, `TakeoutCount`, `TakeoutPage`, and `TakeoutMessage`; `TakeoutPage` stores only the exact sibling-restricted cursor/profile state and exposes the frozen tuple bridge. |
+| `telegram_impl/takeout/transport.rs` | Own client/session/DC state, attempt snapshots, and fallback queueing; expose only the exact restricted accessors used by concrete siblings. |
+| `telegram_impl/takeout/export_dc.rs` | Move the raw, provenance-free half of `export_dc_invoke_with_provenance`, `ExportDcAlias`, DC selection, init request construction, shifted/home invocation/fallback mechanics, and all seven mapped tests. |
+| `telegram_impl/takeout/operations.rs` | Move self-check, init/finish, validation, migration, split/count/history/search operations, and only-my classification. |
+| `telegram_impl/takeout/pagination.rs` | Move all production/tests from `takeout_import/pagination.rs`; own split selection, the exact `pub(super)` TDesktop/descending state types, request/advance fields, restart/warning, and response classification. |
+| `telegram_impl/takeout/raw_parse.rs` | Move all production/tests from `takeout_import/raw_parse.rs`, `peer_ref_identity`, raw response count/classification, and both companion tests. |
+| `telegram_impl/takeout/forum_topics.rs` | Own the post-Takeout remote topic operation and delegate by relative path to the private live topic fetcher. |
+
+Application residual ownership is exact:
+
+| App file | Residual responsibility |
+| --- | --- |
+| `src-tauri/src/lib.rs` | App composition/commands and `#[path = "telegram_impl/lib.rs"] mod telegram_impl;`. |
+| `src-tauri/src/telegram.rs` | Wire-status mapping, account/credential SQL and secret lookup, managed state, restore, events, and six `tg_*` commands; delete app client lookup helpers. |
+| `src-tauri/src/telegram_session_store.rs` | App-data path, keyring, temp/atomic file lifecycle, legacy migration orchestration, and adapter tests. |
+| `src-tauri/src/media.rs` | Provider-neutral core re-exports only at CP7/CP8; its exact four-item Telegram compatibility facade is transitional through CP6. |
+| `src-tauri/src/sources/store.rs` | Tauri commands, the exact 4,000 ms avatar-budget input, avatar presentation/cache/persistence/SQL, and UI DTO mapping. |
+| `src-tauri/src/sources/items.rs` | SQL, transactions, insert/upsert/list/read models, `PreparedSourceItem`, outcomes, and app tests. |
+| `src-tauri/src/sources/peer_resolution.rs` | Resolution plans, aggregate failure wording, manual parser, typed DB identity, metadata/cache coordination, and final pure `ResolvedSyncPeer`; its exact raw field plus `legacy_peer_ref_from_descriptor` are transitional through CP6 and deleted at CP7. Dialog not-found/subtype errors are staged. |
+| `src-tauri/src/sources/identity.rs` | DB rows, policy enums, normalization, SQL loads, readiness; no raw peer conversion. |
+| `src-tauri/src/sources/avatar.rs` | Data URL, 4 s budget, cache key/path/read/write/cleanup. |
+| `src-tauri/src/sources/sync.rs` | Provider/lock/settings policy, bounded batch loop, message-by-message persistence, counters/finalization, and command wrapper. |
+| `src-tauri/src/sources/topics.rs` | UI/read models, refresh coordination, subtype/SQL checks, upsert/read commands. |
+| `src-tauri/src/takeout_import/mod.rs` | Commands, jobs/start records, cancellation, provenance, warnings, range/page selection loop, persistence, progress/events, terminal finalization. |
+| `src-tauri/src/takeout_import/forum_topics.rs` | Completion policy, warning/provenance recording, and all three app tests. |
+| `src-tauri/src/takeout_import/migrated_history.rs` | Capability SQL, migration policy/errors, and identity construction. |
+| `src-tauri/src/ingest_provenance.rs` | Entirely app-owned; only imports change. |
+| `src-tauri/src/sources/types.rs` | App-owned; at CP4 add only `SourceSyncTarget::is_member`, populated by the existing `sources.is_member` column through `sources::store::load_source`, so stored descriptors preserve membership without network work. |
+| `src-tauri/src/sources/mod.rs` | App module shell and non-Telegram exports; redirects exact staged public values only where existing app modules require them. |
+
+### Literal Machine-Checked Production-Symbol Disposition
+
+This table is bounded to current production symbols that move, split, change
+shape, or are deleted, plus every new boundary/replacement symbol. A brace
+group is an exact comma-separated identifier list, not a wildcard; the
+generator expands it into one JSON row per current identifier. Singleton
+targets apply to every current identifier, equal-cardinality groups align
+positionally, and one current identifier may name multiple `finalTargets`.
+Any other cardinality is rejected. `=` means the final identifier is exactly
+the current identifier. `retained` means the symbol
+remains app-owned after the named rewrite. No `*`, `all helpers`, `as needed`,
+or unnamed fragment is legal in the generated artifact.
+
+| Current path | Current exact symbol(s) | Final path | Final exact symbol(s) | Semantic owner | First checkpoint | Removal checkpoint | Disposition |
+| --- | --- | --- | --- | --- | ---: | --- | --- |
+| `telegram/dto.rs` | `{ITEM_KIND_TELEGRAM_MESSAGE,TELEGRAM_PEER_KIND_CHANNEL,TELEGRAM_PEER_KIND_CHAT,TELEGRAM_PEER_KIND_USER,TelegramMessageIdentity,TelegramMessageIdentity::validate,TelegramItemContext,TelegramMessageDraft}` | `telegram_impl/dto.rs` | `=` | staged | 3 | 3 | move |
+| `telegram/media.rs` | `{CONTENT_KIND_TEXT_ONLY,CONTENT_KIND_TEXT_WITH_MEDIA,CONTENT_KIND_MEDIA_ONLY,TelegramMediaPayload,DocumentSignals,trimmed_non_empty,derive_content_kind,collect_document_signals,derive_document_media_kind,contact_summary,extract_document_media_payload,extract_media_payload,extract_item_payload}` | `telegram_impl/media.rs` | `=` | staged | 3 | 3 | move |
+| `<new>` | `derive_document_media_kind_from_parts` | `telegram_impl/media.rs` | `derive_document_media_kind_from_parts` | staged-internal | 7 | retained | new-restricted-bridge |
+| `telegram/runtime.rs` | `{TelegramApiHash,TelegramApiHash::new,TelegramRuntimeStatus,TelegramClientInner,TelegramClientHandle,TelegramLoginAttemptToken,TelegramLoginAttempt,TelegramRuntimeAccount,detach_replaced,TelegramRuntime,TelegramRuntime::new,TelegramRuntime::initialize_account,TelegramRuntime::is_authenticated,TelegramRuntime::request_login_code,TelegramRuntime::sign_in,TelegramRuntime::authorized_client,TelegramRuntime::initialized_client,TelegramRuntime::clear_account,TelegramRuntime::handle_is_authorized,initialize_grammers_client}` | `telegram_impl/runtime.rs` | `=` | staged | 3 | 3 | move |
+| `<new>` | `TelegramRuntime::client` | `telegram_impl/runtime.rs` | `TelegramRuntime::client` | staged | 3 | retained | new |
+| `telegram/runtime.rs` | `{TelegramClientHandle::raw_client,TelegramClientHandle::raw_session}` | `telegram_impl/runtime.rs` | `=` | transitional | 3 | 7 | move-then-delete |
+| `telegram/session.rs` | `{SESSION_KEY_BYTES,ENVELOPE_VERSION,ENVELOPE_ALGORITHM,SavedSession,EncryptedSessionEnvelope,SessionEncryptionKey,SessionEncryptionKey::try_from_encoded,SessionEncryptionKey::generate,encode_base64,decode_base64,associated_data,memory_session_to_saved,saved_to_telegram_session,encrypt_saved_session,decrypt_saved_session,TelegramSession,TelegramSession::empty,session_json_requires_existing_key,decode_session_json,encode_session_json}` | `telegram_impl/session.rs` | `=` | staged | 3 | 3 | move |
+| `telegram/session.rs` | `TelegramSession::raw_memory_session` | `telegram_impl/session.rs` | `=` | transitional | 3 | 7 | move-then-delete |
+| `<new>` | `TelegramSession::clone_memory_session` | `telegram_impl/session.rs` | `TelegramSession::clone_memory_session` | staged-internal | 3 | retained | new-restricted-bridge |
+| `telegram.rs` | `{mod::dto,mod::media,mod::runtime,mod::session}` | `telegram_impl/lib.rs` | `{mod::dto,mod::media,mod::runtime,mod::session}` | staged | 3 | 3 | replace-module-root |
+| `media.rs` | `TelegramMediaPayload` | `telegram_impl/lib.rs` | `TelegramMediaPayload` | staged | 3 | 3 | replace-compat-reexport |
+| `media.rs` | `{derive_content_kind,derive_document_media_kind,extract_item_payload,DocumentSignals}` | `telegram_impl/lib.rs` | `=` | transitional | 3 | 7 | redirect-compat-reexport |
+| `media.rs` | `{derive_content_kind,derive_document_media_kind,extract_item_payload,DocumentSignals}` | `media.rs` | `=` | transitional | 3 | 7 | retain-compat-reexport |
+| `telegram.rs` | `{get_client,get_authorized_client}` | `telegram.rs` | `=` | transitional | existing | 7 | delete |
+| `sources/peer_resolution.rs` | `ResolvedTelegramSource` | `telegram_impl/dto.rs` | `PeerDescriptor` | staged | 4 | 4 | replace |
+| `sources/peer_resolution.rs` | `resolve_telegram_source_by_username` | `telegram_impl/live/peer.rs` | `resolve_username` | staged | 4 | 4 | split-stage |
+| `sources/peer_resolution.rs` | `resolve_telegram_source_by_username` | `sources/peer_resolution.rs` | `resolve_telegram_source` | app | 4 | retained | split-app-dispatch |
+| `sources/peer_resolution.rs` | `resolve_telegram_source_from_dialogs` | `telegram_impl/live/peer.rs` | `resolve_dialog_peer` | staged | 4 | 4 | split-stage |
+| `sources/peer_resolution.rs` | `resolve_telegram_source_from_dialogs` | `sources/peer_resolution.rs` | `resolve_telegram_source` | app | 4 | retained | split-app-dispatch |
+| `sources/peer_resolution.rs` | `{dialog_lookup_not_found_message,dialog_lookup_not_found_error,telegram_source_subtype_matches,validate_expected_telegram_source_subtype,resolved_telegram_source_from_peer,telegram_group_kind,telegram_group_is_member,peer_access_hash}` | `telegram_impl/live/peer.rs` | `{dialog_lookup_not_found_message,dialog_lookup_not_found_error,telegram_source_subtype_matches,validate_expected_telegram_source_subtype,peer_descriptor_from_peer,telegram_group_kind,telegram_group_is_member,peer_access_hash}` | staged | 4 | 4 | move-or-rename |
+| `sources/peer_resolution.rs` | `telegram_source_info_from_peer` | `telegram_impl/live/peer.rs` | `peer_descriptor_from_peer` | staged | 4 | 4 | split-stage |
+| `sources/peer_resolution.rs` | `telegram_source_info_from_peer` | `sources/store.rs` | `peer_descriptor_to_source_info` | app | 4 | retained | split-app-projection |
+| `sources/peer_resolution.rs` | `{source_peer_ref_from_identity,peer_ref_for_source_subtype,peer_ref_for_typed_identity}` | `telegram_impl/live/peer.rs` | `peer_ref_from_descriptor` | staged | 4 | 4 | replace |
+| `sources/identity.rs` | `TelegramSourceIdentity::peer_ref` | `telegram_impl/live/peer.rs` | `peer_ref_from_descriptor` | staged | 4 | 4 | replace |
+| `sources/peer_resolution.rs` | `{source_peer_ref_from_identity,peer_ref_for_source_subtype,peer_ref_for_typed_identity}` | `sources/peer_resolution.rs` | `legacy_peer_ref_from_descriptor` | transitional | 4 | 4 | replace-with-transitional-copy |
+| `sources/identity.rs` | `TelegramSourceIdentity::peer_ref` | `sources/peer_resolution.rs` | `legacy_peer_ref_from_descriptor` | transitional | 4 | 4 | replace-with-transitional-copy |
+| `<new>` | `legacy_peer_ref_from_descriptor` | `sources/peer_resolution.rs` | `legacy_peer_ref_from_descriptor` | transitional | 4 | 7 | new-then-delete |
+| `sources/peer_resolution.rs` | `{typed_peer_resolution_plan,resolve_source_peer_from_typed_identity,resolve_and_refresh_peer,refresh_source_avatar_cache}` | `sources/peer_resolution.rs` | `=` | app | 4 | retained | rewrite-owned-seam |
+| `<new>` | `peer_descriptor_from_stored_identity` | `sources/peer_resolution.rs` | `peer_descriptor_from_stored_identity` | app | 4 | retained | new |
+| `sources/peer_resolution.rs` | `ResolvedSyncPeer::peer` | `sources/peer_resolution.rs` | `ResolvedSyncPeer::peer` | transitional | existing | 7 | retain-then-delete |
+| `<new>` | `ResolvedSyncPeer::descriptor` | `sources/peer_resolution.rs` | `ResolvedSyncPeer::descriptor` | app | 4 | retained | new |
+| `sources/types.rs` | `SourceSyncTarget` | `sources/types.rs` | `SourceSyncTarget` | app | 4 | retained | add-is-member-field |
+| `<new>` | `SourceSyncTarget::is_member` | `sources/types.rs` | `SourceSyncTarget::is_member` | app | 4 | retained | new |
+| `sources/store.rs` | `load_source` | `sources/store.rs` | `load_source` | app | 4 | retained | rewrite-owned-query |
+| `sources/store.rs` | `add_telegram_source` | `sources/store.rs` | `add_telegram_source` | app | 4 | retained | rewrite-owned-seam |
+| `sources/avatar.rs` | `{TELEGRAM_SOURCE_PHOTO_TIMEOUT_MS,peer_photo_bytes_with_timeout,peer_photo_bytes}` | `telegram_impl/live/avatar.rs` | `=` | staged | 4 | 4 | move |
+| `sources/avatar.rs` | `peer_photo_data_url_with_timeout` | `sources/store.rs` | `peer_descriptor_to_source_info` | app | 4 | 4 | replace |
+| `sources/store.rs` | `list_telegram_sources::dialog_and_avatar_segment` | `telegram_impl/live/mod.rs` | `dialog_listing` | staged-internal | 4 | 4 | split-stage-facade |
+| `sources/store.rs` | `list_telegram_sources::dialog_and_avatar_segment` | `telegram_impl/live/peer.rs` | `DialogListing::next` | staged | 4 | 4 | split-stage-iterator |
+| `<new>` | `DialogListing` | `telegram_impl/live/peer.rs` | `DialogListing` | staged | 4 | retained | new |
+| `<new>` | `DialogListing::next` | `telegram_impl/live/peer.rs` | `DialogListing::next` | staged | 4 | retained | new |
+| `<new>` | `DialogListing::new` | `telegram_impl/live/peer.rs` | `DialogListing::new` | staged-internal | 4 | retained | new-restricted-bridge |
+| `<new>` | `peer_avatar_bytes` | `telegram_impl/live/peer.rs` | `peer_avatar_bytes` | staged-internal | 4 | retained | new-restricted-leaf |
+| `<new>` | `{dialog_listing,resolve_dialog_peer,resolve_username,peer_avatar_bytes}` | `telegram_impl/live/mod.rs` | `=` | staged-internal | 4 | retained | new-restricted-facade |
+| `<new>` | `{TelegramClientHandle::dialog_listing,TelegramClientHandle::resolve_dialog_peer,TelegramClientHandle::resolve_username,TelegramClientHandle::peer_avatar_bytes}` | `telegram_impl/runtime.rs` | `=` | staged | 4 | retained | new |
+| `sources/store.rs` | `list_telegram_sources` | `sources/store.rs` | `list_telegram_sources` | app | 4 | retained | split-app-command |
+| `sources/items.rs` | `{message_author,extract_telegram_context,reply_peer_context,build_raw_payload}` | `telegram_impl/live/messages.rs` | `{raw_message_author,extract_telegram_context,reply_peer_context,build_raw_payload}` | staged | 5 | 5 | move-or-rename |
+| `sources/sync.rs` | `fallback_message_identity` | `telegram_impl/live/messages.rs` | `fallback_message_identity` | staged | 5 | 5 | move |
+| `sources/sync.rs` | `persist_items::raw_history_segment` | `telegram_impl/live/messages.rs` | `fetch_message_batch` | staged-internal | 5 | 5 | split-stage |
+| `sources/sync.rs` | `{persist_items,sync_telegram_source}` | `sources/sync.rs` | `=` | app | 5 | retained | rewrite-owned-seam |
+| `<new>` | `run_telegram_batch_loop` | `sources/sync.rs` | `run_telegram_batch_loop` | app | 5 | retained | new-private-test-seam |
+| `<new>` | `TelegramSession::cache_peer_infos` | `telegram_impl/session.rs` | `TelegramSession::cache_peer_infos` | staged-internal | 5 | retained | new-restricted-bridge |
+| `<new>` | `{LiveMessageBatch,LiveMessage}` | `telegram_impl/live/messages.rs` | `=` | staged | 5 | retained | new |
+| `<new>` | `{LiveMessageBatch::take_messages,LiveMessageBatch::is_terminal,LiveMessageBatch::next_offset_id,LiveMessageBatch::next_offset_date,LiveMessage::message_id,LiveMessage::published_at,LiveMessage::into_draft}` | `telegram_impl/live/messages.rs` | `=` | staged | 5 | retained | new |
+| `<new>` | `{fetch_message_batch,fetch_forum_topics}` | `telegram_impl/live/mod.rs` | `=` | staged-internal | 5 | retained | new-restricted-facade |
+| `<new>` | `{TelegramClientHandle::fetch_message_batch,TelegramClientHandle::fetch_forum_topics}` | `telegram_impl/runtime.rs` | `=` | staged | 5 | retained | new |
+| `sources/topics.rs` | `ForumTopicSnapshot` | `telegram_impl/dto.rs` | `ForumTopicSnapshot` | staged | 5 | 5 | move |
+| `sources/topics.rs` | `{fetch_all_forum_topics,forum_topic_page_cursor,forum_topic_message_date}` | `telegram_impl/live/topics.rs` | `{fetch_forum_topics,forum_topic_page_cursor,forum_topic_message_date}` | staged | 5 | 5 | move-or-rename |
+| `sources/topics.rs` | `is_non_forum_topic_refresh_error` | `telegram_impl/error.rs` | `is_non_forum_topic_refresh_error` | staged | 5 | 5 | move |
+| `sources/topics.rs` | `refresh_forum_topics` | `sources/topics.rs` | `refresh_forum_topics` | app | 5 | retained | rewrite-owned-seam |
+| `takeout_import/mod.rs` | `export_dc_invoke_with_provenance::raw_segment` | `telegram_impl/takeout/export_dc.rs` | `export_dc_invoke` | staged-internal | 7 | 7 | split-stage-raw-invoke |
+| `takeout_import/mod.rs` | `export_dc_invoke_with_provenance::durable_segment` | `takeout_import/mod.rs` | `run_takeout_transport_step_with_provenance` | app | 7 | retained | split-app-coordinator |
+| `takeout_import/mod.rs` | `{record_export_dc_attempt_if_needed,record_export_dc_fallback_if_needed,record_only_my_messages_fallback_if_needed}` | `takeout_import/mod.rs` | `=` | app | 7 | retained | rewrite-owned-values |
+| `takeout_import/mod.rs` | `record_channel_private_fallback_if_supported` | `takeout_import/mod.rs` | `record_only_my_messages_fallback_if_needed` | app | 7 | 7 | replace |
+| `takeout_import/mod.rs` | `peer_ref_identity` | `telegram_impl/takeout/raw_parse.rs` | `peer_ref_identity` | staged | 7 | 7 | move |
+| `takeout_import/mod.rs` | `{validate_takeout_peer,detect_supergroup_migration,revalidate_migrated_from_chat_id}` | `telegram_impl/takeout/operations.rs` | `{TakeoutTransport::validate_peer,TakeoutTransport::detect_supergroup_migration,TakeoutTransport::revalidate_migrated_peer}` | staged | 7 | 7 | replace |
+| `takeout_import/mod.rs` | `takeout_get_history` | `telegram_impl/takeout/operations.rs` | `TakeoutTransport::history_count` | staged | 7 | 7 | split-stage-count |
+| `takeout_import/mod.rs` | `takeout_get_history` | `telegram_impl/takeout/operations.rs` | `TakeoutTransport::history_page` | staged | 7 | 7 | split-stage-page |
+| `takeout_import/mod.rs` | `takeout_search_my_messages` | `telegram_impl/takeout/operations.rs` | `TakeoutTransport::search_my_history_count` | staged | 7 | 7 | split-stage-search-count |
+| `takeout_import/mod.rs` | `takeout_search_my_messages` | `telegram_impl/takeout/operations.rs` | `TakeoutTransport::search_my_history_page` | staged | 7 | 7 | split-stage-search-page |
+| `takeout_import/mod.rs` | `{supports_only_my_messages_fallback,is_channel_private_error,messages_response_count}` | `{telegram_impl/takeout/operations.rs,telegram_impl/error.rs,telegram_impl/takeout/raw_parse.rs}` | `{supports_only_my_messages_fallback,is_channel_private_error,messages_response_count}` | staged | 7 | 7 | move |
+| `takeout_import/mod.rs` | `{takeout_history_count_probe,takeout_history_page_response}` | `takeout_import/mod.rs` | `=` | app | 7 | retained | rewrite-owned-seam |
+| `takeout_import/mod.rs` | `TakeoutHistoryProbe` | `telegram_impl/takeout/types.rs` | `TakeoutCount` | staged | 7 | 7 | replace |
+| `takeout_import/mod.rs` | `CountedMessageRange` | `takeout_import/mod.rs` | `CountedMessageRange` | app | 7 | retained | replace-fields-with-owned-values |
+| `takeout_import/mod.rs` | `{run_export_dc_spike_for_handle,run_takeout_source_import,run_takeout_migrated_history_import,run_started_takeout_source_import,run_started_takeout_source_import_inner,import_takeout_history_ranges,import_takeout_history_pages}` | `takeout_import/mod.rs` | `=` | app | 7 | retained | rewrite-owned-seam |
+| `takeout_import/export_dc.rs` | `{EXPORT_DC_SHIFT,TAKEOUT_FILE_MAX_SIZE,ExportDcAlias,prepare_export_dc_alias,export_dc_id_for_home_dc,takeout_init_request_for_source_subtype,export_dc_invoke,export_dc_invoke_with,finish_takeout_session}` | `telegram_impl/takeout/export_dc.rs` | `=` | staged | 7 | 7 | move |
+| `takeout_import/export_dc.rs` | `should_fallback_export_dc_error` | `telegram_impl/error.rs` | `should_fallback_export_dc_error` | staged | 7 | 7 | move |
+| `takeout_import/export_dc.rs` | `ExportDcAttemptState` | `telegram_impl/takeout/transport.rs` | `ExportDcAttemptTracker` | staged | 7 | 7 | split-stage-tracker |
+| `takeout_import/export_dc.rs` | `ExportDcAttemptState` | `telegram_impl/takeout/types.rs` | `TakeoutAttempt` | staged | 7 | 7 | split-stage-attempt-value |
+| `takeout_import/pagination.rs` | `{TAKEOUT_HISTORY_PAGE_LIMIT,TakeoutPaginationProfile,TakeoutPageRequest,TakeoutPaginationCursor,TakeoutPaginationCursor::new,TakeoutCursorAdvance,TakeoutPaginationFallbackReason,select_history_splits,fallback_message_range,takeout_page_request,next_takeout_cursor,should_restart_with_descending_fallback,takeout_pagination_fallback_warning}` | `telegram_impl/takeout/pagination.rs` | `=` | staged | 7 | 7 | move |
+| `takeout_import/pagination.rs` | `{TakeoutPageRequest::offset_id,TakeoutPageRequest::add_offset,TakeoutPageRequest::limit,TakeoutCursorAdvance::cursor,TakeoutCursorAdvance::advanced,TakeoutCursorAdvance::reached_range_start}` | `telegram_impl/takeout/pagination.rs` | `=` | staged-internal | 7 | 7 | move-restricted-fields |
+| `takeout_import/pagination.rs` | `{ParsedTakeoutPage,parse_takeout_page}` | `{telegram_impl/takeout/types.rs,telegram_impl/takeout/pagination.rs}` | `{TakeoutPage,parse_takeout_page}` | staged | 7 | 7 | absorb-and-rewrite |
+| `takeout_import/pagination.rs` | `{message_range_min_id,message_range_max_id}` | `telegram_impl/takeout/types.rs` | `{MessageRange::min_id,MessageRange::max_id}` | staged | 7 | 7 | replace |
+| `takeout_import/raw_parse.rs` | `parse_raw_message` | `telegram_impl/takeout/raw_parse.rs` | `parse_raw_message` | staged-internal | 7 | 7 | move |
+| `takeout_import/raw_parse.rs` | `{extract_raw_media_payload,extract_photo_media_payload,extract_document_media_payload,extract_raw_telegram_context,raw_message_identity,reaction_count,raw_message_author,peer_context,peer_id_string,raw_summary_media,apply_larger_photo_size,contact_summary,trimmed_non_empty}` | `telegram_impl/takeout/raw_parse.rs` | `=` | staged | 7 | 7 | move |
+| `takeout_import/forum_topics.rs` | `refresh_forum_topics_after_completed_takeout::remote_segment` | `telegram_impl/takeout/forum_topics.rs` | `takeout_forum_topics` | staged-internal | 7 | 7 | split-stage |
+| `takeout_import/forum_topics.rs` | `refresh_forum_topics_after_completed_takeout` | `takeout_import/forum_topics.rs` | `refresh_forum_topics_after_completed_takeout` | app | 7 | retained | split-app-policy |
+| `<new>` | `{TakeoutAttempt,TakeoutFallbackKind,TakeoutFallback,TakeoutPeer,MessageRange,TakeoutCount,TakeoutPage,TakeoutMessage}` | `telegram_impl/takeout/types.rs` | `=` | staged | 7 | retained | new |
+| `<new>` | `{TakeoutAttempt::home_dc_id,TakeoutAttempt::export_dc_id,TakeoutFallback::kind,TakeoutFallback::warning,TakeoutFallback::provenance_message,TakeoutPeer::from_descriptor,TakeoutPeer::peer_kind,TakeoutPeer::peer_id,MessageRange::min_id,MessageRange::max_id,TakeoutCount::count,TakeoutCount::only_my_messages,TakeoutPage::take_messages,TakeoutPage::has_next,TakeoutPage::only_my_messages,TakeoutPage::take_pagination_fallback_warning,TakeoutMessage::message_id,TakeoutMessage::into_draft}` | `telegram_impl/takeout/types.rs` | `=` | staged | 7 | retained | new |
+| `<new>` | `{TakeoutAttempt::new,TakeoutFallback::new,TakeoutPeer::new,TakeoutPeer::source_subtype,TakeoutPeer::access_hash,MessageRange::new,TakeoutCount::new,TakeoutPage::from_parts,TakeoutPage::pagination_state,TakeoutMessage::from_raw}` | `telegram_impl/takeout/types.rs` | `=` | staged-internal | 7 | retained | new-restricted-bridge |
+| `<new>` | `TakeoutTransport` | `telegram_impl/takeout/transport.rs` | `=` | staged | 7 | retained | new |
+| `<new>` | `{TakeoutTransport::export_dc_attempt,TakeoutTransport::drain_fallbacks}` | `telegram_impl/takeout/transport.rs` | `=` | staged | 7 | retained | new |
+| `<new>` | `{TakeoutTransport::new,TakeoutTransport::queue_fallback,TakeoutTransport::client,TakeoutTransport::session,TakeoutTransport::home_dc_id,TakeoutTransport::export_dc_id}` | `telegram_impl/takeout/transport.rs` | `=` | staged-internal | 7 | retained | new-restricted-bridge |
+| `<new>` | `takeout_self_check` | `telegram_impl/takeout/operations.rs` | `takeout_self_check` | staged-internal | 7 | retained | new-restricted-leaf |
+| `<new>` | `{takeout_self_check,prepare_takeout,takeout_forum_topics}` | `telegram_impl/takeout/mod.rs` | `=` | staged-internal | 7 | retained | new-restricted-facade |
+| `<new>` | `{TelegramClientHandle::takeout_self_check,TelegramClientHandle::prepare_takeout}` | `telegram_impl/runtime.rs` | `=` | staged | 7 | retained | new |
+| `<new>` | `TelegramClientHandle::takeout_forum_topics` | `telegram_impl/runtime.rs` | `=` | staged | 7 | retained | new |
+| `<new>` | `{TakeoutTransport::init,TakeoutTransport::message_ranges,TakeoutTransport::validate_peer,TakeoutTransport::detect_supergroup_migration,TakeoutTransport::revalidate_migrated_peer,TakeoutTransport::history_count,TakeoutTransport::search_my_history_count,TakeoutTransport::history_page,TakeoutTransport::search_my_history_page,TakeoutTransport::finish}` | `telegram_impl/takeout/operations.rs` | `=` | staged | 7 | retained | new |
+
+The `raw_memory_session` and `clone_memory_session` rows are an intentional
+coexist-then-replace pair: CP3 through CP6 require both exact methods, while
+CP7 and later require the restricted owned-`Arc` bridge exactly once and zero
+occurrences of the borrowed bridge name in production or tests.
+
+The generator also freezes three transition inventories that are not inferred
+from path existence:
+
+```text
+CP3 raw handle callsites:
+  sources::store::{list_telegram_sources,add_telegram_source}
+  sources::sync::sync_telegram_source
+  takeout_import::{run_export_dc_spike_for_handle,run_takeout_migrated_history_import,run_takeout_source_import}
+CP4 raw handle callsites:
+  sources::sync::sync_telegram_source
+  takeout_import::{run_export_dc_spike_for_handle,run_takeout_migrated_history_import,run_takeout_source_import}
+CP4 ResolvedSyncPeer::peer consumers:
+  sources::sync::sync_telegram_source
+  takeout_import::{run_takeout_migrated_history_import,run_takeout_source_import}
+CP5 raw handle callsites:
+  takeout_import::{run_export_dc_spike_for_handle,run_takeout_migrated_history_import,run_takeout_source_import}
+CP5 ResolvedSyncPeer::peer consumers:
+  takeout_import::{run_takeout_migrated_history_import,run_takeout_source_import}
+CP7 raw bridge symbols/callsites: empty
+```
+
+Synthetic `::segment` keys are source fragments, not Rust identifiers. Their
+JSON rows carry these exact pre-move anchors, each required in its enclosing
+function at CP1 and forbidden there after the removal checkpoint:
+
+```text
+list_telegram_sources::dialog_and_avatar_segment:
+  client.iter_dialogs()
+  peer_photo_data_url_with_timeout(&client, dialog.peer())
+persist_items::raw_history_segment:
+  client.iter_messages(peer)
+  messages.next()
+export_dc_invoke_with_provenance::raw_segment:
+  export_dc_invoke(client, alias, request, warnings, fallback_used).await
+export_dc_invoke_with_provenance::durable_segment:
+  record_export_dc_attempt_if_needed
+  record_export_dc_fallback_if_needed
+refresh_forum_topics_after_completed_takeout::remote_segment:
+  refresh_forum_topics(pool, client, peer, source).await
+```
+
+The app-retained production symbols not named above are out of the move scope
+and may receive import-only edits. A body change to any such symbol must be
+listed as `rewrite-owned-seam` before implementation.
+
+## Generated Grammers Feature Baseline
+
+Checkpoint 1 creates
+`src/lib/telegram-grammers-feature-baseline.json` and
+`scripts/telegram-grammers-feature-baseline.mjs`. The script accepts exactly
+`--write` or `--check`, invokes locked Cargo metadata, rejects a
+malformed/missing package-graph result, and writes stable UTF-8 JSON with this
+schema:
+
+```json
+{
+  "schemaVersion": 1,
+  "revision": "1f901ce6e973fdcf0e74267f3d8efad5c729daaa",
+  "packages": [
+    {
+      "name": "grammers-client",
+      "required": [],
+      "forbidden": ["default"],
+      "universe": ["default"]
+    }
+  ]
+}
+```
+
+The real arrays are sorted and contain every feature key exposed by each
+pinned package. The generator uses the resolved `extractum` node only to find
+the four exact direct-dependency package IDs. It reads required features from
+each Grammers dependency's own `resolve.nodes[].features` entry and reads that
+package's feature universe from the matching `packages[].features` keys.
+Forbidden is exactly `universe - required`. The frozen observations are:
+
+| Package | Required | Forbidden |
+| --- | --- | --- |
+| `grammers-client` | none | `default`, `fs`, `html`, `html5ever`, `markdown`, `parse_invite_link`, `proxy`, `pulldown-cmark`, `url` |
+| `grammers-session` | `serde` | `default`, `sqlite-storage` |
+| `grammers-mtsender` | none | `hickory-resolver`, `proxy`, `tokio-socks`, `url` |
+| `grammers-tl-types` | `default`, `deserializable-functions`, `impl-debug`, `impl-from-enum`, `impl-from-type`, `tl-api`, `tl-mtproto` | `impl-serde` |
+
+`--check` fails on revision, package, order, required, forbidden, universe, or
+format drift. The Telegram boundary contract executes `--check`, so
+`npm.cmd run verify` remains the standing gate.
+
 
 ## Data Flows
 
@@ -662,9 +1773,11 @@ app validates identity and acquires source lock
   -> app finalizes source state and existing read models
 ```
 
-The crate returns owned batches rather than a public Grammers iterator or
-stream. The implementation may page internally, but app persistence never
-receives a borrowed Grammers value.
+The crate returns the exact owned `LiveMessageBatch`/`LiveMessage` seam rather
+than a public Grammers iterator or stream. Each batch is exactly one raw
+`messages.getHistory` invoke with `1 <= limit <= 100`; the app processes each
+owned message incrementally before requesting another batch and never receives
+a borrowed Grammers value.
 
 8A characterization must freeze message ordering, limits and date/range
 selection, partial-progress behavior, fallback identity, and the existing
@@ -686,9 +1799,10 @@ app creates durable job/batch and owns cancellation
   -> app emits the existing job event and selects the next operation
 ```
 
-There is no public generic `invoke<R: RemoteCall>` equivalent. Concrete
-operations cover the existing export-DC setup, history count, history page,
-search-my-messages, migration probe, topic refresh, and finish behavior.
+There is no public generic `invoke<R: RemoteCall>` equivalent and no generic
+invocation/provenance callback. The only Takeout transport capability is the
+exact `TakeoutTransport` API frozen below, including stateful attempt/fallback
+draining after success, error, or cancellation.
 
 The app remains the loop and transaction owner. The crate does not commit a
 page, finish a durable batch, emit a Tauri event, or decide application job
@@ -1004,8 +2118,13 @@ The root staging files have unambiguous owners:
   classification and terminal `AppError` construction; it exports no parallel
   error type. The filename is retained for that private failure-translation
   role and does not imply a public Telegram error taxonomy;
-- Takeout-specific public values remain in `takeout/types.rs` and are curated
-  through `lib.rs`.
+- `live/peer.rs` owns the concrete stateful opaque `DialogListing`;
+  `live/messages.rs` owns private-field `LiveMessageBatch` and `LiveMessage`;
+- `takeout/types.rs` owns `TakeoutAttempt`, `TakeoutFallbackKind`,
+  `TakeoutFallback`, `TakeoutPeer`, `MessageRange`, `TakeoutCount`,
+  `TakeoutPage`, and `TakeoutMessage`; `takeout/transport.rs` owns the concrete
+  stateful opaque `TakeoutTransport`. These public values are curated through
+  `lib.rs`.
 
 The application connects this tree only through private
 `#[path = "telegram_impl/lib.rs"] mod telegram_impl;`. By the end of 8B every
@@ -1023,26 +2142,25 @@ exact `crate::telegram_impl::` prefix; bare or aliased staging paths are
 forbidden. That consumer prefix remains unchanged in 8C behind a private
 compatibility facade. Standing scanners enforce both sides of this convention.
 
-The Takeout staging boundary is concrete:
+The Takeout staging boundary is concrete and permits no catch-all ownership:
 
-- `transport.rs` owns the raw transport half of current
-  `export_dc_invoke_with_provenance`;
+- `transport.rs` owns only the concrete client/session/DC state, attempt
+  snapshots, fallback queue, and exact restricted accessors frozen below;
 - `export_dc.rs` owns export-DC selection and invocation;
 - `operations.rs` owns Telegram self-check, init/finish, peer validation,
-  migration detect/revalidate, count/history/search/page operations, and pure
-  attempt/fallback outcomes;
+  migration detect/revalidate, count/history/search/page operations;
 - `raw_parse.rs` owns peer/TL identity conversion and raw response
   classification/parsing;
 - `pagination.rs` owns range, page, and cursor rules;
 - `forum_topics.rs` owns the remote forum-topic operation;
-- `types.rs` owns the pure Takeout inputs, outputs, attempts, and fallback
-  metadata.
+- `types.rs` owns only the exact Takeout inputs, outputs, attempts, fallback
+  metadata, and sibling-restricted pagination state frozen below.
 
 The app-owned `takeout_import/mod.rs` keeps commands, jobs, cancellation and
 selection loops, persistence, provenance recording, warnings, progress/event
-emission, and terminal batch finalization. Concrete crate operations return
-pure results plus attempt/fallback metadata; only the app records that metadata
-as provenance.
+emission, and terminal batch finalization. The app applies the exact
+one-outer-select attempt/fallback protocol frozen below; only the app records
+that metadata as provenance.
 
 8C then moves `src-tauri/src/telegram_impl/**` to
 `src-tauri/crates/extractum-telegram/src/**`, adds the path dependency, and
