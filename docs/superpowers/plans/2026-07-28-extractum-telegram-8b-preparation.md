@@ -42,6 +42,19 @@ pinned-Grammers analysis proves that these details cannot be omitted:
 6. The pinned Grammers high-level history iterator updates its in-memory peer
    cache after each response. A raw single-invoke batch must reproduce that
    side effect before it returns owned messages.
+7. That peer-cache side effect is conditional in pinned Grammers:
+   `ClientConfiguration.auto_cache_peers` must be true before the inner
+   `Peer::auth().is_some()` predicate is evaluated. Extractum currently gets
+   `true` through `Client::new` and
+   `grammers_client::client::ClientConfiguration::default()`, but relying on
+   an implicit default would make the staged raw path diverge if that default
+   changed.
+8. Pinned Grammers `MessageIter::fill_buffer` panics if a
+   `messages.getHistory` request with `hash = 0` returns
+   `Messages::NotModified`. Existing Extractum Takeout page/count parsing
+   instead rejects that response as a typed network error. The owned live
+   boundary must make this panic-to-error divergence explicit rather than
+   hide it behind the phrase "internal invariant."
 
 Explicit approval of this plan also approves only the following clarification:
 
@@ -60,6 +73,16 @@ Explicit approval of this plan also approves only the following clarification:
 - allow stateful attempt/fallback draining on `TakeoutTransport`, including
   metadata retained when the concrete call returns `Err` or its future is
   cancelled;
+- replace implicit `Client::new` construction with an explicitly materialized
+  default `ClientConfiguration`, fail closed with the exact internal error
+  `Grammers client configuration must enable auto_cache_peers` when
+  `auto_cache_peers` is false, and pass the validated value to
+  `Client::with_configuration`;
+- intentionally replace pinned Grammers' `Messages::NotModified` panic on the
+  live `hash = 0` history path with
+  `AppError::network("Telegram returned messagesNotModified for live history batch")`,
+  matching the existing typed Takeout rejection convention without accepting
+  `NotModified.count`;
 - allow Phase 8B and 8C plans to import, by exact committed section hash, the
   immutable literal 140-row map from the retained 8A plan instead of copying
   37,436 bytes and creating a second mutable authority.
@@ -97,6 +120,8 @@ redesign.
 - [ ] App persistence remains incremental. It processes every `LiveMessage` and every `TakeoutMessage` in order, records max IDs before skip/parse decisions exactly as today, and returns a per-entry error only after prior entries have been durably handled.
 - [ ] Every live batch performs exactly one raw `messages.getHistory` invoke with `1 <= limit <= 100`; do not build it by draining `MessageIter::next`. It preserves newest-to-oldest order, exact offset-id/offset-date advancement, the pinned Grammers terminal rule, and per-message conversion after app cutoffs.
 - [ ] The raw live batch reproduces the pinned Grammers peer-map/session-cache update before returning and performs no second remote call.
+- [ ] Grammers client construction explicitly materializes `grammers_client::client::ClientConfiguration::default()`, rejects `auto_cache_peers == false` with `AppError::internal("Grammers client configuration must enable auto_cache_peers")` before `SenderPool::new` or `tokio::spawn`, and calls `Client::with_configuration`. The raw live batch may reproduce the enabled cache side effect only under this fail-closed construction invariant.
+- [ ] The one declared error-behavior exception is `Messages::NotModified` for `messages.getHistory { hash: 0 }`: pinned Grammers panics, while Extractum deliberately returns `AppErrorKind::Network` with exact message `Telegram returned messagesNotModified for live history batch`. This aligns live history with the existing Takeout page/count typed-rejection convention; it neither unwinds nor accepts `NotModified.count`. No other panic/error-kind/message/JSON behavior may change.
 - [ ] The app records an export-DC attempt before each concrete remote call and drains fallback metadata after success, error, or cancellation. On a terminal remote error, failure to record export-DC fallback metadata is best-effort and the original remote error wins. Only-my-messages persistence is mandatory and completes before the explicit search continuation.
 - [ ] Avatar download remains staged; avatar cache keys/paths/writes/cleanup and base64/data-URL presentation remain app-owned. The app creates `DialogListing` with the exact 4,000 ms list budget, converts each returned descriptor before requesting the next one, and staged `next()` preserves dialog-next/avatar interleaving plus the exact 750 ms per-photo timeout.
 - [ ] The immutable 140 primaries and three declared companions remain the only baseline decompositions. Any fourth decomposition or identity rename stops for a plan/design amendment.
@@ -610,7 +635,7 @@ message limit:
 | 4 | `telegram_impl::live::avatar::tests::peer_photo_bytes_returns_owned_bytes_and_suppresses_timeout_and_transport_failure` | 750 ms owned-byte avatar behavior |
 | 4 | `telegram_impl::live::peer::tests::dialog_listing_preserves_dialog_avatar_interleaving_and_budget` | dialog/avatar interleaving, 4 s cutoff, order, and owned descriptors |
 | 4 | `telegram_impl::live::peer::tests::resolution_primitives_preserve_username_dialog_and_subtype_outcomes` | app-owned plan primitives and exact outcomes |
-| 5 | `telegram_impl::live::messages::tests::message_batch_preserves_single_fetch_order_limit_offsets_and_terminal_rule` | one raw invoke, peer-cache update, 1..=100 limit, offsets, ordering, terminal rule |
+| 5 | `telegram_impl::live::messages::tests::message_batch_preserves_single_fetch_order_limit_offsets_and_terminal_rule` | one raw invoke, cache update under the validated `auto_cache_peers` invariant, 1..=100 limit, offsets, ordering, terminal rule, typed `NotModified` rejection |
 | 5 | `telegram_impl::live::messages::tests::live_message_maps_owned_draft_and_skips_empty_payload` | per-entry conversion and empty skip |
 | 5 | `telegram_impl::live::topics::tests::forum_topic_pages_preserve_order_deleted_ids_and_terminal_cursor` | owned topics/deletions/pagination |
 | 5 | `sources::sync::tests::telegram_batch_loop_preserves_entry_durability_limits_and_stops_after_error` | app coordinator durability, raw-message limit, and no post-error fetch |
@@ -1060,8 +1085,14 @@ impl TakeoutTransport {
 `TelegramLoginAttempt`, `TelegramRuntime`, `SessionEncryptionKey`,
 `TelegramSession`, `session_json_requires_existing_key`,
 `decode_session_json`, and `encode_session_json` retain their Phase 8A
-visibility/signatures except for the new `TelegramRuntime::client` method.
-`initialized_client` stays private and `authorized_client` stays public.
+external visibility/signatures. There are two explicit internal/API-surface
+changes: add public `TelegramRuntime::client`, and add restricted
+`TelegramSession::clone_memory_session(&self) -> Arc<MemorySession>` while the
+borrowed restricted
+`TelegramSession::raw_memory_session(&self) -> &Arc<MemorySession>` coexists
+only through CP6 and is deleted at CP7. This is a coexist-then-replace
+transition, not an in-place signature change. `initialized_client` stays
+private and `authorized_client` stays public.
 Private derives and test-only constructors are allowed; no additional
 externally reachable production `pub` item exists at CP7/CP8. The exact
 CP3→CP6 media compatibility exports named below are the only lifecycle-gated
@@ -1088,7 +1119,24 @@ takeout::{takeout_self_check,prepare_takeout,takeout_forum_topics}
 takeout::export_dc::{prepare_export_dc_alias,export_dc_invoke,finish_takeout_session}
 takeout::forum_topics::takeout_forum_topics
 takeout::operations::takeout_self_check
-takeout::pagination::{TakeoutPaginationProfile,TakeoutPageRequest::{offset_id,add_offset,limit},TakeoutPaginationCursor,TakeoutPaginationCursor::new,TakeoutCursorAdvance::{cursor,advanced,reached_range_start},TakeoutPaginationFallbackReason,select_history_splits,takeout_page_request,next_takeout_cursor,should_restart_with_descending_fallback,takeout_pagination_fallback_warning,parse_takeout_page}
+takeout::pagination::TakeoutPaginationProfile
+takeout::pagination::TakeoutPageRequest
+takeout::pagination::TakeoutPageRequest::offset_id
+takeout::pagination::TakeoutPageRequest::add_offset
+takeout::pagination::TakeoutPageRequest::limit
+takeout::pagination::TakeoutPaginationCursor
+takeout::pagination::TakeoutPaginationCursor::new
+takeout::pagination::TakeoutCursorAdvance
+takeout::pagination::TakeoutCursorAdvance::cursor
+takeout::pagination::TakeoutCursorAdvance::advanced
+takeout::pagination::TakeoutCursorAdvance::reached_range_start
+takeout::pagination::TakeoutPaginationFallbackReason
+takeout::pagination::select_history_splits
+takeout::pagination::takeout_page_request
+takeout::pagination::next_takeout_cursor
+takeout::pagination::should_restart_with_descending_fallback
+takeout::pagination::takeout_pagination_fallback_warning
+takeout::pagination::parse_takeout_page
 takeout::raw_parse::{parse_raw_message,peer_ref_identity,messages_response_count}
 takeout::transport::TakeoutTransport::{new,queue_fallback,client,session,home_dc_id,export_dc_id}
 takeout::types::TakeoutAttempt::new
@@ -1099,6 +1147,14 @@ takeout::types::TakeoutCount::new
 takeout::types::TakeoutPage::{from_parts,pagination_state}
 takeout::types::TakeoutMessage::from_raw
 ```
+
+The pagination subsection is intentionally one fully qualified symbol per
+line; no nested brace syntax is legal. Task 1's
+`scripts/telegram-8b-symbol-map.mjs` parses this entire fenced allowlist,
+expands only the remaining single-level brace groups, and materializes the
+sorted canonical 67-entry result as `restrictedFinalSymbols` in the generated
+symbol artifact. The TypeScript contract consumes that generated array instead
+of maintaining or parsing a second pagination list.
 
 Every listed bridge is spelled `pub(super)` at its leaf or is reached through
 one `pub(super)` parent facade; no `pub(crate)`, `pub(in ...)`, root export, or
@@ -1148,17 +1204,27 @@ The live batch implementation is additionally frozen as follows:
   sufficient to preserve current author, reply, media, raw-data, and fallback
   identity behavior without a second remote call;
 - before returning, it reproduces pinned Grammers `build_peer_map` behavior and
-  updates the runtime's in-memory `TelegramSession` peer cache for exactly
-  those response peers for which pinned Grammers `Peer::auth().is_some()` is
-  true. This includes ordinary chats with default auth and excludes min
-  users/channels whose auth is unavailable; it is not an access-hash-only
-  predicate;
+  updates the runtime's in-memory `TelegramSession` peer cache only after
+  runtime construction has validated that
+  `ClientConfiguration.auto_cache_peers` is true, and then for exactly those
+  response peers for which pinned Grammers `Peer::auth().is_some()` is true.
+  This preserves both levels of the pinned condition. The inner predicate
+  includes ordinary chats with default auth and excludes min users/channels
+  whose auth is unavailable; it is not an access-hash-only predicate;
 - newest-to-oldest response order is retained;
 - `Messages::Messages` is terminal; `Messages::Slice` and
   `Messages::ChannelMessages` are terminal exactly when empty or when the first
   returned message ID is less than or equal to the request limit, matching the
-  pinned Grammers `fill_buffer` rule; `Messages::NotModified` with `hash = 0`
-  is an internal invariant error;
+  pinned Grammers `fill_buffer` rule;
+- for this `GetHistory` request whose `hash` is exactly zero,
+  `Messages::NotModified` is the one intentional divergence from pinned
+  `fill_buffer`: pinned Grammers panics, whereas the owned live operation
+  returns `AppErrorKind::Network` with exact message
+  `Telegram returned messagesNotModified for live history batch`. It does not
+  use `NotModified.count`. This matches the existing Extractum Takeout
+  convention, whose operation-specific messages remain exactly
+  `Telegram returned messagesNotModified for Takeout history page` and
+  `Telegram returned messagesNotModified for Takeout history count probe`;
 - a non-terminal batch advances both offsets from its last raw message;
 - the app checks prior-ID and date cutoffs before `into_draft`, then updates
   `max_message_id`, converts, and persists/skips in that order. It never asks
@@ -1422,6 +1488,11 @@ or unnamed fragment is legal in the generated artifact.
 | `<new>` | `TelegramClientHandle::takeout_forum_topics` | `telegram_impl/runtime.rs` | `=` | staged | 7 | retained | new |
 | `<new>` | `{TakeoutTransport::init,TakeoutTransport::message_ranges,TakeoutTransport::validate_peer,TakeoutTransport::detect_supergroup_migration,TakeoutTransport::revalidate_migrated_peer,TakeoutTransport::history_count,TakeoutTransport::search_my_history_count,TakeoutTransport::history_page,TakeoutTransport::search_my_history_page,TakeoutTransport::finish}` | `telegram_impl/takeout/operations.rs` | `=` | staged | 7 | retained | new |
 
+The `raw_memory_session` and `clone_memory_session` rows are an intentional
+coexist-then-replace pair: CP3 through CP6 require both exact methods, while
+CP7 and later require the restricted owned-`Arc` bridge exactly once and zero
+occurrences of the borrowed bridge name in production or tests.
+
 The generator also freezes three transition inventories that are not inferred
 from path existence:
 
@@ -1599,6 +1670,7 @@ imports the immutable Phase 8A identity map by exact section hash
 parses the exact Phase 8B new-test table without duplicates
 materializes the exact Phase 8B test partitions from content-addressed authority
 materializes every production-symbol disposition and transitional bridge
+materializes the exact restricted-visibility allowlist without duplicates
 checks the generated Grammers feature baseline
 keeps Checkpoint 1 on the application-owned pre-staging layout
 ```
@@ -1642,23 +1714,44 @@ keeps Checkpoint 1 on the application-owned pre-staging layout
   partitioned by exact final `telegram_impl::` prefix. Prove a second
   `--write` is byte-identical.
 - [ ] Implement `scripts/telegram-8b-symbol-map.mjs` with exact `--write` and
-  `--check` modes from the literal symbol-disposition table below. Its JSON
-  rows contain `currentPath`, `currentSymbol`, exact `finalTargets`
-  path/symbol pairs, `semanticOwner`, `firstCheckpoint`,
-  `removalCheckpoint`, and `disposition`; split symbols use separate named
-  fragment rows with their literal `currentAnchors` or multiple exact final
-  targets. Reject an
-  unlisted current production symbol in scope, duplicate current
-  path/symbol/disposition tuples, wildcard/catch-all symbols, missing final
-  symbols after their checkpoint, or a transitional bridge surviving its
-  removal checkpoint.
+  `--check` modes from both the literal symbol-disposition table and the exact
+  restricted-bridge fence. Its JSON rows contain `currentPath`,
+  `currentSymbol`, exact `finalTargets` path/symbol pairs, `semanticOwner`,
+  `firstCheckpoint`, `removalCheckpoint`, and `disposition`; split symbols use
+  separate named fragment rows with their literal `currentAnchors` or multiple
+  exact final targets. The same artifact contains an exact 67-entry, sorted,
+  duplicate-free `restrictedFinalSymbols` array. Parse singleton allowlist lines and
+  single-level brace groups only; reject nested braces, so the pagination
+  subsection must remain fully qualified and flat. Every restricted symbol
+  must occur in the disposition table's final targets and must not occur in
+  the root public allowlist. Reject an unlisted current production symbol in
+  scope, duplicate current path/symbol/disposition tuples, duplicate
+  restricted symbols, wildcard/catch-all symbols, malformed groups, missing
+  final symbols after their checkpoint, or a transitional bridge surviving
+  its removal checkpoint. Prove a second `--write` is byte-identical and
+  `--check` rejects either table/fence drift.
 - [ ] Implement the feature generator and create the artifact with `--write`;
   immediately prove a second `--write` is byte-idempotent and `--check` is
   GREEN.
 - [ ] Add contract assertions for the exact public/restricted allowlists,
   exact 19-file terminal tree, checkpoint path table, direct-Grammers consumer
   inventory, forbidden raw/app types, exact test-partition artifact, and exact
-  symbol-disposition artifact. At Checkpoint 1 these future conditions are
+  symbol-disposition artifact. The CP7/CP8 source contract must compare the
+  complete normalized production `pub(super)` inventory to generated
+  `restrictedFinalSymbols`; it must not hard-code a second pagination list.
+  Mutation cases delete `TakeoutPaginationCursor::new` and widen one
+  `TakeoutPageRequest` field, and both must fail the focused contract.
+  Starting at Checkpoint 3, also require
+  `initialize_grammers_client` to materialize
+  `grammers_client::client::ClientConfiguration::default()`, fail closed on
+  `!configuration.auto_cache_peers` with the frozen internal-error message,
+  do so before `SenderPool::new`/`tokio::spawn`, and construct through
+  `Client::with_configuration`; reject a missing or inverted guard, the wrong
+  configuration path, post-spawn validation, or a return to implicit
+  `Client::new`. Require both exact session accessors at CP3 through CP6, then
+  at CP7/CP8 require exactly one restricted
+  `clone_memory_session` definition and zero `raw_memory_session` identifiers
+  across production and tests. At Checkpoint 1 these future conditions are
   authority-only; current source is still the retained 8A layout.
 - [ ] Update statuses atomically to:
 
@@ -1853,6 +1946,43 @@ accepted.
 - [ ] Implement `client` as the renamed public non-authorizing lookup over the
   existing map-lock behavior. Keep `initialized_client` private for internal
   reuse and keep `authorized_client` behavior/signature unchanged.
+- [ ] In `initialize_grammers_client`, replace the implicit
+  `grammers_client::Client::new(pool.handle)` with this fail-closed
+  construction invariant:
+
+```rust
+let configuration =
+    grammers_client::client::ClientConfiguration::default();
+if !configuration.auto_cache_peers {
+    return Err(extractum_core::error::AppError::internal(
+        "Grammers client configuration must enable auto_cache_peers",
+    ));
+}
+let pool = SenderPool::new(session.clone_memory_session(), api_id);
+let runner = tokio::spawn(async move {
+    let _ = pool.runner.run().await;
+});
+let client =
+    grammers_client::Client::with_configuration(pool.handle, configuration);
+```
+
+  The pinned default is true, so this does not change the retained runtime
+  path. It turns the outer Grammers cache gate into an executable precondition:
+  a future default/configuration drift fails during client initialization
+  before any detached runner exists, instead of letting the raw live path cache
+  peers under different rules.
+- [ ] At CP3, add the permanent restricted bridge exactly as
+  `TelegramSession::clone_memory_session(&self) -> Arc<MemorySession>` with
+  body `Arc::clone(&self.inner)`. Keep the existing borrowed
+  `raw_memory_session(&self) -> &Arc<MemorySession>` only for the enumerated
+  transitional consumers through CP6; do not silently change that method's
+  signature in place. Without adding or renaming test identities, update the
+  existing `encrypted_session_load_round_trips`,
+  `initialization_maps_authorization_and_last_insert_wins_without_aborting_replaced_runner`,
+  `failed_sign_in_retains_pending_attempt`, and
+  `successful_sign_in_serializes_clear_then_returns_session_and_clears_attempt`
+  assertions to hold cloned `Arc` values and prove with `Arc::ptr_eq` that the
+  bridge points to the same `MemorySession`.
 - [ ] Redirect every future-owner type/constant/codec consumer to an explicit
   `crate::telegram_impl::...` path. Do not redirect app-owned
   `TelegramState`, Tauri commands, or account/diagnostics helpers out of
@@ -2118,12 +2248,25 @@ Invoke-Phase8BRedCases -TestNames @(
 )
 ```
 
-The raw message fixture must count invokes and peer-cache updates. The first
-test fails unless one batch performs exactly one invoke, updates the in-memory
-peer cache with the exact pinned `Peer::auth().is_some()` predicate (including
-an ordinary chat with default auth and excluding min user/channel fixtures
-without auth), validates 1..=100, preserves response order, advances both
-offsets, and implements the pinned terminal rule. The second fails on per-entry
+The raw message fixture must count invokes and begin with an empty
+`TelegramSession`. After the one raw invoke, the first test queries the backing
+`MemorySession::peer` state through the pinned `grammers_session::Session`
+trait for each exact fixture peer ID: every auth-eligible peer must be present,
+while the min user/channel peers without auth must remain absent. This proves
+the real cache side effect without adding an instrumented `Session` seam. The
+first test is explicitly downstream of the Checkpoint 3
+`auto_cache_peers == true` construction invariant and fails unless one batch
+performs exactly one invoke, updates the in-memory peer cache with the exact
+pinned `Peer::auth().is_some()` inner predicate (including an ordinary chat
+with default auth and excluding min user/channel fixtures without auth),
+validates 1..=100, preserves response order, advances both offsets, and
+implements the pinned terminal rule. Its final subcase supplies
+`Messages::NotModified { count: 0 }`, requires an `Err` whose kind is exactly
+`AppErrorKind::Network` and whose message equals
+`Telegram returned messagesNotModified for live history batch`, and therefore
+fails if the implementation panics, accepts the count, or chooses another
+error mapping. The lifecycle source contract separately fails if the validated
+outer gate is removed or bypassed. The second fails on per-entry
 conversion/skip/fallback-identity drift. The third fails on topic/deletion
 order or non-advancing terminal cursor drift. The app test fails unless prior
 entries remain durable, every returned raw message consumes the RecentMessages
@@ -2133,9 +2276,16 @@ prevents the next fetch.
 - [ ] Implement `fetch_message_batch` directly over one raw
   `messages.getHistory`; do not use `MessageIter::next`. Recreate the pinned
   `build_peer_map` result and update the runtime's in-memory
-  `TelegramSession` peer cache before return, without a second invoke. Keep
-  `LiveMessage` raw/owned internally so `into_draft` runs only after app
-  cutoffs.
+  `TelegramSession` peer cache before return, without a second invoke. This
+  update is permitted only because every real client passed to this path was
+  created under the checked `auto_cache_peers == true` invariant in Task 3;
+  do not add an independent unconditional-cache policy. Keep `LiveMessage`
+  raw/owned internally so `into_draft` runs only after app cutoffs.
+- [ ] Match `Messages::NotModified` before peer-map/cache work and return
+  exactly
+  `AppError::network("Telegram returned messagesNotModified for live history batch")`.
+  This is the declared replacement for pinned Grammers' panic, not a new
+  generic error abstraction and not permission to alter any other error.
 - [ ] Remove the `sources/sync.rs` use of the transitional media facade after
   conversion moves. At CP5/CP6 the only remaining app consumer of the exact
   compatibility set is `takeout_import/raw_parse.rs`.
@@ -2408,7 +2558,12 @@ Invoke-Phase8BRedCases -TestNames @(
 
 Accepted reasons are wrong source-subtype flags/range selection, wrong migrated
 chat identity, missing OnlyMy fallback metadata, wrong page/search ownership
-or pagination state, and wrong finish mapping. Compiler REDs are forbidden.
+or pagination state, and wrong finish mapping. The history-count test also has
+a `Messages::NotModified { count: 0 }` subcase that requires exact
+`AppErrorKind::Network`, exact message
+`Telegram returned messagesNotModified for Takeout history count probe`, no
+queued `OnlyMyMessages` fallback, and no search continuation. Compiler REDs
+are forbidden.
 
 - [ ] Move self-check, prepare/init, validation, migration, split selection,
   count, history, search-my, and finish logic into the frozen concrete
@@ -2567,6 +2722,12 @@ progress afterward.
 - [ ] Move `pagination.rs` and `raw_parse.rs` production/tests to their exact
   staged owners. Move the two temporary companions to their final staged IDs
   byte-for-byte; delete their temporary IDs.
+- [ ] Without adding or renaming a test identity, strengthen the moved
+  `messages_not_modified_response_is_rejected_for_takeout_page` test to
+  require exact `AppErrorKind::Network` and exact message
+  `Telegram returned messagesNotModified for Takeout history page` rather than
+  substring matching. Together with the live-batch and count-probe subcases,
+  this freezes all three operation-specific typed rejections.
 - [ ] While moving raw parsing, replace cross-module construction of
   `DocumentSignals` with the exact
   `derive_document_media_kind_from_parts(mime_type, has_video, has_audio,
@@ -2618,10 +2779,14 @@ Keep completion policy and warning/provenance tests in app
   `TelegramSession::raw_memory_session`,
   `telegram::{get_client,get_authorized_client}`, and
   `{ResolvedSyncPeer::peer,legacy_peer_ref_from_descriptor}` after their final
-  two Takeout consumers use owned operations. Runtime initialization and any
-  sibling-module session consumer switch from the transitional borrowed
-  accessor to permanent restricted `TelegramSession::clone_memory_session`; no
-  runtime consumer may retain the deleted name. Package-private
+  two Takeout consumers use owned operations. Before deletion, every remaining
+  production and test consumer switches from the transitional borrowed
+  accessor to permanent restricted
+  `TelegramSession::clone_memory_session`, including same-module session
+  codec/tests, runtime initialization/tests, and sibling modules. CP7 and later
+  contain zero `raw_memory_session` identifiers anywhere under
+  `src-tauri/src`, while the exact restricted `clone_memory_session`
+  definition remains. Package-private
   `TelegramState` methods may delegate to
   `TelegramRuntime::{client,authorized_client}`; they expose only the opaque
   handle. Public handle methods that need raw internals are implemented in
@@ -2675,7 +2840,9 @@ assert that every application use of a staged public symbol begins with exact
 `crate::telegram_impl::` and no alias/glob exists. Parse
 `src/lib/telegram-8b-symbol-map.json`; require every CP7 final symbol, every
 app-retained replacement, no transitional bridge, and no unlisted production
-`pub(super)` item.
+`pub(super)` item. Compare the complete normalized `pub(super)` inventory to
+the artifact's `restrictedFinalSymbols`; do not parse or hard-code a second
+pagination allowlist in TypeScript.
 
 - [ ] Run all seven new Task 7 tests, both final companions, and the complete
   mapped Takeout suites:
