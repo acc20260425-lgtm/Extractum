@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "revision": "1f901ce6e973fdcf0e74267f3d8efad5c729daaa",
+  "packages": [
+    {
+      "name": "grammers-client",
+      "required": [],
+      "forbidden": [
+        "default",
+        "fs",
+        "html",
+        "html5ever",
+        "markdown",
+        "parse_invite_link",
+        "proxy",
+        "pulldown-cmark",
+        "url"
+      ],
+      "universe": [
+        "default",
+        "fs",
+        "html",
+        "html5ever",
+        "markdown",
+        "parse_invite_link",
+        "proxy",
+        "pulldown-cmark",
+        "url"
+      ]
+    },
+    {
+      "name": "grammers-mtsender",
+      "required": [],
+      "forbidden": [
+        "hickory-resolver",
+        "proxy",
+        "tokio-socks",
+        "url"
+      ],
+      "universe": [
+        "hickory-resolver",
+        "proxy",
+        "tokio-socks",
+        "url"
+      ]
+    },
+    {
+      "name": "grammers-session",
+      "required": [
+        "serde"
+      ],
+      "forbidden": [
+        "default",
+        "sqlite-storage"
+      ],
+      "universe": [
+        "default",
+        "serde",
+        "sqlite-storage"
+      ]
+    },
+    {
+      "name": "grammers-tl-types",
+      "required": [
+        "default",
+        "deserializable-functions",
+        "impl-debug",
+        "impl-from-enum",
+        "impl-from-type",
+        "tl-api",
+        "tl-mtproto"
+      ],
+      "forbidden": [
+        "impl-serde"
+      ],
+      "universe": [
+        "default",
+        "deserializable-functions",
+        "impl-debug",
+        "impl-from-enum",
+        "impl-from-type",
+        "impl-serde",
+        "tl-api",
+        "tl-mtproto"
+      ]
+    }
+  ]
+}

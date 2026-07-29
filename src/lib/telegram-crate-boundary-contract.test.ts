@@ -1,12 +1,18 @@
-import { existsSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import * as telegramContractPaths from "./telegram-contract-paths";
+import { generateIdentityAuthority } from "../../scripts/telegram-8b-test-identities.mjs";
+import { generateSymbolAuthority } from "../../scripts/telegram-8b-symbol-map.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "../..");
 const planPath =
   "docs/superpowers/plans/2026-07-26-extractum-telegram-8a-preparation.md";
+const phase8BPlanPath =
+  "docs/superpowers/plans/2026-07-28-extractum-telegram-8b-preparation.md";
 const designPath =
   "docs/superpowers/specs/2026-07-26-telegram-crate-boundary-design.md";
 const roadmapPath =
@@ -30,8 +36,13 @@ type AddedIdentity = {
 
 const normalize = telegramContractPaths.normalizeTelegramContractSourceText;
 const plan = telegramContractPaths.readTelegramContractFile(planPath);
+const phase8BPlan =
+  telegramContractPaths.readTelegramContractFile(phase8BPlanPath);
 const design = telegramContractPaths.readTelegramContractFile(designPath);
 const roadmap = telegramContractPaths.readTelegramContractFile(roadmapPath);
+const valueRegistry = telegramContractPaths.readTelegramContractFile(
+  "docs/value-registry.md",
+);
 
 const directGrammersPaths = [
   "src-tauri/src/media.rs",
@@ -90,6 +101,7 @@ const stagedRawConsumerPaths = [
   "src-tauri/src/telegram_impl/takeout/pagination.rs",
   "src-tauri/src/telegram_impl/takeout/raw_parse.rs",
   "src-tauri/src/telegram_impl/takeout/transport.rs",
+  "src-tauri/src/telegram_impl/takeout/types.rs",
 ] as const;
 
 const crateRawConsumerPaths = stagedRawConsumerPaths.map((relativePath) =>
@@ -208,6 +220,11 @@ const retainedPreparationStates = [
     roadmapStatus: "8A preparation retained",
     designStatus: "Approved; 8A preparation retained; 8B not started",
     lifecycle: "8a-retained",
+  },
+  {
+    roadmapStatus: "8B preparation Checkpoint 1 retained",
+    designStatus: "Approved; 8B preparation Checkpoint 1 retained",
+    lifecycle: "8b-checkpoint-1",
   },
 ] as const;
 
@@ -2205,7 +2222,11 @@ function rustBraceDepthBefore(source: string, end: number): number {
   return depth;
 }
 
-type RustImplBlock = Readonly<{ header: string; body: string }>;
+type RustImplBlock = Readonly<{
+  start: number;
+  header: string;
+  body: string;
+}>;
 
 function isRustImplItemCandidate(
   searchable: string,
@@ -2238,7 +2259,7 @@ function rustImplBlocks(
   label = "Checkpoint 4 impl inventory",
 ): RustImplBlock[] {
   const searchable = maskRustLexicalNonCode(source);
-  const blocks: Array<{ header: string; body: string }> = [];
+  const blocks: Array<{ start: number; header: string; body: string }> = [];
   for (const match of searchable.matchAll(/\bimpl\b/g)) {
     if (match.index === undefined) continue;
     if (!isRustImplItemCandidate(searchable, match.index)) continue;
@@ -2261,6 +2282,7 @@ function rustImplBlocks(
       label,
     );
     blocks.push({
+      start: match.index,
       header: normalize(searchable.slice(headerStart, open)).trim(),
       body: searchable.slice(open + 1, close),
     });
@@ -3677,7 +3699,12 @@ function parseFixtureIdentitySet(): string[] {
 }
 
 function checkpointNumber(value: telegramContractPaths.TelegramLifecycle): number {
-  if (value === "8a-retained" || value === "8b-preparation" || value === "8c-extracted") {
+  if (
+    value === "8a-retained"
+    || /^8b-checkpoint-[1-8]$/.test(value)
+    || value === "8b-preparation"
+    || value === "8c-extracted"
+  ) {
     return 5;
   }
   return Number(/^8a-checkpoint-(\d)$/.exec(value)?.[1] ?? 0);
@@ -3808,6 +3835,1537 @@ function assertAddedIdentityDeclarations(
 const identityRows = parseIdentityRows();
 const addedIdentities = parseAddedIdentities();
 const storeIdentities = parseStoreIdentities();
+
+type Phase8BIdentityAuthority = {
+  schemaVersion: number;
+  baselineDerived: string[];
+  preNewApp: string[];
+  preNewStaged: string[];
+  phase8BNewApp: string[];
+  phase8BNewStaged: string[];
+};
+
+type Phase8BSymbolTarget = {
+  path: string;
+  symbol: string;
+};
+
+type Phase8BSymbolRow = {
+  currentPath: string;
+  currentSymbol: string;
+  currentAnchors?: string[];
+  finalTargets: Phase8BSymbolTarget[];
+  semanticOwner: string;
+  firstCheckpoint: number | "existing";
+  removalCheckpoint: number | "retained";
+  disposition: string;
+};
+
+type Phase8BSymbolAuthority = {
+  schemaVersion: number;
+  restrictedBridgeFenceAuthority: {
+    normalizedLfBytes: number;
+    sha256: string;
+  };
+  symbols: Phase8BSymbolRow[];
+  transitionInventories: Record<string, string[]>;
+  restrictedFinalSymbols: string[];
+};
+
+const phase8BPortablePathTable = [
+  ["src-tauri/src/telegram_impl/lib.rs", 3, "src-tauri/src/telegram.rs"],
+  ["src-tauri/src/telegram_impl/dto.rs", 3, "src-tauri/src/telegram/dto.rs"],
+  ["src-tauri/src/telegram_impl/media.rs", 3, "src-tauri/src/telegram/media.rs"],
+  ["src-tauri/src/telegram_impl/runtime.rs", 3, "src-tauri/src/telegram/runtime.rs"],
+  ["src-tauri/src/telegram_impl/session.rs", 3, "src-tauri/src/telegram/session.rs"],
+  ["src-tauri/src/telegram_impl/error.rs", 4, "src-tauri/src/sources/topics.rs"],
+  ["src-tauri/src/telegram_impl/live/mod.rs", 4, "src-tauri/src/sources/store.rs"],
+  ["src-tauri/src/telegram_impl/live/avatar.rs", 4, "src-tauri/src/sources/avatar.rs"],
+  ["src-tauri/src/telegram_impl/live/peer.rs", 4, "src-tauri/src/sources/peer_resolution.rs"],
+  ["src-tauri/src/telegram_impl/live/messages.rs", 5, "src-tauri/src/sources/sync.rs"],
+  ["src-tauri/src/telegram_impl/live/topics.rs", 5, "src-tauri/src/sources/topics.rs"],
+  ["src-tauri/src/telegram_impl/takeout/mod.rs", 7, "src-tauri/src/takeout_import/mod.rs"],
+  ["src-tauri/src/telegram_impl/takeout/types.rs", 7, "src-tauri/src/takeout_import/mod.rs"],
+  ["src-tauri/src/telegram_impl/takeout/transport.rs", 7, "src-tauri/src/takeout_import/mod.rs"],
+  ["src-tauri/src/telegram_impl/takeout/export_dc.rs", 7, "src-tauri/src/takeout_import/export_dc.rs"],
+  ["src-tauri/src/telegram_impl/takeout/operations.rs", 7, "src-tauri/src/takeout_import/mod.rs"],
+  ["src-tauri/src/telegram_impl/takeout/pagination.rs", 7, "src-tauri/src/takeout_import/pagination.rs"],
+  ["src-tauri/src/telegram_impl/takeout/raw_parse.rs", 7, "src-tauri/src/takeout_import/raw_parse.rs"],
+  ["src-tauri/src/telegram_impl/takeout/forum_topics.rs", 7, "src-tauri/src/takeout_import/forum_topics.rs"],
+] as const;
+
+function readGeneratedJson<T>(relativePath: string): T {
+  return JSON.parse(
+    readFileSync(path.join(repoRoot, relativePath), "utf8"),
+  ) as T;
+}
+
+function expectSortedUnique(
+  values: readonly string[],
+  label: string,
+): void {
+  expect(values, `${label}: sorted`).toEqual([...values].sort());
+  expect(new Set(values).size, `${label}: unique`).toBe(values.length);
+}
+
+function exactMutation(
+  source: string,
+  before: string,
+  after: string,
+  label: string,
+): string {
+  const matches = source.split(before).length - 1;
+  if (matches !== 1) {
+    throw new Error(`${label}: expected one mutation target, found ${matches}`);
+  }
+  return source.replace(before, after);
+}
+
+function swapExact(
+  source: string,
+  left: string,
+  right: string,
+  label: string,
+): string {
+  const marker = `__TELEGRAM_PHASE_8B_SWAP_${label}__`;
+  if (source.includes(marker)) throw new Error(`${label}: marker collision`);
+  return exactMutation(
+    exactMutation(
+      exactMutation(source, left, marker, `${label} left`),
+      right,
+      left,
+      `${label} right`,
+    ),
+    marker,
+    right,
+    `${label} marker`,
+  );
+}
+
+function runNodeGenerator(
+  relativePath: string,
+  args: readonly string[],
+): ReturnType<typeof spawnSync> {
+  return spawnSync(
+    process.execPath,
+    [path.join(repoRoot, relativePath), ...args],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+      shell: false,
+    },
+  );
+}
+
+function exactPhase8BTextFenceAfter(
+  source: string,
+  marker: string,
+  label: string,
+): string {
+  const markerCount = source.split(marker).length - 1;
+  if (markerCount !== 1) {
+    throw new Error(`${label}: expected one marker, found ${markerCount}`);
+  }
+  const markerIndex = source.indexOf(marker);
+  const fenceStart = source.indexOf("\n\n```text\n", markerIndex);
+  if (fenceStart < 0) throw new Error(`${label}: missing text fence`);
+  const contentStart = fenceStart + "\n\n```text\n".length;
+  const fenceEnd = source.indexOf("\n```", contentStart);
+  if (fenceEnd < 0) throw new Error(`${label}: unterminated text fence`);
+  return source.slice(contentStart, fenceEnd);
+}
+
+function phase8BPortableTreePaths(source = phase8BPlan): string[] {
+  const fence = exactPhase8BTextFenceAfter(
+    source,
+    "Checkpoint 7 must produce exactly these 19 Rust files and no other file below the root:",
+    "Phase 8B portable tree",
+  );
+  const directories: string[] = [];
+  const files: string[] = [];
+  for (const [index, line] of fence.split("\n").entries()) {
+    const indentation = /^ */.exec(line)?.[0].length ?? 0;
+    if (
+      indentation % 2 !== 0
+      || line.trim().length === 0
+      || /\t/.test(line)
+    ) {
+      throw new Error(`Phase 8B portable tree: malformed line ${index + 1}`);
+    }
+    const level = indentation / 2;
+    const entry = line.trim();
+    if (entry.endsWith("/")) {
+      if (level === 0) {
+        if (
+          index !== 0
+          || entry !== "src-tauri/src/telegram_impl/"
+        ) {
+          throw new Error("Phase 8B portable tree: malformed root");
+        }
+        directories[0] = entry;
+      } else {
+        const parent = directories[level - 1];
+        if (!parent) {
+          throw new Error(
+            `Phase 8B portable tree: missing directory parent at line ${index + 1}`,
+          );
+        }
+        directories[level] = `${parent}${entry}`;
+      }
+      directories.length = level + 1;
+      continue;
+    }
+    if (!/^[A-Za-z0-9_]+\.rs$/.test(entry)) {
+      throw new Error(
+        `Phase 8B portable tree: malformed Rust file at line ${index + 1}`,
+      );
+    }
+    const parent = directories[level - 1];
+    if (!parent) {
+      throw new Error(
+        `Phase 8B portable tree: missing file parent at line ${index + 1}`,
+      );
+    }
+    files.push(`${parent}${entry}`);
+  }
+  if (files.length !== 19 || new Set(files).size !== files.length) {
+    throw new Error(
+      `Phase 8B portable tree: expected 19 unique files, found ${files.length}`,
+    );
+  }
+  return files.sort();
+}
+
+function phase8BTerminalRawConsumerAuthority(
+  source = phase8BPlan,
+): string[] {
+  const fence = exactPhase8BTextFenceAfter(
+    source,
+    "and the exact 15 staged raw-consumer paths:",
+    "Phase 8B terminal raw-consumer inventory",
+  );
+  const paths = fence.split("\n").map((relativePath) => {
+    if (!/^telegram_impl(?:\/[A-Za-z0-9_]+)+\.rs$/.test(relativePath)) {
+      throw new Error(
+        `Phase 8B terminal raw-consumer inventory: malformed path ${relativePath}`,
+      );
+    }
+    return `src-tauri/src/${relativePath}`;
+  });
+  if (paths.length !== 15 || new Set(paths).size !== paths.length) {
+    throw new Error(
+      `Phase 8B terminal raw-consumer inventory: expected 15 unique paths, found ${paths.length}`,
+    );
+  }
+  return paths.sort();
+}
+
+function phase8BRootPublicAuthority(source = phase8BPlan): string[] {
+  const fence = exactPhase8BTextFenceAfter(
+    source,
+    "The root re-export allowlist is exactly:",
+    "Phase 8B root public allowlist",
+  );
+  const symbols = fence.split("\n");
+  if (
+    symbols.length !== 29
+    || symbols.some(
+      (symbol) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(symbol),
+    )
+    || new Set(symbols).size !== symbols.length
+  ) {
+    throw new Error("Phase 8B root public allowlist drifted");
+  }
+  return symbols;
+}
+
+function rustUseExportNames(
+  declaration: string,
+  expectedVisibility: "pub" | "pub(super)",
+  label: string,
+): string[] {
+  const visibilityPattern = expectedVisibility === "pub"
+    ? /^pub\s+use\s+/
+    : /^pub\s*\(\s*super\s*\)\s+use\s+/;
+  if (!visibilityPattern.test(declaration)) {
+    throw new Error(`${label}: malformed use visibility`);
+  }
+  const tree = declaration
+    .replace(visibilityPattern, "")
+    .replace(/;\s*$/, "")
+    .trim();
+  if (tree.includes("*")) throw new Error(`${label}: glob use is forbidden`);
+  const open = tree.indexOf("{");
+  if (open < 0) {
+    const alias = /\bas\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(
+      tree,
+    )?.[1];
+    const target = tree.replace(/\bas\s+.+$/, "").trim();
+    const leaf = /(?:^|::)(?:r#)?([A-Za-z_][A-Za-z0-9_]*)$/.exec(
+      target,
+    )?.[1];
+    if (!alias && !leaf) throw new Error(`${label}: malformed singleton use`);
+    return [alias ?? leaf!];
+  }
+  const close = tree.lastIndexOf("}");
+  if (
+    close !== tree.length - 1
+    || tree.indexOf("{", open + 1) >= 0
+    || tree.indexOf("}", open + 1) !== close
+  ) {
+    throw new Error(`${label}: nested or malformed use group`);
+  }
+  const prefix = tree.slice(0, open).replace(/::\s*$/, "").trim();
+  if (!prefix) throw new Error(`${label}: empty use prefix`);
+  const prefixLeaf = prefix.slice(prefix.lastIndexOf("::") + 2);
+  const items = tree.slice(open + 1, close).split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (items.length === 0) throw new Error(`${label}: empty use group`);
+  return items.map((item) => {
+    if (item.includes("{") || item.includes("}")) {
+      throw new Error(`${label}: nested use group`);
+    }
+    const alias = /\bas\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(
+      item,
+    )?.[1];
+    const target = item.replace(/\bas\s+.+$/, "").trim();
+    if (target === "self") return alias ?? prefixLeaf;
+    const leaf = /(?:^|::)(?:r#)?([A-Za-z_][A-Za-z0-9_]*)$/.exec(
+      target,
+    )?.[1];
+    if (!leaf) throw new Error(`${label}: malformed grouped use item`);
+    return alias ?? leaf;
+  });
+}
+
+type RustUseDeclaration = {
+  start: number;
+  end: number;
+  declaration: string;
+};
+
+function rustTopLevelUseDeclarations(
+  searchable: string,
+  visibility: "pub" | "pub(super)" | "pub(crate)",
+  label: string,
+): RustUseDeclaration[] {
+  const expression = visibility === "pub"
+    ? /(?:^|\n)[\t ]*pub\s+use\s+/g
+    : visibility === "pub(super)"
+    ? /(?:^|\n)[\t ]*pub\s*\(\s*super\s*\)\s+use\s+/g
+    : /(?:^|\n)[\t ]*pub\s*\(\s*crate\s*\)\s+use\s+/g;
+  const declarations: RustUseDeclaration[] = [];
+  for (const match of searchable.matchAll(expression)) {
+    if (match.index === undefined) continue;
+    const pubOffset = match[0].lastIndexOf("pub");
+    const start = match.index + pubOffset;
+    if (rustBraceDepthBefore(searchable, start) !== 0) continue;
+    let roundDepth = 0;
+    let squareDepth = 0;
+    let braceDepth = 0;
+    let end = -1;
+    for (let index = start; index < searchable.length; index += 1) {
+      const character = searchable[index];
+      if (character === "(") roundDepth += 1;
+      if (character === ")") roundDepth -= 1;
+      if (character === "[") squareDepth += 1;
+      if (character === "]") squareDepth -= 1;
+      if (character === "{") braceDepth += 1;
+      if (character === "}") braceDepth -= 1;
+      if (
+        character === ";"
+        && roundDepth === 0
+        && squareDepth === 0
+        && braceDepth === 0
+      ) {
+        end = index + 1;
+        break;
+      }
+    }
+    if (end < 0) throw new Error(`${label}: unterminated use declaration`);
+    declarations.push({
+      start,
+      end,
+      declaration: normalize(searchable.slice(start, end))
+        .replace(/\s+/g, " ")
+        .replace(/\{\s+/g, "{")
+        .replace(/\s+\}/g, "}")
+        .trim(),
+    });
+  }
+  return declarations;
+}
+
+function maskRustSourceRanges(
+  source: string,
+  ranges: readonly Pick<RustUseDeclaration, "start" | "end">[],
+): string {
+  const masked = source.split("");
+  for (const { start, end } of ranges) {
+    for (let index = start; index < end; index += 1) {
+      if (masked[index] !== "\n" && masked[index] !== "\r") {
+        masked[index] = " ";
+      }
+    }
+  }
+  return masked.join("");
+}
+
+function phase8BStagedModulePath(relativePath: string): string {
+  const prefix = "src-tauri/src/telegram_impl/";
+  if (!relativePath.startsWith(prefix) || !relativePath.endsWith(".rs")) {
+    throw new Error(`Phase 8B restricted inventory: invalid path ${relativePath}`);
+  }
+  const local = relativePath.slice(prefix.length);
+  if (local === "lib.rs") return "";
+  return local.endsWith("/mod.rs")
+    ? local.slice(0, -"/mod.rs".length).replaceAll("/", "::")
+    : local.slice(0, -".rs".length).replaceAll("/", "::");
+}
+
+function phase8BRestrictedProductionInventory(
+  sources: ReadonlyMap<string, string>,
+): string[] {
+  const inventory: string[] = [];
+  for (const [relativePath, source] of sources) {
+    if (!relativePath.startsWith("src-tauri/src/telegram_impl/")) continue;
+    const modulePath = phase8BStagedModulePath(relativePath);
+    const qualify = (symbol: string): string =>
+      modulePath ? `${modulePath}::${symbol}` : symbol;
+    const production = maskExactCfgTestItemSpans(source);
+    const searchable = maskRustLexicalNonCode(production);
+    if (/\bmod\s+(?:r#)?[A-Za-z_][A-Za-z0-9_]*\s*\{/.test(searchable)) {
+      throw new Error(
+        `Phase 8B restricted inventory: inline production module in ${relativePath}`,
+      );
+    }
+    const restrictedUses = rustTopLevelUseDeclarations(
+      searchable,
+      "pub(super)",
+      `Phase 8B restricted use inventory ${relativePath}`,
+    );
+    for (const useDeclaration of restrictedUses) {
+      inventory.push(
+        ...rustUseExportNames(
+          useDeclaration.declaration,
+          "pub(super)",
+          `Phase 8B restricted use ${relativePath}`,
+        ).map(qualify),
+      );
+    }
+    const topLevelSearchable = maskRustSourceRanges(
+      searchable,
+      restrictedUses,
+    );
+    for (
+      const header of rustTopLevelItemHeaders(
+        topLevelSearchable,
+        `Phase 8B restricted top-level inventory ${relativePath}`,
+      )
+    ) {
+      const declaration = splitLeadingRustOuterAttributes(header).declaration;
+      const visibility =
+        /^pub\s*\(\s*([^)]+?)\s*\)\s+/.exec(declaration);
+      if (!visibility) continue;
+      if (visibility[1].replace(/\s+/g, "") !== "super") {
+        throw new Error(
+          `Phase 8B restricted inventory: forbidden visibility in ${relativePath}`,
+        );
+      }
+      const item = declaration.slice(visibility[0].length);
+      const functionName =
+        /^(?:(?:async|const|default|unsafe)\s+)*(?:extern\s+)?fn\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\b/
+          .exec(item)?.[1];
+      const namedItem =
+        /^(?:unsafe\s+|auto\s+)?(?:struct|enum|union|trait|type|const|static)\s+(?:mut\s+)?(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\b/
+          .exec(item)?.[1];
+      const symbol = functionName ?? namedItem;
+      if (!symbol) {
+        throw new Error(
+          `Phase 8B restricted inventory: unsupported item in ${relativePath}`,
+        );
+      }
+      inventory.push(qualify(symbol));
+    }
+
+    for (
+      const match of searchable.matchAll(
+        /\bstruct\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)[^;{]*\{/g,
+      )
+    ) {
+      if (
+        match.index === undefined
+        || rustBraceDepthBefore(searchable, match.index) !== 0
+      ) {
+        continue;
+      }
+      const open = searchable.indexOf("{", match.index);
+      const close = rustClosingBraceIndex(
+        production,
+        open,
+        `Phase 8B restricted struct ${match[1]}`,
+      );
+      const body = searchable.slice(open + 1, close);
+      for (
+        const field of body.matchAll(
+          /\bpub\s*\(\s*super\s*\)\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\s*:/g,
+        )
+      ) {
+        inventory.push(qualify(`${match[1]}::${field[1]}`));
+      }
+      if (/\bpub\s*\(\s*(?!super\s*\))[^)]+\)\s+/.test(body)) {
+        throw new Error(
+          `Phase 8B restricted inventory: forbidden field visibility in ${relativePath}`,
+        );
+      }
+    }
+
+    for (
+      const { header, body } of rustImplBlocks(
+        production,
+        `Phase 8B restricted impl inventory ${relativePath}`,
+      )
+    ) {
+      if (/\sfor\s/.test(header)) continue;
+      const typeName =
+        /(?:^|::)(?:r#)?([A-Za-z_][A-Za-z0-9_]*)(?:\s+where\b.*)?$/
+          .exec(header)?.[1];
+      if (!typeName) continue;
+      for (
+        const itemHeader of rustTopLevelItemHeaders(
+          body,
+          `Phase 8B restricted associated inventory ${relativePath}`,
+        )
+      ) {
+        const visibility =
+          /\bpub\s*\(\s*([^)]+?)\s*\)\s+/.exec(itemHeader);
+        if (!visibility) continue;
+        if (visibility[1].replace(/\s+/g, "") !== "super") {
+          throw new Error(
+            `Phase 8B restricted inventory: forbidden associated visibility in ${relativePath}`,
+          );
+        }
+        const itemName =
+          /\b(?:fn|const|type)\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\b/
+            .exec(itemHeader)?.[1];
+        if (!itemName) {
+          throw new Error(
+            `Phase 8B restricted inventory: unsupported associated item in ${relativePath}`,
+          );
+        }
+        inventory.push(qualify(`${typeName}::${itemName}`));
+      }
+    }
+  }
+  return inventory;
+}
+
+function phase8BTerminalRootPublicExports(
+  sources: ReadonlyMap<string, string>,
+): string[] {
+  const rootPath = "src-tauri/src/telegram_impl/lib.rs";
+  const source = sources.get(rootPath);
+  if (source === undefined) {
+    throw new Error("Phase 8B terminal public API: missing staged root");
+  }
+  const searchable = maskRustLexicalNonCode(
+    maskExactCfgTestItemSpans(source),
+  );
+  const publicUses = rustTopLevelUseDeclarations(
+    searchable,
+    "pub",
+    "Phase 8B terminal root public use inventory",
+  );
+  const exports = publicUses.flatMap((useDeclaration) =>
+    rustUseExportNames(
+      useDeclaration.declaration,
+      "pub",
+      "Phase 8B terminal root public use",
+    )
+  );
+  const topLevelSearchable = maskRustSourceRanges(searchable, publicUses);
+  for (
+    const header of rustTopLevelItemHeaders(
+      topLevelSearchable,
+      "Phase 8B terminal root public inventory",
+    )
+  ) {
+    const declaration = splitLeadingRustOuterAttributes(header).declaration;
+    if (/^pub(?:\s|\()/.test(declaration)) {
+      throw new Error(
+        "Phase 8B terminal public API: root exposes a non-allowlisted item",
+      );
+    }
+  }
+  return exports;
+}
+
+function assertInitializeGrammersClientContract(source: string): void {
+  const expectedDeclaration =
+    "async fn initialize_grammers_client(api_id: i32, session: &TelegramSession,) -> extractum_core::error::AppResult<(TelegramClientInner, JoinHandle<()>, bool)>";
+  const declaration = normalizedRustFunctionDeclaration(
+    source,
+    "initialize_grammers_client",
+  );
+  if (declaration !== expectedDeclaration) {
+    throw new Error(
+      `Phase 8B initialize_grammers_client signature drifted: ${declaration}`,
+    );
+  }
+
+  const originalBody = rustFunctionOriginalBody(
+    source,
+    "initialize_grammers_client",
+  );
+  const body = maskRustLexicalNonCode(originalBody);
+  const defaultAssignment =
+    /\blet\s+configuration\s*=\s*grammers_client\s*::\s*client\s*::\s*ClientConfiguration\s*::\s*default\s*\(\s*\)\s*;/g;
+  const defaultMatches = [...body.matchAll(defaultAssignment)];
+  if (defaultMatches.length !== 1 || defaultMatches[0].index === undefined) {
+    throw new Error(
+      "Phase 8B initialize_grammers_client must construct the exact default configuration once",
+    );
+  }
+  const configurationBindingMatches = [
+    ...body.matchAll(/\blet\s+(?:mut\s+)?configuration\b/g),
+  ];
+  const configurationAssignmentMatches = [
+    ...body.matchAll(/\bconfiguration\s*=(?!=)/g),
+  ];
+  if (
+    configurationBindingMatches.length !== 1
+    || configurationBindingMatches[0].index !== defaultMatches[0].index
+    || configurationAssignmentMatches.length !== 1
+  ) {
+    throw new Error(
+      "Phase 8B initialize_grammers_client must preserve the sole validated configuration binding",
+    );
+  }
+  const guard =
+    /if\s+!\s*configuration\s*\.\s*auto_cache_peers\s*\{/g;
+  const guardMatches = [...body.matchAll(guard)];
+  if (guardMatches.length !== 1 || guardMatches[0].index === undefined) {
+    throw new Error(
+      "Phase 8B initialize_grammers_client must fail closed on !configuration.auto_cache_peers",
+    );
+  }
+  const guardOpen = body.indexOf("{", guardMatches[0].index);
+  const guardClose = rustClosingBraceIndex(
+    originalBody,
+    guardOpen,
+    "Phase 8B auto_cache_peers guard",
+  );
+  const guardCode = body.slice(guardOpen + 1, guardClose);
+  const guardOriginal = originalBody.slice(guardOpen + 1, guardClose);
+  if (
+    countMatches(guardCode, /\bAppError\s*::\s*internal\s*\(/g) !== 1
+    || !/\breturn\s+Err\s*\(\s*AppError\s*::\s*internal\s*\(\s*"Grammers client configuration must enable auto_cache_peers"\s*,?\s*\)\s*\)\s*;/.test(
+      guardOriginal,
+    )
+  ) {
+    throw new Error(
+      "Phase 8B initialize_grammers_client auto_cache_peers error drifted",
+    );
+  }
+
+  const poolIndex = body.search(/\bSenderPool\s*::\s*new\s*\(/);
+  const spawnIndex = body.search(/\btokio\s*::\s*spawn\s*\(/);
+  const configuredClientExpression =
+    /\bgrammers_client\s*::\s*Client\s*::\s*with_configuration\s*\(\s*pool\s*\.\s*handle\s*,\s*configuration\s*,?\s*\)/g;
+  const configuredClientMatches = [
+    ...body.matchAll(configuredClientExpression),
+  ];
+  const configuredClientIndex = configuredClientMatches[0]?.index ?? -1;
+  const configurationIdentifierIndices = [
+    ...body.matchAll(/\bconfiguration\b/g),
+  ].map((match) => match.index);
+  const authorizedConfigurationIdentifierIndices = [
+    defaultMatches[0].index
+      + defaultMatches[0][0].search(/\bconfiguration\b/),
+    guardMatches[0].index
+      + guardMatches[0][0].search(/\bconfiguration\b/),
+    configuredClientIndex
+      + (configuredClientMatches[0]?.[0].search(/\bconfiguration\b/) ?? -1),
+  ];
+  if (
+    configurationIdentifierIndices.length !== 3
+    || configurationIdentifierIndices.some(
+      (index, position) =>
+        index !== authorizedConfigurationIdentifierIndices[position],
+    )
+  ) {
+    throw new Error(
+      "Phase 8B initialize_grammers_client configuration provenance drifted",
+    );
+  }
+  if (
+    poolIndex < 0
+    || spawnIndex < 0
+    || configuredClientIndex < 0
+    || !(defaultMatches[0].index < guardMatches[0].index)
+    || !(guardClose < poolIndex)
+    || !(poolIndex < spawnIndex)
+    || !(spawnIndex < configuredClientIndex)
+  ) {
+    throw new Error(
+      "Phase 8B initialize_grammers_client configuration validation order drifted",
+    );
+  }
+  if (
+    /\bgrammers_client\s*::\s*Client\s*::\s*new\s*\(/.test(body)
+    || configuredClientMatches.length !== 1
+    || countMatches(
+      body,
+      /\bgrammers_client\s*::\s*Client\s*::\s*with_configuration\s*\(/g,
+    ) !== 1
+  ) {
+    throw new Error(
+      "Phase 8B initialize_grammers_client must use Client::with_configuration exactly once",
+    );
+  }
+}
+
+function assertPhase8BSessionAccessorContract(
+  sources: ReadonlyMap<string, string>,
+  checkpoint: number,
+): void {
+  const sessionPath = "src-tauri/src/telegram_impl/session.rs";
+  const source = sources.get(sessionPath);
+  if (source === undefined) {
+    throw new Error("Phase 8B session contract: missing staged session source");
+  }
+  const cloneDeclaration = normalizedRustFunctionDeclaration(
+    source,
+    "clone_memory_session",
+  );
+  if (
+    cloneDeclaration
+    !== "pub(super) fn clone_memory_session(&self) -> Arc<MemorySession>"
+  ) {
+    throw new Error(
+      `Phase 8B session contract: clone_memory_session signature drifted: ${cloneDeclaration}`,
+    );
+  }
+  const cloneBody = rustFunctionBody(source, "clone_memory_session")
+    .replace(/\s+/g, "")
+    .replace(/;$/, "");
+  if (cloneBody !== "Arc::clone(&self.inner)") {
+    throw new Error(
+      "Phase 8B session contract: clone_memory_session body drifted",
+    );
+  }
+
+  const combined = [...sources.values()]
+    .map(maskRustLexicalNonCode)
+    .join("\n");
+  const rawIdentifierCount = countMatches(
+    combined,
+    /\braw_memory_session\b/g,
+  );
+  if (checkpoint <= 6) {
+    const rawDeclaration = normalizedRustFunctionDeclaration(
+      source,
+      "raw_memory_session",
+    );
+    if (
+      rawDeclaration
+      !== "pub(super) fn raw_memory_session(&self) -> &Arc<MemorySession>"
+    ) {
+      throw new Error(
+        `Phase 8B session contract: raw_memory_session signature drifted: ${rawDeclaration}`,
+      );
+    }
+    if (rawIdentifierCount < 1) {
+      throw new Error(
+        "Phase 8B session contract: CP3-CP6 raw accessor is missing",
+      );
+    }
+    return;
+  }
+  if (rawIdentifierCount !== 0) {
+    throw new Error(
+      "Phase 8B session contract: raw_memory_session survives CP7",
+    );
+  }
+  if (
+    countMatches(
+      combined,
+      /\bfn\s+clone_memory_session\s*\(/g,
+    ) !== 1
+  ) {
+    throw new Error(
+      "Phase 8B session contract: clone_memory_session definition count drifted",
+    );
+  }
+}
+
+function phase8BPublicSurfaceFragments(
+  relativePath: string,
+  source: string,
+): string[] {
+  const production = maskExactCfgTestItemSpans(source);
+  const searchable = maskRustLexicalNonCode(production);
+  const fragments: string[] = [];
+  for (
+    const header of rustTopLevelItemHeaders(
+      searchable,
+      `Phase 8B public surface ${relativePath}`,
+    )
+  ) {
+    const declaration = splitLeadingRustOuterAttributes(header).declaration;
+    if (/^pub\s+(?!\()/.test(declaration)) {
+      fragments.push(declaration);
+    }
+  }
+  for (
+    const { body } of rustImplBlocks(
+      production,
+      `Phase 8B public impl surface ${relativePath}`,
+    )
+  ) {
+    for (
+      const itemHeader of rustTopLevelItemHeaders(
+        body,
+        `Phase 8B public associated surface ${relativePath}`,
+      )
+    ) {
+      if (/\bpub\s+(?!\()/.test(itemHeader)) {
+        fragments.push(itemHeader);
+      }
+    }
+  }
+  for (
+    const match of searchable.matchAll(
+      /\bpub\s+(?:r#)?[A-Za-z_][A-Za-z0-9_]*\s*:[^,\r\n}]+/g,
+    )
+  ) {
+    fragments.push(match[0]);
+  }
+  return fragments;
+}
+
+function phase8BFinalCanonicalSymbol(
+  target: Phase8BSymbolTarget,
+): string | undefined {
+  if (!target.path.startsWith("telegram_impl/")) return undefined;
+  const local = target.path
+    .slice("telegram_impl/".length)
+    .replace(/\.rs$/, "")
+    .replace(/\/mod$/, "");
+  const modulePath = local === "lib" ? "" : local.replaceAll("/", "::");
+  return modulePath ? `${modulePath}::${target.symbol}` : target.symbol;
+}
+
+function assertPhase8BTerminalSourceContract(
+  sources: ReadonlyMap<string, string>,
+  artifact: Phase8BSymbolAuthority,
+): void {
+  const stagedPaths = [...sources.keys()].filter((relativePath) =>
+    relativePath.startsWith("src-tauri/src/telegram_impl/")
+    && relativePath.endsWith(".rs")
+  );
+  exactInventory(
+    stagedPaths,
+    phase8BPortableTreePaths(),
+    "Phase 8B terminal exact 19-file tree",
+  );
+  exactInventory(
+    directGrammersConsumerPaths(sources),
+    phase8BTerminalRawConsumerAuthority(),
+    "Phase 8B terminal direct-Grammers consumer inventory",
+  );
+  exactInventory(
+    phase8BRestrictedProductionInventory(sources),
+    artifact.restrictedFinalSymbols,
+    "Phase 8B terminal generated restricted inventory",
+  );
+  exactInventory(
+    phase8BTerminalRootPublicExports(sources),
+    phase8BRootPublicAuthority(),
+    "Phase 8B terminal root public allowlist",
+  );
+
+  const forbiddenPublic =
+    /\b(?:grammers_client|grammers_session|grammers_mtsender|grammers_tl_types|Client|MemorySession|LoginToken|PeerRef|RemoteCall|InvocationError|SqlitePool|SqliteConnection|AppHandle|SecretStore)\b|\btl\s*::|\btauri\s*::|\bcrate\s*::\s*(?:error|sources|takeout_import|telegram_session_store)\b/;
+  const publicLeaks = [...sources.entries()].flatMap(
+    ([relativePath, source]) => {
+      if (!relativePath.startsWith("src-tauri/src/telegram_impl/")) return [];
+      return phase8BPublicSurfaceFragments(relativePath, source)
+        .filter((fragment) => forbiddenPublic.test(fragment))
+        .map((fragment) => `${relativePath}:${fragment}`);
+    },
+  );
+  if (publicLeaks.length !== 0) {
+    throw new Error(
+      `Phase 8B terminal public API exposes raw/app types: ${publicLeaks.join(", ")}`,
+    );
+  }
+
+  const stagedAppLeaks = [...sources.entries()].flatMap(
+    ([relativePath, source]) => {
+      if (!relativePath.startsWith("src-tauri/src/telegram_impl/")) return [];
+      const searchable = maskRustLexicalNonCode(source);
+      return /\bcrate\s*::|\bsqlx\b|\btauri\b|\bkeyring\b/.test(searchable)
+        ? [relativePath]
+        : [];
+    },
+  );
+  if (stagedAppLeaks.length !== 0) {
+    throw new Error(
+      `Phase 8B terminal staged app-capability leakage: ${stagedAppLeaks.join(", ")}`,
+    );
+  }
+}
+
+function retained8ARawConsumerPaths(): string[] {
+  return [
+    ...checkpointOneRawConsumerPaths.map((relativePath) => {
+      if (relativePath === "src-tauri/src/media.rs") {
+        return "src-tauri/src/telegram/media.rs";
+      }
+      if (relativePath === "src-tauri/src/telegram_session_store.rs") {
+        return "src-tauri/src/telegram/session.rs";
+      }
+      return relativePath;
+    }),
+    "src-tauri/src/telegram/runtime.rs",
+  ].sort();
+}
+
+function assertPhase8BCheckpointSourceContract(
+  lifecycleValue: telegramContractPaths.TelegramLifecycle,
+  sources: ReadonlyMap<string, string>,
+  artifact: Phase8BSymbolAuthority,
+): void {
+  const checkpoint =
+    telegramContractPaths.phase8BCheckpointNumber(lifecycleValue);
+  if (checkpoint === undefined) {
+    throw new Error(`Phase 8B source contract: unsupported ${lifecycleValue}`);
+  }
+  const expectedStagedPaths = phase8BPortablePathTable
+    .filter(([, firstCheckpoint]) => firstCheckpoint <= checkpoint)
+    .map(([stagedPath]) => stagedPath);
+  const actualStagedPaths = [...sources.keys()].filter((relativePath) =>
+    relativePath.startsWith("src-tauri/src/telegram_impl/")
+    && relativePath.endsWith(".rs")
+  );
+  exactInventory(
+    actualStagedPaths,
+    expectedStagedPaths,
+    `Phase 8B CP${checkpoint} staged path inventory`,
+  );
+
+  if (checkpoint <= 2) {
+    exactInventory(
+      rawConsumerPaths(sources),
+      retained8ARawConsumerPaths(),
+      `Phase 8B CP${checkpoint} retained direct-Grammers inventory`,
+    );
+    return;
+  }
+  const runtime = sources.get("src-tauri/src/telegram_impl/runtime.rs");
+  if (runtime === undefined) {
+    throw new Error(
+      `Phase 8B CP${checkpoint} source contract: missing staged runtime`,
+    );
+  }
+  assertInitializeGrammersClientContract(runtime);
+  assertPhase8BSessionAccessorContract(sources, checkpoint);
+  if (checkpoint >= 7) {
+    assertPhase8BTerminalSourceContract(sources, artifact);
+  }
+}
+
+function initializeGrammersClientFixture(): string {
+  return `
+async fn initialize_grammers_client(
+    api_id: i32,
+    session: &TelegramSession,
+) -> extractum_core::error::AppResult<(TelegramClientInner, JoinHandle<()>, bool)> {
+    let configuration =
+        grammers_client::client::ClientConfiguration::default();
+    if !configuration.auto_cache_peers {
+        return Err(AppError::internal(
+            "Grammers client configuration must enable auto_cache_peers",
+        ));
+    }
+    let pool = SenderPool::new(session.clone_memory_session(), api_id);
+    let runner = tokio::spawn(async move {
+        let _ = pool.runner.run().await;
+    });
+    let client =
+        grammers_client::Client::with_configuration(pool.handle, configuration);
+    let is_authorized = client
+        .is_authorized()
+        .await
+        .map_err(AppError::telegram_network)?;
+    Ok((TelegramClientInner::Grammers(client), runner, is_authorized))
+}
+`;
+}
+
+function phase8BSessionFixture(includeRawAccessor: boolean): string {
+  return `
+struct TelegramSession {
+    inner: Arc<MemorySession>,
+}
+
+impl TelegramSession {
+    pub(super) fn clone_memory_session(&self) -> Arc<MemorySession> {
+        Arc::clone(&self.inner)
+    }
+    ${
+      includeRawAccessor
+        ? `pub(super) fn raw_memory_session(&self) -> &Arc<MemorySession> {
+        &self.inner
+    }`
+        : ""
+    }
+}
+`;
+}
+
+function directGrammersConsumerPaths(
+  sources: ReadonlyMap<string, string>,
+): string[] {
+  const directDependency =
+    /\bgrammers_(?:client|session|mtsender|tl_types)\b/;
+  return [...sources.entries()]
+    .filter(([, source]) =>
+      directDependency.test(maskRustLexicalNonCode(source))
+    )
+    .map(([relativePath]) => relativePath);
+}
+
+function phase8BTerminalSourceFixture(
+  artifact: Phase8BSymbolAuthority,
+): ReadonlyMap<string, string> {
+  type ModuleFixture = {
+    functions: Set<string>;
+    types: Set<string>;
+    fields: Map<string, Set<string>>;
+    methods: Map<string, Set<string>>;
+  };
+  const paths = phase8BPortableTreePaths();
+  const pathByModule = new Map(
+    paths.map((relativePath) => [
+      phase8BStagedModulePath(relativePath),
+      relativePath,
+    ]),
+  );
+  const moduleNames = [...pathByModule.keys()]
+    .filter(Boolean)
+    .sort((left, right) => right.length - left.length);
+  const fixtures = new Map<string, ModuleFixture>();
+  const fixtureFor = (modulePath: string): ModuleFixture => {
+    const existing = fixtures.get(modulePath);
+    if (existing) return existing;
+    const created: ModuleFixture = {
+      functions: new Set(),
+      types: new Set(),
+      fields: new Map(),
+      methods: new Map(),
+    };
+    fixtures.set(modulePath, created);
+    return created;
+  };
+  const restrictedFields = new Set(
+    artifact.symbols
+      .filter(({ disposition }) => disposition === "move-restricted-fields")
+      .flatMap(({ finalTargets }) =>
+        finalTargets
+          .map(phase8BFinalCanonicalSymbol)
+          .filter((symbol): symbol is string => symbol !== undefined)
+      ),
+  );
+
+  for (const symbol of artifact.restrictedFinalSymbols) {
+    const modulePath = moduleNames.find((candidate) =>
+      symbol.startsWith(`${candidate}::`)
+    );
+    if (!modulePath) {
+      throw new Error(
+        `Phase 8B terminal fixture: no module path for ${symbol}`,
+      );
+    }
+    const remainder = symbol.slice(modulePath.length + 2);
+    const parts = remainder.split("::");
+    const fixture = fixtureFor(modulePath);
+    if (parts.length === 1) {
+      if (/^[A-Z]/.test(parts[0])) {
+        fixture.types.add(parts[0]);
+      } else {
+        fixture.functions.add(parts[0]);
+      }
+      continue;
+    }
+    if (parts.length !== 2) {
+      throw new Error(
+        `Phase 8B terminal fixture: unsupported associated symbol ${symbol}`,
+      );
+    }
+    const [typeName, member] = parts;
+    const target = restrictedFields.has(symbol)
+      ? fixture.fields
+      : fixture.methods;
+    const members = target.get(typeName) ?? new Set<string>();
+    members.add(member);
+    target.set(typeName, members);
+  }
+
+  const sources = new Map(paths.map((relativePath) => [relativePath, ""]));
+  for (const [modulePath, fixture] of fixtures) {
+    const relativePath = pathByModule.get(modulePath);
+    if (!relativePath) {
+      throw new Error(
+        `Phase 8B terminal fixture: missing source path for ${modulePath}`,
+      );
+    }
+    const parts: string[] = [];
+    for (const functionName of [...fixture.functions].sort()) {
+      parts.push(`pub(super) fn ${functionName}() {}`);
+    }
+    for (const typeName of [...fixture.types].sort()) {
+      const fields = [...(fixture.fields.get(typeName) ?? [])].sort();
+      if (fields.length === 0) {
+        parts.push(`pub(super) struct ${typeName};`);
+      } else {
+        parts.push(
+          `pub(super) struct ${typeName} {\n${
+            fields.map((field) => `    pub(super) ${field}: (),`).join("\n")
+          }\n}`,
+        );
+      }
+    }
+    for (
+      const typeName of [...fixture.methods.keys()].sort()
+    ) {
+      const methods = [...(fixture.methods.get(typeName) ?? [])].sort();
+      parts.push(
+        `impl ${typeName} {\n${
+          methods.map((method) =>
+            modulePath === "session"
+              && typeName === "TelegramSession"
+              && method === "clone_memory_session"
+              ? `    pub(super) fn clone_memory_session(&self) -> Arc<MemorySession> {\n        Arc::clone(&self.inner)\n    }`
+              : `    pub(super) fn ${method}(&self) {}`
+          ).join("\n")
+        }\n}`,
+      );
+    }
+    sources.set(relativePath, `${parts.join("\n\n")}\n`);
+  }
+
+  sources.set(
+    "src-tauri/src/telegram_impl/lib.rs",
+    `pub use dto::{${phase8BRootPublicAuthority().join(",")}};\n`,
+  );
+  sources.set(
+    "src-tauri/src/telegram_impl/runtime.rs",
+    `${
+      sources.get("src-tauri/src/telegram_impl/runtime.rs") ?? ""
+    }\n${initializeGrammersClientFixture()}`,
+  );
+  for (const relativePath of phase8BTerminalRawConsumerAuthority()) {
+    const source = sources.get(relativePath);
+    if (source === undefined) {
+      throw new Error(
+        `Phase 8B terminal fixture: raw consumer lies outside tree: ${relativePath}`,
+      );
+    }
+    sources.set(
+      relativePath,
+      `${source}\nfn direct_grammers_marker() {\n    let _: Option<grammers_client::Client> = None;\n}\n`,
+    );
+  }
+  return sources;
+}
+
+function phase8BCheckpointSourceFixture(
+  checkpoint: number,
+  artifact: Phase8BSymbolAuthority,
+): ReadonlyMap<string, string> {
+  if (checkpoint < 1 || checkpoint > 8) {
+    throw new Error(`Phase 8B checkpoint fixture: invalid CP${checkpoint}`);
+  }
+  if (checkpoint >= 7) return phase8BTerminalSourceFixture(artifact);
+  if (checkpoint <= 2) {
+    return new Map(
+      retained8ARawConsumerPaths().map((relativePath) => [
+        relativePath,
+        "fn direct_grammers_marker() { let _: Option<grammers_client::Client> = None; }\n",
+      ]),
+    );
+  }
+  const sources = new Map(
+    phase8BPortablePathTable
+      .filter(([, firstCheckpoint]) => firstCheckpoint <= checkpoint)
+      .map(([stagedPath]) => [stagedPath, ""]),
+  );
+  sources.set(
+    "src-tauri/src/telegram_impl/runtime.rs",
+    initializeGrammersClientFixture(),
+  );
+  sources.set(
+    "src-tauri/src/telegram_impl/session.rs",
+    phase8BSessionFixture(true),
+  );
+  return sources;
+}
+
+function replaceFixtureSource(
+  sources: ReadonlyMap<string, string>,
+  relativePath: string,
+  mutate: (source: string) => string,
+): ReadonlyMap<string, string> {
+  const source = sources.get(relativePath);
+  if (source === undefined) {
+    throw new Error(`Phase 8B fixture mutation: missing ${relativePath}`);
+  }
+  const mutated = new Map(sources);
+  mutated.set(relativePath, mutate(source));
+  return mutated;
+}
+
+const phase8BWholeModuleCurrentDefinitionPaths = new Set([
+  "telegram/dto.rs",
+  "telegram/media.rs",
+  "telegram/runtime.rs",
+  "telegram/session.rs",
+  "takeout_import/pagination.rs",
+  "takeout_import/raw_parse.rs",
+]);
+
+const phase8BRetainedTestOnlyCurrentDefinitionAuthority = new Set([
+  "sources/peer_resolution.rs::source_peer_ref_from_identity",
+]);
+
+const phase8BDeriveContentKindCurrentDefinition =
+  `pub(crate) fn derive_content_kind(has_content: bool, has_media: bool) -> &'static str {
+    match (has_content, has_media) {
+        (true, true) => CONTENT_KIND_TEXT_WITH_MEDIA,
+        (false, true) => CONTENT_KIND_MEDIA_ONLY,
+        _ => CONTENT_KIND_TEXT_ONLY,
+    }
+}
+`;
+
+type RustProductionDefinitionInventory = Readonly<{
+  all: ReadonlySet<string>;
+  associated: ReadonlySet<string>;
+  topLevel: ReadonlySet<string>;
+}>;
+
+function rustProductionDefinitionFromHeader(
+  header: string,
+): Readonly<{ kind: string; symbol: string }> | undefined {
+  const declaration = splitLeadingRustOuterAttributes(header).declaration;
+  const visibility = String.raw`(?:pub(?:\s*\(\s*[^)]+\s*\))?\s+)?`;
+  const functionMatch = new RegExp(
+    `^${visibility}(?:(?:async|const|default|unsafe)\\s+)*(?:extern\\s+)?fn\\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\\b`,
+  ).exec(declaration);
+  if (functionMatch?.[1] !== undefined) {
+    return { kind: "fn", symbol: functionMatch[1] };
+  }
+  for (const kind of ["const", "static", "type", "struct", "enum", "union"]) {
+    const match = new RegExp(
+      `^${visibility}${kind}(?:\\s+mut)?\\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\\b`,
+    ).exec(declaration);
+    if (match?.[1] !== undefined) return { kind, symbol: match[1] };
+  }
+  const traitMatch = new RegExp(
+    `^${visibility}(?:unsafe\\s+)?(?:auto\\s+)?trait\\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\\b`,
+  ).exec(declaration);
+  if (traitMatch?.[1] !== undefined) {
+    return { kind: "trait", symbol: traitMatch[1] };
+  }
+  const moduleMatch = new RegExp(
+    `^${visibility}(?:unsafe\\s+)?mod\\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\\b`,
+  ).exec(declaration);
+  if (moduleMatch?.[1] !== undefined) {
+    return { kind: "mod", symbol: `mod::${moduleMatch[1]}` };
+  }
+  const macroMatch =
+    /^(?:pub(?:\s*\(\s*[^)]+\s*\))?\s+)?macro_rules!\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\b/
+      .exec(declaration);
+  if (macroMatch?.[1] !== undefined) {
+    return { kind: "macro_rules", symbol: macroMatch[1] };
+  }
+  return undefined;
+}
+
+function rustProductionUseExports(
+  header: string,
+  label: string,
+): string[] {
+  const declaration = splitLeadingRustOuterAttributes(header).declaration;
+  const prefix =
+    /^pub(?:\s*\(\s*[^)]+\s*\))?\s+use\s+/.exec(declaration);
+  if (!prefix) return [];
+  return rustUseExportNames(
+    `pub use ${declaration.slice(prefix[0].length)}`,
+    "pub",
+    label,
+  );
+}
+
+function rustInherentImplTypeName(header: string): string | undefined {
+  if (/\bfor\b/.test(header)) return undefined;
+  return /^(?:(?:r#)?[A-Za-z_][A-Za-z0-9_]*\s*::\s*)*(?:r#)?([A-Za-z_][A-Za-z0-9_]*)$/
+    .exec(header.trim())?.[1];
+}
+
+function rustTopLevelStructBody(
+  source: string,
+  typeName: string,
+  label: string,
+): string | undefined {
+  const searchable = maskRustLexicalNonCode(source);
+  const declaration = new RegExp(
+    `\\bstruct\\s+(?:r#)?${typeName}\\b`,
+    "g",
+  );
+  for (const match of searchable.matchAll(declaration)) {
+    if (
+      match.index === undefined
+      || rustBraceDepthBefore(searchable, match.index) !== 0
+    ) {
+      continue;
+    }
+    const boundary = rustItemBoundary(
+      source,
+      searchable,
+      match.index,
+      label,
+    );
+    if (boundary.kind === "semicolon") return undefined;
+    const close = rustClosingBraceIndex(
+      source,
+      boundary.index,
+      label,
+    );
+    return searchable.slice(boundary.index + 1, close);
+  }
+  return undefined;
+}
+
+function rustProductionDefinitionInventory(
+  source: string,
+  label: string,
+  maskTestItems = true,
+): RustProductionDefinitionInventory {
+  const production = maskTestItems
+    ? maskExactCfgTestItemSpans(source)
+    : source;
+  const searchable = maskRustLexicalNonCode(production);
+  const all = new Set<string>();
+  const associated = new Set<string>();
+  const topLevel = new Set<string>();
+  const structNames: string[] = [];
+
+  for (
+    const visibility of [
+      "pub",
+      "pub(super)",
+      "pub(crate)",
+    ] as const
+  ) {
+    for (
+      const { declaration } of rustTopLevelUseDeclarations(
+        searchable,
+        visibility,
+        `${label} production re-export inventory`,
+      )
+    ) {
+      for (
+        const symbol of rustProductionUseExports(
+          declaration,
+          `${label} production re-export`,
+        )
+      ) {
+        all.add(symbol);
+        topLevel.add(symbol);
+      }
+    }
+  }
+
+  for (
+    const header of rustTopLevelItemHeaders(
+      searchable,
+      `${label} top-level definition inventory`,
+    )
+  ) {
+    const definition = rustProductionDefinitionFromHeader(header);
+    if (!definition) continue;
+    all.add(definition.symbol);
+    topLevel.add(definition.symbol);
+    if (definition.kind === "struct") {
+      structNames.push(definition.symbol);
+    }
+  }
+
+  for (const typeName of structNames) {
+    const body = rustTopLevelStructBody(
+      production,
+      typeName,
+      `${label} ${typeName} field inventory`,
+    );
+    if (body === undefined) continue;
+    for (
+      const field of body.matchAll(
+        /(?:^|\n)\s*(?:#\s*\[[^\]\n]*\]\s*)*(?:pub(?:\s*\(\s*[^)]+\s*\))?\s+)?(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\s*:/g,
+      )
+    ) {
+      if (field[1] !== undefined) all.add(`${typeName}::${field[1]}`);
+    }
+  }
+
+  for (
+    const { start, header, body } of rustImplBlocks(
+      production,
+      `${label} inherent definition inventory`,
+    )
+  ) {
+    if (rustBraceDepthBefore(searchable, start) !== 0) continue;
+    const typeName = rustInherentImplTypeName(header);
+    if (typeName === undefined) continue;
+    for (
+      const itemHeader of rustTopLevelItemHeaders(
+        body,
+        `${label} ${typeName} associated definition inventory`,
+      )
+    ) {
+      const definition = rustProductionDefinitionFromHeader(itemHeader);
+      if (definition !== undefined && definition.kind !== "mod") {
+        const symbol = `${typeName}::${definition.symbol}`;
+        all.add(symbol);
+        associated.add(symbol);
+      }
+    }
+  }
+
+  return { all, associated, topLevel };
+}
+
+function assertCurrentPhase8BSymbolAuthority(
+  sources: ReadonlyMap<string, string>,
+  artifact: Phase8BSymbolAuthority,
+): void {
+  const rowsByCurrentPath = new Map<string, Phase8BSymbolRow[]>();
+  const missingDefinitions: string[] = [];
+  const artifactCurrentDefinitionKeys = new Set<string>();
+  for (const row of artifact.symbols) {
+    if (row.currentPath === "<new>") continue;
+    if (row.currentAnchors === undefined) {
+      artifactCurrentDefinitionKeys.add(
+        `${row.currentPath}::${row.currentSymbol}`,
+      );
+    }
+    const rows = rowsByCurrentPath.get(row.currentPath) ?? [];
+    rows.push(row);
+    rowsByCurrentPath.set(row.currentPath, rows);
+  }
+  for (const authorityKey of phase8BRetainedTestOnlyCurrentDefinitionAuthority) {
+    if (!artifactCurrentDefinitionKeys.has(authorityKey)) {
+      throw new Error(
+        `Phase 8B current symbol authority: missing retained test-only authority ${authorityKey}`,
+      );
+    }
+  }
+
+  for (const [currentPath, rows] of rowsByCurrentPath) {
+    const relativePath = `src-tauri/src/${currentPath}`;
+    const source = sources.get(relativePath);
+    if (source === undefined) {
+      throw new Error(
+        `Phase 8B current symbol authority: missing ${relativePath}`,
+      );
+    }
+    const production = maskExactCfgTestItemSpans(source);
+    const searchable = maskRustLexicalNonCode(production);
+    const definitions = rustProductionDefinitionInventory(
+      source,
+      `Phase 8B current symbol authority ${relativePath}`,
+    );
+    const testInclusiveDefinitions = rustProductionDefinitionInventory(
+      source,
+      `Phase 8B current symbol authority ${relativePath} test-inclusive`,
+      false,
+    );
+    for (const row of rows) {
+      if (row.currentAnchors === undefined) continue;
+      const owner = row.currentSymbol.split("::")[0];
+      const compactSearchable = rustFunctionBody(production, owner)
+        .replace(/\s+/g, "");
+      for (const anchor of row.currentAnchors) {
+        if (!compactSearchable.includes(anchor.replace(/\s+/g, ""))) {
+          throw new Error(
+            `Phase 8B current symbol authority: missing ${row.currentSymbol} anchor ${anchor}`,
+          );
+        }
+      }
+    }
+
+    const expectedDefinitions = new Set(
+      rows
+        .filter(({ currentAnchors }) => currentAnchors === undefined)
+        .map(({ currentSymbol }) => currentSymbol),
+    );
+    for (const symbol of expectedDefinitions) {
+      const authorityKey = `${currentPath}::${symbol}`;
+      const retainedTestOnly =
+        phase8BRetainedTestOnlyCurrentDefinitionAuthority.has(authorityKey);
+      if (retainedTestOnly) {
+        if (
+          definitions.all.has(symbol)
+          || !testInclusiveDefinitions.all.has(symbol)
+        ) {
+          missingDefinitions.push(
+            `${symbol} retained test-only authority in ${relativePath}`,
+          );
+        }
+      } else if (!definitions.all.has(symbol)) {
+        missingDefinitions.push(`${symbol} in ${relativePath}`);
+      }
+    }
+
+    if (!phase8BWholeModuleCurrentDefinitionPaths.has(currentPath)) {
+      continue;
+    }
+    const expectedTopLevel = new Set(
+      [...expectedDefinitions].filter((symbol) => !symbol.includes("::")),
+    );
+    for (const symbol of definitions.topLevel) {
+      if (!expectedTopLevel.has(symbol)) {
+        throw new Error(
+          `Phase 8B current symbol authority: unexpected production definition ${symbol} in ${relativePath}`,
+        );
+      }
+    }
+    for (const symbol of definitions.associated) {
+      if (!expectedDefinitions.has(symbol)) {
+        throw new Error(
+          `Phase 8B current symbol authority: unexpected production definition ${symbol} in ${relativePath}`,
+        );
+      }
+    }
+    for (const symbol of expectedTopLevel) {
+      if (!definitions.topLevel.has(symbol)) {
+        throw new Error(
+          `Phase 8B current symbol authority: missing production definition ${symbol} in ${relativePath}`,
+        );
+      }
+    }
+  }
+  if (missingDefinitions.length > 0) {
+    throw new Error(
+      `Phase 8B current symbol authority: missing production definition ${
+        missingDefinitions.join(", ")
+      }`,
+    );
+  }
+}
 
 describe("Phase 8 Telegram crate boundary", () => {
   it("ignores block-comment, line-comment, and raw-string function declarations", () => {
@@ -4205,10 +5763,1287 @@ describe("Phase 8 Telegram crate boundary", () => {
       ),
     ).toThrow(/Unsupported Phase 8 status/);
   });
+
+  it("recognizes every retained Phase 8B lifecycle and rejects unknown values", () => {
+    const api = telegramContractPaths as Record<string, unknown>;
+
+    expect(api.telegramLifecycleFromStatus).toBeTypeOf("function");
+    const observed: string[] = [];
+    for (let checkpoint = 1; checkpoint <= 8; checkpoint += 1) {
+      observed.push(
+        telegramContractPaths.telegramLifecycleFromStatus(
+          `8B preparation Checkpoint ${checkpoint} retained`,
+        ),
+      );
+    }
+    expect(observed).toEqual(
+      Array.from(
+        { length: 8 },
+        (_, index) => `8b-checkpoint-${index + 1}`,
+      ),
+    );
+    for (let checkpoint = 1; checkpoint <= 8; checkpoint += 1) {
+      expect(valueRegistry).toContain(
+        `| \`8b-checkpoint-${checkpoint}\` | agent-workflow lifecycle |`,
+      );
+      expect(valueRegistry).toContain(
+        `| \`8B preparation Checkpoint ${checkpoint} retained\` | agent-workflow status input |`,
+      );
+    }
+    expect(valueRegistry).toContain(
+      "They are not product, database, event,\nAPI, persisted UI, or user-facing statuses.",
+    );
+    expect(valueRegistry).toContain(
+      "Their persistence/API/UI impact is\nnone.",
+    );
+    expect(
+      telegramContractPaths.telegramLifecycleFromStatus(
+        "8B preparation retained; 8C pending",
+      ),
+    ).toBe("8b-preparation");
+    for (const unknown of [
+      "8B preparation Checkpoint 0 retained",
+      "8B preparation Checkpoint 9 retained",
+      "8B preparation checkpoint 1 retained",
+      "Approved; 8B preparation Checkpoint 1 retained",
+      "8B preparation Checkpoint 1",
+    ]) {
+      expect(() =>
+        telegramContractPaths.telegramLifecycleFromStatus(unknown)
+      ).toThrow(/Unsupported Phase 8 status/);
+    }
+  });
+
+  it("keeps Checkpoint 1 on the application-owned pre-staging layout", () => {
+    expect(phase8BPortablePathTable).toHaveLength(19);
+    for (let checkpoint = 1; checkpoint <= 8; checkpoint += 1) {
+      const selected =
+        telegramContractPaths.telegramLifecycleFromStatus(
+          `8B preparation Checkpoint ${checkpoint} retained`,
+        );
+      for (
+        const [stagedPath, firstCheckpoint, currentPath]
+          of phase8BPortablePathTable
+      ) {
+        expect(
+          telegramContractPaths.resolveTelegramLifecyclePath(
+            {
+              baselinePath: currentPath,
+              stagedPath,
+              finalOwner: "extractum-telegram",
+            },
+            selected,
+          ),
+          `${stagedPath} at Checkpoint ${checkpoint}`,
+        ).toBe(checkpoint >= firstCheckpoint ? stagedPath : currentPath);
+      }
+    }
+    const checkpointOne =
+      telegramContractPaths.telegramLifecycleFromStatus(
+        "8B preparation Checkpoint 1 retained",
+      );
+    expect(() =>
+      telegramContractPaths.resolveTelegramLifecyclePath(
+        {
+          baselinePath: "src-tauri/src/telegram.rs",
+          stagedPath: "src-tauri/src/telegram_impl/not-authorized.rs",
+          finalOwner: "extractum-telegram",
+        },
+        checkpointOne,
+      )
+    ).toThrow(/Unknown Phase 8B staged owner path/);
+    expect(
+      telegramContractPaths.resolveTelegramLifecyclePath(
+        {
+          baselinePath: "src-tauri/src/sources/sync.rs",
+          stagedPath: "src-tauri/src/sources/sync.rs",
+          finalOwner: "extractum",
+        },
+        "8b-checkpoint-8",
+      ),
+    ).toBe("src-tauri/src/sources/sync.rs");
+    expect(
+      checkpointNumber("8b-checkpoint-1"),
+      "legacy 8A physical-layout assertions stay on retained 8A at CP1",
+    ).toBe(5);
+    const phase8BCheckpointNumber = (
+      telegramContractPaths as Record<string, unknown>
+    ).phase8BCheckpointNumber as
+      | ((value: telegramContractPaths.TelegramLifecycle) =>
+        number | undefined)
+      | undefined;
+    expect(phase8BCheckpointNumber).toBeTypeOf("function");
+    if (!phase8BCheckpointNumber) return;
+    for (let checkpoint = 1; checkpoint <= 8; checkpoint += 1) {
+      expect(
+        phase8BCheckpointNumber(
+          `8b-checkpoint-${checkpoint}` as
+            telegramContractPaths.TelegramLifecycle,
+        ),
+      ).toBe(checkpoint);
+    }
+    expect(
+      phase8BCheckpointNumber("8b-preparation"),
+    ).toBe(8);
+    expect(
+      phase8BCheckpointNumber("8a-retained"),
+    ).toBeUndefined();
+  });
+});
+
+describe("Phase 8B generated structural authority", () => {
+  it("imports the immutable Phase 8A identity map by exact section hash", () => {
+    const api = telegramContractPaths as Record<string, unknown>;
+
+    expect(api.readTelegramContentAddressedSection).toBeTypeOf("function");
+    const immutable = telegramContractPaths.readTelegramContentAddressedSection(
+      {
+        relativePath: planPath,
+        startHeading: "## Literal Immutable 140-Test Identity Map",
+        endMarker: "\n### Exact New-Test Identity Map",
+        normalizedLfBytes: 37_436,
+        sha256:
+          "ceab6cef728d396bf2136207f2130974dee2cc0be3c5184eabd8c8de5e58b3ca",
+      },
+    );
+    const additions = telegramContractPaths.readTelegramContentAddressedSection(
+      {
+        relativePath: planPath,
+        startHeading: "### Exact New-Test Identity Map",
+        endMarker: "\n---\n",
+        normalizedLfBytes: 3_717,
+        sha256:
+          "a8dce5a0a00ac8cdcf83ef7eab2304f482e7c3967ec26ab8c8270d6fde42f539",
+      },
+    );
+    expect(Buffer.byteLength(immutable, "utf8")).toBe(37_436);
+    expect(createHash("sha256").update(immutable).digest("hex")).toBe(
+      "ceab6cef728d396bf2136207f2130974dee2cc0be3c5184eabd8c8de5e58b3ca",
+    );
+    expect(Buffer.byteLength(additions, "utf8")).toBe(3_717);
+    expect(createHash("sha256").update(additions).digest("hex")).toBe(
+      "a8dce5a0a00ac8cdcf83ef7eab2304f482e7c3967ec26ab8c8270d6fde42f539",
+    );
+    expect(() =>
+      telegramContractPaths.readTelegramContentAddressedSection({
+        relativePath: planPath,
+        startHeading: "## Literal Immutable 140-Test Identity Map",
+        endMarker: "\n### Exact New-Test Identity Map",
+        normalizedLfBytes: 37_435,
+        sha256:
+          "ceab6cef728d396bf2136207f2130974dee2cc0be3c5184eabd8c8de5e58b3ca",
+      })
+    ).toThrow(/byte length drifted/);
+    expect(() =>
+      telegramContractPaths.readTelegramContentAddressedSection({
+        relativePath: planPath,
+        startHeading: "## Literal Immutable 140-Test Identity Map",
+        endMarker: "\n### Exact New-Test Identity Map",
+        normalizedLfBytes: 37_436,
+        sha256: "0".repeat(64),
+      })
+    ).toThrow(/SHA-256 drifted/);
+  });
+
+  it("parses the exact Phase 8B new-test table without duplicates", () => {
+    const generated = generateIdentityAuthority(
+      plan,
+      phase8BPlan,
+    ) as Phase8BIdentityAuthority;
+    const newIds = [
+      ...generated.phase8BNewApp,
+      ...generated.phase8BNewStaged,
+    ];
+    expect(newIds).toHaveLength(15);
+    expect(generated.phase8BNewApp).toEqual([
+      "sources::sync::tests::telegram_batch_loop_preserves_entry_durability_limits_and_stops_after_error",
+    ]);
+    expect(generated.phase8BNewStaged).toHaveLength(14);
+    expect(
+      generated.phase8BNewStaged.every((identity) =>
+        identity.startsWith("telegram_impl::")
+      ),
+    ).toBe(true);
+    expect(new Set(newIds).size).toBe(15);
+
+    const firstRow =
+      "| 3 | `telegram_impl::runtime::tests::client_preserves_missing_account_error_without_authorization_check` | non-authorized opaque lookup |";
+    expect(() =>
+      generateIdentityAuthority(
+        plan,
+        exactMutation(
+          phase8BPlan,
+          firstRow,
+          `${firstRow}\n${firstRow}`,
+          "duplicate Phase 8B identity",
+        ),
+      )
+    ).toThrow(/expected 15 Phase 8B rows|duplicates|exact Phase 8B row/);
+    expect(() =>
+      generateIdentityAuthority(
+        plan,
+        exactMutation(
+          phase8BPlan,
+          firstRow,
+          firstRow.replace("| 3 |", "| 4 |"),
+          "wrong Phase 8B checkpoint",
+        ),
+      )
+    ).toThrow(/allocation drifted|exact Phase 8B row/);
+    expect(() =>
+      generateIdentityAuthority(
+        plan,
+        exactMutation(
+          phase8BPlan,
+          "`sources::sync::tests::telegram_batch_loop_preserves_entry_durability_limits_and_stops_after_error`",
+          "`telegram_impl::sources::sync::tests::telegram_batch_loop_preserves_entry_durability_limits_and_stops_after_error`",
+          "wrong Phase 8B owner prefix",
+        ),
+      )
+    ).toThrow(/owner-prefix allocation drifted|exact Phase 8B row/);
+    const avatarRow =
+      "| 4 | `telegram_impl::live::avatar::tests::peer_photo_bytes_returns_owned_bytes_and_suppresses_timeout_and_transport_failure` | 750 ms owned-byte avatar behavior |";
+    const dialogRow =
+      "| 4 | `telegram_impl::live::peer::tests::dialog_listing_preserves_dialog_avatar_interleaving_and_budget` | dialog/avatar interleaving, 4 s cutoff, order, and owned descriptors |";
+    const messageBatchRow =
+      "| 5 | `telegram_impl::live::messages::tests::message_batch_preserves_single_fetch_order_limit_offsets_and_terminal_rule` | one raw invoke, cache update under the validated `auto_cache_peers` invariant, 1..=100 limit, offsets, ordering, terminal rule, typed `NotModified` rejection |";
+    expect(() =>
+      generateIdentityAuthority(
+        plan,
+        swapExact(
+          phase8BPlan,
+          avatarRow,
+          dialogRow,
+          "Phase 8B row order",
+        ),
+      )
+    ).toThrow(/order|exact Phase 8B row/);
+    expect(() =>
+      generateIdentityAuthority(
+        plan,
+        exactMutation(
+          exactMutation(
+            phase8BPlan,
+            avatarRow,
+            avatarRow.replace("| 4 |", "| 5 |"),
+            "avatar checkpoint drift",
+          ),
+          messageBatchRow,
+          messageBatchRow.replace("| 5 |", "| 4 |"),
+          "message checkpoint drift",
+        ),
+      )
+    ).toThrow(/checkpoint|exact Phase 8B row/);
+    expect(() =>
+      generateIdentityAuthority(
+        plan,
+        exactMutation(
+          phase8BPlan,
+          "750 ms owned-byte avatar behavior",
+          "changed subject",
+          "Phase 8B subject drift",
+        ),
+      )
+    ).toThrow(/subject|exact Phase 8B row/);
+    expect(() =>
+      generateIdentityAuthority(
+        plan,
+        exactMutation(
+          phase8BPlan,
+          "| ---: | --- | --- |\n| 3 |",
+          "| ---: | --- | --- |\n\n| 3 |",
+          "blank before first Phase 8B row",
+        ),
+      )
+    ).toThrow(/empty|blank|malformed/);
+    expect(() =>
+      generateIdentityAuthority(
+        plan,
+        exactMutation(
+          phase8BPlan,
+          "\n\nThe two deferred companions are separate",
+          "\n\n| 3 | `telegram_impl::ignored::tests::ignored` | ignored |\n\nThe two deferred companions are separate",
+          "trailing Phase 8B row",
+        ),
+      )
+    ).toThrow(/trailing|malformed|expected 15/);
+    const unsupported = runNodeGenerator(
+      "scripts/telegram-8b-test-identities.mjs",
+      ["--unsupported"],
+    );
+    expect(unsupported.status).not.toBe(0);
+    expect(`${unsupported.stdout}${unsupported.stderr}`).toContain(
+      "expected exactly one argument: --write or --check",
+    );
+  });
+
+  it("materializes the exact Phase 8B test partitions from content-addressed authority", () => {
+    const artifact = readGeneratedJson<Phase8BIdentityAuthority>(
+      "src/lib/telegram-8b-test-identities.json",
+    );
+    const generated = generateIdentityAuthority(
+      plan,
+      phase8BPlan,
+    ) as Phase8BIdentityAuthority;
+    expect(artifact).toEqual(generated);
+    expect(artifact.schemaVersion).toBe(1);
+    for (const [label, values, count] of [
+      ["baseline-derived", artifact.baselineDerived, 143],
+      ["pre-new app", artifact.preNewApp, 103],
+      ["pre-new staged", artifact.preNewStaged, 57],
+      ["Phase 8B new app", artifact.phase8BNewApp, 1],
+      ["Phase 8B new staged", artifact.phase8BNewStaged, 14],
+    ] as const) {
+      expect(values, `${label} count`).toHaveLength(count);
+      expectSortedUnique(values, label);
+    }
+    expect(
+      artifact.preNewApp.every(
+        (identity) => !identity.startsWith("telegram_impl::"),
+      ),
+    ).toBe(true);
+    expect(
+      artifact.preNewStaged.every((identity) =>
+        identity.startsWith("telegram_impl::")
+      ),
+    ).toBe(true);
+    const tracked = [
+      ...artifact.preNewApp,
+      ...artifact.preNewStaged,
+      ...artifact.phase8BNewApp,
+      ...artifact.phase8BNewStaged,
+    ];
+    expect(tracked).toHaveLength(175);
+    expect(new Set(tracked).size).toBe(175);
+    expect(
+      artifact.baselineDerived.every((identity) =>
+        tracked.includes(identity)
+      ),
+    ).toBe(true);
+    expect(artifact.preNewApp.length + artifact.phase8BNewApp.length).toBe(
+      104,
+    );
+    expect(
+      artifact.preNewStaged.length + artifact.phase8BNewStaged.length,
+    ).toBe(71);
+    const check = runNodeGenerator(
+      "scripts/telegram-8b-test-identities.mjs",
+      ["--check"],
+    );
+    expect(
+      check.status,
+      `${check.stdout}${check.stderr}`,
+    ).toBe(0);
+  });
+
+  it("materializes every production-symbol disposition and transitional bridge", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    const generated =
+      generateSymbolAuthority(phase8BPlan) as Phase8BSymbolAuthority;
+    expect(artifact).toEqual(generated);
+    expect(artifact.schemaVersion).toBe(1);
+    expect(artifact.restrictedBridgeFenceAuthority).toEqual(
+      generated.restrictedBridgeFenceAuthority,
+    );
+    expect(
+      artifact.restrictedBridgeFenceAuthority.sha256,
+    ).toMatch(/^[0-9a-f]{64}$/);
+    expect(
+      artifact.restrictedBridgeFenceAuthority.normalizedLfBytes,
+    ).toBeGreaterThan(0);
+    expect(artifact.symbols).toHaveLength(306);
+    const tuples = artifact.symbols.map(
+      ({ currentPath, currentSymbol, disposition }) =>
+        `${currentPath}\0${currentSymbol}\0${disposition}`,
+    );
+    expect(new Set(tuples).size).toBe(tuples.length);
+    expect(
+      artifact.symbols.every(
+        ({ currentPath, currentSymbol, finalTargets }) =>
+          currentPath.length > 0
+          && currentSymbol.length > 0
+          && finalTargets.length > 0
+          && finalTargets.every(
+            ({ path: targetPath, symbol }) =>
+              targetPath.length > 0 && symbol.length > 0,
+          ),
+      ),
+    ).toBe(true);
+    expect(artifact.transitionInventories).toEqual({
+      cp3RawHandleCallsites: [
+        "sources::store::add_telegram_source",
+        "sources::store::list_telegram_sources",
+        "sources::sync::sync_telegram_source",
+        "takeout_import::run_export_dc_spike_for_handle",
+        "takeout_import::run_takeout_migrated_history_import",
+        "takeout_import::run_takeout_source_import",
+      ],
+      cp4RawHandleCallsites: [
+        "sources::sync::sync_telegram_source",
+        "takeout_import::run_export_dc_spike_for_handle",
+        "takeout_import::run_takeout_migrated_history_import",
+        "takeout_import::run_takeout_source_import",
+      ],
+      cp4ResolvedSyncPeerPeerConsumers: [
+        "sources::sync::sync_telegram_source",
+        "takeout_import::run_takeout_migrated_history_import",
+        "takeout_import::run_takeout_source_import",
+      ],
+      cp5RawHandleCallsites: [
+        "takeout_import::run_export_dc_spike_for_handle",
+        "takeout_import::run_takeout_migrated_history_import",
+        "takeout_import::run_takeout_source_import",
+      ],
+      cp5ResolvedSyncPeerPeerConsumers: [
+        "takeout_import::run_takeout_migrated_history_import",
+        "takeout_import::run_takeout_source_import",
+      ],
+      cp7RawBridgeSymbolsAndCallsites: [],
+    });
+    const fragments = artifact.symbols.filter(({ currentAnchors }) =>
+      currentAnchors !== undefined
+    );
+    expect(fragments).toHaveLength(6);
+    expect(
+      new Set(fragments.map(({ currentSymbol }) => currentSymbol)),
+    ).toEqual(
+      new Set([
+        "list_telegram_sources::dialog_and_avatar_segment",
+        "persist_items::raw_history_segment",
+        "export_dc_invoke_with_provenance::raw_segment",
+        "export_dc_invoke_with_provenance::durable_segment",
+        "refresh_forum_topics_after_completed_takeout::remote_segment",
+      ]),
+    );
+    expect(
+      fragments.every(
+        ({ currentAnchors }) =>
+          currentAnchors !== undefined
+          && currentAnchors.length > 0
+          && new Set(currentAnchors).size === currentAnchors.length,
+      ),
+    ).toBe(true);
+
+    const firstDispositionRow =
+      "| `telegram/dto.rs` | `{ITEM_KIND_TELEGRAM_MESSAGE,TELEGRAM_PEER_KIND_CHANNEL,TELEGRAM_PEER_KIND_CHAT,TELEGRAM_PEER_KIND_USER,TelegramMessageIdentity,TelegramMessageIdentity::validate,TelegramItemContext,TelegramMessageDraft}` | `telegram_impl/dto.rs` | `=` | staged | 3 | 3 | move |";
+    expect(() =>
+      generateSymbolAuthority(
+        exactMutation(
+          phase8BPlan,
+          `${firstDispositionRow}\n`,
+          "",
+          "missing disposition row",
+        ),
+      )
+    ).toThrow(/expected 98 disposition rows/);
+    expect(() =>
+      generateSymbolAuthority(
+        exactMutation(
+          phase8BPlan,
+          `${firstDispositionRow}\n`,
+          `${firstDispositionRow}\n${firstDispositionRow}\n`,
+          "duplicate disposition row",
+        ),
+      )
+    ).toThrow(/expected 98 disposition rows|duplicate current/);
+    expect(() =>
+      generateSymbolAuthority(
+        exactMutation(
+          phase8BPlan,
+          "`{ITEM_KIND_TELEGRAM_MESSAGE,TELEGRAM_PEER_KIND_CHANNEL,TELEGRAM_PEER_KIND_CHAT,TELEGRAM_PEER_KIND_USER,TelegramMessageIdentity,TelegramMessageIdentity::validate,TelegramItemContext,TelegramMessageDraft}`",
+          "`*`",
+          "wildcard disposition",
+        ),
+      )
+    ).toThrow(/wildcard or catch-all/);
+    const unsupported = runNodeGenerator(
+      "scripts/telegram-8b-symbol-map.mjs",
+      ["--unsupported"],
+    );
+    expect(unsupported.status).not.toBe(0);
+    expect(`${unsupported.stdout}${unsupported.stderr}`).toContain(
+      "expected exactly one argument: --write or --check",
+    );
+  });
+
+  it("materializes the exact restricted-visibility allowlist without duplicates", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    expect(artifact.restrictedFinalSymbols).toHaveLength(67);
+    expectSortedUnique(
+      artifact.restrictedFinalSymbols,
+      "restricted final symbols",
+    );
+    const pagination = artifact.restrictedFinalSymbols.filter((symbol) =>
+      symbol.startsWith("takeout::pagination::")
+    );
+    expect(pagination).toHaveLength(18);
+    expect(pagination).toContain(
+      "takeout::pagination::TakeoutPaginationCursor::new",
+    );
+    expect(pagination).toContain(
+      "takeout::pagination::TakeoutPageRequest",
+    );
+    expect(pagination).toContain(
+      "takeout::pagination::TakeoutCursorAdvance",
+    );
+    const finalTargets = new Set(
+      artifact.symbols.flatMap(({ finalTargets: targets }) =>
+        targets.flatMap(({ path: targetPath, symbol }) => {
+          if (!targetPath.startsWith("telegram_impl/")) return [];
+          const module = targetPath
+            .slice("telegram_impl/".length)
+            .replace(/\.rs$/, "")
+            .replace(/\/mod$/, "")
+            .replaceAll("/", "::");
+          return [module === "lib" ? symbol : `${module}::${symbol}`];
+        })
+      ),
+    );
+    expect(
+      artifact.restrictedFinalSymbols.filter(
+        (symbol) => !finalTargets.has(symbol),
+      ),
+    ).toEqual([]);
+
+    const publicFence = /The root re-export allowlist is exactly:\n\n```text\n([\s\S]*?)\n```/.exec(
+      phase8BPlan,
+    )?.[1];
+    if (!publicFence) throw new Error("Missing root public allowlist fence");
+    const publicSymbols = publicFence.split("\n");
+    expect(publicSymbols).toEqual([
+      "ITEM_KIND_TELEGRAM_MESSAGE",
+      "TelegramMessageIdentity",
+      "TelegramItemContext",
+      "TelegramMessageDraft",
+      "PeerDescriptor",
+      "ForumTopicSnapshot",
+      "TelegramMediaPayload",
+      "TelegramApiHash",
+      "TelegramRuntimeStatus",
+      "TelegramClientHandle",
+      "DialogListing",
+      "TelegramLoginAttempt",
+      "TelegramRuntime",
+      "SessionEncryptionKey",
+      "TelegramSession",
+      "session_json_requires_existing_key",
+      "decode_session_json",
+      "encode_session_json",
+      "LiveMessageBatch",
+      "LiveMessage",
+      "TakeoutAttempt",
+      "TakeoutFallbackKind",
+      "TakeoutFallback",
+      "TakeoutPeer",
+      "TakeoutTransport",
+      "MessageRange",
+      "TakeoutCount",
+      "TakeoutPage",
+      "TakeoutMessage",
+    ]);
+    expect(new Set(publicSymbols).size).toBe(29);
+    expect(
+      artifact.restrictedFinalSymbols.filter((symbol) =>
+        publicSymbols.includes(symbol)
+      ),
+    ).toEqual([]);
+
+    for (const returnedType of [
+      "takeout::pagination::TakeoutPageRequest",
+      "takeout::pagination::TakeoutCursorAdvance",
+    ]) {
+      expect(() =>
+        generateSymbolAuthority(
+          exactMutation(
+            phase8BPlan,
+            `${returnedType}\n`,
+            "",
+            `missing restricted returned type ${returnedType}`,
+          ),
+        )
+      ).toThrow(/expected 67 restricted symbols/);
+    }
+    expect(() =>
+      generateSymbolAuthority(
+        exactMutation(
+          phase8BPlan,
+          "TakeoutPaginationCursor,TakeoutPaginationCursor::new,TakeoutCursorAdvance",
+          "TakeoutPaginationCursor,TakeoutCursorAdvance",
+          "missing pagination constructor disposition",
+        ),
+      )
+    ).toThrow(/restricted symbols missing from final targets/);
+    expect(() =>
+      generateSymbolAuthority(
+        exactMutation(
+          phase8BPlan,
+          "live::{dialog_listing,resolve_dialog_peer,resolve_username,peer_avatar_bytes,fetch_message_batch,fetch_forum_topics}",
+          "live::{{dialog_listing,resolve_dialog_peer},resolve_username,peer_avatar_bytes,fetch_message_batch,fetch_forum_topics}",
+          "nested restricted group",
+        ),
+      )
+    ).toThrow(/nested brace group/);
+    expect(() =>
+      generateSymbolAuthority(
+        exactMutation(
+          phase8BPlan,
+          "live::messages::fetch_message_batch\n",
+          "live::messages::fetch_message_batch\nlive::messages::fetch_message_batch\n",
+          "duplicate restricted symbol",
+        ),
+      )
+    ).toThrow(/expected 67 restricted symbols|duplicates/);
+    const check = runNodeGenerator(
+      "scripts/telegram-8b-symbol-map.mjs",
+      ["--check"],
+    );
+    expect(check.status, `${check.stdout}${check.stderr}`).toBe(0);
+  });
+
+  it("symbol authority rejects restricted-fence order drift", () => {
+    const generated =
+      generateSymbolAuthority(phase8BPlan) as Phase8BSymbolAuthority;
+    const mutated = swapExact(
+      phase8BPlan,
+      "takeout::pagination::TakeoutPageRequest\n",
+      "takeout::pagination::TakeoutPaginationCursor\n",
+      "restricted fence order drift",
+    );
+    expect(generateSymbolAuthority(mutated)).not.toEqual(generated);
+  });
+
+  it("symbol authority rejects restricted root-public leaf overlap", () => {
+    expect(() =>
+      generateSymbolAuthority(
+        exactMutation(
+          phase8BPlan,
+          "\nLiveMessage\nTakeoutAttempt\n",
+          "\nTakeoutPageRequest\nTakeoutAttempt\n",
+          "restricted root-public leaf overlap",
+        ),
+      )
+    ).toThrow(/restricted symbols also occur in root public allowlist/);
+  });
+
+  it("symbol authority rejects duplicate empty transition inventories", () => {
+    expect(() =>
+      generateSymbolAuthority(
+        exactMutation(
+          phase8BPlan,
+          "CP7 raw bridge symbols/callsites: empty\n```",
+          "CP7 raw bridge symbols/callsites: empty\nCP7 raw bridge symbols/callsites: empty\n```",
+          "duplicate empty transition inventory",
+        ),
+      )
+    ).toThrow(/duplicate transition inventory/);
+  });
+
+  it("symbol authority rejects ignored disposition-tail content", () => {
+    expect(() =>
+      generateSymbolAuthority(
+        exactMutation(
+          phase8BPlan,
+          "\n\nThe `raw_memory_session` and `clone_memory_session` rows",
+          "\n\nignored disposition tail\n\nThe `raw_memory_session` and `clone_memory_session` rows",
+          "ignored disposition-tail content",
+        ),
+      )
+    ).toThrow(/disposition table tail/);
+  });
+
+  it("symbol authority rejects transitional bridges without finite removal", () => {
+    const transitionalRow =
+      "| `telegram/runtime.rs` | `{TelegramClientHandle::raw_client,TelegramClientHandle::raw_session}` | `telegram_impl/runtime.rs` | `=` | transitional | 3 | 7 | move-then-delete |";
+    expect(() =>
+      generateSymbolAuthority(
+        exactMutation(
+          phase8BPlan,
+          transitionalRow,
+          transitionalRow.replace("| 3 | 7 |", "| 3 | retained |"),
+          "retained transitional bridge",
+        ),
+      )
+    ).toThrow(/transitional.*finite removal|delete disposition.*finite removal/);
+  });
+
+  it("symbol authority rejects noncanonical checkpoint numerals", () => {
+    const dispositionRow =
+      "| `telegram/runtime.rs` | `{TelegramClientHandle::raw_client,TelegramClientHandle::raw_session}` | `telegram_impl/runtime.rs` | `=` | transitional | 3 | 7 | move-then-delete |";
+    for (const numeral of ["03", "3.0", "3e0"]) {
+      expect(() =>
+        generateSymbolAuthority(
+          exactMutation(
+            phase8BPlan,
+            dispositionRow,
+            dispositionRow.replace("| 3 | 7 |", `| ${numeral} | 7 |`),
+            `noncanonical checkpoint numeral ${numeral}`,
+          ),
+        )
+      ).toThrow(/invalid checkpoint/);
+    }
+  });
+
+  it("rejects an unlisted current production definition in a fully moved module", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    const currentSources = new Map(
+      rustPathsUnder("src-tauri/src").map((relativePath) => [
+        relativePath,
+        telegramContractPaths.readTelegramContractFile(relativePath),
+      ]),
+    );
+    const mutated = replaceFixtureSource(
+      currentSources,
+      "src-tauri/src/telegram/media.rs",
+      (source) =>
+        `${source}\nfn unlisted_current_production_symbol() {}\n`,
+    );
+
+    expect(() =>
+      assertCurrentPhase8BSymbolAuthority(mutated, artifact)
+    ).toThrow(
+      /unexpected production definition unlisted_current_production_symbol/,
+    );
+  });
+
+  it("rejects an unlisted current associated definition in a fully moved module", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    const currentSources = new Map(
+      rustPathsUnder("src-tauri/src").map((relativePath) => [
+        relativePath,
+        telegramContractPaths.readTelegramContractFile(relativePath),
+      ]),
+    );
+    const mutated = replaceFixtureSource(
+      currentSources,
+      "src-tauri/src/telegram/dto.rs",
+      (source) =>
+        exactMutation(
+          source,
+          "impl TelegramMessageIdentity {\n",
+          `impl TelegramMessageIdentity {
+    fn unlisted_current_method(&self) {}
+`,
+          "unlisted current associated definition",
+        ),
+    );
+
+    expect(() =>
+      assertCurrentPhase8BSymbolAuthority(mutated, artifact)
+    ).toThrow(
+      /unexpected production definition TelegramMessageIdentity::unlisted_current_method/,
+    );
+  });
+
+  it("rejects a required current production definition spoofed by references", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    const currentSources = new Map(
+      rustPathsUnder("src-tauri/src").map((relativePath) => [
+        relativePath,
+        telegramContractPaths.readTelegramContractFile(relativePath),
+      ]),
+    );
+    const mutated = replaceFixtureSource(
+      currentSources,
+      "src-tauri/src/telegram/media.rs",
+      (source) =>
+        exactMutation(
+          source,
+          phase8BDeriveContentKindCurrentDefinition,
+          "",
+          "removed derive_content_kind production definition",
+        ),
+    );
+
+    expect(() =>
+      assertCurrentPhase8BSymbolAuthority(mutated, artifact)
+    ).toThrow(/missing production definition derive_content_kind/);
+  });
+
+  it("rejects a non-exception current production definition moved behind cfg(test)", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    const currentSources = new Map(
+      rustPathsUnder("src-tauri/src").map((relativePath) => [
+        relativePath,
+        telegramContractPaths.readTelegramContractFile(relativePath),
+      ]),
+    );
+    const mutated = replaceFixtureSource(
+      currentSources,
+      "src-tauri/src/telegram/media.rs",
+      (source) =>
+        exactMutation(
+          source,
+          phase8BDeriveContentKindCurrentDefinition,
+          `#[cfg(test)]\n${phase8BDeriveContentKindCurrentDefinition}`,
+          "cfg(test) derive_content_kind production definition",
+        ),
+    );
+
+    expect(() =>
+      assertCurrentPhase8BSymbolAuthority(mutated, artifact)
+    ).toThrow(/missing production definition derive_content_kind/);
+  });
+
+  it("freezes the sole retained test-only current-definition exception", () => {
+    expect(
+      [...phase8BRetainedTestOnlyCurrentDefinitionAuthority],
+    ).toEqual([
+      "sources/peer_resolution.rs::source_peer_ref_from_identity",
+    ]);
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    const ordinaryRows = artifact.symbols.filter(
+      ({ currentPath, currentAnchors }) =>
+        currentPath !== "<new>" && currentAnchors === undefined,
+    );
+    const fragmentRows = artifact.symbols.filter(
+      ({ currentPath, currentAnchors }) =>
+        currentPath !== "<new>" && currentAnchors !== undefined,
+    );
+    const ordinaryKeys = new Set(
+      ordinaryRows.map(({ currentPath, currentSymbol }) =>
+        `${currentPath}::${currentSymbol}`
+      ),
+    );
+    const fragmentKeys = new Set(
+      fragmentRows.map(({ currentPath, currentSymbol }) =>
+        `${currentPath}::${currentSymbol}`
+      ),
+    );
+    const wholeModuleKeys = new Set(
+      ordinaryRows
+        .filter(({ currentPath }) =>
+          phase8BWholeModuleCurrentDefinitionPaths.has(currentPath)
+        )
+        .map(({ currentPath, currentSymbol }) =>
+          `${currentPath}::${currentSymbol}`
+        ),
+    );
+    expect({
+      ordinaryRows: ordinaryRows.length,
+      ordinaryKeys: ordinaryKeys.size,
+      fragmentRows: fragmentRows.length,
+      fragmentKeys: fragmentKeys.size,
+      wholeModuleKeys: wholeModuleKeys.size,
+    }).toEqual({
+      ordinaryRows: 204,
+      ordinaryKeys: 190,
+      fragmentRows: 6,
+      fragmentKeys: 5,
+      wholeModuleKeys: 101,
+    });
+    expect(
+      artifact.symbols.filter(
+        ({ currentPath, currentSymbol, currentAnchors }) =>
+          currentPath === "sources/peer_resolution.rs"
+          && currentSymbol === "source_peer_ref_from_identity"
+          && currentAnchors === undefined,
+      ),
+    ).toHaveLength(2);
+    const source = telegramContractPaths.readTelegramContractFile(
+      "src-tauri/src/sources/peer_resolution.rs",
+    );
+    expect(
+      rustProductionDefinitionInventory(
+        source,
+        "retained test-only current-definition production proof",
+      ).all.has("source_peer_ref_from_identity"),
+    ).toBe(false);
+    expect(
+      rustProductionDefinitionInventory(
+        source,
+        "retained test-only current-definition inclusive proof",
+        false,
+      ).all.has("source_peer_ref_from_identity"),
+    ).toBe(true);
+  });
+
+  it("reconciles every Phase 8B checkpoint source fixture with plan authority", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    expect(phase8BPortableTreePaths()).toEqual(
+      phase8BPortablePathTable.map(([stagedPath]) => stagedPath).sort(),
+    );
+    expect(phase8BTerminalRawConsumerAuthority()).toEqual(
+      [...stagedRawConsumerPaths].sort(),
+    );
+    for (let checkpoint = 1; checkpoint <= 8; checkpoint += 1) {
+      assertPhase8BCheckpointSourceContract(
+        `8b-checkpoint-${checkpoint}` as
+          telegramContractPaths.TelegramLifecycle,
+        phase8BCheckpointSourceFixture(checkpoint, artifact),
+        artifact,
+      );
+    }
+
+    const currentSources = new Map(
+      rustPathsUnder("src-tauri/src").map((relativePath) => [
+        relativePath,
+        telegramContractPaths.readTelegramContractFile(relativePath),
+      ]),
+    );
+    assertPhase8BCheckpointSourceContract(
+      "8b-checkpoint-1",
+      currentSources,
+      artifact,
+    );
+    assertCurrentPhase8BSymbolAuthority(currentSources, artifact);
+  });
+
+  it("rejects missing and extra paths in the exact Phase 8B portable tree", () => {
+    expect(() =>
+      phase8BPortableTreePaths(
+        exactMutation(
+          phase8BPlan,
+          "    forum_topics.rs\n```\n\nCheckpoint 8 writes",
+          "```\n\nCheckpoint 8 writes",
+          "missing portable-tree path",
+        ),
+      )
+    ).toThrow(/expected 19 unique files/);
+    expect(() =>
+      phase8BPortableTreePaths(
+        exactMutation(
+          phase8BPlan,
+          "    forum_topics.rs\n```\n\nCheckpoint 8 writes",
+          "    forum_topics.rs\n    extra.rs\n```\n\nCheckpoint 8 writes",
+          "extra portable-tree path",
+        ),
+      )
+    ).toThrow(/expected 19 unique files/);
+  });
+
+  it("rejects every initialize_grammers_client configuration mutation", () => {
+    const source = initializeGrammersClientFixture();
+    assertInitializeGrammersClientContract(source);
+    const guard = `    if !configuration.auto_cache_peers {
+        return Err(AppError::internal(
+            "Grammers client configuration must enable auto_cache_peers",
+        ));
+    }
+`;
+    const withoutGuard = exactMutation(
+      source,
+      guard,
+      "",
+      "missing configuration guard",
+    );
+    const postSpawnGuard = exactMutation(
+      withoutGuard,
+      "    let client =",
+      `${guard}    let client =`,
+      "post-spawn configuration guard",
+    );
+    const bodyMutations = [
+      withoutGuard,
+      source.replace(
+        "if !configuration.auto_cache_peers",
+        "if configuration.auto_cache_peers",
+      ),
+      source.replace(
+        "grammers_client::client::ClientConfiguration::default()",
+        "grammers_client::ClientConfiguration::default()",
+      ),
+      postSpawnGuard,
+      source.replace(
+        "grammers_client::Client::with_configuration(pool.handle, configuration)",
+        "grammers_client::Client::new(pool.handle)",
+      ),
+      source.replace(
+        '"Grammers client configuration must enable auto_cache_peers"',
+        '"configuration drifted"',
+      ),
+      exactMutation(
+        source,
+        guard,
+        `    if !configuration.auto_cache_peers {
+        let _ = AppError::internal(
+            "Grammers client configuration must enable auto_cache_peers",
+        );
+    }
+`,
+        "non-returning configuration guard",
+      ),
+      exactMutation(
+        source,
+        `    let configuration =
+        grammers_client::client::ClientConfiguration::default();
+`,
+        `    let _default_configuration =
+        grammers_client::client::ClientConfiguration::default();
+    let configuration = custom_configuration();
+`,
+        "unrelated default configuration value",
+      ),
+      source.replace(
+        "grammers_client::Client::with_configuration(pool.handle, configuration)",
+        "grammers_client::Client::with_configuration(pool.handle, alternate_configuration)",
+      ),
+      exactMutation(
+        source,
+        "    let pool = SenderPool::new",
+        `    let configuration = custom_configuration();
+    let pool = SenderPool::new`,
+        "post-guard configuration shadow",
+      ),
+      exactMutation(
+        source,
+        `    let client =
+        grammers_client::Client::with_configuration(pool.handle, configuration);
+`,
+        `    let client = (|configuration| {
+        grammers_client::Client::with_configuration(pool.handle, configuration)
+    })(custom_configuration());
+`,
+        "closure configuration shadow",
+      ),
+    ];
+    for (const mutation of bodyMutations) {
+      expect(() =>
+        assertInitializeGrammersClientContract(mutation)
+      ).toThrow(/Phase 8B initialize_grammers_client/);
+    }
+
+    const parameterMutations = [
+      source.replace(
+        "    session: &TelegramSession,\n",
+        "    session: &TelegramSession,\n    configuration: grammers_client::client::ClientConfiguration,\n",
+      ),
+      source.replace(
+        "    session: &TelegramSession,\n",
+        "    session: &TelegramSession,\n    auto_cache_peers: bool,\n",
+      ),
+      source.replace(
+        "    session: &TelegramSession,\n",
+        "    session: &TelegramSession,\n    factory: impl Fn() -> grammers_client::client::ClientConfiguration,\n",
+      ),
+      source.replace(
+        "async fn initialize_grammers_client(",
+        "async fn initialize_grammers_client<T>(",
+      ),
+    ];
+    for (const mutation of parameterMutations) {
+      expect(() =>
+        assertInitializeGrammersClientContract(mutation)
+      ).toThrow();
+    }
+  });
+
+  it("enforces the CP3-CP6 and CP7-CP8 session accessor transition", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    const checkpointThree = phase8BCheckpointSourceFixture(3, artifact);
+    assertPhase8BSessionAccessorContract(checkpointThree, 3);
+    expect(() =>
+      assertPhase8BSessionAccessorContract(
+        replaceFixtureSource(
+          checkpointThree,
+          "src-tauri/src/telegram_impl/session.rs",
+          (source) =>
+            source.replace(
+              /    pub\(super\) fn clone_memory_session[\s\S]*?    \}\n/,
+              "",
+            ),
+        ),
+        3,
+      )
+    ).toThrow(/clone_memory_session/);
+
+    const terminal = phase8BTerminalSourceFixture(artifact);
+    assertPhase8BSessionAccessorContract(terminal, 7);
+    expect(() =>
+      assertPhase8BSessionAccessorContract(
+        replaceFixtureSource(
+          terminal,
+          "src-tauri/src/telegram_impl/session.rs",
+          (source) =>
+            `${source}\nfn raw_memory_session() {}\n`,
+        ),
+        7,
+      )
+    ).toThrow(/raw_memory_session survives CP7/);
+  });
+
+  it("rejects every mandated terminal restricted-visibility mutation", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    const terminal = phase8BTerminalSourceFixture(artifact);
+    assertPhase8BCheckpointSourceContract(
+      "8b-checkpoint-7",
+      terminal,
+      artifact,
+    );
+    const paginationPath =
+      "src-tauri/src/telegram_impl/takeout/pagination.rs";
+    const pagination = terminal.get(paginationPath);
+    if (!pagination) throw new Error("missing pagination fixture");
+    const requestStruct =
+      /pub\(super\) struct TakeoutPageRequest \{[\s\S]*?\n\}/.exec(
+        pagination,
+      )?.[0];
+    const advanceStruct =
+      /pub\(super\) struct TakeoutCursorAdvance \{[\s\S]*?\n\}/.exec(
+        pagination,
+      )?.[0];
+    if (!requestStruct || !advanceStruct) {
+      throw new Error("missing pagination returned-type fixtures");
+    }
+    const mutations = [
+      replaceFixtureSource(
+        terminal,
+        paginationPath,
+        (source) =>
+          exactMutation(
+            source,
+            "    pub(super) fn new(&self) {}",
+            "",
+            "missing TakeoutPaginationCursor::new",
+          ),
+      ),
+      replaceFixtureSource(
+        terminal,
+        paginationPath,
+        (source) =>
+          exactMutation(
+            source,
+            requestStruct,
+            "",
+            "missing TakeoutPageRequest",
+          ),
+      ),
+      replaceFixtureSource(
+        terminal,
+        paginationPath,
+        (source) =>
+          exactMutation(
+            source,
+            advanceStruct,
+            "",
+            "missing TakeoutCursorAdvance",
+          ),
+      ),
+      replaceFixtureSource(
+        terminal,
+        paginationPath,
+        (source) =>
+          exactMutation(
+            source,
+            "    pub(super) offset_id: (),",
+            "    pub offset_id: (),",
+            "widened TakeoutPageRequest field",
+          ),
+      ),
+    ];
+    for (const mutation of mutations) {
+      expect(() =>
+        assertPhase8BCheckpointSourceContract(
+          "8b-checkpoint-7",
+          mutation,
+          artifact,
+        )
+      ).toThrow(/restricted|public API/);
+    }
+  });
+
+  it("rejects terminal tree, consumer, public, and unlisted bridge drift", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    const terminal = phase8BTerminalSourceFixture(artifact);
+    const missingTree = new Map(terminal);
+    missingTree.delete("src-tauri/src/telegram_impl/error.rs");
+    const extraTree = new Map(terminal);
+    extraTree.set("src-tauri/src/telegram_impl/extra.rs", "");
+    const mutations = [
+      missingTree,
+      extraTree,
+      replaceFixtureSource(
+        terminal,
+        "src-tauri/src/telegram_impl/error.rs",
+        (source) =>
+          source.replace(
+            /fn direct_grammers_marker\(\)[\s\S]*?\n\}\n/,
+            "",
+          ),
+      ),
+      replaceFixtureSource(
+        terminal,
+        "src-tauri/src/telegram_impl/lib.rs",
+        (source) =>
+          `${source}\nfn direct_grammers_marker() { let _: Option<grammers_client::Client> = None; }\n`,
+      ),
+      replaceFixtureSource(
+        terminal,
+        "src-tauri/src/telegram_impl/lib.rs",
+        (source) =>
+          source.replace(
+            "TakeoutMessage",
+            "TakeoutMessage,UnexpectedPublic",
+          ),
+      ),
+      replaceFixtureSource(
+        terminal,
+        "src-tauri/src/telegram_impl/error.rs",
+        (source) => `${source}\npub(super) fn unlisted_bridge() {}\n`,
+      ),
+      replaceFixtureSource(
+        terminal,
+        "src-tauri/src/telegram_impl/error.rs",
+        (source) =>
+          `${source}\nmod hidden {\n    pub(super) fn unlisted_inline_bridge() {}\n}\n`,
+      ),
+      replaceFixtureSource(
+        terminal,
+        "src-tauri/src/telegram_impl/dto.rs",
+        (source) => `${source}\npub fn leaks_raw(_: MemorySession) {}\n`,
+      ),
+    ];
+    for (const mutation of mutations) {
+      expect(() =>
+        assertPhase8BCheckpointSourceContract(
+          "8b-checkpoint-8",
+          mutation,
+          artifact,
+        )
+      ).toThrow();
+    }
+  });
+
+  it("ignores unrelated app public APIs in the terminal leak scan", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    const sources = new Map(phase8BTerminalSourceFixture(artifact));
+    sources.set(
+      "src-tauri/src/accounts.rs",
+      "pub fn retained_app_command(_: AppHandle, _: SqlitePool) {}\n",
+    );
+    assertPhase8BCheckpointSourceContract(
+      "8b-checkpoint-8",
+      sources,
+      artifact,
+    );
+  });
 });
 
 describe("literal immutable Telegram test map", () => {
-  it("records only the truthful retained 8A lifecycle states", () => {
+  it("records only the truthful retained Phase 8 lifecycle states", () => {
     expect(retainedPreparationStates).toContainEqual({
       roadmapStatus: phase8Status,
       designStatus: designPhase8Status,

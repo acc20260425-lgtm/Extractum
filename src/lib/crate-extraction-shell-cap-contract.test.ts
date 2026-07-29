@@ -1,6 +1,8 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { generateFeatureBaseline } from "../../scripts/telegram-grammers-feature-baseline.mjs";
 
 import focusedLoopDesignRaw from "../../docs/superpowers/specs/2026-07-17-focused-rust-loop-design.md?raw";
 import crateRoadmapRaw from "../../docs/superpowers/specs/2026-07-17-crate-roadmap.md?raw";
@@ -196,7 +198,257 @@ const appOwnedGeminiBaselineTests = [
   "failed_gemini_browser_job_is_not_retried",
 ];
 
+type FeatureMetadataFixture = {
+  packages: Array<{
+    id: string;
+    name: string;
+    source?: string;
+    features: Record<string, string[] | null>;
+  }>;
+  resolve: {
+    nodes: Array<{
+      id: string;
+      deps: Array<{ pkg: string }>;
+      features: string[];
+    }>;
+  };
+};
+
+function featureMetadataFixture(): FeatureMetadataFixture {
+  const revision = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa";
+  const source =
+    `git+https://codeberg.org/Lonami/grammers?rev=${revision}#${revision}`;
+  const artifact = JSON.parse(
+    readFileSync(
+      path.join(
+        repoRoot,
+        "src/lib/telegram-grammers-feature-baseline.json",
+      ),
+      "utf8",
+    ),
+  ) as {
+    packages: Array<{
+      name: string;
+      required: string[];
+      universe: string[];
+    }>;
+  };
+  const packageRecords = artifact.packages.map((packageRecord) => ({
+    id: `${packageRecord.name}-fixture`,
+    name: packageRecord.name,
+    source,
+    features: Object.fromEntries(
+      packageRecord.universe.map((feature) => [feature, []]),
+    ),
+  }));
+  return {
+    packages: [
+      {
+        id: "extractum-fixture",
+        name: "extractum",
+        features: {},
+      },
+      ...packageRecords,
+    ],
+    resolve: {
+      nodes: [
+        {
+          id: "extractum-fixture",
+          deps: packageRecords.map(({ id }) => ({ pkg: id })),
+          features: [],
+        },
+        ...packageRecords.map(({ id, name }) => ({
+          id,
+          deps: [],
+          features:
+            artifact.packages.find((candidate) => candidate.name === name)
+              ?.required ?? [],
+        })),
+      ],
+    },
+  };
+}
+
 describe("crate extraction timing policy", () => {
+  it("checks the generated Grammers feature baseline", () => {
+    const artifactPath = path.join(
+      repoRoot,
+      "src/lib/telegram-grammers-feature-baseline.json",
+    );
+    const artifact = JSON.parse(readFileSync(artifactPath, "utf8")) as {
+      schemaVersion: number;
+      revision: string;
+      packages: Array<{
+        name: string;
+        required: string[];
+        forbidden: string[];
+        universe: string[];
+      }>;
+    };
+    expect(artifact).toEqual(generateFeatureBaseline());
+    expect(artifact).toEqual({
+      schemaVersion: 1,
+      revision: "1f901ce6e973fdcf0e74267f3d8efad5c729daaa",
+      packages: [
+        {
+          name: "grammers-client",
+          required: [],
+          forbidden: [
+            "default",
+            "fs",
+            "html",
+            "html5ever",
+            "markdown",
+            "parse_invite_link",
+            "proxy",
+            "pulldown-cmark",
+            "url",
+          ],
+          universe: [
+            "default",
+            "fs",
+            "html",
+            "html5ever",
+            "markdown",
+            "parse_invite_link",
+            "proxy",
+            "pulldown-cmark",
+            "url",
+          ],
+        },
+        {
+          name: "grammers-mtsender",
+          required: [],
+          forbidden: [
+            "hickory-resolver",
+            "proxy",
+            "tokio-socks",
+            "url",
+          ],
+          universe: [
+            "hickory-resolver",
+            "proxy",
+            "tokio-socks",
+            "url",
+          ],
+        },
+        {
+          name: "grammers-session",
+          required: ["serde"],
+          forbidden: ["default", "sqlite-storage"],
+          universe: ["default", "serde", "sqlite-storage"],
+        },
+        {
+          name: "grammers-tl-types",
+          required: [
+            "default",
+            "deserializable-functions",
+            "impl-debug",
+            "impl-from-enum",
+            "impl-from-type",
+            "tl-api",
+            "tl-mtproto",
+          ],
+          forbidden: ["impl-serde"],
+          universe: [
+            "default",
+            "deserializable-functions",
+            "impl-debug",
+            "impl-from-enum",
+            "impl-from-type",
+            "impl-serde",
+            "tl-api",
+            "tl-mtproto",
+          ],
+        },
+      ],
+    });
+    for (const packageRecord of artifact.packages) {
+      expect(packageRecord.required).toEqual(
+        [...packageRecord.required].sort(),
+      );
+      expect(packageRecord.forbidden).toEqual(
+        [...packageRecord.forbidden].sort(),
+      );
+      expect(packageRecord.universe).toEqual(
+        [...packageRecord.universe].sort(),
+      );
+      expect(
+        packageRecord.universe.filter(
+          (feature) => !packageRecord.required.includes(feature),
+        ),
+      ).toEqual(packageRecord.forbidden);
+    }
+    expect(() => generateFeatureBaseline({})).toThrow(
+      /missing package graph/,
+    );
+    const check = spawnSync(
+      process.execPath,
+      [
+        path.join(
+          repoRoot,
+          "scripts/telegram-grammers-feature-baseline.mjs",
+        ),
+        "--check",
+      ],
+      { cwd: repoRoot, encoding: "utf8", shell: false },
+    );
+    expect(check.status, `${check.stdout}${check.stderr}`).toBe(0);
+    const unsupported = spawnSync(
+      process.execPath,
+      [
+        path.join(
+          repoRoot,
+          "scripts/telegram-grammers-feature-baseline.mjs",
+        ),
+        "--unsupported",
+      ],
+      { cwd: repoRoot, encoding: "utf8", shell: false },
+    );
+    expect(unsupported.status).not.toBe(0);
+    expect(`${unsupported.stdout}${unsupported.stderr}`).toContain(
+      "expected exactly one argument: --write or --check",
+    );
+  }, 15_000);
+
+  it("feature authority rejects duplicate extractum resolve nodes", () => {
+    const metadata = featureMetadataFixture();
+    const extractumNode = metadata.resolve.nodes[0];
+    metadata.resolve.nodes.push({
+      ...extractumNode,
+      deps: [...extractumNode.deps],
+      features: [...extractumNode.features],
+    });
+    expect(() => generateFeatureBaseline(metadata)).toThrow(
+      /expected one resolved extractum node/,
+    );
+  });
+
+  it("feature authority rejects non-array feature definitions", () => {
+    const metadata = featureMetadataFixture();
+    const client = metadata.packages.find(
+      ({ name }) => name === "grammers-client",
+    );
+    if (!client) throw new Error("missing fixture package");
+    client.features.default = null;
+    expect(() => generateFeatureBaseline(metadata)).toThrow(
+      /feature definition.*string array/,
+    );
+  });
+
+  it("feature authority rejects a revision-matching wrong repository URL", () => {
+    const metadata = featureMetadataFixture();
+    const client = metadata.packages.find(
+      ({ name }) => name === "grammers-client",
+    );
+    if (!client) throw new Error("missing fixture package");
+    client.source =
+      "git+https://evil.example/grammers?rev=1f901ce6e973fdcf0e74267f3d8efad5c729daaa#1f901ce6e973fdcf0e74267f3d8efad5c729daaa";
+    expect(() => generateFeatureBaseline(metadata)).toThrow(
+      /source drifted/,
+    );
+  });
+
   it("tracks the exact Prompt Pack package owner through the extraction move", () => {
     const appRuntime = path.join(
       repoRoot,
@@ -710,9 +962,12 @@ describe("crate extraction timing policy", () => {
     expect(phase7Roadmap).toContain(
       "The check completed in 5,162 ms, below 15,000 ms",
     );
-    expect(phase7Roadmap).toContain(
-      "Phase 8 has an owner-approved boundary; 8A preparation is retained",
-    );
+    expect(
+      [
+        "Phase 8 has an owner-approved boundary; 8A preparation is retained",
+        "Phase 8 has an owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 1 authority are retained",
+      ].some((status) => phase7Roadmap.includes(status)),
+    ).toBe(true);
     expect(roadmapTiming).toContain(
       "Phase 7 `extractum-analysis` | 5,162 ms | completed and retained; below 15,000 ms",
     );
@@ -774,13 +1029,19 @@ describe("crate extraction timing policy", () => {
     );
   });
 
-  it("records the retained Phase 8A Telegram preparation disposition", () => {
-    expect(telegramBoundaryDesign).toContain(
-      "**Status:** Approved; 8A preparation retained; 8B not started",
-    );
-    expect(compact(crateRoadmap)).toContain(
-      "owner-approved Phase 8 boundary; 8A preparation is retained; 8B has not started.",
-    );
+  it("records the retained Phase 8 Telegram preparation disposition", () => {
+    expect(
+      [
+        "**Status:** Approved; 8A preparation retained; 8B not started",
+        "**Status:** Approved; 8B preparation Checkpoint 1 retained",
+      ].some((status) => telegramBoundaryDesign.includes(status)),
+    ).toBe(true);
+    expect(
+      [
+        "owner-approved Phase 8 boundary; 8A preparation is retained; 8B has not started.",
+        "owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 1 authority are retained.",
+      ].some((status) => compact(crateRoadmap).includes(status)),
+    ).toBe(true);
     expect(compact(crateRoadmap)).not.toContain(
       "implementation has not started",
     );
@@ -794,11 +1055,22 @@ describe("crate extraction timing policy", () => {
       "8A preparation Checkpoint 4 retained",
       "8A preparation Checkpoint 5 retained",
       "8A preparation retained",
+      "8B preparation Checkpoint 1 retained",
+      "8B preparation Checkpoint 2 retained",
+      "8B preparation Checkpoint 3 retained",
+      "8B preparation Checkpoint 4 retained",
+      "8B preparation Checkpoint 5 retained",
+      "8B preparation Checkpoint 6 retained",
+      "8B preparation Checkpoint 7 retained",
+      "8B preparation Checkpoint 8 retained",
       "8B preparation retained; 8C pending",
       "done: retained",
       "not retained",
     ]).toContain(phase8Status);
-    expect(phase8Status).toBe("8A preparation retained");
+    expect([
+      "8A preparation retained",
+      "8B preparation Checkpoint 1 retained",
+    ]).toContain(phase8Status);
     expect(phase8Roadmap).toContain(
       "2026-07-26-telegram-crate-boundary-design.md",
     );

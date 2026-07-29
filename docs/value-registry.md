@@ -77,6 +77,32 @@ Use this checklist when adding or changing values:
 | `presentation` | Visual-only value. |
 | `taxonomy` | Domain classification rather than lifecycle. |
 
+## Telegram crate-preparation agent lifecycle
+
+These values are transitional test and agent-workflow selectors owned by
+`src/lib/telegram-contract-paths.ts`. They are not product, database, event,
+API, persisted UI, or user-facing statuses. Their persistence/API/UI impact is
+none.
+
+| Value | Type | Meaning | Source of truth | Lifecycle | Stable? | Persistence/API/UI impact | Current usage |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `8b-checkpoint-1` | agent-workflow lifecycle | Selects retained Phase 8B Checkpoint 1 authority with the application-owned pre-staging layout. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+| `8b-checkpoint-2` | agent-workflow lifecycle | Selects retained Phase 8B Checkpoint 2 authority. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+| `8b-checkpoint-3` | agent-workflow lifecycle | Selects retained Phase 8B Checkpoint 3 authority. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+| `8b-checkpoint-4` | agent-workflow lifecycle | Selects retained Phase 8B Checkpoint 4 authority. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+| `8b-checkpoint-5` | agent-workflow lifecycle | Selects retained Phase 8B Checkpoint 5 authority. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+| `8b-checkpoint-6` | agent-workflow lifecycle | Selects retained Phase 8B Checkpoint 6 authority. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+| `8b-checkpoint-7` | agent-workflow lifecycle | Selects retained Phase 8B Checkpoint 7 authority. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+| `8b-checkpoint-8` | agent-workflow lifecycle | Selects retained Phase 8B Checkpoint 8 authority. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+| `8B preparation Checkpoint 1 retained` | agent-workflow status input | Maps the roadmap Checkpoint 1 retained status to `8b-checkpoint-1`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+| `8B preparation Checkpoint 2 retained` | agent-workflow status input | Maps the roadmap Checkpoint 2 retained status to `8b-checkpoint-2`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+| `8B preparation Checkpoint 3 retained` | agent-workflow status input | Maps the roadmap Checkpoint 3 retained status to `8b-checkpoint-3`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+| `8B preparation Checkpoint 4 retained` | agent-workflow status input | Maps the roadmap Checkpoint 4 retained status to `8b-checkpoint-4`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+| `8B preparation Checkpoint 5 retained` | agent-workflow status input | Maps the roadmap Checkpoint 5 retained status to `8b-checkpoint-5`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+| `8B preparation Checkpoint 6 retained` | agent-workflow status input | Maps the roadmap Checkpoint 6 retained status to `8b-checkpoint-6`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+| `8B preparation Checkpoint 7 retained` | agent-workflow status input | Maps the roadmap Checkpoint 7 retained status to `8b-checkpoint-7`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+| `8B preparation Checkpoint 8 retained` | agent-workflow status input | Maps the roadmap Checkpoint 8 retained status to `8b-checkpoint-8`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+
 ## Analysis run statuses
 
 Representative sources:
