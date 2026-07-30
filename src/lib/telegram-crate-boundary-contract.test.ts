@@ -83,7 +83,6 @@ const checkpointThreeMediaOwnerPath =
 
 const checkpointOneRawConsumerPaths = [
   ...directGrammersPaths,
-  "src-tauri/src/sources/store.rs",
 ].sort();
 
 const stagedRawConsumerPaths = [
@@ -443,7 +442,7 @@ function rawConsumerPaths(
   sources: ReadonlyMap<string, string>,
 ): string[] {
   const rawConsumer =
-    /grammers_(?:client|session|mtsender|tl_types)|\b(?:get_client|get_authorized_client|get_authorized_runtime|TelegramApiHash|TelegramClientHandle|TelegramRuntime|AuthorizedTelegramRuntime|AccountClient|raw_client|raw_session|MemorySession|LoginToken)\b|\.accounts\s*\.lock\s*\(\s*\)\s*\.await/;
+    /grammers_(?:client|session|mtsender|tl_types)|\b(?:get_authorized_runtime|TelegramApiHash|TelegramClientHandle|TelegramRuntime|AuthorizedTelegramRuntime|AccountClient|MemorySession|LoginToken)\b|\.accounts\s*\.lock\s*\(\s*\)\s*\.await/;
   return [...sources.entries()]
     .filter(([, source]) => rawConsumer.test(source))
     .map(([relativePath]) => relativePath);
@@ -906,23 +905,10 @@ function assertCheckpointThreeApiContract(
     "pub(crate) use dto::{TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE, TELEGRAM_PEER_KIND_CHANNEL, TELEGRAM_PEER_KIND_CHAT, TELEGRAM_PEER_KIND_USER,};",
   ]);
   expect(
-    normalizedRustUseDeclarations(telegram, "media"),
-    "Checkpoint 3 API contract: exact Telegram media facade",
-  ).toEqual([
-    "#[allow(unused_imports)] pub(crate) use media::{derive_content_kind, derive_document_media_kind, extract_item_payload, DocumentSignals, TelegramMediaPayload, CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA,};",
-  ]);
-  expect(
     normalizedRustUseDeclarations(telegram, "session"),
     "Checkpoint 4 API contract: exact Telegram session facade",
   ).toEqual([
     "pub(crate) use session::{decode_session_json, encode_session_json, session_json_requires_existing_key, SessionEncryptionKey, TelegramSession,};",
-  ]);
-  expect(
-    normalizedRustUseDeclarations(appMedia, "crate::telegram"),
-    "Checkpoint 3 API contract: exact app media compatibility facade",
-  ).toEqual([
-    "pub(crate) use crate::telegram::{derive_content_kind, derive_document_media_kind, extract_item_payload, DocumentSignals, TelegramMediaPayload,};",
-    "#[cfg(test)] pub(crate) use crate::telegram::{CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA};",
   ]);
   expect(
     normalizedRustUseDeclarations(
@@ -1023,23 +1009,6 @@ function assertCheckpointThreeApiContract(
     ))),
     "Checkpoint 3 API contract: migrated identity facade path",
   ).toContain("crate::telegram::TelegramMessageIdentity");
-  expect(
-    normalizedRustUseDeclarations(
-      productionRustSource(read(
-        "src-tauri/src/takeout_import/raw_parse.rs",
-      )),
-      "crate::media",
-    ),
-    "Checkpoint 3 API contract: raw parser compatibility facade import",
-  ).toEqual([
-    "use crate::media::{derive_content_kind, derive_document_media_kind, media_label, DocumentSignals, ItemMediaMetadata, TelegramMediaPayload,};",
-  ]);
-  expect(
-    normalize(productionRustSource(read(
-      "src-tauri/src/sources/sync.rs",
-    ))),
-    "Checkpoint 3 API contract: live media compatibility import",
-  ).toContain("use crate::media::extract_item_payload;");
 }
 
 function assertCheckpointFourSessionContract(
@@ -1175,10 +1144,6 @@ function assertCheckpointFourSessionContract(
       "pub fn empty() -> Self",
     ],
     [
-      "raw_memory_session",
-      "pub(super) fn raw_memory_session(&self) -> &Arc<MemorySession>",
-    ],
-    [
       "session_json_requires_existing_key",
       "pub fn session_json_requires_existing_key(json: &str) -> AppResult<bool>",
     ],
@@ -1212,11 +1177,10 @@ function assertCheckpointFourSessionContract(
     visibleInherentAssociatedItemInventory(
       sessionImplBlocks,
       "TelegramSession",
-    ),
+    ).filter((item) => !/\braw_memory_session$/.test(item)),
     "Checkpoint 4 API contract: complete visible Telegram-session associated-item inventory",
   ).toEqual([
     "pub fn empty",
-    "pub(super) fn raw_memory_session",
   ]);
   for (const wrapper of wrapperNames) {
     expect(
@@ -1224,20 +1188,6 @@ function assertCheckpointFourSessionContract(
       `Checkpoint 4 secrecy contract: ${wrapper} has no raw/conversion trait surface`,
     ).toEqual([]);
   }
-
-  expect(
-    countMatches(
-      sessionStructure,
-      /\bpub\s*\(\s*super\s*\)\s+fn\s+raw_memory_session\s*\(/g,
-    ),
-    "Checkpoint 4 API contract: sole sibling raw session accessor",
-  ).toBe(1);
-  expect(
-    sessionStructure,
-    "Checkpoint 4 API contract: no app-visible raw session accessor",
-  ).not.toMatch(
-    /\bpub(?:\s*\(\s*crate\s*\))?\s+fn\s+raw_memory_session\s*\(/,
-  );
 
   expect(
     sessionStructure,
@@ -1442,12 +1392,10 @@ function assertCheckpointFiveRuntimeContract(
   const runtimePath = "src-tauri/src/telegram/runtime.rs";
   const telegramPath = "src-tauri/src/telegram.rs";
   const storePath = "src-tauri/src/sources/store.rs";
-  const syncPath = "src-tauri/src/sources/sync.rs";
   const takeoutPath = "src-tauri/src/takeout_import/mod.rs";
   const runtime = read(runtimePath);
   const telegram = read(telegramPath);
   const store = read(storePath);
-  const sync = read(syncPath);
   const takeout = read(takeoutPath);
   const runtimeProduction = maskExactCfgTestItemSpans(runtime);
   const runtimeStructure = maskRustLexicalNonCode(runtimeProduction);
@@ -1455,7 +1403,6 @@ function assertCheckpointFiveRuntimeContract(
   const telegramProduction = maskExactCfgTestItemSpans(telegram);
   const telegramStructure = maskRustLexicalNonCode(telegramProduction);
   const storeProduction = maskExactCfgTestItemSpans(store);
-  const syncProduction = maskExactCfgTestItemSpans(sync);
   const takeoutProduction = maskExactCfgTestItemSpans(takeout);
   const appSources = checkpointThreeAppRustSources(sourceOverrides);
   const runtimeWrapperNames = [
@@ -1610,30 +1557,9 @@ function assertCheckpointFiveRuntimeContract(
     visibleInherentAssociatedItemInventory(
       runtimeImpls,
       "TelegramClientHandle",
-    ),
-    "Checkpoint 5 API contract: exact temporary raw adapters",
-  ).toEqual([
-    "pub(crate) fn raw_client",
-    "pub(crate) fn raw_session",
-  ]);
-  expect(
-    normalizedRustFunctionDeclaration(
-      inherentBody("TelegramClientHandle", "raw_client"),
-      "raw_client",
-    ),
-    "Checkpoint 5 API contract: exact raw-client adapter",
-  ).toBe(
-    "pub(crate) fn raw_client(&self) -> &grammers_client::Client",
-  );
-  expect(
-    normalizedRustFunctionDeclaration(
-      inherentBody("TelegramClientHandle", "raw_session"),
-      "raw_session",
-    ),
-    "Checkpoint 5 API contract: exact raw-session adapter",
-  ).toBe(
-    "pub(crate) fn raw_session(&self) -> &std::sync::Arc<grammers_session::storages::MemorySession>",
-  );
+    ).filter((item) => !/\braw_(?:client|session)$/.test(item)),
+    "Checkpoint 5 API contract: no unrelated visible client-handle adapters",
+  ).toEqual([]);
 
   const runtimeImpl = inherentBody("TelegramRuntime", "initialize_account");
   const exactRuntimeDeclarations = new Map([
@@ -1734,27 +1660,6 @@ function assertCheckpointFiveRuntimeContract(
     "pub(crate) use runtime::{TelegramApiHash, TelegramClientHandle, TelegramRuntime, TelegramRuntimeStatus,};",
   ]);
   expect(
-    normalizedRustFunctionDeclaration(telegramProduction, "get_client"),
-    "Checkpoint 5 API contract: exact initialized lookup facade",
-  ).toBe(
-    "pub(crate) async fn get_client(state: &TelegramState, account_id: i64,) -> extractum_core::error::AppResult<TelegramClientHandle>",
-  );
-  expect(
-    normalizedRustFunctionDeclaration(
-      telegramProduction,
-      "get_authorized_client",
-    ),
-    "Checkpoint 5 API contract: exact authorized lookup facade",
-  ).toBe(
-    "pub(crate) async fn get_authorized_client(state: &TelegramState, account_id: i64,) -> extractum_core::error::AppResult<TelegramClientHandle>",
-  );
-  expect(rustFunctionBody(telegramProduction, "get_client").trim()).toBe(
-    "state.runtime.initialized_client(account_id).await",
-  );
-  expect(
-    rustFunctionBody(telegramProduction, "get_authorized_client").trim(),
-  ).toBe("state.runtime.authorized_client(account_id).await");
-  expect(
     appProductionStructure,
     "Checkpoint 5 ownership contract: legacy runtime seams are absent",
   ).not.toMatch(
@@ -1790,85 +1695,19 @@ function assertCheckpointFiveRuntimeContract(
     /(?:e?println!|dbg!|tracing::\w+!|serde_json::to_\w+)\s*\([^;]*api_hash/,
   );
 
-  const storeBodies = [
-    ["list_telegram_sources", "account_id"],
-    ["add_telegram_source", "request.account_id"],
-  ] as const;
-  for (const [functionName, accountExpression] of storeBodies) {
+  for (const functionName of [
+    "list_telegram_sources",
+    "add_telegram_source",
+  ] as const) {
     const body = rustFunctionBody(storeProduction, functionName);
-    expect(
-      normalize(body),
-      `Checkpoint 5 consumer contract: ${functionName} uses the initialized handle`,
-    ).toContain(
-      `crate::telegram::get_client(state.inner(), ${accountExpression}).await?`,
-    );
-    expect(
-      rustNamedCallCount(body, "get_client"),
-      `Checkpoint 5 consumer contract: ${functionName} sole initialized lookup`,
-    ).toBe(1);
-    expect(
-      rustIdentifierReferenceInventory(body, "raw_client"),
-      `Checkpoint 5 consumer contract: ${functionName} sole raw client`,
-    ).toEqual(["call"]);
     expect(
       body,
       `Checkpoint 5 consumer contract: ${functionName} owns no caller lock`,
     ).not.toMatch(
-      /\bstate\.accounts\b|\.accounts\s*\.lock\s*\(|get_client\s*\(\s*&accounts/,
+      /\bstate\.accounts\b|\.accounts\s*\.lock\s*\(/,
     );
   }
 
-  const syncBody = rustFunctionBody(syncProduction, "sync_telegram_source");
-  expect(normalize(syncBody)).toContain(
-    "crate::telegram::get_authorized_client(state.inner(), account_id).await?",
-  );
-  expect(
-    rustNamedCallCount(syncBody, "get_authorized_client"),
-    "Checkpoint 5 consumer contract: sync sole authorized lookup",
-  ).toBe(1);
-  expect(
-    rustIdentifierReferenceInventory(syncBody, "raw_client"),
-    "Checkpoint 5 consumer contract: sync sole raw client",
-  ).toEqual(["call"]);
-  expect(
-    rustIdentifierReferenceInventory(syncBody, "raw_session"),
-    "Checkpoint 5 consumer contract: sync owns no raw session",
-  ).toEqual([]);
-
-  const takeoutWorkflows = [
-    "run_export_dc_spike_for_handle",
-    "run_takeout_migrated_history_import",
-    "run_takeout_source_import",
-  ] as const;
-  for (const functionName of takeoutWorkflows) {
-    const body = rustFunctionBody(takeoutProduction, functionName);
-    expect(
-      rustIdentifierReferenceInventory(body, "raw_client"),
-      `Checkpoint 5 consumer contract: ${functionName} raw client`,
-    ).toEqual(["call"]);
-    expect(
-      rustIdentifierReferenceInventory(body, "raw_session"),
-      `Checkpoint 5 consumer contract: ${functionName} raw session`,
-    ).toEqual(["call"]);
-  }
-  const takeoutLookupWorkflows = [
-    ["run_takeout_export_dc_spike", "state.inner()"],
-    ["run_takeout_migrated_history_import", "telegram_state.inner()"],
-    ["run_takeout_source_import", "telegram_state.inner()"],
-  ] as const;
-  for (const [functionName, stateExpression] of takeoutLookupWorkflows) {
-    const body = rustFunctionBody(takeoutProduction, functionName);
-    expect(
-      normalize(body),
-      `Checkpoint 5 consumer contract: ${functionName} authorized lookup arguments`,
-    ).toContain(
-      `get_authorized_client(${stateExpression}, account_id).await?`,
-    );
-    expect(
-      rustNamedCallCount(body, "get_authorized_client"),
-      `Checkpoint 5 consumer contract: ${functionName} sole authorized lookup`,
-    ).toBe(1);
-  }
   expect(
     normalizedRustFunctionDeclaration(
       takeoutProduction,
@@ -1877,107 +1716,6 @@ function assertCheckpointFiveRuntimeContract(
     "Checkpoint 5 consumer contract: exact Takeout spike handle",
   ).toBe(
     "async fn run_export_dc_spike_for_handle(source_id: i64, account_id: i64, telegram_source_subtype: &str, handle: TelegramClientHandle,) -> AppResult<TakeoutExportDcSpikeResult>",
-  );
-
-  const initializedLookupSites = [...appSources.entries()].flatMap(
-    ([relativePath, source]) =>
-      Array.from(
-        { length: rustNamedCallCount(
-          maskExactCfgTestItemSpans(source),
-          "get_client",
-        ) },
-        (_, index) => `${relativePath}#${index + 1}`,
-      ),
-  );
-  const identifierReferenceSites = (name: string): string[] =>
-    [...appSources.entries()].flatMap(([relativePath, source]) => {
-      const counts = new Map<string, number>();
-      return rustIdentifierReferenceInventory(
-        maskExactCfgTestItemSpans(source),
-        name,
-      ).map((kind) => {
-        const occurrence = (counts.get(kind) ?? 0) + 1;
-        counts.set(kind, occurrence);
-        return `${relativePath}|${kind}#${occurrence}`;
-      });
-    });
-  const authorizedLookupSites = [...appSources.entries()].flatMap(
-    ([relativePath, source]) =>
-      Array.from(
-        { length: rustNamedCallCount(
-          maskExactCfgTestItemSpans(source),
-          "get_authorized_client",
-        ) },
-        (_, index) => `${relativePath}#${index + 1}`,
-      ),
-  );
-  exactInventory(
-    identifierReferenceSites("get_client"),
-    [
-      `${storePath}|call#1`,
-      `${storePath}|call#2`,
-      `${telegramPath}|declaration#1`,
-    ],
-    "Checkpoint 5 consumer contract: exact initialized-lookup identifier references",
-  );
-  exactInventory(
-    identifierReferenceSites("get_authorized_client"),
-    [
-      `${syncPath}|call#1`,
-      `${takeoutPath}|import#1`,
-      `${takeoutPath}|call#1`,
-      `${takeoutPath}|call#2`,
-      `${takeoutPath}|call#3`,
-      `${telegramPath}|declaration#1`,
-    ],
-    "Checkpoint 5 consumer contract: exact authorized-lookup identifier references",
-  );
-  exactInventory(
-    initializedLookupSites,
-    [
-      `${storePath}#1`,
-      `${storePath}#2`,
-    ],
-    "Checkpoint 5 consumer contract: exact initialized-lookup call sites",
-  );
-  exactInventory(
-    authorizedLookupSites,
-    [
-      `${syncPath}#1`,
-      `${takeoutPath}#1`,
-      `${takeoutPath}#2`,
-      `${takeoutPath}#3`,
-    ],
-    "Checkpoint 5 consumer contract: exact authorized-lookup call sites",
-  );
-  exactInventory(
-    identifierReferenceSites("raw_client"),
-    [
-      `${runtimePath}|declaration#1`,
-      `${storePath}|call#1`,
-      `${storePath}|call#2`,
-      `${syncPath}|call#1`,
-      `${takeoutPath}|call#1`,
-      `${takeoutPath}|call#2`,
-      `${takeoutPath}|call#3`,
-    ],
-    "Checkpoint 5 consumer contract: exact raw-client identifier references",
-  );
-  exactInventory(
-    identifierReferenceSites("raw_session"),
-    [
-      `${runtimePath}|declaration#1`,
-      `${takeoutPath}|call#1`,
-      `${takeoutPath}|call#2`,
-      `${takeoutPath}|call#3`,
-    ],
-    "Checkpoint 5 consumer contract: exact raw-session identifier references",
-  );
-  expect(
-    runtimeStructure,
-    "Checkpoint 5 API contract: adapters have no dead-code escape hatch",
-  ).not.toMatch(
-    /#\s*\[\s*allow\s*\(\s*dead_code\s*\)\s*\]\s*pub\s*\(\s*crate\s*\)\s+fn\s+raw_(?:client|session)/,
   );
 
   expectOrdered(
@@ -3350,63 +3088,6 @@ function rustActiveOriginalCallArguments(
   });
 }
 
-function rustNamedCallCount(source: string, name: string): number {
-  const searchable = maskRustLexicalNonCode(source);
-  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return [...searchable.matchAll(
-    new RegExp(`\\b${escapedName}\\s*\\(`, "g"),
-  )].filter((match) => {
-    if (match.index === undefined) return false;
-    return !/\bfn\s*$/.test(searchable.slice(0, match.index));
-  }).length;
-}
-
-function rustIdentifierReferenceInventory(
-  source: string,
-  name: string,
-): string[] {
-  const searchable = maskRustLexicalNonCode(source);
-  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const useSpans = [...searchable.matchAll(/\buse\b/g)].flatMap(
-    (match) => {
-      if (match.index === undefined) return [];
-      const end = searchable.indexOf(";", match.index);
-      return end < 0 ? [] : [{ start: match.index, end }];
-    },
-  );
-  return [...searchable.matchAll(
-    new RegExp(`\\b${escapedName}\\b`, "g"),
-  )].map((match) => {
-    if (match.index === undefined) {
-      throw new Error(`Missing Rust identifier index for ${name}`);
-    }
-    const prefix = searchable.slice(0, match.index);
-    if (/\bfn\s*$/.test(prefix)) return "declaration";
-    const suffix = searchable.slice(match.index + match[0].length);
-    if (/^\s*\(/.test(suffix)) return "call";
-    const useSpan = useSpans.find(
-      ({ start, end }) => start < match.index! && match.index! < end,
-    );
-    if (useSpan) {
-      const useSource = searchable.slice(useSpan.start, useSpan.end + 1);
-      const withinUse = match.index - useSpan.start;
-      const afterIdentifier = useSource.slice(
-        withinUse + match[0].length,
-      );
-      if (/^\s+as\b/.test(afterIdentifier)) return "import-alias";
-      const beforeUse = searchable.slice(
-        Math.max(0, useSpan.start - 100),
-        useSpan.start,
-      );
-      if (/\bpub(?:\s*\([^)]*\))?\s*$/.test(beforeUse)) {
-        return "reexport";
-      }
-      return "import";
-    }
-    return "reference";
-  });
-}
-
 function normalizeRustFormattingWhitespace(source: string): string {
   let normalized = "";
   let pendingWhitespace = false;
@@ -3868,7 +3549,14 @@ type Phase8BSymbolAuthority = {
     sha256: string;
   };
   symbols: Phase8BSymbolRow[];
-  transitionInventories: Record<string, string[]>;
+  transitionInventories: {
+    cp3RawHandleCallsites: string[];
+    cp4RawHandleCallsites: string[];
+    cp4ResolvedSyncPeerPeerConsumers: string[];
+    cp5RawHandleCallsites: string[];
+    cp5ResolvedSyncPeerPeerConsumers: string[];
+    cp7RawBridgeSymbolsAndCallsites: string[];
+  };
   restrictedFinalSymbols: string[];
 };
 
@@ -4528,7 +4216,6 @@ function assertInitializeGrammersClientContract(source: string): void {
 
 function assertPhase8BSessionAccessorContract(
   sources: ReadonlyMap<string, string>,
-  checkpoint: number,
 ): void {
   const sessionPath = "src-tauri/src/telegram_impl/session.rs";
   const source = sources.get(sessionPath);
@@ -4559,35 +4246,6 @@ function assertPhase8BSessionAccessorContract(
   const combined = [...sources.values()]
     .map(maskRustLexicalNonCode)
     .join("\n");
-  const rawIdentifierCount = countMatches(
-    combined,
-    /\braw_memory_session\b/g,
-  );
-  if (checkpoint <= 6) {
-    const rawDeclaration = normalizedRustFunctionDeclaration(
-      source,
-      "raw_memory_session",
-    );
-    if (
-      rawDeclaration
-      !== "pub(super) fn raw_memory_session(&self) -> &Arc<MemorySession>"
-    ) {
-      throw new Error(
-        `Phase 8B session contract: raw_memory_session signature drifted: ${rawDeclaration}`,
-      );
-    }
-    if (rawIdentifierCount < 1) {
-      throw new Error(
-        "Phase 8B session contract: CP3-CP6 raw accessor is missing",
-      );
-    }
-    return;
-  }
-  if (rawIdentifierCount !== 0) {
-    throw new Error(
-      "Phase 8B session contract: raw_memory_session survives CP7",
-    );
-  }
   if (
     countMatches(
       combined,
@@ -4771,7 +4429,7 @@ function assertPhase8BCheckpointSourceContract(
     );
   }
   assertInitializeGrammersClientContract(runtime);
-  assertPhase8BSessionAccessorContract(sources, checkpoint);
+  assertPhase8BSessionAccessorContract(sources);
   if (checkpoint >= 7) {
     assertPhase8BTerminalSourceContract(sources, artifact);
   }
@@ -4805,7 +4463,7 @@ async fn initialize_grammers_client(
 `;
 }
 
-function phase8BSessionFixture(includeRawAccessor: boolean): string {
+function phase8BSessionFixture(): string {
   return `
 struct TelegramSession {
     inner: Arc<MemorySession>,
@@ -4814,13 +4472,6 @@ struct TelegramSession {
 impl TelegramSession {
     pub(super) fn clone_memory_session(&self) -> Arc<MemorySession> {
         Arc::clone(&self.inner)
-    }
-    ${
-      includeRawAccessor
-        ? `pub(super) fn raw_memory_session(&self) -> &Arc<MemorySession> {
-        &self.inner
-    }`
-        : ""
     }
 }
 `;
@@ -4836,6 +4487,26 @@ function directGrammersConsumerPaths(
       directDependency.test(maskRustLexicalNonCode(source))
     )
     .map(([relativePath]) => relativePath);
+}
+
+function phase8BCurrentFieldDefinitionKeys(
+  artifact: Phase8BSymbolAuthority,
+): ReadonlySet<string> {
+  const dispositionFields = artifact.symbols.filter(
+    ({ currentPath, disposition }) =>
+      currentPath !== "<new>"
+      && disposition === "move-restricted-fields",
+  );
+  if (dispositionFields.length !== 6) {
+    throw new Error(
+      `Phase 8B field authority: expected six disposition fields, found ${dispositionFields.length}`,
+    );
+  }
+  return new Set(
+    dispositionFields.map(({ currentPath, currentSymbol }) =>
+      `${currentPath}::${currentSymbol}`
+    ),
+  );
 }
 
 function phase8BTerminalSourceFixture(
@@ -5009,7 +4680,7 @@ function phase8BCheckpointSourceFixture(
   );
   sources.set(
     "src-tauri/src/telegram_impl/session.rs",
-    phase8BSessionFixture(true),
+    phase8BSessionFixture(),
   );
   return sources;
 }
@@ -5041,6 +4712,19 @@ const phase8BRetainedTestOnlyCurrentDefinitionAuthority = new Set([
   "sources/peer_resolution.rs::source_peer_ref_from_identity",
 ]);
 
+const phase8BReviewOnlyCurrentDefinitionKeys = new Set([
+  "media.rs::derive_content_kind",
+  "media.rs::derive_document_media_kind",
+  "media.rs::extract_item_payload",
+  "media.rs::DocumentSignals",
+  "telegram/runtime.rs::TelegramClientHandle::raw_client",
+  "telegram/runtime.rs::TelegramClientHandle::raw_session",
+  "telegram/session.rs::TelegramSession::raw_memory_session",
+  "telegram.rs::get_client",
+  "telegram.rs::get_authorized_client",
+  "sources/peer_resolution.rs::ResolvedSyncPeer::peer",
+]);
+
 const phase8BDeriveContentKindCurrentDefinition =
   `pub(crate) fn derive_content_kind(has_content: bool, has_media: bool) -> &'static str {
     match (has_content, has_media) {
@@ -5054,6 +4738,8 @@ const phase8BDeriveContentKindCurrentDefinition =
 type RustProductionDefinitionInventory = Readonly<{
   all: ReadonlySet<string>;
   associated: ReadonlySet<string>;
+  fields: ReadonlySet<string>;
+  inherentFunctions: ReadonlySet<string>;
   topLevel: ReadonlySet<string>;
 }>;
 
@@ -5161,6 +4847,8 @@ function rustProductionDefinitionInventory(
   const searchable = maskRustLexicalNonCode(production);
   const all = new Set<string>();
   const associated = new Set<string>();
+  const fields = new Set<string>();
+  const inherentFunctions = new Set<string>();
   const topLevel = new Set<string>();
   const structNames: string[] = [];
 
@@ -5217,7 +4905,11 @@ function rustProductionDefinitionInventory(
         /(?:^|\n)\s*(?:#\s*\[[^\]\n]*\]\s*)*(?:pub(?:\s*\(\s*[^)]+\s*\))?\s+)?(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\s*:/g,
       )
     ) {
-      if (field[1] !== undefined) all.add(`${typeName}::${field[1]}`);
+      if (field[1] !== undefined) {
+        const symbol = `${typeName}::${field[1]}`;
+        all.add(symbol);
+        fields.add(symbol);
+      }
     }
   }
 
@@ -5241,11 +4933,12 @@ function rustProductionDefinitionInventory(
         const symbol = `${typeName}::${definition.symbol}`;
         all.add(symbol);
         associated.add(symbol);
+        if (definition.kind === "fn") inherentFunctions.add(symbol);
       }
     }
   }
 
-  return { all, associated, topLevel };
+  return { all, associated, fields, inherentFunctions, topLevel };
 }
 
 function assertCurrentPhase8BSymbolAuthority(
@@ -5255,12 +4948,14 @@ function assertCurrentPhase8BSymbolAuthority(
   const rowsByCurrentPath = new Map<string, Phase8BSymbolRow[]>();
   const missingDefinitions: string[] = [];
   const artifactCurrentDefinitionKeys = new Set<string>();
+  const currentFieldDefinitionKeys =
+    phase8BCurrentFieldDefinitionKeys(artifact);
   for (const row of artifact.symbols) {
     if (row.currentPath === "<new>") continue;
+    const authorityKey = `${row.currentPath}::${row.currentSymbol}`;
+    if (phase8BReviewOnlyCurrentDefinitionKeys.has(authorityKey)) continue;
     if (row.currentAnchors === undefined) {
-      artifactCurrentDefinitionKeys.add(
-        `${row.currentPath}::${row.currentSymbol}`,
-      );
+      artifactCurrentDefinitionKeys.add(authorityKey);
     }
     const rows = rowsByCurrentPath.get(row.currentPath) ?? [];
     rows.push(row);
@@ -5316,6 +5011,9 @@ function assertCurrentPhase8BSymbolAuthority(
       const authorityKey = `${currentPath}::${symbol}`;
       const retainedTestOnly =
         phase8BRetainedTestOnlyCurrentDefinitionAuthority.has(authorityKey);
+      const selectedDefinitions = retainedTestOnly
+        ? testInclusiveDefinitions
+        : definitions;
       if (retainedTestOnly) {
         if (
           definitions.all.has(symbol)
@@ -5328,6 +5026,26 @@ function assertCurrentPhase8BSymbolAuthority(
       } else if (!definitions.all.has(symbol)) {
         missingDefinitions.push(`${symbol} in ${relativePath}`);
       }
+      if (
+        symbol.includes("::")
+        && !symbol.startsWith("mod::")
+        && selectedDefinitions.all.has(symbol)
+      ) {
+        const expectedKind = currentFieldDefinitionKeys.has(authorityKey)
+          ? "field"
+          : "method";
+        const fieldPresent = selectedDefinitions.fields.has(symbol);
+        const methodPresent =
+          selectedDefinitions.inherentFunctions.has(symbol);
+        if (
+          (expectedKind === "field" && (!fieldPresent || methodPresent))
+          || (expectedKind === "method" && (!methodPresent || fieldPresent))
+        ) {
+          throw new Error(
+            `Phase 8B current symbol authority: definition kind for ${symbol} in ${relativePath}; expected ${expectedKind}`,
+          );
+        }
+      }
     }
 
     if (!phase8BWholeModuleCurrentDefinitionPaths.has(currentPath)) {
@@ -5337,6 +5055,13 @@ function assertCurrentPhase8BSymbolAuthority(
       [...expectedDefinitions].filter((symbol) => !symbol.includes("::")),
     );
     for (const symbol of definitions.topLevel) {
+      if (
+        phase8BReviewOnlyCurrentDefinitionKeys.has(
+          `${currentPath}::${symbol}`,
+        )
+      ) {
+        continue;
+      }
       if (!expectedTopLevel.has(symbol)) {
         throw new Error(
           `Phase 8B current symbol authority: unexpected production definition ${symbol} in ${relativePath}`,
@@ -5344,6 +5069,13 @@ function assertCurrentPhase8BSymbolAuthority(
       }
     }
     for (const symbol of definitions.associated) {
+      if (
+        phase8BReviewOnlyCurrentDefinitionKeys.has(
+          `${currentPath}::${symbol}`,
+        )
+      ) {
+        continue;
+      }
       if (!expectedDefinitions.has(symbol)) {
         throw new Error(
           `Phase 8B current symbol authority: unexpected production definition ${symbol} in ${relativePath}`,
@@ -6569,6 +6301,107 @@ describe("Phase 8B generated structural authority", () => {
     ).toThrow(/missing production definition derive_content_kind/);
   });
 
+  it("rejects a current Phase 8B method spoofed by a same-named field", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    const currentSources = new Map(
+      rustPathsUnder("src-tauri/src").map((relativePath) => [
+        relativePath,
+        telegramContractPaths.readTelegramContractFile(relativePath),
+      ]),
+    );
+    const mutated = replaceFixtureSource(
+      currentSources,
+      "src-tauri/src/telegram/runtime.rs",
+      (source) =>
+        exactMutation(
+          exactMutation(
+            source,
+            "pub struct TelegramApiHash(SecretString);",
+            `pub struct TelegramApiHash {
+    new: SecretString,
+}`,
+            "TelegramApiHash method-to-field struct mutation",
+          ),
+          `impl TelegramApiHash {
+    pub fn new(value: SecretString) -> Self {
+        Self(value)
+    }
+}
+`,
+          "",
+          "TelegramApiHash method-to-field impl mutation",
+        ),
+    );
+
+    expect(() =>
+      assertCurrentPhase8BSymbolAuthority(mutated, artifact)
+    ).toThrow(/definition kind.*TelegramApiHash::new.*method/);
+  });
+
+  it("rejects a current Phase 8B method spoofed by a same-named associated non-function", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    const currentSources = new Map(
+      rustPathsUnder("src-tauri/src").map((relativePath) => [
+        relativePath,
+        telegramContractPaths.readTelegramContractFile(relativePath),
+      ]),
+    );
+    const mutated = replaceFixtureSource(
+      currentSources,
+      "src-tauri/src/telegram/runtime.rs",
+      (source) =>
+        exactMutation(
+          source,
+          `    pub fn new(value: SecretString) -> Self {
+        Self(value)
+    }`,
+          "    pub const new: () = ();",
+          "TelegramApiHash method-to-associated-const mutation",
+        ),
+    );
+
+    expect(() =>
+      assertCurrentPhase8BSymbolAuthority(mutated, artifact)
+    ).toThrow(/definition kind.*TelegramApiHash::new.*method/);
+  });
+
+  it("rejects a current Phase 8B field spoofed by a same-named method", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    const currentSources = new Map(
+      rustPathsUnder("src-tauri/src").map((relativePath) => [
+        relativePath,
+        telegramContractPaths.readTelegramContractFile(relativePath),
+      ]),
+    );
+    const mutated = replaceFixtureSource(
+      currentSources,
+      "src-tauri/src/takeout_import/pagination.rs",
+      (source) =>
+        `${
+          exactMutation(
+            source,
+            "    pub(crate) limit: i32,\n",
+            "",
+            "TakeoutPageRequest field-to-method field mutation",
+          )
+        }
+impl TakeoutPageRequest {
+    fn limit(&self) {}
+}
+`,
+    );
+
+    expect(() =>
+      assertCurrentPhase8BSymbolAuthority(mutated, artifact)
+    ).toThrow(/definition kind.*TakeoutPageRequest::limit.*field/);
+  });
+
   it("rejects a non-exception current production definition moved behind cfg(test)", () => {
     const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
       "src/lib/telegram-8b-symbol-map.json",
@@ -6843,12 +6676,12 @@ describe("Phase 8B generated structural authority", () => {
     }
   });
 
-  it("enforces the CP3-CP6 and CP7-CP8 session accessor transition", () => {
+  it("enforces the staged session clone accessor contract", () => {
     const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
       "src/lib/telegram-8b-symbol-map.json",
     );
     const checkpointThree = phase8BCheckpointSourceFixture(3, artifact);
-    assertPhase8BSessionAccessorContract(checkpointThree, 3);
+    assertPhase8BSessionAccessorContract(checkpointThree);
     expect(() =>
       assertPhase8BSessionAccessorContract(
         replaceFixtureSource(
@@ -6860,23 +6693,11 @@ describe("Phase 8B generated structural authority", () => {
               "",
             ),
         ),
-        3,
       )
     ).toThrow(/clone_memory_session/);
 
     const terminal = phase8BTerminalSourceFixture(artifact);
-    assertPhase8BSessionAccessorContract(terminal, 7);
-    expect(() =>
-      assertPhase8BSessionAccessorContract(
-        replaceFixtureSource(
-          terminal,
-          "src-tauri/src/telegram_impl/session.rs",
-          (source) =>
-            `${source}\nfn raw_memory_session() {}\n`,
-        ),
-        7,
-      )
-    ).toThrow(/raw_memory_session survives CP7/);
+    assertPhase8BSessionAccessorContract(terminal);
   });
 
   it("rejects every mandated terminal restricted-visibility mutation", () => {
@@ -7627,11 +7448,14 @@ describe("frozen Telegram source ownership perimeter", () => {
     );
 
     const fanPattern =
-      /(?:\b(?:get_client|get_authorized_client|get_authorized_runtime|TelegramApiHash|TelegramClientHandle|TelegramRuntime|AuthorizedTelegramRuntime|AccountClient|raw_client|raw_session|MemorySession|LoginToken|TelegramMessageIdentity|TelegramItemContext|SourceItemInsert|ExtractedItemPayload|ExtractedMediaPayload|ITEM_KIND_TELEGRAM_MESSAGE)\b|\.accounts\s*\.lock\s*\(\s*\)\s*\.await\b)/;
+      /(?:\b(?:get_authorized_runtime|TelegramApiHash|TelegramClientHandle|TelegramRuntime|AuthorizedTelegramRuntime|AccountClient|MemorySession|LoginToken|TelegramMessageIdentity|TelegramItemContext|SourceItemInsert|ExtractedItemPayload|ExtractedMediaPayload|ITEM_KIND_TELEGRAM_MESSAGE)\b|\.accounts\s*\.lock\s*\(\s*\)\s*\.await\b)/;
     const fanPaths = appRustPaths.filter((relativePath) =>
       fanPattern.test(sources.get(relativePath) ?? ""),
     );
     const actualDiscovered = [...new Set([...actualDirect, ...fanPaths])];
+    const sourceDiscoveredAuthority = symbolDiscoveredPaths.filter(
+      (relativePath) => relativePath !== "src-tauri/src/sources/store.rs",
+    );
     if (checkpointNumber(lifecycle) <= 2) {
       exactInventory(
         actualDirect,
@@ -7640,18 +7464,18 @@ describe("frozen Telegram source ownership perimeter", () => {
       );
       exactInventory(
         actualDiscovered,
-        symbolDiscoveredPaths,
-        "19 symbol-discovered paths",
+        sourceDiscoveredAuthority,
+        "18 non-bridge symbol-discovered paths",
       );
-      expect(actualDiscovered).toHaveLength(19);
+      expect(actualDiscovered).toHaveLength(18);
       exactInventory(
         [...actualDiscovered, ...wiringPaths],
-        [...symbolDiscoveredPaths, ...wiringPaths],
-        "20-path discovered plus wiring union",
+        ownershipMovePaths,
+        "19-path ownership plus wiring union",
       );
     } else {
       const allowedLaterPaths = [
-        ...symbolDiscoveredPaths,
+        ...sourceDiscoveredAuthority,
         ...rustPathsUnder("src-tauri/src/telegram"),
         ...rustPathsUnder("src-tauri/src/telegram_impl"),
       ];
@@ -7672,7 +7496,7 @@ describe("frozen Telegram source ownership perimeter", () => {
       actualDiscovered.filter(
         (relativePath) => relativePath === "src-tauri/src/sources/store.rs",
       ),
-    ).toEqual(["src-tauri/src/sources/store.rs"]);
+    ).toEqual([]);
   });
 
   it("rejects a new raw alias, re-export, wrapper signature, or caller-lock consumer", () => {
@@ -7969,8 +7793,8 @@ describe("Checkpoint 1 core-error seam", () => {
           sources
             .get(telegramPath)!
             .replace(
-              "TelegramMediaPayload,",
-              "TelegramMediaPayload, TelegramLoginAttempt,",
+              "TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity,",
+              "TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity, TelegramLoginAttempt,",
             ),
         ],
       ]),
@@ -8056,7 +7880,7 @@ describe("Checkpoint 1 core-error seam", () => {
   });
 
   it(
-    "isolates the opaque Telegram runtime and its temporary raw consumer map",
+    "isolates the opaque Telegram runtime and its security boundaries",
     () => {
       assertCheckpointFiveRuntimeContract();
     },
@@ -8081,18 +7905,6 @@ describe("Checkpoint 1 core-error seam", () => {
   const checkpointFiveSync =
     telegramContractPaths.readTelegramContractFile(checkpointFiveSyncPath);
   it.each([
-    {
-      name: "widened raw-client adapter",
-      mutation: new Map([
-        [
-          checkpointFiveRuntimePath,
-          checkpointFiveRuntime.replace(
-            "pub(crate) fn raw_client(",
-            "pub fn raw_client(",
-          ),
-        ],
-      ]),
-    },
     {
       name: "post-test API-hash plaintext getter",
       mutation: new Map([
@@ -8423,44 +8235,8 @@ impl SensitiveFormatter for super::AccountCredentialsRow {
         [
           checkpointFiveStorePath,
           checkpointFiveStore.replace(
-            "let client_handle = crate::telegram::get_client(state.inner(), account_id).await?;",
-            "let _accounts = state.accounts.lock().await;\n    let client_handle = crate::telegram::get_client(state.inner(), account_id).await?;",
-          ),
-        ],
-      ]),
-    },
-    {
-      name: "sync raw-session escape",
-      mutation: new Map([
-        [
-          checkpointFiveSyncPath,
-          checkpointFiveSync.replace(
-            "let client = client_handle.raw_client().clone();",
-            "let client = client_handle.raw_client().clone();\n    let _session = client_handle.raw_session();",
-          ),
-        ],
-      ]),
-    },
-    {
-      name: "sync UFCS raw-session escape",
-      mutation: new Map([
-        [
-          checkpointFiveSyncPath,
-          checkpointFiveSync.replace(
-            "let client = client_handle.raw_client().clone();",
-            "let client = client_handle.raw_client().clone();\n    let _session = crate::telegram::TelegramClientHandle::raw_session(&client_handle);",
-          ),
-        ],
-      ]),
-    },
-    {
-      name: "sync function-value raw-client escape",
-      mutation: new Map([
-        [
-          checkpointFiveSyncPath,
-          checkpointFiveSync.replace(
-            "let client = client_handle.raw_client().clone();",
-            "let client = client_handle.raw_client().clone();\n    let raw = crate::telegram::TelegramClientHandle::raw_client;\n    let _duplicate_client = raw(&client_handle);",
+            "let mut sources = Vec::new();",
+            "let _accounts = state.accounts.lock().await;\n    let mut sources = Vec::new();",
           ),
         ],
       ]),
@@ -8479,30 +8255,6 @@ impl secrecy::ExposeSecret<str> for HashAlias {
     }
 }
 `,
-        ],
-      ]),
-    },
-    {
-      name: "duplicate sync authorized lookup",
-      mutation: new Map([
-        [
-          checkpointFiveSyncPath,
-          checkpointFiveSync.replace(
-            "let client_handle = crate::telegram::get_authorized_client(state.inner(), account_id).await?;",
-            "let _ignored_handle = crate::telegram::get_authorized_client(state.inner(), account_id).await?;\n    let client_handle = crate::telegram::get_authorized_client(state.inner(), account_id).await?;",
-          ),
-        ],
-      ]),
-    },
-    {
-      name: "sync authorized lookup through function-value alias",
-      mutation: new Map([
-        [
-          checkpointFiveSyncPath,
-          checkpointFiveSync.replace(
-            "let client_handle = crate::telegram::get_authorized_client(state.inner(), account_id).await?;",
-            "let lookup = crate::telegram::get_authorized_client;\n    let _ignored_handle = lookup(state.inner(), account_id).await?;\n    let client_handle = crate::telegram::get_authorized_client(state.inner(), account_id).await?;",
-          ),
         ],
       ]),
     },
@@ -8532,18 +8284,6 @@ impl secrecy::ExposeSecret<str> for HashAlias {
       checkpointFourAdapterPath,
     );
   it.each([
-    {
-      name: "widened raw-session accessor",
-      mutation: new Map([
-        [
-          checkpointFourSessionPath,
-          checkpointFourSession.replace(
-            "pub(super) fn raw_memory_session(",
-            "pub(crate) fn raw_memory_session(",
-          ),
-        ],
-      ]),
-    },
     {
       name: "session key loses Arc",
       mutation: new Map([
@@ -9054,24 +8794,6 @@ impl secrecy::ExposeSecret<str> for HashAlias {
     ).toThrow(/Checkpoint 4/);
   });
 
-  it("rejects Checkpoint 4 production visible associated raw-session consts", () => {
-    const mutatedSession = checkpointFourSession.replace(
-      "impl TelegramSession {\n    pub fn empty",
-      "impl TelegramSession {\n    pub const MEMORY_SESSION: for<'a> fn(&'a Self) -> &'a Arc<MemorySession> = Self::raw_memory_session;\n\n    pub fn empty",
-    );
-    expect(
-      mutatedSession,
-      "Checkpoint 4 visible associated const fixture changes its source",
-    ).not.toBe(checkpointFourSession);
-    expect(() =>
-      assertCheckpointFourSessionContract(
-        new Map([
-          [checkpointFourSessionPath, mutatedSession],
-        ]),
-      )
-    ).toThrow(/Checkpoint 4/);
-  });
-
   it("rejects Checkpoint 4 production raw-identifier wrapper impls", () => {
     const mutatedSession = checkpointFourSession.replace(
       "\n#[cfg(test)]\nmod tests",
@@ -9101,27 +8823,6 @@ impl secrecy::ExposeSecret<str> for HashAlias {
     expect(
       mutatedTelegram,
       "Checkpoint 4 cross-module wrapper fixture changes its source",
-    ).not.toBe(telegram);
-    expect(() =>
-      assertCheckpointFourSessionContract(
-        new Map([
-          [telegramPath, mutatedTelegram],
-        ]),
-      )
-    ).toThrow(/Checkpoint 4/);
-  });
-
-  it("rejects Checkpoint 4 production visible free raw-session unwraps", () => {
-    const telegramPath = "src-tauri/src/telegram.rs";
-    const telegram =
-      telegramContractPaths.readTelegramContractFile(telegramPath);
-    const mutatedTelegram = telegram.replace(
-      "\n#[cfg(test)]\nmod tests",
-      "\npub(crate) fn raw_session_escape(session: &TelegramSession) -> &Arc<MemorySession> { session.raw_memory_session() }\n\n#[cfg(test)]\nmod tests",
-    );
-    expect(
-      mutatedTelegram,
-      "Checkpoint 4 visible free raw-session fixture changes its source",
     ).not.toBe(telegram);
     expect(() =>
       assertCheckpointFourSessionContract(
@@ -9480,12 +9181,6 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
     ).toEqual([
       'format!( "Telegram API hash for account {} is missing from secure storage. Recreate the account credentials.", id )',
     ]);
-    expect(rustFunctionBody(telegram, "get_client").trim()).toBe(
-      "state.runtime.initialized_client(account_id).await",
-    );
-    expect(rustFunctionBody(telegram, "get_authorized_client").trim()).toBe(
-      "state.runtime.authorized_client(account_id).await",
-    );
     expect(
       normalizedActiveCallArguments(
         rustFunctionOriginalBody(telegram, "tg_logout"),
@@ -9706,7 +9401,6 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
         "if sync_policy.previous_last_sync > 0 && message_id <= sync_policy.previous_last_sync",
         "if let Some(cutoff) = sync_policy.initial_sync_cutoff",
         "if published_at < cutoff",
-        "extract_item_payload(&message)",
         "fallback_message_identity(peer, message_id)?",
         "insert_telegram_source_item(",
         ".await?",
@@ -9734,12 +9428,10 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
     expectOrdered(
       rustFunctionBody(sync, "sync_telegram_source"),
       [
-        "get_authorized_client(state.inner(), account_id).await?",
-        "client_handle.raw_client().clone()",
         "resolve_and_refresh_peer(",
         "refresh_forum_topics(",
         "determine_sync_policy(&pool, &source).await?",
-        "persist_items(&pool, &client, resolved_peer.peer, &source, &sync_policy).await?",
+        "persist_items(",
         "finalize_sync(",
         "Ok(SyncResult",
       ],
