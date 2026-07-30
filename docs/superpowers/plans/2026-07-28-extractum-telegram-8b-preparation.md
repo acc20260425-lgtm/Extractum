@@ -1867,6 +1867,11 @@ roadmap/design status pair.
 Before Task 2, commit one focused contract simplification with no production
 Rust, manifest, lockfile, artifact-schema, or status change:
 
+- start from the known unstaged review-fix overlay already present in
+  `src/lib/telegram-crate-boundary-contract.test.ts` after retained CP1. At
+  authority commit `56b9d399`, that overlay is `+1531/-132` with an empty
+  index. It is unretained candidate work in the target file, not a clean-HEAD
+  precondition and not automatically unrelated user work;
 - keep `src/lib/telegram-8b-symbol-map.json` at `schemaVersion: 1`;
   `transitionInventories` remains a readable LLM-review checklist and is not
   executable Rust source authority;
@@ -1881,12 +1886,42 @@ Rust, manifest, lockfile, artifact-schema, or status change:
   resolve Rust names/types/imports/bindings/scopes/shadowing, infer producer
   results or call graphs, trace forwarding/data flow, count same-named
   occurrences, or introduce generated use-site anchors/edges/fences;
+- explicitly remove the dirty-only semantic overlay represented by
+  `phase8BTypedReceiverNames`, `phase8BProducerBoundReceiverNames`,
+  `phase8BFunctionUsesTransitionBridge`, and
+  `phase8BIsCanonicalBridgeTypePath`, plus every helper/assertion/mutation that
+  exists only to feed them. Also remove the retained CP1 fixture/assertion
+  branches that authorize or reject the named escape-hatch definitions or
+  uses, including the `phase8BSessionFixture(includeRawAccessor)` lifecycle
+  branch;
 - preserve unrelated document/artifact serialization, lifecycle vocabulary,
   manifest/dependency, public-surface, identity, symbol-disposition, and
   behavior contracts; the escape-hatch rows remain in the generated
   symbol-disposition/review inventory, but TypeScript does not reconcile their
   definitions or use-sites against Rust source. This amendment does not turn
-  off the rest of the Phase 8 boundary;
+  off the rest of the Phase 8 boundary. In particular, preserve the terminal
+  direct-Grammers dependency-path inventory currently named
+  `phase8BTerminalRawConsumerAuthority`: it is dependency-ownership metadata,
+  not escape-hatch use-site authority. Rename it if needed to make that
+  distinction explicit.
+
+Before editing the target TypeScript file:
+
+```powershell
+Invoke-CheckedNative 'post-CP1 target index is empty' {
+    git diff --cached --quiet -- src/lib/telegram-crate-boundary-contract.test.ts
+}
+git diff -- src/lib/telegram-crate-boundary-contract.test.ts
+git diff HEAD -- src/lib/telegram-crate-boundary-contract.test.ts
+```
+
+Review and classify every existing hunk. Reconcile the dirty-only analyzer
+overlay and the retained CP1 contract in one final HEAD-relative file: keep the
+schema-v1 serialization/type metadata and every unrelated boundary contract;
+remove only the prohibited Rust definition/use analysis. Do not use
+`git restore`, `git checkout`, or interactive/partial staging. If any hunk
+cannot be classified as an explicitly retained contract or the prohibited
+analyzer overlay, stop for owner disposition before editing or staging.
 
 For transitional escape-hatch use-sites, automatic evidence is limited to
 Rust compilation plus the named Rust focused, package, and workspace behavior
@@ -1901,28 +1936,71 @@ Every Task 2–8 checkpoint must perform this same gate after its final scoped
 Rust diff is ready and before writing candidate status, running final retained
 checkpoint gates, retaining, staging, or committing the checkpoint:
 
-1. An LLM reviews the complete production Rust diff for that checkpoint plus
-   enough unchanged surrounding Rust source to account for the complete
-   transitional exception set. The review follows every affected producer and
-   full forwarding chain, including
+1. A fresh independent LLM reviewer that did not implement the checkpoint and
+   has no prior implementation-conversation context receives a bounded review
+   packet: the checkpoint and retained predecessor, the complete scoped Rust
+   diff including production and test Rust, enough unchanged surrounding Rust
+   source, this plan/design authority, and committed
+   `src/lib/telegram-8b-symbol-map.json`. The reviewer reads the artifact's
+   complete `transitionInventories` field and symbol-disposition rows together
+   with both complete exception sets; the artifact is an input checklist, not
+   executable source authority. CP2 uses the explicit no-Rust-change rule; CP3
+   uses `cp3RawHandleCallsites`; CP4 uses both CP4 arrays; CP5 uses both CP5
+   arrays; CP6 carries the CP5 arrays forward unless the reviewed diff removes
+   a listed use; and CP7/CP8 use/carry forward the empty
+   `cp7RawBridgeSymbolsAndCallsites` array.
+2. The review accounts for every affected producer and full forwarding chain,
+   including
    `run_takeout_source_import → run_started_takeout_source_import →
    run_started_takeout_source_import_inner`.
-2. The LLM records in the active task thread the checkpoint and retained
+3. The reviewer records in the active task thread the checkpoint and retained
    predecessor; the exact exception definitions and physical uses that remain;
    each logical owner and full forwarding chain; every use that must disappear
    at this checkpoint; aliases, re-exports, wrappers, function items, and
    unrelated same-named fields; and every finding.
-3. The record ends with exactly one verdict:
+4. The record ends with exactly one verdict:
    `Escape-hatch review verdict: CLEAN` or
    `Escape-hatch review verdict: BLOCKED`. Only `CLEAN` permits candidate
    status, final gates, retention, staging, or commit. Any unlisted or
    ambiguous use is `BLOCKED`; it may be removed and followed by a clean
    re-review without an amendment. An approved plan/design amendment is
    required only if the implementation intends to retain that use.
-4. At CP2, the record must explicitly confirm that the complete production
-   Rust diff contains no escape-hatch definition, physical-use, ownership, or
-   forwarding-chain change. At CP8, the verification document must summarize
-   the CP2–CP8 active-task-thread evidence and exact verdicts.
+5. Every review after `BLOCKED` discards the prior verdict and receives the
+   complete current scoped Rust diff plus required unchanged context, not only
+   a fix delta. This full re-review is mandatory even when the resolution was
+   added context, reviewer clarification, or an approved plan/design amendment
+   rather than a Rust edit. Any Rust or escape-hatch-authority change after
+   `CLEAN` likewise invalidates that verdict and requires the same fresh full
+   review.
+6. After `CLEAN` and before candidate status, copy the complete final review
+   record into
+   `docs/superpowers/verification/2026-07-28-extractum-telegram-8b-preparation.md`.
+   CP2 creates this cumulative durable ledger; CP3–CP8 append one exact
+   checkpoint section and commit it with that checkpoint. A `BLOCKED` attempt
+   remains diagnostic task-thread evidence and is not copied as retained
+   evidence. TypeScript does not parse, validate, or gate on this prose.
+7. At CP2, the record must explicitly confirm that the complete scoped Rust
+   diff contains no escape-hatch definition, physical-use, ownership, or
+   forwarding-chain change. The CP8 section contains only the complete CP8
+   review record and its one final CLEAN marker.
+
+The cumulative verification document uses the exact section headings
+`## CP2 Escape-Hatch LLM Review` through
+`## CP8 Escape-Hatch LLM Review`. Every section records the retained
+predecessor SHA, reviewer independence statement, reviewed Rust path list,
+artifact/inventory inputs, remaining definitions and physical uses, logical
+owners and forwarding chains, required removals, aliases/re-exports/wrappers/
+function items/same-named fields, findings, and exactly one final
+`Escape-hatch review verdict: CLEAN` line.
+
+Task 8 adds an aggregate CP2–CP8 outcome table outside those seven exact review
+sections. The table references each section and checkpoint SHA and records the
+outcome as plain `CLEAN`; it does not repeat the exact verdict-marker line.
+
+Literal source search may help the independent reviewer navigate the packet,
+but no search pattern, occurrence count, or exit status authorizes or blocks
+an escape-hatch use or serves as checkpoint-retention evidence. This includes
+the terminal CP7/CP8 zero-use claims.
 
 Run:
 
@@ -1936,25 +2014,52 @@ Invoke-CheckedNative 'post-CP1 shell-cap contract' {
 Invoke-CheckedNative 'post-CP1 symbol authority' {
     node scripts/telegram-8b-symbol-map.mjs --check
 }
-Invoke-CheckedNative 'post-CP1 Rust check' {
-    cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets
-}
-Invoke-CheckedNative 'post-CP1 Rust behavior' {
-    cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets
+Invoke-CheckedNative 'post-CP1 TypeScript diff check' {
+    git diff --check -- src/lib/telegram-crate-boundary-contract.test.ts
 }
 ```
 
 The plan and design are already committed authority; do not stage them in this
-one-time simplification commit. Inspect and stage only the focused
-`src/lib/telegram-crate-boundary-contract.test.ts` simplification. Preserve any
-unrelated dirty TypeScript state until implementation intentionally changes
-it. Keep the exact Checkpoint 1 status pair and commit:
+one-time simplification commit. Once every target-file hunk is classified and
+the complete working file has the intended HEAD-relative state, stage the
+whole focused file non-interactively and inspect both sides:
 
 ```powershell
+Invoke-CheckedNative 'stage post-CP1 contract simplification' {
+    git add -- src/lib/telegram-crate-boundary-contract.test.ts
+}
+$PostCp1CachedPaths = @(git diff --cached --name-only)
+if ($LASTEXITCODE -ne 0) {
+    throw 'Unable to inspect post-CP1 cached path allowlist'
+}
+if (
+    $PostCp1CachedPaths.Count -ne 1 `
+    -or $PostCp1CachedPaths[0] `
+        -ne 'src/lib/telegram-crate-boundary-contract.test.ts'
+) {
+    throw "Unexpected post-CP1 cached paths: $($PostCp1CachedPaths -join ', ')"
+}
+git diff --cached -- src/lib/telegram-crate-boundary-contract.test.ts
+git diff -- src/lib/telegram-crate-boundary-contract.test.ts
+Invoke-CheckedNative 'post-CP1 target has no unstaged diff' {
+    git diff --quiet -- src/lib/telegram-crate-boundary-contract.test.ts
+}
+Invoke-CheckedNative 'post-CP1 cached diff check' {
+    git diff --cached --check
+}
 Invoke-CheckedNative 'commit post-CP1 contract simplification' {
     git commit -m "test: simplify Telegram escape-hatch review authority"
 }
 ```
+
+The cached path allowlist must contain exactly the target TypeScript file, and
+its unstaged target diff must be empty before commit. This is a non-checkpoint
+authority-maintenance commit: it keeps the exact CP1 status pair, is recorded
+with authority commits
+`1c0961516c338073ba9578edb18a61c7b1285897` and
+`56b9d3995f10f0070f4e2d0f94fb048181218ae3` in the final verification ledger,
+along with the reviewed `docs: harden Telegram LLM review gate` correction
+commit, and must be an ancestor of CP2 and the final Phase 8B disposition.
 
 ## Task 2: Normalize Existing Workspace Dependencies Without Graph Drift
 
@@ -1968,6 +2073,8 @@ Invoke-CheckedNative 'commit post-CP1 contract simplification' {
 - Modify:
   `docs/superpowers/specs/2026-07-26-telegram-crate-boundary-design.md`
 - Modify: `docs/superpowers/specs/2026-07-17-crate-roadmap.md`
+- Create:
+  `docs/superpowers/verification/2026-07-28-extractum-telegram-8b-preparation.md`
 
 Promote exactly these entries to `[workspace.dependencies]`:
 
@@ -2030,9 +2137,11 @@ Invoke-CheckedNative 'Task 2 locked metadata' {
 ```
 
 - [ ] Obtain `Escape-hatch review verdict: CLEAN` from the mandatory reusable
-  CP2–CP8 LLM retention gate, including CP2's explicit no-production-Rust
-  escape-hatch-change finding. Only then update statuses to Checkpoint 2, run
-  the `extractum` package checkpoint, assert 719 unique tests, and run:
+  CP2–CP8 LLM retention gate, including CP2's explicit no-scoped-Rust
+  escape-hatch-change finding. Create the cumulative verification document and
+  copy the complete CLEAN record into its CP2 section. Only then update statuses
+  to Checkpoint 2, run the `extractum` package checkpoint, assert 719 unique
+  tests, and run:
 
 ```powershell
 Assert-RustPackageTestTotal -Package extractum -ExpectedTotal 719
@@ -2069,6 +2178,8 @@ Invoke-CheckedNative 'commit Task 2' {
 - Modify:
   `src-tauri/src/takeout_import/{mod,migrated_history,raw_parse}.rs`
 - Modify: the Telegram contract and two status docs
+- Modify:
+  `docs/superpowers/verification/2026-07-28-extractum-telegram-8b-preparation.md`
 
 - [ ] Copy the four retained 8A leaves byte-for-byte into their staged owners
   with `apply_patch`; change only paths/visibility required by the new root.
@@ -2198,8 +2309,11 @@ Invoke-CheckedNative 'Task 3 package checkpoint' {
 - [ ] Assert exactly 720 unique `extractum` library IDs and exact mapped
   identity relocation for DTO/media/runtime/session; no old
   `telegram::{dto,media,runtime,session}` test prefix remains.
-- [ ] Update candidate statuses to Checkpoint 3, run Telegram, media, analysis,
-  LLM, and prompt-pack source contracts, then run:
+- [ ] Obtain `Escape-hatch review verdict: CLEAN` from the mandatory reusable
+  CP2–CP8 LLM retention gate and append the complete CLEAN record to the
+  cumulative verification document. Only then update candidate statuses to
+  Checkpoint 3, run Telegram, media, analysis, LLM, and prompt-pack source
+  contracts, then run:
 
 ```powershell
 Assert-RustPackageTestTotal -Package extractum -ExpectedTotal 720
@@ -2234,6 +2348,8 @@ Invoke-CheckedNative 'commit Task 3' {
   `src-tauri/src/sources/sync.rs` and
   `src-tauri/src/takeout_import/mod.rs`
 - Modify: the Telegram contract and two status docs
+- Modify:
+  `docs/superpowers/verification/2026-07-28-extractum-telegram-8b-preparation.md`
 
 - [ ] Introduce compiling private test callbacks/fakes and deliberately
   semantic RED scaffolds for the three exact Checkpoint 4 tests:
@@ -2374,8 +2490,11 @@ Invoke-CheckedNative 'Task 4 package checkpoint' {
 }
 ```
 
-- [ ] Assert exactly 723 unique library IDs. Update candidate statuses to
-  Checkpoint 4 and require the contract to resolve exactly
+- [ ] Assert exactly 723 unique library IDs. Obtain
+  `Escape-hatch review verdict: CLEAN` from the mandatory reusable CP2–CP8 LLM
+  retention gate and append the complete CLEAN record to the cumulative
+  verification document. Only then update candidate statuses to Checkpoint 4
+  and require the contract to resolve exactly
   `telegram_impl/{error,live/mod,live/avatar,live/peer}.rs` at this lifecycle.
 - [ ] Run:
 
@@ -2407,6 +2526,8 @@ Invoke-CheckedNative 'commit Task 4' {
 - Modify: `src-tauri/src/takeout_import/forum_topics.rs` to use the shared
   owned `fetch_forum_topics` operation during the CP5→CP7 transition
 - Modify: the Telegram contract and two status docs
+- Modify:
+  `docs/superpowers/verification/2026-07-28-extractum-telegram-8b-preparation.md`
 
 - [ ] Add compiling semantic RED scaffolds for:
 
@@ -2540,8 +2661,11 @@ Invoke-CheckedNative 'Task 5 package checkpoint' {
 ```
 
 - [ ] Assert exactly 727 unique library IDs and the exact staged mapped-prefix
-  counts through live messages/peer/media/runtime/session. Update candidate
-  statuses to Checkpoint 5, run all boundary contracts, then run:
+  counts through live messages/peer/media/runtime/session. Obtain
+  `Escape-hatch review verdict: CLEAN` from the mandatory reusable CP2–CP8 LLM
+  retention gate and append the complete CLEAN record to the cumulative
+  verification document. Only then update candidate statuses to Checkpoint 5,
+  run all boundary contracts, then run:
 
 ```powershell
 Assert-RustPackageTestTotal -Package extractum -ExpectedTotal 727
@@ -2566,6 +2690,8 @@ Invoke-CheckedNative 'commit Task 5' {
 - Modify:
   `docs/superpowers/specs/2026-07-26-telegram-crate-boundary-design.md`
 - Modify: `docs/superpowers/specs/2026-07-17-crate-roadmap.md`
+- Modify:
+  `docs/superpowers/verification/2026-07-28-extractum-telegram-8b-preparation.md`
 
 This is a characterization decomposition, not new production behavior. The two
 companion tests are expected GREEN immediately because the raw parser already
@@ -2642,8 +2768,9 @@ Invoke-CheckedNative 'Task 6 package checkpoint' {
   and 168 present tracked IDs. The contract must map the companions to their
   temporary Checkpoint 6 IDs and reserve their staged Checkpoint 7 IDs.
 - [ ] Obtain `Escape-hatch review verdict: CLEAN` from the mandatory reusable
-  CP2–CP8 LLM retention gate. Only then update candidate statuses to Checkpoint
-  6, run the Telegram contract, and run:
+  CP2–CP8 LLM retention gate and append the complete CLEAN record to the
+  cumulative verification document. Only then update candidate statuses to
+  Checkpoint 6, run the Telegram contract, and run:
 
 ```powershell
 Assert-RustPackageTestTotal -Package extractum -ExpectedTotal 729
@@ -2684,6 +2811,8 @@ Invoke-CheckedNative 'commit Task 6' {
 - Modify:
   `docs/superpowers/specs/2026-07-26-telegram-crate-boundary-design.md`
 - Modify: `docs/superpowers/specs/2026-07-17-crate-roadmap.md`
+- Modify:
+  `docs/superpowers/verification/2026-07-28-extractum-telegram-8b-preparation.md`
 
 ### Task 7A: Owned Transport and Attempt/Fallback Ordering
 
@@ -3084,9 +3213,11 @@ This requires exactly 143 baseline-derived, 57 pre-new staged, 14 new staged,
 103 pre-new app, one new app, 175 tracked, 104 app, 71 staged, and 736 unique
 package IDs. The staged prefix is compared against the complete 71-ID union;
 the 57/14 partition is separately count-, overlap-, and membership-checked.
-- [ ] Update candidate statuses to Checkpoint 7. Run Telegram, shell-cap,
-  media, Gemini, analysis, LLM, and prompt-pack contracts plus feature
-  baseline check; then run:
+- [ ] Obtain `Escape-hatch review verdict: CLEAN` from the mandatory reusable
+  CP2–CP8 LLM retention gate and append the complete CLEAN record to the
+  cumulative verification document. Only then update candidate statuses to
+  Checkpoint 7. Run Telegram, shell-cap, media, Gemini, analysis, LLM, and
+  prompt-pack contracts plus feature baseline check; then run:
 
 ```powershell
 Invoke-RetainedCheckpointGates '8B-CP7'
@@ -3109,7 +3240,7 @@ Invoke-CheckedNative 'commit Task 7' {
 - Create: `src/lib/telegram-8b-staging-sha256.json`
 - Modify: `src/lib/telegram-crate-boundary-contract.test.ts`
 - Modify: `src/lib/crate-extraction-shell-cap-contract.test.ts`
-- Create:
+- Modify:
   `docs/superpowers/verification/2026-07-28-extractum-telegram-8b-preparation.md`
 - Modify:
   `docs/superpowers/specs/2026-07-26-telegram-crate-boundary-design.md`
@@ -3223,8 +3354,9 @@ Invoke-CheckedNative 'final LLM and prompt contracts' {
   `extractum-telegram`, all four Grammers roots remain direct on `extractum`,
   and the feature artifact remains exact.
 - [ ] Obtain `Escape-hatch review verdict: CLEAN` from the mandatory reusable
-  CP2–CP8 LLM retention gate. Only then set candidate statuses to Checkpoint 8
-  and run:
+  CP2–CP8 LLM retention gate and append the complete CLEAN record to the
+  cumulative verification document. Only then set candidate statuses to
+  Checkpoint 8 and run:
 
 ```powershell
 Invoke-RetainedCheckpointGates '8B-CP8'
@@ -3420,6 +3552,13 @@ completion gate. Stop only the exact PID started by the script.
 ```text
 start SHA and ancestor proof
 Checkpoint 1–8 commit SHAs
+post-CP1 non-checkpoint authority-maintenance SHAs in chronological order:
+  1c0961516c338073ba9578edb18a61c7b1285897
+    (`docs: define generated Telegram bridge-use authority`)
+  56b9d3995f10f0070f4e2d0f94fb048181218ae3
+    (`docs: move Telegram escape-hatch authority to LLM review`)
+  reviewed `docs: harden Telegram LLM review gate` correction commit
+  post-CP1 TypeScript simplification commit
 authority/map hashes and counts
 manifest/lock hashes and six-member metadata proof
 feature-baseline artifact hash
@@ -3427,7 +3566,8 @@ feature-baseline artifact hash
 exact test counts/identity sets
 focused/full command exit results
 one workspace-check duration per checkpoint
-CP2–CP8 active-task-thread LLM evidence summaries and exact CLEAN verdicts
+complete cumulative CP2–CP8 LLM review sections, each with one exact CLEAN
+  marker, plus an external aggregate outcome table with section/SHA references
 live MCP command result (sanitized, no credentials)
 release build path/hash
 startup PID/path/survival/cleanup evidence
@@ -3542,8 +3682,9 @@ Invoke-CheckedNative 'commit terminal Phase 8B status' {
 ```
 
 - [ ] Prove the worktree is clean, the final commit descends from the recorded
-  start, every Checkpoint 1–8 commit is an ancestor, and no ignored/generated
-  browser artifact was staged.
+  start, every Checkpoint 1–8 commit and every recorded post-CP1
+  authority-maintenance commit is an ancestor, and no ignored/generated browser
+  artifact was staged.
 
 ## Rollback and Pause Ladder
 

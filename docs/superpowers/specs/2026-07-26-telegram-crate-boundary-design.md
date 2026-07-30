@@ -704,10 +704,13 @@ Checkpoint 1 and does not rewrite Checkpoint 1 history:
   accessors retain only their existing package/super visibility and exact
   callsites. Both exception sets are completely removed/demoted before CP7 and
   authorize no public module, glob, fifth media item, or additional raw bridge.
-- [ ] For every unexecuted checkpoint after retained CP1, an LLM reviews the
-  complete scoped Rust diff and enough unchanged surrounding source to account
+- [ ] For every unexecuted checkpoint after retained CP1, a fresh independent
+  LLM that did not implement the checkpoint reviews the complete scoped
+  production/test Rust diff and enough unchanged surrounding source to account
   for every transitional escape-hatch definition, physical use, producer, and
-  forwarding continuation against the readable inventories below. The
+  forwarding continuation against the readable inventories below. The final
+  CLEAN record is appended to the cumulative committed verification document
+  before candidate status. The
   TypeScript contract must not resolve Rust names/types/imports/scopes,
   reconstruct producer or call graphs, trace data flow, or enforce
   source-use anchors/edges/occurrence fences. For these use-sites, automatic
@@ -1704,10 +1707,14 @@ remains so the plan, generated artifact, and reviewer share the same readable
 checkpoint vocabulary. It is not upgraded to schema v2, and no TypeScript test
 may derive, accept, or reject a Rust escape-hatch use-site from those arrays.
 
-For CP2, the LLM reviewer verifies from the complete scoped diff that no
-production-Rust escape-hatch definition or callsite changed. At CP3 through
-CP6, the reviewer uses the logical-owner arrays, symbol-disposition rows, and
-both complete transitional exception sets:
+A fresh independent LLM reviewer that did not implement the checkpoint and has
+no prior implementation-conversation context performs every CP2–CP8 gate. Its
+bounded packet includes the checkpoint and retained predecessor, the complete
+scoped Rust diff including production and test Rust, enough unchanged
+surrounding source, this plan/design authority, and committed
+`src/lib/telegram-8b-symbol-map.json`. The reviewer reads the artifact's
+complete schema-v1 `transitionInventories` field and symbol-disposition rows as
+input checklists together with both complete transitional exception sets:
 
 ```text
 media compatibility facade:
@@ -1723,6 +1730,20 @@ raw bridge:
   ResolvedSyncPeer::peer
   legacy_peer_ref_from_descriptor
 ```
+
+The schema-v1 artifact is intentionally not expanded merely to make every
+checkpoint look uniform. CP2 uses the explicit no-Rust-change rule; CP3 uses
+`cp3RawHandleCallsites`; CP4 uses both CP4 arrays; CP5 uses both CP5 arrays;
+CP6 carries the CP5 arrays forward unless the reviewed diff removes a listed
+use; and CP7/CP8 use/carry forward the empty
+`cp7RawBridgeSymbolsAndCallsites` array. The artifact is not the sole authority:
+the media facade, symbol rows, complete exception sets, and plan/design rules
+remain required review inputs.
+
+At CP2, the reviewer verifies from the complete scoped diff that no Rust
+escape-hatch definition, physical use, logical ownership, or forwarding chain
+changed. At CP3 through CP6, the reviewer accounts for the active inventories
+and the complete exception sets above.
 
 At CP7 and CP8 the reviewer must find no retained transitional definition,
 callsite, forwarding use, alias, re-export, or replacement spelling. An
@@ -1748,9 +1769,9 @@ the direct access in the outer function are attributed to
 shadowing, wrapper, or forwarding changes are reviewed semantically by the
 LLM, not inferred by automation.
 
-For each remaining checkpoint commit, the LLM review inspects the complete
-production Rust diff plus enough unchanged surrounding source to follow every
-affected producer and continuation. Its review evidence records:
+For each remaining checkpoint commit, the independent LLM review inspects the
+complete scoped Rust diff plus enough unchanged surrounding source to follow
+every affected producer and continuation. Its review evidence records:
 
 - the selected checkpoint and retained predecessor;
 - every listed exception definition and physical use that remains;
@@ -1762,8 +1783,21 @@ affected producer and continuation. Its review evidence records:
 
 The evidence is review output, not a generated artifact and not input to a
 source parser. It must be recorded in the active task thread before the
-candidate status/final gates and summarized in the final Task 8 verification
-document. No test passes merely because that prose exists.
+candidate status/final gates. After a final `CLEAN` verdict, CP2 creates and
+CP3–CP8 append the complete record to cumulative committed document
+`docs/superpowers/verification/2026-07-28-extractum-telegram-8b-preparation.md`
+before candidate status. A `BLOCKED` review is not retained as checkpoint
+evidence. Every review after `BLOCKED` receives the complete current scoped
+Rust diff and required unchanged context, even when resolution was added
+context, clarification, or an approved authority amendment rather than a Rust
+edit. Any Rust or escape-hatch-authority change after `CLEAN` also invalidates
+that verdict and requires a fresh independent full review, never a
+fix-delta-only review. The CP8 section contains only the complete CP8 record and
+one final CLEAN marker. A separate aggregate table outside all seven exact
+review sections references their SHAs/sections and records plain `CLEAN`
+outcomes without repeating verdict-marker lines. No TypeScript test parses,
+validates, or gates on this prose, and no test passes merely because the prose
+exists.
 
 For transitional escape-hatch authorization,
 `src/lib/telegram-crate-boundary-contract.test.ts` must not tokenize or mask
@@ -1775,6 +1809,9 @@ inventories remain document/artifact review metadata, but TypeScript does not
 reconcile their definitions or use-sites against Rust source. It may continue
 to verify document/artifact serialization and lifecycle vocabulary. There is
 no global reservation of an unrelated application field named `peer`.
+Literal source search may be used only as reviewer navigation. No search
+pattern, occurrence count, or exit status authorizes or blocks an escape-hatch
+use or serves as CP7/CP8 terminal evidence.
 
 Automatic evidence for these escape-hatch uses is limited to Rust compilation
 and the named Rust focused/package/workspace behavior tests. Compilation
@@ -2706,12 +2743,14 @@ not a correctness failure.
   Grammers revision change. Removing the exact dead generic insert seam and
   draft field declared above is boundary work, not an unrelated cleanup.
 - No focused timing series, process scanner, quiet-window rule, retry policy,
-  cumulative ledger, or new measurement runner.
+  cumulative timing/measurement ledger, or new measurement runner. The
+  cumulative CP2–CP8 LLM review document required above is not measurement
+  infrastructure.
 - No TypeScript implementation of Rust import, name, type, scope, shadowing,
   call-graph, or data-flow resolution and no generated escape-hatch
   use-site/edge/occurrence authority. For unexecuted work after retained CP1,
-  an LLM reviews those source forms; Cargo and behavior tests provide the
-  automatic evidence.
+  a fresh independent LLM reviews those source forms and records CLEAN evidence
+  durably; Cargo and behavior tests provide the automatic evidence.
 
 ## Acceptance Criteria
 
@@ -2756,12 +2795,13 @@ The design outcome is complete only when:
     `crate::telegram_impl::` consumer paths remain byte-identical behind the
     private explicit facade; the first 8A checkpoint directly normalizes the
     six identity-seam error paths, and the final 8B staging tree contains no
-    `crate::error`, `crate::compression`, or `crate::time` reference; the
-    every unexecuted CP2→CP8 checkpoint has recorded LLM review of the
-    complete transitional exception set and all indirect forwarding paths,
-    while the TypeScript contract performs no Rust use-site analysis; CP7/CP8
-    review finds no transitional escape hatch, and the named Rust compile and
-    behavior gates pass;
+    `crate::error`, `crate::compression`, or `crate::time` reference; every
+    unexecuted CP2→CP8 checkpoint has an independent LLM review of the complete
+    transitional exception set and all indirect forwarding paths recorded in
+    the cumulative committed verification document, while the TypeScript
+    contract performs no Rust use-site analysis; CP7/CP8 review finds no
+    transitional escape hatch, and the named Rust compile and behavior gates
+    pass;
 13. the exact Grammers revision and direct declaration policy live with the
     crate dependency owner, the generated required/forbidden feature baseline
     passes without unclassified feature keys, and the lockfile is current;
@@ -2811,10 +2851,12 @@ Each plan must:
   through the explicit private compatibility facade;
 - preserve the retained CP1 schema-v1 symbol map and change only the
   unexecuted CP2→CP8 instructions: keep the logical-owner arrays as a readable
-  LLM-review checklist, require complete diff plus producer/continuation review
-  at each checkpoint, and forbid TypeScript Rust use-site analysis or
-  generated anchors/edges/occurrence fences; automatic evidence for those
-  uses is the named Rust compilation and behavior gates;
+  LLM-review checklist, require the committed artifact plus complete diff and
+  producer/continuation review by a fresh independent reviewer at each
+  checkpoint, record every CLEAN verdict in the cumulative committed
+  verification document, and forbid TypeScript Rust use-site analysis or
+  generated anchors/edges/occurrence fences; automatic evidence for those uses
+  is the named Rust compilation and behavior gates;
 - reproduce the exact existing-symbol public visibility allowlist and state
   every new operation signature before its RED contract;
 - name RED/GREEN tests and non-empty suite helpers before implementation;
