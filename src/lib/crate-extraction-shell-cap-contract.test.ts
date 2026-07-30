@@ -966,6 +966,7 @@ describe("crate extraction timing policy", () => {
       [
         "Phase 8 has an owner-approved boundary; 8A preparation is retained",
         "Phase 8 has an owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 1 authority are retained",
+        "Phase 8 has an owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 2 authority are retained",
       ].some((status) => phase7Roadmap.includes(status)),
     ).toBe(true);
     expect(roadmapTiming).toContain(
@@ -1034,12 +1035,14 @@ describe("crate extraction timing policy", () => {
       [
         "**Status:** Approved; 8A preparation retained; 8B not started",
         "**Status:** Approved; 8B preparation Checkpoint 1 retained",
+        "**Status:** Approved; 8B preparation Checkpoint 2 retained",
       ].some((status) => telegramBoundaryDesign.includes(status)),
     ).toBe(true);
     expect(
       [
         "owner-approved Phase 8 boundary; 8A preparation is retained; 8B has not started.",
         "owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 1 authority are retained.",
+        "owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 2 authority are retained.",
       ].some((status) => compact(crateRoadmap).includes(status)),
     ).toBe(true);
     expect(compact(crateRoadmap)).not.toContain(
@@ -1070,6 +1073,7 @@ describe("crate extraction timing policy", () => {
     expect([
       "8A preparation retained",
       "8B preparation Checkpoint 1 retained",
+      "8B preparation Checkpoint 2 retained",
     ]).toContain(phase8Status);
     expect(phase8Roadmap).toContain(
       "2026-07-26-telegram-crate-boundary-design.md",

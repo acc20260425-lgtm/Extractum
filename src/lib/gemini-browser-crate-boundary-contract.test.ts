@@ -288,6 +288,8 @@ describe("Gemini Browser crate boundary", () => {
       ...(promptPackCrateExtracted ? ["crates/extractum-prompt-packs"] : []),
       ...(analysisCrateExtracted ? ["crates/extractum-analysis"] : []),
     ]);
+    expect(members).toHaveLength(6);
+    expect(rootCargo).not.toContain("extractum-telegram");
     expect(
       tomlSection(rootCargo, "dependencies").match(
         /^extractum-analysis = \{ path = "crates\/extractum-analysis" \}$/gm,
@@ -320,7 +322,14 @@ describe("Gemini Browser crate boundary", () => {
     expect(dependencyNames(tomlSection(rootCargo, "workspace.dependencies"))).toEqual(
       (promptPackCrateExtracted
         ? [
+            "base64",
+            "chacha20poly1305",
+            "grammers-client",
+            "grammers-mtsender",
+            "grammers-session",
+            "grammers-tl-types",
             "parking_lot",
+            "rand_core",
             "reqwest",
             "secrecy",
             "serde",
@@ -350,7 +359,14 @@ describe("Gemini Browser crate boundary", () => {
     );
     expect(tomlSection(rootCargo, "workspace.dependencies")).toBe(
       [
+        'base64 = "0.22"',
+        'chacha20poly1305 = { version = "0.10", features = ["std"] }',
+        'grammers-client = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", default-features = false }',
+        'grammers-mtsender = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa" }',
+        'grammers-session = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", default-features = false, features = ["serde"] }',
+        'grammers-tl-types = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", features = ["deserializable-functions"] }',
         'parking_lot = "0.12"',
+        'rand_core = { version = "0.6", features = ["getrandom"] }',
         'reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }',
         'secrecy = "0.8"',
         'serde = { version = "1", features = ["derive"] }',
@@ -371,6 +387,21 @@ describe("Gemini Browser crate boundary", () => {
     );
     for (const inherited of ["parking_lot", "reqwest", "secrecy", "tokio-util", "url", "tempfile"]) {
       expect(tomlSection(rootCargo, "dependencies")).toMatch(new RegExp(`^${inherited}\\s*=\\s*\\{ workspace = true`, "m"));
+    }
+    for (const inherited of [
+      "base64",
+      "chacha20poly1305",
+      "grammers-client",
+      "grammers-mtsender",
+      "grammers-session",
+      "grammers-tl-types",
+      "rand_core",
+    ]) {
+      expect(
+        tomlSection(rootCargo, "dependencies")
+          .split("\n")
+          .filter((line) => line === `${inherited} = { workspace = true }`),
+      ).toEqual([`${inherited} = { workspace = true }`]);
     }
     expect(tomlSection(rootCargo, "dependencies")).toContain('tokio = { workspace = true, features = ["full"] }');
     expect(tomlSection(rootCargo, "dev-dependencies")).toContain('tokio = { workspace = true, features = ["test-util"] }');

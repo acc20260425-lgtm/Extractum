@@ -33,8 +33,8 @@ Completed and in-flight slices governed by their own documents:
   recorded in the
   [verification document](../verification/2026-07-22-extractum-analysis-extraction.md).
 - [`2026-07-26-telegram-crate-boundary-design.md`](2026-07-26-telegram-crate-boundary-design.md)
-  — owner-approved Phase 8 boundary; 8A preparation is retained; 8B has not
-  started. It replaces the stale
+  — owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 2
+  authority are retained. It replaces the stale
   five-file cluster with three separately retainable sub-slices that remove
   the full current Grammers perimeter without moving app-owned SQL, secrets,
   events, or Takeout job orchestration.
@@ -427,8 +427,8 @@ trigger an investigation by itself.
 Phase 7 is implemented and retained under the
 [JIT boundary design](2026-07-22-analysis-crate-boundary-design.md). The
 [verification document](../verification/2026-07-22-extractum-analysis-extraction.md)
-records the retained result. Phase 8A preparation is retained; 8B has not
-started.
+records the retained result. Phase 8A preparation and Phase 8B Checkpoint 2
+authority are retained.
 
 ### Phase 7 — `extractum-analysis` (done: retained)
 
@@ -463,11 +463,11 @@ back a correct ownership boundary, and it did not decide retention. The result
 participates in the standing adjacent-results rule at 15,000 ms and breaks any
 qualifying sequence because it is below the threshold.
 
-Phase 8 has an owner-approved boundary; 8A preparation is retained. Further
-execution follows the three separately reviewed plans and requires explicit
-owner instructions.
+Phase 8 has an owner-approved Phase 8 boundary; 8A preparation and 8B
+Checkpoint 2 authority are retained. Further execution follows the three
+separately reviewed plans and requires explicit owner instructions.
 
-### Phase 8 — `extractum-telegram` (8B preparation Checkpoint 1 retained)
+### Phase 8 — `extractum-telegram` (8B preparation Checkpoint 2 retained)
 
 The owner-approved
 [Phase 8 boundary design](2026-07-26-telegram-crate-boundary-design.md)
@@ -563,7 +563,8 @@ roadmap/design status pair. The exact uncommitted next-checkpoint pair exists
 only as the candidate lifecycle selector for the final checkpoint gates. It
 becomes retained only in the same GREEN checkpoint commit; a failed gate
 restores the preceding retained pair before any fix. This authority amendment
-does not advance the current `8A preparation retained` status.
+did not itself advance the retained status, which was then
+`8A preparation retained`.
 
 By the end of 8B, staged modules use only relative `self::`/`super::` paths,
 while app-owned callers use the exact `crate::telegram_impl::` prefix. 8C

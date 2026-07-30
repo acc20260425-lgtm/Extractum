@@ -43,6 +43,27 @@ const roadmap = telegramContractPaths.readTelegramContractFile(roadmapPath);
 const valueRegistry = telegramContractPaths.readTelegramContractFile(
   "docs/value-registry.md",
 );
+const rootCargo = telegramContractPaths.readTelegramContractFile(
+  "src-tauri/Cargo.toml",
+);
+const grammersFeatureBaseline = JSON.parse(
+  telegramContractPaths.readTelegramContractFile(
+    "src/lib/telegram-grammers-feature-baseline.json",
+  ),
+) as {
+  revision: string;
+  packages: Array<{ name: string; required: string[] }>;
+};
+
+const workspaceDependencyNormalization = [
+  'base64 = "0.22"',
+  'chacha20poly1305 = { version = "0.10", features = ["std"] }',
+  'grammers-client = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", default-features = false }',
+  'grammers-mtsender = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa" }',
+  'grammers-session = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", default-features = false, features = ["serde"] }',
+  'grammers-tl-types = { git = "https://codeberg.org/Lonami/grammers", rev = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa", features = ["deserializable-functions"] }',
+  'rand_core = { version = "0.6", features = ["getrandom"] }',
+] as const;
 
 const directGrammersPaths = [
   "src-tauri/src/media.rs",
@@ -225,7 +246,21 @@ const retainedPreparationStates = [
     designStatus: "Approved; 8B preparation Checkpoint 1 retained",
     lifecycle: "8b-checkpoint-1",
   },
+  {
+    roadmapStatus: "8B preparation Checkpoint 2 retained",
+    designStatus: "Approved; 8B preparation Checkpoint 2 retained",
+    lifecycle: "8b-checkpoint-2",
+  },
 ] as const;
+
+function tomlSection(source: string, heading: string): string {
+  const marker = `[${heading}]`;
+  const start = source.indexOf(marker);
+  if (start < 0) return "";
+  const bodyStart = start + marker.length;
+  const next = source.slice(bodyStart).search(/^\[\[?[^\n]+\]?\]$/m);
+  return source.slice(bodyStart, next < 0 ? undefined : bodyStart + next).trim();
+}
 
 function sectionBetween(source: string, start: string, end: string): string {
   const startIndex = source.indexOf(start);
@@ -481,7 +516,7 @@ function assertRawConsumerInventory(
     return;
   }
 
-  let expectedApp = [...checkpointOneRawConsumerPaths];
+  let expectedApp: string[] = [...checkpointOneRawConsumerPaths];
   if (checkpointNumber(value) >= 3) {
     expectedApp = expectedApp.map((relativePath) =>
       relativePath === "src-tauri/src/media.rs"
@@ -6864,6 +6899,71 @@ impl TakeoutPageRequest {
 });
 
 describe("literal immutable Telegram test map", () => {
+  it("normalizes the pinned Telegram dependencies without workspace graph drift", () => {
+    const workspace = tomlSection(rootCargo, "workspace");
+    const workspaceDependencies = tomlSection(
+      rootCargo,
+      "workspace.dependencies",
+    );
+    const appDependencies = tomlSection(rootCargo, "dependencies");
+    const members = workspace
+      .match(/^members\s*=\s*\[([^\]]+)\]$/m)?.[1]
+      .split(",")
+      .map((member) => member.trim().replace(/^"|"$/g, ""));
+
+    expect(members).toEqual([
+      ".",
+      "crates/extractum-core",
+      "crates/extractum-gemini-browser",
+      "crates/extractum-llm",
+      "crates/extractum-prompt-packs",
+      "crates/extractum-analysis",
+    ]);
+    expect(rootCargo).not.toContain("extractum-telegram");
+
+    for (const specification of workspaceDependencyNormalization) {
+      expect(
+        workspaceDependencies
+          .split("\n")
+          .filter((line) => line === specification),
+        specification,
+      ).toEqual([specification]);
+      const dependency = specification.slice(0, specification.indexOf(" ="));
+      expect(
+        appDependencies
+          .split("\n")
+          .filter((line) => line === `${dependency} = { workspace = true }`),
+        `${dependency} workspace inheritance`,
+      ).toEqual([`${dependency} = { workspace = true }`]);
+    }
+
+    expect(grammersFeatureBaseline.revision).toBe(
+      "1f901ce6e973fdcf0e74267f3d8efad5c729daaa",
+    );
+    expect(
+      grammersFeatureBaseline.packages.map(({ name, required }) => ({
+        name,
+        required,
+      })),
+    ).toEqual([
+      { name: "grammers-client", required: [] },
+      { name: "grammers-mtsender", required: [] },
+      { name: "grammers-session", required: ["serde"] },
+      {
+        name: "grammers-tl-types",
+        required: [
+          "default",
+          "deserializable-functions",
+          "impl-debug",
+          "impl-from-enum",
+          "impl-from-type",
+          "tl-api",
+          "tl-mtproto",
+        ],
+      },
+    ]);
+  });
+
   it("records only the truthful retained Phase 8 lifecycle states", () => {
     expect(retainedPreparationStates).toContainEqual({
       roadmapStatus: phase8Status,
