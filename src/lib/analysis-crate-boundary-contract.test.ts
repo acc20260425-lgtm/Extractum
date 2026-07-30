@@ -5004,17 +5004,22 @@ describe("analysis crate boundary", () => {
 
     const portable = portableProductionFiles();
     const app = appProductionFiles();
+    const telegramFoundationIsStaged = existsSync(
+      path.join(repoRoot, "src-tauri/src/telegram_impl/lib.rs"),
+    );
     expect(
       [...ownedTables].filter((table) => !schemaTables.has(table)),
       "all six owned tables must exist in canonical migrations",
     ).toEqual([]);
-    expect(app.length, "all-app production graph breadth").toBe(125);
+    expect(app.length, "all-app production graph breadth")
+      .toBe(telegramFoundationIsStaged ? 126 : 125);
     for (const requiredPath of [
       "lib.rs",
       "main.rs",
       "accounts.rs",
       "analysis_documents.rs",
       "analysis/mod.rs",
+      ...(telegramFoundationIsStaged ? ["telegram_impl/lib.rs"] : []),
       "projects/read_model.rs",
       "notebooklm_export/query.rs",
     ]) {
@@ -5609,6 +5614,9 @@ describe("analysis crate boundary", () => {
     const notebookExportSourceFingerprint = extracted
       ? "e5ce8f4c7a525702ec74385a9059af358c9a8211d1605e3d667bce034fc67f91"
       : "02f29dae9838edfa219cadd1bae38764f2b87380783a455888b6413010fc0991";
+    const ingestProvenanceSourceFingerprint = telegramFoundationIsStaged
+      ? "c964e21b5349808deea16ac71b9f4b93955968041fd3b62e00281ae6dde9adaf"
+      : "5a7f28da697b149cf3ba2f9ff01074aa662ea5f6a56c983e8ee24f83816372a2";
     expect(
       portableUnresolved,
       "portable production unresolved SQL consumer inventory",
@@ -5628,8 +5636,8 @@ describe("analysis crate boundary", () => {
       "apalis_jobs.rs:fetch_job_summaries:e3f8a21ab8453e7638518b00acd97e8b934c1f51080c257bd38db95b66f33216:05b1185e47ec480cdeab26d4c62f499a747ac87a701a5830ecfca1eaf3095ba7:query_builder_push:text_expr(schema, \"id\", \"''\")",
       "apalis_jobs.rs:fetch_payloads_for_ids:5735685cb0084ad5a0b182cfe13df418fdddb9b4eb2eb212e52b6c4110117814:05b1185e47ec480cdeab26d4c62f499a747ac87a701a5830ecfca1eaf3095ba7:query_builder_push:text_expr(schema, \"id\", \"''\")",
       "archive_read_model.rs:load_item_rows_from_archive:723126e361dfda6c463279e599a7d20d30fc0768543d46b8a07e056eb880496d:7f696cedd49b194c8de5579349f85150b2fe5f05a836554f874ffef84b36a913:query_as:&sql",
-      "ingest_provenance.rs:mark_takeout_migrated_history_deferred:c6b01d419d14e767d3411693b5b15b2d1201eaf6c811b4ab568392e0c90e822c:5a7f28da697b149cf3ba2f9ff01074aa662ea5f6a56c983e8ee24f83816372a2:query:&query",
-      "ingest_provenance.rs:mark_takeout_only_my_messages_fallback:c73be9308109c5aa4b724423ccc547e0f7380fdb30bfff26f29ad4f93cfded64:5a7f28da697b149cf3ba2f9ff01074aa662ea5f6a56c983e8ee24f83816372a2:query:&query",
+      `ingest_provenance.rs:mark_takeout_migrated_history_deferred:c6b01d419d14e767d3411693b5b15b2d1201eaf6c811b4ab568392e0c90e822c:${ingestProvenanceSourceFingerprint}:query:&query`,
+      `ingest_provenance.rs:mark_takeout_only_my_messages_fallback:c73be9308109c5aa4b724423ccc547e0f7380fdb30bfff26f29ad4f93cfded64:${ingestProvenanceSourceFingerprint}:query:&query`,
       `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
       `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
       `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,

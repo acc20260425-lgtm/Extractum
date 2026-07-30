@@ -699,9 +699,7 @@ function rustModuleReachability(
         const override = pathOverrideAt(declaration.index);
         if (override) {
           const relative = path.posix.join(path.posix.dirname(state.relative), override);
-          const childDir = path.posix.basename(relative) === "mod.rs"
-            ? path.posix.dirname(relative)
-            : path.posix.join(path.posix.dirname(relative), path.posix.basename(relative, ".rs"));
+          const childDir = path.posix.dirname(relative);
           enqueue(relative, childDir);
           continue;
         }
@@ -5654,7 +5652,11 @@ describe("analysis application boundary", () => {
         #[cfg(test)] mod gated { include!("inside.rs"); }
       ` },
       { relative: "production.rs", source: "pub fn production() {}" },
-      { relative: "tests/live.rs", source: "pub fn path_only_name_is_production() {}" },
+      {
+        relative: "tests/live.rs",
+        source: "mod child; pub fn path_only_name_is_production() {}",
+      },
+      { relative: "tests/child.rs", source: "pub fn path_override_child() {}" },
       { relative: "ordinary.rs", source: "pub fn cfg_only_despite_plain_path() {}" },
       { relative: "fixtures.rs", source: "pub fn dev_only() {}" },
       { relative: "inside.rs", source: "pub fn inherited_test_only() {}" },
@@ -5662,6 +5664,7 @@ describe("analysis application boundary", () => {
     expect(cfgReachabilityProbe.production.map(({ relative }) => relative).sort()).toEqual([
       "lib.rs",
       "production.rs",
+      "tests/child.rs",
       "tests/live.rs",
     ]);
     expect(cfgReachabilityProbe.cfgOnly.map(({ relative }) => relative).sort()).toEqual([
@@ -5678,6 +5681,19 @@ describe("analysis application boundary", () => {
       relative: path.relative(appSourceRoot, file).replaceAll("\\", "/"), source: readFileSync(file, "utf8"),
     }));
     const appReachability = rustModuleReachability(appInventory, ["lib.rs", "main.rs"]);
+    const telegramFoundationIsStaged = existsSync(
+      path.join(appSourceRoot, "telegram_impl/lib.rs"),
+    );
+    const productionAppPaths = appReachability.production
+      .map(({ relative }) => relative);
+    if (telegramFoundationIsStaged) {
+      expect(
+        productionAppPaths,
+        "the staged Telegram root must be production-reachable when present",
+      ).toContain("telegram_impl/lib.rs");
+    } else {
+      expect(productionAppPaths).not.toContain("telegram_impl/lib.rs");
+    }
     const movedAppPaths = new Set(
       [...frozenMoves("wholeMoves"), ...frozenMoves("splitMoves")]
         .map(({ before }) => `analysis/${before}`),
@@ -5727,6 +5743,9 @@ describe("analysis application boundary", () => {
     const notebookReplyBodyFingerprint = analysisExtracted
       ? "9b94e015798718e328bc265b0afa1e7f3575c8de94d4817718daff9b5489ce1d"
       : "f4a3902360ed77d4750749e55c73db371c54fd2e117828bc9187f0f4e8ec4333";
+    const ingestProvenanceSourceFingerprint = telegramFoundationIsStaged
+      ? "3f64c972ebc82996e65a396054ec8d16e73dc5fa911b92b9b10b79ed100b4a29"
+      : "a327cabba5f1ab4f3af5c2f405ccb56a4500dc2bc736d8dc33a220f128323bde";
     expect(
       unresolvedProductionConsumers,
       "production unresolved executable SQL consumer inventory",
@@ -5750,8 +5769,8 @@ describe("analysis application boundary", () => {
       "apalis_jobs.rs:fetch_payloads_for_ids:5735685cb0084ad5a0b182cfe13df418fdddb9b4eb2eb212e52b6c4110117814:05b1185e47ec480cdeab26d4c62f499a747ac87a701a5830ecfca1eaf3095ba7:query_builder_push:blob_or_text_expr(schema, \"last_result\")",
       "apalis_jobs.rs:fetch_payloads_for_ids:5735685cb0084ad5a0b182cfe13df418fdddb9b4eb2eb212e52b6c4110117814:05b1185e47ec480cdeab26d4c62f499a747ac87a701a5830ecfca1eaf3095ba7:query_builder_push:blob_or_text_expr(schema, \"metadata\")",
       "archive_read_model.rs:load_item_rows_from_archive:8dd2a5f19a6a016668b832bf98eab1e0baa0b67cbcd32d3f019edea60a13a8a7:e57b034252ca308fe6c2c72cd803b6542a761604c3aabedf5481b6ef49accf23:query_as::<_, StoredItemRow>:&sql",
-      "ingest_provenance.rs:mark_takeout_migrated_history_deferred:c1cf2a46340d983cdc4b17fc9d9b5d55fbb44e1fc86dc8f9c77d3775a738af3d:a327cabba5f1ab4f3af5c2f405ccb56a4500dc2bc736d8dc33a220f128323bde:query:&query",
-      "ingest_provenance.rs:mark_takeout_only_my_messages_fallback:43259a95d59cdd4db1407e3af3d0937060a333423c5008e0f00b61e9d1c2bf12:a327cabba5f1ab4f3af5c2f405ccb56a4500dc2bc736d8dc33a220f128323bde:query:&query",
+      `ingest_provenance.rs:mark_takeout_migrated_history_deferred:c1cf2a46340d983cdc4b17fc9d9b5d55fbb44e1fc86dc8f9c77d3775a738af3d:${ingestProvenanceSourceFingerprint}:query:&query`,
+      `ingest_provenance.rs:mark_takeout_only_my_messages_fallback:43259a95d59cdd4db1407e3af3d0937060a333423c5008e0f00b61e9d1c2bf12:${ingestProvenanceSourceFingerprint}:query:&query`,
       `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
       `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,
       `notebooklm_export/query.rs:load_export_messages_from_items_path:18e50b7eb7b9e2033ea62c6df497ea82f566e289e990ba46b3a5a421fbc6d59d:${notebookExportSourceFingerprint}:query_as:&sql`,

@@ -2212,6 +2212,44 @@ their artifacts, tests, status history, or verification evidence.
   reject retained old leaf files/declarations. It must not reintroduce the
   semantic Rust analyzer removed by the post-CP1 amendment.
 
+### Forward-Only Task 3 Analysis-Gate Compatibility Correction
+
+Before retrying candidate Checkpoint 3 status, make one focused correction
+commit containing only this plan and:
+
+- `src/lib/analysis-application-contract.test.ts`
+- `src/lib/analysis-crate-boundary-contract.test.ts`
+
+The private `#[path = "telegram_impl/lib.rs"] mod telegram_impl;` root adds one
+reachable production Rust file and exercises Rust's path-override module
+semantics: child `mod` declarations resolve relative to the directory
+containing the override target, not a synthetic directory named after its file
+stem. Update the shared analysis reachability fixture to cover a nested child
+of a path-overridden module. Make the frozen all-app production breadth exact
+for both lifecycle states: 125 before the staged root exists and 126 once
+`telegram_impl/lib.rs` exists, with that path required in the latter state.
+Likewise retain the old exact unresolved-query context hash before Checkpoint 3
+and select the new exact hash only after the staged root exists for the two
+unchanged `ingest_provenance.rs` functions whose file context changes when the
+permanent `TelegramMessageIdentity` import moves from `crate::telegram` to
+`crate::telegram_impl`; keep their function/query identities exact. Do not
+change analysis ownership, SQL, portable-crate, cfg-only, or application
+behavior authority.
+
+This is a verification-contract compatibility correction, not a Task 3
+implementation path. It changes no Rust, status, generated artifact, or
+escape-hatch authority. Commit it separately before candidate status, so the
+literal 25-path Task 3 allowlist remains unchanged:
+
+```powershell
+Invoke-CheckedNative 'Task 3 analysis compatibility contracts' {
+    npm.cmd run test -- src/lib/analysis-application-contract.test.ts src/lib/analysis-crate-boundary-contract.test.ts
+}
+Invoke-CheckedNative 'commit Task 3 analysis compatibility correction' {
+    git commit -m "test: align analysis contracts with Telegram staged root"
+}
+```
+
 ## Task 3: Relocate the Prepared Foundation Into the Portable Root
 
 **Files:**
