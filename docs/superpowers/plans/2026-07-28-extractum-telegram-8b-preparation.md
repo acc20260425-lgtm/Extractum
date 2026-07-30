@@ -135,10 +135,12 @@ redesign.
 - [ ] The public API contains no `Client`, `MemorySession`, `LoginToken`, `PeerRef`, `RemoteCall`, `InvocationError`, raw `tl::*`, SQLx, Tauri, keyring, secret getter, or app type.
 - [ ] At CP7/CP8, restricted `pub(super)` bridges are allowed only for the
   literal 67-entry final internal bridge allowlist frozen below. They are not
-  root-re-exported. At CP3→CP6, the only additional staged restricted/package
-  bridge is the exact transitional raw bridge named in the next bullet. The
-  contract rejects every other restricted bridge and every externally
-  reachable public item outside the frozen API.
+  root-re-exported. Before CP7, the only additional staged
+  restricted/package bridges are the exact CP3→CP6 transitional raw bridge and
+  exact CP3→CP4 three-constant peer-kind root bridge named in the next bullet.
+  TypeScript does not authorize or reject those temporary definitions or uses;
+  the mandatory LLM review does. Every externally reachable public item
+  outside the frozen API remains forbidden.
 - [ ] The only lifecycle-gated exceptions to the terminal API/visibility rules
   are: (a) the exact four-item CP3→CP6 media compatibility set, including its
   staged-root export and package-private `src-tauri/src/media.rs` facade for the
@@ -148,8 +150,12 @@ redesign.
   `telegram::{get_client,get_authorized_client}`, and
   `{ResolvedSyncPeer::peer,legacy_peer_ref_from_descriptor}`. The staged raw
   accessors retain only their existing package/super visibility and exact
-  callsites. Both exception sets are completely removed/demoted before CP7 and
-  authorize no public module, glob, fifth media item, or additional raw bridge.
+  callsites; and (c) the exact CP3→CP4 package-private staged-root re-export of
+  `{TELEGRAM_PEER_KIND_CHANNEL,TELEGRAM_PEER_KIND_CHAT,TELEGRAM_PEER_KIND_USER}`
+  for the sole `sources::sync::fallback_message_identity` consumer. Task 5
+  removes (c) with that mapper. All exception sets are removed/demoted by their
+  stated lifecycle and authorize no public module, glob, fifth media item, or
+  additional raw/constant bridge.
 - [ ] Remove `TelegramClientHandle::{raw_client,raw_session}` and app helpers `get_client`/`get_authorized_client` only after their last consumers use owned operations; none may exist at Checkpoint 7 or 8.
 - [ ] App persistence remains incremental. It processes every `LiveMessage` and every `TakeoutMessage` in order, records max IDs before skip/parse decisions exactly as today, and returns a per-entry error only after prior entries have been durably handled.
 - [ ] Every live batch performs exactly one raw `messages.getHistory` invoke with `1 <= limit <= 100`; do not build it by draining `MessageIter::next`. It preserves newest-to-oldest order, exact offset-id/offset-date advancement, the pinned Grammers terminal rule, and per-message conversion after app cutoffs.
@@ -1134,8 +1140,9 @@ transition, not an in-place signature change. `initialized_client` stays
 private and `authorized_client` stays public.
 Private derives and test-only constructors are allowed; no additional
 externally reachable production `pub` item exists at CP7/CP8. The exact
-CP3→CP6 media compatibility exports named below are the only lifecycle-gated
-exception and are removed/demoted at CP7.
+CP3→CP6 media compatibility exports and the exact package-private CP3→CP4
+peer-kind constant exports named below are the only lifecycle-gated staged-root
+exceptions; each is removed/demoted at its stated checkpoint.
 
 The exact restricted internal bridge allowlist is below. A name on the
 `live::{...}` or `takeout::{...}` line is a `pub(super)` parent facade called
@@ -1365,11 +1372,16 @@ extract_item_payload
 ```
 
 `src-tauri/src/media.rs` re-exports that same set package-privately during the
-transition. No other transitional public item is legal. Task 5 removes the
-`extract_item_payload` live-sync consumer; Task 7 moves raw parsing, deletes the
-remaining app compatibility re-exports, removes these four root exports, and
-demotes the leaf helpers/fields to their final private or exact `pub(super)`
-visibility before CP7 is retained.
+transition. Separately, at CP3 and CP4 only, `telegram_impl/lib.rs`
+package-privately re-exports
+`{TELEGRAM_PEER_KIND_CHANNEL,TELEGRAM_PEER_KIND_CHAT,TELEGRAM_PEER_KIND_USER}`
+for the sole `sources::sync::fallback_message_identity` consumer. Task 5 moves
+that mapper into `telegram_impl/live/messages.rs` and removes all three root
+exports. No other transitional staged-root item is legal. Task 5 also removes
+the `extract_item_payload` live-sync consumer; Task 7 moves raw parsing,
+deletes the remaining app compatibility re-exports, removes the four media
+root exports, and demotes the leaf helpers/fields to their final private or
+exact `pub(super)` visibility before CP7 is retained.
 
 ## Symbol-Level Source Map
 
@@ -1943,9 +1955,10 @@ checkpoint gates, retaining, staging, or committing the checkpoint:
    source, this plan/design authority, and committed
    `src/lib/telegram-8b-symbol-map.json`. The reviewer reads the artifact's
    complete `transitionInventories` field and symbol-disposition rows together
-   with both complete exception sets; the artifact is an input checklist, not
-   executable source authority. CP2 uses the explicit no-Rust-change rule; CP3
-   uses `cp3RawHandleCallsites`; CP4 uses both CP4 arrays; CP5 uses both CP5
+   with all complete exception sets active at that checkpoint, including the
+   forward-only CP3→CP4 peer-kind bridge; the artifact is an input checklist,
+   not executable source authority. CP2 uses the explicit no-Rust-change rule;
+   CP3 uses `cp3RawHandleCallsites`; CP4 uses both CP4 arrays; CP5 uses both CP5
    arrays; CP6 carries the CP5 arrays forward unless the reviewed diff removes
    a listed use; and CP7/CP8 use/carry forward the empty
    `cp7RawBridgeSymbolsAndCallsites` array.
@@ -2164,6 +2177,41 @@ Invoke-CheckedNative 'commit Task 2' {
 }
 ```
 
+## Forward-Only Checkpoint 3 Authority Correction
+
+**Effective scope:** this correction governs only unexecuted Task 3 and later
+work after retained Checkpoint 2. It does not alter either retained checkpoint,
+their artifacts, tests, status history, or verification evidence.
+
+- Task 3 has an exact 25-path staging allowlist. It includes
+  `src/lib/crate-extraction-shell-cap-contract.test.ts`, because candidate
+  Checkpoint 3 status cannot pass the retained status contract without the
+  corresponding CP3 vocabulary and prose.
+- CP3 and CP4 additionally permit one exact package-private staged-root bridge:
+  `TELEGRAM_PEER_KIND_CHANNEL`, `TELEGRAM_PEER_KIND_CHAT`, and
+  `TELEGRAM_PEER_KIND_USER`, re-exported from `telegram_impl::dto` and consumed
+  only by `sources::sync::fallback_message_identity`. Task 5 removes the bridge
+  when that mapper moves into `telegram_impl/live/messages.rs`. This is a
+  forward-only third transitional exception, not an externally public API and
+  not an addition to the retained schema-v1 artifact.
+- The mandatory checkpoint LLM review owns authorization of that bridge and
+  every other temporary escape-hatch definition and physical use. TypeScript
+  may continue checking permanent API shape, source ownership/paths,
+  identities, dependency metadata, lifecycle vocabulary, and status prose, but
+  it must not decide whether any temporary raw/media/peer-kind escape-hatch
+  definition or use is allowed. Automatic evidence for those definitions and
+  uses remains Rust compilation plus the named behavior tests.
+- The CP3 review record names retained Checkpoint 2 commit
+  `951b88b004ba4493a73bd2ccf93a2e8aa31dae6d` as the retained predecessor and
+  separately records the later authority-correction commit as the actual
+  implementation-diff base. The correction does not relabel the retained
+  checkpoint.
+- The CP3 Telegram contract must resolve the real staged source tree, keep
+  historical fixtures isolated from current-file reads, route the 20 moved
+  identities plus the one new runtime identity to `telegram_impl::`, and
+  reject retained old leaf files/declarations. It must not reintroduce the
+  semantic Rust analyzer removed by the post-CP1 amendment.
+
 ## Task 3: Relocate the Prepared Foundation Into the Portable Root
 
 **Files:**
@@ -2173,19 +2221,26 @@ Invoke-CheckedNative 'commit Task 2' {
 - Create: `src-tauri/src/telegram_impl/media.rs`
 - Create: `src-tauri/src/telegram_impl/runtime.rs`
 - Create: `src-tauri/src/telegram_impl/session.rs`
-- Delete after successful relocation:
-  `src-tauri/src/telegram/{dto,media,runtime,session}.rs`
+- Delete after successful relocation: `src-tauri/src/telegram/dto.rs`
+- Delete after successful relocation: `src-tauri/src/telegram/media.rs`
+- Delete after successful relocation: `src-tauri/src/telegram/runtime.rs`
+- Delete after successful relocation: `src-tauri/src/telegram/session.rs`
 - Modify: `src-tauri/src/lib.rs`
 - Modify: `src-tauri/src/telegram.rs`
 - Modify: `src-tauri/src/telegram_session_store.rs`
 - Modify: `src-tauri/src/media.rs`
 - Modify: `src-tauri/src/ingest_provenance.rs`
-- Modify: `src-tauri/src/sources/{items,mod,sync}.rs`
-- Modify:
-  `src-tauri/src/takeout_import/{mod,migrated_history,raw_parse}.rs`
-- Modify: the Telegram contract and two status docs
-- Modify:
-  `docs/superpowers/verification/2026-07-28-extractum-telegram-8b-preparation.md`
+- Modify: `src-tauri/src/sources/items.rs`
+- Modify: `src-tauri/src/sources/mod.rs`
+- Modify: `src-tauri/src/sources/sync.rs`
+- Modify: `src-tauri/src/takeout_import/mod.rs`
+- Modify: `src-tauri/src/takeout_import/migrated_history.rs`
+- Modify: `src-tauri/src/takeout_import/raw_parse.rs`
+- Modify: `src/lib/telegram-crate-boundary-contract.test.ts`
+- Modify: `src/lib/crate-extraction-shell-cap-contract.test.ts`
+- Modify: `docs/superpowers/specs/2026-07-26-telegram-crate-boundary-design.md`
+- Modify: `docs/superpowers/specs/2026-07-17-crate-roadmap.md`
+- Modify: `docs/superpowers/verification/2026-07-28-extractum-telegram-8b-preparation.md`
 
 - [ ] Copy the four retained 8A leaves byte-for-byte into their staged owners
   with `apply_patch`; change only paths/visibility required by the new root.
@@ -2197,8 +2252,9 @@ Invoke-CheckedNative 'commit Task 2' {
 mod telegram_impl;
 ```
 
-`telegram_impl/lib.rs` declares only the five existing staged files at this
-checkpoint and curates their permitted exports. It contains no public module.
+Across the five-file staged tree, `telegram_impl/lib.rs` declares exactly four
+private leaf modules: `dto`, `media`, `runtime`, and `session`. It curates
+their permitted exports and contains no public module.
 
 - [ ] Add a minimal compiling `TelegramRuntime::client` candidate that
   incorrectly delegates to `authorized_client`, plus the exact test:
@@ -2276,7 +2332,12 @@ async fn initialize_grammers_client(
 - [ ] Redirect every future-owner type/constant/codec consumer to an explicit
   `crate::telegram_impl::...` path. Do not redirect app-owned
   `TelegramState`, Tauri commands, or account/diagnostics helpers out of
-  `crate::telegram`.
+  `crate::telegram`. For CP3 and CP4, install only the exact package-private
+  staged-root bridge
+  `{TELEGRAM_PEER_KIND_CHANNEL,TELEGRAM_PEER_KIND_CHAT,TELEGRAM_PEER_KIND_USER}`
+  for the sole `sources::sync::fallback_message_identity` consumer. It is
+  reviewed as a temporary escape hatch by the mandatory LLM gate; TypeScript
+  does not authorize its definition or use.
 - [ ] Install only the exact CP3→CP6 media compatibility set:
   `DocumentSignals` with its current fields, `derive_content_kind`,
   `derive_document_media_kind`, and `extract_item_payload`. The staged root
@@ -2286,9 +2347,10 @@ async fn initialize_grammers_client(
   freezes those consumers and forbids any new one; TypeScript does not infer
   the facade consumers from Rust.
 - [ ] Remove the `#[cfg(test)]` Telegram content-kind re-exports from app
-  `media.rs`. Rewrite only the existing `sources/items.rs` test assertions to
-  compare the unchanged literal `"text_only"` / `"text_with_media"` values;
-  keep every test identity and all production code unchanged.
+  `media.rs`. Rewrite all six existing `sources/items.rs` test references,
+  including fixture initializers and assertions, to use the unchanged
+  `"text_only"` / `"text_with_media"` literals; keep every test identity and
+  all production code unchanged.
 - [ ] Keep the temporary package-private `raw_client`/`raw_session` adapters
   only for the still-unmoved live/Takeout consumers. The checkpoint LLM review
   must list each temporary callsite exactly; no new raw callsite may appear.
@@ -2296,6 +2358,20 @@ async fn initialize_grammers_client(
 - [ ] Delete the four old leaf files and their old module declarations only
   after the staged versions compile. There must be no duplicate DTO, item-kind
   literal, media payload, runtime, session codec, or test identity.
+- [ ] Update the Telegram contract for CP3 before requesting the checkpoint
+  LLM verdict: admit retained/candidate CP3 vocabulary; resolve current
+  DTO/media/runtime/session source from `telegram_impl`; keep historical 8A
+  fixtures independent of deleted current paths; require the four old leaves
+  and their old declarations to be absent; recognize permanent
+  `TelegramRuntime::client`, `TelegramSession::clone_memory_session`, and the
+  exact moved/new identity ownership. Remove any remaining raw-use inventory
+  branch that would classify a temporary escape-hatch definition or use.
+  Do not add media-facade, raw-accessor, peer-kind-bridge, `SenderPool`
+  argument, callsite, alias, forwarding, or occurrence authority to
+  TypeScript.
+- [ ] Extend the shell-cap contract's exact status/prose acceptance through
+  Checkpoint 3. This is lifecycle/status authority only and performs no Rust
+  semantic analysis.
 - [ ] Run the exact new GREEN and all moved foundation suites:
 
 ```powershell
@@ -2312,26 +2388,68 @@ Invoke-CheckedNative 'Task 3 package checkpoint' {
 }
 ```
 
-- [ ] Assert exactly 720 unique `extractum` library IDs and exact mapped
-  identity relocation for DTO/media/runtime/session; no old
-  `telegram::{dto,media,runtime,session}` test prefix remains.
+- [ ] Assert exactly 720 unique `extractum` library IDs and the exact 21-ID
+  staged foundation set: 20 mapped DTO/media/runtime/session identities plus
+  the one new CP3 runtime identity. No old
+  `telegram::{dto,media,runtime,session}` test prefix remains:
+
+```powershell
+Invoke-CheckedNative 'Task 3 identity authority' {
+    node scripts/telegram-8b-test-identities.mjs --check
+}
+$Cp3IdentityAuthority =
+    Get-Content -LiteralPath 'src/lib/telegram-8b-test-identities.json' -Raw |
+    ConvertFrom-Json
+$ExactCp3StagedTests = @(
+    @($Cp3IdentityAuthority.preNewStaged) +
+        @($Cp3IdentityAuthority.phase8BNewStaged) |
+        Where-Object {
+            $_ -match '^telegram_impl::(dto|media|runtime|session)::tests::'
+        }
+)
+if ($ExactCp3StagedTests.Count -ne 21) {
+    throw "Expected exact 21-ID CP3 staged foundation authority"
+}
+Assert-ExactRustIdentitySet `
+    -Package extractum `
+    -Prefix 'telegram_impl::' `
+    -Expected $ExactCp3StagedTests
+$OldFoundationTests = @(
+    Get-RustTestIds -Package extractum |
+        Where-Object {
+            $_ -match '^telegram::(dto|media|runtime|session)::tests::'
+        }
+)
+if ($OldFoundationTests.Count -ne 0) {
+    $OldFoundationTests
+    throw "Old Telegram foundation test identities survived CP3"
+}
+```
+
 - [ ] Obtain `Escape-hatch review verdict: CLEAN` from the mandatory reusable
   CP2–CP8 LLM retention gate and append the complete CLEAN record to the
   cumulative verification document. Only then update candidate statuses to
-  Checkpoint 3, run Telegram, media, analysis, LLM, and prompt-pack source
-  contracts, then run:
+  Checkpoint 3, run Telegram, shell-cap, media, analysis, LLM, and prompt-pack
+  source contracts, then run:
 
 ```powershell
+Invoke-CheckedNative 'Task 3 Telegram contract' {
+    npm.cmd run test -- src/lib/telegram-crate-boundary-contract.test.ts
+}
+Invoke-CheckedNative 'Task 3 shell-cap contract' {
+    npm.cmd run test -- src/lib/crate-extraction-shell-cap-contract.test.ts
+}
 Assert-RustPackageTestTotal -Package extractum -ExpectedTotal 720
 Invoke-RetainedCheckpointGates '8B-CP3'
 ```
 
-If a gate fails, the checkpoint is not retained: restore the two status lines
-to Checkpoint 2 with `apply_patch`, fix the cause, and rerun the complete
-Checkpoint 3 gates.
+If a gate fails, the checkpoint is not retained: restore every candidate CP3
+status/prose hunk in both status documents to the retained Checkpoint 2 state
+with `apply_patch`, fix the cause, and rerun the complete Checkpoint 3 gates.
 
-- [ ] Inspect the complete move/import diff and staged diff, stage only Task 3,
-  and commit:
+- [ ] Inspect the complete move/import diff and staged diff. Compare the sorted
+  cached path list to the literal 25-path Task 3 allowlist above, stage no
+  other path, and commit:
 
 ```powershell
 Invoke-CheckedNative 'commit Task 3' {
@@ -2626,7 +2744,9 @@ across a different error boundary.
 - [ ] Move raw author/reply/context/raw-data/fallback-identity conversion from
   `sources/items.rs`/`sources/sync.rs` into `live/messages.rs`. Keep all SQL,
   transactions, `PreparedSourceItem`, insert outcomes, read models, and app
-  tests in `sources/items.rs`.
+  tests in `sources/items.rs`. Remove the exact three-constant CP3→CP4
+  staged-root peer-kind bridge in the same checkpoint; after the mapper moves,
+  no app consumer or replacement bridge remains.
 - [ ] Move the full remote forum-topic loop and snapshot mapping to
   `live/topics.rs`; return `Ok(None)` only for the two existing non-forum RPC
   classifiers and `Ok(Some((topics, deleted_ids)))` otherwise. Keep subtype

@@ -17,6 +17,13 @@ transitional escape-hatch use-sites are reviewed by an LLM. The TypeScript
 contract does not perform Rust semantic use-site analysis; automatic evidence
 for those uses is limited to compilation and behavior.
 
+**Owner-directed 2026-07-30 Checkpoint 3 correction:** for unexecuted CP3 and
+CP4 only, the three package-private peer-kind constants have an exact
+staged-root bridge used solely by `sources::sync::fallback_message_identity`.
+Task 5 removes that bridge with the mapper. The CP3 staging allowlist also
+includes the shell-cap status contract. Neither correction changes retained
+CP1/CP2 history or the schema-v1 authority artifacts.
+
 This specification defines the just-in-time Phase 8 boundary for
 `extractum-telegram`. It supersedes the short Phase 8 placeholder in the crate
 roadmap. Approval of this document does not authorize implementation. Phase 8
@@ -689,10 +696,12 @@ Checkpoint 1 and does not rewrite Checkpoint 1 history:
 - [ ] The public API contains no `Client`, `MemorySession`, `LoginToken`, `PeerRef`, `RemoteCall`, `InvocationError`, raw `tl::*`, SQLx, Tauri, keyring, secret getter, or app type.
 - [ ] At CP7/CP8, restricted `pub(super)` bridges are allowed only for the
   literal 67-entry final internal bridge allowlist frozen below. They are not
-  root-re-exported. At CP3→CP6, the only additional staged restricted/package
-  bridge is the exact transitional raw bridge named in the next bullet. The
-  contract rejects every other restricted bridge and every externally
-  reachable public item outside the frozen API.
+  root-re-exported. Before CP7, the only additional staged
+  restricted/package bridges are the exact CP3→CP6 transitional raw bridge and
+  exact CP3→CP4 three-constant peer-kind root bridge named in the next bullet.
+  TypeScript does not authorize or reject those temporary definitions or uses;
+  the mandatory LLM review does. Every externally reachable public item
+  outside the frozen API remains forbidden.
 - [ ] The only lifecycle-gated exceptions to the terminal API/visibility rules
   are: (a) the exact four-item CP3→CP6 media compatibility set, including its
   staged-root export and package-private `src-tauri/src/media.rs` facade for the
@@ -702,8 +711,12 @@ Checkpoint 1 and does not rewrite Checkpoint 1 history:
   `telegram::{get_client,get_authorized_client}`, and
   `{ResolvedSyncPeer::peer,legacy_peer_ref_from_descriptor}`. The staged raw
   accessors retain only their existing package/super visibility and exact
-  callsites. Both exception sets are completely removed/demoted before CP7 and
-  authorize no public module, glob, fifth media item, or additional raw bridge.
+  callsites; and (c) the exact CP3→CP4 package-private staged-root re-export of
+  `{TELEGRAM_PEER_KIND_CHANNEL,TELEGRAM_PEER_KIND_CHAT,TELEGRAM_PEER_KIND_USER}`
+  for the sole `sources::sync::fallback_message_identity` consumer. Task 5
+  removes (c) with that mapper. All exception sets are removed/demoted by their
+  stated lifecycle and authorize no public module, glob, fifth media item, or
+  additional raw/constant bridge.
 - [ ] For every unexecuted checkpoint after retained CP1, a fresh independent
   LLM that did not implement the checkpoint reviews the complete scoped
   production/test Rust diff and enough unchanged surrounding source to account
@@ -1265,8 +1278,9 @@ transition, not an in-place signature change. `initialized_client` stays
 private and `authorized_client` stays public.
 Private derives and test-only constructors are allowed; no additional
 externally reachable production `pub` item exists at CP7/CP8. The exact
-CP3→CP6 media compatibility exports named below are the only lifecycle-gated
-exception and are removed/demoted at CP7.
+CP3→CP6 media compatibility exports and the exact package-private CP3→CP4
+peer-kind constant exports named below are the only lifecycle-gated staged-root
+exceptions; each is removed/demoted at its stated checkpoint.
 
 The exact restricted internal bridge allowlist is below. A name on the
 `live::{...}` or `takeout::{...}` line is a `pub(super)` parent facade called
@@ -1496,11 +1510,16 @@ extract_item_payload
 ```
 
 `src-tauri/src/media.rs` re-exports that same set package-privately during the
-transition. No other transitional public item is legal. Task 5 removes the
-`extract_item_payload` live-sync consumer; Task 7 moves raw parsing, deletes the
-remaining app compatibility re-exports, removes these four root exports, and
-demotes the leaf helpers/fields to their final private or exact `pub(super)`
-visibility before CP7 is retained.
+transition. Separately, at CP3 and CP4 only, `telegram_impl/lib.rs`
+package-privately re-exports
+`{TELEGRAM_PEER_KIND_CHANNEL,TELEGRAM_PEER_KIND_CHAT,TELEGRAM_PEER_KIND_USER}`
+for the sole `sources::sync::fallback_message_identity` consumer. Task 5 moves
+that mapper into `telegram_impl/live/messages.rs` and removes all three root
+exports. No other transitional staged-root item is legal. Task 5 also removes
+the `extract_item_payload` live-sync consumer; Task 7 moves raw parsing,
+deletes the remaining app compatibility re-exports, removes the four media
+root exports, and demotes the leaf helpers/fields to their final private or
+exact `pub(super)` visibility before CP7 is retained.
 
 ## Symbol-Level Source Map
 
@@ -1695,6 +1714,16 @@ CP5 ResolvedSyncPeer::peer consumers:
 CP7 raw bridge symbols/callsites: empty
 ```
 
+Separately from those schema-v1 inventories, the design itself adds this
+LLM-only CP3→CP4 review input; it is intentionally not generated or written
+into the retained artifact:
+
+```text
+peer-kind staged-root bridge:
+  telegram_impl::{TELEGRAM_PEER_KIND_CHANNEL,TELEGRAM_PEER_KIND_CHAT,TELEGRAM_PEER_KIND_USER}
+  sole consumer: sources::sync::fallback_message_identity
+```
+
 ### Forward-Only Transitional Escape-Hatch Review Authority
 
 This subsection applies only to unexecuted work after retained Checkpoint 1.
@@ -1714,7 +1743,7 @@ scoped Rust diff including production and test Rust, enough unchanged
 surrounding source, this plan/design authority, and committed
 `src/lib/telegram-8b-symbol-map.json`. The reviewer reads the artifact's
 complete schema-v1 `transitionInventories` field and symbol-disposition rows as
-input checklists together with both complete transitional exception sets:
+input checklists together with all complete transitional exception sets:
 
 ```text
 media compatibility facade:
@@ -1729,6 +1758,10 @@ raw bridge:
   telegram::{get_client,get_authorized_client}
   ResolvedSyncPeer::peer
   legacy_peer_ref_from_descriptor
+
+peer-kind staged-root bridge (CP3→CP4 only):
+  telegram_impl::{TELEGRAM_PEER_KIND_CHANNEL,TELEGRAM_PEER_KIND_CHAT,TELEGRAM_PEER_KIND_USER}
+  sole consumer: sources::sync::fallback_message_identity
 ```
 
 The schema-v1 artifact is intentionally not expanded merely to make every
@@ -1743,7 +1776,9 @@ remain required review inputs.
 At CP2, the reviewer verifies from the complete scoped diff that no Rust
 escape-hatch definition, physical use, logical ownership, or forwarding chain
 changed. At CP3 through CP6, the reviewer accounts for the active inventories
-and the complete exception sets above.
+and the complete exception sets above. At CP5 the reviewer additionally
+confirms that the three peer-kind root exports and their sole app consumer
+disappear when the mapper moves; no replacement bridge is allowed.
 
 At CP7 and CP8 the reviewer must find no retained transitional definition,
 callsite, forwarding use, alias, re-export, or replacement spelling. An
@@ -1804,11 +1839,12 @@ For transitional escape-hatch authorization,
 Rust, isolate Rust functions, resolve types/imports/bindings/scopes/shadowing,
 infer producer results or call graphs, trace forwarding/data flow, count
 transitional member occurrences, or enforce generated use-site anchors, edges,
-or occurrence fences for either exception set. Their schema-v1 symbol rows and
-inventories remain document/artifact review metadata, but TypeScript does not
-reconcile their definitions or use-sites against Rust source. It may continue
-to verify document/artifact serialization and lifecycle vocabulary. There is
-no global reservation of an unrelated application field named `peer`.
+or occurrence fences for any transitional exception set. Their schema-v1
+symbol rows and inventories remain document/artifact review metadata, but
+TypeScript does not reconcile their definitions or use-sites against Rust
+source. It may continue to verify document/artifact serialization and
+lifecycle vocabulary. There is no global reservation of an unrelated
+application field named `peer`.
 Literal source search may be used only as reviewer navigation. No search
 pattern, occurrence count, or exit status authorizes or blocks an escape-hatch
 use or serves as CP7/CP8 terminal evidence.
