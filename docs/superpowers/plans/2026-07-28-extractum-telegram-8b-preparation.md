@@ -1857,6 +1857,105 @@ Invoke-CheckedNative 'commit Task 1' {
 }
 ```
 
+## Forward-Only Amendment After Retained Checkpoint 1
+
+**Effective scope:** this amendment governs only unexecuted work after the
+retained Checkpoint 1 commit. It does not rewrite Task 1, regenerate its
+schema-v1 artifact, relabel its RED/GREEN evidence, or change the retained
+roadmap/design status pair.
+
+Before Task 2, commit one focused contract simplification with no production
+Rust, manifest, lockfile, artifact-schema, or status change:
+
+- keep `src/lib/telegram-8b-symbol-map.json` at `schemaVersion: 1`;
+  `transitionInventories` remains a readable LLM-review checklist and is not
+  executable Rust source authority;
+- remove from `src/lib/telegram-crate-boundary-contract.test.ts` every helper,
+  assertion, and mutation whose result decides whether a Rust definition or
+  use of
+  the transitional four-item media compatibility facade,
+  `raw_client`, `raw_session`, `raw_memory_session`, `get_client`,
+  `get_authorized_client`, `ResolvedSyncPeer::peer`, or
+  `legacy_peer_ref_from_descriptor` is authorized;
+- do not tokenize or mask Rust for this purpose, isolate Rust functions,
+  resolve Rust names/types/imports/bindings/scopes/shadowing, infer producer
+  results or call graphs, trace forwarding/data flow, count same-named
+  occurrences, or introduce generated use-site anchors/edges/fences;
+- preserve unrelated document/artifact serialization, lifecycle vocabulary,
+  manifest/dependency, public-surface, identity, symbol-disposition, and
+  behavior contracts; the escape-hatch rows remain in the generated
+  symbol-disposition/review inventory, but TypeScript does not reconcile their
+  definitions or use-sites against Rust source. This amendment does not turn
+  off the rest of the Phase 8 boundary;
+
+For transitional escape-hatch use-sites, automatic evidence is limited to
+Rust compilation plus the named Rust focused, package, and workspace behavior
+tests. The focused TypeScript contract still runs to prove its remaining
+non-use-site responsibilities, but a TypeScript source contract is not
+evidence that an escape-hatch use is allowed and may not accept or reject such
+a Rust use.
+
+### Mandatory Reusable CP2–CP8 LLM Retention Gate
+
+Every Task 2–8 checkpoint must perform this same gate after its final scoped
+Rust diff is ready and before writing candidate status, running final retained
+checkpoint gates, retaining, staging, or committing the checkpoint:
+
+1. An LLM reviews the complete production Rust diff for that checkpoint plus
+   enough unchanged surrounding Rust source to account for the complete
+   transitional exception set. The review follows every affected producer and
+   full forwarding chain, including
+   `run_takeout_source_import → run_started_takeout_source_import →
+   run_started_takeout_source_import_inner`.
+2. The LLM records in the active task thread the checkpoint and retained
+   predecessor; the exact exception definitions and physical uses that remain;
+   each logical owner and full forwarding chain; every use that must disappear
+   at this checkpoint; aliases, re-exports, wrappers, function items, and
+   unrelated same-named fields; and every finding.
+3. The record ends with exactly one verdict:
+   `Escape-hatch review verdict: CLEAN` or
+   `Escape-hatch review verdict: BLOCKED`. Only `CLEAN` permits candidate
+   status, final gates, retention, staging, or commit. Any unlisted or
+   ambiguous use is `BLOCKED`; it may be removed and followed by a clean
+   re-review without an amendment. An approved plan/design amendment is
+   required only if the implementation intends to retain that use.
+4. At CP2, the record must explicitly confirm that the complete production
+   Rust diff contains no escape-hatch definition, physical-use, ownership, or
+   forwarding-chain change. At CP8, the verification document must summarize
+   the CP2–CP8 active-task-thread evidence and exact verdicts.
+
+Run:
+
+```powershell
+Invoke-CheckedNative 'post-CP1 Telegram contract' {
+    npm.cmd run test -- src/lib/telegram-crate-boundary-contract.test.ts
+}
+Invoke-CheckedNative 'post-CP1 shell-cap contract' {
+    npm.cmd run test -- src/lib/crate-extraction-shell-cap-contract.test.ts
+}
+Invoke-CheckedNative 'post-CP1 symbol authority' {
+    node scripts/telegram-8b-symbol-map.mjs --check
+}
+Invoke-CheckedNative 'post-CP1 Rust check' {
+    cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets
+}
+Invoke-CheckedNative 'post-CP1 Rust behavior' {
+    cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets
+}
+```
+
+The plan and design are already committed authority; do not stage them in this
+one-time simplification commit. Inspect and stage only the focused
+`src/lib/telegram-crate-boundary-contract.test.ts` simplification. Preserve any
+unrelated dirty TypeScript state until implementation intentionally changes
+it. Keep the exact Checkpoint 1 status pair and commit:
+
+```powershell
+Invoke-CheckedNative 'commit post-CP1 contract simplification' {
+    git commit -m "test: simplify Telegram escape-hatch review authority"
+}
+```
+
 ## Task 2: Normalize Existing Workspace Dependencies Without Graph Drift
 
 **Files:**
@@ -1930,8 +2029,10 @@ Invoke-CheckedNative 'Task 2 locked metadata' {
 }
 ```
 
-- [ ] Update statuses to Checkpoint 2, run the `extractum` package checkpoint,
-  assert 719 unique tests, and run:
+- [ ] Obtain `Escape-hatch review verdict: CLEAN` from the mandatory reusable
+  CP2–CP8 LLM retention gate, including CP2's explicit no-production-Rust
+  escape-hatch-change finding. Only then update statuses to Checkpoint 2, run
+  the `extractum` package checkpoint, assert 719 unique tests, and run:
 
 ```powershell
 Assert-RustPackageTestTotal -Package extractum -ExpectedTotal 719
@@ -2064,14 +2165,17 @@ async fn initialize_grammers_client(
   `derive_document_media_kind`, and `extract_item_payload`. The staged root
   exports them and `src-tauri/src/media.rs` package-privately re-exports them
   for `sources/sync.rs` and `takeout_import/raw_parse.rs`; the lifecycle
-  contract freezes those exact consumers and forbids any new one.
+  inventory remains the exact reviewer checklist. The checkpoint LLM review
+  freezes those consumers and forbids any new one; TypeScript does not infer
+  the facade consumers from Rust.
 - [ ] Remove the `#[cfg(test)]` Telegram content-kind re-exports from app
   `media.rs`. Rewrite only the existing `sources/items.rs` test assertions to
   compare the unchanged literal `"text_only"` / `"text_with_media"` values;
   keep every test identity and all production code unchanged.
 - [ ] Keep the temporary package-private `raw_client`/`raw_session` adapters
-  only for the still-unmoved live/Takeout consumers. The contract must list
-  each temporary callsite exactly; no new raw callsite may appear.
+  only for the still-unmoved live/Takeout consumers. The checkpoint LLM review
+  must list each temporary callsite exactly; no new raw callsite may appear.
+  The TypeScript contract does not infer or enforce that list from Rust.
 - [ ] Delete the four old leaf files and their old module declarations only
   after the staged versions compile. There must be no duplicate DTO, item-kind
   literal, media payload, runtime, session codec, or test identity.
@@ -2239,9 +2343,10 @@ stored-channel shortcut.
   `sources/store.rs`. Keep `sources/peer_resolution.rs::ResolvedSyncPeer::peer`
   as the one explicitly lifecycle-gated app-private raw field and add its pure
   `descriptor: PeerDescriptor` alongside it.
-- [ ] Freeze exact raw-field consumers: one in
-  `sources::sync_telegram_source` and two Takeout resolution sites at CP4;
-  exactly two Takeout sites after CP5; zero at CP7.
+- [ ] Have the checkpoint LLM review freeze the exact
+  `ResolvedSyncPeer::peer` consumers: one in
+  `sources::sync::sync_telegram_source` and two Takeout resolution sites at
+  CP4; exactly two Takeout resolution owners after CP5; zero at CP7.
 - [ ] Keep exactly
   `TelegramClientHandle::{raw_client,raw_session}`,
   `TelegramSession::raw_memory_session`,
@@ -2249,8 +2354,9 @@ stored-channel shortcut.
   `{ResolvedSyncPeer::peer,legacy_peer_ref_from_descriptor}` as the CP3→CP7
   transitional bridge. `TelegramSession::clone_memory_session` is the permanent
   restricted runtime-initialization bridge and is not part of that deletion.
-  The contract freezes the transitional symbols/callsites, rejects any new raw
-  callsite, and requires deletion at CP7.
+  The LLM review freezes the transitional definitions/callsites, rejects any
+  new raw callsite, and requires deletion at CP7. TypeScript does not decide
+  whether a Rust callsite belongs to this set.
 - [ ] Run all three exact GREEN tests plus mapped peer/store suites:
 
 ```powershell
@@ -2404,8 +2510,15 @@ across a different error boundary.
   completion path call public `TelegramClientHandle::fetch_forum_topics`; no
   raw topic loop or raw bridge survives CP5. Checkpoint 7 adds only the
   Takeout-owned delegation/test in `takeout/forum_topics.rs`.
-- [ ] After live consumers are converted, raw accessors may remain only in the
-  exact two Takeout resolution callsites. Assert no Grammers import remains in
+- [ ] After live consumers are converted, raw-handle accessors may remain only
+  under the three exact raw-handle logical owners/callsites
+  `run_export_dc_spike_for_handle`,
+  `run_takeout_migrated_history_import`, and
+  `run_takeout_source_import`. Separately,
+  `ResolvedSyncPeer::peer` may remain under only the two Takeout resolution
+  owners `run_takeout_migrated_history_import` and
+  `run_takeout_source_import`. The LLM review confirms both exact inventories;
+  separately assert no Grammers import remains in
   `sources/{items,sync,topics}.rs`.
 - [ ] Run the four exact GREEN tests and focused suites:
 
@@ -2528,8 +2641,9 @@ Invoke-CheckedNative 'Task 6 package checkpoint' {
 - [ ] Assert exactly 729 unique library IDs, 143 present baseline-derived IDs,
   and 168 present tracked IDs. The contract must map the companions to their
   temporary Checkpoint 6 IDs and reserve their staged Checkpoint 7 IDs.
-- [ ] Update candidate statuses to Checkpoint 6, run the Telegram contract, and
-  run:
+- [ ] Obtain `Escape-hatch review verdict: CLEAN` from the mandatory reusable
+  CP2–CP8 LLM retention gate. Only then update candidate statuses to Checkpoint
+  6, run the Telegram contract, and run:
 
 ```powershell
 Assert-RustPackageTestTotal -Package extractum -ExpectedTotal 729
@@ -2865,7 +2979,9 @@ Keep completion policy and warning/provenance tests in app
   codec/tests, runtime initialization/tests, and sibling modules. CP7 and later
   contain zero `raw_memory_session` identifiers anywhere under
   `src-tauri/src`, while the exact restricted `clone_memory_session`
-  definition remains. Package-private
+  definition remains; this zero-use/deletion claim is established by the
+  checkpoint LLM review plus compilation/behavior gates, not a TypeScript Rust
+  parser. Package-private
   `TelegramState` methods may delegate to
   `TelegramRuntime::{client,authorized_client}`; they expose only the opaque
   handle. Public handle methods that need raw internals are implemented in
@@ -2905,7 +3021,7 @@ Assert-NoMatches `
   -Paths @('src-tauri/src/telegram_impl')
 Assert-NoMatches `
   -Label 'raw app leakage' `
-  -Pattern 'grammers_|raw_client|raw_session|RemoteCall|InvocationError|PeerRef|tl::' `
+  -Pattern 'grammers_|RemoteCall|InvocationError|PeerRef|tl::' `
   -Paths @(
     'src-tauri/src/telegram.rs',
     'src-tauri/src/sources',
@@ -2914,14 +3030,18 @@ Assert-NoMatches `
   )
 ```
 
-`rg` exit 1 is clean; any other nonzero is infrastructure failure. Separately
-assert that every application use of a staged public symbol begins with exact
+`rg` exit 1 is clean; any other nonzero is infrastructure failure. The
+checkpoint LLM review separately confirms that every named transitional escape
+hatch and every alias/forwarding use is absent; do not add those names back to
+an automatic occurrence scan. Separately assert that every
+application use of a staged public symbol begins with exact
 `crate::telegram_impl::` and no alias/glob exists. Parse
 `src/lib/telegram-8b-symbol-map.json`; require every CP7 final symbol, every
-app-retained replacement, no transitional bridge, and no unlisted production
-`pub(super)` item. Compare the complete normalized `pub(super)` inventory to
-the artifact's `restrictedFinalSymbols`; do not parse or hard-code a second
-pagination allowlist in TypeScript.
+app-retained replacement, the review-only CP7 empty transitional inventory,
+and no unlisted production `pub(super)` item. Compare the complete normalized
+`pub(super)` inventory to the artifact's `restrictedFinalSymbols`; do not
+parse Rust escape-hatch use-sites or hard-code a second pagination allowlist
+in TypeScript.
 
 - [ ] Run all seven new Task 7 tests, both final companions, and the complete
   mapped Takeout suites:
@@ -3102,7 +3222,9 @@ Invoke-CheckedNative 'final LLM and prompt contracts' {
 - [ ] Prove locked metadata has exactly six workspace members, no
   `extractum-telegram`, all four Grammers roots remain direct on `extractum`,
   and the feature artifact remains exact.
-- [ ] Set candidate statuses to Checkpoint 8 and run:
+- [ ] Obtain `Escape-hatch review verdict: CLEAN` from the mandatory reusable
+  CP2–CP8 LLM retention gate. Only then set candidate statuses to Checkpoint 8
+  and run:
 
 ```powershell
 Invoke-RetainedCheckpointGates '8B-CP8'
@@ -3305,6 +3427,7 @@ feature-baseline artifact hash
 exact test counts/identity sets
 focused/full command exit results
 one workspace-check duration per checkpoint
+CP2–CP8 active-task-thread LLM evidence summaries and exact CLEAN verdicts
 live MCP command result (sanitized, no credentials)
 release build path/hash
 startup PID/path/survival/cleanup evidence

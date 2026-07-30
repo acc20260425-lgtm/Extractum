@@ -12,10 +12,10 @@
 **Approved Phase 8B narrow-API authority:**
 [`2026-07-28-extractum-telegram-8b-preparation.md`](../plans/2026-07-28-extractum-telegram-8b-preparation.md)
 
-**Approved 2026-07-30 amendment:** transitional bridge use-sites and
-producer/continuation ownership are explicit generated authority; the
-TypeScript boundary contract does not implement Rust name, type, scope, or
-data-flow resolution.
+**Owner-directed 2026-07-30 forward amendment:** after retained Checkpoint 1,
+transitional escape-hatch use-sites are reviewed by an LLM. The TypeScript
+contract does not perform Rust semantic use-site analysis; automatic evidence
+for those uses is limited to compilation and behavior.
 
 This specification defines the just-in-time Phase 8 boundary for
 `extractum-telegram`. It supersedes the short Phase 8 placeholder in the crate
@@ -657,7 +657,9 @@ plan, and be enforced by the source-boundary contract.
 The approved Phase 8B plan freezes the following execution-state, count,
 signature, visibility, transition, symbol-disposition, portable-tree, and
 generated-artifact authority. These clauses are copied here before RED and
-supersede every broader narrative clause in this design:
+supersede every broader narrative clause in this design. The explicitly
+forward-only amendment below applies to unexecuted work after retained
+Checkpoint 1 and does not rewrite Checkpoint 1 history:
 - [ ] Inspect `git status --short`, the complete scoped diff, and the staged diff before every commit. Stage only the task allowlist; preserve unrelated user changes.
 - [ ] Every Checkpoint 1–8 is independently GREEN, separately committed, and
   truthfully represented in the roadmap/design status in that same commit.
@@ -702,15 +704,17 @@ supersede every broader narrative clause in this design:
   accessors retain only their existing package/super visibility and exact
   callsites. Both exception sets are completely removed/demoted before CP7 and
   authorize no public module, glob, fifth media item, or additional raw bridge.
-- [ ] Transitional raw-bridge use-sites are a generated, lifecycle-specific
-  source contract, not a TypeScript reconstruction of Rust name resolution.
-  The approved 8B plan is the single literal authority for each physical
-  use-site, its logical inventory owner, its normalized source anchors, and
-  every producer/continuation edge required to map a physical consumer to that
-  owner. The generator materializes explicit CP3 through CP8 states; CP3 has
-  its own `ResolvedSyncPeer::peer` state, CP6 is explicit rather than inferred
-  from CP5, and CP7/CP8 are explicitly empty. Cargo remains the authority for
-  Rust type correctness.
+- [ ] For every unexecuted checkpoint after retained CP1, an LLM reviews the
+  complete scoped Rust diff and enough unchanged surrounding source to account
+  for every transitional escape-hatch definition, physical use, producer, and
+  forwarding continuation against the readable inventories below. The
+  TypeScript contract must not resolve Rust names/types/imports/scopes,
+  reconstruct producer or call graphs, trace data flow, or enforce
+  source-use anchors/edges/occurrence fences. For these use-sites, automatic
+  evidence is limited to Rust compilation and the named behavior tests. An
+  unlisted or ambiguous use blocks the checkpoint. It may be removed followed
+  by a clean LLM re-review; retaining it requires an approved plan/design
+  amendment.
 - [ ] Remove `TelegramClientHandle::{raw_client,raw_session}` and app helpers `get_client`/`get_authorized_client` only after their last consumers use owned operations; none may exist at Checkpoint 7 or 8.
 - [ ] App persistence remains incremental. It processes every `LiveMessage` and every `TakeoutMessage` in order, records max IDs before skip/parse decisions exactly as today, and returns a per-entry error only after prior entries have been durably handled.
 - [ ] Every live batch performs exactly one raw `messages.getHistory` invoke with `1 <= limit <= 100`; do not build it by draining `MessageIter::next`. It preserves newest-to-oldest order, exact offset-id/offset-date advancement, the pinned Grammers terminal rule, and per-message conversion after app cutoffs.
@@ -1666,9 +1670,9 @@ coexist-then-replace pair: CP3 through CP6 require both exact methods, while
 CP7 and later require the restricted owned-`Arc` bridge exactly once and zero
 occurrences of the borrowed bridge name in production or tests.
 
-The generator also freezes these logical-owner transition inventories. They
-are a readable summary; the generated bridge-use authority below is the
-executable source of their lifecycle and physical use-site accounting:
+The schema-v1 generator also freezes these logical-owner transition
+inventories. They remain the readable checklist for the forward-only LLM
+review below; TypeScript does not reconcile them against Rust use-sites:
 
 ```text
 CP3 raw handle callsites:
@@ -1688,116 +1692,96 @@ CP5 ResolvedSyncPeer::peer consumers:
 CP7 raw bridge symbols/callsites: empty
 ```
 
-### Generated Transitional Bridge-Use Authority
+### Forward-Only Transitional Escape-Hatch Review Authority
 
-The logical-owner arrays above are insufficient by themselves to prove an
-exact raw bridge. A source contract that tries to derive their meaning from
-Rust syntax must otherwise become a partial resolver for imports, shadowing,
-inferred bindings, UFCS/function-item references, and call-graph data flow.
-That resolver is not part of the product architecture and is not a permitted
-second authority.
+This subsection applies only to unexecuted work after retained Checkpoint 1.
+It does not reinterpret the Checkpoint 1 commit, change its schema-v1 artifact,
+or rewrite its historical RED/GREEN instructions.
 
-The approved Phase 8B plan must therefore contain one literal bridge-use table
-and one literal producer/continuation-edge table before the replacement Task 1
-RED is written. `scripts/telegram-8b-symbol-map.mjs` is their sole parser and
-emits artifact `schemaVersion: 2`. The generated artifact contains:
+The logical-owner arrays above are a human-review checklist, not executable
+Rust source authority. The committed schema-v1 `transitionInventories` field
+remains so the plan, generated artifact, and reviewer share the same readable
+checkpoint vocabulary. It is not upgraded to schema v2, and no TypeScript test
+may derive, accept, or reject a Rust escape-hatch use-site from those arrays.
 
-```text
-transitionBridgeAuthority = {
-  uses,
-  edges,
-  checkpoints: {
-    cp3,
-    cp4,
-    cp5,
-    cp6,
-    cp7,
-    cp8
-  }
-}
-```
-
-Every `uses` row has these exact fields:
+For CP2, the LLM reviewer verifies from the complete scoped diff that no
+production-Rust escape-hatch definition or callsite changed. At CP3 through
+CP6, the reviewer uses the logical-owner arrays, symbol-disposition rows, and
+both complete transitional exception sets:
 
 ```text
-id
-sourcePath
-sourceFunction
-logicalOwner
-member
-normalizedAnchors
-firstCheckpoint
-removalCheckpoint
+media compatibility facade:
+  DocumentSignals
+  derive_content_kind
+  derive_document_media_kind
+  extract_item_payload
+
+raw bridge:
+  TelegramClientHandle::{raw_client,raw_session}
+  TelegramSession::raw_memory_session
+  telegram::{get_client,get_authorized_client}
+  ResolvedSyncPeer::peer
+  legacy_peer_ref_from_descriptor
 ```
 
-`member` is one of
-`TelegramClientHandle::raw_client`,
-`TelegramClientHandle::raw_session`, or
-`ResolvedSyncPeer::peer`. `firstCheckpoint` is inclusive and
-`removalCheckpoint` is exclusive. Each ID is unique. Each active physical
-consumer maps to exactly one logical owner. Multiple physical consumers may
-map to the same logical owner only when separate rows name every consumer.
+At CP7 and CP8 the reviewer must find no retained transitional definition,
+callsite, forwarding use, alias, re-export, or replacement spelling. An
+unlisted use or uncertain attribution blocks the checkpoint. The implementation
+may remove it and obtain a clean LLM re-review; retaining it requires an
+approved plan/design amendment. It is never accepted by teaching the
+TypeScript contract more Rust syntax.
 
-Every `edges` row has these exact fields:
+Review follows the whole value path rather than only the function containing
+the terminal access. In particular, the retained Takeout path is reviewed as
+one two-hop chain:
 
 ```text
-id
-sourcePath
-sourceFunction
-targetPath
-targetFunction
-logicalOwner
-normalizedAnchors
-firstCheckpoint
-removalCheckpoint
+run_takeout_source_import
+  -> run_started_takeout_source_import
+  -> run_started_takeout_source_import_inner
 ```
 
-Edges are declared only when the physical bridge access occurs in a helper or
-continuation but the frozen inventory owner is an outer workflow function.
-They freeze the exact forwarding call/argument fragments. The contract does
-not infer an edge by finding a same-named call and does not infer data flow
-through a wrapper. At every checkpoint, both endpoint functions must exist in
-the checkpoint source fixture and the edge's logical owner must occur in that
-checkpoint's generated logical-owner array.
+The intermediate forwarding function is part of the review even though it is
+not a logical inventory owner. Every physical access in the inner function and
+the direct access in the outer function are attributed to
+`run_takeout_source_import`. Equivalent producer, alias, function-item,
+shadowing, wrapper, or forwarding changes are reviewed semantically by the
+LLM, not inferred by automation.
 
-The generator expands the interval rows into six complete checkpoint objects.
-Each object contains the exact active use IDs, edge IDs, raw logical owners,
-and peer logical owners. It does not use a "latest earlier checkpoint"
-fallback. CP3 explicitly includes the unchanged peer consumers, CP6 explicitly
-repeats the still-active CP5 state, and CP7/CP8 contain four empty arrays.
+For each remaining checkpoint commit, the LLM review inspects the complete
+production Rust diff plus enough unchanged surrounding source to follow every
+affected producer and continuation. Its review evidence records:
 
-Anchor comparison is deliberately lexical and closed. Sources are normalized
-from CRLF to LF; Rust comments plus string/character literal bodies are masked;
-then whitespace is removed from both the production function body and the
-generated anchor. Every active anchor must occur exactly once in its declared
-function. The application-side occurrence fence additionally requires:
+- the selected checkpoint and retained predecessor;
+- every listed exception definition and physical use that remains;
+- the logical owner and full forwarding chain for indirect uses;
+- every use expected to disappear at that checkpoint;
+- any new alias, re-export, wrapper, function item, or unrelated same-named
+  field that could obscure the inventory;
+- a blocking finding for every unlisted or ambiguous escape hatch.
 
-- every production-body occurrence of `raw_client` or `raw_session` outside
-  `telegram_impl/**` to belong to exactly one active raw-use anchor;
-- every non-call application field access matching `.peer` outside
-  `telegram_impl/**` to belong to exactly one active peer-use anchor;
-- zero such transitional occurrences at CP7 and CP8.
+The evidence is review output, not a generated artifact and not input to a
+source parser. It must be recorded in the active task thread before the
+candidate status/final gates and summarized in the final Task 8 verification
+document. No test passes merely because that prose exists.
 
-The staged accessor definitions remain governed by the symbol disposition and
-visibility contracts, not by the application-use fence. An unrelated
-application field named `peer` or accessor named `raw_client` is not silently
-accepted: it requires an authority amendment or a non-conflicting name. This
-conservative reservation is intentional and bounded to the CP3→CP6 bridge.
+For transitional escape-hatch authorization,
+`src/lib/telegram-crate-boundary-contract.test.ts` must not tokenize or mask
+Rust, isolate Rust functions, resolve types/imports/bindings/scopes/shadowing,
+infer producer results or call graphs, trace forwarding/data flow, count
+transitional member occurrences, or enforce generated use-site anchors, edges,
+or occurrence fences for either exception set. Their schema-v1 symbol rows and
+inventories remain document/artifact review metadata, but TypeScript does not
+reconcile their definitions or use-sites against Rust source. It may continue
+to verify document/artifact serialization and lifecycle vocabulary. There is
+no global reservation of an unrelated application field named `peer`.
 
-The TypeScript contract may isolate production functions, normalize/mask
-lexical source, count exact anchors and reserved occurrences, and compare
-generated arrays. It must not resolve Rust types or imports, track scoped
-shadowing, infer producer return values, construct a call graph, or carry a
-second list of bridge functions/continuations. Cargo check/test gates prove
-that the lexically authorized source is valid Rust with the expected types.
-
-The generator fails closed on duplicate IDs, duplicate checkpoint entries,
-unknown members, malformed or empty anchors, invalid checkpoint intervals,
-an edge without active endpoints, an active physical use without exactly one
-logical owner, or any mismatch between expanded checkpoint owners and the
-readable logical-owner inventories. The source contract fails on a missing,
-duplicated, moved, or additional reserved occurrence and on any use/edge
-lifecycle drift.
+Automatic evidence for these escape-hatch uses is limited to Rust compilation
+and the named Rust focused/package/workspace behavior tests. Compilation
+proves the reviewed source is valid and type-correct; Rust behavior tests prove
+the frozen observable contracts. A TypeScript source contract is not evidence
+that a use is allowed. Neither substitutes for the required LLM review, and
+the LLM review does not weaken any compile or behavior gate.
 
 Synthetic `::segment` keys are source fragments, not Rust identifiers. Their
 JSON rows carry these exact pre-move anchors, each required in its enclosing
@@ -2547,9 +2531,9 @@ Required standing contracts include:
 4. a curated crate-root/public-API allowlist;
 5. primary metadata-graph proof of final direct dependency ownership, plus the
    secondary absence scan over app Rust source/tests;
-6. the exact 8B prepared implementation symbol map, its schema-v2
-   lifecycle-specific transitional bridge uses/edges, and the intentionally
-   absent crate/workspace edge;
+6. the exact schema-v1 8B prepared implementation symbol map, its readable
+   transitional review inventories, and the intentionally absent
+   crate/workspace edge; the map is not executable Rust use-site authority;
 7. the literal immutable 140-entry test-identity map, the exact 43
    helper-dependent plus three credential-SQL app assignments, and the two
    raw-TL/SQL companion-test decompositions, plus the 21-identity type-closure
@@ -2724,8 +2708,10 @@ not a correctness failure.
 - No focused timing series, process scanner, quiet-window rule, retry policy,
   cumulative ledger, or new measurement runner.
 - No TypeScript implementation of Rust import, name, type, scope, shadowing,
-  call-graph, or data-flow resolution. Exact transitional bridge source forms
-  are generated authority and Cargo proves their Rust semantics.
+  call-graph, or data-flow resolution and no generated escape-hatch
+  use-site/edge/occurrence authority. For unexecuted work after retained CP1,
+  an LLM reviews those source forms; Cargo and behavior tests provide the
+  automatic evidence.
 
 ## Acceptance Criteria
 
@@ -2771,9 +2757,11 @@ The design outcome is complete only when:
     private explicit facade; the first 8A checkpoint directly normalizes the
     six identity-seam error paths, and the final 8B staging tree contains no
     `crate::error`, `crate::compression`, or `crate::time` reference; the
-    schema-v2 generated transition authority accounts for every CP3→CP6
-    physical raw-bridge use and ownership edge and contains explicit empty
-    CP7/CP8 states without TypeScript semantic inference;
+    every unexecuted CP2→CP8 checkpoint has recorded LLM review of the
+    complete transitional exception set and all indirect forwarding paths,
+    while the TypeScript contract performs no Rust use-site analysis; CP7/CP8
+    review finds no transitional escape hatch, and the named Rust compile and
+    behavior gates pass;
 13. the exact Grammers revision and direct declaration policy live with the
     crate dependency owner, the generated required/forbidden feature baseline
     passes without unclassified feature keys, and the lockfile is current;
@@ -2821,12 +2809,12 @@ Each plan must:
   `crate::telegram_impl::` prefix, then make 8C prove byte-for-byte
   relative-path/content-hash identity while retaining that consumer prefix
   through the explicit private compatibility facade;
-- make the 8B plan freeze the literal schema-v2 transition bridge-use and
-  producer/continuation-edge tables, including normalized anchors, inclusive
-  first checkpoint, exclusive removal checkpoint, exact physical function,
-  exact logical owner, explicit CP3/CP6 states, and empty CP7/CP8 states;
-  generate those tables through `scripts/telegram-8b-symbol-map.mjs`, and keep
-  the TypeScript consumer lexical rather than semantic;
+- preserve the retained CP1 schema-v1 symbol map and change only the
+  unexecuted CP2→CP8 instructions: keep the logical-owner arrays as a readable
+  LLM-review checklist, require complete diff plus producer/continuation review
+  at each checkpoint, and forbid TypeScript Rust use-site analysis or
+  generated anchors/edges/occurrence fences; automatic evidence for those
+  uses is the named Rust compilation and behavior gates;
 - reproduce the exact existing-symbol public visibility allowlist and state
   every new operation signature before its RED contract;
 - name RED/GREEN tests and non-empty suite helpers before implementation;
