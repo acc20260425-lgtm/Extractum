@@ -12,6 +12,11 @@
 **Approved Phase 8B narrow-API authority:**
 [`2026-07-28-extractum-telegram-8b-preparation.md`](../plans/2026-07-28-extractum-telegram-8b-preparation.md)
 
+**Approved 2026-07-30 amendment:** transitional bridge use-sites and
+producer/continuation ownership are explicit generated authority; the
+TypeScript boundary contract does not implement Rust name, type, scope, or
+data-flow resolution.
+
 This specification defines the just-in-time Phase 8 boundary for
 `extractum-telegram`. It supersedes the short Phase 8 placeholder in the crate
 roadmap. Approval of this document does not authorize implementation. Phase 8
@@ -697,6 +702,15 @@ supersede every broader narrative clause in this design:
   accessors retain only their existing package/super visibility and exact
   callsites. Both exception sets are completely removed/demoted before CP7 and
   authorize no public module, glob, fifth media item, or additional raw bridge.
+- [ ] Transitional raw-bridge use-sites are a generated, lifecycle-specific
+  source contract, not a TypeScript reconstruction of Rust name resolution.
+  The approved 8B plan is the single literal authority for each physical
+  use-site, its logical inventory owner, its normalized source anchors, and
+  every producer/continuation edge required to map a physical consumer to that
+  owner. The generator materializes explicit CP3 through CP8 states; CP3 has
+  its own `ResolvedSyncPeer::peer` state, CP6 is explicit rather than inferred
+  from CP5, and CP7/CP8 are explicitly empty. Cargo remains the authority for
+  Rust type correctness.
 - [ ] Remove `TelegramClientHandle::{raw_client,raw_session}` and app helpers `get_client`/`get_authorized_client` only after their last consumers use owned operations; none may exist at Checkpoint 7 or 8.
 - [ ] App persistence remains incremental. It processes every `LiveMessage` and every `TakeoutMessage` in order, records max IDs before skip/parse decisions exactly as today, and returns a per-entry error only after prior entries have been durably handled.
 - [ ] Every live batch performs exactly one raw `messages.getHistory` invoke with `1 <= limit <= 100`; do not build it by draining `MessageIter::next`. It preserves newest-to-oldest order, exact offset-id/offset-date advancement, the pinned Grammers terminal rule, and per-message conversion after app cutoffs.
@@ -1652,8 +1666,9 @@ coexist-then-replace pair: CP3 through CP6 require both exact methods, while
 CP7 and later require the restricted owned-`Arc` bridge exactly once and zero
 occurrences of the borrowed bridge name in production or tests.
 
-The generator also freezes three transition inventories that are not inferred
-from path existence:
+The generator also freezes these logical-owner transition inventories. They
+are a readable summary; the generated bridge-use authority below is the
+executable source of their lifecycle and physical use-site accounting:
 
 ```text
 CP3 raw handle callsites:
@@ -1672,6 +1687,117 @@ CP5 ResolvedSyncPeer::peer consumers:
   takeout_import::{run_takeout_migrated_history_import,run_takeout_source_import}
 CP7 raw bridge symbols/callsites: empty
 ```
+
+### Generated Transitional Bridge-Use Authority
+
+The logical-owner arrays above are insufficient by themselves to prove an
+exact raw bridge. A source contract that tries to derive their meaning from
+Rust syntax must otherwise become a partial resolver for imports, shadowing,
+inferred bindings, UFCS/function-item references, and call-graph data flow.
+That resolver is not part of the product architecture and is not a permitted
+second authority.
+
+The approved Phase 8B plan must therefore contain one literal bridge-use table
+and one literal producer/continuation-edge table before the replacement Task 1
+RED is written. `scripts/telegram-8b-symbol-map.mjs` is their sole parser and
+emits artifact `schemaVersion: 2`. The generated artifact contains:
+
+```text
+transitionBridgeAuthority = {
+  uses,
+  edges,
+  checkpoints: {
+    cp3,
+    cp4,
+    cp5,
+    cp6,
+    cp7,
+    cp8
+  }
+}
+```
+
+Every `uses` row has these exact fields:
+
+```text
+id
+sourcePath
+sourceFunction
+logicalOwner
+member
+normalizedAnchors
+firstCheckpoint
+removalCheckpoint
+```
+
+`member` is one of
+`TelegramClientHandle::raw_client`,
+`TelegramClientHandle::raw_session`, or
+`ResolvedSyncPeer::peer`. `firstCheckpoint` is inclusive and
+`removalCheckpoint` is exclusive. Each ID is unique. Each active physical
+consumer maps to exactly one logical owner. Multiple physical consumers may
+map to the same logical owner only when separate rows name every consumer.
+
+Every `edges` row has these exact fields:
+
+```text
+id
+sourcePath
+sourceFunction
+targetPath
+targetFunction
+logicalOwner
+normalizedAnchors
+firstCheckpoint
+removalCheckpoint
+```
+
+Edges are declared only when the physical bridge access occurs in a helper or
+continuation but the frozen inventory owner is an outer workflow function.
+They freeze the exact forwarding call/argument fragments. The contract does
+not infer an edge by finding a same-named call and does not infer data flow
+through a wrapper. At every checkpoint, both endpoint functions must exist in
+the checkpoint source fixture and the edge's logical owner must occur in that
+checkpoint's generated logical-owner array.
+
+The generator expands the interval rows into six complete checkpoint objects.
+Each object contains the exact active use IDs, edge IDs, raw logical owners,
+and peer logical owners. It does not use a "latest earlier checkpoint"
+fallback. CP3 explicitly includes the unchanged peer consumers, CP6 explicitly
+repeats the still-active CP5 state, and CP7/CP8 contain four empty arrays.
+
+Anchor comparison is deliberately lexical and closed. Sources are normalized
+from CRLF to LF; Rust comments plus string/character literal bodies are masked;
+then whitespace is removed from both the production function body and the
+generated anchor. Every active anchor must occur exactly once in its declared
+function. The application-side occurrence fence additionally requires:
+
+- every production-body occurrence of `raw_client` or `raw_session` outside
+  `telegram_impl/**` to belong to exactly one active raw-use anchor;
+- every non-call application field access matching `.peer` outside
+  `telegram_impl/**` to belong to exactly one active peer-use anchor;
+- zero such transitional occurrences at CP7 and CP8.
+
+The staged accessor definitions remain governed by the symbol disposition and
+visibility contracts, not by the application-use fence. An unrelated
+application field named `peer` or accessor named `raw_client` is not silently
+accepted: it requires an authority amendment or a non-conflicting name. This
+conservative reservation is intentional and bounded to the CP3→CP6 bridge.
+
+The TypeScript contract may isolate production functions, normalize/mask
+lexical source, count exact anchors and reserved occurrences, and compare
+generated arrays. It must not resolve Rust types or imports, track scoped
+shadowing, infer producer return values, construct a call graph, or carry a
+second list of bridge functions/continuations. Cargo check/test gates prove
+that the lexically authorized source is valid Rust with the expected types.
+
+The generator fails closed on duplicate IDs, duplicate checkpoint entries,
+unknown members, malformed or empty anchors, invalid checkpoint intervals,
+an edge without active endpoints, an active physical use without exactly one
+logical owner, or any mismatch between expanded checkpoint owners and the
+readable logical-owner inventories. The source contract fails on a missing,
+duplicated, moved, or additional reserved occurrence and on any use/edge
+lifecycle drift.
 
 Synthetic `::segment` keys are source fragments, not Rust identifiers. Their
 JSON rows carry these exact pre-move anchors, each required in its enclosing
@@ -2421,8 +2547,9 @@ Required standing contracts include:
 4. a curated crate-root/public-API allowlist;
 5. primary metadata-graph proof of final direct dependency ownership, plus the
    secondary absence scan over app Rust source/tests;
-6. the exact 8B prepared implementation symbol map and intentionally absent
-   crate/workspace edge;
+6. the exact 8B prepared implementation symbol map, its schema-v2
+   lifecycle-specific transitional bridge uses/edges, and the intentionally
+   absent crate/workspace edge;
 7. the literal immutable 140-entry test-identity map, the exact 43
    helper-dependent plus three credential-SQL app assignments, and the two
    raw-TL/SQL companion-test decompositions, plus the 21-identity type-closure
@@ -2596,6 +2723,9 @@ not a correctness failure.
   draft field declared above is boundary work, not an unrelated cleanup.
 - No focused timing series, process scanner, quiet-window rule, retry policy,
   cumulative ledger, or new measurement runner.
+- No TypeScript implementation of Rust import, name, type, scope, shadowing,
+  call-graph, or data-flow resolution. Exact transitional bridge source forms
+  are generated authority and Cargo proves their Rust semantics.
 
 ## Acceptance Criteria
 
@@ -2640,7 +2770,10 @@ The design outcome is complete only when:
     `crate::telegram_impl::` consumer paths remain byte-identical behind the
     private explicit facade; the first 8A checkpoint directly normalizes the
     six identity-seam error paths, and the final 8B staging tree contains no
-    `crate::error`, `crate::compression`, or `crate::time` reference;
+    `crate::error`, `crate::compression`, or `crate::time` reference; the
+    schema-v2 generated transition authority accounts for every CP3→CP6
+    physical raw-bridge use and ownership edge and contains explicit empty
+    CP7/CP8 states without TypeScript semantic inference;
 13. the exact Grammers revision and direct declaration policy live with the
     crate dependency owner, the generated required/forbidden feature baseline
     passes without unclassified feature keys, and the lockfile is current;
@@ -2688,6 +2821,12 @@ Each plan must:
   `crate::telegram_impl::` prefix, then make 8C prove byte-for-byte
   relative-path/content-hash identity while retaining that consumer prefix
   through the explicit private compatibility facade;
+- make the 8B plan freeze the literal schema-v2 transition bridge-use and
+  producer/continuation-edge tables, including normalized anchors, inclusive
+  first checkpoint, exclusive removal checkpoint, exact physical function,
+  exact logical owner, explicit CP3/CP6 states, and empty CP7/CP8 states;
+  generate those tables through `scripts/telegram-8b-symbol-map.mjs`, and keep
+  the TypeScript consumer lexical rather than semantic;
 - reproduce the exact existing-symbol public visibility allowlist and state
   every new operation signature before its RED contract;
 - name RED/GREEN tests and non-empty suite helpers before implementation;
