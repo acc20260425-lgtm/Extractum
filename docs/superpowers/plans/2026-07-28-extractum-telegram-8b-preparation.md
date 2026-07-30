@@ -2070,6 +2070,7 @@ commit, and must be an ancestor of CP2 and the final Phase 8B disposition.
   `src-tauri/Cargo.lock`
 - Modify: `src/lib/telegram-crate-boundary-contract.test.ts`
 - Modify: `src/lib/gemini-browser-crate-boundary-contract.test.ts`
+- Modify: `src/lib/crate-extraction-shell-cap-contract.test.ts`
 - Modify:
   `docs/superpowers/specs/2026-07-26-telegram-crate-boundary-design.md`
 - Modify: `docs/superpowers/specs/2026-07-17-crate-roadmap.md`
@@ -2111,8 +2112,10 @@ hash change before continuing.
   stop for plan review unless it proves a semantically identical normalization;
   never casually regenerate the lock.
 - [ ] Run the feature baseline `--check`; it must remain byte-identical.
-- [ ] Update the Gemini exact workspace-dependency contract atomically; run
-  analysis, LLM, and prompt-pack contracts because they fingerprint the
+- [ ] Update the Gemini exact workspace-dependency contract and extend the
+  shell-cap contract's retained-current-status acceptance through Checkpoint 2
+  atomically. Run the shell-cap contract explicitly before candidate status,
+  plus analysis, LLM, and prompt-pack contracts because they fingerprint the
   manifest/reachable graph:
 
 ```powershell
@@ -2121,6 +2124,9 @@ Invoke-CheckedNative 'Task 2 Telegram contract' {
 }
 Invoke-CheckedNative 'Task 2 Gemini contract' {
     npm.cmd run test -- src/lib/gemini-browser-crate-boundary-contract.test.ts
+}
+Invoke-CheckedNative 'Task 2 shell-cap contract' {
+    npm.cmd run test -- src/lib/crate-extraction-shell-cap-contract.test.ts
 }
 Invoke-CheckedNative 'Task 2 analysis contracts' {
     npm.cmd run test -- src/lib/analysis-application-contract.test.ts src/lib/analysis-crate-boundary-contract.test.ts
