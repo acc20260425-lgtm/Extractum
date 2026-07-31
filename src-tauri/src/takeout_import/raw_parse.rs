@@ -396,6 +396,17 @@ mod tests {
         }
     }
 
+    fn takeout_raw_message_for_identity_test(
+        id: i32,
+        peer_id: tl::enums::Peer,
+        text: &str,
+    ) -> tl::types::Message {
+        let mut message = raw_message(id);
+        message.peer_id = peer_id;
+        message.message = text.to_string();
+        message
+    }
+
     #[test]
     fn parses_text_message_with_reply_and_reactions() {
         let mut message = raw_message(42);
@@ -540,6 +551,84 @@ mod tests {
                 .as_ref()
                 .unwrap()
                 .telegram_message_id
+        );
+    }
+
+    #[test]
+    fn raw_parse_preserves_distinct_history_peer_identity_for_equal_message_ids() {
+        let current = takeout_raw_message_for_identity_test(42, peer_channel(12345), "current");
+        let migrated = takeout_raw_message_for_identity_test(
+            42,
+            tl::types::PeerChat { chat_id: 777 }.into(),
+            "migrated",
+        );
+
+        let current_item = parse_raw_message(&None, current)
+            .expect("parse current")
+            .expect("current item");
+        let migrated_item = parse_raw_message(&None, migrated)
+            .expect("parse migrated")
+            .expect("migrated item");
+        let current_identity = current_item.telegram_identity.expect("current identity");
+        let migrated_identity = migrated_item.telegram_identity.expect("migrated identity");
+
+        assert_eq!(current_identity.telegram_message_id, 42);
+        assert_eq!(
+            current_identity.telegram_message_id,
+            migrated_identity.telegram_message_id
+        );
+        assert_eq!(
+            (
+                current_identity.history_peer_kind.as_str(),
+                current_identity.history_peer_id,
+            ),
+            ("channel", 12345)
+        );
+        assert_eq!(
+            (
+                migrated_identity.history_peer_kind.as_str(),
+                migrated_identity.history_peer_id,
+            ),
+            ("chat", 777)
+        );
+        assert_ne!(
+            (
+                current_identity.history_peer_kind.as_str(),
+                current_identity.history_peer_id,
+            ),
+            (
+                migrated_identity.history_peer_kind.as_str(),
+                migrated_identity.history_peer_id,
+            )
+        );
+    }
+
+    #[test]
+    fn raw_parse_preserves_identical_native_identity_for_same_peer_and_message_id() {
+        let first = takeout_raw_message_for_identity_test(42, peer_channel(12345), "first");
+        let duplicate = takeout_raw_message_for_identity_test(42, peer_channel(12345), "duplicate");
+
+        let first_item = parse_raw_message(&None, first)
+            .expect("parse first")
+            .expect("first item");
+        let duplicate_item = parse_raw_message(&None, duplicate)
+            .expect("parse duplicate")
+            .expect("duplicate item");
+
+        assert_ne!(first_item.content, duplicate_item.content);
+        assert_ne!(first_item.raw_data, duplicate_item.raw_data);
+        assert_eq!(
+            first_item.telegram_identity,
+            duplicate_item.telegram_identity
+        );
+        let identity = first_item.telegram_identity.expect("first identity");
+        assert_eq!(
+            (
+                identity.history_peer_kind.as_str(),
+                identity.history_peer_id,
+                identity.telegram_message_id,
+            ),
+            ("channel", 12345, 42)
         );
     }
 

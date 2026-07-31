@@ -298,6 +298,11 @@ const retainedPreparationStates = [
     designStatus: "Approved; 8B preparation Checkpoint 5 retained",
     lifecycle: "8b-checkpoint-5",
   },
+  {
+    roadmapStatus: "8B preparation Checkpoint 6 retained",
+    designStatus: "Approved; 8B preparation Checkpoint 6 retained",
+    lifecycle: "8b-checkpoint-6",
+  },
 ] as const;
 
 function resolveCurrentTelegramSourcePath(
@@ -3612,6 +3617,21 @@ function assertIdentityDeclarations(
       `${currentFullId} declaration count in ${currentPath}`,
     ).toBe(1);
   }
+}
+
+function rawParseCompanionIdentitiesForLifecycle(
+  finalIdentities: readonly string[],
+  value: telegramContractPaths.TelegramLifecycle,
+): string[] {
+  if (value === "8c-extracted") return [...finalIdentities];
+  const checkpoint = telegramContractPaths.phase8BCheckpointNumber(value);
+  if (checkpoint === undefined || checkpoint < 6) return [];
+  if (checkpoint === 6) {
+    return finalIdentities.map((identity) =>
+      identity.replace(/^takeout::/, "takeout_import::")
+    );
+  }
+  return finalIdentities.map((identity) => `telegram_impl::${identity}`);
 }
 
 function assertAddedIdentityDeclarations(
@@ -7630,6 +7650,94 @@ describe("literal immutable Telegram test map", () => {
         ...addedIdentities.map(({ finalId }) => finalId),
       ]).size,
     ).toBe(160);
+  });
+
+  it("maps the deferred raw-parse companions through Checkpoint 6 and reserves Checkpoint 7", () => {
+    const finalIdentities = identityRows.flatMap(
+      ({ companionFinalIds }) => companionFinalIds,
+    ).filter((identity) =>
+      identity.startsWith("takeout::raw_parse::tests::")
+    );
+    const expectedFinal = [
+      "takeout::raw_parse::tests::raw_parse_preserves_distinct_history_peer_identity_for_equal_message_ids",
+      "takeout::raw_parse::tests::raw_parse_preserves_identical_native_identity_for_same_peer_and_message_id",
+    ];
+    const expectedTemporary = expectedFinal.map((identity) =>
+      identity.replace(/^takeout::/, "takeout_import::")
+    );
+    const expectedStaged = expectedFinal.map((identity) =>
+      `telegram_impl::${identity}`
+    );
+
+    exactInventory(
+      finalIdentities,
+      expectedFinal,
+      "two deferred raw-parse companion identities",
+    );
+    expect(
+      rawParseCompanionIdentitiesForLifecycle(
+        finalIdentities,
+        "8b-checkpoint-5",
+      ),
+    ).toEqual([]);
+    exactInventory(
+      rawParseCompanionIdentitiesForLifecycle(
+        finalIdentities,
+        "8b-checkpoint-6",
+      ),
+      expectedTemporary,
+      "Checkpoint 6 temporary raw-parse companions",
+    );
+    for (const state of [
+      "8b-checkpoint-7",
+      "8b-checkpoint-8",
+      "8b-preparation",
+    ] as const) {
+      exactInventory(
+        rawParseCompanionIdentitiesForLifecycle(finalIdentities, state),
+        expectedStaged,
+        `${state} staged raw-parse companions`,
+      );
+    }
+    exactInventory(
+      rawParseCompanionIdentitiesForLifecycle(
+        finalIdentities,
+        "8c-extracted",
+      ),
+      expectedFinal,
+      "8C extracted raw-parse companions",
+    );
+
+    const identityAuthority = readGeneratedJson<Phase8BIdentityAuthority>(
+      "src/lib/telegram-8b-test-identities.json",
+    );
+    exactInventory(
+      identityAuthority.baselineDerived.filter((identity) =>
+        expectedStaged.includes(identity)
+      ),
+      expectedStaged,
+      "Checkpoint 7 baseline-derived raw-parse reservation",
+    );
+    exactInventory(
+      identityAuthority.preNewStaged.filter((identity) =>
+        expectedStaged.includes(identity)
+      ),
+      expectedStaged,
+      "Checkpoint 7 tracked raw-parse reservation",
+    );
+
+    const checkpoint5 = {
+      library: 727,
+      baselineDerived: 141,
+      tracked: 166,
+    };
+    const checkpoint6Companions = expectedTemporary.length;
+    expect({
+      library: checkpoint5.library + checkpoint6Companions,
+      baselineDerived:
+        checkpoint5.baselineDerived + checkpoint6Companions,
+      tracked: checkpoint5.tracked + checkpoint6Companions,
+    }).toEqual({ library: 729, baselineDerived: 143, tracked: 168 });
   });
 
   it("rejects every malformed immutable and plan-added data row", () => {

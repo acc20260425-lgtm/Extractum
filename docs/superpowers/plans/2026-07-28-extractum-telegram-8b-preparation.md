@@ -2900,6 +2900,7 @@ Invoke-CheckedNative 'commit Task 5' {
 - Modify: `src-tauri/src/takeout_import/mod.rs`
 - Modify: `src-tauri/src/takeout_import/raw_parse.rs`
 - Modify: `src/lib/telegram-crate-boundary-contract.test.ts`
+- Modify: `src/lib/crate-extraction-shell-cap-contract.test.ts`
 - Modify:
   `docs/superpowers/specs/2026-07-26-telegram-crate-boundary-design.md`
 - Modify: `docs/superpowers/specs/2026-07-17-crate-roadmap.md`
@@ -2910,6 +2911,12 @@ This is a characterization decomposition, not new production behavior. The two
 companion tests are expected GREEN immediately because the raw parser already
 preserves the identity; a compile failure or intentionally broken production
 stub is not useful RED evidence here.
+
+Execution preflight amendment: promoting the still-unexecuted Task 6 candidate
+to Checkpoint 6 also advances the existing shell-cap lifecycle authority. Add
+Checkpoint 6 only to its four retained-status allowlists (Phase 7 roadmap
+authority, Telegram design status, compact roadmap authority, and the current
+Phase 8 status set); this is status plumbing, not new source-analysis evidence.
 
 - [ ] Rewrite
   `takeout_import::tests::takeout_parsed_items_with_same_message_id_insert_under_different_history_peers`

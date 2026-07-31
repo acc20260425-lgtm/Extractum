@@ -2145,3 +2145,306 @@ These tests and compilation are behavior/type evidence only. The LLM review of d
 The frozen CP5 candidate has exactly the three authorized raw-handle/session logical owners, exactly the two authorized `ResolvedSyncPeer::peer` logical owners, the exact remaining bridge definitions and physical uses, the complete required forwarding chain, and no new app-visible raw escape. Every CP5 removal is present, later finite-lifecycle exceptions remain, the 69-name restricted authority is consistent with checkpoint lifecycle, and no TypeScript code semantically analyzes or authorizes Rust use-sites.
 
 Escape-hatch review verdict: CLEAN
+
+## CP6 Escape-Hatch LLM Review
+
+### Review identity and candidate
+
+- Review time: `2026-07-31T22:09:47.0217922+03:00`.
+- Selected checkpoint: Phase 8B Checkpoint 6, Task 6, `Decompose the Two Raw-TL/SQL Baselines`.
+- Candidate checkpoint SHA: none; the candidate is intentionally uncommitted.
+- Retained predecessor and current HEAD: `180c797bf04d63c33df555cbb04da51b73a2b3af` (`refactor: stage Telegram live message and topic operations`).
+- Reviewer: fresh independent read-only LLM reviewer. I did not implement CP6, had no prior CP6 implementation-conversation context, and did not rely on literal-search counts, TypeScript source analysis, or an implementation report to authorize an escape-hatch use.
+- I made no file edits, staging changes, or commits. The Git index was empty at the final identity check.
+
+The complete HEAD-relative Rust candidate contains only:
+
+```text
+src-tauri/src/takeout_import/mod.rs
+src-tauri/src/takeout_import/raw_parse.rs
+```
+
+Its exact final reviewed identity was:
+
+```text
+src-tauri/src/takeout_import/mod.rs
+  bytes: 92448
+  lines: 2790
+  sha256: c06972155835b300553f7baecff4541c5287760594d625a89630610f6dd3e5ed
+  diff: 81 insertions, 103 deletions
+
+src-tauri/src/takeout_import/raw_parse.rs
+  bytes: 25526
+  lines: 748
+  sha256: 673e3f6789a283523e2c8208f194a230fde8e98f537762c3873c2ff896382854
+  diff: 89 insertions, 0 deletions
+```
+
+I read the complete diff and sufficient unchanged production, producer, caller, continuation, facade, session, and peer-resolution source. Every changed hunk is inside an existing `#[cfg(test)]` module. Any subsequent edit to either reviewed Rust path invalidates this record and requires a fresh complete review.
+
+### Authority and inventory inputs
+
+I read and reconciled:
+
+- the complete mandatory reusable CP2–CP8 LLM retention gate in `docs/superpowers/plans/2026-07-28-extractum-telegram-8b-preparation.md`;
+- the complete Task 6, including its CP6 execution-preflight amendment;
+- the design’s public API/visibility authority, Phase 8B narrow API and lifecycle authority, literal production-symbol disposition, complete transition inventories, and forward-only transitional escape-hatch review authority;
+- the complete retained CP5 review section in `docs/superpowers/verification/2026-07-28-extractum-telegram-8b-preparation.md`;
+- the complete committed `src/lib/telegram-8b-symbol-map.json`, read from predecessor HEAD, including every one of its 307 expanded symbol-disposition rows, every one of its 69 restricted-final-symbol rows, and its complete `transitionInventories`.
+
+The committed artifact identity was:
+
+```text
+schemaVersion: 1
+bytes: 123717
+sha256: 4fdfac6ca545b3ac5eb7dd09d7cfb68d5e7341a4476f938efe63186bc9bd96f0
+Git blob: 5fbf450f50780de182de870e452d28ca69949b73
+expanded symbol rows: 307
+restricted final symbols: 69
+```
+
+The complete transition inventories were:
+
+```text
+cp3RawHandleCallsites:
+  sources::store::add_telegram_source
+  sources::store::list_telegram_sources
+  sources::sync::sync_telegram_source
+  takeout_import::run_export_dc_spike_for_handle
+  takeout_import::run_takeout_migrated_history_import
+  takeout_import::run_takeout_source_import
+
+cp4RawHandleCallsites:
+  sources::sync::sync_telegram_source
+  takeout_import::run_export_dc_spike_for_handle
+  takeout_import::run_takeout_migrated_history_import
+  takeout_import::run_takeout_source_import
+
+cp4ResolvedSyncPeerPeerConsumers:
+  sources::sync::sync_telegram_source
+  takeout_import::run_takeout_migrated_history_import
+  takeout_import::run_takeout_source_import
+
+cp5RawHandleCallsites:
+  takeout_import::run_export_dc_spike_for_handle
+  takeout_import::run_takeout_migrated_history_import
+  takeout_import::run_takeout_source_import
+
+cp5ResolvedSyncPeerPeerConsumers:
+  takeout_import::run_takeout_migrated_history_import
+  takeout_import::run_takeout_source_import
+
+cp7RawBridgeSymbolsAndCallsites:
+  empty
+```
+
+CP6 must carry both CP5 arrays forward unless this Rust diff removes a listed use. The reviewed diff removes none, so CP6 retains exactly the three CP5 raw-handle owners and exactly the two CP5 `ResolvedSyncPeer::peer` consumers.
+
+I treated the artifact and searches only as navigation checklists. Authorization below comes from the actual Rust definitions, visibility, bodies, typed values, producers, callsites, and complete forwarding chains.
+
+### Exact effect of the test-only decomposition
+
+The candidate performs only the Task 6 characterization decomposition:
+
+- The two app persistence tests in `takeout_import::tests` now construct approved owned `TelegramMessageDraft`, `TelegramMessageIdentity`, and `TelegramItemContext` values directly.
+- The app tests no longer import `grammers_client::tl`, invoke `raw_parse::parse_raw_message`, or define `takeout_raw_message_for_identity_test`.
+- `takeout_raw_message_for_identity_test` is now a private helper inside `takeout_import::raw_parse::tests`, implemented using the existing private `raw_message` fixture.
+- Two raw-parser companion tests call the existing `parse_raw_message` and characterize distinct-history-peer identity and identical native identity.
+- The SQL primary retains its required two-insert assertion and exact `SELECT COUNT(*) FROM items WHERE external_id = '42'` check.
+- The duplicate primary retains inserted/duplicate outcomes and final `("ready", 1)` topic-resolution state.
+
+This changes test ownership of raw TL fixture construction and test callsites of `parse_raw_message`. It does not change an escape-hatch definition, physical use, producer, logical owner, visibility, alias, re-export, wrapper, function item, same-named field, or forwarding chain. `parse_raw_message` is the existing package-private parser in a private module and a CP7 move target; it is not one of the CP3–CP6 transitional raw client/session/peer escape hatches. Its production body and visibility are unchanged.
+
+### Remaining media compatibility facade
+
+The CP3–CP6 media compatibility facade remains exactly four package-private definitions in `telegram_impl/media.rs`:
+
+1. `DocumentSignals`, with exactly five `pub(crate)` fields;
+2. `derive_content_kind`;
+3. `derive_document_media_kind`;
+4. `extract_item_payload`.
+
+The exact package-private re-export layers remain:
+
+```text
+telegram_impl/lib.rs
+  -> derive_content_kind
+  -> derive_document_media_kind
+  -> extract_item_payload
+  -> DocumentSignals
+
+src-tauri/src/media.rs
+  -> the same exact four names
+```
+
+There is no public or glob export, alias, fifth compatibility item, or second facade.
+
+The unchanged physical uses are:
+
+- `takeout_import/raw_parse.rs` imports `DocumentSignals`, `derive_content_kind`, and `derive_document_media_kind`, constructs the raw-document signal value, calls the content classifier once, and calls the document classifier once.
+- `telegram_impl/media.rs` constructs its own high-level signal value, calls `derive_content_kind` once through `extract_item_payload_from_parts`, and calls `derive_document_media_kind` once in high-level document extraction.
+- Staged media unit tests call `derive_content_kind` three times, construct three `DocumentSignals` values, and call `derive_document_media_kind` three times.
+- `extract_item_payload` has no current app or staged callsite; only its definition and the exact two package-private re-exports remain.
+
+The separate permanent restricted `media::extract_raw_item_payload` adapter remains `pub(super)`, has the single staged production caller `LiveMessage::into_draft`, is not root-re-exported, and is not part of the temporary four-item facade. CP6 does not change it.
+
+### Remaining raw/session/app definitions and exact physical uses
+
+| Definition | Visibility | Remaining physical uses |
+| --- | --- | --- |
+| `TelegramClientHandle::raw_client` | `pub(crate)` | 3 calls: one in each CP5 Takeout owner |
+| `TelegramClientHandle::raw_session` | `pub(crate)` | 3 calls: one in each CP5 Takeout owner |
+| `TelegramSession::raw_memory_session` | `pub(super)` | 2 calls: session serialization and the `raw_session` wrapper |
+| `telegram::get_client` | `pub(crate)` | 2 calls: `sources::store::{list_telegram_sources,add_telegram_source}` |
+| `telegram::get_authorized_client` | `pub(crate)` | 4 calls: sync plus the three Takeout owners |
+| `ResolvedSyncPeer::peer` | `pub(crate)` field | 6 reads: two in migrated history and four in current-source Takeout |
+| `legacy_peer_ref_from_descriptor` | `pub(crate)` | 1 call, inside the sole `ResolvedSyncPeer` producer |
+
+The accessor bodies remain direct and unchanged:
+
+- `raw_client` returns the underlying Grammers client from the opaque handle.
+- `raw_session` delegates only to `self.session.raw_memory_session()`.
+- `raw_memory_session` returns the borrowed `Arc<MemorySession>`.
+- No parallel accessor, alternate spelling, callback, or wrapper was introduced.
+
+`get_client` delegates only to `TelegramRuntime::client`. Its two store consumers use owned handle operations and never call a raw accessor.
+
+`get_authorized_client` delegates only to `TelegramRuntime::authorized_client`. The sync consumer uses owned descriptor, live-message, and forum-topic APIs and never calls a raw accessor or reads `ResolvedSyncPeer::peer`. Its three Takeout results feed exactly the three authorized raw owners.
+
+`ResolvedSyncPeer` remains one struct with exactly:
+
+```text
+peer: PeerRef
+descriptor: PeerDescriptor
+refreshed_avatar_cache_key: Option<String>
+```
+
+Its sole producer remains `resolve_and_refresh_peer`. That producer obtains an owned `PeerDescriptor`, calls `legacy_peer_ref_from_descriptor(&descriptor)` exactly once, and constructs the single `ResolvedSyncPeer`. Sync invokes this producer but consumes only the owned descriptor and refreshed cache key; it does not read the transitional peer field. The two Takeout consumers account for every field read.
+
+`TelegramSession::clone_memory_session` and `cache_peer_infos` remain permanent `pub(super)` restricted bridges, not transitional application escapes. Neither is app-visible or root-re-exported, and CP6 does not change either.
+
+### Logical owners, producers, and complete forwarding chains
+
+#### Export-DC spike owner
+
+```text
+run_takeout_export_dc_spike
+  -> get_authorized_client
+     -> TelegramRuntime::authorized_client
+  -> run_export_dc_spike_for_handle(owned TelegramClientHandle)
+     -> raw_client (one call)
+     -> raw_session (one call)
+        -> raw_memory_session
+     -> cloned raw client/session values feed self-check,
+        export-DC alias preparation, Takeout init/split, and finish calls
+```
+
+The handle is consumed by `run_export_dc_spike_for_handle`. No nested helper reacquires a handle, calls an accessor, returns a raw handle, or creates another logical owner.
+
+#### Migrated-history owner
+
+```text
+start_takeout_migrated_history_import
+  -> spawned run_takeout_migrated_history_import_job
+  -> run_takeout_migrated_history_import
+     -> get_authorized_client
+     -> raw_client (one call)
+     -> raw_session (one call)
+        -> raw_memory_session
+     -> resolve_and_refresh_peer(&TelegramClientHandle)
+        -> owned PeerDescriptor
+        -> legacy_peer_ref_from_descriptor (sole static callsite)
+        -> ResolvedSyncPeer
+     -> ResolvedSyncPeer::peer read for provenance identity
+     -> ResolvedSyncPeer::peer read for revalidate_migrated_from_chat_id
+     -> remaining Takeout work uses already-produced raw/owned values
+```
+
+Those are the owner’s exact two peer reads. No nested migrated-history helper accepts or obtains `TelegramClientHandle`, invokes a raw accessor, or becomes another logical owner.
+
+#### Current-source Takeout owner and mandatory continuation
+
+```text
+start_takeout_source_import
+  -> spawned run_takeout_import_job
+  -> run_takeout_source_import
+     -> get_authorized_client
+     -> raw_client (one call)
+     -> raw_session (one call)
+        -> raw_memory_session
+     -> resolve_and_refresh_peer(&TelegramClientHandle)
+        -> owned PeerDescriptor
+        -> legacy_peer_ref_from_descriptor
+        -> ResolvedSyncPeer
+     -> ResolvedSyncPeer::peer read for provenance identity
+     -> run_started_takeout_source_import
+        [forwards ResolvedSyncPeer, &TelegramClientHandle, &Client,
+         alias, Takeout ID, warnings/fallback state, and attempts]
+        -> run_started_takeout_source_import_inner
+           [uses the same forwarded values; no reacquisition]
+           -> ResolvedSyncPeer::peer read for InputPeer conversion
+           -> ResolvedSyncPeer::peer read for validate_takeout_peer
+           -> ResolvedSyncPeer::peer read for detect_supergroup_migration
+           -> count/import history
+           -> finish Takeout
+           -> refresh_forum_topics_after_completed_takeout
+              -> TelegramClientHandle::fetch_forum_topics(
+                   &resolved_peer.descriptor
+                 )
+           -> finalize sync
+           -> finalize ingest batch
+```
+
+This accounts for the mandatory full chain:
+
+```text
+run_takeout_source_import
+  -> run_started_takeout_source_import
+  -> run_started_takeout_source_import_inner
+```
+
+The outer owner contains its one raw-client call, one raw-session call, and first peer read. The intermediate function only forwards values and error state. The inner function performs the remaining three peer reads and uses the forwarded owned handle only for the owned forum-topic operation. Neither continuation calls `raw_client`, `raw_session`, `get_client`, or `get_authorized_client`; neither constructs another handle or resolved peer; neither adds a logical owner.
+
+### Required CP6 removals and lifecycle reconciliation
+
+No escape-hatch removal is scheduled for CP6, and the Task 6 Rust diff removes no CP5-inventory use. Therefore:
+
+- the three CP5 raw-handle owners remain exactly unchanged;
+- the two CP5 `ResolvedSyncPeer::peer` consumers remain exactly unchanged;
+- all seven listed transitional raw/session/app definitions remain with unchanged visibility;
+- all six peer-field reads and the sole legacy producer call remain;
+- the four-item media compatibility facade remains through CP6;
+- no CP7 removal occurs early.
+
+Task 6 does remove raw TL fixture construction and `raw_parse::parse_raw_message` calls from the app persistence tests, but those are decomposition requirements, not removal of a transitional client/session/peer escape hatch. Equivalent raw-parser characterization now resides only in the parser’s own test module.
+
+The CP3–CP4 peer-kind staged-root bridge remains absent as required after CP5: `TELEGRAM_PEER_KIND_{CHANNEL,CHAT,USER}` are not re-exported by `telegram_impl/lib.rs`, `sources::sync::fallback_message_identity` is gone from the app owner, and CP6 adds no replacement spelling or constant bridge.
+
+At CP7, not CP6, the temporary media facade, both raw handle accessors, borrowed raw-session accessor, both app lookup helpers, transitional peer field, and legacy builder must be removed or demoted according to authority. CP7/CP8 must then satisfy the empty `cp7RawBridgeSymbolsAndCallsites` inventory.
+
+### Alias, re-export, wrapper, function-item, macro, and same-name audit
+
+- None of the temporary raw bridge names is renamed with `as`, hidden behind a type alias, invoked through UFCS, captured as a function item/callback, or shadowed by another callable.
+- There is no relevant glob import, public leaf-module escape, `macro_rules!`, generated identifier, `paste!`, or `concat_idents!` path.
+- The only temporary re-exports are the exact four package-private media names through the staged root and app media facade.
+- Raw client/session accessors, raw Grammers types, `legacy_peer_ref_from_descriptor`, and the `ResolvedSyncPeer::peer` field are not staged-root or externally public re-exports.
+- `sources::ResolvedSyncPeer` remains the one package-private re-export of the exact struct needed by Takeout continuation signatures. It does not duplicate, alias, or conceal the field or its producer.
+- `get_authorized_client` is imported normally into `takeout_import`; it is not aliased. The other physical calls use their explicit `crate::telegram::...` path.
+- The moved `takeout_raw_message_for_identity_test` is a private `#[cfg(test)]` raw-message fixture constructor. It wraps neither a client handle nor a session or resolved peer, does not expose a production raw value to app code, and is not an alternate escape-hatch spelling.
+- The new parser companion calls to `parse_raw_message` remain inside `takeout_import::raw_parse::tests`; they create no public wrapper or function item.
+- The candidate’s `TelegramMessageIdentity::{history_peer_kind,history_peer_id}` fields and raw fixture `Message::peer_id` are owned identity/test data, not aliases or same-named substitutes for `ResolvedSyncPeer::peer`.
+- Other fields or locals named `peer`, including staged live-operation request/dialog peers and sync’s private owned `PeerDescriptor` test seam, are unrelated typed implementation details. None produces or forwards the transitional `PeerRef`.
+- Other names containing `raw`, `client`, `session`, `messages`, or `identity` are private staged implementation data or test fixtures and do not provide another application-visible client/session/peer escape.
+
+### Findings
+
+- Critical: none.
+- High: none.
+- Medium: none.
+- Low: none.
+- Unlisted or ambiguous escape-hatch definition/use: none.
+- New alias, re-export, wrapper, function item, producer, logical owner, forwarding continuation, visibility widening, same-named replacement, or early lifecycle transition: none.
+
+The frozen CP6 candidate is a test-only baseline decomposition. It preserves exactly the CP5 media and raw-bridge definitions, exact physical-use inventory, three raw-handle logical owners, two peer-field logical owners, sole peer producer, and complete current-source forwarding chain. No CP6 escape-hatch removal is required, no CP5 listed use was removed, and no new or obscured application raw escape exists.
+
+Escape-hatch review verdict: CLEAN

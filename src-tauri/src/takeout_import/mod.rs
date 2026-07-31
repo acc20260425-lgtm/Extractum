@@ -2098,11 +2098,10 @@ mod tests {
     use super::{
         create_locked_migrated_history_start_records, create_locked_takeout_start_records,
         is_channel_private_error, load_takeout_source_subtype, migrated_history_detected_warning,
-        raw_parse, record_channel_private_fallback_if_supported,
-        record_export_dc_attempt_if_needed, record_export_dc_fallback_if_needed,
-        record_only_my_messages_fallback_if_needed, run_takeout_step_with_cancel,
-        supports_only_my_messages_fallback, ExportDcAlias, ExportDcAttemptState,
-        TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+        record_channel_private_fallback_if_supported, record_export_dc_attempt_if_needed,
+        record_export_dc_fallback_if_needed, record_only_my_messages_fallback_if_needed,
+        run_takeout_step_with_cancel, supports_only_my_messages_fallback, ExportDcAlias,
+        ExportDcAttemptState, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
     };
     use crate::error::{AppError, AppErrorKind, AppResult};
     use crate::ingest_provenance::{
@@ -2117,7 +2116,10 @@ mod tests {
         memory_pool_with_sources,
     };
     use crate::takeout_import::state::TakeoutImportState;
-    use grammers_client::tl;
+    use crate::telegram_impl::{
+        TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity,
+        ITEM_KIND_TELEGRAM_MESSAGE,
+    };
     use tokio_util::sync::CancellationToken;
 
     #[test]
@@ -2424,23 +2426,40 @@ mod tests {
         create_analysis_documents_table(&pool).await;
         seed_item_source(&pool, 1).await;
 
-        let current = takeout_raw_message_for_identity_test(
-            42,
-            tl::types::PeerChannel { channel_id: 12345 }.into(),
-            "current",
-        );
-        let migrated = takeout_raw_message_for_identity_test(
-            42,
-            tl::types::PeerChat { chat_id: 777 }.into(),
-            "migrated",
-        );
-
-        let current_item = raw_parse::parse_raw_message(&None, current)
-            .expect("parse current")
-            .expect("current item");
-        let migrated_item = raw_parse::parse_raw_message(&None, migrated)
-            .expect("parse migrated")
-            .expect("migrated item");
+        let current_item = TelegramMessageDraft {
+            telegram_identity: Some(TelegramMessageIdentity {
+                history_peer_kind: "channel".to_string(),
+                history_peer_id: 12345,
+                telegram_message_id: 42,
+                migration_domain: None,
+                is_migrated_history: false,
+            }),
+            telegram_context: TelegramItemContext::default(),
+            content: Some("current".to_string()),
+            content_kind: "text_only",
+            author: None,
+            published_at: 1234,
+            raw_data: br#"{"id":42,"text":"current"}"#.to_vec(),
+            item_kind: ITEM_KIND_TELEGRAM_MESSAGE.to_string(),
+            media: None,
+        };
+        let migrated_item = TelegramMessageDraft {
+            telegram_identity: Some(TelegramMessageIdentity {
+                history_peer_kind: "chat".to_string(),
+                history_peer_id: 777,
+                telegram_message_id: 42,
+                migration_domain: None,
+                is_migrated_history: false,
+            }),
+            telegram_context: TelegramItemContext::default(),
+            content: Some("migrated".to_string()),
+            content_kind: "text_only",
+            author: None,
+            published_at: 1234,
+            raw_data: br#"{"id":42,"text":"migrated"}"#.to_vec(),
+            item_kind: ITEM_KIND_TELEGRAM_MESSAGE.to_string(),
+            media: None,
+        };
 
         assert!(insert_telegram_source_item(&pool, 1, current_item)
             .await
@@ -2449,12 +2468,11 @@ mod tests {
             .await
             .expect("insert migrated"));
 
-        let item_count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM items WHERE source_id = 1 AND external_id = '42'",
-        )
-        .fetch_one(&pool)
-        .await
-        .expect("count overlapping ids");
+        let item_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM items WHERE external_id = '42'")
+                .fetch_one(&pool)
+                .await
+                .expect("count overlapping ids");
         assert_eq!(item_count, 2);
     }
 
@@ -2472,23 +2490,40 @@ mod tests {
         .await
         .expect("seed ready topic state");
 
-        let first = takeout_raw_message_for_identity_test(
-            42,
-            tl::types::PeerChannel { channel_id: 12345 }.into(),
-            "first",
-        );
-        let duplicate = takeout_raw_message_for_identity_test(
-            42,
-            tl::types::PeerChannel { channel_id: 12345 }.into(),
-            "duplicate",
-        );
-
-        let first_item = raw_parse::parse_raw_message(&None, first)
-            .expect("parse first")
-            .expect("first item");
-        let duplicate_item = raw_parse::parse_raw_message(&None, duplicate)
-            .expect("parse duplicate")
-            .expect("duplicate item");
+        let first_item = TelegramMessageDraft {
+            telegram_identity: Some(TelegramMessageIdentity {
+                history_peer_kind: "channel".to_string(),
+                history_peer_id: 12345,
+                telegram_message_id: 42,
+                migration_domain: None,
+                is_migrated_history: false,
+            }),
+            telegram_context: TelegramItemContext::default(),
+            content: Some("first".to_string()),
+            content_kind: "text_only",
+            author: None,
+            published_at: 1234,
+            raw_data: br#"{"id":42,"text":"first"}"#.to_vec(),
+            item_kind: ITEM_KIND_TELEGRAM_MESSAGE.to_string(),
+            media: None,
+        };
+        let duplicate_item = TelegramMessageDraft {
+            telegram_identity: Some(TelegramMessageIdentity {
+                history_peer_kind: "channel".to_string(),
+                history_peer_id: 12345,
+                telegram_message_id: 42,
+                migration_domain: None,
+                is_migrated_history: false,
+            }),
+            telegram_context: TelegramItemContext::default(),
+            content: Some("duplicate".to_string()),
+            content_kind: "text_only",
+            author: None,
+            published_at: 1234,
+            raw_data: br#"{"id":42,"text":"duplicate"}"#.to_vec(),
+            item_kind: ITEM_KIND_TELEGRAM_MESSAGE.to_string(),
+            media: None,
+        };
 
         assert!(insert_telegram_source_item(&pool, 1, first_item)
             .await
@@ -2751,62 +2786,5 @@ mod tests {
         .execute(pool)
         .await
         .expect("seed telegram source");
-    }
-
-    fn takeout_raw_message_for_identity_test(
-        id: i32,
-        peer_id: tl::enums::Peer,
-        text: &str,
-    ) -> tl::types::Message {
-        tl::types::Message {
-            out: false,
-            mentioned: false,
-            media_unread: false,
-            silent: false,
-            post: false,
-            from_scheduled: false,
-            legacy: false,
-            edit_hide: false,
-            pinned: false,
-            noforwards: false,
-            invert_media: false,
-            offline: false,
-            video_processing_pending: false,
-            paid_suggested_post_stars: false,
-            paid_suggested_post_ton: false,
-            id,
-            from_id: None,
-            from_boosts_applied: None,
-            from_rank: None,
-            peer_id,
-            saved_peer_id: None,
-            fwd_from: None,
-            via_bot_id: None,
-            via_business_bot_id: None,
-            guestchat_via_from: None,
-            reply_to: None,
-            date: 1234,
-            message: text.to_string(),
-            media: None,
-            reply_markup: None,
-            entities: None,
-            views: None,
-            forwards: None,
-            replies: None,
-            edit_date: None,
-            post_author: None,
-            grouped_id: None,
-            reactions: None,
-            restriction_reason: None,
-            ttl_period: None,
-            quick_reply_shortcut_id: None,
-            effect: None,
-            factcheck: None,
-            report_delivery_until_date: None,
-            paid_message_stars: None,
-            suggested_post: None,
-            schedule_repeat_period: None,
-            summary_from_language: None,
-        }
     }
 }

@@ -970,6 +970,7 @@ describe("crate extraction timing policy", () => {
         "Phase 8 has an owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 3 authority are retained",
         "Phase 8 has an owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 4 authority are retained",
         "Phase 8 has an owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 5 authority are retained",
+        "Phase 8 has an owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 6 authority are retained",
       ].some((status) => phase7Roadmap.includes(status)),
     ).toBe(true);
     expect(roadmapTiming).toContain(
@@ -1042,6 +1043,7 @@ describe("crate extraction timing policy", () => {
         "**Status:** Approved; 8B preparation Checkpoint 3 retained",
         "**Status:** Approved; 8B preparation Checkpoint 4 retained",
         "**Status:** Approved; 8B preparation Checkpoint 5 retained",
+        "**Status:** Approved; 8B preparation Checkpoint 6 retained",
       ].some((status) => telegramBoundaryDesign.includes(status)),
     ).toBe(true);
     expect(
@@ -1052,6 +1054,7 @@ describe("crate extraction timing policy", () => {
         "owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 3 authority are retained.",
         "owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 4 authority are retained.",
         "owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 5 authority are retained.",
+        "owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 6 authority are retained.",
       ].some((status) => compact(crateRoadmap).includes(status)),
     ).toBe(true);
     expect(compact(crateRoadmap)).not.toContain(
@@ -1086,6 +1089,7 @@ describe("crate extraction timing policy", () => {
       "8B preparation Checkpoint 3 retained",
       "8B preparation Checkpoint 4 retained",
       "8B preparation Checkpoint 5 retained",
+      "8B preparation Checkpoint 6 retained",
     ]).toContain(phase8Status);
     expect(phase8Roadmap).toContain(
       "2026-07-26-telegram-crate-boundary-design.md",
