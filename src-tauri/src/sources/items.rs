@@ -1,17 +1,13 @@
 use std::collections::HashMap;
 
-use grammers_client::tl;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use tauri::AppHandle;
 
 use crate::compression::{compress_json_bytes, compress_text, decompress_bytes, decompress_text};
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::media::{decode_media_metadata, encode_media_metadata};
-use crate::telegram_impl::{
-    TelegramItemContext, TelegramMediaPayload, TelegramMessageDraft, ITEM_KIND_TELEGRAM_MESSAGE,
-};
+use crate::telegram_impl::{TelegramMessageDraft, ITEM_KIND_TELEGRAM_MESSAGE};
 use crate::tx::{begin_immediate, finish_manual_transaction};
 
 use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
@@ -730,84 +726,14 @@ fn item_record_from_row(
     })
 }
 
-pub(super) fn message_author(message: &grammers_client::message::Message) -> Option<String> {
-    if let Some(post_author) = message.post_author() {
-        return Some(post_author.to_string());
-    }
-
-    message.sender().and_then(|sender| {
-        sender
-            .name()
-            .map(str::to_string)
-            .or_else(|| sender.username().map(|username| format!("@{username}")))
-    })
-}
-
-pub(super) fn extract_telegram_context(
-    message: &grammers_client::message::Message,
-) -> TelegramItemContext {
-    let mut context = TelegramItemContext {
-        reply_to_msg_id: message.reply_to_message_id().map(i64::from),
-        reaction_count: message.reaction_count().map(i64::from),
-        ..TelegramItemContext::default()
-    };
-
-    if let Some(tl::enums::MessageReplyHeader::Header(header)) = message.reply_header() {
-        context.reply_to_msg_id = header
-            .reply_to_msg_id
-            .map(i64::from)
-            .or(context.reply_to_msg_id);
-        context.reply_to_top_id = header.reply_to_top_id.map(i64::from);
-        if let Some((kind, id)) = reply_peer_context(header.reply_to_peer_id.as_ref()) {
-            context.reply_to_peer_kind = Some(kind.to_string());
-            context.reply_to_peer_id = Some(id);
-        }
-    }
-
-    context
-}
-
-fn reply_peer_context(peer: Option<&tl::enums::Peer>) -> Option<(&'static str, String)> {
-    match peer? {
-        tl::enums::Peer::User(peer) => Some(("user", peer.user_id.to_string())),
-        tl::enums::Peer::Chat(peer) => Some(("chat", peer.chat_id.to_string())),
-        tl::enums::Peer::Channel(peer) => Some(("channel", peer.channel_id.to_string())),
-    }
-}
-
-pub(super) fn build_raw_payload(
-    message: &grammers_client::message::Message,
-    source_title: &Option<String>,
-    author: &Option<String>,
-    content: Option<&str>,
-    content_kind: &'static str,
-    media: Option<&TelegramMediaPayload>,
-) -> AppResult<Vec<u8>> {
-    serde_json::to_vec(&json!({
-        "id": message.id(),
-        "peer_id": message.peer_id().to_string(),
-        "sender_id": message.sender_id().map(|id| id.to_string()),
-        "published_at": message.date().timestamp(),
-        "text": content,
-        "content_kind": content_kind,
-        "has_media": media.is_some(),
-        "media_kind": media.map(|media| &media.kind),
-        "media_metadata": media.map(|media| &media.metadata),
-        "post_author": message.post_author(),
-        "source_title": source_title,
-        "author": author,
-    }))
-    .map_err(|e| AppError::internal(e.to_string()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
         decode_media_metadata, encode_media_metadata, insert_telegram_source_item,
         insert_telegram_source_item_outcome, insert_telegram_source_item_with_observation,
-        insert_telegram_source_item_with_observation_in_context, reply_peer_context, tl,
-        upsert_youtube_comment_item, upsert_youtube_transcript_item, ForumTopicFilter,
-        TelegramInsertContext, TelegramItemInsertOutcome,
+        insert_telegram_source_item_with_observation_in_context, upsert_youtube_comment_item,
+        upsert_youtube_transcript_item, ForumTopicFilter, TelegramInsertContext,
+        TelegramItemInsertOutcome,
     };
     use crate::compression::{compress_text, decompress_bytes, decompress_text};
     use crate::media::ItemMediaMetadata;
@@ -1897,29 +1823,6 @@ mod tests {
                 .expect("decode raw json");
         assert_eq!(raw["comment_id"], "Ugabc");
         assert_eq!(raw["raw_payload"]["text"], "new comment");
-    }
-
-    #[test]
-    fn reply_peer_context_uses_telegram_peer_kinds() {
-        assert_eq!(
-            reply_peer_context(Some(&tl::enums::Peer::User(tl::types::PeerUser {
-                user_id: 11
-            }))),
-            Some(("user", "11".to_string()))
-        );
-        assert_eq!(
-            reply_peer_context(Some(&tl::enums::Peer::Chat(tl::types::PeerChat {
-                chat_id: 22
-            }))),
-            Some(("chat", "22".to_string()))
-        );
-        assert_eq!(
-            reply_peer_context(Some(&tl::enums::Peer::Channel(tl::types::PeerChannel {
-                channel_id: 33
-            }))),
-            Some(("channel", "33".to_string()))
-        );
-        assert_eq!(reply_peer_context(None), None);
     }
 
     async fn create_legacy_item_external_unique_index(pool: &sqlx::SqlitePool) {

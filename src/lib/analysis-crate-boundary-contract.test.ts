@@ -5013,6 +5013,10 @@ describe("analysis crate boundary", () => {
       "telegram_impl/live/mod.rs",
       "telegram_impl/live/peer.rs",
     ];
+    const telegramLiveConsumerPaths = [
+      "telegram_impl/live/messages.rs",
+      "telegram_impl/live/topics.rs",
+    ];
     const appPaths = new Set(app.map(({ relative }) => relative));
     const telegramPeerAvatarBoundaryPathCount =
       telegramPeerAvatarBoundaryPaths.filter((relativePath) =>
@@ -5025,13 +5029,25 @@ describe("analysis crate boundary", () => {
     const telegramPeerAvatarBoundaryIsStaged =
       telegramPeerAvatarBoundaryPathCount
         === telegramPeerAvatarBoundaryPaths.length;
+    const telegramLiveConsumerPathCount =
+      telegramLiveConsumerPaths.filter((relativePath) =>
+        appPaths.has(relativePath)
+      ).length;
+    expect(
+      [0, telegramLiveConsumerPaths.length],
+      "Telegram CP5 live-consumer graph stage must be absent or complete",
+    ).toContain(telegramLiveConsumerPathCount);
+    const telegramLiveConsumersAreStaged =
+      telegramLiveConsumerPathCount === telegramLiveConsumerPaths.length;
     expect(
       [...ownedTables].filter((table) => !schemaTables.has(table)),
       "all six owned tables must exist in canonical migrations",
     ).toEqual([]);
     expect(app.length, "all-app production graph breadth")
       .toBe(
-        telegramPeerAvatarBoundaryIsStaged
+        telegramLiveConsumersAreStaged
+          ? 132
+          : telegramPeerAvatarBoundaryIsStaged
           ? 130
           : telegramFoundationIsStaged
           ? 126
@@ -5046,6 +5062,9 @@ describe("analysis crate boundary", () => {
       ...(telegramFoundationIsStaged ? ["telegram_impl/lib.rs"] : []),
       ...(telegramPeerAvatarBoundaryIsStaged
         ? telegramPeerAvatarBoundaryPaths
+        : []),
+      ...(telegramLiveConsumersAreStaged
+        ? telegramLiveConsumerPaths
         : []),
       "projects/read_model.rs",
       "notebooklm_export/query.rs",

@@ -9,7 +9,12 @@ use secrecy::{ExposeSecret, SecretString};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
-use super::{dto::PeerDescriptor, live, session::TelegramSession, DialogListing};
+use super::{
+    dto::{ForumTopicSnapshot, PeerDescriptor},
+    live,
+    session::TelegramSession,
+    DialogListing, LiveMessageBatch,
+};
 
 #[derive(Clone)]
 pub struct TelegramApiHash(SecretString);
@@ -90,6 +95,45 @@ impl TelegramClientHandle {
             #[cfg(test)]
             TelegramClientInner::Test { .. } => {
                 unreachable!("test Telegram clients cannot download live avatars")
+            }
+        }
+    }
+
+    pub async fn fetch_message_batch(
+        &self,
+        peer: &PeerDescriptor,
+        offset_id: i32,
+        offset_date: i32,
+        limit: usize,
+    ) -> extractum_core::error::AppResult<LiveMessageBatch> {
+        match &self.client {
+            TelegramClientInner::Grammers(client) => {
+                live::fetch_message_batch(
+                    client,
+                    &self.session,
+                    peer,
+                    offset_id,
+                    offset_date,
+                    limit,
+                )
+                .await
+            }
+            #[cfg(test)]
+            TelegramClientInner::Test { .. } => {
+                unreachable!("test Telegram clients cannot fetch live message batches")
+            }
+        }
+    }
+
+    pub async fn fetch_forum_topics(
+        &self,
+        peer: &PeerDescriptor,
+    ) -> extractum_core::error::AppResult<Option<(Vec<ForumTopicSnapshot>, Vec<i64>)>> {
+        match &self.client {
+            TelegramClientInner::Grammers(client) => live::fetch_forum_topics(client, peer).await,
+            #[cfg(test)]
+            TelegramClientInner::Test { .. } => {
+                unreachable!("test Telegram clients cannot fetch live forum topics")
             }
         }
     }

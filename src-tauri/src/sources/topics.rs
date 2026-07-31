@@ -1,11 +1,10 @@
-use grammers_client::{tl, Client};
-use grammers_session::types::PeerRef;
 use serde::Serialize;
 use tauri::AppHandle;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::forum_topics::{FORUM_TOPIC_UNCATEGORIZED_KEY, FORUM_TOPIC_UNCATEGORIZED_TITLE};
+use crate::telegram_impl::{ForumTopicSnapshot, PeerDescriptor, TelegramClientHandle};
 
 use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
 use super::types::{now_secs, SourceForumTopicRow, SourceSyncTarget, TelegramSourceKind};
@@ -43,23 +42,10 @@ pub struct SourceForumTopicsResponse {
     pub topic_resolution_state: TopicResolutionStateSummary,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct ForumTopicSnapshot {
-    topic_id: i64,
-    top_message_id: i64,
-    title: String,
-    icon_color: i64,
-    icon_emoji_id: Option<i64>,
-    is_closed: bool,
-    is_pinned: bool,
-    is_hidden: bool,
-    sort_order: i64,
-}
-
 pub(crate) async fn refresh_forum_topics(
     pool: &sqlx::Pool<sqlx::Sqlite>,
-    client: &Client,
-    peer: PeerRef,
+    client: &TelegramClientHandle,
+    peer: &PeerDescriptor,
     source: &SourceSyncTarget,
 ) -> Vec<String> {
     let supports_forum_topics = match source_supports_forum_topics(pool, source.id).await {
@@ -75,8 +61,8 @@ pub(crate) async fn refresh_forum_topics(
         return Vec::new();
     }
 
-    match fetch_all_forum_topics(client, peer).await {
-        Ok((topics, deleted_topic_ids)) => {
+    match client.fetch_forum_topics(peer).await {
+        Ok(Some((topics, deleted_topic_ids))) => {
             if let Err(error) = upsert_forum_topics_from_refresh(
                 pool,
                 source.id,
@@ -94,7 +80,7 @@ pub(crate) async fn refresh_forum_topics(
                 Vec::new()
             }
         }
-        Err(error) if is_non_forum_topic_refresh_error(&error.message) => Vec::new(),
+        Ok(None) => Vec::new(),
         Err(error) => vec![format!(
             "Forum topic refresh failed for source {}: {error}",
             source.id
@@ -108,107 +94,6 @@ async fn source_supports_forum_topics(
 ) -> AppResult<bool> {
     let identity = crate::sources::identity::load_telegram_source_identity(pool, source_id).await?;
     Ok(identity.source_subtype == TelegramSourceKind::Supergroup)
-}
-
-async fn fetch_all_forum_topics(
-    client: &Client,
-    peer: PeerRef,
-) -> AppResult<(Vec<ForumTopicSnapshot>, Vec<i64>)> {
-    let mut topics = Vec::new();
-    let mut deleted_topic_ids = Vec::new();
-    let mut offset_date = 0_i32;
-    let mut offset_id = 0_i32;
-    let mut offset_topic = 0_i32;
-    let mut sort_order = 0_i64;
-
-    loop {
-        let response = client
-            .invoke(&tl::functions::messages::GetForumTopics {
-                peer: peer.into(),
-                q: None,
-                offset_date,
-                offset_id,
-                offset_topic,
-                limit: 100,
-            })
-            .await
-            .map_err(|e| AppError::network(e.to_string()))?;
-
-        let tl::enums::messages::ForumTopics::Topics(forum_topics) = response;
-
-        if forum_topics.topics.is_empty() {
-            break;
-        }
-
-        let last_cursor = forum_topic_page_cursor(&forum_topics);
-        let page_topics = forum_topics.topics;
-        for topic in page_topics {
-            match topic {
-                tl::enums::ForumTopic::Topic(topic) => {
-                    topics.push(ForumTopicSnapshot {
-                        topic_id: i64::from(topic.id),
-                        top_message_id: i64::from(topic.top_message),
-                        title: topic.title,
-                        icon_color: i64::from(topic.icon_color),
-                        icon_emoji_id: topic.icon_emoji_id,
-                        is_closed: topic.closed,
-                        is_pinned: topic.pinned,
-                        is_hidden: topic.hidden,
-                        sort_order,
-                    });
-                    sort_order += 1;
-                }
-                tl::enums::ForumTopic::Deleted(topic) => {
-                    deleted_topic_ids.push(i64::from(topic.id));
-                }
-            }
-        }
-
-        let Some((next_offset_date, next_offset_id, next_offset_topic)) = last_cursor else {
-            break;
-        };
-        if next_offset_date == offset_date
-            && next_offset_id == offset_id
-            && next_offset_topic == offset_topic
-        {
-            break;
-        }
-
-        offset_date = next_offset_date;
-        offset_id = next_offset_id;
-        offset_topic = next_offset_topic;
-    }
-
-    Ok((topics, deleted_topic_ids))
-}
-
-fn forum_topic_page_cursor(
-    forum_topics: &tl::types::messages::ForumTopics,
-) -> Option<(i32, i32, i32)> {
-    let last_topic = forum_topics
-        .topics
-        .iter()
-        .rev()
-        .find_map(|topic| match topic {
-            tl::enums::ForumTopic::Topic(topic) => Some(topic),
-            tl::enums::ForumTopic::Deleted(_) => None,
-        })?;
-    let offset_date = forum_topics
-        .messages
-        .iter()
-        .find(|message| message.id() == last_topic.top_message)
-        .and_then(forum_topic_message_date)
-        .unwrap_or(last_topic.date);
-
-    Some((offset_date, last_topic.top_message, last_topic.id))
-}
-
-fn forum_topic_message_date(message: &tl::enums::Message) -> Option<i32> {
-    match message {
-        tl::enums::Message::Empty(_) => None,
-        tl::enums::Message::Message(message) => Some(message.date),
-        tl::enums::Message::Service(message) => Some(message.date),
-    }
 }
 
 async fn upsert_forum_topics_from_refresh(
@@ -289,10 +174,6 @@ async fn upsert_forum_topics_from_refresh(
         .await?;
 
     Ok(())
-}
-
-fn is_non_forum_topic_refresh_error(error: &str) -> bool {
-    error.contains("CHANNEL_FORUM_MISSING") || error.contains("CHANNEL_MONOFORUM_UNSUPPORTED")
 }
 
 #[tauri::command]
@@ -422,8 +303,8 @@ fn state_summary_from_row(
 #[cfg(test)]
 mod tests {
     use super::{
-        is_non_forum_topic_refresh_error, list_source_forum_topics_from_pool,
-        source_supports_forum_topics, upsert_forum_topics_from_refresh, ForumTopicSnapshot,
+        list_source_forum_topics_from_pool, source_supports_forum_topics,
+        upsert_forum_topics_from_refresh, ForumTopicSnapshot,
     };
     use crate::sources::test_support::memory_pool_with_source_items_and_topics;
 
@@ -800,18 +681,5 @@ mod tests {
         .await
         .expect("load state");
         assert_eq!(state, ("ready".to_string(), 0));
-    }
-
-    #[test]
-    fn non_forum_topic_refresh_errors_are_detected() {
-        assert!(is_non_forum_topic_refresh_error(
-            "Rpc error 400: CHANNEL_FORUM_MISSING"
-        ));
-        assert!(is_non_forum_topic_refresh_error(
-            "Rpc error 400: CHANNEL_MONOFORUM_UNSUPPORTED"
-        ));
-        assert!(!is_non_forum_topic_refresh_error(
-            "Rpc error 400: CHANNEL_PRIVATE"
-        ));
     }
 }

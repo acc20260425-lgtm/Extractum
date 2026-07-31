@@ -1811,3 +1811,337 @@ Therefore the new live adapter is a private owned-value test seam, not an altern
 The frozen v6 candidate contains exactly the CP4-authorized temporary exception definitions, physical uses, logical owners, forwarding chains, visibility, and lifecycle. The isolated TypeScript historical CP3 facade fixture changes no Rust authority or escape-hatch semantics.
 
 Escape-hatch review verdict: CLEAN
+
+## CP5 Escape-Hatch LLM Review
+
+# Phase 8B Checkpoint 5 Temporary Escape-Hatch Review
+
+## Review identity and frozen candidate
+
+- Review date/time: 2026-07-31T21:01:25.8951569+03:00.
+- Selected checkpoint: Phase 8B Checkpoint 5, Task 5, `Move Live History and Topic Fetching Behind Owned Batch APIs`.
+- Retained predecessor and current HEAD: `1acc4f618dcc5855b677c844624f21c67c371b47` (`refactor: stage Telegram peer and avatar boundary`).
+- Reviewer: fresh independent read-only LLM reviewer. I did not implement this candidate and did not rely on the implementation report for authorization; I independently read the complete current Rust diff, complete new Rust files, unchanged producer/forwarding context, pinned Grammers implementation, approved plan/design, generated authority, and cumulative ledger.
+- The retained status pair remains Checkpoint 4: the roadmap is unchanged from the predecessor and the design header remains `Approved; 8B preparation Checkpoint 4 retained`. The cumulative ledger is unchanged at SHA-256 `75c749adf4361116fcc5c315bfd3426e9cc8f885bd466ab2b708e77bb498b2f8`.
+- This review wrote only this scratch record. It did not edit Rust, TypeScript, status, plan, design, symbol authority, ledger, staging, or commits.
+
+The complete scoped Rust candidate consists of 13 tracked modifications and two complete untracked files. The tracked Rust diff is 573 insertions and 407 deletions; the new files contain 1,115 and 365 lines. I read every changed hunk, both complete new files, and the relevant unchanged definitions/callers/producers. The exact reviewed path list is:
+
+```text
+src-tauri/src/sources/items.rs
+src-tauri/src/sources/sync.rs
+src-tauri/src/sources/topics.rs
+src-tauri/src/takeout_import/forum_topics.rs
+src-tauri/src/takeout_import/mod.rs
+src-tauri/src/telegram_impl/dto.rs
+src-tauri/src/telegram_impl/error.rs
+src-tauri/src/telegram_impl/lib.rs
+src-tauri/src/telegram_impl/live/messages.rs
+src-tauri/src/telegram_impl/live/mod.rs
+src-tauri/src/telegram_impl/live/peer.rs
+src-tauri/src/telegram_impl/live/topics.rs
+src-tauri/src/telegram_impl/media.rs
+src-tauri/src/telegram_impl/runtime.rs
+src-tauri/src/telegram_impl/session.rs
+```
+
+The candidate was frozen by hashing the UTF-8 text `path|byte-length|sha256` for those 15 paths in the order above, joined with LF and without a final LF. Its aggregate SHA-256 is `d21577ed80d8993bc52a574e30800ecf086cffd0519044dc5812d0702b8351e5`. The constituent rows are:
+
+```text
+src-tauri/src/sources/items.rs|68218|5be8b96e92e24739a385243b9688dbbe4202b7a06e6629c0ad7bb8f40b11b286
+src-tauri/src/sources/sync.rs|26884|694aa31cd92fd515c5b2719a38f56761d06669e6c5f956f71e6a6259df4a8969
+src-tauri/src/sources/topics.rs|23264|d537625c03303d57b6e61fc515b6587f9dcfd1da63873ad68edf7d4243cf18cc
+src-tauri/src/takeout_import/forum_topics.rs|8472|db71c36e57ccaaebdaa7b7ba082d9b8e756116760314a2e04b6e9480f33ad3f2
+src-tauri/src/takeout_import/mod.rs|95248|1547ae4c0b54c0e7a8a1ce94283785bc5b751aceaf7e5ddc6883442cf184da3c
+src-tauri/src/telegram_impl/dto.rs|9404|0a9caed44e37496c0a8f336048dbc7a548737e2213381c34901a59b44dc76c4b
+src-tauri/src/telegram_impl/error.rs|660|0311ea20d5ae815d78960f76e7b98181b99c36886ee4a3776ad65a3ea453a305
+src-tauri/src/telegram_impl/lib.rs|747|5a14b5b2bbd6e0397e2985bae29c232b9ba166bb1131c258cd77216035a0a4d2
+src-tauri/src/telegram_impl/live/messages.rs|36346|927d2e927d43fc79653f800329938401b8b51de416ca00ac991393be9c9c61b1
+src-tauri/src/telegram_impl/live/mod.rs|1793|c62179eb196f13a7a616bd5b25b1787bba1bd8bf3068a51973722876b524bc5a
+src-tauri/src/telegram_impl/live/peer.rs|25356|62228ab09ffab1f2d03ded8a878baef9566a7b0b6d9df1005a76304c89168de8
+src-tauri/src/telegram_impl/live/topics.rs|11824|bf4e4d964c04c0c722f048023f7285e9a967c5b6b4d7fa169f7dccf11328b316
+src-tauri/src/telegram_impl/media.rs|9752|3773641120e18010a77c962deb048784d75f7878c67564d8d80eb710c6bb79c4
+src-tauri/src/telegram_impl/runtime.rs|53648|8827953e85c7376759055e2af7b62c31cb030f15c8efa674d571c6362447e4f6
+src-tauri/src/telegram_impl/session.rs|12692|569117e1e7ce31e4c51331d2a8258b28cc10445436e6a7ae606ce8c1a4e8456b
+```
+
+Any subsequent edit to any reviewed Rust path invalidates this record and requires the full fresh review required by the reusable gate.
+
+## Authority and complete inventory inputs
+
+I independently read and reconciled:
+
+- the approved plan's complete global constraints, forward-only no-TypeScript-Rust-analysis amendment, complete mandatory reusable CP2-CP8 LLM gate, complete transition inventories, public/restricted fences, symbol-disposition table, lifecycle rules, Rust verification loops, and all of Task 5;
+- the approved design's complete boundary, lifecycle, owned-value API, live-history/topic semantics, exception sets, 69-name final restricted fence, symbol map, and acceptance criteria;
+- the complete cumulative verification ledger, including the retained CP2, corrected CP3, and valid CP4 v6 review records;
+- the complete Task 5 brief and report as navigation/evidence claims only;
+- all 307 expanded symbol-disposition entries, all transition arrays, and all 69 final restricted symbols in `src/lib/telegram-8b-symbol-map.json`;
+- the complete `scripts/telegram-8b-symbol-map.mjs` generator, which reads plan/document structure and does not parse Rust bodies or authorize Rust use-sites;
+- the complete scoped Rust candidate plus unchanged `sources/peer_resolution.rs`, `telegram.rs`, store callers, session serialization, and all three Takeout owner chains;
+- pinned Grammers revision `1f901ce6e973fdcf0e74267f3d8efad5c729daaa`, specifically `MessageIter::fill_buffer`, `Client::build_peer_map`, raw-message owned mapping, `Peer::auth`, `PeerInfo` conversion/auth, and the default `ClientConfiguration`.
+
+Authority input hashes at review time were:
+
+| Input | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `docs/superpowers/plans/2026-07-28-extractum-telegram-8b-preparation.md` | 210073 | `5c8533c5a7b4e7768659f9fbbc1a633ecdbd3c45d1e2ed3e2d5830a8a22880b5` |
+| `docs/superpowers/specs/2026-07-26-telegram-crate-boundary-design.md` | 167172 | `ca242075914936613814cc7de85f75591c6a3025ffd6c662e9186056ed0126c4` |
+| cumulative verification ledger | 107340 | `75c749adf4361116fcc5c315bfd3426e9cc8f885bd466ab2b708e77bb498b2f8` |
+| `scripts/telegram-8b-symbol-map.mjs` | 23161 | `2a801cd645d9074f22149319ff3243dc3b5d2d106ce90aa4a9170a9020a58be7` |
+| `src/lib/telegram-8b-symbol-map.json` | 123717 | `4fdfac6ca545b3ac5eb7dd09d7cfb68d5e7341a4476f938efe63186bc9bd96f0` |
+| `src/lib/telegram-crate-boundary-contract.test.ts` | 346305 | `c1da5bc38e13f7373c94ad88a908c0526a8f487e3e793bbd49315511b7533213` |
+| Task 5 brief | 9154 | `917993506b897a98b28122dca82dc4d1bb68e02cac2940a38fb72a1029108261` |
+| Task 5 implementation report | 10422 | `62fecd892df2028fec113ba19f9ff3da0d4cb90002680d0b161bbf45e6dc5ca9` |
+
+The artifact is schema version 1, contains 307 unique expanded disposition entries, contains 69 sorted unique restricted final symbols, and has restricted-fence authority `{ normalizedLfBytes: 2246, sha256: b7d7d4028fc653aa1efb217f043f9a4ab96778e0e38c775703507ce9b81f5fa1 }`. `node scripts/telegram-8b-symbol-map.mjs --check` exited 0.
+
+The complete transition inventories read from the artifact were:
+
+```text
+CP3 raw-handle owners:
+  sources::store::add_telegram_source
+  sources::store::list_telegram_sources
+  sources::sync::sync_telegram_source
+  takeout_import::run_export_dc_spike_for_handle
+  takeout_import::run_takeout_migrated_history_import
+  takeout_import::run_takeout_source_import
+
+CP4 raw-handle owners:
+  sources::sync::sync_telegram_source
+  takeout_import::run_export_dc_spike_for_handle
+  takeout_import::run_takeout_migrated_history_import
+  takeout_import::run_takeout_source_import
+
+CP4 ResolvedSyncPeer::peer consumers:
+  sources::sync::sync_telegram_source
+  takeout_import::run_takeout_migrated_history_import
+  takeout_import::run_takeout_source_import
+
+CP5 raw-handle owners:
+  takeout_import::run_export_dc_spike_for_handle
+  takeout_import::run_takeout_migrated_history_import
+  takeout_import::run_takeout_source_import
+
+CP5 ResolvedSyncPeer::peer consumers:
+  takeout_import::run_takeout_migrated_history_import
+  takeout_import::run_takeout_source_import
+
+CP7 raw bridge symbols/callsites:
+  empty
+```
+
+I treated those lists only as navigation/checklists. The authorization conclusions below come from the actual Rust definitions, visibility, signatures, bodies, physical calls, producers, and complete data/forwarding paths.
+
+The complete 69-name final restricted fence was also read. At CP5, its materialized live/error/session leaf and parent facade names have the specified `pub(super)` visibility: both avatar leaves; all six `live` parent operations; the message and topic leaves; `DialogListing::new`; the four peer leaves including the newly restricted descriptor converter; `is_non_forum_topic_refresh_error`; `TelegramSession::{clone_memory_session,cache_peer_infos}`; and `media::extract_raw_item_payload`. The four media compatibility names that remain temporarily `pub(crate)` are governed by their explicit finite lifecycle rather than prematurely demoted. Remaining `takeout::*`, later error, and later media names are future CP7 targets and are not materialized early. No restricted name is root-public, and all current root-public types have owned, raw-free signatures.
+
+## TypeScript source-analysis prohibition
+
+There is no new TypeScript Rust parser, Rust fixture variant, or mutation test in the candidate.
+
+- The complete HEAD-relative diff of `src/lib/telegram-crate-boundary-contract.test.ts` changes only the expected generated authority cardinalities: 306 to 307 disposition entries, 98 to 99 source rows in three error expectations, and 67 to 69 restricted names in the corresponding expectations.
+- The prohibited analyzer names `phase8BTypedReceiverNames`, `phase8BProducerBoundReceiverNames`, `phase8BFunctionUsesTransitionBridge`, and `phase8BIsCanonicalBridgeTypePath` occur only as prose in the plan and do not exist in TypeScript.
+- `phase8BSessionFixture()` exists in exactly the same two lines in the retained predecessor and the current file. It takes no parameter; there is no `includeRawAccessor` branch. It is an unchanged non-use-site compilation/public-surface fixture, not a newly introduced escape-hatch analyzer.
+- The generator parses approved plan tables/fences into JSON and never reads, tokenizes, masks, scopes, or semantically reconciles Rust source.
+
+Accordingly, no TypeScript result accepts or rejects a Rust escape-hatch use. The source-level ownership analysis in this record is the required LLM review; automatic evidence below is Rust compilation and Rust behavior testing (plus formatting/diff and generated-document consistency checks, none of which authorize use-sites).
+
+## Four-item media compatibility facade and new restricted raw adapter
+
+The temporary CP3-CP6 media compatibility facade remains exactly four `pub(crate)` definitions in `telegram_impl/media.rs`:
+
+1. `DocumentSignals`, with exactly its five package-private fields;
+2. `derive_content_kind`;
+3. `derive_document_media_kind`;
+4. `extract_item_payload`.
+
+`telegram_impl/lib.rs` re-exports exactly those four package-privately, and app `src-tauri/src/media.rs` re-exports exactly those four package-privately. There is no glob, alias, public re-export, fifth facade item, or second compatibility module.
+
+The remaining app physical uses are narrower than CP4 and fully accounted:
+
+- `takeout_import/raw_parse.rs` imports `DocumentSignals`, `derive_content_kind`, and `derive_document_media_kind`, constructs the one signal value, and calls the two classifiers in its existing raw Takeout parse flow;
+- `extract_item_payload` has no app call after the live-history move, but remains the declared temporary compatibility item through its planned lifecycle and is not widened;
+- all other occurrences are the exact two package-private re-export sites, implementation-local calls, or leaf tests.
+
+Task 5 adds `media::extract_raw_item_payload` as a separate `pub(super)` staged-internal adapter. `LiveMessage::into_draft` is its sole production caller. The adapter and the retained high-level helper delegate to the same private `extract_item_payload_from_parts`, so raw/high-level mapping cannot silently fork. The new adapter is not app-visible, not root-re-exported, not part of the four-item compatibility facade, and returns only owned application payload values.
+
+## Remaining transitional raw/session/app definitions and exact physical uses
+
+The active definitions and all production physical uses are:
+
+| Definition | Visibility | Physical uses | Exact accounting |
+| --- | --- | ---: | --- |
+| `TelegramClientHandle::raw_client` | `pub(crate)` | 3 | one call in each of the three CP5 Takeout logical owners |
+| `TelegramClientHandle::raw_session` | `pub(crate)` | 3 | one call in each of the same three owners |
+| `TelegramSession::raw_memory_session` | `pub(super)` | 2 | session serialization and the `raw_session` wrapper |
+| `telegram::get_client` | `pub(crate)` | 2 | `sources::store::{list_telegram_sources,add_telegram_source}`, both owned-handle consumers |
+| `telegram::get_authorized_client` | `pub(crate)` | 4 | sync's owned handle plus the three Takeout owners |
+| `ResolvedSyncPeer::peer` | `pub(crate)` field | 6 reads | two in migrated history and four under current-source Takeout |
+| `legacy_peer_ref_from_descriptor` | `pub(crate)` | 1 | sole call in `resolve_and_refresh_peer`, the sole field producer |
+
+`raw_client` and `raw_session` have no call in `sources::sync` or any other app owner. Each body still returns the exact raw value directly; there is no parallel accessor. `raw_session` delegates only to `self.session.raw_memory_session()`.
+
+`get_client` delegates only to `TelegramRuntime::client`; its two store consumers use owned handle methods and never call a raw accessor. `get_authorized_client` delegates only to `TelegramRuntime::authorized_client`; its sync consumer now uses only owned handle APIs, while its three Takeout results feed exactly the three allowed raw owners.
+
+`ResolvedSyncPeer` is unchanged and has exactly one definition with fields `peer: PeerRef`, owned `descriptor: PeerDescriptor`, and the optional refreshed avatar cache key. Its sole producer remains `resolve_and_refresh_peer`: the function obtains the owned descriptor, invokes `legacy_peer_ref_from_descriptor` once, and constructs the one result. The field's six physical reads are:
+
+- migrated-history owner: provenance identity and `revalidate_migrated_from_chat_id` (2);
+- current-source owner/forwarded continuation: provenance identity, `InputPeer` conversion, `validate_takeout_peer`, and `detect_supergroup_migration` (4).
+
+The former current-source completed-Takeout topic-refresh raw peer read is gone; that operation now receives `&resolved_peer.descriptor` and `&TelegramClientHandle`.
+
+`TelegramSession::clone_memory_session` is a permanent restricted bridge rather than a transitional app escape. Its production call materializes the sender pool during client initialization; other calls are staged-unit-test pointer/session checks. It is not app-visible and is not root-re-exported. The new permanent `cache_peer_infos` method is also `pub(super)` and is called only by the staged live-message operation.
+
+## Logical raw owners and full forwarding chains
+
+### Export-DC spike owner
+
+```text
+run_takeout_export_dc_spike
+  -> get_authorized_client -> TelegramRuntime::authorized_client
+  -> run_export_dc_spike_for_handle(owned TelegramClientHandle)
+     -> raw_client (one call) + raw_session (one call)
+        -> raw_memory_session
+     -> cloned raw values used by self-check, export-DC alias, and Takeout calls
+```
+
+The handle is consumed by `run_export_dc_spike_for_handle`; no helper reacquires it, returns it, or creates another owner.
+
+### Migrated-history owner
+
+```text
+start_takeout_migrated_history_import
+  -> run_takeout_migrated_history_import_job
+  -> run_takeout_migrated_history_import
+     -> get_authorized_client
+     -> raw_client (one call) + raw_session (one call)
+     -> resolve_and_refresh_peer(opaque handle)
+        -> owned PeerDescriptor
+        -> legacy_peer_ref_from_descriptor (sole producer)
+        -> ResolvedSyncPeer
+     -> peer read for provenance identity
+     -> peer read for revalidate_migrated_from_chat_id
+     -> remaining Takeout work uses already produced raw/owned values
+```
+
+No nested helper accepts or obtains `TelegramClientHandle`, calls a raw accessor, or becomes a second logical owner.
+
+### Current-source Takeout owner and mandatory full continuation
+
+```text
+start_takeout_source_import
+  -> run_takeout_import_job
+  -> run_takeout_source_import
+     -> get_authorized_client
+     -> raw_client (one call) + raw_session (one call)
+     -> resolve_and_refresh_peer(opaque handle)
+        -> owned PeerDescriptor + transitional PeerRef
+     -> peer read for provenance identity
+     -> run_started_takeout_source_import
+        [forwards resolved_peer, &TelegramClientHandle, &Client, session-derived alias, state]
+        -> run_started_takeout_source_import_inner
+           [forwards/uses the same values; no reacquisition and no raw accessor]
+           -> peer read for InputPeer conversion
+           -> peer read for validate_takeout_peer
+           -> peer read for detect_supergroup_migration
+           -> history import
+           -> finish Takeout
+           -> refresh_forum_topics_after_completed_takeout
+              -> refresh_forum_topics
+                 -> TelegramClientHandle::fetch_forum_topics(&PeerDescriptor)
+           -> finalize sync
+           -> finalize ingest batch
+```
+
+The public owned handle is forwarded through both started-import functions solely to invoke the new owned forum-topic method at the end. Neither continuation calls `raw_client`, `raw_session`, `get_client`, or `get_authorized_client`; neither constructs a handle or peer; neither adds a logical owner. The original outer owner retains the raw values required by the still-unmoved Takeout path. This accounts for the complete plan-mandated three-function chain.
+
+## CP5 removals and application boundary
+
+Every use scheduled to disappear at CP5 is gone:
+
+- `sources::sync::sync_telegram_source` no longer calls `raw_client` and no longer reads `ResolvedSyncPeer::peer`; it resolves an opaque handle/owned descriptor, calls the owned forum-topic API, and passes the owned descriptor into the live batch loop;
+- the app raw `iter_messages`/payload/author/context/reply logic is removed from `sources::{sync,items}` and is owned by `telegram_impl/live/messages.rs` plus the restricted media adapter;
+- the app raw forum-topic pagination, TL mapping, cursor helpers, and error classifier are removed from `sources/topics.rs` and owned by `telegram_impl/live/topics.rs` and `telegram_impl/error.rs`;
+- the completed-Takeout topic refresh no longer receives or consumes `ResolvedSyncPeer::peer`; the exact owned handle is threaded through the full continuation and the owned descriptor is used;
+- the temporary CP3-CP4 peer-kind root bridge is removed: the three `TELEGRAM_PEER_KIND_*` constants are private DTO implementation constants, are not re-exported by `telegram_impl/lib.rs`, and have no app consumer;
+- `sources/items.rs`, `sources/sync.rs`, and `sources/topics.rs` contain no Grammers import, raw Grammers type, `tl::` operation, `PeerRef`, `PeerKind`, or raw `Client` use.
+
+The new public boundary is raw-free:
+
+- `TelegramClientHandle::fetch_message_batch` accepts only `&PeerDescriptor`, integer offsets, and `usize`, and returns owned `LiveMessageBatch`;
+- `TelegramClientHandle::fetch_forum_topics` accepts only `&PeerDescriptor` and returns owned `ForumTopicSnapshot`/deleted-ID vectors;
+- `LiveMessageBatch` is public with private fields and exposes only owned messages, terminal state, and integer offsets;
+- `LiveMessage` is public with private raw/fetched/peer-map fields and exposes only integer metadata and consuming conversion to `TelegramMessageDraft`;
+- `ForumTopicSnapshot` is an owned DTO with no Grammers field;
+- no raw Grammers type appears in a root-public function signature or field.
+
+No CP7 removal happened early: the three Takeout raw owners, both handle raw accessors, borrowed session accessor, app lookup helpers, transitional peer field, sole legacy builder, and four-item media facade remain exactly for their finite lifecycle.
+
+## Live-message equivalence, cache invariant, and initialization guard
+
+The new leaf performs exactly one raw `GetHistory` invocation per batch through one private backend seam. It validates `limit` in `1..=100` before invocation and sends the frozen offsets/request fields. Response order is preserved. A nonterminal page advances both ID and date offsets from the final returned message; a terminal page preserves the input offsets. `Messages::Messages` is terminal; `Slice` and `ChannelMessages` use the pinned Grammers empty/first-ID terminal rule.
+
+The peer map reproduces pinned Grammers ordering and overwrite behavior: users are inserted first, chats second. `PeerInfo` uses the pinned conversions, and `TelegramSession::cache_peer_infos` caches exactly entries for which `PeerInfo::auth().is_some()`. This matches pinned `Peer::auth().is_some()` semantics, including ambient authority for chats; it is not an access-hash-only predicate.
+
+The outer `auto_cache_peers` precondition is executable. `initialize_grammers_client(api_id, session)` does not accept configuration from its caller; it materializes `ClientConfiguration::default()` internally, rejects `!configuration.auto_cache_peers`, and performs that guard before constructing `SenderPool` or spawning its runner. It then uses `Client::with_configuration`. The configuration-free signature prevents moving the invariant to a caller merely to make the currently unreachable error branch testable. Test-only client construction does not alter the production invariant.
+
+Pinned Grammers panics on `Messages::NotModified` for history hash zero. The candidate deliberately maps it to a typed network `AppError`, matching the approved plan and existing Takeout convention. The match occurs before peer caching or message conversion, so the error has no partial cache/conversion side effect.
+
+The raw-message conversion retains owned message identity, content/media classification, author, context/reply/reaction fields, raw serialized payload, and peer lookup semantics behind private fields. The live batch test exercises populated/empty/min/no-auth peers; the draft test exercises owned mapping and empty-payload skip.
+
+## Topic operation and sync loop behavior
+
+The topic pagination/mapping/classifier moved intact to the staged owner. `sources/topics.rs` retains only the app policy, SQL writes, membership rebuild, and warnings. The same public owned handle operation is used by normal sync and the current-source completed-Takeout path. The Takeout wrapper retains completion/warning/provenance policy and records a refresh warning before final ingest-batch completion.
+
+The app sync loop requests `min(remaining, 100)`, forwards both offsets, and decrements the remaining-message budget before previous-ID/date cutoff checks and before a message can be skipped by conversion. It updates max ID before conversion, persists each draft sequentially, stops immediately on conversion/persistence/fetch error, returns only after a terminal page or exhausted budget, and advances both offsets only between successful pages. Thus a skipped raw entry still consumes budget and a successful prior insert is durable if a later entry or page fails.
+
+The exact existing Rust behavior test covers all owner-requested orchestration evidence in one test body: persistence order/durability, skipped-entry budget consumption and shrinking second-page limit, offset order, conversion-stop behavior, and a network `timeout` on the second fetch with the first page already persisted and no third fetch. No TypeScript Rust-source analysis is used as evidence for budget, order, or timeout.
+
+## Alias, re-export, wrapper, function-item, macro, and same-name audit
+
+- None of the temporary names is imported/re-exported with `as`, hidden behind a type alias, invoked through UFCS, captured as a function item/callback, or shadowed by an alternate callable.
+- There is no exception-related `macro_rules!`, generated identifier, `paste!`, `concat_idents!`, production glob import, or public leaf module that creates an alternate path.
+- Temporary re-exports are limited to the exact four media compatibility names in the staged root and app media facade. Raw accessors, raw types, the transitional peer field, and the legacy builder are not root-re-exported.
+- `sources::ResolvedSyncPeer` is the one package-private re-export of the exact struct needed by Takeout continuation signatures; it neither duplicates nor conceals the field producer.
+- The private test/back-end traits in live messages/topics and sync hold or model raw values only inside their owning modules. They are not implemented as public traits on `TelegramClientHandle`, not root-re-exported, and cannot expose a raw client/session/peer to app code.
+- `LiveMessage` privately retains a raw TL message and peer map so its consuming owned conversion can preserve semantics. Its private fields and raw-free public methods make it an opaque owned boundary value, not an escape hatch.
+- `DialogListing` remains the approved opaque public iterator: raw client/iterator state is private and `next` returns only owned descriptors.
+- Other fields or locals named `client`, `session`, `peer`, `raw`, `messages`, or `legacy` are staged implementation details or unrelated app data, not additional definitions, producers, wrappers, aliases, or logical owners of the transitional exceptions.
+
+## Fresh automatic evidence
+
+All commands were run against the frozen candidate in `G:\Develop\Extractum` after the static ownership review:
+
+| Command | Fresh result |
+| --- | --- |
+| `node scripts/telegram-8b-symbol-map.mjs --check` | exit 0 |
+| `npm.cmd run check:rustfmt` | exit 0 |
+| `git diff --check 1acc4f618dcc5855b677c844624f21c67c371b47` | exit 0; only Git LF/CRLF notices |
+| exact live-message batch test | 1 passed, 0 failed, 726 filtered out |
+| exact live-message draft test | 1 passed, 0 failed, 726 filtered out |
+| exact forum-topic page test | 1 passed, 0 failed, 726 filtered out |
+| exact sync durability/budget/error/timeout test | 1 passed, 0 failed, 726 filtered out |
+| `cargo check --color never --manifest-path src-tauri/Cargo.toml -p extractum --all-targets` | exit 0; warnings only |
+| `cargo test --color never --manifest-path src-tauri/Cargo.toml -p extractum --all-targets` | 727 passed, 0 failed; binary target had 0 tests |
+
+The four exact test identities were:
+
+```text
+telegram_impl::live::messages::tests::message_batch_preserves_single_fetch_order_limit_offsets_and_terminal_rule
+telegram_impl::live::messages::tests::live_message_maps_owned_draft_and_skips_empty_payload
+telegram_impl::live::topics::tests::forum_topic_pages_preserve_order_deleted_ids_and_terminal_cursor
+sources::sync::tests::telegram_batch_loop_preserves_entry_durability_limits_and_stops_after_error
+```
+
+These tests and compilation are behavior/type evidence only. The LLM review of definitions and full owner chains above is the authorization evidence for retained escape uses.
+
+## Findings
+
+- Critical: none.
+- High: none.
+- Medium: none.
+- Low: none.
+- Unlisted, ambiguous, aliased, newly wrapped, early-added, or prematurely retained escape-hatch definition/use: none.
+
+The frozen CP5 candidate has exactly the three authorized raw-handle/session logical owners, exactly the two authorized `ResolvedSyncPeer::peer` logical owners, the exact remaining bridge definitions and physical uses, the complete required forwarding chain, and no new app-visible raw escape. Every CP5 removal is present, later finite-lifecycle exceptions remain, the 69-name restricted authority is consistent with checkpoint lifecycle, and no TypeScript code semantically analyzes or authorizes Rust use-sites.
+
+Escape-hatch review verdict: CLEAN

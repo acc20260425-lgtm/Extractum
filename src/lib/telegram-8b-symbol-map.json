@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "restrictedBridgeFenceAuthority": {
-    "normalizedLfBytes": 2184,
-    "sha256": "87a520b5917ac82c95527210120616e3e9e5b66141d6492ce46a036d75b2c5ca"
+    "normalizedLfBytes": 2246,
+    "sha256": "b7d7d4028fc653aa1efb217f043f9a4ab96778e0e38c775703507ce9b81f5fa1"
   },
   "symbols": [
     {
@@ -298,6 +298,20 @@
       "firstCheckpoint": 3,
       "removalCheckpoint": 3,
       "disposition": "move"
+    },
+    {
+      "currentPath": "<new>",
+      "currentSymbol": "extract_raw_item_payload",
+      "finalTargets": [
+        {
+          "path": "telegram_impl/media.rs",
+          "symbol": "extract_raw_item_payload"
+        }
+      ],
+      "semanticOwner": "staged-internal",
+      "firstCheckpoint": 5,
+      "removalCheckpoint": "retained",
+      "disposition": "new-restricted-bridge"
     },
     {
       "currentPath": "<new>",
@@ -4355,6 +4369,7 @@
     "live::messages::fetch_message_batch",
     "live::peer::DialogListing::new",
     "live::peer::peer_avatar_bytes",
+    "live::peer::peer_ref_from_descriptor",
     "live::peer::resolve_dialog_peer",
     "live::peer::resolve_username",
     "live::peer_avatar_bytes",
@@ -4364,6 +4379,7 @@
     "media::derive_content_kind",
     "media::derive_document_media_kind_from_parts",
     "media::extract_item_payload",
+    "media::extract_raw_item_payload",
     "session::TelegramSession::cache_peer_infos",
     "session::TelegramSession::clone_memory_session",
     "takeout::export_dc::export_dc_invoke",

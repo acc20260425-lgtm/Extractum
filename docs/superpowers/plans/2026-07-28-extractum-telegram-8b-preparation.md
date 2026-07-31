@@ -134,7 +134,7 @@ redesign.
 - [ ] Public fallible operations return `extractum_core::error::AppResult<T>` directly. The root does not re-export `AppError`/`AppResult` and defines no `TelegramError`.
 - [ ] The public API contains no `Client`, `MemorySession`, `LoginToken`, `PeerRef`, `RemoteCall`, `InvocationError`, raw `tl::*`, SQLx, Tauri, keyring, secret getter, or app type.
 - [ ] At CP7/CP8, restricted `pub(super)` bridges are allowed only for the
-  literal 67-entry final internal bridge allowlist frozen below. They are not
+  literal 69-entry final internal bridge allowlist frozen below. They are not
   root-re-exported. Before CP7, the only additional staged
   restricted/package bridges are the exact CP3→CP6 transitional raw bridge and
   exact CP3→CP4 three-constant peer-kind root bridge named in the next bullet.
@@ -1150,15 +1150,21 @@ only by `runtime.rs`, except that
 `takeout/forum_topics.rs` is the one additional caller of
 `live::fetch_forum_topics`. A leaf name is `pub(super)` to its immediate
 parent. Public inherent methods listed in the API block are not duplicated
-here.
+here. `live::peer::peer_ref_from_descriptor` remains private through the
+retained CP4 source and becomes the listed `pub(super)` leaf only at CP5.
+`media::extract_raw_item_payload` is introduced as a `pub(super)` leaf at CP5
+solely for owned raw live-message conversion; the existing CP3-CP6
+`extract_item_payload(&grammers_client::message::Message)` compatibility
+signature remains unchanged.
 
 ```text
 live::{dialog_listing,resolve_dialog_peer,resolve_username,peer_avatar_bytes,fetch_message_batch,fetch_forum_topics}
 live::avatar::{peer_photo_bytes_with_timeout,peer_photo_bytes}
 live::peer::{DialogListing::new,resolve_dialog_peer,resolve_username,peer_avatar_bytes}
+live::peer::peer_ref_from_descriptor
 live::messages::fetch_message_batch
 live::topics::fetch_forum_topics
-media::{derive_content_kind,derive_document_media_kind_from_parts,extract_item_payload}
+media::{derive_content_kind,derive_document_media_kind_from_parts,extract_item_payload,extract_raw_item_payload}
 error::{is_non_forum_topic_refresh_error,is_channel_private_error,should_fallback_export_dc_error}
 session::TelegramSession::{clone_memory_session,cache_peer_infos}
 takeout::{takeout_self_check,prepare_takeout,takeout_forum_topics}
@@ -1198,7 +1204,7 @@ The pagination subsection is intentionally one fully qualified symbol per
 line; no nested brace syntax is legal. Task 1's
 `scripts/telegram-8b-symbol-map.mjs` parses this entire fenced allowlist,
 expands only the remaining single-level brace groups, and materializes the
-sorted canonical 67-entry result as `restrictedFinalSymbols` in the generated
+sorted canonical 69-entry result as `restrictedFinalSymbols` in the generated
 symbol artifact. The TypeScript contract consumes that generated array instead
 of maintaining or parsing a second pagination list. Flattening also
 deliberately closes two omissions in the old nested notation by listing the
@@ -1452,6 +1458,7 @@ or unnamed fragment is legal in the generated artifact.
 | --- | --- | --- | --- | --- | ---: | --- | --- |
 | `telegram/dto.rs` | `{ITEM_KIND_TELEGRAM_MESSAGE,TELEGRAM_PEER_KIND_CHANNEL,TELEGRAM_PEER_KIND_CHAT,TELEGRAM_PEER_KIND_USER,TelegramMessageIdentity,TelegramMessageIdentity::validate,TelegramItemContext,TelegramMessageDraft}` | `telegram_impl/dto.rs` | `=` | staged | 3 | 3 | move |
 | `telegram/media.rs` | `{CONTENT_KIND_TEXT_ONLY,CONTENT_KIND_TEXT_WITH_MEDIA,CONTENT_KIND_MEDIA_ONLY,TelegramMediaPayload,DocumentSignals,trimmed_non_empty,derive_content_kind,collect_document_signals,derive_document_media_kind,contact_summary,extract_document_media_payload,extract_media_payload,extract_item_payload}` | `telegram_impl/media.rs` | `=` | staged | 3 | 3 | move |
+| `<new>` | `extract_raw_item_payload` | `telegram_impl/media.rs` | `extract_raw_item_payload` | staged-internal | 5 | retained | new-restricted-bridge |
 | `<new>` | `derive_document_media_kind_from_parts` | `telegram_impl/media.rs` | `derive_document_media_kind_from_parts` | staged-internal | 7 | retained | new-restricted-bridge |
 | `telegram/runtime.rs` | `{TelegramApiHash,TelegramApiHash::new,TelegramRuntimeStatus,TelegramClientInner,TelegramClientHandle,TelegramLoginAttemptToken,TelegramLoginAttempt,TelegramRuntimeAccount,detach_replaced,TelegramRuntime,TelegramRuntime::new,TelegramRuntime::initialize_account,TelegramRuntime::is_authenticated,TelegramRuntime::request_login_code,TelegramRuntime::sign_in,TelegramRuntime::authorized_client,TelegramRuntime::initialized_client,TelegramRuntime::clear_account,TelegramRuntime::handle_is_authorized,initialize_grammers_client}` | `telegram_impl/runtime.rs` | `=` | staged | 3 | 3 | move |
 | `<new>` | `TelegramRuntime::client` | `telegram_impl/runtime.rs` | `TelegramRuntime::client` | staged | 3 | retained | new |
@@ -1785,7 +1792,7 @@ keeps Checkpoint 1 on the application-owned pre-staging layout
   `currentSymbol`, exact `finalTargets` path/symbol pairs, `semanticOwner`,
   `firstCheckpoint`, `removalCheckpoint`, and `disposition`; split symbols use
   separate named fragment rows with their literal `currentAnchors` or multiple
-  exact final targets. The same artifact contains an exact 67-entry, sorted,
+  exact final targets. The same artifact contains an exact 69-entry, sorted,
   duplicate-free `restrictedFinalSymbols` array. Parse singleton allowlist lines and
   single-level brace groups only; reject nested braces, so the pagination
   subsection must remain fully qualified and flat. Every restricted symbol
@@ -2680,6 +2687,17 @@ Invoke-CheckedNative 'commit Task 4' {
 
 ## Task 5: Replace Live History and Topic Consumers With Owned Batches
 
+**Execution preflight amendment (2026-07-31):** the owned Takeout topic call
+cannot be threaded through `takeout_import/forum_topics.rs` without changing
+its caller in `takeout_import/mod.rs`, whose existing owners already hold the
+opaque handle. The CP5 candidate also creates two production graph paths,
+advances the retained status allowlists, needs the existing canonical staged
+peer converter to become visible to its immediate parent, and needs one raw-TL
+media adapter while preserving the frozen CP3-CP6 compatibility signature.
+Therefore the Task 5 scope includes the exact paths added below. This
+forward-only correction applies only to the unexecuted Task 5 and does not
+reopen Checkpoints 0-4.
+
 **Files:**
 
 - Create: `src-tauri/src/telegram_impl/live/messages.rs`
@@ -2687,11 +2705,22 @@ Invoke-CheckedNative 'commit Task 4' {
 - Modify:
   `src-tauri/src/telegram_impl/{lib,dto,error,media,runtime,session}.rs`
 - Modify: `src-tauri/src/telegram_impl/live/mod.rs`
+- Modify: `src-tauri/src/telegram_impl/live/peer.rs` only to change the existing
+  canonical `peer_ref_from_descriptor` converter from private through CP4 to
+  `pub(super)` starting at CP5; do not duplicate its reconstruction rules
 - Modify:
   `src-tauri/src/sources/{items,peer_resolution,sync,topics,mod}.rs`
 - Modify: `src-tauri/src/takeout_import/forum_topics.rs` to use the shared
   owned `fetch_forum_topics` operation during the CP5→CP7 transition
-- Modify: the Telegram contract and two status docs
+- Modify: `src-tauri/src/takeout_import/mod.rs` only to thread the existing
+  `TelegramClientHandle` and owned `PeerDescriptor` into that shared operation
+- Modify: the Telegram contract, shell-cap contract, analysis graph contract,
+  and two status docs:
+  `src/lib/{telegram-crate-boundary-contract,crate-extraction-shell-cap-contract,analysis-crate-boundary-contract}.test.ts`
+- Modify: `scripts/telegram-8b-symbol-map.mjs` and
+  `src/lib/telegram-8b-symbol-map.json` only to advance the exact restricted
+  symbol inventory from 67 to 69 for the CP5 peer converter and raw media
+  adapter
 - Modify:
   `docs/superpowers/verification/2026-07-28-extractum-telegram-8b-preparation.md`
 
@@ -2756,6 +2785,12 @@ prevents the next fetch.
 - [ ] Remove the `sources/sync.rs` use of the transitional media facade after
   conversion moves. At CP5/CP6 the only remaining app consumer of the exact
   compatibility set is `takeout_import/raw_parse.rs`.
+- [ ] Preserve the existing CP3-CP6
+  `extract_item_payload(&grammers_client::message::Message)` compatibility
+  signature. Add only the restricted
+  `extract_raw_item_payload(&tl::enums::Message)` media adapter for the owned
+  live path; it reuses the same private media classifier and is not a second
+  classification rule.
 - [ ] Rewrite `sources/sync.rs::persist_items` as this exact bounded loop:
 
 ```text
@@ -2833,7 +2868,17 @@ Invoke-CheckedNative 'Task 5 package checkpoint' {
   `Escape-hatch review verdict: CLEAN` from the mandatory reusable CP2–CP8 LLM
   retention gate and append the complete CLEAN record to the cumulative
   verification document. Only then update candidate statuses to Checkpoint 5,
-  run all boundary contracts, then run:
+  extend the shell-cap retained-status allowlists through CP5, and update the
+  analysis graph contract with an all-or-none
+  `telegram_impl/live/{messages,topics}.rs` CP5 stage, exact app breadth 132,
+  and both paths in the required-path inventory. Run those exact contracts
+  before all retained boundary contracts, then run:
+
+```powershell
+npm.cmd run test -- src/lib/crate-extraction-shell-cap-contract.test.ts src/lib/analysis-crate-boundary-contract.test.ts
+```
+
+Then run:
 
 ```powershell
 Assert-RustPackageTestTotal -Package extractum -ExpectedTotal 727

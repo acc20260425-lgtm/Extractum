@@ -1,9 +1,7 @@
-use grammers_client::Client;
-use grammers_session::types::PeerRef;
-
 use crate::error::AppResult;
 use crate::ingest_provenance::{record_ingest_batch_warning, TerminalBatchStatus};
 use crate::sources::{refresh_forum_topics, SourceSyncTarget, TELEGRAM_KIND_SUPERGROUP};
+use crate::telegram_impl::{PeerDescriptor, TelegramClientHandle};
 
 pub(crate) const FORUM_TOPIC_REFRESH_FAILED_WARNING_CODE: &str = "forum_topic_refresh_failed";
 const FORUM_TOPIC_REFRESH_FAILED_JOB_WARNING: &str =
@@ -30,8 +28,8 @@ pub(crate) fn completed_takeout_forum_topic_refresh_policy(
 pub(crate) async fn refresh_forum_topics_after_completed_takeout(
     pool: &sqlx::SqlitePool,
     batch_id: i64,
-    client: &Client,
-    peer: PeerRef,
+    client: &TelegramClientHandle,
+    peer: &PeerDescriptor,
     source: &SourceSyncTarget,
     source_subtype: &str,
     warnings: &mut Vec<String>,

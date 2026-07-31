@@ -1,21 +1,16 @@
-use grammers_session::types::{PeerKind, PeerRef};
 use serde::Serialize;
 use tauri::AppHandle;
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
-use crate::media::extract_item_payload;
 use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
 use crate::telegram::TelegramState;
 use crate::telegram_impl::{
-    TelegramMessageDraft, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
-    TELEGRAM_PEER_KIND_CHANNEL, TELEGRAM_PEER_KIND_CHAT, TELEGRAM_PEER_KIND_USER,
+    LiveMessage, PeerDescriptor, TelegramClientHandle, TelegramMessageDraft,
 };
 
 use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
-use super::items::{
-    build_raw_payload, extract_telegram_context, insert_telegram_source_item, message_author,
-};
+use super::items::insert_telegram_source_item;
 use super::peer_resolution::resolve_and_refresh_peer;
 use super::refresh_forum_topics;
 use super::settings::{
@@ -45,6 +40,147 @@ struct IngestOutcome {
     inserted: i64,
     skipped: i64,
     max_message_id: i64,
+}
+
+struct TelegramBatchLoopPage<M> {
+    messages: Vec<M>,
+    is_terminal: bool,
+    next_offset_id: i32,
+    next_offset_date: i32,
+}
+
+trait TelegramBatchLoopMessage {
+    fn message_id(&self) -> i64;
+    fn published_at(&self) -> i64;
+    fn into_draft(self, source_title: Option<&str>) -> AppResult<Option<TelegramMessageDraft>>;
+}
+
+trait TelegramBatchLoopBackend {
+    type Message: TelegramBatchLoopMessage;
+
+    async fn fetch_message_batch(
+        &mut self,
+        offset_id: i32,
+        offset_date: i32,
+        limit: usize,
+    ) -> AppResult<TelegramBatchLoopPage<Self::Message>>;
+
+    async fn persist_draft(&mut self, draft: TelegramMessageDraft) -> AppResult<bool>;
+}
+
+async fn run_telegram_batch_loop<B: TelegramBatchLoopBackend>(
+    backend: &mut B,
+    source_title: Option<&str>,
+    sync_policy: &SyncPolicy,
+) -> AppResult<IngestOutcome> {
+    let mut outcome = IngestOutcome {
+        inserted: 0,
+        skipped: 0,
+        max_message_id: sync_policy.previous_last_sync,
+    };
+    let mut remaining = sync_policy
+        .initial_sync_settings
+        .as_ref()
+        .and_then(|settings| {
+            (settings.initial_sync_mode == InitialSyncMode::RecentMessages)
+                .then_some(settings.initial_sync_value as usize)
+        });
+    let mut offset_id = 0_i32;
+    let mut offset_date = 0_i32;
+
+    loop {
+        if remaining == Some(0) {
+            return Ok(outcome);
+        }
+        let limit = remaining.map(|remaining| remaining.min(100)).unwrap_or(100);
+        let page = backend
+            .fetch_message_batch(offset_id, offset_date, limit)
+            .await?;
+
+        for message in page.messages {
+            if remaining == Some(0) {
+                break;
+            }
+            if let Some(remaining) = remaining.as_mut() {
+                *remaining -= 1;
+            }
+
+            let message_id = message.message_id();
+            if message_id <= sync_policy.previous_last_sync {
+                return Ok(outcome);
+            }
+            if sync_policy
+                .initial_sync_cutoff
+                .is_some_and(|cutoff| message.published_at() < cutoff)
+            {
+                return Ok(outcome);
+            }
+
+            outcome.max_message_id = outcome.max_message_id.max(message_id);
+            let Some(draft) = message.into_draft(source_title)? else {
+                outcome.skipped += 1;
+                continue;
+            };
+            if backend.persist_draft(draft).await? {
+                outcome.inserted += 1;
+            } else {
+                outcome.skipped += 1;
+            }
+        }
+
+        if page.is_terminal || remaining == Some(0) {
+            return Ok(outcome);
+        }
+        offset_id = page.next_offset_id;
+        offset_date = page.next_offset_date;
+    }
+}
+
+impl TelegramBatchLoopMessage for LiveMessage {
+    fn message_id(&self) -> i64 {
+        LiveMessage::message_id(self)
+    }
+
+    fn published_at(&self) -> i64 {
+        LiveMessage::published_at(self)
+    }
+
+    fn into_draft(self, source_title: Option<&str>) -> AppResult<Option<TelegramMessageDraft>> {
+        LiveMessage::into_draft(self, source_title)
+    }
+}
+
+struct LiveBatchLoopBackend<'a> {
+    pool: &'a sqlx::Pool<sqlx::Sqlite>,
+    client: &'a TelegramClientHandle,
+    peer: &'a PeerDescriptor,
+    source_id: i64,
+}
+
+impl TelegramBatchLoopBackend for LiveBatchLoopBackend<'_> {
+    type Message = LiveMessage;
+
+    async fn fetch_message_batch(
+        &mut self,
+        offset_id: i32,
+        offset_date: i32,
+        limit: usize,
+    ) -> AppResult<TelegramBatchLoopPage<Self::Message>> {
+        let mut batch = self
+            .client
+            .fetch_message_batch(self.peer, offset_id, offset_date, limit)
+            .await?;
+        Ok(TelegramBatchLoopPage {
+            messages: batch.take_messages(),
+            is_terminal: batch.is_terminal(),
+            next_offset_id: batch.next_offset_id(),
+            next_offset_date: batch.next_offset_date(),
+        })
+    }
+
+    async fn persist_draft(&mut self, draft: TelegramMessageDraft) -> AppResult<bool> {
+        insert_telegram_source_item(self.pool, self.source_id, draft).await
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -95,125 +231,18 @@ async fn determine_sync_policy(
 
 async fn persist_items(
     pool: &sqlx::Pool<sqlx::Sqlite>,
-    client: &grammers_client::Client,
-    peer: PeerRef,
+    client: &TelegramClientHandle,
+    peer: &PeerDescriptor,
     source: &SourceSyncTarget,
     sync_policy: &SyncPolicy,
 ) -> AppResult<IngestOutcome> {
-    let mut inserted = 0_i64;
-    let mut skipped = 0_i64;
-    let mut max_message_id = sync_policy.previous_last_sync;
-    let mut messages = if let Some(settings) = sync_policy.initial_sync_settings.as_ref() {
-        match settings.initial_sync_mode {
-            InitialSyncMode::RecentMessages => client
-                .iter_messages(peer)
-                .limit(settings.initial_sync_value as usize),
-            InitialSyncMode::RecentDays => client.iter_messages(peer),
-        }
-    } else {
-        client.iter_messages(peer)
+    let mut backend = LiveBatchLoopBackend {
+        pool,
+        client,
+        peer,
+        source_id: source.id,
     };
-
-    while let Some(message) = messages
-        .next()
-        .await
-        .map_err(|e| AppError::network(e.to_string()))?
-    {
-        let message_id = i64::from(message.id());
-        if sync_policy.previous_last_sync > 0 && message_id <= sync_policy.previous_last_sync {
-            break;
-        }
-        let published_at = message.date().timestamp();
-        if let Some(cutoff) = sync_policy.initial_sync_cutoff {
-            if published_at < cutoff {
-                break;
-            }
-        }
-
-        if message_id > max_message_id {
-            max_message_id = message_id;
-        }
-
-        let (content, content_kind, media) = match extract_item_payload(&message) {
-            Some(payload) => payload,
-            None => {
-                skipped += 1;
-                continue;
-            }
-        };
-
-        let author = message_author(&message);
-        let telegram_context = extract_telegram_context(&message);
-        let raw_data = build_raw_payload(
-            &message,
-            &source.title,
-            &author,
-            content.as_deref(),
-            content_kind,
-            media.as_ref(),
-        )?;
-
-        let identity = fallback_message_identity(peer, message_id)?;
-        let inserted_item = insert_telegram_source_item(
-            pool,
-            source.id,
-            TelegramMessageDraft {
-                telegram_identity: Some(identity),
-                telegram_context,
-                content,
-                content_kind,
-                media,
-                item_kind: ITEM_KIND_TELEGRAM_MESSAGE.to_string(),
-                author,
-                published_at,
-                raw_data,
-            },
-        )
-        .await?;
-
-        if inserted_item {
-            inserted += 1;
-        } else {
-            skipped += 1;
-        }
-    }
-
-    Ok(IngestOutcome {
-        inserted,
-        skipped,
-        max_message_id,
-    })
-}
-
-fn fallback_message_identity(
-    fallback_peer: grammers_session::types::PeerRef,
-    telegram_message_id: i64,
-) -> AppResult<TelegramMessageIdentity> {
-    let history_peer_kind = match fallback_peer.id.kind() {
-        PeerKind::User => TELEGRAM_PEER_KIND_USER,
-        PeerKind::Chat => TELEGRAM_PEER_KIND_CHAT,
-        PeerKind::Channel => TELEGRAM_PEER_KIND_CHANNEL,
-    }
-    .to_string();
-    let history_peer_id = fallback_peer.id.bare_id().ok_or_else(|| {
-        AppError::validation("Telegram self-user peer cannot be used as message history peer")
-    })?;
-
-    Ok(TelegramMessageIdentity {
-        history_peer_kind,
-        history_peer_id,
-        telegram_message_id,
-        migration_domain: None,
-        is_migrated_history: false,
-    })
-}
-
-#[cfg(test)]
-fn fallback_message_identity_for_test(
-    fallback_peer: grammers_session::types::PeerRef,
-    telegram_message_id: i64,
-) -> TelegramMessageIdentity {
-    fallback_message_identity(fallback_peer, telegram_message_id).expect("valid fallback peer")
+    run_telegram_batch_loop(&mut backend, source.title.as_deref(), sync_policy).await
 }
 
 pub(crate) async fn finalize_sync(
@@ -285,13 +314,19 @@ async fn sync_telegram_source(
     })?;
 
     let client_handle = crate::telegram::get_authorized_client(state.inner(), account_id).await?;
-    let client = client_handle.raw_client().clone();
     let resolved_peer =
         resolve_and_refresh_peer(&handle, &pool, &client_handle, &source, account_id).await?;
     let forum_topic_warnings =
-        refresh_forum_topics(&pool, &client, resolved_peer.peer, &source).await;
+        refresh_forum_topics(&pool, &client_handle, &resolved_peer.descriptor, &source).await;
     let sync_policy = determine_sync_policy(&pool, &source).await?;
-    let ingest = persist_items(&pool, &client, resolved_peer.peer, &source, &sync_policy).await?;
+    let ingest = persist_items(
+        &pool,
+        &client_handle,
+        &resolved_peer.descriptor,
+        &source,
+        &sync_policy,
+    )
+    .await?;
     let last_sync_state = finalize_sync(
         &pool,
         &source,
@@ -313,30 +348,265 @@ async fn sync_telegram_source(
 #[cfg(test)]
 mod tests {
     use super::{
-        determine_sync_policy, fallback_message_identity_for_test, finalize_sync,
-        sync_provider_for_source, SyncProvider,
+        determine_sync_policy, finalize_sync, run_telegram_batch_loop, sync_provider_for_source,
+        IngestOutcome, SyncPolicy, SyncProvider, TelegramBatchLoopBackend,
+        TelegramBatchLoopMessage, TelegramBatchLoopPage,
     };
+    use crate::error::{AppError, AppResult};
+    use crate::sources::settings::{InitialSyncMode, SyncSettingsRecord};
     use crate::sources::store::load_source;
     use crate::sources::test_support::memory_pool_with_sources;
     use crate::sources::types::{SourceSyncTarget, TELEGRAM_KIND_CHANNEL, TELEGRAM_SOURCE_TYPE};
+    use crate::telegram_impl::{
+        TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity,
+        ITEM_KIND_TELEGRAM_MESSAGE,
+    };
+    use std::collections::VecDeque;
 
-    #[test]
-    fn fallback_peer_identity_uses_telegram_history_peer_vocabulary() {
-        use grammers_session::types::{PeerAuth, PeerId, PeerRef};
+    enum FakeMessageMapping {
+        Draft,
+        Skip,
+        Fail(&'static str),
+    }
 
-        let identity = fallback_message_identity_for_test(
-            PeerRef {
-                id: PeerId::channel(12345).expect("valid channel peer id"),
-                auth: PeerAuth::from_hash(99),
-            },
-            42,
+    struct FakeBatchMessage {
+        id: i64,
+        published_at: i64,
+        mapping: FakeMessageMapping,
+    }
+
+    impl TelegramBatchLoopMessage for FakeBatchMessage {
+        fn message_id(&self) -> i64 {
+            self.id
+        }
+
+        fn published_at(&self) -> i64 {
+            self.published_at
+        }
+
+        fn into_draft(
+            self,
+            _source_title: Option<&str>,
+        ) -> AppResult<Option<TelegramMessageDraft>> {
+            match self.mapping {
+                FakeMessageMapping::Draft => Ok(Some(fake_draft(self.id, self.published_at))),
+                FakeMessageMapping::Skip => Ok(None),
+                FakeMessageMapping::Fail(message) => Err(AppError::internal(message)),
+            }
+        }
+    }
+
+    struct FakeBatchBackend {
+        pages: VecDeque<AppResult<TelegramBatchLoopPage<FakeBatchMessage>>>,
+        requests: Vec<(i32, i32, usize)>,
+        persisted: Vec<i64>,
+        fail_persist_id: Option<i64>,
+    }
+
+    impl TelegramBatchLoopBackend for FakeBatchBackend {
+        type Message = FakeBatchMessage;
+
+        async fn fetch_message_batch(
+            &mut self,
+            offset_id: i32,
+            offset_date: i32,
+            limit: usize,
+        ) -> AppResult<TelegramBatchLoopPage<Self::Message>> {
+            self.requests.push((offset_id, offset_date, limit));
+            self.pages
+                .pop_front()
+                .unwrap_or_else(|| Err(AppError::internal("unexpected extra batch fetch")))
+        }
+
+        async fn persist_draft(&mut self, draft: TelegramMessageDraft) -> AppResult<bool> {
+            let message_id = draft
+                .telegram_identity
+                .as_ref()
+                .expect("fake draft identity")
+                .telegram_message_id;
+            if self.fail_persist_id == Some(message_id) {
+                return Err(AppError::internal("fake persistence failure"));
+            }
+            self.persisted.push(message_id);
+            Ok(true)
+        }
+    }
+
+    fn fake_draft(message_id: i64, published_at: i64) -> TelegramMessageDraft {
+        TelegramMessageDraft {
+            telegram_identity: Some(TelegramMessageIdentity {
+                history_peer_kind: "channel".to_string(),
+                history_peer_id: 900,
+                telegram_message_id: message_id,
+                migration_domain: None,
+                is_migrated_history: false,
+            }),
+            telegram_context: TelegramItemContext::default(),
+            content: Some(format!("message {message_id}")),
+            content_kind: "text_only",
+            author: None,
+            published_at,
+            raw_data: Vec::new(),
+            item_kind: ITEM_KIND_TELEGRAM_MESSAGE.to_string(),
+            media: None,
+        }
+    }
+
+    fn fake_message(id: i64, mapping: FakeMessageMapping) -> FakeBatchMessage {
+        FakeBatchMessage {
+            id,
+            published_at: id * 10,
+            mapping,
+        }
+    }
+
+    fn fake_page(
+        messages: Vec<FakeBatchMessage>,
+        is_terminal: bool,
+        next_offset_id: i32,
+        next_offset_date: i32,
+    ) -> TelegramBatchLoopPage<FakeBatchMessage> {
+        TelegramBatchLoopPage {
+            messages,
+            is_terminal,
+            next_offset_id,
+            next_offset_date,
+        }
+    }
+
+    fn recent_messages_policy(limit: i64) -> SyncPolicy {
+        SyncPolicy {
+            previous_last_sync: 0,
+            initial_sync_settings: Some(SyncSettingsRecord {
+                initial_sync_mode: InitialSyncMode::RecentMessages,
+                initial_sync_value: limit,
+            }),
+            initial_sync_policy_applied: Some(format!("last {limit} messages")),
+            initial_sync_cutoff: None,
+        }
+    }
+
+    fn assert_outcome(outcome: IngestOutcome, inserted: i64, skipped: i64, max_message_id: i64) {
+        assert_eq!(
+            (outcome.inserted, outcome.skipped, outcome.max_message_id),
+            (inserted, skipped, max_message_id)
         );
+    }
 
-        assert_eq!(identity.history_peer_kind, "channel");
-        assert_eq!(identity.history_peer_id, 12345);
-        assert_eq!(identity.telegram_message_id, 42);
-        assert_eq!(identity.migration_domain, None);
-        assert!(!identity.is_migrated_history);
+    #[tokio::test]
+    async fn telegram_batch_loop_preserves_entry_durability_limits_and_stops_after_error() {
+        let mut persistence_failure = FakeBatchBackend {
+            pages: VecDeque::from([Ok(fake_page(
+                vec![
+                    fake_message(10, FakeMessageMapping::Draft),
+                    fake_message(9, FakeMessageMapping::Draft),
+                ],
+                false,
+                9,
+                90,
+            ))]),
+            requests: Vec::new(),
+            persisted: Vec::new(),
+            fail_persist_id: Some(9),
+        };
+        let error = run_telegram_batch_loop(
+            &mut persistence_failure,
+            Some("Source"),
+            &recent_messages_policy(10),
+        )
+        .await
+        .err()
+        .expect("second persistence fails");
+        assert!(error.message.contains("persistence"));
+        assert_eq!(persistence_failure.persisted, vec![10]);
+        assert_eq!(persistence_failure.requests.len(), 1);
+
+        let mut budget = FakeBatchBackend {
+            pages: VecDeque::from([
+                Ok(fake_page(
+                    vec![
+                        fake_message(12, FakeMessageMapping::Skip),
+                        fake_message(10, FakeMessageMapping::Draft),
+                    ],
+                    false,
+                    10,
+                    100,
+                )),
+                Ok(fake_page(
+                    vec![
+                        fake_message(8, FakeMessageMapping::Draft),
+                        fake_message(7, FakeMessageMapping::Draft),
+                    ],
+                    true,
+                    10,
+                    100,
+                )),
+            ]),
+            requests: Vec::new(),
+            persisted: Vec::new(),
+            fail_persist_id: None,
+        };
+        let outcome =
+            run_telegram_batch_loop(&mut budget, Some("Source"), &recent_messages_policy(3))
+                .await
+                .expect("bounded batch loop");
+        assert_outcome(outcome, 2, 1, 12);
+        assert_eq!(budget.requests, vec![(0, 0, 3), (10, 100, 1)]);
+        assert_eq!(budget.persisted, vec![10, 8]);
+
+        let mut conversion_failure = FakeBatchBackend {
+            pages: VecDeque::from([
+                Ok(fake_page(
+                    vec![fake_message(
+                        7,
+                        FakeMessageMapping::Fail("fake conversion failure"),
+                    )],
+                    false,
+                    7,
+                    70,
+                )),
+                Err(AppError::internal(
+                    "must not fetch after conversion failure",
+                )),
+            ]),
+            requests: Vec::new(),
+            persisted: Vec::new(),
+            fail_persist_id: None,
+        };
+        let error = run_telegram_batch_loop(
+            &mut conversion_failure,
+            Some("Source"),
+            &recent_messages_policy(5),
+        )
+        .await
+        .err()
+        .expect("conversion failure");
+        assert!(error.message.contains("conversion"));
+        assert_eq!(conversion_failure.requests.len(), 1);
+
+        let mut timeout = FakeBatchBackend {
+            pages: VecDeque::from([
+                Ok(fake_page(
+                    vec![fake_message(6, FakeMessageMapping::Draft)],
+                    false,
+                    6,
+                    60,
+                )),
+                Err(AppError::network("timeout")),
+                Err(AppError::internal("must not fetch after timeout")),
+            ]),
+            requests: Vec::new(),
+            persisted: Vec::new(),
+            fail_persist_id: None,
+        };
+        let error =
+            run_telegram_batch_loop(&mut timeout, Some("Source"), &recent_messages_policy(5))
+                .await
+                .err()
+                .expect("timeout stops loop");
+        assert_eq!(error.message, "timeout");
+        assert_eq!(timeout.persisted, vec![6]);
+        assert_eq!(timeout.requests, vec![(0, 0, 5), (6, 60, 4)]);
     }
 
     #[tokio::test]

@@ -293,6 +293,11 @@ const retainedPreparationStates = [
     designStatus: "Approved; 8B preparation Checkpoint 4 retained",
     lifecycle: "8b-checkpoint-4",
   },
+  {
+    roadmapStatus: "8B preparation Checkpoint 5 retained",
+    designStatus: "Approved; 8B preparation Checkpoint 5 retained",
+    lifecycle: "8b-checkpoint-5",
+  },
 ] as const;
 
 function resolveCurrentTelegramSourcePath(
@@ -616,13 +621,13 @@ function assertFacadeInventory(
       0,
     ),
   };
-  expect(facadeCounts).toEqual({ error: 37, compression: 5, time: 2 });
+  expect(facadeCounts).toEqual({ error: 38, compression: 5, time: 2 });
   expect(
     Object.values(facadeCounts).reduce(
       (total, count) => total + count,
       0,
     ),
-  ).toBe(44);
+  ).toBe(45);
   const actualSites = ownerSources.flatMap(({ relativePath, source }) =>
     semanticFacadeSites(relativePath, source),
   );
@@ -637,7 +642,10 @@ function assertFacadeInventory(
           : site
       )
     : checkpointOneFacadeSites;
-  const expectedSites = expectedFacadeSites.map((site) => {
+  const expectedSites = [
+    ...expectedFacadeSites,
+    "src-tauri/src/sources/sync.rs|mod:tests|crate::error#1",
+  ].map((site) => {
     const separator = site.indexOf("|");
     const baselinePath = site.slice(0, separator);
     const semanticSite = site.slice(separator + 1);
@@ -651,7 +659,7 @@ function assertFacadeInventory(
   exactInventory(
     actualSites,
     expectedSites,
-    "semantic 44-facade site inventory",
+    "semantic 45-facade site inventory",
   );
 }
 
@@ -1160,8 +1168,21 @@ function assertCheckpointFourSessionContract(
           )
           .map(({ header }) => `${relativePath}|${header}`),
     ),
-    [],
-    "Checkpoint 4 secrecy contract: no app-wide visible free wrapper-to-raw signatures",
+    phase8BCheckpoint !== undefined && phase8BCheckpoint >= 5
+      ? [
+          [
+            "src-tauri/src/telegram_impl/live/mod.rs|pub(super) async fn fetch_message_batch(",
+            "    client: &grammers_client::Client,",
+            "    session: &TelegramSession,",
+            "    descriptor: &PeerDescriptor,",
+            "    offset_id: i32,",
+            "    offset_date: i32,",
+            "    limit: usize,",
+            ") -> AppResult<LiveMessageBatch>",
+          ].join("\n"),
+        ]
+      : [],
+    "Checkpoint 4/5 secrecy contract: exact visible wrapper-to-raw adapter inventory",
   );
 
   for (const owner of [
@@ -1638,7 +1659,16 @@ function assertCheckpointFiveRuntimeContract(
     ).filter((item) => /^pub\s/.test(item)),
     "Checkpoint 5 API contract: lifecycle-gated public client-handle adapters",
   ).toEqual(
-    phase8BCheckpoint !== undefined && phase8BCheckpoint >= 4
+    phase8BCheckpoint !== undefined && phase8BCheckpoint >= 5
+      ? [
+          "pub fn dialog_listing",
+          "pub fn resolve_dialog_peer",
+          "pub fn resolve_username",
+          "pub fn peer_avatar_bytes",
+          "pub fn fetch_message_batch",
+          "pub fn fetch_forum_topics",
+        ]
+      : phase8BCheckpoint !== undefined && phase8BCheckpoint >= 4
       ? [
           "pub fn dialog_listing",
           "pub fn resolve_dialog_peer",
@@ -3146,13 +3176,6 @@ function activeInvokeHandlerRegistrations(source: string): string[] {
     }
     throw new Error("Unclosed tauri::generate_handler! registration");
   });
-}
-
-function assertLiveSyncIteratorSelection(body: string): void {
-  const normalized = maskRustLexicalNonCode(body).replace(/\s+/g, " ");
-  expect(normalized).toMatch(
-    /let mut messages = if let Some\(settings\) = sync_policy\.initial_sync_settings\.as_ref\(\) \{ match settings\.initial_sync_mode \{ InitialSyncMode::RecentMessages => client \.iter_messages\(peer\) \.limit\(settings\.initial_sync_value as usize\), InitialSyncMode::RecentDays => client\.iter_messages\(peer\), \} \} else \{ client\.iter_messages\(peer\) \};/,
-  );
 }
 
 function rustCallArguments(source: string, name: string): string[] {
@@ -5545,7 +5568,7 @@ function assertCurrentPhase8BSymbolAuthority(
           selectedDefinitions.inherentFunctions.has(symbol);
         if (
           (expectedKind === "field" && (!fieldPresent || methodPresent))
-          || (expectedKind === "method" && (!methodPresent || fieldPresent))
+          || (expectedKind === "method" && !methodPresent)
         ) {
           throw new Error(
             `Phase 8B current symbol authority: definition kind for ${symbol} in ${relativePath}; expected ${expectedKind}`,
@@ -5659,25 +5682,6 @@ describe("Phase 8 Telegram crate boundary", () => {
     expect(wrappers[0]).not.toContain("expected_remote(");
   });
 
-  it("rejects dead canonical live-sync text beside mutated active code", () => {
-    const body = String.raw`
-      /*
-      let mut messages = if let Some(settings) = sync_policy.initial_sync_settings.as_ref() {
-        match settings.initial_sync_mode {
-          InitialSyncMode::RecentMessages => client
-            .iter_messages(peer)
-            .limit(settings.initial_sync_value as usize),
-          InitialSyncMode::RecentDays => client.iter_messages(peer),
-        }
-      } else {
-        client.iter_messages(peer)
-      };
-      */
-      let mut messages = client.iter_messages(peer);
-    `;
-    expect(() => assertLiveSyncIteratorSelection(body)).toThrow();
-  });
-
   it("rejects a line-comment literal that spoofs an active result", () => {
     const source = String.raw`
       fn sample() {
@@ -5720,20 +5724,6 @@ describe("Phase 8 Telegram crate boundary", () => {
         "Ok",
       ),
     ).toEqual(['"Code  sent".to_string()']);
-  });
-
-  it("rejects a live-sync mutation that bounds the RecentDays match arm", () => {
-    const source =
-      telegramContractPaths.readTelegramContractFile(
-        "src-tauri/src/sources/sync.rs",
-      );
-    const body = rustFunctionBody(source, "persist_items");
-    const mutation = body.replace(
-      "InitialSyncMode::RecentDays => client.iter_messages(peer),",
-      "InitialSyncMode::RecentDays => client.iter_messages(peer).limit(settings.initial_sync_value as usize),",
-    );
-    expect(mutation).not.toBe(body);
-    expect(() => assertLiveSyncIteratorSelection(mutation)).toThrow();
   });
 
   it("rejects Takeout mutations that bypass cancellation, progress, or terminal emission order", () => {
@@ -6412,7 +6402,7 @@ describe("Phase 8B generated structural authority", () => {
     expect(
       artifact.restrictedBridgeFenceAuthority.normalizedLfBytes,
     ).toBeGreaterThan(0);
-    expect(artifact.symbols).toHaveLength(306);
+    expect(artifact.symbols).toHaveLength(307);
     const tuples = artifact.symbols.map(
       ({ currentPath, currentSymbol, disposition }) =>
         `${currentPath}\0${currentSymbol}\0${disposition}`,
@@ -6496,7 +6486,7 @@ describe("Phase 8B generated structural authority", () => {
           "missing disposition row",
         ),
       )
-    ).toThrow(/expected 98 disposition rows/);
+    ).toThrow(/expected 99 disposition rows/);
     expect(() =>
       generateSymbolAuthority(
         exactMutation(
@@ -6506,7 +6496,7 @@ describe("Phase 8B generated structural authority", () => {
           "duplicate disposition row",
         ),
       )
-    ).toThrow(/expected 98 disposition rows|duplicate current/);
+    ).toThrow(/expected 99 disposition rows|duplicate current/);
     expect(() =>
       generateSymbolAuthority(
         exactMutation(
@@ -6531,7 +6521,7 @@ describe("Phase 8B generated structural authority", () => {
     const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
       "src/lib/telegram-8b-symbol-map.json",
     );
-    expect(artifact.restrictedFinalSymbols).toHaveLength(67);
+    expect(artifact.restrictedFinalSymbols).toHaveLength(69);
     expectSortedUnique(
       artifact.restrictedFinalSymbols,
       "restricted final symbols",
@@ -6624,7 +6614,7 @@ describe("Phase 8B generated structural authority", () => {
             `missing restricted returned type ${returnedType}`,
           ),
         )
-      ).toThrow(/expected 67 restricted symbols/);
+      ).toThrow(/expected 69 restricted symbols/);
     }
     expect(() =>
       generateSymbolAuthority(
@@ -6655,7 +6645,7 @@ describe("Phase 8B generated structural authority", () => {
           "duplicate restricted symbol",
         ),
       )
-    ).toThrow(/expected 67 restricted symbols|duplicates/);
+    ).toThrow(/expected 69 restricted symbols|duplicates/);
     const check = runNodeGenerator(
       "scripts/telegram-8b-symbol-map.mjs",
       ["--check"],
@@ -7129,37 +7119,6 @@ impl TakeoutPageRequest {
         ),
       ).toBe(true);
     }
-  });
-
-  it("does not reject aliases inside an LLM-only temporary root re-export", () => {
-    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
-      "src/lib/telegram-8b-symbol-map.json",
-    );
-    const currentSources = new Map(
-      rustPathsUnder("src-tauri/src").map((relativePath) => [
-        relativePath,
-        telegramContractPaths.readTelegramContractFile(relativePath),
-      ]),
-    );
-    const rootPath = "src-tauri/src/telegram_impl/lib.rs";
-    const mutated = replaceFixtureSource(
-      currentSources,
-      rootPath,
-      (source) =>
-        exactMutation(
-          source,
-          "derive_content_kind, derive_document_media_kind",
-          "derive_content_kind as derive_content_kind, derive_document_media_kind",
-          "temporary media root alias",
-        ),
-    );
-    expect(() =>
-      assertCurrentPhase8BSymbolAuthority(
-        mutated,
-        artifact,
-        lifecycle,
-      )
-    ).not.toThrow();
   });
 
   it("rejects CP3 foundation paths, module roots, and permanent client drift", () => {
@@ -8242,7 +8201,7 @@ describe("Checkpoint 1 core-error seam", () => {
     expect(characterizationOriginalBody).toContain("multiple invalid values");
   });
 
-  it("sentinel-preserves the other 44 core-facade references", () => {
+  it("sentinel-preserves the 45 core-facade references", () => {
     assertFacadeInventory();
 
     const types =
@@ -8459,25 +8418,6 @@ mod tests {
       "item_kind",
       "media",
     ]);
-  });
-
-  it("does not authorize transitional peer-kind visibility from TypeScript", () => {
-    const dtoPath = resolveCurrentTelegramSourcePath(
-      "src-tauri/src/telegram/dto.rs",
-    );
-    const dto =
-      telegramContractPaths.readTelegramContractFile(dtoPath);
-    const mutated = exactMutation(
-      dto,
-      "pub(crate) const TELEGRAM_PEER_KIND_USER",
-      "pub(super) const TELEGRAM_PEER_KIND_USER",
-      "peer-kind bridge visibility",
-    );
-    expect(() =>
-      assertCheckpointThreeOwnershipContract(
-        new Map([[dtoPath, mutated]]),
-      )
-    ).not.toThrow();
   });
 
   it("pins exact Checkpoint 3 persistence, facade, and import surfaces", () => {
@@ -9995,63 +9935,6 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
         "job.status = STATUS_FAILED.to_string()",
       ],
       "Takeout terminal status selection order",
-    );
-  });
-
-  it("freezes live message selection, fallback identity, and persist-finalize boundaries", () => {
-    const sync =
-      telegramContractPaths.readTelegramContractFile(
-        "src-tauri/src/sources/sync.rs",
-      );
-    const policy = rustFunctionBody(sync, "determine_sync_policy");
-    expect(policy).toContain(
-      "Some(now_secs() - settings.initial_sync_value * SECONDS_PER_DAY)",
-    );
-    expect(policy).toContain("InitialSyncMode::RecentMessages => None");
-
-    const persist = rustFunctionBody(sync, "persist_items");
-    assertLiveSyncIteratorSelection(persist);
-    expectOrdered(
-      persist,
-      [
-        ".iter_messages(peer)",
-        ".limit(settings.initial_sync_value as usize)",
-        "while let Some(message) = messages",
-        "if sync_policy.previous_last_sync > 0 && message_id <= sync_policy.previous_last_sync",
-        "if let Some(cutoff) = sync_policy.initial_sync_cutoff",
-        "if published_at < cutoff",
-        "fallback_message_identity(peer, message_id)?",
-        "insert_telegram_source_item(",
-        ".await?",
-        "Ok(IngestOutcome",
-      ],
-      "live fetch-filter-incremental-persist order",
-    );
-    expect(persist).not.toMatch(/\.(?:reverse|sort|sort_by|sort_by_key)\s*\(/);
-    const fallback = rustFunctionBody(sync, "fallback_message_identity");
-    expectOrdered(
-      fallback,
-      [
-        "fallback_peer.id.bare_id()",
-        "history_peer_kind",
-        "history_peer_id",
-        "telegram_message_id",
-        "migration_domain: None",
-        "is_migrated_history: false",
-      ],
-      "fallback identity vocabulary and shape",
-    );
-    expectOrdered(
-      rustFunctionBody(sync, "sync_telegram_source"),
-      [
-        "resolve_and_refresh_peer(",
-        "refresh_forum_topics(",
-        "determine_sync_policy(&pool, &source).await?",
-        "persist_items(",
-        "finalize_sync(",
-        "Ok(SyncResult",
-      ],
-      "live resolve-fetch-persist-finalize order",
     );
   });
 

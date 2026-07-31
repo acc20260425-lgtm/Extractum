@@ -5,7 +5,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng, Payload};
 use chacha20poly1305::{Key, XChaCha20Poly1305, XNonce};
-use grammers_session::types::{DcOption, UpdatesState};
+use grammers_session::types::{DcOption, PeerInfo, UpdatesState};
 use grammers_session::{storages::MemorySession, Session, SessionData};
 use rand_core::RngCore;
 use secrecy::{ExposeSecret, SecretString, SecretVec};
@@ -182,6 +182,14 @@ impl TelegramSession {
 
     pub(super) fn raw_memory_session(&self) -> &Arc<MemorySession> {
         &self.inner
+    }
+
+    pub(super) async fn cache_peer_infos(&self, peer_infos: &[PeerInfo]) {
+        for peer_info in peer_infos {
+            if peer_info.auth().is_some() {
+                self.inner.cache_peer(peer_info).await;
+            }
+        }
     }
 }
 

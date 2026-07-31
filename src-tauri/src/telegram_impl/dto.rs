@@ -1,9 +1,9 @@
 use super::media::TelegramMediaPayload;
 
 pub const ITEM_KIND_TELEGRAM_MESSAGE: &str = "telegram_message";
-pub(crate) const TELEGRAM_PEER_KIND_CHANNEL: &str = "channel";
-pub(crate) const TELEGRAM_PEER_KIND_CHAT: &str = "chat";
-pub(crate) const TELEGRAM_PEER_KIND_USER: &str = "user";
+const TELEGRAM_PEER_KIND_CHANNEL: &str = "channel";
+const TELEGRAM_PEER_KIND_CHAT: &str = "chat";
+const TELEGRAM_PEER_KIND_USER: &str = "user";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PeerDescriptor {
@@ -14,6 +14,19 @@ pub struct PeerDescriptor {
     pub username: Option<String>,
     pub access_hash: Option<i64>,
     pub avatar_bytes: Option<Vec<u8>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ForumTopicSnapshot {
+    pub topic_id: i64,
+    pub top_message_id: i64,
+    pub title: String,
+    pub icon_color: i64,
+    pub icon_emoji_id: Option<i64>,
+    pub is_closed: bool,
+    pub is_pinned: bool,
+    pub is_hidden: bool,
+    pub sort_order: i64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

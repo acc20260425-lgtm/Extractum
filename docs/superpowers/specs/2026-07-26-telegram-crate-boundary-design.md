@@ -1,6 +1,6 @@
 # Telegram Crate Boundary Design
 
-**Status:** Approved; 8B preparation Checkpoint 4 retained
+**Status:** Approved; 8B preparation Checkpoint 5 retained
 **Date:** 2026-07-26
 
 **Roadmap authority:**
@@ -695,7 +695,7 @@ Checkpoint 1 and does not rewrite Checkpoint 1 history:
 - [ ] Public fallible operations return `extractum_core::error::AppResult<T>` directly. The root does not re-export `AppError`/`AppResult` and defines no `TelegramError`.
 - [ ] The public API contains no `Client`, `MemorySession`, `LoginToken`, `PeerRef`, `RemoteCall`, `InvocationError`, raw `tl::*`, SQLx, Tauri, keyring, secret getter, or app type.
 - [ ] At CP7/CP8, restricted `pub(super)` bridges are allowed only for the
-  literal 67-entry final internal bridge allowlist frozen below. They are not
+  literal 69-entry final internal bridge allowlist frozen below. They are not
   root-re-exported. Before CP7, the only additional staged
   restricted/package bridges are the exact CP3→CP6 transitional raw bridge and
   exact CP3→CP4 three-constant peer-kind root bridge named in the next bullet.
@@ -1288,15 +1288,21 @@ only by `runtime.rs`, except that
 `takeout/forum_topics.rs` is the one additional caller of
 `live::fetch_forum_topics`. A leaf name is `pub(super)` to its immediate
 parent. Public inherent methods listed in the API block are not duplicated
-here.
+here. `live::peer::peer_ref_from_descriptor` remains private through the
+retained CP4 source and becomes the listed `pub(super)` leaf only at CP5.
+`media::extract_raw_item_payload` is introduced as a `pub(super)` leaf at CP5
+solely for owned raw live-message conversion; the existing CP3-CP6
+`extract_item_payload(&grammers_client::message::Message)` compatibility
+signature remains unchanged.
 
 ```text
 live::{dialog_listing,resolve_dialog_peer,resolve_username,peer_avatar_bytes,fetch_message_batch,fetch_forum_topics}
 live::avatar::{peer_photo_bytes_with_timeout,peer_photo_bytes}
 live::peer::{DialogListing::new,resolve_dialog_peer,resolve_username,peer_avatar_bytes}
+live::peer::peer_ref_from_descriptor
 live::messages::fetch_message_batch
 live::topics::fetch_forum_topics
-media::{derive_content_kind,derive_document_media_kind_from_parts,extract_item_payload}
+media::{derive_content_kind,derive_document_media_kind_from_parts,extract_item_payload,extract_raw_item_payload}
 error::{is_non_forum_topic_refresh_error,is_channel_private_error,should_fallback_export_dc_error}
 session::TelegramSession::{clone_memory_session,cache_peer_infos}
 takeout::{takeout_self_check,prepare_takeout,takeout_forum_topics}
@@ -1336,7 +1342,7 @@ The pagination subsection is intentionally one fully qualified symbol per
 line; no nested brace syntax is legal. Task 1's
 `scripts/telegram-8b-symbol-map.mjs` parses this entire fenced allowlist,
 expands only the remaining single-level brace groups, and materializes the
-sorted canonical 67-entry result as `restrictedFinalSymbols` in the generated
+sorted canonical 69-entry result as `restrictedFinalSymbols` in the generated
 symbol artifact. The TypeScript contract consumes that generated array instead
 of maintaining or parsing a second pagination list. Flattening also
 deliberately closes two omissions in the old nested notation by listing the
@@ -1590,6 +1596,7 @@ or unnamed fragment is legal in the generated artifact.
 | --- | --- | --- | --- | --- | ---: | --- | --- |
 | `telegram/dto.rs` | `{ITEM_KIND_TELEGRAM_MESSAGE,TELEGRAM_PEER_KIND_CHANNEL,TELEGRAM_PEER_KIND_CHAT,TELEGRAM_PEER_KIND_USER,TelegramMessageIdentity,TelegramMessageIdentity::validate,TelegramItemContext,TelegramMessageDraft}` | `telegram_impl/dto.rs` | `=` | staged | 3 | 3 | move |
 | `telegram/media.rs` | `{CONTENT_KIND_TEXT_ONLY,CONTENT_KIND_TEXT_WITH_MEDIA,CONTENT_KIND_MEDIA_ONLY,TelegramMediaPayload,DocumentSignals,trimmed_non_empty,derive_content_kind,collect_document_signals,derive_document_media_kind,contact_summary,extract_document_media_payload,extract_media_payload,extract_item_payload}` | `telegram_impl/media.rs` | `=` | staged | 3 | 3 | move |
+| `<new>` | `extract_raw_item_payload` | `telegram_impl/media.rs` | `extract_raw_item_payload` | staged-internal | 5 | retained | new-restricted-bridge |
 | `<new>` | `derive_document_media_kind_from_parts` | `telegram_impl/media.rs` | `derive_document_media_kind_from_parts` | staged-internal | 7 | retained | new-restricted-bridge |
 | `telegram/runtime.rs` | `{TelegramApiHash,TelegramApiHash::new,TelegramRuntimeStatus,TelegramClientInner,TelegramClientHandle,TelegramLoginAttemptToken,TelegramLoginAttempt,TelegramRuntimeAccount,detach_replaced,TelegramRuntime,TelegramRuntime::new,TelegramRuntime::initialize_account,TelegramRuntime::is_authenticated,TelegramRuntime::request_login_code,TelegramRuntime::sign_in,TelegramRuntime::authorized_client,TelegramRuntime::initialized_client,TelegramRuntime::clear_account,TelegramRuntime::handle_is_authorized,initialize_grammers_client}` | `telegram_impl/runtime.rs` | `=` | staged | 3 | 3 | move |
 | `<new>` | `TelegramRuntime::client` | `telegram_impl/runtime.rs` | `TelegramRuntime::client` | staged | 3 | retained | new |

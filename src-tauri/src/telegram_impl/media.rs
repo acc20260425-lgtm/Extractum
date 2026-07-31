@@ -206,11 +206,12 @@ fn extract_media_payload(media: Media) -> TelegramMediaPayload {
     }
 }
 
-pub(crate) fn extract_item_payload(
-    message: &grammers_client::message::Message,
+fn extract_item_payload_from_parts(
+    text: &str,
+    media: Option<Media>,
 ) -> Option<(Option<String>, &'static str, Option<TelegramMediaPayload>)> {
-    let content = trimmed_non_empty(message.text());
-    let media = message.media().map(extract_media_payload);
+    let content = trimmed_non_empty(text);
+    let media = media.map(extract_media_payload);
     let has_content = content.is_some();
     let has_media = media.is_some();
 
@@ -219,6 +220,22 @@ pub(crate) fn extract_item_payload(
     }
 
     Some((content, derive_content_kind(has_content, has_media), media))
+}
+
+pub(crate) fn extract_item_payload(
+    message: &grammers_client::message::Message,
+) -> Option<(Option<String>, &'static str, Option<TelegramMediaPayload>)> {
+    extract_item_payload_from_parts(message.text(), message.media())
+}
+
+pub(super) fn extract_raw_item_payload(
+    message: &tl::enums::Message,
+) -> Option<(Option<String>, &'static str, Option<TelegramMediaPayload>)> {
+    let (text, raw_media) = match message {
+        tl::enums::Message::Message(message) => (message.message.as_str(), message.media.clone()),
+        tl::enums::Message::Empty(_) | tl::enums::Message::Service(_) => ("", None),
+    };
+    extract_item_payload_from_parts(text, raw_media.and_then(Media::from_raw))
 }
 
 #[cfg(test)]

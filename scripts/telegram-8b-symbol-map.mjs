@@ -277,8 +277,8 @@ function parseDispositionRows(source) {
   for (const line of rawRows) {
     if (!line.startsWith("| ")) fail(`malformed disposition row: ${line}`);
   }
-  if (rawRows.length !== 98) {
-    fail(`expected 98 disposition rows, found ${rawRows.length}`);
+  if (rawRows.length !== 99) {
+    fail(`expected 99 disposition rows, found ${rawRows.length}`);
   }
 
   const rows = rawRows.flatMap((line, rowIndex) => {
@@ -461,8 +461,8 @@ function parseRestrictedSymbols(source) {
   const symbols = lines.flatMap((line) =>
     expandQualifiedFenceLine(line, "restricted bridge")
   ).sort();
-  if (symbols.length !== 67) {
-    fail(`expected 67 restricted symbols, found ${symbols.length}`);
+  if (symbols.length !== 69) {
+    fail(`expected 69 restricted symbols, found ${symbols.length}`);
   }
   if (new Set(symbols).size !== symbols.length) {
     fail("restricted bridge allowlist contains duplicates");

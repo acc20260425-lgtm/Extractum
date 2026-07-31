@@ -362,7 +362,7 @@ fn peer_access_hash(peer: &Peer) -> Option<i64> {
     }
 }
 
-fn peer_ref_from_descriptor(descriptor: &PeerDescriptor) -> AppResult<PeerRef> {
+pub(super) fn peer_ref_from_descriptor(descriptor: &PeerDescriptor) -> AppResult<PeerRef> {
     let peer_id = descriptor
         .external_id
         .parse::<i64>()
