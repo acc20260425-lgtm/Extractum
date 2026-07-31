@@ -3,10 +3,11 @@ use serde_json::json;
 
 use crate::media::{
     derive_content_kind, derive_document_media_kind, media_label, DocumentSignals,
-    ItemMediaMetadata, TelegramMediaPayload,
+    ItemMediaMetadata,
 };
-use crate::telegram::{
-    TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
+use crate::telegram_impl::{
+    TelegramItemContext, TelegramMediaPayload, TelegramMessageDraft, TelegramMessageIdentity,
+    ITEM_KIND_TELEGRAM_MESSAGE,
 };
 
 pub(crate) fn parse_raw_message(

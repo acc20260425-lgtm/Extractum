@@ -6,7 +6,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::error::{AppError, AppResult};
 use crate::secret_store::{telegram_account_session_key_secret, SecretStoreState};
-use crate::telegram::{
+use crate::telegram_impl::{
     decode_session_json, encode_session_json, session_json_requires_existing_key,
     SessionEncryptionKey, TelegramSession,
 };

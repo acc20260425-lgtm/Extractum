@@ -9,7 +9,7 @@ use crate::compression::{compress_json_bytes, compress_text, decompress_bytes, d
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::media::{decode_media_metadata, encode_media_metadata};
-use crate::telegram::{
+use crate::telegram_impl::{
     TelegramItemContext, TelegramMediaPayload, TelegramMessageDraft, ITEM_KIND_TELEGRAM_MESSAGE,
 };
 use crate::tx::{begin_immediate, finish_manual_transaction};
@@ -153,7 +153,7 @@ impl TelegramInsertContext {
 }
 
 fn prepare_source_item(
-    draft: &crate::telegram::TelegramMessageDraft,
+    draft: &crate::telegram_impl::TelegramMessageDraft,
 ) -> extractum_core::error::AppResult<Option<PreparedSourceItem>> {
     let content_zstd = draft
         .content
@@ -186,7 +186,7 @@ fn prepare_source_item(
 pub(crate) async fn insert_telegram_source_item(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source_id: i64,
-    draft: crate::telegram::TelegramMessageDraft,
+    draft: crate::telegram_impl::TelegramMessageDraft,
 ) -> extractum_core::error::AppResult<bool> {
     Ok(insert_telegram_source_item_outcome(pool, source_id, draft)
         .await?
@@ -196,7 +196,7 @@ pub(crate) async fn insert_telegram_source_item(
 pub(crate) async fn insert_telegram_source_item_outcome(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     source_id: i64,
-    draft: crate::telegram::TelegramMessageDraft,
+    draft: crate::telegram_impl::TelegramMessageDraft,
 ) -> extractum_core::error::AppResult<TelegramItemInsertOutcome> {
     let mut conn = begin_immediate(pool).await?;
 
@@ -229,7 +229,7 @@ pub(crate) async fn insert_telegram_source_item_with_observation(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     batch_id: i64,
     source_id: i64,
-    draft: crate::telegram::TelegramMessageDraft,
+    draft: crate::telegram_impl::TelegramMessageDraft,
 ) -> extractum_core::error::AppResult<TelegramItemInsertOutcome> {
     insert_telegram_source_item_with_observation_in_context(
         pool,
@@ -810,13 +810,13 @@ mod tests {
         TelegramInsertContext, TelegramItemInsertOutcome,
     };
     use crate::compression::{compress_text, decompress_bytes, decompress_text};
-    use crate::media::{ItemMediaMetadata, CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA};
+    use crate::media::ItemMediaMetadata;
     use crate::sources::test_support::{
         create_analysis_documents_table, create_ingest_provenance_tables,
         create_item_identity_indexes, memory_pool_with_source_items_and_topics,
     };
     use crate::sources::types::{StoredItemRow, TELEGRAM_MIGRATION_DOMAIN_MIGRATED_FROM_CHAT};
-    use crate::telegram::{
+    use crate::telegram_impl::{
         TelegramItemContext, TelegramMediaPayload, TelegramMessageDraft, TelegramMessageIdentity,
         ITEM_KIND_TELEGRAM_MESSAGE,
     };
@@ -881,7 +881,7 @@ mod tests {
                     reaction_count: Some(3),
                 },
                 content: Some("hello".to_string()),
-                content_kind: CONTENT_KIND_TEXT_WITH_MEDIA,
+                content_kind: "text_with_media",
                 media: Some(TelegramMediaPayload {
                     kind: "photo".to_string(),
                     metadata: media_metadata.clone(),
@@ -903,7 +903,7 @@ mod tests {
                 telegram_identity: Some(telegram_identity(42)),
                 telegram_context: TelegramItemContext::default(),
                 content: Some("duplicate".to_string()),
-                content_kind: CONTENT_KIND_TEXT_ONLY,
+                content_kind: "text_only",
                 media: None,
                 item_kind: ITEM_KIND_TELEGRAM_MESSAGE.to_string(),
                 author: None,
@@ -938,7 +938,7 @@ mod tests {
         assert_eq!(row.item_kind, ITEM_KIND_TELEGRAM_MESSAGE);
         assert_eq!(row.author.as_deref(), Some("alice"));
         assert_eq!(row.published_at, 1234);
-        assert_eq!(row.content_kind, CONTENT_KIND_TEXT_WITH_MEDIA);
+        assert_eq!(row.content_kind, "text_with_media");
         assert!(row.has_media);
         assert_eq!(row.media_kind.as_deref(), Some("photo"));
         assert_eq!(row.reply_to_msg_id, Some(7));
@@ -1640,7 +1640,7 @@ mod tests {
         assert_eq!(row.item_kind, "youtube_transcript");
         assert_eq!(row.author.as_deref(), Some("Demo Channel"));
         assert_eq!(row.published_at, 1_700_000_001);
-        assert_eq!(row.content_kind, CONTENT_KIND_TEXT_ONLY);
+        assert_eq!(row.content_kind, "text_only");
         assert!(!row.has_media);
         assert_eq!(
             decompress_text(&row.content_zstd.expect("content")).expect("decode content"),
@@ -1878,7 +1878,7 @@ mod tests {
         assert_eq!(row.item_kind, "youtube_comment");
         assert_eq!(row.author.as_deref(), Some("Alice"));
         assert_eq!(row.published_at, 1_700_000_000);
-        assert_eq!(row.content_kind, CONTENT_KIND_TEXT_ONLY);
+        assert_eq!(row.content_kind, "text_only");
         assert!(!row.has_media);
         assert_eq!(reaction_count, Some(9));
         assert_eq!(
@@ -1979,7 +1979,7 @@ mod tests {
             telegram_identity: Some(identity),
             telegram_context: TelegramItemContext::default(),
             content: Some(content.to_string()),
-            content_kind: CONTENT_KIND_TEXT_ONLY,
+            content_kind: "text_only",
             media: None,
             item_kind: ITEM_KIND_TELEGRAM_MESSAGE.to_string(),
             author: Some("alice".to_string()),

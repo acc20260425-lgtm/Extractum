@@ -33,7 +33,7 @@ Completed and in-flight slices governed by their own documents:
   recorded in the
   [verification document](../verification/2026-07-22-extractum-analysis-extraction.md).
 - [`2026-07-26-telegram-crate-boundary-design.md`](2026-07-26-telegram-crate-boundary-design.md)
-  — owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 2
+  — owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 3
   authority are retained. It replaces the stale
   five-file cluster with three separately retainable sub-slices that remove
   the full current Grammers perimeter without moving app-owned SQL, secrets,
@@ -427,7 +427,7 @@ trigger an investigation by itself.
 Phase 7 is implemented and retained under the
 [JIT boundary design](2026-07-22-analysis-crate-boundary-design.md). The
 [verification document](../verification/2026-07-22-extractum-analysis-extraction.md)
-records the retained result. Phase 8A preparation and Phase 8B Checkpoint 2
+records the retained result. Phase 8A preparation and Phase 8B Checkpoint 3
 authority are retained.
 
 ### Phase 7 — `extractum-analysis` (done: retained)
@@ -464,10 +464,10 @@ participates in the standing adjacent-results rule at 15,000 ms and breaks any
 qualifying sequence because it is below the threshold.
 
 Phase 8 has an owner-approved Phase 8 boundary; 8A preparation and 8B
-Checkpoint 2 authority are retained. Further execution follows the three
+Checkpoint 3 authority are retained. Further execution follows the three
 separately reviewed plans and requires explicit owner instructions.
 
-### Phase 8 — `extractum-telegram` (8B preparation Checkpoint 2 retained)
+### Phase 8 — `extractum-telegram` (8B preparation Checkpoint 3 retained)
 
 The owner-approved
 [Phase 8 boundary design](2026-07-26-telegram-crate-boundary-design.md)

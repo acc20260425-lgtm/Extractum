@@ -3,7 +3,7 @@
 use sqlx::{Sqlite, SqliteConnection};
 
 use crate::error::{AppError, AppResult};
-use crate::telegram::TelegramMessageIdentity;
+use crate::telegram_impl::TelegramMessageIdentity;
 use crate::tx::{begin_immediate, finish_manual_transaction};
 
 pub(crate) const PROVENANCE_TEXT_MAX_LEN: usize = 512;
@@ -498,7 +498,7 @@ mod tests {
     use crate::sources::test_support::{
         create_ingest_provenance_tables, memory_pool_with_source_items_and_topics,
     };
-    use crate::telegram::ITEM_KIND_TELEGRAM_MESSAGE;
+    use crate::telegram_impl::ITEM_KIND_TELEGRAM_MESSAGE;
 
     async fn seed_source(pool: &sqlx::SqlitePool) {
         sqlx::query(

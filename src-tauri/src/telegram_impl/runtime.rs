@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+#[cfg(test)]
 use std::sync::Arc;
 
 use extractum_core::error::AppError;
@@ -241,7 +242,14 @@ impl TelegramRuntime {
         Ok(handle)
     }
 
-    pub(super) async fn initialized_client(
+    pub async fn client(
+        &self,
+        account_id: i64,
+    ) -> extractum_core::error::AppResult<TelegramClientHandle> {
+        self.initialized_client(account_id).await
+    }
+
+    async fn initialized_client(
         &self,
         account_id: i64,
     ) -> extractum_core::error::AppResult<TelegramClientHandle> {
@@ -302,11 +310,17 @@ async fn initialize_grammers_client(
     api_id: i32,
     session: &TelegramSession,
 ) -> extractum_core::error::AppResult<(TelegramClientInner, JoinHandle<()>, bool)> {
-    let pool = SenderPool::new(Arc::clone(session.raw_memory_session()), api_id);
+    let configuration = grammers_client::client::ClientConfiguration::default();
+    if !configuration.auto_cache_peers {
+        return Err(AppError::internal(
+            "Grammers client configuration must enable auto_cache_peers",
+        ));
+    }
+    let pool = SenderPool::new(session.clone_memory_session(), api_id);
     let runner = tokio::spawn(async move {
         let _ = pool.runner.run().await;
     });
-    let client = grammers_client::Client::new(pool.handle);
+    let client = grammers_client::Client::with_configuration(pool.handle, configuration);
     let is_authorized = client
         .is_authorized()
         .await
@@ -529,11 +543,10 @@ mod tests {
             .initialized_client(7)
             .await
             .expect("initialized winning account");
+        let winning_session = winning_handle.session.clone_memory_session();
+        let first_memory_session = first_session.clone_memory_session();
         assert!(
-            Arc::ptr_eq(
-                winning_handle.session.raw_memory_session(),
-                first_session.raw_memory_session()
-            ),
+            Arc::ptr_eq(&winning_session, &first_memory_session),
             "RED: CP5 initialization ordering: last accounts.insert must win"
         );
         assert!(
@@ -843,8 +856,10 @@ mod tests {
             .sign_in(7, "good".to_string())
             .await
             .expect("RED: CP5 retain failed login attempt");
+        let returned_memory_session = returned.clone_memory_session();
+        let expected_memory_session = session.clone_memory_session();
         assert!(
-            Arc::ptr_eq(returned.raw_memory_session(), session.raw_memory_session()),
+            Arc::ptr_eq(&returned_memory_session, &expected_memory_session),
             "RED: CP5 retain failed login attempt"
         );
         assert_eq!(
@@ -871,11 +886,10 @@ mod tests {
             .sign_in(7, "12345".to_string())
             .await
             .expect("direct sign-in succeeds");
+        let returned_memory_session = returned.clone_memory_session();
+        let expected_memory_session = direct_session.clone_memory_session();
         assert!(
-            Arc::ptr_eq(
-                returned.raw_memory_session(),
-                direct_session.raw_memory_session()
-            ),
+            Arc::ptr_eq(&returned_memory_session, &expected_memory_session),
             "RED: CP5 serialized successful sign in"
         );
         let second_error = match direct_runtime.sign_in(7, "12345".to_string()).await {
@@ -1161,6 +1175,52 @@ mod tests {
         assert!(
             runner_drop_rx.try_recv().is_err(),
             "RED: CP5 runtime clear ordering: missing clear must not drop a runner"
+        );
+    }
+
+    #[tokio::test]
+    async fn client_preserves_missing_account_error_without_authorization_check() {
+        let authorization_checks = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let callbacks = TelegramRuntimeTestCallbacks {
+            is_authorized: {
+                let authorization_checks = Arc::clone(&authorization_checks);
+                Arc::new(move |account_id| {
+                    authorization_checks.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    test_future(async move {
+                        assert_eq!(account_id, 7);
+                        Ok(false)
+                    })
+                })
+            },
+            ..default_test_callbacks()
+        };
+        let runtime = TelegramRuntime::with_test_callbacks(callbacks);
+
+        assert_eq!(
+            runtime
+                .initialize_account(
+                    7,
+                    12345,
+                    test_api_hash("api-hash"),
+                    TelegramSession::empty(),
+                )
+                .await
+                .expect("initialize unauthenticated account"),
+            TelegramRuntimeStatus::ReauthRequired
+        );
+
+        let missing = match runtime.client(99).await {
+            Ok(_) => panic!("missing account lookup must fail"),
+            Err(error) => error,
+        };
+        assert_eq!(missing.kind, AppErrorKind::Auth);
+        assert_eq!(missing.message, "Account 99 not initialized");
+
+        let initialized = runtime.client(7).await;
+        assert!(initialized.is_ok(), "PHASE8B_RED_RUNTIME_CLIENT_LOOKUP");
+        assert_eq!(
+            authorization_checks.load(std::sync::atomic::Ordering::SeqCst),
+            1
         );
     }
 

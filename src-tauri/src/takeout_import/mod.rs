@@ -24,7 +24,8 @@ use crate::sources::{
     SourceIdentityRepairState, TelegramSourceKind, MIGRATED_HISTORY_STATUS_AVAILABLE,
     TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
 };
-use crate::telegram::{get_authorized_client, TelegramClientHandle, TelegramState};
+use crate::telegram::{get_authorized_client, TelegramState};
+use crate::telegram_impl::TelegramClientHandle;
 use crate::time::now_secs;
 use grammers_session::types::{PeerKind, PeerRef};
 

@@ -66,6 +66,8 @@ use accounts::{
 mod account_deletion;
 
 mod telegram;
+#[path = "telegram_impl/lib.rs"]
+mod telegram_impl;
 mod telegram_session_store;
 use telegram::{
     restore_telegram_accounts, tg_get_account_statuses, tg_init, tg_is_authenticated, tg_logout,

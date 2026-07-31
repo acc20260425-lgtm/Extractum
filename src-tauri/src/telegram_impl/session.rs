@@ -176,6 +176,10 @@ impl TelegramSession {
         }
     }
 
+    pub(super) fn clone_memory_session(&self) -> Arc<MemorySession> {
+        Arc::clone(&self.inner)
+    }
+
     pub(super) fn raw_memory_session(&self) -> &Arc<MemorySession> {
         &self.inner
     }
@@ -303,7 +307,10 @@ mod tests {
 
         let loaded = decode_session_json(&json, 7, Some(&key)).expect("decode encrypted session");
 
-        assert_eq!(loaded.raw_memory_session().home_dc_id(), 2);
+        let loaded_memory_session = loaded.clone_memory_session();
+        let same_memory_session = loaded.clone_memory_session();
+        assert!(Arc::ptr_eq(&loaded_memory_session, &same_memory_session));
+        assert_eq!(loaded_memory_session.home_dc_id(), 2);
     }
 
     #[tokio::test]

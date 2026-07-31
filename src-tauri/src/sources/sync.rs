@@ -6,8 +6,9 @@ use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::media::extract_item_payload;
 use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
-use crate::telegram::{
-    TelegramMessageDraft, TelegramMessageIdentity, TelegramState, ITEM_KIND_TELEGRAM_MESSAGE,
+use crate::telegram::TelegramState;
+use crate::telegram_impl::{
+    TelegramMessageDraft, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
     TELEGRAM_PEER_KIND_CHANNEL, TELEGRAM_PEER_KIND_CHAT, TELEGRAM_PEER_KIND_USER,
 };
 

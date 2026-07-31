@@ -35,7 +35,7 @@ pub use topics::SourceForumTopicRecord;
 pub use types::{SourceRecord, SourceType, TelegramSourceInfo, TelegramSourceKind};
 
 #[allow(unused_imports)]
-pub(crate) use crate::telegram::{
+pub(crate) use crate::telegram_impl::{
     TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
 };
 pub(crate) use identity_repair::{require_source_identity_ready, SourceIdentityRepairState};

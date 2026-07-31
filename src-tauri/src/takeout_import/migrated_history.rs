@@ -41,8 +41,8 @@ pub(crate) fn validate_revalidated_chat_id(
 pub(crate) fn migrated_small_group_identity(
     telegram_message_id: i64,
     migrated_from_chat_id: i64,
-) -> crate::telegram::TelegramMessageIdentity {
-    crate::telegram::TelegramMessageIdentity {
+) -> crate::telegram_impl::TelegramMessageIdentity {
+    crate::telegram_impl::TelegramMessageIdentity {
         history_peer_kind: "chat".to_string(),
         history_peer_id: migrated_from_chat_id,
         telegram_message_id,

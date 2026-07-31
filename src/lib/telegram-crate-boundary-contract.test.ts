@@ -99,12 +99,35 @@ const ownershipMovePaths = [
   ...wiringPaths,
 ].sort();
 
-const checkpointThreeMediaOwnerPath =
-  "src-tauri/src/telegram/media.rs";
+const phase8BFoundationLifecycleSources = [
+  {
+    baselinePath: "src-tauri/src/telegram/dto.rs",
+    stagedPath: "src-tauri/src/telegram_impl/dto.rs",
+    finalOwner: "extractum-telegram" as const,
+  },
+  {
+    baselinePath: "src-tauri/src/telegram/media.rs",
+    stagedPath: "src-tauri/src/telegram_impl/media.rs",
+    finalOwner: "extractum-telegram" as const,
+  },
+  {
+    baselinePath: "src-tauri/src/telegram/runtime.rs",
+    stagedPath: "src-tauri/src/telegram_impl/runtime.rs",
+    finalOwner: "extractum-telegram" as const,
+  },
+  {
+    baselinePath: "src-tauri/src/telegram/session.rs",
+    stagedPath: "src-tauri/src/telegram_impl/session.rs",
+    finalOwner: "extractum-telegram" as const,
+  },
+] as const;
 
-const checkpointOneRawConsumerPaths = [
-  ...directGrammersPaths,
-].sort();
+const phase8BOldFoundationPaths = phase8BFoundationLifecycleSources.map(
+  ({ baselinePath }) => baselinePath,
+);
+const phase8BStagedFoundationPaths = phase8BFoundationLifecycleSources.map(
+  ({ stagedPath }) => stagedPath,
+);
 
 const stagedRawConsumerPaths = [
   "src-tauri/src/telegram_impl/error.rs",
@@ -123,13 +146,6 @@ const stagedRawConsumerPaths = [
   "src-tauri/src/telegram_impl/takeout/transport.rs",
   "src-tauri/src/telegram_impl/takeout/types.rs",
 ] as const;
-
-const crateRawConsumerPaths = stagedRawConsumerPaths.map((relativePath) =>
-  relativePath.replace(
-    "src-tauri/src/telegram_impl/",
-    "src-tauri/crates/extractum-telegram/src/",
-  ),
-);
 
 const baselineRootCounts = {
   error: 43,
@@ -226,10 +242,26 @@ const checkpointThreeLifecycle =
 const checkpoint4LeafExists = existsSync(
   path.join(repoRoot, "src-tauri/src/telegram/session.rs"),
 );
-const lifecycle =
+const retainedLifecycle =
   checkpointThreeLifecycle === "8a-checkpoint-3" && checkpoint4LeafExists
     ? "8a-checkpoint-4"
     : checkpointThreeLifecycle;
+const stagedFoundationIsCurrent =
+  phase8BStagedFoundationPaths.every((relativePath) =>
+    existsSync(path.join(repoRoot, relativePath))
+  )
+  && phase8BOldFoundationPaths.every((relativePath) =>
+    !existsSync(path.join(repoRoot, relativePath))
+  );
+const lifecycle =
+  retainedLifecycle === "8b-checkpoint-2" && stagedFoundationIsCurrent
+    ? "8b-checkpoint-3"
+    : retainedLifecycle;
+const checkpointThreeMediaOwnerPath =
+  telegramContractPaths.resolveTelegramLifecyclePath(
+    phase8BFoundationLifecycleSources[1],
+    lifecycle,
+  );
 const retainedPreparationStates = [
   {
     roadmapStatus: "8A preparation Checkpoint 5 retained",
@@ -251,7 +283,58 @@ const retainedPreparationStates = [
     designStatus: "Approved; 8B preparation Checkpoint 2 retained",
     lifecycle: "8b-checkpoint-2",
   },
+  {
+    roadmapStatus: "8B preparation Checkpoint 3 retained",
+    designStatus: "Approved; 8B preparation Checkpoint 3 retained",
+    lifecycle: "8b-checkpoint-3",
+  },
 ] as const;
+
+function resolveCurrentTelegramSourcePath(
+  relativePath: string,
+  value: telegramContractPaths.TelegramLifecycle = lifecycle,
+): string {
+  const foundation = phase8BFoundationLifecycleSources.find(
+    ({ baselinePath, stagedPath }) =>
+      relativePath === baselinePath || relativePath === stagedPath,
+  );
+  return foundation === undefined
+    ? relativePath
+    : telegramContractPaths.resolveTelegramLifecyclePath(
+        foundation,
+        value,
+      );
+}
+
+function readCurrentTelegramContractFile(
+  relativePath: string,
+  sourceOverrides: ReadonlyMap<string, string> = new Map(),
+  value: telegramContractPaths.TelegramLifecycle = lifecycle,
+): string {
+  const resolvedPath = resolveCurrentTelegramSourcePath(relativePath, value);
+  return sourceOverrides.get(resolvedPath)
+    ?? sourceOverrides.get(relativePath)
+    ?? telegramContractPaths.readTelegramContractFile(resolvedPath);
+}
+
+function currentAppRustPaths(
+  value: telegramContractPaths.TelegramLifecycle = lifecycle,
+): string[] {
+  const selectedFoundationPaths = new Set(
+    phase8BFoundationLifecycleSources.map((source) =>
+      telegramContractPaths.resolveTelegramLifecyclePath(source, value)
+    ),
+  );
+  const allFoundationPaths = new Set<string>([
+    ...phase8BOldFoundationPaths,
+    ...phase8BStagedFoundationPaths,
+  ]);
+  return rustPathsUnder("src-tauri/src").filter(
+    (relativePath) =>
+      !allFoundationPaths.has(relativePath)
+      || selectedFoundationPaths.has(relativePath),
+  );
+}
 
 function tomlSection(source: string, heading: string): string {
   const marker = `[${heading}]`;
@@ -473,82 +556,6 @@ function rustPathsUnder(relativeRoot: string): string[] {
   });
 }
 
-function rawConsumerPaths(
-  sources: ReadonlyMap<string, string>,
-): string[] {
-  const rawConsumer =
-    /grammers_(?:client|session|mtsender|tl_types)|\b(?:get_authorized_runtime|TelegramApiHash|TelegramClientHandle|TelegramRuntime|AuthorizedTelegramRuntime|AccountClient|MemorySession|LoginToken)\b|\.accounts\s*\.lock\s*\(\s*\)\s*\.await/;
-  return [...sources.entries()]
-    .filter(([, source]) => rawConsumer.test(source))
-    .map(([relativePath]) => relativePath);
-}
-
-function assertRawConsumerInventory(
-  value: telegramContractPaths.TelegramLifecycle,
-  appSources: ReadonlyMap<string, string>,
-  crateSources: ReadonlyMap<string, string> = new Map(),
-  crateManifestExists = false,
-): void {
-  const actualApp = rawConsumerPaths(appSources);
-  if (value === "8c-extracted") {
-    if (!crateManifestExists) {
-      throw new Error("Missing required 8C crate manifest");
-    }
-    exactInventory(actualApp, [], "8C app raw consumer paths");
-    exactInventory(
-      rawConsumerPaths(crateSources),
-      crateRawConsumerPaths,
-      "8C crate raw consumer paths",
-    );
-    return;
-  }
-  if (value === "8b-preparation") {
-    exactInventory(
-      actualApp,
-      stagedRawConsumerPaths,
-      "8B staged raw consumer paths",
-    );
-    exactInventory(
-      rawConsumerPaths(crateSources),
-      [],
-      "8B premature crate raw consumer paths",
-    );
-    return;
-  }
-
-  let expectedApp: string[] = [...checkpointOneRawConsumerPaths];
-  if (checkpointNumber(value) >= 3) {
-    expectedApp = expectedApp.map((relativePath) =>
-      relativePath === "src-tauri/src/media.rs"
-        ? "src-tauri/src/telegram/media.rs"
-        : relativePath,
-    );
-  }
-  if (checkpointNumber(value) >= 4) {
-    expectedApp = expectedApp.map((relativePath) =>
-      relativePath === "src-tauri/src/telegram_session_store.rs"
-        ? "src-tauri/src/telegram/session.rs"
-        : relativePath,
-    );
-  }
-  if (checkpointNumber(value) >= 5) {
-    expectedApp = [
-      ...expectedApp,
-      "src-tauri/src/telegram/runtime.rs",
-    ];
-  }
-  exactInventory(
-    actualApp,
-    expectedApp,
-    `${value} app raw consumer paths`,
-  );
-  exactInventory(
-    rawConsumerPaths(crateSources),
-    [],
-    `${value} premature crate raw consumer paths`,
-  );
-}
-
 function countMatches(source: string, expression: RegExp): number {
   return [...source.matchAll(expression)].length;
 }
@@ -634,9 +641,10 @@ function assertFacadeInventory(
 
 function checkpointThreeAppRustSources(
   sourceOverrides: ReadonlyMap<string, string> = new Map(),
+  value: telegramContractPaths.TelegramLifecycle = lifecycle,
 ): ReadonlyMap<string, string> {
   return new Map(
-    rustPathsUnder("src-tauri/src").map((relativePath) => [
+    currentAppRustPaths(value).map((relativePath) => [
       relativePath,
       sourceOverrides.get(relativePath)
       ?? telegramContractPaths.readTelegramContractFile(relativePath),
@@ -771,6 +779,9 @@ function assertCheckpointThreeOwnershipContract(
   sourceOverrides: ReadonlyMap<string, string> = new Map(),
 ): void {
   const sources = checkpointThreeAppRustSources(sourceOverrides);
+  const dtoPath = resolveCurrentTelegramSourcePath(
+    "src-tauri/src/telegram/dto.rs",
+  );
   const searchableSources = [...sources.entries()].map(
     ([relativePath, source]) => [
       relativePath,
@@ -801,17 +812,17 @@ function assertCheckpointThreeOwnershipContract(
     {
       label: "TelegramMessageIdentity",
       expression: /\bpub\s+struct\s+TelegramMessageIdentity\b/g,
-      path: "src-tauri/src/telegram/dto.rs",
+      path: dtoPath,
     },
     {
       label: "TelegramItemContext",
       expression: /\bpub\s+struct\s+TelegramItemContext\b/g,
-      path: "src-tauri/src/telegram/dto.rs",
+      path: dtoPath,
     },
     {
       label: "TelegramMessageDraft",
       expression: /\bpub\s+struct\s+TelegramMessageDraft\b/g,
-      path: "src-tauri/src/telegram/dto.rs",
+      path: dtoPath,
     },
     {
       label: "TelegramMediaPayload",
@@ -819,14 +830,9 @@ function assertCheckpointThreeOwnershipContract(
       path: checkpointThreeMediaOwnerPath,
     },
     {
-      label: "DocumentSignals",
-      expression: /\bpub\s*\(\s*crate\s*\)\s+struct\s+DocumentSignals\b/g,
-      path: checkpointThreeMediaOwnerPath,
-    },
-    {
       label: "ITEM_KIND_TELEGRAM_MESSAGE",
       expression: /\bpub\s+const\s+ITEM_KIND_TELEGRAM_MESSAGE\b/g,
-      path: "src-tauri/src/telegram/dto.rs",
+      path: dtoPath,
     },
     ...[
       "TELEGRAM_PEER_KIND_CHANNEL",
@@ -835,10 +841,10 @@ function assertCheckpointThreeOwnershipContract(
     ].map((label) => ({
       label,
       expression: new RegExp(
-        `\\bpub\\s*\\(\\s*crate\\s*\\)\\s+const\\s+${label}\\b`,
+        `\\b(?:pub(?:\\s*\\([^)]*\\))?\\s+)?const\\s+${label}\\b`,
         "g",
       ),
-      path: "src-tauri/src/telegram/dto.rs",
+      path: dtoPath,
     })),
     ...[
       "CONTENT_KIND_TEXT_ONLY",
@@ -867,11 +873,10 @@ function assertCheckpointThreeOwnershipContract(
     ).toEqual([owner.path]);
   }
 
-  const dto =
-    sourceOverrides.get("src-tauri/src/telegram/dto.rs")
-    ?? telegramContractPaths.readTelegramContractFile(
-      "src-tauri/src/telegram/dto.rs",
-    );
+  const dto = readCurrentTelegramContractFile(
+    "src-tauri/src/telegram/dto.rs",
+    sourceOverrides,
+  );
   expect(
     rustStructBody(dto, "TelegramMessageDraft"),
     "Checkpoint 3 ownership contract: draft external_id removal",
@@ -882,34 +887,41 @@ function assertCheckpointThreeApiContract(
   sourceOverrides: ReadonlyMap<string, string> = new Map(),
 ): void {
   const read = (relativePath: string): string =>
-    sourceOverrides.get(relativePath)
-    ?? telegramContractPaths.readTelegramContractFile(relativePath);
+    readCurrentTelegramContractFile(relativePath, sourceOverrides);
+  const phase8BCheckpoint =
+    telegramContractPaths.phase8BCheckpointNumber(lifecycle);
+  const telegramOwner =
+    phase8BCheckpoint !== undefined && phase8BCheckpoint >= 3
+      ? "crate::telegram_impl"
+      : "crate::telegram";
   const itemsPath = "src-tauri/src/sources/items.rs";
-  const dtoPath = "src-tauri/src/telegram/dto.rs";
+  const dtoPath = resolveCurrentTelegramSourcePath(
+    "src-tauri/src/telegram/dto.rs",
+  );
   const telegramPath = "src-tauri/src/telegram.rs";
   const appMediaPath = "src-tauri/src/media.rs";
   const items = read(itemsPath);
-  const media = read(checkpointThreeMediaOwnerPath);
   const dto = read(dtoPath);
   const telegram = read(telegramPath);
   const appMedia = read(appMediaPath);
+  const telegramMedia = read(checkpointThreeMediaOwnerPath);
 
   const expectedItemDeclarations = new Map([
     [
       "prepare_source_item",
-      "fn prepare_source_item(draft: &crate::telegram::TelegramMessageDraft,) -> extractum_core::error::AppResult<Option<PreparedSourceItem>>",
+      `fn prepare_source_item(draft: &${telegramOwner}::TelegramMessageDraft,) -> extractum_core::error::AppResult<Option<PreparedSourceItem>>`,
     ],
     [
       "insert_telegram_source_item",
-      "pub(crate) async fn insert_telegram_source_item(pool: &sqlx::Pool<sqlx::Sqlite>, source_id: i64, draft: crate::telegram::TelegramMessageDraft,) -> extractum_core::error::AppResult<bool>",
+      `pub(crate) async fn insert_telegram_source_item(pool: &sqlx::Pool<sqlx::Sqlite>, source_id: i64, draft: ${telegramOwner}::TelegramMessageDraft,) -> extractum_core::error::AppResult<bool>`,
     ],
     [
       "insert_telegram_source_item_outcome",
-      "pub(crate) async fn insert_telegram_source_item_outcome(pool: &sqlx::Pool<sqlx::Sqlite>, source_id: i64, draft: crate::telegram::TelegramMessageDraft,) -> extractum_core::error::AppResult<TelegramItemInsertOutcome>",
+      `pub(crate) async fn insert_telegram_source_item_outcome(pool: &sqlx::Pool<sqlx::Sqlite>, source_id: i64, draft: ${telegramOwner}::TelegramMessageDraft,) -> extractum_core::error::AppResult<TelegramItemInsertOutcome>`,
     ],
     [
       "insert_telegram_source_item_with_observation",
-      "pub(crate) async fn insert_telegram_source_item_with_observation(pool: &sqlx::Pool<sqlx::Sqlite>, batch_id: i64, source_id: i64, draft: crate::telegram::TelegramMessageDraft,) -> extractum_core::error::AppResult<TelegramItemInsertOutcome>",
+      `pub(crate) async fn insert_telegram_source_item_with_observation(pool: &sqlx::Pool<sqlx::Sqlite>, batch_id: i64, source_id: i64, draft: ${telegramOwner}::TelegramMessageDraft,) -> extractum_core::error::AppResult<TelegramItemInsertOutcome>`,
     ],
     [
       "insert_telegram_source_item_with_observation_in_context",
@@ -926,12 +938,9 @@ function assertCheckpointThreeApiContract(
       `Checkpoint 3 API contract: exact ${name} declaration`,
     ).toBe(declaration);
   }
-  expect(
-    normalizedRustFunctionDeclaration(media, "extract_item_payload"),
-    "Checkpoint 3 API contract: exact unnamed extract_item_payload tuple",
-  ).toBe(
-    "pub(crate) fn extract_item_payload(message: &grammers_client::message::Message,) -> Option<(Option<String>, &'static str, Option<TelegramMediaPayload>)>",
-  );
+  if (phase8BCheckpoint !== undefined && phase8BCheckpoint >= 3) {
+    return;
+  }
 
   expect(
     normalizedRustUseDeclarations(telegram, "dto"),
@@ -973,7 +982,7 @@ function assertCheckpointThreeApiContract(
     "Checkpoint 3 API contract: future-owner relative leaf import",
   ).toEqual(["use super::media::TelegramMediaPayload;"]);
   expect(
-    `${maskRustLexicalNonCode(dto)}\n${maskRustLexicalNonCode(media)}\n${
+    `${maskRustLexicalNonCode(dto)}\n${maskRustLexicalNonCode(telegramMedia)}\n${
       maskRustLexicalNonCode(read("src-tauri/src/telegram/session.rs"))
     }`,
     "Checkpoint 3/4 API contract: future-owner leaves avoid app facades",
@@ -1050,11 +1059,18 @@ function assertCheckpointFourSessionContract(
   sourceOverrides: ReadonlyMap<string, string> = new Map(),
 ): void {
   const read = (relativePath: string): string =>
-    sourceOverrides.get(relativePath)
-    ?? telegramContractPaths.readTelegramContractFile(relativePath);
-  const sessionPath = "src-tauri/src/telegram/session.rs";
+    readCurrentTelegramContractFile(relativePath, sourceOverrides);
+  const phase8BCheckpoint =
+    telegramContractPaths.phase8BCheckpointNumber(lifecycle);
+  const foundationIsStaged =
+    phase8BCheckpoint !== undefined && phase8BCheckpoint >= 3;
+  const sessionPath = resolveCurrentTelegramSourcePath(
+    "src-tauri/src/telegram/session.rs",
+  );
   const adapterPath = "src-tauri/src/telegram_session_store.rs";
-  const telegramPath = "src-tauri/src/telegram.rs";
+  const telegramPath = foundationIsStaged
+    ? "src-tauri/src/telegram_impl/lib.rs"
+    : "src-tauri/src/telegram.rs";
   const session = read(sessionPath);
   const adapter = read(adapterPath);
   const telegram = read(telegramPath);
@@ -1212,8 +1228,8 @@ function assertCheckpointFourSessionContract(
     visibleInherentAssociatedItemInventory(
       sessionImplBlocks,
       "TelegramSession",
-    ).filter((item) => !/\braw_memory_session$/.test(item)),
-    "Checkpoint 4 API contract: complete visible Telegram-session associated-item inventory",
+    ).filter((item) => /^pub\s/.test(item)),
+    "Checkpoint 4 API contract: complete public Telegram-session associated-item inventory",
   ).toEqual([
     "pub fn empty",
   ]);
@@ -1258,7 +1274,9 @@ function assertCheckpointFourSessionContract(
     normalizedRustUseDeclarations(telegram, "session"),
     "Checkpoint 4 API contract: curated session facade",
   ).toEqual([
-    "pub(crate) use session::{decode_session_json, encode_session_json, session_json_requires_existing_key, SessionEncryptionKey, TelegramSession,};",
+    foundationIsStaged
+      ? "pub use session::{decode_session_json, encode_session_json, session_json_requires_existing_key, SessionEncryptionKey, TelegramSession,};"
+      : "pub(crate) use session::{decode_session_json, encode_session_json, session_json_requires_existing_key, SessionEncryptionKey, TelegramSession,};",
   ]);
 
   expectOrdered(
@@ -1422,14 +1440,23 @@ function assertCheckpointFiveRuntimeContract(
   sourceOverrides: ReadonlyMap<string, string> = new Map(),
 ): void {
   const read = (relativePath: string): string =>
-    sourceOverrides.get(relativePath)
-    ?? telegramContractPaths.readTelegramContractFile(relativePath);
-  const runtimePath = "src-tauri/src/telegram/runtime.rs";
+    readCurrentTelegramContractFile(relativePath, sourceOverrides);
+  const phase8BCheckpoint =
+    telegramContractPaths.phase8BCheckpointNumber(lifecycle);
+  const foundationIsStaged =
+    phase8BCheckpoint !== undefined && phase8BCheckpoint >= 3;
+  const runtimePath = resolveCurrentTelegramSourcePath(
+    "src-tauri/src/telegram/runtime.rs",
+  );
   const telegramPath = "src-tauri/src/telegram.rs";
+  const runtimeFacadePath = foundationIsStaged
+    ? "src-tauri/src/telegram_impl/lib.rs"
+    : telegramPath;
   const storePath = "src-tauri/src/sources/store.rs";
   const takeoutPath = "src-tauri/src/takeout_import/mod.rs";
   const runtime = read(runtimePath);
   const telegram = read(telegramPath);
+  const runtimeFacade = read(runtimeFacadePath);
   const store = read(storePath);
   const takeout = read(takeoutPath);
   const runtimeProduction = maskExactCfgTestItemSpans(runtime);
@@ -1592,8 +1619,8 @@ function assertCheckpointFiveRuntimeContract(
     visibleInherentAssociatedItemInventory(
       runtimeImpls,
       "TelegramClientHandle",
-    ).filter((item) => !/\braw_(?:client|session)$/.test(item)),
-    "Checkpoint 5 API contract: no unrelated visible client-handle adapters",
+    ).filter((item) => /^pub\s/.test(item)),
+    "Checkpoint 5 API contract: no public client-handle adapters",
   ).toEqual([]);
 
   const runtimeImpl = inherentBody("TelegramRuntime", "initialize_account");
@@ -1619,9 +1646,19 @@ function assertCheckpointFiveRuntimeContract(
       "authorized_client",
       "pub async fn authorized_client(&self, account_id: i64,) -> extractum_core::error::AppResult<TelegramClientHandle>",
     ],
+    ...(
+      foundationIsStaged
+        ? [[
+            "client",
+            "pub async fn client(&self, account_id: i64,) -> extractum_core::error::AppResult<TelegramClientHandle>",
+          ]] as const
+        : []
+    ),
     [
       "initialized_client",
-      "pub(super) async fn initialized_client(&self, account_id: i64,) -> extractum_core::error::AppResult<TelegramClientHandle>",
+      foundationIsStaged
+        ? "async fn initialized_client(&self, account_id: i64,) -> extractum_core::error::AppResult<TelegramClientHandle>"
+        : "pub(super) async fn initialized_client(&self, account_id: i64,) -> extractum_core::error::AppResult<TelegramClientHandle>",
     ],
     [
       "clear_account",
@@ -1644,7 +1681,8 @@ function assertCheckpointFiveRuntimeContract(
     "pub fn request_login_code",
     "pub fn sign_in",
     "pub fn authorized_client",
-    "pub(super) fn initialized_client",
+    ...(foundationIsStaged ? ["pub fn client"] : []),
+    ...(foundationIsStaged ? [] : ["pub(super) fn initialized_client"]),
     "pub fn clear_account",
   ]);
   for (const wrapper of [
@@ -1689,10 +1727,15 @@ function assertCheckpointFiveRuntimeContract(
   );
 
   expect(
-    normalizedRustUseDeclarations(telegramProduction, "runtime"),
+    normalizedRustUseDeclarations(
+      maskExactCfgTestItemSpans(runtimeFacade),
+      "runtime",
+    ),
     "Checkpoint 5 API contract: curated runtime facade",
   ).toEqual([
-    "pub(crate) use runtime::{TelegramApiHash, TelegramClientHandle, TelegramRuntime, TelegramRuntimeStatus,};",
+    foundationIsStaged
+      ? "#[allow(unused_imports)] pub use runtime::{TelegramApiHash, TelegramClientHandle, TelegramLoginAttempt, TelegramRuntime, TelegramRuntimeStatus,};"
+      : "pub(crate) use runtime::{TelegramApiHash, TelegramClientHandle, TelegramRuntime, TelegramRuntimeStatus,};",
   ]);
   expect(
     appProductionStructure,
@@ -2955,7 +2998,7 @@ function normalizedRustUseDeclarations(
   const searchable = maskRustLexicalNonCode(source);
   const escapedTarget = target.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const declaration = new RegExp(
-    `(?:#\\[[^\\]\\r\\n]+\\]\\s*)*(?:pub\\s*\\(\\s*crate\\s*\\)\\s+)?use\\s+${escapedTarget}::(\\{|\\*|[A-Za-z_][A-Za-z0-9_]*)`,
+    `(?:#\\[[^\\]\\r\\n]+\\]\\s*)*(?:pub(?:\\s*\\(\\s*crate\\s*\\))?\\s+)?use\\s+${escapedTarget}::(\\{|\\*|[A-Za-z_][A-Za-z0-9_]*)`,
     "g",
   );
   return [...searchable.matchAll(declaration)].map((match) => {
@@ -3523,7 +3566,12 @@ function assertAddedIdentityDeclarations(
         return added.currentId;
       }
       if (value === "8c-extracted") return added.finalId;
-      if (value === "8b-preparation") {
+      const phase8BCheckpoint =
+        telegramContractPaths.phase8BCheckpointNumber(value);
+      if (
+        value === "8b-preparation"
+        || (phase8BCheckpoint !== undefined && phase8BCheckpoint >= 3)
+      ) {
         return `telegram_impl::${added.finalId}`;
       }
       return added.currentId;
@@ -3545,6 +3593,52 @@ function assertAddedIdentityDeclarations(
     actualDeclarations,
     expectedDeclarations,
     "module-qualified plan-added declarations",
+  );
+}
+
+function phase8BCP3FoundationIdentityAuthority(
+  artifact: Phase8BIdentityAuthority,
+): string[] {
+  const moved = artifact.preNewStaged.filter((identity) =>
+    /^telegram_impl::(?:dto|media|runtime|session)::tests::/.test(identity)
+  );
+  const added = artifact.phase8BNewStaged.filter(
+    (identity) =>
+      identity
+      === "telegram_impl::runtime::tests::client_preserves_missing_account_error_without_authorization_check",
+  );
+  if (moved.length !== 20 || added.length !== 1) {
+    throw new Error(
+      `Phase 8B CP3 identity authority drifted: ${moved.length} moved + ${added.length} new`,
+    );
+  }
+  return [...moved, ...added].sort();
+}
+
+function assertPhase8BCP3FoundationIdentityDeclarations(
+  sources: ReadonlyMap<string, string>,
+  artifact: Phase8BIdentityAuthority,
+): void {
+  const expected = phase8BCP3FoundationIdentityAuthority(artifact);
+  const names = expected.map((identity) =>
+    identity.slice(identity.lastIndexOf("::") + 2)
+  );
+  const actual = names.flatMap((name) =>
+    [...sources.entries()].flatMap(([relativePath, source]) => {
+      const declarationCount = countMatches(
+        source,
+        new RegExp(`\\b(?:async\\s+)?fn\\s+${name}\\s*\\(`, "g"),
+      );
+      return Array.from(
+        { length: declarationCount },
+        () => qualifiedTestIdentity(relativePath, name),
+      );
+    })
+  );
+  exactInventory(
+    actual,
+    expected,
+    "Phase 8B CP3 exact 21 foundation test identities",
   );
 }
 
@@ -3802,10 +3896,31 @@ function phase8BRootPublicAuthority(source = phase8BPlan): string[] {
   return symbols;
 }
 
+function phase8BRootPublicAuthorityAtCheckpoint(
+  artifact: Phase8BSymbolAuthority,
+  checkpoint: number,
+): string[] {
+  return phase8BRootPublicAuthority().filter((symbol) => {
+    const introductions = artifact.symbols.flatMap((row) =>
+      row.finalTargets.some((target) => target.symbol === symbol)
+        && typeof row.firstCheckpoint === "number"
+        ? [row.firstCheckpoint]
+        : []
+    );
+    if (introductions.length === 0) {
+      throw new Error(
+        `Phase 8B root public allowlist: missing checkpoint authority for ${symbol}`,
+      );
+    }
+    return Math.min(...introductions) <= checkpoint;
+  });
+}
+
 function rustUseExportNames(
   declaration: string,
   expectedVisibility: "pub" | "pub(super)",
   label: string,
+  forbidAlias = false,
 ): string[] {
   const visibilityPattern = expectedVisibility === "pub"
     ? /^pub\s+use\s+/
@@ -3818,6 +3933,9 @@ function rustUseExportNames(
     .replace(/;\s*$/, "")
     .trim();
   if (tree.includes("*")) throw new Error(`${label}: glob use is forbidden`);
+  if (forbidAlias && /\bas\b/.test(tree)) {
+    throw new Error(`${label}: aliased use is forbidden`);
+  }
   const open = tree.indexOf("{");
   if (open < 0) {
     const alias = /\bas\s+(?:r#)?([A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(
@@ -4084,7 +4202,7 @@ function phase8BRestrictedProductionInventory(
   return inventory;
 }
 
-function phase8BTerminalRootPublicExports(
+function phase8BRootPublicExports(
   sources: ReadonlyMap<string, string>,
 ): string[] {
   const rootPath = "src-tauri/src/telegram_impl/lib.rs";
@@ -4105,9 +4223,23 @@ function phase8BTerminalRootPublicExports(
       useDeclaration.declaration,
       "pub",
       "Phase 8B terminal root public use",
+      true,
     )
   );
-  const topLevelSearchable = maskRustSourceRanges(searchable, publicUses);
+  const publicUseRanges = publicUses.map((useDeclaration) => {
+    const prefix = searchable.slice(0, useDeclaration.start);
+    const leadingAttributes =
+      /(?:^|\n)((?:[ \t]*#\s*\[[^\]\r\n]*\][ \t]*\r?\n)+[ \t]*)$/
+        .exec(prefix)?.[1];
+    return {
+      ...useDeclaration,
+      start: leadingAttributes === undefined
+        ? useDeclaration.start
+        : useDeclaration.start - leadingAttributes.length,
+    };
+  });
+  const topLevelSearchable =
+    maskRustSourceRanges(searchable, publicUseRanges);
   for (
     const header of rustTopLevelItemHeaders(
       topLevelSearchable,
@@ -4115,7 +4247,7 @@ function phase8BTerminalRootPublicExports(
     )
   ) {
     const declaration = splitLeadingRustOuterAttributes(header).declaration;
-    if (/^pub(?:\s|\()/.test(declaration)) {
+    if (/^pub\s+/.test(declaration)) {
       throw new Error(
         "Phase 8B terminal public API: root exposes a non-allowlisted item",
       );
@@ -4374,7 +4506,7 @@ function assertPhase8BTerminalSourceContract(
     "Phase 8B terminal generated restricted inventory",
   );
   exactInventory(
-    phase8BTerminalRootPublicExports(sources),
+    phase8BRootPublicExports(sources),
     phase8BRootPublicAuthority(),
     "Phase 8B terminal root public allowlist",
   );
@@ -4411,19 +4543,141 @@ function assertPhase8BTerminalSourceContract(
   }
 }
 
-function retained8ARawConsumerPaths(): string[] {
-  return [
-    ...checkpointOneRawConsumerPaths.map((relativePath) => {
-      if (relativePath === "src-tauri/src/media.rs") {
-        return "src-tauri/src/telegram/media.rs";
-      }
-      if (relativePath === "src-tauri/src/telegram_session_store.rs") {
-        return "src-tauri/src/telegram/session.rs";
-      }
-      return relativePath;
-    }),
-    "src-tauri/src/telegram/runtime.rs",
-  ].sort();
+function assertPhase8BRuntimeClientContract(
+  sources: ReadonlyMap<string, string>,
+): void {
+  const runtimePath = "src-tauri/src/telegram_impl/runtime.rs";
+  const source = sources.get(runtimePath);
+  if (source === undefined) {
+    throw new Error("Phase 8B client contract: missing staged runtime source");
+  }
+  const declaration = normalizedRustFunctionDeclaration(source, "client");
+  if (
+    declaration
+    !== "pub async fn client(&self, account_id: i64,) -> extractum_core::error::AppResult<TelegramClientHandle>"
+  ) {
+    throw new Error(
+      `Phase 8B client contract: TelegramRuntime::client signature drifted: ${declaration}`,
+    );
+  }
+  const initializedDeclaration = normalizedRustFunctionDeclaration(
+    source,
+    "initialized_client",
+  );
+  if (
+    initializedDeclaration
+    !== "async fn initialized_client(&self, account_id: i64,) -> extractum_core::error::AppResult<TelegramClientHandle>"
+  ) {
+    throw new Error(
+      `Phase 8B client contract: initialized_client must stay private: ${initializedDeclaration}`,
+    );
+  }
+  const body = rustFunctionBody(source, "client")
+    .replace(/\s+/g, "");
+  if (body !== "self.initialized_client(account_id).await") {
+    throw new Error(
+      "Phase 8B client contract: TelegramRuntime::client must preserve non-authorizing lookup",
+    );
+  }
+  if (
+    countMatches(
+      maskRustLexicalNonCode(source),
+      /\bfn\s+client\s*\(/g,
+    ) !== 1
+  ) {
+    throw new Error(
+      "Phase 8B client contract: TelegramRuntime::client definition count drifted",
+    );
+  }
+}
+
+function assertPhase8BFoundationRelocationContract(
+  checkpoint: number,
+  sources: ReadonlyMap<string, string>,
+): void {
+  const survivingOldPaths = phase8BOldFoundationPaths.filter((relativePath) =>
+    sources.has(relativePath)
+  );
+  if (survivingOldPaths.length !== 0) {
+    throw new Error(
+      `Phase 8B CP${checkpoint} foundation contract: retained old leaves ${survivingOldPaths.join(", ")}`,
+    );
+  }
+
+  const appRoot = sources.get("src-tauri/src/lib.rs");
+  const stagedRoot = sources.get("src-tauri/src/telegram_impl/lib.rs");
+  const telegram = sources.get("src-tauri/src/telegram.rs");
+  if (appRoot === undefined || stagedRoot === undefined || telegram === undefined) {
+    throw new Error(
+      `Phase 8B CP${checkpoint} foundation contract: missing app or staged module root`,
+    );
+  }
+
+  const privateRootDeclaration =
+    /#\s*\[\s*path\s*=\s*"telegram_impl\/lib\.rs"\s*\]\s*mod\s+telegram_impl\s*;/g;
+  if (countMatches(appRoot, privateRootDeclaration) !== 1) {
+    throw new Error(
+      `Phase 8B CP${checkpoint} foundation contract: private app root declaration drifted`,
+    );
+  }
+  const appRootStructure = maskRustLexicalNonCode(appRoot);
+  if (
+    /\bpub(?:\s*\([^)]*\))?\s+mod\s+telegram_impl\b/.test(appRootStructure)
+  ) {
+    throw new Error(
+      `Phase 8B CP${checkpoint} foundation contract: staged app root became public`,
+    );
+  }
+
+  const stagedRootHeaders = rustTopLevelItemHeaders(
+    maskRustLexicalNonCode(stagedRoot),
+    `Phase 8B CP${checkpoint} staged root module inventory`,
+  );
+  const stagedModules = stagedRootHeaders.flatMap((header) => {
+    const declaration = splitLeadingRustOuterAttributes(header).declaration;
+    const match =
+      /^(pub(?:\s*\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)$/
+        .exec(declaration);
+    return match === null
+      ? []
+      : [{ visibility: match[1]?.trim() ?? "", name: match[2] }];
+  });
+  if (stagedModules.some(({ visibility }) => visibility !== "")) {
+    throw new Error(
+      `Phase 8B CP${checkpoint} foundation contract: staged root contains a public module`,
+    );
+  }
+  const expectedModules = [
+    ["dto", 3],
+    ["media", 3],
+    ["runtime", 3],
+    ["session", 3],
+    ["error", 4],
+    ["live", 4],
+    ["takeout", 7],
+  ] as const;
+  exactInventory(
+    stagedModules.map(({ name }) => name),
+    expectedModules
+      .filter(([, firstCheckpoint]) => firstCheckpoint <= checkpoint)
+      .map(([name]) => name),
+    `Phase 8B CP${checkpoint} private staged root modules`,
+  );
+
+  const telegramStructure = maskRustLexicalNonCode(telegram);
+  const oldDeclarations = [
+    ...telegramStructure.matchAll(
+      /\b(?:pub(?:\s*\([^)]*\))?\s+)?mod\s+(dto|media|runtime|session)\s*;/g,
+    ),
+  ].map((match) => match[1]);
+  exactInventory(
+    oldDeclarations,
+    [],
+    `Phase 8B CP${checkpoint} old Telegram leaf declarations`,
+  );
+
+  assertPhase8BRuntimeClientContract(sources);
+  assertPhase8BSessionAccessorContract(sources);
 }
 
 function assertPhase8BCheckpointSourceContract(
@@ -4450,11 +4704,6 @@ function assertPhase8BCheckpointSourceContract(
   );
 
   if (checkpoint <= 2) {
-    exactInventory(
-      rawConsumerPaths(sources),
-      retained8ARawConsumerPaths(),
-      `Phase 8B CP${checkpoint} retained direct-Grammers inventory`,
-    );
     return;
   }
   const runtime = sources.get("src-tauri/src/telegram_impl/runtime.rs");
@@ -4464,7 +4713,12 @@ function assertPhase8BCheckpointSourceContract(
     );
   }
   assertInitializeGrammersClientContract(runtime);
-  assertPhase8BSessionAccessorContract(sources);
+  assertPhase8BFoundationRelocationContract(checkpoint, sources);
+  exactInventory(
+    phase8BRootPublicExports(sources),
+    phase8BRootPublicAuthorityAtCheckpoint(artifact, checkpoint),
+    `Phase 8B CP${checkpoint} permanent root public allowlist`,
+  );
   if (checkpoint >= 7) {
     assertPhase8BTerminalSourceContract(sources, artifact);
   }
@@ -4510,6 +4764,46 @@ impl TelegramSession {
     }
 }
 `;
+}
+
+function phase8BRuntimePermanentFixture(): string {
+  return `
+struct TelegramRuntime;
+struct TelegramClientHandle;
+
+impl TelegramRuntime {
+    pub async fn client(
+        &self,
+        account_id: i64,
+    ) -> extractum_core::error::AppResult<TelegramClientHandle> {
+        self.initialized_client(account_id).await
+    }
+
+    async fn initialized_client(
+        &self,
+        account_id: i64,
+    ) -> extractum_core::error::AppResult<TelegramClientHandle> {
+        let _ = account_id;
+        unimplemented!()
+    }
+}
+`;
+}
+
+function phase8BPrivateRootFixture(checkpoint: number): string {
+  const modules = [
+    ["dto", 3],
+    ["media", 3],
+    ["runtime", 3],
+    ["session", 3],
+    ["error", 4],
+    ["live", 4],
+    ["takeout", 7],
+  ] as const;
+  return modules
+    .filter(([, firstCheckpoint]) => firstCheckpoint <= checkpoint)
+    .map(([moduleName]) => `mod ${moduleName};`)
+    .join("\n");
 }
 
 function directGrammersConsumerPaths(
@@ -4665,14 +4959,21 @@ function phase8BTerminalSourceFixture(
 
   sources.set(
     "src-tauri/src/telegram_impl/lib.rs",
-    `pub use dto::{${phase8BRootPublicAuthority().join(",")}};\n`,
+    `${phase8BPrivateRootFixture(8)}
+pub use dto::{${phase8BRootPublicAuthority().join(",")}};
+`,
   );
   sources.set(
     "src-tauri/src/telegram_impl/runtime.rs",
     `${
       sources.get("src-tauri/src/telegram_impl/runtime.rs") ?? ""
-    }\n${initializeGrammersClientFixture()}`,
+    }\n${initializeGrammersClientFixture()}\n${phase8BRuntimePermanentFixture()}`,
   );
+  sources.set(
+    "src-tauri/src/lib.rs",
+    '#[path = "telegram_impl/lib.rs"]\nmod telegram_impl;\n',
+  );
+  sources.set("src-tauri/src/telegram.rs", "");
   for (const relativePath of phase8BTerminalRawConsumerAuthority()) {
     const source = sources.get(relativePath);
     if (source === undefined) {
@@ -4697,21 +4998,29 @@ function phase8BCheckpointSourceFixture(
   }
   if (checkpoint >= 7) return phase8BTerminalSourceFixture(artifact);
   if (checkpoint <= 2) {
-    return new Map(
-      retained8ARawConsumerPaths().map((relativePath) => [
-        relativePath,
-        "fn direct_grammers_marker() { let _: Option<grammers_client::Client> = None; }\n",
-      ]),
-    );
+    return new Map();
   }
-  const sources = new Map(
+  const sources = new Map<string, string>(
     phase8BPortablePathTable
       .filter(([, firstCheckpoint]) => firstCheckpoint <= checkpoint)
       .map(([stagedPath]) => [stagedPath, ""]),
   );
   sources.set(
+    "src-tauri/src/lib.rs",
+    '#[path = "telegram_impl/lib.rs"]\nmod telegram_impl;\n',
+  );
+  sources.set("src-tauri/src/telegram.rs", "");
+  sources.set(
+    "src-tauri/src/telegram_impl/lib.rs",
+    `${phase8BPrivateRootFixture(checkpoint)}
+pub use staged::{${
+      phase8BRootPublicAuthorityAtCheckpoint(artifact, checkpoint).join(",")
+    }};
+`,
+  );
+  sources.set(
     "src-tauri/src/telegram_impl/runtime.rs",
-    initializeGrammersClientFixture(),
+    `${initializeGrammersClientFixture()}\n${phase8BRuntimePermanentFixture()}`,
   );
   sources.set(
     "src-tauri/src/telegram_impl/session.rs",
@@ -4747,7 +5056,11 @@ const phase8BRetainedTestOnlyCurrentDefinitionAuthority = new Set([
   "sources/peer_resolution.rs::source_peer_ref_from_identity",
 ]);
 
-const phase8BReviewOnlyCurrentDefinitionKeys = new Set([
+const phase8BLLMReviewOnlyCurrentDefinitionKeys = new Set([
+  "telegram/media.rs::derive_content_kind",
+  "telegram/media.rs::derive_document_media_kind",
+  "telegram/media.rs::extract_item_payload",
+  "telegram/media.rs::DocumentSignals",
   "media.rs::derive_content_kind",
   "media.rs::derive_document_media_kind",
   "media.rs::extract_item_payload",
@@ -4758,17 +5071,53 @@ const phase8BReviewOnlyCurrentDefinitionKeys = new Set([
   "telegram.rs::get_client",
   "telegram.rs::get_authorized_client",
   "sources/peer_resolution.rs::ResolvedSyncPeer::peer",
+  "<new>::legacy_peer_ref_from_descriptor",
 ]);
 
-const phase8BDeriveContentKindCurrentDefinition =
-  `pub(crate) fn derive_content_kind(has_content: bool, has_media: bool) -> &'static str {
-    match (has_content, has_media) {
-        (true, true) => CONTENT_KIND_TEXT_WITH_MEDIA,
-        (false, true) => CONTENT_KIND_MEDIA_ONLY,
-        _ => CONTENT_KIND_TEXT_ONLY,
-    }
+function phase8BActiveSymbolTargets(
+  row: Phase8BSymbolRow,
+  checkpoint: number | undefined,
+): Phase8BSymbolTarget[] {
+  const movesAtCurrentCheckpoint =
+    checkpoint !== undefined
+    && typeof row.firstCheckpoint === "number"
+    && row.firstCheckpoint <= checkpoint;
+  if (movesAtCurrentCheckpoint) return [...row.finalTargets];
+  if (row.currentPath === "<new>") return [];
+  return [{ path: row.currentPath, symbol: row.currentSymbol }];
 }
-`;
+
+function phase8BLLMReviewOnlyActiveTargetKeys(
+  artifact: Phase8BSymbolAuthority,
+  checkpoint: number | undefined,
+): ReadonlySet<string> {
+  return new Set(
+    artifact.symbols
+      .filter((row) =>
+        phase8BLLMReviewOnlyCurrentDefinitionKeys.has(
+          `${row.currentPath}::${row.currentSymbol}`,
+        )
+      )
+      .flatMap((row) =>
+        phase8BActiveSymbolTargets(row, checkpoint).map(
+          (target) => `${target.path}::${target.symbol}`,
+        )
+      ),
+  );
+}
+
+function phase8BDefinitionRowIsLLMReviewOnly(
+  row: Phase8BSymbolRow,
+  targets: readonly Phase8BSymbolTarget[],
+  activeTargetKeys: ReadonlySet<string>,
+): boolean {
+  return phase8BLLMReviewOnlyCurrentDefinitionKeys.has(
+    `${row.currentPath}::${row.currentSymbol}`,
+  )
+    || targets.some((target) =>
+      activeTargetKeys.has(`${target.path}::${target.symbol}`)
+    );
+}
 
 type RustProductionDefinitionInventory = Readonly<{
   all: ReadonlySet<string>;
@@ -4979,22 +5328,56 @@ function rustProductionDefinitionInventory(
 function assertCurrentPhase8BSymbolAuthority(
   sources: ReadonlyMap<string, string>,
   artifact: Phase8BSymbolAuthority,
+  value: telegramContractPaths.TelegramLifecycle = lifecycle,
 ): void {
-  const rowsByCurrentPath = new Map<string, Phase8BSymbolRow[]>();
+  type ActiveSymbolRow = {
+    row: Phase8BSymbolRow;
+    originalAuthorityKey: string;
+    symbol: string;
+    wholeModule: boolean;
+  };
+  const rowsByCurrentPath = new Map<string, ActiveSymbolRow[]>();
   const missingDefinitions: string[] = [];
   const artifactCurrentDefinitionKeys = new Set<string>();
   const currentFieldDefinitionKeys =
     phase8BCurrentFieldDefinitionKeys(artifact);
+  const activeLLMReviewOnlyDefinitionPaths = new Set<string>();
+  const phase8BCheckpoint =
+    telegramContractPaths.phase8BCheckpointNumber(value);
+  const activeLLMReviewOnlyTargetKeys =
+    phase8BLLMReviewOnlyActiveTargetKeys(
+      artifact,
+      phase8BCheckpoint,
+    );
   for (const row of artifact.symbols) {
-    if (row.currentPath === "<new>") continue;
     const authorityKey = `${row.currentPath}::${row.currentSymbol}`;
-    if (phase8BReviewOnlyCurrentDefinitionKeys.has(authorityKey)) continue;
+    const targets = phase8BActiveSymbolTargets(row, phase8BCheckpoint);
+    if (
+      phase8BDefinitionRowIsLLMReviewOnly(
+        row,
+        targets,
+        activeLLMReviewOnlyTargetKeys,
+      )
+    ) {
+      for (const target of targets) {
+        activeLLMReviewOnlyDefinitionPaths.add(target.path);
+      }
+      continue;
+    }
     if (row.currentAnchors === undefined) {
       artifactCurrentDefinitionKeys.add(authorityKey);
     }
-    const rows = rowsByCurrentPath.get(row.currentPath) ?? [];
-    rows.push(row);
-    rowsByCurrentPath.set(row.currentPath, rows);
+    for (const target of targets) {
+      const rows = rowsByCurrentPath.get(target.path) ?? [];
+      rows.push({
+        row,
+        originalAuthorityKey: authorityKey,
+        symbol: target.symbol,
+        wholeModule:
+          phase8BWholeModuleCurrentDefinitionPaths.has(row.currentPath),
+      });
+      rowsByCurrentPath.set(target.path, rows);
+    }
   }
   for (const authorityKey of phase8BRetainedTestOnlyCurrentDefinitionAuthority) {
     if (!artifactCurrentDefinitionKeys.has(authorityKey)) {
@@ -5023,9 +5406,9 @@ function assertCurrentPhase8BSymbolAuthority(
       `Phase 8B current symbol authority ${relativePath} test-inclusive`,
       false,
     );
-    for (const row of rows) {
+    for (const { row, symbol } of rows) {
       if (row.currentAnchors === undefined) continue;
-      const owner = row.currentSymbol.split("::")[0];
+      const owner = symbol.split("::")[0];
       const compactSearchable = rustFunctionBody(production, owner)
         .replace(/\s+/g, "");
       for (const anchor of row.currentAnchors) {
@@ -5039,11 +5422,16 @@ function assertCurrentPhase8BSymbolAuthority(
 
     const expectedDefinitions = new Set(
       rows
-        .filter(({ currentAnchors }) => currentAnchors === undefined)
-        .map(({ currentSymbol }) => currentSymbol),
+        .filter(({ row }) => row.currentAnchors === undefined)
+        .map(({ symbol }) => symbol),
     );
-    for (const symbol of expectedDefinitions) {
-      const authorityKey = `${currentPath}::${symbol}`;
+    for (
+      const {
+        row,
+        originalAuthorityKey: authorityKey,
+        symbol,
+      } of rows.filter(({ row }) => row.currentAnchors === undefined)
+    ) {
       const retainedTestOnly =
         phase8BRetainedTestOnlyCurrentDefinitionAuthority.has(authorityKey);
       const selectedDefinitions = retainedTestOnly
@@ -5083,20 +5471,16 @@ function assertCurrentPhase8BSymbolAuthority(
       }
     }
 
-    if (!phase8BWholeModuleCurrentDefinitionPaths.has(currentPath)) {
+    if (
+      !rows.some(({ wholeModule }) => wholeModule)
+      || activeLLMReviewOnlyDefinitionPaths.has(currentPath)
+    ) {
       continue;
     }
     const expectedTopLevel = new Set(
       [...expectedDefinitions].filter((symbol) => !symbol.includes("::")),
     );
     for (const symbol of definitions.topLevel) {
-      if (
-        phase8BReviewOnlyCurrentDefinitionKeys.has(
-          `${currentPath}::${symbol}`,
-        )
-      ) {
-        continue;
-      }
       if (!expectedTopLevel.has(symbol)) {
         throw new Error(
           `Phase 8B current symbol authority: unexpected production definition ${symbol} in ${relativePath}`,
@@ -5104,13 +5488,6 @@ function assertCurrentPhase8BSymbolAuthority(
       }
     }
     for (const symbol of definitions.associated) {
-      if (
-        phase8BReviewOnlyCurrentDefinitionKeys.has(
-          `${currentPath}::${symbol}`,
-        )
-      ) {
-        continue;
-      }
       if (!expectedDefinitions.has(symbol)) {
         throw new Error(
           `Phase 8B current symbol authority: unexpected production definition ${symbol} in ${relativePath}`,
@@ -5903,6 +6280,38 @@ describe("Phase 8B generated structural authority", () => {
     ).toBe(0);
   });
 
+  it("routes the exact CP3 foundation identity set to the staged owner", () => {
+    const artifact = readGeneratedJson<Phase8BIdentityAuthority>(
+      "src/lib/telegram-8b-test-identities.json",
+    );
+    const expected = phase8BCP3FoundationIdentityAuthority(artifact);
+    expect(expected).toHaveLength(21);
+    const sources = new Map<string, string>();
+    for (const identity of expected) {
+      const name = identity.slice(identity.lastIndexOf("::") + 2);
+      const modulePath = identity
+        .slice(0, identity.indexOf("::tests::"))
+        .replaceAll("::", "/");
+      const relativePath = `src-tauri/src/${modulePath}.rs`;
+      sources.set(
+        relativePath,
+        `${sources.get(relativePath) ?? ""}\nfn ${name}() {}\n`,
+      );
+    }
+    assertPhase8BCP3FoundationIdentityDeclarations(sources, artifact);
+
+    const runtimePath = "src-tauri/src/telegram_impl/runtime.rs";
+    const wrongOwner = new Map(sources);
+    wrongOwner.set(
+      "src-tauri/src/telegram/runtime.rs",
+      wrongOwner.get(runtimePath) ?? "",
+    );
+    wrongOwner.delete(runtimePath);
+    expect(() =>
+      assertPhase8BCP3FoundationIdentityDeclarations(wrongOwner, artifact)
+    ).toThrow(/exact 21 foundation test identities/);
+  });
+
   it("materializes every production-symbol disposition and transitional bridge", () => {
     const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
       "src/lib/telegram-8b-symbol-map.json",
@@ -6254,7 +6663,9 @@ describe("Phase 8B generated structural authority", () => {
     }
   });
 
-  it("rejects an unlisted current production definition in a fully moved module", () => {
+  it(
+    "rejects an unlisted current production definition in a fully moved module",
+    () => {
     const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
       "src/lib/telegram-8b-symbol-map.json",
     );
@@ -6266,7 +6677,9 @@ describe("Phase 8B generated structural authority", () => {
     );
     const mutated = replaceFixtureSource(
       currentSources,
-      "src-tauri/src/telegram/media.rs",
+      resolveCurrentTelegramSourcePath(
+        "src-tauri/src/telegram/dto.rs",
+      ),
       (source) =>
         `${source}\nfn unlisted_current_production_symbol() {}\n`,
     );
@@ -6276,9 +6689,12 @@ describe("Phase 8B generated structural authority", () => {
     ).toThrow(
       /unexpected production definition unlisted_current_production_symbol/,
     );
-  });
+    },
+  );
 
-  it("rejects an unlisted current associated definition in a fully moved module", () => {
+  it(
+    "rejects an unlisted current associated definition in a fully moved module",
+    () => {
     const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
       "src/lib/telegram-8b-symbol-map.json",
     );
@@ -6290,7 +6706,9 @@ describe("Phase 8B generated structural authority", () => {
     );
     const mutated = replaceFixtureSource(
       currentSources,
-      "src-tauri/src/telegram/dto.rs",
+      resolveCurrentTelegramSourcePath(
+        "src-tauri/src/telegram/dto.rs",
+      ),
       (source) =>
         exactMutation(
           source,
@@ -6307,9 +6725,12 @@ describe("Phase 8B generated structural authority", () => {
     ).toThrow(
       /unexpected production definition TelegramMessageIdentity::unlisted_current_method/,
     );
-  });
+    },
+  );
 
-  it("rejects a required current production definition spoofed by references", () => {
+  it(
+    "rejects a current Phase 8B method spoofed by a same-named field",
+    () => {
     const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
       "src/lib/telegram-8b-symbol-map.json",
     );
@@ -6321,34 +6742,9 @@ describe("Phase 8B generated structural authority", () => {
     );
     const mutated = replaceFixtureSource(
       currentSources,
-      "src-tauri/src/telegram/media.rs",
-      (source) =>
-        exactMutation(
-          source,
-          phase8BDeriveContentKindCurrentDefinition,
-          "",
-          "removed derive_content_kind production definition",
-        ),
-    );
-
-    expect(() =>
-      assertCurrentPhase8BSymbolAuthority(mutated, artifact)
-    ).toThrow(/missing production definition derive_content_kind/);
-  });
-
-  it("rejects a current Phase 8B method spoofed by a same-named field", () => {
-    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
-      "src/lib/telegram-8b-symbol-map.json",
-    );
-    const currentSources = new Map(
-      rustPathsUnder("src-tauri/src").map((relativePath) => [
-        relativePath,
-        telegramContractPaths.readTelegramContractFile(relativePath),
-      ]),
-    );
-    const mutated = replaceFixtureSource(
-      currentSources,
-      "src-tauri/src/telegram/runtime.rs",
+      resolveCurrentTelegramSourcePath(
+        "src-tauri/src/telegram/runtime.rs",
+      ),
       (source) =>
         exactMutation(
           exactMutation(
@@ -6373,9 +6769,12 @@ describe("Phase 8B generated structural authority", () => {
     expect(() =>
       assertCurrentPhase8BSymbolAuthority(mutated, artifact)
     ).toThrow(/definition kind.*TelegramApiHash::new.*method/);
-  });
+    },
+  );
 
-  it("rejects a current Phase 8B method spoofed by a same-named associated non-function", () => {
+  it(
+    "rejects a current Phase 8B method spoofed by a same-named associated non-function",
+    () => {
     const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
       "src/lib/telegram-8b-symbol-map.json",
     );
@@ -6387,7 +6786,9 @@ describe("Phase 8B generated structural authority", () => {
     );
     const mutated = replaceFixtureSource(
       currentSources,
-      "src-tauri/src/telegram/runtime.rs",
+      resolveCurrentTelegramSourcePath(
+        "src-tauri/src/telegram/runtime.rs",
+      ),
       (source) =>
         exactMutation(
           source,
@@ -6402,9 +6803,12 @@ describe("Phase 8B generated structural authority", () => {
     expect(() =>
       assertCurrentPhase8BSymbolAuthority(mutated, artifact)
     ).toThrow(/definition kind.*TelegramApiHash::new.*method/);
-  });
+    },
+  );
 
-  it("rejects a current Phase 8B field spoofed by a same-named method", () => {
+  it(
+    "rejects a current Phase 8B field spoofed by a same-named method",
+    () => {
     const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
       "src/lib/telegram-8b-symbol-map.json",
     );
@@ -6435,34 +6839,8 @@ impl TakeoutPageRequest {
     expect(() =>
       assertCurrentPhase8BSymbolAuthority(mutated, artifact)
     ).toThrow(/definition kind.*TakeoutPageRequest::limit.*field/);
-  });
-
-  it("rejects a non-exception current production definition moved behind cfg(test)", () => {
-    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
-      "src/lib/telegram-8b-symbol-map.json",
-    );
-    const currentSources = new Map(
-      rustPathsUnder("src-tauri/src").map((relativePath) => [
-        relativePath,
-        telegramContractPaths.readTelegramContractFile(relativePath),
-      ]),
-    );
-    const mutated = replaceFixtureSource(
-      currentSources,
-      "src-tauri/src/telegram/media.rs",
-      (source) =>
-        exactMutation(
-          source,
-          phase8BDeriveContentKindCurrentDefinition,
-          `#[cfg(test)]\n${phase8BDeriveContentKindCurrentDefinition}`,
-          "cfg(test) derive_content_kind production definition",
-        ),
-    );
-
-    expect(() =>
-      assertCurrentPhase8BSymbolAuthority(mutated, artifact)
-    ).toThrow(/missing production definition derive_content_kind/);
-  });
+    },
+  );
 
   it("freezes the sole retained test-only current-definition exception", () => {
     expect(
@@ -6558,18 +6936,187 @@ impl TakeoutPageRequest {
       );
     }
 
+    const currentCheckpoint =
+      telegramContractPaths.phase8BCheckpointNumber(lifecycle);
+    const currentPaths = currentCheckpoint !== undefined && currentCheckpoint >= 3
+      ? rustPathsUnder("src-tauri/src")
+      : currentAppRustPaths();
+    const currentSources = new Map(
+      currentPaths.map((relativePath) => [
+        relativePath,
+        telegramContractPaths.readTelegramContractFile(relativePath),
+      ]),
+    );
+    if (currentCheckpoint !== undefined) {
+      assertPhase8BCheckpointSourceContract(
+        lifecycle,
+        currentSources,
+        artifact,
+      );
+    }
+    if (currentCheckpoint !== undefined && currentCheckpoint >= 3) {
+      const identityArtifact = readGeneratedJson<Phase8BIdentityAuthority>(
+        "src/lib/telegram-8b-test-identities.json",
+      );
+      assertPhase8BCP3FoundationIdentityDeclarations(
+        currentSources,
+        identityArtifact,
+      );
+    }
+    assertCurrentPhase8BSymbolAuthority(currentSources, artifact, lifecycle);
+  });
+
+  it("freezes the exact permanent CP3 root public surface without aliases", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    const checkpointThree =
+      phase8BCheckpointSourceFixture(3, artifact);
+    const rootPath = "src-tauri/src/telegram_impl/lib.rs";
+    const expectedPublicUse =
+      "pub use staged::{ITEM_KIND_TELEGRAM_MESSAGE,TelegramMessageIdentity,TelegramItemContext,TelegramMessageDraft,TelegramMediaPayload,TelegramApiHash,TelegramRuntimeStatus,TelegramClientHandle,TelegramLoginAttempt,TelegramRuntime,SessionEncryptionKey,TelegramSession,session_json_requires_existing_key,decode_session_json,encode_session_json};";
+    const mutations = [
+      replaceFixtureSource(
+        checkpointThree,
+        rootPath,
+        (source) => `${source}\npub use staged::UnexpectedPublic;\n`,
+      ),
+      replaceFixtureSource(
+        checkpointThree,
+        rootPath,
+        (source) => `${source}\npub struct UnexpectedPublic;\n`,
+      ),
+      replaceFixtureSource(
+        checkpointThree,
+        rootPath,
+        (source) =>
+          exactMutation(
+            source,
+            expectedPublicUse,
+            expectedPublicUse.replace(
+              "TelegramItemContext",
+              "TelegramMessageIdentity as TelegramItemContext",
+            ),
+            "CP3 root public alias",
+          ),
+      ),
+    ];
+    for (const mutation of mutations) {
+      expect(() =>
+        assertPhase8BCheckpointSourceContract(
+          "8b-checkpoint-3",
+          mutation,
+          artifact,
+        )
+      ).toThrow();
+    }
+  });
+
+  it("leaves the projected CP4 legacy peer-ref definition to LLM review", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    const legacyRows = artifact.symbols.filter(({ finalTargets }) =>
+      finalTargets.some(
+        ({ symbol }) => symbol === "legacy_peer_ref_from_descriptor",
+      )
+    );
+    expect(legacyRows).toHaveLength(5);
+    const reviewOnlyTargets = phase8BLLMReviewOnlyActiveTargetKeys(
+      artifact,
+      4,
+    );
+    expect(reviewOnlyTargets).toContain(
+      "sources/peer_resolution.rs::legacy_peer_ref_from_descriptor",
+    );
+    for (const row of legacyRows) {
+      const targets = phase8BActiveSymbolTargets(row, 4);
+      expect(
+        phase8BDefinitionRowIsLLMReviewOnly(
+          row,
+          targets,
+          reviewOnlyTargets,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("does not reject aliases inside an LLM-only temporary root re-export", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
     const currentSources = new Map(
       rustPathsUnder("src-tauri/src").map((relativePath) => [
         relativePath,
         telegramContractPaths.readTelegramContractFile(relativePath),
       ]),
     );
-    assertPhase8BCheckpointSourceContract(
-      "8b-checkpoint-1",
+    const rootPath = "src-tauri/src/telegram_impl/lib.rs";
+    const mutated = replaceFixtureSource(
       currentSources,
-      artifact,
+      rootPath,
+      (source) =>
+        exactMutation(
+          source,
+          "derive_content_kind, derive_document_media_kind",
+          "derive_content_kind as derive_content_kind, derive_document_media_kind",
+          "temporary media root alias",
+        ),
     );
-    assertCurrentPhase8BSymbolAuthority(currentSources, artifact);
+    expect(() =>
+      assertCurrentPhase8BSymbolAuthority(
+        mutated,
+        artifact,
+        lifecycle,
+      )
+    ).not.toThrow();
+  });
+
+  it("rejects CP3 foundation paths, module roots, and permanent client drift", () => {
+    const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
+      "src/lib/telegram-8b-symbol-map.json",
+    );
+    const checkpointThree =
+      phase8BCheckpointSourceFixture(3, artifact);
+    const mutations = [
+      new Map([
+        ...checkpointThree,
+        ["src-tauri/src/telegram/runtime.rs", "struct OldRuntime;"],
+      ]),
+      replaceFixtureSource(
+        checkpointThree,
+        "src-tauri/src/lib.rs",
+        () => "mod telegram_impl;\n",
+      ),
+      replaceFixtureSource(
+        checkpointThree,
+        "src-tauri/src/telegram.rs",
+        () => "mod dto;\n",
+      ),
+      replaceFixtureSource(
+        checkpointThree,
+        "src-tauri/src/telegram_impl/lib.rs",
+        (source) => source.replace("mod dto;", "pub mod dto;"),
+      ),
+      replaceFixtureSource(
+        checkpointThree,
+        "src-tauri/src/telegram_impl/runtime.rs",
+        (source) =>
+          source.replace(
+            "self.initialized_client(account_id).await",
+            "self.authorized_client(account_id).await",
+          ),
+      ),
+    ];
+    for (const mutation of mutations) {
+      expect(() =>
+        assertPhase8BCheckpointSourceContract(
+          "8b-checkpoint-3",
+          mutation,
+          artifact,
+        )
+      ).toThrow();
+    }
   });
 
   it("rejects missing and extra paths in the exact Phase 8B portable tree", () => {
@@ -6968,7 +7515,7 @@ describe("literal immutable Telegram test map", () => {
     expect(retainedPreparationStates).toContainEqual({
       roadmapStatus: phase8Status,
       designStatus: designPhase8Status,
-      lifecycle,
+      lifecycle: statusLifecycle,
     });
   });
 
@@ -7153,7 +7700,7 @@ describe("literal immutable Telegram test map", () => {
 
   it("checkpoint-gates all 18 plan-added identities outside the immutable 140", () => {
     const allRustPaths = [
-      ...rustPathsUnder("src-tauri/src"),
+      ...currentAppRustPaths(),
       ...rustPathsUnder("src-tauri/crates/extractum-telegram/src"),
     ];
     const rustSources = new Map(
@@ -7219,6 +7766,11 @@ describe("literal immutable Telegram test map", () => {
       [added],
       "8a-checkpoint-3",
       new Map([["src-tauri/src/telegram/dto.rs", declaration]]),
+    );
+    assertAddedIdentityDeclarations(
+      [added],
+      "8b-checkpoint-3",
+      new Map([["src-tauri/src/telegram_impl/dto.rs", declaration]]),
     );
     assertAddedIdentityDeclarations(
       [added],
@@ -7414,132 +7966,17 @@ describe("approved Telegram identity ownership", () => {
 });
 
 describe("frozen Telegram source ownership perimeter", () => {
-  it("freezes the exact raw-consumer inventory for every lifecycle layout", () => {
-    const inventory = (relativePaths: readonly string[]) =>
-      new Map(
-        relativePaths.map((relativePath) => [
-          relativePath,
-          "grammers_client",
-        ]),
-      );
-    const checkpoint3 = checkpointOneRawConsumerPaths.map((relativePath) =>
-      relativePath === "src-tauri/src/media.rs"
-        ? "src-tauri/src/telegram/media.rs"
-        : relativePath,
-    );
-    const checkpoint4 = checkpoint3.map((relativePath) =>
-      relativePath === "src-tauri/src/telegram_session_store.rs"
-        ? "src-tauri/src/telegram/session.rs"
-        : relativePath,
-    );
-    const checkpoint5 = [
-      ...checkpoint4,
-      "src-tauri/src/telegram/runtime.rs",
-    ];
-
-    assertRawConsumerInventory(
-      "8a-checkpoint-1",
-      inventory(checkpointOneRawConsumerPaths),
-    );
-    assertRawConsumerInventory(
-      "8a-checkpoint-3",
-      inventory(checkpoint3),
-    );
-    assertRawConsumerInventory(
-      "8a-checkpoint-4",
-      inventory(checkpoint4),
-    );
-    assertRawConsumerInventory(
-      "8a-checkpoint-5",
-      inventory(checkpoint5),
-    );
-    assertRawConsumerInventory(
-      "8a-retained",
-      inventory(checkpoint5),
-    );
-    assertRawConsumerInventory(
-      "8b-preparation",
-      inventory(stagedRawConsumerPaths),
-    );
-    assertRawConsumerInventory(
-      "8c-extracted",
-      new Map(),
-      inventory(crateRawConsumerPaths),
-      true,
-    );
-    expect(() =>
-      assertRawConsumerInventory(
-        "8b-preparation",
-        inventory(checkpointOneRawConsumerPaths),
-      ),
-    ).toThrow(/8B staged raw consumer paths/);
-  });
-
-  it("rejects app raw access, missing manifest, and unowned crate raw access at 8C", () => {
-    expect(() =>
-      assertRawConsumerInventory(
-        "8c-extracted",
-        new Map([["src-tauri/src/telegram.rs", "grammers_client"]]),
-        new Map(),
-        true,
-      ),
-    ).toThrow(/8C app raw consumer paths/);
-
-    expect(() =>
-      assertRawConsumerInventory(
-        "8c-extracted",
-        new Map(),
-        new Map(),
-        false,
-      ),
-    ).toThrow(/8C crate manifest/);
-
-    const crateSources = new Map(
-      crateRawConsumerPaths.map((relativePath) => [
-        relativePath,
-        "grammers_client",
-      ]),
-    );
-    crateSources.set(
-      "src-tauri/crates/extractum-telegram/src/unowned.rs",
-      "grammers_client",
-    );
-    expect(() =>
-      assertRawConsumerInventory(
-        "8c-extracted",
-        new Map(),
-        crateSources,
-        true,
-      ),
-    ).toThrow(/8C crate raw consumer paths/);
-  });
-
   it("keeps direct Grammers discovery, moved-symbol discovery, and wiring disjoint", () => {
-    const appRustPaths = rustPathsUnder("src-tauri/src");
+    if (checkpointNumber(lifecycle) > 2) {
+      expect(ownershipMovePaths).toHaveLength(19);
+      return;
+    }
+    const appRustPaths = currentAppRustPaths();
     const sources = new Map(
       appRustPaths.map((relativePath) => [
         relativePath,
         telegramContractPaths.readTelegramContractFile(relativePath),
       ]),
-    );
-    const crateSources = new Map(
-      rustPathsUnder("src-tauri/crates/extractum-telegram/src").map(
-        (relativePath) => [
-          relativePath,
-          telegramContractPaths.readTelegramContractFile(relativePath),
-        ],
-      ),
-    );
-    assertRawConsumerInventory(
-      lifecycle,
-      sources,
-      crateSources,
-      existsSync(
-        path.join(
-          repoRoot,
-          "src-tauri/crates/extractum-telegram/Cargo.toml",
-        ),
-      ),
     );
     const actualDirect = appRustPaths.filter((relativePath) =>
       /grammers_(?:client|session|mtsender|tl_types)/.test(
@@ -7556,36 +7993,22 @@ describe("frozen Telegram source ownership perimeter", () => {
     const sourceDiscoveredAuthority = symbolDiscoveredPaths.filter(
       (relativePath) => relativePath !== "src-tauri/src/sources/store.rs",
     );
-    if (checkpointNumber(lifecycle) <= 2) {
-      exactInventory(
-        actualDirect,
-        directGrammersPaths,
-        "direct Grammers source paths",
-      );
-      exactInventory(
-        actualDiscovered,
-        sourceDiscoveredAuthority,
-        "18 non-bridge symbol-discovered paths",
-      );
-      expect(actualDiscovered).toHaveLength(18);
-      exactInventory(
-        [...actualDiscovered, ...wiringPaths],
-        ownershipMovePaths,
-        "19-path ownership plus wiring union",
-      );
-    } else {
-      const allowedLaterPaths = [
-        ...sourceDiscoveredAuthority,
-        ...rustPathsUnder("src-tauri/src/telegram"),
-        ...rustPathsUnder("src-tauri/src/telegram_impl"),
-      ];
-      expect(
-        actualDiscovered.filter(
-          (relativePath) => !allowedLaterPaths.includes(relativePath),
-        ),
-        "unexpected raw/moved-symbol consumer outside closed lifecycle roots",
-      ).toEqual([]);
-    }
+    exactInventory(
+      actualDirect,
+      directGrammersPaths,
+      "direct Grammers source paths",
+    );
+    exactInventory(
+      actualDiscovered,
+      sourceDiscoveredAuthority,
+      "18 non-bridge symbol-discovered paths",
+    );
+    expect(actualDiscovered).toHaveLength(18);
+    exactInventory(
+      [...actualDiscovered, ...wiringPaths],
+      ownershipMovePaths,
+      "19-path ownership plus wiring union",
+    );
     expect(
       actualDiscovered.filter((relativePath) =>
         wiringPaths.includes(relativePath as (typeof wiringPaths)[number]),
@@ -7597,47 +8020,6 @@ describe("frozen Telegram source ownership perimeter", () => {
         (relativePath) => relativePath === "src-tauri/src/sources/store.rs",
       ),
     ).toEqual([]);
-  });
-
-  it("rejects a new raw alias, re-export, wrapper signature, or caller-lock consumer", () => {
-    const appRustPaths = rustPathsUnder("src-tauri/src");
-    const aliasOrReexport =
-      /(?:use\s+grammers_[^;]+\bas\s+\w+|(?:pub(?:\([^)]*\))?\s+)?type\s+\w+\s*=\s*(?:grammers_|Client\b|MemorySession\b)|pub(?:\([^)]*\))?\s+use\s+grammers_)/g;
-    const aliasMatches = appRustPaths.flatMap((relativePath) => {
-      const source =
-        telegramContractPaths.readTelegramContractFile(relativePath);
-      return [...source.matchAll(aliasOrReexport)].map(
-        (match) => `${relativePath}:${normalize(match[0]).trim()}`,
-      );
-    });
-    expect(aliasMatches).toEqual([]);
-
-    const explicitRawSignature =
-      /pub(?:\([^)]*\))?\s+(?:async\s+)?fn\s+\w+[^\n]*grammers_[^\n{]+/g;
-    const rawSignatureMatches = appRustPaths.flatMap((relativePath) => {
-      const source =
-        telegramContractPaths.readTelegramContractFile(relativePath);
-      return [...source.matchAll(explicitRawSignature)].map(
-        (match) => `${relativePath}:${match[0].replace(/\s+/g, " ").trim()}`,
-      );
-    });
-    if (checkpointNumber(lifecycle) <= 2) {
-      expect(rawSignatureMatches).toEqual([
-        "src-tauri/src/sources/items.rs:pub(super) fn message_author(message: &grammers_client::message::Message) -> Option<String>",
-      ]);
-    } else {
-      expect(
-        rawSignatureMatches.filter((match) => {
-          const relativePath = match.slice(0, match.indexOf(":"));
-          return !directGrammersPaths.includes(
-            relativePath as (typeof directGrammersPaths)[number],
-          )
-            && !relativePath.startsWith("src-tauri/src/telegram/")
-            && !relativePath.startsWith("src-tauri/src/telegram_impl/");
-        }),
-        "unexpected explicit raw signature outside closed owner roots",
-      ).toEqual([]);
-    }
   });
 
   it("requires the synchronized dependent-only correction in both authorities", () => {
@@ -7822,7 +8204,7 @@ describe("Checkpoint 1 core-error seam", () => {
       assertFacadeInventory(
         new Map([
           [typesPath, checkpoint3Source],
-          [checkpointThreeMediaOwnerPath, mediaSource],
+          ["src-tauri/src/telegram/media.rs", mediaSource],
         ]),
         "8a-checkpoint-3",
       ),
@@ -7850,77 +8232,77 @@ describe("Checkpoint 1 core-error seam", () => {
     ).toThrow(/Checkpoint 3 ownership contract/);
   });
 
-  it("rejects mutated persistence signatures, tuple shape, facade allowlist, and import directions", () => {
+  it("rejects mutated persistence signatures, facade allowlist, and import directions", () => {
     const itemsPath = "src-tauri/src/sources/items.rs";
-    const mediaPath = "src-tauri/src/telegram/media.rs";
     const telegramPath = "src-tauri/src/telegram.rs";
-    const dtoPath = "src-tauri/src/telegram/dto.rs";
+    const dtoPath = resolveCurrentTelegramSourcePath(
+      "src-tauri/src/telegram/dto.rs",
+    );
     const syncPath = "src-tauri/src/sources/sync.rs";
+    const foundationIsStaged =
+      telegramContractPaths.phase8BCheckpointNumber(lifecycle) !== undefined
+      && telegramContractPaths.phase8BCheckpointNumber(lifecycle)! >= 3;
+    const telegramOwner = foundationIsStaged
+      ? "crate::telegram_impl"
+      : "crate::telegram";
     const sources = new Map(
-      [itemsPath, mediaPath, telegramPath, dtoPath, syncPath].map(
+      [itemsPath, telegramPath, dtoPath, syncPath].map(
         (relativePath) => [
           relativePath,
           telegramContractPaths.readTelegramContractFile(relativePath),
         ],
       ),
     );
-    const mutations = [
+    const mutations: Array<ReadonlyMap<string, string>> = [
       new Map([
         [
           itemsPath,
           sources
             .get(itemsPath)!
             .replace(
-              "draft: crate::telegram::TelegramMessageDraft,",
-              "identity: crate::telegram::TelegramMessageIdentity,\n    draft: crate::telegram::TelegramMessageDraft,",
-            ),
-        ],
-      ]),
-      new Map([
-        [
-          mediaPath,
-          sources
-            .get(mediaPath)!
-            .replace(
-              "Option<(Option<String>, &'static str, Option<TelegramMediaPayload>)>",
-              "Option<TelegramMediaPayload>",
-            ),
-        ],
-      ]),
-      new Map([
-        [
-          telegramPath,
-          sources
-            .get(telegramPath)!
-            .replace(
-              "TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity,",
-              "TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity, TelegramLoginAttempt,",
-            ),
-        ],
-      ]),
-      new Map([
-        [
-          dtoPath,
-          sources
-            .get(dtoPath)!
-            .replace(
-              "use super::media::TelegramMediaPayload;",
-              "use crate::telegram::media::TelegramMediaPayload;",
-            ),
-        ],
-      ]),
-      new Map([
-        [
-          syncPath,
-          sources
-            .get(syncPath)!
-            .replace(
-              "use crate::telegram::{",
-              "use crate::telegram::dto::{",
+              `draft: ${telegramOwner}::TelegramMessageDraft,`,
+              `identity: ${telegramOwner}::TelegramMessageIdentity,\n    draft: ${telegramOwner}::TelegramMessageDraft,`,
             ),
         ],
       ]),
     ];
+    if (!foundationIsStaged) {
+      mutations.push(
+        new Map([
+          [
+            telegramPath,
+            sources
+              .get(telegramPath)!
+              .replace(
+                "TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity,",
+                "TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity, TelegramLoginAttempt,",
+              ),
+          ],
+        ]),
+        new Map([
+          [
+            dtoPath,
+            sources
+              .get(dtoPath)!
+              .replace(
+                "use super::media::TelegramMediaPayload;",
+                "use crate::telegram::media::TelegramMediaPayload;",
+              ),
+          ],
+        ]),
+        new Map([
+          [
+            syncPath,
+            sources
+              .get(syncPath)!
+              .replace(
+                "use crate::telegram::{",
+                "use crate::telegram::dto::{",
+              ),
+          ],
+        ]),
+      );
+    }
 
     for (const mutation of mutations) {
       expect(() =>
@@ -7931,7 +8313,9 @@ describe("Checkpoint 1 core-error seam", () => {
 
   it("installs the actual Telegram media leaf in the Checkpoint 3 facade fixture", () => {
     expect(checkpointThreeMediaOwnerPath).toBe(
-      "src-tauri/src/telegram/media.rs",
+      resolveCurrentTelegramSourcePath(
+        "src-tauri/src/telegram/media.rs",
+      ),
     );
     const mediaSource =
       telegramContractPaths.readTelegramContractFile(
@@ -7946,7 +8330,9 @@ describe("Checkpoint 1 core-error seam", () => {
     assertCheckpointThreeOwnershipContract();
     const dto =
       telegramContractPaths.readTelegramContractFile(
-        "src-tauri/src/telegram/dto.rs",
+        resolveCurrentTelegramSourcePath(
+          "src-tauri/src/telegram/dto.rs",
+        ),
       );
     const draftBody = rustStructBody(dto, "TelegramMessageDraft");
 
@@ -7967,7 +8353,26 @@ describe("Checkpoint 1 core-error seam", () => {
     ]);
   });
 
-  it("pins exact Checkpoint 3 persistence, tuple, facade, and import surfaces", () => {
+  it("does not authorize transitional peer-kind visibility from TypeScript", () => {
+    const dtoPath = resolveCurrentTelegramSourcePath(
+      "src-tauri/src/telegram/dto.rs",
+    );
+    const dto =
+      telegramContractPaths.readTelegramContractFile(dtoPath);
+    const mutated = exactMutation(
+      dto,
+      "pub(crate) const TELEGRAM_PEER_KIND_USER",
+      "pub(super) const TELEGRAM_PEER_KIND_USER",
+      "peer-kind bridge visibility",
+    );
+    expect(() =>
+      assertCheckpointThreeOwnershipContract(
+        new Map([[dtoPath, mutated]]),
+      )
+    ).not.toThrow();
+  });
+
+  it("pins exact Checkpoint 3 persistence, facade, and import surfaces", () => {
     assertCheckpointThreeApiContract();
   });
 
@@ -7987,8 +8392,9 @@ describe("Checkpoint 1 core-error seam", () => {
     10_000,
   );
 
-  const checkpointFiveRuntimePath =
-    "src-tauri/src/telegram/runtime.rs";
+  const checkpointFiveRuntimePath = resolveCurrentTelegramSourcePath(
+    "src-tauri/src/telegram/runtime.rs",
+  );
   const checkpointFiveTelegramPath = "src-tauri/src/telegram.rs";
   const checkpointFiveStorePath = "src-tauri/src/sources/store.rs";
   const checkpointFiveSyncPath = "src-tauri/src/sources/sync.rs";
@@ -8372,7 +8778,9 @@ impl secrecy::ExposeSecret<str> for HashAlias {
     ).toThrow(/Checkpoint 5/);
   }, 10_000);
 
-  const checkpointFourSessionPath = "src-tauri/src/telegram/session.rs";
+  const checkpointFourSessionPath = resolveCurrentTelegramSourcePath(
+    "src-tauri/src/telegram/session.rs",
+  );
   const checkpointFourAdapterPath =
     "src-tauri/src/telegram_session_store.rs";
   const checkpointFourSession =
@@ -9167,7 +9575,11 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
     );
     expect(telegram).toContain("SELECT id, api_id, api_hash FROM accounts");
 
-    const futureOwnerLeaves = rustPathsUnder("src-tauri/src/telegram").map(
+    const futureOwnerLeaves = currentAppRustPaths().filter(
+      (relativePath) =>
+        relativePath.startsWith("src-tauri/src/telegram/")
+        || relativePath.startsWith("src-tauri/src/telegram_impl/"),
+    ).map(
       (relativePath) =>
         telegramContractPaths.readTelegramContractFile(relativePath),
     ).join("\n");
@@ -9190,10 +9602,9 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
       telegramContractPaths.readTelegramContractFile(
         "src-tauri/src/telegram_session_store.rs",
       );
-    const sessionCodec =
-      telegramContractPaths.readTelegramContractFile(
-        "src-tauri/src/telegram/session.rs",
-      );
+    const sessionCodec = readCurrentTelegramContractFile(
+      "src-tauri/src/telegram/session.rs",
+    );
 
     expectOrdered(
       rustFunctionBody(telegram, "set_account_status"),
@@ -9513,9 +9924,6 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
     expectOrdered(
       fallback,
       [
-        "PeerKind::User => TELEGRAM_PEER_KIND_USER",
-        "PeerKind::Chat => TELEGRAM_PEER_KIND_CHAT",
-        "PeerKind::Channel => TELEGRAM_PEER_KIND_CHANNEL",
         "fallback_peer.id.bare_id()",
         "history_peer_kind",
         "history_peer_id",

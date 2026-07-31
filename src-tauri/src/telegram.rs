@@ -7,29 +7,10 @@ use tokio::sync::Mutex;
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
 use crate::secret_store::{telegram_account_api_hash_secret, SecretStoreState};
-use crate::telegram_session_store;
-
-mod dto;
-mod media;
-mod runtime;
-mod session;
-
-pub(crate) use dto::{
-    TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
-    TELEGRAM_PEER_KIND_CHANNEL, TELEGRAM_PEER_KIND_CHAT, TELEGRAM_PEER_KIND_USER,
-};
-#[allow(unused_imports)]
-pub(crate) use media::{
-    derive_content_kind, derive_document_media_kind, extract_item_payload, DocumentSignals,
-    TelegramMediaPayload, CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA,
-};
-pub(crate) use runtime::{
+use crate::telegram_impl::{
     TelegramApiHash, TelegramClientHandle, TelegramRuntime, TelegramRuntimeStatus,
 };
-pub(crate) use session::{
-    decode_session_json, encode_session_json, session_json_requires_existing_key,
-    SessionEncryptionKey, TelegramSession,
-};
+use crate::telegram_session_store;
 
 const STATUS_NOT_INITIALIZED: &str = "not_initialized";
 const STATUS_RESTORING: &str = "restoring";
@@ -450,7 +431,7 @@ pub(crate) async fn get_client(
     state: &TelegramState,
     account_id: i64,
 ) -> extractum_core::error::AppResult<TelegramClientHandle> {
-    state.runtime.initialized_client(account_id).await
+    state.runtime.client(account_id).await
 }
 
 pub(crate) async fn get_authorized_client(
