@@ -5684,6 +5684,9 @@ describe("analysis application boundary", () => {
     const telegramFoundationIsStaged = existsSync(
       path.join(appSourceRoot, "telegram_impl/lib.rs"),
     );
+    const telegramPeerAvatarBoundaryIsStaged = existsSync(
+      path.join(appSourceRoot, "telegram_impl/live/peer.rs"),
+    );
     const productionAppPaths = appReachability.production
       .map(({ relative }) => relative);
     if (telegramFoundationIsStaged) {
@@ -5746,6 +5749,9 @@ describe("analysis application boundary", () => {
     const ingestProvenanceSourceFingerprint = telegramFoundationIsStaged
       ? "3f64c972ebc82996e65a396054ec8d16e73dc5fa911b92b9b10b79ed100b4a29"
       : "a327cabba5f1ab4f3af5c2f405ccb56a4500dc2bc736d8dc33a220f128323bde";
+    const sourcesStoreSourceFingerprint = telegramPeerAvatarBoundaryIsStaged
+      ? "c752a11642888a3c45df0c53587588e3a7603b584de1ca19e2a3c8edc025b3e9"
+      : "e510e682120b6566460fddf405f6c45d31ee7e96b399948fe91b75a51fa4a92d";
     expect(
       unresolvedProductionConsumers,
       "production unresolved executable SQL consumer inventory",
@@ -5782,7 +5788,7 @@ describe("analysis application boundary", () => {
       `notebooklm_export/query.rs:load_reply_contexts_from_archive:${notebookReplyBodyFingerprint}:${notebookExportSourceFingerprint}:query_as::<_, ReplyLookupRow>:&sql`,
       "sources/items/query.rs:load_scoped_item_rows:c2fc5684aa0042787e68af601b66b3e72eb0dc8b6a5733be08870feafeb3a13f:432d7f537661761553773e9a1b9083e92fd4f873e4205b513aaa3b4d92338add:query_as::<_, BrowsableItemRow>:&sql",
       "sources/items/query.rs:load_item_cursor:2c9ef963c3ec312b3fb89a4863419196380548e5e6afd0100d3a63be07f4de00:432d7f537661761553773e9a1b9083e92fd4f873e4205b513aaa3b4d92338add:query_as::<_, BrowsableItemRow>:&sql",
-      "sources/store.rs:delete_source_from_pool:f57c3fb2c5b7e0dab204d1ac4120eb119fde4c13a720a412e03feb126f616e8d:e510e682120b6566460fddf405f6c45d31ee7e96b399948fe91b75a51fa4a92d:query:&format!( \"PRAGMA busy_timeout = {SOURCE_DELETE_BUSY_TIMEOUT_MS}\" )",
+      `sources/store.rs:delete_source_from_pool:f57c3fb2c5b7e0dab204d1ac4120eb119fde4c13a720a412e03feb126f616e8d:${sourcesStoreSourceFingerprint}:query:&format!( "PRAGMA busy_timeout = {SOURCE_DELETE_BUSY_TIMEOUT_MS}" )`,
       "takeout_import/validation_diagnostics.rs:scalar_i64:f7d827bd898cd0cd75ffb1152e53d54534dbacdd22cdd7befd324847a41dee8f:ee2183e9150108c029ce1482613464456e6323ec80b64400f1f1478c45b277eb:query_scalar:sql",
       "takeout_import/validation_diagnostics.rs:push_mismatch_category:068f1c3248bbbe7d9519155502f1f53d840c219db4a185a0f28c327d400ed473:ee2183e9150108c029ce1482613464456e6323ec80b64400f1f1478c45b277eb:query_scalar:sample_sql",
       "topic_memberships.rs:rebuild_topic_memberships_for_source_on_connection:8492a6d57388761a564774ee507c761263c23740782e3ae236e7c9c2d88d3299:e6e8534af6f578f52a29e408ecd82f27f69f70042129a03521b38bf417af52a3:query:&insert_sql",

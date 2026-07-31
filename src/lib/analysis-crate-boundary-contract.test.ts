@@ -5007,12 +5007,36 @@ describe("analysis crate boundary", () => {
     const telegramFoundationIsStaged = existsSync(
       path.join(repoRoot, "src-tauri/src/telegram_impl/lib.rs"),
     );
+    const telegramPeerAvatarBoundaryPaths = [
+      "telegram_impl/error.rs",
+      "telegram_impl/live/avatar.rs",
+      "telegram_impl/live/mod.rs",
+      "telegram_impl/live/peer.rs",
+    ];
+    const appPaths = new Set(app.map(({ relative }) => relative));
+    const telegramPeerAvatarBoundaryPathCount =
+      telegramPeerAvatarBoundaryPaths.filter((relativePath) =>
+        appPaths.has(relativePath)
+      ).length;
+    expect(
+      [0, telegramPeerAvatarBoundaryPaths.length],
+      "Telegram CP4 peer/avatar graph stage must be absent or complete",
+    ).toContain(telegramPeerAvatarBoundaryPathCount);
+    const telegramPeerAvatarBoundaryIsStaged =
+      telegramPeerAvatarBoundaryPathCount
+        === telegramPeerAvatarBoundaryPaths.length;
     expect(
       [...ownedTables].filter((table) => !schemaTables.has(table)),
       "all six owned tables must exist in canonical migrations",
     ).toEqual([]);
     expect(app.length, "all-app production graph breadth")
-      .toBe(telegramFoundationIsStaged ? 126 : 125);
+      .toBe(
+        telegramPeerAvatarBoundaryIsStaged
+          ? 130
+          : telegramFoundationIsStaged
+          ? 126
+          : 125,
+      );
     for (const requiredPath of [
       "lib.rs",
       "main.rs",
@@ -5020,6 +5044,9 @@ describe("analysis crate boundary", () => {
       "analysis_documents.rs",
       "analysis/mod.rs",
       ...(telegramFoundationIsStaged ? ["telegram_impl/lib.rs"] : []),
+      ...(telegramPeerAvatarBoundaryIsStaged
+        ? telegramPeerAvatarBoundaryPaths
+        : []),
       "projects/read_model.rs",
       "notebooklm_export/query.rs",
     ]) {
@@ -5617,6 +5644,9 @@ describe("analysis crate boundary", () => {
     const ingestProvenanceSourceFingerprint = telegramFoundationIsStaged
       ? "c964e21b5349808deea16ac71b9f4b93955968041fd3b62e00281ae6dde9adaf"
       : "5a7f28da697b149cf3ba2f9ff01074aa662ea5f6a56c983e8ee24f83816372a2";
+    const sourcesStoreSourceFingerprint = telegramPeerAvatarBoundaryIsStaged
+      ? "01f4773cdc95e94f83c14b21efd0ae62976c3326895d0938925f6ab36c5d6167"
+      : "28a8eb092ae42884e8b06bd6681bc36c8378cb1facea61fd8076b6ed284e3895";
     expect(
       portableUnresolved,
       "portable production unresolved SQL consumer inventory",
@@ -5649,7 +5679,7 @@ describe("analysis crate boundary", () => {
       `notebooklm_export/query.rs:load_reply_contexts_from_archive:66738ed721e900eb0f17ec4c586505676b218d8db107cd91b70148cc4a157458:${notebookExportSourceFingerprint}:query_as:&sql`,
       "sources/items/query.rs:load_scoped_item_rows:bfb50958f6b5793b0731984b9e12200dd5459f1b5c6e77699e073202b5d525d0:429bc8566779242fc32476367b6cb587010ce1dc79b6c6ceb508e10730ef9c3a:query_as:&sql",
       "sources/items/query.rs:load_item_cursor:f8cae30a17e3e8b3502f58c8b655e7a958f33c1ba4884a6e169d1ff636466652:429bc8566779242fc32476367b6cb587010ce1dc79b6c6ceb508e10730ef9c3a:query_as:&sql",
-      "sources/store.rs:delete_source_from_pool:f57c3fb2c5b7e0dab204d1ac4120eb119fde4c13a720a412e03feb126f616e8d:28a8eb092ae42884e8b06bd6681bc36c8378cb1facea61fd8076b6ed284e3895:query:&format!( \"PRAGMA busy_timeout = {SOURCE_DELETE_BUSY_TIMEOUT_MS}\" )",
+      `sources/store.rs:delete_source_from_pool:f57c3fb2c5b7e0dab204d1ac4120eb119fde4c13a720a412e03feb126f616e8d:${sourcesStoreSourceFingerprint}:query:&format!( "PRAGMA busy_timeout = {SOURCE_DELETE_BUSY_TIMEOUT_MS}" )`,
       "takeout_import/validation_diagnostics.rs:scalar_i64:f7d827bd898cd0cd75ffb1152e53d54534dbacdd22cdd7befd324847a41dee8f:c10c3ed708c568efa64586bb5a6e8da9b3a037866b1ec5e4c604f2ba0dd03a9d:query_scalar:sql",
       "takeout_import/validation_diagnostics.rs:distribution:edacbda83ddb78e356b2db59916e5025eabfd93cd42058ecb1f837e5e94a70ee:c10c3ed708c568efa64586bb5a6e8da9b3a037866b1ec5e4c604f2ba0dd03a9d:query_as:sql",
       "takeout_import/validation_diagnostics.rs:push_mismatch_category:068f1c3248bbbe7d9519155502f1f53d840c219db4a185a0f28c327d400ed473:c10c3ed708c568efa64586bb5a6e8da9b3a037866b1ec5e4c604f2ba0dd03a9d:query_scalar:sample_sql",

@@ -1,5 +1,4 @@
 use tauri::AppHandle;
-use tokio::time::{Duration, Instant};
 
 use crate::db::get_pool;
 use crate::error::{AppError, AppResult};
@@ -13,7 +12,7 @@ use crate::youtube::source_metadata::{
 };
 
 use super::avatar::{
-    cache_source_avatar, peer_photo_data_url_with_timeout, read_source_avatar_data_url,
+    cache_source_avatar, photo_bytes_data_url, read_source_avatar_data_url,
     TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS,
 };
 use super::identity::{
@@ -22,13 +21,13 @@ use super::identity::{
 };
 use super::identity_repair::{require_source_identity_ready, SourceIdentityRepairState};
 use super::peer_resolution::{
-    add_source_resolution_strategy, resolve_telegram_source, telegram_source_info_from_peer,
-    ResolvedTelegramSource, SourcePeerResolutionStrategy,
+    add_source_resolution_strategy, resolve_telegram_source, SourcePeerResolutionStrategy,
 };
 use super::types::{
     now_secs, SourceRecord, SourceRecordRow, SourceSyncTarget, SourceType, TelegramSourceInfo,
     TelegramSourceKind, MIGRATED_HISTORY_STATUS_NONE, TELEGRAM_SOURCE_TYPE,
 };
+use crate::telegram_impl::PeerDescriptor;
 
 const SOURCE_DELETE_BUSY_TIMEOUT_MS: i64 = 10_000;
 
@@ -108,26 +107,30 @@ pub async fn list_telegram_sources(
     account_id: i64,
 ) -> AppResult<Vec<TelegramSourceInfo>> {
     let client_handle = crate::telegram::get_client(state.inner(), account_id).await?;
-    let client = client_handle.raw_client().clone();
 
     let mut sources = Vec::new();
-    let mut dialogs = client.iter_dialogs();
-    let photo_budget_started_at = Instant::now();
-    let photo_budget = Duration::from_millis(TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS);
-    while let Some(dialog) = dialogs
-        .next()
-        .await
-        .map_err(|e| AppError::network(e.to_string()))?
-    {
-        if let Some(mut source) = telegram_source_info_from_peer(dialog.peer()) {
-            if photo_budget_started_at.elapsed() < photo_budget {
-                source.photo_data_url =
-                    peer_photo_data_url_with_timeout(&client, dialog.peer()).await;
-            }
-            sources.push(source);
-        }
+    let mut dialogs = client_handle.dialog_listing(TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS);
+    while let Some(descriptor) = dialogs.next().await? {
+        sources.push(peer_descriptor_to_source_info(descriptor)?);
     }
     Ok(sources)
+}
+
+fn peer_descriptor_to_source_info(descriptor: PeerDescriptor) -> AppResult<TelegramSourceInfo> {
+    let id = descriptor.external_id.parse::<i64>().map_err(|_| {
+        AppError::validation(format!(
+            "Invalid Telegram peer id '{}'",
+            descriptor.external_id
+        ))
+    })?;
+    Ok(TelegramSourceInfo {
+        id,
+        title: descriptor.title,
+        username: descriptor.username,
+        source_subtype: descriptor.source_subtype,
+        is_member: descriptor.is_member,
+        photo_data_url: descriptor.avatar_bytes.map(photo_bytes_data_url),
+    })
 }
 
 pub(crate) async fn load_source(
@@ -135,7 +138,7 @@ pub(crate) async fn load_source(
     source_id: i64,
 ) -> AppResult<SourceSyncTarget> {
     sqlx::query_as(
-        "SELECT id, source_type, source_subtype, account_id, external_id, title, last_sync_state FROM sources WHERE id = ?",
+        "SELECT id, source_type, source_subtype, account_id, external_id, title, is_member, last_sync_state FROM sources WHERE id = ?",
     )
     .bind(source_id)
     .fetch_optional(pool)
@@ -281,10 +284,10 @@ pub async fn add_telegram_source(
 ) -> AppResult<SourceRecord> {
     require_source_identity_ready(repair_state.inner()).await?;
     let client_handle = crate::telegram::get_client(state.inner(), request.account_id).await?;
-    let client = client_handle.raw_client().clone();
 
     let expected_subtype = request.expected_subtype.map(TelegramSourceKind::as_str);
-    let resolved = resolve_telegram_source(&client, &request.source_ref, expected_subtype).await?;
+    let resolved =
+        resolve_telegram_source(&client_handle, &request.source_ref, expected_subtype).await?;
     let avatar_cache_key = if let Some(bytes) = resolved.avatar_bytes.as_deref() {
         cache_source_avatar(
             &handle,
@@ -315,7 +318,7 @@ async fn upsert_telegram_source_with_identity(
     account_id: i64,
     source_ref: &str,
     expected_subtype: Option<&str>,
-    resolved: &ResolvedTelegramSource,
+    resolved: &PeerDescriptor,
     avatar_cache_key: Option<&str>,
 ) -> AppResult<i64> {
     let mut tx = pool.begin().await.map_err(AppError::database)?;
@@ -351,7 +354,7 @@ async fn upsert_telegram_source_with_identity(
 async fn upsert_telegram_source_row(
     tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     account_id: i64,
-    resolved: &ResolvedTelegramSource,
+    resolved: &PeerDescriptor,
 ) -> AppResult<i64> {
     let now = now_secs();
     sqlx::query_scalar(
@@ -543,7 +546,7 @@ async fn upsert_telegram_source_identity_from_resolved(
     account_id: i64,
     source_ref: &str,
     expected_subtype: Option<&str>,
-    resolved: &ResolvedTelegramSource,
+    resolved: &PeerDescriptor,
     avatar_cache_key: Option<&str>,
 ) -> AppResult<()> {
     let source_subtype = TelegramSourceKind::from_source_subtype(&resolved.source_subtype)?;
@@ -1115,7 +1118,6 @@ mod tests {
             Some(77),
             None,
         );
-
         let source_id = upsert_telegram_source_with_identity(
             &pool,
             1,
@@ -1139,9 +1141,11 @@ mod tests {
 
     #[tokio::test]
     async fn telegram_source_upsert_writes_required_identity_and_available_optional_fields() {
+        assert_eq!(TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS, 4_000);
+
         let pool = memory_pool_with_sources().await;
         create_canonical_telegram_identity_index(&pool).await;
-        let resolved = resolved_telegram_source(
+        let mut resolved = resolved_telegram_source(
             "12345",
             "Example channel",
             TELEGRAM_KIND_CHANNEL,
@@ -1149,6 +1153,7 @@ mod tests {
             Some(77),
             None,
         );
+        resolved.is_member = false;
 
         let source_id = upsert_telegram_source_with_identity(
             &pool,
@@ -1191,6 +1196,9 @@ mod tests {
         assert_eq!(row.5.as_deref(), Some("example"));
         assert_eq!(row.6, Some(77));
         assert_eq!(row.7.as_deref(), Some("1_channel_12345.jpg"));
+
+        let source = load_source(&pool, source_id).await.expect("load source");
+        assert!(!source.is_member);
     }
 
     #[tokio::test]
@@ -1703,8 +1711,8 @@ mod tests {
         username: Option<&str>,
         access_hash: Option<i64>,
         avatar_bytes: Option<Vec<u8>>,
-    ) -> ResolvedTelegramSource {
-        ResolvedTelegramSource {
+    ) -> PeerDescriptor {
+        PeerDescriptor {
             external_id: external_id.to_string(),
             title: title.to_string(),
             source_subtype: source_subtype.to_string(),

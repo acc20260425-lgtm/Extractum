@@ -6,6 +6,17 @@ pub(crate) const TELEGRAM_PEER_KIND_CHAT: &str = "chat";
 pub(crate) const TELEGRAM_PEER_KIND_USER: &str = "user";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PeerDescriptor {
+    pub external_id: String,
+    pub title: String,
+    pub source_subtype: String,
+    pub is_member: bool,
+    pub username: Option<String>,
+    pub access_hash: Option<i64>,
+    pub avatar_bytes: Option<Vec<u8>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TelegramMessageIdentity {
     /// Telegram history/origin peer for this message, not necessarily the current source peer.
     pub history_peer_kind: String,

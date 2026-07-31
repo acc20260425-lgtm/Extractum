@@ -2509,7 +2509,7 @@ Invoke-CheckedNative 'commit Task 3' {
 - Modify: exact transitional consumers
   `src-tauri/src/sources/sync.rs` and
   `src-tauri/src/takeout_import/mod.rs`
-- Modify: the Telegram contract and two status docs
+- Modify: the Telegram contract, shell-cap contract, and two status docs
 - Modify:
   `docs/superpowers/verification/2026-07-28-extractum-telegram-8b-preparation.md`
 
@@ -2609,9 +2609,13 @@ stored-channel shortcut.
   `telegram_source_upsert_writes_required_identity_and_available_optional_fields`
   to retain its avatar-cache-key assertion and additionally load/assert
   `SourceSyncTarget::is_member`; do not add or rename a test identity.
-- [ ] Extend the lifecycle-gated source contract to require the app-owned
-  4,000 ms constant, the exact dialog-next/avatar call order, the elapsed
-  guard before each avatar, and no avatar attempt after budget expiry.
+- [ ] Do not add a TypeScript Rust-function-body analyzer for the CP4
+  peer-listing behavior. Prove the app-owned 4,000 ms budget,
+  dialog-next/avatar interleaving, one elapsed-budget guard, exact 750 ms
+  timeout, and absence of avatar attempts after expiry through the existing
+  exact Rust behavior tests and Rust compilation; do not add or rename a test
+  identity. The TypeScript CP4 extension remains limited to lifecycle/status
+  and the existing path/module/symbol/identity responsibilities.
 - [ ] Create `error.rs` as the private classifier shell. Move the non-forum
   topic classifier at Checkpoint 5 with its consumer; leave
   channel-private/export-DC classifiers at their current owners until

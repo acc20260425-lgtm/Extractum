@@ -1,22 +1,21 @@
-use grammers_client::{peer::Peer, tl};
-use grammers_session::types::PeerRef;
-#[cfg(test)]
-use grammers_session::types::{PeerAuth, PeerId};
+use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
-use super::avatar::{cache_source_avatar, peer_photo_bytes_with_timeout};
+use super::avatar::cache_source_avatar;
 use super::identity::{
-    load_telegram_source_identity, TelegramResolutionStrategy, TelegramSourceIdentity,
+    load_telegram_source_identity, TelegramPeerKind, TelegramResolutionStrategy,
+    TelegramSourceIdentity,
 };
 #[cfg(test)]
 use super::types::TELEGRAM_SOURCE_TYPE;
 use super::types::{
-    SourceSyncTarget, TelegramSourceInfo, TelegramSourceKind, TELEGRAM_KIND_CHANNEL,
-    TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+    SourceSyncTarget, TelegramSourceKind, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP,
+    TELEGRAM_KIND_SUPERGROUP,
 };
 use crate::compression::decompress_bytes;
 use crate::error::{AppError, AppResult};
+use crate::telegram_impl::{PeerDescriptor, TelegramClientHandle};
 
 use manual_ref::{
     parse_supported_manual_telegram_source_ref, parse_username, ManualTelegramSourceRef,
@@ -82,18 +81,9 @@ impl SourceMetadata {
     }
 }
 
-pub(super) struct ResolvedTelegramSource {
-    pub(super) external_id: String,
-    pub(super) title: String,
-    pub(super) source_subtype: String,
-    pub(super) is_member: bool,
-    pub(super) username: Option<String>,
-    pub(super) access_hash: Option<i64>,
-    pub(super) avatar_bytes: Option<Vec<u8>>,
-}
-
 pub(crate) struct ResolvedSyncPeer {
     pub(crate) peer: PeerRef,
+    pub(crate) descriptor: PeerDescriptor,
     pub(crate) refreshed_avatar_cache_key: Option<String>,
 }
 
@@ -175,159 +165,38 @@ fn source_peer_resolution_plan(metadata: &SourceMetadata) -> Vec<SourcePeerResol
     plan
 }
 
-#[cfg(test)]
-fn source_peer_resolution_failure(source: &SourceSyncTarget, metadata: &SourceMetadata) -> String {
-    match metadata
-        .peer_identity
-        .as_ref()
-        .map(|identity| identity.strategy)
-    {
-        Some(SourcePeerResolutionStrategy::Username) => {
-            let username = metadata
-                .peer_identity
-                .as_ref()
-                .and_then(|identity| identity.username.as_deref())
-                .unwrap_or("unknown");
-            format!(
-                "Source {} could not be resolved from stored username '{}' or compatibility dialog scanning. If the public username changed or the source became private, re-add it from the account's dialogs.",
-                source.id, username
-            )
-        }
-        Some(SourcePeerResolutionStrategy::Dialog)
-            if source.source_subtype.as_deref() == Some(TELEGRAM_KIND_GROUP) =>
-        {
-            format!(
-                "Source {} could not be resolved from dialogs. Small Telegram groups still depend on dialog availability; if this group disappeared from the account's dialogs, re-add it from that account.",
-                source.id
-            )
-        }
-        Some(SourcePeerResolutionStrategy::Dialog) => format!(
-            "Source {} could not be resolved from stored peer identity or dialogs. If this private Telegram source disappeared from the account's dialogs, re-add it from that account.",
-            source.id
-        ),
-        None => format!(
-            "Source {} could not be resolved from compatibility dialog scanning. If this is a private Telegram source, re-add it from the account's dialogs.",
-            source.id
-        ),
-    }
-}
-
-async fn resolve_telegram_source_by_username(
-    client: &grammers_client::Client,
-    username: &str,
-    source_ref: &str,
-    expected_subtype: Option<&str>,
-) -> AppResult<ResolvedTelegramSource> {
-    let peer = client
-        .resolve_username(username)
-        .await
-        .map_err(|e| AppError::network(e.to_string()))?
-        .ok_or_else(|| {
-            AppError::not_found(format!("Telegram source '{}' not found", source_ref))
-        })?;
-
-    let mut source = resolved_telegram_source_from_peer(&peer)
-        .ok_or_else(|| AppError::validation("Not a Telegram channel, group, or supergroup"))?;
-    validate_expected_telegram_source_subtype(&source, expected_subtype)?;
-    source.avatar_bytes = peer_photo_bytes_with_timeout(client, &peer).await;
-    Ok(source)
-}
-
-fn dialog_lookup_not_found_message(source_ref: &str, expected_subtype: Option<&str>) -> String {
-    if expected_subtype.is_some() {
-        format!(
-            "Telegram source '{}' was not found in this account's dialogs",
-            source_ref
-        )
-    } else {
-        format!(
-            "Telegram source '{}' was not found in this account's dialogs. Numeric manual adds only work for sources that are still visible in that account's dialogs. For private Telegram sources, add them from the account's dialogs instead.",
-            source_ref
-        )
-    }
-}
-
-fn dialog_lookup_not_found_error(source_ref: &str, expected_subtype: Option<&str>) -> AppError {
-    AppError::not_found(dialog_lookup_not_found_message(
-        source_ref,
-        expected_subtype,
-    ))
-}
-
-async fn resolve_telegram_source_from_dialogs(
-    client: &grammers_client::Client,
-    source_id: i64,
-    source_ref: &str,
-    expected_subtype: Option<&str>,
-) -> AppResult<ResolvedTelegramSource> {
-    let mut dialogs = client.iter_dialogs();
-    let mut found_wrong_kind = false;
-    while let Some(dialog) = dialogs
-        .next()
-        .await
-        .map_err(|e| AppError::network(e.to_string()))?
-    {
-        if dialog.peer().id().bare_id() == Some(source_id) {
-            if let Some(source) = resolved_telegram_source_from_peer(dialog.peer()) {
-                if telegram_source_subtype_matches(&source, expected_subtype)? {
-                    let mut source = source;
-                    source.avatar_bytes =
-                        peer_photo_bytes_with_timeout(client, dialog.peer()).await;
-                    return Ok(source);
-                }
-                found_wrong_kind = true;
-            }
-        }
-    }
-
-    if found_wrong_kind {
-        return Err(AppError::validation(format!(
-            "Telegram source '{}' was found, but it has a different source subtype than the requested source subtype",
-            source_ref
-        )));
-    }
-
-    Err(dialog_lookup_not_found_error(source_ref, expected_subtype))
-}
-
 pub(super) async fn resolve_telegram_source(
-    client: &grammers_client::Client,
+    client: &TelegramClientHandle,
     source_ref: &str,
     expected_subtype: Option<&str>,
-) -> AppResult<ResolvedTelegramSource> {
+) -> AppResult<PeerDescriptor> {
     let trimmed = source_ref.trim();
     if expected_subtype.is_none() {
         match parse_supported_manual_telegram_source_ref(trimmed)? {
             ManualTelegramSourceRef::Username(username) => {
-                return resolve_telegram_source_by_username(
-                    client,
-                    &username,
-                    source_ref,
-                    expected_subtype,
-                )
-                .await
+                return client
+                    .resolve_username(&username, expected_subtype)
+                    .await?
+                    .ok_or_else(|| {
+                        AppError::not_found(format!("Telegram source '{}' not found", source_ref))
+                    })
             }
             ManualTelegramSourceRef::NumericId(source_id) => {
-                return resolve_telegram_source_from_dialogs(
-                    client,
-                    source_id,
-                    source_ref,
-                    expected_subtype,
-                )
-                .await
+                return client
+                    .resolve_dialog_peer(source_id, expected_subtype)
+                    .await
             }
         }
     }
 
     let username = parse_username(trimmed);
     if !username.is_empty() && !username.chars().all(|char| char.is_ascii_digit()) {
-        return resolve_telegram_source_by_username(
-            client,
-            &username,
-            source_ref,
-            expected_subtype,
-        )
-        .await;
+        return client
+            .resolve_username(&username, expected_subtype)
+            .await?
+            .ok_or_else(|| {
+                AppError::not_found(format!("Telegram source '{}' not found", source_ref))
+            });
     }
 
     let Ok(source_id) = trimmed.parse::<i64>() else {
@@ -337,100 +206,9 @@ pub(super) async fn resolve_telegram_source(
         )));
     };
 
-    resolve_telegram_source_from_dialogs(client, source_id, source_ref, expected_subtype).await
-}
-
-fn telegram_source_subtype_matches(
-    source: &ResolvedTelegramSource,
-    expected_subtype: Option<&str>,
-) -> AppResult<bool> {
-    let Some(expected_subtype) = expected_subtype else {
-        return Ok(true);
-    };
-
-    TelegramSourceKind::parse(expected_subtype)?;
-    Ok(source.source_subtype == expected_subtype)
-}
-
-fn validate_expected_telegram_source_subtype(
-    source: &ResolvedTelegramSource,
-    expected_subtype: Option<&str>,
-) -> AppResult<()> {
-    if telegram_source_subtype_matches(source, expected_subtype)? {
-        Ok(())
-    } else {
-        Err(AppError::validation(format!(
-            "Resolved Telegram source has a different source subtype than the requested source subtype: requested {}, actual {}",
-            expected_subtype.unwrap_or("unknown"),
-            source.source_subtype
-        )))
-    }
-}
-
-fn resolved_telegram_source_from_peer(peer: &Peer) -> Option<ResolvedTelegramSource> {
-    telegram_source_info_from_peer(peer).map(|source| ResolvedTelegramSource {
-        external_id: source.id.to_string(),
-        title: source.title,
-        source_subtype: source.source_subtype,
-        is_member: source.is_member,
-        username: source.username,
-        access_hash: peer_access_hash(peer),
-        avatar_bytes: None,
-    })
-}
-
-pub(super) fn telegram_source_info_from_peer(peer: &Peer) -> Option<TelegramSourceInfo> {
-    match peer {
-        Peer::Channel(channel) => Some(TelegramSourceInfo {
-            id: channel.id().bare_id()?,
-            title: channel.title().to_string(),
-            username: channel.username().map(|value| value.to_string()),
-            source_subtype: TELEGRAM_KIND_CHANNEL.to_string(),
-            is_member: !channel.raw.left,
-            photo_data_url: None,
-        }),
-        Peer::Group(group) => Some(TelegramSourceInfo {
-            id: group.id().bare_id()?,
-            title: group.title().unwrap_or("Untitled group").to_string(),
-            username: group.username().map(|value| value.to_string()),
-            source_subtype: telegram_group_kind(group).to_string(),
-            is_member: telegram_group_is_member(group),
-            photo_data_url: None,
-        }),
-        Peer::User(_) => None,
-    }
-}
-
-fn telegram_group_kind(group: &grammers_client::peer::Group) -> &'static str {
-    if group.is_megagroup() {
-        TELEGRAM_KIND_SUPERGROUP
-    } else {
-        TELEGRAM_KIND_GROUP
-    }
-}
-
-fn telegram_group_is_member(group: &grammers_client::peer::Group) -> bool {
-    match &group.raw {
-        tl::enums::Chat::Chat(chat) => !chat.left && !chat.deactivated,
-        tl::enums::Chat::Channel(channel) => !channel.left,
-        tl::enums::Chat::Empty(_)
-        | tl::enums::Chat::Forbidden(_)
-        | tl::enums::Chat::ChannelForbidden(_) => false,
-    }
-}
-
-fn peer_access_hash(peer: &Peer) -> Option<i64> {
-    match peer {
-        Peer::Channel(channel) => channel.raw.access_hash,
-        Peer::Group(group) => match &group.raw {
-            tl::enums::Chat::Channel(channel) => channel.access_hash,
-            tl::enums::Chat::ChannelForbidden(channel) => Some(channel.access_hash),
-            tl::enums::Chat::Empty(_)
-            | tl::enums::Chat::Chat(_)
-            | tl::enums::Chat::Forbidden(_) => None,
-        },
-        Peer::User(_) => None,
-    }
+    client
+        .resolve_dialog_peer(source_id, expected_subtype)
+        .await
 }
 
 pub(super) fn decode_source_metadata(bytes: Option<&[u8]>) -> AppResult<SourceMetadata> {
@@ -466,7 +244,20 @@ fn typed_peer_resolution_plan(
 ) -> AppResult<Vec<SourcePeerResolutionStep>> {
     let mut plan = Vec::new();
 
-    if identity.peer_ref()?.is_some() {
+    let has_stored_identity = match (identity.peer_kind, identity.source_subtype) {
+        (
+            TelegramPeerKind::Channel,
+            TelegramSourceKind::Channel | TelegramSourceKind::Supergroup,
+        ) => identity.access_hash.is_some(),
+        (TelegramPeerKind::Chat, TelegramSourceKind::Group) => false,
+        _ => {
+            return Err(AppError::validation(format!(
+                "Source {} has inconsistent Telegram typed identity",
+                identity.source_id
+            )))
+        }
+    };
+    if has_stored_identity {
         plan.push(SourcePeerResolutionStep::StoredPeerIdentity);
     }
 
@@ -497,11 +288,61 @@ fn typed_peer_resolution_plan(
     Ok(plan)
 }
 
+trait TypedPeerResolutionBackend {
+    async fn resolve_username(
+        &mut self,
+        username: &str,
+        expected_subtype: &str,
+    ) -> AppResult<Option<PeerDescriptor>>;
+
+    async fn resolve_dialog_peer(
+        &mut self,
+        peer_id: i64,
+        expected_subtype: &str,
+    ) -> AppResult<PeerDescriptor>;
+}
+
+struct LiveTypedPeerResolutionBackend<'a>(&'a TelegramClientHandle);
+
+impl TypedPeerResolutionBackend for LiveTypedPeerResolutionBackend<'_> {
+    async fn resolve_username(
+        &mut self,
+        username: &str,
+        expected_subtype: &str,
+    ) -> AppResult<Option<PeerDescriptor>> {
+        self.0
+            .resolve_username(username, Some(expected_subtype))
+            .await
+    }
+
+    async fn resolve_dialog_peer(
+        &mut self,
+        peer_id: i64,
+        expected_subtype: &str,
+    ) -> AppResult<PeerDescriptor> {
+        self.0
+            .resolve_dialog_peer(peer_id, Some(expected_subtype))
+            .await
+    }
+}
+
 async fn resolve_source_peer_from_typed_identity(
-    client: &grammers_client::Client,
-    source_id: i64,
+    client: &TelegramClientHandle,
+    source: &SourceSyncTarget,
     identity: &TelegramSourceIdentity,
-) -> AppResult<PeerRef> {
+) -> AppResult<(PeerDescriptor, bool)> {
+    let mut backend = LiveTypedPeerResolutionBackend(client);
+    resolve_source_peer_from_typed_identity_with(&mut backend, source, identity).await
+}
+
+async fn resolve_source_peer_from_typed_identity_with<B>(
+    backend: &mut B,
+    source: &SourceSyncTarget,
+    identity: &TelegramSourceIdentity,
+) -> AppResult<(PeerDescriptor, bool)>
+where
+    B: TypedPeerResolutionBackend,
+{
     for step in typed_peer_resolution_plan(identity)? {
         match step {
             SourcePeerResolutionStep::Username => {
@@ -509,36 +350,34 @@ async fn resolve_source_peer_from_typed_identity(
                     continue;
                 };
 
-                if let Some(peer) = client
-                    .resolve_username(username)
-                    .await
-                    .map_err(|e| AppError::network(e.to_string()))?
+                if let Some(descriptor) = backend
+                    .resolve_username(username, identity.source_subtype.as_str())
+                    .await?
                 {
-                    return peer_ref_for_typed_identity(&peer, source_id, identity);
+                    return Ok((descriptor, false));
                 }
             }
             SourcePeerResolutionStep::StoredPeerIdentity => {
-                if let Some(peer_ref) = identity.peer_ref()? {
-                    return Ok(peer_ref);
-                }
+                return Ok((
+                    peer_descriptor_from_stored_identity(source, identity)?,
+                    true,
+                ));
             }
             SourcePeerResolutionStep::DialogScan => {
-                let mut dialogs = client.iter_dialogs();
-                while let Some(dialog) = dialogs
-                    .next()
+                match backend
+                    .resolve_dialog_peer(identity.peer_id, identity.source_subtype.as_str())
                     .await
-                    .map_err(|e| AppError::network(e.to_string()))?
                 {
-                    if dialog.peer().id().bare_id() == Some(identity.peer_id) {
-                        return peer_ref_for_typed_identity(dialog.peer(), source_id, identity);
-                    }
+                    Ok(descriptor) => return Ok((descriptor, false)),
+                    Err(error) if error.kind == crate::error::AppErrorKind::NotFound => {}
+                    Err(error) => return Err(error),
                 }
             }
         }
     }
 
     Err(AppError::not_found(typed_peer_resolution_failure(
-        source_id, identity,
+        source.id, identity,
     )))
 }
 
@@ -567,104 +406,125 @@ fn typed_peer_resolution_failure(source_id: i64, identity: &TelegramSourceIdenti
     }
 }
 
-#[cfg(test)]
-fn source_peer_ref_from_identity(
+fn peer_descriptor_from_stored_identity(
     source: &SourceSyncTarget,
-    telegram_source_id: i64,
-    metadata: &SourceMetadata,
-) -> AppResult<Option<PeerRef>> {
-    let Some(access_hash) = metadata
-        .peer_identity
-        .as_ref()
-        .and_then(|identity| identity.access_hash)
-    else {
-        return Ok(None);
-    };
-
-    match source.source_subtype.as_deref() {
-        Some(TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP) => Ok(Some(PeerRef {
-            id: PeerId::channel(telegram_source_id).ok_or_else(|| {
-                AppError::validation(format!(
-                    "Source {} has invalid Telegram channel peer id {}",
-                    source.id, telegram_source_id
-                ))
-            })?,
-            auth: PeerAuth::from_hash(access_hash),
-        })),
-        Some(TELEGRAM_KIND_GROUP) => Ok(None),
-        Some(other) => Err(AppError::validation(format!(
-            "Source {} has unsupported source_subtype '{}'",
-            source.id, other
-        ))),
-        None => Err(AppError::validation(format!(
-            "Source {} is missing source_subtype",
-            source.id
-        ))),
-    }
-}
-
-fn peer_ref_for_source_subtype(
-    peer: &Peer,
-    source_subtype: &str,
-    source_id: i64,
-) -> AppResult<PeerRef> {
-    match (source_subtype, peer) {
-        (TELEGRAM_KIND_CHANNEL, Peer::Channel(channel)) => Ok(channel.raw.clone().into()),
-        (TELEGRAM_KIND_SUPERGROUP, Peer::Group(group)) if group.is_megagroup() => {
-            Ok(group.raw.clone().into())
-        }
-        (TELEGRAM_KIND_GROUP, Peer::Group(group)) if !group.is_megagroup() => {
-            Ok(group.raw.clone().into())
-        }
-        (TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP | TELEGRAM_KIND_GROUP, _) => Err(
-            AppError::validation(format!(
-                "Source {} resolved to a different Telegram source subtype than the requested source subtype",
-                source_id
-            )),
-        ),
-        (other, _) => Err(AppError::validation(format!(
-            "Source {} has unsupported source_subtype '{}'",
-            source_id, other
-        ))),
-    }
-}
-
-fn peer_ref_for_typed_identity(
-    peer: &Peer,
-    source_id: i64,
     identity: &TelegramSourceIdentity,
-) -> AppResult<PeerRef> {
-    peer_ref_for_source_subtype(peer, identity.source_subtype.as_str(), source_id)
+) -> AppResult<PeerDescriptor> {
+    match (
+        identity.peer_kind,
+        identity.source_subtype,
+        identity.access_hash,
+    ) {
+        (
+            TelegramPeerKind::Channel,
+            TelegramSourceKind::Channel | TelegramSourceKind::Supergroup,
+            Some(_),
+        ) => {}
+        _ => {
+            return Err(AppError::validation(format!(
+                "Source {} does not have a reconstructible stored Telegram identity",
+                source.id
+            )))
+        }
+    }
+
+    Ok(PeerDescriptor {
+        external_id: source.external_id.clone(),
+        title: source
+            .title
+            .clone()
+            .unwrap_or_else(|| "Untitled Telegram source".to_string()),
+        source_subtype: identity.source_subtype.as_str().to_string(),
+        is_member: source.is_member,
+        username: identity.username.clone(),
+        access_hash: identity.access_hash,
+        avatar_bytes: None,
+    })
+}
+
+pub(crate) fn legacy_peer_ref_from_descriptor(descriptor: &PeerDescriptor) -> AppResult<PeerRef> {
+    let peer_id = descriptor
+        .external_id
+        .parse::<i64>()
+        .ok()
+        .filter(|peer_id| *peer_id > 0)
+        .ok_or_else(|| {
+            AppError::validation(format!(
+                "Invalid Telegram peer id '{}'",
+                descriptor.external_id
+            ))
+        })?;
+
+    match descriptor.source_subtype.as_str() {
+        TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP => {
+            let access_hash = descriptor.access_hash.ok_or_else(|| {
+                AppError::validation(format!(
+                    "Telegram {} {} is missing an access hash",
+                    descriptor.source_subtype, descriptor.external_id
+                ))
+            })?;
+            Ok(PeerRef {
+                id: PeerId::channel(peer_id).ok_or_else(|| {
+                    AppError::validation(format!("Invalid Telegram channel peer id {peer_id}"))
+                })?,
+                auth: PeerAuth::from_hash(access_hash),
+            })
+        }
+        TELEGRAM_KIND_GROUP => Ok(PeerRef {
+            id: PeerId::chat(peer_id).ok_or_else(|| {
+                AppError::validation(format!("Invalid Telegram group peer id {peer_id}"))
+            })?,
+            auth: PeerAuth::default(),
+        }),
+        other => Err(AppError::validation(format!(
+            "Unsupported Telegram source_subtype '{other}'"
+        ))),
+    }
 }
 
 pub(crate) async fn resolve_and_refresh_peer(
     handle: &AppHandle,
     pool: &sqlx::Pool<sqlx::Sqlite>,
-    client: &grammers_client::Client,
+    client: &TelegramClientHandle,
     source: &SourceSyncTarget,
     account_id: i64,
 ) -> AppResult<ResolvedSyncPeer> {
     let identity = load_telegram_source_identity(pool, source.id).await?;
-    let peer = resolve_source_peer_from_typed_identity(client, source.id, &identity).await?;
-    let refreshed_avatar_cache_key =
-        refresh_source_avatar_cache(handle, client, source, &identity, account_id, peer).await;
+    let (descriptor, fetch_stored_avatar) =
+        resolve_source_peer_from_typed_identity(client, source, &identity).await?;
+    let peer = legacy_peer_ref_from_descriptor(&descriptor)?;
+    let refreshed_avatar_cache_key = refresh_source_avatar_cache(
+        handle,
+        client,
+        source,
+        &identity,
+        account_id,
+        &descriptor,
+        fetch_stored_avatar,
+    )
+    .await;
 
     Ok(ResolvedSyncPeer {
         peer,
+        descriptor,
         refreshed_avatar_cache_key,
     })
 }
 
 async fn refresh_source_avatar_cache(
     handle: &AppHandle,
-    client: &grammers_client::Client,
+    client: &TelegramClientHandle,
     source: &SourceSyncTarget,
     identity: &TelegramSourceIdentity,
     account_id: i64,
-    peer_ref: PeerRef,
+    descriptor: &PeerDescriptor,
+    fetch_stored_avatar: bool,
 ) -> Option<String> {
-    let peer = client.resolve_peer(peer_ref).await.ok()?;
-    let bytes = peer_photo_bytes_with_timeout(client, &peer).await?;
+    let bytes = if fetch_stored_avatar {
+        client.peer_avatar_bytes(descriptor).await?
+    } else {
+        descriptor.avatar_bytes.clone()?
+    };
     cache_source_avatar(
         handle,
         account_id,
@@ -685,39 +545,31 @@ mod tests {
         TelegramPeerKind, TelegramResolutionStrategy, TelegramSourceIdentity,
     };
 
-    #[test]
-    fn typed_identity_builds_channel_peer_ref_when_access_hash_exists() {
-        let identity = TelegramSourceIdentity {
-            source_id: 101,
-            account_id: 1,
-            source_subtype: TelegramSourceKind::Channel,
-            peer_kind: TelegramPeerKind::Channel,
-            peer_id: 12345,
-            resolution_strategy: TelegramResolutionStrategy::Username,
-            username: Some("example".to_string()),
-            access_hash: Some(77),
-            avatar_cache_key: None,
-        };
-
-        assert!(identity.peer_ref().expect("peer ref check").is_some());
+    #[derive(Default)]
+    struct ExhaustedPeerResolver {
+        events: Vec<String>,
     }
 
-    #[test]
-    fn typed_identity_rejects_subtype_peer_kind_mismatch() {
-        let identity = TelegramSourceIdentity {
-            source_id: 101,
-            account_id: 1,
-            source_subtype: TelegramSourceKind::Group,
-            peer_kind: TelegramPeerKind::Channel,
-            peer_id: 12345,
-            resolution_strategy: TelegramResolutionStrategy::Dialog,
-            username: None,
-            access_hash: Some(77),
-            avatar_cache_key: None,
-        };
+    impl TypedPeerResolutionBackend for ExhaustedPeerResolver {
+        async fn resolve_username(
+            &mut self,
+            username: &str,
+            expected_subtype: &str,
+        ) -> AppResult<Option<PeerDescriptor>> {
+            self.events
+                .push(format!("username:{username}:{expected_subtype}"));
+            Ok(None)
+        }
 
-        let error = identity.peer_ref().expect_err("mismatch is invalid");
-        assert_eq!(error.kind, crate::error::AppErrorKind::Validation);
+        async fn resolve_dialog_peer(
+            &mut self,
+            peer_id: i64,
+            expected_subtype: &str,
+        ) -> AppResult<PeerDescriptor> {
+            self.events
+                .push(format!("dialog:{peer_id}:{expected_subtype}"));
+            Err(AppError::not_found("deterministic dialog miss"))
+        }
     }
 
     #[test]
@@ -932,24 +784,6 @@ mod tests {
     }
 
     #[test]
-    fn dialog_lookup_misses_are_not_found() {
-        let error = dialog_lookup_not_found_error("12345", None);
-
-        assert_eq!(error.kind, AppErrorKind::NotFound);
-        assert!(error
-            .message
-            .contains("not found in this account's dialogs"));
-    }
-
-    #[test]
-    fn dialog_lookup_not_found_message_explains_numeric_manual_limit() {
-        let message = dialog_lookup_not_found_message("12345", None);
-        assert!(message.contains("not found in this account's dialogs"));
-        assert!(message.contains("Numeric manual adds only work"));
-        assert!(message.contains("private Telegram sources"));
-    }
-
-    #[test]
     fn add_source_resolution_strategy_distinguishes_username_and_dialog_flows() {
         assert_eq!(
             add_source_resolution_strategy("@example", None),
@@ -1006,136 +840,6 @@ mod tests {
     }
 
     #[test]
-    fn validate_expected_telegram_source_subtype_reports_requested_and_actual_subtype() {
-        let source = ResolvedTelegramSource {
-            external_id: "123".to_string(),
-            title: "Example".to_string(),
-            source_subtype: TELEGRAM_KIND_SUPERGROUP.to_string(),
-            is_member: true,
-            username: Some("example".to_string()),
-            access_hash: Some(42),
-            avatar_bytes: None,
-        };
-
-        let error = validate_expected_telegram_source_subtype(&source, Some(TELEGRAM_KIND_CHANNEL))
-            .expect_err("expected subtype mismatch");
-
-        assert!(error.message.contains("requested source subtype"));
-        let legacy_key = ["telegram", "source", "kind"].join("_");
-        assert!(!error.message.contains(&legacy_key));
-        assert!(error.message.contains(TELEGRAM_KIND_CHANNEL));
-        assert!(error.message.contains(TELEGRAM_KIND_SUPERGROUP));
-    }
-
-    #[test]
-    fn peer_ref_from_identity_uses_channel_access_hash() {
-        let source = SourceSyncTarget {
-            id: 7,
-            source_type: TELEGRAM_SOURCE_TYPE.to_string(),
-            source_subtype: Some(TELEGRAM_KIND_CHANNEL.to_string()),
-            account_id: Some(1),
-            external_id: "12345".to_string(),
-            title: Some("Example".to_string()),
-            last_sync_state: None,
-        };
-        let metadata = SourceMetadata {
-            peer_identity: Some(SourcePeerIdentity {
-                strategy: SourcePeerResolutionStrategy::Dialog,
-                username: None,
-                access_hash: Some(67890),
-            }),
-            ..SourceMetadata::default()
-        };
-
-        let peer_ref = source_peer_ref_from_identity(&source, 12345, &metadata)
-            .expect("metadata peer ref")
-            .expect("peer ref");
-
-        assert_eq!(peer_ref.id.bare_id(), Some(12345));
-        assert_eq!(peer_ref.auth.hash(), 67890);
-    }
-
-    #[test]
-    fn peer_ref_from_identity_uses_supergroup_access_hash() {
-        let source = SourceSyncTarget {
-            id: 7,
-            source_type: TELEGRAM_SOURCE_TYPE.to_string(),
-            source_subtype: Some(TELEGRAM_KIND_SUPERGROUP.to_string()),
-            account_id: Some(1),
-            external_id: "12345".to_string(),
-            title: Some("Example".to_string()),
-            last_sync_state: None,
-        };
-        let metadata = SourceMetadata {
-            peer_identity: Some(SourcePeerIdentity {
-                strategy: SourcePeerResolutionStrategy::Dialog,
-                username: None,
-                access_hash: Some(67890),
-            }),
-            ..SourceMetadata::default()
-        };
-
-        let peer_ref = source_peer_ref_from_identity(&source, 12345, &metadata)
-            .expect("metadata peer ref")
-            .expect("peer ref");
-
-        assert_eq!(peer_ref.id.bare_id(), Some(12345));
-        assert_eq!(peer_ref.auth.hash(), 67890);
-    }
-
-    #[test]
-    fn peer_ref_from_identity_ignores_small_groups_without_supported_identity() {
-        let source = SourceSyncTarget {
-            id: 7,
-            source_type: TELEGRAM_SOURCE_TYPE.to_string(),
-            source_subtype: Some(TELEGRAM_KIND_GROUP.to_string()),
-            account_id: Some(1),
-            external_id: "12345".to_string(),
-            title: Some("Example".to_string()),
-            last_sync_state: None,
-        };
-        let metadata = SourceMetadata {
-            peer_identity: Some(SourcePeerIdentity {
-                strategy: SourcePeerResolutionStrategy::Dialog,
-                username: None,
-                access_hash: Some(67890),
-            }),
-            ..SourceMetadata::default()
-        };
-
-        let peer_ref =
-            source_peer_ref_from_identity(&source, 12345, &metadata).expect("metadata peer ref");
-
-        assert!(peer_ref.is_none());
-    }
-
-    #[test]
-    fn peer_ref_from_identity_rejects_unsupported_telegram_kind_as_validation() {
-        let source = SourceSyncTarget {
-            id: 7,
-            source_type: TELEGRAM_SOURCE_TYPE.to_string(),
-            source_subtype: Some("unsupported".to_string()),
-            account_id: Some(1),
-            external_id: "12345".to_string(),
-            title: Some("Example".to_string()),
-            last_sync_state: None,
-        };
-        let metadata = SourceMetadata {
-            peer_identity: Some(SourcePeerIdentity {
-                strategy: SourcePeerResolutionStrategy::Dialog,
-                username: None,
-                access_hash: Some(67890),
-            }),
-            ..SourceMetadata::default()
-        };
-
-        let error = source_peer_ref_from_identity(&source, 12345, &metadata)
-            .expect_err("unsupported kind should fail");
-
-        assert_eq!(error.kind, AppErrorKind::Validation);
-    }
-
-    #[test]
     fn source_peer_input_rejects_unsupported_source_type_as_validation() {
         let source = SourceSyncTarget {
             id: 7,
@@ -1144,6 +848,7 @@ mod tests {
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
+            is_member: true,
             last_sync_state: None,
         };
 
@@ -1162,6 +867,7 @@ mod tests {
             account_id: Some(1),
             external_id: "not-a-number".to_string(),
             title: Some("Example".to_string()),
+            is_member: true,
             last_sync_state: None,
         };
 
@@ -1171,28 +877,76 @@ mod tests {
         assert_eq!(error.kind, AppErrorKind::Validation);
     }
 
-    #[test]
-    fn source_peer_resolution_failure_explains_small_group_dialog_dependency() {
-        let source = SourceSyncTarget {
+    #[tokio::test]
+    async fn source_peer_resolution_failure_explains_small_group_dialog_dependency() {
+        let username_source = SourceSyncTarget {
             id: 7,
             source_type: TELEGRAM_SOURCE_TYPE.to_string(),
-            source_subtype: Some(TELEGRAM_KIND_GROUP.to_string()),
+            source_subtype: Some(TELEGRAM_KIND_CHANNEL.to_string()),
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
+            is_member: true,
             last_sync_state: None,
         };
-        let metadata = SourceMetadata {
-            peer_identity: Some(SourcePeerIdentity {
-                strategy: SourcePeerResolutionStrategy::Dialog,
-                username: None,
-                access_hash: None,
-            }),
-            ..SourceMetadata::default()
+        let username_identity = TelegramSourceIdentity {
+            source_id: username_source.id,
+            account_id: 1,
+            source_subtype: TelegramSourceKind::Channel,
+            peer_kind: TelegramPeerKind::Channel,
+            peer_id: 12345,
+            resolution_strategy: TelegramResolutionStrategy::Username,
+            username: Some("example".to_string()),
+            access_hash: None,
+            avatar_cache_key: None,
         };
+        let mut username_backend = ExhaustedPeerResolver::default();
 
-        let message = source_peer_resolution_failure(&source, &metadata);
-        assert!(message.contains("Small Telegram groups"));
-        assert!(message.contains("dialogs"));
+        let username_error = resolve_source_peer_from_typed_identity_with(
+            &mut username_backend,
+            &username_source,
+            &username_identity,
+        )
+        .await
+        .expect_err("username and dialog exhaustion");
+
+        assert_eq!(username_error.kind, AppErrorKind::NotFound);
+        assert!(username_error.message.contains("stored username 'example'"));
+        assert!(username_error.message.contains("typed dialog scanning"));
+        assert_eq!(
+            username_backend.events,
+            vec!["username:example:channel", "dialog:12345:channel"]
+        );
+
+        let group_source = SourceSyncTarget {
+            id: 8,
+            source_subtype: Some(TELEGRAM_KIND_GROUP.to_string()),
+            ..username_source
+        };
+        let group_identity = TelegramSourceIdentity {
+            source_id: group_source.id,
+            account_id: 1,
+            source_subtype: TelegramSourceKind::Group,
+            peer_kind: TelegramPeerKind::Chat,
+            peer_id: 12345,
+            resolution_strategy: TelegramResolutionStrategy::Dialog,
+            username: None,
+            access_hash: None,
+            avatar_cache_key: None,
+        };
+        let mut group_backend = ExhaustedPeerResolver::default();
+
+        let group_error = resolve_source_peer_from_typed_identity_with(
+            &mut group_backend,
+            &group_source,
+            &group_identity,
+        )
+        .await
+        .expect_err("small-group dialog miss");
+
+        assert_eq!(group_error.kind, AppErrorKind::NotFound);
+        assert!(group_error.message.contains("Small Telegram groups"));
+        assert!(group_error.message.contains("dialogs"));
+        assert_eq!(group_backend.events, vec!["dialog:12345:group"]);
     }
 }

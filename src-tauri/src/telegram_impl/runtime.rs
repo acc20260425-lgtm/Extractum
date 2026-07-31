@@ -9,7 +9,7 @@ use secrecy::{ExposeSecret, SecretString};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
-use super::session::TelegramSession;
+use super::{dto::PeerDescriptor, live, session::TelegramSession, DialogListing};
 
 #[derive(Clone)]
 pub struct TelegramApiHash(SecretString);
@@ -42,6 +42,58 @@ pub struct TelegramClientHandle {
 }
 
 impl TelegramClientHandle {
+    pub fn dialog_listing(&self, avatar_budget_ms: u64) -> DialogListing {
+        match &self.client {
+            TelegramClientInner::Grammers(client) => live::dialog_listing(client, avatar_budget_ms),
+            #[cfg(test)]
+            TelegramClientInner::Test { .. } => {
+                unreachable!("test Telegram clients cannot list live dialogs")
+            }
+        }
+    }
+
+    pub async fn resolve_dialog_peer(
+        &self,
+        peer_id: i64,
+        expected_subtype: Option<&str>,
+    ) -> extractum_core::error::AppResult<PeerDescriptor> {
+        match &self.client {
+            TelegramClientInner::Grammers(client) => {
+                live::resolve_dialog_peer(client, peer_id, expected_subtype).await
+            }
+            #[cfg(test)]
+            TelegramClientInner::Test { .. } => {
+                unreachable!("test Telegram clients cannot resolve live dialogs")
+            }
+        }
+    }
+
+    pub async fn resolve_username(
+        &self,
+        username: &str,
+        expected_subtype: Option<&str>,
+    ) -> extractum_core::error::AppResult<Option<PeerDescriptor>> {
+        match &self.client {
+            TelegramClientInner::Grammers(client) => {
+                live::resolve_username(client, username, expected_subtype).await
+            }
+            #[cfg(test)]
+            TelegramClientInner::Test { .. } => {
+                unreachable!("test Telegram clients cannot resolve live usernames")
+            }
+        }
+    }
+
+    pub async fn peer_avatar_bytes(&self, peer: &PeerDescriptor) -> Option<Vec<u8>> {
+        match &self.client {
+            TelegramClientInner::Grammers(client) => live::peer_avatar_bytes(client, peer).await,
+            #[cfg(test)]
+            TelegramClientInner::Test { .. } => {
+                unreachable!("test Telegram clients cannot download live avatars")
+            }
+        }
+    }
+
     pub(crate) fn raw_client(&self) -> &grammers_client::Client {
         match &self.client {
             TelegramClientInner::Grammers(client) => client,

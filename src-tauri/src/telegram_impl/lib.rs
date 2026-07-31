@@ -1,14 +1,18 @@
 mod dto;
+mod error;
+mod live;
 mod media;
 mod runtime;
 mod session;
 
 pub use dto::{
-    TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity, ITEM_KIND_TELEGRAM_MESSAGE,
+    PeerDescriptor, TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity,
+    ITEM_KIND_TELEGRAM_MESSAGE,
 };
 pub(crate) use dto::{
     TELEGRAM_PEER_KIND_CHANNEL, TELEGRAM_PEER_KIND_CHAT, TELEGRAM_PEER_KIND_USER,
 };
+pub use live::DialogListing;
 pub use media::TelegramMediaPayload;
 pub(crate) use media::{
     derive_content_kind, derive_document_media_kind, extract_item_payload, DocumentSignals,

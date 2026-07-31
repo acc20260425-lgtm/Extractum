@@ -287,7 +287,7 @@ async fn sync_telegram_source(
     let client_handle = crate::telegram::get_authorized_client(state.inner(), account_id).await?;
     let client = client_handle.raw_client().clone();
     let resolved_peer =
-        resolve_and_refresh_peer(&handle, &pool, &client, &source, account_id).await?;
+        resolve_and_refresh_peer(&handle, &pool, &client_handle, &source, account_id).await?;
     let forum_topic_warnings =
         refresh_forum_topics(&pool, &client, resolved_peer.peer, &source).await;
     let sync_policy = determine_sync_policy(&pool, &source).await?;
@@ -349,6 +349,7 @@ mod tests {
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
+            is_member: true,
             last_sync_state: None,
         };
 
@@ -387,6 +388,7 @@ mod tests {
             account_id: Some(1),
             external_id: "12345".to_string(),
             title: Some("Example".to_string()),
+            is_member: true,
             last_sync_state: None,
         };
 
@@ -405,6 +407,7 @@ mod tests {
             account_id: None,
             external_id: "dQw4w9WgXcQ".to_string(),
             title: Some("Demo video".to_string()),
+            is_member: false,
             last_sync_state: None,
         };
 

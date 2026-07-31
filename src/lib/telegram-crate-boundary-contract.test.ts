@@ -288,6 +288,11 @@ const retainedPreparationStates = [
     designStatus: "Approved; 8B preparation Checkpoint 3 retained",
     lifecycle: "8b-checkpoint-3",
   },
+  {
+    roadmapStatus: "8B preparation Checkpoint 4 retained",
+    designStatus: "Approved; 8B preparation Checkpoint 4 retained",
+    lifecycle: "8b-checkpoint-4",
+  },
 ] as const;
 
 function resolveCurrentTelegramSourcePath(
@@ -621,7 +626,18 @@ function assertFacadeInventory(
   const actualSites = ownerSources.flatMap(({ relativePath, source }) =>
     semanticFacadeSites(relativePath, source),
   );
-  const expectedSites = checkpointOneFacadeSites.map((site) => {
+  const phase8BCheckpoint =
+    telegramContractPaths.phase8BCheckpointNumber(value);
+  const expectedFacadeSites = phase8BCheckpoint !== undefined
+      && phase8BCheckpoint >= 4
+    ? checkpointOneFacadeSites.map((site) =>
+        site
+            === "src-tauri/src/sources/peer_resolution.rs|mod:tests/fn:typed_identity_rejects_subtype_peer_kind_mismatch|crate::error#1"
+          ? "src-tauri/src/sources/peer_resolution.rs|fn:resolve_source_peer_from_typed_identity_with|crate::error#1"
+          : site
+      )
+    : checkpointOneFacadeSites;
+  const expectedSites = expectedFacadeSites.map((site) => {
     const separator = site.indexOf("|");
     const baselinePath = site.slice(0, separator);
     const semanticSite = site.slice(separator + 1);
@@ -1620,8 +1636,17 @@ function assertCheckpointFiveRuntimeContract(
       runtimeImpls,
       "TelegramClientHandle",
     ).filter((item) => /^pub\s/.test(item)),
-    "Checkpoint 5 API contract: no public client-handle adapters",
-  ).toEqual([]);
+    "Checkpoint 5 API contract: lifecycle-gated public client-handle adapters",
+  ).toEqual(
+    phase8BCheckpoint !== undefined && phase8BCheckpoint >= 4
+      ? [
+          "pub fn dialog_listing",
+          "pub fn resolve_dialog_peer",
+          "pub fn resolve_username",
+          "pub fn peer_avatar_bytes",
+        ]
+      : [],
+  );
 
   const runtimeImpl = inherentBody("TelegramRuntime", "initialize_account");
   const exactRuntimeDeclarations = new Map([
@@ -3528,17 +3553,30 @@ function assertIdentityDeclarations(
         `Invalid final module-qualified identity: ${row.finalFullId} != ${expectedFinalIdentity}`,
       );
     }
+    const phase8BCheckpoint =
+      telegramContractPaths.phase8BCheckpointNumber(value);
+    const identityFirstCheckpoint =
+      finalName === "non_forum_topic_refresh_errors_are_detected"
+        ? 5
+        : finalName
+              === "channel_private_detection_reads_rpc_name_from_error_message"
+          ? 7
+          : undefined;
     const currentPath =
-      telegramContractPaths.resolveTelegramLifecyclePath(
-        {
-          baselinePath,
-          stagedPath: row.stagedPath,
-          finalOwner: row.finalOwner as
-            | "extractum"
-            | "extractum-telegram",
-        },
-        value,
-      );
+      phase8BCheckpoint !== undefined
+        && identityFirstCheckpoint !== undefined
+        && phase8BCheckpoint < identityFirstCheckpoint
+        ? baselinePath
+        : telegramContractPaths.resolveTelegramLifecyclePath(
+            {
+              baselinePath,
+              stagedPath: row.stagedPath,
+              finalOwner: row.finalOwner as
+                | "extractum"
+                | "extractum-telegram",
+            },
+            value,
+          );
     const source =
       telegramContractPaths.readTelegramContractFile(currentPath);
     const name = currentCheckpoint >= 3 ? finalName : baselineName;
@@ -4821,19 +4859,33 @@ function directGrammersConsumerPaths(
 function phase8BCurrentFieldDefinitionKeys(
   artifact: Phase8BSymbolAuthority,
 ): ReadonlySet<string> {
+  const introducedAppFieldKeys = new Set([
+    "<new>::ResolvedSyncPeer::descriptor",
+    "<new>::SourceSyncTarget::is_member",
+  ]);
   const dispositionFields = artifact.symbols.filter(
     ({ currentPath, disposition }) =>
       currentPath !== "<new>"
       && disposition === "move-restricted-fields",
+  );
+  const introducedAppFields = artifact.symbols.filter(
+    ({ currentPath, currentSymbol }) =>
+      introducedAppFieldKeys.has(`${currentPath}::${currentSymbol}`),
   );
   if (dispositionFields.length !== 6) {
     throw new Error(
       `Phase 8B field authority: expected six disposition fields, found ${dispositionFields.length}`,
     );
   }
+  if (introducedAppFields.length !== 2) {
+    throw new Error(
+      `Phase 8B field authority: expected two CP4 app fields, found ${introducedAppFields.length}`,
+    );
+  }
   return new Set(
-    dispositionFields.map(({ currentPath, currentSymbol }) =>
-      `${currentPath}::${currentSymbol}`
+    [...dispositionFields, ...introducedAppFields].map(
+      ({ currentPath, currentSymbol }) =>
+        `${currentPath}::${currentSymbol}`,
     ),
   );
 }
@@ -5085,6 +5137,18 @@ function phase8BActiveSymbolTargets(
   if (movesAtCurrentCheckpoint) return [...row.finalTargets];
   if (row.currentPath === "<new>") return [];
   return [{ path: row.currentPath, symbol: row.currentSymbol }];
+}
+
+function phase8BCurrentAnchorsAreActive(
+  row: Phase8BSymbolRow,
+  checkpoint: number | undefined,
+): boolean {
+  return row.currentAnchors !== undefined
+    && !(
+      checkpoint !== undefined
+      && typeof row.firstCheckpoint === "number"
+      && row.firstCheckpoint <= checkpoint
+    );
 }
 
 function phase8BLLMReviewOnlyActiveTargetKeys(
@@ -5349,7 +5413,17 @@ function assertCurrentPhase8BSymbolAuthority(
       artifact,
       phase8BCheckpoint,
     );
+  const retainedTestOnlyAuthorityIsActive =
+    value !== "8c-extracted"
+    && (phase8BCheckpoint === undefined || phase8BCheckpoint < 4);
   for (const row of artifact.symbols) {
+    if (
+      phase8BCheckpoint !== undefined
+      && phase8BCheckpoint >= 4
+      && row.disposition === "split-stage-iterator"
+    ) {
+      continue;
+    }
     const authorityKey = `${row.currentPath}::${row.currentSymbol}`;
     const targets = phase8BActiveSymbolTargets(row, phase8BCheckpoint);
     if (
@@ -5364,7 +5438,7 @@ function assertCurrentPhase8BSymbolAuthority(
       }
       continue;
     }
-    if (row.currentAnchors === undefined) {
+    if (!phase8BCurrentAnchorsAreActive(row, phase8BCheckpoint)) {
       artifactCurrentDefinitionKeys.add(authorityKey);
     }
     for (const target of targets) {
@@ -5379,11 +5453,13 @@ function assertCurrentPhase8BSymbolAuthority(
       rowsByCurrentPath.set(target.path, rows);
     }
   }
-  for (const authorityKey of phase8BRetainedTestOnlyCurrentDefinitionAuthority) {
-    if (!artifactCurrentDefinitionKeys.has(authorityKey)) {
-      throw new Error(
-        `Phase 8B current symbol authority: missing retained test-only authority ${authorityKey}`,
-      );
+  if (retainedTestOnlyAuthorityIsActive) {
+    for (const authorityKey of phase8BRetainedTestOnlyCurrentDefinitionAuthority) {
+      if (!artifactCurrentDefinitionKeys.has(authorityKey)) {
+        throw new Error(
+          `Phase 8B current symbol authority: missing retained test-only authority ${authorityKey}`,
+        );
+      }
     }
   }
 
@@ -5407,11 +5483,15 @@ function assertCurrentPhase8BSymbolAuthority(
       false,
     );
     for (const { row, symbol } of rows) {
-      if (row.currentAnchors === undefined) continue;
+      const currentAnchors = row.currentAnchors;
+      if (
+        currentAnchors === undefined
+        || !phase8BCurrentAnchorsAreActive(row, phase8BCheckpoint)
+      ) continue;
       const owner = symbol.split("::")[0];
       const compactSearchable = rustFunctionBody(production, owner)
         .replace(/\s+/g, "");
-      for (const anchor of row.currentAnchors) {
+      for (const anchor of currentAnchors) {
         if (!compactSearchable.includes(anchor.replace(/\s+/g, ""))) {
           throw new Error(
             `Phase 8B current symbol authority: missing ${row.currentSymbol} anchor ${anchor}`,
@@ -5430,10 +5510,13 @@ function assertCurrentPhase8BSymbolAuthority(
         row,
         originalAuthorityKey: authorityKey,
         symbol,
-      } of rows.filter(({ row }) => row.currentAnchors === undefined)
+      } of rows.filter(({ row }) =>
+        !phase8BCurrentAnchorsAreActive(row, phase8BCheckpoint)
+      )
     ) {
       const retainedTestOnly =
-        phase8BRetainedTestOnlyCurrentDefinitionAuthority.has(authorityKey);
+        retainedTestOnlyAuthorityIsActive
+        && phase8BRetainedTestOnlyCurrentDefinitionAuthority.has(authorityKey);
       const selectedDefinitions = retainedTestOnly
         ? testInclusiveDefinitions
         : definitions;
@@ -6899,22 +6982,29 @@ impl TakeoutPageRequest {
           && currentAnchors === undefined,
       ),
     ).toHaveLength(2);
-    const source = telegramContractPaths.readTelegramContractFile(
-      "src-tauri/src/sources/peer_resolution.rs",
-    );
-    expect(
-      rustProductionDefinitionInventory(
-        source,
-        "retained test-only current-definition production proof",
-      ).all.has("source_peer_ref_from_identity"),
-    ).toBe(false);
-    expect(
-      rustProductionDefinitionInventory(
-        source,
-        "retained test-only current-definition inclusive proof",
-        false,
-      ).all.has("source_peer_ref_from_identity"),
-    ).toBe(true);
+    const phase8BCheckpoint =
+      telegramContractPaths.phase8BCheckpointNumber(lifecycle);
+    if (
+      lifecycle !== "8c-extracted"
+      && (phase8BCheckpoint === undefined || phase8BCheckpoint < 4)
+    ) {
+      const source = telegramContractPaths.readTelegramContractFile(
+        "src-tauri/src/sources/peer_resolution.rs",
+      );
+      expect(
+        rustProductionDefinitionInventory(
+          source,
+          "retained test-only current-definition production proof",
+        ).all.has("source_peer_ref_from_identity"),
+      ).toBe(false);
+      expect(
+        rustProductionDefinitionInventory(
+          source,
+          "retained test-only current-definition inclusive proof",
+          false,
+        ).all.has("source_peer_ref_from_identity"),
+      ).toBe(true);
+    }
   });
 
   it("reconciles every Phase 8B checkpoint source fixture with plan authority", () => {
@@ -8192,6 +8282,8 @@ describe("Checkpoint 1 core-error seam", () => {
 
   it("keeps semantic facade sites stable across Checkpoint 3 line shifts", () => {
     const typesPath = "src-tauri/src/sources/types.rs";
+    const peerResolutionPath =
+      "src-tauri/src/sources/peer_resolution.rs";
     const source =
       telegramContractPaths.readTelegramContractFile(typesPath);
     const mediaSource =
@@ -8200,11 +8292,27 @@ describe("Checkpoint 1 core-error seam", () => {
       );
     const checkpoint3Source =
       `// Checkpoint 3 DTO split shifts retained source lines.\n${source}`;
+    const peerResolutionCheckpointThreeFixture = `
+use crate::compression::decompress_bytes;
+use crate::error::{AppError, AppResult};
+
+#[cfg(test)]
+mod tests {
+    use crate::compression::compress_json_bytes;
+    use crate::error::AppErrorKind;
+
+    #[test]
+    fn typed_identity_rejects_subtype_peer_kind_mismatch() {
+        let _ = crate::error::AppErrorKind::Validation;
+    }
+}
+`;
     expect(() =>
       assertFacadeInventory(
         new Map([
           [typesPath, checkpoint3Source],
           ["src-tauri/src/telegram/media.rs", mediaSource],
+          [peerResolutionPath, peerResolutionCheckpointThreeFixture],
         ]),
         "8a-checkpoint-3",
       ),

@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use serde::Serialize;
 
 use crate::error::{AppError, AppResult};
@@ -92,36 +91,6 @@ pub(crate) struct TelegramSourceIdentity {
     pub(crate) username: Option<String>,
     pub(crate) access_hash: Option<i64>,
     pub(crate) avatar_cache_key: Option<String>,
-}
-
-impl TelegramSourceIdentity {
-    pub(crate) fn peer_ref(&self) -> AppResult<Option<PeerRef>> {
-        match (self.peer_kind, self.source_subtype, self.access_hash) {
-            (
-                TelegramPeerKind::Channel,
-                TelegramSourceKind::Channel | TelegramSourceKind::Supergroup,
-                Some(access_hash),
-            ) => Ok(Some(PeerRef {
-                id: PeerId::channel(self.peer_id).ok_or_else(|| {
-                    AppError::validation(format!(
-                        "Source {} has invalid Telegram channel peer id {}",
-                        self.source_id, self.peer_id
-                    ))
-                })?,
-                auth: PeerAuth::from_hash(access_hash),
-            })),
-            (
-                TelegramPeerKind::Channel,
-                TelegramSourceKind::Channel | TelegramSourceKind::Supergroup,
-                None,
-            ) => Ok(None),
-            (TelegramPeerKind::Chat, TelegramSourceKind::Group, _) => Ok(None),
-            _ => Err(AppError::validation(format!(
-                "Source {} has inconsistent Telegram typed identity",
-                self.source_id
-            ))),
-        }
-    }
 }
 
 #[derive(sqlx::FromRow)]

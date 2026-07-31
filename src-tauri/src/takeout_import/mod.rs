@@ -718,7 +718,7 @@ async fn run_takeout_migrated_history_import(
     .await;
     let resolved_peer = run_takeout_step_with_cancel(
         cancellation_token.clone(),
-        resolve_and_refresh_peer(handle, &pool, &client, &source, account_id),
+        resolve_and_refresh_peer(handle, &pool, &client_handle, &source, account_id),
     )
     .await?;
     let (resolved_peer_kind, resolved_peer_id) = peer_ref_identity(resolved_peer.peer)?;
@@ -974,7 +974,7 @@ async fn run_takeout_source_import(
     .await;
     let resolved_peer = run_takeout_step_with_cancel(
         cancellation_token.clone(),
-        resolve_and_refresh_peer(handle, &pool, &client, &source, account_id),
+        resolve_and_refresh_peer(handle, &pool, &client_handle, &source, account_id),
     )
     .await?;
     let (resolved_peer_kind, resolved_peer_id) = peer_ref_identity(resolved_peer.peer)?;
