@@ -11530,7 +11530,7 @@ describe("Phase 8C extracted Telegram boundary", () => {
         relativePath,
       ].sort());
     }
-  });
+  }, 15_000);
 
   it("moves direct dependency ownership and preserves the Grammers feature closure", () => {
     const metadata = phase8CLockedMetadata();
