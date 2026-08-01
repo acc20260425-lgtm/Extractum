@@ -173,6 +173,14 @@ global, or additional constructor. The functions preserve their current
 implementation and construct values only from already public owned boundary
 types.
 
+`app-test-support` is a development-isolation mechanism, not a security
+boundary: any external consumer can explicitly enable a public Cargo feature.
+It is authorized here only because it changes no production behavior, is
+needed solely by consumer tests, exposes a two-function API, and is safe when
+Cargo enables it for tests, examples, benches, or `--all-targets`. It must
+never expose secrets, bypass authentication, or enable an administrative
+operation.
+
 During the preparation correction, the still app-owned package temporarily
 declares `app-test-support = []` so Rust's checked-cfg recognizes the feature.
 The two definitions and root exports use
@@ -206,11 +214,31 @@ pub(crate) use extractum_telegram::{
 };
 ```
 
-Normal `cargo check -p extractum --lib` must compile the dependency without
-the feature. App tests enable it through the dev-dependency. A contract must
-prove that the normal dependency has no feature, the dev-dependency enables
-exactly `app-test-support`, the app retains no same-named package feature, and
-no third feature-gated public item exists.
+### Resolver-v2 semantics and exact evidence
+
+The workspace uses Cargo resolver version 2. In a normal library build,
+features requested only by a dev-dependency are not unified into the normal
+dependency. When Cargo builds a target that needs dev-dependencies, including
+tests, examples, benches, or `--all-targets`, `app-test-support` is expected to
+be enabled and unified for that build.
+
+Consequently, `cargo check --all-targets` is not evidence that the feature is
+off. Cargo activation has exactly two verification invariants:
+
+1. `extractum-telegram` compiles as a library without
+   `app-test-support`:
+   `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features`;
+2. the consumer package tests compile and pass with the feature enabled through
+   its dev-dependency:
+   `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`.
+
+No separate feature-unification contract or explicit feature-on crate check is
+required. The exact normal/dev manifest declarations above remain part of the
+dependency-ownership evidence. The standing curated source/API allowlist still
+rejects unconditional fixture exposure or any third feature-gated public item;
+this is API-boundary evidence, not a second Cargo feature model.
+`cargo tree -e features` is a diagnostic when the resolved graph is surprising,
+not an additional completion gate.
 
 ## Prepared-Tree Hash Authority
 
@@ -311,8 +339,10 @@ by 8B. Phase 8C widens no production item and changes no signature.
 
 The only additional externally reachable names are the two functions under
 `app-test-support`. They are not reachable in a normal dependency build and
-are excluded from production API accounting. Contract checks must evaluate
-both normal and feature-enabled surfaces.
+are excluded from production API accounting. The feature-off crate check and
+feature-on consumer tests exercise the two relevant Cargo configurations. The
+standing source/API allowlist proves that fixture exports remain conditional;
+no second production API accounting model is introduced.
 
 The package does not publicly re-export `AppError`, `AppResult`, Grammers
 types, internal modules, or raw protocol values.
@@ -414,8 +444,11 @@ and its immediate consumer `extractum`.
 
 ### Preparation loop
 
-- RED: focused contract proving the two helpers are not feature-addressable;
-- GREEN: exact four app tests plus the test-support/hash contract;
+- RED:
+  `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --lib --features app-test-support`
+  fails because the still app-owned package does not yet declare the feature;
+- GREEN: the same command succeeds, followed by the exact four app tests and
+  the prepared-hash contract;
 - focused check:
   `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`;
 - package checkpoint:
@@ -424,13 +457,19 @@ and its immediate consumer `extractum`.
 ### Extraction loop
 
 - RED: exact final package-boundary assertions described in Checkpoint 1;
-- crate GREEN:
+- feature-off crate GREEN:
+  `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features`;
+- crate focused check; this builds development targets and is not feature-off
+  evidence:
   `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets`;
 - crate checkpoint:
   `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets`;
-- consumer GREEN:
+- normal consumer GREEN:
+  `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --lib`;
+- consumer focused check; resolver v2 enables `app-test-support` for its
+  development targets:
   `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`;
-- consumer checkpoint:
+- feature-on consumer checkpoint:
   `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`.
 
 A filtered run reporting zero tests is not evidence. List test names first when
@@ -447,14 +486,10 @@ cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets
 npm.cmd run verify
 ```
 
-The final package must also pass normal and `app-test-support` feature checks
-separately so accidental production feature enablement cannot hide.
-
-```powershell
-cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features
-cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features --features app-test-support
-cargo check --manifest-path src-tauri/Cargo.toml -p extractum --lib
-```
+The workspace `--all-targets` gates intentionally include development targets
+and therefore do not prove that `app-test-support` is off. The feature-off
+crate check and feature-on consumer checkpoint in the extraction loop are the
+only feature-specific completion evidence.
 
 ## Rollback
 
@@ -495,9 +530,11 @@ Phase 8C is complete only when:
 6. the app has no direct Grammers, `chacha20poly1305`, or `rand_core`
    dependency;
 7. Cargo metadata proves exact dependency ownership, revision, and features;
-8. the production dependency does not enable `app-test-support`;
-9. the dev-dependency enables exactly `app-test-support` and the feature
-   exposes exactly two approved functions;
+8. the exact feature-off `extractum-telegram --lib --no-default-features`
+   check passes, without using `--all-targets` as feature-off evidence;
+9. the dev-dependency enables exactly `app-test-support`, the app package tests
+   pass with it enabled by resolver v2, and it exposes only the two approved
+   fixture functions;
 10. the compatibility facade is explicit, private to the app, and contains no
     behavior;
 11. existing app consumer paths and all production behavior are unchanged;
@@ -512,7 +549,7 @@ Phase 8C is complete only when:
 After owner approval, write a separate Phase 8C implementation plan using the
 project's planning workflow. The plan must include the Rust verification loops
 above, exact RED/GREEN assertions, checkpoint commits, path and dependency
-allowlists, hash-script schema, API checks for both feature states, test
-identity commands, rollback commands, and final evidence template.
+allowlists, hash-script schema, resolver-v2 two-invariant feature evidence,
+test identity commands, rollback commands, and final evidence template.
 
 Approval of this specification alone does not start implementation.
