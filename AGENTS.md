@@ -71,6 +71,14 @@ This file is a working contract for AI agents modifying the repository.
 - Every workspace member shares canonical `src-tauri/target`; do not create slice-specific `codex-*` targets for sequential work.
 - For rare dependency-level native debugging, start clean, temporarily set both `[profile.dev] debug` and `[profile.dev.package."*"] debug` to `2`, set `CARGO_TARGET_DIR` to an absolute isolated native-debug directory, run `npm.cmd run tauri dev`, then restore the manifest. Never commit the temporary profile edit.
 
+<!-- cargo-test-support-features -->
+- For a cross-package test-only seam, use a narrow, non-default `*-test-support` feature: keep the consumer's normal `[dependencies]` edge feature-free and enable the feature for the same package only in `[dev-dependencies]`.
+- The feature may expose only behavior-neutral fixtures or helpers required by consumer tests. Treat it as development isolation, not a security boundary; never place secrets, authentication bypasses, administrative controls, or production capability switches behind it.
+- With Cargo resolver v2, building consumer tests, examples, or benches—including `--all-targets`—activates and unifies the dev feature. Therefore `--all-targets` is feature-on evidence and must not be used to prove feature-off.
+- Prove the producer's production surface with `cargo check --manifest-path src-tauri/Cargo.toml -p <producer> --lib --no-default-features`; prove the seam from its consumer with `cargo test --manifest-path src-tauri/Cargo.toml -p <consumer> --all-targets`.
+- Use `cargo tree --manifest-path src-tauri/Cargo.toml -e features --invert <producer>` only to diagnose activation, not as a primary correctness gate.
+- Do not use this pattern for production variants such as storage backends, encryption, transports, or experimental protocols. The Telegram 8C design is the worked example: `docs/superpowers/specs/2026-08-01-telegram-8c-extraction-design.md`.
+
 ## 5. Data Grid & Date Formatting
 - `ExtractumDataGrid` date/time columns must use raw values plus `dateTimeFormat`.
 - Do not pre-format grid date/time values into label-only columns.
