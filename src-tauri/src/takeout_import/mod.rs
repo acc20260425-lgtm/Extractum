@@ -1,8 +1,7 @@
 #![allow(clippy::needless_borrow, clippy::too_many_arguments)]
 
-use std::{future::Future, sync::Arc};
+use std::future::Future;
 
-use grammers_client::{tl, Client};
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 use tokio_util::sync::CancellationToken;
@@ -22,35 +21,23 @@ use crate::source_ingest::{SourceIngestGuard, SourceIngestKind, SourceIngestLock
 use crate::sources::{
     finalize_sync, load_source, require_source_identity_ready, resolve_and_refresh_peer,
     SourceIdentityRepairState, TelegramSourceKind, MIGRATED_HISTORY_STATUS_AVAILABLE,
-    TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+    TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
 };
-use crate::telegram::{get_authorized_client, TelegramState};
+use crate::telegram::TelegramState;
 use crate::telegram_impl::TelegramClientHandle;
+use crate::telegram_impl::{
+    MessageRange, TakeoutAttempt, TakeoutCount, TakeoutFallback, TakeoutFallbackKind, TakeoutPage,
+    TakeoutPeer, TakeoutTransport,
+};
 use crate::time::now_secs;
-use grammers_session::types::{PeerKind, PeerRef};
-
-mod export_dc;
 mod forum_topics;
 pub(crate) mod migrated_history;
-mod pagination;
-#[allow(dead_code)]
-mod raw_parse;
 mod recovery;
 mod state;
 #[allow(dead_code)]
 mod validation_diagnostics;
 
-use export_dc::{
-    export_dc_invoke, finish_takeout_session, prepare_export_dc_alias,
-    takeout_init_request_for_source_subtype, ExportDcAlias, ExportDcAttemptState,
-};
 use forum_topics::refresh_forum_topics_after_completed_takeout;
-use pagination::{
-    message_range_min_id, next_takeout_cursor, parse_takeout_page, select_history_splits,
-    should_restart_with_descending_fallback, takeout_page_request,
-    takeout_pagination_fallback_warning, TakeoutPageRequest, TakeoutPaginationCursor,
-    TakeoutPaginationProfile,
-};
 use recovery::list_takeout_import_recovery_states_for_sources;
 pub(crate) use recovery::TakeoutImportRecoveryState;
 pub use state::TakeoutImportState;
@@ -226,91 +213,6 @@ async fn create_locked_migrated_history_start_records(
     Ok((record, ingest_guard))
 }
 
-async fn record_export_dc_attempt_if_needed(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    batch_id: i64,
-    alias: &ExportDcAlias,
-    attempts: &mut ExportDcAttemptState,
-) -> AppResult<()> {
-    if attempts.mark_attempted(alias.export_dc_id) {
-        mark_takeout_export_dc_attempted(pool, batch_id, alias.export_dc_id).await?;
-    }
-    Ok(())
-}
-
-async fn record_export_dc_fallback_if_needed(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    batch_id: i64,
-    warnings: &[String],
-    fallback_before: bool,
-    fallback_after: bool,
-    attempts: &mut ExportDcAttemptState,
-) -> AppResult<()> {
-    if !fallback_before && fallback_after {
-        let message = warnings
-            .last()
-            .cloned()
-            .unwrap_or_else(|| "Export DC fallback was used.".to_string());
-        if let Some(message) = attempts.mark_fallback(message) {
-            mark_takeout_export_dc_fallback(pool, batch_id, &message).await?;
-        }
-    }
-    Ok(())
-}
-
-async fn export_dc_invoke_with_provenance<R: tl::RemoteCall>(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    batch_id: i64,
-    client: &Client,
-    alias: &ExportDcAlias,
-    request: &R,
-    warnings: &mut Vec<String>,
-    fallback_used: &mut bool,
-    attempts: &mut ExportDcAttemptState,
-) -> AppResult<R::Return> {
-    let fallback_before = *fallback_used;
-    record_export_dc_attempt_if_needed(pool, batch_id, alias, attempts).await?;
-    let response = export_dc_invoke(client, alias, request, warnings, fallback_used).await;
-    match response {
-        Ok(response) => {
-            record_export_dc_fallback_if_needed(
-                pool,
-                batch_id,
-                warnings,
-                fallback_before,
-                *fallback_used,
-                attempts,
-            )
-            .await?;
-            Ok(response)
-        }
-        Err(error) => {
-            let _ = record_export_dc_fallback_if_needed(
-                pool,
-                batch_id,
-                warnings,
-                fallback_before,
-                *fallback_used,
-                attempts,
-            )
-            .await;
-            Err(error)
-        }
-    }
-}
-
-fn peer_ref_identity(peer: PeerRef) -> AppResult<(&'static str, i64)> {
-    let kind = match peer.id.kind() {
-        PeerKind::User => "user",
-        PeerKind::Chat => "chat",
-        PeerKind::Channel => "channel",
-    };
-    let peer_id = peer.id.bare_id().ok_or_else(|| {
-        AppError::validation("Telegram self-user peer cannot be used for Takeout import")
-    })?;
-    Ok((kind, peer_id))
-}
-
 fn migrated_history_detected_warning() -> String {
     "Migrated small-group history detected; current Takeout keeps it deferred until explicit historical import."
         .to_string()
@@ -387,7 +289,7 @@ pub async fn run_takeout_export_dc_spike(
         AppError::validation(format!("Source {source_id} is not linked to an account"))
     })?;
     let telegram_source_subtype = load_takeout_source_subtype(&pool, source.id).await?;
-    let client_handle = get_authorized_client(state.inner(), account_id).await?;
+    let client_handle = state.authorized_client(account_id).await?;
 
     run_export_dc_spike_for_handle(
         source.id,
@@ -398,71 +300,57 @@ pub async fn run_takeout_export_dc_spike(
     .await
 }
 
+macro_rules! run_spike_transport_step {
+    ($transport:ident, $warnings:ident, $fallback_used:ident, $operation:expr) => {{
+        let result = $operation.await;
+        for fallback in $transport.drain_fallbacks() {
+            push_warning_once(&mut $warnings, fallback.warning().to_string());
+            $fallback_used |= fallback.kind() == TakeoutFallbackKind::ExportDc;
+        }
+        result
+    }};
+}
+
 async fn run_export_dc_spike_for_handle(
     source_id: i64,
     account_id: i64,
     telegram_source_subtype: &str,
     handle: TelegramClientHandle,
 ) -> AppResult<TakeoutExportDcSpikeResult> {
-    let client = handle.raw_client().clone();
-    let session = Arc::clone(handle.raw_session());
-    client
-        .invoke(&tl::functions::users::GetUsers {
-            id: vec![tl::enums::InputUser::UserSelf],
-        })
-        .await
-        .map_err(|e| AppError::network(format!("Telegram self check failed: {e}")))?;
-
-    let alias = prepare_export_dc_alias(&session).await?;
-    let init_request = takeout_init_request_for_source_subtype(telegram_source_subtype)?;
+    handle.takeout_self_check().await?;
+    let mut transport = handle.prepare_takeout().await?;
+    let attempt = transport.export_dc_attempt();
     let mut warnings = Vec::new();
     let mut fallback_used = false;
-
-    let takeout = export_dc_invoke(
-        &client,
-        &alias,
-        &init_request,
-        &mut warnings,
-        &mut fallback_used,
-    )
-    .await?;
-    let tl::enums::account::Takeout::Takeout(takeout) = takeout;
-    let takeout_id = takeout.id;
-
-    let split_ranges = export_dc_invoke(
-        &client,
-        &alias,
-        &tl::functions::InvokeWithTakeout {
-            takeout_id,
-            query: tl::functions::messages::GetSplitRanges {},
-        },
-        &mut warnings,
-        &mut fallback_used,
-    )
-    .await?;
-
-    export_dc_invoke(
-        &client,
-        &alias,
-        &tl::functions::InvokeWithTakeout {
-            takeout_id,
-            query: tl::functions::account::FinishTakeoutSession { success: true },
-        },
-        &mut warnings,
-        &mut fallback_used,
-    )
-    .await?;
+    let takeout_id = run_spike_transport_step!(
+        transport,
+        warnings,
+        fallback_used,
+        transport.init(telegram_source_subtype)
+    )?;
+    let (split_count, _) = run_spike_transport_step!(
+        transport,
+        warnings,
+        fallback_used,
+        transport.message_ranges(takeout_id, telegram_source_subtype)
+    )?;
+    run_spike_transport_step!(
+        transport,
+        warnings,
+        fallback_used,
+        transport.finish(takeout_id, true)
+    )?;
 
     Ok(TakeoutExportDcSpikeResult {
         source_id,
         account_id,
         telegram_source_subtype: telegram_source_subtype.to_string(),
-        home_dc_id: alias.home_dc_id,
-        export_dc_id: alias.export_dc_id,
+        home_dc_id: attempt.home_dc_id(),
+        export_dc_id: attempt.export_dc_id(),
         used_export_dc: !fallback_used,
         fallback_used,
         takeout_id,
-        split_count: split_ranges.len(),
+        split_count: usize::try_from(split_count).unwrap_or(usize::MAX),
         warnings,
     })
 }
@@ -662,6 +550,458 @@ struct TakeoutImportOutcome {
     warnings: Vec<String>,
 }
 
+enum FallbackRecordState {
+    Empty,
+    Pending(Vec<TakeoutFallback>),
+    InFlight(Vec<TakeoutFallback>),
+    Recorded,
+    Failed {
+        fallbacks: Vec<TakeoutFallback>,
+        error: AppError,
+    },
+}
+
+enum StepOutcome<T> {
+    Remote(AppResult<T>),
+    MetadataStopped(AppResult<T>),
+    AttemptStopped {
+        remote: AppResult<T>,
+        error: AppError,
+    },
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy)]
+enum HistoryTransitionCommand {
+    History,
+    Search,
+    Drain,
+}
+
+#[cfg(test)]
+enum HistoryTransitionResponse<T> {
+    Remote {
+        result: AppResult<T>,
+        fallbacks: Vec<TakeoutFallback>,
+    },
+    Drained(Vec<TakeoutFallback>),
+}
+
+fn queue_drained_fallbacks(
+    state: &mut FallbackRecordState,
+    mut fallbacks: Vec<TakeoutFallback>,
+) -> AppResult<()> {
+    if fallbacks.is_empty() {
+        return Ok(());
+    }
+    match state {
+        FallbackRecordState::Empty | FallbackRecordState::Recorded => {
+            *state = FallbackRecordState::Pending(fallbacks);
+            Ok(())
+        }
+        FallbackRecordState::Pending(pending) => {
+            pending.append(&mut fallbacks);
+            Ok(())
+        }
+        FallbackRecordState::InFlight(_) | FallbackRecordState::Failed { .. } => Err(
+            AppError::internal("Takeout fallback metadata arrived in an invalid recorder state"),
+        ),
+    }
+}
+
+#[cfg(test)]
+async fn record_pending_once<Record>(state: &mut FallbackRecordState, record: &mut Record)
+where
+    Record: AsyncFnMut(Vec<TakeoutFallback>) -> AppResult<()>,
+{
+    let FallbackRecordState::Pending(fallbacks) =
+        std::mem::replace(state, FallbackRecordState::Empty)
+    else {
+        return;
+    };
+    *state = FallbackRecordState::InFlight(fallbacks);
+    let owned = match state {
+        FallbackRecordState::InFlight(fallbacks) => fallbacks.clone(),
+        _ => unreachable!("fallback recorder must be in flight"),
+    };
+    match record(owned).await {
+        Ok(()) => *state = FallbackRecordState::Recorded,
+        Err(error) => {
+            let fallbacks = match std::mem::replace(state, FallbackRecordState::Empty) {
+                FallbackRecordState::InFlight(fallbacks) => fallbacks,
+                _ => unreachable!("fallback recorder must retain in-flight values"),
+            };
+            *state = FallbackRecordState::Failed { fallbacks, error };
+        }
+    }
+}
+
+#[cfg(test)]
+async fn record_after_select_once<Record>(state: &mut FallbackRecordState, record: &mut Record)
+where
+    Record: AsyncFnMut(Vec<TakeoutFallback>) -> AppResult<()>,
+{
+    if matches!(state, FallbackRecordState::Pending(_)) {
+        record_pending_once(state, record).await;
+        return;
+    }
+    let FallbackRecordState::InFlight(fallbacks) = state else {
+        return;
+    };
+    let retained = fallbacks.clone();
+    match record(retained).await {
+        Ok(()) => *state = FallbackRecordState::Recorded,
+        Err(error) => {
+            let fallbacks = match std::mem::replace(state, FallbackRecordState::Empty) {
+                FallbackRecordState::InFlight(fallbacks) => fallbacks,
+                _ => unreachable!("fallback recovery must retain in-flight values"),
+            };
+            *state = FallbackRecordState::Failed { fallbacks, error };
+        }
+    }
+}
+
+fn resolve_metadata_precedence<T>(
+    state: FallbackRecordState,
+    selected: AppResult<StepOutcome<T>>,
+) -> AppResult<T> {
+    let metadata_failure = match state {
+        FallbackRecordState::Failed { fallbacks, error } => Some((
+            fallbacks
+                .iter()
+                .any(|fallback| fallback.kind() == TakeoutFallbackKind::OnlyMyMessages),
+            error,
+        )),
+        _ => None,
+    };
+    if let Some((true, error)) = metadata_failure.as_ref() {
+        return Err(error.clone());
+    }
+    match selected {
+        Err(error) => Err(error),
+        Ok(StepOutcome::AttemptStopped { error, .. }) => Err(error),
+        Ok(StepOutcome::Remote(remote) | StepOutcome::MetadataStopped(remote)) => {
+            match (metadata_failure, remote) {
+                (Some((false, metadata_error)), Ok(_)) => Err(metadata_error),
+                (_, remote) => remote,
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+async fn run_history_search_transition<T, Invoke, RecordAttempt, RecordFallbacks>(
+    cancellation_token: Option<CancellationToken>,
+    attempt: TakeoutAttempt,
+    mut invoke: Invoke,
+    mut record_attempt: RecordAttempt,
+    mut record_fallbacks: RecordFallbacks,
+) -> AppResult<T>
+where
+    Invoke: AsyncFnMut(HistoryTransitionCommand) -> HistoryTransitionResponse<T>,
+    RecordAttempt: AsyncFnMut(TakeoutAttempt) -> AppResult<()>,
+    RecordFallbacks: AsyncFnMut(Vec<TakeoutFallback>) -> AppResult<()>,
+{
+    let mut record_state = FallbackRecordState::Empty;
+    let selected = run_takeout_step_with_cancel(cancellation_token, async {
+        record_attempt(attempt).await?;
+        let HistoryTransitionResponse::Remote {
+            result: history_result,
+            fallbacks,
+        } = invoke(HistoryTransitionCommand::History).await
+        else {
+            return Err(AppError::internal(
+                "Takeout history transition returned drain metadata for a remote call",
+            ));
+        };
+        let classified_only_my = history_result.is_err()
+            && fallbacks
+                .iter()
+                .any(|fallback| fallback.kind() == TakeoutFallbackKind::OnlyMyMessages);
+        queue_drained_fallbacks(&mut record_state, fallbacks)?;
+        if classified_only_my {
+            record_pending_once(&mut record_state, &mut record_fallbacks).await;
+            if matches!(record_state, FallbackRecordState::Failed { .. }) {
+                return Ok(StepOutcome::MetadataStopped(history_result));
+            }
+            if let Err(error) = record_attempt(attempt).await {
+                return Ok(StepOutcome::AttemptStopped {
+                    remote: history_result,
+                    error,
+                });
+            }
+            let HistoryTransitionResponse::Remote {
+                result: search_result,
+                fallbacks,
+            } = invoke(HistoryTransitionCommand::Search).await
+            else {
+                return Err(AppError::internal(
+                    "Takeout search transition returned drain metadata for a remote call",
+                ));
+            };
+            queue_drained_fallbacks(&mut record_state, fallbacks)?;
+            return Ok(StepOutcome::Remote(search_result));
+        }
+        Ok(StepOutcome::Remote(history_result))
+    })
+    .await;
+    let HistoryTransitionResponse::Drained(fallbacks) =
+        invoke(HistoryTransitionCommand::Drain).await
+    else {
+        return Err(AppError::internal(
+            "Takeout history transition returned a remote result while draining metadata",
+        ));
+    };
+    queue_drained_fallbacks(&mut record_state, fallbacks)?;
+    record_after_select_once(&mut record_state, &mut record_fallbacks).await;
+    resolve_metadata_precedence(record_state, selected)
+}
+
+#[derive(Default)]
+struct TakeoutAttemptRecordState {
+    recorded: Option<(i32, i32)>,
+}
+
+#[derive(Default)]
+struct TakeoutFallbackRecordTracker {
+    export_dc_recorded: bool,
+    only_my_messages_recorded: bool,
+}
+
+async fn record_export_dc_attempt_if_needed(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
+    attempt: TakeoutAttempt,
+    state: &mut TakeoutAttemptRecordState,
+) -> AppResult<()> {
+    let key = (attempt.home_dc_id(), attempt.export_dc_id());
+    if state.recorded == Some(key) {
+        return Ok(());
+    }
+    mark_takeout_export_dc_attempted(pool, batch_id, attempt.export_dc_id()).await?;
+    state.recorded = Some(key);
+    Ok(())
+}
+
+async fn record_export_dc_fallback_if_needed(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
+    warnings: &mut Vec<String>,
+    tracker: &mut TakeoutFallbackRecordTracker,
+    fallback: TakeoutFallback,
+) -> AppResult<()> {
+    push_warning_once(warnings, fallback.warning().to_string());
+    if tracker.export_dc_recorded {
+        return Ok(());
+    }
+    let message = fallback.provenance_message().unwrap_or(fallback.warning());
+    mark_takeout_export_dc_fallback(pool, batch_id, message).await?;
+    tracker.export_dc_recorded = true;
+    Ok(())
+}
+
+async fn record_only_my_messages_fallback_if_needed(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
+    warnings: &mut Vec<String>,
+    tracker: &mut TakeoutFallbackRecordTracker,
+    fallback: TakeoutFallback,
+) -> AppResult<()> {
+    push_warning_once(warnings, fallback.warning().to_string());
+    if tracker.only_my_messages_recorded {
+        return Ok(());
+    }
+    let message = fallback.provenance_message().ok_or_else(|| {
+        AppError::internal("OnlyMyMessages fallback is missing provenance metadata")
+    })?;
+    mark_takeout_only_my_messages_fallback(pool, batch_id, message).await?;
+    tracker.only_my_messages_recorded = true;
+    Ok(())
+}
+
+async fn record_takeout_fallbacks(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
+    warnings: &mut Vec<String>,
+    tracker: &mut TakeoutFallbackRecordTracker,
+    fallbacks: Vec<TakeoutFallback>,
+) -> AppResult<()> {
+    for fallback in fallbacks {
+        match fallback.kind() {
+            TakeoutFallbackKind::ExportDc => {
+                record_export_dc_fallback_if_needed(pool, batch_id, warnings, tracker, fallback)
+                    .await?;
+            }
+            TakeoutFallbackKind::OnlyMyMessages => {
+                record_only_my_messages_fallback_if_needed(
+                    pool, batch_id, warnings, tracker, fallback,
+                )
+                .await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn record_pending_takeout_fallbacks(
+    state: &mut FallbackRecordState,
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
+    warnings: &mut Vec<String>,
+    tracker: &mut TakeoutFallbackRecordTracker,
+) {
+    let FallbackRecordState::Pending(fallbacks) =
+        std::mem::replace(state, FallbackRecordState::Empty)
+    else {
+        return;
+    };
+    *state = FallbackRecordState::InFlight(fallbacks);
+    let owned = match state {
+        FallbackRecordState::InFlight(fallbacks) => fallbacks.clone(),
+        _ => unreachable!("fallback recorder must be in flight"),
+    };
+    match record_takeout_fallbacks(pool, batch_id, warnings, tracker, owned).await {
+        Ok(()) => *state = FallbackRecordState::Recorded,
+        Err(error) => {
+            let fallbacks = match std::mem::replace(state, FallbackRecordState::Empty) {
+                FallbackRecordState::InFlight(fallbacks) => fallbacks,
+                _ => unreachable!("fallback recorder must retain in-flight values"),
+            };
+            *state = FallbackRecordState::Failed { fallbacks, error };
+        }
+    }
+}
+
+async fn record_after_select_takeout_fallbacks(
+    state: &mut FallbackRecordState,
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    batch_id: i64,
+    warnings: &mut Vec<String>,
+    tracker: &mut TakeoutFallbackRecordTracker,
+) {
+    if matches!(state, FallbackRecordState::Pending(_)) {
+        record_pending_takeout_fallbacks(state, pool, batch_id, warnings, tracker).await;
+        return;
+    }
+    let FallbackRecordState::InFlight(fallbacks) = state else {
+        return;
+    };
+    let retained = fallbacks.clone();
+    match record_takeout_fallbacks(pool, batch_id, warnings, tracker, retained).await {
+        Ok(()) => *state = FallbackRecordState::Recorded,
+        Err(error) => {
+            let fallbacks = match std::mem::replace(state, FallbackRecordState::Empty) {
+                FallbackRecordState::InFlight(fallbacks) => fallbacks,
+                _ => unreachable!("fallback recovery must retain in-flight values"),
+            };
+            *state = FallbackRecordState::Failed { fallbacks, error };
+        }
+    }
+}
+
+macro_rules! run_takeout_transport_step_with_provenance {
+    (
+        $cancellation_token:expr,
+        $pool:expr,
+        $batch_id:expr,
+        $transport:ident,
+        $warnings:ident,
+        $attempt_state:ident,
+        $fallback_tracker:ident,
+        $operation:expr
+    ) => {{
+        let attempt = $transport.export_dc_attempt();
+        let mut record_state = FallbackRecordState::Empty;
+        let selected = run_takeout_step_with_cancel($cancellation_token, async {
+            record_export_dc_attempt_if_needed($pool, $batch_id, attempt, &mut $attempt_state)
+                .await?;
+            let remote = $operation.await;
+            queue_drained_fallbacks(&mut record_state, $transport.drain_fallbacks())?;
+            Ok(StepOutcome::Remote(remote))
+        })
+        .await;
+        queue_drained_fallbacks(&mut record_state, $transport.drain_fallbacks())?;
+        record_after_select_takeout_fallbacks(
+            &mut record_state,
+            $pool,
+            $batch_id,
+            &mut $warnings,
+            &mut $fallback_tracker,
+        )
+        .await;
+        resolve_metadata_precedence(record_state, selected)
+    }};
+}
+
+macro_rules! run_history_search_transition_with_provenance {
+    (
+        $cancellation_token:expr,
+        $pool:expr,
+        $batch_id:expr,
+        $transport:ident,
+        $warnings:ident,
+        $attempt_state:ident,
+        $fallback_tracker:ident,
+        $history_operation:expr,
+        $search_operation:expr
+    ) => {{
+        let attempt = $transport.export_dc_attempt();
+        let mut record_state = FallbackRecordState::Empty;
+        let selected = run_takeout_step_with_cancel($cancellation_token, async {
+            record_export_dc_attempt_if_needed($pool, $batch_id, attempt, &mut $attempt_state)
+                .await?;
+            let history_result = $history_operation.await;
+            let fallbacks = $transport.drain_fallbacks();
+            let classified_only_my = history_result.is_err()
+                && fallbacks
+                    .iter()
+                    .any(|fallback| fallback.kind() == TakeoutFallbackKind::OnlyMyMessages);
+            queue_drained_fallbacks(&mut record_state, fallbacks)?;
+            if classified_only_my {
+                record_pending_takeout_fallbacks(
+                    &mut record_state,
+                    $pool,
+                    $batch_id,
+                    &mut $warnings,
+                    &mut $fallback_tracker,
+                )
+                .await;
+                if matches!(record_state, FallbackRecordState::Failed { .. }) {
+                    return Ok(StepOutcome::MetadataStopped(history_result));
+                }
+                if let Err(error) = record_export_dc_attempt_if_needed(
+                    $pool,
+                    $batch_id,
+                    attempt,
+                    &mut $attempt_state,
+                )
+                .await
+                {
+                    return Ok(StepOutcome::AttemptStopped {
+                        remote: history_result,
+                        error,
+                    });
+                }
+                let search_result = $search_operation.await;
+                queue_drained_fallbacks(&mut record_state, $transport.drain_fallbacks())?;
+                return Ok(StepOutcome::Remote(search_result));
+            }
+            Ok(StepOutcome::Remote(history_result))
+        })
+        .await;
+        queue_drained_fallbacks(&mut record_state, $transport.drain_fallbacks())?;
+        record_after_select_takeout_fallbacks(
+            &mut record_state,
+            $pool,
+            $batch_id,
+            &mut $warnings,
+            &mut $fallback_tracker,
+        )
+        .await;
+        resolve_metadata_precedence(record_state, selected)
+    }};
+}
+
 async fn run_takeout_step_with_cancel<Fut, T>(
     cancellation_token: Option<CancellationToken>,
     future: Fut,
@@ -707,9 +1047,7 @@ async fn run_takeout_migrated_history_import(
     let account_id = source.account_id.ok_or_else(|| {
         AppError::validation(format!("Source {} is not linked to an account", source.id))
     })?;
-    let client_handle = get_authorized_client(telegram_state.inner(), account_id).await?;
-    let client = client_handle.raw_client().clone();
-    let session = Arc::clone(client_handle.raw_session());
+    let client_handle = telegram_state.authorized_client(account_id).await?;
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_RESOLVING_SOURCE.to_string();
@@ -721,12 +1059,12 @@ async fn run_takeout_migrated_history_import(
         resolve_and_refresh_peer(handle, &pool, &client_handle, &source, account_id),
     )
     .await?;
-    let (resolved_peer_kind, resolved_peer_id) = peer_ref_identity(resolved_peer.peer)?;
+    let current_peer = TakeoutPeer::from_descriptor(&resolved_peer.descriptor)?;
     update_takeout_resolved_peer(
         &pool,
         batch_id,
-        resolved_peer_kind,
-        resolved_peer_id,
+        current_peer.peer_kind(),
+        current_peer.peer_id(),
         "chat",
         expected_chat_id.unwrap_or_default(),
     )
@@ -737,31 +1075,22 @@ async fn run_takeout_migrated_history_import(
         job.message = Some("Starting Takeout session.".to_string());
     })
     .await;
-    let alias = run_takeout_step_with_cancel(
-        cancellation_token.clone(),
-        prepare_export_dc_alias(&session),
-    )
-    .await?;
-    let init_request = takeout_init_request_for_source_subtype(TELEGRAM_KIND_GROUP)?;
+    let mut transport =
+        run_takeout_step_with_cancel(cancellation_token.clone(), client_handle.prepare_takeout())
+            .await?;
     let mut warnings = Vec::new();
-    let mut fallback_used = false;
-    let mut export_attempts = ExportDcAttemptState::new();
-    let takeout = run_takeout_step_with_cancel(
+    let mut attempt_state = TakeoutAttemptRecordState::default();
+    let mut fallback_tracker = TakeoutFallbackRecordTracker::default();
+    let takeout_id = run_takeout_transport_step_with_provenance!(
         cancellation_token.clone(),
-        export_dc_invoke_with_provenance(
-            &pool,
-            batch_id,
-            &client,
-            &alias,
-            &init_request,
-            &mut warnings,
-            &mut fallback_used,
-            &mut export_attempts,
-        ),
-    )
-    .await?;
-    let tl::enums::account::Takeout::Takeout(takeout) = takeout;
-    let takeout_id = takeout.id;
+        &pool,
+        batch_id,
+        transport,
+        warnings,
+        attempt_state,
+        fallback_tracker,
+        transport.init(TELEGRAM_KIND_GROUP)
+    )?;
     update_takeout_session_started(&pool, batch_id, takeout_id).await?;
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
@@ -769,23 +1098,21 @@ async fn run_takeout_migrated_history_import(
         job.message = Some("Revalidating migrated history availability.".to_string());
     })
     .await;
-    let revalidated_chat_id = run_takeout_step_with_cancel(
+    let revalidated = run_takeout_transport_step_with_provenance!(
         cancellation_token.clone(),
-        revalidate_migrated_from_chat_id(
-            &pool,
-            batch_id,
-            &client,
-            &alias,
-            takeout_id,
-            resolved_peer.peer,
-            &mut warnings,
-            &mut fallback_used,
-            &mut export_attempts,
-        ),
-    )
-    .await?;
-    let validation =
-        migrated_history::validate_revalidated_chat_id(expected_chat_id, revalidated_chat_id)?;
+        &pool,
+        batch_id,
+        transport,
+        warnings,
+        attempt_state,
+        fallback_tracker,
+        transport.revalidate_migrated_peer(takeout_id, &current_peer)
+    )?;
+    let validation = migrated_history::validate_revalidated_chat_id(
+        expected_chat_id,
+        revalidated.as_ref().map(|(chat_id, _)| *chat_id),
+    )?;
+    let (_, migrated_peer) = revalidated.ok_or_else(migrated_history::unavailable_error)?;
     migrated_history::upsert_migrated_history_available(
         &pool,
         source_id,
@@ -794,35 +1121,22 @@ async fn run_takeout_migrated_history_import(
     )
     .await?;
 
-    let input_peer = tl::enums::InputPeer::Chat(tl::types::InputPeerChat {
-        chat_id: validation.migrated_from_chat_id,
-    });
-
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_LOADING_SPLITS.to_string();
         job.message = Some("Loading migrated history Takeout message ranges.".to_string());
         job.warnings = warnings.to_vec();
     })
     .await;
-    let split_ranges = run_takeout_step_with_cancel(
+    let (split_count, selected_ranges) = run_takeout_transport_step_with_provenance!(
         cancellation_token.clone(),
-        export_dc_invoke_with_provenance(
-            &pool,
-            batch_id,
-            &client,
-            &alias,
-            &tl::functions::InvokeWithTakeout {
-                takeout_id,
-                query: tl::functions::messages::GetSplitRanges {},
-            },
-            &mut warnings,
-            &mut fallback_used,
-            &mut export_attempts,
-        ),
-    )
-    .await?;
-    let split_count = split_ranges.len() as i64;
-    let selected_ranges = select_history_splits(TELEGRAM_KIND_GROUP, split_ranges)?;
+        &pool,
+        batch_id,
+        transport,
+        warnings,
+        attempt_state,
+        fallback_tracker,
+        transport.message_ranges(takeout_id, TELEGRAM_KIND_GROUP)
+    )?;
     let selected_split_count = selected_ranges.len() as i64;
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
@@ -833,32 +1147,23 @@ async fn run_takeout_migrated_history_import(
     .await;
     let mut counted_ranges = Vec::new();
     let mut total = 0_i64;
-    let mut only_my_messages_recorded = false;
     for range in selected_ranges {
-        let probe = run_takeout_step_with_cancel(
+        let count = takeout_history_count_probe(
+            &pool,
+            batch_id,
             cancellation_token.clone(),
-            takeout_history_count_probe(
-                &pool,
-                batch_id,
-                &client,
-                &alias,
-                takeout_id,
-                input_peer.clone(),
-                range.clone(),
-                TELEGRAM_KIND_GROUP,
-                &mut warnings,
-                &mut fallback_used,
-                &mut export_attempts,
-                &mut only_my_messages_recorded,
-            ),
+            &mut transport,
+            takeout_id,
+            &migrated_peer,
+            &range,
+            TELEGRAM_KIND_GROUP,
+            &mut warnings,
+            &mut attempt_state,
+            &mut fallback_tracker,
         )
         .await?;
-        total += probe.count;
-        counted_ranges.push(CountedMessageRange {
-            range,
-            count: probe.count,
-            only_my_messages: probe.only_my_messages,
-        });
+        total += count.count();
+        counted_ranges.push(CountedMessageRange { range, count });
     }
     update_takeout_split_metadata(
         &pool,
@@ -881,18 +1186,15 @@ async fn run_takeout_migrated_history_import(
         handle,
         job_id,
         batch_id,
-        &client,
-        &alias,
+        &mut transport,
         takeout_id,
-        input_peer,
+        &migrated_peer,
         counted_ranges,
         &source,
         total,
-        TELEGRAM_KIND_GROUP,
         &mut warnings,
-        &mut fallback_used,
-        &mut export_attempts,
-        &mut only_my_messages_recorded,
+        &mut attempt_state,
+        &mut fallback_tracker,
         Some(validation.migrated_from_chat_id),
     )
     .await?;
@@ -907,29 +1209,16 @@ async fn run_takeout_migrated_history_import(
         job.warnings = warnings.to_vec();
     })
     .await;
-    let fallback_before = fallback_used;
-    record_export_dc_attempt_if_needed(&pool, batch_id, &alias, &mut export_attempts).await?;
-    run_takeout_step_with_cancel(
+    run_takeout_transport_step_with_provenance!(
         cancellation_token.clone(),
-        finish_takeout_session(
-            &client,
-            &alias,
-            takeout_id,
-            true,
-            &mut warnings,
-            &mut fallback_used,
-        ),
-    )
-    .await?;
-    record_export_dc_fallback_if_needed(
         &pool,
         batch_id,
-        &warnings,
-        fallback_before,
-        fallback_used,
-        &mut export_attempts,
-    )
-    .await?;
+        transport,
+        warnings,
+        attempt_state,
+        fallback_tracker,
+        transport.finish(takeout_id, true)
+    )?;
     mark_takeout_migrated_history_imported(&pool, batch_id).await?;
     finalize_ingest_batch(&pool, batch_id, TerminalBatchStatus::Completed, None).await?;
 
@@ -963,9 +1252,7 @@ async fn run_takeout_source_import(
     let account_id = source.account_id.ok_or_else(|| {
         AppError::validation(format!("Source {} is not linked to an account", source.id))
     })?;
-    let client_handle = get_authorized_client(telegram_state.inner(), account_id).await?;
-    let client = client_handle.raw_client().clone();
-    let session = Arc::clone(client_handle.raw_session());
+    let client_handle = telegram_state.authorized_client(account_id).await?;
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_RESOLVING_SOURCE.to_string();
@@ -977,14 +1264,14 @@ async fn run_takeout_source_import(
         resolve_and_refresh_peer(handle, &pool, &client_handle, &source, account_id),
     )
     .await?;
-    let (resolved_peer_kind, resolved_peer_id) = peer_ref_identity(resolved_peer.peer)?;
+    let peer = TakeoutPeer::from_descriptor(&resolved_peer.descriptor)?;
     update_takeout_resolved_peer(
         &pool,
         batch_id,
-        resolved_peer_kind,
-        resolved_peer_id,
-        resolved_peer_kind,
-        resolved_peer_id,
+        peer.peer_kind(),
+        peer.peer_id(),
+        peer.peer_kind(),
+        peer.peer_id(),
     )
     .await?;
 
@@ -993,40 +1280,27 @@ async fn run_takeout_source_import(
         job.message = Some("Starting Takeout session.".to_string());
     })
     .await;
-    run_takeout_step_with_cancel(cancellation_token.clone(), async {
-        client
-            .invoke(&tl::functions::users::GetUsers {
-                id: vec![tl::enums::InputUser::UserSelf],
-            })
-            .await
-            .map_err(|e| AppError::network(format!("Telegram self check failed: {e}")))
-    })
-    .await?;
-    let alias = run_takeout_step_with_cancel(
+    run_takeout_step_with_cancel(
         cancellation_token.clone(),
-        prepare_export_dc_alias(&session),
+        client_handle.takeout_self_check(),
     )
     .await?;
-    let init_request = takeout_init_request_for_source_subtype(&telegram_source_subtype)?;
+    let mut transport =
+        run_takeout_step_with_cancel(cancellation_token.clone(), client_handle.prepare_takeout())
+            .await?;
     let mut warnings = Vec::new();
-    let mut fallback_used = false;
-    let mut export_attempts = ExportDcAttemptState::new();
-    let takeout = run_takeout_step_with_cancel(
+    let mut attempt_state = TakeoutAttemptRecordState::default();
+    let mut fallback_tracker = TakeoutFallbackRecordTracker::default();
+    let takeout_id = run_takeout_transport_step_with_provenance!(
         cancellation_token.clone(),
-        export_dc_invoke_with_provenance(
-            &pool,
-            batch_id,
-            &client,
-            &alias,
-            &init_request,
-            &mut warnings,
-            &mut fallback_used,
-            &mut export_attempts,
-        ),
-    )
-    .await?;
-    let tl::enums::account::Takeout::Takeout(takeout) = takeout;
-    let takeout_id = takeout.id;
+        &pool,
+        batch_id,
+        transport,
+        warnings,
+        attempt_state,
+        fallback_tracker,
+        transport.init(&telegram_source_subtype)
+    )?;
     update_takeout_session_started(&pool, batch_id, takeout_id).await?;
 
     let started_result = run_started_takeout_source_import(
@@ -1038,32 +1312,28 @@ async fn run_takeout_source_import(
         &telegram_source_subtype,
         resolved_peer,
         &client_handle,
-        &client,
-        &alias,
+        &peer,
+        &mut transport,
         takeout_id,
-        warnings,
-        fallback_used,
-        &mut export_attempts,
+        &mut warnings,
+        &mut attempt_state,
+        &mut fallback_tracker,
     )
     .await;
 
     match started_result {
         Ok(outcome) => Ok(outcome),
-        Err((error, mut warnings, mut fallback_used)) => {
-            let fallback_before = fallback_used;
-            let _ =
-                record_export_dc_attempt_if_needed(&pool, batch_id, &alias, &mut export_attempts)
-                    .await;
-            if let Err(finish_error) = finish_takeout_session(
-                &client,
-                &alias,
-                takeout_id,
-                false,
-                &mut warnings,
-                &mut fallback_used,
-            )
-            .await
-            {
+        Err(error) => {
+            if let Err(finish_error) = run_takeout_transport_step_with_provenance!(
+                None,
+                &pool,
+                batch_id,
+                transport,
+                warnings,
+                attempt_state,
+                fallback_tracker,
+                transport.finish(takeout_id, false)
+            ) {
                 warnings.push(format!(
                     "Failed to finish Takeout session after error: {finish_error}"
                 ));
@@ -1077,17 +1347,8 @@ async fn run_takeout_source_import(
                 )
                 .await;
             }
-            let _ = record_export_dc_fallback_if_needed(
-                &pool,
-                batch_id,
-                &warnings,
-                fallback_before,
-                fallback_used,
-                &mut export_attempts,
-            )
-            .await;
             update_and_emit(handle, &takeout_state, job_id, |job| {
-                job.warnings = warnings;
+                job.warnings = warnings.clone();
             })
             .await;
             Err(error)
@@ -1104,14 +1365,14 @@ async fn run_started_takeout_source_import(
     telegram_source_subtype: &str,
     resolved_peer: crate::sources::ResolvedSyncPeer,
     client_handle: &TelegramClientHandle,
-    client: &Client,
-    alias: &ExportDcAlias,
+    peer: &TakeoutPeer,
+    transport: &mut TakeoutTransport,
     takeout_id: i64,
-    mut warnings: Vec<String>,
-    mut fallback_used: bool,
-    export_attempts: &mut ExportDcAttemptState,
-) -> Result<TakeoutImportOutcome, (AppError, Vec<String>, bool)> {
-    match run_started_takeout_source_import_inner(
+    warnings: &mut Vec<String>,
+    attempt_state: &mut TakeoutAttemptRecordState,
+    fallback_tracker: &mut TakeoutFallbackRecordTracker,
+) -> AppResult<TakeoutImportOutcome> {
+    run_started_takeout_source_import_inner(
         handle,
         job_id,
         batch_id,
@@ -1120,18 +1381,14 @@ async fn run_started_takeout_source_import(
         telegram_source_subtype,
         resolved_peer,
         client_handle,
-        client,
-        alias,
+        peer,
+        transport,
         takeout_id,
-        &mut warnings,
-        &mut fallback_used,
-        export_attempts,
+        warnings,
+        attempt_state,
+        fallback_tracker,
     )
     .await
-    {
-        Ok(outcome) => Ok(outcome),
-        Err(error) => Err((error, warnings, fallback_used)),
-    }
 }
 
 async fn run_started_takeout_source_import_inner(
@@ -1143,17 +1400,15 @@ async fn run_started_takeout_source_import_inner(
     telegram_source_subtype: &str,
     resolved_peer: crate::sources::ResolvedSyncPeer,
     client_handle: &TelegramClientHandle,
-    client: &Client,
-    alias: &ExportDcAlias,
+    peer: &TakeoutPeer,
+    transport: &mut TakeoutTransport,
     takeout_id: i64,
-    warnings: &mut Vec<String>,
-    fallback_used: &mut bool,
-    export_attempts: &mut ExportDcAttemptState,
+    mut warnings: &mut Vec<String>,
+    mut attempt_state: &mut TakeoutAttemptRecordState,
+    mut fallback_tracker: &mut TakeoutFallbackRecordTracker,
 ) -> AppResult<TakeoutImportOutcome> {
     let takeout_state = handle.state::<TakeoutImportState>();
     let cancellation_token = takeout_state.cancellation_token(job_id).await;
-    let input_peer: tl::enums::InputPeer = resolved_peer.peer.into();
-    let mut only_my_messages_recorded = false;
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
         job.phase = PHASE_VALIDATING_PEER.to_string();
@@ -1161,40 +1416,28 @@ async fn run_started_takeout_source_import_inner(
         job.warnings.extend(warnings.clone());
     })
     .await;
-    run_takeout_step_with_cancel(
+    run_takeout_transport_step_with_provenance!(
         cancellation_token.clone(),
-        validate_takeout_peer(
-            pool,
-            batch_id,
-            &client,
-            &alias,
-            takeout_id,
-            telegram_source_subtype,
-            resolved_peer.peer,
-            warnings,
-            fallback_used,
-            export_attempts,
-            &mut only_my_messages_recorded,
-        ),
-    )
-    .await?;
-    let migrated_from_chat_id = run_takeout_step_with_cancel(
+        pool,
+        batch_id,
+        transport,
+        warnings,
+        attempt_state,
+        fallback_tracker,
+        transport.validate_peer(takeout_id, peer, telegram_source_subtype)
+    )?;
+    let migrated_from_chat_id = run_takeout_transport_step_with_provenance!(
         cancellation_token.clone(),
-        detect_supergroup_migration(
-            pool,
-            batch_id,
-            client,
-            alias,
-            takeout_id,
-            telegram_source_subtype,
-            resolved_peer.peer,
-            warnings,
-            fallback_used,
-            export_attempts,
-        ),
-    )
-    .await?;
+        pool,
+        batch_id,
+        transport,
+        warnings,
+        attempt_state,
+        fallback_tracker,
+        transport.detect_supergroup_migration(takeout_id, peer, telegram_source_subtype)
+    )?;
     if let Some(migrated_from_chat_id) = migrated_from_chat_id {
+        push_warning_once(warnings, migrated_history_detected_warning());
         migrated_history::upsert_migrated_history_available(
             pool,
             source.id,
@@ -1216,25 +1459,16 @@ async fn run_started_takeout_source_import_inner(
         job.warnings = warnings.to_vec();
     })
     .await;
-    let split_ranges = run_takeout_step_with_cancel(
+    let (split_count, selected_ranges) = run_takeout_transport_step_with_provenance!(
         cancellation_token.clone(),
-        export_dc_invoke_with_provenance(
-            pool,
-            batch_id,
-            &client,
-            &alias,
-            &tl::functions::InvokeWithTakeout {
-                takeout_id,
-                query: tl::functions::messages::GetSplitRanges {},
-            },
-            warnings,
-            fallback_used,
-            export_attempts,
-        ),
-    )
-    .await?;
-    let split_count = split_ranges.len() as i64;
-    let selected_ranges = select_history_splits(telegram_source_subtype, split_ranges)?;
+        pool,
+        batch_id,
+        transport,
+        warnings,
+        attempt_state,
+        fallback_tracker,
+        transport.message_ranges(takeout_id, telegram_source_subtype)
+    )?;
     let selected_split_count = selected_ranges.len() as i64;
 
     update_and_emit(handle, &takeout_state, job_id, |job| {
@@ -1246,30 +1480,22 @@ async fn run_started_takeout_source_import_inner(
     let mut counted_ranges = Vec::new();
     let mut total = 0_i64;
     for range in selected_ranges {
-        let probe = run_takeout_step_with_cancel(
+        let count = takeout_history_count_probe(
+            pool,
+            batch_id,
             cancellation_token.clone(),
-            takeout_history_count_probe(
-                pool,
-                batch_id,
-                &client,
-                &alias,
-                takeout_id,
-                input_peer.clone(),
-                range.clone(),
-                telegram_source_subtype,
-                warnings,
-                fallback_used,
-                export_attempts,
-                &mut only_my_messages_recorded,
-            ),
+            transport,
+            takeout_id,
+            peer,
+            &range,
+            telegram_source_subtype,
+            warnings,
+            attempt_state,
+            fallback_tracker,
         )
         .await?;
-        total += probe.count;
-        counted_ranges.push(CountedMessageRange {
-            range,
-            count: probe.count,
-            only_my_messages: probe.only_my_messages,
-        });
+        total += count.count();
+        counted_ranges.push(CountedMessageRange { range, count });
     }
     update_takeout_split_metadata(
         pool,
@@ -1292,18 +1518,15 @@ async fn run_started_takeout_source_import_inner(
         handle,
         job_id,
         batch_id,
-        &client,
-        &alias,
+        transport,
         takeout_id,
-        input_peer,
+        peer,
         counted_ranges,
         &source,
         total,
-        telegram_source_subtype,
         warnings,
-        fallback_used,
-        export_attempts,
-        &mut only_my_messages_recorded,
+        attempt_state,
+        fallback_tracker,
         None,
     )
     .await?;
@@ -1318,22 +1541,16 @@ async fn run_started_takeout_source_import_inner(
         job.warnings = warnings.to_vec();
     })
     .await;
-    let fallback_before = *fallback_used;
-    record_export_dc_attempt_if_needed(pool, batch_id, alias, export_attempts).await?;
-    run_takeout_step_with_cancel(
+    run_takeout_transport_step_with_provenance!(
         cancellation_token.clone(),
-        finish_takeout_session(client, alias, takeout_id, true, warnings, fallback_used),
-    )
-    .await?;
-    record_export_dc_fallback_if_needed(
         pool,
         batch_id,
+        transport,
         warnings,
-        fallback_before,
-        *fallback_used,
-        export_attempts,
-    )
-    .await?;
+        attempt_state,
+        fallback_tracker,
+        transport.finish(takeout_id, true)
+    )?;
     refresh_forum_topics_after_completed_takeout(
         pool,
         batch_id,
@@ -1369,14 +1586,8 @@ struct TakeoutHistoryImport {
 }
 
 struct CountedMessageRange {
-    range: tl::enums::MessageRange,
-    count: i64,
-    only_my_messages: bool,
-}
-
-struct TakeoutHistoryProbe {
-    count: i64,
-    only_my_messages: bool,
+    range: MessageRange,
+    count: TakeoutCount,
 }
 
 fn ensure_supported_takeout_source_subtype(source_subtype: &str) -> AppResult<()> {
@@ -1393,257 +1604,45 @@ async fn load_takeout_source_subtype(
     Ok(source_subtype.to_string())
 }
 
-async fn validate_takeout_peer(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    batch_id: i64,
-    client: &Client,
-    alias: &ExportDcAlias,
-    takeout_id: i64,
-    telegram_source_subtype: &str,
-    peer: grammers_session::types::PeerRef,
-    warnings: &mut Vec<String>,
-    fallback_used: &mut bool,
-    export_attempts: &mut ExportDcAttemptState,
-    only_my_messages_recorded: &mut bool,
-) -> AppResult<()> {
-    match telegram_source_subtype {
-        TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP => {
-            let input_channel: tl::enums::InputChannel = peer.into();
-            let result = export_dc_invoke_with_provenance(
-                pool,
-                batch_id,
-                client,
-                alias,
-                &tl::functions::InvokeWithTakeout {
-                    takeout_id,
-                    query: tl::functions::channels::GetChannels {
-                        id: vec![input_channel],
-                    },
-                },
-                warnings,
-                fallback_used,
-                export_attempts,
-            )
-            .await;
-            if let Err(error) = result {
-                if record_channel_private_fallback_if_supported(
-                    pool,
-                    batch_id,
-                    telegram_source_subtype,
-                    &error,
-                    warnings,
-                    only_my_messages_recorded,
-                )
-                .await?
-                {
-                    return Ok(());
-                }
-                return Err(error);
-            }
-        }
-        TELEGRAM_KIND_GROUP => {
-            export_dc_invoke_with_provenance(
-                pool,
-                batch_id,
-                client,
-                alias,
-                &tl::functions::InvokeWithTakeout {
-                    takeout_id,
-                    query: tl::functions::messages::GetChats {
-                        id: vec![peer.id.bare_id().ok_or_else(|| {
-                            AppError::validation(
-                                "Telegram self-user peer cannot be validated as a Takeout group",
-                            )
-                        })?],
-                    },
-                },
-                warnings,
-                fallback_used,
-                export_attempts,
-            )
-            .await?;
-        }
-        other => {
-            return Err(AppError::validation(format!(
-                "Unsupported Telegram source_subtype '{other}'"
-            )));
-        }
-    }
-
-    Ok(())
-}
-
-async fn detect_supergroup_migration(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    batch_id: i64,
-    client: &Client,
-    alias: &ExportDcAlias,
-    takeout_id: i64,
-    telegram_source_subtype: &str,
-    peer: grammers_session::types::PeerRef,
-    warnings: &mut Vec<String>,
-    fallback_used: &mut bool,
-    export_attempts: &mut ExportDcAttemptState,
-) -> AppResult<Option<i64>> {
-    if telegram_source_subtype != TELEGRAM_KIND_SUPERGROUP {
-        return Ok(None);
-    }
-
-    let input_channel: tl::enums::InputChannel = peer.into();
-    let chat_full = export_dc_invoke_with_provenance(
-        pool,
-        batch_id,
-        client,
-        alias,
-        &tl::functions::InvokeWithTakeout {
-            takeout_id,
-            query: tl::functions::channels::GetFullChannel {
-                channel: input_channel,
-            },
-        },
-        warnings,
-        fallback_used,
-        export_attempts,
-    )
-    .await?;
-
-    let tl::enums::messages::ChatFull::Full(chat_full) = chat_full;
-    if let tl::enums::ChatFull::ChannelFull(full) = chat_full.full_chat {
-        if let Some(migrated_from_chat_id) = full.migrated_from_chat_id {
-            warnings.push(migrated_history_detected_warning());
-            return Ok(Some(migrated_from_chat_id));
-        }
-    }
-
-    Ok(None)
-}
-
-async fn revalidate_migrated_from_chat_id(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    batch_id: i64,
-    client: &Client,
-    alias: &ExportDcAlias,
-    takeout_id: i64,
-    peer: grammers_session::types::PeerRef,
-    warnings: &mut Vec<String>,
-    fallback_used: &mut bool,
-    export_attempts: &mut ExportDcAttemptState,
-) -> AppResult<Option<i64>> {
-    let input_channel: tl::enums::InputChannel = peer.into();
-    let chat_full = export_dc_invoke_with_provenance(
-        pool,
-        batch_id,
-        client,
-        alias,
-        &tl::functions::InvokeWithTakeout {
-            takeout_id,
-            query: tl::functions::channels::GetFullChannel {
-                channel: input_channel,
-            },
-        },
-        warnings,
-        fallback_used,
-        export_attempts,
-    )
-    .await?;
-
-    let tl::enums::messages::ChatFull::Full(chat_full) = chat_full;
-    if let tl::enums::ChatFull::ChannelFull(full) = chat_full.full_chat {
-        return Ok(full.migrated_from_chat_id);
-    }
-    Ok(None)
-}
-
 async fn takeout_history_count_probe(
     pool: &sqlx::Pool<sqlx::Sqlite>,
     batch_id: i64,
-    client: &Client,
-    alias: &ExportDcAlias,
+    cancellation_token: Option<CancellationToken>,
+    transport: &mut TakeoutTransport,
     takeout_id: i64,
-    input_peer: tl::enums::InputPeer,
-    range: tl::enums::MessageRange,
+    peer: &TakeoutPeer,
+    range: &MessageRange,
     telegram_source_subtype: &str,
-    warnings: &mut Vec<String>,
-    fallback_used: &mut bool,
-    export_attempts: &mut ExportDcAttemptState,
-    only_my_messages_recorded: &mut bool,
-) -> AppResult<TakeoutHistoryProbe> {
-    let response = takeout_get_history(
+    mut warnings: &mut Vec<String>,
+    mut attempt_state: &mut TakeoutAttemptRecordState,
+    mut fallback_tracker: &mut TakeoutFallbackRecordTracker,
+) -> AppResult<TakeoutCount> {
+    run_history_search_transition_with_provenance!(
+        cancellation_token,
         pool,
         batch_id,
-        client,
-        alias,
-        takeout_id,
-        input_peer.clone(),
-        range.clone(),
-        0,
-        0,
-        1,
+        transport,
         warnings,
-        fallback_used,
-        export_attempts,
+        attempt_state,
+        fallback_tracker,
+        transport.history_count(takeout_id, peer, range, telegram_source_subtype),
+        transport.search_my_history_count(takeout_id, peer, range)
     )
-    .await;
-
-    let response = match response {
-        Ok(response) => response,
-        Err(error)
-            if supports_only_my_messages_fallback(telegram_source_subtype)
-                && is_channel_private_error(&error) =>
-        {
-            record_only_my_messages_fallback_if_needed(
-                pool,
-                batch_id,
-                warnings,
-                only_my_messages_recorded,
-            )
-            .await?;
-            let search_response = takeout_search_my_messages(
-                pool,
-                batch_id,
-                client,
-                alias,
-                takeout_id,
-                input_peer,
-                range,
-                0,
-                0,
-                1,
-                warnings,
-                fallback_used,
-                export_attempts,
-            )
-            .await?;
-            return Ok(TakeoutHistoryProbe {
-                count: messages_response_count(search_response)?,
-                only_my_messages: true,
-            });
-        }
-        Err(error) => return Err(error),
-    };
-
-    Ok(TakeoutHistoryProbe {
-        count: messages_response_count(response)?,
-        only_my_messages: false,
-    })
 }
 
 async fn import_takeout_history_ranges(
     handle: &AppHandle,
     job_id: &str,
     batch_id: i64,
-    client: &Client,
-    alias: &ExportDcAlias,
+    transport: &mut TakeoutTransport,
     takeout_id: i64,
-    input_peer: tl::enums::InputPeer,
+    peer: &TakeoutPeer,
     ranges: Vec<CountedMessageRange>,
     source: &crate::sources::SourceSyncTarget,
     total: i64,
-    telegram_source_subtype: &str,
     warnings: &mut Vec<String>,
-    fallback_used: &mut bool,
-    export_attempts: &mut ExportDcAttemptState,
-    only_my_messages_recorded: &mut bool,
+    attempt_state: &mut TakeoutAttemptRecordState,
+    fallback_tracker: &mut TakeoutFallbackRecordTracker,
     migrated_from_chat_id: Option<i64>,
 ) -> AppResult<TakeoutHistoryImport> {
     let mut imported = TakeoutHistoryImport {
@@ -1657,19 +1656,16 @@ async fn import_takeout_history_ranges(
             handle,
             job_id,
             batch_id,
-            client,
-            alias,
+            transport,
             takeout_id,
-            input_peer.clone(),
+            peer,
             counted_range,
             source,
             total,
-            telegram_source_subtype,
             imported,
             warnings,
-            fallback_used,
-            export_attempts,
-            only_my_messages_recorded,
+            attempt_state,
+            fallback_tracker,
             migrated_from_chat_id,
         )
         .await?;
@@ -1682,96 +1678,63 @@ async fn import_takeout_history_pages(
     handle: &AppHandle,
     job_id: &str,
     batch_id: i64,
-    client: &Client,
-    alias: &ExportDcAlias,
+    transport: &mut TakeoutTransport,
     takeout_id: i64,
-    input_peer: tl::enums::InputPeer,
+    peer: &TakeoutPeer,
     counted_range: CountedMessageRange,
     source: &crate::sources::SourceSyncTarget,
     total: i64,
-    telegram_source_subtype: &str,
     mut imported: TakeoutHistoryImport,
     warnings: &mut Vec<String>,
-    fallback_used: &mut bool,
-    export_attempts: &mut ExportDcAttemptState,
-    only_my_messages_recorded: &mut bool,
+    attempt_state: &mut TakeoutAttemptRecordState,
+    fallback_tracker: &mut TakeoutFallbackRecordTracker,
     migrated_from_chat_id: Option<i64>,
 ) -> AppResult<TakeoutHistoryImport> {
     let takeout_state = handle.state::<TakeoutImportState>();
     let cancellation_token = takeout_state.cancellation_token(job_id).await;
     let pool = get_pool(handle).await?;
     let range = counted_range.range;
-    let split_count = counted_range.count;
-    let mut only_my_messages = counted_range.only_my_messages;
-    let mut profile = TakeoutPaginationProfile::TDesktop;
-    let mut cursor = TakeoutPaginationCursor::new(profile, &range);
-    let mut page_index = 0_usize;
+    let count = counted_range.count;
+    let mut previous: Option<TakeoutPage> = None;
 
     loop {
-        if takeout_state.is_cancel_requested(job_id).await {
-            return Err(AppError::validation("Takeout import cancelled"));
-        }
-
-        let request = takeout_page_request(cursor);
-        let response = run_takeout_step_with_cancel(
+        let mut page = takeout_history_page_response(
             cancellation_token.clone(),
-            takeout_history_page_response(
-                &pool,
-                batch_id,
-                client,
-                alias,
-                takeout_id,
-                input_peer.clone(),
-                range.clone(),
-                request,
-                telegram_source_subtype,
-                &mut only_my_messages,
-                warnings,
-                fallback_used,
-                export_attempts,
-                only_my_messages_recorded,
-            ),
+            &pool,
+            batch_id,
+            transport,
+            takeout_id,
+            peer,
+            &range,
+            &count,
+            previous.as_ref(),
+            warnings,
+            attempt_state,
+            fallback_tracker,
         )
         .await?;
-        let page = parse_takeout_page(response, profile)?;
-        let advance = next_takeout_cursor(cursor, &page, &range);
-
-        if let Some(reason) = should_restart_with_descending_fallback(
-            profile,
-            split_count,
-            page_index,
-            &page,
-            advance,
-        ) {
-            push_warning_once(
-                warnings,
-                takeout_pagination_fallback_warning(reason, &range),
-            );
+        if let Some(warning) = page.take_pagination_fallback_warning() {
+            warnings.push(warning);
             update_and_emit(handle, &takeout_state, job_id, |job| {
                 job.warnings = warnings.clone();
             })
             .await;
-            profile = TakeoutPaginationProfile::DescendingFallback;
-            cursor = TakeoutPaginationCursor::new(profile, &range);
-            page_index = 0;
-            continue;
+            if takeout_state.is_cancel_requested(job_id).await {
+                return Err(AppError::validation("Takeout import cancelled"));
+            }
         }
 
-        if page.messages.is_empty() {
-            break;
-        }
-
-        for message in page.messages {
-            let message_id = message.id;
-            if message_id <= message_range_min_id(&range) {
+        for message in page.take_messages() {
+            let message_id = message.message_id();
+            if message_id <= i64::from(range.min_id()) {
                 continue;
             }
-            let next_max_message_id = imported.max_message_id.max(i64::from(message_id));
+            let next_max_message_id = imported.max_message_id.max(message_id);
             if next_max_message_id != imported.max_message_id {
                 imported.max_message_id = next_max_message_id;
                 update_takeout_max_message_id(&pool, batch_id, imported.max_message_id).await?;
             }
-            match raw_parse::parse_raw_message(&source.title, message) {
+            match message.into_draft(source.title.as_deref()) {
                 Ok(Some(mut item)) => {
                     let parsed_identity = item.telegram_identity.clone().ok_or_else(|| {
                         AppError::validation(
@@ -1810,7 +1773,7 @@ async fn import_takeout_history_pages(
                     }
                 }
                 Ok(None) => imported.skipped += 1,
-                Err(error) => return Err(AppError::internal(error)),
+                Err(error) => return Err(error),
             }
         }
 
@@ -1827,100 +1790,55 @@ async fn import_takeout_history_pages(
             return Err(AppError::validation("Takeout import cancelled"));
         }
 
-        if page.is_terminal_response || !advance.advanced || advance.reached_range_start {
+        if !page.has_next() {
             break;
         }
-        cursor = advance.cursor;
-        page_index += 1;
+        previous = Some(page);
     }
 
     Ok(imported)
 }
 
 async fn takeout_history_page_response(
+    cancellation_token: Option<CancellationToken>,
     pool: &sqlx::Pool<sqlx::Sqlite>,
     batch_id: i64,
-    client: &Client,
-    alias: &ExportDcAlias,
+    transport: &mut TakeoutTransport,
     takeout_id: i64,
-    input_peer: tl::enums::InputPeer,
-    range: tl::enums::MessageRange,
-    request: TakeoutPageRequest,
-    telegram_source_subtype: &str,
-    only_my_messages: &mut bool,
-    warnings: &mut Vec<String>,
-    fallback_used: &mut bool,
-    export_attempts: &mut ExportDcAttemptState,
-    only_my_messages_recorded: &mut bool,
-) -> AppResult<tl::enums::messages::Messages> {
-    if *only_my_messages {
-        return takeout_search_my_messages(
+    peer: &TakeoutPeer,
+    range: &MessageRange,
+    count: &TakeoutCount,
+    previous: Option<&TakeoutPage>,
+    mut warnings: &mut Vec<String>,
+    mut attempt_state: &mut TakeoutAttemptRecordState,
+    mut fallback_tracker: &mut TakeoutFallbackRecordTracker,
+) -> AppResult<TakeoutPage> {
+    let only_my_messages = previous
+        .map(TakeoutPage::only_my_messages)
+        .unwrap_or_else(|| count.only_my_messages());
+    if only_my_messages {
+        return run_takeout_transport_step_with_provenance!(
+            cancellation_token,
             pool,
             batch_id,
-            client,
-            alias,
-            takeout_id,
-            input_peer,
-            range,
-            request.offset_id,
-            request.add_offset,
-            request.limit,
+            transport,
             warnings,
-            fallback_used,
-            export_attempts,
-        )
-        .await;
+            attempt_state,
+            fallback_tracker,
+            transport.search_my_history_page(takeout_id, peer, range, count, previous)
+        );
     }
-
-    match takeout_get_history(
+    run_history_search_transition_with_provenance!(
+        cancellation_token,
         pool,
         batch_id,
-        client,
-        alias,
-        takeout_id,
-        input_peer.clone(),
-        range.clone(),
-        request.offset_id,
-        request.add_offset,
-        request.limit,
+        transport,
         warnings,
-        fallback_used,
-        export_attempts,
+        attempt_state,
+        fallback_tracker,
+        transport.history_page(takeout_id, peer, range, count, previous),
+        transport.search_my_history_page(takeout_id, peer, range, count, previous)
     )
-    .await
-    {
-        Ok(response) => Ok(response),
-        Err(error)
-            if supports_only_my_messages_fallback(telegram_source_subtype)
-                && is_channel_private_error(&error) =>
-        {
-            *only_my_messages = true;
-            record_only_my_messages_fallback_if_needed(
-                pool,
-                batch_id,
-                warnings,
-                only_my_messages_recorded,
-            )
-            .await?;
-            takeout_search_my_messages(
-                pool,
-                batch_id,
-                client,
-                alias,
-                takeout_id,
-                input_peer,
-                range,
-                request.offset_id,
-                request.add_offset,
-                request.limit,
-                warnings,
-                fallback_used,
-                export_attempts,
-            )
-            .await
-        }
-        Err(error) => Err(error),
-    }
 }
 
 fn push_warning_once(warnings: &mut Vec<String>, warning: impl Into<String>) {
@@ -1930,178 +1848,22 @@ fn push_warning_once(warnings: &mut Vec<String>, warning: impl Into<String>) {
     }
 }
 
-async fn record_only_my_messages_fallback_if_needed(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    batch_id: i64,
-    warnings: &mut Vec<String>,
-    only_my_messages_recorded: &mut bool,
-) -> AppResult<()> {
-    push_warning_once(
-        warnings,
-        "Channel history is private; falling back to messages.search(from_id=self).",
-    );
-    if !*only_my_messages_recorded {
-        mark_takeout_only_my_messages_fallback(
-            pool,
-            batch_id,
-            "Channel history is private; importing only messages visible through from_id=self fallback.",
-        )
-        .await?;
-        *only_my_messages_recorded = true;
-    }
-    Ok(())
-}
-
-async fn record_channel_private_fallback_if_supported(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    batch_id: i64,
-    telegram_source_subtype: &str,
-    error: &AppError,
-    warnings: &mut Vec<String>,
-    only_my_messages_recorded: &mut bool,
-) -> AppResult<bool> {
-    if supports_only_my_messages_fallback(telegram_source_subtype)
-        && is_channel_private_error(error)
-    {
-        record_only_my_messages_fallback_if_needed(
-            pool,
-            batch_id,
-            warnings,
-            only_my_messages_recorded,
-        )
-        .await?;
-        return Ok(true);
-    }
-    Ok(false)
-}
-
-async fn takeout_get_history(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    batch_id: i64,
-    client: &Client,
-    alias: &ExportDcAlias,
-    takeout_id: i64,
-    input_peer: tl::enums::InputPeer,
-    range: tl::enums::MessageRange,
-    offset_id: i32,
-    add_offset: i32,
-    limit: i32,
-    warnings: &mut Vec<String>,
-    fallback_used: &mut bool,
-    export_attempts: &mut ExportDcAttemptState,
-) -> AppResult<tl::enums::messages::Messages> {
-    export_dc_invoke_with_provenance(
-        pool,
-        batch_id,
-        client,
-        alias,
-        &tl::functions::InvokeWithTakeout {
-            takeout_id,
-            query: tl::functions::InvokeWithMessagesRange {
-                range,
-                query: tl::functions::messages::GetHistory {
-                    peer: input_peer,
-                    offset_id,
-                    offset_date: 0,
-                    add_offset,
-                    limit,
-                    max_id: 0,
-                    min_id: 0,
-                    hash: 0,
-                },
-            },
-        },
-        warnings,
-        fallback_used,
-        export_attempts,
-    )
-    .await
-}
-
-async fn takeout_search_my_messages(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    batch_id: i64,
-    client: &Client,
-    alias: &ExportDcAlias,
-    takeout_id: i64,
-    input_peer: tl::enums::InputPeer,
-    range: tl::enums::MessageRange,
-    offset_id: i32,
-    add_offset: i32,
-    limit: i32,
-    warnings: &mut Vec<String>,
-    fallback_used: &mut bool,
-    export_attempts: &mut ExportDcAttemptState,
-) -> AppResult<tl::enums::messages::Messages> {
-    export_dc_invoke_with_provenance(
-        pool,
-        batch_id,
-        client,
-        alias,
-        &tl::functions::InvokeWithTakeout {
-            takeout_id,
-            query: tl::functions::InvokeWithMessagesRange {
-                range,
-                query: tl::functions::messages::Search {
-                    peer: input_peer,
-                    q: String::new(),
-                    from_id: Some(tl::enums::InputPeer::PeerSelf),
-                    saved_peer_id: None,
-                    saved_reaction: None,
-                    top_msg_id: None,
-                    filter: tl::enums::MessagesFilter::InputMessagesFilterEmpty,
-                    min_date: 0,
-                    max_date: 0,
-                    offset_id,
-                    add_offset,
-                    limit,
-                    max_id: 0,
-                    min_id: 0,
-                    hash: 0,
-                },
-            },
-        },
-        warnings,
-        fallback_used,
-        export_attempts,
-    )
-    .await
-}
-
-fn supports_only_my_messages_fallback(telegram_source_subtype: &str) -> bool {
-    matches!(
-        telegram_source_subtype,
-        TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP
-    )
-}
-
-fn is_channel_private_error(error: &AppError) -> bool {
-    error
-        .message
-        .to_ascii_uppercase()
-        .contains("CHANNEL_PRIVATE")
-}
-
-fn messages_response_count(response: tl::enums::messages::Messages) -> AppResult<i64> {
-    match response {
-        tl::enums::messages::Messages::Messages(messages) => Ok(messages.messages.len() as i64),
-        tl::enums::messages::Messages::Slice(messages) => Ok(i64::from(messages.count)),
-        tl::enums::messages::Messages::ChannelMessages(messages) => Ok(i64::from(messages.count)),
-        tl::enums::messages::Messages::NotModified(_) => Err(AppError::network(
-            "Telegram returned messagesNotModified for Takeout history count probe",
-        )),
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    };
+
     use super::{
         create_locked_migrated_history_start_records, create_locked_takeout_start_records,
-        is_channel_private_error, load_takeout_source_subtype, migrated_history_detected_warning,
-        record_channel_private_fallback_if_supported, record_export_dc_attempt_if_needed,
+        load_takeout_source_subtype, migrated_history_detected_warning, queue_drained_fallbacks,
+        record_after_select_once, record_export_dc_attempt_if_needed,
         record_export_dc_fallback_if_needed, record_only_my_messages_fallback_if_needed,
-        run_takeout_step_with_cancel, supports_only_my_messages_fallback, ExportDcAlias,
-        ExportDcAttemptState, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP,
+        record_pending_once, record_takeout_fallbacks, resolve_metadata_precedence,
+        run_history_search_transition, run_takeout_step_with_cancel, FallbackRecordState,
+        HistoryTransitionCommand, HistoryTransitionResponse, StepOutcome,
+        TakeoutAttemptRecordState, TakeoutFallbackRecordTracker,
     };
     use crate::error::{AppError, AppErrorKind, AppResult};
     use crate::ingest_provenance::{
@@ -2109,35 +1871,21 @@ mod tests {
         TerminalBatchStatus,
     };
     use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
-    use crate::sources::insert_telegram_source_item;
     use crate::sources::test_support::{
         create_analysis_documents_table, create_ingest_provenance_tables,
         create_migrated_history_capability_tables, memory_pool_with_source_items_and_topics,
         memory_pool_with_sources,
     };
+    use crate::sources::{
+        insert_telegram_source_item, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_SUPERGROUP,
+    };
     use crate::takeout_import::state::TakeoutImportState;
     use crate::telegram_impl::{
+        takeout_attempt_fixture, takeout_fallback_fixture, TakeoutFallbackKind,
         TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity,
         ITEM_KIND_TELEGRAM_MESSAGE,
     };
     use tokio_util::sync::CancellationToken;
-
-    #[test]
-    fn only_my_messages_fallback_is_limited_to_channels() {
-        assert!(supports_only_my_messages_fallback(TELEGRAM_KIND_CHANNEL));
-        assert!(supports_only_my_messages_fallback(TELEGRAM_KIND_SUPERGROUP));
-        assert!(!supports_only_my_messages_fallback(TELEGRAM_KIND_GROUP));
-    }
-
-    #[test]
-    fn channel_private_detection_reads_rpc_name_from_error_message() {
-        assert!(is_channel_private_error(&AppError::network(
-            "Rpc error 400: CHANNEL_PRIVATE"
-        )));
-        assert!(!is_channel_private_error(&AppError::network(
-            "Rpc error 400: TAKEOUT_INVALID"
-        )));
-    }
 
     #[tokio::test]
     async fn takeout_step_cancel_wrapper_allows_completed_future() {
@@ -2151,16 +1899,180 @@ mod tests {
     #[tokio::test]
     async fn takeout_step_cancel_wrapper_interrupts_pending_future() {
         let token = CancellationToken::new();
-        token.cancel();
+        let cancellation = token.clone();
+        let started = Arc::new(tokio::sync::Notify::new());
+        let started_for_cancel = Arc::clone(&started);
+        let recorder_calls = Arc::new(AtomicUsize::new(0));
+        let recorder_calls_for_closure = Arc::clone(&recorder_calls);
+        let search_calls = Arc::new(AtomicUsize::new(0));
+        let progress_events = Arc::new(AtomicUsize::new(0));
+        let fallback = takeout_fallback_fixture(
+            TakeoutFallbackKind::OnlyMyMessages,
+            "Channel history is private; falling back to messages.search(from_id=self).",
+            Some(
+                "Channel history is private; importing only messages visible through from_id=self fallback.",
+            ),
+        );
+        let mut state = FallbackRecordState::Pending(vec![fallback]);
+        let mut recorder = move |_fallbacks| {
+            let call = recorder_calls_for_closure.fetch_add(1, Ordering::SeqCst);
+            let started = Arc::clone(&started);
+            async move {
+                if call == 0 {
+                    started.notify_one();
+                    std::future::pending::<AppResult<()>>().await
+                } else {
+                    Ok(())
+                }
+            }
+        };
+        let cancel_task = tokio::spawn(async move {
+            started_for_cancel.notified().await;
+            cancellation.cancel();
+        });
 
-        let result: AppResult<()> =
-            run_takeout_step_with_cancel(Some(token), std::future::pending()).await;
+        let result = run_takeout_step_with_cancel(Some(token), async {
+            record_pending_once(&mut state, &mut recorder).await;
+            search_calls.fetch_add(1, Ordering::SeqCst);
+            progress_events.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        })
+        .await;
+        cancel_task.await.expect("cancel task");
+        record_after_select_once(&mut state, &mut recorder).await;
 
-        assert!(result.is_err());
+        assert_eq!(
+            result.expect_err("cancelled step").message,
+            "Takeout import cancelled"
+        );
+        assert_eq!(recorder_calls.load(Ordering::SeqCst), 2);
+        assert!(matches!(state, FallbackRecordState::Recorded));
+        assert_eq!(search_calls.load(Ordering::SeqCst), 0);
+        assert_eq!(progress_events.load(Ordering::SeqCst), 0);
     }
 
     #[tokio::test]
     async fn channel_private_count_probe_records_fallback_before_search_continuation() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let invoke_events = Arc::clone(&events);
+        let attempt_events = Arc::clone(&events);
+        let record_events = Arc::clone(&events);
+        let attempt = takeout_attempt_fixture(2, 40_002);
+        let result = run_history_search_transition(
+            None,
+            attempt,
+            move |command| {
+                let events = Arc::clone(&invoke_events);
+                async move {
+                    match command {
+                        HistoryTransitionCommand::History => {
+                            events.lock().unwrap().push("history");
+                            HistoryTransitionResponse::Remote {
+                                result: Err(AppError::network("Rpc error 400: CHANNEL_PRIVATE")),
+                                fallbacks: vec![takeout_fallback_fixture(
+                                    TakeoutFallbackKind::OnlyMyMessages,
+                                    "Channel history is private; falling back to messages.search(from_id=self).",
+                                    Some("Channel history is private; importing only messages visible through from_id=self fallback."),
+                                )],
+                            }
+                        }
+                        HistoryTransitionCommand::Search => {
+                            events.lock().unwrap().push("search");
+                            HistoryTransitionResponse::Remote {
+                                result: Ok(17_i64),
+                                fallbacks: Vec::new(),
+                            }
+                        }
+                        HistoryTransitionCommand::Drain => {
+                            events.lock().unwrap().push("drain");
+                            HistoryTransitionResponse::Drained(Vec::new())
+                        }
+                    }
+                }
+            },
+            move |_attempt| {
+                let events = Arc::clone(&attempt_events);
+                async move {
+                    events.lock().unwrap().push("attempt");
+                    Ok(())
+                }
+            },
+            move |_fallbacks| {
+                let events = Arc::clone(&record_events);
+                async move {
+                    events.lock().unwrap().push("record");
+                    Ok(())
+                }
+            },
+        )
+        .await
+        .expect("OnlyMy search continuation");
+
+        assert_eq!(result, 17);
+        assert_eq!(
+            *events.lock().unwrap(),
+            vec!["attempt", "history", "record", "attempt", "search", "drain"]
+        );
+
+        let failed_events = Arc::new(Mutex::new(Vec::new()));
+        let invoke_events = Arc::clone(&failed_events);
+        let attempt_events = Arc::clone(&failed_events);
+        let record_events = Arc::clone(&failed_events);
+        let error = run_history_search_transition(
+            None,
+            attempt,
+            move |command| {
+                let events = Arc::clone(&invoke_events);
+                async move {
+                    match command {
+                        HistoryTransitionCommand::History => {
+                            events.lock().unwrap().push("history");
+                            HistoryTransitionResponse::Remote {
+                                result: Err(AppError::network("Rpc error 400: CHANNEL_PRIVATE")),
+                                fallbacks: vec![takeout_fallback_fixture(
+                                    TakeoutFallbackKind::OnlyMyMessages,
+                                    "only-my warning",
+                                    Some("only-my provenance"),
+                                )],
+                            }
+                        }
+                        HistoryTransitionCommand::Search => {
+                            events.lock().unwrap().push("search");
+                            HistoryTransitionResponse::Remote {
+                                result: Ok(99_i64),
+                                fallbacks: Vec::new(),
+                            }
+                        }
+                        HistoryTransitionCommand::Drain => {
+                            events.lock().unwrap().push("drain");
+                            HistoryTransitionResponse::Drained(Vec::new())
+                        }
+                    }
+                }
+            },
+            move |_attempt| {
+                let events = Arc::clone(&attempt_events);
+                async move {
+                    events.lock().unwrap().push("attempt");
+                    Ok(())
+                }
+            },
+            move |_fallbacks| {
+                let events = Arc::clone(&record_events);
+                async move {
+                    events.lock().unwrap().push("record");
+                    Err(AppError::internal("fallback recorder failed"))
+                }
+            },
+        )
+        .await
+        .expect_err("OnlyMy recorder failure must stop before search");
+        assert_eq!(error.kind, AppErrorKind::Internal);
+        assert_eq!(
+            *failed_events.lock().unwrap(),
+            vec!["attempt", "history", "record", "drain"]
+        );
+
         let pool = memory_pool_with_source_items_and_topics().await;
         create_ingest_provenance_tables(&pool).await;
         seed_item_source(&pool, 1).await;
@@ -2175,27 +2087,79 @@ mod tests {
         .await
         .expect("create takeout batch");
         let mut warnings = Vec::new();
-        let mut only_my_messages_recorded = false;
-
+        let mut fallback_tracker = TakeoutFallbackRecordTracker::default();
+        let fallback = takeout_fallback_fixture(
+            TakeoutFallbackKind::OnlyMyMessages,
+            "Channel history is private; falling back to messages.search(from_id=self).",
+            Some(
+                "Channel history is private; importing only messages visible through from_id=self fallback.",
+            ),
+        );
         record_only_my_messages_fallback_if_needed(
             &pool,
             batch_id,
             &mut warnings,
-            &mut only_my_messages_recorded,
+            &mut fallback_tracker,
+            fallback.clone(),
         )
         .await
-        .expect("record fallback");
+        .expect("record validation fallback");
         record_only_my_messages_fallback_if_needed(
             &pool,
             batch_id,
             &mut warnings,
-            &mut only_my_messages_recorded,
+            &mut fallback_tracker,
+            fallback,
         )
         .await
-        .expect("record fallback idempotently");
-
-        assert!(only_my_messages_recorded);
-        assert_eq!(warnings.len(), 1);
+        .expect("dedupe validation fallback");
+        let validation_events = Arc::new(Mutex::new(Vec::new()));
+        let invoke_events = Arc::clone(&validation_events);
+        let attempt_events = Arc::clone(&validation_events);
+        let result = run_history_search_transition(
+            None,
+            attempt,
+            move |command| {
+                let events = Arc::clone(&invoke_events);
+                async move {
+                    match command {
+                        HistoryTransitionCommand::History => {
+                            events.lock().unwrap().push("history");
+                            HistoryTransitionResponse::Remote {
+                                result: Ok(23_i64),
+                                fallbacks: Vec::new(),
+                            }
+                        }
+                        HistoryTransitionCommand::Search => {
+                            events.lock().unwrap().push("search");
+                            HistoryTransitionResponse::Remote {
+                                result: Ok(99_i64),
+                                fallbacks: Vec::new(),
+                            }
+                        }
+                        HistoryTransitionCommand::Drain => {
+                            events.lock().unwrap().push("drain");
+                            HistoryTransitionResponse::Drained(Vec::new())
+                        }
+                    }
+                }
+            },
+            move |_attempt| {
+                let events = Arc::clone(&attempt_events);
+                async move {
+                    events.lock().unwrap().push("attempt");
+                    Ok(())
+                }
+            },
+            |_fallbacks| async { Ok(()) },
+        )
+        .await
+        .expect("history remains first after validation-only metadata");
+        assert_eq!(result, 23);
+        assert_eq!(
+            *validation_events.lock().unwrap(),
+            vec!["attempt", "history", "drain"]
+        );
         let state: (i64, String) = sqlx::query_as(
             "SELECT only_my_messages, history_scope FROM telegram_takeout_batches WHERE batch_id = ?",
         )
@@ -2215,6 +2179,44 @@ mod tests {
 
     #[tokio::test]
     async fn export_dc_fallback_provenance_records_once_before_finalize() {
+        async fn failed_export_state(calls: Arc<AtomicUsize>) -> FallbackRecordState {
+            let fallback = takeout_fallback_fixture(
+                TakeoutFallbackKind::ExportDc,
+                "export fallback",
+                Some("export fallback"),
+            );
+            let mut state = FallbackRecordState::Empty;
+            queue_drained_fallbacks(&mut state, vec![fallback]).expect("queue fallback");
+            let mut recorder = move |_fallbacks| {
+                calls.fetch_add(1, Ordering::SeqCst);
+                async { Err(AppError::internal("fallback recorder failed")) }
+            };
+            record_pending_once(&mut state, &mut recorder).await;
+            state
+        }
+
+        let remote_error_calls = Arc::new(AtomicUsize::new(0));
+        let remote_error = resolve_metadata_precedence(
+            failed_export_state(Arc::clone(&remote_error_calls)).await,
+            Ok(StepOutcome::<()>::Remote(Err(AppError::network(
+                "remote history failed",
+            )))),
+        )
+        .expect_err("remote error must beat ExportDc recorder error");
+        assert_eq!(remote_error.kind, AppErrorKind::Network);
+        assert_eq!(remote_error.message, "remote history failed");
+        assert_eq!(remote_error_calls.load(Ordering::SeqCst), 1);
+
+        let remote_success_calls = Arc::new(AtomicUsize::new(0));
+        let recorder_error = resolve_metadata_precedence(
+            failed_export_state(Arc::clone(&remote_success_calls)).await,
+            Ok(StepOutcome::Remote(Ok("remote success"))),
+        )
+        .expect_err("ExportDc recorder error must beat remote success");
+        assert_eq!(recorder_error.kind, AppErrorKind::Internal);
+        assert_eq!(recorder_error.message, "fallback recorder failed");
+        assert_eq!(remote_success_calls.load(Ordering::SeqCst), 1);
+
         let pool = memory_pool_with_source_items_and_topics().await;
         create_ingest_provenance_tables(&pool).await;
         seed_item_source(&pool, 1).await;
@@ -2228,30 +2230,41 @@ mod tests {
         )
         .await
         .expect("create takeout batch");
-        let alias = ExportDcAlias {
-            home_dc_id: 2,
-            export_dc_id: 40_002,
-        };
-        let mut attempts = ExportDcAttemptState::new();
-        let mut warnings = vec![
-            "Export DC 40002 failed with local transport error; falling back to home DC 2: invalid DC"
-                .to_string(),
-        ];
-
-        record_export_dc_attempt_if_needed(&pool, batch_id, &alias, &mut attempts)
+        let attempt = takeout_attempt_fixture(2, 40_002);
+        let mut attempt_state = TakeoutAttemptRecordState::default();
+        let mut fallback_tracker = TakeoutFallbackRecordTracker::default();
+        let mut warnings = Vec::new();
+        let fallback = takeout_fallback_fixture(
+            TakeoutFallbackKind::ExportDc,
+            "Export DC 40002 failed with local transport error; falling back to home DC 2: invalid DC",
+            Some(
+                "Export DC 40002 failed with local transport error; falling back to home DC 2: invalid DC",
+            ),
+        );
+        record_export_dc_attempt_if_needed(&pool, batch_id, attempt, &mut attempt_state)
             .await
             .expect("record export DC attempt");
-        record_export_dc_fallback_if_needed(&pool, batch_id, &warnings, false, true, &mut attempts)
-            .await
-            .expect("record first export DC fallback");
-        warnings.push("second fallback detail should not create a second warning".to_string());
-        record_export_dc_fallback_if_needed(&pool, batch_id, &warnings, false, true, &mut attempts)
-            .await
-            .expect("record duplicate fallback idempotently");
+        record_export_dc_fallback_if_needed(
+            &pool,
+            batch_id,
+            &mut warnings,
+            &mut fallback_tracker,
+            fallback.clone(),
+        )
+        .await
+        .expect("record first export DC fallback");
+        record_export_dc_fallback_if_needed(
+            &pool,
+            batch_id,
+            &mut warnings,
+            &mut fallback_tracker,
+            fallback,
+        )
+        .await
+        .expect("record duplicate fallback idempotently");
         finalize_ingest_batch(&pool, batch_id, TerminalBatchStatus::Completed, None)
             .await
-            .expect("finalize batch");
-
+            .expect("finalize batch after metadata");
         let state: (Option<i64>, i64, i64, i64) = sqlx::query_as(
             "SELECT t.export_dc_id, t.used_export_dc, t.fallback_used, b.warning_count
              FROM telegram_takeout_batches t
@@ -2263,7 +2276,6 @@ mod tests {
         .await
         .expect("load export DC provenance");
         assert_eq!(state, (Some(40_002), 1, 1, 1));
-
         let warning_codes: Vec<String> =
             sqlx::query_scalar("SELECT code FROM ingest_batch_warnings WHERE batch_id = ?")
                 .bind(batch_id)
@@ -2289,21 +2301,24 @@ mod tests {
         .await
         .expect("create takeout batch");
         let mut warnings = Vec::new();
-        let mut only_my_messages_recorded = false;
-
-        let should_continue = record_channel_private_fallback_if_supported(
+        let mut fallback_tracker = TakeoutFallbackRecordTracker::default();
+        record_takeout_fallbacks(
             &pool,
             batch_id,
-            TELEGRAM_KIND_CHANNEL,
-            &AppError::network("Rpc error 400: CHANNEL_PRIVATE"),
             &mut warnings,
-            &mut only_my_messages_recorded,
+            &mut fallback_tracker,
+            vec![takeout_fallback_fixture(
+                TakeoutFallbackKind::OnlyMyMessages,
+                "Channel history is private; falling back to messages.search(from_id=self).",
+                Some(
+                    "Channel history is private; importing only messages visible through from_id=self fallback.",
+                ),
+            )],
         )
         .await
         .expect("handle channel private validation");
 
-        assert!(should_continue);
-        assert!(only_my_messages_recorded);
+        assert!(fallback_tracker.only_my_messages_recorded);
         assert_eq!(warnings.len(), 1);
         let state: (i64, String) = sqlx::query_as(
             "SELECT only_my_messages, history_scope FROM telegram_takeout_batches WHERE batch_id = ?",

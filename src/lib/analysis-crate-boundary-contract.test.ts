@@ -5017,6 +5017,16 @@ describe("analysis crate boundary", () => {
       "telegram_impl/live/messages.rs",
       "telegram_impl/live/topics.rs",
     ];
+    const telegramTakeoutBoundaryPaths = [
+      "telegram_impl/takeout/mod.rs",
+      "telegram_impl/takeout/types.rs",
+      "telegram_impl/takeout/transport.rs",
+      "telegram_impl/takeout/export_dc.rs",
+      "telegram_impl/takeout/operations.rs",
+      "telegram_impl/takeout/pagination.rs",
+      "telegram_impl/takeout/raw_parse.rs",
+      "telegram_impl/takeout/forum_topics.rs",
+    ];
     const appPaths = new Set(app.map(({ relative }) => relative));
     const telegramPeerAvatarBoundaryPathCount =
       telegramPeerAvatarBoundaryPaths.filter((relativePath) =>
@@ -5039,13 +5049,25 @@ describe("analysis crate boundary", () => {
     ).toContain(telegramLiveConsumerPathCount);
     const telegramLiveConsumersAreStaged =
       telegramLiveConsumerPathCount === telegramLiveConsumerPaths.length;
+    const telegramTakeoutBoundaryPathCount =
+      telegramTakeoutBoundaryPaths.filter((relativePath) =>
+        appPaths.has(relativePath)
+      ).length;
+    expect(
+      [0, telegramTakeoutBoundaryPaths.length],
+      "Telegram CP7 Takeout graph stage must be absent or complete",
+    ).toContain(telegramTakeoutBoundaryPathCount);
+    const telegramTakeoutBoundaryIsStaged =
+      telegramTakeoutBoundaryPathCount === telegramTakeoutBoundaryPaths.length;
     expect(
       [...ownedTables].filter((table) => !schemaTables.has(table)),
       "all six owned tables must exist in canonical migrations",
     ).toEqual([]);
     expect(app.length, "all-app production graph breadth")
       .toBe(
-        telegramLiveConsumersAreStaged
+        telegramTakeoutBoundaryIsStaged
+          ? 137
+          : telegramLiveConsumersAreStaged
           ? 132
           : telegramPeerAvatarBoundaryIsStaged
           ? 130
@@ -5065,6 +5087,9 @@ describe("analysis crate boundary", () => {
         : []),
       ...(telegramLiveConsumersAreStaged
         ? telegramLiveConsumerPaths
+        : []),
+      ...(telegramTakeoutBoundaryIsStaged
+        ? telegramTakeoutBoundaryPaths
         : []),
       "projects/read_model.rs",
       "notebooklm_export/query.rs",
@@ -5663,7 +5688,9 @@ describe("analysis crate boundary", () => {
     const ingestProvenanceSourceFingerprint = telegramFoundationIsStaged
       ? "c964e21b5349808deea16ac71b9f4b93955968041fd3b62e00281ae6dde9adaf"
       : "5a7f28da697b149cf3ba2f9ff01074aa662ea5f6a56c983e8ee24f83816372a2";
-    const sourcesStoreSourceFingerprint = telegramPeerAvatarBoundaryIsStaged
+    const sourcesStoreSourceFingerprint = telegramTakeoutBoundaryIsStaged
+      ? "340890b2099e76c9da00e7c52d1746c13a25876b3d9a9580025c5f6601e3f7bb"
+      : telegramPeerAvatarBoundaryIsStaged
       ? "01f4773cdc95e94f83c14b21efd0ae62976c3326895d0938925f6ab36c5d6167"
       : "28a8eb092ae42884e8b06bd6681bc36c8378cb1facea61fd8076b6ed284e3895";
     expect(

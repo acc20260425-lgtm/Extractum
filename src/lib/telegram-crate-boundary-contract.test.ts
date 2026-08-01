@@ -122,6 +122,24 @@ const phase8BFoundationLifecycleSources = [
   },
 ] as const;
 
+const phase8BRelocatedTakeoutLifecycleSources = [
+  {
+    baselinePath: "src-tauri/src/takeout_import/export_dc.rs",
+    stagedPath: "src-tauri/src/telegram_impl/takeout/export_dc.rs",
+    finalOwner: "extractum-telegram" as const,
+  },
+  {
+    baselinePath: "src-tauri/src/takeout_import/pagination.rs",
+    stagedPath: "src-tauri/src/telegram_impl/takeout/pagination.rs",
+    finalOwner: "extractum-telegram" as const,
+  },
+  {
+    baselinePath: "src-tauri/src/takeout_import/raw_parse.rs",
+    stagedPath: "src-tauri/src/telegram_impl/takeout/raw_parse.rs",
+    finalOwner: "extractum-telegram" as const,
+  },
+] as const;
+
 const phase8BOldFoundationPaths = phase8BFoundationLifecycleSources.map(
   ({ baselinePath }) => baselinePath,
 );
@@ -131,6 +149,7 @@ const phase8BStagedFoundationPaths = phase8BFoundationLifecycleSources.map(
 
 const stagedRawConsumerPaths = [
   "src-tauri/src/telegram_impl/error.rs",
+  "src-tauri/src/telegram_impl/live/mod.rs",
   "src-tauri/src/telegram_impl/live/avatar.rs",
   "src-tauri/src/telegram_impl/live/messages.rs",
   "src-tauri/src/telegram_impl/live/peer.rs",
@@ -138,6 +157,7 @@ const stagedRawConsumerPaths = [
   "src-tauri/src/telegram_impl/media.rs",
   "src-tauri/src/telegram_impl/runtime.rs",
   "src-tauri/src/telegram_impl/session.rs",
+  "src-tauri/src/telegram_impl/takeout/mod.rs",
   "src-tauri/src/telegram_impl/takeout/export_dc.rs",
   "src-tauri/src/telegram_impl/takeout/forum_topics.rs",
   "src-tauri/src/telegram_impl/takeout/operations.rs",
@@ -303,20 +323,28 @@ const retainedPreparationStates = [
     designStatus: "Approved; 8B preparation Checkpoint 6 retained",
     lifecycle: "8b-checkpoint-6",
   },
+  {
+    roadmapStatus: "8B preparation Checkpoint 7 retained",
+    designStatus: "Approved; 8B preparation Checkpoint 7 retained",
+    lifecycle: "8b-checkpoint-7",
+  },
 ] as const;
 
 function resolveCurrentTelegramSourcePath(
   relativePath: string,
   value: telegramContractPaths.TelegramLifecycle = lifecycle,
 ): string {
-  const foundation = phase8BFoundationLifecycleSources.find(
+  const source = [
+    ...phase8BFoundationLifecycleSources,
+    ...phase8BRelocatedTakeoutLifecycleSources,
+  ].find(
     ({ baselinePath, stagedPath }) =>
       relativePath === baselinePath || relativePath === stagedPath,
   );
-  return foundation === undefined
+  return source === undefined
     ? relativePath
     : telegramContractPaths.resolveTelegramLifecyclePath(
-        foundation,
+        source,
         value,
       );
 }
@@ -596,7 +624,15 @@ function assertFacadeInventory(
   sourceOverrides: ReadonlyMap<string, string> = new Map(),
   value: telegramContractPaths.TelegramLifecycle = lifecycle,
 ): void {
-  if (value === "8b-preparation" || value === "8c-extracted") return;
+  const phase8BCheckpoint =
+    telegramContractPaths.phase8BCheckpointNumber(value);
+  if (
+    value === "8b-preparation"
+    || value === "8c-extracted"
+    || (phase8BCheckpoint !== undefined && phase8BCheckpoint >= 7)
+  ) {
+    return;
+  }
   const ownerPaths = ownershipMovePaths.map((baselinePath) =>
     telegramContractPaths.resolveTelegramLifecyclePath(
       facadeLifecycleSource(baselinePath),
@@ -636,8 +672,6 @@ function assertFacadeInventory(
   const actualSites = ownerSources.flatMap(({ relativePath, source }) =>
     semanticFacadeSites(relativePath, source),
   );
-  const phase8BCheckpoint =
-    telegramContractPaths.phase8BCheckpointNumber(value);
   const expectedFacadeSites = phase8BCheckpoint !== undefined
       && phase8BCheckpoint >= 4
     ? checkpointOneFacadeSites.map((site) =>
@@ -807,6 +841,8 @@ function maskExactCfgTestItemSpans(source: string): string {
 function assertCheckpointThreeOwnershipContract(
   sourceOverrides: ReadonlyMap<string, string> = new Map(),
 ): void {
+  const phase8BCheckpoint =
+    telegramContractPaths.phase8BCheckpointNumber(lifecycle);
   const sources = checkpointThreeAppRustSources(sourceOverrides);
   const dtoPath = resolveCurrentTelegramSourcePath(
     "src-tauri/src/telegram/dto.rs",
@@ -881,7 +917,9 @@ function assertCheckpointThreeOwnershipContract(
     ].map((label) => ({
       label,
       expression: new RegExp(
-        `\\bpub\\s*\\(\\s*crate\\s*\\)\\s+const\\s+${label}\\b`,
+        phase8BCheckpoint !== undefined && phase8BCheckpoint >= 7
+          ? `\\bconst\\s+${label}\\b`
+          : `\\bpub\\s*\\(\\s*crate\\s*\\)\\s+const\\s+${label}\\b`,
         "g",
       ),
       path: checkpointThreeMediaOwnerPath,
@@ -1664,7 +1702,19 @@ function assertCheckpointFiveRuntimeContract(
     ).filter((item) => /^pub\s/.test(item)),
     "Checkpoint 5 API contract: lifecycle-gated public client-handle adapters",
   ).toEqual(
-    phase8BCheckpoint !== undefined && phase8BCheckpoint >= 5
+    phase8BCheckpoint !== undefined && phase8BCheckpoint >= 7
+      ? [
+          "pub fn dialog_listing",
+          "pub fn resolve_dialog_peer",
+          "pub fn resolve_username",
+          "pub fn peer_avatar_bytes",
+          "pub fn fetch_message_batch",
+          "pub fn fetch_forum_topics",
+          "pub fn takeout_self_check",
+          "pub fn prepare_takeout",
+          "pub fn takeout_forum_topics",
+        ]
+      : phase8BCheckpoint !== undefined && phase8BCheckpoint >= 5
       ? [
           "pub fn dialog_listing",
           "pub fn resolve_dialog_peer",
@@ -1909,16 +1959,6 @@ function assertCheckpointOneRootInventory(
     existsSync(path.join(repoRoot, relativePath)),
 ): void {
   if (checkpointNumber(value) > 2) return;
-  const rootCounts = new Map<string, number>();
-  for (const relativePath of ownershipMovePaths) {
-    const source =
-      telegramContractPaths.readTelegramContractFile(relativePath);
-    for (const match of source.matchAll(
-      /\bcrate::([A-Za-z_][A-Za-z0-9_]*)/g,
-    )) {
-      rootCounts.set(match[1], (rootCounts.get(match[1]) ?? 0) + 1);
-    }
-  }
   const prematureLayouts = [
     "src-tauri/src/telegram",
     "src-tauri/src/telegram_impl",
@@ -1928,6 +1968,16 @@ function assertCheckpointOneRootInventory(
     throw new Error(
       `Checkpoint 1 premature owner layout: ${prematureLayouts.join(", ")}`,
     );
+  }
+  const rootCounts = new Map<string, number>();
+  for (const relativePath of ownershipMovePaths) {
+    const source =
+      telegramContractPaths.readTelegramContractFile(relativePath);
+    for (const match of source.matchAll(
+      /\bcrate::([A-Za-z_][A-Za-z0-9_]*)/g,
+    )) {
+      rootCounts.set(match[1], (rootCounts.get(match[1]) ?? 0) + 1);
+    }
   }
   expect(
     Object.fromEntries(rootCounts),
@@ -3939,7 +3989,7 @@ function phase8BTerminalRawConsumerAuthority(
 ): string[] {
   const fence = exactPhase8BTextFenceAfter(
     source,
-    "and the exact 15 staged raw-consumer paths:",
+    "and the exact 17 staged direct-Grammers paths:",
     "Phase 8B terminal raw-consumer inventory",
   );
   const paths = fence.split("\n").map((relativePath) => {
@@ -3950,9 +4000,9 @@ function phase8BTerminalRawConsumerAuthority(
     }
     return `src-tauri/src/${relativePath}`;
   });
-  if (paths.length !== 15 || new Set(paths).size !== paths.length) {
+  if (paths.length !== 17 || new Set(paths).size !== paths.length) {
     throw new Error(
-      `Phase 8B terminal raw-consumer inventory: expected 15 unique paths, found ${paths.length}`,
+      `Phase 8B terminal raw-consumer inventory: expected 17 unique paths, found ${paths.length}`,
     );
   }
   return paths.sort();
@@ -6506,7 +6556,7 @@ describe("Phase 8B generated structural authority", () => {
           "missing disposition row",
         ),
       )
-    ).toThrow(/expected 99 disposition rows/);
+    ).toThrow(/expected 100 disposition rows/);
     expect(() =>
       generateSymbolAuthority(
         exactMutation(
@@ -6516,7 +6566,7 @@ describe("Phase 8B generated structural authority", () => {
           "duplicate disposition row",
         ),
       )
-    ).toThrow(/expected 99 disposition rows|duplicate current/);
+    ).toThrow(/expected 100 disposition rows|duplicate current/);
     expect(() =>
       generateSymbolAuthority(
         exactMutation(
@@ -6911,14 +6961,23 @@ describe("Phase 8B generated structural authority", () => {
         telegramContractPaths.readTelegramContractFile(relativePath),
       ]),
     );
+    const phase8BCheckpoint =
+      telegramContractPaths.phase8BCheckpointNumber(lifecycle);
+    const pageRequestFieldVisibility =
+      lifecycle === "8c-extracted"
+        || (phase8BCheckpoint !== undefined && phase8BCheckpoint >= 7)
+        ? "pub(super)"
+        : "pub(crate)";
     const mutated = replaceFixtureSource(
       currentSources,
-      "src-tauri/src/takeout_import/pagination.rs",
+      resolveCurrentTelegramSourcePath(
+        "src-tauri/src/takeout_import/pagination.rs",
+      ),
       (source) =>
         `${
           exactMutation(
             source,
-            "    pub(crate) limit: i32,\n",
+            `    ${pageRequestFieldVisibility} limit: i32,\n`,
             "",
             "TakeoutPageRequest field-to-method field mutation",
           )
@@ -8348,6 +8407,20 @@ describe("Checkpoint 1 core-error seam", () => {
   });
 
   it("keeps semantic facade sites stable across Checkpoint 3 line shifts", () => {
+    const phase8BCheckpoint =
+      telegramContractPaths.phase8BCheckpointNumber(lifecycle);
+    if (phase8BCheckpoint !== undefined && phase8BCheckpoint >= 7) {
+      expect(
+        phase8BRelocatedTakeoutLifecycleSources.map(({ baselinePath }) =>
+          resolveCurrentTelegramSourcePath(baselinePath)
+        ),
+      ).toEqual(
+        phase8BRelocatedTakeoutLifecycleSources.map(({ stagedPath }) =>
+          stagedPath
+        ),
+      );
+      return;
+    }
     const typesPath = "src-tauri/src/sources/types.rs";
     const peerResolutionPath =
       "src-tauri/src/sources/peer_resolution.rs";
@@ -8387,11 +8460,14 @@ mod tests {
   });
 
   it("rejects legacy seams and duplicate Telegram owners across the complete Rust perimeter", () => {
+    const rawParsePath = resolveCurrentTelegramSourcePath(
+      "src-tauri/src/takeout_import/raw_parse.rs",
+    );
     const overrides = new Map<string, string>([
       [
-        "src-tauri/src/takeout_import/raw_parse.rs",
+        rawParsePath,
         `${telegramContractPaths.readTelegramContractFile(
-          "src-tauri/src/takeout_import/raw_parse.rs",
+          rawParsePath,
         )}\nstruct ExtractedMediaPayload;\n`,
       ],
       [
@@ -9567,6 +9643,20 @@ impl secrecy::ExposeSecret<str> for HashAlias {
   });
 
   it("rejects moving a facade reference while preserving aggregate counts", () => {
+    const phase8BCheckpoint =
+      telegramContractPaths.phase8BCheckpointNumber(lifecycle);
+    if (phase8BCheckpoint !== undefined && phase8BCheckpoint >= 7) {
+      expect(
+        phase8BRelocatedTakeoutLifecycleSources.map(({ baselinePath }) =>
+          resolveCurrentTelegramSourcePath(baselinePath)
+        ),
+      ).toEqual(
+        phase8BRelocatedTakeoutLifecycleSources.map(({ stagedPath }) =>
+          stagedPath
+        ),
+      );
+      return;
+    }
     const typesPath = "src-tauri/src/sources/types.rs";
     const source =
       telegramContractPaths.readTelegramContractFile(typesPath);
@@ -10046,18 +10136,48 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
     );
   });
 
-  it("freezes Takeout range/page/fallback, incremental persistence, warnings, and finalization", () => {
+  it("freezes Takeout behavior through Checkpoint 6 and hands CP7 paths to Rust behavior tests", () => {
+    const phase8BCheckpoint =
+      telegramContractPaths.phase8BCheckpointNumber(lifecycle);
+    if (
+      lifecycle === "8c-extracted"
+      || (phase8BCheckpoint !== undefined && phase8BCheckpoint >= 7)
+    ) {
+      const relocatedPaths = phase8BRelocatedTakeoutLifecycleSources.map(
+        ({ baselinePath }) => resolveCurrentTelegramSourcePath(baselinePath),
+      );
+      const expectedPaths = phase8BRelocatedTakeoutLifecycleSources.map(
+        ({ stagedPath }) =>
+          lifecycle === "8c-extracted"
+            ? stagedPath.replace(
+                "src-tauri/src/telegram_impl/",
+                "src-tauri/crates/extractum-telegram/src/",
+              )
+            : stagedPath,
+      );
+      expect(relocatedPaths).toEqual(expectedPaths);
+      for (const relativePath of relocatedPaths) {
+        expect(() =>
+          telegramContractPaths.resolveTelegramContractPath(relativePath)
+        ).not.toThrow();
+      }
+      return;
+    }
     const takeout =
       telegramContractPaths.readTelegramContractFile(
         "src-tauri/src/takeout_import/mod.rs",
       );
     const pagination =
       telegramContractPaths.readTelegramContractFile(
-        "src-tauri/src/takeout_import/pagination.rs",
+        resolveCurrentTelegramSourcePath(
+          "src-tauri/src/takeout_import/pagination.rs",
+        ),
       );
     const rawParse =
       telegramContractPaths.readTelegramContractFile(
-        "src-tauri/src/takeout_import/raw_parse.rs",
+        resolveCurrentTelegramSourcePath(
+          "src-tauri/src/takeout_import/raw_parse.rs",
+        ),
       );
     const paginationStructure = maskRustLexicalNonCode(pagination);
     const rawParseStructure = maskRustLexicalNonCode(rawParse);

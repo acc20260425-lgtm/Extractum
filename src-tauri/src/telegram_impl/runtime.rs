@@ -13,7 +13,7 @@ use super::{
     dto::{ForumTopicSnapshot, PeerDescriptor},
     live,
     session::TelegramSession,
-    DialogListing, LiveMessageBatch,
+    takeout, DialogListing, LiveMessageBatch, TakeoutTransport,
 };
 
 #[derive(Clone)]
@@ -138,18 +138,41 @@ impl TelegramClientHandle {
         }
     }
 
-    pub(crate) fn raw_client(&self) -> &grammers_client::Client {
+    pub async fn takeout_self_check(&self) -> extractum_core::error::AppResult<()> {
         match &self.client {
-            TelegramClientInner::Grammers(client) => client,
+            TelegramClientInner::Grammers(client) => takeout::takeout_self_check(client).await,
             #[cfg(test)]
             TelegramClientInner::Test { .. } => {
-                unreachable!("test Telegram clients have no raw Grammers handle")
+                unreachable!("test Telegram clients cannot run Takeout self checks")
             }
         }
     }
 
-    pub(crate) fn raw_session(&self) -> &std::sync::Arc<grammers_session::storages::MemorySession> {
-        self.session.raw_memory_session()
+    pub async fn prepare_takeout(&self) -> extractum_core::error::AppResult<TakeoutTransport> {
+        match &self.client {
+            TelegramClientInner::Grammers(client) => {
+                takeout::prepare_takeout(client, &self.session).await
+            }
+            #[cfg(test)]
+            TelegramClientInner::Test { .. } => {
+                unreachable!("test Telegram clients cannot prepare Takeout transports")
+            }
+        }
+    }
+
+    pub async fn takeout_forum_topics(
+        &self,
+        peer: &PeerDescriptor,
+    ) -> extractum_core::error::AppResult<Option<(Vec<ForumTopicSnapshot>, Vec<i64>)>> {
+        match &self.client {
+            TelegramClientInner::Grammers(client) => {
+                takeout::takeout_forum_topics(client, peer).await
+            }
+            #[cfg(test)]
+            TelegramClientInner::Test { .. } => {
+                unreachable!("test Telegram clients cannot fetch Takeout forum topics")
+            }
+        }
     }
 }
 

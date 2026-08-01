@@ -2756,20 +2756,6 @@
     },
     {
       "currentPath": "takeout_import/export_dc.rs",
-      "currentSymbol": "TAKEOUT_FILE_MAX_SIZE",
-      "finalTargets": [
-        {
-          "path": "telegram_impl/takeout/export_dc.rs",
-          "symbol": "TAKEOUT_FILE_MAX_SIZE"
-        }
-      ],
-      "semanticOwner": "staged",
-      "firstCheckpoint": 7,
-      "removalCheckpoint": 7,
-      "disposition": "move"
-    },
-    {
-      "currentPath": "takeout_import/export_dc.rs",
       "currentSymbol": "ExportDcAlias",
       "finalTargets": [
         {
@@ -2812,20 +2798,6 @@
     },
     {
       "currentPath": "takeout_import/export_dc.rs",
-      "currentSymbol": "takeout_init_request_for_source_subtype",
-      "finalTargets": [
-        {
-          "path": "telegram_impl/takeout/export_dc.rs",
-          "symbol": "takeout_init_request_for_source_subtype"
-        }
-      ],
-      "semanticOwner": "staged",
-      "firstCheckpoint": 7,
-      "removalCheckpoint": 7,
-      "disposition": "move"
-    },
-    {
-      "currentPath": "takeout_import/export_dc.rs",
       "currentSymbol": "export_dc_invoke",
       "finalTargets": [
         {
@@ -2859,6 +2831,34 @@
         {
           "path": "telegram_impl/takeout/export_dc.rs",
           "symbol": "finish_takeout_session"
+        }
+      ],
+      "semanticOwner": "staged",
+      "firstCheckpoint": 7,
+      "removalCheckpoint": 7,
+      "disposition": "move"
+    },
+    {
+      "currentPath": "takeout_import/export_dc.rs",
+      "currentSymbol": "TAKEOUT_FILE_MAX_SIZE",
+      "finalTargets": [
+        {
+          "path": "telegram_impl/takeout/mod.rs",
+          "symbol": "TAKEOUT_FILE_MAX_SIZE"
+        }
+      ],
+      "semanticOwner": "staged",
+      "firstCheckpoint": 7,
+      "removalCheckpoint": 7,
+      "disposition": "move"
+    },
+    {
+      "currentPath": "takeout_import/export_dc.rs",
+      "currentSymbol": "takeout_init_request_for_source_subtype",
+      "finalTargets": [
+        {
+          "path": "telegram_impl/takeout/mod.rs",
+          "symbol": "takeout_init_request_for_source_subtype"
         }
       ],
       "semanticOwner": "staged",

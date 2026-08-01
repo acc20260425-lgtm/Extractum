@@ -65,6 +65,17 @@ impl TelegramState {
         }
     }
 
+    pub(crate) async fn client(&self, account_id: i64) -> AppResult<TelegramClientHandle> {
+        self.runtime.client(account_id).await
+    }
+
+    pub(crate) async fn authorized_client(
+        &self,
+        account_id: i64,
+    ) -> AppResult<TelegramClientHandle> {
+        self.runtime.authorized_client(account_id).await
+    }
+
     pub(crate) async fn diagnostic_status_counts(&self, account_ids: &[i64]) -> Vec<(String, i64)> {
         let statuses = self.statuses.lock().await;
         let mut counts = std::collections::BTreeMap::<String, i64>::new();
@@ -425,20 +436,6 @@ pub async fn tg_logout(
 ) -> AppResult<bool> {
     clear_account_runtime(&handle, &state, &secret_store, account_id, true).await?;
     Ok(true)
-}
-
-pub(crate) async fn get_client(
-    state: &TelegramState,
-    account_id: i64,
-) -> extractum_core::error::AppResult<TelegramClientHandle> {
-    state.runtime.client(account_id).await
-}
-
-pub(crate) async fn get_authorized_client(
-    state: &TelegramState,
-    account_id: i64,
-) -> extractum_core::error::AppResult<TelegramClientHandle> {
-    state.runtime.authorized_client(account_id).await
 }
 
 #[cfg(test)]

@@ -1,4 +1,3 @@
-use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
@@ -82,7 +81,6 @@ impl SourceMetadata {
 }
 
 pub(crate) struct ResolvedSyncPeer {
-    pub(crate) peer: PeerRef,
     pub(crate) descriptor: PeerDescriptor,
     pub(crate) refreshed_avatar_cache_key: Option<String>,
 }
@@ -442,46 +440,6 @@ fn peer_descriptor_from_stored_identity(
     })
 }
 
-pub(crate) fn legacy_peer_ref_from_descriptor(descriptor: &PeerDescriptor) -> AppResult<PeerRef> {
-    let peer_id = descriptor
-        .external_id
-        .parse::<i64>()
-        .ok()
-        .filter(|peer_id| *peer_id > 0)
-        .ok_or_else(|| {
-            AppError::validation(format!(
-                "Invalid Telegram peer id '{}'",
-                descriptor.external_id
-            ))
-        })?;
-
-    match descriptor.source_subtype.as_str() {
-        TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP => {
-            let access_hash = descriptor.access_hash.ok_or_else(|| {
-                AppError::validation(format!(
-                    "Telegram {} {} is missing an access hash",
-                    descriptor.source_subtype, descriptor.external_id
-                ))
-            })?;
-            Ok(PeerRef {
-                id: PeerId::channel(peer_id).ok_or_else(|| {
-                    AppError::validation(format!("Invalid Telegram channel peer id {peer_id}"))
-                })?,
-                auth: PeerAuth::from_hash(access_hash),
-            })
-        }
-        TELEGRAM_KIND_GROUP => Ok(PeerRef {
-            id: PeerId::chat(peer_id).ok_or_else(|| {
-                AppError::validation(format!("Invalid Telegram group peer id {peer_id}"))
-            })?,
-            auth: PeerAuth::default(),
-        }),
-        other => Err(AppError::validation(format!(
-            "Unsupported Telegram source_subtype '{other}'"
-        ))),
-    }
-}
-
 pub(crate) async fn resolve_and_refresh_peer(
     handle: &AppHandle,
     pool: &sqlx::Pool<sqlx::Sqlite>,
@@ -492,7 +450,6 @@ pub(crate) async fn resolve_and_refresh_peer(
     let identity = load_telegram_source_identity(pool, source.id).await?;
     let (descriptor, fetch_stored_avatar) =
         resolve_source_peer_from_typed_identity(client, source, &identity).await?;
-    let peer = legacy_peer_ref_from_descriptor(&descriptor)?;
     let refreshed_avatar_cache_key = refresh_source_avatar_cache(
         handle,
         client,
@@ -505,7 +462,6 @@ pub(crate) async fn resolve_and_refresh_peer(
     .await;
 
     Ok(ResolvedSyncPeer {
-        peer,
         descriptor,
         refreshed_avatar_cache_key,
     })

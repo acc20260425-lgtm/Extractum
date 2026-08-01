@@ -1,6 +1,8 @@
 use crate::error::AppResult;
 use crate::ingest_provenance::{record_ingest_batch_warning, TerminalBatchStatus};
-use crate::sources::{refresh_forum_topics, SourceSyncTarget, TELEGRAM_KIND_SUPERGROUP};
+use crate::sources::{
+    apply_forum_topic_refresh_result, SourceSyncTarget, TELEGRAM_KIND_SUPERGROUP,
+};
 use crate::telegram_impl::{PeerDescriptor, TelegramClientHandle};
 
 pub(crate) const FORUM_TOPIC_REFRESH_FAILED_WARNING_CODE: &str = "forum_topic_refresh_failed";
@@ -40,7 +42,9 @@ pub(crate) async fn refresh_forum_topics_after_completed_takeout(
         return Ok(());
     }
 
-    let refresh_warnings = refresh_forum_topics(pool, client, peer, source).await;
+    let refresh_warnings =
+        apply_forum_topic_refresh_result(pool, source.id, client.takeout_forum_topics(peer).await)
+            .await;
     record_takeout_forum_topic_refresh_failure_if_needed(
         pool,
         batch_id,

@@ -61,11 +61,19 @@ pub(crate) async fn refresh_forum_topics(
         return Vec::new();
     }
 
-    match client.fetch_forum_topics(peer).await {
+    apply_forum_topic_refresh_result(pool, source.id, client.fetch_forum_topics(peer).await).await
+}
+
+pub(crate) async fn apply_forum_topic_refresh_result(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    source_id: i64,
+    result: AppResult<Option<(Vec<ForumTopicSnapshot>, Vec<i64>)>>,
+) -> Vec<String> {
+    match result {
         Ok(Some((topics, deleted_topic_ids))) => {
             if let Err(error) = upsert_forum_topics_from_refresh(
                 pool,
-                source.id,
+                source_id,
                 &topics,
                 &deleted_topic_ids,
                 now_secs(),
@@ -74,7 +82,7 @@ pub(crate) async fn refresh_forum_topics(
             {
                 vec![format!(
                     "Forum topic refresh failed for source {}: {error}",
-                    source.id
+                    source_id
                 )]
             } else {
                 Vec::new()
@@ -83,7 +91,7 @@ pub(crate) async fn refresh_forum_topics(
         Ok(None) => Vec::new(),
         Err(error) => vec![format!(
             "Forum topic refresh failed for source {}: {error}",
-            source.id
+            source_id
         )],
     }
 }

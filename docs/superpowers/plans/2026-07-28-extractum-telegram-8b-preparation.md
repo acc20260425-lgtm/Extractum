@@ -1413,7 +1413,7 @@ follows them is normative and is materialized by
 | `telegram_impl/takeout/mod.rs` | Private Takeout module shell and curated internal exports. |
 | `telegram_impl/takeout/types.rs` | Own `TakeoutAttempt`, `TakeoutFallback*`, `TakeoutPeer`, `MessageRange`, `TakeoutCount`, `TakeoutPage`, and `TakeoutMessage`; `TakeoutPage` stores only the exact sibling-restricted cursor/profile state and exposes the frozen tuple bridge. |
 | `telegram_impl/takeout/transport.rs` | Own client/session/DC state, attempt snapshots, and fallback queueing; expose only the exact restricted accessors used by concrete siblings. |
-| `telegram_impl/takeout/export_dc.rs` | Move the raw, provenance-free half of `export_dc_invoke_with_provenance`, `ExportDcAlias`, DC selection, init request construction, shifted/home invocation/fallback mechanics, and all seven mapped tests. |
+| `telegram_impl/takeout/export_dc.rs` | Move the raw, provenance-free half of `export_dc_invoke_with_provenance`, `ExportDcAlias`, DC selection, shifted/home invocation/fallback mechanics, init-request characterization tests, and all seven mapped tests. |
 | `telegram_impl/takeout/operations.rs` | Move self-check, init/finish, validation, migration, split/count/history/search operations, and only-my classification. |
 | `telegram_impl/takeout/pagination.rs` | Move all production/tests from `takeout_import/pagination.rs`; own split selection, the exact `pub(super)` TDesktop/descending state types, request/advance fields, restart/warning, and response classification. |
 | `telegram_impl/takeout/raw_parse.rs` | Move all production/tests from `takeout_import/raw_parse.rs`, `peer_ref_identity`, raw response count/classification, and both companion tests. |
@@ -1532,7 +1532,8 @@ or unnamed fragment is legal in the generated artifact.
 | `takeout_import/mod.rs` | `TakeoutHistoryProbe` | `telegram_impl/takeout/types.rs` | `TakeoutCount` | staged | 7 | 7 | replace |
 | `takeout_import/mod.rs` | `CountedMessageRange` | `takeout_import/mod.rs` | `CountedMessageRange` | app | 7 | retained | replace-fields-with-owned-values |
 | `takeout_import/mod.rs` | `{run_export_dc_spike_for_handle,run_takeout_source_import,run_takeout_migrated_history_import,run_started_takeout_source_import,run_started_takeout_source_import_inner,import_takeout_history_ranges,import_takeout_history_pages}` | `takeout_import/mod.rs` | `=` | app | 7 | retained | rewrite-owned-seam |
-| `takeout_import/export_dc.rs` | `{EXPORT_DC_SHIFT,TAKEOUT_FILE_MAX_SIZE,ExportDcAlias,prepare_export_dc_alias,export_dc_id_for_home_dc,takeout_init_request_for_source_subtype,export_dc_invoke,export_dc_invoke_with,finish_takeout_session}` | `telegram_impl/takeout/export_dc.rs` | `=` | staged | 7 | 7 | move |
+| `takeout_import/export_dc.rs` | `{EXPORT_DC_SHIFT,ExportDcAlias,prepare_export_dc_alias,export_dc_id_for_home_dc,export_dc_invoke,export_dc_invoke_with,finish_takeout_session}` | `telegram_impl/takeout/export_dc.rs` | `=` | staged | 7 | 7 | move |
+| `takeout_import/export_dc.rs` | `{TAKEOUT_FILE_MAX_SIZE,takeout_init_request_for_source_subtype}` | `telegram_impl/takeout/mod.rs` | `=` | staged | 7 | 7 | move |
 | `takeout_import/export_dc.rs` | `should_fallback_export_dc_error` | `telegram_impl/error.rs` | `should_fallback_export_dc_error` | staged | 7 | 7 | move |
 | `takeout_import/export_dc.rs` | `ExportDcAttemptState` | `telegram_impl/takeout/transport.rs` | `ExportDcAttemptTracker` | staged | 7 | 7 | split-stage-tracker |
 | `takeout_import/export_dc.rs` | `ExportDcAttemptState` | `telegram_impl/takeout/types.rs` | `TakeoutAttempt` | staged | 7 | 7 | split-stage-attempt-value |
@@ -3007,6 +3008,38 @@ Invoke-CheckedNative 'commit Task 6' {
 
 ## Task 7: Complete the Concrete Takeout Boundary and Seal the Portable Tree
 
+**Execution preflight amendment (2026-07-31):** sealing the still-unexecuted
+Checkpoint 7 boundary removes the free application helpers
+`telegram::{get_client,get_authorized_client}`. Their remaining non-Takeout
+callers in `sources/{store,sync}.rs` must therefore move to package-private
+`TelegramState::{client,authorized_client}` methods in the same candidate.
+That focused edit also advances the existing retained-status, staged-tree, and
+whole-file-fingerprint authorities. Consequently Task 7 includes the exact
+additional paths named below. These TypeScript contracts may update only their
+existing lifecycle/path/fingerprint data; they must not parse Rust semantics or
+be used to prove request budget, ordering, cancellation, or timeout behavior.
+Those properties remain proved by the named Rust behavior tests and successful
+compilation. This forward-only correction applies only to unexecuted Task 7 and
+does not reopen Checkpoints 0-6.
+
+The CP7 terminal direct-Grammers path inventory also counts the two private
+parent facade shells `telegram_impl/{live,takeout}/mod.rs`. Their frozen facade
+signatures necessarily name raw client/request types before delegating to the
+listed leaves, so the former 15-path list omitted two real direct dependencies.
+The corrected 17-path inventory records those existing private facades; it adds
+no application escape hatch, public API, parser, fixture, or mutation test.
+The same private-parent correction makes `telegram_impl/takeout/mod.rs` the
+single owner of `TAKEOUT_FILE_MAX_SIZE` and
+`takeout_init_request_for_source_subtype`, so both child modules share one
+builder without a forwarding alias or a new restricted bridge. The three
+app-retained persistence helper names in the symbol map remain exact while
+their implementations are rewritten around owned attempt/fallback values.
+Splitting that exact ownership across the leaf and private parent turns the
+former single grouped disposition into two rows, so the existing generator's
+grouped source-table invariant advances mechanically from 99 to 100 rows and
+the schema-v1 artifact is regenerated with the corrected owners; this changes
+no Rust-semantic parsing or behavior authority.
+
 **Files:**
 
 - Create: `src-tauri/src/telegram_impl/takeout/mod.rs`
@@ -3023,11 +3056,23 @@ Invoke-CheckedNative 'commit Task 6' {
 - Modify:
   `src-tauri/src/takeout_import/{mod,forum_topics,migrated_history}.rs`
 - Modify:
-  `src-tauri/src/sources/{peer_resolution,topics}.rs` only where final pure
+  `src-tauri/src/sources/{mod,peer_resolution,topics}.rs` only where final pure
   peer/topic coordination requires it
+- Modify: `src-tauri/src/sources/{store,sync}.rs` only to replace the removed
+  free Telegram client helpers with the package-private `TelegramState`
+  methods; preserve all existing source-store/sync behavior
 - Delete after successful relocation:
   `src-tauri/src/takeout_import/{export_dc,pagination,raw_parse}.rs`
 - Modify: `src/lib/telegram-crate-boundary-contract.test.ts`
+- Modify: `scripts/telegram-8b-symbol-map.mjs` and
+  `src/lib/telegram-8b-symbol-map.json` only to advance the generator's exact
+  grouped disposition-row authority from 99 to 100 and regenerate the
+  corrected private-parent owner mappings; do not add Rust-semantic parsing, a
+  fixture, or a mutation test
+- Modify: the existing shell-cap, production-graph, and application-analysis
+  contracts only for retained CP7 status/path/breadth and the mechanically
+  changed `sources/store.rs` whole-file fingerprint:
+  `src/lib/{crate-extraction-shell-cap-contract,analysis-crate-boundary-contract,analysis-application-contract}.test.ts`
 - Modify:
   `docs/superpowers/specs/2026-07-26-telegram-crate-boundary-design.md`
 - Modify: `docs/superpowers/specs/2026-07-17-crate-roadmap.md`
@@ -3337,10 +3382,11 @@ Keep completion policy and warning/provenance tests in app
   `runtime.rs` and delegate by relative path through the exact `pub(super)`
   allowlist, so no raw accessor is visible to an app module.
 - [ ] Produce exactly the 19-file portable tree. Assert no extra/missing path
-  and the exact 15 staged raw-consumer paths:
+  and the exact 17 staged direct-Grammers paths:
 
 ```text
 telegram_impl/error.rs
+telegram_impl/live/mod.rs
 telegram_impl/live/avatar.rs
 telegram_impl/live/messages.rs
 telegram_impl/live/peer.rs
@@ -3348,6 +3394,7 @@ telegram_impl/live/topics.rs
 telegram_impl/media.rs
 telegram_impl/runtime.rs
 telegram_impl/session.rs
+telegram_impl/takeout/mod.rs
 telegram_impl/takeout/export_dc.rs
 telegram_impl/takeout/forum_topics.rs
 telegram_impl/takeout/operations.rs

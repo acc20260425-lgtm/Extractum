@@ -313,7 +313,7 @@ async fn sync_telegram_source(
         AppError::validation(format!("Source {source_id} is not linked to an account"))
     })?;
 
-    let client_handle = crate::telegram::get_authorized_client(state.inner(), account_id).await?;
+    let client_handle = state.authorized_client(account_id).await?;
     let resolved_peer =
         resolve_and_refresh_peer(&handle, &pool, &client_handle, &source, account_id).await?;
     let forum_topic_warnings =

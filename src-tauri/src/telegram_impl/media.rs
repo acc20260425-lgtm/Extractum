@@ -2,8 +2,8 @@ use grammers_client::{media::Media, tl};
 
 use extractum_core::media_metadata::{media_label, ItemMediaMetadata};
 
-pub(crate) const CONTENT_KIND_TEXT_ONLY: &str = "text_only";
-pub(crate) const CONTENT_KIND_TEXT_WITH_MEDIA: &str = "text_with_media";
+const CONTENT_KIND_TEXT_ONLY: &str = "text_only";
+const CONTENT_KIND_TEXT_WITH_MEDIA: &str = "text_with_media";
 const CONTENT_KIND_MEDIA_ONLY: &str = "media_only";
 
 #[derive(Clone, Debug, PartialEq)]
@@ -13,12 +13,12 @@ pub struct TelegramMediaPayload {
 }
 
 #[derive(Default)]
-pub(crate) struct DocumentSignals {
-    pub(crate) mime_type: Option<String>,
-    pub(crate) has_video: bool,
-    pub(crate) has_audio: bool,
-    pub(crate) is_voice: bool,
-    pub(crate) is_animated: bool,
+struct DocumentSignals {
+    mime_type: Option<String>,
+    has_video: bool,
+    has_audio: bool,
+    is_voice: bool,
+    is_animated: bool,
 }
 
 fn trimmed_non_empty(input: &str) -> Option<String> {
@@ -26,7 +26,7 @@ fn trimmed_non_empty(input: &str) -> Option<String> {
     (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
-pub(crate) fn derive_content_kind(has_content: bool, has_media: bool) -> &'static str {
+pub(super) fn derive_content_kind(has_content: bool, has_media: bool) -> &'static str {
     match (has_content, has_media) {
         (true, true) => CONTENT_KIND_TEXT_WITH_MEDIA,
         (false, true) => CONTENT_KIND_MEDIA_ONLY,
@@ -57,7 +57,7 @@ fn collect_document_signals(document: &grammers_client::media::Document) -> Docu
     signals
 }
 
-pub(crate) fn derive_document_media_kind(signals: &DocumentSignals) -> &'static str {
+fn derive_document_media_kind(signals: &DocumentSignals) -> &'static str {
     let mime_type = signals.mime_type.as_deref().unwrap_or("");
 
     if signals.has_video || mime_type.starts_with("video/") {
@@ -76,6 +76,22 @@ pub(crate) fn derive_document_media_kind(signals: &DocumentSignals) -> &'static 
         return "image";
     }
     "document"
+}
+
+pub(super) fn derive_document_media_kind_from_parts(
+    mime_type: Option<&str>,
+    has_video: bool,
+    has_audio: bool,
+    is_voice: bool,
+    is_animated: bool,
+) -> &'static str {
+    derive_document_media_kind(&DocumentSignals {
+        mime_type: mime_type.map(str::to_string),
+        has_video,
+        has_audio,
+        is_voice,
+        is_animated,
+    })
 }
 
 fn contact_summary(contact: &grammers_client::media::Contact) -> String {
@@ -222,7 +238,7 @@ fn extract_item_payload_from_parts(
     Some((content, derive_content_kind(has_content, has_media), media))
 }
 
-pub(crate) fn extract_item_payload(
+pub(super) fn extract_item_payload(
     message: &grammers_client::message::Message,
 ) -> Option<(Option<String>, &'static str, Option<TelegramMediaPayload>)> {
     extract_item_payload_from_parts(message.text(), message.media())
@@ -241,7 +257,7 @@ pub(super) fn extract_raw_item_payload(
 #[cfg(test)]
 mod tests {
     use super::{
-        derive_content_kind, derive_document_media_kind, DocumentSignals, CONTENT_KIND_MEDIA_ONLY,
+        derive_content_kind, derive_document_media_kind_from_parts, CONTENT_KIND_MEDIA_ONLY,
         CONTENT_KIND_TEXT_ONLY, CONTENT_KIND_TEXT_WITH_MEDIA,
     };
 
@@ -257,25 +273,23 @@ mod tests {
 
     #[test]
     fn derive_document_media_kind_prefers_specific_signals() {
-        let voice = DocumentSignals {
-            mime_type: Some("audio/ogg".to_string()),
-            has_audio: true,
-            is_voice: true,
-            ..DocumentSignals::default()
-        };
-        assert_eq!(derive_document_media_kind(&voice), "voice");
-
-        let video = DocumentSignals {
-            mime_type: Some("application/octet-stream".to_string()),
-            has_video: true,
-            ..DocumentSignals::default()
-        };
-        assert_eq!(derive_document_media_kind(&video), "video");
-
-        let image = DocumentSignals {
-            mime_type: Some("image/png".to_string()),
-            ..DocumentSignals::default()
-        };
-        assert_eq!(derive_document_media_kind(&image), "image");
+        assert_eq!(
+            derive_document_media_kind_from_parts(Some("audio/ogg"), false, true, true, false,),
+            "voice"
+        );
+        assert_eq!(
+            derive_document_media_kind_from_parts(
+                Some("application/octet-stream"),
+                true,
+                false,
+                false,
+                false,
+            ),
+            "video"
+        );
+        assert_eq!(
+            derive_document_media_kind_from_parts(Some("image/png"), false, false, false, false,),
+            "image"
+        );
     }
 }

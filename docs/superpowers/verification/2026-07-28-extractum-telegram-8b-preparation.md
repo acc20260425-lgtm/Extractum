@@ -2448,3 +2448,184 @@ At CP7, not CP6, the temporary media facade, both raw handle accessors, borrowed
 The frozen CP6 candidate is a test-only baseline decomposition. It preserves exactly the CP5 media and raw-bridge definitions, exact physical-use inventory, three raw-handle logical owners, two peer-field logical owners, sole peer producer, and complete current-source forwarding chain. No CP6 escape-hatch removal is required, no CP5 listed use was removed, and no new or obscured application raw escape exists.
 
 Escape-hatch review verdict: CLEAN
+
+## Superseded Phase 8B Checkpoint 7 LLM retention gate (invalidated)
+
+This CLEAN record was invalidated by the subsequent semantics-preserving
+inlining of an unlisted private pagination helper after the first promoted
+contract run failed. It remains only as audit history and cannot authorize
+Checkpoint 7 retention.
+
+### Findings resolved before retention
+
+- The first fresh review found that the terminal direct-Grammers authority
+  listed 15 paths while the two private parent facade modules also directly
+  name frozen Grammers types. The plan, design, and existing lifecycle/path
+  contract now truthfully freeze 17 paths; no application escape hatch or
+  public API was added.
+- The next review found that the exact retained app-helper names had been
+  consolidated and that the Takeout init builder/constant had a forwarding
+  leaf alias. The app now retains the exact
+  `record_export_dc_attempt_if_needed`,
+  `record_export_dc_fallback_if_needed`, and
+  `record_only_my_messages_fallback_if_needed` definitions with owned durable
+  persistence. `TAKEOUT_FILE_MAX_SIZE` and
+  `takeout_init_request_for_source_subtype` now have one private owner in
+  `telegram_impl/takeout/mod.rs`, with no forwarding alias or new bridge.
+- The final review pass found one stale responsibility-table phrase that still
+  assigned init-request construction to the export leaf. Both source maps now
+  describe the leaf as owning characterization tests, while the private parent
+  remains the sole production builder owner. Splitting the grouped source-map
+  row advanced the existing generator invariant from 99 to 100 grouped rows;
+  its two existing test expectations and the generated schema-v1 owner mapping
+  were updated mechanically.
+
+### Final independent review
+
+- P1: none.
+- P2: none.
+- P3: none.
+
+The reviewer verified:
+
+- exactly 19 portable-tree files and 17 direct-Grammers paths;
+- 69 restricted symbols;
+- identical 100-row source tables and 307 expanded schema-v1 artifact entries;
+- the private parent as the only init-builder/constant owner, with no alias or
+  visibility expansion;
+- exact retained app-helper names plus durable ordering and deduplication;
+- zero raw application leakage, zero `crate::` paths inside `telegram_impl`,
+  and no transitional raw escape hatch;
+- no new TypeScript Rust-semantic parser, fixture, or mutation test;
+- TypeScript changes limited to the existing lifecycle, path, breadth,
+  fingerprint, visibility, and generated-authority expectations;
+- behavior authority remains in the existing Rust tests and compilation.
+
+Fresh pre-retention evidence on the final candidate:
+
+- `node scripts/telegram-8b-symbol-map.mjs --check`: PASS;
+- `node scripts/telegram-8b-test-identities.mjs --check`: PASS;
+- `npm.cmd run check:rustfmt`: PASS;
+- `git diff --check`: PASS;
+- analysis/application/shell-cap contracts: 79/79 PASS;
+- Telegram contract: 134/145 PASS before status promotion, with exactly the
+  expected 11 CP6-status-versus-CP7-tree lifecycle failures and no other
+  failure;
+- Takeout export suite: 7/7 PASS;
+- Takeout operations suite: 6/6 PASS;
+- app Takeout suite: 15/15 PASS;
+- the strengthened export provenance/error-precedence/SQL, channel-fallback
+  ordering, and cancellation-recovery tests: 3/3 PASS;
+- the existing store 4,000 ms, dialog budget/interleaving, message single-call
+  ordering/limits, sync durability/timeout-stop, and avatar 750 ms behavior
+  tests: 5/5 PASS;
+- `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`:
+  PASS on the final code candidate. A later independent sandbox repeat was
+  unavailable only because it could not open the canonical `.cargo-lock`; no
+  alternate target or escalation was used.
+
+Escape-hatch review verdict: CLEAN
+
+## Phase 8B Checkpoint 7 LLM retention gate — final candidate, 2026-08-01
+
+This record supersedes the invalidated CP7 review above. It covers the final
+candidate after the private pagination helper was inlined and the existing
+TypeScript contracts were corrected only for CP7 lifecycle/path authority.
+
+### Findings
+
+- P1: none.
+- P2: none.
+- P3: none.
+
+### Complete review record
+
+- The portable inventory contains exactly 19 Rust files and exactly 17 direct
+  Grammers paths, including both private parent facades.
+- The two normative source tables contain 100 grouped rows. The schema-v1
+  artifact contains 307 expanded entries, 69 restricted symbols, and an empty
+  CP7 transitional inventory.
+- `TAKEOUT_FILE_MAX_SIZE` and
+  `takeout_init_request_for_source_subtype` have one private owner in
+  `telegram_impl/takeout/mod.rs`. Child modules use that owner without a
+  forwarding alias or added bridge.
+- The exact app persistence helpers remain
+  `record_export_dc_attempt_if_needed`,
+  `record_export_dc_fallback_if_needed`, and
+  `record_only_my_messages_fallback_if_needed`.
+- Attempt recording, fallback draining, OnlyMy record-before-search, the
+  single outer cancellation selection, cancellation recovery, durable
+  deduplication, and error precedence match the frozen choreography.
+- The app message loop preserves lower-bound checking, durable maximum-ID
+  update before conversion, persistence, page progress, cancellation, and
+  `has_next` ordering.
+- The unlisted `message_range_from_raw` helper is absent. Its sole exhaustive
+  raw-range conversion is inlined at the original callsite without an API,
+  visibility, symbol-map, or test-identity change.
+- Forum retrieval delegates through the shared live operation while app
+  completion and persistence policy remain application-owned.
+- `DocumentSignals` remains private and raw parsing uses the exact parts
+  bridge.
+- Fail-closed scans found no `crate::`, app/Tauri/SQL/keyring leakage inside
+  `telegram_impl`, no raw Grammers leakage in application paths, and no named
+  transitional raw/client/session/peer escape hatch, alias, glob, or forwarding
+  wrapper.
+- Root exports and production restricted visibility match generated authority.
+- The CP7 branch of the old TypeScript Takeout behavior contract is path-only
+  and returns before inspecting Rust semantics. No new TypeScript
+  Rust-semantic parser, fixture, or mutation test was added; request budgets,
+  ordering, cancellation, and timeouts remain proved by Rust behavior tests
+  and compilation.
+
+Fresh final-candidate evidence:
+
+- `node scripts/telegram-8b-symbol-map.mjs --check`: PASS;
+- `node scripts/telegram-8b-test-identities.mjs --check`: PASS;
+- analysis/application/shell-cap contracts: 79/79 PASS;
+- Telegram contract before status promotion: 135/145 PASS, with exactly ten
+  CP6-status-versus-CP7-tree lifecycle failures and no implementation failure;
+- `npm.cmd run check:rustfmt`: PASS;
+- `git diff --check`: PASS;
+- Takeout pagination suite: 9/9 PASS;
+- complete `extractum` library suite: 736/736 PASS;
+- `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`:
+  PASS.
+
+Escape-hatch review verdict: CLEAN
+
+### Checkpoint 7 retained-gate results
+
+The unchanged CLEAN candidate was promoted to the Checkpoint 7 candidate
+status pair before the named retained gates. Post-promotion evidence:
+
+- Telegram, shell-cap, media, Gemini, analysis, LLM, and prompt-pack contract
+  selection: 8/8 files and 251/251 tests PASS;
+- `node scripts/telegram-grammers-feature-baseline.mjs --check`: PASS;
+- `npm.cmd run check:rustfmt`: PASS;
+- `cargo metadata --manifest-path src-tauri/Cargo.toml --locked
+  --format-version 1`: PASS;
+- `cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets
+  -q`: PASS. The concise confirmation completed in 1.7 seconds; the earlier
+  verbose output was UI-truncated and is not used as a timing sample;
+- `cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets
+  -q`: PASS: 736 + 112 + 22 + 77 + 37 + 249 tests, zero failures;
+- `npm.cmd run verify` outside the managed sandbox: PASS in 172.1 seconds:
+  177/177 Vitest files and 1629/1629 tests, zero Svelte diagnostics, rustfmt,
+  workspace check, and workspace tests all GREEN.
+
+The first sandboxed `npm.cmd run verify` attempt was a false-negative
+infrastructure result. Per the rollback ladder, both candidate status lines
+were restored to Checkpoint 6 before diagnosis. Focused reproduction showed:
+
+- the process-tree test received `taskkill: ERROR: Access denied` in the
+  sandbox and passed unchanged outside it with confirmed zero survivors;
+- the two Gemini sidecar artifact assertions received `null` after sandboxed
+  filesystem writes failed, while the unchanged focused pair passed outside
+  the sandbox and its TypeScript typecheck passed;
+- none of the process diagnostic, sidecar, runner, package, or protocol files
+  is part of the Task 7 diff.
+
+No production, test, authority, or candidate-review source changed during
+that diagnosis. The same CLEAN candidate status pair was therefore restored,
+and only the failed repository gate was repeated outside the sandbox. No
+alternate Cargo target was used.

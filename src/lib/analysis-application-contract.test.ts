@@ -5687,6 +5687,9 @@ describe("analysis application boundary", () => {
     const telegramPeerAvatarBoundaryIsStaged = existsSync(
       path.join(appSourceRoot, "telegram_impl/live/peer.rs"),
     );
+    const telegramTakeoutBoundaryIsStaged = existsSync(
+      path.join(appSourceRoot, "telegram_impl/takeout/mod.rs"),
+    );
     const productionAppPaths = appReachability.production
       .map(({ relative }) => relative);
     if (telegramFoundationIsStaged) {
@@ -5749,7 +5752,9 @@ describe("analysis application boundary", () => {
     const ingestProvenanceSourceFingerprint = telegramFoundationIsStaged
       ? "3f64c972ebc82996e65a396054ec8d16e73dc5fa911b92b9b10b79ed100b4a29"
       : "a327cabba5f1ab4f3af5c2f405ccb56a4500dc2bc736d8dc33a220f128323bde";
-    const sourcesStoreSourceFingerprint = telegramPeerAvatarBoundaryIsStaged
+    const sourcesStoreSourceFingerprint = telegramTakeoutBoundaryIsStaged
+      ? "f808fff21440a539658b600440dfaa8168007fba11756326fa557a1fc6b0e70b"
+      : telegramPeerAvatarBoundaryIsStaged
       ? "c752a11642888a3c45df0c53587588e3a7603b584de1ca19e2a3c8edc025b3e9"
       : "e510e682120b6566460fddf405f6c45d31ee7e96b399948fe91b75a51fa4a92d";
     expect(

@@ -1,16 +1,21 @@
 use grammers_client::tl;
+use grammers_session::types::{PeerKind, PeerRef};
 use serde_json::json;
 
-use crate::media::{
-    derive_content_kind, derive_document_media_kind, media_label, DocumentSignals,
-    ItemMediaMetadata,
-};
-use crate::telegram_impl::{
-    TelegramItemContext, TelegramMediaPayload, TelegramMessageDraft, TelegramMessageIdentity,
-    ITEM_KIND_TELEGRAM_MESSAGE,
+use extractum_core::{
+    error::{AppError, AppResult},
+    media_metadata::{media_label, ItemMediaMetadata},
 };
 
-pub(crate) fn parse_raw_message(
+use super::super::{
+    dto::{
+        TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity,
+        ITEM_KIND_TELEGRAM_MESSAGE,
+    },
+    media::{derive_content_kind, derive_document_media_kind_from_parts, TelegramMediaPayload},
+};
+
+pub(super) fn parse_raw_message(
     source_title: &Option<String>,
     message: tl::types::Message,
 ) -> Result<Option<TelegramMessageDraft>, String> {
@@ -142,10 +147,10 @@ fn extract_document_media_payload(
         tl::enums::Document::Document(document) => document,
         tl::enums::Document::Empty(_) => return Some(raw_summary_media("document", "Document")),
     };
-    let mut signals = DocumentSignals {
-        mime_type: Some(document.mime_type.clone()),
-        ..DocumentSignals::default()
-    };
+    let mut has_video = false;
+    let mut has_audio = false;
+    let mut is_voice = false;
+    let mut is_animated = false;
     let mut file_name = None;
     let mut width = None;
     let mut height = None;
@@ -154,10 +159,10 @@ fn extract_document_media_payload(
 
     for attribute in &document.attributes {
         match attribute {
-            tl::enums::DocumentAttribute::Animated => signals.is_animated = true,
+            tl::enums::DocumentAttribute::Animated => is_animated = true,
             tl::enums::DocumentAttribute::Audio(audio) => {
-                signals.has_audio = true;
-                signals.is_voice = audio.voice;
+                has_audio = true;
+                is_voice = audio.voice;
                 duration_seconds = Some(f64::from(audio.duration));
             }
             tl::enums::DocumentAttribute::Filename(name) => {
@@ -171,7 +176,7 @@ fn extract_document_media_payload(
                 sticker_alt = trimmed_non_empty(&sticker.alt);
             }
             tl::enums::DocumentAttribute::Video(video) => {
-                signals.has_video = true;
+                has_video = true;
                 width = Some(video.w);
                 height = Some(video.h);
                 duration_seconds = Some(video.duration);
@@ -181,14 +186,21 @@ fn extract_document_media_payload(
     }
 
     if media.video {
-        signals.has_video = true;
+        has_video = true;
     }
     if media.voice {
-        signals.has_audio = true;
-        signals.is_voice = true;
+        has_audio = true;
+        is_voice = true;
     }
 
-    let mut kind = derive_document_media_kind(&signals).to_string();
+    let mut kind = derive_document_media_kind_from_parts(
+        Some(document.mime_type.as_str()),
+        has_video,
+        has_audio,
+        is_voice,
+        is_animated,
+    )
+    .to_string();
     let mut summary = media_label(&kind).to_string();
     if let Some(alt) = sticker_alt {
         kind = "sticker".to_string();
@@ -328,6 +340,29 @@ fn contact_summary(contact: &tl::types::MessageMediaContact) -> String {
 fn trimmed_non_empty(input: &str) -> Option<String> {
     let trimmed = input.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+pub(super) fn peer_ref_identity(peer: PeerRef) -> AppResult<(&'static str, i64)> {
+    let kind = match peer.id.kind() {
+        PeerKind::User => "user",
+        PeerKind::Chat => "chat",
+        PeerKind::Channel => "channel",
+    };
+    let peer_id = peer.id.bare_id().ok_or_else(|| {
+        AppError::validation("Telegram self-user peer cannot be used for Takeout import")
+    })?;
+    Ok((kind, peer_id))
+}
+
+pub(super) fn messages_response_count(response: tl::enums::messages::Messages) -> AppResult<i64> {
+    match response {
+        tl::enums::messages::Messages::Messages(messages) => Ok(messages.messages.len() as i64),
+        tl::enums::messages::Messages::Slice(messages) => Ok(i64::from(messages.count)),
+        tl::enums::messages::Messages::ChannelMessages(messages) => Ok(i64::from(messages.count)),
+        tl::enums::messages::Messages::NotModified(_) => Err(AppError::network(
+            "Telegram returned messagesNotModified for Takeout history count probe",
+        )),
+    }
 }
 
 #[cfg(test)]

@@ -1,52 +1,25 @@
 use std::{future::Future, sync::Arc};
 
-use grammers_client::{tl, Client};
+use extractum_core::error::{AppError, AppResult};
+use grammers_client::tl;
 use grammers_mtsender::InvocationError;
 use grammers_session::{storages::MemorySession, Session};
 
-use crate::error::{AppError, AppResult};
-use crate::sources::{TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP};
+use super::super::error::should_fallback_export_dc_error;
+use super::{
+    transport::TakeoutTransport,
+    types::{TakeoutAttempt, TakeoutFallback, TakeoutFallbackKind},
+};
 
 const EXPORT_DC_SHIFT: i32 = 4 * 10_000;
-const TAKEOUT_FILE_MAX_SIZE: i64 = 8 * 1024 * 1024;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ExportDcAlias {
-    pub(crate) home_dc_id: i32,
-    pub(crate) export_dc_id: i32,
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ExportDcAlias {
+    home_dc_id: i32,
+    export_dc_id: i32,
 }
 
-#[derive(Default)]
-pub(crate) struct ExportDcAttemptState {
-    attempted_export_dc_id: Option<i32>,
-    fallback_recorded: bool,
-}
-
-impl ExportDcAttemptState {
-    pub(crate) fn new() -> Self {
-        Self::default()
-    }
-
-    pub(crate) fn mark_attempted(&mut self, export_dc_id: i32) -> bool {
-        if self.attempted_export_dc_id == Some(export_dc_id) {
-            return false;
-        }
-        self.attempted_export_dc_id = Some(export_dc_id);
-        true
-    }
-
-    pub(crate) fn mark_fallback(&mut self, message: String) -> Option<String> {
-        if self.fallback_recorded {
-            return None;
-        }
-        self.fallback_recorded = true;
-        Some(message)
-    }
-}
-
-pub(crate) async fn prepare_export_dc_alias(
-    session: &Arc<MemorySession>,
-) -> AppResult<ExportDcAlias> {
+pub(super) async fn prepare_export_dc_alias(session: &Arc<MemorySession>) -> AppResult<(i32, i32)> {
     let home_dc_id = session.home_dc_id();
     let export_dc_id = export_dc_id_for_home_dc(home_dc_id);
     let mut export_option = session.dc_option(home_dc_id).ok_or_else(|| {
@@ -57,56 +30,48 @@ pub(crate) async fn prepare_export_dc_alias(
     export_option.id = export_dc_id;
     session.set_dc_option(&export_option).await;
 
-    Ok(ExportDcAlias {
+    let alias = ExportDcAlias {
         home_dc_id,
         export_dc_id,
-    })
+    };
+    Ok((alias.home_dc_id, alias.export_dc_id))
 }
 
 fn export_dc_id_for_home_dc(home_dc_id: i32) -> i32 {
     home_dc_id + EXPORT_DC_SHIFT
 }
 
-pub(crate) fn takeout_init_request_for_source_subtype(
-    source_subtype: &str,
-) -> AppResult<tl::functions::account::InitTakeoutSession> {
-    let (message_chats, message_megagroups, message_channels) = match source_subtype {
-        TELEGRAM_KIND_GROUP => (true, false, false),
-        TELEGRAM_KIND_SUPERGROUP => (false, true, false),
-        TELEGRAM_KIND_CHANNEL => (false, false, true),
-        other => {
-            return Err(AppError::validation(format!(
-                "Unsupported Telegram source_subtype '{other}'"
-            )));
+pub(super) async fn export_dc_invoke<R, Shifted, Home, ShiftedFuture, HomeFuture, OnFallback>(
+    attempt: TakeoutAttempt,
+    use_shifted: bool,
+    shifted_invoke: Shifted,
+    home_invoke: Home,
+    on_fallback: OnFallback,
+) -> AppResult<R>
+where
+    Shifted: FnOnce() -> ShiftedFuture,
+    Home: FnOnce() -> HomeFuture,
+    ShiftedFuture: Future<Output = Result<R, InvocationError>>,
+    HomeFuture: Future<Output = Result<R, InvocationError>>,
+    OnFallback: FnOnce(String),
+{
+    if use_shifted {
+        match shifted_invoke().await {
+            Ok(response) => return Ok(response),
+            Err(error) if should_fallback_export_dc_error(&error) => {
+                on_fallback(format!(
+                    "Export DC {} failed with local transport error; falling back to home DC {}: {error}",
+                    attempt.export_dc_id(),
+                    attempt.home_dc_id()
+                ));
+            }
+            Err(error) => return Err(AppError::network(error.to_string())),
         }
-    };
+    }
 
-    Ok(tl::functions::account::InitTakeoutSession {
-        contacts: false,
-        message_users: false,
-        message_chats,
-        message_megagroups,
-        message_channels,
-        files: true,
-        file_max_size: Some(TAKEOUT_FILE_MAX_SIZE),
-    })
-}
-
-pub(crate) async fn export_dc_invoke<R: tl::RemoteCall>(
-    client: &Client,
-    alias: &ExportDcAlias,
-    request: &R,
-    warnings: &mut Vec<String>,
-    fallback_used: &mut bool,
-) -> AppResult<R::Return> {
-    export_dc_invoke_with(
-        alias,
-        warnings,
-        fallback_used,
-        || client.invoke_in_dc(alias.export_dc_id, request),
-        || client.invoke(request),
-    )
-    .await
+    home_invoke()
+        .await
+        .map_err(|error| AppError::network(error.to_string()))
 }
 
 async fn export_dc_invoke_with<R, Shifted, Home, ShiftedFuture, HomeFuture>(
@@ -122,53 +87,44 @@ where
     ShiftedFuture: Future<Output = Result<R, InvocationError>>,
     HomeFuture: Future<Output = Result<R, InvocationError>>,
 {
-    if !*fallback_used {
-        match shifted_invoke().await {
-            Ok(response) => return Ok(response),
-            Err(error) if should_fallback_export_dc_error(&error) => {
-                *fallback_used = true;
-                warnings.push(format!(
-                    "Export DC {} failed with local transport error; falling back to home DC {}: {error}",
-                    alias.export_dc_id, alias.home_dc_id
-                ));
-            }
-            Err(error) => return Err(AppError::network(error.to_string())),
-        }
-    }
-
-    home_invoke()
-        .await
-        .map_err(|error| AppError::network(error.to_string()))
-}
-
-fn should_fallback_export_dc_error(error: &InvocationError) -> bool {
-    matches!(
-        error,
-        InvocationError::InvalidDc
-            | InvocationError::Io(_)
-            | InvocationError::Transport(_)
-            | InvocationError::Authentication(_)
-            | InvocationError::Dropped
+    let use_shifted = !*fallback_used;
+    export_dc_invoke(
+        TakeoutAttempt::new(alias.home_dc_id, alias.export_dc_id),
+        use_shifted,
+        shifted_invoke,
+        home_invoke,
+        |warning| {
+            *fallback_used = true;
+            warnings.push(warning);
+        },
     )
+    .await
 }
 
-pub(crate) async fn finish_takeout_session(
-    client: &Client,
-    alias: &ExportDcAlias,
+pub(super) async fn finish_takeout_session(
+    transport: &mut TakeoutTransport,
     takeout_id: i64,
     success: bool,
-    warnings: &mut Vec<String>,
-    fallback_used: &mut bool,
 ) -> AppResult<()> {
+    let client = transport.client().clone();
+    let attempt = transport.export_dc_attempt();
+    let use_shifted = transport.export_dc_id().is_some();
+    let request = tl::functions::InvokeWithTakeout {
+        takeout_id,
+        query: tl::functions::account::FinishTakeoutSession { success },
+    };
     export_dc_invoke(
-        client,
-        alias,
-        &tl::functions::InvokeWithTakeout {
-            takeout_id,
-            query: tl::functions::account::FinishTakeoutSession { success },
+        attempt,
+        use_shifted,
+        || client.invoke_in_dc(attempt.export_dc_id(), &request),
+        || client.invoke(&request),
+        |warning| {
+            transport.queue_fallback(TakeoutFallback::new(
+                TakeoutFallbackKind::ExportDc,
+                warning.clone(),
+                Some(warning),
+            ));
         },
-        warnings,
-        fallback_used,
     )
     .await
     .map(|_| ())
@@ -176,15 +132,20 @@ pub(crate) async fn finish_takeout_session(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        export_dc_id_for_home_dc, export_dc_invoke_with, should_fallback_export_dc_error,
-        takeout_init_request_for_source_subtype, ExportDcAlias, ExportDcAttemptState,
+    use std::sync::{Arc, Mutex};
+
+    use extractum_core::error::AppErrorKind;
+    use grammers_mtsender::{InvocationError, RpcError};
+
+    use super::super::{
+        takeout_init_request_for_source_subtype,
+        types::{TakeoutAttempt, TakeoutFallback, TakeoutFallbackKind},
         TAKEOUT_FILE_MAX_SIZE,
     };
-    use crate::error::AppErrorKind;
-    use crate::sources::{TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP};
-    use grammers_mtsender::{InvocationError, RpcError};
-    use std::sync::{Arc, Mutex};
+    use super::{
+        export_dc_id_for_home_dc, export_dc_invoke_with, should_fallback_export_dc_error,
+        ExportDcAlias,
+    };
 
     #[test]
     fn export_dc_id_applies_tdesktop_shift() {
@@ -193,33 +154,36 @@ mod tests {
 
     #[test]
     fn export_dc_attempt_state_detects_first_fallback_transition() {
-        let mut state = ExportDcAttemptState::new();
-        assert!(state.mark_attempted(40002));
-        assert!(!state.mark_attempted(40002));
-        assert!(state
-            .mark_fallback("fallback message".to_string())
-            .is_some());
-        assert!(state.mark_fallback("second fallback".to_string()).is_none());
+        let attempt = TakeoutAttempt::new(2, 40_002);
+        assert_eq!(attempt.home_dc_id(), 2);
+        assert_eq!(attempt.export_dc_id(), 40_002);
+
+        let fallback = TakeoutFallback::new(
+            TakeoutFallbackKind::ExportDc,
+            "fallback message".to_string(),
+            Some("fallback message".to_string()),
+        );
+        assert_eq!(fallback.kind(), TakeoutFallbackKind::ExportDc);
+        assert_eq!(fallback.warning(), "fallback message");
+        assert_eq!(fallback.provenance_message(), Some("fallback message"));
     }
 
     #[test]
     fn takeout_init_request_uses_source_subtype_flags_and_file_limit() {
-        let group =
-            takeout_init_request_for_source_subtype(TELEGRAM_KIND_GROUP).expect("group flags");
+        let group = takeout_init_request_for_source_subtype("group").expect("group flags");
         assert!(group.message_chats);
         assert!(!group.message_megagroups);
         assert!(!group.message_channels);
         assert!(group.files);
         assert_eq!(group.file_max_size, Some(TAKEOUT_FILE_MAX_SIZE));
 
-        let supergroup = takeout_init_request_for_source_subtype(TELEGRAM_KIND_SUPERGROUP)
-            .expect("supergroup flags");
+        let supergroup =
+            takeout_init_request_for_source_subtype("supergroup").expect("supergroup flags");
         assert!(!supergroup.message_chats);
         assert!(supergroup.message_megagroups);
         assert!(!supergroup.message_channels);
 
-        let channel =
-            takeout_init_request_for_source_subtype(TELEGRAM_KIND_CHANNEL).expect("channel flags");
+        let channel = takeout_init_request_for_source_subtype("channel").expect("channel flags");
         assert!(!channel.message_chats);
         assert!(!channel.message_megagroups);
         assert!(channel.message_channels);

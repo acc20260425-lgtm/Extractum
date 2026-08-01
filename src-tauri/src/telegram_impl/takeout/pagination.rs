@@ -1,110 +1,87 @@
 use grammers_client::tl;
 
-use crate::error::{AppError, AppResult};
-use crate::sources::{TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP};
+use extractum_core::error::{AppError, AppResult};
+
+use super::types::{MessageRange, TakeoutMessage, TakeoutPage};
 
 const TAKEOUT_HISTORY_PAGE_LIMIT: i32 = 100;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum TakeoutPaginationProfile {
+pub(super) enum TakeoutPaginationProfile {
     TDesktop,
     DescendingFallback,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct TakeoutPageRequest {
-    pub(crate) offset_id: i32,
-    pub(crate) add_offset: i32,
-    pub(crate) limit: i32,
+pub(super) struct TakeoutPageRequest {
+    pub(super) offset_id: i32,
+    pub(super) add_offset: i32,
+    pub(super) limit: i32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum TakeoutPaginationCursor {
+pub(super) enum TakeoutPaginationCursor {
     TDesktop { largest_id_plus_one: i32 },
     DescendingFallback { offset_id: i32 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct TakeoutCursorAdvance {
-    pub(crate) cursor: TakeoutPaginationCursor,
-    pub(crate) advanced: bool,
-    pub(crate) reached_range_start: bool,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct ParsedTakeoutPage {
-    pub(crate) messages: Vec<tl::types::Message>,
-    pub(crate) first_regular_message_id: Option<i32>,
-    pub(crate) last_regular_message_id: Option<i32>,
-    pub(crate) oldest_regular_message_id: Option<i32>,
-    pub(crate) newest_regular_message_id: Option<i32>,
-    pub(crate) is_terminal_response: bool,
+pub(super) struct TakeoutCursorAdvance {
+    pub(super) cursor: TakeoutPaginationCursor,
+    pub(super) advanced: bool,
+    pub(super) reached_range_start: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum TakeoutPaginationFallbackReason {
+pub(super) enum TakeoutPaginationFallbackReason {
     EmptyFirstPageWithNonZeroCount,
     NonAdvancingTDesktopCursor,
 }
 
-pub(crate) fn select_history_splits(
+pub(super) fn select_history_splits(
     telegram_source_subtype: &str,
     split_ranges: Vec<tl::enums::MessageRange>,
-) -> AppResult<Vec<tl::enums::MessageRange>> {
+) -> AppResult<Vec<MessageRange>> {
     let mut ranges = if split_ranges.is_empty() {
         vec![fallback_message_range()]
     } else {
         split_ranges
+            .into_iter()
+            .map(|range| match range {
+                tl::enums::MessageRange::Range(range) => {
+                    MessageRange::new(range.min_id, range.max_id)
+                }
+            })
+            .collect()
     };
 
     match telegram_source_subtype {
-        TELEGRAM_KIND_CHANNEL | TELEGRAM_KIND_SUPERGROUP => {
-            Ok(vec![ranges.pop().unwrap_or_else(fallback_message_range)])
-        }
-        TELEGRAM_KIND_GROUP => Ok(ranges),
+        "channel" | "supergroup" => Ok(vec![ranges.pop().unwrap_or_else(fallback_message_range)]),
+        "group" => Ok(ranges),
         other => Err(AppError::validation(format!(
             "Unsupported Telegram source_subtype '{other}'"
         ))),
     }
 }
 
-fn fallback_message_range() -> tl::enums::MessageRange {
-    tl::types::MessageRange {
-        min_id: 1,
-        max_id: i32::MAX,
-    }
-    .into()
+fn fallback_message_range() -> MessageRange {
+    MessageRange::new(1, i32::MAX)
 }
 
-// This deliberately models the full TDesktop history pagination cycle instead of
-// only swapping Extractum's old `add_offset = 0` for `add_offset = -100`.
-// TDesktop starts every split with `largestIdPlusOne = 1`, requests the page
-// above that cursor with `add_offset = -limit`, then `ParseMessagesSlice`
-// reverses Telegram's raw newest-to-oldest response into oldest-to-newest order.
-// Only after that reversal does `finishMessagesSlice` move the cursor to the
-// newest message from the parsed page plus one.
-//
-// The `DescendingFallback` profile is Extractum-specific. A live Takeout run
-// showed that the naive TDesktop-looking request (`offset_id=1/add_offset=-100`)
-// can return an empty first page through the current grammers raw Takeout request
-// shape, while the descending `offset_id=range.max_id/add_offset=0` profile did
-// import the real channel history. Keeping both profiles explicit makes the
-// TDesktop path auditable and protects the known-working recovery path from a
-// future "simplification" that would break real imports again.
 impl TakeoutPaginationCursor {
-    pub(crate) fn new(profile: TakeoutPaginationProfile, range: &tl::enums::MessageRange) -> Self {
+    pub(super) fn new(profile: TakeoutPaginationProfile, range: &MessageRange) -> Self {
         match profile {
             TakeoutPaginationProfile::TDesktop => Self::TDesktop {
                 largest_id_plus_one: 1,
             },
             TakeoutPaginationProfile::DescendingFallback => Self::DescendingFallback {
-                offset_id: message_range_max_id(range),
+                offset_id: range.max_id(),
             },
         }
     }
 }
 
-pub(crate) fn takeout_page_request(cursor: TakeoutPaginationCursor) -> TakeoutPageRequest {
+pub(super) fn takeout_page_request(cursor: TakeoutPaginationCursor) -> TakeoutPageRequest {
     match cursor {
         TakeoutPaginationCursor::TDesktop {
             largest_id_plus_one,
@@ -121,20 +98,19 @@ pub(crate) fn takeout_page_request(cursor: TakeoutPaginationCursor) -> TakeoutPa
     }
 }
 
-pub(crate) fn next_takeout_cursor(
+pub(super) fn next_takeout_cursor(
     cursor: TakeoutPaginationCursor,
-    page: &ParsedTakeoutPage,
-    range: &tl::enums::MessageRange,
+    message_ids: &[i32],
+    range: &MessageRange,
 ) -> TakeoutCursorAdvance {
-    let min_id = message_range_min_id(range);
+    let min_id = range.min_id();
     match cursor {
         TakeoutPaginationCursor::TDesktop {
             largest_id_plus_one,
         } => {
-            let next_largest_id_plus_one = page
-                .messages
+            let next_largest_id_plus_one = message_ids
                 .iter()
-                .map(|message| message.id)
+                .copied()
                 .filter(|message_id| *message_id > min_id)
                 .max()
                 .map(|message_id| message_id.saturating_add(1))
@@ -148,10 +124,9 @@ pub(crate) fn next_takeout_cursor(
             }
         }
         TakeoutPaginationCursor::DescendingFallback { offset_id } => {
-            let next_offset_id = page
-                .messages
+            let next_offset_id = message_ids
                 .iter()
-                .map(|message| message.id)
+                .copied()
                 .filter(|message_id| *message_id > min_id)
                 .fold(offset_id, i32::min);
             TakeoutCursorAdvance {
@@ -165,31 +140,28 @@ pub(crate) fn next_takeout_cursor(
     }
 }
 
-pub(crate) fn should_restart_with_descending_fallback(
+pub(super) fn should_restart_with_descending_fallback(
     profile: TakeoutPaginationProfile,
     split_count: i64,
     page_index: usize,
-    page: &ParsedTakeoutPage,
+    message_count: usize,
     advance: TakeoutCursorAdvance,
 ) -> Option<TakeoutPaginationFallbackReason> {
     if profile != TakeoutPaginationProfile::TDesktop {
         return None;
     }
-
-    if page_index == 0 && split_count > 0 && page.messages.is_empty() {
+    if page_index == 0 && split_count > 0 && message_count == 0 {
         return Some(TakeoutPaginationFallbackReason::EmptyFirstPageWithNonZeroCount);
     }
-
-    if !page.messages.is_empty() && !advance.advanced {
+    if message_count > 0 && !advance.advanced {
         return Some(TakeoutPaginationFallbackReason::NonAdvancingTDesktopCursor);
     }
-
     None
 }
 
-pub(crate) fn takeout_pagination_fallback_warning(
+pub(super) fn takeout_pagination_fallback_warning(
     reason: TakeoutPaginationFallbackReason,
-    range: &tl::enums::MessageRange,
+    range: &MessageRange,
 ) -> String {
     let reason = match reason {
         TakeoutPaginationFallbackReason::EmptyFirstPageWithNonZeroCount => "an empty first page",
@@ -197,15 +169,20 @@ pub(crate) fn takeout_pagination_fallback_warning(
     };
     format!(
         "TDesktop Takeout pagination returned {reason} for split {}..{}; retrying this split with Extractum descending fallback.",
-        message_range_min_id(range),
-        message_range_max_id(range)
+        range.min_id(),
+        range.max_id()
     )
 }
 
-pub(crate) fn parse_takeout_page(
+pub(super) fn parse_takeout_page(
     response: tl::enums::messages::Messages,
     profile: TakeoutPaginationProfile,
-) -> AppResult<ParsedTakeoutPage> {
+    cursor: TakeoutPaginationCursor,
+    range: &MessageRange,
+    split_count: i64,
+    page_index: usize,
+    only_my_messages: bool,
+) -> AppResult<TakeoutPage> {
     let (messages, is_terminal_response) = match response {
         tl::enums::messages::Messages::Messages(messages) => (messages.messages, true),
         tl::enums::messages::Messages::Slice(messages) => (messages.messages, false),
@@ -224,261 +201,262 @@ pub(crate) fn parse_takeout_page(
             _ => None,
         })
         .collect::<Vec<_>>();
-
     if profile == TakeoutPaginationProfile::TDesktop {
-        // TDesktop's cursor update depends on this order: after reversing,
-        // `messages.last()` is the newest page item, so `newest + 1` matches
-        // `slice.list.back().id + 1` from `finishMessagesSlice`.
         messages.reverse();
     }
 
-    let first_regular_message_id = messages.first().map(|message| message.id);
-    let last_regular_message_id = messages.last().map(|message| message.id);
-    let oldest_regular_message_id = messages.iter().map(|message| message.id).min();
-    let newest_regular_message_id = messages.iter().map(|message| message.id).max();
-
-    Ok(ParsedTakeoutPage {
-        messages,
-        first_regular_message_id,
-        last_regular_message_id,
-        oldest_regular_message_id,
-        newest_regular_message_id,
-        is_terminal_response,
-    })
-}
-
-pub(crate) fn message_range_min_id(range: &tl::enums::MessageRange) -> i32 {
-    match range {
-        tl::enums::MessageRange::Range(range) => range.min_id,
+    let message_ids = messages
+        .iter()
+        .map(|message| message.id)
+        .collect::<Vec<_>>();
+    let advance = next_takeout_cursor(cursor, &message_ids, range);
+    if let Some(reason) = should_restart_with_descending_fallback(
+        profile,
+        split_count,
+        page_index,
+        messages.len(),
+        advance,
+    ) {
+        return Ok(TakeoutPage::from_parts(
+            TakeoutPaginationProfile::DescendingFallback,
+            TakeoutPaginationCursor::new(TakeoutPaginationProfile::DescendingFallback, range),
+            0,
+            Vec::new(),
+            true,
+            only_my_messages,
+            Some(takeout_pagination_fallback_warning(reason, range)),
+        ));
     }
-}
 
-pub(crate) fn message_range_max_id(range: &tl::enums::MessageRange) -> i32 {
-    match range {
-        tl::enums::MessageRange::Range(range) => range.max_id,
-    }
+    let has_next = !messages.is_empty()
+        && !is_terminal_response
+        && advance.advanced
+        && !advance.reached_range_start;
+    Ok(TakeoutPage::from_parts(
+        profile,
+        advance.cursor,
+        page_index.saturating_add(1),
+        messages.into_iter().map(TakeoutMessage::from_raw).collect(),
+        has_next,
+        only_my_messages,
+        None,
+    ))
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::types::{MessageRange, TakeoutMessage};
     use super::{
-        message_range_max_id, message_range_min_id, next_takeout_cursor, parse_takeout_page,
-        select_history_splits, should_restart_with_descending_fallback, takeout_page_request,
-        takeout_pagination_fallback_warning, TakeoutPaginationCursor,
-        TakeoutPaginationFallbackReason, TakeoutPaginationProfile, TAKEOUT_HISTORY_PAGE_LIMIT,
+        parse_takeout_page, select_history_splits, takeout_page_request, TakeoutPaginationCursor,
+        TakeoutPaginationProfile, TAKEOUT_HISTORY_PAGE_LIMIT,
     };
-    use crate::sources::{TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_GROUP, TELEGRAM_KIND_SUPERGROUP};
+    use extractum_core::error::AppErrorKind;
     use grammers_client::tl;
 
     #[test]
     fn split_selection_uses_last_range_for_channel_and_supergroup() {
-        let ranges = vec![message_range(1, 10), message_range(11, 20)];
-
-        let channel =
-            select_history_splits(TELEGRAM_KIND_CHANNEL, ranges.clone()).expect("channel splits");
-        let supergroup =
-            select_history_splits(TELEGRAM_KIND_SUPERGROUP, ranges).expect("supergroup splits");
-
-        assert_eq!(channel.len(), 1);
-        assert_eq!(message_range_min_id(&channel[0]), 11);
-        assert_eq!(message_range_max_id(&channel[0]), 20);
-        assert_eq!(supergroup.len(), 1);
-        assert_eq!(message_range_min_id(&supergroup[0]), 11);
-        assert_eq!(message_range_max_id(&supergroup[0]), 20);
+        let ranges = vec![raw_range(1, 10), raw_range(11, 20)];
+        let channel = select_history_splits("channel", ranges.clone()).expect("channel splits");
+        let supergroup = select_history_splits("supergroup", ranges).expect("supergroup splits");
+        assert_eq!(channel, vec![MessageRange::new(11, 20)]);
+        assert_eq!(supergroup, vec![MessageRange::new(11, 20)]);
     }
 
     #[test]
     fn split_selection_uses_all_ranges_for_small_group() {
-        let ranges = vec![message_range(1, 10), message_range(11, 20)];
-
-        let selected = select_history_splits(TELEGRAM_KIND_GROUP, ranges).expect("group splits");
-
-        assert_eq!(selected.len(), 2);
-        assert_eq!(message_range_min_id(&selected[0]), 1);
-        assert_eq!(message_range_max_id(&selected[0]), 10);
-        assert_eq!(message_range_min_id(&selected[1]), 11);
-        assert_eq!(message_range_max_id(&selected[1]), 20);
+        let selected = select_history_splits("group", vec![raw_range(1, 10), raw_range(11, 20)])
+            .expect("group splits");
+        assert_eq!(
+            selected,
+            vec![MessageRange::new(1, 10), MessageRange::new(11, 20)]
+        );
     }
 
     #[test]
     fn split_selection_falls_back_when_telegram_returns_no_ranges() {
-        let selected =
-            select_history_splits(TELEGRAM_KIND_GROUP, Vec::new()).expect("fallback split");
-
-        assert_eq!(selected.len(), 1);
-        assert_eq!(message_range_min_id(&selected[0]), 1);
-        assert_eq!(message_range_max_id(&selected[0]), i32::MAX);
+        let selected = select_history_splits("group", Vec::new()).expect("fallback split");
+        assert_eq!(selected, vec![MessageRange::new(1, i32::MAX)]);
     }
 
     #[test]
     fn tdesktop_pagination_reverses_raw_order_and_advances_from_newest_id() {
-        let range = message_range(1, 1_000);
+        let range = MessageRange::new(1, 1_000);
         let cursor = TakeoutPaginationCursor::new(TakeoutPaginationProfile::TDesktop, &range);
         let request = takeout_page_request(cursor);
+        assert_eq!(
+            (request.offset_id, request.add_offset, request.limit),
+            (1, -TAKEOUT_HISTORY_PAGE_LIMIT, TAKEOUT_HISTORY_PAGE_LIMIT)
+        );
 
-        assert_eq!(request.offset_id, 1);
-        assert_eq!(request.add_offset, -TAKEOUT_HISTORY_PAGE_LIMIT);
-        assert_eq!(request.limit, TAKEOUT_HISTORY_PAGE_LIMIT);
-
-        let page = parse_takeout_page(
+        let mut page = parse_takeout_page(
             messages_slice_response(vec![300, 250, 200]),
             TakeoutPaginationProfile::TDesktop,
+            cursor,
+            &range,
+            3,
+            0,
+            false,
         )
         .expect("parse tdesktop page");
-
-        assert_eq!(message_ids(&page.messages), vec![200, 250, 300]);
-        assert_eq!(page.oldest_regular_message_id, Some(200));
-        assert_eq!(page.newest_regular_message_id, Some(300));
-
-        let advance = next_takeout_cursor(cursor, &page, &range);
-        assert!(advance.advanced);
+        assert_eq!(message_ids(&page.take_messages()), vec![200, 250, 300]);
+        let (_, next_cursor, next_page_index) = page.pagination_state();
         assert_eq!(
-            advance.cursor,
+            next_cursor,
             TakeoutPaginationCursor::TDesktop {
                 largest_id_plus_one: 301
             }
         );
-
-        let next_request = takeout_page_request(advance.cursor);
+        assert_eq!(next_page_index, 1);
+        assert!(page.has_next());
+        let next_request = takeout_page_request(next_cursor);
         assert_eq!(next_request.offset_id, 301);
-        assert_eq!(next_request.add_offset, -TAKEOUT_HISTORY_PAGE_LIMIT);
-        assert_eq!(next_request.limit, TAKEOUT_HISTORY_PAGE_LIMIT);
     }
 
     #[test]
     fn descending_fallback_keeps_raw_order_and_moves_to_min_message_id() {
-        let range = message_range(1, 1_000);
+        let range = MessageRange::new(1, 1_000);
         let cursor =
             TakeoutPaginationCursor::new(TakeoutPaginationProfile::DescendingFallback, &range);
-        let request = takeout_page_request(cursor);
-
-        assert_eq!(request.offset_id, 1_000);
-        assert_eq!(request.add_offset, 0);
-        assert_eq!(request.limit, TAKEOUT_HISTORY_PAGE_LIMIT);
-
-        let page = parse_takeout_page(
+        let mut page = parse_takeout_page(
             messages_slice_response(vec![999, 900, 850]),
             TakeoutPaginationProfile::DescendingFallback,
+            cursor,
+            &range,
+            3,
+            0,
+            false,
         )
         .expect("parse descending page");
-
-        assert_eq!(message_ids(&page.messages), vec![999, 900, 850]);
-
-        let advance = next_takeout_cursor(cursor, &page, &range);
-        assert!(advance.advanced);
-        assert!(!advance.reached_range_start);
+        assert_eq!(message_ids(&page.take_messages()), vec![999, 900, 850]);
+        let (_, next_cursor, _) = page.pagination_state();
         assert_eq!(
-            advance.cursor,
+            next_cursor,
             TakeoutPaginationCursor::DescendingFallback { offset_id: 850 }
         );
-
-        let next_request = takeout_page_request(advance.cursor);
-        assert_eq!(next_request.offset_id, 850);
-        assert_eq!(next_request.add_offset, 0);
-        assert_eq!(next_request.limit, TAKEOUT_HISTORY_PAGE_LIMIT);
+        assert!(page.has_next());
+        let next_request = takeout_page_request(next_cursor);
+        assert_eq!((next_request.offset_id, next_request.add_offset), (850, 0));
     }
 
     #[test]
     fn tdesktop_empty_first_page_with_nonzero_count_restarts_descending_fallback() {
-        let range = message_range(10, 500);
+        let range = MessageRange::new(10, 500);
         let cursor = TakeoutPaginationCursor::new(TakeoutPaginationProfile::TDesktop, &range);
-        let page = parse_takeout_page(
+        let mut page = parse_takeout_page(
             messages_slice_response(Vec::new()),
             TakeoutPaginationProfile::TDesktop,
+            cursor,
+            &range,
+            25,
+            0,
+            false,
         )
         .expect("parse empty page");
-        let advance = next_takeout_cursor(cursor, &page, &range);
-
-        assert_eq!(
-            should_restart_with_descending_fallback(
-                TakeoutPaginationProfile::TDesktop,
-                25,
-                0,
-                &page,
-                advance,
-            ),
-            Some(TakeoutPaginationFallbackReason::EmptyFirstPageWithNonZeroCount)
-        );
-        assert_eq!(
-            should_restart_with_descending_fallback(
-                TakeoutPaginationProfile::TDesktop,
-                0,
-                0,
-                &page,
-                advance,
-            ),
-            None
-        );
-
-        let warning = takeout_pagination_fallback_warning(
-            TakeoutPaginationFallbackReason::EmptyFirstPageWithNonZeroCount,
-            &range,
-        );
+        assert!(page.take_messages().is_empty());
+        assert!(page.has_next());
+        let warning = page
+            .take_pagination_fallback_warning()
+            .expect("pagination fallback warning");
         assert!(warning.contains("TDesktop Takeout pagination"));
         assert!(warning.contains("10..500"));
         assert!(warning.contains("descending fallback"));
+        assert_eq!(
+            page.pagination_state(),
+            (
+                TakeoutPaginationProfile::DescendingFallback,
+                TakeoutPaginationCursor::DescendingFallback { offset_id: 500 },
+                0,
+            )
+        );
+
+        let no_restart = parse_takeout_page(
+            messages_slice_response(Vec::new()),
+            TakeoutPaginationProfile::TDesktop,
+            cursor,
+            &range,
+            0,
+            0,
+            false,
+        )
+        .expect("parse empty zero-count page");
+        assert!(!no_restart.has_next());
     }
 
     #[test]
     fn tdesktop_non_advancing_cursor_restarts_descending_fallback() {
-        let range = message_range(1, 1_000);
+        let range = MessageRange::new(1, 1_000);
         let cursor = TakeoutPaginationCursor::TDesktop {
             largest_id_plus_one: 301,
         };
-        let page = parse_takeout_page(
+        let mut page = parse_takeout_page(
             messages_slice_response(vec![300, 200, 100]),
             TakeoutPaginationProfile::TDesktop,
+            cursor,
+            &range,
+            25,
+            3,
+            false,
         )
         .expect("parse page");
-        let advance = next_takeout_cursor(cursor, &page, &range);
-
-        assert_eq!(message_ids(&page.messages), vec![100, 200, 300]);
-        assert!(!advance.advanced);
+        assert!(page.take_messages().is_empty());
+        assert!(page.has_next());
+        assert!(page.take_pagination_fallback_warning().is_some());
         assert_eq!(
-            should_restart_with_descending_fallback(
-                TakeoutPaginationProfile::TDesktop,
-                25,
-                3,
-                &page,
-                advance,
-            ),
-            Some(TakeoutPaginationFallbackReason::NonAdvancingTDesktopCursor)
+            page.pagination_state().1,
+            TakeoutPaginationCursor::DescendingFallback { offset_id: 1_000 }
         );
     }
 
     #[test]
     fn messages_response_without_slice_is_terminal_page() {
-        let page = parse_takeout_page(
+        let range = MessageRange::new(1, 1_000);
+        let cursor = TakeoutPaginationCursor::new(TakeoutPaginationProfile::TDesktop, &range);
+        let mut page = parse_takeout_page(
             messages_messages_response(vec![30, 20, 10]),
             TakeoutPaginationProfile::TDesktop,
+            cursor,
+            &range,
+            3,
+            0,
+            false,
         )
         .expect("parse terminal page");
-
-        assert!(page.is_terminal_response);
-        assert_eq!(message_ids(&page.messages), vec![10, 20, 30]);
+        assert!(!page.has_next());
+        assert_eq!(message_ids(&page.take_messages()), vec![10, 20, 30]);
     }
 
     #[test]
     fn messages_not_modified_response_is_rejected_for_takeout_page() {
+        let range = MessageRange::new(1, 1_000);
+        let cursor = TakeoutPaginationCursor::new(TakeoutPaginationProfile::TDesktop, &range);
         let error = parse_takeout_page(
             tl::enums::messages::Messages::NotModified(tl::types::messages::MessagesNotModified {
                 count: 0,
             }),
             TakeoutPaginationProfile::TDesktop,
+            cursor,
+            &range,
+            0,
+            0,
+            false,
         )
         .expect_err("messagesNotModified should fail");
-
-        assert!(error
-            .message
-            .contains("Telegram returned messagesNotModified for Takeout history page"));
+        assert_eq!(error.kind, AppErrorKind::Network);
+        assert_eq!(
+            error.message,
+            "Telegram returned messagesNotModified for Takeout history page"
+        );
     }
 
-    fn message_range(min_id: i32, max_id: i32) -> tl::enums::MessageRange {
+    fn raw_range(min_id: i32, max_id: i32) -> tl::enums::MessageRange {
         tl::types::MessageRange { min_id, max_id }.into()
     }
 
-    fn message_ids(messages: &[tl::types::Message]) -> Vec<i32> {
-        messages.iter().map(|message| message.id).collect()
+    fn message_ids(messages: &[TakeoutMessage]) -> Vec<i32> {
+        messages
+            .iter()
+            .map(|message| message.message_id() as i32)
+            .collect()
     }
 
     fn messages_slice_response(ids: Vec<i32>) -> tl::enums::messages::Messages {

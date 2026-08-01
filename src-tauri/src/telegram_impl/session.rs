@@ -70,7 +70,7 @@ fn associated_data(account_id: i64) -> String {
 }
 
 async fn memory_session_to_saved(session: &TelegramSession) -> SavedSession {
-    let session = session.raw_memory_session();
+    let session = session.clone_memory_session();
     let home_dc = session.home_dc_id();
     let updates_state = session.updates_state().await;
     let mut dc_options = HashMap::new();
@@ -178,10 +178,6 @@ impl TelegramSession {
 
     pub(super) fn clone_memory_session(&self) -> Arc<MemorySession> {
         Arc::clone(&self.inner)
-    }
-
-    pub(super) fn raw_memory_session(&self) -> &Arc<MemorySession> {
-        &self.inner
     }
 
     pub(super) async fn cache_peer_infos(&self, peer_infos: &[PeerInfo]) {

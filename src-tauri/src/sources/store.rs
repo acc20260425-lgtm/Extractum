@@ -106,7 +106,7 @@ pub async fn list_telegram_sources(
     state: tauri::State<'_, TelegramState>,
     account_id: i64,
 ) -> AppResult<Vec<TelegramSourceInfo>> {
-    let client_handle = crate::telegram::get_client(state.inner(), account_id).await?;
+    let client_handle = state.client(account_id).await?;
 
     let mut sources = Vec::new();
     let mut dialogs = client_handle.dialog_listing(TELEGRAM_SOURCE_PHOTO_LIST_BUDGET_MS);
@@ -283,7 +283,7 @@ pub async fn add_telegram_source(
     request: AddTelegramSourceRequest,
 ) -> AppResult<SourceRecord> {
     require_source_identity_ready(repair_state.inner()).await?;
-    let client_handle = crate::telegram::get_client(state.inner(), request.account_id).await?;
+    let client_handle = state.client(request.account_id).await?;
 
     let expected_subtype = request.expected_subtype.map(TelegramSourceKind::as_str);
     let resolved =

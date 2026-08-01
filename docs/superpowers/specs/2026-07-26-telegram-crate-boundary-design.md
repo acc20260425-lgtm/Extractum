@@ -1,6 +1,6 @@
 # Telegram Crate Boundary Design
 
-**Status:** Approved; 8B preparation Checkpoint 6 retained
+**Status:** Approved; 8B preparation Checkpoint 7 retained
 **Date:** 2026-07-26
 
 **Roadmap authority:**
@@ -1535,6 +1535,13 @@ checkpoint drift. The literal production-symbol disposition table that
 follows them is normative and is materialized by
 `scripts/telegram-8b-symbol-map.mjs`.
 
+The exact private-parent ownership correction below splits the former grouped
+Takeout export disposition across its leaf and parent owners. The normative
+source table and the existing generator's grouped-row invariant therefore
+contain 100 rows instead of 99; the expanded schema-v1 artifact is regenerated
+with the corrected owners. This is a mechanical ownership-map correction, not
+Rust-semantic parsing or behavioral test authority.
+
 | Final staged owner | Current production source and exact responsibility |
 | --- | --- |
 | `telegram_impl/lib.rs` | New private module shell and curated exports; replaces the future-owner module declarations/re-exports at the top of `telegram.rs`. |
@@ -1543,15 +1550,15 @@ follows them is normative and is materialized by
 | `telegram_impl/runtime.rs` | Move all production/tests from `telegram/runtime.rs`; add `TelegramRuntime::client`; own every public `TelegramClientHandle` method and delegate through the exact restricted live/Takeout parent facades; remove raw client/session adapters at Checkpoint 7. |
 | `telegram_impl/session.rs` | Move all production/tests from `telegram/session.rs`, including the opaque session/key, envelope/legacy codec, AAD, base64, encryption logic, and permanent restricted `clone_memory_session`/peer-cache bridges. |
 | `telegram_impl/media.rs` | Move all production/tests from `telegram/media.rs`, including the Grammers media adapter and private content/media classifiers. |
-| `telegram_impl/live/mod.rs` | Private live module shell. |
+| `telegram_impl/live/mod.rs` | Private live module shell and the frozen parent facades; their signatures directly name the raw client before delegating to leaves. |
 | `telegram_impl/live/avatar.rs` | Move `TELEGRAM_SOURCE_PHOTO_TIMEOUT_MS`, `peer_photo_bytes_with_timeout`, and raw avatar download from `sources/avatar.rs`; expose owned bytes only. |
 | `telegram_impl/live/peer.rs` | Own `DialogListing` and its public `next`; move username/dialog transport lookup, raw peer mapping/reconstruction, subtype/member/access-hash helpers, and budgeted dialog/avatar listing from `sources/{peer_resolution,identity,store}.rs`. |
 | `telegram_impl/live/messages.rs` | Move raw history fetch and message/media/author/reply/raw-payload/fallback-identity adaptation from `sources/{sync,items}.rs`; own the single-invoke batch seam. |
 | `telegram_impl/live/topics.rs` | Move `fetch_all_forum_topics`, cursor/date helpers, raw mapping, and the private topic fetch shared with Takeout. |
-| `telegram_impl/takeout/mod.rs` | Private Takeout module shell and curated internal exports. |
+| `telegram_impl/takeout/mod.rs` | Private Takeout module shell, curated internal exports, the single private `TAKEOUT_FILE_MAX_SIZE`/`takeout_init_request_for_source_subtype` owner shared by child modules, and the frozen parent facades; their signatures directly name raw client/request types before delegating to leaves. |
 | `telegram_impl/takeout/types.rs` | Own `TakeoutAttempt`, `TakeoutFallback*`, `TakeoutPeer`, `MessageRange`, `TakeoutCount`, `TakeoutPage`, and `TakeoutMessage`; `TakeoutPage` stores only the exact sibling-restricted cursor/profile state and exposes the frozen tuple bridge. |
 | `telegram_impl/takeout/transport.rs` | Own client/session/DC state, attempt snapshots, and fallback queueing; expose only the exact restricted accessors used by concrete siblings. |
-| `telegram_impl/takeout/export_dc.rs` | Move the raw, provenance-free half of `export_dc_invoke_with_provenance`, `ExportDcAlias`, DC selection, init request construction, shifted/home invocation/fallback mechanics, and all seven mapped tests. |
+| `telegram_impl/takeout/export_dc.rs` | Move the raw, provenance-free half of `export_dc_invoke_with_provenance`, `ExportDcAlias`, DC selection, shifted/home invocation/fallback mechanics, init-request characterization tests, and all seven mapped tests. |
 | `telegram_impl/takeout/operations.rs` | Move self-check, init/finish, validation, migration, split/count/history/search operations, and only-my classification. |
 | `telegram_impl/takeout/pagination.rs` | Move all production/tests from `takeout_import/pagination.rs`; own split selection, the exact `pub(super)` TDesktop/descending state types, request/advance fields, restart/warning, and response classification. |
 | `telegram_impl/takeout/raw_parse.rs` | Move all production/tests from `takeout_import/raw_parse.rs`, `peer_ref_identity`, raw response count/classification, and both companion tests. |
@@ -1670,7 +1677,8 @@ or unnamed fragment is legal in the generated artifact.
 | `takeout_import/mod.rs` | `TakeoutHistoryProbe` | `telegram_impl/takeout/types.rs` | `TakeoutCount` | staged | 7 | 7 | replace |
 | `takeout_import/mod.rs` | `CountedMessageRange` | `takeout_import/mod.rs` | `CountedMessageRange` | app | 7 | retained | replace-fields-with-owned-values |
 | `takeout_import/mod.rs` | `{run_export_dc_spike_for_handle,run_takeout_source_import,run_takeout_migrated_history_import,run_started_takeout_source_import,run_started_takeout_source_import_inner,import_takeout_history_ranges,import_takeout_history_pages}` | `takeout_import/mod.rs` | `=` | app | 7 | retained | rewrite-owned-seam |
-| `takeout_import/export_dc.rs` | `{EXPORT_DC_SHIFT,TAKEOUT_FILE_MAX_SIZE,ExportDcAlias,prepare_export_dc_alias,export_dc_id_for_home_dc,takeout_init_request_for_source_subtype,export_dc_invoke,export_dc_invoke_with,finish_takeout_session}` | `telegram_impl/takeout/export_dc.rs` | `=` | staged | 7 | 7 | move |
+| `takeout_import/export_dc.rs` | `{EXPORT_DC_SHIFT,ExportDcAlias,prepare_export_dc_alias,export_dc_id_for_home_dc,export_dc_invoke,export_dc_invoke_with,finish_takeout_session}` | `telegram_impl/takeout/export_dc.rs` | `=` | staged | 7 | 7 | move |
+| `takeout_import/export_dc.rs` | `{TAKEOUT_FILE_MAX_SIZE,takeout_init_request_for_source_subtype}` | `telegram_impl/takeout/mod.rs` | `=` | staged | 7 | 7 | move |
 | `takeout_import/export_dc.rs` | `should_fallback_export_dc_error` | `telegram_impl/error.rs` | `should_fallback_export_dc_error` | staged | 7 | 7 | move |
 | `takeout_import/export_dc.rs` | `ExportDcAttemptState` | `telegram_impl/takeout/transport.rs` | `ExportDcAttemptTracker` | staged | 7 | 7 | split-stage-tracker |
 | `takeout_import/export_dc.rs` | `ExportDcAttemptState` | `telegram_impl/takeout/types.rs` | `TakeoutAttempt` | staged | 7 | 7 | split-stage-attempt-value |

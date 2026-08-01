@@ -28,9 +28,9 @@ pub use sync::sync_source;
 #[allow(unused_imports)]
 pub use sync::SyncResult;
 pub use topics::list_source_forum_topics;
-pub(crate) use topics::refresh_forum_topics;
 #[allow(unused_imports)]
 pub use topics::SourceForumTopicRecord;
+pub(crate) use topics::{apply_forum_topic_refresh_result, refresh_forum_topics};
 #[allow(unused_imports)]
 pub use types::{SourceRecord, SourceType, TelegramSourceInfo, TelegramSourceKind};
 

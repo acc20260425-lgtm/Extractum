@@ -277,8 +277,8 @@ function parseDispositionRows(source) {
   for (const line of rawRows) {
     if (!line.startsWith("| ")) fail(`malformed disposition row: ${line}`);
   }
-  if (rawRows.length !== 99) {
-    fail(`expected 99 disposition rows, found ${rawRows.length}`);
+  if (rawRows.length !== 100) {
+    fail(`expected 100 disposition rows, found ${rawRows.length}`);
   }
 
   const rows = rawRows.flatMap((line, rowIndex) => {
