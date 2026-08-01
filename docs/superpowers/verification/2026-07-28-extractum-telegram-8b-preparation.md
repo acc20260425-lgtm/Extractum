@@ -2524,13 +2524,69 @@ Fresh pre-retention evidence on the final candidate:
   unavailable only because it could not open the canonical `.cargo-lock`; no
   alternate target or escalation was used.
 
-Escape-hatch review verdict: CLEAN
+Superseded review outcome: CLEAN (invalidated; not an active verdict marker).
 
-## Phase 8B Checkpoint 7 LLM retention gate — final candidate, 2026-08-01
+## CP7 Escape-Hatch LLM Review
 
 This record supersedes the invalidated CP7 review above. It covers the final
 candidate after the private pagination helper was inlined and the existing
 TypeScript contracts were corrected only for CP7 lifecycle/path authority.
+
+### Reviewer, predecessor, and reviewed inputs
+
+- Reviewer: fresh independent read-only subagent
+  `/root/task7_final_retention_rereview`. It did not implement the checkpoint,
+  made no file/status/staging/commit change, and performed the final manual
+  source audit after the prior record was invalidated.
+- Retained predecessor: CP6 commit
+  `86b80a17fca47ac5c485c339fc6c8298f130690f`.
+- Candidate: the complete CP6-to-CP7 scoped production-and-test Rust diff that
+  was later retained as
+  `189e3fd002d957d8eafdf5159e61ac3fe1a66179`.
+- The reviewer read the complete 19-file staged Rust tree:
+  `telegram_impl/{lib,dto,error,media,runtime,session}.rs`,
+  `telegram_impl/live/{mod,avatar,messages,peer,topics}.rs`, and
+  `telegram_impl/takeout/{mod,types,transport,export_dc,operations,pagination,raw_parse,forum_topics}.rs`.
+- Unchanged surrounding/application owners reviewed for the forwarding and
+  persistence audit were `telegram.rs`, `media.rs`,
+  `sources/{mod,store,sync,peer_resolution,topics}.rs`, and
+  `takeout_import/{mod,forum_topics,migrated_history}.rs`.
+- Artifact inputs were the complete schema-v1 symbol map with all 307 rows,
+  the 69-symbol restricted fence, all transition inventories including the
+  empty `cp7RawBridgeSymbolsAndCallsites` set, both 100-row source maps, and
+  the committed test-identity inventory. They were navigation/checklist
+  inputs, not automated semantic authorization.
+
+### Remaining definitions, owners, chains, and removals
+
+- No transitional escape-hatch definition or physical use remains at CP7.
+  The required removals are complete for
+  `TelegramClientHandle::{raw_client,raw_session}`,
+  `TelegramSession::raw_memory_session`,
+  `telegram::{get_client,get_authorized_client}`,
+  `ResolvedSyncPeer::peer`, `legacy_peer_ref_from_descriptor`, the four-item
+  app media compatibility facade, the staged-root peer-kind bridge, and
+  `sources::sync::fallback_message_identity`.
+- Approved raw Grammers values remain only as private/restricted
+  implementation details inside `telegram_impl`; application callers receive
+  owned DTOs and opaque handles. There is no raw app-visible producer or
+  physical consumer to inventory under the empty CP7 exception set.
+- The complete live chain remains `TelegramState` → opaque
+  `TelegramClientHandle` → runtime handle method → private `live` parent facade
+  → restricted leaf. The application retains resolution, budget, persistence,
+  cutoff, cancellation, and progress policy.
+- The complete Takeout chain remains
+  `run_takeout_source_import` → `run_started_takeout_source_import` →
+  `run_started_takeout_source_import_inner` → concrete
+  `TakeoutTransport` operations → restricted raw leaves. The reviewer manually
+  verified attempt recording, fallback draining, OnlyMy record-before-search,
+  one outer cancellation selection, recovery, durable deduplication, error
+  precedence, forum routing, and app completion/persistence ownership.
+- No removed escape hatch was recreated through an alias, re-export, wrapper,
+  closure, function item, UFCS call, glob, visibility widening, forwarding
+  helper, raw app field, or unrelated same-named `peer`/`client`/`session`/
+  `raw` value. The unlisted `message_range_from_raw` helper is absent; its
+  exhaustive conversion is inlined at the one approved callsite.
 
 ### Findings
 
@@ -2629,3 +2685,429 @@ No production, test, authority, or candidate-review source changed during
 that diagnosis. The same CLEAN candidate status pair was therefore restored,
 and only the failed repository gate was repeated outside the sandbox. No
 alternate Cargo target was used.
+
+## CP8 Escape-Hatch LLM Review
+
+### Reviewer and independence
+
+- Reviewer: independent Codex subagent `/root/cp8_retention_review`.
+- Review performed read-only and from first principles; no implementation
+  changes were made and no previous CLEAN verdict was used as evidence.
+- Candidate working tree is based on
+  `189e3fd002d957d8eafdf5159e61ac3fe1a66179`.
+- `git diff 189e3fd0 -- '*.rs'` is empty. The CP8 candidate therefore retains
+  the CP7 Rust checkpoint byte-for-byte.
+- Current Task 8A scope is limited to:
+  - `src/lib/crate-extraction-shell-cap-contract.test.ts`;
+  - `src/lib/telegram-crate-boundary-contract.test.ts`;
+  - `scripts/telegram-staging-sha256.mjs`;
+  - `src/lib/telegram-8b-staging-sha256.json`.
+
+### Authority and evidence reviewed
+
+The following were read completely:
+
+- the Mandatory Reusable CP2–CP8 LLM Retention Gate and all of Task 8 in the
+  approved Phase 8B plan;
+- the Phase 8B lifecycle, public API, exact 69-symbol restricted fence, exact
+  tree, direct-Grammers inventory, transition inventories,
+  forwarding/ownership rules, source map, and final test authority in the
+  approved boundary design;
+- all 19 files under `src-tauri/src/telegram_impl`;
+- all relevant residual and forwarding owners:
+  `src-tauri/src/{telegram,media}.rs`,
+  `src-tauri/src/sources/{mod,store,sync,peer_resolution,topics}.rs`, and
+  `src-tauri/src/takeout_import/{mod,forum_topics,migrated_history}.rs`;
+- the complete current Task 8A diff and both checklist artifacts: all 307
+  symbol rows, transition inventories, and 69 restricted entries in
+  `src/lib/telegram-8b-symbol-map.json`, plus all 318 entries in
+  `src/lib/telegram-8b-test-identities.json`.
+
+The artifacts were used only as navigation and reconciliation checklists, not
+as semantic proof.
+
+### Findings
+
+- P1 findings: none.
+- P2 findings: none.
+- P3 findings: none.
+- Unresolved ambiguities: none.
+- Remaining expected removals or physical uses: none.
+
+### Exact staging and visibility audit
+
+- The staged tree contains exactly the approved 19 Rust files and no
+  additional Rust modules.
+- The direct-Grammers inventory is exactly the approved 17 paths: `error.rs`,
+  `media.rs`, `runtime.rs`, `session.rs`, the five `live` files, and the eight
+  `takeout` files. `dto.rs` and `lib.rs` contain no direct Grammers dependency.
+- The staged tree has exactly 69 `pub(super)` declarations, semantically
+  matching the approved restricted fence.
+- No unapproved production `pub(crate)` bridge exists. The only `pub(crate)`
+  items are the two `#[cfg(test)]` owned-value fixtures.
+- Production reexports are explicit. The only `use super::*` occurrences are
+  inside test modules.
+- The public crate facade exposes only approved owned DTOs, handles, session
+  envelope operations, and Takeout value types. No Grammers client, session
+  storage, peer, TL object, invocation error, or request type crosses it.
+- No `crate::`, Tauri, SQLx, keyring, app error module, compression module, or
+  app time module dependency occurs anywhere inside `telegram_impl`.
+
+### Transitional escape-hatch and alias audit
+
+The complete transitional inventory is absent:
+
+- no `TelegramClientHandle::{raw_client,raw_session}`;
+- no `TelegramSession::raw_memory_session`;
+- no free `telegram::{get_client,get_authorized_client}`;
+- no `ResolvedSyncPeer::peer` or `legacy_peer_ref_from_descriptor`;
+- no app-facing Telegram media facade containing `DocumentSignals`,
+  `derive_content_kind`, `derive_document_media_kind`, or
+  `extract_item_payload`;
+- no root export of the three `TELEGRAM_PEER_KIND_*` constants and no retained
+  `sources::sync::fallback_message_identity`;
+- the symbol-map `cp7RawBridgeSymbolsAndCallsites` inventory is empty,
+  consistent with the source audit.
+
+No equivalent escape hatch was recreated through renamed methods,
+same-purpose spellings, type or module aliases, reexports, wrappers, closures,
+function-item forwarding, production globs, raw app fields, or raw return
+values hidden behind tuples, options, futures, or result aliases.
+
+The similarly named approved facilities do not create app escape hatches:
+
+- `TelegramRuntime::client` and `TelegramState::client` return an owned opaque
+  `TelegramClientHandle`, not a raw Grammers client;
+- `TelegramState::authorized_client` likewise returns the opaque handle and
+  preserves authorization policy;
+- `TelegramSession::clone_memory_session` and
+  `TakeoutTransport::{client,session}` remain strictly `pub(super)` and are
+  among the exact 69 approved internal bridges;
+- private staged `peer` fields hold implementation details only;
+  app-owned `ResolvedSyncPeer` contains an owned `PeerDescriptor` and refreshed
+  avatar cache key, with no raw peer.
+
+All reviewed app imports from `crate::telegram_impl` are explicit, unaliased,
+and nonglob. No reviewed app owner mentions Grammers crates, `RemoteCall`,
+`InvocationError`, `PeerRef`, or `tl::` types.
+
+### Forwarding-chain and ownership audit
+
+The live forwarding chain is intact:
+
+`TelegramState` → opaque `TelegramClientHandle` → `runtime` handle method →
+`live` parent facade → private/restricted leaf implementation.
+
+- `sources::store` owns source persistence and requests owned descriptors.
+- `sources::peer_resolution` owns resolution policy and returns
+  `ResolvedSyncPeer` without a raw peer.
+- `sources::sync` owns the durable bounded batch loop and persistence ordering.
+- `sources::topics` owns refresh policy and consumes owned forum-topic
+  snapshots.
+- App `media.rs` remains provider-neutral and contains no Telegram
+  compatibility facade.
+
+The Takeout forwarding chain is intact:
+
+`run_takeout_source_import` → `run_started_takeout_source_import` →
+`run_started_takeout_source_import_inner` → concrete `TakeoutTransport`
+operations → staged private Grammers leaves.
+
+- The intermediary forwards owned staged values only.
+- The app retains cancellation selection, provenance durability, fallback
+  ordering, persistence, SQL ownership, and capability policy.
+- The staged crate owns raw invocation, parsing, pagination primitives,
+  ExportDC transport, and raw peer conversion.
+- `takeout_import/forum_topics.rs` retains app refresh/provenance policy.
+- `takeout_import/migrated_history.rs` retains SQL, capability, validation,
+  and identity-override policy.
+- Deleted app raw-owner modules `takeout_import/{export_dc,pagination,raw_parse}.rs`
+  have not reappeared.
+
+### Cache, configuration, and live-message invariants
+
+- `initialize_grammers_client` accepts no configuration parameter.
+- It materializes `ClientConfiguration::default()`, rejects disabled
+  `auto_cache_peers` before sender-pool construction or runner spawn, and uses
+  `Client::with_configuration`.
+- The live message batch performs one backend `get_history` call with the
+  approved limit clamp, zero hash, and exact offsets.
+- Peer-cache updates use the approved authenticated `PeerInfo` predicate and
+  do not reduce it to an access-hash-only condition.
+- `Messages::NotModified` is intentionally converted into the typed
+  application error rather than preserving the upstream panic.
+- Batch order, terminal status, and next offsets remain derived from the
+  single raw response.
+
+### Automated-authority boundary
+
+Task 8A introduces no Rust-semantic TypeScript parser, tokenizer, function
+isolator, binding graph, call graph, data-flow analysis, fixture, or mutation
+test.
+
+The new JavaScript helper performs only structural filesystem and byte-level
+SHA-256 validation: exact staged paths, regular-file and containment checks,
+exact byte hashes, schema, and ordering. Its `--check` mode passed.
+
+Compilation and named Rust behavior tests remain the automated semantic
+authority over avatar timeout handling, dialog/avatar interleaving and budget,
+single-fetch message order/limits/offsets/cache behavior, forum-topic paging,
+owned Takeout results and fallback/pagination/migration/finish behavior, and
+application durability/timeout/error/persistence ordering. The test-identity
+checklist contains the expected one app and fourteen staged Task 8B behavior
+additions. This semantic review does not substitute for the separate
+Cargo/workspace execution gates.
+
+Escape-hatch review verdict: CLEAN
+
+## CP2–CP8 LLM Review Outcome Index
+
+This index is outside the seven active review sections. Outcomes are plain
+references and intentionally do not repeat verdict-marker lines.
+
+| Checkpoint | Active review section | Reviewed base | Retained checkpoint | Outcome |
+| ---: | --- | --- | --- | --- |
+| 2 | `## CP2 Escape-Hatch LLM Review` | `58fea66c870b9144bcd13becd72dc577d0d46428` | `951b88b004ba4493a73bd2ccf93a2e8aa31dae6d` | CLEAN |
+| 3 | `## CP3 Escape-Hatch LLM Review` | `ba0cec533cfa2824f465e1a8e2184362170a92ee` | `d72d56d7fce6a0545fe89f6934d41d6ae7fa3f9f` | CLEAN |
+| 4 | `## CP4 Escape-Hatch LLM Review` | `d72d56d7fce6a0545fe89f6934d41d6ae7fa3f9f` | `1acc4f618dcc5855b677c844624f21c67c371b47` | CLEAN |
+| 5 | `## CP5 Escape-Hatch LLM Review` | `1acc4f618dcc5855b677c844624f21c67c371b47` | `180c797bf04d63c33df555cbb04da51b73a2b3af` | CLEAN |
+| 6 | `## CP6 Escape-Hatch LLM Review` | `180c797bf04d63c33df555cbb04da51b73a2b3af` | `86b80a17fca47ac5c485c339fc6c8298f130690f` | CLEAN |
+| 7 | `## CP7 Escape-Hatch LLM Review` | `86b80a17fca47ac5c485c339fc6c8298f130690f` | `189e3fd002d957d8eafdf5159e61ac3fe1a66179` | CLEAN |
+| 8 | `## CP8 Escape-Hatch LLM Review` | `189e3fd002d957d8eafdf5159e61ac3fe1a66179` | pending CP8 checkpoint commit | CLEAN |
+
+## Phase 8B Checkpoint 8 Completion Evidence — 2026-08-01
+
+### Execution identity and retained commits
+
+- Execution start SHA:
+  `a4b57e1b10a47b5c96638ca740ce5d9e12b3b17f`.
+- `git merge-base --is-ancestor
+  dd14161386a946dfd070e25dae06bbb99ac62cfb HEAD`: exit `0`.
+- Retained checkpoint commits:
+  - CP1: `9cad3941d8c9c314aa1d7fd63aed163f7586461a`;
+  - CP2: `951b88b004ba4493a73bd2ccf93a2e8aa31dae6d`;
+  - CP3: `d72d56d7fce6a0545fe89f6934d41d6ae7fa3f9f`;
+  - CP4: `1acc4f618dcc5855b677c844624f21c67c371b47`;
+  - CP5: `180c797bf04d63c33df555cbb04da51b73a2b3af`;
+  - CP6: `86b80a17fca47ac5c485c339fc6c8298f130690f`;
+  - CP7: `189e3fd002d957d8eafdf5159e61ac3fe1a66179`;
+  - CP8: pending the separately GREEN checkpoint commit.
+- Post-CP1 non-checkpoint authority and compatibility commits, in
+  chronological order:
+  - `1c0961516c338073ba9578edb18a61c7b1285897`,
+    `docs: define generated Telegram bridge-use authority`;
+  - `56b9d3995f10f0070f4e2d0f94fb048181218ae3`,
+    `docs: move Telegram escape-hatch authority to LLM review`;
+  - `091b51345fdd4ff03bbc2fe835a26e1e7ee5a8cb`,
+    `docs: harden Telegram LLM review gate`;
+  - `30603f11a3e6ea359b0d459497169603f0026269`,
+    `test: simplify Telegram escape-hatch review authority`;
+  - `58fea66c870b9144bcd13becd72dc577d0d46428`,
+    `docs: correct Phase 8B Checkpoint 2 status gate`;
+  - `0d91cbd800bd94f6dcbfef48072b227f099cb9a8`,
+    `docs: correct Phase 8B Checkpoint 3 authority`;
+  - `ba0cec533cfa2824f465e1a8e2184362170a92ee`,
+    `test: align analysis contracts with Telegram staged root`;
+  - `8149c3e3a166d1d4bf5ef606c343cb2e0a4725fa`,
+    `docs: correct Phase 8B MCP smoke authority`.
+
+### Authority artifacts, graph, and exact inventories
+
+- `src-tauri/Cargo.toml`: SHA-256
+  `ee323d7b613573918d4ad3777b238bc7e107d049588ddcfa0959dacfd1e2cf69`.
+- `src-tauri/Cargo.lock`: SHA-256
+  `720e38ea632d7b932b2a23d1481528845ec9304376035b1c851c546ea402e43c`.
+- Grammers feature artifact: SHA-256
+  `774e2b979d5cdc8185a85488c965548cf09cdf1ef0ab4b9ecad58246283cf5b3`;
+  four exact Grammers packages.
+- test-identity artifact: SHA-256
+  `507f09f4fab76bee4360185eca3fbef17fb1563e784f7654bebb430cf7f08a95`;
+  143 baseline-derived, 103 pre-new app, 57 pre-new staged, one new app,
+  and 14 new staged identities.
+- symbol-map artifact: SHA-256
+  `f978e80cd58303fd9cd6402ba17deef1df817d22fdbf821830e9e0a5968c13b3`;
+  307 disposition rows and 69 restricted final symbols.
+- staging artifact: 2,544 bytes, SHA-256
+  `12e99b10aaaccc471ae4c950b4a3ea0331ae68db45618823ea2aa58bae29d1a9`.
+  Two consecutive `--write` executions produced identical bytes; `--check`
+  passed.
+- Locked metadata contains exactly six members: `extractum`,
+  `extractum-analysis`, `extractum-core`, `extractum-gemini-browser`,
+  `extractum-llm`, and `extractum-prompt-packs`. There is no
+  `extractum-telegram` member/package/edge.
+- `extractum` retains exactly four direct Grammers dependencies at revision
+  `1f901ce6e973fdcf0e74267f3d8efad5c729daaa`:
+  `grammers-client`, `grammers-mtsender`, `grammers-session`, and
+  `grammers-tl-types`.
+- Cargo metadata target directory is exactly
+  `G:\Develop\Extractum\src-tauri\target`.
+- Final Rust inventory is 736 unique `extractum` library tests. The Phase 8B
+  authority partitions are 143 baseline-derived, 175 tracked, 104 app-owned,
+  and 71 staged identities, including exactly 15 new seam identities. The
+  exact `sources::store::tests::` set contains 24 identities.
+- The named precommit checks `Assert-Phase8BFinalTestInventory` and
+  `Assert-ExactRustIdentitySet` both returned PASS against the 736-test Cargo
+  inventory and the exact 24-entry `sources::store::tests::` set.
+
+The complete 19-file staging records are:
+
+```text
+dto.rs                          0a9caed44e37496c0a8f336048dbc7a548737e2213381c34901a59b44dc76c4b
+error.rs                        df1c7228d7fe116bb612ab7ba2cff473a8690d63ebcfec4849a75faa521e2dbf
+lib.rs                          acbbb25f7f068eb5a076c44a7d4542abb6817d09b57c072b09d4623db2996755
+live/avatar.rs                  e17be49b2823671c374e06d8b33b381beb1bbaf5f5dba3d3695754f0bc383aa4
+live/messages.rs                927d2e927d43fc79653f800329938401b8b51de416ca00ac991393be9c9c61b1
+live/mod.rs                     c62179eb196f13a7a616bd5b25b1787bba1bd8bf3068a51973722876b524bc5a
+live/peer.rs                    62228ab09ffab1f2d03ded8a878baef9566a7b0b6d9df1005a76304c89168de8
+live/topics.rs                  bf4e4d964c04c0c722f048023f7285e9a967c5b6b4d7fa169f7dccf11328b316
+media.rs                        42e11efb852f8681e56664d5289e083b110248df733ba87497b60df3bffbb4ec
+runtime.rs                      d8014bd1e2286e0102e68fa5cedb2e98aaea9e772d91b72307a856d5d995e0cf
+session.rs                      9d8ca83263773d82ce569aaa6712ccca09588284740e539014a4339cdba5e18e
+takeout/export_dc.rs            579f9d81f244616e5fd438a7ad379122aeaf4d3814b2976091b07ad5d154196b
+takeout/forum_topics.rs         576b6eda8ac54e6b1da0cb3398bfffb2a17bc05a00aa1d7dc48aed940965dcf5
+takeout/mod.rs                  d9f113860dbdc46d1d5fb5b8c4e5766b546e6b5322d7422e16a7965f6dabac08
+takeout/operations.rs           95682467d65ea09d3d0b2b9850330da581538728446f455bbc4392dabe68ae6f
+takeout/pagination.rs           be40468d7b7c572474d8bd64ee1e8f822f6ebd51fd9fe4e78b36f51132252711
+takeout/raw_parse.rs            909d9a1323dce1df7931822a6d576de8b4da29d01907de674f6c0ac423adb697
+takeout/transport.rs            4c14530ceb46d497870d84186298006e8a7dbf9a85d7d41b44e26e5182dbef8c
+takeout/types.rs                3b8a12a538472137e75ac61d23f2bfa69f4693a8331a5cc67836ef6a587c6285
+```
+
+### Checkpoint 8 structural and deterministic gates
+
+- Task 8A RED: the three new structural staging assertions failed for the
+  expected missing generator/artifact authority while 157 tests passed.
+- Task 8A GREEN: the focused Telegram and shell-cap selection passed 160/160;
+  `npm.cmd run check` reported zero errors and zero warnings; generator syntax,
+  write reproducibility, and check mode passed.
+- Independent Task 8A specification and code-quality reviews both returned
+  APPROVED with no P1/P2/P3 finding. The new JavaScript performs only path,
+  regular-file, byte, ordering, schema, and SHA-256 checks. It adds no Rust
+  parser, fixture, mutation test, name/type/scope resolution, call graph, or
+  data-flow analysis.
+- The final eight-file focused contract selection passed 254/254 before
+  candidate promotion.
+- The complete independent CP8 semantic review is recorded above and ends in
+  its single exact CLEAN marker. No Rust file changed after that review.
+- Candidate rustfmt and locked metadata passed. The one official CP8 workspace
+  check passed in 1,648 ms. Workspace tests passed 736 + 112 + 22 + 77 + 37 +
+  249, with zero failures.
+- The first full candidate verifier passed all 1,632 tests but its sole
+  Playwright-backed answer-extractor file timed out in `afterAll` while closing
+  Chromium. Both candidate status lines were restored to CP7 before diagnosis.
+  The unchanged exact file then passed 6/6 twice (sandbox and outside), with
+  zero browser residue. The same CLEAN candidate was re-promoted and only the
+  failed verifier was repeated outside the sandbox: 177/177 files, 1,632/1,632
+  tests, zero Svelte diagnostics, rustfmt, workspace check, and workspace tests
+  all passed.
+- After the Task 8C authority correction commit, the affected Telegram and
+  shell-cap contracts passed 160/160, and a fresh outside-sandbox
+  `npm.cmd run verify` passed 177/177 files and 1,632/1,632 tests in 202.7
+  seconds, with zero Svelte diagnostics and all Rust gates GREEN.
+- The final CP8 precommit sequence passed the Telegram contract 148/148, the
+  shell-cap contract 12/12, all four generator `--check` commands, both named
+  Rust identity assertions, and `npm.cmd run verify` at 177/177 files and
+  1,632/1,632 tests in 175.5 seconds. Svelte reported zero errors/warnings;
+  rustfmt, workspace check, and workspace tests were GREEN.
+
+### Live MCP command-registration smoke
+
+The original still-unexecuted Task 8C text selected
+`ipc_execute_command`. The pinned bridge 0.11.0 returned
+`Unsupported Tauri command` even though the command was registered in the
+application. Both candidate status lines were restored to CP7 before
+diagnosis. Local pinned source proved the bridge handler accepts only its own
+plugin commands. A diagnostic webview invocation returned `[]`, and the owner
+approved the narrow authority correction. Commit
+`8149c3e3a166d1d4bf5ef606c343cb2e0a4725fa` changed only the unexecuted Task 8C
+and the matching design evidence. Two independent reviews approved it with no
+P1/P2/P3 finding; no dependency, manifest, lockfile, or product code changed.
+
+The final approved live smoke then produced:
+
+```text
+pre-existing extractum processes: 0
+pre-existing LISTENING rows on 1420/5173/9223: 0
+pre-existing driver session: disconnected
+dev executable: G:\Develop\Extractum\src-tauri\target\debug\extractum.exe
+dev PID: 6800
+backend: org.ai.extractum 0.2.0; Tauri 2.10.3; one window
+main window URL: http://localhost:1420/analysis
+webview invoke: tg_get_account_statuses { accountIds: [] }
+exact serialized result: []
+driver cleanup: disconnected
+exact dev-tree PID survivors: 0 of 13
+post-smoke extractum processes: 0
+post-smoke LISTENING rows on 1420/5173/9223: 0
+```
+
+No account was created; no code was requested; no sign-in, source mutation,
+Takeout operation, credential mutation, or credentialed Telegram request was
+performed.
+
+### Release and bounded startup
+
+The first sandboxed release attempt failed before Rust compilation because
+SvelteKit received `EPERM` writing its generated
+`.svelte-kit/generated/client/nodes/9.js`. Both status lines were immediately
+restored to CP7. The tracked candidate, manifests, lockfile, process state, and
+generated file attributes were unchanged. The same release gate was then run
+outside the sandbox without changing code or authority and passed:
+
+```text
+CARGO_TARGET_DIR: unset
+CARGO_BUILD_TARGET: unset
+metadata target: G:\Develop\Extractum\src-tauri\target
+host target: x86_64-pc-windows-msvc
+build command: npm.cmd run tauri -- build --no-bundle --target x86_64-pc-windows-msvc
+build exit: 0
+Rust release profile time: 13m 48s
+resolved path: G:\Develop\Extractum\src-tauri\target\x86_64-pc-windows-msvc\release\extractum.exe
+SHA-256: ee57a8aab8fb0e03bb03818944ba651e4428251e265e203996068bf2578ff046
+file length: 40138752 bytes
+```
+
+The self-managed startup smoke started only that resolved executable:
+
+```text
+startup PID: 19584
+actual PID path: G:\Develop\Extractum\src-tauri\target\x86_64-pc-windows-msvc\release\extractum.exe
+survival window: 5168 ms
+owned PID cleanup: clean
+post-cleanup extractum processes: 0
+post-cleanup LISTENING rows on 1420/5173/9223: 0
+```
+
+The release/startup gate is intentionally non-credentialed. Login, session,
+source, message-order, timeout, cancellation, Takeout fallback, persistence,
+and durable progress behavior remain proved by compilation and the named Rust
+behavior tests rather than a live Telegram mutation.
+
+### Workspace-check timing ledger
+
+Each checkpoint ran the plan's ordinary measured workspace check once. The
+durations durably recoverable from the active task transcript and retained
+scratch records are:
+
+| Checkpoint | Ordinary workspace check |
+| ---: | ---: |
+| CP1 | historical exact value not persisted; GREEN recorded |
+| CP2 | 1,111 ms |
+| CP3 | 1,173 ms |
+| CP4 | 1,154 ms |
+| CP5 | 1,885 ms |
+| CP6 | 1,192 ms |
+| CP7 | 1.7 seconds (retained record precision) |
+| CP8 | 1,648 ms |
+
+No replacement timing sample was taken for a previously successful check.
+CP3 and CP6 were recovered from the existing active-task rollout output
+(`WORKSPACE_CHECK_MS=1173` and
+`checkpoint=8B-CP6 workspace_check_ms=1192`) without rerunning Cargo. The
+missing CP1 numeric value is an evidence-retention defect in earlier
+checkpoint execution, not a failed check or a correctness failure; its
+available tool wall times are rounded and are not substituted for the missing
+official millisecond sample. Inventing a value or remeasuring later code would
+violate the single-sample rule. Every recoverable value is below 15,000 ms.
+Phase 8B remains a preparation slice and does not itself participate in the
+completed-phase adjacent-results rule.

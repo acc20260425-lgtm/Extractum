@@ -467,7 +467,7 @@ Phase 8 has an owner-approved Phase 8 boundary; 8A preparation and 8B
 Checkpoint 7 authority are retained. Further execution follows the three
 separately reviewed plans and requires explicit owner instructions.
 
-### Phase 8 — `extractum-telegram` (8B preparation Checkpoint 7 retained)
+### Phase 8 — `extractum-telegram` (8B preparation Checkpoint 8 retained)
 
 The owner-approved
 [Phase 8 boundary design](2026-07-26-telegram-crate-boundary-design.md)

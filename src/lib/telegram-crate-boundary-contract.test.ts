@@ -328,6 +328,16 @@ const retainedPreparationStates = [
     designStatus: "Approved; 8B preparation Checkpoint 7 retained",
     lifecycle: "8b-checkpoint-7",
   },
+  {
+    roadmapStatus: "8B preparation Checkpoint 8 retained",
+    designStatus: "Approved; 8B preparation Checkpoint 8 retained",
+    lifecycle: "8b-checkpoint-8",
+  },
+  {
+    roadmapStatus: "8B preparation retained; 8C pending",
+    designStatus: "Approved; 8B preparation retained; 8C pending",
+    lifecycle: "8b-preparation",
+  },
 ] as const;
 
 function resolveCurrentTelegramSourcePath(
@@ -3820,6 +3830,16 @@ type Phase8BSymbolAuthority = {
   restrictedFinalSymbols: string[];
 };
 
+type Phase8BStagingHashManifest = {
+  schemaVersion: number;
+  algorithm: string;
+  root: string;
+  files: Array<{
+    path: string;
+    sha256: string;
+  }>;
+};
+
 const phase8BPortablePathTable = [
   ["src-tauri/src/telegram_impl/lib.rs", 3, "src-tauri/src/telegram.rs"],
   ["src-tauri/src/telegram_impl/dto.rs", 3, "src-tauri/src/telegram/dto.rs"],
@@ -3846,6 +3866,27 @@ function readGeneratedJson<T>(relativePath: string): T {
   return JSON.parse(
     readFileSync(path.join(repoRoot, relativePath), "utf8"),
   ) as T;
+}
+
+function recursiveRepositoryFiles(
+  rootRelativePath: string,
+  currentRelativePath = "",
+): string[] {
+  const absoluteDirectory = path.join(
+    repoRoot,
+    rootRelativePath,
+    currentRelativePath,
+  );
+  return readdirSync(absoluteDirectory, { withFileTypes: true }).flatMap(
+    (entry) => {
+      const relativePath = currentRelativePath
+        ? `${currentRelativePath}/${entry.name}`
+        : entry.name;
+      return entry.isDirectory()
+        ? recursiveRepositoryFiles(rootRelativePath, relativePath)
+        : [relativePath];
+    },
+  );
 }
 
 function expectSortedUnique(
@@ -6179,6 +6220,84 @@ describe("Phase 8 Telegram crate boundary", () => {
 });
 
 describe("Phase 8B generated structural authority", () => {
+  it("requires the exact generated Phase 8B staging hash manifest", () => {
+    const generatorPath = "scripts/telegram-staging-sha256.mjs";
+    const artifactPath = "src/lib/telegram-8b-staging-sha256.json";
+
+    expect(existsSync(path.join(repoRoot, generatorPath))).toBe(true);
+    expect(existsSync(path.join(repoRoot, artifactPath))).toBe(true);
+    const result = runNodeGenerator(generatorPath, ["--check"]);
+    expect(result.status, `${result.stdout}${result.stderr}`).toBe(0);
+
+    const artifact = readGeneratedJson<Phase8BStagingHashManifest>(
+      artifactPath,
+    );
+    expect(artifact).toMatchObject({
+      schemaVersion: 1,
+      algorithm: "sha256",
+      root: "src-tauri/src/telegram_impl",
+    });
+    expect(artifact.files).toHaveLength(19);
+
+    const futureRoot = "src-tauri/crates/extractum-telegram/src";
+    expect(phase8BPlan).toContain(`\`${futureRoot}\``);
+    expect(design).toContain(`\`${futureRoot}\``);
+    expect(existsSync(path.join(repoRoot, futureRoot))).toBe(false);
+  });
+
+  it("rejects missing extra reordered or byte-drifted staged files", () => {
+    const artifact = readGeneratedJson<Phase8BStagingHashManifest>(
+      "src/lib/telegram-8b-staging-sha256.json",
+    );
+    const expectedRoot = "src-tauri/src/telegram_impl";
+    const expectedPaths = phase8BPortableTreePaths().map((relativePath) =>
+      relativePath.slice(`${expectedRoot}/`.length)
+    );
+    const actualPaths = recursiveRepositoryFiles(expectedRoot).sort();
+    const actualRecords = actualPaths.map((relativePath) => ({
+      path: relativePath,
+      sha256: createHash("sha256")
+        .update(readFileSync(path.join(repoRoot, expectedRoot, relativePath)))
+        .digest("hex"),
+    }));
+
+    expect(actualPaths).toEqual(expectedPaths);
+    expect(artifact.files).toEqual(actualRecords);
+    expect(
+      artifact.files.every(({ sha256 }) => /^[0-9a-f]{64}$/.test(sha256)),
+    ).toBe(true);
+  });
+
+  it("accepts only the Checkpoint 8 and terminal Phase 8B retained status pairs", () => {
+    expect(
+      retainedPreparationStates.filter(
+        ({ lifecycle: state }) => state === "8b-checkpoint-8",
+      ),
+    ).toEqual([
+      {
+        roadmapStatus: "8B preparation Checkpoint 8 retained",
+        designStatus: "Approved; 8B preparation Checkpoint 8 retained",
+        lifecycle: "8b-checkpoint-8",
+      },
+    ]);
+    expect(retainedPreparationStates).not.toContainEqual({
+      roadmapStatus: "8B preparation Checkpoint 8 retained",
+      designStatus: "Approved; 8B preparation Checkpoint 7 retained",
+      lifecycle: "8b-checkpoint-8",
+    });
+    expect(
+      retainedPreparationStates.filter(
+        ({ lifecycle: state }) => state === "8b-preparation",
+      ),
+    ).toEqual([
+      {
+        roadmapStatus: "8B preparation retained; 8C pending",
+        designStatus: "Approved; 8B preparation retained; 8C pending",
+        lifecycle: "8b-preparation",
+      },
+    ]);
+  });
+
   it("imports the immutable Phase 8A identity map by exact section hash", () => {
     const api = telegramContractPaths as Record<string, unknown>;
 
