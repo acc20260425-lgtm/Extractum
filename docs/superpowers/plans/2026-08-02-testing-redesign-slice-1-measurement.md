@@ -22,6 +22,8 @@
 - Rust mutations target `src-tauri/src/readiness.rs`, append only an inert unique comment, and restore the original bytes in `finally`. Interpret no result until SHA-256 and `git diff --exit-code -- src-tauri/src/readiness.rs` prove restoration.
 - Use the exact zero-I/O test `readiness::tests::mark_failed_returns_failed_state`. Reject a direct-binary result unless libtest reports exactly one passed test and zero failed tests.
 - Use one disclosed warm-up and exactly three retained samples for every Rust command shape. Never replace a failed or slow retained sample.
+- A non-zero test/gate exit in the baseline is valid evidence of current reality, including the known Chromium lifecycle flake. Record it, do not substitute a green run, and do not let it block completion of the measurement driver. Only a spawn failure may be retried; retain both attempts. Missing or malformed required inventory exits 3 without rerunning the observed command.
+- The final `verify` is a correctness gate, not a baseline sample. One rerun is allowed only after preserving the first result and matching the already documented Chromium `afterAll` lifecycle-timeout signature; a repeated flake or any other failure blocks the slice.
 - Store raw JSON, logs, generated reports, and temporary executable-path records under `artifacts/testing/slice-1/`; commit only source/tests and the final Markdown verification record.
 - Machine durations are local observations, not portable thresholds or eligibility state.
 - Preserve unrelated user changes and stage only files named by the active task.
@@ -179,7 +181,8 @@ Expected: one commit containing only the writer and its tests.
 
 **Interfaces:**
 - Export `runObservedCommand({ command, args, cwd, stdio, capture, dependencies })`.
-- Return `{ command, startedAt, duration, exitCode, commit, stdout, stderr, signal }`.
+- Accept explicit `env` overrides and merge them over the inherited environment without logging environment contents.
+- Return `{ command, startedAt, duration, exitCode, commit, stdout, stderr, signal, termination }`, where `termination` is `exit`, `signal`, or `spawn-error`.
 - Normal exit keeps its integer code; `SIGINT` becomes 130; another signal/spawn failure becomes 3.
 - Record one row after termination. A logging failure must not replace the process result.
 
@@ -250,8 +253,8 @@ Expected: one focused commit.
 - Export `BASELINE_COMMANDS` and `runBaseline({ repoRoot, runCommand })`.
 - Export `resolveNpmScript(script, extraArgs, environment)`; on Windows it invokes `npm.cmd` through `ComSpec` with `shell: false`, because `.cmd` files are not native executables.
 - CLI supports only `--output <path-under-artifacts/testing/slice-1>`.
-- Generate JSON containing each complete command, start, duration, exit code, and parsed inventory when the runner exposes it.
-- Attempt every listed command sequentially even when an earlier observation fails; return the first non-zero exit code after writing the complete report.
+- Generate JSON containing each complete command, start, duration, exit code, and required parsed inventory from file-backed Vitest and Playwright reporters.
+- Attempt every listed command sequentially even when an earlier observation exits non-zero. Ordinary test/gate failures produce `baselineStatus: "observed-failures"` and a successful measurement-driver exit; only spawn failure or missing/malformed required inventory is infrastructure exit 3.
 
 - [ ] **Step 1: Write the baseline contract test**
 
@@ -259,21 +262,21 @@ Assert that the logical command table contains these exact observations in this 
 
 ```js
 [
-  ["frontend Vitest", { npmScript: "test", extraArgs: ["--reporter=json"] }],
+  ["frontend Vitest", { npmScript: "test", vitestReport: "frontend-vitest.json" }],
   ["Svelte check", { npmScript: "check" }],
   ["sidecar typecheck", { npmScript: "test:gemini-browser-sidecar:typecheck" }],
-  ["sidecar unit", { npmScript: "test:gemini-browser-sidecar:unit", extraArgs: ["--reporter=json"] }],
+  ["sidecar unit", { npmScript: "test:gemini-browser-sidecar:unit", vitestReport: "sidecar-vitest.json" }],
   ["sidecar build", { npmScript: "test:gemini-browser-sidecar:build" }],
   ["adapter typecheck", { npmScript: "test:gemini-browser-adapter:typecheck" }],
-  ["adapter unit", { npmScript: "test:gemini-browser-adapter:unit", extraArgs: ["--reporter=json"] }],
-  ["adapter Playwright", { npmScript: "test:gemini-browser-adapter:e2e", extraArgs: ["--reporter=json"] }],
+  ["adapter unit", { npmScript: "test:gemini-browser-adapter:unit", vitestReport: "adapter-vitest.json" }],
+  ["adapter Playwright", { npmScript: "test:gemini-browser-adapter:e2e", playwrightReport: "adapter-playwright.json" }],
   ["Cargo check", { command: "cargo", args: ["check", "--manifest-path", "src-tauri/Cargo.toml", "--workspace", "--all-targets"] }],
   ["Cargo test", { command: "cargo", args: ["test", "--manifest-path", "src-tauri/Cargo.toml", "--workspace", "--all-targets"] }],
   ["full verify", { npmScript: "verify" }],
 ]
 ```
 
-Also assert sequential invocation, continuation after an injected failure, first-failure exit precedence, and rejection of an output path outside `artifacts/testing/slice-1`.
+Also assert sequential invocation, continuation after an injected correctness failure, `baselineStatus: "observed-failures"` with driver exit 0, and rejection of an output path outside `artifacts/testing/slice-1`. Add a spawn-error case that retries once, retains both timing attempts, and exits 3 when the retry also fails. Add missing/malformed Vitest and Playwright report cases that exit 3 rather than silently omitting inventory.
 
 - [ ] **Step 2: Run RED**
 
@@ -296,7 +299,15 @@ Use `runObservedCommand` for every table entry. On Windows, resolve an npm descr
 }
 ```
 
-Keep `shell: false`; the explicit command processor is part of the complete normalized timing command. Parse Vitest JSON only when valid and retain at least `numTotalTestSuites`, `numPassedTestSuites`, `numTotalTests`, `numPassedTests`, and each test file path. Parse Playwright JSON into suite/spec/test counts. Never infer a passing inventory from a failed or unparsable report; preserve the raw parse error in the generated baseline JSON.
+Keep `shell: false`; the explicit command processor is part of the complete normalized timing command. For each Vitest descriptor, create a unique absolute path below `artifacts/testing/slice-1/inventory/`, remove only that exact old file before spawn, and append:
+
+```js
+["--reporter=json", `--outputFile=${absoluteReportPath}`]
+```
+
+`resolveNpmScript` inserts the single npm `--` separator before those extra arguments. For Playwright, pass `--reporter=json` the same way and set `PLAYWRIGHT_JSON_OUTPUT_FILE` to its unique absolute report path in the child environment. This keeps npm banners out of both JSON documents. Parse Vitest JSON and retain at least `numTotalTestSuites`, `numPassedTestSuites`, `numTotalTests`, `numPassedTests`, and every test file path. Parse Playwright JSON into suite/spec/test counts and runnable file paths. Missing or malformed required reporter output is an infrastructure error even when the command itself exited non-zero; do not publish an inventory-free baseline.
+
+An ordinary non-zero test/gate exit is not a driver failure. Record it exactly once, continue, and set `baselineStatus` to `observed-failures`. Retry only an observation whose termination kind is `spawn-error`, at most once, and keep both timing rows and both attempt records. A missing/malformed reporter file is not a reason to rerun: record the inventory infrastructure error, continue the remaining command table, and return exit 3 after the complete report is written.
 
 The driver itself does not add a richer timing row. Its child commands already produce the five-field observations; its generated JSON is diagnostic evidence under the ignored artifact directory.
 
@@ -340,10 +351,12 @@ Expected: one focused commit.
 The tests must assert:
 
 - one warm-up plus three retained observations for `noopCheck`, `invalidatedCheck`, `noRun`, `directBinary`, and `endToEnd`;
+- warm-up order is `noopCheck → invalidatedCheck → noRun/directBinary → endToEnd`, ensuring an executable identity exists before end-to-end rebuild proof;
 - each retained invalidating attempt has a unique token;
 - retained invalidating order is `check → noRun/direct → endToEnd`, `endToEnd → noRun/direct → check`, then `noRun/direct → check → endToEnd`;
-- `parseCargoArtifacts` accepts only a `compiler-artifact` for package `extractum`, target `extractum_lib`, `fresh: false`, and the expected test/non-test profile;
+- `parseCargoArtifacts` is parameterized by `expectedFresh`: no-op root artifacts require `fresh: true`, while invalidated check/no-run artifacts require `fresh: false`; every case still requires package `extractum`, target `extractum_lib`, and the expected test/non-test profile;
 - the no-run artifact supplies an executable below canonical `src-tauri/target`;
+- every `endToEnd` attempt contains `Compiling extractum` on Cargo stderr, changes the paired root test binary's last-write timestamp, and then reports exactly one executed passing test;
 - `parseExactLibtest` rejects zero tests, two tests, ignored-only output, or any failure;
 - an injected command failure still restores the exact original `Buffer` and records the failed retained sample without replacement.
 
@@ -379,6 +392,8 @@ Run the direct executable returned by its paired `noRun` compiler artifact as:
 
 Before each invalidating command, append `// extractum-slice-1-probe:<cohort>:<crypto.randomUUID()>` using the file's existing bytes/newline style. After the command, restore using the originally captured `Buffer`, re-read it, and compare SHA-256. A separate mutation is mandatory for `endToEnd`; it may not reuse the `noRun` build.
 
+For each `endToEnd` attempt, snapshot the root test executable path and last-write timestamp from the latest valid warm-up or retained no-run artifact. Capture Cargo stderr while mirroring it to the terminal. Accept the attempt only when stderr contains a line matching `^\s*Compiling extractum v` and the test executable's last-write timestamp increases. This proves the distinct mutation rebuilt the root lib-test unit without adding JSON-reporter overhead to the canonical Cargo command.
+
 Before retained no-op controls, establish the canonical restored source once, run the disclosed no-op warm-up, and then run three consecutive retained no-op checks. Do not place a no-op sample immediately after source restoration from a mutation.
 
 - [ ] **Step 4: Generate the diagnostic fields and decision mechanically**
@@ -391,11 +406,12 @@ The JSON report must retain every warm-up and sample. For the three retained sam
 - `directHarnessMs` from paired direct-binary execution;
 - `cargoEndToEndMs` from the canonical exact Cargo command.
 
-Emit exactly one classification:
+Emit exactly one classification. `FAST_OWNER_EVIDENCE_LIMIT_MS` is deliberately 13 seconds: it is a diagnostic decision reserve, not a new public timeout, and leaves two seconds of the 15-second contract for Git/manifest/selector reporting plus the required cleanup window.
 
 ```js
-if (checkFloorMs > 15_000) classification = "PACKAGE_BOUNDARY_OR_SLOW";
-else if (combinedTestBuildMs > 15_000 || cargoEndToEndMs > 15_000)
+const FAST_OWNER_EVIDENCE_LIMIT_MS = 13_000;
+if (checkFloorMs > FAST_OWNER_EVIDENCE_LIMIT_MS) classification = "PACKAGE_BOUNDARY_OR_SLOW";
+else if (combinedTestBuildMs > FAST_OWNER_EVIDENCE_LIMIT_MS || cargoEndToEndMs > FAST_OWNER_EVIDENCE_LIMIT_MS)
   classification = "SMALLER_TEST_TARGET_REQUIRED";
 else if (directHarnessMs === Math.max(checkFloorMs, combinedTestBuildMs, directHarnessMs, cargoEndToEndMs))
   classification = "HARNESS_OPTIMIZATION_REQUIRED";
@@ -441,10 +457,23 @@ Run:
 ```powershell
 git status --short --untracked-files=all
 git diff --exit-code -- src-tauri/src/readiness.rs
-$repoProcesses = Get-CimInstance Win32_Process | Where-Object {
-  $_.ProcessId -ne $PID -and $_.CommandLine -like '*G:\Develop\Extractum*' -and
-  $_.Name -match '^(cargo|rustc|rust-analyzer|node|vitest|playwright)(\.exe)?$'
+$allProcesses = @(Get-CimInstance Win32_Process)
+$byId = @{}
+$allProcesses | ForEach-Object { $byId[[int]$_.ProcessId] = $_ }
+$ancestorIds = [System.Collections.Generic.HashSet[int]]::new()
+$cursor = [int]$PID
+while ($cursor -gt 0 -and $byId.ContainsKey($cursor) -and $ancestorIds.Add($cursor)) {
+  $cursor = [int]$byId[$cursor].ParentProcessId
 }
+$repoProcesses = @($allProcesses | Where-Object {
+  $name = $_.Name
+  $line = [string]$_.CommandLine
+  -not $ancestorIds.Contains([int]$_.ProcessId) -and
+  $line -like '*G:\Develop\Extractum*' -and (
+    $name -match '^(cargo|rustc|rust-analyzer)(\.exe)?$' -or
+    ($name -match '^node(\.exe)?$' -and $line -match '(run-vitest|vitest|playwright)')
+  )
+})
 $repoProcesses | Select-Object ProcessId, Name, CommandLine
 if ($repoProcesses) { exit 1 }
 ```
@@ -459,7 +488,7 @@ Run:
 node scripts/testing/slice-1-baseline.mjs --output artifacts/testing/slice-1/current-baseline.json
 ```
 
-Expected: every current command is attempted sequentially, every command has one five-field JSONL row, and the driver exits zero only if every observed command passed. A missing Playwright browser is recorded as a failure, not converted into a skip.
+Expected: every current command is attempted sequentially and every attempt has one five-field JSONL row. Ordinary non-zero test/gate exits, including the known Chromium lifecycle failure, are retained as valid baseline evidence and the completed measurement driver exits zero with `baselineStatus: "observed-failures"`. The driver retries only a spawn error once, retaining both attempts; missing/malformed inventory or a repeated spawn error exits 3. A missing Playwright browser is recorded as a failure, not converted into a skip.
 
 - [ ] **Step 3: Validate raw output invariants**
 
@@ -476,7 +505,7 @@ if ($bad.Count -ne 0) { exit 1 }
 Get-Content artifacts/testing/slice-1/current-baseline.json
 ```
 
-Expected: zero malformed rows and a literal observation for Vitest, Svelte-check, sidecar, adapter, Playwright, Cargo, and full `verify`.
+Expected: zero malformed rows, required parsed file/test inventories for all three Vitest observations and Playwright, and a literal exit/duration observation for Vitest, Svelte-check, sidecar, adapter, Playwright, Cargo, and full `verify`. Correctness failures remain visible rather than invalidating the baseline.
 
 ---
 
@@ -485,7 +514,35 @@ Expected: zero malformed rows and a literal observation for Vitest, Svelte-check
 **Files:**
 - Generate ignored: `artifacts/testing/slice-1/rust-feasibility.json`
 
-- [ ] **Step 1: Prove the exact test exists before measuring**
+- [ ] **Step 1: Re-run the competing-process preflight immediately before Rust measurements**
+
+Run:
+
+```powershell
+$allProcesses = @(Get-CimInstance Win32_Process)
+$byId = @{}
+$allProcesses | ForEach-Object { $byId[[int]$_.ProcessId] = $_ }
+$ancestorIds = [System.Collections.Generic.HashSet[int]]::new()
+$cursor = [int]$PID
+while ($cursor -gt 0 -and $byId.ContainsKey($cursor) -and $ancestorIds.Add($cursor)) {
+  $cursor = [int]$byId[$cursor].ParentProcessId
+}
+$repoProcesses = @($allProcesses | Where-Object {
+  $name = $_.Name
+  $line = [string]$_.CommandLine
+  -not $ancestorIds.Contains([int]$_.ProcessId) -and
+  $line -like '*G:\Develop\Extractum*' -and (
+    $name -match '^(cargo|rustc|rust-analyzer)(\.exe)?$' -or
+    ($name -match '^node(\.exe)?$' -and $line -match '(run-vitest|vitest|playwright)')
+  )
+})
+$repoProcesses | Select-Object ProcessId, Name, CommandLine
+if ($repoProcesses) { exit 1 }
+```
+
+Expected: no competing Cargo/Rust process and no repository Vitest/Playwright runner. The current shell's complete ancestor chain is excluded, so the Codex harness is not a false positive. Stop and inspect any remaining process; do not terminate it automatically.
+
+- [ ] **Step 2: Prove the exact test exists before measuring**
 
 Run:
 
@@ -500,7 +557,7 @@ cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib readiness::te
 
 Expected: exactly one listed test and exactly one executed passing test.
 
-- [ ] **Step 2: Record the original source identity**
+- [ ] **Step 3: Record the original source identity**
 
 Run:
 
@@ -512,7 +569,7 @@ $beforeLength = (Get-Item src-tauri/src/readiness.rs).Length
 
 Expected: one baseline hash and byte length retained in the terminal transcript.
 
-- [ ] **Step 3: Run one warm-up and three retained samples per command shape**
+- [ ] **Step 4: Run one warm-up and three retained samples per command shape**
 
 Run:
 
@@ -520,9 +577,9 @@ Run:
 node scripts/testing/slice-1-rust-feasibility.mjs --output artifacts/testing/slice-1/rust-feasibility.json
 ```
 
-Expected: zero exit; each invalidated compiler sample proves `extractum_lib` rebuilt with `fresh: false`; each no-run artifact is paired with its exact executable; each direct run reports one pass; no retained failure is replaced.
+Expected: zero exit; each invalidated check/no-run compiler sample proves `extractum_lib` rebuilt with `fresh: false`; each no-op root artifact proves `fresh: true`; each no-run artifact is paired with its exact executable; every end-to-end attempt proves `Compiling extractum` and an increased test-binary timestamp; each direct and Cargo-owned run reports exactly one pass; no retained failure is replaced.
 
-- [ ] **Step 4: Prove byte restoration before reading results**
+- [ ] **Step 5: Prove byte restoration before reading results**
 
 Run:
 
@@ -536,7 +593,7 @@ if ($beforeHash -ne $afterHash -or $beforeLength -ne $afterLength) { exit 1 }
 
 Expected: both restoration checks are `True` and Git reports no diff.
 
-- [ ] **Step 5: Inspect the literal report and classification**
+- [ ] **Step 6: Inspect the literal report and classification**
 
 Run:
 
@@ -558,7 +615,7 @@ Expected: 15 retained observations (three for each of five shapes), disclosed wa
 
 - [ ] **Step 1: Create the evidence record from literal generated values**
 
-Create the document with `apply_patch` and these exact sections:
+Create the file with these exact sections:
 
 ```markdown
 # Testing Redesign Slice 1 Measurement Verification
@@ -578,7 +635,8 @@ Create the document with `apply_patch` and these exact sections:
 Populate it only with values from `current-baseline.json`, `rust-feasibility.json`, tool version commands, and the timing JSONL validation. Include:
 
 - every command, duration, and exit code;
-- Vitest/Playwright inventories where parsable;
+- every non-zero baseline result labeled as observed current behavior, including the exact lifecycle-flake signature when present; do not replace it with a later green baseline sample;
+- complete Vitest and Playwright inventories from the required file-backed reporter documents;
 - all warm-ups labeled separately from all retained Rust samples;
 - medians for check floor, combined test build, delta, direct binary, and Cargo end-to-end;
 - the complete delta-confounder statement;
@@ -591,7 +649,7 @@ Decision text must follow the classification:
 - `PACKAGE_BOUNDARY_OR_SLOW`: state that root paths cannot be fast owners as-is; either plan a named smaller production package boundary or classify them slow. If no bounded seam is evident from existing module/package boundaries, select slow and return to the user before any open-ended rewrite.
 - `SMALLER_TEST_TARGET_REQUIRED`: name the smallest existing source/test boundary supported by the artifact evidence; do not promise sub-15 seconds without a follow-up measurement.
 - `HARNESS_OPTIMIZATION_REQUIRED`: identify direct harness/setup evidence and keep the path slow until a bounded optimization is approved.
-- `BOUNDED_FAST_OWNER_PLAUSIBLE`: name the measured command shape that fits and carry it into Slice 4 planning.
+- `BOUNDED_FAST_OWNER_PLAUSIBLE`: name the measured command shape whose retained median is at most 13 seconds and carry it into Slice 4 planning; state that the remaining two seconds are reserved for selector/reporting/cleanup overhead and that Slice 4's real feedback smoke remains authoritative.
 
 Do not write `TODO`, `TBD`, portable CPU/memory claims, eligibility state, or a pure-link claim.
 
@@ -642,12 +700,38 @@ Expected: one documentation/evidence commit.
 Run:
 
 ```powershell
-npm.cmd run verify
+New-Item -ItemType Directory -Force artifacts/testing/slice-1 | Out-Null
+npm.cmd run verify 2>&1 | Tee-Object artifacts/testing/slice-1/final-verify-attempt-1.log
+$verifyExit = $LASTEXITCODE
+Set-Content artifacts/testing/slice-1/final-verify-attempt-1.exit $verifyExit
+"VERIFY_ATTEMPT_1_EXIT=$verifyExit"
 ```
 
-Expected: all existing verification checks pass. A timing-log warning, if any, is reported separately and cannot change gate correctness.
+Expected: exit 0. A timing-log warning, if any, is reported separately and cannot change gate correctness. Unlike Task 5, this is a correctness gate: a non-zero exit is not accepted as completion evidence.
 
-- [ ] **Step 2: Confirm clean state and inspect commits**
+- [ ] **Step 2: If and only if the known Chromium lifecycle flake occurred, preserve it and run one gate retry**
+
+Skip this step when attempt 1 exited zero. Otherwise run:
+
+```powershell
+$verifyExit = [int](Get-Content artifacts/testing/slice-1/final-verify-attempt-1.exit -Raw)
+$log = Get-Content artifacts/testing/slice-1/final-verify-attempt-1.log -Raw
+$knownChromiumFlake =
+  $log -match 'answer-extractor\.test\.ts' -and
+  $log -match 'afterAll' -and
+  $log -match '(timed out|timeout)'
+"KNOWN_CHROMIUM_FLAKE=$knownChromiumFlake"
+if ($verifyExit -eq 0 -or -not $knownChromiumFlake) { exit 1 }
+npm.cmd run verify 2>&1 | Tee-Object artifacts/testing/slice-1/final-verify-attempt-2.log
+$retryExit = $LASTEXITCODE
+Set-Content artifacts/testing/slice-1/final-verify-attempt-2.exit $retryExit
+"VERIFY_ATTEMPT_2_EXIT=$retryExit"
+if ($retryExit -ne 0) { exit $retryExit }
+```
+
+Expected: the first failure remains in ignored evidence, its signature exactly matches the previously documented answer-extractor `afterAll` timeout while closing Chromium, and the sole retry passes. Any other first failure or any second failure blocks the slice; do not retry again.
+
+- [ ] **Step 3: Confirm clean state and inspect commits**
 
 Run:
 
@@ -661,6 +745,6 @@ if ($status.Count -ne 0) { $status; exit 1 }
 
 Expected: clean tree, successful evidence commit, and no tracked raw measurement artifacts.
 
-- [ ] **Step 3: Stop for the Slice 1 decision checkpoint**
+- [ ] **Step 4: Stop for the Slice 1 decision checkpoint**
 
 Report the literal Rust classification and decision to the user. Do not author or execute Slice 2A until the user accepts the checkpoint outcome. After acceptance, use the program index to write the detailed Slice 2A plan against the committed repository state.
