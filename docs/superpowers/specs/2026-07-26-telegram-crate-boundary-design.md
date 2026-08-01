@@ -12,6 +12,15 @@
 **Approved Phase 8B narrow-API authority:**
 [`2026-07-28-extractum-telegram-8b-preparation.md`](../plans/2026-07-28-extractum-telegram-8b-preparation.md)
 
+**Phase 8C bounded design:**
+[`2026-08-01-telegram-8c-extraction-design.md`](2026-08-01-telegram-8c-extraction-design.md)
+
+The linked document records its current approval status and is never, by
+itself, implementation authority. After explicit owner approval, it becomes
+the forward-only normative authority for 8C where it explicitly supersedes
+this umbrella design. It does not rewrite retained 8A or 8B history; every
+parent requirement not explicitly superseded remains in force.
+
 **Owner-directed 2026-07-30 forward amendment:** after retained Checkpoint 1,
 transitional escape-hatch use-sites are reviewed by an LLM. The TypeScript
 contract does not perform Rust semantic use-site analysis; automatic evidence
@@ -525,6 +534,12 @@ deferred or canceled, the owner explicitly chooses whether to retain or revert
 that overhead; the roadmap does not report Phase 8 as successful.
 
 ### 8C — single mechanical extraction and dependency cleanup
+
+The bounded Phase 8C design linked above specifies the post-8B extraction
+protocol, including the exact cross-package test-support preparation and its
+derived source-hash authority. Until that design is explicitly approved, the
+clauses in this section remain the current 8C authority. After approval, the
+bounded design takes precedence only for the clauses it explicitly names.
 
 8C creates `extractum-telegram` and mechanically moves the complete prepared
 Grammers perimeter:
