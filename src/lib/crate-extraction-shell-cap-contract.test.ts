@@ -12,6 +12,8 @@ import llmBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-20-llm-cr
 import promptPacksBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-20-prompt-packs-crate-boundary-design.md?raw";
 import analysisBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-22-analysis-crate-boundary-design.md?raw";
 import telegramBoundaryDesignRaw from "../../docs/superpowers/specs/2026-07-26-telegram-crate-boundary-design.md?raw";
+import telegram8CDesignRaw from "../../docs/superpowers/specs/2026-08-01-telegram-8c-extraction-design.md?raw";
+import telegram8CPlanRaw from "../../docs/superpowers/plans/2026-08-01-extractum-telegram-8c-extraction.md?raw";
 import analysisExtractionPlanRaw from "../../docs/superpowers/plans/2026-07-22-extractum-analysis-extraction.md?raw";
 import analysisExtractionVerificationRaw from "../../docs/superpowers/verification/2026-07-22-extractum-analysis-extraction.md?raw";
 import llmVerificationRaw from "../../docs/superpowers/verification/2026-07-20-extractum-llm-extraction.md?raw";
@@ -55,6 +57,17 @@ const llmBoundaryDesign = compact(llmBoundaryDesignRaw);
 const promptPacksBoundaryDesign = compact(promptPacksBoundaryDesignRaw);
 const analysisBoundaryDesign = compact(analysisBoundaryDesignRaw);
 const telegramBoundaryDesign = compact(telegramBoundaryDesignRaw);
+const telegram8CDesign = compact(telegram8CDesignRaw);
+const telegram8CPlan = compact(telegram8CPlanRaw);
+const telegram8CVerificationPath = path.join(
+  repoRoot,
+  "docs/superpowers/verification/2026-08-01-extractum-telegram-8c-extraction.md",
+);
+const telegram8CVerification = existsSync(telegram8CVerificationPath)
+  ? compact(readFileSync(telegram8CVerificationPath, "utf8"))
+  : undefined;
+const phase8TerminalVerificationLink =
+  "[verification](../verification/2026-08-01-extractum-telegram-8c-extraction.md)";
 const telegramTypePerimeter = compact(
   sectionBetween(
     normalize(telegramBoundaryDesignRaw),
@@ -176,6 +189,40 @@ const phase8Roadmap = compact(
 const phase8Status = phase8Roadmap.match(
   /### Phase 8 — `extractum-telegram` \(([^)]+)\)/,
 )?.[1];
+
+function assertPhase8CBoundedAuthority(): void {
+  expect(phase8Status).toBeDefined();
+  expect(["8B preparation retained; 8C pending", "done: retained"])
+    .toContain(phase8Status);
+  const phase8Terminal = phase8Status === "done: retained";
+  if (phase8Terminal) {
+    const terminalStatus = `**Status:** Implemented and retained; ${phase8TerminalVerificationLink}`;
+    expect(telegramBoundaryDesign).toContain(terminalStatus);
+    expect(telegram8CDesign).toContain(terminalStatus);
+    expect(telegram8CVerification).toBeDefined();
+    expect(telegram8CVerification).toContain("**Result: implemented and retained.**");
+  } else {
+    expect(telegramBoundaryDesign).toContain("**Status:** Approved; 8B preparation retained; 8C pending");
+    expect(telegram8CDesign).toContain("**Status:** Approved for implementation planning; implementation not authorized");
+    expect(telegram8CVerification).toBeUndefined();
+  }
+  expect(compact(crateRoadmap)).not.toContain("implementation has not started");
+  expect(telegramBoundaryDesign).toContain("[`2026-08-01-telegram-8c-extraction-design.md`](2026-08-01-telegram-8c-extraction-design.md)");
+  expect(telegram8CDesign).toContain("[`2026-07-26-telegram-crate-boundary-design.md`](2026-07-26-telegram-crate-boundary-design.md)");
+  expect(telegram8CDesign).toContain("Use one forward-only, atomic Phase 8C implementation checkpoint.");
+  expect(telegram8CDesign).toContain("The single retained implementation checkpoint is `EXTRACTION_COMMIT`.");
+  expect(telegram8CPlan).toContain("Phase 8C has exactly one implementation commit, named `EXTRACTION_COMMIT`.");
+  expect(telegram8CDesign).toContain("The feature is declared only by `extractum-telegram` and is non-default. The normal app dependency remains feature-free; only the app dev-dependency enables it.");
+  expect(telegram8CDesign).toContain("The contract derives the extracted state from exact package, path, and facade preconditions and must pass before terminal roadmap/design statuses are updated. Partial layouts fail closed; terminal status is not a prerequisite for final GREEN.");
+  expect(telegram8CDesign).toContain("The counts must still be 665 app / 71 crate / 736 union.");
+  expect(telegram8CDesign).toContain(
+    "The required order is final uncommitted `npm.cmd run verify` -> release command above -> `EXTRACTION_COMMIT` -> live MCP -> self-managed startup smoke -> docs-only terminal commit.",
+  );
+  expect(telegram8CPlan).toContain(
+    "The terminal order is fixed: final uncommitted `npm.cmd run verify` -> release build with explicit host target -> `EXTRACTION_COMMIT` -> one live MCP smoke -> self-managed startup smoke -> docs-only terminal evidence commit.",
+  );
+  expect(phase8Roadmap).toContain("2026-07-26-telegram-crate-boundary-design.md");
+}
 const appOwnedGeminiBaselineTests = [
   "explicit_shutdown_kills_and_reaps_the_owned_child_once",
   "drop_falls_back_to_owned_child_shutdown",
@@ -244,8 +291,8 @@ function featureMetadataFixture(): FeatureMetadataFixture {
   return {
     packages: [
       {
-        id: "extractum-fixture",
-        name: "extractum",
+        id: "extractum-telegram-fixture",
+        name: "extractum-telegram",
         features: {},
       },
       ...packageRecords,
@@ -253,7 +300,7 @@ function featureMetadataFixture(): FeatureMetadataFixture {
     resolve: {
       nodes: [
         {
-          id: "extractum-fixture",
+          id: "extractum-telegram-fixture",
           deps: packageRecords.map(({ id }) => ({ pkg: id })),
           features: [],
         },
@@ -411,16 +458,16 @@ describe("crate extraction timing policy", () => {
     );
   }, 15_000);
 
-  it("feature authority rejects duplicate extractum resolve nodes", () => {
+  it("feature authority rejects duplicate extractum-telegram resolve nodes", () => {
     const metadata = featureMetadataFixture();
-    const extractumNode = metadata.resolve.nodes[0];
+    const directOwnerNode = metadata.resolve.nodes[0];
     metadata.resolve.nodes.push({
-      ...extractumNode,
-      deps: [...extractumNode.deps],
-      features: [...extractumNode.features],
+      ...directOwnerNode,
+      deps: [...directOwnerNode.deps],
+      features: [...directOwnerNode.features],
     });
     expect(() => generateFeatureBaseline(metadata)).toThrow(
-      /expected one resolved extractum node/,
+      /expected one resolved extractum-telegram node, found 2/,
     );
   });
 
@@ -1037,7 +1084,8 @@ describe("crate extraction timing policy", () => {
     );
   });
 
-  it("records the retained Phase 8 Telegram preparation disposition", () => {
+  it("records the retained Phase 8 authority and bounded 8C lifecycle", () => {
+    assertPhase8CBoundedAuthority();
     expect(
       [
         "**Status:** Approved; 8A preparation retained; 8B not started",
@@ -1050,9 +1098,11 @@ describe("crate extraction timing policy", () => {
         "**Status:** Approved; 8B preparation Checkpoint 7 retained",
         "**Status:** Approved; 8B preparation Checkpoint 8 retained",
         "**Status:** Approved; 8B preparation retained; 8C pending",
+        "**Status:** Implemented and retained;",
       ].some((status) => telegramBoundaryDesign.includes(status)),
     ).toBe(true);
-    expect(
+    if (phase8Status !== "done: retained") {
+      expect(
       [
         "owner-approved Phase 8 boundary; 8A preparation is retained; 8B has not started.",
         "owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 1 authority are retained.",
@@ -1065,7 +1115,8 @@ describe("crate extraction timing policy", () => {
         "owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 8 authority are retained.",
         "owner-approved Phase 8 boundary; 8A preparation and 8B preparation are retained, while 8C remains pending.",
       ].some((status) => compact(crateRoadmap).includes(status)),
-    ).toBe(true);
+      ).toBe(true);
+    }
     expect(compact(crateRoadmap)).not.toContain(
       "implementation has not started",
     );
@@ -1102,6 +1153,7 @@ describe("crate extraction timing policy", () => {
       "8B preparation Checkpoint 7 retained",
       "8B preparation Checkpoint 8 retained",
       "8B preparation retained; 8C pending",
+      "done: retained",
     ]).toContain(phase8Status);
     expect(phase8Roadmap).toContain(
       "2026-07-26-telegram-crate-boundary-design.md",
@@ -1160,14 +1212,14 @@ describe("crate extraction timing policy", () => {
     expect(phase8Roadmap).toContain(
       "staged modules use only relative `self::`/`super::` paths",
     );
-    expect(phase8Roadmap).toContain(
-      "8C preserves staged files byte-for-byte",
+    expect(telegram8CDesign).toContain(
+      "For 17 relative paths other than `lib.rs` and `takeout/mod.rs`, completion evidence requires:",
     );
     expect(phase8Roadmap).toContain(
       "Consumer paths remain byte-identical, as required by the standing mechanical-move rule",
     );
-    expect(phase8Roadmap).toContain(
-      "8C makes no visibility change",
+    expect(telegram8CDesign).toContain(
+      "The remaining two destination files may differ from their frozen source only by this exact patch:",
     );
     expect(phase8Roadmap).toContain(
       "`TelegramMessageIdentity`, `TelegramItemContext`, and the Telegram item-kind constant move",
@@ -1403,8 +1455,8 @@ describe("crate extraction timing policy", () => {
     expect(telegramBoundaryDesign).toContain(
       "the remaining 73 identities have no aggregate owner",
     );
-    expect(telegramBoundaryDesign).toContain(
-      "No app dev dependency, reverse dependency, or fixture crate is introduced",
+    expect(telegram8CDesign).toContain(
+      "The normal app dependency remains feature-free; only the app dev-dependency enables it.",
     );
     expect(telegramBoundaryDesign).toContain(
       "`raw_parse_preserves_distinct_history_peer_identity_for_equal_message_ids`",
@@ -1427,8 +1479,8 @@ describe("crate extraction timing policy", () => {
     expect(telegramBoundaryDesign).toContain(
       "every app-owned source outside the staging tree refers to staged public API only through the exact `crate::telegram_impl::` prefix",
     );
-    expect(telegramBoundaryDesign).toContain(
-      "The move preserves every staged source file byte-for-byte",
+    expect(telegram8CDesign).toContain(
+      "For 17 relative paths other than `lib.rs` and `takeout/mod.rs`, completion evidence requires:",
     );
     expect(telegramBoundaryDesign).toContain(
       "After moving the staged `lib.rs`, 8C creates a new private compatibility facade",
@@ -1439,8 +1491,8 @@ describe("crate extraction timing policy", () => {
     expect(telegramBoundaryDesign).toContain(
       "every consumer `crate::telegram_impl::` path remain byte-identical",
     );
-    expect(telegramBoundaryDesign).toContain(
-      "requires exact path and byte-hash equality",
+    expect(telegram8CDesign).toContain(
+      "Excluding diff headers, the two diffs together may contain only the eight line substitutions in the table:",
     );
     expect(telegramBoundaryDesign).toContain(
       "its four largest files are 61.9% and its eight largest are 83.8%",
@@ -1538,8 +1590,8 @@ describe("crate extraction timing policy", () => {
     expect(telegramStagingContract).toContain(
       "No staged source contains `crate::`",
     );
-    expect(telegramStagingContract).toContain(
-      "Inside the moved tree, no module path, import, visibility, or source text changes in 8C",
+    expect(telegram8CDesign).toContain(
+      "function bodies, signatures, names, order, imports, and all other bytes remain unchanged.",
     );
     expect(telegramVisibilityAllowlist).toContain(
       "The complete existing-symbol widening/rename allowlist is:",
@@ -1583,11 +1635,11 @@ describe("crate extraction timing policy", () => {
     expect(telegramVisibilityAllowlist).toContain(
       "`ITEM_KIND_TELEGRAM_MESSAGE` becomes one public constant",
     );
-    expect(telegramVisibilityAllowlist).toContain(
-      "No existing free function is widened in place",
+    expect(telegram8CDesign).toContain(
+      "The production API is exactly the curated parent-design API already prepared by 8B. Phase 8C widens no production item and changes no signature.",
     );
-    expect(telegramVisibilityAllowlist).toContain(
-      "8C changes no visibility",
+    expect(telegram8CDesign).toContain(
+      "The only additional externally reachable names are the two functions under `app-test-support`.",
     );
     expect(telegramVisibilityAllowlist).toContain(
       "reject any other `pub` item",

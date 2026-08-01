@@ -71,8 +71,8 @@ pub(super) async fn takeout_forum_topics(
     forum_topics::takeout_forum_topics(client, peer).await
 }
 
-#[cfg(test)]
-pub(crate) fn fallback_fixture(
+#[cfg(feature = "app-test-support")]
+pub fn fallback_fixture(
     kind: TakeoutFallbackKind,
     warning: &str,
     provenance_message: Option<&str>,
@@ -84,7 +84,7 @@ pub(crate) fn fallback_fixture(
     )
 }
 
-#[cfg(test)]
-pub(crate) fn attempt_fixture(home_dc_id: i32, export_dc_id: i32) -> TakeoutAttempt {
+#[cfg(feature = "app-test-support")]
+pub fn attempt_fixture(home_dc_id: i32, export_dc_id: i32) -> TakeoutAttempt {
     TakeoutAttempt::new(home_dc_id, export_dc_id)
 }

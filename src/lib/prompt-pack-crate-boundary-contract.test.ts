@@ -11,6 +11,12 @@ const crateExtracted = existsSync(path.join(repositoryRoot, crateManifestPath));
 const analysisCrateExtracted = existsSync(
   path.join(repositoryRoot, "src-tauri/crates/extractum-analysis/Cargo.toml"),
 );
+const telegramCrateExtracted = existsSync(
+  path.join(
+    repositoryRoot,
+    "src-tauri/crates/extractum-telegram/Cargo.toml",
+  ),
+);
 
 const normalize = (value: string) => value.replace(/\r\n/g, "\n");
 const toRepositoryPath = (absolutePath: string) =>
@@ -630,7 +636,9 @@ describe("extractum-prompt-packs crate boundary", () => {
       "crates/extractum-llm",
       "crates/extractum-prompt-packs",
       ...(analysisCrateExtracted ? ["crates/extractum-analysis"] : []),
+      ...(telegramCrateExtracted ? ["crates/extractum-telegram"] : []),
     ]);
+    expect(members).toHaveLength(telegramCrateExtracted ? 7 : 6);
     expect(crateCargo).toBe(expectedCrateManifest);
     expect(tomlSection(rootCargo, "features")).toContain(
       'prompt-pack-dev-fixtures = ["extractum-prompt-packs/dev-fixtures"]',
@@ -704,13 +712,20 @@ describe("extractum-prompt-packs crate boundary", () => {
     expect(lockDependencies(cratePackages[0])).not.toContain(
       "extractum-analysis",
     );
+    expect(crateCargo).not.toContain("extractum-telegram");
+    expect(lockDependencies(cratePackages[0])).not.toContain(
+      "extractum-telegram",
+    );
     const appPackage = lockPackages(cargoLock, "extractum");
     expect(appPackage).toHaveLength(1);
     expect(lockDependencies(appPackage[0]).filter((name) => name === "extractum-prompt-packs")).toEqual([
       "extractum-prompt-packs",
     ]);
     expect(lockDependencies(appPackage[0])).not.toContain("jsonschema");
-    for (const lower of ["extractum-core", "extractum-gemini-browser", "extractum-llm"]) {
+    for (const lower of [
+      "extractum-core", "extractum-gemini-browser", "extractum-llm",
+      ...(telegramCrateExtracted ? ["extractum-telegram"] : []),
+    ]) {
       const packages = lockPackages(cargoLock, lower);
       expect(packages, lower).toHaveLength(1);
       expect(lockDependencies(packages[0]), lower).not.toContain("extractum-prompt-packs");

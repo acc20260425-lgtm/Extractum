@@ -1338,20 +1338,15 @@ dependencies = [
  "apalis",
  "apalis-sqlite",
  "base64 0.22.1",
- "chacha20poly1305",
  "dirs",
  "extractum-analysis",
  "extractum-core",
  "extractum-gemini-browser",
  "extractum-llm",
  "extractum-prompt-packs",
- "grammers-client",
- "grammers-mtsender",
- "grammers-session",
- "grammers-tl-types",
+ "extractum-telegram",
  "keyring",
  "parking_lot",
- "rand_core 0.6.4",
  "reqwest 0.12.28",
  "secrecy",
  "serde",
@@ -1439,6 +1434,24 @@ dependencies = [
  "time",
  "tokio",
  "tokio-util",
+]
+
+[[package]]
+name = "extractum-telegram"
+version = "0.2.0"
+dependencies = [
+ "base64 0.22.1",
+ "chacha20poly1305",
+ "extractum-core",
+ "grammers-client",
+ "grammers-mtsender",
+ "grammers-session",
+ "grammers-tl-types",
+ "rand_core 0.6.4",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

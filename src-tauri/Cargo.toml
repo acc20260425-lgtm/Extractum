@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/extractum-core", "crates/extractum-gemini-browser", "crates/extractum-llm", "crates/extractum-prompt-packs", "crates/extractum-analysis"]
+members = [".", "crates/extractum-core", "crates/extractum-gemini-browser", "crates/extractum-llm", "crates/extractum-prompt-packs", "crates/extractum-analysis", "crates/extractum-telegram"]
 resolver = "2"
 
 [workspace.package]
@@ -60,10 +60,6 @@ parking_lot = { workspace = true }
 tower = { version = "0.5", features = ["timeout", "util"] }
 secrecy = { workspace = true }
 sqlx = { workspace = true }
-grammers-client = { workspace = true }
-grammers-session = { workspace = true }
-grammers-mtsender = { workspace = true }
-grammers-tl-types = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tokio-util = { workspace = true }
 anyhow = "1.0"
@@ -71,8 +67,6 @@ sha2 = { workspace = true }
 dirs = "6"
 reqwest = { workspace = true }
 base64 = { workspace = true }
-chacha20poly1305 = { workspace = true }
-rand_core = { workspace = true }
 time = { workspace = true }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 url = { workspace = true }
@@ -82,9 +76,11 @@ extractum-analysis = { path = "crates/extractum-analysis" }
 extractum-gemini-browser = { path = "crates/extractum-gemini-browser" }
 extractum-llm = { path = "crates/extractum-llm" }
 extractum-prompt-packs = { path = "crates/extractum-prompt-packs" }
+extractum-telegram = { path = "crates/extractum-telegram" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
+extractum-telegram = { path = "crates/extractum-telegram", features = ["app-test-support"] }
 
 [profile.dev]
 debug = "line-tables-only"

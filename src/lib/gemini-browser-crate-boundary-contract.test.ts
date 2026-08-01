@@ -273,6 +273,9 @@ const promptPackCrateExtracted = existsSync(
 const analysisCrateExtracted = existsSync(
   path.join(repoRoot, "src-tauri/crates/extractum-analysis/Cargo.toml"),
 );
+const telegramCrateExtracted = existsSync(
+  path.join(repoRoot, "src-tauri/crates/extractum-telegram/Cargo.toml"),
+);
 
 describe("Gemini Browser crate boundary", () => {
   it("declares one app-to-domain edge and locked package", () => {
@@ -287,9 +290,12 @@ describe("Gemini Browser crate boundary", () => {
       "crates/extractum-llm",
       ...(promptPackCrateExtracted ? ["crates/extractum-prompt-packs"] : []),
       ...(analysisCrateExtracted ? ["crates/extractum-analysis"] : []),
+      ...(telegramCrateExtracted ? ["crates/extractum-telegram"] : []),
     ]);
-    expect(members).toHaveLength(6);
-    expect(rootCargo).not.toContain("extractum-telegram");
+    expect(members).toHaveLength(telegramCrateExtracted ? 7 : 6);
+    expect(crateCargo).not.toContain("extractum-telegram");
+    expect(lockDependencies(lockPackage(cargoLock, "extractum-gemini-browser")))
+      .not.toContain("extractum-telegram");
     expect(
       tomlSection(rootCargo, "dependencies").match(
         /^extractum-analysis = \{ path = "crates\/extractum-analysis" \}$/gm,
@@ -401,7 +407,13 @@ describe("Gemini Browser crate boundary", () => {
         tomlSection(rootCargo, "dependencies")
           .split("\n")
           .filter((line) => line === `${inherited} = { workspace = true }`),
-      ).toEqual([`${inherited} = { workspace = true }`]);
+      ).toEqual(
+        telegramCrateExtracted && [
+          "chacha20poly1305", "grammers-client", "grammers-mtsender",
+          "grammers-session", "grammers-tl-types", "rand_core",
+        ].includes(inherited)
+          ? [] : [`${inherited} = { workspace = true }`],
+      );
     }
     expect(tomlSection(rootCargo, "dependencies")).toContain('tokio = { workspace = true, features = ["full"] }');
     expect(tomlSection(rootCargo, "dev-dependencies")).toContain('tokio = { workspace = true, features = ["test-util"] }');

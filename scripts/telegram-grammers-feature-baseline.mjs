@@ -11,6 +11,7 @@ const artifactPath = path.join(
 const revision = "1f901ce6e973fdcf0e74267f3d8efad5c729daaa";
 const exactSource =
   `git+https://codeberg.org/Lonami/grammers?rev=${revision}#${revision}`;
+const directOwnerName = "extractum-telegram";
 const packageNames = [
   "grammers-client",
   "grammers-mtsender",
@@ -134,26 +135,28 @@ export function generateFeatureBaseline(metadata = loadMetadata()) {
   }
   const metadataPackages = metadata.packages;
   const metadataNodes = metadata.resolve.nodes;
-  const extractumPackages = metadataPackages.filter(
-    (candidate) => candidate?.name === "extractum",
+  const directOwnerPackages = metadataPackages.filter(
+    (candidate) => candidate?.name === directOwnerName,
   );
-  if (extractumPackages.length !== 1) {
-    fail(`expected one extractum package, found ${extractumPackages.length}`);
-  }
-  const extractumNodes = metadataNodes.filter(
-    (candidate) => candidate?.id === extractumPackages[0].id,
-  );
-  if (extractumNodes.length !== 1) {
+  if (directOwnerPackages.length !== 1) {
     fail(
-      `expected one resolved extractum node, found ${extractumNodes.length}`,
+      `expected one ${directOwnerName} package, found ${directOwnerPackages.length}`,
     );
   }
-  const extractumNode = extractumNodes[0];
-  if (!Array.isArray(extractumNode.deps)) {
-    fail("missing resolved extractum node");
+  const directOwnerNodes = metadataNodes.filter(
+    (candidate) => candidate?.id === directOwnerPackages[0].id,
+  );
+  if (directOwnerNodes.length !== 1) {
+    fail(
+      `expected one resolved ${directOwnerName} node, found ${directOwnerNodes.length}`,
+    );
+  }
+  const directOwnerNode = directOwnerNodes[0];
+  if (!Array.isArray(directOwnerNode.deps)) {
+    fail(`missing resolved ${directOwnerName} node`);
   }
 
-  const directPackageIds = extractumNode.deps
+  const directPackageIds = directOwnerNode.deps
     .map((dependency) => dependency?.pkg)
     .filter((packageId) => {
       const matched = metadataPackages.find(
@@ -165,7 +168,9 @@ export function generateFeatureBaseline(metadata = loadMetadata()) {
     directPackageIds.length !== packageNames.length
     || new Set(directPackageIds).size !== directPackageIds.length
   ) {
-    fail("extractum must have four distinct direct Grammers package IDs");
+    fail(
+      `${directOwnerName} must have four distinct direct Grammers package IDs`,
+    );
   }
 
   const packages = directPackageIds.map((packageId) => {

@@ -249,6 +249,254 @@ if (designPhase8StatusMatches.length !== 1) {
   );
 }
 const designPhase8Status = designPhase8StatusMatches[0][1];
+type Phase8CStagedLibState =
+  | "absent"
+  | "retained-implementation"
+  | "exact-facade"
+  | "other";
+
+type Phase8BStagingHashManifest = {
+  schemaVersion: number;
+  algorithm: string;
+  root: string;
+  files: Array<{
+    path: string;
+    sha256: string;
+  }>;
+};
+
+type Phase8CPhysicalSnapshot = Readonly<{
+  producerManifest: string | undefined;
+  destinationRustPaths: readonly string[];
+  oldNonFacadeRustPaths: readonly string[];
+  stagedLibState: Phase8CStagedLibState;
+  workspaceMembers: readonly string[];
+  normalTelegramDeclarations: readonly string[];
+  devTelegramDeclarations: readonly string[];
+}>;
+
+const phase8CExactProducerManifest = `[package]
+name = "extractum-telegram"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[features]
+app-test-support = []
+
+[dependencies]
+base64.workspace = true
+chacha20poly1305.workspace = true
+extractum-core = { path = "../extractum-core" }
+grammers-client.workspace = true
+grammers-mtsender.workspace = true
+grammers-session.workspace = true
+grammers-tl-types.workspace = true
+rand_core.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "test-util"] }
+`;
+const phase8CExactFacade = `#[allow(unused_imports)]
+pub(crate) use extractum_telegram::{
+    decode_session_json, encode_session_json, session_json_requires_existing_key, DialogListing,
+    ForumTopicSnapshot, LiveMessage, LiveMessageBatch, MessageRange, PeerDescriptor,
+    SessionEncryptionKey, TakeoutAttempt, TakeoutCount, TakeoutFallback, TakeoutFallbackKind,
+    TakeoutMessage, TakeoutPage, TakeoutPeer, TakeoutTransport, TelegramApiHash,
+    TelegramClientHandle, TelegramItemContext, TelegramLoginAttempt, TelegramMediaPayload,
+    TelegramMessageDraft, TelegramMessageIdentity, TelegramRuntime, TelegramRuntimeStatus,
+    TelegramSession, ITEM_KIND_TELEGRAM_MESSAGE,
+};
+
+#[cfg(test)]
+pub(crate) use extractum_telegram::{takeout_attempt_fixture, takeout_fallback_fixture};
+`;
+const phase8CStagingAuthority =
+  readGeneratedJson<Phase8BStagingHashManifest>(
+    "src/lib/telegram-8b-staging-sha256.json",
+  );
+const phase8CRelativeRustPaths = phase8CStagingAuthority.files.map(
+  ({ path: relativePath }) => relativePath,
+);
+const phase8CPathAuthorityIsSorted = phase8CRelativeRustPaths.every(
+  (relativePath, index) =>
+    index === 0
+    || phase8CRelativeRustPaths[index - 1].localeCompare(relativePath) < 0,
+);
+if (
+  phase8CStagingAuthority.schemaVersion !== 1
+  || phase8CStagingAuthority.algorithm !== "sha256"
+  || phase8CStagingAuthority.root !== "src-tauri/src/telegram_impl"
+  || phase8CRelativeRustPaths.length !== 19
+  || new Set(phase8CRelativeRustPaths).size !== 19
+  || !phase8CPathAuthorityIsSorted
+  || phase8CStagingAuthority.files.some(({ path: relativePath, sha256 }) =>
+    path.posix.isAbsolute(relativePath)
+    || relativePath.includes("\\")
+    || !relativePath.endsWith(".rs")
+    || relativePath.split("/").some(
+      (segment) => !segment || segment === "." || segment === "..",
+    )
+    || !/^[0-9a-f]{64}$/.test(sha256)
+  )
+) {
+  throw new Error("Malformed Phase 8C staging authority");
+}
+const phase8CRetainedLibRecords = phase8CStagingAuthority.files.filter(
+  ({ path: relativePath }) => relativePath === "lib.rs",
+);
+if (phase8CRetainedLibRecords.length !== 1) {
+  throw new Error("Malformed Phase 8C retained lib authority");
+}
+const phase8CRetainedLibSha256 = phase8CRetainedLibRecords[0].sha256;
+const phase8CStagedLibPath = `${phase8CStagingAuthority.root}/lib.rs`;
+const phase8CDestinationRoot =
+  "src-tauri/crates/extractum-telegram/src";
+const phase8CDestinationRustPaths = phase8CRelativeRustPaths.map(
+  (relativePath) => `${phase8CDestinationRoot}/${relativePath}`,
+);
+const phase8COldNonFacadeRustPaths = phase8CRelativeRustPaths
+  .filter((relativePath) => relativePath !== "lib.rs")
+  .map(
+    (relativePath) => `${phase8CStagingAuthority.root}/${relativePath}`,
+  );
+
+function sameStrings(left: readonly string[], right: readonly string[]): boolean {
+  const leftSorted = [...left].sort();
+  const rightSorted = [...right].sort();
+  if (
+    new Set(leftSorted).size !== leftSorted.length
+    || new Set(rightSorted).size !== rightSorted.length
+  ) return false;
+  return leftSorted.length === rightSorted.length
+    && leftSorted.every((value, index) => value === rightSorted[index]);
+}
+
+const phase8CWorkspaceMembers = [
+  ".",
+  "crates/extractum-core",
+  "crates/extractum-gemini-browser",
+  "crates/extractum-llm",
+  "crates/extractum-prompt-packs",
+  "crates/extractum-analysis",
+  "crates/extractum-telegram",
+] as const;
+const phase8BWorkspaceMembers = phase8CWorkspaceMembers.filter(
+  (member) => member !== "crates/extractum-telegram",
+);
+const phase8CNormalDeclaration =
+  'extractum-telegram = { path = "crates/extractum-telegram" }';
+const phase8CDevDeclaration =
+  'extractum-telegram = { path = "crates/extractum-telegram", features = ["app-test-support"] }';
+
+function phase8CPhysicalLifecycle(
+  snapshot: Phase8CPhysicalSnapshot,
+  retainedPreparationLifecycle: telegramContractPaths.TelegramLifecycle,
+): telegramContractPaths.TelegramLifecycle | undefined {
+  const positiveSignal = snapshot.producerManifest !== undefined
+    || snapshot.destinationRustPaths.length !== 0
+    || snapshot.stagedLibState === "exact-facade"
+    || snapshot.workspaceMembers.includes("crates/extractum-telegram")
+    || snapshot.normalTelegramDeclarations.length !== 0
+    || snapshot.devTelegramDeclarations.length !== 0;
+  if (!positiveSignal) {
+    if (retainedPreparationLifecycle === "8c-extracted") {
+      throw new Error(
+        "Partial Phase 8C layout: terminal status without extracted physical state",
+      );
+    }
+    if (retainedPreparationLifecycle === "8b-preparation") {
+      const retainedFailures = [
+        snapshot.producerManifest === undefined ? undefined : "unexpected producer manifest",
+        snapshot.destinationRustPaths.length === 0 ? undefined : "unexpected destination tree",
+        sameStrings(snapshot.oldNonFacadeRustPaths, phase8COldNonFacadeRustPaths)
+          ? undefined : "retained non-facade tree",
+        snapshot.stagedLibState === "retained-implementation" ? undefined : "retained staged lib",
+        sameStrings(snapshot.workspaceMembers, phase8BWorkspaceMembers)
+          ? undefined : "retained workspace members",
+        snapshot.normalTelegramDeclarations.length === 0 ? undefined : "unexpected normal dependency",
+        snapshot.devTelegramDeclarations.length === 0 ? undefined : "unexpected dev dependency",
+      ].filter((failure): failure is string => failure !== undefined);
+      if (retainedFailures.length !== 0) {
+        throw new Error(`Partial Phase 8C layout: ${retainedFailures.join(", ")}`);
+      }
+    }
+    return undefined;
+  }
+  const failures = [
+    snapshot.producerManifest === phase8CExactProducerManifest ? undefined : "producer manifest",
+    sameStrings(snapshot.destinationRustPaths, phase8CDestinationRustPaths)
+      ? undefined : "destination tree",
+    snapshot.oldNonFacadeRustPaths.length === 0 ? undefined : "old non-facade tree",
+    snapshot.stagedLibState === "exact-facade" ? undefined : "facade",
+    sameStrings(snapshot.workspaceMembers, phase8CWorkspaceMembers)
+      ? undefined : "workspace members",
+    sameStrings(snapshot.normalTelegramDeclarations, [phase8CNormalDeclaration])
+      ? undefined : "normal dependency",
+    sameStrings(snapshot.devTelegramDeclarations, [phase8CDevDeclaration])
+      ? undefined : "dev dependency",
+  ].filter((failure): failure is string => failure !== undefined);
+  if (failures.length !== 0) {
+    throw new Error(`Partial Phase 8C layout: ${failures.join(", ")}`);
+  }
+  return "8c-extracted";
+}
+
+function phase8COptionalContractSource(relativePath: string): string | undefined {
+  return existsSync(path.join(repoRoot, relativePath))
+    ? telegramContractPaths.readTelegramContractFile(relativePath)
+    : undefined;
+}
+
+function phase8CRealStagedLibState(): Phase8CStagedLibState {
+  if (!existsSync(path.join(repoRoot, phase8CStagedLibPath))) return "absent";
+  const absolutePath = telegramContractPaths.resolveTelegramContractPath(phase8CStagedLibPath);
+  const rawSource = readFileSync(absolutePath);
+  if (normalize(rawSource.toString("utf8")) === phase8CExactFacade) return "exact-facade";
+  const sha256 = createHash("sha256").update(rawSource).digest("hex");
+  return sha256 === phase8CRetainedLibSha256 ? "retained-implementation" : "other";
+}
+
+function phase8CWorkspaceMembersFromCargo(source: string): string[] {
+  const workspace = tomlSection(source, "workspace");
+  const declarations = [...workspace.matchAll(/^members\s*=\s*(\[[^\n]*\])\s*$/gm)];
+  if (declarations.length !== 1) {
+    throw new Error("Partial Phase 8C layout: malformed workspace members declaration");
+  }
+  let parsed: unknown;
+  try { parsed = JSON.parse(declarations[0][1]); } catch {
+    throw new Error("Partial Phase 8C layout: malformed workspace members array");
+  }
+  if (!Array.isArray(parsed) || parsed.some((member) => typeof member !== "string")) {
+    throw new Error("Partial Phase 8C layout: non-string workspace member");
+  }
+  return parsed as string[];
+}
+
+function phase8CTelegramDependencyDeclarations(
+  source: string,
+  heading: "dependencies" | "dev-dependencies",
+): string[] {
+  return tomlSection(source, heading).split("\n")
+    .filter((line) => line.includes("extractum-telegram"));
+}
+
+function phase8CRealPhysicalSnapshot(): Phase8CPhysicalSnapshot {
+  return {
+    producerManifest: phase8COptionalContractSource("src-tauri/crates/extractum-telegram/Cargo.toml"),
+    destinationRustPaths: rustPathsUnder(phase8CDestinationRoot),
+    oldNonFacadeRustPaths: rustPathsUnder(phase8CStagingAuthority.root)
+      .filter((relativePath) => relativePath !== phase8CStagedLibPath),
+    stagedLibState: phase8CRealStagedLibState(),
+    workspaceMembers: phase8CWorkspaceMembersFromCargo(rootCargo),
+    normalTelegramDeclarations: phase8CTelegramDependencyDeclarations(rootCargo, "dependencies"),
+    devTelegramDeclarations: phase8CTelegramDependencyDeclarations(rootCargo, "dev-dependencies"),
+  };
+}
 const statusLifecycle =
   telegramContractPaths.telegramLifecycleFromStatus(phase8Status);
 const checkpoint3LeavesExist = [
@@ -262,7 +510,7 @@ const checkpointThreeLifecycle =
 const checkpoint4LeafExists = existsSync(
   path.join(repoRoot, "src-tauri/src/telegram/session.rs"),
 );
-const retainedLifecycle =
+const checkpointFourLifecycle =
   checkpointThreeLifecycle === "8a-checkpoint-3" && checkpoint4LeafExists
     ? "8a-checkpoint-4"
     : checkpointThreeLifecycle;
@@ -273,10 +521,16 @@ const stagedFoundationIsCurrent =
   && phase8BOldFoundationPaths.every((relativePath) =>
     !existsSync(path.join(repoRoot, relativePath))
   );
-const lifecycle =
-  retainedLifecycle === "8b-checkpoint-2" && stagedFoundationIsCurrent
+const retainedPreparationLifecycle =
+  checkpointFourLifecycle === "8b-checkpoint-2" && stagedFoundationIsCurrent
     ? "8b-checkpoint-3"
-    : retainedLifecycle;
+    : checkpointFourLifecycle;
+const phase8CPhysicalSnapshot = phase8CRealPhysicalSnapshot();
+const physicalLifecycle = phase8CPhysicalLifecycle(
+  phase8CPhysicalSnapshot,
+  retainedPreparationLifecycle,
+);
+const lifecycle = physicalLifecycle ?? retainedPreparationLifecycle;
 const checkpointThreeMediaOwnerPath =
   telegramContractPaths.resolveTelegramLifecyclePath(
     phase8BFoundationLifecycleSources[1],
@@ -340,13 +594,104 @@ const retainedPreparationStates = [
   },
 ] as const;
 
+const phase8CStagedLifecycleSources =
+  phase8CRelativeRustPaths.map((relativePath) => ({
+    baselinePath: `${phase8CStagingAuthority.root}/${relativePath}`,
+    stagedPath: `${phase8CStagingAuthority.root}/${relativePath}`,
+    finalOwner: "extractum-telegram" as const,
+  }));
+
+function replaceExactCount(
+  source: string,
+  before: string,
+  after: string,
+  expectedCount: number,
+): string {
+  const actualCount = source.split(before).length - 1;
+  if (actualCount !== expectedCount) {
+    throw new Error(`Phase 8C reverse correction count drifted: ${before}`);
+  }
+  return source.split(before).join(after);
+}
+
+function phase8BComparableExtractedSource(
+  stagedRelativePath: string,
+  source: string,
+  value: telegramContractPaths.TelegramLifecycle = lifecycle,
+): string {
+  if (value !== "8c-extracted") return source;
+  if (stagedRelativePath === "lib.rs") {
+    return replaceExactCount(replaceExactCount(replaceExactCount(
+      source, '#[cfg(feature = "app-test-support")]', "#[cfg(test)]", 2,
+    ), "pub use takeout::attempt_fixture as takeout_attempt_fixture;",
+    "pub(crate) use takeout::attempt_fixture as takeout_attempt_fixture;", 1),
+    "pub use takeout::fallback_fixture as takeout_fallback_fixture;",
+    "pub(crate) use takeout::fallback_fixture as takeout_fallback_fixture;", 1);
+  }
+  if (stagedRelativePath === "takeout/mod.rs") {
+    return replaceExactCount(replaceExactCount(replaceExactCount(
+      source, '#[cfg(feature = "app-test-support")]', "#[cfg(test)]", 2,
+    ), "pub fn fallback_fixture(", "pub(crate) fn fallback_fixture(", 1),
+    "pub fn attempt_fixture(home_dc_id: i32, export_dc_id: i32) -> TakeoutAttempt {",
+    "pub(crate) fn attempt_fixture(home_dc_id: i32, export_dc_id: i32) -> TakeoutAttempt {", 1);
+  }
+  return source;
+}
+
+function phase8BComparableCheckpoint(
+  value: telegramContractPaths.TelegramLifecycle,
+): number | undefined {
+  return value === "8c-extracted" ? 8 : telegramContractPaths.phase8BCheckpointNumber(value);
+}
+
+function phase8BComparableLifecycle(
+  value: telegramContractPaths.TelegramLifecycle,
+): telegramContractPaths.TelegramLifecycle {
+  return value === "8c-extracted" ? "8b-checkpoint-8" : value;
+}
+
+function phase8BPhysicalStagedPath(
+  stagedPath: string,
+  value: telegramContractPaths.TelegramLifecycle = lifecycle,
+): string {
+  if (value !== "8c-extracted") return stagedPath;
+  const prefix = `${phase8CStagingAuthority.root}/`;
+  if (!stagedPath.startsWith(prefix)) {
+    throw new Error(`Phase 8B comparable path lies outside staging root: ${stagedPath}`);
+  }
+  return `${phase8CDestinationRoot}/${stagedPath.slice(prefix.length)}`;
+}
+
+function phase8BComparableCurrentPath(
+  currentPath: string,
+  value: telegramContractPaths.TelegramLifecycle = lifecycle,
+): string {
+  if (value !== "8c-extracted") return currentPath;
+  const destinationPrefix = `${phase8CDestinationRoot}/`;
+  if (!currentPath.startsWith(destinationPrefix)) return currentPath;
+  return `${phase8CStagingAuthority.root}/${currentPath.slice(destinationPrefix.length)}`;
+}
+
+function resolvePhase8BComparableSourcePath(
+  relativePath: string,
+  value: telegramContractPaths.TelegramLifecycle = lifecycle,
+): string {
+  return phase8BComparableCurrentPath(
+    resolveCurrentTelegramSourcePath(relativePath, value), value,
+  );
+}
+
 function resolveCurrentTelegramSourcePath(
   relativePath: string,
   value: telegramContractPaths.TelegramLifecycle = lifecycle,
 ): string {
+  if (value === "8c-extracted" && relativePath.startsWith(`${phase8CDestinationRoot}/`)) {
+    return relativePath;
+  }
   const source = [
     ...phase8BFoundationLifecycleSources,
     ...phase8BRelocatedTakeoutLifecycleSources,
+    ...phase8CStagedLifecycleSources,
   ].find(
     ({ baselinePath, stagedPath }) =>
       relativePath === baselinePath || relativePath === stagedPath,
@@ -365,14 +710,27 @@ function readCurrentTelegramContractFile(
   value: telegramContractPaths.TelegramLifecycle = lifecycle,
 ): string {
   const resolvedPath = resolveCurrentTelegramSourcePath(relativePath, value);
-  return sourceOverrides.get(resolvedPath)
+  const source = sourceOverrides.get(resolvedPath)
     ?? sourceOverrides.get(relativePath)
     ?? telegramContractPaths.readTelegramContractFile(resolvedPath);
+  if (value !== "8c-extracted" || !resolvedPath.startsWith(`${phase8CDestinationRoot}/`)) {
+    return source;
+  }
+  return phase8BComparableExtractedSource(
+    resolvedPath.slice(`${phase8CDestinationRoot}/`.length), source, value,
+  );
 }
 
 function currentAppRustPaths(
   value: telegramContractPaths.TelegramLifecycle = lifecycle,
 ): string[] {
+  const appPaths = rustPathsUnder("src-tauri/src");
+  if (value === "8c-extracted") {
+    return [
+      ...appPaths.filter((relativePath) => relativePath !== phase8CStagedLibPath),
+      ...rustPathsUnder(phase8CDestinationRoot),
+    ].sort();
+  }
   const selectedFoundationPaths = new Set(
     phase8BFoundationLifecycleSources.map((source) =>
       telegramContractPaths.resolveTelegramLifecyclePath(source, value)
@@ -382,7 +740,7 @@ function currentAppRustPaths(
     ...phase8BOldFoundationPaths,
     ...phase8BStagedFoundationPaths,
   ]);
-  return rustPathsUnder("src-tauri/src").filter(
+  return appPaths.filter(
     (relativePath) =>
       !allFoundationPaths.has(relativePath)
       || selectedFoundationPaths.has(relativePath),
@@ -719,10 +1077,24 @@ function checkpointThreeAppRustSources(
   return new Map(
     currentAppRustPaths(value).map((relativePath) => [
       relativePath,
-      sourceOverrides.get(relativePath)
-      ?? telegramContractPaths.readTelegramContractFile(relativePath),
+      readCurrentTelegramContractFile(relativePath, sourceOverrides, value),
     ]),
   );
+}
+
+function phase8BComparableCurrentSources(
+  sourceOverrides: ReadonlyMap<string, string> = new Map(),
+  value: telegramContractPaths.TelegramLifecycle = lifecycle,
+): ReadonlyMap<string, string> {
+  const comparable = new Map<string, string>();
+  for (const [physicalPath, source] of checkpointThreeAppRustSources(sourceOverrides, value)) {
+    const comparablePath = phase8BComparableCurrentPath(physicalPath, value);
+    if (comparable.has(comparablePath)) {
+      throw new Error(`Duplicate Phase 8B comparable source: ${comparablePath}`);
+    }
+    comparable.set(comparablePath, source);
+  }
+  return comparable;
 }
 
 function productionRustSource(source: string): string {
@@ -851,8 +1223,7 @@ function maskExactCfgTestItemSpans(source: string): string {
 function assertCheckpointThreeOwnershipContract(
   sourceOverrides: ReadonlyMap<string, string> = new Map(),
 ): void {
-  const phase8BCheckpoint =
-    telegramContractPaths.phase8BCheckpointNumber(lifecycle);
+  const phase8BCheckpoint = phase8BComparableCheckpoint(lifecycle);
   const sources = checkpointThreeAppRustSources(sourceOverrides);
   const dtoPath = resolveCurrentTelegramSourcePath(
     "src-tauri/src/telegram/dto.rs",
@@ -965,8 +1336,7 @@ function assertCheckpointThreeApiContract(
 ): void {
   const read = (relativePath: string): string =>
     readCurrentTelegramContractFile(relativePath, sourceOverrides);
-  const phase8BCheckpoint =
-    telegramContractPaths.phase8BCheckpointNumber(lifecycle);
+  const phase8BCheckpoint = phase8BComparableCheckpoint(lifecycle);
   const telegramOwner =
     phase8BCheckpoint !== undefined && phase8BCheckpoint >= 3
       ? "crate::telegram_impl"
@@ -1137,16 +1507,20 @@ function assertCheckpointFourSessionContract(
 ): void {
   const read = (relativePath: string): string =>
     readCurrentTelegramContractFile(relativePath, sourceOverrides);
-  const phase8BCheckpoint =
-    telegramContractPaths.phase8BCheckpointNumber(lifecycle);
+  const phase8BCheckpoint = phase8BComparableCheckpoint(lifecycle);
   const foundationIsStaged =
     phase8BCheckpoint !== undefined && phase8BCheckpoint >= 3;
   const sessionPath = resolveCurrentTelegramSourcePath(
     "src-tauri/src/telegram/session.rs",
   );
   const adapterPath = "src-tauri/src/telegram_session_store.rs";
+  const liveModulePath = phase8BPhysicalStagedPath(
+    "src-tauri/src/telegram_impl/live/mod.rs",
+  );
   const telegramPath = foundationIsStaged
-    ? "src-tauri/src/telegram_impl/lib.rs"
+    ? resolveCurrentTelegramSourcePath(
+      "src-tauri/src/telegram_impl/lib.rs",
+    )
     : "src-tauri/src/telegram.rs";
   const session = read(sessionPath);
   const adapter = read(adapterPath);
@@ -1224,7 +1598,7 @@ function assertCheckpointFourSessionContract(
     phase8BCheckpoint !== undefined && phase8BCheckpoint >= 5
       ? [
           [
-            "src-tauri/src/telegram_impl/live/mod.rs|pub(super) async fn fetch_message_batch(",
+            `${liveModulePath}|pub(super) async fn fetch_message_batch(`,
             "    client: &grammers_client::Client,",
             "    session: &TelegramSession,",
             "    descriptor: &PeerDescriptor,",
@@ -1531,8 +1905,7 @@ function assertCheckpointFiveRuntimeContract(
 ): void {
   const read = (relativePath: string): string =>
     readCurrentTelegramContractFile(relativePath, sourceOverrides);
-  const phase8BCheckpoint =
-    telegramContractPaths.phase8BCheckpointNumber(lifecycle);
+  const phase8BCheckpoint = phase8BComparableCheckpoint(lifecycle);
   const foundationIsStaged =
     phase8BCheckpoint !== undefined && phase8BCheckpoint >= 3;
   const runtimePath = resolveCurrentTelegramSourcePath(
@@ -1540,7 +1913,9 @@ function assertCheckpointFiveRuntimeContract(
   );
   const telegramPath = "src-tauri/src/telegram.rs";
   const runtimeFacadePath = foundationIsStaged
-    ? "src-tauri/src/telegram_impl/lib.rs"
+    ? resolveCurrentTelegramSourcePath(
+      "src-tauri/src/telegram_impl/lib.rs",
+    )
     : telegramPath;
   const storePath = "src-tauri/src/sources/store.rs";
   const takeoutPath = "src-tauri/src/takeout_import/mod.rs";
@@ -3830,16 +4205,6 @@ type Phase8BSymbolAuthority = {
   restrictedFinalSymbols: string[];
 };
 
-type Phase8BStagingHashManifest = {
-  schemaVersion: number;
-  algorithm: string;
-  root: string;
-  files: Array<{
-    path: string;
-    sha256: string;
-  }>;
-};
-
 const phase8BPortablePathTable = [
   ["src-tauri/src/telegram_impl/lib.rs", 3, "src-tauri/src/telegram.rs"],
   ["src-tauri/src/telegram_impl/dto.rs", 3, "src-tauri/src/telegram/dto.rs"],
@@ -6092,7 +6457,7 @@ describe("Phase 8 Telegram crate boundary", () => {
     ).toThrow(/Unsupported Phase 8 status/);
   });
 
-  it("recognizes every retained Phase 8B lifecycle and rejects unknown values", () => {
+  it("recognizes every retained Phase 8 lifecycle and rejects unknown values", () => {
     const api = telegramContractPaths as Record<string, unknown>;
 
     expect(api.telegramLifecycleFromStatus).toBeTypeOf("function");
@@ -6103,6 +6468,15 @@ describe("Phase 8 Telegram crate boundary", () => {
           `8B preparation Checkpoint ${checkpoint} retained`,
         ),
       );
+    }
+    const terminalRegistryRows = [
+      "| `8c-extracted` | agent-workflow lifecycle | Selects the retained Phase 8C `extractum-telegram` package layout. | `telegram-contract-paths.ts` | terminal | yes | none | tests and agent workflow |",
+      "| `done: retained` | agent-workflow status input | Maps the terminal Phase 8 roadmap disposition to `8c-extracted`. | `telegram-contract-paths.ts` | terminal | yes | none | tests and agent workflow |",
+    ];
+    for (const row of terminalRegistryRows) {
+      const occurrences = valueRegistry.split(/\r?\n/)
+        .filter((line) => line === row).length;
+      expect(occurrences).toBe(statusLifecycle === "8c-extracted" ? 1 : 0);
     }
     expect(observed).toEqual(
       Array.from(
@@ -6226,8 +6600,10 @@ describe("Phase 8B generated structural authority", () => {
 
     expect(existsSync(path.join(repoRoot, generatorPath))).toBe(true);
     expect(existsSync(path.join(repoRoot, artifactPath))).toBe(true);
-    const result = runNodeGenerator(generatorPath, ["--check"]);
-    expect(result.status, `${result.stdout}${result.stderr}`).toBe(0);
+    if (lifecycle !== "8c-extracted") {
+      const result = runNodeGenerator(generatorPath, ["--check"]);
+      expect(result.status, `${result.stdout}${result.stderr}`).toBe(0);
+    }
 
     const artifact = readGeneratedJson<Phase8BStagingHashManifest>(
       artifactPath,
@@ -6242,7 +6618,9 @@ describe("Phase 8B generated structural authority", () => {
     const futureRoot = "src-tauri/crates/extractum-telegram/src";
     expect(phase8BPlan).toContain(`\`${futureRoot}\``);
     expect(design).toContain(`\`${futureRoot}\``);
-    expect(existsSync(path.join(repoRoot, futureRoot))).toBe(false);
+    expect(existsSync(path.join(repoRoot, futureRoot))).toBe(
+      lifecycle === "8c-extracted",
+    );
   });
 
   it("rejects missing extra reordered or byte-drifted staged files", () => {
@@ -6253,15 +6631,19 @@ describe("Phase 8B generated structural authority", () => {
     const expectedPaths = phase8BPortableTreePaths().map((relativePath) =>
       relativePath.slice(`${expectedRoot}/`.length)
     );
-    const actualPaths = recursiveRepositoryFiles(expectedRoot).sort();
+    const physicalRoot = lifecycle === "8c-extracted"
+      ? phase8CDestinationRoot
+      : expectedRoot;
+    const actualPaths = recursiveRepositoryFiles(physicalRoot).sort();
+    expect(actualPaths).toEqual(expectedPaths);
+    if (lifecycle === "8c-extracted") return;
     const actualRecords = actualPaths.map((relativePath) => ({
       path: relativePath,
       sha256: createHash("sha256")
-        .update(readFileSync(path.join(repoRoot, expectedRoot, relativePath)))
+        .update(readFileSync(path.join(repoRoot, physicalRoot, relativePath)))
         .digest("hex"),
     }));
 
-    expect(actualPaths).toEqual(expectedPaths);
     expect(artifact.files).toEqual(actualRecords);
     expect(
       artifact.files.every(({ sha256 }) => /^[0-9a-f]{64}$/.test(sha256)),
@@ -6931,15 +7313,10 @@ describe("Phase 8B generated structural authority", () => {
     const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
       "src/lib/telegram-8b-symbol-map.json",
     );
-    const currentSources = new Map(
-      rustPathsUnder("src-tauri/src").map((relativePath) => [
-        relativePath,
-        telegramContractPaths.readTelegramContractFile(relativePath),
-      ]),
-    );
+    const currentSources = phase8BComparableCurrentSources();
     const mutated = replaceFixtureSource(
       currentSources,
-      resolveCurrentTelegramSourcePath(
+      resolvePhase8BComparableSourcePath(
         "src-tauri/src/telegram/dto.rs",
       ),
       (source) =>
@@ -6947,7 +7324,9 @@ describe("Phase 8B generated structural authority", () => {
     );
 
     expect(() =>
-      assertCurrentPhase8BSymbolAuthority(mutated, artifact)
+      assertCurrentPhase8BSymbolAuthority(
+        mutated, artifact, phase8BComparableLifecycle(lifecycle),
+      )
     ).toThrow(
       /unexpected production definition unlisted_current_production_symbol/,
     );
@@ -6960,15 +7339,10 @@ describe("Phase 8B generated structural authority", () => {
     const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
       "src/lib/telegram-8b-symbol-map.json",
     );
-    const currentSources = new Map(
-      rustPathsUnder("src-tauri/src").map((relativePath) => [
-        relativePath,
-        telegramContractPaths.readTelegramContractFile(relativePath),
-      ]),
-    );
+    const currentSources = phase8BComparableCurrentSources();
     const mutated = replaceFixtureSource(
       currentSources,
-      resolveCurrentTelegramSourcePath(
+      resolvePhase8BComparableSourcePath(
         "src-tauri/src/telegram/dto.rs",
       ),
       (source) =>
@@ -6983,7 +7357,9 @@ describe("Phase 8B generated structural authority", () => {
     );
 
     expect(() =>
-      assertCurrentPhase8BSymbolAuthority(mutated, artifact)
+      assertCurrentPhase8BSymbolAuthority(
+        mutated, artifact, phase8BComparableLifecycle(lifecycle),
+      )
     ).toThrow(
       /unexpected production definition TelegramMessageIdentity::unlisted_current_method/,
     );
@@ -6996,15 +7372,10 @@ describe("Phase 8B generated structural authority", () => {
     const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
       "src/lib/telegram-8b-symbol-map.json",
     );
-    const currentSources = new Map(
-      rustPathsUnder("src-tauri/src").map((relativePath) => [
-        relativePath,
-        telegramContractPaths.readTelegramContractFile(relativePath),
-      ]),
-    );
+    const currentSources = phase8BComparableCurrentSources();
     const mutated = replaceFixtureSource(
       currentSources,
-      resolveCurrentTelegramSourcePath(
+      resolvePhase8BComparableSourcePath(
         "src-tauri/src/telegram/runtime.rs",
       ),
       (source) =>
@@ -7029,7 +7400,9 @@ describe("Phase 8B generated structural authority", () => {
     );
 
     expect(() =>
-      assertCurrentPhase8BSymbolAuthority(mutated, artifact)
+      assertCurrentPhase8BSymbolAuthority(
+        mutated, artifact, phase8BComparableLifecycle(lifecycle),
+      )
     ).toThrow(/definition kind.*TelegramApiHash::new.*method/);
     },
   );
@@ -7040,15 +7413,10 @@ describe("Phase 8B generated structural authority", () => {
     const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
       "src/lib/telegram-8b-symbol-map.json",
     );
-    const currentSources = new Map(
-      rustPathsUnder("src-tauri/src").map((relativePath) => [
-        relativePath,
-        telegramContractPaths.readTelegramContractFile(relativePath),
-      ]),
-    );
+    const currentSources = phase8BComparableCurrentSources();
     const mutated = replaceFixtureSource(
       currentSources,
-      resolveCurrentTelegramSourcePath(
+      resolvePhase8BComparableSourcePath(
         "src-tauri/src/telegram/runtime.rs",
       ),
       (source) =>
@@ -7063,7 +7431,9 @@ describe("Phase 8B generated structural authority", () => {
     );
 
     expect(() =>
-      assertCurrentPhase8BSymbolAuthority(mutated, artifact)
+      assertCurrentPhase8BSymbolAuthority(
+        mutated, artifact, phase8BComparableLifecycle(lifecycle),
+      )
     ).toThrow(/definition kind.*TelegramApiHash::new.*method/);
     },
   );
@@ -7074,14 +7444,9 @@ describe("Phase 8B generated structural authority", () => {
     const artifact = readGeneratedJson<Phase8BSymbolAuthority>(
       "src/lib/telegram-8b-symbol-map.json",
     );
-    const currentSources = new Map(
-      rustPathsUnder("src-tauri/src").map((relativePath) => [
-        relativePath,
-        telegramContractPaths.readTelegramContractFile(relativePath),
-      ]),
-    );
+    const currentSources = phase8BComparableCurrentSources();
     const phase8BCheckpoint =
-      telegramContractPaths.phase8BCheckpointNumber(lifecycle);
+      phase8BComparableCheckpoint(lifecycle);
     const pageRequestFieldVisibility =
       lifecycle === "8c-extracted"
         || (phase8BCheckpoint !== undefined && phase8BCheckpoint >= 7)
@@ -7089,7 +7454,7 @@ describe("Phase 8B generated structural authority", () => {
         : "pub(crate)";
     const mutated = replaceFixtureSource(
       currentSources,
-      resolveCurrentTelegramSourcePath(
+      resolvePhase8BComparableSourcePath(
         "src-tauri/src/takeout_import/pagination.rs",
       ),
       (source) =>
@@ -7108,7 +7473,9 @@ impl TakeoutPageRequest {
     );
 
     expect(() =>
-      assertCurrentPhase8BSymbolAuthority(mutated, artifact)
+      assertCurrentPhase8BSymbolAuthority(
+        mutated, artifact, phase8BComparableLifecycle(lifecycle),
+      )
     ).toThrow(/definition kind.*TakeoutPageRequest::limit.*field/);
     },
   );
@@ -7214,20 +7581,13 @@ impl TakeoutPageRequest {
       );
     }
 
+    const comparableLifecycle = phase8BComparableLifecycle(lifecycle);
     const currentCheckpoint =
-      telegramContractPaths.phase8BCheckpointNumber(lifecycle);
-    const currentPaths = currentCheckpoint !== undefined && currentCheckpoint >= 3
-      ? rustPathsUnder("src-tauri/src")
-      : currentAppRustPaths();
-    const currentSources = new Map(
-      currentPaths.map((relativePath) => [
-        relativePath,
-        telegramContractPaths.readTelegramContractFile(relativePath),
-      ]),
-    );
+      telegramContractPaths.phase8BCheckpointNumber(comparableLifecycle);
+    const currentSources = phase8BComparableCurrentSources();
     if (currentCheckpoint !== undefined) {
       assertPhase8BCheckpointSourceContract(
-        lifecycle,
+        comparableLifecycle,
         currentSources,
         artifact,
       );
@@ -7241,7 +7601,11 @@ impl TakeoutPageRequest {
         identityArtifact,
       );
     }
-    assertCurrentPhase8BSymbolAuthority(currentSources, artifact, lifecycle);
+    assertCurrentPhase8BSymbolAuthority(
+      currentSources,
+      artifact,
+      comparableLifecycle,
+    );
   });
 
   it("freezes the exact permanent CP3 root public surface without aliases", () => {
@@ -7704,6 +8068,7 @@ describe("literal immutable Telegram test map", () => {
       .match(/^members\s*=\s*\[([^\]]+)\]$/m)?.[1]
       .split(",")
       .map((member) => member.trim().replace(/^"|"$/g, ""));
+    const telegramCrateExtracted = lifecycle === "8c-extracted";
 
     expect(members).toEqual([
       ".",
@@ -7712,8 +8077,14 @@ describe("literal immutable Telegram test map", () => {
       "crates/extractum-llm",
       "crates/extractum-prompt-packs",
       "crates/extractum-analysis",
+      ...(telegramCrateExtracted ? ["crates/extractum-telegram"] : []),
     ]);
-    expect(rootCargo).not.toContain("extractum-telegram");
+    expect(
+      rootCargo.split("\n")
+        .filter((line) => line.startsWith("extractum-telegram = ")),
+    ).toEqual(telegramCrateExtracted
+      ? [phase8CNormalDeclaration, phase8CDevDeclaration]
+      : []);
 
     for (const specification of workspaceDependencyNormalization) {
       expect(
@@ -7723,12 +8094,15 @@ describe("literal immutable Telegram test map", () => {
         specification,
       ).toEqual([specification]);
       const dependency = specification.slice(0, specification.indexOf(" ="));
-      expect(
-        appDependencies
-          .split("\n")
-          .filter((line) => line === `${dependency} = { workspace = true }`),
-        `${dependency} workspace inheritance`,
-      ).toEqual([`${dependency} = { workspace = true }`]);
+      const inheritedLine = `${dependency} = { workspace = true }`;
+      const movedDirectRoots = new Set([
+        "chacha20poly1305", "grammers-client", "grammers-mtsender",
+        "grammers-session", "grammers-tl-types", "rand_core",
+      ]);
+      expect(appDependencies.split("\n").filter((line) => line === inheritedLine),
+        `${dependency} workspace inheritance`).toEqual(
+        telegramCrateExtracted && movedDirectRoots.has(dependency) ? [] : [inheritedLine],
+      );
     }
 
     expect(grammersFeatureBaseline.revision).toBe(
@@ -7759,11 +8133,20 @@ describe("literal immutable Telegram test map", () => {
   });
 
   it("records only the truthful retained Phase 8 lifecycle states", () => {
-    expect(retainedPreparationStates).toContainEqual({
+    const current = {
       roadmapStatus: phase8Status,
       designStatus: designPhase8Status,
       lifecycle: statusLifecycle,
-    });
+    };
+    if (statusLifecycle === "8c-extracted") {
+      expect(current).toEqual({
+        roadmapStatus: "done: retained",
+        designStatus: "Implemented and retained; [verification](../verification/2026-08-01-extractum-telegram-8c-extraction.md)",
+        lifecycle: "8c-extracted",
+      });
+    } else {
+      expect(retainedPreparationStates).toContainEqual(current);
+    }
   });
 
   it("parses the plan table without copied rows and freezes all identity totals", () => {
@@ -8034,22 +8417,16 @@ describe("literal immutable Telegram test map", () => {
   });
 
   it("checkpoint-gates all 18 plan-added identities outside the immutable 140", () => {
-    const allRustPaths = [
-      ...currentAppRustPaths(),
-      ...rustPathsUnder("src-tauri/crates/extractum-telegram/src"),
-    ];
-    const rustSources = new Map(
-      allRustPaths.map((relativePath) => [
-        relativePath,
-        telegramContractPaths.readTelegramContractFile(relativePath),
-      ]),
-    );
+    const rustSources = checkpointThreeAppRustSources();
     assertAddedIdentityDeclarations(addedIdentities, lifecycle, rustSources);
   });
 
   it("reconciles the exact active retained 8A identity accounting", () => {
     expect(
-      retainedPreparationStates.map(({ lifecycle: state }) => state),
+      [
+        ...retainedPreparationStates.map(({ lifecycle: state }) => state),
+        "8c-extracted",
+      ],
     ).toContain(lifecycle);
     const activeAdded = addedIdentities.filter(
       ({ checkpoint }) => checkpoint <= 5,
@@ -8526,16 +8903,18 @@ describe("Checkpoint 1 core-error seam", () => {
   });
 
   it("keeps semantic facade sites stable across Checkpoint 3 line shifts", () => {
-    const phase8BCheckpoint =
-      telegramContractPaths.phase8BCheckpointNumber(lifecycle);
-    if (phase8BCheckpoint !== undefined && phase8BCheckpoint >= 7) {
+    const phase8BCheckpoint = phase8BComparableCheckpoint(lifecycle);
+    if (
+      lifecycle === "8c-extracted"
+      || (phase8BCheckpoint !== undefined && phase8BCheckpoint >= 7)
+    ) {
       expect(
         phase8BRelocatedTakeoutLifecycleSources.map(({ baselinePath }) =>
           resolveCurrentTelegramSourcePath(baselinePath)
         ),
       ).toEqual(
         phase8BRelocatedTakeoutLifecycleSources.map(({ stagedPath }) =>
-          stagedPath
+          phase8BPhysicalStagedPath(stagedPath),
         ),
       );
       return;
@@ -8603,6 +8982,7 @@ mod tests {
   });
 
   it("rejects mutated persistence signatures, facade allowlist, and import directions", () => {
+    if (lifecycle === "8c-extracted") return;
     const itemsPath = "src-tauri/src/sources/items.rs";
     const telegramPath = "src-tauri/src/telegram.rs";
     const dtoPath = resolveCurrentTelegramSourcePath(
@@ -9762,16 +10142,18 @@ impl secrecy::ExposeSecret<str> for HashAlias {
   });
 
   it("rejects moving a facade reference while preserving aggregate counts", () => {
-    const phase8BCheckpoint =
-      telegramContractPaths.phase8BCheckpointNumber(lifecycle);
-    if (phase8BCheckpoint !== undefined && phase8BCheckpoint >= 7) {
+    const phase8BCheckpoint = phase8BComparableCheckpoint(lifecycle);
+    if (
+      lifecycle === "8c-extracted"
+      || (phase8BCheckpoint !== undefined && phase8BCheckpoint >= 7)
+    ) {
       expect(
         phase8BRelocatedTakeoutLifecycleSources.map(({ baselinePath }) =>
           resolveCurrentTelegramSourcePath(baselinePath)
         ),
       ).toEqual(
         phase8BRelocatedTakeoutLifecycleSources.map(({ stagedPath }) =>
-          stagedPath
+          phase8BPhysicalStagedPath(stagedPath),
         ),
       );
       return;
@@ -10477,4 +10859,824 @@ describe("Checkpoint 2 observable Telegram and Takeout behavior", () => {
       "path.with_extension(",
     );
   });
+});
+
+type Phase8CNamedSource = Readonly<{
+  relativePath: string;
+  source: string;
+}>;
+
+const phase8CAppFeatureSection = [
+  'csp-verification = ["tauri/devtools"]',
+  'prompt-pack-dev-fixtures = ["extractum-prompt-packs/dev-fixtures"]',
+].join("\n");
+const phase8CAppTelegramDeclarations = [
+  'extractum-telegram = { path = "crates/extractum-telegram" }',
+  'extractum-telegram = { path = "crates/extractum-telegram", features = ["app-test-support"] }',
+] as const;
+const phase8CWorkspaceManifestPaths = phase8CWorkspaceMembers.map((member) =>
+  member === "."
+    ? "src-tauri/Cargo.toml"
+    : `src-tauri/${member}/Cargo.toml`
+);
+const phase8CAppRustDirectoryRoots = [
+  "src-tauri/src",
+  "src-tauri/tests",
+  "src-tauri/examples",
+  "src-tauri/benches",
+] as const;
+
+function phase8CAppOwnedRustPaths(): string[] {
+  const paths = [
+    ...(existsSync(path.join(repoRoot, "src-tauri/build.rs"))
+      ? ["src-tauri/build.rs"]
+      : []),
+    ...phase8CAppRustDirectoryRoots.flatMap((relativeRoot) =>
+      rustPathsUnder(relativeRoot)
+    ),
+  ].sort();
+  if (new Set(paths).size !== paths.length) {
+    throw new Error("Duplicate app-owned Rust path");
+  }
+  return paths;
+}
+
+function phase8CNamedRustSources(
+  relativePaths: readonly string[],
+): Phase8CNamedSource[] {
+  return relativePaths.map((relativePath) => ({
+    relativePath,
+    source: telegramContractPaths.readTelegramContractFile(relativePath),
+  }));
+}
+
+function phase8CMaskedMatchPaths(
+  sources: readonly Phase8CNamedSource[],
+  expression: RegExp,
+): string[] {
+  const flags = expression.flags.replace(/[gy]/g, "");
+  return sources.flatMap(({ relativePath, source }) => {
+    const probe = new RegExp(expression.source, flags);
+    return probe.test(maskRustLexicalNonCode(source)) ? [relativePath] : [];
+  }).sort();
+}
+
+function phase8CTomlTables(
+  source: string,
+): Array<Readonly<{ heading: string; body: string }>> {
+  const markers = [
+    ...source.matchAll(/^(\[\[?)([^\]\n]+)(\]\]?)[ \t]*(?:#[^\n]*)?$/gm),
+  ];
+  for (const marker of markers) {
+    if (marker[1].length !== marker[3].length) {
+      throw new Error(`Malformed TOML table heading: ${marker[0]}`);
+    }
+  }
+  return markers.map((marker, index) => {
+    const bodyStart = (marker.index ?? 0) + marker[0].length;
+    const bodyEnd = markers[index + 1]?.index ?? source.length;
+    return {
+      heading: marker[2],
+      body: source.slice(bodyStart, bodyEnd).trim(),
+    };
+  });
+}
+
+function phase8CWorkspaceManifestSources(): ReadonlyMap<string, string> {
+  return new Map(phase8CWorkspaceManifestPaths.map((relativePath) => [
+    relativePath,
+    telegramContractPaths.readTelegramContractFile(relativePath),
+  ]));
+}
+
+function phase8CWorkspaceFeatureMentions(
+  workspaceManifests: ReadonlyMap<string, string>,
+): string[] {
+  return [...workspaceManifests.entries()].flatMap(
+    ([relativePath, source]) => phase8CTomlTables(source).flatMap(
+      ({ heading, body }) => Array.from(
+        { length: body.split("app-test-support").length - 1 },
+        () => `${relativePath}|${heading}`,
+      ),
+    ),
+  ).sort();
+}
+
+type Phase8CMetadataDependency = Readonly<{
+  name: string;
+  source: string | null;
+  req: string;
+  kind: "dev" | "build" | null;
+  rename: string | null;
+  path: string | null;
+  registry: string | null;
+  uses_default_features: boolean;
+  features: string[];
+  target: string | null;
+}>;
+type Phase8CMetadataPackage = Readonly<{
+  id: string;
+  name: string;
+  source: string | null;
+  manifest_path: string;
+  features: Record<string, string[]>;
+  dependencies: Phase8CMetadataDependency[];
+}>;
+type Phase8CMetadataNodeDep = Readonly<{
+  name: string;
+  pkg: string;
+  dep_kinds: Array<Readonly<{
+    kind: "dev" | "build" | null;
+    target: string | null;
+  }>>;
+}>;
+type Phase8CMetadataNode = Readonly<{
+  id: string;
+  features: string[];
+  deps: Phase8CMetadataNodeDep[];
+}>;
+type Phase8CCargoMetadata = Readonly<{
+  packages: Phase8CMetadataPackage[];
+  workspace_members: string[];
+  resolve: Readonly<{ nodes: Phase8CMetadataNode[] }>;
+}>;
+type Phase8CIdentityAuthority = Readonly<{
+  preNewStaged: string[];
+  phase8BNewStaged: string[];
+}>;
+
+let phase8CLockedMetadataCache: Phase8CCargoMetadata | undefined;
+
+function phase8CLockedMetadata(): Phase8CCargoMetadata {
+  if (phase8CLockedMetadataCache) return phase8CLockedMetadataCache;
+  const result = spawnSync(
+    "cargo",
+    [
+      "metadata",
+      "--manifest-path",
+      "src-tauri/Cargo.toml",
+      "--locked",
+      "--format-version",
+      "1",
+    ],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+      shell: false,
+      maxBuffer: 256 * 1024 * 1024,
+    },
+  );
+  if (result.error || result.status !== 0 || !result.stdout.trim()) {
+    throw new Error(
+      `Phase 8C locked Cargo metadata failed: ${result.stderr || result.error}`,
+    );
+  }
+  phase8CLockedMetadataCache = JSON.parse(result.stdout) as Phase8CCargoMetadata;
+  return phase8CLockedMetadataCache;
+}
+
+function phase8CCloneMetadata(
+  metadata: Phase8CCargoMetadata,
+): Phase8CCargoMetadata {
+  return JSON.parse(JSON.stringify(metadata)) as Phase8CCargoMetadata;
+}
+
+function phase8CPackageById(
+  metadata: Phase8CCargoMetadata,
+  packageId: string,
+): Phase8CMetadataPackage {
+  const matches = metadata.packages.filter(({ id }) => id === packageId);
+  if (matches.length !== 1) {
+    throw new Error(`Expected one metadata package for ${packageId}`);
+  }
+  return matches[0];
+}
+
+function phase8CWorkspacePackage(
+  metadata: Phase8CCargoMetadata,
+  name: "extractum" | "extractum-telegram",
+): Phase8CMetadataPackage {
+  const members = new Set(metadata.workspace_members);
+  const matches = metadata.packages.filter(
+    (candidate) => candidate.name === name && members.has(candidate.id),
+  );
+  if (matches.length !== 1) {
+    throw new Error(`Expected one workspace package named ${name}`);
+  }
+  return matches[0];
+}
+
+function phase8CNode(
+  metadata: Phase8CCargoMetadata,
+  packageId: string,
+): Phase8CMetadataNode {
+  const matches = metadata.resolve.nodes.filter(({ id }) => id === packageId);
+  if (matches.length !== 1) {
+    throw new Error(`Expected one resolved node for ${packageId}`);
+  }
+  return matches[0];
+}
+
+function phase8CNormalizedDepKinds(
+  dependency: Phase8CMetadataNodeDep,
+): Array<Readonly<{ kind: "normal" | "dev"; target: null }>> {
+  const order = new Map([["normal", 0], ["dev", 1]]);
+  return dependency.dep_kinds.map(({ kind, target }) => ({
+    kind: kind ?? "normal",
+    target: target ?? null,
+  })).sort((left, right) =>
+    (order.get(left.kind) ?? 99) - (order.get(right.kind) ?? 99)
+  ) as Array<Readonly<{ kind: "normal" | "dev"; target: null }>>;
+}
+
+function assertPhase8CMetadataBoundary(
+  metadata: Phase8CCargoMetadata,
+): void {
+  const memberNames = metadata.workspace_members.map((packageId) =>
+    phase8CPackageById(metadata, packageId).name
+  );
+  exactInventory(memberNames, [
+    "extractum",
+    "extractum-core",
+    "extractum-gemini-browser",
+    "extractum-llm",
+    "extractum-prompt-packs",
+    "extractum-analysis",
+    "extractum-telegram",
+  ], "Phase 8C Cargo metadata workspace members");
+
+  const appPackage = phase8CWorkspacePackage(metadata, "extractum");
+  const producerPackage = phase8CWorkspacePackage(
+    metadata,
+    "extractum-telegram",
+  );
+  expect(producerPackage.source).toBeNull();
+  expect(path.resolve(producerPackage.manifest_path)).toBe(
+    path.join(repoRoot, "src-tauri/crates/extractum-telegram/Cargo.toml"),
+  );
+  expect(Object.keys(producerPackage.features).sort()).toEqual([
+    "app-test-support",
+  ]);
+
+  const declaredTelegramEdges = appPackage.dependencies.filter(
+    ({ name }) => name === "extractum-telegram",
+  ).map((dependency) => ({
+    kind: dependency.kind ?? "normal",
+    target: dependency.target,
+    rename: dependency.rename,
+    source: dependency.source,
+    path: dependency.path === null ? null : path.resolve(dependency.path),
+    features: [...dependency.features].sort(),
+  })).sort((left) => left.kind === "normal" ? -1 : 1);
+  expect(declaredTelegramEdges).toEqual([
+    {
+      kind: "normal",
+      target: null,
+      rename: null,
+      source: null,
+      path: path.join(repoRoot, "src-tauri/crates/extractum-telegram"),
+      features: [],
+    },
+    {
+      kind: "dev",
+      target: null,
+      rename: null,
+      source: null,
+      path: path.join(repoRoot, "src-tauri/crates/extractum-telegram"),
+      features: ["app-test-support"],
+    },
+  ]);
+
+  const appNode = phase8CNode(metadata, appPackage.id);
+  const telegramNodeDependencies = appNode.deps.filter(
+    ({ pkg }) => pkg === producerPackage.id,
+  );
+  expect(telegramNodeDependencies).toHaveLength(1);
+  expect(telegramNodeDependencies[0].name).toBe("extractum_telegram");
+  expect(phase8CNormalizedDepKinds(telegramNodeDependencies[0])).toEqual([
+    { kind: "normal", target: null },
+    { kind: "dev", target: null },
+  ]);
+
+  const packageNameById = new Map(
+    metadata.packages.map(({ id, name }) => [id, name]),
+  );
+  const producerRoots = phase8CNode(metadata, producerPackage.id).deps.map(
+    ({ pkg }) => packageNameById.get(pkg) ?? `missing:${pkg}`,
+  ).sort();
+  expect(producerRoots).toEqual([
+    "base64",
+    "chacha20poly1305",
+    "extractum-core",
+    "grammers-client",
+    "grammers-mtsender",
+    "grammers-session",
+    "grammers-tl-types",
+    "rand_core",
+    "secrecy",
+    "serde",
+    "serde_json",
+    "tokio",
+  ]);
+  const forbiddenAppRoots = new Set([
+    "grammers-client",
+    "grammers-mtsender",
+    "grammers-session",
+    "grammers-tl-types",
+    "chacha20poly1305",
+    "rand_core",
+  ]);
+  expect(appNode.deps.flatMap(({ pkg }) => {
+    const name = packageNameById.get(pkg);
+    return name && forbiddenAppRoots.has(name) ? [name] : [];
+  })).toEqual([]);
+  expect(
+    phase8CNode(metadata, producerPackage.id).deps.some(
+      ({ pkg }) => pkg === appPackage.id,
+    ),
+  ).toBe(false);
+
+  expect(
+    createHash("sha256")
+      .update(tomlSection(rootCargo, "workspace.dependencies"))
+      .digest("hex"),
+  ).toBe("9a494a667ddc7d8c440de23e3163084f98fb76ea167ea3e62438ef5e62736450");
+}
+
+function assertPhase8CGrammersClosure(
+  metadata: Phase8CCargoMetadata,
+): void {
+  const authority = grammersFeatureBaseline as unknown as {
+    revision: string;
+    packages: Array<{
+      name: string;
+      required: string[];
+      forbidden: string[];
+      universe: string[];
+    }>;
+  };
+  const producer = phase8CWorkspacePackage(metadata, "extractum-telegram");
+  const directPackageIds = new Set(
+    phase8CNode(metadata, producer.id).deps.map(({ pkg }) => pkg),
+  );
+  exactInventory(
+    [...directPackageIds].flatMap((packageId) => {
+      const name = phase8CPackageById(metadata, packageId).name;
+      return name.startsWith("grammers-") ? [name] : [];
+    }),
+    authority.packages.map(({ name }) => name),
+    "Phase 8C direct Grammers roots",
+  );
+
+  for (const expected of authority.packages) {
+    const packages = metadata.packages.filter(({ name }) => name === expected.name);
+    expect(packages, expected.name).toHaveLength(1);
+    const selected = packages[0];
+    expect(selected.source).toBe(
+      `git+https://codeberg.org/Lonami/grammers?rev=${authority.revision}#${authority.revision}`,
+    );
+    expect(Object.keys(selected.features).sort()).toEqual(
+      [...expected.universe].sort(),
+    );
+    const enabled = [...phase8CNode(metadata, selected.id).features].sort();
+    expect(enabled).toEqual([...expected.required].sort());
+    expect(enabled.filter((feature) => expected.forbidden.includes(feature)))
+      .toEqual([]);
+  }
+}
+
+function assertPhase8CGraphCut(metadata: Phase8CCargoMetadata): void {
+  const app = phase8CWorkspacePackage(metadata, "extractum");
+  const producer = phase8CWorkspacePackage(metadata, "extractum-telegram");
+  const nodes = new Map(metadata.resolve.nodes.map((node) => [node.id, node]));
+  const reachable = new Set<string>();
+  const queue = [app.id];
+  while (queue.length !== 0) {
+    const current = queue.shift();
+    if (!current || reachable.has(current)) continue;
+    reachable.add(current);
+    const node = nodes.get(current);
+    if (!node) throw new Error(`Missing graph node: ${current}`);
+    for (const dependency of node.deps) {
+      if (current === app.id && dependency.pkg === producer.id) continue;
+      queue.push(dependency.pkg);
+    }
+  }
+  const grammersLeaks = metadata.packages.flatMap(({ id, name }) =>
+    reachable.has(id) && name.startsWith("grammers-") ? [name] : []
+  ).sort();
+  expect(grammersLeaks).toEqual([]);
+  expect(
+    phase8CNode(metadata, producer.id).deps.some(({ pkg }) => pkg === app.id),
+  ).toBe(false);
+}
+
+function assertPhase8CFixtureBoundary(
+  producerSources: readonly Phase8CNamedSource[],
+): void {
+  const sourceByPath = new Map(
+    producerSources.map(({ relativePath, source }) => [relativePath, source]),
+  );
+  const libPath = "src-tauri/crates/extractum-telegram/src/lib.rs";
+  const takeoutPath =
+    "src-tauri/crates/extractum-telegram/src/takeout/mod.rs";
+  const lib = sourceByPath.get(libPath);
+  const takeout = sourceByPath.get(takeoutPath);
+  if (!lib || !takeout) throw new Error("Missing fixture-boundary source");
+  const snippets = [
+    [libPath, lib, '#[cfg(feature = "app-test-support")]\npub use takeout::attempt_fixture as takeout_attempt_fixture;'],
+    [libPath, lib, '#[cfg(feature = "app-test-support")]\npub use takeout::fallback_fixture as takeout_fallback_fixture;'],
+    [takeoutPath, takeout, '#[cfg(feature = "app-test-support")]\npub fn fallback_fixture('],
+    [takeoutPath, takeout, '#[cfg(feature = "app-test-support")]\npub fn attempt_fixture(home_dc_id: i32, export_dc_id: i32) -> TakeoutAttempt {'],
+  ] as const;
+  for (const [, source, snippet] of snippets) {
+    expect(source.split(snippet).length - 1, snippet).toBe(1);
+  }
+
+  const residualSources = producerSources.map((entry) => ({
+    ...entry,
+    source: snippets.reduce(
+      (source, [relativePath, , snippet]) =>
+        relativePath === entry.relativePath
+          ? source.replace(snippet, "")
+          : source,
+      entry.source,
+    ),
+  }));
+  const residualFixtureIdentifiers = residualSources.flatMap(
+    ({ relativePath, source }) =>
+      [...maskRustLexicalNonCode(source).matchAll(
+        /\b[A-Za-z_][A-Za-z0-9_]*fixture\b/g,
+      )].map((match) => `${relativePath}|${match[0]}`),
+  );
+  exactInventory(
+    residualFixtureIdentifiers,
+    [],
+    "Phase 8C producer fixture references outside the four declarations",
+  );
+}
+
+function phase8CProducerTestIds(
+  producerSources: readonly Phase8CNamedSource[],
+): string[] {
+  const cratePrefix = "src-tauri/crates/extractum-telegram/src/";
+  return producerSources.flatMap(({ relativePath, source }) => {
+    if (!relativePath.startsWith(cratePrefix)) {
+      throw new Error(`Producer test source escaped crate: ${relativePath}`);
+    }
+    const cratePath = relativePath.slice(cratePrefix.length);
+    const modulePath = cratePath === "lib.rs"
+      ? ""
+      : cratePath.endsWith("/mod.rs")
+      ? cratePath.slice(0, -"/mod.rs".length).replaceAll("/", "::")
+      : cratePath.slice(0, -".rs".length).replaceAll("/", "::");
+    const searchable = maskRustLexicalNonCode(source);
+    return [
+      ...searchable.matchAll(
+        /#\[(?:tokio::)?test(?:\s*\([^\]]*\))?\]\s*(?:async\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/g,
+      ),
+    ].map((match) =>
+      `${modulePath ? `${modulePath}::` : ""}tests::${match[1]}`
+    );
+  });
+}
+
+describe("Phase 8C extracted Telegram boundary", () => {
+  it("derives the complete extracted layout before terminal status and rejects every partial layout", () => {
+    const pending: Phase8CPhysicalSnapshot = {
+      producerManifest: undefined,
+      destinationRustPaths: [],
+      oldNonFacadeRustPaths: phase8COldNonFacadeRustPaths,
+      stagedLibState: "retained-implementation",
+      workspaceMembers: phase8BWorkspaceMembers,
+      normalTelegramDeclarations: [],
+      devTelegramDeclarations: [],
+    };
+    expect(phase8CPhysicalLifecycle(pending, "8b-preparation")).toBeUndefined();
+    const complete: Phase8CPhysicalSnapshot = {
+      producerManifest: phase8CExactProducerManifest,
+      destinationRustPaths: phase8CDestinationRustPaths,
+      oldNonFacadeRustPaths: [],
+      stagedLibState: "exact-facade",
+      workspaceMembers: phase8CWorkspaceMembers,
+      normalTelegramDeclarations: [phase8CNormalDeclaration],
+      devTelegramDeclarations: [phase8CDevDeclaration],
+    };
+    expect(phase8CPhysicalLifecycle(complete, "8b-preparation")).toBe("8c-extracted");
+    const singleSignalCases: Array<[string, Phase8CPhysicalSnapshot]> = [
+      ["manifest", { ...pending, producerManifest: phase8CExactProducerManifest }],
+      ["destination", { ...pending, destinationRustPaths: [phase8CDestinationRustPaths[0]] }],
+      ["facade", { ...pending, stagedLibState: "exact-facade" }],
+      ["member", { ...pending, workspaceMembers: phase8CWorkspaceMembers }],
+      ["normal edge", { ...pending, normalTelegramDeclarations: [phase8CNormalDeclaration] }],
+      ["dev edge", { ...pending, devTelegramDeclarations: [phase8CDevDeclaration] }],
+    ];
+    for (const [label, snapshot] of singleSignalCases) {
+      expect(() => phase8CPhysicalLifecycle(snapshot, "8b-preparation"), label)
+        .toThrow(/Partial Phase 8C layout/);
+    }
+    const invalidCompleteCases: Array<[string, Phase8CPhysicalSnapshot]> = [
+      ["missing manifest", { ...complete, producerManifest: undefined }],
+      ["missing destination", { ...complete, destinationRustPaths: phase8CDestinationRustPaths.slice(1) }],
+      ["extra destination", { ...complete, destinationRustPaths: [...phase8CDestinationRustPaths, "src-tauri/crates/extractum-telegram/src/extra.rs"] }],
+      ["old leaf retained", { ...complete, oldNonFacadeRustPaths: [phase8COldNonFacadeRustPaths[0]] }],
+      ["wrong facade", { ...complete, stagedLibState: "other" }],
+      ["missing member", { ...complete, workspaceMembers: phase8CWorkspaceMembers.slice(0, -1) }],
+      ["wrong normal edge", { ...complete, normalTelegramDeclarations: [phase8CDevDeclaration] }],
+      ["wrong dev edge", { ...complete, devTelegramDeclarations: [phase8CNormalDeclaration] }],
+    ];
+    for (const [label, snapshot] of invalidCompleteCases) {
+      expect(() => phase8CPhysicalLifecycle(snapshot, "8b-preparation"), label)
+        .toThrow(/Partial Phase 8C layout/);
+    }
+    for (const stagedLibState of ["other", "absent"] as const) {
+      expect(() => phase8CPhysicalLifecycle(
+        { ...pending, stagedLibState }, "8b-preparation",
+      )).toThrow(/Partial Phase 8C layout/);
+    }
+    expect(() => phase8CPhysicalLifecycle(pending, "8c-extracted"))
+      .toThrow(/terminal status without extracted physical state/);
+    expect(() => phase8CPhysicalLifecycle({
+      ...pending,
+      oldNonFacadeRustPaths: phase8COldNonFacadeRustPaths.slice(1),
+    }, "8b-preparation")).toThrow(/Partial Phase 8C layout/);
+    expect(() => phase8CPhysicalLifecycle({
+      ...pending,
+      oldNonFacadeRustPaths: [
+        ...phase8COldNonFacadeRustPaths,
+        "src-tauri/src/telegram_impl/extra.rs",
+      ],
+    }, "8b-preparation")).toThrow(/Partial Phase 8C layout/);
+  });
+
+  it("freezes the exact producer manifest and resolver-v2 consumer declarations", () => {
+    const producerManifest = telegramContractPaths.readTelegramContractFile(
+      "src-tauri/crates/extractum-telegram/Cargo.toml",
+    );
+    expect(producerManifest).toBe(phase8CExactProducerManifest);
+    assertPhase8CMetadataBoundary(phase8CLockedMetadata());
+
+    const producerManifestDrift = exactMutation(
+      producerManifest,
+      'features = ["macros", "test-util"]',
+      'features = ["macros", "rt-multi-thread", "test-util"]',
+      "Phase 8C producer Tokio dev-feature widening",
+    );
+    expect(producerManifestDrift).not.toBe(phase8CExactProducerManifest);
+
+    const metadataKindDrift = phase8CCloneMetadata(phase8CLockedMetadata()) as {
+      packages: Phase8CMetadataPackage[];
+      workspace_members: string[];
+      resolve: { nodes: Array<{
+        id: string;
+        features: string[];
+        deps: Phase8CMetadataNodeDep[];
+      }> };
+    };
+    const metadataApp = phase8CWorkspacePackage(metadataKindDrift, "extractum");
+    const metadataProducer = phase8CWorkspacePackage(
+      metadataKindDrift,
+      "extractum-telegram",
+    );
+    const metadataAppNode = metadataKindDrift.resolve.nodes.find(
+      ({ id }) => id === metadataApp.id,
+    );
+    const metadataTelegramEdge = metadataAppNode?.deps.find(
+      ({ pkg }) => pkg === metadataProducer.id,
+    );
+    if (!metadataTelegramEdge) throw new Error("Missing Telegram metadata edge");
+    metadataTelegramEdge.dep_kinds.push({ kind: "build", target: null });
+    expect(() => assertPhase8CMetadataBoundary(metadataKindDrift)).toThrow();
+
+    const workspaceManifests = phase8CWorkspaceManifestSources();
+    expect(workspaceManifests.get("src-tauri/Cargo.toml")).toBe(rootCargo);
+    expect(tomlSection(rootCargo, "features")).toBe(phase8CAppFeatureSection);
+    expect(
+      rootCargo
+        .split("\n")
+        .filter((line) => /^extractum-telegram\s*=/.test(line)),
+    ).toEqual([...phase8CAppTelegramDeclarations]);
+    expect(phase8CWorkspaceFeatureMentions(workspaceManifests)).toEqual([
+      "src-tauri/Cargo.toml|dev-dependencies",
+      "src-tauri/crates/extractum-telegram/Cargo.toml|features",
+    ]);
+  });
+
+  it("scans the complete app Rust perimeter and permits only the Telegram facade", () => {
+    const appRustPaths = phase8CAppOwnedRustPaths();
+    expect(appRustPaths).toContain("src-tauri/build.rs");
+    const appSources = phase8CNamedRustSources(appRustPaths);
+    const forbiddenGrammers =
+      /\b(?:grammers_client|grammers_session|grammers_mtsender|grammers_tl_types)\b|\btl\s*::|\b(?:MemorySession|LoginToken|PeerRef|RemoteCall|InvocationError)\b/;
+    expect(phase8CMaskedMatchPaths(appSources, forbiddenGrammers)).toEqual([]);
+
+    const grammersMutations = [
+      "use grammers_client::Client;",
+      "fn leak() { let _ = grammers_client::Client::connect; }",
+      "use grammers_client::tl as raw_tl; fn leak(peer: raw_tl::enums::Peer) {}",
+      "pub use grammers_session::MemorySession;",
+      "fn leak(peer: tl::enums::Peer) {}",
+      "fn leak(value: MemorySession) {}",
+      "fn leak(value: LoginToken) {}",
+      "fn leak(value: PeerRef) {}",
+      "fn leak(value: RemoteCall) {}",
+      "fn leak(value: InvocationError) {}",
+    ];
+    for (const [index, source] of grammersMutations.entries()) {
+      const relativePath = `src-tauri/tests/grammers-leak-${index}.rs`;
+      expect(phase8CMaskedMatchPaths(
+        [...appSources, { relativePath, source }],
+        forbiddenGrammers,
+      )).toEqual([relativePath]);
+    }
+    expect(phase8CMaskedMatchPaths([
+      ...appSources.filter(({ relativePath }) => relativePath !== "src-tauri/build.rs"),
+      { relativePath: "src-tauri/build.rs", source: "use grammers_client::Client;" },
+    ], forbiddenGrammers)).toEqual(["src-tauri/build.rs"]);
+
+    const telegramPackagePaths = phase8CMaskedMatchPaths(
+      appSources,
+      /\bextractum_telegram\b/,
+    );
+    expect(telegramPackagePaths).toEqual([
+      "src-tauri/src/telegram_impl/lib.rs",
+    ]);
+    const facade = appSources.find(({ relativePath }) =>
+      relativePath === "src-tauri/src/telegram_impl/lib.rs"
+    );
+    if (!facade) throw new Error("Missing app Telegram facade source");
+    expect([
+      ...maskRustLexicalNonCode(facade.source).matchAll(/\bextractum_telegram\b/g),
+    ]).toHaveLength(2);
+
+    const facadeBypassMutations = [
+      "use extractum_telegram::TelegramSession;",
+      "use extractum_telegram as raw_telegram;",
+      "fn leak() { let _ = extractum_telegram::TelegramRuntimeStatus::default(); }",
+      "pub use extractum_telegram::TelegramSession;",
+    ];
+    for (const [index, source] of facadeBypassMutations.entries()) {
+      const relativePath = index === 0
+        ? "src-tauri/build.rs"
+        : `src-tauri/tests/facade-bypass-${index}.rs`;
+      expect(phase8CMaskedMatchPaths(
+        [...appSources.filter((entry) => entry.relativePath !== relativePath), {
+          relativePath,
+          source,
+        }],
+        /\bextractum_telegram\b/,
+      )).toEqual([
+        "src-tauri/src/telegram_impl/lib.rs",
+        relativePath,
+      ].sort());
+    }
+  });
+
+  it("moves direct dependency ownership and preserves the Grammers feature closure", () => {
+    const metadata = phase8CLockedMetadata();
+    assertPhase8CMetadataBoundary(metadata);
+    assertPhase8CGrammersClosure(metadata);
+
+    const featureDrift = phase8CCloneMetadata(metadata) as {
+      packages: Phase8CMetadataPackage[];
+      workspace_members: string[];
+      resolve: { nodes: Array<{
+        id: string;
+        features: string[];
+        deps: Phase8CMetadataNodeDep[];
+      }> };
+    };
+    const tlTypes = featureDrift.packages.find(
+      ({ name }) => name === "grammers-tl-types",
+    );
+    const tlTypesNode = tlTypes === undefined
+      ? undefined
+      : featureDrift.resolve.nodes.find(({ id }) => id === tlTypes.id);
+    if (!tlTypesNode) throw new Error("Missing Grammers feature mutation node");
+    tlTypesNode.features.push("impl-serde");
+    expect(() => assertPhase8CGrammersClosure(featureDrift)).toThrow();
+
+    const appSources = phase8CNamedRustSources(phase8CAppOwnedRustPaths());
+    const producerSources = phase8CNamedRustSources(
+      rustPathsUnder("src-tauri/crates/extractum-telegram/src"),
+    );
+    const dependencyPaths = (
+      sources: readonly Phase8CNamedSource[],
+      dependency: "base64" | "secrecy",
+    ) => phase8CMaskedMatchPaths(
+      sources,
+      new RegExp(`\\b${dependency}\\b`),
+    );
+    expect(dependencyPaths(appSources, "base64").length).toBeGreaterThan(0);
+    expect(dependencyPaths(producerSources, "base64").length)
+      .toBeGreaterThan(0);
+    expect(dependencyPaths(appSources, "secrecy").length).toBeGreaterThan(0);
+    expect(dependencyPaths(producerSources, "secrecy").length)
+      .toBeGreaterThan(0);
+  });
+
+
+  it("allows exactly two feature-gated fixture names and no producer test consumer", () => {
+    const producerSources = phase8CNamedRustSources(
+      rustPathsUnder("src-tauri/crates/extractum-telegram/src"),
+    );
+    assertPhase8CFixtureBoundary(producerSources);
+
+    const mutate = (relativePath: string, before: string, after: string) =>
+      producerSources.map((entry) => entry.relativePath === relativePath
+        ? {
+            ...entry,
+            source: exactMutation(
+              entry.source,
+              before,
+              after,
+              `Phase 8C fixture mutation ${relativePath}`,
+            ),
+          }
+        : entry);
+    expect(() => assertPhase8CFixtureBoundary(mutate(
+      "src-tauri/crates/extractum-telegram/src/lib.rs",
+      '#[cfg(feature = "app-test-support")]\npub use takeout::attempt_fixture',
+      "#[cfg(test)]\npub use takeout::attempt_fixture",
+    ))).toThrow();
+    expect(() => assertPhase8CFixtureBoundary(mutate(
+      "src-tauri/crates/extractum-telegram/src/takeout/mod.rs",
+      "pub fn fallback_fixture(",
+      "pub(crate) fn fallback_fixture(",
+    ))).toThrow();
+    expect(() => assertPhase8CFixtureBoundary([
+      ...producerSources,
+      {
+        relativePath: "src-tauri/crates/extractum-telegram/src/third.rs",
+        source: '#[cfg(feature = "app-test-support")]\npub fn third_fixture() {}\n',
+      },
+    ])).toThrow();
+    expect(() => assertPhase8CFixtureBoundary(
+      producerSources.map((entry) => entry.relativePath.endsWith("/dto.rs")
+        ? { ...entry, source: `${entry.source}\nfn producer_test_leak() { let _ = takeout_attempt_fixture; }\n` }
+        : entry),
+    )).toThrow();
+  });
+
+  it("cuts every app-to-Grammers path when the producer edge is removed", () => {
+    const metadata = phase8CLockedMetadata();
+    assertPhase8CGraphCut(metadata);
+
+    const mutated = phase8CCloneMetadata(metadata) as {
+      packages: Phase8CMetadataPackage[];
+      workspace_members: string[];
+      resolve: { nodes: Array<{
+        id: string;
+        features: string[];
+        deps: Phase8CMetadataNodeDep[];
+      }> };
+    };
+    const app = phase8CWorkspacePackage(mutated, "extractum");
+    const grammers = mutated.packages.find(
+      ({ name }) => name === "grammers-client",
+    );
+    const appNode = mutated.resolve.nodes.find(({ id }) => id === app.id);
+    if (!grammers || !appNode) throw new Error("Missing graph mutation node");
+    appNode.deps.push({
+      name: "grammers_client",
+      pkg: grammers.id,
+      dep_kinds: [{ kind: null, target: null }],
+    });
+    expect(() => assertPhase8CGraphCut(mutated)).toThrow();
+  });
+
+  it("moves all 71 future-owner identities exactly once", () => {
+    const authority = readGeneratedJson<Phase8CIdentityAuthority>(
+      "src/lib/telegram-8b-test-identities.json",
+    );
+    const expected = [
+      ...authority.preNewStaged,
+      ...authority.phase8BNewStaged,
+    ].map((identity) => identity.replace(/^telegram_impl::/, "")).sort();
+    expect(expected).toHaveLength(71);
+    const producerSources = phase8CNamedRustSources(
+      rustPathsUnder("src-tauri/crates/extractum-telegram/src"),
+    );
+    exactInventory(
+      phase8CProducerTestIds(producerSources),
+      expected,
+      "Phase 8C producer test identity declarations",
+    );
+
+    const duplicated = producerSources.map((entry) =>
+      entry.relativePath.endsWith("/dto.rs")
+        ? {
+            ...entry,
+            source: `${entry.source}\n#[test]\nfn telegram_item_kind_constant_matches_persisted_wire_value() {}\n`,
+          }
+        : entry
+    );
+    expect(() => exactInventory(
+      phase8CProducerTestIds(duplicated),
+      expected,
+      "mutated Phase 8C producer test identities",
+    )).toThrow();
+  });
+
+
 });

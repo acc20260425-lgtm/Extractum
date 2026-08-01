@@ -9,6 +9,9 @@ const promptPackCrateExtracted = existsSync(
 const analysisCrateExtracted = existsSync(
   path.join(repoRoot, "src-tauri/crates/extractum-analysis/Cargo.toml"),
 );
+const telegramCrateExtracted = existsSync(
+  path.join(repoRoot, "src-tauri/crates/extractum-telegram/Cargo.toml"),
+);
 const readSource = (relativePath: string) =>
   readFileSync(path.join(repoRoot, relativePath), "utf8").replace(/\r\n/g, "\n");
 const readOptionalSource = (relativePath: string) =>
@@ -54,8 +57,10 @@ describe("Rust workspace core contract", () => {
       "crates/extractum-llm",
       ...(promptPackCrateExtracted ? ["crates/extractum-prompt-packs"] : []),
       ...(analysisCrateExtracted ? ["crates/extractum-analysis"] : []),
+      ...(telegramCrateExtracted ? ["crates/extractum-telegram"] : []),
     ];
     expect(members).toEqual(expectedMembers);
+    expect(members).toHaveLength(telegramCrateExtracted ? 7 : 6);
     expect(
       tomlSection(rootCargo, "dependencies").match(
         /^extractum-analysis = \{ path = "crates\/extractum-analysis" \}$/gm,
@@ -66,6 +71,15 @@ describe("Rust workspace core contract", () => {
         .split("\n")
         .filter((line) => line.includes("extractum-analysis")),
     ).toHaveLength(analysisCrateExtracted ? 2 : 0);
+    expect(tomlSection(rootCargo, "dependencies").match(
+      /^extractum-telegram = \{ path = "crates\/extractum-telegram" \}$/gm,
+    ) ?? []).toHaveLength(telegramCrateExtracted ? 1 : 0);
+    expect(tomlSection(rootCargo, "dev-dependencies").match(
+      /^extractum-telegram\s*=\s*\{\s*path\s*=\s*"crates\/extractum-telegram"\s*,\s*features\s*=\s*\["app-test-support"\]\s*,?\s*\}$/gm,
+    ) ?? []).toHaveLength(telegramCrateExtracted ? 1 : 0);
+    expect(lockPackage(cargoLock, "extractum").match(
+      /^ "extractum-telegram(?: [^"]+)?",?$/gm,
+    ) ?? []).toHaveLength(telegramCrateExtracted ? 1 : 0);
     expect(rootCargo).toMatch(/resolver\s*=\s*"2"/);
     expect(rootCargo).toContain("[workspace.dependencies]");
     expect(rootCargo).toContain("[profile.dev]");
@@ -83,12 +97,18 @@ describe("Rust workspace core contract", () => {
     expect(coreCargo).not.toMatch(/\[profile\./);
     expect(coreCargo).not.toContain("extractum-prompt-packs");
     expect(coreCargo).not.toContain("extractum-analysis");
+    expect(coreCargo).not.toContain("extractum-telegram");
     expect(' "extractum-analysis 0.2.0",').toMatch(
       analysisLockDependencyPattern,
     );
     expect(lockPackage(cargoLock, "extractum-core")).not.toMatch(
       analysisLockDependencyPattern,
     );
+    expect(
+      lockPackage(cargoLock, "extractum-core").match(
+        /^ "extractum-telegram(?: [^"]+)?",?$/gm,
+      ) ?? [],
+    ).toHaveLength(0);
   });
 
   it("keeps a curated core and explicit private application wrappers", () => {

@@ -204,6 +204,9 @@ const promptPackCrateExtracted = existsSync(
 const analysisCrateExtracted = existsSync(
   path.join(repoRoot, "src-tauri/crates/extractum-analysis/Cargo.toml"),
 );
+const telegramCrateExtracted = existsSync(
+  path.join(repoRoot, "src-tauri/crates/extractum-telegram/Cargo.toml"),
+);
 
 describe("extractum-llm crate boundary", () => {
   it("owns the exact workspace, manifest, lock, and feature dependency surface", () => {
@@ -218,7 +221,9 @@ describe("extractum-llm crate boundary", () => {
       "crates/extractum-llm",
       ...(promptPackCrateExtracted ? ["crates/extractum-prompt-packs"] : []),
       ...(analysisCrateExtracted ? ["crates/extractum-analysis"] : []),
+      ...(telegramCrateExtracted ? ["crates/extractum-telegram"] : []),
     ]);
+    expect(members).toHaveLength(telegramCrateExtracted ? 7 : 6);
     expect(
       tomlSection(rootCargo, "dependencies").match(
         /^extractum-analysis = \{ path = "crates\/extractum-analysis" \}$/gm,

@@ -41,6 +41,9 @@ const readOptional = (relativePath: string): string =>
 const implementationPlan = read(implementationPlanPath);
 const approvedSpecification = read(approvedSpecificationPath);
 const extracted = existsSync(analysisCrateManifest);
+const telegramCrateExtracted = existsSync(
+  path.join(repoRoot, "src-tauri/crates/extractum-telegram/Cargo.toml"),
+);
 
 type SourceFile = {
   owner: "app" | "crate";
@@ -4161,8 +4164,10 @@ describe("analysis crate boundary", () => {
       "crates/extractum-llm",
       "crates/extractum-prompt-packs",
       ...(extracted ? ["crates/extractum-analysis"] : []),
+      ...(telegramCrateExtracted ? ["crates/extractum-telegram"] : []),
     ];
     expect(workspaceMembers(rootCargo)).toEqual(expectedMembers);
+    expect(expectedMembers).toHaveLength(telegramCrateExtracted ? 7 : 6);
 
     const lowerManifests = readdirSync(
       path.join(repoRoot, "src-tauri/crates"),
@@ -4207,6 +4212,18 @@ describe("analysis crate boundary", () => {
     expect(rootDependencies).not.toMatch(/^zstd(?:\.workspace)?\s*=/m);
 
     const analysisLock = lockPackage(lock, "extractum-analysis");
+    for (const foreignDependency of [
+      "extractum-telegram",
+      "grammers-client",
+      "grammers-mtsender",
+      "grammers-session",
+      "grammers-tl-types",
+    ]) {
+      expect(
+        read("src-tauri/crates/extractum-analysis/Cargo.toml"),
+      ).not.toContain(foreignDependency);
+      expect(lockDependencies(analysisLock)).not.toContain(foreignDependency);
+    }
     expect(lockDependencies(analysisLock)).toEqual([
       "extractum-core",
       "extractum-llm",
@@ -5039,6 +5056,9 @@ describe("analysis crate boundary", () => {
     const telegramPeerAvatarBoundaryIsStaged =
       telegramPeerAvatarBoundaryPathCount
         === telegramPeerAvatarBoundaryPaths.length;
+    const telegramPeerAvatarBoundaryIsRetained =
+      telegramPeerAvatarBoundaryIsStaged
+      || existsSync(path.join(repoRoot, "src-tauri/crates/extractum-telegram/src/live/peer.rs"));
     const telegramLiveConsumerPathCount =
       telegramLiveConsumerPaths.filter((relativePath) =>
         appPaths.has(relativePath)
@@ -5059,13 +5079,18 @@ describe("analysis crate boundary", () => {
     ).toContain(telegramTakeoutBoundaryPathCount);
     const telegramTakeoutBoundaryIsStaged =
       telegramTakeoutBoundaryPathCount === telegramTakeoutBoundaryPaths.length;
+    const telegramTakeoutBoundaryIsRetained =
+      telegramTakeoutBoundaryIsStaged
+      || existsSync(path.join(repoRoot, "src-tauri/crates/extractum-telegram/src/takeout/mod.rs"));
     expect(
       [...ownedTables].filter((table) => !schemaTables.has(table)),
       "all six owned tables must exist in canonical migrations",
     ).toEqual([]);
     expect(app.length, "all-app production graph breadth")
       .toBe(
-        telegramTakeoutBoundaryIsStaged
+        telegramCrateExtracted
+          ? 119
+          : telegramTakeoutBoundaryIsStaged
           ? 137
           : telegramLiveConsumersAreStaged
           ? 132
@@ -5688,9 +5713,9 @@ describe("analysis crate boundary", () => {
     const ingestProvenanceSourceFingerprint = telegramFoundationIsStaged
       ? "c964e21b5349808deea16ac71b9f4b93955968041fd3b62e00281ae6dde9adaf"
       : "5a7f28da697b149cf3ba2f9ff01074aa662ea5f6a56c983e8ee24f83816372a2";
-    const sourcesStoreSourceFingerprint = telegramTakeoutBoundaryIsStaged
+    const sourcesStoreSourceFingerprint = telegramTakeoutBoundaryIsRetained
       ? "340890b2099e76c9da00e7c52d1746c13a25876b3d9a9580025c5f6601e3f7bb"
-      : telegramPeerAvatarBoundaryIsStaged
+      : telegramPeerAvatarBoundaryIsRetained
       ? "01f4773cdc95e94f83c14b21efd0ae62976c3326895d0938925f6ab36c5d6167"
       : "28a8eb092ae42884e8b06bd6681bc36c8378cb1facea61fd8076b6ed284e3895";
     expect(

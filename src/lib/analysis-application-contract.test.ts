@@ -5681,18 +5681,18 @@ describe("analysis application boundary", () => {
       relative: path.relative(appSourceRoot, file).replaceAll("\\", "/"), source: readFileSync(file, "utf8"),
     }));
     const appReachability = rustModuleReachability(appInventory, ["lib.rs", "main.rs"]);
-    const telegramFoundationIsStaged = existsSync(
+    const telegramFacadeIsRetained = existsSync(
       path.join(appSourceRoot, "telegram_impl/lib.rs"),
     );
-    const telegramPeerAvatarBoundaryIsStaged = existsSync(
+    const telegramPeerAvatarBoundaryIsRetained = existsSync(
       path.join(appSourceRoot, "telegram_impl/live/peer.rs"),
-    );
-    const telegramTakeoutBoundaryIsStaged = existsSync(
+    ) || existsSync(path.join(repoRoot, "src-tauri/crates/extractum-telegram/src/live/peer.rs"));
+    const telegramTakeoutBoundaryIsRetained = existsSync(
       path.join(appSourceRoot, "telegram_impl/takeout/mod.rs"),
-    );
+    ) || existsSync(path.join(repoRoot, "src-tauri/crates/extractum-telegram/src/takeout/mod.rs"));
     const productionAppPaths = appReachability.production
       .map(({ relative }) => relative);
-    if (telegramFoundationIsStaged) {
+    if (telegramFacadeIsRetained) {
       expect(
         productionAppPaths,
         "the staged Telegram root must be production-reachable when present",
@@ -5749,12 +5749,12 @@ describe("analysis application boundary", () => {
     const notebookReplyBodyFingerprint = analysisExtracted
       ? "9b94e015798718e328bc265b0afa1e7f3575c8de94d4817718daff9b5489ce1d"
       : "f4a3902360ed77d4750749e55c73db371c54fd2e117828bc9187f0f4e8ec4333";
-    const ingestProvenanceSourceFingerprint = telegramFoundationIsStaged
+    const ingestProvenanceSourceFingerprint = telegramFacadeIsRetained
       ? "3f64c972ebc82996e65a396054ec8d16e73dc5fa911b92b9b10b79ed100b4a29"
       : "a327cabba5f1ab4f3af5c2f405ccb56a4500dc2bc736d8dc33a220f128323bde";
-    const sourcesStoreSourceFingerprint = telegramTakeoutBoundaryIsStaged
+    const sourcesStoreSourceFingerprint = telegramTakeoutBoundaryIsRetained
       ? "f808fff21440a539658b600440dfaa8168007fba11756326fa557a1fc6b0e70b"
-      : telegramPeerAvatarBoundaryIsStaged
+      : telegramPeerAvatarBoundaryIsRetained
       ? "c752a11642888a3c45df0c53587588e3a7603b584de1ca19e2a3c8edc025b3e9"
       : "e510e682120b6566460fddf405f6c45d31ee7e96b399948fe91b75a51fa4a92d";
     expect(
