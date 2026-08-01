@@ -1,6 +1,6 @@
 # Telegram Phase 8C Extraction Design
 
-**Status:** Draft for owner review; implementation not authorized
+**Status:** Approved for implementation planning; implementation not authorized
 **Date:** 2026-08-01
 
 **Parent boundary design:**
@@ -30,17 +30,23 @@ consumer's `cfg(test)`, and `pub(crate)` cannot cross a package boundary.
 Therefore a literal byte-for-byte move of all 19 files cannot compile those
 four retained app tests.
 
-This design resolves that issue before the mechanical move, retains the clean
-preparation commit as the corrected-tree content authority, and keeps the
-actual extraction free of source adaptation.
+This design resolves that issue inside one atomic extraction checkpoint. The
+immutable 8B artifact remains the path-inventory authority, while an exact
+two-file patch and Git blob comparisons make the only moved-source adaptation
+explicit and auditable.
 
 ## Decision
 
-Use a two-step, forward-only Phase 8C:
+Use one forward-only, atomic Phase 8C implementation checkpoint. Before edits,
+record the clean repository HEAD as `BASE_COMMIT` and capture the retained app
+test identities. `BASE_COMMIT` is evidence and a rollback anchor, not a new
+implementation checkpoint.
 
-1. make one bounded preparation correction in the still app-owned staged tree;
-2. mechanically extract the resulting prepared tree into a new workspace
-   package.
+The single extraction change creates the package edge, moves the 19-file tree,
+applies the exact two-file fixture-boundary patch described below, creates the
+private app facade, updates the existing boundary contract once for the final
+layout, and transfers dependency ownership. After focused and full deterministic
+gates plus the release build pass, retain that state as `EXTRACTION_COMMIT`.
 
 The correction introduces a non-default `app-test-support` feature and exposes
 exactly two fixture functions when that feature is enabled. The production
@@ -49,7 +55,7 @@ and the private app facade re-exports the two functions only under
 `#[cfg(test)]`.
 
 No production behavior, public wire contract, persistence format, source
-ownership, or normal-build API is changed by the correction.
+ownership, or normal-build API is changed by the fixture-boundary patch.
 
 ## Considered Alternatives
 
@@ -72,29 +78,37 @@ does not invalidate the achieved 8B package-portability boundary.
 
 ### Make constructors permanently public
 
-Rejected. The app needs the constructors only in tests. Permanently expanding
-the production API would weaken the curated crate boundary.
+Rejected for boundary consistency, not because the constructors enforce hidden
+invariants. Their arguments are already observable through read-only public
+accessors, but making them public would add unconditional production
+construction names beyond the curated 8B surface. The selected feature gates
+the existing fixture seam and leaves the normal-build type surface unchanged.
 
 ## Authority and Precedence
 
-Until explicit owner approval, this document is a draft and the parent design
-remains the active 8C authority. Approval authorizes design only; it does not
-authorize implementation.
-
-After explicit approval, this document becomes the normative authority for
-Phase 8C where it explicitly differs from the parent design. It supersedes
+This owner-approved document is the normative authority for Phase 8C where it
+explicitly differs from the parent design. Approval authorizes implementation
+planning only; it does not authorize implementation. This document supersedes
 only these parent clauses:
 
-1. 8C may perform a bounded two-file staged-tree correction before the move;
+1. 8C may apply the exact two-file fixture-boundary patch below inside the
+   atomic extraction checkpoint;
 2. the feature-enabled crate surface may contain exactly the two test fixture
    functions specified below;
-3. final move equality is measured by exact Git blob identity against the
-   retained 8C preparation commit, while the immutable 8B artifact remains
-   retained evidence and the exact 19-path inventory;
+3. final content authority consists of exact Git blob equality for 17 moved
+   files and the exact approved patch for the other two, while the immutable 8B
+   artifact remains retained evidence and the exact 19-path inventory;
 4. the app may declare the same path package once in normal dependencies and
    once in dev-dependencies solely to enable `app-test-support` for app tests;
-5. after the preparation correction, the two corrected source files move
-   byte-for-byte with the other 17 files.
+5. 8C observes its final fixture-boundary RED inside the uncommitted extraction
+   change and retains neither a separate RED-contract commit nor a fixture
+   preparation commit; the sole implementation commit is
+   `EXTRACTION_COMMIT`. This explicitly replaces the parent's separate
+   committed-RED and mechanical-extraction commits;
+6. the single 8C fixture-boundary RED is a bounded exception to the parent's
+   runtime-only RED rule: compilation of the `extractum` library test target
+   fails with the exact `E0432` fixture-import diagnostic before any test binary
+   exists. No other compiler failure or zero-test execution is RED evidence.
 
 Every parent requirement not named above remains in force. In particular,
 this document does not reopen 8A or 8B, expand the production API, alter the
@@ -102,8 +116,9 @@ this document does not reopen 8A or 8B, expand the production API, alter the
 
 ## Frozen Starting Identity
 
-Phase 8C begins from retained 8B terminal commit
-`c4c446b1169733d8623f84bbda5e028c2e7fa365`.
+The frozen source identity for Phase 8C is retained 8B terminal commit
+`c4c446b1169733d8623f84bbda5e028c2e7fa365`. Later documentation-only commits
+do not replace that authority.
 
 The implementation plan must verify these files before its first source edit:
 
@@ -116,7 +131,12 @@ The implementation plan must verify these files before its first source edit:
 | `src-tauri/Cargo.toml` | `ee323d7b613573918d4ad3777b238bc7e107d049588ddcfa0959dacfd1e2cf69` |
 | `src-tauri/Cargo.lock` | `720e38ea632d7b932b2a23d1481528845ec9304376035b1c851c546ea402e43c` |
 
-Unexpected drift stops the slice. It is not normalized inside Phase 8C.
+Immediately before implementation, record the clean current HEAD as
+`BASE_COMMIT`. Verify that the 19 staged source paths, `src-tauri/Cargo.toml`,
+and `src-tauri/Cargo.lock` at `BASE_COMMIT` still match the frozen 8B source
+identity and the hashes above. `BASE_COMMIT` may include later documentation
+commits, but no Telegram source, manifest, or lockfile drift. Unexpected drift
+stops the slice; it is not normalized inside Phase 8C.
 
 ## Cross-Package Test-Support Problem
 
@@ -151,17 +171,17 @@ The new package owns one empty, non-default feature:
 app-test-support = []
 ```
 
-When either the package's own tests or that feature are enabled, the crate root
-may expose exactly these two free functions:
+When that feature is enabled, the crate root may expose exactly these two free
+functions:
 
 ```rust
-#[cfg(any(test, feature = "app-test-support"))]
+#[cfg(feature = "app-test-support")]
 pub fn takeout_attempt_fixture(
     home_dc_id: i32,
     export_dc_id: i32,
 ) -> TakeoutAttempt;
 
-#[cfg(any(test, feature = "app-test-support"))]
+#[cfg(feature = "app-test-support")]
 pub fn takeout_fallback_fixture(
     kind: TakeoutFallbackKind,
     warning: &str,
@@ -178,17 +198,25 @@ types.
 boundary: any external consumer can explicitly enable a public Cargo feature.
 It is authorized here only because it changes no production behavior, is
 needed solely by consumer tests, exposes a two-function API, and is safe when
-Cargo enables it for tests, examples, benches, or `--all-targets`. It must
-never expose secrets, bypass authentication, or enable an administrative
-operation.
+Cargo activates the consumer's dev-dependency. It must never expose secrets,
+bypass authentication, or enable an administrative operation.
 
-During the preparation correction, the still app-owned package temporarily
-declares `app-test-support = []` so Rust's checked-cfg recognizes the feature.
-The two definitions and root exports use
-`#[cfg(any(test, feature = "app-test-support"))]`; their visibility becomes
-`pub`. No app test or production call site changes.
+The producer definitions and crate-root re-exports use only
+`#[cfg(feature = "app-test-support")]`; they do not use `cfg(test)` or
+`cfg(any(...))`. No `extractum-telegram` test consumes the fixtures. This is a
+required ownership rule: isolated `-p extractum-telegram` checks/tests compile
+the producer feature-off, while workspace `--all-targets` gates compile it
+feature-on through the app dev-dependency. A producer test that used either
+fixture would fail in the isolated package checkpoint while workspace feature
+unification could mask that invalid reliance. Both configurations must remain
+GREEN.
 
-After extraction:
+The app does not temporarily declare the feature, and no app test or production
+call site changes. The two `pub fn` definitions remain inside the private
+`takeout` module; their two crate-root `pub use` declarations expose exactly two
+external fixture names, not four.
+
+The extraction adds these dependency declarations to the app package:
 
 ```toml
 [dependencies]
@@ -201,8 +229,9 @@ extractum-telegram = {
 }
 ```
 
-The temporary app-owned `app-test-support` feature declaration is removed at
-this point; the feature belongs only to `extractum-telegram`.
+The feature is declared only by `extractum-telegram` and is non-default. The
+normal app dependency remains feature-free; only the app dev-dependency enables
+it.
 
 The private compatibility facade contains the normal explicit production
 allowlist plus only this test-gated addition:
@@ -219,12 +248,13 @@ pub(crate) use extractum_telegram::{
 
 The workspace uses Cargo resolver version 2. In a normal library build,
 features requested only by a dev-dependency are not unified into the normal
-dependency. When Cargo builds a target that needs dev-dependencies, including
-tests, examples, benches, or `--all-targets`, `app-test-support` is expected to
-be enabled and unified for that build.
+dependency. Consumer tests, examples, benches, and consumer `--all-targets`
+commands require dev-dependencies, so both
+`cargo check -p extractum --all-targets` and
+`cargo test -p extractum --all-targets` enable and unify
+`app-test-support`. Neither command is feature-off evidence.
 
-Consequently, `cargo check --all-targets` is not evidence that the feature is
-off. Cargo activation has exactly two verification invariants:
+Cargo activation has exactly two verification invariants:
 
 1. `extractum-telegram` compiles as a library without
    `app-test-support`:
@@ -236,44 +266,61 @@ off. Cargo activation has exactly two verification invariants:
 No separate feature-unification contract or explicit feature-on crate check is
 required. The exact normal/dev manifest declarations above remain part of the
 dependency-ownership evidence. The standing curated source/API allowlist still
-rejects unconditional fixture exposure or any third feature-gated public item;
-this is API-boundary evidence, not a second Cargo feature model.
+allows exactly those two feature-gated definitions in the private `takeout`
+module and their two corresponding crate-root re-exports. It rejects an
+unconditional fixture, any additional feature-gated definition or root export,
+and any third externally reachable fixture name. This is API-boundary evidence,
+not a second Cargo feature model.
 `cargo tree -e features` is a diagnostic when the resolved graph is surprising,
 not an additional completion gate.
 
-## Preparation-Commit Content Authority
+## Extraction Content Authority
 
-The immutable 8B staging artifact remains unchanged. It continues to prove
-the retained 8B result, supplies the exact sorted 19-path inventory, and must
-never be regenerated for Phase 8C.
+The immutable 8B staging artifact remains unchanged. It continues to prove the
+retained 8B result, supplies the exact sorted 19-path inventory, and must never
+be regenerated for Phase 8C.
 
-Checkpoint 1 retains a clean Git commit called `PREPARATION_COMMIT`. Relative
-to retained 8B terminal commit
-`c4c446b1169733d8623f84bbda5e028c2e7fa365`, the path set under
-`src-tauri/src/telegram_impl` remains the artifact's exact 19 paths and the
-source delta is exactly:
+`BASE_COMMIT` records the clean pre-implementation HEAD. Before edits, evidence
+proves that all 19 app-owned source blobs at `BASE_COMMIT` equal their blobs at
+retained 8B terminal commit
+`c4c446b1169733d8623f84bbda5e028c2e7fa365`. This lets the plan use
+`BASE_COMMIT` as its operational rollback and test-list anchor without
+redefining frozen 8B authority.
 
-- `lib.rs`;
-- `takeout/mod.rs`.
-
-The other 17 source paths retain their starting Git blob IDs. Evidence records
-the full `PREPARATION_COMMIT` SHA and this exact path/blob delta; no new hash
-script or generated manifest is created.
-
-Checkpoint 2 records `EXTRACTION_COMMIT`. For each of the 19 relative paths
-from the immutable 8B artifact, completion evidence requires:
+The single retained implementation checkpoint is `EXTRACTION_COMMIT`. For 17
+relative paths other than `lib.rs` and `takeout/mod.rs`, completion evidence
+requires:
 
 ```text
-git rev-parse PREPARATION_COMMIT:src-tauri/src/telegram_impl/<path>
+git rev-parse c4c446b1169733d8623f84bbda5e028c2e7fa365:src-tauri/src/telegram_impl/<path>
 ==
 git rev-parse EXTRACTION_COMMIT:src-tauri/crates/extractum-telegram/src/<path>
 ```
 
-Equal blob IDs prove exact repository-byte identity for each moved file. Git
-rename output may supplement the evidence but is not the authority: the old
-`telegram_impl/lib.rs` path remains present as the new app facade, so ordinary
-rename detection is not sufficient for that file. The facade is outside the
-19-pair comparison.
+The remaining two destination files may differ from their frozen source only
+by this exact patch:
+
+| File | Exact allowed substitutions |
+| --- | --- |
+| `lib.rs` | On both fixture re-exports, replace `#[cfg(test)]` with `#[cfg(feature = "app-test-support")]` and `pub(crate) use` with `pub use`. |
+| `takeout/mod.rs` | On both fixture definitions, replace `#[cfg(test)]` with `#[cfg(feature = "app-test-support")]` and `pub(crate) fn` with `pub fn`. |
+
+For each corrected path, evidence resolves the frozen source blob and retained
+destination blob with `git rev-parse`, then runs:
+
+```text
+git diff --no-ext-diff --unified=0 <source-blob-id> <destination-blob-id>
+```
+
+Record both blob IDs and the complete diff. Excluding diff headers, the two
+diffs together may contain only the eight line substitutions in the table:
+function bodies, signatures, names, order, imports, and all other bytes remain
+unchanged. No generated 8C hash artifact or comparison script is added.
+
+Git rename output may supplement the evidence but is not the authority: the
+old `telegram_impl/lib.rs` path remains present as the new app facade, so
+ordinary rename detection is not sufficient for that file. The facade is new
+app-owned content and is outside the 19-file source comparison.
 
 ## Target Package and Dependency Ownership
 
@@ -316,23 +363,24 @@ features must not drift.
 
 ## Physical Move and Compatibility Facade
 
-After the preparation checkpoint is retained, Phase 8C atomically:
+Starting from recorded `BASE_COMMIT`, Phase 8C atomically:
 
 1. creates the new package manifest;
 2. moves all 19 prepared source paths from
    `src-tauri/src/telegram_impl/**` to
    `src-tauri/crates/extractum-telegram/src/**`;
-3. creates a new private compatibility facade at the vacated
+3. applies the exact two-file fixture-boundary patch and no other moved-source
+   edit;
+4. creates a new private compatibility facade at the vacated
    `src-tauri/src/telegram_impl/lib.rs`;
-4. adds the workspace member and normal/dev path dependency declarations;
-5. removes moved direct dependencies from the app package;
-6. updates the lockfile and boundary contracts.
+5. adds the workspace member and normal/dev path dependency declarations;
+6. removes moved direct dependencies from the app package;
+7. updates the lockfile and the existing boundary contract once for the final
+   physical layout.
 
-Every destination source file, including corrected `lib.rs` and
-`takeout/mod.rs`, has the same Git blob ID as its source at
-`PREPARATION_COMMIT`. There is no source fix during or after the move. A
-required moved-tree edit means the preparation is incomplete and the
-extraction checkpoint stops.
+The 17 unchanged destination files retain their frozen Git blobs. The other
+two match the exact approved patch above. Any additional moved-tree edit stops
+the extraction checkpoint.
 
 The app retains:
 
@@ -373,8 +421,8 @@ The retained terminal inventory contains 736 unique `extractum` library tests:
 
 No test is deleted, duplicated, ignored, or converted into a contract-only
 assertion. The 8B identity artifact remains immutable and identifies the exact
-71 future-owner tests. Checkpoint 1 evidence captures the exact 736-test
-`extractum` library list from:
+71 future-owner tests. Before edits, evidence captures the exact 736-test
+`extractum` library list at `BASE_COMMIT` from:
 
 ```powershell
 cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib -- --list
@@ -384,59 +432,87 @@ Expected final crate identities are the 71 staged identities with the
 `telegram_impl::` prefix removed; expected final app identities are the
 captured 736 identities minus those 71 staged identities.
 
-Checkpoint 2 evidence captures the exact library test lists from both packages
-using the same command shape with `-p extractum` and
+`EXTRACTION_COMMIT` evidence captures the exact library test lists from both
+packages using the same command shape with `-p extractum` and
 `-p extractum-telegram`, then compares the sets, not only their counts, with
 those expectations. The counts must still be 665 app / 71 crate / 736 union.
-No new persistent test ownership contract or generator is introduced.
+The captured lists belong in completion evidence; no persistent full-736
+contract or generator is introduced.
 
 ## Execution Checkpoints
 
-Phase 8C has exactly two retained implementation checkpoints.
+Phase 8C has exactly one retained implementation checkpoint.
 
-### Checkpoint 1: bounded test-support preparation
+### Final-boundary RED and atomic extraction GREEN
 
-The first implementation checkpoint changes only:
+Inside the same uncommitted extraction change, first create the package edge,
+move the frozen source, and create the app facade without yet applying the
+fixture patch or enabling `app-test-support`. In this transient state, the app
+manifest contains only the normal feature-free path dependency on
+`extractum-telegram`; neither the app dev-dependency nor the producer
+`app-test-support` feature declaration exists. Add those two declarations
+together with the exact source patch after the RED. Compile the `extractum`
+library test target with:
 
-- `src-tauri/src/telegram_impl/lib.rs`;
-- `src-tauri/src/telegram_impl/takeout/mod.rs`;
-- `src-tauri/Cargo.toml` for temporary checked-cfg feature recognition;
-- existing boundary contracts only where the conditional API allowlist must
-  recognize the two exact fixture exports;
-- documentation/evidence required by the plan.
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib --no-run
+```
 
-It must prove all 736 app library tests remain GREEN, capture their exact test
-identity list, and prove the exact two-source-path preparation delta described
-above. It is retained as clean `PREPARATION_COMMIT`. The roadmap status remains
-`8B preparation retained; 8C pending` because no crate or dependency edge
-exists yet.
+The exact expected RED is compiler error `E0432` at the facade re-export,
+naming both unresolved imports
+`extractum_telegram::takeout_attempt_fixture` and
+`extractum_telegram::takeout_fallback_fixture`. No test binary is produced and
+no test starts. This directly reproduces the cross-package seam and is the
+single meaningful RED. The transient state is never committed. A Cargo
+invocation that fails merely because an undeclared feature name was supplied
+is not an accepted RED.
 
-### Checkpoint 2: final-boundary RED and atomic extraction GREEN
+The exact oracle constrains that primary facade diagnostic, not the total
+diagnostic count. Current rustc suppresses a downstream cascade; if another
+supported compiler also emits `E0432` at the `takeout_import` import, record it
+as expected secondary evidence, but do not require it or accept it as a
+substitute for the primary facade error.
 
-Before moving files, add one focused assertion over `cargo metadata`: the
-workspace must contain seven members including `extractum-telegram`, and
-`extractum` must have no direct Grammers dependency. Execute it and observe the
-exact expected RED. File existence, local-module removal, facade shape, the
-remaining two exclusive dependency removals, and other structural postconditions
-are checked directly in the final GREEN state rather than receiving separate
-tests for their pre-move nonexistence.
+Do not run the TypeScript boundary contract in this transient state. It still
+describes the app-owned topology and would add an unrelated structural failure.
+Its first 8C execution occurs only after the contract is updated in the final
+GREEN state; the later full verifier sees that same final state.
 
-Then perform the physical move, manifest/workspace/dependency transfer, facade
-creation, lockfile refresh, and final contract updates as one extraction
-checkpoint. Do not edit moved source content.
+Then apply the exact two-file patch and final normal/dev dependency declarations.
+Update the existing Telegram crate boundary contract once so its focused 8C
+assertion describes only the final physical layout and final API boundary. The
+contract must assert exactly two public fixture exports gated by
+`feature = "app-test-support"`, reject either fixture when unconditional, and
+allow exactly the two feature-gated private-module definitions plus their two
+corresponding crate-root re-exports. Any additional gated definition or root
+export fails. These four declarations represent exactly two externally
+reachable fixture names. The contract is not rewritten through preparation and
+extraction variants and does not embed the full 736-test identity list.
 
-The checkpoint is GREEN only when package tests, app tests, all 19 blob pairs,
-exact test identity sets, dependency ownership, feature closure, API
-allowlists, and workspace checks all pass. Retain it as clean
+The contract derives the extracted state from exact package, path, and facade
+preconditions and must pass before terminal roadmap/design statuses are
+updated. Partial layouts fail closed; terminal status is not a prerequisite for
+final GREEN.
+
+Run all four fixture-consuming app tests GREEN with a non-empty selection, then
+finish the lockfile and every tracked file intended for `EXTRACTION_COMMIT`.
+On that final, still-uncommitted tree, run `npm.cmd run verify`, then run the
+exact release build specified below on the same unchanged tree. Any tracked
+checkpoint-file change after either gate invalidates both results and requires
+both commands to be rerun. The checkpoint is GREEN only when focused package
+and consumer tests, the 17 exact blob pairs and two exact diffs, exact test
+identity sets, dependency ownership, feature closure, API allowlists, full
+verification, and release build all pass. Only then retain the clean state as
 `EXTRACTION_COMMIT`.
 
-After Checkpoint 2, record completion evidence in a docs-only terminal commit:
-the two checkpoint SHAs, exact blob comparison, file disposition, test identity
-sets, Cargo metadata, feature-off build and feature-on consumer evidence,
-release build, startup smoke, MCP smoke, and full repository verification. That
-commit changes no Rust source, manifest, or lockfile and is not a third
-implementation checkpoint. It also updates roadmap/design status to the exact
-terminal disposition required by the parent design.
+After `EXTRACTION_COMMIT`, run the live MCP and startup evidence once and record
+completion in a docs-only terminal commit. That evidence commit records
+`BASE_COMMIT`, `EXTRACTION_COMMIT`, content comparison, file disposition, test
+identity sets, Cargo metadata, feature-off and feature-on evidence, full
+verification, release build, MCP smoke, and startup smoke. It changes no Rust
+source, manifest, or lockfile and is not an implementation checkpoint. It also
+updates roadmap/design status to the exact terminal disposition required by
+the parent design.
 
 ## Error and Behavior Compatibility
 
@@ -452,86 +528,106 @@ SQLite, compression, and session persistence remain backend-owned.
 
 ## Runtime and MCP Evidence
 
-Completion requires the parent-design startup and live MCP evidence. The MCP
-smoke invokes the real webview command:
+Terminal Phase 8C completion requires the parent-design startup and live MCP
+evidence. Run the live MCP smoke once, after the clean `EXTRACTION_COMMIT` is
+retained and before any self-managed startup smoke. It invokes the real webview
+command:
 
 ```text
 tg_get_account_statuses { accountIds: [] }
 ```
 
 The exact result is `[]`. A plugin-side command executor is not a substitute
-for webview-to-Tauri IPC evidence.
+for webview-to-Tauri IPC evidence. The empty-ID call is intentionally bounded:
+it proves command registration and the real webview-to-Tauri invoke path while
+deterministic tests prove extracted Telegram behavior.
 
-Environment-sensitive full verification, release build, startup, and MCP
-smoke use the repository-approved outside-sandbox protocol. Ports must be free
-before self-managed smoke checks, and live MCP smoke runs first.
+The release build is a deterministic pre-retention gate; its execution may
+still require the repository-approved outside-sandbox protocol. The plan derives
+`$hostTarget` from the `host:` line of `rustc -vV`, proves that
+`CARGO_TARGET_DIR` and `CARGO_BUILD_TARGET` are unset, and runs exactly:
+
+```powershell
+npm.cmd run tauri -- build --no-bundle --target $hostTarget
+```
+
+This intentionally continues the retained 8B release protocol. The subsequent
+startup smoke resolves only
+`src-tauri/target/$hostTarget/release/extractum.exe`, records its hash and actual
+PID path, and never substitutes `src-tauri/target/release/extractum.exe`.
+
+MCP and startup are environment-sensitive post-commit terminal evidence. Their
+failure blocks the terminal 8C/Phase 8 disposition but does not erase or by
+itself invalidate the clean extraction commit. App ports must be free before
+the self-managed startup smoke. The required order is final uncommitted
+`npm.cmd run verify` -> release command above -> `EXTRACTION_COMMIT` -> live MCP
+-> self-managed startup smoke -> docs-only terminal commit.
 
 ## Rust Verification Loops
 
-Affected packages are initially `extractum`, then both `extractum-telegram`
-and its immediate consumer `extractum`.
-
-### Preparation loop
-
-- RED:
-  `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --lib --features app-test-support`
-  fails because the still app-owned package does not yet declare the feature;
-- GREEN: the same command succeeds, followed by the exact four app tests and
-  the preparation-commit path/blob and test-identity evidence;
-- focused check:
-  `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`;
-- package checkpoint:
-  `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`.
+Affected packages are `extractum-telegram` and its immediate consumer
+`extractum`.
 
 ### Extraction loop
 
-- RED: the single focused `cargo metadata` assertion described in Checkpoint 2
-  fails with its exact expected boundary message;
+- compile-time RED: after the frozen move and package edge exist in the
+  uncommitted working change but before the feature patch,
+  `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib --no-run`
+  fails with `E0432` for both fixture imports at the facade re-export; no test
+  starts;
+- narrow consumer GREEN: the four named app tests that consume the fixture seam
+  run and pass with a non-empty selection;
 - feature-off crate GREEN:
   `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features`;
-- crate focused check; this builds development targets and is not feature-off
-  evidence:
+- producer-isolated focused check; selecting only the producer factually leaves
+  the feature off, but this is not the canonical feature-off evidence:
   `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets`;
-- crate checkpoint:
+- producer-isolated checkpoint, with the same evidence qualification:
   `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets`;
 - normal consumer GREEN:
   `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --lib`;
-- consumer focused check; resolver v2 enables `app-test-support` for its
-  development targets:
+- feature-on consumer focused check; resolver v2 activates the app
+  dev-dependency for its development targets:
   `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`;
 - feature-on consumer checkpoint:
   `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`.
 
-A filtered run reporting zero tests is not evidence. List test names first when
-an exact identity is uncertain.
+A filtered GREEN run intended to execute tests is not evidence when it reports
+zero tests; list names first when an exact identity is uncertain. The
+compile-time RED above is different: it intentionally starts no tests and is
+proved by the exact `E0432` diagnostic at the facade.
 
-### End-of-slice gates
+### End-of-slice gate
 
-Run all of:
+Run one final time on the complete, still-uncommitted checkpoint tree:
 
 ```powershell
-npm.cmd run check:rustfmt
-cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets
-cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets
 npm.cmd run verify
 ```
 
-The workspace `--all-targets` gates intentionally include development targets
-and therefore do not prove that `app-test-support` is off. The feature-off
-crate check and feature-on consumer checkpoint in the extraction loop are the
-only feature-specific completion evidence.
+The repository verifier already includes rustfmt plus workspace-wide Cargo
+check and test gates, so those workspace commands are not duplicated in this
+section. Its final `git diff HEAD --check` must inspect the complete extraction
+diff, which is why verification precedes retention. The explicit feature-off
+crate library check and feature-on consumer checkpoint remain the two primary
+feature-specific invariants.
+
+The package-level focused checks and checkpoints intentionally remain even
+though the workspace verifier later recompiles their targets: the repository
+workflow requires both directly affected packages and the immediate consumer
+to have isolated package evidence before the full gate.
 
 ## Rollback
 
-Checkpoint 1 is independently retained only if its app package checkpoint,
-exact test list, and preparation-commit path/blob proof are GREEN. If
-extraction fails later, return to that clean commit; do not partially copy
-files back or regenerate the 8B artifact.
+Before `EXTRACTION_COMMIT` is retained, any failed extraction returns the
+workflow-owned working change to recorded `BASE_COMMIT` using the safe rollback
+procedure named in the implementation plan. Do not partially copy files back,
+reconstruct individual paths, or regenerate the immutable 8B artifact.
 
-Checkpoint 2 is atomic. A failed move is not retained. A rollback restores the
-single app-owned prepared tree, removes the unfinished workspace/package edge,
-and restores the pre-extraction lockfile without changing Checkpoint 1 source
-content.
+After `EXTRACTION_COMMIT` is retained, a failed environment-sensitive MCP or
+startup check leaves that clean commit intact and Phase 8C pending. No terminal
+status or docs-only evidence commit is written until the required evidence
+passes.
 
 ## Non-Goals
 
@@ -554,40 +650,64 @@ Phase 8C does not:
 Phase 8C is complete only when:
 
 1. retained 8B authority files and their starting hashes were verified before
-   edits;
+   edits, the clean pre-implementation HEAD was recorded as `BASE_COMMIT`, and
+   its Telegram source, manifest, and lockfile match frozen 8B identity;
 2. the immutable 8B staging artifact is unchanged;
-3. `PREPARATION_COMMIT` has the same 19 staged paths, changes exactly `lib.rs`
-   and `takeout/mod.rs`, and preserves the other 17 starting blob IDs;
-4. all 19 destination blob IDs at `EXTRACTION_COMMIT` equal their corresponding
-   source blob IDs at `PREPARATION_COMMIT`;
-5. `extractum-telegram` is the seventh workspace member;
-6. the app has no direct Grammers, `chacha20poly1305`, or `rand_core`
+3. Phase 8C has one retained implementation checkpoint,
+   `EXTRACTION_COMMIT`;
+4. 17 destination blobs equal their frozen 8B sources, while `lib.rs` and
+   `takeout/mod.rs` contain only the exact approved eight-line fixture patch;
+5. compiling the `extractum` library test target in the uncommitted frozen-move
+   state produced the recorded primary `E0432` diagnostic at the facade naming
+   exactly the two fixture imports, without producing or running a test binary;
+   any compiler-emitted downstream cascade was recorded but was not required;
+   after the patch, all four consumers are GREEN and the once-updated final
+   contract enforces exactly the two conditional fixture exports without
+   depending on terminal status;
+6. `extractum-telegram` is the seventh workspace member;
+7. the app has no direct Grammers, `chacha20poly1305`, or `rand_core`
    dependency;
-7. Cargo metadata proves exact package-edge ownership while the unchanged
+8. Cargo metadata proves exact package-edge ownership while the unchanged
    `[workspace.dependencies]` table and retained baseline prove revision and
    feature identity;
-8. the exact feature-off `extractum-telegram --lib --no-default-features`
+9. the exact feature-off `extractum-telegram --lib --no-default-features`
    check passes, without using `--all-targets` as feature-off evidence;
-9. the dev-dependency enables exactly `app-test-support`, the app package tests
-   pass with it enabled by resolver v2, and it exposes only the two approved
-   fixture functions;
-10. the compatibility facade is explicit, private to the app, and contains no
-    behavior;
-11. existing app consumer paths and all production behavior are unchanged;
-12. exact `cargo test -- --list` sets match the retained preparation list and
+10. only `extractum-telegram` declares the non-default `app-test-support`
+    feature; both producer definitions and re-exports use only
+    `cfg(feature = "app-test-support")`, and the app dev-dependency enables it;
+11. app package tests pass with the feature enabled by resolver v2, including
+    the four fixture consumers;
+12. the compatibility facade is explicit, `cfg(test)`-gated for the two
+    fixtures, private to the app, and behavior-free;
+13. existing app consumer paths and all production behavior are unchanged;
+14. exact `cargo test -- --list` sets match the `BASE_COMMIT` list and
     71-owner map, with counts 665 app / 71 crate / 736 union;
-13. focused package checks and all end-of-slice gates pass;
-14. release, startup, and real webview MCP evidence pass;
-15. final documentation records the exact retained commits, hashes, commands,
+15. focused package checks and checkpoints pass, and `npm.cmd run verify`
+    passes on the final uncommitted extraction tree immediately before
+    retention;
+16. `npm.cmd run tauri -- build --no-bundle --target $hostTarget` passes on the
+    same unchanged tree before `EXTRACTION_COMMIT` is created, and startup
+    evidence resolves only
+    `src-tauri/target/$hostTarget/release/extractum.exe`;
+17. the one-time post-commit real-webview MCP smoke and subsequent startup
+    smoke pass;
+18. final documentation records the exact retained commits, hashes, commands,
     results, and terminal Phase 8 disposition.
 
 ## Implementation-Plan Requirements
 
-After owner approval, write a separate Phase 8C implementation plan using the
-project's planning workflow. The plan must include the Rust verification loops
-above, the single metadata RED, both checkpoint commits, path and dependency
-allowlists, exact 19-path Git blob comparison, resolver-v2 two-invariant
-feature evidence, exact test-list set comparisons, rollback commands, and the
-final evidence template.
+Implementation requires a separate Phase 8C plan written with the project's
+planning workflow. The plan must include the Rust verification loops
+above; `BASE_COMMIT` capture and frozen-authority checks; the pre-edit exact
+736-test list; the single compile-time `E0432` fixture-boundary RED inside the
+uncommitted move; one atomic `EXTRACTION_COMMIT`;
+path and dependency allowlists; 17 exact Git blob comparisons plus the two exact
+approved diffs; one final-layout boundary-contract update whose physical-state
+logic does not require terminal status; resolver-v2 feature-off/feature-on
+evidence; exact test-list set comparisons; package loops; final uncommitted
+`npm.cmd run verify`; the exact pre-retention release command and host-target
+derivation; the exact host-qualified startup executable path; safe rollback
+commands; and the one-time post-commit MCP/startup evidence template. It must
+not run the boundary contract during the transient compile-time RED.
 
 Approval of this specification alone does not start implementation.
