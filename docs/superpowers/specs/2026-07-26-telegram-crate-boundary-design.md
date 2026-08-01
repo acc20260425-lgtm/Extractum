@@ -537,9 +537,10 @@ that overhead; the roadmap does not report Phase 8 as successful.
 
 The bounded Phase 8C design linked above specifies the post-8B extraction
 protocol, including the exact cross-package test-support preparation and its
-derived source-hash authority. Until that design is explicitly approved, the
-clauses in this section remain the current 8C authority. After approval, the
-bounded design takes precedence only for the clauses it explicitly names.
+preparation-commit content authority. Until that design is explicitly
+approved, the clauses in this section remain the current 8C authority. After
+approval, the bounded design takes precedence only for the clauses it
+explicitly names.
 
 8C creates `extractum-telegram` and mechanically moves the complete prepared
 Grammers perimeter:

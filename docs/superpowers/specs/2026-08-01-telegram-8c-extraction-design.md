@@ -30,9 +30,9 @@ consumer's `cfg(test)`, and `pub(crate)` cannot cross a package boundary.
 Therefore a literal byte-for-byte move of all 19 files cannot compile those
 four retained app tests.
 
-This design resolves that issue before the mechanical move, derives a new
-hash authority for the corrected tree, and keeps the actual extraction free of
-source adaptation.
+This design resolves that issue before the mechanical move, retains the clean
+preparation commit as the corrected-tree content authority, and keeps the
+actual extraction free of source adaptation.
 
 ## Decision
 
@@ -88,8 +88,9 @@ only these parent clauses:
 1. 8C may perform a bounded two-file staged-tree correction before the move;
 2. the feature-enabled crate surface may contain exactly the two test fixture
    functions specified below;
-3. final move equality is measured against a new derived 8C prepared-tree
-   artifact, while the immutable 8B artifact remains retained evidence;
+3. final move equality is measured by exact Git blob identity against the
+   retained 8C preparation commit, while the immutable 8B artifact remains
+   retained evidence and the exact 19-path inventory;
 4. the app may declare the same path package once in normal dependencies and
    once in dev-dependencies solely to enable `app-test-support` for app tests;
 5. after the preparation correction, the two corrected source files move
@@ -240,31 +241,39 @@ this is API-boundary evidence, not a second Cargo feature model.
 `cargo tree -e features` is a diagnostic when the resolved graph is surprising,
 not an additional completion gate.
 
-## Prepared-Tree Hash Authority
+## Preparation-Commit Content Authority
 
 The immutable 8B staging artifact remains unchanged. It continues to prove
-the retained 8B result and must never be regenerated for Phase 8C.
+the retained 8B result, supplies the exact sorted 19-path inventory, and must
+never be regenerated for Phase 8C.
 
-The preparation correction creates:
-
-- `src/lib/telegram-8c-prepared-sha256.json`;
-- `scripts/telegram-8c-extraction-sha256.mjs`.
-
-The new artifact has the same 19 sorted relative paths as the 8B artifact. Its
-records differ from 8B for exactly:
+Checkpoint 1 retains a clean Git commit called `PREPARATION_COMMIT`. Relative
+to retained 8B terminal commit
+`c4c446b1169733d8623f84bbda5e028c2e7fa365`, the path set under
+`src-tauri/src/telegram_impl` remains the artifact's exact 19 paths and the
+source delta is exactly:
 
 - `lib.rs`;
 - `takeout/mod.rs`.
 
-The other 17 path/hash records must be byte-identical to the retained 8B
-artifact. The script supports `--write` only while the source root is
-`src-tauri/src/telegram_impl`, and `--check` against either that prepared root
-or `src-tauri/crates/extractum-telegram/src` as selected by an explicit
-argument. It rejects missing or extra paths, order drift, root drift, malformed
-hashes, and a changed two-file delta.
+The other 17 source paths retain their starting Git blob IDs. Evidence records
+the full `PREPARATION_COMMIT` SHA and this exact path/blob delta; no new hash
+script or generated manifest is created.
 
-The final extracted destination must match all 19 prepared records exactly.
-The newly created app facade is outside this comparison.
+Checkpoint 2 records `EXTRACTION_COMMIT`. For each of the 19 relative paths
+from the immutable 8B artifact, completion evidence requires:
+
+```text
+git rev-parse PREPARATION_COMMIT:src-tauri/src/telegram_impl/<path>
+==
+git rev-parse EXTRACTION_COMMIT:src-tauri/crates/extractum-telegram/src/<path>
+```
+
+Equal blob IDs prove exact repository-byte identity for each moved file. Git
+rename output may supplement the evidence but is not the authority: the old
+`telegram_impl/lib.rs` path remains present as the new app facade, so ordinary
+rename detection is not sufficient for that file. The facade is outside the
+19-pair comparison.
 
 ## Target Package and Dependency Ownership
 
@@ -278,24 +287,28 @@ The workspace member count becomes seven. The package name is
 `extractum-telegram`, its library crate is `extractum_telegram`, and it
 inherits workspace edition and version.
 
-The new package owns the four exact Grammers declarations and their retained
-revision/feature policy:
+`[workspace.dependencies]` remains the sole declaration authority for versions,
+Git revisions, default-feature policy, and explicit features. Phase 8C does not
+copy or alter those declarations. The new package owns direct
+`{ workspace = true }` inheritance edges for:
 
 - `grammers-client`;
 - `grammers-session`;
 - `grammers-mtsender`;
 - `grammers-tl-types`.
 
-It also owns direct dependencies actually used by the moved tree, including
-`chacha20poly1305` and `rand_core`. The app removes those six direct roots.
+It also owns direct inheritance edges for dependencies actually used by the
+moved tree, including `chacha20poly1305` and `rand_core`. The app removes those
+six direct roots.
 `base64` and `secrecy` remain app dependencies because app-owned code uses
 them independently; duplicate direct ownership is allowed only where metadata
 and source search prove both packages consume the dependency.
 
 The implementation plan must freeze the exact new package manifest from
-current source imports before the extraction RED contract. It may not infer a
-new capability from transitive resolution. The retained Grammers feature
-baseline must remain GREEN after ownership moves.
+current source imports before the extraction RED assertion. It may not infer a
+new capability from transitive resolution. Cargo metadata must prove the
+package-edge move while the retained Grammers feature baseline proves that the
+unchanged workspace declarations resolve to the same effective features.
 
 `Cargo.lock` changes only as Cargo requires for the new path package and moved
 direct ownership. Versions, Git revisions, checksums, and effective Grammers
@@ -316,9 +329,10 @@ After the preparation checkpoint is retained, Phase 8C atomically:
 6. updates the lockfile and boundary contracts.
 
 Every destination source file, including corrected `lib.rs` and
-`takeout/mod.rs`, equals the prepared artifact byte-for-byte. There is no
-source fix during or after the move. A required moved-tree edit means the
-preparation is incomplete and the extraction checkpoint stops.
+`takeout/mod.rs`, has the same Git blob ID as its source at
+`PREPARATION_COMMIT`. There is no source fix during or after the move. A
+required moved-tree edit means the preparation is incomplete and the
+extraction checkpoint stops.
 
 The app retains:
 
@@ -358,56 +372,71 @@ The retained terminal inventory contains 736 unique `extractum` library tests:
 - the workspace union remains exactly 736 unique logical identities.
 
 No test is deleted, duplicated, ignored, or converted into a contract-only
-assertion. The 8B identity artifact remains immutable. An 8C ownership
-contract derives the expected package split from its 71 staged identities and
-proves the union against the retained 736-test set.
+assertion. The 8B identity artifact remains immutable and identifies the exact
+71 future-owner tests. Checkpoint 1 evidence captures the exact 736-test
+`extractum` library list from:
+
+```powershell
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib -- --list
+```
+
+Expected final crate identities are the 71 staged identities with the
+`telegram_impl::` prefix removed; expected final app identities are the
+captured 736 identities minus those 71 staged identities.
+
+Checkpoint 2 evidence captures the exact library test lists from both packages
+using the same command shape with `-p extractum` and
+`-p extractum-telegram`, then compares the sets, not only their counts, with
+those expectations. The counts must still be 665 app / 71 crate / 736 union.
+No new persistent test ownership contract or generator is introduced.
 
 ## Execution Checkpoints
 
-### Checkpoint 0: bounded test-support preparation
+Phase 8C has exactly two retained implementation checkpoints.
+
+### Checkpoint 1: bounded test-support preparation
 
 The first implementation checkpoint changes only:
 
 - `src-tauri/src/telegram_impl/lib.rs`;
 - `src-tauri/src/telegram_impl/takeout/mod.rs`;
 - `src-tauri/Cargo.toml` for temporary checked-cfg feature recognition;
-- the new 8C hash script/artifact and their focused contract tests;
+- existing boundary contracts only where the conditional API allowlist must
+  recognize the two exact fixture exports;
 - documentation/evidence required by the plan.
 
-It must prove all 736 app library tests remain GREEN and that the new artifact
-differs from the immutable 8B artifact at exactly two source paths. The
-roadmap status remains `8B preparation retained; 8C pending` because no crate
-or dependency edge exists yet.
+It must prove all 736 app library tests remain GREEN, capture their exact test
+identity list, and prove the exact two-source-path preparation delta described
+above. It is retained as clean `PREPARATION_COMMIT`. The roadmap status remains
+`8B preparation retained; 8C pending` because no crate or dependency edge
+exists yet.
 
-### Checkpoint 1: final boundary RED
+### Checkpoint 2: final-boundary RED and atomic extraction GREEN
 
-Before moving files, contracts must fail for the intended missing final state:
+Before moving files, add one focused assertion over `cargo metadata`: the
+workspace must contain seven members including `extractum-telegram`, and
+`extractum` must have no direct Grammers dependency. Execute it and observe the
+exact expected RED. File existence, local-module removal, facade shape, the
+remaining two exclusive dependency removals, and other structural postconditions
+are checked directly in the final GREEN state rather than receiving separate
+tests for their pre-move nonexistence.
 
-- no `extractum-telegram` workspace member;
-- no new package manifest;
-- staged files still app-owned;
-- Grammers roots still app-owned;
-- compatibility facade still points to local modules.
-
-Every RED must be a real executed failure with the exact expected assertion;
-syntax errors, zero-test filters, or unrelated failures do not qualify.
-
-### Checkpoint 2: atomic extraction GREEN
-
-Perform the physical move, manifest/workspace/dependency transfer, facade
+Then perform the physical move, manifest/workspace/dependency transfer, facade
 creation, lockfile refresh, and final contract updates as one extraction
 checkpoint. Do not edit moved source content.
 
-The checkpoint is GREEN only when package tests, app tests, hash comparison,
-dependency ownership, feature closure, API allowlists, and workspace checks
-all pass.
+The checkpoint is GREEN only when package tests, app tests, all 19 blob pairs,
+exact test identity sets, dependency ownership, feature closure, API
+allowlists, and workspace checks all pass. Retain it as clean
+`EXTRACTION_COMMIT`.
 
-### Checkpoint 3: completion evidence
-
-Record final hashes, exact file disposition, test ownership, Cargo metadata,
-normal and feature-enabled API evidence, release build, startup smoke, MCP
-smoke, and full repository verification. Then update roadmap/design status to
-the exact terminal disposition required by the parent design.
+After Checkpoint 2, record completion evidence in a docs-only terminal commit:
+the two checkpoint SHAs, exact blob comparison, file disposition, test identity
+sets, Cargo metadata, feature-off build and feature-on consumer evidence,
+release build, startup smoke, MCP smoke, and full repository verification. That
+commit changes no Rust source, manifest, or lockfile and is not a third
+implementation checkpoint. It also updates roadmap/design status to the exact
+terminal disposition required by the parent design.
 
 ## Error and Behavior Compatibility
 
@@ -448,7 +477,7 @@ and its immediate consumer `extractum`.
   `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --lib --features app-test-support`
   fails because the still app-owned package does not yet declare the feature;
 - GREEN: the same command succeeds, followed by the exact four app tests and
-  the prepared-hash contract;
+  the preparation-commit path/blob and test-identity evidence;
 - focused check:
   `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`;
 - package checkpoint:
@@ -456,7 +485,8 @@ and its immediate consumer `extractum`.
 
 ### Extraction loop
 
-- RED: exact final package-boundary assertions described in Checkpoint 1;
+- RED: the single focused `cargo metadata` assertion described in Checkpoint 2
+  fails with its exact expected boundary message;
 - feature-off crate GREEN:
   `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --lib --no-default-features`;
 - crate focused check; this builds development targets and is not feature-off
@@ -493,13 +523,14 @@ only feature-specific completion evidence.
 
 ## Rollback
 
-Checkpoint 0 is independently retained only if its app package checkpoint and
-prepared-hash proof are GREEN. If extraction fails later, return to that clean
-checkpoint; do not partially copy files back or regenerate the 8B artifact.
+Checkpoint 1 is independently retained only if its app package checkpoint,
+exact test list, and preparation-commit path/blob proof are GREEN. If
+extraction fails later, return to that clean commit; do not partially copy
+files back or regenerate the 8B artifact.
 
 Checkpoint 2 is atomic. A failed move is not retained. A rollback restores the
 single app-owned prepared tree, removes the unfinished workspace/package edge,
-and restores the pre-extraction lockfile without changing Checkpoint 0 source
+and restores the pre-extraction lockfile without changing Checkpoint 1 source
 content.
 
 ## Non-Goals
@@ -512,6 +543,8 @@ Phase 8C does not:
 - rename consumer paths away from `crate::telegram_impl`;
 - refactor or optimize moved code;
 - add general test builders or public modules;
+- add a second staging-hash script or generated 8C hash artifact;
+- add a persistent test-ownership generator or count-only ownership contract;
 - reopen retained 8A/8B checkpoints;
 - upgrade dependencies or alter Grammers revision/features;
 - resolve unrelated security debt.
@@ -523,13 +556,16 @@ Phase 8C is complete only when:
 1. retained 8B authority files and their starting hashes were verified before
    edits;
 2. the immutable 8B staging artifact is unchanged;
-3. the prepared artifact has the same 19 paths and exactly the authorized
-   two-file hash delta;
-4. all 19 destination files equal the prepared artifact byte-for-byte;
+3. `PREPARATION_COMMIT` has the same 19 staged paths, changes exactly `lib.rs`
+   and `takeout/mod.rs`, and preserves the other 17 starting blob IDs;
+4. all 19 destination blob IDs at `EXTRACTION_COMMIT` equal their corresponding
+   source blob IDs at `PREPARATION_COMMIT`;
 5. `extractum-telegram` is the seventh workspace member;
 6. the app has no direct Grammers, `chacha20poly1305`, or `rand_core`
    dependency;
-7. Cargo metadata proves exact dependency ownership, revision, and features;
+7. Cargo metadata proves exact package-edge ownership while the unchanged
+   `[workspace.dependencies]` table and retained baseline prove revision and
+   feature identity;
 8. the exact feature-off `extractum-telegram --lib --no-default-features`
    check passes, without using `--all-targets` as feature-off evidence;
 9. the dev-dependency enables exactly `app-test-support`, the app package tests
@@ -538,7 +574,8 @@ Phase 8C is complete only when:
 10. the compatibility facade is explicit, private to the app, and contains no
     behavior;
 11. existing app consumer paths and all production behavior are unchanged;
-12. test ownership is exactly 665 app / 71 crate / 736 union;
+12. exact `cargo test -- --list` sets match the retained preparation list and
+    71-owner map, with counts 665 app / 71 crate / 736 union;
 13. focused package checks and all end-of-slice gates pass;
 14. release, startup, and real webview MCP evidence pass;
 15. final documentation records the exact retained commits, hashes, commands,
@@ -548,8 +585,9 @@ Phase 8C is complete only when:
 
 After owner approval, write a separate Phase 8C implementation plan using the
 project's planning workflow. The plan must include the Rust verification loops
-above, exact RED/GREEN assertions, checkpoint commits, path and dependency
-allowlists, hash-script schema, resolver-v2 two-invariant feature evidence,
-test identity commands, rollback commands, and final evidence template.
+above, the single metadata RED, both checkpoint commits, path and dependency
+allowlists, exact 19-path Git blob comparison, resolver-v2 two-invariant
+feature evidence, exact test-list set comparisons, rollback commands, and the
+final evidence template.
 
 Approval of this specification alone does not start implementation.
