@@ -1,6 +1,6 @@
 # Telegram Crate Boundary Design
 
-**Status:** Approved; 8B preparation Checkpoint 8 retained
+**Status:** Approved; 8B preparation retained; 8C pending
 **Date:** 2026-07-26
 
 **Roadmap authority:**

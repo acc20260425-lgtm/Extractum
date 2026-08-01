@@ -2873,7 +2873,7 @@ references and intentionally do not repeat verdict-marker lines.
 | 5 | `## CP5 Escape-Hatch LLM Review` | `1acc4f618dcc5855b677c844624f21c67c371b47` | `180c797bf04d63c33df555cbb04da51b73a2b3af` | CLEAN |
 | 6 | `## CP6 Escape-Hatch LLM Review` | `180c797bf04d63c33df555cbb04da51b73a2b3af` | `86b80a17fca47ac5c485c339fc6c8298f130690f` | CLEAN |
 | 7 | `## CP7 Escape-Hatch LLM Review` | `86b80a17fca47ac5c485c339fc6c8298f130690f` | `189e3fd002d957d8eafdf5159e61ac3fe1a66179` | CLEAN |
-| 8 | `## CP8 Escape-Hatch LLM Review` | `189e3fd002d957d8eafdf5159e61ac3fe1a66179` | pending CP8 checkpoint commit | CLEAN |
+| 8 | `## CP8 Escape-Hatch LLM Review` | `189e3fd002d957d8eafdf5159e61ac3fe1a66179` | `4701b3e3368f649c1199a2f85d4a683a1e93bda5` | CLEAN |
 
 ## Phase 8B Checkpoint 8 Completion Evidence — 2026-08-01
 
@@ -2891,7 +2891,7 @@ references and intentionally do not repeat verdict-marker lines.
   - CP5: `180c797bf04d63c33df555cbb04da51b73a2b3af`;
   - CP6: `86b80a17fca47ac5c485c339fc6c8298f130690f`;
   - CP7: `189e3fd002d957d8eafdf5159e61ac3fe1a66179`;
-  - CP8: pending the separately GREEN checkpoint commit.
+  - CP8: `4701b3e3368f649c1199a2f85d4a683a1e93bda5`.
 - Post-CP1 non-checkpoint authority and compatibility commits, in
   chronological order:
   - `1c0961516c338073ba9578edb18a61c7b1285897`,
