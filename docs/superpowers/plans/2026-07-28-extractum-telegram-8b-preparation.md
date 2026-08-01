@@ -3635,6 +3635,13 @@ Do not retain or commit Checkpoint 8 if any deterministic gate fails.
 
 This smoke is non-mutating and does not require Telegram credentials.
 
+Execution correction approved before this task was completed: the pinned
+`tauri-plugin-mcp-bridge` 0.11.0 implements `ipc_execute_command` only for the
+bridge plugin's own commands and rejects application commands as unsupported.
+Therefore command registration is exercised through the bridge's live webview
+JavaScript tool and Tauri's actual `window.__TAURI__.core.invoke` API. Do not
+upgrade the plugin or change `Cargo.toml`/`Cargo.lock` to obtain this evidence.
+
 - [ ] Prove no stale Vite/Tauri app port or `extractum` process remains.
 - [ ] Start the MCP-enabled development app with:
 
@@ -3652,12 +3659,13 @@ by Vite.
 driver_session start
 ipc_get_backend_state
 manage_window list
-ipc_execute_command command=tg_get_account_statuses args={"accountIds":[]}
+webview_execute_js script="(async () => await window.__TAURI__.core.invoke('tg_get_account_statuses', { accountIds: [] }))()"
 ```
 
-Require a connected backend/window and a successful serializable command
-result. Do not create an account, request a code, sign in, add a source, start
-Takeout, or mutate credentials.
+Require a connected backend/window and the exact serializable command result
+`[]`. An `ipc_execute_command` attempt is not accepted as command-registration
+evidence on the pinned bridge revision. Do not create an account, request a
+code, sign in, add a source, start Takeout, or mutate credentials.
 - [ ] Stop the driver session and the exact dev processes it started. Prove
 ports are free. `.playwright-mcp/` is generated/ignored and must not be staged.
 

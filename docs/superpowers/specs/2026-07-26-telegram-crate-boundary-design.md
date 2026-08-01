@@ -2750,6 +2750,16 @@ boundary. The smoke:
 - leaves app ports free;
 - does not create a new process-control or timing harness.
 
+For the 8B live command-registration step, pinned
+`tauri-plugin-mcp-bridge` 0.11.0 cannot invoke arbitrary application commands
+through its `ipc_execute_command` handler; that handler accepts only the
+bridge plugin's own commands. The live MCP smoke therefore uses
+`webview_execute_js` to evaluate
+`(async () => await window.__TAURI__.core.invoke('tg_get_account_statuses', { accountIds: [] }))()`
+in the connected main webview and requires the exact result `[]`. This is the
+real Tauri IPC path used by the application. The evidence must not be obtained
+by upgrading the bridge or changing `Cargo.toml`/`Cargo.lock`.
+
 Deterministic Rust tests, not a live account mutation, prove login, session,
 source, and Takeout behavior.
 
