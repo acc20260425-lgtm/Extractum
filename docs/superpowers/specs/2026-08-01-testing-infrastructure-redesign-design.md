@@ -412,13 +412,12 @@ For every invocation the selector:
 
 No historical timing lookup occurs in this flow.
 
-Sequential owner execution is deliberate: the selector needs no hidden
-scheduler classification, Cargo is necessarily alone, and ordinary commands
-remain below the global maximum of two. Typical changes resolve to one
-tier-level owner. The standard unit-plus-component case maps to
-test:frontend:fast and therefore remains one Vitest process; any other
-recurring multi-owner case requires a reviewed aggregate owner rather than
-dynamic selector metadata.
+The selector runs owner commands one at a time. This needs no scheduler
+metadata and automatically satisfies the verify concurrency limits, including
+Cargo exclusivity. Typical changes resolve to one tier-level owner. The
+standard unit-plus-component case maps to test:frontend:fast and therefore
+remains one Vitest process; any other recurring multi-owner case requires a
+reviewed aggregate owner rather than dynamic selector metadata.
 
 Shared configuration, lockfiles, or other paths that require a broad aggregate
 are mapped directly to that aggregate owner and normally classified slow. They
@@ -453,7 +452,7 @@ input received fast assurance. It is always labelled feedback-only.
 
 The human diagnostic may contain normalized inputs, selected commands,
 deferred commands, and reproduction instructions. The persisted timing row is
-separate and contains only the four timing fields defined below.
+separate and contains only the five timing fields defined below.
 
 Path mapping errors are resolved before a runner starts. After execution
 starts, interruption is primary. Without interruption, an observed correctness
@@ -539,6 +538,8 @@ should invoke these checks.
 Both tools start with narrow reviewed rules. Existing findings are fixed or
 entered into exact, reasoned, expiring baselines. Blanket repository ignores
 are prohibited.
+
+verify fails when a dependency-cruiser or Knip baseline entry is expired.
 
 A checked-in canary proves that configured analysis resolves Svelte files,
 $lib and $app aliases, raw imports, root scripts, the Gemini sidecar, and the
@@ -1149,7 +1150,8 @@ test. The normal dependency edge remains feature-free.
     chromium-lifecycle stability command completes twenty consecutive
     executions with no failed run, lifecycle timeout, or leaked browser/server
     process.
-21. Every skipped or quarantined test has a non-expired owned entry.
+21. Every skipped or quarantined test has a non-expired owned entry, and verify
+    rejects every expired dependency-cruiser or Knip baseline entry.
 22. New third-party tooling is locked, compatible with the repository
     toolchain, and does not add a general-purpose build graph.
 23. AGENTS.md, docs/project.md, docs/value-registry.md, package scripts, and the
