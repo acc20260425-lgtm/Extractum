@@ -102,6 +102,8 @@ none.
 | `8B preparation Checkpoint 6 retained` | agent-workflow status input | Maps the roadmap Checkpoint 6 retained status to `8b-checkpoint-6`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
 | `8B preparation Checkpoint 7 retained` | agent-workflow status input | Maps the roadmap Checkpoint 7 retained status to `8b-checkpoint-7`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
 | `8B preparation Checkpoint 8 retained` | agent-workflow status input | Maps the roadmap Checkpoint 8 retained status to `8b-checkpoint-8`. | `telegram-contract-paths.ts` | transitional | yes | none | tests and agent workflow |
+| `8c-extracted` | agent-workflow lifecycle | Selects the retained Phase 8C `extractum-telegram` package layout. | `telegram-contract-paths.ts` | terminal | yes | none | tests and agent workflow |
+| `done: retained` | agent-workflow status input | Maps the terminal Phase 8 roadmap disposition to `8c-extracted`. | `telegram-contract-paths.ts` | terminal | yes | none | tests and agent workflow |
 
 ## Analysis run statuses
 

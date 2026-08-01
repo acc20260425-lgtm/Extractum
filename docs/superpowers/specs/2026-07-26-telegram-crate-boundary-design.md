@@ -1,6 +1,6 @@
 # Telegram Crate Boundary Design
 
-**Status:** Approved; 8B preparation retained; 8C pending
+**Status:** Implemented and retained; [verification](../verification/2026-08-01-extractum-telegram-8c-extraction.md)
 **Date:** 2026-07-26
 
 **Roadmap authority:**

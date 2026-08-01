@@ -1,6 +1,6 @@
 # Telegram Phase 8C Extraction Design
 
-**Status:** Approved for implementation planning; implementation not authorized
+**Status:** Implemented and retained; [verification](../verification/2026-08-01-extractum-telegram-8c-extraction.md)
 **Date:** 2026-08-01
 
 **Parent boundary design:**

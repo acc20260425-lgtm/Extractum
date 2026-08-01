@@ -33,11 +33,10 @@ Completed and in-flight slices governed by their own documents:
   recorded in the
   [verification document](../verification/2026-07-22-extractum-analysis-extraction.md).
 - [`2026-07-26-telegram-crate-boundary-design.md`](2026-07-26-telegram-crate-boundary-design.md)
-  — owner-approved Phase 8 boundary; 8A preparation and 8B Checkpoint 5
-  authority are retained. It replaces the stale
-  five-file cluster with three separately retainable sub-slices that remove
-  the full current Grammers perimeter without moving app-owned SQL, secrets,
-  events, or Takeout job orchestration.
+  — implemented and retained Phase 8 boundary. The 8A and 8B preparations
+  remain historical authority; 8C retained the seven-member extraction without
+  moving app-owned SQL, secrets, events, or Takeout job orchestration. See the
+  [terminal verification](../verification/2026-08-01-extractum-telegram-8c-extraction.md).
 
 - `2026-07-15-rust-workspace-crate-extraction-design.md` — workspace +
   `extractum-core` (`error`, `time`, `compression`). Done.
@@ -427,8 +426,10 @@ trigger an investigation by itself.
 Phase 7 is implemented and retained under the
 [JIT boundary design](2026-07-22-analysis-crate-boundary-design.md). The
 [verification document](../verification/2026-07-22-extractum-analysis-extraction.md)
-records the retained result. Phase 8A preparation and Phase 8B Checkpoint 5
-authority are retained.
+records the retained result. Phase 8 is implemented and retained under the
+[Telegram boundary design](2026-07-26-telegram-crate-boundary-design.md); its
+[verification document](../verification/2026-08-01-extractum-telegram-8c-extraction.md)
+records the terminal extraction result.
 
 ### Phase 7 — `extractum-analysis` (done: retained)
 
@@ -463,11 +464,37 @@ back a correct ownership boundary, and it did not decide retention. The result
 participates in the standing adjacent-results rule at 15,000 ms and breaks any
 qualifying sequence because it is below the threshold.
 
-Phase 8 has an owner-approved Phase 8 boundary; 8A preparation and 8B
-preparation are retained, while 8C remains pending. Further execution follows
-the three separately reviewed plans and requires explicit owner instructions.
+Phase 8 has an owner-approved and retained boundary. Preparatory slices 8A and
+8B remain historical authority; 8C completed the extraction, with terminal
+evidence linked from the retained Phase 8 summary below.
 
-### Phase 8 — `extractum-telegram` (8B preparation retained; 8C pending)
+The immediately preceding retained checkpoint recorded that Phase 8 has an
+owner-approved Phase 8 boundary; 8A preparation and 8B preparation are
+retained, while 8C remains pending. That wording is historical evidence, not
+the current disposition.
+
+### Phase 8 — `extractum-telegram` (done: retained)
+
+Phase 8C is implemented and retained in the single implementation commit
+`3e2a3b841cacfea2c4ce3cfdd27977dee569a403`, whose parent is the clean `BASE_COMMIT`
+`525569d6219458e6edb4556d232b9858040b54df`. The extraction moved the exact 19-file prepared Telegram
+tree into `extractum-telegram`: 17 destination blobs are identical to frozen
+8B and `lib.rs` plus `takeout/mod.rs` contain only their two approved complete
+diffs. The exact library-test split is 665 app / 71 producer / 736 normalized
+logical union, equal to the 736-test BASE set. The producer's canonical
+feature-off check and the app's resolver-v2 feature-on tests passed; the app
+has only the feature-free normal edge plus the feature-enabled dev edge. Locked
+metadata proves the seven-member workspace, removal of the six raw Telegram
+roots from the app, and their producer ownership.
+
+The final uncommitted verifier and host-target release build passed for
+`x86_64-pc-windows-msvc`; the retained executable is `G:\Develop\Extractum\src-tauri\target\x86_64-pc-windows-msvc\release\extractum.exe` with SHA-256
+`7f756e9f152087085af925173b8043c53ab58ae4bbb5666def514c8cffdde435`. The live MCP empty-account-status smoke returned `[]`,
+and the same executable passed the bounded five-second startup/cleanup smoke
+with zero residue. The retained evidence is
+[Phase 8C extraction verification](../verification/2026-08-01-extractum-telegram-8c-extraction.md).
+The single admitted ordinary workspace check completed in
+`2010 ms`.
 
 The owner-approved
 [Phase 8 boundary design](2026-07-26-telegram-crate-boundary-design.md)
@@ -566,15 +593,22 @@ restores the preceding retained pair before any fix. This authority amendment
 did not itself advance the retained status, which was then
 `8A preparation retained`.
 
-By the end of 8B, staged modules use only relative `self::`/`super::` paths,
-while app-owned callers use the exact `crate::telegram_impl::` prefix. 8C
-preserves staged files byte-for-byte, proves relative-path/content-hash
-identity, and replaces the vacated staged app `lib.rs` with a private explicit
-compatibility facade. Consumer paths remain byte-identical, as required by the
-standing mechanical-move rule; only manifest and lockfile ownership changes.
-The boundary specification enumerates every existing-symbol visibility
-widening/rename; 8A/8B establish that final allowlist and 8C makes no visibility
-change.
+By the end of 8B, staged modules used only relative `self::`/`super::` paths,
+while app-owned callers used the exact `crate::telegram_impl::` prefix. The
+retained 8C extraction preserves 17 prepared files as exact Git blobs. Its two
+approved corrections are confined to the producer crate root's feature-gated
+fixture exports and the Takeout fixture definitions; function bodies,
+production signatures, and the curated production API remain unchanged. The
+vacated app `telegram_impl/lib.rs` is a private explicit compatibility facade,
+so app-owned production consumer paths remain stable. Manifest and lockfile
+changes transfer dependency ownership without widening a production item.
+
+The 8B checkpoint's historical contract wording remains retained evidence:
+“staged modules use only relative `self::`/`super::` paths” and “Consumer paths
+remain byte-identical, as required by the standing mechanical-move rule”. Its
+prior authorization guard—“The approved design does not authorize
+implementation”—described the pre-8C state and is superseded by the retained
+implementation status.
 
 The app permanently retains all twelve account/Telegram Tauri commands,
 account SQL and cross-domain deletion, generic `SecretStore`, app-data and
@@ -624,8 +658,8 @@ completed-phase 15,000 ms observation rule. A workspace check repeated
 internally by `npm.cmd run verify` is a correctness gate, not another admitted
 timing result.
 
-The approved design does not authorize implementation. 8A, 8B, and 8C each
-require a separate plan and explicit owner instruction.
+Phase 8 is implemented and retained. The approved boundary, the separate 8A,
+8B, and 8C plans, and the terminal verification record remain its authority.
 
 ### Phase 9+ — Ingest decomposition (gradual, bottom-up)
 
