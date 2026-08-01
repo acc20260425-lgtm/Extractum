@@ -2,9 +2,10 @@
 
 ## Status
 
-The design was approved on 2026-08-01, revised after written review, and then
-simplified by user decision on 2026-08-02. This revision must be reviewed by
-the user before implementation planning begins.
+The design was approved on 2026-08-01, revised after written review, simplified
+by user decision on 2026-08-02, and refined after a second written review on
+the same date. This revision must be reviewed by the user before implementation
+planning begins.
 
 ## Executive Summary
 
@@ -19,7 +20,7 @@ The central simplification is that test selection and timing are independent:
 - Selection uses only that mapping. Historical timings never make a test
   eligible, ineligible, valid, stale, or ratified.
 - Every orchestrated command appends one timing row containing only command,
-  duration, exitCode, and commit.
+  startedAt, duration, exitCode, and commit.
 - test:feedback has a hard end-to-end limit of 15 seconds.
 - test:watch prints a warning when a rerun takes more than 5 seconds.
 - verify prints a warning when the complete gate takes more than 90 seconds,
@@ -260,6 +261,7 @@ All documented Windows commands use npm.cmd.
 | npm.cmd run check:watch | Separate background Svelte/TypeScript checking |
 | npm.cmd run test:unit | Complete unit-node project |
 | npm.cmd run test:component | Complete component project |
+| npm.cmd run test:frontend:fast | One Vitest process selecting both unit-node and component through repeated --project flags |
 | npm.cmd run test:architecture | Complete structured architecture project |
 | npm.cmd run test:integration:os | Complete OS integration tier |
 | npm.cmd run test:e2e | Critical Playwright suite |
@@ -297,6 +299,26 @@ fingerprints, or migration records in TestingManifest.
 A path has exactly one owner command. When several checks are required, that
 owner is a small stable aggregate command. Overlapping path patterns are a lint
 error rather than a precedence feature.
+
+Owner granularity has explicit defaults:
+
+- ordinary TypeScript behavior maps to the complete test:unit tier command;
+- ordinary Svelte component behavior maps to the complete test:component tier
+  command;
+- a component path family that routinely spans component and TypeScript
+  behavior maps to test:frontend:fast, which starts Vitest once with repeated
+  --project filters for unit-node and component;
+- structured rules map to the complete test:architecture tier command;
+- Rust maps to the narrowest stable package and target owner command required
+  by the focused Rust loop, never the complete workspace by default;
+- shared configuration, lockfiles, browser, OS, and other broad surfaces map
+  to an explicit slow aggregate when their complete assurance cannot fit.
+
+Tier-level ownership is the default because it keeps the manifest small. A
+narrower JavaScript or Svelte owner is introduced only after the real
+test:feedback path shows that its tier or standard aggregate reaches the hard
+deadline. Narrowing must preserve non-empty collection and an understandable
+stable command; it is not inferred dynamically from imports.
 
 The speed value means:
 
@@ -392,9 +414,11 @@ No historical timing lookup occurs in this flow.
 
 Sequential owner execution is deliberate: the selector needs no hidden
 scheduler classification, Cargo is necessarily alone, and ordinary commands
-remain below the global maximum of two. Typical changes should resolve to one
-owner command; a recurring multi-owner case is handled by a reviewed aggregate
-owner rather than dynamic scheduling metadata.
+remain below the global maximum of two. Typical changes resolve to one
+tier-level owner. The standard unit-plus-component case maps to
+test:frontend:fast and therefore remains one Vitest process; any other
+recurring multi-owner case requires a reviewed aggregate owner rather than
+dynamic selector metadata.
 
 Shared configuration, lockfiles, or other paths that require a broad aggregate
 are mapped directly to that aggregate owner and normally classified slow. They
@@ -486,8 +510,21 @@ the old evidence removed.
 The extractor and validator are timeboxed to two implementation days.
 Unsupported syntax produces an explicit manual row instead of expanding a
 custom parser indefinitely. The completed ledger remains checked in as review
-evidence. During migration, test:manifest invokes the bounded ledger validator
-as a separate module; TestingManifest does not absorb ledger fields.
+evidence.
+
+### Transitional validation carrier
+
+Slice 2A introduces scripts/validate-testing-transition.mjs before census or
+ledger evidence becomes mandatory. The script owns only the bidirectional
+runner census and bounded migration-ledger checks. The then-current
+scripts/verify.mjs invokes it as a required static gate throughout Slices 2A,
+2B, and 3.
+
+Slice 4 makes test:manifest the public wrapper for this existing module plus
+the new three-field TestingManifest checks. At the same checkpoint verify
+replaces its direct transition-validator entry with test:manifest, so
+validation never disappears and never runs twice. TestingManifest does not
+absorb census or ledger fields.
 
 ### Generic tool ownership
 
@@ -564,6 +601,13 @@ Global retries remain zero. A shared server starts with one worker. More
 workers require worker-scoped servers, testInfo-scoped artifacts, and a
 measured benefit.
 
+Slice 2B introduces the targeted stability entry
+npm.cmd run verify:stability -- --suite chromium-lifecycle --runs 20. It runs
+the migrated Chromium lifecycle suite twenty consecutive times with no retries.
+Every run must complete and pass, and the final process audit must find no
+browser or server descendant. This is lifecycle acceptance, not a timing p95
+calculation and not a repeat of the full verify inventory.
+
 Component tests stay in jsdom and have one Testing Library cleanup owner.
 happy-dom is not introduced without a compatibility experiment on the actual
 component cohort.
@@ -576,7 +620,7 @@ verify covers:
 
 | Group | Required contents |
 | --- | --- |
-| static | svelte-check, sidecar and adapter typechecks, sidecar build, test:manifest including census and active ledger validation, dependency-cruiser, Knip, git diff --check, and owned generated/lockfile drift checks |
+| static | svelte-check, sidecar and adapter typechecks, sidecar build, the direct transition validator before Slice 4 or test:manifest afterward, dependency-cruiser, Knip, git diff --check, and owned generated/lockfile drift checks |
 | frontend | unit-node, component, architecture, transitional legacy-contract, and sidecar/adapter unit tests |
 | rust | rustfmt, required producer feature-off and consumer feature-on proofs, workspace cargo check --all-targets, and cargo test --all-targets |
 | os-integration | Real Windows process, filesystem, socket, and SQLite tests, including Cargo-owned tests that execute only once |
@@ -648,18 +692,22 @@ dependency-cruiser, and Cargo. A top-level command records itself. An aggregate
 records each direct child after that child exits or is terminated and
 suppresses the child's top-level recorder, so a forced termination still has a
 row and no invocation is duplicated. Helper processes inside one owner command
-do not receive separate rows. The row has exactly four fields:
+do not receive separate rows. The row has exactly five fields:
 
 | Field | Meaning |
 | --- | --- |
 | command | Complete normalized command string |
+| startedAt | UTC ISO-8601 timestamp with milliseconds for the instant duration measurement begins |
 | duration | Wall duration in integer milliseconds |
 | exitCode | Normalized integer command result |
 | commit | Full HEAD commit hash at command start |
 
 Each test:watch rerun is treated as a public-command observation even though
-the watcher process remains alive. Append order is the only chronology. There
-is no timestamp, environment snapshot, machine ID, inventory hash,
+the watcher process remains alive; its startedAt is the accepted file event
+that begins rerun timing. For process commands, startedAt is captured
+immediately before spawn. startedAt plus duration makes parallel overlap and
+approximate completion order reconstructable. JSONL append order remains only
+the write order. There is no environment snapshot, machine ID, inventory hash,
 fingerprint, status, rolling summary, or retention protocol.
 
 exitCode uses the public command's integer contract. A normal child exit keeps
@@ -865,7 +913,7 @@ machine-globally by the implementation.
 ### Slice 1: Measurement and Rust feasibility
 
 Rebaseline current test inventories and existing gate durations. Add only the
-minimal four-field timing writer needed for comparable observations.
+minimal five-field timing writer needed for comparable observations.
 
 Perform the Rust feasibility diagnostic above and decide whether root
 extractum paths can receive a bounded fast seam or must initially remain slow.
@@ -878,9 +926,11 @@ project startup benchmarks, or the source-migration ledger.
 
 ### Slice 2A: Migration preflight
 
-Build the bidirectional filesystem-versus-runner census. Freeze the lightweight
-test-level source-contract ledger immediately before any test relocation.
-This freezes obligations but not the physical legacy file inventory. Timebox
+Introduce scripts/validate-testing-transition.mjs and add it to the current
+verify static gates before transition evidence becomes mandatory. Then build
+the bidirectional filesystem-versus-runner census and freeze the lightweight
+test-level source-contract ledger immediately before any test relocation. This
+freezes obligations but not the physical legacy file inventory. Timebox
 automatic extraction and enter unsupported constructs manually.
 
 ### Slice 2B: Project and browser ownership
@@ -893,6 +943,10 @@ lineage, then freeze the resulting legacy file inventory. Verify collection is
 non-empty and the independent census closes in both directions.
 
 No mandatory per-project startup benchmark is added.
+
+Introduce the targeted chromium-lifecycle mode of verify:stability and close
+the slice only after twenty consecutive no-retry executions pass without a
+lifecycle timeout or leaked browser/server process.
 
 ### Slice 3: Source-contract replacement
 
@@ -912,17 +966,28 @@ Introduce the three-field TestingManifest entries, NoTestAllowlist, manifest
 validator, one-shot selector, compatibility aliases, result statuses, and warm
 watcher.
 
+test:manifest becomes the public wrapper around the existing transition
+validator and the new routing checks. verify atomically replaces the direct
+transition-validator gate with test:manifest.
+
 Path ownership is complete at the checkpoint. Known fast owners run under the
 hard deadline. Known slow owners return DEFERRED_ONLY. Unknown paths return
 MAPPING_ERROR. No benchmark artifact or timing state is required before a path
 is allowed to be fast.
 
-If Slice 1 identified a bounded Rust seam, implement it before marking the
-corresponding paths fast. Otherwise keep those paths slow and print the exact
-focused or full owner command. Slice 4 acceptance exercises each proposed fast
-Rust owner once through the real test:feedback path so selector and reporting
-overhead are included. This smoke is ordinary command evidence, creates no
-eligibility record, and a deadline miss leaves the reviewed mapping slow.
+Before Slice 4 closes, enumerate every unique command classified fast and
+exercise it once through the real test:feedback path with a representative
+mapped input. This includes unit, component, test:frontend:fast, architecture,
+and every proposed fast Rust owner. Selector startup and reporting therefore
+consume the same 15-second envelope users receive. These are ordinary
+acceptance smokes, create no eligibility record, and are not retained as
+selection state.
+
+If a tier-level candidate reaches the deadline, either keep its mapping slow
+or introduce a reviewed narrower owner and repeat that command's smoke. If
+Slice 1 identified a bounded Rust seam, implement it before marking the
+corresponding paths fast; otherwise keep those paths slow and print the exact
+focused or full owner command.
 
 If the bounded seam introduces a Cargo --test target, the same Rust slice
 updates AGENTS.md to permit that exact target; it does not wait for Slice 5.
@@ -1014,7 +1079,8 @@ test. The normal dependency edge remains feature-free.
 - scripts/verify.mjs owns the three explicit complete-gate command arrays and
   fixed scheduling loop.
 - Package scripts expose stable owner commands.
-- The local timing JSONL owns only command, duration, exitCode, and commit.
+- The local timing JSONL owns only command, startedAt, duration, exitCode, and
+  commit.
 
 ## Acceptance Criteria
 
@@ -1030,7 +1096,10 @@ test. The normal dependency edge remains feature-free.
    hung child proves dispatch stops at 14 seconds and the controller returns
    with no remaining owned descendant by the 15-second deadline.
 4. A non-empty fast selection can return PASS only after its owner commands
-   pass. Empty Vitest and Cargo selections cannot pass.
+   pass. Empty Vitest and Cargo selections cannot pass. Before Slice 4 closes,
+   every unique fast command passes one representative real test:feedback
+   smoke inside the hard deadline; a miss is narrowed and resmoked or remains
+   slow.
 5. A slow-only selection returns DEFERRED_ONLY without starting the slow owner
    and prints its exact command.
 6. A mixed fast-and-slow selection runs the fast subset under the deadline,
@@ -1049,9 +1118,10 @@ test. The normal dependency edge remains feature-free.
     another command fails.
 11. A verify duration over 90 seconds prints a warning and does not change its
     correctness exit code.
-12. Every persisted timing row has exactly command, duration, exitCode, and
-    commit. No budget state, fingerprint, rolling counter, or resource claim is
-    persisted.
+12. Every persisted timing row has exactly command, startedAt, duration,
+    exitCode, and commit. startedAt is UTC ISO-8601 with milliseconds and marks
+    the beginning of the measured duration. No budget state, fingerprint,
+    rolling counter, or resource claim is persisted.
 13. verify:performance performs exactly five sequential complete runs and
     reports all five durations, median, maximum, and five slowest gates. It
     never replaces a failed or slow sample.
@@ -1074,9 +1144,11 @@ test. The normal dependency edge remains feature-free.
     verify or a specific deletion reason.
 19. No test reads arbitrary production source solely for substring or
     regular-expression assertions; fixture and indexer exceptions are exact.
-20. Chromium is Playwright-owned, global retries are zero, failure artifacts
-    are retained, and the five normal performance runs do not leak browser
-    processes.
+20. Chromium is Playwright-owned, global retries are zero, and failure
+    artifacts are retained. At the Slice 2B checkpoint the targeted
+    chromium-lifecycle stability command completes twenty consecutive
+    executions with no failed run, lifecycle timeout, or leaked browser/server
+    process.
 21. Every skipped or quarantined test has a non-expired owned entry.
 22. New third-party tooling is locked, compatible with the repository
     toolchain, and does not add a general-purpose build graph.
@@ -1095,6 +1167,12 @@ Fast and slow are human-maintained classifications. A mistakenly fast command
 can hit the hard deadline; a mistakenly slow command can defer useful feedback.
 The hard limit, visible owner command, manifest lint, and ordinary code review
 bound that risk without automatic eligibility machinery.
+
+A slow production mapping is allowed to remain slow indefinitely. This design
+deliberately has no debt registry, expiry, or automatic requirement to create a
+fast seam later. DEFERRED_ONLY friction and owner review are the only pressure
+to improve it. The project accepts weaker long-term fast-feedback coverage in
+exchange for keeping the daily selection and measurement system small.
 
 The fixed scheduler may leave some safe parallelism unused. It is preferred to
 a resource model whose claims, locks, fingerprints, and critical-path math
