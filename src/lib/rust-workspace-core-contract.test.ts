@@ -130,7 +130,8 @@ describe("Rust workspace core contract", () => {
     for (const guidance of [agentGuidance, projectGuidance]) {
       expect(guidance).toContain("<!-- daily-development-loop -->");
       expect(guidance).toContain("src-tauri/target");
-      expect(guidance).toContain("--workspace --all-targets");
     }
+    expect(agentGuidance).toContain("npm.cmd run verify");
+    expect(projectGuidance).toContain("--workspace --all-targets");
   });
 });

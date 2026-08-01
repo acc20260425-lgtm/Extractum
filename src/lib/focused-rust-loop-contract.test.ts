@@ -34,10 +34,6 @@ const focusedTest =
   "cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib <full-test-name> -- --exact";
 const packageCheckpoint =
   "cargo test --manifest-path src-tauri/Cargo.toml -p <package> --all-targets";
-const workspaceCheck =
-  "cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets";
-const workspaceTest =
-  "cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets";
 
 describe("focused Rust loop repository policy", () => {
   it("owns canonical focused package commands", () => {
@@ -60,20 +56,18 @@ describe("focused Rust loop repository policy", () => {
     ]);
   });
 
-  it("separates focused feedback from full completion gates", () => {
+  it("routes focused feedback through the canonical completion gate", () => {
     expect(focusedPolicy, "missing focused Rust loop policy anchor").not.toBe("");
     expect(focusedPolicy).toContain("`0 tests` is not verification");
-    expect(focusedPolicy).toContain(workspaceCheck);
-    expect(focusedPolicy).toContain(workspaceTest);
     expect(focusedPolicy).toContain("npm.cmd run verify");
     expect(focusedPolicy).toContain("accelerators, not completion evidence");
   });
 
-  it("documents plan shape, cold starts, and deferred integration feedback", () => {
+  it("documents plan shape and deferred integration feedback", () => {
     expect(focusedPolicy, "missing focused Rust loop policy anchor").not.toBe("");
     expect(focusedPolicy).toContain("`## Rust Verification Loops`");
-    expect(focusedPolicy).toContain("first Rust check in a session may be cold and slower");
     expect(focusedPolicy).toContain("public cross-crate interface");
     expect(focusedPolicy).toContain("immediate dependent package");
+    expect(focusedPolicy).toContain("docs/project.md#native-dependency-debugging");
   });
 });

@@ -18,10 +18,10 @@ Run baseline full-project verification before committing or merging:
 npm.cmd run verify
 ```
 
-This command runs frontend tests, Svelte checks, Rust check/tests, and
-`git diff HEAD --check`. It is a baseline local gate; CI, Rust formatting/lint
-policy, and broader live Telegram/LLM event-flow validation remain separate
-stabilization work.
+This command runs frontend tests, Svelte checks, Rust formatting, workspace
+Rust check/tests, and `git diff HEAD --check`. It is a baseline local gate; CI,
+Rust lint policy, and broader live Telegram/LLM event-flow validation remain
+separate stabilization work.
 
 <!-- daily-development-loop -->
 For the daily loop after a small change, choose the narrowest applicable command:
@@ -30,7 +30,7 @@ For the daily loop after a small change, choose the narrowest applicable command
 npm.cmd run test:changed
 npm.cmd run test:changed:last
 npm.cmd run test:related -- src/lib/some-model.ts
-npm.cmd run test:rust -- prompt_packs::runtime::tests::load_run_runtime_config
+cargo test --manifest-path src-tauri/Cargo.toml -p extractum-prompt-packs --lib runtime::tests::load_run_runtime_config_reads_api_and_browser_rows -- --exact
 ```
 
 The working-tree command sees uncommitted changes; the last-checkpoint command
@@ -43,13 +43,40 @@ incomplete for dynamic relationships, so it is not a replacement for the full
 Canonical full Rust checks and tests use `--workspace --all-targets`. Focused
 root-package filters select `-p extractum` explicitly. Every workspace member
 shares `src-tauri/target`; avoid per-task target directories during sequential
-development. Ordinary dev/test builds retain
-workspace line tables and omit dependency debug information. For rare native
-inspection of dependency variables, begin with a clean tree, temporarily set
-both `[profile.dev] debug` and `[profile.dev.package."*"] debug` to `2`, point
-`CARGO_TARGET_DIR` at an absolute isolated directory, and launch the usual
-MCP-enabled `npm.cmd run tauri dev`. Restore the manifest afterward and never
-commit that temporary profile change.
+development.
+
+### Native dependency debugging
+
+Ordinary dev/test builds retain workspace line tables and omit dependency debug
+information. For rare native inspection of dependency variables, begin with a
+clean tree, temporarily set both `[profile.dev] debug` and
+`[profile.dev.package."*"] debug` to `2`, point `CARGO_TARGET_DIR` at an absolute
+isolated directory, and launch the usual MCP-enabled `npm.cmd run tauri dev`.
+Restore the manifest afterward and never commit that temporary profile change.
+
+### Windows sandbox fallback
+
+If a sandboxed Vite server exits immediately, run it outside the sandbox in a
+hidden PowerShell host, using approval or escalation when required:
+
+```powershell
+$workspace = (Get-Location).Path
+$cmd = "Set-Location -LiteralPath '$workspace'; node.exe node_modules/vite/bin/vite.js --host 127.0.0.1"
+Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoLogo','-NoExit','-Command',$cmd) -PassThru -WindowStyle Hidden
+```
+
+The same hidden-host approach applies to the Superpowers visual companion
+(`server.cjs`), with `BRAINSTORM_DIR`, `BRAINSTORM_HOST=127.0.0.1`, and
+`BRAINSTORM_URL_HOST=localhost` set for that process.
+
+Before a self-managed analysis smoke check, run the live MCP smoke first and
+ensure the app ports are free. To stop a self-managed server, resolve the PID
+listening on the actual port before terminating it:
+
+```powershell
+netstat -ano | findstr ":<PORT>"
+Stop-Process -Id <LISTENING_PID> -Force
+```
 
 For the YouTube Summary / Prompt Pack project-runs slice, use the narrower
 verification scripts while iterating:
