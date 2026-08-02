@@ -58,23 +58,40 @@ describe("slice one baseline", () => {
 
   it("continues sequentially after observed test failures and writes reporter inventories", async () => {
     const root = await repoRoot();
-    const calls: Array<{ args: string[]; env?: NodeJS.ProcessEnv }> = [];
     const runCommand = vi.fn(async (command) => {
-      calls.push(command);
       await writeReporterOutput(command, command.env?.PLAYWRIGHT_JSON_OUTPUT_FILE !== undefined);
-      return result(calls.length === 2 ? 1 : 0);
+      return result(runCommand.mock.calls.length === 2 ? 1 : 0);
     });
 
     const report = await runBaseline({ repoRoot: root, runCommand });
 
     expect(runCommand).toHaveBeenCalledTimes(BASELINE_COMMANDS.length);
-    expect(calls.every((call, index) => call.args !== calls[index + 1]?.args || index === calls.length - 1)).toBe(true);
     expect(report).toMatchObject({ exitCode: 0, baselineStatus: "observed-failures" });
     expect(report.observations).toHaveLength(BASELINE_COMMANDS.length);
     expect(report.observations[0].inventory).toMatchObject({ numTotalTests: 1, files: ["src/example.test.ts"] });
     expect(report.observations[7].inventory).toMatchObject({ suiteCount: 1, specCount: 1, testCount: 1, files: ["research/example.spec.ts"] });
     const written = JSON.parse(await readFile(path.join(root, "artifacts/testing/slice-1/baseline.json"), "utf8"));
     expect(written.baselineStatus).toBe("observed-failures");
+  });
+
+  it("does not invoke command N plus one until command N resolves", async () => {
+    const root = await repoRoot();
+    const pending: Array<{
+      command: { args: string[]; env?: NodeJS.ProcessEnv };
+      resolve: (value: ReturnType<typeof result>) => void;
+    }> = [];
+    const runCommand = vi.fn((command) => new Promise<ReturnType<typeof result>>((resolve) => {
+      pending.push({ command, resolve });
+    }));
+    const baseline = runBaseline({ repoRoot: root, runCommand });
+
+    for (let index = 0; index < BASELINE_COMMANDS.length; index += 1) {
+      await vi.waitFor(() => expect(runCommand).toHaveBeenCalledTimes(index + 1));
+      await writeReporterOutput(pending[index].command, pending[index].command.env?.PLAYWRIGHT_JSON_OUTPUT_FILE !== undefined);
+      pending[index].resolve(result());
+    }
+
+    await expect(baseline).resolves.toMatchObject({ exitCode: 0, baselineStatus: "observed-success" });
   });
 
   it("uses ComSpec and exactly one npm argument separator on Windows", () => {
