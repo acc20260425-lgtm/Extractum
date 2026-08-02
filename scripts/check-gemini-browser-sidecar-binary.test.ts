@@ -56,6 +56,14 @@ describe("Gemini browser sidecar binary checker", () => {
     expect(() => inspect(() => stats({ symbolicLink: true }))).toThrow(bootstrapCommand);
   });
 
+  it("rejects a non-regular sidecar file with the bootstrap command", () => {
+    expect(() => inspect(() => stats({
+      symbolicLink: false,
+      directory: false,
+      file: false,
+    }))).toThrow(bootstrapCommand);
+  });
+
   it("accepts a non-empty regular sidecar file and reports its path and size", () => {
     expect(inspect(() => stats({ size: 42 }))).toEqual({
       relativePath: "src-tauri/binaries/gemini-browser-sidecar-x86_64-pc-windows-msvc.exe",
