@@ -1,5 +1,5 @@
 import { randomUUID as defaultRandomUUID, createHash } from "node:crypto";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runObservedCommand } from "./run-observation.mjs";
@@ -108,7 +108,7 @@ export function parseExactLibtest(text) {
   const output = String(text);
   const running = [...output.matchAll(/^running (\d+) tests?\s*$/gmu)];
   const summaries = [...output.matchAll(/^test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored; \d+ measured; \d+ filtered out;/gmu)];
-  const namedPass = new RegExp(`^test ${escapeRegExp(RUST_TEST_NAME)} \\.\\.\\. ok\\s*$`, "mu").test(output);
+  const namedPasses = [...output.matchAll(new RegExp(`^test ${escapeRegExp(RUST_TEST_NAME)} \\.\\.\\. ok\\s*$`, "gmu"))];
   if (running.length !== 1
     || Number(running[0][1]) !== 1
     || summaries.length !== 1
@@ -116,7 +116,7 @@ export function parseExactLibtest(text) {
     || Number(summaries[0][2]) !== 1
     || Number(summaries[0][3]) !== 0
     || Number(summaries[0][4]) !== 0
-    || !namedPass) {
+    || namedPasses.length !== 1) {
     throw new Error("Expected exactly one passing test with no failures or ignored tests");
   }
   return { passed: 1, failed: 0, ignored: 0 };
@@ -166,6 +166,87 @@ async function restoreOriginal(filesystem, sourcePath, original, originalHash) {
   }
 }
 
+function createSourceMutationGuard(filesystem, sourcePath, original, originalHash) {
+  let mutationWrite = Promise.resolve();
+  let restorationPromise = null;
+  let stopRequested = false;
+
+  return {
+    async mutate(mutated) {
+      if (stopRequested) throw new Error("Study interrupted before source mutation");
+      mutationWrite = filesystem.writeFile(sourcePath, mutated);
+      await mutationWrite;
+      if (stopRequested) {
+        await this.restore();
+        throw new Error("Study interrupted during source mutation");
+      }
+    },
+    requestStop() {
+      stopRequested = true;
+      return this.restore();
+    },
+    restore() {
+      if (!restorationPromise) {
+        restorationPromise = (async () => {
+          try {
+            await mutationWrite;
+          } catch {
+            // Restoration still has to run after a failed mutation write.
+          }
+          return restoreOriginal(filesystem, sourcePath, original, originalHash);
+        })().finally(() => {
+          restorationPromise = null;
+        });
+      }
+      return restorationPromise;
+    },
+  };
+}
+
+function defaultInstallSignalHandlers(handler) {
+  const listeners = new Map(["SIGINT", "SIGTERM"].map((signal) => {
+    const listener = () => {
+      void handler(signal).then((exitCode) => {
+        process.exitCode = exitCode;
+      }, () => {
+        process.exitCode = 3;
+      });
+    };
+    process.on(signal, listener);
+    return [signal, listener];
+  }));
+  return () => {
+    for (const [signal, listener] of listeners) process.off(signal, listener);
+  };
+}
+
+function unavailableSummary() {
+  return {
+    checkFloorMs: null,
+    combinedTestBuildMs: null,
+    testBuildOverCheckMs: null,
+    testBuildOverCheckExplanation: DELTA_EXPLANATION,
+    directHarnessMs: null,
+    cargoEndToEndMs: null,
+  };
+}
+
+function preflightReport(failure = "Study is in progress; no decision is available") {
+  return {
+    schemaVersion: 1,
+    testName: RUST_TEST_NAME,
+    warmupRuns: WARMUP_RUNS,
+    retainedRuns: RETAINED_RUNS,
+    valid: false,
+    exitCode: 3,
+    failure,
+    samples: [],
+    summary: unavailableSummary(),
+    classification: null,
+    classificationUnavailableReason: "Study is incomplete or invalid; no authoritative classification is available",
+  };
+}
+
 function median(values) {
   if (values.length !== RETAINED_RUNS || values.some((value) => !Number.isFinite(value))) return null;
   return [...values].sort((left, right) => left - right)[Math.floor(values.length / 2)];
@@ -211,25 +292,65 @@ export async function runRustFeasibility({
   repoRoot,
   outputPath = OUTPUT_PATH,
   runCommand = runObservedCommand,
-  filesystem = { mkdir, readFile, stat, writeFile },
+  filesystem = { mkdir, readFile, rm, stat, writeFile },
   randomUUID = defaultRandomUUID,
+  installSignalHandlers = defaultInstallSignalHandlers,
 } = {}) {
   if (typeof repoRoot !== "string" || repoRoot.length === 0) throw new TypeError("repoRoot");
   if (outputPath !== OUTPUT_PATH) throw new Error(`Rust feasibility output must be ${OUTPUT_PATH}`);
   const root = path.resolve(repoRoot);
   const sourcePath = path.join(root, ...SOURCE_PATH.split("/"));
   const target = path.join(root, ...OUTPUT_PATH.split("/"));
-  const original = Buffer.from(await filesystem.readFile(sourcePath));
+  await filesystem.mkdir(path.dirname(target), { recursive: true });
+  let removalFailure;
+  try {
+    await filesystem.rm(target, { force: true });
+  } catch (error) {
+    removalFailure = errorMessage(error);
+  }
+  const initialReport = preflightReport(removalFailure
+    ? `Unable to remove prior report: ${removalFailure}`
+    : undefined);
+  await filesystem.writeFile(target, `${JSON.stringify(initialReport, null, 2)}\n`, "utf8");
+  if (removalFailure) return initialReport;
+
+  let original;
+  try {
+    original = Buffer.from(await filesystem.readFile(sourcePath));
+  } catch (error) {
+    const report = preflightReport(`Unable to capture original readiness.rs bytes: ${errorMessage(error)}`);
+    await filesystem.writeFile(target, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    return report;
+  }
   const originalHash = sha256(original);
+  const sourceGuard = createSourceMutationGuard(filesystem, sourcePath, original, originalHash);
   const observations = [];
   const pairedExecutables = new Map();
   let latestExecutable = null;
   let infrastructureFailure = false;
   let observedFailure = false;
   let interrupted = false;
+  let restorationFailure = false;
   let restoration = { verified: true, restoredHash: originalHash };
+  let signalGeneration = 0;
+  let signalRestoration = Promise.resolve(130);
+  const removeSignalHandlers = installSignalHandlers((signal) => {
+    signalGeneration += 1;
+    interrupted = true;
+    signalRestoration = (async () => {
+      restoration = await sourceGuard.requestStop();
+      if (!restoration.verified) {
+        restorationFailure = true;
+        infrastructureFailure = true;
+        return 3;
+      }
+      return 130;
+    })();
+    return signalRestoration;
+  });
 
-  for (const entry of buildRunSchedule()) {
+  try {
+    for (const entry of buildRunSchedule()) {
     let result = null;
     let observation;
     let token;
@@ -242,7 +363,7 @@ export async function runRustFeasibility({
     try {
       if (INVALIDATING_SHAPES.has(entry.shape)) {
         token = `${entry.cohort}:${randomUUID()}`;
-        await filesystem.writeFile(sourcePath, appendMutation(original, token));
+        await sourceGuard.mutate(appendMutation(original, token));
       }
 
       let command;
@@ -314,12 +435,13 @@ export async function runRustFeasibility({
       failure = errorMessage(error);
       infrastructureFailure = true;
     } finally {
-      restoration = await restoreOriginal(filesystem, sourcePath, original, originalHash);
+      restoration = await sourceGuard.restore();
       if (!restoration.verified) {
         valid = false;
         failureKind = "restoration";
         failure = "Original readiness.rs bytes could not be verified after restoration";
         infrastructureFailure = true;
+        restorationFailure = true;
       }
     }
 
@@ -330,58 +452,93 @@ export async function runRustFeasibility({
       ...(failure ? { failure, failureKind } : {}),
       restoration,
     });
-    observations.push(observation);
-    if (interrupted || !restoration.verified) break;
-  }
+      observations.push(observation);
+      if (interrupted || !restoration.verified) break;
+    }
 
-  const checkFloorMs = retainedMedian(observations, "invalidatedCheck");
-  const combinedTestBuildMs = retainedMedian(observations, "noRun");
-  const directHarnessMs = retainedMedian(observations, "directBinary");
-  const cargoEndToEndMs = retainedMedian(observations, "endToEnd");
-  const metrics = {
-    checkFloorMs,
-    combinedTestBuildMs,
-    testBuildOverCheckMs: Number.isFinite(checkFloorMs) && Number.isFinite(combinedTestBuildMs)
-      ? combinedTestBuildMs - checkFloorMs
-      : null,
-    testBuildOverCheckExplanation: DELTA_EXPLANATION,
-    directHarnessMs,
-    cargoEndToEndMs,
-  };
-  const finalBytes = Buffer.from(await filesystem.readFile(sourcePath));
-  const finalHash = sha256(finalBytes);
-  const finalRestored = finalBytes.equals(original) && finalHash === originalHash;
-  if (!finalRestored) infrastructureFailure = true;
-  const valid = !infrastructureFailure && !observedFailure && !interrupted;
-  const exitCode = interrupted ? 130 : infrastructureFailure ? 3 : observedFailure ? 1 : 0;
-  const samples = observations.map((observation) => ({
-    ...observation,
-    warmup: observation.phase === "warmup",
-    retained: observation.phase === "retained",
-  }));
-  const report = {
-    schemaVersion: 1,
-    testName: RUST_TEST_NAME,
-    warmupRuns: WARMUP_RUNS,
-    retainedRuns: RETAINED_RUNS,
-    valid,
-    exitCode,
-    restoration: {
-      sourcePath: SOURCE_PATH,
-      originalHash,
-      restoredHash: finalHash,
-      originalLength: original.length,
-      restoredLength: finalBytes.length,
-      verified: restoration.verified && finalRestored,
-      ...(restoration.recoveryVerified !== undefined ? { recoveryVerified: restoration.recoveryVerified } : {}),
-    },
-    samples,
-    summary: metrics,
-    classification: classify(metrics),
-  };
-  await filesystem.mkdir(path.dirname(target), { recursive: true });
-  await filesystem.writeFile(target, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-  return report;
+    let finalBytes = null;
+    let finalReadFailure;
+    let verificationGeneration;
+    do {
+      await signalRestoration;
+      verificationGeneration = signalGeneration;
+      try {
+        finalBytes = Buffer.from(await filesystem.readFile(sourcePath));
+        finalReadFailure = undefined;
+      } catch (error) {
+        finalBytes = null;
+        finalReadFailure = errorMessage(error);
+        infrastructureFailure = true;
+        restorationFailure = true;
+      }
+      await signalRestoration;
+    } while (verificationGeneration !== signalGeneration);
+    const finalHash = finalBytes ? sha256(finalBytes) : null;
+    const finalRestored = Boolean(finalBytes?.equals(original) && finalHash === originalHash);
+    if (!finalRestored) {
+      infrastructureFailure = true;
+      restorationFailure = true;
+    }
+    const buildReport = () => {
+      const valid = !infrastructureFailure && !observedFailure && !interrupted;
+      const completeValidStudy = valid
+        && observations.length === buildRunSchedule().length
+        && observations.every((observation) => observation.valid);
+      const checkFloorMs = completeValidStudy ? retainedMedian(observations, "invalidatedCheck") : null;
+      const combinedTestBuildMs = completeValidStudy ? retainedMedian(observations, "noRun") : null;
+      const directHarnessMs = completeValidStudy ? retainedMedian(observations, "directBinary") : null;
+      const cargoEndToEndMs = completeValidStudy ? retainedMedian(observations, "endToEnd") : null;
+      const metrics = completeValidStudy ? {
+        checkFloorMs,
+        combinedTestBuildMs,
+        testBuildOverCheckMs: combinedTestBuildMs - checkFloorMs,
+        testBuildOverCheckExplanation: DELTA_EXPLANATION,
+        directHarnessMs,
+        cargoEndToEndMs,
+      } : unavailableSummary();
+      const exitCode = restorationFailure ? 3 : interrupted ? 130 : infrastructureFailure ? 3 : observedFailure ? 1 : 0;
+      const samples = observations.map((observation) => ({
+        ...observation,
+        warmup: observation.phase === "warmup",
+        retained: observation.phase === "retained",
+      }));
+      return {
+        schemaVersion: 1,
+        testName: RUST_TEST_NAME,
+        warmupRuns: WARMUP_RUNS,
+        retainedRuns: RETAINED_RUNS,
+        valid,
+        exitCode,
+        restoration: {
+          sourcePath: SOURCE_PATH,
+          originalHash,
+          restoredHash: finalHash,
+          originalLength: original.length,
+          restoredLength: finalBytes?.length ?? null,
+          verified: restoration.verified && finalRestored,
+          ...(finalReadFailure ? { verificationError: finalReadFailure } : {}),
+          ...(restoration.recoveryVerified !== undefined ? { recoveryVerified: restoration.recoveryVerified } : {}),
+        },
+        samples,
+        summary: metrics,
+        classification: completeValidStudy ? classify(metrics) : null,
+        ...(!completeValidStudy ? {
+          classificationUnavailableReason: "Study is incomplete or invalid; no authoritative classification is available",
+        } : {}),
+      };
+    };
+
+    while (true) {
+      await signalRestoration;
+      const reportGeneration = signalGeneration;
+      const report = buildReport();
+      await filesystem.writeFile(target, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+      await signalRestoration;
+      if (reportGeneration === signalGeneration) return report;
+    }
+  } finally {
+    removeSignalHandlers();
+  }
 }
 
 function cliOutputPath(argv) {

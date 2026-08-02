@@ -155,34 +155,56 @@ describe("slice one Rust feasibility proof parsers", () => {
       `running 2 tests\ntest ${RUST_TEST_NAME} ... ok\ntest other ... ok\n\ntest result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`,
       `running 1 test\ntest ${RUST_TEST_NAME} ... ignored\n\ntest result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s`,
       `running 1 test\ntest ${RUST_TEST_NAME} ... FAILED\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`,
+      `running 1 test\ntest ${RUST_TEST_NAME} ... ok\ntest ${RUST_TEST_NAME} ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s`,
     ];
     for (const output of invalid) expect(() => parseExactLibtest(output)).toThrow(/exactly one passing test/i);
   });
 });
 
-function createHarness(failRetainedInvalidated = false) {
+function createHarness({
+  failRetainedInvalidated = false,
+  restoreFailure,
+  staleReport = false,
+}: {
+  failRetainedInvalidated?: boolean;
+  restoreFailure?: "read" | "write" | "write-when-mutated";
+  staleReport?: boolean;
+} = {}) {
   const repoRoot = path.resolve("G:/virtual-repo");
   const sourcePath = path.join(repoRoot, "src-tauri", "src", "readiness.rs");
   const outputPath = path.join(repoRoot, "artifacts", "testing", "slice-1", "rust-feasibility.json");
   const executable = path.join(repoRoot, "src-tauri", "target", "debug", "deps", "extractum_lib-cafebabe.exe");
   const files = new Map<string, Buffer>([[sourcePath, Buffer.from(ORIGINAL_SOURCE)]]);
+  if (staleReport) files.set(outputPath, Buffer.from('{"valid":true,"classification":"STALE"}\n'));
   const mtimes = new Map<string, number>([[executable, 100]]);
   const writes: Array<{ file: string; bytes: Buffer }> = [];
   let uuid = 0;
   let invalidatedCalls = 0;
+  let sourceReads = 0;
 
   const filesystem = {
     readFile: vi.fn(async (file: string) => {
+      if (file === sourcePath) {
+        sourceReads += 1;
+        if (restoreFailure === "read" && sourceReads > 1) throw new Error("persistent restore read failure");
+      }
       const value = files.get(file);
       if (!value) throw Object.assign(new Error(`ENOENT: ${file}`), { code: "ENOENT" });
       return Buffer.from(value);
     }),
     writeFile: vi.fn(async (file: string, value: string | Uint8Array) => {
       const bytes = Buffer.isBuffer(value) ? Buffer.from(value) : Buffer.from(value);
+      const currentSourceIsMutated = file === sourcePath && !files.get(sourcePath)?.equals(ORIGINAL_SOURCE);
+      if (file === sourcePath
+        && bytes.equals(ORIGINAL_SOURCE)
+        && (restoreFailure === "write" || (restoreFailure === "write-when-mutated" && currentSourceIsMutated))) {
+        throw new Error("persistent restore write failure");
+      }
       files.set(file, bytes);
       writes.push({ file, bytes });
     }),
     mkdir: vi.fn(async () => undefined),
+    rm: vi.fn(async (file: string) => { files.delete(file); }),
     stat: vi.fn(async (file: string) => ({ mtimeMs: mtimes.get(file) ?? 0 })),
   };
 
@@ -291,7 +313,7 @@ describe("slice one Rust feasibility driver", () => {
   });
 
   it("restores exact source bytes in finally and retains a failed sample without replacement", async () => {
-    const harness = createHarness(true);
+    const harness = createHarness({ failRetainedInvalidated: true });
     const report = await runRustFeasibility({
       repoRoot: harness.repoRoot,
       runCommand: harness.runCommand,
@@ -312,6 +334,15 @@ describe("slice one Rust feasibility driver", () => {
     expect(harness.files.get(harness.sourcePath)).toEqual(ORIGINAL_SOURCE);
     const sourceWrites = harness.writes.filter((write) => write.file === harness.sourcePath);
     expect(sourceWrites.at(-1)?.bytes).toEqual(ORIGINAL_SOURCE);
+    expect(report.summary).toMatchObject({
+      checkFloorMs: null,
+      combinedTestBuildMs: null,
+      testBuildOverCheckMs: null,
+      directHarnessMs: null,
+      cargoEndToEndMs: null,
+    });
+    expect(report.classification).toBeNull();
+    expect(report.classificationUnavailableReason).toMatch(/invalid|incomplete/i);
   });
 
   it("invalidates the report with exit 3 when restored bytes do not match", async () => {
@@ -335,5 +366,156 @@ describe("slice one Rust feasibility driver", () => {
     });
 
     expect(report).toMatchObject({ exitCode: 3, valid: false, restoration: { verified: false } });
+    expect(report.classification).toBeNull();
+  });
+
+  it("restores and verifies an active mutation before an injected SIGINT completes", async () => {
+    const harness = createHarness();
+    let signalHandler: ((signal: string) => Promise<number>) | undefined;
+    const removeSignalHandlers = vi.fn();
+    const installSignalHandlers = vi.fn((handler) => {
+      signalHandler = handler;
+      return removeSignalHandlers;
+    });
+    const baseRunCommand = harness.runCommand;
+    let signalled = false;
+    harness.runCommand = vi.fn(async (call) => {
+      const mutated = !harness.files.get(harness.sourcePath)!.equals(ORIGINAL_SOURCE);
+      if (mutated && !signalled) {
+        signalled = true;
+        expect(signalHandler).toBeTypeOf("function");
+        await signalHandler!("SIGINT");
+        expect(harness.files.get(harness.sourcePath)).toEqual(ORIGINAL_SOURCE);
+        return {
+          command: [call.command, ...call.args].join(" "),
+          startedAt: "2026-08-02T10:11:12.123Z",
+          duration: 7,
+          exitCode: 130,
+          termination: "signal",
+          signal: "SIGINT",
+          stdout: "",
+          stderr: "",
+        };
+      }
+      return baseRunCommand(call);
+    });
+
+    const report = await runRustFeasibility({
+      repoRoot: harness.repoRoot,
+      runCommand: harness.runCommand,
+      filesystem: harness.filesystem,
+      randomUUID: harness.randomUUID,
+      installSignalHandlers,
+    });
+
+    expect(report).toMatchObject({ exitCode: 130, valid: false, restoration: { verified: true } });
+    expect(report.classification).toBeNull();
+    expect(harness.files.get(harness.sourcePath)).toEqual(ORIGINAL_SOURCE);
+    expect(installSignalHandlers).toHaveBeenCalledTimes(1);
+    expect(removeSignalHandlers).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["read", "write"] as const)("replaces a stale valid report after persistent restoration %s failure", async (restoreFailure) => {
+    const harness = createHarness({ restoreFailure, staleReport: true });
+    const staleAtFirstCommand: string[] = [];
+    const baseRunCommand = harness.runCommand;
+    harness.runCommand = vi.fn(async (call) => {
+      staleAtFirstCommand.push(harness.files.get(harness.outputPath)?.toString("utf8") ?? "missing");
+      return baseRunCommand(call);
+    });
+
+    const report = await runRustFeasibility({
+      repoRoot: harness.repoRoot,
+      runCommand: harness.runCommand,
+      filesystem: harness.filesystem,
+      randomUUID: harness.randomUUID,
+      installSignalHandlers: () => vi.fn(),
+    });
+
+    expect(staleAtFirstCommand[0]).not.toContain('"valid":true');
+    expect(report).toMatchObject({ exitCode: 3, valid: false, classification: null });
+    expect(report.summary).toMatchObject({
+      checkFloorMs: null,
+      combinedTestBuildMs: null,
+      testBuildOverCheckMs: null,
+      directHarnessMs: null,
+      cargoEndToEndMs: null,
+    });
+    const written = JSON.parse(harness.files.get(harness.outputPath)!.toString("utf8"));
+    expect(written).toMatchObject({ exitCode: 3, valid: false, classification: null });
+    expect(written.classificationUnavailableReason).toMatch(/invalid|incomplete/i);
+  });
+
+  it("gives restoration failure precedence over injected interruption", async () => {
+    const harness = createHarness({ restoreFailure: "write-when-mutated" });
+    let signalHandler: ((signal: string) => Promise<number>) | undefined;
+    let signalCalls = 0;
+    const baseRunCommand = harness.runCommand;
+    harness.runCommand = vi.fn(async (call) => {
+      if (!harness.files.get(harness.sourcePath)!.equals(ORIGINAL_SOURCE)) {
+        await signalHandler!("SIGTERM");
+        return {
+          command: [call.command, ...call.args].join(" "),
+          startedAt: "2026-08-02T10:11:12.123Z",
+          duration: 7,
+          exitCode: 130,
+          termination: "signal",
+          signal: "SIGTERM",
+          stdout: "",
+          stderr: "",
+        };
+      }
+      return baseRunCommand(call);
+    });
+
+    const report = await runRustFeasibility({
+      repoRoot: harness.repoRoot,
+      runCommand: harness.runCommand,
+      filesystem: harness.filesystem,
+      randomUUID: harness.randomUUID,
+      installSignalHandlers: (handler) => {
+        signalHandler = async (signal) => {
+          signalCalls += 1;
+          return handler(signal);
+        };
+        return vi.fn();
+      },
+    });
+
+    expect(report).toMatchObject({ exitCode: 3, valid: false, classification: null });
+    expect(signalCalls).toBe(1);
+  });
+
+  it("rewrites the final report when SIGINT arrives during its write", async () => {
+    const harness = createHarness();
+    let signalHandler: ((signal: string) => Promise<number>) | undefined;
+    let outputWrites = 0;
+    const writeFile = harness.filesystem.writeFile;
+    harness.filesystem.writeFile = vi.fn(async (file: string, value: string | Uint8Array) => {
+      if (file === harness.outputPath) {
+        outputWrites += 1;
+        if (outputWrites === 2) await signalHandler!("SIGINT");
+      }
+      await writeFile(file, value);
+    });
+
+    const report = await runRustFeasibility({
+      repoRoot: harness.repoRoot,
+      runCommand: harness.runCommand,
+      filesystem: harness.filesystem,
+      randomUUID: harness.randomUUID,
+      installSignalHandlers: (handler) => {
+        signalHandler = handler;
+        return vi.fn();
+      },
+    });
+
+    expect(report).toMatchObject({ exitCode: 130, valid: false, classification: null });
+    expect(JSON.parse(harness.files.get(harness.outputPath)!.toString("utf8"))).toMatchObject({
+      exitCode: 130,
+      valid: false,
+      classification: null,
+    });
+    expect(outputWrites).toBe(3);
   });
 });
