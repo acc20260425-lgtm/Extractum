@@ -7,6 +7,7 @@ import {
   buildLedgerDraft,
   discoverSourceReaders,
   discoverTestDeclarations,
+  selectVitestTrackedPaths,
   validateSourceContractLedger,
 } from "./extract-source-contract-ledger.mjs";
 
@@ -207,118 +208,305 @@ describe("transition carrier", () => {
 });
 
 describe("bounded source-contract ledger", () => {
-  const sourceFiles = [{
-    path: "src/example-contract.test.ts",
-    source: [
-      'import source from "./example.ts?raw";',
-      'const cases = [["one", 1]] as const;',
-      'describe("outer", () => {',
-      '  it.each(cases)("case %s", (_name, value) => { expect(value).toBe(1); });',
-      '  it("ordinary", () => expect(source).toContain("export"));',
-      '});',
-    ].join("\r\n"),
-  }];
-
-  it("discovers static nested titles, .each authority, assertions, and normalized slices", () => {
-    const declarations = discoverTestDeclarations(sourceFiles, ts);
-    expect(declarations).toHaveLength(2);
-    expect(declarations.map((entry: any) => entry.title)).toEqual(["outer > case %s", "outer > ordinary"]);
-    expect(declarations[0]).toMatchObject({ assertionOrdinals: [1], eachAuthorityText: 'const cases = [["one", 1]] as const;' });
-    expect(declarations[1].sourceSlice).not.toContain("\r");
-    expect(declarations[1].referencedSymbols).toContain("source");
+  const sha = (value: string) => createHash("sha256").update(value.replace(/\r\n?/g, "\n")).digest("hex");
+  const gitMetadata = (
+    trackedPaths: string[],
+    pathKinds: Record<string, string> = {},
+    ignoredPaths: string[] = [],
+  ) => ({ trackedPaths: new Set(trackedPaths), pathKinds: new Map(Object.entries(pathKinds)), ignoredPaths: new Set(ignoredPaths) });
+  const envelope = (rows: unknown[], sourceReaderExceptions: unknown[] = []) => ({
+    schemaVersion: 1,
+    frozenAtCommit: "a".repeat(40),
+    sourceReaderExceptions,
+    rows,
+  });
+  const simpleRow = (declaration: any, overrides: Record<string, unknown> = {}) => ({
+    id: "SC-000001",
+    path: declaration.path,
+    title: declaration.title,
+    sourceHash: sha(declaration.sourceSlice),
+    assertionCount: declaration.assertionOrdinals.length,
+    ...(declaration.authorityText ? { authorityHash: sha(declaration.authorityText) } : {}),
+    lineage: [],
+    invariant: "Keep the source-backed invariant.",
+    disposition: "behavior",
+    replacementIds: ["test:vitest:src/replacement.test.ts#replacement"],
+    ...overrides,
   });
 
-  it("discovers only tracked raw-source readers and bounded manual requirements", () => {
-    const readers = discoverSourceReaders(sourceFiles, new Set(["src/example.ts", "src/fixture.txt"]), ts);
-    expect(readers).toMatchObject([{ path: "src/example-contract.test.ts", authorityPath: "src/example.ts", kind: "raw-import" }]);
+  it("builds a complete static declaration inventory with nested titles, both .each forms, and Node assert ordinals", () => {
+    const declarations = discoverTestDeclarations([{
+      path: "src/inventory.test.ts",
+      source: [
+        'import assert from "node:assert/strict";',
+        'const cases = [["one", 1]] as const;',
+        'describe("outer", () => {',
+        '  it.each(cases)("named %s", (_name, value) => { expect(value).toBe(1); });',
+        '  test.each([["two", 2]])("inline %s", (_name, value) => { assert(value === 2); });',
+        '});',
+      ].join("\r\n"),
+    }], ts);
 
-    const dynamic = discoverTestDeclarations([{ path: "src/dynamic.test.ts", source: 'it(makeTitle(), () => expect(1).toBe(1));' }], ts);
-    expect(dynamic.manualRequirements).toEqual([expect.objectContaining({ path: "src/dynamic.test.ts", reason: "computed test title" })]);
+    expect(declarations.map((entry: any) => entry.title)).toEqual(["outer > named %s", "outer > inline %s"]);
+    expect(declarations.map((entry: any) => entry.assertionOrdinals)).toEqual([[1], [1]]);
+    expect(declarations[0].eachAuthorityText).toBe('const cases = [["one", 1]] as const;');
+    expect(declarations[1].eachAuthorityText).toBe('[["two", 2]]');
+    expect(declarations.every((entry: any) => !entry.sourceSlice.includes("\r"))).toBe(true);
   });
 
-  it("expands only tracked raw import.meta.glob authorities", () => {
-    const readers = discoverSourceReaders([{
-      path: "src/glob-contract.test.ts",
-      source: 'const modules = import.meta.glob("./components/*.svelte", { query: "?raw" });\nit("keeps component source", () => expect(modules).toBeDefined());',
-    }], new Set(["src/components/One.svelte", "src/components/Two.svelte", "src/components/skip.ts"]), ts);
-    expect(readers.map((reader: any) => reader.authorityPath)).toEqual(["src/components/One.svelte", "src/components/Two.svelte"]);
-    expect(readers[0].symbolNames).toContain("modules");
+  it("turns factory declarations, computed titles, dynamic .each, and ambiguous bindings into exact manual requirements", () => {
+    const source = [
+      'const title = "computed";',
+      'const cases = getCases();',
+      'const source = "one";',
+      'const source = "two";',
+      'it(title, () => expect(source).toBe("one"));',
+      'it.each(cases)("case", () => expect(1).toBe(1));',
+      'it("factory", makeAssertion());',
+    ].join("\n");
+    const declarations = discoverTestDeclarations([{ path: "src/manual.test.ts", source }], ts);
+
+    expect(declarations).toHaveLength(0);
+    expect(declarations.manualRequirements).toEqual([
+      expect.objectContaining({ path: "src/manual.test.ts", sourceRange: "5:1-5:44", reason: expect.stringMatching(/computed test title|ambiguous lexical binding/) }),
+      expect.objectContaining({ path: "src/manual.test.ts", sourceRange: "6:1-6:48", reason: "unresolved dynamic .each table" }),
+      expect.objectContaining({ path: "src/manual.test.ts", sourceRange: "7:1-7:31", reason: "dynamic test factory" }),
+    ]);
+    expect(declarations.manualRequirements.every((entry: any) => entry.sourceSlice && entry.assertionOrdinals && entry.sourceOffset >= 0)).toBe(true);
   });
 
-  it("creates deterministic LF-normalized draft IDs only for an explicit output artifact", () => {
-    const declarations = discoverTestDeclarations(sourceFiles, ts);
-    const draft = buildLedgerDraft({ declarations: [...declarations].reverse(), frozenAtCommit: "a".repeat(40) });
-    expect(draft.rows.map((row: any) => row.id)).toEqual(["SC-000001", "SC-000002"]);
-    expect(draft.rows[1].sourceHash).toBe(createHash("sha256").update(declarations[1].sourceSlice).digest("hex"));
-    expect(draft.rows[0].invariant).toContain("Review");
-  });
-
-  it("validates bidirectional rows, resolution syntax, and derived open state", () => {
-    const declaration = discoverTestDeclarations(sourceFiles, ts)[1];
-    const row = {
-      id: "SC-000001",
-      path: declaration.path,
-      title: declaration.title,
-      sourceHash: createHash("sha256").update(declaration.sourceSlice).digest("hex"),
-      assertionCount: declaration.assertionOrdinals.length,
-      lineage: [],
-      invariant: "Source contents remain covered by behavior.",
-      disposition: "behavior",
-      replacementIds: ["test:vitest:src/example-contract.test.ts#outer > ordinary"],
-    };
-    const ledger = { schemaVersion: 1, frozenAtCommit: "b".repeat(40), sourceReaderExceptions: [], rows: [row] };
-    const result = validateSourceContractLedger({ ledger, declarations: [declaration], sourceReaders: [{ path: declaration.path, sourceRange: "1:1-1:2" }], liveCensus: { vitestOwners: [{ id: "vitest:root", ownerScript: "test" }] }, verifySteps: [{ npmScript: "test" }] });
-    expect(result.issues).toEqual([]);
-    expect(result.rows).toEqual([expect.objectContaining({ id: "SC-000001", state: "open" })]);
-  });
-
-  it("rejects lifecycle fields, invalid subgroup coverage, and unresolved absent rows", () => {
-    const ledger = {
-      schemaVersion: 1,
-      frozenAtCommit: "c".repeat(40),
-      sourceReaderExceptions: [],
-      rows: [{
-        id: "SC-000001", path: "src/old.test.ts", title: "old", sourceHash: "a".repeat(64), assertionCount: 2, lineage: [], invariant: "mixed",
-        status: "pending", subgroups: [{ assertionOrdinals: [1, 1], invariant: "dup", disposition: "behavior", replacementIds: ["test:playwright:x#y"] }],
-      }],
-    };
-    const result = validateSourceContractLedger({ ledger, declarations: [], sourceReaders: [], liveCensus: { vitestOwners: [] }, verifySteps: [] });
-    expect(result.issues).toEqual(expect.arrayContaining([
-      expect.stringContaining("stored lifecycle field"),
-      expect.stringContaining("overlapping subgroup assertion ordinal"),
-      expect.stringContaining("unresolved historical row"),
-    ]));
-  });
-
-  it("fails closed for extensionless helper namespaces, dynamic readers, and shadowed authority names", () => {
-    const source = [{ path: "src/reader.test.ts", source: [
+  it("seeds only exact source-reading helper exports for extensionless named and namespace imports", () => {
+    const files = [{ path: "src/helper.test.ts", source: [
+      'import { readAnalysisContractSource as readAnalysis, normalizeAnalysisContractSourceText } from "./analysis-contract-paths";',
       'import * as telegram from "./telegram-contract-paths";',
-      'import { readFileSync } from "node:fs";',
-      'const source = readFileSync(dynamicPath);',
-      'const modules = import.meta.glob(dynamicPattern, { query: "?raw" });',
-      'it("reader", () => { const source = "local"; expect(source).toBe("local"); });',
+      'import { readPromptPackDomainSource, promptPackCrateExtracted } from "./prompt-pack-contract-paths";',
+      'const analysis = readAnalysis({ before: "a.rs", after: { owner: "app", path: "b.rs" } });',
+      'const telegramSource = telegram.readTelegramContractFile("src/live.ts");',
+      'const prompt = readPromptPackDomainSource("lib.rs");',
+      'it("analysis", () => expect(analysis).toContain("x"));',
+      'it("telegram", () => expect(telegramSource).toContain("x"));',
+      'it("prompt", () => expect(prompt).toContain("x"));',
+      'it("non-readers", () => expect([normalizeAnalysisContractSourceText("x"), telegram.phase8BCheckpointNumber("8b-preparation"), promptPackCrateExtracted]).toBeDefined());',
     ].join("\n") }];
-    const readers = discoverSourceReaders(source, new Set(["src/live.ts"]), ts);
-    expect(readers).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: "contract-path-helper", symbolName: "telegram" }),
-      expect.objectContaining({ kind: "manual", reason: expect.stringMatching(/dynamic path/) }),
-      expect.objectContaining({ kind: "manual", reason: expect.stringMatching(/dynamic raw glob/) }),
-    ]));
-    const declarations = discoverTestDeclarations(source, ts);
-    const draft = buildLedgerDraft({ declarations, sourceReaders: readers, frozenAtCommit: "d".repeat(40) });
-    expect(draft.rows.some((row: any) => row.title === "reader")).toBe(false);
+    const readers = discoverSourceReaders(files, gitMetadata([]), ts);
+    const inventory = discoverTestDeclarations(files, ts);
+    const draft = buildLedgerDraft({ declarationInventory: inventory, sourceReaders: readers, frozenAtCommit: "b".repeat(40) });
+
+    expect(readers.filter((reader: any) => reader.kind === "contract-path-helper").map((reader: any) => reader.exportName).sort()).toEqual([
+      "readAnalysisContractSource", "readPromptPackDomainSource", "readTelegramContractFile",
+    ]);
+    expect(draft.rows.map((row: any) => row.title)).toEqual(["analysis", "telegram", "prompt"]);
   });
 
-  it("rejects malformed manual/mixed rows and duplicate current identities", () => {
-    const declaration = { path: "src/x.test.ts", title: "same", sourceSlice: 'it("same", () => assert(true));', sourceOffset: 0, assertionOrdinals: [1], referencedSymbols: [] };
-    const ledger = { schemaVersion: 1, frozenAtCommit: "e".repeat(40), sourceReaderExceptions: [], rows: [{
-      id: "SC-000001", path: "src/x.test.ts", title: "same", manual: {}, sourceHash: "bad", assertionCount: -1, lineage: [], invariant: "", disposition: "delete", replacementIds: ["rule:"], status: "pending",
-    }] };
-    const result = validateSourceContractLedger({ ledger, declarations: [declaration, { ...declaration, sourceOffset: 10 }], sourceReaders: [], liveCensus: { vitestOwners: [] }, verifySteps: [] });
-    expect(result.issues).toEqual(expect.arrayContaining([
-      expect.stringContaining("duplicate current identity"), expect.stringContaining("unknown ledger row field"),
-      expect.stringContaining("invalid manual row"), expect.stringContaining("invalid sourceHash"),
-      expect.stringContaining("stored lifecycle field"), expect.stringContaining("delete must not contain replacementIds"),
+  it("ties named and namespace node:fs calls to their imports and never seeds local same-name functions", () => {
+    const files = [{ path: "src/fs.test.ts", source: [
+      'import { readFileSync as readSource } from "node:fs";',
+      'import * as fs from "node:fs";',
+      'const one = readSource("src/one.ts", "utf8");',
+      'const two = fs.readFileSync("src/two.ts", "utf8");',
+      'function readFileSync(_path: string) { return "local"; }',
+      'const local = readFileSync("src/local.ts");',
+      'it("one", () => expect(one).toContain("x"));',
+      'it("two", () => expect(two).toContain("x"));',
+      'it("local", () => expect(local).toContain("x"));',
+    ].join("\n") }];
+    const readers = discoverSourceReaders(files, gitMetadata(["src/one.ts", "src/two.ts", "src/local.ts"]), ts);
+
+    expect(readers.map((reader: any) => reader.authorityPath)).toEqual(["src/one.ts", "src/two.ts"]);
+    const draft = buildLedgerDraft({ declarationInventory: discoverTestDeclarations(files, ts), sourceReaders: readers, frozenAtCommit: "c".repeat(40) });
+    expect(draft.rows.map((row: any) => row.title)).toEqual(["one", "two"]);
+  });
+
+  it("uses lexical binding identity so a shadowed name does not propagate source authority", () => {
+    const files = [{ path: "src/shadow.test.ts", source: [
+      'import source from "./live.ts?raw";',
+      'it("local", () => { const source = "local"; expect(source).toBe("local"); });',
+      'it("external", () => expect(source).toContain("export"));',
+    ].join("\n") }];
+    const readers = discoverSourceReaders(files, gitMetadata(["src/live.ts"]), ts);
+    const draft = buildLedgerDraft({ declarationInventory: discoverTestDeclarations(files, ts), sourceReaders: readers, frozenAtCommit: "d".repeat(40) });
+    expect(draft.rows.map((row: any) => row.title)).toEqual(["external"]);
+  });
+
+  it("emits exact manual readers for dynamic fs, untracked raw imports, unknown wrappers, and unresolved raw globs", () => {
+    const files = [{ path: "src/unknown.test.ts", source: [
+      'import { readFileSync } from "node:fs";',
+      'import missing from "./missing.ts?raw";',
+      'import { readSourceFile } from "./unknown-reader";',
+      'const dynamic = readFileSync(dynamicPath, "utf8");',
+      'const wrapped = readSourceFile("src/live.ts");',
+      'const modules = import.meta.glob(pattern, { query: "?raw" });',
+      'it("unknown", () => expect([missing, dynamic, wrapped, modules]).toBeDefined());',
+    ].join("\n") }];
+    const readers = discoverSourceReaders(files, gitMetadata(["src/live.ts"]), ts);
+    expect(readers.filter((reader: any) => reader.kind === "manual")).toEqual([
+      expect.objectContaining({ sourceRange: "2:1-2:40", reason: "untracked raw import" }),
+      expect.objectContaining({ sourceRange: "4:17-4:50", reason: "dynamic or unknown filesystem authority" }),
+      expect.objectContaining({ sourceRange: "5:17-5:46", reason: "unknown source-reader wrapper" }),
+      expect.objectContaining({ sourceRange: "6:17-6:61", reason: "dynamic raw glob" }),
+    ]);
+  });
+
+  it("hashes raw, fs, helper, glob, and .each authority text into obligated rows", () => {
+    const files = [{ path: "src/authority.test.ts", source: [
+      'import raw from "./raw.ts?raw";',
+      'import { readFileSync } from "node:fs";',
+      'const fsSource = readFileSync("src/fs.ts", "utf8");',
+      'const modules = import.meta.glob("./parts/*.ts", { query: "?raw" });',
+      'const cases = [["x"]] as const;',
+      'it.each(cases)("authority %s", () => expect([raw, fsSource, modules]).toBeDefined());',
+    ].join("\n") }];
+    const metadata = gitMetadata(["src/raw.ts", "src/fs.ts", "src/parts/a.ts"]);
+    const inventory = discoverTestDeclarations(files, ts);
+    const readers = discoverSourceReaders(files, metadata, ts);
+    const draft = buildLedgerDraft({ declarationInventory: inventory, sourceReaders: readers, frozenAtCommit: "e".repeat(40) });
+    const authorityText = [
+      'import raw from "./raw.ts?raw";',
+      'readFileSync("src/fs.ts", "utf8")',
+      'import.meta.glob("./parts/*.ts", { query: "?raw" })',
+      'const cases = [["x"]] as const;',
+    ].join("\n");
+    expect(draft.rows[0].authorityHash).toBe(sha(authorityText));
+    expect(draft.rows[0]).not.toHaveProperty("authorityTextForAudit");
+  });
+
+  it("classifies exact production, fixture, generated, ignored, output, test, and temp provenance from injected metadata", () => {
+    const files = [{ path: "src/provenance.test.ts", source: [
+      'import { mkdtempSync, readFileSync } from "node:fs";',
+      'import { tmpdir } from "node:os";',
+      'import path from "node:path";',
+      'const tempRoot = mkdtempSync(path.join(tmpdir(), "audit-"));',
+      'const production = readFileSync("src/live.ts", "utf8");',
+      'const fixture = readFileSync("samples/input.txt", "utf8");',
+      'const generated = readFileSync("cache/generated.txt", "utf8");',
+      'const output = readFileSync("reports/result.json", "utf8");',
+      'const ignored = readFileSync("artifacts/run.json", "utf8");',
+      'const testSource = readFileSync("src/other.test.ts", "utf8");',
+      'const temporary = readFileSync(path.join(tempRoot, "value.txt"), "utf8");',
+    ].join("\n") }];
+    const metadata = gitMetadata(
+      ["src/live.ts", "samples/input.txt", "cache/generated.txt", "reports/result.json", "src/other.test.ts"],
+      { "src/live.ts": "production", "samples/input.txt": "fixture", "cache/generated.txt": "generated", "reports/result.json": "output" },
+      ["artifacts/run.json"],
+    );
+    const readers = discoverSourceReaders(files, metadata, ts);
+    expect(readers.map((reader: any) => [reader.authorityPath, reader.classification])).toEqual([
+      ["src/live.ts", "production"], ["samples/input.txt", "fixture"], ["cache/generated.txt", "generated"],
+      ["reports/result.json", "output"], ["artifacts/run.json", "ignored"], ["src/other.test.ts", "test"],
+      [undefined, "temp"],
+    ]);
+  });
+
+  it("keeps full replacement inventory separate from the source-reader-derived obligated cohort", () => {
+    const files = [{ path: "src/mixed.test.ts", source: [
+      'import source from "./live.ts?raw";',
+      'it("legacy", () => expect(source).toContain("export"));',
+      'it("replacement", () => expect(1 + 1).toBe(2));',
+    ].join("\n") }];
+    const inventory = discoverTestDeclarations(files, ts);
+    const readers = discoverSourceReaders(files, gitMetadata(["src/live.ts"]), ts);
+    const draft = buildLedgerDraft({ declarationInventory: inventory, sourceReaders: readers, frozenAtCommit: "f".repeat(40) });
+    expect(draft.rows.map((row: any) => row.title)).toEqual(["legacy"]);
+
+    const historical = simpleRow(inventory[0], { path: "src/old.test.ts", title: "old", replacementIds: ["test:vitest:src/mixed.test.ts#replacement"] });
+    const result = validateSourceContractLedger({
+      ledger: envelope([historical]), declarationInventory: inventory, sourceReaders: [],
+      liveCensus: { vitestOwners: [{ id: "vitest:root", ownerScript: "test" }], vitestFiles: { "vitest:root": ["src/mixed.test.ts"] } },
+      verifySteps: [{ npmScript: "test" }],
+    });
+    expect(result.issues).toEqual([]);
+    expect(result.rows).toEqual([{ id: "SC-000001", state: "closed" }]);
+  });
+
+  it("limits the CLI declaration inventory to paths proven by the freeze-time Vitest list", () => {
+    expect(selectVitestTrackedPaths(
+      ["src/unit.test.ts", "research/e2e.spec.ts", "src/not-a-test.ts"],
+      { "src/unit.test.ts": ["unit"], "scripts/untracked.test.ts": ["other"] },
+    )).toEqual(["src/unit.test.ts"]);
+  });
+
+  it("builds exact manual rows only with non-empty freeze-time runner titles and validates them against current requirements", () => {
+    const files = [{ path: "src/manual-reader.test.ts", source: [
+      'import { readFileSync } from "node:fs";',
+      'const source = readFileSync(dynamicPath, "utf8");',
+      'it("manual reader", () => expect(source).toContain("x"));',
+    ].join("\n") }];
+    const inventory = discoverTestDeclarations(files, ts);
+    const readers = discoverSourceReaders(files, gitMetadata([]), ts);
+    expect(() => buildLedgerDraft({ declarationInventory: inventory, sourceReaders: readers, frozenAtCommit: "1".repeat(40) })).toThrow(/runnerTitles/);
+
+    const draft = buildLedgerDraft({
+      declarationInventory: inventory,
+      sourceReaders: readers,
+      frozenAtCommit: "1".repeat(40),
+      runnerTitlesByPath: { "src/manual-reader.test.ts": ["suite > manual reader"] },
+    });
+    expect(draft.rows).toEqual([expect.objectContaining({
+      manual: { sourceRange: "2:16-2:49", reason: "dynamic or unknown filesystem authority", runnerTitles: ["suite > manual reader"] },
+      sourceHash: sha('readFileSync(dynamicPath, "utf8")'),
+      assertionCount: 1,
+    })]);
+    const reviewed = { ...draft.rows[0], invariant: "Review the dynamic reader.", disposition: "delete", deletionReason: "The implementation-text assertion will be removed.", replacementIds: undefined };
+    delete reviewed.replacementIds;
+    expect(validateSourceContractLedger({ ledger: envelope([reviewed]), declarationInventory: inventory, sourceReaders: readers, runnerTitlesByPath: { "src/manual-reader.test.ts": ["suite > manual reader"] } }).issues).toEqual([]);
+  });
+
+  it("requires draft output to remain under repo artifacts and be proven ignored", () => {
+    const base = { declarationInventory: [], sourceReaders: [], frozenAtCommit: "2".repeat(40), repoRoot: "C:/repo" };
+    expect(() => buildLedgerDraft({ ...base, outputPath: "../escape.json", isIgnoredPath: () => true })).toThrow(/inside artifacts/);
+    expect(() => buildLedgerDraft({ ...base, outputPath: "artifacts/draft.json", isIgnoredPath: () => false })).toThrow(/Git-ignored/);
+    expect(() => buildLedgerDraft({ ...base, outputPath: "artifacts/draft.json" })).toThrow(/isIgnoredPath/);
+  });
+
+  it("validates strict recursive schemas, exact unions, anchored namespaces, lineage, and nulls deterministically", () => {
+    const badRows = [
+      null,
+      { id: "SC-000001", path: "src/x.test.ts", title: "x", manual: { sourceRange: "*", reason: "", runnerTitles: [], extra: true }, sourceHash: "bad", assertionCount: -1, lineage: ["../old.test.ts", "../old.test.ts"], invariant: "", disposition: "delete", replacementIds: ["junk test:vitest:x#y"], status: "pending" },
+      { id: "SC-000002", path: "src/y.test.ts", title: "y", sourceHash: "b".repeat(64), assertionCount: 2, lineage: [], invariant: "mixed", disposition: "behavior", subgroups: [{ assertionOrdinals: [1, 1], invariant: "", disposition: "behavior", replacementIds: ["rule:"], extra: true }] },
+    ];
+    const ledger = { ...envelope(badRows, [{ path: "src/*.test.ts", sourceRange: "*", reason: "", owner: "", extra: true }]), extra: true };
+    const first = validateSourceContractLedger({ ledger, declarationInventory: [], sourceReaders: [] });
+    const second = validateSourceContractLedger({ ledger, declarationInventory: [], sourceReaders: [] });
+    expect(() => validateSourceContractLedger({ ledger, declarationInventory: [], sourceReaders: [] })).not.toThrow();
+    expect(first).toEqual(second);
+    expect(first.issues).toEqual(expect.arrayContaining([
+      expect.stringContaining("unknown ledger envelope field"), expect.stringContaining("invalid ledger row"),
+      expect.stringContaining("invalid manual row"), expect.stringContaining("invalid lineage"),
+      expect.stringContaining("mixed row has top-level resolution"), expect.stringContaining("overlapping subgroup assertion ordinal"),
+      expect.stringContaining("unknown replacement namespace"), expect.stringContaining("invalid sourceReaderException"),
     ]));
+  });
+
+  it("requires exact necessary fixture exceptions and rejects broad, empty, duplicate, and stale entries", () => {
+    const readers = [{ path: "src/x.test.ts", sourceRange: "2:16-2:60", sourceSlice: 'readFileSync("samples/a.txt", "utf8")', kind: "fs-read", classification: "fixture", authorityPath: "samples/a.txt" }];
+    const exact = { path: "src/x.test.ts", sourceRange: "2:16-2:60", reason: "Reads the parser fixture.", owner: "parser fixture" };
+    expect(validateSourceContractLedger({ ledger: envelope([], [exact]), declarationInventory: [], sourceReaders: readers }).issues).toEqual([]);
+    const issues = validateSourceContractLedger({ ledger: envelope([], [exact, exact, { path: "src/*.test.ts", sourceRange: "*", reason: "", owner: "" }, { path: "src/stale.test.ts", sourceRange: "1:1-1:2", reason: "stale", owner: "owner" }]), declarationInventory: [], sourceReaders: readers }).issues;
+    expect(issues).toEqual(expect.arrayContaining([
+      expect.stringContaining("duplicate sourceReaderException"), expect.stringContaining("invalid sourceReaderException"), expect.stringContaining("stale sourceReaderException"),
+    ]));
+  });
+
+  it("derives truthful open and closed states for present, deleted, unresolved, and mixed historical rows", () => {
+    const current = { path: "src/current.test.ts", title: "current", sourceSlice: 'it("current", () => expect(1).toBe(1))', sourceOffset: 0, assertionOrdinals: [1], referencedBindingKeys: [], sourceRange: "1:1-1:42" };
+    const replacement = { path: "src/replacement.test.ts", title: "replacement", sourceSlice: 'it("replacement", () => expect(1).toBe(1))', sourceOffset: 0, assertionOrdinals: [1], referencedBindingKeys: [], sourceRange: "1:1-1:50" };
+    const rows = [
+      simpleRow(current, { id: "SC-000001", replacementIds: ["test:vitest:src/replacement.test.ts#replacement"] }),
+      simpleRow(current, { id: "SC-000002", path: "src/deleted.test.ts", title: "deleted", disposition: "delete", deletionReason: "Formatting-only assertion retired.", replacementIds: undefined }),
+      { ...simpleRow(current, { id: "SC-000003", path: "src/mixed.test.ts", title: "mixed", assertionCount: 2 }), disposition: undefined, replacementIds: undefined, subgroups: [
+        { assertionOrdinals: [1], invariant: "one", disposition: "behavior", replacementIds: ["test:vitest:src/replacement.test.ts#replacement"] },
+        { assertionOrdinals: [2], invariant: "two", disposition: "delete", deletionReason: "Exact formatting assertion retired." },
+      ] },
+      simpleRow(current, { id: "SC-000004", path: "src/unresolved.test.ts", title: "unresolved", replacementIds: ["rule:future"] }),
+    ].map((row: any) => Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined)));
+    const result = validateSourceContractLedger({
+      ledger: envelope(rows), declarationInventory: [current, replacement], sourceReaders: [{ path: current.path, sourceRange: current.sourceRange, sourceOffset: 0, kind: "raw-import", classification: "production", bindingKey: "src/current.test.ts:binding:0", authorityText: "authority", dependentDeclarationKeys: [`${current.path}#${current.title}`] }],
+      liveCensus: { vitestOwners: [{ id: "vitest:root", ownerScript: "test" }], vitestFiles: { "vitest:root": ["src/replacement.test.ts"] } }, verifySteps: [{ npmScript: "test" }],
+    });
+    expect(result.rows).toEqual([
+      { id: "SC-000001", state: "open" }, { id: "SC-000002", state: "closed" },
+      { id: "SC-000003", state: "closed" }, { id: "SC-000004", state: "open" },
+    ]);
+    expect(result.issues).toContain("SC-000004: unresolved historical row");
   });
 });
