@@ -3,8 +3,6 @@ import { lstatSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 
-// The carrier deliberately exposes the bounded ledger checks without activating
-// a checked-in ledger until the subsequent freeze task supplies one.
 export {
   buildLedgerDraft,
   discoverSourceReaders,
