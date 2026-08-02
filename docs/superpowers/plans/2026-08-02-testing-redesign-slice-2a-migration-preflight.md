@@ -29,7 +29,7 @@
 
 - At `72a00b38`, the Git-visible filesystem census is 187 files: 181 Vitest `.test.ts` files and 6 Playwright `.spec.ts` files. The sets are disjoint and require no exceptions.
 - This plan adds exactly three Vitest files before census freeze: `scripts/check-gemini-browser-sidecar-binary.test.ts`, `scripts/verify.test.ts`, and `scripts/testing/validate-testing-transition.test.ts`. The frozen Slice 2A census is therefore expected to close at 190 files: 184 Vitest plus 6 Playwright, with zero exceptions.
-- Read-only AST audit at `72a00b38` found 84 potential source-reader files, 778 declarations in those files, and 652 source-dependent declarations. These are reconciliation expectations, not constants embedded in the validator. Nineteen files mix source-dependent and ordinary declarations, so file-level ledger rows are forbidden.
+- The earlier read-only AST audit at `72a00b38` found 84 potential source-reader files, 778 declarations in those files, and 652 source-dependent declarations. The approved bounded extractor at `79ccd6e6` supersedes that estimate with 671 exact declaration rows: 465 static rows and 206 manual rows, plus one exact fixture exception. The 19-row increase is the reviewed declaration diff from decomposing the formerly broad coordinator suite and recognizing conditional declarations; the approved audit found zero cross-file-only rows, kind mismatches, or broad suite rows. These are reconciliation facts, not constants embedded in the validator.
 - The committed runner census does not repeat 190 paths. It stores two owner definitions plus exact exception arrays; the validator derives current file sets on every run.
 - The expensive `vitest list --json` declaration inventory runs once during ledger freeze. Daily transition validation uses `vitest list --filesOnly` and static AST checks only.
 - No command in this plan records elapsed time.
@@ -38,7 +38,7 @@
 
 - Execute tasks in order with a fresh implementation subagent per task and specification/code review before proceeding.
 - Each task ends in the named commit. The implementing agent stages only the listed files.
-- Reconcile the extractor result with the read-only 84/778/652 audit before promotion. If the result differs, preserve an exact added/removed declaration report under `artifacts/testing/slice-2a/`, determine whether the audit or bounded extractor is wrong, and amend the plan/evidence before freezing. Do not hard-code these counts or add exceptions merely to reproduce them.
+- Reconcile the extractor result with the approved Task 4 pinned audit before promotion. The expected current result is 671 rows (465 static and 206 manual), one exact fixture exception, and SHA-256 `EBB16BA13D2EADC9E47629891412825BB4A34FCF489242480D7D002D4E0A68C3` when pinned to `79ccd6e6`. If current declarations differ, preserve and explain the exact declaration diff under `artifacts/testing/slice-2a/` before amending these facts. Do not hard-code counts or add exceptions merely to reproduce an estimate.
 - If the runner census does not close at 184 Vitest plus 6 Playwright files, treat the mismatch as a correctness failure. Do not add a broad exception to make it green.
 
 ---
@@ -305,7 +305,7 @@ For this scanner, a production/configuration/documentation authority is a Git-tr
 - `assertionCount`: statically counted Vitest/Node assertion calls;
 - optional `authorityHash`: SHA-256 of canonical `.each` parameters and/or source-authority initializer text;
 - `lineage`: prior paths only, empty at freeze;
-- either static `title`, or `manual: { sourceRange, reason, runnerTitles }` for a declaration the bounded extractor cannot name structurally. `runnerTitles` comes only from the freeze-time Vitest list. The current baseline is expected to need zero manual rows.
+- either static `title`, or `manual: { sourceRange, reason, runnerTitles }` for a declaration the bounded extractor cannot name structurally. `runnerTitles` comes only from the freeze-time Vitest list. The approved bounded extractor produces 206 exact manual rows: each owns an exact declaration/requirement source slice and freeze-time runner title assignment for dynamic filesystem authority, unsupported destructuring/alias flow, unknown wrappers, untracked raw imports, or exact lexical ambiguity. This is the deliberate two-day timebox fallback, not missing coverage or permission to add a general interpreter.
 
 **Resolution union:**
 
@@ -397,13 +397,13 @@ node scripts/testing/extract-source-contract-ledger.mjs --output artifacts/testi
 
 The extractor may invoke `node scripts/run-vitest.mjs list --json --no-color` once to reconcile declarations with runner full titles. It records no duration and is never called by `verify`.
 
-The prior read-only audit expects 84 reader-candidate files, 778 declarations examined, 652 source-dependent rows, 19 mixed files, 10 `.each` declarations, and 3 raw `import.meta.glob` sites. The draft must print an exact reconciliation report rather than embedding these counts as validator policy.
+The approved Task 4 pinned audit expects 671 source-dependent rows: 465 static rows and 206 exact manual rows, with one exact fixture exception. It also records 1,466 static declarations, 192 declaration-manual requirements, 676 source-reader records, and zero cross-file-only rows, kind mismatches, or broad suite rows. The draft must print an exact reconciliation report rather than embedding these counts as validator policy.
 
 - [ ] **Step 3: Reconcile provenance before reviewing dispositions**
 
-Inspect every added/removed declaration versus the prior audit. Confirm that temp/generated/runtime reads are absent, tracked fixture/artifact reads have exact call-site exceptions, and every tracked production/configuration/documentation reader is represented. The current supported forms should yield zero manual rows; any manual requirement must name the exact unsupported syntax and remain inside the approved two-day extractor timebox.
+Inspect every added/removed declaration versus the approved Task 4 pinned audit. Confirm that temp/generated/runtime reads are absent, tracked fixture/artifact reads have exact call-site exceptions, and every tracked production/configuration/documentation reader is represented. The 206 approved manual rows are exact declaration-owned fallbacks inside the two-day extractor timebox; each must retain its exact unsupported-syntax reason, source range, and freeze-time runner titles.
 
-If the reconciled row count is not 652, update this plan's frozen expectation with the reviewed declaration diff before promotion. Never change the extractor or add a broad exception solely to force the old count.
+If the reconciled row count is not 671, update this plan's frozen expectation with the reviewed current-HEAD declaration diff before promotion. Never change the extractor or add a broad exception solely to force an old count.
 
 - [ ] **Step 4: Review the draft in deterministic ID cohorts**
 
@@ -423,7 +423,7 @@ Run:
 node scripts/validate-testing-transition.mjs
 ```
 
-Expected: census still reports 184 Vitest plus 6 Playwright files. The ledger row count equals the reconciled freeze report (expected 652), every current source-dependent declaration has exactly one open row, no historical row is yet absent, and there are zero missing, duplicate, drifting, or schema-invalid rows. Planned replacement IDs may be unresolved and therefore open; that is expected before migration.
+Expected: census still reports 184 Vitest plus 6 Playwright files. The ledger row count equals the reconciled freeze report (expected 671), every current source-dependent declaration has exactly one open row, no historical row is yet absent, and there are zero missing, duplicate, drifting, or schema-invalid rows. Planned replacement IDs may be unresolved and therefore open; that is expected before migration.
 
 - [ ] **Step 6: Run the source-reader audit cross-check**
 
@@ -486,7 +486,7 @@ Record:
 - base and final commit identities;
 - 190 filesystem candidates = 184 Vitest + 6 Playwright;
 - zero runner intersections/exceptions/unowned/extra files;
-- the reconciled ledger row count (expected 652), exact source-reader exception count, and counts by disposition/manual/subgroup;
+- the reconciled ledger row count (expected 671), exact source-reader exception count, and counts by disposition/manual/subgroup;
 - exact fresh-checkout bootstrap contract;
 - focused and full correctness outcomes;
 - explicit statement that Slice 2A added no timing mechanism and captured no duration.
@@ -511,7 +511,7 @@ Expected: clean worktree. Do not push.
 
 - `npm.cmd run verify` passes with the sidecar prerequisite first and transition validation second.
 - The live census owns exactly every Git-visible test candidate once, every owner is non-empty, and exact exception arrays remain empty unless a separately reviewed current fact requires one.
-- The committed ledger accounts for the reconciled baseline source-dependent declarations (expected 652) with stable IDs, reviewed invariants/dispositions, hashes, assertion counts, planned resolution, and no stored lifecycle state.
+- The committed ledger accounts for the reconciled baseline source-dependent declarations (expected 671) with stable IDs, reviewed invariants/dispositions, hashes, assertion counts, planned resolution, and no stored lifecycle state.
 - No existing source-contract test has moved or been removed.
 - The only daily runner collection added is list-only file census; full declaration listing is freeze-only.
 - No timing field, benchmark, threshold, performance state, or timing-derived selection behavior was added.
