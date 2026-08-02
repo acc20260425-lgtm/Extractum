@@ -6592,13 +6592,25 @@ describe("Phase 8 Telegram crate boundary", () => {
     ).toBeUndefined();
   });
   it("pins immutable Telegram authority artifacts to LF", () => {
-    const attributes = readFileSync(path.join(repoRoot, ".gitattributes"), "utf8");
-    for (const line of [
-      "src/lib/telegram-grammers-feature-baseline.json text eol=lf",
-      "src/lib/telegram-8b-test-identities.json text eol=lf",
-      "src/lib/telegram-8b-symbol-map.json text eol=lf",
-    ]) {
-      expect(attributes).toContain(line);
+    const authorityPaths = [
+      "src/lib/telegram-grammers-feature-baseline.json",
+      "src/lib/telegram-8b-test-identities.json",
+      "src/lib/telegram-8b-symbol-map.json",
+    ];
+    const result = spawnSync("git", ["check-attr", "eol", "--", ...authorityPaths], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      shell: false,
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    const effective = new Map(result.stdout.trim().split(/\r?\n/u).map((line) => {
+      const match = /^(.*): eol: (.*)$/u.exec(line);
+      expect(match).not.toBeNull();
+      return [match![1], match![2]];
+    }));
+    for (const authorityPath of authorityPaths) {
+      expect(effective.get(authorityPath)).toBe("lf");
     }
   });
 

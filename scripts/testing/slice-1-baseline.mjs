@@ -129,7 +129,7 @@ export async function runBaseline({ repoRoot, runCommand = runObservedCommand, o
     const attempts = [];
     for (let attempt = 0; attempt < 2; attempt += 1) {
       if (reportPath) await rm(reportPath, { force: true });
-      const result = await runCommand({ ...descriptor, cwd: repoRoot });
+      const result = await runCommand({ ...descriptor, cwd: repoRoot, repoRoot });
       attempts.push(result);
       if (result.termination !== "spawn-error") break;
     }

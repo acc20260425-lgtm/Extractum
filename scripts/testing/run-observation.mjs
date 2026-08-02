@@ -22,12 +22,22 @@ export async function runObservedCommand({
   command,
   args = [],
   cwd,
+  repoRoot = cwd,
   stdio,
   capture = false,
   env,
   mirror = false,
+  signal: abortSignal,
   dependencies = {},
 }) {
+  if (typeof cwd !== "string" || cwd.length === 0) throw new TypeError("cwd");
+  if (typeof repoRoot !== "string" || repoRoot.length === 0) throw new TypeError("repoRoot");
+  if (abortSignal !== undefined
+    && (typeof abortSignal !== "object"
+      || typeof abortSignal.addEventListener !== "function"
+      || typeof abortSignal.removeEventListener !== "function")) {
+    throw new TypeError("signal");
+  }
   const spawn = dependencies.spawn ?? defaultSpawn;
   const nowDate = dependencies.nowDate ?? (() => new Date());
   const nowMonotonic = dependencies.nowMonotonic ?? (() => performance.now());
@@ -36,7 +46,7 @@ export async function runObservedCommand({
   const recordTimingBestEffort = dependencies.recordTimingBestEffort ?? defaultRecordTimingBestEffort;
   const warn = dependencies.warn ?? console.warn;
   const completedCommand = formatCommand(command, args);
-  const commit = readHeadCommit(cwd);
+  const commit = readHeadCommit(repoRoot);
   const effectiveStdio = capture ? "pipe" : (stdio ?? "inherit");
   const mirrorOutput = capture && (mirror || stdio === "inherit");
   const output = { stdout: [], stderr: [] };
@@ -51,9 +61,11 @@ export async function runObservedCommand({
 
   return new Promise((resolve) => {
     let finished = false;
+    let removeAbortListener = () => {};
     const finish = async (details) => {
       if (finished) return;
       finished = true;
+      removeAbortListener();
       const duration = Math.round(nowMonotonic() - monotonicStart);
       const row = createTimingRow({
         command: completedCommand,
@@ -63,7 +75,7 @@ export async function runObservedCommand({
         commit,
       });
       try {
-        await recordTimingBestEffort(row);
+        await recordTimingBestEffort(row, { repoRoot });
       } catch (error) {
         timingWarning(warn, error);
       }
@@ -102,7 +114,40 @@ export async function runObservedCommand({
         if (mirrorOutput) process.stderr.write(buffer);
       });
     }
-    child.once("close", (exitCode, signal) => void finish(exitDetails(exitCode, signal)));
-    child.once("error", () => void finish({ exitCode: 3, signal: null, termination: "spawn-error" }));
+    let cancellationSignal = null;
+    let spawnedChildError = false;
+    const requestCancellation = () => {
+      if (cancellationSignal || finished) return;
+      cancellationSignal = ["SIGINT", "SIGTERM"].includes(abortSignal?.reason)
+        ? abortSignal.reason
+        : "SIGTERM";
+      try {
+        child.kill(cancellationSignal);
+      } catch {
+        // Settlement remains tied to close; without confirmed termination the
+        // observation intentionally stays pending.
+      }
+    };
+    if (abortSignal) {
+      abortSignal.addEventListener("abort", requestCancellation, { once: true });
+      removeAbortListener = () => abortSignal.removeEventListener("abort", requestCancellation);
+      if (abortSignal.aborted) requestCancellation();
+    }
+    child.once("close", (exitCode, signal) => {
+      if (cancellationSignal) {
+        void finish({ exitCode: 130, signal: cancellationSignal, termination: "signal" });
+      } else if (spawnedChildError) {
+        void finish({ exitCode: 3, signal: null, termination: "spawn-error" });
+      } else {
+        void finish(exitDetails(exitCode, signal));
+      }
+    });
+    child.once("error", () => {
+      if (child.pid == null) {
+        void finish({ exitCode: 3, signal: null, termination: "spawn-error" });
+      } else {
+        spawnedChildError = true;
+      }
+    });
   });
 }

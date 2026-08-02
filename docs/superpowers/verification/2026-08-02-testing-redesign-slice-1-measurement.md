@@ -3,10 +3,13 @@
 ## Scope and Starting Commit
 
 This record captures the Slice 1 baseline and controlled Rust diagnostic. The
-starting commit was `5d614a300dfce135b2094a0c2ab3d75801ba9f93`. The baseline
-driver completed with `baselineStatus: "observed-failures"` and driver exit
-code `0`: observed failing commands are evidence of current behavior, not a
-reason to replace them with later passing samples.
+starting commit was `5d614a300dfce135b2094a0c2ab3d75801ba9f93`. The separate
+baseline observation commit was
+`65ff13ee2441d8846ac092837f596480e1a4b5bb`; every authoritative baseline
+timing row names that commit. The baseline driver completed with
+`baselineStatus: "observed-failures"` and driver exit code `0`: observed
+failing commands are evidence of current behavior, not a reason to replace
+them with later passing samples.
 
 The authoritative artifacts are `artifacts/testing/slice-1/current-baseline.json`
 and `artifacts/testing/slice-1/rust-feasibility.json`. Earlier invalid Rust
@@ -28,6 +31,13 @@ The diagnostic also emitted pre-existing unused-code warnings and a Rust warning
 that a corrupt incremental compilation artifact was ignored and deleted. These
 conditions are disclosed as local limitations; they do not replace any proof
 recorded in the authoritative report.
+
+The ignored Tauri resource
+`src-tauri/binaries/gemini-browser-sidecar-x86_64-pc-windows-msvc.exe` was
+absent during the baseline. It was generated locally before the authoritative
+Rust measurement and remained present for the later successful post-fix gate.
+Because the binary is ignored, neither this branch nor a fresh checkout is
+automatically hydrated with that prerequisite.
 
 ## Five-Field Timing Writer
 
@@ -283,12 +293,26 @@ The non-zero results are observed current behavior:
   - `crate extraction timing policy checks the generated Grammers feature baseline`: `AssertionError: Telegram Grammers feature baseline: artifact content or formatting drifted; run with --write`.
   - `Phase 8B generated structural authority materializes the exact Phase 8B test partitions from content-addressed authority`: `AssertionError: Telegram Phase 8B test identity authority: artifact content or formatting drifted; run with --write`.
   - `Phase 8B generated structural authority materializes the exact restricted-visibility allowlist without duplicates`: `AssertionError: Telegram Phase 8B symbol authority: artifact content or formatting drifted; run with --write`.
-- Cargo check (69668 ms, exit 101) and Cargo test (113807 ms, exit 101) are recorded as non-zero baseline observations.
+- Cargo check (69668 ms, exit 101) and Cargo test (113807 ms, exit 101) both
+  failed because the ignored Gemini browser sidecar executable was absent.
+  These values are durations to failure, not successful complete-gate
+  durations, and remain unchanged as baseline observations.
 - Full verify (86408 ms, exit 1) is recorded as a non-zero baseline observation.
 
 No later passing run is substituted for those observations. The file-backed
 frontend reporter records the exact four failures above; it does not record an
 `afterAll` lifecycle-timeout signature for this baseline sample.
+
+## Later External Windows Gate Checkpoint
+
+This checkpoint is separate from the baseline inventory and timings. At commit
+`cc84004f0ce683df4df6294b39a1b0aac1612dbb`, an unfiltered external Windows
+`npm.cmd run verify` passed with 181/181 Vitest files and 1677/1677 tests;
+Svelte check and the Rust workspace gates also passed. The locally generated,
+ignored sidecar executable was present for this checkpoint. These passing
+counts do not replace the original 181-file / 1671-test baseline inventory or
+its failing observations, and they do not imply that a fresh checkout contains
+the ignored prerequisite.
 
 ## Rust Diagnostic Protocol
 

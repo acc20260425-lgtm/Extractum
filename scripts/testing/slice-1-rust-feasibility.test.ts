@@ -532,33 +532,53 @@ describe("slice one Rust feasibility driver", () => {
     expect(report.classification).toBeNull();
   });
 
-  it("restores and verifies an active mutation before an injected SIGINT completes", async () => {
+  it("cancels and settles an active command before restoring its source mutation", async () => {
     const harness = createHarness();
     let signalHandler: ((signal: string) => Promise<number>) | undefined;
+    let signalResult: Promise<number> | undefined;
+    const order: string[] = [];
     const removeSignalHandlers = vi.fn();
     const installSignalHandlers = vi.fn((handler) => {
       signalHandler = handler;
       return removeSignalHandlers;
     });
     const baseRunCommand = harness.runCommand;
+    const baseWriteFile = harness.filesystem.writeFile;
+    harness.filesystem.writeFile = vi.fn(async (file: string, value: string | Uint8Array) => {
+      if (file === harness.sourcePath
+        && Buffer.from(value).equals(ORIGINAL_SOURCE)
+        && !harness.files.get(harness.sourcePath)?.equals(ORIGINAL_SOURCE)) {
+        order.push("restoration write");
+      }
+      return baseWriteFile(file, value);
+    });
     let signalled = false;
     harness.runCommand = vi.fn(async (call) => {
       const mutated = !harness.files.get(harness.sourcePath)!.equals(ORIGINAL_SOURCE);
       if (mutated && !signalled) {
         signalled = true;
         expect(signalHandler).toBeTypeOf("function");
-        await signalHandler!("SIGINT");
-        expect(harness.files.get(harness.sourcePath)).toEqual(ORIGINAL_SOURCE);
-        return {
-          command: [call.command, ...call.args].join(" "),
-          startedAt: "2026-08-02T10:11:12.123Z",
-          duration: 7,
-          exitCode: 130,
-          termination: "signal",
-          signal: "SIGINT",
-          stdout: "",
-          stderr: "",
-        };
+        return new Promise((resolve) => {
+          call.signal.addEventListener("abort", () => {
+            order.push("cancellation requested");
+            expect(harness.files.get(harness.sourcePath)).not.toEqual(ORIGINAL_SOURCE);
+            queueMicrotask(() => {
+              order.push("command settled");
+              expect(harness.files.get(harness.sourcePath)).not.toEqual(ORIGINAL_SOURCE);
+              resolve({
+                command: [call.command, ...call.args].join(" "),
+                startedAt: "2026-08-02T10:11:12.123Z",
+                duration: 7,
+                exitCode: 130,
+                termination: "signal",
+                signal: "SIGINT",
+                stdout: "",
+                stderr: "",
+              });
+            });
+          }, { once: true });
+          signalResult = signalHandler!("SIGINT");
+        });
       }
       return baseRunCommand(call);
     });
@@ -574,6 +594,12 @@ describe("slice one Rust feasibility driver", () => {
     expect(report).toMatchObject({ exitCode: 130, valid: false, restoration: { verified: true } });
     expect(report.classification).toBeNull();
     expect(harness.files.get(harness.sourcePath)).toEqual(ORIGINAL_SOURCE);
+    await expect(signalResult).resolves.toBe(130);
+    expect(order.slice(0, 3)).toEqual([
+      "cancellation requested",
+      "command settled",
+      "restoration write",
+    ]);
     expect(installSignalHandlers).toHaveBeenCalledTimes(1);
     expect(removeSignalHandlers).toHaveBeenCalledTimes(1);
   });
@@ -616,7 +642,11 @@ describe("slice one Rust feasibility driver", () => {
     const baseRunCommand = harness.runCommand;
     harness.runCommand = vi.fn(async (call) => {
       if (!harness.files.get(harness.sourcePath)!.equals(ORIGINAL_SOURCE)) {
-        await signalHandler!("SIGTERM");
+        const aborted = new Promise<void>((resolve) => {
+          call.signal.addEventListener("abort", () => resolve(), { once: true });
+        });
+        void signalHandler!("SIGTERM");
+        await aborted;
         return {
           command: [call.command, ...call.args].join(" "),
           startedAt: "2026-08-02T10:11:12.123Z",

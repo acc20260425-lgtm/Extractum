@@ -372,10 +372,21 @@ export async function runRustFeasibility({
   let restoration = { verified: true, restoredHash: originalHash };
   let signalGeneration = 0;
   let signalRestoration = Promise.resolve(130);
+  let activeObservation = null;
   const removeSignalHandlers = installSignalHandlers((signal) => {
     signalGeneration += 1;
     interrupted = true;
     signalRestoration = (async () => {
+      const active = activeObservation;
+      if (active) {
+        active.controller.abort(signal);
+        try {
+          await active.settlement;
+        } catch {
+          // The sample loop retains command failures. Restoration must still
+          // wait for command settlement before touching the source bytes.
+        }
+      }
       restoration = await sourceGuard.requestStop();
       if (!restoration.verified) {
         restorationFailure = true;
@@ -420,13 +431,23 @@ export async function runRustFeasibility({
         beforeMtime = (await filesystem.stat(executableForAttempt)).mtimeMs;
       }
 
-      result = await runCommand({
+      const controller = new AbortController();
+      const settlement = Promise.resolve().then(() => runCommand({
         command,
         args,
         cwd: root,
+        repoRoot: root,
         capture: true,
         mirror: entry.shape === "endToEnd",
-      });
+        signal: controller.signal,
+      }));
+      const active = { controller, settlement };
+      activeObservation = active;
+      try {
+        result = await settlement;
+      } finally {
+        if (activeObservation === active) activeObservation = null;
+      }
       result.stdout ??= "";
       result.stderr ??= "";
       if (result.exitCode !== 0) {
