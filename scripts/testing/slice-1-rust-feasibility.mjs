@@ -52,6 +52,17 @@ function packageIsExtractum(packageId) {
   return typeof packageId === "string" && /(?:#|\s)extractum(?:@|\s|$)/u.test(packageId);
 }
 
+function isExtractumRootTarget(target) {
+  const crateTypes = ["staticlib", "cdylib", "rlib"];
+  return target?.name === "extractum_lib"
+    && Array.isArray(target.kind)
+    && target.kind.length === crateTypes.length
+    && target.kind.every((kind, index) => kind === crateTypes[index])
+    && Array.isArray(target.crate_types)
+    && target.crate_types.length === crateTypes.length
+    && target.crate_types.every((crateType, index) => crateType === crateTypes[index]);
+}
+
 function canonicalExecutable(executable, repoRoot) {
   if (typeof executable !== "string" || executable.length === 0) throw new Error("Missing root test executable");
   const canonicalTarget = path.resolve(repoRoot, "src-tauri", "target");
@@ -80,9 +91,7 @@ export function parseCargoArtifacts(text, expectation) {
   });
   const artifacts = messages.filter((message) => message?.reason === "compiler-artifact"
     && packageIsExtractum(message.package_id)
-    && message.target?.name === "extractum_lib"
-    && Array.isArray(message.target?.kind)
-    && message.target.kind.includes("lib"));
+    && isExtractumRootTarget(message.target));
   if (artifacts.length !== 1) throw new Error("Expected exactly one extractum/extractum_lib Cargo artifact");
   const artifact = artifacts[0];
   if (artifact.fresh !== expectedFresh) throw new Error(`Cargo artifact fresh proof did not equal ${expectedFresh}`);

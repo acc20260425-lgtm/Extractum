@@ -19,17 +19,31 @@ function cargoArtifact({
   executable = null,
   packageName = "extractum",
   targetName = "extractum_lib",
+  kind = ["staticlib", "cdylib", "rlib"],
+  crateTypes = ["staticlib", "cdylib", "rlib"],
 }: {
   fresh: boolean;
   test: boolean;
   executable?: string | null;
   packageName?: string;
   targetName?: string;
+  kind?: string[];
+  crateTypes?: string[];
 }) {
   return `${JSON.stringify({
     reason: "compiler-artifact",
     package_id: `path+file:///repo/src-tauri#${packageName}@0.1.0`,
-    target: { name: targetName, kind: ["lib"], crate_types: ["lib"] },
+    manifest_path: "G:\\repo\\src-tauri\\Cargo.toml",
+    target: {
+      name: targetName,
+      kind,
+      crate_types: crateTypes,
+      src_path: "G:\\repo\\src-tauri\\src\\lib.rs",
+      edition: "2021",
+      doc: true,
+      doctest: true,
+      test: true,
+    },
     profile: { test },
     fresh,
     executable,
@@ -122,6 +136,31 @@ describe("slice one Rust feasibility proof parsers", () => {
       expectedFresh: false,
       expectedTestProfile: false,
     })).toThrow(/profile/i);
+  });
+
+  it("accepts exactly one canonical Cargo 1.95 multi-crate-type root artifact", () => {
+    const actualCargo195Shape = cargoArtifact({ fresh: false, test: false });
+    expect(parseCargoArtifacts(actualCargo195Shape, {
+      repoRoot,
+      expectedFresh: false,
+      expectedTestProfile: false,
+    })).toMatchObject({ package: "extractum", target: "extractum_lib", fresh: false, testProfile: false });
+
+    for (const legacySyntheticShape of [
+      cargoArtifact({ fresh: false, test: false, kind: ["lib"] }),
+      cargoArtifact({ fresh: false, test: false, crateTypes: ["lib"] }),
+    ]) {
+      expect(() => parseCargoArtifacts(legacySyntheticShape, {
+        repoRoot,
+        expectedFresh: false,
+        expectedTestProfile: false,
+      })).toThrow(/extractum_lib/i);
+    }
+    expect(() => parseCargoArtifacts(`${actualCargo195Shape}${actualCargo195Shape}`, {
+      repoRoot,
+      expectedFresh: false,
+      expectedTestProfile: false,
+    })).toThrow(/exactly one/i);
   });
 
   it("accepts only a root test executable below canonical src-tauri target", () => {
