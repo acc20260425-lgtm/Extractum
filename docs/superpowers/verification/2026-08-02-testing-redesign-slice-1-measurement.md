@@ -314,6 +314,29 @@ counts do not replace the original 181-file / 1671-test baseline inventory or
 its failing observations, and they do not imply that a fresh checkout contains
 the ignored prerequisite.
 
+## Final-Code External Windows Gate Checkpoint
+
+This is a third, separate checkpoint and does not replace either the baseline
+at `65ff13ee2441d8846ac092837f596480e1a4b5bb` or the intermediate successful
+checkpoint at `cc84004f0ce683df4df6294b39a1b0aac1612dbb`. At final-code commit
+`16f733662d41514bb6b008c0ac1d48bdd899d9d0`, `npm.cmd run verify` was run
+exactly once outside the sandbox and exited 0 without a retry.
+
+The complete final-code gate results were:
+
+- Vitest: 181/181 files and 1686/1686 tests passed.
+- Svelte check: 0 errors and 0 warnings.
+- Rust formatting and workspace `cargo check --all-targets`: passed.
+- Rust workspace tests: 1233 passed and 0 failed across eight test binaries.
+
+The locally generated, ignored sidecar executable
+`src-tauri/binaries/gemini-browser-sidecar-x86_64-pc-windows-msvc.exe` was
+present and measured 45,200,400 bytes. It remains absent from a fresh checkout
+until separately generated; the repository does not auto-hydrate it. The
+final-code log at
+`artifacts/testing/slice-1/final-verify-final-code-attempt-1.log` is ignored
+evidence, not tracked branch content.
+
 ## Rust Diagnostic Protocol
 
 The authoritative diagnostic report has `schemaVersion: 1`, test name
