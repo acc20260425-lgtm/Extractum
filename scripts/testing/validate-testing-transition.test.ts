@@ -673,4 +673,68 @@ describe("bounded source-contract ledger", () => {
     expect(result.issues).toContain("SC-000001: unknown ledger row field: extra");
     expect(result.rows).toEqual([{ id: "SC-000001", state: "open" }]);
   });
+
+  it("never applies numeric reader containment across test-file boundaries", () => {
+    const files = [
+      { path: "src/a.test.ts", source: [
+        'import { readFileSync } from "node:fs";',
+        'const source = readFileSync(dynamicPath, "utf8");',
+        'it("source owner", () => expect(source).toContain("x"));',
+      ].join("\n") },
+      { path: "src/b.test.ts", source: 'it("unrelated declaration with enough padding", () => expect("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx").toContain("x"));' },
+    ];
+    const draft = buildLedgerDraft({
+      declarationInventory: discoverTestDeclarations(files, ts),
+      sourceReaders: discoverSourceReaders(files, gitMetadata([]), ts),
+      runnerTitlesByPath: { "src/a.test.ts": ["source owner"], "src/b.test.ts": ["unrelated declaration with enough padding"] },
+      frozenAtCommit: "b".repeat(40),
+    });
+    expect(draft.rows.map((row: any) => row.path)).toEqual(["src/a.test.ts"]);
+  });
+
+  it("discovers children of the Vitest suite options overload individually", () => {
+    const declarations = discoverTestDeclarations([{ path: "src/options.test.ts", source: [
+      'describe("suite", { timeout: 30_000 }, () => {',
+      '  it("one", () => expect(1).toBe(1));',
+      '  it("two", () => expect(2).toBe(2));',
+      '});',
+    ].join("\n") }], ts);
+    expect(declarations.map((item: any) => item.title)).toEqual(["suite > one", "suite > two"]);
+    expect(declarations.manualRequirements).toEqual([]);
+  });
+
+  it("discovers documented conditional test modifiers as individual declarations", () => {
+    const declarations = discoverTestDeclarations([{ path: "src/conditional.test.ts", source:
+      'it.runIf(process.platform === "win32")("conditional", () => expect(1).toBe(1));' }], ts);
+    expect(declarations.map((item: any) => item.title)).toEqual(["conditional"]);
+    expect(declarations.manualRequirements).toEqual([]);
+  });
+
+  it("makes variable-bound arrow and function-expression registration factories exact manual requirements", () => {
+    const declarations = discoverTestDeclarations([{ path: "src/variable-register.test.ts", source: [
+      'const registerArrow = () => { it("arrow factory", () => expect(1).toBe(1)); };',
+      'const registerFunction = function () { it("function factory", () => expect(2).toBe(2)); };',
+      'registerArrow();',
+      'registerFunction();',
+    ].join("\n") }], ts);
+    expect(declarations).toHaveLength(0);
+    expect(declarations.manualRequirements).toEqual([
+      expect.objectContaining({ reason: "test declaration inside registration function", title: "arrow factory" }),
+      expect.objectContaining({ reason: "test declaration inside registration function", title: "function factory" }),
+    ]);
+  });
+
+  it("rejects duplicate manual path and runner-title ownership across rows", () => {
+    const manualRow = (id: string, sourceRange: string) => ({
+      id, path: "src/collision.test.ts", manual: { sourceRange, reason: "ambiguous each expansion", runnerTitles: ["case shared"] },
+      sourceHash: "c".repeat(64), assertionCount: 1, lineage: [], invariant: "Review exact declaration.",
+      disposition: "delete", deletionReason: "Remove the obsolete source assertion.",
+    });
+    const result = validateSourceContractLedger({
+      ledger: envelope([manualRow("SC-000001", "1:1-1:10"), manualRow("SC-000002", "2:1-2:10")]),
+      declarationInventory: [], sourceReaders: [],
+    });
+    expect(result.issues).toContain("duplicate manual runner-title ownership: src/collision.test.ts#case shared");
+    expect(result.rows).toEqual([{ id: "SC-000001", state: "open" }, { id: "SC-000002", state: "open" }]);
+  });
 });

@@ -248,11 +248,21 @@ function unwrapExpression(node, typescript) {
 
 function callKind(node, typescript) {
   if (!typescript.isCallExpression(node)) return undefined;
-  if (typescript.isIdentifier(node.expression)) return { kind: node.expression.text, args: node.arguments, callback: node.arguments[1] };
+  const callbackFor = (kind, args) => SUITE_NAMES.has(kind) && args.length >= 3
+    && !(typescript.isArrowFunction(args[1]) || typescript.isFunctionExpression(args[1]))
+    ? args[2]
+    : args[1];
+  if (typescript.isIdentifier(node.expression)) {
+    const kind = node.expression.text;
+    return { kind, args: node.arguments, callback: callbackFor(kind, node.arguments) };
+  }
   if (!typescript.isCallExpression(node.expression)) return undefined;
   const each = node.expression;
-  if (!typescript.isPropertyAccessExpression(each.expression) || each.expression.name.text !== "each" || !typescript.isIdentifier(each.expression.expression)) return undefined;
-  return { kind: each.expression.expression.text, args: node.arguments, callback: node.arguments[1], eachTable: each.arguments[0] };
+  if (!typescript.isPropertyAccessExpression(each.expression) || !typescript.isIdentifier(each.expression.expression)) return undefined;
+  const kind = each.expression.expression.text;
+  if (each.expression.name.text === "each") return { kind, args: node.arguments, callback: node.arguments[1], eachTable: each.arguments[0] };
+  if (["runIf", "skipIf"].includes(each.expression.name.text)) return { kind, args: node.arguments, callback: callbackFor(kind, node.arguments) };
+  return undefined;
 }
 
 function referencedSymbols(node, model) {
@@ -288,6 +298,9 @@ function insideNamedRegistration(node, typescript) {
   let current = node.parent;
   while (current) {
     if (typescript.isFunctionDeclaration(current) && current.name) return true;
+    if ((typescript.isArrowFunction(current) || typescript.isFunctionExpression(current))
+      && typescript.isVariableDeclaration(current.parent)
+      && typescript.isIdentifier(current.parent.name)) return true;
     current = current.parent;
   }
   return false;
@@ -635,6 +648,7 @@ function declarationIdentity(value) {
 }
 
 function readerApplies(declaration, reader) {
+  if (reader.path !== declaration.path) return false;
   if (reader.dependentDeclarationKeys?.includes(`${declaration.path}#${declaration.title}`)) return true;
   if (reader.bindingKey && declaration.referencedBindingKeys?.includes(reader.bindingKey)) return true;
   return Number.isInteger(reader.sourceOffset) && reader.sourceOffset >= declaration.sourceOffset && reader.sourceOffset < (declaration.sourceEnd ?? declaration.sourceOffset + declaration.sourceSlice.length);
@@ -956,6 +970,19 @@ export function validateSourceContractLedger(context = {}) {
     if (rowsByIdentity.has(key)) issues.push(`duplicate current identity: ${key}`);
     rowsByIdentity.set(key, row);
     validRows.push(row);
+  }
+
+  const manualTitleOwners = new Map();
+  for (const row of validRows) {
+    for (const title of row.manual?.runnerTitles ?? []) {
+      const key = `${row.path}#${title}`;
+      const owner = manualTitleOwners.get(key);
+      if (owner) {
+        issues.push(`duplicate manual runner-title ownership: ${key}`);
+        invalidRowIds.add(owner.id);
+        invalidRowIds.add(row.id);
+      } else manualTitleOwners.set(key, row);
+    }
   }
 
   for (const [key, obligation] of current) {
