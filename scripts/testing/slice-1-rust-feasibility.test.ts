@@ -302,6 +302,41 @@ describe("slice one Rust feasibility driver", () => {
     expect(mutated.toString("utf8")).toBe("one\r\ntwo\r\n// extractum-slice-1-probe:retained-1:uuid\r\n");
   });
 
+  it("keeps consecutive no-op checks fresh without rewriting the source", async () => {
+    const harness = createHarness();
+    const sourceWriteCountsBeforeNoop: number[] = [];
+    const baseRunCommand = harness.runCommand;
+    harness.runCommand = vi.fn(async (call) => {
+      if (call.command === "cargo" && call.args[0] === "check") {
+        const sourceWrites = harness.writes.filter((write) => write.file === harness.sourcePath).length;
+        sourceWriteCountsBeforeNoop.push(sourceWrites);
+        if (sourceWrites > 0) {
+          return {
+            command: [call.command, ...call.args].join(" "),
+            startedAt: "2026-08-02T10:11:12.123Z",
+            duration: 7,
+            exitCode: 0,
+            termination: "exit",
+            stdout: cargoArtifact({ fresh: false, test: false }),
+            stderr: "",
+          };
+        }
+      }
+      return baseRunCommand(call);
+    });
+
+    const report = await runRustFeasibility({
+      repoRoot: harness.repoRoot,
+      runCommand: harness.runCommand,
+      filesystem: harness.filesystem,
+      randomUUID: harness.randomUUID,
+    });
+
+    expect(sourceWriteCountsBeforeNoop.slice(0, 4)).toEqual([0, 0, 0, 0]);
+    expect(report.samples.filter((entry: { shape: string }) => entry.shape === "noopCheck")
+      .every((entry: { proof?: { fresh?: boolean } }) => entry.proof?.fresh === true)).toBe(true);
+  });
+
   it("proves every rebuild, uses unique invalidation tokens, and emits mechanical medians", async () => {
     const harness = createHarness();
     const report = await runRustFeasibility({
@@ -386,6 +421,32 @@ describe("slice one Rust feasibility driver", () => {
     });
     expect(report.classification).toBeNull();
     expect(report.classificationUnavailableReason).toMatch(/invalid|incomplete/i);
+  });
+
+  it("recovers exact source bytes after a partial mutation write failure", async () => {
+    const harness = createHarness();
+    const writeFile = harness.filesystem.writeFile;
+    let failMutationWrite = true;
+    harness.filesystem.writeFile = vi.fn(async (file: string, value: string | Uint8Array) => {
+      const bytes = Buffer.from(value);
+      if (file === harness.sourcePath && !bytes.equals(ORIGINAL_SOURCE) && failMutationWrite) {
+        failMutationWrite = false;
+        await writeFile(file, bytes.subarray(0, Math.floor(bytes.length / 2)));
+        throw new Error("partial mutation write failure");
+      }
+      await writeFile(file, value);
+    });
+
+    const report = await runRustFeasibility({
+      repoRoot: harness.repoRoot,
+      runCommand: harness.runCommand,
+      filesystem: harness.filesystem,
+      randomUUID: harness.randomUUID,
+    });
+
+    expect(report).toMatchObject({ exitCode: 3, valid: false, classification: null, restoration: { verified: true } });
+    expect(harness.files.get(harness.sourcePath)).toEqual(ORIGINAL_SOURCE);
+    expect(harness.writes.some((write) => write.file === harness.sourcePath && write.bytes.equals(ORIGINAL_SOURCE))).toBe(true);
   });
 
   it("invalidates the report with exit 3 when restored bytes do not match", async () => {

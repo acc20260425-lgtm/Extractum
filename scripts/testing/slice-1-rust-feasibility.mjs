@@ -177,14 +177,29 @@ async function restoreOriginal(filesystem, sourcePath, original, originalHash) {
   }
 }
 
+async function verifyOriginal(filesystem, sourcePath, original, originalHash) {
+  try {
+    const restored = Buffer.from(await filesystem.readFile(sourcePath));
+    const restoredHash = sha256(restored);
+    return {
+      verified: restoredHash === originalHash && restored.equals(original),
+      restoredHash,
+    };
+  } catch (error) {
+    return { verified: false, restoredHash: null, error: errorMessage(error) };
+  }
+}
+
 function createSourceMutationGuard(filesystem, sourcePath, original, originalHash) {
   let mutationWrite = Promise.resolve();
   let restorationPromise = null;
   let stopRequested = false;
+  let mutationAttempted = false;
 
   return {
     async mutate(mutated) {
       if (stopRequested) throw new Error("Study interrupted before source mutation");
+      mutationAttempted = true;
       mutationWrite = filesystem.writeFile(sourcePath, mutated);
       await mutationWrite;
       if (stopRequested) {
@@ -204,7 +219,11 @@ function createSourceMutationGuard(filesystem, sourcePath, original, originalHas
           } catch {
             // Restoration still has to run after a failed mutation write.
           }
-          return restoreOriginal(filesystem, sourcePath, original, originalHash);
+          const restoration = mutationAttempted
+            ? await restoreOriginal(filesystem, sourcePath, original, originalHash)
+            : await verifyOriginal(filesystem, sourcePath, original, originalHash);
+          if (restoration.verified) mutationAttempted = false;
+          return restoration;
         })().finally(() => {
           restorationPromise = null;
         });
