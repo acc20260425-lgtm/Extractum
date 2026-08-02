@@ -177,12 +177,45 @@ describe("filesystem and runner collection", () => {
       resolveCli: () => "playwright-cli.mjs",
       runCommand: async () => ({ exitCode: 0, stdout }),
     });
-    await expect(invoke(JSON.stringify({ suites: [{ suites: [{ file: "nested.spec.ts", specs: [] }], specs: [{ file: "root.spec.ts" }] }] })))
+    await expect(invoke(JSON.stringify({ config: { rootDir: "research/gemini_browser_adapter/tests" }, suites: [{ suites: [{ file: "nested.spec.ts", specs: [] }], specs: [{ file: "root.spec.ts" }] }] })))
       .resolves.toMatchObject({ files: ["research/gemini_browser_adapter/tests/nested.spec.ts", "research/gemini_browser_adapter/tests/root.spec.ts"], issues: [] });
-    await expect(invoke(JSON.stringify({ suites: [], errors: [] }))).resolves.toMatchObject({ files: [], issues: [] });
+    await expect(invoke(JSON.stringify({ config: { rootDir: "research/gemini_browser_adapter/tests" }, suites: [], errors: [] }))).resolves.toMatchObject({ files: [], issues: [] });
     await expect(invoke("not-json")).resolves.toMatchObject({ issues: ["playwright:adapter: malformed Playwright JSON"] });
     await expect(invoke(JSON.stringify({ suites: [], errors: { message: "bad" } }))).resolves.toMatchObject({ issues: ["playwright:adapter: Playwright errors are not empty"] });
     await expect(invoke(JSON.stringify({ suites: [], errors: ["bad"] }))).resolves.toMatchObject({ issues: ["playwright:adapter: Playwright errors are not empty"] });
+  });
+
+  it("resolves Playwright suite files from the JSON report rootDir without parsing a computed config testDir", async () => {
+    const owner = { ...census.playwrightOwners[0], config: "research/adapter/playwright.config.ts" };
+    const report = {
+      config: { rootDir: "research/adapter/computed-test-root" },
+      suites: [{ file: "nested/suite.spec.ts", specs: [{ file: "root.spec.ts" }] }],
+    };
+    const result = await collectPlaywrightFiles(owner, {
+      repoRoot: root,
+      resolveCli: () => "playwright-cli.mjs",
+      runCommand: async () => ({ exitCode: 0, stdout: JSON.stringify(report) }),
+    });
+
+    expect(result).toEqual({
+      files: ["research/adapter/computed-test-root/nested/suite.spec.ts", "research/adapter/computed-test-root/root.spec.ts"],
+      issues: [],
+    });
+  });
+
+  it.each([
+    [{ suites: [] }, "missing Playwright config.rootDir"],
+    [{ config: { rootDir: 7 }, suites: [] }, "invalid Playwright config.rootDir"],
+    [{ config: { rootDir: "../outside" }, suites: [] }, "Playwright config.rootDir escapes repository: ../outside"],
+  ])("fails closed for invalid Playwright JSON rootDir", async (report, issue) => {
+    const owner = { ...census.playwrightOwners[0], config: "research/adapter/playwright.config.ts" };
+    const result = await collectPlaywrightFiles(owner, {
+      repoRoot: root,
+      resolveCli: () => "playwright-cli.mjs",
+      runCommand: async () => ({ exitCode: 0, stdout: JSON.stringify(report) }),
+    });
+
+    expect(result).toEqual({ files: [], issues: [`playwright:adapter: ${issue}`] });
   });
 });
 

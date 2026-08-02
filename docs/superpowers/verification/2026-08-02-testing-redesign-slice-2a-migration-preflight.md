@@ -5,13 +5,14 @@
 - Program-plan base: `72a00b3839082ed610991a6568cc0a189da8d5c5`
   (`docs: plan testing redesign slice 2a`).
 - Slice 2A implementation base after its approved prerequisites:
-  `55d38acf41b29c30567a53b55157df94006b2b54`
-  (`test: make sidecar bootstrap explicit`).
+  `f081cb90c589e80873b936960749626563e5511f`
+  (`test: cover non-regular sidecar binary`).
 - Final implementation checkpoint:
   `d533444539c664b2d6834cae9297667a853b1806`
-  (`test: freeze source contract migration ledger`), whose parent is the
-  ledger freeze commit
-  `0045abf6006f42fe735d5142e139375d702d4fe9`.
+  (`test: freeze source contract migration ledger`), whose exact parent is
+  the docs-reconciliation and frozen-parent checkpoint
+  `0045abf6006f42fe735d5142e139375d702d4fe9`
+  (`docs: reconcile slice 2a source ledger freeze`).
 
 This record describes the committed Slice 2A code checkpoint. The
 documentation commit that adds this record is evidence about that checkpoint,
@@ -100,7 +101,8 @@ The implementation-range review found no diff for
 transition carrier, extractor, or `testing/` tree. Slice 2A added no timing
 mechanism and captured no duration.
 
-Ignored Slice 2A material is limited to the approved preflight drafts and
-review reports; no temporary diagnostic runner or log remains. Slice 2A does
-not add GitHub Actions, branch protection, a scheduler, a test manifest, or
-Nx configuration.
+The retained ignored Slice 2A artifacts are the approved preflight drafts under
+`artifacts/testing/slice-2a/`; review reports remain under `.superpowers/sdd/`.
+No temporary diagnostic runner, superseded draft outside that canonical
+artifact location, or log remains. Slice 2A does not add GitHub Actions, branch
+protection, a scheduler, a test manifest, or Nx configuration.

@@ -173,11 +173,27 @@ function walkPlaywright(node, files) {
   for (const spec of node.specs ?? []) if (typeof spec.file === "string") files.push(spec.file);
 }
 
-function playwrightRootDir(repoRoot, config) {
-  const configPath = path.join(repoRoot, config);
-  const source = readFileSync(configPath, "utf8");
-  const testDir = source.match(/\btestDir\s*:\s*["']([^"']+)["']/)?.[1] ?? ".";
-  return path.posix.join(path.posix.dirname(config.replaceAll("\\", "/")), testDir);
+function playwrightRootDir(repoRoot, rootDir) {
+  if (rootDir === undefined) return { issue: "missing Playwright config.rootDir" };
+  if (typeof rootDir !== "string") return { issue: "invalid Playwright config.rootDir" };
+  const value = rootDir.trim();
+  if (!value) return { issue: "invalid Playwright config.rootDir" };
+  const normalizedRoot = normalizeRoot(repoRoot);
+  const candidate = value.replaceAll("\\", "/");
+  const isAbsolute = /^[A-Za-z]:\//.test(candidate) || candidate.startsWith("/");
+  if (isAbsolute) {
+    const insensitive = /^[A-Za-z]:\//.test(normalizedRoot);
+    const compareRoot = insensitive ? normalizedRoot.toLowerCase() : normalizedRoot;
+    const compareCandidate = insensitive ? candidate.toLowerCase() : candidate;
+    if (compareCandidate === compareRoot) return { path: "." };
+    if (!compareCandidate.startsWith(`${compareRoot}/`)) {
+      return { issue: `Playwright config.rootDir escapes repository: ${rootDir}` };
+    }
+    const relative = normalizeRepoPath("", candidate.slice(normalizedRoot.length + 1));
+    return relative.issue ? { issue: `Playwright config.rootDir escapes repository: ${rootDir}` } : relative;
+  }
+  const relative = normalizeRepoPath("", candidate);
+  return relative.issue ? { issue: `Playwright config.rootDir escapes repository: ${rootDir}` } : relative;
 }
 
 export async function collectPlaywrightFiles(owner, { repoRoot, runCommand = runProcess, resolveCli = (id) => require.resolve(id) } = {}) {
@@ -189,10 +205,11 @@ export async function collectPlaywrightFiles(owner, { repoRoot, runCommand = run
       const report = JSON.parse(stdout);
       if (!Array.isArray(report.suites)) return { issue: "malformed Playwright JSON" };
       if ("errors" in report && (!Array.isArray(report.errors) || report.errors.length)) return { issue: "Playwright errors are not empty" };
+      const configRoot = playwrightRootDir(repoRoot, report.config?.rootDir);
+      if (configRoot.issue) return configRoot;
       const rawFiles = [];
       for (const suite of report.suites) walkPlaywright(suite, rawFiles);
-      const configRoot = playwrightRootDir(repoRoot, owner.config);
-      return { files: rawFiles.map((file) => /^[A-Za-z]:[\\/]|^\//.test(file) ? file : path.posix.join(configRoot, file)) };
+      return { files: rawFiles.map((file) => /^[A-Za-z]:[\\/]|^\//.test(file) ? file : path.posix.join(configRoot.path, file)) };
     } catch { return { issue: "malformed Playwright JSON" }; }
   });
 }
