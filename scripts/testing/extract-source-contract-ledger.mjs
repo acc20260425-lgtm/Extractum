@@ -8,9 +8,9 @@ import tsDefault from "typescript";
 const TEST_NAMES = new Set(["it", "test"]);
 const SUITE_NAMES = new Set(["describe", "suite"]);
 const DISPOSITIONS = new Set(["behavior", "architecture", "tool_owned", "delete"]);
-const REPLACEMENT = /^(test:(?:vitest|playwright|cargo):|rule:|tool:)/;
+const REPLACEMENT = /^(?:test:(?:vitest|playwright|cargo):|rule:|tool:)[^\s][\s\S]*$/;
 const LIFECYCLE_FIELDS = new Set(["status", "state", "pending", "dualRun", "retired", "timestamp", "timestamps", "duration", "durations", "counter", "counters"]);
-const HELPER_MODULES = new Set(["analysis-contract-paths.ts", "telegram-contract-paths.ts", "prompt-pack-contract-paths.ts"]);
+const HELPER_MODULES = new Set(["analysis-contract-paths", "telegram-contract-paths", "prompt-pack-contract-paths"]);
 
 const normalizeText = (text) => String(text).replace(/\r\n?/g, "\n");
 const sha256 = (text) => createHash("sha256").update(normalizeText(text)).digest("hex");
@@ -109,7 +109,7 @@ export function discoverTestDeclarations(sourceFiles, typescript = tsDefault) {
           if (call.eachTable) {
             if (typescript.isIdentifier(call.eachTable)) {
               const declaration = findInitializer(entry.file, call.eachTable.text, typescript);
-              if (!declaration) {
+              if (!declaration || !staticEachTable(declaration.initializer, typescript)) {
                 manualRequirements.push({ path: entry.path, sourceRange: sourceRange(entry.file, node), reason: "unresolved dynamic .each table" });
                 return;
               }
@@ -214,17 +214,21 @@ export function discoverSourceReaders(programOrFiles, trackedPaths, typescript =
       if (typescript.isImportDeclaration(node) && node.importClause && typescript.isStringLiteral(node.moduleSpecifier)) {
         const moduleName = node.moduleSpecifier.text;
         const binding = node.importClause.name?.text;
-        const helper = [...HELPER_MODULES].some((name) => moduleName.endsWith(name));
+        const helper = HELPER_MODULES.has(path.posix.basename(moduleName).replace(/\.ts$/, ""));
         if (binding && moduleName.includes("?raw")) {
           const authorityPath = trackedAuthority(moduleName, entry.path, tracked);
           if (authorityPath) readers.push({ path: entry.path, sourceRange: sourceRange(entry.file, node), sourceOffset: node.getStart(entry.file), kind: "raw-import", authorityPath, classification: authorityClassification(authorityPath), symbolName: binding });
         }
-        if (helper) for (const specifier of node.importClause.namedBindings?.elements ?? []) readers.push({ path: entry.path, sourceRange: sourceRange(entry.file, specifier), sourceOffset: specifier.getStart(entry.file), kind: "contract-path-helper", authorityPath: moduleName, classification: "production", symbolName: specifier.name.text });
+        if (helper) {
+          const bindings = node.importClause.namedBindings;
+          if (typescript.isNamespaceImport(bindings)) readers.push({ path: entry.path, sourceRange: sourceRange(entry.file, bindings), sourceOffset: bindings.getStart(entry.file), kind: "contract-path-helper", authorityPath: moduleName, authorityText: moduleName, classification: "production", symbolName: bindings.name.text });
+          else for (const specifier of bindings?.elements ?? []) readers.push({ path: entry.path, sourceRange: sourceRange(entry.file, specifier), sourceOffset: specifier.getStart(entry.file), kind: "contract-path-helper", authorityPath: moduleName, authorityText: moduleName, classification: "production", symbolName: specifier.name.text });
+        }
         if (["node:fs", "fs", "node:fs/promises", "fs/promises"].includes(moduleName)) for (const specifier of node.importClause.namedBindings?.elements ?? []) imports.set(specifier.name.text, "fs");
       }
       if (typescript.isCallExpression(node)) {
         const expression = node.expression;
-        const fsRead = typescript.isIdentifier(expression) && imports.get(expression.text) === "fs" && /^(readFile|readFileSync|readdir|readdirSync)$/.test(expression.text);
+        const fsRead = typescript.isIdentifier(expression) && /^(readFile|readFileSync|readdir|readdirSync)$/.test(expression.text);
         if (fsRead) {
           const candidate = staticPath(node.arguments[0], entry.file, typescript);
           const authorityPath = trackedAuthority(candidate, entry.path, tracked);
@@ -240,11 +244,16 @@ export function discoverSourceReaders(programOrFiles, trackedPaths, typescript =
             if (authorityPath) readers.push({ path: entry.path, sourceRange: sourceRange(entry.file, node), sourceOffset: node.getStart(entry.file), kind: "import-meta-glob", authorityPath, classification: authorityClassification(authorityPath) });
           }
           if (candidate && raw && /[*?[{]/.test(candidate)) for (const authorityPath of globAuthorities(candidate, entry.path, tracked)) readers.push({ path: entry.path, sourceRange: sourceRange(entry.file, node), sourceOffset: node.getStart(entry.file), kind: "import-meta-glob", authorityPath, classification: authorityClassification(authorityPath) });
+          if (raw && candidate === undefined) readers.push({ path: entry.path, sourceRange: sourceRange(entry.file, node), sourceOffset: node.getStart(entry.file), kind: "manual", reason: "dynamic raw glob" });
+          if (raw && candidate && /[*?[{]/.test(candidate) && !globAuthorities(candidate, entry.path, tracked).length) readers.push({ path: entry.path, sourceRange: sourceRange(entry.file, node), sourceOffset: node.getStart(entry.file), kind: "manual", reason: "raw glob resolved no tracked authority" });
         }
       }
       typescript.forEachChild(node, visit);
     };
     visit(entry.file);
+    if (/\b(?:readFile|readFileSync|readdir|readdirSync)\s*\(\s*[^"'`]/.test(entry.source) && !readers.some((reader) => reader.path === entry.path && reader.kind === "manual" && /dynamic path/.test(reader.reason))) {
+      readers.push({ path: entry.path, sourceRange: "1:1-1:1", sourceOffset: 0, kind: "manual", reason: "unknown source-reader wrapper or dynamic path" });
+    }
     const symbols = sourceSymbols(entry.file, readers, typescript);
     for (const reader of readers) if (reader.path === entry.path) reader.symbolNames = [...symbols].sort();
   }
@@ -257,9 +266,11 @@ function draftRow(declaration, index) {
   return row;
 }
 
-export function buildLedgerDraft({ declarations = [], sourceReaders, frozenAtCommit, outputPath } = {}) {
+export function buildLedgerDraft({ declarations = [], sourceReaders, frozenAtCommit, outputPath, repoRoot = process.cwd() } = {}) {
   if (!/^[a-f0-9]{40}$/i.test(frozenAtCommit ?? "")) throw new Error("frozenAtCommit must be a full commit SHA");
-  if (outputPath !== undefined && !String(outputPath).replaceAll("\\", "/").startsWith("artifacts/")) throw new Error("ledger drafts may only be written to an ignored artifacts/ path");
+  const artifactRoot = path.resolve(repoRoot, "artifacts");
+  const resolvedOutput = outputPath === undefined ? undefined : path.resolve(repoRoot, outputPath);
+  if (resolvedOutput !== undefined && path.relative(artifactRoot, resolvedOutput).startsWith("..")) throw new Error("ledger drafts may only be written inside artifacts/");
   let selected = declarations;
   if (sourceReaders) {
     const symbols = new Map();
@@ -273,11 +284,12 @@ export function buildLedgerDraft({ declarations = [], sourceReaders, frozenAtCom
       return declaration.path === readerPath && Number(readerOffset) >= declaration.sourceOffset && Number(readerOffset) < declaration.sourceOffset + declaration.sourceSlice.length;
     }));
   }
-  const rows = [...selected].sort((a, b) => a.path.localeCompare(b.path) || a.sourceOffset - b.sourceOffset).map(draftRow);
+  const manual = [...(declarations.manualRequirements ?? []), ...(sourceReaders ?? []).filter((reader) => reader.kind === "manual").map((reader) => ({ path: reader.path, sourceRange: reader.sourceRange, sourceOffset: reader.sourceOffset ?? 0, reason: reader.reason, runnerTitles: reader.runnerTitles ?? [] }))];
+  const rows = [...selected, ...manual].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : (a.sourceOffset ?? 0) - (b.sourceOffset ?? 0)).map((item, index) => item.title !== undefined ? draftRow(item, index) : ({ id: `SC-${String(index + 1).padStart(6, "0")}`, path: item.path, manual: { sourceRange: item.sourceRange, reason: item.reason, runnerTitles: item.runnerTitles ?? [] }, sourceHash: sha256(item.sourceSlice ?? ""), assertionCount: item.assertionCount ?? 0, lineage: [], invariant: "Review this unsupported source-contract declaration manually.", disposition: "behavior", replacementIds: [] }));
   const draft = { schemaVersion: 1, frozenAtCommit, sourceReaderExceptions: [], rows };
-  if (outputPath) {
-    mkdirSync(path.dirname(outputPath), { recursive: true });
-    writeFileSync(outputPath, `${JSON.stringify(draft, null, 2)}\n`, "utf8");
+  if (resolvedOutput) {
+    mkdirSync(path.dirname(resolvedOutput), { recursive: true });
+    writeFileSync(resolvedOutput, `${JSON.stringify(draft, null, 2)}\n`, "utf8");
   }
   return draft;
 }
@@ -301,27 +313,64 @@ function resolutionIssues(row, resolution, assertionCount, context) {
   if (!DISPOSITIONS.has(resolution.disposition)) issues.push(`${prefix} invalid disposition`);
   const replacements = resolution.replacementIds;
   if (resolution.disposition === "delete") {
+    if ("replacementIds" in resolution) issues.push(`${prefix} delete must not contain replacementIds`);
     if (typeof resolution.deletionReason !== "string" || !resolution.deletionReason.trim()) issues.push(`${prefix} delete requires a specific deletionReason`);
     return { issues, closed: !issues.length };
   }
+  if ("deletionReason" in resolution) issues.push(`${prefix} non-delete must not contain deletionReason`);
   if (!Array.isArray(replacements) || !replacements.length) issues.push(`${prefix} missing replacementIds`);
   else for (const id of replacements) if (typeof id !== "string" || !REPLACEMENT.test(id)) issues.push(`${prefix} unknown replacement namespace: ${id}`);
   return { issues, closed: !issues.length && replacements.every((id) => replacementResolved(id, context)) };
 }
 
+function fieldsIssue(value, allowed, label, issues) {
+  for (const field of Object.keys(value ?? {})) if (!allowed.has(field)) issues.push(`${value?.id ?? "unknown"}: unknown ${label} field: ${field}`);
+}
+
+function validateRowShape(row, issues) {
+  const simple = new Set(["id", "path", "title", "manual", "sourceHash", "assertionCount", "authorityHash", "lineage", "invariant", "disposition", "replacementIds", "deletionReason"]);
+  const mixed = new Set(["id", "path", "title", "manual", "sourceHash", "assertionCount", "authorityHash", "lineage", "invariant", "subgroups"]);
+  const isMixed = Array.isArray(row.subgroups);
+  fieldsIssue(row, isMixed ? mixed : simple, "ledger row", issues);
+  if (typeof row.path !== "string" || !row.path || row.path.includes("\\") || row.path.split("/").some((part) => !part || part === "." || part === "..")) issues.push(`${row.id}: invalid path`);
+  if (typeof row.sourceHash !== "string" || !/^[a-f0-9]{64}$/i.test(row.sourceHash)) issues.push(`${row.id}: invalid sourceHash`);
+  if (!Number.isInteger(row.assertionCount) || row.assertionCount < 0) issues.push(`${row.id}: invalid assertionCount`);
+  if (row.authorityHash !== undefined && (typeof row.authorityHash !== "string" || !/^[a-f0-9]{64}$/i.test(row.authorityHash))) issues.push(`${row.id}: invalid authorityHash`);
+  if (typeof row.invariant !== "string" || !row.invariant.trim()) issues.push(`${row.id}: missing invariant`);
+  if (Boolean(row.title) === Boolean(row.manual)) issues.push(`${row.id}: row requires exactly one title or manual`);
+  if (row.title !== undefined && (typeof row.title !== "string" || !row.title.trim())) issues.push(`${row.id}: invalid title`);
+  if (row.manual !== undefined && (!row.manual || Object.keys(row.manual).some((field) => !new Set(["sourceRange", "reason", "runnerTitles"]).has(field)) || typeof row.manual.sourceRange !== "string" || !row.manual.sourceRange || typeof row.manual.reason !== "string" || !row.manual.reason || !Array.isArray(row.manual.runnerTitles) || row.manual.runnerTitles.some((title) => typeof title !== "string" || !title))) issues.push(`${row.id}: invalid manual row`);
+  if (isMixed) {
+    if (!row.subgroups.length) issues.push(`${row.id}: mixed row requires subgroups`);
+    for (const subgroup of row.subgroups) {
+      fieldsIssue(subgroup, new Set(["assertionOrdinals", "invariant", "disposition", "replacementIds", "deletionReason"]), "subgroup", issues);
+      if (typeof subgroup.invariant !== "string" || !subgroup.invariant.trim()) issues.push(`${row.id}: subgroup missing invariant`);
+      for (const field of Object.keys(subgroup ?? {})) if (LIFECYCLE_FIELDS.has(field)) issues.push(`${row.id}: stored lifecycle field: ${field}`);
+    }
+  }
+}
+
 export function validateSourceContractLedger(context = {}) {
   const { ledger, declarations = [], sourceReaders = [] } = context;
   const issues = []; const states = [];
-  if (!ledger || ledger.schemaVersion !== 1 || !Array.isArray(ledger.rows) || !Array.isArray(ledger.sourceReaderExceptions) || !/^[a-f0-9]{40}$/i.test(ledger.frozenAtCommit ?? "")) return { issues: ["invalid source-contract ledger envelope"], rows: states };
+  if (!ledger || typeof ledger !== "object") return { issues: ["invalid source-contract ledger envelope"], rows: states };
+  fieldsIssue(ledger, new Set(["schemaVersion", "frozenAtCommit", "sourceReaderExceptions", "rows"]), "ledger envelope", issues);
+  if (ledger.schemaVersion !== 1 || !Array.isArray(ledger.rows) || !Array.isArray(ledger.sourceReaderExceptions) || !/^[a-f0-9]{40}$/i.test(ledger.frozenAtCommit ?? "")) return { issues: [...issues, "invalid source-contract ledger envelope"], rows: states };
   const ids = new Set(); const rowsByIdentity = new Map();
   for (const row of ledger.rows) {
     if (!row || typeof row !== "object") { issues.push("invalid ledger row"); continue; }
+    validateRowShape(row, issues);
     for (const field of Object.keys(row)) if (LIFECYCLE_FIELDS.has(field)) issues.push(`${row.id ?? "unknown"}: stored lifecycle field: ${field}`);
     if (!/^SC-\d{6}$/.test(row.id ?? "") || ids.has(row.id)) issues.push(`duplicate or invalid ledger id: ${row.id}`); ids.add(row.id);
     if (!Array.isArray(row.lineage) || row.lineage.some((item) => typeof item !== "string" || !item || item === row.path)) issues.push(`${row.id}: invalid lineage`);
     const key = identity(row); if (rowsByIdentity.has(key)) issues.push(`duplicate current identity: ${key}`); rowsByIdentity.set(key, row);
   }
-  const current = new Map(declarations.map((declaration) => [identity(declaration), declaration]));
+  const current = new Map();
+  for (const declaration of declarations) {
+    const key = identity(declaration);
+    if (current.has(key)) issues.push(`duplicate current identity: ${key}`);
+    else current.set(key, declaration);
+  }
   for (const [key, declaration] of current) {
     const row = rowsByIdentity.get(key);
     if (!row) { issues.push(`missing ledger row: ${key}`); continue; }
@@ -351,7 +400,7 @@ export function validateSourceContractLedger(context = {}) {
       resolved = resolutionIssues(row, row, row.assertionCount, context); issues.push(...resolved.issues); resolved = resolved.closed;
     }
     if (!isCurrent && !resolved) issues.push(`${row.id}: unresolved historical row`);
-    states.push({ id: row.id, state: isCurrent ? "open" : "closed" });
+    states.push({ id: row.id, state: isCurrent ? "open" : resolved ? "closed" : "open" });
   }
   const exceptionKeys = new Set();
   for (const exception of ledger.sourceReaderExceptions) {

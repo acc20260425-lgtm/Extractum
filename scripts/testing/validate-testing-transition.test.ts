@@ -289,4 +289,36 @@ describe("bounded source-contract ledger", () => {
       expect.stringContaining("unresolved historical row"),
     ]));
   });
+
+  it("fails closed for extensionless helper namespaces, dynamic readers, and shadowed authority names", () => {
+    const source = [{ path: "src/reader.test.ts", source: [
+      'import * as telegram from "./telegram-contract-paths";',
+      'import { readFileSync } from "node:fs";',
+      'const source = readFileSync(dynamicPath);',
+      'const modules = import.meta.glob(dynamicPattern, { query: "?raw" });',
+      'it("reader", () => { const source = "local"; expect(source).toBe("local"); });',
+    ].join("\n") }];
+    const readers = discoverSourceReaders(source, new Set(["src/live.ts"]), ts);
+    expect(readers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "contract-path-helper", symbolName: "telegram" }),
+      expect.objectContaining({ kind: "manual", reason: expect.stringMatching(/dynamic path/) }),
+      expect.objectContaining({ kind: "manual", reason: expect.stringMatching(/dynamic raw glob/) }),
+    ]));
+    const declarations = discoverTestDeclarations(source, ts);
+    const draft = buildLedgerDraft({ declarations, sourceReaders: readers, frozenAtCommit: "d".repeat(40) });
+    expect(draft.rows.some((row: any) => row.title === "reader")).toBe(false);
+  });
+
+  it("rejects malformed manual/mixed rows and duplicate current identities", () => {
+    const declaration = { path: "src/x.test.ts", title: "same", sourceSlice: 'it("same", () => assert(true));', sourceOffset: 0, assertionOrdinals: [1], referencedSymbols: [] };
+    const ledger = { schemaVersion: 1, frozenAtCommit: "e".repeat(40), sourceReaderExceptions: [], rows: [{
+      id: "SC-000001", path: "src/x.test.ts", title: "same", manual: {}, sourceHash: "bad", assertionCount: -1, lineage: [], invariant: "", disposition: "delete", replacementIds: ["rule:"], status: "pending",
+    }] };
+    const result = validateSourceContractLedger({ ledger, declarations: [declaration, { ...declaration, sourceOffset: 10 }], sourceReaders: [], liveCensus: { vitestOwners: [] }, verifySteps: [] });
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.stringContaining("duplicate current identity"), expect.stringContaining("unknown ledger row field"),
+      expect.stringContaining("invalid manual row"), expect.stringContaining("invalid sourceHash"),
+      expect.stringContaining("stored lifecycle field"), expect.stringContaining("delete must not contain replacementIds"),
+    ]));
+  });
 });
