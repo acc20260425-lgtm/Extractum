@@ -5,6 +5,7 @@ import ts from "typescript";
 
 import {
   buildLedgerDraft,
+  createCliGitMetadata,
   discoverSourceReaders,
   discoverTestDeclarations,
   selectVitestTrackedPaths,
@@ -439,16 +440,16 @@ describe("bounded source-contract ledger", () => {
       declarationInventory: inventory,
       sourceReaders: readers,
       frozenAtCommit: "1".repeat(40),
-      runnerTitlesByPath: { "src/manual-reader.test.ts": ["suite > manual reader"] },
+      runnerTitlesByPath: { "src/manual-reader.test.ts": ["manual reader"] },
     });
     expect(draft.rows).toEqual([expect.objectContaining({
-      manual: { sourceRange: "2:16-2:49", reason: "dynamic or unknown filesystem authority", runnerTitles: ["suite > manual reader"] },
-      sourceHash: sha('readFileSync(dynamicPath, "utf8")'),
+      manual: { sourceRange: "3:1-3:57", reason: "dynamic or unknown filesystem authority", runnerTitles: ["manual reader"] },
+      sourceHash: sha('it("manual reader", () => expect(source).toContain("x"))'),
       assertionCount: 1,
     })]);
     const reviewed = { ...draft.rows[0], invariant: "Review the dynamic reader.", disposition: "delete", deletionReason: "The implementation-text assertion will be removed.", replacementIds: undefined };
     delete reviewed.replacementIds;
-    expect(validateSourceContractLedger({ ledger: envelope([reviewed]), declarationInventory: inventory, sourceReaders: readers, runnerTitlesByPath: { "src/manual-reader.test.ts": ["suite > manual reader"] } }).issues).toEqual([]);
+    expect(validateSourceContractLedger({ ledger: envelope([reviewed]), declarationInventory: inventory, sourceReaders: readers, runnerTitlesByPath: { "src/manual-reader.test.ts": ["manual reader"] } }).issues).toEqual([]);
   });
 
   it("requires draft output to remain under repo artifacts and be proven ignored", () => {
@@ -508,5 +509,168 @@ describe("bounded source-contract ledger", () => {
       { id: "SC-000003", state: "closed" }, { id: "SC-000004", state: "open" },
     ]);
     expect(result.issues).toContain("SC-000004: unresolved historical row");
+  });
+
+  it("consolidates manual readers into one exact row per known declaration title", () => {
+    const files = [{ path: "src/consolidated.test.ts", source: [
+      'import { readFileSync } from "node:fs";',
+      'const source = readFileSync(dynamicPath, "utf8");',
+      'describe("suite", () => {',
+      '  it("one", () => expect(source).toContain("one"));',
+      '  it("two", () => expect(source).toContain("two"));',
+      '});',
+    ].join("\n") }];
+    const inventory = discoverTestDeclarations(files, ts);
+    const readers = discoverSourceReaders(files, gitMetadata([]), ts);
+    const draft = buildLedgerDraft({
+      declarationInventory: inventory, sourceReaders: readers, frozenAtCommit: "3".repeat(40),
+      runnerTitlesByPath: { "src/consolidated.test.ts": ["suite > one", "suite > two"] },
+    });
+    expect(draft.rows).toHaveLength(2);
+    expect(draft.rows.map((row: any) => row.manual.runnerTitles)).toEqual([["suite > one"], ["suite > two"]]);
+    expect(draft.rows.map((row: any) => row.sourceHash)).toEqual(inventory.map((entry: any) => sha(entry.sourceSlice)));
+  });
+
+  it("reconciles static each templates to their exact expanded freeze-time titles", () => {
+    const files = [{ path: "src/each-manual.test.ts", source: [
+      'import { readFileSync } from "node:fs";',
+      'const source = readFileSync(dynamicPath, "utf8");',
+      'it("reads raw", () => expect(source).toContain("x"));',
+      'it.each([{ kind: "a" }, { kind: "b" }])("reads $kind", ({ kind }) => expect([source, kind]).toBeDefined());',
+    ].join("\n") }];
+    const draft = buildLedgerDraft({
+      declarationInventory: discoverTestDeclarations(files, ts),
+      sourceReaders: discoverSourceReaders(files, gitMetadata([]), ts),
+      frozenAtCommit: "9".repeat(40),
+      runnerTitlesByPath: { "src/each-manual.test.ts": ["reads raw", "reads 'a'", "reads 'b'"] },
+    });
+    expect(draft.rows).toEqual(expect.arrayContaining([expect.objectContaining({
+      manual: expect.objectContaining({ runnerTitles: ["reads 'a'", "reads 'b'"] }),
+    })]));
+    expect(draft.rows.flatMap((row: any) => row.manual.runnerTitles)).toEqual(["reads raw", "reads 'a'", "reads 'b'"]);
+  });
+
+  it("retains known manual titles and reconciles structurally unknown suites without reusing file-wide titles", () => {
+    const files = [{ path: "src/reconcile.test.ts", source: [
+      'import source from "./live.ts?raw";',
+      'describe(makeTitle(), () => { it("inside", () => expect(source).toContain("x")); });',
+      'it("outside", () => expect(source).toContain("x"));',
+    ].join("\n") }];
+    const inventory = discoverTestDeclarations(files, ts);
+    const readers = discoverSourceReaders(files, gitMetadata(["src/live.ts"]), ts);
+    const draft = buildLedgerDraft({
+      declarationInventory: inventory, sourceReaders: readers, frozenAtCommit: "4".repeat(40),
+      runnerTitlesByPath: { "src/reconcile.test.ts": ["dynamic > inside", "outside"] },
+    });
+    expect(draft.rows).toHaveLength(2);
+    expect(draft.rows.find((row: any) => row.manual)?.manual.runnerTitles).toEqual(["dynamic > inside"]);
+    expect(draft.rows.find((row: any) => row.title)?.title).toBe("outside");
+  });
+
+  it("makes registration functions and unsupported destructuring flows exact manual declarations", () => {
+    const registration = discoverTestDeclarations([{ path: "src/register.test.ts", source: [
+      'function register() { it("factory", () => expect(1).toBe(1)); }',
+      'register();',
+    ].join("\n") }], ts);
+    expect(registration).toHaveLength(0);
+    expect(registration.manualRequirements).toEqual([expect.objectContaining({
+      sourceRange: "1:23-1:61", reason: "test declaration inside registration function", title: "factory",
+    })]);
+
+    const files = [{ path: "src/destructure.test.ts", source: [
+      'import raw from "./live.ts?raw";',
+      'const holder = { raw };',
+      'const { raw: source } = holder;',
+      'it("destructured", () => expect(source).toContain("x"));',
+    ].join("\n") }];
+    const inventory = discoverTestDeclarations(files, ts);
+    expect(inventory).toHaveLength(0);
+    expect(inventory.manualRequirements).toEqual([expect.objectContaining({
+      reason: "unsupported destructuring or alias flow", title: "destructured",
+    })]);
+  });
+
+  it("unwraps awaited mkdtemp and tmpdir provenance so proven temp reads create no obligations", () => {
+    const files = [{ path: "src/async-temp.test.ts", source: [
+      'import { mkdtemp, readFile } from "node:fs/promises";',
+      'import { tmpdir } from "node:os";',
+      'import path from "node:path";',
+      'const root = await mkdtemp(path.join(tmpdir(), "audit-"));',
+      'const text = await readFile(path.join(root, "value.txt"), "utf8");',
+      'it("temp", () => expect(text).toContain("x"));',
+    ].join("\n") }];
+    const readers = discoverSourceReaders(files, gitMetadata([]), ts);
+    expect(readers).toEqual([expect.objectContaining({ classification: "temp", kind: "fs-read" })]);
+    expect(buildLedgerDraft({ declarationInventory: discoverTestDeclarations(files, ts), sourceReaders: readers, frozenAtCommit: "5".repeat(40) }).rows).toEqual([]);
+  });
+
+  it("validates exact metadata kinds and fails closed for unclassified directory entries", () => {
+    const files = [{ path: "src/kinds.test.ts", source: [
+      'import { readFileSync, readdirSync } from "node:fs";',
+      'const config = readFileSync("config/app.json", "utf8");',
+      'const docs = readFileSync("docs/guide.md", "utf8");',
+      'const entries = readdirSync("src/generated");',
+      'it("kinds", () => expect([config, docs, entries]).toBeDefined());',
+    ].join("\n") }];
+    const metadata = {
+      trackedPaths: new Set(["config/app.json", "docs/guide.md", "src/generated/a.ts"]),
+      pathKinds: new Map([["config/app.json", "configuration"], ["docs/guide.md", "documentation"]]),
+      ignoredPaths: new Set(),
+      directoryEntries: new Map([["src/kinds.test.ts:4:17-4:45", ["src/generated/a.ts"]]]),
+    };
+    const readers = discoverSourceReaders(files, metadata, ts);
+    expect(readers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ classification: "configuration" }),
+      expect.objectContaining({ classification: "documentation" }),
+      expect.objectContaining({ kind: "manual", reason: "unclassified directory entry: src/generated/a.ts" }),
+    ]));
+    const draft = buildLedgerDraft({
+      declarationInventory: discoverTestDeclarations(files, ts), sourceReaders: readers, frozenAtCommit: "6".repeat(40),
+      runnerTitlesByPath: { "src/kinds.test.ts": ["kinds"] },
+    });
+    expect(draft.rows).toHaveLength(1);
+    expect(() => discoverSourceReaders(files, { ...metadata, pathKinds: new Map([["config/app.json", "prodution"]]) }, ts)).toThrow(/invalid path kind/);
+  });
+
+  it("supplies bounded exact CLI fixture and directory provenance with non-stale exceptions", () => {
+    const metadata = createCliGitMetadata(new Set([
+      "src-tauri/src/analysis/test_schema.rs",
+      "src-tauri/crates/extractum-analysis/src/test_schema.rs",
+      "src-tauri/src/prompt_packs/lib.rs",
+      "src-tauri/src/prompt_packs/runtime.rs",
+    ]), new Set());
+    expect(metadata.pathKinds.get("src-tauri/src/analysis/test_schema.rs")).toBe("fixture");
+    expect(metadata.readerSites.size).toBeGreaterThan(0);
+    expect(metadata.directoryEntries.get("src/lib/prompt-pack-application-contract.test.ts:10:29-10:84")).toEqual([
+      "src-tauri/src/prompt_packs/lib.rs", "src-tauri/src/prompt_packs/runtime.rs",
+    ]);
+  });
+
+  it("counts named Node assert imports and preserves public referencedSymbols", () => {
+    const declarations = discoverTestDeclarations([{ path: "src/assert.test.ts", source: [
+      'import { strictEqual } from "node:assert";',
+      'const source = "value";',
+      'it("asserts", () => strictEqual(source, "value"));',
+    ].join("\n") }], ts);
+    expect(declarations[0]).toMatchObject({ assertionOrdinals: [1], referencedSymbols: ["source", "strictEqual"] });
+  });
+
+  it("matches bounded recursive raw globs", () => {
+    const files = [{ path: "src/glob.test.ts", source: [
+      'const modules = import.meta.glob("./parts/**/*.ts", { query: "?raw" });',
+      'it("glob", () => expect(modules).toBeDefined());',
+    ].join("\n") }];
+    const readers = discoverSourceReaders(files, gitMetadata(["src/parts/a.ts", "src/parts/a/b.ts", "src/parts/a/b.txt"]), ts);
+    expect(readers.map((reader: any) => reader.authorityPath)).toEqual(["src/parts/a.ts", "src/parts/a/b.ts"]);
+  });
+
+  it("never reports a schema-invalid absent simple row as closed", () => {
+    const row = {
+      id: "SC-000001", path: "src/old.test.ts", title: "old", sourceHash: "a".repeat(64), assertionCount: 1,
+      lineage: [], invariant: "invalid", disposition: "delete", deletionReason: "specific", extra: true,
+    };
+    const result = validateSourceContractLedger({ ledger: envelope([row]), declarationInventory: [], sourceReaders: [] });
+    expect(result.issues).toContain("SC-000001: unknown ledger row field: extra");
+    expect(result.rows).toEqual([{ id: "SC-000001", state: "open" }]);
   });
 });

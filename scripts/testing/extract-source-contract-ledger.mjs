@@ -18,6 +18,8 @@ const FS_MODULES = new Set(["node:fs", "fs", "node:fs/promises", "fs/promises"])
 const FS_READS = new Set(["readFile", "readFileSync", "readdir", "readdirSync"]);
 const EXACT_RANGE = /^(\d+):(\d+)-(\d+):(\d+)$/;
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/i;
+const PATH_KINDS = new Set(["production", "configuration", "documentation", "fixture", "generated", "output"]);
+const OBLIGATION_KINDS = new Set(["production", "configuration", "documentation"]);
 const REPLACEMENT = /^(?:test:vitest:[^#\s]+#[^\r\n]+|test:playwright:[^\s]+|test:cargo:[^\s]+|rule:[A-Za-z0-9][A-Za-z0-9:./_-]*|tool:[A-Za-z0-9][A-Za-z0-9:./_-]*)$/;
 
 const normalizeText = (text) => String(text ?? "").replace(/\r\n?/g, "\n");
@@ -138,8 +140,15 @@ function createLexicalModel(entry, typescript) {
       typescript.forEachChild(node, (child) => visit(child, blockScope));
       return;
     }
-    if (typescript.isVariableDeclaration(node) && typescript.isIdentifier(node.name)) {
-      addBinding(scope, node.name.text, node.name, node.initializer);
+    if (typescript.isVariableDeclaration(node)) {
+      if (typescript.isIdentifier(node.name)) addBinding(scope, node.name.text, node.name, node.initializer);
+      else {
+        const addPattern = (pattern) => {
+          if (typescript.isIdentifier(pattern)) addBinding(scope, pattern.text, pattern, node.initializer, { kind: "unsupported-binding" });
+          else typescript.forEachChild(pattern, addPattern);
+        };
+        addPattern(node.name);
+      }
     }
     typescript.forEachChild(node, (child) => visit(child, scope));
   };
@@ -210,6 +219,10 @@ function assertionInfo(node, model) {
         if (resolved.length === 1 && resolved[0].role.kind === "node-assert") assertion = true;
         else if (resolved.length !== 1) unknownDirectAssert.push(rangeOf(model.file, child));
       }
+      if (model.typescript.isIdentifier(expression)) {
+        const resolved = model.resolve(expression);
+        if (resolved.length === 1 && resolved[0].role.kind === "node-assert" && resolved[0].role.importedName !== "default") assertion = true;
+      }
       if (model.typescript.isPropertyAccessExpression(expression)) {
         const root = rootIdentifier(expression, model.typescript);
         const resolved = root ? model.resolve(root) : [];
@@ -229,7 +242,7 @@ function staticText(node, typescript) {
 
 function unwrapExpression(node, typescript) {
   let current = node;
-  while (current && (typescript.isAsExpression(current) || typescript.isSatisfiesExpression(current) || typescript.isParenthesizedExpression(current))) current = current.expression;
+  while (current && (typescript.isAsExpression(current) || typescript.isSatisfiesExpression(current) || typescript.isParenthesizedExpression(current) || typescript.isAwaitExpression(current))) current = current.expression;
   return current;
 }
 
@@ -242,7 +255,18 @@ function callKind(node, typescript) {
   return { kind: each.expression.expression.text, args: node.arguments, callback: node.arguments[1], eachTable: each.arguments[0] };
 }
 
-function manualRequirement(model, node, reason, analysisNode = node) {
+function referencedSymbols(node, model) {
+  const names = new Set();
+  const visit = (child) => {
+    if (model.typescript.isIdentifier(child) && isReferenceIdentifier(child, model.typescript)
+      && !["expect", "it", "test", "describe", "suite"].includes(child.text)) names.add(child.text);
+    model.typescript.forEachChild(child, visit);
+  };
+  if (node) visit(node);
+  return [...names].sort(compareText);
+}
+
+function manualRequirement(model, node, reason, analysisNode = node, title, titleExact = true, titleTemplate = false) {
   const assertions = assertionInfo(analysisNode, model);
   const closure = bindingClosure(analysisNode, model);
   return {
@@ -250,10 +274,23 @@ function manualRequirement(model, node, reason, analysisNode = node) {
     sourceRange: rangeOf(model.file, node),
     sourceSlice: normalizeText(node.getText(model.file)),
     sourceOffset: node.getStart(model.file),
+    sourceEnd: node.getEnd(),
     assertionOrdinals: assertions.ordinals,
     referencedBindingKeys: closure.keys,
+    referencedSymbols: referencedSymbols(analysisNode, model),
+    ...(title ? { title, titleExact } : {}),
+    ...(titleTemplate ? { titleTemplate: true } : {}),
     reason,
   };
+}
+
+function insideNamedRegistration(node, typescript) {
+  let current = node.parent;
+  while (current) {
+    if (typescript.isFunctionDeclaration(current) && current.name) return true;
+    current = current.parent;
+  }
+  return false;
 }
 
 export function discoverTestDeclarations(sourceFiles, typescript = tsDefault) {
@@ -278,7 +315,12 @@ export function discoverTestDeclarations(sourceFiles, typescript = tsDefault) {
           return;
         }
         if (!callback || !(typescript.isArrowFunction(callback) || typescript.isFunctionExpression(callback))) {
-          manualRequirements.push(manualRequirement(model, node, "dynamic test factory"));
+          manualRequirements.push(manualRequirement(model, node, "dynamic test factory", node, title === undefined ? undefined : [...parentTitles, title].join(" > "), true, Boolean(call.eachTable)));
+          return;
+        }
+        const fullTitle = [...parentTitles, title].join(" > ");
+        if (insideNamedRegistration(node, typescript)) {
+          manualRequirements.push(manualRequirement(model, node, "test declaration inside registration function", callback, fullTitle, false, Boolean(call.eachTable)));
           return;
         }
         let eachAuthorityText;
@@ -289,7 +331,7 @@ export function discoverTestDeclarations(sourceFiles, typescript = tsDefault) {
             const resolved = model.resolve(table);
             const initializer = resolved.length === 1 ? unwrapExpression(resolved[0].analysisNode, typescript) : undefined;
             if (!initializer || !(typescript.isArrayLiteralExpression(initializer) || typescript.isTaggedTemplateExpression(initializer))) {
-              manualRequirements.push(manualRequirement(model, node, "unresolved dynamic .each table", callback));
+              manualRequirements.push(manualRequirement(model, node, "unresolved dynamic .each table", callback, fullTitle, true, true));
               return;
             }
             const declaration = resolved[0].node.parent;
@@ -300,29 +342,34 @@ export function discoverTestDeclarations(sourceFiles, typescript = tsDefault) {
             eachAuthorityText = normalizeText(table.getText(model.file));
             eachAuthorityOffset = table.getStart(model.file);
           } else {
-            manualRequirements.push(manualRequirement(model, node, "unresolved dynamic .each table", callback));
+            manualRequirements.push(manualRequirement(model, node, "unresolved dynamic .each table", callback, fullTitle, true, true));
             return;
           }
         }
         const closure = bindingClosure(callback, model);
+        if (closure.keys.some((key) => model.bindings.get(key)?.role.kind === "unsupported-binding")) {
+          manualRequirements.push(manualRequirement(model, node, "unsupported destructuring or alias flow", callback, fullTitle, true, Boolean(call.eachTable)));
+          return;
+        }
         if (closure.ambiguous.length) {
-          manualRequirements.push(manualRequirement(model, node, `ambiguous lexical binding: ${closure.ambiguous.join(", ")}`, callback));
+          manualRequirements.push(manualRequirement(model, node, `ambiguous lexical binding: ${closure.ambiguous.join(", ")}`, callback, fullTitle, true, Boolean(call.eachTable)));
           return;
         }
         const assertions = assertionInfo(callback, model);
         if (assertions.unknownDirectAssert.length) {
-          manualRequirements.push(manualRequirement(model, node, "unresolved direct assert binding", callback));
+          manualRequirements.push(manualRequirement(model, node, "unresolved direct assert binding", callback, fullTitle, true, Boolean(call.eachTable)));
           return;
         }
         declarations.push({
           path: model.path,
-          title: [...parentTitles, title].join(" > "),
+          title: fullTitle,
           sourceRange: rangeOf(model.file, node),
           sourceSlice: normalizeText(node.getText(model.file)),
           sourceOffset: node.getStart(model.file),
           sourceEnd: node.getEnd(),
           assertionOrdinals: assertions.ordinals,
           referencedBindingKeys: closure.keys,
+          referencedSymbols: referencedSymbols(callback, model),
           eachAuthorityText,
           eachAuthorityOffset,
         });
@@ -347,13 +394,21 @@ export function discoverTestDeclarations(sourceFiles, typescript = tsDefault) {
 }
 
 function normalizeGitMetadata(input) {
-  if (input instanceof Set || Array.isArray(input)) return { trackedPaths: new Set([...input].map(normalizePath)), pathKinds: new Map(), ignoredPaths: new Set(), directoryEntries: new Map() };
-  return {
+  if (input instanceof Set || Array.isArray(input)) return { trackedPaths: new Set([...input].map(normalizePath)), pathKinds: new Map(), ignoredPaths: new Set(), directoryEntries: new Map(), readerSites: new Map() };
+  const metadata = {
     trackedPaths: new Set([...(input?.trackedPaths ?? [])].map(normalizePath)),
     pathKinds: new Map([...(input?.pathKinds ?? [])].map(([key, value]) => [normalizePath(key), value])),
     ignoredPaths: new Set([...(input?.ignoredPaths ?? [])].map(normalizePath)),
     directoryEntries: new Map(input?.directoryEntries ?? []),
+    readerSites: new Map(input?.readerSites ?? []),
   };
+  for (const [pathValue, kind] of metadata.pathKinds) {
+    if (!isNormalizedRepoPath(pathValue) || !PATH_KINDS.has(kind)) throw new Error(`invalid path kind for ${pathValue}: ${kind}`);
+  }
+  for (const [site, entries] of metadata.directoryEntries) {
+    if (typeof site !== "string" || !Array.isArray(entries) || entries.some((entry) => !isNormalizedRepoPath(normalizePath(entry)))) throw new Error(`invalid directory provenance: ${site}`);
+  }
+  return metadata;
 }
 
 function bindingForIdentifier(identifier, model) {
@@ -415,9 +470,29 @@ function classificationFor(authorityPath, metadata) {
   return undefined;
 }
 
+function directoryClassificationFor(authorityPath, metadata) {
+  if (metadata.ignoredPaths.has(authorityPath)) return "ignored";
+  const exact = metadata.pathKinds.get(authorityPath);
+  if (exact) return exact;
+  if (metadata.trackedPaths.has(authorityPath) && TEST_FILE.test(authorityPath)) return "test";
+  return undefined;
+}
+
 function globMatcher(pattern) {
-  const escaped = pattern.replace(/[.+^$()|\\]/g, "\\$&").replaceAll("**/", "(?:.+/)?").replaceAll("**", ".*").replaceAll("*", "[^/]*").replaceAll("?", "[^/]");
-  return new RegExp(`^${escaped}$`);
+  let expression = "";
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index];
+    if (character === "*" && pattern[index + 1] === "*") {
+      index += 1;
+      if (pattern[index + 1] === "/") {
+        index += 1;
+        expression += "(?:[^/]+/)*";
+      } else expression += ".*";
+    } else if (character === "*") expression += "[^/]*";
+    else if (character === "?") expression += "[^/]";
+    else expression += character.replace(/[.+^$()|[\]{}\\]/g, "\\$&");
+  }
+  return new RegExp(`^${expression}$`);
 }
 
 function enclosingBindingKey(node, model) {
@@ -510,13 +585,29 @@ export function discoverSourceReaders(programOrFiles, gitMetadata, typescript = 
           const imported = callImportRole(node, model);
           const fsKind = imported?.role.kind;
           if ((fsKind === "fs-named" || fsKind === "fs-default" || fsKind === "fs-namespace") && FS_READS.has(imported.importedName)) {
+            const siteKey = `${model.path}:${rangeOf(model.file, node)}`;
+            const explicitSite = metadata.readerSites.get(siteKey);
             const candidate = staticPathValue(node.arguments[0], model);
-            if (candidate.kind === "temp") readers.push(readerRecord(model, node, { kind: "fs-read", classification: "temp" }));
+            if (explicitSite) {
+              for (const authority of explicitSite.authorities ?? []) {
+                if (!PATH_KINDS.has(authority.classification) || !isNormalizedRepoPath(authority.path)) throw new Error(`invalid reader-site provenance: ${siteKey}`);
+                readers.push(readerRecord(model, node, {
+                  kind: "fs-read",
+                  authorityPath: authority.path,
+                  classification: authority.classification,
+                  ...(authority.classification === "fixture" && explicitSite.exception ? { exception: explicitSite.exception } : {}),
+                }));
+              }
+            } else if (candidate.kind === "temp") readers.push(readerRecord(model, node, { kind: "fs-read", classification: "temp" }));
             else if (candidate.kind !== "path") readers.push(readerRecord(model, node, { kind: "manual", reason: "dynamic or unknown filesystem authority" }));
             else if (["readdir", "readdirSync"].includes(imported.importedName)) {
-              const exactEntries = metadata.directoryEntries.get(`${model.path}:${rangeOf(model.file, node)}`);
+              const exactEntries = metadata.directoryEntries.get(siteKey);
               if (!Array.isArray(exactEntries) || !exactEntries.length) readers.push(readerRecord(model, node, { kind: "manual", reason: "directory enumeration requires exact file provenance" }));
-              else for (const item of exactEntries.map(normalizePath).sort(compareText)) readers.push(readerRecord(model, node, { kind: "fs-directory-read", authorityPath: item, classification: classificationFor(item, metadata) }));
+              else for (const item of exactEntries.map(normalizePath).sort(compareText)) {
+                const classification = directoryClassificationFor(item, metadata);
+                if (!classification) readers.push(readerRecord(model, node, { kind: "manual", reason: `unclassified directory entry: ${item}` }));
+                else readers.push(readerRecord(model, node, { kind: "fs-directory-read", authorityPath: item, classification }));
+              }
             } else {
               const authorityPath = resolveAuthority(candidate.value, model.path);
               const classification = classificationFor(authorityPath, metadata);
@@ -554,6 +645,21 @@ function titlesFor(pathValue, runnerTitlesByPath) {
   return Array.isArray(values) ? [...new Set(values.filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim()))].sort(compareText) : [];
 }
 
+function eachTitleMatcher(title) {
+  let expression = "";
+  for (let index = 0; index < title.length; index += 1) {
+    if (title[index] === "$" && /[A-Za-z_$]/.test(title[index + 1] ?? "")) {
+      index += 1;
+      while (index + 1 < title.length && /[\w$.-]/.test(title[index + 1])) index += 1;
+      expression += ".+?";
+    } else if (title[index] === "%" && /[sdifjoO#]/.test(title[index + 1] ?? "")) {
+      index += 1;
+      expression += ".+?";
+    } else expression += title[index].replace(/[.+^$()|[\]{}\\]/g, "\\$&");
+  }
+  return new RegExp(`^${expression}$`);
+}
+
 function authorityTextFor(declaration, readers) {
   const parts = readers.filter((reader) => reader.authorityText).map((reader) => ({ offset: reader.sourceOffset, text: normalizeText(reader.authorityText) }));
   if (declaration.eachAuthorityText) parts.push({ offset: declaration.eachAuthorityOffset ?? declaration.sourceOffset, text: normalizeText(declaration.eachAuthorityText) });
@@ -564,37 +670,89 @@ function authorityTextFor(declaration, readers) {
 function deriveObligations(declarationInventory, sourceReaders, runnerTitlesByPath, requireRunnerTitles) {
   const staticRows = [];
   const manualRows = [];
-  const productionReaders = sourceReaders.filter((reader) => reader.kind !== "manual" && reader.classification === "production");
+  const productionReaders = sourceReaders.filter((reader) => reader.kind !== "manual" && OBLIGATION_KINDS.has(reader.classification));
   const manualReaders = sourceReaders.filter((reader) => reader.kind === "manual");
+  const allRelevantReaders = [...productionReaders, ...manualReaders];
+  const ownedManualReaders = new Set();
+  const manualRequirements = declarationInventory.manualRequirements ?? [];
+  const knownAssignments = new Map();
+
+  for (const requirement of manualRequirements) {
+    if (!requirement.title) continue;
+    const listed = titlesFor(requirement.path, runnerTitlesByPath);
+    const reservedExact = new Set([
+      ...declarationInventory.filter((item) => item.path === requirement.path && !item.eachAuthorityText).map((item) => item.title),
+      ...manualRequirements.filter((item) => item !== requirement && item.path === requirement.path && item.title && !item.titleTemplate && item.titleExact).map((item) => item.title),
+    ]);
+    const matches = requirement.titleTemplate
+      ? listed.filter((title) => eachTitleMatcher(requirement.title).test(title) && !reservedExact.has(title))
+      : requirement.titleExact
+      ? listed.filter((title) => title === requirement.title)
+      : listed.filter((title) => title === requirement.title || title.endsWith(` > ${requirement.title}`));
+    knownAssignments.set(requirement, matches);
+  }
+
+  const unknownByPath = new Map();
+  for (const requirement of manualRequirements.filter((item) => !item.title)) {
+    const values = unknownByPath.get(requirement.path) ?? [];
+    values.push(requirement);
+    unknownByPath.set(requirement.path, values);
+  }
+  const unknownAssignments = new Map();
+  for (const [filePath, requirements] of unknownByPath) {
+    const reserved = new Set(declarationInventory.filter((item) => item.path === filePath).map((item) => item.title));
+    for (const [requirement, assigned] of knownAssignments) if (requirement.path === filePath) for (const title of assigned) reserved.add(title);
+    const remaining = titlesFor(filePath, runnerTitlesByPath).filter((title) => !reserved.has(title));
+    if (requirements.length === 1) unknownAssignments.set(requirements[0], remaining);
+    else for (const requirement of requirements) unknownAssignments.set(requirement, []);
+  }
+
   for (const declaration of declarationInventory) {
     const relatedManual = manualReaders.filter((reader) => readerApplies(declaration, reader));
     const relatedProduction = productionReaders.filter((reader) => readerApplies(declaration, reader));
-    if (relatedManual.length) continue;
+    if (relatedManual.length) {
+      for (const reader of relatedManual) ownedManualReaders.add(reader);
+      const listedTitles = titlesFor(declaration.path, runnerTitlesByPath);
+      const reservedExact = new Set(declarationInventory
+        .filter((item) => item !== declaration && item.path === declaration.path && !item.eachAuthorityText)
+        .map((item) => item.title));
+      const runnerTitles = declaration.eachAuthorityText
+        ? listedTitles.filter((title) => eachTitleMatcher(declaration.title).test(title) && !reservedExact.has(title))
+        : listedTitles.filter((title) => title === declaration.title);
+      if (requireRunnerTitles && (!runnerTitles.length || (!declaration.eachAuthorityText && runnerTitles.length !== 1))) throw new Error(`manual declaration ${declaration.path}#${declaration.title} requires exact non-empty freeze-time runnerTitles reconciliation`);
+      manualRows.push({
+        ...declaration,
+        manualReason: [...new Set(relatedManual.map((reader) => reader.reason))].sort(compareText).join("; "),
+        runnerTitles,
+        authorityText: authorityTextFor(declaration, [...relatedProduction, ...relatedManual]),
+      });
+      continue;
+    }
     if (!relatedProduction.length) continue;
     staticRows.push({ ...declaration, authorityText: authorityTextFor(declaration, relatedProduction) });
   }
-  for (const requirement of declarationInventory.manualRequirements ?? []) {
-    const related = [...productionReaders, ...manualReaders].filter((reader) => readerApplies(requirement, reader));
-    if (!related.length && ![...productionReaders, ...manualReaders].some((reader) => reader.path === requirement.path)) continue;
-    let runnerTitles = titlesFor(requirement.path, runnerTitlesByPath);
-    if (requirement.title && runnerTitles.includes(requirement.title)) runnerTitles = [requirement.title];
-    if (requireRunnerTitles && !runnerTitles.length) throw new Error(`manual requirement ${requirement.path}:${requirement.sourceRange} requires non-empty freeze-time runnerTitles input`);
-    manualRows.push({ ...requirement, runnerTitles, authorityText: authorityTextFor(requirement, related) });
+  for (const requirement of manualRequirements) {
+    const related = allRelevantReaders.filter((reader) => readerApplies(requirement, reader));
+    if (!related.length) continue;
+    for (const reader of related.filter((item) => item.kind === "manual")) ownedManualReaders.add(reader);
+    const runnerTitles = requirement.title ? (knownAssignments.get(requirement) ?? []) : (unknownAssignments.get(requirement) ?? []);
+    if (requireRunnerTitles && !runnerTitles.length) throw new Error(`manual requirement ${requirement.path}:${requirement.sourceRange} requires exact freeze-time runner-title reconciliation`);
+    manualRows.push({ ...requirement, manualReason: requirement.reason, runnerTitles, authorityText: authorityTextFor(requirement, related) });
   }
-  for (const reader of manualReaders) {
+  for (const reader of manualReaders.filter((item) => !ownedManualReaders.has(item))) {
     const dependents = declarationInventory.filter((declaration) => readerApplies(declaration, reader));
     const listedTitles = titlesFor(reader.path, runnerTitlesByPath);
     const dependentTitles = new Set(dependents.map((declaration) => declaration.title).filter(Boolean));
     const exactDependentTitles = dependentTitles.size ? listedTitles.filter((title) => dependentTitles.has(title)) : [];
-    const runnerTitles = exactDependentTitles.length ? exactDependentTitles : listedTitles;
-    if (requireRunnerTitles && !runnerTitles.length) throw new Error(`manual reader ${reader.path}:${reader.sourceRange} requires non-empty freeze-time runnerTitles input`);
+    const runnerTitles = exactDependentTitles;
+    if (requireRunnerTitles && runnerTitles.length !== 1) throw new Error(`owner-ambiguous manual reader ${reader.path}:${reader.sourceRange} requires exactly one reconciled freeze-time runner title`);
     manualRows.push({
       path: reader.path,
       sourceRange: reader.sourceRange,
       sourceSlice: reader.sourceSlice,
       sourceOffset: reader.sourceOffset,
       assertionOrdinals: dependents.flatMap((declaration) => declaration.assertionOrdinals).map((_, index) => index + 1),
-      reason: reader.reason,
+      manualReason: reader.reason,
       runnerTitles,
       authorityText: reader.authorityText,
     });
@@ -603,15 +761,16 @@ function deriveObligations(declarationInventory, sourceReaders, runnerTitlesByPa
 }
 
 function draftRow(item, index) {
+  const manual = Boolean(item.manualReason);
   const row = {
     id: `SC-${String(index + 1).padStart(6, "0")}`,
     path: item.path,
-    ...(item.title ? { title: item.title } : { manual: { sourceRange: item.sourceRange, reason: item.reason, runnerTitles: item.runnerTitles } }),
+    ...(!manual && item.title ? { title: item.title } : { manual: { sourceRange: item.sourceRange, reason: item.manualReason, runnerTitles: item.runnerTitles } }),
     sourceHash: sha256(item.sourceSlice),
     assertionCount: item.assertionOrdinals.length,
     ...(item.authorityText ? { authorityHash: sha256(item.authorityText) } : {}),
     lineage: [],
-    invariant: item.title ? "Review this source-contract assertion and preserve its user-observable invariant." : "Review this unsupported source-contract declaration manually.",
+    invariant: !manual && item.title ? "Review this source-contract assertion and preserve its user-observable invariant." : "Review this unsupported source-contract declaration manually.",
     disposition: "behavior",
     replacementIds: [],
   };
@@ -624,7 +783,15 @@ export function buildLedgerDraft({
 } = {}) {
   if (!/^[a-f0-9]{40}$/i.test(frozenAtCommit ?? "")) throw new Error("frozenAtCommit must be a full commit SHA");
   const obligations = deriveObligations(declarationInventory, sourceReaders, runnerTitlesByPath, true);
-  const draft = { schemaVersion: 1, frozenAtCommit, sourceReaderExceptions: [], rows: obligations.map(draftRow) };
+  const sourceReaderExceptions = [];
+  const exceptionKeys = new Set();
+  for (const reader of sourceReaders) {
+    if (!reader.exception) continue;
+    const key = `${reader.exception.path}:${reader.exception.sourceRange}`;
+    if (!exceptionKeys.has(key)) sourceReaderExceptions.push(reader.exception);
+    exceptionKeys.add(key);
+  }
+  const draft = { schemaVersion: 1, frozenAtCommit, sourceReaderExceptions, rows: obligations.map(draftRow) };
   if (outputPath !== undefined) {
     if (!repoRoot) throw new Error("repoRoot is required when writing a ledger draft");
     const artifactRoot = path.resolve(repoRoot, "artifacts");
@@ -757,7 +924,9 @@ export function validateSourceContractLedger(context = {}) {
   }
   const current = new Map();
   for (const obligation of obligations) {
-    const value = obligation.title ? obligation : { ...obligation, manual: { sourceRange: obligation.sourceRange } };
+    const value = obligation.manualReason
+      ? { ...obligation, manual: { sourceRange: obligation.sourceRange } }
+      : obligation;
     const key = declarationIdentity(value);
     if (current.has(key)) issues.push(`duplicate current identity: ${key}`);
     else current.set(key, obligation);
@@ -772,13 +941,16 @@ export function validateSourceContractLedger(context = {}) {
   const ids = new Set();
   const rowsByIdentity = new Map();
   const validRows = [];
+  const invalidRowIds = new Set();
   for (const row of ledger.rows) {
     if (!row || typeof row !== "object" || Array.isArray(row)) {
       issues.push("invalid ledger row");
       continue;
     }
+    const issueCount = issues.length;
     validateRowShape(row, issues);
     if (!/^SC-\d{6}$/.test(row.id ?? "") || ids.has(row.id)) issues.push(`duplicate or invalid ledger id: ${row.id}`);
+    if (issues.length > issueCount) invalidRowIds.add(row.id);
     ids.add(row.id);
     const key = declarationIdentity(row);
     if (rowsByIdentity.has(key)) issues.push(`duplicate current identity: ${key}`);
@@ -796,9 +968,9 @@ export function validateSourceContractLedger(context = {}) {
     if (row.assertionCount !== obligation.assertionOrdinals.length) issues.push(`${row.id}: assertionCount drift`);
     const expectedAuthority = obligation.authorityText ? sha256(obligation.authorityText) : undefined;
     if (row.authorityHash !== expectedAuthority) issues.push(`${row.id}: authorityHash drift`);
-    if (!obligation.title) {
+    if (obligation.manualReason) {
       const expectedTitles = obligation.runnerTitles;
-      if (row.manual?.reason !== obligation.reason || JSON.stringify(row.manual?.runnerTitles) !== JSON.stringify(expectedTitles)) issues.push(`${row.id}: manual requirement drift`);
+      if (row.manual?.reason !== obligation.manualReason || JSON.stringify(row.manual?.runnerTitles) !== JSON.stringify(expectedTitles)) issues.push(`${row.id}: manual requirement drift`);
     }
   }
 
@@ -820,8 +992,8 @@ export function validateSourceContractLedger(context = {}) {
         subgroupClosed.push(validateResolution(row, subgroup, resolutionContext, issues));
       }
       for (let ordinal = 1; ordinal <= row.assertionCount; ordinal++) if (!owned.has(ordinal)) issues.push(`${row.id}: incomplete subgroup assertion ordinals`);
-      resolved = subgroupClosed.length > 0 && subgroupClosed.every(Boolean) && !issues.some((issue) => issue.startsWith(`${row.id}:`));
-    } else resolved = validateResolution(row, row, resolutionContext, issues);
+      resolved = subgroupClosed.length > 0 && subgroupClosed.every(Boolean) && !invalidRowIds.has(row.id) && !issues.some((issue) => issue.startsWith(`${row.id}:`));
+    } else resolved = validateResolution(row, row, resolutionContext, issues) && !invalidRowIds.has(row.id);
     if (!currentRow && !resolved) issues.push(`${row.id}: unresolved historical row`);
     states.push({ id: row.id, state: currentRow ? "open" : resolved ? "closed" : "open" });
   }
@@ -860,6 +1032,51 @@ export function selectVitestTrackedPaths(trackedPaths, runnerTitlesByPath) {
   return [...trackedPaths].map(normalizePath).filter((item) => TEST_FILE.test(item) && listed.has(item)).sort(compareText);
 }
 
+export function createCliGitMetadata(trackedPaths, ignoredPaths = new Set()) {
+  const tracked = new Set([...trackedPaths].map(normalizePath));
+  const ignored = new Set([...ignoredPaths].map(normalizePath));
+  const fixturePaths = [
+    "src-tauri/crates/extractum-analysis/src/test_schema.rs",
+    "src-tauri/src/analysis/test_schema.rs",
+  ];
+  const pathKinds = new Map(fixturePaths.filter((item) => tracked.has(item)).map((item) => [item, "fixture"]));
+  const promptPackEntries = [...tracked]
+    .filter((item) => /^src-tauri\/src\/prompt_packs\/[^/]+\.rs$/.test(item))
+    .sort(compareText);
+  const lowerCrateManifests = [...tracked]
+    .filter((item) => /^src-tauri\/crates\/[^/]+\/Cargo\.toml$/.test(item) && item !== "src-tauri/crates/extractum-analysis/Cargo.toml")
+    .sort(compareText);
+  for (const item of [...promptPackEntries, ...lowerCrateManifests]) pathKinds.set(item, "production");
+  const directoryEntries = new Map([
+    ["src/lib/prompt-pack-application-contract.test.ts:10:29-10:84", promptPackEntries],
+    ["src/lib/analysis-crate-boundary-contract.test.ts:4172:28-4175:6", lowerCrateManifests],
+  ]);
+  const fixtureException = {
+    path: "src/lib/analysis-migration-fixture-contract.test.ts",
+    sourceRange: "14:13-14:74",
+    reason: "test-only migration schema candidates are intentional fixture authorities",
+    owner: "analysis migration fixture contract",
+  };
+  const readerSites = new Map([
+    ["src/lib/analysis-migration-fixture-contract.test.ts:14:13-14:74", {
+      authorities: [
+        { path: "src-tauri/src/migrations.rs", classification: "production" },
+        ...fixturePaths.filter((item) => tracked.has(item)).map((item) => ({ path: item, classification: "fixture" })),
+      ],
+      exception: fixtureException,
+    }],
+    ["src/lib/youtube-summary-smoke-fixture-contract.test.ts:14:30-14:56", {
+      authorities: [
+        "src/lib/api/prompt-packs.ts",
+        "src/lib/components/research-projects/YoutubeSummaryResultView.svelte",
+        "src/lib/components/research-projects/YoutubeSummaryRunDialog.svelte",
+        "src/lib/components/research-projects/YoutubeSummaryRunsPanel.svelte",
+      ].map((item) => ({ path: item, classification: "production" })),
+    }],
+  ]);
+  return { trackedPaths: tracked, ignoredPaths: ignored, pathKinds, directoryEntries, readerSites };
+}
+
 async function main() {
   const outputIndex = process.argv.indexOf("--output");
   if (outputIndex < 0 || !process.argv[outputIndex + 1]) throw new Error("Use --output artifacts/.../source-contract-ledger.draft.json");
@@ -869,7 +1086,7 @@ async function main() {
   const runnerTitlesByPath = collectRunnerTitles(repoRoot);
   const tests = selectVitestTrackedPaths(tracked, runnerTitlesByPath).map((item) => ({ path: item, source: readFileSync(path.join(repoRoot, item), "utf8") }));
   const declarationInventory = discoverTestDeclarations(tests, tsDefault);
-  const sourceReaders = discoverSourceReaders(tests, { trackedPaths: new Set(tracked), ignoredPaths: new Set(ignored), pathKinds: new Map() }, tsDefault);
+  const sourceReaders = discoverSourceReaders(tests, createCliGitMetadata(new Set(tracked), new Set(ignored)), tsDefault);
   const outputPath = process.argv[outputIndex + 1];
   const draft = buildLedgerDraft({
     declarationInventory,
