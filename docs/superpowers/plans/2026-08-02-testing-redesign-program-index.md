@@ -55,12 +55,14 @@ Before writing each next detailed plan:
 - Completed: `docs/superpowers/plans/2026-08-02-testing-redesign-slice-2a-migration-preflight.md`
   at `d533444539c664b2d6834cae9297667a853b1806`; its verification record is
   `docs/superpowers/verification/2026-08-02-testing-redesign-slice-2a-migration-preflight.md`.
+- Completed: `docs/superpowers/plans/2026-08-02-testing-redesign-slice-2b-project-browser-ownership.md`
+  at `4352e0000dacb90495b92392fd17f55e2c4c152f`; its verification record is
+  `docs/superpowers/verification/2026-08-02-testing-redesign-slice-2b-project-browser-ownership.md`.
 
 Slice 1 remains complete at `72a00b38`; its verification record is
 `docs/superpowers/verification/2026-08-02-testing-redesign-slice-1-measurement.md`.
-Slice 2A is the current completed detailed-plan checkpoint: its committed live
-runner census and reviewed source-contract ledger are the only basis from which
-the Slice 2B ownership plan may be authored. After Slice 2B is committed, the
-program still requires the separate disposable Slice 2C Nx decision spike
+Slice 2B is the current completed detailed-plan checkpoint: its five disjoint
+Vitest owners and one Playwright owner retain complete sequential verification.
+The next checkpoint is the separate disposable Slice 2C Nx decision spike
 before Slice 3 planning. Nx remains unselected unless that spike records
 `ADOPT_NX`; no Nx package or configuration is adopted by this checkpoint.

@@ -38,6 +38,19 @@ This avoids renaming or splitting approximately 91 files in Slice 2B. Only the 1
 
 Task 2 may change only `SC-000366` to `delete`: the invariant is now covered through named inert configuration imports in `scripts/testing/test-conventions.test.ts`, not another source reader. It may add no row, path, or obligation.
 
+### Task 5 Frozen Ledger Reconciliation
+
+Task 5 may reconcile only `SC-000508`, `SC-000509`, and `SC-000510` after
+the approved project split moved `svelteTesting()` from `vite.config.js` to the
+component-only Vitest configuration but left the legacy Vite contract asserting
+the former root plugin text. `SC-000508` retains its stable ID, invariant,
+disposition, lineage, and replacement guard; only its exact declaration hash
+changes. `SC-000509` and `SC-000510` retain all semantic fields and update
+only their shifted manual source ranges. This reconciliation creates no row,
+path, or source-reader obligation: the existing raw Vite import remains the
+owner, while the project-boundary convention is guarded by the existing
+non-ledger `scripts/testing/test-conventions.test.ts` module import.
+
 ## Exact Project Partition
 
 `vitest.config.ts` derives these arrays and places them directly in Vitest project `include`/`exclude` fields; there is no parallel classifier:
