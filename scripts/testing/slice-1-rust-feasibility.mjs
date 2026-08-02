@@ -52,10 +52,9 @@ function packageIsExtractum(packageId) {
   return typeof packageId === "string" && /(?:#|\s)extractum(?:@|\s|$)/u.test(packageId);
 }
 
-function isExtractumRootTarget(target) {
+function hasCanonicalExtractumRootShape(target) {
   const crateTypes = ["staticlib", "cdylib", "rlib"];
-  return target?.name === "extractum_lib"
-    && Array.isArray(target.kind)
+  return Array.isArray(target?.kind)
     && target.kind.length === crateTypes.length
     && target.kind.every((kind, index) => kind === crateTypes[index])
     && Array.isArray(target.crate_types)
@@ -89,11 +88,14 @@ export function parseCargoArtifacts(text, expectation) {
       throw new Error("Malformed Cargo JSON artifact output");
     }
   });
-  const artifacts = messages.filter((message) => message?.reason === "compiler-artifact"
+  const candidates = messages.filter((message) => message?.reason === "compiler-artifact"
     && packageIsExtractum(message.package_id)
-    && isExtractumRootTarget(message.target));
-  if (artifacts.length !== 1) throw new Error("Expected exactly one extractum/extractum_lib Cargo artifact");
-  const artifact = artifacts[0];
+    && message.target?.name === "extractum_lib");
+  if (candidates.length !== 1) throw new Error("Expected exactly one extractum/extractum_lib Cargo artifact");
+  const artifact = candidates[0];
+  if (!hasCanonicalExtractumRootShape(artifact.target)) {
+    throw new Error("extractum_lib target.kind and target.crate_types did not match the canonical Cargo 1.95 root shape");
+  }
   if (artifact.fresh !== expectedFresh) throw new Error(`Cargo artifact fresh proof did not equal ${expectedFresh}`);
   if (artifact.profile?.test !== expectedTestProfile) throw new Error(`Cargo artifact profile.test did not equal ${expectedTestProfile}`);
   const executable = artifact.executable == null

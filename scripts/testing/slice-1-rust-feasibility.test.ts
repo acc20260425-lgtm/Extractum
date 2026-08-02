@@ -146,10 +146,9 @@ describe("slice one Rust feasibility proof parsers", () => {
       expectedTestProfile: false,
     })).toMatchObject({ package: "extractum", target: "extractum_lib", fresh: false, testProfile: false });
 
-    for (const legacySyntheticShape of [
-      cargoArtifact({ fresh: false, test: false, kind: ["lib"] }),
-      cargoArtifact({ fresh: false, test: false, crateTypes: ["lib"] }),
-    ]) {
+    const malformedKindShape = cargoArtifact({ fresh: false, test: false, kind: ["lib"] });
+    const malformedCrateTypesShape = cargoArtifact({ fresh: false, test: false, crateTypes: ["lib"] });
+    for (const legacySyntheticShape of [malformedKindShape, malformedCrateTypesShape]) {
       expect(() => parseCargoArtifacts(legacySyntheticShape, {
         repoRoot,
         expectedFresh: false,
@@ -157,6 +156,11 @@ describe("slice one Rust feasibility proof parsers", () => {
       })).toThrow(/extractum_lib/i);
     }
     expect(() => parseCargoArtifacts(`${actualCargo195Shape}${actualCargo195Shape}`, {
+      repoRoot,
+      expectedFresh: false,
+      expectedTestProfile: false,
+    })).toThrow(/exactly one/i);
+    expect(() => parseCargoArtifacts(`${actualCargo195Shape}${malformedKindShape}`, {
       repoRoot,
       expectedFresh: false,
       expectedTestProfile: false,
