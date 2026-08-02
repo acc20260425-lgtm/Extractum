@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { spawn as realSpawn } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -284,8 +285,17 @@ describe("runObservedCommand", () => {
     expect(child.kill).toHaveBeenCalledWith("SIGKILL");
   });
 
-  it("does not leak a real observed child when the injected termination proof fails closed", async () => {
+  it("waits for the real observed child identity to close when tree proof fails closed", async () => {
     const controller = new AbortController();
+    let observedChild: ReturnType<typeof realSpawn> | undefined;
+    let exitObserved = false;
+    let closeObserved = false;
+    const spawn = vi.fn((...args: Parameters<typeof realSpawn>) => {
+      observedChild = realSpawn(...args);
+      observedChild.once("exit", () => { exitObserved = true; });
+      observedChild.once("close", () => { closeObserved = true; });
+      return observedChild;
+    });
     const terminateProcessTree = vi.fn(async ({ child: observedChild }) => {
       observedChild.kill("SIGTERM");
       return { confirmed: false, failure: "injected proof failure" };
@@ -296,15 +306,20 @@ describe("runObservedCommand", () => {
       cwd: process.cwd(),
       capture: true,
       signal: controller.signal,
-      dependencies: dependencies({ spawn: undefined, terminateProcessTree }),
+      dependencies: dependencies({ spawn, terminateProcessTree }),
     });
     setTimeout(() => controller.abort("SIGTERM"), 150);
 
     const result = await observation;
-    expect(result).toMatchObject({ exitCode: 3, cancellationConfirmed: false });
-    const childPid = Number(result.stdout.trim());
-    expect(Number.isInteger(childPid)).toBe(true);
-    expect(processIsAlive(childPid)).toBe(false);
+    expect(result).toMatchObject({
+      exitCode: 3,
+      cancellationConfirmed: false,
+      cancellation: { command: { closeObserved: true } },
+    });
+    expect(observedChild).toBeDefined();
+    expect(exitObserved).toBe(true);
+    expect(closeObserved).toBe(true);
+    expect(observedChild!.exitCode !== null || observedChild!.signalCode !== null).toBe(true);
   }, 5_000);
 
   it("uses a detached process group and bounded group proof on non-Windows", async () => {
