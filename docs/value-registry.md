@@ -964,6 +964,20 @@ configuration to remain in main by themselves.
 | `ADOPT_NX` | tooling decision | The disposable spike satisfied every adoption condition and authorizes a follow-up specification amendment before Slice 3. | Slice 2C evidence | terminal | yes | Markdown evidence only; none | testing redesign program |
 | `REJECT_NX` | tooling decision | The spike failed, was incomplete, or did not reduce orchestration complexity; original Slice 3–5 architecture continues. | Slice 2C evidence | terminal | yes | Markdown evidence only; none | testing redesign program |
 
+## Source-contract migration ledger dispositions
+
+These tooling-only values classify a reviewed source-contract migration row.
+They are persisted only in the checked-in migration ledger. They have no
+product, database, API, UI, or fixture impact, and leave the active workflow
+when the completed ledger becomes historical evidence.
+
+| Value | Type | Meaning | Owner | Persistence/API/UI impact | Current usage |
+| --- | --- | --- | --- | --- | --- |
+| `behavior` | ledger disposition | Preserve the invariant with behavior-level replacement evidence. | testing migration ledger | Checked-in ledger only; none elsewhere. | source-contract migration |
+| `architecture` | ledger disposition | Preserve the invariant with an architecture rule or boundary check. | testing migration ledger | Checked-in ledger only; none elsewhere. | source-contract migration |
+| `tool_owned` | ledger disposition | Preserve the invariant through a named, owned tooling rule. | testing migration ledger | Checked-in ledger only; none elsewhere. | source-contract migration |
+| `delete` | ledger disposition | Retire an assertion only with its exact, reviewed deletion reason. | testing migration ledger | Checked-in ledger only; none elsewhere. | source-contract migration |
+
 ## Process-shell diagnostic artifact classifications
 
 Representative source:

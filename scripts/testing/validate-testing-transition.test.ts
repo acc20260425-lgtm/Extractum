@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import path from "node:path";
+import { createHash } from "node:crypto";
+import ts from "typescript";
+
+import {
+  buildLedgerDraft,
+  discoverSourceReaders,
+  discoverTestDeclarations,
+  validateSourceContractLedger,
+} from "./extract-source-contract-ledger.mjs";
 
 import {
   collectPlaywrightFiles,
@@ -194,5 +203,90 @@ describe("transition carrier", () => {
     expect(result.exitCode).toBe(1);
     expect(stderr.write).toHaveBeenCalledWith("second issue\n");
     expect(stdout.write).toHaveBeenCalledWith(expect.stringContaining("Runner census:"));
+  });
+});
+
+describe("bounded source-contract ledger", () => {
+  const sourceFiles = [{
+    path: "src/example-contract.test.ts",
+    source: [
+      'import source from "./example.ts?raw";',
+      'const cases = [["one", 1]] as const;',
+      'describe("outer", () => {',
+      '  it.each(cases)("case %s", (_name, value) => { expect(value).toBe(1); });',
+      '  it("ordinary", () => expect(source).toContain("export"));',
+      '});',
+    ].join("\r\n"),
+  }];
+
+  it("discovers static nested titles, .each authority, assertions, and normalized slices", () => {
+    const declarations = discoverTestDeclarations(sourceFiles, ts);
+    expect(declarations).toHaveLength(2);
+    expect(declarations.map((entry: any) => entry.title)).toEqual(["outer > case %s", "outer > ordinary"]);
+    expect(declarations[0]).toMatchObject({ assertionOrdinals: [1], eachAuthorityText: 'const cases = [["one", 1]] as const;' });
+    expect(declarations[1].sourceSlice).not.toContain("\r");
+    expect(declarations[1].referencedSymbols).toContain("source");
+  });
+
+  it("discovers only tracked raw-source readers and bounded manual requirements", () => {
+    const readers = discoverSourceReaders(sourceFiles, new Set(["src/example.ts", "src/fixture.txt"]), ts);
+    expect(readers).toMatchObject([{ path: "src/example-contract.test.ts", authorityPath: "src/example.ts", kind: "raw-import" }]);
+
+    const dynamic = discoverTestDeclarations([{ path: "src/dynamic.test.ts", source: 'it(makeTitle(), () => expect(1).toBe(1));' }], ts);
+    expect(dynamic.manualRequirements).toEqual([expect.objectContaining({ path: "src/dynamic.test.ts", reason: "computed test title" })]);
+  });
+
+  it("expands only tracked raw import.meta.glob authorities", () => {
+    const readers = discoverSourceReaders([{
+      path: "src/glob-contract.test.ts",
+      source: 'const modules = import.meta.glob("./components/*.svelte", { query: "?raw" });\nit("keeps component source", () => expect(modules).toBeDefined());',
+    }], new Set(["src/components/One.svelte", "src/components/Two.svelte", "src/components/skip.ts"]), ts);
+    expect(readers.map((reader: any) => reader.authorityPath)).toEqual(["src/components/One.svelte", "src/components/Two.svelte"]);
+    expect(readers[0].symbolNames).toContain("modules");
+  });
+
+  it("creates deterministic LF-normalized draft IDs only for an explicit output artifact", () => {
+    const declarations = discoverTestDeclarations(sourceFiles, ts);
+    const draft = buildLedgerDraft({ declarations: [...declarations].reverse(), frozenAtCommit: "a".repeat(40) });
+    expect(draft.rows.map((row: any) => row.id)).toEqual(["SC-000001", "SC-000002"]);
+    expect(draft.rows[1].sourceHash).toBe(createHash("sha256").update(declarations[1].sourceSlice).digest("hex"));
+    expect(draft.rows[0].invariant).toContain("Review");
+  });
+
+  it("validates bidirectional rows, resolution syntax, and derived open state", () => {
+    const declaration = discoverTestDeclarations(sourceFiles, ts)[1];
+    const row = {
+      id: "SC-000001",
+      path: declaration.path,
+      title: declaration.title,
+      sourceHash: createHash("sha256").update(declaration.sourceSlice).digest("hex"),
+      assertionCount: declaration.assertionOrdinals.length,
+      lineage: [],
+      invariant: "Source contents remain covered by behavior.",
+      disposition: "behavior",
+      replacementIds: ["test:vitest:src/example-contract.test.ts#outer > ordinary"],
+    };
+    const ledger = { schemaVersion: 1, frozenAtCommit: "b".repeat(40), sourceReaderExceptions: [], rows: [row] };
+    const result = validateSourceContractLedger({ ledger, declarations: [declaration], sourceReaders: [{ path: declaration.path, sourceRange: "1:1-1:2" }], liveCensus: { vitestOwners: [{ id: "vitest:root", ownerScript: "test" }] }, verifySteps: [{ npmScript: "test" }] });
+    expect(result.issues).toEqual([]);
+    expect(result.rows).toEqual([expect.objectContaining({ id: "SC-000001", state: "open" })]);
+  });
+
+  it("rejects lifecycle fields, invalid subgroup coverage, and unresolved absent rows", () => {
+    const ledger = {
+      schemaVersion: 1,
+      frozenAtCommit: "c".repeat(40),
+      sourceReaderExceptions: [],
+      rows: [{
+        id: "SC-000001", path: "src/old.test.ts", title: "old", sourceHash: "a".repeat(64), assertionCount: 2, lineage: [], invariant: "mixed",
+        status: "pending", subgroups: [{ assertionOrdinals: [1, 1], invariant: "dup", disposition: "behavior", replacementIds: ["test:playwright:x#y"] }],
+      }],
+    };
+    const result = validateSourceContractLedger({ ledger, declarations: [], sourceReaders: [], liveCensus: { vitestOwners: [] }, verifySteps: [] });
+    expect(result.issues).toEqual(expect.arrayContaining([
+      expect.stringContaining("stored lifecycle field"),
+      expect.stringContaining("overlapping subgroup assertion ordinal"),
+      expect.stringContaining("unresolved historical row"),
+    ]));
   });
 });
