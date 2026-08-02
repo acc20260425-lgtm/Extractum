@@ -181,7 +181,7 @@ export async function collectPlaywrightFiles(owner, { repoRoot, runCommand = run
     try {
       const report = JSON.parse(stdout);
       if (!Array.isArray(report.suites)) return { issue: "malformed Playwright JSON" };
-      if (Array.isArray(report.errors) && report.errors.length) return { issue: "Playwright errors are not empty" };
+      if ("errors" in report && (!Array.isArray(report.errors) || report.errors.length)) return { issue: "Playwright errors are not empty" };
       const rawFiles = [];
       for (const suite of report.suites) walkPlaywright(suite, rawFiles);
       const configRoot = playwrightRootDir(repoRoot, owner.config);
@@ -194,6 +194,11 @@ export function validateRunnerCensus({ census, filesystemFiles = [], vitestFiles
   const issues = [...validateCensusSchema(census), ...runnerIssues];
   if (!census || !Array.isArray(census.vitestOwners) || !Array.isArray(census.playwrightOwners)
     || !Array.isArray(census.nonstandardTests) || !Array.isArray(census.fixtureExceptions)) return [...new Set(issues)].sort();
+  const malformedException = [...census.nonstandardTests, ...census.fixtureExceptions].some((entry) =>
+    !entry || typeof entry !== "object" || Array.isArray(entry)
+    || ["path", "reason", "owner"].some((field) => typeof entry[field] !== "string" || !entry[field].trim()),
+  );
+  if (malformedException) return [...new Set(issues)].sort();
   const candidates = new Set(filesystemFiles);
   const allOwners = [...census.vitestOwners, ...census.playwrightOwners];
   const byOwner = new Map(allOwners.map((owner) => [owner.id, [...(vitestFiles[owner.id] ?? playwrightFiles[owner.id] ?? [])]]));

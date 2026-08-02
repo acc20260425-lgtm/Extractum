@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import path from "node:path";
 
 import {
+  collectPlaywrightFiles,
+  collectVitestFiles,
+  discoverFilesystemCandidates,
+  normalizeRepoPath,
   runTransitionValidation,
+  validateCensusSchema,
   validateRunnerCensus,
 } from "./testing-transition.mjs";
 
@@ -87,6 +92,75 @@ describe("runner census validation", () => {
       "invalid fixture exception path: src/*.test.ts",
       "stale fixture exception: src/stale.test.ts",
     ]));
+  });
+
+  it.each([null, "not-an-entry", { path: "src/a.test.ts" }])("returns schema issues for malformed nonstandard exceptions: %j", (entry) => {
+    expect(() => validateRunnerCensus(check({
+      census: { ...census, nonstandardTests: [entry] },
+    }))).not.toThrow();
+    expect(validateRunnerCensus(check({ census: { ...census, nonstandardTests: [entry] } }))).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^invalid nonstandard exception/)]),
+    );
+  });
+
+  it("reports unknown census and exception fields", () => {
+    expect(validateCensusSchema({ ...census, unexpected: true })).toEqual(["unknown runner census field: unexpected"]);
+    expect(validateRunnerCensus(check({
+      census: { ...census, fixtureExceptions: [{ path: "src/a.test.ts", reason: "fixture", owner: "fixture", extra: true }] },
+    }))).toEqual(expect.arrayContaining(["unknown fixture exception field: extra"]));
+  });
+});
+
+describe("filesystem and runner collection", () => {
+  const stats = ({ file = true, symlink = false } = {}) => ({ isFile: () => file, isSymbolicLink: () => symlink });
+
+  it("discovers only existing candidate files from the required nul-delimited Git command", async () => {
+    const runGit = vi.fn(async () => ({ exitCode: 0, stdout: "src/a.test.ts\0src/b.spec.mtsx\0src/readme.ts\0deleted.test.ts\0" }));
+    const found = await discoverFilesystemCandidates(root, runGit, (candidate) => {
+      if (candidate.endsWith("deleted.test.ts")) {
+        const error = new Error("missing") as NodeJS.ErrnoException;
+        error.code = "ENOENT";
+        throw error;
+      }
+      return stats();
+    });
+    expect(runGit).toHaveBeenCalledWith(["ls-files", "--cached", "--others", "--exclude-standard", "-z"], root);
+    expect(found).toEqual({ files: ["src/a.test.ts", "src/b.spec.mtsx"], issues: [] });
+  });
+
+  it("reports Git failure and supported symlink candidates instead of silently omitting them", async () => {
+    await expect(discoverFilesystemCandidates(root, async () => ({ exitCode: 2, stdout: "" }))).resolves.toEqual({ files: [], issues: ["git ls-files failed"] });
+    await expect(discoverFilesystemCandidates(root, async () => ({ exitCode: 0, stdout: "src/link.test.ts\0" }), () => stats({ file: false, symlink: true })))
+      .resolves.toEqual({ files: [], issues: ["unsupported candidate symlink: src/link.test.ts"] });
+  });
+
+  it("normalizes Windows and repository-relative paths while rejecting escapes", () => {
+    expect(normalizeRepoPath("C:\\repo", "C:\\repo\\src\\a.test.ts")).toEqual({ path: "src/a.test.ts" });
+    expect(normalizeRepoPath(root, "/outside/a.test.ts")).toEqual({ issue: "repository escape: /outside/a.test.ts" });
+    expect(normalizeRepoPath(root, "../outside/a.test.ts")).toEqual({ issue: "repository escape: ../outside/a.test.ts" });
+  });
+
+  it("collects Vitest paths and reports non-zero and spawn errors", async () => {
+    const owner = census.vitestOwners[0];
+    const good = await collectVitestFiles(owner, { repoRoot: root, runCommand: vi.fn(async () => ({ exitCode: 0, stdout: "src/a.test.ts\r\nsrc/b.spec.ts\n" })) });
+    expect(good.files).toEqual(["src/a.test.ts", "src/b.spec.ts"]);
+    await expect(collectVitestFiles(owner, { repoRoot: root, runCommand: async () => ({ exitCode: 1, stdout: "", error: new Error("spawn") }) }))
+      .resolves.toMatchObject({ issues: ["runner spawn error: vitest:root: spawn", "runner failed: vitest:root"] });
+  });
+
+  it("parses Playwright suites and rejects malformed JSON and any errors value", async () => {
+    const owner = { ...census.playwrightOwners[0], config: "research/gemini_browser_adapter/playwright.config.ts" };
+    const invoke = async (stdout: string) => collectPlaywrightFiles(owner, {
+      repoRoot: process.cwd(),
+      resolveCli: () => "playwright-cli.mjs",
+      runCommand: async () => ({ exitCode: 0, stdout }),
+    });
+    await expect(invoke(JSON.stringify({ suites: [{ suites: [{ file: "nested.spec.ts", specs: [] }], specs: [{ file: "root.spec.ts" }] }] })))
+      .resolves.toMatchObject({ files: ["research/gemini_browser_adapter/tests/nested.spec.ts", "research/gemini_browser_adapter/tests/root.spec.ts"], issues: [] });
+    await expect(invoke(JSON.stringify({ suites: [], errors: [] }))).resolves.toMatchObject({ files: [], issues: [] });
+    await expect(invoke("not-json")).resolves.toMatchObject({ issues: ["playwright:adapter: malformed Playwright JSON"] });
+    await expect(invoke(JSON.stringify({ suites: [], errors: { message: "bad" } }))).resolves.toMatchObject({ issues: ["playwright:adapter: Playwright errors are not empty"] });
+    await expect(invoke(JSON.stringify({ suites: [], errors: ["bad"] }))).resolves.toMatchObject({ issues: ["playwright:adapter: Playwright errors are not empty"] });
   });
 });
 
