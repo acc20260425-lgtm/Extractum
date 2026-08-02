@@ -23,6 +23,19 @@ Rust check/tests, and `git diff HEAD --check`. It is a baseline local gate; CI,
 Rust lint policy, and broader live Telegram/LLM event-flow validation remain
 separate stabilization work.
 
+Before the first `verify` in a fresh checkout or worktree, and after changing
+sidecar packaging, bootstrap its ignored Gemini Browser sidecar binary:
+
+```powershell
+npm ci
+npm.cmd run bootstrap:testing
+npm.cmd run verify
+```
+
+`bootstrap:testing` may download the `pkg` runtime cache. `verify` only
+inspects this prerequisite; it never builds the sidecar automatically. Release
+builds remain separate: `tauri build` invokes `build:tauri-prereqs`.
+
 <!-- daily-development-loop -->
 For the daily loop after a small change, choose the narrowest applicable command:
 

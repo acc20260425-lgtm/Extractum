@@ -15,6 +15,7 @@
     "gemini-browser-sidecar": "node sidecars/gemini-browser/dist/index.js",
     "build:gemini-browser-sidecar": "node scripts/build-gemini-browser-sidecar.mjs",
     "check:gemini-browser-sidecar-binary": "node scripts/check-gemini-browser-sidecar-binary.mjs",
+    "bootstrap:testing": "npm run build:gemini-browser-sidecar && npm run check:gemini-browser-sidecar-binary",
     "build:tauri-prereqs": "npm run build && npm run build:gemini-browser-sidecar && npm run check:gemini-browser-sidecar-binary",
     "smoke:gemini-browser-sidecar:node": "node scripts/gemini-browser-sidecar-smoke.mjs",
     "smoke:gemini-browser-sidecar:binary": "node scripts/gemini-browser-sidecar-smoke.mjs --binary",

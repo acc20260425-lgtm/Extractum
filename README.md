@@ -223,6 +223,18 @@ For Browser Provider troubleshooting, especially Gemini DOM drift, see
 
 The Gemini Browser Provider uses a TypeScript/Playwright sidecar. Development
 runs can launch `sidecars/gemini-browser/dist/index.js` through local Node.
+Before running verification in a fresh checkout or worktree, and after sidecar
+packaging changes, bootstrap the ignored sidecar binary explicitly:
+
+```powershell
+npm ci
+npm.cmd run bootstrap:testing
+npm.cmd run verify
+```
+
+The bootstrap may download the `pkg` runtime cache. `verify` only inspects the
+sidecar prerequisite and never builds it.
+
 Release builds must first create the Tauri external sidecar binary:
 
 ```powershell

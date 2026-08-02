@@ -22,6 +22,11 @@
   - the most recent linear checkpoint: `npm.cmd run test:changed:last`;
   - a known frontend source: `npm.cmd run test:related -- <forward-or-backslash-path>`;
   - broad Svelte/TypeScript work: also run `npm.cmd run check`.
+- In a fresh checkout or worktree, and after sidecar-packaging changes, run
+  `npm.cmd run bootstrap:testing` before `npm.cmd run verify`. The bootstrap
+  may download the `pkg` runtime cache; `verify` only checks the sidecar
+  prerequisite and never builds it. Release `tauri build` still runs
+  `build:tauri-prereqs`.
 
 <!-- focused-rust-loop -->
 - Every implementation plan that changes Rust must include a `## Rust Verification Loops` section naming affected packages, narrow RED/GREEN tests, focused checks, package checkpoints, and end-of-slice workspace gates.
