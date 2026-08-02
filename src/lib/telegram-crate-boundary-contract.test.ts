@@ -6591,6 +6591,17 @@ describe("Phase 8 Telegram crate boundary", () => {
       phase8BCheckpointNumber("8a-retained"),
     ).toBeUndefined();
   });
+  it("pins immutable Telegram authority artifacts to LF", () => {
+    const attributes = readFileSync(path.join(repoRoot, ".gitattributes"), "utf8");
+    for (const line of [
+      "src/lib/telegram-grammers-feature-baseline.json text eol=lf",
+      "src/lib/telegram-8b-test-identities.json text eol=lf",
+      "src/lib/telegram-8b-symbol-map.json text eol=lf",
+    ]) {
+      expect(attributes).toContain(line);
+    }
+  });
+
 });
 
 describe("Phase 8B generated structural authority", () => {
