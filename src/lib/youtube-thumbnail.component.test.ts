@@ -11,6 +11,8 @@ import {
   resolveYoutubeThumbnail,
 } from "./youtube-thumbnail";
 
+afterEach(cleanup);
+
 let observers: TestIntersectionObserver[] = [];
 
 class TestIntersectionObserver {

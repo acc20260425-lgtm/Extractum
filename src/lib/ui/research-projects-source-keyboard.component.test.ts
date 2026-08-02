@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { cleanup } from "@testing-library/svelte";
 import {
   isSourceKeyboardEditableTarget,
   sourceGridRowIdsFromElement,
   sourceKeyboardCommand,
 } from "./research-projects-source-keyboard";
+
+afterEach(cleanup);
 
 describe("research project source keyboard navigation", () => {
   const orderedSourceIds = ["10", "20", "30"];
