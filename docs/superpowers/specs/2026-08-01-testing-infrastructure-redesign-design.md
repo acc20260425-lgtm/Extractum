@@ -4,8 +4,9 @@
 
 The design was approved on 2026-08-01, revised after written review, simplified
 by user decision on 2026-08-02, and refined after a second written review on
-the same date. This revision must be reviewed by the user before implementation
-planning begins.
+the same date. It was amended on 2026-08-02 to add the user-approved disposable
+Slice 2C Nx decision gate. This amendment must be reviewed by the user before
+its implementation plan is written.
 
 ## Executive Summary
 
@@ -135,8 +136,9 @@ warning.
    and critical browser surfaces in verify.
 8. Use a fixed scheduler that is easy to understand and debug.
 9. Keep timing data minimal and independent of correctness.
-10. Keep commands and ownership rules understandable without a general-purpose
-    monorepo build system.
+10. Keep public commands and ownership rules understandable without requiring
+    developers to understand a general-purpose monorepo build system. Nx may
+    be considered only by the disposable Slice 2C decision gate below.
 
 ## Non-Goals
 
@@ -149,8 +151,14 @@ warning.
 - Do not predict duration from a resource-constrained critical-path model.
 - Do not encode numeric CPU or memory claims in test orchestration.
 - Do not require startup microbenchmarks for every Vitest project.
-- Do not adopt Nx, Turborepo, another general-purpose build graph, remote
-  execution, or build-artifact caching.
+- Do not adopt Nx, Turborepo, or another general-purpose build graph by
+  default. The only exception is the one-day disposable Nx spike after Slice
+  2B; it changes architecture only through an explicit ADOPT_NX decision and
+  follow-up specification amendment.
+- Do not add Nx Cloud, remote execution, remote caching, or automatic uploads
+  to an external service.
+- Do not add Allure, Allure TestOps, or report-history storage without a
+  separate approved reporting/retention use case.
 - Do not introduce Testcontainers or Docker for the SQLite-owned backend.
 - Do not add Mockall where existing narrow Rust traits and handwritten fakes
   already provide adequate seams.
@@ -881,7 +889,9 @@ explicit diagnostic rather than a silent success.
 | @vitest/coverage-v8 | Adopt | Explicit coverage outside daily feedback |
 | cargo-nextest | Small A/B experiment only | May improve reporting or isolation, but can add process cost |
 | sccache | Small A/B experiment only | May improve compilation but does not fix harness or linking cost |
-| Nx or Turborepo | Do not adopt | The project does not need a second general build graph |
+| Allure | Do not adopt in this program | No approved report-history owner, retention location, or blocking use case |
+| Nx | One-day disposable decision spike after Slice 2B | Not selected by default; adoption requires evidence against the approved TestingManifest architecture |
+| Turborepo or another general build graph | Do not adopt | No second orchestration experiment is authorized |
 | Testcontainers | Do not adopt | Production storage is embedded SQLite |
 | Mockall | Do not adopt globally | Existing narrow traits and fakes are adequate |
 | Global retries | Prohibited | They hide lifecycle and flake defects |
@@ -889,6 +899,69 @@ explicit diagnostic rather than a silent success.
 Optional A/B experiments use five paired runs, unchanged inventory, and a
 manual maintenance-cost decision. They do not create automated adoption
 thresholds or performance states.
+
+### Disposable Nx decision gate
+
+After Slice 2B is committed and before Slice 3 begins, create a separate
+disposable worktree for a one-working-day Nx spike. Nx is not selected
+architecture before that gate. Slice 2A and Slice 2B do not add Nx packages,
+configuration, targets, cache, or public commands.
+
+The spike compares Nx with the approved TestingManifest and fixed-scheduler
+architecture in five areas:
+
+1. affected selection against the committed Slice 2B runner census, project
+   ownership, and source-contract ledger;
+2. cold startup overhead through five paired cache-disabled invocations after
+   one disclosed warm-up;
+3. the approved parallelism rules: at most two ordinary commands, Cargo alone,
+   and no browser/OS overlap;
+4. Windows interruption, failure, descendant cleanup, and exit-code safety;
+5. configuration and maintenance volume, including any custom policy layer Nx
+   still requires.
+
+The affected-selection oracle is spike-only. It enumerates representative
+changed paths from every Slice 2B owner plus exact ledger/exception cases and
+compares Nx's selected owner set with the owner set required by the approved
+TestingManifest rules. It does not pull the production TestingManifest or
+Slice 4 selector into Slice 2C. Any false negative is disqualifying. An empty
+selection is reported as no work and is never treated as correctness evidence.
+False positives are listed explicitly; selecting the full owner set for every
+representative single-owner change is not useful affected selection and
+produces REJECT_NX.
+
+The cold-start comparison uses a no-op owner fixture so the result measures Nx
+selection/orchestration overhead rather than test duration. ADOPT_NX requires
+median added cold overhead no greater than 500 ms across the five retained
+pairs. These numbers exist only in the decision evidence; they do not enter the
+daily timing log, eligibility state, or a reusable benchmark system.
+
+Nx must preserve current public command names through npm wrappers, require no
+Nx Cloud or remote service, and run the spike with local and remote task cache
+disabled. Cache behavior is not part of this adoption decision. Performance
+commands remain cache-disabled even if a later separately reviewed change
+enables local cache for deterministic correctness gates.
+
+The decision is exactly ADOPT_NX or REJECT_NX. Missing evidence, an unfinished
+spike at the one-day boundary, any affected-selection false negative, failure
+to preserve correctness exits/process cleanup, or a required custom scheduler
+of comparable complexity produces REJECT_NX.
+
+The Markdown evidence records the Slice 2B base commit, OS/Node/Nx versions,
+the affected-path matrix and selected owners, all five paired startup values
+and median delta, parallelism/process-safety outcomes, configuration file count
+and non-lockfile line count, any custom policy code required, the exact
+decision, and proof that main has no Nx dependency or configuration. Raw logs
+remain under the disposable worktree's ignored artifacts and are deleted with
+that worktree. The spike never appends to the daily five-field timing log.
+
+The disposable worktree and all Nx packages/configuration are removed after
+either decision. Main receives only the Markdown decision/evidence record from
+the spike. REJECT_NX sends Slice 3 through Slice 5 down the
+original TestingManifest and fixed-scheduler design. ADOPT_NX authorizes a
+small follow-up specification amendment and implementation plan before Slice
+3; it does not itself merge the spike configuration or silently rewrite later
+slices.
 
 New packages must be compatible with the locked Node and runner versions and
 must be recorded in package-lock.json. Optional tools are not installed
@@ -948,6 +1021,18 @@ No mandatory per-project startup benchmark is added.
 Introduce the targeted chromium-lifecycle mode of verify:stability and close
 the slice only after twenty consecutive no-retry executions pass without a
 lifecycle timeout or leaked browser/server process.
+
+### Slice 2C: Disposable Nx decision gate
+
+Run the one-day spike defined under Third-Party Tool Decisions in a separate
+worktree. Do not modify the Slice 2B checkpoint in place. Commit only an
+ADOPT_NX or REJECT_NX Markdown decision/evidence record; delete the worktree
+and all experimental Nx configuration afterward.
+
+REJECT_NX proceeds directly to the existing Slice 3 plan boundary. ADOPT_NX
+blocks Slice 3 plan authoring until a narrowly scoped follow-up amendment says
+which later orchestration tasks Nx replaces, which npm wrappers remain public,
+and how the existing scheduler/process-safety contracts are preserved.
 
 ### Slice 3: Source-contract replacement
 
@@ -1152,9 +1237,15 @@ test. The normal dependency edge remains feature-free.
     process.
 21. Every skipped or quarantined test has a non-expired owned entry, and verify
     rejects every expired dependency-cruiser or Knip baseline entry.
-22. New third-party tooling is locked, compatible with the repository
-    toolchain, and does not add a general-purpose build graph.
-23. AGENTS.md, docs/project.md, docs/value-registry.md, package scripts, and the
+22. New third-party tooling is locked and compatible with the repository
+    toolchain. No general-purpose build graph reaches main without a committed
+    ADOPT_NX decision and the required follow-up specification amendment.
+23. Slice 2C finishes within one working day, commits only ADOPT_NX or
+    REJECT_NX evidence, leaves no Nx package/configuration in main, and treats
+    false-negative selection, unsafe Windows cleanup/exits, excessive startup
+    overhead, missing evidence, or comparable custom-scheduler complexity as
+    REJECT_NX.
+24. AGENTS.md, docs/project.md, docs/value-registry.md, package scripts, and the
     implemented command behavior agree; AGENTS.md handles DEFERRED_ONLY by
     running every printed owner command.
 
@@ -1180,6 +1271,13 @@ The fixed scheduler may leave some safe parallelism unused. It is preferred to
 a resource model whose claims, locks, fingerprints, and critical-path math
 would need continuous maintenance.
 
+The disposable Nx spike spends one working day and five paired startup
+observations without guaranteeing adoption. This cost is accepted because the
+worktree is deleted, the daily timing system remains unchanged, and an
+inconclusive result deterministically rejects Nx. If Nx is adopted, the added
+general build graph is an explicit maintenance risk that must be justified
+again in the follow-up amendment before any configuration reaches main.
+
 Because this design omits CI and Git hooks, nothing repository-owned prevents a
 human from merging without running verify. Documentation and agent workflow
 make it mandatory in process but cannot enforce it.
@@ -1196,5 +1294,6 @@ the mitigation. TestingManifest must not grow into a build graph in response.
 - Playwright trace viewer: https://playwright.dev/docs/trace-viewer
 - dependency-cruiser rules: https://github.com/sverweij/dependency-cruiser/blob/main/doc/rules-reference.md
 - Knip configuration: https://knip.dev/reference/configuration
+- Nx affected tasks, caching, and parallelism: https://nx.dev/
 - cargo-nextest: https://nexte.st/
 - sccache: https://github.com/mozilla/sccache

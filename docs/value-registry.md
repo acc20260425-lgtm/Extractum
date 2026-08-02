@@ -952,6 +952,18 @@ Use this checklist whenever a change introduces or renames a `status`, `state`, 
 
 Recommended review phrase: `Value registry checked: owner, persistence, API mirror, UI display, fixtures.`
 
+## Testing tooling decision evidence
+
+These values exist only as the terminal heading/value in the committed Slice
+2C Markdown evidence. They are not runtime states, are not stored in the
+database, are not exposed through an API or UI, and do not authorize Nx
+configuration to remain in main by themselves.
+
+| Value | Type | Meaning | Source of truth | Lifecycle | Stable? | Persistence/API/UI impact | Current usage |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `ADOPT_NX` | tooling decision | The disposable spike satisfied every adoption condition and authorizes a follow-up specification amendment before Slice 3. | Slice 2C evidence | terminal | yes | Markdown evidence only; none | testing redesign program |
+| `REJECT_NX` | tooling decision | The spike failed, was incomplete, or did not reduce orchestration complexity; original Slice 3–5 architecture continues. | Slice 2C evidence | terminal | yes | Markdown evidence only; none | testing redesign program |
+
 ## Process-shell diagnostic artifact classifications
 
 Representative source:

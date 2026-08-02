@@ -4,9 +4,9 @@
 
 **Goal:** Deliver the approved testing-infrastructure redesign as evidence-gated slices without making later plans depend on guessed inventories or guessed Rust performance.
 
-**Architecture:** Keep the approved specification as the single behavioral contract. Write and execute one detailed slice plan at a time; each slice commits its implementation and verification evidence before the next plan fixes file-level work. Slice 1 supplies the Rust fast-versus-slow decision, while Slice 2A supplies the census and source-contract ledger that make the migration plans concrete.
+**Architecture:** Keep the approved specification as the single behavioral contract. Write and execute one detailed slice plan at a time; each slice commits its implementation and verification evidence before the next plan fixes file-level work. Slice 1 supplies the Rust fast-versus-slow decision, Slice 2A supplies the census and source-contract ledger, and disposable Slice 2C decides whether Nx merits a separate integration amendment before source-contract migration begins.
 
-**Tech Stack:** Node.js ESM, TypeScript, Vitest 4.1.5, SvelteKit 2, Playwright 1.61, Cargo/Rust 2021, Windows PowerShell, dependency-cruiser, Knip, V8 coverage.
+**Tech Stack:** Node.js ESM, TypeScript, Vitest 4.1.5, SvelteKit 2, Playwright 1.61, Cargo/Rust 2021, Windows PowerShell, dependency-cruiser, Knip, V8 coverage, and an optional disposable Nx spike.
 
 ## Global Constraints
 
@@ -16,6 +16,9 @@
 - Use `npm.cmd`, not plain `npm`, for repository scripts on Windows.
 - Use only canonical `src-tauri/target`; never create a slice-specific Cargo target.
 - Preserve full `verify` coverage until the replacement scheduler proves equivalent coverage.
+- Nx is not selected by default. Only Slice 2C may install it, only in a
+  disposable worktree, and main receives no Nx package or configuration from
+  the spike.
 - Treat the committed census, ledger, manifests, registries, baselines, and quarantine files as reviewable source; keep raw timings and generated diagnostics under gitignored `artifacts/`.
 - End every implementation slice with a clean checkpoint and successful `npm.cmd run verify`.
 - Do not push unless the user separately requests it.
@@ -29,7 +32,8 @@
 | 1. Measurement and Rust feasibility | Now | Five-field timing writer, current inventory/duration evidence, Rust compile/check floor, combined test-build time, delta, direct-binary time, Cargo end-to-end time, and an explicit fast-boundary-versus-slow decision |
 | 2A. Migration preflight | After Slice 1 is committed | Transition validator integrated into current `verify`, bidirectional runner census, frozen source-contract ledger |
 | 2B. Project and browser ownership | After the 2A census and ledger are committed | Disjoint non-empty Vitest projects, Chromium extraction moved to Playwright, cleanup ownership, explicit 20-run lifecycle audit |
-| 3. Test migration | After 2B establishes final project owners | Source-dependent tests replaced or deleted with ledger lineage; legacy-contract project and configuration removed |
+| 2C. Disposable Nx decision gate | After Slice 2B is committed and before Slice 3 planning | One-day separate-worktree spike; only ADOPT_NX or REJECT_NX decision/evidence reaches main; no Nx configuration remains |
+| 3. Test migration | After Slice 2C records REJECT_NX, or after ADOPT_NX plus its follow-up amendment | Source-dependent tests replaced or deleted with ledger lineage; legacy-contract project and configuration removed |
 | 4. Manifest and selector | After Slice 1's Rust decision and Slice 3's final test paths are committed | Validated path-to-owner manifest, fast/slow classification, every unique fast-owner smoke-tested through real feedback selection |
 | 5. Process ownership and watch mode | After selector owner commands are stable | 15-second one-shot deadline, descendant cleanup, 5-second watch warning, slow handoff behavior |
 | 6. Verification scheduler and performance command | After complete gate inventory is stable | Fixed scheduler constraints, complete non-fail-fast gate execution, 90-second warning, five-run report and optional explicit p95 audit |
