@@ -1,7 +1,11 @@
 {
   "schemaVersion": 1,
   "vitestOwners": [
-    { "id": "vitest:root", "args": [], "ownerScript": "test" }
+    { "id": "vitest:unit-node", "args": ["--project", "unit-node"], "ownerScript": "test:unit" },
+    { "id": "vitest:component", "args": ["--project", "component"], "ownerScript": "test:component" },
+    { "id": "vitest:architecture", "args": ["--project", "architecture"], "ownerScript": "test:architecture" },
+    { "id": "vitest:legacy-contract", "args": ["--project", "legacy-contract"], "ownerScript": "test:legacy-contract" },
+    { "id": "vitest:os-integration", "args": ["--project", "os-integration"], "ownerScript": "test:integration:os" }
   ],
   "playwrightOwners": [
     {

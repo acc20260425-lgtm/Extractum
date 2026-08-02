@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { normalizeVitestListOutput } from "./run-vitest.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const runnerSource = readFileSync(path.join(repoRoot, "scripts/run-vitest.mjs"), "utf8");
@@ -24,5 +25,9 @@ describe("run-vitest wrapper", () => {
     expect(runnerSource).toMatch(
       /if \(process\.argv\[1\] && import\.meta\.url === pathToFileURL\(process\.argv\[1\]\)\.href\) \{\s*runVitest\(\);\s*\}/s,
     );
+  });
+
+  it("keeps project-filtered file lists consumable by the census", () => {
+    expect(normalizeVitestListOutput("[unit-node] src/lib/example.test.ts\n")).toBe("src/lib/example.test.ts\n");
   });
 });

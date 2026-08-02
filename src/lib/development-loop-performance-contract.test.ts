@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { normalizeRelatedFileArgs } from "../../scripts/run-vitest.mjs";
-import { VITEST_TEST_CONFIG } from "../../vite.config.js";
+import { VITEST_PROJECT_DEFINITIONS } from "../../vitest.config";
 
 const repoRoot = path.resolve(import.meta.dirname, "..", "..");
 const readSource = (relativePath: string) =>
@@ -24,10 +24,10 @@ const promptPackCrateExtracted = existsSync(
 );
 
 describe("daily development loop configuration", () => {
-  it("uses adaptive Vitest threads through one owned config object", () => {
-    expect(VITEST_TEST_CONFIG.pool).toBe("threads");
-    expect(Object.prototype.hasOwnProperty.call(VITEST_TEST_CONFIG, "maxWorkers")).toBe(false);
-    expect(readSource("vite.config.js")).toMatch(/\btest:\s*VITEST_TEST_CONFIG\b/);
+  it("uses adaptive Vitest threads through dedicated project definitions", () => {
+    const threadedProjects = VITEST_PROJECT_DEFINITIONS.filter(({ pool }) => pool === "threads");
+    expect(threadedProjects.map(({ name }) => name)).toEqual(["unit-node", "component", "architecture", "legacy-contract"]);
+    expect(threadedProjects.every((project) => !Object.prototype.hasOwnProperty.call(project, "maxWorkers"))).toBe(true);
   });
 
   it("gives the filesystem-heavy coordinator suite an explicit timeout", () => {
@@ -38,10 +38,10 @@ describe("daily development loop configuration", () => {
     );
   });
 
-  it("has no separate root Vitest config", () => {
-    for (const extension of ["js", "ts", "mjs", "mts", "cjs", "cts"]) {
-      expect(existsSync(path.join(repoRoot, `vitest.config.${extension}`))).toBe(false);
-    }
+  it("keeps project ownership in the dedicated root Vitest config", () => {
+    expect(existsSync(path.join(repoRoot, "vitest.config.ts"))).toBe(true);
+    expect(readSource("vite.config.js")).not.toMatch(/\btest:\s/);
+    expect(readSource("vitest.config.ts")).toContain("projects");
   });
 
   it("owns the focused package scripts and canonical Rust target", () => {

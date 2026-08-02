@@ -29,6 +29,11 @@ export function normalizeRelatedFileArgs(args, cwd = process.cwd()) {
   });
 }
 
+/** @param {unknown} output */
+export function normalizeVitestListOutput(output) {
+  return String(output).replace(/^\[[^\]]+\]\s+/gm, "");
+}
+
 function runVitest() {
   const realCwd = realpathSync.native(process.cwd());
   process.chdir(realCwd);
@@ -36,14 +41,20 @@ function runVitest() {
   const defaultExcludeArgs = DEFAULT_EXCLUDES.flatMap((glob) => ["--exclude", glob]);
   const vitestCli = path.join(realCwd, "node_modules", "vitest", "vitest.mjs");
   const args = normalizeRelatedFileArgs(process.argv.slice(2), realCwd);
-  const result = spawnSync(process.execPath, [vitestCli, ...args, ...defaultExcludeArgs], {
+  const filesOnlyList = args[0] === "list" && args.includes("--filesOnly");
+  const result = spawnSync(process.execPath, [vitestCli, "--config", "vitest.config.ts", ...args, ...defaultExcludeArgs], {
     cwd: realCwd,
     env: process.env,
-    stdio: "inherit",
+    stdio: filesOnlyList ? "pipe" : "inherit",
   });
 
   if (result.error) {
     throw result.error;
+  }
+
+  if (filesOnlyList) {
+    process.stdout.write(normalizeVitestListOutput(result.stdout));
+    process.stderr.write(result.stderr);
   }
 
   process.exit(result.status ?? 1);
