@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import packageJson from "../../package.json";
-import { LEGACY_TEST_FILES, VITEST_PROJECT_DEFINITIONS } from "../../vitest.config";
+import * as vitestConfiguration from "../../vitest.config";
+import componentSetupSource from "./setup-component-tests.ts?raw";
+
+const { LEGACY_TEST_FILES, VITEST_PROJECT_DEFINITIONS } = vitestConfiguration;
 
 const sourceTests = import.meta.glob("/src/**/*.test.ts", { query: "?raw", import: "default", eager: true });
 const scriptTests = import.meta.glob("/scripts/**/*.test.ts", { query: "?raw", import: "default", eager: true });
@@ -19,16 +22,48 @@ type ProjectConvention = {
 };
 const projectConventions = VITEST_PROJECT_DEFINITIONS as readonly ProjectConvention[];
 
+function componentTestEntries(sources: Record<string, string>) {
+  return Object.entries(sources).filter(([testPath]) => testPath.endsWith(".component.test.ts"));
+}
+
+const expectedComponentSetupSource = [
+  'import { setup } from "@testing-library/svelte/pure";',
+  'import { beforeEach } from "vitest";',
+  "",
+  "beforeEach(setup);",
+].join("\n");
+// Keep this raw-source guard outside a test declaration so it cannot become a
+// source-contract obligation; a mismatch still fails the convention suite at import.
+if (componentSetupSource.replaceAll("\r\n", "\n").trim() !== expectedComponentSetupSource) {
+  throw new Error("component setup must register beforeEach(setup) without cleanup or teardown");
+}
+
 describe("test conventions", () => {
-  it("gives jsdom component tests component ownership and cleanup", () => {
+  it("allows inline jsdom ownership only in component tests", () => {
     for (const [testPath, source] of Object.entries(testSources)) {
       if (!source.includes(environmentMarker)) continue;
 
       expect(testPath).toMatch(/\.component\.test\.ts$/);
+    }
+  });
+
+  it("gives every component-owned test exactly one file-local cleanup owner", () => {
+    for (const [, source] of componentTestEntries(testSources)) {
       expect(source).toMatch(/import\s*\{[^}]*\bcleanup\b[^}]*\}\s*from\s*["']@testing-library\/svelte["']/);
       expect((source.match(/afterEach\(cleanup\)/g) ?? [])).toHaveLength(1);
       expect((source.match(/\bcleanup\s*\(/g) ?? [])).toHaveLength(0);
     }
+  });
+
+  it("includes a component suffix without an inline jsdom marker in the cleanup cohort", () => {
+    const markerlessPath = "/src/markerless.component.test.ts";
+    const markerlessSource = [
+      'import { cleanup } from "@testing-library/svelte";',
+      "afterEach(cleanup);",
+    ].join("\n");
+
+    expect(componentTestEntries({ [markerlessPath]: markerlessSource }).map(([testPath]) => testPath))
+      .toContain(markerlessPath);
   });
 
   it("keeps Testing Library setup component-only without plugin cleanup", () => {
@@ -41,6 +76,36 @@ describe("test conventions", () => {
     for (const project of projectConventions.filter(({ name }) => name !== "component")) {
       expect(project.setupFiles ?? []).not.toContain("./scripts/testing/setup-component-tests.ts");
       expect(project.svelteTestingOptions).toBeUndefined();
+    }
+  });
+
+  it("maps component setup and cleanup options into the runtime project config", () => {
+    type RuntimeProject = {
+      plugins: unknown[];
+      test: { name: string; setupFiles?: string[] };
+    };
+    type ProjectMapper = (pluginFactory: (options: { autoCleanup: boolean }) => unknown) => RuntimeProject[];
+    const createVitestProjects = (vitestConfiguration as unknown as {
+      createVitestProjects?: ProjectMapper;
+    }).createVitestProjects;
+
+    expect(typeof createVitestProjects).toBe("function");
+    if (!createVitestProjects) throw new Error("createVitestProjects is not exported");
+
+    const componentPlugin = { name: "stub-component-plugin" };
+    const pluginFactory = vi.fn(() => componentPlugin);
+    const projects = createVitestProjects(pluginFactory);
+    const componentProject = projects.find(({ test }) => test.name === "component");
+
+    expect(pluginFactory).toHaveBeenCalledOnce();
+    expect(pluginFactory).toHaveBeenCalledWith({ autoCleanup: false });
+    expect(componentProject).toMatchObject({
+      plugins: [componentPlugin],
+      test: { setupFiles: ["./scripts/testing/setup-component-tests.ts"] },
+    });
+    for (const project of projects.filter(({ test }) => test.name !== "component")) {
+      expect(project.plugins).toEqual([]);
+      expect(project.test.setupFiles).toBeUndefined();
     }
   });
 

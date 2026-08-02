@@ -85,26 +85,32 @@ export const VITEST_PROJECT_DEFINITIONS = Object.freeze([
   }),
 ]);
 
+export function createVitestProjects(
+  componentPluginFactory: (options: { autoCleanup: boolean }) => ReturnType<typeof svelteTesting>,
+) {
+  return VITEST_PROJECT_DEFINITIONS.map((definition) => ({
+    extends: true as const,
+    plugins: "svelteTestingOptions" in definition
+      ? [componentPluginFactory(definition.svelteTestingOptions)]
+      : [],
+    test: {
+      name: definition.name,
+      include: [...definition.include],
+      exclude: [...definition.exclude],
+      environment: definition.environment,
+      pool: definition.pool,
+      setupFiles: "setupFiles" in definition ? [...definition.setupFiles] : undefined,
+    },
+  }));
+}
+
 export default defineConfig(() => {
   const sharedPlugins = [tailwindcss(), sveltekit()];
 
   return {
     plugins: sharedPlugins,
     test: {
-      projects: VITEST_PROJECT_DEFINITIONS.map((definition) => ({
-        extends: true as const,
-        plugins: "svelteTestingOptions" in definition
-          ? [svelteTesting(definition.svelteTestingOptions)]
-          : [],
-        test: {
-          name: definition.name,
-          include: [...definition.include],
-          exclude: [...definition.exclude],
-          environment: definition.environment,
-          pool: definition.pool,
-          setupFiles: "setupFiles" in definition ? [...definition.setupFiles] : undefined,
-        },
-      })),
+      projects: createVitestProjects(svelteTesting),
     },
   };
 });
