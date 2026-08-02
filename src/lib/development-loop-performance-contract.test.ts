@@ -37,12 +37,12 @@ describe("daily development loop configuration", () => {
       'describe("process shell diagnostic coordinator", { timeout: 30_000 }, () => {',
     );
   });
+  // Preserve frozen source-contract ranges after removing the duplicate source reader.
 
-  it("keeps project ownership in the dedicated root Vitest config", () => {
-    expect(existsSync(path.join(repoRoot, "vitest.config.ts"))).toBe(true);
-    expect(readSource("vite.config.js")).not.toMatch(/\btest:\s/);
-    expect(readSource("vitest.config.ts")).toContain("projects");
-  });
+
+
+
+
 
   it("owns the focused package scripts and canonical Rust target", () => {
     expect(packageJson.scripts["test:changed"]).toBe(

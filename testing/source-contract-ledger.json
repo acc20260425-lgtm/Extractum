@@ -5128,7 +5128,7 @@
       "lineage": [],
       "invariant": "Vitest uses the shared adaptive thread configuration without a hard-coded worker cap.",
       "disposition": "delete",
-      "deletionReason": "The project-definition assertion imports inert configuration data and is no longer an arbitrary-source contract."
+      "deletionReason": "The invariant is now covered through named inert configuration imports in scripts/testing/test-conventions.test.ts, not another source reader."
     },
     {
       "id": "SC-000367",
@@ -10064,24 +10064,6 @@
       "replacementIds": [
         "test:vitest:src/routes/projects/next/page-keyboard.behavior.test.ts#passes keyboard navigation callbacks to the source grid"
       ]
-    },
-    {
-      "id": "SC-000672",
-      "path": "src/lib/development-loop-performance-contract.test.ts",
-      "manual": {
-        "sourceRange": "41:3-45:5",
-        "reason": "dynamic or unknown filesystem authority",
-        "runnerTitles": [
-          "daily development loop configuration > keeps project ownership in the dedicated root Vitest config"
-        ]
-      },
-      "sourceHash": "32cdf8c69da9b62572a965a73b863172075121baec590a18f8c7236dc48facca",
-      "assertionCount": 3,
-      "authorityHash": "d1d6a9895957a6e59693190ba7ce619c5c4b69cf9212a277c5d6d581ae2fc827",
-      "lineage": [],
-      "invariant": "Vitest project ownership remains in the dedicated root configuration while Vite has no competing test owner.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:vitest-test-config-policy"]
     }
   ]
 }

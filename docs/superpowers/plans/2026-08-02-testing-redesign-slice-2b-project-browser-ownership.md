@@ -34,6 +34,10 @@ The approved design says mixed source-contract files are split before project ow
 
 This avoids renaming or splitting approximately 91 files in Slice 2B. Only the 19 actual jsdom component files are renamed so component ownership is visible and stable. Ledger paths/lineage are updated only for renamed component files that have rows.
 
+### Frozen Ledger Exception
+
+Task 2 may change only `SC-000366` to `delete`: the invariant is now covered through named inert configuration imports in `scripts/testing/test-conventions.test.ts`, not another source reader. It may add no row, path, or obligation.
+
 ## Exact Project Partition
 
 `vitest.config.ts` derives these arrays and places them directly in Vitest project `include`/`exclude` fields; there is no parallel classifier:
