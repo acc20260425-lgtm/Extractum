@@ -48,6 +48,9 @@ Before writing each next detailed plan:
 
 ## Current Detailed Plan
 
-- `docs/superpowers/plans/2026-08-02-testing-redesign-slice-1-measurement.md`
+- `docs/superpowers/plans/2026-08-02-testing-redesign-slice-2a-migration-preflight.md`
 
-The next detailed plan is Slice 2A. It is authored only after Slice 1 commits its evidence, because the Rust decision changes which future owner commands and manifest entries are valid.
+Slice 1 is complete at `72a00b38`; its verification record is
+`docs/superpowers/verification/2026-08-02-testing-redesign-slice-1-measurement.md`.
+Slice 2A must commit its live runner census and reviewed source-contract ledger
+before the Slice 2B ownership plan is authored.
