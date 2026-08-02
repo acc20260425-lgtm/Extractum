@@ -21,9 +21,10 @@ describe("verify", () => {
       "git",
     ]);
     expect(steps[1]).toMatchObject({ command: process.execPath, args: ["scripts/validate-testing-transition.mjs"] });
-    expect(steps.filter((step) => step.npmScript).map((step) => step.npmScript)).not.toEqual(expect.arrayContaining([
-      "test", "bootstrap:testing", "build:gemini-browser-sidecar",
-    ]));
+    const npmScripts = steps.filter((step) => step.npmScript).map((step) => step.npmScript);
+    expect(npmScripts).not.toContain("test");
+    expect(npmScripts).not.toContain("bootstrap:testing");
+    expect(npmScripts).not.toContain("build:gemini-browser-sidecar");
   });
 
   it("is sequential and fail-fast", async () => {

@@ -59,6 +59,8 @@ export const VITEST_PROJECT_DEFINITIONS = Object.freeze([
     exclude: DEFAULT_PROJECT_EXCLUDES,
     environment: "jsdom",
     pool: "threads",
+    setupFiles: Object.freeze(["./scripts/testing/setup-component-tests.ts"]),
+    svelteTestingOptions: Object.freeze({ autoCleanup: false }),
   }),
   Object.freeze({
     name: "architecture",
@@ -91,13 +93,16 @@ export default defineConfig(() => {
     test: {
       projects: VITEST_PROJECT_DEFINITIONS.map((definition) => ({
         extends: true as const,
-        plugins: definition.name === "component" ? [svelteTesting()] : [],
+        plugins: "svelteTestingOptions" in definition
+          ? [svelteTesting(definition.svelteTestingOptions)]
+          : [],
         test: {
           name: definition.name,
           include: [...definition.include],
           exclude: [...definition.exclude],
           environment: definition.environment,
           pool: definition.pool,
+          setupFiles: "setupFiles" in definition ? [...definition.setupFiles] : undefined,
         },
       })),
     },

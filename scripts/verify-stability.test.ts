@@ -25,6 +25,18 @@ const leakedPlaywrightChromium = {
   CommandLine: 'chrome-headless-shell.exe --headless --user-data-dir="C:\\Users\\tester\\AppData\\Local\\Temp\\playwright_chromiumdev_profile-a1b2" --remote-debugging-pipe',
 };
 
+const leakedPlaywrightChromiumInCustomTemp = {
+  ...leakedPlaywrightChromium,
+  ProcessId: 203,
+  CommandLine: 'chrome-headless-shell.exe --headless=new --user-data-dir="D:\\ci-tmp\\playwright_chromiumdev_profile-c3d4" --remote-debugging-pipe',
+};
+
+const leakedPlaywrightChromiumWithQuotedArgument = {
+  ...leakedPlaywrightChromium,
+  ProcessId: 204,
+  CommandLine: 'chrome-headless-shell.exe --headless "--user-data-dir=C:\\Users\\Build Agent\\AppData\\Local\\Temp\\playwright_chromiumdev_profile-e5f6" --remote-debugging-pipe',
+};
+
 function successfulRun() {
   return Promise.resolve({ exitCode: 0, stdout: "", stderr: "" });
 }
@@ -110,13 +122,20 @@ describe("Chromium lifecycle audit", () => {
     const runCommand = vi
       .fn()
       .mockResolvedValueOnce({ exitCode: 0, stdout: "", stderr: "" })
-      .mockResolvedValueOnce({ exitCode: 1, stdout: "", stderr: "assertion failed" });
+      .mockResolvedValueOnce({
+        exitCode: 1,
+        stdout: `reporter summary\n${"o".repeat(3_000)}`,
+        stderr: `assertion failed\n${"e".repeat(3_000)}`,
+      });
     const listProcesses = processSnapshots([cleanProcess], [cleanProcess]);
 
-    await expect(runChromiumLifecycleAudit({ runCommand, listProcesses })).resolves.toEqual({
-      exitCode: 1,
-      diagnostic: "Playwright run 2/20 exited with code 1",
-    });
+    const result = await runChromiumLifecycleAudit({ runCommand, listProcesses });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.diagnostic).toContain("Playwright run 2/20 exited with code 1");
+    expect(result.diagnostic).toContain("assertion failed");
+    expect(result.diagnostic).toContain("reporter summary");
+    expect(result.diagnostic.length).toBeLessThanOrEqual(2_500);
 
     expect(runCommand).toHaveBeenCalledTimes(2);
     expect(console.log).toHaveBeenCalledWith("chromium-lifecycle run 1/20: pass");
@@ -172,6 +191,30 @@ describe("Chromium lifecycle audit", () => {
 
     await expect(runChromiumLifecycleAudit({ runCommand: vi.fn(successfulRun), listProcesses })).resolves.toEqual({
       exitCode: 0,
+    });
+  });
+
+  it("detects a Playwright profile below a custom temporary root", async () => {
+    const listProcesses = processSnapshots(
+      [cleanProcess],
+      [cleanProcess, leakedPlaywrightChromiumInCustomTemp],
+    );
+
+    await expect(runChromiumLifecycleAudit({ runCommand: vi.fn(successfulRun), listProcesses })).resolves.toEqual({
+      exitCode: 1,
+      diagnostic: "Leaked Playwright Chromium process IDs: 203",
+    });
+  });
+
+  it("detects a whole-argument quoted Playwright profile", async () => {
+    const listProcesses = processSnapshots(
+      [cleanProcess],
+      [cleanProcess, leakedPlaywrightChromiumWithQuotedArgument],
+    );
+
+    await expect(runChromiumLifecycleAudit({ runCommand: vi.fn(successfulRun), listProcesses })).resolves.toEqual({
+      exitCode: 1,
+      diagnostic: "Leaked Playwright Chromium process IDs: 204",
     });
   });
 });

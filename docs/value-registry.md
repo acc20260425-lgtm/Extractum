@@ -952,6 +952,20 @@ Use this checklist whenever a change introduces or renames a `status`, `state`, 
 
 Recommended review phrase: `Value registry checked: owner, persistence, API mirror, UI display, fixtures.`
 
+## Vitest testing project names
+
+These stable tooling-only values select the five Vitest owners. They are owned
+by `vitest.config.ts`, persisted only in checked-in configuration, and have no
+product database, API, UI, or fixture impact.
+
+| Value | Type | Meaning | Owner | Persistence/API/UI/fixture impact | Current usage |
+| --- | --- | --- | --- | --- | --- |
+| `unit-node` | Vitest project name | Pure Node and TypeScript tests. | `vitest.config.ts` | Checked-in config only; none elsewhere. | `test:unit`, runner census |
+| `component` | Vitest project name | Svelte Testing Library tests in jsdom. | `vitest.config.ts` | Checked-in config only; none elsewhere. | `test:component`, runner census |
+| `architecture` | Vitest project name | Structured architecture rules. | `vitest.config.ts` | Checked-in config only; none elsewhere. | `test:architecture`, runner census |
+| `legacy-contract` | Vitest project name | Frozen source-contract migration inventory. | `vitest.config.ts` | Checked-in config only; none elsewhere. | `test:legacy-contract`, runner census |
+| `os-integration` | Vitest project name | Tests that own real operating-system resources. | `vitest.config.ts` | Checked-in config only; none elsewhere. | `test:integration:os`, runner census |
+
 ## Testing tooling decision evidence
 
 These values exist only as the terminal heading/value in the committed Slice

@@ -28,7 +28,6 @@ class TestIntersectionObserver {
 }
 
 afterEach(() => {
-  cleanup();
   observers = [];
   invoke.mockReset();
   resetYoutubeThumbnailCache();

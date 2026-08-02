@@ -12,6 +12,12 @@ const chromiumLauncherImport = new RegExp(
   String.raw`^\s*import\s+(?=[^;]*\bchromium\b)[^;]*\s+from\s+["']@playwright/test["']\s*;?`,
   "m",
 );
+type ProjectConvention = {
+  name: string;
+  setupFiles?: readonly string[];
+  svelteTestingOptions?: Readonly<{ autoCleanup: boolean }>;
+};
+const projectConventions = VITEST_PROJECT_DEFINITIONS as readonly ProjectConvention[];
 
 describe("test conventions", () => {
   it("gives jsdom component tests component ownership and cleanup", () => {
@@ -21,6 +27,20 @@ describe("test conventions", () => {
       expect(testPath).toMatch(/\.component\.test\.ts$/);
       expect(source).toMatch(/import\s*\{[^}]*\bcleanup\b[^}]*\}\s*from\s*["']@testing-library\/svelte["']/);
       expect((source.match(/afterEach\(cleanup\)/g) ?? [])).toHaveLength(1);
+      expect((source.match(/\bcleanup\s*\(/g) ?? [])).toHaveLength(0);
+    }
+  });
+
+  it("keeps Testing Library setup component-only without plugin cleanup", () => {
+    const componentProject = projectConventions.find(({ name }) => name === "component");
+
+    expect(componentProject).toMatchObject({
+      setupFiles: ["./scripts/testing/setup-component-tests.ts"],
+      svelteTestingOptions: { autoCleanup: false },
+    });
+    for (const project of projectConventions.filter(({ name }) => name !== "component")) {
+      expect(project.setupFiles ?? []).not.toContain("./scripts/testing/setup-component-tests.ts");
+      expect(project.svelteTestingOptions).toBeUndefined();
     }
   });
 

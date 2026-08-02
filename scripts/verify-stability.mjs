@@ -101,12 +101,35 @@ function exitCodeOf(result) {
   return exitCode;
 }
 
+function playwrightUserDataDir(commandLine) {
+  const match = commandLine.match(
+    /(?:^|\s)(?:"--user-data-dir=([^"]+)"|--user-data-dir="([^"]+)"|--user-data-dir=([^"\s]+))(?=\s|$)/i,
+  );
+  return match ? (match[1] ?? match[2] ?? match[3]) : null;
+}
+
 function isPlaywrightChromiumLeak(processRecord) {
   const commandLine = processRecord.CommandLine;
   if (typeof commandLine !== "string") return false;
-  const hasHeadlessMarker = /(?:^|\s)--headless(?:=(?:new|old|chrome))?(?=\s|$)/i.test(commandLine);
-  const hasPlaywrightTempProfile = /(?:^|\s)--user-data-dir=(?:"[^"]*[\\/]Temp[\\/]playwright_chromiumdev_profile-[^"]+"|\S*[\\/]Temp[\\/]playwright_chromiumdev_profile-\S+)/i.test(commandLine);
+  const hasHeadlessMarker = /(?:^|\s)"?--headless(?:=(?:new|old|chrome))?"?(?=\s|$)/i.test(commandLine);
+  const userDataDir = playwrightUserDataDir(commandLine);
+  const hasPlaywrightTempProfile = typeof userDataDir === "string"
+    && /^playwright_chromiumdev_profile-.+/i.test(path.win32.basename(userDataDir));
   return hasHeadlessMarker && hasPlaywrightTempProfile;
+}
+
+function boundedProcessOutput(result) {
+  const streams = [
+    ["stderr", String(result?.stderr ?? "").trim()],
+    ["stdout", String(result?.stdout ?? "").trim()],
+  ].filter(([, output]) => output.length > 0);
+  if (streams.length === 0) return "";
+
+  const limit = streams.length === 1 ? 1_900 : 900;
+  return streams.map(([name, output]) => {
+    const excerpt = output.length > limit ? `${output.slice(0, limit - 3)}...` : output;
+    return `${name}:\n${excerpt}`;
+  }).join("\n");
 }
 
 async function finalProcessSnapshot(listProcesses) {
@@ -146,7 +169,7 @@ export async function runChromiumLifecycleAudit({ runCommand, listProcesses }) {
     const passed = exitCode === 0;
     console.log(`chromium-lifecycle run ${run}/20: ${passed ? "pass" : "fail"}`);
     if (!passed) {
-      failedRun = { run, exitCode };
+      failedRun = { run, exitCode, stdout: result?.stdout, stderr: result?.stderr };
       break;
     }
   }
@@ -162,9 +185,11 @@ export async function runChromiumLifecycleAudit({ runCommand, listProcesses }) {
 
   if (failedRun) {
     const leakDetail = leakedPids.length > 0 ? `; leaked Playwright Chromium process IDs: ${leakedPids.join(", ")}` : "";
+    const outputExcerpt = boundedProcessOutput(failedRun);
+    const outputDetail = outputExcerpt ? `\nPlaywright output excerpt:\n${outputExcerpt}` : "";
     return {
       exitCode: 1,
-      diagnostic: `Playwright run ${failedRun.run}/20 exited with code ${failedRun.exitCode}${leakDetail}`,
+      diagnostic: `Playwright run ${failedRun.run}/20 exited with code ${failedRun.exitCode}${leakDetail}${outputDetail}`,
     };
   }
   if (leakedPids.length > 0) {
