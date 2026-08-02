@@ -22,7 +22,7 @@ function cargoArtifact({
   kind = ["staticlib", "cdylib", "rlib"],
   crateTypes = ["staticlib", "cdylib", "rlib"],
 }: {
-  fresh: boolean;
+  fresh?: boolean;
   test: boolean;
   executable?: string | null;
   packageName?: string;
@@ -96,53 +96,73 @@ describe("slice one Rust feasibility proof parsers", () => {
   const repoRoot = path.resolve("G:/repo");
   const executable = path.join(repoRoot, "src-tauri", "target", "debug", "deps", "extractum_lib-deadbeef.exe");
 
-  it("requires the expected freshness, root package, target, and profile", () => {
+  it("requires the explicit freshness expectation, root package, target, and profile", () => {
     expect(parseCargoArtifacts(cargoArtifact({ fresh: true, test: false }), {
       repoRoot,
-      expectedFresh: true,
+      freshExpectation: "must-be-fresh",
       expectedTestProfile: false,
     })).toMatchObject({ fresh: true, executable: null });
 
     expect(parseCargoArtifacts(cargoArtifact({ fresh: false, test: false }), {
       repoRoot,
-      expectedFresh: false,
+      freshExpectation: "must-rebuild",
       expectedTestProfile: false,
     })).toMatchObject({ fresh: false, executable: null });
 
     expect(parseCargoArtifacts(cargoArtifact({ fresh: false, test: true, executable }), {
       repoRoot,
-      expectedFresh: false,
+      freshExpectation: "must-rebuild",
       expectedTestProfile: true,
       requireExecutable: true,
     })).toMatchObject({ fresh: false, executable });
 
     expect(() => parseCargoArtifacts(cargoArtifact({ fresh: true, test: false }), {
       repoRoot,
-      expectedFresh: false,
+      freshExpectation: "must-rebuild",
       expectedTestProfile: false,
     })).toThrow(/fresh/i);
     expect(() => parseCargoArtifacts(cargoArtifact({ fresh: false, test: false, packageName: "extractum_storage" }), {
       repoRoot,
-      expectedFresh: false,
+      freshExpectation: "must-rebuild",
       expectedTestProfile: false,
     })).toThrow(/extractum/i);
     expect(() => parseCargoArtifacts(cargoArtifact({ fresh: false, test: false, targetName: "other" }), {
       repoRoot,
-      expectedFresh: false,
+      freshExpectation: "must-rebuild",
       expectedTestProfile: false,
     })).toThrow(/extractum_lib/i);
     expect(() => parseCargoArtifacts(cargoArtifact({ fresh: false, test: true, executable }), {
       repoRoot,
-      expectedFresh: false,
+      freshExpectation: "must-rebuild",
       expectedTestProfile: false,
     })).toThrow(/profile/i);
+  });
+
+  it("records either boolean freshness for the disclosed no-op warm-up", () => {
+    expect(parseCargoArtifacts(cargoArtifact({ fresh: false, test: false }), {
+      repoRoot,
+      freshExpectation: "record",
+      expectedTestProfile: false,
+    })).toMatchObject({ fresh: false, executable: null });
+
+    expect(parseCargoArtifacts(cargoArtifact({ fresh: true, test: false }), {
+      repoRoot,
+      freshExpectation: "record",
+      expectedTestProfile: false,
+    })).toMatchObject({ fresh: true, executable: null });
+
+    expect(() => parseCargoArtifacts(cargoArtifact({ fresh: undefined, test: false }), {
+      repoRoot,
+      freshExpectation: "record",
+      expectedTestProfile: false,
+    })).toThrow(/fresh/i);
   });
 
   it("accepts exactly one canonical Cargo 1.95 multi-crate-type root artifact", () => {
     const actualCargo195Shape = cargoArtifact({ fresh: false, test: false });
     expect(parseCargoArtifacts(actualCargo195Shape, {
       repoRoot,
-      expectedFresh: false,
+      freshExpectation: "must-rebuild",
       expectedTestProfile: false,
     })).toMatchObject({ package: "extractum", target: "extractum_lib", fresh: false, testProfile: false });
 
@@ -151,18 +171,18 @@ describe("slice one Rust feasibility proof parsers", () => {
     for (const legacySyntheticShape of [malformedKindShape, malformedCrateTypesShape]) {
       expect(() => parseCargoArtifacts(legacySyntheticShape, {
         repoRoot,
-        expectedFresh: false,
+        freshExpectation: "must-rebuild",
         expectedTestProfile: false,
       })).toThrow(/extractum_lib/i);
     }
     expect(() => parseCargoArtifacts(`${actualCargo195Shape}${actualCargo195Shape}`, {
       repoRoot,
-      expectedFresh: false,
+      freshExpectation: "must-rebuild",
       expectedTestProfile: false,
     })).toThrow(/exactly one/i);
     expect(() => parseCargoArtifacts(`${actualCargo195Shape}${malformedKindShape}`, {
       repoRoot,
-      expectedFresh: false,
+      freshExpectation: "must-rebuild",
       expectedTestProfile: false,
     })).toThrow(/exactly one/i);
   });
@@ -170,7 +190,7 @@ describe("slice one Rust feasibility proof parsers", () => {
   it("accepts only a root test executable below canonical src-tauri target", () => {
     expect(parseCargoArtifacts(cargoArtifact({ fresh: false, test: true, executable }), {
       repoRoot,
-      expectedFresh: false,
+      freshExpectation: "must-rebuild",
       expectedTestProfile: true,
       requireExecutable: true,
     }).executable).toBe(executable);
@@ -178,13 +198,13 @@ describe("slice one Rust feasibility proof parsers", () => {
     const outside = path.join(repoRoot, "other-target", "debug", "deps", "extractum_lib-deadbeef.exe");
     expect(() => parseCargoArtifacts(cargoArtifact({ fresh: false, test: true, executable: outside }), {
       repoRoot,
-      expectedFresh: false,
+      freshExpectation: "must-rebuild",
       expectedTestProfile: true,
       requireExecutable: true,
     })).toThrow(/canonical/i);
     expect(() => parseCargoArtifacts(cargoArtifact({ fresh: false, test: true }), {
       repoRoot,
-      expectedFresh: false,
+      freshExpectation: "must-rebuild",
       expectedTestProfile: true,
       requireExecutable: true,
     })).toThrow(/executable/i);
@@ -208,10 +228,12 @@ function createHarness({
   failRetainedInvalidated = false,
   restoreFailure,
   staleReport = false,
+  warmupNoopFresh = true,
 }: {
   failRetainedInvalidated?: boolean;
   restoreFailure?: "read" | "write" | "write-when-mutated";
   staleReport?: boolean;
+  warmupNoopFresh?: boolean;
 } = {}) {
   const repoRoot = path.resolve("G:/virtual-repo");
   const sourcePath = path.join(repoRoot, "src-tauri", "src", "readiness.rs");
@@ -223,6 +245,7 @@ function createHarness({
   const writes: Array<{ file: string; bytes: Buffer }> = [];
   let uuid = 0;
   let invalidatedCalls = 0;
+  let noOpChecks = 0;
   let sourceReads = 0;
 
   const filesystem = {
@@ -269,7 +292,11 @@ function createHarness({
       if (mutated && failRetainedInvalidated && invalidatedCalls === 2) {
         return { ...base, exitCode: 1, stderr: "compiler error" };
       }
-      return { ...base, stdout: cargoArtifact({ fresh: !mutated, test: false }) };
+      if (!mutated) noOpChecks += 1;
+      return {
+        ...base,
+        stdout: cargoArtifact({ fresh: !mutated && (noOpChecks !== 1 || warmupNoopFresh), test: false }),
+      };
     }
     if (args.includes("--no-run")) {
       mtimes.set(executable, (mtimes.get(executable) ?? 0) + 10);
@@ -302,7 +329,7 @@ describe("slice one Rust feasibility driver", () => {
     expect(mutated.toString("utf8")).toBe("one\r\ntwo\r\n// extractum-slice-1-probe:retained-1:uuid\r\n");
   });
 
-  it("keeps consecutive no-op checks fresh without rewriting the source", async () => {
+  it("keeps retained consecutive no-op checks fresh without rewriting the source", async () => {
     const harness = createHarness();
     const sourceWriteCountsBeforeNoop: number[] = [];
     const baseRunCommand = harness.runCommand;
@@ -333,8 +360,40 @@ describe("slice one Rust feasibility driver", () => {
     });
 
     expect(sourceWriteCountsBeforeNoop.slice(0, 4)).toEqual([0, 0, 0, 0]);
-    expect(report.samples.filter((entry: { shape: string }) => entry.shape === "noopCheck")
+    expect(report.samples.filter((entry: { phase: string; shape: string }) => entry.phase === "retained" && entry.shape === "noopCheck")
       .every((entry: { proof?: { fresh?: boolean } }) => entry.proof?.fresh === true)).toBe(true);
+  });
+
+  it("keeps a false disclosed no-op warm-up while retaining three fresh controls and a valid study", async () => {
+    const harness = createHarness({ warmupNoopFresh: false });
+
+    const report = await runRustFeasibility({
+      repoRoot: harness.repoRoot,
+      runCommand: harness.runCommand,
+      filesystem: harness.filesystem,
+      randomUUID: harness.randomUUID,
+    });
+
+    const noops = report.samples.filter((entry: { shape: string }) => entry.shape === "noopCheck");
+    expect(noops).toHaveLength(4);
+    expect(noops[0]).toMatchObject({ phase: "warmup", valid: true, proof: { fresh: false } });
+    expect(noops.slice(1)).toHaveLength(3);
+    expect(noops.slice(1).every((entry: {
+      phase: string;
+      valid: boolean;
+      proof?: { fresh?: boolean };
+    }) => entry.phase === "retained" && entry.valid && entry.proof?.fresh === true)).toBe(true);
+    expect(report).toMatchObject({
+      valid: true,
+      exitCode: 0,
+      summary: {
+        checkFloorMs: expect.any(Number),
+        combinedTestBuildMs: expect.any(Number),
+        directHarnessMs: expect.any(Number),
+        cargoEndToEndMs: expect.any(Number),
+      },
+      classification: expect.any(String),
+    });
   });
 
   it("proves every rebuild, uses unique invalidation tokens, and emits mechanical medians", async () => {

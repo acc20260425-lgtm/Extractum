@@ -77,9 +77,11 @@ function canonicalExecutable(executable, repoRoot) {
 }
 
 export function parseCargoArtifacts(text, expectation) {
-  const { repoRoot, expectedFresh, expectedTestProfile, requireExecutable = false } = expectation ?? {};
-  if (typeof repoRoot !== "string" || typeof expectedFresh !== "boolean" || typeof expectedTestProfile !== "boolean") {
-    throw new TypeError("Cargo artifact expectation requires repoRoot, expectedFresh, and expectedTestProfile");
+  const { repoRoot, freshExpectation, expectedTestProfile, requireExecutable = false } = expectation ?? {};
+  if (typeof repoRoot !== "string"
+    || !["must-be-fresh", "must-rebuild", "record"].includes(freshExpectation)
+    || typeof expectedTestProfile !== "boolean") {
+    throw new TypeError("Cargo artifact expectation requires repoRoot, freshExpectation, and expectedTestProfile");
   }
   const messages = String(text).split(/\r?\n/u).filter((line) => line.trim().length > 0).map((line) => {
     try {
@@ -96,7 +98,13 @@ export function parseCargoArtifacts(text, expectation) {
   if (!hasCanonicalExtractumRootShape(artifact.target)) {
     throw new Error("extractum_lib target.kind and target.crate_types did not match the canonical Cargo 1.95 root shape");
   }
-  if (artifact.fresh !== expectedFresh) throw new Error(`Cargo artifact fresh proof did not equal ${expectedFresh}`);
+  if (typeof artifact.fresh !== "boolean") throw new Error("Cargo artifact fresh proof must be boolean");
+  if (freshExpectation === "must-be-fresh" && artifact.fresh !== true) {
+    throw new Error("Cargo artifact fresh proof did not equal true");
+  }
+  if (freshExpectation === "must-rebuild" && artifact.fresh !== false) {
+    throw new Error("Cargo artifact fresh proof did not equal false");
+  }
   if (artifact.profile?.test !== expectedTestProfile) throw new Error(`Cargo artifact profile.test did not equal ${expectedTestProfile}`);
   const executable = artifact.executable == null
     ? null
@@ -435,13 +443,21 @@ export async function runRustFeasibility({
           observedFailure = true;
         }
       } else if (entry.shape === "noopCheck") {
-        proof = parseCargoArtifacts(result.stdout, { repoRoot: root, expectedFresh: true, expectedTestProfile: false });
+        proof = parseCargoArtifacts(result.stdout, {
+          repoRoot: root,
+          freshExpectation: entry.phase === "warmup" ? "record" : "must-be-fresh",
+          expectedTestProfile: false,
+        });
       } else if (entry.shape === "invalidatedCheck") {
-        proof = parseCargoArtifacts(result.stdout, { repoRoot: root, expectedFresh: false, expectedTestProfile: false });
+        proof = parseCargoArtifacts(result.stdout, {
+          repoRoot: root,
+          freshExpectation: "must-rebuild",
+          expectedTestProfile: false,
+        });
       } else if (entry.shape === "noRun") {
         proof = parseCargoArtifacts(result.stdout, {
           repoRoot: root,
-          expectedFresh: false,
+          freshExpectation: "must-rebuild",
           expectedTestProfile: true,
           requireExecutable: true,
         });

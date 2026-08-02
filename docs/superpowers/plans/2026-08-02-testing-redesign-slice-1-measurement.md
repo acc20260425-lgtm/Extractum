@@ -354,7 +354,7 @@ The tests must assert:
 - warm-up order is `noopCheck → invalidatedCheck → noRun/directBinary → endToEnd`, ensuring an executable identity exists before end-to-end rebuild proof;
 - each retained invalidating attempt has a unique token;
 - retained invalidating order is `check → noRun/direct → endToEnd`, `endToEnd → noRun/direct → check`, then `noRun/direct → check → endToEnd`;
-- `parseCargoArtifacts` is parameterized by `expectedFresh`: no-op root artifacts require `fresh: true`, while invalidated check/no-run artifacts require `fresh: false`; every case still requires package `extractum`, target `extractum_lib`, and the expected test/non-test profile;
+- `parseCargoArtifacts` is parameterized by explicit `freshExpectation`: the disclosed no-op warm-up records either boolean `fresh` value while still requiring package `extractum`, target `extractum_lib`, the canonical Cargo 1.95 root shape, and a non-test profile; each retained no-op root artifact requires `fresh: true`; invalidated check/no-run artifacts require `fresh: false`; every artifact requires a boolean `fresh` field and the expected test/non-test profile;
 - the no-run artifact supplies an executable below canonical `src-tauri/target`;
 - every `endToEnd` attempt contains `Compiling extractum` on Cargo stderr, changes the paired root test binary's last-write timestamp, and then reports exactly one executed passing test;
 - `parseExactLibtest` rejects zero tests, two tests, ignored-only output, or any failure;
@@ -394,7 +394,7 @@ Before each invalidating command, append `// extractum-slice-1-probe:<cohort>:<c
 
 For each `endToEnd` attempt, snapshot the root test executable path and last-write timestamp from the latest valid warm-up or retained no-run artifact. Capture Cargo stderr while mirroring it to the terminal. Accept the attempt only when stderr contains a line matching `^\s*Compiling extractum v` and the test executable's last-write timestamp increases. This proves the distinct mutation rebuilt the root lib-test unit without adding JSON-reporter overhead to the canonical Cargo command.
 
-Before retained no-op controls, establish the canonical restored source once, run the disclosed no-op warm-up, and then run three consecutive retained no-op checks. Do not place a no-op sample immediately after source restoration from a mutation.
+Before retained no-op controls, establish the canonical restored source once, run the disclosed no-op warm-up, and then run three consecutive retained no-op checks. The warm-up must exit successfully and prove the exact non-test `extractum`/`extractum_lib` canonical Cargo 1.95 artifact, but records its actual boolean `fresh` value (`true` or `false`) because the preceding restoration may legitimately require one rebuild; only the three retained controls must prove `fresh: true`. Do not place a no-op sample immediately after source restoration from a mutation.
 
 - [ ] **Step 4: Generate the diagnostic fields and decision mechanically**
 
@@ -577,7 +577,7 @@ Run:
 node scripts/testing/slice-1-rust-feasibility.mjs --output artifacts/testing/slice-1/rust-feasibility.json
 ```
 
-Expected: zero exit; each invalidated check/no-run compiler sample proves `extractum_lib` rebuilt with `fresh: false`; each no-op root artifact proves `fresh: true`; each no-run artifact is paired with its exact executable; every end-to-end attempt proves `Compiling extractum` and an increased test-binary timestamp; each direct and Cargo-owned run reports exactly one pass; no retained failure is replaced.
+Expected: zero exit; each invalidated check/no-run compiler sample proves `extractum_lib` rebuilt with `fresh: false`; the disclosed no-op warm-up records its actual boolean `fresh` value after proving the exact canonical non-test root artifact, while each retained no-op root artifact proves `fresh: true`; each no-run artifact is paired with its exact executable; every end-to-end attempt proves `Compiling extractum` and an increased test-binary timestamp; each direct and Cargo-owned run reports exactly one pass; no retained failure is replaced.
 
 - [ ] **Step 5: Prove byte restoration before reading results**
 
