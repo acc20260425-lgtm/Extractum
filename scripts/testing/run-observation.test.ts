@@ -19,6 +19,29 @@ function completedChild(exitCode: number | null, signal: NodeJS.Signals | null) 
   return child;
 }
 
+function processIsAlive(pid: number) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
+    throw error;
+  }
+}
+
+async function waitForPidFile(file: string) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    try {
+      return (await readFile(file, "utf8")).trim().split(",").map(Number);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+  throw new Error(`PID file was not created: ${file}`);
+}
+
 function dependencies(overrides = {}) {
   return {
     spawn: vi.fn(() => completedChild(0, null)),
@@ -148,62 +171,209 @@ describe("runObservedCommand", () => {
     expect(value.warn).toHaveBeenCalledWith("Timing log warning: disk unavailable");
   });
 
-  it("requests cancellation and waits for the child close event before resolving", async () => {
+  it("uses explicit bounded Windows tree termination and waits for both settlements", async () => {
     const controller = new AbortController();
     const child = new EventEmitter() as EventEmitter & { pid: number; kill: ReturnType<typeof vi.fn> };
     child.pid = 123;
-    const order: string[] = [];
-    let fallback: ReturnType<typeof setTimeout>;
     child.kill = vi.fn((signal: NodeJS.Signals) => {
-      order.push(`kill:${signal}`);
+      queueMicrotask(() => child.emit("close", null, signal));
       return true;
     });
-    fallback = setTimeout(() => child.emit("close", 0, null), 100);
+    const helper = new EventEmitter();
+    const order: string[] = [];
+    const spawnTerminationHelper = vi.fn((command, args, options) => {
+      expect(command).toBe("C:\\Windows\\System32\\taskkill.exe");
+      expect(args).toEqual(["/PID", "123", "/T", "/F"]);
+      expect(options).toMatchObject({ shell: false, windowsHide: true });
+      queueMicrotask(() => {
+        order.push("helper close");
+        helper.emit("close", 0, null);
+        order.push("child close");
+        child.emit("close", null, "SIGTERM");
+      });
+      return helper;
+    });
 
     const observation = runObservedCommand({
       command: "node",
       cwd: "repo",
       signal: controller.signal,
-      dependencies: dependencies({ spawn: vi.fn(() => child) }),
+      dependencies: dependencies({
+        spawn: vi.fn(() => child),
+        spawnTerminationHelper,
+        platform: "win32",
+        systemRoot: "C:\\Windows",
+      }),
     });
     void observation.then(() => order.push("resolved"));
-    controller.abort("SIGINT");
+    controller.abort("SIGTERM");
     await Promise.resolve();
 
-    expect(order).toEqual(["kill:SIGINT"]);
-    clearTimeout(fallback);
-    order.push("close");
-    child.emit("close", null, "SIGINT");
+    expect(order).toEqual(["helper close", "child close"]);
 
     await expect(observation).resolves.toMatchObject({
       exitCode: 130,
       termination: "signal",
-      signal: "SIGINT",
+      signal: "SIGTERM",
+      cancellationConfirmed: true,
     });
-    expect(child.kill).toHaveBeenCalledWith("SIGINT");
-    expect(order).toEqual(["kill:SIGINT", "close", "resolved"]);
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(order).toEqual(["helper close", "child close", "resolved"]);
   });
 
-  it("aborts a real child and reports cancellation only after it terminates", async () => {
+  it("fails closed when tree termination is unconfirmed after the observed child closes", async () => {
     const controller = new AbortController();
+    const child = new EventEmitter() as EventEmitter & { pid: number; kill: ReturnType<typeof vi.fn> };
+    child.pid = 456;
+    child.kill = vi.fn(() => {
+      queueMicrotask(() => child.emit("close", null, "SIGTERM"));
+      return true;
+    });
+    const terminateProcessTree = vi.fn(async ({ child: observedChild }) => {
+      observedChild.kill("SIGTERM");
+      return { confirmed: false, failure: "injected helper failure" };
+    });
+
+    const observation = runObservedCommand({
+      command: "node",
+      cwd: "repo",
+      signal: controller.signal,
+      dependencies: dependencies({ spawn: vi.fn(() => child), terminateProcessTree }),
+    });
+    controller.abort("SIGTERM");
+
+    await expect(observation).resolves.toMatchObject({
+      exitCode: 3,
+      termination: "signal",
+      signal: "SIGTERM",
+      cancellationConfirmed: false,
+    });
+    expect(terminateProcessTree).toHaveBeenCalledOnce();
+  });
+
+  it("bounds a stuck Windows termination helper and closes the direct child as unconfirmed cleanup", async () => {
+    const controller = new AbortController();
+    const child = new EventEmitter() as EventEmitter & { pid: number; kill: ReturnType<typeof vi.fn> };
+    child.pid = 321;
+    child.kill = vi.fn((signal: NodeJS.Signals) => {
+      queueMicrotask(() => child.emit("close", null, signal));
+      return true;
+    });
+    const helper = new EventEmitter() as EventEmitter & { pid: number; kill: ReturnType<typeof vi.fn> };
+    helper.pid = 654;
+    helper.kill = vi.fn((signal: NodeJS.Signals) => {
+      queueMicrotask(() => helper.emit("close", null, signal));
+      return true;
+    });
+    const observation = runObservedCommand({
+      command: "node",
+      cwd: "repo",
+      signal: controller.signal,
+      dependencies: dependencies({
+        spawn: vi.fn(() => child),
+        spawnTerminationHelper: vi.fn(() => helper),
+        platform: "win32",
+        systemRoot: "C:\\Windows",
+        terminationTimeoutMs: 10,
+      }),
+    });
+    controller.abort("SIGTERM");
+
+    await expect(observation).resolves.toMatchObject({ exitCode: 3, cancellationConfirmed: false });
+    expect(helper.kill).toHaveBeenCalledWith("SIGKILL");
+    expect(child.kill).toHaveBeenCalledWith("SIGKILL");
+  });
+
+  it("does not leak a real observed child when the injected termination proof fails closed", async () => {
+    const controller = new AbortController();
+    const terminateProcessTree = vi.fn(async ({ child: observedChild }) => {
+      observedChild.kill("SIGTERM");
+      return { confirmed: false, failure: "injected proof failure" };
+    });
     const observation = runObservedCommand({
       command: process.execPath,
       args: ["-e", "console.log(process.pid); setTimeout(() => process.exit(0), 1000)"],
       cwd: process.cwd(),
       capture: true,
       signal: controller.signal,
-      dependencies: dependencies({ spawn: undefined }),
+      dependencies: dependencies({ spawn: undefined, terminateProcessTree }),
     });
     setTimeout(() => controller.abort("SIGTERM"), 150);
 
     const result = await observation;
-    expect(result).toMatchObject({
-      exitCode: 130,
-      termination: "signal",
-      signal: "SIGTERM",
-    });
+    expect(result).toMatchObject({ exitCode: 3, cancellationConfirmed: false });
     const childPid = Number(result.stdout.trim());
     expect(Number.isInteger(childPid)).toBe(true);
-    expect(() => process.kill(childPid, 0)).toThrow();
+    expect(processIsAlive(childPid)).toBe(false);
   }, 5_000);
+
+  it("uses a detached process group and bounded group proof on non-Windows", async () => {
+    const controller = new AbortController();
+    const child = new EventEmitter() as EventEmitter & { pid: number };
+    child.pid = 789;
+    const processKill = vi.fn((pid: number, signal: NodeJS.Signals | 0) => {
+      if (signal === "SIGTERM") {
+        queueMicrotask(() => child.emit("close", null, "SIGTERM"));
+        return true;
+      }
+      throw Object.assign(new Error("process group is gone"), { code: "ESRCH" });
+    });
+    const spawn = vi.fn(() => child);
+    const observation = runObservedCommand({
+      command: "node",
+      cwd: "repo",
+      signal: controller.signal,
+      dependencies: dependencies({ spawn, platform: "linux", processKill }),
+    });
+    controller.abort("SIGTERM");
+
+    await expect(observation).resolves.toMatchObject({
+      exitCode: 130,
+      cancellationConfirmed: true,
+      cancellation: { tree: { strategy: "posix-process-group" } },
+    });
+    expect(spawn.mock.calls[0][2]).toMatchObject({ detached: true, shell: false });
+    expect(processKill).toHaveBeenCalledWith(-789, "SIGTERM");
+  });
+
+  it.runIf(process.platform === "win32")("does not resolve until a real child and grandchild are dead", async () => {
+    const repoRoot = await mkdtemp(path.join(tmpdir(), "extractum-observer-tree-"));
+    temporaryRoots.push(repoRoot);
+    const pidFile = path.join(repoRoot, "tree.pid");
+    const controller = new AbortController();
+    let pids: number[] = [];
+    const observation = runObservedCommand({
+      command: process.execPath,
+      args: ["-e", [
+        "const { spawn } = require('node:child_process');",
+        "const { writeFileSync } = require('node:fs');",
+        "const grandchild = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });",
+        `writeFileSync(${JSON.stringify(pidFile)}, process.pid + ',' + grandchild.pid);`,
+        "setInterval(() => {}, 1000);",
+      ].join(" ")],
+      cwd: repoRoot,
+      repoRoot,
+      capture: true,
+      signal: controller.signal,
+      dependencies: dependencies({ spawn: undefined }),
+    });
+    try {
+      pids = await waitForPidFile(pidFile);
+      expect(pids).toHaveLength(2);
+      expect(pids.every(processIsAlive)).toBe(true);
+      controller.abort("SIGTERM");
+
+      await expect(observation).resolves.toMatchObject({
+        exitCode: 130,
+        termination: "signal",
+        signal: "SIGTERM",
+        cancellationConfirmed: true,
+      });
+      expect(pids.every((pid) => !processIsAlive(pid))).toBe(true);
+    } finally {
+      for (const pid of pids.reverse()) {
+        if (processIsAlive(pid)) process.kill(pid, "SIGKILL");
+      }
+    }
+  }, 30_000);
 });

@@ -1,4 +1,5 @@
 import { spawn as defaultSpawn } from "node:child_process";
+import path from "node:path";
 import {
   createTimingRow as defaultCreateTimingRow,
   formatCommand,
@@ -16,6 +17,137 @@ function exitDetails(exitCode, signal) {
 function timingWarning(warn, error) {
   const message = error instanceof Error ? error.message : String(error);
   warn(`Timing log warning: ${message}`);
+}
+
+const DEFAULT_TERMINATION_TIMEOUT_MS = 15_000;
+const FALLBACK_CLOSE_TIMEOUT_MS = 2_000;
+
+async function bounded(promise, timeoutMs, timeoutValue) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve(timeoutValue), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function processSettlement(child) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let spawnError = null;
+    const settle = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    child.once("error", (error) => {
+      spawnError = error instanceof Error ? error.message : String(error);
+      if (child.pid == null) settle({ closeObserved: false, exitCode: null, signal: null, spawnError });
+    });
+    child.once("close", (exitCode, signal) => {
+      settle({ closeObserved: true, exitCode, signal, spawnError });
+    });
+  });
+}
+
+function processGroupAlive(pid, processKill) {
+  try {
+    processKill(-pid, 0);
+    return true;
+  } catch (error) {
+    if (error?.code === "ESRCH") return false;
+    if (error?.code === "EPERM") return true;
+    throw error;
+  }
+}
+
+async function waitForProcessGroupExit(pid, processKill, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (processGroupAlive(pid, processKill) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return !processGroupAlive(pid, processKill);
+}
+
+async function defaultTerminateProcessTree({
+  pid,
+  cwd,
+  env,
+  signal,
+  platform,
+  systemRoot,
+  spawnTerminationHelper,
+  processKill,
+  timeoutMs,
+}) {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return { confirmed: false, failure: "observed command PID is unavailable" };
+  }
+  if (platform === "win32") {
+    if (typeof systemRoot !== "string" || systemRoot.length === 0) {
+      return { confirmed: false, failure: "SystemRoot is unavailable" };
+    }
+    const command = path.win32.join(systemRoot, "System32", "taskkill.exe");
+    const args = ["/PID", String(pid), "/T", "/F"];
+    let helper;
+    try {
+      helper = spawnTerminationHelper(command, args, {
+        cwd,
+        env,
+        shell: false,
+        windowsHide: true,
+        stdio: "ignore",
+      });
+    } catch (error) {
+      return { confirmed: false, command, args, failure: error instanceof Error ? error.message : String(error) };
+    }
+    const settled = processSettlement(helper);
+    const result = await bounded(settled, timeoutMs, { timedOut: true });
+    if (result.timedOut) {
+      try {
+        helper.kill("SIGKILL");
+      } catch {
+        // The unconfirmed result below is authoritative.
+      }
+      await bounded(settled, FALLBACK_CLOSE_TIMEOUT_MS, null);
+      return { confirmed: false, command, args, failure: "taskkill timed out" };
+    }
+    return {
+      confirmed: result.closeObserved === true && result.exitCode === 0,
+      command,
+      args,
+      exitCode: result.exitCode,
+      signal: result.signal,
+      ...(result.spawnError ? { failure: result.spawnError } : {}),
+    };
+  }
+
+  try {
+    processKill(-pid, signal);
+  } catch (error) {
+    if (error?.code === "ESRCH") return { confirmed: true, strategy: "posix-process-group" };
+    return { confirmed: false, strategy: "posix-process-group", failure: error instanceof Error ? error.message : String(error) };
+  }
+  if (await waitForProcessGroupExit(pid, processKill, timeoutMs)) {
+    return { confirmed: true, strategy: "posix-process-group" };
+  }
+  try {
+    processKill(-pid, "SIGKILL");
+  } catch (error) {
+    if (error?.code !== "ESRCH") {
+      return { confirmed: false, strategy: "posix-process-group", failure: error instanceof Error ? error.message : String(error) };
+    }
+  }
+  return {
+    confirmed: await waitForProcessGroupExit(pid, processKill, FALLBACK_CLOSE_TIMEOUT_MS),
+    strategy: "posix-process-group",
+    escalated: true,
+  };
 }
 
 export async function runObservedCommand({
@@ -39,6 +171,11 @@ export async function runObservedCommand({
     throw new TypeError("signal");
   }
   const spawn = dependencies.spawn ?? defaultSpawn;
+  const platform = dependencies.platform ?? process.platform;
+  const spawnTerminationHelper = dependencies.spawnTerminationHelper ?? defaultSpawn;
+  const terminateProcessTree = dependencies.terminateProcessTree ?? defaultTerminateProcessTree;
+  const processKill = dependencies.processKill ?? process.kill.bind(process);
+  const terminationTimeoutMs = dependencies.terminationTimeoutMs ?? DEFAULT_TERMINATION_TIMEOUT_MS;
   const nowDate = dependencies.nowDate ?? (() => new Date());
   const nowMonotonic = dependencies.nowMonotonic ?? (() => performance.now());
   const readHeadCommit = dependencies.readHeadCommit ?? defaultReadHeadCommit;
@@ -50,11 +187,13 @@ export async function runObservedCommand({
   const effectiveStdio = capture ? "pipe" : (stdio ?? "inherit");
   const mirrorOutput = capture && (mirror || stdio === "inherit");
   const output = { stdout: [], stderr: [] };
+  const commandEnv = { ...process.env, ...env };
   const spawnOptions = {
     cwd,
-    env: { ...process.env, ...env },
+    env: commandEnv,
     shell: false,
     stdio: effectiveStdio,
+    ...(abortSignal && platform !== "win32" ? { detached: true } : {}),
   };
   let startedAt;
   let monotonicStart;
@@ -89,6 +228,9 @@ export async function runObservedCommand({
         stderr: Buffer.concat(output.stderr).toString("utf8"),
         signal: details.signal,
         termination: details.termination,
+        ...(details.cancellationConfirmed !== undefined
+          ? { cancellationConfirmed: details.cancellationConfirmed, cancellation: details.cancellation }
+          : {}),
       });
     };
 
@@ -114,6 +256,7 @@ export async function runObservedCommand({
         if (mirrorOutput) process.stderr.write(buffer);
       });
     }
+    const observedClose = processSettlement(child);
     let cancellationSignal = null;
     let spawnedChildError = false;
     const requestCancellation = () => {
@@ -121,12 +264,48 @@ export async function runObservedCommand({
       cancellationSignal = ["SIGINT", "SIGTERM"].includes(abortSignal?.reason)
         ? abortSignal.reason
         : "SIGTERM";
-      try {
-        child.kill(cancellationSignal);
-      } catch {
-        // Settlement remains tied to close; without confirmed termination the
-        // observation intentionally stays pending.
-      }
+      void (async () => {
+        let tree;
+        try {
+          tree = await terminateProcessTree({
+            child,
+            pid: child.pid,
+            cwd,
+            env: commandEnv,
+            signal: cancellationSignal,
+            platform,
+            systemRoot: dependencies.systemRoot ?? commandEnv.SystemRoot,
+            spawnTerminationHelper,
+            processKill,
+            timeoutMs: terminationTimeoutMs,
+          });
+        } catch (error) {
+          tree = { confirmed: false, failure: error instanceof Error ? error.message : String(error) };
+        }
+        let commandSettlement = await bounded(
+          observedClose,
+          terminationTimeoutMs,
+          { closeObserved: false, timedOut: true },
+        );
+        if (commandSettlement.closeObserved !== true) {
+          try {
+            child.kill("SIGKILL");
+          } catch {
+            // The cancellation remains unconfirmed.
+          }
+          const fallbackSettlement = await bounded(observedClose, FALLBACK_CLOSE_TIMEOUT_MS, null);
+          if (fallbackSettlement) commandSettlement = fallbackSettlement;
+        }
+        const cancellationConfirmed = tree?.confirmed === true
+          && commandSettlement?.closeObserved === true;
+        await finish({
+          exitCode: cancellationConfirmed ? 130 : 3,
+          signal: cancellationSignal,
+          termination: "signal",
+          cancellationConfirmed,
+          cancellation: { tree, command: commandSettlement },
+        });
+      })();
     };
     if (abortSignal) {
       abortSignal.addEventListener("abort", requestCancellation, { once: true });
@@ -135,7 +314,7 @@ export async function runObservedCommand({
     }
     child.once("close", (exitCode, signal) => {
       if (cancellationSignal) {
-        void finish({ exitCode: 130, signal: cancellationSignal, termination: "signal" });
+        return;
       } else if (spawnedChildError) {
         void finish({ exitCode: 3, signal: null, termination: "spawn-error" });
       } else {

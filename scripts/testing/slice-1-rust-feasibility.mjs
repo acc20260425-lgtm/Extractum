@@ -368,6 +368,7 @@ export async function runRustFeasibility({
   let infrastructureFailure = false;
   let observedFailure = false;
   let interrupted = false;
+  let cancellationFailure = false;
   let restorationFailure = false;
   let restoration = { verified: true, restoredHash: originalHash };
   let signalGeneration = 0;
@@ -380,11 +381,28 @@ export async function runRustFeasibility({
       const active = activeObservation;
       if (active) {
         active.controller.abort(signal);
+        let activeResult;
         try {
-          await active.settlement;
-        } catch {
-          // The sample loop retains command failures. Restoration must still
-          // wait for command settlement before touching the source bytes.
+          activeResult = await active.settlement;
+        } catch (error) {
+          cancellationFailure = true;
+          infrastructureFailure = true;
+          restoration = {
+            verified: false,
+            restoredHash: null,
+            cancellationError: errorMessage(error),
+          };
+          return 3;
+        }
+        if (activeResult?.cancellationConfirmed !== true) {
+          cancellationFailure = true;
+          infrastructureFailure = true;
+          restoration = {
+            verified: false,
+            restoredHash: null,
+            cancellationError: "Active command tree termination was not confirmed",
+          };
+          return 3;
         }
       }
       restoration = await sourceGuard.requestStop();
@@ -502,8 +520,14 @@ export async function runRustFeasibility({
       failure = errorMessage(error);
       infrastructureFailure = true;
     } finally {
-      restoration = await sourceGuard.restore();
-      if (!restoration.verified) {
+      if (interrupted) await signalRestoration;
+      if (!cancellationFailure) restoration = await sourceGuard.restore();
+      if (cancellationFailure) {
+        valid = false;
+        failureKind = "cancellation";
+        failure = "Active command tree termination was not confirmed; source restoration was withheld";
+        infrastructureFailure = true;
+      } else if (!restoration.verified) {
         valid = false;
         failureKind = "restoration";
         failure = "Original readiness.rs bytes could not be verified after restoration";
@@ -563,7 +587,9 @@ export async function runRustFeasibility({
         directHarnessMs,
         cargoEndToEndMs,
       } : unavailableSummary();
-      const exitCode = restorationFailure ? 3 : interrupted ? 130 : infrastructureFailure ? 3 : observedFailure ? 1 : 0;
+      const exitCode = restorationFailure || cancellationFailure
+        ? 3
+        : interrupted ? 130 : infrastructureFailure ? 3 : observedFailure ? 1 : 0;
       const samples = observations.map((observation) => ({
         ...observation,
         warmup: observation.phase === "warmup",

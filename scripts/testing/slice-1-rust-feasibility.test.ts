@@ -572,6 +572,7 @@ describe("slice one Rust feasibility driver", () => {
                 exitCode: 130,
                 termination: "signal",
                 signal: "SIGINT",
+                cancellationConfirmed: true,
                 stdout: "",
                 stderr: "",
               });
@@ -602,6 +603,62 @@ describe("slice one Rust feasibility driver", () => {
     ]);
     expect(installSignalHandlers).toHaveBeenCalledTimes(1);
     expect(removeSignalHandlers).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not restore a mutation after unconfirmed active-command tree termination", async () => {
+    const harness = createHarness();
+    let signalHandler: ((signal: string) => Promise<number>) | undefined;
+    let signalResult: Promise<number> | undefined;
+    let signalled = false;
+    const baseRunCommand = harness.runCommand;
+    harness.runCommand = vi.fn(async (call) => {
+      const mutated = !harness.files.get(harness.sourcePath)!.equals(ORIGINAL_SOURCE);
+      if (mutated && !signalled) {
+        signalled = true;
+        return new Promise((resolve) => {
+          call.signal.addEventListener("abort", () => {
+            queueMicrotask(() => resolve({
+              command: [call.command, ...call.args].join(" "),
+              startedAt: "2026-08-02T10:11:12.123Z",
+              duration: 7,
+              exitCode: 3,
+              termination: "signal",
+              signal: "SIGTERM",
+              cancellationConfirmed: false,
+              stdout: "",
+              stderr: "tree termination unconfirmed",
+            }));
+          }, { once: true });
+          signalResult = signalHandler!("SIGTERM");
+        });
+      }
+      return baseRunCommand(call);
+    });
+
+    const report = await runRustFeasibility({
+      repoRoot: harness.repoRoot,
+      runCommand: harness.runCommand,
+      filesystem: harness.filesystem,
+      randomUUID: harness.randomUUID,
+      installSignalHandlers: (handler) => {
+        signalHandler = handler;
+        return vi.fn();
+      },
+    });
+
+    await expect(signalResult).resolves.toBe(3);
+    expect(report).toMatchObject({
+      exitCode: 3,
+      valid: false,
+      restoration: { verified: false },
+      samples: expect.arrayContaining([expect.objectContaining({
+        failureKind: "cancellation",
+        failure: expect.stringMatching(/restoration was withheld/i),
+      })]),
+    });
+    expect(harness.files.get(harness.sourcePath)).not.toEqual(ORIGINAL_SOURCE);
+    expect(harness.writes.some((write) => write.file === harness.sourcePath
+      && write.bytes.equals(ORIGINAL_SOURCE))).toBe(false);
   });
 
   it.each(["read", "write"] as const)("replaces a stale valid report after persistent restoration %s failure", async (restoreFailure) => {
@@ -654,6 +711,7 @@ describe("slice one Rust feasibility driver", () => {
           exitCode: 130,
           termination: "signal",
           signal: "SIGTERM",
+          cancellationConfirmed: true,
           stdout: "",
           stderr: "",
         };
