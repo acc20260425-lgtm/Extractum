@@ -103,6 +103,17 @@ describe("runner census validation", () => {
     );
   });
 
+  it.each([
+    ["vitestOwners", null, "invalid Vitest owner"],
+    ["vitestOwners", "not-an-owner", "invalid Vitest owner"],
+    ["playwrightOwners", null, "invalid Playwright owner"],
+    ["playwrightOwners", "not-an-owner", "invalid Playwright owner"],
+  ])("returns schema issues for malformed %s entries", (ownerKey, entry, issue) => {
+    const malformed = { ...census, [ownerKey]: [entry] };
+    expect(() => validateRunnerCensus(check({ census: malformed }))).not.toThrow();
+    expect(validateRunnerCensus(check({ census: malformed }))).toEqual(expect.arrayContaining([issue]));
+  });
+
   it("reports unknown census and exception fields", () => {
     expect(validateCensusSchema({ ...census, unexpected: true })).toEqual(["unknown runner census field: unexpected"]);
     expect(validateRunnerCensus(check({

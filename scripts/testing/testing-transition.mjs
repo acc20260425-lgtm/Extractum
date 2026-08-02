@@ -194,6 +194,10 @@ export function validateRunnerCensus({ census, filesystemFiles = [], vitestFiles
   const issues = [...validateCensusSchema(census), ...runnerIssues];
   if (!census || !Array.isArray(census.vitestOwners) || !Array.isArray(census.playwrightOwners)
     || !Array.isArray(census.nonstandardTests) || !Array.isArray(census.fixtureExceptions)) return [...new Set(issues)].sort();
+  const malformedOwner = [...census.vitestOwners, ...census.playwrightOwners].some((owner) =>
+    !owner || typeof owner !== "object" || Array.isArray(owner),
+  );
+  if (malformedOwner) return [...new Set(issues)].sort();
   const malformedException = [...census.nonstandardTests, ...census.fixtureExceptions].some((entry) =>
     !entry || typeof entry !== "object" || Array.isArray(entry)
     || ["path", "reason", "owner"].some((field) => typeof entry[field] !== "string" || !entry[field].trim()),
