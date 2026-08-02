@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "vitestOwners": [
+    { "id": "vitest:root", "args": [], "ownerScript": "test" }
+  ],
+  "playwrightOwners": [
+    {
+      "id": "playwright:gemini-browser-adapter",
+      "config": "research/gemini_browser_adapter/playwright.config.ts",
+      "ownerScript": "test:gemini-browser-adapter:e2e"
+    }
+  ],
+  "nonstandardTests": [],
+  "fixtureExceptions": []
+}
