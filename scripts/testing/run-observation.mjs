@@ -37,11 +37,17 @@ export async function runObservedCommand({
   const warn = dependencies.warn ?? console.warn;
   const completedCommand = formatCommand(command, args);
   const commit = readHeadCommit(cwd);
-  const startedAt = nowDate().toISOString();
-  const monotonicStart = nowMonotonic();
   const effectiveStdio = capture ? "pipe" : (stdio ?? "inherit");
   const mirrorOutput = capture && (mirror || stdio === "inherit");
   const output = { stdout: [], stderr: [] };
+  const spawnOptions = {
+    cwd,
+    env: { ...process.env, ...env },
+    shell: false,
+    stdio: effectiveStdio,
+  };
+  let startedAt;
+  let monotonicStart;
 
   return new Promise((resolve) => {
     let finished = false;
@@ -76,12 +82,9 @@ export async function runObservedCommand({
 
     let child;
     try {
-      child = spawn(command, args, {
-        cwd,
-        env: { ...process.env, ...env },
-        shell: false,
-        stdio: effectiveStdio,
-      });
+      startedAt = nowDate().toISOString();
+      monotonicStart = nowMonotonic();
+      child = spawn(command, args, spawnOptions);
     } catch (error) {
       void finish({ exitCode: 3, signal: null, termination: "spawn-error" });
       return;

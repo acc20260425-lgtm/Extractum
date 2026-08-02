@@ -27,16 +27,25 @@ describe("runObservedCommand", () => {
   it("reads startedAt immediately before spawning and measures with monotonic time", async () => {
     const calls: string[] = [];
     const child = completedChild(0, null);
+    let monotonicCall = 0;
+    const env = new Proxy({ EXTRACTUM_OBSERVATION: "1" }, {
+      ownKeys(target) {
+        calls.push("env");
+        return Reflect.ownKeys(target);
+      },
+    });
     const value = dependencies({
       readHeadCommit: vi.fn(() => { calls.push("commit"); return commit; }),
       nowDate: vi.fn(() => { calls.push("date"); return new Date("2026-08-02T10:11:12.123Z"); }),
-      nowMonotonic: vi.fn(() => { calls.push("monotonic"); return calls.length === 3 ? 100 : 126.4; }),
+      nowMonotonic: vi.fn(() => { calls.push("monotonic"); return [100, 126.4][monotonicCall++]; }),
       spawn: vi.fn(() => { calls.push("spawn"); return child; }),
     });
 
-    const result = await runObservedCommand({ command: "node", args: ["script.mjs"], cwd: "repo", dependencies: value });
+    const result = await runObservedCommand({
+      command: "node", args: ["script.mjs"], cwd: "repo", env, dependencies: value,
+    });
 
-    expect(calls).toEqual(["commit", "date", "monotonic", "spawn", "monotonic"]);
+    expect(calls).toEqual(["commit", "env", "date", "monotonic", "spawn", "monotonic"]);
     expect(result).toMatchObject({ startedAt: "2026-08-02T10:11:12.123Z", duration: 26, exitCode: 0 });
   });
 
