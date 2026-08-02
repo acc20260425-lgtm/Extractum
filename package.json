@@ -45,6 +45,7 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "verify:project-runs": "npm run test:project-runs && npm run check && npm run test:rust:prompt-pack-runs",
     "verify": "node scripts/verify.mjs",
+    "verify:stability": "node scripts/verify-stability.mjs",
     "smoke:analysis": "node scripts/analysis-smoke.mjs",
     "smoke:cancellation": "node scripts/cancellation-smoke.mjs",
     "tauri": "node scripts/tauri.mjs"
