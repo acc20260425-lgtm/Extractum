@@ -8,6 +8,10 @@ const sidecarTests = import.meta.glob("/sidecars/**/*.test.ts", { query: "?raw",
 const researchTests = import.meta.glob("/research/**/*.test.ts", { query: "?raw", import: "default", eager: true });
 const testSources = { ...sourceTests, ...scriptTests, ...sidecarTests, ...researchTests } as Record<string, string>;
 const environmentMarker = "@vitest-environment " + "jsdom";
+const chromiumLauncherImport = new RegExp(
+  String.raw`^\s*import\s+(?=[^;]*\bchromium\b)[^;]*\s+from\s+["']@playwright/test["']\s*;?`,
+  "m",
+);
 
 describe("test conventions", () => {
   it("gives jsdom component tests component ownership and cleanup", () => {
@@ -17,6 +21,12 @@ describe("test conventions", () => {
       expect(testPath).toMatch(/\.component\.test\.ts$/);
       expect(source).toMatch(/import\s*\{[^}]*\bcleanup\b[^}]*\}\s*from\s*["']@testing-library\/svelte["']/);
       expect((source.match(/afterEach\(cleanup\)/g) ?? [])).toHaveLength(1);
+    }
+  });
+
+  it("keeps Chromium launch ownership out of Vitest test sources", () => {
+    for (const source of Object.values(testSources)) {
+      expect(source).not.toMatch(chromiumLauncherImport);
     }
   });
 
