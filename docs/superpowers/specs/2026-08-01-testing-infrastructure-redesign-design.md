@@ -5,8 +5,7 @@
 The design was approved on 2026-08-01, revised after written review, simplified
 by user decision on 2026-08-02, and refined after a second written review on
 the same date. It was amended on 2026-08-02 to add the user-approved disposable
-Slice 2C Nx decision gate. This amendment must be reviewed by the user before
-its implementation plan is written.
+Slice 2C Nx decision gate. The user approved this amendment on 2026-08-02.
 
 ## Executive Summary
 
