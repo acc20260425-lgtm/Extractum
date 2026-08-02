@@ -7226,7 +7226,7 @@
       "id": "SC-000508",
       "path": "src/lib/research-projects-foundation-contract.test.ts",
       "title": "new UI foundation > wires Tailwind through Vite without changing the Tauri server settings",
-      "sourceHash": "6f1badf1a47042c1678e440c5878ccd2d64167bf0bdc9532c000750fc2a28286",
+      "sourceHash": "c7b10a30c16c87aeb7cfb72135c5a36f0b65a7382c74950b7644c24bbe70e1dc",
       "assertionCount": 4,
       "authorityHash": "73600d7cda53adafb7020014af6718a8eb9456d4818b9e3127e14b6646685caf",
       "lineage": [],
@@ -7240,7 +7240,7 @@
       "id": "SC-000509",
       "path": "src/lib/research-projects-foundation-contract.test.ts",
       "manual": {
-        "sourceRange": "41:3-47:5",
+        "sourceRange": "39:3-45:5",
         "reason": "dynamic or unknown filesystem authority",
         "runnerTitles": [
           "new UI foundation > keeps shadcn generated primitives in lower-case ui folders beside legacy PascalCase ui files"
@@ -7260,7 +7260,7 @@
       "id": "SC-000510",
       "path": "src/lib/research-projects-foundation-contract.test.ts",
       "manual": {
-        "sourceRange": "49:3-57:5",
+        "sourceRange": "47:3-55:5",
         "reason": "dynamic or unknown filesystem authority",
         "runnerTitles": [
           "new UI foundation > moves shared tokens into the product base stylesheet"

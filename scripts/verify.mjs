@@ -14,7 +14,12 @@ export function createVerifySteps({ npmExecPath = process.env.npm_execpath, plat
   return [
     npmStep("npm run check:gemini-browser-sidecar-binary", "check:gemini-browser-sidecar-binary", { npmExecPath, platform }),
     { title: "node scripts/validate-testing-transition.mjs", command: process.execPath, args: ["scripts/validate-testing-transition.mjs"] },
-    npmStep("npm run test", "test", { npmExecPath, platform }),
+    npmStep("npm run test:unit", "test:unit", { npmExecPath, platform }),
+    npmStep("npm run test:component", "test:component", { npmExecPath, platform }),
+    npmStep("npm run test:architecture", "test:architecture", { npmExecPath, platform }),
+    npmStep("npm run test:legacy-contract", "test:legacy-contract", { npmExecPath, platform }),
+    npmStep("npm run test:integration:os", "test:integration:os", { npmExecPath, platform }),
+    npmStep("npm run test:e2e", "test:e2e", { npmExecPath, platform }),
     npmStep("npm run check", "check", { npmExecPath, platform }),
     npmStep("npm run check:rustfmt", "check:rustfmt", { npmExecPath, platform }),
     { title: "cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets", command: "cargo", args: ['check', '--manifest-path', 'src-tauri/Cargo.toml', '--workspace', '--all-targets'] },

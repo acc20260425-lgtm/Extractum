@@ -3,12 +3,17 @@ import { describe, expect, it, vi } from "vitest";
 import { createVerifySteps, runVerification } from "./verify.mjs";
 
 describe("verify", () => {
-  it("starts with the binary and transition gates, then preserves the previous gates", () => {
+  it("runs each test owner once between the transition and preserved static gates", () => {
     const steps = createVerifySteps({ npmExecPath: "npm-cli.js", platform: "win32" });
     expect(steps.map((step) => step.npmScript ?? step.command)).toEqual([
       "check:gemini-browser-sidecar-binary",
       process.execPath,
-      "test",
+      "test:unit",
+      "test:component",
+      "test:architecture",
+      "test:legacy-contract",
+      "test:integration:os",
+      "test:e2e",
       "check",
       "check:rustfmt",
       "cargo",
@@ -17,7 +22,7 @@ describe("verify", () => {
     ]);
     expect(steps[1]).toMatchObject({ command: process.execPath, args: ["scripts/validate-testing-transition.mjs"] });
     expect(steps.filter((step) => step.npmScript).map((step) => step.npmScript)).not.toEqual(expect.arrayContaining([
-      "bootstrap:testing", "build:gemini-browser-sidecar",
+      "test", "bootstrap:testing", "build:gemini-browser-sidecar",
     ]));
   });
 

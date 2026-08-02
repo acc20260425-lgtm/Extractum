@@ -29,11 +29,9 @@ describe("new UI foundation", () => {
 
   it("wires Tailwind through Vite without changing the Tauri server settings", () => {
     expect(viteConfigSource).toContain('import tailwindcss from "@tailwindcss/vite";');
-    // `svelteTesting()` is appended only under Vitest (component render tests);
-    // the Tauri/Tailwind plugin wiring and server settings are unchanged.
-    expect(viteConfigSource).toContain(
-      "plugins: [tailwindcss(), sveltekit(), ...(process.env.VITEST ? [svelteTesting()] : [])]",
-    );
+    // Component-only Vitest plugin wiring belongs in vitest.config.ts; the
+    // root Vite configuration remains the Tauri/Tailwind owner.
+    expect(viteConfigSource).toContain("plugins: [tailwindcss(), sveltekit()]");
     expect(viteConfigSource).toContain("port: 1420");
     expect(viteConfigSource).toContain("strictPort: true");
   });
