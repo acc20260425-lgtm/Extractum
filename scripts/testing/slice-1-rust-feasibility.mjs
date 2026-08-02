@@ -449,70 +449,76 @@ export async function runRustFeasibility({
         beforeMtime = (await filesystem.stat(executableForAttempt)).mtimeMs;
       }
 
-      const controller = new AbortController();
-      const settlement = Promise.resolve().then(() => runCommand({
-        command,
-        args,
-        cwd: root,
-        repoRoot: root,
-        capture: true,
-        mirror: entry.shape === "endToEnd",
-        signal: controller.signal,
-      }));
-      const active = { controller, settlement };
-      activeObservation = active;
-      try {
-        result = await settlement;
-      } finally {
-        if (activeObservation === active) activeObservation = null;
-      }
-      result.stdout ??= "";
-      result.stderr ??= "";
-      if (result.exitCode !== 0) {
+      if (interrupted) {
         valid = false;
-        failure = `Command exited ${result.exitCode}`;
-        if (result.exitCode === 130) {
-          failureKind = "interrupted";
-          interrupted = true;
-        } else if (result.termination === "spawn-error" || result.exitCode === 3) {
-          failureKind = "infrastructure";
-          infrastructureFailure = true;
-        } else {
-          failureKind = "command";
-          observedFailure = true;
+        failureKind = "interrupted";
+        failure = "Study interrupted before command dispatch";
+      } else {
+        const controller = new AbortController();
+        const settlement = Promise.resolve().then(() => runCommand({
+          command,
+          args,
+          cwd: root,
+          repoRoot: root,
+          capture: true,
+          mirror: entry.shape === "endToEnd",
+          signal: controller.signal,
+        }));
+        const active = { controller, settlement };
+        activeObservation = active;
+        try {
+          result = await settlement;
+        } finally {
+          if (activeObservation === active) activeObservation = null;
         }
-      } else if (entry.shape === "noopCheck") {
-        proof = parseCargoArtifacts(result.stdout, {
-          repoRoot: root,
-          freshExpectation: entry.phase === "warmup" ? "record" : "must-be-fresh",
-          expectedTestProfile: false,
-        });
-      } else if (entry.shape === "invalidatedCheck") {
-        proof = parseCargoArtifacts(result.stdout, {
-          repoRoot: root,
-          freshExpectation: "must-rebuild",
-          expectedTestProfile: false,
-        });
-      } else if (entry.shape === "noRun") {
-        proof = parseCargoArtifacts(result.stdout, {
-          repoRoot: root,
-          freshExpectation: "must-rebuild",
-          expectedTestProfile: true,
-          requireExecutable: true,
-        });
-        executableForAttempt = proof.executable;
-        latestExecutable = proof.executable;
-        pairedExecutables.set(entry.pair, proof.executable);
-      } else if (entry.shape === "directBinary") {
-        proof = { executable: executableForAttempt, exactTest: parseExactLibtest(result.stdout) };
-      } else if (entry.shape === "endToEnd") {
-        const compiledExtractum = /^\s*Compiling extractum v/mu.test(result.stderr);
-        const afterMtime = (await filesystem.stat(executableForAttempt)).mtimeMs;
-        const executableMtimeIncreased = afterMtime > beforeMtime;
-        const exactTest = parseExactLibtest(result.stdout);
-        if (!compiledExtractum) throw new Error("End-to-end stderr did not prove Compiling extractum");
-        if (!executableMtimeIncreased) throw new Error("End-to-end root test executable mtime did not increase");
-        proof = { executable: executableForAttempt, beforeMtime, afterMtime, compiledExtractum, executableMtimeIncreased, exactTest };
+        result.stdout ??= "";
+        result.stderr ??= "";
+        if (result.exitCode !== 0) {
+          valid = false;
+          failure = `Command exited ${result.exitCode}`;
+          if (result.exitCode === 130) {
+            failureKind = "interrupted";
+            interrupted = true;
+          } else if (result.termination === "spawn-error" || result.exitCode === 3) {
+            failureKind = "infrastructure";
+            infrastructureFailure = true;
+          } else {
+            failureKind = "command";
+            observedFailure = true;
+          }
+        } else if (entry.shape === "noopCheck") {
+          proof = parseCargoArtifacts(result.stdout, {
+            repoRoot: root,
+            freshExpectation: entry.phase === "warmup" ? "record" : "must-be-fresh",
+            expectedTestProfile: false,
+          });
+        } else if (entry.shape === "invalidatedCheck") {
+          proof = parseCargoArtifacts(result.stdout, {
+            repoRoot: root,
+            freshExpectation: "must-rebuild",
+            expectedTestProfile: false,
+          });
+        } else if (entry.shape === "noRun") {
+          proof = parseCargoArtifacts(result.stdout, {
+            repoRoot: root,
+            freshExpectation: "must-rebuild",
+            expectedTestProfile: true,
+            requireExecutable: true,
+          });
+          executableForAttempt = proof.executable;
+          latestExecutable = proof.executable;
+          pairedExecutables.set(entry.pair, proof.executable);
+        } else if (entry.shape === "directBinary") {
+          proof = { executable: executableForAttempt, exactTest: parseExactLibtest(result.stdout) };
+        } else if (entry.shape === "endToEnd") {
+          const compiledExtractum = /^\s*Compiling extractum v/mu.test(result.stderr);
+          const afterMtime = (await filesystem.stat(executableForAttempt)).mtimeMs;
+          const executableMtimeIncreased = afterMtime > beforeMtime;
+          const exactTest = parseExactLibtest(result.stdout);
+          if (!compiledExtractum) throw new Error("End-to-end stderr did not prove Compiling extractum");
+          if (!executableMtimeIncreased) throw new Error("End-to-end root test executable mtime did not increase");
+          proof = { executable: executableForAttempt, beforeMtime, afterMtime, compiledExtractum, executableMtimeIncreased, exactTest };
+        }
       }
     } catch (error) {
       valid = false;

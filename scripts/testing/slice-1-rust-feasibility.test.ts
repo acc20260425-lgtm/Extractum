@@ -605,6 +605,43 @@ describe("slice one Rust feasibility driver", () => {
     expect(removeSignalHandlers).toHaveBeenCalledTimes(1);
   });
 
+  it("does not dispatch end-to-end Cargo after SIGINT during its pre-command mtime read", async () => {
+    const harness = createHarness();
+    let signalHandler: ((signal: string) => Promise<number>) | undefined;
+    let signalResult: Promise<number> | undefined;
+    let sourceWasMutatedAtSignal = false;
+    const stat = harness.filesystem.stat;
+    harness.filesystem.stat = vi.fn(async (file: string) => {
+      if (file === harness.executable && !signalResult) {
+        sourceWasMutatedAtSignal = !harness.files.get(harness.sourcePath)!.equals(ORIGINAL_SOURCE);
+        expect(signalHandler).toBeTypeOf("function");
+        signalResult = signalHandler!("SIGINT");
+      }
+      return stat(file);
+    });
+
+    const report = await runRustFeasibility({
+      repoRoot: harness.repoRoot,
+      runCommand: harness.runCommand,
+      filesystem: harness.filesystem,
+      randomUUID: harness.randomUUID,
+      installSignalHandlers: (handler) => {
+        signalHandler = handler;
+        return vi.fn();
+      },
+    });
+
+    const endToEndCalls = harness.runCommand.mock.calls.filter(([call]) => call.command === "cargo"
+      && call.args[0] === "test" && call.args.includes(RUST_TEST_NAME));
+    const endToEndObservation = report.samples.find((entry: { shape: string }) => entry.shape === "endToEnd");
+    expect(sourceWasMutatedAtSignal).toBe(true);
+    expect(endToEndCalls).toHaveLength(0);
+    expect(endToEndObservation).toMatchObject({ valid: false, failureKind: "interrupted", termination: "not-run" });
+    expect(harness.files.get(harness.sourcePath)).toEqual(ORIGINAL_SOURCE);
+    expect(report).toMatchObject({ exitCode: 130, valid: false, restoration: { verified: true } });
+    await expect(signalResult).resolves.toBe(130);
+  });
+
   it("does not restore a mutation after unconfirmed active-command tree termination", async () => {
     const harness = createHarness();
     let signalHandler: ((signal: string) => Promise<number>) | undefined;
