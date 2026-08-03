@@ -16,8 +16,12 @@ pub(crate) fn session_path(handle: &AppHandle, account_id: i64) -> AppResult<Pat
         .path()
         .app_data_dir()
         .map_err(|error| AppError::internal(error.to_string()))?;
-    fs::create_dir_all(&app_dir).map_err(|error| AppError::internal(error.to_string()))?;
-    Ok(app_dir.join(format!("telegram_{account_id}.session.json")))
+    session_path_from_app_data_root(&app_dir, account_id)
+}
+
+fn session_path_from_app_data_root(app_data_root: &Path, account_id: i64) -> AppResult<PathBuf> {
+    fs::create_dir_all(app_data_root).map_err(|error| AppError::internal(error.to_string()))?;
+    Ok(app_data_root.join(format!("telegram_{account_id}.session.json")))
 }
 
 pub(crate) fn session_exists(handle: &AppHandle, account_id: i64) -> bool {
@@ -59,9 +63,31 @@ fn session_temp_path(path: &std::path::Path) -> std::path::PathBuf {
 }
 
 fn write_atomic(path: &Path, contents: &str) -> AppResult<()> {
+    write_atomic_with(
+        path,
+        contents,
+        |path, contents| fs::write(path, contents),
+        |from, to| fs::rename(from, to),
+    )
+}
+
+fn write_atomic_with<Write, Rename>(
+    path: &Path,
+    contents: &str,
+    write: Write,
+    rename: Rename,
+) -> AppResult<()>
+where
+    Write: FnOnce(&Path, &str) -> std::io::Result<()>,
+    Rename: FnOnce(&Path, &Path) -> std::io::Result<()>,
+{
     let tmp_path = session_temp_path(path);
-    fs::write(&tmp_path, contents).map_err(|error| AppError::internal(error.to_string()))?;
-    fs::rename(&tmp_path, path).map_err(|error| AppError::internal(error.to_string()))
+    write(&tmp_path, contents).map_err(|error| AppError::internal(error.to_string()))?;
+    if let Err(error) = rename(&tmp_path, path) {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(AppError::internal(error.to_string()));
+    }
+    Ok(())
 }
 
 async fn write_encrypted_session_file(
@@ -192,6 +218,90 @@ mod tests {
             Ok(_) => panic!("{context}"),
             Err(error) => error,
         }
+    }
+
+    #[test]
+    fn session_path_uses_app_data_root_and_account_filename() {
+        let app_data_root = tempfile::tempdir().expect("app data root");
+
+        let path = session_path_from_app_data_root(app_data_root.path(), 42)
+            .expect("resolve private session path");
+
+        assert_eq!(path.parent(), Some(app_data_root.path()));
+        assert_eq!(
+            path.file_name().and_then(|name| name.to_str()),
+            Some("telegram_42.session.json")
+        );
+        assert!(app_data_root.path().is_dir());
+    }
+
+    #[test]
+    fn atomic_session_write_outcome_and_error_contract_is_exact() {
+        let success_root = tempfile::tempdir().expect("success root");
+        let success_path = success_root.path().join("telegram_7.session.json");
+        fs::write(&success_path, "old").expect("write old target");
+        write_atomic_with(
+            &success_path,
+            "new",
+            |path, contents| fs::write(path, contents),
+            |from, to| fs::rename(from, to),
+        )
+        .expect("replace session atomically");
+        assert_eq!(
+            fs::read_to_string(&success_path).expect("read replacement"),
+            "new"
+        );
+        assert!(!session_temp_path(&success_path).exists());
+
+        let write_root = tempfile::tempdir().expect("write failure root");
+        let write_path = write_root.path().join("telegram_8.session.json");
+        let write_error = write_atomic_with(
+            &write_path,
+            "new",
+            |_, _| {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "scripted write failure",
+                ))
+            },
+            |_, _| panic!("rename must not run after write failure"),
+        )
+        .expect_err("write failure must be internal");
+        assert_error_contract(
+            write_error,
+            AppErrorKind::Internal,
+            "scripted write failure",
+            r#"{"kind":"internal","message":"scripted write failure"}"#,
+        );
+        assert!(!write_path.exists());
+        assert!(!session_temp_path(&write_path).exists());
+
+        let rename_root = tempfile::tempdir().expect("rename failure root");
+        let rename_path = rename_root.path().join("telegram_9.session.json");
+        fs::write(&rename_path, "old").expect("write retained target");
+        let rename_error = write_atomic_with(
+            &rename_path,
+            "new",
+            |path, contents| fs::write(path, contents),
+            |_, _| {
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "scripted rename failure",
+                ))
+            },
+        )
+        .expect_err("rename failure must be internal");
+        assert_error_contract(
+            rename_error,
+            AppErrorKind::Internal,
+            "scripted rename failure",
+            r#"{"kind":"internal","message":"scripted rename failure"}"#,
+        );
+        assert_eq!(
+            fs::read_to_string(&rename_path).expect("read retained target"),
+            "old"
+        );
+        assert!(!session_temp_path(&rename_path).exists());
     }
 
     #[tokio::test]
