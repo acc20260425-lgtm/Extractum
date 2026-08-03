@@ -81,6 +81,36 @@ describe("RepositoryIndex", () => {
     ]);
   });
 
+  it("retains template operands in complete guard predicates", () => {
+    const { index } = fixtureIndex({
+      "src/guard.ts": 'function rejectParent(relative: string) { if (relative.startsWith(`..${path.sep}`)) throw new Error("parent path"); }',
+    });
+
+    expect(index.getTypeScript("src/guard.ts").functions[0].guards[0]).toEqual({
+      condition: {
+        kind: "call",
+        callee: {
+          kind: "member",
+          object: { kind: "identifier", name: "relative" },
+          property: "startsWith",
+        },
+        arguments: [{
+          kind: "template",
+          head: "..",
+          spans: [{
+            expression: {
+              kind: "member",
+              object: { kind: "identifier", name: "path" },
+              property: "sep",
+            },
+            literal: "",
+          }],
+        }],
+      },
+      consequenceThrows: true,
+    });
+  });
+
   it("returns parsed Svelte component facts", () => {
     const { index } = fixtureIndex({
       "src/example.svelte": '<script lang="ts">import Child from "./Child.svelte";</script>\n<Child answer={42} />',

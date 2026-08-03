@@ -28,23 +28,6 @@ function requireCalls(violations, functionFact, functionName, expectedCalls) {
   }
 }
 
-function requireGuardFacts(violations, functionFact, functionName, expectedCalls, expectedLiterals, minimumThrows) {
-  if (!functionFact) return;
-  for (const call of expectedCalls) {
-    if (!functionFact.guardCalls.includes(call)) {
-      violations.push(`${TELEGRAM_PATH}: ${functionName} must guard with ${call}`);
-    }
-  }
-  for (const literal of expectedLiterals) {
-    if (!functionFact.guardStringLiterals.includes(literal)) {
-      violations.push(`${TELEGRAM_PATH}: ${functionName} must guard the ${JSON.stringify(literal)} path case`);
-    }
-  }
-  if (functionFact.throwCount < minimumThrows) {
-    violations.push(`${TELEGRAM_PATH}: ${functionName} must fail closed from its path guards`);
-  }
-}
-
 function identifier(expression, name) {
   return expression?.kind === "identifier" && expression.name === name;
 }
@@ -66,47 +49,75 @@ function call(expression, callee, argumentsMatch) {
     && argumentsMatch(expression.arguments);
 }
 
-function containsExpression(expression, predicate) {
-  if (!expression || typeof expression !== "object") return false;
-  if (predicate(expression)) return true;
-  return Object.values(expression).some((value) => Array.isArray(value)
-    ? value.some((item) => containsExpression(item, predicate))
-    : containsExpression(value, predicate));
+function unary(expression, operator, operandMatch) {
+  return expression?.kind === "unary"
+    && expression.operator === operator
+    && operandMatch(expression.operand);
 }
 
-function equality(expression, operandName, value) {
+function comparison(expression, operator, operandName, value) {
   return expression?.kind === "binary"
-    && expression.operator === "==="
-    && identifier(expression.left, operandName)
-    && stringLiteral(expression.right, value);
+    && expression.operator === operator
+    && ((identifier(expression.left, operandName) && stringLiteral(expression.right, value))
+      || (stringLiteral(expression.left, value) && identifier(expression.right, operandName)));
 }
 
 function exactDotSegmentPredicate(expression, parameter) {
+  const comparisons = expression?.kind === "binary" && expression.operator === "||"
+    ? [expression.left, expression.right]
+    : [];
   return expression?.kind === "binary"
     && expression.operator === "||"
-    && equality(expression.left, parameter, ".")
-    && equality(expression.right, parameter, "..");
+    && comparisons.some((item) => comparison(item, "===", parameter, "."))
+    && comparisons.some((item) => comparison(item, "===", parameter, ".."));
 }
 
-function hasDotSegmentGuard(functionFact) {
-  return functionFact?.guards.some((guard) => guard.consequenceThrows
-    && containsExpression(guard.condition, (expression) => {
-      if (expression?.kind !== "call" || expression.callee?.kind !== "member" || expression.callee.property !== "some") {
-        return false;
-      }
-      const split = expression.callee.object;
-      if (!call(split, "relativePath.split", (args) => args.length === 1 && stringLiteral(args[0], "/"))) return false;
-      const predicate = expression.arguments[0];
-      const parameter = predicate?.kind === "arrow" ? predicate.parameters[0] : undefined;
-      return typeof parameter === "string" && exactDotSegmentPredicate(predicate.body, parameter);
-    }));
+function dotSegmentPredicate(expression) {
+  if (expression?.kind !== "call" || expression.callee?.kind !== "member" || expression.callee.property !== "some") {
+    return false;
+  }
+  const split = expression.callee.object;
+  if (!call(split, "relativePath.split", (args) => args.length === 1 && stringLiteral(args[0], "/"))) return false;
+  const predicate = expression.arguments[0];
+  const parameter = predicate?.kind === "arrow" ? predicate.parameters[0] : undefined;
+  return typeof parameter === "string" && exactDotSegmentPredicate(predicate.body, parameter);
 }
 
-function hasMissingFileGuard(functionFact) {
-  return functionFact?.guards.some((guard) => guard.consequenceThrows
-    && guard.condition?.kind === "unary"
-    && guard.condition.operator === "!"
-    && call(guard.condition.operand, "existsSync", (args) => args.length === 1 && identifier(args[0], "selected")));
+function disjunctionTerms(expression) {
+  return expression?.kind === "binary" && expression.operator === "||"
+    ? [...disjunctionTerms(expression.left), ...disjunctionTerms(expression.right)]
+    : [expression];
+}
+
+function throwingGuardTerms(functionFact) {
+  return functionFact?.guards
+    .filter(({ consequenceThrows }) => consequenceThrows)
+    .flatMap(({ condition }) => disjunctionTerms(condition)) ?? [];
+}
+
+function requireThrowingGuard(violations, functionFact, label, match) {
+  if (!throwingGuardTerms(functionFact).some(match)) {
+    violations.push(`${TELEGRAM_PATH}: missing fail-closed ${label} guard`);
+  }
+}
+
+function pathSeparatorMember(expression) {
+  return expressionPath(expression) === "path.sep";
+}
+
+function parentPrefix(expression) {
+  if (expression?.kind === "binary" && expression.operator === "+") {
+    return stringLiteral(expression.left, "..") && pathSeparatorMember(expression.right);
+  }
+  return expression?.kind === "template"
+    && expression.head === ".."
+    && expression.spans.length === 1
+    && pathSeparatorMember(expression.spans[0].expression)
+    && expression.spans[0].literal === "";
+}
+
+function startsWithParent(expression, owner) {
+  return call(expression, `${owner}.startsWith`, (args) => args.length === 1 && parentPrefix(args[0]));
 }
 
 function evaluateTelegramRepositoryPathSafety(index) {
@@ -123,27 +134,35 @@ function evaluateTelegramRepositoryPathSafety(index) {
     "path.relative",
     "relativePath.split",
   ]);
-  requireGuardFacts(violations, repositoryGuard, "assertRepositoryRelative", [
-    "path.isAbsolute",
-    "relativePath.includes",
-    "relativePath.split",
-  ], ["", "\\", ".", ".."], 2);
-  if (!hasDotSegmentGuard(repositoryGuard)) {
-    violations.push(`${TELEGRAM_PATH}: assertRepositoryRelative must reject exactly the . and .. path segments`);
-  }
+  requireThrowingGuard(violations, repositoryGuard, "empty repository path", (term) =>
+    unary(term, "!", (operand) => identifier(operand, "relativePath")));
+  requireThrowingGuard(violations, repositoryGuard, "absolute input path", (term) =>
+    call(term, "path.isAbsolute", (args) => args.length === 1 && identifier(args[0], "relativePath")));
+  requireThrowingGuard(violations, repositoryGuard, "Windows-separator path", (term) =>
+    call(term, "relativePath.includes", (args) => args.length === 1 && stringLiteral(args[0], "\\")));
+  requireThrowingGuard(violations, repositoryGuard, "dot-segment path", dotSegmentPredicate);
+  requireThrowingGuard(violations, repositoryGuard, "resolved repository root", (term) =>
+    comparison(term, "===", "relative", ""));
+  requireThrowingGuard(violations, repositoryGuard, "resolved parent path", (term) =>
+    comparison(term, "===", "relative", ".."));
+  requireThrowingGuard(violations, repositoryGuard, "resolved parent-prefix path", (term) =>
+    startsWithParent(term, "relative"));
+  requireThrowingGuard(violations, repositoryGuard, "resolved absolute path", (term) =>
+    call(term, "path.isAbsolute", (args) => args.length === 1 && identifier(args[0], "relative")));
   requireCalls(violations, resolver, "resolveTelegramContractPath", [
     "assertRepositoryRelative",
     "existsSync",
     "path.relative",
     "realpathSync",
   ]);
-  requireGuardFacts(violations, resolver, "resolveTelegramContractPath", [
-    "existsSync",
-    "path.isAbsolute",
-  ], [".."], 2);
-  if (!hasMissingFileGuard(resolver)) {
-    violations.push(`${TELEGRAM_PATH}: resolveTelegramContractPath must reject a missing selected path`);
-  }
+  requireThrowingGuard(violations, resolver, "missing selected path", (term) =>
+    unary(term, "!", (operand) => call(operand, "existsSync", (args) => args.length === 1 && identifier(args[0], "selected"))));
+  requireThrowingGuard(violations, resolver, "realpath parent escape", (term) =>
+    comparison(term, "===", "realRelative", ".."));
+  requireThrowingGuard(violations, resolver, "realpath parent-prefix escape", (term) =>
+    startsWithParent(term, "realRelative"));
+  requireThrowingGuard(violations, resolver, "realpath absolute escape", (term) =>
+    call(term, "path.isAbsolute", (args) => args.length === 1 && identifier(args[0], "realRelative")));
   requireCalls(violations, reader, "readTelegramContractFile", [
     "normalizeTelegramContractSourceText",
     "readFileSync",

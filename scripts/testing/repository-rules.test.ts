@@ -61,8 +61,26 @@ const ruleFixtures: Record<string, RuleFixture> = {
   "rule:telegram-repository-path-safety": {
     positive: { [TELEGRAM_PATH]: telegramPathHelper },
     mutations: {
-      "removes the Windows-separator rejection": {
-        [TELEGRAM_PATH]: telegramPathHelper.replace('      || relativePath.includes("\\\\")\n', ""),
+      "inverts the empty-path rejection": {
+        [TELEGRAM_PATH]: telegramPathHelper.replace("      !relativePath\n", "      relativePath\n"),
+      },
+      "inverts the absolute-input rejection": {
+        [TELEGRAM_PATH]: telegramPathHelper.replace(
+          "      || path.isAbsolute(relativePath)\n",
+          "      || !path.isAbsolute(relativePath)\n",
+        ),
+      },
+      "inverts the Windows-separator rejection": {
+        [TELEGRAM_PATH]: telegramPathHelper.replace(
+          '      || relativePath.includes("\\\\")\n',
+          '      || !relativePath.includes("\\\\")\n',
+        ),
+      },
+      "negates the complete dot-segment predicate": {
+        [TELEGRAM_PATH]: telegramPathHelper.replace(
+          '      || relativePath.split("/").some((segment) => segment === "." || segment === "..")',
+          '      || !relativePath.split("/").some((segment) => segment === "." || segment === "..")',
+        ),
       },
       "inverts the dot-segment predicate": {
         [TELEGRAM_PATH]: telegramPathHelper.replace(
@@ -70,8 +88,35 @@ const ruleFixtures: Record<string, RuleFixture> = {
           'segment !== "." && segment !== ".."',
         ),
       },
+      "inverts the resolved-root empty rejection": {
+        [TELEGRAM_PATH]: telegramPathHelper.replace('relative === ""', 'relative !== ""'),
+      },
+      "inverts the resolved-root parent rejection": {
+        [TELEGRAM_PATH]: telegramPathHelper.replace('relative === ".."', 'relative !== ".."'),
+      },
+      "inverts the resolved-root parent-prefix rejection": {
+        [TELEGRAM_PATH]: telegramPathHelper.replace("relative.startsWith", "!relative.startsWith"),
+      },
+      "inverts the resolved-root absolute rejection": {
+        [TELEGRAM_PATH]: telegramPathHelper.replace(
+          "|| path.isAbsolute(relative))",
+          "|| !path.isAbsolute(relative))",
+        ),
+      },
       "inverts the missing-file predicate": {
         [TELEGRAM_PATH]: telegramPathHelper.replace("if (!existsSync(selected))", "if (existsSync(selected))"),
+      },
+      "inverts the realpath parent rejection": {
+        [TELEGRAM_PATH]: telegramPathHelper.replace('realRelative === ".."', 'realRelative !== ".."'),
+      },
+      "inverts the realpath parent-prefix rejection": {
+        [TELEGRAM_PATH]: telegramPathHelper.replace("realRelative.startsWith", "!realRelative.startsWith"),
+      },
+      "inverts the realpath absolute rejection": {
+        [TELEGRAM_PATH]: telegramPathHelper.replace(
+          "|| path.isAbsolute(realRelative))",
+          "|| !path.isAbsolute(realRelative))",
+        ),
       },
     },
   },
@@ -119,6 +164,15 @@ function inSlice3ARanges(id: string) {
     || (number >= 561 && number <= 658);
 }
 
+function telegramMutation(name: string) {
+  const mutation = ruleFixtures["rule:telegram-repository-path-safety"].mutations[name];
+  if (!mutation) throw new Error(`missing Telegram mutation fixture: ${name}`);
+  return evaluateRule({
+    id: "rule:telegram-repository-path-safety",
+    index: indexFor(mutation),
+  }).violations;
+}
+
 describe("repository rule registry", () => {
   const allowedRuleIds = new Set(
     sourceContractLedger.rows
@@ -150,6 +204,18 @@ describe("repository rule registry", () => {
         expect(evaluateRule({ id, index: indexFor(mutation) }).violations, `${id}: ${name}`).not.toEqual([]);
       }
     }
+  });
+
+  it("rejects a negated complete dot-segment predicate", () => {
+    expect(telegramMutation("negates the complete dot-segment predicate")).not.toEqual([]);
+  });
+
+  it("rejects an inverted Windows-separator guard", () => {
+    expect(telegramMutation("inverts the Windows-separator rejection")).not.toEqual([]);
+  });
+
+  it("rejects an inverted realpath parent escape guard", () => {
+    expect(telegramMutation("inverts the realpath parent rejection")).not.toEqual([]);
   });
 
   it("converts declared-input parse failures to INFRA_ERROR violations", () => {

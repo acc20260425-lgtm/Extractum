@@ -84,6 +84,16 @@ function expressionFact(node, typescript) {
   if (typescript.isStringLiteral(node) || typescript.isNoSubstitutionTemplateLiteral(node)) {
     return { kind: "string", value: node.text };
   }
+  if (typescript.isTemplateExpression(node)) {
+    return {
+      kind: "template",
+      head: node.head.text,
+      spans: node.templateSpans.map((span) => ({
+        expression: expressionFact(span.expression, typescript),
+        literal: span.literal.text,
+      })),
+    };
+  }
   if (typescript.isNumericLiteral(node)) return { kind: "number", value: Number(node.text) };
   if (node.kind === typescript.SyntaxKind.TrueKeyword || node.kind === typescript.SyntaxKind.FalseKeyword) {
     return { kind: "boolean", value: node.kind === typescript.SyntaxKind.TrueKeyword };
