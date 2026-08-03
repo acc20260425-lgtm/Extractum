@@ -202,81 +202,15 @@ macro_rules! telegram_command_handler {
     };
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    prepare_database().expect("database preparation failed");
-
-    let builder = tauri::Builder::default()
-        .manage(ExternalProcessShutdownState::new())
-        .manage(YoutubeProcessRegistry::new())
-        .manage(TelegramState::new())
-        .manage(SourceIngestLocks::new())
-        .manage(TakeoutImportState::new())
-        .manage(SourceJobState::new())
-        .manage(AnalysisState::new())
-        .manage(PromptPackRunState::new())
-        .manage(Arc::new(LlmSchedulerState::new()))
-        .manage(GeminiBrowserState::new())
-        .manage(GeminiBrowserJobRuntime::default())
-        .manage(SourceIdentityRepairState::new())
-        .manage(YoutubeThumbnailState::new())
-        .manage(SecretStoreState::system())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
-        .plugin(
-            tauri_plugin_sql::Builder::default()
-                .add_migrations(crate::db::DB_URL, build_migrations())
-                .build(),
-        );
-
-    #[cfg(dev)]
-    let builder = builder.plugin(
-        tauri_plugin_mcp_bridge::Builder::new()
-            .bind_address("127.0.0.1")
-            .build(),
-    );
-
-    builder
-        .setup(|app| {
-            #[cfg(feature = "csp-verification")]
-            if let Some(window) = app.get_webview_window("main") {
-                window.open_devtools();
-            }
-
-            let worker_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(error) = start_gemini_browser_job_worker(worker_handle).await {
-                    eprintln!("Failed to start Gemini Browser job worker: {error}");
-                }
-            });
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(error) = seed_builtin_prompt_packs(handle.clone()).await {
-                    eprintln!("Prompt Pack seed failed: {error}");
-                }
-                cleanup_interrupted_prompt_pack_runs(handle.clone()).await;
-                cleanup_interrupted_analysis_runs(handle.clone()).await;
-                restore_telegram_accounts(handle).await;
-            });
-            let repair_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                run_startup_source_identity_repair(repair_handle).await;
-            });
-            Ok(())
-        })
-        .invoke_handler(telegram_command_registration_inventory!(
-            telegram_command_handler,
+macro_rules! application_command_inventory {
+    ($consumer:ident) => {
+        telegram_command_registration_inventory!(
+            $consumer,
             [
                 ping_db,
                 get_diagnostic_summary,
                 apalis_jobs_list,
                 apalis_jobs_prune_terminal,
-                tg_init,
-                tg_is_authenticated,
-                tg_get_account_statuses,
-                tg_send_code,
-                tg_sign_in,
-                tg_logout,
             ],
             [
                 delete_source,
@@ -406,7 +340,73 @@ pub fn run() {
                 clear_youtube_auth,
                 resolve_youtube_thumbnail
             ]
-        ))
+        )
+    };
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    prepare_database().expect("database preparation failed");
+
+    let builder = tauri::Builder::default()
+        .manage(ExternalProcessShutdownState::new())
+        .manage(YoutubeProcessRegistry::new())
+        .manage(TelegramState::new())
+        .manage(SourceIngestLocks::new())
+        .manage(TakeoutImportState::new())
+        .manage(SourceJobState::new())
+        .manage(AnalysisState::new())
+        .manage(PromptPackRunState::new())
+        .manage(Arc::new(LlmSchedulerState::new()))
+        .manage(GeminiBrowserState::new())
+        .manage(GeminiBrowserJobRuntime::default())
+        .manage(SourceIdentityRepairState::new())
+        .manage(YoutubeThumbnailState::new())
+        .manage(SecretStoreState::system())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri_plugin_sql::Builder::default()
+                .add_migrations(crate::db::DB_URL, build_migrations())
+                .build(),
+        );
+
+    #[cfg(dev)]
+    let builder = builder.plugin(
+        tauri_plugin_mcp_bridge::Builder::new()
+            .bind_address("127.0.0.1")
+            .build(),
+    );
+
+    builder
+        .setup(|app| {
+            #[cfg(feature = "csp-verification")]
+            if let Some(window) = app.get_webview_window("main") {
+                window.open_devtools();
+            }
+
+            let worker_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = start_gemini_browser_job_worker(worker_handle).await {
+                    eprintln!("Failed to start Gemini Browser job worker: {error}");
+                }
+            });
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = seed_builtin_prompt_packs(handle.clone()).await {
+                    eprintln!("Prompt Pack seed failed: {error}");
+                }
+                cleanup_interrupted_prompt_pack_runs(handle.clone()).await;
+                cleanup_interrupted_analysis_runs(handle.clone()).await;
+                restore_telegram_accounts(handle).await;
+            });
+            let repair_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                run_startup_source_identity_repair(repair_handle).await;
+            });
+            Ok(())
+        })
+        .invoke_handler(application_command_inventory!(telegram_command_handler))
         .build(tauri::generate_context!())
         .expect("error while building Tauri application")
         .run(|app, event| {
@@ -459,32 +459,47 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    macro_rules! inventory_names {
-        (; $($command:ident),* $(,)?) => {
-            [$(stringify!($command)),*]
+    macro_rules! complete_application_inventory_names {
+        (
+            [$($before:ident,)*],
+            [$($(#[$after_attribute:meta])* $after:ident),* $(,)?];
+            $($command:ident),* $(,)?
+        ) => {
+            [
+                $(stringify!($before),)*
+                $(stringify!($command),)*
+                $(stringify!($after)),*
+            ]
         };
     }
 
     #[test]
     fn telegram_command_registration_inventory_is_exact() {
-        let registered = telegram_command_registration_inventory!(inventory_names,);
+        let registered = application_command_inventory!(complete_application_inventory_names);
+        let frozen = [
+            "list_accounts",
+            "get_account",
+            "create_account",
+            "set_account_phone",
+            "clear_account_phone",
+            "delete_account",
+            "tg_init",
+            "tg_is_authenticated",
+            "tg_get_account_statuses",
+            "tg_send_code",
+            "tg_sign_in",
+            "tg_logout",
+        ];
 
-        assert_eq!(
-            registered,
-            [
-                "list_accounts",
-                "get_account",
-                "create_account",
-                "set_account_phone",
-                "clear_account_phone",
-                "delete_account",
-                "tg_init",
-                "tg_is_authenticated",
-                "tg_get_account_statuses",
-                "tg_send_code",
-                "tg_sign_in",
-                "tg_logout",
-            ],
-        );
+        for command in frozen {
+            assert_eq!(
+                registered
+                    .iter()
+                    .filter(|registered| **registered == command)
+                    .count(),
+                1,
+                "{command} must occur exactly once in the complete application command inventory",
+            );
+        }
     }
 }

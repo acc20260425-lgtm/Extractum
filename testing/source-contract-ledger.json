@@ -9691,30 +9691,83 @@
           "Checkpoint 2 observable Telegram and Takeout behavior > pins all twelve command declarations, registration entries, and default camelCase IPC keys"
         ]
       },
-     "sourceHash": "dd6adfe8a750d1e9691fd2967e976961bd954cb3bc81e97c96a8e31f56b0c0b4",
-     "assertionCount": 17,
+      "sourceHash": "dd6adfe8a750d1e9691fd2967e976961bd954cb3bc81e97c96a8e31f56b0c0b4",
+      "assertionCount": 17,
       "authorityHash": "0d4c5bdd2f51c32a70db2e5ac0dd1dfc86b339346dd6cca9ca45239045e96d9f",
-     "lineage": [],
+      "lineage": [],
       "invariant": "Telegram and Takeout commands retain their public registrations and IPC names.",
       "subgroups": [
         {
-          "assertionOrdinals": [2, 3],
-          "invariant": "Frontend Telegram wrappers retain their public IPC names and default camelCase payload keys.",
-          "disposition": "behavior",
-          "replacementIds": [
-            "test:vitest:src/lib/telegram-checkpoint-2.behavior.test.ts#pins frontend Telegram command IPC names and default camelCase keys"
-          ]
+          "assertionOrdinals": [
+            1,
+            4,
+            6
+          ],
+          "invariant": "Handler-site count, exact Rust command declaration spelling, and SQL projection text are private implementation details.",
+          "disposition": "delete",
+          "deletionReason": "The executable command inventory and account behavior cover public outcomes; exact handler count, declaration syntax, and SQL text can change without changing those outcomes."
         },
         {
-          "assertionOrdinals": [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-          "invariant": "The application registers exactly the frozen account and Telegram command inventory.",
+          "assertionOrdinals": [
+            2,
+            5
+          ],
+          "invariant": "The complete application command inventory contains each frozen account and Telegram registration exactly once.",
           "disposition": "behavior",
           "replacementIds": [
             "test:cargo:extractum::tests::telegram_command_registration_inventory_is_exact"
           ]
         },
         {
-          "assertionOrdinals": [15, 16],
+          "assertionOrdinals": [
+            3
+          ],
+          "invariant": "The eleven public account and Telegram wrappers retain their IPC names and default camelCase payload keys.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:vitest:src/lib/telegram-checkpoint-2.behavior.test.ts#pins the eleven public account and Telegram wrapper IPC names and default camelCase keys"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "invariant": "Account deletion rejects missing accounts and every supported active-work blocker for owned sources.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::account_deletion::tests::missing_account_returns_not_found",
+            "test:cargo:extractum::account_deletion::tests::existing_account_with_zero_sources_passes",
+            "test:cargo:extractum::account_deletion::tests::source_ingest_lock_on_owned_source_blocks_without_deleting_rows",
+            "test:cargo:extractum::account_deletion::tests::active_takeout_job_on_owned_source_blocks",
+            "test:cargo:extractum::account_deletion::tests::active_source_job_on_owned_source_blocks_but_unowned_job_does_not",
+            "test:cargo:extractum::account_deletion::tests::active_direct_source_analysis_run_blocks_owned_source_only",
+            "test:cargo:extractum::account_deletion::tests::active_group_analysis_run_blocks_when_any_member_source_is_owned",
+            "test:cargo:extractum::account_deletion::tests::active_llm_request_for_completed_owned_run_blocks_but_provider_test_does_not"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            13,
+            14
+          ],
+          "invariant": "Telegram credentials migrate to secure storage and preserve failure/authentication outcomes.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::telegram::tests::legacy_api_hash_migrates_to_secret_store_and_blanks_column",
+            "test:cargo:extractum::telegram::tests::legacy_api_hash_remains_when_secret_write_fails",
+            "test:cargo:extractum::telegram::tests::missing_secure_api_hash_for_blank_legacy_account_is_auth_error"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            15,
+            16
+          ],
           "invariant": "The application Rust perimeter retains the Telegram facade import boundary.",
           "disposition": "architecture",
           "replacementIds": [
@@ -9722,7 +9775,9 @@
           ]
         },
         {
-          "assertionOrdinals": [17],
+          "assertionOrdinals": [
+            17
+          ],
           "invariant": "Telegram crate extraction retains its future-owner boundary.",
           "disposition": "architecture",
           "replacementIds": [
@@ -9741,28 +9796,144 @@
           "Checkpoint 2 observable Telegram and Takeout behavior > pins Telegram event emission, status mutation, login result, and session ordering"
         ]
       },
-     "sourceHash": "2e0988496e5e82589178ea3541385528d164c9ea4975e32fd56b8b0925dfdd2f",
-     "assertionCount": 20,
-     "authorityHash": "a8e572e26866540da064c58e3c7a3780aff6b67daec6dbeaed7e0ce18de4eb60",
-     "lineage": [],
+      "sourceHash": "2e0988496e5e82589178ea3541385528d164c9ea4975e32fd56b8b0925dfdd2f",
+      "assertionCount": 20,
+      "authorityHash": "a8e572e26866540da064c58e3c7a3780aff6b67daec6dbeaed7e0ce18de4eb60",
+      "lineage": [],
       "invariant": "Telegram workflows emit the expected events and report status, login, and session outcomes in order.",
-      "disposition": "behavior",
-      "replacementIds": [
-        "test:vitest:src/lib/telegram-checkpoint-2.behavior.test.ts#pins Telegram event emission, status mutation, login result, and session ordering"
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            1
+          ],
+          "invariant": "Telegram restore emits a failure event for each failed account restoration path.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::telegram::tests::restore_emits_failure_event_for_each_failed_account"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            2,
+            3
+          ],
+          "invariant": "Telegram send-code success returns the expected result without an authentication error.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::telegram::tests::send_code_success_is_not_auth_error"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            4,
+            5
+          ],
+          "invariant": "Telegram sign-in persists its session before publishing ready status and returns success.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::telegram::tests::sign_in_persists_session_before_ready_event"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            6,
+            7
+          ],
+          "invariant": "Missing secure Telegram API credentials retain the authentication error contract.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::telegram::tests::missing_secure_api_hash_for_blank_legacy_account_is_auth_error"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            8
+          ],
+          "invariant": "Telegram logout clears runtime/session state before returning success.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::telegram::tests::logout_returns_true_after_runtime_and_session_cleanup"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            9,
+            10
+          ],
+          "invariant": "Telegram session paths use the app-data root and account filename.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::telegram_session_store::tests::session_path_uses_app_data_root_and_account_filename"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            11,
+            12
+          ],
+          "invariant": "Private session temporary-path call counts and extension call sites are implementation details.",
+          "disposition": "delete",
+          "deletionReason": "Atomic-write outcomes are executable behavior; private helper and extension call counts are refactor-sensitive source shape."
+        },
+        {
+          "assertionOrdinals": [
+            13
+          ],
+          "invariant": "Atomic Telegram session writes replace the target and map write/rename failures to the internal-error contract.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::telegram_session_store::tests::atomic_session_write_outcome_and_error_contract_is_exact"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            14,
+            15,
+            17,
+            18,
+            20
+          ],
+          "invariant": "Encrypted Telegram session encoding and decoding retain their exact error behavior.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum-telegram::session::tests::encrypted_session_error_contract_is_exact"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            16
+          ],
+          "invariant": "Invalid Telegram session key length retains its error contract.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum-telegram::session::tests::session_encryption_key_rejects_invalid_length"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            19
+          ],
+          "invariant": "Missing encrypted Telegram session keys retain their authentication error contract.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum-telegram::session::tests::missing_encrypted_key_preserves_auth_error"
+          ]
+        }
       ]
     },
     {
       "id": "SC-000650",
       "path": "src/lib/telegram-crate-boundary-contract.test.ts",
       "title": "Checkpoint 2 observable Telegram and Takeout behavior > pins Takeout mutation-before-event and terminal cancellation selection",
-     "sourceHash": "45c782aa1f10e8fabe2da52569ab33aa4e288e5b29b43f5f7b66c35e001e75f8",
-     "assertionCount": 3,
-     "authorityHash": "cf91626417628ddec82b6561ab69ef042d175a1e8b6cf4303f6d213c9bf975d9",
-     "lineage": [],
+      "sourceHash": "45c782aa1f10e8fabe2da52569ab33aa4e288e5b29b43f5f7b66c35e001e75f8",
+      "assertionCount": 3,
+      "authorityHash": "cf91626417628ddec82b6561ab69ef042d175a1e8b6cf4303f6d213c9bf975d9",
+      "lineage": [],
       "invariant": "Takeout cancellation records its terminal state before selecting the cancellation outcome.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/telegram-checkpoint-2.behavior.test.ts#pins Takeout mutation-before-event and terminal cancellation selection"
+        "test:cargo:extractum::takeout_import::tests::cancelled_job_emits_persisted_terminal_record",
+        "test:cargo:extractum::takeout_import::state::tests::takeout_event_status_and_cancellation_contract_is_exact"
       ]
     },
     {
@@ -9775,28 +9946,95 @@
           "Checkpoint 2 observable Telegram and Takeout behavior > freezes Takeout behavior through Checkpoint 6 and hands CP7 paths to Rust behavior tests"
         ]
       },
-     "sourceHash": "f34cc254b93a861eeb71b9b953dedad12d6e6fcecbbb45a9b75f90935dd94a91",
-     "assertionCount": 11,
-     "authorityHash": "d11543b165aacd516b08485e0513baca631af9322d7e63e635add5387fc14911",
-     "lineage": [],
+      "sourceHash": "f34cc254b93a861eeb71b9b953dedad12d6e6fcecbbb45a9b75f90935dd94a91",
+      "assertionCount": 11,
+      "authorityHash": "d11543b165aacd516b08485e0513baca631af9322d7e63e635add5387fc14911",
+      "lineage": [],
       "invariant": "Takeout workflows retain their required lifecycle outcomes through Checkpoint 6.",
-      "disposition": "behavior",
-      "replacementIds": [
-        "test:vitest:src/lib/telegram-takeout.behavior.test.ts#freezes Takeout behavior through Checkpoint 6 and hands CP7 paths to Rust behavior tests"
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            10,
+            11
+          ],
+          "invariant": "Takeout crate extraction retains its required layout and abstraction boundary.",
+          "disposition": "architecture",
+          "replacementIds": [
+            "rule:telegram-crate-extraction-boundary"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            3,
+            4
+          ],
+          "invariant": "TDesktop pagination retains its page limit and cursor progression through lifecycle import.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum-telegram::takeout::pagination::tests::tdesktop_pagination_reverses_raw_order_and_advances_from_newest_id",
+            "test:cargo:extractum-telegram::takeout::operations::tests::checkpoint_six_lifecycle_preserves_fallback_cancellation_and_finalize_order"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            5
+          ],
+          "invariant": "Descending pagination fallback retains its distinct progression through lifecycle import.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum-telegram::takeout::pagination::tests::descending_fallback_keeps_raw_order_and_moves_to_min_message_id",
+            "test:cargo:extractum-telegram::takeout::operations::tests::checkpoint_six_lifecycle_preserves_fallback_cancellation_and_finalize_order"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            6,
+            7,
+            8,
+            9
+          ],
+          "invariant": "Raw Takeout User, Chat, and Channel peers retain their native identity and i64 message IDs.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum-telegram::takeout::raw_parse::tests::takeout_peer_identity_maps_user_chat_and_channel"
+          ]
+        }
       ]
     },
     {
       "id": "SC-000652",
       "path": "src/lib/telegram-crate-boundary-contract.test.ts",
       "title": "Checkpoint 2 observable Telegram and Takeout behavior > uses one production session temp-path helper with the frozen extension",
-     "sourceHash": "47528d69c4f8aea0725638d99799990b16f5123c980b4806c2ccd0acbaac59d1",
-     "assertionCount": 5,
-     "authorityHash": "7f22b798799e4716f63e06860f3c390d8e67bfe57e61f1f0f818701a36d4adad",
-     "lineage": [],
+      "sourceHash": "47528d69c4f8aea0725638d99799990b16f5123c980b4806c2ccd0acbaac59d1",
+      "assertionCount": 5,
+      "authorityHash": "7f22b798799e4716f63e06860f3c390d8e67bfe57e61f1f0f818701a36d4adad",
+      "lineage": [],
       "invariant": "Atomic Telegram session writes use a temporary path with the configured extension.",
-      "disposition": "behavior",
-      "replacementIds": [
-        "test:vitest:src/lib/telegram-session-persistence.behavior.test.ts#uses one production session temp-path helper with the frozen extension"
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            1,
+            2
+          ],
+          "invariant": "Atomic Telegram session writes retain their temporary-path result and configured extension.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::telegram_session_store::tests::session_path_temp_path_and_error_contract_is_exact",
+            "test:cargo:extractum::telegram_session_store::tests::atomic_session_write_outcome_and_error_contract_is_exact"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            3,
+            4,
+            5
+          ],
+          "invariant": "Private temporary-path helper call counts, delegation, and inline extension spelling are implementation details.",
+          "disposition": "delete",
+          "deletionReason": "The atomic-write outcome/error contract is executable; private helper call counts, delegation, and inline path construction are refactor-sensitive source shape."
+        }
       ]
     },
     {
