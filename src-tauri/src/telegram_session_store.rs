@@ -82,7 +82,10 @@ where
     Rename: FnOnce(&Path, &Path) -> std::io::Result<()>,
 {
     let tmp_path = session_temp_path(path);
-    write(&tmp_path, contents).map_err(|error| AppError::internal(error.to_string()))?;
+    if let Err(error) = write(&tmp_path, contents) {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(AppError::internal(error.to_string()));
+    }
     if let Err(error) = rename(&tmp_path, path) {
         let _ = fs::remove_file(&tmp_path);
         return Err(AppError::internal(error.to_string()));
@@ -258,7 +261,8 @@ mod tests {
         let write_error = write_atomic_with(
             &write_path,
             "new",
-            |_, _| {
+            |path, _| {
+                fs::write(path, "partial").expect("script partial temporary write");
                 Err(std::io::Error::new(
                     std::io::ErrorKind::PermissionDenied,
                     "scripted write failure",
