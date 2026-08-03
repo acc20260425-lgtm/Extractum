@@ -491,7 +491,22 @@ function directoryClassificationFor(authorityPath, metadata) {
   return undefined;
 }
 
+function hasFlatBraceStructure(pattern) {
+  let insideGroup = false;
+  for (const character of pattern) {
+    if (character === "{") {
+      if (insideGroup) return false;
+      insideGroup = true;
+    } else if (character === "}") {
+      if (!insideGroup) return false;
+      insideGroup = false;
+    }
+  }
+  return !insideGroup;
+}
+
 function globMatcher(pattern) {
+  const expandBraces = hasFlatBraceStructure(pattern);
   let expression = "";
   for (let index = 0; index < pattern.length; index += 1) {
     const character = pattern[index];
@@ -503,9 +518,10 @@ function globMatcher(pattern) {
       } else expression += ".*";
     } else if (character === "*") expression += "[^/]*";
     else if (character === "?") expression += "[^/]";
-    else if (character === "{") {
+    else if (character === "{" && expandBraces) {
       const closingBrace = pattern.indexOf("}", index + 1);
-      const alternatives = closingBrace === -1 ? [] : pattern.slice(index + 1, closingBrace).split(",");
+      const body = pattern.slice(index + 1, closingBrace);
+      const alternatives = body.split(",");
       if (alternatives.length > 1) {
         expression += `(?:${alternatives.map((alternative) => globMatcher(alternative).source.slice(1, -1)).join("|")})`;
         index = closingBrace;

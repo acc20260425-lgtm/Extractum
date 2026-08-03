@@ -399,6 +399,22 @@ describe("bounded source-contract ledger", () => {
     expect(readers.some((reader: any) => reader.kind === "manual")).toBe(false);
   });
 
+  it("fails closed for malformed nested brace globs", () => {
+    const files = [{
+      path: "src/glob-reader.test.ts",
+      source: 'const modules = import.meta.glob("./parts/{{alpha,beta}.test.ts", { query: "?raw" });',
+    }];
+    const readers = discoverSourceReaders(files, gitMetadata([
+      "src/parts/beta.test.ts",
+      "src/parts/{beta.test.ts",
+    ]), ts);
+
+    expect(readers).toEqual([
+      expect.objectContaining({ kind: "manual", reason: "raw glob resolved no tracked or ignored authority" }),
+    ]);
+    expect(readers[0]).not.toHaveProperty("authorityPath");
+  });
+
   it("hashes raw, fs, helper, glob, and .each authority text into obligated rows", () => {
     const files = [{ path: "src/authority.test.ts", source: [
       'import raw from "./raw.ts?raw";',
