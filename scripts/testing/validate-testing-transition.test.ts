@@ -381,6 +381,24 @@ describe("bounded source-contract ledger", () => {
     ]);
   });
 
+  it("resolves brace alternatives in static raw globs without creating a manual reader", () => {
+    const files = [{
+      path: "src/glob-reader.test.ts",
+      source: 'const modules = import.meta.glob("./parts/*.{test,spec}.{ts,tsx}", { query: "?raw" });',
+    }];
+    const readers = discoverSourceReaders(files, gitMetadata([
+      "src/parts/alpha.test.ts",
+      "src/parts/beta.spec.tsx",
+      "src/parts/ignored.test.js",
+    ]), ts);
+
+    expect(readers).toEqual([
+      expect.objectContaining({ kind: "import-meta-glob", authorityPath: "src/parts/alpha.test.ts", classification: "test" }),
+      expect.objectContaining({ kind: "import-meta-glob", authorityPath: "src/parts/beta.spec.tsx", classification: "test" }),
+    ]);
+    expect(readers.some((reader: any) => reader.kind === "manual")).toBe(false);
+  });
+
   it("hashes raw, fs, helper, glob, and .each authority text into obligated rows", () => {
     const files = [{ path: "src/authority.test.ts", source: [
       'import raw from "./raw.ts?raw";',

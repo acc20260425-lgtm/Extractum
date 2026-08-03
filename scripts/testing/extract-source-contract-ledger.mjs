@@ -503,6 +503,14 @@ function globMatcher(pattern) {
       } else expression += ".*";
     } else if (character === "*") expression += "[^/]*";
     else if (character === "?") expression += "[^/]";
+    else if (character === "{") {
+      const closingBrace = pattern.indexOf("}", index + 1);
+      const alternatives = closingBrace === -1 ? [] : pattern.slice(index + 1, closingBrace).split(",");
+      if (alternatives.length > 1) {
+        expression += `(?:${alternatives.map((alternative) => globMatcher(alternative).source.slice(1, -1)).join("|")})`;
+        index = closingBrace;
+      } else expression += "\\{";
+    }
     else expression += character.replace(/[.+^$()|[\]{}\\]/g, "\\$&");
   }
   return new RegExp(`^${expression}$`);
