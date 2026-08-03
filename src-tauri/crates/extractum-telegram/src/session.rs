@@ -103,6 +103,24 @@ fn encrypt_saved_session(
     key: &SessionEncryptionKey,
     saved: &SavedSession,
 ) -> AppResult<EncryptedSessionEnvelope> {
+    encrypt_saved_session_with(account_id, key, saved, |cipher, nonce, payload| {
+        cipher.encrypt(nonce, payload)
+    })
+}
+
+fn encrypt_saved_session_with<F>(
+    account_id: i64,
+    key: &SessionEncryptionKey,
+    saved: &SavedSession,
+    encrypt: F,
+) -> AppResult<EncryptedSessionEnvelope>
+where
+    F: FnOnce(
+        &XChaCha20Poly1305,
+        &XNonce,
+        Payload<'_, '_>,
+    ) -> Result<Vec<u8>, chacha20poly1305::aead::Error>,
+{
     let key_bytes = key.0.expose_secret();
     if key_bytes.len() != SESSION_KEY_BYTES {
         return Err(AppError::internal("Invalid Telegram session key length"));
@@ -111,15 +129,16 @@ fn encrypt_saved_session(
         serde_json::to_vec(saved).map_err(|error| AppError::internal(error.to_string()))?;
     let cipher = XChaCha20Poly1305::new(Key::from_slice(key_bytes));
     let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
-    let ciphertext = cipher
-        .encrypt(
-            &nonce,
-            Payload {
-                msg: &plaintext,
-                aad: associated_data(account_id).as_bytes(),
-            },
-        )
-        .map_err(|_| AppError::internal("Failed to encrypt Telegram session"))?;
+    let associated_data = associated_data(account_id);
+    let ciphertext = encrypt(
+        &cipher,
+        &nonce,
+        Payload {
+            msg: &plaintext,
+            aad: associated_data.as_bytes(),
+        },
+    )
+    .map_err(|_| AppError::internal("Failed to encrypt Telegram session"))?;
     Ok(EncryptedSessionEnvelope {
         version: ENVELOPE_VERSION,
         algorithm: ENVELOPE_ALGORITHM.to_string(),
@@ -253,6 +272,13 @@ mod tests {
         }
     }
 
+    fn expect_error<T>(result: AppResult<T>, context: &str) -> AppError {
+        match result {
+            Ok(_) => panic!("{context}"),
+            Err(error) => error,
+        }
+    }
+
     #[test]
     fn session_encryption_key_rejects_invalid_length() {
         let encoded = SecretString::new(URL_SAFE_NO_PAD.encode([7u8; SESSION_KEY_BYTES - 1]));
@@ -334,6 +360,119 @@ mod tests {
         };
 
         assert_eq!(error.message, "Failed to decrypt Telegram session");
+    }
+
+    #[tokio::test]
+    async fn encrypted_session_error_contract_is_exact() {
+        let session = test_session(2);
+        let key = SessionEncryptionKey::try_from_encoded(SecretString::new(
+            URL_SAFE_NO_PAD.encode([7u8; SESSION_KEY_BYTES]),
+        ))
+        .expect("valid key");
+        let saved = memory_session_to_saved(&session).await;
+
+        let encryption_error = expect_error(
+            encrypt_saved_session_with(7, &key, &saved, |_, _, _| {
+                Err(chacha20poly1305::aead::Error)
+            }),
+            "scripted encryption failure must preserve the error contract",
+        );
+        assert_eq!(encryption_error.kind, AppErrorKind::Internal);
+        assert_eq!(
+            encryption_error.message,
+            "Failed to encrypt Telegram session"
+        );
+
+        let invalid_key_error = expect_error(
+            SessionEncryptionKey::try_from_encoded(SecretString::new("!".to_owned())),
+            "invalid encoded key must fail through the codec",
+        );
+        assert_eq!(invalid_key_error.kind, AppErrorKind::Internal);
+        assert_eq!(
+            invalid_key_error.message,
+            "Invalid encrypted Telegram session encoding: Invalid symbol 33, offset 0."
+        );
+
+        let json = encode_session_json(&session, 7, &key)
+            .await
+            .expect("encode real encrypted session");
+        let envelope: EncryptedSessionEnvelope =
+            serde_json::from_str(&json).expect("decode real encrypted envelope");
+        let valid_nonce = envelope.nonce.clone();
+
+        let mut invalid_base64 = envelope;
+        invalid_base64.nonce = "!".to_owned();
+        let invalid_base64_error = expect_error(
+            decode_session_json(
+                &serde_json::to_string(&invalid_base64).expect("serialize invalid base64 envelope"),
+                7,
+                Some(&key),
+            ),
+            "invalid nonce encoding must fail through the codec",
+        );
+        assert_eq!(invalid_base64_error.kind, AppErrorKind::Internal);
+        assert_eq!(
+            invalid_base64_error.message,
+            "Invalid encrypted Telegram session encoding: Invalid symbol 33, offset 0."
+        );
+
+        let mut invalid_nonce = invalid_base64;
+        invalid_nonce.nonce = URL_SAFE_NO_PAD.encode([9u8; 23]);
+        let invalid_nonce_error = expect_error(
+            decode_session_json(
+                &serde_json::to_string(&invalid_nonce).expect("serialize invalid nonce envelope"),
+                7,
+                Some(&key),
+            ),
+            "invalid nonce material must fail",
+        );
+        assert_eq!(invalid_nonce_error.kind, AppErrorKind::Internal);
+        assert_eq!(
+            invalid_nonce_error.message,
+            "Invalid encrypted Telegram session nonce length"
+        );
+
+        let mut decrypt_failure = invalid_nonce;
+        decrypt_failure.nonce = valid_nonce;
+        decrypt_failure.ciphertext = URL_SAFE_NO_PAD.encode([0u8; 1]);
+        let decrypt_error = expect_error(
+            decode_session_json(
+                &serde_json::to_string(&decrypt_failure)
+                    .expect("serialize decrypt-failure envelope"),
+                7,
+                Some(&key),
+            ),
+            "invalid ciphertext must fail through the real decrypt path",
+        );
+        assert_eq!(decrypt_error.kind, AppErrorKind::Internal);
+        assert_eq!(decrypt_error.message, "Failed to decrypt Telegram session");
+
+        let mut unsupported_envelope = decrypt_failure;
+        unsupported_envelope.version = ENVELOPE_VERSION + 1;
+        let unsupported_envelope_error = expect_error(
+            decode_session_json(
+                &serde_json::to_string(&unsupported_envelope)
+                    .expect("serialize unsupported envelope"),
+                7,
+                Some(&key),
+            ),
+            "unsupported envelope format must fail",
+        );
+        assert_eq!(unsupported_envelope_error.kind, AppErrorKind::Internal);
+        assert_eq!(
+            unsupported_envelope_error.message,
+            "Unsupported encrypted Telegram session format"
+        );
+
+        let unsupported_file_error = expect_error(
+            decode_session_json("{}", 7, Some(&key)),
+            "unsupported session file format must fail",
+        );
+        assert_eq!(unsupported_file_error.kind, AppErrorKind::Internal);
+        assert_eq!(
+            unsupported_file_error.message,
+            "Telegram session file is not a supported format"
+        );
     }
 
     #[tokio::test]
