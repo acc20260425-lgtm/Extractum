@@ -9693,12 +9693,42 @@
       },
      "sourceHash": "dd6adfe8a750d1e9691fd2967e976961bd954cb3bc81e97c96a8e31f56b0c0b4",
      "assertionCount": 17,
-     "authorityHash": "0d4c5bdd2f51c32a70db2e5ac0dd1dfc86b339346dd6cca9ca45239045e96d9f",
+      "authorityHash": "0d4c5bdd2f51c32a70db2e5ac0dd1dfc86b339346dd6cca9ca45239045e96d9f",
      "lineage": [],
       "invariant": "Telegram and Takeout commands retain their public registrations and IPC names.",
-      "disposition": "behavior",
-      "replacementIds": [
-        "test:vitest:src/lib/telegram-checkpoint-2.behavior.test.ts#pins all twelve command declarations, registration entries, and default camelCase IPC keys"
+      "subgroups": [
+        {
+          "assertionOrdinals": [2, 3],
+          "invariant": "Frontend Telegram wrappers retain their public IPC names and default camelCase payload keys.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:vitest:src/lib/telegram-checkpoint-2.behavior.test.ts#pins frontend Telegram command IPC names and default camelCase keys"
+          ]
+        },
+        {
+          "assertionOrdinals": [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+          "invariant": "The application registers exactly the frozen account and Telegram command inventory.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::tests::telegram_command_registration_inventory_is_exact"
+          ]
+        },
+        {
+          "assertionOrdinals": [15, 16],
+          "invariant": "The application Rust perimeter retains the Telegram facade import boundary.",
+          "disposition": "architecture",
+          "replacementIds": [
+            "rule:telegram-app-facade-import-boundary"
+          ]
+        },
+        {
+          "assertionOrdinals": [17],
+          "invariant": "Telegram crate extraction retains its future-owner boundary.",
+          "disposition": "architecture",
+          "replacementIds": [
+            "rule:telegram-crate-extraction-boundary"
+          ]
+        }
       ]
     },
     {

@@ -172,6 +172,36 @@ fn ping_db() -> String {
     "Rust: Database plugin is initialized and migrations should have run.".to_string()
 }
 
+macro_rules! telegram_command_registration_inventory {
+    ($consumer:ident, $($arguments:tt)*) => {
+        $consumer!(
+            $($arguments)*;
+            list_accounts,
+            get_account,
+            create_account,
+            set_account_phone,
+            clear_account_phone,
+            delete_account,
+            tg_init,
+            tg_is_authenticated,
+            tg_get_account_statuses,
+            tg_send_code,
+            tg_sign_in,
+            tg_logout,
+        )
+    };
+}
+
+macro_rules! telegram_command_handler {
+    ([$($before:tt)*], [$($after:tt)*]; $($command:ident),* $(,)?) => {
+        tauri::generate_handler![
+            $($before)*
+            $($command,)*
+            $($after)*
+        ]
+    };
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     prepare_database().expect("database preparation failed");
@@ -234,150 +264,149 @@ pub fn run() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
-            ping_db,
-            get_diagnostic_summary,
-            apalis_jobs_list,
-            apalis_jobs_prune_terminal,
-            tg_init,
-            tg_is_authenticated,
-            tg_get_account_statuses,
-            tg_send_code,
-            tg_sign_in,
-            tg_logout,
-            list_accounts,
-            get_account,
-            create_account,
-            set_account_phone,
-            clear_account_phone,
-            delete_account,
-            delete_source,
-            list_projects,
-            list_research_projects,
-            create_project,
-            update_project,
-            delete_project,
-            set_project_pinned,
-            set_project_archived,
-            list_project_sources,
-            add_project_sources,
-            remove_project_sources,
-            delete_project_youtube_video_source_from_library,
-            start_project_analysis,
-            get_project_data_range,
-            list_project_runs,
-            get_prompt_pack_library,
-            preflight_youtube_summary_run,
-            start_youtube_summary_run,
-            cancel_prompt_pack_run,
-            update_prompt_pack_run,
-            delete_prompt_pack_run,
-            list_prompt_pack_runs,
-            list_active_prompt_pack_runs,
-            list_prompt_pack_run_stages,
-            get_prompt_pack_result,
-            list_prompt_pack_stage_artifacts,
-            get_prompt_pack_stage_artifact,
-            get_prompt_pack_validation_findings,
-            list_prompt_pack_audit_events,
-            #[cfg(all(dev, feature = "prompt-pack-dev-fixtures"))]
-            seed_prompt_pack_cancellation_smoke_fixture,
-            #[cfg(all(dev, feature = "prompt-pack-dev-fixtures"))]
-            clear_prompt_pack_cancellation_smoke_fixture,
-            get_source_identity_repair_status,
-            preview_source_identity_repair,
-            audit_legacy_telegram_source_metadata,
-            clear_legacy_telegram_source_metadata,
-            list_telegram_sources,
-            add_telegram_source,
-            list_sources,
-            get_sync_settings,
-            save_sync_settings,
-            sync_source,
-            start_takeout_migrated_history_import,
-            start_takeout_source_import,
-            cancel_takeout_source_import,
-            list_takeout_source_import_jobs,
-            list_takeout_import_recovery_states,
-            #[cfg(dev)]
-            seed_takeout_cancellation_smoke_fixture,
-            #[cfg(dev)]
-            clear_takeout_cancellation_smoke_fixture,
-            run_takeout_export_dc_spike,
-            list_source_items,
-            list_source_forum_topics,
-            export_source_to_notebooklm,
-            get_llm_profiles,
-            get_llm_request_snapshots,
-            save_llm_profile,
-            clear_llm_profile_api_key,
-            delete_llm_profile,
-            set_active_llm_profile,
-            list_llm_provider_models,
-            ask_llm_stream,
-            cancel_llm_request,
-            gemini_bridge_status,
-            gemini_bridge_status_snapshot,
-            gemini_bridge_open_browser,
-            gemini_bridge_start_cdp_chrome,
-            gemini_bridge_send_single,
-            gemini_bridge_resume,
-            gemini_bridge_stop,
-            gemini_bridge_list_runs,
-            gemini_bridge_get_run,
-            gemini_bridge_open_run_folder,
-            list_analysis_sources,
-            list_library_sources,
-            list_library_catalog,
-            list_analysis_prompt_templates,
-            create_analysis_prompt_template,
-            update_analysis_prompt_template,
-            delete_analysis_prompt_template,
-            list_analysis_source_groups,
-            create_analysis_source_group,
-            update_analysis_source_group,
-            delete_analysis_source_group,
-            list_analysis_runs,
-            list_active_analysis_runs,
-            get_analysis_run,
-            list_analysis_run_messages,
-            delete_analysis_run,
-            get_analysis_run_trace,
-            resolve_analysis_trace_refs,
-            list_analysis_chat_messages,
-            clear_analysis_chat_messages,
-            ask_analysis_run_question,
-            start_analysis_report,
-            cancel_analysis_run,
-            #[cfg(dev)]
-            seed_analysis_redesign_fixtures,
-            #[cfg(dev)]
-            clear_analysis_redesign_fixture_active_runs,
-            #[cfg(dev)]
-            clear_analysis_redesign_fixtures,
-            preview_youtube_source,
-            add_youtube_source,
-            sync_youtube_source,
-            sync_youtube_playlist_video,
-            cancel_source_job,
-            list_source_jobs,
-            retry_failed_youtube_playlist_videos,
-            #[cfg(dev)]
-            seed_source_job_cancellation_smoke_fixture,
-            #[cfg(dev)]
-            clear_source_job_cancellation_smoke_fixture,
-            get_youtube_runtime_status,
-            list_youtube_source_summaries,
-            get_youtube_video_detail,
-            get_youtube_playlist_detail,
-            list_youtube_transcript_segments,
-            get_youtube_settings,
-            save_youtube_settings,
-            get_youtube_auth_status,
-            save_youtube_cookies,
-            clear_youtube_auth,
-            resolve_youtube_thumbnail
-        ])
+        .invoke_handler(telegram_command_registration_inventory!(
+            telegram_command_handler,
+            [
+                ping_db,
+                get_diagnostic_summary,
+                apalis_jobs_list,
+                apalis_jobs_prune_terminal,
+                tg_init,
+                tg_is_authenticated,
+                tg_get_account_statuses,
+                tg_send_code,
+                tg_sign_in,
+                tg_logout,
+            ],
+            [
+                delete_source,
+                list_projects,
+                list_research_projects,
+                create_project,
+                update_project,
+                delete_project,
+                set_project_pinned,
+                set_project_archived,
+                list_project_sources,
+                add_project_sources,
+                remove_project_sources,
+                delete_project_youtube_video_source_from_library,
+                start_project_analysis,
+                get_project_data_range,
+                list_project_runs,
+                get_prompt_pack_library,
+                preflight_youtube_summary_run,
+                start_youtube_summary_run,
+                cancel_prompt_pack_run,
+                update_prompt_pack_run,
+                delete_prompt_pack_run,
+                list_prompt_pack_runs,
+                list_active_prompt_pack_runs,
+                list_prompt_pack_run_stages,
+                get_prompt_pack_result,
+                list_prompt_pack_stage_artifacts,
+                get_prompt_pack_stage_artifact,
+                get_prompt_pack_validation_findings,
+                list_prompt_pack_audit_events,
+                #[cfg(all(dev, feature = "prompt-pack-dev-fixtures"))]
+                seed_prompt_pack_cancellation_smoke_fixture,
+                #[cfg(all(dev, feature = "prompt-pack-dev-fixtures"))]
+                clear_prompt_pack_cancellation_smoke_fixture,
+                get_source_identity_repair_status,
+                preview_source_identity_repair,
+                audit_legacy_telegram_source_metadata,
+                clear_legacy_telegram_source_metadata,
+                list_telegram_sources,
+                add_telegram_source,
+                list_sources,
+                get_sync_settings,
+                save_sync_settings,
+                sync_source,
+                start_takeout_migrated_history_import,
+                start_takeout_source_import,
+                cancel_takeout_source_import,
+                list_takeout_source_import_jobs,
+                list_takeout_import_recovery_states,
+                #[cfg(dev)]
+                seed_takeout_cancellation_smoke_fixture,
+                #[cfg(dev)]
+                clear_takeout_cancellation_smoke_fixture,
+                run_takeout_export_dc_spike,
+                list_source_items,
+                list_source_forum_topics,
+                export_source_to_notebooklm,
+                get_llm_profiles,
+                get_llm_request_snapshots,
+                save_llm_profile,
+                clear_llm_profile_api_key,
+                delete_llm_profile,
+                set_active_llm_profile,
+                list_llm_provider_models,
+                ask_llm_stream,
+                cancel_llm_request,
+                gemini_bridge_status,
+                gemini_bridge_status_snapshot,
+                gemini_bridge_open_browser,
+                gemini_bridge_start_cdp_chrome,
+                gemini_bridge_send_single,
+                gemini_bridge_resume,
+                gemini_bridge_stop,
+                gemini_bridge_list_runs,
+                gemini_bridge_get_run,
+                gemini_bridge_open_run_folder,
+                list_analysis_sources,
+                list_library_sources,
+                list_library_catalog,
+                list_analysis_prompt_templates,
+                create_analysis_prompt_template,
+                update_analysis_prompt_template,
+                delete_analysis_prompt_template,
+                list_analysis_source_groups,
+                create_analysis_source_group,
+                update_analysis_source_group,
+                delete_analysis_source_group,
+                list_analysis_runs,
+                list_active_analysis_runs,
+                get_analysis_run,
+                list_analysis_run_messages,
+                delete_analysis_run,
+                get_analysis_run_trace,
+                resolve_analysis_trace_refs,
+                list_analysis_chat_messages,
+                clear_analysis_chat_messages,
+                ask_analysis_run_question,
+                start_analysis_report,
+                cancel_analysis_run,
+                #[cfg(dev)]
+                seed_analysis_redesign_fixtures,
+                #[cfg(dev)]
+                clear_analysis_redesign_fixture_active_runs,
+                #[cfg(dev)]
+                clear_analysis_redesign_fixtures,
+                preview_youtube_source,
+                add_youtube_source,
+                sync_youtube_source,
+                sync_youtube_playlist_video,
+                cancel_source_job,
+                list_source_jobs,
+                retry_failed_youtube_playlist_videos,
+                #[cfg(dev)]
+                seed_source_job_cancellation_smoke_fixture,
+                #[cfg(dev)]
+                clear_source_job_cancellation_smoke_fixture,
+                get_youtube_runtime_status,
+                list_youtube_source_summaries,
+                get_youtube_video_detail,
+                get_youtube_playlist_detail,
+                list_youtube_transcript_segments,
+                get_youtube_settings,
+                save_youtube_settings,
+                get_youtube_auth_status,
+                save_youtube_cookies,
+                clear_youtube_auth,
+                resolve_youtube_thumbnail
+            ]
+        ))
         .build(tauri::generate_context!())
         .expect("error while building Tauri application")
         .run(|app, event| {
@@ -426,4 +455,36 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    macro_rules! inventory_names {
+        (; $($command:ident),* $(,)?) => {
+            [$(stringify!($command)),*]
+        };
+    }
+
+    #[test]
+    fn telegram_command_registration_inventory_is_exact() {
+        let registered = telegram_command_registration_inventory!(inventory_names,);
+
+        assert_eq!(
+            registered,
+            [
+                "list_accounts",
+                "get_account",
+                "create_account",
+                "set_account_phone",
+                "clear_account_phone",
+                "delete_account",
+                "tg_init",
+                "tg_is_authenticated",
+                "tg_get_account_statuses",
+                "tg_send_code",
+                "tg_sign_in",
+                "tg_logout",
+            ],
+        );
+    }
 }
