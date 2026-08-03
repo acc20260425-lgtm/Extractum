@@ -10,11 +10,16 @@ import componentSetupSource from "./setup-component-tests.ts?raw";
 
 const { LEGACY_TEST_FILES, VITEST_PROJECT_DEFINITIONS } = vitestConfiguration;
 
-const sourceTests = import.meta.glob("/src/**/*.test.ts", { query: "?raw", import: "default", eager: true });
-const scriptTests = import.meta.glob("/scripts/**/*.test.ts", { query: "?raw", import: "default", eager: true });
-const sidecarTests = import.meta.glob("/sidecars/**/*.test.ts", { query: "?raw", import: "default", eager: true });
-const researchTests = import.meta.glob("/research/**/*.test.ts", { query: "?raw", import: "default", eager: true });
-const testSources = { ...sourceTests, ...scriptTests, ...sidecarTests, ...researchTests } as Record<string, string>;
+const sourceTests = import.meta.glob("/src/**/*.{test,spec}.{js,jsx,ts,tsx,cjs,cjsx,cts,ctsx,mjs,mjsx,mts,mtsx}", { query: "?raw", import: "default", eager: true });
+const scriptTests = import.meta.glob("/scripts/**/*.{test,spec}.{js,jsx,ts,tsx,cjs,cjsx,cts,ctsx,mjs,mjsx,mts,mtsx}", { query: "?raw", import: "default", eager: true });
+const sidecarTests = import.meta.glob("/sidecars/**/*.{test,spec}.{js,jsx,ts,tsx,cjs,cjsx,cts,ctsx,mjs,mjsx,mts,mtsx}", { query: "?raw", import: "default", eager: true });
+const researchTests = import.meta.glob("/research/**/*.{test,spec}.{js,jsx,ts,tsx,cjs,cjsx,cts,ctsx,mjs,mjsx,mts,mtsx}", { query: "?raw", import: "default", eager: true });
+const testSources = Object.fromEntries(Object.entries({
+  ...sourceTests,
+  ...scriptTests,
+  ...sidecarTests,
+  ...researchTests,
+}).filter(([testPath]) => !/^\/research\/gemini_browser_adapter\/tests\/.*\.spec\.ts$/.test(testPath))) as Record<string, string>;
 const environmentMarker = "@vitest-environment " + "jsdom";
 const chromiumLauncherImport = new RegExp(
   String.raw`^\s*import\s+(?=[^;]*\bchromium\b)[^;]*\s+from\s+["']@playwright/test["']\s*;?`,
@@ -33,6 +38,10 @@ const approvedStructuredSourceAuthorities = [
   "scripts/testing/repository-rules.mjs",
 ] as const;
 
+function isInspectedVitestSource(testPath: string) {
+  return /\.(?:test|spec)\.(?:[cm]?[jt]sx?)$/i.test(testPath);
+}
+
 function directTextReaderViolations(sources: Record<string, string>) {
   const approvedOwners = new Set([
     ...sourceContractLedger.rows.map(({ path }) => path),
@@ -42,10 +51,12 @@ function directTextReaderViolations(sources: Record<string, string>) {
     "scripts/testing/repository-rules.test.ts",
     "scripts/testing/test-conventions.test.ts",
   ]);
-  const entries = Object.entries(sources).map(([testPath, source]) => ({
-    path: testPath.replaceAll("\\", "/").replace(/^\//, ""),
-    source,
-  }));
+  const entries = Object.entries(sources)
+    .filter(([testPath]) => isInspectedVitestSource(testPath))
+    .map(([testPath, source]) => ({
+      path: testPath.replaceAll("\\", "/").replace(/^\//, ""),
+      source,
+    }));
   const readers = discoverSourceReaders(entries, new Set(), ts);
   const readerOwners = new Set(readers
     .filter(({ classification, kind }) => kind === "manual" || !["fixture", "generated", "ignored", "output", "temp", "test"].includes(classification ?? ""))
@@ -163,6 +174,11 @@ describe("test conventions", () => {
       "/src/lib/unapproved.test.ts": 'import productionSource from "./production.ts?raw";\nexpect(productionSource).toBeDefined();',
     })).toEqual([
       "src/lib/unapproved.test.ts: direct text source reader is not an approved index or fixture owner",
+    ]);
+    expect(directTextReaderViolations({
+      "/src/lib/unapproved.spec.ts": 'import productionSource from "./production.ts?raw";\nexpect(productionSource).toBeDefined();',
+    })).toEqual([
+      "src/lib/unapproved.spec.ts: direct text source reader is not an approved index or fixture owner",
     ]);
     expect(directTextReaderViolations(testSources)).toEqual([]);
   });

@@ -13,7 +13,7 @@ const ANALYSIS_SURFACE_PATH = "src/lib/components/analysis/report-source-surface
 
 type RuleFixture = {
   positive: Record<string, string>;
-  mutation: Record<string, string>;
+  mutations: Record<string, Record<string, string>>;
 };
 
 const telegramPathHelper = String.raw`
@@ -60,8 +60,19 @@ const telegramPathHelper = String.raw`
 const ruleFixtures: Record<string, RuleFixture> = {
   "rule:telegram-repository-path-safety": {
     positive: { [TELEGRAM_PATH]: telegramPathHelper },
-    mutation: {
-      [TELEGRAM_PATH]: telegramPathHelper.replace('      || relativePath.includes("\\\\")\n', ""),
+    mutations: {
+      "removes the Windows-separator rejection": {
+        [TELEGRAM_PATH]: telegramPathHelper.replace('      || relativePath.includes("\\\\")\n', ""),
+      },
+      "inverts the dot-segment predicate": {
+        [TELEGRAM_PATH]: telegramPathHelper.replace(
+          'segment === "." || segment === ".."',
+          'segment !== "." && segment !== ".."',
+        ),
+      },
+      "inverts the missing-file predicate": {
+        [TELEGRAM_PATH]: telegramPathHelper.replace("if (!existsSync(selected))", "if (existsSync(selected))"),
+      },
     },
   },
   "rule:analysis-source-reader-surface-composition": {
@@ -73,13 +84,15 @@ const ruleFixtures: Record<string, RuleFixture> = {
         <SourceBrowserShell />
       `,
     },
-    mutation: {
-      [ANALYSIS_SURFACE_PATH]: `
-        <script lang="ts">
-          import TelegramTimelineReader from "./telegram-timeline-reader.svelte";
-        </script>
-        <TelegramTimelineReader />
-      `,
+    mutations: {
+      "restores a transitional source reader": {
+        [ANALYSIS_SURFACE_PATH]: `
+          <script lang="ts">
+            import TelegramTimelineReader from "./telegram-timeline-reader.svelte";
+          </script>
+          <TelegramTimelineReader />
+        `,
+      },
     },
   },
 };
@@ -132,7 +145,10 @@ describe("repository rule registry", () => {
         id,
         violations: [],
       });
-      expect(evaluateRule({ id, index: indexFor(fixture.mutation) }).violations, `${id} mutation`).not.toEqual([]);
+      expect(Object.keys(fixture.mutations), `${id} mutations`).not.toEqual([]);
+      for (const [name, mutation] of Object.entries(fixture.mutations)) {
+        expect(evaluateRule({ id, index: indexFor(mutation) }).violations, `${id}: ${name}`).not.toEqual([]);
+      }
     }
   });
 

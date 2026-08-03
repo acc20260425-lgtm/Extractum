@@ -53,6 +53,34 @@ describe("RepositoryIndex", () => {
     ]);
   });
 
+  it("retains predicate operators and operands as structured TypeScript guard facts", () => {
+    const { index } = fixtureIndex({
+      "src/guard.ts": 'function rejectDotSegment(segment: string) { if (segment === "." || segment === "..") throw new Error("dot segment"); }',
+    });
+
+    expect(index.getTypeScript("src/guard.ts").functions[0].guards).toEqual([
+      {
+        condition: {
+          kind: "binary",
+          operator: "||",
+          left: {
+            kind: "binary",
+            operator: "===",
+            left: { kind: "identifier", name: "segment" },
+            right: { kind: "string", value: "." },
+          },
+          right: {
+            kind: "binary",
+            operator: "===",
+            left: { kind: "identifier", name: "segment" },
+            right: { kind: "string", value: ".." },
+          },
+        },
+        consequenceThrows: true,
+      },
+    ]);
+  });
+
   it("returns parsed Svelte component facts", () => {
     const { index } = fixtureIndex({
       "src/example.svelte": '<script lang="ts">import Child from "./Child.svelte";</script>\n<Child answer={42} />',

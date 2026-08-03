@@ -74,8 +74,78 @@ function expressionName(node, typescript) {
   return undefined;
 }
 
+function operatorText(kind, typescript) {
+  return typescript.tokenToString?.(kind) ?? typescript.SyntaxKind[kind];
+}
+
+function expressionFact(node, typescript) {
+  if (typescript.isParenthesizedExpression(node)) return expressionFact(node.expression, typescript);
+  if (typescript.isIdentifier(node)) return { kind: "identifier", name: node.text };
+  if (typescript.isStringLiteral(node) || typescript.isNoSubstitutionTemplateLiteral(node)) {
+    return { kind: "string", value: node.text };
+  }
+  if (typescript.isNumericLiteral(node)) return { kind: "number", value: Number(node.text) };
+  if (node.kind === typescript.SyntaxKind.TrueKeyword || node.kind === typescript.SyntaxKind.FalseKeyword) {
+    return { kind: "boolean", value: node.kind === typescript.SyntaxKind.TrueKeyword };
+  }
+  if (node.kind === typescript.SyntaxKind.NullKeyword) return { kind: "null" };
+  if (typescript.isPrefixUnaryExpression(node)) {
+    return {
+      kind: "unary",
+      operator: operatorText(node.operator, typescript),
+      operand: expressionFact(node.operand, typescript),
+    };
+  }
+  if (typescript.isBinaryExpression(node)) {
+    return {
+      kind: "binary",
+      operator: operatorText(node.operatorToken.kind, typescript),
+      left: expressionFact(node.left, typescript),
+      right: expressionFact(node.right, typescript),
+    };
+  }
+  if (typescript.isPropertyAccessExpression(node)) {
+    return {
+      kind: "member",
+      object: expressionFact(node.expression, typescript),
+      property: node.name.text,
+    };
+  }
+  if (typescript.isCallExpression(node)) {
+    return {
+      kind: "call",
+      callee: expressionFact(node.expression, typescript),
+      arguments: node.arguments.map((argument) => expressionFact(argument, typescript)),
+    };
+  }
+  if (typescript.isArrowFunction(node)) {
+    return {
+      kind: "arrow",
+      parameters: node.parameters.map((parameter) => typescript.isIdentifier(parameter.name) ? parameter.name.text : null),
+      body: typescript.isBlock(node.body)
+        ? { kind: "block" }
+        : expressionFact(node.body, typescript),
+    };
+  }
+  return { kind: "unsupported", syntaxKind: typescript.SyntaxKind[node.kind] };
+}
+
+function containsThrow(node, typescript) {
+  let found = false;
+  const visit = (child) => {
+    if (typescript.isThrowStatement(child)) {
+      found = true;
+      return;
+    }
+    if (!found) typescript.forEachChild(child, visit);
+  };
+  visit(node);
+  return found;
+}
+
 function functionFact(name, node, exported, typescript) {
   const calls = [];
+  const guards = [];
   const guardCalls = [];
   const guardStringLiterals = [];
   let throwCount = 0;
@@ -94,7 +164,13 @@ function functionFact(name, node, exported, typescript) {
       const called = expressionName(child.expression, typescript);
       if (called) calls.push(called);
     }
-    if (typescript.isIfStatement(child)) visitGuard(child.expression);
+    if (typescript.isIfStatement(child)) {
+      visitGuard(child.expression);
+      guards.push({
+        condition: expressionFact(child.expression, typescript),
+        consequenceThrows: containsThrow(child.thenStatement, typescript),
+      });
+    }
     if (typescript.isThrowStatement(child)) throwCount += 1;
     typescript.forEachChild(child, visit);
   };
@@ -105,6 +181,7 @@ function functionFact(name, node, exported, typescript) {
     calls: [...new Set(calls)].sort(),
     guardCalls: [...new Set(guardCalls)].sort(),
     guardStringLiterals: [...new Set(guardStringLiterals)].sort(),
+    guards,
     throwCount,
   };
 }

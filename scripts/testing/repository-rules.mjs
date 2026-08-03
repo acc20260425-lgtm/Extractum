@@ -45,6 +45,70 @@ function requireGuardFacts(violations, functionFact, functionName, expectedCalls
   }
 }
 
+function identifier(expression, name) {
+  return expression?.kind === "identifier" && expression.name === name;
+}
+
+function stringLiteral(expression, value) {
+  return expression?.kind === "string" && expression.value === value;
+}
+
+function expressionPath(expression) {
+  if (expression?.kind === "identifier") return expression.name;
+  if (expression?.kind !== "member") return undefined;
+  const owner = expressionPath(expression.object);
+  return owner ? `${owner}.${expression.property}` : undefined;
+}
+
+function call(expression, callee, argumentsMatch) {
+  return expression?.kind === "call"
+    && expressionPath(expression.callee) === callee
+    && argumentsMatch(expression.arguments);
+}
+
+function containsExpression(expression, predicate) {
+  if (!expression || typeof expression !== "object") return false;
+  if (predicate(expression)) return true;
+  return Object.values(expression).some((value) => Array.isArray(value)
+    ? value.some((item) => containsExpression(item, predicate))
+    : containsExpression(value, predicate));
+}
+
+function equality(expression, operandName, value) {
+  return expression?.kind === "binary"
+    && expression.operator === "==="
+    && identifier(expression.left, operandName)
+    && stringLiteral(expression.right, value);
+}
+
+function exactDotSegmentPredicate(expression, parameter) {
+  return expression?.kind === "binary"
+    && expression.operator === "||"
+    && equality(expression.left, parameter, ".")
+    && equality(expression.right, parameter, "..");
+}
+
+function hasDotSegmentGuard(functionFact) {
+  return functionFact?.guards.some((guard) => guard.consequenceThrows
+    && containsExpression(guard.condition, (expression) => {
+      if (expression?.kind !== "call" || expression.callee?.kind !== "member" || expression.callee.property !== "some") {
+        return false;
+      }
+      const split = expression.callee.object;
+      if (!call(split, "relativePath.split", (args) => args.length === 1 && stringLiteral(args[0], "/"))) return false;
+      const predicate = expression.arguments[0];
+      const parameter = predicate?.kind === "arrow" ? predicate.parameters[0] : undefined;
+      return typeof parameter === "string" && exactDotSegmentPredicate(predicate.body, parameter);
+    }));
+}
+
+function hasMissingFileGuard(functionFact) {
+  return functionFact?.guards.some((guard) => guard.consequenceThrows
+    && guard.condition?.kind === "unary"
+    && guard.condition.operator === "!"
+    && call(guard.condition.operand, "existsSync", (args) => args.length === 1 && identifier(args[0], "selected")));
+}
+
 function evaluateTelegramRepositoryPathSafety(index) {
   const facts = index.getTypeScript(TELEGRAM_PATH);
   const violations = [];
@@ -64,6 +128,9 @@ function evaluateTelegramRepositoryPathSafety(index) {
     "relativePath.includes",
     "relativePath.split",
   ], ["", "\\", ".", ".."], 2);
+  if (!hasDotSegmentGuard(repositoryGuard)) {
+    violations.push(`${TELEGRAM_PATH}: assertRepositoryRelative must reject exactly the . and .. path segments`);
+  }
   requireCalls(violations, resolver, "resolveTelegramContractPath", [
     "assertRepositoryRelative",
     "existsSync",
@@ -74,6 +141,9 @@ function evaluateTelegramRepositoryPathSafety(index) {
     "existsSync",
     "path.isAbsolute",
   ], [".."], 2);
+  if (!hasMissingFileGuard(resolver)) {
+    violations.push(`${TELEGRAM_PATH}: resolveTelegramContractPath must reject a missing selected path`);
+  }
   requireCalls(violations, reader, "readTelegramContractFile", [
     "normalizeTelegramContractSourceText",
     "readFileSync",
