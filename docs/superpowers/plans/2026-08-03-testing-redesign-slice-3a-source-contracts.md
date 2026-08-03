@@ -14,7 +14,7 @@
 - Do not add timing eligibility, fingerprints, rolling counters, benchmark states, or timing-driven selection.
 - No test may read arbitrary production source solely for `includes`, regular-expression, or text-match assertions.
 - Fixture readers and RepositoryIndex tests stay exact, declared exceptions; parse failures are `INFRA_ERROR`, never zero violations.
-- Preserve stable ledger IDs and reviewed invariants; close a row only through a present replacement or documented deletion. The user-approved SC-000648 correction may replace its inaccurate single Vitest resolution with exhaustive frontend, Cargo, and architecture subgroups while retaining the stable row ID and all 17 assertion ordinals.
+- Preserve stable ledger IDs and reviewed invariants; close a row only through a present replacement or documented deletion. The user-approved Task 2A correction replaces nominal Vitest ownership with exhaustive Cargo, architecture, frontend, and deletion subgroups while retaining SC-000648 through SC-000652 and every assertion ordinal.
 - Preserve direct Cargo ownership for Rust behavior. Node tests must not parse `.rs` production text to prove Rust behavior.
 - On Windows use `npm.cmd`; use the package-specific Rust loops in `AGENTS.md`; every task ends with `npm.cmd run verify` outside the sandbox when process-tree proof is needed.
 - Do not change `TestingManifest`, selector behavior, scheduler behavior, public test commands, GitHub settings, or hosted CI.
@@ -29,20 +29,22 @@
 | `scripts/testing/repository-index.test.ts` | Unit tests for parsed facts, snapshot reuse, and parse-failure behavior. |
 | `scripts/testing/repository-rules.mjs` | Stable rule IDs and evaluators for the migrated Telegram and analysis architecture obligations. |
 | `scripts/testing/repository-rules.test.ts` | Positive and mutation tests for each implemented rule ID. |
-| `src/lib/telegram-checkpoint-2.behavior.test.ts` | Direct tests for SC-000648 through SC-000650. |
-| `src/lib/telegram-takeout.behavior.test.ts` | Direct test for SC-000651 and focused Telegram behavior handoff. |
-| `src/lib/telegram-session-persistence.behavior.test.ts` | Direct test for SC-000652. |
-| `src-tauri/src/lib.rs` | Single-source Telegram Tauri command inventory, the real invoke handler expansion, and its Cargo-owned registration test. |
+| `src/lib/telegram-checkpoint-2.behavior.test.ts` | Fast contract for the eleven public account/Telegram TypeScript wrappers; it does not claim backend state, event, Takeout, or session behavior. |
+| `src-tauri/src/lib.rs` | One complete application command inventory feeding the real invoke handler plus Cargo-owned uniqueness checks for the twelve account/Telegram registrations. |
+| `src-tauri/src/telegram.rs`, `src-tauri/src/telegram_session_store.rs` | Direct application-crate tests for Telegram result/order/event and session-path/atomic-write behavior. |
+| `src-tauri/src/takeout_import/mod.rs` | Direct application-crate cancellation mutation-before-event behavior. |
+| `src-tauri/crates/extractum-telegram/src/session.rs` | Direct encrypted-session error behavior. |
+| `src-tauri/crates/extractum-telegram/src/takeout/operations.rs`, `src-tauri/crates/extractum-telegram/src/takeout/raw_parse.rs` | Direct Checkpoint-6 lifecycle and raw peer-identity behavior. |
 | `src/lib/analysis-source-readers.behavior.test.ts` | Direct component/route behavior tests for SC-000222 and SC-000224 through SC-000278. |
 | `testing/source-contract-ledger.json` | Existing stable rows; no newly invented obligations. |
 | `vitest.config.ts`, `testing/runner-census.json`, `package.json`, `scripts/verify.mjs` | Remove legacy ownership only when the last file in that owner has migrated; Slice 3A must retain the project because later rows remain. |
 
 ## Rust Verification Loops
 
-- Affected package: `extractum` application crate; Task 2A changes only its private Tauri handler inventory and test.
-- Exact RED/GREEN test: `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib tests::telegram_command_registration_inventory_is_exact -- --exact`; list tests first if the module-qualified name differs, and never accept a zero-test run.
-- Focused check: `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`.
-- Task checkpoint: `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`.
+- Affected packages: `extractum` and `extractum-telegram`.
+- Task 2A narrow RED/GREEN runs use each exact test identity listed in the Task 2A subgroup tables with `cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib <module>::tests::<name> -- --exact`; list tests first if an identity differs, and never accept a zero-test run.
+- Focused checks: `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets` and `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets`.
+- Task checkpoints: `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets` and `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets`.
 - End-of-slice workspace gates remain `cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets`, `cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets`, and the authoritative `npm.cmd run verify`.
 - Use only canonical `src-tauri/target`; do not introduce a slice-specific target directory or test-support feature.
 
@@ -90,48 +92,70 @@ Run: `node scripts/run-vitest.mjs run scripts/testing/repository-index.test.ts s
 
 Expected: PASS with exactly the two initial evaluators registered, including their independent mutations and explicit parse-failure coverage.
 
-## Task 2A: Add direct Telegram behavior replacements
+## Task 2A: Replace nominal Telegram tests with direct Rust behavior
 
 **Files:**
 
-- Create: `src/lib/telegram-checkpoint-2.behavior.test.ts`
-- Create: `src/lib/telegram-takeout.behavior.test.ts`
-- Create: `src/lib/telegram-session-persistence.behavior.test.ts`
+- Modify: `src/lib/telegram-checkpoint-2.behavior.test.ts`
+- Delete: `src/lib/telegram-takeout.behavior.test.ts`
+- Delete: `src/lib/telegram-session-persistence.behavior.test.ts`
 - Modify: `src-tauri/src/lib.rs`
+- Modify: `src-tauri/src/telegram.rs`
+- Modify: `src-tauri/src/telegram_session_store.rs`
+- Modify: `src-tauri/src/takeout_import/mod.rs`
+- Modify: `src-tauri/crates/extractum-telegram/src/session.rs`
+- Modify: `src-tauri/crates/extractum-telegram/src/takeout/operations.rs`
+- Modify: `src-tauri/crates/extractum-telegram/src/takeout/raw_parse.rs`
 - Modify: `testing/source-contract-ledger.json`
 
 **Interfaces:**
 
-- SC-000649–SC-000652 resolve to the Vitest behavior identities already recorded in the ledger.
-- SC-000648 retains its stable ID but becomes exhaustive subgroups: assertions 2–3 resolve to `test:vitest:src/lib/telegram-checkpoint-2.behavior.test.ts#pins frontend Telegram command IPC names and default camelCase keys`; assertions 1 and 4–14 resolve to `test:cargo:extractum::tests::telegram_command_registration_inventory_is_exact`; assertions 15–17 resolve to the already approved `rule:telegram-app-facade-import-boundary` and `rule:telegram-crate-extraction-boundary` replacements. No assertion ordinal may be omitted or overlap.
+- SC-000648 retains all 17 ordinals: delete source-only ordinals `{1,4,6}` with specific reasons; `{2,5}` resolve to `test:cargo:extractum::tests::telegram_command_registration_inventory_is_exact`; `{3}` resolves to `test:vitest:src/lib/telegram-checkpoint-2.behavior.test.ts#pins the eleven public account and Telegram wrapper IPC names and default camelCase keys`; `{7-12}` resolve to the existing exact `extractum::account_deletion::tests::*` behavior cases named in `.superpowers/sdd/task-2a-cargo-ownership-map.md`; `{13,14}` resolve to the three existing exact credential behavior tests named there; `{15,16}` resolve to `rule:telegram-app-facade-import-boundary`; `{17}` resolves to `rule:telegram-crate-extraction-boundary`. The unused backend-only `tg_is_authenticated` TypeScript wrapper/key fragment is not preserved by inventing public API.
+- SC-000649 retains all 20 ordinals: `{1}` restore-event test; `{2,3}` send-code test; `{4,5}` sign-in order test; `{6,7}` existing missing-hash test; `{8}` logout order test; `{9,10}` session-path test; delete `{11,12}` as private call-count shape; `{13}` atomic-write outcome/error test; `{14,15,17,18,20}` encrypted-session error test; `{16}` existing invalid-key-length test; `{19}` existing missing-key test.
+- SC-000650 `{1,2,3}` resolves jointly to `test:cargo:extractum::takeout_import::tests::cancelled_job_emits_persisted_terminal_record` and existing `test:cargo:extractum::takeout_import::state::tests::takeout_event_status_and_cancellation_contract_is_exact`.
+- SC-000651 retains all 11 ordinals: `{1,2,10,11}` resolve to `rule:telegram-crate-extraction-boundary`; `{3,4}` use the existing TDesktop pagination test plus the Checkpoint-6 lifecycle test; `{5}` uses the existing descending-fallback pagination test plus the lifecycle test; `{6,7,8,9}` use the new raw peer-identity test. The lifecycle replacement must also prove the reviewed unordinalized fallback/cancellation/finalize ordering.
+- SC-000652 `{1,2}` resolves jointly to existing `test:cargo:extractum::telegram_session_store::tests::session_path_temp_path_and_error_contract_is_exact` and the new atomic-write outcome test; delete `{3,4,5}` as helper-call-count/delegation/source-shape constraints. No assertion ordinal may be omitted or overlap.
 
-- [ ] **Step 1: Write failing direct Telegram behavior tests**
+- [ ] **Step 1: Repair the command-surface replacement under RED tests**
 
-Use public frontend command wrappers, emitted events, session, and Takeout seams. Assert the observable TypeScript contracts named by SC-000648 through SC-000652 without importing or reading Rust source text. The SC-000648 Vitest title is the exact frontend subgroup identity above; it must not claim backend registration.
+Trim `telegram-checkpoint-2.behavior.test.ts` to the eleven real public wrappers and the exact title above. Delete the two mock-only Takeout/session files: fabricated `invoke` results and manually injected events are not backend behavior evidence. Add a Cargo RED that fails while any account/Telegram command is duplicated in the complete application handler inventory. Refactor the entire invoke-handler command list into one private callback inventory expanded both into the real `tauri::generate_handler!` and the test; assert each of the twelve target names occurs exactly once. Remove the six manual duplicate `tg_*` entries. Do not add a `tg_is_authenticated` frontend wrapper.
 
-- [ ] **Step 2: Run focused RED tests**
+- [ ] **Step 2: Add direct application Telegram/session Cargo behavior**
 
-Run: `node scripts/run-vitest.mjs run src/lib/telegram-checkpoint-2.behavior.test.ts src/lib/telegram-takeout.behavior.test.ts src/lib/telegram-session-persistence.behavior.test.ts`
+Add these exact tests under TDD, using narrow internal recorders/scripted adapters only where the production ordering cannot otherwise be observed:
 
-Expected: FAIL because the replacement files are absent.
+- `extractum::telegram::tests::restore_emits_failure_event_for_each_failed_account`;
+- `extractum::telegram::tests::send_code_success_is_not_auth_error`;
+- `extractum::telegram::tests::sign_in_persists_session_before_ready_event`;
+- `extractum::telegram::tests::logout_returns_true_after_runtime_and_session_cleanup`;
+- `extractum::telegram_session_store::tests::session_path_uses_app_data_root_and_account_filename`;
+- `extractum::telegram_session_store::tests::atomic_session_write_outcome_and_error_contract_is_exact`.
 
-- [ ] **Step 3: Write the failing Cargo registration test**
+The session test must exercise success, write failure, and rename failure, assert final replacement/no residual temporary file, and assert the existing internal-error contract. Do not expose production capability through a test-support feature.
 
-In `src-tauri/src/lib.rs`, add `tests::telegram_command_registration_inventory_is_exact` before introducing the inventory seam. The test names exactly the twelve frozen account/Telegram commands and must fail because no single-source inventory exists yet.
+- [ ] **Step 3: Add extracted Telegram/session Cargo behavior**
 
-Run: `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib tests::telegram_command_registration_inventory_is_exact -- --exact`
+Add exact test `extractum-telegram::session::tests::encrypted_session_error_contract_is_exact` under TDD. It covers SC-000649 `{14,15,17,18,20}` with deterministic invalid base64/key/nonce/format and encrypt/decrypt failure cases. Reuse the existing invalid-key-length, wrong-account, and missing-key tests only for the behavior they actually execute.
 
-Expected: FAIL because the command inventory used by both the handler and test is absent.
+- [ ] **Step 4: Add direct Takeout Cargo behavior**
 
-- [ ] **Step 4: Implement the smallest frontend fixtures and single-source Rust inventory**
+Add these exact tests under TDD:
 
-Do not duplicate Rust production logic in TypeScript. In Rust, define the twelve-command inventory once through a local macro or equivalent compile-time construct; expand that same inventory into the real `tauri::generate_handler!` expression and into the Cargo assertion. Do not maintain a second string list disconnected from the handler. Keep the inventory private to the application crate. Update SC-000648 to the approved exhaustive subgroups without changing its stable ID, source hashes, lineage, or assertion count. Do not delete the legacy contract in this task.
+- `extractum::takeout_import::tests::cancelled_job_emits_persisted_terminal_record`, with an internal event recorder proving state persistence before emission and cancellation-versus-failure terminal selection;
+- `extractum-telegram::takeout::operations::tests::checkpoint_six_lifecycle_preserves_fallback_cancellation_and_finalize_order`, using the existing scripted transport/backend seam to record validate, migration/split, count, import, fallback, cancellation, provenance, finish, and finalize order;
+- `extractum-telegram::takeout::raw_parse::tests::takeout_peer_identity_maps_user_chat_and_channel`, proving User/Chat/Channel identity and retained `i64` message IDs.
 
-- [ ] **Step 5: Verify Task 2A**
+Reuse the two exact pagination tests and the existing application Takeout state contract named in the ownership map; do not duplicate their scenarios.
 
-Run the focused Vitest command, the exact Cargo test, `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`, `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`, and `node scripts/validate-testing-transition.mjs`.
+- [ ] **Step 5: Write the exhaustive ledger subgroups**
 
-Expected: PASS. The transition validator remains open for SC-000561–SC-000647 and SC-000653–SC-000658 until Task 2B adds their structured rules.
+Apply the exact SC-000648–SC-000652 partitions above. Every delete subgroup has a specific `deletionReason`; every behavior replacement names a present exact Vitest/Cargo identity; rule-owned subgroups remain open until Task 2B. Preserve stable IDs, hashes, lineage, assertion counts, and the legacy source file.
+
+- [ ] **Step 6: Verify Task 2A**
+
+Run the one focused Vitest file, every new exact Cargo test at least once, both package-focused checks and package checkpoints from `## Rust Verification Loops`, and `node scripts/validate-testing-transition.mjs`.
+
+Expected: all direct behavior tests pass. The transition validator itself passes while reporting rule-owned Telegram subgroups open until Task 2B; it must not report missing Cargo/Vitest identities or nominal mock-only replacements.
 
 ## Task 2B: Migrate Telegram architecture rules and cut over the legacy file
 
@@ -167,13 +191,13 @@ Make the existing `rule:telegram-*` IDs evaluate parsed structure and Cargo meta
 
 - [ ] **Step 4: Remove the legacy file and prove full Telegram closure**
 
-Before deletion, add transition-validator RED/GREEN cases for a missing rule ID, a violating live rule, a missing Cargo test identity, and the exact passing SC-000648 Cargo identity. Obtain the Cargo list once per transition validation only when the ledger contains a historical `test:cargo:` replacement; do not persist a Cargo census or timing data.
+Before deletion, add transition-validator RED/GREEN cases for a missing rule ID, a violating live rule, a missing Cargo test identity, and representative passing identities from both `extractum` and `extractum-telegram`. Require every Cargo identity introduced by Task 2A to resolve from bounded `cargo test -- --list` output. Obtain each owning package list once per transition validation only when the ledger contains a historical `test:cargo:` replacement; do not persist a Cargo census or timing data.
 
 Delete `src/lib/telegram-crate-boundary-contract.test.ts`; do not alter its row IDs, invariants, dispositions, or replacement IDs. Run `node scripts/validate-testing-transition.mjs` and require SC-000561–SC-000658 to report closed.
 
 - [ ] **Step 5: Verify Task 2B**
 
-Run: `node scripts/run-vitest.mjs run src/lib/telegram-checkpoint-2.behavior.test.ts src/lib/telegram-takeout.behavior.test.ts src/lib/telegram-session-persistence.behavior.test.ts scripts/testing/repository-rules.test.ts`; then run the owning Telegram package check/test commands from `AGENTS.md` and `npm.cmd run verify`.
+Run: `node scripts/run-vitest.mjs run src/lib/telegram-checkpoint-2.behavior.test.ts scripts/testing/repository-rules.test.ts`; then run both owning package check/test commands from `## Rust Verification Loops` and `npm.cmd run verify`.
 
 ## Task 3: Migrate the analysis source-reader contract
 
@@ -282,7 +306,7 @@ Expected: only the Slice 3A implementation and evidence files are changed before
 | Checkpoint | Evidence |
 | --- | --- |
 | Structured authority | RepositoryIndex and rule mutation tests pass; malformed inputs surface as errors. |
-| Telegram migration | SC-000561–SC-000658 close without a Node source scan of Rust production files; SC-000648 resolves through exhaustive frontend, Cargo, and architecture subgroups under its stable ID. |
+| Telegram migration | SC-000561–SC-000658 close without a Node source scan of Rust production files; SC-000648–SC-000652 retain exhaustive frontend, Cargo, architecture, and explicit deletion subgroups under their stable IDs. |
 | Source-reader migration | SC-000221–SC-000278 close, including three explicit deletion rows. |
 | Analysis application migration | SC-000029–SC-000059 close through one deterministic structured rule. |
 | Transition integrity | Census remains bidirectional and ledger closes the removed paths. |
