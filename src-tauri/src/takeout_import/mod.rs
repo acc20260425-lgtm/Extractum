@@ -235,11 +235,32 @@ pub async fn cancel_takeout_source_import(
     state: tauri::State<'_, TakeoutImportState>,
     job_id: String,
 ) -> AppResult<CancelTakeoutImportResponse> {
-    let Some(record) = state.request_cancel(&job_id).await else {
+    let event_handle = handle.clone();
+    let Some(_record) = request_cancel_and_emit_with(state.inner(), &job_id, move |record| {
+        let event_handle = event_handle.clone();
+        async move {
+            emit_takeout_import_event(&event_handle, &record);
+        }
+    })
+    .await
+    else {
         return Ok(CancelTakeoutImportResponse { cancelled: false });
     };
-    emit_takeout_import_event(&handle, &record);
     Ok(CancelTakeoutImportResponse { cancelled: true })
+}
+
+async fn request_cancel_and_emit_with<Emit, EmitFuture>(
+    state: &TakeoutImportState,
+    job_id: &str,
+    mut emit: Emit,
+) -> Option<TakeoutImportJobRecord>
+where
+    Emit: FnMut(TakeoutImportJobRecord) -> EmitFuture,
+    EmitFuture: Future<Output = ()>,
+{
+    let record = state.request_cancel(job_id).await?;
+    emit(record.clone()).await;
+    Some(record)
 }
 
 #[tauri::command]
@@ -361,47 +382,89 @@ async fn run_takeout_import_job(
     ingest_guard: SourceIngestGuard,
 ) {
     let takeout_state = handle.state::<TakeoutImportState>();
+    let operation_handle = handle.clone();
+    let operation_job_id = job_id.clone();
+    let finalize_handle = handle.clone();
+    let event_handle = handle.clone();
+    run_takeout_import_job_with(
+        takeout_state.inner(),
+        &job_id,
+        move |batch_id| {
+            let operation_handle = operation_handle.clone();
+            let operation_job_id = operation_job_id.clone();
+            async move {
+                run_takeout_source_import(&operation_handle, &operation_job_id, batch_id).await
+            }
+        },
+        move |batch_id, status, terminal_error| {
+            let finalize_handle = finalize_handle.clone();
+            async move {
+                finalize_terminal_batch_best_effort(
+                    &finalize_handle,
+                    batch_id,
+                    status,
+                    terminal_error.as_deref(),
+                )
+                .await;
+            }
+        },
+        move |record| {
+            let event_handle = event_handle.clone();
+            async move {
+                emit_takeout_import_event(&event_handle, &record);
+            }
+        },
+    )
+    .await;
+    drop(ingest_guard);
+}
 
+async fn run_takeout_import_job_with<Run, RunFuture, Finalize, FinalizeFuture, Emit, EmitFuture>(
+    takeout_state: &TakeoutImportState,
+    job_id: &str,
+    run: Run,
+    mut finalize: Finalize,
+    mut emit: Emit,
+) where
+    Run: FnOnce(i64) -> RunFuture,
+    RunFuture: Future<Output = AppResult<TakeoutImportOutcome>>,
+    Finalize: FnMut(i64, TerminalBatchStatus, Option<String>) -> FinalizeFuture,
+    FinalizeFuture: Future<Output = ()>,
+    Emit: FnMut(TakeoutImportJobRecord) -> EmitFuture,
+    EmitFuture: Future<Output = ()>,
+{
     let Some(running_record) = takeout_state
-        .update_job(&job_id, |job| {
+        .update_job(job_id, |job| {
             job.status = STATUS_RUNNING.to_string();
             job.phase = PHASE_RESOLVING_SOURCE.to_string();
             job.message = Some("Preparing Takeout import.".to_string());
         })
         .await
     else {
-        drop(ingest_guard);
         return;
     };
-    emit_takeout_import_event(&handle, &running_record);
+    emit(running_record.clone()).await;
     let batch_id = running_record.batch_id;
 
-    if takeout_state.is_cancel_requested(&job_id).await {
-        finalize_terminal_batch_best_effort(
-            &handle,
-            batch_id,
-            TerminalBatchStatus::Cancelled,
-            None,
-        )
-        .await;
+    if takeout_state.is_cancel_requested(job_id).await {
+        finalize(batch_id, TerminalBatchStatus::Cancelled, None).await;
         if let Some(record) = takeout_state
-            .finish_job(&job_id, |job| {
+            .finish_job(job_id, |job| {
                 job.status = STATUS_CANCELLED.to_string();
                 job.phase = PHASE_CANCELLED.to_string();
                 job.message = Some("Takeout import cancelled.".to_string());
             })
             .await
         {
-            emit_takeout_import_event(&handle, &record);
+            emit(record).await;
         }
-        drop(ingest_guard);
         return;
     }
 
-    match run_takeout_source_import(&handle, &job_id, batch_id).await {
+    match run(batch_id).await {
         Ok(outcome) => {
             if let Some(record) = takeout_state
-                .finish_job(&job_id, |job| {
+                .finish_job(job_id, |job| {
                     job.status = STATUS_COMPLETED.to_string();
                     job.phase = PHASE_COMPLETED.to_string();
                     job.message = Some(format!(
@@ -416,39 +479,32 @@ async fn run_takeout_import_job(
                 })
                 .await
             {
-                emit_takeout_import_event(&handle, &record);
+                emit(record).await;
             }
         }
         Err(error) => {
-            if takeout_state.is_cancel_requested(&job_id).await {
-                finalize_terminal_batch_best_effort(
-                    &handle,
-                    batch_id,
-                    TerminalBatchStatus::Cancelled,
-                    None,
-                )
-                .await;
+            if takeout_state.is_cancel_requested(job_id).await {
+                finalize(batch_id, TerminalBatchStatus::Cancelled, None).await;
                 if let Some(record) = takeout_state
-                    .finish_job(&job_id, |job| {
+                    .finish_job(job_id, |job| {
                         job.status = STATUS_CANCELLED.to_string();
                         job.phase = PHASE_CANCELLED.to_string();
                         job.message = Some("Takeout import cancelled.".to_string());
                     })
                     .await
                 {
-                    emit_takeout_import_event(&handle, &record);
+                    emit(record).await;
                 }
             } else {
                 let terminal_error = error.to_string();
-                finalize_terminal_batch_best_effort(
-                    &handle,
+                finalize(
                     batch_id,
                     TerminalBatchStatus::Failed,
-                    Some(&terminal_error),
+                    Some(terminal_error.clone()),
                 )
                 .await;
                 if let Some(record) = takeout_state
-                    .finish_job(&job_id, |job| {
+                    .finish_job(job_id, |job| {
                         job.status = STATUS_FAILED.to_string();
                         job.phase = PHASE_FAILED.to_string();
                         job.message = None;
@@ -456,12 +512,11 @@ async fn run_takeout_import_job(
                     })
                     .await
                 {
-                    emit_takeout_import_event(&handle, &record);
+                    emit(record).await;
                 }
             }
         }
     }
-    drop(ingest_guard);
 }
 
 async fn run_takeout_migrated_history_import_job(
@@ -1860,15 +1915,17 @@ mod tests {
         load_takeout_source_subtype, migrated_history_detected_warning, queue_drained_fallbacks,
         record_after_select_once, record_export_dc_attempt_if_needed,
         record_export_dc_fallback_if_needed, record_only_my_messages_fallback_if_needed,
-        record_pending_once, record_takeout_fallbacks, resolve_metadata_precedence,
-        run_history_search_transition, run_takeout_step_with_cancel, FallbackRecordState,
-        HistoryTransitionCommand, HistoryTransitionResponse, StepOutcome,
-        TakeoutAttemptRecordState, TakeoutFallbackRecordTracker,
+        record_pending_once, record_takeout_fallbacks, request_cancel_and_emit_with,
+        resolve_metadata_precedence, run_history_search_transition, run_takeout_import_job_with,
+        run_takeout_step_with_cancel, FallbackRecordState, HistoryTransitionCommand,
+        HistoryTransitionResponse, StepOutcome, TakeoutAttemptRecordState,
+        TakeoutFallbackRecordTracker, TakeoutImportOutcome, PHASE_CANCELLED, PHASE_FAILED,
+        STATUS_CANCELLED, STATUS_FAILED,
     };
     use crate::error::{AppError, AppErrorKind, AppResult};
     use crate::ingest_provenance::{
         create_telegram_takeout_batch, finalize_ingest_batch, CreateTelegramTakeoutBatch,
-        TerminalBatchStatus,
+        TerminalBatchStatus, TAKEOUT_HISTORY_SCOPE_CURRENT,
     };
     use crate::source_ingest::{SourceIngestKind, SourceIngestLocks};
     use crate::sources::test_support::{
@@ -1879,13 +1936,199 @@ mod tests {
     use crate::sources::{
         insert_telegram_source_item, TELEGRAM_KIND_CHANNEL, TELEGRAM_KIND_SUPERGROUP,
     };
-    use crate::takeout_import::state::TakeoutImportState;
+    use crate::takeout_import::state::{
+        TakeoutImportJobRecord, TakeoutImportState, STATUS_CANCEL_REQUESTED,
+    };
     use crate::telegram_impl::{
         takeout_attempt_fixture, takeout_fallback_fixture, TakeoutFallbackKind,
         TelegramItemContext, TelegramMessageDraft, TelegramMessageIdentity,
         ITEM_KIND_TELEGRAM_MESSAGE,
     };
     use tokio_util::sync::CancellationToken;
+
+    #[tokio::test]
+    async fn cancelled_job_emits_persisted_terminal_record() {
+        type RecordedEvent = (String, String, Option<String>);
+
+        async fn recorded_snapshot(
+            state: &TakeoutImportState,
+            emitted: &Arc<Mutex<Vec<(RecordedEvent, RecordedEvent)>>>,
+            record: TakeoutImportJobRecord,
+        ) {
+            let persisted = state
+                .list_jobs()
+                .await
+                .into_iter()
+                .find(|job| job.job_id == record.job_id)
+                .expect("emitted job remains persisted");
+            emitted.lock().expect("event recorder").push((
+                (persisted.status, persisted.phase, persisted.message),
+                (record.status, record.phase, record.message),
+            ));
+        }
+
+        let early_state = TakeoutImportState::new();
+        let early_job = early_state
+            .create_job(71, 72, 70, TAKEOUT_HISTORY_SCOPE_CURRENT)
+            .await
+            .expect("create early-cancel job");
+        let early_events = Arc::new(Mutex::new(Vec::new()));
+        let cancel_events = Arc::clone(&early_events);
+        let cancel_record =
+            request_cancel_and_emit_with(&early_state, &early_job.job_id, |record| {
+                let cancel_events = Arc::clone(&cancel_events);
+                let state = &early_state;
+                async move {
+                    recorded_snapshot(state, &cancel_events, record).await;
+                }
+            })
+            .await
+            .expect("active job cancellation");
+        assert_eq!(cancel_record.status, STATUS_CANCEL_REQUESTED);
+        assert_eq!(cancel_record.message.as_deref(), Some("Cancel requested."));
+
+        let early_operation_calls = Arc::new(AtomicUsize::new(0));
+        let operation_calls = Arc::clone(&early_operation_calls);
+        let early_finalized = Arc::new(Mutex::new(Vec::new()));
+        let finalized = Arc::clone(&early_finalized);
+        let terminal_events = Arc::clone(&early_events);
+        run_takeout_import_job_with(
+            &early_state,
+            &early_job.job_id,
+            move |_batch_id| {
+                operation_calls.fetch_add(1, Ordering::SeqCst);
+                async {
+                    Ok(TakeoutImportOutcome {
+                        inserted: 1,
+                        skipped: 0,
+                        progress_total: Some(1),
+                        warnings: Vec::new(),
+                    })
+                }
+            },
+            move |_batch_id, status, error| {
+                let finalized = Arc::clone(&finalized);
+                async move {
+                    finalized
+                        .lock()
+                        .expect("finalize recorder")
+                        .push((status, error));
+                }
+            },
+            |record| {
+                let terminal_events = Arc::clone(&terminal_events);
+                let state = &early_state;
+                async move {
+                    recorded_snapshot(state, &terminal_events, record).await;
+                }
+            },
+        )
+        .await;
+
+        assert_eq!(early_operation_calls.load(Ordering::SeqCst), 0);
+        assert_eq!(
+            *early_finalized.lock().expect("early finalize recorder"),
+            vec![(TerminalBatchStatus::Cancelled, None)]
+        );
+        let early_events = early_events.lock().expect("early event recorder");
+        assert_eq!(
+            early_events
+                .iter()
+                .map(|(_, emitted)| emitted.0.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                STATUS_CANCEL_REQUESTED,
+                super::STATUS_RUNNING,
+                STATUS_CANCELLED
+            ]
+        );
+        assert!(early_events
+            .iter()
+            .all(|(persisted, emitted)| persisted == emitted));
+        assert_eq!(
+            early_events.last().expect("terminal event").1 .1,
+            PHASE_CANCELLED
+        );
+        drop(early_events);
+
+        let cancelled_error_state = TakeoutImportState::new();
+        let cancelled_error_job = cancelled_error_state
+            .create_job(81, 82, 80, TAKEOUT_HISTORY_SCOPE_CURRENT)
+            .await
+            .expect("create cancelled-error job");
+        let cancelled_error_finalized = Arc::new(Mutex::new(Vec::new()));
+        let finalized = Arc::clone(&cancelled_error_finalized);
+        run_takeout_import_job_with(
+            &cancelled_error_state,
+            &cancelled_error_job.job_id,
+            |_batch_id| async {
+                cancelled_error_state
+                    .request_cancel(&cancelled_error_job.job_id)
+                    .await
+                    .expect("request cancellation during operation");
+                Err(AppError::network("remote failed after cancellation"))
+            },
+            move |_batch_id, status, error| {
+                let finalized = Arc::clone(&finalized);
+                async move {
+                    finalized
+                        .lock()
+                        .expect("finalize recorder")
+                        .push((status, error));
+                }
+            },
+            |_record| async {},
+        )
+        .await;
+        assert_eq!(
+            *cancelled_error_finalized
+                .lock()
+                .expect("cancelled-error finalize recorder"),
+            vec![(TerminalBatchStatus::Cancelled, None)]
+        );
+        let cancelled_error = cancelled_error_state.list_jobs().await.remove(0);
+        assert_eq!(
+            (cancelled_error.status, cancelled_error.phase),
+            (STATUS_CANCELLED.to_string(), PHASE_CANCELLED.to_string(),)
+        );
+
+        let failed_state = TakeoutImportState::new();
+        let failed_job = failed_state
+            .create_job(91, 92, 90, TAKEOUT_HISTORY_SCOPE_CURRENT)
+            .await
+            .expect("create failed job");
+        let failed_finalized = Arc::new(Mutex::new(Vec::new()));
+        let finalized = Arc::clone(&failed_finalized);
+        run_takeout_import_job_with(
+            &failed_state,
+            &failed_job.job_id,
+            |_batch_id| async { Err(AppError::network("remote failed")) },
+            move |_batch_id, status, error| {
+                let finalized = Arc::clone(&finalized);
+                async move {
+                    finalized
+                        .lock()
+                        .expect("finalize recorder")
+                        .push((status, error));
+                }
+            },
+            |_record| async {},
+        )
+        .await;
+        assert_eq!(
+            *failed_finalized.lock().expect("failed finalize recorder"),
+            vec![(
+                TerminalBatchStatus::Failed,
+                Some("remote failed".to_string()),
+            )]
+        );
+        let failed = failed_state.list_jobs().await.remove(0);
+        assert_eq!(
+            (failed.status, failed.phase),
+            (STATUS_FAILED.to_string(), PHASE_FAILED.to_string(),)
+        );
+        assert_eq!(failed.error.as_deref(), Some("remote failed"));
+    }
 
     #[tokio::test]
     async fn takeout_step_cancel_wrapper_allows_completed_future() {
