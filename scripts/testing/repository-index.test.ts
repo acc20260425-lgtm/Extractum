@@ -111,6 +111,23 @@ describe("RepositoryIndex", () => {
     });
   });
 
+  it("counts only throws executable in the guarded consequence scope", () => {
+    const { index } = fixtureIndex({
+      "src/guard.ts": [
+        "function inspect(nestedOnly: boolean, sameScope: boolean) {",
+        "  if (nestedOnly) {",
+        '    function unused() { throw new Error("nested function"); }',
+        '    class Deferred { run() { throw new Error("nested class"); } }',
+        "  }",
+        '  if (sameScope) { { throw new Error("same scope block"); } }',
+        "}",
+      ].join("\n"),
+    });
+
+    expect(index.getTypeScript("src/guard.ts").functions[0].guards.map(({ consequenceThrows }: any) => consequenceThrows))
+      .toEqual([false, true]);
+  });
+
   it("returns parsed Svelte component facts", () => {
     const { index } = fixtureIndex({
       "src/example.svelte": '<script lang="ts">import Child from "./Child.svelte";</script>\n<Child answer={42} />',

@@ -140,9 +140,22 @@ function expressionFact(node, typescript) {
   return { kind: "unsupported", syntaxKind: typescript.SyntaxKind[node.kind] };
 }
 
+function isDeferredExecutionBoundary(node, typescript) {
+  return typescript.isFunctionDeclaration(node)
+    || typescript.isFunctionExpression(node)
+    || typescript.isArrowFunction(node)
+    || typescript.isMethodDeclaration(node)
+    || typescript.isGetAccessorDeclaration(node)
+    || typescript.isSetAccessorDeclaration(node)
+    || typescript.isConstructorDeclaration(node)
+    || typescript.isClassDeclaration(node)
+    || typescript.isClassExpression(node);
+}
+
 function containsThrow(node, typescript) {
   let found = false;
   const visit = (child) => {
+    if (child !== node && isDeferredExecutionBoundary(child, typescript)) return;
     if (typescript.isThrowStatement(child)) {
       found = true;
       return;
@@ -170,6 +183,7 @@ function functionFact(name, node, exported, typescript) {
     typescript.forEachChild(child, visitGuard);
   };
   const visit = (child) => {
+    if (isDeferredExecutionBoundary(child, typescript)) return;
     if (typescript.isCallExpression(child)) {
       const called = expressionName(child.expression, typescript);
       if (called) calls.push(called);

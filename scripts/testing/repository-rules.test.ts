@@ -61,6 +61,12 @@ const ruleFixtures: Record<string, RuleFixture> = {
   "rule:telegram-repository-path-safety": {
     positive: { [TELEGRAM_PATH]: telegramPathHelper },
     mutations: {
+      "moves the first rejection throw into an unused nested function": {
+        [TELEGRAM_PATH]: telegramPathHelper.replace(
+          ') throw new Error("invalid path");',
+          ') { function unusedRejection() { throw new Error("invalid path"); } }',
+        ),
+      },
       "inverts the empty-path rejection": {
         [TELEGRAM_PATH]: telegramPathHelper.replace("      !relativePath\n", "      relativePath\n"),
       },
@@ -208,6 +214,10 @@ describe("repository rule registry", () => {
 
   it("rejects a negated complete dot-segment predicate", () => {
     expect(telegramMutation("negates the complete dot-segment predicate")).not.toEqual([]);
+  });
+
+  it("rejects a guard whose only throw is inside an unused nested function", () => {
+    expect(telegramMutation("moves the first rejection throw into an unused nested function")).not.toEqual([]);
   });
 
   it("rejects an inverted Windows-separator guard", () => {
