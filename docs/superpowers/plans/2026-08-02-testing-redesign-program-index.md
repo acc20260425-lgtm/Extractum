@@ -4,7 +4,7 @@
 
 **Goal:** Deliver the approved testing-infrastructure redesign as evidence-gated slices without making later plans depend on guessed inventories or guessed Rust performance.
 
-**Architecture:** Keep the approved specification as the single behavioral contract. Write and execute one detailed slice plan at a time; each slice commits its implementation and verification evidence before the next plan fixes file-level work. Slice 1 supplies the Rust fast-versus-slow decision, Slice 2A supplies the census and source-contract ledger, and disposable Slice 2C decides whether Nx merits a separate integration amendment before source-contract migration begins.
+**Architecture:** Keep the approved specification as the single behavioral contract. Write and execute one detailed slice plan at a time; each slice commits its implementation and verification evidence before the next plan fixes file-level work. Slice 1 supplies the Rust fast-versus-slow decision, Slice 2A supplies the census and source-contract ledger, and deferred disposable Slice 2C decides whether Nx merits a separate integration amendment only after Slice 4 completes.
 
 **Tech Stack:** Node.js ESM, TypeScript, Vitest 4.1.5, SvelteKit 2, Playwright 1.61, Cargo/Rust 2021, Windows PowerShell, dependency-cruiser, Knip, V8 coverage, and an optional disposable Nx spike.
 
@@ -32,10 +32,10 @@
 | 1. Measurement and Rust feasibility | Now | Five-field timing writer, current inventory/duration evidence, Rust compile/check floor, combined test-build time, delta, direct-binary time, Cargo end-to-end time, and an explicit fast-boundary-versus-slow decision |
 | 2A. Migration preflight | After Slice 1 is committed | Transition validator integrated into current `verify`, bidirectional runner census, frozen source-contract ledger |
 | 2B. Project and browser ownership | After the 2A census and ledger are committed | Disjoint non-empty Vitest projects, Chromium extraction moved to Playwright, cleanup ownership, explicit 20-run lifecycle audit |
-| 2C. Disposable Nx decision gate | After Slice 2B is committed and before Slice 3 planning | One-day separate-worktree spike; only ADOPT_NX or REJECT_NX decision/evidence reaches main; no Nx configuration remains |
-| 3. Test migration | After Slice 2C records REJECT_NX, or after ADOPT_NX plus its follow-up amendment | Source-dependent tests replaced or deleted with ledger lineage; legacy-contract project and configuration removed |
-| 4. Manifest and selector | After Slice 1's Rust decision and Slice 3's final test paths are committed | Validated path-to-owner manifest, fast/slow classification, every unique fast-owner smoke-tested through real feedback selection |
-| 5. Process ownership and watch mode | After selector owner commands are stable | 15-second one-shot deadline, descendant cleanup, 5-second watch warning, slow handoff behavior |
+| 3. Test migration | After Slice 2B is committed; Nx remains unselected | Source-dependent tests replaced or deleted with ledger lineage; legacy-contract project and configuration removed |
+| 4. Manifest and selector | After Slice 1's Rust decision and Slice 3's final test paths are committed; Nx remains unselected | Validated path-to-owner manifest, fast/slow classification, every unique fast-owner smoke-tested through real feedback selection |
+| 2C. Disposable Nx decision gate | After Slice 4 is committed and before Slice 5 planning | One-day separate-worktree spike; only ADOPT_NX or REJECT_NX decision/evidence reaches main; no Nx configuration remains |
+| 5. Process ownership and watch mode | After Slice 2C records REJECT_NX, or after ADOPT_NX plus its follow-up amendment | 15-second one-shot deadline, descendant cleanup, 5-second watch warning, slow handoff behavior |
 | 6. Verification scheduler and performance command | After complete gate inventory is stable | Fixed scheduler constraints, complete non-fail-fast gate execution, 90-second warning, five-run report and optional explicit p95 audit |
 | 7. Static analysis, coverage, stability, and quarantine | After final source/test layout exists | dependency-cruiser and Knip gates, expiring baselines, V8 critical-module ratchet, explicit stability/quarantine commands |
 | 8. Documentation and final acceptance | After all implementation slices pass | Updated contributor workflow, fresh evidence, acceptance-criteria audit, removal of transitional artifacts |
@@ -63,6 +63,7 @@ Slice 1 remains complete at `72a00b38`; its verification record is
 `docs/superpowers/verification/2026-08-02-testing-redesign-slice-1-measurement.md`.
 Slice 2B is the current completed detailed-plan checkpoint: its five disjoint
 Vitest owners and one Playwright owner retain complete sequential verification.
-The next checkpoint is the separate disposable Slice 2C Nx decision spike
-before Slice 3 planning. Nx remains unselected unless that spike records
-`ADOPT_NX`; no Nx package or configuration is adopted by this checkpoint.
+The next checkpoint is Slice 3 planning. Slices 3 and 4 proceed without Nx
+under the approved TestingManifest architecture. The separate disposable Slice
+2C Nx decision spike is deferred until Slice 4 has committed; no Nx package or
+configuration is adopted before then.
