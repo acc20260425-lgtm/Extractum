@@ -58,12 +58,17 @@ Before writing each next detailed plan:
 - Completed: `docs/superpowers/plans/2026-08-02-testing-redesign-slice-2b-project-browser-ownership.md`
   at `4352e0000dacb90495b92392fd17f55e2c4c152f`; its verification record is
   `docs/superpowers/verification/2026-08-02-testing-redesign-slice-2b-project-browser-ownership.md`.
+- Completed: `docs/superpowers/plans/2026-08-03-testing-redesign-slice-3a-source-contracts.md`
+  at implementation checkpoint `6cfc9679`; its verification record is
+  `docs/superpowers/verification/2026-08-03-testing-redesign-slice-3a-source-contracts.md`.
 
 Slice 1 remains complete at `72a00b38`; its verification record is
 `docs/superpowers/verification/2026-08-02-testing-redesign-slice-1-measurement.md`.
-Slice 2B is the current completed detailed-plan checkpoint: its five disjoint
-Vitest owners and one Playwright owner retain complete sequential verification.
-The next checkpoint is Slice 3 planning. Slices 3 and 4 proceed without Nx
-under the approved TestingManifest architecture. The separate disposable Slice
-2C Nx decision spike is deferred until Slice 4 has committed; no Nx package or
-configuration is adopted before then.
+Slice 3A is the current completed detailed-plan checkpoint. It closed the first
+three source-contract cohorts while retaining ten narrow structured rules and
+truthful direct behavior; the live ledger has 483 open rows. Slice 3B planning
+is next and must begin from that live inventory rather than extending this
+evidence task into the next cohort. Slices 3B and 4 proceed without Nx under
+the approved TestingManifest architecture. The separate disposable Slice 2C
+Nx decision spike remains deferred until Slice 4 has committed; no Nx package
+or configuration is adopted before then.
