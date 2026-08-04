@@ -86,10 +86,11 @@ function ledgerReplacementIds(ledger) {
   ]);
 }
 
-export function collectTrackedTestSources({ root, tracked, authorizedMissingPaths = new Set(), readSource = readFileSync }) {
+export function collectTrackedTestSources({ root, tracked, vitestFiles = {}, authorizedMissingPaths = new Set(), readSource = readFileSync }) {
   const tests = [];
   const issues = [];
-  for (const item of tracked.filter((candidate) => candidate.endsWith(".test.ts"))) {
+  const vitestPaths = new Set(Object.values(vitestFiles).flat().map(normalizePath));
+  for (const item of tracked.filter((candidate) => candidate.endsWith(".test.ts") || vitestPaths.has(candidate))) {
     try {
       tests.push({ path: item, source: readSource(path.join(root, item), "utf8") });
     } catch (error) {
@@ -158,7 +159,12 @@ function validateLiveSourceContractLedger(root, ledger, liveCensus) {
     maxBuffer: 64 * 1024 * 1024,
   }).split("\0").filter(Boolean).map(normalizePath);
   const authorizedMissingPaths = new Set((ledger.rows ?? []).map((row) => row.path));
-  const { tests, issues: discoveryIssues } = collectTrackedTestSources({ root, tracked, authorizedMissingPaths });
+  const { tests, issues: discoveryIssues } = collectTrackedTestSources({
+    root,
+    tracked,
+    vitestFiles: liveCensus.vitestFiles,
+    authorizedMissingPaths,
+  });
   const runnerTitlesByPath = {};
   for (const row of ledger.rows ?? []) {
     if (!row?.manual?.runnerTitles) continue;

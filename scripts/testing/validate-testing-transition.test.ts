@@ -253,6 +253,24 @@ describe("Telegram Cargo test identity ownership", () => {
 });
 
 describe("live source-contract test discovery", () => {
+  it("adds tracked Vitest specs without collecting Playwright-only specs", () => {
+    const readSource = vi.fn(() => "test source");
+
+    expect(collectTrackedTestSources({
+      root,
+      tracked: ["src/current.test.ts", "src/unapproved.spec.ts", "research/adapter/tests/e2e.spec.ts"],
+      vitestFiles: { "vitest:root": ["src/current.test.ts", "src/unapproved.spec.ts"] },
+      readSource,
+    })).toEqual({
+      tests: [
+        { path: "src/current.test.ts", source: "test source" },
+        { path: "src/unapproved.spec.ts", source: "test source" },
+      ],
+      issues: [],
+    });
+    expect(readSource).not.toHaveBeenCalledWith(path.join(root, "research/adapter/tests/e2e.spec.ts"), "utf8");
+  });
+
   it("allows a missing tracked test only when the ledger owns its transition", () => {
     const readSource = vi.fn((candidate: string) => {
       if (candidate.endsWith("deleted.test.ts")) {
