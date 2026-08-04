@@ -209,6 +209,23 @@ describe("Telegram Cargo test identity ownership", () => {
     expect(unused).not.toHaveBeenCalled();
   });
 
+  it("lists and resolves referenced Cargo packages outside the Telegram pair", () => {
+    const runCargoList = vi.fn((packageName: string) => packageName === "extractum-analysis"
+      ? { exitCode: 0, stdout: "state::tests::owned: test\n1 test, 0 benchmarks\n" }
+      : passingLists[packageName as keyof typeof passingLists]);
+    const ledger = { rows: [{ replacementIds: [
+      "test:cargo:extractum-analysis::state::tests::owned",
+    ] }] };
+
+    const evidence = collectTelegramCargoReplacementEvidence({ ledger, authority, verifySteps, runCargoList });
+
+    expect(runCargoList.mock.calls).toEqual([["extractum-analysis"]]);
+    expect(evidence.issues).toEqual([]);
+    expect(evidence.resolvedReplacementIds).toEqual(new Set([
+      "test:cargo:extractum-analysis::state::tests::owned",
+    ]));
+  });
+
   it("closes a transition-only tool replacement only with resolved Cargo identity evidence", () => {
     const historical = {
       id: "SC-000001",

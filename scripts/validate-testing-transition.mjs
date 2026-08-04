@@ -125,9 +125,7 @@ export function collectTelegramCargoReplacementEvidence({ ledger, authority, ver
   }
 
   const listResults = {};
-  for (const packageName of ["extractum", "extractum-telegram"]) {
-    if (packages.has(packageName)) listResults[packageName] = runCargoList(packageName);
-  }
+  for (const packageName of [...packages].sort()) listResults[packageName] = runCargoList(packageName);
   const issues = [];
   const countsByPackage = {};
   for (const packageName of packages) {
