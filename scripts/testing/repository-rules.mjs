@@ -450,6 +450,46 @@ function evaluateTelegramCrateManifestBoundary(index) {
   return violations;
 }
 
+function evaluateAnalysisCrateManifestBoundary(index) {
+  const metadata = index.getCargoMetadata();
+  if (!metadata || typeof metadata !== "object"
+    || !Array.isArray(metadata.packages)
+    || !Array.isArray(metadata.workspace_members)) {
+    throw new Error("Cargo metadata: malformed workspace package inventory");
+  }
+
+  const violations = [];
+  const app = workspacePackage(metadata, "extractum");
+  const analysis = workspacePackage(metadata, "extractum-analysis");
+  if (!app) violations.push("Cargo metadata: missing extractum workspace package");
+  if (!analysis) return [...violations, "Cargo metadata: missing extractum-analysis workspace package"];
+
+  if (!(analysis.targets ?? []).some((target) => target?.kind?.includes("lib") && target.name === "extractum_analysis")) {
+    violations.push("extractum-analysis: missing library target");
+  }
+
+  if (app) {
+    const normalPathEdges = (app.dependencies ?? []).filter((dependency) =>
+      dependency?.name === "extractum-analysis"
+      && dependency.kind === null
+      && dependency.source === null
+      && typeof dependency.path === "string"
+      && dependency.path.length > 0);
+    if (normalPathEdges.length !== 1) {
+      violations.push("extractum: expected one normal path dependency on extractum-analysis");
+    }
+  }
+
+  const applicationOnly = (analysis.dependencies ?? [])
+    .map((dependency) => dependency?.name)
+    .filter((name) => typeof name === "string" && (name === "tauri" || name.startsWith("tauri-")))
+    .sort();
+  if (applicationOnly.length) {
+    violations.push(`extractum-analysis: application-only dependencies are forbidden: ${applicationOnly.join(", ")}`);
+  }
+  return violations;
+}
+
 function evaluateTelegramCrateDependencyOwnership(index) {
   const metadata = index.getCargoMetadata();
   const baseline = index.getJson(GRAMMERS_BASELINE_PATH);
@@ -494,6 +534,7 @@ function evaluateTelegramCrateDependencyOwnership(index) {
 }
 
 const evaluators = new Map([
+  ["rule:analysis-crate-manifest-boundary", evaluateAnalysisCrateManifestBoundary],
   ["rule:analysis-evidence-highlight-token-styling", evaluateAnalysisEvidenceHighlightTokenStyling],
   ["rule:analysis-source-browser-canonical-composition", evaluateAnalysisSourceBrowserCanonicalComposition],
   ["rule:analysis-source-browser-explicit-subject-contract", evaluateAnalysisSourceBrowserExplicitSubjectContract],

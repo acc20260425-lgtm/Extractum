@@ -169,6 +169,7 @@ describe("test conventions", () => {
     expect(typeof createRepositoryIndex).toBe("function");
     expect(typeof evaluateRule).toBe("function");
     expect(registeredRuleIds).toEqual([
+      "rule:analysis-crate-manifest-boundary",
       "rule:analysis-evidence-highlight-token-styling",
       "rule:analysis-source-browser-canonical-composition",
       "rule:analysis-source-browser-explicit-subject-contract",

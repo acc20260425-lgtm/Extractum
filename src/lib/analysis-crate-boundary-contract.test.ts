@@ -6012,7 +6012,7 @@ describe("analysis crate boundary", () => {
     expect(new Set(portableReferences.map(({ table }) => table)))
       .toEqual(ownedTables);
 
-    const applicationContract = read(
+    const applicationContract = readOptional(
       "src/lib/analysis-application-contract.test.ts",
     );
     for (const marker of [
@@ -6021,7 +6021,7 @@ describe("analysis crate boundary", () => {
       "unresolvedConsumerInventory",
       "moving source unresolved executable SQL consumer inventory",
     ]) {
-      expect(applicationContract).toContain(marker);
+      expect(applicationContract).not.toContain(marker);
     }
     expect(
       read("src-tauri/src/analysis/mod.rs"),
@@ -7183,8 +7183,8 @@ describe("analysis crate boundary", () => {
       "#[derive(Debug, Clone, Serialize, PartialEq, Eq)]",
     );
     expect(
-      read("src/lib/analysis-application-contract.test.ts"),
-    ).toContain(
+      readOptional("src/lib/analysis-application-contract.test.ts"),
+    ).not.toContain(
       'it("analysis_wire_contract_serializes_commands_events_and_errors_unchanged"',
     );
   });

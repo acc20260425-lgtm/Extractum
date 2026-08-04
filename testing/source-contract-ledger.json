@@ -481,8 +481,8 @@
       "authorityHash": "db5ab35eb789e8b453a6d1a4cfdb345341da9e5da6f5660ea4d15b0c24861d08",
       "lineage": [],
       "invariant": "Uses a manifest-keyed fail-closed dual-owner source selector.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "disposition": "delete",
+      "deletionReason": "The dual-owner selector is completed transition-harness behavior; the live owner is unconditionally the extracted crate."
     },
     {
       "id": "SC-000030",
@@ -499,8 +499,8 @@
       "authorityHash": "0028a08b4a05cf9d6f3cc5f50e79a1e52a599508a4c73fe748b75a5eb20944e2",
       "lineage": [],
       "invariant": "Stages checkpoint four portable engines through exact unsuffixed includes.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "disposition": "delete",
+      "deletionReason": "Exact checkpoint-four include, module, signature, and adapter spellings are completed staging shape; Cargo compilation and package tests exercise the final modules."
     },
     {
       "id": "SC-000031",
@@ -511,8 +511,35 @@
       "authorityHash": "e3521e10fd8a863e3b423f820d922008e578d8cae1764ee545fc23f449533065",
       "lineage": [],
       "invariant": "Keeps checkpoint four portable subjects application-free and depth-stable.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            1
+          ],
+          "invariant": "The extracted analysis package remains application-free at the Cargo package/dependency boundary.",
+          "disposition": "architecture",
+          "replacementIds": [
+            "rule:analysis-crate-manifest-boundary"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "invariant": "Residual function, module-depth, re-export, and path spellings are unavailable from Cargo metadata and are deleted as completed source shape.",
+          "disposition": "delete",
+          "deletionReason": "Residual function, module-depth, re-export, and path spellings are unavailable from Cargo metadata and are deleted as completed source shape."
+        }
+      ]
     },
     {
       "id": "SC-000032",
@@ -529,8 +556,8 @@
       "authorityHash": "a0c4c5920162349aad45b23aeeb628230d44d899aea9c008719a23d46431e961",
       "lineage": [],
       "invariant": "Keeps the Tauri analysis event sink synchronous and side-effect minimal.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "disposition": "delete",
+      "deletionReason": "Exact TauriAnalysisEventSink bodies and absence of hidden side effects are Rust body shape; trait conformance is compiler-owned and event outcomes remain directly tested."
     },
     {
       "id": "SC-000033",
@@ -541,8 +568,35 @@
       "authorityHash": "479488adb3d1331f1d69212cad70c16664ca2d3d109de582bee0e3d036b3d860",
       "lineage": [],
       "invariant": "Exposes only the opaque fixture cancellation wait capability.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            3
+          ],
+          "invariant": "Cancellation wait capability retains its observable cancellation outcome.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum-analysis::state::tests::analysis_state_cancels_report_run_child_tokens",
+            "test:cargo:extractum::analysis::fixtures::tests::active_runs::fixture_cancel_waiter_marks_running_run_cancelled"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "invariant": "Private-field, derive, accessor-visibility, and exact fixture call-order assertions are refactor-sensitive Rust source shape.",
+          "disposition": "delete",
+          "deletionReason": "Private-field, derive, accessor-visibility, and exact fixture call-order assertions are refactor-sensitive Rust source shape."
+        }
+      ]
     },
     {
       "id": "SC-000034",
@@ -559,8 +613,8 @@
       "authorityHash": "2e61e99d24c436ec7e09c376d283fc0fbf20b5a7d65f06d2ae1fd75db606f779",
       "lineage": [],
       "invariant": "Freezes the executable Appendix A partition at 95 crate and 48 app identities.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "disposition": "delete",
+      "deletionReason": "The 95/48 Appendix-A partition and frozen identity counts are a completed extraction census; no persistent Cargo test census is retained."
     },
     {
       "id": "SC-000035",
@@ -577,8 +631,8 @@
       "authorityHash": "fd397487423092338280ecdd16de401baf9f11eea9b9f8e2f2f6241adf6de010",
       "lineage": [],
       "invariant": "Manages one scheduler Arc and routes every app consumer through it.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "disposition": "delete",
+      "deletionReason": "Singleton Arc counts and exact consumer spellings are application call-graph shape unavailable without Rust analysis."
     },
     {
       "id": "SC-000036",
@@ -589,8 +643,62 @@
       "authorityHash": "6b4ad01aa331e908eb0b845f9cbfbffbe8e7314cad59efcf3243fb2006e70c7e",
       "lineage": [],
       "invariant": "Stages checkpoint two portable values and safe construction without app compression ownership.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            6,
+            7,
+            8,
+            9,
+            13,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ],
+          "invariant": "Portable wire values, scoped requests, and curated run-list constructors retain their observable outcomes.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::analysis::tests_application::analysis_wire_values_serialize_to_exact_json_objects",
+            "test:cargo:extractum::analysis::tests_application::report_start_preserves_acceptance_order_and_two_corpus_reads",
+            "test:cargo:extractum-analysis::report::tests::scope::start_analysis_report_request_constructors_preserve_source_group_and_project_scopes",
+            "test:cargo:extractum-analysis::report::tests::scope::report_run_input_carries_resolved_profile_snapshot",
+            "test:cargo:extractum-analysis::report::tests::scope::resolved_analysis_scope_rejects_zero_or_multiple_identities",
+            "test:cargo:extractum-analysis::report::tests::scope::resolved_analysis_scope_requires_nonempty_stable_sources_and_label",
+            "test:cargo:extractum-analysis::store::tests::read_model::analysis_run_list_filter_constructors_preserve_analysis_and_project_scopes"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            1
+          ],
+          "invariant": "The extracted analysis package retains an application-free Cargo dependency boundary.",
+          "disposition": "architecture",
+          "replacementIds": [
+            "rule:analysis-crate-manifest-boundary"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            2,
+            3,
+            4,
+            5,
+            10,
+            11,
+            12,
+            14,
+            15,
+            16
+          ],
+          "invariant": "Checkpoint includes, exact signatures/order, private fields, compression-import spelling, and source placement are completed or refactor-sensitive Rust shape.",
+          "disposition": "delete",
+          "deletionReason": "Checkpoint includes, exact signatures/order, private fields, compression-import spelling, and source placement are completed or refactor-sensitive Rust shape."
+        }
+      ]
     },
     {
       "id": "SC-000037",
@@ -601,8 +709,39 @@
       "authorityHash": "c79b551aa7f462882fb31565e7a8ff2bc019b9d81d28d746c31aad5d874d0c1c",
       "lineage": [],
       "invariant": "Freezes opaque report tickets and the explicit execution API.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            5,
+            7,
+            8
+          ],
+          "invariant": "Report ticket inputs, execution outcomes, and terminal cleanup remain directly tested.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum-analysis::report::tests::scope::start_analysis_report_request_constructors_preserve_source_group_and_project_scopes",
+            "test:cargo:extractum-analysis::report::tests::scope::report_run_input_carries_resolved_profile_snapshot",
+            "test:cargo:extractum-analysis::report::tests::scope::resolved_analysis_scope_rejects_zero_or_multiple_identities",
+            "test:cargo:extractum-analysis::report::tests::scope::resolved_analysis_scope_requires_nonempty_stable_sources_and_label",
+            "test:cargo:extractum-analysis::report::tests::runtime::report_execution_publishes_typed_events_in_existing_order",
+            "test:cargo:extractum-analysis::report::tests::lifecycle::terminal_cleanup_removes_active_state_when_terminal_persistence_fails"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            3,
+            4,
+            6,
+            9,
+            10
+          ],
+          "invariant": "Opaque-ticket field/derive, exact signature, enum layout, and re-export spellings are private Rust API shape.",
+          "disposition": "delete",
+          "deletionReason": "Opaque-ticket field/derive, exact signature, enum layout, and re-export spellings are private Rust API shape."
+        }
+      ]
     },
     {
       "id": "SC-000038",
@@ -613,8 +752,39 @@
       "authorityHash": "4239b3968fa303ef53cb42eb1cfb3116b13ab90563718183eb52958ee9ab5549",
       "lineage": [],
       "invariant": "Freezes opaque chat tickets and the explicit execution API.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            7,
+            9,
+            10,
+            11,
+            12
+          ],
+          "invariant": "Chat resolution, persistence ordering, failure, and asynchronous acceptance outcomes remain directly tested.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum-analysis::chat::tests::chat_execution_persists_turns_before_completed_event",
+            "test:cargo:extractum-analysis::chat::tests::chat_persistence_failure_keeps_completed_answer_failure_message",
+            "test:cargo:extractum::analysis::tests_application::chat_profile_resolution_failure_is_async_after_request_id",
+            "test:cargo:extractum::analysis::tests_application::chat_legacy_label_fallback_rereads_run_on_the_foreign_label_snapshot"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            8
+          ],
+          "invariant": "Ticket visibility/derive, exact signatures, exact spawn topology, and forbidden-call spellings are private Rust source shape.",
+          "disposition": "delete",
+          "deletionReason": "Ticket visibility/derive, exact signatures, exact spawn topology, and forbidden-call spellings are private Rust source shape."
+        }
+      ]
     },
     {
       "id": "SC-000039",
@@ -625,8 +795,39 @@
       "authorityHash": "0b282e1498f46ece0c64c048082a07fa8c44e0712ecf289008d3427db489ddfe",
       "lineage": [],
       "invariant": "Keeps analysis run-list filters public with private state.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            9
+          ],
+          "invariant": "Curated analysis filters and run-list query outcomes remain directly tested.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum-analysis::store::tests::read_model::analysis_run_list_filter_constructors_preserve_analysis_and_project_scopes",
+            "test:cargo:extractum-analysis::store::tests::read_model::list_analysis_run_summaries_applies_query_before_limit",
+            "test:cargo:extractum-analysis::store::tests::read_model::list_analysis_run_summaries_combines_scope_and_field_filters",
+            "test:cargo:extractum-analysis::store::tests::read_model::list_analysis_run_summaries_escapes_literal_like_characters",
+            "test:cargo:extractum-analysis::store::tests::read_model::list_analysis_run_summaries_filters_source_groups_and_template_names",
+            "test:cargo:extractum-analysis::store::tests::read_model::list_analysis_run_summaries_filters_status_and_dates",
+            "test:cargo:extractum-analysis::store::tests::read_model::list_analysis_run_summaries_rejects_both_scope_ids"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "invariant": "Private-field inventory, Default absence, and exact method-list shape are deleted; curated constructor outcomes remain directly tested.",
+          "disposition": "delete",
+          "deletionReason": "Private-field inventory, Default absence, and exact method-list shape are deleted; curated constructor outcomes remain directly tested."
+        }
+      ]
     },
     {
       "id": "SC-000040",
@@ -637,8 +838,10 @@
       "authorityHash": "bc6e588245e6d71037fdae4346f410204b8e0e3f6ef680aa0639c4fb67619c51",
       "lineage": [],
       "invariant": "Requires analysis run-list tests to use the curated filter constructors.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "disposition": "behavior",
+      "replacementIds": [
+        "test:cargo:extractum-analysis::store::tests::read_model::analysis_run_list_filter_constructors_preserve_analysis_and_project_scopes"
+      ]
     },
     {
       "id": "SC-000041",
@@ -649,8 +852,46 @@
       "authorityHash": "cb9dad1276ffffe8dbd116c92a1718d9c1166c3238013f95939da26964f04542",
       "lineage": [],
       "invariant": "Keeps project data range on typed app scope without analysis SQL helper imports.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "invariant": "Project data-range scope and document-kind outcomes remain covered by nine exact tests.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::projects::data_range::tests::project_data_range_expands_playlist_to_linked_video_sources",
+            "test:cargo:extractum::projects::data_range::tests::project_data_range_includes_telegram_migrated_history_when_requested",
+            "test:cargo:extractum::projects::data_range::tests::project_data_range_preserves_migrated_history_error_for_unknown_source_type",
+            "test:cargo:extractum::projects::data_range::tests::project_data_range_rejects_migrated_history_for_non_telegram",
+            "test:cargo:extractum::projects::data_range::tests::project_data_range_rejects_migrated_history_for_unmaterialized_playlist_project",
+            "test:cargo:extractum::projects::data_range::tests::project_data_range_rejects_mixed_provider_project",
+            "test:cargo:extractum::projects::data_range::tests::project_data_range_returns_nulls_for_empty_project",
+            "test:cargo:extractum::projects::data_range::tests::project_data_range_returns_nulls_for_unmaterialized_playlist_project",
+            "test:cargo:extractum::projects::data_range::tests::project_data_range_uses_youtube_mode_document_kinds"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            11,
+            12,
+            13,
+            14
+          ],
+          "invariant": "Forbidden imports, literal SQL predicates, helper names, and error-message spellings are implementation detail rather than behavior.",
+          "disposition": "delete",
+          "deletionReason": "Forbidden imports, literal SQL predicates, helper names, and error-message spellings are implementation detail rather than behavior."
+        }
+      ]
     },
     {
       "id": "SC-000042",
@@ -661,8 +902,72 @@
       "authorityHash": "1046f794652e4a73b9d9c702e4ab43ea7dd54a3258323912ea5e509d99852bf9",
       "lineage": [],
       "invariant": "Stages checkpoint three corpus and foreign-label boundaries under original identities.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            20,
+            21,
+            29,
+            34,
+            35,
+            36
+          ],
+          "invariant": "Corpus resolution and read-model outcomes remain under exact app and crate tests.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::analysis::corpus::source_resolution::tests::source_group_resolution_orders_members_by_title_then_id_before_playlist_expansion",
+            "test:cargo:extractum::analysis::store::tests::read_model::list_analysis_run_summaries_filters_project_runs",
+            "test:cargo:extractum::analysis::store::tests::read_model::list_analysis_run_summaries_matches_all_query_terms_across_any_field",
+            "test:cargo:extractum-analysis::corpus::tests::source_resolution::resolve_run_source_ids_prefers_snapshot_over_live_group_membership",
+            "test:cargo:extractum-analysis::corpus::tests::snapshot::run_snapshot_roundtrips_frozen_corpus",
+            "test:cargo:extractum-analysis::corpus::tests::snapshot::list_run_snapshot_messages_page_reads_saved_snapshot_only",
+            "test:cargo:extractum-analysis::corpus::tests::snapshot::run_message_cursor_uses_ref_and_published_at",
+            "test:cargo:extractum-analysis::store::tests::read_model::list_analysis_run_summaries_applies_query_before_limit",
+            "test:cargo:extractum-analysis::store::tests::read_model::list_analysis_run_summaries_combines_scope_and_field_filters",
+            "test:cargo:extractum-analysis::store::tests::read_model::list_analysis_run_summaries_escapes_literal_like_characters",
+            "test:cargo:extractum-analysis::store::tests::read_model::list_analysis_run_summaries_filters_source_groups_and_template_names",
+            "test:cargo:extractum-analysis::store::tests::read_model::list_analysis_run_summaries_filters_status_and_dates",
+            "test:cargo:extractum-analysis::store::tests::read_model::list_analysis_run_summaries_rejects_both_scope_ids"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            30,
+            31,
+            32,
+            33
+          ],
+          "invariant": "Checkpoint includes, module identities, exact transaction text, import depth, and forbidden-token inventories are completed source shape.",
+          "disposition": "delete",
+          "deletionReason": "Checkpoint includes, module identities, exact transaction text, import depth, and forbidden-token inventories are completed source shape."
+        }
+      ]
     },
     {
       "id": "SC-000043",
@@ -673,8 +978,8 @@
       "authorityHash": "170fd83f8590c6f25019a0a3e68cee7fe89f3f7ead9b59fc85e4967b77315d95",
       "lineage": [],
       "invariant": "Keeps owned read-model staging compiled at its final module identity.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "disposition": "delete",
+      "deletionReason": "Exact path/include/module ordering and relative import depth are completed staging mechanics; the crate package gate compiles final store modules."
     },
     {
       "id": "SC-000044",
@@ -691,8 +996,40 @@
       "authorityHash": "8e16b49ed8bb202cf8bb3bae9f4b38670d91bf6b9472fb100d5277b508857440",
       "lineage": [],
       "invariant": "Curates the owned corpus facade and forbids legacy corpus compatibility types.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            8
+          ],
+          "invariant": "Corpus access and saved-corpus outcomes remain directly tested.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum-analysis::corpus::tests::source_resolution::resolve_run_source_ids_prefers_snapshot_over_live_group_membership",
+            "test:cargo:extractum-analysis::corpus::tests::snapshot::run_snapshot_roundtrips_frozen_corpus",
+            "test:cargo:extractum-analysis::corpus::tests::snapshot::list_run_snapshot_messages_page_reads_saved_snapshot_only",
+            "test:cargo:extractum-analysis::corpus::tests::snapshot::run_message_cursor_uses_ref_and_published_at",
+            "test:cargo:extractum-analysis::report::tests::corpus_port::report_execution_uses_distinct_preflight_and_capture_corpus_reads",
+            "test:cargo:extractum-analysis::report::tests::corpus_port::started_load_items_uses_preflight_summary_before_empty_capture_failure",
+            "test:cargo:extractum-analysis::report::tests::corpus_port::started_load_items_uses_preflight_summary_before_error_capture_failure"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            9,
+            10
+          ],
+          "invariant": "Exact facade/re-export/accessor inventory, private fields, and legacy-token absence are Rust source shape; corpus outcomes remain directly tested.",
+          "disposition": "delete",
+          "deletionReason": "Exact facade/re-export/accessor inventory, private fields, and legacy-token absence are Rust source shape; corpus outcomes remain directly tested."
+        }
+      ]
     },
     {
       "id": "SC-000045",
@@ -703,8 +1040,45 @@
       "authorityHash": "849d2c6b5fb3dddfe1133d7f744f4de31d1b2e73cd83c6f976880e04b12ff2c5",
       "lineage": [],
       "invariant": "Keeps raw analysis run rows and mappers inside the owned read model.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            11
+          ],
+          "invariant": "Mapped run and lifecycle outcomes remain directly tested.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum-analysis::store::tests::read_model::map_run_summary_exposes_frozen_scope_label",
+            "test:cargo:extractum-analysis::store::tests::read_model::map_run_detail_exposes_youtube_corpus_mode",
+            "test:cargo:extractum-analysis::store::tests::runs::delete_saved_run_removes_run_and_saved_children",
+            "test:cargo:extractum-analysis::store::tests::runs::duplicate_lookup_keeps_project_and_source_group_scopes_separate",
+            "test:cargo:extractum-analysis::report::tests::runtime::report_execution_publishes_typed_events_in_existing_order",
+            "test:cargo:extractum-analysis::report::tests::lifecycle::terminal_cleanup_removes_active_state_when_terminal_persistence_fails"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            12,
+            13,
+            14,
+            15,
+            16
+          ],
+          "invariant": "Raw-row/mapper placement, visibility, function names, facade exports, and consumer token absence are private source shape.",
+          "disposition": "delete",
+          "deletionReason": "Raw-row/mapper placement, visibility, function names, facade exports, and consumer token absence are private source shape."
+        }
+      ]
     },
     {
       "id": "SC-000046",
@@ -715,8 +1089,43 @@
       "authorityHash": "afa64675975fa78f898d4f04eb59cd5e1943bfae78601fd09514371330bfb627",
       "lineage": [],
       "invariant": "Carries the resolved analysis scope through the report ticket.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            2,
+            6,
+            7,
+            8,
+            9,
+            10,
+            14,
+            15,
+            16
+          ],
+          "invariant": "Resolved report scope and frozen label outcomes remain directly tested.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum-analysis::report::tests::scope::start_analysis_report_request_constructors_preserve_source_group_and_project_scopes",
+            "test:cargo:extractum-analysis::report::tests::scope::report_run_input_carries_resolved_profile_snapshot",
+            "test:cargo:extractum-analysis::report::tests::scope::resolved_analysis_scope_rejects_zero_or_multiple_identities",
+            "test:cargo:extractum-analysis::report::tests::scope::resolved_analysis_scope_requires_nonempty_stable_sources_and_label"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            1,
+            3,
+            4,
+            5,
+            11,
+            12,
+            13
+          ],
+          "invariant": "Exact ticket fields, call spellings, and forbidden SQL/source lookup assertions are private Rust source shape.",
+          "disposition": "delete",
+          "deletionReason": "Exact ticket fields, call spellings, and forbidden SQL/source lookup assertions are private Rust source shape."
+        }
+      ]
     },
     {
       "id": "SC-000047",
@@ -727,8 +1136,43 @@
       "authorityHash": "a31b796bd5a9077e1891e81328f2c1b852d92b9c9857f4b556d98199a9bb6761",
       "lineage": [],
       "invariant": "Drives the frozen corpus port cases through capture and lifecycle seams.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            1,
+            6,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "invariant": "Preflight and capture remain distinct, and both capture-failure paths preserve their tested lifecycle outcomes.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum-analysis::report::tests::corpus_port::report_execution_uses_distinct_preflight_and_capture_corpus_reads",
+            "test:cargo:extractum-analysis::report::tests::corpus_port::started_load_items_uses_preflight_summary_before_empty_capture_failure",
+            "test:cargo:extractum-analysis::report::tests::corpus_port::started_load_items_uses_preflight_summary_before_error_capture_failure"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            2,
+            3,
+            4,
+            5,
+            7,
+            8,
+            16,
+            17
+          ],
+          "invariant": "Duplicate source strings, helper names, and occurrence counts are deleted; the named corpus-port outcomes are directly tested.",
+          "disposition": "delete",
+          "deletionReason": "Duplicate source strings, helper names, and occurrence counts are deleted; the named corpus-port outcomes are directly tested."
+        }
+      ]
     },
     {
       "id": "SC-000048",
@@ -739,8 +1183,58 @@
       "authorityHash": "7f25943404e70ae5e8ed06f52bcd306c2234e2e9211556a74966df847d4c3b89",
       "lineage": [],
       "invariant": "Keeps retained preflight integrations independent from portable imports.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "invariant": "Retained app and portable crate preflight/live corpus outcomes remain directly tested.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::analysis::corpus::tests::preflight::preflight_count_matches_loader_for_youtube_corpus_modes",
+            "test:cargo:extractum::analysis::corpus::tests::preflight::preflight_counts_eligible_text_messages_for_sources",
+            "test:cargo:extractum::analysis::corpus::tests::preflight::preflight_ignores_media_only_items_without_text_content",
+            "test:cargo:extractum::analysis::corpus::tests::live::default_analysis_corpus_excludes_migrated_history_documents",
+            "test:cargo:extractum::analysis::corpus::tests::live::load_corpus_messages_filters_telegram_to_telegram_message",
+            "test:cargo:extractum::analysis::corpus::tests::live::load_corpus_messages_filters_youtube_transcript_only_to_transcripts",
+            "test:cargo:extractum::analysis::corpus::tests::live::load_corpus_messages_includes_youtube_comment_only_in_comments_mode",
+            "test:cargo:extractum::analysis::corpus::tests::live::source_group_opt_in_includes_only_members_with_migrated_rows",
+            "test:cargo:extractum-analysis::corpus::tests::preflight::default_preflight_limits_are_conservative",
+            "test:cargo:extractum-analysis::corpus::tests::preflight::estimated_chunk_count_matches_chunk_boundary_behavior",
+            "test:cargo:extractum-analysis::corpus::tests::preflight::estimated_message_chars_match_report_chunk_accounting",
+            "test:cargo:extractum-analysis::corpus::tests::preflight::model_limit_preflight_allows_unknown_or_fitting_limits",
+            "test:cargo:extractum-analysis::corpus::tests::preflight::model_limit_preflight_reports_oversized_chunks",
+            "test:cargo:extractum-analysis::corpus::tests::preflight::preflight_limit_error_allows_runs_within_limits",
+            "test:cargo:extractum-analysis::corpus::tests::preflight::preflight_limit_error_reports_all_scale_dimensions",
+            "test:cargo:extractum-analysis::corpus::tests::live::youtube_corpus_mode_parses_wire_values_and_defaults"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            16,
+            17,
+            18,
+            19
+          ],
+          "invariant": "Exact test counts, include directives, aliases, import depth, and retained/portable file placement are completed staging shape.",
+          "disposition": "delete",
+          "deletionReason": "Exact test counts, include directives, aliases, import depth, and retained/portable file placement are completed staging shape."
+        }
+      ]
     },
     {
       "id": "SC-000049",
@@ -757,8 +1251,30 @@
       "authorityHash": "ed4bbc5406eca064787236c4b109b978e7ef2059bb34181514b67a8262a64eef",
       "lineage": [],
       "invariant": "Freezes the 21 release, three project, and three dev command inventory.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            2,
+            4,
+            5,
+            6
+          ],
+          "invariant": "The complete command macro contains the exact 21 analysis, three project, and three development registrations once each.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::tests::analysis_command_registration_inventory_is_exact"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            1,
+            3
+          ],
+          "invariant": "Regex scanning of Tauri command declarations is deleted; the direct macro test owns exact registration names and counts, while compiler expansion owns symbol existence.",
+          "disposition": "delete",
+          "deletionReason": "Regex scanning of Tauri command declarations is deleted; the direct macro test owns exact registration names and counts, while compiler expansion owns symbol existence."
+        }
+      ]
     },
     {
       "id": "SC-000050",
@@ -769,8 +1285,36 @@
       "authorityHash": "854644e3acdfc9cc4e683fd6ecbbde77c4f44e723738289d3ca3108d27bf1a8c",
       "lineage": [],
       "invariant": "Pins startup and named cross-domain compatibility paths outside the 27-command count.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "invariant": "Project read/delete and NotebookLM source-group compatibility outcomes remain directly tested.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::projects::read_model::tests::list_research_projects_counts_playlist_linked_video_materials",
+            "test:cargo:extractum::projects::read_model::tests::list_research_projects_derives_counts_status_and_last_run_without_fanout",
+            "test:cargo:extractum::projects::read_model::tests::list_research_projects_prioritizes_running_and_sorts_active_pinned_updated_first",
+            "test:cargo:extractum::projects::tests::delete_project_removes_membership_and_project_runs_but_keeps_sources",
+            "test:cargo:extractum::notebooklm_export::query::tests::load_export_source_group_exposes_youtube_group_for_hard_validation",
+            "test:cargo:extractum::notebooklm_export::query::tests::load_export_source_group_keeps_dirty_member_source_type_for_skip_logic",
+            "test:cargo:extractum::notebooklm_export::query::tests::load_export_source_group_orders_members_by_title_then_id"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            1
+          ],
+          "invariant": "Exact startup invocation, compatibility aliases, function names, and cross-domain call order are private source shape.",
+          "disposition": "delete",
+          "deletionReason": "Exact startup invocation, compatibility aliases, function names, and cross-domain call order are private source shape."
+        }
+      ]
     },
     {
       "id": "SC-000051",
@@ -781,8 +1325,64 @@
       "authorityHash": "ff0e87e29c4c40103469da2bb689486127b11048cfc6732e2d8cba4ef67aef91",
       "lineage": [],
       "invariant": "Routes ordinary cross-domain analysis APIs through owned pool functions.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            28,
+            29,
+            32,
+            34,
+            35
+          ],
+          "invariant": "Cross-domain blocking, diagnostics, interrupted-run cleanup, and fixture cancellation outcomes remain directly tested.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::account_deletion::tests::active_direct_source_analysis_run_blocks_owned_source_only",
+            "test:cargo:extractum::account_deletion::tests::active_group_analysis_run_blocks_when_any_member_source_is_owned",
+            "test:cargo:extractum::diagnostics::database::tests::database_diagnostics_groups_only_allow_listed_aggregates",
+            "test:cargo:extractum-analysis::state::tests::analysis_state_cancels_report_run_child_tokens",
+            "test:cargo:extractum::analysis::fixtures::tests::active_runs::fixture_cancel_waiter_marks_running_run_cancelled"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            30,
+            31,
+            33,
+            36
+          ],
+          "invariant": "Exact SQL tables/text, DTO/accessor/re-export spelling, call order, cleanup bodies, and duplicate-code absence are private source shape.",
+          "disposition": "delete",
+          "deletionReason": "Exact SQL tables/text, DTO/accessor/re-export spelling, call order, cleanup bodies, and duplicate-code absence are private source shape."
+        }
+      ]
     },
     {
       "id": "SC-000052",
@@ -799,8 +1399,8 @@
       "authorityHash": "2e61e99d24c436ec7e09c376d283fc0fbf20b5a7d65f06d2ae1fd75db606f779",
       "lineage": [],
       "invariant": "Pins the closed Family 1 borrowed-connection inclusion and ordinary-pool exclusions.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "disposition": "delete",
+      "deletionReason": "The Family-1 inclusion/exclusion table is a historical design classification plus a bounded get_pool source scan; individual outcomes remain under direct tests."
     },
     {
       "id": "SC-000053",
@@ -811,8 +1411,43 @@
       "authorityHash": "c63f91dfe47e68f6d3c65a6d48a856ca08237d9429db241048b2806e05af2eab",
       "lineage": [],
       "invariant": "Routes Family 2 enrichment through borrowed participants and app-owned transactions.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            12,
+            13,
+            14,
+            15,
+            16,
+            17
+          ],
+          "invariant": "NotebookLM source-group enrichment preserves type, dirty-member, and stable-order outcomes.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::notebooklm_export::query::tests::load_export_source_group_exposes_youtube_group_for_hard_validation",
+            "test:cargo:extractum::notebooklm_export::query::tests::load_export_source_group_keeps_dirty_member_source_type_for_skip_logic",
+            "test:cargo:extractum::notebooklm_export::query::tests::load_export_source_group_orders_members_by_title_then_id"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ],
+          "invariant": "Exact participant/coordinator signatures, SQL-table absence, begin/commit topology, and query/order spelling are private transaction source shape.",
+          "disposition": "delete",
+          "deletionReason": "Exact participant/coordinator signatures, SQL-table absence, begin/commit topology, and query/order spelling are private transaction source shape."
+        }
+      ]
     },
     {
       "id": "SC-000054",
@@ -829,8 +1464,57 @@
       "authorityHash": "5667d196756417066e51e07c87f39965bc3879b7f0abc7c17a1778053bfd7dde",
       "lineage": [],
       "invariant": "Routes Family 3 project-list composition through one app-owned transaction.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            3,
+            9,
+            10,
+            30
+          ],
+          "invariant": "Project listing retains counts, derived status, and ordering outcomes.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::projects::read_model::tests::list_research_projects_counts_playlist_linked_video_materials",
+            "test:cargo:extractum::projects::read_model::tests::list_research_projects_derives_counts_status_and_last_run_without_fanout",
+            "test:cargo:extractum::projects::read_model::tests::list_research_projects_prioritizes_running_and_sorts_active_pinned_updated_first"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            4,
+            5,
+            6,
+            7,
+            8,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            31
+          ],
+          "invariant": "Exact aggregate DTO/accessors, query text, schema census, re-exports, and single-transaction topology are private source shape.",
+          "disposition": "delete",
+          "deletionReason": "Exact aggregate DTO/accessors, query text, schema census, re-exports, and single-transaction topology are private source shape."
+        }
+      ]
     },
     {
       "id": "SC-000055",
@@ -841,8 +1525,43 @@
       "authorityHash": "783786ef65edb93b0e8217f617414b59c5cc12befa7877ffd2be60a5c2030b55",
       "lineage": [],
       "invariant": "Routes Family 4 project deletion through one app-owned transaction.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            1,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18
+          ],
+          "invariant": "Project deletion atomically removes memberships and project runs while preserving sources.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::projects::tests::delete_project_removes_membership_and_project_runs_but_keeps_sources"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            19
+          ],
+          "invariant": "Exact SQL statement counts/order, re-export/import spellings, await counts, and transaction body topology are private source shape.",
+          "disposition": "delete",
+          "deletionReason": "Exact SQL statement counts/order, re-export/import spellings, await counts, and transaction body topology are private source shape."
+        }
+      ]
     },
     {
       "id": "SC-000056",
@@ -859,8 +1578,66 @@
       "authorityHash": "ec6706d92f3ac38fa80b067ead02335cf06cc8be08c93ca86a73a1c2fcf9d910",
       "lineage": [],
       "invariant": "Preserves analysis wire-contract serialization for commands, events, and errors.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            11,
+            12,
+            13,
+            19,
+            20
+          ],
+          "invariant": "Rust wire values and every public analysis API wrapper retain their serialized IPC names, keys, events, and errors.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum::analysis::tests_application::analysis_wire_values_serialize_to_exact_json_objects",
+            "test:vitest:src/lib/api/analysis-chat.test.ts#analysis chat api wrapper > loads persisted chat messages for a run",
+            "test:vitest:src/lib/api/analysis-chat.test.ts#analysis chat api wrapper > starts an analysis chat answer with typed arguments",
+            "test:vitest:src/lib/api/analysis-chat.test.ts#analysis chat api wrapper > clears persisted chat messages for a run",
+            "test:vitest:src/lib/api/analysis-chat.test.ts#analysis chat api wrapper > listens on the shared analysis chat event name",
+            "test:vitest:src/lib/api/analysis-runs.test.ts#analysis run api wrappers > wraps analysis run list commands with typed arguments",
+            "test:vitest:src/lib/api/analysis-runs.test.ts#analysis run api wrappers > wraps analysis run detail loading",
+            "test:vitest:src/lib/api/analysis-runs.test.ts#analysis run api wrappers > wraps snapshot-only run message paging",
+            "test:vitest:src/lib/api/analysis-runs.test.ts#analysis run api wrappers > passes an around ref for focused snapshot paging",
+            "test:vitest:src/lib/api/analysis-runs.test.ts#analysis run api wrappers > wraps analysis report start and destructive run actions",
+            "test:vitest:src/lib/api/analysis-runs.test.ts#analysis run api wrappers > passes explicit analysis report profile ids through unchanged",
+            "test:vitest:src/lib/api/analysis-runs.test.ts#analysis run api wrappers > listens on the shared analysis run event name",
+            "test:vitest:src/lib/api/analysis-trace.test.ts#analysis trace api wrapper > loads saved analysis trace data for a run",
+            "test:vitest:src/lib/api/analysis-trace.test.ts#analysis trace api wrapper > resolves requested trace refs for a run",
+            "test:vitest:src/lib/api/analysis-source-groups.test.ts#analysis source groups api wrappers > loads analysis source groups with the registered command name",
+            "test:vitest:src/lib/api/analysis-source-groups.test.ts#analysis source groups api wrappers > loads prompt templates with the expected template kind payload",
+            "test:vitest:src/lib/api/analysis-source-groups.test.ts#analysis source groups api wrappers > creates a prompt template with the expected payload",
+            "test:vitest:src/lib/api/analysis-source-groups.test.ts#analysis source groups api wrappers > updates a prompt template with the expected payload",
+            "test:vitest:src/lib/api/analysis-source-groups.test.ts#analysis source groups api wrappers > deletes a prompt template with the expected payload",
+            "test:vitest:src/lib/api/analysis-source-groups.test.ts#analysis source groups api wrappers > creates a source group with the expected payload",
+            "test:vitest:src/lib/api/analysis-source-groups.test.ts#analysis source groups api wrappers > updates a source group with the expected payload",
+            "test:vitest:src/lib/api/analysis-source-groups.test.ts#analysis source groups api wrappers > deletes a source group with the expected payload",
+            "test:vitest:src/lib/api/analysis-workspace.test.ts#analysis workspace api wrappers > loads analysis source metrics with the registered command name"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            8,
+            9,
+            10,
+            14,
+            15,
+            16,
+            17,
+            18
+          ],
+          "invariant": "Regex-derived Rust command signatures, private request-ID construction, internal event-construction order, terminal-message strings, and exact error-struct spelling are private source shape.",
+          "disposition": "delete",
+          "deletionReason": "Regex-derived Rust command signatures, private request-ID construction, internal event-construction order, terminal-message strings, and exact error-struct spelling are private source shape."
+        }
+      ]
     },
     {
       "id": "SC-000057",
@@ -877,8 +1654,36 @@
       "authorityHash": "6204fbf8a50913f5a9f567c478929473231bcc3b2cb251332ef59d3c2be8f243",
       "lineage": [],
       "invariant": "Keeps every mechanical-move source portable before extraction.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            9
+          ],
+          "invariant": "Cargo metadata proves the final extracted analysis workspace library and normal application dependency ownership.",
+          "disposition": "architecture",
+          "replacementIds": [
+            "rule:analysis-crate-manifest-boundary"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            10,
+            11,
+            12
+          ],
+          "invariant": "Frozen path counts, move map, drift helper, forbidden-token scan, and relative-depth spellings are completed extraction census and source shape.",
+          "disposition": "delete",
+          "deletionReason": "Frozen path counts, move map, drift helper, forbidden-token scan, and relative-depth spellings are completed extraction census and source shape."
+        }
+      ]
     },
     {
       "id": "SC-000058",
@@ -895,8 +1700,8 @@
       "authorityHash": "0a345cae546fdcd3c8275bc44f65f30c5d84046bc720d26ed315bdf1b0413002",
       "lineage": [],
       "invariant": "Keeps analysis SQL ownership and borrowed coordinator capabilities fail closed.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "disposition": "delete",
+      "deletionReason": "All assertions are the retired Rust/SQL scanner itself: global reachability, SQL ownership, async topology, transaction-control detection, and fingerprints. This accepted high risk is not recreated."
     },
     {
       "id": "SC-000059",
@@ -913,8 +1718,116 @@
       "authorityHash": "e44dd4e67635f5b1fd5c1efc1514bf1dd80b1e8c231c5eaf018731c542e82009",
       "lineage": [],
       "invariant": "Limits moving crate-test foreign sentinels and foreign-key suppression.",
-      "disposition": "architecture",
-      "replacementIds": ["rule:repository-index:analysis-application-boundary"]
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            45,
+            61,
+            62,
+            63,
+            64,
+            65,
+            66,
+            67,
+            68,
+            69,
+            70,
+            71,
+            72,
+            73,
+            74,
+            75,
+            76,
+            77,
+            78,
+            79
+          ],
+          "invariant": "Snapshot no-live-fallback and foreign-key behavior remain covered by exact crate/app tests.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:cargo:extractum-analysis::corpus::tests::snapshot::list_run_snapshot_messages_page_does_not_fall_back_to_live_source",
+            "test:cargo:extractum-analysis::corpus::tests::snapshot::load_run_corpus_messages_does_not_reconstruct_completed_capture_failed_from_live_rows",
+            "test:cargo:extractum-analysis::corpus::tests::snapshot::trace_resolution_does_not_fall_back_to_live_source_for_completed_missing_snapshot",
+            "test:cargo:extractum-analysis::corpus::tests::snapshot::source_group_membership_drift_after_capture_does_not_change_saved_run_corpus",
+            "test:cargo:extractum-analysis::test_schema::tests::canonical_fixture_preserves_analysis_owned_indexes_and_foreign_keys",
+            "test:cargo:extractum::tx::tests::begin_immediate_with_foreign_keys_enforces_cascade",
+            "test:cargo:extractum::tx::tests::sqlite_ignores_foreign_keys_pragma_inside_open_transaction"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            55,
+            56,
+            57,
+            58,
+            59,
+            60,
+            80,
+            81,
+            82,
+            83,
+            84,
+            85,
+            86
+          ],
+          "invariant": "SQL-parser probes, exact authorized-range census, negative-sentinel source scans, helper-body order, fingerprints, reachability, and global foreign-SQL scans are retired source-analysis machinery.",
+          "disposition": "delete",
+          "deletionReason": "SQL-parser probes, exact authorized-range census, negative-sentinel source scans, helper-body order, fingerprints, reachability, and global foreign-SQL scans are retired source-analysis machinery."
+        }
+      ]
     },
     {
       "id": "SC-000060",
@@ -1220,7 +2133,7 @@
           "analysis crate boundary > keeps production SQL in the exact six-table owner"
         ]
       },
-      "sourceHash": "08a81cb13930622e9737446ee75f7ce28399d63ec8a823c1f037ae4102b4b8cb",
+      "sourceHash": "c92b40c78f1fe5a9cea64a1b5d7311c1a8cc0417470cbc5051a070e379b34a36",
       "assertionCount": 103,
       "authorityHash": "e2044d88492da370b874ecbfec3b2281dfd21f2c2233382c551e1ad25cd4dd98",
       "lineage": [],
@@ -1364,7 +2277,7 @@
           "analysis crate boundary > keeps command event and AppError wire contracts unchanged"
         ]
       },
-      "sourceHash": "ec2ff741bfba67d3187a3b5addb8b29142caa6ce6ff906c66958ff5320bfe6cf",
+      "sourceHash": "414f093b4c95bbc9b5a0d206176dfbc22661e61f021e1fac4598b1ea8d3ec8a1",
       "assertionCount": 25,
       "authorityHash": "b3897d2086441d81ac175eb2682df4eb1f73b34414e70909d19cde534927ed76",
       "lineage": [],

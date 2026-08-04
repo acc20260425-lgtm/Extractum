@@ -502,4 +502,56 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn analysis_command_registration_inventory_is_exact() {
+        let registered = application_command_inventory!(complete_application_inventory_names);
+        let analysis = [
+            "list_analysis_sources",
+            "list_analysis_runs",
+            "list_active_analysis_runs",
+            "get_analysis_run",
+            "list_analysis_run_messages",
+            "get_analysis_run_trace",
+            "delete_analysis_run",
+            "resolve_analysis_trace_refs",
+            "list_analysis_prompt_templates",
+            "create_analysis_prompt_template",
+            "update_analysis_prompt_template",
+            "delete_analysis_prompt_template",
+            "list_analysis_source_groups",
+            "create_analysis_source_group",
+            "update_analysis_source_group",
+            "delete_analysis_source_group",
+            "list_analysis_chat_messages",
+            "clear_analysis_chat_messages",
+            "ask_analysis_run_question",
+            "start_analysis_report",
+            "cancel_analysis_run",
+        ];
+        let project = [
+            "start_project_analysis",
+            "list_project_runs",
+            "get_project_data_range",
+        ];
+        let development = [
+            "seed_analysis_redesign_fixtures",
+            "clear_analysis_redesign_fixtures",
+            "clear_analysis_redesign_fixture_active_runs",
+        ];
+
+        assert_eq!(analysis.len(), 21);
+        assert_eq!(project.len(), 3);
+        assert_eq!(development.len(), 3);
+        for command in analysis.into_iter().chain(project).chain(development) {
+            assert_eq!(
+                registered
+                    .iter()
+                    .filter(|registered| **registered == command)
+                    .count(),
+                1,
+                "{command} must occur exactly once in the complete application command inventory",
+            );
+        }
+    }
 }
