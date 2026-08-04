@@ -142,7 +142,7 @@ Add exact test `extractum-telegram::session::tests::encrypted_session_error_cont
 Add these exact tests under TDD:
 
 - `extractum::takeout_import::tests::cancelled_job_emits_persisted_terminal_record`, with an internal event recorder proving state persistence before emission and cancellation-versus-failure terminal selection;
-- `extractum-telegram::takeout::operations::tests::checkpoint_six_lifecycle_preserves_fallback_cancellation_and_finalize_order`, using the existing scripted transport/backend seam to record validate, migration/split, count, import, fallback, cancellation, provenance, finish, and finalize order;
+- `extractum-telegram::takeout::operations::tests::checkpoint_six_remote_lifecycle_preserves_fallback_and_provenance_order`, using the existing scripted transport/backend seam to record real validate, migration/split, count, import, fallback, provenance, and finish behavior. Application-owned cancellation, terminal selection, batch finalization, persistence, and emission ordering remain in `extractum::takeout_import::tests::cancelled_job_emits_persisted_terminal_record`;
 - `extractum-telegram::takeout::raw_parse::tests::takeout_peer_identity_maps_user_chat_and_channel`, proving User/Chat/Channel identity and retained `i64` message IDs.
 
 Reuse the two exact pagination tests and the existing application Takeout state contract named in the ownership map; do not duplicate their scenarios.

@@ -1973,12 +1973,19 @@ mod tests {
             .await
             .expect("create early-cancel job");
         let early_events = Arc::new(Mutex::new(Vec::new()));
+        let early_lifecycle = Arc::new(Mutex::new(Vec::new()));
         let cancel_events = Arc::clone(&early_events);
+        let cancel_lifecycle = Arc::clone(&early_lifecycle);
         let cancel_record =
             request_cancel_and_emit_with(&early_state, &early_job.job_id, |record| {
                 let cancel_events = Arc::clone(&cancel_events);
+                let cancel_lifecycle = Arc::clone(&cancel_lifecycle);
                 let state = &early_state;
                 async move {
+                    cancel_lifecycle
+                        .lock()
+                        .expect("lifecycle recorder")
+                        .push(format!("emit:{}", record.status));
                     recorded_snapshot(state, &cancel_events, record).await;
                 }
             })
@@ -1991,13 +1998,15 @@ mod tests {
         let operation_calls = Arc::clone(&early_operation_calls);
         let early_finalized = Arc::new(Mutex::new(Vec::new()));
         let finalized = Arc::clone(&early_finalized);
+        let finalize_lifecycle = Arc::clone(&early_lifecycle);
         let terminal_events = Arc::clone(&early_events);
+        let terminal_lifecycle = Arc::clone(&early_lifecycle);
         run_takeout_import_job_with(
             &early_state,
             &early_job.job_id,
             move |_batch_id| {
                 operation_calls.fetch_add(1, Ordering::SeqCst);
-                async {
+                async move {
                     Ok(TakeoutImportOutcome {
                         inserted: 1,
                         skipped: 0,
@@ -2008,7 +2017,12 @@ mod tests {
             },
             move |_batch_id, status, error| {
                 let finalized = Arc::clone(&finalized);
+                let finalize_lifecycle = Arc::clone(&finalize_lifecycle);
                 async move {
+                    finalize_lifecycle
+                        .lock()
+                        .expect("lifecycle recorder")
+                        .push(format!("finalize:{status:?}"));
                     finalized
                         .lock()
                         .expect("finalize recorder")
@@ -2017,8 +2031,13 @@ mod tests {
             },
             |record| {
                 let terminal_events = Arc::clone(&terminal_events);
+                let terminal_lifecycle = Arc::clone(&terminal_lifecycle);
                 let state = &early_state;
                 async move {
+                    terminal_lifecycle
+                        .lock()
+                        .expect("lifecycle recorder")
+                        .push(format!("emit:{}", record.status));
                     recorded_snapshot(state, &terminal_events, record).await;
                 }
             },
@@ -2029,6 +2048,15 @@ mod tests {
         assert_eq!(
             *early_finalized.lock().expect("early finalize recorder"),
             vec![(TerminalBatchStatus::Cancelled, None)]
+        );
+        assert_eq!(
+            *early_lifecycle.lock().expect("early lifecycle recorder"),
+            vec![
+                format!("emit:{STATUS_CANCEL_REQUESTED}"),
+                format!("emit:{}", super::STATUS_RUNNING),
+                "finalize:Cancelled".to_string(),
+                format!("emit:{STATUS_CANCELLED}"),
+            ]
         );
         let early_events = early_events.lock().expect("early event recorder");
         assert_eq!(
@@ -2057,27 +2085,54 @@ mod tests {
             .await
             .expect("create cancelled-error job");
         let cancelled_error_finalized = Arc::new(Mutex::new(Vec::new()));
+        let cancelled_error_lifecycle = Arc::new(Mutex::new(Vec::new()));
         let finalized = Arc::clone(&cancelled_error_finalized);
+        let run_lifecycle = Arc::clone(&cancelled_error_lifecycle);
+        let finalize_lifecycle = Arc::clone(&cancelled_error_lifecycle);
+        let emit_lifecycle = Arc::clone(&cancelled_error_lifecycle);
+        let cancelled_error_run_state = &cancelled_error_state;
+        let cancelled_error_run_job_id = cancelled_error_job.job_id.clone();
         run_takeout_import_job_with(
             &cancelled_error_state,
             &cancelled_error_job.job_id,
-            |_batch_id| async {
-                cancelled_error_state
-                    .request_cancel(&cancelled_error_job.job_id)
-                    .await
-                    .expect("request cancellation during operation");
-                Err(AppError::network("remote failed after cancellation"))
+            move |_batch_id| {
+                let run_lifecycle = Arc::clone(&run_lifecycle);
+                let job_id = cancelled_error_run_job_id;
+                async move {
+                    run_lifecycle
+                        .lock()
+                        .expect("lifecycle recorder")
+                        .push("run:remote".to_string());
+                    cancelled_error_run_state
+                        .request_cancel(&job_id)
+                        .await
+                        .expect("request cancellation during operation");
+                    Err(AppError::network("remote failed after cancellation"))
+                }
             },
             move |_batch_id, status, error| {
                 let finalized = Arc::clone(&finalized);
+                let finalize_lifecycle = Arc::clone(&finalize_lifecycle);
                 async move {
+                    finalize_lifecycle
+                        .lock()
+                        .expect("lifecycle recorder")
+                        .push(format!("finalize:{status:?}"));
                     finalized
                         .lock()
                         .expect("finalize recorder")
                         .push((status, error));
                 }
             },
-            |_record| async {},
+            |record| {
+                let emit_lifecycle = Arc::clone(&emit_lifecycle);
+                async move {
+                    emit_lifecycle
+                        .lock()
+                        .expect("lifecycle recorder")
+                        .push(format!("emit:{}", record.status));
+                }
+            },
         )
         .await;
         assert_eq!(
@@ -2085,6 +2140,17 @@ mod tests {
                 .lock()
                 .expect("cancelled-error finalize recorder"),
             vec![(TerminalBatchStatus::Cancelled, None)]
+        );
+        assert_eq!(
+            *cancelled_error_lifecycle
+                .lock()
+                .expect("cancelled-error lifecycle recorder"),
+            vec![
+                format!("emit:{}", super::STATUS_RUNNING),
+                "run:remote".to_string(),
+                "finalize:Cancelled".to_string(),
+                format!("emit:{STATUS_CANCELLED}"),
+            ]
         );
         let cancelled_error = cancelled_error_state.list_jobs().await.remove(0);
         assert_eq!(
@@ -2098,21 +2164,47 @@ mod tests {
             .await
             .expect("create failed job");
         let failed_finalized = Arc::new(Mutex::new(Vec::new()));
+        let failed_lifecycle = Arc::new(Mutex::new(Vec::new()));
         let finalized = Arc::clone(&failed_finalized);
+        let run_lifecycle = Arc::clone(&failed_lifecycle);
+        let finalize_lifecycle = Arc::clone(&failed_lifecycle);
+        let emit_lifecycle = Arc::clone(&failed_lifecycle);
         run_takeout_import_job_with(
             &failed_state,
             &failed_job.job_id,
-            |_batch_id| async { Err(AppError::network("remote failed")) },
+            |_batch_id| {
+                let run_lifecycle = Arc::clone(&run_lifecycle);
+                async move {
+                    run_lifecycle
+                        .lock()
+                        .expect("lifecycle recorder")
+                        .push("run:remote".to_string());
+                    Err(AppError::network("remote failed"))
+                }
+            },
             move |_batch_id, status, error| {
                 let finalized = Arc::clone(&finalized);
+                let finalize_lifecycle = Arc::clone(&finalize_lifecycle);
                 async move {
+                    finalize_lifecycle
+                        .lock()
+                        .expect("lifecycle recorder")
+                        .push(format!("finalize:{status:?}"));
                     finalized
                         .lock()
                         .expect("finalize recorder")
                         .push((status, error));
                 }
             },
-            |_record| async {},
+            |record| {
+                let emit_lifecycle = Arc::clone(&emit_lifecycle);
+                async move {
+                    emit_lifecycle
+                        .lock()
+                        .expect("lifecycle recorder")
+                        .push(format!("emit:{}", record.status));
+                }
+            },
         )
         .await;
         assert_eq!(
@@ -2121,6 +2213,15 @@ mod tests {
                 TerminalBatchStatus::Failed,
                 Some("remote failed".to_string()),
             )]
+        );
+        assert_eq!(
+            *failed_lifecycle.lock().expect("failed lifecycle recorder"),
+            vec![
+                format!("emit:{}", super::STATUS_RUNNING),
+                "run:remote".to_string(),
+                "finalize:Failed".to_string(),
+                format!("emit:{STATUS_FAILED}"),
+            ]
         );
         let failed = failed_state.list_jobs().await.remove(0);
         assert_eq!(

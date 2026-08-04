@@ -767,17 +767,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn checkpoint_six_lifecycle_preserves_fallback_cancellation_and_finalize_order() {
-        fn check_cancellation(
-            lifecycle: &mut Vec<String>,
-            cancellation_checks: &mut usize,
-            point: &'static str,
-        ) -> bool {
-            *cancellation_checks += 1;
-            lifecycle.push(format!("cancel:{point}"));
-            false
-        }
-
+    async fn checkpoint_six_remote_lifecycle_preserves_fallback_and_provenance_order() {
         let peer = TakeoutPeer::new("supergroup".to_string(), "channel", 12_345, Some(99));
         let mut backend = FakeOperationsBackend::new([
             Err(AppError::network("Rpc error 400: CHANNEL_PRIVATE")),
@@ -789,33 +779,24 @@ mod tests {
             Ok(RawFixture::Messages(messages_response(vec![42]))),
             Ok(RawFixture::Unit),
         ]);
-        let mut lifecycle = Vec::new();
-        let mut cancellation_checks = 0;
+        let mut fallback_provenance = Vec::new();
 
-        assert!(!check_cancellation(
-            &mut lifecycle,
-            &mut cancellation_checks,
-            "before_validate"
-        ));
-        lifecycle.push("validate".to_string());
         validate_peer_with_backend(&mut backend, 77, &peer, "supergroup")
             .await
             .expect("private validation falls back");
         for fallback in backend.drain_fallbacks() {
-            lifecycle.push(format!("fallback:{:?}", fallback.kind()));
-            lifecycle.push(format!(
+            fallback_provenance.push(format!("fallback:{:?}", fallback.kind()));
+            fallback_provenance.push(format!(
                 "provenance:{}",
                 fallback.provenance_message().expect("fallback provenance")
             ));
         }
 
-        lifecycle.push("migration".to_string());
         let migration = detect_migration_with_backend(&mut backend, 77, &peer, "supergroup")
             .await
             .expect("migration probe");
         assert_eq!(migration, None);
 
-        lifecycle.push("split".to_string());
         let (split_count, ranges) = message_ranges_with_backend(&mut backend, 77, "supergroup")
             .await
             .expect("split selection");
@@ -823,34 +804,21 @@ mod tests {
         assert_eq!(ranges, vec![MessageRange::new(10, 500)]);
         let range = &ranges[0];
 
-        assert!(!check_cancellation(
-            &mut lifecycle,
-            &mut cancellation_checks,
-            "before_count"
-        ));
-        lifecycle.push("count:history".to_string());
         let history_count =
             history_count_with_backend(&mut backend, 77, &peer, range, "supergroup", false).await;
         assert!(history_count.is_err());
         for fallback in backend.drain_fallbacks() {
-            lifecycle.push(format!("fallback:{:?}", fallback.kind()));
-            lifecycle.push(format!(
+            fallback_provenance.push(format!("fallback:{:?}", fallback.kind()));
+            fallback_provenance.push(format!(
                 "provenance:{}",
                 fallback.provenance_message().expect("fallback provenance")
             ));
         }
-        lifecycle.push("count:search".to_string());
         let count = history_count_with_backend(&mut backend, 77, &peer, range, "supergroup", true)
             .await
             .expect("private-channel search count");
         assert_eq!(count, TakeoutCount::new(1, true));
 
-        assert!(!check_cancellation(
-            &mut lifecycle,
-            &mut cancellation_checks,
-            "before_import"
-        ));
-        lifecycle.push("import:tdesktop".to_string());
         let mut first_page =
             history_page_with_backend(&mut backend, 77, &peer, range, &count, None, true)
                 .await
@@ -859,15 +827,9 @@ mod tests {
         let pagination_warning = first_page
             .take_pagination_fallback_warning()
             .expect("descending fallback warning");
-        lifecycle.push("fallback:Descending".to_string());
-        lifecycle.push(format!("provenance:{pagination_warning}"));
+        fallback_provenance.push("fallback:Descending".to_string());
+        fallback_provenance.push(format!("provenance:{pagination_warning}"));
 
-        assert!(!check_cancellation(
-            &mut lifecycle,
-            &mut cancellation_checks,
-            "before_import"
-        ));
-        lifecycle.push("import:descending".to_string());
         let mut descending_page = history_page_with_backend(
             &mut backend,
             77,
@@ -881,41 +843,19 @@ mod tests {
         .expect("descending page");
         assert_eq!(message_ids(&descending_page.take_messages()), vec![42]);
 
-        assert!(!check_cancellation(
-            &mut lifecycle,
-            &mut cancellation_checks,
-            "before_finish"
-        ));
-        lifecycle.push("finish".to_string());
         finish_with_backend(&mut backend, 77, true)
             .await
             .expect("finish Takeout");
-        lifecycle.push("finalize:completed".to_string());
 
-        assert_eq!(cancellation_checks, 5);
         assert_eq!(
-            lifecycle,
+            fallback_provenance,
             vec![
-                "cancel:before_validate",
-                "validate",
                 "fallback:OnlyMyMessages",
                 "provenance:Channel history is private; importing only messages visible through from_id=self fallback.",
-                "migration",
-                "split",
-                "cancel:before_count",
-                "count:history",
                 "fallback:OnlyMyMessages",
                 "provenance:Channel history is private; importing only messages visible through from_id=self fallback.",
-                "count:search",
-                "cancel:before_import",
-                "import:tdesktop",
                 "fallback:Descending",
                 "provenance:TDesktop Takeout pagination returned an empty first page for split 10..500; retrying this split with Extractum descending fallback.",
-                "cancel:before_import",
-                "import:descending",
-                "cancel:before_finish",
-                "finish",
-                "finalize:completed",
             ]
         );
         assert_eq!(

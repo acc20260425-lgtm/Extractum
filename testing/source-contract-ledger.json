@@ -9974,7 +9974,7 @@
           "disposition": "behavior",
           "replacementIds": [
             "test:cargo:extractum-telegram::takeout::pagination::tests::tdesktop_pagination_reverses_raw_order_and_advances_from_newest_id",
-            "test:cargo:extractum-telegram::takeout::operations::tests::checkpoint_six_lifecycle_preserves_fallback_cancellation_and_finalize_order"
+            "test:cargo:extractum-telegram::takeout::operations::tests::checkpoint_six_remote_lifecycle_preserves_fallback_and_provenance_order"
           ]
         },
         {
@@ -9985,7 +9985,7 @@
           "disposition": "behavior",
           "replacementIds": [
             "test:cargo:extractum-telegram::takeout::pagination::tests::descending_fallback_keeps_raw_order_and_moves_to_min_message_id",
-            "test:cargo:extractum-telegram::takeout::operations::tests::checkpoint_six_lifecycle_preserves_fallback_cancellation_and_finalize_order"
+            "test:cargo:extractum-telegram::takeout::operations::tests::checkpoint_six_remote_lifecycle_preserves_fallback_and_provenance_order"
           ]
         },
         {
