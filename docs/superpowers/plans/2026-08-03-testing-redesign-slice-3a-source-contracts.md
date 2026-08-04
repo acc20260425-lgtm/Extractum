@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Remove the first three largest legacy source-contract files while preserving their 187 reviewed behavior and architecture obligations through executable behavior tests and structured RepositoryIndex rules.
+**Goal:** Remove the first three largest legacy source-contract files while preserving durable behavior and architecture obligations through executable tests, four narrow Telegram RepositoryIndex rules, Cargo metadata, and explicit retirement of historical source shape.
 
-**Architecture:** The ledger remains the migration authority. Behavior rows become direct Vitest tests of public TypeScript/Tauri seams; architecture rows become named RepositoryIndex evaluators that inspect parsed TypeScript, Svelte, Cargo metadata, and declared repository fixtures instead of raw production-source regular expressions. Delete rows remove only the explicitly documented implementation-detail assertions. Each task removes one legacy file and leaves the transition validator as the proof that its ledger rows closed.
+**Architecture:** The ledger remains the migration authority. Behavior rows become direct Vitest/Cargo tests; durable architecture rows use parsed TypeScript/Svelte facts, Cargo metadata, or generated repository authorities. Telegram keeps only four truthful structured rules and one transition-only bounded Cargo test-list comparison; it does not replace the deleted scanner with another Rust parser. Delete rows explicitly retire checkpoint simulations, exact source locations/counts, and scanner mutation cases. Each task removes one legacy file and leaves the transition validator as the proof that its ledger rows closed.
 
 **Tech Stack:** Node.js ESM, TypeScript, Vitest 4.1.5, TypeScript compiler API, `svelte/compiler`, Cargo metadata and focused Cargo tests, existing transition validator.
 
@@ -16,6 +16,7 @@
 - Fixture readers and RepositoryIndex tests stay exact, declared exceptions; parse failures are `INFRA_ERROR`, never zero violations.
 - Preserve stable ledger IDs and reviewed invariants; close a row only through a present replacement or documented deletion. The user-approved Task 2A correction replaces nominal Vitest ownership with exhaustive Cargo, architecture, frontend, and deletion subgroups while retaining SC-000648 through SC-000652 and every assertion ordinal.
 - Preserve direct Cargo ownership for Rust behavior. Node tests must not parse `.rs` production text to prove Rust behavior.
+- Do not add a Rust lexer/parser, tree-sitter binding, `syn`, `ra_ap_syntax`, rustdoc/nightly inspector, or persistent Cargo test census for Slice 3A.
 - On Windows use `npm.cmd`; use the package-specific Rust loops in `AGENTS.md`; every task ends with `npm.cmd run verify` outside the sandbox when process-tree proof is needed.
 - Do not change `TestingManifest`, selector behavior, scheduler behavior, public test commands, GitHub settings, or hosted CI.
 
@@ -30,6 +31,7 @@
 | `scripts/testing/repository-rules.mjs` | Stable rule IDs and evaluators for the migrated Telegram and analysis architecture obligations. |
 | `scripts/testing/repository-rules.test.ts` | Positive and mutation tests for each implemented rule ID. |
 | `src/lib/telegram-checkpoint-2.behavior.test.ts` | Fast contract for the eleven public account/Telegram TypeScript wrappers; it does not claim backend state, event, Takeout, or session behavior. |
+| `src/lib/telegram-contract-paths.behavior.test.ts` | Direct fast behavior for the retained Phase 8 lifecycle vocabulary and path resolution. |
 | `src-tauri/src/lib.rs` | One complete application command inventory feeding the real invoke handler plus Cargo-owned uniqueness checks for the twelve account/Telegram registrations. |
 | `src-tauri/src/telegram.rs`, `src-tauri/src/telegram_session_store.rs` | Direct application-crate tests for Telegram result/order/event and session-path/atomic-write behavior. |
 | `src-tauri/src/takeout_import/mod.rs` | Direct application-crate cancellation mutation-before-event behavior. |
@@ -80,7 +82,7 @@ Use the installed TypeScript compiler API and `svelte/compiler`; use `cargo meta
 
 - [ ] **Step 4: Write failing rule-runner tests**
 
-Derive the allowed 22-ID set from the existing replacement IDs in SC-000029–SC-000059, SC-000221–SC-000278, and SC-000561–SC-000658. Assert that every currently registered evaluator belongs to that set and has its own positive fixture plus a mutation with a non-empty violation. This task does not assert that all 22 IDs are registered yet.
+Derive the pre-cutover 22-ID candidate set from the existing replacement IDs in SC-000029–SC-000059, SC-000221–SC-000278, and SC-000561–SC-000658. Assert that every currently registered evaluator belongs to that set and has its own positive fixture plus a mutation with a non-empty violation. Task 2B later corrects Telegram ownership and intentionally reduces the final set to 11.
 
 - [ ] **Step 5: Implement named evaluators and convention guard**
 
@@ -110,10 +112,10 @@ Expected: PASS with exactly the two initial evaluators registered, including the
 
 **Interfaces:**
 
-- SC-000648 retains all 17 ordinals: delete source-only ordinals `{1,4,6}` with specific reasons; `{2,5}` resolve to `test:cargo:extractum::tests::telegram_command_registration_inventory_is_exact`; `{3}` resolves to `test:vitest:src/lib/telegram-checkpoint-2.behavior.test.ts#pins the eleven public account and Telegram wrapper IPC names and default camelCase keys`; `{7-12}` resolve to the existing exact `extractum::account_deletion::tests::*` behavior cases named in `.superpowers/sdd/task-2a-cargo-ownership-map.md`; `{13,14}` resolve to the three existing exact credential behavior tests named there; `{15,16}` resolve to `rule:telegram-app-facade-import-boundary`; `{17}` resolves to `rule:telegram-crate-extraction-boundary`. The unused backend-only `tg_is_authenticated` TypeScript wrapper/key fragment is not preserved by inventing public API.
+- SC-000648 retains all 17 ordinals: delete source-only ordinals `{1,4,6}` with specific reasons; `{2,5}` resolve to `test:cargo:extractum::tests::telegram_command_registration_inventory_is_exact`; `{3}` resolves to `test:vitest:src/lib/telegram-checkpoint-2.behavior.test.ts#pins the eleven public account and Telegram wrapper IPC names and default camelCase keys`; `{7-12}` resolve to the existing exact `extractum::account_deletion::tests::*` behavior cases named in `.superpowers/sdd/task-2a-cargo-ownership-map.md`; `{13,14}` resolve to the three existing exact credential behavior tests named there. Task 2A provisionally leaves `{15,16}` and `{17}` on the original architecture IDs; Task 2B replaces those unenforceable source-shape claims with the approved `{15,16,17}` deletion subgroup. The unused backend-only `tg_is_authenticated` TypeScript wrapper/key fragment is not preserved by inventing public API.
 - SC-000649 retains all 20 ordinals: `{1}` restore-event test; `{2,3}` send-code test; `{4,5}` sign-in order test; `{6,7}` existing missing-hash test; `{8}` logout order test; `{9,10}` session-path test; delete `{11,12}` as private call-count shape; `{13}` atomic-write outcome/error test; `{14,15,17,18,20}` encrypted-session error test; `{16}` existing invalid-key-length test; `{19}` existing missing-key test.
 - SC-000650 `{1,2,3}` resolves jointly to `test:cargo:extractum::takeout_import::tests::cancelled_job_emits_persisted_terminal_record` and existing `test:cargo:extractum::takeout_import::state::tests::takeout_event_status_and_cancellation_contract_is_exact`.
-- SC-000651 retains all 11 ordinals: `{1,2,10,11}` resolve to `rule:telegram-crate-extraction-boundary`; `{3,4}` use the existing TDesktop pagination test plus `test:cargo:extractum-telegram::takeout::operations::tests::checkpoint_six_remote_lifecycle_preserves_fallback_and_provenance_order`; `{5}` uses the existing descending-fallback pagination test plus that same remote-lifecycle identity; `{6,7,8,9}` use the new raw peer-identity test. The extracted identity proves the reviewed unordinalized remote validate, migration/split, count, fallback/import, finish, and provenance behavior; `test:cargo:extractum::takeout_import::tests::cancelled_job_emits_persisted_terminal_record` proves application-owned cancellation, durable batch finalization, terminal selection, persistence, and emission ordering.
+- SC-000651 retains all 11 ordinals: Task 2A provisionally leaves `{1,2,10,11}` on `rule:telegram-crate-extraction-boundary`, and Task 2B replaces that transitional path/layout claim with its documented deletion subgroup. `{3,4}` use the existing TDesktop pagination test plus `test:cargo:extractum-telegram::takeout::operations::tests::checkpoint_six_remote_lifecycle_preserves_fallback_and_provenance_order`; `{5}` uses the existing descending-fallback pagination test plus that same remote-lifecycle identity; `{6,7,8,9}` use the new raw peer-identity test. The extracted identity proves the reviewed unordinalized remote validate, migration/split, count, fallback/import, finish, and provenance behavior; `test:cargo:extractum::takeout_import::tests::cancelled_job_emits_persisted_terminal_record` proves application-owned cancellation, durable batch finalization, terminal selection, persistence, and emission ordering.
 - SC-000652 `{1,2}` resolves jointly to existing `test:cargo:extractum::telegram_session_store::tests::session_path_temp_path_and_error_contract_is_exact` and the new atomic-write outcome test; delete `{3,4,5}` as helper-call-count/delegation/source-shape constraints. No assertion ordinal may be omitted or overlap.
 
 - [ ] **Step 1: Repair the command-surface replacement under RED tests**
@@ -157,11 +159,14 @@ Run the one focused Vitest file, every new exact Cargo test at least once, both 
 
 Expected: all direct behavior tests pass. The transition validator itself passes while reporting rule-owned Telegram subgroups open until Task 2B; it must not report missing Cargo/Vitest identities or nominal mock-only replacements.
 
-## Task 2B: Migrate Telegram architecture rules and cut over the legacy file
+## Task 2B: Simplify Telegram architecture ownership and cut over the legacy file
 
 **Files:**
 
+- Create: `src/lib/telegram-contract-paths.behavior.test.ts`
 - Delete: `src/lib/telegram-crate-boundary-contract.test.ts`
+- Modify: `scripts/testing/repository-index.mjs`
+- Modify: `scripts/testing/repository-index.test.ts`
 - Modify: `scripts/testing/repository-rules.mjs`
 - Modify: `scripts/testing/repository-rules.test.ts`
 - Modify: `scripts/testing/extract-source-contract-ledger.mjs`
@@ -171,33 +176,56 @@ Expected: all direct behavior tests pass. The transition validator itself passes
 
 **Interfaces:**
 
-- SC-000561–SC-000647 and SC-000653–SC-000658 resolve only to their existing 15 `rule:telegram-*` IDs.
-- Every rule ID has one positive fixture and at least one mutation that produces a non-empty violation.
-- A `rule:` replacement resolves only when the named evaluator exists and returns zero violations on the live RepositoryIndex. A `test:cargo:` replacement resolves only when the exact package/test identity appears in a bounded `cargo test -- --list` result and the owning Cargo workspace gate remains in `verify`.
+- Preserve every SC-000561–SC-000658 ID, path, source/authority hash, lineage entry, and assertion count. Resolution fields may change under the approved ownership correction; only SC-000648 and SC-000651 require ordinal subgroup edits.
+- The complete Telegram structured-rule set is exactly `rule:telegram-repository-path-safety`, `rule:telegram-phase-8b-authority-integrity`, `rule:telegram-crate-manifest-boundary`, and `rule:telegram-crate-dependency-ownership`.
+- `tool:telegram-cargo-test-identity-ownership` is transition-only. It runs `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib -- --list` and the equivalent `-p extractum-telegram` command once each, compares exact module-qualified identities declared by `src/lib/telegram-8b-test-identities.json`, requires each identity under its declared package exactly once, requires absence from the other package, and persists no census or timing data.
+- A `rule:` replacement resolves only when its evaluator exists and returns zero live violations. A `test:cargo:` replacement resolves only when its exact identity is present in the bounded owner list and that package gate remains in `verify`. The transition-only tool resolves only when both package comparisons and verify-owner checks pass.
 
-- [ ] **Step 1: Write failing evaluator cases for every Telegram rule ID**
+- [ ] **Step 1: Add RED tests for the four truthful rules and the bounded identity tool**
 
-Extend the registry table to all 15 Telegram rule IDs. For each newly added ID, add the smallest mutation fixture that violates that exact ID; retain the independent Task 1 coverage for `telegram-repository-path-safety`. Do not use a family-level mutation as evidence for another evaluator.
+Retain the independent path-safety fixture. Add positive and non-empty mutation fixtures for authority integrity, semantic manifest ownership, and dependency ownership. Authority integrity compares the generated symbol map, test-identity map, and staging SHA artifact with the checked-in declared inputs; it must not claim live Rust definition conformance. Manifest/dependency rules use Cargo metadata and must detect a missing producer target, a production edge that enables `app-test-support`, a missing dev-only feature edge, an app-owned direct Grammers dependency, and Grammers feature/source drift.
 
-- [ ] **Step 2: Run the focused RED command**
+Add transition-validator cases proving that the Cargo identity tool fails on a missing identity, a duplicate/wrong-package identity, a failed list command, or a missing verify owner, and passes representative exact identities from both packages. Inject list results in unit tests; do not spawn Cargo from the unit-test fixture.
 
-Run: `node scripts/run-vitest.mjs run scripts/testing/repository-rules.test.ts -t "telegram"`
+- [ ] **Step 2: Run the focused RED commands**
 
-Expected: FAIL because 14 of the 15 Telegram evaluators and their mutation coverage are incomplete; `telegram-repository-path-safety` was established as the Task 1 example.
+Run: `node scripts/run-vitest.mjs run scripts/testing/repository-index.test.ts scripts/testing/repository-rules.test.ts scripts/testing/validate-testing-transition.test.ts -t "telegram|Cargo test identity"`
 
-- [ ] **Step 3: Implement all Telegram architecture evaluators**
+Expected: FAIL because three Telegram evaluators, declared authority inputs, and the transition-only Cargo-list resolver are absent.
 
-Make the existing `rule:telegram-*` IDs evaluate parsed structure and Cargo metadata. Preserve each positive fact and return deterministic non-empty violations for its paired mutation fixture.
+- [ ] **Step 3: Implement the minimum structured authority and Cargo resolver**
 
-- [ ] **Step 4: Remove the legacy file and prove full Telegram closure**
+Extend RepositoryIndex only with declared JSON/text artifact access needed by the pure Telegram generators; cache each declared input once and fail closed on read/parse/generator errors. Implement the three new evaluators and the bounded tool resolver. Invoke each real Cargo list at most once per package during a live transition validation and only when a historical ledger row references `test:cargo:` or `tool:telegram-cargo-test-identity-ownership`.
 
-Before deletion, add transition-validator RED/GREEN cases for a missing rule ID, a violating live rule, a missing Cargo test identity, and representative passing identities from both `extractum` and `extractum-telegram`. Require every Cargo identity introduced by Task 2A to resolve from bounded `cargo test -- --list` output. Obtain each owning package list once per transition validation only when the ledger contains a historical `test:cargo:` replacement; do not persist a Cargo census or timing data.
+Do not read or tokenize live `.rs` text. Do not persist the list, timing, fingerprint, or eligibility state. Keep the four evaluator IDs exact and reject unknown `rule:` or `tool:` IDs.
 
-Delete `src/lib/telegram-crate-boundary-contract.test.ts`; do not alter its row IDs, invariants, dispositions, or replacement IDs. Run `node scripts/validate-testing-transition.mjs` and require SC-000561–SC-000658 to report closed.
+- [ ] **Step 4: Add direct lifecycle behavior and verify all named Cargo identities**
 
-- [ ] **Step 5: Verify Task 2B**
+Create `src/lib/telegram-contract-paths.behavior.test.ts` with the exact title `recognizes the retained Phase 8 lifecycle vocabulary and paths`. Directly cover `phase8BCheckpointNumber`, `telegramLifecycleFromStatus`, and `resolveTelegramLifecyclePath`, including unknown lifecycle/status values.
 
-Run: `node scripts/run-vitest.mjs run src/lib/telegram-checkpoint-2.behavior.test.ts scripts/testing/repository-rules.test.ts`; then run both owning package check/test commands from `## Rust Verification Loops` and `npm.cmd run verify`.
+Before changing ledger ownership, run both bounded package lists and confirm every Cargo identity named in `.superpowers/sdd/task-2b-ownership-map.md` is non-empty and exact. In particular verify the three SC-000561 identities, the encrypted-session identities for SC-000627 and SC-000629–SC-000631, and `runtime::tests::successful_sign_in_serializes_clear_then_returns_session_and_clears_attempt`. A missing identity is a blocking mapping error.
+
+- [ ] **Step 5: Apply the approved ledger ownership map**
+
+Use `.superpowers/sdd/task-2b-ownership-map.md` as the exact mapping authority:
+
+- SC-000561 becomes direct Cargo behavior; SC-000562 stays path safety; SC-000563 becomes the new Vitest behavior; SC-000564–SC-000578 stay generated authority integrity.
+- SC-000579–SC-000593 delete historical current-definition/checkpoint/source-shape simulation row by row.
+- SC-000594 uses dependency ownership; SC-000595–SC-000602 use generated authority integrity; SC-000603/605/608 delete zero-assertion checkpoint history; SC-000604/607/609–SC-000613 use the bounded Cargo identity tool; SC-000606 requires both generated authority and the tool.
+- SC-000614–SC-000626 delete exact reference sets, counts/sites, checkpoint fixtures, import spellings, and signature/source-placement scans.
+- SC-000627 and SC-000629–SC-000631 become the exact encrypted-session/runtime Cargo behavior identities from the map. SC-000628 and SC-000632 delete the unenforceable whole-source negative scans. SC-000633–SC-000647 delete legacy scanner mutation/source-site assertions.
+- Keep SC-000648 ordinals 1–14 unchanged and replace its architecture subgroups with one `{15,16,17}` delete subgroup. Keep SC-000649–SC-000650 unchanged. Keep SC-000651 ordinals 3–9 unchanged and replace `{1,2,10,11}` with its documented transitional-layout deletion. Keep SC-000652 unchanged.
+- Delete SC-000653's partial-layout matrix; keep SC-000654 as manifest ownership; delete SC-000655's exact facade path/count; keep SC-000656 as dependency ownership; delete SC-000657's item-level fixture inventory while retaining its durable feature-edge coverage through SC-000654; make SC-000658 tool-owned.
+
+Every delete row/subgroup receives the specific reason in the ownership map. Do not claim that ordinary Cargo compilation proves a negative source-shape assertion. Record SC-000628, SC-000655, and SC-000657 as intentional losses in the Slice 3A verification report.
+
+- [ ] **Step 6: Remove the legacy file and prove full Telegram closure**
+
+Delete `src/lib/telegram-crate-boundary-contract.test.ts`. Update the registry test from the pre-cutover 22-ID candidate set to the current partial set: the four Telegram IDs plus currently implemented analysis IDs only. Run `node scripts/validate-testing-transition.mjs` and require every SC-000561–SC-000658 row to report closed without a Node Rust parser or persisted Cargo census.
+
+- [ ] **Step 7: Verify Task 2B**
+
+Run: `node scripts/run-vitest.mjs run src/lib/telegram-checkpoint-2.behavior.test.ts src/lib/telegram-contract-paths.behavior.test.ts scripts/testing/repository-index.test.ts scripts/testing/repository-rules.test.ts scripts/testing/validate-testing-transition.test.ts`; run both package-focused checks and package checkpoints from `## Rust Verification Loops`; run `node scripts/validate-testing-transition.mjs`; then run authoritative `npm.cmd run verify`.
 
 ## Task 3: Migrate the analysis source-reader contract
 
@@ -279,13 +307,13 @@ Run the focused rule suite, `cargo check --manifest-path src-tauri/Cargo.toml -p
 - Create: `docs/superpowers/verification/2026-08-03-testing-redesign-slice-3a-source-contracts.md`
 - Modify: `docs/superpowers/plans/2026-08-02-testing-redesign-program-index.md`
 
-- [ ] **Step 1: Add the final 22-ID completeness assertion**
+- [ ] **Step 1: Add the final 11-ID completeness assertion**
 
-In `scripts/testing/repository-rules.test.ts`, derive the exact rule-ID set from SC-000029–SC-000059, SC-000221–SC-000278, and SC-000561–SC-000658. Assert exact set equality with the registered evaluator IDs and retain the per-ID positive/mutation requirement.
+In `scripts/testing/repository-rules.test.ts`, derive the exact post-cutover rule-ID set from SC-000029–SC-000059, SC-000221–SC-000278, and SC-000561–SC-000658. Assert exact set equality with the registered evaluator IDs and retain the per-ID positive/mutation requirement. The set is four Telegram rules, six analysis source-reader rules, and one analysis application-boundary rule.
 
 Run: `node scripts/run-vitest.mjs run scripts/testing/repository-rules.test.ts`
 
-Expected: PASS with exactly 22 implemented rule IDs; an absent, extra, or mutation-free rule fails.
+Expected: PASS with exactly 11 implemented rule IDs; an absent, extra, or mutation-free rule fails.
 
 - [ ] **Step 2: Record the migration evidence**
 
@@ -306,7 +334,7 @@ Expected: only the Slice 3A implementation and evidence files are changed before
 | Checkpoint | Evidence |
 | --- | --- |
 | Structured authority | RepositoryIndex and rule mutation tests pass; malformed inputs surface as errors. |
-| Telegram migration | SC-000561–SC-000658 close without a Node source scan of Rust production files; SC-000648–SC-000652 retain exhaustive frontend, Cargo, architecture, and explicit deletion subgroups under their stable IDs. |
+| Telegram migration | SC-000561–SC-000658 close without a Node Rust parser or persistent Cargo census; four structured rules and one bounded transition-only Cargo identity comparison remain. SC-000648–SC-000652 retain their approved direct behavior and explicit deletion subgroups under stable IDs. |
 | Source-reader migration | SC-000221–SC-000278 close, including three explicit deletion rows. |
 | Analysis application migration | SC-000029–SC-000059 close through one deterministic structured rule. |
 | Transition integrity | Census remains bidirectional and ledger closes the removed paths. |

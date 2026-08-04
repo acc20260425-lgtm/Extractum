@@ -1286,6 +1286,18 @@ A stale path mapping remains possible. Fail-closed classification,
 non-overlapping patterns, bidirectional census checks, and test:manifest are
 the mitigation. TestingManifest must not grow into a build graph in response.
 
+The Telegram source-contract migration deliberately retires exact Rust
+source-shape assertions that cannot be proven by Cargo metadata, compiler
+gates, or behavior tests without recreating a custom Rust parser. This includes
+checkpoint layouts, reference counts and sites, `cfg` ordering, exact facade
+file ownership, exact feature-fixture item inventories, and the absence of a
+`Debug` derive on one private credential row. Package dependency and feature
+edges, generated authority integrity, encrypted-session outcomes, and direct
+Cargo behavior remain enforced. The private-credential `Debug` assertion is
+the security-adjacent accepted loss: ordinary compilation does not reject a
+future derive, so documentation and review own that narrow risk unless a
+long-lived compiler-backed check is later justified.
+
 ## Tooling Basis
 
 - Vitest projects and configuration: https://vitest.dev/guide/projects
