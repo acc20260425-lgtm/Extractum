@@ -239,9 +239,10 @@ Run: `node scripts/run-vitest.mjs run src/lib/telegram-checkpoint-2.behavior.tes
 
 **Interfaces:**
 
-- SC-000222 and SC-000224 through SC-000278 resolve to `analysis-source-readers.behavior.component.test.ts`. Task 3 updates only those replacement paths from the pre-migration `.behavior.test.ts` draft; stable row IDs, hashes, lineage, dispositions, assertion counts, and exact test titles remain unchanged.
+- SC-000222, SC-000224–SC-000237, SC-000243–SC-000264, SC-000266, SC-000269–SC-000270, and SC-000272–SC-000278 resolve to `analysis-source-readers.behavior.component.test.ts`. Task 3 updates only those replacement paths from the pre-migration `.behavior.test.ts` draft; stable row IDs, hashes, lineage, dispositions, assertion counts, and exact test titles remain unchanged.
 - SC-000221, SC-000223, SC-000265, SC-000267, SC-000268, and SC-000271 resolve to their existing `rule:analysis-*` IDs.
 - SC-000239 through SC-000241 close only by their existing documented deletion reasons.
+- SC-000238 deletes the exact sticky/z-index visual contract because jsdom cannot expose Svelte scoped layout styles truthfully and DOM ordering remains covered by direct behavior. SC-000242 deletes the exact CSS hyphenation/wrapping contract while retaining accessible long-word text behavior elsewhere; neither row may be replaced by production-source/CSS text inspection or a new browser harness.
 
 - [ ] **Step 1: Write failing direct source-reader behavior tests**
 
