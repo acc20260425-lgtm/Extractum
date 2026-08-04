@@ -21,9 +21,9 @@ hashes, lineage, assertion counts, and ordinal-complete mixed-row partitions:
 | `src/lib/analysis-source-readers.test.ts` | SC-000221--SC-000278 (58) | 47 rendered component behavior contracts, six parsed TypeScript/Svelte rules, and explicit deletion of assertions that jsdom cannot prove truthfully. |
 | `src/lib/analysis-application-contract.test.ts` | SC-000029--SC-000059 (31) | Exact Cargo/Vitest identities, one direct 21/3/3 Tauri command-inventory test, and explicit ordinal-complete deletion of residual source shape. |
 
-The live validator now reports 671 rows with 483 open, down from 670 before
-the first cutover. It also reports 194 runner candidates: 187 Vitest files and
-7 Playwright files, with bidirectional ownership intact.
+The live validator now reports 671 total rows; the open count fell from 670
+before the first cutover to 483. It also reports 194 runner candidates: 187
+Vitest files and 7 Playwright files, with bidirectional ownership intact.
 
 ## Structured Authority
 
@@ -60,6 +60,17 @@ a Node Rust parser or persistent Cargo census. Checkpoint-relative paths,
 exact item/file placement, private call counts, forbidden-token scans, and
 other historical source shape were explicitly retired rather than replaced
 with nominal tests.
+
+The three Telegram losses called out by the migration plan are explicit:
+
+- SC-000628 retires static proof that the private plaintext credential row
+  cannot acquire a `Debug` derive; secret-store and encrypted-envelope behavior
+  remains tested.
+- SC-000655 retires the exact application-facade path and occurrence count;
+  package edges and direct Grammers dependency ownership remain enforced.
+- SC-000657 retires exact fixture item names, aliases, `cfg` placement,
+  visibility, and producer-consumer inventory; durable Cargo feature-edge
+  ownership remains enforced.
 
 Analysis source-reader behavior is exercised through rendered components.
 Six rules use parsed TypeScript/Svelte facts and fail closed on malformed
