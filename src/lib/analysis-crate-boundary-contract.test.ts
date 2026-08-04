@@ -3913,12 +3913,12 @@ function expectOrdered(source: string, markers: readonly string[]): void {
 
 function handlerBody(): string {
   const appLib = read("src-tauri/src/lib.rs");
-  const marker = "tauri::generate_handler![";
-  const start = appLib.indexOf(marker);
-  if (start < 0) throw new Error("missing generate_handler! registration");
-  const open = start + marker.length - 1;
-  const close = closingDelimiter(appLib, open, "[", "]");
-  return appLib.slice(open + 1, close);
+  const marker = "macro_rules! application_command_inventory", start = appLib.indexOf(marker);
+  if (start < 0) throw new Error("missing application command inventory");
+  const open = appLib.indexOf("{", start + marker.length), macro = appLib.slice(open + 1, closingDelimiter(appLib, open, "{", "}"));
+  const call = "telegram_command_registration_inventory!(", callStart = macro.indexOf(call); if (callStart < 0) throw new Error("missing Telegram command inventory invocation");
+  const body = macro.slice(callStart + call.length, closingDelimiter(macro, callStart + call.length - 1, "(", ")")), lists = splitTopLevel(body);
+  if (lists.length !== 3 || lists[0] !== "$consumer") throw new Error("malformed application command inventory"); return lists.slice(1).map((list) => list.slice(1, closingDelimiter(list, 0, "[", "]"))).join(",");
 }
 
 function occurrenceCount(source: string, pattern: RegExp): number {

@@ -347,8 +347,8 @@ describe("repository rule registry", () => {
       .filter((id): id is string => id.startsWith("rule:")),
   );
 
-  it("derives the frozen 22-ID allowlist and registers the implemented Task 2B evaluators", () => {
-    expect(allowedRuleIds.size).toBe(22);
+  it("derives the post-Telegram-cutover 11-ID allowlist and registers the current five evaluators", () => {
+    expect(allowedRuleIds.size).toBe(11);
     expect(registeredRuleIds).toEqual([
       "rule:analysis-source-reader-surface-composition",
       "rule:telegram-crate-dependency-ownership",

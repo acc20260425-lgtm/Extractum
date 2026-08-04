@@ -407,16 +407,16 @@ function parseAppendix(): FrozenIdentity[] {
 }
 
 function handlerBody(): string {
-  const marker = "tauri::generate_handler![";
+  const marker = "macro_rules! application_command_inventory";
   const start = appLib.indexOf(marker);
-  if (start < 0) throw new Error("missing generate_handler! registration");
-  let depth = 0;
-  for (let index = start + marker.length - 1; index < appLib.length; index += 1) {
-    if (appLib[index] === "[") depth += 1;
-    if (appLib[index] === "]") depth -= 1;
-    if (depth === 0) return appLib.slice(start + marker.length, index);
-  }
-  throw new Error("unclosed generate_handler! registration");
+  if (start < 0) throw new Error("missing application command inventory");
+  const open = appLib.indexOf("{", start + marker.length);
+  const macro = appLib.slice(open + 1, closingDelimiter(appLib, open, "{", "}"));
+  const call = "telegram_command_registration_inventory!(";
+  const callStart = macro.indexOf(call);
+  if (callStart < 0) throw new Error("missing Telegram command inventory invocation");
+  const body = macro.slice(callStart + call.length, closingDelimiter(macro, callStart + call.length - 1, "(", ")")), lists = splitTopLevel(body);
+  if (lists.length !== 3 || lists[0] !== "$consumer") throw new Error("malformed application command inventory"); return lists.slice(1).map((list) => list.slice(1, closingDelimiter(list, 0, "[", "]"))).join(",");
 }
 
 function closingDelimiter(source: string, open: number, left: string, right: string): number {

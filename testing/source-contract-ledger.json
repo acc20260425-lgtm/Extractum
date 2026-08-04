@@ -8075,9 +8075,11 @@
       "authorityHash": "c9d7f95505acebd5b2c057d90ac3e7f9a29234d14fdb5f47323fe5650773ed24",
       "lineage": [],
       "invariant": "Takeout mutations preserve cancellation, progress, and terminal-emission order.",
-      "disposition": "architecture",
+      "disposition": "behavior",
       "replacementIds": [
-        "rule:telegram-takeout-lifecycle-boundary"
+        "test:cargo:extractum::takeout_import::tests::cancelled_job_emits_persisted_terminal_record",
+        "test:cargo:extractum::takeout_import::state::tests::takeout_event_status_and_cancellation_contract_is_exact",
+        "test:cargo:extractum-telegram::takeout::operations::tests::checkpoint_six_remote_lifecycle_preserves_fallback_and_provenance_order"
       ]
     },
     {
@@ -8109,9 +8111,9 @@
       "authorityHash": "53b899464a781f4bcc4c5221c6b3dac5689684514693bc6cbd6c267329175487",
       "lineage": [],
       "invariant": "Phase 8 lifecycle data uses only recognized retained values.",
-      "disposition": "architecture",
+      "disposition": "behavior",
       "replacementIds": [
-        "rule:telegram-phase-8-lifecycle-values"
+        "test:vitest:src/lib/telegram-contract-paths.behavior.test.ts#recognizes the retained Phase 8 lifecycle vocabulary and paths"
       ]
     },
     {
@@ -8381,10 +8383,8 @@
       "authorityHash": "a047b656bbf2d15d2845b235ebc046bd8cc2ad89d0b20625c6cfc44de9908a7a",
       "lineage": [],
       "invariant": "The Phase 8B structural authority rejects an unlisted current production definition in a fully moved module.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-phase-8b-current-definition-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "These are historical Phase 8B checkpoint simulations of Rust definition category, spelling, path/tree placement, exception inventories, aliases, and restricted-visibility mutations. The terminal crates now compile and run directly; preserving these claims would require recreating the deleted Rust scanner and would not provide name resolution."
     },
     {
       "id": "SC-000580",
@@ -8401,10 +8401,8 @@
       "authorityHash": "a047b656bbf2d15d2845b235ebc046bd8cc2ad89d0b20625c6cfc44de9908a7a",
       "lineage": [],
       "invariant": "The Phase 8B structural authority rejects an unlisted current associated definition in a fully moved module.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-phase-8b-current-definition-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "These are historical Phase 8B checkpoint simulations of Rust definition category, spelling, path/tree placement, exception inventories, aliases, and restricted-visibility mutations. The terminal crates now compile and run directly; preserving these claims would require recreating the deleted Rust scanner and would not provide name resolution."
     },
     {
       "id": "SC-000581",
@@ -8421,10 +8419,8 @@
       "authorityHash": "a047b656bbf2d15d2845b235ebc046bd8cc2ad89d0b20625c6cfc44de9908a7a",
       "lineage": [],
       "invariant": "The Phase 8B structural authority rejects a current Phase 8B method spoofed by a same-named field.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-phase-8b-current-definition-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "These are historical Phase 8B checkpoint simulations of Rust definition category, spelling, path/tree placement, exception inventories, aliases, and restricted-visibility mutations. The terminal crates now compile and run directly; preserving these claims would require recreating the deleted Rust scanner and would not provide name resolution."
     },
     {
       "id": "SC-000582",
@@ -8441,10 +8437,8 @@
       "authorityHash": "a047b656bbf2d15d2845b235ebc046bd8cc2ad89d0b20625c6cfc44de9908a7a",
       "lineage": [],
       "invariant": "The Phase 8B structural authority rejects a current Phase 8B method spoofed by a same-named associated non-function.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-phase-8b-current-definition-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "These are historical Phase 8B checkpoint simulations of Rust definition category, spelling, path/tree placement, exception inventories, aliases, and restricted-visibility mutations. The terminal crates now compile and run directly; preserving these claims would require recreating the deleted Rust scanner and would not provide name resolution."
     },
     {
       "id": "SC-000583",
@@ -8461,10 +8455,8 @@
       "authorityHash": "a047b656bbf2d15d2845b235ebc046bd8cc2ad89d0b20625c6cfc44de9908a7a",
       "lineage": [],
       "invariant": "The Phase 8B structural authority rejects a current Phase 8B field spoofed by a same-named method.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-phase-8b-current-definition-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "These are historical Phase 8B checkpoint simulations of Rust definition category, spelling, path/tree placement, exception inventories, aliases, and restricted-visibility mutations. The terminal crates now compile and run directly; preserving these claims would require recreating the deleted Rust scanner and would not provide name resolution."
     },
     {
       "id": "SC-000584",
@@ -8481,10 +8473,8 @@
       "authorityHash": "1ecd66cb30ce5ae998fbe7d6504e8bbd534a3da3bc82508ea0caf862d64bb289",
       "lineage": [],
       "invariant": "The Phase 8B structural authority freezes the sole retained test-only current-definition exception.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-phase-8b-current-definition-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "These are historical Phase 8B checkpoint simulations of Rust definition category, spelling, path/tree placement, exception inventories, aliases, and restricted-visibility mutations. The terminal crates now compile and run directly; preserving these claims would require recreating the deleted Rust scanner and would not provide name resolution."
     },
     {
       "id": "SC-000585",
@@ -8501,10 +8491,8 @@
       "authorityHash": "eccc11f31eda7f61c116420bd90e923171d83e0e1fc6e5f3e1e251bd0d418563",
       "lineage": [],
       "invariant": "The Phase 8B structural authority reconciles every Phase 8B checkpoint source fixture with plan authority.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-phase-8b-current-definition-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "These are historical Phase 8B checkpoint simulations of Rust definition category, spelling, path/tree placement, exception inventories, aliases, and restricted-visibility mutations. The terminal crates now compile and run directly; preserving these claims would require recreating the deleted Rust scanner and would not provide name resolution."
     },
     {
       "id": "SC-000586",
@@ -8521,10 +8509,8 @@
       "authorityHash": "a531874029557810782c8be87fb07ade8116dfbaf5aab959bca19cd6129703f9",
       "lineage": [],
       "invariant": "The Phase 8B structural authority freezes the exact permanent CP3 root public surface without aliases.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-phase-8b-current-definition-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "These are historical Phase 8B checkpoint simulations of Rust definition category, spelling, path/tree placement, exception inventories, aliases, and restricted-visibility mutations. The terminal crates now compile and run directly; preserving these claims would require recreating the deleted Rust scanner and would not provide name resolution."
     },
     {
       "id": "SC-000587",
@@ -8541,10 +8527,8 @@
       "authorityHash": "d1d6a9895957a6e59693190ba7ce619c5c4b69cf9212a277c5d6d581ae2fc827",
       "lineage": [],
       "invariant": "The Phase 8B structural authority leaves the projected CP4 legacy peer-ref definition to LLM review.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-phase-8b-current-definition-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "These are historical Phase 8B checkpoint simulations of Rust definition category, spelling, path/tree placement, exception inventories, aliases, and restricted-visibility mutations. The terminal crates now compile and run directly; preserving these claims would require recreating the deleted Rust scanner and would not provide name resolution."
     },
     {
       "id": "SC-000588",
@@ -8561,10 +8545,8 @@
       "authorityHash": "a531874029557810782c8be87fb07ade8116dfbaf5aab959bca19cd6129703f9",
       "lineage": [],
       "invariant": "The Phase 8B structural authority rejects CP3 foundation paths, module roots, and permanent client drift.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-phase-8b-current-definition-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "These are historical Phase 8B checkpoint simulations of Rust definition category, spelling, path/tree placement, exception inventories, aliases, and restricted-visibility mutations. The terminal crates now compile and run directly; preserving these claims would require recreating the deleted Rust scanner and would not provide name resolution."
     },
     {
       "id": "SC-000589",
@@ -8581,10 +8563,8 @@
       "authorityHash": "83b31e1e9ea4f0905cd6bda9b64374c60440603dee38ce35edc7fd6b00819637",
       "lineage": [],
       "invariant": "The Phase 8B structural authority rejects missing and extra paths in the exact Phase 8B portable tree.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-phase-8b-current-definition-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "These are historical Phase 8B checkpoint simulations of Rust definition category, spelling, path/tree placement, exception inventories, aliases, and restricted-visibility mutations. The terminal crates now compile and run directly; preserving these claims would require recreating the deleted Rust scanner and would not provide name resolution."
     },
     {
       "id": "SC-000590",
@@ -8601,10 +8581,8 @@
       "authorityHash": "a531874029557810782c8be87fb07ade8116dfbaf5aab959bca19cd6129703f9",
       "lineage": [],
       "invariant": "The Phase 8B structural authority enforces the staged session clone accessor contract.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-phase-8b-current-definition-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "These are historical Phase 8B checkpoint simulations of Rust definition category, spelling, path/tree placement, exception inventories, aliases, and restricted-visibility mutations. The terminal crates now compile and run directly; preserving these claims would require recreating the deleted Rust scanner and would not provide name resolution. The exact clone-accessor shape has behavior-level session round-trip/error coverage, but its source spelling is still retired."
     },
     {
       "id": "SC-000591",
@@ -8621,10 +8599,8 @@
       "authorityHash": "a531874029557810782c8be87fb07ade8116dfbaf5aab959bca19cd6129703f9",
       "lineage": [],
       "invariant": "The Phase 8B structural authority rejects every mandated terminal restricted-visibility mutation.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-phase-8b-current-definition-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "These are historical Phase 8B checkpoint simulations of Rust definition category, spelling, path/tree placement, exception inventories, aliases, and restricted-visibility mutations. The terminal crates now compile and run directly; preserving these claims would require recreating the deleted Rust scanner and would not provide name resolution."
     },
     {
       "id": "SC-000592",
@@ -8641,10 +8617,8 @@
       "authorityHash": "a531874029557810782c8be87fb07ade8116dfbaf5aab959bca19cd6129703f9",
       "lineage": [],
       "invariant": "The Phase 8B structural authority rejects terminal tree, consumer, public, and unlisted bridge drift.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-phase-8b-current-definition-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "These are historical Phase 8B checkpoint simulations of Rust definition category, spelling, path/tree placement, exception inventories, aliases, and restricted-visibility mutations. The terminal crates now compile and run directly; preserving these claims would require recreating the deleted Rust scanner and would not provide name resolution."
     },
     {
       "id": "SC-000593",
@@ -8661,10 +8635,8 @@
       "authorityHash": "a531874029557810782c8be87fb07ade8116dfbaf5aab959bca19cd6129703f9",
       "lineage": [],
       "invariant": "The Phase 8B structural authority ignores unrelated app public APIs in the terminal leak scan.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-phase-8b-current-definition-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "These are historical Phase 8B checkpoint simulations of Rust definition category, spelling, path/tree placement, exception inventories, aliases, and restricted-visibility mutations. The terminal crates now compile and run directly; preserving these claims would require recreating the deleted Rust scanner and would not provide name resolution."
     },
     {
       "id": "SC-000594",
@@ -8683,7 +8655,7 @@
       "invariant": "The immutable Telegram test map normalizes the pinned Telegram dependencies without workspace graph drift.",
       "disposition": "architecture",
       "replacementIds": [
-        "rule:telegram-immutable-test-map-integrity"
+        "rule:telegram-crate-dependency-ownership"
       ]
     },
     {
@@ -8697,7 +8669,7 @@
       "invariant": "The immutable Telegram test map records only the truthful retained Phase 8 lifecycle states.",
       "disposition": "architecture",
       "replacementIds": [
-        "rule:telegram-immutable-test-map-integrity"
+        "rule:telegram-phase-8b-authority-integrity"
       ]
     },
     {
@@ -8711,7 +8683,7 @@
       "invariant": "The immutable Telegram test map parses the plan table without copied rows and freezes all identity totals.",
       "disposition": "architecture",
       "replacementIds": [
-        "rule:telegram-immutable-test-map-integrity"
+        "rule:telegram-phase-8b-authority-integrity"
       ]
     },
     {
@@ -8731,7 +8703,7 @@
       "invariant": "The immutable Telegram test map maps the deferred raw-parse companions through Checkpoint 6 and reserves Checkpoint 7.",
       "disposition": "architecture",
       "replacementIds": [
-        "rule:telegram-immutable-test-map-integrity"
+        "rule:telegram-phase-8b-authority-integrity"
       ]
     },
     {
@@ -8745,7 +8717,7 @@
       "invariant": "The immutable Telegram test map rejects every malformed immutable and plan-added data row.",
       "disposition": "architecture",
       "replacementIds": [
-        "rule:telegram-immutable-test-map-integrity"
+        "rule:telegram-phase-8b-authority-integrity"
       ]
     },
     {
@@ -8759,7 +8731,7 @@
       "invariant": "The immutable Telegram test map rejects an app-owned immutable row staged away from its baseline.",
       "disposition": "architecture",
       "replacementIds": [
-        "rule:telegram-immutable-test-map-integrity"
+        "rule:telegram-phase-8b-authority-integrity"
       ]
     },
     {
@@ -8773,7 +8745,7 @@
       "invariant": "The immutable Telegram test map rejects non-pipe plan-added body lines and open disposition values.",
       "disposition": "architecture",
       "replacementIds": [
-        "rule:telegram-immutable-test-map-integrity"
+        "rule:telegram-phase-8b-authority-integrity"
       ]
     },
     {
@@ -8787,7 +8759,7 @@
       "invariant": "Telegram boundary rejects a crate disposition with the wrong complete final identity.",
       "disposition": "architecture",
       "replacementIds": [
-        "rule:telegram-immutable-test-map-integrity"
+        "rule:telegram-phase-8b-authority-integrity"
       ]
     },
     {
@@ -8801,7 +8773,7 @@
       "invariant": "Telegram boundary rejects a plan-added current identity without a complete test module.",
       "disposition": "architecture",
       "replacementIds": [
-        "rule:telegram-immutable-test-map-integrity"
+        "rule:telegram-phase-8b-authority-integrity"
       ]
     },
     {
@@ -8819,10 +8791,8 @@
      "authorityHash": "378e02466c5204630021b533b343d7bdf7fcec6d59baa5857b9d6202c8b41540",
      "lineage": [],
       "invariant": "Telegram boundary resolves each row through the current lifecycle without requiring future paths.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-immutable-test-map-integrity"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Zero-assertion historical checkpoint-path simulation; no executable obligation remains."
     },
     {
       "id": "SC-000604",
@@ -8839,9 +8809,9 @@
      "authorityHash": "378e02466c5204630021b533b343d7bdf7fcec6d59baa5857b9d6202c8b41540",
      "lineage": [],
       "invariant": "Telegram boundary rejects a matching leaf test under the wrong module-qualified identity.",
-      "disposition": "architecture",
+      "disposition": "tool_owned",
       "replacementIds": [
-        "rule:telegram-immutable-test-map-integrity"
+        "tool:telegram-cargo-test-identity-ownership"
       ]
     },
     {
@@ -8859,10 +8829,8 @@
      "authorityHash": "a1a0c2c7c96dc5ae97be77369e580d321c3a1416a0ba22429a36475effe48d41",
      "lineage": [],
       "invariant": "Telegram boundary checkpoint-gates all 18 plan-added identities outside the immutable 140.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-immutable-test-map-integrity"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Zero-assertion historical checkpoint gating of the 18 plan-added identities; terminal ownership is checked directly rather than simulating intermediate checkpoints."
     },
     {
       "id": "SC-000606",
@@ -8879,9 +8847,10 @@
      "authorityHash": "db235c31e92ece7eccac593d3dba1a45b0dd37daa9584741fcc7acb32349d6cf",
      "lineage": [],
       "invariant": "Telegram boundary reconciles the exact active retained 8A identity accounting.",
-      "disposition": "architecture",
+      "disposition": "tool_owned",
       "replacementIds": [
-        "rule:telegram-immutable-test-map-integrity"
+        "rule:telegram-phase-8b-authority-integrity",
+        "tool:telegram-cargo-test-identity-ownership"
       ]
     },
     {
@@ -8893,9 +8862,9 @@
      "authorityHash": "10f3d51f8832d5566ad1261107612bf90811312a79fc3d0d20b6736e1526338a",
      "lineage": [],
       "invariant": "Telegram boundary rejects a plan-added leaf declaration under the wrong module.",
-      "disposition": "architecture",
+      "disposition": "tool_owned",
       "replacementIds": [
-        "rule:telegram-immutable-test-map-integrity"
+        "tool:telegram-cargo-test-identity-ownership"
       ]
     },
     {
@@ -8907,10 +8876,8 @@
      "authorityHash": "10f3d51f8832d5566ad1261107612bf90811312a79fc3d0d20b6736e1526338a",
      "lineage": [],
       "invariant": "Telegram boundary tracks a crate plan-added identity through 8A, 8B, and 8C modules.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-immutable-test-map-integrity"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Zero-assertion history of one identity through 8A/8B/8C modules; terminal package identity is already checked by the bounded list."
     },
     {
       "id": "SC-000609",
@@ -8921,9 +8888,9 @@
      "authorityHash": "160c67d9c9cef2efc259104edeb7eade3a369af3b3029b414150862b7e2b72ff",
      "lineage": [],
       "invariant": "Telegram boundary freezes the independent 24-test store suite without polluting the 140.",
-      "disposition": "architecture",
+      "disposition": "tool_owned",
       "replacementIds": [
-        "rule:telegram-immutable-test-map-integrity"
+        "tool:telegram-cargo-test-identity-ownership"
       ]
     },
     {
@@ -8935,9 +8902,9 @@
      "authorityHash": "fb757fab7ce630f203147e996de6a92018a9254b938297189ccceb28df57baba",
      "lineage": [],
       "invariant": "Telegram boundary keeps the exact 43 helper-dependent and three credential-SQL identities app-owned.",
-      "disposition": "architecture",
+      "disposition": "tool_owned",
       "replacementIds": [
-        "rule:telegram-identity-ownership-boundary"
+        "tool:telegram-cargo-test-identity-ownership"
       ]
     },
     {
@@ -8949,9 +8916,9 @@
      "authorityHash": "fb757fab7ce630f203147e996de6a92018a9254b938297189ccceb28df57baba",
      "lineage": [],
       "invariant": "Telegram boundary individually accounts for all 119 direct-perimeter identities and the residual 73.",
-      "disposition": "architecture",
+      "disposition": "tool_owned",
       "replacementIds": [
-        "rule:telegram-identity-ownership-boundary"
+        "tool:telegram-cargo-test-identity-ownership"
       ]
     },
     {
@@ -8969,9 +8936,9 @@
      "authorityHash": "10f3d51f8832d5566ad1261107612bf90811312a79fc3d0d20b6736e1526338a",
      "lineage": [],
       "invariant": "Telegram boundary freezes the 21-identity transitive type closure and its one mixed companion.",
-      "disposition": "architecture",
+      "disposition": "tool_owned",
       "replacementIds": [
-        "rule:telegram-identity-ownership-boundary"
+        "tool:telegram-cargo-test-identity-ownership"
       ]
     },
     {
@@ -8983,9 +8950,9 @@
      "authorityHash": "10f3d51f8832d5566ad1261107612bf90811312a79fc3d0d20b6736e1526338a",
      "lineage": [],
       "invariant": "Telegram boundary preserves the three declared decompositions and exact retained identities.",
-      "disposition": "architecture",
+      "disposition": "tool_owned",
       "replacementIds": [
-        "rule:telegram-identity-ownership-boundary"
+        "tool:telegram-cargo-test-identity-ownership"
       ]
     },
     {
@@ -9003,10 +8970,8 @@
      "authorityHash": "297e12c6cfeeab6badd6cbee8218931b21ee450f86b2497a6eb92a6748a20995",
      "lineage": [],
       "invariant": "Telegram boundary keeps direct Grammers discovery, moved-symbol discovery, and wiring disjoint.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-source-ownership-perimeter"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Exact reference-set partitioning (direct Grammers, moved symbols, wiring, and the copied dependent-only correction) is refactor-sensitive live Rust source shape. Cargo dependency ownership remains enforced by SC-000656; executable behavior remains in package tests. No current non-parser authority can truthfully prove this row."
     },
     {
       "id": "SC-000615",
@@ -9017,10 +8982,8 @@
      "authorityHash": "9a3fd50854210232421a123e13bd683bc07e0c8c0730308812f6cd584a21ab29",
      "lineage": [],
       "invariant": "Telegram boundary requires the synchronized dependent-only correction in both authorities.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-source-ownership-perimeter"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Exact reference-set partitioning (direct Grammers, moved symbols, wiring, and the copied dependent-only correction) is refactor-sensitive live Rust source shape. Cargo dependency ownership remains enforced by SC-000656; executable behavior remains in package tests. No current non-parser authority can truthfully prove this row."
     },
     {
       "id": "SC-000616",
@@ -9037,10 +9000,8 @@
      "authorityHash": "910886dd746124bd20d636162a74de3fba402ecfb0ffeb82e5e38bb100b13782",
      "lineage": [],
       "invariant": "Telegram boundary retains the immutable 166-reference evidence and requires the 160-reference live layout.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-core-error-seam-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Historical Checkpoint 1-3 fixture layouts, exact reference counts/sites, import spellings, persistence signatures, and singular DTO/media-owner text are implementation-detail source scans. Workspace/package compile and behavior gates retain type/signature correctness; no exact source-site invariant survives without a Rust semantic index."
     },
     {
       "id": "SC-000617",
@@ -9051,10 +9012,8 @@
      "authorityHash": "fba8bdb1e976849d8ab7d0cb5baec6f5ab73dac6ef45ce92246b1263895d60f4",
      "lineage": [],
       "invariant": "Telegram boundary rejects a premature owner layout at retained Checkpoint 1.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-core-error-seam-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Historical Checkpoint 1-3 fixture layouts, exact reference counts/sites, import spellings, persistence signatures, and singular DTO/media-owner text are implementation-detail source scans. Workspace/package compile and behavior gates retain type/signature correctness; no exact source-site invariant survives without a Rust semantic index."
     },
     {
       "id": "SC-000618",
@@ -9065,10 +9024,8 @@
      "authorityHash": "fba8bdb1e976849d8ab7d0cb5baec6f5ab73dac6ef45ce92246b1263895d60f4",
      "lineage": [],
       "invariant": "Telegram boundary does not read unavailable Checkpoint 1 paths after Checkpoint 2.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-core-error-seam-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Historical Checkpoint 1-3 fixture layouts, exact reference counts/sites, import spellings, persistence signatures, and singular DTO/media-owner text are implementation-detail source scans. Workspace/package compile and behavior gates retain type/signature correctness; no exact source-site invariant survives without a Rust semantic index."
     },
     {
       "id": "SC-000619",
@@ -9085,10 +9042,8 @@
      "authorityHash": "ef69943b7e0388a73fe7c74946caa893195f9780eec78a09a7f271769735156c",
      "lineage": [],
       "invariant": "Telegram boundary normalizes exactly the six identity-validation paths directly to core.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-core-error-seam-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Historical Checkpoint 1-3 fixture layouts, exact reference counts/sites, import spellings, persistence signatures, and singular DTO/media-owner text are implementation-detail source scans. Workspace/package compile and behavior gates retain type/signature correctness; no exact source-site invariant survives without a Rust semantic index."
     },
     {
       "id": "SC-000620",
@@ -9105,10 +9060,8 @@
      "authorityHash": "22f6d5bcd2177159c4df846626473e45eadf30b0534383b46c76eb1b20483a42",
      "lineage": [],
       "invariant": "Telegram boundary sentinel-preserves the 45 core-facade references.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-core-error-seam-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Historical Checkpoint 1-3 fixture layouts, exact reference counts/sites, import spellings, persistence signatures, and singular DTO/media-owner text are implementation-detail source scans. Workspace/package compile and behavior gates retain type/signature correctness; no exact source-site invariant survives without a Rust semantic index."
     },
     {
       "id": "SC-000621",
@@ -9125,10 +9078,8 @@
      "authorityHash": "7848d5492c2c2127e81502dff790483ea885d05786c183cbe5d246caab50e9a7",
      "lineage": [],
       "invariant": "Telegram boundary keeps semantic facade sites stable across Checkpoint 3 line shifts.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-core-error-seam-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Historical Checkpoint 1-3 fixture layouts, exact reference counts/sites, import spellings, persistence signatures, and singular DTO/media-owner text are implementation-detail source scans. Workspace/package compile and behavior gates retain type/signature correctness; no exact source-site invariant survives without a Rust semantic index."
     },
     {
       "id": "SC-000622",
@@ -9145,10 +9096,8 @@
      "authorityHash": "b16323ebb86c6491007a8250b94e45e02045dcec311146e0d63d34d386d36a9b",
      "lineage": [],
       "invariant": "Telegram boundary rejects legacy seams and duplicate Telegram owners across the complete Rust perimeter.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-core-error-seam-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Historical Checkpoint 1-3 fixture layouts, exact reference counts/sites, import spellings, persistence signatures, and singular DTO/media-owner text are implementation-detail source scans. Workspace/package compile and behavior gates retain type/signature correctness; no exact source-site invariant survives without a Rust semantic index."
     },
     {
       "id": "SC-000623",
@@ -9165,10 +9114,8 @@
      "authorityHash": "ae65c06d8766e4608fcecf1ec5c71d848bd35bbdb062a090d9236e5c65b65070",
      "lineage": [],
       "invariant": "Telegram boundary rejects mutated persistence signatures, facade allowlist, and import directions.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-core-error-seam-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Historical Checkpoint 1-3 fixture layouts, exact reference counts/sites, import spellings, persistence signatures, and singular DTO/media-owner text are implementation-detail source scans. Workspace/package compile and behavior gates retain type/signature correctness; no exact source-site invariant survives without a Rust semantic index."
     },
     {
       "id": "SC-000624",
@@ -9185,10 +9132,8 @@
      "authorityHash": "f45e98c9517788ebc27bcaff14da2acc59966cafcfd71c0a990ec779e5e8b689",
      "lineage": [],
       "invariant": "Telegram boundary installs the actual Telegram media leaf in the Checkpoint 3 facade fixture.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-core-error-seam-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Historical Checkpoint 1-3 fixture layouts, exact reference counts/sites, import spellings, persistence signatures, and singular DTO/media-owner text are implementation-detail source scans. Workspace/package compile and behavior gates retain type/signature correctness; no exact source-site invariant survives without a Rust semantic index."
     },
     {
       "id": "SC-000625",
@@ -9205,10 +9150,8 @@
      "authorityHash": "b4efb2eaeab6e845c63e5280316855075b1d7833191722aeaf3f7bd97064351c",
      "lineage": [],
       "invariant": "Telegram boundary removes legacy seams and keeps singular Telegram DTO/media owners.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-core-error-seam-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Historical Checkpoint 1-3 fixture layouts, exact reference counts/sites, import spellings, persistence signatures, and singular DTO/media-owner text are implementation-detail source scans. Workspace/package compile and behavior gates retain type/signature correctness; no exact source-site invariant survives without a Rust semantic index."
     },
     {
       "id": "SC-000626",
@@ -9225,10 +9168,8 @@
      "authorityHash": "a047b656bbf2d15d2845b235ebc046bd8cc2ad89d0b20625c6cfc44de9908a7a",
      "lineage": [],
       "invariant": "Telegram boundary pins exact Checkpoint 3 persistence, facade, and import surfaces.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-core-error-seam-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Historical Checkpoint 1-3 fixture layouts, exact reference counts/sites, import spellings, persistence signatures, and singular DTO/media-owner text are implementation-detail source scans. Workspace/package compile and behavior gates retain type/signature correctness; no exact source-site invariant survives without a Rust semantic index."
     },
     {
       "id": "SC-000627",
@@ -9245,9 +9186,10 @@
      "authorityHash": "a047b656bbf2d15d2845b235ebc046bd8cc2ad89d0b20625c6cfc44de9908a7a",
      "lineage": [],
       "invariant": "Telegram boundary isolates the opaque Telegram session codec from the app adapter.",
-      "disposition": "architecture",
+      "disposition": "behavior",
       "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
+        "test:cargo:extractum-telegram::session::tests::saving_session_writes_encrypted_envelope_not_plaintext",
+        "test:cargo:extractum-telegram::session::tests::encrypted_session_load_round_trips"
       ]
     },
     {
@@ -9265,10 +9207,8 @@
      "authorityHash": "a047b656bbf2d15d2845b235ebc046bd8cc2ad89d0b20625c6cfc44de9908a7a",
      "lineage": [],
       "invariant": "Telegram boundary keeps the plaintext Telegram credential row out of Debug.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Exact absence of a Debug derive on one private credential row is not truthfully enforceable by current Cargo metadata or runtime tests. Secret-store migration and encrypted-envelope tests cover the observable secret-handling contract."
     },
     {
       "id": "SC-000629",
@@ -9285,9 +9225,11 @@
      "authorityHash": "a047b656bbf2d15d2845b235ebc046bd8cc2ad89d0b20625c6cfc44de9908a7a",
      "lineage": [],
       "invariant": "Telegram boundary isolates the opaque Telegram runtime and its security boundaries.",
-      "disposition": "architecture",
+      "disposition": "behavior",
       "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
+        "test:cargo:extractum-telegram::session::tests::saving_session_writes_encrypted_envelope_not_plaintext",
+        "test:cargo:extractum-telegram::session::tests::encrypted_session_load_round_trips",
+        "test:cargo:extractum-telegram::runtime::tests::successful_sign_in_serializes_clear_then_returns_session_and_clears_attempt"
       ]
     },
     {
@@ -9324,9 +9266,11 @@
      "authorityHash": "ae65c06d8766e4608fcecf1ec5c71d848bd35bbdb062a090d9236e5c65b65070",
      "lineage": [],
       "invariant": "Telegram boundary prevents Checkpoint 5 runtime mutations from exposing sensitive state.",
-      "disposition": "architecture",
+      "disposition": "behavior",
       "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
+        "test:cargo:extractum-telegram::session::tests::saving_session_writes_encrypted_envelope_not_plaintext",
+        "test:cargo:extractum-telegram::session::tests::encrypted_session_load_round_trips",
+        "test:cargo:extractum-telegram::runtime::tests::successful_sign_in_serializes_clear_then_returns_session_and_clears_attempt"
       ]
     },
     {
@@ -9348,9 +9292,11 @@
      "authorityHash": "4563fc39dbb81a8ccc45cec2d3f58e5b8013112cd7042403d0ad49e636b4ff1a",
      "lineage": [],
       "invariant": "Encrypted Telegram session envelopes remain owned by the codec.",
-      "disposition": "architecture",
+      "disposition": "behavior",
       "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
+        "test:cargo:extractum-telegram::session::tests::saving_session_writes_encrypted_envelope_not_plaintext",
+        "test:cargo:extractum-telegram::session::tests::encrypted_session_load_round_trips",
+        "test:cargo:extractum-telegram::session::tests::encrypted_session_error_contract_is_exact"
       ]
     },
     {
@@ -9375,10 +9321,8 @@
      "authorityHash": "8a15f5cd2d8134f7bcc9acf88368a79655b09868243c64680fbf79d78cff7420",
      "lineage": [],
       "invariant": "No alternate Telegram wrapper conversion exposes secret material.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "No alternate wrapper conversion is a whole-Rust-source negative scan. The public encrypted session behavior is covered by SC-000627 and SC-000629 through SC-000631; retaining the negative source scan would require the rejected parser."
     },
     {
       "id": "SC-000633",
@@ -9395,10 +9339,8 @@
      "authorityHash": "8a15f5cd2d8134f7bcc9acf88368a79655b09868243c64680fbf79d78cff7420",
      "lineage": [],
       "invariant": "Telegram boundary rejects Checkpoint 4 cfg-order production accessor after the test module.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "This is a mutation test for the legacy scanner itself: cfg ordering, impl headers, const generics, raw identifiers, aliases, nested attributes/variants, or tokenizer masking. It does not execute production behavior and must not be recreated in the replacement infrastructure."
     },
     {
       "id": "SC-000634",
@@ -9415,10 +9357,8 @@
      "authorityHash": "5135051c5d0db698e306c40448676540f0edb008a1cb233ad7d856feeae15182",
      "lineage": [],
       "invariant": "Telegram boundary rejects Checkpoint 4 adapter cfg-order production raw signature after the test module.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "This is a mutation test for the legacy scanner itself: cfg ordering, impl headers, const generics, raw identifiers, aliases, nested attributes/variants, or tokenizer masking. It does not execute production behavior and must not be recreated in the replacement infrastructure."
     },
     {
       "id": "SC-000635",
@@ -9435,10 +9375,8 @@
      "authorityHash": "8a15f5cd2d8134f7bcc9acf88368a79655b09868243c64680fbf79d78cff7420",
      "lineage": [],
       "invariant": "Telegram boundary excludes Checkpoint 4 cfg-order standalone test-only impl methods.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "This is a mutation test for the legacy scanner itself: cfg ordering, impl headers, const generics, raw identifiers, aliases, nested attributes/variants, or tokenizer masking. It does not execute production behavior and must not be recreated in the replacement infrastructure."
     },
     {
       "id": "SC-000636",
@@ -9455,10 +9393,8 @@
      "authorityHash": "8a15f5cd2d8134f7bcc9acf88368a79655b09868243c64680fbf79d78cff7420",
      "lineage": [],
       "invariant": "Telegram boundary excludes Checkpoint 4 cfg-order array-signature test-only items.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "This is a mutation test for the legacy scanner itself: cfg ordering, impl headers, const generics, raw identifiers, aliases, nested attributes/variants, or tokenizer masking. It does not execute production behavior and must not be recreated in the replacement infrastructure."
     },
     {
       "id": "SC-000637",
@@ -9475,10 +9411,8 @@
      "authorityHash": "8a15f5cd2d8134f7bcc9acf88368a79655b09868243c64680fbf79d78cff7420",
      "lineage": [],
       "invariant": "Telegram boundary excludes Checkpoint 4 cfg-order braced-const-generic test-only items.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "This is a mutation test for the legacy scanner itself: cfg ordering, impl headers, const generics, raw identifiers, aliases, nested attributes/variants, or tokenizer masking. It does not execute production behavior and must not be recreated in the replacement infrastructure."
     },
     {
       "id": "SC-000638",
@@ -9495,10 +9429,8 @@
      "authorityHash": "8a15f5cd2d8134f7bcc9acf88368a79655b09868243c64680fbf79d78cff7420",
      "lineage": [],
       "invariant": "Telegram boundary rejects Checkpoint 4 cfg-order production impl after a test-only comparison.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "This is a mutation test for the legacy scanner itself: cfg ordering, impl headers, const generics, raw identifiers, aliases, nested attributes/variants, or tokenizer masking. It does not execute production behavior and must not be recreated in the replacement infrastructure."
     },
     {
       "id": "SC-000639",
@@ -9515,10 +9447,8 @@
      "authorityHash": "8a15f5cd2d8134f7bcc9acf88368a79655b09868243c64680fbf79d78cff7420",
      "lineage": [],
       "invariant": "Telegram boundary rejects Checkpoint 4 production inherent impl with a braced const header.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "This is a mutation test for the legacy scanner itself: cfg ordering, impl headers, const generics, raw identifiers, aliases, nested attributes/variants, or tokenizer masking. It does not execute production behavior and must not be recreated in the replacement infrastructure."
     },
     {
       "id": "SC-000640",
@@ -9535,10 +9465,8 @@
      "authorityHash": "8a15f5cd2d8134f7bcc9acf88368a79655b09868243c64680fbf79d78cff7420",
      "lineage": [],
       "invariant": "Telegram boundary rejects Checkpoint 4 production trait impl with a braced const header.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "This is a mutation test for the legacy scanner itself: cfg ordering, impl headers, const generics, raw identifiers, aliases, nested attributes/variants, or tokenizer masking. It does not execute production behavior and must not be recreated in the replacement infrastructure."
     },
     {
       "id": "SC-000641",
@@ -9555,10 +9483,8 @@
      "authorityHash": "8a15f5cd2d8134f7bcc9acf88368a79655b09868243c64680fbf79d78cff7420",
      "lineage": [],
       "invariant": "Telegram boundary rejects Checkpoint 4 production generic visible methods.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "This is a mutation test for the legacy scanner itself: cfg ordering, impl headers, const generics, raw identifiers, aliases, nested attributes/variants, or tokenizer masking. It does not execute production behavior and must not be recreated in the replacement infrastructure."
     },
     {
       "id": "SC-000642",
@@ -9575,10 +9501,8 @@
      "authorityHash": "8a15f5cd2d8134f7bcc9acf88368a79655b09868243c64680fbf79d78cff7420",
      "lineage": [],
       "invariant": "Telegram boundary rejects Checkpoint 4 production raw-identifier wrapper impls.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "This is a mutation test for the legacy scanner itself: cfg ordering, impl headers, const generics, raw identifiers, aliases, nested attributes/variants, or tokenizer masking. It does not execute production behavior and must not be recreated in the replacement infrastructure."
     },
     {
       "id": "SC-000643",
@@ -9595,10 +9519,8 @@
      "authorityHash": "4f74e3f8a16fd3681ea98b0887b2fc86851d84f767ae8d7bc60ef0df288c498a",
      "lineage": [],
       "invariant": "Telegram boundary rejects Checkpoint 4 production cross-module wrapper impls.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "This is a mutation test for the legacy scanner itself: cfg ordering, impl headers, const generics, raw identifiers, aliases, nested attributes/variants, or tokenizer masking. It does not execute production behavior and must not be recreated in the replacement infrastructure."
     },
     {
       "id": "SC-000644",
@@ -9616,10 +9538,8 @@
      "authorityHash": "4f74e3f8a16fd3681ea98b0887b2fc86851d84f767ae8d7bc60ef0df288c498a",
      "lineage": [],
       "invariant": "Telegram boundary rejects Checkpoint 4 production type alias wrapper impls.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "This is a mutation test for the legacy scanner itself: cfg ordering, impl headers, const generics, raw identifiers, aliases, nested attributes/variants, or tokenizer masking. It does not execute production behavior and must not be recreated in the replacement infrastructure."
     },
     {
       "id": "SC-000645",
@@ -9636,10 +9556,8 @@
      "authorityHash": "4f74e3f8a16fd3681ea98b0887b2fc86851d84f767ae8d7bc60ef0df288c498a",
      "lineage": [],
       "invariant": "Telegram boundary rejects Checkpoint 4 production chained wrapper aliases.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "This is a mutation test for the legacy scanner itself: cfg ordering, impl headers, const generics, raw identifiers, aliases, nested attributes/variants, or tokenizer masking. It does not execute production behavior and must not be recreated in the replacement infrastructure."
     },
     {
       "id": "SC-000646",
@@ -9656,10 +9574,8 @@
      "authorityHash": "8a15f5cd2d8134f7bcc9acf88368a79655b09868243c64680fbf79d78cff7420",
      "lineage": [],
       "invariant": "Telegram boundary rejects Checkpoint 4 nested cfg(test) enum variant masking.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-sensitive-api-visibility-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "This is a mutation test for the legacy scanner itself: cfg ordering, impl headers, const generics, raw identifiers, aliases, nested attributes/variants, or tokenizer masking. It does not execute production behavior and must not be recreated in the replacement infrastructure."
     },
     {
       "id": "SC-000647",
@@ -9676,10 +9592,8 @@
      "authorityHash": "66349753dea2791fdc76e49671460715244bc0152fb0a12316d3d2f354a2d396",
      "lineage": [],
       "invariant": "Telegram boundary rejects moving a facade reference while preserving aggregate counts.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-core-error-seam-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Exact semantic facade reference-site placement/count is unavailable without live Rust name resolution; aggregate/site-preserving mutation coverage belongs to the retired scanner."
     },
     {
       "id": "SC-000648",
@@ -9766,23 +9680,12 @@
         {
           "assertionOrdinals": [
             15,
-            16
-          ],
-          "invariant": "The application Rust perimeter retains the Telegram facade import boundary.",
-          "disposition": "architecture",
-          "replacementIds": [
-            "rule:telegram-app-facade-import-boundary"
-          ]
-        },
-        {
-          "assertionOrdinals": [
+            16,
             17
           ],
-          "invariant": "Telegram crate extraction retains its future-owner boundary.",
-          "disposition": "architecture",
-          "replacementIds": [
-            "rule:telegram-crate-extraction-boundary"
-          ]
+          "invariant": "Absence of command adapters, wrapper calls, and dependency symbols from the single facade file is terminal source shape.",
+          "disposition": "delete",
+          "deletionReason": "Absence of command adapters, wrapper calls, and dependency symbols from the single facade file is terminal source shape. Command inventory is covered by ordinal 2/5 replacements, and dependency ownership by SC-000656."
         }
       ]
     },
@@ -9960,10 +9863,8 @@
             11
           ],
           "invariant": "Takeout crate extraction retains its required layout and abstraction boundary.",
-          "disposition": "architecture",
-          "replacementIds": [
-            "rule:telegram-crate-extraction-boundary"
-          ]
+          "disposition": "delete",
+          "deletionReason": "Checkpoint-relative path relocation and absence of a private provider/remote abstraction are transitional source layout, while ordinals 3-9 already exercise pagination, lifecycle, and peer identity through direct Cargo tests."
         },
         {
           "assertionOrdinals": [
@@ -10052,10 +9953,8 @@
      "authorityHash": "d1d6a9895957a6e59693190ba7ce619c5c4b69cf9212a277c5d6d581ae2fc827",
      "lineage": [],
       "invariant": "Telegram boundary derives the complete extracted layout before terminal status and rejects every partial layout.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-crate-extraction-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "The partial-layout matrix is migration history. Terminal crate compilation and exact Cargo test identity ownership replace the useful end-state evidence; partial intermediate trees must not remain a permanent gate."
     },
     {
       "id": "SC-000654",
@@ -10086,10 +9985,8 @@
      "authorityHash": "6f37cd4614afce0ab4790f9f41db72a00128b194155ad7dd0a612a89774ac99a",
      "lineage": [],
       "invariant": "Telegram boundary scans the complete app Rust perimeter and permits only the Telegram facade.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-app-facade-import-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Exact app-file import/reference perimeter and the two-occurrence facade count cannot be proven by Cargo metadata. The long-lived package edge/no-direct-Grammers portion is enforced by SC-000656; exact facade path/count is intentionally retired rather than approximated."
     },
     {
       "id": "SC-000656",
@@ -10126,10 +10023,8 @@
      "authorityHash": "6f37cd4614afce0ab4790f9f41db72a00128b194155ad7dd0a612a89774ac99a",
      "lineage": [],
       "invariant": "Telegram boundary allows exactly two feature-gated fixture names and no producer test consumer.",
-      "disposition": "architecture",
-      "replacementIds": [
-        "rule:telegram-test-support-feature-boundary"
-      ]
+      "disposition": "delete",
+      "deletionReason": "Cargo metadata's feature and normal/dev-edge facts remain enforced by SC-000654. Exact fixture item names, aliases, cfg placement, visibility, and absence of producer-side consumers require a Rust item/reference parser and are retired."
     },
     {
       "id": "SC-000658",
@@ -10146,9 +10041,9 @@
      "authorityHash": "b32067ceeddc85bd33c3e08c7f3aa7e91c956cd61c72c1e0f8b6097e36786c57",
      "lineage": [],
       "invariant": "Telegram boundary moves all 71 future-owner identities exactly once.",
-      "disposition": "architecture",
+      "disposition": "tool_owned",
       "replacementIds": [
-        "rule:telegram-crate-extraction-boundary"
+        "tool:telegram-cargo-test-identity-ownership"
       ]
     },
     {

@@ -86,6 +86,26 @@ function ledgerReplacementIds(ledger) {
   ]);
 }
 
+export function collectTrackedTestSources({ root, tracked, readSource = readFileSync }) {
+  const tests = [];
+  for (const item of tracked.filter((candidate) => candidate.endsWith(".test.ts"))) {
+    try {
+      tests.push({ path: item, source: readSource(path.join(root, item), "utf8") });
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
+    }
+  }
+  return tests;
+}
+
+export function createLedgerLiveCensus({ census, runnerResult }) {
+  return {
+    vitestOwners: census.vitestOwners,
+    vitestFiles: runnerResult?.vitestFiles ?? {},
+  };
+}
+
 export function collectTelegramCargoReplacementEvidence({ ledger, authority, verifySteps = [], runCargoList }) {
   const referenced = new Set(ledgerReplacementIds(ledger));
   const packages = new Set();
@@ -126,7 +146,7 @@ export function collectTelegramCargoReplacementEvidence({ ledger, authority, ver
   return { issues, listResults, resolvedReplacementIds };
 }
 
-function validateLiveSourceContractLedger(root, ledger) {
+function validateLiveSourceContractLedger(root, ledger, liveCensus) {
   const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: root, encoding: "utf8" })
     .split("\0").filter(Boolean).map(normalizePath);
   const ignored = execFileSync("git", ["ls-files", "--others", "--ignored", "--exclude-standard", "-z"], {
@@ -134,9 +154,7 @@ function validateLiveSourceContractLedger(root, ledger) {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   }).split("\0").filter(Boolean).map(normalizePath);
-  const tests = tracked
-    .filter((item) => item.endsWith(".test.ts"))
-    .map((item) => ({ path: item, source: readFileSync(path.join(root, item), "utf8") }));
+  const tests = collectTrackedTestSources({ root, tracked });
   const runnerTitlesByPath = {};
   for (const row of ledger.rows ?? []) {
     if (!row?.manual?.runnerTitles) continue;
@@ -189,6 +207,7 @@ function validateLiveSourceContractLedger(root, ledger) {
     declarationInventory,
     sourceReaders,
     runnerTitlesByPath,
+    liveCensus,
     verifySteps,
     resolvedReplacementIds,
   });
@@ -207,15 +226,24 @@ export async function validateTestingTransition({ root = repoRoot, stdout = proc
     return { exitCode: 1 };
   }
   const schemaIssues = validateCensusSchema(census);
+  let liveRunnerCensus;
   return runTransitionValidation({
     repoRoot: root,
     stdout,
     stderr,
     checks: [
-      async () => schemaIssues.length ? schemaIssues : validateLiveRunnerCensus(root, census),
+      async () => {
+        if (schemaIssues.length) return schemaIssues;
+        liveRunnerCensus = await validateLiveRunnerCensus(root, census);
+        return liveRunnerCensus;
+      },
       async () => {
         try {
-          return validateLiveSourceContractLedger(root, loadSourceContractLedger(root));
+          return validateLiveSourceContractLedger(
+            root,
+            loadSourceContractLedger(root),
+            createLedgerLiveCensus({ census, runnerResult: liveRunnerCensus }),
+          );
         } catch (error) {
           return [`unable to load or validate source-contract ledger: ${error.message}`];
         }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { expect, it } from "vitest";
 
 import {
   phase8BCheckpointNumber,
@@ -8,8 +8,7 @@ import {
   type TelegramLifecycleSource,
 } from "./telegram-contract-paths";
 
-describe("Telegram lifecycle contract paths", () => {
-  it("recognizes the retained Phase 8 lifecycle vocabulary and paths", () => {
+it("recognizes the retained Phase 8 lifecycle vocabulary and paths", () => {
     expect([
       phase8BCheckpointNumber("8b-checkpoint-1"),
       phase8BCheckpointNumber("8b-checkpoint-8"),
@@ -43,5 +42,4 @@ describe("Telegram lifecycle contract paths", () => {
       { ...extracted, stagedPath: "src-tauri/src/telegram_impl/unknown.rs" },
       "8c-extracted",
     )).toThrow(/Unknown Phase 8C staged owner path/);
-  });
 });

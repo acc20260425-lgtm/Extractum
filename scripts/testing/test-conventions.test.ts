@@ -168,7 +168,13 @@ describe("test conventions", () => {
     ]);
     expect(typeof createRepositoryIndex).toBe("function");
     expect(typeof evaluateRule).toBe("function");
-    expect(registeredRuleIds).toHaveLength(2);
+    expect(registeredRuleIds).toEqual([
+      "rule:analysis-source-reader-surface-composition",
+      "rule:telegram-crate-dependency-ownership",
+      "rule:telegram-crate-manifest-boundary",
+      "rule:telegram-phase-8b-authority-integrity",
+      "rule:telegram-repository-path-safety",
+    ]);
 
     expect(directTextReaderViolations({
       "/src/lib/unapproved.test.ts": 'import productionSource from "./production.ts?raw";\nexpect(productionSource).toBeDefined();',

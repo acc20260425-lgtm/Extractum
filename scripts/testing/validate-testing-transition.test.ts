@@ -22,6 +22,8 @@ import {
   validateRunnerCensus,
 } from "./testing-transition.mjs";
 import {
+  createLedgerLiveCensus,
+  collectTrackedTestSources,
   collectTelegramCargoReplacementEvidence,
   evaluateTelegramCargoTestIdentityOwnership,
 } from "../validate-testing-transition.mjs";
@@ -230,6 +232,38 @@ describe("Telegram Cargo test identity ownership", () => {
       resolvedReplacementIds: new Set(["tool:telegram-cargo-test-identity-ownership"]),
     }).rows).toEqual([{ id: "SC-000001", state: "closed" }]);
     expect(validateSourceContractLedger(context).rows).toEqual([{ id: "SC-000001", state: "open" }]);
+  });
+});
+
+describe("live source-contract test discovery", () => {
+  it("skips a tracked test deleted by the current cutover", () => {
+    const readSource = vi.fn((candidate: string) => {
+      if (candidate.endsWith("deleted.test.ts")) {
+        const error = new Error("missing") as NodeJS.ErrnoException;
+        error.code = "ENOENT";
+        throw error;
+      }
+      return "test source";
+    });
+
+    expect(collectTrackedTestSources({
+      root,
+      tracked: ["src/current.test.ts", "src/deleted.test.ts", "src/not-a-test.ts"],
+      readSource,
+    })).toEqual([{ path: "src/current.test.ts", source: "test source" }]);
+  });
+
+  it("bridges collected Vitest ownership into replacement evidence", () => {
+    expect(createLedgerLiveCensus({
+      census,
+      runnerResult: {
+        vitestFiles: { "vitest:root": ["src/replacement.test.ts"] },
+        playwrightFiles: { "playwright:adapter": ["research/adapter/tests/e2e.spec.ts"] },
+      },
+    })).toEqual({
+      vitestOwners: census.vitestOwners,
+      vitestFiles: { "vitest:root": ["src/replacement.test.ts"] },
+    });
   });
 });
 
