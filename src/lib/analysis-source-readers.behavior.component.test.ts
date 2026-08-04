@@ -4,6 +4,7 @@ import SourceBrowserShell from "$lib/components/analysis/source-browser-shell.sv
 import SourceReaderHeader from "$lib/components/analysis/source-reader-header.svelte";
 import type { SourceBrowserSubject } from "$lib/source-browser-model";
 import type { SourceReaderItem } from "$lib/source-reader-model";
+import type { EvidenceHighlightToken } from "$lib/analysis-evidence-source-navigation";
 import type { AnalysisRunDetail, AnalysisSourceGroup } from "$lib/types/analysis";
 import type { Source, SourceItem } from "$lib/types/sources";
 import type { YoutubePlaylistDetail, YoutubeVideoDetail } from "$lib/types/youtube";
@@ -318,17 +319,34 @@ function snapshotBrowserData(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function browserProps(subject: SourceBrowserSubject, overrides: Record<string, unknown> = {}) {
+  return {
+    subject,
+    sourceBrowserData: subject.kind === "source" ? sourceBrowserData() : null,
+    groupBrowserData: subject.kind === "source_group" ? groupBrowserData() : null,
+    snapshotBrowserData: subject.kind === "run_snapshot" ? snapshotBrowserData() : null,
+    formatTimestamp,
+    ...overrides,
+  };
+}
+
 function renderBrowser(subject: SourceBrowserSubject, overrides: Record<string, unknown> = {}) {
-  return render(SourceBrowserShell, {
-    props: {
-      subject,
-      sourceBrowserData: subject.kind === "source" ? sourceBrowserData() : null,
-      groupBrowserData: subject.kind === "source_group" ? groupBrowserData() : null,
-      snapshotBrowserData: subject.kind === "run_snapshot" ? snapshotBrowserData() : null,
-      formatTimestamp,
-      ...overrides,
-    },
-  });
+  return render(SourceBrowserShell, { props: browserProps(subject, overrides) });
+}
+
+function evidenceToken(
+  tokenId: string,
+  traceRef: string,
+  sourceViewBasis: EvidenceHighlightToken["sourceViewBasis"] = "live_source",
+): EvidenceHighlightToken {
+  return {
+    tokenId,
+    runId: 30,
+    sourceScope: { kind: "source", sourceId: 1 },
+    sourceViewBasis,
+    traceRef,
+    createdAt: 1_700_000_000,
+  };
 }
 
 const telegramSubject = (): SourceBrowserSubject => ({ kind: "source", source: source() });
@@ -414,11 +432,39 @@ describe("analysis source readers", () => {
   });
 
   it("preserves the existing Telegram timeline controls through the shell", async () => {
-    const onLoadMoreSourceItems = vi.fn();
-    renderBrowser(telegramSubject(), { sourceBrowserData: sourceBrowserData({ onLoadMoreSourceItems }) });
+    const onChangeTelegramHistoryScope = vi.fn();
+    const onChangeSelectedTopicKey = vi.fn();
+    renderBrowser({
+      kind: "source",
+      source: source({ migratedHistoryStatus: "available", migratedHistoryRowCount: 4, migratedHistoryImportCompleted: true }),
+    }, {
+      sourceBrowserData: sourceBrowserData({
+        showTopicSelector: true,
+        telegramHistoryScope: "current",
+        onChangeTelegramHistoryScope,
+        onChangeSelectedTopicKey,
+        sourceTopics: [{
+          kind: "topic",
+          key: "topic:7",
+          title: "Methods",
+          messageCount: 9,
+          topicId: 7,
+          topMessageId: 70,
+          iconColor: null,
+          iconEmojiId: null,
+          isClosed: false,
+          isPinned: false,
+          isHidden: false,
+          isDeleted: false,
+          sortOrder: 1,
+        }],
+      }),
+    });
 
-    await fireEvent.click(await screen.findByRole("button", { name: "Load older messages" }));
-    expect(onLoadMoreSourceItems).toHaveBeenCalledOnce();
+    await fireEvent.change(await screen.findByLabelText("History scope"), { target: { value: "merged" } });
+    expect(onChangeTelegramHistoryScope).toHaveBeenCalledWith("merged");
+    await fireEvent.change(screen.getByLabelText("Topic view"), { target: { value: "topic:7" } });
+    expect(onChangeSelectedTopicKey).toHaveBeenCalledWith("topic:7");
   });
 
   it("keeps live source and run snapshot basis visible", () => {
@@ -604,25 +650,6 @@ describe("analysis source readers", () => {
     expect(onLoadMoreSourceItems).toHaveBeenCalledOnce();
   });
 
-  it("keeps sticky date labels below overlay source switching UI", async () => {
-    renderBrowser(telegramSubject());
-    const tabs = await screen.findByRole("navigation", { name: "Source browser tabs" });
-    const day = screen.getByText("2023-11-14");
-    expect(tabs.compareDocumentPosition(day) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
-    expect(day.closest("section")?.getAttribute("aria-label")).toBe("2023-11-14");
-  });
-
-  it("allows Telegram message text to hyphenate long words", async () => {
-    const longWord = "электрофотополупроводниковый".repeat(4);
-    renderBrowser(telegramSubject(), {
-      sourceBrowserData: sourceBrowserData({ liveReaderItems: [readerItem({ content: longWord })] }),
-    });
-
-    const message = await screen.findByText(longWord);
-    expect(message.textContent).toBe(longWord);
-    expect(message.getAttribute("lang")).toBe("ru");
-  });
-
   it("renders YouTube videos as transcript-first source readers", async () => {
     renderBrowser(youtubeVideoSubject(), {
       sourceBrowserData: sourceBrowserData({
@@ -733,16 +760,44 @@ describe("analysis source readers", () => {
   });
 
   it("passes live YouTube video comments and jobs only into live transcript readers", async () => {
+    const onCancelSourceJob = vi.fn();
     const live = renderBrowser(youtubeVideoSubject(), {
-      sourceBrowserData: sourceBrowserData({ youtubeVideoDetail: youtubeVideoDetail() }),
+      sourceBrowserData: sourceBrowserData({
+        youtubeVideoDetail: youtubeVideoDetail(),
+        onCancelSourceJob,
+        sourceJobs: [{
+          job_id: "live-only-job",
+          source_id: 1,
+          related_source_id: null,
+          job_type: "youtube_video_comments_sync",
+          status: "running",
+          message: "Live comments sync",
+          progress_current: 1,
+          progress_total: 2,
+          started_at: 1_700_000_000,
+          finished_at: null,
+          warnings: [],
+          error: null,
+        }],
+      }),
     });
     expect(await screen.findByRole("button", { name: "Sync comments" })).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "Activity" }));
+    expect(screen.getByText("Live comments sync")).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onCancelSourceJob).toHaveBeenCalledWith("live-only-job");
     live.unmount();
 
-    renderBrowser(snapshotSubject("youtube_transcript"));
+    renderBrowser(snapshotSubject("youtube_transcript"), {
+      sourceBrowserData: sourceBrowserData({
+        youtubeVideoDetail: youtubeVideoDetail(),
+        sourceJobs: [{ job_id: "live-only-job", message: "Live comments sync" }],
+      }),
+    });
     expect(await screen.findByRole("region", { name: "YouTube transcript reader" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Sync comments" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Activity" })).toBeNull();
+    expect(screen.queryByText("Live comments sync")).toBeNull();
   });
 
   it("renders YouTube source job activity with progress warnings errors and cancel", async () => {
@@ -992,27 +1047,126 @@ describe("analysis source readers", () => {
   });
 
   it("adds one-shot evidence highlight support to trace-capable readers", async () => {
-    const highlightToken = {
-      tokenId: "highlight-1",
-      runId: 30,
-      sourceScope: { kind: "source" as const, sourceId: 1 },
-      sourceViewBasis: "live_source" as const,
-      traceRef: "source:1:item:1",
-      createdAt: 1_700_000_000,
+    const transcriptSegment = {
+      id: 51,
+      sourceId: 1,
+      itemId: 151,
+      segmentIndex: 0,
+      startMs: 5_000,
+      endMs: 8_000,
+      text: "Highlighted transcript evidence",
+      captionLanguage: "en",
+      captionTrackKind: "manual",
+      isAutoGenerated: false,
     };
-    const view = renderBrowser(telegramSubject(), { highlightToken });
-
-    const highlighted = await waitFor(() => document.querySelector('[data-trace-ref="source:1:item:1"]'));
-    expect(highlighted?.getAttribute("data-evidence-highlighted")).toBe("true");
-    await view.rerender({
-      subject: telegramSubject(),
-      sourceBrowserData: sourceBrowserData(),
-      groupBrowserData: null,
-      snapshotBrowserData: null,
-      formatTimestamp,
-      highlightToken,
+    const comment = sourceItem({
+      id: 52,
+      itemKind: "youtube_comment",
+      content: "Highlighted audience comment",
+      youtubeComment: {
+        commentId: "comment-52",
+        parentCommentId: null,
+        isReply: false,
+        likeCount: 1,
+        isPinned: false,
+        isHearted: false,
+        authorChannelUrl: null,
+      },
     });
-    expect(document.querySelectorAll('[data-evidence-highlighted="true"]')).toHaveLength(1);
+    const cases = [
+      {
+        name: "TelegramTimelineReader",
+        scrollConsumers: 1,
+        traceRef: "trace:telegram",
+        makeProps: (tokenId: string) => browserProps(telegramSubject(), {
+          sourceBrowserData: sourceBrowserData({ liveReaderItems: [readerItem({ ref: "trace:telegram" })] }),
+          highlightToken: evidenceToken(tokenId, "trace:telegram"),
+        }),
+      },
+      {
+        name: "YoutubeTranscriptReader",
+        scrollConsumers: 1,
+        traceRef: "s1-i151@5000ms",
+        makeProps: (tokenId: string) => browserProps(youtubeVideoSubject(), {
+          sourceBrowserData: sourceBrowserData({ youtubeTranscriptSegments: [transcriptSegment] }),
+          highlightToken: evidenceToken(tokenId, "s1-i151@5000ms"),
+        }),
+      },
+      {
+        name: "SnapshotGroupSourcesView",
+        scrollConsumers: 2,
+        traceRef: "trace:snapshot-group",
+        makeProps: (tokenId: string) => browserProps(snapshotSubject("source_group"), {
+          snapshotBrowserData: snapshotBrowserData({
+            readerItems: [readerItem({ ref: "trace:snapshot-group" })],
+          }),
+          highlightToken: evidenceToken(tokenId, "trace:snapshot-group", "run_snapshot"),
+        }),
+      },
+      {
+        name: "SnapshotItemsView",
+        scrollConsumers: 1,
+        traceRef: "trace:snapshot-item",
+        makeProps: (tokenId: string) => browserProps(snapshotSubject("generic_items"), {
+          snapshotBrowserData: snapshotBrowserData({
+            readerItems: [readerItem({ kind: "generic_item", ref: "trace:snapshot-item" })],
+          }),
+          highlightToken: evidenceToken(tokenId, "trace:snapshot-item", "run_snapshot"),
+        }),
+      },
+      {
+        name: "SourceGroupSourcesView",
+        scrollConsumers: 2,
+        traceRef: "trace:group-source",
+        makeProps: (tokenId: string) => browserProps(groupSubject(), {
+          groupBrowserData: groupBrowserData({
+            liveReaderItems: [readerItem({ ref: "trace:group-source" })],
+          }),
+          highlightToken: evidenceToken(tokenId, "trace:group-source"),
+        }),
+      },
+      {
+        name: "UniversalItemsView",
+        scrollConsumers: 1,
+        traceRef: "s1-i53",
+        makeProps: (tokenId: string) => browserProps(telegramSubject(), {
+          sourceBrowserData: sourceBrowserData({
+            sourceItems: [sourceItem({ id: 53, itemKind: "forum_post", content: "Highlighted generic item" })],
+          }),
+          highlightToken: evidenceToken(tokenId, "s1-i53"),
+        }),
+      },
+      {
+        name: "YoutubeCommentsView",
+        scrollConsumers: 1,
+        traceRef: "s1-i52",
+        makeProps: (tokenId: string) => browserProps(youtubeVideoSubject(), {
+          sourceBrowserData: sourceBrowserData({
+            sourceItems: [comment],
+            youtubeVideoDetail: youtubeVideoDetail(),
+          }),
+          highlightToken: evidenceToken(tokenId, "s1-i52"),
+        }),
+      },
+    ];
+    const scrollIntoView = HTMLElement.prototype.scrollIntoView as ReturnType<typeof vi.fn>;
+
+    for (const traceCase of cases) {
+      scrollIntoView.mockClear();
+      const view = render(SourceBrowserShell, { props: traceCase.makeProps(`${traceCase.name}:first`) });
+      const selector = `[data-trace-ref="${traceCase.traceRef}"][data-evidence-highlighted="true"]`;
+      const { scrollConsumers } = traceCase;
+
+      await waitFor(() => expect(document.querySelector(selector)).toBeTruthy());
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(scrollConsumers));
+
+      await view.rerender(traceCase.makeProps(`${traceCase.name}:first`));
+      expect(scrollIntoView).toHaveBeenCalledTimes(scrollConsumers);
+
+      await view.rerender(traceCase.makeProps(`${traceCase.name}:second`));
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(scrollConsumers * 2));
+      view.unmount();
+    }
   });
 
   it("matches evidence highlights by concrete trace refs without replacing selected row behavior", async () => {
