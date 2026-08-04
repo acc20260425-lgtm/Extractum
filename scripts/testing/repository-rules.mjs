@@ -7,11 +7,15 @@ const ANALYSIS_SURFACE_PATH = "src/lib/components/analysis/report-source-surface
 const SOURCE_BROWSER_SHELL_PATH = "src/lib/components/analysis/source-browser-shell.svelte";
 const SOURCE_GROUP_SOURCES_PATH = "src/lib/components/analysis/source-group-sources-view.svelte";
 const SOURCE_GROUP_ACTIVITY_PATH = "src/lib/components/analysis/source-group-activity-view.svelte";
+const SOURCE_BROWSER_SHELL_MODULE = "$lib/components/analysis/source-browser-shell.svelte";
+const SOURCE_ACTIVITY_MODULE = "$lib/components/analysis/source-activity-view.svelte";
+const SOURCE_GROUP_ACTIVITY_MODULE = "$lib/components/analysis/source-group-activity-view.svelte";
+const EMPTY_STATE_MODULE = "$lib/components/ui/EmptyState.svelte";
 const CANONICAL_LEAF_PATHS = [
-  ["SourceGroupSourcesView", SOURCE_GROUP_SOURCES_PATH],
-  ["SnapshotGroupSourcesView", "src/lib/components/analysis/snapshot-group-sources-view.svelte"],
-  ["SnapshotItemsView", "src/lib/components/analysis/snapshot-items-view.svelte"],
-  ["RunSnapshotMetadataView", "src/lib/components/analysis/run-snapshot-metadata-view.svelte"],
+  ["SourceGroupSourcesView", SOURCE_GROUP_SOURCES_PATH, "$lib/components/analysis/source-group-sources-view.svelte"],
+  ["SnapshotGroupSourcesView", "src/lib/components/analysis/snapshot-group-sources-view.svelte", "$lib/components/analysis/snapshot-group-sources-view.svelte"],
+  ["SnapshotItemsView", "src/lib/components/analysis/snapshot-items-view.svelte", "$lib/components/analysis/snapshot-items-view.svelte"],
+  ["RunSnapshotMetadataView", "src/lib/components/analysis/run-snapshot-metadata-view.svelte", "$lib/components/analysis/run-snapshot-metadata-view.svelte"],
 ];
 const HIGHLIGHT_STYLE_TARGETS = [
   ["src/lib/components/analysis/telegram-timeline-reader.svelte", "li", "primary", true],
@@ -30,14 +34,14 @@ const GRAMMERS_BASELINE_PATH = "src/lib/telegram-grammers-feature-baseline.json"
 const FROZEN_STAGING_SHA256 = "12e99b10aaaccc471ae4c950b4a3ea0331ae68db45618823ea2aa58bae29d1a9";
 
 const TRANSITIONAL_SOURCE_COMPONENTS = [
-  "RunCompanionTabs",
-  "SourceContextPanel",
-  "SourceGroupReader",
-  "TelegramTimelineReader",
-  "YoutubePlaylistDetail",
-  "YoutubePlaylistReader",
-  "YoutubeSourceDetail",
-  "YoutubeTranscriptReader",
+  ["RunCompanionTabs", "$lib/components/analysis/run-companion-tabs.svelte"],
+  ["SourceContextPanel", "$lib/components/analysis/source-context-panel.svelte"],
+  ["SourceGroupReader", "$lib/components/analysis/source-group-reader.svelte"],
+  ["TelegramTimelineReader", "$lib/components/analysis/telegram-timeline-reader.svelte"],
+  ["YoutubePlaylistDetail", "$lib/components/analysis/youtube-playlist-detail.svelte"],
+  ["YoutubePlaylistReader", "$lib/components/analysis/youtube-playlist-reader.svelte"],
+  ["YoutubeSourceDetail", "$lib/components/analysis/youtube-source-detail.svelte"],
+  ["YoutubeTranscriptReader", "$lib/components/analysis/youtube-transcript-reader.svelte"],
 ];
 
 function functionByName(facts, name) {
@@ -206,14 +210,13 @@ function evaluateTelegramRepositoryPathSafety(index) {
 
 function evaluateAnalysisSourceReaderSurfaceComposition(index) {
   const facts = index.getSvelte(ANALYSIS_SURFACE_PATH);
-  const componentNames = new Set(facts.components.map(({ name }) => name));
   const violations = [];
 
-  if (!componentNames.has("SourceBrowserShell")) {
+  if (!hasComponentFromModule(facts, SOURCE_BROWSER_SHELL_MODULE)) {
     violations.push(`${ANALYSIS_SURFACE_PATH}: SourceBrowserShell must own source browsing`);
   }
-  for (const name of TRANSITIONAL_SOURCE_COMPONENTS) {
-    if (componentNames.has(name)) {
+  for (const [name, moduleSource] of TRANSITIONAL_SOURCE_COMPONENTS) {
+    if (hasComponentFromModule(facts, moduleSource)) {
       violations.push(`${ANALYSIS_SURFACE_PATH}: transitional ${name} composition is forbidden`);
     }
   }
@@ -222,7 +225,7 @@ function evaluateAnalysisSourceReaderSurfaceComposition(index) {
 
 function evaluateAnalysisSourceBrowserExplicitSubjectContract(index) {
   const facts = index.getSvelte(ANALYSIS_SURFACE_PATH);
-  const shells = facts.components.filter(({ name }) => name === "SourceBrowserShell");
+  const shells = componentsFromModule(facts, SOURCE_BROWSER_SHELL_MODULE);
   const violations = [];
   if (!shells.length) {
     return [`${ANALYSIS_SURFACE_PATH}: missing SourceBrowserShell composition`];
@@ -271,17 +274,41 @@ function routeApiImport(source) {
     || source.startsWith("@tauri-apps/api/");
 }
 
+function importedDefaultSource(facts, localName) {
+  const matches = facts.imports.filter(({ bindings }) => bindings.some((binding) =>
+    binding.imported === "default" && binding.local === localName && !binding.typeOnly));
+  return matches.length === 1 ? matches[0].source : undefined;
+}
+
+function componentsFromModule(facts, moduleSource) {
+  return facts.components.filter((component) => importedDefaultSource(facts, component.name) === moduleSource);
+}
+
+function hasComponentFromModule(facts, moduleSource) {
+  return componentsFromModule(facts, moduleSource).length > 0;
+}
+
+function componentHasConsequentIdentifier(component, identifierName) {
+  return component.branches?.some((branch) =>
+    branch.polarity === "consequent" && branch.conditionIdentifiers.includes(identifierName)) ?? false;
+}
+
 function evaluateAnalysisSourceGroupTabLeafBoundary(index) {
   const facts = index.getSvelte(SOURCE_GROUP_SOURCES_PATH);
-  const components = new Set(facts.components.map(({ name }) => name));
   const violations = [];
-  for (const required of ["TelegramTimelineReader", "YoutubeTranscriptReader"]) {
-    if (!components.has(required)) {
+  for (const [required, moduleSource] of [
+    ["TelegramTimelineReader", "$lib/components/analysis/telegram-timeline-reader.svelte"],
+    ["YoutubeTranscriptReader", "$lib/components/analysis/youtube-transcript-reader.svelte"],
+  ]) {
+    if (!hasComponentFromModule(facts, moduleSource)) {
       violations.push(`${SOURCE_GROUP_SOURCES_PATH}: missing leaf reader ${required}`);
     }
   }
-  for (const forbidden of ["SourceBrowserShell", "SourceActivityView"]) {
-    if (components.has(forbidden)) {
+  for (const [forbidden, moduleSource] of [
+    ["SourceBrowserShell", SOURCE_BROWSER_SHELL_MODULE],
+    ["SourceActivityView", SOURCE_ACTIVITY_MODULE],
+  ]) {
+    if (hasComponentFromModule(facts, moduleSource)) {
       violations.push(`${SOURCE_GROUP_SOURCES_PATH}: route-owning ${forbidden} is forbidden`);
     }
   }
@@ -292,24 +319,20 @@ function evaluateAnalysisSourceGroupTabLeafBoundary(index) {
   return violations;
 }
 
-function componentNames(facts) {
-  return new Set(facts.components.map(({ name }) => name));
-}
-
 function evaluateAnalysisSourceBrowserCanonicalComposition(index) {
-  const surfaceComponents = componentNames(index.getSvelte(ANALYSIS_SURFACE_PATH));
-  const shellComponents = componentNames(index.getSvelte(SOURCE_BROWSER_SHELL_PATH));
+  const surface = index.getSvelte(ANALYSIS_SURFACE_PATH);
+  const shell = index.getSvelte(SOURCE_BROWSER_SHELL_PATH);
   const violations = [];
-  if (!surfaceComponents.has("SourceBrowserShell")) {
+  if (!hasComponentFromModule(surface, SOURCE_BROWSER_SHELL_MODULE)) {
     violations.push(`${ANALYSIS_SURFACE_PATH}: missing canonical SourceBrowserShell`);
   }
-  for (const transitional of TRANSITIONAL_SOURCE_COMPONENTS) {
-    if (surfaceComponents.has(transitional)) {
+  for (const [transitional, moduleSource] of TRANSITIONAL_SOURCE_COMPONENTS) {
+    if (hasComponentFromModule(surface, moduleSource)) {
       violations.push(`${ANALYSIS_SURFACE_PATH}: transitional ${transitional} composition is forbidden`);
     }
   }
-  for (const [component, path] of CANONICAL_LEAF_PATHS) {
-    if (!shellComponents.has(component)) {
+  for (const [component, path, moduleSource] of CANONICAL_LEAF_PATHS) {
+    if (!hasComponentFromModule(shell, moduleSource)) {
       violations.push(`${SOURCE_BROWSER_SHELL_PATH}: missing canonical leaf ${component}`);
     }
     const leaf = index.getSvelte(path);
@@ -317,7 +340,7 @@ function evaluateAnalysisSourceBrowserCanonicalComposition(index) {
     if (routeImports.length) {
       violations.push(`${path}: route API imports are forbidden: ${routeImports.sort().join(", ")}`);
     }
-    if (componentNames(leaf).has("SourceBrowserShell")) {
+    if (hasComponentFromModule(leaf, SOURCE_BROWSER_SHELL_MODULE)) {
       violations.push(`${path}: nested SourceBrowserShell is forbidden`);
     }
   }
@@ -325,19 +348,21 @@ function evaluateAnalysisSourceBrowserCanonicalComposition(index) {
 }
 
 function evaluateAnalysisSourceGroupActivityBoundary(index) {
-  const shellComponents = componentNames(index.getSvelte(SOURCE_BROWSER_SHELL_PATH));
+  const shell = index.getSvelte(SOURCE_BROWSER_SHELL_PATH);
   const groupActivity = index.getSvelte(SOURCE_GROUP_ACTIVITY_PATH);
-  const groupComponents = componentNames(groupActivity);
   const violations = [];
-  for (const required of ["SourceGroupActivityView", "SourceActivityView"]) {
-    if (!shellComponents.has(required)) {
-      violations.push(`${SOURCE_BROWSER_SHELL_PATH}: missing ${required} activity branch`);
-    }
+  const groupBranches = componentsFromModule(shell, SOURCE_GROUP_ACTIVITY_MODULE);
+  const sourceBranches = componentsFromModule(shell, SOURCE_ACTIVITY_MODULE);
+  if (!groupBranches.some((component) => componentHasConsequentIdentifier(component, "groupSubject"))) {
+    violations.push(`${SOURCE_BROWSER_SHELL_PATH}: SourceGroupActivityView must be under the groupSubject branch`);
   }
-  if (!groupComponents.has("EmptyState")) {
+  if (!sourceBranches.some((component) => componentHasConsequentIdentifier(component, "sourceSubject"))) {
+    violations.push(`${SOURCE_BROWSER_SHELL_PATH}: SourceActivityView must be under the sourceSubject branch`);
+  }
+  if (!hasComponentFromModule(groupActivity, EMPTY_STATE_MODULE)) {
     violations.push(`${SOURCE_GROUP_ACTIVITY_PATH}: missing group-owned activity leaf`);
   }
-  if (groupComponents.has("SourceActivityView")) {
+  if (hasComponentFromModule(groupActivity, SOURCE_ACTIVITY_MODULE)) {
     violations.push(`${SOURCE_GROUP_ACTIVITY_PATH}: per-source SourceActivityView is forbidden`);
   }
   const routeImports = groupActivity.imports.map(({ source }) => source).filter(routeApiImport);

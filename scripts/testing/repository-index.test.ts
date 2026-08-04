@@ -152,7 +152,12 @@ describe("RepositoryIndex", () => {
     });
 
     expect(index.getSvelte("src/example.svelte").imports).toEqual([
-      { source: "@tauri-apps/api/core" },
+      {
+        source: "@tauri-apps/api/core",
+        bindings: [
+          { imported: "invoke", local: "invoke", typeOnly: false },
+        ],
+      },
     ]);
     expect(index.getSvelte("src/example.svelte").styleRules).toEqual([
       {
@@ -169,6 +174,50 @@ describe("RepositoryIndex", () => {
         declarations: [
           { property: "background", value: "color-mix(in srgb, var(--accent) 8%, transparent)" },
         ],
+      },
+    ]);
+  });
+
+  it("preserves Svelte import aliases and component ancestor branch polarity", () => {
+    const { index } = fixtureIndex({
+      "src/example.svelte": [
+        '<script lang="ts">',
+        '  import CanonicalAlias from "./Canonical.svelte";',
+        '  import { Child as NamedAlias, type Options as LocalOptions } from "./named";',
+        "</script>",
+        "{#if groupSubject}",
+        "  <CanonicalAlias />",
+        "{:else}",
+        "  <NamedAlias />",
+        "{/if}",
+      ].join("\n"),
+    });
+
+    expect(index.getSvelte("src/example.svelte").imports).toEqual([
+      {
+        source: "./Canonical.svelte",
+        bindings: [
+          { imported: "default", local: "CanonicalAlias", typeOnly: false },
+        ],
+      },
+      {
+        source: "./named",
+        bindings: [
+          { imported: "Child", local: "NamedAlias", typeOnly: false },
+          { imported: "Options", local: "LocalOptions", typeOnly: true },
+        ],
+      },
+    ]);
+    expect(index.getSvelte("src/example.svelte").components).toEqual([
+      {
+        name: "CanonicalAlias",
+        attributes: [],
+        branches: [{ conditionIdentifiers: ["groupSubject"], polarity: "consequent" }],
+      },
+      {
+        name: "NamedAlias",
+        attributes: [],
+        branches: [{ conditionIdentifiers: ["groupSubject"], polarity: "alternate" }],
       },
     ]);
   });

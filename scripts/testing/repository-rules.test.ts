@@ -71,7 +71,7 @@ const telegramPathHelper = String.raw`
 
 const explicitSubjectSurface = `
   <script lang="ts">
-    import SourceBrowserShell from "./source-browser-shell.svelte";
+    import SourceBrowserShell from "$lib/components/analysis/source-browser-shell.svelte";
     const source = {};
     const group = {};
     const snapshot = {};
@@ -97,15 +97,15 @@ const evidenceHighlightSources = {
 
 const canonicalCompositionSources = {
   [ANALYSIS_SURFACE_PATH]: `
-    <script lang="ts">import SourceBrowserShell from "./source-browser-shell.svelte";</script>
+    <script lang="ts">import SourceBrowserShell from "$lib/components/analysis/source-browser-shell.svelte";</script>
     <SourceBrowserShell />
   `,
   [SOURCE_BROWSER_SHELL_PATH]: `
     <script lang="ts">
-      import SourceGroupSourcesView from "./source-group-sources-view.svelte";
-      import SnapshotGroupSourcesView from "./snapshot-group-sources-view.svelte";
-      import SnapshotItemsView from "./snapshot-items-view.svelte";
-      import RunSnapshotMetadataView from "./run-snapshot-metadata-view.svelte";
+      import SourceGroupSourcesView from "$lib/components/analysis/source-group-sources-view.svelte";
+      import SnapshotGroupSourcesView from "$lib/components/analysis/snapshot-group-sources-view.svelte";
+      import SnapshotItemsView from "$lib/components/analysis/snapshot-items-view.svelte";
+      import RunSnapshotMetadataView from "$lib/components/analysis/run-snapshot-metadata-view.svelte";
     </script>
     <SourceGroupSourcesView />
     <SnapshotGroupSourcesView />
@@ -191,7 +191,7 @@ const ruleFixtures: Record<string, RuleFixture> = {
     positive: {
       [ANALYSIS_SURFACE_PATH]: `
         <script lang="ts">
-          import SourceBrowserShell from "./source-browser-shell.svelte";
+          import SourceBrowserShell from "$lib/components/analysis/source-browser-shell.svelte";
         </script>
         <SourceBrowserShell />
       `,
@@ -200,9 +200,15 @@ const ruleFixtures: Record<string, RuleFixture> = {
       "restores a transitional source reader": {
         [ANALYSIS_SURFACE_PATH]: `
           <script lang="ts">
-            import TelegramTimelineReader from "./telegram-timeline-reader.svelte";
+            import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
           </script>
           <TelegramTimelineReader />
+        `,
+      },
+      "aliases an unrelated module as SourceBrowserShell": {
+        [ANALYSIS_SURFACE_PATH]: `
+          <script lang="ts">import SourceBrowserShell from "$lib/components/ui/Button.svelte";</script>
+          <SourceBrowserShell />
         `,
       },
     },
@@ -214,6 +220,12 @@ const ruleFixtures: Record<string, RuleFixture> = {
         [ANALYSIS_SURFACE_PATH]: explicitSubjectSurface.replace(
           "<SourceBrowserShell subject={group} />",
           "<SourceBrowserShell source={group} />",
+        ),
+      },
+      "aliases an unrelated module as SourceBrowserShell": {
+        [ANALYSIS_SURFACE_PATH]: explicitSubjectSurface.replace(
+          "$lib/components/analysis/source-browser-shell.svelte",
+          "$lib/components/ui/Button.svelte",
         ),
       },
     },
@@ -231,8 +243,8 @@ const ruleFixtures: Record<string, RuleFixture> = {
     positive: {
       [SOURCE_GROUP_SOURCES_PATH]: `
         <script lang="ts">
-          import TelegramTimelineReader from "./telegram-timeline-reader.svelte";
-          import YoutubeTranscriptReader from "./youtube-transcript-reader.svelte";
+          import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
+          import YoutubeTranscriptReader from "$lib/components/analysis/youtube-transcript-reader.svelte";
         </script>
         <TelegramTimelineReader />
         <YoutubeTranscriptReader />
@@ -241,7 +253,7 @@ const ruleFixtures: Record<string, RuleFixture> = {
     mutations: {
       "nests the route-owning source browser shell": {
         [SOURCE_GROUP_SOURCES_PATH]: `
-          <script lang="ts">import SourceBrowserShell from "./source-browser-shell.svelte";</script>
+          <script lang="ts">import SourceBrowserShell from "$lib/components/analysis/source-browser-shell.svelte";</script>
           <SourceBrowserShell />
         `,
       },
@@ -249,8 +261,18 @@ const ruleFixtures: Record<string, RuleFixture> = {
         [SOURCE_GROUP_SOURCES_PATH]: `
           <script lang="ts">
             import { invoke } from "@tauri-apps/api/core";
-            import TelegramTimelineReader from "./telegram-timeline-reader.svelte";
-            import YoutubeTranscriptReader from "./youtube-transcript-reader.svelte";
+            import TelegramTimelineReader from "$lib/components/analysis/telegram-timeline-reader.svelte";
+            import YoutubeTranscriptReader from "$lib/components/analysis/youtube-transcript-reader.svelte";
+          </script>
+          <TelegramTimelineReader />
+          <YoutubeTranscriptReader />
+        `,
+      },
+      "aliases the Telegram leaf to the YouTube module": {
+        [SOURCE_GROUP_SOURCES_PATH]: `
+          <script lang="ts">
+            import TelegramTimelineReader from "$lib/components/analysis/youtube-transcript-reader.svelte";
+            import YoutubeTranscriptReader from "$lib/components/analysis/youtube-transcript-reader.svelte";
           </script>
           <TelegramTimelineReader />
           <YoutubeTranscriptReader />
@@ -273,20 +295,27 @@ const ruleFixtures: Record<string, RuleFixture> = {
           <section>Snapshot items</section>
         `,
       },
+      "aliases a canonical leaf to the wrong module": {
+        ...canonicalCompositionSources,
+        [SOURCE_BROWSER_SHELL_PATH]: canonicalCompositionSources[SOURCE_BROWSER_SHELL_PATH].replace(
+          "$lib/components/analysis/source-group-sources-view.svelte",
+          "$lib/components/analysis/source-group-metadata-view.svelte",
+        ),
+      },
     },
   },
   "rule:analysis-source-group-activity-boundary": {
     positive: {
       [SOURCE_BROWSER_SHELL_PATH]: `
         <script lang="ts">
-          import SourceGroupActivityView from "./source-group-activity-view.svelte";
-          import SourceActivityView from "./source-activity-view.svelte";
+          import SourceGroupActivityView from "$lib/components/analysis/source-group-activity-view.svelte";
+          import SourceActivityView from "$lib/components/analysis/source-activity-view.svelte";
         </script>
-        <SourceGroupActivityView />
-        <SourceActivityView />
+        {#if groupSubject}<SourceGroupActivityView />{/if}
+        {#if sourceSubject}<SourceActivityView />{/if}
       `,
       [SOURCE_GROUP_ACTIVITY_PATH]: `
-        <script lang="ts">import EmptyState from "../../ui/EmptyState.svelte";</script>
+        <script lang="ts">import EmptyState from "$lib/components/ui/EmptyState.svelte";</script>
         <EmptyState />
       `,
     },
@@ -294,19 +323,47 @@ const ruleFixtures: Record<string, RuleFixture> = {
       "nests per-source activity inside group activity": {
         [SOURCE_BROWSER_SHELL_PATH]: `
           <script lang="ts">
-            import SourceGroupActivityView from "./source-group-activity-view.svelte";
-            import SourceActivityView from "./source-activity-view.svelte";
+            import SourceGroupActivityView from "$lib/components/analysis/source-group-activity-view.svelte";
+            import SourceActivityView from "$lib/components/analysis/source-activity-view.svelte";
           </script>
-          <SourceGroupActivityView />
-          <SourceActivityView />
+          {#if groupSubject}<SourceGroupActivityView />{/if}
+          {#if sourceSubject}<SourceActivityView />{/if}
         `,
         [SOURCE_GROUP_ACTIVITY_PATH]: `
           <script lang="ts">
-            import EmptyState from "../../ui/EmptyState.svelte";
-            import SourceActivityView from "./source-activity-view.svelte";
+            import EmptyState from "$lib/components/ui/EmptyState.svelte";
+            import SourceActivityView from "$lib/components/analysis/source-activity-view.svelte";
           </script>
           <EmptyState />
           <SourceActivityView />
+        `,
+      },
+      "aliases group activity to the per-source module": {
+        [SOURCE_BROWSER_SHELL_PATH]: `
+          <script lang="ts">
+            import SourceGroupActivityView from "$lib/components/analysis/source-activity-view.svelte";
+            import SourceActivityView from "$lib/components/analysis/source-activity-view.svelte";
+          </script>
+          {#if groupSubject}<SourceGroupActivityView />{/if}
+          {#if sourceSubject}<SourceActivityView />{/if}
+        `,
+        [SOURCE_GROUP_ACTIVITY_PATH]: `
+          <script lang="ts">import EmptyState from "$lib/components/ui/EmptyState.svelte";</script>
+          <EmptyState />
+        `,
+      },
+      "swaps group and source activity branches": {
+        [SOURCE_BROWSER_SHELL_PATH]: `
+          <script lang="ts">
+            import SourceGroupActivityView from "$lib/components/analysis/source-group-activity-view.svelte";
+            import SourceActivityView from "$lib/components/analysis/source-activity-view.svelte";
+          </script>
+          {#if sourceSubject}<SourceGroupActivityView />{/if}
+          {#if groupSubject}<SourceActivityView />{/if}
+        `,
+        [SOURCE_GROUP_ACTIVITY_PATH]: `
+          <script lang="ts">import EmptyState from "$lib/components/ui/EmptyState.svelte";</script>
+          <EmptyState />
         `,
       },
     },

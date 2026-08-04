@@ -288,11 +288,42 @@ function styleRuleFacts(stylesheet) {
     }));
 }
 
+function conditionIdentifiers(expression) {
+  const names = new Set();
+  const seen = new WeakSet();
+  const visit = (value) => {
+    if (!value || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+    if (value.type === "Identifier") names.add(value.name);
+    for (const [key, child] of Object.entries(value)) {
+      if (["loc", "metadata", "parent"].includes(key)) continue;
+      if (Array.isArray(child)) child.forEach(visit);
+      else visit(child);
+    }
+  };
+  visit(expression);
+  return [...names].sort();
+}
+
+function svelteImportFact(node) {
+  const declarationTypeOnly = node.importKind === "type";
+  const bindings = (node.specifiers ?? []).map((specifier) => ({
+    imported: specifier.type === "ImportDefaultSpecifier"
+      ? "default"
+      : specifier.type === "ImportNamespaceSpecifier"
+        ? "*"
+        : specifier.imported?.name ?? specifier.imported?.value,
+    local: specifier.local?.name,
+    typeOnly: declarationTypeOnly || specifier.importKind === "type",
+  }));
+  return { source: node.source.value, bindings };
+}
+
 function svelteFacts(relativePath, source, svelte) {
   const ast = svelte.parse(source, { filename: relativePath, modern: true });
   const components = [];
   const seen = new WeakSet();
-  const visit = (value) => {
+  const visit = (value, branches = []) => {
     if (!value || typeof value !== "object" || seen.has(value)) return;
     seen.add(value);
     if (value.type === "Component" || value.type === "SvelteComponent") {
@@ -304,18 +335,25 @@ function svelteFacts(relativePath, source, svelte) {
             .map((attribute) => typeof attribute.name === "string" ? attribute.name : undefined)
             .filter(Boolean)
             .sort(),
+          ...(branches.length ? { branches } : {}),
         });
       }
     }
+    if (value.type === "IfBlock") {
+      const identifiers = conditionIdentifiers(value.test);
+      visit(value.consequent, [...branches, { conditionIdentifiers: identifiers, polarity: "consequent" }]);
+      visit(value.alternate, [...branches, { conditionIdentifiers: identifiers, polarity: "alternate" }]);
+      return;
+    }
     for (const child of Object.values(value)) {
-      if (Array.isArray(child)) child.forEach(visit);
-      else visit(child);
+      if (Array.isArray(child)) child.forEach((item) => visit(item, branches));
+      else visit(child, branches);
     }
   };
   visit(ast);
   const imports = (ast.instance?.content?.body ?? [])
     .filter((node) => node.type === "ImportDeclaration" && typeof node.source?.value === "string")
-    .map((node) => ({ source: node.source.value }));
+    .map(svelteImportFact);
   return freeze({ path: relativePath, imports, components, styleRules: styleRuleFacts(ast.css) });
 }
 
