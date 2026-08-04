@@ -177,6 +177,15 @@ describe("Telegram Cargo test identity ownership", () => {
     );
   });
 
+  it("rejects a declared staged identity that remains under the app package", () => {
+    const leaked = structuredClone(passingLists);
+    leaked.extractum.stdout += "telegram_impl::session::tests::owned: test\n";
+
+    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: leaked, verifySteps })).toEqual(
+      expect.arrayContaining([expect.stringMatching(/extractum.*telegram_impl::session::tests::owned/i)]),
+    );
+  });
+
   it("lists each referenced Cargo package at most once and skips unreferenced lists", () => {
     const runCargoList = vi.fn((packageName: string) => passingLists[packageName as keyof typeof passingLists]);
     const ledger = { rows: [{ replacementIds: [

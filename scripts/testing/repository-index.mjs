@@ -306,13 +306,31 @@ export function createRepositoryIndex({
   loadCargoMetadata = () => defaultCargoMetadata(root),
 }) {
   const repositoryRoot = path.resolve(root);
-  const textCache = new Map();
+  const rawSourceCache = new Map();
   const jsonCache = new Map();
   const typeScriptCache = new Map();
   const svelteCache = new Map();
   let cargoMetadata;
   let cargoError;
   let cargoLoaded = false;
+
+  const cachedRawSource = (selected) => {
+    if (rawSourceCache.has(selected.relativePath)) {
+      const cached = rawSourceCache.get(selected.relativePath);
+      if (cached.error) throw cached.error;
+      return cached.value;
+    }
+    try {
+      const source = readFile(selected.absolutePath, "utf8");
+      const value = Buffer.isBuffer(source) ? source.toString("utf8") : String(source);
+      rawSourceCache.set(selected.relativePath, { value });
+      return value;
+    } catch (error) {
+      const wrapped = errorFor(selected.relativePath, error);
+      rawSourceCache.set(selected.relativePath, { error: wrapped });
+      throw wrapped;
+    }
+  };
 
   const cachedSource = (cache, inputPath, parse) => {
     const selected = repositoryPath(repositoryRoot, inputPath);
@@ -321,9 +339,15 @@ export function createRepositoryIndex({
       if (cached.error) throw cached.error;
       return cached.value;
     }
+    let source;
     try {
-      const source = readFile(selected.absolutePath, "utf8");
-      const parsed = parse(selected.relativePath, Buffer.isBuffer(source) ? source.toString("utf8") : String(source));
+      source = cachedRawSource(selected);
+    } catch (error) {
+      cache.set(selected.relativePath, { error });
+      throw error;
+    }
+    try {
+      const parsed = parse(selected.relativePath, source);
       cache.set(selected.relativePath, { value: parsed });
       return parsed;
     } catch (error) {
@@ -335,7 +359,7 @@ export function createRepositoryIndex({
 
   return freeze({
     getText(inputPath) {
-      return cachedSource(textCache, inputPath, (_relativePath, source) => source);
+      return cachedRawSource(repositoryPath(repositoryRoot, inputPath));
     },
     getJson(inputPath) {
       return cachedSource(jsonCache, inputPath, (_relativePath, source) => freeze(JSON.parse(source)));

@@ -176,6 +176,16 @@ describe("RepositoryIndex", () => {
     expect(fixture.readFile).toHaveBeenCalledTimes(2);
   });
 
+  it("shares one immutable raw snapshot between declared text and JSON views", () => {
+    const fixture = fixtureIndex({
+      "src/generated.json": '{"schemaVersion":1,"items":["one"]}',
+    });
+
+    expect(fixture.index.getText("src/generated.json")).toBe('{"schemaVersion":1,"items":["one"]}');
+    expect(fixture.index.getJson("src/generated.json")).toEqual({ schemaVersion: 1, items: ["one"] });
+    expect(fixture.readFile).toHaveBeenCalledOnce();
+  });
+
   it("fails closed and caches malformed declared JSON", () => {
     const fixture = fixtureIndex({ "src/generated.json": "{not-json" });
 

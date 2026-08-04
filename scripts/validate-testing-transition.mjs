@@ -47,10 +47,10 @@ function verifyOwnsCargoPackage(verifySteps, packageName) {
 
 export function evaluateTelegramCargoTestIdentityOwnership({ authority, listResults, verifySteps = [] }) {
   const violations = [];
+  const stagedDeclared = [...(authority?.preNewStaged ?? []), ...(authority?.phase8BNewStaged ?? [])];
   const expectedByPackage = {
     extractum: [...(authority?.preNewApp ?? []), ...(authority?.phase8BNewApp ?? [])],
-    "extractum-telegram": [...(authority?.preNewStaged ?? []), ...(authority?.phase8BNewStaged ?? [])]
-      .map((identity) => identity.replace(/^telegram_impl::/, "")),
+    "extractum-telegram": stagedDeclared.map((identity) => identity.replace(/^telegram_impl::/, "")),
   };
   const countsByPackage = {
     extractum: listedTestCounts(listResults?.extractum, "extractum", violations),
@@ -69,6 +69,11 @@ export function evaluateTelegramCargoTestIdentityOwnership({ authority, listResu
       if ((countsByPackage[otherPackage].get(identity) ?? 0) !== 0) {
         violations.push(`${otherPackage}: wrong package for declared identity ${identity}`);
       }
+    }
+  }
+  for (const identity of stagedDeclared) {
+    if ((countsByPackage.extractum.get(identity) ?? 0) !== 0) {
+      violations.push(`extractum: declared staged identity must be absent after extraction: ${identity}`);
     }
   }
   return violations;
