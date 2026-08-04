@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Remove the first three largest legacy source-contract files while preserving durable behavior and architecture obligations through executable tests, four narrow Telegram RepositoryIndex rules, one narrow analysis Cargo-manifest rule, Cargo metadata, and explicit retirement of historical source shape.
+**Goal:** Remove the first three largest legacy source-contract files while preserving durable behavior and architecture obligations through executable tests, four narrow Telegram RepositoryIndex rules, Cargo metadata where a frozen obligation supports it, and explicit retirement of historical source shape.
 
-**Architecture:** The ledger remains the migration authority. Behavior rows become direct Vitest/Cargo tests; durable architecture rows use parsed TypeScript/Svelte facts, Cargo metadata, or generated repository authorities. Telegram keeps only four truthful structured rules and one transition-only bounded Cargo test-list comparison. The analysis application cutover keeps only a Cargo-metadata package/dependency boundary; it explicitly does not claim Rust visibility, call-flow, SQL, transaction, command-body, or module-reachability facts. Delete rows retire checkpoint simulations, exact source locations/counts, transaction topology, and scanner mutation cases instead of replacing either deleted scanner with another Rust parser. Each task removes one legacy file and leaves the transition validator as the proof that its ledger rows closed.
+**Architecture:** The ledger remains the migration authority. Behavior rows become direct Vitest/Cargo tests; durable architecture rows use parsed TypeScript/Svelte facts, Cargo metadata, or generated repository authorities only when the frozen obligation supports that replacement. Telegram keeps only four truthful structured rules and one transition-only bounded Cargo test-list comparison. The analysis application cutover keeps direct behavior and command-inventory owners but retires its source-shape package/dependency claims; it does not invent a standalone manifest obligation. Delete rows retire checkpoint simulations, exact source locations/counts, transaction topology, and scanner mutation cases instead of replacing either deleted scanner with another Rust parser. Each task removes one legacy file and leaves the transition validator as the proof that its ledger rows closed.
 
 **Tech Stack:** Node.js ESM, TypeScript, Vitest 4.1.5, TypeScript compiler API, `svelte/compiler`, Cargo metadata and focused Cargo tests, existing transition validator.
 
@@ -37,7 +37,6 @@
 | `src-tauri/src/takeout_import/mod.rs` | Direct application-crate cancellation mutation-before-event behavior. |
 | `src-tauri/crates/extractum-telegram/src/session.rs` | Direct encrypted-session error behavior. |
 | `src-tauri/crates/extractum-telegram/src/takeout/operations.rs`, `src-tauri/crates/extractum-telegram/src/takeout/raw_parse.rs` | Direct Checkpoint-6 lifecycle and raw peer-identity behavior. |
-| `src-tauri/crates/extractum-analysis/Cargo.toml` | Live package/dependency input for `rule:analysis-crate-manifest-boundary`; the rule consumes Cargo metadata, not Rust source text. |
 | `src/lib/analysis-source-readers.behavior.component.test.ts` | Direct jsdom component/route behavior tests for SC-000222 and SC-000224 through SC-000278; the suffix gives permanent component-project ownership without a Vitest special case. |
 | `testing/source-contract-ledger.json` | Existing stable rows; no newly invented obligations. |
 | `vitest.config.ts`, `testing/runner-census.json`, `package.json`, `scripts/verify.mjs` | Remove legacy ownership only when the last file in that owner has migrated; Slice 3A must retain the project because later rows remain. |
@@ -48,7 +47,7 @@
 - Task 2A narrow RED/GREEN runs use each exact test identity listed in the Task 2A subgroup tables with `cargo test --manifest-path src-tauri/Cargo.toml -p <package> --lib <module>::tests::<name> -- --exact`; list tests first if an identity differs, and never accept a zero-test run.
 - Focused checks: `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets` and `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets`.
 - Task checkpoints: `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets` and `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-telegram --all-targets`.
-- Task 4 narrow RED/GREEN runs are `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib tests::analysis_command_registration_inventory_is_exact -- --exact` and the focused RepositoryIndex rule test. Its package checkpoint also includes `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets` and `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets`.
+- Task 4 narrow RED/GREEN runs use `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib tests::analysis_command_registration_inventory_is_exact -- --exact`. Its package checkpoint also includes `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets` and `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets`.
 - End-of-slice workspace gates remain `cargo check --manifest-path src-tauri/Cargo.toml --workspace --all-targets`, `cargo test --manifest-path src-tauri/Cargo.toml --workspace --all-targets`, and the authoritative `npm.cmd run verify`.
 - Use only canonical `src-tauri/target`; do not introduce a slice-specific target directory or test-support feature.
 
@@ -84,7 +83,7 @@ Use the installed TypeScript compiler API and `svelte/compiler`; use `cargo meta
 
 - [ ] **Step 4: Write failing rule-runner tests**
 
-Derive the pre-cutover 22-ID candidate set from the existing replacement IDs in SC-000029–SC-000059, SC-000221–SC-000278, and SC-000561–SC-000658. Assert that every currently registered evaluator belongs to that set and has its own positive fixture plus a mutation with a non-empty violation. Task 2B later corrects Telegram ownership and intentionally reduces the final set to 11.
+Derive the pre-cutover 22-ID candidate set from the existing replacement IDs in SC-000029–SC-000059, SC-000221–SC-000278, and SC-000561–SC-000658. Assert that every currently registered evaluator belongs to that set and has its own positive fixture plus a mutation with a non-empty violation. Task 2B later corrects Telegram ownership and reduces the candidate set to 11; the Task 4 truthfulness correction retires the remaining unanchored manifest rule, leaving 10.
 
 - [ ] **Step 5: Implement named evaluators and convention guard**
 
@@ -280,7 +279,6 @@ Run: `npm.cmd run test:component`; `node scripts/run-vitest.mjs run scripts/test
 
 **Interfaces:**
 
-- `rule:analysis-crate-manifest-boundary` consumes only `RepositoryIndex.getCargoMetadata()` and returns deterministic violations for a missing/malformed `extractum-analysis` workspace library, a missing normal path dependency from `extractum`, or an application-only dependency such as Tauri on the analysis crate. It does not inspect Rust source and does not claim visibility, call-flow, SQL, transaction, command-body, or module-reachability facts.
 - `test:cargo:extractum::tests::analysis_command_registration_inventory_is_exact` consumes the existing `application_command_inventory!` macro and proves the exact 21 analysis, three project, and three dev registration names occur once. Real handler expansion remains compiler proof that each registered symbol exists.
 - Every SC-000029 through SC-000059 row retains its stable ID, hashes, lineage, and `assertionCount`. For a mixed row, enumerate the original assertions in source order and place every ordinal from `1` through `assertionCount` in exactly one subgroup. `validateLedgerShape` must prove that subgroup ordinals are total, disjoint, in range, and non-empty. Do not infer an ordinal from a replacement count or renumber after deleting the file.
 
@@ -292,12 +290,12 @@ The `behavior` entries below are the only permitted direct replacement families.
 | --- | --- | --- |
 | SC-000029 | none | The dual-owner selector is completed transition-harness behavior; the live owner is unconditionally the extracted crate. Delete all seven ordinals. |
 | SC-000030 | none | Exact checkpoint-four `include!`, module, signature, and adapter spellings are completed staging shape. Delete all 31 ordinals; Cargo compilation and package tests exercise the final modules. |
-| SC-000031 | `rule:analysis-crate-manifest-boundary` for the application-free package/dependency assertion | Delete residual function, module-depth, re-export, and path spellings because Cargo metadata cannot prove them. |
+| SC-000031 | none | Delete all 11 application-free, function, module-depth, re-export, and path-spelling ordinals because Cargo metadata does not prove their source-shape claims. |
 | SC-000032 | none | Exact `TauriAnalysisEventSink` bodies and absence of hidden side effects are Rust body shape. Delete all six ordinals and record the accepted risk; trait conformance remains compiler-owned and event outcomes remain covered by `extractum-analysis::report::tests::runtime::report_execution_publishes_typed_events_in_existing_order`. |
 | SC-000033 | `extractum-analysis::state::tests::analysis_state_cancels_report_run_child_tokens`; `extractum::analysis::fixtures::tests::active_runs::fixture_cancel_waiter_marks_running_run_cancelled` | Delete private-field, derive, accessor-visibility, and exact fixture call-order ordinals. |
 | SC-000034 | none | The 95/48 Appendix-A partition and 143/169 identity counts are a completed extraction census. Delete all 13 ordinals; do not add a persistent Cargo test census. |
 | SC-000035 | none | Singleton-`Arc` count and exact consumer spellings are application call-graph shape unavailable without Rust analysis. Delete all eight ordinals. |
-| SC-000036 | `extractum::analysis::tests_application::analysis_wire_values_serialize_to_exact_json_objects`; `extractum::analysis::tests_application::report_start_preserves_acceptance_order_and_two_corpus_reads`; `extractum-analysis::report::tests::scope::start_analysis_report_request_constructors_preserve_source_group_and_project_scopes`; `extractum-analysis::store::tests::read_model::analysis_run_list_filter_constructors_preserve_analysis_and_project_scopes`; `rule:analysis-crate-manifest-boundary` | Delete checkpoint include/path, exact signature/order, private-field, compression-import, and source-placement ordinals. |
+| SC-000036 | `extractum::analysis::tests_application::analysis_wire_values_serialize_to_exact_json_objects`; `extractum::analysis::tests_application::report_start_preserves_acceptance_order_and_two_corpus_reads`; `extractum-analysis::report::tests::scope::start_analysis_report_request_constructors_preserve_source_group_and_project_scopes`; `extractum-analysis::store::tests::read_model::analysis_run_list_filter_constructors_preserve_analysis_and_project_scopes` | Delete application-free package shape, checkpoint include/path, exact signature/order, private-field, compression-import, and source-placement ordinals. |
 | SC-000037 | `extractum-analysis::report::tests::scope::report_run_input_carries_resolved_profile_snapshot`; `extractum-analysis::report::tests::runtime::report_execution_publishes_typed_events_in_existing_order`; `extractum-analysis::report::tests::lifecycle::terminal_cleanup_removes_active_state_when_terminal_persistence_fails` | Delete opaque-ticket field/derive, exact signature, exact enum-layout, and re-export spellings. |
 | SC-000038 | `extractum-analysis::chat::tests::chat_execution_persists_turns_before_completed_event`; `extractum-analysis::chat::tests::chat_persistence_failure_keeps_completed_answer_failure_message`; `extractum::analysis::tests_application::chat_profile_resolution_failure_is_async_after_request_id`; `extractum::analysis::tests_application::chat_legacy_label_fallback_rereads_run_on_the_foreign_label_snapshot` | Delete ticket visibility/derive, exact signatures, exact `tokio::spawn` topology, and forbidden-call spellings. |
 | SC-000039–SC-000040 | `extractum-analysis::store::tests::read_model::analysis_run_list_filter_constructors_preserve_analysis_and_project_scopes` and the exact `extractum-analysis::store::tests::read_model::list_analysis_run_summaries_*` identities selected from Cargo `--list` | Delete private-field inventory, `Default`-absence, exact method-list, and whole-repository struct-literal scan ordinals. |
@@ -317,19 +315,15 @@ The `behavior` entries below are the only permitted direct replacement families.
 | SC-000054 | `extractum::projects::read_model::tests::list_research_projects_counts_playlist_linked_video_materials`; `extractum::projects::read_model::tests::list_research_projects_derives_counts_status_and_last_run_without_fanout`; `extractum::projects::read_model::tests::list_research_projects_prioritizes_running_and_sorts_active_pinned_updated_first` | Delete exact aggregate DTO/accessors, query text, schema table census, re-exports, and single-transaction topology ordinals. |
 | SC-000055 | `extractum::projects::tests::delete_project_removes_membership_and_project_runs_but_keeps_sources` | Delete exact SQL statement counts/order, re-export/import spellings, await counts, and transaction body topology ordinals. |
 | SC-000056 | `extractum::analysis::tests_application::analysis_wire_values_serialize_to_exact_json_objects`; every exact Vitest identity in `src/lib/api/analysis-runs.test.ts`, `analysis-chat.test.ts`, `analysis-trace.test.ts`, `analysis-source-groups.test.ts`, and `analysis-workspace.test.ts` | Delete regex-derived Rust command signatures, private request-ID construction, internal event-construction order, terminal-message source strings, and exact error-struct spelling ordinals. |
-| SC-000057 | `rule:analysis-crate-manifest-boundary` only for final package/dependency ownership | Delete the 23/21/44/35/79 path counts, frozen move map, inventory-drift helper, forbidden Rust-token scan, and relative-depth spelling ordinals. |
+| SC-000057 | none | Delete all 12 ordinals: the 23/21/44/35/79 path counts, frozen move map, inventory-drift helper, forbidden Rust-token scan, package-presence claim, and relative-depth spellings are completed extraction census/source shape. |
 | SC-000058 | none | Delete all 54 ordinals. They are the legacy Rust/SQL scanner itself: module reachability, SQL reconstruction, table ownership, async call topology, transaction-control detection, and fingerprints. Record the explicit high accepted risk; do not recreate the scanner. |
 | SC-000059 | `extractum-analysis::corpus::tests::snapshot::list_run_snapshot_messages_page_does_not_fall_back_to_live_source`; `extractum-analysis::corpus::tests::snapshot::load_run_corpus_messages_does_not_reconstruct_completed_capture_failed_from_live_rows`; `extractum-analysis::corpus::tests::snapshot::trace_resolution_does_not_fall_back_to_live_source_for_completed_missing_snapshot`; `extractum-analysis::corpus::tests::snapshot::source_group_membership_drift_after_capture_does_not_change_saved_run_corpus`; `extractum-analysis::test_schema::tests::canonical_fixture_preserves_analysis_owned_indexes_and_foreign_keys`; `extractum::tx::tests::begin_immediate_with_foreign_keys_enforces_cascade`; `extractum::tx::tests::sqlite_ignores_foreign_keys_pragma_inside_open_transaction` | Delete SQL-parser probes, exact authorized-range census, negative-sentinel source scan, helper-body order, fingerprints, source reachability, and global foreign-SQL scan ordinals. |
 
-- [ ] **Step 1: Write the two narrow RED tests**
+- [ ] **Step 1: Write the narrow RED test**
 
-Add a positive Cargo-metadata fixture plus independent mutations for missing workspace membership, missing `extractum` normal path dependency, missing library target, and an application-only Tauri dependency on `extractum-analysis`. Add `tests::analysis_command_registration_inventory_is_exact` against the existing macro; assert the exact 21 analysis, three project, and three dev names and one occurrence of each.
+Add `tests::analysis_command_registration_inventory_is_exact` against the existing macro; assert the exact 21 analysis, three project, and three dev names and one occurrence of each. Do not create a Cargo-manifest rule without a matching frozen obligation.
 
 - [ ] **Step 2: Run the focused RED command**
-
-Run: `node scripts/run-vitest.mjs run scripts/testing/repository-rules.test.ts -t "analysis crate manifest boundary"`
-
-Expected: FAIL because the narrow evaluator is not registered.
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --lib tests::analysis_command_registration_inventory_is_exact -- --exact`
 
@@ -337,7 +331,7 @@ Expected: FAIL because the exact inventory test does not exist. A zero-test resu
 
 - [ ] **Step 3: Implement only the narrow owners**
 
-Implement `analysis-crate-manifest-boundary` from Cargo metadata only. It must report every declared package/dependency violation deterministically and convert unavailable or malformed metadata to `INFRA_ERROR`. Add the direct macro inventory test without scanning Rust source or duplicating the handler list outside the macro/test expected array.
+Add the direct macro inventory test without scanning Rust source or duplicating the handler list outside the macro/test expected array. SC-000031 ordinal 1, SC-000036 ordinal 1, and SC-000057 ordinal 9 remain source-shape claims and belong to their delete dispositions rather than a broader metadata rule.
 
 - [ ] **Step 4: Apply the mechanical ledger partition**
 
@@ -349,7 +343,7 @@ Delete `src/lib/analysis-application-contract.test.ts`. Run `node scripts/valida
 
 - [ ] **Step 6: Verify Task 4**
 
-Run the focused rule suite; both exact RED/GREEN Cargo identities; `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets`; `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets`; `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`; `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`; and authoritative unsandboxed `npm.cmd run verify`.
+Run the focused repository-rule registry suite; the exact RED/GREEN Cargo identity; `cargo check --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets`; `cargo test --manifest-path src-tauri/Cargo.toml -p extractum-analysis --all-targets`; `cargo check --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`; `cargo test --manifest-path src-tauri/Cargo.toml -p extractum --all-targets`; and authoritative unsandboxed `npm.cmd run verify`.
 
 ## Task 5: Slice 3A completeness, evidence, and handoff
 
@@ -358,13 +352,13 @@ Run the focused rule suite; both exact RED/GREEN Cargo identities; `cargo check 
 - Create: `docs/superpowers/verification/2026-08-03-testing-redesign-slice-3a-source-contracts.md`
 - Modify: `docs/superpowers/plans/2026-08-02-testing-redesign-program-index.md`
 
-- [ ] **Step 1: Add the final 11-ID completeness assertion**
+- [ ] **Step 1: Add the final 10-ID completeness assertion**
 
-In `scripts/testing/repository-rules.test.ts`, derive the exact post-cutover rule-ID set from SC-000029–SC-000059, SC-000221–SC-000278, and SC-000561–SC-000658. Assert exact set equality with the registered evaluator IDs and retain the per-ID positive/mutation requirement. The set is four Telegram rules, six analysis source-reader rules, and `rule:analysis-crate-manifest-boundary`; the rejected `rule:repository-index:analysis-application-boundary` is absent.
+In `scripts/testing/repository-rules.test.ts`, derive the exact post-cutover rule-ID set from SC-000029–SC-000059, SC-000221–SC-000278, and SC-000561–SC-000658. Assert exact set equality with the registered evaluator IDs and retain the per-ID positive/mutation requirement. The set is four Telegram rules and six analysis source-reader rules; both the rejected broad application-boundary candidate and the unanchored analysis manifest candidate are absent.
 
 Run: `node scripts/run-vitest.mjs run scripts/testing/repository-rules.test.ts`
 
-Expected: PASS with exactly 11 implemented rule IDs; an absent, extra, or mutation-free rule fails.
+Expected: PASS with exactly 10 implemented rule IDs; an absent, extra, or mutation-free rule fails.
 
 - [ ] **Step 2: Record the migration evidence**
 
@@ -387,6 +381,6 @@ Expected: only the Slice 3A implementation and evidence files are changed before
 | Structured authority | RepositoryIndex and rule mutation tests pass; malformed inputs surface as errors. |
 | Telegram migration | SC-000561–SC-000658 close without a Node Rust parser or persistent Cargo census; four structured rules and one bounded transition-only Cargo identity comparison remain. SC-000648–SC-000652 retain their approved direct behavior and explicit deletion subgroups under stable IDs. |
 | Source-reader migration | SC-000221–SC-000278 close, including three explicit deletion rows. |
-| Analysis application migration | SC-000029–SC-000059 close through direct Cargo/Vitest behavior, one narrow Cargo-metadata manifest rule, and explicit ordinal-complete deletion subgroups; no Rust/SQL scanner remains. |
+| Analysis application migration | SC-000029–SC-000059 close through direct Cargo/Vitest behavior, exact command inventory, and explicit ordinal-complete deletion subgroups; no invented manifest obligation or Rust/SQL scanner remains. |
 | Transition integrity | Census remains bidirectional and ledger closes the removed paths. |
 | Completion gate | Unsandboxed `npm.cmd run verify` passes; sandbox-only taskkill denial is recorded separately rather than misclassified as a product failure. |

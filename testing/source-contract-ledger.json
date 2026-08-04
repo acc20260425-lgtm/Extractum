@@ -511,35 +511,8 @@
       "authorityHash": "e3521e10fd8a863e3b423f820d922008e578d8cae1764ee545fc23f449533065",
       "lineage": [],
       "invariant": "Keeps checkpoint four portable subjects application-free and depth-stable.",
-      "subgroups": [
-        {
-          "assertionOrdinals": [
-            1
-          ],
-          "invariant": "The extracted analysis package remains application-free at the Cargo package/dependency boundary.",
-          "disposition": "architecture",
-          "replacementIds": [
-            "rule:analysis-crate-manifest-boundary"
-          ]
-        },
-        {
-          "assertionOrdinals": [
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            10,
-            11
-          ],
-          "invariant": "Residual function, module-depth, re-export, and path spellings are unavailable from Cargo metadata and are deleted as completed source shape.",
-          "disposition": "delete",
-          "deletionReason": "Residual function, module-depth, re-export, and path spellings are unavailable from Cargo metadata and are deleted as completed source shape."
-        }
-      ]
+      "disposition": "delete",
+      "deletionReason": "Application-free assertions plus residual function, module-depth, re-export, and path spellings are completed source shape that Cargo metadata does not prove."
     },
     {
       "id": "SC-000032",
@@ -673,16 +646,7 @@
         },
         {
           "assertionOrdinals": [
-            1
-          ],
-          "invariant": "The extracted analysis package retains an application-free Cargo dependency boundary.",
-          "disposition": "architecture",
-          "replacementIds": [
-            "rule:analysis-crate-manifest-boundary"
-          ]
-        },
-        {
-          "assertionOrdinals": [
+            1,
             2,
             3,
             4,
@@ -694,9 +658,9 @@
             15,
             16
           ],
-          "invariant": "Checkpoint includes, exact signatures/order, private fields, compression-import spelling, and source placement are completed or refactor-sensitive Rust shape.",
+          "invariant": "Application-free package shape, checkpoint includes, exact signatures/order, private fields, compression-import spelling, and source placement are completed or refactor-sensitive Rust shape.",
           "disposition": "delete",
-          "deletionReason": "Checkpoint includes, exact signatures/order, private fields, compression-import spelling, and source placement are completed or refactor-sensitive Rust shape."
+          "deletionReason": "Application-free package shape, checkpoint includes, exact signatures/order, private fields, compression-import spelling, and source placement are completed or refactor-sensitive Rust shape."
         }
       ]
     },
@@ -1654,36 +1618,8 @@
       "authorityHash": "6204fbf8a50913f5a9f567c478929473231bcc3b2cb251332ef59d3c2be8f243",
       "lineage": [],
       "invariant": "Keeps every mechanical-move source portable before extraction.",
-      "subgroups": [
-        {
-          "assertionOrdinals": [
-            9
-          ],
-          "invariant": "Cargo metadata proves the final extracted analysis workspace library and normal application dependency ownership.",
-          "disposition": "architecture",
-          "replacementIds": [
-            "rule:analysis-crate-manifest-boundary"
-          ]
-        },
-        {
-          "assertionOrdinals": [
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            10,
-            11,
-            12
-          ],
-          "invariant": "Frozen path counts, move map, drift helper, forbidden-token scan, and relative-depth spellings are completed extraction census and source shape.",
-          "disposition": "delete",
-          "deletionReason": "Frozen path counts, move map, drift helper, forbidden-token scan, and relative-depth spellings are completed extraction census and source shape."
-        }
-      ]
+      "disposition": "delete",
+      "deletionReason": "Frozen path counts, move map, drift helper, forbidden-token scan, package-presence claim, and relative-depth spellings are completed extraction census and source shape."
     },
     {
       "id": "SC-000058",

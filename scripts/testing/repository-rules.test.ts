@@ -420,17 +420,7 @@ function cargoMetadata() {
     dependencies: [
       { name: "extractum-telegram", kind: null, source: null, path: "C:/repo/src-tauri/crates/extractum-telegram", target: null, rename: null, features: [] },
       { name: "extractum-telegram", kind: "dev", source: null, path: "C:/repo/src-tauri/crates/extractum-telegram", target: null, rename: null, features: ["app-test-support"] },
-      { name: "extractum-analysis", kind: null, source: null, path: "C:/repo/src-tauri/crates/extractum-analysis", target: null, rename: null, features: [] },
     ],
-  };
-  const analysis = {
-    id: "path+file:///repo/src-tauri/crates/extractum-analysis#0.2.0",
-    name: "extractum-analysis",
-    source: null,
-    manifest_path: "C:/repo/src-tauri/crates/extractum-analysis/Cargo.toml",
-    features: {},
-    targets: [{ kind: ["lib"], name: "extractum_analysis" }],
-    dependencies: [],
   };
   const producer = {
     id: "path+file:///repo/src-tauri/crates/extractum-telegram#0.2.0",
@@ -442,13 +432,12 @@ function cargoMetadata() {
     dependencies: grammers.map(({ name, source }) => ({ name, kind: null, source: source.replace(`#${revision}`, ""), path: null, target: null, rename: null, features: [] })),
   };
   return {
-    packages: [app, producer, analysis, ...grammers],
-    workspace_members: [app.id, producer.id, analysis.id],
+    packages: [app, producer, ...grammers],
+    workspace_members: [app.id, producer.id],
     resolve: {
       nodes: [
         { id: app.id, features: [], deps: [{ name: "extractum_telegram", pkg: producer.id, dep_kinds: [{ kind: null, target: null }, { kind: "dev", target: null }] }] },
         { id: producer.id, features: ["app-test-support"], deps: grammers.map(({ id, name }) => ({ name: name.replaceAll("-", "_"), pkg: id, dep_kinds: [{ kind: null, target: null }] })) },
-        { id: analysis.id, features: [], deps: [] },
         ...grammers.map((entry) => ({ id: entry.id, features: [...grammersBaseline.packages.find(({ name }) => name === entry.name)!.required], deps: [] })),
       ],
     },
@@ -474,35 +463,6 @@ function realAuthorityIndex() {
 }
 
 const telegramStructuredFixtures = {
-  "rule:analysis-crate-manifest-boundary": {
-    positive: () => cargoIndex(),
-    mutations: {
-      "removes the analysis workspace package": () => {
-        const metadata = clone(cargoMetadata());
-        const analysis = metadata.packages.find(({ name }: any) => name === "extractum-analysis")!;
-        metadata.workspace_members = metadata.workspace_members.filter((id: string) => id !== analysis.id);
-        return cargoIndex(metadata);
-      },
-      "removes the app normal path dependency": () => {
-        const metadata = clone(cargoMetadata());
-        const app = metadata.packages.find(({ name }: any) => name === "extractum")!;
-        app.dependencies = app.dependencies.filter(({ name }: any) => name !== "extractum-analysis");
-        return cargoIndex(metadata);
-      },
-      "removes the analysis library target": () => {
-        const metadata = clone(cargoMetadata());
-        metadata.packages.find(({ name }: any) => name === "extractum-analysis")!.targets = [];
-        return cargoIndex(metadata);
-      },
-      "adds an application-only Tauri dependency": () => {
-        const metadata = clone(cargoMetadata());
-        metadata.packages.find(({ name }: any) => name === "extractum-analysis")!.dependencies.push({
-          name: "tauri", kind: null, source: "registry+https://github.com/rust-lang/crates.io-index", path: null,
-        });
-        return cargoIndex(metadata);
-      },
-    },
-  },
   "rule:telegram-phase-8b-authority-integrity": {
     positive: () => realAuthorityIndex(),
     mutations: {
@@ -585,24 +545,6 @@ const telegramStructuredFixtures = {
   },
 } as const;
 
-describe("analysis crate manifest boundary", () => {
-  const id = "rule:analysis-crate-manifest-boundary";
-
-  it("accepts the isolated workspace library and rejects every declared mutation", () => {
-    const fixture = telegramStructuredFixtures[id];
-    expect(evaluateRule({ id, index: fixture.positive() })).toEqual({ id, violations: [] });
-    for (const [name, mutation] of Object.entries(fixture.mutations)) {
-      expect(evaluateRule({ id, index: mutation() }).violations, name).not.toEqual([]);
-    }
-  });
-
-  it("converts malformed Cargo metadata to INFRA_ERROR", () => {
-    expect(evaluateRule({ id, index: cargoIndex({ packages: "invalid" } as any) }).violations).toEqual([
-      expect.stringMatching(/^INFRA_ERROR:/),
-    ]);
-  });
-});
-
 function inSlice3ARanges(id: string) {
   const number = Number(id.slice("SC-".length));
   return (number >= 29 && number <= 59)
@@ -660,10 +602,9 @@ describe("repository rule registry", () => {
       .filter((id): id is string => id.startsWith("rule:")),
   );
 
-  it("derives and registers the complete Slice 3A 11-ID allowlist", () => {
-    expect(allowedRuleIds.size).toBe(11);
+  it("derives and registers the complete Slice 3A 10-ID allowlist", () => {
+    expect(allowedRuleIds.size).toBe(10);
     expect(registeredRuleIds).toEqual([
-      "rule:analysis-crate-manifest-boundary",
       "rule:analysis-evidence-highlight-token-styling",
       "rule:analysis-source-browser-canonical-composition",
       "rule:analysis-source-browser-explicit-subject-contract",

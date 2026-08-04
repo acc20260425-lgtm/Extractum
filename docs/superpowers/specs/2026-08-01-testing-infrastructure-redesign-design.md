@@ -1305,9 +1305,12 @@ SC-000058 no longer proves whole-repository Rust module reachability, SQL-table
 ownership, absence of hidden transaction-control SQL, exact async coordinator
 topology, or the absence of pool/transaction bypasses. SC-000032 and
 SC-000053–SC-000055 also stop freezing the concrete Tauri event-sink body and
-exact single-transaction call topology. Cargo package/dependency metadata,
-compiler gates, direct database/event behavior tests, code review, and focused
-atomicity tests when a concrete regression appears are the accepted controls.
+exact single-transaction call topology. SC-000031, SC-000036, and SC-000057
+also retire their source-shape package/dependency assertions: no standalone
+Cargo-manifest rule is retained because those ordinals do not establish that
+broader obligation. Compiler gates, the exact application command inventory,
+direct database/event behavior tests, code review, and focused atomicity tests
+when a concrete regression appears are the accepted controls.
 This is a deliberate maintenance trade: the project accepts weaker global
 static proof rather than keeping source fingerprints, a custom Rust/SQL parser,
 or a copied authority that can report green without proving live code.
