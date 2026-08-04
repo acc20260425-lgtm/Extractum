@@ -37,7 +37,7 @@
 | `src-tauri/src/takeout_import/mod.rs` | Direct application-crate cancellation mutation-before-event behavior. |
 | `src-tauri/crates/extractum-telegram/src/session.rs` | Direct encrypted-session error behavior. |
 | `src-tauri/crates/extractum-telegram/src/takeout/operations.rs`, `src-tauri/crates/extractum-telegram/src/takeout/raw_parse.rs` | Direct Checkpoint-6 lifecycle and raw peer-identity behavior. |
-| `src/lib/analysis-source-readers.behavior.test.ts` | Direct component/route behavior tests for SC-000222 and SC-000224 through SC-000278. |
+| `src/lib/analysis-source-readers.behavior.component.test.ts` | Direct jsdom component/route behavior tests for SC-000222 and SC-000224 through SC-000278; the suffix gives permanent component-project ownership without a Vitest special case. |
 | `testing/source-contract-ledger.json` | Existing stable rows; no newly invented obligations. |
 | `vitest.config.ts`, `testing/runner-census.json`, `package.json`, `scripts/verify.mjs` | Remove legacy ownership only when the last file in that owner has migrated; Slice 3A must retain the project because later rows remain. |
 
@@ -232,14 +232,14 @@ Run: `node scripts/run-vitest.mjs run src/lib/telegram-checkpoint-2.behavior.tes
 **Files:**
 
 - Delete: `src/lib/analysis-source-readers.test.ts`
-- Create: `src/lib/analysis-source-readers.behavior.test.ts`
+- Create: `src/lib/analysis-source-readers.behavior.component.test.ts`
 - Modify: `scripts/testing/repository-rules.mjs`
 - Modify: `scripts/testing/repository-rules.test.ts`
 - Modify: `testing/source-contract-ledger.json`
 
 **Interfaces:**
 
-- SC-000222 and SC-000224 through SC-000278 resolve to `analysis-source-readers.behavior.test.ts` as recorded in the ledger.
+- SC-000222 and SC-000224 through SC-000278 resolve to `analysis-source-readers.behavior.component.test.ts`. Task 3 updates only those replacement paths from the pre-migration `.behavior.test.ts` draft; stable row IDs, hashes, lineage, dispositions, assertion counts, and exact test titles remain unchanged.
 - SC-000221, SC-000223, SC-000265, SC-000267, SC-000268, and SC-000271 resolve to their existing `rule:analysis-*` IDs.
 - SC-000239 through SC-000241 close only by their existing documented deletion reasons.
 
@@ -249,7 +249,7 @@ Use rendered components and route-owned fixtures to cover live sources, snapshot
 
 - [ ] **Step 2: Run focused RED tests**
 
-Run: `node scripts/run-vitest.mjs run src/lib/analysis-source-readers.behavior.test.ts`
+Run: `node scripts/run-vitest.mjs run src/lib/analysis-source-readers.behavior.component.test.ts`
 
 Expected: FAIL because the replacement file is absent.
 
