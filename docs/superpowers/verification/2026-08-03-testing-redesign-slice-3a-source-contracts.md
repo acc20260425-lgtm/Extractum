@@ -2,11 +2,12 @@
 
 ## Checkpoint Context
 
-- Final verified implementation checkpoint: `6cfc9679` (`fix: remove
-  unanchored analysis manifest rule`).
-- This record and the program-index update are evidence-only. They do not add
-  a test owner, selector, scheduler, timing state, Nx configuration, CI, or
-  hosted tooling.
+- Final verified implementation checkpoint: `9640cb89` (`test: remove
+  duplicate Grammers metadata check`).
+- The completion audit also removed a duplicate full-corpus source-reader scan
+  from the unit suite and made the single transition-validator scan include
+  every census-owned Vitest path. It did not add a test owner, selector,
+  scheduler, timing state, Nx configuration, CI, or hosted tooling.
 - The authoritative full gate was run outside the sandbox so its Windows
   process-tree checks exercised the real operating-system behavior.
 
@@ -111,33 +112,43 @@ Task 4's focused package evidence at the implementation checkpoint also
 passed: `extractum-analysis` check and 112/112 tests, `extractum` check and
 674/674 tests, and the exact analysis command inventory 1/1.
 
-After `6cfc9679`, a fresh authoritative unsandboxed `npm.cmd run verify`
-exited `0` in 481.5 seconds. Its non-empty owner results were:
+After `9640cb89`, the final authoritative unsandboxed `npm.cmd run verify`
+exited `0` in 321.3 seconds. Its non-empty owner results were:
 
 | Owner | Files | Tests | Observed duration |
 | --- | ---: | ---: | ---: |
-| `test:unit` | 85 | 807 | 37.15 s |
-| `test:component` | 20 | 168 | 103.31 s |
-| `test:architecture` | 1 | 2 | 0.76 s |
-| `test:legacy-contract` | 75 | 522 | 31.20 s |
-| `test:integration:os` | 6 | 87 | 16.90 s |
-| `test:e2e` | 7 census-owned files | 79 | 1.6 min |
+| `test:unit` | 85 | 808 | 19.57 s |
+| `test:component` | 20 | 168 | 44.12 s |
+| `test:architecture` | 1 | 2 | 0.25 s |
+| `test:legacy-contract` | 75 | 522 | 13.07 s |
+| `test:integration:os` | 6 | 87 | 6.13 s |
+| `test:e2e` | 7 census-owned files | 79 | PASS; separate duration not retained in the truncated console result |
 
-The same run passed sidecar validation, transition validation, Svelte check
-with zero errors and warnings, rustfmt, Cargo workspace check/test, and the Git
-diff gate. The earlier final Task 4 run also passed in 366.9 seconds (unit
-809/809, component 168/168, architecture 2/2, legacy 522/522, OS 87/87, and
-Playwright 79/79); it is retained as a prior observation, not substituted for
-the fresh final run.
+The same run passed sidecar validation, transition validation, Svelte check,
+rustfmt, Cargo workspace check/test, and the Git diff gate. Earlier successful
+observations remain recorded rather than substituted: 366.9 seconds at the
+Task 4 checkpoint and 481.5 seconds after `6cfc9679` (unit 807, component 168,
+architecture 2, legacy 522, OS 87, and Playwright 79).
+
+The completion audit also retained its failed observations. One attempt hit
+the external 903.4-second command limit and closed Cargo's output pipe; a clean
+retry then exposed a five-second timeout in the unit convention test's
+duplicate full-corpus reader scan. After moving live coverage solely to the
+transition validator, while expanding it to census-owned Vitest specs, unit
+passed 808/808. The next full run exposed a separate 15-second timeout in a
+legacy Grammers baseline test that launched live Cargo metadata twice. The
+legacy test now checks the pure generator and fixed artifact, while the
+transition rule remains the single live locked-Cargo comparison. Its owning
+file passed 12/12 before the final full PASS.
 
 No automated 90-second timing warning was printed by the current sequential
 `verify` implementation; adding that observational warning remains future
 scheduler work. The measured command nevertheless exceeded 90 seconds without
 changing its successful result. The focused Task 3 component behavior took
 24.59--26.46 seconds; the component project was 82.20 seconds cold-ish and
-39.54 seconds warm, then 79.29 seconds in the Task 4 verify and 103.31 seconds
-in this final verify. Therefore the current component owner is unambiguously
-`slow` for Slice 4's 15-second feedback contract.
+39.54 seconds warm, then 79.29 and 103.31 seconds in prior full runs and 44.12
+seconds in the final run. Therefore the current component owner is
+unambiguously `slow` for Slice 4's 15-second feedback contract.
 
 ## Remaining Cohort Handoff
 

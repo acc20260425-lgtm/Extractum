@@ -59,7 +59,7 @@ Before writing each next detailed plan:
   at `4352e0000dacb90495b92392fd17f55e2c4c152f`; its verification record is
   `docs/superpowers/verification/2026-08-02-testing-redesign-slice-2b-project-browser-ownership.md`.
 - Completed: `docs/superpowers/plans/2026-08-03-testing-redesign-slice-3a-source-contracts.md`
-  at implementation checkpoint `6cfc9679`; its verification record is
+  at final verified checkpoint `9640cb89`; its verification record is
   `docs/superpowers/verification/2026-08-03-testing-redesign-slice-3a-source-contracts.md`.
 
 Slice 1 remains complete at `72a00b38`; its verification record is
