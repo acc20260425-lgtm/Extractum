@@ -1,5 +1,16 @@
+import { createHash } from "node:crypto";
+import { generateIdentityAuthority } from "../telegram-8b-test-identities.mjs";
+import { generateSymbolAuthority } from "../telegram-8b-symbol-map.mjs";
+
 const TELEGRAM_PATH = "src/lib/telegram-contract-paths.ts";
 const ANALYSIS_SURFACE_PATH = "src/lib/components/analysis/report-source-surface.svelte";
+const PHASE_8A_PLAN_PATH = "docs/superpowers/plans/2026-07-26-extractum-telegram-8a-preparation.md";
+const PHASE_8B_PLAN_PATH = "docs/superpowers/plans/2026-07-28-extractum-telegram-8b-preparation.md";
+const SYMBOL_MAP_PATH = "src/lib/telegram-8b-symbol-map.json";
+const TEST_IDENTITIES_PATH = "src/lib/telegram-8b-test-identities.json";
+const STAGING_SHA_PATH = "src/lib/telegram-8b-staging-sha256.json";
+const GRAMMERS_BASELINE_PATH = "src/lib/telegram-grammers-feature-baseline.json";
+const FROZEN_STAGING_SHA256 = "12e99b10aaaccc471ae4c950b4a3ea0331ae68db45618823ea2aa58bae29d1a9";
 
 const TRANSITIONAL_SOURCE_COMPONENTS = [
   "RunCompanionTabs",
@@ -192,8 +203,132 @@ function evaluateAnalysisSourceReaderSurfaceComposition(index) {
   return violations;
 }
 
+function sameJson(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function evaluateTelegramPhase8BAuthorityIntegrity(index) {
+  const phase8A = index.getText(PHASE_8A_PLAN_PATH);
+  const phase8B = index.getText(PHASE_8B_PLAN_PATH);
+  const violations = [];
+  if (!sameJson(index.getJson(SYMBOL_MAP_PATH), generateSymbolAuthority(phase8B))) {
+    violations.push(`${SYMBOL_MAP_PATH}: generated authority drifted`);
+  }
+  if (!sameJson(index.getJson(TEST_IDENTITIES_PATH), generateIdentityAuthority(phase8A, phase8B))) {
+    violations.push(`${TEST_IDENTITIES_PATH}: generated authority drifted`);
+  }
+
+  const stagingSource = index.getText(STAGING_SHA_PATH).replaceAll("\r\n", "\n");
+  const staging = index.getJson(STAGING_SHA_PATH);
+  const paths = Array.isArray(staging?.files) ? staging.files.map((entry) => entry?.path) : [];
+  const validRecords = Array.isArray(staging?.files)
+    && staging.files.length === 19
+    && staging.files.every((entry) => entry
+      && Object.keys(entry).sort().join(",") === "path,sha256"
+      && typeof entry.path === "string"
+      && /^[a-f0-9]{64}$/.test(entry.sha256));
+  if (staging?.schemaVersion !== 1
+    || staging?.algorithm !== "sha256"
+    || staging?.root !== "src-tauri/src/telegram_impl"
+    || !validRecords
+    || new Set(paths).size !== paths.length
+    || paths.some((value, index) => index > 0 && paths[index - 1].localeCompare(value) >= 0)) {
+    violations.push(`${STAGING_SHA_PATH}: frozen artifact schema drifted`);
+  }
+  const contentAddress = createHash("sha256").update(stagingSource).digest("hex");
+  if (contentAddress !== FROZEN_STAGING_SHA256) {
+    violations.push(`${STAGING_SHA_PATH}: frozen content address drifted`);
+  }
+  return violations;
+}
+
+function workspacePackage(metadata, name) {
+  const members = new Set(metadata?.workspace_members ?? []);
+  const matches = (metadata?.packages ?? []).filter((candidate) => candidate?.name === name && members.has(candidate.id));
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function resolvedNode(metadata, packageId) {
+  const matches = (metadata?.resolve?.nodes ?? []).filter((candidate) => candidate?.id === packageId);
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function evaluateTelegramCrateManifestBoundary(index) {
+  const metadata = index.getCargoMetadata();
+  const violations = [];
+  const app = workspacePackage(metadata, "extractum");
+  const producer = workspacePackage(metadata, "extractum-telegram");
+  if (!app) violations.push("Cargo metadata: missing extractum workspace package");
+  if (!producer) return [...violations, "Cargo metadata: missing extractum-telegram workspace package"];
+  if (!(producer.targets ?? []).some((target) => target?.kind?.includes("lib") && target.name === "extractum_telegram")) {
+    violations.push("extractum-telegram: missing library target");
+  }
+  if (!Object.prototype.hasOwnProperty.call(producer.features ?? {}, "app-test-support")) {
+    violations.push("extractum-telegram: missing app-test-support feature");
+  }
+  if (app) {
+    const edges = (app.dependencies ?? []).filter((dependency) => dependency?.name === "extractum-telegram");
+    const normal = edges.filter((dependency) => dependency.kind === null);
+    const development = edges.filter((dependency) => dependency.kind === "dev");
+    if (normal.length !== 1 || (normal[0]?.features ?? []).length !== 0) {
+      violations.push("extractum: production extractum-telegram edge must be feature-free");
+    }
+    if (development.length !== 1
+      || [...(development[0]?.features ?? [])].sort().join(",") !== "app-test-support") {
+      violations.push("extractum: dev extractum-telegram edge must enable only app-test-support");
+    }
+  }
+  return violations;
+}
+
+function evaluateTelegramCrateDependencyOwnership(index) {
+  const metadata = index.getCargoMetadata();
+  const baseline = index.getJson(GRAMMERS_BASELINE_PATH);
+  const violations = [];
+  const app = workspacePackage(metadata, "extractum");
+  const producer = workspacePackage(metadata, "extractum-telegram");
+  if (!app || !producer) return ["Cargo metadata: missing Telegram owner package"];
+  const appGrammers = (app.dependencies ?? []).filter((dependency) => dependency?.name?.startsWith("grammers-"));
+  if (appGrammers.length) violations.push(`extractum: direct Grammers dependencies are forbidden: ${appGrammers.map(({ name }) => name).sort().join(", ")}`);
+
+  const expectedPackages = Array.isArray(baseline?.packages) ? baseline.packages : [];
+  const producerGrammers = (producer.dependencies ?? []).filter((dependency) => dependency?.name?.startsWith("grammers-"));
+  const actualNames = producerGrammers.map(({ name }) => name).sort();
+  const expectedNames = expectedPackages.map(({ name }) => name).sort();
+  if (actualNames.join("\n") !== expectedNames.join("\n")) {
+    violations.push("extractum-telegram: direct Grammers dependency inventory drifted");
+  }
+  for (const expected of expectedPackages) {
+    const packages = (metadata.packages ?? []).filter(({ name }) => name === expected.name);
+    if (packages.length !== 1) {
+      violations.push(`${expected.name}: expected one Cargo metadata package`);
+      continue;
+    }
+    const selected = packages[0];
+    const expectedSource = `git+https://codeberg.org/Lonami/grammers?rev=${baseline.revision}#${baseline.revision}`;
+    if (selected.source !== expectedSource) violations.push(`${expected.name}: source revision drifted`);
+    if (Object.keys(selected.features ?? {}).sort().join("\n") !== [...expected.universe].sort().join("\n")) {
+      violations.push(`${expected.name}: feature universe drifted`);
+    }
+    const node = resolvedNode(metadata, selected.id);
+    if (!node) {
+      violations.push(`${expected.name}: missing resolved Cargo node`);
+      continue;
+    }
+    const enabled = [...(node.features ?? [])].sort();
+    if (enabled.join("\n") !== [...expected.required].sort().join("\n")
+      || enabled.some((feature) => expected.forbidden.includes(feature))) {
+      violations.push(`${expected.name}: enabled feature closure drifted`);
+    }
+  }
+  return violations;
+}
+
 const evaluators = new Map([
   ["rule:analysis-source-reader-surface-composition", evaluateAnalysisSourceReaderSurfaceComposition],
+  ["rule:telegram-crate-dependency-ownership", evaluateTelegramCrateDependencyOwnership],
+  ["rule:telegram-crate-manifest-boundary", evaluateTelegramCrateManifestBoundary],
+  ["rule:telegram-phase-8b-authority-integrity", evaluateTelegramPhase8BAuthorityIntegrity],
   ["rule:telegram-repository-path-safety", evaluateTelegramRepositoryPathSafety],
 ]);
 

@@ -290,9 +290,10 @@ function svelteFacts(relativePath, source, svelte) {
 }
 
 function defaultCargoMetadata(root) {
-  return execFileSync("cargo", ["metadata", "--format-version", "1", "--no-deps"], {
-    cwd: path.join(root, "src-tauri"),
+  return execFileSync("cargo", ["metadata", "--locked", "--format-version", "1", "--manifest-path", "src-tauri/Cargo.toml"], {
+    cwd: root,
     encoding: "utf8",
+    maxBuffer: 256 * 1024 * 1024,
     windowsHide: true,
   });
 }
@@ -305,6 +306,8 @@ export function createRepositoryIndex({
   loadCargoMetadata = () => defaultCargoMetadata(root),
 }) {
   const repositoryRoot = path.resolve(root);
+  const textCache = new Map();
+  const jsonCache = new Map();
   const typeScriptCache = new Map();
   const svelteCache = new Map();
   let cargoMetadata;
@@ -331,6 +334,12 @@ export function createRepositoryIndex({
   };
 
   return freeze({
+    getText(inputPath) {
+      return cachedSource(textCache, inputPath, (_relativePath, source) => source);
+    },
+    getJson(inputPath) {
+      return cachedSource(jsonCache, inputPath, (_relativePath, source) => freeze(JSON.parse(source)));
+    },
     getTypeScript(inputPath) {
       return cachedSource(typeScriptCache, inputPath, (relativePath, source) => typeScriptFacts(relativePath, source, ts));
     },

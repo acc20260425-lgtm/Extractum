@@ -21,6 +21,10 @@ import {
   validateCensusSchema,
   validateRunnerCensus,
 } from "./testing-transition.mjs";
+import {
+  collectTelegramCargoReplacementEvidence,
+  evaluateTelegramCargoTestIdentityOwnership,
+} from "../validate-testing-transition.mjs";
 
 const root = "C:/repo";
 const census = {
@@ -130,6 +134,93 @@ describe("runner census validation", () => {
     expect(validateRunnerCensus(check({
       census: { ...census, fixtureExceptions: [{ path: "src/a.test.ts", reason: "fixture", owner: "fixture", extra: true }] },
     }))).toEqual(expect.arrayContaining(["unknown fixture exception field: extra"]));
+  });
+});
+
+describe("Telegram Cargo test identity ownership", () => {
+  const authority = {
+    preNewApp: ["app::tests::owned"],
+    phase8BNewApp: [],
+    preNewStaged: ["telegram_impl::session::tests::owned"],
+    phase8BNewStaged: [],
+  };
+  const passingLists = {
+    extractum: { exitCode: 0, stdout: "app::tests::owned: test\n1 test, 0 benchmarks\n" },
+    "extractum-telegram": { exitCode: 0, stdout: "session::tests::owned: test\n1 test, 0 benchmarks\n" },
+  };
+  const verifySteps = [{ command: "cargo", args: ["test", "--manifest-path", "src-tauri/Cargo.toml", "--workspace", "--all-targets"] }];
+
+  it("accepts exact declared identities under their terminal Cargo owners", () => {
+    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: passingLists, verifySteps })).toEqual([]);
+  });
+
+  it("fails closed on missing, duplicate, wrong-package, failed-list, and missing-owner evidence", () => {
+    const missing = structuredClone(passingLists);
+    missing.extractum.stdout = "0 tests, 0 benchmarks\n";
+    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: missing, verifySteps })).toEqual(
+      expect.arrayContaining([expect.stringMatching(/missing.*app::tests::owned/i)]),
+    );
+
+    const duplicateAndWrong = structuredClone(passingLists);
+    duplicateAndWrong["extractum-telegram"].stdout += "session::tests::owned: test\napp::tests::owned: test\n";
+    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: duplicateAndWrong, verifySteps })).toEqual(
+      expect.arrayContaining([expect.stringMatching(/duplicate.*session::tests::owned/i), expect.stringMatching(/wrong package.*app::tests::owned/i)]),
+    );
+
+    const failed = structuredClone(passingLists);
+    failed.extractum.exitCode = 101;
+    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: failed, verifySteps })).toEqual(
+      expect.arrayContaining([expect.stringMatching(/extractum.*failed/i)]),
+    );
+    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: passingLists, verifySteps: [] })).toEqual(
+      expect.arrayContaining([expect.stringMatching(/verify owner.*extractum/i), expect.stringMatching(/verify owner.*extractum-telegram/i)]),
+    );
+  });
+
+  it("lists each referenced Cargo package at most once and skips unreferenced lists", () => {
+    const runCargoList = vi.fn((packageName: string) => passingLists[packageName as keyof typeof passingLists]);
+    const ledger = { rows: [{ replacementIds: [
+      "test:cargo:extractum::app::tests::owned",
+      "test:cargo:extractum::app::tests::owned",
+      "tool:telegram-cargo-test-identity-ownership",
+    ] }] };
+
+    const evidence = collectTelegramCargoReplacementEvidence({ ledger, authority, verifySteps, runCargoList });
+
+    expect(runCargoList.mock.calls).toEqual([["extractum"], ["extractum-telegram"]]);
+    expect(evidence.resolvedReplacementIds).toEqual(new Set([
+      "test:cargo:extractum::app::tests::owned",
+      "tool:telegram-cargo-test-identity-ownership",
+    ]));
+    const unused = vi.fn();
+    expect(collectTelegramCargoReplacementEvidence({ ledger: { rows: [] }, authority, verifySteps, runCargoList: unused }))
+      .toMatchObject({ issues: [], resolvedReplacementIds: new Set() });
+    expect(unused).not.toHaveBeenCalled();
+  });
+
+  it("closes a transition-only tool replacement only with resolved Cargo identity evidence", () => {
+    const historical = {
+      id: "SC-000001",
+      path: "src/deleted.test.ts",
+      title: "Cargo test identity replacement",
+      sourceHash: "a".repeat(64),
+      assertionCount: 1,
+      lineage: [],
+      invariant: "The declared Cargo test identity remains under its terminal package.",
+      disposition: "tool_owned",
+      replacementIds: ["tool:telegram-cargo-test-identity-ownership"],
+    };
+    const context = {
+      ledger: { schemaVersion: 1, frozenAtCommit: "f".repeat(40), sourceReaderExceptions: [], rows: [historical] },
+      declarationInventory: [],
+      sourceReaders: [],
+    };
+
+    expect(validateSourceContractLedger({
+      ...context,
+      resolvedReplacementIds: new Set(["tool:telegram-cargo-test-identity-ownership"]),
+    }).rows).toEqual([{ id: "SC-000001", state: "closed" }]);
+    expect(validateSourceContractLedger(context).rows).toEqual([{ id: "SC-000001", state: "open" }]);
   });
 });
 

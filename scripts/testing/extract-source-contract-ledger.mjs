@@ -893,6 +893,7 @@ function validateResolution(row, resolution, context, issues) {
 }
 
 function replacementResolved(id, context) {
+  if (context.resolvedReplacementIds?.has(id)) return true;
   if (typeof id !== "string" || !id.startsWith("test:vitest:")) return false;
   const target = id.slice("test:vitest:".length);
   const split = target.indexOf("#");

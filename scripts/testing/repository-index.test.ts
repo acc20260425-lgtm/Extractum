@@ -160,6 +160,30 @@ describe("RepositoryIndex", () => {
     expect(fixture.loadCargoMetadata).toHaveBeenCalledOnce();
   });
 
+  it("returns cached declared text and JSON artifacts", () => {
+    const fixture = fixtureIndex({
+      "docs/authority.md": "declared authority\n",
+      "src/generated.json": '{"schemaVersion":1,"items":["one"]}',
+    });
+
+    const firstText = fixture.index.getText("docs/authority.md");
+    const firstJson = fixture.index.getJson("src/generated.json");
+
+    expect(firstText).toBe("declared authority\n");
+    expect(firstJson).toEqual({ schemaVersion: 1, items: ["one"] });
+    expect(fixture.index.getText("docs/authority.md")).toBe(firstText);
+    expect(fixture.index.getJson("src/generated.json")).toBe(firstJson);
+    expect(fixture.readFile).toHaveBeenCalledTimes(2);
+  });
+
+  it("fails closed and caches malformed declared JSON", () => {
+    const fixture = fixtureIndex({ "src/generated.json": "{not-json" });
+
+    expect(() => fixture.index.getJson("src/generated.json")).toThrow(/src\/generated\.json/);
+    expect(() => fixture.index.getJson("src/generated.json")).toThrow(/src\/generated\.json/);
+    expect(fixture.readFile).toHaveBeenCalledOnce();
+  });
+
   it("throws a path-qualified error for malformed TypeScript", () => {
     const { index } = fixtureIndex({ "src/broken.ts": "export const = ;" });
 

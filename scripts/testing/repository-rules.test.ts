@@ -10,6 +10,8 @@ import { evaluateRule, registeredRuleIds } from "./repository-rules.mjs";
 const root = path.resolve("repository-rule-fixture");
 const TELEGRAM_PATH = "src/lib/telegram-contract-paths.ts";
 const ANALYSIS_SURFACE_PATH = "src/lib/components/analysis/report-source-surface.svelte";
+const SYMBOL_MAP_PATH = "src/lib/telegram-8b-symbol-map.json";
+const GRAMMERS_BASELINE_PATH = "src/lib/telegram-grammers-feature-baseline.json";
 
 type RuleFixture = {
   positive: Record<string, string>;
@@ -163,6 +165,164 @@ function indexFor(sources: Record<string, string>) {
   });
 }
 
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value));
+}
+
+const grammersBaseline = {
+  schemaVersion: 1,
+  revision: "1f901ce6e973fdcf0e74267f3d8efad5c729daaa",
+  packages: [
+    { name: "grammers-client", required: [], forbidden: ["default"], universe: ["default"] },
+    { name: "grammers-mtsender", required: [], forbidden: ["proxy"], universe: ["proxy"] },
+    { name: "grammers-session", required: ["serde"], forbidden: ["default"], universe: ["default", "serde"] },
+    { name: "grammers-tl-types", required: ["default", "deserializable-functions"], forbidden: ["impl-serde"], universe: ["default", "deserializable-functions", "impl-serde"] },
+  ],
+};
+
+function cargoMetadata() {
+  const revision = grammersBaseline.revision;
+  const grammers = grammersBaseline.packages.map((entry) => ({
+    id: `${entry.name} 0.1.0 (git+https://codeberg.org/Lonami/grammers?rev=${revision}#${revision})`,
+    name: entry.name,
+    source: `git+https://codeberg.org/Lonami/grammers?rev=${revision}#${revision}`,
+    features: Object.fromEntries(entry.universe.map((feature) => [feature, []])),
+    targets: [{ kind: ["lib"], name: entry.name.replaceAll("-", "_") }],
+    dependencies: [],
+  }));
+  const app = {
+    id: "path+file:///repo/src-tauri#extractum@0.2.0",
+    name: "extractum",
+    source: null,
+    manifest_path: "C:/repo/src-tauri/Cargo.toml",
+    features: {},
+    targets: [{ kind: ["lib"], name: "extractum_lib" }],
+    dependencies: [
+      { name: "extractum-telegram", kind: null, source: null, path: "C:/repo/src-tauri/crates/extractum-telegram", target: null, rename: null, features: [] },
+      { name: "extractum-telegram", kind: "dev", source: null, path: "C:/repo/src-tauri/crates/extractum-telegram", target: null, rename: null, features: ["app-test-support"] },
+    ],
+  };
+  const producer = {
+    id: "path+file:///repo/src-tauri/crates/extractum-telegram#0.2.0",
+    name: "extractum-telegram",
+    source: null,
+    manifest_path: "C:/repo/src-tauri/crates/extractum-telegram/Cargo.toml",
+    features: { "app-test-support": [] },
+    targets: [{ kind: ["lib"], name: "extractum_telegram" }],
+    dependencies: grammers.map(({ name, source }) => ({ name, kind: null, source: source.replace(`#${revision}`, ""), path: null, target: null, rename: null, features: [] })),
+  };
+  return {
+    packages: [app, producer, ...grammers],
+    workspace_members: [app.id, producer.id],
+    resolve: {
+      nodes: [
+        { id: app.id, features: [], deps: [{ name: "extractum_telegram", pkg: producer.id, dep_kinds: [{ kind: null, target: null }, { kind: "dev", target: null }] }] },
+        { id: producer.id, features: ["app-test-support"], deps: grammers.map(({ id, name }) => ({ name: name.replaceAll("-", "_"), pkg: id, dep_kinds: [{ kind: null, target: null }] })) },
+        ...grammers.map((entry) => ({ id: entry.id, features: [...grammersBaseline.packages.find(({ name }) => name === entry.name)!.required], deps: [] })),
+      ],
+    },
+  };
+}
+
+function cargoIndex(metadata = cargoMetadata()) {
+  return createRepositoryIndex({
+    root,
+    readFile(absolutePath: string) {
+      const relativePath = path.relative(root, absolutePath).replaceAll("\\", "/");
+      if (relativePath === GRAMMERS_BASELINE_PATH) return JSON.stringify(grammersBaseline);
+      throw new Error(`missing fixture: ${relativePath}`);
+    },
+    ts,
+    svelte,
+    loadCargoMetadata: () => metadata,
+  });
+}
+
+function realAuthorityIndex() {
+  return createRepositoryIndex({ root: process.cwd() });
+}
+
+const telegramStructuredFixtures = {
+  "rule:telegram-phase-8b-authority-integrity": {
+    positive: () => realAuthorityIndex(),
+    mutations: {
+      "changes the generated symbol authority": () => {
+        const index = realAuthorityIndex();
+        return {
+          ...index,
+          getJson(inputPath: string) {
+            const value = index.getJson(inputPath);
+            return inputPath === SYMBOL_MAP_PATH ? { ...value, schemaVersion: 2 } : value;
+          },
+        };
+      },
+      "changes the generated test identity authority": () => {
+        const index = realAuthorityIndex();
+        return {
+          ...index,
+          getJson(inputPath: string) {
+            const value = index.getJson(inputPath);
+            return inputPath === "src/lib/telegram-8b-test-identities.json"
+              ? { ...value, schemaVersion: 2 }
+              : value;
+          },
+        };
+      },
+      "changes the frozen staging content address": () => {
+        const index = realAuthorityIndex();
+        return {
+          ...index,
+          getText(inputPath: string) {
+            const value = index.getText(inputPath);
+            return inputPath === "src/lib/telegram-8b-staging-sha256.json" ? `${value} ` : value;
+          },
+        };
+      },
+    },
+  },
+  "rule:telegram-crate-manifest-boundary": {
+    positive: () => cargoIndex(),
+    mutations: {
+      "removes the producer library target": () => {
+        const metadata = clone(cargoMetadata());
+        metadata.packages.find(({ name }: any) => name === "extractum-telegram")!.targets = [];
+        return cargoIndex(metadata);
+      },
+      "enables app test support on the production edge": () => {
+        const metadata = clone(cargoMetadata());
+        metadata.packages.find(({ name }: any) => name === "extractum")!.dependencies[0].features = ["app-test-support"];
+        return cargoIndex(metadata);
+      },
+      "removes the dev-only feature edge": () => {
+        const metadata = clone(cargoMetadata());
+        metadata.packages.find(({ name }: any) => name === "extractum")!.dependencies.pop();
+        return cargoIndex(metadata);
+      },
+    },
+  },
+  "rule:telegram-crate-dependency-ownership": {
+    positive: () => cargoIndex(),
+    mutations: {
+      "adds a direct app Grammers dependency": () => {
+        const metadata = clone(cargoMetadata());
+        metadata.packages.find(({ name }: any) => name === "extractum")!.dependencies.push({ name: "grammers-client", kind: null });
+        return cargoIndex(metadata);
+      },
+      "drifts the Grammers source revision": () => {
+        const metadata = clone(cargoMetadata());
+        metadata.packages.find(({ name }: any) => name === "grammers-client")!.source = "git+https://codeberg.org/Lonami/grammers?rev=wrong#wrong";
+        return cargoIndex(metadata);
+      },
+      "enables a forbidden Grammers feature": () => {
+        const metadata = clone(cargoMetadata());
+        const selected = metadata.packages.find(({ name }: any) => name === "grammers-tl-types")!;
+        metadata.resolve.nodes.find(({ id }: any) => id === selected.id)!.features.push("impl-serde");
+        return cargoIndex(metadata);
+      },
+    },
+  },
+} as const;
+
 function inSlice3ARanges(id: string) {
   const number = Number(id.slice("SC-".length));
   return (number >= 29 && number <= 59)
@@ -187,27 +347,34 @@ describe("repository rule registry", () => {
       .filter((id): id is string => id.startsWith("rule:")),
   );
 
-  it("derives the frozen 22-ID allowlist and registers only the two Task 1 evaluators", () => {
+  it("derives the frozen 22-ID allowlist and registers the implemented Task 2B evaluators", () => {
     expect(allowedRuleIds.size).toBe(22);
     expect(registeredRuleIds).toEqual([
       "rule:analysis-source-reader-surface-composition",
+      "rule:telegram-crate-dependency-ownership",
+      "rule:telegram-crate-manifest-boundary",
+      "rule:telegram-phase-8b-authority-integrity",
       "rule:telegram-repository-path-safety",
     ]);
     for (const id of registeredRuleIds) expect(allowedRuleIds.has(id), id).toBe(true);
   });
 
   it("gives every registered evaluator its own positive fixture and violating mutation", () => {
-    expect(Object.keys(ruleFixtures).sort()).toEqual(registeredRuleIds);
+    expect([...Object.keys(ruleFixtures), ...Object.keys(telegramStructuredFixtures)].sort()).toEqual(registeredRuleIds);
 
     for (const id of registeredRuleIds) {
       const fixture = ruleFixtures[id];
-      expect(evaluateRule({ id, index: indexFor(fixture.positive) }), `${id} positive`).toEqual({
+      const structured = telegramStructuredFixtures[id as keyof typeof telegramStructuredFixtures];
+      const positiveIndex = structured ? structured.positive() : indexFor(fixture.positive);
+      expect(evaluateRule({ id, index: positiveIndex }), `${id} positive`).toEqual({
         id,
         violations: [],
       });
-      expect(Object.keys(fixture.mutations), `${id} mutations`).not.toEqual([]);
-      for (const [name, mutation] of Object.entries(fixture.mutations)) {
-        expect(evaluateRule({ id, index: indexFor(mutation) }).violations, `${id}: ${name}`).not.toEqual([]);
+      const mutations = structured?.mutations ?? fixture.mutations;
+      expect(Object.keys(mutations), `${id} mutations`).not.toEqual([]);
+      for (const [name, mutation] of Object.entries(mutations)) {
+        const mutationIndex = structured ? mutation() : indexFor(mutation);
+        expect(evaluateRule({ id, index: mutationIndex }).violations, `${id}: ${name}`).not.toEqual([]);
       }
     }
   });
