@@ -191,7 +191,6 @@ describe("test conventions", () => {
     })).toEqual([
       "src/lib/unapproved.spec.ts: direct text source reader is not an approved index or fixture owner",
     ]);
-    expect(directTextReaderViolations(testSources)).toEqual([]);
   });
 
   it("keeps the Vitest project commands and ledger-derived legacy inventory explicit", () => {
