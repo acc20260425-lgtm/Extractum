@@ -4,6 +4,23 @@ import { generateSymbolAuthority } from "../telegram-8b-symbol-map.mjs";
 
 const TELEGRAM_PATH = "src/lib/telegram-contract-paths.ts";
 const ANALYSIS_SURFACE_PATH = "src/lib/components/analysis/report-source-surface.svelte";
+const SOURCE_BROWSER_SHELL_PATH = "src/lib/components/analysis/source-browser-shell.svelte";
+const SOURCE_GROUP_SOURCES_PATH = "src/lib/components/analysis/source-group-sources-view.svelte";
+const SOURCE_GROUP_ACTIVITY_PATH = "src/lib/components/analysis/source-group-activity-view.svelte";
+const CANONICAL_LEAF_PATHS = [
+  ["SourceGroupSourcesView", SOURCE_GROUP_SOURCES_PATH],
+  ["SnapshotGroupSourcesView", "src/lib/components/analysis/snapshot-group-sources-view.svelte"],
+  ["SnapshotItemsView", "src/lib/components/analysis/snapshot-items-view.svelte"],
+  ["RunSnapshotMetadataView", "src/lib/components/analysis/run-snapshot-metadata-view.svelte"],
+];
+const HIGHLIGHT_STYLE_TARGETS = [
+  ["src/lib/components/analysis/telegram-timeline-reader.svelte", "li", "primary", true],
+  ["src/lib/components/analysis/youtube-transcript-reader.svelte", "li", "primary", true],
+  ["src/lib/components/analysis/snapshot-items-view.svelte", "article", "accent", true],
+  ["src/lib/components/analysis/snapshot-group-sources-view.svelte", "li", "accent", true],
+  ["src/lib/components/analysis/universal-items-view.svelte", "article", "accent", false],
+  ["src/lib/components/analysis/youtube-comments-view.svelte", "article", "accent", false],
+];
 const PHASE_8A_PLAN_PATH = "docs/superpowers/plans/2026-07-26-extractum-telegram-8a-preparation.md";
 const PHASE_8B_PLAN_PATH = "docs/superpowers/plans/2026-07-28-extractum-telegram-8b-preparation.md";
 const SYMBOL_MAP_PATH = "src/lib/telegram-8b-symbol-map.json";
@@ -203,6 +220,133 @@ function evaluateAnalysisSourceReaderSurfaceComposition(index) {
   return violations;
 }
 
+function evaluateAnalysisSourceBrowserExplicitSubjectContract(index) {
+  const facts = index.getSvelte(ANALYSIS_SURFACE_PATH);
+  const shells = facts.components.filter(({ name }) => name === "SourceBrowserShell");
+  const violations = [];
+  if (!shells.length) {
+    return [`${ANALYSIS_SURFACE_PATH}: missing SourceBrowserShell composition`];
+  }
+  for (const [position, shell] of shells.entries()) {
+    if (!shell.attributes.includes("subject")) {
+      violations.push(`${ANALYSIS_SURFACE_PATH}: SourceBrowserShell ${position + 1} must receive subject`);
+    }
+    if (shell.attributes.includes("source")) {
+      violations.push(`${ANALYSIS_SURFACE_PATH}: SourceBrowserShell ${position + 1} must not receive legacy source`);
+    }
+  }
+  return violations;
+}
+
+function selectorHas(selector, type, name, value) {
+  return selector.some((part) => part.type === type
+    && part.name === name
+    && (value === undefined || part.value === value));
+}
+
+function evaluateAnalysisEvidenceHighlightTokenStyling(index) {
+  const violations = [];
+  for (const [path, tag, token, paired] of HIGHLIGHT_STYLE_TARGETS) {
+    const facts = index.getSvelte(path);
+    const matchingRule = facts.styleRules.find((rule) => {
+      const evidenceSelector = rule.selectors.some((selector) =>
+        selectorHas(selector, "tag", tag)
+        && selectorHas(selector, "attribute", "data-evidence-highlighted", "true"));
+      const selectedSelector = rule.selectors.some((selector) =>
+        selectorHas(selector, "tag", tag) && selectorHas(selector, "class", "selected"));
+      const semanticToken = rule.declarations.some(({ value }) => value.includes(`var(--${token})`));
+      return evidenceSelector && (!paired || selectedSelector) && semanticToken;
+    });
+    if (!matchingRule) {
+      violations.push(`${path}: evidence highlight must use the semantic --${token} selection token${paired ? " beside selected styling" : ""}`);
+    }
+  }
+  return violations;
+}
+
+function routeApiImport(source) {
+  return source === "$lib/api"
+    || source.startsWith("$lib/api/")
+    || source === "@tauri-apps/api"
+    || source.startsWith("@tauri-apps/api/");
+}
+
+function evaluateAnalysisSourceGroupTabLeafBoundary(index) {
+  const facts = index.getSvelte(SOURCE_GROUP_SOURCES_PATH);
+  const components = new Set(facts.components.map(({ name }) => name));
+  const violations = [];
+  for (const required of ["TelegramTimelineReader", "YoutubeTranscriptReader"]) {
+    if (!components.has(required)) {
+      violations.push(`${SOURCE_GROUP_SOURCES_PATH}: missing leaf reader ${required}`);
+    }
+  }
+  for (const forbidden of ["SourceBrowserShell", "SourceActivityView"]) {
+    if (components.has(forbidden)) {
+      violations.push(`${SOURCE_GROUP_SOURCES_PATH}: route-owning ${forbidden} is forbidden`);
+    }
+  }
+  const routeImports = facts.imports.map(({ source }) => source).filter(routeApiImport);
+  if (routeImports.length) {
+    violations.push(`${SOURCE_GROUP_SOURCES_PATH}: route API imports are forbidden: ${routeImports.sort().join(", ")}`);
+  }
+  return violations;
+}
+
+function componentNames(facts) {
+  return new Set(facts.components.map(({ name }) => name));
+}
+
+function evaluateAnalysisSourceBrowserCanonicalComposition(index) {
+  const surfaceComponents = componentNames(index.getSvelte(ANALYSIS_SURFACE_PATH));
+  const shellComponents = componentNames(index.getSvelte(SOURCE_BROWSER_SHELL_PATH));
+  const violations = [];
+  if (!surfaceComponents.has("SourceBrowserShell")) {
+    violations.push(`${ANALYSIS_SURFACE_PATH}: missing canonical SourceBrowserShell`);
+  }
+  for (const transitional of TRANSITIONAL_SOURCE_COMPONENTS) {
+    if (surfaceComponents.has(transitional)) {
+      violations.push(`${ANALYSIS_SURFACE_PATH}: transitional ${transitional} composition is forbidden`);
+    }
+  }
+  for (const [component, path] of CANONICAL_LEAF_PATHS) {
+    if (!shellComponents.has(component)) {
+      violations.push(`${SOURCE_BROWSER_SHELL_PATH}: missing canonical leaf ${component}`);
+    }
+    const leaf = index.getSvelte(path);
+    const routeImports = leaf.imports.map(({ source }) => source).filter(routeApiImport);
+    if (routeImports.length) {
+      violations.push(`${path}: route API imports are forbidden: ${routeImports.sort().join(", ")}`);
+    }
+    if (componentNames(leaf).has("SourceBrowserShell")) {
+      violations.push(`${path}: nested SourceBrowserShell is forbidden`);
+    }
+  }
+  return violations;
+}
+
+function evaluateAnalysisSourceGroupActivityBoundary(index) {
+  const shellComponents = componentNames(index.getSvelte(SOURCE_BROWSER_SHELL_PATH));
+  const groupActivity = index.getSvelte(SOURCE_GROUP_ACTIVITY_PATH);
+  const groupComponents = componentNames(groupActivity);
+  const violations = [];
+  for (const required of ["SourceGroupActivityView", "SourceActivityView"]) {
+    if (!shellComponents.has(required)) {
+      violations.push(`${SOURCE_BROWSER_SHELL_PATH}: missing ${required} activity branch`);
+    }
+  }
+  if (!groupComponents.has("EmptyState")) {
+    violations.push(`${SOURCE_GROUP_ACTIVITY_PATH}: missing group-owned activity leaf`);
+  }
+  if (groupComponents.has("SourceActivityView")) {
+    violations.push(`${SOURCE_GROUP_ACTIVITY_PATH}: per-source SourceActivityView is forbidden`);
+  }
+  const routeImports = groupActivity.imports.map(({ source }) => source).filter(routeApiImport);
+  if (routeImports.length) {
+    violations.push(`${SOURCE_GROUP_ACTIVITY_PATH}: route API imports are forbidden: ${routeImports.sort().join(", ")}`);
+  }
+  return violations;
+}
+
 function sameJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -325,6 +469,11 @@ function evaluateTelegramCrateDependencyOwnership(index) {
 }
 
 const evaluators = new Map([
+  ["rule:analysis-evidence-highlight-token-styling", evaluateAnalysisEvidenceHighlightTokenStyling],
+  ["rule:analysis-source-browser-canonical-composition", evaluateAnalysisSourceBrowserCanonicalComposition],
+  ["rule:analysis-source-browser-explicit-subject-contract", evaluateAnalysisSourceBrowserExplicitSubjectContract],
+  ["rule:analysis-source-group-activity-boundary", evaluateAnalysisSourceGroupActivityBoundary],
+  ["rule:analysis-source-group-tab-leaf-boundary", evaluateAnalysisSourceGroupTabLeafBoundary],
   ["rule:analysis-source-reader-surface-composition", evaluateAnalysisSourceReaderSurfaceComposition],
   ["rule:telegram-crate-dependency-ownership", evaluateTelegramCrateDependencyOwnership],
   ["rule:telegram-crate-manifest-boundary", evaluateTelegramCrateManifestBoundary],

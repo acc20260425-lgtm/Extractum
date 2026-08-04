@@ -1155,7 +1155,7 @@ describe("analysis source readers", () => {
       scrollIntoView.mockClear();
       const view = render(SourceBrowserShell, { props: traceCase.makeProps(`${traceCase.name}:first`) });
       const selector = `[data-trace-ref="${traceCase.traceRef}"][data-evidence-highlighted="true"]`;
-      const { scrollConsumers } = traceCase;
+      const scrollConsumers = traceCase.scrollConsumers;
 
       await waitFor(() => expect(document.querySelector(selector)).toBeTruthy());
       await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(scrollConsumers));

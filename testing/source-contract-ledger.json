@@ -3229,7 +3229,7 @@
       "invariant": "Routes live browsable sources and source groups through SourceBrowserShell.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > routes live browsable sources and source groups through SourceBrowserShell"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > routes live browsable sources and source groups through SourceBrowserShell"
       ]
     },
     {
@@ -3257,7 +3257,7 @@
       "invariant": "Routes available run snapshots through SourceBrowserShell while keeping the header route-owned.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > routes available run snapshots through SourceBrowserShell while keeping the header route-owned"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > routes available run snapshots through SourceBrowserShell while keeping the header route-owned"
       ]
     },
     {
@@ -3271,7 +3271,7 @@
       "invariant": "Handles project-scoped run snapshots as grouped source material.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > handles project-scoped run snapshots as grouped source material"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > handles project-scoped run snapshots as grouped source material"
       ]
     },
     {
@@ -3285,7 +3285,7 @@
       "invariant": "Keeps snapshot shell data frozen-only and live props empty.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > keeps snapshot shell data frozen-only and live props empty"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > keeps snapshot shell data frozen-only and live props empty"
       ]
     },
     {
@@ -3299,7 +3299,7 @@
       "invariant": "Renders YouTube playlist videos through SourceBrowserShell.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > renders YouTube playlist videos through SourceBrowserShell"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders YouTube playlist videos through SourceBrowserShell"
       ]
     },
     {
@@ -3313,7 +3313,7 @@
       "invariant": "Keeps SourceBrowserShell mounted across supported live source switches.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > keeps SourceBrowserShell mounted across supported live source switches"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > keeps SourceBrowserShell mounted across supported live source switches"
       ]
     },
     {
@@ -3327,7 +3327,7 @@
       "invariant": "Preserves the existing Telegram timeline controls through the shell.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > preserves the existing Telegram timeline controls through the shell"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > preserves the existing Telegram timeline controls through the shell"
       ]
     },
     {
@@ -3341,7 +3341,7 @@
       "invariant": "Keeps live source and run snapshot basis visible.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > keeps live source and run snapshot basis visible"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > keeps live source and run snapshot basis visible"
       ]
     },
     {
@@ -3355,7 +3355,7 @@
       "invariant": "Uses a compact source reader heading instead of repeating the selected title.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > uses a compact source reader heading instead of repeating the selected title"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > uses a compact source reader heading instead of repeating the selected title"
       ]
     },
     {
@@ -3369,7 +3369,7 @@
       "invariant": "Renders Telegram as a metadata-rich timeline without binary previews.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > renders Telegram as a metadata-rich timeline without binary previews"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders Telegram as a metadata-rich timeline without binary previews"
       ]
     },
     {
@@ -3383,7 +3383,7 @@
       "invariant": "Surfaces migrated Telegram history labels and scope controls.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > surfaces migrated Telegram history labels and scope controls"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > surfaces migrated Telegram history labels and scope controls"
       ]
     },
     {
@@ -3397,7 +3397,7 @@
       "invariant": "Shows migrated Telegram history availability before imported rows are browsable.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > shows migrated Telegram history availability before imported rows are browsable"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > shows migrated Telegram history availability before imported rows are browsable"
       ]
     },
     {
@@ -3411,7 +3411,7 @@
       "invariant": "Renders Telegram topic filtering only in live single-source mode.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > renders Telegram topic filtering only in live single-source mode"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders Telegram topic filtering only in live single-source mode"
       ]
     },
     {
@@ -3425,7 +3425,7 @@
       "invariant": "Uses the shared takeout recovery notice in the selected source surface.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > uses the shared takeout recovery notice in the selected source surface"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > uses the shared takeout recovery notice in the selected source surface"
       ]
     },
     {
@@ -3439,7 +3439,7 @@
       "invariant": "Keeps live single-source timeline readers pageable.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > keeps live single-source timeline readers pageable"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > keeps live single-source timeline readers pageable"
       ]
     },
     {
@@ -3450,11 +3450,9 @@
       "assertionCount": 4,
       "authorityHash": "1b22d2d8674d1daa04c1e9c5f080714756b5e4b2c232e3a2a6ec1ec063dc885e",
       "lineage": [],
-      "invariant": "Keeps sticky date labels below overlay source switching UI.",
-      "disposition": "behavior",
-      "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > keeps sticky date labels below overlay source switching UI"
-      ]
+      "invariant": "Exact sticky/z-index visual contract is deleted because jsdom cannot expose Svelte scoped layout styles truthfully and DOM ordering remains covered by direct behavior.",
+      "disposition": "delete",
+      "deletionReason": "Exact sticky/z-index visual contract is deleted because jsdom cannot expose Svelte scoped layout styles truthfully and DOM ordering remains covered by direct behavior."
     },
     {
       "id": "SC-000239",
@@ -3500,11 +3498,9 @@
       "assertionCount": 4,
       "authorityHash": "1b22d2d8674d1daa04c1e9c5f080714756b5e4b2c232e3a2a6ec1ec063dc885e",
       "lineage": [],
-      "invariant": "Allows Telegram message text to hyphenate long words.",
-      "disposition": "behavior",
-      "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > allows Telegram message text to hyphenate long words"
-      ]
+      "invariant": "Exact CSS hyphenation/wrapping contract is deleted while retaining accessible long-word text behavior elsewhere.",
+      "disposition": "delete",
+      "deletionReason": "Exact CSS hyphenation/wrapping contract is deleted while retaining accessible long-word text behavior elsewhere."
     },
     {
       "id": "SC-000243",
@@ -3517,7 +3513,7 @@
       "invariant": "Renders YouTube videos as transcript-first source readers.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > renders YouTube videos as transcript-first source readers"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders YouTube videos as transcript-first source readers"
       ]
     },
     {
@@ -3531,7 +3527,7 @@
       "invariant": "Keeps YouTube live sync actions out of readonly snapshot transcript readers.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > keeps YouTube live sync actions out of readonly snapshot transcript readers"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > keeps YouTube live sync actions out of readonly snapshot transcript readers"
       ]
     },
     {
@@ -3545,7 +3541,7 @@
       "invariant": "Keeps run snapshot YouTube readers detached from live video detail.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > keeps run snapshot YouTube readers detached from live video detail"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > keeps run snapshot YouTube readers detached from live video detail"
       ]
     },
     {
@@ -3559,7 +3555,7 @@
       "invariant": "Keeps live YouTube video comments sync status and CTAs in transcript reader.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > keeps live YouTube video comments sync status and CTAs in transcript reader"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > keeps live YouTube video comments sync status and CTAs in transcript reader"
       ]
     },
     {
@@ -3573,7 +3569,7 @@
       "invariant": "Moves detailed source job cards into the Activity tab.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > moves detailed source job cards into the Activity tab"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > moves detailed source job cards into the Activity tab"
       ]
     },
     {
@@ -3587,7 +3583,7 @@
       "invariant": "Keeps provider tabs to contextual CTAs instead of detailed job cards.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > keeps provider tabs to contextual CTAs instead of detailed job cards"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > keeps provider tabs to contextual CTAs instead of detailed job cards"
       ]
     },
     {
@@ -3601,7 +3597,7 @@
       "invariant": "Covers Telegram source activity without adding backend job APIs.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > covers Telegram source activity without adding backend job APIs"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > covers Telegram source activity without adding backend job APIs"
       ]
     },
     {
@@ -3615,7 +3611,7 @@
       "invariant": "Renders universal Items as a loaded-window browser.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > renders universal Items as a loaded-window browser"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders universal Items as a loaded-window browser"
       ]
     },
     {
@@ -3629,7 +3625,7 @@
       "invariant": "Renders snapshot Items as a frozen SourceReaderItem browser.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > renders snapshot Items as a frozen SourceReaderItem browser"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders snapshot Items as a frozen SourceReaderItem browser"
       ]
     },
     {
@@ -3643,7 +3639,7 @@
       "invariant": "Renders snapshot group Sources with global snapshot paging only.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > renders snapshot group Sources with global snapshot paging only"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders snapshot group Sources with global snapshot paging only"
       ]
     },
     {
@@ -3657,7 +3653,7 @@
       "invariant": "Renders run snapshot metadata from route-owned fields.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > renders run snapshot metadata from route-owned fields"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders run snapshot metadata from route-owned fields"
       ]
     },
     {
@@ -3671,7 +3667,7 @@
       "invariant": "Renders YouTube comments as a loaded-window browser.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > renders YouTube comments as a loaded-window browser"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders YouTube comments as a loaded-window browser"
       ]
     },
     {
@@ -3685,7 +3681,7 @@
       "invariant": "Renders source metadata in structured sections with bounded raw JSON.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > renders source metadata in structured sections with bounded raw JSON"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source metadata in structured sections with bounded raw JSON"
       ]
     },
     {
@@ -3699,7 +3695,7 @@
       "invariant": "Passes playlist detail into metadata and playlist-specific empty copy into Items.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > passes playlist detail into metadata and playlist-specific empty copy into Items"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > passes playlist detail into metadata and playlist-specific empty copy into Items"
       ]
     },
     {
@@ -3713,7 +3709,7 @@
       "invariant": "Passes live YouTube video comments and jobs only into live transcript readers.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > passes live YouTube video comments and jobs only into live transcript readers"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > passes live YouTube video comments and jobs only into live transcript readers"
       ]
     },
     {
@@ -3727,7 +3723,7 @@
       "invariant": "Renders YouTube source job activity with progress warnings errors and cancel.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > renders YouTube source job activity with progress warnings errors and cancel"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders YouTube source job activity with progress warnings errors and cancel"
       ]
     },
     {
@@ -3741,7 +3737,7 @@
       "invariant": "Surfaces YouTube runtime diagnostics in the live source canvas.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > surfaces YouTube runtime diagnostics in the live source canvas"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > surfaces YouTube runtime diagnostics in the live source canvas"
       ]
     },
     {
@@ -3755,7 +3751,7 @@
       "invariant": "Renders transcript search as one compact input shell.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > renders transcript search as one compact input shell"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders transcript search as one compact input shell"
       ]
     },
     {
@@ -3769,7 +3765,7 @@
       "invariant": "Renders grouped transcript rows as a continuous reading surface.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > renders grouped transcript rows as a continuous reading surface"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders grouped transcript rows as a continuous reading surface"
       ]
     },
     {
@@ -3783,7 +3779,7 @@
       "invariant": "Scrolls selected Telegram and YouTube source rows into view.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > scrolls selected Telegram and YouTube source rows into view"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > scrolls selected Telegram and YouTube source rows into view"
       ]
     },
     {
@@ -3797,7 +3793,7 @@
       "invariant": "Adds one-shot evidence highlight support to trace-capable readers.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > adds one-shot evidence highlight support to trace-capable readers"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > adds one-shot evidence highlight support to trace-capable readers"
       ]
     },
     {
@@ -3811,7 +3807,7 @@
       "invariant": "Matches evidence highlights by concrete trace refs without replacing selected row behavior.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > matches evidence highlights by concrete trace refs without replacing selected row behavior"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > matches evidence highlights by concrete trace refs without replacing selected row behavior"
       ]
     },
     {
@@ -3839,7 +3835,7 @@
       "invariant": "Renders YouTube playlist videos as a job-free leaf view.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > renders YouTube playlist videos as a job-free leaf view"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders YouTube playlist videos as a job-free leaf view"
       ]
     },
     {
@@ -3881,7 +3877,7 @@
       "invariant": "Renders source group metadata from route-owned group fields.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > renders source group metadata from route-owned group fields"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source group metadata from route-owned group fields"
       ]
     },
     {
@@ -3895,7 +3891,7 @@
       "invariant": "Renders source group activity without source job cards.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > renders source group activity without source job cards"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > renders source group activity without source job cards"
       ]
     },
     {
@@ -3923,7 +3919,7 @@
       "invariant": "Keeps playlist video opening as source selection instead of nested browsing.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > keeps playlist video opening as source selection instead of nested browsing"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > keeps playlist video opening as source selection instead of nested browsing"
       ]
     },
     {
@@ -3937,7 +3933,7 @@
       "invariant": "Groups source group material by source.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > groups source group material by source"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > groups source group material by source"
       ]
     },
     {
@@ -3951,7 +3947,7 @@
       "invariant": "Merges focused group YouTube transcript DTOs into source-group reader items.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > merges focused group YouTube transcript DTOs into source-group reader items"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > merges focused group YouTube transcript DTOs into source-group reader items"
       ]
     },
     {
@@ -3965,7 +3961,7 @@
       "invariant": "Uses a neutral timeline label for mixed source-group material.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > uses a neutral timeline label for mixed source-group material"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > uses a neutral timeline label for mixed source-group material"
       ]
     },
     {
@@ -3979,7 +3975,7 @@
       "invariant": "Builds live source-group focus options from every group member.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > builds live source-group focus options from every group member"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > builds live source-group focus options from every group member"
       ]
     },
     {
@@ -3993,7 +3989,7 @@
       "invariant": "Keeps run snapshot focus options based on the whole loaded snapshot page.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > keeps run snapshot focus options based on the whole loaded snapshot page"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > keeps run snapshot focus options based on the whole loaded snapshot page"
       ]
     },
     {
@@ -4007,7 +4003,7 @@
       "invariant": "Keeps source focus controls in one reader header location.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/analysis-source-readers.behavior.test.ts#analysis source readers > keeps source focus controls in one reader header location"
+        "test:vitest:src/lib/analysis-source-readers.behavior.component.test.ts#analysis source readers > keeps source focus controls in one reader header location"
       ]
     },
     {

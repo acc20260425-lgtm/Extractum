@@ -138,6 +138,41 @@ describe("RepositoryIndex", () => {
     ]);
   });
 
+  it("returns structured Svelte import and style facts", () => {
+    const { index } = fixtureIndex({
+      "src/example.svelte": [
+        '<script lang="ts">import { invoke } from "@tauri-apps/api/core";</script>',
+        '<article class:selected data-evidence-highlighted="true">Example</article>',
+        "<style>",
+        "  article.selected, article[data-evidence-highlighted=\"true\"] {",
+        "    background: color-mix(in srgb, var(--accent) 8%, transparent);",
+        "  }",
+        "</style>",
+      ].join("\n"),
+    });
+
+    expect(index.getSvelte("src/example.svelte").imports).toEqual([
+      { source: "@tauri-apps/api/core" },
+    ]);
+    expect(index.getSvelte("src/example.svelte").styleRules).toEqual([
+      {
+        selectors: [
+          [
+            { type: "tag", name: "article" },
+            { type: "class", name: "selected" },
+          ],
+          [
+            { type: "tag", name: "article" },
+            { type: "attribute", name: "data-evidence-highlighted", matcher: "=", value: "true" },
+          ],
+        ],
+        declarations: [
+          { property: "background", value: "color-mix(in srgb, var(--accent) 8%, transparent)" },
+        ],
+      },
+    ]);
+  });
+
   it("parses each declared input once for one immutable snapshot", () => {
     const fixture = fixtureIndex({
       "src/example.ts": 'import "first";',

@@ -169,6 +169,11 @@ describe("test conventions", () => {
     expect(typeof createRepositoryIndex).toBe("function");
     expect(typeof evaluateRule).toBe("function");
     expect(registeredRuleIds).toEqual([
+      "rule:analysis-evidence-highlight-token-styling",
+      "rule:analysis-source-browser-canonical-composition",
+      "rule:analysis-source-browser-explicit-subject-contract",
+      "rule:analysis-source-group-activity-boundary",
+      "rule:analysis-source-group-tab-leaf-boundary",
       "rule:analysis-source-reader-surface-composition",
       "rule:telegram-crate-dependency-ownership",
       "rule:telegram-crate-manifest-boundary",

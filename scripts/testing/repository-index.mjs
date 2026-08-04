@@ -261,6 +261,33 @@ function componentName(node) {
   return undefined;
 }
 
+function styleSelectorFact(selector) {
+  if (selector.type === "TypeSelector") return { type: "tag", name: selector.name };
+  if (selector.type === "ClassSelector") return { type: "class", name: selector.name };
+  if (selector.type === "AttributeSelector") {
+    return {
+      type: "attribute",
+      name: selector.name,
+      matcher: selector.matcher ?? null,
+      value: selector.value ?? null,
+    };
+  }
+  return { type: "unsupported", syntaxKind: selector.type };
+}
+
+function styleRuleFacts(stylesheet) {
+  return (stylesheet?.children ?? [])
+    .filter((child) => child.type === "Rule")
+    .map((rule) => ({
+      selectors: (rule.prelude?.children ?? []).map((complexSelector) =>
+        (complexSelector.children ?? []).flatMap((relativeSelector) =>
+          (relativeSelector.selectors ?? []).map(styleSelectorFact))),
+      declarations: (rule.block?.children ?? [])
+        .filter((child) => child.type === "Declaration")
+        .map(({ property, value }) => ({ property, value })),
+    }));
+}
+
 function svelteFacts(relativePath, source, svelte) {
   const ast = svelte.parse(source, { filename: relativePath, modern: true });
   const components = [];
@@ -286,7 +313,10 @@ function svelteFacts(relativePath, source, svelte) {
     }
   };
   visit(ast);
-  return freeze({ path: relativePath, components });
+  const imports = (ast.instance?.content?.body ?? [])
+    .filter((node) => node.type === "ImportDeclaration" && typeof node.source?.value === "string")
+    .map((node) => ({ source: node.source.value }));
+  return freeze({ path: relativePath, imports, components, styleRules: styleRuleFacts(ast.css) });
 }
 
 function defaultCargoMetadata(root) {

@@ -10,6 +10,16 @@ import { evaluateRule, registeredRuleIds } from "./repository-rules.mjs";
 const root = path.resolve("repository-rule-fixture");
 const TELEGRAM_PATH = "src/lib/telegram-contract-paths.ts";
 const ANALYSIS_SURFACE_PATH = "src/lib/components/analysis/report-source-surface.svelte";
+const SOURCE_BROWSER_SHELL_PATH = "src/lib/components/analysis/source-browser-shell.svelte";
+const SOURCE_GROUP_SOURCES_PATH = "src/lib/components/analysis/source-group-sources-view.svelte";
+const SOURCE_GROUP_ACTIVITY_PATH = "src/lib/components/analysis/source-group-activity-view.svelte";
+const SNAPSHOT_GROUP_SOURCES_PATH = "src/lib/components/analysis/snapshot-group-sources-view.svelte";
+const SNAPSHOT_ITEMS_PATH = "src/lib/components/analysis/snapshot-items-view.svelte";
+const RUN_SNAPSHOT_METADATA_PATH = "src/lib/components/analysis/run-snapshot-metadata-view.svelte";
+const TELEGRAM_TIMELINE_PATH = "src/lib/components/analysis/telegram-timeline-reader.svelte";
+const YOUTUBE_TRANSCRIPT_PATH = "src/lib/components/analysis/youtube-transcript-reader.svelte";
+const UNIVERSAL_ITEMS_PATH = "src/lib/components/analysis/universal-items-view.svelte";
+const YOUTUBE_COMMENTS_PATH = "src/lib/components/analysis/youtube-comments-view.svelte";
 const SYMBOL_MAP_PATH = "src/lib/telegram-8b-symbol-map.json";
 const GRAMMERS_BASELINE_PATH = "src/lib/telegram-grammers-feature-baseline.json";
 
@@ -58,6 +68,55 @@ const telegramPathHelper = String.raw`
     return source;
   }
 `;
+
+const explicitSubjectSurface = `
+  <script lang="ts">
+    import SourceBrowserShell from "./source-browser-shell.svelte";
+    const source = {};
+    const group = {};
+    const snapshot = {};
+  </script>
+  <SourceBrowserShell subject={source} />
+  <SourceBrowserShell subject={group} />
+  <SourceBrowserShell subject={snapshot} />
+`;
+
+function evidenceStyle(tag: string, token: "primary" | "accent", paired = true) {
+  const selected = paired ? `${tag}.selected, ` : "";
+  return `<${tag}>Example</${tag}><style>${selected}${tag}[data-evidence-highlighted="true"] { background: var(--${token}); }</style>`;
+}
+
+const evidenceHighlightSources = {
+  [TELEGRAM_TIMELINE_PATH]: evidenceStyle("li", "primary"),
+  [YOUTUBE_TRANSCRIPT_PATH]: evidenceStyle("li", "primary"),
+  [SNAPSHOT_ITEMS_PATH]: evidenceStyle("article", "accent"),
+  [SNAPSHOT_GROUP_SOURCES_PATH]: evidenceStyle("li", "accent"),
+  [UNIVERSAL_ITEMS_PATH]: evidenceStyle("article", "accent", false),
+  [YOUTUBE_COMMENTS_PATH]: evidenceStyle("article", "accent", false),
+};
+
+const canonicalCompositionSources = {
+  [ANALYSIS_SURFACE_PATH]: `
+    <script lang="ts">import SourceBrowserShell from "./source-browser-shell.svelte";</script>
+    <SourceBrowserShell />
+  `,
+  [SOURCE_BROWSER_SHELL_PATH]: `
+    <script lang="ts">
+      import SourceGroupSourcesView from "./source-group-sources-view.svelte";
+      import SnapshotGroupSourcesView from "./snapshot-group-sources-view.svelte";
+      import SnapshotItemsView from "./snapshot-items-view.svelte";
+      import RunSnapshotMetadataView from "./run-snapshot-metadata-view.svelte";
+    </script>
+    <SourceGroupSourcesView />
+    <SnapshotGroupSourcesView />
+    <SnapshotItemsView />
+    <RunSnapshotMetadataView />
+  `,
+  [SOURCE_GROUP_SOURCES_PATH]: "<section>Group sources</section>",
+  [SNAPSHOT_GROUP_SOURCES_PATH]: "<section>Snapshot sources</section>",
+  [SNAPSHOT_ITEMS_PATH]: "<section>Snapshot items</section>",
+  [RUN_SNAPSHOT_METADATA_PATH]: "<section>Snapshot metadata</section>",
+};
 
 const ruleFixtures: Record<string, RuleFixture> = {
   "rule:telegram-repository-path-safety": {
@@ -144,6 +203,110 @@ const ruleFixtures: Record<string, RuleFixture> = {
             import TelegramTimelineReader from "./telegram-timeline-reader.svelte";
           </script>
           <TelegramTimelineReader />
+        `,
+      },
+    },
+  },
+  "rule:analysis-source-browser-explicit-subject-contract": {
+    positive: { [ANALYSIS_SURFACE_PATH]: explicitSubjectSurface },
+    mutations: {
+      "restores a legacy source prop on one shell": {
+        [ANALYSIS_SURFACE_PATH]: explicitSubjectSurface.replace(
+          "<SourceBrowserShell subject={group} />",
+          "<SourceBrowserShell source={group} />",
+        ),
+      },
+    },
+  },
+  "rule:analysis-evidence-highlight-token-styling": {
+    positive: evidenceHighlightSources,
+    mutations: {
+      "hardcodes one evidence highlight color": {
+        ...evidenceHighlightSources,
+        [YOUTUBE_COMMENTS_PATH]: evidenceHighlightSources[YOUTUBE_COMMENTS_PATH].replace("var(--accent)", "red"),
+      },
+    },
+  },
+  "rule:analysis-source-group-tab-leaf-boundary": {
+    positive: {
+      [SOURCE_GROUP_SOURCES_PATH]: `
+        <script lang="ts">
+          import TelegramTimelineReader from "./telegram-timeline-reader.svelte";
+          import YoutubeTranscriptReader from "./youtube-transcript-reader.svelte";
+        </script>
+        <TelegramTimelineReader />
+        <YoutubeTranscriptReader />
+      `,
+    },
+    mutations: {
+      "nests the route-owning source browser shell": {
+        [SOURCE_GROUP_SOURCES_PATH]: `
+          <script lang="ts">import SourceBrowserShell from "./source-browser-shell.svelte";</script>
+          <SourceBrowserShell />
+        `,
+      },
+      "imports a route API": {
+        [SOURCE_GROUP_SOURCES_PATH]: `
+          <script lang="ts">
+            import { invoke } from "@tauri-apps/api/core";
+            import TelegramTimelineReader from "./telegram-timeline-reader.svelte";
+            import YoutubeTranscriptReader from "./youtube-transcript-reader.svelte";
+          </script>
+          <TelegramTimelineReader />
+          <YoutubeTranscriptReader />
+        `,
+      },
+    },
+  },
+  "rule:analysis-source-browser-canonical-composition": {
+    positive: canonicalCompositionSources,
+    mutations: {
+      "drops one canonical snapshot leaf": {
+        ...canonicalCompositionSources,
+        [SOURCE_BROWSER_SHELL_PATH]: canonicalCompositionSources[SOURCE_BROWSER_SHELL_PATH]
+          .replace("    <SnapshotItemsView />\n", ""),
+      },
+      "moves route API ownership into a leaf": {
+        ...canonicalCompositionSources,
+        [SNAPSHOT_ITEMS_PATH]: `
+          <script lang="ts">import { invoke } from "@tauri-apps/api/core";</script>
+          <section>Snapshot items</section>
+        `,
+      },
+    },
+  },
+  "rule:analysis-source-group-activity-boundary": {
+    positive: {
+      [SOURCE_BROWSER_SHELL_PATH]: `
+        <script lang="ts">
+          import SourceGroupActivityView from "./source-group-activity-view.svelte";
+          import SourceActivityView from "./source-activity-view.svelte";
+        </script>
+        <SourceGroupActivityView />
+        <SourceActivityView />
+      `,
+      [SOURCE_GROUP_ACTIVITY_PATH]: `
+        <script lang="ts">import EmptyState from "../../ui/EmptyState.svelte";</script>
+        <EmptyState />
+      `,
+    },
+    mutations: {
+      "nests per-source activity inside group activity": {
+        [SOURCE_BROWSER_SHELL_PATH]: `
+          <script lang="ts">
+            import SourceGroupActivityView from "./source-group-activity-view.svelte";
+            import SourceActivityView from "./source-activity-view.svelte";
+          </script>
+          <SourceGroupActivityView />
+          <SourceActivityView />
+        `,
+        [SOURCE_GROUP_ACTIVITY_PATH]: `
+          <script lang="ts">
+            import EmptyState from "../../ui/EmptyState.svelte";
+            import SourceActivityView from "./source-activity-view.svelte";
+          </script>
+          <EmptyState />
+          <SourceActivityView />
         `,
       },
     },
@@ -339,6 +502,37 @@ function telegramMutation(name: string) {
   }).violations;
 }
 
+const analysisRuleIds = [
+  "rule:analysis-source-reader-surface-composition",
+  "rule:analysis-source-browser-explicit-subject-contract",
+  "rule:analysis-evidence-highlight-token-styling",
+  "rule:analysis-source-group-tab-leaf-boundary",
+  "rule:analysis-source-browser-canonical-composition",
+  "rule:analysis-source-group-activity-boundary",
+] as const;
+
+describe("analysis source-reader structured rules", () => {
+  for (const id of analysisRuleIds) {
+    it(`${id} accepts its positive fixture and rejects every mutation`, () => {
+      const fixture = ruleFixtures[id];
+      expect(evaluateRule({ id, index: indexFor(fixture.positive) }), `${id} positive`).toEqual({
+        id,
+        violations: [],
+      });
+      for (const [name, mutation] of Object.entries(fixture.mutations)) {
+        expect(evaluateRule({ id, index: indexFor(mutation) }).violations, `${id}: ${name}`).not.toEqual([]);
+      }
+    });
+  }
+
+  it("accepts the current repository snapshot for all six analysis source-reader rules", () => {
+    const index = realAuthorityIndex();
+    for (const id of analysisRuleIds) {
+      expect(evaluateRule({ id, index }), id).toEqual({ id, violations: [] });
+    }
+  });
+});
+
 describe("repository rule registry", () => {
   const allowedRuleIds = new Set(
     sourceContractLedger.rows
@@ -347,9 +541,14 @@ describe("repository rule registry", () => {
       .filter((id): id is string => id.startsWith("rule:")),
   );
 
-  it("derives the post-Telegram-cutover 11-ID allowlist and registers the current five evaluators", () => {
+  it("derives the post-Telegram-cutover 11-ID allowlist and registers the current ten evaluators", () => {
     expect(allowedRuleIds.size).toBe(11);
     expect(registeredRuleIds).toEqual([
+      "rule:analysis-evidence-highlight-token-styling",
+      "rule:analysis-source-browser-canonical-composition",
+      "rule:analysis-source-browser-explicit-subject-contract",
+      "rule:analysis-source-group-activity-boundary",
+      "rule:analysis-source-group-tab-leaf-boundary",
       "rule:analysis-source-reader-surface-composition",
       "rule:telegram-crate-dependency-ownership",
       "rule:telegram-crate-manifest-boundary",
