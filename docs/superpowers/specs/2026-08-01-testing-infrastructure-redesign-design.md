@@ -1298,6 +1298,20 @@ the security-adjacent accepted loss: ordinary compilation does not reject a
 future derive, so documentation and review own that narrow risk unless a
 long-lived compiler-backed check is later justified.
 
+The analysis application source-contract migration likewise retires global
+Rust/SQL source-shape enforcement that cannot be expressed by the approved
+RepositoryIndex without rebuilding the deleted scanner. In particular,
+SC-000058 no longer proves whole-repository Rust module reachability, SQL-table
+ownership, absence of hidden transaction-control SQL, exact async coordinator
+topology, or the absence of pool/transaction bypasses. SC-000032 and
+SC-000053–SC-000055 also stop freezing the concrete Tauri event-sink body and
+exact single-transaction call topology. Cargo package/dependency metadata,
+compiler gates, direct database/event behavior tests, code review, and focused
+atomicity tests when a concrete regression appears are the accepted controls.
+This is a deliberate maintenance trade: the project accepts weaker global
+static proof rather than keeping source fingerprints, a custom Rust/SQL parser,
+or a copied authority that can report green without proving live code.
+
 ## Tooling Basis
 
 - Vitest projects and configuration: https://vitest.dev/guide/projects
