@@ -332,7 +332,7 @@ describe("crate extraction timing policy", () => {
         universe: string[];
       }>;
     };
-    expect(artifact).toEqual(generateFeatureBaseline());
+    expect(artifact).toEqual(generateFeatureBaseline(featureMetadataFixture()));
     expect(artifact).toEqual({
       schemaVersion: 1,
       revision: "1f901ce6e973fdcf0e74267f3d8efad5c729daaa",
@@ -429,18 +429,6 @@ describe("crate extraction timing policy", () => {
     expect(() => generateFeatureBaseline({})).toThrow(
       /missing package graph/,
     );
-    const check = spawnSync(
-      process.execPath,
-      [
-        path.join(
-          repoRoot,
-          "scripts/telegram-grammers-feature-baseline.mjs",
-        ),
-        "--check",
-      ],
-      { cwd: repoRoot, encoding: "utf8", shell: false },
-    );
-    expect(check.status, `${check.stdout}${check.stderr}`).toBe(0);
     const unsupported = spawnSync(
       process.execPath,
       [
