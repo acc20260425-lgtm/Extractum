@@ -3912,8 +3912,8 @@ function expectOrdered(source: string, markers: readonly string[]): void {
 }
 
 function handlerBody(): string {
-  const appLib = read("src-tauri/src/lib.rs");
-  const marker = "macro_rules! application_command_inventory", start = appLib.indexOf(marker);
+  const appLib = read("src-tauri/src/lib.rs"), marker = "macro_rules! application_command_inventory", start = appLib.indexOf(marker);
+  const bridge = ".invoke_handler(application_command_inventory!(telegram_command_handler))", bridgeCount = appLib.split(bridge).length - 1; if (bridgeCount !== 1) throw new Error(`expected one literal application command inventory bridge, found ${bridgeCount}`);
   if (start < 0) throw new Error("missing application command inventory");
   const open = appLib.indexOf("{", start + marker.length), macro = appLib.slice(open + 1, closingDelimiter(appLib, open, "{", "}"));
   const call = "telegram_command_registration_inventory!(", callStart = macro.indexOf(call); if (callStart < 0) throw new Error("missing Telegram command inventory invocation");

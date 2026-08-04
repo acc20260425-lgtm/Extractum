@@ -86,17 +86,22 @@ function ledgerReplacementIds(ledger) {
   ]);
 }
 
-export function collectTrackedTestSources({ root, tracked, readSource = readFileSync }) {
+export function collectTrackedTestSources({ root, tracked, authorizedMissingPaths = new Set(), readSource = readFileSync }) {
   const tests = [];
+  const issues = [];
   for (const item of tracked.filter((candidate) => candidate.endsWith(".test.ts"))) {
     try {
       tests.push({ path: item, source: readSource(path.join(root, item), "utf8") });
     } catch (error) {
-      if (error?.code === "ENOENT") continue;
+      if (error?.code === "ENOENT" && authorizedMissingPaths.has(item)) continue;
+      if (error?.code === "ENOENT") {
+        issues.push(`missing tracked test without ledger ownership: ${item}`);
+        continue;
+      }
       throw error;
     }
   }
-  return tests;
+  return { tests, issues };
 }
 
 export function createLedgerLiveCensus({ census, runnerResult }) {
@@ -154,7 +159,8 @@ function validateLiveSourceContractLedger(root, ledger, liveCensus) {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   }).split("\0").filter(Boolean).map(normalizePath);
-  const tests = collectTrackedTestSources({ root, tracked });
+  const authorizedMissingPaths = new Set((ledger.rows ?? []).map((row) => row.path));
+  const { tests, issues: discoveryIssues } = collectTrackedTestSources({ root, tracked, authorizedMissingPaths });
   const runnerTitlesByPath = {};
   for (const row of ledger.rows ?? []) {
     if (!row?.manual?.runnerTitles) continue;
@@ -212,7 +218,7 @@ function validateLiveSourceContractLedger(root, ledger, liveCensus) {
     resolvedReplacementIds,
   });
   return {
-    issues: [...result.issues, ...evidenceIssues],
+    issues: [...discoveryIssues, ...result.issues, ...evidenceIssues],
     summary: `Source-contract ledger: ${ledger.rows?.length ?? 0} rows, ${result.rows.filter((row) => row.state === "open").length} open`,
   };
 }

@@ -236,7 +236,7 @@ describe("Telegram Cargo test identity ownership", () => {
 });
 
 describe("live source-contract test discovery", () => {
-  it("skips a tracked test deleted by the current cutover", () => {
+  it("allows a missing tracked test only when the ledger owns its transition", () => {
     const readSource = vi.fn((candidate: string) => {
       if (candidate.endsWith("deleted.test.ts")) {
         const error = new Error("missing") as NodeJS.ErrnoException;
@@ -249,8 +249,30 @@ describe("live source-contract test discovery", () => {
     expect(collectTrackedTestSources({
       root,
       tracked: ["src/current.test.ts", "src/deleted.test.ts", "src/not-a-test.ts"],
+      authorizedMissingPaths: new Set(["src/deleted.test.ts"]),
       readSource,
-    })).toEqual([{ path: "src/current.test.ts", source: "test source" }]);
+    })).toEqual({
+      tests: [{ path: "src/current.test.ts", source: "test source" }],
+      issues: [],
+    });
+  });
+
+  it("reports a missing tracked test that has no ledger ownership", () => {
+    const readSource = vi.fn(() => {
+      const error = new Error("missing") as NodeJS.ErrnoException;
+      error.code = "ENOENT";
+      throw error;
+    });
+
+    expect(collectTrackedTestSources({
+      root,
+      tracked: ["src/accidentally-deleted.test.ts"],
+      authorizedMissingPaths: new Set(["src/ledger-owned.test.ts"]),
+      readSource,
+    })).toEqual({
+      tests: [],
+      issues: ["missing tracked test without ledger ownership: src/accidentally-deleted.test.ts"],
+    });
   });
 
   it("bridges collected Vitest ownership into replacement evidence", () => {
