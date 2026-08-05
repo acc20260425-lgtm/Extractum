@@ -1,9 +1,20 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import { tick, type ComponentProps } from "svelte";
-import type { ProjectRecord } from "$lib/types/projects";
+import { defaultDateOffset, endOfDayUnix, startOfDayUnix } from "$lib/analysis-utils";
+import type { AnalysisPromptTemplate, AnalysisRunSummary } from "$lib/types/analysis";
+import type { LibraryCatalogRecord } from "$lib/types/library-sources";
+import type { ProjectRecord, ProjectSourceRecord } from "$lib/types/projects";
+import type { PromptPackRunListItem } from "$lib/types/prompt-packs";
+import type { YoutubePreview } from "$lib/types/sources";
 import type { ResearchProjectsWorkflowState } from "$lib/ui/research-projects-workflow";
+import { projectSourceGridColumns } from "$lib/ui/research-projects-project-source-grid";
+import type {
+  LibrarySourceView,
+  ProjectSourceLinkView,
+  ResearchProjectView,
+} from "$lib/ui/research-projects-model";
 import ProjectsShell from "./ProjectsShell.svelte";
 import ProjectRail from "./ProjectRail.svelte";
 import ProjectInspector from "./ProjectInspector.svelte";
@@ -18,6 +29,7 @@ import YoutubeSummaryRunsPanel from "./YoutubeSummaryRunsPanel.svelte";
 
 const api = vi.hoisted(() => ({
   addProjectSources: vi.fn(),
+  addYoutubeSource: vi.fn(),
   cancelPromptPackRun: vi.fn(),
   createProject: vi.fn(),
   deleteAnalysisRun: vi.fn(),
@@ -39,6 +51,7 @@ const api = vi.hoisted(() => ({
   listenToPromptPackRunEvents: vi.fn(),
   listenToSourceJobEvents: vi.fn(),
   openUrl: vi.fn(),
+  previewYoutubeSource: vi.fn(),
   removeProjectSources: vi.fn(),
   startProjectAnalysis: vi.fn(),
   setProjectArchived: vi.fn(),
@@ -71,6 +84,11 @@ vi.mock("$lib/api/projects", () => ({
 
 vi.mock("$lib/api/library-sources", () => ({
   listLibraryCatalog: api.listLibraryCatalog,
+}));
+
+vi.mock("$lib/api/sources", () => ({
+  addYoutubeSource: api.addYoutubeSource,
+  previewYoutubeSource: api.previewYoutubeSource,
 }));
 
 vi.mock("$lib/api/source-jobs", () => ({
@@ -122,6 +140,220 @@ function projectRecord(overrides: Partial<ProjectRecord> = {}): ProjectRecord {
     description: null,
     created_at: 1,
     updated_at: 1,
+    ...overrides,
+  };
+}
+
+function researchProjectView(
+  overrides: Partial<ResearchProjectView> = {},
+): ResearchProjectView {
+  return {
+    id: "project:1",
+    projectId: 1,
+    title: "Smoke project",
+    description: "Project description",
+    periodLabel: "All time",
+    sourceCount: 1,
+    evidenceCount: 4,
+    materialCount: 4,
+    lastRunLabel: null,
+    status: "ready",
+    backing: { kind: "project", projectId: 1 },
+    ...overrides,
+  };
+}
+
+function projectSourceRecord(
+  overrides: Partial<ProjectSourceRecord> = {},
+): ProjectSourceRecord {
+  return {
+    project_id: 1,
+    source_id: 11,
+    provider: "youtube",
+    source_subtype: "video",
+    title: "Evidence video",
+    subtitle: "Research channel",
+    item_count: 4,
+    added_at: 1_700_000_000,
+    last_synced_at: 1_700_000_100,
+    sync_status: "active",
+    handle: null,
+    ...overrides,
+  };
+}
+
+function projectSourceLink(
+  overrides: Partial<ProjectSourceLinkView> = {},
+): ProjectSourceLinkView {
+  return {
+    projectId: "project:1",
+    sourceId: "source:11",
+    sourceNumericId: 11,
+    provider: "youtube",
+    subtype: "video",
+    typeLabel: "YouTube / Video",
+    title: "Evidence video",
+    subtitle: "Research channel",
+    itemCount: 4,
+    localCopyLabel: "4 materials",
+    addedAt: 1_700_000_000,
+    addedAtLabel: "14/11/2023, 22:13",
+    connectionStatus: "connected",
+    filterSummary: "Research channel",
+    ...overrides,
+  };
+}
+
+function librarySourceView(overrides: Partial<LibrarySourceView> = {}): LibrarySourceView {
+  return {
+    id: "source:11",
+    sourceId: 11,
+    provider: "youtube",
+    typeLabel: "YouTube / Video",
+    title: "Evidence video",
+    subtitle: "Research channel",
+    projectCount: 0,
+    lastCollectedAt: 1_700_000_100,
+    lastCollectedLabel: "14/11/2023, 22:15",
+    localCopyLabel: "4 materials",
+    status: "active",
+    disabledReason: null,
+    alreadyConnected: false,
+    connectable: true,
+    ...overrides,
+  };
+}
+
+function analysisRun(overrides: Partial<AnalysisRunSummary> = {}): AnalysisRunSummary {
+  return {
+    id: 71,
+    run_type: "project",
+    scope_type: "project",
+    source_id: null,
+    source_title: null,
+    source_group_id: null,
+    source_group_name: null,
+    project_id: 1,
+    project_name: "Smoke project",
+    scope_label: "Smoke project",
+    period_from: 0,
+    period_to: 86_399,
+    output_language: "en",
+    prompt_template_id: 5,
+    prompt_template_name: "Evidence brief",
+    prompt_template_version: 2,
+    provider_profile: "default",
+    provider: "openai",
+    model: "gpt-test",
+    youtube_corpus_mode: "transcript_description",
+    telegram_history_scope: "current",
+    status: "completed",
+    error: null,
+    has_trace_data: false,
+    snapshot_state: "captured",
+    snapshot_captured_at: "2026-08-05T00:00:00Z",
+    snapshot_error: null,
+    created_at: 1_700_000_000,
+    completed_at: 1_700_000_100,
+    ...overrides,
+  };
+}
+
+function promptTemplate(
+  overrides: Partial<AnalysisPromptTemplate> = {},
+): AnalysisPromptTemplate {
+  return {
+    id: 5,
+    name: "Evidence brief",
+    template_kind: "report",
+    body: "Summarize evidence",
+    version: 2,
+    is_builtin: true,
+    created_at: 1,
+    updated_at: 1,
+    ...overrides,
+  };
+}
+
+function promptPackRun(
+  overrides: Partial<PromptPackRunListItem> = {},
+): PromptPackRunListItem {
+  return {
+    runId: 91,
+    projectId: 1,
+    runLabel: "Prompt detail",
+    runtimeProvider: "api",
+    packId: "youtube-summary",
+    packVersion: "1",
+    runStatus: "complete",
+    resultStatus: "complete",
+    latestMessage: "Prompt pack complete",
+    ...overrides,
+  };
+}
+
+function libraryCatalogRecord(
+  overrides: Partial<LibraryCatalogRecord> = {},
+): LibraryCatalogRecord {
+  return {
+    source: {
+      source_id: 11,
+      provider: "youtube",
+      source_subtype: "video",
+      account_id: null,
+      external_id: "video-11",
+      title: "Evidence video",
+      subtitle: "Research channel",
+      canonical_url: "https://www.youtube.com/watch?v=video-11",
+      created_at: 1_700_000_000,
+      last_synced_at: 1_700_000_100,
+      item_count: 4,
+      project_count: 0,
+      youtube: {
+        video_form: "watch",
+        duration_seconds: 120,
+        playlist_video_count: null,
+        channel_title: "Research channel",
+        availability_status: "available",
+      },
+      telegram: null,
+    },
+    latest_job: null,
+    status: "active",
+    status_detail: null,
+    capabilities: {
+      can_refresh_source: true,
+      can_delete: true,
+      can_edit: true,
+      can_connect_to_project: true,
+    },
+    disabled_reasons: {
+      refresh_source: null,
+      delete: null,
+      edit: null,
+      connect_to_project: null,
+    },
+    ...overrides,
+  };
+}
+
+function youtubePreview(overrides: Partial<YoutubePreview> = {}): YoutubePreview {
+  return {
+    kind: "video",
+    externalId: "video-11",
+    canonicalUrl: "https://www.youtube.com/watch?v=video-11",
+    title: "Evidence video",
+    channelTitle: "Research channel",
+    channelId: "channel-1",
+    channelHandle: "@research",
+    channelUrl: "https://www.youtube.com/@research",
+    thumbnailUrl: null,
+    durationSeconds: 120,
+    publishedAt: "2026-08-05T00:00:00Z",
+    playlistVideoCount: null,
+    captionsEstimate: { hasManual: true, hasAuto: false, languages: ["en"] },
+    availabilityStatus: "available",
+    warnings: [],
     ...overrides,
   };
 }
@@ -259,13 +491,25 @@ function youtubeSummaryRunsPanelProps(
 
 beforeEach(() => {
   class ResizeObserverStub {
-    observe() {}
+    constructor(private readonly callback: ResizeObserverCallback) {}
+    observe(target: Element) {
+      this.callback(
+        [
+          {
+            target,
+            contentRect: { width: 1_200, height: 720 },
+          } as ResizeObserverEntry,
+        ],
+        this as unknown as ResizeObserver,
+      );
+    }
     unobserve() {}
     disconnect() {}
   }
 
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
   api.addProjectSources.mockResolvedValue({ added_count: 0, already_present_count: 0 });
+  api.addYoutubeSource.mockResolvedValue({ id: 11, title: "Evidence video", externalId: "video-11" });
   api.cancelPromptPackRun.mockResolvedValue(undefined);
   api.createProject.mockResolvedValue(projectRecord());
   api.deleteAnalysisRun.mockResolvedValue(undefined);
@@ -291,6 +535,7 @@ beforeEach(() => {
   api.listenToPromptPackRunEvents.mockResolvedValue(api.unlistenPromptPackRuns);
   api.listenToSourceJobEvents.mockResolvedValue(api.unlistenSourceJobs);
   api.openUrl.mockResolvedValue(undefined);
+  api.previewYoutubeSource.mockResolvedValue(youtubePreview());
   api.removeProjectSources.mockResolvedValue(undefined);
   api.startProjectAnalysis.mockResolvedValue(1);
   api.setProjectArchived.mockResolvedValue(undefined);
@@ -434,4 +679,384 @@ it("smoke renders next Projects route", async () => {
 
   view.unmount();
   await tick();
+});
+
+it("renders three-zone projects workspace", () => {
+  const project = researchProjectView();
+  const view = render(ProjectsShell, {
+    props: projectsShellProps({
+      state: emptyProjectsState({
+        projects: [project],
+        selectedProjectId: project.id,
+      }),
+    }),
+  });
+
+  const rail = view.container.querySelector<HTMLElement>('[data-ui-region="project-rail"]');
+  const workspace = view.container.querySelector<HTMLElement>('[data-ui-region="project-workspace"]');
+  const inspector = view.container.querySelector<HTMLElement>('[data-ui-region="project-inspector"]');
+
+  expect(rail).toBeTruthy();
+  expect(workspace).toBeTruthy();
+  expect(inspector).toBeTruthy();
+  expect(within(rail!).getByRole("listbox", { name: "Research projects" })).toBeTruthy();
+  expect(within(workspace!).getByRole("heading", { name: "Smoke project" })).toBeTruthy();
+  expect(within(inspector!).getByText("Inspector")).toBeTruthy();
+});
+
+it("exposes create/edit/delete and run eligibility UI", async () => {
+  const onCreateProject = vi.fn();
+  const railView = render(ProjectRail, {
+    props: projectRailProps({
+      projects: [researchProjectView()],
+      onCreateProject,
+    }),
+  });
+
+  await fireEvent.click(screen.getByRole("button", { name: "Create project" }));
+  expect(onCreateProject).toHaveBeenCalledOnce();
+  railView.unmount();
+
+  const onEditProject = vi.fn();
+  const onDeleteProject = vi.fn();
+  render(ProjectInspector, {
+    props: projectInspectorProps({
+      project: researchProjectView(),
+      sources: [
+        projectSourceRecord({ provider: "youtube" }),
+        projectSourceRecord({ source_id: 12, provider: "telegram", source_subtype: "channel" }),
+      ],
+      onEditProject,
+      onDeleteProject,
+    }),
+  });
+
+  expect(screen.getByText("Mixed-provider project analysis runs are not supported yet.")).toBeTruthy();
+  expect(
+    (screen.getByRole("button", { name: "Run project analysis" }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+  await fireEvent.click(screen.getByRole("button", { name: "Edit selected project" }));
+  await fireEvent.click(screen.getByRole("button", { name: "Delete selected project" }));
+  expect(onEditProject).toHaveBeenCalledOnce();
+  expect(onDeleteProject).toHaveBeenCalledOnce();
+});
+
+it("defaults project run dates to all synced history instead of today only", async () => {
+  const onSubmit = vi.fn();
+  const today = defaultDateOffset(0);
+  render(ProjectRunDialog, {
+    props: projectRunDialogProps({
+      open: true,
+      project: researchProjectView(),
+      templates: [promptTemplate()],
+      onSubmit,
+    }),
+  });
+  await tick();
+
+  expect((screen.getByLabelText("From") as HTMLInputElement).value).toBe("1970-01-01");
+  expect((screen.getByLabelText("To") as HTMLInputElement).value).toBe(today);
+
+  await fireEvent.click(screen.getByRole("button", { name: "Run project analysis" }));
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+  expect(onSubmit).toHaveBeenCalledWith({
+    projectId: 1,
+    periodFrom: startOfDayUnix("1970-01-01"),
+    periodTo: endOfDayUnix(today),
+    outputLanguage: "en",
+    promptTemplateId: 5,
+    modelOverride: null,
+    profileId: null,
+    youtubeCorpusMode: "transcript_description",
+    includeMigratedHistory: false,
+  });
+});
+
+it("shows project runs in the central Runs tab", async () => {
+  const onRefreshProjectRuns = vi.fn();
+  render(ProjectWorkspace, {
+    props: projectWorkspaceProps({
+      project: researchProjectView(),
+      runs: [analysisRun()],
+      onRefreshProjectRuns,
+    }),
+  });
+
+  await fireEvent.click(screen.getByRole("tab", { name: "Runs" }));
+  const runsRegion = screen.getByRole("region", { name: "Project analysis runs" });
+  const reportLink = within(runsRegion).getByRole("link", { name: "Open report for run 71" });
+  expect(reportLink.getAttribute("href")).toBe("/analysis?runId=71");
+  expect(within(runsRegion).getByText(/Evidence brief v2/)).toBeTruthy();
+
+  await fireEvent.click(
+    within(runsRegion).getByRole("button", { name: "Refresh project analysis runs" }),
+  );
+  expect(onRefreshProjectRuns).toHaveBeenCalledOnce();
+});
+
+it("keeps prompt-pack run details in the Runs tab instead of duplicating them in the inspector", async () => {
+  api.listPromptPackRuns.mockResolvedValue([promptPackRun()]);
+  const workspaceView = render(ProjectWorkspace, {
+    props: projectWorkspaceProps({
+      project: researchProjectView(),
+      runs: [analysisRun()],
+    }),
+  });
+
+  await fireEvent.click(screen.getByRole("tab", { name: "Runs" }));
+  await waitFor(() => expect(screen.getByText("Run #91")).toBeTruthy());
+  expect(screen.getByRole("region", { name: "Prompt Pack runs" })).toBeTruthy();
+  workspaceView.unmount();
+
+  render(ProjectInspector, {
+    props: projectInspectorProps({
+      project: researchProjectView(),
+      sources: [projectSourceRecord()],
+      runs: [analysisRun()],
+    }),
+  });
+  expect(screen.queryByRole("region", { name: "Prompt Pack runs" })).toBeNull();
+  expect(screen.queryByText("Run #91")).toBeNull();
+});
+
+it("matches the Library type column in Workspace project sources", () => {
+  const columns = projectSourceGridColumns(undefined);
+
+  expect(columns.map((column) => column.id)).toEqual([
+    "title",
+    "typeLabel",
+    "localCopyLabel",
+    "addedAt",
+  ]);
+  expect(columns.map((column) => column.header)).toEqual([
+    "Title",
+    "Type",
+    "Details",
+    "Added to project at",
+  ]);
+  expect(columns.some((column) => column.id === "provider" || column.id === "subtype")).toBe(false);
+});
+
+it("shows full source type labels when connecting sources from Library", async () => {
+  render(ConnectFromLibrary, {
+    props: connectFromLibraryProps({
+      open: true,
+      project: researchProjectView(),
+      librarySources: [librarySourceView({ typeLabel: "YouTube / Playlist" })],
+    }),
+  });
+
+  const gridHost = screen.getByRole("region", { name: "Library sources available to connect" });
+  await waitFor(() => expect(within(gridHost).getByText("YouTube / Playlist")).toBeTruthy());
+  expect(within(gridHost).queryByText(/^youtube$/i)).toBeNull();
+});
+
+it("wires the project Add source dialog through the current ProjectsShell", async () => {
+  const onConnectExistingProjectSource = vi.fn();
+  const onConnectAddedProjectSource = vi.fn();
+  const onConnectAddedProjectSources = vi.fn();
+  const project = researchProjectView();
+  render(ProjectsShell, {
+    props: projectsShellProps({
+      state: emptyProjectsState({
+        projectsRaw: [projectRecord()],
+        projects: [project],
+        selectedProjectId: project.id,
+        libraryCatalogRecords: [libraryCatalogRecord()],
+      }),
+      onConnectExistingProjectSource,
+      onConnectAddedProjectSource,
+      onConnectAddedProjectSources,
+    }),
+  });
+
+  await fireEvent.click(screen.getByRole("button", { name: "Add source to project" }));
+  expect(screen.getByRole("dialog", { name: "Add source" })).toBeTruthy();
+
+  await fireEvent.input(screen.getByLabelText("YouTube URL"), {
+    target: { value: "https://www.youtube.com/watch?v=video-11" },
+  });
+  await fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await waitFor(() => {
+    expect(api.previewYoutubeSource).toHaveBeenCalledWith(
+      "https://www.youtube.com/watch?v=video-11",
+    );
+    expect(screen.getByText("Already in Library: Evidence video")).toBeTruthy();
+  });
+
+  await fireEvent.click(screen.getByRole("button", { name: "Connect to project" }));
+  expect(onConnectExistingProjectSource).toHaveBeenCalledOnce();
+  expect(onConnectExistingProjectSource).toHaveBeenCalledWith(11);
+  expect(onConnectAddedProjectSource).not.toHaveBeenCalled();
+  expect(onConnectAddedProjectSources).not.toHaveBeenCalled();
+});
+
+it("keeps top command actions honest while project export is out of scope", async () => {
+  const onRunProject = vi.fn();
+  render(TopCommandBar, {
+    props: topCommandBarProps({
+      project: researchProjectView(),
+      sources: [projectSourceRecord()],
+      onRunProject,
+    }),
+  });
+
+  const run = screen.getByRole("button", { name: "Run project analysis" });
+  expect((run as HTMLButtonElement).disabled).toBe(false);
+  await fireEvent.click(run);
+  expect(onRunProject).toHaveBeenCalledOnce();
+
+  const exportAction = screen.getByRole("button", {
+    name: "Project export is not available yet.",
+  });
+  expect((exportAction as HTMLButtonElement).disabled).toBe(true);
+  expect(exportAction.getAttribute("title")).toBe("Project export is not available yet.");
+  expect(exportAction.getAttribute("data-disabled-reason")).toBe(
+    "Project export is not available yet.",
+  );
+});
+
+it("keeps project action hierarchy consistent across Workspace, Projects, and Runs", async () => {
+  const inspectorView = render(ProjectInspector, {
+    props: projectInspectorProps({
+      project: researchProjectView(),
+      sources: [projectSourceRecord()],
+      selectedSource: projectSourceLink(),
+    }),
+  });
+  expect(screen.getByRole("button", { name: "Delete selected project" }).className).toContain(
+    "bg-destructive/10",
+  );
+  expect(
+    screen.getByRole("button", { name: "Remove source Evidence video from project" }).className,
+  ).toContain("bg-destructive/10");
+  inspectorView.unmount();
+
+  api.listPromptPackRuns.mockResolvedValue([promptPackRun()]);
+  const runsView = render(ProjectRunsScreen, { props: projectRunsScreenProps() });
+  const deleteRun = await screen.findByRole("button", {
+    name: "Delete selected prompt pack run 91",
+  });
+  expect(deleteRun.className).toContain("bg-destructive/10");
+  runsView.unmount();
+
+  const project = researchProjectView();
+  render(ProjectsShell, {
+    props: projectsShellProps({
+      showRail: false,
+      state: emptyProjectsState({
+        projects: [project],
+        selectedProjectId: project.id,
+      }),
+    }),
+  });
+  expect(screen.getByRole("button", { name: "Edit project Smoke project" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Delete project Smoke project" })).toBeTruthy();
+});
+
+it("keeps project navigation rows visually neutral until selected", async () => {
+  const onSelectProject = vi.fn();
+  render(ProjectRail, {
+    props: projectRailProps({
+      projects: [
+        researchProjectView({ id: "project:1", projectId: 1, title: "Selected project" }),
+        researchProjectView({ id: "project:2", projectId: 2, title: "Neutral project" }),
+      ],
+      selectedProjectId: "project:1",
+      onSelectProject,
+    }),
+  });
+
+  const selected = screen.getByRole("button", { name: /Selected project/ });
+  const neutral = screen.getByRole("button", { name: /Neutral project/ });
+  expect(selected.classList.contains("extractum-project-row")).toBe(true);
+  expect(selected.getAttribute("data-selected")).toBe("true");
+  expect(selected.classList.contains("is-selected")).toBe(true);
+  expect(neutral.classList.contains("extractum-project-row")).toBe(true);
+  expect(neutral.getAttribute("data-selected")).toBe("false");
+  expect(neutral.classList.contains("is-selected")).toBe(false);
+  expect(neutral.hasAttribute("aria-current")).toBe(false);
+
+  await fireEvent.click(neutral);
+  expect(onSelectProject).toHaveBeenCalledOnce();
+  expect(onSelectProject).toHaveBeenCalledWith("project:2");
+});
+
+it("labels project data grids for assistive technology", async () => {
+  const columns = projectSourceGridColumns(undefined);
+  expect(columns.find((column) => column.id === "title")?.header).toBe("Title");
+
+  const workspaceView = render(ProjectWorkspace, {
+    props: projectWorkspaceProps({
+      project: researchProjectView(),
+      projectSourceLinks: [projectSourceLink()],
+      librarySources: [librarySourceView()],
+    }),
+  });
+  expect(screen.getByRole("region", { name: "Project sources" })).toBeTruthy();
+  workspaceView.unmount();
+
+  const connectView = render(ConnectFromLibrary, {
+    props: connectFromLibraryProps({
+      open: true,
+      project: researchProjectView(),
+      librarySources: [librarySourceView()],
+    }),
+  });
+  expect(
+    screen.getByRole("region", { name: "Library sources available to connect" }),
+  ).toBeTruthy();
+  connectView.unmount();
+
+  render(ProjectRunsScreen, { props: projectRunsScreenProps() });
+  expect(screen.getByRole("region", { name: "Prompt Pack runs grid" })).toBeTruthy();
+  const promptPackRegions = screen.getAllByRole("region", { name: "Prompt Pack runs" });
+  expect(promptPackRegions.some((region) => region.classList.contains("project-runs-screen"))).toBe(
+    true,
+  );
+  expect(promptPackRegions.some((region) => region.classList.contains("extractum-data-grid"))).toBe(
+    true,
+  );
+});
+
+it("scopes repeated project refresh controls", async () => {
+  const onRefreshProjectRuns = vi.fn();
+  render(ProjectRunsTab, {
+    props: projectRunsTabProps({
+      projectId: 1,
+      onRefreshProjectRuns,
+    }),
+  });
+  await waitFor(() => expect(api.listPromptPackRuns).toHaveBeenCalledOnce());
+  api.listPromptPackRuns.mockClear();
+  api.listActivePromptPackRuns.mockClear();
+
+  await fireEvent.click(
+    screen.getByRole("button", { name: "Refresh project analysis runs" }),
+  );
+  expect(onRefreshProjectRuns).toHaveBeenCalledOnce();
+
+  await fireEvent.click(screen.getByRole("button", { name: "Refresh prompt pack runs" }));
+  await waitFor(() => {
+    expect(api.listPromptPackRuns).toHaveBeenCalledWith({ projectId: 1, limit: 20 });
+    expect(api.listActivePromptPackRuns).toHaveBeenCalledOnce();
+  });
+});
+
+it("clarifies the Workspace Runs taxonomy", async () => {
+  const runsView = render(ProjectRunsTab, {
+    props: projectRunsTabProps({ projectId: 1 }),
+  });
+  const analysisRuns = screen.getByRole("region", { name: "Project analysis runs" });
+  expect(within(analysisRuns).getByText("Project analysis runs")).toBeTruthy();
+  expect(within(analysisRuns).getByText("No project analysis runs yet.")).toBeTruthy();
+  const promptPackRuns = within(analysisRuns).getByRole("region", { name: "Prompt Pack runs" });
+  expect(within(promptPackRuns).getByText("Prompt Pack runs")).toBeTruthy();
+  expect(within(promptPackRuns).getByText("No prompt pack runs yet.")).toBeTruthy();
+  runsView.unmount();
+
+  render(ProjectInspector, { props: projectInspectorProps() });
+  expect(screen.getByRole("heading", { name: "Recent project analysis runs" })).toBeTruthy();
+  expect(screen.getByText("No project analysis runs")).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "Recent project runs" })).toBeNull();
 });
