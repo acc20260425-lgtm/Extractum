@@ -1,7 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, waitFor } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import { tick, type ComponentProps } from "svelte";
 import ReportCanvas from "$lib/components/analysis/report-canvas.svelte";
+import type {
+  AnalysisRunDetail,
+  AnalysisRunMessage,
+  AnalysisSourceGroup,
+} from "$lib/types/analysis";
+import type {
+  Source,
+  SourceForumTopic,
+  SourceItem,
+  SourceJobRecord,
+} from "$lib/types/sources";
 
 const api = vi.hoisted(() => ({
   askAnalysisRunQuestion: vi.fn(),
@@ -170,6 +181,168 @@ vi.mock("$lib/api/sources", () => ({
 }));
 
 type ReportCanvasProps = ComponentProps<typeof ReportCanvas>;
+
+function source(overrides: Partial<Source> = {}): Source {
+  return {
+    id: 1,
+    sourceType: "telegram",
+    sourceSubtype: "supergroup",
+    accountId: 7,
+    externalId: "source-1",
+    title: "Research channel",
+    lastSyncState: 1,
+    lastSyncedAt: 1_700_000_000,
+    isMember: true,
+    isActive: true,
+    createdAt: 1_699_000_000,
+    telegramUsername: "research",
+    avatarDataUrl: null,
+    migratedHistoryStatus: "none",
+    migratedHistoryDetectedAt: null,
+    migratedHistoryRefreshedAt: null,
+    migratedHistoryRowCount: 0,
+    migratedHistoryImportCompleted: false,
+    ...overrides,
+  };
+}
+
+function sourceItem(overrides: Partial<SourceItem> = {}): SourceItem {
+  return {
+    id: 1,
+    sourceId: 1,
+    externalId: "live-item-1",
+    itemKind: "rss_post",
+    author: "Live author",
+    publishedAt: 1_700_000_000,
+    content: "Live-only source row",
+    contentKind: "text",
+    hasMedia: false,
+    mediaKind: null,
+    mediaSummary: null,
+    mediaFileName: null,
+    mediaMimeType: null,
+    hasRawData: false,
+    forumTopicId: null,
+    forumTopicTitle: null,
+    forumTopicTopMessageId: null,
+    replyToMessageId: null,
+    replyToPeerKind: null,
+    replyToPeerId: null,
+    replyToTopMessageId: null,
+    reactionCount: null,
+    historyScope: "current",
+    isMigratedHistory: false,
+    migrationDomain: null,
+    historyScopeLabel: "Current supergroup history",
+    pageCursor: "live-cursor-1",
+    ...overrides,
+  };
+}
+
+function group(overrides: Partial<AnalysisSourceGroup> = {}): AnalysisSourceGroup {
+  return {
+    id: 20,
+    name: "Research group",
+    source_type: "telegram",
+    members: [
+      { source_id: 1, source_title: "Research channel", item_count: 2 },
+      { source_id: 2, source_title: "Research archive", item_count: 1 },
+    ],
+    created_at: 1_699_000_000,
+    updated_at: 1_700_000_000,
+    ...overrides,
+  };
+}
+
+function run(overrides: Partial<AnalysisRunDetail> = {}): AnalysisRunDetail {
+  return {
+    id: 30,
+    run_type: "report",
+    scope_type: "project",
+    source_id: null,
+    source_title: null,
+    source_group_id: null,
+    source_group_name: null,
+    project_id: 40,
+    project_name: "Project Alpha",
+    scope_label: "Project sources",
+    period_from: 1_699_000_000,
+    period_to: 1_700_000_000,
+    output_language: "en",
+    prompt_template_id: 1,
+    prompt_template_name: "Research report",
+    prompt_template_version: 3,
+    provider_profile: "Default",
+    provider: "openai",
+    model: "model-a",
+    youtube_corpus_mode: "transcript_only",
+    telegram_history_scope: "current",
+    status: "completed",
+    error: null,
+    has_trace_data: true,
+    snapshot_state: "captured",
+    snapshot_captured_at: "2026-08-03T10:00:00Z",
+    snapshot_error: null,
+    created_at: 1_700_000_000,
+    completed_at: 1_700_000_100,
+    result_markdown: "# Saved report",
+    ...overrides,
+  };
+}
+
+function snapshotMessage(overrides: Partial<AnalysisRunMessage> = {}): AnalysisRunMessage {
+  return {
+    item_id: 101,
+    source_id: 1,
+    external_id: "snapshot-item-1",
+    author: "Snapshot author",
+    published_at: 1_699_999_000,
+    ref: "snapshot:1",
+    content: "Frozen snapshot row",
+    item_kind: "rss_post",
+    source_type: "rss",
+    source_subtype: "feed",
+    metadata_json: null,
+    ...overrides,
+  };
+}
+
+function topic(overrides: Partial<SourceForumTopic> = {}): SourceForumTopic {
+  return {
+    kind: "topic",
+    key: "topic:7",
+    title: "Methods",
+    messageCount: 9,
+    topicId: 7,
+    topMessageId: 70,
+    iconColor: null,
+    iconEmojiId: null,
+    isClosed: false,
+    isPinned: false,
+    isHidden: false,
+    isDeleted: false,
+    sortOrder: 1,
+    ...overrides,
+  };
+}
+
+function sourceJob(overrides: Partial<SourceJobRecord> = {}): SourceJobRecord {
+  return {
+    job_id: "source-job-1",
+    source_id: 1,
+    related_source_id: null,
+    job_type: "youtube_video_comments_sync",
+    status: "running",
+    message: "Syncing live comments",
+    progress_current: 1,
+    progress_total: 2,
+    started_at: 1_700_000_000,
+    finished_at: null,
+    warnings: [],
+    error: null,
+    ...overrides,
+  };
+}
 
 function reportCanvasProps(
   overrides: Partial<ReportCanvasProps> = {},
@@ -349,6 +522,23 @@ function reportCanvasProps(
   };
 }
 
+function renderReportCanvas(overrides: Partial<ReportCanvasProps> = {}) {
+  return render(ReportCanvas, { props: reportCanvasProps(overrides) });
+}
+
+function expectBefore(first: Element, second: Element) {
+  expect(
+    first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+}
+
+function sourceBrowserBody() {
+  const tabs = screen.getByRole("navigation", { name: "Source browser tabs" });
+  const body = tabs.nextElementSibling;
+  expect(body).toBeInstanceOf(HTMLElement);
+  return body as HTMLElement;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
@@ -370,6 +560,521 @@ describe("report canvas render smoke", () => {
     ).toBeTruthy();
 
     view.unmount();
+  });
+});
+
+describe("report canvas component contract", () => {
+  it("owns the central Report and Source modes", async () => {
+    const onChangeCanvasMode = vi.fn();
+    renderReportCanvas({ onChangeCanvasMode });
+
+    const tablist = screen.getByRole("tablist", { name: "Report canvas mode" });
+    const reportTab = within(tablist).getByRole("tab", { name: "Report" });
+    const sourceTab = within(tablist).getByRole("tab", { name: "Source" });
+
+    expect(reportTab.getAttribute("aria-selected")).toBe("true");
+    expect(sourceTab.getAttribute("aria-selected")).toBe("false");
+    await fireEvent.click(sourceTab);
+    await fireEvent.click(reportTab);
+
+    expect(onChangeCanvasMode).toHaveBeenNthCalledWith(1, "source");
+    expect(onChangeCanvasMode).toHaveBeenNthCalledWith(2, "report");
+  });
+
+  it("shows setup only when no run is open and report mode is selected", async () => {
+    const view = renderReportCanvas();
+
+    expect(screen.getByRole("region", { name: "Report setup" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Opened run metadata" })).toBeNull();
+
+    await view.rerender(reportCanvasProps({ currentRun: run() }));
+    expect(screen.queryByRole("region", { name: "Report setup" })).toBeNull();
+    expect(screen.getByRole("region", { name: "Opened run metadata" })).toBeTruthy();
+
+    await view.rerender(reportCanvasProps({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+    }));
+    expect(screen.queryByRole("region", { name: "Report setup" })).toBeNull();
+    expect(screen.getByRole("navigation", { name: "Source browser tabs" })).toBeTruthy();
+  });
+
+  it("renders required opened-run header metadata", async () => {
+    const view = renderReportCanvas({
+      currentRun: run(),
+      runSnapshotAvailability: "available",
+      snapshotProbeState: "available",
+      traceRefCount: 4,
+      activePhase: "finalizing",
+      activeProgress: "9/10",
+      runTargetLabel: () => "Saved research scope",
+    });
+
+    const header = screen.getByRole("region", { name: "Opened run metadata" });
+    expect(within(header).getByRole("heading", { name: "Run #30" })).toBeTruthy();
+    expect(within(header).getAllByText("Saved research scope")).toHaveLength(2);
+    expect(within(header).getAllByText("completed").length).toBeGreaterThan(0);
+    expect(within(header).getByText("1699000000-1700000000")).toBeTruthy();
+    expect(within(header).getByText("Research report v3")).toBeTruthy();
+    expect(within(header).getByText("openai/model-a")).toBeTruthy();
+    expect(within(header).getByText("4")).toBeTruthy();
+
+    await fireEvent.click(within(header).getByText("Run details"));
+    for (const label of [
+      "Scope",
+      "Status",
+      "Created",
+      "Completed",
+      "Provider profile",
+      "Source basis",
+      "Snapshot status",
+      "Snapshot captured",
+      "Snapshot note",
+      "YouTube corpus",
+      "Live phase",
+      "Live progress",
+    ]) {
+      expect(within(header).getByText(label, { selector: "span" })).toBeTruthy();
+    }
+    expect(within(header).getByText("time:1700000000")).toBeTruthy();
+    expect(within(header).getByText("time:1700000100")).toBeTruthy();
+    expect(within(header).getByText("Default")).toBeTruthy();
+    expect(within(header).getByText("2026-08-03T10:00:00Z")).toBeTruthy();
+    expect(within(header).getByText("Transcript")).toBeTruthy();
+    expect(within(header).getByText("finalizing")).toBeTruthy();
+    expect(within(header).getByText("9/10")).toBeTruthy();
+
+    await view.rerender(reportCanvasProps({
+      currentRun: run({
+        snapshot_state: "capture_failed",
+        snapshot_captured_at: null,
+        snapshot_error: "  snapshot   disk full  ",
+      }),
+      runSnapshotAvailability: "unavailable",
+      snapshotProbeState: "error",
+      runTargetLabel: () => "Saved research scope",
+    }));
+    const failedHeader = screen.getByRole("region", { name: "Opened run metadata" });
+    expect(within(failedHeader).getByText("Snapshot error", { selector: "span" })).toBeTruthy();
+    expect(within(failedHeader).getByText("snapshot disk full")).toBeTruthy();
+  });
+
+  it("keeps report setup copy aware of existing saved runs", async () => {
+    const view = renderReportCanvas({ currentScopeHasSavedRuns: false });
+
+    expect(screen.getByRole("heading", { name: "Start the first report" })).toBeTruthy();
+    expect(screen.getByText(/Once the report is ready/)).toBeTruthy();
+
+    await view.rerender(reportCanvasProps({ currentScopeHasSavedRuns: true }));
+    expect(screen.queryByRole("heading", { name: "Start the first report" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Run another report" })).toBeTruthy();
+    expect(screen.getByText(/Prior reports stay available in Runs/)).toBeTruthy();
+  });
+
+  it("keeps snapshot and live source basis explicit", async () => {
+    const onViewLiveSource = vi.fn();
+    const onBackToRunSnapshot = vi.fn();
+    const openedRun = run({
+      scope_type: "source",
+      source_id: 1,
+      source_title: "Research channel",
+      project_id: null,
+      project_name: null,
+      scope_label: "Research channel",
+    });
+    const view = renderReportCanvas({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+      currentRun: openedRun,
+      sourceViewBasis: "run_snapshot",
+      runSnapshotAvailability: "available",
+      snapshotProbeState: "available",
+      runSnapshotMessages: [snapshotMessage({
+        item_kind: "telegram_message",
+        source_type: "telegram",
+        source_subtype: "supergroup",
+      })],
+      onViewLiveSource,
+      onBackToRunSnapshot,
+    });
+
+    const snapshotHeader = screen.getByLabelText("Run snapshot");
+    expect(within(snapshotHeader).getByText("Run snapshot")).toBeTruthy();
+    expect(within(snapshotHeader).getByText("Frozen source material captured for the opened run.")).toBeTruthy();
+    await fireEvent.click(within(snapshotHeader).getByRole("button", { name: "View live source" }));
+    expect(onViewLiveSource).toHaveBeenCalledOnce();
+
+    await view.rerender(reportCanvasProps({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+      currentRun: openedRun,
+      sourceViewBasis: "live_source",
+      runSnapshotAvailability: "available",
+      snapshotProbeState: "available",
+      onViewLiveSource,
+      onBackToRunSnapshot,
+    }));
+    const liveHeader = screen.getByLabelText("Live source");
+    expect(within(liveHeader).getByText("Live source")).toBeTruthy();
+    expect(within(liveHeader).getByText(/Browsing live source data/)).toBeTruthy();
+    await fireEvent.click(within(liveHeader).getByRole("button", { name: "Back to run snapshot" }));
+    expect(onBackToRunSnapshot).toHaveBeenCalledOnce();
+
+    await view.rerender(reportCanvasProps({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+      currentRun: run({
+        ...openedRun,
+        snapshot_state: "capture_failed",
+        snapshot_captured_at: null,
+        snapshot_error: "snapshot failed",
+      }),
+      sourceViewBasis: "run_snapshot",
+      runSnapshotAvailability: "unavailable",
+      snapshotProbeState: "error",
+      onViewLiveSource,
+      onBackToRunSnapshot,
+    }));
+    expect(screen.getByLabelText("Snapshot capture failed")).toBeTruthy();
+    expect(screen.getByText(/This is live data, not the saved run snapshot/)).toBeTruthy();
+  });
+
+  it("passes YouTube comments and source activity callbacks through the report canvas", async () => {
+    const onSyncYoutubeComments = vi.fn();
+    const onCancelSourceJob = vi.fn();
+    renderReportCanvas({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source({
+        sourceType: "youtube",
+        sourceSubtype: "video",
+        title: "Research video",
+      }),
+      sourceJobs: [sourceJob()],
+      onSyncYoutubeComments,
+      onCancelSourceJob,
+    });
+
+    await fireEvent.click(await screen.findByRole("button", { name: "Sync comments" }));
+    expect(onSyncYoutubeComments).toHaveBeenCalledWith(1);
+
+    await fireEvent.click(screen.getByRole("button", { name: "Activity" }));
+    expect(screen.getByText("Syncing live comments")).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onCancelSourceJob).toHaveBeenCalledWith("source-job-1");
+  });
+
+  it("passes Telegram topic state into the source surface", async () => {
+    const onChangeSelectedTopicKey = vi.fn();
+    const view = renderReportCanvas({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+      sourceTopics: [topic()],
+      selectedTopicKey: "topic:7",
+      showTopicSelector: true,
+      onChangeSelectedTopicKey,
+    });
+
+    const topicSelect = await screen.findByLabelText("Topic view");
+    expect((topicSelect as HTMLSelectElement).value).toBe("topic:7");
+    expect(screen.getByRole("option", { name: "Methods (9)" })).toBeTruthy();
+    await fireEvent.change(topicSelect, { target: { value: "__all_topics__" } });
+    expect(onChangeSelectedTopicKey).toHaveBeenCalledWith("__all_topics__");
+
+    await view.rerender(reportCanvasProps({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+      sourceTopics: [topic()],
+      loadingSourceTopics: true,
+      selectedTopicKey: "topic:7",
+      showTopicSelector: true,
+      onChangeSelectedTopicKey,
+    }));
+    expect((screen.getByLabelText("Topic view") as HTMLSelectElement).disabled).toBe(true);
+  });
+
+  it("labels source surfaces without repeating the selected workspace title", async () => {
+    const view = renderReportCanvas({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+      currentScopeTitle: "Selected source workspace title",
+    });
+
+    expect(screen.getAllByText("Selected source workspace title")).toHaveLength(1);
+    expect(screen.getByText("Source material")).toBeTruthy();
+
+    await view.rerender(reportCanvasProps({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source_group", sourceGroupId: 20 },
+      currentGroup: group(),
+      currentScopeTitle: "Selected group workspace title",
+    }));
+    expect(screen.getAllByText("Selected group workspace title")).toHaveLength(1);
+    expect(screen.getByText("Group sources")).toBeTruthy();
+  });
+
+  it("keeps run snapshot reading bounded and snapshot-only", async () => {
+    const onLoadMoreRunSnapshotMessages = vi.fn();
+    renderReportCanvas({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source({ sourceType: "rss", sourceSubtype: "feed" }),
+      currentRun: run({
+        scope_type: "source",
+        source_id: 1,
+        source_title: "Research feed",
+        project_id: null,
+        project_name: null,
+        scope_label: "Research feed",
+      }),
+      sourceViewBasis: "run_snapshot",
+      runSnapshotAvailability: "available",
+      snapshotProbeState: "available",
+      runSnapshotMessages: [snapshotMessage()],
+      hasMoreRunSnapshotMessages: true,
+      sourceItems: [sourceItem()],
+      onLoadMoreRunSnapshotMessages,
+    });
+
+    expect(screen.getByRole("region", { name: "Run snapshot items" })).toBeTruthy();
+    expect(screen.getByText("Frozen snapshot row")).toBeTruthy();
+    expect(screen.getByText("snapshot:1")).toBeTruthy();
+    expect(screen.queryByText("Live-only source row")).toBeNull();
+    expect(screen.getByText(/Snapshot items are limited to frozen rows loaded for this run/)).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "Load older snapshot messages" }));
+    expect(onLoadMoreRunSnapshotMessages).toHaveBeenCalledOnce();
+  });
+
+  it("keeps source-group run snapshots pageable through the snapshot browser", async () => {
+    const onLoadMoreRunSnapshotMessages = vi.fn();
+    renderReportCanvas({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source_group", sourceGroupId: 20 },
+      currentGroup: group(),
+      currentRun: run({
+        scope_type: "source_group",
+        source_group_id: 20,
+        source_group_name: "Research group",
+        project_id: null,
+        project_name: null,
+        scope_label: "Research group",
+      }),
+      sourceViewBasis: "run_snapshot",
+      runSnapshotAvailability: "available",
+      snapshotProbeState: "available",
+      runSnapshotMessages: [
+        snapshotMessage({
+          item_kind: "telegram_message",
+          source_type: "telegram",
+          source_subtype: "supergroup",
+        }),
+        snapshotMessage({
+          item_id: 102,
+          source_id: 2,
+          external_id: "snapshot-item-2",
+          ref: "snapshot:2",
+          content: "Second frozen group row",
+          item_kind: "telegram_message",
+          source_type: "telegram",
+          source_subtype: "supergroup",
+        }),
+      ],
+      hasMoreRunSnapshotMessages: true,
+      onLoadMoreRunSnapshotMessages,
+    });
+
+    expect(screen.getByRole("region", { name: "Run snapshot group sources" })).toBeTruthy();
+    expect(screen.getByText("Frozen snapshot row")).toBeTruthy();
+    expect(screen.getByText("Second frozen group row")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Load older messages" })).toBeNull();
+    await fireEvent.click(screen.getByRole("button", { name: "Load older snapshot messages" }));
+    expect(onLoadMoreRunSnapshotMessages).toHaveBeenCalledOnce();
+  });
+
+  it("uses real chat availability in the report toolbar", async () => {
+    const view = renderReportCanvas({
+      currentRun: run(),
+      chatAvailability: {
+        enabled: false,
+        reason: "checking_snapshot",
+        title: "Checking exact saved context",
+        description: "Waiting for the saved snapshot check.",
+      },
+    });
+
+    expect(screen.getByText("Checking exact saved context")).toBeTruthy();
+    expect(screen.queryByText("Chat ready")).toBeNull();
+
+    await view.rerender(reportCanvasProps({
+      currentRun: run(),
+      chatAvailability: {
+        enabled: true,
+        reason: "enabled",
+        title: "Saved context ready",
+        description: "Questions use saved context.",
+      },
+    }));
+    expect(screen.getByText("Chat ready")).toBeTruthy();
+    expect(screen.queryByText("Checking exact saved context")).toBeNull();
+  });
+
+  it("keeps workspace tools reachable before setup report and source bodies", async () => {
+    const view = renderReportCanvas();
+
+    const tools = screen.getByRole("region", { name: "Workspace actions" });
+    const setup = screen.getByRole("region", { name: "Report setup" });
+    expectBefore(tools, setup);
+    await fireEvent.click(within(tools).getByRole("button", { name: "Edit templates" }));
+    await fireEvent.click(within(tools).getByRole("button", { name: "Edit groups" }));
+    expect(screen.getByLabelText("Template editor drawer")).toBeTruthy();
+    expect(screen.getByLabelText("Source group editor drawer")).toBeTruthy();
+
+    await view.rerender(reportCanvasProps({ currentRun: run() }));
+    expectBefore(
+      screen.getByRole("region", { name: "Workspace actions" }),
+      screen.getByRole("region", { name: "Opened run metadata" }),
+    );
+
+    await view.rerender(reportCanvasProps({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+    }));
+    expectBefore(
+      screen.getByRole("region", { name: "Workspace actions" }),
+      screen.getByRole("navigation", { name: "Source browser tabs" }),
+    );
+  });
+
+  it("derives NotebookLM export availability from live canvas source or Telegram group", async () => {
+    const onOpenNotebookLmExport = vi.fn();
+    const view = renderReportCanvas({
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+      onOpenNotebookLmExport,
+    });
+
+    const sourceExport = screen.getByRole("button", { name: "Export for NotebookLM" });
+    expect((sourceExport as HTMLButtonElement).disabled).toBe(false);
+    await fireEvent.click(sourceExport);
+    expect(onOpenNotebookLmExport).toHaveBeenCalledTimes(1);
+
+    await view.rerender(reportCanvasProps({
+      workspaceSelection: { kind: "source_group", sourceGroupId: 20 },
+      currentGroup: group({ source_type: "telegram" }),
+      onOpenNotebookLmExport,
+    }));
+    const telegramGroupExport = screen.getByRole("button", { name: "Export for NotebookLM" });
+    expect((telegramGroupExport as HTMLButtonElement).disabled).toBe(false);
+    await fireEvent.click(telegramGroupExport);
+    expect(onOpenNotebookLmExport).toHaveBeenCalledTimes(2);
+
+    await view.rerender(reportCanvasProps({
+      workspaceSelection: { kind: "source_group", sourceGroupId: 20 },
+      currentGroup: group({ source_type: "youtube" }),
+      onOpenNotebookLmExport,
+    }));
+    const youtubeGroupExport = screen.getByRole("button", { name: "Export for NotebookLM" });
+    expect((youtubeGroupExport as HTMLButtonElement).disabled).toBe(true);
+    expect(youtubeGroupExport.getAttribute("title")).toBe(
+      "YouTube source-group NotebookLM export is not implemented yet.",
+    );
+
+    await view.rerender(reportCanvasProps({ onOpenNotebookLmExport }));
+    expect(screen.queryByRole("button", { name: "Export for NotebookLM" })).toBeNull();
+  });
+
+  it("renders the scoped evidence return affordance above source reader headers", async () => {
+    const view = renderReportCanvas({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+      currentScopeTitle: "Evidence source workspace",
+      selectedTraceRef: null,
+      sourceReturnContext: {
+        kind: "evidence",
+        runId: 30,
+        sourceScope: { kind: "source", sourceId: 1 },
+        sourceViewBasis: "live_source",
+        traceRef: "source:1:item:101",
+      },
+    });
+
+    const returnButton = screen.getByRole("button", { name: "Back to evidence" });
+    const readerHeader = screen.getByLabelText("Evidence source workspace");
+    expectBefore(returnButton, readerHeader);
+
+    await view.rerender(reportCanvasProps({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+      currentScopeTitle: "Evidence source workspace",
+      sourceReturnContext: null,
+    }));
+    expect(screen.queryByRole("button", { name: "Back to evidence" })).toBeNull();
+  });
+
+  it("passes evidence return context and callback through the report canvas", async () => {
+    const onReturnToEvidenceReview = vi.fn();
+    renderReportCanvas({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source_group", sourceGroupId: 20 },
+      currentGroup: group(),
+      sourceReturnContext: {
+        kind: "evidence",
+        runId: 30,
+        sourceScope: { kind: "group_member", groupId: 20, sourceId: 2 },
+        sourceViewBasis: "live_source",
+        traceRef: "source:2:item:202",
+      },
+      onReturnToEvidenceReview,
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Back to evidence" }));
+    expect(onReturnToEvidenceReview).toHaveBeenCalledOnce();
+    expect(onReturnToEvidenceReview).toHaveBeenCalledWith(expect.any(MouseEvent));
+  });
+
+  it("passes bounded source browser mode only for live source canvas review", async () => {
+    const openedRun = run({
+      scope_type: "source",
+      source_id: 1,
+      source_title: "Research channel",
+      project_id: null,
+      project_name: null,
+      scope_label: "Research channel",
+    });
+    const view = renderReportCanvas({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+      sourceViewBasis: "live_source",
+    });
+
+    expect(sourceBrowserBody().parentElement?.classList.contains("bounded")).toBe(true);
+
+    await view.rerender(reportCanvasProps({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+      currentRun: openedRun,
+      sourceViewBasis: "run_snapshot",
+      runSnapshotAvailability: "available",
+      snapshotProbeState: "available",
+      runSnapshotMessages: [snapshotMessage({
+        item_kind: "telegram_message",
+        source_type: "telegram",
+        source_subtype: "supergroup",
+      })],
+    }));
+    expect(sourceBrowserBody().parentElement?.classList.contains("bounded")).toBe(false);
   });
 });
 
