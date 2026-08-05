@@ -45,7 +45,7 @@ function verifyOwnsCargoPackage(verifySteps, packageName) {
   });
 }
 
-export function evaluateTelegramCargoTestIdentityOwnership({ authority, listResults, verifySteps = [] }) {
+export function evaluateTelegramCargoTestIdentityOwnership({ authority, listResults, ignoredListResults, verifySteps = [] }) {
   const violations = [];
   const stagedDeclared = [...(authority?.preNewStaged ?? []), ...(authority?.phase8BNewStaged ?? [])];
   const expectedByPackage = {
@@ -55,6 +55,10 @@ export function evaluateTelegramCargoTestIdentityOwnership({ authority, listResu
   const countsByPackage = {
     extractum: listedTestCounts(listResults?.extractum, "extractum", violations),
     "extractum-telegram": listedTestCounts(listResults?.["extractum-telegram"], "extractum-telegram", violations),
+  };
+  const ignoredCountsByPackage = {
+    extractum: listedTestCounts(ignoredListResults?.extractum, "extractum ignored-only", violations),
+    "extractum-telegram": listedTestCounts(ignoredListResults?.["extractum-telegram"], "extractum-telegram ignored-only", violations),
   };
 
   for (const packageName of ["extractum", "extractum-telegram"]) {
@@ -66,6 +70,9 @@ export function evaluateTelegramCargoTestIdentityOwnership({ authority, listResu
       const count = countsByPackage[packageName].get(identity) ?? 0;
       if (count === 0) violations.push(`${packageName}: missing declared identity ${identity}`);
       else if (count !== 1) violations.push(`${packageName}: duplicate declared identity ${identity}`);
+      if ((ignoredCountsByPackage[packageName].get(identity) ?? 0) > 0) {
+        violations.push(`${packageName}: ignored declared identity ${identity}`);
+      }
       if ((countsByPackage[otherPackage].get(identity) ?? 0) !== 0) {
         violations.push(`${otherPackage}: wrong package for declared identity ${identity}`);
       }
@@ -86,15 +93,25 @@ function ledgerReplacementIds(ledger) {
   ]);
 }
 
-export function collectTrackedTestSources({ root, tracked, vitestFiles = {}, authorizedMissingPaths = new Set(), readSource = readFileSync }) {
+export function collectTrackedTestSources({
+  root,
+  tracked,
+  vitestFiles = {},
+  playwrightFiles = {},
+  authorizedMissingPaths = new Set(),
+  readSource = readFileSync,
+}) {
   const tests = [];
   const issues = [];
-  const vitestPaths = new Set(Object.values(vitestFiles).flat().map(normalizePath));
-  for (const item of tracked.filter((candidate) => candidate.endsWith(".test.ts") || vitestPaths.has(candidate))) {
+  const trackedTests = tracked.map(normalizePath).filter((candidate) => /\.(?:test|spec)\.[cm]?[jt]sx?$/i.test(candidate));
+  const runnerPaths = [...Object.values(vitestFiles).flat(), ...Object.values(playwrightFiles).flat()].map(normalizePath);
+  const liveTestPaths = [...new Set([...trackedTests, ...runnerPaths])].sort();
+  const normalizedAuthorizedMissingPaths = new Set([...authorizedMissingPaths].map(normalizePath));
+  for (const item of liveTestPaths) {
     try {
       tests.push({ path: item, source: readSource(path.join(root, item), "utf8") });
     } catch (error) {
-      if (error?.code === "ENOENT" && authorizedMissingPaths.has(item)) continue;
+      if (error?.code === "ENOENT" && normalizedAuthorizedMissingPaths.has(item)) continue;
       if (error?.code === "ENOENT") {
         issues.push(`missing tracked test without ledger ownership: ${item}`);
         continue;
@@ -109,6 +126,8 @@ export function createLedgerLiveCensus({ census, runnerResult }) {
   return {
     vitestOwners: census.vitestOwners,
     vitestFiles: runnerResult?.vitestFiles ?? {},
+    playwrightOwners: census.playwrightOwners,
+    playwrightFiles: runnerResult?.playwrightFiles ?? {},
   };
 }
 
@@ -126,28 +145,41 @@ export function collectTelegramCargoReplacementEvidence({ ledger, authority, ver
   }
 
   const listResults = {};
-  for (const packageName of [...packages].sort()) listResults[packageName] = runCargoList(packageName);
+  const ignoredListResults = {};
+  for (const packageName of [...packages].sort()) {
+    listResults[packageName] = runCargoList(packageName, { ignoredOnly: false });
+    ignoredListResults[packageName] = runCargoList(packageName, { ignoredOnly: true });
+  }
   const issues = [];
   const countsByPackage = {};
+  const ignoredCountsByPackage = {};
   for (const packageName of packages) {
     countsByPackage[packageName] = listedTestCounts(listResults[packageName], packageName, issues);
+    ignoredCountsByPackage[packageName] = listedTestCounts(ignoredListResults[packageName], `${packageName} ignored-only`, issues);
   }
   const resolvedReplacementIds = new Set();
   for (const id of referenced) {
     const match = /^test:cargo:([^:]+)::(.+)$/.exec(id);
     if (!match) continue;
     const [, packageName, identity] = match;
-    if (verifyOwnsCargoPackage(verifySteps, packageName)
+    const ignoredCount = ignoredCountsByPackage[packageName]?.get(identity) ?? 0;
+    if (ignoredCount > 0) issues.push(`${packageName}: ignored replacement identity ${identity}`);
+    const ignoredEvidenceValid = ignoredListResults[packageName]
+      && !ignoredListResults[packageName].error
+      && ignoredListResults[packageName].exitCode === 0;
+    if (ignoredEvidenceValid
+      && ignoredCount === 0
+      && verifyOwnsCargoPackage(verifySteps, packageName)
       && (countsByPackage[packageName]?.get(identity) ?? 0) === 1) {
       resolvedReplacementIds.add(id);
     }
   }
   if (referenced.has(toolId)) {
-    const toolIssues = evaluateTelegramCargoTestIdentityOwnership({ authority, listResults, verifySteps });
+    const toolIssues = evaluateTelegramCargoTestIdentityOwnership({ authority, listResults, ignoredListResults, verifySteps });
     for (const issue of toolIssues) if (!issues.includes(issue)) issues.push(issue);
     if (toolIssues.length === 0) resolvedReplacementIds.add(toolId);
   }
-  return { issues, listResults, resolvedReplacementIds };
+  return { issues, listResults, ignoredListResults, resolvedReplacementIds };
 }
 
 function validateLiveSourceContractLedger(root, ledger, liveCensus) {
@@ -163,6 +195,7 @@ function validateLiveSourceContractLedger(root, ledger, liveCensus) {
     root,
     tracked,
     vitestFiles: liveCensus.vitestFiles,
+    playwrightFiles: liveCensus.playwrightFiles,
     authorizedMissingPaths,
   });
   const runnerTitlesByPath = {};
@@ -194,10 +227,11 @@ function validateLiveSourceContractLedger(root, ledger, liveCensus) {
       ledger,
       authority: index.getJson("src/lib/telegram-8b-test-identities.json"),
       verifySteps,
-      runCargoList(packageName) {
+      runCargoList(packageName, { ignoredOnly }) {
         try {
           const stdout = execFileSync("cargo", [
-            "test", "--manifest-path", "src-tauri/Cargo.toml", "-p", packageName, "--lib", "--", "--list",
+            "test", "--manifest-path", "src-tauri/Cargo.toml", "-p", packageName, "--lib", "--",
+            ...(ignoredOnly ? ["--ignored"] : []), "--list",
           ], { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, windowsHide: true });
           return { exitCode: 0, stdout };
         } catch (error) {

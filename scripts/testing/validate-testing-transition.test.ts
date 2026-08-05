@@ -150,31 +150,35 @@ describe("Telegram Cargo test identity ownership", () => {
     extractum: { exitCode: 0, stdout: "app::tests::owned: test\n1 test, 0 benchmarks\n" },
     "extractum-telegram": { exitCode: 0, stdout: "session::tests::owned: test\n1 test, 0 benchmarks\n" },
   };
+  const passingIgnoredLists = {
+    extractum: { exitCode: 0, stdout: "0 tests, 0 benchmarks\n" },
+    "extractum-telegram": { exitCode: 0, stdout: "0 tests, 0 benchmarks\n" },
+  };
   const verifySteps = [{ command: "cargo", args: ["test", "--manifest-path", "src-tauri/Cargo.toml", "--workspace", "--all-targets"] }];
 
   it("accepts exact declared identities under their terminal Cargo owners", () => {
-    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: passingLists, verifySteps })).toEqual([]);
+    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: passingLists, ignoredListResults: passingIgnoredLists, verifySteps })).toEqual([]);
   });
 
   it("fails closed on missing, duplicate, wrong-package, failed-list, and missing-owner evidence", () => {
     const missing = structuredClone(passingLists);
     missing.extractum.stdout = "0 tests, 0 benchmarks\n";
-    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: missing, verifySteps })).toEqual(
+    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: missing, ignoredListResults: passingIgnoredLists, verifySteps })).toEqual(
       expect.arrayContaining([expect.stringMatching(/missing.*app::tests::owned/i)]),
     );
 
     const duplicateAndWrong = structuredClone(passingLists);
     duplicateAndWrong["extractum-telegram"].stdout += "session::tests::owned: test\napp::tests::owned: test\n";
-    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: duplicateAndWrong, verifySteps })).toEqual(
+    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: duplicateAndWrong, ignoredListResults: passingIgnoredLists, verifySteps })).toEqual(
       expect.arrayContaining([expect.stringMatching(/duplicate.*session::tests::owned/i), expect.stringMatching(/wrong package.*app::tests::owned/i)]),
     );
 
     const failed = structuredClone(passingLists);
     failed.extractum.exitCode = 101;
-    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: failed, verifySteps })).toEqual(
+    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: failed, ignoredListResults: passingIgnoredLists, verifySteps })).toEqual(
       expect.arrayContaining([expect.stringMatching(/extractum.*failed/i)]),
     );
-    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: passingLists, verifySteps: [] })).toEqual(
+    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: passingLists, ignoredListResults: passingIgnoredLists, verifySteps: [] })).toEqual(
       expect.arrayContaining([expect.stringMatching(/verify owner.*extractum/i), expect.stringMatching(/verify owner.*extractum-telegram/i)]),
     );
   });
@@ -183,13 +187,15 @@ describe("Telegram Cargo test identity ownership", () => {
     const leaked = structuredClone(passingLists);
     leaked.extractum.stdout += "telegram_impl::session::tests::owned: test\n";
 
-    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: leaked, verifySteps })).toEqual(
+    expect(evaluateTelegramCargoTestIdentityOwnership({ authority, listResults: leaked, ignoredListResults: passingIgnoredLists, verifySteps })).toEqual(
       expect.arrayContaining([expect.stringMatching(/extractum.*telegram_impl::session::tests::owned/i)]),
     );
   });
 
   it("lists each referenced Cargo package at most once and skips unreferenced lists", () => {
-    const runCargoList = vi.fn((packageName: string) => passingLists[packageName as keyof typeof passingLists]);
+    const runCargoList = vi.fn((packageName: string, options?: { ignoredOnly?: boolean }) => options?.ignoredOnly
+      ? passingIgnoredLists[packageName as keyof typeof passingIgnoredLists]
+      : passingLists[packageName as keyof typeof passingLists]);
     const ledger = { rows: [{ replacementIds: [
       "test:cargo:extractum::app::tests::owned",
       "test:cargo:extractum::app::tests::owned",
@@ -198,7 +204,12 @@ describe("Telegram Cargo test identity ownership", () => {
 
     const evidence = collectTelegramCargoReplacementEvidence({ ledger, authority, verifySteps, runCargoList });
 
-    expect(runCargoList.mock.calls).toEqual([["extractum"], ["extractum-telegram"]]);
+    expect(runCargoList.mock.calls).toEqual([
+      ["extractum", { ignoredOnly: false }],
+      ["extractum", { ignoredOnly: true }],
+      ["extractum-telegram", { ignoredOnly: false }],
+      ["extractum-telegram", { ignoredOnly: true }],
+    ]);
     expect(evidence.resolvedReplacementIds).toEqual(new Set([
       "test:cargo:extractum::app::tests::owned",
       "tool:telegram-cargo-test-identity-ownership",
@@ -210,7 +221,9 @@ describe("Telegram Cargo test identity ownership", () => {
   });
 
   it("lists and resolves referenced Cargo packages outside the Telegram pair", () => {
-    const runCargoList = vi.fn((packageName: string) => packageName === "extractum-analysis"
+    const runCargoList = vi.fn((packageName: string, options?: { ignoredOnly?: boolean }) => options?.ignoredOnly
+      ? { exitCode: 0, stdout: "0 tests, 0 benchmarks\n" }
+      : packageName === "extractum-analysis"
       ? { exitCode: 0, stdout: "state::tests::owned: test\n1 test, 0 benchmarks\n" }
       : passingLists[packageName as keyof typeof passingLists]);
     const ledger = { rows: [{ replacementIds: [
@@ -219,11 +232,31 @@ describe("Telegram Cargo test identity ownership", () => {
 
     const evidence = collectTelegramCargoReplacementEvidence({ ledger, authority, verifySteps, runCargoList });
 
-    expect(runCargoList.mock.calls).toEqual([["extractum-analysis"]]);
+    expect(runCargoList.mock.calls).toEqual([
+      ["extractum-analysis", { ignoredOnly: false }],
+      ["extractum-analysis", { ignoredOnly: true }],
+    ]);
     expect(evidence.issues).toEqual([]);
     expect(evidence.resolvedReplacementIds).toEqual(new Set([
       "test:cargo:extractum-analysis::state::tests::owned",
     ]));
+  });
+
+  it("does not resolve a Cargo replacement when the exact test is ignored", () => {
+    const runCargoList = vi.fn((_packageName: string, options?: { ignoredOnly?: boolean }) => ({
+      exitCode: 0,
+      stdout: options?.ignoredOnly
+        ? "state::tests::ignored_owner: test\n1 test, 0 benchmarks\n"
+        : "state::tests::ignored_owner: test\n1 test, 0 benchmarks\n",
+    }));
+    const ledger = { rows: [{ replacementIds: [
+      "test:cargo:extractum-analysis::state::tests::ignored_owner",
+    ] }] };
+
+    const evidence = collectTelegramCargoReplacementEvidence({ ledger, authority, verifySteps, runCargoList });
+
+    expect(evidence.resolvedReplacementIds).toEqual(new Set());
+    expect(evidence.issues).toContain("extractum-analysis: ignored replacement identity state::tests::ignored_owner");
   });
 
   it("closes a transition-only tool replacement only with resolved Cargo identity evidence", () => {
@@ -253,22 +286,25 @@ describe("Telegram Cargo test identity ownership", () => {
 });
 
 describe("live source-contract test discovery", () => {
-  it("adds tracked Vitest specs without collecting Playwright-only specs", () => {
+  it("collects the normalized union of tracked tests and every live runner-owned path", () => {
     const readSource = vi.fn(() => "test source");
 
     expect(collectTrackedTestSources({
       root,
       tracked: ["src/current.test.ts", "src/unapproved.spec.ts", "research/adapter/tests/e2e.spec.ts"],
-      vitestFiles: { "vitest:root": ["src/current.test.ts", "src/unapproved.spec.ts"] },
+      vitestFiles: { "vitest:root": ["src/current.test.ts", "scripts\\untracked-vitest.spec.ts"] },
+      playwrightFiles: { "playwright:adapter": ["research/adapter/tests/e2e.spec.ts", "research\\untracked-e2e.spec.ts"] },
       readSource,
     })).toEqual({
       tests: [
+        { path: "research/adapter/tests/e2e.spec.ts", source: "test source" },
+        { path: "research/untracked-e2e.spec.ts", source: "test source" },
+        { path: "scripts/untracked-vitest.spec.ts", source: "test source" },
         { path: "src/current.test.ts", source: "test source" },
         { path: "src/unapproved.spec.ts", source: "test source" },
       ],
       issues: [],
     });
-    expect(readSource).not.toHaveBeenCalledWith(path.join(root, "research/adapter/tests/e2e.spec.ts"), "utf8");
   });
 
   it("allows a missing tracked test only when the ledger owns its transition", () => {
@@ -320,6 +356,8 @@ describe("live source-contract test discovery", () => {
     })).toEqual({
       vitestOwners: census.vitestOwners,
       vitestFiles: { "vitest:root": ["src/replacement.test.ts"] },
+      playwrightOwners: census.playwrightOwners,
+      playwrightFiles: { "playwright:adapter": ["research/adapter/tests/e2e.spec.ts"] },
     });
   });
 });
@@ -542,6 +580,42 @@ describe("bounded source-contract ledger", () => {
     expect(draft.rows.map((row: any) => row.title)).toEqual(["one", "two"]);
   });
 
+  it("discovers CommonJS namespace, destructured, aliased, and dynamic node:fs reader flows", () => {
+    const files = [{ path: "src/commonjs-fs.test.ts", source: [
+      'let uninitialized;',
+      'const fs = require("node:fs");',
+      'const { readFileSync } = require("node:fs");',
+      'const { readFile: readAsync } = require("node:fs/promises");',
+      'const { [readerName]: destructuredDynamic } = require("node:fs");',
+      'const readAlias = fs.readFileSync;',
+      'const dynamicReader = fs[readerName];',
+      'const one = fs.readFileSync("src/one.ts", "utf8");',
+      'const two = readFileSync("src/two.ts", "utf8");',
+      'const three = await readAsync("src/three.ts", "utf8");',
+      'const four = readAlias("src/four.ts", "utf8");',
+      'const unknown = dynamicReader(dynamicPath, "utf8");',
+      'const five = require("node:fs")["readFileSync"]("src/five.ts", "utf8");',
+      'const directUnknown = require("node:fs")[readerName](dynamicPath, "utf8");',
+      'const destructuredUnknown = destructuredDynamic(dynamicPath, "utf8");',
+      'it("reads", () => expect([one, two, three, four, five, unknown, directUnknown, destructuredUnknown]).toBeDefined());',
+    ].join("\n") }];
+
+    const readers = discoverSourceReaders(files, gitMetadata([
+      "src/one.ts", "src/two.ts", "src/three.ts", "src/four.ts", "src/five.ts",
+    ]), ts);
+
+    expect(readers.map((reader: any) => [reader.authorityPath, reader.kind, reader.reason])).toEqual([
+      ["src/one.ts", "fs-read", undefined],
+      ["src/two.ts", "fs-read", undefined],
+      ["src/three.ts", "fs-read", undefined],
+      ["src/four.ts", "fs-read", undefined],
+      [undefined, "manual", "dynamic or unknown filesystem reader flow"],
+      ["src/five.ts", "fs-read", undefined],
+      [undefined, "manual", "dynamic or unknown filesystem reader flow"],
+      [undefined, "manual", "dynamic or unknown filesystem reader flow"],
+    ]);
+  });
+
   it("uses lexical binding identity so a shadowed name does not propagate source authority", () => {
     const files = [{ path: "src/shadow.test.ts", source: [
       'import source from "./live.ts?raw";',
@@ -747,8 +821,8 @@ describe("bounded source-contract ledger", () => {
   });
 
   it("derives truthful open and closed states for present, deleted, unresolved, and mixed historical rows", () => {
-    const current = { path: "src/current.test.ts", title: "current", sourceSlice: 'it("current", () => expect(1).toBe(1))', sourceOffset: 0, assertionOrdinals: [1], referencedBindingKeys: [], sourceRange: "1:1-1:42" };
-    const replacement = { path: "src/replacement.test.ts", title: "replacement", sourceSlice: 'it("replacement", () => expect(1).toBe(1))', sourceOffset: 0, assertionOrdinals: [1], referencedBindingKeys: [], sourceRange: "1:1-1:50" };
+    const current = { path: "src/current.test.ts", title: "current", eligibility: "eligible", sourceSlice: 'it("current", () => expect(1).toBe(1))', sourceOffset: 0, assertionOrdinals: [1], referencedBindingKeys: [], sourceRange: "1:1-1:42" };
+    const replacement = { path: "src/replacement.test.ts", title: "replacement", eligibility: "eligible", sourceSlice: 'it("replacement", () => expect(1).toBe(1))', sourceOffset: 0, assertionOrdinals: [1], referencedBindingKeys: [], sourceRange: "1:1-1:50" };
     const rows = [
       simpleRow(current, { id: "SC-000001", replacementIds: ["test:vitest:src/replacement.test.ts#replacement"] }),
       simpleRow(current, { id: "SC-000002", path: "src/deleted.test.ts", title: "deleted", disposition: "delete", deletionReason: "Formatting-only assertion retired.", replacementIds: undefined }),
@@ -767,6 +841,92 @@ describe("bounded source-contract ledger", () => {
       { id: "SC-000003", state: "closed" }, { id: "SC-000004", state: "open" },
     ]);
     expect(result.issues).toContain("SC-000004: unresolved historical row");
+  });
+
+  it("closes only unconditionally eligible Vitest replacement declarations", () => {
+    const source = [
+      'it("normal", () => expect(1).toBe(1));',
+      'it.skip("skipped", () => expect(1).toBe(1));',
+      'test.skip("test skipped", () => expect(1).toBe(1));',
+      'describe.skip("skipped suite", () => { it("child", () => expect(1).toBe(1)); });',
+      'it.runIf(false)("run false", () => expect(1).toBe(1));',
+      'it.skipIf(true)("skip true", () => expect(1).toBe(1));',
+      'it.runIf(runtimeFlag)("dynamic", () => expect(1).toBe(1));',
+    ].join("\n");
+    const inventory = discoverTestDeclarations([{ path: "src/eligibility.test.ts", source }], ts);
+    expect(inventory.map((entry: any) => [entry.title, entry.eligibility])).toEqual([
+      ["normal", "eligible"],
+      ["skipped", "ineligible"],
+      ["test skipped", "ineligible"],
+      ["skipped suite > child", "ineligible"],
+      ["run false", "ineligible"],
+      ["skip true", "ineligible"],
+      ["dynamic", "unknown"],
+    ]);
+    const titles = inventory.map((entry: any) => entry.title);
+    const rows = titles.map((title: string, index: number) => ({
+      id: `SC-${String(index + 1).padStart(6, "0")}`,
+      path: `src/deleted-${index}.test.ts`,
+      title: `deleted ${index}`,
+      sourceHash: "a".repeat(64),
+      assertionCount: 1,
+      lineage: [],
+      invariant: "Keep executable behavior.",
+      disposition: "behavior",
+      replacementIds: [`test:vitest:src/eligibility.test.ts#${title}`],
+    }));
+    const result = validateSourceContractLedger({
+      ledger: envelope(rows),
+      declarationInventory: inventory,
+      sourceReaders: [],
+      liveCensus: { vitestOwners: [{ id: "vitest:root", ownerScript: "test" }], vitestFiles: { "vitest:root": ["src/eligibility.test.ts"] } },
+      verifySteps: [{ npmScript: "test" }],
+    });
+
+    expect(result.rows).toEqual([
+      { id: "SC-000001", state: "closed" },
+      ...rows.slice(1).map((row: any) => ({ id: row.id, state: "open" })),
+    ]);
+  });
+
+  it("rejects duplicate replacement IDs and placeholder deletion reasons", () => {
+    const replacement = discoverTestDeclarations([{
+      path: "src/replacement.test.ts",
+      source: 'it("replacement", () => expect(1).toBe(1));',
+    }], ts)[0];
+    const duplicate = simpleRow(replacement, {
+      path: "src/deleted.test.ts",
+      title: "deleted",
+      replacementIds: [
+        "test:vitest:src/replacement.test.ts#replacement",
+        "test:vitest:src/replacement.test.ts#replacement",
+      ],
+    });
+    const placeholder = simpleRow(replacement, {
+      id: "SC-000002",
+      path: "src/deleted-too.test.ts",
+      title: "deleted too",
+      disposition: "delete",
+      deletionReason: "TODO",
+      replacementIds: undefined,
+    });
+    delete placeholder.replacementIds;
+    const result = validateSourceContractLedger({
+      ledger: envelope([duplicate, placeholder]),
+      declarationInventory: [replacement],
+      sourceReaders: [],
+      liveCensus: { vitestOwners: [{ id: "vitest:root", ownerScript: "test" }], vitestFiles: { "vitest:root": ["src/replacement.test.ts"] } },
+      verifySteps: [{ npmScript: "test" }],
+    });
+
+    expect(result.issues).toEqual(expect.arrayContaining([
+      "SC-000001: duplicate replacementId: test:vitest:src/replacement.test.ts#replacement",
+      "SC-000002: delete requires a specific non-placeholder deletionReason",
+    ]));
+    expect(result.rows).toEqual([
+      { id: "SC-000001", state: "open" },
+      { id: "SC-000002", state: "open" },
+    ]);
   });
 
   it("consolidates manual readers into one exact row per known declaration title", () => {
@@ -899,6 +1059,12 @@ describe("bounded source-contract ledger", () => {
     ]), new Set());
     expect(metadata.pathKinds.get("src-tauri/src/analysis/test_schema.rs")).toBe("fixture");
     expect(metadata.readerSites.size).toBeGreaterThan(0);
+    expect(metadata.readerSites.get("research/gemini_browser_adapter/tests/failure-artifacts.spec.ts:32:32-32:86")).toEqual({
+      authorities: [{ path: "research/gemini_browser_adapter/artifacts/test-timeout", classification: "output" }],
+    });
+    expect(metadata.readerSites.get("research/gemini_browser_adapter/tests/failure-artifacts.spec.ts:83:16-83:65")).toEqual({
+      authorities: [{ path: "research/gemini_browser_adapter/artifacts/test-reduced", classification: "output" }],
+    });
     expect(metadata.directoryEntries.get("src/lib/prompt-pack-application-contract.test.ts:10:29-10:84")).toEqual([
       "src-tauri/src/prompt_packs/lib.rs", "src-tauri/src/prompt_packs/runtime.rs",
     ]);

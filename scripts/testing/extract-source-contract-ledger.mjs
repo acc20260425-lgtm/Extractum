@@ -65,12 +65,32 @@ function helperModuleName(moduleName) {
   return SOURCE_HELPERS.has(base) ? base : undefined;
 }
 
+function commonJsModuleName(node, typescript) {
+  const current = unwrapExpression(node, typescript);
+  if (!current
+    || !typescript.isCallExpression(current)
+    || !typescript.isIdentifier(current.expression)
+    || current.expression.text !== "require"
+    || current.arguments.length !== 1) return undefined;
+  return staticText(current.arguments[0], typescript);
+}
+
 function createLexicalModel(entry, typescript) {
   let nextScope = 0;
   const scopeByNode = new WeakMap();
   const bindings = new Map();
   const makeScope = (parent) => ({ id: nextScope++, parent, bindings: new Map() });
   const root = makeScope(undefined);
+
+  const resolveInScope = (scope, name) => {
+    let current = scope;
+    while (current) {
+      const found = current.bindings.get(name);
+      if (found?.length) return found;
+      current = current.parent;
+    }
+    return [];
+  };
 
   const addBinding = (scope, name, node, analysisNode, role = {}) => {
     const key = `${entry.path}:${node.getStart(entry.file)}:${name}`;
@@ -103,6 +123,37 @@ function createLexicalModel(entry, typescript) {
         addBinding(scope, specifier.name.text, specifier.name, undefined, roleFor("named", specifier.propertyName?.text ?? specifier.name.text));
       }
     }
+  };
+
+  const fsRoleFromExpression = (node, scope) => {
+    const current = unwrapExpression(node, typescript);
+    if (!current) return undefined;
+    const requiredModule = commonJsModuleName(current, typescript);
+    if (FS_MODULES.has(requiredModule)) return { kind: "fs-namespace", moduleName: requiredModule, importedName: "*" };
+    if (typescript.isIdentifier(current)) {
+      const resolved = resolveInScope(scope, current.text);
+      return resolved.length === 1 && resolved[0].role.kind?.startsWith("fs-") ? resolved[0].role : undefined;
+    }
+    if (typescript.isPropertyAccessExpression(current) || typescript.isElementAccessExpression(current)) {
+      const base = current.expression;
+      const directModule = commonJsModuleName(base, typescript);
+      const baseRole = FS_MODULES.has(directModule)
+        ? { kind: "fs-namespace", moduleName: directModule, importedName: "*" }
+        : typescript.isIdentifier(base)
+        ? (() => {
+          const resolved = resolveInScope(scope, base.text);
+          return resolved.length === 1 ? resolved[0].role : undefined;
+        })()
+        : undefined;
+      if (!["fs-default", "fs-namespace"].includes(baseRole?.kind)) return undefined;
+      const importedName = typescript.isPropertyAccessExpression(current)
+        ? current.name.text
+        : staticText(current.argumentExpression, typescript);
+      if (FS_READS.has(importedName)) return { kind: "fs-named", moduleName: baseRole.moduleName, importedName };
+      if (importedName === undefined) return { kind: "fs-unknown", moduleName: baseRole.moduleName };
+      return undefined;
+    }
+    return undefined;
   };
 
   const visit = (node, scope) => {
@@ -141,7 +192,28 @@ function createLexicalModel(entry, typescript) {
       return;
     }
     if (typescript.isVariableDeclaration(node)) {
-      if (typescript.isIdentifier(node.name)) addBinding(scope, node.name.text, node.name, node.initializer);
+      if (typescript.isIdentifier(node.name)) {
+        addBinding(scope, node.name.text, node.name, node.initializer, fsRoleFromExpression(node.initializer, scope));
+      } else if (typescript.isObjectBindingPattern(node.name)
+        && ["fs-default", "fs-namespace", "fs-unknown"].includes(fsRoleFromExpression(node.initializer, scope)?.kind)) {
+        const initializerRole = fsRoleFromExpression(node.initializer, scope);
+        for (const element of node.name.elements) {
+          if (!typescript.isIdentifier(element.name)) continue;
+          const importedName = !element.propertyName
+            ? element.name.text
+            : typescript.isIdentifier(element.propertyName) || typescript.isStringLiteral(element.propertyName)
+            ? element.propertyName.text
+            : undefined;
+          const role = importedName === undefined
+            ? { kind: "fs-unknown", moduleName: initializerRole.moduleName }
+            : ["fs-default", "fs-namespace"].includes(initializerRole?.kind) && FS_READS.has(importedName)
+            ? { kind: "fs-named", moduleName: initializerRole.moduleName, importedName }
+            : initializerRole?.kind === "fs-unknown"
+            ? initializerRole
+            : { kind: "unsupported-binding" };
+          addBinding(scope, element.name.text, element.name, node.initializer, role);
+        }
+      }
       else {
         const addPattern = (pattern) => {
           if (typescript.isIdentifier(pattern)) addBinding(scope, pattern.text, pattern, node.initializer, { kind: "unsupported-binding" });
@@ -246,6 +318,27 @@ function unwrapExpression(node, typescript) {
   return current;
 }
 
+function staticBoolean(node, typescript) {
+  const current = unwrapExpression(node, typescript);
+  if (current?.kind === typescript.SyntaxKind.TrueKeyword) return true;
+  if (current?.kind === typescript.SyntaxKind.FalseKeyword) return false;
+  return undefined;
+}
+
+function conditionalEligibility(modifier, condition, typescript) {
+  const value = staticBoolean(condition, typescript);
+  if (value === undefined) return "unknown";
+  return modifier === "runIf"
+    ? value ? "eligible" : "ineligible"
+    : value ? "ineligible" : "eligible";
+}
+
+function combineEligibility(parent, own) {
+  if (parent === "ineligible" || own === "ineligible") return "ineligible";
+  if (parent === "unknown" || own === "unknown") return "unknown";
+  return "eligible";
+}
+
 function callKind(node, typescript) {
   if (!typescript.isCallExpression(node)) return undefined;
   const callbackFor = (kind, args) => SUITE_NAMES.has(kind) && args.length >= 3
@@ -254,14 +347,26 @@ function callKind(node, typescript) {
     : args[1];
   if (typescript.isIdentifier(node.expression)) {
     const kind = node.expression.text;
-    return { kind, args: node.arguments, callback: callbackFor(kind, node.arguments) };
+    return { kind, args: node.arguments, callback: callbackFor(kind, node.arguments), eligibility: "eligible" };
+  }
+  if (typescript.isPropertyAccessExpression(node.expression)
+    && typescript.isIdentifier(node.expression.expression)) {
+    const kind = node.expression.expression.text;
+    const modifier = node.expression.name.text;
+    if (modifier === "skip") return { kind, args: node.arguments, callback: callbackFor(kind, node.arguments), eligibility: "ineligible" };
+    if (modifier === "only") return { kind, args: node.arguments, callback: callbackFor(kind, node.arguments), eligibility: "eligible" };
   }
   if (!typescript.isCallExpression(node.expression)) return undefined;
   const each = node.expression;
   if (!typescript.isPropertyAccessExpression(each.expression) || !typescript.isIdentifier(each.expression.expression)) return undefined;
   const kind = each.expression.expression.text;
-  if (each.expression.name.text === "each") return { kind, args: node.arguments, callback: node.arguments[1], eachTable: each.arguments[0] };
-  if (["runIf", "skipIf"].includes(each.expression.name.text)) return { kind, args: node.arguments, callback: callbackFor(kind, node.arguments) };
+  if (each.expression.name.text === "each") return { kind, args: node.arguments, callback: node.arguments[1], eachTable: each.arguments[0], eligibility: "eligible" };
+  if (["runIf", "skipIf"].includes(each.expression.name.text)) return {
+    kind,
+    args: node.arguments,
+    callback: callbackFor(kind, node.arguments),
+    eligibility: conditionalEligibility(each.expression.name.text, each.arguments[0], typescript),
+  };
   return undefined;
 }
 
@@ -276,7 +381,7 @@ function referencedSymbols(node, model) {
   return [...names].sort(compareText);
 }
 
-function manualRequirement(model, node, reason, analysisNode = node, title, titleExact = true, titleTemplate = false) {
+function manualRequirement(model, node, reason, analysisNode = node, title, titleExact = true, titleTemplate = false, eligibility = "unknown") {
   const assertions = assertionInfo(analysisNode, model);
   const closure = bindingClosure(analysisNode, model);
   return {
@@ -290,6 +395,7 @@ function manualRequirement(model, node, reason, analysisNode = node, title, titl
     referencedSymbols: referencedSymbols(analysisNode, model),
     ...(title ? { title, titleExact } : {}),
     ...(titleTemplate ? { titleTemplate: true } : {}),
+    eligibility,
     reason,
   };
 }
@@ -311,29 +417,30 @@ export function discoverTestDeclarations(sourceFiles, typescript = tsDefault) {
   const manualRequirements = [];
   for (const entry of sourceEntries(sourceFiles, typescript)) {
     const model = createLexicalModel(entry, typescript);
-    const visit = (node, parentTitles = []) => {
+    const visit = (node, parentTitles = [], inheritedEligibility = "eligible") => {
       const call = callKind(node, typescript);
+      const eligibility = combineEligibility(inheritedEligibility, call?.eligibility ?? "eligible");
       if (call && SUITE_NAMES.has(call.kind)) {
         const title = staticText(call.args[0], typescript);
-        if (title === undefined) manualRequirements.push(manualRequirement(model, node, "computed suite title"));
-        else if (!call.callback || !(typescript.isArrowFunction(call.callback) || typescript.isFunctionExpression(call.callback))) manualRequirements.push(manualRequirement(model, node, "dynamic suite factory"));
-        else typescript.forEachChild(call.callback.body, (child) => visit(child, [...parentTitles, title]));
+        if (title === undefined) manualRequirements.push(manualRequirement(model, node, "computed suite title", node, undefined, true, false, eligibility));
+        else if (!call.callback || !(typescript.isArrowFunction(call.callback) || typescript.isFunctionExpression(call.callback))) manualRequirements.push(manualRequirement(model, node, "dynamic suite factory", node, undefined, true, false, eligibility));
+        else typescript.forEachChild(call.callback.body, (child) => visit(child, [...parentTitles, title], eligibility));
         return;
       }
       if (call && TEST_NAMES.has(call.kind)) {
         const title = staticText(call.args[0], typescript);
         const callback = call.callback;
         if (title === undefined) {
-          manualRequirements.push(manualRequirement(model, node, "computed test title", callback ?? node));
+          manualRequirements.push(manualRequirement(model, node, "computed test title", callback ?? node, undefined, true, false, eligibility));
           return;
         }
         if (!callback || !(typescript.isArrowFunction(callback) || typescript.isFunctionExpression(callback))) {
-          manualRequirements.push(manualRequirement(model, node, "dynamic test factory", node, title === undefined ? undefined : [...parentTitles, title].join(" > "), true, Boolean(call.eachTable)));
+          manualRequirements.push(manualRequirement(model, node, "dynamic test factory", node, title === undefined ? undefined : [...parentTitles, title].join(" > "), true, Boolean(call.eachTable), eligibility));
           return;
         }
         const fullTitle = [...parentTitles, title].join(" > ");
         if (insideNamedRegistration(node, typescript)) {
-          manualRequirements.push(manualRequirement(model, node, "test declaration inside registration function", callback, fullTitle, false, Boolean(call.eachTable)));
+          manualRequirements.push(manualRequirement(model, node, "test declaration inside registration function", callback, fullTitle, false, Boolean(call.eachTable), eligibility));
           return;
         }
         let eachAuthorityText;
@@ -344,7 +451,7 @@ export function discoverTestDeclarations(sourceFiles, typescript = tsDefault) {
             const resolved = model.resolve(table);
             const initializer = resolved.length === 1 ? unwrapExpression(resolved[0].analysisNode, typescript) : undefined;
             if (!initializer || !(typescript.isArrayLiteralExpression(initializer) || typescript.isTaggedTemplateExpression(initializer))) {
-              manualRequirements.push(manualRequirement(model, node, "unresolved dynamic .each table", callback, fullTitle, true, true));
+              manualRequirements.push(manualRequirement(model, node, "unresolved dynamic .each table", callback, fullTitle, true, true, eligibility));
               return;
             }
             const declaration = resolved[0].node.parent;
@@ -355,27 +462,28 @@ export function discoverTestDeclarations(sourceFiles, typescript = tsDefault) {
             eachAuthorityText = normalizeText(table.getText(model.file));
             eachAuthorityOffset = table.getStart(model.file);
           } else {
-            manualRequirements.push(manualRequirement(model, node, "unresolved dynamic .each table", callback, fullTitle, true, true));
+            manualRequirements.push(manualRequirement(model, node, "unresolved dynamic .each table", callback, fullTitle, true, true, eligibility));
             return;
           }
         }
         const closure = bindingClosure(callback, model);
         if (closure.keys.some((key) => model.bindings.get(key)?.role.kind === "unsupported-binding")) {
-          manualRequirements.push(manualRequirement(model, node, "unsupported destructuring or alias flow", callback, fullTitle, true, Boolean(call.eachTable)));
+          manualRequirements.push(manualRequirement(model, node, "unsupported destructuring or alias flow", callback, fullTitle, true, Boolean(call.eachTable), eligibility));
           return;
         }
         if (closure.ambiguous.length) {
-          manualRequirements.push(manualRequirement(model, node, `ambiguous lexical binding: ${closure.ambiguous.join(", ")}`, callback, fullTitle, true, Boolean(call.eachTable)));
+          manualRequirements.push(manualRequirement(model, node, `ambiguous lexical binding: ${closure.ambiguous.join(", ")}`, callback, fullTitle, true, Boolean(call.eachTable), eligibility));
           return;
         }
         const assertions = assertionInfo(callback, model);
         if (assertions.unknownDirectAssert.length) {
-          manualRequirements.push(manualRequirement(model, node, "unresolved direct assert binding", callback, fullTitle, true, Boolean(call.eachTable)));
+          manualRequirements.push(manualRequirement(model, node, "unresolved direct assert binding", callback, fullTitle, true, Boolean(call.eachTable), eligibility));
           return;
         }
         declarations.push({
           path: model.path,
           title: fullTitle,
+          eligibility,
           sourceRange: rangeOf(model.file, node),
           sourceSlice: normalizeText(node.getText(model.file)),
           sourceOffset: node.getStart(model.file),
@@ -392,11 +500,11 @@ export function discoverTestDeclarations(sourceFiles, typescript = tsDefault) {
         const resolved = model.resolve(node.expression);
         const initializer = resolved.length === 1 ? unwrapExpression(resolved[0].analysisNode, typescript) : undefined;
         if (initializer && typescript.isIdentifier(initializer) && TEST_NAMES.has(initializer.text)) {
-          manualRequirements.push(manualRequirement(model, node, "factory-created test declaration"));
+          manualRequirements.push(manualRequirement(model, node, "factory-created test declaration", node, undefined, true, false, inheritedEligibility));
           return;
         }
       }
-      typescript.forEachChild(node, (child) => visit(child, parentTitles));
+      typescript.forEachChild(node, (child) => visit(child, parentTitles, inheritedEligibility));
     };
     visit(model.file);
   }
@@ -567,6 +675,25 @@ function callImportRole(node, model) {
     const binding = bindingForIdentifier(expression.expression, model);
     return binding ? { binding, importedName: expression.name.text, role: binding.role } : undefined;
   }
+  if (model.typescript.isPropertyAccessExpression(expression)) {
+    const moduleName = commonJsModuleName(expression.expression, model.typescript);
+    if (FS_MODULES.has(moduleName)) return {
+      importedName: expression.name.text,
+      role: { kind: "fs-named", moduleName, importedName: expression.name.text },
+    };
+  }
+  if (model.typescript.isElementAccessExpression(expression)) {
+    const moduleName = commonJsModuleName(expression.expression, model.typescript);
+    if (FS_MODULES.has(moduleName)) {
+      const importedName = staticText(expression.argumentExpression, model.typescript);
+      return {
+        importedName,
+        role: importedName === undefined
+          ? { kind: "fs-unknown", moduleName }
+          : { kind: "fs-named", moduleName, importedName },
+      };
+    }
+  }
   return undefined;
 }
 
@@ -651,6 +778,8 @@ export function discoverSourceReaders(programOrFiles, gitMetadata, typescript = 
               if (classification) readers.push(readerRecord(model, node, { kind: "fs-read", authorityPath, classification }));
               else readers.push(readerRecord(model, node, { kind: "manual", reason: "untracked filesystem authority" }));
             }
+          } else if (fsKind === "fs-unknown") {
+            readers.push(readerRecord(model, node, { kind: "manual", reason: "dynamic or unknown filesystem reader flow" }));
           } else if (imported?.role.kind === "helper-named" && SOURCE_HELPERS.get(imported.role.helper)?.has(imported.role.importedName)) {
             readers.push(readerRecord(model, node, { kind: "contract-path-helper", authorityPath: imported.role.moduleName, classification: "production", exportName: imported.role.importedName }));
           } else if (imported?.role.kind === "helper-namespace" && SOURCE_HELPERS.get(imported.role.helper)?.has(imported.importedName)) {
@@ -873,8 +1002,14 @@ function validateResolution(row, resolution, context, issues) {
   if (!DISPOSITIONS.has(resolution.disposition)) issues.push(`${prefix} invalid disposition`);
   if (resolution.disposition === "delete") {
     if (Object.prototype.hasOwnProperty.call(resolution, "replacementIds")) issues.push(`${prefix} delete must not contain replacementIds`);
-    if (typeof resolution.deletionReason !== "string" || !resolution.deletionReason.trim()) issues.push(`${prefix} delete requires a specific deletionReason`);
-    return DISPOSITIONS.has(resolution.disposition) && !Object.prototype.hasOwnProperty.call(resolution, "replacementIds") && typeof resolution.deletionReason === "string" && Boolean(resolution.deletionReason.trim());
+    const reason = typeof resolution.deletionReason === "string" ? resolution.deletionReason.trim() : "";
+    const placeholder = /^(?:todo|tbd|placeholder|delete|deleted|remove|removed|n\/?a|none)[.!]?$/i.test(reason);
+    if (!reason) issues.push(`${prefix} delete requires a specific deletionReason`);
+    else if (placeholder) issues.push(`${prefix} delete requires a specific non-placeholder deletionReason`);
+    return DISPOSITIONS.has(resolution.disposition)
+      && !Object.prototype.hasOwnProperty.call(resolution, "replacementIds")
+      && Boolean(reason)
+      && !placeholder;
   }
   if (Object.prototype.hasOwnProperty.call(resolution, "deletionReason")) issues.push(`${prefix} non-delete must not contain deletionReason`);
   if (!Array.isArray(resolution.replacementIds) || !resolution.replacementIds.length) {
@@ -882,11 +1017,17 @@ function validateResolution(row, resolution, context, issues) {
     return false;
   }
   let syntaxValid = true;
+  const seenReplacementIds = new Set();
   for (const id of resolution.replacementIds) {
     if (typeof id !== "string" || !REPLACEMENT.test(id)) {
       issues.push(`${prefix} unknown replacement namespace: ${id}`);
       syntaxValid = false;
     }
+    if (seenReplacementIds.has(id)) {
+      issues.push(`${prefix} duplicate replacementId: ${id}`);
+      syntaxValid = false;
+    }
+    seenReplacementIds.add(id);
   }
   return syntaxValid && DISPOSITIONS.has(resolution.disposition) && !Object.prototype.hasOwnProperty.call(resolution, "deletionReason")
     && resolution.replacementIds.every((id) => replacementResolved(id, context));
@@ -900,7 +1041,9 @@ function replacementResolved(id, context) {
   if (split < 1) return false;
   const filePath = target.slice(0, split);
   const title = target.slice(split + 1);
-  if (!context.declarationInventory.some((declaration) => declaration.path === filePath && declaration.title === title)) return false;
+  if (!context.declarationInventory.some((declaration) => declaration.path === filePath
+    && declaration.title === title
+    && declaration.eligibility === "eligible")) return false;
   const owner = (context.liveCensus?.vitestOwners ?? []).find((candidate) => {
     const owned = candidate?.files ?? context.liveCensus?.vitestFiles?.[candidate?.id];
     return Array.isArray(owned) && owned.includes(filePath);
@@ -1110,6 +1253,12 @@ export function createCliGitMetadata(trackedPaths, ignoredPaths = new Set()) {
     owner: "analysis migration fixture contract",
   };
   const readerSites = new Map([
+    ["research/gemini_browser_adapter/tests/failure-artifacts.spec.ts:32:32-32:86", {
+      authorities: [{ path: "research/gemini_browser_adapter/artifacts/test-timeout", classification: "output" }],
+    }],
+    ["research/gemini_browser_adapter/tests/failure-artifacts.spec.ts:83:16-83:65", {
+      authorities: [{ path: "research/gemini_browser_adapter/artifacts/test-reduced", classification: "output" }],
+    }],
     ["src/lib/analysis-migration-fixture-contract.test.ts:14:13-14:74", {
       authorities: [
         { path: "src-tauri/src/migrations.rs", classification: "production" },
