@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import SourceBrowserShell from "$lib/components/analysis/source-browser-shell.svelte";
 import SourceReaderHeader from "$lib/components/analysis/source-reader-header.svelte";
@@ -9,12 +9,33 @@ import type { AnalysisRunDetail, AnalysisSourceGroup } from "$lib/types/analysis
 import type { Source, SourceItem } from "$lib/types/sources";
 import type { YoutubePlaylistDetail, YoutubeVideoDetail } from "$lib/types/youtube";
 
+const originalScrollIntoView = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "scrollIntoView",
+);
+const originalCss = Object.getOwnPropertyDescriptor(globalThis, "CSS");
+
 beforeAll(() => {
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
     configurable: true,
     value: vi.fn(),
   });
   vi.stubGlobal("CSS", { escape: (value: string) => value });
+});
+
+afterAll(() => {
+  if (originalScrollIntoView) {
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScrollIntoView);
+  } else {
+    delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
+  }
+
+  vi.unstubAllGlobals();
+  if (originalCss) {
+    Object.defineProperty(globalThis, "CSS", originalCss);
+  } else {
+    delete (globalThis as Partial<typeof globalThis>).CSS;
+  }
 });
 
 afterEach(cleanup);

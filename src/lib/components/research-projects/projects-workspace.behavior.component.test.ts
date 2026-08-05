@@ -8,6 +8,7 @@ import type { LibraryCatalogRecord } from "$lib/types/library-sources";
 import type { ProjectRecord, ProjectSourceRecord, ProjectSummary } from "$lib/types/projects";
 import type { PromptPackRunListItem } from "$lib/types/prompt-packs";
 import type { YoutubePreview } from "$lib/types/sources";
+import type { YoutubeContentStatus, YoutubePlaylistDetail } from "$lib/types/youtube";
 import type { ResearchProjectsWorkflowState } from "$lib/ui/research-projects-workflow";
 import { projectSourceGridColumns } from "$lib/ui/research-projects-project-source-grid";
 import type {
@@ -37,6 +38,7 @@ const api = vi.hoisted(() => ({
   deleteProjectYoutubeVideoSourceFromLibrary: vi.fn(),
   deletePromptPackRun: vi.fn(),
   getProjectDataRange: vi.fn(),
+  getYoutubePlaylistDetail: vi.fn(),
   getLlmProfiles: vi.fn(),
   listActivePromptPackRuns: vi.fn(),
   listAnalysisPromptTemplates: vi.fn(),
@@ -99,6 +101,10 @@ vi.mock("$lib/api/source-jobs", () => ({
   syncYoutubeSource: api.syncYoutubeSource,
 }));
 
+vi.mock("$lib/api/youtube-detail", () => ({
+  getYoutubePlaylistDetail: api.getYoutubePlaylistDetail,
+}));
+
 vi.mock("$lib/api/analysis-runs", () => ({
   deleteAnalysisRun: api.deleteAnalysisRun,
   listenToAnalysisRunEvents: api.listenToAnalysisRunEvents,
@@ -110,41 +116,9 @@ vi.mock("$lib/api/analysis-source-groups", () => ({
   updateAnalysisSourceGroup: api.updateAnalysisSourceGroup,
 }));
 
-type ProjectsRouteReceiverProps = {
-  railPanel: { onSelect?: (projectId: number) => void };
-  filterBar?: { onAddSource?: () => void };
-  onSelectedSourceIdsChange?: (sourceIds: string[]) => void;
-  bulkBar?: { onDeleteFromLibrary?: () => void };
-};
-
 vi.mock("$lib/components/research-projects/ResearchProjectsShell.svelte", async () => {
-  // @ts-expect-error Svelte's compiler-emitted client runtime has no public declaration file.
-  const client = await import("svelte/internal/client");
-  const root = client.from_html(
-    '<main><button aria-label="Select route project">Select project</button><button aria-label="Open route add source">Add source</button><button aria-label="Select route source">Select source</button><button aria-label="Run route Library delete">Delete from Library</button></main>',
-  );
-
-  function ProjectsRouteReceiver(
-    anchor: Parameters<typeof client.append>[0],
-    props: ProjectsRouteReceiverProps,
-  ) {
-    client.push(props, true);
-    const main = root();
-    const selectProject = client.child(main) as HTMLButtonElement;
-    const addSource = client.sibling(selectProject) as HTMLButtonElement;
-    const selectSource = client.sibling(addSource) as HTMLButtonElement;
-    const deleteFromLibrary = client.sibling(selectSource) as HTMLButtonElement;
-
-    client.reset(main);
-    selectProject.addEventListener("click", () => props.railPanel.onSelect?.(1));
-    addSource.addEventListener("click", () => props.filterBar?.onAddSource?.());
-    selectSource.addEventListener("click", () => props.onSelectedSourceIdsChange?.(["11"]));
-    deleteFromLibrary.addEventListener("click", () => props.bulkBar?.onDeleteFromLibrary?.());
-    client.append(anchor, main);
-    client.pop();
-  }
-
-  return { default: ProjectsRouteReceiver };
+  const receiver = await import("$lib/testing/ProjectsRouteReceiver.svelte");
+  return { default: receiver.default };
 });
 
 vi.mock("$lib/api/llm", () => ({
@@ -394,6 +368,90 @@ function libraryCatalogRecord(
   };
 }
 
+function playlistCatalogRecord(): LibraryCatalogRecord {
+  const record = libraryCatalogRecord();
+  return {
+    ...record,
+    source: {
+      ...record.source,
+      source_id: 31,
+      source_subtype: "playlist",
+      external_id: "playlist-31",
+      title: "Evidence playlist",
+      canonical_url: "https://www.youtube.com/playlist?list=playlist-31",
+      item_count: 2,
+      youtube: {
+        ...record.source.youtube!,
+        video_form: "playlist",
+        duration_seconds: null,
+        playlist_video_count: 2,
+      },
+    },
+  };
+}
+
+function youtubeContentStatus(): YoutubeContentStatus {
+  return {
+    state: "not_synced",
+    itemCount: 0,
+    segmentCount: 0,
+    lastSyncedAt: null,
+    label: "Not synced",
+  };
+}
+
+function youtubePlaylistDetail(): YoutubePlaylistDetail {
+  return {
+    summary: {
+      sourceId: 31,
+      sourceSubtype: "playlist",
+      title: "Evidence playlist",
+      channelTitle: "Research channel",
+      channelHandle: "@research",
+      canonicalUrl: "https://www.youtube.com/playlist?list=playlist-31",
+      thumbnailUrl: null,
+      durationSeconds: null,
+      publishedAt: null,
+      availabilityStatus: "available",
+      videoCount: 2,
+      linkedVideoCount: 0,
+      unavailableCount: 0,
+      captions: youtubeContentStatus(),
+      comments: youtubeContentStatus(),
+    },
+    items: [
+      {
+        position: 1,
+        videoId: "playlist-video-1",
+        videoSourceId: null,
+        title: "First playlist video",
+        canonicalUrl: "https://www.youtube.com/watch?v=playlist-video-1",
+        thumbnailUrl: null,
+        durationSeconds: 90,
+        publishedAt: 1_700_000_000,
+        availabilityStatus: "available",
+        isRemovedFromPlaylist: false,
+        captions: youtubeContentStatus(),
+        comments: youtubeContentStatus(),
+      },
+      {
+        position: 2,
+        videoId: "playlist-video-2",
+        videoSourceId: null,
+        title: "Second playlist video",
+        canonicalUrl: "https://www.youtube.com/watch?v=playlist-video-2",
+        thumbnailUrl: null,
+        durationSeconds: 120,
+        publishedAt: 1_700_000_100,
+        availabilityStatus: "available",
+        isRemovedFromPlaylist: false,
+        captions: youtubeContentStatus(),
+        comments: youtubeContentStatus(),
+      },
+    ],
+  };
+}
+
 function youtubePreview(overrides: Partial<YoutubePreview> = {}): YoutubePreview {
   return {
     kind: "video",
@@ -544,11 +602,14 @@ function youtubeSummaryRunsPanelProps(
   return { projectId: null, ...overrides };
 }
 
-function arrangeCurrentProjectsRoute(sources: ProjectSourceRecord[] = []) {
+function arrangeCurrentProjectsRoute(
+  sources: ProjectSourceRecord[] = [],
+  catalogRecords: LibraryCatalogRecord[] = [libraryCatalogRecord()],
+) {
   api.listProjects.mockResolvedValue([projectRecord()]);
   api.listProjectSources.mockResolvedValue(sources);
   api.listLibraryCatalog.mockResolvedValue({
-    sources: [libraryCatalogRecord()],
+    sources: catalogRecords,
     filter_counts: [],
   });
 }
@@ -568,26 +629,82 @@ async function renderCurrentProjectsRoute(route: "main" | "list") {
   return view;
 }
 
-async function selectCurrentProjectSource() {
+async function selectCurrentProjectSource(title = "Evidence video") {
   const grid = await screen.findByRole("region", { name: "Project sources" });
-  await fireEvent.click(await within(grid).findByText("Evidence video"));
+  await fireEvent.click(await within(grid).findByText(title));
   await screen.findByRole("button", {
     name: "Delete selected YouTube video from Library",
   });
 }
 
-async function completeExistingProjectAddSource() {
+async function openProjectAddSourceDialog() {
   await fireEvent.click(await screen.findByRole("button", { name: "Add source to project" }));
-  await screen.findByRole("dialog", { name: "Add source" });
-  await fireEvent.input(screen.getByLabelText("YouTube URL"), {
-    target: { value: "https://www.youtube.com/watch?v=video-11" },
+  return screen.findByRole("dialog", { name: "Add source" });
+}
+
+async function addNewVideoThroughOpenDialog(options: {
+  sourceId: number;
+  title: string;
+  url: string;
+}) {
+  api.previewYoutubeSource.mockResolvedValueOnce(youtubePreview({
+    externalId: `video-${options.sourceId}`,
+    canonicalUrl: options.url,
+    title: options.title,
+  }));
+  api.addYoutubeSource.mockResolvedValueOnce({
+    id: options.sourceId,
+    title: options.title,
+    externalId: `video-${options.sourceId}`,
   });
-  await fireEvent.click(screen.getByRole("button", { name: "Preview" }));
-  await screen.findByText("Already in Library: Evidence video");
-  await fireEvent.click(screen.getByRole("button", { name: "Connect to project" }));
+
+  const dialog = screen.getByRole("dialog", { name: "Add source" });
+  await fireEvent.input(within(dialog).getByLabelText("YouTube URL"), {
+    target: { value: options.url },
+  });
+  await fireEvent.click(within(dialog).getByRole("button", { name: "Preview" }));
+  await within(dialog).findByText(options.title);
+  await fireEvent.click(within(dialog).getByRole("button", { name: "Add source" }));
   await waitFor(() => {
-    expect(api.addProjectSources).toHaveBeenCalledWith({ projectId: 1, sourceIds: [11] });
+    expect(api.addYoutubeSource).toHaveBeenCalledOnce();
+    expect(api.addYoutubeSource).toHaveBeenCalledWith(options.url, {
+      materializePlaylistVideos: true,
+    });
   });
+}
+
+async function addPlaylistVideosThroughOpenDialog(sourceIds: [number, number]) {
+  api.getYoutubePlaylistDetail.mockResolvedValueOnce(youtubePlaylistDetail());
+  api.addYoutubeSource
+    .mockResolvedValueOnce({
+      id: sourceIds[0],
+      title: "First playlist video",
+      externalId: "playlist-video-1",
+    })
+    .mockResolvedValueOnce({
+      id: sourceIds[1],
+      title: "Second playlist video",
+      externalId: "playlist-video-2",
+    });
+
+  const dialog = screen.getByRole("dialog", { name: "Add source" });
+  await fireEvent.click(within(dialog).getByRole("tab", { name: "From existing data" }));
+  await fireEvent.click(await within(dialog).findByRole("button", { name: /Evidence playlist/ }));
+  await waitFor(() => expect(api.getYoutubePlaylistDetail).toHaveBeenCalledWith(31));
+  await fireEvent.click(await within(dialog).findByRole("checkbox", { name: /First playlist video/ }));
+  await fireEvent.click(within(dialog).getByRole("checkbox", { name: /Second playlist video/ }));
+  await fireEvent.click(within(dialog).getByRole("button", { name: "Add selected" }));
+  await within(dialog).findByText("Added 2, skipped 0, failed 0.");
+
+  expect(api.addYoutubeSource).toHaveBeenCalledTimes(2);
+  expect(api.addYoutubeSource).toHaveBeenNthCalledWith(
+    1,
+    "https://www.youtube.com/watch?v=playlist-video-1",
+  );
+  expect(api.addYoutubeSource).toHaveBeenNthCalledWith(
+    2,
+    "https://www.youtube.com/watch?v=playlist-video-2",
+  );
 }
 
 beforeEach(() => {
@@ -622,6 +739,7 @@ beforeEach(() => {
   });
   api.deletePromptPackRun.mockResolvedValue(undefined);
   api.getProjectDataRange.mockResolvedValue({ from: null, to: null });
+  api.getYoutubePlaylistDetail.mockResolvedValue(null);
   api.getLlmProfiles.mockResolvedValue({ active_profile: "", profiles: [] });
   api.listActivePromptPackRuns.mockResolvedValue([]);
   api.listAnalysisPromptTemplates.mockResolvedValue([]);
@@ -803,16 +921,38 @@ it("uses real project APIs instead of analysis source group APIs", async () => {
 
 it("passes project add-source workflow callbacks from both current project routes", async () => {
   for (const route of ["main", "list"] as const) {
-    arrangeCurrentProjectsRoute();
-    api.addProjectSources.mockClear();
-    api.previewYoutubeSource.mockClear();
+    arrangeCurrentProjectsRoute([], []);
+    let view = await renderCurrentProjectsRoute(route);
+    await openProjectAddSourceDialog();
+    await addNewVideoThroughOpenDialog({
+      sourceId: 21,
+      title: "New route video",
+      url: "https://www.youtube.com/watch?v=new-route-video",
+    });
 
-    const view = await renderCurrentProjectsRoute(route);
-    await completeExistingProjectAddSource();
-
-    expect(api.addProjectSources).toHaveBeenCalledOnce();
+    await waitFor(() => {
+      expect(api.addProjectSources).toHaveBeenCalledOnce();
+      expect(api.addProjectSources).toHaveBeenCalledWith({ projectId: 1, sourceIds: [21] });
+    });
     view.unmount();
     await tick();
+    vi.clearAllMocks();
+
+    arrangeCurrentProjectsRoute([], [playlistCatalogRecord()]);
+    view = await renderCurrentProjectsRoute(route);
+    await openProjectAddSourceDialog();
+    await addPlaylistVideosThroughOpenDialog([22, 23]);
+
+    await waitFor(() => {
+      expect(api.addProjectSources).toHaveBeenCalledOnce();
+      expect(api.addProjectSources).toHaveBeenCalledWith({
+        projectId: 1,
+        sourceIds: [22, 23],
+      });
+    });
+    view.unmount();
+    await tick();
+    vi.clearAllMocks();
   }
 });
 
@@ -919,15 +1059,45 @@ it("wires the project Add source dialog through the next Projects route", async 
 
 it("wires Delete from Library in the next projects bulk bar", async () => {
   api.listResearchProjects.mockResolvedValue([projectSummary()]);
-  api.listProjectSources.mockResolvedValue([projectSourceRecord({ handle: "video-11" })]);
+  api.listProjectSources.mockResolvedValue([
+    projectSourceRecord({
+      source_id: 12,
+      source_subtype: "playlist",
+      title: "Ineligible playlist",
+      handle: "playlist-12",
+    }),
+  ]);
   const page = await import("../../../routes/projects/next/+page.svelte");
-  const view = render(page.default);
+  let view = render(page.default);
+
+  await fireEvent.click(screen.getByRole("button", { name: "Select route project" }));
+  await waitFor(() => expect(api.listProjectSources).toHaveBeenCalledWith(1));
+  await fireEvent.click(screen.getByRole("button", { name: "Select ineligible route source" }));
+  await tick();
+
+  const ineligibleDelete = screen.getByRole("button", { name: "Run route Library delete" });
+  expect((ineligibleDelete as HTMLButtonElement).disabled).toBe(true);
+  expect(ineligibleDelete.getAttribute("title")).toBe(
+    "Only YouTube videos can be deleted from Library here",
+  );
+  await fireEvent.click(ineligibleDelete);
+  expect(api.deleteProjectYoutubeVideoSourceFromLibrary).not.toHaveBeenCalled();
+
+  view.unmount();
+  await tick();
+  vi.clearAllMocks();
+
+  api.listResearchProjects.mockResolvedValue([projectSummary()]);
+  api.listProjectSources.mockResolvedValue([projectSourceRecord({ handle: "video-11" })]);
+  view = render(page.default);
 
   await fireEvent.click(screen.getByRole("button", { name: "Select route project" }));
   await waitFor(() => expect(api.listProjectSources).toHaveBeenCalledWith(1));
   await fireEvent.click(screen.getByRole("button", { name: "Select route source" }));
   await tick();
-  await fireEvent.click(screen.getByRole("button", { name: "Run route Library delete" }));
+  const eligibleDelete = screen.getByRole("button", { name: "Run route Library delete" });
+  expect((eligibleDelete as HTMLButtonElement).disabled).toBe(false);
+  await fireEvent.click(eligibleDelete);
 
   await waitFor(() => {
     expect(api.deleteProjectYoutubeVideoSourceFromLibrary).toHaveBeenCalledWith({
@@ -942,18 +1112,112 @@ it("wires Delete from Library in the next projects bulk bar", async () => {
 
 it("wires selected Workspace source syncs to the YouTube source job command", async () => {
   arrangeCurrentProjectsRoute([projectSourceRecord()]);
-  const view = await renderCurrentProjectsRoute("main");
+  let view = await renderCurrentProjectsRoute("main");
 
   await selectCurrentProjectSource();
   await fireEvent.click(screen.getByRole("button", { name: "Sync selected 1 source" }));
 
   await waitFor(() => {
+    expect(api.syncYoutubeSource).toHaveBeenCalledOnce();
     expect(api.syncYoutubeSource).toHaveBeenCalledWith(11, {
       metadata: true,
       transcripts: true,
       comments: true,
     });
   });
+
+  view.unmount();
+  await tick();
+
+  vi.clearAllMocks();
+  arrangeCurrentProjectsRoute([
+    projectSourceRecord({ source_id: 11, title: "First syncable video" }),
+    projectSourceRecord({ source_id: 12, title: "Second syncable video" }),
+  ]);
+  view = await renderCurrentProjectsRoute("main");
+
+  await fireEvent.click(screen.getByRole("button", { name: "Sync all sources" }));
+  await waitFor(() => expect(api.syncYoutubeSource).toHaveBeenCalledTimes(2));
+  expect(api.syncYoutubeSource).toHaveBeenNthCalledWith(1, 11, {
+    metadata: true,
+    transcripts: true,
+    comments: true,
+  });
+  expect(api.syncYoutubeSource).toHaveBeenNthCalledWith(2, 12, {
+    metadata: true,
+    transcripts: true,
+    comments: true,
+  });
+
+  view.unmount();
+  await tick();
+
+  vi.clearAllMocks();
+  arrangeCurrentProjectsRoute([
+    projectSourceRecord({
+      source_id: 12,
+      source_subtype: "playlist",
+      title: "Unsupported sync playlist",
+    }),
+  ]);
+  view = await renderCurrentProjectsRoute("main");
+
+  const ineligibleSyncAll = screen.getByRole("button", { name: "Sync all sources" });
+  expect((ineligibleSyncAll as HTMLButtonElement).disabled).toBe(true);
+  expect(ineligibleSyncAll.getAttribute("title")).toBe(
+    "Selected sources include unsupported sync types",
+  );
+  await fireEvent.click(ineligibleSyncAll);
+  expect(api.syncYoutubeSource).not.toHaveBeenCalled();
+
+  await selectCurrentProjectSource("Unsupported sync playlist");
+  const ineligibleSyncSelected = screen.getByRole("button", {
+    name: "Sync selected 1 source",
+  });
+  expect((ineligibleSyncSelected as HTMLButtonElement).disabled).toBe(true);
+  expect(ineligibleSyncSelected.getAttribute("title")).toBe(
+    "Selected sources include unsupported sync types",
+  );
+  await fireEvent.click(ineligibleSyncSelected);
+  expect(api.syncYoutubeSource).not.toHaveBeenCalled();
+
+  view.unmount();
+  await tick();
+
+  vi.clearAllMocks();
+  api.listResearchProjects.mockResolvedValue([projectSummary()]);
+  api.listProjectSources.mockResolvedValue([
+    projectSourceRecord({ source_id: 11, title: "Filtered sync video" }),
+    projectSourceRecord({
+      source_id: 12,
+      provider: "telegram",
+      source_subtype: "supergroup",
+      title: "Filtered sync group",
+    }),
+  ]);
+  const nextPage = await import("../../../routes/projects/next/+page.svelte");
+  view = render(nextPage.default);
+
+  await fireEvent.click(screen.getByRole("button", { name: "Select route project" }));
+  await waitFor(() => expect(api.listProjectSources).toHaveBeenCalledWith(1));
+  await fireEvent.click(screen.getByRole("button", { name: "Select mixed route sources" }));
+  await tick();
+  const filteredSync = screen.getByRole("button", { name: "Run route sync" });
+  expect((filteredSync as HTMLButtonElement).disabled).toBe(false);
+  await fireEvent.click(filteredSync);
+  await waitFor(() => expect(api.syncYoutubeSource).toHaveBeenCalledOnce());
+  expect(api.syncYoutubeSource).toHaveBeenCalledWith(11, {
+    metadata: true,
+    transcripts: true,
+    comments: true,
+  });
+
+  await fireEvent.click(screen.getByRole("button", { name: "Select ineligible route source" }));
+  await tick();
+  const filteredIneligibleSync = screen.getByRole("button", { name: "Run route sync" });
+  expect((filteredIneligibleSync as HTMLButtonElement).disabled).toBe(true);
+  await fireEvent.click(filteredIneligibleSync);
+  expect(api.syncYoutubeSource).toHaveBeenCalledOnce();
 
   view.unmount();
   await tick();
@@ -970,18 +1234,25 @@ it("refreshes Workspace source content when source sync jobs finish", async () =
   expect(api.listProjectSources).toHaveBeenCalledWith(1);
 
   vi.useFakeTimers();
-  onSourceJob({ status: "succeeded" });
-  onSourceJob({ status: "failed" });
-  onSourceJob({ status: "cancelled" });
-  await vi.advanceTimersByTimeAsync(349);
+  onSourceJob({ status: "running" });
+  await vi.advanceTimersByTimeAsync(350);
   expect(api.listProjects).toHaveBeenCalledOnce();
   expect(api.listProjectSources).toHaveBeenCalledOnce();
-  await vi.advanceTimersByTimeAsync(1);
-  await tick();
-  await Promise.resolve();
-  expect(api.listProjects).toHaveBeenCalledTimes(2);
-  expect(api.listProjectSources).toHaveBeenCalledTimes(2);
-  expect(api.listProjectSources).toHaveBeenNthCalledWith(2, 1);
+
+  for (const [index, status] of ["succeeded", "failed", "cancelled"].entries()) {
+    const callsBeforeRefresh = index + 1;
+    onSourceJob({ status });
+    await vi.advanceTimersByTimeAsync(349);
+    expect(api.listProjects).toHaveBeenCalledTimes(callsBeforeRefresh);
+    expect(api.listProjectSources).toHaveBeenCalledTimes(callsBeforeRefresh);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await tick();
+    await Promise.resolve();
+    expect(api.listProjects).toHaveBeenCalledTimes(callsBeforeRefresh + 1);
+    expect(api.listProjectSources).toHaveBeenCalledTimes(callsBeforeRefresh + 1);
+    expect(api.listProjectSources).toHaveBeenNthCalledWith(callsBeforeRefresh + 1, 1);
+  }
 
   view.unmount();
   expect(api.unlistenSourceJobs).toHaveBeenCalledOnce();
@@ -1168,7 +1439,7 @@ it("wires the project Add source dialog through the current ProjectsShell", asyn
         projectsRaw: [projectRecord()],
         projects: [project],
         selectedProjectId: project.id,
-        libraryCatalogRecords: [libraryCatalogRecord()],
+        libraryCatalogRecords: [playlistCatalogRecord()],
       }),
       onConnectExistingProjectSource,
       onConnectAddedProjectSource,
@@ -1176,25 +1447,25 @@ it("wires the project Add source dialog through the current ProjectsShell", asyn
     }),
   });
 
-  await fireEvent.click(screen.getByRole("button", { name: "Add source to project" }));
-  expect(screen.getByRole("dialog", { name: "Add source" })).toBeTruthy();
-
-  await fireEvent.input(screen.getByLabelText("YouTube URL"), {
-    target: { value: "https://www.youtube.com/watch?v=video-11" },
+  await openProjectAddSourceDialog();
+  await addNewVideoThroughOpenDialog({
+    sourceId: 21,
+    title: "New shell video",
+    url: "https://www.youtube.com/watch?v=new-shell-video",
   });
-  await fireEvent.click(screen.getByRole("button", { name: "Preview" }));
   await waitFor(() => {
-    expect(api.previewYoutubeSource).toHaveBeenCalledWith(
-      "https://www.youtube.com/watch?v=video-11",
-    );
-    expect(screen.getByText("Already in Library: Evidence video")).toBeTruthy();
+    expect(onConnectAddedProjectSource).toHaveBeenCalledOnce();
+    expect(onConnectAddedProjectSource).toHaveBeenCalledWith(21);
   });
+  expect(onConnectExistingProjectSource).not.toHaveBeenCalled();
 
-  await fireEvent.click(screen.getByRole("button", { name: "Connect to project" }));
-  expect(onConnectExistingProjectSource).toHaveBeenCalledOnce();
-  expect(onConnectExistingProjectSource).toHaveBeenCalledWith(11);
-  expect(onConnectAddedProjectSource).not.toHaveBeenCalled();
-  expect(onConnectAddedProjectSources).not.toHaveBeenCalled();
+  api.addYoutubeSource.mockClear();
+  await addPlaylistVideosThroughOpenDialog([22, 23]);
+  await waitFor(() => {
+    expect(onConnectAddedProjectSources).toHaveBeenCalledOnce();
+    expect(onConnectAddedProjectSources).toHaveBeenCalledWith([22, 23]);
+  });
+  expect(onConnectExistingProjectSource).not.toHaveBeenCalled();
 });
 
 it("keeps top command actions honest while project export is out of scope", async () => {

@@ -183,19 +183,6 @@ vi.mock("$lib/api/sources", () => ({
 }));
 
 type ReportCanvasProps = ComponentProps<typeof ReportCanvas>;
-type AnalysisRouteReceiverProps = Pick<
-  ReportCanvasProps,
-  | "workspaceSelection"
-  | "currentSource"
-  | "currentGroup"
-  | "exportDialogOpen"
-  | "notebookLmExportForm"
-  | "groupLiveTranscriptSegmentsBySource"
-  | "highlightToken"
-  | "onOpenNotebookLmExport"
-  | "onChangeNotebookLmExportForm"
-  | "onExportNotebookLm"
->;
 const originalAnimate = Object.getOwnPropertyDescriptor(Element.prototype, "animate");
 let analysisRouteReceiverMockActive = false;
 
@@ -570,73 +557,8 @@ function arrangeActiveGroupTranscriptRoute() {
 }
 
 async function analysisRouteReceiverModule() {
-  // @ts-expect-error Svelte's compiler-emitted client runtime has no public declaration file.
-  const client = await import("svelte/internal/client");
-  const root = client.from_html(
-    '<section aria-label="Analysis route canvas receiver"><button aria-label="Read route target">Read target</button><button aria-label="Open route NotebookLM export">Open export</button><button aria-label="Prepare route NotebookLM export">Prepare export</button><button aria-label="Submit route NotebookLM export">Submit export</button><button aria-label="Read route export dialog">Read export dialog</button><button aria-label="Read route highlight token">Read highlight</button><button aria-label="Read route group transcripts">Read transcripts</button><output aria-label="Received route target"></output><output aria-label="Received route export dialog"></output><output aria-label="Received route highlight token"></output><output aria-label="Received route group transcripts"></output></section>',
-  );
-
-  function AnalysisRouteReceiver(
-    anchor: Parameters<typeof client.append>[0],
-    props: AnalysisRouteReceiverProps,
-  ) {
-    client.push(props, true);
-    const section = root();
-    const readTarget = client.child(section) as HTMLButtonElement;
-    const openExport = client.sibling(readTarget) as HTMLButtonElement;
-    const prepareExport = client.sibling(openExport) as HTMLButtonElement;
-    const submitExport = client.sibling(prepareExport) as HTMLButtonElement;
-    const readExportDialog = client.sibling(submitExport) as HTMLButtonElement;
-    const readHighlight = client.sibling(readExportDialog) as HTMLButtonElement;
-    const readTranscripts = client.sibling(readHighlight) as HTMLButtonElement;
-    const targetOutput = client.sibling(readTranscripts) as HTMLOutputElement;
-    const exportDialogOutput = client.sibling(targetOutput) as HTMLOutputElement;
-    const highlightOutput = client.sibling(exportDialogOutput) as HTMLOutputElement;
-    const transcriptsOutput = client.sibling(highlightOutput) as HTMLOutputElement;
-
-    client.reset(section);
-    readTarget.addEventListener("click", () => {
-      const selection = props.workspaceSelection;
-      targetOutput.textContent = selection.kind === "source"
-        ? `source:${props.currentSource?.id ?? "missing"}`
-        : selection.kind === "source_group"
-          ? `group:${props.currentGroup?.id ?? "missing"}:${props.currentGroup?.source_type ?? "missing"}`
-          : "none";
-    });
-    openExport.addEventListener("click", () => props.onOpenNotebookLmExport());
-    prepareExport.addEventListener("click", () => {
-      props.onChangeNotebookLmExportForm({
-        ...props.notebookLmExportForm,
-        outputDir: " C:\\NotebookLM ",
-        range: "entire_history",
-        includeMediaPlaceholders: true,
-        includeMigratedHistory: true,
-        minMessageLength: 3,
-        maxWordsPerFile: 300_000,
-        maxBytesPerFile: 50_000_000,
-        overwriteExisting: false,
-      });
-    });
-    submitExport.addEventListener("click", () => props.onExportNotebookLm());
-    readExportDialog.addEventListener("click", () => {
-      exportDialogOutput.textContent = `open:${props.exportDialogOpen}`;
-    });
-    readHighlight.addEventListener("click", () => {
-      const token = props.highlightToken;
-      highlightOutput.textContent = token
-        ? `${token.traceRef}|${token.sourceViewBasis}|${token.sourceScope.kind}:${token.sourceScope.sourceId}`
-        : "none";
-    });
-    readTranscripts.addEventListener("click", () => {
-      transcriptsOutput.textContent = Object.values(
-        props.groupLiveTranscriptSegmentsBySource,
-      ).flat().map((segment) => segment.text).join("|") || "none";
-    });
-    client.append(anchor, section);
-    client.pop();
-  }
-
-  return { default: AnalysisRouteReceiver };
+  const receiver = await import("$lib/testing/AnalysisRouteReceiver.svelte");
+  return { default: receiver.default };
 }
 
 async function renderAnalysisRouteWithReceiver() {
