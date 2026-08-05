@@ -2,8 +2,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/svelte";
 import { tick, type ComponentProps } from "svelte";
-import type { AnalysisRunSummary } from "$lib/types/analysis";
-import type { ProjectRecord, ProjectSourceRecord } from "$lib/types/projects";
+import type { ProjectRecord } from "$lib/types/projects";
 import type { ResearchProjectsWorkflowState } from "$lib/ui/research-projects-workflow";
 import ProjectsShell from "./ProjectsShell.svelte";
 import ProjectRail from "./ProjectRail.svelte";
@@ -123,58 +122,6 @@ function projectRecord(overrides: Partial<ProjectRecord> = {}): ProjectRecord {
     description: null,
     created_at: 1,
     updated_at: 1,
-    ...overrides,
-  };
-}
-
-function projectSource(overrides: Partial<ProjectSourceRecord> = {}): ProjectSourceRecord {
-  return {
-    project_id: 1,
-    source_id: 10,
-    provider: "youtube",
-    source_subtype: "video",
-    title: "Smoke source",
-    subtitle: null,
-    item_count: 1,
-    added_at: 1,
-    last_synced_at: null,
-    sync_status: "active",
-    handle: "smoke-video",
-    ...overrides,
-  };
-}
-
-function analysisRun(overrides: Partial<AnalysisRunSummary> = {}): AnalysisRunSummary {
-  return {
-    id: 1,
-    run_type: "project",
-    scope_type: "project",
-    source_id: null,
-    source_title: null,
-    source_group_id: null,
-    source_group_name: null,
-    project_id: 1,
-    project_name: "Smoke project",
-    scope_label: "Smoke project",
-    period_from: 0,
-    period_to: 1,
-    output_language: "en",
-    prompt_template_id: 1,
-    prompt_template_name: "Smoke template",
-    prompt_template_version: 1,
-    provider_profile: "default",
-    provider: "openai",
-    model: "smoke-model",
-    youtube_corpus_mode: "transcript_description",
-    telegram_history_scope: "current",
-    status: "completed",
-    error: null,
-    has_trace_data: false,
-    snapshot_state: null,
-    snapshot_captured_at: null,
-    snapshot_error: null,
-    created_at: 1,
-    completed_at: null,
     ...overrides,
   };
 }
@@ -334,8 +281,8 @@ beforeEach(() => {
   api.listActivePromptPackRuns.mockResolvedValue([]);
   api.listAnalysisPromptTemplates.mockResolvedValue([]);
   api.listLibraryCatalog.mockResolvedValue({ sources: [], filter_counts: [] });
-  api.listProjectRuns.mockResolvedValue([analysisRun()]);
-  api.listProjectSources.mockResolvedValue([projectSource()]);
+  api.listProjectRuns.mockResolvedValue([]);
+  api.listProjectSources.mockResolvedValue([]);
   api.listProjects.mockResolvedValue([]);
   api.listResearchProjects.mockResolvedValue([]);
   api.listPromptPackRuns.mockResolvedValue([]);
@@ -436,7 +383,12 @@ it("smoke renders main Projects route", async () => {
   const { default: ProjectsPage } = await import("../../../routes/projects/+page.svelte");
   const view = render(ProjectsPage);
 
-  await waitFor(() => expect(api.listProjects).toHaveBeenCalledOnce());
+  await waitFor(() => {
+    expect(api.listProjects).toHaveBeenCalledOnce();
+    expect(api.listLibraryCatalog).toHaveBeenCalledOnce();
+    expect(api.listSourceJobs).toHaveBeenCalledOnce();
+    expect(api.listAnalysisPromptTemplates).toHaveBeenCalledOnce();
+  });
   await waitFor(() => expect(api.listenToAnalysisRunEvents).toHaveBeenCalledOnce());
   await waitFor(() => expect(api.listenToSourceJobEvents).toHaveBeenCalledOnce());
 
@@ -452,7 +404,12 @@ it("smoke renders list Projects route", async () => {
   const { default: ProjectsListPage } = await import("../../../routes/projects/list/+page.svelte");
   const view = render(ProjectsListPage);
 
-  await waitFor(() => expect(api.listProjects).toHaveBeenCalledOnce());
+  await waitFor(() => {
+    expect(api.listProjects).toHaveBeenCalledOnce();
+    expect(api.listLibraryCatalog).toHaveBeenCalledOnce();
+    expect(api.listSourceJobs).toHaveBeenCalledOnce();
+    expect(api.listAnalysisPromptTemplates).toHaveBeenCalledOnce();
+  });
   await waitFor(() => expect(api.listenToAnalysisRunEvents).toHaveBeenCalledOnce());
   await waitFor(() => expect(api.listenToSourceJobEvents).toHaveBeenCalledOnce());
 
@@ -468,7 +425,10 @@ it("smoke renders next Projects route", async () => {
   const { default: ProjectsNextPage } = await import("../../../routes/projects/next/+page.svelte");
   const view = render(ProjectsNextPage);
 
-  await waitFor(() => expect(api.listResearchProjects).toHaveBeenCalledOnce());
+  await waitFor(() => {
+    expect(api.listResearchProjects).toHaveBeenCalledOnce();
+    expect(api.listAnalysisPromptTemplates).toHaveBeenCalledOnce();
+  });
 
   expect(screen.getByRole("main")).toBeTruthy();
 
