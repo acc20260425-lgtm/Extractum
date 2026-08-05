@@ -110,16 +110,23 @@ vi.mock("$lib/api/analysis-source-groups", () => ({
   updateAnalysisSourceGroup: api.updateAnalysisSourceGroup,
 }));
 
+type ProjectsRouteReceiverProps = {
+  railPanel: { onSelect?: (projectId: number) => void };
+  filterBar?: { onAddSource?: () => void };
+  onSelectedSourceIdsChange?: (sourceIds: string[]) => void;
+  bulkBar?: { onDeleteFromLibrary?: () => void };
+};
+
 vi.mock("$lib/components/research-projects/ResearchProjectsShell.svelte", async () => {
   // @ts-expect-error Svelte's compiler-emitted client runtime has no public declaration file.
   const client = await import("svelte/internal/client");
   const root = client.from_html(
-    '<main><button aria-label="Select route project">Select project</button><button aria-label="Open route add source">Add source</button><button aria-label="Select route source">Select source</button><button aria-label="Run route Library delete">Delete from Library</button><button aria-label="Run route bulk sync">Sync selected</button></main>',
+    '<main><button aria-label="Select route project">Select project</button><button aria-label="Open route add source">Add source</button><button aria-label="Select route source">Select source</button><button aria-label="Run route Library delete">Delete from Library</button></main>',
   );
 
   function ProjectsRouteReceiver(
     anchor: Parameters<typeof client.append>[0],
-    props: Record<string, any>,
+    props: ProjectsRouteReceiverProps,
   ) {
     client.push(props, true);
     const main = root();
@@ -127,14 +134,12 @@ vi.mock("$lib/components/research-projects/ResearchProjectsShell.svelte", async 
     const addSource = client.sibling(selectProject) as HTMLButtonElement;
     const selectSource = client.sibling(addSource) as HTMLButtonElement;
     const deleteFromLibrary = client.sibling(selectSource) as HTMLButtonElement;
-    const syncSelected = client.sibling(deleteFromLibrary) as HTMLButtonElement;
 
     client.reset(main);
     selectProject.addEventListener("click", () => props.railPanel.onSelect?.(1));
     addSource.addEventListener("click", () => props.filterBar?.onAddSource?.());
     selectSource.addEventListener("click", () => props.onSelectedSourceIdsChange?.(["11"]));
     deleteFromLibrary.addEventListener("click", () => props.bulkBar?.onDeleteFromLibrary?.());
-    syncSelected.addEventListener("click", () => props.bulkBar?.onSync?.());
     client.append(anchor, main);
     client.pop();
   }
@@ -962,6 +967,8 @@ it("refreshes Workspace source content when source sync jobs finish", async () =
   const onSourceJob = api.listenToSourceJobEvents.mock.calls[0]?.[0];
   expect(onSourceJob).toEqual(expect.any(Function));
   expect(api.listProjects).toHaveBeenCalledOnce();
+  expect(api.listProjectSources).toHaveBeenCalledOnce();
+  expect(api.listProjectSources).toHaveBeenCalledWith(1);
 
   vi.useFakeTimers();
   onSourceJob({ status: "succeeded" });
@@ -969,10 +976,13 @@ it("refreshes Workspace source content when source sync jobs finish", async () =
   onSourceJob({ status: "cancelled" });
   await vi.advanceTimersByTimeAsync(349);
   expect(api.listProjects).toHaveBeenCalledOnce();
+  expect(api.listProjectSources).toHaveBeenCalledOnce();
   await vi.advanceTimersByTimeAsync(1);
   await tick();
   await Promise.resolve();
   expect(api.listProjects).toHaveBeenCalledTimes(2);
+  expect(api.listProjectSources).toHaveBeenCalledTimes(2);
+  expect(api.listProjectSources).toHaveBeenNthCalledWith(2, 1);
 
   view.unmount();
   expect(api.unlistenSourceJobs).toHaveBeenCalledOnce();
