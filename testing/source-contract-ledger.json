@@ -8246,7 +8246,7 @@
       "invariant": "The Projects workspace uses project APIs instead of analysis source-group APIs.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#uses real project APIs instead of analysis source group APIs"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#uses real project APIs instead of analysis source group APIs"
       ]
     },
     {
@@ -8260,7 +8260,7 @@
       "invariant": "The Projects workspace renders its rail, work area, and inspector.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#renders three-zone projects workspace"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#renders three-zone projects workspace"
       ]
     },
     {
@@ -8274,7 +8274,7 @@
       "invariant": "Users can create, edit, delete, and assess project run eligibility.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#exposes create/edit/delete and run eligibility UI"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#exposes create/edit/delete and run eligibility UI"
       ]
     },
     {
@@ -8288,7 +8288,7 @@
       "invariant": "New project runs include all synced history unless users narrow the date range.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#defaults project run dates to all synced history instead of today only"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#defaults project run dates to all synced history instead of today only"
       ]
     },
     {
@@ -8302,7 +8302,7 @@
       "invariant": "Project analysis runs appear in the central Runs tab and open their reports.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#shows project runs in the central Runs tab"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#shows project runs in the central Runs tab"
       ]
     },
     {
@@ -8316,7 +8316,7 @@
       "invariant": "Prompt-pack run details appear in Runs rather than being duplicated in the inspector.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#keeps prompt-pack run details in the Runs tab instead of duplicating them in the inspector"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#keeps prompt-pack run details in the Runs tab instead of duplicating them in the inspector"
       ]
     },
     {
@@ -8330,7 +8330,7 @@
       "invariant": "Workspace project sources show the same readable type labels as Library.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#matches the Library type column in Workspace project sources"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#matches the Library type column in Workspace project sources"
       ]
     },
     {
@@ -8344,7 +8344,7 @@
       "invariant": "The Library connection view shows complete source type labels.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#shows full source type labels when connecting sources from Library"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#shows full source type labels when connecting sources from Library"
       ]
     },
     {
@@ -8370,7 +8370,7 @@
       "invariant": "The current Projects shell opens and completes the project add-source workflow.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#wires the project Add source dialog through the current ProjectsShell"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#wires the project Add source dialog through the current ProjectsShell"
       ]
     },
     {
@@ -8384,7 +8384,7 @@
       "invariant": "Each current project route supplies the callbacks needed to add or connect a source.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#passes project add-source workflow callbacks from both current project routes"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#passes project add-source workflow callbacks from both current project routes"
       ]
     },
     {
@@ -8396,9 +8396,9 @@
       "authorityHash": "342208cdf9ac2d270cf4161f1e83bd71d8f4d4187ff7b3d1e2d5660e2979ab67",
       "lineage": [],
       "invariant": "The main Projects route can delete an eligible project source from Library.",
-      "disposition": "architecture",
+      "disposition": "behavior",
       "replacementIds": [
-        "rule:telegram-phase-8b-authority-integrity"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#wires project source Library delete through the main projects route"
       ]
     },
     {
@@ -8412,7 +8412,7 @@
       "invariant": "The list Projects route can delete an eligible project source from Library.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#wires project source Library delete through the list projects route"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#wires project source Library delete through the list projects route"
       ]
     },
     {
@@ -8426,7 +8426,7 @@
       "invariant": "Removing a source from a project does not delete it from Library, while the dedicated Library action does.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#keeps Remove membership-only and adds a separate Delete from Library action"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#keeps Remove membership-only and adds a separate Delete from Library action"
       ]
     },
     {
@@ -8440,7 +8440,7 @@
       "invariant": "The next Projects route opens and completes the project add-source workflow.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#wires the project Add source dialog through the next Projects route"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#wires the project Add source dialog through the next Projects route"
       ]
     },
     {
@@ -8454,7 +8454,7 @@
       "invariant": "The next Projects bulk action deletes selected Library sources only when eligible.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#wires Delete from Library in the next projects bulk bar"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#wires Delete from Library in the next projects bulk bar"
       ]
     },
     {
@@ -8468,7 +8468,7 @@
       "invariant": "Users can start selected or all eligible Workspace source syncs.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#wires selected Workspace source syncs to the YouTube source job command"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#wires selected Workspace source syncs to the YouTube source job command"
       ]
     },
     {
@@ -8482,7 +8482,7 @@
       "invariant": "Workspace source content refreshes after a source sync job finishes.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#refreshes Workspace source content when source sync jobs finish"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#refreshes Workspace source content when source sync jobs finish"
       ]
     },
     {
@@ -8496,7 +8496,7 @@
       "invariant": "The project command bar enables runnable actions and explains unavailable export.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#keeps top command actions honest while project export is out of scope"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#keeps top command actions honest while project export is out of scope"
       ]
     },
     {
@@ -8508,9 +8508,29 @@
       "authorityHash": "6d2cdbf72731aa9172d217cd6fb9f701e4bc25f8dcd202a75259c00844427241",
       "lineage": [],
       "invariant": "Project destructive actions remain distinguishable and consistently labelled across views.",
-      "disposition": "behavior",
-      "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#keeps project action hierarchy consistent across Workspace, Projects, and Runs"
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            1
+          ],
+          "invariant": "Global default button styling is represented as stylesheet implementation rather than runtime component behavior.",
+          "disposition": "delete",
+          "deletionReason": "jsdom cannot expose the global +layout.svelte selector as truthfully applied behavior."
+        },
+        {
+          "assertionOrdinals": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "invariant": "Destructive project actions retain destructive variants and accessible action names across Workspace, Projects, and Runs.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#keeps project action hierarchy consistent across Workspace, Projects, and Runs"
+          ]
+        }
       ]
     },
     {
@@ -8522,9 +8542,27 @@
       "authorityHash": "bf084ac212e98eea0bb43b24813c5e81ca797ff8b9a7b02e0bb343b1d7a46c8e",
       "lineage": [],
       "invariant": "The selected project is visually and semantically distinguishable from other navigation rows.",
-      "disposition": "behavior",
-      "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#keeps project navigation rows visually neutral until selected"
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            1,
+            2
+          ],
+          "invariant": "Project navigation rows expose the shared row class and selected state only for the selected project.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#keeps project navigation rows visually neutral until selected"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            3,
+            4
+          ],
+          "invariant": "Project-row hover decoration is external stylesheet implementation shape.",
+          "disposition": "delete",
+          "deletionReason": "jsdom cannot truthfully expose the external :hover selector or its applied inset box-shadow."
+        }
       ]
     },
     {
@@ -8548,9 +8586,33 @@
       "authorityHash": "e90a3177a0bc18e38bb7c6a513be42c7490858f46aef69debc822a52eaaadcff",
       "lineage": [],
       "invariant": "Project data grids and their empty or loading states have accessible names.",
-      "disposition": "behavior",
-      "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#labels project data grids for assistive technology"
+      "subgroups": [
+        {
+          "assertionOrdinals": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9
+          ],
+          "invariant": "Project data surfaces retain their accessible host names, direct column definitions, and labelled sections.",
+          "disposition": "behavior",
+          "replacementIds": [
+            "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#labels project data grids for assistive technology"
+          ]
+        },
+        {
+          "assertionOrdinals": [
+            10
+          ],
+          "invariant": "Project-runs empty and loading overlays are rendered by the internal SVAR grid.",
+          "disposition": "delete",
+          "deletionReason": "SVAR Grid internal overlay output is not a truthful jsdom observation boundary."
+        }
       ]
     },
     {
@@ -8564,7 +8626,7 @@
       "invariant": "Repeated refresh controls have distinct accessible names.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#scopes repeated project refresh controls"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#scopes repeated project refresh controls"
       ]
     },
     {
@@ -8578,7 +8640,7 @@
       "invariant": "The Workspace distinguishes project analysis runs from prompt-pack runs.",
       "disposition": "behavior",
       "replacementIds": [
-        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.test.ts#clarifies the Workspace Runs taxonomy"
+        "test:vitest:src/lib/components/research-projects/projects-workspace.behavior.component.test.ts#clarifies the Workspace Runs taxonomy"
       ]
     },
     {

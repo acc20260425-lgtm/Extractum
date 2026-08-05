@@ -5,7 +5,7 @@ import { tick, type ComponentProps } from "svelte";
 import { defaultDateOffset, endOfDayUnix, startOfDayUnix } from "$lib/analysis-utils";
 import type { AnalysisPromptTemplate, AnalysisRunSummary } from "$lib/types/analysis";
 import type { LibraryCatalogRecord } from "$lib/types/library-sources";
-import type { ProjectRecord, ProjectSourceRecord } from "$lib/types/projects";
+import type { ProjectRecord, ProjectSourceRecord, ProjectSummary } from "$lib/types/projects";
 import type { PromptPackRunListItem } from "$lib/types/prompt-packs";
 import type { YoutubePreview } from "$lib/types/sources";
 import type { ResearchProjectsWorkflowState } from "$lib/ui/research-projects-workflow";
@@ -47,6 +47,7 @@ const api = vi.hoisted(() => ({
   listResearchProjects: vi.fn(),
   listPromptPackRuns: vi.fn(),
   listSourceJobs: vi.fn(),
+  listAnalysisSourceGroups: vi.fn(),
   listenToAnalysisRunEvents: vi.fn(),
   listenToPromptPackRunEvents: vi.fn(),
   listenToSourceJobEvents: vi.fn(),
@@ -61,6 +62,7 @@ const api = vi.hoisted(() => ({
   unlistenPromptPackRuns: vi.fn(),
   unlistenSourceJobs: vi.fn(),
   updateProject: vi.fn(),
+  updateAnalysisSourceGroup: vi.fn(),
   updatePromptPackRun: vi.fn(),
 }));
 
@@ -103,8 +105,42 @@ vi.mock("$lib/api/analysis-runs", () => ({
 }));
 
 vi.mock("$lib/api/analysis-source-groups", () => ({
+  listAnalysisSourceGroups: api.listAnalysisSourceGroups,
   listAnalysisPromptTemplates: api.listAnalysisPromptTemplates,
+  updateAnalysisSourceGroup: api.updateAnalysisSourceGroup,
 }));
+
+vi.mock("$lib/components/research-projects/ResearchProjectsShell.svelte", async () => {
+  // @ts-expect-error Svelte's compiler-emitted client runtime has no public declaration file.
+  const client = await import("svelte/internal/client");
+  const root = client.from_html(
+    '<main><button aria-label="Select route project">Select project</button><button aria-label="Open route add source">Add source</button><button aria-label="Select route source">Select source</button><button aria-label="Run route Library delete">Delete from Library</button><button aria-label="Run route bulk sync">Sync selected</button></main>',
+  );
+
+  function ProjectsRouteReceiver(
+    anchor: Parameters<typeof client.append>[0],
+    props: Record<string, any>,
+  ) {
+    client.push(props, true);
+    const main = root();
+    const selectProject = client.child(main) as HTMLButtonElement;
+    const addSource = client.sibling(selectProject) as HTMLButtonElement;
+    const selectSource = client.sibling(addSource) as HTMLButtonElement;
+    const deleteFromLibrary = client.sibling(selectSource) as HTMLButtonElement;
+    const syncSelected = client.sibling(deleteFromLibrary) as HTMLButtonElement;
+
+    client.reset(main);
+    selectProject.addEventListener("click", () => props.railPanel.onSelect?.(1));
+    addSource.addEventListener("click", () => props.filterBar?.onAddSource?.());
+    selectSource.addEventListener("click", () => props.onSelectedSourceIdsChange?.(["11"]));
+    deleteFromLibrary.addEventListener("click", () => props.bulkBar?.onDeleteFromLibrary?.());
+    syncSelected.addEventListener("click", () => props.bulkBar?.onSync?.());
+    client.append(anchor, main);
+    client.pop();
+  }
+
+  return { default: ProjectsRouteReceiver };
+});
 
 vi.mock("$lib/api/llm", () => ({
   getLlmProfiles: api.getLlmProfiles,
@@ -139,6 +175,22 @@ function projectRecord(overrides: Partial<ProjectRecord> = {}): ProjectRecord {
     name: "Smoke project",
     description: null,
     created_at: 1,
+    updated_at: 1,
+    ...overrides,
+  };
+}
+
+function projectSummary(overrides: Partial<ProjectSummary> = {}): ProjectSummary {
+  return {
+    id: 1,
+    name: "Smoke project",
+    description: null,
+    source_count: 1,
+    material_count: 4,
+    status: "ready",
+    last_run_at: null,
+    pinned: false,
+    archived: false,
     updated_at: 1,
     ...overrides,
   };
@@ -429,10 +481,8 @@ function projectRunsTabProps(overrides: Partial<ProjectRunsTabProps> = {}): Proj
   return { runs: [], onRefreshProjectRuns: vi.fn(), ...overrides };
 }
 
-function projectRunsScreenProps(
-  overrides: Partial<ProjectRunsScreenProps> = {},
-): ProjectRunsScreenProps {
-  return { ...overrides };
+function projectRunsScreenProps(): ProjectRunsScreenProps {
+  return {};
 }
 
 function projectRunDialogProps(overrides: Partial<ProjectRunDialogProps> = {}): ProjectRunDialogProps {
@@ -487,6 +537,52 @@ function youtubeSummaryRunsPanelProps(
   overrides: Partial<YoutubeSummaryRunsPanelProps> = {},
 ): YoutubeSummaryRunsPanelProps {
   return { projectId: null, ...overrides };
+}
+
+function arrangeCurrentProjectsRoute(sources: ProjectSourceRecord[] = []) {
+  api.listProjects.mockResolvedValue([projectRecord()]);
+  api.listProjectSources.mockResolvedValue(sources);
+  api.listLibraryCatalog.mockResolvedValue({
+    sources: [libraryCatalogRecord()],
+    filter_counts: [],
+  });
+}
+
+async function renderCurrentProjectsRoute(route: "main" | "list") {
+  const page =
+    route === "main"
+      ? await import("../../../routes/projects/+page.svelte")
+      : await import("../../../routes/projects/list/+page.svelte");
+  const view = render(page.default);
+
+  await waitFor(() => {
+    expect(api.listProjects).toHaveBeenCalled();
+    expect(api.listProjectSources).toHaveBeenCalledWith(1);
+  });
+  await screen.findAllByRole("heading", { name: "Smoke project" });
+  return view;
+}
+
+async function selectCurrentProjectSource() {
+  const grid = await screen.findByRole("region", { name: "Project sources" });
+  await fireEvent.click(await within(grid).findByText("Evidence video"));
+  await screen.findByRole("button", {
+    name: "Delete selected YouTube video from Library",
+  });
+}
+
+async function completeExistingProjectAddSource() {
+  await fireEvent.click(await screen.findByRole("button", { name: "Add source to project" }));
+  await screen.findByRole("dialog", { name: "Add source" });
+  await fireEvent.input(screen.getByLabelText("YouTube URL"), {
+    target: { value: "https://www.youtube.com/watch?v=video-11" },
+  });
+  await fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+  await screen.findByText("Already in Library: Evidence video");
+  await fireEvent.click(screen.getByRole("button", { name: "Connect to project" }));
+  await waitFor(() => {
+    expect(api.addProjectSources).toHaveBeenCalledWith({ projectId: 1, sourceIds: [11] });
+  });
 }
 
 beforeEach(() => {
@@ -548,6 +644,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.resetAllMocks();
 });
@@ -667,8 +764,8 @@ it("smoke renders list Projects route", async () => {
 });
 
 it("smoke renders next Projects route", async () => {
-  const { default: ProjectsNextPage } = await import("../../../routes/projects/next/+page.svelte");
-  const view = render(ProjectsNextPage);
+  const page = await import("../../../routes/projects/next/+page.svelte");
+  const view = render(page.default);
 
   await waitFor(() => {
     expect(api.listResearchProjects).toHaveBeenCalledOnce();
@@ -679,6 +776,206 @@ it("smoke renders next Projects route", async () => {
 
   view.unmount();
   await tick();
+});
+
+it("uses real project APIs instead of analysis source group APIs", async () => {
+  arrangeCurrentProjectsRoute([projectSourceRecord()]);
+  api.listProjectRuns.mockResolvedValue([analysisRun()]);
+
+  const view = await renderCurrentProjectsRoute("main");
+
+  expect(api.listProjects).toHaveBeenCalledOnce();
+  expect(api.listProjectSources).toHaveBeenCalledWith(1);
+  expect(api.listProjectRuns).toHaveBeenCalledWith(1);
+  expect(api.listLibraryCatalog).toHaveBeenCalledOnce();
+  expect(api.listAnalysisPromptTemplates).toHaveBeenCalledWith("report");
+  expect(api.listAnalysisSourceGroups).not.toHaveBeenCalled();
+  expect(api.updateAnalysisSourceGroup).not.toHaveBeenCalled();
+
+  view.unmount();
+  await tick();
+});
+
+it("passes project add-source workflow callbacks from both current project routes", async () => {
+  for (const route of ["main", "list"] as const) {
+    arrangeCurrentProjectsRoute();
+    api.addProjectSources.mockClear();
+    api.previewYoutubeSource.mockClear();
+
+    const view = await renderCurrentProjectsRoute(route);
+    await completeExistingProjectAddSource();
+
+    expect(api.addProjectSources).toHaveBeenCalledOnce();
+    view.unmount();
+    await tick();
+    cleanup();
+  }
+});
+
+it("wires project source Library delete through the main projects route", async () => {
+  arrangeCurrentProjectsRoute([projectSourceRecord()]);
+  const view = await renderCurrentProjectsRoute("main");
+
+  await selectCurrentProjectSource();
+  await fireEvent.click(
+    screen.getByRole("button", { name: "Delete selected YouTube video from Library" }),
+  );
+  await fireEvent.click(screen.getByRole("button", { name: "Delete from Library permanently" }));
+
+  await waitFor(() => {
+    expect(api.deleteProjectYoutubeVideoSourceFromLibrary).toHaveBeenCalledWith({
+      projectId: 1,
+      sourceId: 11,
+    });
+  });
+
+  view.unmount();
+  await tick();
+});
+
+it("wires project source Library delete through the list projects route", async () => {
+  arrangeCurrentProjectsRoute([projectSourceRecord()]);
+  const view = await renderCurrentProjectsRoute("list");
+
+  await selectCurrentProjectSource();
+  await fireEvent.click(
+    screen.getByRole("button", { name: "Delete selected YouTube video from Library" }),
+  );
+  await fireEvent.click(screen.getByRole("button", { name: "Delete from Library permanently" }));
+
+  await waitFor(() => {
+    expect(api.deleteProjectYoutubeVideoSourceFromLibrary).toHaveBeenCalledWith({
+      projectId: 1,
+      sourceId: 11,
+    });
+  });
+
+  view.unmount();
+  await tick();
+});
+
+it("keeps Remove membership-only and adds a separate Delete from Library action", async () => {
+  arrangeCurrentProjectsRoute([projectSourceRecord()]);
+  vi.stubGlobal("confirm", vi.fn(() => true));
+  const view = await renderCurrentProjectsRoute("main");
+
+  await selectCurrentProjectSource();
+  await fireEvent.click(screen.getByRole("button", { name: "Remove 1 selected source" }));
+
+  await waitFor(() => {
+    expect(api.removeProjectSources).toHaveBeenCalledWith({ projectId: 1, sourceIds: [11] });
+    expect(api.deleteProjectYoutubeVideoSourceFromLibrary).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Remove 1 selected source" })).toBeNull();
+  });
+
+  await selectCurrentProjectSource();
+  await fireEvent.click(
+    screen.getByRole("button", { name: "Delete selected YouTube video from Library" }),
+  );
+  await fireEvent.click(screen.getByRole("button", { name: "Delete from Library permanently" }));
+
+  await waitFor(() => {
+    expect(api.deleteProjectYoutubeVideoSourceFromLibrary).toHaveBeenCalledWith({
+      projectId: 1,
+      sourceId: 11,
+    });
+  });
+  expect(api.removeProjectSources).toHaveBeenCalledOnce();
+
+  view.unmount();
+  await tick();
+});
+
+it("wires the project Add source dialog through the next Projects route", async () => {
+  api.listResearchProjects.mockResolvedValue([projectSummary()]);
+  api.listProjectSources.mockResolvedValue([]);
+  const page = await import("../../../routes/projects/next/+page.svelte");
+  const view = render(page.default);
+
+  await fireEvent.click(screen.getByRole("button", { name: "Select route project" }));
+  await waitFor(() => expect(api.listProjectSources).toHaveBeenCalledWith(1));
+  await fireEvent.click(screen.getByRole("button", { name: "Open route add source" }));
+
+  const dialog = await screen.findByRole("dialog", { name: "Add source" });
+  await fireEvent.input(within(dialog).getByLabelText("YouTube URL"), {
+    target: { value: "https://www.youtube.com/watch?v=video-11" },
+  });
+  await fireEvent.click(within(dialog).getByRole("button", { name: "Preview" }));
+  await within(dialog).findByText("Evidence video");
+  await fireEvent.click(within(dialog).getByRole("button", { name: "Add source" }));
+
+  await waitFor(() => {
+    expect(api.addYoutubeSource).toHaveBeenCalledOnce();
+    expect(api.addProjectSources).toHaveBeenCalledWith({ projectId: 1, sourceIds: [11] });
+  });
+
+  view.unmount();
+  await tick();
+});
+
+it("wires Delete from Library in the next projects bulk bar", async () => {
+  api.listResearchProjects.mockResolvedValue([projectSummary()]);
+  api.listProjectSources.mockResolvedValue([projectSourceRecord({ handle: "video-11" })]);
+  const page = await import("../../../routes/projects/next/+page.svelte");
+  const view = render(page.default);
+
+  await fireEvent.click(screen.getByRole("button", { name: "Select route project" }));
+  await waitFor(() => expect(api.listProjectSources).toHaveBeenCalledWith(1));
+  await fireEvent.click(screen.getByRole("button", { name: "Select route source" }));
+  await tick();
+  await fireEvent.click(screen.getByRole("button", { name: "Run route Library delete" }));
+
+  await waitFor(() => {
+    expect(api.deleteProjectYoutubeVideoSourceFromLibrary).toHaveBeenCalledWith({
+      projectId: 1,
+      sourceId: 11,
+    });
+  });
+
+  view.unmount();
+  await tick();
+});
+
+it("wires selected Workspace source syncs to the YouTube source job command", async () => {
+  arrangeCurrentProjectsRoute([projectSourceRecord()]);
+  const view = await renderCurrentProjectsRoute("main");
+
+  await selectCurrentProjectSource();
+  await fireEvent.click(screen.getByRole("button", { name: "Sync selected 1 source" }));
+
+  await waitFor(() => {
+    expect(api.syncYoutubeSource).toHaveBeenCalledWith(11, {
+      metadata: true,
+      transcripts: true,
+      comments: true,
+    });
+  });
+
+  view.unmount();
+  await tick();
+});
+
+it("refreshes Workspace source content when source sync jobs finish", async () => {
+  arrangeCurrentProjectsRoute([projectSourceRecord()]);
+  const view = await renderCurrentProjectsRoute("main");
+  await waitFor(() => expect(api.listenToSourceJobEvents).toHaveBeenCalledOnce());
+  const onSourceJob = api.listenToSourceJobEvents.mock.calls[0]?.[0];
+  expect(onSourceJob).toEqual(expect.any(Function));
+  expect(api.listProjects).toHaveBeenCalledOnce();
+
+  vi.useFakeTimers();
+  onSourceJob({ status: "succeeded" });
+  onSourceJob({ status: "failed" });
+  onSourceJob({ status: "cancelled" });
+  await vi.advanceTimersByTimeAsync(349);
+  expect(api.listProjects).toHaveBeenCalledOnce();
+  await vi.advanceTimersByTimeAsync(1);
+  await tick();
+  await Promise.resolve();
+  expect(api.listProjects).toHaveBeenCalledTimes(2);
+
+  view.unmount();
+  expect(api.unlistenSourceJobs).toHaveBeenCalledOnce();
 });
 
 it("renders three-zone projects workspace", () => {
