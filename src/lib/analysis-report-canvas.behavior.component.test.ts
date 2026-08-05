@@ -887,8 +887,54 @@ function sourceBrowserBody() {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   localStorage.clear();
+  api.getAnalysisRun.mockResolvedValue(null);
+  api.getAnalysisRunTrace.mockResolvedValue({ refs: [] });
+  api.getLlmProfiles.mockResolvedValue({ active_profile: "", profiles: [] });
+  api.getWorkspaceAccountStatuses.mockResolvedValue([]);
+  api.getYoutubePlaylistDetail.mockResolvedValue(null);
+  api.getYoutubeRuntimeStatus.mockResolvedValue({
+    ytdlpAvailable: false,
+    ytdlpVersion: null,
+    message: "YouTube runtime unavailable in component smoke",
+  });
+  api.getYoutubeVideoDetail.mockResolvedValue(null);
+  api.listActiveAnalysisRuns.mockResolvedValue([]);
+  api.listAnalysisChatMessages.mockResolvedValue([]);
+  api.listAnalysisPromptTemplates.mockResolvedValue([]);
+  api.listAnalysisRunMessages.mockResolvedValue({
+    messages: [],
+    next_cursor: null,
+    has_more: false,
+  });
+  api.listAnalysisRuns.mockResolvedValue([]);
+  api.listAnalysisSourceGroups.mockResolvedValue([]);
+  api.listAnalysisSources.mockResolvedValue([]);
+  api.listLlmProviderModels.mockResolvedValue([]);
+  api.listSourceForumTopics.mockResolvedValue({
+    topics: [],
+    topicResolutionState: {
+      status: "never_run",
+      resolverVersion: 0,
+      unresolvedCount: 0,
+      pendingItemCount: 0,
+      membershipsRefreshedAt: null,
+    },
+  });
+  api.listSourceItems.mockResolvedValue([]);
+  api.listSourceJobs.mockResolvedValue([]);
+  api.listSources.mockResolvedValue([]);
+  api.listTakeoutImportRecoveryStates.mockResolvedValue([]);
+  api.listTakeoutSourceImportJobs.mockResolvedValue([]);
+  api.listWorkspaceAccounts.mockResolvedValue([]);
+  api.listYoutubeSourceSummaries.mockResolvedValue([]);
+  api.listYoutubeTranscriptSegments.mockResolvedValue({
+    segments: [],
+    nextCursor: null,
+    hasMore: false,
+  });
+  api.resolveAnalysisTraceRefs.mockResolvedValue([]);
   api.listenToAnalysisRunEvents.mockResolvedValue(api.unlistenAnalysisRuns);
   api.listenToAnalysisChatEvents.mockResolvedValue(api.unlistenAnalysisChat);
   api.listenToNotebookLmExportEvents.mockResolvedValue(api.unlistenNotebookLmExport);
@@ -1761,6 +1807,8 @@ it("smoke renders analysis route", async () => {
   await Promise.resolve();
 
   expect(view.container.querySelector("section.analysis-workspace")).toBeTruthy();
+  expect(screen.queryAllByRole("button", { name: /Group research video/ })).toHaveLength(0);
+  expect(screen.queryAllByRole("button", { name: "Research group. 1 sources" })).toHaveLength(0);
 
   view.unmount();
 
