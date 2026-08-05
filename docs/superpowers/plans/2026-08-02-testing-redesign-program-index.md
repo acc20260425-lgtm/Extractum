@@ -61,14 +61,17 @@ Before writing each next detailed plan:
 - Completed: `docs/superpowers/plans/2026-08-03-testing-redesign-slice-3a-source-contracts.md`
   at final verified checkpoint `9640cb89`; its verification record is
   `docs/superpowers/verification/2026-08-03-testing-redesign-slice-3a-source-contracts.md`.
+- Completed: `docs/superpowers/plans/2026-08-05-testing-redesign-slice-3b-component-contracts.md`
+  at final implementation checkpoint `95ccec08`; its evidence record is
+  `docs/superpowers/verification/2026-08-05-testing-redesign-slice-3b-component-contracts.md`.
 
 Slice 1 remains complete at `72a00b38`; its verification record is
 `docs/superpowers/verification/2026-08-02-testing-redesign-slice-1-measurement.md`.
-Slice 3A is the current completed detailed-plan checkpoint. It closed the first
-three source-contract cohorts while retaining ten narrow structured rules and
-truthful direct behavior; the live ledger has 483 open rows. Slice 3B planning
-is next and must begin from that live inventory rather than extending this
-evidence task into the next cohort. Slices 3B and 4 proceed without Nx under
-the approved TestingManifest architecture. The separate disposable Slice 2C
-Nx decision spike remains deferred until Slice 4 has committed; no Nx package
-or configuration is adopted before then.
+Slice 3B is the latest completed detailed-plan checkpoint. It closed 46 rows
+across the Projects workspace and analysis report canvas cohorts, leaving 437
+open rows in the live ledger, and its authoritative unsandboxed full gate is
+green. Slice 3C planning from the live ledger is next and must not extend this
+evidence task into another cohort. Slice 4 continues without Nx under the
+approved TestingManifest architecture. The separate disposable Slice 2C Nx
+decision spike remains deferred until after Slice 4 has committed; no Nx
+package or configuration is adopted before then.
