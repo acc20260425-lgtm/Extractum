@@ -645,6 +645,8 @@ describe("report canvas component contract", () => {
 
     const setup = screen.getByRole("region", { name: "Report setup" });
     expect(setup).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Workspace actions" })).toBeTruthy();
+    expect(within(setup).getByRole("heading", { name: "Start the first report" })).toBeTruthy();
     expect(screen.queryByRole("region", { name: "Opened run metadata" })).toBeNull();
     expect(screen.queryByRole("tablist", { name: "Run companion tabs" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Follow-up chat" })).toBeNull();
@@ -659,7 +661,21 @@ describe("report canvas component contract", () => {
     expect(launch.getAttribute("title")).toBe(disabledReason);
     expect(screen.getByRole("alert").textContent).toContain(disabledReason);
 
+    await view.rerender(reportCanvasProps({ startingReport: true }));
+    expect(screen.getByRole("region", { name: "Report setup" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Start the first report" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Starting..." })).toBeTruthy();
+
+    await view.rerender(reportCanvasProps({
+      selectedRunIsActive: true,
+      activePhase: "gathering",
+    }));
+    expect(screen.getByRole("region", { name: "Report setup" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Start the first report" })).toBeNull();
+    expect(screen.getByText("gathering")).toBeTruthy();
+
     await view.rerender(reportCanvasProps({ reportLaunchDisabledReason: null }));
+    expect(screen.getByRole("heading", { name: "Start the first report" })).toBeTruthy();
     expect((screen.getByRole("button", { name: "Run report" }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByRole("alert")).toBeNull();
 
@@ -755,11 +771,13 @@ describe("report canvas component contract", () => {
 
     expect(screen.getByRole("heading", { name: "Start the first report" })).toBeTruthy();
     expect(screen.getByText(/Once the report is ready/)).toBeTruthy();
+    expect(screen.queryByText("Build the first report for this workspace")).toBeNull();
 
     await view.rerender(reportCanvasProps({ currentScopeHasSavedRuns: true }));
     expect(screen.queryByRole("heading", { name: "Start the first report" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Run another report" })).toBeTruthy();
     expect(screen.getByText(/Prior reports stay available in Runs/)).toBeTruthy();
+    expect(screen.queryByText("Build the first report for this workspace")).toBeNull();
   });
 
   it("keeps snapshot and live source basis explicit", async () => {
@@ -871,6 +889,27 @@ describe("report canvas component contract", () => {
     expect(screen.getByLabelText("Snapshot capture failed")).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toBe("snapshot failed");
     expect(screen.getByText(/This is live data, not the saved run snapshot/)).toBeTruthy();
+
+    await view.rerender(reportCanvasProps({
+      canvasMode: "source",
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source({
+        sourceType: "youtube",
+        sourceSubtype: "playlist",
+        title: "Research playlist",
+      }),
+      currentScopeTitle: "Research playlist",
+      sourceViewBasis: "live_source",
+      onViewLiveSource,
+      onBackToRunSnapshot,
+    }));
+    const playlistTabs = screen.getByRole("navigation", { name: "Source browser tabs" });
+    expect(within(playlistTabs).getByRole("button", { name: "Videos" }).getAttribute("aria-selected")).toBe("true");
+    expect(within(playlistTabs).getByRole("button", { name: "Items" })).toBeTruthy();
+    expect(within(playlistTabs).getByRole("button", { name: "Metadata" })).toBeTruthy();
+    expect(within(playlistTabs).getByRole("button", { name: "Activity" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "YouTube playlist videos" })).toBeTruthy();
+    expect(screen.getByText("Research playlist", { selector: "h3" })).toBeTruthy();
   });
 
   it("passes YouTube comments and source activity callbacks through the report canvas", async () => {
@@ -1068,12 +1107,33 @@ describe("report canvas component contract", () => {
     await fireEvent.click(within(tools).getByRole("button", { name: "Edit groups" }));
     expect(screen.getByLabelText("Template editor drawer")).toBeTruthy();
     expect(screen.getByLabelText("Source group editor drawer")).toBeTruthy();
+    await fireEvent.click(within(tools).getByRole("button", { name: "Hide templates" }));
+    await fireEvent.click(within(tools).getByRole("button", { name: "Hide groups" }));
 
-    await view.rerender(reportCanvasProps({ currentRun: run() }));
+    await view.rerender(reportCanvasProps({
+      workspaceSelection: { kind: "source", sourceId: 1 },
+      currentSource: source(),
+      currentRun: run({
+        scope_type: "source",
+        source_id: 1,
+        source_title: "Research channel",
+        project_id: null,
+        project_name: null,
+        scope_label: "Research channel",
+      }),
+    }));
+    const openedRunTools = screen.getByRole("region", { name: "Workspace actions" });
     expectBefore(
-      screen.getByRole("region", { name: "Workspace actions" }),
+      openedRunTools,
       screen.getByRole("region", { name: "Opened run metadata" }),
     );
+    expect(screen.queryByRole("region", { name: "Opened run management" })).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Export for NotebookLM" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Edit templates" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Edit groups" })).toHaveLength(1);
+    expect(within(openedRunTools).getByRole("button", { name: "Export for NotebookLM" })).toBeTruthy();
+    expect(within(openedRunTools).getByRole("button", { name: "Edit templates" })).toBeTruthy();
+    expect(within(openedRunTools).getByRole("button", { name: "Edit groups" })).toBeTruthy();
 
     await view.rerender(reportCanvasProps({
       canvasMode: "source",
