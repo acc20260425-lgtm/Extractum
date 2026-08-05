@@ -26,7 +26,7 @@
 
 | Path | Responsibility |
 | --- | --- |
-| `src/lib/components/research-projects/projects-workspace.behavior.component.test.ts` | Component and route smokes plus the exact 23 Projects replacement declarations for SC-000517--SC-000541. |
+| `src/lib/components/research-projects/projects-workspace.behavior.component.test.ts` | Component and route smokes plus the exact 23 Projects replacement declarations for the behavior-bearing rows in SC-000517--SC-000541; SC-000525 and SC-000538 remain delete-only. |
 | `src/lib/analysis-report-canvas.behavior.component.test.ts` | Report-canvas/analysis-route smokes plus the exact 20 replacement declarations for SC-000138--SC-000157. |
 | `testing/source-contract-ledger.json` | Change replacement paths, correct SC-000528, encode SC-000536/537/539 as mixed rows, and preserve every other frozen field. |
 | `src/lib/research-projects-route-contract.test.ts` | Delete only after all 26 Projects rows resolve or have an approved deletion resolution. |
@@ -45,7 +45,7 @@ The Projects file must contain these exact top-level declarations. The task spli
 | Task | Rows | Exact top-level `it` titles |
 | --- | --- | --- |
 | Component behavior | SC-000518--SC-000524 | `renders three-zone projects workspace`; `exposes create/edit/delete and run eligibility UI`; `defaults project run dates to all synced history instead of today only`; `shows project runs in the central Runs tab`; `keeps prompt-pack run details in the Runs tab instead of duplicating them in the inspector`; `matches the Library type column in Workspace project sources`; `shows full source type labels when connecting sources from Library` |
-| Component behavior | SC-000526, SC-000535--SC-000541 | `wires the project Add source dialog through the current ProjectsShell`; `keeps top command actions honest while project export is out of scope`; `keeps project action hierarchy consistent across Workspace, Projects, and Runs`; `keeps project navigation rows visually neutral until selected`; `labels project data grids for assistive technology`; `scopes repeated project refresh controls`; `clarifies the Workspace Runs taxonomy` |
+| Component behavior | SC-000526, SC-000535--SC-000537, SC-000539--SC-000541 | `wires the project Add source dialog through the current ProjectsShell`; `keeps top command actions honest while project export is out of scope`; `keeps project action hierarchy consistent across Workspace, Projects, and Runs`; `keeps project navigation rows visually neutral until selected`; `labels project data grids for assistive technology`; `scopes repeated project refresh controls`; `clarifies the Workspace Runs taxonomy` |
 | Route behavior | SC-000517, SC-000527--SC-000534 | `uses real project APIs instead of analysis source group APIs`; `passes project add-source workflow callbacks from both current project routes`; `wires project source Library delete through the main projects route`; `wires project source Library delete through the list projects route`; `keeps Remove membership-only and adds a separate Delete from Library action`; `wires the project Add source dialog through the next Projects route`; `wires Delete from Library in the next projects bulk bar`; `wires selected Workspace source syncs to the YouTube source job command`; `refreshes Workspace source content when source sync jobs finish` |
 
 The Canvas file must contain these exact titles inside `describe("report canvas component contract")`:
@@ -56,6 +56,10 @@ The Canvas file must contain these exact titles inside `describe("report canvas 
 | SC-000143--SC-000147 | `passes YouTube comments and source activity callbacks through the report canvas`; `passes Telegram topic state into the source surface`; `labels source surfaces without repeating the selected workspace title`; `keeps run snapshot reading bounded and snapshot-only`; `keeps source-group run snapshots pageable through the snapshot browser` |
 | SC-000148--SC-000152 | `uses real chat availability in the report toolbar`; `keeps workspace tools reachable before setup report and source bodies`; `derives NotebookLM export availability from live canvas source or Telegram group`; `submits NotebookLM export for either current source or current source group`; `opens NotebookLM export for Telegram source groups without the old single-source guard` |
 | SC-000153--SC-000157 | `passes transient evidence highlight tokens from route to source surfaces`; `passes focused group transcript segments from route to source surfaces`; `renders the scoped evidence return affordance above source reader headers`; `passes evidence return context and callback through the report canvas`; `passes bounded source browser mode only for live source canvas review` |
+
+## Rollback Boundary
+
+Each task commit is an independent rollback boundary. Tasks 1, 2, 4, and 5 only add passing replacement evidence while the corresponding legacy file and ledger resolution remain unchanged, so reverting one of those commits restores the preceding green checkpoint. Tasks 3 and 6 are atomic cohort cutovers: replacement completion, ledger edits, legacy-file deletion, transition validation, and owner/type checkpoints land together and are reverted together. Task 7 changes evidence and program documentation only. Do not carry a partial ledger cutover across task commits.
 
 ---
 
@@ -451,9 +455,34 @@ Mark Slice 3B as the latest completed detailed-plan checkpoint, record that it c
 
 Run:
 
-`rg -n "analysis-report-canvas\.behavior\.test|projects-workspace\.behavior\.test|research-projects-route-contract\.test|analysis-report-canvas\.test" testing docs scripts src package.json vitest.config.ts`
+`rg -n "analysis-report-canvas\.behavior\.test|projects-workspace\.behavior\.test" testing docs scripts src package.json vitest.config.ts`
 
-Expected: no live ledger/config references to the deleted or pre-component replacement paths; historical plan/spec/verification references are allowed and must not be rewritten.
+Expected: no matches. The pre-component replacement paths must disappear from every `replacementIds` entry and live document/configuration.
+
+Then load `testing/source-contract-ledger.json` in PowerShell and assert the durable legacy identities structurally:
+
+```powershell
+$ledger = Get-Content testing/source-contract-ledger.json -Raw | ConvertFrom-Json
+$legacyPaths = @(
+  'src/lib/research-projects-route-contract.test.ts',
+  'src/lib/analysis-report-canvas.test.ts'
+)
+$legacyRows = @($ledger.rows | Where-Object { $_.path -in $legacyPaths })
+if ($legacyRows.Count -ne 46) { throw "Expected 46 durable Slice 3B legacy path rows, found $($legacyRows.Count)" }
+$badReplacement = @($ledger.rows | Where-Object {
+  $replacementIds = @($_.replacementIds) + @($_.subgroups | ForEach-Object { $_.replacementIds })
+  ($replacementIds -join ' ') -match 'research-projects-route-contract\.test|analysis-report-canvas\.test'
+})
+if ($badReplacement.Count -ne 0) { throw "Legacy paths remain in replacementIds" }
+```
+
+Expected: PASS. The 46 `row.path` values intentionally remain after their files are deleted; their absence from the filesystem is how the transition validator recognizes cutover.
+
+Finally run:
+
+`rg -n "research-projects-route-contract\.test|analysis-report-canvas\.test" vitest.config.ts package.json scripts`
+
+Expected: exactly the two frozen `LEGACY_TEST_FILES` expectation entries in `scripts/testing/test-conventions.test.ts`, and no configuration, package-script, replacement, or other script references. `vitest.config.ts` intentionally derives `LEGACY_TEST_FILES` from all durable ledger paths, including closed rows; the convention snapshot therefore retains these two literal identities just as it retains deleted Slice 3A identities.
 
 Run `git diff --check` and `git status --short`. Expected: only the program-index and Slice 3B verification-document changes remain after the implementation commits.
 

@@ -117,10 +117,13 @@ deleted and no retained assertion needs it.
 SC-000517 and SC-000528 require route-level API evidence from the rendered main
 Projects page. SC-000527 and SC-000529--SC-000532 use route renders for the
 route-owned callback wiring, with receiving-component fixtures only for the
-child-owned half of the interaction. SC-000151--SC-000154 likewise use the
-rendered analysis route to prove NotebookLM request/open behavior and prop
-delivery into `ReportCanvas`; rendering only the accepting canvas is not
-sufficient route evidence.
+child-owned half of the interaction. SC-000533 uses the rendered main and next
+Projects routes to prove selected-source synchronization reaches the YouTube
+source-job command. SC-000534 uses the rendered main Projects route to prove a
+source-job completion refreshes Workspace content. SC-000151--SC-000154
+likewise use the rendered analysis route to prove NotebookLM request/open
+behavior and prop delivery into `ReportCanvas`; rendering only the accepting
+canvas is not sufficient route evidence.
 
 ## Constraints
 
